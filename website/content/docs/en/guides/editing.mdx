@@ -3,7 +3,7 @@ title: Editing & color
 description: Cut video, edit from transcripts, work with captions and sound, then export.
 order: 2
 updated: 2026-09-09
-version: 1.3.1
+version: 1.4.0
 ---
 
 The **Edit** page centers on one monitor and a bottom timeline. The left panel switches between **Media / Transcript / Subtitles / Voice**; selecting a clip makes its inspector available on the right. AI assistant and Export sit in the top toolbar.
@@ -71,6 +71,13 @@ workspace and reads the sentence. Google is the default — it costs nothing and
 Every cue carries its own dub button, and you can dub a batch. The audio lands on a dedicated **dub
 track**: the original audio is untouched, delete the track and you are back where you started, and
 dubbing again returns to that same track rather than stacking up a pile of one-clip tracks.
+
+Once dubbing finishes, the track holding the original audio is marked **ducked** — it drops by about
+10 dB wherever the dub speaks. "Untouched" means the clips are not edited or deleted, not that the
+original plays at full volume under the dub; without ducking the export has two people talking at
+once. What gets ducked is whichever track actually carries sound, including a video clip's own audio
+— which is exactly the shape of the translated-dubbing workflow, where the source video sits on a
+video track and the audio track is empty.
 
 - **Fit to cue length** (off by default): stretch or squeeze the voiceover to that cue's duration. It
   uses the clip's own speed, so the render applies atempo — lossless, undoable, still adjustable in the

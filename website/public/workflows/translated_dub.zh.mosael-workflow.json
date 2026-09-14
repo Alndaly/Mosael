@@ -1,0 +1,380 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "视频译配 · 字幕与配音",
+  "description": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声保留在自己的轨上，只是被压低。",
+  "graph_hash": "542bce17c3d365453bad7227a8439579124f0354f45542b44a5be10ede0d7d1c",
+  "graph": {
+    "meta": {
+      "template_id": "translated_dub",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "开始译配",
+        "position": {
+          "x": -270,
+          "y": 260
+        },
+        "config": {
+          "params": {}
+        }
+      },
+      {
+        "id": "source_video",
+        "type": "asset",
+        "name": "选择要配音的视频",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "config": {
+          "asset_id": ""
+        }
+      },
+      {
+        "id": "dub_project",
+        "type": "project_sequence_create",
+        "name": "建立非破坏性配音副本",
+        "position": {
+          "x": 350,
+          "y": 420
+        },
+        "config": {
+          "name": "{{source_video.name}} · 译配版",
+          "width": "",
+          "height": "",
+          "fps": ""
+        },
+        "inputs": [
+          "width",
+          "height",
+          "fps"
+        ]
+      },
+      {
+        "id": "video_on_timeline",
+        "type": "timeline_append",
+        "name": "把原视频接到时间线",
+        "position": {
+          "x": 670,
+          "y": 420
+        },
+        "config": {
+          "sequence_id": "",
+          "asset_id": "",
+          "track_id": "",
+          "start": 0,
+          "end": ""
+        },
+        "inputs": [
+          "sequence_id",
+          "asset_id",
+          "track_id",
+          "end"
+        ]
+      },
+      {
+        "id": "verbatim_transcript",
+        "type": "transcribe_asset",
+        "name": "生成带时间码逐字稿",
+        "position": {
+          "x": 350,
+          "y": 120
+        },
+        "config": {
+          "asset_id": "",
+          "engine": "auto"
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
+        "id": "translate_lines",
+        "type": "loop_foreach",
+        "name": "逐句翻译成目标语言",
+        "position": {
+          "x": 990,
+          "y": 120
+        },
+        "config": {
+          "items": "",
+          "body": {
+            "nodes": [
+              {
+                "id": "translate_line",
+                "type": "translate",
+                "name": "翻译这一句",
+                "position": {
+                  "x": 80,
+                  "y": 120
+                },
+                "config": {
+                  "text": "{{loop.item.text}}",
+                  "target_lang": "en",
+                  "engine": "google"
+                }
+              }
+            ],
+            "edges": []
+          },
+          "output": "{{translate_line.text}}"
+        },
+        "inputs": [
+          "items"
+        ]
+      },
+      {
+        "id": "translated_subtitles",
+        "type": "generate_subtitles",
+        "name": "按原时间码铺译文字幕",
+        "position": {
+          "x": 1310,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "texts": "",
+          "keep_original": "no",
+          "offset": ""
+        },
+        "inputs": [
+          "sequence_id",
+          "segments",
+          "texts",
+          "offset"
+        ]
+      },
+      {
+        "id": "dubbing",
+        "type": "dub_subtitles",
+        "name": "逐条配音并压回原段落长度",
+        "position": {
+          "x": 1630,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": "",
+          "clip_ids": "",
+          "match_duration": "yes",
+          "line": "all",
+          "duck_original": "yes",
+          "voice_id": ""
+        },
+        "inputs": [
+          "sequence_id",
+          "clip_ids"
+        ]
+      },
+      {
+        "id": "export_dubbed_video",
+        "type": "export_sequence",
+        "name": "导出译配成片(字幕烧进画面)",
+        "position": {
+          "x": 1950,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "译配完成通知",
+        "position": {
+          "x": 2260,
+          "y": 260
+        },
+        "config": {
+          "title": "视频译配与字幕已完成",
+          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "交付逐字稿、译文、字幕与成片",
+        "position": {
+          "x": 2570,
+          "y": 260
+        },
+        "config": {
+          "values": {
+            "source_asset_id": "{{source_video.asset_id}}",
+            "source_language": "{{verbatim_transcript.language}}",
+            "verbatim_transcript": "{{verbatim_transcript.text}}",
+            "translated_lines": "{{translate_lines.results}}",
+            "subtitle_track_id": "{{translated_subtitles.track_id}}",
+            "subtitle_count": "{{translated_subtitles.count}}",
+            "dub_track_id": "{{dubbing.track_id}}",
+            "dubbed_lines": "{{dubbing.done}}",
+            "failed_lines": "{{dubbing.failed}}",
+            "project_id": "{{dub_project.project_id}}",
+            "sequence_id": "{{dub_project.sequence_id}}",
+            "final_asset_id": "{{export_dubbed_video.asset_id}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_source",
+        "source": "start",
+        "target": "source_video"
+      },
+      {
+        "id": "dub_export",
+        "source": "dubbing",
+        "target": "export_dubbed_video"
+      },
+      {
+        "id": "export_notice",
+        "source": "export_dubbed_video",
+        "target": "done_notice"
+      },
+      {
+        "id": "notice_output",
+        "source": "done_notice",
+        "target": "output"
+      },
+      {
+        "id": "d-source_video-width-dub_project-width",
+        "source": "source_video",
+        "target": "dub_project",
+        "kind": "data",
+        "source_output": "width",
+        "target_input": "width"
+      },
+      {
+        "id": "d-source_video-height-dub_project-height",
+        "source": "source_video",
+        "target": "dub_project",
+        "kind": "data",
+        "source_output": "height",
+        "target_input": "height"
+      },
+      {
+        "id": "d-source_video-fps-dub_project-fps",
+        "source": "source_video",
+        "target": "dub_project",
+        "kind": "data",
+        "source_output": "fps",
+        "target_input": "fps"
+      },
+      {
+        "id": "d-dub_project-sequence_id-video_on_timeline-sequence_id",
+        "source": "dub_project",
+        "target": "video_on_timeline",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-source_video-asset_id-video_on_timeline-asset_id",
+        "source": "source_video",
+        "target": "video_on_timeline",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-dub_project-video_track_id-video_on_timeline-track_id",
+        "source": "dub_project",
+        "target": "video_on_timeline",
+        "kind": "data",
+        "source_output": "video_track_id",
+        "target_input": "track_id"
+      },
+      {
+        "id": "d-source_video-duration-video_on_timeline-end",
+        "source": "source_video",
+        "target": "video_on_timeline",
+        "kind": "data",
+        "source_output": "duration",
+        "target_input": "end"
+      },
+      {
+        "id": "d-source_video-asset_id-verbatim_transcript-asset_id",
+        "source": "source_video",
+        "target": "verbatim_transcript",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-verbatim_transcript-segments-translate_lines-items",
+        "source": "verbatim_transcript",
+        "target": "translate_lines",
+        "kind": "data",
+        "source_output": "segments",
+        "target_input": "items"
+      },
+      {
+        "id": "d-dub_project-sequence_id-translated_subtitles-sequence_id",
+        "source": "dub_project",
+        "target": "translated_subtitles",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-verbatim_transcript-segments-translated_subtitles-segments",
+        "source": "verbatim_transcript",
+        "target": "translated_subtitles",
+        "kind": "data",
+        "source_output": "segments",
+        "target_input": "segments"
+      },
+      {
+        "id": "d-translate_lines-results-translated_subtitles-texts",
+        "source": "translate_lines",
+        "target": "translated_subtitles",
+        "kind": "data",
+        "source_output": "results",
+        "target_input": "texts"
+      },
+      {
+        "id": "d-video_on_timeline-timeline_start-translated_subtitles-offset",
+        "source": "video_on_timeline",
+        "target": "translated_subtitles",
+        "kind": "data",
+        "source_output": "timeline_start",
+        "target_input": "offset"
+      },
+      {
+        "id": "d-dub_project-sequence_id-dubbing-sequence_id",
+        "source": "dub_project",
+        "target": "dubbing",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-translated_subtitles-clip_ids-dubbing-clip_ids",
+        "source": "translated_subtitles",
+        "target": "dubbing",
+        "kind": "data",
+        "source_output": "clip_ids",
+        "target_input": "clip_ids"
+      },
+      {
+        "id": "d-dub_project-sequence_id-export_dubbed_video-sequence_id",
+        "source": "dub_project",
+        "target": "export_dubbed_video",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      }
+    ]
+  }
+}

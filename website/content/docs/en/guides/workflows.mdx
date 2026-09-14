@@ -3,22 +3,23 @@ title: Visual workflows
 description: Connect media, models and tools, check inputs and run repeatable creative tasks.
 order: 6
 updated: 2026-09-09
-version: 1.3.1
+version: 1.4.0
 ---
 
 Workflows connect media, models and tools into reusable steps. Configure node inputs and run the readiness check before starting a flow. Use schedules or webhooks for recurring work. Run history keeps node inputs, results and errors available for inspection.
 
 ## Download and import official templates
 
-The [website workflow catalog](/workflows) includes Topic to finished video and Transcript-based video cleanup.
+The [website workflow catalog](/workflows) includes Topic to finished video, Transcript-based video cleanup and Translated dubbing with subtitles.
 
 1. Download a `.mosael-workflow.json` file; no extraction is needed.
 2. Choose your workspace in the app, open Workflows, then use Import workflow to select the file.
 3. Open the imported graph, choose your own providers and models, supply the required media and pass the readiness check before running.
 
 Downloads contain no account secrets or private assets, and do not automatically select local default models. Video generation
-requires a text-to-video model; transcript cleanup requires an available transcription engine and a source video.
-Use v1.0.0 or later. Template node names and prompts are currently in Chinese.
+requires a text-to-video model; transcript cleanup requires an available transcription engine and a source video;
+translated dubbing also needs a voice — a cloned voice from your library, or a built-in voice from any engine
+(Edge's free voices need no configuration). Use v1.0.0 or later. Template node names and prompts are currently in Chinese.
 
 ## Canvas & nodes
 
@@ -36,7 +37,7 @@ Use v1.0.0 or later. Template node names and prompts are currently in Chinese.
   | Flow | start, output, condition, delay, notify |
   | Text & models | LLM, text template, text transform, translate, JSON extract, code |
   | Loops & reuse | for-each, while, subgraph, call workflow |
-  | Media & cuts | AI-generate asset, synthesize speech, transcribe asset, video to GIF, export timeline, publish |
+  | Media & cuts | AI-generate asset, synthesize speech, transcribe asset, generate subtitles, dub subtitles, video to GIF, export timeline, publish |
   | Asset library | asset query, asset tag, asset update, create project |
   | External | HTTP request, plugin tool |
   | Browser | open / navigate / click / input / extract / scroll / upload / wait / evaluate / close |

@@ -15,7 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.domain.workflows.revisions import graph_digest
-from app.domain.workflows.templates import ModelChoice, full_video_generation_graph, transcript_video_cleanup_graph
+from app.domain.workflows.templates import (
+    ModelChoice,
+    full_video_generation_graph,
+    transcript_video_cleanup_graph,
+    translated_dub_graph,
+)
 
 
 def catalog_files() -> dict[str, str]:
@@ -53,6 +58,24 @@ def catalog_files() -> dict[str, str]:
                 "en": ["Choose a video", "Transcribe", "Review and plan cuts", "Ripple cut", "Export"],
             },
             "graph": transcript_video_cleanup_graph(chat=ModelChoice()),
+        },
+        {
+            "id": "translated_dub",
+            "name": {"zh": "视频译配 · 字幕与配音", "en": "Translated dubbing with subtitles"},
+            "summary": {
+                "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声保留在自己的轨上，只是被压低。",
+                "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original audio stays on its track, only ducked.",
+            },
+            "requires": {
+                "zh": ["可用的转写引擎", "翻译：AI 对话模型或 Google 翻译", "一把嗓子：配音库的克隆音色，或某个引擎的现成音色", "有人说话的视频素材"],
+                "en": ["Available transcription engine", "Translation: a chat model or Google Translate", "A voice: a cloned voice, or a built-in voice from any engine", "A video with speech"],
+            },
+            "stages": {
+                "zh": ["选择视频", "生成带时间码逐字稿", "逐句翻译", "按原时间码铺译文字幕", "逐条配音并压回原长度", "导出译配成片"],
+                "en": ["Choose a video", "Transcribe with timecodes", "Translate line by line", "Lay subtitles on the original timecodes", "Dub and time-compress", "Export"],
+            },
+            # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
+            "graph": translated_dub_graph(voice_id=""),
         },
     ]
     files: dict[str, str] = {}
