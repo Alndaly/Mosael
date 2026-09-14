@@ -1,12 +1,12 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { CommentCard } from "./CommentCard";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
-import { boardAssetSources } from "./boardAssetSources";
+import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
 import { useQueries } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getNoteReference, noteReferenceQuery, type NoteReference } from "@/api/domains/notes";
+import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
-import { boardSourceText, boardDocumentBlocked, type BoardDocumentState } from "./boardDocumentSources";
+import { type BoardDocumentState } from "./boardDocumentSources";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
@@ -470,25 +470,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    * 已经出了产出的项收上来,交给面板照当前生成方式挂进槽位(一张图当首帧、多张当参考)。
    * 还没出产出的上游跳过 —— 它自己都还没有东西可给。
    */
-  const feeding = (() => {
-    if (!composerItem) return { assets: [], texts: [] as { itemId: string; text: string }[], blocked: false, pending: false, references: [] as NoteReference[] };
-    const byId = new Map(boardItems(nodes).map((item) => [item.id, item]));
-    const sources = edges
-      .filter((edge) => edge.target === composerItem.id)
-      .map((edge) => byId.get(edge.source))
-      .filter((item): item is BoardItem => Boolean(item));
-    return {
-      references: sources.filter(item => item.kind === "document").map(item => documents.get(item.id)?.reference).filter((ref): ref is NoteReference => !!ref),
-      blocked: sources.some(item => boardDocumentBlocked(item, documents.get(item.id))),
-      pending: sources.some(item => item.kind === "document" && documents.get(item.id)?.pending),
-      assets: boardAssetSources(sources),
-      //: **便签给的是提示词,不是素材。** 一张写着描述的便签连到图片上,用户的意思是
-      //: 「照这段话画」—— 而不是把便签当参考图(它根本没有图)。
-      texts: sources
-        .map((item) => ({ itemId: item.id, text: boardSourceText(item, documents.get(item.id)) }))
-        .filter(item => !!item.text),
-    };
-  })();
+  const feeding = composerItem
+    ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
+    : NO_UPSTREAM;
 
   /**
    * 拖动分组框时被它带着走的那几项。
