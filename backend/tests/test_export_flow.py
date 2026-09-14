@@ -27,6 +27,20 @@ def make_test_video(path: Path, seconds: float) -> None:
     )
 
 
+def _exported_file(client, workspace_id: str, tmp_path: Path) -> Path:
+    """导出的产物 —— **从素材库取**,那才是用户拿到的那一份。
+
+    此前这两条探的是 `exports/{job_id}.mp4` 那个中转文件。它现在跑完就删了:成功时内容
+    已经拷进素材库,留着等于同一段成片在磁盘上存两份(实测某台机器攒了 445 MB);
+    取消/失败时它是个半截,更不该留。
+    """
+    assets = client.get(f"/api/assets?workspace_id={workspace_id}").json()
+    exported = next(item for item in assets if item["source"] == "exported")
+    path = tmp_path / "exported.mp4"
+    path.write_bytes(client.get(f"/api/assets/{exported['id']}/file").content)
+    return path
+
+
 def test_export_renders_mp4_with_gap_black(tmp_path: Path) -> None:
     client = fresh_client()
 
@@ -65,8 +79,9 @@ def test_export_renders_mp4_with_gap_black(tmp_path: Path) -> None:
     assert job["status"] == "succeeded", job.get("error")
     assert job["progress"] == 1.0
 
-    output = settings.data_dir / "exports" / f"{job['id']}.mp4"
-    assert output.exists()
+    # 中转文件跑完就该没了 —— 成品在素材库里,留着它就是第二份。
+    assert not (settings.data_dir / "exports" / f"{job['id']}.mp4").exists()
+    assert _exported_file(client, ws["id"], tmp_path).stat().st_size > 0
 
     exported_asset = client.get(f"/api/assets?workspace_id={ws['id']}").json()
     exported = next(item for item in exported_asset if item["source"] == "exported")
@@ -109,7 +124,8 @@ def test_export_video_on_overlay_track_renders_with_audio(tmp_path: Path) -> Non
         time.sleep(0.5)
     assert job["status"] == "succeeded", job.get("error")
 
-    output = settings.data_dir / "exports" / f"{job['id']}.mp4"
+    assert not (settings.data_dir / "exports" / f"{job['id']}.mp4").exists()
+    output = _exported_file(client, ws["id"], tmp_path)
     streams = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(output)],
         capture_output=True, text=True,

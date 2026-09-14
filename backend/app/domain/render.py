@@ -422,7 +422,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 status="succeeded",
                 progress=1.0,
                 message="jobMsg_renderDone",
-                result={"asset_id": asset.id, "output_key": f"exports/{job_id}.mp4"},
+                result={"asset_id": asset.id},
             ):
                 emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
                 size_mb = output_path.stat().st_size / 1_048_576 if output_path.exists() else 0.0
@@ -448,6 +448,11 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             # The registry must not outlive the run, or a later cancel would kill a dead
             # process handle — or worse, a recycled one.
             unregister_job_child(job_id)
+            # ffmpeg 写的那个文件是**中转**,不是成品:成功时它已经被拷进素材库(register_file_asset
+            # 是流式拷贝,不搬走源文件),失败和取消时它是个半截。三种情况都不该留下 ——
+            # 留着的话,成功的导出在磁盘上存两份,取消的导出留一截永远没人清。
+            # 实测某台机器上 ~/.mosael/exports 攒了 66 个文件 445 MB,全是这么来的。
+            output_path.unlink(missing_ok=True)
         db.commit()
 
 
