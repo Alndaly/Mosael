@@ -124,12 +124,15 @@ type CapabilityRefs = {
 function CapabilityRefField({
   profileId,
   kind,
+  showKind,
   value,
   known,
   onChange,
 }: {
   profileId: string;
   kind: "image" | "video";
+  /** 双能力模型两个字段同组,kind 缀在字段名后面区分;单 kind 时缀它是噪音。 */
+  showKind?: boolean;
   value: string | null;
   known: boolean;
   onChange: (next: string | null) => void;
@@ -168,13 +171,14 @@ function CapabilityRefField({
   ];
 
   return (
-    <div className="grid gap-2 border-t border-border pt-3">
-      <span className="text-ui-md font-medium text-foreground">{t("modelSettingsGenerationGroup")}</span>
-      {/* **一句话就够。** 这里原本挂着三行说明,而它和下面那句黄字讲的是同一件事 ——
-          「表里查不到,指一下就有参数了」。常驻的那份还是在没出问题时说的,所以更该去掉:
-          真正需要解释的时刻是认不出来的时候,那句话就在下面,而且带着能照做的动作。 */}
+    <div className="grid gap-2">
       <label className="grid gap-1 text-ui-sm font-medium text-foreground">
-        {t("modelGenerationRef")}
+        <span className="flex items-center gap-1.5">
+          {t("modelGenerationRef")}
+          {showKind && (
+            <span className="rounded bg-secondary px-1 py-px text-ui-2xs font-normal text-muted-foreground">{kind}</span>
+          )}
+        </span>
       <OptionPicker
         ariaLabel={t("modelGenerationRef")}
         value={value ?? NONE}
@@ -444,22 +448,30 @@ export function ModelSettingsDialog({
           </div>
         )}
 
-        {current && generationKinds.map((kind) => (
-          <CapabilityRefField
-            key={kind}
-            profileId={profileId}
-            kind={kind}
-            value={current.generation_capability_refs?.[kind] ?? null}
-            known={current.generation_capabilities_known_by_kind?.[kind] !== false}
-            onChange={(next) => setDraft((prev) => (prev ? {
-              ...prev,
-              generation_capability_refs: {
-                ...(prev.generation_capability_refs ?? {}),
-                [kind]: next,
-              },
-            } : prev))}
-          />
-        ))}
+        {/* 「生成」组头只说一遍:双能力模型的两个 kind 共享这一组,kind 落在字段名后面,
+            而不是把整组(标题、分隔线、间距)原样再来一遍。 */}
+        {current && generationKinds.length > 0 && (
+          <div className="grid gap-3 border-t border-border pt-3">
+            <span className="text-ui-md font-medium text-foreground">{t("modelSettingsGenerationGroup")}</span>
+            {generationKinds.map((kind) => (
+              <CapabilityRefField
+                key={kind}
+                profileId={profileId}
+                kind={kind}
+                showKind={generationKinds.length > 1}
+                value={current.generation_capability_refs?.[kind] ?? null}
+                known={current.generation_capabilities_known_by_kind?.[kind] !== false}
+                onChange={(next) => setDraft((prev) => (prev ? {
+                  ...prev,
+                  generation_capability_refs: {
+                    ...(prev.generation_capability_refs ?? {}),
+                    [kind]: next,
+                  },
+                } : prev))}
+              />
+            ))}
+          </div>
+        )}
 
       </form>
     </ModalShell>

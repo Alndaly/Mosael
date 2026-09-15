@@ -76,6 +76,16 @@ it("两种能力都有时两组都在", () => {
   expect(screen.getByText("modelSettingsGenerationGroup")).toBeInTheDocument();
 });
 
+it("双生成能力的模型,「生成」组头只说一遍,kind 缀在字段名后面区分", () => {
+  /* 此前逐 kind 渲染整组:两个一模一样的「生成」标题、两条分隔线摞在一起,
+     间距也成双 —— 同一件事说了两遍。 */
+  open(["image", "video"]);
+  expect(screen.getAllByText("modelSettingsGenerationGroup")).toHaveLength(1);
+  expect(screen.getByText("image")).toBeInTheDocument();
+  expect(screen.getByText("video")).toBeInTheDocument();
+  expect(screen.getAllByRole("combobox", { name: "modelGenerationRef" })).toHaveLength(2);
+});
+
 it("同一件事只说一遍:认不出参数时才有那句解释,而且只有一句", () => {
   const { unmount } = open(["image"], false);
   expect(screen.getByText("modelGenerationRefUnknown")).toBeInTheDocument();
