@@ -80,5 +80,7 @@ export function useAgentNavigation({
       // 清失败就让它下一轮再来一次:重复跳到同一页是小事,跳不动才是大事。
       .catch(() => (doneRef.current = ""))
       .finally(() => void qc.invalidateQueries({ queryKey: ["agent-session", sessionId] }));
-  }, [pending, sessionId, qc]);
+  // dataUpdatedAt makes a failed DELETE retry after the invalidation refetches the same pending
+  // value. Depending on `pending` alone cannot observe that refetch because the string is unchanged.
+  }, [pending, sessionId, qc, session.dataUpdatedAt]);
 }
