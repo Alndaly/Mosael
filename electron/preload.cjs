@@ -4,6 +4,22 @@
 const { contextBridge, ipcRenderer } = require("electron");
 const { IPC } = require("./ipc-contract.cjs");
 
+/**
+ * 订阅一条主进程事件,只把载荷交给回调。listener 的参数类型在这里写一次,免得每个
+ * 订阅点各标一遍 —— checkJs 的 strict 对隐式 any 零容忍,而桥对象字面量上的类型
+ * 标注只罩得住外层回调,罩不住里面这层 listener。
+ * @template T
+ * @param {string} channel
+ * @param {(payload: T) => void} callback
+ * @returns {() => void} 退订函数
+ */
+function onEvent(channel, callback) {
+  /** @param {unknown} _event @param {T} payload */
+  const listener = (_event, payload) => callback(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
 // 全屏状态在渲染层挂载 React 监听器之前就可能推来(主进程 did-finish-load 时发一帧),
 // 那一帧会错过 → 全屏时左上角边距"有时"没撤。这里在 preload 加载即订阅并缓存最新值,
 // onFullscreen 订阅时先补发缓存,消除时序竞态。
@@ -28,7 +44,8 @@ ipcRenderer.on(IPC.event.openFiles, (_event, paths) => {
 
 // 桌面环境标识:前端据此加 is-desktop / is-mac 类,适配无边框窗(红绿灯占位、拖拽区)。
 // setTitleOverlay:Win/Linux 的标题栏三键叠层颜色随主题切换(mac 无此叠层,调用为 no-op)。
-contextBridge.exposeInMainWorld("mosaelDesktop", {
+/** @type {import("./preload-api").MosaelDesktopBridge} */
+const desktopBridge = {
   platform: process.platform,
   setTitleOverlay: (colors) => ipcRenderer.send(IPC.send.titleOverlay, colors),
   // 系统能力:reportStatus 把「有几个任务在跑」推给主进程(托盘文案 + 有任务时阻止系统睡眠)。
@@ -50,11 +67,7 @@ contextBridge.exposeInMainWorld("mosaelDesktop", {
   },
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
   checkUpdates: () => ipcRenderer.invoke(IPC.invoke.checkUpdates),
-  onUpdateAvailable: (callback) => {
-    const listener = (_event, info) => callback(info);
-    ipcRenderer.on(IPC.event.updateAvailable, listener);
-    return () => ipcRenderer.removeListener(IPC.event.updateAvailable, listener);
-  },
+  onUpdateAvailable: (callback) => onEvent(IPC.event.updateAvailable, callback),
   // 全屏状态订阅:主进程在进入/退出全屏(及首帧)推送布尔值。订阅时立即补发缓存的当前值,
   // 避免渲染层挂载晚于首帧推送时"有时"漏掉全屏态。
   // 自定义 CSS(userData/custom.css)。read 取当前内容,onChange 订阅存盘后的推送 ——
@@ -64,21 +77,17 @@ contextBridge.exposeInMainWorld("mosaelDesktop", {
     path: () => ipcRenderer.invoke(IPC.invoke.customCssPath),
     open: () => ipcRenderer.invoke(IPC.invoke.customCssOpen),
     reveal: () => ipcRenderer.invoke(IPC.invoke.customCssReveal),
-    onChange: (callback) => {
-      const listener = (_event, css) => callback(css);
-      ipcRenderer.on(IPC.event.customCss, listener);
-      return () => ipcRenderer.removeListener(IPC.event.customCss, listener);
-    },
+    onChange: (callback) => onEvent(IPC.event.customCss, callback),
   },
   onFullscreen: (callback) => {
     callback(lastFullscreen);
-    const listener = (_event, value) => callback(value);
-    ipcRenderer.on(IPC.event.fullscreen, listener);
-    return () => ipcRenderer.removeListener(IPC.event.fullscreen, listener);
+    return onEvent(IPC.event.fullscreen, callback);
   },
-});
+};
+contextBridge.exposeInMainWorld("mosaelDesktop", desktopBridge);
 
-contextBridge.exposeInMainWorld("mosaelPublish", {
+/** @type {import("./preload-api").MosaelPublishBridge} */
+const publishBridge = {
   login: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishLogin, { accountId, platform }),
   openPage: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishOpenPage, { accountId, platform }),
   inspect: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishInspect, { accountId, platform }),
@@ -87,30 +96,21 @@ contextBridge.exposeInMainWorld("mosaelPublish", {
   forward: () => ipcRenderer.invoke(IPC.invoke.publishForward),
   reload: () => ipcRenderer.invoke(IPC.invoke.publishReload),
   hideView: () => ipcRenderer.invoke(IPC.invoke.publishHideView),
-  onViewState: (callback) => {
-    const listener = (_event, state) => callback(state);
-    ipcRenderer.on(IPC.event.publishView, listener);
-    return () => ipcRenderer.removeListener(IPC.event.publishView, listener);
-  },
+  onViewState: (callback) => onEvent(IPC.event.publishView, callback),
   /** 悬浮卡片几何(见 main.cjs onPanels):渲染层照它画圆角/阴影/标题条。 */
   /** 拖动/缩放悬浮面板(几何由主进程持有并落盘)。 */
   setPanelLayout: (patch) => ipcRenderer.invoke(IPC.invoke.publishPanelLayout, patch),
   /** 手动关闭某块面板:只撤面板,任务照常继续。 */
   closePanel: (id) => ipcRenderer.invoke(IPC.invoke.publishClosePanel, { id }),
-  onPanels: (callback) => {
-    const listener = (_event, cards) => callback(cards);
-    ipcRenderer.on(IPC.event.publishPanels, listener);
-    return () => ipcRenderer.removeListener(IPC.event.publishPanels, listener);
-  },
-});
+  onPanels: (callback) => onEvent(IPC.event.publishPanels, callback),
+};
+contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);
 
 // 自动化浏览器(RPA / 智能体)的实时预览帧:离屏视图截帧,前端画成缩略预览。
-contextBridge.exposeInMainWorld("mosaelBrowser", {
-  onFrame: (callback) => {
-    const listener = (_event, frame) => callback(frame);
-    ipcRenderer.on(IPC.event.browserFrame, listener);
-    return () => ipcRenderer.removeListener(IPC.event.browserFrame, listener);
-  },
+/** @type {import("./preload-api").MosaelBrowserBridge} */
+const browserBridge = {
+  onFrame: (callback) => onEvent(IPC.event.browserFrame, callback),
   // 通用池档案登录:在该档案分区开内嵌视图登任意站点(见 main.cjs browser:openLogin)。
   openLogin: (opts) => ipcRenderer.invoke(IPC.invoke.browserOpenLogin, opts),
-});
+};
+contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);

@@ -42,6 +42,8 @@ describe("窗口装饰让位", () => {
     const cleanup = installWindowChrome(
       {
         platform: "darwin",
+        /* 桥类型是完整契约(preload-api.d.ts),用不到的方法给个桩,不再拿 Partial 绕过。 */
+        setTitleOverlay: vi.fn(),
         onFullscreen: (callback) => {
           callbacks.push(callback);
           callback(true);
@@ -82,7 +84,10 @@ describe("窗口装饰让位", () => {
   it("updates native title buttons to the same dark surface and text as the application", async () => {
     const root = document.createElement("html");
     const setTitleOverlay = vi.fn();
-    const cleanup = installWindowChrome({ platform: "win32", setTitleOverlay }, root);
+    const cleanup = installWindowChrome(
+      { platform: "win32", setTitleOverlay, onFullscreen: () => () => {} },
+      root,
+    );
     const light = setTitleOverlay.mock.lastCall?.[0];
     root.classList.add("dark");
     await Promise.resolve();

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "skipLibCheck": true,
+    "typeRoots": ["../frontend/node_modules/@types"]
+  },
+  "include": ["preload.cjs", "preload-api.d.ts", "ipc-contract.d.cts"]
+}
+
