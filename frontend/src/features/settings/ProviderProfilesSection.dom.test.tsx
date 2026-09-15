@@ -146,6 +146,13 @@ describe("供应商连接列表", () => {
     const menuScope = within(menu.closest("[data-radix-popper-content-wrapper]") as HTMLElement);
     expect(menuScope.getByText("bulkSelect")).toBeInTheDocument();
     expect(menuScope.queryByText("generationProfiles")).not.toBeInTheDocument();
+
+    /* 点完任意一项,菜单自己要关上 —— 此前只有 onSelect,菜单一直挂着,
+       「选择」这种不开对话框的动作,菜单就明晃晃地挡在列表前面。 */
+    await user.click(menuScope.getByText("bulkSelect"));
+    await waitFor(() =>
+      expect(screen.queryByText("modelAddEntry")).not.toBeInTheDocument(),
+    );
   });
 
   it("添加模型是「先挑后确认」:选择只是挑选,点「加入」才 POST,取消什么都不发生", async () => {

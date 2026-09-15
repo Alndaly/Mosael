@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
@@ -76,17 +76,21 @@ function MenuItem({
   onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-2 py-[6px] text-left text-ui-sm hover:bg-secondary",
-        destructive ? "text-destructive" : "text-foreground",
-      )}
-      onClick={onSelect}
-    >
-      <span className="shrink-0 opacity-70">{icon}</span>
-      {label}
-    </button>
+    /* 点完要关菜单:此前只有 onSelect,菜单一直挂着 —— 「选择」这种不开对话框的
+       动作,菜单就明晃晃地挡在进入了选择模式的列表前面。 */
+    <PopoverClose asChild>
+      <button
+        type="button"
+        className={cn(
+          "flex w-full cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-2 py-[6px] text-left text-ui-sm hover:bg-secondary",
+          destructive ? "text-destructive" : "text-foreground",
+        )}
+        onClick={onSelect}
+      >
+        <span className="shrink-0 opacity-70">{icon}</span>
+        {label}
+      </button>
+    </PopoverClose>
   );
 }
 
