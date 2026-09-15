@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -633,6 +633,76 @@ class ProviderModel(Base):
 
     #: 解析一个模型时几乎总要同时拿到端点与凭据 —— 它们在连接上。
     profile: Mapped["ProviderProfile"] = relationship(lazy="joined")
+
+
+class GenerationCapabilityProfile(Base):
+    """用户自己写下的一份「这个端点接受什么参数」。
+
+    **为什么需要**:生成参数来自一张静态目录,按 (provider, model, kind) 精确查。那张表装的是
+    我们查证过的东西,而中转端点的组合是装不完的 —— 同一个 gemini 经两家中转,一家支持尺寸和
+    多张、另一家只支持尺寸。指向内置那份会**过度承诺**:界面摆出一个「张数」旋钮,发出去被拒。
+
+    **归连接**,不归人也不归部署:它描述的就是「这条连接后面那个端点接受什么」,和连接同生共死
+    (删连接一起清,不会留下指向虚空的孤儿)。连接本来就是按人的 —— 归属这件事跟着它走就够了,
+    不必再发明一层。
+
+    **它不是"我们查证过的事实"**,是用户的断言。所以界面上要和内置目录区分开:填错了不会当场
+    报错,而是等到生成请求被供应商拒掉 —— 这个代价由填的人承担,前提是他知道自己在断言。
+    """
+
+    __tablename__ = "generation_capability_profiles"
+    __table_args__ = (
+        # 同一条连接下名字唯一 —— 选择器里两个同名的档案,选哪个都说不清。
+        UniqueConstraint("provider_profile_id", "name", name="uq_generation_profiles_profile_name"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    provider_profile_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("provider_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: 给人看的名字。它会出现在「参数按什么来」那个下拉里。
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: image / video。**一份档案只服务一种** —— 图片的尺寸清单套到视频上是另一套东西。
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: 描述符本身,和内置目录里那几十份同形(parameter_keys / sizes / durations / source_limits…)。
+    capabilities: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class GenerationCapabilityDeclaration(Base):
+    """一行模型在一种生成能力下，参数契约从哪里来。
+
+    声明按 ``(provider_model_id, kind)`` 唯一。图片和视频必须分开：同一个模型行可以同时拥有
+    image / video 能力，但两者的尺寸、时长和素材角色没有可复用的默认关系。
+
+    ``catalog_ref`` 指向代码目录里的已知模型或命名契约；``template_id`` 指向这条连接下用户写的
+    参数模板。两者只会有一个，空行没有意义，因此“跟随目录”用没有声明行来表达。
+    """
+
+    __tablename__ = "generation_capability_declarations"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_model_id", "kind", name="uq_generation_declarations_model_kind"
+        ),
+        CheckConstraint(
+            "(catalog_ref IS NOT NULL AND template_id IS NULL) OR "
+            "(catalog_ref IS NULL AND template_id IS NOT NULL)",
+            name="ck_generation_declarations_one_source",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    provider_model_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("provider_models.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    catalog_ref: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    template_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("generation_capability_profiles.id", ondelete="RESTRICT"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
 class ProviderDefault(Base):

@@ -11,6 +11,7 @@ import { Combobox } from "@/components/app/combobox";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
+import { GenerationProfilesSection } from "./GenerationProfilesSection";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
 import { SettingsList, SettingsListItem } from "@/features/settings/ui";
 
@@ -31,10 +32,13 @@ export function ProviderModelList({
   profileId,
   vendor,
   vendorLabel,
+  capability,
 }: {
   profileId: string;
   vendor?: string;
   vendorLabel?: string;
+  /** 当前设置页在看哪种能力 —— 自定义参数组按 kind 分,图片的尺寸清单套到视频上是另一套。 */
+  capability?: string | null;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -237,6 +241,12 @@ export function ProviderModelList({
         }}
       />
       {vendorLabel && <span className="sr-only">{vendorLabel}</span>}
+
+      {/* 自定义参数组和这条连接同级 —— 它描述的就是"这条连接后面那个端点接受什么"。
+          折叠着:多数连接用不上它,展开的默认状态会让这一节喧宾夺主。 */}
+      {(capability === "image" || capability === "video") && (
+        <GenerationProfilesSection profileId={profileId} kind={capability} />
+      )}
 
       {editing && (
         <ModelSettingsDialog

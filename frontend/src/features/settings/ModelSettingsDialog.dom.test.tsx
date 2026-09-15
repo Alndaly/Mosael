@@ -9,7 +9,7 @@
  * 判据是**分组随能力增删**:纯对话模型不该看见生成那一组,纯生成模型不该看见上下文和高级。
  * 这比断言字号耐久 —— 字号会调,而"这一组属于哪种能力"是结构。
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { expect, it, vi } from "vitest";
 
@@ -21,12 +21,19 @@ const model = (capabilities: string[], known = true) => ({
   enabled: true, configured: true, in_catalog: true, source: "manual",
   context_window: null, context_window_source: "fallback", max_output_tokens: null,
   reasoning: null, vision: null, reasoning_effort: null, developer_role: null,
-  generation_capability_ref: null, generation_capabilities_known: known,
+  generation_capability_ref: null,
+  /* 声明按 (模型, kind) 分行 —— 双能力模型的两个 kind 各指各的(ADR-0013)。 */
+  generation_capability_refs: {} as Record<string, string>,
+  generation_capabilities_known: known,
+  generation_capabilities_known_by_kind: Object.fromEntries(
+    capabilities.filter((one) => one === "image" || one === "video").map((one) => [one, known]),
+  ),
 });
 
 /* **引用必须稳定。** 每次渲染返回一个新数组/新对象,组件里那条"把查询结果落成草稿"的 effect
    就会每次都判定为变了 —— 无限重渲染,直接把 worker 撑爆(第一版就是这么 OOM 的)。 */
-const REFS = { data: { models: [], profiles: [] } };
+type RefOption = { value: string; profile: string; parameter_keys: string[] };
+const REFS: { data: { models: unknown[]; profiles: RefOption[] } } = { data: { models: [], profiles: [] } };
 const EMPTY = { data: [], isLoading: false };
 /* 组件用 `select` 从整份列表里挑出这一行 —— mock 也得走同一条路,直接把数组当 data 返回
    等于跳过了它,弹窗拿到的是数组而不是那一行,整个内容渲染不出来。 */
@@ -77,4 +84,25 @@ it("同一件事只说一遍:认不出参数时才有那句解释,而且只有�
   open(["image"], true);
   expect(screen.queryByText("modelGenerationRefUnknown")).not.toBeInTheDocument();
   expect(screen.queryByText("modelGenerationRefHint")).not.toBeInTheDocument();
+});
+
+it("双能力模型的两个 kind 各有一个选择器 —— 共用一个引用就是只能配置一半", () => {
+  open(["image", "video"]);
+  expect(screen.getAllByRole("combobox", { name: "modelGenerationRef" })).toHaveLength(2);
+});
+
+it("这条连接的自定义参数组出现在选择器里,选之前看得见它会带来哪几项", async () => {
+  REFS.data = {
+    models: [],
+    profiles: [{ value: "profile:abc", profile: "中转那份", parameter_keys: ["size", "num_images"] }],
+  };
+  try {
+    open(["image"]);
+    fireEvent.click(screen.getByRole("combobox", { name: "modelGenerationRef" }));
+    /* i18n 在测试里是恒等函数,名字拼不进 label;能断言的是参数清单那行描述 ——
+       它回答的是"选它会得到哪几项"。 */
+    expect(await screen.findByText("size · num_images")).toBeInTheDocument();
+  } finally {
+    REFS.data = { models: [], profiles: [] };
+  }
 });

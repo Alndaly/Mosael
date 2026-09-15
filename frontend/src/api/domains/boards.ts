@@ -104,6 +104,7 @@ export function generateOnBoard(
     x: number;
     y: number;
     provider?: string;
+    provider_profile_id?: string;
     model?: string;
     parameters?: Record<string, unknown>;
     source_assets?: { asset_id: string; role: string }[];

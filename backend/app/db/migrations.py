@@ -314,6 +314,19 @@ def _migrate_track_role() -> None:
     backfill_dub_tracks()
 
 
+def _migrate_generation_capability_profiles() -> None:
+    """建生成参数模板与逐模型、逐 kind 的声明表。
+
+    `_create_current_schema` 会为全新库建好它;这一步是给**已有库**补上的。建表语句从模型本身
+    取(`checkfirst=True`),不手写一遍 DDL —— 手写的那份迟早和模型分岔,而分岔的症状是某一列
+    在老库上不存在,只有升级过来的人撞得到。
+    """
+    from app.db.models import GenerationCapabilityDeclaration, GenerationCapabilityProfile
+
+    GenerationCapabilityProfile.__table__.create(bind=engine, checkfirst=True)
+    GenerationCapabilityDeclaration.__table__.create(bind=engine, checkfirst=True)
+
+
 def _migrate_provider_model_capability_ref() -> None:
     """给模型行补 `generation_capability_ref` 列。
 
@@ -2028,6 +2041,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
                 _migrate_provider_model_capability_ref,
+                _migrate_generation_capability_profiles,
                 _migrate_browser_boolean_options,
                 _migrate_official_workflow_data_bindings,
                 _migrate_workflow_revisions,

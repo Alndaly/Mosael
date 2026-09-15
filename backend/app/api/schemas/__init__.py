@@ -605,9 +605,12 @@ class ProviderModelOut(ApiModel):
     developer_role: bool | None = None
     #: 生成参数按什么来 —— `model:<provider>/<model>` 或 `profile:<id>`,留空 = 跟随目录。
     generation_capability_ref: str | None = None
+    #: 按生成类型分别声明。双能力模型不能让 image 与 video 共用一个引用。
+    generation_capability_refs: dict[str, str] = Field(default_factory=dict)
     #: 这个模型的生成参数是**认出来的**还是落到兜底。界面据此分开"确实没有参数"和
     #: "我们不认识这个模型" —— 合成一个的话,后者会静默地什么都不显示。
     generation_capabilities_known: bool = True
+    generation_capabilities_known_by_kind: dict[str, bool] = Field(default_factory=dict)
 
 
 class ProviderModelUpdate(ApiModel):
@@ -624,6 +627,31 @@ class ProviderModelUpdate(ApiModel):
     reasoning_effort: bool | None = None
     developer_role: bool | None = None
     generation_capability_ref: str | None = None
+    generation_capability_refs: dict[str, str | None] | None = None
+
+
+class GenerationCapabilityProfileOut(ApiModel):
+    """一份用户自己写下的参数组。"""
+
+    id: str
+    name: str
+    kind: str
+    capabilities: dict = Field(default_factory=dict)
+    #: 模型行上要存的那个值。前端不自己拼 —— 拼错了是一个解析不到的 ref。
+    ref: str
+
+
+class GenerationCapabilityProfileCreate(ApiModel):
+    name: str = Field(min_length=1, max_length=120)
+    kind: str = "image"
+    capabilities: dict = Field(default_factory=dict)
+
+
+class GenerationCapabilityProfileUpdate(ApiModel):
+    """只改传了的那几项。kind 不给改 —— 要换就新建一份(见路由里的说明)。"""
+
+    name: str | None = Field(default=None, max_length=120)
+    capabilities: dict | None = None
 
 
 class OAuthPromptOut(ApiModel):

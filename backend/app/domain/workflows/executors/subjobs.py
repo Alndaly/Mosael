@@ -125,6 +125,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
         project_id=None,
         created_by=current_actor(db),
         provider=provider,
+        provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
         model=model,
         kind=kind,
         prompt=str(config.get("prompt", "")),

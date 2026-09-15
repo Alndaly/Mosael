@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Narration is optional.",
-  "graph_hash": "09478290cd4f5e61161b5d593fba64131dfb554176988a093bd7e27a997bffa5",
+  "graph_hash": "c919272966662d7bff11ee19cfb1fc7175e56e6856e1c5a7213942fb154d0a20",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -447,6 +447,7 @@
                 },
                 "config": {
                   "provider": "",
+                  "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
                   "prompt": "{{loop.item.generation_prompt}}",

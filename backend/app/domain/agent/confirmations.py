@@ -629,11 +629,13 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         from app.domain import provider_models
         kind = "image" if confirmation.tool == "generate_image" else "video"
         provider = str(payload.get("provider", "")).strip()
+        provider_profile_id = str(payload.get("provider_profile_id", "")).strip()
         model = str(payload.get("model", "")).strip()
         if not provider or not model:
             default = provider_models.resolve_default(db, kind, actor)
             if default is not None:
                 provider, model = default.profile.vendor, default.model_id
+                provider_profile_id = default.provider_profile_id
         if not provider or not model:
             raise RuntimeError("没有配置可用于生成的真实供应商和模型")
         generation, job = create_generation_job(
@@ -643,6 +645,7 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
             project_id=payload.get("project_id"),
             created_by=actor,
             provider=provider,
+            provider_profile_id=provider_profile_id or None,
             model=model,
             kind=kind,
             prompt=str(payload["prompt"]),

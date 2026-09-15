@@ -32,6 +32,9 @@ RATCHET = True
 #: 值来自一张接口拉来的列表,界面渲染成选择器(options 优先于 type)。**只减不增。**
 _PICKER_KEYS = {
     "profile_id",
+    # 生成节点上随模型一起存的连接身份:值从 /api/generation/options 拉来的列表里选
+    # (同一 vendor/model 可以在多条连接下),用户不手打 —— 和 model / provider 同一类。
+    "provider_profile_id",
     "model",
     "provider",
     "plugin_id",

@@ -1,0 +1,216 @@
+"""Resolve one generation model to one effective parameter contract.
+
+This is the seam shared by settings, generation jobs, boards, workflows and agents.  Callers do
+not join provider models, declarations and templates themselves: doing so previously gave the UI
+and job validation different answers for the same model.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.ai.providers import get_generation_adapter
+from app.db.models import (
+    GenerationCapabilityDeclaration,
+    GenerationCapabilityProfile,
+    ProviderModel,
+)
+from app.domain import provider_models
+from app.domain.generation.catalog import (
+    capabilities_are_known,
+    capabilities_for,
+    resolve_capability_ref,
+)
+from app.domain.generation.custom_profiles import custom_capabilities_map
+
+KINDS = ("image", "video")
+
+
+class GenerationResolutionError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class ResolvedGenerationModel:
+    row: ProviderModel
+    profile_id: str
+    profile_name: str
+    provider: str
+    model: str
+    kind: str
+    capabilities: dict[str, Any]
+    capabilities_known: bool
+    declaration_ref: str | None
+
+
+def declarations_for_model(db: Session, model_id: str) -> dict[str, GenerationCapabilityDeclaration]:
+    rows = db.scalars(
+        select(GenerationCapabilityDeclaration).where(
+            GenerationCapabilityDeclaration.provider_model_id == model_id
+        )
+    ).all()
+    return {row.kind: row for row in rows}
+
+
+def declaration_refs_for_model(db: Session, model: ProviderModel) -> dict[str, str]:
+    """Opaque refs for the settings form; the browser never parses storage details."""
+    refs: dict[str, str] = {}
+    for kind, declaration in declarations_for_model(db, model.id).items():
+        if declaration.template_id:
+            refs[kind] = f"profile:{declaration.template_id}"
+        elif declaration.catalog_ref:
+            refs[kind] = declaration.catalog_ref
+    # Compatibility for rows written before declarations were split by kind.  New writes clear it.
+    if model.generation_capability_ref:
+        for kind in KINDS:
+            if kind in provider_models.effective_capabilities(model):
+                refs.setdefault(kind, model.generation_capability_ref)
+    return refs
+
+
+def set_declaration_refs(db: Session, model: ProviderModel, refs: dict[str, str | None]) -> None:
+    """Replace only the kinds present in ``refs`` after validating ownership and kind."""
+    existing = declarations_for_model(db, model.id)
+    for kind, raw_ref in refs.items():
+        if kind not in KINDS:
+            raise GenerationResolutionError(f"未知的生成类型:{kind}")
+        current = existing.get(kind)
+        ref = (raw_ref or "").strip()
+        if not ref:
+            if current is not None:
+                db.delete(current)
+            continue
+
+        catalog_ref: str | None = None
+        template_id: str | None = None
+        if ref.startswith("profile:"):
+            candidate = ref.removeprefix("profile:").strip()
+            template = db.get(GenerationCapabilityProfile, candidate)
+            if template is not None:
+                if template.provider_profile_id != model.provider_profile_id or template.kind != kind:
+                    raise GenerationResolutionError("参数模板不属于这条连接或生成类型不匹配")
+                template_id = template.id
+            elif resolve_capability_ref(ref, kind) is not None:
+                catalog_ref = ref
+            else:
+                raise GenerationResolutionError("参数契约不存在")
+        elif resolve_capability_ref(ref, kind) is not None:
+            catalog_ref = ref
+        else:
+            raise GenerationResolutionError("参数契约不存在")
+
+        declaration = current or GenerationCapabilityDeclaration(
+            provider_model_id=model.id, kind=kind
+        )
+        declaration.catalog_ref = catalog_ref
+        declaration.template_id = template_id
+        db.add(declaration)
+    #: legacy 列按 kind 兜底:只写了部分 kind 时,没写到的那几个还靠它 —— 无条件下架会让
+    #: 双能力模型的另一半静默落回目录。这次写入把这个模型的生成 kind 全覆盖了,才安全下架。
+    if refs:
+        covered = {kind for kind in provider_models.effective_capabilities(model) if kind in KINDS}
+        if covered and covered <= set(refs):
+            model.generation_capability_ref = None
+
+
+def _resolved_ref(db: Session, model: ProviderModel, kind: str) -> tuple[str | None, dict[str, dict[str, Any]]]:
+    declaration = declarations_for_model(db, model.id).get(kind)
+    custom = custom_capabilities_map(db, model.provider_profile_id, kind)
+    if declaration is not None:
+        if declaration.template_id:
+            return f"profile:{declaration.template_id}", custom
+        return declaration.catalog_ref, custom
+    return model.generation_capability_ref, custom
+
+
+def resolve_row(db: Session, model: ProviderModel, kind: str) -> ResolvedGenerationModel:
+    profile = model.profile
+    if profile is None:
+        raise GenerationResolutionError("生成连接不存在")
+    ref, custom = _resolved_ref(db, model, kind)
+    return ResolvedGenerationModel(
+        row=model,
+        profile_id=profile.id,
+        profile_name=profile.name,
+        provider=profile.vendor,
+        model=model.model_id,
+        kind=kind,
+        capabilities=capabilities_for(profile.vendor, model.model_id, kind, ref=ref, custom=custom),
+        capabilities_known=capabilities_are_known(
+            profile.vendor, model.model_id, kind, ref=ref, custom=custom
+        ),
+        declaration_ref=ref,
+    )
+
+
+def resolve_generation_model(
+    db: Session,
+    *,
+    user_id: str | None,
+    provider: str,
+    model: str,
+    kind: str,
+    provider_profile_id: str | None = None,
+) -> ResolvedGenerationModel:
+    """Resolve an enabled, owned model; legacy calls without profile id must be unambiguous."""
+    candidates = provider_models.models_for_capability(db, kind, user_id=user_id)
+    matches = [
+        row
+        for row in candidates
+        if row.model_id == model
+        and row.profile is not None
+        and (provider_profile_id is not None or row.profile.vendor == provider)
+        and (provider_profile_id is None or row.provider_profile_id == provider_profile_id)
+    ]
+    if not matches:
+        raise GenerationResolutionError("Generation model is not enabled or does not exist")
+    if len(matches) > 1:
+        raise GenerationResolutionError("同一模型存在于多条连接，请明确选择连接")
+    return resolve_row(db, matches[0], kind)
+
+
+def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[dict[str, Any]]:
+    """能用来生成的 (连接 × 模型) 列表 —— **唯一**的那份。
+
+    以前这份列表是前端现拼的:拿 generation_models 的目录、enabled 的档案、provider_defaults
+    三张表在浏览器里做交叉连接。三份数据任何一份的口径变一点,拼出来的东西就和设置页看到的
+    对不上 —— ComfyUI 的工作流只在目录里(还是个叫 `workflow` 的假模型 id)、设置页里加的
+    模型进不了生成页,都是这么来的。
+
+    现在只有一条线:**有哪些模型 = provider_models**(设置页管的就是它),参数描述符按
+    (vendor, model, kind) 经 resolve_row 解析(声明 → 目录 → 兜底),适配器可用性问
+    get_generation_adapter。适配器不可用的照样列出但标出来 —— 藏起来的话,用户配好了
+    却找不到,只会以为是自己配错了。
+    """
+    options: list[dict[str, Any]] = []
+    for row in provider_models.models_for_capability(db, kind, user_id=user_id):
+        resolved = resolve_row(db, row, kind)
+        options.append(
+            {
+                "id": f"{resolved.profile_id}:{kind}:{resolved.model}",
+                "provider_profile_id": resolved.profile_id,
+                "profile_name": resolved.profile_name,
+                "provider": resolved.provider,
+                "kind": kind,
+                "model": resolved.model,
+                "label": f"{resolved.profile_name} · {row.display_name or resolved.model}",
+                "capabilities": resolved.capabilities,
+                "capabilities_known": resolved.capabilities_known,
+                "adapter_available": get_generation_adapter(resolved.provider, kind) is not None,
+            }
+        )
+    options.sort(key=lambda item: (item["profile_name"], item["model"]))
+    return options
+
+
+def template_reference_count(db: Session, template_id: str) -> int:
+    return len(
+        db.scalars(
+            select(GenerationCapabilityDeclaration.id).where(
+                GenerationCapabilityDeclaration.template_id == template_id
+            )
+        ).all()
+    )

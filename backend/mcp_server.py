@@ -506,6 +506,7 @@ def generate_image(
     prompt: str,
     model: str = "",
     provider: str = "",
+    provider_profile_id: str = "",
     workspace_id: str = "",
     source_asset_ids: list[str] | None = None,
     parameters: dict[str, Any] | None = None,
@@ -539,6 +540,7 @@ def generate_image(
             "payload": {
                 "prompt": prompt,
                 "provider": provider,
+                "provider_profile_id": provider_profile_id,
                 "model": model,
                 "parameters": parameters or {},
                 "source_assets": [
@@ -677,6 +679,7 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
             out.append(
                 {
                     "provider": item["provider"],
+                    "provider_profile_id": item["provider_profile_id"],
                     "model": item["model"],
                     "kind": item["kind"],
                     "profile": item["profile_name"],
@@ -772,6 +775,7 @@ def generate_video(
     prompt: str,
     model: str = "",
     provider: str = "",
+    provider_profile_id: str = "",
     workspace_id: str = "",
     parameters: dict[str, Any] | None = None,
     source_assets: list[dict[str, str]] | None = None,
@@ -808,6 +812,7 @@ def generate_video(
             "payload": {
                 "prompt": prompt,
                 "provider": provider,
+                "provider_profile_id": provider_profile_id,
                 "model": model,
                 "parameters": parameters or {},
                 "source_assets": source_assets or [],

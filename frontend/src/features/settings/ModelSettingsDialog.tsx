@@ -14,6 +14,12 @@ import { cn } from "@/lib/utils";
 
 type ModelSettings = components["schemas"]["ProviderModelOut"];
 
+/** 草稿态:读模型回包里每个 kind 都是非空串,而编辑中 null 表示"这个 kind 改回跟随目录"
+    (更新载荷 ProviderModelUpdate 允许 null)。共用同一个 state,所以这里显式放宽。 */
+type ModelSettingsDraft = Omit<ModelSettings, "generation_capability_refs"> & {
+  generation_capability_refs?: Record<string, string | null>;
+};
+
 /**
  * 单个模型的设置。
  *
@@ -114,11 +120,13 @@ type CapabilityRefs = {
  * 所以要么目录认得,要么用户在这里说。
  */
 function CapabilityRefField({
+  profileId,
   kind,
   value,
   known,
   onChange,
 }: {
+  profileId: string;
   kind: "image" | "video";
   value: string | null;
   known: boolean;
@@ -126,8 +134,8 @@ function CapabilityRefField({
 }) {
   const t = useI18n();
   const refs = useQuery({
-    queryKey: ["generation-capability-refs", kind],
-    queryFn: () => api<CapabilityRefs>(`/api/generation/capability-refs?kind=${kind}`),
+    queryKey: ["generation-capability-refs", profileId, kind],
+    queryFn: () => api<CapabilityRefs>(`/api/generation/capability-refs?kind=${kind}&profile_id=${profileId}`),
     staleTime: 5 * 60_000,
   });
   const NONE = "__follow__";
@@ -192,7 +200,7 @@ export function ModelSettingsDialog({
   const t = useI18n();
   const formId = React.useId();
   const qc = useQueryClient();
-  const [draft, setDraft] = React.useState<ModelSettings | null>(null);
+  const [draft, setDraft] = React.useState<ModelSettingsDraft | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const capabilityOptions = useCapabilityOptions(vendor);
 
@@ -263,7 +271,7 @@ export function ModelSettingsDialog({
             vision: current.vision,
             reasoning_effort: current.reasoning_effort,
             developer_role: current.developer_role,
-            generation_capability_ref: current.generation_capability_ref ?? null,
+            generation_capability_refs: current.generation_capability_refs ?? {},
           });
         }}
       >
@@ -410,14 +418,22 @@ export function ModelSettingsDialog({
           </div>
         )}
 
-        {generationKinds.length > 0 && current && (
+        {current && generationKinds.map((kind) => (
           <CapabilityRefField
-            kind={generationKinds[0]}
-            value={current.generation_capability_ref ?? null}
-            known={current.generation_capabilities_known !== false}
-            onChange={(next) => setDraft((prev) => (prev ? { ...prev, generation_capability_ref: next } : prev))}
+            key={kind}
+            profileId={profileId}
+            kind={kind}
+            value={current.generation_capability_refs?.[kind] ?? null}
+            known={current.generation_capabilities_known_by_kind?.[kind] !== false}
+            onChange={(next) => setDraft((prev) => (prev ? {
+              ...prev,
+              generation_capability_refs: {
+                ...(prev.generation_capability_refs ?? {}),
+                [kind]: next,
+              },
+            } : prev))}
           />
-        )}
+        ))}
 
       </form>
     </ModalShell>

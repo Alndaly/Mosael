@@ -181,17 +181,18 @@ class Test示范工作流要挑得动的模型:
         from app.domain.workflows.templates import _supports_text_to_video
 
         # 内置目录里真实存在的两类,直接拿它们断言 —— 编一个假模型名会落进"不认识"那条路。
-        assert not _supports_text_to_video(ModelChoice(provider="alibaba", model="wan2.7-i2v"))
-        assert _supports_text_to_video(ModelChoice(provider="minimax", model="MiniMax-H3"))
+        # db=None = 纯静态上下文:不点名连接,只看内置目录。
+        assert not _supports_text_to_video(None, ModelChoice(provider="alibaba", model="wan2.7-i2v"))
+        assert _supports_text_to_video(None, ModelChoice(provider="minimax", model="MiniMax-H3"))
 
     def test_认不出来的模型算能(self) -> None:
         """用户自建的、ComfyUI 的工作流查不到能力表。落到"不认识"时拿窄名单去拦,
         会把本来能用的模型挡在外面 —— 见 known_capabilities_for 的说明。"""
         from app.domain.workflows.templates import _supports_text_to_video
 
-        assert _supports_text_to_video(ModelChoice(provider="self-hosted", model="my-own-t2v"))
+        assert _supports_text_to_video(None, ModelChoice(provider="self-hosted", model="my-own-t2v"))
         # 但"根本没有模型"不算能:那是空,不是未知。
-        assert not _supports_text_to_video(ModelChoice())
+        assert not _supports_text_to_video(None, ModelChoice())
 
     def test_生成节点不喂首帧所以不能用图生视频(self) -> None:
         """把节点实际的输入摆出来:它只有 prompt / negative_prompt / parameters,

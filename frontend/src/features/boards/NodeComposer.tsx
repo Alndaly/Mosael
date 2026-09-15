@@ -382,6 +382,7 @@ export function NodeComposer({
   onSubmit: (input: {
     prompt: string;
     provider: string;
+    providerProfileId: string;
     model: string;
     parameters: Record<string, unknown>;
     sourceAssets: { asset_id: string; role: string }[];
@@ -408,15 +409,15 @@ export function NodeComposer({
     saved.prompt_document as PromptDocument | undefined,
   );
   const [picked, setPicked] = React.useState(
-    saved.provider && saved.model ? `${saved.provider}/${saved.model}` : "",
+    saved.provider_profile_id && saved.model ? `${saved.provider_profile_id}:${saved.model}` : "",
   );
 
   const options = React.useMemo(
     () => models.filter((model) => model.kind === item.kind),
     [models, item.kind],
   );
-  const current = options.find((model) => `${model.provider}/${model.model}` === picked) ?? options[0] ?? null;
-  const modelValue = picked || (current ? `${current.provider}/${current.model}` : "");
+  const current = options.find((model) => `${model.provider_profile_id}:${model.model}` === picked) ?? options[0] ?? null;
+  const modelValue = picked || (current ? `${current.provider_profile_id}:${current.model}` : "");
 
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
   //: 对着真机核过的。换模型时跟着换,所以用 key 重挂而不是 useState 记着上一个模型的值。
@@ -596,13 +597,14 @@ export function NodeComposer({
       prompt,
       prompt_document: promptDocument,
       provider: current?.provider ?? saved.provider,
+      provider_profile_id: current?.provider_profile_id ?? saved.provider_profile_id,
       model: current?.model ?? saved.model,
       mode: activeMode?.key ?? mode,
       parameters: formParameters,
       source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role })),
       mentioned_asset_ids: mentioned,
     }),
-    [prompt, promptDocument, current, saved.provider, saved.model, activeMode, mode, formParameters, sources, mentioned],
+    [prompt, promptDocument, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned],
   );
   const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
@@ -630,6 +632,7 @@ export function NodeComposer({
       onSubmit({
         prompt: documentPrompt(legend ? `${text}\n\n${t("boardPromptLegend")}${legend}` : text, upstreamDocuments ?? []),
         provider: current.provider,
+        providerProfileId: current.provider_profile_id,
         model: current.model,
         parameters,
         sourceAssets,
@@ -824,7 +827,7 @@ export function NodeComposer({
                 value={modelValue}
                 onChange={(next) => {
                   setPicked(next);
-                  const target = options.find((one) => `${one.provider}/${one.model}` === next) ?? null;
+                  const target = options.find((one) => `${one.provider_profile_id}:${one.model}` === next) ?? null;
                   setRatio(capabilityString(target, "default_aspect_ratio", aspectRatioOptions(target)[0] ?? ""));
                   setResolution(capabilityString(target, "default_resolution", videoResolutionOptions(target)[0] ?? ""));
                   setSize(capabilityString(target, "default_size", sizeOptions(target)[0] ?? ""));
@@ -845,7 +848,10 @@ export function NodeComposer({
                   setMode("");
                   touched.current = false;
                 }}
-                options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))}
+                options={options.map((one) => ({
+                  value: `${one.provider_profile_id}:${one.model}`,
+                  label: `${one.model} · ${one.profile_name}`,
+                }))}
               />
 
               {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮 —— 点开是一个只有标题的

@@ -66,7 +66,7 @@ def _is_known_model(vendor: str, model_id: str, catalog: dict[str, dict]) -> boo
     return any(model_id in builtin_models_for(vendor, kind) for kind in ("image", "video"))
 
 
-def _model_out(model, catalog: dict[str, dict], vendor: str = "") -> ProviderModelOut:
+def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> ProviderModelOut:
     entry = catalog.get(model.model_id) or {}
     catalog_window = entry.get("context_window")
     if model.context_window:
@@ -75,6 +75,14 @@ def _model_out(model, catalog: dict[str, dict], vendor: str = "") -> ProviderMod
         window, source = catalog_window, "catalog"
     else:
         window, source = None, "fallback"
+    from app.domain.generation.resolution import declaration_refs_for_model, resolve_row
+
+    refs = declaration_refs_for_model(db, model)
+    known_by_kind = {
+        kind: resolve_row(db, model, kind).capabilities_known
+        for kind in ("image", "video")
+        if kind in provider_models.effective_capabilities(model)
+    }
     return ProviderModelOut(
         id=model.model_id,
         display_name=model.display_name or "",
@@ -92,11 +100,11 @@ def _model_out(model, catalog: dict[str, dict], vendor: str = "") -> ProviderMod
         reasoning_effort=model.reasoning_effort,
         developer_role=model.developer_role,
         generation_capability_ref=model.generation_capability_ref,
+        generation_capability_refs=refs,
         #: 只有这一行真能生成时才谈得上"认不认得出参数" —— 纯对话模型永远是 True,
         #: 免得设置页对着一排 gpt-4 挂出一串"参数还没认出来"。
-        generation_capabilities_known=_generation_capabilities_known(
-            vendor or (model.profile.vendor if model.profile else ""), model
-        ),
+        generation_capabilities_known=all(known_by_kind.values()),
+        generation_capabilities_known_by_kind=known_by_kind,
     )
 
 
@@ -135,7 +143,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     profile = _require_profile(db, profile_id, user)
     catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     configured = provider_models.list_models(db, profile_id)
-    rows = [_model_out(model, catalog, profile.vendor) for model in configured]
+    rows = [_model_out(db, model, catalog, profile.vendor) for model in configured]
     known = {row.id for row in rows}
     for model_id, entry in catalog.items():
         if model_id in known:
@@ -196,7 +204,10 @@ def add_provider_model(
     if not model_id:
         raise HTTPException(status_code=422, detail="模型 id 不能为空")
     catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
-    fields = body.model_dump(exclude_unset=True, exclude={"model_id", "capability_ids"})
+    fields = body.model_dump(
+        exclude_unset=True,
+        exclude={"model_id", "capability_ids", "generation_capability_refs"},
+    )
     model = provider_models.upsert(
         db,
         profile,
@@ -205,8 +216,15 @@ def add_provider_model(
         capability_ids=body.capability_ids if body.capability_ids is not None else None,
         **fields,
     )
+    if body.generation_capability_refs is not None:
+        from app.domain.generation.resolution import GenerationResolutionError, set_declaration_refs
+
+        try:
+            set_declaration_refs(db, model, body.generation_capability_refs)
+        except GenerationResolutionError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
-    return _model_out(model, catalog, profile.vendor)
+    return _model_out(db, model, catalog, profile.vendor)
 
 
 @router.patch("/settings/providers/{profile_id}/models/{model_id:path}", response_model=ProviderModelOut)
@@ -233,8 +251,15 @@ def update_provider_model(
         model.display_name = body.display_name or ""
     if "capability_ids" in patch:
         model.capability_ids = normalize_capability_ids(body.capability_ids) or []
+    if body.generation_capability_refs is not None:
+        from app.domain.generation.resolution import GenerationResolutionError, set_declaration_refs
+
+        try:
+            set_declaration_refs(db, model, body.generation_capability_refs)
+        except GenerationResolutionError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
-    return _model_out(model, _catalog_entries(_resolved_or_bare(db, profile, user)), profile.vendor)
+    return _model_out(db, model, _catalog_entries(_resolved_or_bare(db, profile, user)), profile.vendor)
 
 
 @router.delete("/settings/providers/{profile_id}/models/{model_id:path}", status_code=204)
@@ -247,4 +272,3 @@ def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: C
         db.delete(model)
         db.commit()
     return Response(status_code=204)
-

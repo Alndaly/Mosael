@@ -44,6 +44,7 @@ class BoardGenerate(ApiModel):
     x: float = 0
     y: float = 0
     provider: str = ""
+    provider_profile_id: str = ""
     model: str = ""
     parameters: dict = Field(default_factory=dict)
     source_assets: list[SourceAssetRef] = Field(default_factory=list)

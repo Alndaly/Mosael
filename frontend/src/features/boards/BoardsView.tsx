@@ -392,6 +392,7 @@ function BoardDetail({
       x?: number;
       y?: number;
       provider?: string;
+      providerProfileId?: string;
       model?: string;
       parameters?: Record<string, unknown>;
       sourceAssets?: { asset_id: string; role: string }[];
@@ -409,6 +410,7 @@ function BoardDetail({
           x: input.x ?? 0,
           y: input.y ?? 0,
           provider: input.provider,
+          provider_profile_id: input.providerProfileId,
           model: input.model,
           parameters: input.parameters,
           source_assets: input.sourceAssets,

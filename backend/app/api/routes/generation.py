@@ -116,11 +116,13 @@ def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser)
 @router.get("/generation/options", response_model=list[GenerationOptionOut])
 def list_generation_options(db: DbSession, user: CurrentUser, kind: str = "image") -> list[GenerationOptionOut]:
     """能用来生成的 (连接 × 模型)。设置页里加了什么,这里就有什么 —— 同一个来源。"""
-    return [GenerationOptionOut(**option) for option in generation_options(db, kind)]
+    return [GenerationOptionOut(**option) for option in generation_options(db, kind, user_id=user.id)]
 
 
 @router.get("/generation/capability-refs")
-def list_capability_refs(kind: str = "image") -> dict[str, list[dict[str, object]]]:
+def list_capability_refs(
+    db: DbSession, user: CurrentUser, kind: str = "image", profile_id: str | None = None
+) -> dict[str, list[dict[str, object]]]:
     """设置页里「这一行的生成参数按什么来」能选什么。
 
     两组,对应那一列的两种写法:
@@ -157,6 +159,19 @@ def list_capability_refs(kind: str = "image") -> dict[str, list[dict[str, object
         if any(mode.endswith(f"-to-{'image' if kind == 'image' else 'video'}") for mode in (caps.get("modes") or []))
     ]
     profiles.sort(key=lambda row: row["profile"])
+    if profile_id:
+        from app.api.routes.settings.provider_profiles import _require_profile
+        from app.domain.generation.custom_profiles import custom_profiles_for
+
+        _require_profile(db, profile_id, user)
+        profiles.extend(
+            {
+                "value": f"profile:{row.id}",
+                "profile": row.name,
+                "parameter_keys": list((row.capabilities or {}).get("parameter_keys") or []),
+            }
+            for row in custom_profiles_for(db, profile_id, kind)
+        )
     return {"models": models, "profiles": profiles}
 
 

@@ -7,6 +7,7 @@ module only composes their routers; behavior belongs to the matching module.
 from fastapi import APIRouter
 
 from app.api.routes.settings.provider_defaults import router as provider_defaults_router
+from app.api.routes.settings.generation_profiles import router as generation_profiles_router
 from app.api.routes.settings.provider_models import router as provider_models_router
 from app.api.routes.settings.provider_oauth import router as provider_oauth_router
 from app.api.routes.settings.provider_pricing import router as provider_pricing_router
@@ -19,6 +20,7 @@ for subrouter in (
     provider_profiles_router,
     provider_oauth_router,
     provider_models_router,
+    generation_profiles_router,
     provider_defaults_router,
     provider_pricing_router,
     system_router,

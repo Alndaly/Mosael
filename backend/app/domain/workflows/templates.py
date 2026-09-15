@@ -11,6 +11,7 @@ from typing import Any
 
 from app.db.models import ProviderModel, Voice
 from app.domain.generation.catalog import known_capabilities_for
+from app.domain.generation.resolution import resolve_row
 from app.domain.provider_defaults import get_row
 from app.domain.provider_models import effective_capabilities
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
@@ -52,13 +53,35 @@ def _default_model(db: Session, capability: str, user_id: str) -> ModelChoice:
     )
 
 
-def _supports_text_to_video(choice: ModelChoice) -> bool:
+def _resolved_video_capabilities(db: Session | None, choice: ModelChoice) -> dict[str, Any] | None:
+    """这个模型在 video 下的能力描述符;认不出返回 None(**不猜**)。
+
+    点了名连接且有库可查时走逐模型解析 —— 用户自定义的声明(见 generation/resolution.py)
+    在这条路上生效。纯静态上下文(官网模板导出、不建库的单元测试)传 ``db=None``,
+    退回内置目录;连模型名都没有时是空选择,不是"不认识",同样 None。
+    """
+    if not choice.model:
+        return None
+    if db is not None and choice.profile_id:
+        model = db.scalar(
+            select(ProviderModel).where(
+                ProviderModel.provider_profile_id == choice.profile_id,
+                ProviderModel.model_id == choice.model,
+            )
+        )
+        if model is not None:
+            resolved = resolve_row(db, model, "video")
+            return resolved.capabilities if resolved.capabilities_known else None
+    return known_capabilities_for(choice.provider, choice.model, "video")
+
+
+def _supports_text_to_video(db: Session | None, choice: ModelChoice) -> bool:
     """这个模型能不能只凭一段文字出片。
 
     认不出来的模型(用户自建、ComfyUI)算**能** —— 落到"不认识"的时候拿窄名单去拦,
     会把本来能用的模型挡在外面(见 known_capabilities_for 的说明)。
     """
-    capabilities = known_capabilities_for(choice.provider, choice.model, "video")
+    capabilities = _resolved_video_capabilities(db, choice)
     if capabilities is None:
         return bool(choice.model)
     return "text-to-video" in (capabilities.get("modes") or ())
@@ -78,12 +101,14 @@ def _text_to_video_model(db: Session, user_id: str) -> ModelChoice:
     模型进去诚实。
     """
     chosen = _default_model(db, "video", user_id)
-    if _supports_text_to_video(chosen):
+    if _supports_text_to_video(db, chosen):
         return chosen
     # 「是不是视频模型」不是一个列 —— 能力是从行上写的、模型名推的、vendor 预设里
     # 依次得出的(见 provider_models.effective_capabilities)。所以只能取出已启用的行
     # 再逐个问,不能在 SQL 里筛。
-    rows = db.scalars(select(ProviderModel).where(ProviderModel.enabled.is_(True)))
+    from app.domain import provider_models
+
+    rows = provider_models.models_for_capability(db, "video", user_id=user_id)
     for model in rows:
         if model.profile is None or not model.profile.enabled:
             continue
@@ -94,14 +119,14 @@ def _text_to_video_model(db: Session, user_id: str) -> ModelChoice:
             provider=model.profile.vendor,
             model=model.model_id,
         )
-        if _supports_text_to_video(candidate):
+        if _supports_text_to_video(db, candidate):
             return candidate
     return ModelChoice()
 
 
-def _video_plan(choice: ModelChoice) -> VideoPlan:
+def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
     """从模型能力目录挑一组肯定合法的默认值；未知模型只给生成契约的通用时长。"""
-    capabilities = known_capabilities_for(choice.provider, choice.model, "video")
+    capabilities = _resolved_video_capabilities(db, choice)
     if capabilities is None:
         return VideoPlan(parameters={"duration_seconds": 5})
 
@@ -161,6 +186,7 @@ def built_in_template_graph(
             video=_text_to_video_model(db, user_id),
             # 音色是工作区的(克隆音色存在工作区名下),所以按工作区取,不按人。
             voice_id=_first_voice_id(db, workspace_id),
+            db=db,
         )
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return transcript_video_cleanup_graph(chat=chat)
@@ -672,10 +698,16 @@ def _first_voice_id(db: Session, workspace_id: str) -> str:
     return voice.id if voice else ""
 
 
-def full_video_generation_graph(*, chat: ModelChoice, video: ModelChoice, voice_id: str = "") -> dict[str, Any]:
-    """主题 → 主旨 → 并行脚本/视觉开发 → 时间分镜 → 逐镜生成合成 → 导出。"""
+def full_video_generation_graph(
+    *, chat: ModelChoice, video: ModelChoice, voice_id: str = "", db: Session | None = None
+) -> dict[str, Any]:
+    """主题 → 主旨 → 并行脚本/视觉开发 → 时间分镜 → 逐镜生成合成 → 导出。
 
-    video_plan = _video_plan(video)
+    ``db`` 让视频模型的默认参数能读到用户自定义的参数声明;官网导出等无库上下文留空,
+    退回内置目录(见 _resolved_video_capabilities)。
+    """
+
+    video_plan = _video_plan(db, video)
 
     brief_system = """你是资深创意总监和纪录片策划。先把用户给出的主题收敛为全片唯一核心主旨，
 建立清晰的受众收益、叙事因果和可执行视觉母题。不要编造未经输入支持的具体数字、引语、人物经历
@@ -708,6 +740,7 @@ JSON Schema 的对象。"""
                 "position": {"x": 80, "y": 140},
                 "config": {
                     "provider": video.provider,
+                    "provider_profile_id": video.profile_id,
                     "model": video.model,
                     "kind": "video",
                     "prompt": "{{loop.item.generation_prompt}}",

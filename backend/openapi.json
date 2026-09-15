@@ -7926,6 +7926,22 @@
               "default": "image",
               "title": "Kind"
             }
+          },
+          {
+            "name": "profile_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Profile Id"
+            }
           }
         ],
         "responses": {
@@ -12388,6 +12404,216 @@
             "schema": {
               "type": "string",
               "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/generation-profiles": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Profiles",
+        "operationId": "list_profiles_api_settings_providers__profile_id__generation_profiles_get",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "image",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GenerationCapabilityProfileOut"
+                  },
+                  "title": "Response List Profiles Api Settings Providers  Profile Id  Generation Profiles Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Create Profile",
+        "operationId": "create_profile_api_settings_providers__profile_id__generation_profiles_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationCapabilityProfileCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationCapabilityProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/generation-profiles/{ref_id}": {
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Profile",
+        "operationId": "update_profile_api_settings_providers__profile_id__generation_profiles__ref_id__patch",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "ref_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationCapabilityProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationCapabilityProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete Profile",
+        "description": "删掉一份参数组。\n\n**还有模型指着它时不给删**(409,说出还有几个):删了的话那些行的 ref 解析不到,静默落回\n兜底 —— 用户以为还在生效的配置其实没了。先让他把模型改回\"跟随目录\",再删,数据里就永远\n回答得出\"当时配的是什么\"。数据库层也由 template_id 的 FK(RESTRICT)兜住同一个不变量。",
+        "operationId": "delete_profile_api_settings_providers__profile_id__generation_profiles__ref_id__delete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "ref_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref Id"
             }
           }
         ],
@@ -18957,6 +19183,11 @@
             "title": "Provider",
             "default": ""
           },
+          "provider_profile_id": {
+            "type": "string",
+            "title": "Provider Profile Id",
+            "default": ""
+          },
           "model": {
             "type": "string",
             "title": "Model",
@@ -21057,6 +21288,96 @@
           "cues"
         ],
         "title": "GenerateSubtitlesRequest"
+      },
+      "GenerationCapabilityProfileCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "image"
+          },
+          "capabilities": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Capabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "GenerationCapabilityProfileCreate"
+      },
+      "GenerationCapabilityProfileOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "capabilities": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Capabilities"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "ref"
+        ],
+        "title": "GenerationCapabilityProfileOut",
+        "description": "一份用户自己写下的参数组。"
+      },
+      "GenerationCapabilityProfileUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capabilities"
+          }
+        },
+        "type": "object",
+        "title": "GenerationCapabilityProfileUpdate",
+        "description": "只改传了的那几项。kind 不给改 —— 要换就新建一份(见路由里的说明)。"
       },
       "GenerationCreate": {
         "properties": {
@@ -24181,10 +24502,24 @@
             ],
             "title": "Generation Capability Ref"
           },
+          "generation_capability_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Generation Capability Refs"
+          },
           "generation_capabilities_known": {
             "type": "boolean",
             "title": "Generation Capabilities Known",
             "default": true
+          },
+          "generation_capabilities_known_by_kind": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Generation Capabilities Known By Kind"
           }
         },
         "type": "object",
@@ -24321,6 +24656,27 @@
               }
             ],
             "title": "Generation Capability Ref"
+          },
+          "generation_capability_refs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Capability Refs"
           }
         },
         "type": "object",

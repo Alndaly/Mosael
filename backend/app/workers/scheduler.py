@@ -119,11 +119,13 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
 
             kind = str(payload.get("kind", "image")).strip() or "image"
             provider = str(payload.get("provider", "")).strip()
+            provider_profile_id = str(payload.get("provider_profile_id", "")).strip()
             model = str(payload.get("model", "")).strip()
             if not provider or not model:
                 default = provider_models.resolve_default(db, kind, task.owner_user_id)
                 if default is not None:
                     provider, model = default.profile.vendor, default.model_id
+                    provider_profile_id = default.provider_profile_id
             if not provider or not model:
                 raise RuntimeError("AI 生成任务缺少真实供应商或模型")
             generation, _generation_job = create_generation_job(
@@ -133,6 +135,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
                 project_id=task.project_id,
                 created_by=task.owner_user_id,
                 provider=provider,
+                provider_profile_id=provider_profile_id or None,
                 model=model,
                 kind=kind,
                 prompt=str(payload.get("prompt", "")),

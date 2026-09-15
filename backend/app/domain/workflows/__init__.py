@@ -199,6 +199,8 @@ _FIELD_LABELS = {
     "presence_penalty": "wfField_presence_penalty",
     "preset": "wfField_preset",
     "profile_id": "wfField_profile_id",
+    #: 生成节点上随模型一起存的连接身份 —— 和 profile_id 是同一个东西,复用同一份翻译。
+    "provider_profile_id": "wfField_profile_id",
     "project_id": "wfField_project_id",
     "prompt": "wfField_prompt",
     "provider": "wfField_provider",
@@ -558,6 +560,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_ai_generate",
         "description": "wfNode_ai_generate_desc",
         "config": {
+            # 连接身份随模型一起存；同一 vendor/model 可以存在于多条端点，二元组不再唯一。
+            "provider_profile_id": {"type": "string"},
             "provider": {"type": "string", "required": True},
             "model": {"type": "string", "required": True, "depends_on": "provider"},
             "kind": {"type": "string", "required": True, "description": "wfNode_ai_generate_kind", "options": ["image", "video"]},

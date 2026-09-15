@@ -275,7 +275,9 @@ const AGENT_PANEL_KEY = "mosael:workflow-agent-open";
 //: 生成节点里由专区自己渲染的配置项,不走通用字段列表。source_assets 在这里,是因为它在配置里
 //: 是一段 `id:role` 的文本,而界面上该是**按角色一行一格** —— 让用户手写那段文本,角色名要背、
 //: 冒号要记,写错了还不报错(后端拿不到角色就按默认走,于是"我明明挂了尾帧"的片子里没有尾帧)。
-const GENERATE_SPECIAL_CONFIG_KEYS = new Set(["provider", "model", "kind", "parameters", "source_assets"]);
+const GENERATE_SPECIAL_CONFIG_KEYS = new Set([
+  "provider_profile_id", "provider", "model", "kind", "parameters", "source_assets",
+]);
 
 const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "preset",
@@ -3015,6 +3017,7 @@ function NodeInspector({
         (model) =>
           model.provider === chosenProvider &&
           model.model === chosenModel &&
+          (!config.provider_profile_id || model.provider_profile_id === config.provider_profile_id) &&
           (!config.kind || model.kind === config.kind),
       );
       const capability = String(config.kind || matchedModel?.kind || "image");
@@ -3141,7 +3144,11 @@ function NodeInspector({
   const genModel =
     node.type === "ai_generate"
       ? (generationModels.data ?? []).find(
-          (item) => item.provider === config.provider && item.model === config.model && item.kind === config.kind,
+          (item) =>
+            item.provider === config.provider &&
+            item.model === config.model &&
+            item.kind === config.kind &&
+            (!config.provider_profile_id || item.provider_profile_id === config.provider_profile_id),
         ) ?? null
       : null;
   const genParams = (config.parameters ?? {}) as Record<string, unknown>;
@@ -3649,7 +3656,14 @@ function NodeInspector({
                   // 三者一起写:分开填就会出现「图像模型 + 类型 video」这种自相矛盾的组合。
                   // 换模型时清空参数 —— 上一个模型的比例/时长在新模型上未必存在。
                   onChange({
-                    config: { ...config, provider: model.provider, model: model.model, kind: model.kind, parameters: {} },
+                    config: {
+                      ...config,
+                      provider_profile_id: model.provider_profile_id,
+                      provider: model.provider,
+                      model: model.model,
+                      kind: model.kind,
+                      parameters: {},
+                    },
                   });
                   setGenCustom(false);
                 }}

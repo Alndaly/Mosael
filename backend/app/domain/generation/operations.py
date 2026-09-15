@@ -17,6 +17,7 @@ from app.ai.providers import (
     roles_supplied_via_url,
 )
 from app.domain.generation.catalog import SOURCE_ROLE_LABELS, known_capabilities_for
+from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
 
@@ -53,18 +54,30 @@ def create_generation_job(
 ) -> tuple[GenerationJob, Any]:
     provider = provider.strip()
     model = model.strip()
-    provider_profile = _resolve_provider_profile(db, provider_profile_id, owner_user_id=created_by)
-    if provider_profile is not None:
-        provider = provider_profile.vendor
-    elif not _vendor_can_generate(db, provider, kind):
-        # 没点名连接时,至少要有一条**启用的**连接声明了这个 vendor 能做这种生成 ——
-        # 以前查的是 generation_models 那张目录表,而目录说"这个 vendor 有这个模型"和
-        # "用户配了这条连接"是两回事,于是删掉档案之后照样能提交任务、跑到一半才失败。
-        raise GenerationDomainError("Generation model is not enabled or does not exist")
+    try:
+        resolved = resolve_generation_model(
+            db,
+            user_id=created_by,
+            provider=provider,
+            model=model,
+            kind=kind,
+            provider_profile_id=provider_profile_id,
+        )
+    except GenerationResolutionError as exc:
+        raise GenerationDomainError(str(exc)) from exc
+    provider_profile = resolved.row.profile
+    provider = resolved.provider
     if get_generation_adapter(provider, kind) is None:
         raise GenerationDomainError(f"Generation adapter is not available for {provider}/{kind}")
 
-    validate_against_capabilities(provider, model, kind, parameters, source_assets)
+    validate_against_capabilities(
+        provider,
+        model,
+        kind,
+        parameters,
+        source_assets,
+        capabilities=resolved.capabilities if resolved.capabilities_known else None,
+    )
     _validate_source_assets(db, workspace_id, source_assets)
     negative_prompt = requested_negative_prompt(negative_prompt, parameters)
 
@@ -269,6 +282,9 @@ def allowed_parameter_keys(capabilities: dict[str, Any], kind: str | None = None
     return allowed
 
 
+_UNSET_CAPABILITIES = object()
+
+
 def _integer_parameter(provider: str, model: str, name: str, value: Any) -> int:
     """Canonical integer parameters fail at submission instead of crashing in an Adapter.
 
@@ -295,6 +311,8 @@ def validate_against_capabilities(
     kind: str,
     parameters: dict[str, Any],
     source_assets: list[dict[str, str]],
+    *,
+    capabilities: dict[str, Any] | None | object = _UNSET_CAPABILITIES,
 ) -> None:
     """按描述符拦下这个模型不认的参数和素材角色。
 
@@ -306,7 +324,8 @@ def validate_against_capabilities(
     描述符查不到的模型(用户自己加的、ComfyUI 的工作流)放行:我们不知道它认什么,
     猜着拦只会挡住本来能用的东西。
     """
-    capabilities = known_capabilities_for(provider, model, kind)
+    if capabilities is _UNSET_CAPABILITIES:
+        capabilities = known_capabilities_for(provider, model, kind)
     if capabilities is None:
         return
     keys = capabilities.get("parameter_keys")

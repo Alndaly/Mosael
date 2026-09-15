@@ -261,6 +261,7 @@ interface Props {
     x?: number;
     y?: number;
     provider?: string;
+    providerProfileId?: string;
     model?: string;
     parameters?: Record<string, unknown>;
     sourceAssets?: { asset_id: string; role: string }[];
@@ -1475,11 +1476,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           upstreamTexts={feeding.texts.filter(one => !documents.has(one.itemId))}
           upstreamDocuments={feeding.references}
           onFormChange={(form) => patch(composerItem.id, { form })}
-          onSubmit={({ prompt, provider, model, parameters, sourceAssets, form }) =>
+          onSubmit={({ prompt, provider, providerProfileId, model, parameters, sourceAssets, form }) =>
             void onGenerate({
               kind: composerItem.kind as "image" | "video",
               prompt,
               provider,
+              providerProfileId,
               model,
               parameters,
               sourceAssets,

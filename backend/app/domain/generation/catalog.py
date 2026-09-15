@@ -1148,7 +1148,9 @@ _FALLBACK_BY_KIND: dict[str, dict[str, Any]] = {
 }
 
 
-def resolve_capability_ref(ref: str | None, kind: str) -> dict[str, Any] | None:
+def resolve_capability_ref(
+    ref: str | None, kind: str, *, custom: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any] | None:
     """用户在自己那行模型上写下的「生成参数按什么来」。认不出就回 None(**不猜**)。
 
     两种写法:
@@ -1166,7 +1168,10 @@ def resolve_capability_ref(ref: str | None, kind: str) -> dict[str, Any] | None:
         return None
     prefix, _, rest = text.partition(":")
     if prefix == "profile":
-        found = CAPABILITY_PROFILES.get(rest.strip())
+        name = rest.strip()
+        #: 自定义的排在前面:同名时用户的那份说了算 —— 内置 id 是 `openai-image` 这种词,
+        #: 自定义的是 32 位十六进制,实际撞不上,但顺序仍要写明白。
+        found = (custom or {}).get(name) or CAPABILITY_PROFILES.get(name)
         return dict(found) if found is not None else None
     if prefix == "model":
         target_vendor, _, target_model = rest.partition("/")
@@ -1175,7 +1180,9 @@ def resolve_capability_ref(ref: str | None, kind: str) -> dict[str, Any] | None:
     return None
 
 
-def capabilities_for(vendor: str, model: str, kind: str, *, ref: str | None = None) -> dict[str, Any]:
+def capabilities_for(
+    vendor: str, model: str, kind: str, *, ref: str | None = None, custom: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """某个模型在某种生成能力下的参数描述符(尺寸/时长/支持哪些参数)。
 
     **这是关于供应商 API 的静态知识,不是用户配置** —— 所以它是一张查表,不再是数据库里的行。
@@ -1187,7 +1194,7 @@ def capabilities_for(vendor: str, model: str, kind: str, *, ref: str | None = No
     界面保留提示词和提交入口。即使同一个供应商，同系列不同型号的时长、素材角色和枚举值也
     经常不同；继承目录第一项会让界面主动发送用户没有选择、目标模型也未必支持的参数。
     """
-    declared = resolve_capability_ref(ref, kind)
+    declared = resolve_capability_ref(ref, kind, custom=custom)
     if declared is not None:
         return declared
     exact = known_capabilities_for(vendor, model, kind)
@@ -1196,13 +1203,18 @@ def capabilities_for(vendor: str, model: str, kind: str, *, ref: str | None = No
     return dict(_FALLBACK_BY_KIND.get(kind, {}))
 
 
-def capabilities_are_known(vendor: str, model: str, kind: str, *, ref: str | None = None) -> bool:
+def capabilities_are_known(
+    vendor: str, model: str, kind: str, *, ref: str | None = None, custom: dict[str, dict[str, Any]] | None = None
+) -> bool:
     """这个模型的参数是**认出来的**,还是落到了兜底。
 
     界面要分得开这两种零:「这个模型确实没有可调参数」和「我们不认识这个模型」。合成一个的
     后果今天见过 —— 生成节点的「参数」按钮对着一堆其实有参数的模型悄悄消失了。
     """
-    return resolve_capability_ref(ref, kind) is not None or known_capabilities_for(vendor, model, kind) is not None
+    return (
+        resolve_capability_ref(ref, kind, custom=custom) is not None
+        or known_capabilities_for(vendor, model, kind) is not None
+    )
 
 
 def known_capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any] | None:
@@ -1222,45 +1234,5 @@ def builtin_models_for(vendor: str, kind: str) -> list[str]:
     """该 vendor 在该能力下的内置模型名 —— 用户没在设置里加过任何模型时的候选。"""
     return [item["model"] for item in BUILTIN_MODELS if item["provider"] == vendor and item["kind"] == kind]
 
-
-def generation_options(db, kind: str) -> list[dict[str, Any]]:
-    """能用来生成的 (连接 × 模型) 列表 —— **唯一**的那份。
-
-    以前这份列表是前端现拼的:拿 generation_models 的目录、enabled 的档案、provider_defaults
-    三张表在浏览器里做交叉连接。三份数据任何一份的口径变一点,拼出来的东西就和设置页看到的
-    对不上 —— ComfyUI 的工作流只在目录里(还是个叫 `workflow` 的假模型 id)、设置页里加的
-    模型进不了生成页,都是这么来的。
-
-    现在只有一条线:**有哪些模型 = provider_models**(设置页管的就是它),参数描述符按
-    (vendor, model, kind) 查静态表,适配器可用性问 get_generation_adapter。
-    """
-    from app.ai.providers import get_generation_adapter
-    from app.domain import provider_models
-
-    options: list[dict[str, Any]] = []
-    for model in provider_models.models_for_capability(db, kind):
-        profile = model.profile
-        if profile is None:
-            continue
-        vendor = profile.vendor
-        options.append(
-            {
-                "id": f"{profile.id}:{kind}:{model.model_id}",
-                "provider_profile_id": profile.id,
-                "profile_name": profile.name,
-                "provider": vendor,
-                "kind": kind,
-                "model": model.model_id,
-                "label": f"{profile.name} · {model.display_name or model.model_id}",
-                "capabilities": capabilities_for(vendor, model.model_id, kind, ref=model.generation_capability_ref),
-                #: 参数是认出来的还是兜底 —— 界面据此区分"没有参数"和"不认识这个模型"。
-                "capabilities_known": capabilities_are_known(
-                    vendor, model.model_id, kind, ref=model.generation_capability_ref
-                ),
-                # 适配器不可用的照样列出来但标出来 —— 藏起来的话,用户配好了却找不到,
-                # 只会以为是自己配错了。
-                "adapter_available": get_generation_adapter(vendor, kind) is not None,
-            }
-        )
-    options.sort(key=lambda item: (item["profile_name"], item["model"]))
-    return options
+#: 「能用来生成的 (连接 × 模型) 列表」是 db 感知的,住在 resolution.py 那个集成缝上。
+#: 这里保持纯静态目录 —— 叶模块向上伸手会成环(import 分层测试钉着)。

@@ -129,11 +129,13 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
         )
 
     provider, model = body.provider.strip(), body.model.strip()
+    provider_profile_id = body.provider_profile_id.strip()
     if not provider or not model:
         # 没点名就用这个人在这种能力上的默认 —— 和定时任务那条路同一个解析。
         default = provider_models.resolve_default(db, body.kind, user.id)
         if default is not None and default.profile is not None:
             provider, model = default.profile.vendor, default.model_id
+            provider_profile_id = default.provider_profile_id
     if not provider or not model:
         raise HTTPException(status_code=400, detail="还没有可用的生成模型,先去设置里配一个")
 
@@ -145,6 +147,7 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
             project_id=None,
             created_by=user.id,
             provider=provider,
+            provider_profile_id=provider_profile_id or None,
             model=model,
             kind=body.kind,
             prompt=body.prompt,
@@ -181,6 +184,7 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
                     # 表单，运行时追加的图例不会再覆盖它。
                     "prompt": str((body.form or {}).get("prompt") or body.prompt),
                     "provider": provider,
+                    "provider_profile_id": generation.provider_profile_id,
                     "model": model,
                     "parameters": dict(body.parameters or {}),
                     "source_assets": [one.model_dump() for one in (body.source_assets or [])],

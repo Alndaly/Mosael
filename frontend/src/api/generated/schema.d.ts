@@ -4104,6 +4104,49 @@ export interface paths {
         patch: operations["update_provider_model_api_settings_providers__profile_id__models__model_id__patch"];
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/generation-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Profiles */
+        get: operations["list_profiles_api_settings_providers__profile_id__generation_profiles_get"];
+        put?: never;
+        /** Create Profile */
+        post: operations["create_profile_api_settings_providers__profile_id__generation_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}/generation-profiles/{ref_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Profile
+         * @description 删掉一份参数组。
+         *
+         *     **还有模型指着它时不给删**(409,说出还有几个):删了的话那些行的 ref 解析不到,静默落回
+         *     兜底 —— 用户以为还在生效的配置其实没了。先让他把模型改回"跟随目录",再删,数据里就永远
+         *     回答得出"当时配的是什么"。数据库层也由 template_id 的 FK(RESTRICT)兜住同一个不变量。
+         */
+        delete: operations["delete_profile_api_settings_providers__profile_id__generation_profiles__ref_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Profile */
+        patch: operations["update_profile_api_settings_providers__profile_id__generation_profiles__ref_id__patch"];
+        trace?: never;
+    };
     "/api/settings/provider-defaults": {
         parameters: {
             query?: never;
@@ -6521,6 +6564,11 @@ export interface components {
              */
             provider: string;
             /**
+             * Provider Profile Id
+             * @default
+             */
+            provider_profile_id: string;
+            /**
              * Model
              * @default
              */
@@ -7396,6 +7444,50 @@ export interface components {
             track_id: string;
             /** Cues */
             cues: components["schemas"]["SubtitleCueInput"][];
+        };
+        /** GenerationCapabilityProfileCreate */
+        GenerationCapabilityProfileCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @default image
+             */
+            kind: string;
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * GenerationCapabilityProfileOut
+         * @description 一份用户自己写下的参数组。
+         */
+        GenerationCapabilityProfileOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: unknown;
+            };
+            /** Ref */
+            ref: string;
+        };
+        /**
+         * GenerationCapabilityProfileUpdate
+         * @description 只改传了的那几项。kind 不给改 —— 要换就新建一份(见路由里的说明)。
+         */
+        GenerationCapabilityProfileUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** GenerationCreate */
         GenerationCreate: {
@@ -8869,11 +8961,19 @@ export interface components {
             developer_role?: boolean | null;
             /** Generation Capability Ref */
             generation_capability_ref?: string | null;
+            /** Generation Capability Refs */
+            generation_capability_refs?: {
+                [key: string]: string;
+            };
             /**
              * Generation Capabilities Known
              * @default true
              */
             generation_capabilities_known: boolean;
+            /** Generation Capabilities Known By Kind */
+            generation_capabilities_known_by_kind?: {
+                [key: string]: boolean;
+            };
         };
         /**
          * ProviderModelUpdate
@@ -8902,6 +9002,10 @@ export interface components {
             developer_role?: boolean | null;
             /** Generation Capability Ref */
             generation_capability_ref?: string | null;
+            /** Generation Capability Refs */
+            generation_capability_refs?: {
+                [key: string]: string | null;
+            } | null;
         };
         /** ProviderPricingRuleCreate */
         ProviderPricingRuleCreate: {
@@ -17019,6 +17123,7 @@ export interface operations {
         parameters: {
             query?: {
                 kind?: string;
+                profile_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -20066,6 +20171,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderModelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_profiles_api_settings_providers__profile_id__generation_profiles_get: {
+        parameters: {
+            query?: {
+                kind?: string;
+            };
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCapabilityProfileOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_profile_api_settings_providers__profile_id__generation_profiles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationCapabilityProfileCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCapabilityProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_profile_api_settings_providers__profile_id__generation_profiles__ref_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_api_settings_providers__profile_id__generation_profiles__ref_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationCapabilityProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCapabilityProfileOut"];
                 };
             };
             /** @description Validation Error */
