@@ -92,9 +92,15 @@ export function paintScene(ctx: Ctx2D, layers: ScenePaintLayer[], opts: ScenePai
     ctx.translate(width / 2 + tf.x * 0.5 * width, height / 2 + tf.y * 0.5 * height);
     ctx.rotate((tf.rotation * Math.PI) / 180);
     ctx.scale(tf.scale, tf.scale);
+    // **自由元素就是画幅那么大,和素材自身的宽高比无关。** 导出那边是
+    // `scale=W:H:force_original_aspect_ratio=increase,crop=W:H` —— 铺满**再裁到画幅**。
+    // 这里此前只铺满、不裁,拿的是 min(dw,dh):素材比例和画幅一致时两者相等(所以一直没露),
+    // 一旦不一致就分叉 —— 竖素材进横画幅差 1.78 倍,成片里的圆比预览小一圈。
+    const elementWidth = freeElement ? width : dw;
+    const elementHeight = freeElement ? height : dh;
     const circle = appearance.mask.shape === "circle";
-    const drawWidth = circle ? Math.min(dw, dh) : dw;
-    const drawHeight = circle ? drawWidth : dh;
+    const drawWidth = circle ? Math.min(elementWidth, elementHeight) : elementWidth;
+    const drawHeight = circle ? drawWidth : elementHeight;
     const drawX = -drawWidth / 2;
     const drawY = -drawHeight / 2;
 
@@ -120,16 +126,19 @@ export function paintScene(ctx: Ctx2D, layers: ScenePaintLayer[], opts: ScenePai
       ctx.clip();
     }
     ctx.filter = filter || "none";
-    if (circle) {
-      // Preserve source proportions: crop its central square, then map square→circle. Drawing the
-      // whole 16:9 source into a square would make faces visibly narrow.
-      const sourceSide = Math.min(mw, mh);
+    if (freeElement) {
+      // 保住素材自身的比例:按**目标框的比例**中心裁源,再映射过去 —— 把整张 16:9 的源塞进一个
+      // 正方形会让人脸明显变窄。圆形是这条的特例(目标比例 1:1),不必单开一条。
+      // 这正是导出侧 `force_original_aspect_ratio=increase` + `crop` 做的事。
+      const aspect = drawWidth / drawHeight;
+      const sourceWidth = Math.min(mw, mh * aspect);
+      const sourceHeight = Math.min(mh, mw / aspect);
       ctx.drawImage(
         img,
-        (mw - sourceSide) / 2,
-        (mh - sourceSide) / 2,
-        sourceSide,
-        sourceSide,
+        (mw - sourceWidth) / 2,
+        (mh - sourceHeight) / 2,
+        sourceWidth,
+        sourceHeight,
         drawX,
         drawY,
         drawWidth,
