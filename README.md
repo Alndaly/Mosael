@@ -164,8 +164,11 @@ on macOS is `Cmd+Option+I`.
 (cd backend && uv run --frozen python -m pytest -q)
 pnpm --dir frontend exec vitest run
 pnpm --dir frontend exec tsc -b --noEmit
+pnpm --dir agent-sidecar typecheck && pnpm --dir agent-sidecar build && pnpm --dir agent-sidecar test
+pnpm typecheck:electron
+pnpm --dir browser-extension test && pnpm --dir browser-extension typecheck && pnpm build:extension
 pnpm --dir frontend gen:api        # after backend OpenAPI changes
-pnpm --dir website build           # after website or documentation changes
+pnpm --dir website test && pnpm --dir website build
 ```
 
 Run checks from the repository root. Current results are recorded in [GitHub Actions](https://github.com/Alndaly/Mosael/actions); test counts change as the project grows.

@@ -79,6 +79,28 @@ jobs:
       - name: Frontend tests
         run: cd frontend && pnpm vitest run
 
+      # 契约链快照的新鲜度:openapi.json 必须是 app 此刻的形状,schema.d.ts 必须是从它
+      # 再生成出来的那份。此前两端靠手工同步,漂移没有任何闸 —— 已经实测漂过一次
+      # (BoardGenerate.provider_profile_id 进了路由没进快照)。
+      - name: OpenAPI snapshot and generated schema are fresh
+        run: |
+          cd backend && uv run python scripts/export_openapi.py --check && cd ..
+          pnpm gen:api
+          git diff --exit-code frontend/src/api/generated/schema.d.ts
+
+      # sidecar 此前只在发版期跑:context-meter 契约的 Node 一侧在主干没有门。
+      # test 清单末尾的 bundle 冒烟要 dist 在,所以先 build。
+      - name: Agent sidecar typecheck and tests
+        run: |
+          pnpm --dir agent-sidecar typecheck
+          pnpm --dir agent-sidecar build
+          pnpm --dir agent-sidecar test
+
+      # esbuild 只打包不查类型 —— 发布执行器的类型检查此前只在发版期,攒出过失效的
+      # @ts-expect-error 和死参数才被发现。挪到主干,坏了就别合。
+      - name: Electron typecheck
+        run: pnpm typecheck:electron
+
       - name: Browser extension tests and build
         run: |
           pnpm --dir browser-extension test

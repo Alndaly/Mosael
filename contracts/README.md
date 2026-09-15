@@ -83,6 +83,45 @@ sidecar 那份没跟上。开着 prompt caching 时 `input` 只剩新增的一�
 写入那份最严,所以另外几份从来没咬到过 —— 但那是「上游恰好挡住」,不是两侧一致。合法范围
 现在只有一份(`domain.sequences.operations.TRANSFORM_BOUNDS`),两侧跑同一份语料。
 
+### `clip-appearance-cases.json` —— 片段外观契约
+
+「一份 `clip.effects` 读出来是什么:圆形蒙版的半径、阴影的开关/颜色/模糊/偏移,缺省与垃圾值怎么退。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/clipAppearance.ts` | `clipAppearance.parity.test.ts` |
+| 导出 | `backend/app/media/render_plan.py` 的 `_read_appearance` | `backend/tests/test_clip_appearance_parity.py` |
+
+外观是「画板上拖出来的那组参数」逐帧生效的前提:预览里圆的半径是 `cqw`、导出里是像素,
+两边必须解析到同一个默认值表 —— 阴影默认开不开、模糊 24 还是 0,差一点都不只是样式问题,
+而是"预览里不是这样"的成片。
+
+### `clip-free-element-geometry.json` —— 自由元素几何契约
+
+「带蒙版或阴影的片段(自由元素)在画幅里占哪一块:导出侧先铺满画幅再裁回来,预览侧必须算出同一块。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/playback/freeElementGeometry.ts` | `freeElementGeometry.parity.test.ts` |
+| 导出 | `backend/app/media/render_executor.py` 的 `_appearance_filters` | `backend/tests/test_free_element_geometry_parity.py` |
+
+**这份契约是两次用户可见的事故换来的**:先是成片里的圆比预览小 1.78 倍;修好大小之后,
+圆里装的源又是错的 —— 两侧各写了一遍"铺满再裁"的几何,各自自洽,互不相识。
+语料里的 `why` 字段留着完整的经过,提醒下一个想"就两行几何,各写一遍就好"的人。
+
+### `audio-mix-cases.json` —— 混音契约
+
+「t 时刻每条音频轨的增益是多少:音量、变速下的淡入淡出、重叠淡变怎么缩放进片段长度。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/playback/audioMix.ts`(WebAudio 增益曲线) | `audioMix.test.ts` |
+| 导出 | `backend/app/media/render_executor.py` + `render_plan.py`(FFmpeg 滤镜) | `backend/tests/test_audio_mix_parity.py` |
+
+后端那条 parity 直接跑真 FFmpeg 出声再逐采样读回增益 —— 滤镜图写错一个参数,
+拿假的求值器是验不出来的。变速 2x 的片段,淡入 1 秒到底占源素材的 1 秒还是成片的
+1 秒,两侧答案必须一致,不然用户听到的是两种混音。
+
 ### `marker-shortcut-cases.json` —— 画布标记快捷键契约
 
 「一个用户自己绑的快捷键归一成什么串,以及哪些键根本不给绑。」
