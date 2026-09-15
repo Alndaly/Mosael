@@ -43,6 +43,7 @@ import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/compo
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
+import { readSseData } from "@/lib/sse";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -313,30 +314,18 @@ export function CanvasAgentChat({
           signal: controller.signal,
         });
         if (!response.ok || !response.body) return;
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const events = buffer.split("\n\n");
-          buffer = events.pop() ?? "";
-          for (const event of events) {
-            const line = event.split("\n").find((item) => item.startsWith("data: "));
-            if (!line) continue;
-            try {
-              const payload = JSON.parse(line.slice(6)) as {
-                text: string;
-                timeline?: AgentTimelineItem[];
-              };
-              if (streamingRef.current === targetSessionId) {
-                setStreamText(payload.text);
-                setStreamTimeline(payload.timeline ?? []);
-              }
-            } catch {
-              // partial frame
+        for await (const data of readSseData(response.body)) {
+          try {
+            const payload = JSON.parse(data) as {
+              text: string;
+              timeline?: AgentTimelineItem[];
+            };
+            if (streamingRef.current === targetSessionId) {
+              setStreamText(payload.text);
+              setStreamTimeline(payload.timeline ?? []);
             }
+          } catch {
+            // A bad event must not tear down later updates from the same stream.
           }
         }
       } finally {

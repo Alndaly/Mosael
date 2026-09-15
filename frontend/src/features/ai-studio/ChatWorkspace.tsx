@@ -43,6 +43,7 @@ import { TraceStatsBar, TraceView } from "@/features/ai-studio/trace/TraceView";
 import { buildTurns } from "@/features/ai-studio/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
+import { readSseData } from "@/lib/sse";
 import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, type SubagentRun } from "@/components/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -113,31 +114,19 @@ export function ChatWorkspace({
           signal: controller.signal,
         });
         if (!response.ok || !response.body) return;
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const events = buffer.split("\n\n");
-          buffer = events.pop() ?? "";
-          for (const event of events) {
-            const line = event.split("\n").find((item) => item.startsWith("data: "));
-            if (!line) continue;
-            try {
-              const payload = JSON.parse(line.slice(6)) as {
-                text: string;
-                done: boolean;
-                timeline?: AgentTimelineItem[];
-              };
-              if (streamingRef.current === targetSessionId) {
-                setStreamText(payload.text);
-                setStreamTimeline(payload.timeline ?? []);
-              }
-            } catch {
-              // partial frame — ignore
+        for await (const data of readSseData(response.body)) {
+          try {
+            const payload = JSON.parse(data) as {
+              text: string;
+              done: boolean;
+              timeline?: AgentTimelineItem[];
+            };
+            if (streamingRef.current === targetSessionId) {
+              setStreamText(payload.text);
+              setStreamTimeline(payload.timeline ?? []);
             }
+          } catch {
+            // A bad event must not tear down later updates from the same stream.
           }
         }
       } finally {
