@@ -101,19 +101,19 @@ it("双能力模型的两个 kind 各有一个选择器 —— 共用一个引�
   expect(screen.getAllByRole("combobox", { name: "modelGenerationRef" })).toHaveLength(2);
 });
 
-it("这条连接的自定义参数组出现在选择器里,管理入口也在 —— 绑定的地方就是需要它的地方", async () => {
+it("这条连接的自定义参数组出现在选择器里,管理入口常驻在选择器下面", async () => {
   REFS.data = {
     models: [],
     profiles: [{ value: "profile:abc", profile: "中转那份", parameter_keys: ["size", "num_images"] }],
   };
   try {
     open(["image"]);
+    /* 入口常驻:塞下拉项尾部时,五十几个内置模型把它压到滚动尽头,事实上等于没有入口。 */
+    expect(screen.getByText("generationProfilesManage")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("combobox", { name: "modelGenerationRef" }));
     /* i18n 在测试里是恒等函数,名字拼不进 label;能断言的是参数清单那行描述 ——
        它回答的是"选它会得到哪几项"。 */
     expect(await screen.findByText("size · num_images")).toBeInTheDocument();
-    /* Radix 会把 option 在隐藏原生 select 里再渲染一份 —— 断言"至少一处",不断言唯一。 */
-    expect(screen.getAllByText("generationProfilesManage").length).toBeGreaterThan(0);
   } finally {
     REFS.data = { models: [], profiles: [] };
   }

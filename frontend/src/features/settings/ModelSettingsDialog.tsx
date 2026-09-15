@@ -145,9 +145,8 @@ function CapabilityRefField({
     staleTime: 5 * 60_000,
   });
   const NONE = "__follow__";
-  /* 管理的入口就在绑定的地方:挑参数来源时才发现"目录没有、参数组也没有"的人,
-     不该再回设置页翻一节 —— 就在这里开门。 */
-  const MANAGE = "__manage__";
+  /* 管理的入口常驻在选择器**下面**:塞进下拉项的尾部时,五十几个内置模型把它压到
+     滚动尽头,事实上等于没有入口。 */
   const [managing, setManaging] = React.useState(false);
   const data = refs.data;
   /* 「和 X 一样」排在前面,而且是**指针**:以后我们把 X 的描述符改宽了,指着它的行跟着变。
@@ -167,7 +166,6 @@ function CapabilityRefField({
       description: one.parameter_keys.join(" · ") || t("modelGenerationRefNoParams"),
       keywords: [one.profile],
     })),
-    { value: MANAGE, label: t("generationProfilesManage") },
   ];
 
   return (
@@ -182,17 +180,18 @@ function CapabilityRefField({
       <OptionPicker
         ariaLabel={t("modelGenerationRef")}
         value={value ?? NONE}
-        onChange={(next) => {
-          if (next === MANAGE) {
-            setManaging(true);
-            return;
-          }
-          onChange(next === NONE ? null : next);
-        }}
+        onChange={(next) => onChange(next === NONE ? null : next)}
         options={options}
         contentClassName="max-w-[min(520px,calc(100vw-32px))]"
       />
       </label>
+      <button
+        type="button"
+        className="cursor-pointer justify-self-start text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        onClick={() => setManaging(true)}
+      >
+        {t("generationProfilesManage")}
+      </button>
       {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。 */}
       {!known && !value && (
         <p className="m-0 text-ui-xs leading-[1.45] text-warning">{t("modelGenerationRefUnknown")}</p>
