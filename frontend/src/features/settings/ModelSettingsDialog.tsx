@@ -152,9 +152,13 @@ function CapabilityRefField({
   ];
 
   return (
-    <div className="grid gap-1.5 border-t border-border pt-2">
-      <span className="text-ui-md font-medium text-foreground">{t("modelGenerationRef")}</span>
-      <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("modelGenerationRefHint")}</p>
+    <div className="grid gap-2 border-t border-border pt-3">
+      <span className="text-ui-md font-medium text-foreground">{t("modelSettingsGenerationGroup")}</span>
+      {/* **一句话就够。** 这里原本挂着三行说明,而它和下面那句黄字讲的是同一件事 ——
+          「表里查不到,指一下就有参数了」。常驻的那份还是在没出问题时说的,所以更该去掉:
+          真正需要解释的时刻是认不出来的时候,那句话就在下面,而且带着能照做的动作。 */}
+      <label className="grid gap-1 text-ui-sm font-medium text-foreground">
+        {t("modelGenerationRef")}
       <OptionPicker
         ariaLabel={t("modelGenerationRef")}
         value={value ?? NONE}
@@ -162,6 +166,7 @@ function CapabilityRefField({
         options={options}
         contentClassName="max-w-[min(520px,calc(100vw-32px))]"
       />
+      </label>
       {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。 */}
       {!known && !value && (
         <p className="m-0 text-ui-xs leading-[1.45] text-warning">{t("modelGenerationRefUnknown")}</p>
@@ -323,9 +328,13 @@ export function ModelSettingsDialog({
         </div>
 
         {isChat && (
-          <div className="grid gap-1.5">
+          /* 对话那一组。**整组由能力决定出不出现** —— 和下面生成那组对称,两组同一个规格:
+             一条分隔线起头、一个组标题、组内才是各项。此前上下文、高级、生成参数三块平级摆着,
+             同样的标题字号,读者得自己在脑子里分组。 */
+          <div className="grid gap-2 border-t border-border pt-3">
+            <span className="text-ui-md font-medium text-foreground">{t("modelSettingsChatGroup")}</span>
             <div className="grid gap-1">
-              <label className="text-ui-md font-medium text-foreground" htmlFor="ctx">
+              <label className="text-ui-sm font-medium text-foreground" htmlFor="ctx">
                 {t("modelSettingsContextWindow")}
               </label>
               <Input
@@ -356,14 +365,15 @@ export function ModelSettingsDialog({
         )}
 
         {isChat && (
-          <div className="border-t border-border pt-2">
-            {/* 弹窗本身已经有一圈边框,再套一个盒子就是框中框。一条分隔线足够划分区域。 */}
+          /* 高级是**对话那一组里**的折叠开关,不是又一个区段 —— 它此前顶着同样的标题字号、
+             上面还有自己的分隔线,于是读起来像第三个并列的标题。 */
+          <div className="-mt-1">
             <button
               type="button"
               className="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left"
               onClick={() => setAdvancedOpen((v) => !v)}
             >
-              <span className="text-ui-sm font-medium text-foreground">{t("modelSettingsAdvanced")}</span>
+              <span className="text-ui-sm font-medium text-muted-foreground">{t("modelSettingsAdvanced")}</span>
               <span className="flex items-center gap-1 text-ui-xs text-muted-foreground">
                 {t("modelSettingsAdvancedHint")}
                 <ChevronDown size={13} className={cn("transition-transform", advancedOpen && "rotate-180")} />
