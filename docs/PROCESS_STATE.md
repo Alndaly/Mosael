@@ -28,6 +28,7 @@
 | `app/domain/publish/worker.py` 的认领(心跳在 `app/domain/publish/worker.py:_last_heartbeat`) | `claim_next_pending` 靠同事务内 select→update 保证原子 | 那句原子性写着「单进程 SQLite 后端 + 单个 worker」。多个认领者会重复领同一条待发布任务 —— 同一个视频发两遍。 |
 | `app/domain/agent/login.py:_sessions` | 平台登录会话(带子进程句柄) | 轮询进度的请求打到另一个进程上就查无此会话,而浏览器窗口正开在第一个进程那边。 |
 | `app/domain/blender/bridge.py:_locks` | 每个 Blender 连接一把互斥锁,保证同一个连接同时只有一次同步 | 两个进程各持各的锁,于是同一个 Blender 会被两次同步同时驱动。它们写的是同一份 `.blend` 与同一个传输目录,**后完成的覆盖先完成的** —— 而用户看到的是「发过去的场景不对」,不像并发问题。锁只在进程内有意义,这条路径没有数据库层面的兜底。 |
+| `app/core/rate_limit.py:WindowLimiter._events` | 远程部署的登录、OAuth 与计费操作限流窗口 | 两个进程各有自己的计数，同一客户端可在每个进程分别用满额度。当前单进程拓扑下限额准确；横向扩展时必须先把这份窗口搬到共享存储或入口网关。 |
 
 ## 二、单进程是**功能在场**的前提
 

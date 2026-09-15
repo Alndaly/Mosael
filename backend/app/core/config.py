@@ -71,6 +71,15 @@ class Settings(BaseSettings):
     #: 这个后端上给自己开个号并读回 token。要哪个域名就写哪个域名。
     cors_origins: str = ""
 
+    # 远程部署的入口保护。None = 自动（桌面/回环关闭，监听外网地址时开启）；显式 0/1 可覆盖。
+    # 这是单进程应用，所以进程内窗口与真实执行模型一致；若未来横向扩展，见 PROCESS_STATE。
+    rate_limit_enabled: bool | None = None
+    rate_limit_auth_per_minute: int = 10
+    rate_limit_oauth_per_minute: int = 30
+    rate_limit_billable_per_minute: int = 60
+    # 只有这里列出的反向代理地址才允许用 X-Forwarded-For 作为客户端身份，避免伪造头绕过限流。
+    rate_limit_trusted_proxies: str = ""
+
     # ffmpeg/ffprobe binaries. Default to PATH; override (MOSAEL_FFMPEG / MOSAEL_FFPROBE) to
     # point at a full build — Homebrew's core `ffmpeg` is slim (no libass/freetype), so
     # subtitle burn-in needs e.g. /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.

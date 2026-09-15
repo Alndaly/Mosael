@@ -57,6 +57,7 @@ from app.core.config import settings
 from app.core.i18n import normalize_locale, set_current_locale
 from app.api.deps import require_worker_key
 from app.core.logging import configure_logging
+from app.core.rate_limit import install_rate_limiting
 from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal
 from app.db.migrations import init_db
@@ -261,6 +262,7 @@ _wire_seams()
 def create_app() -> FastAPI:
     app = FastAPI(title="Mosael API", version="0.1.0", lifespan=lifespan)
     _install_permission_handlers(app)
+    install_rate_limiting(app, settings)
     # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend
     # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather
     # than a same-origin policy.
