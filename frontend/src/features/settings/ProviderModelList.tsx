@@ -139,6 +139,12 @@ export function ProviderModelList({
 
   const actionOpen = (kind: "add") => action?.kind === kind;
 
+  /* 添加模型弹窗的候选。每次动作重新打开都从空开始 —— 上回挑了一半的值不该留着。 */
+  const [picked, setPicked] = React.useState("");
+  React.useEffect(() => {
+    if (action?.kind === "add") setPicked("");
+  }, [action]);
+
   return (
     <div className="grid gap-1.5">
       {models.isPending && (
@@ -228,14 +234,32 @@ export function ProviderModelList({
 
       {/* 添加模型与自定义参数组的弹窗:入口统一在连接行的溢出菜单里(见 ProviderProfilesSection),
           列表本体只剩模型行 —— 列表级动作不再各自占一行浮在首尾。 */}
-      <ModalShell open={actionOpen("add")} onOpenChange={(next) => !next && onActionDone?.()} title={t("modelAddEntry")}>
+      <ModalShell
+        open={actionOpen("add")}
+        onOpenChange={(next) => !next && onActionDone?.()}
+        title={t("modelAddEntry")}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => onActionDone?.()}>{t("cancel")}</Button>
+            {/* 选中即提交的交互撤掉了:挑错一个目录项就多发一次请求,而撤销要再去删一行。
+                先挑后确认 —— 确认才 POST,取消什么都不发生。 */}
+            <Button
+              disabled={!picked.trim()}
+              loading={add.isPending}
+              onClick={() => add.mutate(picked.trim(), { onSuccess: () => onActionDone?.() })}
+            >
+              {t("modelAdd")}
+            </Button>
+          </>
+        }
+      >
         {/* 一个带搜索的入口,取代原来的「展开目录清单」+「手填 id」两处。
          *
          * 目录动辄两三百个模型(百炼 233 个),铺成一列既滚不完也找不到 —— 而用户来这里时
          * 通常已经知道要哪个,缺的是"输入几个字母就定位"。手填也并进来:目录里没有就直接用
          * 输入的那个,不必先意识到"这个模型不在目录里"再去找另一个框。 */}
         <Combobox
-          value=""
+          value={picked}
           options={available.map((row) => ({ value: row.id }))}
           placeholder={unit.add}
           searchPlaceholder={unit.search}
@@ -243,10 +267,7 @@ export function ProviderModelList({
           allowCustomValue
           customValueLabel={(query) => unit.custom.replace("{id}", query)}
           className="h-8 w-full text-ui-sm"
-          onValueChange={(modelId) => {
-            const trimmed = modelId.trim();
-            if (trimmed) add.mutate(trimmed, { onSuccess: () => onActionDone?.() });
-          }}
+          onValueChange={setPicked}
         />
       </ModalShell>
       {vendorLabel && <span className="sr-only">{vendorLabel}</span>}

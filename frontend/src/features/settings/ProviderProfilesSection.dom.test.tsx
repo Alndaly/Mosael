@@ -32,9 +32,12 @@ vi.mock("@/app/preferences", () => ({
 
 let providersResult: unknown = [];
 let vendorsResult: unknown = [];
+const apiCalls: Array<{ path: string; init?: { method?: string; body?: string } }> = [];
 
 vi.mock("@/api/client", () => ({
-  api: async (path: string) => {
+  api: async (path: string, init?: { method?: string; body?: string }) => {
+    apiCalls.push({ path, init });
+    if (path.includes("/models")) return [];
     if (path.startsWith("/api/settings/providers")) {
       if (providersResult instanceof Error) throw providersResult;
       return providersResult;
@@ -143,5 +146,54 @@ describe("供应商连接列表", () => {
     const menuScope = within(menu.closest("[data-radix-popper-content-wrapper]") as HTMLElement);
     expect(menuScope.getByText("bulkSelect")).toBeInTheDocument();
     expect(menuScope.queryByText("generationProfiles")).not.toBeInTheDocument();
+  });
+
+  it("添加模型是「先挑后确认」:选择只是挑选,点「加入」才 POST,取消什么都不发生", async () => {
+    /* 选中即提交那版,挑错一个目录项就多发一次请求,而撤销要再去删一行。
+       cmdk 在挂载时要 ResizeObserver,jsdom 没有。 */
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+    Element.prototype.scrollIntoView ??= () => {};
+    const user = userEvent.setup();
+    vendorsResult = [];
+    providersResult = [{
+      id: "p1",
+      name: "中转",
+      vendor: "openai-compatible",
+      enabled: true,
+      auth_type: "api_key",
+      oauth_linked: false,
+      capability_ids: ["chat", "image"],
+      config: { base_url: "https://x.example/v1" },
+      base_url: "https://x.example/v1",
+      needs_key: false,
+      quota_supported: false,
+    }];
+    apiCalls.length = 0;
+    const posts = () => apiCalls.filter((call) => call.init?.method === "POST");
+
+    renderSection("image");
+    await user.click(await screen.findByRole("button", { name: "more" }));
+    await user.click(await screen.findByText("modelAddEntry"));
+
+    /* 第一趟:挑了,但取消 —— 不该有任何 POST。 */
+    await user.click(await screen.findByRole("combobox"));
+    await user.type(document.querySelector("[cmdk-input]") as HTMLElement, "my-model-x");
+    await user.click(await screen.findByText("modelAddCustom"));
+    expect(posts()).toHaveLength(0);
+    await user.click(screen.getByText("cancel"));
+    expect(posts()).toHaveLength(0);
+
+    /* 第二趟:挑了同一个,点「加入」才落。 */
+    await user.click(await screen.findByRole("button", { name: "more" }));
+    await user.click(await screen.findByText("modelAddEntry"));
+    await user.click(await screen.findByRole("combobox"));
+    await user.type(document.querySelector("[cmdk-input]") as HTMLElement, "my-model-x");
+    await user.click(await screen.findByText("modelAddCustom"));
+    expect(posts()).toHaveLength(0);
+    await user.click(screen.getByText("modelAdd"));
+
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0].path).toBe("/api/settings/providers/p1/models");
+    expect(JSON.parse(posts()[0].init!.body!)).toEqual({ model_id: "my-model-x", enabled: true });
   });
 });
