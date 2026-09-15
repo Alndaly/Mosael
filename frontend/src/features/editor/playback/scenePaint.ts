@@ -127,12 +127,15 @@ export function paintScene(ctx: Ctx2D, layers: ScenePaintLayer[], opts: ScenePai
     }
     ctx.filter = filter || "none";
     if (freeElement) {
-      // 保住素材自身的比例:按**目标框的比例**中心裁源,再映射过去 —— 把整张 16:9 的源塞进一个
-      // 正方形会让人脸明显变窄。圆形是这条的特例(目标比例 1:1),不必单开一条。
-      // 这正是导出侧 `force_original_aspect_ratio=increase` + `crop` 做的事。
-      const aspect = drawWidth / drawHeight;
-      const sourceWidth = Math.min(mw, mh * aspect);
-      const sourceHeight = Math.min(mh, mw / aspect);
+      // **源区域 = 元素的输出尺寸 ÷ 铺满系数。** 导出那边是两次连续裁剪:
+      // 源 →(`scale=W:H:force_original_aspect_ratio=increase` 铺满后 `crop=W:H`)→
+      // 圆形再 `crop=min(W,H)` 中心裁一次。把最终那块换算回源坐标,就是这一行。
+      //
+      // 直觉上容易写成"取源的中心正方 min(mw,mh)" —— 那是**多取**:1080×1920 的源进
+      // 1920×1080 的画幅,正确的是 607.5 而不是 1080,多取 1.78 倍,于是圆里的内容被缩小
+      // 同样的倍数(圆本身一样大,里面的东西小了一圈)。同比例的素材两者相等,所以很难看出来。
+      const sourceWidth = drawWidth / fit;
+      const sourceHeight = drawHeight / fit;
       ctx.drawImage(
         img,
         (mw - sourceWidth) / 2,

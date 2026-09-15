@@ -1,0 +1,133 @@
+{
+  "contract": "clip-free-element-geometry",
+  "version": 1,
+  "why": "带蒙版或阴影的片段是「自由元素」:导出侧铺满画幅**再裁到画幅**(scale=W:H:force_original_aspect_ratio=increase 后 crop=W:H),圆形再中心裁成 min(W,H)。预览侧必须算出同一块。两侧各写一遍的结果已经见过两次:圆的大小差 1.78 倍,修好大小之后圆里的内容又差 1.78 倍 —— 都要等到看成片才发现。",
+  "formula": "cover = max(W/mw, H/mh);元素 = 圆 ? min(W,H) : W×H;源区域 = 元素 ÷ cover,居中。",
+  "cases": [
+    {
+      "name": "同比例素材:圆内切画幅短边",
+      "note": "源和画幅同比例 —— 这一档两种写法都对,所以它挡不住 bug,但它保证修复没把对的改坏。",
+      "source": {
+        "width": 1600,
+        "height": 900
+      },
+      "frame": {
+        "width": 800,
+        "height": 450
+      },
+      "circle": true,
+      "expected": {
+        "element": {
+          "width": 450,
+          "height": 450
+        },
+        "source_rect": {
+          "x": 350.0,
+          "y": 0.0,
+          "width": 900.0,
+          "height": 900.0
+        }
+      }
+    },
+    {
+      "name": "竖素材进横画幅:圆",
+      "note": "圆的直径仍是画幅短边 1080;源区域是 1080/1.7778=607.5,不是 min(mw,mh)=1080。",
+      "source": {
+        "width": 1080,
+        "height": 1920
+      },
+      "frame": {
+        "width": 1920,
+        "height": 1080
+      },
+      "circle": true,
+      "expected": {
+        "element": {
+          "width": 1080,
+          "height": 1080
+        },
+        "source_rect": {
+          "x": 236.25,
+          "y": 656.25,
+          "width": 607.5,
+          "height": 607.5
+        }
+      }
+    },
+    {
+      "name": "横素材进竖画幅:圆",
+      "note": "反过来同理 —— 直径 1080,源区域 1080/1.7778=607.5。",
+      "source": {
+        "width": 1920,
+        "height": 1080
+      },
+      "frame": {
+        "width": 1080,
+        "height": 1920
+      },
+      "circle": true,
+      "expected": {
+        "element": {
+          "width": 1080,
+          "height": 1080
+        },
+        "source_rect": {
+          "x": 656.25,
+          "y": 236.25,
+          "width": 607.5,
+          "height": 607.5
+        }
+      }
+    },
+    {
+      "name": "竖素材进横画幅:只有阴影没有蒙版",
+      "note": "元素就是画幅那么大;按画幅比例中心裁源,而不是把整张竖图塞进去(那会压扁)。",
+      "source": {
+        "width": 1080,
+        "height": 1920
+      },
+      "frame": {
+        "width": 1920,
+        "height": 1080
+      },
+      "circle": false,
+      "expected": {
+        "element": {
+          "width": 1920,
+          "height": 1080
+        },
+        "source_rect": {
+          "x": 0.0,
+          "y": 656.25,
+          "width": 1080.0,
+          "height": 607.5
+        }
+      }
+    },
+    {
+      "name": "方形素材进横画幅:圆",
+      "note": "方形源 —— 铺满系数由宽边决定(1.92),源区域 1080/1.92=562.5。",
+      "source": {
+        "width": 1000,
+        "height": 1000
+      },
+      "frame": {
+        "width": 1920,
+        "height": 1080
+      },
+      "circle": true,
+      "expected": {
+        "element": {
+          "width": 1080,
+          "height": 1080
+        },
+        "source_rect": {
+          "x": 218.75,
+          "y": 218.75,
+          "width": 562.5,
+          "height": 562.5
+        }
+      }
+    }
+  ]
+}
