@@ -259,6 +259,16 @@ _Avoid_: `providers/image/<vendor>.py` 式纯能力目录；一个供应商一�
 供应商结果与远程输入统一经 `ai/providers/media_transfer.py`：预签名地址不携带 API 凭据、跨源跳转
 主动丢弃受信头、流式下载经 `.part` 原子落盘。
 
+**生成参数模板(GenerationCapabilityProfile)**:
+用户对某条连接后端点能力的可复用声明，只归该连接且只服务 image 或 video 一种 kind。它补充静态
+目录装不下的私有别名和中转差异；保存时验证结构与 Adapter 能消费的参数名，但不冒充供应商已验证事实。
+
+**生成参数声明(GenerationCapabilityDeclaration)**:
+一行模型在一种 kind 下“参数契约从哪里来”的选择，按 `(provider_model_id, kind)` 唯一；可指向内置
+目录契约或同连接的生成参数模板。没有声明行表示跟随精确目录。解析、可选项与任务提交统一经过
+`domain/generation/resolution.py`，调用身份是 `(provider_profile_id, model)`。
+_Avoid_: 用一个 ref 同时描述图片与视频；由画板/工作流/MCP 各自拼契约；只凭 `(vendor, model)` 随机选连接
+
 **订阅额度**:
 `domain/provider_quota.py`,六家(anthropic / codex / openrouter / kimi / xai / copilot)各一个解析器。
 **只在用户点击时查**——这些端点都不是官方承诺的公开接口,定时轮询既容易撞限流,也会在对方改接口后
