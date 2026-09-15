@@ -266,7 +266,6 @@ export function ProviderModelList({
           emptyText={unit.empty}
           allowCustomValue
           customValueLabel={(query) => unit.custom.replace("{id}", query)}
-          className="h-8 w-full text-ui-sm"
           onValueChange={setPicked}
         />
       </ModalShell>
