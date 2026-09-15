@@ -103,33 +103,44 @@ _FIELD_GROUPS: dict[str, str] = {
 }
 
 
-def canonical_parameters() -> list[str]:
-    """目前真有适配器会发送的参数名 —— parameter_keys 的可选范围。
-
-    声明一个没人会发的参数,只会让用户以为界面会多一个旋钮(见 validate_capabilities)。
-    """
+def _builtin_capabilities(kind: str) -> list[dict[str, Any]]:
     from app.domain.generation.catalog import BUILTIN_MODELS
 
+    return [item.get("capabilities", {}) for item in BUILTIN_MODELS if item.get("kind") == kind]
+
+
+def canonical_parameters(kind: str) -> list[str]:
+    """这种生成能力下,目前真有适配器会发送的参数名 —— parameter_keys 的可选范围。
+
+    **按 kind 分**:image 的可选里不该有 duration_seconds,声明一个这个 kind 没人会发的
+    参数,只会让用户以为界面会多一个旋钮(见 validate_capabilities)。
+    """
     return sorted(
-        {
-            parameter
-            for item in BUILTIN_MODELS
-            for parameter in (item.get("capabilities", {}).get("parameter_keys") or [])
-        }
+        {parameter for capabilities in _builtin_capabilities(kind) for parameter in (capabilities.get("parameter_keys") or [])}
     )
 
 
-def profile_form_schema() -> dict[str, Any]:
-    """可视表单的结构描述:有哪些字段、什么形状、归哪组、参数与素材角色叫什么。
+def profile_form_schema(kind: str) -> dict[str, Any]:
+    """可视表单的结构描述:有哪些字段、什么形状、归哪组、这个 kind 的参数与素材角色叫什么。
 
     **这是表单唯一的事实源。** 前端的语义化表单由它驱动,而不是把 34 个键的知识在
     TypeScript 里再抄一遍 —— 加字段时后端加一行,表单自动长出对应的控件。
     """
     from app.domain.generation.catalog import SOURCE_ROLE_LABELS
 
+    capabilities = _builtin_capabilities(kind)
+    enum_parameters = sorted(
+        {name for caps in capabilities for name in (caps.get("parameter_choices") or {})}
+    )
+    roles = [
+        role
+        for role in SOURCE_ROLE_LABELS
+        if any(role in (caps.get("parameter_keys") or []) for caps in capabilities)
+    ]
     return {
-        "parameters": canonical_parameters(),
-        "source_roles": list(SOURCE_ROLE_LABELS),
+        "parameters": canonical_parameters(kind),
+        "enum_parameters": enum_parameters,
+        "source_roles": roles,
         "fields": [
             {"key": key, "shape": shape, "group": _FIELD_GROUPS[key]}
             for key, shape in _KNOWN_KEYS.items()
@@ -206,7 +217,7 @@ def validate_capabilities(raw: Any, kind: str) -> dict[str, Any]:
         #: 点名说是哪个键。"格式不对"这种话对着三十几个键的表单毫无用处。
         _fail("这几个字段我们不认得:" + "、".join(sorted(unknown)))
     clean = {key: _check(key, _KNOWN_KEYS[key], value) for key, value in raw.items() if value is not None}
-    unknown_parameters = sorted(set(clean.get("parameter_keys") or []) - set(canonical_parameters()))
+    unknown_parameters = sorted(set(clean.get("parameter_keys") or []) - set(canonical_parameters(kind)))
     if unknown_parameters:
         _fail(
             "这些参数当前没有生成适配器会发送，不能只在界面里声明:"

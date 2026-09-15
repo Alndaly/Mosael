@@ -121,15 +121,17 @@ def list_generation_options(db: DbSession, user: CurrentUser, kind: str = "image
 
 
 @router.get("/generation/capability-profile-schema", response_model=CapabilityProfileSchemaOut)
-def get_capability_profile_schema() -> CapabilityProfileSchemaOut:
-    """参数组可视表单的结构描述 —— 34 个字段的键、形状与分组,表单唯一的事实源。
+def get_capability_profile_schema(kind: str = "image") -> CapabilityProfileSchemaOut:
+    """参数组可视表单的结构描述 —— 34 个字段的键/形状/分组,和这个 kind 的参数与素材角色。
 
     前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出
     对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。
     """
     from app.domain.generation.custom_profiles import profile_form_schema
 
-    return CapabilityProfileSchemaOut(**profile_form_schema())
+    if kind not in ("image", "video"):
+        raise HTTPException(status_code=422, detail="kind 只能是 image 或 video")
+    return CapabilityProfileSchemaOut(**profile_form_schema(kind))
 
 
 @router.get("/generation/capability-refs")

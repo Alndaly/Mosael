@@ -7914,8 +7914,20 @@
           "generation"
         ],
         "summary": "Get Capability Profile Schema",
-        "description": "参数组可视表单的结构描述 —— 34 个字段的键、形状与分组,表单唯一的事实源。\n\n前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出\n对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。",
+        "description": "参数组可视表单的结构描述 —— 34 个字段的键/形状/分组,和这个 kind 的参数与素材角色。\n\n前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出\n对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。",
         "operationId": "get_capability_profile_schema_api_generation_capability_profile_schema_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "image",
+              "title": "Kind"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -20106,6 +20118,13 @@
             "type": "array",
             "title": "Parameters"
           },
+          "enum_parameters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Enum Parameters"
+          },
           "source_roles": {
             "items": {
               "type": "string"
@@ -20124,6 +20143,7 @@
         "type": "object",
         "required": [
           "parameters",
+          "enum_parameters",
           "source_roles",
           "fields"
         ],

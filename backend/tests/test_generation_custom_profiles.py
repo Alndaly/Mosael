@@ -85,16 +85,29 @@ class Test表单结构描述端点:
         #: 每个字段都得有分组 —— 漏了的话表单里它会掉出所有区块,谁都看不见。
         assert all(field["group"] for field in body["fields"])
 
-    def test_参数与角色不是空的(self) -> None:
+    def test_参数与角色按kind分(self) -> None:
+        """image 的表单不该摆出 video 的参数:声明一个这个 kind 没人会发的参数,
+        只会让用户以为界面会多一个旋钮。保存校验用同一份 —— 表单和校验不分家。"""
         from tests.util import fresh_client
 
         client = fresh_client()
-        body = client.get("/api/generation/capability-profile-schema").json()
+        image = client.get("/api/generation/capability-profile-schema?kind=image").json()
+        video = client.get("/api/generation/capability-profile-schema?kind=video").json()
 
-        #: parameter_keys 的可选范围就是保存校验认的那份 —— 同一条 canonical_parameters。
-        assert body["parameters"] == canonical_parameters()
-        assert "size" in body["parameters"]
-        assert "reference_image" in body["source_roles"]
+        assert image["parameters"] == canonical_parameters("image")
+        assert video["parameters"] == canonical_parameters("video")
+        assert "size" in image["parameters"]
+        assert "duration_seconds" not in image["parameters"]
+        assert "duration_seconds" in video["parameters"]
+        assert "reference_video" not in image["source_roles"]
+        assert "reference_video" in video["source_roles"]
+        #: 有枚举值的参数单列 —— 「参数可选值」那一组只在选了它们时才该出现。
+        assert "quality" in image["enum_parameters"]
+
+    def test_别种kind的参数在保存时拦下(self) -> None:
+        """video 专属的 duration_seconds 塞进 image 参数组,此前靠全 kind 并集漏过。"""
+        with pytest.raises(CapabilityProfileError, match="duration_seconds"):
+            validate_capabilities({"parameter_keys": ["duration_seconds"]}, "image")
 
 
 class Test自定义档案参与解析:

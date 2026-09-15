@@ -666,6 +666,7 @@ class CapabilityProfileSchemaOut(ApiModel):
     """参数组可视表单的结构描述 —— 表单唯一的事实源(见 domain/generation/custom_profiles.py)。"""
 
     parameters: list[str]
+    enum_parameters: list[str]
     source_roles: list[str]
     fields: list[CapabilityProfileFieldOut]
 

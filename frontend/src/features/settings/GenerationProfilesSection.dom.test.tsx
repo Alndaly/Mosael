@@ -26,6 +26,7 @@ const LIST = { data: [] as unknown[] };
 const SCHEMA = {
   data: {
     parameters: ["size", "num_images", "quality"],
+    enum_parameters: ["quality"],
     source_roles: ["reference_image", "first_frame"],
     fields: [
       { key: "parameter_keys", shape: "str_list", group: "params" },
@@ -64,8 +65,9 @@ it("新建:名字与表单填出的描述符原样 POST 到这条连接下", asy
 
   fireEvent.click(screen.getByText("generationProfilesAdd"));
   fireEvent.change(screen.getByLabelText(/generationProfilesName/), { target: { value: "中转那份" } });
-  /* 默认模板勾了 size;再勾上 num_images —— 表单里勾了什么,描述符就该带什么。 */
-  fireEvent.click(screen.getByRole("button", { name: "num_images" }));
+  /* 默认模板勾了 size;再勾上 num_images —— 表单里勾了什么,描述符就该带什么。
+     chips 显示的是翻译键(测试里 i18n 是恒等函数),真机上是人话标签。 */
+  fireEvent.click(screen.getByRole("button", { name: "genParam_num_images" }));
   fireEvent.click(screen.getByText("save"));
 
   await waitFor(() => expect(apiMock).toHaveBeenCalled());

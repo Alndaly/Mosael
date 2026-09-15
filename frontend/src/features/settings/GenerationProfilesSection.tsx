@@ -159,7 +159,8 @@ function ProfileEditor({
     <ModalShell
       open
       onOpenChange={(next) => !next && onDone()}
-      title={row ? t("generationProfilesEdit") : t("generationProfilesAdd")}
+      /* kind 写进标题:图片的清单套不到视频上,填的时候得知道自己在为哪一种写。 */
+      title={`${row ? t("generationProfilesEdit") : t("generationProfilesAdd")} · ${kind}`}
       footer={
         <>
           <Button variant="outline" onClick={onDone}>{t("cancel")}</Button>
@@ -174,7 +175,7 @@ function ProfileEditor({
           {t("generationProfilesName")}
           <Input value={name} onChange={(event) => setName(event.target.value)} className="bg-panel" />
         </label>
-        <CapabilityProfileForm value={descriptor} onChange={setDescriptor} />
+        <CapabilityProfileForm kind={kind} value={descriptor} onChange={setDescriptor} />
         {error && <p className="m-0 text-ui-xs leading-[1.45] text-destructive">{error}</p>}
         <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("generationProfilesDisclaimer")}</p>
       </div>

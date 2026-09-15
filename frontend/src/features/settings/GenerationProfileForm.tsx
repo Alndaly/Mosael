@@ -39,10 +39,10 @@ const LIST_FOR_PARAMETER: Record<string, string> = {
   duration_seconds: "duration_seconds",
 };
 
-function useSchema() {
+function useSchema(kind: "image" | "video") {
   return useQuery({
-    queryKey: ["capability-profile-schema"],
-    queryFn: () => api<Schema>("/api/generation/capability-profile-schema"),
+    queryKey: ["capability-profile-schema", kind],
+    queryFn: () => api<Schema>(`/api/generation/capability-profile-schema?kind=${kind}`),
     staleTime: 10 * 60_000,
   });
 }
@@ -188,21 +188,31 @@ function Field({ label, children, onRemove }: { label: string; children: React.R
 }
 
 export function CapabilityProfileForm({
+  kind,
   value,
   onChange,
 }: {
+  kind: "image" | "video";
   value: Descriptor;
   onChange: (next: Descriptor) => void;
 }) {
   const t = useI18n();
-  const schema = useSchema();
+  const schema = useSchema(kind);
   const fields = schema.data?.fields ?? [];
   const shapeOf = (key: string) => fields.find((field) => field.key === key)?.shape ?? "";
   /* 键名由后端 schema 驱动,翻译键跟着拼 —— t 的键是静态联合类型,这里必须断言一次:
      后端加字段时 messages.ts 的 genField_* 要同步加(缺了界面就露出原始键名,看得见)。 */
   const labelOf = (key: string) => t(`genField_${key}` as Parameters<typeof t>[0]);
+  /* 参数 chips 给人看的名字(尺寸/张数/参考图);键全集在 messages.ts,缺了会露 undefined ——
+     那里是静态联合类型,漏加在 tsc 阶段就会红。 */
+  const parameterLabel = (parameter: string) => t(`genParam_${parameter}` as Parameters<typeof t>[0]);
 
   const parameters = (value.parameter_keys as string[] | undefined) ?? [];
+  /* 选了哪些**真有枚举值**的参数(质量/背景/输出格式那类,由后端按 kind 给出)——
+     「参数可选值」一组只在他们当中挑行名。 */
+  const enumCapableSelected = parameters.filter((parameter) =>
+    (schema.data?.enum_parameters ?? []).includes(parameter),
+  );
   const set = (key: string, next: unknown) => onChange({ ...value, [key]: next });
   const unset = (key: string) => {
     const next = { ...value };
@@ -294,13 +304,15 @@ export function CapabilityProfileForm({
 
   return (
     <div className="grid gap-4">
-      {/* 可调参数:只勾这个端点真会接受的 —— 勾了它不收,请求发出去被供应商拒掉。 */}
+      {/* 可调参数:只勾这个端点真会接受的 —— 勾了它不收,请求发出去被供应商拒掉。
+          候选已经按 kind 过滤:image 的表单里不会出现 video 专属的时长与首尾帧。 */}
       <Field label={t("genField_parameter_keys")}>
         <div className="flex flex-wrap gap-1">
           {(schema.data?.parameters ?? []).map((parameter) => (
             <button
               key={parameter}
               type="button"
+              title={parameter}
               onClick={() => toggleParameter(parameter)}
               className={cn(
                 "cursor-pointer rounded-md border px-1.5 py-0.5 text-ui-xs transition-colors",
@@ -309,14 +321,15 @@ export function CapabilityProfileForm({
                   : "border-border bg-panel text-muted-foreground hover:text-foreground",
               )}
             >
-              {parameter}
+              {parameterLabel(parameter)}
             </button>
           ))}
         </div>
       </Field>
 
-      {/* 可选值:跟着勾出来的参数出现。 */}
-      {parameters.some((parameter) => LIST_FOR_PARAMETER[parameter]) && (
+      {/* 可选值:跟着勾出来的参数出现。「参数可选值」只在选了真有枚举的参数时才有意义 —
+          没选的时候摆一个空行编辑器,看着像坏掉的。 */}
+      {parameters.some((parameter) => LIST_FOR_PARAMETER[parameter]) || enumCapableSelected.length > 0 ? (
         <div className="grid gap-2.5 border-t border-border pt-3">
           <span className="text-ui-xs font-semibold text-foreground">{t("genGroup_choices")}</span>
           {parameters.map((parameter) => {
@@ -333,9 +346,23 @@ export function CapabilityProfileForm({
               </Field>
             );
           })}
-          <Field label={labelOf("parameter_choices")}>{renderGeneric("parameter_choices")}</Field>
+          {enumCapableSelected.length > 0 && (
+            <Field label={labelOf("parameter_choices")}>
+              <MapRows
+                entries={Object.entries((value.parameter_choices as Record<string, unknown> | undefined) ?? {})}
+                names={enumCapableSelected}
+                valueKind="chips"
+                addLabel={t("genFormAddRow")}
+                ariaLabel={labelOf("parameter_choices")}
+                onChange={(next) => {
+                  const obj = Object.fromEntries(next.filter(([name]) => name.trim()));
+                  Object.keys(obj).length ? set("parameter_choices", obj) : unset("parameter_choices");
+                }}
+              />
+            </Field>
+          )}
         </div>
-      )}
+      ) : null}
 
       {/* 默认值:清单型给下拉(只能选清单里的,选不回来的值不存在),其余给输入。 */}
       {Object.entries(LIST_FOR_DEFAULT).some(([, listKey]) => Array.isArray(value[listKey]) && (value[listKey] as unknown[]).length > 0) && (
@@ -382,6 +409,7 @@ export function CapabilityProfileForm({
           {idleSecondary.length > 0 && (
             <OptionPicker
               ariaLabel={t("genFormAddField")}
+              placeholder={t("genFormAddField")}
               value=""
               onChange={(key) => {
                 if (key) set(key, initialFor(shapeOf(key)));

@@ -2768,7 +2768,7 @@ export interface paths {
         };
         /**
          * Get Capability Profile Schema
-         * @description 参数组可视表单的结构描述 —— 34 个字段的键、形状与分组,表单唯一的事实源。
+         * @description 参数组可视表单的结构描述 —— 34 个字段的键/形状/分组,和这个 kind 的参数与素材角色。
          *
          *     前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出
          *     对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。
@@ -6986,6 +6986,8 @@ export interface components {
         CapabilityProfileSchemaOut: {
             /** Parameters */
             parameters: string[];
+            /** Enum Parameters */
+            enum_parameters: string[];
             /** Source Roles */
             source_roles: string[];
             /** Fields */
@@ -17168,7 +17170,9 @@ export interface operations {
     };
     get_capability_profile_schema_api_generation_capability_profile_schema_get: {
         parameters: {
-            query?: never;
+            query?: {
+                kind?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
