@@ -79,7 +79,7 @@ describe("区间时长在紧凑参数行中的呈现", () => {
  * 连了线还要再挂一遍素材,那条线就只是根装饰;挂错组则更糟 —— 首尾帧和参考素材是厂商的
  * 硬约束(描述符 exclusive_source_groups 里写着),混着发会吃一个说着 content 下标的英文 400。
  */
-import { autoAssign, defaultMode, modeLabel, roleAccepts, sourceModes } from "./NodeComposer";
+import { autoAssign, defaultMode, generationSettingBlocks, modeLabel, roleAccepts, sourceModes } from "./NodeComposer";
 
 const seedance = () =>
   ({
@@ -254,5 +254,43 @@ describe("参考素材格子的合并判据", () => {
 
   it("只有一个角色时没有可合并的东西", () => {
     expect(mergeableSourceSlots([{ role: "reference_image", limit: 4 }])).toBeNull();
+  });
+});
+
+
+describe("「参数」按钮只在真有参数时出现", () => {
+  /**
+   * 10 个图片模型里 8 个的 `parameter_keys` 是空的(gemini 那几族、ComfyUI 工作流、gemma4…),
+   * 而互斥输入组只有一组时 `sourceModes` 也回空 —— 于是弹层里每一个条件块都是 false,
+   * 点开「参数」是一个只有标题的空盒子。
+   */
+  const bare = () => ({ capabilities: { parameter_keys: [] } }) as unknown as GenerationOption;
+
+  it("什么都不支持的模型:一块都没有 —— 按钮据此不出现", () => {
+    expect(generationSettingBlocks(bare(), { modes: 0, durations: 0 })).toEqual([]);
+  });
+
+  it("只有一种生成方式时,「生成方式」这一块也不算数", () => {
+    // sourceModes 在不足两组时回空,所以 modes=0 —— 这一条钉的是两者的接法。
+    expect(generationSettingBlocks(seedance(), { modes: 0, durations: 0 })).toEqual([]);
+    expect(generationSettingBlocks(seedance(), { modes: 2, durations: 0 })).toEqual(["mode"]);
+  });
+
+  it("支持什么就列什么,顺序和弹层里的排布一致", () => {
+    const model = {
+      capabilities: {
+        parameter_keys: ["size", "aspect_ratio", "duration_seconds", "generate_audio", "quality"],
+        parameter_choices: { quality: ["standard", "hd"] },
+      },
+    } as unknown as GenerationOption;
+    expect(generationSettingBlocks(model, { modes: 0, durations: 3 })).toEqual([
+      "aspect_ratio", "size", "duration_seconds", "quality", "generate_audio",
+    ]);
+  });
+
+  it("时长这一块要**两个条件都成立** —— 声明了却没有可选值时不算", () => {
+    const model = { capabilities: { parameter_keys: ["duration_seconds"] } } as unknown as GenerationOption;
+    expect(generationSettingBlocks(model, { modes: 0, durations: 0 })).toEqual([]);
+    expect(generationSettingBlocks(model, { modes: 0, durations: 5 })).toEqual(["duration_seconds"]);
   });
 });

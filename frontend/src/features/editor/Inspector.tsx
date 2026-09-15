@@ -1,4 +1,3 @@
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, RotateCcw, Trash2, Upload, X } from "lucide-react";
 
@@ -151,12 +150,17 @@ export function Inspector({
     <section className="min-h-0 editor-pane overflow-hidden bg-workspace-panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
         {selectedClip && !isTextClip ? (
-          <div className={SEGMENTED_LIST} role="tablist">
+          /* 用剪辑台自己那套 tab(`.editor-mode-tab`,和左栏的素材/逐字稿/字幕/配音同一个),
+             不是通用的 SEGMENTED_LIST。后者会在两个标签外面再包一层 40px 的承托底色 ——
+             塞进 44px 的面板头里上下只剩 2px,而同排的图标按钮才 24px,于是这一块又高又重;
+             更要紧的是**同一页上出现了两种长相的分段控件**,左栏一种、右栏一种。
+             选中态的底色两边本来就是同一个 `--accent`,差的只是那层壳。 */
+          <div className="flex min-w-0 items-center gap-1" role="tablist">
             <button
               type="button"
               role="tab"
               aria-selected={tab === "props"}
-              className={segmentedTriggerClass(tab === "props")}
+              className={cn("editor-mode-tab", tab === "props" && "is-active")}
               onClick={() => setTab("props")}
             >
               {t("inspectorProps")}
@@ -165,7 +169,7 @@ export function Inspector({
               type="button"
               role="tab"
               aria-selected={tab === "color"}
-              className={segmentedTriggerClass(tab === "color")}
+              className={cn("editor-mode-tab", tab === "color" && "is-active")}
               onClick={() => setTab("color")}
             >
               {t("colorGrade")}

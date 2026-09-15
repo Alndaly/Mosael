@@ -141,6 +141,32 @@ export function roleAccepts(role: string): "image" | "video" | "audio" {
  *
  * 只留这个模型真认的角色;剩不下角色的组直接不出现。不足两组就没得选,返回空 =「不显示开关」。
  */
+/**
+ * 「参数」弹层里**会出现哪几块**。按 key 回一个清单,而不是回一个 boolean。
+ *
+ * 按钮的显隐和弹层的内容必须出自**同一处**。分开写的结果已经见过了:10 个图片模型里 8 个的
+ * `parameter_keys` 是空的(gemini 那几族、ComfyUI 工作流、gemma4…),而互斥输入组只有一组时
+ * `sourceModes` 也回空 —— 于是每一个条件块都是 false,点开「参数」是一个只有标题的空盒子。
+ * 这正是这个仓库一直在消灭的那种"点了没反应"。
+ *
+ * 回清单还有第二个用处:弹层按它渲染,新增一块参数时**漏掉按钮那一侧**这件事不可能发生。
+ */
+export function generationSettingBlocks(
+  model: GenerationOption | null,
+  options: { modes: number; durations: number },
+): string[] {
+  const blocks: string[] = [];
+  if (options.modes > 0) blocks.push("mode");
+  for (const key of ["aspect_ratio", "resolution", "size"]) {
+    if (supportsParameter(model, key)) blocks.push(key);
+  }
+  if (supportsParameter(model, "duration_seconds") && options.durations > 0) blocks.push("duration_seconds");
+  blocks.push(...booleanParameterKeys(model).filter((key) => key !== "generate_audio"));
+  blocks.push(...parameterChoiceEntries(model).map(([key]) => key));
+  if (supportsParameter(model, "generate_audio")) blocks.push("generate_audio");
+  return blocks;
+}
+
 export function sourceModes(model: GenerationOption | null): { key: string; roles: string[] }[] {
   const groups = exclusiveSourceGroups(model)
     .map((roles) => roles.filter((role) => supportsParameter(model, role)))
@@ -440,6 +466,11 @@ export function NodeComposer({
   const modes = React.useMemo(() => sourceModes(current), [current]);
   const [mode, setMode] = React.useState(saved.mode ?? "");
   const activeMode = modes.find((one) => one.key === mode) ?? modes[0] ?? null;
+  //: 这个模型有没有可调参数。**按钮和弹层共用它** —— 见 generationSettingBlocks 的说明。
+  const settingBlocks = React.useMemo(
+    () => generationSettingBlocks(current, { modes: modes.length, durations: durations.length }),
+    [current, modes.length, durations.length],
+  );
 
   //: 这个模型认哪几种输入素材,各能挂几份。首尾帧和参考图**分属互斥的两组**(厂商硬约束),
   //: 描述符里已经声明过 —— 这里只按它出格子,不自己判。
@@ -817,6 +848,10 @@ export function NodeComposer({
                 options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))}
               />
 
+              {/* **这个模型没有可调参数就不摆这个按钮。** 10 个图片模型里 8 个的 parameter_keys
+                  是空的,而互斥输入组只有一组时生成方式也没得选 —— 点开是一个只有标题的空盒子。
+                  显隐和弹层内容共用 settingBlocks,不会再各走各的(见 generationSettingBlocks)。 */}
+              {settingBlocks.length > 0 && (
               <Popover>
                 <PopoverTrigger asChild>
                   <button type="button" aria-label={t("boardGenerationSettings")} className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-ui-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
@@ -909,6 +944,7 @@ export function NodeComposer({
               )}
                 </PopoverContent>
               </Popover>
+              )}
 
               <span className="ml-auto flex shrink-0 items-center gap-1">
                 {maxImages(current) > 1 && (
