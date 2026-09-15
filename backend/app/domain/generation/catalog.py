@@ -792,6 +792,28 @@ EVOLINK_IMAGE_EDIT_CAPABILITIES = {
     "source_limits": {"reference_image": 14},
 }
 
+GOOGLE_VEO_VIDEO_CAPABILITIES = {
+    "modes": ["text-to-video", "image-to-video"],
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame", "seed"],
+    # 没有 Google 密钥,这一份仍是照文档写的 —— Veo 3.x 文档上还有参考图和续写,
+    # 都没接,等有密钥再核。
+    "source_limits": {"first_frame": 1},
+    "duration_seconds": [4, 6, 8],
+    "default_duration_seconds": 8,
+    "resolutions": ["720p", "1080p", "4k"],
+    "default_resolution": "720p",
+    "duration_by_resolution": {"1080p": [8], "4k": [8]},
+    "aspect_ratios": ["16:9", "9:16"],
+    "default_aspect_ratio": "16:9",
+    "max_duration_seconds": 8,
+    # Veo 3.x 原生生成音频；它没有 generate_audio 开关。
+    "supports_audio": True,
+}
+
+#: Veo 3.1 Pro 经 Evolink:和那边的文生视频同形,只是原生带音频。**单独一份而不是就地拼**——
+#: 就地 `{**X, ...}` 拼出来的是个匿名对象,名册里指不到它,用户也就没法选它。
+EVOLINK_VEO_31_PRO_CAPABILITIES = {**EVOLINK_VIDEO_T2V_CAPABILITIES, "supports_audio": True}
+
 EVOLINK_BUILTIN_MODELS = [
     # Seedance 经 Evolink 是一条独立于火山方舟的路由；不在本地做「真人」关键词拦截，
     # 实际审核仍由 Evolink 当前选中的上游型号决定。
@@ -818,7 +840,7 @@ EVOLINK_BUILTIN_MODELS = [
     ("wan2.6-image-to-video", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
     ("grok-imagine-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
     ("grok-imagine-image-to-video", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
-    ("veo3.1-pro", "video", {**EVOLINK_VIDEO_T2V_CAPABILITIES, "supports_audio": True}),
+    ("veo3.1-pro", "video", EVOLINK_VEO_31_PRO_CAPABILITIES),
     ("gpt-image-1.5", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
     ("gemini-3.1-flash-image-preview", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
     ("z-image-turbo", "image", EVOLINK_IMAGE_CAPABILITIES),
@@ -1017,23 +1039,7 @@ BUILTIN_MODELS = [
         "provider": "google",
         "kind": "video",
         "model": "veo",
-        "capabilities": {
-            "modes": ["text-to-video", "image-to-video"],
-            "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame", "seed"],
-            # 没有 Google 密钥,这一份仍是照文档写的 —— Veo 3.x 文档上还有参考图和续写,
-            # 都没接,等有密钥再核。
-            "source_limits": {"first_frame": 1},
-            "duration_seconds": [4, 6, 8],
-            "default_duration_seconds": 8,
-            "resolutions": ["720p", "1080p", "4k"],
-            "default_resolution": "720p",
-            "duration_by_resolution": {"1080p": [8], "4k": [8]},
-            "aspect_ratios": ["16:9", "9:16"],
-            "default_aspect_ratio": "16:9",
-            "max_duration_seconds": 8,
-            # Veo 3.x 原生生成音频；它没有 generate_audio 开关。
-            "supports_audio": True,
-        },
+        "capabilities": GOOGLE_VEO_VIDEO_CAPABILITIES,
     },
     {
         # 旧接口那一代(2.x):参数平铺,只有首尾帧,没有主体。
@@ -1066,6 +1072,68 @@ BUILTIN_MODELS = [
     },
 ]
 
+#: **能力档案的名册。** 上面那几十个常量本来就是"档案" —— 9 份被 28 行共用,只是没有名字,
+#: 于是"另一条通道也有这个模型"每出现一次就只能再抄一行(openai / openai-compatible 下的
+#: gpt-image-2 就是抄出来的一对)。给它们一个稳定的 id 之后,这件事有了第二种说法:
+#: 用户在自己那行模型上指一份档案,而不是等我们补一行。
+#:
+#: id 由常量名推出来(`OPENAI_IMAGE_CAPABILITIES` → `openai-image`),但**写成显式的一行**:
+#: 它会被存进用户的数据里,不能因为有人重命名了常量就悄悄变。改名要在这里同步改,并且
+#: 想清楚存量数据怎么办。
+CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
+    "openai-image": OPENAI_IMAGE_CAPABILITIES,
+    "qwen-text-image": QWEN_TEXT_IMAGE_CAPABILITIES,
+    "qwen-pro-image": QWEN_PRO_IMAGE_CAPABILITIES,
+    "qwen-edit-image": QWEN_EDIT_IMAGE_CAPABILITIES,
+    "seedream-4-image": SEEDREAM_4_IMAGE_CAPABILITIES,
+    "seedream-3-image": SEEDREAM_3_IMAGE_CAPABILITIES,
+    "wan-video": WAN_VIDEO_CAPABILITIES,
+    "wan-27-t2v": WAN_27_T2V_CAPABILITIES,
+    "wan-27-i2v": WAN_27_I2V_CAPABILITIES,
+    "wan-27-r2v": WAN_27_R2V_CAPABILITIES,
+    "kling-legacy-video": KLING_LEGACY_VIDEO_CAPABILITIES,
+    "kling-v3-video": KLING_V3_VIDEO_CAPABILITIES,
+    "kling-v3-omni-video": KLING_V3_OMNI_VIDEO_CAPABILITIES,
+    "wan-video-edit": WAN_VIDEO_EDIT_CAPABILITIES,
+    "seedance-2-video": SEEDANCE_2_VIDEO_CAPABILITIES,
+    "seedance-2-small-video": SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
+    "seedance-1-video": SEEDANCE_1_VIDEO_CAPABILITIES,
+    "seedance-15-video": SEEDANCE_15_VIDEO_CAPABILITIES,
+    "comfyui-image": COMFYUI_IMAGE_CAPABILITIES,
+    "comfyui-video": COMFYUI_VIDEO_CAPABILITIES,
+    "minimax-video": MINIMAX_VIDEO_CAPABILITIES,
+    "evolink-video-t2v": EVOLINK_VIDEO_T2V_CAPABILITIES,
+    "evolink-video-i2v": EVOLINK_VIDEO_I2V_CAPABILITIES,
+    "evolink-seedance-15": EVOLINK_SEEDANCE_15_CAPABILITIES,
+    "evolink-seedance-20-t2v": EVOLINK_SEEDANCE_20_T2V_CAPABILITIES,
+    "evolink-seedance-20-i2v": EVOLINK_SEEDANCE_20_I2V_CAPABILITIES,
+    "evolink-seedance-20-r2v": EVOLINK_SEEDANCE_20_R2V_CAPABILITIES,
+    "evolink-seedance-20-fast-t2v": EVOLINK_SEEDANCE_20_FAST_T2V_CAPABILITIES,
+    "evolink-seedance-20-fast-i2v": EVOLINK_SEEDANCE_20_FAST_I2V_CAPABILITIES,
+    "evolink-seedance-20-fast-r2v": EVOLINK_SEEDANCE_20_FAST_R2V_CAPABILITIES,
+    "evolink-seedance-25-t2v": EVOLINK_SEEDANCE_25_T2V_CAPABILITIES,
+    "evolink-seedance-25-i2v": EVOLINK_SEEDANCE_25_I2V_CAPABILITIES,
+    "evolink-seedance-25-r2v": EVOLINK_SEEDANCE_25_R2V_CAPABILITIES,
+    "evolink-seedance-25-video-edit": EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES,
+    "evolink-seedance-25-video-extend": EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES,
+    "evolink-image": EVOLINK_IMAGE_CAPABILITIES,
+    "evolink-image-edit": EVOLINK_IMAGE_EDIT_CAPABILITIES,
+    "evolink-veo-31-pro": EVOLINK_VEO_31_PRO_CAPABILITIES,
+    "google-veo-video": GOOGLE_VEO_VIDEO_CAPABILITIES,
+}
+
+#: 按对象身份反查档案 id。**不比较内容** —— 两份内容恰好相同的档案仍是两份(它们会各自演化)。
+_PROFILE_ID_BY_IDENTITY: dict[int, str] = {id(caps): name for name, caps in CAPABILITY_PROFILES.items()}
+
+
+def profile_id_for(vendor: str, model: str, kind: str) -> str | None:
+    """这条内置记录用的是哪份档案。查不到这个模型时回 None。"""
+    for item in BUILTIN_MODELS:
+        if item["provider"] == vendor and item["model"] == model and item["kind"] == kind:
+            return _PROFILE_ID_BY_IDENTITY.get(id(item["capabilities"]))
+    return None
+
+
 #: 某个 vendor 在某种生成能力下的**兜底**描述符。目录里没登记的模型(私有部署、别名、
 #: 用户手填的)照样要能出现在选择器里并给出一组可用参数 —— 缺描述符不该等于"不能用"。
 _FALLBACK_BY_KIND: dict[str, dict[str, Any]] = {
@@ -1080,7 +1148,34 @@ _FALLBACK_BY_KIND: dict[str, dict[str, Any]] = {
 }
 
 
-def capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any]:
+def resolve_capability_ref(ref: str | None, kind: str) -> dict[str, Any] | None:
+    """用户在自己那行模型上写下的「生成参数按什么来」。认不出就回 None(**不猜**)。
+
+    两种写法:
+
+      `model:<provider>/<model>`  「它和 X 一样」。存的是指针不是快照 —— 以后我们把 X 的描述符
+                                  改宽了,指着它的那些行**跟着变**。用户写 `gpt-image-2-client`
+                                  时想说的正是这个:它就是 gpt-image-2,别的我不管。
+      `profile:<id>`              目录里没有对应模型时,直接指一份能力档案(见 CAPABILITY_PROFILES)。
+
+    指向的东西不存在时回 None 而不是抛:一个指向已被删掉的模型的旧值,不该让整个模型列表 500。
+    界面那边会因此显示成"还没认出来",用户重新指一次即可。
+    """
+    text = (ref or "").strip()
+    if not text:
+        return None
+    prefix, _, rest = text.partition(":")
+    if prefix == "profile":
+        found = CAPABILITY_PROFILES.get(rest.strip())
+        return dict(found) if found is not None else None
+    if prefix == "model":
+        target_vendor, _, target_model = rest.partition("/")
+        #: 跨 kind 不认:同一个 id 的图片档案套到视频上,参数是另一套。
+        return known_capabilities_for(target_vendor.strip(), target_model.strip(), kind)
+    return None
+
+
+def capabilities_for(vendor: str, model: str, kind: str, *, ref: str | None = None) -> dict[str, Any]:
     """某个模型在某种生成能力下的参数描述符(尺寸/时长/支持哪些参数)。
 
     **这是关于供应商 API 的静态知识,不是用户配置** —— 所以它是一张查表,不再是数据库里的行。
@@ -1092,10 +1187,22 @@ def capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any]:
     界面保留提示词和提交入口。即使同一个供应商，同系列不同型号的时长、素材角色和枚举值也
     经常不同；继承目录第一项会让界面主动发送用户没有选择、目标模型也未必支持的参数。
     """
+    declared = resolve_capability_ref(ref, kind)
+    if declared is not None:
+        return declared
     exact = known_capabilities_for(vendor, model, kind)
     if exact is not None:
         return exact
     return dict(_FALLBACK_BY_KIND.get(kind, {}))
+
+
+def capabilities_are_known(vendor: str, model: str, kind: str, *, ref: str | None = None) -> bool:
+    """这个模型的参数是**认出来的**,还是落到了兜底。
+
+    界面要分得开这两种零:「这个模型确实没有可调参数」和「我们不认识这个模型」。合成一个的
+    后果今天见过 —— 生成节点的「参数」按钮对着一堆其实有参数的模型悄悄消失了。
+    """
+    return resolve_capability_ref(ref, kind) is not None or known_capabilities_for(vendor, model, kind) is not None
 
 
 def known_capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any] | None:
@@ -1145,7 +1252,11 @@ def generation_options(db, kind: str) -> list[dict[str, Any]]:
                 "kind": kind,
                 "model": model.model_id,
                 "label": f"{profile.name} · {model.display_name or model.model_id}",
-                "capabilities": capabilities_for(vendor, model.model_id, kind),
+                "capabilities": capabilities_for(vendor, model.model_id, kind, ref=model.generation_capability_ref),
+                #: 参数是认出来的还是兜底 —— 界面据此区分"没有参数"和"不认识这个模型"。
+                "capabilities_known": capabilities_are_known(
+                    vendor, model.model_id, kind, ref=model.generation_capability_ref
+                ),
                 # 适配器不可用的照样列出来但标出来 —— 藏起来的话,用户配好了却找不到,
                 # 只会以为是自己配错了。
                 "adapter_available": get_generation_adapter(vendor, kind) is not None,

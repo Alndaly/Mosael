@@ -24,7 +24,16 @@ from app.domain import thinking
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
-RUNTIME_FIELDS = ("context_window", "max_output_tokens", "reasoning", "vision", "reasoning_effort", "developer_role")
+RUNTIME_FIELDS = (
+    "context_window",
+    "max_output_tokens",
+    "reasoning",
+    "vision",
+    "reasoning_effort",
+    "developer_role",
+    #: 生成参数按什么来。和上面几格同一个约定 —— 留空 = 跟随目录。
+    "generation_capability_ref",
+)
 
 
 #: 从模型名推能力的线索,按 vendor 给。**只写有把握的**:推错比不推更糟。

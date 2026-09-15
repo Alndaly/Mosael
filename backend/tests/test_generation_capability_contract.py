@@ -450,3 +450,116 @@ class Test描述符里素材规矩的形状:
                 )
                 for role in group:
                     assert role in SOURCE_ROLES, f"{item['id']} 的互斥组有未知角色 {role}"
+
+
+class Test能力档案名册:
+    """上面那几十个能力常量本来就是"档案"。给它们稳定的 id 之后,用户可以在自己那行模型上
+    指一份,而不是等我们为"另一条通道也有这个模型"再抄一行。
+
+    名册必须**完整**且**稳定**:漏一份,那个模型就指不了;id 变一个,已经存进用户数据的那个
+    值就指向虚空。
+    """
+
+    def test_目录里用到的每一份能力都在名册里(self) -> None:
+        from app.domain.generation.catalog import CAPABILITY_PROFILES, profile_id_for
+
+        missing = [
+            item["id"]
+            for item in BUILTIN_MODELS
+            if profile_id_for(item["provider"], item["model"], item["kind"]) is None
+        ]
+        assert missing == [], (
+            "这些内置模型用的能力常量没有档案 id —— 新加一份能力时要同时在 CAPABILITY_PROFILES "
+            "里给它起个名字,否则用户指不到它:" + ", ".join(missing)
+        )
+        assert len(CAPABILITY_PROFILES) >= 30
+
+    def test_档案id是稳定的标识而不是内容哈希(self) -> None:
+        """两份内容恰好相同的档案仍是两份 —— 它们会各自演化。
+
+        按内容去重会让 `openai-image` 和某个恰好一样的档案合并,之后其中一边改了,
+        指着它的用户行会被悄悄带走。
+        """
+        from app.domain.generation.catalog import CAPABILITY_PROFILES
+
+        assert len(CAPABILITY_PROFILES) == len({id(v) for v in CAPABILITY_PROFILES.values()})
+
+    def test_同一个模型经不同通道各指各的档案(self) -> None:
+        """这条是整件事的**判据**:provider 不是运输标签,它实质改变端点接受什么。
+
+        实测 qwen-image-edit —— alibaba 自家只收 reference_image、3 张、只有图生图;
+        经 evolink 则多出 size / num_images、14 张、两种模式。按 model id 跨 vendor 兜底
+        会把后者的参数发给前者,当场被拒。
+        """
+        from app.domain.generation.catalog import profile_id_for
+
+        own = profile_id_for("alibaba", "qwen-image-edit", "image")
+        relayed = profile_id_for("evolink", "qwen-image-edit", "image")
+        assert own and relayed and own != relayed
+
+
+class Test用户在自己那行模型上声明生成参数:
+    """静态目录按 (provider, model, kind) 精确查,这是对的 —— 实测同一个模型经两条通道,
+    端点接受的参数真的不同(见上面 qwen-image-edit 那条)。但它有一半是空的:用户手填的别名、
+    经另一条中转配的同一个模型,目录永远查不到,而**只有用户知道**它是什么。
+
+    这一列就是那半边。它不引入任何推断:要么目录认得,要么用户说了。
+    """
+
+    def test_指向另一个已知模型时跟着它走(self) -> None:
+        """`gpt-image-2-client` 是用户手填的别名 —— 同一个端点、同一个模型,多了个后缀。
+
+        存的是**指针**不是快照:以后 gpt-image-2 的描述符改宽了,指着它的行跟着变。
+        """
+        from app.domain.generation.catalog import capabilities_for, resolve_capability_ref
+
+        target = capabilities_for("openai-compatible", "gpt-image-2", "image")
+        assert resolve_capability_ref("model:openai-compatible/gpt-image-2", "image") == target
+        assert capabilities_for(
+            "openai-compatible", "gpt-image-2-client", "image", ref="model:openai-compatible/gpt-image-2"
+        ) == target
+
+    def test_目录里没有对应模型时可以直接指一份档案(self) -> None:
+        from app.domain.generation.catalog import CAPABILITY_PROFILES, resolve_capability_ref
+
+        assert resolve_capability_ref("profile:openai-image", "image") == CAPABILITY_PROFILES["openai-image"]
+
+    def test_指针跨不过kind(self) -> None:
+        """同一个 id 的图片档案套到视频上,参数是另一套 —— 宁可认不出,不可发错。"""
+        from app.domain.generation.catalog import resolve_capability_ref
+
+        assert resolve_capability_ref("model:openai-compatible/gpt-image-2", "video") is None
+
+    def test_指向不存在的东西回None而不是抛(self) -> None:
+        """一个指向已被删掉的模型的旧值,不该让整个模型列表 500。"""
+        from app.domain.generation.catalog import resolve_capability_ref
+
+        for bad in ("", None, "乱写的", "profile:不存在", "model:nobody/nothing", "model:没有斜杠"):
+            assert resolve_capability_ref(bad, "image") is None
+
+    def test_声明优先于目录(self) -> None:
+        """用户说了就按用户的来 —— 他知道自己那个端点,我们只有一张静态表。"""
+        from app.domain.generation.catalog import capabilities_for
+
+        #: alibaba 自家的 qwen-image-edit 只收 reference_image;用户声明"按 evolink 那份"之后
+        #: 应当拿到 evolink 的那一份(size / num_images / 14 张参考图)。
+        own = capabilities_for("alibaba", "qwen-image-edit", "image")
+        declared = capabilities_for(
+            "alibaba", "qwen-image-edit", "image", ref="model:evolink/qwen-image-edit"
+        )
+        assert "size" not in own["parameter_keys"]
+        assert "size" in declared["parameter_keys"]
+
+    def test_分得开两种零(self) -> None:
+        """「这个模型确实没有可调参数」和「我们不认识这个模型」必须分得开。
+
+        合成一个的后果今天见过:生成节点的「参数」按钮对着一堆其实有参数的模型悄悄消失了。
+        """
+        from app.domain.generation.catalog import capabilities_are_known, capabilities_for
+
+        unknown = "gemini-3.1-flash-image"
+        assert capabilities_are_known("openai-compatible", unknown, "image") is False
+        assert capabilities_for("openai-compatible", unknown, "image")["parameter_keys"] == []
+        assert capabilities_are_known(
+            "openai-compatible", unknown, "image", ref="profile:evolink-image-edit"
+        ) is True

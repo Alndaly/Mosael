@@ -603,6 +603,11 @@ class ProviderModelOut(ApiModel):
     vision: bool | None = None
     reasoning_effort: bool | None = None
     developer_role: bool | None = None
+    #: 生成参数按什么来 —— `model:<provider>/<model>` 或 `profile:<id>`,留空 = 跟随目录。
+    generation_capability_ref: str | None = None
+    #: 这个模型的生成参数是**认出来的**还是落到兜底。界面据此分开"确实没有参数"和
+    #: "我们不认识这个模型" —— 合成一个的话,后者会静默地什么都不显示。
+    generation_capabilities_known: bool = True
 
 
 class ProviderModelUpdate(ApiModel):
@@ -618,6 +623,7 @@ class ProviderModelUpdate(ApiModel):
     vision: bool | None = None
     reasoning_effort: bool | None = None
     developer_role: bool | None = None
+    generation_capability_ref: str | None = None
 
 
 class OAuthPromptOut(ApiModel):
@@ -1323,6 +1329,10 @@ class GenerationOptionOut(ApiModel):
     #: 这个 vendor+kind 有没有接入的生成 Adapter。不可用的照样列出但标出来 ——
     #: 藏起来的话用户配好了却找不到,只会以为是自己配错了。
     adapter_available: bool = False
+    #: 上面那份 capabilities 是**认出来的**,还是落到了兜底(什么参数都不声明)。
+    #: 界面据此分开两种零:「这个模型确实没有可调参数」和「我们不认识这个模型」——
+    #: 合成一个的后果是后者静默地什么都不显示,看起来就像前者。
+    capabilities_known: bool = True
 
 
 class GenerationModelOut(OrmModel):

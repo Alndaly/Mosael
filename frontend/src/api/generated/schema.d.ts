@@ -2759,6 +2759,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generation/capability-refs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Capability Refs
+         * @description 设置页里「这一行的生成参数按什么来」能选什么。
+         *
+         *     两组,对应那一列的两种写法:
+         *
+         *       `models`   目录认得的 (provider, model) —— 「它和 X 一样」。**首选** ,因为它是指针:
+         *                  以后我们把 X 的描述符改宽了,指着它的行跟着变。
+         *       `profiles` 能力档案本身 —— 目录里没有对应模型时(某个中转独有的组合)才用得上。
+         *
+         *     两边都带上 `parameter_keys`,好让用户在选之前就看得见"选它会得到哪几项",而不是选完
+         *     回去翻界面。
+         */
+        get: operations["list_capability_refs_api_generation_capability_refs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generation/optimize-prompt": {
         parameters: {
             query?: never;
@@ -3415,7 +3444,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read */
+        /**
+         * Read
+         * @description `workspace_id` **可选** —— 画板自带归属,和素材/工作流那两条详情路由一致(同 notes.read)。
+         */
         get: operations["read_api_boards__board_id__get"];
         put?: never;
         post?: never;
@@ -3566,7 +3598,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read */
+        /**
+         * Read
+         * @description `workspace_id` **可选** —— 笔记自带归属,和素材/工作流那两条详情路由一致。
+         *
+         *     它此前是必填的,而引用胶囊的探活用的是同一个形状的 URL(/api/notes/{id}),于是点笔记
+         *     胶囊永远 422 → 界面报「它已经不在了」,可它明明在。带上时仍按它查(跨工作区的 id 读不出来)。
+         */
         get: operations["read_api_notes__note_id__get"];
         put?: never;
         post?: never;
@@ -7471,6 +7509,11 @@ export interface components {
              * @default false
              */
             adapter_available: boolean;
+            /**
+             * Capabilities Known
+             * @default true
+             */
+            capabilities_known: boolean;
         };
         /** GenerationSessionCreate */
         GenerationSessionCreate: {
@@ -8824,6 +8867,13 @@ export interface components {
             reasoning_effort?: boolean | null;
             /** Developer Role */
             developer_role?: boolean | null;
+            /** Generation Capability Ref */
+            generation_capability_ref?: string | null;
+            /**
+             * Generation Capabilities Known
+             * @default true
+             */
+            generation_capabilities_known: boolean;
         };
         /**
          * ProviderModelUpdate
@@ -8850,6 +8900,8 @@ export interface components {
             reasoning_effort?: boolean | null;
             /** Developer Role */
             developer_role?: boolean | null;
+            /** Generation Capability Ref */
+            generation_capability_ref?: string | null;
         };
         /** ProviderPricingRuleCreate */
         ProviderPricingRuleCreate: {
@@ -16963,6 +17015,41 @@ export interface operations {
             };
         };
     };
+    list_capability_refs_api_generation_capability_refs_get: {
+        parameters: {
+            query?: {
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: {
+                            [key: string]: unknown;
+                        }[];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     optimize_prompt_api_generation_optimize_prompt_post: {
         parameters: {
             query?: never;
@@ -18492,8 +18579,8 @@ export interface operations {
     };
     read_api_boards__board_id__get: {
         parameters: {
-            query: {
-                workspace_id: string;
+            query?: {
+                workspace_id?: string | null;
             };
             header?: never;
             path: {
@@ -18836,8 +18923,8 @@ export interface operations {
     };
     read_api_notes__note_id__get: {
         parameters: {
-            query: {
-                workspace_id: string;
+            query?: {
+                workspace_id?: string | null;
             };
             header?: never;
             path: {

@@ -91,6 +91,29 @@ def _model_out(model, catalog: dict[str, dict], vendor: str = "") -> ProviderMod
         vision=model.vision,
         reasoning_effort=model.reasoning_effort,
         developer_role=model.developer_role,
+        generation_capability_ref=model.generation_capability_ref,
+        #: 只有这一行真能生成时才谈得上"认不认得出参数" —— 纯对话模型永远是 True,
+        #: 免得设置页对着一排 gpt-4 挂出一串"参数还没认出来"。
+        generation_capabilities_known=_generation_capabilities_known(
+            vendor or (model.profile.vendor if model.profile else ""), model
+        ),
+    )
+
+
+def _generation_capabilities_known(vendor: str, model) -> bool:
+    """这一行的生成参数是认出来的,还是落到了兜底。
+
+    **不是生成模型就不算数**:能力清单里没有 image/video 的行(纯对话模型)恒为 True,
+    否则设置页会对着一排 gpt-4 挂出"参数还没认出来",而那句话对它们毫无意义。
+    """
+    from app.domain.generation import capabilities_are_known
+
+    kinds = [k for k in ("image", "video") if k in provider_models.effective_capabilities(model)]
+    if not kinds:
+        return True
+    return all(
+        capabilities_are_known(vendor, model.model_id, kind, ref=model.generation_capability_ref)
+        for kind in kinds
     )
 
 

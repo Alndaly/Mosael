@@ -119,6 +119,47 @@ def list_generation_options(db: DbSession, user: CurrentUser, kind: str = "image
     return [GenerationOptionOut(**option) for option in generation_options(db, kind)]
 
 
+@router.get("/generation/capability-refs")
+def list_capability_refs(kind: str = "image") -> dict[str, list[dict[str, object]]]:
+    """设置页里「这一行的生成参数按什么来」能选什么。
+
+    两组,对应那一列的两种写法:
+
+      `models`   目录认得的 (provider, model) —— 「它和 X 一样」。**首选** ,因为它是指针:
+                 以后我们把 X 的描述符改宽了,指着它的行跟着变。
+      `profiles` 能力档案本身 —— 目录里没有对应模型时(某个中转独有的组合)才用得上。
+
+    两边都带上 `parameter_keys`,好让用户在选之前就看得见"选它会得到哪几项",而不是选完
+    回去翻界面。
+    """
+    from app.domain.generation.catalog import BUILTIN_MODELS, CAPABILITY_PROFILES, profile_id_for
+
+    models = [
+        {
+            "value": f"model:{item['provider']}/{item['model']}",
+            "provider": item["provider"],
+            "model": item["model"],
+            "profile": profile_id_for(item["provider"], item["model"], kind),
+            "parameter_keys": list(item["capabilities"].get("parameter_keys") or []),
+        }
+        for item in BUILTIN_MODELS
+        if item["kind"] == kind
+    ]
+    models.sort(key=lambda row: (row["model"], row["provider"]))
+    profiles = [
+        {
+            "value": f"profile:{name}",
+            "profile": name,
+            "parameter_keys": list(caps.get("parameter_keys") or []),
+        }
+        for name, caps in CAPABILITY_PROFILES.items()
+        #: 只列这一种 kind 用得上的 —— 图片档案摆进视频的下拉里是纯噪音。
+        if any(mode.endswith(f"-to-{'image' if kind == 'image' else 'video'}") for mode in (caps.get("modes") or []))
+    ]
+    profiles.sort(key=lambda row: row["profile"])
+    return {"models": models, "profiles": profiles}
+
+
 @router.post("/generation/optimize-prompt", response_model=PromptOptimizeResponse)
 def optimize_prompt(body: PromptOptimizeRequest, db: DbSession, user: CurrentUser) -> PromptOptimizeResponse:
     """把提示词按目标图像平台(provider/model)的习惯优化。前端「优化」按钮与智能助手技能共用。"""

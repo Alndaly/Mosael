@@ -7908,6 +7908,58 @@
         }
       }
     },
+    "/api/generation/capability-refs": {
+      "get": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "List Capability Refs",
+        "description": "设置页里「这一行的生成参数按什么来」能选什么。\n\n两组,对应那一列的两种写法:\n\n  `models`   目录认得的 (provider, model) —— 「它和 X 一样」。**首选** ,因为它是指针:\n             以后我们把 X 的描述符改宽了,指着它的行跟着变。\n  `profiles` 能力档案本身 —— 目录里没有对应模型时(某个中转独有的组合)才用得上。\n\n两边都带上 `parameter_keys`,好让用户在选之前就看得见\"选它会得到哪几项\",而不是选完\n回去翻界面。",
+        "operationId": "list_capability_refs_api_generation_capability_refs_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "image",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "title": "Response List Capability Refs Api Generation Capability Refs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/generation/optimize-prompt": {
       "post": {
         "tags": [
@@ -10150,6 +10202,7 @@
           "boards"
         ],
         "summary": "Read",
+        "description": "`workspace_id` **可选** —— 画板自带归属,和素材/工作流那两条详情路由一致(同 notes.read)。",
         "operationId": "read_api_boards__board_id__get",
         "parameters": [
           {
@@ -10164,9 +10217,16 @@
           {
             "name": "workspace_id",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": "string",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Workspace Id"
             }
           }
@@ -10694,6 +10754,7 @@
           "notes"
         ],
         "summary": "Read",
+        "description": "`workspace_id` **可选** —— 笔记自带归属,和素材/工作流那两条详情路由一致。\n\n它此前是必填的,而引用胶囊的探活用的是同一个形状的 URL(/api/notes/{id}),于是点笔记\n胶囊永远 422 → 界面报「它已经不在了」,可它明明在。带上时仍按它查(跨工作区的 id 读不出来)。",
         "operationId": "read_api_notes__note_id__get",
         "parameters": [
           {
@@ -10708,9 +10769,16 @@
           {
             "name": "workspace_id",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": "string",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Workspace Id"
             }
           }
@@ -21272,6 +21340,11 @@
             "type": "boolean",
             "title": "Adapter Available",
             "default": false
+          },
+          "capabilities_known": {
+            "type": "boolean",
+            "title": "Capabilities Known",
+            "default": true
           }
         },
         "type": "object",
@@ -24096,6 +24169,22 @@
               }
             ],
             "title": "Developer Role"
+          },
+          "generation_capability_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Capability Ref"
+          },
+          "generation_capabilities_known": {
+            "type": "boolean",
+            "title": "Generation Capabilities Known",
+            "default": true
           }
         },
         "type": "object",
@@ -24221,6 +24310,17 @@
               }
             ],
             "title": "Developer Role"
+          },
+          "generation_capability_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Capability Ref"
           }
         },
         "type": "object",

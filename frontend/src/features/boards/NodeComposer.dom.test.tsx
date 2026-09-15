@@ -16,7 +16,7 @@ it("edits parameters in the settings popup, persists them after closing, and sub
   const onFormChange = vi.fn();
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise" } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {
       parameter_keys: ["aspect_ratio", "generate_audio"], aspect_ratios: ["16:9", "9:16"], default_aspect_ratio: "16:9",
     } } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={onFormChange} onSubmit={onSubmit}
@@ -41,7 +41,7 @@ it("把模型旁那枚图标画在触发器里面 —— 装饰和控件必须�
   // 正是那两个高亮框合成一个的充分条件 —— 内边距、hover、焦点环都由触发器这一个盒子出。
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise" } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={vi.fn()}
   />);
   const trigger = screen.getAllByRole("combobox").find((one) => one.textContent?.includes("a-long-video-model-name"));
@@ -49,4 +49,29 @@ it("把模型旁那枚图标画在触发器里面 —— 装饰和控件必须�
   expect(trigger!.querySelector("svg.lucide-sparkles")).not.toBeNull();
   // 左右内边距由触发器自己出,两侧同一个值 —— 这正是「左侧边距明显不对」的那一处。
   expect(trigger!.className).toContain("px-2");
+});
+
+it("认不出参数时要出声,而不是和「确实没有参数」一样静默", async () => {
+  // 两种零。「这个模型确实没有可调参数」不摆按钮是对的 —— 点开是个只有标题的空盒子。
+  // 但「我们不认识这个模型」多半**有**参数,只是目录里查不到(手填的别名、经另一条中转配的
+  // 同一个模型)。两者都静默的话,用户会以为这个模型就是没参数 —— 今天就是这么错的。
+  const model = (known: boolean) => ({
+    id: "m", provider_profile_id: "p", profile_name: "T", label: "L",
+    adapter_available: true, capabilities_known: known,
+    provider: "test", model: "some-image-model", kind: "image", capabilities: { parameter_keys: [] },
+  } as GenerationOption);
+  const props = {
+    item: { id: "image", kind: "image", text: "x" } as BoardItem,
+    busy: false, workspaceId: "w", onPickAsset: vi.fn(), onFormChange: vi.fn(), onSubmit: vi.fn(),
+  };
+
+  const unknown = render(<NodeComposer {...props} models={[model(false)]} />);
+  expect(screen.getByText("boardGenerationUnknownParams")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "boardGenerationSettings" })).not.toBeInTheDocument();
+  unknown.unmount();
+
+  // 认得出、但这个模型真的没有可调参数:什么都不说,也不摆按钮。
+  render(<NodeComposer {...props} models={[model(true)]} />);
+  expect(screen.queryByText("boardGenerationUnknownParams")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "boardGenerationSettings" })).not.toBeInTheDocument();
 });

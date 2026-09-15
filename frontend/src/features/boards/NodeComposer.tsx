@@ -848,9 +848,16 @@ export function NodeComposer({
                 options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))}
               />
 
-              {/* **这个模型没有可调参数就不摆这个按钮。** 10 个图片模型里 8 个的 parameter_keys
-                  是空的,而互斥输入组只有一组时生成方式也没得选 —— 点开是一个只有标题的空盒子。
+              {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮 —— 点开是一个只有标题的
+                  空盒子。而「我们不认识这个模型」是另一回事:它多半**有**参数,只是目录里查不到
+                  (手填的别名、经另一条中转配的同一个模型)。那种情况静默地什么都不显示,看起来
+                  就和前一种一样,于是用户以为这个模型就是没参数 —— 今天就是这么错的。
                   显隐和弹层内容共用 settingBlocks,不会再各走各的(见 generationSettingBlocks)。 */}
+              {settingBlocks.length === 0 && current?.capabilities_known === false && (
+                <span className="min-w-0 truncate px-1 text-ui-2xs text-muted-foreground" title={t("boardGenerationUnknownParams")}>
+                  {t("boardGenerationUnknownParams")}
+                </span>
+              )}
               {settingBlocks.length > 0 && (
               <Popover>
                 <PopoverTrigger asChild>

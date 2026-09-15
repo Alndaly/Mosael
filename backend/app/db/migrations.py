@@ -314,6 +314,23 @@ def _migrate_track_role() -> None:
     backfill_dub_tracks()
 
 
+def _migrate_provider_model_capability_ref() -> None:
+    """给模型行补 `generation_capability_ref` 列。
+
+    生成参数此前只能来自静态目录,而目录按 (provider, model, kind) 精确查 —— 用户手填的别名
+    (`gpt-image-2-client`)、经另一条中转配的同一个模型,一律查不到,界面上一个参数都没有。
+    这一列是用户写下"只有他知道的事"的地方。**回填不做任何猜测**:老行一律留空 = 跟随目录,
+    和它现在的行为一模一样。
+    """
+    inspector = inspect(engine)
+    if "provider_models" not in set(inspector.get_table_names()):
+        return
+    if "generation_capability_ref" in {c["name"] for c in inspector.get_columns("provider_models")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE provider_models ADD COLUMN generation_capability_ref VARCHAR(200)"))
+
+
 def _migrate_prepared_publish_tasks() -> None:
     """把老的 `prepared` 发布任务迁成 `cancelled`。
 
@@ -2010,6 +2027,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_message_i18n,
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
+                _migrate_provider_model_capability_ref,
                 _migrate_browser_boolean_options,
                 _migrate_official_workflow_data_bindings,
                 _migrate_workflow_revisions,

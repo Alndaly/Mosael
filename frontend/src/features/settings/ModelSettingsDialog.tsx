@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +96,80 @@ function AdvancedToggle({
   );
 }
 
+type CapabilityRefs = {
+  models: { value: string; provider: string; model: string; parameter_keys: string[] }[];
+  profiles: { value: string; profile: string; parameter_keys: string[] }[];
+};
+
+/**
+ * 「这一行的生成参数按什么来」。
+ *
+ * **为什么需要**:生成参数来自一张静态目录,按 (provider, model, kind) 精确查。那张表只能装
+ * 我们查证过的东西,而用户手里有它装不下的知识 —— 手填的别名(`gpt-image-2-client` 就是
+ * gpt-image-2)、经另一条中转配的同一个模型。此前这些行一个参数都没有,而用户没有任何地方
+ * 可以说明白。旁边那几格(思考、视觉、developer 角色)早就是这个形状,只是生成模型一格都没有。
+ *
+ * **不做推断**。按模型名跨 vendor 猜是有害的:实测同一个 qwen-image-edit,alibaba 自家只收
+ * 一张参考图、没有尺寸,经 evolink 则收 14 张还能选尺寸 —— 猜过去的参数会被端点当场拒掉。
+ * 所以要么目录认得,要么用户在这里说。
+ */
+function CapabilityRefField({
+  kind,
+  value,
+  known,
+  onChange,
+}: {
+  kind: "image" | "video";
+  value: string | null;
+  known: boolean;
+  onChange: (next: string | null) => void;
+}) {
+  const t = useI18n();
+  const refs = useQuery({
+    queryKey: ["generation-capability-refs", kind],
+    queryFn: () => api<CapabilityRefs>(`/api/generation/capability-refs?kind=${kind}`),
+    staleTime: 5 * 60_000,
+  });
+  const NONE = "__follow__";
+  const data = refs.data;
+  /* 「和 X 一样」排在前面,而且是**指针**:以后我们把 X 的描述符改宽了,指着它的行跟着变。
+     档案排在后面,它是目录里没有对应模型时的出路(某个中转独有的组合)。
+     两边都把参数列出来 —— 选之前就该看得见"选它会得到哪几项",而不是选完回去翻界面。 */
+  const options = [
+    { value: NONE, label: t("modelGenerationRefFollow") },
+    ...(data?.models ?? []).map((one) => ({
+      value: one.value,
+      label: `${one.model} · ${one.provider}`,
+      description: one.parameter_keys.join(" · ") || t("modelGenerationRefNoParams"),
+      keywords: [one.provider, one.model],
+    })),
+    ...(data?.profiles ?? []).map((one) => ({
+      value: one.value,
+      label: t("modelGenerationRefProfile").replace("{name}", one.profile),
+      description: one.parameter_keys.join(" · ") || t("modelGenerationRefNoParams"),
+      keywords: [one.profile],
+    })),
+  ];
+
+  return (
+    <div className="grid gap-1.5 border-t border-border pt-2">
+      <span className="text-ui-md font-medium text-foreground">{t("modelGenerationRef")}</span>
+      <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("modelGenerationRefHint")}</p>
+      <OptionPicker
+        ariaLabel={t("modelGenerationRef")}
+        value={value ?? NONE}
+        onChange={(next) => onChange(next === NONE ? null : next)}
+        options={options}
+        contentClassName="max-w-[min(520px,calc(100vw-32px))]"
+      />
+      {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。 */}
+      {!known && !value && (
+        <p className="m-0 text-ui-xs leading-[1.45] text-warning">{t("modelGenerationRefUnknown")}</p>
+      )}
+    </div>
+  );
+}
+
 export function ModelSettingsDialog({
   profileId,
   modelId,
@@ -155,6 +230,8 @@ export function ModelSettingsDialog({
   const own = current?.capability_ids ?? [];
   const effective = own.length > 0 ? own : (current?.effective_capability_ids ?? []);
   const isChat = effective.includes("chat");
+  //: 生成模型才谈得上"生成参数按什么来"。图片和视频各有一套描述符,所以要分别问。
+  const generationKinds = (["image", "video"] as const).filter((kind) => effective.includes(kind));
 
   return (
     <ModalShell
@@ -181,6 +258,7 @@ export function ModelSettingsDialog({
             vision: current.vision,
             reasoning_effort: current.reasoning_effort,
             developer_role: current.developer_role,
+            generation_capability_ref: current.generation_capability_ref ?? null,
           });
         }}
       >
@@ -320,6 +398,15 @@ export function ModelSettingsDialog({
               </div>
             )}
           </div>
+        )}
+
+        {generationKinds.length > 0 && current && (
+          <CapabilityRefField
+            kind={generationKinds[0]}
+            value={current.generation_capability_ref ?? null}
+            known={current.generation_capabilities_known !== false}
+            onChange={(next) => setDraft((prev) => (prev ? { ...prev, generation_capability_ref: next } : prev))}
+          />
         )}
 
       </form>
