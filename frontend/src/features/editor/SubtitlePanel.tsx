@@ -29,7 +29,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { NONE, optionalValue } from "@/components/ui/selectSentinel";
-import { dubEngineChoices } from "@/features/editor/dubEngines";
+import { speechEngineChoices } from "@/features/voice/speechEngines";
 import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from "@/features/editor/dubLanguage";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
@@ -282,7 +282,7 @@ function SubtitleDub({
   });
   const voiceChoices = engineVoices.data ?? [];
   const activeEngine = engines.data?.find((item) => item.id === engine);
-  const engineChoices = dubEngineChoices(engines.data);
+  const engineChoices = speechEngineChoices(engines.data);
   React.useEffect(() => {
     if (engine === "clone" && !voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
   }, [voices.data, voiceId, engine]);

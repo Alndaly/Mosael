@@ -21,6 +21,9 @@ export interface BoardItem {
     model?: string;
     mode?: string;
     voice_id?: string;
+    /** 引擎音色那条路。和 voice_id **二选一** —— 与后端 BoardSpeak 同形。 */
+    engine?: string;
+    engine_voice?: string;
     parameters?: Record<string, unknown>;
     source_assets?: { asset_id: string; role: string }[];
     mentioned_asset_ids?: string[];
@@ -128,7 +131,18 @@ export function writeOnBoard(
 
 export function speakOnBoard(
   boardId: string,
-  body: { workspace_id: string; base_revision?: number; item_id: string; text: string; voice_id?: string; x?: number; y?: number },
+  body: {
+    workspace_id: string;
+    base_revision?: number;
+    item_id: string;
+    text: string;
+    /** 克隆音色(配音库里那一行)。和下面的引擎音色**二选一** —— 后端 BoardSpeak 的注释同源。 */
+    voice_id?: string;
+    engine?: string;
+    engine_voice?: string;
+    x?: number;
+    y?: number;
+  },
 ): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}/speak`, { method: "POST", body: JSON.stringify(body) });
 }

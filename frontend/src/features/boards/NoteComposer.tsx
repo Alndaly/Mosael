@@ -215,21 +215,26 @@ export function NoteComposer({
             // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
             <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoChatModel")}</span>
           ) : (
-            <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
-              <Sparkles size={12} className="shrink-0 text-muted-foreground" />
-              {/* 模型多了自动带搜索(阈值在 OptionPicker 里)。keywords 挂原始 model id:
-                  展示名换成中文之后,记得住 `gpt-4o` 的人仍然搜得到。 */}
-              <OptionPicker
-                value={`${current?.provider_profile_id}:${current?.model}`}
-                onChange={setPicked}
-                options={options.map((one) => ({
-                  value: `${one.provider_profile_id}:${one.model}`,
-                  label: one.display_name || one.model,
-                  keywords: [one.model],
-                }))}
-                className="h-6 w-auto gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden"
-              />
-            </span>
+            /* 模型多了自动带搜索(阈值在 OptionPicker 里)。keywords 挂原始 model id:
+               展示名换成中文之后,记得住 `gpt-4o` 的人仍然搜得到。
+
+               **图标画在触发器里面,箭头留着。** 这一格和视频卡片的模型选择器是同一类控件,
+               看起来就该一样:此前它外面包一层只负责 hover 底色的壳(于是悬停和聚焦高亮出两个
+               不同大小的框),`[&>svg]:hidden` 把下拉箭头藏了(看起来根本不像个下拉),
+               `focus:ring-0` 又把焦点环也关了(键盘走到这里没有任何反馈)。 */
+            <OptionPicker
+              ariaLabel={t("agentModel")}
+              icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
+              value={`${current?.provider_profile_id}:${current?.model}`}
+              onChange={setPicked}
+              options={options.map((one) => ({
+                value: `${one.provider_profile_id}:${one.model}`,
+                label: one.display_name || one.model,
+                keywords: [one.model],
+              }))}
+              className="h-7 w-auto min-w-0 max-w-[min(11rem,45%)] shrink gap-1 border-0 bg-transparent px-1.5 text-ui-2xs text-muted-foreground shadow-none transition-colors hover:bg-secondary data-[state=open]:text-foreground"
+              contentClassName="max-w-[min(360px,calc(100vw-16px))]"
+            />
           )}
           <button
             type="button"

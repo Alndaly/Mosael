@@ -462,7 +462,7 @@ function BoardDetail({
 
   /** 把一段文字念成音频。**异步** —— 和出图出片同一套:摆占位、起任务、轮询等回执填回来。 */
   const speak = React.useCallback(
-    async (input: { itemId: string; text: string; voiceId: string }) => {
+    async (input: { itemId: string; text: string; voiceId: string; engine: string; engineVoice: string }) => {
       let placed;
       try {
         placed = await speakOnBoard(board.id, {
@@ -471,6 +471,8 @@ function BoardDetail({
           item_id: input.itemId,
           text: input.text,
           voice_id: input.voiceId,
+          engine: input.engine,
+          engine_voice: input.engineVoice,
         });
       } catch (error) {
         if (await recoverConflict(error)) return;

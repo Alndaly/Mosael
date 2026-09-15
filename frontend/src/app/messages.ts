@@ -720,7 +720,8 @@ export const messages = {
     boardNoAssetsToMention: "这个工作区里还没有素材可以引用。",
     boardSpeakPlaceholder: "要念的文字 —— 上游连一张便签过来就自动填好了",
     boardSpeak: "念出来",
-    boardNoVoices: "还没有可用的音色,先去「声音」里加一个",
+    //: 这句只在**克隆库**空着时说 —— 引擎自带的音色是另一回事,它们就在旁边那个下拉里。
+    boardNoVoices: "配音库里还没有克隆音色,换一个引擎,或去「声音」里克隆一个",
     boardTrimFrom: "从",
     boardTrimTo: "到",
     boardTrimSeconds: "秒",
@@ -3262,7 +3263,7 @@ export const messages = {
     boardNoAssetsToMention: "No assets in this workspace to reference yet.",
     boardSpeakPlaceholder: "Text to read aloud — connect a note upstream and it fills itself in",
     boardSpeak: "Read aloud",
-    boardNoVoices: "No voices yet — add one under Voices first",
+    boardNoVoices: "No cloned voices yet — pick another engine, or clone one under Voices",
     boardTrimFrom: "From",
     boardTrimTo: "to",
     boardTrimSeconds: "s",
