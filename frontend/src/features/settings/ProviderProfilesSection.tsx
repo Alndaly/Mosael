@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronDown, ExternalLink, KeyRound, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Power, RotateCw, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, KeyRound, ListChecks, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Power, RotateCw, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -294,6 +294,14 @@ export function ProviderProfilesSection({
   /** 正在授权的档案。订阅计划没有可填的 Key,授权是它唯一的"配置"动作。 */
   const [authing, setAuthing] = React.useState<ProviderProfile | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  /** 溢出菜单发给模型列表的动作(添加模型 / 自定义参数组 / 进入选择)。
+      数据与弹窗都在列表那层,菜单只发信号;`at` 让连点两次同一个动作也能再来一遍。 */
+  const [listAction, setListAction] = React.useState<{ kind: "add" | "profiles" | "bulk"; profileId: string; at: number } | null>(null);
+  const fireListAction = (profile: ProviderProfile, kind: "add" | "profiles" | "bulk") => {
+    /* 动作落在展开区里 —— 列表没展开时先展开,弹窗/选择模式才有处可去。 */
+    setExpanded((prev) => new Set(prev).add(profile.id));
+    setListAction({ kind, profileId: profile.id, at: Date.now() });
+  };
   const logout = useMutation({
     mutationFn: (id: string) => api(`/api/settings/providers/${id}/oauth`, { method: "DELETE" }),
     onSuccess: refresh,
@@ -560,6 +568,13 @@ export function ProviderProfilesSection({
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className={cn(ACTION_MENU, "w-48")}>
+                    {/* 模型列表的三个动作收口在这里:行内不再各摆入口(列表底下的输入框、
+                        右上角浮着的「选择」,都已撤掉)。参数组按 kind 分,只在生成类能力区出现。 */}
+                    <MenuItem icon={<Plus size={13} />} label={t("modelAddEntry")} onSelect={() => fireListAction(profile, "add")} />
+                    {(capability === "image" || capability === "video") && (
+                      <MenuItem icon={<SlidersHorizontal size={13} />} label={t("generationProfiles")} onSelect={() => fireListAction(profile, "profiles")} />
+                    )}
+                    <MenuItem icon={<ListChecks size={13} />} label={t("bulkSelect")} onSelect={() => fireListAction(profile, "bulk")} />
                     {isOauth(profile) && (
                       <MenuItem
                         icon={<LogIn size={13} />}
@@ -591,7 +606,13 @@ export function ProviderProfilesSection({
                   挤进那一列会窄到读不出任何东西。 */}
               {expanded.has(profile.id) && (
                 <div className="col-span-full border-t border-border pt-2">
-                  <ProviderModelList profileId={profile.id} vendor={profile.vendor} capability={capability} />
+                  <ProviderModelList
+                    profileId={profile.id}
+                    vendor={profile.vendor}
+                    capability={capability}
+                    action={listAction?.profileId === profile.id ? listAction : null}
+                    onActionDone={() => setListAction(null)}
+                  />
                 </div>
               )}
             </SettingsListItem>

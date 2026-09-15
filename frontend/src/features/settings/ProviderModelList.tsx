@@ -8,10 +8,11 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/app/combobox";
-import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
+import { ModalShell } from "@/components/app/modals";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
-import { GenerationProfilesSection } from "./GenerationProfilesSection";
+import { GenerationProfilesDialog } from "./GenerationProfilesSection";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
 import { SettingsList, SettingsListItem } from "@/features/settings/ui";
 
@@ -33,12 +34,18 @@ export function ProviderModelList({
   vendor,
   vendorLabel,
   capability,
+  action,
+  onActionDone,
 }: {
   profileId: string;
   vendor?: string;
   vendorLabel?: string;
   /** 当前设置页在看哪种能力 —— 自定义参数组按 kind 分,图片的尺寸清单套到视频上是另一套。 */
   capability?: string | null;
+  /** 连接行溢出菜单发下来的动作(添加模型 / 自定义参数组 / 进入选择)。数据与弹窗都在这层,
+      菜单只发信号 —— 执行完要回报,否则同一个动作点第二次不会再来一遍。 */
+  action?: { kind: "add" | "profiles" | "bulk"; at: number } | null;
+  onActionDone?: () => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -126,6 +133,16 @@ export function ProviderModelList({
   });
   const busy = patchMany.isPending || removeMany.isPending;
 
+  /* 「选择」没有自己的常驻入口:它和其他两个动作一起住在连接行的溢出菜单里,菜单发信号、
+     这里执行。只有一个模型时不进入 —— 对一行做"批量"没有意义。 */
+  React.useEffect(() => {
+    if (action?.kind !== "bulk") return;
+    if (configured.length > 1) bulk.enter();
+    onActionDone?.();
+  }, [action, configured.length, bulk, onActionDone]);
+
+  const actionOpen = (kind: "add" | "profiles") => action?.kind === kind;
+
   return (
     <div className="grid gap-1.5">
       {models.isPending && (
@@ -133,14 +150,6 @@ export function ProviderModelList({
           <Loader2 size={12} className="animate-spin" />
           {t("modelListLoading")}
         </span>
-      )}
-
-      {/* 这个列表内嵌在展开的供应商行里,没有自己的标题栏 —— 入口就贴在列表右上角。
-          只有一个模型时不给:对一行做"批量"没有意义。 */}
-      {configured.length > 1 && !bulk.active && (
-        <div className="flex justify-end">
-          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} />
-        </div>
       )}
 
       <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
@@ -221,31 +230,38 @@ export function ProviderModelList({
         ))}
       </SettingsList>
 
-      {/* 一个带搜索的入口,取代原来的「展开目录清单」+「手填 id」两处。
-       *
-       * 目录动辄两三百个模型(百炼 233 个),铺成一列既滚不完也找不到 —— 而用户来这里时
-       * 通常已经知道要哪个,缺的是"输入几个字母就定位"。手填也并进来:目录里没有就直接用
-       * 输入的那个,不必先意识到"这个模型不在目录里"再去找另一个框。 */}
-      <Combobox
-        value=""
-        options={available.map((row) => ({ value: row.id }))}
-        placeholder={unit.add}
-        searchPlaceholder={unit.search}
-        emptyText={unit.empty}
-        allowCustomValue
-        customValueLabel={(query) => unit.custom.replace("{id}", query)}
-        className="h-8 w-full text-ui-sm"
-        onValueChange={(modelId) => {
-          const trimmed = modelId.trim();
-          if (trimmed) add.mutate(trimmed);
-        }}
-      />
+      {/* 添加模型与自定义参数组的弹窗:入口统一在连接行的溢出菜单里(见 ProviderProfilesSection),
+          列表本体只剩模型行 —— 列表级动作不再各自占一行浮在首尾。 */}
+      <ModalShell open={actionOpen("add")} onOpenChange={(next) => !next && onActionDone?.()} title={t("modelAddEntry")}>
+        {/* 一个带搜索的入口,取代原来的「展开目录清单」+「手填 id」两处。
+         *
+         * 目录动辄两三百个模型(百炼 233 个),铺成一列既滚不完也找不到 —— 而用户来这里时
+         * 通常已经知道要哪个,缺的是"输入几个字母就定位"。手填也并进来:目录里没有就直接用
+         * 输入的那个,不必先意识到"这个模型不在目录里"再去找另一个框。 */}
+        <Combobox
+          value=""
+          options={available.map((row) => ({ value: row.id }))}
+          placeholder={unit.add}
+          searchPlaceholder={unit.search}
+          emptyText={unit.empty}
+          allowCustomValue
+          customValueLabel={(query) => unit.custom.replace("{id}", query)}
+          className="h-8 w-full text-ui-sm"
+          onValueChange={(modelId) => {
+            const trimmed = modelId.trim();
+            if (trimmed) add.mutate(trimmed, { onSuccess: () => onActionDone?.() });
+          }}
+        />
+      </ModalShell>
       {vendorLabel && <span className="sr-only">{vendorLabel}</span>}
 
-      {/* 自定义参数组和这条连接同级 —— 它描述的就是"这条连接后面那个端点接受什么"。
-          折叠着:多数连接用不上它,展开的默认状态会让这一节喧宾夺主。 */}
       {(capability === "image" || capability === "video") && (
-        <GenerationProfilesSection profileId={profileId} kind={capability} />
+        <GenerationProfilesDialog
+          profileId={profileId}
+          kind={capability}
+          open={actionOpen("profiles")}
+          onOpenChange={(next) => !next && onActionDone?.()}
+        />
       )}
 
       {editing && (

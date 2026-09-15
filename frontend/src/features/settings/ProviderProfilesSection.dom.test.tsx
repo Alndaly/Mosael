@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -47,11 +47,11 @@ vi.mock("@/api/client", () => ({
 
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 
-function renderSection() {
+function renderSection(capability = "chat") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ProviderProfilesSection capability="chat" />
+      <ProviderProfilesSection capability={capability} />
     </QueryClientProvider>,
   );
 }
@@ -114,5 +114,41 @@ describe("供应商连接列表", () => {
 
     expect(await screen.findByText("百炼 API Endpoint")).toBeInTheDocument();
     expect(screen.queryByText("初始模型(可选)")).not.toBeInTheDocument();
+  });
+
+  it("模型列表的三个动作收口在连接的溢出菜单里;参数组只在生成类能力区出现", async () => {
+    /* 列表底下的常驻输入框和浮在右上角的「选择」都撤掉了 —— 入口统一在 ⋯ 菜单,
+       同一样式。参数组按 kind 分:对话区不该看到它(图片的参数组套不到对话上)。 */
+    const user = userEvent.setup();
+    vendorsResult = [];
+    providersResult = [{
+      id: "p1",
+      name: "中转",
+      vendor: "openai-compatible",
+      enabled: true,
+      auth_type: "api_key",
+      oauth_linked: false,
+      capability_ids: ["chat", "image"],
+      config: { base_url: "https://x.example/v1" },
+      base_url: "https://x.example/v1",
+      needs_key: false,
+      quota_supported: false,
+    }];
+
+    const chatView = renderSection("chat");
+    await user.click(await screen.findByRole("button", { name: "more" }));
+    /* 断言限定在弹出的菜单里:连接列表自己也有一个「选择」(批量删连接),同文案不同作用域。 */
+    let menu = await screen.findByText("modelAddEntry");
+    expect(menu.closest("[data-radix-popper-content-wrapper]")).toBeTruthy();
+    expect(within(menu.closest("[data-radix-popper-content-wrapper]") as HTMLElement).getByText("bulkSelect")).toBeInTheDocument();
+    expect(screen.queryByText("generationProfiles")).not.toBeInTheDocument();
+    chatView.unmount();
+
+    renderSection("image");
+    await user.click(await screen.findByRole("button", { name: "more" }));
+    menu = await screen.findByText("modelAddEntry");
+    const imageMenu = within(menu.closest("[data-radix-popper-content-wrapper]") as HTMLElement);
+    expect(imageMenu.getByText("bulkSelect")).toBeInTheDocument();
+    expect(imageMenu.getByText("generationProfiles")).toBeInTheDocument();
   });
 });
