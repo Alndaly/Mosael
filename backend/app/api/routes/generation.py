@@ -5,6 +5,7 @@ from sqlalchemy import delete, select, update
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    CapabilityProfileSchemaOut,
     GenerationCreate,
     GenerationCreateResponse,
     GenerationJobOut,
@@ -117,6 +118,18 @@ def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser)
 def list_generation_options(db: DbSession, user: CurrentUser, kind: str = "image") -> list[GenerationOptionOut]:
     """能用来生成的 (连接 × 模型)。设置页里加了什么,这里就有什么 —— 同一个来源。"""
     return [GenerationOptionOut(**option) for option in generation_options(db, kind, user_id=user.id)]
+
+
+@router.get("/generation/capability-profile-schema", response_model=CapabilityProfileSchemaOut)
+def get_capability_profile_schema() -> CapabilityProfileSchemaOut:
+    """参数组可视表单的结构描述 —— 34 个字段的键、形状与分组,表单唯一的事实源。
+
+    前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出
+    对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。
+    """
+    from app.domain.generation.custom_profiles import profile_form_schema
+
+    return CapabilityProfileSchemaOut(**profile_form_schema())
 
 
 @router.get("/generation/capability-refs")

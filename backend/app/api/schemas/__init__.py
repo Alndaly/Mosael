@@ -654,6 +654,22 @@ class GenerationCapabilityProfileUpdate(ApiModel):
     capabilities: dict | None = None
 
 
+class CapabilityProfileFieldOut(ApiModel):
+    """可视表单的一个字段:键、形状、分组。分组是后端语义,前端只翻译标签。"""
+
+    key: str
+    shape: str
+    group: str
+
+
+class CapabilityProfileSchemaOut(ApiModel):
+    """参数组可视表单的结构描述 —— 表单唯一的事实源(见 domain/generation/custom_profiles.py)。"""
+
+    parameters: list[str]
+    source_roles: list[str]
+    fields: list[CapabilityProfileFieldOut]
+
+
 class OAuthPromptOut(ApiModel):
     """登录流程中需要用户作答的一步(输入授权码、选账号……)。"""
 

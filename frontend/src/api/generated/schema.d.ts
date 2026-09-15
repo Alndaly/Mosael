@@ -2759,6 +2759,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generation/capability-profile-schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Capability Profile Schema
+         * @description 参数组可视表单的结构描述 —— 34 个字段的键、形状与分组,表单唯一的事实源。
+         *
+         *     前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出
+         *     对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。
+         */
+        get: operations["get_capability_profile_schema_api_generation_capability_profile_schema_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generation/capability-refs": {
         parameters: {
             query?: never;
@@ -6943,6 +6966,30 @@ export interface components {
              * @default []
              */
             thinking_levels: string[];
+        };
+        /**
+         * CapabilityProfileFieldOut
+         * @description 可视表单的一个字段:键、形状、分组。分组是后端语义,前端只翻译标签。
+         */
+        CapabilityProfileFieldOut: {
+            /** Key */
+            key: string;
+            /** Shape */
+            shape: string;
+            /** Group */
+            group: string;
+        };
+        /**
+         * CapabilityProfileSchemaOut
+         * @description 参数组可视表单的结构描述 —— 表单唯一的事实源(见 domain/generation/custom_profiles.py)。
+         */
+        CapabilityProfileSchemaOut: {
+            /** Parameters */
+            parameters: string[];
+            /** Source Roles */
+            source_roles: string[];
+            /** Fields */
+            fields: components["schemas"]["CapabilityProfileFieldOut"][];
         };
         /**
          * ClipIdsRequest
@@ -17106,6 +17153,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerationOptionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_capability_profile_schema_api_generation_capability_profile_schema_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityProfileSchemaOut"];
                 };
             };
             /** @description Validation Error */

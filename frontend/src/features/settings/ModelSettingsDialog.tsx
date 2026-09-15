@@ -12,6 +12,8 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
+import { GenerationProfilesDialog } from "./GenerationProfilesSection";
+
 type ModelSettings = components["schemas"]["ProviderModelOut"];
 
 /** 草稿态:读模型回包里每个 kind 都是非空串,而编辑中 null 表示"这个 kind 改回跟随目录"
@@ -133,12 +135,17 @@ function CapabilityRefField({
   onChange: (next: string | null) => void;
 }) {
   const t = useI18n();
+  const qc = useQueryClient();
   const refs = useQuery({
     queryKey: ["generation-capability-refs", profileId, kind],
     queryFn: () => api<CapabilityRefs>(`/api/generation/capability-refs?kind=${kind}&profile_id=${profileId}`),
     staleTime: 5 * 60_000,
   });
   const NONE = "__follow__";
+  /* 管理的入口就在绑定的地方:挑参数来源时才发现"目录没有、参数组也没有"的人,
+     不该再回设置页翻一节 —— 就在这里开门。 */
+  const MANAGE = "__manage__";
+  const [managing, setManaging] = React.useState(false);
   const data = refs.data;
   /* 「和 X 一样」排在前面,而且是**指针**:以后我们把 X 的描述符改宽了,指着它的行跟着变。
      档案排在后面,它是目录里没有对应模型时的出路(某个中转独有的组合)。
@@ -157,6 +164,7 @@ function CapabilityRefField({
       description: one.parameter_keys.join(" · ") || t("modelGenerationRefNoParams"),
       keywords: [one.profile],
     })),
+    { value: MANAGE, label: t("generationProfilesManage") },
   ];
 
   return (
@@ -170,7 +178,13 @@ function CapabilityRefField({
       <OptionPicker
         ariaLabel={t("modelGenerationRef")}
         value={value ?? NONE}
-        onChange={(next) => onChange(next === NONE ? null : next)}
+        onChange={(next) => {
+          if (next === MANAGE) {
+            setManaging(true);
+            return;
+          }
+          onChange(next === NONE ? null : next);
+        }}
         options={options}
         contentClassName="max-w-[min(520px,calc(100vw-32px))]"
       />
@@ -178,6 +192,18 @@ function CapabilityRefField({
       {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。 */}
       {!known && !value && (
         <p className="m-0 text-ui-xs leading-[1.45] text-warning">{t("modelGenerationRefUnknown")}</p>
+      )}
+      {managing && (
+        <GenerationProfilesDialog
+          profileId={profileId}
+          kind={kind}
+          open
+          onOpenChange={(next) => {
+            setManaging(next);
+            /* 建完/删完,选择器里的清单要跟着变 —— 刚建好的那份要能马上选到。 */
+            if (!next) void qc.invalidateQueries({ queryKey: ["generation-capability-refs", profileId, kind] });
+          }}
+        />
       )}
     </div>
   );

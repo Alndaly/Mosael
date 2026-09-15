@@ -12,7 +12,6 @@ import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/
 import { ModalShell } from "@/components/app/modals";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
-import { GenerationProfilesDialog } from "./GenerationProfilesSection";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
 import { SettingsList, SettingsListItem } from "@/features/settings/ui";
 
@@ -33,18 +32,15 @@ export function ProviderModelList({
   profileId,
   vendor,
   vendorLabel,
-  capability,
   action,
   onActionDone,
 }: {
   profileId: string;
   vendor?: string;
   vendorLabel?: string;
-  /** 当前设置页在看哪种能力 —— 自定义参数组按 kind 分,图片的尺寸清单套到视频上是另一套。 */
-  capability?: string | null;
-  /** 连接行溢出菜单发下来的动作(添加模型 / 自定义参数组 / 进入选择)。数据与弹窗都在这层,
+  /** 连接行溢出菜单发下来的动作(添加模型 / 进入选择)。数据与弹窗都在这层,
       菜单只发信号 —— 执行完要回报,否则同一个动作点第二次不会再来一遍。 */
-  action?: { kind: "add" | "profiles" | "bulk"; at: number } | null;
+  action?: { kind: "add" | "bulk"; at: number } | null;
   onActionDone?: () => void;
 }) {
   const t = useI18n();
@@ -141,7 +137,7 @@ export function ProviderModelList({
     onActionDone?.();
   }, [action, configured.length, bulk, onActionDone]);
 
-  const actionOpen = (kind: "add" | "profiles") => action?.kind === kind;
+  const actionOpen = (kind: "add") => action?.kind === kind;
 
   return (
     <div className="grid gap-1.5">
@@ -254,15 +250,6 @@ export function ProviderModelList({
         />
       </ModalShell>
       {vendorLabel && <span className="sr-only">{vendorLabel}</span>}
-
-      {(capability === "image" || capability === "video") && (
-        <GenerationProfilesDialog
-          profileId={profileId}
-          kind={capability}
-          open={actionOpen("profiles")}
-          onOpenChange={(next) => !next && onActionDone?.()}
-        />
-      )}
 
       {editing && (
         <ModelSettingsDialog

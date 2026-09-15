@@ -10,6 +10,8 @@ import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+import { CapabilityProfileForm } from "./GenerationProfileForm";
+
 type Profile = components["schemas"]["GenerationCapabilityProfileOut"];
 
 /**
@@ -111,13 +113,11 @@ export function GenerationProfilesDialog({
 }
 
 /**
- * 新建 / 编辑一份参数组。
+ * 新建 / 编辑一份参数组 —— **语义化表单,不写 JSON**。
  *
- * **正文是 JSON。** 三十几个字段、彼此有依赖(default_size 要在 sizes 里)、形状各不相同
- * (一串文字 / 一组「名字→上限」/ 若干组互斥角色)——给每一种做一个控件,是在给一件本来就该
- * 照抄的事发明一套界面。而这份内容的来源通常就是供应商文档里那段 JSON。
- *
- * 代价是要看得懂 JSON;补偿是**保存时逐项校验并点名说错在哪个键**,而不是"格式不对"。
+ * 表单结构由后端 schema 端点驱动(见 GenerationProfileForm):三十几个字段、彼此有依赖
+ * (default_size 要在 sizes 里)、形状各不相同 —— 每一种都有对应控件。保存时后端仍逐项
+ * 校验并点名说错在哪个键(形状是后端的事,表单只负责让人少填错)。
  */
 function ProfileEditor({
   profileId,
@@ -132,8 +132,10 @@ function ProfileEditor({
 }) {
   const t = useI18n();
   const [name, setName] = React.useState(row?.name ?? "");
-  const [text, setText] = React.useState(() =>
-    JSON.stringify(row?.capabilities ?? { parameter_keys: ["size"], sizes: ["1024x1024"], default_size: "1024x1024" }, null, 2),
+  const [descriptor, setDescriptor] = React.useState<Record<string, unknown>>(() =>
+    row?.capabilities
+      ? { ...row.capabilities }
+      : { parameter_keys: ["size"], sizes: ["1024x1024"], default_size: "1024x1024" },
   );
   const [error, setError] = React.useState("");
 
@@ -161,21 +163,7 @@ function ProfileEditor({
       footer={
         <>
           <Button variant="outline" onClick={onDone}>{t("cancel")}</Button>
-          <Button
-            loading={save.isPending}
-            onClick={() => {
-              let parsed: unknown;
-              try {
-                parsed = JSON.parse(text);
-              } catch {
-                //: JSON 本身坏掉时不发请求 —— 那一句报错该在这里出,而不是绕一圈从服务端回来。
-                setError(t("generationProfilesBadJson"));
-                return;
-              }
-              setError("");
-              save.mutate({ name, capabilities: parsed });
-            }}
-          >
+          <Button loading={save.isPending} onClick={() => save.mutate({ name, capabilities: descriptor })}>
             {t("save")}
           </Button>
         </>
@@ -186,16 +174,7 @@ function ProfileEditor({
           {t("generationProfilesName")}
           <Input value={name} onChange={(event) => setName(event.target.value)} className="bg-panel" />
         </label>
-        <label className="grid gap-1 text-ui-sm font-medium text-foreground">
-          {t("generationProfilesBody")}
-          <textarea
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            rows={14}
-            spellCheck={false}
-            className="w-full resize-y rounded-md border border-border bg-panel px-2.5 py-2 font-mono text-ui-xs leading-[1.6] text-foreground outline-none focus:border-primary"
-          />
-        </label>
+        <CapabilityProfileForm value={descriptor} onChange={setDescriptor} />
         {error && <p className="m-0 text-ui-xs leading-[1.45] text-destructive">{error}</p>}
         <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("generationProfilesDisclaimer")}</p>
       </div>

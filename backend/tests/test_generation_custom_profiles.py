@@ -11,7 +11,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.generation.custom_profiles import CapabilityProfileError, validate_capabilities
+from app.domain.generation.custom_profiles import (
+    CapabilityProfileError,
+    _KNOWN_KEYS,
+    canonical_parameters,
+    validate_capabilities,
+)
 
 
 class Test保存时拦得住的那些:
@@ -63,6 +68,33 @@ class Test保存时拦得住的那些:
     def test_kind只能是那两种(self) -> None:
         with pytest.raises(CapabilityProfileError):
             validate_capabilities({"parameter_keys": ["size"]}, "audio")
+
+
+class Test表单结构描述端点:
+    """可视表单的结构由后端这一份描述驱动 —— 它要是和保存校验的白名单分家,
+    表单放行的字段保存时被拒,或者能保存的字段表单里根本没有。"""
+
+    def test_字段集就是保存校验的白名单(self) -> None:
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        body = client.get("/api/generation/capability-profile-schema").json()
+
+        assert {field["key"] for field in body["fields"]} == set(_KNOWN_KEYS)
+        assert {field["shape"] for field in body["fields"]} == set(_KNOWN_KEYS.values())
+        #: 每个字段都得有分组 —— 漏了的话表单里它会掉出所有区块,谁都看不见。
+        assert all(field["group"] for field in body["fields"])
+
+    def test_参数与角色不是空的(self) -> None:
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        body = client.get("/api/generation/capability-profile-schema").json()
+
+        #: parameter_keys 的可选范围就是保存校验认的那份 —— 同一条 canonical_parameters。
+        assert body["parameters"] == canonical_parameters()
+        assert "size" in body["parameters"]
+        assert "reference_image" in body["source_roles"]
 
 
 class Test自定义档案参与解析:

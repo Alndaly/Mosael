@@ -63,6 +63,79 @@ _KNOWN_KEYS: dict[str, str] = {
 
 _KINDS = ("image", "video")
 
+#: 每个键在可视表单里归哪一组。**后端给语义分组,前端只翻译组名和键名** —— 分组知识要是也
+#: 抄一份到前端,加一个键时漏掉不会有任何东西报错(见 routes/generation.py 的 schema 端点)。
+_FIELD_GROUPS: dict[str, str] = {
+    "parameter_keys": "params",
+    "sizes": "choices",
+    "resolutions": "choices",
+    "aspect_ratios": "choices",
+    "duration_seconds": "choices",
+    "parameter_choices": "choices",
+    "default_size": "defaults",
+    "default_resolution": "defaults",
+    "default_aspect_ratio": "defaults",
+    "default_duration_seconds": "defaults",
+    "default_quality": "defaults",
+    "default_background": "defaults",
+    "default_output_format": "defaults",
+    "default_moderation": "defaults",
+    "default_generate_audio": "defaults",
+    "default_prompt_extend": "defaults",
+    "max_num_images": "limits",
+    "max_prompt_chars": "limits",
+    "max_duration_seconds": "limits",
+    "min_duration_seconds": "limits",
+    "min_reference_images": "limits",
+    "min_size_pixels": "limits",
+    "size_multiple_of": "limits",
+    "source_limits": "limits",
+    "duration_special_values": "advanced",
+    "duration_by_resolution": "advanced",
+    "conditional_max_duration_seconds": "advanced",
+    "exclusive_source_groups": "advanced",
+    "requires_source": "advanced",
+    "requires_companion": "advanced",
+    "boolean_parameters": "advanced",
+    "supports_audio": "advanced",
+    "supports_generate_audio": "advanced",
+    "modes": "advanced",
+}
+
+
+def canonical_parameters() -> list[str]:
+    """目前真有适配器会发送的参数名 —— parameter_keys 的可选范围。
+
+    声明一个没人会发的参数,只会让用户以为界面会多一个旋钮(见 validate_capabilities)。
+    """
+    from app.domain.generation.catalog import BUILTIN_MODELS
+
+    return sorted(
+        {
+            parameter
+            for item in BUILTIN_MODELS
+            for parameter in (item.get("capabilities", {}).get("parameter_keys") or [])
+        }
+    )
+
+
+def profile_form_schema() -> dict[str, Any]:
+    """可视表单的结构描述:有哪些字段、什么形状、归哪组、参数与素材角色叫什么。
+
+    **这是表单唯一的事实源。** 前端的语义化表单由它驱动,而不是把 34 个键的知识在
+    TypeScript 里再抄一遍 —— 加字段时后端加一行,表单自动长出对应的控件。
+    """
+    from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+
+    return {
+        "parameters": canonical_parameters(),
+        "source_roles": list(SOURCE_ROLE_LABELS),
+        "fields": [
+            {"key": key, "shape": shape, "group": _FIELD_GROUPS[key]}
+            for key, shape in _KNOWN_KEYS.items()
+        ],
+    }
+
 
 def _fail(message: str) -> None:
     raise CapabilityProfileError(message)
@@ -133,14 +206,7 @@ def validate_capabilities(raw: Any, kind: str) -> dict[str, Any]:
         #: 点名说是哪个键。"格式不对"这种话对着三十几个键的表单毫无用处。
         _fail("这几个字段我们不认得:" + "、".join(sorted(unknown)))
     clean = {key: _check(key, _KNOWN_KEYS[key], value) for key, value in raw.items() if value is not None}
-    from app.domain.generation.catalog import BUILTIN_MODELS
-
-    canonical_parameters = {
-        parameter
-        for item in BUILTIN_MODELS
-        for parameter in (item.get("capabilities", {}).get("parameter_keys") or [])
-    }
-    unknown_parameters = sorted(set(clean.get("parameter_keys") or []) - canonical_parameters)
+    unknown_parameters = sorted(set(clean.get("parameter_keys") or []) - set(canonical_parameters()))
     if unknown_parameters:
         _fail(
             "这些参数当前没有生成适配器会发送，不能只在界面里声明:"

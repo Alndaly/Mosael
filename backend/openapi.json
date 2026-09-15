@@ -7908,6 +7908,38 @@
         }
       }
     },
+    "/api/generation/capability-profile-schema": {
+      "get": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "Get Capability Profile Schema",
+        "description": "参数组可视表单的结构描述 —— 34 个字段的键、形状与分组,表单唯一的事实源。\n\n前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出\n对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。",
+        "operationId": "get_capability_profile_schema_api_generation_capability_profile_schema_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityProfileSchemaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/generation/capability-refs": {
       "get": {
         "tags": [
@@ -20040,6 +20072,63 @@
         ],
         "title": "CapabilityModelOut",
         "description": "某能力下的一个候选模型(跨连接)。\n\n界面直接列它 —— 一个模型现在自带能力与连接,\"先选供应商再选模型\"那两级下拉是模型还不是\n实体时的形状:它逼着用户先知道\"这个模型在哪条连接下\",而那恰恰是他不关心的。"
+      },
+      "CapabilityProfileFieldOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "shape": {
+            "type": "string",
+            "title": "Shape"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "shape",
+          "group"
+        ],
+        "title": "CapabilityProfileFieldOut",
+        "description": "可视表单的一个字段:键、形状、分组。分组是后端语义,前端只翻译标签。"
+      },
+      "CapabilityProfileSchemaOut": {
+        "properties": {
+          "parameters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Parameters"
+          },
+          "source_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Roles"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityProfileFieldOut"
+            },
+            "type": "array",
+            "title": "Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parameters",
+          "source_roles",
+          "fields"
+        ],
+        "title": "CapabilityProfileSchemaOut",
+        "description": "参数组可视表单的结构描述 —— 表单唯一的事实源(见 domain/generation/custom_profiles.py)。"
       },
       "ClipIdsRequest": {
         "properties": {

@@ -116,9 +116,10 @@ describe("供应商连接列表", () => {
     expect(screen.queryByText("初始模型(可选)")).not.toBeInTheDocument();
   });
 
-  it("模型列表的三个动作收口在连接的溢出菜单里;参数组只在生成类能力区出现", async () => {
+  it("模型列表的动作收口在连接的溢出菜单里;参数组不在这 —— 它的入口在绑定的地方", async () => {
     /* 列表底下的常驻输入框和浮在右上角的「选择」都撤掉了 —— 入口统一在 ⋯ 菜单,
-       同一样式。参数组按 kind 分:对话区不该看到它(图片的参数组套不到对话上)。 */
+       同一样式。参数组的管理入口在「参数按什么来」选择器里(见 ModelSettingsDialog),
+       挑参数来源时才发现缺一份的人,不该回这里翻菜单。 */
     const user = userEvent.setup();
     vendorsResult = [];
     providersResult = [{
@@ -135,20 +136,12 @@ describe("供应商连接列表", () => {
       quota_supported: false,
     }];
 
-    const chatView = renderSection("chat");
-    await user.click(await screen.findByRole("button", { name: "more" }));
-    /* 断言限定在弹出的菜单里:连接列表自己也有一个「选择」(批量删连接),同文案不同作用域。 */
-    let menu = await screen.findByText("modelAddEntry");
-    expect(menu.closest("[data-radix-popper-content-wrapper]")).toBeTruthy();
-    expect(within(menu.closest("[data-radix-popper-content-wrapper]") as HTMLElement).getByText("bulkSelect")).toBeInTheDocument();
-    expect(screen.queryByText("generationProfiles")).not.toBeInTheDocument();
-    chatView.unmount();
-
     renderSection("image");
     await user.click(await screen.findByRole("button", { name: "more" }));
-    menu = await screen.findByText("modelAddEntry");
-    const imageMenu = within(menu.closest("[data-radix-popper-content-wrapper]") as HTMLElement);
-    expect(imageMenu.getByText("bulkSelect")).toBeInTheDocument();
-    expect(imageMenu.getByText("generationProfiles")).toBeInTheDocument();
+    /* 断言限定在弹出的菜单里:连接列表自己也有一个「选择」(批量删连接),同文案不同作用域。 */
+    const menu = await screen.findByText("modelAddEntry");
+    const menuScope = within(menu.closest("[data-radix-popper-content-wrapper]") as HTMLElement);
+    expect(menuScope.getByText("bulkSelect")).toBeInTheDocument();
+    expect(menuScope.queryByText("generationProfiles")).not.toBeInTheDocument();
   });
 });
