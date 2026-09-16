@@ -17218,9 +17218,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: {
-                            [key: string]: unknown;
-                        }[];
+                        [key: string]: unknown[];
                     };
                 };
             };

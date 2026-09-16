@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronLeft } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -12,7 +12,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-import { GenerationProfilesDialog } from "./GenerationProfilesSection";
+import { CapabilityProfileForm } from "./GenerationProfileForm";
 
 type ModelSettings = components["schemas"]["ProviderModelOut"];
 
@@ -106,7 +106,7 @@ function AdvancedToggle({
 
 type CapabilityRefs = {
   models: { value: string; provider: string; model: string; parameter_keys: string[] }[];
-  profiles: { value: string; profile: string; parameter_keys: string[] }[];
+  profiles: { value: string; profile: string; parameter_keys: string[]; custom?: boolean; id?: string }[];
   /** 什么都不指时,这条通道本身给得出哪几项。**空 = 真的只剩提示词**;非空 = 键知道了,
    *  但没人验证过这个模型收哪些取值。这两种处境要分开说。 */
   fallback_keys?: string[];
@@ -131,6 +131,7 @@ function CapabilityRefField({
   value,
   known,
   onChange,
+  onDescribe,
 }: {
   profileId: string;
   kind: "image" | "video";
@@ -139,19 +140,18 @@ function CapabilityRefField({
   value: string | null;
   known: boolean;
   onChange: (next: string | null) => void;
+  /** 就地换体去写一份参数组。`null` = 新建,否则是要编辑的那一份。 */
+  onDescribe: (profileRowId: string | null) => void;
 }) {
   const t = useI18n();
-  const qc = useQueryClient();
   const refs = useQuery({
     queryKey: ["generation-capability-refs", profileId, kind],
     queryFn: () => api<CapabilityRefs>(`/api/generation/capability-refs?kind=${kind}&profile_id=${profileId}`),
     staleTime: 5 * 60_000,
   });
   const NONE = "__follow__";
+  const DESCRIBE = "__describe__";
   const fallbackKeys = refs.data?.fallback_keys ?? [];
-  /* 管理的入口常驻在选择器**下面**:塞进下拉项的尾部时,五十几个内置模型把它压到
-     滚动尽头,事实上等于没有入口。 */
-  const [managing, setManaging] = React.useState(false);
   const data = refs.data;
   /* 「和 X 一样」排在前面,而且是**指针**:以后我们把 X 的描述符改宽了,指着它的行跟着变。
      档案排在后面,它是目录里没有对应模型时的出路(某个中转独有的组合)。
@@ -170,7 +170,13 @@ function CapabilityRefField({
       description: one.parameter_keys.join(" · ") || t("modelGenerationRefNoParams"),
       keywords: [one.profile],
     })),
+    /* **建一份新的是选择器里的一个分支,不是另一个地方。** 此前它是「管理参数组」链接 →
+       一层库弹窗 → 一层编辑器弹窗,而且建完还得回到这里再选一次 —— 创建本身没有完成任务。
+       现在选中它就地换掉对话框主体,保存后回来、且新建的那份已经选中。 */
+    { value: DESCRIBE, label: t("modelGenerationRefDescribe"), description: t("modelGenerationRefDescribeHint") },
   ];
+  //: 当前选中的是不是我自己建的那种 —— 是的话给一个就地编辑的入口(改名、调字段、删除)。
+  const editableProfile = (data?.profiles ?? []).find((one) => one.value === value && one.custom);
 
   return (
     <div className="grid gap-2">
@@ -184,18 +190,28 @@ function CapabilityRefField({
       <OptionPicker
         ariaLabel={t("modelGenerationRef")}
         value={value ?? NONE}
-        onChange={(next) => onChange(next === NONE ? null : next)}
+        onChange={(next) => {
+          if (next === DESCRIBE) {
+            onDescribe(null);
+            return;
+          }
+          onChange(next === NONE ? null : next);
+        }}
         options={options}
         contentClassName="max-w-[min(520px,calc(100vw-32px))]"
       />
       </label>
-      <button
-        type="button"
-        className="cursor-pointer justify-self-start text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        onClick={() => setManaging(true)}
-      >
-        {t("generationProfilesManage")}
-      </button>
+      {/* 改名 / 调字段 / 删除都从**用它的那个模型**进入。独立的"管理列表"删掉了:参数组本来
+          就是为某个模型建的,单开一页的结果是那一页永远空着,而入口还挡在路上。 */}
+      {editableProfile && (
+        <button
+          type="button"
+          className="cursor-pointer justify-self-start text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          onClick={() => onDescribe(editableProfile.id ?? null)}
+        >
+          {t("modelGenerationRefEditThis")}
+        </button>
+      )}
       {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。
           **但处境有两种。** 这条通道不按模型名分支时,我们说得出它发得出哪几项(请求是自己
           构造的);给不出时才是真的只剩提示词。说清前者能帮用户判断该指哪个参照模型。
@@ -208,18 +224,6 @@ function CapabilityRefField({
             ? t("modelGenerationRefUnverified").replace("{keys}", fallbackKeys.join(" · "))
             : t("modelGenerationRefUnknown")}
         </p>
-      )}
-      {managing && (
-        <GenerationProfilesDialog
-          profileId={profileId}
-          kind={kind}
-          open
-          onOpenChange={(next) => {
-            setManaging(next);
-            /* 建完/删完,选择器里的清单要跟着变 —— 刚建好的那份要能马上选到。 */
-            if (!next) void qc.invalidateQueries({ queryKey: ["generation-capability-refs", profileId, kind] });
-          }}
-        />
       )}
     </div>
   );
@@ -242,6 +246,9 @@ export function ModelSettingsDialog({
   const t = useI18n();
   const formId = React.useId();
   const qc = useQueryClient();
+  /* **就地换体,不叠弹窗。** 写一份参数组曾经是"链接 → 库弹窗 → 编辑器弹窗",三层叠着,
+     而且建完还得回到选择器再选一次。现在它换掉这个对话框的主体,保存后回来、且已选中。 */
+  const [describing, setDescribing] = React.useState<{ kind: "image" | "video"; rowId: string | null } | null>(null);
   const [draft, setDraft] = React.useState<ModelSettingsDraft | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const capabilityOptions = useCapabilityOptions(vendor);
@@ -289,6 +296,27 @@ export function ModelSettingsDialog({
   const generationKinds = (["image", "video"] as const).filter((kind) => effective.includes(kind));
 
   return (
+    describing ? (
+      /* **同一个对话框,换掉主体。** 不叠第二层:叠上去的那一层会把"我正在配这个模型"这件事
+         推到背景里,而用户做的自始至终是同一件事。返回箭头回到模型设置,保存后新建的那份
+         已经选中 —— 创建这一步本身就把任务做完了。 */
+      <ProfileBody
+        profileId={profileId}
+        kind={describing.kind}
+        rowId={describing.rowId}
+        onBack={() => setDescribing(null)}
+        onSaved={(ref) => {
+          setDraft((prev) => (prev ? {
+            ...prev,
+            generation_capability_refs: { ...(prev.generation_capability_refs ?? {}), [describing.kind]: ref },
+          } : prev));
+          void qc.invalidateQueries({ queryKey: ["generation-capability-refs", profileId, describing.kind] });
+          setDescribing(null);
+        }}
+        open={open}
+        onOpenChange={onOpenChange}
+      />
+    ) : (
     <ModalShell
       open={open}
       onOpenChange={onOpenChange}
@@ -473,6 +501,7 @@ export function ModelSettingsDialog({
                 showKind={generationKinds.length > 1}
                 value={current.generation_capability_refs?.[kind] ?? null}
                 known={current.generation_capabilities_known_by_kind?.[kind] !== false}
+                onDescribe={(rowId) => setDescribing({ kind, rowId })}
                 onChange={(next) => setDraft((prev) => (prev ? {
                   ...prev,
                   generation_capability_refs: {
@@ -486,6 +515,137 @@ export function ModelSettingsDialog({
         )}
 
       </form>
+    </ModalShell>
+    )
+  );
+}
+
+/**
+ * 写一份参数组 —— **和模型设置共用同一个对话框**,不是叠上去的第二层。
+ *
+ * 此前这里是「管理参数组」链接 → 一层库弹窗(空列表时全部内容是一句话加一个按钮)→ 一层
+ * 编辑器弹窗,而且建完还得回到选择器再选一次:六步三个界面,而创建那一步本身没有完成任务。
+ *
+ * 现在它是选择器里的一个分支。返回回到模型设置;保存后**新建的那份已经选中**。
+ * 改名 / 调字段 / 删除也都在这里 —— 独立的"管理列表"删掉了,参数组本来就是为某个模型建的。
+ */
+function ProfileBody({
+  profileId,
+  kind,
+  rowId,
+  open,
+  onOpenChange,
+  onBack,
+  onSaved,
+}: {
+  profileId: string;
+  kind: "image" | "video";
+  /** null = 新建。 */
+  rowId: string | null;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  onBack: () => void;
+  onSaved: (ref: string) => void;
+}) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  /* 从**列表**里取那一份,不新开一个"取单份"的接口:这条连接下的参数组本来就是个短清单,
+     列表那次请求多半已经在缓存里 —— 为一份数据再加一条路由是给自己多留一处会走岔的口径。 */
+  const existing = useQuery({
+    queryKey: ["generation-profiles", profileId, kind],
+    queryFn: () => api<{ id: string; name: string; capabilities: Record<string, unknown> }[]>(
+      `/api/settings/providers/${profileId}/generation-profiles?kind=${kind}`,
+    ),
+    enabled: Boolean(rowId),
+  });
+  const row = rowId ? existing.data?.find((one) => one.id === rowId) : undefined;
+  const [name, setName] = React.useState("");
+  const [descriptor, setDescriptor] = React.useState<Record<string, unknown>>({});
+  const [error, setError] = React.useState("");
+  const loaded = React.useRef(false);
+  React.useEffect(() => {
+    if (rowId && row && !loaded.current) {
+      loaded.current = true;
+      setName(row.name);
+      setDescriptor({ ...row.capabilities });
+    }
+  }, [rowId, row]);
+
+  const save = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      rowId
+        ? api<{ id: string }>(`/api/settings/providers/${profileId}/generation-profiles/${rowId}`, {
+            method: "PATCH", body: JSON.stringify(body),
+          })
+        : api<{ id: string }>(`/api/settings/providers/${profileId}/generation-profiles`, {
+            method: "POST", body: JSON.stringify({ ...body, kind }),
+          }),
+    onSuccess: (row) => onSaved(`profile:${row.id}`),
+    //: 后端的报错已经点名了是哪个键,原样显示,别包一层"保存失败"。
+    onError: (err: Error) => setError(err.message),
+  });
+  const remove = useMutation({
+    mutationFn: () => api<void>(`/api/settings/providers/${profileId}/generation-profiles/${rowId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["generation-capability-refs", profileId, kind] });
+      onBack();
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  return (
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={
+        <span className="flex min-w-0 items-center gap-1.5">
+          {/* 返回,不是关闭 —— 关掉会把用户正在配的那个模型一起丢了。 */}
+          <button
+            type="button"
+            aria-label={t("back")}
+            className="-ml-1 grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            onClick={onBack}
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <span className="truncate">{rowId ? t("modelGenerationRefEditThis") : t("modelGenerationRefDescribe")}</span>
+          <span className="rounded bg-secondary px-1 py-px text-ui-2xs font-normal text-muted-foreground">{kind}</span>
+        </span>
+      }
+      footer={
+        <>
+          {/* 删除只在编辑已有的那一份时出现,而且靠左 —— 和"保存"分开站,别让人误点。 */}
+          {rowId && (
+            <Button
+              type="button" variant="ghost" size="sm"
+              className="mr-auto text-destructive hover:text-destructive"
+              loading={remove.isPending}
+              onClick={() => remove.mutate()}
+            >
+              {t("delete")}
+            </Button>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={onBack}>{t("back")}</Button>
+          <Button
+            type="button" size="sm"
+            disabled={!name.trim()}
+            loading={save.isPending}
+            onClick={() => save.mutate({ name: name.trim(), capabilities: descriptor })}
+          >
+            {t("save")}
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-3">
+        <label className="grid gap-1 text-ui-sm font-medium text-foreground">
+          {t("generationProfilesName")}
+          <Input value={name} onChange={(event) => setName(event.target.value)} className="bg-panel" />
+        </label>
+        <CapabilityProfileForm kind={kind} value={descriptor} onChange={setDescriptor} />
+        {error && <p className="m-0 text-ui-xs leading-[1.45] text-destructive">{error}</p>}
+        <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("generationProfilesDisclaimer")}</p>
+      </div>
     </ModalShell>
   );
 }

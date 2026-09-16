@@ -170,6 +170,8 @@ def list_capability_refs(
             "value": f"profile:{name}",
             "profile": name,
             "parameter_keys": list(caps.get("parameter_keys") or []),
+            #: 内置的那份改不了 —— 它是我们查证过的事实,不是用户的断言。
+            "custom": False,
         }
         for name, caps in CAPABILITY_PROFILES.items()
         #: 只列这一种 kind 用得上的 —— 图片档案摆进视频的下拉里是纯噪音。
@@ -186,6 +188,9 @@ def list_capability_refs(
                 "value": f"profile:{row.id}",
                 "profile": row.name,
                 "parameter_keys": list((row.capabilities or {}).get("parameter_keys") or []),
+                #: 自己建的才改得了 —— 界面据此在字段旁给出「编辑这一份」,并拿 id 就地打开。
+                "custom": True,
+                "id": row.id,
             }
             for row in custom_profiles_for(db, profile_id, kind)
         )

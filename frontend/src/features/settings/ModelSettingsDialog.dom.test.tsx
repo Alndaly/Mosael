@@ -16,14 +16,14 @@ import { expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (k: string) => k, usePreferences: () => ({ locale: "zh-CN" }) }));
 vi.mock("@/api/client", () => ({ api: vi.fn(async () => ({ models: [], profiles: [] })) }));
 
-const model = (capabilities: string[], known = true) => ({
+const model = (capabilities: string[], known = true, refs: Record<string, string> = {}) => ({
   id: "m", display_name: "", capability_ids: capabilities, effective_capability_ids: capabilities,
   enabled: true, configured: true, in_catalog: true, source: "manual",
   context_window: null, context_window_source: "fallback", max_output_tokens: null,
   reasoning: null, vision: null, reasoning_effort: null, developer_role: null,
   generation_capability_ref: null,
   /* 声明按 (模型, kind) 分行 —— 双能力模型的两个 kind 各指各的(ADR-0013)。 */
-  generation_capability_refs: {} as Record<string, string>,
+  generation_capability_refs: refs,
   generation_capabilities_known: known,
   generation_capabilities_known_by_kind: Object.fromEntries(
     capabilities.filter((one) => one === "image" || one === "video").map((one) => [one, known]),
@@ -32,7 +32,7 @@ const model = (capabilities: string[], known = true) => ({
 
 /* **引用必须稳定。** 每次渲染返回一个新数组/新对象,组件里那条"把查询结果落成草稿"的 effect
    就会每次都判定为变了 —— 无限重渲染,直接把 worker 撑爆(第一版就是这么 OOM 的)。 */
-type RefOption = { value: string; profile: string; parameter_keys: string[] };
+type RefOption = { value: string; profile: string; parameter_keys: string[]; custom?: boolean; id?: string };
 const REFS: { data: { models: unknown[]; profiles: RefOption[] } } = { data: { models: [], profiles: [] } };
 const EMPTY = { data: [], isLoading: false };
 /* 组件用 `select` 从整份列表里挑出这一行 —— mock 也得走同一条路,直接把数组当 data 返回
@@ -50,8 +50,8 @@ vi.mock("@tanstack/react-query", () => ({
 
 import { ModelSettingsDialog } from "./ModelSettingsDialog";
 
-function open(capabilities: string[], known = true) {
-  state.row = model(capabilities, known);
+function open(capabilities: string[], known = true, refs: Record<string, string> = {}) {
+  state.row = model(capabilities, known, refs);
   ROW.data = state.row;
   return render(
     <ModelSettingsDialog profileId="p" modelId="m" vendor="openai-compatible" open onOpenChange={() => {}} />,
@@ -101,19 +101,46 @@ it("双能力模型的两个 kind 各有一个选择器 —— 共用一个引�
   expect(screen.getAllByRole("combobox", { name: "modelGenerationRef" })).toHaveLength(2);
 });
 
-it("这条连接的自定义参数组出现在选择器里,管理入口常驻在选择器下面", async () => {
+it("这条连接的自定义参数组出现在选择器里", async () => {
   REFS.data = {
     models: [],
-    profiles: [{ value: "profile:abc", profile: "中转那份", parameter_keys: ["size", "num_images"] }],
+    profiles: [{ value: "profile:abc", profile: "中转那份", parameter_keys: ["size", "num_images"], custom: true, id: "abc" }],
   };
   try {
     open(["image"]);
-    /* 入口常驻:塞下拉项尾部时,五十几个内置模型把它压到滚动尽头,事实上等于没有入口。 */
-    expect(screen.getByText("generationProfilesManage")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("combobox", { name: "modelGenerationRef" }));
     /* i18n 在测试里是恒等函数,名字拼不进 label;能断言的是参数清单那行描述 ——
        它回答的是"选它会得到哪几项"。 */
     expect(await screen.findByText("size · num_images")).toBeInTheDocument();
+  } finally {
+    REFS.data = { models: [], profiles: [] };
+  }
+});
+
+it("写一份新的是选择器里的一项,不是另一个地方", async () => {
+  // 此前这里是「管理参数组」链接 → 一层库弹窗(空列表时全部内容是一句话加一个按钮)→ 一层
+  // 编辑器弹窗,三层叠着;而且建完还得回到这个选择器再选一次 —— 创建本身没有完成任务。
+  open(["image"]);
+  //: 常驻的那个管理链接没有了。
+  expect(screen.queryByText("generationProfilesManage")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("combobox", { name: "modelGenerationRef" }));
+  /* Radix 同时渲染一份隐藏的原生 <select> 供表单回填 —— 按 text 查会撞到两个。
+     按 option 角色查,拿到的才是读者真正点得到的那一项。 */
+  expect(await screen.findByRole("option", { name: "modelGenerationRefDescribe" })).toBeInTheDocument();
+});
+
+it("「编辑这一份」只在选中的是自己建的那种时出现", () => {
+  // 内置档案是我们查证过的事实,不是用户的断言 —— 给它一个编辑入口是在说谎。
+  REFS.data = {
+    models: [],
+    profiles: [
+      { value: "profile:openai-image", profile: "openai-image", parameter_keys: ["size"], custom: false },
+      { value: "profile:abc", profile: "我的", parameter_keys: ["size"], custom: true, id: "abc" },
+    ],
+  };
+  try {
+    open(["image"], true, { image: "profile:openai-image" });
+    expect(screen.queryByText("modelGenerationRefEditThis")).not.toBeInTheDocument();
   } finally {
     REFS.data = { models: [], profiles: [] };
   }

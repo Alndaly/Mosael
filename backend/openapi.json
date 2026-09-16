@@ -7997,10 +7997,7 @@
                   "type": "object",
                   "additionalProperties": {
                     "type": "array",
-                    "items": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "items": {}
                   },
                   "title": "Response List Capability Refs Api Generation Capability Refs Get"
                 }
