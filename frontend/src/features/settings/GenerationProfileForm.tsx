@@ -133,6 +133,7 @@ function MapRows({
      什么都不发生。这不是按钮没绑事件,是草稿在一个存不下草稿的地方。
      所以这里自己拿着行,只把**有名字的**推上去;上层换了一份数据(载入已有的那份、切 kind)时
      再按它重新落一次 —— 判据是"上层那份和我上次推上去的不一样",否则会和用户正在打的字打架。 */
+  const t = useI18n();
   const [rows, setRows] = React.useState<Array<[string, unknown]>>(entries);
   const pushed = React.useRef(JSON.stringify(entries));
   React.useEffect(() => {
@@ -193,7 +194,9 @@ function MapRows({
             /* 对齐到名字那一格的中线,不是整摞的顶端:这一列是"名字 + 取值"两层,
                items-start 会把叉顶到最上面,看起来像挂在两行之间。(40-28)/2 = 6px。 */
             className="mt-1.5 rounded-full border border-border hover:border-border-strong"
-            aria-label={`${ariaLabel} ×`}
+            /* 带上行号:这一格自己也有一个「×」(移除整格),两个按钮同名的话,读屏念出来
+               一模一样 —— 而它们一个删一行、一个删一整格。 */
+            aria-label={`${ariaLabel} ${t("genFormRemoveRow")} ${index + 1}`}
             onClick={() => commit(rows.filter((_, i) => i !== index))}
           >
             <X size={12} />
@@ -207,6 +210,7 @@ function MapRows({
 
 /** 这张表单里**每一格**的外壳 —— 名字那一格也走它,不然同一屏上会有两种标签字号和两种输入框高度。 */
 export function ProfileField({ label, children, onRemove }: { label: string; children: React.ReactNode; onRemove?: () => void }) {
+  const t = useI18n();
   return (
     <div className="grid gap-1">
       <span className="flex items-center justify-between text-ui-xs font-medium text-muted-foreground">
@@ -214,7 +218,7 @@ export function ProfileField({ label, children, onRemove }: { label: string; chi
         {onRemove && (
           <button
             type="button"
-            aria-label={`${label} ×`}
+            aria-label={`${label} ${t("genFormRemoveField")}`}
             /* 包一个圆框:光秃秃一个叉在一行文字右端,既看不出是可点的,也没有可点的边界。 */
             className="grid size-5 shrink-0 cursor-pointer place-items-center rounded-full border border-border text-faint transition-colors hover:border-border-strong hover:bg-secondary hover:text-foreground"
             onClick={onRemove}
@@ -245,12 +249,21 @@ function DefaultRow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-/** 一组的标题行。右侧可以挂一个动作 —— 「再加一个」属于这里,不属于列表末尾。 */
-function GroupHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+/**
+ * 一组的标题行。右侧可以挂一个动作 —— 「再加一个」属于这里,不属于列表末尾。
+ *
+ * `hint` 是**这一组和别的组差在哪**。四个组的标题都是两三个字(可选值/默认值/上限/特殊规则),
+ * 光看标题分不出「可调参数」「可选值」「上限」各管什么 —— 而它们回答的是三个不同的问题:
+ * 摆哪几个旋钮、每个旋钮有哪几档、这个端点的硬限制是什么。
+ */
+function GroupHeader({ title, hint, action }: { title: string; hint?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex min-h-7 items-center justify-between gap-2">
-      <span className="text-ui-xs font-semibold text-foreground">{title}</span>
-      {action}
+    <div className="grid gap-0.5">
+      <div className="flex min-h-7 items-center justify-between gap-2">
+        <span className="text-ui-xs font-semibold text-foreground">{title}</span>
+        {action}
+      </div>
+      {hint && <span className="text-ui-xs leading-[1.45] text-muted-foreground">{hint}</span>}
     </div>
   );
 }
@@ -296,9 +309,24 @@ export function CapabilityProfileForm({
     );
 
   /* 上限与高级组:还没设值的字段进「添加字段」菜单,设了的排出来可移除。 */
-  const secondary = fields.filter((field) => field.group === "limits" || field.group === "advanced");
-  const activeSecondary = secondary.filter((field) => value[field.key] !== undefined);
-  const idleSecondary = secondary.filter((field) => value[field.key] === undefined);
+  /* **「打开了这一格」和「这一格有值」是两件事。**
+     此前只看后者:清空一格(或者刚点「加一行」而那一行还没填完)时描述符里的键被 unset,
+     整格随即从界面上消失 —— 用户点的是"加一行",看到的是"这一项没了"。
+     打开的状态留在本地,只有那个 × 才关掉它。 */
+  const [opened, setOpened] = React.useState<string[]>([]);
+  const isOpen = (key: string) => value[key] !== undefined || opened.includes(key);
+  const openField = (key: string) => {
+    setOpened((current) => (current.includes(key) ? current : [...current, key]));
+    set(key, initialFor(shapeOf(key)));
+  };
+  const closeField = (key: string) => {
+    setOpened((current) => current.filter((one) => one !== key));
+    unset(key);
+  };
+  const groupFields = (group: string) => {
+    const all = fields.filter((field) => field.group === group);
+    return { active: all.filter((field) => isOpen(field.key)), idle: all.filter((field) => !isOpen(field.key)) };
+  };
 
   const renderGeneric = (key: string) => {
     const shape = shapeOf(key);
@@ -400,7 +428,7 @@ export function CapabilityProfileForm({
           没选的时候摆一个空行编辑器,看着像坏掉的。 */}
       {parameters.some((parameter) => LIST_FOR_PARAMETER[parameter]) || enumCapableSelected.length > 0 ? (
         <div className="grid gap-2.5 border-t border-border pt-3">
-          <GroupHeader title={t("genGroup_choices")} />
+          <GroupHeader title={t("genGroup_choices")} hint={t("genGroupHint_choices")} />
           {parameters.map((parameter) => {
             const listKey = LIST_FOR_PARAMETER[parameter];
             if (!listKey) return null;
@@ -437,7 +465,7 @@ export function CapabilityProfileForm({
       {/* 默认值:清单型给下拉(只能选清单里的,选不回来的值不存在),其余给输入。 */}
       {Object.entries(LIST_FOR_DEFAULT).some(([, listKey]) => Array.isArray(value[listKey]) && (value[listKey] as unknown[]).length > 0) && (
         <div className="grid gap-2.5 border-t border-border pt-3">
-          <GroupHeader title={t("genGroup_defaults")} />
+          <GroupHeader title={t("genGroup_defaults")} hint={t("genGroupHint_defaults")} />
           {/* 每一项一整行:名字在左,控件靠右。
               此前是两列格子,而这一组里控件宽窄差得极远(一个下拉、一个开关)—— 开关独占半格,
               左边空着一大片;只有一项时更明显,整组看起来像没排完。一行一项之后,行宽固定、
@@ -471,37 +499,43 @@ export function CapabilityProfileForm({
         </div>
       )}
 
-      {/* 上限与高级:按需请出来,不一次铺开。 */}
-      {(activeSecondary.length > 0 || idleSecondary.length > 0) && (
-        <div className="grid gap-2.5 border-t border-border pt-3">
-          {/* 「再加一个」挂在组头上,不排在列表最末 —— 排在末尾的话,字段加得越多,下一次
-              添加就要往下走得越远;而且它长得和一格空表单一模一样,像是有一项没填完。 */}
-          <GroupHeader
-            title={t("genGroup_limits")}
-            action={
-              idleSecondary.length > 0 ? (
-                <OptionPicker
-                  ariaLabel={t("genFormAddField")}
-                  placeholder={t("genFormAddField")}
-                  value=""
-                  onChange={(key) => {
-                    if (key) set(key, initialFor(shapeOf(key)));
-                  }}
-                  options={idleSecondary.map((field) => ({ value: field.key, label: labelOf(field.key) }))}
-                  className="h-7 w-auto gap-1 px-2 text-ui-xs text-muted-foreground"
-                  contentClassName="max-w-[min(420px,calc(100vw-32px))]"
-                  align="end"
-                />
-              ) : undefined
-            }
-          />
-          {activeSecondary.map((field) => (
-            <ProfileField key={field.key} label={labelOf(field.key)} onRemove={() => unset(field.key)}>
-              {renderGeneric(field.key)}
-            </ProfileField>
-          ))}
-        </div>
-      )}
+      {/* 上限、特殊规则:按需请出来,不一次铺开。
+          **分两组,不合成一组。** 后端本来就把它们分开(custom_profiles._FIELD_GROUPS),
+          而合起来叫「上限与高级」之后,「必需素材」「支持音频」这些既不是上限也说不上高级的
+          字段全都落在一个说不着它们的标题底下 —— 读者当然分不出这一组和上面那几组的区别。 */}
+      {(["limits", "advanced"] as const).map((group) => {
+        const { active, idle } = groupFields(group);
+        if (active.length === 0 && idle.length === 0) return null;
+        return (
+          <div className="grid gap-2.5 border-t border-border pt-3" key={group}>
+            {/* 「再加一个」挂在组头上,不排在列表最末 —— 排在末尾的话,字段加得越多,下一次
+                添加就要往下走得越远;而且它长得和一格空表单一模一样,像是有一项没填完。 */}
+            <GroupHeader
+              title={t(`genGroup_${group}` as Parameters<typeof t>[0])}
+              hint={t(`genGroupHint_${group}` as Parameters<typeof t>[0])}
+              action={
+                idle.length > 0 ? (
+                  <OptionPicker
+                    ariaLabel={t("genFormAddField")}
+                    placeholder={t("genFormAddField")}
+                    value=""
+                    onChange={(key) => key && openField(key)}
+                    options={idle.map((field) => ({ value: field.key, label: labelOf(field.key) }))}
+                    className="h-7 w-auto gap-1 px-2 text-ui-xs text-muted-foreground"
+                    contentClassName="max-w-[min(420px,calc(100vw-32px))]"
+                    align="end"
+                  />
+                ) : undefined
+              }
+            />
+            {active.map((field) => (
+              <ProfileField key={field.key} label={labelOf(field.key)} onRemove={() => closeField(field.key)}>
+                {renderGeneric(field.key)}
+              </ProfileField>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

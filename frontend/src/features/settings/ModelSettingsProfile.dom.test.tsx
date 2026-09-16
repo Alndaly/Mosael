@@ -34,6 +34,8 @@ const SCHEMA = {
       { key: "sizes", shape: "str_list", group: "choices" },
       { key: "default_size", shape: "str", group: "defaults" },
       { key: "max_num_images", shape: "positive_int", group: "limits" },
+      //: 必需素材那种形状 —— 一行是"一组素材角色",而空的一组在描述符里存不下。
+      { key: "requires_source", shape: "str_list_list", group: "advanced" },
     ],
   },
 };
@@ -191,4 +193,45 @@ it("「加一行」真的加得出一行 —— 还没起名的那一行也得�
   await waitFor(() => expect(apiMock).toHaveBeenCalled());
   const body = JSON.parse((apiMock.mock.calls[0] as [string, { body: string }])[1].body);
   expect(body.capabilities.parameter_choices).toEqual({ quality: ["hd"] });
+});
+
+it("点「加一行」不会把这一整格弄没 —— 「打开了」和「有值」是两件事", async () => {
+  /* 真机上撞到的:在「必需素材」里点「加一行」,整格连标题一起消失了。
+     那一格是"一组一组的素材角色"(str_list_list),刚加的那一组还是空的,提交时被
+     `filter(group.length)` 滤光 —— 于是 unset(key),而这一格是否渲染正是看 key 在不在。
+     用户点的是"加一行",看到的是"这一项没了"。 */
+  open_dialog();
+  describe_endpoint();
+  /* 两个「添加字段」:「上限」一个、「特殊规则」一个。合成一组时,「必需素材」「支持音频」
+     这些既不是上限也说不上高级的字段全落在一个说不着它们的标题底下。 */
+  const adders = screen.getAllByRole("combobox", { name: "genFormAddField" });
+  expect(adders).toHaveLength(2);
+  fireEvent.click(adders[1]);
+  fireEvent.click(await screen.findByRole("option", { name: "genField_requires_source" }));
+  expect(screen.getByText("genField_requires_source")).toBeInTheDocument();
+
+  //: 这一格里也有一个「加一行」—— 点它之后这一格得还在。
+  const addRow = screen.getAllByText("genFormAddRow");
+  fireEvent.click(addRow[addRow.length - 1]);
+  expect(screen.getByText("genField_requires_source")).toBeInTheDocument();
+
+  //: 只有那个 × 才关得掉它。
+  fireEvent.click(screen.getByLabelText("genField_requires_source genFormRemoveField"));
+  expect(screen.queryByText("genField_requires_source")).not.toBeInTheDocument();
+});
+
+it("每一组都说得出自己和别的组差在哪", () => {
+  /* 「可调参数」「可选值」「默认值」「上限」「特殊规则」—— 标题都是两三个字,光看标题分不出
+     各管什么,而它们回答的是几个不同的问题:摆哪几个旋钮、每个旋钮有哪几档、一开始停在哪档、
+     硬限制是什么、请求形状上有什么怪脾气。真机上的提问就是「上限和高级与上面的有什么区别」。 */
+  open_dialog();
+  describe_endpoint();
+  fireEvent.click(screen.getByRole("button", { name: "genParam_size" }));
+  //: 「默认值」那一组要有一档可选值才出现 —— 没有清单就没有"默认停在哪一档"可言。
+  const sizes = screen.getByLabelText("genField_sizes", { selector: "input" });
+  fireEvent.change(sizes, { target: { value: "1024x1024" } });
+  fireEvent.keyDown(sizes, { key: "Enter" });
+  for (const group of ["choices", "defaults", "limits", "advanced"]) {
+    expect(screen.getByText(`genGroupHint_${group}`)).toBeInTheDocument();
+  }
 });
