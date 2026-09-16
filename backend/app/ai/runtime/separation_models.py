@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from app.core import interpreter, pip_install
 from app.core.child_process import run_logged
@@ -47,6 +50,39 @@ TORCH_HOME = MANAGED_SEPARATION_ROOT / "torch"
 #: 默认模型。htdemucs 是 demucs v4 的默认包,四分离(人声/鼓/贝斯/其它),约 300MB。
 #: 我们只要人声和"其余全部",后者由 worker 把另外三条相加 —— 见 workers/separation.py。
 DEFAULT_MODEL = "htdemucs"
+
+
+# ---------------------------------------------------------------------------
+# 安装状态(只在内存里;盘上有没有那个解释器才是静息时的事实源)
+# ---------------------------------------------------------------------------
+@dataclass
+class _Live:
+    status: str = "idle"  # "installing" | "failed"
+    message: str = ""
+    #: message 是 key 时的模板参数(见 core/i18n.t)。翻译在出口做。
+    params: dict[str, str] = field(default_factory=dict)
+
+
+class _Store:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._live: dict[str, _Live] = {}
+
+    def get(self, engine: str) -> _Live | None:
+        with self._lock:
+            live = self._live.get(engine)
+            return None if live is None else _Live(**live.__dict__)
+
+    def set(self, engine: str, live: _Live) -> None:
+        with self._lock:
+            self._live[engine] = live
+
+    def clear(self, engine: str) -> None:
+        with self._lock:
+            self._live.pop(engine, None)
+
+
+_store = _Store()
 
 
 def managed_venv_dir(engine: str) -> Path:
@@ -117,3 +153,57 @@ def ensure_runtime(engine: str) -> None:
     except pip_install.PipInstallError as exc:
         raise RuntimeError(f"安装 {engine} 运行依赖失败:{exc}") from exc
     runtime_ready.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# 给设置页的那一面
+# ---------------------------------------------------------------------------
+def list_status() -> list[dict[str, Any]]:
+    """每个分离引擎现在是什么状态。
+
+    **装没装是从盘上看出来的,不是记在内存里的** —— 内存那份只在"正在装"和"刚失败"时有话说。
+    重启之后内存清空,而解释器还在盘上:这时状态该是"已安装",不是"未知"。
+    """
+    return [_status_dict(engine) for engine in ENGINE_REQUIREMENTS]
+
+
+def _status_dict(engine: str) -> dict[str, Any]:
+    live = _store.get(engine)
+    ready = runtime_ready(engine)
+    status = "installed" if ready else "missing"
+    if live is not None and live.status in {"installing", "failed"} and not ready:
+        status = live.status
+    return {
+        "engine": engine,
+        "label": f"sepEngine_{engine}",
+        "status": status,
+        "runtime_ready": ready,
+        "message": live.message if live else "",
+        "message_params": dict(live.params) if live else {},
+    }
+
+
+def start_install(engine: str) -> dict[str, Any]:
+    """在后台线程里装。**不阻塞请求** —— 建 venv 加装 torch 是几分钟到几十分钟的事。"""
+    if engine not in ENGINE_REQUIREMENTS:
+        raise KeyError(engine)
+    if runtime_ready(engine):
+        return _status_dict(engine)
+    live = _store.get(engine)
+    if live is not None and live.status == "installing":
+        raise RuntimeError("这个引擎已经在安装中")
+    _store.set(engine, _Live(status="installing", message="dlMsg_creatingRuntime"))
+    threading.Thread(target=_run_install, args=(engine,), daemon=True).start()
+    return _status_dict(engine)
+
+
+def _run_install(engine: str) -> None:
+    try:
+        _store.set(engine, _Live(status="installing", message="dlMsg_installingDeps", params={"engine": engine}))
+        ensure_runtime(engine)
+    except Exception as exc:  # noqa: BLE001 — 失败要留在状态里给用户看,不是吞掉
+        logger.warning("安装分离引擎 %s 失败:%s", engine, exc)
+        #: 原因**原样带出来**:pip 说不清时用户至少能把那句话搜一下。
+        _store.set(engine, _Live(status="failed", message=str(exc)))
+        return
+    _store.clear(engine)

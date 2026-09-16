@@ -1,0 +1,115 @@
+import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Download, Loader2, RotateCw } from "lucide-react";
+import { toast } from "sonner";
+
+import { type SeparationEngine, installSeparationEngine, listSeparationEngines } from "@/api/client";
+import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
+import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
+import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
+
+/**
+ * Settings → 人声/伴奏分离引擎(ADR-0016)。
+ *
+ * **为什么这一页必须存在**:不装它,第一次分离会在工作流跑到一半时静默建 venv、装 torch、
+ * 拉权重 —— 几分钟到几十分钟,期间界面上只有一个转圈,而用户完全不知道正在往自己机器上装
+ * 一个 GB 级的东西。把它提到设置里,装是一次**显式**的动作,进度和失败原因都有地方说。
+ *
+ * 和转写模型那一页共用同一套形状,但只有**一件**事要说:跑不跑得起来。权重是第一次分离时
+ * 引擎自己拉的,所以这里没有"文件在不在盘上"那一半。
+ */
+export function SeparationEnginesSection() {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const engines = useQuery({
+    queryKey: ["separation-engines"],
+    queryFn: listSeparationEngines,
+    refetchInterval: (query) => pollWhileUnsettled(query.state.data),
+  });
+  const install = useMutation({
+    mutationFn: (engine: string) => installSeparationEngine(engine),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["separation-engines"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  return (
+    <SettingsGroup title={t("separationTitle")} description={t("separationDesc")}>
+      <SettingsBlock>
+        <div className="grid gap-2">
+          {engines.data?.map((engine) => (
+            <EngineCard
+              key={engine.engine}
+              engine={engine}
+              busy={(install.isPending && install.variables === engine.engine) || engine.status === "installing"}
+              onInstall={() => install.mutate(engine.engine)}
+            />
+          ))}
+          {engines.isLoading && <p className="text-ui-sm text-muted-foreground">{t("connecting")}</p>}
+        </div>
+      </SettingsBlock>
+    </SettingsGroup>
+  );
+}
+
+function EngineCard({
+  engine,
+  busy,
+  onInstall,
+}: {
+  engine: SeparationEngine;
+  busy?: boolean;
+  onInstall: () => void;
+}) {
+  const t = useI18n();
+  return (
+    <div
+      className={cn(
+        "grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5",
+        engine.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-[3px]">
+          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
+            <strong>{engine.label}</strong>
+            {/* 「约」不是客套:装下来的实际大小取决于这台机器要哪个 torch 轮子。 */}
+            <span className="text-ui-xs tabular-nums text-muted-foreground">{t("separationSize")}</span>
+          </div>
+          <small className="text-ui-xs text-muted-foreground">{t("separationEngineDetail")}</small>
+          {/* 失败的原因**原样显示** —— pip 说不清时,用户至少能把那句话搜一下。 */}
+          {engine.status === "failed" && engine.message && (
+            <small className="text-ui-xs text-destructive">{engine.message}</small>
+          )}
+          {engine.status === "installing" && engine.message && (
+            <small className="text-ui-xs text-muted-foreground">{engine.message}</small>
+          )}
+        </div>
+        <div className="shrink-0">
+          {engine.status === "installed" && (
+            <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
+              <CheckCircle2 size={14} /> {t("separationInstalled")}
+            </span>
+          )}
+          {engine.status === "installing" && (
+            // 没有分母就不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样(转写那一页同款)。
+            <span className="inline-flex items-center gap-[5px] text-xs text-muted-foreground">
+              <Loader2 size={13} className="animate-mosael-spin" />
+            </span>
+          )}
+          {engine.status === "missing" && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+              <Download size={13} /> {t("separationInstall")}
+            </Button>
+          )}
+          {engine.status === "failed" && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+              <RotateCw size={13} /> {t("separationRetry")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

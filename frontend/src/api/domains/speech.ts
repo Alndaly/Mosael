@@ -7,6 +7,7 @@ export type Voice = components["schemas"]["VoiceOut"];
 export type Transcript = components["schemas"]["TranscriptOut"];
 export type TtsEngine = components["schemas"]["TtsEngineOut"];
 export type TtsConfig = components["schemas"]["TtsConfigOut"];
+export type SeparationEngine = components["schemas"]["SeparationEngineOut"];
 
 export function listAsrModels(): Promise<AsrModel[]> {
   return api<AsrModel[]>("/api/asr/models");
@@ -14,6 +15,15 @@ export function listAsrModels(): Promise<AsrModel[]> {
 
 export function downloadAsrModel(id: string): Promise<AsrModel> {
   return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/download`, { method: "POST" });
+}
+
+/** 人声/伴奏分离引擎(ADR-0016)。装在**后端主机**上,所以和转写模型同一条路。 */
+export function listSeparationEngines(): Promise<SeparationEngine[]> {
+  return api<SeparationEngine[]>("/api/separation/engines");
+}
+
+export function installSeparationEngine(engine: string): Promise<SeparationEngine> {
+  return api<SeparationEngine>(`/api/separation/engines/${encodeURIComponent(engine)}/install`, { method: "POST" });
 }
 
 export function listVoices(workspaceId: string): Promise<Voice[]> {

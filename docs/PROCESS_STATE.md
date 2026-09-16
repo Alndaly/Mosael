@@ -68,6 +68,12 @@
   `app/ai/runtime/tts_models.py:_store`;以及 `app/ai/runtime/asr_models.py:_PROBED`、
   `app/ai/runtime/asr_models.py:_PROBING`、`app/ai/runtime/asr_models.py:_PROBE_GENERATION`、
   `app/ai/runtime/asr_models.py:_store`。
+- `app/ai/runtime/separation_models.py:_store` — 分离引擎的**安装进度**。和上面两个 `_store`
+  同一类:静息时的事实源在盘上(那个托管 venv 的解释器在不在),内存这份只在"正在装"和
+  "刚失败"时有话说。重启丢掉的是"有人正在装"这句话,而那个安装线程本来就随进程一起没了 ——
+  重启后状态回到 missing,再点一次即可,不会出现"页面说装好了其实没装"。
+  多进程下各算各的:A 进程在装,B 进程看到的是 missing。它不构成部署约束,但两个进程同时装
+  同一个 venv 会互相踩 —— 当前部署是单后端进程(见第一节),真要起第二个时这一条要一起想。
 - `app/ai/runtime/f5_models.py:_live`、`app/ai/runtime/workers/tts.py:_LOADED` — 已加载的模型。
 - `app/api/routes/sequences.py:_SEQUENCE_JSON` — 序列 JSON 按 revision 缓存。每序列一条,不随流量增长。
 - `app/api/routes/settings/provider_profiles.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。

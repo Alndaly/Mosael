@@ -1307,6 +1307,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/separation/engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Separation Engines
+         * @description 人声/伴奏分离引擎,以及它们装没装。
+         */
+        get: operations["list_separation_engines_api_separation_engines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/separation/engines/{engine}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Separation Engine
+         * @description 把这个引擎的运行环境装上(建 venv + 装依赖)。
+         *
+         *     和下载转写模型同一条:往**后端主机**上装东西是部署级动作,不属于任何工作区。
+         */
+        post: operations["install_separation_engine_api_separation_engines__engine__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voices": {
         parameters: {
             query?: never;
@@ -10095,6 +10137,31 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * SeparationEngineOut
+         * @description 一个人声/伴奏分离引擎装没装。
+         *
+         *     和转写模型那一页同一条区分:**文件在不在盘上**和**跑不跑得起来**是两件事。这里只有后者
+         *     有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的就是"这个引擎的解释器在不在"。
+         */
+        SeparationEngineOut: {
+            /** Engine */
+            engine: string;
+            /** Label */
+            label: string;
+            /** Status */
+            status: string;
+            /**
+             * Runtime Ready
+             * @default false
+             */
+            runtime_ready: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
         /** SequenceCreate */
         SequenceCreate: {
             /** Workspace Id */
@@ -14149,6 +14216,66 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_separation_engines_api_separation_engines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeparationEngineOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_separation_engine_api_separation_engines__engine__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engine: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeparationEngineOut"];
                 };
             };
             /** @description Validation Error */

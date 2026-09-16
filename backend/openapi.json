@@ -3427,6 +3427,85 @@
         }
       }
     },
+    "/api/separation/engines": {
+      "get": {
+        "tags": [
+          "separation"
+        ],
+        "summary": "List Separation Engines",
+        "description": "人声/伴奏分离引擎,以及它们装没装。",
+        "operationId": "list_separation_engines_api_separation_engines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeparationEngineOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Separation Engines Api Separation Engines Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/separation/engines/{engine}/install": {
+      "post": {
+        "tags": [
+          "separation"
+        ],
+        "summary": "Install Separation Engine",
+        "description": "把这个引擎的运行环境装上(建 venv + 装依赖)。\n\n和下载转写模型同一条:往**后端主机**上装东西是部署级动作,不属于任何工作区。",
+        "operationId": "install_separation_engine_api_separation_engines__engine__install_post",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeparationEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/voices": {
       "get": {
         "tags": [
@@ -27382,6 +27461,40 @@
         },
         "type": "object",
         "title": "ScheduledTaskUpdate"
+      },
+      "SeparationEngineOut": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "runtime_ready": {
+            "type": "boolean",
+            "title": "Runtime Ready",
+            "default": false
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine",
+          "label",
+          "status"
+        ],
+        "title": "SeparationEngineOut",
+        "description": "一个人声/伴奏分离引擎装没装。\n\n和转写模型那一页同一条区分:**文件在不在盘上**和**跑不跑得起来**是两件事。这里只有后者\n有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的就是\"这个引擎的解释器在不在\"。"
       },
       "SequenceCreate": {
         "properties": {

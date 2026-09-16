@@ -26,6 +26,7 @@ import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
 import { AppearanceSection, BackgroundSection, CustomCssSection } from "@/features/settings/AppearanceSection";
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
+import { SeparationEnginesSection } from "@/features/settings/SeparationEnginesSection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { BackendSection } from "@/features/settings/BackendSection";
 import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
@@ -229,7 +230,14 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
             </>
           )}
           {section === "provider-pricing" && <ProviderPricingSection workspace={workspace} />}
-          {section === "transcribe" && <AsrModelsSection />}
+          {section === "transcribe" && (
+            <>
+              <AsrModelsSection />
+              {/* 分离和转写都是"在这台机器上跑的音频模型",而且译配那条流程两个都要用 ——
+                  放在同一页里,装的时候一次看得全。 */}
+              <SeparationEnginesSection />
+            </>
+          )}
           {section === "voice" && (
             <>
               <VoiceCloneSection />
