@@ -171,7 +171,8 @@ function MapRows({
   );
 }
 
-function Field({ label, children, onRemove }: { label: string; children: React.ReactNode; onRemove?: () => void }) {
+/** 这张表单里**每一格**的外壳 —— 名字那一格也走它,不然同一屏上会有两种标签字号和两种输入框高度。 */
+export function ProfileField({ label, children, onRemove }: { label: string; children: React.ReactNode; onRemove?: () => void }) {
   return (
     <div className="grid gap-1">
       <span className="flex items-center justify-between text-ui-xs font-medium text-muted-foreground">
@@ -183,6 +184,16 @@ function Field({ label, children, onRemove }: { label: string; children: React.R
         )}
       </span>
       {children}
+    </div>
+  );
+}
+
+/** 一组的标题行。右侧可以挂一个动作 —— 「再加一个」属于这里,不属于列表末尾。 */
+function GroupHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex min-h-7 items-center justify-between gap-2">
+      <span className="text-ui-xs font-semibold text-foreground">{title}</span>
+      {action}
     </div>
   );
 }
@@ -306,7 +317,7 @@ export function CapabilityProfileForm({
     <div className="grid gap-4">
       {/* 可调参数:只勾这个端点真会接受的 —— 勾了它不收,请求发出去被供应商拒掉。
           候选已经按 kind 过滤:image 的表单里不会出现 video 专属的时长与首尾帧。 */}
-      <Field label={t("genField_parameter_keys")}>
+      <ProfileField label={t("genField_parameter_keys")}>
         <div className="flex flex-wrap gap-1">
           {(schema.data?.parameters ?? []).map((parameter) => (
             <button
@@ -325,29 +336,29 @@ export function CapabilityProfileForm({
             </button>
           ))}
         </div>
-      </Field>
+      </ProfileField>
 
       {/* 可选值:跟着勾出来的参数出现。「参数可选值」只在选了真有枚举的参数时才有意义 —
           没选的时候摆一个空行编辑器,看着像坏掉的。 */}
       {parameters.some((parameter) => LIST_FOR_PARAMETER[parameter]) || enumCapableSelected.length > 0 ? (
         <div className="grid gap-2.5 border-t border-border pt-3">
-          <span className="text-ui-xs font-semibold text-foreground">{t("genGroup_choices")}</span>
+          <GroupHeader title={t("genGroup_choices")} />
           {parameters.map((parameter) => {
             const listKey = LIST_FOR_PARAMETER[parameter];
             if (!listKey) return null;
             return (
-              <Field key={listKey} label={labelOf(listKey)}>
+              <ProfileField key={listKey} label={labelOf(listKey)}>
                 <Chips
                   values={(value[listKey] as Array<string | number> | undefined) ?? []}
                   numeric={listKey === "duration_seconds"}
                   ariaLabel={labelOf(listKey)}
                   onChange={(next) => (next.length ? set(listKey, next) : unset(listKey))}
                 />
-              </Field>
+              </ProfileField>
             );
           })}
           {enumCapableSelected.length > 0 && (
-            <Field label={labelOf("parameter_choices")}>
+            <ProfileField label={labelOf("parameter_choices")}>
               <MapRows
                 entries={Object.entries((value.parameter_choices as Record<string, unknown> | undefined) ?? {})}
                 names={enumCapableSelected}
@@ -359,7 +370,7 @@ export function CapabilityProfileForm({
                   Object.keys(obj).length ? set("parameter_choices", obj) : unset("parameter_choices");
                 }}
               />
-            </Field>
+            </ProfileField>
           )}
         </div>
       ) : null}
@@ -367,31 +378,31 @@ export function CapabilityProfileForm({
       {/* 默认值:清单型给下拉(只能选清单里的,选不回来的值不存在),其余给输入。 */}
       {Object.entries(LIST_FOR_DEFAULT).some(([, listKey]) => Array.isArray(value[listKey]) && (value[listKey] as unknown[]).length > 0) && (
         <div className="grid gap-2.5 border-t border-border pt-3">
-          <span className="text-ui-xs font-semibold text-foreground">{t("genGroup_defaults")}</span>
+          <GroupHeader title={t("genGroup_defaults")} />
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(LIST_FOR_DEFAULT).map(([defaultKey, listKey]) => {
               const options = (value[listKey] as string[] | undefined) ?? [];
               if (options.length === 0) return null;
               return (
-                <Field key={defaultKey} label={labelOf(defaultKey)}>
+                <ProfileField key={defaultKey} label={labelOf(defaultKey)}>
                   <OptionPicker
                     ariaLabel={labelOf(defaultKey)}
                     value={typeof value[defaultKey] === "string" ? (value[defaultKey] as string) : options[0]}
                     onChange={(next) => set(defaultKey, next)}
                     options={options.map((one) => ({ value: one, label: one }))}
                   />
-                </Field>
+                </ProfileField>
               );
             })}
             {parameters.includes("duration_seconds") && (
-              <Field label={labelOf("default_duration_seconds")}>{renderGeneric("default_duration_seconds")}</Field>
+              <ProfileField label={labelOf("default_duration_seconds")}>{renderGeneric("default_duration_seconds")}</ProfileField>
             )}
             {(["generate_audio", "prompt_extend"] as const)
               .filter((parameter) => parameters.includes(parameter))
               .map((parameter) => (
-                <Field key={parameter} label={labelOf(`default_${parameter}`)}>
+                <ProfileField key={parameter} label={labelOf(`default_${parameter}`)}>
                   {renderGeneric(`default_${parameter}`)}
-                </Field>
+                </ProfileField>
               ))}
           </div>
         </div>
@@ -400,24 +411,32 @@ export function CapabilityProfileForm({
       {/* 上限与高级:按需请出来,不一次铺开。 */}
       {(activeSecondary.length > 0 || idleSecondary.length > 0) && (
         <div className="grid gap-2.5 border-t border-border pt-3">
-          <span className="text-ui-xs font-semibold text-foreground">{t("genGroup_limits")}</span>
+          {/* 「再加一个」挂在组头上,不排在列表最末 —— 排在末尾的话,字段加得越多,下一次
+              添加就要往下走得越远;而且它长得和一格空表单一模一样,像是有一项没填完。 */}
+          <GroupHeader
+            title={t("genGroup_limits")}
+            action={
+              idleSecondary.length > 0 ? (
+                <OptionPicker
+                  ariaLabel={t("genFormAddField")}
+                  placeholder={t("genFormAddField")}
+                  value=""
+                  onChange={(key) => {
+                    if (key) set(key, initialFor(shapeOf(key)));
+                  }}
+                  options={idleSecondary.map((field) => ({ value: field.key, label: labelOf(field.key) }))}
+                  className="h-7 w-auto gap-1 px-2 text-ui-xs text-muted-foreground"
+                  contentClassName="max-w-[min(420px,calc(100vw-32px))]"
+                  align="end"
+                />
+              ) : undefined
+            }
+          />
           {activeSecondary.map((field) => (
-            <Field key={field.key} label={labelOf(field.key)} onRemove={() => unset(field.key)}>
+            <ProfileField key={field.key} label={labelOf(field.key)} onRemove={() => unset(field.key)}>
               {renderGeneric(field.key)}
-            </Field>
+            </ProfileField>
           ))}
-          {idleSecondary.length > 0 && (
-            <OptionPicker
-              ariaLabel={t("genFormAddField")}
-              placeholder={t("genFormAddField")}
-              value=""
-              onChange={(key) => {
-                if (key) set(key, initialFor(shapeOf(key)));
-              }}
-              options={idleSecondary.map((field) => ({ value: field.key, label: labelOf(field.key) }))}
-              contentClassName="max-w-[min(420px,calc(100vw-32px))]"
-            />
-          )}
         </div>
       )}
     </div>

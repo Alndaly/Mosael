@@ -12,7 +12,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-import { CapabilityProfileForm } from "./GenerationProfileForm";
+import { CapabilityProfileForm, ProfileField } from "./GenerationProfileForm";
 
 type ModelSettings = components["schemas"]["ProviderModelOut"];
 
@@ -638,10 +638,15 @@ function ProfileBody({
       }
     >
       <div className="grid gap-3">
-        <label className="grid gap-1 text-ui-sm font-medium text-foreground">
-          {t("generationProfilesName")}
-          <Input value={name} onChange={(event) => setName(event.target.value)} className="bg-panel" />
-        </label>
+        {/* 名字这一格走表单里同一个外壳 —— 各写各的话,同一屏上就有两种标签字号、两种输入框高度。 */}
+        <ProfileField label={t("generationProfilesName")}>
+          <Input
+            value={name}
+            aria-label={t("generationProfilesName")}
+            onChange={(event) => setName(event.target.value)}
+            className="h-8 bg-panel text-ui-sm"
+          />
+        </ProfileField>
         <CapabilityProfileForm kind={kind} value={descriptor} onChange={setDescriptor} />
         {error && <p className="m-0 text-ui-xs leading-[1.45] text-destructive">{error}</p>}
         <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("generationProfilesDisclaimer")}</p>
