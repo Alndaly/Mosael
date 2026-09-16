@@ -523,6 +523,18 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 **不做网络微服务**——理由与边界见 [ADR-0001](adr/0001-no-network-microservices.md);
 统一语言见根目录 [CONTEXT.md](../CONTEXT.md)。
 
+### 人声与背景分离(提案)
+
+译配要替换的是**说话声**,而原片里说话声和背景音混在同一条轨上 —— 所以「把原声静音」会把音乐
+一起带走。缺的那个操作是分离:一条混音进去,人声/伴奏两条(或更多)出来;有了它,
+`original_audio: mute` 针对的才是**人声那条 stem**。
+
+它不是配音流程的私有步骤:做纯音乐、做卡拉OK、给转写降噪问的是同一件事。所以它按能力组织 ——
+契约进 `ai/providers/contracts/`,本地实现走 `ai/runtime` 那套(独立托管 venv、按需下模型、
+常驻 worker),工作流节点 / 剪辑台 / MCP 读同一份注册表。配音流程**只问领域有没有可用引擎**,
+问不到就退回今天的整轨静音,不报错。详见
+[ADR-0016](adr/0016-source-separation-is-a-capability.md)(尚未实现)。
+
 ### 生成参数从哪里来（1.4.0）
 
 一条链上有四个来源,**按这个顺序**取第一个命中的:模型行上的声明(`generation_capability_refs`,
