@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, SlidersHorizontal, Trash2 } from "lucide-react";
+import { SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -11,6 +11,7 @@ import { Combobox } from "@/components/app/combobox";
 import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
 import { ModalShell } from "@/components/app/modals";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
 import { SettingsList, SettingsListItem } from "@/features/settings/ui";
@@ -147,11 +148,24 @@ export function ProviderModelList({
 
   return (
     <div className="grid gap-1.5">
+      {/* **占位要长在真实行的容器里。** 此前这里是一条左对齐的裸文字,既没有行高也没有内边距,
+          于是它贴在展开区的边上,和下面将要出现的模型行对不齐 —— 加载完还会整片跳一下。
+          用同一套 SettingsList / SettingsListItem 铺三行骨架:版面先占住,内容到了就地替换。
+          行数固定三行是有意的:它表示"正在来",不表示"有三个" —— 真实数量此刻还不知道。 */}
       {models.isPending && (
-        <span className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-          <Loader2 size={12} className="animate-spin" />
-          {t("modelListLoading")}
-        </span>
+        <SettingsList aria-busy="true" aria-label={t("modelListLoading")}>
+          {[0, 1, 2].map((index) => (
+            <SettingsListItem className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2" key={index}>
+              <div className="grid gap-1.5">
+                {/* 名字那一行长短不一 —— 三块等宽反而更像一张表格,不像一份清单。 */}
+                <Skeleton className="h-3.5" style={{ width: `${[42, 58, 34][index]}%` }} />
+                <Skeleton className="h-2.5 w-[28%]" />
+              </div>
+              {/* 右侧是开关 + 两个图标按钮,占位也照这个宽度留着,免得加载完右栏横向跳。 */}
+              <Skeleton className="h-5 w-[64px] rounded-full" />
+            </SettingsListItem>
+          ))}
+        </SettingsList>
       )}
 
       <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>

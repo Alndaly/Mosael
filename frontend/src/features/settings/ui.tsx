@@ -173,11 +173,15 @@ export function SettingsList({
   children,
   className,
   scrollable = false,
+  ...rest
 }: {
   children: React.ReactNode;
   className?: string;
   scrollable?: boolean;
-}) {
+  /* 转交其余属性(`aria-busy`、`data-*`…)。**不转交的话它们会被静默吃掉** —— TypeScript 对
+     带连字符的 JSX 属性豁免多余属性检查,于是 `<SettingsList aria-busy>` 编译通过、运行时
+     什么也没发生,读屏一无所知。写了等于没写是这个仓库一直在消灭的那种沉默。 */
+} & Omit<React.ComponentProps<"div">, "className" | "children">) {
   return (
     <div
       data-slot="settings-list"
@@ -186,6 +190,7 @@ export function SettingsList({
         scrollable && "max-h-80 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
         className,
       )}
+      {...rest}
     >
       {children}
     </div>
