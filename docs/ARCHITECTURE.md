@@ -56,7 +56,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
 | `agent/` | 智能体会话:pi Agent Adapter + sidecar 流式协议 + 会话/记忆 + 工具循环 + 子智能体 |
 | `audio/`(在 `app/` 下,与 `domain/` 平级) | 语音:ASR 引擎目录与 worker、TTS 引擎与守护进程、音色克隆、字幕配音(`subtitle_dub.py`)。**语言能力挂在权重上而不是引擎上**(`f5_models.py` 是那张表,`tts_language.py` 是合成前的那道判断) |
-| `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(五条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。描述符只按精确 `(vendor, model, kind)` 匹配；未知模型得到明确的空参数表，而不是继承同厂商第一款型号。布尔、枚举、特殊时长和分辨率-时长组合也属于这份契约。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** |
+| `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(五条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。描述符只按精确 `(vendor, model, kind)` 匹配，**查不到时不猜这个模型**(同系列不同型号的时长、角色、枚举经常不同)。但「不猜模型」不等于「什么都不知道」:请求是我们自己构造的,Adapter 说得出自己发哪几项标量参数(`parameter_surface`),那个面与模型名无关时兜底就用它 —— **只给键、不声称取值范围**;面依赖模型时才是空参数表。用户还可以给自己那条连接写一份参数组,在模型行上按 kind 指过去(见 [ADR-0015](adr/0015-generation-parameters-come-from-the-adapter.md))。布尔、枚举、特殊时长和分辨率-时长组合也属于这份契约。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** |
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
 | `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
@@ -468,6 +468,15 @@ Gateway 的边界与安全不变量见
 
 智能体通过 MCP 工具读写系统(查素材、改时间线、跑工作流、生成内容)。
 **所有写操作先出确认卡**(`tool_confirmations` 表 + 前端卡片),用户批准后才执行——见 [MCP.md](MCP.md)。
+
+**两种卡,一个等法,两种超时结局。** 确认卡问「这件事能不能做」,选择卡(`ask_user`,
+`agent_questions` 表)问「你要哪一个」;后者不能被「本会话始终允许」自动答掉 —— 自动回答等于
+让模型自己编一个。两者都让这次工具调用**停在那里等人**:等法由 manifest 上的标记
+(`confirmation` / `awaits_answer`)驱动,各 runtime 自己生成 —— 应用自己那条(sidecar)阻塞
+轮询,直连 MCP 的客户端自己轮询 `get_confirmation` / `get_answer`。所以工具描述里**不写怎么等**,
+写死一种必然对另一种说谎。
+到点之后两者相反:确认卡超时 = 那个动作**没有发生**,抛错;选择卡超时 = 用户还没顾上,而答案
+仍然会到(作答后由回执送回这次对话),如实回一句「还没答」并拦住「再问一遍」。
 智能体也能复用**浏览器池**:`browser_pool_list` 只读发现档案(不含 cookie),`browser_pool_open(profile_id)`
 是确认卡工具——不经用户批准一张**点名该登录身份**的卡(显式授权每会话),智能体拿不到任何已登录档案。
 
@@ -513,6 +522,29 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 进程层是「微内核 + 卫星进程」:后端唯一事实源,重活出进程,接缝画在进程边界、协议显式化。
 **不做网络微服务**——理由与边界见 [ADR-0001](adr/0001-no-network-microservices.md);
 统一语言见根目录 [CONTEXT.md](../CONTEXT.md)。
+
+### 生成参数从哪里来（1.4.0）
+
+一条链上有四个来源,**按这个顺序**取第一个命中的:模型行上的声明(`generation_capability_refs`,
+按 kind 分行)→ 目录里精确匹配的那一份 → 这条通道的 Adapter 说得出的参数面 → 空。
+前三种各自回答一个不同的问题,不能塌成一个:
+
+| | 谁说的 | 说了什么 | 取值验证过吗 |
+| --- | --- | --- | --- |
+| 目录 | 我们 | 键 + 取值范围 | 是 |
+| Adapter 参数面 | 代码本身 | **只有键** | 否 |
+| 用户写的参数组 | 用户 | 键 + 取值范围 | 否(保存时只校验形状) |
+
+「这个模型真的没有参数」和「我们不认识这个模型」是两种处境,塌成一个就让后者看起来像前者 ——
+界面因此要在落到 Adapter 兜底时**出声**,说出那几个键并说明没人验证过取值。反过来,界面
+**不许替目录编值**:一个键出现而取值清单没声明时,凭空造出 `1024x1024` / `5 秒` 再取第一项当默认,
+等于替这个端点作了它没做过的声明。
+
+Adapter 声明 `surface_depends_on_model = False` 要同时满足两条:不按模型 id 分支,且面里每一项
+在用户设置之前都不出现在请求里。两条由 `tests/test_adapter_parameter_surface.py` 钉住,退出声明
+是一次显式编辑。可视表单的字段、分组、「这一格是谁的默认值」和「这个参数的取值装在哪个键里」
+全部由后端 `domain/generation/custom_profiles.py` 描述 —— 抄到前端的那两份立刻就漏掉了四个
+`default_*` 键。
 
 ### 3D 与画布协作（1.2.0）
 

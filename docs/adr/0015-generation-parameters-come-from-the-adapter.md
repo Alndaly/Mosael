@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-09-16. Decisions 1, 2 and 5 are implemented; 3 and 4 are not yet. Amends the
+Accepted — 2026-09-16. Decisions 1, 2, 4 and 5 are implemented; 3 is not yet. Amends the
 fallback of ADR 0012 (decision 3). ADR 0013 stands unchanged.
 
 Implementing it corrected the ADR twice, and the second correction was the expensive one.
@@ -126,6 +126,22 @@ exactly which seven it is prepared to send.
    the values", which stays false for a fallback surface. The surface itself is separately known,
    so the UI can offer the fields while saying the limits are unverified — instead of today's
    single bit that collapses "no parameters" and "no knowledge".
+
+**Third — what decision 4 actually cost.** "Reached from the model row rather than from a standing
+settings section" shipped by deleting the section outright, and that deletion is what made the
+surface settle. The library dialog it fed (empty state: one sentence and a button) sat between the
+model row and the editor, so writing a set took three stacked modals and then a fourth step —
+going back to the picker to select the thing just created. Creation did not finish the task. The
+form is now a branch of the "where do parameters come from" field: it replaces the body of the same
+dialog, and on save the new set is already selected. Editing and deleting are reached the same way,
+from the model that uses it. A standing list would have stayed empty in most installations while
+its entry point stayed in everyone's way.
+
+The form itself is driven by the backend's field description, including which parameter each
+default belongs to (`defaults_for`) and where a parameter's value list lives (`choices_key`). Those
+two were briefly copied into the frontend and the copy immediately went stale: `default_quality`,
+`default_background`, `default_output_format` and `default_moderation` were accepted by save
+validation but unreachable from the form.
 
 ## Consequences
 

@@ -93,6 +93,14 @@ summaries — never raw internal schemas.
 而且没有任何信号:这份文档一度只列了 54 个里的 15 个,缺的恰恰是后来加的那批(浏览器、记忆、
 通知)。`tests/test_tool_docs_in_sync.py` 钉住它与代码一致。
 
+表里的「等作答」是 `ask_user`：它不是「直接执行」的一种,这次调用会**停在那里等用户挑**。
+和确认卡是同一个形状、两张不同的表(`agent_questions` / `tool_confirmations`):确认卡问「这件事
+能不能做」、可以被「本会话始终允许」自动批准,而「你要哪一个」自动回答等于让模型自己编一个。
+**怎么等由 manifest 上的标记驱动、各 runtime 自己生成**,所以工具描述里不写等法 —— 应用自己
+那条(sidecar)阻塞轮询,直连 MCP 的客户端按回包 `message` 里的协议自己轮询 `get_answer`。
+超时结局相反:确认卡超时 = 那个动作没有发生(抛错);选择卡超时 = 用户还没顾上,答案仍会由回执
+送回这次对话,所以如实回一句「还没答」,并明确拦住「再问一遍」。
+
 表里的「直接执行」只表示**不需要确认卡**，不是 AI 的 `direct` execution surface。以
 `analyze_asset` 为例：普通、未绑定智能体会话的请求独立选择后端 `direct` 分析模型；AI Studio
 工具回连则从 service token 的 `agent_session_id` 继承当前会话模型，API Key 仍走 `direct`，
@@ -101,8 +109,9 @@ summaries — never raw internal schemas.
 明确失败；它不需要 `base_url`，也不会静默换成 `gpt-4o-mini` 或另一条连接。
 
 `list_generation_models` 返回完整模型能力描述符；`generate_image` / `generate_video` 的参数说明也从
-同一描述符生成。未知模型的 `parameter_keys` 明确为空：智能体可以提交提示词，但不能从同供应商其他
-型号猜时长、尺寸或素材角色。素材参数既可给 `asset_id`，也可按角色给 URL；两种传输形式进入相同的
+同一描述符生成。目录认不出的模型**不从同供应商其他型号继承**时长、尺寸或素材角色；它拿到的是这条
+通道自己发得出的那几个键（Adapter 声明的参数面，只有键、没有取值范围），面依赖模型的通道则仍是空集。
+两种情况下取值都未经验证，智能体照样可以只提交提示词。素材参数既可给 `asset_id`，也可按角色给 URL；两种传输形式进入相同的
 必填、份数、互斥与搭伴校验。
 
 工作流画布能做的事智能体都能做 —— 由 `tests/test_agent_workflow_parity.py` 钉住:节点类型

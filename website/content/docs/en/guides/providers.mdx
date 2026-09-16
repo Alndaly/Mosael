@@ -80,9 +80,25 @@ Expand a provider row:
   - **Capabilities**: which sections this model serves (chat / image / video / tts / podcast). Empty means "follow the vendor preset". This is how one endpoint expresses "a chat model *and* an image model".
   - **Context window**: decides how long a conversation can run before compaction kicks in. Defaults to the vendor catalog; when the catalog doesn't know the model, a conservative 32000 is used and you can override it. The line underneath says whether the current value is **yours, the catalog's, or the fallback**.
   - **Advanced** (collapsed): four compatibility switches — reasoning model, vision, reasoning effort, developer role. You only come here when an endpoint rejects a request; normally none of them need touching.
+  - **Where parameters come from** (image/video models only; a model with both capabilities configures each separately): see the next section.
 - **Delete** with the trash icon.
 
 > The context window and the compatibility switches only show for **chat** models — asking an image model whether it supports the developer role is noise.
+
+## Where an image/video model's parameters come from
+
+The built-in table only holds models we have **verified**: which sizes they accept, what their duration cap is, whether they take a reference image. So this field defaults to **Detect automatically** — the model name is looked up in that table. When it is found, the matching knobs appear in the generation screen.
+
+Three common reasons a model is not found: an alias you typed yourself (`gpt-image-2-client` is just gpt-image-2), a private deployment, or the same model configured through a relay endpoint. Two ways out:
+
+- **"Same as ‹model›"** — point at a model we do recognise. It is a **pointer**: if we later widen that model's description, rows pointing at it follow. Prefer this.
+- **"Describe this endpoint…"** (the link under the field) — when nothing in the catalog matches (a combination only your relay offers), write the parameter set yourself: tick the knobs this endpoint really accepts, say which values each one takes and where it starts, plus its hard limits and any quirks about request shape. Save and the row already points at it; renaming, editing and deleting are reached the same way.
+
+Two things worth stating plainly:
+
+- **We do not guess across vendors from the model name.** Measured on the same `qwen-image-edit`: Alibaba's own endpoint takes one reference image and no size; through Evolink it takes 14 and offers sizes. A guessed parameter is rejected by the endpoint on the spot.
+- **When a model is unrecognised the screen does not pretend it simply has no parameters.** It names the fields that channel **can send** (the request is constructed by Mosael, so that part needs no verification) while saying nobody has verified which values this model accepts, which is why the generation screen does not offer them yet.
+- Saving a parameter set only checks the **shape** (lists must be text, limits must be positive integers, a default must appear in its list). It cannot check "does this endpoint really support it" — only the endpoint knows that, and a wrong value fails when the provider rejects the generation request.
 
 ## Subscription plans: authorize instead of pasting a key
 

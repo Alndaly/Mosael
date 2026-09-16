@@ -379,16 +379,24 @@ failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑
 能力目录、Adapter、三个生成界面与 MCP 是一条契约链：
 
 - `known_capabilities_for` 只给提交校验使用；精确查不到表示平台不知道，不能套用同 vendor 的第一项；
-- `capabilities_for` 给 UI/MCP 的未知模型返回 `parameter_keys: []`，仍可提交提示词，但不自动发送尺寸、
-  时长、画幅或素材；前端必须区分“字段缺失的旧描述符”和“明确为空”；
+- `capabilities_for` 查不到模型时**不猜这个模型**，但也不再一律返回空集：请求是我们自己构造的，
+  所以 Adapter 说得出自己发哪几项标量参数；那个面与模型名无关时（`surface_depends_on_model = False`）
+  兜底就用它，**只给键、不声称任何取值范围**（ADR 0015）。面依赖模型的 Adapter 仍返回
+  `parameter_keys: []`。前端必须分得清三种处境：“字段缺失的旧描述符”“明确为空”“有键但没人验证过取值”，
+  最后一种要出声说出那几个键，而不是静默地什么都不摆；
 - Adapter 只翻译已声明参数。新增 `request.parameters.get("x")` 时，必须同时声明 `x` 并让 UI/MCP
   能表达它；编辑专属等模式级参数在契约支持模式范围前不要伪装成全模型参数；
 - `supports_audio` 只表示输出可能有声音，只有 `supports_generate_audio` / `boolean_parameters` 才能
   生成开关；枚举放 `parameter_choices`，分辨率限定时长放 `duration_by_resolution`；
 - 外链和素材库文件是同一个领域角色，必填、上限、互斥和搭伴校验必须同时计数。
 
+- 界面**不许替目录编值**：一个键出现、而取值清单没声明时，不要凭空造出 `1024x1024`、`720p`、
+  `16:9`、`5 秒` 这类清单再把第一项当默认值 —— 那等于替这个端点作了它没做过的声明。没有可选值的
+  键渲染成自由输入，不填就不发（`DURATION_UNSET`）。
+
 回归至少运行 `test_generation_capability_contract.py`、`test_capabilities_match_reality.py`、
-`test_adapters_read_only_declared_parameters.py` 与前端 `generationCapabilities.test.ts`。供应商结果下载
+`test_adapters_read_only_declared_parameters.py`、`test_adapter_parameter_surface.py`
+与前端 `generationCapabilities.test.ts`。供应商结果下载
 必须走 `media_transfer`，不得复用携带 API 凭据的提交客户端去请求预签名对象存储地址。
 
 ## 18. 音色创建入口必须共享录音与弹窗生命周期
