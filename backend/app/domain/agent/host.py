@@ -782,8 +782,15 @@ def post_user_message(
     body_document: dict | None = None,
     origin_session_id: str | None = None,
     origin_job_id: str | None = None,
+    steer_if_running: bool = False,
 ) -> AgentMessage:
-    """Store the user message and run the agent turn on a worker thread."""
+    """Store the user message and run the agent turn on a worker thread.
+
+    `steer_if_running` 是给**回答**用的:选择卡的答案、跳过的回执 —— 这条消息是对模型自己
+    提的那个问题的回复,不是"用户碰巧提早打的下一句"。排队的默认语义在那里是错的:模型
+    此刻正基于"还没拿到答案"往下走,而答案躺在队列里等这一轮跑完。用户看到的更糟 ——
+    输入框上方冒出一条**他没写过**的消息,带着 Steer 和删除两个按钮。
+    """
     # 模型收到的那一份可以比落库的正文多几样东西:引用清单、上下文集锦,以及"这条是别的
     # 会话发来的"信封。都不进 content —— content 是**用户在对话里看到的**那份。
     # 前两样和排队那条共用 user_prompt,免得两条路各拼各的(引用当初就是这么漏掉的)。
@@ -800,6 +807,25 @@ def post_user_message(
     # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
     origin_marker = origin_marker_for(origin_session_id, origin_job_id)
     if not _claim_idle_session(db, session.id):
+        # 回答走插话:抢不到会话说明有一轮在跑,而这条正是它等的东西。插进去成功就当场落库
+        # (不带 queued 标),于是它像一条正常的用户消息出现在对话里,而不是队列里那种待办。
+        # 插不进去(那一轮刚好结束了)就落回排队 —— 下面那次 drain 会接走它,不会掉进空里。
+        if steer_if_running and steer_turn(session.id, prompt):
+            message = AgentMessage(
+                session_id=session.id,
+                role="user",
+                content=content,
+                payload={
+                    **({"references": references} if references else {}),
+                    **({"body_document": body_document} if body_document else {}),
+                    **({"context": context.strip()} if context and context.strip() else {}),
+                    **origin_marker,
+                },
+            )
+            db.add(message)
+            db.commit()
+            db.refresh(message)
+            return message
         # Queued, not steered. These are two different things and only one of them should be
         # the default: queuing waits for the whole reason-act loop to finish and then runs as
         # its own turn, which is what someone typing a follow-up almost always means. Steering

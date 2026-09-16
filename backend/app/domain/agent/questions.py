@@ -138,16 +138,18 @@ def deliver_to_session(db: Session, row: AgentQuestion, user: User) -> None:
 
     走的是任务回执那条现成的路(见 domain/agent/receipts):会话闲就立刻开新一轮,忙就排队。
 
-    **忙的时候也送。** 那一轮可能正好自己 get_answer 拿到了,于是多出一轮"我选了 X"的确认,
-    有点冗余。但反过来判断「在跑就不送」是个竞态:检查时它在跑、送出去之前它结束了,答案
-    就再一次掉进空里。多一轮看得出来,也忽略得掉;死路看不出来。
+    **忙的时候也送,而且是插进那一轮**(`steer_if_running`)。反过来判断「在跑就不送」是个
+    竞态:检查时它在跑、送出去之前它结束了,答案就再一次掉进空里。而排队同样不对 —— 模型
+    此刻正基于"还没拿到答案"往下走,答案却在队列里等这一轮跑完;用户看到的是输入框上方
+    冒出一条**他没写过**的消息(「我选好了:…」),带着 Steer 和删除两个按钮,莫名其妙。
+    插不进去时才落回排队,由那一轮结束时的 drain 接走。
     """
     from app.domain.agent import host
 
     session = db.get(AgentSession, row.session_id)
     if session is None:
         return
-    host.post_user_message(db, session, _as_user_words(row), user)
+    host.post_user_message(db, session, _as_user_words(row), user, steer_if_running=True)
 
 
 def _as_user_words(row: AgentQuestion) -> str:

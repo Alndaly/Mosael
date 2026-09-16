@@ -11,8 +11,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentQuestion, AgentSession
+from app.domain.agent import host
 from tests.util import fresh_client
 
 QUESTIONS = [
@@ -119,3 +122,58 @@ def test_会话没了不炸() -> None:
     )
     assert answered.status_code == 200, answered.text
     assert _user_messages(session_id) == []
+
+
+def _set_running(session_id: str) -> None:
+    with SessionLocal() as db:
+        db.query(AgentSession).filter(AgentSession.id == session_id).update({"status": "running"})
+        db.commit()
+
+
+def _queued_flags(session_id: str) -> list[bool]:
+    with SessionLocal() as db:
+        rows = db.query(AgentMessage).filter(AgentMessage.session_id == session_id).all()
+        return [bool((row.payload or {}).get("queued")) for row in rows if row.role == "user"]
+
+
+def test_那一轮还在跑时答案插进去而不是排队(monkeypatch: pytest.MonkeyPatch) -> None:
+    """用户在界面上看到的那条 bug:输入框上方冒出一条**他没写过**的消息,躺在队列里。
+
+    它是选择卡的回执。排队的默认语义在这里是错的 —— 模型此刻正基于"还没拿到答案"往下走,
+    而答案在队列里等这一轮跑完;何况队列条上还挂着 Steer 和删除,像是用户自己打的一句话。
+    """
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    session_id, question_id = _ask(client, workspace["id"])
+    _set_running(session_id)
+
+    sent: list[str] = []
+    monkeypatch.setattr(host, "steer_turn", lambda _sid, prompt, *a, **k: (sent.append(prompt), True)[1])
+
+    answered = client.post(
+        f"/api/agent/questions/{question_id}/answer",
+        json={"answers": {"成片走哪个方向?": ["告白场景"]}},
+    )
+    assert answered.status_code == 200, answered.text
+    assert len(sent) == 1 and "告白场景" in sent[0], sent
+    # 落库了(对话里读得到这句),但**不带 queued 标** —— 它不是待办,是已经说出去的话。
+    assert _queued_flags(session_id) == [False]
+
+
+def test_插不进去就还是排队__答案不许掉进空里(monkeypatch: pytest.MonkeyPatch) -> None:
+    """那一轮刚好在这中间结束了:插话失败是正常结果,回执要落回排队等下一轮捞。
+
+    反过来"在跑就不送"才是真正的死路 —— 检查时它在跑、送出去之前它结束了,答案再也不会被读到。
+    """
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    session_id, question_id = _ask(client, workspace["id"])
+    _set_running(session_id)
+    monkeypatch.setattr(host, "steer_turn", lambda *a, **k: False)
+
+    answered = client.post(
+        f"/api/agent/questions/{question_id}/answer",
+        json={"answers": {"成片走哪个方向?": ["告白场景"]}},
+    )
+    assert answered.status_code == 200, answered.text
+    assert _queued_flags(session_id) == [True], "插不进去又不排队,这条答案就没人读了"
