@@ -3,7 +3,7 @@ import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleDot, CornerDownRight, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleDot, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
@@ -33,6 +33,7 @@ import { type CompactionInfo, type ContextInfo } from "@/components/agent/Contex
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/components/agent/PlanCard";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
+import { QueuedMessages } from "@/components/agent/QueuedMessages";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { InlineQuestions } from "@/components/agent/InlineQuestions";
 import { AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
@@ -58,6 +59,10 @@ export const AI_PANEL_BOUNDS = {
   left: { min: 180, max: 340, fallback: 240 },
   right: { min: 240, max: 460, fallback: 300 },
 } as const;
+
+/* 输入框那一列的宽度 —— 队列条和它下面那行脚注共用这一个。
+   写死三遍的结果是窗口变窄时只有输入框缩进去,队列条仍顶着两侧边缘,同一件事的几个盒子对不齐。 */
+const COMPOSER_COLUMN = "mx-auto w-[min(780px,calc(100%-32px))]";
 
 export function ChatWorkspace({
   workspace,
@@ -559,37 +564,17 @@ export function ChatWorkspace({
             {/* Pending strip, above the composer: these have not been sent yet, so they do not
                 belong in the transcript. Each one can be steered into the running turn or
                 dropped — the Codex arrangement. */}
-            {(queue.data ?? []).map((message) => (
-              <div
-                className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-control px-2.5 py-[7px] text-xs"
-                key={message.id}
-              >
-                <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-foreground" title={message.content}>
-                  {message.content}
-                </span>
-                <button
-                  type="button"
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                  disabled={steerQueued.isPending}
-                  onClick={() => steerQueued.mutate(message.id)}
-                  title={t("chatSteerHint")}
-                >
-                  <CornerDownRight size={11} /> {t("chatSteerAction")}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                  disabled={cancelQueued.isPending}
-                  onClick={() => cancelQueued.mutate(message.id)}
-                  aria-label={t("chatQueuedCancel")}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
+            <QueuedMessages
+              messages={queue.data ?? []}
+              /* 和下面那个 form 同一个宽度表达式 —— 窗口一窄两个盒子必须一起缩。 */
+              className={COMPOSER_COLUMN}
+              onSteer={(id) => steerQueued.mutate(id)}
+              onCancel={(id) => cancelQueued.mutate(id)}
+              steering={steerQueued.isPending}
+              cancelling={cancelQueued.isPending}
+            />
             <form
-              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-control pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring"
+              className={cn(COMPOSER_COLUMN, "mb-3.5 mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-control pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring")}
               onSubmit={submit}
             >
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
@@ -677,7 +662,7 @@ export function ChatWorkspace({
             <TraceStatsBar
               turns={statsTurns}
               usageEvents={usageEvents.data ?? []}
-              className="mx-auto -mt-2 mb-2 w-[min(780px,calc(100%-32px))] px-3"
+              className={cn(COMPOSER_COLUMN, "-mt-2 mb-2 px-3")}
             />
           </>
         )}

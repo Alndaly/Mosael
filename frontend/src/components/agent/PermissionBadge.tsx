@@ -21,5 +21,7 @@ export function PermissionBadge({ permission }: { permission: string }) {
   const key = LABEL_KEYS[permission as keyof typeof LABEL_KEYS];
   // external:后果不在这个应用里(公开发布 / 对外写请求 / 本机执行),用最重的样式。
   const variant = permission === "external" ? "destructive" : permission === "edit" ? "secondary" : "default";
-  return <Badge variant={variant}>{key ? t(key) : permission}</Badge>;
+  /* 不许换行、不许被挤扁:它右邻是一行可以很长的摘要(「3 个工作流编辑: set_node_config,
+     set_node_config, set_node_config」),flex 里两边都可缩时,这两个字会被压成一列竖排。 */
+  return <Badge variant={variant} className="shrink-0 whitespace-nowrap">{key ? t(key) : permission}</Badge>;
 }

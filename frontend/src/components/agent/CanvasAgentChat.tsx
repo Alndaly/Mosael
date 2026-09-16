@@ -3,14 +3,12 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
-  CornerDownRight,
   Move,
   PanelRight,
   Paperclip,
   Plus,
   Send,
   Square,
-  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -36,6 +34,7 @@ import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { AgentStatusRow } from "@/components/agent/AgentStatusRow";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
+import { QueuedMessages } from "@/components/agent/QueuedMessages";
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -57,6 +56,9 @@ export type CanvasAgentMode = "docked" | "floating";
  * 只有三样东西 —— 给每条消息附加的隐藏上下文、空态那句话、输入框的例子。所以这里收参数,
  * 而不是各存一份六百行的副本:副本改一处只会改好其中一个,而两边看起来一模一样。
  */
+/* 输入卡那一列的留边 —— 队列条共用这一个。侧栏很窄,差这 8px 一眼就看得出来。 */
+const COMPOSER_COLUMN = "mx-2";
+
 export function CanvasAgentChat({
   /** 附在每条消息上的隐藏上下文:告诉智能体它在看哪张画布、该用哪几个工具。 */
   contextLine,
@@ -572,36 +574,16 @@ export function CanvasAgentChat({
       </div>
       <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
       </div>
-      {(queue.data ?? []).map((message) => (
-        <div
-          className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-control px-2.5 py-[7px] text-xs"
-          key={message.id}
-        >
-          <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-foreground" title={message.content}>
-            {message.content}
-          </span>
-          <button
-            type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-            disabled={steerQueued.isPending}
-            onClick={() => steerQueued.mutate(message.id)}
-            title={t("chatSteerHint")}
-          >
-            <CornerDownRight size={11} /> {t("chatSteerAction")}
-          </button>
-          <button
-            type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-            disabled={cancelQueued.isPending}
-            onClick={() => cancelQueued.mutate(message.id)}
-            aria-label={t("chatQueuedCancel")}
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
-      ))}
-      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
+      <QueuedMessages
+        messages={queue.data ?? []}
+        /* 和下面那张输入卡同样的留边(mx-2)—— 侧栏很窄,差这 8px 一眼就看得出来。 */
+        className={COMPOSER_COLUMN}
+        onSteer={(id) => steerQueued.mutate(id)}
+        onCancel={(id) => cancelQueued.mutate(id)}
+        steering={steerQueued.isPending}
+        cancelling={cancelQueued.isPending}
+      />
+      <div className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
         <input
           ref={fileRef}
           type="file"

@@ -107,3 +107,13 @@ describe("确认卡的等待状态", () => {
     releaseDecision();
   });
 });
+
+it("权限徽标不跟着长摘要换行 —— 两个字被压成一列竖排就没法读了", async () => {
+  /* 摘要可以很长(「3 个工作流编辑: set_node_config, set_node_config, set_node_config」),
+     它和徽标同在一个 flex 行里。两边都可缩时,浏览器挑徽标下手:「编辑」竖排成两行。
+     jsdom 没有排版,能钉的是那两个决定它不被挤的类落在了徽标自己身上。 */
+  renderCards();
+  const badge = (await screen.findAllByText("write"))[0]; //: 这份夹具的档次是 write,没有文案,原样透出
+  expect(badge.className).toContain("shrink-0");
+  expect(badge.className).toContain("whitespace-nowrap");
+});
