@@ -170,18 +170,18 @@ it("「加一行」真的加得出一行 —— 还没起名的那一行也得�
   describe_endpoint();
   //: parameter_choices 那一格只在勾了"真有枚举值"的参数之后才出现(这份 schema 里是 quality)。
   fireEvent.click(screen.getByRole("button", { name: "genParam_quality" }));
-  /* 名字那一列按 `input[list]` 找:同一个 aria-label 还挂在这一行的碎屑编辑器上
-     (它的标签是 `${名字列} ${行名}`,行名为空时归一化后和名字列一模一样)。 */
-  const nameCell = () => screen.queryAllByLabelText("genField_parameter_choices").filter((one) => one.hasAttribute("list"));
+  /* 名字那一列是个**选择器**(候选是封闭集合),按 combobox 角色找:同一个 aria-label
+     还挂在这一行的碎屑编辑器上(它的标签是 `${名字列} ${行名}`,行名为空时归一化后一模一样)。 */
+  const nameCell = () => screen.queryAllByRole("combobox", { name: "genField_parameter_choices" });
   expect(nameCell()).toHaveLength(0);
 
   fireEvent.click(screen.getByText("genFormAddRow"));
   expect(nameCell()).toHaveLength(1);
-  const row = nameCell()[0];
 
   //: 起了名字才算数 —— 而"算数"的判据是它**真的进了描述符**,不是界面上还画着。
   apiMock.mockResolvedValue({ id: "x", ref: "profile:x" });
-  fireEvent.change(row, { target: { value: "quality" } });
+  fireEvent.click(nameCell()[0]);
+  fireEvent.click(await screen.findByRole("option", { name: "quality" }));
   const chips = screen.getByLabelText("genField_parameter_choices quality");
   fireEvent.change(chips, { target: { value: "hd" } });
   fireEvent.keyDown(chips, { key: "Enter" });

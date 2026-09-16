@@ -114,6 +114,7 @@ function MapRows({
   valueKind,
   addLabel,
   ariaLabel,
+  namePlaceholder,
 }: {
   entries: Array<[string, unknown]>;
   onChange: (next: Array<[string, unknown]>) => void;
@@ -122,6 +123,8 @@ function MapRows({
   valueKind: "number" | "chips" | "int_chips";
   addLabel: string;
   ariaLabel: string;
+  /** 名字那一列还没挑时显示什么 —— 「参数可选值」当占位符只是把标题又说了一遍。 */
+  namePlaceholder: string;
 }) {
   /* **正在编辑的行留在本地。**
      上层把行列表从描述符里**推导**出来(`Object.entries(value[key])`),而刚加的那一行还没有
@@ -152,13 +155,17 @@ function MapRows({
       {rows.map(([name, value], index) => (
         <div key={index} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1.5">
           <div className="grid gap-1">
-            <input
+            {/* 名字一列是**挑**,不是填:候选是一个封闭集合(勾出来的那几个参数、素材角色、
+                填过的那几档分辨率),集合之外的名字保存时会被后端当作未知键退回来。
+                此前它是 `<input list=…>` —— 浏览器自带的那个 datalist 下拉,箭头、字号、
+                展开的浮层全都不是这套界面的长相,而且看上去像一格可以随便打字的输入框。 */}
+            <OptionPicker
+              ariaLabel={ariaLabel}
               value={name}
-              list={`${ariaLabel}-names`}
-              aria-label={ariaLabel}
-              placeholder={ariaLabel}
-              onChange={(event) => setEntry(index, [event.target.value, value])}
-              className="h-8 w-full rounded-md border border-field-border bg-panel px-2 text-ui-xs text-foreground outline-none focus:border-primary"
+              placeholder={namePlaceholder}
+              disabled={names.length === 0}
+              onChange={(next) => setEntry(index, [next, value])}
+              options={names.map((one) => ({ value: one, label: one }))}
             />
             {valueKind === "number" ? (
               <Input
@@ -167,7 +174,7 @@ function MapRows({
                 value={typeof value === "number" ? value : ""}
                 aria-label={`${ariaLabel} ${name}`}
                 onChange={(event) => setEntry(index, [name, Number(event.target.value) || 0])}
-                className="h-8 bg-panel text-ui-xs"
+                className="bg-panel"
               />
             ) : (
               <Chips
@@ -182,7 +189,9 @@ function MapRows({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="rounded-full border border-border hover:border-border-strong"
+            /* 对齐到名字那一格的中线,不是整摞的顶端:这一列是"名字 + 取值"两层,
+               items-start 会把叉顶到最上面,看起来像挂在两行之间。(40-28)/2 = 6px。 */
+            className="mt-1.5 rounded-full border border-border hover:border-border-strong"
             aria-label={`${ariaLabel} ×`}
             onClick={() => commit(rows.filter((_, i) => i !== index))}
           >
@@ -190,11 +199,6 @@ function MapRows({
           </Button>
         </div>
       ))}
-      <datalist id={`${ariaLabel}-names`}>
-        {names.map((one) => (
-          <option key={one} value={one} />
-        ))}
-      </datalist>
       <Button variant="ghost" size="sm" className="justify-self-start text-muted-foreground" onClick={() => commit([...rows, ["", valueKind === "number" ? 1 : []]])}>
         <Plus size={12} /> {addLabel}
       </Button>
@@ -360,6 +364,7 @@ export function CapabilityProfileForm({
           valueKind={shape === "str_to_int" ? "number" : shape === "str_to_int_list" ? "int_chips" : "chips"}
           addLabel={t("genFormAddRow")}
           ariaLabel={labelOf(key)}
+          namePlaceholder={t("genFormPickName")}
           onChange={commit}
         />
       );
@@ -419,6 +424,7 @@ export function CapabilityProfileForm({
                 valueKind="chips"
                 addLabel={t("genFormAddRow")}
                 ariaLabel={labelOf("parameter_choices")}
+                namePlaceholder={t("genFormPickParameter")}
                 onChange={(next) => {
                   const obj = Object.fromEntries(next.filter(([name]) => name.trim()));
                   Object.keys(obj).length ? set("parameter_choices", obj) : unset("parameter_choices");
