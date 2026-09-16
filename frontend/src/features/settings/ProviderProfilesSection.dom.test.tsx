@@ -203,4 +203,26 @@ describe("供应商连接列表", () => {
     expect(posts()[0].path).toBe("/api/settings/providers/p1/models");
     expect(JSON.parse(posts()[0].init!.body!)).toEqual({ model_id: "my-model-x", enabled: true });
   });
+
+  it("停用的那一行和启用的那一行,右端占的格子一样多", async () => {
+    /* 用户看到的:停用之后右侧那几个图标整体错开了一格。「已停用」徽标自己占了一条网格轨道,
+       而它只在停用时渲染 —— 启用的行末列是空的,宽度 0,gap 却照算。
+       判据是**两种行的直接子元素数目相同**:条件出现的东西不能自己占一条轨道。
+       (jsdom 量不到版面,而"错开一格"的成因正是这个数目差。) */
+    vendorsResult = [];
+    providersResult = [
+      { id: "on", name: "开着的", vendor: "openai-compatible", enabled: true, auth_type: "api_key",
+        oauth_linked: false, capability_ids: ["chat"], config: {}, base_url: "http://a", needs_key: false },
+      { id: "off", name: "停用的", vendor: "openai-compatible", enabled: false, auth_type: "api_key",
+        oauth_linked: false, capability_ids: ["chat"], config: {}, base_url: "http://b", needs_key: false },
+    ];
+    const { container } = renderSection();
+
+    await waitFor(() => expect(container.textContent).toContain("停用的"));
+    const rows = [...container.querySelectorAll("[data-slot='settings-list-item']")];
+    expect(rows).toHaveLength(2);
+    expect(rows[1].children.length).toBe(rows[0].children.length);
+    //: 徽标确实还在,只是和那几个按钮同处一格。
+    expect(rows[1].textContent).toContain("providerDisabled");
+  });
 });

@@ -488,7 +488,10 @@ export function ProviderProfilesSection({
             <SettingsListItem
                 className={cn(
                   "grid items-center gap-2",
-                  bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
+                  /* 右端只有**一列**。此前「已停用」徽标自己占一列,而它只在停用时渲染 ——
+                     启用的行少一个子元素,末列空着,gap 却照算,于是那些行的图标比停用的行
+                     往左错开一格。条件出现的东西不能自己占一条网格轨道。 */
+                  bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto]",
                   !profile.enabled && "opacity-55",
                   bulk.isSelected(profile.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] opacity-100",
                 )}
@@ -539,6 +542,7 @@ export function ProviderProfilesSection({
                   <ProviderHealth profileId={profile.id} className="ml-1.5 align-middle" />
                 </small>
               </div>
+              <div className="flex items-center gap-2">
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
               <div className="flex items-center gap-1">
                 {/* 常用的三个留在行内:展开模型、查额度、启停。授权/编辑/删除进溢出菜单 ——
@@ -603,6 +607,7 @@ export function ProviderProfilesSection({
                     />
                   </PopoverContent>
                 </Popover>
+              </div>
               </div>
               {/* 展开区整行独占:模型行本身就是"名字 + 能力 + 开关 + 两个按钮",
                   挤进那一列会窄到读不出任何东西。 */}

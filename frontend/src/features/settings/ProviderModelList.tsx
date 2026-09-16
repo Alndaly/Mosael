@@ -219,7 +219,11 @@ export function ProviderModelList({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {/* 开关右边要多留一截。视觉上的间距是 gap 加上两侧控件自己的内边距:两个幽灵图标
+                按钮之间有 4 + 7.5 + 7.5 ≈ 19px,而开关是一块实心胶囊、内边距为 0,同样的
+                gap 只剩 11.5px —— 它就贴在了参数按钮上。 */}
             <Switch
+              className="mr-2"
               checked={row.enabled}
               aria-label={t("modelEnabled")}
               onCheckedChange={(next) => patch.mutate({ modelId: row.id, body: { enabled: next } })}
