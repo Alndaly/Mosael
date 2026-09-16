@@ -11,11 +11,12 @@
  */
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { AddRow } from "@/components/ui/add-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -199,9 +200,7 @@ function MapRows({
           </Button>
         </div>
       ))}
-      <Button variant="ghost" size="sm" className="justify-self-start text-muted-foreground" onClick={() => commit([...rows, ["", valueKind === "number" ? 1 : []]])}>
-        <Plus size={12} /> {addLabel}
-      </Button>
+      <AddRow label={addLabel} onClick={() => commit([...rows, ["", valueKind === "number" ? 1 : []]])} />
     </div>
   );
 }

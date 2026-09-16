@@ -1,7 +1,8 @@
 import React from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { AddRow } from "@/components/ui/add-row";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/app/combobox";
 import { Input } from "@/components/ui/input";
@@ -149,20 +150,13 @@ export function MapField({
           </Button>
         </div>
       ))}
-      {/* **左对齐的小按钮,不是居中的大块。** 一行都没有时,居中的"加一项"孤零零悬在那儿,
-          既不像表单也不像空状态 —— 它只是个次要操作。
+      {/* 撑满的虚线空位 —— 和参数组表单里的「加一行」同一个东西,共用一份实现。
+          此前是一枚左对齐的 ghost 小钮:一行都没有时它悬在一大片空白里,读不出是可点的,
+          也读不出它和上面那几行是什么关系(当时那条注释反对的是"居中的小按钮",而不是
+          这种占满一行、带边界的空位 —— 前者是浮在空白里的一个点,后者就是那一行本身)。
           这里曾经还摆着一排"上游有什么"的 chip,后来撤了:值那一格的下拉本来就把上游输出
           原样列全,还能搜 —— 同一份清单在同一个面板里出现两遍,第二遍只是噪音。 */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        className="w-fit justify-start px-1.5"
-        onClick={() => push([...rows, { key: "", value: "" }])}
-      >
-        <Plus size={12} />
-        {t("wfMapAdd")}
-      </Button>
+      <AddRow dense label={t("wfMapAdd")} onClick={() => push([...rows, { key: "", value: "" }])} />
     </div>
   );
 }
