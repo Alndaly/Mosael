@@ -389,3 +389,31 @@ class Test删除正在使用的参数组:
         assert client.delete(
             f"/api/settings/providers/{pid}/generation-profiles/{profile_row_id}"
         ).status_code == 204
+
+
+class Test兜底面走得出接口:
+    """目录认不出的模型,界面靠这个面区分两种处境:「键知道了但取值没人验证过」和「真的只剩
+    提示词」。合成一句会在其中一边说假话(见 ADR 0015)。
+
+    这里带着 `profile_id` 真发一次请求 —— 这条路上的返回类型标注比实际返回窄过一次,
+    FastAPI 校验响应时 500,而浏览器只看得到"Internal Server Error"。标注和返回是两份东西,
+    只有真调一次才对得上。
+    """
+
+    def test_纯转发的通道给得出键(self) -> None:
+        admin = fresh_client()
+        pid = _connection(admin, "openai")
+        body = admin.get(f"/api/generation/capability-refs?kind=image&profile_id={pid}")
+        assert body.status_code == 200, body.text
+        keys = body.json()["fallback_keys"]
+        assert "size" in keys and "num_images" in keys
+        #: 素材角色不在其中 —— 它决定这个模型做哪种任务,不是一个标量旋钮。
+        assert "reference_image" not in keys
+
+    def test_按模型分支的通道保持空(self) -> None:
+        """seedance 那几个真的按模型分支(t2v 和 i2v 是两件事),这里给键就是在猜。"""
+        admin = fresh_client()
+        pid = _connection(admin, "bytedance")
+        body = admin.get(f"/api/generation/capability-refs?kind=video&profile_id={pid}")
+        assert body.status_code == 200, body.text
+        assert body.json()["fallback_keys"] == []

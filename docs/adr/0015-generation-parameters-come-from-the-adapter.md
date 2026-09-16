@@ -2,9 +2,32 @@
 
 ## Status
 
-Proposed — 2026-09-16. No code written. Amends the fallback of ADR 0012 (decision 3) and demotes
-its user-authored profiles (decisions 5 and 6) from the primary path to an expert escape hatch.
-ADR 0013's per-`(model, kind)` declarations and single resolution seam stand unchanged.
+Partly accepted — 2026-09-16. Decision 1 is implemented and held by tests. **Decision 2 is not:
+it is blocked, and the block is the most useful thing this ADR found.** Decisions 3, 4 and 5 wait
+on it. Amends nothing in ADR 0012 yet; ADR 0013 stands unchanged.
+
+Implementing it corrected the ADR twice.
+
+**First correction — the criterion was incomplete.** "Does the adapter branch on the model id" is
+necessary but not sufficient: Evolink branches on nothing yet forwards whatever it is given. The
+shipped criterion adds a second property — **every parameter in a declared surface is absent from
+the request until the user sets it** (or its default is what is already sent today). Both are held
+by `backend/tests/test_adapter_parameter_surface.py`, along with a list of which channels are
+declared independent, so retiring one is a deliberate edit rather than a silent loss.
+
+**Second correction — the empty fallback is load-bearing, and this ADR misread it as merely
+timid.** Wiring the surface into `capabilities_for` made an existing test fail:
+`不伪造第一款型号的参数`, whose docstring warns that a UI inheriting Seedance's default duration
+will quietly submit five seconds. That test was right. The frontend has its own fabrication layer:
+once a parameter key is present and no values are declared, `generationCapabilities` invents the
+whole list and takes the first as the default — `size` → `["1024x1024"]`, `resolution` → `["720p"]`,
+`aspect_ratio` → `["16:9"]`, `duration` → `5`. So "we know which keys we can send" silently becomes
+"we claim this model is 720p, 16:9, five seconds", with the user having chosen none of it.
+
+The empty `parameter_keys` was the only gate holding that back. Decision 2 therefore cannot ship
+before the UI can render a declared key with undeclared values as genuinely unset — offered, but
+carrying nothing until the user picks. That is the next piece of work, and it is a frontend change,
+not a catalogue one.
 
 ## Context
 
@@ -73,13 +96,20 @@ exactly which seven it is prepared to send.
 1. **An adapter declares its own parameter surface, and states whether that surface depends on the
    model id.** This is not inference about a vendor's API: it is a description of the request our
    own code constructs. A ratchet test asserts, per adapter, that a surface declared
-   model-independent really is — a new `if model ==` branch inside such an adapter fails the build.
+   model-independent really is — a new `if model ==` branch inside such an adapter fails the build,
+   and so does a parameter that is sent when the user has not set it.
 
 2. **The fallback for an unrecognised model on a model-independent adapter is that adapter's
    surface, with no value constraints asserted.** Parameter *keys* come from the adapter; *valid
    values* (sizes, durations, limits) remain unknown until the catalogue or the user supplies them.
    Offering a size field without claiming which sizes are valid is honest; offering nothing is not,
    because it reads as "this model has no parameters".
+
+   **Blocked** (see Status). The sentence above quietly assumes the UI can offer a field without
+   claiming a value. It cannot today: an undeclared list becomes a fabricated one. Until that is
+   fixed, `fallback_capabilities` keeps returning empty keys, and the adapter surface is used only
+   to tell the user in settings what this connection is able to send — which is what helps them
+   choose a model to point at.
 
 3. **Adapters whose payload depends on the model keep the conservative fallback**, and what the
    user is asked for there is the task shape — text-to-video, image-to-video, reference-to-video —

@@ -559,6 +559,8 @@ export const messages = {
     modelGenerationRefProfile: "参数组 · {name}",
     modelGenerationRefNoParams: "没有可调参数",
     modelGenerationRefUnknown: "这个模型的参数还没认出来 —— 生成时只能写提示词。指一个「和它一样」的模型就好。",
+    //: 兜底给了键但没给取值范围时说这句。和上面那句是**两种不同的处境**,合成一句会在其中一边说假话。
+    modelGenerationRefUnverified: "这条通道本身发得出 {keys} —— 但没人验证过这个模型收哪些取值,所以生成界面先不摆出来。指一个「和它一样」的模型,它们就都有了。",
     modelSettingsDeveloperRoleHint: "关闭时系统提示用 system 角色发送。",
     modelSettingsFollowDefault: "跟随默认",
     agentContextLeft: "剩余 {n}%",
@@ -3185,6 +3187,7 @@ export const messages = {
     modelGenerationRefProfile: "Parameter set · {name}",
     modelGenerationRefNoParams: "No adjustable parameters",
     modelGenerationRefUnknown: "We don't recognise this model's parameters yet — generation will only take a prompt. Point it at a model that behaves the same.",
+    modelGenerationRefUnverified: "This connection can send {keys}, but nobody has verified which values this model accepts, so the generation panel holds them back. Point it at a model that behaves the same and they all appear.",
     modelSettingsDeveloperRoleHint: "When off, the system prompt is sent with the system role.",
     modelSettingsFollowDefault: "Follow default",
     agentContextLeft: "{n}% left",

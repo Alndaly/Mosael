@@ -80,6 +80,12 @@ def extract_image_bytes(payload: dict[str, Any]) -> list[bytes]:
 
 
 class OpenAIImageAdapter(GenerationAdapter):
+    #: 见 build_submit_payload:`n` 恒发(默认 1,和今天一样),其余四项**给了才发**,
+    #: `size` 同理。整段代码只把 request.model 放进 payload,从不按它分支 ——
+    #: 所以这个面对任何模型名都成立,包括我们没见过的。
+    parameter_surface = ("num_images", "size", "quality", "background", "output_format", "moderation")
+    surface_depends_on_model = False
+
     media_kind = "image"
 
     def __init__(self, vendor_id: str = "openai") -> None:

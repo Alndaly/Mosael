@@ -1190,9 +1190,15 @@ def capabilities_for(
     答案:设置页看 provider_models,生成页看 generation_models,两边永远对不齐(ComfyUI 的
     工作流只在后者里,而且是个叫 `workflow` 的假模型 id)。
 
-    只精确匹配 (provider, model, kind)。查不到时返回一份**不猜参数**的 kind 级兜底，只让
-    界面保留提示词和提交入口。即使同一个供应商，同系列不同型号的时长、素材角色和枚举值也
-    经常不同；继承目录第一项会让界面主动发送用户没有选择、目标模型也未必支持的参数。
+    只精确匹配 (provider, model, kind)。查不到时**不猜这个模型** —— 同一个供应商下,同系列
+    不同型号的时长、素材角色和枚举值经常不同,继承目录第一项会让界面主动发送用户没有选择、
+    目标模型也未必支持的参数。
+
+    但"不猜模型"不等于"什么都不知道"。请求是**我们自己构造的**,所以 Adapter 说得出它能发
+    哪几项标量参数。那个面与模型名无关时(`surface_depends_on_model = False`),兜底就用它 ——
+    只给**键**,不声称任何取值范围。这不是推测:代码就在那儿,发哪几项一目了然。
+    此前这里返回的是空集,于是一个中转上的模型看起来像"它就是没有参数",而那段代码早就知道
+    自己准备发哪七项(见 ADR 0015)。
     """
     declared = resolve_capability_ref(ref, kind, custom=custom)
     if declared is not None:
@@ -1200,6 +1206,35 @@ def capabilities_for(
     exact = known_capabilities_for(vendor, model, kind)
     if exact is not None:
         return exact
+    return fallback_capabilities(vendor, kind)
+
+
+def adapter_parameter_surface(vendor: str, kind: str) -> tuple[str, ...]:
+    """这条通道能发出去的标量参数;依赖模型名的一律回空(保守)。"""
+    from app.ai.providers import get_generation_adapter
+
+    adapter = get_generation_adapter(vendor, kind)
+    if adapter is None or adapter.surface_depends_on_model:
+        return ()
+    return tuple(adapter.parameter_surface)
+
+
+def fallback_capabilities(vendor: str, kind: str) -> dict[str, Any]:
+    """目录不认识这个模型时给什么。
+
+    **仍然是空的 parameter_keys,而且这个空是承重的。** ADR 0015 本想在这里放
+    `adapter_parameter_surface` —— 请求是我们自己构造的,发哪几项是知道的。真接上之后发现
+    界面那一层还有一套自己的造值逻辑:一个参数键只要出现,`generationCapabilities` 就会在
+    没有可选值时**凭空造出整张清单**并取第一项当默认 ——
+    size→["1024x1024"]、resolution→["720p"]、aspect_ratio→["16:9"]、duration→5。
+
+    于是"我们知道能发哪几项"会悄悄变成"我们声称这个模型是 720p / 16:9 / 5 秒",而用户一项
+    都没选过。`tests/test_generation_capability_contract.py` 里那条
+    `不伪造第一款型号的参数` 抓的正是这个,它护的不是旧实现,是这条真陷阱。
+
+    所以键要等界面能表达「这一项我知道你能发,但不知道有哪些取值」之后才放出来。
+    Adapter 那份面仍然有用:设置页用它告诉用户这条通道能发什么,好让他挑一个参照模型。
+    """
     return dict(_FALLBACK_BY_KIND.get(kind, {}))
 
 

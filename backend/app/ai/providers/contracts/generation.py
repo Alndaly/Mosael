@@ -157,6 +157,22 @@ class GenerationAdapter(ABC):
     #: Adapters that accept generate(..., callbacks=...) set this True.
     supports_progress_callbacks: bool = False
 
+    #: **这个 Adapter 能发出去的标量参数。** 它描述的是我们自己构造的那个请求,不是对供应商
+    #: API 的推测 —— 代码就在下面,发哪几项一目了然。目录查不到某个模型时,界面据此仍能给出
+    #: 参数(见 domain/generation/catalog.capabilities_for),而不是一个只剩提示词的空壳。
+    #:
+    #: **素材角色不在其中**(first_frame / reference_image / …)。那些是"这个模型做哪种任务",
+    #: 按模型变得厉害(text-to-video 和 image-to-video 本来就是两件事),猜错就是给文生视频
+    #: 摆一个首帧槽位。见 ADR 0015 决策 3。
+    parameter_surface: tuple[str, ...] = ()
+    #: 上面那个面**依不依赖模型名**。默认 True = 保守,不参与兜底。
+    #:
+    #: 声明 False 的,要同时满足两条,`tests/test_adapter_parameter_surface.py` 逐条盯着:
+    #:   1. 构造请求时不按模型名分支 —— 任何模型名得到同一个形状;
+    #:   2. 面里每一项**没设就不发**(或它的默认值正是今天已经在发的那个)。
+    #: 第 2 条是"暴露它是安全的"的理由:用户不动它,线上一个字节都不变。
+    surface_depends_on_model: bool = True
+
     def requires_credentials(self) -> bool:
         return True
 

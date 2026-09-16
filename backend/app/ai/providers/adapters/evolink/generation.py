@@ -239,10 +239,24 @@ def download_results(urls: list[str], output_dir: Path, kind: str) -> list[Path]
 class EvolinkGenerationAdapter(GenerationAdapter):
     vendor_id = "evolink"
 
+    #: 这个网关是**纯转发**:构造请求时不看模型名,而且每一项标量都是"给了才发"
+    #: (见 build_image_payload / build_video_payload)。所以目录认不出的模型也能拿到这些键。
+    #: 素材角色不在其中 —— 它们决定这个模型做哪种任务,按模型变得厉害。
+    _SURFACE_BY_KIND = {
+        "image": ("size", "num_images"),
+        "video": ("duration_seconds", "resolution", "aspect_ratio", "generate_audio"),
+    }
+    surface_depends_on_model = False
+
     def __init__(self, media_kind: str):
         if media_kind not in {"image", "video"}:
             raise ValueError(f"unsupported Evolink generation kind: {media_kind}")
         self.media_kind = media_kind
+
+    @property
+    def parameter_surface(self) -> tuple[str, ...]:
+        """一个类注册了两个 kind,面要跟着实例的 media_kind 走。"""
+        return self._SURFACE_BY_KIND[self.media_kind]
 
     def validate_request(self, request: GenerationRequest) -> None:
         # Evolink 网关的协议范围:视频 3–30 秒(Seedance 2.5 已放到 4–30,2026-09-01 文档)、

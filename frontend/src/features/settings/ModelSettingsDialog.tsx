@@ -107,6 +107,9 @@ function AdvancedToggle({
 type CapabilityRefs = {
   models: { value: string; provider: string; model: string; parameter_keys: string[] }[];
   profiles: { value: string; profile: string; parameter_keys: string[] }[];
+  /** 什么都不指时,这条通道本身给得出哪几项。**空 = 真的只剩提示词**;非空 = 键知道了,
+   *  但没人验证过这个模型收哪些取值。这两种处境要分开说。 */
+  fallback_keys?: string[];
 };
 
 /**
@@ -145,6 +148,7 @@ function CapabilityRefField({
     staleTime: 5 * 60_000,
   });
   const NONE = "__follow__";
+  const fallbackKeys = refs.data?.fallback_keys ?? [];
   /* 管理的入口常驻在选择器**下面**:塞进下拉项的尾部时,五十几个内置模型把它压到
      滚动尽头,事实上等于没有入口。 */
   const [managing, setManaging] = React.useState(false);
@@ -192,9 +196,18 @@ function CapabilityRefField({
       >
         {t("generationProfilesManage")}
       </button>
-      {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。 */}
+      {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。
+          **但处境有两种。** 这条通道不按模型名分支时,我们说得出它发得出哪几项(请求是自己
+          构造的);给不出时才是真的只剩提示词。说清前者能帮用户判断该指哪个参照模型。
+          注意这里说的是"通道发得出",不是"生成界面会摆出来" —— 界面在没有可选值时会凭空
+          造出整张清单(size→1024x1024、duration→5),所以那些键要等界面能表达"不知道有哪些
+          取值"之后才放出来。见 domain/generation/catalog.fallback_capabilities。 */}
       {!known && !value && (
-        <p className="m-0 text-ui-xs leading-[1.45] text-warning">{t("modelGenerationRefUnknown")}</p>
+        <p className="m-0 text-ui-xs leading-[1.45] text-warning">
+          {fallbackKeys.length > 0
+            ? t("modelGenerationRefUnverified").replace("{keys}", fallbackKeys.join(" · "))
+            : t("modelGenerationRefUnknown")}
+        </p>
       )}
       {managing && (
         <GenerationProfilesDialog

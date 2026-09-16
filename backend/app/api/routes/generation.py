@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import delete, select, update
 
@@ -137,7 +139,7 @@ def get_capability_profile_schema(kind: str = "image") -> CapabilityProfileSchem
 @router.get("/generation/capability-refs")
 def list_capability_refs(
     db: DbSession, user: CurrentUser, kind: str = "image", profile_id: str | None = None
-) -> dict[str, list[dict[str, object]]]:
+) -> dict[str, list[Any]]:
     """设置页里「这一行的生成参数按什么来」能选什么。
 
     两组,对应那一列的两种写法:
@@ -187,7 +189,15 @@ def list_capability_refs(
             }
             for row in custom_profiles_for(db, profile_id, kind)
         )
-    return {"models": models, "profiles": profiles}
+    #: 什么都不指时,这条通道本身给得出哪几项。**空 = 真的只剩提示词**,非空 = 键知道了但
+    #: 取值范围没人验证过。界面要分开说这两种处境,合成一句会在其中一边说假话(见 ADR 0015)。
+    fallback_keys: list[str] = []
+    if profile_id:
+        from app.domain.generation.catalog import adapter_parameter_surface
+
+        vendor = _require_profile(db, profile_id, user).vendor
+        fallback_keys = list(adapter_parameter_surface(vendor, kind))
+    return {"models": models, "profiles": profiles, "fallback_keys": fallback_keys}
 
 
 @router.post("/generation/optimize-prompt", response_model=PromptOptimizeResponse)
