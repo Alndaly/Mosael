@@ -82,18 +82,17 @@ function open_dialog(refs: Record<string, string> = {}) {
   );
 }
 
-/** 走用户的路:打开选择器,选中那一项。 */
-async function pick(name: string) {
-  fireEvent.click(screen.getByRole("combobox", { name: "modelGenerationRef" }));
-  const item = await screen.findByRole("option", { name });
-  fireEvent.click(item);
+/** 走用户的路:点字段下面那个动作。
+    它不在选择器里 —— 选择器里只有能选的**值**,「自己描述这个端点」是一个动作。 */
+function describe_endpoint() {
+  fireEvent.click(screen.getByText("modelGenerationRefDescribe"));
 }
 
 it("新建:名字与表单填出的描述符原样 POST 到这条连接下", async () => {
   apiMock.mockResolvedValue({ id: "x", name: "中转那份", kind: "image", capabilities: {}, ref: "profile:x" });
   open_dialog();
 
-  await pick("modelGenerationRefDescribe");
+  describe_endpoint();
   fireEvent.change(screen.getByLabelText(/generationProfilesName/), { target: { value: "中转那份" } });
   /* **新建从空白开始。** 旧版预先勾好 size 并塞进 sizes:["1024x1024"] —— 用户一个字没填,
      POST 里已经替这个端点声称了一档尺寸。那正是我们刚从生成界面里拆掉的那种凭空造值。
@@ -118,7 +117,7 @@ it("可选值清单跟着勾出来的参数出现,碎屑编辑器回车加、叉
   apiMock.mockResolvedValue({ id: "x", ref: "profile:x" });
   open_dialog();
 
-  await pick("modelGenerationRefDescribe");
+  describe_endpoint();
   //: 勾上 size,尺寸档位清单才出现 —— 没勾的参数不该有它的可选值编辑器。
   expect(screen.queryByLabelText("genField_sizes")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "genParam_size" }));

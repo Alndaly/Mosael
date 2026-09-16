@@ -551,8 +551,11 @@ export const messages = {
 
 
     editAction: "编辑",
-    modelGenerationRefFollow: "跟随目录",
-    //: 选择器末尾那一项。写"这个端点"而不是"参数组" —— 用户想的是他那条连接,不是我们的概念。
+    /* 「目录」是我们内部的说法 —— 读者在这一格里要回答的是"参数按什么来",而"跟随目录"
+       既没说会发生什么,也没说"目录"是什么。说清动作:按模型名去查内置那张表。 */
+    modelGenerationRefFollow: "自动识别",
+    modelGenerationRefFollowHint: "按模型名在内置的那张表里查。查不到时下面会说明。",
+    //: 写"这个端点"而不是"参数组" —— 用户想的是他那条连接,不是我们的概念。
     modelGenerationRefDescribe: "自己描述这个端点…",
     modelGenerationRefDescribeHint: "内置的表只装我们查证过的模型。你那条连接接受什么,只有你知道",
     modelGenerationRefEditThis: "编辑这一份",
@@ -3181,7 +3184,8 @@ export const messages = {
 
 
     editAction: "Edit",
-    modelGenerationRefFollow: "Follow the catalog",
+    modelGenerationRefFollow: "Detect automatically",
+    modelGenerationRefFollowHint: "Look the model name up in the built-in table. If it is not there, you will be told below.",
     modelGenerationRefDescribe: "Describe this endpoint…",
     modelGenerationRefDescribeHint: "The built-in table only holds models we verified. What your connection accepts, only you know",
     modelGenerationRefEditThis: "Edit this one",

@@ -150,14 +150,13 @@ function CapabilityRefField({
     staleTime: 5 * 60_000,
   });
   const NONE = "__follow__";
-  const DESCRIBE = "__describe__";
   const fallbackKeys = refs.data?.fallback_keys ?? [];
   const data = refs.data;
   /* 「和 X 一样」排在前面,而且是**指针**:以后我们把 X 的描述符改宽了,指着它的行跟着变。
      档案排在后面,它是目录里没有对应模型时的出路(某个中转独有的组合)。
      两边都把参数列出来 —— 选之前就该看得见"选它会得到哪几项",而不是选完回去翻界面。 */
   const options = [
-    { value: NONE, label: t("modelGenerationRefFollow") },
+    { value: NONE, label: t("modelGenerationRefFollow"), description: t("modelGenerationRefFollowHint") },
     ...(data?.models ?? []).map((one) => ({
       value: one.value,
       label: `${one.model} · ${one.provider}`,
@@ -170,10 +169,6 @@ function CapabilityRefField({
       description: one.parameter_keys.join(" · ") || t("modelGenerationRefNoParams"),
       keywords: [one.profile],
     })),
-    /* **建一份新的是选择器里的一个分支,不是另一个地方。** 此前它是「管理参数组」链接 →
-       一层库弹窗 → 一层编辑器弹窗,而且建完还得回到这里再选一次 —— 创建本身没有完成任务。
-       现在选中它就地换掉对话框主体,保存后回来、且新建的那份已经选中。 */
-    { value: DESCRIBE, label: t("modelGenerationRefDescribe"), description: t("modelGenerationRefDescribeHint") },
   ];
   //: 当前选中的是不是我自己建的那种 —— 是的话给一个就地编辑的入口(改名、调字段、删除)。
   const editableProfile = (data?.profiles ?? []).find((one) => one.value === value && one.custom);
@@ -190,28 +185,34 @@ function CapabilityRefField({
       <OptionPicker
         ariaLabel={t("modelGenerationRef")}
         value={value ?? NONE}
-        onChange={(next) => {
-          if (next === DESCRIBE) {
-            onDescribe(null);
-            return;
-          }
-          onChange(next === NONE ? null : next);
-        }}
+        onChange={(next) => onChange(next === NONE ? null : next)}
         options={options}
         contentClassName="max-w-[min(520px,calc(100vw-32px))]"
       />
       </label>
-      {/* 改名 / 调字段 / 删除都从**用它的那个模型**进入。独立的"管理列表"删掉了:参数组本来
-          就是为某个模型建的,单开一页的结果是那一页永远空着,而入口还挡在路上。 */}
-      {editableProfile && (
+      {/* 写一份 / 改一份都在字段**下面**,不在选择器里面。选择器里该只有能选的**值**
+          (自动识别、和某个模型一样、某个参数组);「自己描述这个端点」是一个动作 ——
+          混进去之后,它既像一个可以选中的取值,又要在选中的瞬间把整个对话框换掉。
+          管理入口仍然只从**用它的那个模型**进入:参数组本来就是为某个模型建的,
+          单开一页的结果是那一页永远空着,而入口还挡在路上。 */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"
-          className="cursor-pointer justify-self-start text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          onClick={() => onDescribe(editableProfile.id ?? null)}
+          className="cursor-pointer text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          onClick={() => onDescribe(null)}
         >
-          {t("modelGenerationRefEditThis")}
+          {t("modelGenerationRefDescribe")}
         </button>
-      )}
+        {editableProfile && (
+          <button
+            type="button"
+            className="cursor-pointer text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            onClick={() => onDescribe(editableProfile.id ?? null)}
+          >
+            {t("modelGenerationRefEditThis")}
+          </button>
+        )}
+      </div>
       {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。
           **但处境有两种。** 这条通道不按模型名分支时,我们说得出它发得出哪几项(请求是自己
           构造的);给不出时才是真的只剩提示词。说清前者能帮用户判断该指哪个参照模型。

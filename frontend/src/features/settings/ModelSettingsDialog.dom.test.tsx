@@ -117,16 +117,22 @@ it("这条连接的自定义参数组出现在选择器里", async () => {
   }
 });
 
-it("写一份新的是选择器里的一项,不是另一个地方", async () => {
-  // 此前这里是「管理参数组」链接 → 一层库弹窗(空列表时全部内容是一句话加一个按钮)→ 一层
-  // 编辑器弹窗,三层叠着;而且建完还得回到这个选择器再选一次 —— 创建本身没有完成任务。
+it("「自己描述这个端点」是字段下面的一个动作,不是选择器里的一个取值", async () => {
+  /* 选择器里该只有能**选中**的值(自动识别、和某个模型一样、某个参数组)。把这个动作混进去
+     之后,它既像一个取值,又要在选中的瞬间把整个对话框换掉 —— 而"选一个值"和"打开一个编辑器"
+     是两件事。(更早的一版更远:它是「管理参数组」链接 → 库弹窗 → 编辑器弹窗,三层叠着。) */
   open(["image"]);
-  //: 常驻的那个管理链接没有了。
-  expect(screen.queryByText("generationProfilesManage")).not.toBeInTheDocument();
+  expect(screen.getByText("modelGenerationRefDescribe")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("combobox", { name: "modelGenerationRef" }));
-  /* Radix 同时渲染一份隐藏的原生 <select> 供表单回填 —— 按 text 查会撞到两个。
-     按 option 角色查,拿到的才是读者真正点得到的那一项。 */
-  expect(await screen.findByRole("option", { name: "modelGenerationRefDescribe" })).toBeInTheDocument();
+  await screen.findByRole("option", { name: /modelGenerationRefFollow/ });
+  expect(screen.queryByRole("option", { name: "modelGenerationRefDescribe" })).not.toBeInTheDocument();
+});
+
+it("「自动识别」说得出它会做什么 —— 「跟随目录」是我们的行话", async () => {
+  //: 这一格问的是"参数按什么来",而"跟随目录"既没说会发生什么,也没说"目录"是什么。
+  open(["image"]);
+  fireEvent.click(screen.getByRole("combobox", { name: "modelGenerationRef" }));
+  expect(await screen.findByText("modelGenerationRefFollowHint")).toBeInTheDocument();
 });
 
 it("「编辑这一份」只在选中的是自己建的那种时出现", () => {
