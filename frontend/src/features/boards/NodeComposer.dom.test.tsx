@@ -75,3 +75,32 @@ it("认不出参数时要出声,而不是和「确实没有参数」一样静默
   expect(screen.queryByText("boardGenerationUnknownParams")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "boardGenerationSettings" })).not.toBeInTheDocument();
 });
+
+it("目录没给取值时,用户没填就一个值都不提交", async () => {
+  // 这条盯的是整件事的要害。曾经的链条是:兜底给出 duration_seconds 这个键 → 界面渲染时长
+  // → 没有可选值也没有默认值 → defaultDuration 编一个 5 → 提交带上 duration_seconds: 5
+  // → 适配器 `if ... is not None` 成立 → 发出 5 秒。用户一项都没选,成片却是 5 秒。
+  //
+  // 现在这些项渲染成自由输入:**摆出来,但在用户填之前不带任何值**。
+  const onSubmit = vi.fn();
+  render(<NodeComposer
+    item={{ id: "video", kind: "video", text: "一段风景" } as BoardItem}
+    models={[{
+      id: "m", provider_profile_id: "p", profile_name: "T", label: "L",
+      adapter_available: true, capabilities_known: false,
+      provider: "relay", model: "上游昨天刚上的型号", kind: "video",
+      capabilities: { parameter_keys: ["size", "resolution", "aspect_ratio", "duration_seconds"] },
+    } as GenerationOption]}
+    busy={false} workspaceId="w" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
+  />);
+
+  // 「参数」按钮要在 —— 这些项点得开,而不是看起来像"这个模型没参数"。
+  expect(screen.getByRole("button", { name: "boardGenerationSettings" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+  const { parameters } = onSubmit.mock.calls[0][0] as { parameters: Record<string, unknown> };
+  for (const key of ["size", "resolution", "aspect_ratio", "duration_seconds"]) {
+    expect(parameters).not.toHaveProperty(key);
+  }
+});

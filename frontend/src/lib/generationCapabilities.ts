@@ -10,10 +10,21 @@
  */
 import type { GenerationOption } from "@/api/client";
 
-//: 目录没声明时的兜底。刻意保守:给一个能跑的常见值,而不是空(空会让参数区整个消失)。
-export const FALLBACK_IMAGE_SIZES = ["1024x1024"];
-export const FALLBACK_VIDEO_RESOLUTIONS = ["720p"];
-export const FALLBACK_ASPECT_RATIOS = ["16:9"];
+/**
+ * **目录没声明可选值时,这里不再替它编一个。**
+ *
+ * 这三个常量原本是"给一个能跑的常见值,而不是空"。代价是:一个参数键只要出现、而清单缺席,
+ * 界面就会摆出一个只有 1024x1024 / 720p / 16:9 的下拉,取第一项当默认并提交 —— 于是
+ * "我们知道这个模型收 size" 悄悄变成 "我们声称它是 1024x1024",而用户一项都没选过。
+ *
+ * 量过:39 份内置档案里**没有一份**声明了 size / resolution / aspect_ratio 却不给清单
+ * (只有 duration 会,而它走 min/max 区间那条路)。所以这三个兜底对已知模型是死代码,
+ * 它们只在**未知模型**上开火 —— 也就是最不该替它编值的那一种。
+ *
+ * 空清单的含义因此变成"这一项能发,但有哪些取值我们不知道",由界面渲染成一个自由输入框:
+ * 摆出来,但在用户填之前不带任何值。见 ADR 0015。
+ */
+export const UNDECLARED: string[] = [];
 
 export function capabilityList(model: GenerationOption | null, key: string, fallback: string[]): string[] {
   const value = model?.capabilities?.[key];
@@ -115,33 +126,38 @@ export function parameterChoiceEntries(model: GenerationOption | null): Array<[s
  *  而名字里带 image 会让人以为视频不该有这一栏(它此前就是这么被漏掉的)。 */
 export function sizeOptions(model: GenerationOption | null): string[] {
   if (!supportsParameter(model, "size")) return [];
-  return capabilityList(model, "sizes", model?.kind === "video" ? [] : FALLBACK_IMAGE_SIZES);
+  return capabilityList(model, "sizes", UNDECLARED);
 }
 
 export function videoResolutionOptions(model: GenerationOption | null): string[] {
   if (!supportsParameter(model, "resolution")) return [];
-  return capabilityList(model, "resolutions", FALLBACK_VIDEO_RESOLUTIONS);
+  return capabilityList(model, "resolutions", UNDECLARED);
 }
 
 export function aspectRatioOptions(model: GenerationOption | null): string[] {
   if (!supportsParameter(model, "aspect_ratio")) return [];
-  return capabilityList(model, "aspect_ratios", FALLBACK_ASPECT_RATIOS);
+  return capabilityList(model, "aspect_ratios", UNDECLARED);
 }
 
 /**
- * 时长的**可选档位**。空数组有两种含义,要分开:
+ * 时长的**可选档位**。空数组有三种含义,都不该被编成一个值:
  *
  * - 模型不支持时长 → 空(上面那行);
- * - 支持,但它是个**区间**而不是几个档 → 也是空,由 min/max 说了算(见 durationRange)。
+ * - 支持,但它是个**区间**而不是几个档 → 也是空,由 min/max 说了算(见 durationRange);
+ * - 支持,但目录里根本没有这个模型 → 还是空,由界面渲染成自由输入(见 ADR 0015)。
  *
  * 所以这里不能走 capabilityNumberList 的兜底 —— 那个兜底把空数组当成"没声明"、回落到
  * `[5]`,于是区间型的模型永远显示成一个只有 5 的下拉。Seedance 2 收 4–15 秒,而界面
  * 只给一个选项,正是这么来的。
+ *
+ * **第三种是后来才补上的。** 此前字段完全缺席时这里也回 `[5]`,那个 5 会被选中并提交 ——
+ * 用户没选过时长,成片却是 5 秒。量过:39 份内置档案里没有一份是"声明了键却完全没有这个
+ * 字段"的(区间型给的是空数组),所以这一支只在**未知模型**上开火,也就是最不该编值的那种。
  */
 export function durationOptions(model: GenerationOption | null): number[] {
   if (!supportsParameter(model, "duration_seconds")) return [];
   const value = model?.capabilities?.duration_seconds;
-  if (!Array.isArray(value)) return [5];
+  if (!Array.isArray(value)) return [];
   return value.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0);
 }
 
@@ -181,8 +197,13 @@ export function durationChoices(model: GenerationOption | null, resolution = "")
   return [...new Set([...special, ...allowed])];
 }
 
-/** 默认时长允许是 -1；通用 capabilityNumber 有意只接收正数，不适合这里。 */
-export function defaultDuration(model: GenerationOption | null, fallback = 5): number {
+/** 默认时长允许是 -1；通用 capabilityNumber 有意只接收正数，不适合这里。
+ *
+ *  **没有任何声明时回 0 = 未设置**,不再编一个 5。编出来的那个 5 会被原样提交 ——
+ *  用户没选过时长,成片却是 5 秒(见 ADR 0015 与 catalog.fallback_capabilities)。 */
+export const DURATION_UNSET = 0;
+
+export function defaultDuration(model: GenerationOption | null, fallback = DURATION_UNSET): number {
   const declared = Number(model?.capabilities?.default_duration_seconds);
   if (Number.isFinite(declared)) return declared;
   return durationChoices(model)[0] ?? fallback;

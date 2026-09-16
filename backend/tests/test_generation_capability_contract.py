@@ -112,10 +112,24 @@ class Test按描述符校验:
         _check("evolink", "vendor-new-video-model", "video", {"duration_seconds": 20})
 
     def test_同供应商未知模型的界面描述符也不伪造第一款型号的参数(self) -> None:
-        """校验放行还不够：UI 若继承 Seedance 的默认时长，提交时仍会偷偷带上 5 秒。"""
+        """校验放行还不够：UI 若继承 Seedance 的默认时长，提交时仍会偷偷带上 5 秒。
+
+        **护的是"不伪造取值",不是"什么都不给"。** 这条断言曾经写成
+        `parameter_keys == []` —— 那时候它们是一回事:界面只要拿到一个参数键、而清单缺席,
+        就会凭空造出 duration→5 并提交。那个空因此是承重的。
+
+        界面改成"不知道就空着"(自由输入,用户不填就不提交)之后,两件事分开了:**键**可以给,
+        因为请求是我们自己构造的,发哪几项是知道的;**取值**一个都不能给。所以断言从
+        "键必须为空"改成"取值必须一个都没有" —— 那才是它一直想说的话。
+        见 ADR 0015,以及 features/boards/NodeComposer.dom.test.tsx 里那条端到端用例。
+        """
         capabilities = capabilities_for("evolink", "vendor-new-video-model", "video")
-        assert capabilities == {"modes": ["text-to-video"], "parameter_keys": []}
-        assert "duration_seconds" not in capabilities
+        #: 键给得出:这条通道不按模型名分支,发哪几项是代码里写死的。
+        assert capabilities["parameter_keys"] == ["duration_seconds", "resolution", "aspect_ratio", "generate_audio"]
+        #: 取值一个都不声称 —— 默认值、可选清单、上下限,任何一项漏出去都会被界面选中并提交。
+        assert set(capabilities) == {"modes", "parameter_keys"}, (
+            f"兜底声称了取值:{sorted(set(capabilities) - {'modes', 'parameter_keys'})}"
+        )
         assert "source_roles" not in capabilities
 
     def test_参数必须由模型显式声明_不能全局放行后被静默忽略(self) -> None:
@@ -559,7 +573,9 @@ class Test用户在自己那行模型上声明生成参数:
 
         unknown = "gemini-3.1-flash-image"
         assert capabilities_are_known("openai-compatible", unknown, "image") is False
-        assert capabilities_for("openai-compatible", unknown, "image")["parameter_keys"] == []
+        #: 键有了(这条通道发得出),但"有没有人验证过取值"仍然是 False —— 这正是两种零的区别。
+        assert capabilities_for("openai-compatible", unknown, "image")["parameter_keys"]
+        assert set(capabilities_for("openai-compatible", unknown, "image")) == {"modes", "parameter_keys"}
         assert capabilities_are_known(
             "openai-compatible", unknown, "image", ref="profile:evolink-image-edit"
         ) is True

@@ -1222,20 +1222,22 @@ def adapter_parameter_surface(vendor: str, kind: str) -> tuple[str, ...]:
 def fallback_capabilities(vendor: str, kind: str) -> dict[str, Any]:
     """目录不认识这个模型时给什么。
 
-    **仍然是空的 parameter_keys,而且这个空是承重的。** ADR 0015 本想在这里放
-    `adapter_parameter_surface` —— 请求是我们自己构造的,发哪几项是知道的。真接上之后发现
-    界面那一层还有一套自己的造值逻辑:一个参数键只要出现,`generationCapabilities` 就会在
-    没有可选值时**凭空造出整张清单**并取第一项当默认 ——
-    size→["1024x1024"]、resolution→["720p"]、aspect_ratio→["16:9"]、duration→5。
+    **键来自 Adapter,取值范围一个都不声称。** 请求是我们自己构造的,发哪几项是知道的;
+    这个模型收哪些**取值**才是未知的。界面据此渲染成自由输入 —— 摆出来,但在用户填之前
+    不带任何值(见 ADR 0015 与 lib/generationCapabilities 的 UNDECLARED / DURATION_UNSET)。
 
-    于是"我们知道能发哪几项"会悄悄变成"我们声称这个模型是 720p / 16:9 / 5 秒",而用户一项
-    都没选过。`tests/test_generation_capability_contract.py` 里那条
-    `不伪造第一款型号的参数` 抓的正是这个,它护的不是旧实现,是这条真陷阱。
-
-    所以键要等界面能表达「这一项我知道你能发,但不知道有哪些取值」之后才放出来。
-    Adapter 那份面仍然有用:设置页用它告诉用户这条通道能发什么,好让他挑一个参照模型。
+    **这一步曾经放不出来。** 界面那一层原本有自己的造值逻辑:一个参数键只要出现、清单缺席,
+    就凭空造出 size→["1024x1024"]、resolution→["720p"]、aspect_ratio→["16:9"]、duration→5
+    并取第一项提交。于是"知道能发哪几项"会变成"声称这个模型是 720p / 16:9 / 5 秒",而用户
+    一项都没选过 —— 那时这里的空是**承重**的,是唯一拦住它的闸。
+    `tests/test_generation_capability_contract.py` 的 `不伪造第一款型号的参数` 抓的正是这个。
+    界面改成"不知道就空着"之后,这道闸才拆得掉。
     """
-    return dict(_FALLBACK_BY_KIND.get(kind, {}))
+    base = dict(_FALLBACK_BY_KIND.get(kind, {}))
+    surface = adapter_parameter_surface(vendor, kind)
+    if surface:
+        base["parameter_keys"] = list(surface)
+    return base
 
 
 def capabilities_are_known(

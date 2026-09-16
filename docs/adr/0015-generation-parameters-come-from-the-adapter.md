@@ -2,32 +2,35 @@
 
 ## Status
 
-Partly accepted — 2026-09-16. Decision 1 is implemented and held by tests. **Decision 2 is not:
-it is blocked, and the block is the most useful thing this ADR found.** Decisions 3, 4 and 5 wait
-on it. Amends nothing in ADR 0012 yet; ADR 0013 stands unchanged.
+Accepted — 2026-09-16. Decisions 1, 2 and 5 are implemented; 3 and 4 are not yet. Amends the
+fallback of ADR 0012 (decision 3). ADR 0013 stands unchanged.
 
-Implementing it corrected the ADR twice.
+Implementing it corrected the ADR twice, and the second correction was the expensive one.
 
-**First correction — the criterion was incomplete.** "Does the adapter branch on the model id" is
-necessary but not sufficient: Evolink branches on nothing yet forwards whatever it is given. The
-shipped criterion adds a second property — **every parameter in a declared surface is absent from
-the request until the user sets it** (or its default is what is already sent today). Both are held
-by `backend/tests/test_adapter_parameter_surface.py`, along with a list of which channels are
-declared independent, so retiring one is a deliberate edit rather than a silent loss.
+**First — the criterion was incomplete.** "Does the adapter branch on the model id" is necessary
+but not sufficient: Evolink branches on nothing yet forwards whatever it is given. The shipped
+criterion adds a second property — **every parameter in a declared surface is absent from the
+request until the user sets it** (or its default is what is already sent today). Both are held by
+`backend/tests/test_adapter_parameter_surface.py`, with a list of which channels are declared
+independent so retiring one is a deliberate edit.
 
-**Second correction — the empty fallback is load-bearing, and this ADR misread it as merely
-timid.** Wiring the surface into `capabilities_for` made an existing test fail:
-`不伪造第一款型号的参数`, whose docstring warns that a UI inheriting Seedance's default duration
-will quietly submit five seconds. That test was right. The frontend has its own fabrication layer:
-once a parameter key is present and no values are declared, `generationCapabilities` invents the
-whole list and takes the first as the default — `size` → `["1024x1024"]`, `resolution` → `["720p"]`,
-`aspect_ratio` → `["16:9"]`, `duration` → `5`. So "we know which keys we can send" silently becomes
-"we claim this model is 720p, 16:9, five seconds", with the user having chosen none of it.
+**Second — the empty fallback was load-bearing, and this ADR misread it as timid.** Wiring the
+surface in made `不伪造第一款型号的参数` fail, a test whose docstring warns that a UI inheriting
+Seedance's default duration will quietly submit five seconds. It was right. The frontend had its
+own fabrication layer: once a parameter key was present and no values were declared,
+`generationCapabilities` invented the whole list and took the first as the default — `size` →
+`["1024x1024"]`, `resolution` → `["720p"]`, `aspect_ratio` → `["16:9"]`, `duration` → `5`. So
+"we know which keys we can send" became "we claim this model is 720p, 16:9, five seconds", with the
+user having chosen none of it. The empty `parameter_keys` was the only gate holding that back.
 
-The empty `parameter_keys` was the only gate holding that back. Decision 2 therefore cannot ship
-before the UI can render a declared key with undeclared values as genuinely unset — offered, but
-carrying nothing until the user picks. That is the next piece of work, and it is a frontend change,
-not a catalogue one.
+The gate could not simply be removed; the fabrication had to go first. It now has: undeclared value
+lists stay empty, `defaultDuration` returns `DURATION_UNSET` (0) rather than 5, and a declared key
+with no declared values renders as a free-form input — offered, but carrying nothing until the user
+types. Submission skips an unset duration. Measurement said this was safe to change: of 39 built-in
+profiles none declares `size`/`resolution`/`aspect_ratio` without its list, and the 25 that declare
+`duration_seconds` without a discrete list supply a min/max range instead — so every fabricated
+fallback was dead code for known models and fired only on the unknown ones, which are exactly the
+models we have no business inventing values for.
 
 ## Context
 
@@ -105,11 +108,10 @@ exactly which seven it is prepared to send.
    Offering a size field without claiming which sizes are valid is honest; offering nothing is not,
    because it reads as "this model has no parameters".
 
-   **Blocked** (see Status). The sentence above quietly assumes the UI can offer a field without
-   claiming a value. It cannot today: an undeclared list becomes a fabricated one. Until that is
-   fixed, `fallback_capabilities` keeps returning empty keys, and the adapter surface is used only
-   to tell the user in settings what this connection is able to send — which is what helps them
-   choose a model to point at.
+   This sentence quietly assumed the UI could offer a field without claiming a value. It could not,
+   and making it able to was most of the work (see Status). The invariant that replaced "keys must
+   be empty" is **"values must be empty"**: the fallback carries `modes` and `parameter_keys` and
+   nothing else, because a default or a list leaking through would be selected and submitted.
 
 3. **Adapters whose payload depends on the model keep the conservative fallback**, and what the
    user is asked for there is the task shape — text-to-video, image-to-video, reference-to-video —

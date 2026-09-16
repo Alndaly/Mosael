@@ -1145,6 +1145,8 @@ export const messages = {
     wfGenSize: "图像尺寸",
     wfGenResolution: "分辨率",
     wfGenDuration: "时长（秒）",
+    //: 目录没给可选值时那个自由输入的占位。说清"可以填,但我们不知道有哪些"。
+    genValueUnknownPlaceholder: "取值未知 · 可自行填写",
     wfGenSeed: "随机种子",
     wfGenSeedHint: "留空则每次不同",
     wfGenNoParams: "该模型没有可调参数。",
@@ -3770,6 +3772,7 @@ export const messages = {
     wfGenSize: "Image size",
     wfGenResolution: "Resolution",
     wfGenDuration: "Duration (s)",
+    genValueUnknownPlaceholder: "Values unknown · type your own",
     wfGenSeed: "Seed",
     wfGenSeedHint: "Leave empty for a new one each run",
     wfGenNoParams: "This model exposes no adjustable parameters.",

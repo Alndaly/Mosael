@@ -19,16 +19,18 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/sourceFrames";
+import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  DURATION_UNSET,
   aspectRatioOptions,
   booleanParameterKeys,
   capabilityBoolean,
-  exclusiveSourceGroups,
   capabilityString,
   defaultDuration,
   durationChoices,
+  exclusiveSourceGroups,
   maxImages,
   parameterChoiceEntries,
   sizeOptions,
@@ -66,6 +68,8 @@ function Pick({
   label,
   icon,
   className,
+  allowFreeValue,
+  placeholder,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -75,9 +79,29 @@ function Pick({
    *  包在外面就成了两个盒子,hover 和焦点环各高亮一个,而且左右内边距对不齐。 */
   icon?: React.ReactNode;
   className?: string;
+  /**
+   * 目录**声明了这一项、但没给可选值**时怎么办。
+   *
+   * 默认是消失 —— 对"这个模型根本没有这一项"来说是对的。但还有另一种处境:这条通道发得出
+   * 这一项,只是没人验证过这个模型收哪些取值(中转上的新型号最常见)。那时候消失等于说
+   * "没有这一项",而替它编一个清单(1024x1024 / 720p / 16:9)等于替用户做了选择,还会被
+   * 原样提交 —— 两种都在说假话。
+   *
+   * 开了这个之后渲染成自由输入:**摆出来,但在用户填之前不带任何值**。见 ADR 0015。
+   */
+  allowFreeValue?: boolean;
+  placeholder?: string;
 }) {
-  if (options.length === 0) return null;
-  const control = (
+  if (options.length === 0 && !allowFreeValue) return null;
+  const control = options.length === 0 ? (
+    <Input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-label={label}
+      placeholder={placeholder}
+      className="h-8 w-full min-w-0 px-2 text-ui-xs"
+    />
+  ) : (
     /* 选项一多自动换成可搜索的那一版(阈值在 OptionPicker 里)—— 模型清单动辄十几项,
        而且名字之间只差一个数字,靠滚是这个界面上最慢的动作。 */
     <OptionPicker
@@ -160,7 +184,9 @@ export function generationSettingBlocks(
   for (const key of ["aspect_ratio", "resolution", "size"]) {
     if (supportsParameter(model, key)) blocks.push(key);
   }
-  if (supportsParameter(model, "duration_seconds") && options.durations > 0) blocks.push("duration_seconds");
+  //: 门槛是"声明了这一项",不是"有可选值"。没有可选值时它渲染成自由输入 —— 那也是一格,
+  //: 漏掉它会让「参数」按钮在只剩自由输入项时不出现,于是那些项点不开(显隐和内容共用这份清单)。
+  if (supportsParameter(model, "duration_seconds")) blocks.push("duration_seconds");
   blocks.push(...booleanParameterKeys(model).filter((key) => key !== "generate_audio"));
   blocks.push(...parameterChoiceEntries(model).map(([key]) => key));
   if (supportsParameter(model, "generate_audio")) blocks.push("generate_audio");
@@ -579,7 +605,11 @@ export function NodeComposer({
     if (supportsParameter(current, "aspect_ratio") && ratio) parameters.aspect_ratio = ratio;
     if (supportsParameter(current, "resolution") && resolution) parameters.resolution = resolution;
     if (supportsParameter(current, "size") && size) parameters.size = size;
-    if (supportsParameter(current, "duration_seconds")) parameters.duration_seconds = duration;
+    //: **0 = 未设置,不发。** 此前这里无条件发,而目录没给时长时界面会编一个 5 出来 ——
+    //: 用户没选过时长,成片却是 5 秒。见 ADR 0015 与 lib/generationCapabilities.DURATION_UNSET。
+    if (supportsParameter(current, "duration_seconds") && duration !== DURATION_UNSET) {
+      parameters.duration_seconds = duration;
+    }
     // 布尔值必须显式发送两边。只在 true 时发送会让“静音”落回供应商默认；Evolink
     // Seedance 2.5 的默认恰好是有声，于是 UI 显示静音、成片却带声音。
     if (supportsParameter(current, "generate_audio")) parameters.generate_audio = audio;
@@ -886,7 +916,14 @@ export function NodeComposer({
                   />
                 )}
                 {supportsParameter(current, "aspect_ratio") && (
-                  <Pick label={t("wfGenAspectRatio")} value={ratio} onChange={setRatio} options={aspectRatioOptions(current).map((one) => ({ value: one, label: one }))} />
+                  <Pick
+                    label={t("wfGenAspectRatio")}
+                    value={ratio}
+                    onChange={setRatio}
+                    options={aspectRatioOptions(current).map((one) => ({ value: one, label: one }))}
+                    allowFreeValue
+                    placeholder={t("genValueUnknownPlaceholder")}
+                  />
                 )}
                 {supportsParameter(current, "resolution") && (
                   <Pick
@@ -898,10 +935,31 @@ export function NodeComposer({
                       if (nextDurations.length > 0 && !nextDurations.includes(duration)) setDuration(nextDurations[0]);
                     }}
                     options={videoResolutionOptions(current).map((one) => ({ value: one, label: one }))}
+                    allowFreeValue
+                    placeholder={t("genValueUnknownPlaceholder")}
                   />
                 )}
                 {supportsParameter(current, "size") && (
-                  <Pick label={t("wfGenSize")} value={size} onChange={setSize} options={sizeOptions(current).map((one) => ({ value: one, label: one }))} />
+                  <Pick
+                    label={t("wfGenSize")}
+                    value={size}
+                    onChange={setSize}
+                    options={sizeOptions(current).map((one) => ({ value: one, label: one }))}
+                    allowFreeValue
+                    placeholder={t("genValueUnknownPlaceholder")}
+                  />
+                )}
+                {supportsParameter(current, "duration_seconds") && durations.length === 0 && (
+                  /* 声明了时长、却没有可选值也没有区间 —— 摆一个自由输入,而不是消失。
+                     值仍然是 0(未设置),用户不填就不提交。 */
+                  <Pick
+                    label={t("wfGenDuration")}
+                    value={duration > 0 ? String(duration) : ""}
+                    onChange={(next) => setDuration(Number(next) || DURATION_UNSET)}
+                    options={[]}
+                    allowFreeValue
+                    placeholder={t("genValueUnknownPlaceholder")}
+                  />
                 )}
                 {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
                   <Pick

@@ -104,17 +104,12 @@ class Test_OpenAI图片通道:
         assert payload["size"] == "1024x1024" and payload["quality"] == "high" and payload["n"] == 3
 
 
-def test_兜底暂时仍然是空的而且这个空是承重的() -> None:
-    """**这条测试记的是一个尚未拆除的路障,不是一个想要的终态。**
+def test_兜底给键但一个取值都不声称() -> None:
+    """摆出尺寸输入框却不说哪些尺寸有效,是诚实的;什么都不摆则读起来像"这个模型没有参数"。
 
-    ADR 0015 想让兜底给出 Adapter 那份面 —— 请求是我们自己构造的,发哪几项是知道的。
-    真接上之后发现界面那一层还有一套自己的造值逻辑:一个参数键只要出现,没有可选值时
-    `generationCapabilities` 会**凭空造出整张清单**并取第一项当默认 ——
-    size→["1024x1024"]、resolution→["720p"]、aspect_ratio→["16:9"]、duration→5。
-
-    于是"知道能发哪几项"会变成"声称这个模型是 720p / 16:9 / 5 秒",而用户一项都没选过。
-    所以这个空是**承重**的:它是目前唯一拦住那套造值的闸。界面能表达「这一项你能发,
-    但我不知道有哪些取值」之后,这条测试连同它护着的空一起改。
+    **取值必须一个都不给。** 漏出去一个默认值或一张清单,界面就会选中它并提交 —— 用户没选过
+    的值被发出去。这条闸曾经靠"键也为空"把着,那是承重的;界面改成"不知道就空着"之后,
+    把门的变成这一条断言。
     """
     from app.domain.generation.catalog import (
         adapter_parameter_surface,
@@ -123,9 +118,11 @@ def test_兜底暂时仍然是空的而且这个空是承重的() -> None:
     )
 
     caps = fallback_capabilities("openai-compatible", "image")
-    assert caps["parameter_keys"] == [], "界面的造值逻辑还在时,放开这里会让用户没选过的值被发出去"
-    #: 面本身是知道的 —— 设置页用它告诉用户这条通道能发什么,好让他挑一个参照模型。
-    assert adapter_parameter_surface("openai-compatible", "image")
+    assert caps["parameter_keys"] == list(adapter_parameter_surface("openai-compatible", "image"))
+    assert set(caps) == {"modes", "parameter_keys"}, (
+        f"兜底声称了取值:{sorted(set(caps) - {'modes', 'parameter_keys'})}"
+    )
+    #: 键知道了,值仍然没人验证过 —— 这两件事是分开的。
     assert capabilities_are_known("openai-compatible", "随便什么型号", "image") is False
 
 

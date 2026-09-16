@@ -288,9 +288,22 @@ describe("「参数」按钮只在真有参数时出现", () => {
     ]);
   });
 
-  it("时长这一块要**两个条件都成立** —— 声明了却没有可选值时不算", () => {
+  it("声明了时长但没有可选值时**仍然算一格** —— 它渲染成自由输入,不是消失", () => {
+    // 这条断言原本是反的:"两个条件都成立才算"。那时候没有可选值确实等于没东西可显示,
+    // 于是把它算进去会让「参数」点开是个空盒子。
+    //
+    // 现在多了第三种处境:这条通道发得出时长,只是没人验证过这个模型收哪些取值(中转上的
+    // 新型号最常见)。那一格渲染成自由输入 —— 摆出来,但在用户填之前不带任何值。所以它
+    // **是**内容,漏算会让这些项点不开。见 ADR 0015。
+    //
+    // 不变量没变,变的是"有内容"的定义:按钮出现 ⟺ 弹层里有东西。
     const model = { capabilities: { parameter_keys: ["duration_seconds"] } } as unknown as GenerationOption;
-    expect(generationSettingBlocks(model, { modes: 0, durations: 0 })).toEqual([]);
+    expect(generationSettingBlocks(model, { modes: 0, durations: 0 })).toEqual(["duration_seconds"]);
     expect(generationSettingBlocks(model, { modes: 0, durations: 5 })).toEqual(["duration_seconds"]);
+  });
+
+  it("一项参数都没声明时仍然没有按钮 —— 空盒子那条底线还在", () => {
+    const model = { capabilities: { parameter_keys: [] } } as unknown as GenerationOption;
+    expect(generationSettingBlocks(model, { modes: 0, durations: 0 })).toEqual([]);
   });
 });
