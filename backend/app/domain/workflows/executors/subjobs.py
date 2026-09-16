@@ -744,8 +744,10 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     db.expire_all()
     result = final.result or {}
     track_id = str(result.get("track_id") or "")
-    if track_id and _yes_no(config, "duck_original", default=True):
-        _duck_other_audio(db, sequence.id, track_id, actor_id=actor)
+    if track_id:
+        _handle_original_audio(db, sequence.id, track_id, str(config.get("original_audio") or "").strip().lower()
+                               or ("duck" if _yes_no(config, "duck_original", default=True) else "keep"),
+                               actor_id=actor)
     return {
         "track_id": track_id,
         "done": int(result.get("done") or 0),
@@ -762,35 +764,56 @@ def _carries_audio(track: Track) -> bool:
     return any(clip.asset_id for clip in (track.clips or []))
 
 
-def _duck_other_audio(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> None:
-    """让原有音轨在配音说话的那几段自动压低。
+def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode: str, *, actor_id: str | None) -> None:
+    """配音落轨之后,原声怎么办 —— 压低、静音,还是原样留着。
 
-    **不压低的话,成片里是两个人同时说话** —— 原声一个字没删(那是配音这套设计的前提:整条轨
-    删掉就回到原样),所以译配和原声会重叠。闪避是时间线本来就有的能力(轨道右键·闪避,渲染侧
-    见 render_plan._duck_windows),这里只是替用户按下它。
+    **「压低」不等于「听不见」。** 闪避把原声压到 30%(≈ −10.5 dB),那是给「旁白盖在环境音
+    之上」准备的档位:环境音本来就该若隐若现。而译配是**用另一种语言的说话声替换说话声** ——
+    两边都是人声,压到 30% 的结果是观众同时听见两个人在说话,只是一个小声点。真机上报回来的
+    正是这个:「视频原本的文案对应的音频还在」。
 
-    压的是**原有的**音轨,不是全部:配音轨自己必须不闪避,否则没有任何一条轨是"关键音源",
-    闪避窗口算出来是空的。同样地,已经闪避过的轨不重复记一次操作 —— 那只会在撤销栈里堆空步。
+    所以译配那条流程用 `mute`:原片整段的声音在成片里不出现。它仍然**不删任何东西** ——
+    动的是轨道上那个静音位,轨还在、片段还在,取消静音就回到原样,和闪避同样可撤销。
+    带音乐的片子想留背景音时选 `duck`。
 
-    **视频轨也要压。** 一条视频片段自带的声音和音频轨上的声音一样会被听见,而译配这条流程
+    两种模式都**只动原有的**那几条轨,不动配音轨:闪避要求配音轨自己不闪避,否则没有任何一条
+    轨是"关键音源",闪避窗口算出来是空的。
+
+    **视频轨也要算。** 一条视频片段自带的声音和音频轨上的声音一样会被听见,而译配这条流程
     恰恰把原片整段放在视频轨上(音频轨是空的)—— 只挑 kind=="audio" 的话,标记落在一条没有
     片段的空轨上,成片里原声一分贝没降。带画面的轨只在真有媒体片段时才算数:纯文字/纯占位的
     轨没有声音可压。
     """
     from app.domain.sequences.operations import SetTrackState, set_track_state
 
+    if mode == "keep":
+        return
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         return
     # 先把要改的那几条挑出来:set_track_state 会 commit,而 commit 之后 sequence.tracks
     # 上的对象全部过期 —— 边遍历边改的话,下一圈读 track.kind 会去重新查一遍库。
+    mute = mode == "mute"
     targets = [
         track.id
         for track in (sequence.tracks or [])
-        if track.id != dub_track_id and not track.duck and _carries_audio(track)
+        if track.id != dub_track_id
+        and _carries_audio(track)
+        # 已经是那个状态的不重复记一次操作 —— 那只会在撤销栈里堆空步。
+        and (not track.muted if mute else not track.duck)
     ]
     for track_id in targets:
-        set_track_state(db, sequence_id, SetTrackState(track_id=track_id, duck=True, actor_id=actor_id))
+        #: SetTrackState 是 frozen 的 —— 建好就不能再改字段,所以一次性构造。
+        set_track_state(
+            db,
+            sequence_id,
+            SetTrackState(
+                track_id=track_id,
+                muted=True if mute else None,
+                duck=None if mute else True,
+                actor_id=actor_id,
+            ),
+        )
 
 
 @register("asset")

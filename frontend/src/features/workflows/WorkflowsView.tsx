@@ -2922,11 +2922,15 @@ function NodeInspector({
     return found;
   }, [node.config, graph.nodes, scopeVariables]);
 
+  /* 「这条连接上有哪些模型 / 有哪些连接」。llm 和翻译节点问的是同一个问题 —— 翻译节点此前
+     连问都问不了:`model` 那一格根本不存在,于是 engine=ai 时用的永远是这条连接的默认对话模型。 */
+  const picksChatModel = ["llm", "translate", "translate_lines"].includes(node.type);
   // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
   const providers = useQuery({
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
-    enabled: node.type === "llm" || node.type === "ai_generate",
+    //: 翻译节点选了 AI 引擎之后也要在这里挑连接 —— 不拉列表的话那个下拉永远是空的。
+    enabled: picksChatModel || node.type === "ai_generate",
   });
   const pluginTools = useQuery({
     queryKey: ["plugin-tools"],
@@ -2948,11 +2952,11 @@ function NodeInspector({
   });
   // llm 节点的模型列表:所选供应商端点上真实可用的模型。以前这里是个纯文本框,
   // 要用户凭记忆手打模型名 —— 打错了要等到运行时才报错。
-  const llmProfileId = node.type === "llm" ? String(config.profile_id || "") : "";
+  const llmProfileId = picksChatModel ? String(config.profile_id || "") : "";
   const llmModels = useQuery({
     queryKey: ["provider-models", llmProfileId],
     queryFn: () => listProviderModels(llmProfileId),
-    enabled: node.type === "llm" && Boolean(llmProfileId),
+    enabled: picksChatModel && Boolean(llmProfileId),
     staleTime: 60_000,
   });
   const generationModels = useQuery({
@@ -3234,12 +3238,15 @@ function NodeInspector({
     key: string,
     spec?: { plugin_instances?: boolean },
   ): Array<{ value: string; label: string }> | null => {
-    if (node.type === "llm" && key === "profile_id") {
+    /* 「用哪条连接」。**不是 llm 节点专属** —— 翻译节点的 engine 选 ai 之后问的是同一个问题,
+       而它此前只拿到一个自由文本框:要用户去别处把连接 id 抄过来,配了好几条 AI 供应商的人
+       在这里一条都选不出来。判据是字段名 + 这个节点真的会用它,不是节点类型硬编码。 */
+    if (key === "profile_id" && picksChatModel) {
       return (providers.data ?? [])
         .filter(supportsAutomationChat)
         .map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
     }
-    if (node.type === "llm" && key === "model") {
+    if (picksChatModel && key === "model") {
       // 端点上真实存在的模型。allowsCustomValue 同时放行手填 —— 新模型上线往往早于目录更新,
       // 只给下拉会把人堵死在一个「列表里没有,于是填不进去」的死角。
       return (llmModels.data ?? []).map((m) => ({ value: m.id, label: m.id }));

@@ -208,17 +208,21 @@ class Test官方工作流:
             if edge.get("kind") == "data" and edge["target"] == "translated_subtitles"
         }
         assert ("verbatim_transcript", "segments", "segments") in wired
-        assert ("translate_lines", "results", "texts") in wired
+        #: 整轨一次翻完(translate_lines 节点),不是 loop_foreach 套一个 translate ——
+        #: 那是 N 次串行调用,而免费端点按 IP 封。输出名也跟着从 results 变成 texts。
+        assert ("translate_lines", "texts", "texts") in wired
         assert ("video_on_timeline", "timeline_start", "offset") in wired
-        # 逐句翻译:循环体每次只交出一句译文,而不是整个子作用域。
-        assert nodes["translate_lines"]["config"]["output"] == "{{translate_line.text}}"
+        # 逐句翻译 —— 但「逐句」说的是**切分**,不是逐个发请求:整轨一次交给批量节点,
+        # 它自己从每段里取正文、并发发出、顺序不变。此前这里是 loop_foreach 套一个 translate,
+        # 于是一轨字幕变成 N 次串行调用,而免费端点按出口 IP 封(真机上第 1/31 次就 429)。
+        assert nodes["translate_lines"]["type"] == "translate_lines"
         assert {
             (edge["source"], edge["source_output"], edge["target_input"])
             for edge in graph["edges"]
             if edge.get("kind") == "data" and edge["target"] == "translate_lines"
-        } == {("verbatim_transcript", "segments", "items")}
-        body = nodes["translate_lines"]["config"]["body"]
-        assert body["nodes"][0]["config"]["text"] == "{{loop.item.text}}"
+        } == {("verbatim_transcript", "segments", "texts")}
+        #: 官方模板不把成败押在免费端点上 —— 这条链路本来就在用用户自己的供应商。
+        assert nodes["translate_lines"]["config"]["engine"] == "ai"
 
     def test_新节点都归了类(self) -> None:
         """EXTERNAL/INTERNAL 合起来必须覆盖全部节点 —— 漏掉的那个恰恰是没人想过后果的那个。"""

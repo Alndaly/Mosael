@@ -509,35 +509,28 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
     本来就和原文不一样),于是每一句都会往后错一点,越到后面错得越多。逐句走,时间码是白拿的:
     第 i 条译文配第 i 段的时间,按构造对齐。
 
+    **但「逐句」说的是切分,不是逐个发请求。** 这一步曾经是 loop_foreach 套一个 translate ——
+    N 次串行节点调用、每次一个新连接,而免费翻译端点按 IP 限流,串起来正好踩在它的节流上
+    (真机上第 1/31 次就 429)。现在是一个 translate_lines 节点:同样按段切,但 8 路并发、
+    共用一条会重试的连接,顺序不变。
+
     **配音靠变速塞回原长度,不是靠裁剪。** 同一句话译成另一种语言,长度天然对不上;裁掉尾巴等于
     把话说一半,留空则对不上口型。变速改的是片段的 speed(渲染时 atempo),无损、可撤销、事后
     还能在检查器里逐条微调 —— 这是 `dub_subtitles` 的 match_duration。
     """
-    translate_body = {
-        "nodes": [
-            {
-                "id": "translate_line",
-                "type": "translate",
-                "name": "翻译这一句",
-                "position": {"x": 80, "y": 120},
-                "config": {
-                    # 整段逐字稿里的一段。**不能用 {{loop.item}}** —— 那是整个段落对象
-                    # (带 start/end/tokens),交给翻译引擎就是把一坨 JSON 送去翻译。
-                    "text": "{{loop.item.text}}",
-                    "target_lang": "en",
-                    "engine": "google",
-                },
-            },
-        ],
-        "edges": [],
-    }
-
     nodes: list[dict[str, Any]] = [
         {
             "id": "start",
             "type": "start",
             "name": "开始译配",
             "position": {"x": -270, "y": 260},
+            # **目标语言和音色留在它们各自的节点上,不提成起始参数。**
+            # 提上来看似更"通用",实际是把两个真控件换成一个自由文本框:`start.params` 在节点
+            # 表里是无类型的 `{"type": "object"}`,值那一列只能填字符串或引用上游输出 ——
+            # 而起始节点没有上游。留在节点上,`target_lang` 有 9 种语言的下拉、`voice_id` 命中
+            # nodePicksVoice 会拿到真正的音色选择器。
+            # 要让"运行时问我一次"成立,缺的是**起始参数能声明类型**这件事,那是引擎级的口子,
+            # 不是这条模板能绕过去的。
             "config": {"params": {}},
         },
         {
@@ -581,14 +574,19 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         },
         {
             "id": "translate_lines",
-            "type": "loop_foreach",
+            "type": "translate_lines",
             "name": "逐句翻译成目标语言",
             "position": {"x": 990, "y": 120},
             "config": {
-                "items": "{{verbatim_transcript.segments}}",
-                "body": translate_body,
-                # 每次迭代只收一句译文 —— 留空的话收的是整个子作用域,而下游要的是一列字符串。
-                "output": "{{translate_line.text}}",
+                # 直接收 segments:节点自己从每段里取 text,不需要模板层写 `{{loop.item.text}}`。
+                "texts": "{{verbatim_transcript.segments}}",
+                "target_lang": "en",
+                # **官方模板不走免费端点。** 它按出口 IP 封禁,而且是持续的 ——
+                # 真机上直接请求拿到的是 Google 的 "Sorry..." 拦截页,重试多少次都一样
+                # (机房、VPN、代理出口尤其容易中)。一条官方模板不能把成败押在这上面。
+                # 这条链路本来就在用用户自己的供应商(转写、配音都是),翻译用同一套不是新的
+                # 花费面;而且 LLM 读的是整句,译文比逐词接口好。节点上仍然可以换回 google。
+                "engine": "ai",
             },
         },
         {
@@ -599,7 +597,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
             "config": {
                 "sequence_id": "{{dub_project.sequence_id}}",
                 "segments": "{{verbatim_transcript.segments}}",
-                "texts": "{{translate_lines.results}}",
+                "texts": "{{translate_lines.texts}}",
                 # 只念译文的话就把这里改成 yes、并把下一个节点的 line 改成 last:
                 # 屏幕上两行(原文/译文),嘴里只念下面那行。
                 "keep_original": "no",
@@ -617,7 +615,9 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
                 "clip_ids": "{{translated_subtitles.clip_ids}}",
                 "match_duration": "yes",
                 "line": "all",
-                "duck_original": "yes",
+                # **译配要的是替换,不是叠加。** 闪避把原声压到 30%,而两边都是人声 ——
+                # 观众听见的是两个人同时说话,只是一个小声点(真机上报回来的正是这个)。
+                "original_audio": "mute",
                 "voice_id": voice_id,
             },
         },
@@ -648,7 +648,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
                     "source_asset_id": "{{source_video.asset_id}}",
                     "source_language": "{{verbatim_transcript.language}}",
                     "verbatim_transcript": "{{verbatim_transcript.text}}",
-                    "translated_lines": "{{translate_lines.results}}",
+                    "translated_lines": "{{translate_lines.texts}}",
                     "subtitle_track_id": "{{translated_subtitles.track_id}}",
                     "subtitle_count": "{{translated_subtitles.count}}",
                     "dub_track_id": "{{dubbing.track_id}}",

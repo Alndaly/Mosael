@@ -128,6 +128,7 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   subgraph: <Boxes size={13} />,
   notify: <Bell size={13} />,
   translate: <Languages size={13} />,
+  translate_lines: <Languages size={13} />,
   loop_foreach: <Repeat size={13} />,
   loop_while: <RefreshCw size={13} />,
   asset_query: <Filter size={13} />,

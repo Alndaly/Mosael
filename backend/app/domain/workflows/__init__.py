@@ -146,6 +146,7 @@ _FIELD_LABELS = {
     "condition": "wfField_condition",
     "description": "wfField_description",
     "duck_original": "wfField_duck_original",
+    "original_audio": "wfField_original_audio",
     "duration": "wfField_duration",
     "dy": "wfField_dy",
     "end": "wfField_end",
@@ -756,9 +757,37 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
             "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"]},
-            "profile_id": {"advanced": True, "type": "string", "description": "wfNode_translate_profile_id"},
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine"},
+            # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
+            # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id"},
         },
         "outputs": ["text"],
+    },
+    #: 整轨一次翻完。逐句循环也能得到同样的结果,但那是 N 次**串行**节点调用,每次一个
+    #: 新连接;而免费端点按 IP 限流,串起来正好踩在它的节流上。这里走 translate_many:
+    #: 8 路并发 + 共用一条连接,顺带共用重试。
+    "translate_lines": {
+        "category": "wfCat_ai",
+        "label": "wfNode_translate_lines",
+        "description": "wfNode_translate_lines_desc",
+        "config": {
+            "texts": {"type": "template", "required": True, "description": "wfNode_translate_lines_texts"},
+            "target_lang": {
+                "type": "string",
+                "required": True,
+                "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
+            },
+            "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"]},
+            # 选了 ai 之后「用哪条连接」立刻变成要紧事,所以它不在高级里。
+            # depends_on:换引擎就换了这一格的意义(google 下它没用),声明出来界面才会跟着变。
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine"},
+            # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
+            # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id"},
+        },
+        "outputs": ["texts", "count"],
+        "output_types": {"texts": "json", "count": "number"},
     },
     "generate_subtitles": {
         "category": "wfCat_asset",
@@ -799,6 +828,16 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["all", "first", "last"],
                 "description": "wfNode_dub_subtitles_line",
             },
+            # 配音落轨之后原声怎么办。**「压低」不等于「听不见」** —— 闪避是 30%(≈ −10.5 dB),
+            # 那是给"旁白盖在环境音之上"准备的;译配是用说话声替换说话声,压到 30% 的结果是
+            # 观众同时听见两个人说话,只是一个小声点。所以给得出"静音"这一档。
+            "original_audio": {
+                "type": "string",
+                "default": "duck",
+                "options": ["duck", "mute", "keep"],
+                "description": "wfNode_dub_subtitles_original_audio",
+            },
+            # 旧键,留着读:此前存下来的工作流里是 yes/no。新建的用上面那个。
             "duck_original": {
                 "advanced": True,
                 "type": "string",
@@ -1328,6 +1367,7 @@ INTERNAL_NODE_TYPES = frozenset(
         "dub_subtitles",
         "notify",
         "translate",
+        "translate_lines",
         "loop_foreach",
         "loop_while",
         "asset_query",

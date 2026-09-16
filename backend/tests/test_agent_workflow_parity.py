@@ -51,6 +51,9 @@ NODE_TO_TOOL: dict[str, str] = {
     "synthesize_speech": "generate_audio",
     "notify": "notify_workspace",
     "translate": "translate_text",
+    #: 整轨一次翻完是同一件事的批量形状 —— 画布上一条字幕轨值得一个节点,
+    #: 而智能体本来就是一句一句地调 translate_text。
+    "translate_lines": "translate_text",
     "asset_query": "list_assets",
     "note_search": "search_notes",
     "note_read": "read_note",

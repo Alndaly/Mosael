@@ -61,7 +61,7 @@ def language_label(code: str) -> str:
     return _LANG_NAMES.get(code, code)
 
 
-def resolve_ai_chat_target(db, profile_id: str | None, user_id: str | None) -> ChatTarget:
+def resolve_ai_chat_target(db, profile_id: str | None, user_id: str | None, model: str = "") -> ChatTarget:
     from app.domain import provider_credentials
     from app.domain.providers import find_enabled_connection, first_enabled_connection
 
@@ -76,16 +76,18 @@ def resolve_ai_chat_target(db, profile_id: str | None, user_id: str | None) -> C
     if resolved is None:
         raise TranslateError("translateErr_noCredential", name=profile.name)
     try:
-        return target_for(db, resolved)
+        # model 留空 = 按这条连接的 chat 能力解析(target_for 自己做)。给了就用给的那个:
+        # 一条连接上常常有好几个模型,而"用哪个模型翻译"和"用哪条连接"是两个问题。
+        return target_for(db, resolved, model=model)
     except AiChatError as exc:
         raise TranslateError(str(exc)) from exc
 
 
-def ai_translate(db, text: str, target: str, profile_id: str | None, user_id: str | None) -> str:
+def ai_translate(db, text: str, target: str, profile_id: str | None, user_id: str | None, model: str = "") -> str:
     """Translate via an enabled AI provider (LLM). Reused by the workflow node + the API."""
     if not text.strip():
         return ""
-    return ai_translate_with(resolve_ai_chat_target(db, profile_id, user_id), text, target)
+    return ai_translate_with(resolve_ai_chat_target(db, profile_id, user_id, model), text, target)
 
 
 def ai_translate_with(
@@ -115,27 +117,55 @@ def ai_translate_with(
         raise TranslateError(str(exc)) from exc
 
 
-def translate(db, text: str, target: str, *, user_id: str | None, engine: str = "google", profile_id: str | None = None) -> str:
+def translate(
+    db,
+    text: str,
+    target: str,
+    *,
+    user_id: str | None,
+    engine: str = "google",
+    profile_id: str | None = None,
+    model: str = "",
+) -> str:
     """Dispatch to the requested engine."""
     if engine == "ai":
-        return ai_translate(db, text, target, profile_id, user_id)
+        return ai_translate(db, text, target, profile_id, user_id, model)
     return google_translate(text, target)
 
 
 def google_translate(text: str, target: str, source: str = "auto", client: httpx.Client | None = None) -> str:
-    """Free Google translate. Returns the translation, or "" for empty input."""
+    """Free Google translate. Returns the translation, or "" for empty input.
+
+    **没给 client 时自己开一个会重试的。** 批量那条路(`translate_many`)一直用
+    `RetryingClient`,而逐句那条(工作流的翻译节点,一句一次调用)走的是裸 `httpx.get` ——
+    于是同一个 429,在批量里退避重试、在节点里当场失败。设置页那句「连接断开/超时/限流时
+    自动重试」管的是所有 AI 调用,这里漏了一条缝。免费端点按 IP 限流,而一条字幕轨就是
+    几十上百次调用,正好是最需要重试的地方。
+    """
     if not text.strip():
         return ""
+    own = client is None
+    http = client or ai_retry.RetryingClient(timeout=_TIMEOUT)
     try:
-        response = (client or httpx).get(
+        response = http.get(
             _GOOGLE_URL,
             params={"client": "gtx", "sl": source, "tl": target, "dt": "t", "q": text},
             timeout=_TIMEOUT,
         )
         response.raise_for_status()
         data = response.json()
+    except httpx.HTTPStatusError as exc:
+        # **不要把 exc 原样拼进去。** httpx 的这句话带着完整 URL,而 URL 里是整段被百分号
+        # 编码的原文 —— 真机上用户看到的是一屏 %E5%B7%A5%E4%BD%9C,错误本身淹在里面。
+        status = exc.response.status_code
+        if status == 429:
+            raise TranslateError("translateErr_googleRateLimited") from exc
+        raise TranslateError("translateErr_googleHttp", status=status) from exc
     except (httpx.HTTPError, ValueError) as exc:
-        raise TranslateError(f"Google 翻译失败: {exc}") from exc
+        raise TranslateError("translateErr_googleUnreachable", reason=type(exc).__name__) from exc
+    finally:
+        if own:
+            http.close()
     # data[0] = list of [translated_segment, original_segment, ...]; join the translated parts.
     segments = data[0] if isinstance(data, list) and data else []
     return "".join(seg[0] for seg in segments if isinstance(seg, list) and seg and seg[0])
@@ -149,6 +179,7 @@ def translate_many(
     user_id: str | None,
     engine: str = "google",
     profile_id: str | None = None,
+    model: str = "",
 ) -> list[str]:
     """Translate a batch, running the round-trips concurrently.
 
@@ -161,7 +192,7 @@ def translate_many(
     """
     if not texts:
         return []
-    chat_target = resolve_ai_chat_target(db, profile_id, user_id) if engine == "ai" else None
+    chat_target = resolve_ai_chat_target(db, profile_id, user_id, model) if engine == "ai" else None
     indexed = [(i, text) for i, text in enumerate(texts) if text.strip()]
     results = [""] * len(texts)
     if not indexed:

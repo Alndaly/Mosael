@@ -233,6 +233,44 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     return result
 
 
+@register("translate_lines")
+def translate_lines(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """整轨一次翻完。
+
+    **收什么都行:一列字符串,或者一列带 `text` 的段落。** 上游最常见的是逐字稿的 segments
+    (每段带 start/end/text),而把整个段落对象交给翻译引擎就是把一坨 JSON 送去翻译 ——
+    此前的逐句循环靠模板里写 `{{loop.item.text}}` 绕开这件事,那是把节点的职责推给了调用方。
+
+    逐句循环也能得到同样的结果,但那是 N 次**串行**节点调用、每次一个新连接;免费端点按 IP
+    限流,串起来正好踩在它的节流上(真机上第 1/31 次就 429)。这里走 translate_many:
+    8 路并发、共用一条会重试的连接。
+
+    **顺序即对齐**:第 i 条译文配第 i 段的时间码,所以空段落也要占住自己的位置 ——
+    translate_many 对空串返回空串,不压缩列表。
+    """
+    from app.domain.translate import translate_many
+
+    raw = config.get("texts")
+    items = raw if isinstance(raw, list) else []
+    texts = [
+        str(item.get("text", "")) if isinstance(item, dict) else str(item if item is not None else "")
+        for item in items
+    ]
+    if not texts:
+        return {"texts": [], "count": 0}
+    with workspace_scope(getattr(workflow, "workspace_id", "") or ""):
+        translated = translate_many(
+            db,
+            texts,
+            str(config.get("target_lang") or "en"),
+            user_id=current_actor(db),
+            engine=str(config.get("engine") or "google").lower(),
+            profile_id=str(config.get("profile_id") or "") or None,
+            model=str(config.get("model") or ""),
+        )
+    return {"texts": translated, "count": len(translated)}
+
+
 @register("translate")
 def translate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.translate import translate as translate_text
@@ -250,5 +288,6 @@ def translate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
             user_id=current_actor(db),
             engine=str(config.get("engine") or "google").lower(),
             profile_id=str(config.get("profile_id") or "") or None,
+            model=str(config.get("model") or ""),
         )
     return {"text": translated}

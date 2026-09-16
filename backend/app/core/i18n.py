@@ -296,6 +296,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_match_duration": {"zh": "压回原长度", "en": "Fit to original length"},
     "wfField_line": {"zh": "念哪一行", "en": "Line to speak"},
     "wfField_duck_original": {"zh": "压低原声", "en": "Duck the original"},
+    "wfField_original_audio": {"zh": "原声", "en": "Original audio"},
     "wfField_done": {"zh": "完成条数", "en": "Done"},
     "wfField_failed": {"zh": "失败条数", "en": "Failed"},
     "wfField_sent": {"zh": "已发送", "en": "Sent"},
@@ -440,7 +441,23 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_translate": {"zh": "翻译", "en": "Translate"},
     "wfNode_translate_desc": {"zh": "把文本翻译成目标语言:Google 免费接口(无需 key)或 AI 供应商。", "en": "Translate text into a target language: Google's free endpoint (no key needed) or an AI provider."},
     "wfNode_translate_engine": {"zh": "翻译引擎(默认 Google 免费)", "en": "Translation engine (Google's free one by default)"},
-    "wfNode_translate_profile_id": {"zh": "engine=ai 时的供应商配置,留空自动", "en": "The provider connection used when engine=ai; leave empty to choose automatically"},
+    "wfNode_translate_lines": {"zh": "批量翻译", "en": "Translate lines"},
+    "wfNode_translate_lines_desc": {
+        "zh": "一次翻一整轨:并发发出、共用一条连接,顺序不变(第 i 条译文对第 i 段)。逐条循环也能做到,但那是一句一次请求,免费接口很容易因此限流。",
+        "en": "Translate a whole track in one step: concurrent round-trips over one shared connection, order preserved (translation i matches segment i). A per-line loop does the same thing one request at a time, which easily trips the free endpoint's rate limit.",
+    },
+    "wfNode_translate_lines_texts": {
+        "zh": "要翻译的一列文本。也可以直接给逐字稿的段落(每段带 text),节点会自己取出正文。",
+        "en": "The list of texts to translate. A transcript's segments work too (each carrying `text`) — the node pulls the text out itself.",
+    },
+    "wfNode_translate_model": {
+        "zh": "用这条连接上的哪个模型。留空 = 按这条连接的对话能力解析。",
+        "en": "Which model on that connection to use. Empty resolves it from the connection's chat capability.",
+    },
+    "wfNode_translate_profile_id": {
+        "zh": "引擎选 AI 时用哪条连接。留空 = 用第一条可用的 —— 你有好几条时,那多半不是你想要的那条。",
+        "en": "Which connection to use when the engine is AI. Empty means the first available one \u2014 with several configured, that is rarely the one you meant.",
+    },
     "wfNode_generate_subtitles": {"zh": "生成字幕", "en": "Generate subtitles"},
     "wfNode_generate_subtitles_desc": {"zh": "把逐字稿段落批量插成时间线上的字幕条;给了译文就用译文,可选同时保留原文两行。", "en": "Turn transcript segments into subtitle cues on the timeline; uses the translated lines when given, optionally keeping the original as a second line."},
     "wfNode_generate_subtitles_sequence_id": {"zh": "字幕落到哪条时间线", "en": "The timeline the subtitles go onto"},
@@ -455,6 +472,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_dub_subtitles_clip_ids": {"zh": "要配音的字幕条,如 {{生成字幕.clip_ids}}", "en": "The subtitle cues to dub, e.g. {{generate_subtitles.clip_ids}}"},
     "wfNode_dub_subtitles_match_duration": {"zh": "把配音快进/放慢到原段落的长度,好让它对得上画面", "en": "Speed each dubbed line up or down to fill the original segment, so it stays in sync with the picture"},
     "wfNode_dub_subtitles_line": {"zh": "双语字幕念哪一行:全念 / 第一行 / 最后一行", "en": "Which line of a bilingual cue to speak: all, the first, or the last"},
+    "wfNode_dub_subtitles_original_audio": {
+        "zh": "配音之后原声怎么办:duck=在配音说话时压低到 30%(适合原声是环境音/音乐);mute=成片里不出现(译配用这个,两边都是人声,压低只会变成两个人同时说话);keep=原样留着。都不删东西,轨上那个开关随时能改回来。",
+        "en": "What happens to the original audio once the dub lands: duck lowers it to 30% while the dub speaks (right when the original is ambience or music); mute keeps it out of the export (use this for translated dubbing \u2014 both sides are speech, and ducking just gives you two people talking at once); keep leaves it alone. Nothing is deleted; the track switch can be flipped back at any time.",
+    },
     "wfNode_dub_subtitles_duck_original": {"zh": "配音说话时自动压低原有音轨,否则成片里两个人同时说话", "en": "Duck the existing audio tracks while the dub speaks — otherwise two voices talk at once in the final cut"},
     "wfNode_loop_foreach": {"zh": "循环·遍历", "en": "Loop · for each"},
     "wfNode_loop_foreach_desc": {"zh": "对一个列表逐项运行内嵌子流程,汇总每次迭代的输出为列表。子流程内用 {{loop.item}} / {{loop.index}} 读取当前元素与序号,用 {{input.名}} 读取显式传入的外层值。", "en": "Run an embedded sub-flow once per item of a list and collect each iteration's output into a list. Inside it, {{loop.item}} / {{loop.index}} read the current item and index, while {{input.name}} reads explicitly passed outer values."},
@@ -650,6 +671,20 @@ MESSAGES: dict[str, dict[str, str]] = {
     "translateErr_noCredential": {
         "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
         "en": "Provider \u300c{name}\u300d has no key of yours yet — set it in Settings first",
+    },
+    #: 免费端点按 IP 限流,而一条字幕轨就是几十上百次调用。已经退避重试过还是 429,说明这会儿
+    #: 它不打算放行 —— 所以这句话要给出**另一条路**,而不只是复述状态码。
+    "translateErr_googleRateLimited": {
+        "zh": "Google 免费翻译接口拒绝了这台机器的请求(429)。它按出口 IP 封,而且往往不是一会儿就好 —— 机房、VPN、代理出口尤其容易中。把翻译节点的引擎换成「AI 翻译」即可:它走你自己的供应商,不受这个限制。",
+        "en": "Google's free translate endpoint refused this machine (429). It blocks by egress IP and often does not clear on its own \u2014 data-centre, VPN and proxy exits are the usual cases. Switch the translate node's engine to \u300cAI\u300d: it goes through your own provider and is not subject to this limit.",
+    },
+    "translateErr_googleHttp": {
+        "zh": "Google 免费翻译接口返回 {status}。稍后再试,或者把翻译节点的引擎换成「AI 翻译」。",
+        "en": "Google's free translate endpoint returned {status}. Try again later, or switch the translate node's engine to \u300cAI\u300d.",
+    },
+    "translateErr_googleUnreachable": {
+        "zh": "连不上 Google 免费翻译接口:{reason}。它在部分网络下不可达 —— 可以配置出站代理,或者把翻译节点的引擎换成「AI 翻译」。",
+        "en": "Could not reach Google's free translate endpoint: {reason}. It is unreachable on some networks \u2014 configure an outbound proxy, or switch the translate node's engine to \u300cAI\u300d.",
     },
 }
 

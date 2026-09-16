@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "视频译配 · 字幕与配音",
   "description": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声保留在自己的轨上，只是被压低。",
-  "graph_hash": "542bce17c3d365453bad7227a8439579124f0354f45542b44a5be10ede0d7d1c",
+  "graph_hash": "962b3d06428fb408eddaeee440aafdbfba14fe34728453b273fd87395eb57be5",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -96,37 +96,19 @@
       },
       {
         "id": "translate_lines",
-        "type": "loop_foreach",
+        "type": "translate_lines",
         "name": "逐句翻译成目标语言",
         "position": {
           "x": 990,
           "y": 120
         },
         "config": {
-          "items": "",
-          "body": {
-            "nodes": [
-              {
-                "id": "translate_line",
-                "type": "translate",
-                "name": "翻译这一句",
-                "position": {
-                  "x": 80,
-                  "y": 120
-                },
-                "config": {
-                  "text": "{{loop.item.text}}",
-                  "target_lang": "en",
-                  "engine": "google"
-                }
-              }
-            ],
-            "edges": []
-          },
-          "output": "{{translate_line.text}}"
+          "texts": "",
+          "target_lang": "en",
+          "engine": "ai"
         },
         "inputs": [
-          "items"
+          "texts"
         ]
       },
       {
@@ -164,7 +146,7 @@
           "clip_ids": "",
           "match_duration": "yes",
           "line": "all",
-          "duck_original": "yes",
+          "original_audio": "mute",
           "voice_id": ""
         },
         "inputs": [
@@ -213,7 +195,7 @@
             "source_asset_id": "{{source_video.asset_id}}",
             "source_language": "{{verbatim_transcript.language}}",
             "verbatim_transcript": "{{verbatim_transcript.text}}",
-            "translated_lines": "{{translate_lines.results}}",
+            "translated_lines": "{{translate_lines.texts}}",
             "subtitle_track_id": "{{translated_subtitles.track_id}}",
             "subtitle_count": "{{translated_subtitles.count}}",
             "dub_track_id": "{{dubbing.track_id}}",
@@ -312,12 +294,12 @@
         "target_input": "asset_id"
       },
       {
-        "id": "d-verbatim_transcript-segments-translate_lines-items",
+        "id": "d-verbatim_transcript-segments-translate_lines-texts",
         "source": "verbatim_transcript",
         "target": "translate_lines",
         "kind": "data",
         "source_output": "segments",
-        "target_input": "items"
+        "target_input": "texts"
       },
       {
         "id": "d-dub_project-sequence_id-translated_subtitles-sequence_id",
@@ -336,11 +318,11 @@
         "target_input": "segments"
       },
       {
-        "id": "d-translate_lines-results-translated_subtitles-texts",
+        "id": "d-translate_lines-texts-translated_subtitles-texts",
         "source": "translate_lines",
         "target": "translated_subtitles",
         "kind": "data",
-        "source_output": "results",
+        "source_output": "texts",
         "target_input": "texts"
       },
       {

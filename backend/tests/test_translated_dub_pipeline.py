@@ -51,6 +51,13 @@ def stubs(monkeypatch):
         assert target_lang == "en", "模板的目标语言该原样传下去"
         return TRANSLATED.get(text, text)
 
+    def fake_translate_many(db, texts, target_lang, *, user_id=None, engine="", profile_id=None):
+        """整轨一次翻完那条路。**打这里而不是打 google_translate** —— 这条测试要钉的是
+        「模板把段落原样交给了批量节点、顺序不变」,不是某个引擎怎么发请求;打在引擎上
+        会让它真的去连网络(改成批量节点时就撞到了:live 端点当场 429)。"""
+        assert target_lang == "en", "模板的目标语言该原样传下去"
+        return [TRANSLATED.get(text, text) for text in texts]
+
     def fake_synthesis(db, *, text, project_id, created_by, **kwargs):
         sequence = db.scalars(select(Asset)).first()
         asset = Asset(
@@ -76,6 +83,7 @@ def stubs(monkeypatch):
 
     monkeypatch.setattr(transcription, "start_transcription", fake_transcribe)
     monkeypatch.setattr(translate_domain, "translate", fake_translate)
+    monkeypatch.setattr(translate_domain, "translate_many", fake_translate_many)
     monkeypatch.setattr(voices, "start_synthesis", fake_synthesis)
     monkeypatch.setattr(render, "start_export", fake_export)
 
@@ -140,8 +148,11 @@ def test_整条链路跑完之后时间线上该有什么(stubs) -> None:
         # 而成片里原声一分贝没降(实测最小二乘增益 0.996)。
         original = tracks[video_clips[0].track_id]
         assert original.id != dub_track.id
-        assert original.duck, "装着原声的那条轨必须被闪避,不管它是音频轨还是视频轨"
-        assert not dub_track.duck, "配音轨自己不能闪避,否则没有关键音源、窗口算出来是空的"
+        # **译配要的是替换,不是叠加。** 闪避只压到 30%(≈ −10.5 dB),而两边都是人声 ——
+        # 成片里就是两个人同时说话,只是一个小声点(真机上报回来的正是这个)。所以这条流程
+        # 把原声**静音**:不删任何东西,动的是轨上那个开关,随时能改回来。
+        assert original.muted, "装着原声的那条轨必须被静音,不管它是音频轨还是视频轨"
+        assert not dub_track.muted, "配音轨自己不能被静音 —— 那样成片里就什么都没有了"
 
     assert context["dubbing"]["done"] == 2 and context["dubbing"]["failed"] == 0
     assert context["translated_subtitles"]["count"] == 2
