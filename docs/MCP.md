@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **75** 个工具,其中 **18** 个走确认卡、**1** 个停下来等用户作答。
+共 **76** 个工具,其中 **19** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -78,6 +78,7 @@ summaries — never raw internal schemas.
 | `run_code` | 确认卡 | Confirmation required: run a short Python snippet locally and return `output`. |
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
+| `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and an |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |
 | `transcribe_asset` | 直接执行 | Runs directly: run speech-to-text on an audio/video asset; returns the job. |
 | `translate_text` | 直接执行 | Runs directly: translate text into a target language. |

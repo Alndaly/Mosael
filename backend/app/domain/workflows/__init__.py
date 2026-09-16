@@ -789,6 +789,24 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["texts", "count"],
         "output_types": {"texts": "json", "count": "number"},
     },
+    #: 人声/伴奏分离(ADR-0016)。**产出两份新素材,原素材一个字节不动。**
+    "separate_audio": {
+        "category": "wfCat_asset",
+        "label": "wfNode_separate_audio",
+        "description": "wfNode_separate_audio_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "description": "wfNode_separate_audio_asset_id"},
+            # 留空 = 用现在跑得起来的那个。点名一个引擎是给"装了好几个"的人用的,
+            # 而不是让每个模板都得知道引擎叫什么。
+            "engine": {"type": "string", "description": "wfNode_separate_audio_engine"},
+        },
+        "outputs": ["vocals_asset_id", "accompaniment_asset_id", "engine"],
+        "output_labels": {
+            "vocals_asset_id": "wfOut_vocals_asset_id",
+            "accompaniment_asset_id": "wfOut_accompaniment_asset_id",
+        },
+        "output_types": {"vocals_asset_id": "asset", "accompaniment_asset_id": "asset"},
+    },
     "generate_subtitles": {
         "category": "wfCat_asset",
         "label": "wfNode_generate_subtitles",
@@ -834,7 +852,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "original_audio": {
                 "type": "string",
                 "default": "duck",
-                "options": ["duck", "mute", "keep"],
+                "options": ["duck", "mute", "keep", "separate"],
                 "description": "wfNode_dub_subtitles_original_audio",
             },
             # 旧键,留着读:此前存下来的工作流里是 yes/no。新建的用上面那个。
@@ -1368,6 +1386,7 @@ INTERNAL_NODE_TYPES = frozenset(
         "notify",
         "translate",
         "translate_lines",
+        "separate_audio",
         "loop_foreach",
         "loop_while",
         "asset_query",

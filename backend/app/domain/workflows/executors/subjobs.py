@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 from typing import Any
 
@@ -19,6 +20,8 @@ from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import CHILD_JOB_TIMEOUT_SECONDS, id_list, truthy, wait_for_job
+
+logger = logging.getLogger(__name__)
 
 
 def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
@@ -788,6 +791,14 @@ def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mod
 
     if mode == "keep":
         return
+    if mode == "separate":
+        #: 分不成就退回整轨静音 —— **一个没装的可选引擎不该让一条本来能跑完的流程失败**
+        #: (ADR-0016 决定 4)。退回的是"原声全没",不是"原声全在":后者才会让成片里
+        #: 两个人同时说话,而那正是用户报回来的那个症状。
+        if _split_voice_from_music(db, sequence_id, dub_track_id, actor_id=actor_id):
+            return
+        logger.info("没有可用的音频分离引擎,原声整轨静音(序列 %s)", sequence_id)
+        mode = "mute"
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         return
@@ -814,6 +825,68 @@ def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mod
                 actor_id=actor_id,
             ),
         )
+
+
+def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> bool:
+    """把装着原声的那条轨换成它的**伴奏**,人声那半丢掉。成功返回 True。
+
+    这是 `original_audio: separate` 的实现。做法是替换片段指向的素材,而不是改音频本身:
+    原素材一个字节不动(分离产出的是两份新素材),所以这一步和它上面那几步一样撤得回来。
+
+    **问得到引擎才做。** 问不到就返回 False,由调用方退回整轨静音 —— 见 ADR-0016 决定 4。
+    """
+    from app.ai.providers.contracts.separation import SeparationError
+    from app.domain.separation import available, separate_asset
+
+    if not available():
+        return False
+    sequence = db.get(Sequence, sequence_id)
+    if sequence is None:
+        return False
+    swapped = False
+    for track in sequence.tracks or []:
+        if track.id == dub_track_id or not _carries_audio(track):
+            continue
+        for clip in track.clips or []:
+            if not clip.asset_id:
+                continue
+            asset = db.get(Asset, clip.asset_id)
+            if asset is None:
+                continue
+            try:
+                made = separate_asset(db, asset, engine="")
+            except SeparationError as exc:
+                logger.warning("分离失败,这一段退回静音:%s", exc)
+                return False
+            clip.asset_id = made.accompaniment.id
+            swapped = True
+    if swapped:
+        db.commit()
+    return swapped
+
+
+@register("separate_audio")
+def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """把一份素材拆成人声 + 伴奏两份新素材。
+
+    **节点不认识任何引擎** —— 它只跟 domain.separation 说话,由注册表决定这次用哪个
+    Adapter(ADR-0016)。所以加一个引擎不用改这里。
+    """
+    from app.ai.providers.contracts.separation import SeparationError
+    from app.domain.separation import separate_asset
+
+    #: **收进工作区**,不是直接 db.get —— asset_id 常常来自上游节点,少了这一条,
+    #: A 工作区的工作流能拆 B 工作区的素材,而产出的两份 stem 是要返回到工作流输出里的。
+    asset = _asset_in(db, workflow, str(config.get("asset_id") or "").strip())
+    try:
+        made = separate_asset(db, asset, engine=str(config.get("engine") or ""))
+    except SeparationError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    return {
+        "vocals_asset_id": made.vocals.id,
+        "accompaniment_asset_id": made.accompaniment.id,
+        "engine": made.engine,
+    }
 
 
 @register("asset")

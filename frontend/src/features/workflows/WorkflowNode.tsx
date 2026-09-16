@@ -113,6 +113,8 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   text_transform: <CaseSensitive size={13} />,
   delay: <Timer size={13} />,
   synthesize_speech: <AudioLines size={13} />,
+  //: 把一条音轨剪成两条 —— 剪刀比音波更能说出"分开"这件事。
+  separate_audio: <Scissors size={13} />,
   browser_open: <AppWindow size={13} />,
   browser_navigate: <Globe size={13} />,
   browser_click: <MousePointerClick size={13} />,

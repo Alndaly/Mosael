@@ -29,3 +29,8 @@ def tts_script() -> Path:
 def asr_script() -> Path:
     """语音识别 worker。同上。"""
     return _HERE / "asr.py"
+
+
+def separation_script() -> Path:
+    """人声/伴奏分离 worker。由分离引擎自己那个 venv 的解释器跑。"""
+    return _HERE / "separation.py"

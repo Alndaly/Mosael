@@ -51,7 +51,7 @@ def stubs(monkeypatch):
         assert target_lang == "en", "模板的目标语言该原样传下去"
         return TRANSLATED.get(text, text)
 
-    def fake_translate_many(db, texts, target_lang, *, user_id=None, engine="", profile_id=None):
+    def fake_translate_many(db, texts, target_lang, *, user_id=None, engine="", profile_id=None, model=""):
         """整轨一次翻完那条路。**打这里而不是打 google_translate** —— 这条测试要钉的是
         「模板把段落原样交给了批量节点、顺序不变」,不是某个引擎怎么发请求;打在引擎上
         会让它真的去连网络(改成批量节点时就撞到了:live 端点当场 429)。"""
@@ -151,7 +151,9 @@ def test_整条链路跑完之后时间线上该有什么(stubs) -> None:
         # **译配要的是替换,不是叠加。** 闪避只压到 30%(≈ −10.5 dB),而两边都是人声 ——
         # 成片里就是两个人同时说话,只是一个小声点(真机上报回来的正是这个)。所以这条流程
         # 把原声**静音**:不删任何东西,动的是轨上那个开关,随时能改回来。
-        assert original.muted, "装着原声的那条轨必须被静音,不管它是音频轨还是视频轨"
+        #: 这台测试机上没有分离引擎,所以走的是**退回**那条路:整轨静音。
+        #: 装了引擎时换成"把片段指向伴奏素材",由 test_分离可用时保住背景音乐 钉住。
+        assert original.muted, "没有分离引擎时要退回整轨静音,而不是让整条流程失败"
         assert not dub_track.muted, "配音轨自己不能被静音 —— 那样成片里就什么都没有了"
 
     assert context["dubbing"]["done"] == 2 and context["dubbing"]["failed"] == 0

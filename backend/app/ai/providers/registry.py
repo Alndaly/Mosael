@@ -19,11 +19,13 @@ from app.ai.providers.adapters.comfyui import ComfyUIGenerationAdapter
 from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapter
 from app.ai.providers.adapters.google.veo import VeoAdapter
 from app.ai.providers.adapters.kuaishou.kling.video import KlingVideoAdapter
+from app.ai.providers.adapters.local.demucs_separation import DemucsSeparationAdapter
 from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
 from app.ai.providers.adapters.minimax.video import MiniMaxVideoAdapter
 from app.ai.providers.adapters.openai.image import OpenAIImageAdapter
 from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
 from app.ai.providers.contracts.generation import GenerationAdapter
+from app.ai.providers.contracts.separation import SeparationAdapter
 from app.ai.providers.contracts.speech import SpeechSynthesisError, SpeechAdapter
 
 
@@ -99,6 +101,35 @@ def connection_vendor_for_speech_engine(engine: str) -> str:
     return _SPEECH_ENGINE_CONNECTION_VENDOR.get(engine, engine)
 
 
+def _index_separation_adapters(adapters: Iterable[SeparationAdapter]) -> dict[str, SeparationAdapter]:
+    indexed: dict[str, SeparationAdapter] = {}
+    for adapter in adapters:
+        if adapter.engine_id in indexed:
+            raise RuntimeError(f"重复的音频分离 Adapter:{adapter.engine_id}")
+        indexed[adapter.engine_id] = adapter
+    return indexed
+
+
+#: 人声/伴奏分离(ADR-0016)。**这是能力可用性的唯一答案** —— 调用方不按引擎名写 if,
+#: 加一个引擎就是加一个 Adapter 加一行注册。
+SEPARATION_ADAPTERS = _index_separation_adapters((DemucsSeparationAdapter(),))
+
+
+def get_separation_adapter(engine: str = "") -> SeparationAdapter | None:
+    """点名一个引擎;不点名就给**现在跑得起来的**第一个。
+
+    「跑不跑得起来」是问出来的,不是配置出来的:本地引擎要装依赖和拉权重,云引擎要有凭据。
+    一个都没有时返回 None —— 调用方据此退回"没有这个能力"的做法,而不是先调一次再看报错
+    (那一次可能已经花了钱或者等了十分钟)。
+    """
+    if engine:
+        return SEPARATION_ADAPTERS.get(engine)
+    for adapter in SEPARATION_ADAPTERS.values():
+        if adapter.runtime_ready():
+            return adapter
+    return None
+
+
 def has_capability_implementation(vendor_id: str, capability: str) -> bool:
     """Whether the composed runtime can execute one declared Provider capability."""
     if capability == "chat":
@@ -132,6 +163,8 @@ def build_speech_adapter(
 
 __all__ = [
     "REMOTE_SPEECH_ADAPTERS",
+    "SEPARATION_ADAPTERS",
+    "get_separation_adapter",
     "build_speech_adapter",
     "connection_vendor_for_speech_engine",
     "get_generation_adapter",

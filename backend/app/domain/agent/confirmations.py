@@ -28,6 +28,9 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "edit_timeline": {"permission": "edit", "cost": "none"},
     "render_sequence": {"permission": "render-cost", "cost": "render"},
     "convert_video_to_gif": {"permission": "render-cost", "cost": "render"},
+    # 分离跑的是本机模型:不花供应商的钱,但会占满 CPU/GPU 十几分钟,而且产出两份新素材。
+    # 按"渲染开销"那一档 —— 和它同档的都是"这台机器要忙很久"。
+    "separate_audio": {"permission": "render-cost", "cost": "render"},
     "generate_image": {"permission": "ai-cost", "cost": "ai"},
     "generate_video": {"permission": "ai-cost", "cost": "ai"},
     "generate_audio": {"permission": "ai-cost", "cost": "ai"},
@@ -280,6 +283,14 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
         sequence = db.get(Sequence, str(payload.get("sequence_id", "")))
         if sequence is None or sequence.workspace_id != workspace_id:
             raise ConfirmationError("Sequence not found in this workspace")
+    if tool == "separate_audio":
+        from app.db.models import Asset
+
+        asset = db.get(Asset, str(payload.get("asset_id") or ""))
+        if asset is None or asset.workspace_id != workspace_id:
+            raise ConfirmationError("这个工作区里没有这份素材")
+        if asset.kind not in {"audio", "video"}:
+            raise ConfirmationError("只有音频或视频素材可以分离")
     if tool == "convert_video_to_gif":
         from app.db.models import Asset
 
@@ -449,6 +460,9 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
             scope = f"整条字幕轨({subtitle_cues} 条字幕)"
         fit = ",并变速压回原段落长度" if payload.get("match_duration", True) else ""
         return f"给{scope}配音{fit}(新开一条配音轨,原声不动)"
+    if tool == "separate_audio":
+        #: 卡上说清**产出什么、原件动不动、要多久** —— 它是"这台机器忙很久"那一档。
+        return "把这份素材拆成「人声」和「伴奏」两份新素材(原素材不动;本机跑模型,长素材会很慢)"
     if tool == "convert_video_to_gif":
         duration = payload.get("duration")
         clip = f"，截取 {duration} 秒" if duration not in (None, "") else ""
@@ -604,6 +618,19 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
 
         job = start_export(db, str(payload["sequence_id"]))
         return {"job_id": job.id}
+    if confirmation.tool == "separate_audio":
+        from app.db.models import Asset
+        from app.domain.separation import separate_asset
+
+        asset = db.get(Asset, str(payload["asset_id"]))
+        if asset is None or asset.workspace_id != confirmation.workspace_id:
+            raise ValueError("素材不存在")
+        made = separate_asset(db, asset, engine=str(payload.get("engine") or ""))
+        return {
+            "vocals_asset_id": made.vocals.id,
+            "accompaniment_asset_id": made.accompaniment.id,
+            "engine": made.engine,
+        }
     if confirmation.tool == "convert_video_to_gif":
         from app.db.models import Asset
         from app.domain.assets.video_gif import start_video_to_gif

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
   "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original audio stays on its track, only ducked.",
-  "graph_hash": "962b3d06428fb408eddaeee440aafdbfba14fe34728453b273fd87395eb57be5",
+  "graph_hash": "35ce7e004b1187369a03568d1eb3922a3f5e87a4cf1ba2bea66e5584974d3913",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -146,7 +146,7 @@
           "clip_ids": "",
           "match_duration": "yes",
           "line": "all",
-          "original_audio": "mute",
+          "original_audio": "separate",
           "voice_id": ""
         },
         "inputs": [

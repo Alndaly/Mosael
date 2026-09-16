@@ -154,6 +154,7 @@ CONFIRMATION_TOOLS = frozenset(
         "edit_timeline",
         "render_sequence",
         "convert_video_to_gif",
+        "separate_audio",
         "generate_image",
         "generate_video",
         "generate_audio",
@@ -470,6 +471,30 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
             "tool": "render_sequence",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {"sequence_id": sequence_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def separate_audio(asset_id: str, engine: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: split an audio or video asset into a voice stem and an
+    accompaniment stem, as two NEW assets.
+
+    The source asset is never changed. Use it when someone wants the music without the voice,
+    the voice without the music, or — most often — to dub over a video while keeping its
+    background music: drop the voice stem, keep the accompaniment, lay the new speech on top.
+
+    Runs a model on this machine: it needs a separation engine installed, and a long asset takes
+    many minutes. Leave `engine` empty to use whichever engine is currently runnable.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "separate_audio",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "engine": engine},
         },
     )
     return _confirmation_reply(confirmation)

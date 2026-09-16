@@ -185,6 +185,9 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         "app.ai.providers.adapters.bytedance.volcano.podcast",
         # 纯二进制编解码 Module，不执行网络 I/O。
         "app.ai.providers.adapters.bytedance.volcano.podcast_protocol",
+        # 分离跑在**本机**:这个模块起的是自己那个 venv 的子进程,一次 HTTP 都不发。
+        # (权重下载发生在子进程里,由 demucs 自己做,不经过这一层。)
+        "app.ai.providers.adapters.local.demucs_separation",
     }
 
     #: **不自己建连接**的模块 —— 请求是拿调用方给的 client 发的,而那个 client 就是

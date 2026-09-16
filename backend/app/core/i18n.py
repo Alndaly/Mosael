@@ -442,6 +442,16 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_translate_desc": {"zh": "把文本翻译成目标语言:Google 免费接口(无需 key)或 AI 供应商。", "en": "Translate text into a target language: Google's free endpoint (no key needed) or an AI provider."},
     "wfNode_translate_engine": {"zh": "翻译引擎(默认 Google 免费)", "en": "Translation engine (Google's free one by default)"},
     "wfNode_translate_lines": {"zh": "批量翻译", "en": "Translate lines"},
+    "wfNode_separate_audio": {"zh": "分离人声与伴奏", "en": "Separate voice and accompaniment"},
+    "wfNode_separate_audio_desc": {
+        "zh": "把一份音频或视频拆成「人声」和「伴奏」两份**新素材**,原素材一个字节不动。译配时用它保住背景音乐:人声那条丢掉、伴奏那条留着,配音叠在上面。需要本机装好分离引擎。",
+        "en": "Split an audio or video asset into a voice stem and an accompaniment stem as two **new assets**; the original is untouched. Use it in dubbing to keep the music: drop the voice stem, keep the accompaniment, lay the dub on top. Requires a separation engine installed on this machine.",
+    },
+    "wfNode_separate_audio_asset_id": {"zh": "要分离的素材(音频或视频都行)", "en": "The asset to separate (audio or video)"},
+    "wfNode_separate_audio_engine": {"zh": "用哪个分离引擎。留空 = 用现在跑得起来的那个。", "en": "Which separation engine to use. Empty picks whichever is currently runnable."},
+    "sepEngine_demucs": {"zh": "Demucs(本机)", "en": "Demucs (local)"},
+    "wfOut_vocals_asset_id": {"zh": "人声", "en": "Voice"},
+    "wfOut_accompaniment_asset_id": {"zh": "伴奏", "en": "Accompaniment"},
     "wfNode_translate_lines_desc": {
         "zh": "一次翻一整轨:并发发出、共用一条连接,顺序不变(第 i 条译文对第 i 段)。逐条循环也能做到,但那是一句一次请求,免费接口很容易因此限流。",
         "en": "Translate a whole track in one step: concurrent round-trips over one shared connection, order preserved (translation i matches segment i). A per-line loop does the same thing one request at a time, which easily trips the free endpoint's rate limit.",
@@ -473,8 +483,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_dub_subtitles_match_duration": {"zh": "把配音快进/放慢到原段落的长度,好让它对得上画面", "en": "Speed each dubbed line up or down to fill the original segment, so it stays in sync with the picture"},
     "wfNode_dub_subtitles_line": {"zh": "双语字幕念哪一行:全念 / 第一行 / 最后一行", "en": "Which line of a bilingual cue to speak: all, the first, or the last"},
     "wfNode_dub_subtitles_original_audio": {
-        "zh": "配音之后原声怎么办:duck=在配音说话时压低到 30%(适合原声是环境音/音乐);mute=成片里不出现(译配用这个,两边都是人声,压低只会变成两个人同时说话);keep=原样留着。都不删东西,轨上那个开关随时能改回来。",
-        "en": "What happens to the original audio once the dub lands: duck lowers it to 30% while the dub speaks (right when the original is ambience or music); mute keeps it out of the export (use this for translated dubbing \u2014 both sides are speech, and ducking just gives you two people talking at once); keep leaves it alone. Nothing is deleted; the track switch can be flipped back at any time.",
+        "zh": "配音之后原声怎么办:duck=在配音说话时压低到 30%(适合原声是环境音/音乐);mute=成片里不出现(译配用这个,两边都是人声,压低只会变成两个人同时说话);keep=原样留着;separate=先把原声拆成人声和伴奏,只丢人声、留住背景音乐(需要本机装了分离引擎,没装就退回 mute)。都不删东西,轨上那个开关随时能改回来。",
+        "en": "What happens to the original audio once the dub lands: duck lowers it to 30% while the dub speaks (right when the original is ambience or music); mute keeps it out of the export (use this for translated dubbing \u2014 both sides are speech, and ducking just gives you two people talking at once); keep leaves it alone; separate splits the original into voice and accompaniment first, so only the voice goes and the music stays (needs a separation engine on this machine; falls back to mute without one). Nothing is deleted; the track switch can be flipped back at any time.",
     },
     "wfNode_dub_subtitles_duck_original": {"zh": "配音说话时自动压低原有音轨,否则成片里两个人同时说话", "en": "Duck the existing audio tracks while the dub speaks — otherwise two voices talk at once in the final cut"},
     "wfNode_loop_foreach": {"zh": "循环·遍历", "en": "Loop · for each"},

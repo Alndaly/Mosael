@@ -216,11 +216,13 @@ def test_原声三档各做各的事() -> None:
     from app.domain.workflows.templates import translated_dub_graph
 
     spec = NODE_TYPES["dub_subtitles"]["config"]["original_audio"]
-    assert spec["options"] == ["duck", "mute", "keep"], spec
+    assert spec["options"] == ["duck", "mute", "keep", "separate"], spec
     assert spec["default"] == "duck", "单独用这个节点时保持旧行为"
+    #: separate 是"先拆再丢人声" —— 它存在的理由就是 mute 会把背景音乐一起带走(ADR-0016)。
 
     nodes = {node["id"]: node for node in translated_dub_graph(voice_id="")["nodes"]}
-    assert nodes["dubbing"]["config"]["original_audio"] == "mute", "译配这条流程要的是替换"
+    #: 译配要的是替换,而整轨静音会把背景音乐一起带走 —— 所以先拆,只丢人声那半。
+    assert nodes["dubbing"]["config"]["original_audio"] == "separate"
 
 
 def test_没写新键时仍按旧的_duck_original_走() -> None:

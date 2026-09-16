@@ -1,0 +1,119 @@
+"""人声/伴奏分离引擎的本地运行时:托管 venv、权重在哪、跑不跑得起来。
+
+和 `asr_models` / `tts_models` 同一个形状,共用同一批底层件(`interpreter.base_python`、
+`pip_install.install`、`run_logged`),**但有自己的 venv**。理由是 asr_models 里那句被违反过
+一次才写下的话:
+
+    两边的依赖会打架(不同的 torch 版本),而共用一个 venv 意味着装一边可能弄坏另一边。
+
+demucs 又是一个 torch。塞进转写或克隆那个 venv,代价是把用户已经在用的引擎弄坏,而那种故障
+出现的地方离原因很远(下次转写报一句 import 错误,没有人会联想到"因为装了分离")。
+
+**这个 Module 跑在后端进程里**,只管"环境和权重";真正的分离跑在 `workers/separation.py`,
+由这个 venv 的解释器起成子进程 —— 重活出进程,接缝画在进程边界(ADR-0001)。
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from functools import lru_cache
+from pathlib import Path
+
+from app.core import interpreter, pip_install
+from app.core.child_process import run_logged
+from app.core.config import settings
+from app.core.text import blame_line
+
+logger = logging.getLogger(__name__)
+
+#: 引擎 id → 装进它自己 venv 的依赖。
+#:
+#: demucs 走 PyPI;torch 不写死版本 —— 钉死会在新 Python 上装不出来,而这一层不需要复现性,
+#: 它需要的是"能跑"。CPU 也能跑,只是慢;有 MPS/CUDA 时 demucs 自己会用。
+ENGINE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    #: demucs>=4.0.1 才有 demucs.api(worker 用的是它,不是命令行) —— 钉下限不钉上限。
+    "demucs": ("demucs>=4.0.1", "torch", "torchaudio"),
+}
+
+#: 托管的分离运行环境。和 asr / tts 的根目录分开,理由见模块说明。
+MANAGED_SEPARATION_ROOT = settings.data_dir / "separation"
+
+#: 权重落在哪。demucs 默认写 `~/.cache/torch/hub/checkpoints`,而那是**用户主目录**里的东西 ——
+#: 应用装的东西要落在应用自己的数据目录,卸载时才有一个地方可以整个删掉。
+#: 这个路径通过 TORCH_HOME 交给 worker。
+TORCH_HOME = MANAGED_SEPARATION_ROOT / "torch"
+
+#: 默认模型。htdemucs 是 demucs v4 的默认包,四分离(人声/鼓/贝斯/其它),约 300MB。
+#: 我们只要人声和"其余全部",后者由 worker 把另外三条相加 —— 见 workers/separation.py。
+DEFAULT_MODEL = "htdemucs"
+
+
+def managed_venv_dir(engine: str) -> Path:
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in engine)
+    return MANAGED_SEPARATION_ROOT / f"venv-{safe}"
+
+
+def managed_venv_python(engine: str) -> Path:
+    #: 和 asr_models._venv_python 同一个写法(Windows 下是 Scripts/python.exe)。
+    windows = os.name == "nt"
+    venv = managed_venv_dir(engine)
+    return venv / ("Scripts" if windows else "bin") / ("python.exe" if windows else "python")
+
+
+@lru_cache(maxsize=4)
+def runtime_ready(engine: str) -> bool:
+    """这个引擎现在跑得起来吗。
+
+    判据是**解释器在不在**,不是"权重下没下":权重是第一次分离时 demucs 自己拉的,而没有
+    解释器就连拉都开始不了。两件事分开问,是因为它们完全可以一真一假(见 asr_models.runtime_ready
+    那段:三行「已安装」配一句「未找到可用的转写环境」,两句话都没说谎)。
+
+    缓存住:这个函数会被"能力可用吗"问很多遍。装完调 `runtime_ready.cache_clear()`。
+    """
+    return managed_venv_python(engine).is_file()
+
+
+def ensure_runtime(engine: str) -> None:
+    """建 venv、装依赖。已经好了就什么都不做 —— 不碰用户自带的环境。"""
+    if runtime_ready(engine):
+        return
+    requirements = ENGINE_REQUIREMENTS.get(engine)
+    if not requirements:
+        raise RuntimeError(f"不认识的分离引擎:{engine}")
+
+    venv_dir = managed_venv_dir(engine)
+    venv_python = managed_venv_python(engine)
+    if not venv_python.is_file():
+        # **不能用 sys.executable**:打包版里它是应用自己,`-m venv` 会把后端再启动一遍
+        # (asr_models 里记着这笔账:然后把 uvicorn「端口已占用」当成创建失败的原因端给用户)。
+        base = interpreter.base_python()
+        if not base:
+            raise RuntimeError("找不到可用于创建运行环境的 Python 解释器")
+        venv_dir.parent.mkdir(parents=True, exist_ok=True)
+        created = run_logged(
+            [base, "-m", "venv", str(venv_dir)],
+            capture_output=True,
+            text=True,
+            timeout=600,
+            what="创建音频分离运行环境",
+        )
+        if created.returncode != 0 or not venv_python.is_file():
+            raise RuntimeError(
+                f"创建运行环境失败:{blame_line(created.stderr or created.stdout, fallback='没有留下原因')}"
+            )
+
+    # 和转写、克隆走同一个安装器,包括设置页那个 pip 镜像 —— 同一台机器上不该"一个走镜像、
+    # 一个直连 PyPI",而那个设置项写的就是「装引擎依赖时用的 pip 索引」。
+    from app.ai.runtime import config as runtime_config
+
+    try:
+        pip_install.install(
+            venv_python,
+            requirements,
+            what="安装音频分离运行依赖",
+            index_url=runtime_config.get().pip_index_url,
+        )
+    except pip_install.PipInstallError as exc:
+        raise RuntimeError(f"安装 {engine} 运行依赖失败:{exc}") from exc
+    runtime_ready.cache_clear()
