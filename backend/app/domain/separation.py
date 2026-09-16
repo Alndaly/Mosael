@@ -28,8 +28,10 @@ from app.ai.providers.contracts.separation import (
     SeparationRequest,
 )
 from app.ai.providers.registry import get_separation_adapter
-from app.db.models import Asset
+from app.core.db import SessionLocal
+from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
+from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
 
 logger = logging.getLogger(__name__)
 
@@ -115,3 +117,80 @@ def _as_audio(source: Path, work: Path) -> Path:
     target = work / "source.wav"
     _extract_audio(source, target)
     return target
+
+
+# ---------------------------------------------------------------------------
+# 当作任务跑(界面和智能体走这条)
+# ---------------------------------------------------------------------------
+def start_separation_job(db: Session, *, asset: Asset, created_by: str | None, engine: str = "") -> Job:
+    """把分离排成一个任务。
+
+    **为什么不是一次同步请求**:一段长素材在 CPU 上要跑十几分钟,而一个十几分钟不返回的 HTTP
+    请求在任何一层(浏览器、反向代理、我们自己的超时)都会先断掉,用户看到的是"失败了",
+    而后台其实还在跑。工作流那条路本身已经在任务里,所以它直接调 `separate_asset`;
+    界面和智能体这条要有自己的任务,才有进度、有取消、有失败原因可看。
+
+    占 RENDER_SLOTS:它和导出、转 GIF 一样是"这台机器要忙很久"的活,不该几个一起抢 CPU。
+    """
+    if asset.kind not in {"audio", "video"}:
+        raise SeparationError("只有音频或视频素材可以分离")
+    if not asset.file_key:
+        raise SeparationError("这份素材没有本地文件")
+    if not available(engine):
+        #: **排队之前就问**:没有引擎时排一个注定失败的任务,只是把同一句话推迟十秒说。
+        raise SeparationError("没有可用的音频分离引擎 —— 先在设置里装一个")
+
+    job = create_job(
+        db,
+        workspace_id=asset.workspace_id,
+        kind="separate_audio",
+        created_by=created_by,
+        payload={"asset_id": asset.id, "subject": asset.name, "engine": engine},
+        message="jobMsg_separateQueued",
+    )
+    db.commit()
+    dispatch_job(db, job, lambda: _run_job(job.id, asset.id, engine))
+    return job
+
+
+def _run_job(job_id: str, asset_id: str, engine: str) -> None:
+    with RENDER_SLOTS:
+        run_job_guarded(job_id, lambda: _job_body(job_id, asset_id, engine), what="人声伴奏分离")
+
+
+def _job_body(job_id: str, asset_id: str, engine: str) -> None:
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        asset = db.get(Asset, asset_id)
+        if job is None or asset is None:
+            return
+        job.status = "running"
+        job.progress = 0.1
+        say(job, "jobMsg_separateRunning")
+        emit_job_event(db, job.id, "job.running", {})
+        db.commit()
+
+        made = separate_asset(db, asset, engine=engine)
+        # 派生关系放在新素材上;原素材不改一字(和转 GIF 同款)。
+        for stem, produced in ((VOCALS, made.vocals), (ACCOMPANIMENT, made.accompaniment)):
+            produced.media_info = {
+                **(produced.media_info or {}),
+                "derived_from_asset_id": asset.id,
+                "derivation": "separate_audio",
+                "stem": stem,
+                "separation_engine": made.engine,
+            }
+        db.commit()
+
+        job.status = "succeeded"
+        job.progress = 1.0
+        job.result = {
+            "vocals_asset_id": made.vocals.id,
+            "accompaniment_asset_id": made.accompaniment.id,
+            "source_asset_id": asset.id,
+            "engine": made.engine,
+        }
+        say(job, "jobMsg_separateDone")
+        emit_job_event(db, job.id, "job.succeeded", dict(job.result))
+        db.commit()
+        logger.info("asset %s -> stems %s / %s", asset.id, made.vocals.id, made.accompaniment.id)

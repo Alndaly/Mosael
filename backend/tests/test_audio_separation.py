@@ -247,3 +247,62 @@ class Test配音流程按可用性退让:
 
         assert subjobs._split_voice_from_music(_DB(), "s1", "dub", actor_id=None) is True
         assert clip.asset_id == "acc", "片段该指向伴奏那一份"
+
+
+class Test当作任务跑:
+    def test_没有引擎时不排队__当场说清楚(self, monkeypatch) -> None:
+        """排一个注定失败的任务,只是把同一句话推迟十秒说 —— 而中间那十秒用户以为它在干活。"""
+        from app.db.models import Asset
+        from app.domain import separation
+
+        monkeypatch.setattr(separation, "available", lambda engine="": False)
+        with pytest.raises(SeparationError, match="先在设置里装"):
+            separation.start_separation_job(
+                None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None
+            )
+
+    def test_只有音频和视频能拆(self, monkeypatch) -> None:
+        from app.db.models import Asset
+        from app.domain import separation
+
+        monkeypatch.setattr(separation, "available", lambda engine="": True)
+        with pytest.raises(SeparationError, match="只有音频或视频"):
+            separation.start_separation_job(
+                None, asset=Asset(workspace_id="w", kind="image", name="x", file_key="k"), created_by=None
+            )
+
+    def test_两份产出都记着自己是从哪儿来的(self, monkeypatch, tmp_path) -> None:
+        """派生关系放在**新素材**上,原素材一个字不改(和转 GIF 同款)。
+        没有它,素材库里多出两份来历不明的音频,而"人声还是伴奏"只能靠名字猜。"""
+        from app.core.db import SessionLocal
+        from app.db.models import Asset, Job
+        from app.domain import separation
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+        source = tmp_path / "talk.wav"
+        source.write_bytes(b"RIFF....WAVE")
+        with SessionLocal() as db:
+            asset = Asset(workspace_id=workspace["id"], kind="audio", name="访谈", file_key="k")
+            job = Job(workspace_id=workspace["id"], kind="separate_audio", status="queued")
+            db.add_all([asset, job])
+            db.commit()
+            asset_id, job_id = asset.id, job.id
+
+        monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": _FakeAdapter())
+        monkeypatch.setattr(separation, "_source_path", lambda one: source)
+        separation._job_body(job_id, asset_id, "")
+
+        with SessionLocal() as db:
+            done = db.get(Job, job_id)
+            assert done.status == "succeeded"
+            stems = {
+                db.get(Asset, done.result["vocals_asset_id"]).media_info["stem"]: done.result["vocals_asset_id"],
+                db.get(Asset, done.result["accompaniment_asset_id"]).media_info["stem"]: done.result[
+                    "accompaniment_asset_id"
+                ],
+            }
+            assert set(stems) == {VOCALS, ACCOMPANIMENT}
+            for one in stems.values():
+                assert db.get(Asset, one).media_info["derived_from_asset_id"] == asset_id

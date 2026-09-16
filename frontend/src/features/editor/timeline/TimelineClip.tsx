@@ -1,5 +1,5 @@
 import React from "react";
-import { AudioLines, Copy, Scissors, Trash2, Waves } from "lucide-react";
+import { AudioLines, Copy, Mic, Scissors, Trash2, Waves } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -24,6 +24,7 @@ export function TimelineClip({
   onSplit,
   onDuplicate,
   onDetachAudio,
+  onSeparateAudio,
 }: {
   trackKind: string;
   name: string;
@@ -44,6 +45,7 @@ export function TimelineClip({
   onSplit?: () => void;
   onDuplicate?: () => void;
   onDetachAudio?: () => void;
+  onSeparateAudio?: () => void;
 }) {
   const t = useI18n();
   const className = cn(
@@ -122,6 +124,13 @@ export function TimelineClip({
         {onDetachAudio && (
           <ContextMenuItem onSelect={onDetachAudio}>
             <AudioLines /> {t("detachAudio")}
+          </ContextMenuItem>
+        )}
+        {/* 「分离音频」是把视频里的声音摘到单独一条轨(不动内容);这一条是把**声音本身**
+            拆成人声和伴奏两份新素材。名字像,做的事是两回事,所以挨着放并各自说清楚。 */}
+        {onSeparateAudio && (
+          <ContextMenuItem onSelect={onSeparateAudio}>
+            <Mic /> {t("separateClipAudio")}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />

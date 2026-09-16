@@ -137,6 +137,12 @@ export function transcribeAsset(assetId: string, language = "", engine = ""): Pr
   return api<Job>(`/api/assets/${assetId}/transcribe${query}`, { method: "POST" });
 }
 
+/** 拆成人声 + 伴奏两份**新**素材;原素材不动(ADR-0016)。排成任务:长素材要跑十几分钟。 */
+export function separateAssetAudio(assetId: string, engine = ""): Promise<Job> {
+  const query = engine ? `?engine=${encodeURIComponent(engine)}` : "";
+  return api<Job>(`/api/assets/${assetId}/separate${query}`, { method: "POST" });
+}
+
 /** Create a new GIF asset without mutating the source video. */
 export function convertVideoToGif(
   assetId: string,

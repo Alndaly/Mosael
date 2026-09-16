@@ -75,6 +75,7 @@ export function Timeline({
   onSplitClipAt,
   onDuplicateClip,
   onDetachAudio,
+  onSeparateAudio,
   onSetTrackState,
   toolbarExtra,
 }: {
@@ -99,6 +100,7 @@ export function Timeline({
   onSplitClipAt?: (clipId: string, srcTime: number) => void;
   onDuplicateClip?: (clipId: string) => void;
   onDetachAudio?: (clipId: string) => void;
+  onSeparateAudio?: (clipId: string) => void;
   onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean }) => void;
   toolbarExtra?: React.ReactNode;
 }) {
@@ -1038,6 +1040,13 @@ export function Timeline({
                       onDetachAudio={
                         onDetachAudio && track.kind === "video" && clip.asset_id
                           ? () => onDetachAudio(clip.id)
+                          : undefined
+                      }
+                      // 视频轨和音频轨都给:声音在哪都能拆,而译配那条流程恰恰把原片整段
+                      // 放在视频轨上(音频轨是空的)。
+                      onSeparateAudio={
+                        onSeparateAudio && clip.asset_id && (track.kind === "video" || track.kind === "audio")
+                          ? () => onSeparateAudio(clip.id)
                           : undefined
                       }
                     />

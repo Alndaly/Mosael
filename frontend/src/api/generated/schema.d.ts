@@ -1102,6 +1102,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/separate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Separate Asset Audio
+         * @description 拆成人声 + 伴奏两份**新**素材;原素材不动(ADR-0016)。
+         *
+         *     排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被
+         *     某一层断掉 —— 用户看到"失败了",后台其实还在跑。
+         */
+        post: operations["separate_asset_audio_api_assets__asset_id__separate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/file": {
         parameters: {
             query?: never;
@@ -13861,6 +13884,39 @@ export interface operations {
                 "application/json": components["schemas"]["VideoToGifRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    separate_asset_audio_api_assets__asset_id__separate_post: {
+        parameters: {
+            query?: {
+                engine?: string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

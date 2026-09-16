@@ -415,6 +415,23 @@ def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: DbSession, 
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/assets/{asset_id}/separate", response_model=JobOut)
+def separate_asset_audio(asset_id: str, db: DbSession, user: CurrentUser, engine: str = "") -> Job:
+    """拆成人声 + 伴奏两份**新**素材;原素材不动(ADR-0016)。
+
+    排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被
+    某一层断掉 —— 用户看到"失败了",后台其实还在跑。
+    """
+    from app.ai.providers.contracts.separation import SeparationError
+    from app.domain.separation import start_separation_job
+
+    asset = require_asset(db, user, asset_id, perm="edit")
+    try:
+        return start_separation_job(db, asset=asset, created_by=user.id, engine=engine)
+    except SeparationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/assets/{asset_id}/transcript", response_model=TranscriptOut)
 def get_transcript(asset_id: str, db: DbSession, user: CurrentUser) -> Transcript:
     require_asset(db, user, asset_id)

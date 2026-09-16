@@ -620,17 +620,15 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         return {"job_id": job.id}
     if confirmation.tool == "separate_audio":
         from app.db.models import Asset
-        from app.domain.separation import separate_asset
+        from app.domain.separation import start_separation_job
 
         asset = db.get(Asset, str(payload["asset_id"]))
         if asset is None or asset.workspace_id != confirmation.workspace_id:
             raise ValueError("素材不存在")
-        made = separate_asset(db, asset, engine=str(payload.get("engine") or ""))
-        return {
-            "vocals_asset_id": made.vocals.id,
-            "accompaniment_asset_id": made.accompaniment.id,
-            "engine": made.engine,
-        }
+        # **起任务,不在这里同步跑完** —— 批准确认卡的那个请求不该挂十几分钟
+        # (和 convert_video_to_gif 同款:返回 job_id,智能体按它问进度)。
+        job = start_separation_job(db, asset=asset, created_by=actor, engine=str(payload.get("engine") or ""))
+        return {"job_id": job.id}
     if confirmation.tool == "convert_video_to_gif":
         from app.db.models import Asset
         from app.domain.assets.video_gif import start_video_to_gif

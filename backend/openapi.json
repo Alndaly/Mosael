@@ -2965,6 +2965,59 @@
         }
       }
     },
+    "/api/assets/{asset_id}/separate": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Separate Asset Audio",
+        "description": "拆成人声 + 伴奏两份**新**素材;原素材不动(ADR-0016)。\n\n排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被\n某一层断掉 —— 用户看到\"失败了\",后台其实还在跑。",
+        "operationId": "separate_asset_audio_api_assets__asset_id__separate_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/file": {
       "get": {
         "tags": [

@@ -37,6 +37,7 @@ import {
   splitClipAtPointsBatch,
   setClipEffects,
   detachClipAudio,
+  separateAssetAudio,
   setClipGain,
   setClipSpeed,
   setClipTransform,
@@ -467,6 +468,17 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       applySequence(updated);
       toast.success(t("detachAudioDone"));
     },
+    onError: (error) => toast.error(String((error as Error).message)),
+  });
+  /* 拆成人声 + 伴奏。**排任务,不等结果** —— 一段长素材在本机跑十几分钟,而这里只是右键菜单
+     里的一下;完成后两份素材自己出现在素材库里(任务面板有进度和失败原因)。 */
+  const separateAudioMutation = useMutation({
+    mutationFn: (clipId: string) => {
+      const clip = (sequence?.tracks ?? []).flatMap((track) => track.clips ?? []).find((one) => one.id === clipId);
+      if (!clip?.asset_id) throw new Error(t("separateClipAudio"));
+      return separateAssetAudio(clip.asset_id);
+    },
+    onSuccess: () => toast.success(t("separateClipAudioQueued")),
     onError: (error) => toast.error(String((error as Error).message)),
   });
   const setEffectsMutation = useMutation({
@@ -1111,6 +1123,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}
+          onSeparateAudio={(clipId) => separateAudioMutation.mutate(clipId)}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
 
         />
