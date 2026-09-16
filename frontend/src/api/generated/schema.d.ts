@@ -6979,6 +6979,8 @@ export interface components {
             shape: string;
             /** Group */
             group: string;
+            /** Defaults For */
+            defaults_for?: string | null;
         };
         /**
          * CapabilityProfileSchemaOut
@@ -6991,6 +6993,10 @@ export interface components {
             enum_parameters: string[];
             /** Source Roles */
             source_roles: string[];
+            /** Choices Key */
+            choices_key: {
+                [key: string]: string;
+            };
             /** Fields */
             fields: components["schemas"]["CapabilityProfileFieldOut"][];
         };

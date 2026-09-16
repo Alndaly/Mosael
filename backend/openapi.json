@@ -20095,6 +20095,17 @@
           "group": {
             "type": "string",
             "title": "Group"
+          },
+          "defaults_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaults For"
           }
         },
         "type": "object",
@@ -20129,6 +20140,13 @@
             "type": "array",
             "title": "Source Roles"
           },
+          "choices_key": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Choices Key"
+          },
           "fields": {
             "items": {
               "$ref": "#/components/schemas/CapabilityProfileFieldOut"
@@ -20142,6 +20160,7 @@
           "parameters",
           "enum_parameters",
           "source_roles",
+          "choices_key",
           "fields"
         ],
         "title": "CapabilityProfileSchemaOut",

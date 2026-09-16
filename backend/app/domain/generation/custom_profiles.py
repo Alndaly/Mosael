@@ -103,6 +103,32 @@ _FIELD_GROUPS: dict[str, str] = {
 }
 
 
+#: 参数 → 装它可选值的那个描述符键。没有条目的参数,取值装在 `parameter_choices` 里按参数名
+#: 分槽(quality / background / output_format / moderation 这几个枚举参数)。
+#:
+#: **这一份也归后端。** 界面此前在 TypeScript 里抄了一份 `{size: "sizes", ...}`,而"默认值"
+#: 那一组还额外抄了一份"哪几个参数有默认值可设" —— 抄漏的后果真机上看得见:声明了
+#: quality 的可选值之后,没有任何地方可以设 default_quality,而后端一直收这个键。
+_CHOICES_KEY: dict[str, str] = {
+    "size": "sizes",
+    "resolution": "resolutions",
+    "aspect_ratio": "aspect_ratios",
+    "duration_seconds": "duration_seconds",
+}
+
+_DEFAULT_PREFIX = "default_"
+
+
+def _defaults_for(key: str) -> str | None:
+    """`default_quality` 是 `quality` 的默认值。名字本身就是这层关系,不另立一张表 ——
+    另立一张表就有第二处要跟着改,而漏改不会有任何东西报错。
+
+    这里不再额外判一次"它是不是 defaults 组":`default_` 开头**就是**归在那一组,而这条
+    由测试直接钉住(test_别的组不冒充默认值),多一道判断只是给同一条规则加第二个说法。
+    """
+    return key[len(_DEFAULT_PREFIX) :] if key.startswith(_DEFAULT_PREFIX) else None
+
+
 def _builtin_capabilities(kind: str) -> list[dict[str, Any]]:
     from app.domain.generation.catalog import BUILTIN_MODELS
 
@@ -141,8 +167,14 @@ def profile_form_schema(kind: str) -> dict[str, Any]:
         "parameters": canonical_parameters(kind),
         "enum_parameters": enum_parameters,
         "source_roles": roles,
+        "choices_key": dict(_CHOICES_KEY),
         "fields": [
-            {"key": key, "shape": shape, "group": _FIELD_GROUPS[key]}
+            {
+                "key": key,
+                "shape": shape,
+                "group": _FIELD_GROUPS[key],
+                "defaults_for": _defaults_for(key),
+            }
             for key, shape in _KNOWN_KEYS.items()
         ],
     }

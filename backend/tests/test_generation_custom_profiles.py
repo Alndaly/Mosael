@@ -104,6 +104,53 @@ class Test表单结构描述端点:
         #: 有枚举值的参数单列 —— 「参数可选值」那一组只在选了它们时才该出现。
         assert "quality" in image["enum_parameters"]
 
+    def test_每一格默认值都说得出自己是谁的(self) -> None:
+        """界面据此决定"这个旋钮要不要配一格默认值"。
+
+        此前这份知识抄在前端:一张写死的名单,上面只有 size / resolution / aspect_ratio /
+        duration 和两个开关 —— 于是用户声明完 quality 的可选值之后,没有任何地方可以设
+        default_quality,而保存校验一直收这个键。抄一份就会漏,这是漏掉的那几个。
+        """
+        from tests.util import fresh_client
+
+        body = fresh_client().get("/api/generation/capability-profile-schema?kind=image").json()
+        defaults = [field for field in body["fields"] if field["group"] == "defaults"]
+        assert defaults, "defaults 组空了"
+        for field in defaults:
+            assert field["defaults_for"], f"{field['key']} 说不出自己是谁的默认值"
+            assert field["key"] == f"default_{field['defaults_for']}"
+        #: 那几个此前被名单漏掉的,现在在册。
+        named = {field["defaults_for"] for field in defaults}
+        assert {"quality", "background", "output_format", "moderation"} <= named
+
+    def test_别的组不冒充默认值(self) -> None:
+        """defaults_for 只有 defaults 组有 —— 别的组带上它,界面会把它当成一格默认值摆出来。"""
+        from tests.util import fresh_client
+
+        body = fresh_client().get("/api/generation/capability-profile-schema").json()
+        for field in body["fields"]:
+            if field["group"] != "defaults":
+                assert field["defaults_for"] is None, field["key"]
+                #: 名字本身就是那层关系,所以反过来也得成立 —— `default_` 开头的键必须在
+                #: defaults 组里。破了这一条,那个键要么被当成默认值摆错地方,要么静默消失。
+                assert not field["key"].startswith("default_"), field["key"]
+
+    def test_可选值装在哪个键里由这里说(self) -> None:
+        """界面此前也抄了一份 {size: "sizes", …}。它和 _KNOWN_KEYS 分家的后果是静默的:
+        指向一个不存在的键,那一格可选值编辑器就永远是空的。"""
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        for kind in ("image", "video"):
+            body = client.get(f"/api/generation/capability-profile-schema?kind={kind}").json()
+            mapping = body["choices_key"]
+            assert mapping["size"] == "sizes" and mapping["duration_seconds"] == "duration_seconds"
+            for parameter, key in mapping.items():
+                assert key in _KNOWN_KEYS, f"{parameter} 指向的 {key} 不是认得的键"
+            #: 有专属清单的和走 parameter_choices 的**两个 kind 都**不能重叠 —— 同一个参数
+            #: 两个取值来源必然对不上,而 quality 只在 image 那边是枚举参数。
+            assert not (set(mapping) & set(body["enum_parameters"])), kind
+
     def test_别种kind的参数在保存时拦下(self) -> None:
         """video 专属的 duration_seconds 塞进 image 参数组,此前靠全 kind 并集漏过。"""
         with pytest.raises(CapabilityProfileError, match="duration_seconds"):

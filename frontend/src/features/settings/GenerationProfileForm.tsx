@@ -26,20 +26,6 @@ import { cn } from "@/lib/utils";
 type Schema = components["schemas"]["CapabilityProfileSchemaOut"];
 type Descriptor = Record<string, unknown>;
 
-const LIST_FOR_DEFAULT: Record<string, string> = {
-  default_size: "sizes",
-  default_resolution: "resolutions",
-  default_aspect_ratio: "aspect_ratios",
-};
-
-/** 声明可调参数 → 它的可选值清单字段。只勾了参数、清单却空着,界面照样没有旋钮。 */
-const LIST_FOR_PARAMETER: Record<string, string> = {
-  size: "sizes",
-  resolution: "resolutions",
-  aspect_ratio: "aspect_ratios",
-  duration_seconds: "duration_seconds",
-};
-
 function useSchema(kind: "image" | "video") {
   return useQuery({
     queryKey: ["capability-profile-schema", kind],
@@ -289,11 +275,24 @@ export function CapabilityProfileForm({
   const parameterLabel = (parameter: string) => t(`genParam_${parameter}` as Parameters<typeof t>[0]);
 
   const parameters = (value.parameter_keys as string[] | undefined) ?? [];
+  /* 「这个参数的可选值装在哪个键里」由后端 schema 给(choices_key),不在这里再抄一份 ——
+     抄漏的后果真机上看得见:声明了 quality 的可选值之后,没有任何地方可以设 default_quality,
+     而后端一直收这个键。见 custom_profiles._CHOICES_KEY。 */
+  const choicesKey = schema.data?.choices_key ?? {};
+  const enumParameters = schema.data?.enum_parameters ?? [];
+  /** 这个参数已经声明出来的可选值 —— 专属清单或 parameter_choices 里的那一槽。 */
+  const choicesOf = (parameter: string): Array<string | number> | null => {
+    const key = choicesKey[parameter];
+    if (key) return (value[key] as Array<string | number> | undefined) ?? [];
+    if (enumParameters.includes(parameter)) {
+      const slot = (value.parameter_choices as Record<string, unknown> | undefined)?.[parameter];
+      return Array.isArray(slot) ? (slot as Array<string | number>) : [];
+    }
+    return null;
+  };
   /* 选了哪些**真有枚举值**的参数(质量/背景/输出格式那类,由后端按 kind 给出)——
      「参数可选值」一组只在他们当中挑行名。 */
-  const enumCapableSelected = parameters.filter((parameter) =>
-    (schema.data?.enum_parameters ?? []).includes(parameter),
-  );
+  const enumCapableSelected = parameters.filter((parameter) => enumParameters.includes(parameter));
   const set = (key: string, next: unknown) => onChange({ ...value, [key]: next });
   const unset = (key: string) => {
     const next = { ...value };
@@ -307,6 +306,16 @@ export function CapabilityProfileForm({
         ? parameters.filter((one) => one !== parameter)
         : [...parameters, parameter],
     );
+
+  /* 「默认值」那一组有哪几行 —— 由 schema 推,不由名单定。
+     判据是**这个旋钮存在**(勾了)且**它有档位可选**(或者它本来就不是选档位的形状,比如开关)。
+     档位空着时不摆:一个点开是空的下拉,比没有它更糟。 */
+  const defaultRows = fields
+    .filter((field) => field.group === "defaults" && field.defaults_for)
+    .map((field) => ({ key: field.key, parameter: field.defaults_for as string }))
+    .filter(({ parameter }) => parameters.includes(parameter))
+    .map(({ key, parameter }) => ({ key, options: choicesOf(parameter) }))
+    .filter(({ options }) => options === null || options.length > 0);
 
   /* 上限与高级组:还没设值的字段进「添加字段」菜单,设了的排出来可移除。 */
   /* **「打开了这一格」和「这一格有值」是两件事。**
@@ -426,11 +435,11 @@ export function CapabilityProfileForm({
 
       {/* 可选值:跟着勾出来的参数出现。「参数可选值」只在选了真有枚举的参数时才有意义 —
           没选的时候摆一个空行编辑器,看着像坏掉的。 */}
-      {parameters.some((parameter) => LIST_FOR_PARAMETER[parameter]) || enumCapableSelected.length > 0 ? (
+      {parameters.some((parameter) => choicesKey[parameter]) || enumCapableSelected.length > 0 ? (
         <div className="grid gap-2.5 border-t border-border pt-3">
           <GroupHeader title={t("genGroup_choices")} hint={t("genGroupHint_choices")} />
           {parameters.map((parameter) => {
-            const listKey = LIST_FOR_PARAMETER[parameter];
+            const listKey = choicesKey[parameter];
             if (!listKey) return null;
             return (
               <ProfileField key={listKey} label={labelOf(listKey)}>
@@ -462,8 +471,12 @@ export function CapabilityProfileForm({
         </div>
       ) : null}
 
-      {/* 默认值:清单型给下拉(只能选清单里的,选不回来的值不存在),其余给输入。 */}
-      {Object.entries(LIST_FOR_DEFAULT).some(([, listKey]) => Array.isArray(value[listKey]) && (value[listKey] as unknown[]).length > 0) && (
+      {/* 默认值:**跟着勾出来的旋钮长**,而不是一张写死的名单。
+          此前只认 size / resolution / aspect_ratio / duration / 两个开关 —— 于是声明了
+          quality 的可选值之后,没有任何地方可以设 default_quality,而后端一直收这个键。
+          现在每一格从 schema 的 defaults 组里来,「这一格是谁的默认值」也由 schema 说
+          (defaults_for)。有档位可选的给下拉(选不回来的值不存在),其余按形状给控件。 */}
+      {defaultRows.length > 0 && (
         <div className="grid gap-2.5 border-t border-border pt-3">
           <GroupHeader title={t("genGroup_defaults")} hint={t("genGroupHint_defaults")} />
           {/* 每一项一整行:名字在左,控件靠右。
@@ -471,30 +484,20 @@ export function CapabilityProfileForm({
               左边空着一大片;只有一项时更明显,整组看起来像没排完。一行一项之后,行宽固定、
               控件右端对齐,加多少项都还是同一列。 */}
           <div className="grid gap-1">
-            {Object.entries(LIST_FOR_DEFAULT).map(([defaultKey, listKey]) => {
-              const options = (value[listKey] as string[] | undefined) ?? [];
-              if (options.length === 0) return null;
-              return (
-                <DefaultRow key={defaultKey} label={labelOf(defaultKey)}>
+            {defaultRows.map(({ key, options }) => (
+              <DefaultRow key={key} label={labelOf(key)}>
+                {options ? (
                   <OptionPicker
-                    ariaLabel={labelOf(defaultKey)}
-                    value={typeof value[defaultKey] === "string" ? (value[defaultKey] as string) : options[0]}
-                    onChange={(next) => set(defaultKey, next)}
-                    options={options.map((one) => ({ value: one, label: one }))}
+                    ariaLabel={labelOf(key)}
+                    value={value[key] !== undefined ? String(value[key]) : String(options[0])}
+                    onChange={(next) => set(key, shapeOf(key) === "int" ? Number(next) : next)}
+                    options={options.map((one) => ({ value: String(one), label: String(one) }))}
                   />
-                </DefaultRow>
-              );
-            })}
-            {parameters.includes("duration_seconds") && (
-              <DefaultRow label={labelOf("default_duration_seconds")}>{renderGeneric("default_duration_seconds")}</DefaultRow>
-            )}
-            {(["generate_audio", "prompt_extend"] as const)
-              .filter((parameter) => parameters.includes(parameter))
-              .map((parameter) => (
-                <DefaultRow key={parameter} label={labelOf(`default_${parameter}`)}>
-                  {renderGeneric(`default_${parameter}`)}
-                </DefaultRow>
-              ))}
+                ) : (
+                  renderGeneric(key)
+                )}
+              </DefaultRow>
+            ))}
           </div>
         </div>
       )}

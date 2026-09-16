@@ -29,10 +29,14 @@ const SCHEMA = {
     parameters: ["size", "num_images", "quality"],
     enum_parameters: ["quality"],
     source_roles: ["reference_image", "first_frame"],
+    //: 「这个参数的可选值装在哪个键里」由后端给 —— 界面不再自己攒这张表(见 _CHOICES_KEY)。
+    choices_key: { size: "sizes" },
     fields: [
       { key: "parameter_keys", shape: "str_list", group: "params" },
       { key: "sizes", shape: "str_list", group: "choices" },
-      { key: "default_size", shape: "str", group: "defaults" },
+      //: defaults 组的每一格都说得出自己是**谁的**默认值,界面据此决定要不要摆这一行。
+      { key: "default_size", shape: "str", group: "defaults", defaults_for: "size" },
+      { key: "default_quality", shape: "str", group: "defaults", defaults_for: "quality" },
       { key: "max_num_images", shape: "positive_int", group: "limits" },
       //: 必需素材那种形状 —— 一行是"一组素材角色",而空的一组在描述符里存不下。
       { key: "requires_source", shape: "str_list_list", group: "advanced" },
@@ -234,4 +238,43 @@ it("每一组都说得出自己和别的组差在哪", () => {
   for (const group of ["choices", "defaults", "limits", "advanced"]) {
     expect(screen.getByText(`genGroupHint_${group}`)).toBeInTheDocument();
   }
+});
+
+it("有档位的旋钮都配得上默认值 —— 不是只有尺寸那几个", async () => {
+  /* 用户问的是"有些需要设置默认值,有些不需要?"。当时的答案是"界面自己攒了一张名单",
+     名单上只有 size / resolution / aspect_ratio / duration 和两个开关 —— 于是给 quality
+     声明完可选值之后,没有任何地方可以设 default_quality,而后端一直收这个键。
+     现在这一组跟着勾出来的旋钮长,"这一格是谁的默认值"由 schema 说(defaults_for)。 */
+  open_dialog();
+  describe_endpoint();
+  fireEvent.click(screen.getByRole("button", { name: "genParam_quality" }));
+  //: 还没声明取值时不摆 —— 一个点开是空的下拉,比没有它更糟。
+  expect(screen.queryByText("genField_default_quality")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByText("genFormAddRow"));
+  fireEvent.click(screen.getAllByRole("combobox", { name: "genField_parameter_choices" })[0]);
+  fireEvent.click(await screen.findByRole("option", { name: "quality" }));
+  const chips = screen.getByLabelText("genField_parameter_choices quality");
+  fireEvent.change(chips, { target: { value: "hd" } });
+  fireEvent.keyDown(chips, { key: "Enter" });
+
+  //: 有档位了,这一格就该出现,而且只能从声明过的那几档里选。
+  expect(screen.getByText("genField_default_quality")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("combobox", { name: "genField_default_quality" }));
+  expect(await screen.findByRole("option", { name: "hd" })).toBeInTheDocument();
+});
+
+it("旋钮取消勾选之后,它那一格默认值跟着消失", () => {
+  /* 档位清单还留着(用户可能只是手滑),但"这个旋钮一开始停在哪一档"已经无从谈起 ——
+     一个不存在的旋钮的默认值,保存下去就是描述符里一条永远不会被读到的声明。 */
+  open_dialog();
+  describe_endpoint();
+  fireEvent.click(screen.getByRole("button", { name: "genParam_size" }));
+  const sizes = screen.getByLabelText("genField_sizes", { selector: "input" });
+  fireEvent.change(sizes, { target: { value: "1024x1024" } });
+  fireEvent.keyDown(sizes, { key: "Enter" });
+  expect(screen.getByText("genField_default_size")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "genParam_size" }));
+  expect(screen.queryByText("genField_default_size")).not.toBeInTheDocument();
 });
