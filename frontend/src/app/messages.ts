@@ -554,10 +554,14 @@ export const messages = {
     /* 「目录」是我们内部的说法 —— 读者在这一格里要回答的是"参数按什么来",而"跟随目录"
        既没说会发生什么,也没说"目录"是什么。说清动作:按模型名去查内置那张表。 */
     modelGenerationRefFollow: "自动识别",
-    modelGenerationRefFollowHint: "按模型名在内置的那张表里查。查不到时下面会说明。",
+    /* 别提"那张表"—— 读者在界面上看不到它,一个指不过去的名词只会多一个疑问。
+       说它做什么:按模型名去认。认不出来的处境由下面那句黄字当场说清。 */
+    modelGenerationRefFollowHint: "按模型名自动识别它支持哪些参数。认不出来时下面会说明。",
     //: 写"这个端点"而不是"参数组" —— 用户想的是他那条连接,不是我们的概念。
     modelGenerationRefDescribe: "自己描述这个端点…",
-    modelGenerationRefDescribeHint: "内置的表只装我们查证过的模型。你那条连接接受什么,只有你知道",
+    /* 同一句话当标题时不带省略号:省略号是**链接**的记号("点了会展开点什么"),
+       而标题就是已经展开的那个东西 —— 挂在那儿等于一直在预告一件已经发生的事。 */
+    modelGenerationRefDescribeTitle: "描述这个端点",
     modelGenerationRefEditThis: "编辑这一份",
     modelGenerationRefProfile: "参数组 · {name}",
     modelGenerationRefNoParams: "没有可调参数",
@@ -3185,9 +3189,9 @@ export const messages = {
 
     editAction: "Edit",
     modelGenerationRefFollow: "Detect automatically",
-    modelGenerationRefFollowHint: "Look the model name up in the built-in table. If it is not there, you will be told below.",
+    modelGenerationRefFollowHint: "Work out which parameters it supports from the model name. You will be told below when it cannot.",
     modelGenerationRefDescribe: "Describe this endpoint…",
-    modelGenerationRefDescribeHint: "The built-in table only holds models we verified. What your connection accepts, only you know",
+    modelGenerationRefDescribeTitle: "Describe this endpoint",
     modelGenerationRefEditThis: "Edit this one",
     modelGenerationRefProfile: "Parameter set · {name}",
     modelGenerationRefNoParams: "No adjustable parameters",

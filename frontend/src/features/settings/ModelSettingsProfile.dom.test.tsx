@@ -161,3 +161,34 @@ it("删除被占用的参数组时,后端那句 409 原样显示在表单里", a
     PROFILES.data = [];
   }
 });
+
+it("「加一行」真的加得出一行 —— 还没起名的那一行也得留得住", async () => {
+  /* 真机上点它什么都不发生:行列表是从描述符**推导**出来的(Object.entries(value[key])),
+     而刚加的那一行还没有名字,提交时被 name.trim() 过滤掉 —— 描述符没变,重渲染推导出的
+     还是原来那几行。不是按钮没绑事件,是草稿放在了一个存不下草稿的地方。 */
+  open_dialog();
+  describe_endpoint();
+  //: parameter_choices 那一格只在勾了"真有枚举值"的参数之后才出现(这份 schema 里是 quality)。
+  fireEvent.click(screen.getByRole("button", { name: "genParam_quality" }));
+  /* 名字那一列按 `input[list]` 找:同一个 aria-label 还挂在这一行的碎屑编辑器上
+     (它的标签是 `${名字列} ${行名}`,行名为空时归一化后和名字列一模一样)。 */
+  const nameCell = () => screen.queryAllByLabelText("genField_parameter_choices").filter((one) => one.hasAttribute("list"));
+  expect(nameCell()).toHaveLength(0);
+
+  fireEvent.click(screen.getByText("genFormAddRow"));
+  expect(nameCell()).toHaveLength(1);
+  const row = nameCell()[0];
+
+  //: 起了名字才算数 —— 而"算数"的判据是它**真的进了描述符**,不是界面上还画着。
+  apiMock.mockResolvedValue({ id: "x", ref: "profile:x" });
+  fireEvent.change(row, { target: { value: "quality" } });
+  const chips = screen.getByLabelText("genField_parameter_choices quality");
+  fireEvent.change(chips, { target: { value: "hd" } });
+  fireEvent.keyDown(chips, { key: "Enter" });
+
+  fireEvent.change(screen.getByLabelText(/generationProfilesName/), { target: { value: "x" } });
+  fireEvent.click(screen.getByText("save"));
+  await waitFor(() => expect(apiMock).toHaveBeenCalled());
+  const body = JSON.parse((apiMock.mock.calls[0] as [string, { body: string }])[1].body);
+  expect(body.capabilities.parameter_choices).toEqual({ quality: ["hd"] });
+});

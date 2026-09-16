@@ -609,7 +609,7 @@ function ProfileBody({
           >
             <ChevronLeft size={15} />
           </button>
-          <span className="truncate">{rowId ? t("modelGenerationRefEditThis") : t("modelGenerationRefDescribe")}</span>
+          <span className="truncate">{rowId ? t("modelGenerationRefEditThis") : t("modelGenerationRefDescribeTitle")}</span>
           <span className="rounded bg-secondary px-1 py-px text-ui-2xs font-normal text-muted-foreground">{kind}</span>
         </span>
       }
@@ -645,7 +645,7 @@ function ProfileBody({
             value={name}
             aria-label={t("generationProfilesName")}
             onChange={(event) => setName(event.target.value)}
-            className="h-8 bg-panel text-ui-sm"
+            className="bg-panel"
           />
         </ProfileField>
         <CapabilityProfileForm kind={kind} value={descriptor} onChange={setDescriptor} />

@@ -73,7 +73,9 @@ function Chips({
     setText("");
   };
   return (
-    <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-panel px-2 py-1.5">
+    /* 和 Input 同高(min-h-10):它在版面上就是一格输入框,只是里面装的是碎屑。
+       内容多到换行时再往下长 —— 所以是 min-h 不是 h。 */
+    <div className="flex min-h-10 flex-wrap items-center gap-1 rounded-md border border-field-border bg-panel px-2 py-1.5">
       {values.map((value) => (
         <span key={String(value)} className="flex items-center gap-0.5 rounded bg-secondary px-1.5 py-px text-ui-xs text-foreground">
           {String(value)}
@@ -121,11 +123,33 @@ function MapRows({
   addLabel: string;
   ariaLabel: string;
 }) {
+  /* **正在编辑的行留在本地。**
+     上层把行列表从描述符里**推导**出来(`Object.entries(value[key])`),而刚加的那一行还没有
+     名字 —— 提交时被 `name.trim()` 过滤掉,描述符没变,重渲染推导出的还是原来那几行:点「加一行」
+     什么都不发生。这不是按钮没绑事件,是草稿在一个存不下草稿的地方。
+     所以这里自己拿着行,只把**有名字的**推上去;上层换了一份数据(载入已有的那份、切 kind)时
+     再按它重新落一次 —— 判据是"上层那份和我上次推上去的不一样",否则会和用户正在打的字打架。 */
+  const [rows, setRows] = React.useState<Array<[string, unknown]>>(entries);
+  const pushed = React.useRef(JSON.stringify(entries));
+  React.useEffect(() => {
+    const incoming = JSON.stringify(entries);
+    if (incoming !== pushed.current) {
+      pushed.current = incoming;
+      setRows(entries);
+    }
+  }, [entries]);
+
+  const commit = (next: Array<[string, unknown]>) => {
+    setRows(next);
+    const named = next.filter(([name]) => name.trim());
+    pushed.current = JSON.stringify(named);
+    onChange(named);
+  };
   const setEntry = (index: number, entry: [string, unknown]) =>
-    onChange(entries.map((one, i) => (i === index ? entry : one)));
+    commit(rows.map((one, i) => (i === index ? entry : one)));
   return (
     <div className="grid gap-1.5">
-      {entries.map(([name, value], index) => (
+      {rows.map(([name, value], index) => (
         <div key={index} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1.5">
           <div className="grid gap-1">
             <input
@@ -134,7 +158,7 @@ function MapRows({
               aria-label={ariaLabel}
               placeholder={ariaLabel}
               onChange={(event) => setEntry(index, [event.target.value, value])}
-              className="h-7 w-full rounded-md border border-border bg-panel px-2 text-ui-xs text-foreground outline-none focus:border-primary"
+              className="h-8 w-full rounded-md border border-field-border bg-panel px-2 text-ui-xs text-foreground outline-none focus:border-primary"
             />
             {valueKind === "number" ? (
               <Input
@@ -143,7 +167,7 @@ function MapRows({
                 value={typeof value === "number" ? value : ""}
                 aria-label={`${ariaLabel} ${name}`}
                 onChange={(event) => setEntry(index, [name, Number(event.target.value) || 0])}
-                className="h-7 bg-panel text-ui-xs"
+                className="h-8 bg-panel text-ui-xs"
               />
             ) : (
               <Chips
@@ -154,7 +178,14 @@ function MapRows({
               />
             )}
           </div>
-          <Button variant="ghost" size="icon-xs" aria-label={`${ariaLabel} ×`} onClick={() => onChange(entries.filter((_, i) => i !== index))}>
+          {/* 和字段那一层同一个长相:圆框。两处不一样的话,同一屏上就有两种"删掉这一行"。 */}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="rounded-full border border-border hover:border-border-strong"
+            aria-label={`${ariaLabel} ×`}
+            onClick={() => commit(rows.filter((_, i) => i !== index))}
+          >
             <X size={12} />
           </Button>
         </div>
@@ -164,7 +195,7 @@ function MapRows({
           <option key={one} value={one} />
         ))}
       </datalist>
-      <Button variant="ghost" size="sm" className="justify-self-start text-muted-foreground" onClick={() => onChange([...entries, ["", valueKind === "number" ? 1 : []]])}>
+      <Button variant="ghost" size="sm" className="justify-self-start text-muted-foreground" onClick={() => commit([...rows, ["", valueKind === "number" ? 1 : []]])}>
         <Plus size={12} /> {addLabel}
       </Button>
     </div>
@@ -178,12 +209,35 @@ export function ProfileField({ label, children, onRemove }: { label: string; chi
       <span className="flex items-center justify-between text-ui-xs font-medium text-muted-foreground">
         {label}
         {onRemove && (
-          <button type="button" aria-label={`${label} ×`} className="cursor-pointer text-faint hover:text-foreground" onClick={onRemove}>
+          <button
+            type="button"
+            aria-label={`${label} ×`}
+            /* 包一个圆框:光秃秃一个叉在一行文字右端,既看不出是可点的,也没有可点的边界。 */
+            className="grid size-5 shrink-0 cursor-pointer place-items-center rounded-full border border-border text-faint transition-colors hover:border-border-strong hover:bg-secondary hover:text-foreground"
+            onClick={onRemove}
+          >
             <X size={11} />
           </button>
         )}
       </span>
       {children}
+    </div>
+  );
+}
+
+/**
+ * 默认值那一组里的一行:名字在左,控件靠右。
+ *
+ * 控件给一个固定宽度而不是撑满:这一组里的取值都很短(一档尺寸、一个秒数、一个开关),撑满
+ * 之后一个「是/否」会横跨整屏,读者要把视线从最左扫到最右才知道它是开还是关。
+ */
+function DefaultRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-10 items-center justify-between gap-3 border-b border-border/60 py-1 last:border-b-0">
+      <span className="min-w-0 flex-1 truncate text-ui-sm text-foreground">{label}</span>
+      {/* 不强行拉宽里面的东西:输入框和下拉本来就是 w-full,而开关是固定的 36px ——
+          统一拉满会把一个「是/否」抻成 220px 的大条。justify-end 把它推到右端就够了。 */}
+      <div className="flex w-[min(220px,50%)] shrink-0 justify-end">{children}</div>
     </div>
   );
 }
@@ -264,7 +318,7 @@ export function CapabilityProfileForm({
           value={typeof current === "number" ? current : ""}
           aria-label={labelOf(key)}
           onChange={(event) => set(key, Number(event.target.value) || undefined)}
-          className="h-8 bg-panel text-ui-sm"
+          className="bg-panel"
         />
       );
     }
@@ -277,7 +331,7 @@ export function CapabilityProfileForm({
           value={typeof current === "string" ? current : ""}
           aria-label={labelOf(key)}
           onChange={(event) => set(key, event.target.value)}
-          className="h-8 bg-panel text-ui-sm"
+          className="bg-panel"
         />
       );
     }
@@ -379,30 +433,34 @@ export function CapabilityProfileForm({
       {Object.entries(LIST_FOR_DEFAULT).some(([, listKey]) => Array.isArray(value[listKey]) && (value[listKey] as unknown[]).length > 0) && (
         <div className="grid gap-2.5 border-t border-border pt-3">
           <GroupHeader title={t("genGroup_defaults")} />
-          <div className="grid grid-cols-2 gap-2">
+          {/* 每一项一整行:名字在左,控件靠右。
+              此前是两列格子,而这一组里控件宽窄差得极远(一个下拉、一个开关)—— 开关独占半格,
+              左边空着一大片;只有一项时更明显,整组看起来像没排完。一行一项之后,行宽固定、
+              控件右端对齐,加多少项都还是同一列。 */}
+          <div className="grid gap-1">
             {Object.entries(LIST_FOR_DEFAULT).map(([defaultKey, listKey]) => {
               const options = (value[listKey] as string[] | undefined) ?? [];
               if (options.length === 0) return null;
               return (
-                <ProfileField key={defaultKey} label={labelOf(defaultKey)}>
+                <DefaultRow key={defaultKey} label={labelOf(defaultKey)}>
                   <OptionPicker
                     ariaLabel={labelOf(defaultKey)}
                     value={typeof value[defaultKey] === "string" ? (value[defaultKey] as string) : options[0]}
                     onChange={(next) => set(defaultKey, next)}
                     options={options.map((one) => ({ value: one, label: one }))}
                   />
-                </ProfileField>
+                </DefaultRow>
               );
             })}
             {parameters.includes("duration_seconds") && (
-              <ProfileField label={labelOf("default_duration_seconds")}>{renderGeneric("default_duration_seconds")}</ProfileField>
+              <DefaultRow label={labelOf("default_duration_seconds")}>{renderGeneric("default_duration_seconds")}</DefaultRow>
             )}
             {(["generate_audio", "prompt_extend"] as const)
               .filter((parameter) => parameters.includes(parameter))
               .map((parameter) => (
-                <ProfileField key={parameter} label={labelOf(`default_${parameter}`)}>
+                <DefaultRow key={parameter} label={labelOf(`default_${parameter}`)}>
                   {renderGeneric(`default_${parameter}`)}
-                </ProfileField>
+                </DefaultRow>
               ))}
           </div>
         </div>
