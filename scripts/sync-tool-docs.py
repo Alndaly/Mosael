@@ -38,12 +38,21 @@ def render() -> str:
 
     tools = sorted(asyncio.run(mcp_server.mcp.list_tools()), key=lambda t: t.name)
     gated = set(mcp_server.CONFIRMATION_TOOLS)
-    rows = [
-        f"| `{t.name}` | {'确认卡' if t.name in gated else '直接执行'} | {_first_sentence(t.description)} |"
-        for t in tools
-    ]
+    #: 「等作答」不是「直接执行」的一种。这一列此前只有两个取值,于是 ask_user 被标成
+    #: 「直接执行」—— 而它会停在那儿等用户挑,读者据此得出的结论正好相反。
+    waiting = set(mcp_server.ANSWER_TOOLS)
+
+    def gate(name: str) -> str:
+        if name in gated:
+            return "确认卡"
+        if name in waiting:
+            return "等作答"
+        return "直接执行"
+
+    rows = [f"| `{t.name}` | {gate(t.name)} | {_first_sentence(t.description)} |" for t in tools]
     header = [
-        f"共 **{len(tools)}** 个工具,其中 **{len(gated)}** 个走确认卡。",
+        f"共 **{len(tools)}** 个工具,其中 **{len(gated)}** 个走确认卡、"
+        f"**{len(waiting)}** 个停下来等用户作答。",
         "",
         "| 工具 | 门控 | 说明 |",
         "| --- | --- | --- |",

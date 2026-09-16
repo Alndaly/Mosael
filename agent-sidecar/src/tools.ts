@@ -11,6 +11,12 @@
  * `confirmation: true`, and any such tool gets the same generic wrapper — invoke (creates the
  * pending card), then block-poll /api/confirmations/{id} until the user resolves it, so the
  * model receives the executed result rather than a pending stub.
+ *
+ * `awaits_answer: true` (ask_user) is the same shape pointed at the question card, with one
+ * difference that matters: a confirmation that times out means the action never happened, so
+ * that one throws; a question that times out only means the user has not got to it yet — the
+ * answer still reaches the conversation later — so that one returns "pending" and lets the
+ * model carry on instead of reporting a failure and asking all over again.
  */
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
@@ -109,6 +115,33 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 interface Confirmation { id: string; status: string; result: unknown; error?: string | null }
+interface Question { id: string; status: string; answers: unknown }
+
+/**
+ * 等用户在 Mosael 里处理掉一张卡 —— 这次 turn 就停在这里。
+ *
+ * 人工操作是人速的,所以上限给足:590s,压在后端 TURN_TIMEOUT_SECONDS(600s)底下 ——
+ * 要由我们先到点,不然模型收到的是一句没有信息的「智能体运行超过 600 秒」。
+ * 环境变量只为**测得到超时那一支**存在:不给这个口子的话,验证"到点之后给的是什么"
+ * 得让测试原地坐十分钟,于是那一支永远没人验。
+ *
+ * `settle` 返回 undefined 表示还没定下来,继续等;抛错就是终局的坏结果。到点之后由调用方
+ * 决定是抛错还是给一个"还没轮到"的回包 —— 那正是确认卡和选择卡唯一不同的地方。
+ */
+async function awaitCard<T>(
+  read: () => Promise<T>,
+  settle: (current: T) => unknown | undefined,
+  signal: AbortSignal | undefined,
+): Promise<unknown | undefined> {
+  const ceiling = Number(process.env.MOSAEL_CARD_WAIT_MS) || 590_000;
+  const step = Math.min(1500, ceiling);
+  for (let waited = 0; waited < ceiling; waited += step) {
+    const settled = settle(await read());
+    if (settled !== undefined) return settled;
+    await sleep(step, signal);
+  }
+  return undefined;
+}
 
 /**
  * Block until the user resolves a confirmation card in Mosael.
@@ -121,15 +154,48 @@ async function awaitConfirmation(
   confirmationId: string,
   signal: AbortSignal | undefined,
 ): Promise<unknown> {
-  // 人工批准是人速的,轮询上限给足(后端 turn 超时 600s 兜底)
-  for (let waited = 0; waited < 590_000; waited += 1500) {
-    const cur = (await apiGet(apiBase, token, `/api/confirmations/${confirmationId}`, undefined, signal)) as Confirmation;
-    if (cur.status === "executed") return cur.result;
-    if (cur.status === "rejected") throw new Error("用户拒绝了该操作");
-    if (cur.status === "failed") throw new Error(`执行失败:${cur.error ?? "unknown"}`);
-    await sleep(1500, signal);
-  }
-  throw new Error("等待用户确认超时");
+  const settled = await awaitCard<Confirmation>(
+    () => apiGet(apiBase, token, `/api/confirmations/${confirmationId}`, undefined, signal) as Promise<Confirmation>,
+    (cur) => {
+      if (cur.status === "executed") return { result: cur.result };
+      if (cur.status === "rejected") throw new Error("用户拒绝了该操作");
+      if (cur.status === "failed") throw new Error(`执行失败:${cur.error ?? "unknown"}`);
+      return undefined;
+    },
+    signal,
+  );
+  // 超时 = 这个动作**没有发生**。说成别的都会让模型以为它做过了。
+  if (settled === undefined) throw new Error("等待用户确认超时");
+  return (settled as { result: unknown }).result;
+}
+
+/**
+ * Block until the user answers (or skips) a question card in Mosael.
+ *
+ * 到点不抛错:超时只说明用户还没顾上,而答案**仍然会到** —— 作答后由回执送回这次对话
+ * (backend domain/agent/questions.deliver_to_session,插进当时那一轮)。抛错会让模型以为
+ * 「问这件事失败了」,转头把同一张卡再立一遍,而第一张还在用户面前。
+ */
+async function awaitAnswer(
+  apiBase: string,
+  token: string,
+  questionId: string,
+  signal: AbortSignal | undefined,
+): Promise<unknown> {
+  const settled = await awaitCard<Question>(
+    () => apiGet(apiBase, token, `/api/agent/questions/${questionId}`, undefined, signal) as Promise<Question>,
+    (cur) => {
+      if (cur.status === "answered") return { status: "answered", answers: cur.answers ?? {} };
+      if (cur.status === "dismissed") return { status: "dismissed", skipped: true };
+      return undefined;
+    },
+    signal,
+  );
+  return settled ?? {
+    status: "pending",
+    message:
+      "用户还没作答。按你自己的判断继续或者先收尾,**不要再问一遍** —— 他答了之后答案会自己送到这次对话里。",
+  };
 }
 
 /**
@@ -148,6 +214,7 @@ interface ToolSpec {
   description: string;
   parameters: Record<string, unknown>;
   confirmation?: boolean;
+  awaits_answer?: boolean;
   read_only?: boolean;
 }
 
@@ -216,6 +283,14 @@ export async function buildAllTools(
             // 要不要自动放行。
           }, signal)) as { result?: unknown; error?: string };
           if (response?.error) throw new Error(response.error);
+          if (spec.awaits_answer) {
+            // 选择卡:调用只立起了卡,这一轮停在这里等用户挑 —— 答案于是作为**工具结果**
+            // 回到它被问的那个位置,不用靠一条伪造的用户消息把模型重新叫醒。
+            const card = (response?.result ?? {}) as { question_id?: string; error?: string };
+            // 没有会话上下文时后端回的是一句 error(飞书 / 外部客户端),照原样给模型。
+            if (!card.question_id) return jsonResult(response?.result ?? null);
+            return jsonResult(await awaitAnswer(apiBase, token, card.question_id, signal));
+          }
           if (!spec.confirmation) return jsonResult(response?.result ?? null);
           // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。
           const card = (response?.result ?? {}) as { confirmation_id?: string };

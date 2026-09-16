@@ -145,6 +145,45 @@ class Test不会被自动回答:
         assert "ask_user" in mcp_server.READ_ONLY_TOOLS, "问一句话不改任何东西,该是只读"
 
 
+class Test等作答这件事要写在清单上:
+    """**怎么等由 runtime 按元数据生成,不写进工具描述。**
+
+    描述是给所有运行时看的同一份,而等法两条路不一样:应用自己那条停在工具调用上等,直连
+    MCP 的客户端自己轮询 get_answer。描述里写死一种,就必然对另一种说谎 —— 确认卡那边为这件
+    事付过代价(模型按描述去找一个永远收不到的 confirmation_id)。
+    """
+
+    def test_清单上标着它要等用户作答(self) -> None:
+        from app.domain.agent import tool_manifest
+
+        spec = next(one for one in _specs() if one.name == "ask_user")
+        assert spec.awaits_answer is True
+        assert spec.confirmation is False, "它不是确认卡 —— 进那套会被自动批准覆盖掉"
+        #: 阻塞协议接在描述后面,而且要拦住"没答就再问一遍"那种行为。
+        assert "BLOCKS until the user answers" in spec.description
+        assert "do NOT ask the same thing again" in spec.description
+        assert tool_manifest._ANSWER_PROTOCOL in spec.description
+
+    def test_确认卡那份协议没被串到这里(self) -> None:
+        """两段协议的结局不同(超时 = 没发生 / 超时 = 还没答),串了就会说反。"""
+        from app.domain.agent import tool_manifest
+
+        spec = next(one for one in _specs() if one.name == "ask_user")
+        assert tool_manifest._CONFIRMATION_PROTOCOL not in spec.description
+
+    def test_别的工具没被顺手标上(self) -> None:
+        marked = {one.name for one in _specs() if one.awaits_answer}
+        assert marked == {"ask_user"}, marked
+
+
+def _specs():
+    from app.core.db import SessionLocal
+    from app.domain.agent.tool_manifest import agent_tool_specs
+
+    with SessionLocal() as db:
+        return agent_tool_specs(db)
+
+
 class Test接口:
     def test_形状不对回_422_而不是_500(self) -> None:
         """这是模型给错了形状,消息里要说清怎么改 —— 它下一步就是改了重发。"""

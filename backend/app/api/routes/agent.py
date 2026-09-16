@@ -402,7 +402,8 @@ def answer_question(
         answered = agent_questions.answer(db, row, body.answers)
     except agent_questions.QuestionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    # 选完要有下文:ask_user 不阻塞,模型多半已经结束了这一轮(见 deliver_to_session)。
+    # 选完要有下文。应用自己那条路上模型正停在工具调用里等着,这一送是**兜底** ——
+    # 等待有上限、直连 MCP 的客户端不阻塞、后端重启会掐掉那一轮(见 deliver_to_session)。
     agent_questions.deliver_to_session(db, answered, user)
     return answered
 
@@ -411,7 +412,8 @@ def answer_question(
 def dismiss_question(question_id: str, db: DbSession, user: CurrentUser) -> AgentQuestion:
     """不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。
 
-    「收到」是这里送过去的:ask_user 不阻塞,那一轮多半早就结束了,不送就真的卡在那儿。
+    「收到」由两条路保证:应用自己那条运行时停在 ask_user 这次工具调用上等着,跳过就是它的
+    返回值;而那一轮已经不在了的时候(等待到点、直连 MCP、后端重启过),由这里送过去。
     """
     row = _require_question(db, user, question_id)
     ensure_workspace_perm(db, user, row.workspace_id, "ai")

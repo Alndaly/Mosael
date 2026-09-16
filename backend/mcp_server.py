@@ -223,6 +223,14 @@ READ_ONLY_TOOLS = frozenset(
     }
 )
 
+#: **等用户作答**的工具。和 CONFIRMATION_TOOLS 是同一个形状:调用只立起一张卡,怎么等由
+#: 各 runtime 按 manifest 上的标记生成 —— sidecar 阻塞轮询、直连 MCP 的客户端自己 get_answer。
+#:
+#: 单独一份而不是并进确认卡那份:确认卡问「这件事能不能做」,可以被「本会话始终允许」自动
+#: 批准,而「你要哪一个」自动回答就是让模型自己编一个(见 domain/agent/questions)。两者的
+#: 超时结局也不同 —— 见 tool_manifest._ANSWER_PROTOCOL。
+ANSWER_TOOLS = frozenset({"ask_user"})
+
 #: 会改动东西、但**不走确认卡**的工具。单独列出来是为了让「漏声明」这件事看得见:它和
 #: READ_ONLY_TOOLS、CONFIRMATION_TOOLS 三者合起来必须覆盖全部内置工具(由测试钉住)。
 #:
@@ -1740,10 +1748,12 @@ def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
 def ask_user(questions: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
     """Ask the user to choose between options you cannot decide for them.
 
-    **This returns immediately with a `question_id`; it does NOT block.** The card goes up in
-    Mosael and the user answers in their own time — poll `get_answer(question_id)` until it
-    stops saying "pending". Treating the return value as the answer means building on a choice
-    that was never made.
+    How the waiting works is NOT described here on purpose: it differs per runtime and a
+    sentence baked into this description would be a lie to the other one. Inside Mosael the
+    call blocks and hands you the answer (the manifest says so on that path); a direct MCP
+    client gets {question_id, status: pending} and the reply's `message` field spells out the
+    polling protocol on the spot. Either way, a return value that still says "pending" is not
+    an answer — building on it means building on a choice that was never made.
 
     Use at a genuine fork — two or three routes all make sense and which one is right depends on
     what the user wants. Picking one yourself and building on it means a whole stretch of work

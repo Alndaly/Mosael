@@ -5377,7 +5377,8 @@ export interface paths {
          * Dismiss Question
          * @description 不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。
          *
-         *     「收到」是这里送过去的:ask_user 不阻塞,那一轮多半早就结束了,不送就真的卡在那儿。
+         *     「收到」由两条路保证:应用自己那条运行时停在 ask_user 这次工具调用上等着,跳过就是它的
+         *     返回值;而那一轮已经不在了的时候(等待到点、直连 MCP、后端重启过),由这里送过去。
          */
         post: operations["dismiss_question_api_agent_questions__question_id__dismiss_post"];
         delete?: never;
@@ -10506,6 +10507,11 @@ export interface components {
              * @default false
              */
             read_only: boolean;
+            /**
+             * Awaits Answer
+             * @default false
+             */
+            awaits_answer: boolean;
         };
         /** TrackOut */
         TrackOut: {

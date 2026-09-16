@@ -36,6 +36,10 @@ class ToolSpec(BaseModel):
     #: 除非 manifest 在那个工具上明写 `"read_only": true`。宁可让子智能体少一个工具,也不要让它
     #: 在一次"帮我查一下"里替用户发了条微博。
     read_only: bool = False
+    #: 等用户作答标:调用只会立起一张选择卡并立刻返回 {question_id, status: pending}。
+    #: 和 confirmation 同一个形状、同一个理由 —— 等法由 runtime 按元数据生成,而不是写进
+    #: 工具描述里(写进去就必然对另一条运行时说谎)。两者的**超时结局不同**,见下面的协议段。
+    awaits_answer: bool = False
 
 
 #: 展开成一等公民之后,这两个元工具就是同一份东西的第二条路径 —— 留着只会让模型在
@@ -93,7 +97,24 @@ _CONFIRMATION_PROTOCOL = (
 )
 
 
-def _describe(description: str, gated: bool) -> str:
+#: 选择卡在这条路上的真实协议。和确认卡是同一件事的两个结局:
+#:
+#:   · 确认卡超时 = 这个动作**没有发生**,所以那边抛错。
+#:   · 选择卡超时 = 用户还没顾上答,而答案**仍然会到**(用户作答后由回执送回这次对话,
+#:     见 domain/agent/questions.deliver_to_session)。所以这边不抛错,如实说"还没答",
+#:     让模型自己决定是按判断继续还是收尾 —— 抛错会让它以为问这件事失败了,转头再问一遍。
+_ANSWER_PROTOCOL = (
+    "This call BLOCKS until the user answers or skips, and then returns their answer directly "
+    "— there is no question_id for you to poll and no need to call get_answer afterwards. "
+    "If it returns status \"pending\" the user has not got to it yet: carry on with your own "
+    "best judgement or wrap up, and do NOT ask the same thing again — their answer will arrive "
+    "on its own once they do respond."
+)
+
+
+def _describe(description: str, gated: bool, awaits_answer: bool = False) -> str:
+    if awaits_answer:
+        return f"{description.rstrip()}\n\n{_ANSWER_PROTOCOL}"
     if not gated:
         return description
     return f"{description.rstrip()}\n\n{_CONFIRMATION_PROTOCOL}"
@@ -110,10 +131,15 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     specs = [
         ToolSpec(
             name=tool.name,
-            description=_describe(tool.description or "", tool.name in registry.CONFIRMATION_TOOLS),
+            description=_describe(
+                tool.description or "",
+                tool.name in registry.CONFIRMATION_TOOLS,
+                tool.name in registry.ANSWER_TOOLS,
+            ),
             # mcp 2.0 起字段名统一为 snake_case(原 inputSchema)。
             parameters=tool.input_schema or {"type": "object", "properties": {}},
             confirmation=tool.name in registry.CONFIRMATION_TOOLS,
+            awaits_answer=tool.name in registry.ANSWER_TOOLS,
             # 显式声明,不再由「有没有确认卡」推出来 —— 那个推论对浏览器动作是错的,
             # 而这个标记决定的是子智能体拿得到什么(见 mcp_server.READ_ONLY_TOOLS)。
             read_only=tool.name in registry.READ_ONLY_TOOLS,
