@@ -118,7 +118,7 @@ class Test检视:
 
 def test_两侧用的是同一份操作清单() -> None:
     """不是抄的,是同一个常量 —— 抄一份的话,加一种操作时两处会漂。"""
-    from app.domain.agent.confirmations import EDIT_OP_KINDS as agent_kinds
+    from app.domain.agent.confirmable.media import EDIT_OP_KINDS as agent_kinds
     from app.domain.sequences.operations import EDIT_OP_KINDS as domain_kinds
 
     assert agent_kinds is domain_kinds

@@ -126,14 +126,14 @@ def test_登记表里没有已经删掉的节点或工具() -> None:
 
 def test_两份确认清单必须一致() -> None:
     """确认门控写在两个地方:mcp_server 的 CONFIRMATION_TOOLS(工具这一侧,决定要不要开卡)
-    和后端的 TOOL_DEFS(领域这一侧,决定权限档次和批准后干什么)。
+    和后端的确认卡工具登记表(领域这一侧,决定权限档次和批准后干什么)。
 
     只加一边不会报错,只会在**用户点批准的那一刻**才炸 —— 而那时智能体已经告诉他"正在做了"。
     (这次就是:三个新工具只加进了 CONFIRMATION_TOOLS,开卡直接 422 Unknown mutating tool。)
     """
-    from app.domain.agent.confirmations import TOOL_DEFS
+    from app.domain.agent.confirmable import tool_specs
 
-    assert set(mcp_server.CONFIRMATION_TOOLS) == set(TOOL_DEFS)
+    assert set(mcp_server.CONFIRMATION_TOOLS) == set(tool_specs())
 
 
 def test_确认卡的权限档次前端都有文案() -> None:
@@ -141,12 +141,12 @@ def test_确认卡的权限档次前端都有文案() -> None:
     机器名(如 "external"),所以这里守住:每一档都要有 messages.ts 里的键。"""
     from pathlib import Path
 
-    from app.domain.agent.confirmations import TOOL_DEFS
+    from app.domain.agent.confirmable import tool_specs
 
     messages = (Path(__file__).resolve().parents[2] / "frontend/src/app/messages.ts").read_text("utf-8")
     keys = {"edit": "permEdit", "ai-cost": "permAiCost", "render-cost": "permRenderCost", "external": "permExternal"}
-    for definition in TOOL_DEFS.values():
-        permission = definition["permission"]
+    for definition in tool_specs().values():
+        permission = definition.permission
         assert permission in keys, f"新权限档次 {permission} 没有前端文案键"
         assert f"{keys[permission]}:" in messages, f"messages.ts 里缺 {keys[permission]}"
 

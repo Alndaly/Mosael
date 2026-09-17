@@ -154,7 +154,7 @@ class Test生成不点名模型时用我的默认:
         app = pathlib.Path(__file__).resolve().parents[1] / "app"
         for relative in ("api/routes/boards.py", "domain/scheduler/executors.py"):
             assert "resolve_default" not in (app / relative).read_text(encoding="utf-8"), relative
-        confirmations = (app / "domain/agent/confirmations.py").read_text(encoding="utf-8")
-        start = confirmations.index('if confirmation.tool in ("generate_image", "generate_video")')
-        end = confirmations.index("if confirmation.tool", start + 10)
-        assert "resolve_default" not in confirmations[start:end]
+        generation = (app / "domain/agent/confirmable/generation.py").read_text(encoding="utf-8")
+        start = generation.index("def _execute_generate_image(")
+        end = generation.index("def _validate_generate_audio(")
+        assert "resolve_default" not in generation[start:end]

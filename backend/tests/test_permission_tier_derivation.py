@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 
-from app.domain.agent.confirmations import TOOL_DEFS, effective_permission
+from app.domain.agent.confirmable import tool_spec
+from app.domain.agent.confirmations import effective_permission
 from app.domain.workflows import EXTERNAL_NODE_TYPES, INTERNAL_NODE_TYPES, NODE_TYPES, external_nodes_in_graph
 from tests.util import fresh_client
 
@@ -64,12 +65,12 @@ def test_scanner_survives_malformed_input() -> None:
 
 def test_browser_pool_open_is_external() -> None:
     """它接的是用户真实登录的身份 —— 不是"可撤销的编辑"。"""
-    assert TOOL_DEFS["browser_pool_open"]["permission"] == "external"
+    assert tool_spec("browser_pool_open").permission == "external"
 
 
 def test_isolated_browser_stays_edit() -> None:
     """对照:隔离浏览器与用户身份物理隔开,不该被一起提上去。"""
-    assert TOOL_DEFS["browser_open"]["permission"] == "edit"
+    assert tool_spec("browser_open").permission == "edit"
 
 
 def _workspace_with_workflow(client, graph: dict) -> tuple[str, str]:

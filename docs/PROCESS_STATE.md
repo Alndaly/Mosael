@@ -85,6 +85,7 @@
 
 模块导入时填一次,之后只读。每个进程都一样,不构成任何约束。
 
+- `app/domain/agent/confirmable/registry.py:_TOOLS` — 确认卡工具的登记表。
 - `app/domain/jobs.py:_EXECUTION_MODES`(每个 kind 在进程内跑还是交给外部执行器)、
   `app/domain/jobs.py:_RECEIPT_DELIVERERS`
 - `app/domain/sequences/undo/__init__.py:_REGISTRY`

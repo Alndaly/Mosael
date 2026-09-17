@@ -231,7 +231,10 @@ class Test排队和开卡之前就判:
             dm.deepfilter_ready.cache_clear()
 
     def test_确认卡上说得出会去掉音乐(self) -> None:
-        from app.domain.agent.confirmations import _summarize
+        from app.domain.agent.confirmable import tool_spec
+
+        def _summarize(tool: str, payload: dict) -> str:
+            return tool_spec(tool).summarize(None, payload)
 
         speech = _summarize("denoise_audio", {"engine_name": "DeepFilterNet 语音降噪", "removes_music": True, "has_strengths": True, "strength": "medium"})
         assert "音乐" in speech and "DeepFilterNet" in speech and "中度" in speech
@@ -375,7 +378,11 @@ class Test工作流节点和确认卡:
     def test_确认卡开卡前就判档位和素材类型(self) -> None:
         from app.core.db import SessionLocal
         from app.db.models import Asset
-        from app.domain.agent.confirmations import ConfirmationError, _validate_payload
+        from app.domain.agent.confirmable import tool_spec
+        from app.domain.agent.confirmations import ConfirmationError
+
+        def _validate_payload(db, tool, workspace_id, payload):
+            tool_spec(tool).validate(db, workspace_id, payload)
         from tests.util import fresh_client
 
         client = fresh_client()

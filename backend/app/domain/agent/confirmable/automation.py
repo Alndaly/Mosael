@@ -1,0 +1,276 @@
+"""工作流和画板:建、改、跑。
+
+**运行一张图的档位由图自己说了算** —— 图里有会伸到应用外面去的节点(发帖、请求别人的服务器、跑代码)时,
+卡按最高那一档开,并且在摘要里点名(见 graphs)。"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.domain.agent.confirmable.registry import ConfirmableTool, confirmable_tool
+from app.domain.agent.errors import ConfirmationError
+from app.domain.agent.confirmable.graphs import external_warning, graph_under_review
+from app.domain.workflows import external_nodes_in_graph
+
+
+
+def _workflow_in(db: Session, workspace_id: str, payload: dict[str, Any]):
+    """这次要改/要跑的那张工作流,**收进这个工作区**。"""
+    from app.db.models import Workflow
+
+    workflow = db.get(Workflow, str(payload.get("workflow_id", "")))
+    if workflow is None or workflow.workspace_id != workspace_id:
+        raise ConfirmationError("Workflow not found in this workspace")
+    return workflow
+
+
+
+def _check_graph(graph: object) -> None:
+    from app.domain.workflows import validate_graph
+
+    errors = validate_graph(graph, require_config=False, allow_missing_start=True)
+    if errors:
+        raise ConfirmationError("；".join(errors))
+
+
+
+def _escalate_graph(db: Session, tool: str, payload: dict[str, Any]) -> str | None:
+    """图里有会伸到应用外面去的节点(发帖、请求别人的服务器、跑代码)时,按最高那一档开卡。
+
+    档位由**这次真的会落库或执行的那张图**说了算,不是由工具名说了算 —— 同一个 edit_workflow,
+    加一个文本节点和加一个 code 节点不是一回事。
+    """
+    return "external" if external_nodes_in_graph(graph_under_review(db, tool, payload)) else None
+
+
+
+def _validate_create_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    if not str(payload.get("name", "")).strip():
+        raise ConfirmationError("create_workflow requires a name")
+    if payload.get("graph") is not None:
+        _check_graph(payload["graph"])
+
+
+def _summarize_create_workflow(db: Session, payload: dict[str, Any]) -> str:
+    nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
+    return f"创建工作流「{payload.get('name', '')}」({nodes or 1} 个节点)" + external_warning(external_nodes_in_graph(graph_under_review(db, "create_workflow", payload)))
+
+
+def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    from app.domain.workflows import create_workflow
+
+    workflow = create_workflow(
+        db,
+        workspace_id=confirmation.workspace_id,
+        name=str(payload["name"]),
+        description=str(payload.get("description", "")),
+        graph=payload.get("graph"),
+        source="agent",
+        created_by=actor,
+    )
+    return {"workflow_id": workflow.id}
+
+
+def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    _workflow_in(db, workspace_id, payload)
+    if payload.get("graph") is not None:
+        _check_graph(payload["graph"])
+
+
+def _summarize_update_workflow(db: Session, payload: dict[str, Any]) -> str:
+    nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
+    head = f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
+    return head + external_warning(external_nodes_in_graph(graph_under_review(db, "update_workflow", payload)))
+
+
+def _execute_update_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    from app.db.models import Workflow
+    from app.domain.workflows import update_workflow
+
+    workflow = db.get(Workflow, str(payload["workflow_id"]))
+    assert workflow is not None  # validated at request time
+    update_workflow(
+        db,
+        workflow,
+        {key: payload[key] for key in ("name", "description", "graph") if key in payload},
+        source="agent",
+        created_by=actor,
+    )
+    return {"workflow_id": workflow.id}
+
+
+def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.graph_ops import GRAPH_OP_KINDS, apply_graph_ops
+
+    workflow = _workflow_in(db, workspace_id, payload)
+    operations = payload.get("operations")
+    if not isinstance(operations, list) or not operations:
+        raise ConfirmationError("edit_workflow requires a non-empty operations list")
+    for operation in operations:
+        kind = operation.get("kind") if isinstance(operation, dict) else None
+        if kind not in GRAPH_OP_KINDS:
+            raise ConfirmationError(f"Unsupported workflow op: {kind}")
+    # Dry-run the ops onto the current graph so malformed edits fail fast (before approval).
+    try:
+        preview = apply_graph_ops(workflow.graph or {}, operations)
+    except WorkflowDomainError as exc:
+        raise ConfirmationError(str(exc)) from exc
+    _check_graph(preview)
+
+
+def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> str:
+    ops = [op for op in payload.get("operations", []) if isinstance(op, dict)]
+    kinds = [op.get("kind", "?") for op in ops]
+    # A `code` node runs arbitrary local Python when the workflow is later run, so say so
+    # here rather than leaving it to be noticed in the payload.
+    adds_code = any(
+        op.get("kind") == "add_node" and str(op.get("node_type") or op.get("type")) == "code" for op in ops
+    )
+    head = f"{len(kinds)} 个工作流编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
+    # code 那句更具体(点名"运行时执行本地 Python"),留着;其余外部节点走通用那句。
+    if adds_code:
+        return head + "  ⚠️ 含代码节点(运行时执行本地 Python)"
+    return head + external_warning(external_nodes_in_graph(graph_under_review(db, "edit_workflow", payload)))
+
+
+def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    from app.db.models import Workflow
+    from app.domain.workflows import update_workflow
+    from app.domain.workflows.graph_ops import apply_graph_ops
+
+    workflow = db.get(Workflow, str(payload["workflow_id"]))
+    assert workflow is not None
+    # Re-apply onto the CURRENT graph at approval time (not the request-time snapshot).
+    new_graph = apply_graph_ops(workflow.graph or {}, payload["operations"])
+    update_workflow(
+        db,
+        workflow,
+        {"graph": new_graph},
+        source="agent",
+        created_by=actor,
+    )
+    return {"workflow_id": workflow.id, "nodes": len(new_graph.get("nodes", []))}
+
+
+def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    _workflow_in(db, workspace_id, payload)
+
+
+
+def _summarize_run_workflow(db: Session, payload: dict[str, Any]) -> str:
+    name = str(payload.get("name") or payload.get("workflow_id") or "")
+    head = f"运行工作流{f'「{name}」' if name else ''}(可能产生 AI/渲染消耗)"
+    return head + external_warning(external_nodes_in_graph(graph_under_review(db, "run_workflow", payload)))
+
+
+def _execute_run_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    from app.db.models import Workflow
+    from app.domain.workflows.engine import start_workflow_job
+
+    workflow = db.get(Workflow, str(payload["workflow_id"]))
+    assert workflow is not None
+    job = start_workflow_job(db, workflow, created_by=actor, params=dict(payload.get("params") or {}))
+    return {"job_id": job.id}
+
+
+def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    from app.db.models import Board
+    from app.domain.boards.ops import BOARD_OP_KINDS, apply_board_ops
+    from app.domain.boards import BoardDomainError, normalize_canvas
+
+    board = db.get(Board, str(payload.get("board_id", "")))
+    if board is None or board.workspace_id != workspace_id:
+        raise ConfirmationError("这个工作区里没有这张画板")
+    operations = payload.get("operations")
+    if not isinstance(operations, list) or not operations:
+        raise ConfirmationError("edit_board 需要一个非空的 operations 列表")
+    for operation in operations:
+        kind = operation.get("kind") if isinstance(operation, dict) else None
+        if kind not in BOARD_OP_KINDS:
+            raise ConfirmationError(f"不支持的画板算子:{kind}")
+    # 先干跑一遍:写坏的算子要在**批准之前**就失败,而不是让用户点了同意才看到报错。
+    try:
+        normalize_canvas(apply_board_ops(board.canvas or {}, operations))
+    except BoardDomainError as exc:
+        raise ConfirmationError(str(exc)) from exc
+
+
+def _summarize_edit_board(db: Session, payload: dict[str, Any]) -> str:
+    kinds = [op.get("kind", "?") for op in payload.get("operations", []) if isinstance(op, dict)]
+    return f"{len(kinds)} 个画板编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
+
+
+def _execute_edit_board(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    from app.db.models import Board
+    from app.domain.boards.ops import apply_board_ops
+    from app.domain.boards import update_board
+
+    board = db.get(Board, str(payload["board_id"]))
+    assert board is not None  # 开卡时校验过
+    # 落到**批准这一刻**的画布上,而不是开卡时的那份快照 —— 这中间用户很可能还在拖东西。
+    canvas = apply_board_ops(board.canvas or {}, payload["operations"])
+    update_board(db, workspace_id=board.workspace_id, board_id=board.id, name=None, canvas=canvas)
+    return {"board_id": board.id, "items": len(canvas.get("items", []))}
+
+confirmable_tool(ConfirmableTool(
+    name="create_workflow",
+    permission="edit",
+    cost="none",
+    summarize=_summarize_create_workflow,
+    execute=_execute_create_workflow,
+    validate=_validate_create_workflow,
+    escalate=_escalate_graph,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="update_workflow",
+    permission="edit",
+    cost="none",
+    summarize=_summarize_update_workflow,
+    execute=_execute_update_workflow,
+    validate=_validate_update_workflow,
+    escalate=_escalate_graph,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="edit_workflow",
+    permission="edit",
+    cost="none",
+    summarize=_summarize_edit_workflow,
+    execute=_execute_edit_workflow,
+    validate=_validate_edit_workflow,
+    escalate=_escalate_graph,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="run_workflow",
+    permission="ai-cost",
+    cost="ai",
+    summarize=_summarize_run_workflow,
+    execute=_execute_run_workflow,
+    validate=_validate_run_workflow,
+    escalate=_escalate_graph,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="edit_board",
+    permission="edit",
+    cost="none",
+    summarize=_summarize_edit_board,
+    execute=_execute_edit_board,
+    validate=_validate_edit_board,
+))
+
+

@@ -118,10 +118,11 @@ def test_智能体改画板走确认卡_并且写坏的算子在批准前就失�
     那时他以为自己批准的是一件做得成的事。
     """
     from app.core.db import SessionLocal
-    from app.domain.agent.confirmations import ConfirmationError, TOOL_DEFS, request_confirmation
+    from app.domain.agent.confirmable import tool_spec
+    from app.domain.agent.confirmations import ConfirmationError, request_confirmation
     from tests.util import fresh_client
 
-    assert TOOL_DEFS["edit_board"]["permission"] == "edit"
+    assert tool_spec("edit_board").permission == "edit"
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]

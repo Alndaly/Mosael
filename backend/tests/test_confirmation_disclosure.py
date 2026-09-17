@@ -2,7 +2,22 @@
 
 from __future__ import annotations
 
-from app.domain.agent.confirmations import _summarize
+from app.domain.agent.confirmable import tool_spec
+
+
+class _NoDb:
+    """摘要里问库的那几处(工作流的图)在这些用例里问不到东西 —— 给一个什么都查不到的会话,
+    断言的是**这句话本身**。"""
+
+    def get(self, _model, _key):
+        return None
+
+
+def _summarize(tool: str, payload: dict) -> str:
+    spec = tool_spec(tool)
+    assert spec is not None, tool
+    return spec.summarize(_NoDb(), payload)
+
 
 
 def test_a_code_node_is_called_out_in_the_summary() -> None:
