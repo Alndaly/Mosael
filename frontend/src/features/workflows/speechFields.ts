@@ -36,3 +36,22 @@ export function speechFieldVisible(nodeType: string, key: string, engine: unknow
   if (key === "engine_voice" || key === "engine_voice_resource") return !clone;
   return true;
 }
+
+/** 两个存储键,界面上是同一格「音色」。 */
+const VOICE_KEYS = new Set(["voice_id", "engine_voice"]);
+
+/**
+ * 字段的排列:**引擎在前,音色紧跟在引擎后面**,其余字段保持声明顺序。
+ *
+ * 此前照声明顺序排,而声明里 voice_id 在 engine 前、engine_voice 在 engine 后 —— 于是选克隆时
+ * 音色在引擎上面,换成某个引擎后音色又跑到下面,同一格看起来像两个不同的音色框(用户报过)。
+ * 后端的声明已经改过来了;这里再定一次,是因为这是这对字段自己的规则,不该靠声明碰巧排对。
+ */
+export function orderSpeechFields<E extends readonly [string, unknown]>(nodeType: string, entries: readonly E[]): E[] {
+  if (!SPEECH_NODE_TYPES.has(nodeType)) return [...entries];
+  const voices = entries.filter(([key]) => VOICE_KEYS.has(key));
+  const rest = entries.filter(([key]) => !VOICE_KEYS.has(key));
+  const at = rest.findIndex(([key]) => key === "engine");
+  if (at < 0) return [...entries];
+  return [...rest.slice(0, at + 1), ...voices, ...rest.slice(at + 1)];
+}

@@ -117,7 +117,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
-import { nodePicksVoice, speechFieldVisible } from "@/features/workflows/speechFields";
+import { nodePicksVoice, orderSpeechFields, speechFieldVisible } from "@/features/workflows/speechFields";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { syncFromServer } from "@/features/workflows/serverSync";
 import { MapField } from "@/features/workflows/MapField";
@@ -3306,7 +3306,7 @@ function NodeInspector({
   };
 
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
-  const visibleSpecs = specs
+  const visibleSpecs = orderSpeechFields(node.type, specs)
     .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
     .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)))
     // 语音合成的两条路互斥,只渲染当前那条 —— 规则和它的来龙去脉在 speechFields.ts。

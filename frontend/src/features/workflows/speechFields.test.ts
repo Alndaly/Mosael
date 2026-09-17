@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { nodePicksVoice, speechFieldVisible, speechUsesClonedVoice } from "@/features/workflows/speechFields";
+import { nodePicksVoice, orderSpeechFields, speechFieldVisible, speechUsesClonedVoice } from "@/features/workflows/speechFields";
 
 /**
  * 钉的是用户报的那句「音色和引擎音色 重复了」。
@@ -54,5 +54,30 @@ describe("语音合成的音色那一格", () => {
     expect(speechFieldVisible("dub_subtitles", "engine_voice", "clone")).toBe(false);
     expect(speechFieldVisible("dub_subtitles", "voice_id", "edge")).toBe(false);
     expect(speechFieldVisible("dub_subtitles", "engine_voice", "edge")).toBe(true);
+  });
+});
+
+describe("引擎在前,音色紧跟其后", () => {
+  //: 声明顺序故意排成旧的样子(voice_id 在 engine 前、engine_voice 在后):
+  //: 这条规则不该靠声明碰巧排对。
+  const declared = ["text", "voice_id", "engine", "engine_voice", "engine_voice_resource", "speed"].map(
+    (key) => [key, null] as const,
+  );
+  const visible = (engine: string) =>
+    orderSpeechFields("synthesize_speech", declared)
+      .filter(([key]) => speechFieldVisible("synthesize_speech", key, engine))
+      .map(([key]) => key);
+
+  it.each(["clone", "edge"])("选 %s 时,音色那一格都在引擎正下方", (engine) => {
+    const keys = visible(engine);
+    const at = keys.indexOf("engine");
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(["voice_id", "engine_voice"]).toContain(keys[at + 1]);
+    //: 同一时刻只有一格音色。
+    expect(keys.filter((key) => key === "voice_id" || key === "engine_voice")).toHaveLength(1);
+  });
+
+  it("不收音色的节点照声明顺序", () => {
+    expect(orderSpeechFields("llm", declared).map(([key]) => key)).toEqual(declared.map(([key]) => key));
   });
 });

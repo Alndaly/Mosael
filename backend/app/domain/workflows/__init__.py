@@ -722,7 +722,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         # 而那种表单的典型结果是两个都填或者两个都空。
         "config": {
             "text": {"type": "template", "required": True},
-            "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
+            # **引擎在前,音色紧跟其后** —— 先说嗓子从哪来,再从那一处挑一把。此前 voice_id 排在
+            # engine 前面、engine_voice 排在后面,于是选克隆时音色在上、选引擎时音色在下,
+            # 看起来像两个不同的音色框(用户报过)。
             "engine": {
                 "type": "string",
                 # 留空 = 克隆,和执行体一致;给个 default 只是让下拉一打开就显示"克隆音色",
@@ -730,6 +732,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "default": "clone",
                 "description": "wfNode_synthesize_speech_engine",
             },
+            "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
             # 换引擎就换了一整套音色 id,旧的那个在新引擎下不存在 —— 由 depends_on 声明,
             # 前端的 withDependentsCleared 据此清空,不必为这个节点写一处特例。
             "engine_voice": {
@@ -918,8 +921,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
 
             # 和「语音合成」逐字同形:同一对互斥的路(克隆音色 / 引擎音色),所以同一套键名、
             # 同一条 required_one_of、同一份表单规则(前端 speechFields 按节点类型集合判)。
-            "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
             "engine": {"type": "string", "default": "clone", "description": "wfNode_synthesize_speech_engine"},
+            "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
             "engine_voice": {
                 "type": "string",
                 "depends_on": "engine",
