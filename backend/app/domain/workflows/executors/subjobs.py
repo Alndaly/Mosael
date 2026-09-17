@@ -363,13 +363,13 @@ _TRACK_FOR_ASSET = {"audio": "audio"}
 
 @register("timeline_append")
 def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    """把一份素材接到轨道末尾。
+    """把一份素材接到轨道上 —— 默认接在末尾,也可以放在指定的那一秒。
 
     **这是编排里占九成的动作**,所以它是一个有真表单的节点,而不是让人手写一条
     `{"kind": "insert_clip", "timeline_start": …}` —— 那个 timeline_start 还得自己算,
     而"接到末尾"本来就该由机器算。
     """
-    from app.domain.sequences.operations import InsertClip, insert_clip, timeline_span
+    from app.domain.sequences.operations import InsertClip, SetClipSpeed, insert_clip, set_clip_speed, timeline_span
 
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
     asset_id = str(config.get("asset_id", "")).strip()
@@ -404,11 +404,18 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     if src_out <= src_in:
         raise WorkflowDomainError("截取的结束时间要大于开始时间")
 
-    # 接到末尾:这条轨道上最后一个片段的终点。空轨道就是 0。
-    timeline_start = max(
-        (clip.timeline_start + timeline_span(clip) for clip in (track.clips or [])),
-        default=0.0,
-    )
+    # 落点:给了 `at` 就放在那一秒(口播要对齐它那一镜的画面,而不是接在上一段口播后面);
+    # 没给就接到末尾 —— 这条轨道上最后一个片段的终点,空轨道就是 0。
+    at = config.get("at")
+    if at not in (None, ""):
+        timeline_start = float(at)
+        if timeline_start < 0:
+            raise WorkflowDomainError("落点不能是负数")
+    else:
+        timeline_start = max(
+            (clip.timeline_start + timeline_span(clip) for clip in (track.clips or [])),
+            default=0.0,
+        )
     insert_clip(
         db,
         sequence.id,
@@ -423,12 +430,33 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     db.commit()
     db.refresh(sequence)
     clip = max((c for t in (sequence.tracks or []) for c in (t.clips or [])), key=lambda c: c.created_at, default=None)
+    span = src_out - src_in
+    speed = _fit_speed(span, config.get("max_duration"))
+    if clip is not None and speed is not None:
+        set_clip_speed(db, sequence.id, SetClipSpeed(clip_id=clip.id, speed=speed))
+        span = span / speed
     return {
         "clip_id": clip.id if clip else "",
         "timeline_start": timeline_start,
-        "timeline_end": timeline_start + (src_out - src_in),
+        "timeline_end": timeline_start + span,
         "sequence_id": sequence.id,
     }
+
+
+#: 为了塞进 max_duration 最多加速到多少。再快就听不清了 —— 宁可让它超出去,也不交一段
+#: 听不懂的口播(超出多少,调用方从 timeline_end 看得到)。
+MAX_FIT_SPEEDUP = 1.5
+
+
+def _fit_speed(span: float, max_duration: Any) -> float | None:
+    """片段比 max_duration 长时该用的倍速;不需要变就是 None。**只加速,不减速** ——
+    一段话比它的位置短是正常的,拉慢了反而拖沓。"""
+    if max_duration in (None, ""):
+        return None
+    limit = float(max_duration)
+    if limit <= 0 or span <= limit:
+        return None
+    return round(min(MAX_FIT_SPEEDUP, span / limit), 3)
 
 
 @register("timeline_add_track")
@@ -704,6 +732,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     因此才谈得上「把配音压进原段落的长度」—— match_duration 改的是片段的 speed,渲染时由
     atempo 变速(见 media/render_executor),无损、可撤销、事后还能在检查器里手动微调。
     """
+    from app.core.i18n import get_current_locale, t
     from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
 
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
@@ -747,13 +776,18 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     db.expire_all()
     result = final.result or {}
     track_id = str(result.get("track_id") or "")
+    applied = "keep"
     if track_id:
         mode = str(config.get("original_audio") or "duck").strip().lower()
-        _handle_original_audio(db, sequence.id, track_id, mode, actor_id=actor)
+        applied = _handle_original_audio(db, sequence.id, track_id, mode, actor_id=actor)
     return {
         "track_id": track_id,
         "done": int(result.get("done") or 0),
         "failed": int(result.get("failed") or 0),
+        # **实际**对原声做了什么。选了 separate 却没有分离引擎时,这里是 mute ——
+        # 背景音乐跟着没了,这件事得有地方说出来,而不是让人在成片里才发现。
+        "original_audio": applied,
+        "original_audio_note": t(f"dubOriginalAudio_{applied}", get_current_locale()),
     }
 
 
@@ -766,8 +800,8 @@ def _carries_audio(track: Track) -> bool:
     return any(clip.asset_id for clip in (track.clips or []))
 
 
-def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode: str, *, actor_id: str | None) -> None:
-    """配音落轨之后,原声怎么办 —— 压低、静音,还是原样留着。
+def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode: str, *, actor_id: str | None) -> str:
+    """配音落轨之后,原声怎么办 —— 压低、静音,还是原样留着。返回**实际**用的那种。
 
     **「压低」不等于「听不见」。** 闪避把原声压到 30%(≈ −10.5 dB),那是给「旁白盖在环境音
     之上」准备的档位:环境音本来就该若隐若现。而译配是**用另一种语言的说话声替换说话声** ——
@@ -789,21 +823,21 @@ def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mod
     from app.domain.sequences.operations import SetTrackState, set_track_state
 
     if mode == "keep":
-        return
+        return "keep"
     if mode == "separate":
         #: 分不成就退回整轨静音 —— **一个没装的可选引擎不该让一条本来能跑完的流程失败**
         #: (ADR-0016 决定 4)。退回的是"原声全没",不是"原声全在":后者才会让成片里
         #: 两个人同时说话,而那正是用户报回来的那个症状。
         if _split_voice_from_music(db, sequence_id, dub_track_id, actor_id=actor_id):
-            return
+            return "separate"
         logger.info("没有可用的音频分离引擎,原声整轨静音(序列 %s)", sequence_id)
-        mode = "mute"
+        mode = "mute_fallback"
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
-        return
+        return mode
     # 先把要改的那几条挑出来:set_track_state 会 commit,而 commit 之后 sequence.tracks
     # 上的对象全部过期 —— 边遍历边改的话,下一圈读 track.kind 会去重新查一遍库。
-    mute = mode == "mute"
+    mute = mode in {"mute", "mute_fallback"}
     targets = [
         track.id
         for track in (sequence.tracks or [])
@@ -824,6 +858,7 @@ def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mod
                 actor_id=actor_id,
             ),
         )
+    return mode
 
 
 def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> bool:

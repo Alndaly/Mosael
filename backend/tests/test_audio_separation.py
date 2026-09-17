@@ -206,8 +206,13 @@ class Test配音流程按可用性退让:
             def get(self, model, key):
                 return _Seq()
 
-        subjobs._handle_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
+        applied = subjobs._handle_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
         assert seen == ["muted"], seen
+        #: 退回静音要**报出来** —— 背景音乐跟着没了,用户要从通知里知道,而不是看成片才发现。
+        assert applied == "mute_fallback"
+        from app.core.i18n import t
+
+        assert "背景音乐" in t(f"dubOriginalAudio_{applied}") and "设置" in t(f"dubOriginalAudio_{applied}")
 
     def test_分离可用时把片段换成背景音__原素材不动(self, monkeypatch) -> None:
         """成功那条路:片段指向的素材换成背景音那一份,人声那半丢掉。

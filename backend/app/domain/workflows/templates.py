@@ -260,7 +260,10 @@ def _shot_schema(clip_seconds: int) -> dict[str, Any]:
         "end_seconds": {"type": "number", "exclusiveMinimum": 0},
         "duration_seconds": {"type": "number", "minimum": clip_seconds, "maximum": clip_seconds},
         "story_beat": {"type": "string", "description": "该镜头推进叙事的唯一任务"},
-        "narration": {"type": "string", "description": "该时间段的口播或对白，无则写空字符串"},
+        "narration": {
+            "type": "string",
+            "description": f"该时间段的口播或对白，念出来不超过 {clip_seconds} 秒；无则写空字符串",
+        },
         "scene": {"type": "string", "description": "人物、环境、道具与前中后景关系"},
         "shot_size": {"type": "string", "description": "景别及其叙事理由"},
         "camera_angle": {"type": "string", "description": "机位高度、俯仰、视线与镜头焦段"},
@@ -333,7 +336,13 @@ def _cleanup_schema() -> dict[str, Any]:
 
 
 def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
-    """视频 → 带时间码逐字稿 → 智能诊断 → 多区间波纹裁切 → 整理版导出。"""
+    """视频 → 降噪 → 带时间码逐字稿 → 智能诊断 → 多区间波纹裁切 → 整理版导出。
+
+    **先降噪再转写。** 口播、访谈最常见的毛病就是底噪(空调、风扇、电流声),它同时拖累两件事:
+    转写认错字(整理方案是照着逐字稿切的),以及成片里一直嗡着。降噪用内置引擎 —— 不用装、
+    不动背景音乐;以说话为主、噪声杂的素材,可以在节点上换成 deepfilternet。降噪只换声音,
+    时间码不变,所以后面按逐字稿切的每一刀仍然落在原来的位置。
+    """
 
     cleanup_system = """你是一名资深口播、访谈与课程剪辑师。你会收到词级或段级时间码逐字稿，
 任务是在不改写观点、不改变事实、不打乱时间顺序的前提下，让视频更紧凑、清楚、自然。识别长停顿、
@@ -367,17 +376,24 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
             "config": {"asset_id": ""},
         },
         {
+            "id": "clean_audio",
+            "type": "denoise_audio",
+            "name": "去除底噪(产出新视频,原片不动)",
+            "position": {"x": 650, "y": 260},
+            "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto", "strength": "medium"},
+        },
+        {
             "id": "verbatim_transcript",
             "type": "transcribe_asset",
             "name": "生成带时间码逐字稿",
-            "position": {"x": 650, "y": 100},
-            "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto"},
+            "position": {"x": 970, "y": 100},
+            "config": {"asset_id": "{{clean_audio.asset_id}}", "engine": "auto"},
         },
         {
             "id": "cleanup_project",
             "type": "project_sequence_create",
             "name": "建立非破坏性整理副本",
-            "position": {"x": 650, "y": 420},
+            "position": {"x": 970, "y": 420},
             "config": {
                 "name": "{{source_video.name}} · 智能整理",
                 "width": "{{source_video.width}}",
@@ -388,11 +404,11 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "source_on_timeline",
             "type": "timeline_append",
-            "name": "复制原视频到新时间线",
-            "position": {"x": 970, "y": 420},
+            "name": "把降噪后的视频放到新时间线",
+            "position": {"x": 1290, "y": 420},
             "config": {
                 "sequence_id": "{{cleanup_project.sequence_id}}",
-                "asset_id": "{{source_video.asset_id}}",
+                "asset_id": "{{clean_audio.asset_id}}",
                 "track_id": "{{cleanup_project.video_track_id}}",
                 "start": 0,
                 "end": "{{source_video.duration}}",
@@ -402,7 +418,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
             "id": "cleanup_plan",
             "type": "llm",
             "name": "诊断杂乱问题并生成整理方案",
-            "position": {"x": 1290, "y": 260},
+            "position": {"x": 1610, "y": 260},
             "config": {
                 "profile_id": chat.profile_id,
                 "model": chat.model,
@@ -434,7 +450,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
             "id": "apply_cleanup",
             "type": "timeline_cut_ranges",
             "name": "按逐字稿批量波纹整理",
-            "position": {"x": 1620, "y": 260},
+            "position": {"x": 1930, "y": 260},
             "config": {
                 "sequence_id": "{{cleanup_project.sequence_id}}",
                 "clip_id": "{{source_on_timeline.clip_id}}",
@@ -447,27 +463,28 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
             "id": "export_clean_video",
             "type": "export_sequence",
             "name": "导出智能整理版视频",
-            "position": {"x": 1950, "y": 260},
+            "position": {"x": 2250, "y": 260},
             "config": {"sequence_id": "{{cleanup_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
             "name": "整理完成通知",
-            "position": {"x": 2260, "y": 260},
+            "position": {"x": 2570, "y": 260},
             "config": {
                 "title": "视频逐字稿与智能整理已完成",
-                "body": "{{source_video.name}} 已生成逐字稿、问题诊断和非破坏性整理版视频。",
+                "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。",
             },
         },
         {
             "id": "output",
             "type": "output",
             "name": "交付逐字稿、方案与成片",
-            "position": {"x": 2570, "y": 260},
+            "position": {"x": 2890, "y": 260},
             "config": {
                 "values": {
                     "source_asset_id": "{{source_video.asset_id}}",
+                    "denoised_asset_id": "{{clean_audio.asset_id}}",
                     "verbatim_transcript": "{{verbatim_transcript.text}}",
                     "timed_transcript": "{{verbatim_transcript.segments}}",
                     "cleanup_plan": "{{cleanup_plan.json}}",
@@ -482,9 +499,10 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
     ]
     edges = [
         {"id": "start_source", "source": "start", "target": "source_video"},
-        {"id": "source_transcript", "source": "source_video", "target": "verbatim_transcript"},
+        {"id": "source_denoise", "source": "source_video", "target": "clean_audio"},
+        {"id": "denoise_transcript", "source": "clean_audio", "target": "verbatim_transcript"},
         {"id": "source_project", "source": "source_video", "target": "cleanup_project"},
-        {"id": "source_append", "source": "source_video", "target": "source_on_timeline"},
+        {"id": "denoise_append", "source": "clean_audio", "target": "source_on_timeline"},
         {"id": "project_append", "source": "cleanup_project", "target": "source_on_timeline"},
         {"id": "transcript_plan", "source": "verbatim_transcript", "target": "cleanup_plan"},
         {"id": "append_plan", "source": "source_on_timeline", "target": "cleanup_plan"},
@@ -494,7 +512,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 3, "source": "official"},
+        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 4, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
@@ -639,7 +657,9 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
             "position": {"x": 2260, "y": 260},
             "config": {
                 "title": "视频译配与字幕已完成",
-                "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。",
+                # 原声那一句**必须说**:选了「分离」却没装分离引擎时,流程会退回整轨静音 ——
+                # 背景音乐跟着没了。不说的话,用户要到看成片时才发现。
+                "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。{{dubbing.original_audio_note}}",
             },
         },
         {
@@ -656,6 +676,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
                     "subtitle_track_id": "{{translated_subtitles.track_id}}",
                     "subtitle_count": "{{translated_subtitles.count}}",
                     "dub_track_id": "{{dubbing.track_id}}",
+                    "original_audio": "{{dubbing.original_audio}}",
                     "dubbed_lines": "{{dubbing.done}}",
                     "failed_lines": "{{dubbing.failed}}",
                     "project_id": "{{dub_project.project_id}}",
@@ -681,7 +702,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": TRANSLATED_DUB, "template_version": 1, "source": "official"},
+        "meta": {"template_id": TRANSLATED_DUB, "template_version": 2, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
@@ -729,7 +750,9 @@ def full_video_generation_graph(
 {video_plan.clip_seconds} 秒镜头。每镜必须给出精确起止时间、口播、景别、机位、构图、主体动作、光线、色彩、声音设计、
 连续性和运镜。运镜不得只写“推进/环绕”：必须写明镜头从哪里开始、沿什么路径、以何速度移动、
 在哪里结束，以及运动如何服务叙事。所有镜头时间必须首尾相接，不重叠、不留空；首镜建立钩子，
-中段逐步升级信息，末镜完成主旨回收。generation_prompt 使用英文，能独立交给视频模型，完整复述
+中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来不得超过 {video_plan.clip_seconds} 秒：
+中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进这一镜，
+听起来会很赶。generation_prompt 使用英文，能独立交给视频模型，完整复述
 主体、环境、风格、镜头语言、动作节拍、运镜和连续性；主体动作必须能在 {video_plan.clip_seconds} 秒内完成；
 画面中不要生成字幕、UI、Logo 或水印。
 transition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合
@@ -819,14 +842,20 @@ JSON Schema 的对象。"""
         {
             "id": "append_narration",
             "type": "timeline_append",
-            "name": "把口播接到音轨",
+            "name": "把口播对齐到这一镜",
             "position": {"x": 1010, "y": 300},
             "config": {
                 "sequence_id": "{{input.sequence_id}}",
                 "asset_id": "{{narrate.asset_id}}",
                 "track_id": "{{input.audio_track_id}}",
-                # 不写 start/end:音频按自己的实际长度接在音轨末尾。画面是每镜定长的,
-                # 口播不是 —— 硬裁到 clip_seconds 会把话切掉半句。
+                # **放在这一镜画面开始的那一秒**,不是接在上一段口播后面。此前是后者:
+                # 口播长短不一,第 n 段落在前 n−1 段口播时长之和上,越往后和画面错得越多。
+                # 用的是画面片段**实际**落下的位置,不是分镜里写的 start_seconds —— 那是
+                # 模型写的数字,画面按顺序接在前一镜后面,两者不必一致。
+                "at": "{{append_clip.timeline_start}}",
+                # 不裁(硬裁会把话切掉半句),比镜头长就加速塞进去,最多 1.5 倍。
+                # 分镜提示词里已经按语速给了字数上限,这一道是兜底。
+                "max_duration": video_plan.clip_seconds,
             },
         },
     ])
@@ -1045,7 +1074,7 @@ JSON Schema 的对象。"""
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 3, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 4, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

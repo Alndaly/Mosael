@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Topic to finished video",
-  "description": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Narration is optional.",
-  "graph_hash": "c919272966662d7bff11ee19cfb1fc7175e56e6856e1c5a7213942fb154d0a20",
+  "description": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Narration is optional; each shot's narration is aligned to its own picture.",
+  "graph_hash": "8155e0750aefe2fa8012b8ca99017ccb880d5e30066677a33c314d64a9829307",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -276,7 +276,7 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是导演、摄影指导、分镜师和视频生成提示词工程师。把创意简报拆成连续的\n5 秒镜头。每镜必须给出精确起止时间、口播、景别、机位、构图、主体动作、光线、色彩、声音设计、\n连续性和运镜。运镜不得只写“推进/环绕”：必须写明镜头从哪里开始、沿什么路径、以何速度移动、\n在哪里结束，以及运动如何服务叙事。所有镜头时间必须首尾相接，不重叠、不留空；首镜建立钩子，\n中段逐步升级信息，末镜完成主旨回收。generation_prompt 使用英文，能独立交给视频模型，完整复述\n主体、环境、风格、镜头语言、动作节拍、运镜和连续性；主体动作必须能在 5 秒内完成；\n画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
+          "system": "你是导演、摄影指导、分镜师和视频生成提示词工程师。把创意简报拆成连续的\n5 秒镜头。每镜必须给出精确起止时间、口播、景别、机位、构图、主体动作、光线、色彩、声音设计、\n连续性和运镜。运镜不得只写“推进/环绕”：必须写明镜头从哪里开始、沿什么路径、以何速度移动、\n在哪里结束，以及运动如何服务叙事。所有镜头时间必须首尾相接，不重叠、不留空；首镜建立钩子，\n中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来不得超过 5 秒：\n中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进这一镜，\n听起来会很赶。generation_prompt 使用英文，能独立交给视频模型，完整复述\n主体、环境、风格、镜头语言、动作节拍、运镜和连续性；主体动作必须能在 5 秒内完成；\n画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
           "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经与连续性规则：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 5 秒，镜头数按目标时长除以\n5；若不能整除，向不少于目标时长的最近倍数取整。时间码从 0 开始连续编号。",
           "response_format": "json_schema",
           "json_schema_name": "professional_timed_storyboard",
@@ -323,7 +323,7 @@
                     },
                     "narration": {
                       "type": "string",
-                      "description": "该时间段的口播或对白，无则写空字符串"
+                      "description": "该时间段的口播或对白，念出来不超过 5 秒；无则写空字符串"
                     },
                     "scene": {
                       "type": "string",
@@ -535,7 +535,7 @@
               {
                 "id": "append_narration",
                 "type": "timeline_append",
-                "name": "把口播接到音轨",
+                "name": "把口播对齐到这一镜",
                 "position": {
                   "x": 1010,
                   "y": 300
@@ -543,10 +543,13 @@
                 "config": {
                   "sequence_id": "{{input.sequence_id}}",
                   "asset_id": "",
-                  "track_id": "{{input.audio_track_id}}"
+                  "track_id": "{{input.audio_track_id}}",
+                  "at": "",
+                  "max_duration": 5
                 },
                 "inputs": [
-                  "asset_id"
+                  "asset_id",
+                  "at"
                 ]
               }
             ],
@@ -596,6 +599,14 @@
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_id"
+              },
+              {
+                "id": "d-append_clip-timeline_start-append_narration-at",
+                "source": "append_clip",
+                "target": "append_narration",
+                "kind": "data",
+                "source_output": "timeline_start",
+                "target_input": "at"
               }
             ]
           },

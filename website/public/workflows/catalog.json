@@ -6,8 +6,8 @@
       "en": "Topic to finished video"
     },
     "summary": {
-      "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。可选添加旁白。",
-      "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Narration is optional."
+      "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。可选添加旁白，每镜口播对齐到它自己的画面。",
+      "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Narration is optional; each shot's narration is aligned to its own picture."
     },
     "requires": {
       "zh": [
@@ -38,7 +38,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 3,
+    "version": 4,
     "nodes": 10,
     "download": {
       "zh": "/workflows/full_video_generation.zh.mosael-workflow.json",
@@ -52,8 +52,8 @@
       "en": "Transcript-based video cleanup"
     },
     "summary": {
-      "zh": "将已有视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
-      "en": "Transcribe an existing video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original."
+      "zh": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
+      "en": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original."
     },
     "requires": {
       "zh": [
@@ -70,6 +70,7 @@
     "stages": {
       "zh": [
         "选择视频",
+        "去除底噪",
         "生成逐字稿",
         "诊断与裁切方案",
         "波纹裁切",
@@ -77,6 +78,7 @@
       ],
       "en": [
         "Choose a video",
+        "Remove hiss",
         "Transcribe",
         "Review and plan cuts",
         "Ripple cut",
@@ -84,8 +86,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 3,
-    "nodes": 10,
+    "version": 4,
+    "nodes": 11,
     "download": {
       "zh": "/workflows/transcript_video_cleanup.zh.mosael-workflow.json",
       "en": "/workflows/transcript_video_cleanup.en.mosael-workflow.json"
@@ -98,20 +100,22 @@
       "en": "Translated dubbing with subtitles"
     },
     "summary": {
-      "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声保留在自己的轨上，只是被压低。",
-      "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original audio stays on its track, only ducked."
+      "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；没装人声分离引擎时整轨静音，完成通知里会说明。",
+      "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so."
     },
     "requires": {
       "zh": [
         "可用的转写引擎",
-        "翻译：AI 对话模型或 Google 翻译",
+        "翻译：AI 对话模型（节点上可换成 Google 翻译）",
         "一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
+        "保住背景音乐：人声分离引擎（可选）",
         "有人说话的视频素材"
       ],
       "en": [
         "Available transcription engine",
-        "Translation: a chat model or Google Translate",
+        "Translation: a chat model (switchable to Google Translate on the node)",
         "A voice: a cloned voice, or a built-in voice from any engine",
+        "To keep the background music: a voice separation engine (optional)",
         "A video with speech"
       ]
     },
@@ -134,7 +138,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 1,
+    "version": 2,
     "nodes": 11,
     "download": {
       "zh": "/workflows/translated_dub.zh.mosael-workflow.json",

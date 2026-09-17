@@ -175,6 +175,39 @@ class Test接素材到时间线:
                 "sequence_id": sequence_id, "asset_id": self._asset(ws), "start": 5, "end": 2,
             })
 
+    def test_可以放在指定的那一秒(self) -> None:
+        """口播要对齐它那一镜的画面,不是接在上一段口播后面。"""
+        ws, sequence_id, _ = _setup()
+        asset = self._asset(ws, duration=3.0)
+        _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset})
+        placed = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset, "at": 10})
+        assert (placed["timeline_start"], placed["timeline_end"]) == (10.0, 13.0)
+
+    def test_落点不能是负数(self) -> None:
+        ws, sequence_id, _ = _setup()
+        with pytest.raises(WorkflowDomainError, match="负数"):
+            _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": self._asset(ws), "at": -1})
+
+    @pytest.mark.parametrize(
+        ("duration", "limit", "span", "speed"),
+        [
+            (6.0, 5, 5.0, 1.2),  # 长了一点:加速塞进去
+            (10.0, 5, 10.0 / 1.5, 1.5),  # 长太多:最多 1.5 倍,宁可超出也不念成听不清
+            (3.0, 5, 3.0, None),  # 本来就短:不拉慢
+        ],
+    )
+    def test_太长就加速塞进最长时长(self, duration, limit, span, speed) -> None:
+        from app.db.models import Clip
+
+        ws, sequence_id, _ = _setup()
+        out = _run("timeline_append", ws, {
+            "sequence_id": sequence_id, "asset_id": self._asset(ws, duration=duration), "max_duration": limit,
+        })
+        assert out["timeline_end"] - out["timeline_start"] == pytest.approx(span)
+        with SessionLocal() as db:
+            clip = db.get(Clip, out["clip_id"])
+            assert (clip.speed or 1.0) == pytest.approx(speed or 1.0)
+
     def test_跨工作区的素材不给接(self) -> None:
         from app.db.models import Workspace
 

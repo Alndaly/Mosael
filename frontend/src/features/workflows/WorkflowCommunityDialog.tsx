@@ -44,6 +44,7 @@ const TEMPLATES: TemplateDefinition[] = [
     description: "wfTranscriptCleanupTemplateDescription",
     stages: [
       "wfCommunityStagePickVideo",
+      "wfCommunityStageDenoise",
       "wfCommunityStageTranscript",
       "wfCommunityStageCleanupPlan",
       "wfCommunityStageRippleCut",
@@ -64,8 +65,8 @@ const TEMPLATES: TemplateDefinition[] = [
       "wfCommunityStageDub",
       "wfCommunityStageExport",
     ],
-    // 翻译走 Google 免费接口,不要对话模型;要的是一把嗓子。
-    requirements: ["wfCommunityRequirementVoice"],
+    // 翻译走对话模型(免费的 Google 接口按出口 IP 封禁,官方模板不押在它上面),外加一把嗓子。
+    requirements: ["wfCommunityRequirementChat", "wfCommunityRequirementVoice"],
     icon: Languages,
   },
 ];

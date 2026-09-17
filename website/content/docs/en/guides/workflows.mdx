@@ -2,7 +2,7 @@
 title: Visual workflows
 description: Connect media, models and tools, check inputs and run repeatable creative tasks.
 order: 6
-updated: 2026-09-09
+updated: 2026-09-17
 version: 1.4.0
 ---
 
@@ -16,10 +16,17 @@ The [website workflow catalog](/workflows) includes Topic to finished video, Tra
 2. Choose your workspace in the app, open Workflows, then use Import workflow to select the file.
 3. Open the imported graph, choose your own providers and models, supply the required media and pass the readiness check before running.
 
-Downloads contain no account secrets or private assets, and do not automatically select local default models. Video generation
-requires a text-to-video model; transcript cleanup requires an available transcription engine and a source video;
-translated dubbing also needs a voice — a cloned voice from your library, or a built-in voice from any engine
-(Edge's free voices need no configuration). Use v1.0.0 or later. Template node names and prompts are currently in Chinese.
+Downloads contain no account secrets or private assets, and do not automatically select local default models. Use v1.4.0 or
+later. Template node names and prompts are currently in Chinese.
+
+| Template | What it does | Needs |
+| --- | --- | --- |
+| Topic to finished video | Thesis → script and visual bible in parallel → timed storyboard → generate each shot onto the timeline → export. With a voice selected, each shot's narration is synthesized and **placed at the second that shot starts**; narration longer than its shot is sped up to fit (at most 1.5×), and the storyboard prompt already caps its length by speaking rate | A chat model and a text-to-video model; narration is optional: a cloned voice |
+| Transcript-based video cleanup | **Remove background hiss first** (built-in engine, music untouched; transcription gets more accurate) → timed transcript → diagnose pauses, fillers and repetition → ripple-cut high-confidence ranges in a new project → export. Denoising produces a new video; the source is untouched | A chat model, a transcription engine, a source video |
+| Translated dubbing with subtitles | Transcribe line by line → translate each line (chat model, switchable to Google on the node) → lay subtitles on the original timecodes → dub each line and time-compress it into its slot → remove the original voice and keep the background music → export. Without a voice separation engine the original track is muted, and **the completion notice says so** | A transcription engine, a chat model, a voice (cloned or a stock engine voice; Edge's free voices need no setup); a separation engine to keep the music |
+
+The reduce-noise node uses the built-in engine by default. For speech-led material with messy noise (keyboards, dishes, chatter)
+switch it to `deepfilternet` (download it first under Settings → On-device engines → Noise reduction); it removes music as well.
 
 ## Canvas & nodes
 
@@ -34,13 +41,15 @@ translated dubbing also needs a voice — a cloned voice from your library, or a
 
   | Group | Nodes |
   | --- | --- |
-  | Flow | start, output, condition, delay, notify |
-  | Text & models | LLM, text template, text transform, translate, JSON extract, code |
-  | Loops & reuse | for-each, while, subgraph, call workflow |
-  | Media & cuts | AI-generate asset, synthesize speech, transcribe asset, generate subtitles, dub subtitles, video to GIF, export timeline, publish |
-  | Asset library | asset query, asset tag, asset update, create project |
-  | External | HTTP request, plugin tool |
-  | Browser | open / navigate / click / input / extract / scroll / upload / wait / evaluate / close |
+  | Flow | start, output, condition, delay, for-each loop, while loop, subgraph, call workflow |
+  | AI | LLM, AI generate, translate, translate lines |
+  | Audio | transcribe asset, text to speech, dub subtitles, separate voice and background, reduce noise |
+  | Assets & timeline | asset, create project, create video project, append to timeline, add a track, clear timeline, inspect timeline, clean up time ranges, timeline advanced operations, generate subtitles, video to GIF, export timeline, find assets, tag assets, organize assets |
+  | Knowledge | search notes, read note, save as note |
+  | Publishing | publish, send notification |
+  | Data | HTTP request, code, text template, JSON extract, text transform |
+  | Plugins | plugin tool |
+  | Browser | open / navigate / click / type / upload file / extract / wait / scroll / run script / close |
 - **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
 - Click a node to open its **inspector** — it sits **directly below** the node, and a floating bar sits
   **directly above** it: content sections on the left (**Parameters** / **Advanced** / **Outputs**, plus

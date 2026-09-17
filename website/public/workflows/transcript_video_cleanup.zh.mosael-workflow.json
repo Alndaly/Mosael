@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "口播与访谈智能整理",
-  "description": "将已有视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
-  "graph_hash": "9b5d128e5b761f960d5ecc9ae254addf90d9408c80f534d354527ad4980120f1",
+  "description": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
+  "graph_hash": "4343e8f2cb57f3c754bc491a3cebf5a70a56fa6e89b01b7e443f3d904baa050f",
   "graph": {
     "meta": {
       "template_id": "transcript_video_cleanup",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -42,11 +42,28 @@
         }
       },
       {
+        "id": "clean_audio",
+        "type": "denoise_audio",
+        "name": "去除底噪(产出新视频,原片不动)",
+        "position": {
+          "x": 650,
+          "y": 260
+        },
+        "config": {
+          "asset_id": "",
+          "engine": "auto",
+          "strength": "medium"
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
         "id": "verbatim_transcript",
         "type": "transcribe_asset",
         "name": "生成带时间码逐字稿",
         "position": {
-          "x": 650,
+          "x": 970,
           "y": 100
         },
         "config": {
@@ -62,7 +79,7 @@
         "type": "project_sequence_create",
         "name": "建立非破坏性整理副本",
         "position": {
-          "x": 650,
+          "x": 970,
           "y": 420
         },
         "config": {
@@ -80,9 +97,9 @@
       {
         "id": "source_on_timeline",
         "type": "timeline_append",
-        "name": "复制原视频到新时间线",
+        "name": "把降噪后的视频放到新时间线",
         "position": {
-          "x": 970,
+          "x": 1290,
           "y": 420
         },
         "config": {
@@ -104,7 +121,7 @@
         "type": "llm",
         "name": "诊断杂乱问题并生成整理方案",
         "position": {
-          "x": 1290,
+          "x": 1610,
           "y": 260
         },
         "config": {
@@ -267,7 +284,7 @@
         "type": "timeline_cut_ranges",
         "name": "按逐字稿批量波纹整理",
         "position": {
-          "x": 1620,
+          "x": 1930,
           "y": 260
         },
         "config": {
@@ -287,7 +304,7 @@
         "type": "export_sequence",
         "name": "导出智能整理版视频",
         "position": {
-          "x": 1950,
+          "x": 2250,
           "y": 260
         },
         "config": {
@@ -302,12 +319,12 @@
         "type": "notify",
         "name": "整理完成通知",
         "position": {
-          "x": 2260,
+          "x": 2570,
           "y": 260
         },
         "config": {
           "title": "视频逐字稿与智能整理已完成",
-          "body": "{{source_video.name}} 已生成逐字稿、问题诊断和非破坏性整理版视频。"
+          "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。"
         }
       },
       {
@@ -315,12 +332,13 @@
         "type": "output",
         "name": "交付逐字稿、方案与成片",
         "position": {
-          "x": 2570,
+          "x": 2890,
           "y": 260
         },
         "config": {
           "values": {
             "source_asset_id": "{{source_video.asset_id}}",
+            "denoised_asset_id": "{{clean_audio.asset_id}}",
             "verbatim_transcript": "{{verbatim_transcript.text}}",
             "timed_transcript": "{{verbatim_transcript.segments}}",
             "cleanup_plan": "{{cleanup_plan.json}}",
@@ -370,8 +388,16 @@
         "target": "output"
       },
       {
-        "id": "d-source_video-asset_id-verbatim_transcript-asset_id",
+        "id": "d-source_video-asset_id-clean_audio-asset_id",
         "source": "source_video",
+        "target": "clean_audio",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-clean_audio-asset_id-verbatim_transcript-asset_id",
+        "source": "clean_audio",
         "target": "verbatim_transcript",
         "kind": "data",
         "source_output": "asset_id",
@@ -410,8 +436,8 @@
         "target_input": "sequence_id"
       },
       {
-        "id": "d-source_video-asset_id-source_on_timeline-asset_id",
-        "source": "source_video",
+        "id": "d-clean_audio-asset_id-source_on_timeline-asset_id",
+        "source": "clean_audio",
         "target": "source_on_timeline",
         "kind": "data",
         "source_output": "asset_id",

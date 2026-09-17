@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator
 from typing import Any
@@ -8,6 +9,7 @@ from app.domain.workflows import NODE_TYPES, validate_graph
 from app.domain.workflows.templates import (
     ModelChoice,
     full_video_generation_graph,
+    translated_dub_graph,
     transcript_video_cleanup_graph,
 )
 from app.domain.workflows.normalization import canonicalize_data_bindings
@@ -70,7 +72,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 3,
+        "template_version": 4,
         "source": "official",
     }
 
@@ -108,7 +110,7 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "transcript_video_cleanup",
-        "template_version": 3,
+        "template_version": 4,
         "source": "official",
     }
 
@@ -120,21 +122,59 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
         for edge in graph["edges"]
         if edge.get("target") == "verbatim_transcript" and edge.get("target_input") == "asset_id"
     )
+    #: 转写读的是**降噪后**的那份 —— 底噪会让转写认错字,而整理方案是照着逐字稿切的。
     assert {key: binding[key] for key in ("source", "source_output", "target", "target_input", "kind")} == {
-        "source": "source_video",
+        "source": "clean_audio",
         "source_output": "asset_id",
         "target": "verbatim_transcript",
         "target_input": "asset_id",
         "kind": "data",
     }
+    clean = next(node for node in graph["nodes"] if node["id"] == "clean_audio")
+    assert clean["type"] == "denoise_audio"
+    #: 官方模板用内置引擎:不用装、不动背景音乐。
+    assert clean["config"]["engine"] == "auto"
+    on_timeline = next(edge for edge in graph["edges"]
+                       if edge.get("target") == "source_on_timeline" and edge.get("target_input") == "asset_id")
+    assert on_timeline["source"] == "clean_audio", "放上时间线的也该是降噪后的那份"
     assert not any(
         edge["source"] == "source_video"
         and edge["target"] == "verbatim_transcript"
-        and edge.get("kind", "control") == "control"
         for edge in graph["edges"]
     )
     cleanup_plan = next(node for node in graph["nodes"] if node["id"] == "cleanup_plan")
     assert "token_columns" in cleanup_plan["config"]["prompt"]
+
+
+def test_full_video_narration_lands_on_its_own_shot() -> None:
+    """口播放在这一镜画面开始的那一秒,而不是接在上一段口播后面。
+
+    此前是后者:口播长短不一,第 n 段落在前 n−1 段口播时长之和上,越往后和画面错得越多。
+    """
+    graph = full_video_generation_graph(
+        chat=ModelChoice(profile_id="chat-profile", provider="openai", model="chat-model"),
+        video=ModelChoice(profile_id="video-profile", provider="fal", model="video-model"),
+    )
+    loop = next(node for node in graph["nodes"] if node["id"] == "generate_and_assemble")
+    body = loop["config"]["body"]
+    narration = next(node for node in body["nodes"] if node["id"] == "append_narration")
+    clip = next(node for node in body["nodes"] if node["id"] == "generate_clip")
+    at = next(edge for edge in body["edges"] if edge.get("target") == "append_narration" and edge.get("target_input") == "at")
+    assert (at["source"], at["source_output"]) == ("append_clip", "timeline_start")
+    #: 比镜头长就压进去(兜底);镜头多长由分镜里固定的片段长度决定。
+    seconds = clip["name"].split(" ")[1]
+    assert str(narration["config"]["max_duration"]) == seconds
+    storyboard = next(node for node in graph["nodes"] if node["id"] == "storyboard")
+    assert "每秒约 4 字" in storyboard["config"]["system"]
+
+
+def test_translated_dub_notice_says_what_happened_to_the_original_audio() -> None:
+    """选了「分离」却没有分离引擎时会退回整轨静音 —— 背景音乐跟着没了,通知里得说。"""
+    graph = translated_dub_graph()
+    notice = next(node for node in graph["nodes"] if node["id"] == "done_notice")
+    references = json.dumps(notice, ensure_ascii=False) + json.dumps(graph["edges"], ensure_ascii=False)
+    assert "original_audio_note" in references
+    assert graph["meta"]["template_version"] == 2
 
 
 def test_data_binding_normalization_is_lossless_and_idempotent() -> None:

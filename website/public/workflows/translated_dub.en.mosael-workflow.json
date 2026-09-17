@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
-  "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original audio stays on its track, only ducked.",
-  "graph_hash": "35ce7e004b1187369a03568d1eb3922a3f5e87a4cf1ba2bea66e5584974d3913",
+  "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so.",
+  "graph_hash": "cb5cc0814f30f1afb70e7bd2781a1302ae386609403a43a377e37f84cf3c20cc",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -179,7 +179,7 @@
         },
         "config": {
           "title": "视频译配与字幕已完成",
-          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。"
+          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。{{dubbing.original_audio_note}}"
         }
       },
       {
@@ -199,6 +199,7 @@
             "subtitle_track_id": "{{translated_subtitles.track_id}}",
             "subtitle_count": "{{translated_subtitles.count}}",
             "dub_track_id": "{{dubbing.track_id}}",
+            "original_audio": "{{dubbing.original_audio}}",
             "dubbed_lines": "{{dubbing.done}}",
             "failed_lines": "{{dubbing.failed}}",
             "project_id": "{{dub_project.project_id}}",
