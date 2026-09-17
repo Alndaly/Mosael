@@ -1,4 +1,4 @@
-"""人声/伴奏分离是一个**能力**,不是配音流程里的一步(ADR-0016)。
+"""人声/背景音分离是一个**能力**,不是配音流程里的一步(ADR-0016)。
 
 真机上撞到的那一步:译配把原声整轨静音之后,**背景音乐也没了** —— 说话声和音乐混在同一条
 轨上,而"静音"分不开它们。缺的操作是分离。
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from app.ai.providers.contracts.separation import (
-    ACCOMPANIMENT,
+    BACKGROUND,
     VOCALS,
     SeparationError,
     SeparationRequest,
@@ -29,7 +29,7 @@ class _FakeAdapter:
     engine_id = "fake"
     label_key = "sepEngine_fake"
 
-    def __init__(self, *, ready: bool = True, stems: tuple[str, ...] = (VOCALS, ACCOMPANIMENT)) -> None:
+    def __init__(self, *, ready: bool = True, stems: tuple[str, ...] = (VOCALS, BACKGROUND)) -> None:
         self._ready = ready
         self._stems = stems
         self.installed = 0
@@ -112,11 +112,11 @@ class Test分离产出新素材:
             monkeypatch.setattr(separation, "_source_path", lambda one: source)
 
             made = separation.separate_asset(db, asset, engine="")
-            assert made.vocals.id != asset_id and made.accompaniment.id != asset_id
-            assert made.vocals.kind == "audio" and made.accompaniment.kind == "audio"
+            assert made.vocals.id != asset_id and made.background.id != asset_id
+            assert made.vocals.kind == "audio" and made.background.kind == "audio"
             #: 名字要让人在素材库里一眼看出它是从哪儿来的。
             assert "人声" in made.vocals.name and "访谈" in made.vocals.name
-            assert "伴奏" in made.accompaniment.name
+            assert "背景音" in made.background.name
 
             db.refresh(asset)
             assert asset.file_key == before, "原素材一个字节都不该动"
@@ -139,7 +139,7 @@ class Test分离产出新素材:
             half = _FakeAdapter(stems=(VOCALS,))
             monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": half)
             monkeypatch.setattr(separation, "_source_path", lambda one: source)
-            with pytest.raises(SeparationError, match="伴奏"):
+            with pytest.raises(SeparationError, match="背景音"):
                 separation.separate_asset(db, asset, engine="")
 
     def test_没引擎时说得出是没引擎(self, monkeypatch) -> None:
@@ -209,15 +209,15 @@ class Test配音流程按可用性退让:
         subjobs._handle_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
         assert seen == ["muted"], seen
 
-    def test_分离可用时把片段换成伴奏__原素材不动(self, monkeypatch) -> None:
-        """成功那条路:片段指向的素材换成伴奏那一份,人声那半丢掉。
+    def test_分离可用时把片段换成背景音__原素材不动(self, monkeypatch) -> None:
+        """成功那条路:片段指向的素材换成背景音那一份,人声那半丢掉。
 
         改的是**片段指向谁**,不是音频本身 —— 原素材一个字节不动,所以这一步和它上面那几步
         一样撤得回来。
         """
         from app.domain.workflows.executors import subjobs
 
-        made = type("M", (), {"accompaniment": type("A", (), {"id": "acc"})(), "vocals": type("V", (), {"id": "voc"})()})()
+        made = type("M", (), {"background": type("A", (), {"id": "acc"})(), "vocals": type("V", (), {"id": "voc"})()})()
 
         class _Clip:
             asset_id = "orig"
@@ -246,7 +246,7 @@ class Test配音流程按可用性退让:
         monkeypatch.setattr(sep, "separate_asset", lambda *a, **k: made)
 
         assert subjobs._split_voice_from_music(_DB(), "s1", "dub", actor_id=None) is True
-        assert clip.asset_id == "acc", "片段该指向伴奏那一份"
+        assert clip.asset_id == "acc", "片段该指向背景音那一份"
 
 
 class Test当作任务跑:
@@ -273,7 +273,7 @@ class Test当作任务跑:
 
     def test_两份产出都记着自己是从哪儿来的(self, monkeypatch, tmp_path) -> None:
         """派生关系放在**新素材**上,原素材一个字不改(和转 GIF 同款)。
-        没有它,素材库里多出两份来历不明的音频,而"人声还是伴奏"只能靠名字猜。"""
+        没有它,素材库里多出两份来历不明的音频,而"人声还是背景音"只能靠名字猜。"""
         from app.core.db import SessionLocal
         from app.db.models import Asset, Job
         from app.domain import separation
@@ -299,10 +299,32 @@ class Test当作任务跑:
             assert done.status == "succeeded"
             stems = {
                 db.get(Asset, done.result["vocals_asset_id"]).media_info["stem"]: done.result["vocals_asset_id"],
-                db.get(Asset, done.result["accompaniment_asset_id"]).media_info["stem"]: done.result[
-                    "accompaniment_asset_id"
+                db.get(Asset, done.result["background_asset_id"]).media_info["stem"]: done.result[
+                    "background_asset_id"
                 ],
             }
-            assert set(stems) == {VOCALS, ACCOMPANIMENT}
+            assert set(stems) == {VOCALS, BACKGROUND}
             for one in stems.values():
                 assert db.get(Asset, one).media_info["derived_from_asset_id"] == asset_id
+
+
+class Test节点上的引擎是选出来的:
+    def test_选项就是注册表里那几个(self) -> None:
+        """节点上的引擎曾经是一格自由文本 —— 用户得知道引擎叫什么才填得对。
+        选项从注册表读:加一个引擎,下拉里自动多一项,不用改两处。"""
+        from app.ai.providers.registry import SEPARATION_ADAPTERS
+        from app.domain.workflows import NODE_TYPES
+
+        spec = NODE_TYPES["separate_audio"]["config"]["engine"]
+        assert spec["options"] == ["auto", *SEPARATION_ADAPTERS]
+        assert spec["default"] == "auto"
+
+    def test_auto_就是不点名(self, monkeypatch) -> None:
+        """下拉给的是 auto(和转写节点同一个约定),它和空串必须是同一个意思 ——
+        否则选了 auto 反而去找一个叫 auto 的引擎,找不到就说"没有可用引擎"。"""
+        from app.ai.providers import registry
+
+        ready = _FakeAdapter(ready=True)
+        monkeypatch.setattr(registry, "SEPARATION_ADAPTERS", {"fake": ready})
+        assert registry.get_separation_adapter("auto") is ready
+        assert registry.get_separation_adapter("") is ready

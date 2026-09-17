@@ -478,12 +478,12 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
 
 @mcp.tool()
 def separate_audio(asset_id: str, engine: str = "", workspace_id: str = "") -> dict[str, Any]:
-    """Confirmation required: split an audio or video asset into a voice stem and an
-    accompaniment stem, as two NEW assets.
+    """Confirmation required: split an audio or video asset into a voice stem and a
+    background stem (music, ambience, effects), as two NEW assets.
 
     The source asset is never changed. Use it when someone wants the music without the voice,
     the voice without the music, or — most often — to dub over a video while keeping its
-    background music: drop the voice stem, keep the accompaniment, lay the new speech on top.
+    background music: drop the voice stem, keep the background, lay the new speech on top.
 
     Runs a model on this machine: it needs a separation engine installed, and a long asset takes
     many minutes. Leave `engine` empty to use whichever engine is currently runnable.

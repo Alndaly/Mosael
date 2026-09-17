@@ -17,7 +17,7 @@ export function downloadAsrModel(id: string): Promise<AsrModel> {
   return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
 
-/** 人声/伴奏分离引擎(ADR-0016)。装在**后端主机**上,所以和转写模型同一条路。 */
+/** 人声/背景音分离引擎(ADR-0016)。装在**后端主机**上,所以和转写模型同一条路。 */
 export function listSeparationEngines(): Promise<SeparationEngine[]> {
   return api<SeparationEngine[]>("/api/separation/engines");
 }
@@ -183,6 +183,17 @@ export function listTtsModels(): Promise<TtsEngine[]> {
 
 export function downloadTtsModel(id: string): Promise<TtsEngine> {
   return api<TtsEngine>(`/api/tts/models/${encodeURIComponent(id)}/download`, { method: "POST" });
+}
+
+export type InstallSource = components["schemas"]["InstallSourceOut"];
+
+/** 本机引擎(转写 / 声音克隆 / 人声分离)装依赖时用哪个 pip 索引。三个引擎共用这一份。 */
+export function getInstallSource(): Promise<InstallSource> {
+  return api<InstallSource>("/api/settings/install-source");
+}
+
+export function updateInstallSource(pip_index: string): Promise<InstallSource> {
+  return api<InstallSource>("/api/settings/install-source", { method: "PUT", body: JSON.stringify({ pip_index }) });
 }
 
 export function getTtsConfig(): Promise<TtsConfig> {

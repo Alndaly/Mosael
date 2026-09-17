@@ -1,4 +1,4 @@
-"""把一条混音拆成几条 stem 的能力契约(人声 / 伴奏 / …)。
+"""把一条混音拆成几条 stem 的能力契约(人声 / 背景音 / …)。
 
 和 ``contracts/generation.py``、``contracts/speech.py`` 并列:契约只说**要什么、拿到什么**,
 不说是哪个模型、跑在哪、要不要联网。具体实现在 ``adapters/``,装配在 ``registry.py`` ——
@@ -19,12 +19,11 @@ from typing import Protocol
 #: 而一段一小时的访谈是正常输入 —— 所以这个数比合成/识别那两条都大得多。
 SEPARATION_TIMEOUT_SECONDS = 3600
 
-#: 契约认得的 stem 名字。适配器各叫各的(demucs 叫 `no_vocals`、别家叫 `instrumental`、
-#: `accompaniment`),归一到这里,调用方才不必认识引擎 —— 而「调用方不认识引擎」这条由
+#: 契约认得的 stem 名字。适配器各叫各的(demucs 叫 `no_vocals`、别家叫 `instrumental` / `accompaniment`),归一到这里,调用方才不必认识引擎 —— 而「调用方不认识引擎」这条由
 #: tests/test_audio_separation.py::Test契约不认识任何一个引擎 守着。
 VOCALS = "vocals"
-ACCOMPANIMENT = "accompaniment"
-STEMS = (VOCALS, ACCOMPANIMENT)
+BACKGROUND = "background"
+STEMS = (VOCALS, BACKGROUND)
 
 
 class SeparationError(RuntimeError):
@@ -36,7 +35,7 @@ class SeparationRequest:
     """要分离的那段音频。
 
     `stems` 是**想要哪几条**,不是"引擎能给哪几条":四分离的引擎给得出鼓和贝斯,而这条产品线上
-    真正用得到的是人声和伴奏两条。要不到的名字由适配器报错,而不是悄悄少给一个文件 ——
+    真正用得到的是人声和背景音两条。要不到的名字由适配器报错,而不是悄悄少给一个文件 ——
     少给的那条会一路空到成片里。
     """
 

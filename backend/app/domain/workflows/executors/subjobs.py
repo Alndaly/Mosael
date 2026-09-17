@@ -748,9 +748,8 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     result = final.result or {}
     track_id = str(result.get("track_id") or "")
     if track_id:
-        _handle_original_audio(db, sequence.id, track_id, str(config.get("original_audio") or "").strip().lower()
-                               or ("duck" if _yes_no(config, "duck_original", default=True) else "keep"),
-                               actor_id=actor)
+        mode = str(config.get("original_audio") or "duck").strip().lower()
+        _handle_original_audio(db, sequence.id, track_id, mode, actor_id=actor)
     return {
         "track_id": track_id,
         "done": int(result.get("done") or 0),
@@ -828,7 +827,7 @@ def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mod
 
 
 def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> bool:
-    """把装着原声的那条轨换成它的**伴奏**,人声那半丢掉。成功返回 True。
+    """把装着原声的那条轨换成它的**背景音**,人声那半丢掉。成功返回 True。
 
     这是 `original_audio: separate` 的实现。做法是替换片段指向的素材,而不是改音频本身:
     原素材一个字节不动(分离产出的是两份新素材),所以这一步和它上面那几步一样撤得回来。
@@ -858,7 +857,7 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
             except SeparationError as exc:
                 logger.warning("分离失败,这一段退回静音:%s", exc)
                 return False
-            clip.asset_id = made.accompaniment.id
+            clip.asset_id = made.background.id
             swapped = True
     if swapped:
         db.commit()
@@ -867,7 +866,7 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
 
 @register("separate_audio")
 def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    """把一份素材拆成人声 + 伴奏两份新素材。
+    """把一份素材拆成人声 + 背景音两份新素材。
 
     **节点不认识任何引擎** —— 它只跟 domain.separation 说话,由注册表决定这次用哪个
     Adapter(ADR-0016)。所以加一个引擎不用改这里。
@@ -884,7 +883,7 @@ def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any])
         raise WorkflowDomainError(str(exc)) from exc
     return {
         "vocals_asset_id": made.vocals.id,
-        "accompaniment_asset_id": made.accompaniment.id,
+        "background_asset_id": made.background.id,
         "engine": made.engine,
     }
 

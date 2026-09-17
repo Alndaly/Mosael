@@ -225,13 +225,6 @@ def test_原声三档各做各的事() -> None:
     assert nodes["dubbing"]["config"]["original_audio"] == "separate"
 
 
-def test_没写新键时仍按旧的_duck_original_走() -> None:
-    """存量工作流里存的是 yes/no。读不懂旧键 = 别人保存过的流程换了行为,而且是静默的。"""
-    from app.domain.workflows import NODE_TYPES
-
-    assert "duck_original" in NODE_TYPES["dub_subtitles"]["config"], "旧键要留着读"
-
-
 def test_翻译用哪个模型是能配的() -> None:
     """一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
 

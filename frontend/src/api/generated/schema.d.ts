@@ -1113,7 +1113,7 @@ export interface paths {
         put?: never;
         /**
          * Separate Asset Audio
-         * @description 拆成人声 + 伴奏两份**新**素材;原素材不动(ADR-0016)。
+         * @description 拆成人声 + 背景音两份**新**素材;原素材不动(ADR-0016)。
          *
          *     排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被
          *     某一层断掉 —— 用户看到"失败了",后台其实还在跑。
@@ -1339,7 +1339,7 @@ export interface paths {
         };
         /**
          * List Separation Engines
-         * @description 人声/伴奏分离引擎,以及它们装没装。
+         * @description 人声/背景音分离引擎,以及它们装没装。
          */
         get: operations["list_separation_engines_api_separation_engines_get"];
         put?: never;
@@ -4428,6 +4428,31 @@ export interface paths {
          *     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(domain/ai_retry)。
          */
         put: operations["set_ai_runtime_api_settings_ai_runtime_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/install-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Install Source
+         * @description 本机引擎装依赖用哪个 pip 索引。
+         *
+         *     **为什么单独一对接口**:这个值历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
+         *     也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。想给转写换镜像的人得去
+         *     「声音克隆」里找。存储位置不动(搬表是另一件事),但界面和接口不再挂在克隆名下。
+         */
+        get: operations["get_install_source_api_settings_install_source_get"];
+        /** Set Install Source */
+        put: operations["set_install_source_api_settings_install_source_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -7842,6 +7867,25 @@ export interface components {
              */
             duration: number;
         };
+        /**
+         * InstallSourceOut
+         * @description 本机引擎装依赖时用哪个 pip 索引。转写、声音克隆、人声分离三个引擎共用这一份。
+         */
+        InstallSourceOut: {
+            /**
+             * Pip Index
+             * @default
+             */
+            pip_index: string;
+        };
+        /** InstallSourceUpdate */
+        InstallSourceUpdate: {
+            /**
+             * Pip Index
+             * @default
+             */
+            pip_index: string;
+        };
         /** InvitationListOut */
         InvitationListOut: {
             /** Invitations */
@@ -10162,7 +10206,7 @@ export interface components {
         };
         /**
          * SeparationEngineOut
-         * @description 一个人声/伴奏分离引擎装没装。
+         * @description 一个人声/背景音分离引擎装没装。
          *
          *     和转写模型那一页同一条区分:**文件在不在盘上**和**跑不跑得起来**是两件事。这里只有后者
          *     有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的就是"这个引擎的解释器在不在"。
@@ -10814,11 +10858,6 @@ export interface components {
              * @default hf-mirror
              */
             source: string;
-            /**
-             * Pip Index
-             * @default
-             */
-            pip_index: string;
             /**
              * Fish Repo Dir
              * @default
@@ -21020,6 +21059,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiRuntimeConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_install_source_api_settings_install_source_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallSourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_install_source_api_settings_install_source_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallSourceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallSourceOut"];
                 };
             };
             /** @description Validation Error */

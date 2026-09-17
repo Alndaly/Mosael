@@ -1,4 +1,4 @@
-"""把一份素材拆成人声和伴奏两份素材。
+"""把一份素材拆成人声和背景音两份素材。
 
 **这一层是"能力"和"素材"之间的那道缝**(ADR-0016):上面的调用方(工作流节点、配音流程、
 以后的剪辑台和 MCP)只跟这里说话,不认识任何一个引擎;下面由 `providers.registry` 决定
@@ -22,7 +22,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.separation import (
-    ACCOMPANIMENT,
+    BACKGROUND,
     VOCALS,
     SeparationError,
     SeparationRequest,
@@ -36,7 +36,8 @@ from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_eve
 logger = logging.getLogger(__name__)
 
 #: 拆出来的两份素材,名字后面缀什么。取名要让人在素材库里一眼认出它是从哪儿来的。
-_SUFFIX = {VOCALS: "人声", ACCOMPANIMENT: "伴奏"}
+#: 「背景音」而不是「伴奏」:对视频来说人声之外是音乐 + 环境声 + 音效,「伴奏」是个音乐术语,说窄了。
+_SUFFIX = {VOCALS: "人声", BACKGROUND: "背景音"}
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ class SeparatedAssets:
     """一次分离的产出。两份都是**新的**素材行。"""
 
     vocals: Asset
-    accompaniment: Asset
+    background: Asset
     engine: str
 
 
@@ -61,7 +62,7 @@ def separate_asset(
     engine: str = "",
     project_id: str | None = None,
 ) -> SeparatedAssets:
-    """把这份素材拆成人声 + 伴奏两份新素材。
+    """把这份素材拆成人声 + 背景音两份新素材。
 
     输入可以是视频:分离引擎只认音频,所以先抽一条 wav 出来 —— 走的是转写那条现成的路
     (`voices.transcription._extract_audio`),不另写一份 ffmpeg 调用。
@@ -83,7 +84,7 @@ def separate_asset(
         audio = _as_audio(source, work)
         stems = adapter.separate(SeparationRequest(audio_path=audio), work / "out")
         made: dict[str, Asset] = {}
-        for stem in (VOCALS, ACCOMPANIMENT):
+        for stem in (VOCALS, BACKGROUND):
             path = stems.get(stem)
             if path is None or not path.is_file():
                 raise SeparationError(f"分离结果里缺少:{_SUFFIX[stem]}")
@@ -95,7 +96,7 @@ def separate_asset(
                 name=f"{asset.name} · {_SUFFIX[stem]}",
                 source="separated",
             )
-    return SeparatedAssets(vocals=made[VOCALS], accompaniment=made[ACCOMPANIMENT], engine=adapter.engine_id)
+    return SeparatedAssets(vocals=made[VOCALS], background=made[BACKGROUND], engine=adapter.engine_id)
 
 
 def _source_path(asset: Asset) -> Path | None:
@@ -155,7 +156,7 @@ def start_separation_job(db: Session, *, asset: Asset, created_by: str | None, e
 
 def _run_job(job_id: str, asset_id: str, engine: str) -> None:
     with RENDER_SLOTS:
-        run_job_guarded(job_id, lambda: _job_body(job_id, asset_id, engine), what="人声伴奏分离")
+        run_job_guarded(job_id, lambda: _job_body(job_id, asset_id, engine), what="人声与背景音分离")
 
 
 def _job_body(job_id: str, asset_id: str, engine: str) -> None:
@@ -172,7 +173,7 @@ def _job_body(job_id: str, asset_id: str, engine: str) -> None:
 
         made = separate_asset(db, asset, engine=engine)
         # 派生关系放在新素材上;原素材不改一字(和转 GIF 同款)。
-        for stem, produced in ((VOCALS, made.vocals), (ACCOMPANIMENT, made.accompaniment)):
+        for stem, produced in ((VOCALS, made.vocals), (BACKGROUND, made.background)):
             produced.media_info = {
                 **(produced.media_info or {}),
                 "derived_from_asset_id": asset.id,
@@ -186,11 +187,11 @@ def _job_body(job_id: str, asset_id: str, engine: str) -> None:
         job.progress = 1.0
         job.result = {
             "vocals_asset_id": made.vocals.id,
-            "accompaniment_asset_id": made.accompaniment.id,
+            "background_asset_id": made.background.id,
             "source_asset_id": asset.id,
             "engine": made.engine,
         }
         say(job, "jobMsg_separateDone")
         emit_job_event(db, job.id, "job.succeeded", dict(job.result))
         db.commit()
-        logger.info("asset %s -> stems %s / %s", asset.id, made.vocals.id, made.accompaniment.id)
+        logger.info("asset %s -> stems %s / %s", asset.id, made.vocals.id, made.background.id)

@@ -1,4 +1,4 @@
-"""人声/伴奏分离引擎的本地运行时:托管 venv、权重在哪、跑不跑得起来。
+"""人声/背景音分离引擎的本地运行时:托管 venv、权重在哪、跑不跑得起来。
 
 和 `asr_models` / `tts_models` 同一个形状,共用同一批底层件(`interpreter.base_python`、
 `pip_install.install`、`run_logged`),**但有自己的 venv**。理由是 asr_models 里那句被违反过

@@ -124,14 +124,14 @@ It is **fetched on click**. None of these quota endpoints is a documented public
 
 ## Outbound proxy
 
-When a vendor blocks your region (authorization or calls rejected, "region not supported"), set a proxy under Settings → **Local backend → Outbound proxy**. Both provider calls and authorization sign-in go through it.
+When a vendor blocks your region (authorization or calls rejected, "region not supported"), set a proxy under Settings → **Network → Outbound proxy**. Both provider calls and authorization sign-in go through it.
 
 - Loopback traffic **never** goes through the proxy (otherwise every agent tool call would break) — nothing to configure.
 - The embedded browser is **unaffected**: publish-account logins carry their own per-account proxy.
 
 ## Retries on a flaky network
 
-Settings → **AI runtime** sets the retry count. It applies to **every** AI call — chat, image, video, audio, embedding — because rate limits and 502s don't discriminate. On 429 / 5xx / connection failure the request retries with exponential backoff, with nothing required from you.
+Settings → **Network** sets the retry count (on the same page as the outbound proxy: both answer "how do AI calls get out"). It applies to **every** AI call — chat, image, video, audio, embedding — because rate limits and 502s don't discriminate. On 429 / 5xx / connection failure the request retries with exponential backoff, with nothing required from you.
 
 ## Cost rules
 

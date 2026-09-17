@@ -1,254 +1,98 @@
-import { Input } from "@/components/ui/input";
 import React from "react";
-import {
-  AudioLines,
-  Brain,
-  Database,
-  ImageIcon,
-  MessageSquare,
-  Mic,
-  Palette,
-  ReceiptText,
-  RefreshCw,
-  Server,
-  ShieldCheck,
-  UserRound,
-  Users,
-  Video,
-} from "lucide-react";
 
 import type { Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
-import { AccountSection } from "@/features/settings/AccountSection";
-import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
-import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
-import { AppearanceSection, BackgroundSection, CustomCssSection } from "@/features/settings/AppearanceSection";
-import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
-import { SeparationEnginesSection } from "@/features/settings/SeparationEnginesSection";
-import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
-import { BackendSection } from "@/features/settings/BackendSection";
-import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
-import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
-import { DataDiagnosticsSection } from "@/features/settings/DataDiagnosticsSection";
-import { FeishuSection } from "@/features/settings/FeishuSection";
-import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
-import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
-import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
-import { TeamSection } from "@/features/settings/TeamSection";
 import { SettingsSectionStack } from "@/features/settings/ui";
-import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
-import { VoiceLibrarySection } from "@/features/settings/VoiceLibrarySection";
-
-type SectionId =
-  | "account"
-  | "team"
-  | "appearance"
-  | "provider-chat"
-  | "provider-image"
-  | "provider-video"
-  | "provider-audio"
-  | "provider-pricing"
-  | "ai-runtime"
-  | "agent-memory"
-  | "agent-autopilot"
-  | "transcribe"
-  | "voice"
-  | "feishu"
-  | "data"
-  | "backend";
-
-const SECTION_IDS: SectionId[] = [
-  "account",
-  "team",
-  "appearance",
-  "provider-chat",
-  "provider-image",
-  "provider-video",
-  "provider-audio",
-  "provider-pricing",
-  "ai-runtime",
-  "agent-memory",
-  "agent-autopilot",
-  "transcribe",
-  "voice",
-  "feishu",
-  "data",
-  "backend",
-];
+import {
+  ALL_SECTIONS,
+  DEFAULT_SECTION_ID,
+  SETTINGS_GROUPS,
+  resolveSettingsLink,
+} from "@/features/settings/settingsSections";
 
 const SECTION_STORAGE_KEY = "mosael:settings-section";
 
+/**
+ * 设置页的外壳:左边导航、右边当前页。**它不认识任何一页** —— 有哪些页、怎么分组、每页渲染
+ * 什么,全在 settingsSections.tsx 那一份声明里。加一页只动那里。
+ */
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   // 导航项是短标签,不是长内容 —— 用紧凑档,宽度让给右边真正在配的东西。
   const sidebar = useResizableSidebar("settings", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
   const [navSearch, setNavSearch] = React.useState("");
-  const [focusProviderCapability, setFocusProviderCapability] = React.useState<string | null>(null);
-  const [section, setSectionState] = React.useState<SectionId>(() => {
+  const [focusCapability, setFocusCapability] = React.useState<string | null>(null);
+  const [section, setSectionState] = React.useState<string>(() => {
     const saved = localStorage.getItem(SECTION_STORAGE_KEY);
-    return saved && SECTION_IDS.includes(saved as SectionId) ? (saved as SectionId) : "account";
+    return saved && ALL_SECTIONS.some((one) => one.id === saved) ? saved : DEFAULT_SECTION_ID;
   });
-  // Persist the open section so a refresh returns to the same tab (mirrors the editor).
-  const setSection = (id: SectionId) => {
+  // 刷新后回到同一页(和剪辑台同款)。
+  const setSection = (id: string) => {
     localStorage.setItem(SECTION_STORAGE_KEY, id);
     setSectionState(id);
   };
 
-  // 深链:别处(如工作流「模型未配置」提示)→ mosael:open-settings 直达对应分区。
+  // 深链:别处(如工作流「模型未配置」提示)→ mosael:open-settings 直达对应页。
   React.useEffect(() => {
     const onOpen = (event: Event) => {
-      const detail = (event as CustomEvent<string>).detail;
-      const [id, focus] = String(detail || "").split(":");
-      if (id === "providers") {
-        const next =
-          focus === "chat"
-            ? "provider-chat"
-            : focus === "image"
-              ? "provider-image"
-              : focus === "video"
-                ? "provider-video"
-                : focus === "tts" || focus === "podcast" || focus === "audio"
-                  ? "provider-audio"
-                  : "provider-chat";
-        setSection(next);
-        setFocusProviderCapability(focus || null);
-        return;
-      }
-      if (SECTION_IDS.includes(id as SectionId)) {
-        setSection(id as SectionId);
-        setFocusProviderCapability(focus ?? null);
-      }
+      const target = resolveSettingsLink((event as CustomEvent<string>).detail);
+      if (!target) return;
+      setSection(target.id);
+      setFocusCapability(target.focus);
     };
     window.addEventListener("mosael:open-settings", onOpen);
     return () => window.removeEventListener("mosael:open-settings", onOpen);
   }, []);
 
-  const nav: Array<{ id: SectionId; label: string; icon: React.ReactNode }> = [
-    { id: "account", label: t("settingsAccount"), icon: <UserRound size={14} /> },
-    { id: "team", label: t("teamTitle"), icon: <Users size={14} /> },
-    { id: "appearance", label: t("settingsAppearance"), icon: <Palette size={14} /> },
-    { id: "provider-chat", label: t("providerChatTitle"), icon: <MessageSquare size={14} /> },
-    { id: "provider-image", label: t("providerImageTitle"), icon: <ImageIcon size={14} /> },
-    { id: "provider-video", label: t("providerVideoTitle"), icon: <Video size={14} /> },
-    { id: "provider-audio", label: t("providerAudioTitle"), icon: <AudioLines size={14} /> },
-    { id: "provider-pricing", label: t("providerPricingTitle"), icon: <ReceiptText size={14} /> },
-    // 重试对**所有** AI 供应商调用生效(对话/生图/生视频/语音/向量化),所以自成一节。
-    // 原本挂在「AI 对话」下面,位置本身就在说"只管对话",而它从来不是。
-    { id: "ai-runtime", label: t("aiRuntimeTitle"), icon: <RefreshCw size={14} /> },
-    // 记忆和供应商/重试挨着:它们都是"智能体怎么工作"的设置,而不是某种能力的配置。
-    { id: "agent-memory", label: t("agentMemoryTitle"), icon: <Brain size={14} /> },
-    // 放行准则和记忆并排:同样是"智能体怎么工作"的设置,而不是某种能力的配置。
-    { id: "agent-autopilot", label: t("autopilotTitle"), icon: <ShieldCheck size={14} /> },
-    { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
-    { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
-    { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
-    { id: "data", label: t("dataDiagnosticsTitle"), icon: <Database size={14} /> },
-    // 部署与本地后端挨着:两者说的都是"这台后端",而不是某个工作区。
-    { id: "backend", label: t("settingsBackend"), icon: <Server size={14} /> },
-  ];
+  const query = navSearch.toLocaleLowerCase();
+  const matches = (label: string) => label.toLocaleLowerCase().includes(query);
+  const current = ALL_SECTIONS.find((one) => one.id === section) ?? ALL_SECTIONS[0];
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-workspace-panel">
       <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]" style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
         <nav className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-divider bg-workspace-subtle px-4 py-5 max-[880px]:max-h-48 max-[880px]:border-b max-[880px]:border-r-0" aria-label={t("settingsTitle")}>
           <Input className="shrink-0" aria-label={t("studioSettingsSearch")} placeholder={t("studioSettingsSearch")} value={navSearch} onChange={e => setNavSearch(e.target.value)} />
-          {[{ title: t("studioSettingsPersonal"), ids: ["account", "team", "appearance"] }, { title: t("studioSettingsModels"), ids: ["provider-chat", "provider-image", "provider-video", "provider-audio", "provider-pricing", "ai-runtime", "agent-memory", "agent-autopilot"] }, { title: t("studioSettingsServices"), ids: ["transcribe", "voice", "feishu", "data", "backend"] }].map(group => {
-            const items = nav.filter(item => group.ids.includes(item.id) && item.label.toLocaleLowerCase().includes(navSearch.toLocaleLowerCase()));
-            return items.length > 0 && <div key={group.title} className="grid gap-1">
-              <h3 className="m-0 px-2 pb-1 text-ui-xs font-medium text-muted-foreground">{group.title}</h3>
-              {items.map(item => <button key={item.id} type="button" aria-current={section === item.id ? "page" : undefined} className={cn("flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-ui-sm text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", section === item.id && "bg-panel font-semibold text-primary shadow-sm")} onClick={() => { setFocusProviderCapability(null); setSection(item.id); }}>
-                {item.icon}<span>{item.label}</span>
-              </button>)}
-            </div>;
+          {SETTINGS_GROUPS.map((group) => {
+            const items = group.sections.filter((one) => matches(t(one.label)));
+            if (items.length === 0) return null;
+            return (
+              <div key={group.title} className="grid gap-1">
+                <h3 className="m-0 px-2 pb-1 text-ui-xs font-medium text-muted-foreground">{t(group.title)}</h3>
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-current={section === item.id ? "page" : undefined}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-ui-sm text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      section === item.id && "bg-panel font-semibold text-primary shadow-sm",
+                    )}
+                    onClick={() => {
+                      setFocusCapability(null);
+                      setSection(item.id);
+                    }}
+                  >
+                    {item.icon}
+                    <span>{t(item.label)}</span>
+                  </button>
+                ))}
+              </div>
+            );
           })}
-          {nav.every(item => !item.label.toLocaleLowerCase().includes(navSearch.toLocaleLowerCase())) && <p className="text-ui-sm text-muted-foreground">{t("studioSettingsEmpty")}</p>}
+          {ALL_SECTIONS.every((one) => !matches(t(one.label))) && (
+            <p className="text-ui-sm text-muted-foreground">{t("studioSettingsEmpty")}</p>
+          )}
         </nav>
         {/* 边缘拖动 —— 和别处同一套(lib/useResizableSidebar)。 */}
         <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 和插件页、定时任务页同一套。此前它跟着
             内容走,内容少时就是半截,而左边是个完整的带边框面板。 */}
         <SettingsSectionStack className="min-h-0 min-w-0 overflow-y-auto bg-workspace-panel px-6 py-7 xl:px-10">
-          {section === "account" && <AccountSection />}
-          {section === "team" && <TeamSection workspace={workspace} />}
-          {section === "appearance" && (
-            <>
-              <AppearanceSection />
-              <BackgroundSection />
-              <CustomCssSection />
-            </>
-          )}
-          {section === "provider-chat" && (
-            <>
-              <ProviderDefaultsSection capabilities={["chat"]} focusCapability={focusProviderCapability} />
-              <ProviderProfilesSection
-                capability="chat"
-                title={t("providerChatTitle")}
-                description={t("providerChatDesc")}
-              />
-            </>
-          )}
-          {section === "ai-runtime" && <AiRuntimeSection />}
-          {section === "agent-memory" && <AgentMemorySection workspace={workspace} />}
-          {section === "agent-autopilot" && <AutopilotRulesSection workspace={workspace} />}
-          {section === "provider-image" && (
-            <>
-              <ProviderDefaultsSection capabilities={["image"]} focusCapability={focusProviderCapability} />
-              <ProviderProfilesSection
-                capability="image"
-                title={t("providerImageTitle")}
-                description={t("providerImageDesc")}
-              />
-            </>
-          )}
-          {section === "provider-video" && (
-            <>
-              <ProviderDefaultsSection capabilities={["video"]} focusCapability={focusProviderCapability} />
-              <ProviderProfilesSection
-                capability="video"
-                title={t("providerVideoTitle")}
-                description={t("providerVideoDesc")}
-              />
-            </>
-          )}
-          {section === "provider-audio" && (
-            <>
-              {/* 语音对话排在配音前面:它是"它怎么跟我说话",而下面几节是"怎么给成片配音"。 */}
-              <AgentVoiceSection workspaceId={workspace.id} />
-              <BuiltinTtsSection onOpenVoiceClone={() => setSection("voice")} />
-              <ProviderProfilesSection
-                capability="tts"
-                title={t("providerTtsTitle")}
-                description={t("providerTtsDesc")}
-              />
-              <ProviderProfilesSection
-                capability="podcast"
-                title={t("providerPodcastTitle")}
-                description={t("providerPodcastDesc")}
-              />
-            </>
-          )}
-          {section === "provider-pricing" && <ProviderPricingSection workspace={workspace} />}
-          {section === "transcribe" && (
-            <>
-              <AsrModelsSection />
-              {/* 分离和转写都是"在这台机器上跑的音频模型",而且译配那条流程两个都要用 ——
-                  放在同一页里,装的时候一次看得全。 */}
-              <SeparationEnginesSection />
-            </>
-          )}
-          {section === "voice" && (
-            <>
-              <VoiceCloneSection />
-              {/* 引擎/权重是这一页的上半截,音色是下半截 —— 此前只有上半截,而"用哪把嗓子"
-                  得去剪辑页的配音面板里管(要先打开一个项目才够得着)。 */}
-              <VoiceLibrarySection workspace={workspace} />
-            </>
-          )}
-          {section === "feishu" && <FeishuSection workspace={workspace} />}
-          {section === "data" && <DataDiagnosticsSection />}
-          {section === "backend" && <BackendSection workspace={workspace} />}
+          {current.render({ workspace, t, focusCapability })}
         </SettingsSectionStack>
       </div>
     </div>

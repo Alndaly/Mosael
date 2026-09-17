@@ -2971,7 +2971,7 @@
           "assets"
         ],
         "summary": "Separate Asset Audio",
-        "description": "拆成人声 + 伴奏两份**新**素材;原素材不动(ADR-0016)。\n\n排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被\n某一层断掉 —— 用户看到\"失败了\",后台其实还在跑。",
+        "description": "拆成人声 + 背景音两份**新**素材;原素材不动(ADR-0016)。\n\n排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被\n某一层断掉 —— 用户看到\"失败了\",后台其实还在跑。",
         "operationId": "separate_asset_audio_api_assets__asset_id__separate_post",
         "parameters": [
           {
@@ -3486,7 +3486,7 @@
           "separation"
         ],
         "summary": "List Separation Engines",
-        "description": "人声/伴奏分离引擎,以及它们装没装。",
+        "description": "人声/背景音分离引擎,以及它们装没装。",
         "operationId": "list_separation_engines_api_separation_engines_get",
         "responses": {
           "200": {
@@ -13394,6 +13394,77 @@
         }
       }
     },
+    "/api/settings/install-source": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Install Source",
+        "description": "本机引擎装依赖用哪个 pip 索引。\n\n**为什么单独一对接口**:这个值历史上存在 tts_config 里(克隆先有了它),于是它在设置页里\n也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。想给转写换镜像的人得去\n「声音克隆」里找。存储位置不动(搬表是另一件事),但界面和接口不再挂在克隆名下。",
+        "operationId": "get_install_source_api_settings_install_source_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallSourceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Install Source",
+        "operationId": "set_install_source_api_settings_install_source_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallSourceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/data/backup": {
       "post": {
         "tags": [
@@ -22239,6 +22310,30 @@
         ],
         "title": "InsertTextClipRequest"
       },
+      "InstallSourceOut": {
+        "properties": {
+          "pip_index": {
+            "type": "string",
+            "title": "Pip Index",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "InstallSourceOut",
+        "description": "本机引擎装依赖时用哪个 pip 索引。转写、声音克隆、人声分离三个引擎共用这一份。"
+      },
+      "InstallSourceUpdate": {
+        "properties": {
+          "pip_index": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Pip Index",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "InstallSourceUpdate"
+      },
       "InvitationListOut": {
         "properties": {
           "invitations": {
@@ -27547,7 +27642,7 @@
           "status"
         ],
         "title": "SeparationEngineOut",
-        "description": "一个人声/伴奏分离引擎装没装。\n\n和转写模型那一页同一条区分:**文件在不在盘上**和**跑不跑得起来**是两件事。这里只有后者\n有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的就是\"这个引擎的解释器在不在\"。"
+        "description": "一个人声/背景音分离引擎装没装。\n\n和转写模型那一页同一条区分:**文件在不在盘上**和**跑不跑得起来**是两件事。这里只有后者\n有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的就是\"这个引擎的解释器在不在\"。"
       },
       "SequenceCreate": {
         "properties": {
@@ -28829,12 +28924,6 @@
             "pattern": "^(hf|hf-mirror|modelscope)$",
             "title": "Source",
             "default": "hf-mirror"
-          },
-          "pip_index": {
-            "type": "string",
-            "maxLength": 200,
-            "title": "Pip Index",
-            "default": ""
           },
           "fish_repo_dir": {
             "type": "string",

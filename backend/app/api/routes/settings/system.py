@@ -5,7 +5,14 @@ import logging
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AiRuntimeConfigOut, AiRuntimeConfigUpdate, NetworkConfigOut, NetworkConfigUpdate
+from app.api.schemas import (
+    AiRuntimeConfigOut,
+    AiRuntimeConfigUpdate,
+    InstallSourceOut,
+    InstallSourceUpdate,
+    NetworkConfigOut,
+    NetworkConfigUpdate,
+)
 from app.core.http_retry import set_max_retries
 from app.db.models import AiRuntimeConfig, NetworkConfig
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
@@ -70,3 +77,34 @@ def set_ai_runtime(body: AiRuntimeConfigUpdate, db: DbSession, user: CurrentUser
     # 与出站代理(domain/network.apply_to_process)同一套做法,改完即时生效、不必重启。
     set_max_retries(row.max_retries)
     return AiRuntimeConfigOut(max_retries=row.max_retries)
+
+
+@router.get("/settings/install-source", response_model=InstallSourceOut)
+def get_install_source(db: DbSession, user: CurrentUser) -> InstallSourceOut:
+    """本机引擎装依赖用哪个 pip 索引。
+
+    **为什么单独一对接口**:这个值历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
+    也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。想给转写换镜像的人得去
+    「声音克隆」里找。存储位置不动(搬表是另一件事),但界面和接口不再挂在克隆名下。
+    """
+    from app.ai.runtime import config as runtime_config
+
+    return InstallSourceOut(pip_index=runtime_config.get().pip_index or "")
+
+
+@router.put("/settings/install-source", response_model=InstallSourceOut)
+def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUser) -> InstallSourceOut:
+    # 往这台机器上装东西用哪个源,是部署级的设置 —— 和装引擎本身同一条权限。
+    ensure_deployment_admin(db, user)
+    from app.ai.runtime import config as runtime_config
+    from app.db.models import TtsConfig
+
+    row = db.get(TtsConfig, "default")
+    if row is None:
+        row = TtsConfig(id="default")
+        db.add(row)
+    #: 只写这一个字段 —— 克隆那几项(引擎、解释器、下载源、fish 目录)一个都不碰。
+    row.pip_index = body.pip_index.strip()
+    db.commit()
+    runtime_config.refresh()
+    return InstallSourceOut(pip_index=runtime_config.get().pip_index or "")

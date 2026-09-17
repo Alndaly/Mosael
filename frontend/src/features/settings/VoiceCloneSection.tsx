@@ -26,7 +26,7 @@ import { formatBytes, formatSpeed } from "@/lib/bytes";
 import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
 
 
-type ConfigForm = { engine: string; python_path: string; source: string; pip_index: string; fish_repo_dir: string; fish_model_dir: string };
+type ConfigForm = { engine: string; python_path: string; source: string; fish_repo_dir: string; fish_model_dir: string };
 
 /** Settings → 声音克隆:选引擎、指定装了 f5-tts 的 Python 解释器、下载源,并下载
     引擎权重。装好并配好后合成即为真实音色;否则回退占位音。 */
@@ -73,12 +73,11 @@ export function VoiceCloneSection() {
         engine: z.string(),
         python_path: z.string(),
         source: z.string(),
-        pip_index: z.string(),
         fish_repo_dir: z.string(),
         fish_model_dir: z.string(),
       }),
     ),
-    defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror", pip_index: "", fish_repo_dir: "", fish_model_dir: "" },
+    defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror", fish_repo_dir: "", fish_model_dir: "" },
   });
   const engineValue = form.watch("engine");
   // 这个引擎能用哪些下载源,后端说了算 —— F5 要的 vocos 在 ModelScope 上没有。
@@ -109,7 +108,6 @@ export function VoiceCloneSection() {
       engine: config.data.engine,
       python_path: config.data.python_path,
       source: normalizeSource(config.data.source, savedSources),
-      pip_index: config.data.pip_index ?? "",
       fish_repo_dir: config.data.fish_repo_dir ?? "",
       fish_model_dir: config.data.fish_model_dir ?? "",
     });
@@ -270,31 +268,8 @@ export function VoiceCloneSection() {
                 </FormItem>
               )}
             />
-            {/* 与「模型下载源」分开:那个管 HF 权重从哪拉,这个管 Python 依赖从哪拉。
-                装引擎要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用。 */}
-            <FormField
-              control={form.control}
-              name="pip_index"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("voiceClonePipIndex")}</FormLabel>
-                  <Select value={field.value || "pypi"} onValueChange={(value) => field.onChange(value === "pypi" ? "" : value)}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="pypi">{t("voiceClonePipPypi")}</SelectItem>
-                      <SelectItem value="tsinghua">{t("voiceClonePipTsinghua")}</SelectItem>
-                      <SelectItem value="aliyun">{t("voiceClonePipAliyun")}</SelectItem>
-                      <SelectItem value="tencent">{t("voiceClonePipTencent")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>{t("voiceClonePipIndexHint")}</FormDescription>
-                </FormItem>
-              )}
-            />
+            {/* pip 镜像不在这里了 —— 它归「本机引擎 → 安装源」。转写和人声分离装依赖时读的也是它,
+                挂在克隆名下的时候,想给转写换镜像的人得来「声音克隆」里找。 */}
             {/* 「改了还没保存」讲的是**这个表单**的状态,所以只说一次、说在「保存」旁边。
                 此前每张引擎卡片下面各挂一遍,同一句话在一屏里出现两三次,读起来像是每个引擎
                 各自出了问题。 */}

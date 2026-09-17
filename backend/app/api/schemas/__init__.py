@@ -1317,14 +1317,26 @@ class TtsConfigUpdate(ApiModel):
     engine: str = Field(pattern="^(f5-tts|fish-speech)$")
     python_path: str = ""
     source: str = Field(default="hf-mirror", pattern="^(hf|hf-mirror|modelscope)$")
-    #: 预设 key(pypi/tsinghua/aliyun/tencent)或自定义 index URL;空 = 官方 PyPI。
-    pip_index: str = Field(default="", max_length=200)
+    #: 没有 pip_index:它不属于克隆 —— 转写和人声分离装依赖时读的也是它,所以它有自己的接口
+    #: (`PUT /settings/install-source`)。留在这里的话,克隆表单不发它时默认成 "",每保存一次
+    #: 克隆设置,镜像就被悄悄重置回官方 PyPI。
     fish_repo_dir: str = ""
     fish_model_dir: str = ""
 
 
+class InstallSourceOut(ApiModel):
+    """本机引擎装依赖时用哪个 pip 索引。转写、声音克隆、人声分离三个引擎共用这一份。"""
+
+    #: 预设 key(pypi/tsinghua/aliyun/tencent)或自定义 index URL;空 = 官方 PyPI。
+    pip_index: str = ""
+
+
+class InstallSourceUpdate(ApiModel):
+    pip_index: str = Field(default="", max_length=200)
+
+
 class SeparationEngineOut(ApiModel):
-    """一个人声/伴奏分离引擎装没装。
+    """一个人声/背景音分离引擎装没装。
 
     和转写模型那一页同一条区分:**文件在不在盘上**和**跑不跑得起来**是两件事。这里只有后者
     有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的就是"这个引擎的解释器在不在"。

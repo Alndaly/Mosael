@@ -417,7 +417,7 @@ def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: DbSession, 
 
 @router.post("/assets/{asset_id}/separate", response_model=JobOut)
 def separate_asset_audio(asset_id: str, db: DbSession, user: CurrentUser, engine: str = "") -> Job:
-    """拆成人声 + 伴奏两份**新**素材;原素材不动(ADR-0016)。
+    """拆成人声 + 背景音两份**新**素材;原素材不动(ADR-0016)。
 
     排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被
     某一层断掉 —— 用户看到"失败了",后台其实还在跑。

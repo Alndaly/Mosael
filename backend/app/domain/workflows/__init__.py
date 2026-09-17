@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from app.ai.providers.registry import SEPARATION_ADAPTERS
 from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_ROLE_LABELS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 
@@ -84,12 +85,17 @@ class WorkflowDomainError(RuntimeError):
 #: 节点面板的分组与**顺序**。节点类型注册表里每一项都必须落在其中一组(有测试钉着)。
 #:
 #: 顺序不是随手排的,它是一条搭工作流的动线:先有骨架(流程),再决定这一步做什么
-#: (AI / 素材 / 数据),然后是把结果送出去(发布),最后才是两类"需要额外准备"的能力 ——
+#: (AI / 音频 / 素材 / 数据),然后是把结果送出去(发布),最后才是两类"需要额外准备"的能力 ——
 #: 浏览器要登录态,插件要先装。列表顺序即面板顺序,前端不再排第二次。
+#:
+#: **「音频」单独一组**:转写、语音合成、字幕配音、人声/背景音分离是同一条流水线上的几步,
+#: 此前前三个在「AI」、分离在「素材」(和十几个时间线操作挤在一起)—— 按"它是不是 AI"分组,
+#: 用户按"我要处理声音"去找时找不到。
 #: 分组名也存 key —— 它出现在节点面板的每一栏标题上,写死的话英文界面下那几栏还是中文。
 NODE_CATEGORIES: tuple[str, ...] = (
     "wfCat_flow",
     "wfCat_ai",
+    "wfCat_audio",
     "wfCat_asset",
     "wfCat_knowledge",
     "wfCat_data",
@@ -145,7 +151,6 @@ _FIELD_LABELS = {
     "code": "wfField_code",
     "condition": "wfField_condition",
     "description": "wfField_description",
-    "duck_original": "wfField_duck_original",
     "original_audio": "wfField_original_audio",
     "duration": "wfField_duration",
     "dy": "wfField_dy",
@@ -418,7 +423,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "transcribe_asset": {
-        "category": "wfCat_ai",
+        "category": "wfCat_audio",
         "label": "wfNode_transcribe_asset",
         "description": "wfNode_transcribe_asset_desc",
         "config": {
@@ -693,7 +698,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["waited"],
     },
     "synthesize_speech": {
-        "category": "wfCat_ai",
+        "category": "wfCat_audio",
         "label": "wfNode_synthesize_speech",
         "description": "wfNode_synthesize_speech_desc",
         # 两条路,**任选其一**:克隆音色(voice_id,念你自己录的那把嗓子)或者引擎音色
@@ -789,23 +794,29 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["texts", "count"],
         "output_types": {"texts": "json", "count": "number"},
     },
-    #: 人声/伴奏分离(ADR-0016)。**产出两份新素材,原素材一个字节不动。**
+    #: 人声/背景音分离(ADR-0016)。**产出两份新素材,原素材一个字节不动。**
     "separate_audio": {
-        "category": "wfCat_asset",
+        "category": "wfCat_audio",
         "label": "wfNode_separate_audio",
         "description": "wfNode_separate_audio_desc",
         "config": {
             "asset_id": {"type": "template", "required": True, "description": "wfNode_separate_audio_asset_id"},
-            # 留空 = 用现在跑得起来的那个。点名一个引擎是给"装了好几个"的人用的,
-            # 而不是让每个模板都得知道引擎叫什么。
-            "engine": {"type": "string", "description": "wfNode_separate_audio_engine"},
+            # auto = 用现在跑得起来的那个。点名一个引擎是给"装了好几个"的人用的。
+            # **选项从注册表读** —— 在这里再写一遍引擎名,加一个引擎就得改两处,
+            # 漏改的那处表现为"装好了却选不到"。
+            "engine": {
+                "type": "string",
+                "default": "auto",
+                "description": "wfNode_separate_audio_engine",
+                "options": ["auto", *SEPARATION_ADAPTERS],
+            },
         },
-        "outputs": ["vocals_asset_id", "accompaniment_asset_id", "engine"],
+        "outputs": ["vocals_asset_id", "background_asset_id", "engine"],
         "output_labels": {
             "vocals_asset_id": "wfOut_vocals_asset_id",
-            "accompaniment_asset_id": "wfOut_accompaniment_asset_id",
+            "background_asset_id": "wfOut_background_asset_id",
         },
-        "output_types": {"vocals_asset_id": "asset", "accompaniment_asset_id": "asset"},
+        "output_types": {"vocals_asset_id": "asset", "background_asset_id": "asset"},
     },
     "generate_subtitles": {
         "category": "wfCat_asset",
@@ -828,7 +839,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"clip_ids": "json", "count": "number"},
     },
     "dub_subtitles": {
-        "category": "wfCat_ai",
+        "category": "wfCat_audio",
         "label": "wfNode_dub_subtitles",
         "description": "wfNode_dub_subtitles_desc",
         "config": {
@@ -855,14 +866,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["duck", "mute", "keep", "separate"],
                 "description": "wfNode_dub_subtitles_original_audio",
             },
-            # 旧键,留着读:此前存下来的工作流里是 yes/no。新建的用上面那个。
-            "duck_original": {
-                "advanced": True,
-                "type": "string",
-                "default": "yes",
-                "options": ["yes", "no"],
-                "description": "wfNode_dub_subtitles_duck_original",
-            },
+
             # 和「语音合成」逐字同形:同一对互斥的路(克隆音色 / 引擎音色),所以同一套键名、
             # 同一条 required_one_of、同一份表单规则(前端 speechFields 按节点类型集合判)。
             "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},

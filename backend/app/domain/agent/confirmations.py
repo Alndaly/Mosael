@@ -462,7 +462,7 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
         return f"给{scope}配音{fit}(新开一条配音轨,原声不动)"
     if tool == "separate_audio":
         #: 卡上说清**产出什么、原件动不动、要多久** —— 它是"这台机器忙很久"那一档。
-        return "把这份素材拆成「人声」和「伴奏」两份新素材(原素材不动;本机跑模型,长素材会很慢)"
+        return "把这份素材拆成「人声」和「背景音」两份新素材(原素材不动;本机跑模型,长素材会很慢)"
     if tool == "convert_video_to_gif":
         duration = payload.get("duration")
         clip = f"，截取 {duration} 秒" if duration not in (None, "") else ""

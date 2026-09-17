@@ -13,7 +13,7 @@ router = APIRouter(tags=["separation"])
 
 @router.get("/separation/engines", response_model=list[SeparationEngineOut])
 def list_separation_engines(request: Request, user: CurrentUser) -> list[dict]:
-    """人声/伴奏分离引擎,以及它们装没装。"""
+    """人声/背景音分离引擎,以及它们装没装。"""
     # 领域里存的是 key,**在出口翻译**(见 core/i18n)——领域数据不必知道语言。
     locale = normalize_locale(request.headers.get("accept-language"))
     return [translate_fields(row, ("label", "message"), locale) for row in separation_models.list_status()]

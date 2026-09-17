@@ -110,7 +110,7 @@ def _index_separation_adapters(adapters: Iterable[SeparationAdapter]) -> dict[st
     return indexed
 
 
-#: 人声/伴奏分离(ADR-0016)。**这是能力可用性的唯一答案** —— 调用方不按引擎名写 if,
+#: 人声/背景音分离(ADR-0016)。**这是能力可用性的唯一答案** —— 调用方不按引擎名写 if,
 #: 加一个引擎就是加一个 Adapter 加一行注册。
 SEPARATION_ADAPTERS = _index_separation_adapters((DemucsSeparationAdapter(),))
 
@@ -122,7 +122,8 @@ def get_separation_adapter(engine: str = "") -> SeparationAdapter | None:
     一个都没有时返回 None —— 调用方据此退回"没有这个能力"的做法,而不是先调一次再看报错
     (那一次可能已经花了钱或者等了十分钟)。
     """
-    if engine:
+    #: "auto" 和空串是同一个意思 —— 节点下拉里给的是 auto(和转写节点同一个约定)。
+    if engine and engine != "auto":
         return SEPARATION_ADAPTERS.get(engine)
     for adapter in SEPARATION_ADAPTERS.values():
         if adapter.runtime_ready():

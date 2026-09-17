@@ -102,7 +102,7 @@ function ServerSwitchRow() {
 
 /** 出站代理。挂在「本地后端」下:它和端点、开机自启一样是实例级的基础设施设置,
  *  为一个字段单开一个导航项不值得。 */
-function ProxySection() {
+export function ProxySection() {
   const t = useI18n();
   const qc = useQueryClient();
   const config = useQuery({
@@ -174,7 +174,7 @@ export function BackendSection({ workspace }: { workspace: Workspace }) {
           <UpdateCheckButton />
         </SettingsRow>
       </SettingsGroup>
-      <ProxySection />
+      {/* 出站代理不在这里了 —— 它和重试次数同一类(所有 AI 调用怎么出去),归「网络」一页。 */}
     </SettingsSectionStack>
   );
 }

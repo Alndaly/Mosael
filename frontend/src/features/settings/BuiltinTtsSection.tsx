@@ -1,11 +1,9 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines } from "lucide-react";
 
 import { listTtsEngines } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 import { SettingsGroup, SettingsRow } from "./ui";
 
@@ -15,7 +13,7 @@ import { SettingsGroup, SettingsRow } from "./ui";
  * 而剪辑页明明即开即用。这一节把内置引擎摆到档案区上面,元数据来自
  * /api/tts/engines(needs_key=false 的就是内置),后端加引擎这里自动跟进。
  */
-export function BuiltinTtsSection({ onOpenVoiceClone }: { onOpenVoiceClone: () => void }) {
+export function BuiltinTtsSection() {
   const t = useI18n();
   // staleTime 不能是 Infinity:这份数据里带着"本地引擎装了没有",而用户就是会在另一个页面
   // 把它装上再回来(和 VoicePanel 同一个 query key —— 那边已经因此改过一次,这边漏了)。
@@ -26,10 +24,10 @@ export function BuiltinTtsSection({ onOpenVoiceClone }: { onOpenVoiceClone: () =
     <SettingsGroup title={t("builtinTtsTitle")} description={t("builtinTtsDesc")}>
       {builtin.map((engine) => (
         <SettingsRow key={engine.id} label={engine.label} description={engine.note}>
+          {/* 克隆引擎就在这一页下面(「声音克隆」)—— 此前它在另一个组里,这一行因此挂着一个
+              跳页按钮。放到一起之后,跳页就成了"跳到自己下面"。 */}
           {engine.id === "clone" ? (
-            <Button variant="outline" size="sm" onClick={onOpenVoiceClone}>
-              <AudioLines size={13} /> {t("builtinTtsManageClone")}
-            </Button>
+            <span className="text-ui-xs text-muted-foreground">{t("builtinTtsCloneBelow")}</span>
           ) : (
             <Badge variant="outline" className="border-[color:var(--ok,#22a06b)] text-[color:var(--ok,#22a06b)]">
               {t("builtinTtsReady")}

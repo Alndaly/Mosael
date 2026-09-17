@@ -373,10 +373,10 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
         "engine": body.engine,
         "python_path": body.python_path.strip(),
         "source": body.source,
-        "pip_index": body.pip_index.strip(),
         "fish_repo_dir": body.fish_repo_dir.strip(),
         "fish_model_dir": body.fish_model_dir.strip(),
     }
+    # pip 镜像不在这里写 —— 它归「安装源」(见 routes/settings/system.set_install_source)。
     for name, value in wanted.items():
         setattr(row, name, value)
     db.commit()

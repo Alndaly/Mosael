@@ -8,7 +8,7 @@ repository, so an `app.*` import fails at run time and never in the unit tests.
 stdin:  JSON {"audio_path": str, "out_dir": str, "model": str, "stems": [str]}
 argv:   [result_json_path] — results go to a FILE because demucs and torch write progress bars
         and warnings straight to stdout/stderr.
-output: JSON {"stems": {"vocals": path, "accompaniment": path}}
+output: JSON {"stems": {"vocals": path, "background": path}}
 Errors exit non-zero with the message on stderr.
 
 **It uses demucs' Python API rather than spawning `python -m demucs.separate`.** Two reasons,
@@ -18,7 +18,7 @@ import it); and going through the API hands back tensors, so "everything except 
 tensor addition instead of an ffmpeg mix whose default normalisation would quietly drop each stem
 to a third of its level.
 
-**Why "accompaniment" is computed rather than picked.** htdemucs is a four-stem model
+**Why "background" is computed rather than picked.** htdemucs is a four-stem model
 (vocals / drums / bass / other). What this product needs is "the voice" and "everything else", so
 the other three are summed back. Going through the four keeps the door open for exposing them
 individually later without changing the contract.
@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 VOCALS = "vocals"
-ACCOMPANIMENT = "accompaniment"
+BACKGROUND = "background"
 
 
 def _fail(message: str) -> None:
@@ -45,7 +45,7 @@ def _separate(request: dict, out_dir: Path) -> dict[str, str]:
     if not audio.is_file():
         _fail(f"找不到要分离的音频:{audio}")
     model = str(request.get("model") or "htdemucs")
-    wanted = set(request.get("stems") or (VOCALS, ACCOMPANIMENT))
+    wanted = set(request.get("stems") or (VOCALS, BACKGROUND))
 
     try:
         from demucs.api import Separator, save_audio
@@ -64,16 +64,16 @@ def _separate(request: dict, out_dir: Path) -> dict[str, str]:
     made: dict[str, str] = {}
     if VOCALS in wanted:
         made[VOCALS] = str(_write(stems[VOCALS], out_dir / "vocals.wav", separator, save_audio))
-    if ACCOMPANIMENT in wanted:
+    if BACKGROUND in wanted:
         others = [tensor for name, tensor in stems.items() if name != VOCALS]
         if not others:
-            _fail(f"{model} 只给了人声一条,没有可以合成伴奏的部分")
+            _fail(f"{model} 只给了人声一条,没有可以合成背景音的部分")
         mixed = others[0]
         for tensor in others[1:]:
             # 直接相加 —— 这几条本来就是从同一段音频里拆出来的,加回去应该等于原样。
-            # (ffmpeg 的 amix 默认会各除以路数,伴奏会整体变轻。)
+            # (ffmpeg 的 amix 默认会各除以路数,背景音会整体变轻。)
             mixed = mixed + tensor
-        made[ACCOMPANIMENT] = str(_write(mixed, out_dir / "accompaniment.wav", separator, save_audio))
+        made[BACKGROUND] = str(_write(mixed, out_dir / "background.wav", separator, save_audio))
     return made
 
 

@@ -32,5 +32,5 @@ def asr_script() -> Path:
 
 
 def separation_script() -> Path:
-    """人声/伴奏分离 worker。由分离引擎自己那个 venv 的解释器跑。"""
+    """人声/背景音分离 worker。由分离引擎自己那个 venv 的解释器跑。"""
     return _HERE / "separation.py"

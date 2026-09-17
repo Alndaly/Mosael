@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
 
 /**
- * Settings → 人声/伴奏分离引擎(ADR-0016)。
+ * Settings → 人声/背景音分离引擎(ADR-0016)。
  *
  * **为什么这一页必须存在**:不装它,第一次分离会在工作流跑到一半时静默建 venv、装 torch、
  * 拉权重 —— 几分钟到几十分钟,期间界面上只有一个转圈,而用户完全不知道正在往自己机器上装
