@@ -374,6 +374,7 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
+        "external": False,
         "category": "wfCat_flow",
         "label": "wfNode_start",
         "description": "wfNode_start_desc",
@@ -381,6 +382,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["*params"],
     },
     "llm": {
+        "external": False,
         "category": "wfCat_ai",
         "label": "wfNode_llm",
         "description": "wfNode_llm_desc",
@@ -417,6 +419,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text", "json"],
     },
     "plugin_tool": {
+        "external": True,
         "category": "wfCat_plugin",
         "label": "wfNode_plugin_tool",
         "description": "wfNode_plugin_tool_desc",
@@ -430,6 +433,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "transcribe_asset": {
+        "external": False,
         "category": "wfCat_audio",
         "label": "wfNode_transcribe_asset",
         "description": "wfNode_transcribe_asset_desc",
@@ -446,6 +450,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"segments": "json", "duration": "number"},
     },
     "export_sequence": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_export_sequence",
         "description": "wfNode_export_sequence_desc",
@@ -453,6 +458,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["asset_id"],
     },
     "note_search": {
+        "external": False,
         "category": "wfCat_knowledge", "label": "wfNode_note_search", "description": "wfNode_note_search_desc",
         "config": {"query": {"type": "template"}, "limit": {"type": "number", "default": 10},
                    "offset": {"type": "number", "default": 0, "advanced": True}},
@@ -460,6 +466,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"notes": "json", "ids": "json", "count": "number", "has_more": "json", "text": "text"},
     },
     "note_read": {
+        "external": False,
         "category": "wfCat_knowledge", "label": "wfNode_note_read", "description": "wfNode_note_read_desc",
         # 两个字段不分档(见 tests/test_advanced_split_is_sane.py):藏起唯一的可选项,
         # 省下的空间抵不上多出来的那一次点击。
@@ -469,6 +476,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"note_id": "text", "text": "text", "markdown": "text", "tags": "json", "revision": "number"},
     },
     "note_create": {
+        "external": False,
         "category": "wfCat_knowledge", "label": "wfNode_note_create", "description": "wfNode_note_create_desc",
         "config": {"title": {"type": "template", "required": True},
                    "markdown": {"type": "template", "required": True}, "tags": {"type": "template", "advanced": True}},
@@ -476,6 +484,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"note_id": "text", "revision": "number"},
     },
     "asset": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset",
         "description": "wfNode_asset_desc",
@@ -484,6 +493,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"duration": "number", "width": "number", "height": "number", "fps": "number"},
     },
     "inspect_sequence": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_inspect_sequence",
         "description": "wfNode_inspect_sequence_desc",
@@ -491,6 +501,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["sequence_id", "revision", "tracks", "duration", "video_track_id", "audio_track_id"],
     },
     "timeline_append": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_append",
         "description": "wfNode_timeline_append_desc",
@@ -506,6 +517,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["clip_id", "timeline_start", "timeline_end", "sequence_id"],
     },
     "timeline_add_track": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_add_track",
         "description": "wfNode_timeline_add_track_desc",
@@ -521,6 +533,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["track_id", "sequence_id"],
     },
     "timeline_clear": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_clear",
         "description": "wfNode_timeline_clear_desc",
@@ -528,6 +541,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["removed", "sequence_id"],
     },
     "timeline_cut_ranges": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_timeline_cut_ranges",
         "description": "wfNode_timeline_cut_ranges_desc",
@@ -554,6 +568,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"removed": "number", "removed_seconds": "number", "ranges": "json", "revision": "number"},
     },
     "edit_timeline": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_edit_timeline",
         "description": "wfNode_edit_timeline_desc",
@@ -571,6 +586,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["applied", "sequence_id", "revision"],
     },
     "ai_generate": {
+        "external": False,
         "category": "wfCat_ai",
         "label": "wfNode_ai_generate",
         "description": "wfNode_ai_generate_desc",
@@ -600,6 +616,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["asset_id", "generation_id"],
     },
     "video_to_gif": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_video_to_gif",
         "description": "wfNode_video_to_gif_desc",
@@ -613,6 +630,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["asset_id", "source_asset_id"],
     },
     "publish": {
+        "external": True,
         "category": "wfCat_publish",
         "label": "wfNode_publish",
         "description": "wfNode_publish_desc",
@@ -626,6 +644,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"result": "json"},
     },
     "condition": {
+        "external": False,
         "category": "wfCat_flow",
         "label": "wfNode_condition",
         "description": "wfNode_condition_desc",
@@ -644,6 +663,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "branches": ["true", "false"],
     },
     "http_request": {
+        "external": True,
         "category": "wfCat_data",
         "label": "wfNode_http_request",
         "description": "wfNode_http_request_desc",
@@ -656,6 +676,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["status", "text", "json"],
     },
     "code": {
+        "external": True,
         "category": "wfCat_data",
         "label": "wfNode_code",
         "description": "wfNode_code_desc",
@@ -666,6 +687,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "template": {
+        "external": False,
         "category": "wfCat_data",
         "label": "wfNode_template",
         "description": "wfNode_template_desc",
@@ -673,6 +695,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text"],
     },
     "json_extract": {
+        "external": False,
         "category": "wfCat_data",
         "label": "wfNode_json_extract",
         "description": "wfNode_json_extract_desc",
@@ -683,6 +706,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["value", "text"],
     },
     "text_transform": {
+        "external": False,
         "category": "wfCat_data",
         "label": "wfNode_text_transform",
         "description": "wfNode_text_transform_desc",
@@ -700,6 +724,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text", "length"],
     },
     "delay": {
+        "external": False,
         "category": "wfCat_flow",
         "label": "wfNode_delay",
         "description": "wfNode_delay_desc",
@@ -707,6 +732,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["waited"],
     },
     "synthesize_speech": {
+        "external": False,
         "category": "wfCat_audio",
         "label": "wfNode_synthesize_speech",
         "description": "wfNode_synthesize_speech_desc",
@@ -738,6 +764,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["asset_id"],
     },
     "notify": {
+        "external": False,
         "category": "wfCat_publish",
         "label": "wfNode_notify",
         "description": "wfNode_notify_desc",
@@ -748,6 +775,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["sent"],
     },
     "translate": {
+        "external": False,
         "category": "wfCat_ai",
         "label": "wfNode_translate",
         "description": "wfNode_translate_desc",
@@ -770,6 +798,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 新连接;而免费端点按 IP 限流,串起来正好踩在它的节流上。这里走 translate_many:
     #: 8 路并发 + 共用一条连接,顺带共用重试。
     "translate_lines": {
+        "external": False,
         "category": "wfCat_ai",
         "label": "wfNode_translate_lines",
         "description": "wfNode_translate_lines_desc",
@@ -793,6 +822,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     #: 人声/背景音分离(ADR-0016)。**产出两份新素材,原素材一个字节不动。**
     "separate_audio": {
+        "external": False,
         "category": "wfCat_audio",
         "label": "wfNode_separate_audio",
         "description": "wfNode_separate_audio_desc",
@@ -817,6 +847,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     #: 降噪(ADR-0017)。**产出一份新素材**:音频进音频出,视频进视频出(画面原样拷贝)。
     "denoise_audio": {
+        "external": False,
         "category": "wfCat_audio",
         "label": "wfNode_denoise_audio",
         "description": "wfNode_denoise_audio_desc",
@@ -841,6 +872,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"asset_id": "asset"},
     },
     "generate_subtitles": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_generate_subtitles",
         "description": "wfNode_generate_subtitles_desc",
@@ -874,6 +906,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"clip_ids": "json", "count": "number"},
     },
     "dub_subtitles": {
+        "external": False,
         "category": "wfCat_audio",
         "label": "wfNode_dub_subtitles",
         "description": "wfNode_dub_subtitles_desc",
@@ -926,6 +959,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"done": "number", "failed": "number"},
     },
     "loop_foreach": {
+        "external": False,
         "category": "wfCat_flow",
         "label": "wfNode_loop_foreach",
         "description": "wfNode_loop_foreach_desc",
@@ -954,6 +988,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["results", "count"],
     },
     "loop_while": {
+        "external": False,
         "category": "wfCat_flow",
         "label": "wfNode_loop_while",
         "description": "wfNode_loop_while_desc",
@@ -969,6 +1004,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["results", "count", "iterations"],
     },
     "asset_query": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset_query",
         "description": "wfNode_asset_query_desc",
@@ -981,6 +1017,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["assets", "ids", "count"],
     },
     "asset_tag": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset_tag",
         "description": "wfNode_asset_tag_desc",
@@ -1000,6 +1037,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["updated", "count"],
     },
     "asset_update": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_asset_update",
         "description": "wfNode_asset_update_desc",
@@ -1011,6 +1049,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["updated", "count"],
     },
     "project_create": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_project_create",
         "description": "wfNode_project_create_desc",
@@ -1020,6 +1059,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["project_id", "name"],
     },
     "project_sequence_create": {
+        "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_project_sequence_create",
         "description": "wfNode_project_sequence_create_desc",
@@ -1033,6 +1073,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     # 组合/嵌套:把工作流当子流程调用,声明工作流的输出契约。
     "call_workflow": {
+        "external": True,
         "category": "wfCat_flow",
         "label": "wfNode_call_workflow",
         "description": "wfNode_call_workflow_desc",
@@ -1043,6 +1084,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "output": {
+        "external": False,
         "category": "wfCat_flow",
         "label": "wfNode_output",
         "description": "wfNode_output_desc",
@@ -1052,6 +1094,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "subgraph": {
+        "external": False,
         "category": "wfCat_flow",
         "label": "wfNode_subgraph",
         "description": "wfNode_subgraph_desc",
@@ -1065,6 +1108,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     # 浏览器自动化(RPA):在隔离浏览器会话里自动化操作网页,与发布登录完全隔离。
     # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。
     "browser_open": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_open",
         "description": "wfNode_browser_open_desc",
@@ -1077,6 +1121,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_navigate": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_navigate",
         "description": "wfNode_browser_navigate_desc",
@@ -1087,6 +1132,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_click": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_click",
         "description": "wfNode_browser_click_desc",
@@ -1099,6 +1145,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_input": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_input",
         "description": "wfNode_browser_input_desc",
@@ -1110,6 +1157,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_upload": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_upload",
         "description": "wfNode_browser_upload_desc",
@@ -1123,6 +1171,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_extract": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_extract",
         "description": "wfNode_browser_extract_desc",
@@ -1135,6 +1184,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session", "value"],
     },
     "browser_wait": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_wait",
         "description": "wfNode_browser_wait_desc",
@@ -1149,6 +1199,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_scroll": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_scroll",
         "description": "wfNode_browser_scroll_desc",
@@ -1160,6 +1211,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_evaluate": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_evaluate",
         "description": "wfNode_browser_evaluate_desc",
@@ -1170,6 +1222,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session", "value"],
     },
     "browser_close": {
+        "external": True,
         "category": "wfCat_browser",
         "label": "wfNode_browser_close",
         "description": "wfNode_browser_close_desc",
@@ -1380,77 +1433,24 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
 #: 浏览器节点整组算在内:一张图只要驱动浏览器,它做了什么就不再由这张图本身说了算。
 #: `plugin_tool` 算在内:插件工具可以是写类的(manifest 里的 read_only 是自报的,不是判据)。
 #: `call_workflow` 算在内是**保守**:它按 id 引用另一张图,扫描器跟不过去(跟过去要查库递归),
-#: 跟不过去就不能假装那张图是干净的。
-EXTERNAL_NODE_TYPES = frozenset(
-    {
-        "code",
-        "http_request",
-        "publish",
-        "plugin_tool",
-        "call_workflow",
-        "browser_open",
-        "browser_navigate",
-        "browser_click",
-        "browser_input",
-        "browser_upload",
-        "browser_extract",
-        "browser_wait",
-        "browser_scroll",
-        "browser_evaluate",
-        "browser_close",
-    }
-)
-
-#: 明确判定为「后果留在这个应用内」的节点。**与 EXTERNAL_NODE_TYPES 合起来必须覆盖 NODE_TYPES
-#: 全部** —— 由测试钉住。新增一个节点类型时作者必须归类,而不是让它默认落进"安全"那一边:
-#: 漏掉的那一个恰恰会是没人想过后果的那一个。
+#: 「后果落在这个应用外面」的节点。**声明在节点自己身上**(`"external": True`)——
+#: 加一个节点类型时作者必须在同一处说清它的后果落在哪,而不是记得去改另一头的一张表
+#: (漏掉的那一个恰恰会是没人想过后果的那一个;由棘轮守着每个声明都有这一格)。
+#:
 #: 容器节点(loop/subgraph)本身是内部的 —— 危险的是它们的体,而体会被递归扫到。
-INTERNAL_NODE_TYPES = frozenset(
-    {
-        "start",
-        "llm",
-        "transcribe_asset",
-        "export_sequence",
-        # 编排/检视时间线改的是**本地序列**,后果留在这个应用里;而且每一步都记进
-        # sequence_operations,用户撤得回来。
-        "asset",
-        "inspect_sequence",
-        "edit_timeline",
-        "timeline_append",
-        "timeline_add_track",
-        "timeline_clear",
-        "timeline_cut_ranges",
-        "generate_subtitles",
-        "ai_generate",
-        "video_to_gif",
-        "condition",
-        "template",
-        "json_extract",
-        "text_transform",
-        "delay",
-        "synthesize_speech",
-        "dub_subtitles",
-        "notify",
-        "translate",
-        "translate_lines",
-        "separate_audio",
-        "denoise_audio",
-        "loop_foreach",
-        "loop_while",
-        "asset_query",
-        "note_search",
-        "note_read",
-        "note_create",
-        "asset_tag",
-        "asset_update",
-        "project_create",
-        "project_sequence_create",
-        "output",
-        "subgraph",
-    }
-)
+EXTERNAL_NODE_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if spec.get("external"))
+INTERNAL_NODE_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if not spec.get("external"))
 
 _MAX_GRAPH_SCAN_DEPTH = 16
+
+
+#: 插件节点的类型前缀(`plugin.<插件id>.<工具名>`)。类型是**运行时**才知道的,所以它进不了
+#: 上面那两张由声明派生的集合 —— 而它跑的是别人的代码,默认就该按"应用之外"算。
+from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX as _PLUGIN_NODE_PREFIX
+
+
+def _is_external(node_type: str, types: frozenset[str]) -> bool:
+    return node_type in types or (types is EXTERNAL_NODE_TYPES and node_type.startswith(_PLUGIN_NODE_PREFIX))
 
 
 def _nodes_of_types(graph: Any, types: frozenset[str], *, _depth: int = 0) -> set[str]:
@@ -1468,7 +1468,7 @@ def _nodes_of_types(graph: Any, types: frozenset[str], *, _depth: int = 0) -> se
         if not isinstance(node, dict):
             continue
         ntype = str(node.get("type") or "")
-        if ntype in types:
+        if _is_external(ntype, types):
             found.add(ntype)
         if ntype in NESTED_BODY_TYPES:
             found |= _nodes_of_types((node.get("config") or {}).get("body"), types, _depth=_depth + 1)

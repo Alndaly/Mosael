@@ -35,11 +35,14 @@ def _graph(*nodes) -> dict:
 def test_every_node_type_is_classified() -> None:
     """新增一个节点类型时,作者必须说清它的后果落在哪 —— 而不是默认落进"安全"那一边。
 
-    这条断言的是**覆盖**:漏掉一个新节点类型,测试就红,而不是让它悄悄按内部处理。
+    声明写在**节点自己身上**(`"external": True/False`),所以这里断言的是:每个声明都有这一格。
+    漏掉一个,测试就红,而不是让它悄悄按内部处理。
     """
-    classified = EXTERNAL_NODE_TYPES | INTERNAL_NODE_TYPES
-    assert set(NODE_TYPES) - classified == set(), "有节点类型没有归类"
-    assert classified - set(NODE_TYPES) == set(), "归类里有不存在的节点类型"
+    missing = [name for name, spec in NODE_TYPES.items() if "external" not in spec]
+    assert not missing, f"这些节点没说清后果落在哪(加一格 \"external\": True/False):{missing}"
+    wrong = [name for name, spec in NODE_TYPES.items() if not isinstance(spec["external"], bool)]
+    assert not wrong, f"external 只能是 True/False:{wrong}"
+    assert EXTERNAL_NODE_TYPES | INTERNAL_NODE_TYPES == set(NODE_TYPES)
     assert EXTERNAL_NODE_TYPES & INTERNAL_NODE_TYPES == set(), "同一个节点被归了两边"
 
 
@@ -174,3 +177,16 @@ def test_an_ordinary_workflow_card_is_not_dressed_up_as_dangerous() -> None:
     ).json()
     assert card["permission"] == "ai-cost"
     assert "⚠️" not in card["summary"], card["summary"]
+
+
+def test_插件节点也算应用之外() -> None:
+    """插件节点的类型是**运行时**才知道的(`plugin.<插件id>.<工具名>`),所以它进不了由声明派生
+    的那张集合 —— 而它跑的是别人的代码、发别人的请求。此前一张含插件节点的图只按「花钱」那一档
+    开卡,而批准它等于放行第三方代码。默认按最高那一档算。
+    """
+    from app.domain.plugins.nodes import node_type_id
+
+    plugin_node = {"id": "p1", "type": node_type_id("dev.mosael.tikhub", "fetch"), "config": {}}
+    assert external_nodes_in_graph(_graph(plugin_node)) == {plugin_node["type"]}
+    folded = _graph({"id": "sub_1", "type": "subgraph", "config": {"body": {"nodes": [plugin_node]}}})
+    assert external_nodes_in_graph(folded) == {plugin_node["type"]}, "折叠成子图不该把它藏起来"
