@@ -157,6 +157,11 @@ _FIELD_LABELS = {
     "dy": "wfField_dy",
     "end": "wfField_end",
     "engine": "wfField_engine",
+    "concurrency": "wfField_concurrency",
+    "start_field": "wfField_start_field",
+    "end_field": "wfField_end_field",
+    "text_field": "wfField_text_field",
+    "allow_empty": "wfField_allow_empty",
     "at": "wfField_at",
     "max_duration": "wfField_max_duration",
     "strength": "wfField_strength",
@@ -865,6 +870,19 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "offset": {"advanced": True, "type": "number", "description": "wfNode_generate_subtitles_offset"},
             "track_id": {"advanced": True, "type": "template", "description": "wfNode_generate_subtitles_track_id"},
+            # 段落不是逐字稿、而是别的对象列表时(比如循环每一项的产物),起止和文本各在哪个字段。
+            "start_field": {"advanced": True, "type": "template", "default": "start", "description": "wfNode_generate_subtitles_start_field"},
+            "end_field": {"advanced": True, "type": "template", "default": "end", "description": "wfNode_generate_subtitles_end_field"},
+            "text_field": {"advanced": True, "type": "template", "default": "text", "description": "wfNode_generate_subtitles_text_field"},
+            # 一条能用的段落都没有时:默认报错(翻译配字幕时那意味着上游出了问题);
+            # 口播字幕这种"可能整片都没有口播"的场合选 yes,交出 0 条而不是让整条流程失败。
+            "allow_empty": {
+                "advanced": True,
+                "type": "string",
+                "default": "no",
+                "options": ["yes", "no"],
+                "description": "wfNode_generate_subtitles_allow_empty",
+            },
         },
         "outputs": ["track_id", "clip_ids", "count", "sequence_id"],
         "output_types": {"clip_ids": "json", "count": "number"},
@@ -941,6 +959,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "output": {
                 "type": "template",
                 "description": "wfNode_loop_foreach_output",
+            },
+            "concurrency": {
+                "advanced": True,
+                "type": "number",
+                "default": 1,
+                "description": "wfNode_loop_foreach_concurrency",
             },
         },
         "outputs": ["results", "count"],

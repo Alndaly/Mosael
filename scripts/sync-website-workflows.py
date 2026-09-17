@@ -29,16 +29,16 @@ def catalog_files() -> dict[str, str]:
             "id": "full_video_generation",
             "name": {"zh": "从主题到完整视频", "en": "Topic to finished video"},
             "summary": {
-                "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。可选添加旁白，每镜口播对齐到它自己的画面。",
-                "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Narration is optional; each shot's narration is aligned to its own picture.",
+                "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。各镜同时生成以节省时间；可选添加旁白，每镜口播对齐到它自己的画面并配上字幕。",
+                "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned.",
             },
             "requires": {
                 "zh": ["AI 对话模型", "支持文生视频的模型", "旁白可选：克隆音色"],
                 "en": ["Chat model", "Text-to-video model", "Optional narration: cloned voice"],
             },
             "stages": {
-                "zh": ["输入主题", "脚本与视觉方案", "生成分镜", "逐镜生成与组装", "导出成片"],
-                "en": ["Choose a topic", "Script and visual direction", "Storyboard", "Generate and assemble", "Export"],
+                "zh": ["输入主题", "脚本与视觉方案", "生成分镜", "各镜同时生成", "按顺序组装并配字幕", "导出成片"],
+                "en": ["Choose a topic", "Script and visual direction", "Storyboard", "Generate shots in parallel", "Assemble in order with captions", "Export"],
             },
             "graph": full_video_generation_graph(chat=ModelChoice(), video=ModelChoice()),
         },

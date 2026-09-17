@@ -726,7 +726,7 @@ def _first_voice_id(db: Session, workspace_id: str) -> str:
 def full_video_generation_graph(
     *, chat: ModelChoice, video: ModelChoice, voice_id: str = "", db: Session | None = None
 ) -> dict[str, Any]:
-    """主题 → 主旨 → 并行脚本/视觉开发 → 时间分镜 → 逐镜生成合成 → 导出。
+    """主题 → 主旨 → 并行脚本/视觉开发 → 时间分镜 → 各镜并发生成 → 按序上时间线 → 口播字幕 → 导出。
 
     ``db`` 让视频模型的默认参数能读到用户自定义的参数声明;官网导出等无库上下文留空,
     退回内置目录(见 _resolved_video_capabilities)。
@@ -758,7 +758,16 @@ def full_video_generation_graph(
 transition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合
 JSON Schema 的对象。"""
 
-    shot_body = {
+    # 逐镜的活分两段:**生成**各镜互不依赖,可以同时跑;**上时间线**要按镜头顺序,只能一镜
+    # 一镜来。此前两件事在同一个循环里,于是 N 个镜头的视频生成也只能排着队一个一个等 ——
+    # 视频生成动辄一两分钟一条,这是整条流程最慢的地方。
+    #
+    # 口播有两道闸,因为两件事都可能缺:
+    # · 没选音色 —— voice_id 是 synthesize_speech 的必填项,而模板不可能替用户猜一个。
+    #   空着就整段跳过:得到的是默片,而不是一个跑到一半失败的工作流。
+    # · 这一镜没有口播 —— 分镜的 schema 明说"无则写空字符串",纯画面镜头是正常的。
+    #   空文本交给合成会失败,而那一镜失败会拖垮整轮循环。
+    generate_body = {
         "nodes": [
             {
                 "id": "generate_clip",
@@ -787,78 +796,90 @@ JSON Schema 的对象。"""
                 },
             },
             {
+                "id": "has_voice",
+                "type": "condition",
+                "name": "选了配音音色吗",
+                "position": {"x": 80, "y": 300},
+                "config": {"left": "{{input.voice_id}}", "op": "not_empty"},
+            },
+            {
+                "id": "has_narration",
+                "type": "condition",
+                "name": "这一镜有口播吗",
+                "position": {"x": 390, "y": 300},
+                "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
+            },
+            {
+                "id": "narrate",
+                "type": "synthesize_speech",
+                "name": "合成该镜口播",
+                "position": {"x": 700, "y": 300},
+                "config": {"voice_id": "{{input.voice_id}}", "text": "{{loop.item.narration}}"},
+            },
+        ],
+        "edges": [
+            {"id": "shot_generate_organize", "source": "generate_clip", "target": "organize_clip"},
+            {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "branch": "true"},
+            {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "branch": "true"},
+        ],
+    }
+    # 这一段遍历的是上一段的**结果**:每一项是那一镜的全部产物,连同那一镜的分镜本身
+    # (`loop.item.loop.item` —— 外面那层 loop 是这一轮,里面那层是生成那一轮)。
+    assemble_body = {
+        "nodes": [
+            {
                 "id": "append_clip",
                 "type": "timeline_append",
                 "name": "按镜头顺序接入时间线",
-                "position": {"x": 700, "y": 140},
+                "position": {"x": 80, "y": 140},
                 "config": {
                     "sequence_id": "{{input.sequence_id}}",
-                    "asset_id": "{{generate_clip.asset_id}}",
+                    "asset_id": "{{loop.item.generate_clip.asset_id}}",
                     "track_id": "{{input.video_track_id}}",
                     "start": 0,
                     "end": video_plan.clip_seconds,
                 },
             },
+            {
+                "id": "has_audio",
+                "type": "condition",
+                "name": "这一镜合成了口播吗",
+                "position": {"x": 390, "y": 140},
+                "config": {"left": "{{loop.item.narrate.asset_id}}", "op": "not_empty"},
+            },
+            {
+                "id": "append_narration",
+                "type": "timeline_append",
+                "name": "把口播对齐到这一镜",
+                "position": {"x": 700, "y": 140},
+                "config": {
+                    "sequence_id": "{{input.sequence_id}}",
+                    "asset_id": "{{loop.item.narrate.asset_id}}",
+                    "track_id": "{{input.audio_track_id}}",
+                    # **放在这一镜画面开始的那一秒**,不是接在上一段口播后面。此前是后者:
+                    # 口播长短不一,第 n 段落在前 n−1 段口播时长之和上,越往后和画面错得越多。
+                    # 用的是画面片段**实际**落下的位置,不是分镜里写的 start_seconds —— 那是
+                    # 模型写的数字,画面按顺序接在前一镜后面,两者不必一致。
+                    "at": "{{append_clip.timeline_start}}",
+                    # 不裁(硬裁会把话切掉半句),比镜头长就加速塞进去,最多 1.5 倍。
+                    # 分镜提示词里已经按语速给了字数上限,这一道是兜底。
+                    "max_duration": video_plan.clip_seconds,
+                },
+            },
+            {
+                "id": "caption",
+                "type": "template",
+                "name": "这一镜的字幕文本",
+                "position": {"x": 1010, "y": 140},
+                "config": {"template": "{{loop.item.loop.item.narration}}"},
+            },
         ],
         "edges": [
-            {"id": "shot_generate_organize", "source": "generate_clip", "target": "organize_clip"},
-            {"id": "shot_organize_append", "source": "organize_clip", "target": "append_clip"},
-            {"id": "shot_append_voice_gate", "source": "append_clip", "target": "has_voice"},
-            {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "branch": "true"},
-            {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "branch": "true"},
-            {"id": "shot_speak_append", "source": "narrate", "target": "append_narration"},
+            {"id": "assemble_clip_gate", "source": "append_clip", "target": "has_audio"},
+            {"id": "assemble_gate_narration", "source": "has_audio", "target": "append_narration", "branch": "true"},
+            {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
     }
-    # 分镜给每镜写了 narration,而此前**没有任何一个节点用它** —— 成片是默哑的。口播是
-    # 这条工作流叙事的一半(创意简报、脚本、分镜都在为它服务),生成完却只接了画面。
-    #
-    # 两道闸,因为两件事都可能缺:
-    # · 没选音色 —— voice_id 是 synthesize_speech 的必填项,而模板不可能替用户猜一个。
-    #   空着就整段跳过:得到的是和今天一样的默片,而不是一个跑到一半失败的工作流。
-    # · 这一镜没有口播 —— 分镜的 schema 明说"无则写空字符串",纯画面镜头是正常的。
-    #   空文本交给合成会失败,而那一镜失败会拖垮整轮循环。
-    shot_body["nodes"].extend([
-        {
-            "id": "has_voice",
-            "type": "condition",
-            "name": "选了配音音色吗",
-            "position": {"x": 80, "y": 300},
-            "config": {"left": "{{input.voice_id}}", "op": "not_empty"},
-        },
-        {
-            "id": "has_narration",
-            "type": "condition",
-            "name": "这一镜有口播吗",
-            "position": {"x": 390, "y": 300},
-            "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
-        },
-        {
-            "id": "narrate",
-            "type": "synthesize_speech",
-            "name": "合成该镜口播",
-            "position": {"x": 700, "y": 300},
-            "config": {"voice_id": "{{input.voice_id}}", "text": "{{loop.item.narration}}"},
-        },
-        {
-            "id": "append_narration",
-            "type": "timeline_append",
-            "name": "把口播对齐到这一镜",
-            "position": {"x": 1010, "y": 300},
-            "config": {
-                "sequence_id": "{{input.sequence_id}}",
-                "asset_id": "{{narrate.asset_id}}",
-                "track_id": "{{input.audio_track_id}}",
-                # **放在这一镜画面开始的那一秒**,不是接在上一段口播后面。此前是后者:
-                # 口播长短不一,第 n 段落在前 n−1 段口播时长之和上,越往后和画面错得越多。
-                # 用的是画面片段**实际**落下的位置,不是分镜里写的 start_seconds —— 那是
-                # 模型写的数字,画面按顺序接在前一镜后面,两者不必一致。
-                "at": "{{append_clip.timeline_start}}",
-                # 不裁(硬裁会把话切掉半句),比镜头长就加速塞进去,最多 1.5 倍。
-                # 分镜提示词里已经按语速给了字数上限,这一道是兜底。
-                "max_duration": video_plan.clip_seconds,
-            },
-        },
-    ])
 
     nodes: list[dict[str, Any]] = [
         {
@@ -1003,37 +1024,71 @@ JSON Schema 的对象。"""
             },
         },
         {
-            "id": "generate_and_assemble",
+            "id": "generate_shots",
             "type": "loop_foreach",
-            "name": "逐镜生成视频并按时间合成",
+            "name": "各镜同时生成画面与口播",
             "position": {"x": 1400, "y": 300},
             "config": {
                 "items": "{{storyboard.json.shots}}",
                 "inputs": {
                     "project_id": "{{video_project.project_id}}",
+                    "voice_id": "{{start.voice_id}}",
+                },
+                "body": generate_body,
+                # 不写 output:每一项交出那一镜的全部产物(画面、口播)连同分镜本身,
+                # 下一段按顺序上时间线、配字幕都要用。
+                "output": "",
+                # 三镜同时:视频供应商大多按账号限并发,再多就是排队或 429。
+                "concurrency": 3,
+            },
+        },
+        {
+            "id": "assemble_timeline",
+            "type": "loop_foreach",
+            "name": "按镜头顺序接上时间线",
+            "position": {"x": 1720, "y": 300},
+            "config": {
+                "items": "{{generate_shots.results}}",
+                "inputs": {
                     "sequence_id": "{{video_project.sequence_id}}",
                     "video_track_id": "{{video_project.video_track_id}}",
                     "audio_track_id": "{{video_project.audio_track_id}}",
-                    "voice_id": "{{start.voice_id}}",
-                    "aspect_ratio": "{{start.aspect_ratio}}",
-                    "resolution": "{{start.resolution}}",
                 },
-                "body": shot_body,
-                "output": "{{generate_clip.asset_id}}",
+                "body": assemble_body,
+                "output": "",
+                # 一镜接一镜:「接到末尾」的落点取决于前一镜已经接上。
+                "concurrency": 1,
+            },
+        },
+        {
+            "id": "narration_subtitles",
+            "type": "generate_subtitles",
+            "name": "把口播做成字幕",
+            "position": {"x": 2040, "y": 300},
+            "config": {
+                "sequence_id": "{{video_project.sequence_id}}",
+                "segments": "{{assemble_timeline.results}}",
+                # 每一项是上一段那一轮的产物:起止取口播**实际**落下的位置(可能被加速过),
+                # 文本取那一镜的口播。没有口播的镜头起止为空,自动跳过。
+                "start_field": "append_narration.timeline_start",
+                "end_field": "append_narration.timeline_end",
+                "text_field": "caption.text",
+                # 整片没有口播(没选音色)时交出 0 条,不让一条已经生成完的片子在这里失败。
+                "allow_empty": "yes",
             },
         },
         {
             "id": "export_final",
             "type": "export_sequence",
             "name": "合成并导出最终视频",
-            "position": {"x": 1740, "y": 300},
+            "position": {"x": 2360, "y": 300},
             "config": {"sequence_id": "{{video_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
             "name": "成片完成通知",
-            "position": {"x": 2080, "y": 120},
+            "position": {"x": 2680, "y": 120},
             "config": {
                 "title": "视频已生成：{{creative_brief.json.title}}",
                 "body": "脚本、分镜、视频片段和最终合成均已完成。最终素材 ID：{{export_final.asset_id}}",
@@ -1043,7 +1098,7 @@ JSON Schema 的对象。"""
             "id": "output",
             "type": "output",
             "name": "交付完整制作结果",
-            "position": {"x": 2080, "y": 480},
+            "position": {"x": 2680, "y": 480},
             "config": {
                 "values": {
                     "title": "{{creative_brief.json.title}}",
@@ -1052,7 +1107,8 @@ JSON Schema 的对象。"""
                     "narrative_script": "{{narrative_script.json}}",
                     "visual_bible": "{{visual_bible.json}}",
                     "storyboard": "{{storyboard.json}}",
-                    "generated_clip_asset_ids": "{{generate_and_assemble.results}}",
+                    "shots": "{{generate_shots.results}}",
+                    "subtitle_count": "{{narration_subtitles.count}}",
                     "project_id": "{{video_project.project_id}}",
                     "sequence_id": "{{video_project.sequence_id}}",
                     "final_asset_id": "{{export_final.asset_id}}",
@@ -1067,14 +1123,16 @@ JSON Schema 的对象。"""
         {"id": "brief_project", "source": "creative_brief", "target": "video_project"},
         {"id": "narrative_storyboard", "source": "narrative_script", "target": "storyboard"},
         {"id": "visual_storyboard", "source": "visual_bible", "target": "storyboard"},
-        {"id": "storyboard_generate", "source": "storyboard", "target": "generate_and_assemble"},
-        {"id": "project_generate", "source": "video_project", "target": "generate_and_assemble"},
-        {"id": "generate_export", "source": "generate_and_assemble", "target": "export_final"},
+        {"id": "storyboard_generate", "source": "storyboard", "target": "generate_shots"},
+        {"id": "project_generate", "source": "video_project", "target": "generate_shots"},
+        {"id": "generate_assemble", "source": "generate_shots", "target": "assemble_timeline"},
+        {"id": "assemble_subtitles", "source": "assemble_timeline", "target": "narration_subtitles"},
+        {"id": "subtitles_export", "source": "narration_subtitles", "target": "export_final"},
         {"id": "export_notice", "source": "export_final", "target": "done_notice"},
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 4, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 5, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

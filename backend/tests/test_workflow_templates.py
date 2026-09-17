@@ -72,7 +72,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 4,
+        "template_version": 5,
         "source": "official",
     }
 
@@ -82,13 +82,19 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert successors["creative_brief"] == {"narrative_script", "visual_bible", "video_project"}
     assert successors["export_final"] == {"done_notice", "output"}
 
-    loop = next(node for node in graph["nodes"] if node["id"] == "generate_and_assemble")
-    body = loop["config"]["body"]
-    assert validate_graph(body, require_start=False) == []
-    assert _invalid_references(body, virtual_roots={"loop", "input"}) == []
-    body_ids = {node["id"] for node in body["nodes"]}
-    assert {reference.split(".")[0] for reference in _references(loop["config"]["output"])} <= body_ids
-    organize = next(node for node in body["nodes"] if node["id"] == "organize_clip")
+    generate = next(node for node in graph["nodes"] if node["id"] == "generate_shots")
+    assemble = next(node for node in graph["nodes"] if node["id"] == "assemble_timeline")
+    for loop in (generate, assemble):
+        body = loop["config"]["body"]
+        assert validate_graph(body, require_start=False) == []
+        assert _invalid_references(body, virtual_roots={"loop", "input"}) == []
+    #: 生成可以同时跑(视频生成是整条流程最慢的一步);上时间线必须一镜接一镜。
+    assert generate["config"]["concurrency"] == 3
+    assert assemble["config"]["concurrency"] == 1
+    assert successors["generate_shots"] == {"assemble_timeline"}
+    assert successors["assemble_timeline"] == {"narration_subtitles"}
+    assert successors["narration_subtitles"] == {"export_final"}
+    organize = next(node for node in generate["config"]["body"]["nodes"] if node["id"] == "organize_clip")
     assert organize["inputs"] == ["asset_ids"]
     assert any(
         edge.get("kind") == "data"
@@ -96,8 +102,12 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
         and edge.get("source_output") == "asset_id"
         and edge.get("target") == "organize_clip"
         and edge.get("target_input") == "asset_ids"
-        for edge in body["edges"]
+        for edge in generate["config"]["body"]["edges"]
     )
+    subtitles = next(node for node in graph["nodes"] if node["id"] == "narration_subtitles")
+    #: 整片没有口播时交出 0 条,不让一条已经生成完的片子在导出前失败。
+    assert subtitles["config"]["allow_empty"] == "yes"
+    assert subtitles["config"]["text_field"] == "caption.text"
 
 
 def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
@@ -150,20 +160,20 @@ def test_full_video_narration_lands_on_its_own_shot() -> None:
     """口播放在这一镜画面开始的那一秒,而不是接在上一段口播后面。
 
     此前是后者:口播长短不一,第 n 段落在前 n−1 段口播时长之和上,越往后和画面错得越多。
+    (实际跑一遍的验证见 test_loop_concurrency_and_full_video_assembly。)
     """
     graph = full_video_generation_graph(
         chat=ModelChoice(profile_id="chat-profile", provider="openai", model="chat-model"),
         video=ModelChoice(profile_id="video-profile", provider="fal", model="video-model"),
     )
-    loop = next(node for node in graph["nodes"] if node["id"] == "generate_and_assemble")
-    body = loop["config"]["body"]
+    assemble = next(node for node in graph["nodes"] if node["id"] == "assemble_timeline")
+    body = assemble["config"]["body"]
     narration = next(node for node in body["nodes"] if node["id"] == "append_narration")
-    clip = next(node for node in body["nodes"] if node["id"] == "generate_clip")
+    clip = next(node for node in body["nodes"] if node["id"] == "append_clip")
     at = next(edge for edge in body["edges"] if edge.get("target") == "append_narration" and edge.get("target_input") == "at")
     assert (at["source"], at["source_output"]) == ("append_clip", "timeline_start")
-    #: 比镜头长就压进去(兜底);镜头多长由分镜里固定的片段长度决定。
-    seconds = clip["name"].split(" ")[1]
-    assert str(narration["config"]["max_duration"]) == seconds
+    #: 比镜头长就压进去(兜底);镜头多长就是画面片段截的那一段。
+    assert narration["config"]["max_duration"] == clip["config"]["end"]
     storyboard = next(node for node in graph["nodes"] if node["id"] == "storyboard")
     assert "每秒约 4 字" in storyboard["config"]["system"]
 
@@ -242,8 +252,8 @@ class Test示范工作流要挑得动的模型:
             chat=ModelChoice(provider="p", model="c"),
             video=ModelChoice(provider="minimax", model="MiniMax-H3"),
         )
-        # 它在 loop_foreach 的 body 里,不是顶层节点。
-        loop = next(n for n in graph["nodes"] if n["id"] == "generate_and_assemble")
+        # 它在「各镜同时生成」那个循环的 body 里,不是顶层节点。
+        loop = next(n for n in graph["nodes"] if n["id"] == "generate_shots")
         node = next(n for n in loop["config"]["body"]["nodes"] if n["id"] == "generate_clip")
         config = node["config"]
         assert config["prompt"]
@@ -303,65 +313,68 @@ class Test分镜写了口播就要真的配上:
     而此前**没有任何一个节点用它**,成片是默哑的。写了却不用,比不写更容易让人以为是坏了。
     """
 
-    def _body(self, voice_id: str = "v1") -> dict[str, Any]:
+    def _loops(self, voice_id: str = "v1") -> tuple[dict[str, Any], dict[str, Any]]:
+        """(各镜同时生成, 按镜头顺序接上时间线) 两个循环的 config。"""
         graph = full_video_generation_graph(
             chat=ModelChoice(provider="p", model="c"),
             video=ModelChoice(provider="minimax", model="MiniMax-H3"),
             voice_id=voice_id,
         )
-        loop = next(n for n in graph["nodes"] if n["id"] == "generate_and_assemble")
-        return graph, loop["config"]
+        by_id = {n["id"]: n for n in graph["nodes"]}
+        return by_id["generate_shots"]["config"], by_id["assemble_timeline"]["config"]
 
     def test_口播被合成并接进音轨(self) -> None:
-        _, loop = self._body()
-        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        generate, assemble = self._loops()
+        made = {n["id"]: n for n in generate["body"]["nodes"]}
+        placed = {n["id"]: n for n in assemble["body"]["nodes"]}
 
-        assert nodes["narrate"]["type"] == "synthesize_speech"
-        assert nodes["narrate"]["config"]["text"] == "{{loop.item.narration}}"
+        assert made["narrate"]["type"] == "synthesize_speech"
+        assert made["narrate"]["config"]["text"] == "{{loop.item.narration}}"
         # 接的是**音轨**,不是画面那条 —— 接错轨道的话口播会把画面顶掉。
-        assert nodes["append_narration"]["config"]["track_id"] == "{{input.audio_track_id}}"
-        assert loop["inputs"]["audio_track_id"] == "{{video_project.audio_track_id}}"
-        # 指向别的节点的引用会被规范化成一条**有类型的数据边**,配置里留空
-        # (见 normalization.canonicalize_data_bindings)—— 所以断言那条边,不是那个字符串。
-        assert any(
-            e.get("kind") == "data"
-            and e["source"] == "narrate"
-            and e["target"] == "append_narration"
-            and e.get("source_output") == "asset_id"
-            and e.get("target_input") == "asset_id"
-            for e in loop["body"]["edges"]
-        )
+        assert placed["append_narration"]["config"]["track_id"] == "{{input.audio_track_id}}"
+        assert assemble["inputs"]["audio_track_id"] == "{{video_project.audio_track_id}}"
+        # 上时间线那一轮遍历的是生成那一轮的结果:口播素材就是那一项里 narrate 的产物。
+        assert placed["append_narration"]["config"]["asset_id"] == "{{loop.item.narrate.asset_id}}"
 
     def test_口播不按镜头定长裁(self) -> None:
-        """画面每镜定长,口播不是。硬裁到 clip_seconds 会把话切掉半句。"""
-        _, loop = self._body()
-        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        """画面每镜定长,口播不是。硬裁到 clip_seconds 会把话切掉半句 —— 太长就加速,不裁。"""
+        _, assemble = self._loops()
+        nodes = {n["id"]: n for n in assemble["body"]["nodes"]}
         assert "end" not in nodes["append_narration"]["config"]
+        assert nodes["append_narration"]["config"]["max_duration"]
 
     def test_没选音色时整段跳过而不是失败(self) -> None:
         """voice_id 是 synthesize_speech 的必填项,模板不可能替用户猜一个。空着要得到
         一部默片,而不是一个跑到第一镜就失败的工作流。"""
-        _, loop = self._body(voice_id="")
-        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        generate, assemble = self._loops(voice_id="")
+        nodes = {n["id"]: n for n in generate["body"]["nodes"]}
         gate = nodes["has_voice"]
         assert gate["type"] == "condition"
         assert gate["config"] == {"left": "{{input.voice_id}}", "op": "not_empty"}
         # 合成只挂在 true 分支上。
-        to_narration = [e for e in loop["body"]["edges"] if e["source"] == "has_voice"]
-        assert all(e.get("branch") == "true" for e in to_narration)
+        to_narration = [e for e in generate["body"]["edges"] if e["source"] == "has_voice"]
+        assert to_narration and all(e.get("branch") == "true" for e in to_narration)
+        # 上时间线那一轮:没合成出口播的镜头不去接口播。
+        placed = {n["id"]: n for n in assemble["body"]["nodes"]}
+        assert placed["has_audio"]["config"] == {"left": "{{loop.item.narrate.asset_id}}", "op": "not_empty"}
+        gated = [e for e in assemble["body"]["edges"] if e["source"] == "has_audio"]
+        assert gated and all(e.get("branch") == "true" for e in gated)
 
     def test_这一镜没口播也跳过(self) -> None:
         """分镜 schema 明说"无则写空字符串" —— 纯画面镜头是正常的,而空文本交给合成会失败,
         那一镜失败会拖垮整轮循环。"""
-        _, loop = self._body()
-        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        generate, _ = self._loops()
+        nodes = {n["id"]: n for n in generate["body"]["nodes"]}
         assert nodes["has_narration"]["config"] == {"left": "{{loop.item.narration}}", "op": "not_empty"}
-        edges = [e for e in loop["body"]["edges"] if e["source"] == "has_narration"]
-        assert all(e.get("branch") == "true" for e in edges)
+        edges = [e for e in generate["body"]["edges"] if e["source"] == "has_narration"]
+        assert edges and all(e.get("branch") == "true" for e in edges)
 
     def test_口播链路不影响画面(self) -> None:
         """加配音不该动到已经能用的那半边。"""
-        _, loop = self._body()
-        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
-        assert nodes["append_clip"]["config"]["track_id"] == "{{input.video_track_id}}"
-        assert loop["output"] == "{{generate_clip.asset_id}}"
+        generate, assemble = self._loops()
+        placed = {n["id"]: n for n in assemble["body"]["nodes"]}
+        assert placed["append_clip"]["config"]["track_id"] == "{{input.video_track_id}}"
+        assert placed["append_clip"]["config"]["asset_id"] == "{{loop.item.generate_clip.asset_id}}"
+        # 画面和口播在生成那一轮里是两条互不依赖的支路 —— 口播失败不会拖住画面的顺序。
+        roots = {n["id"] for n in generate["body"]["nodes"]} - {e["target"] for e in generate["body"]["edges"]}
+        assert {"generate_clip", "has_voice"} <= roots

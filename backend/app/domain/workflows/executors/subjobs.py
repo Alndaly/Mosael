@@ -613,6 +613,16 @@ def _segments_in(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def _field(item: dict[str, Any], path: str) -> Any:
+    """按点号路径取嵌套字段(`append.timeline_start`),取不到就是空串 —— 与模板插值同一个约定。"""
+    current: Any = item
+    for part in path.split("."):
+        if not isinstance(current, dict):
+            return ""
+        current = current.get(part, "")
+    return current
+
+
 def _lines_in(value: Any) -> list[str]:
     """逐条替换的文本。**不能按逗号拆** —— 句子里全是逗号,id_list 那套在这里会把一句话拆成五句。"""
     if isinstance(value, list):
@@ -675,7 +685,11 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
 
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
     segments = _segments_in(config.get("segments"))
+    allow_empty = _yes_no(config, "allow_empty", default=False)
+    nothing = {"track_id": "", "clip_ids": [], "count": 0, "sequence_id": sequence.id}
     if not segments:
+        if allow_empty:
+            return nothing
         raise WorkflowDomainError("没有可用来生成字幕的逐字稿段落")
     lines = _lines_in(config.get("texts"))
     if lines and len(lines) != len(segments):
@@ -686,14 +700,17 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
     except (TypeError, ValueError):
         raise WorkflowDomainError("offset 要是一个秒数") from None
 
+    start_field = str(config.get("start_field") or "start").strip()
+    end_field = str(config.get("end_field") or "end").strip()
+    text_field = str(config.get("text_field") or "text").strip()
     cues: list[tuple[str, float, float]] = []
     for index, segment in enumerate(segments):
         try:
-            start = float(segment.get("start") or 0.0)
-            end = float(segment.get("end") or 0.0)
+            start = float(_field(segment, start_field) or 0.0)
+            end = float(_field(segment, end_field) or 0.0)
         except (TypeError, ValueError):
             raise WorkflowDomainError(f"第 {index + 1} 段的时间码不是数字") from None
-        original = str(segment.get("text") or "").strip()
+        original = str(_field(segment, text_field) or "").strip()
         text = lines[index].strip() if lines else original
         if keep_original and lines and original and original != text:
             # 原文在上、译文在下 —— 和「字幕配音」的 line=last 正好配套:看两行,只念译文。
@@ -701,6 +718,9 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
         if text and end > start:
             cues.append((text, start + offset, end - start))
     if not cues:
+        if allow_empty:
+            # 提前返回:连字幕轨都不建 —— 一条空轨挂在时间线上只会让人以为字幕丢了。
+            return nothing
         raise WorkflowDomainError("这些段落里没有一条能生成字幕(文本为空或时长为 0)")
 
     track_id = _subtitle_track(db, sequence, str(config.get("track_id", "")).strip())

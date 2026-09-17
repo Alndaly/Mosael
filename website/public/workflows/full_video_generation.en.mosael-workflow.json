@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Topic to finished video",
-  "description": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Narration is optional; each shot's narration is aligned to its own picture.",
-  "graph_hash": "8155e0750aefe2fa8012b8ca99017ccb880d5e30066677a33c314d64a9829307",
+  "description": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned.",
+  "graph_hash": "5ece4c0d2c1ec4b622823daa153d291a226431a6732d563724a80d856712f5a6",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 4,
+      "template_version": 5,
       "source": "official"
     },
     "nodes": [
@@ -417,9 +417,9 @@
         }
       },
       {
-        "id": "generate_and_assemble",
+        "id": "generate_shots",
         "type": "loop_foreach",
-        "name": "逐镜生成视频并按时间合成",
+        "name": "各镜同时生成画面与口播",
         "position": {
           "x": 1400,
           "y": 300
@@ -428,12 +428,7 @@
           "items": "{{storyboard.json.shots}}",
           "inputs": {
             "project_id": "{{video_project.project_id}}",
-            "sequence_id": "{{video_project.sequence_id}}",
-            "video_track_id": "{{video_project.video_track_id}}",
-            "audio_track_id": "{{video_project.audio_track_id}}",
-            "voice_id": "{{start.voice_id}}",
-            "aspect_ratio": "{{start.aspect_ratio}}",
-            "resolution": "{{start.resolution}}"
+            "voice_id": "{{start.voice_id}}"
           },
           "body": {
             "nodes": [
@@ -475,25 +470,6 @@
                 ]
               },
               {
-                "id": "append_clip",
-                "type": "timeline_append",
-                "name": "按镜头顺序接入时间线",
-                "position": {
-                  "x": 700,
-                  "y": 140
-                },
-                "config": {
-                  "sequence_id": "{{input.sequence_id}}",
-                  "asset_id": "",
-                  "track_id": "{{input.video_track_id}}",
-                  "start": 0,
-                  "end": 5
-                },
-                "inputs": [
-                  "asset_id"
-                ]
-              },
-              {
                 "id": "has_voice",
                 "type": "condition",
                 "name": "选了配音音色吗",
@@ -531,39 +507,9 @@
                   "voice_id": "{{input.voice_id}}",
                   "text": "{{loop.item.narration}}"
                 }
-              },
-              {
-                "id": "append_narration",
-                "type": "timeline_append",
-                "name": "把口播对齐到这一镜",
-                "position": {
-                  "x": 1010,
-                  "y": 300
-                },
-                "config": {
-                  "sequence_id": "{{input.sequence_id}}",
-                  "asset_id": "",
-                  "track_id": "{{input.audio_track_id}}",
-                  "at": "",
-                  "max_duration": 5
-                },
-                "inputs": [
-                  "asset_id",
-                  "at"
-                ]
               }
             ],
             "edges": [
-              {
-                "id": "shot_organize_append",
-                "source": "organize_clip",
-                "target": "append_clip"
-              },
-              {
-                "id": "shot_append_voice_gate",
-                "source": "append_clip",
-                "target": "has_voice"
-              },
               {
                 "id": "shot_voice_gate_narration",
                 "source": "has_voice",
@@ -583,22 +529,107 @@
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_ids"
+              }
+            ]
+          },
+          "output": "",
+          "concurrency": 3
+        }
+      },
+      {
+        "id": "assemble_timeline",
+        "type": "loop_foreach",
+        "name": "按镜头顺序接上时间线",
+        "position": {
+          "x": 1720,
+          "y": 300
+        },
+        "config": {
+          "items": "",
+          "inputs": {
+            "sequence_id": "{{video_project.sequence_id}}",
+            "video_track_id": "{{video_project.video_track_id}}",
+            "audio_track_id": "{{video_project.audio_track_id}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "append_clip",
+                "type": "timeline_append",
+                "name": "按镜头顺序接入时间线",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "{{loop.item.generate_clip.asset_id}}",
+                  "track_id": "{{input.video_track_id}}",
+                  "start": 0,
+                  "end": 5
+                }
               },
               {
-                "id": "d-generate_clip-asset_id-append_clip-asset_id",
-                "source": "generate_clip",
-                "target": "append_clip",
-                "kind": "data",
-                "source_output": "asset_id",
-                "target_input": "asset_id"
+                "id": "has_audio",
+                "type": "condition",
+                "name": "这一镜合成了口播吗",
+                "position": {
+                  "x": 390,
+                  "y": 140
+                },
+                "config": {
+                  "left": "{{loop.item.narrate.asset_id}}",
+                  "op": "not_empty"
+                }
               },
               {
-                "id": "d-narrate-asset_id-append_narration-asset_id",
-                "source": "narrate",
+                "id": "append_narration",
+                "type": "timeline_append",
+                "name": "把口播对齐到这一镜",
+                "position": {
+                  "x": 700,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "{{loop.item.narrate.asset_id}}",
+                  "track_id": "{{input.audio_track_id}}",
+                  "at": "",
+                  "max_duration": 5
+                },
+                "inputs": [
+                  "at"
+                ]
+              },
+              {
+                "id": "caption",
+                "type": "template",
+                "name": "这一镜的字幕文本",
+                "position": {
+                  "x": 1010,
+                  "y": 140
+                },
+                "config": {
+                  "template": "{{loop.item.loop.item.narration}}"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "assemble_clip_gate",
+                "source": "append_clip",
+                "target": "has_audio"
+              },
+              {
+                "id": "assemble_gate_narration",
+                "source": "has_audio",
                 "target": "append_narration",
-                "kind": "data",
-                "source_output": "asset_id",
-                "target_input": "asset_id"
+                "branch": "true"
+              },
+              {
+                "id": "assemble_narration_caption",
+                "source": "append_narration",
+                "target": "caption"
               },
               {
                 "id": "d-append_clip-timeline_start-append_narration-at",
@@ -610,15 +641,40 @@
               }
             ]
           },
-          "output": "{{generate_clip.asset_id}}"
-        }
+          "output": "",
+          "concurrency": 1
+        },
+        "inputs": [
+          "items"
+        ]
+      },
+      {
+        "id": "narration_subtitles",
+        "type": "generate_subtitles",
+        "name": "把口播做成字幕",
+        "position": {
+          "x": 2040,
+          "y": 300
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "start_field": "append_narration.timeline_start",
+          "end_field": "append_narration.timeline_end",
+          "text_field": "caption.text",
+          "allow_empty": "yes"
+        },
+        "inputs": [
+          "sequence_id",
+          "segments"
+        ]
       },
       {
         "id": "export_final",
         "type": "export_sequence",
         "name": "合成并导出最终视频",
         "position": {
-          "x": 1740,
+          "x": 2360,
           "y": 300
         },
         "config": {
@@ -633,7 +689,7 @@
         "type": "notify",
         "name": "成片完成通知",
         "position": {
-          "x": 2080,
+          "x": 2680,
           "y": 120
         },
         "config": {
@@ -646,7 +702,7 @@
         "type": "output",
         "name": "交付完整制作结果",
         "position": {
-          "x": 2080,
+          "x": 2680,
           "y": 480
         },
         "config": {
@@ -657,7 +713,8 @@
             "narrative_script": "{{narrative_script.json}}",
             "visual_bible": "{{visual_bible.json}}",
             "storyboard": "{{storyboard.json}}",
-            "generated_clip_asset_ids": "{{generate_and_assemble.results}}",
+            "shots": "{{generate_shots.results}}",
+            "subtitle_count": "{{narration_subtitles.count}}",
             "project_id": "{{video_project.project_id}}",
             "sequence_id": "{{video_project.sequence_id}}",
             "final_asset_id": "{{export_final.asset_id}}"
@@ -699,16 +756,16 @@
       {
         "id": "storyboard_generate",
         "source": "storyboard",
-        "target": "generate_and_assemble"
+        "target": "generate_shots"
       },
       {
         "id": "project_generate",
         "source": "video_project",
-        "target": "generate_and_assemble"
+        "target": "generate_shots"
       },
       {
-        "id": "generate_export",
-        "source": "generate_and_assemble",
+        "id": "subtitles_export",
+        "source": "narration_subtitles",
         "target": "export_final"
       },
       {
@@ -720,6 +777,30 @@
         "id": "export_output",
         "source": "export_final",
         "target": "output"
+      },
+      {
+        "id": "d-generate_shots-results-assemble_timeline-items",
+        "source": "generate_shots",
+        "target": "assemble_timeline",
+        "kind": "data",
+        "source_output": "results",
+        "target_input": "items"
+      },
+      {
+        "id": "d-video_project-sequence_id-narration_subtitles-sequence_id",
+        "source": "video_project",
+        "target": "narration_subtitles",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-assemble_timeline-results-narration_subtitles-segments",
+        "source": "assemble_timeline",
+        "target": "narration_subtitles",
+        "kind": "data",
+        "source_output": "results",
+        "target_input": "segments"
       },
       {
         "id": "d-video_project-sequence_id-export_final-sequence_id",

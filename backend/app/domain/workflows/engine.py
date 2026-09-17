@@ -191,6 +191,13 @@ def execute_graph(
         node_edges = incoming.get(nid, [])
         if not node_edges:
             return False
+        # **有控制边时只看控制边。** 数据边只说"这个值从哪来"(同时约束先后),不说"该不该跑"。
+        # 此前两种边一视同仁:一个挂在条件分支"真"出口上的节点,只要另有一条数据边从别处取值,
+        # 分支为假时也照跑 —— 整片生成里没有口播的那一镜,就这样拿着空素材去接口播而失败。
+        # 只有数据边(画布上把控制边折叠成了数据边)时,由数据边决定,和以前一样。
+        control = [edge for edge in node_edges if str(edge.get("kind", "")) != "data"]
+        if control:
+            node_edges = control
         for edge in node_edges:
             source = str(edge.get("source"))
             with lock:

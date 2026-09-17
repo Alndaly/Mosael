@@ -21,7 +21,7 @@ later. Template node names and prompts are currently in Chinese.
 
 | Template | What it does | Needs |
 | --- | --- | --- |
-| Topic to finished video | Thesis → script and visual bible in parallel → timed storyboard → generate each shot onto the timeline → export. With a voice selected, each shot's narration is synthesized and **placed at the second that shot starts**; narration longer than its shot is sped up to fit (at most 1.5×), and the storyboard prompt already caps its length by speaking rate | A chat model and a text-to-video model; narration is optional: a cloned voice |
+| Topic to finished video | Thesis → script and visual bible in parallel → timed storyboard → **shots generated in parallel** (up to 3 at once) → assembled in shot order → narration captions → export. With a voice selected, each shot's narration is synthesized and **placed at the second that shot starts**; narration longer than its shot is sped up to fit (at most 1.5×), and the storyboard prompt already caps its length by speaking rate. Captions follow the narration's actual timing; delete the caption node if you don't want them | A chat model and a text-to-video model; narration is optional: a cloned voice |
 | Transcript-based video cleanup | **Remove background hiss first** (built-in engine, music untouched; transcription gets more accurate) → timed transcript → diagnose pauses, fillers and repetition → ripple-cut high-confidence ranges in a new project → export. Denoising produces a new video; the source is untouched | A chat model, a transcription engine, a source video |
 | Translated dubbing with subtitles | Transcribe line by line → translate each line (chat model, switchable to Google on the node) → lay subtitles on the original timecodes → dub each line and time-compress it into its slot → remove the original voice and keep the background music → export. Without a voice separation engine the original track is muted, and **the completion notice says so** | A transcription engine, a chat model, a voice (cloned or a stock engine voice; Edge's free voices need no setup); a separation engine to keep the music |
 
@@ -50,7 +50,11 @@ switch it to `deepfilternet` (download it first under Settings → On-device eng
   | Data | HTTP request, code, text template, JSON extract, text transform |
   | Plugins | plugin tool |
   | Browser | open / navigate / click / type / upload file / extract / wait / scroll / run script / close |
-- **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
+- **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets.
+  A node hanging off one outlet runs only when that branch holds; a data connection it takes a value from elsewhere decides only the value, never whether it runs.
+- A **for-each loop** runs one item after another by default. When items don't depend on each other (such as generating each shot), raise
+  "Concurrency" to 2–4 under Advanced; results keep their original order and any failure stops the loop. Without an iteration output,
+  each item returns everything that round produced plus the item itself (`loop.item`), so a later loop can iterate over the results. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
 - Click a node to open its **inspector** — it sits **directly below** the node, and a floating bar sits
   **directly above** it: content sections on the left (**Parameters** / **Advanced** / **Outputs**, plus
   **This run** once it has run — each shown **only when the node has it**), node actions on the right
