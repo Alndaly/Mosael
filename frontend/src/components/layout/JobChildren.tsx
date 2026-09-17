@@ -17,25 +17,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import { listJobChildren, type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { useJobKinds } from "@/components/layout/jobKinds";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
 
-/** job.kind → 文案键的后缀。认不出来的归到「其它」,而不是把裸 kind 摆到界面上。 */
-function kindKey(kind: string): string {
-  const map: Record<string, string> = {
-    render: "Render",
-    transcribe: "Transcribe",
-    ai_generation: "Generation",
-    scheduled: "Scheduled",
-    workflow: "Workflow",
-    publish: "Publish",
-  };
-  return map[kind] ?? "Other";
-}
-
 export function JobChildrenList({ children: rows }: { children: Job[] }) {
   const t = useI18n();
+  const { kindOf } = useJobKinds();
   if (rows.length === 0) return null;
   return (
     <ul className="m-0 grid list-none gap-0 p-0">
@@ -52,7 +41,7 @@ export function JobChildrenList({ children: rows }: { children: Job[] }) {
             key={child.id}
           >
             <div className="grid min-w-0 gap-px">
-              <span className="text-ui-xs text-foreground">{t(`jobKind${kindKey(child.kind)}` as never)}</span>
+              <span className="text-ui-xs text-foreground">{kindOf(child.kind).label}</span>
               {child.message && <small className="truncate text-ui-xs text-muted-foreground">{child.message}</small>}
             </div>
             <span

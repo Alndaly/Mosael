@@ -2547,6 +2547,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Job Kinds
+         * @description 任务种类目录:任务中心据此显示名字、决定要不要提示、刷新哪些数据、跳到哪一页。
+         */
+        get: operations["list_job_kinds_api_jobs_kinds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/finished": {
         parameters: {
             query?: never;
@@ -8070,6 +8090,33 @@ export interface components {
              * @default editor
              */
             role: string;
+        };
+        /** JobKindCatalogOut */
+        JobKindCatalogOut: {
+            /** Kinds */
+            kinds: components["schemas"]["JobKindOut"][];
+            fallback: components["schemas"]["JobKindOut"];
+        };
+        /**
+         * JobKindOut
+         * @description 一种任务在界面上的样子(见 app/domain/job_catalog.py)。label 已按请求方的语言翻好。
+         */
+        JobKindOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /**
+             * Announce
+             * @enum {string}
+             */
+            announce: "always" | "failures" | "never";
+            /** Affects */
+            affects: string[];
+            /** View */
+            view?: string | null;
+            /** Record Field */
+            record_field?: string | null;
         };
         /**
          * JobOut
@@ -16849,6 +16896,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_job_kinds_api_jobs_kinds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobKindCatalogOut"];
                 };
             };
             /** @description Validation Error */

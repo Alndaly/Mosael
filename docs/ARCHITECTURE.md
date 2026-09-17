@@ -70,8 +70,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 
 ### 任务总线是枢纽
 
-任何耗时操作都建一个 `job`(kind = render/transcribe/ai_generation/workflow/publish/scheduled),
-前端任务中心只认 `jobs` + `task_events`,不关心是谁在干活。这让"取消任务"能有统一语义:
+任何耗时操作都建一个 `job`,前端任务中心只认 `jobs` + `task_events`,不关心是谁在干活。这让"取消任务"能有统一语义:
 `cancel_job()` 把 job 落终态,工作流引擎**在每个节点边界重读 job 状态**决定是否停下
 ——中断是节点粒度的(执行中的单个节点无法安全掐断);子工作流经父子 job 链随父级级联取消。事件统一经 `emit_job_event()` 发,
 TaskEvent 行只在总线创建。
@@ -80,6 +79,18 @@ TaskEvent 行只在总线创建。
 `/api/jobs/worker/*` 的 claim/report 协议认领,跨后端重启存活——发布器同款模式的推广,
 见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`MOSAEL_EXTERNAL_JOB_KINDS=render`
 即可把渲染交给独立 worker 机器,领域代码不改。
+
+**任务的归属与播报**([ADR-0018](adr/0018-job-ownership-and-announcements.md)):
+
+- `dispatch_job` 在它起的线程里把"当前父任务"设成这个任务,于是执行体里建的任务(字幕配音
+  逐句的合成、导出收尾排的预览代理)都是它的子任务,取消会一并级联。两档:工作流引擎和调度器
+  是**严格**的(父任务已结束就拒绝派生);执行体自己是**派生**的(父任务刚落终态也照样挂上)。
+- 每种任务在界面上的样子在 `domain/job_catalog.py` 声明一次:名字、做完要不要说
+  (`always` / `failures` / `never`)、可能改动的资源、在哪一页看它的记录;`GET /api/jobs/kinds`
+  发给前端。前端只补图标和"资源 → 缓存键"两张表(`components/layout/jobKinds.tsx`)。
+  `create_job` 用到的每个种类都得在目录里、每个种类都得有图标,都有测试守着。
+- **只有任务中心播报**:它按目录给顶层任务弹提示、发系统通知、刷新改动过的数据。发起任务的
+  组件只说"排上了"。站内通知(铃铛)不变。
 
 ### 创意画板:生成能力的第五个入口
 
@@ -536,7 +547,9 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 
 - **分离**([ADR-0016](adr/0016-source-separation-is-a-capability.md)):Demucs 跑在自己的托管 venv
   里(和转写、克隆的 torch 版本会打架)。配音节点 `original_audio: separate` 只问领域有没有可用
-  引擎,问不到就退回整轨静音。
+  引擎,问不到就退回整轨静音。问得到时每个发声的片段走一次剪辑台的「分离音频」,只是放到
+  音频轨上的换成背景音:画面留在原处,源片段静音,可撤销。**不能**把视频片段直接指向背景音
+  素材 —— 视频轨上的纯音频素材既不算画面、也不进混音,成片里就只剩静音。
 - **降噪**([ADR-0017](adr/0017-noise-reduction-is-a-capability.md)),三个引擎:
   - 内置 `ffmpeg`(afftdn):**先量噪声底再下手**(写死的 `nf` 要么降不动、要么削人声),永远可用,
     `auto` 挑的就是它;只对持续的底噪有效。

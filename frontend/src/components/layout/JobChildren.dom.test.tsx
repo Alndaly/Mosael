@@ -15,7 +15,11 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/api/client", () => ({ listJobChildren: vi.fn() }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
-    ({ jobKindGeneration: "AI 生成", jobKindOther: "其它", runStatus_running: "进行中", runStatus_succeeded: "已完成", runStatus_failed: "失败" })[key] ?? key,
+    ({ runStatus_running: "进行中", runStatus_succeeded: "已完成", runStatus_failed: "失败" })[key] ?? key,
+}));
+// 名字来自后端的任务目录(ADR-0018),这里不经网络。
+vi.mock("@/components/layout/jobKinds", () => ({
+  useJobKinds: () => ({ kindOf: (kind: string) => ({ label: kind === "ai_generation" ? "AI 生成" : "任务" }) }),
 }));
 
 import { JobChildrenList } from "@/components/layout/JobChildren";
@@ -40,12 +44,6 @@ describe("子任务清单", () => {
     // queued 和 pending 都还没结束 —— 显示成"失败"色会吓人一跳。
     render(<JobChildrenList>{[job("1", "ai_generation", "queued"), job("2", "ai_generation", "pending")]}</JobChildrenList>);
     expect(screen.getAllByText("进行中")).toHaveLength(2);
-  });
-
-  it("认不出的 kind 归到「其它」，不把裸 kind 摆到界面上", () => {
-    render(<JobChildrenList>{[job("1", "some_new_kind", "succeeded")]}</JobChildrenList>);
-    expect(screen.getByText("其它")).toBeTruthy();
-    expect(screen.queryByText("some_new_kind")).toBeNull();
   });
 
   it("一条都没有时不占位置", () => {

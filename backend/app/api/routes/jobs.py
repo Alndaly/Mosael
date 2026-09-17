@@ -4,10 +4,11 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import JobOut, TaskEventOut
-from app.core.i18n import normalize_locale, render_message
+from app.api.schemas import JobKindCatalogOut, JobOut, TaskEventOut
+from app.core.i18n import get_current_locale, normalize_locale, render_message, t
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, TaskEvent
+from app.domain import job_catalog
 from app.domain.jobs import cancel_job, clear_finished_jobs
 
 router = APIRouter(tags=["jobs"])
@@ -31,6 +32,27 @@ def list_jobs(
         stmt = stmt.where(Job.parent_job_id.is_(None))
     stmt = stmt.order_by(Job.created_at.desc())
     return list(db.scalars(stmt))
+
+
+def _kind_out(entry: job_catalog.JobKind, label_key: str, locale: str) -> dict:
+    return {
+        "kind": entry.kind,
+        "label": t(label_key, locale),
+        "announce": entry.announce,
+        "affects": list(entry.affects),
+        "view": entry.view,
+        "record_field": entry.record_field,
+    }
+
+
+@router.get("/jobs/kinds", response_model=JobKindCatalogOut)
+def list_job_kinds(user: CurrentUser) -> dict:
+    """任务种类目录:任务中心据此显示名字、决定要不要提示、刷新哪些数据、跳到哪一页。"""
+    locale = get_current_locale()
+    return {
+        "kinds": [_kind_out(entry, entry.label_key, locale) for entry in job_catalog.JOB_KINDS.values()],
+        "fallback": _kind_out(job_catalog.FALLBACK, job_catalog.FALLBACK_LABEL_KEY, locale),
+    }
 
 
 @router.delete("/jobs/finished")

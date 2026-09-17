@@ -106,14 +106,8 @@ export function SubtitleDub({
         );
   const langName = mismatch ? t(`langName_${mismatch}` as never) : "";
 
-  const job = useWatchedJob((finished) => {
-    // 时间线和**素材库**都要刷:新片段引用的素材前端还不知道的话,标题会回退成 id、波形也拉不到。
-    // 失败也刷 —— 部分成功时已经落地的那几段同样得看得见。
-    void qc.invalidateQueries({ queryKey: ["sequences"] });
-    void qc.invalidateQueries({ queryKey: ["assets"] });
-    if (finished.status === "succeeded") toast.success(finished.message ?? t("subtitleDubDone"));
-    else toast.error(finished.message ?? t("subtitleDubFailed"), { description: finished.error ?? undefined });
-  });
+  // 配好了没有、时间线和素材库的刷新,都归任务中心(ADR-0018);这里只管按钮忙不忙。
+  const job = useWatchedJob();
   const run = useMutation({
     mutationFn: () =>
       dubSubtitles(sequence.id, {
@@ -125,7 +119,7 @@ export function SubtitleDub({
       }),
     onSuccess: (queued) => {
       job.watch(queued.id);
-      // 只确认"排上了",不假装已经配好 —— 配好由任务终态说。
+      // 只确认"排上了",不假装已经配好 —— 配好由任务中心说。
       toast.success(t("subtitleDubQueued").replace("{n}", String(targets.length)));
     },
     onError: (error: Error) => toast.error(t("subtitleDubFailed"), { description: error.message }),

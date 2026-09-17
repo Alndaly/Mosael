@@ -6,6 +6,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -20,19 +21,30 @@ logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("succeeded", "failed")
 
-# 「当前正在执行的父任务」——工作流引擎在跑某个子任务节点时把父 workflow job id 设进来,
-# create_job 据此自动给派生的子 job 打上 parent_job_id(见 workflows/engine.py)。用 contextvar
-# 而非显式穿参:子任务创建函数(start_publish/start_export/…)散落各领域,都汇聚到 create_job,
-# 在此一处捕获最省事;非工作流路径下取默认 None,即顶层任务。每个节点在自己的线程里 set/reset,
-# 线程间天然隔离。
-_current_parent_job: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+# 「当前正在执行的父任务」:之后 create_job 建出来的任务,都挂在它下面(ADR-0018)。
+#
+# 两个来源,强弱不同:
+# - **strict** —— 工作流引擎每个节点、定时调度:父任务一旦结束(比如被取消),就拒绝再派生;
+# - **derived** —— 任务自己的执行体(dispatch_job 设的):父任务刚结束也照样挂上去 ——
+#   导出在收尾时登记产物、顺手排代理转码,那一刻导出已经是 succeeded。
+#
+# 用 contextvar 而非显式穿参:派生任务的入口(start_publish/start_export/…)散落各领域,都汇聚到
+# create_job,在此一处捕获。**线程不继承 contextvar**,所以每个起线程的地方都要自己设 ——
+# dispatch_job 替所有任务设了;工作流节点和循环在各自的线程池里设。
+@dataclass(frozen=True)
+class _ParentJob:
+    job_id: str
+    strict: bool
+
+
+_current_parent_job: contextvars.ContextVar[_ParentJob | None] = contextvars.ContextVar(
     "mosael_current_parent_job", default=None
 )
 
 
-def set_parent_job(job_id: str | None) -> contextvars.Token:
+def set_parent_job(job_id: str | None, *, strict: bool = True) -> contextvars.Token:
     """标记「后续 create_job 派生的都是 job_id 的子任务」。返回的 token 用于 reset_parent_job。"""
-    return _current_parent_job.set(job_id)
+    return _current_parent_job.set(_ParentJob(job_id, strict) if job_id else None)
 
 
 def reset_parent_job(token: contextvars.Token) -> None:
@@ -40,8 +52,9 @@ def reset_parent_job(token: contextvars.Token) -> None:
 
 
 def current_parent_job_id() -> str | None:
-    """当前正在执行的父任务 id(工作流节点里 = 本工作流 job);无则 None。"""
-    return _current_parent_job.get()
+    """当前正在执行的父任务 id;无则 None。"""
+    parent = _current_parent_job.get()
+    return parent.job_id if parent else None
 
 
 #: 「接下来建的任务,干完了把回执寄给谁」。和 _current_parent_job 同一个做法。
@@ -355,7 +368,18 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
         logger.info("job %s [%s] queued for external worker", job.id, job.kind)
         return False
     db.commit()
-    threading.Thread(target=thread_target, name=JOB_THREAD_NAME, daemon=True).start()
+    job_id = job.id
+
+    def run_as_job() -> None:
+        # 执行体里建出来的任务都归这个任务(ADR-0018)。新线程不继承 contextvar ——
+        # 此前字幕配音逐句建的合成、导出收尾排的代理转码,全都成了顶层任务,各自弹一条"完成"。
+        token = set_parent_job(job_id, strict=False)
+        try:
+            thread_target()
+        finally:
+            reset_parent_job(token)
+
+    threading.Thread(target=run_as_job, name=JOB_THREAD_NAME, daemon=True).start()
     logger.info("job %s [%s] dispatched in-process", job.id, job.kind)
     return True
 
@@ -387,9 +411,11 @@ def create_job(
     它得能答出这活儿替谁干 —— 用谁的钥匙、花谁的额度。做成必填参数而不是可选,是因为漏掉的
     那个调用点会安静地建出一个无主任务,然后在运行时退回"随便找一把钥匙"。
     """
-    # 显式传入优先;否则取当前工作流上下文(工作流节点里派生的子任务自动归到父 job 下)。
-    parent = parent_job_id if parent_job_id is not None else _current_parent_job.get()
-    if parent:
+    # 显式传入优先(按 strict);否则取上下文里的父任务(见 _ParentJob)。
+    context = _current_parent_job.get()
+    parent = parent_job_id if parent_job_id is not None else (context.job_id if context else None)
+    strict = parent_job_id is not None or (context.strict if context else True)
+    if parent and strict:
         parent_job = db.get(Job, parent)
         if parent_job is not None and not lock_active_job(db, parent_job):
             raise ValueError("父任务已结束,不能再派生任务")
@@ -442,7 +468,7 @@ def current_actor(db: Session) -> str | None:
     拿不到调用者,但父 job 上记着这活儿是替谁干的,而子任务与父任务的关系本来就是显式建立的
     (见 `_current_parent_job`)。
     """
-    parent = _current_parent_job.get()
+    parent = current_parent_job_id()
     job = db.get(Job, parent) if parent else None
     return job.created_by if job is not None else None
 

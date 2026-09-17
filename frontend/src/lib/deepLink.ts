@@ -33,8 +33,8 @@ export function gotoSettings(section: string): void {
   gotoRecord("/settings", "mosael:open-settings", section);
 }
 
-/** mosael:// 深链里 view → 打开单条记录的事件名。没有对应事件的页面就只跳页。 */
-const VIEW_RECORD_EVENTS: Record<string, string> = {
+/** 页面 → 打开单条记录的事件名(mosael:// 深链、任务中心「前往」共用)。没有对应事件的页面就只跳页。 */
+export const VIEW_RECORD_EVENTS: Record<string, string> = {
   workflows: "mosael:open-workflow",
   publish: "mosael:open-publish-task",
   settings: "mosael:open-settings",

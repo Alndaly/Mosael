@@ -20,3 +20,11 @@ export function listJobEvents(jobId: string): Promise<TaskEvent[]> {
 export function listJobChildren(jobId: string): Promise<Job[]> {
   return api<Job[]>(`/api/jobs/${jobId}/children`);
 }
+
+export type JobKind = components["schemas"]["JobKindOut"];
+export type JobKindCatalog = components["schemas"]["JobKindCatalogOut"];
+
+/** 任务种类目录:名字(已按语言翻好)、做完要不要说、改动了什么、在哪一页看。 */
+export function fetchJobKinds(): Promise<JobKindCatalog> {
+  return api<JobKindCatalog>("/api/jobs/kinds");
+}

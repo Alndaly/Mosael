@@ -6997,6 +6997,38 @@
         }
       }
     },
+    "/api/jobs/kinds": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Job Kinds",
+        "description": "任务种类目录:任务中心据此显示名字、决定要不要提示、刷新哪些数据、跳到哪一页。",
+        "operationId": "list_job_kinds_api_jobs_kinds_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobKindCatalogOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/finished": {
       "delete": {
         "tags": [
@@ -22715,6 +22747,85 @@
           "username"
         ],
         "title": "InviteMemberRequest"
+      },
+      "JobKindCatalogOut": {
+        "properties": {
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/JobKindOut"
+            },
+            "type": "array",
+            "title": "Kinds"
+          },
+          "fallback": {
+            "$ref": "#/components/schemas/JobKindOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kinds",
+          "fallback"
+        ],
+        "title": "JobKindCatalogOut"
+      },
+      "JobKindOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "announce": {
+            "type": "string",
+            "enum": [
+              "always",
+              "failures",
+              "never"
+            ],
+            "title": "Announce"
+          },
+          "affects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Affects"
+          },
+          "view": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View"
+          },
+          "record_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Field"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "announce",
+          "affects"
+        ],
+        "title": "JobKindOut",
+        "description": "一种任务在界面上的样子(见 app/domain/job_catalog.py)。label 已按请求方的语言翻好。"
       },
       "JobOut": {
         "properties": {

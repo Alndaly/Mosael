@@ -130,3 +130,96 @@ def test_cannot_spawn_from_a_parent_settled_in_the_same_transaction():
             create_job(db, workspace_id=ws, kind="demo", created_by=None, payload={}, parent_job_id=parent.id)
         db.commit()
         assert parent.status == "failed"
+
+
+def _dispatch_and_wait(ws: str, body) -> str:
+    """派发一个 job,等它的执行体跑完,返回它的 id。"""
+    import threading
+
+    from app.domain.jobs import dispatch_job
+
+    done = threading.Event()
+
+    with SessionLocal() as db:
+        parent = create_job(db, created_by=None, workspace_id=ws, kind="subtitle_dub", payload={})
+        parent_id = parent.id
+
+        def target() -> None:
+            try:
+                body(parent_id)
+            finally:
+                done.set()
+
+        dispatch_job(db, parent, target)
+    assert done.wait(10)
+    return parent_id
+
+
+def test_执行体里建的任务归这个任务() -> None:
+    """ADR-0018:派发的线程不继承 contextvar,此前字幕配音逐句的合成全成了顶层任务。"""
+    _, ws = _workspace()
+    created: list[str] = []
+
+    def body(_parent_id: str) -> None:
+        with SessionLocal() as db:
+            created.append(create_job(db, created_by=None, workspace_id=ws, kind="tts", payload={}).id)
+            db.commit()
+
+    parent_id = _dispatch_and_wait(ws, body)
+    with SessionLocal() as db:
+        assert db.get(Job, created[0]).parent_job_id == parent_id
+
+
+def test_执行体收尾时父任务已结束_派生的任务照样挂上() -> None:
+    """导出最后一步登记产物、顺手排代理转码时,导出任务可能已经落了终态 —— 派生的不该因此报错。"""
+    from app.domain.jobs import finish_job
+
+    _, ws = _workspace()
+    created: list[str] = []
+
+    def body(parent_id: str) -> None:
+        with SessionLocal() as db:
+            assert finish_job(db, db.get(Job, parent_id), status="succeeded")
+            db.commit()
+            created.append(create_job(db, created_by=None, workspace_id=ws, kind="proxy", payload={}).id)
+            db.commit()
+
+    parent_id = _dispatch_and_wait(ws, body)
+    with SessionLocal() as db:
+        assert db.get(Job, created[0]).parent_job_id == parent_id
+
+
+def test_严格上下文里_父任务取消后不再派生() -> None:
+    """工作流引擎用的是严格那档:取消了的工作流不能再起新活。"""
+    import pytest
+
+    _, ws = _workspace()
+    with SessionLocal() as db:
+        parent = create_job(db, created_by=None, workspace_id=ws, kind="workflow", payload={})
+        db.commit()
+        cancel_job(db, parent)
+        parent_id = parent.id
+    token = set_parent_job(parent_id)
+    try:
+        with SessionLocal() as db, pytest.raises(ValueError, match="父任务已结束"):
+            create_job(db, created_by=None, workspace_id=ws, kind="tts", payload={})
+    finally:
+        reset_parent_job(token)
+
+
+def test_取消字幕配音连带停掉逐句合成() -> None:
+    _, ws = _workspace()
+    created: list[str] = []
+
+    def body(_parent_id: str) -> None:
+        with SessionLocal() as db:
+            line = create_job(db, created_by=None, workspace_id=ws, kind="tts", payload={})
+            line.status = "running"
+            db.commit()
+            created.append(line.id)
+
+    parent_id = _dispatch_and_wait(ws, body)
+    with SessionLocal() as db:
+        cancel_job(db, db.get(Job, parent_id))
+    with SessionLocal() as db:
+        assert db.get(Job, created[0]).status == "failed"

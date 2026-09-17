@@ -3,10 +3,28 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, ValidationInfo, field_validator
 
-from app.api.schemas.base import OrmModel
+from app.api.schemas.base import ApiModel, OrmModel
+
+
+class JobKindOut(ApiModel):
+    """一种任务在界面上的样子(见 app/domain/job_catalog.py)。label 已按请求方的语言翻好。"""
+
+    kind: str
+    label: str
+    announce: Literal["always", "failures", "never"]
+    affects: list[str]
+    view: str | None = None
+    record_field: str | None = None
+
+
+class JobKindCatalogOut(ApiModel):
+    kinds: list[JobKindOut]
+    #: 目录里没有的种类按这一条显示。
+    fallback: JobKindOut
 
 
 class TaskEventOut(OrmModel):

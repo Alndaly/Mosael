@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 /**
- * 任务做完了,它改动的东西就得跟着刷新。
+ * 任务做完了,它改动的东西就得跟着刷新;该说的说一声,不该说的不说。
+ *
+ * 种类的名字、要不要提示、改动了什么都来自后端的任务目录(ADR-0018)—— 这里用一份最小的目录。
  *
  * 真机反馈:从链接下完的视频不出现在素材库,要刷新页面才看得见 —— 而"下载完成"的提示
  * 就弹在眼前。任务中心是唯一知道"哪个任务刚变成完成态"的地方,所以刷新放在这里一处;
@@ -15,11 +17,28 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-
 // vi.mock 的工厂会被提升到文件顶部,所以共享状态要走 vi.hoisted,否则工厂执行时它还不存在。
-const h = vi.hoisted(() => ({ apiMock: vi.fn(), state: { jobs: [] as any[] } }));
-vi.mock("@/api/client", () => ({ api: h.apiMock }));
+const h = vi.hoisted(() => ({
+  apiMock: vi.fn(),
+  toast: { success: vi.fn(), error: vi.fn() },
+  state: { jobs: [] as any[] },
+}));
+vi.mock("sonner", () => ({ toast: h.toast }));
+const entry = (kind: string, label: string, announce: string, affects: string[]) =>
+  ({ kind, label, announce, affects, view: null, record_field: null });
+const CATALOG = {
+  kinds: [
+    entry("url_import", "链接导入", "always", ["assets"]),
+    entry("subtitle_dub", "字幕配音", "always", ["assets", "sequences"]),
+    entry("proxy", "预览代理", "failures", ["assets"]),
+  ],
+  fallback: entry("", "任务", "always", ["assets"]),
+};
+vi.mock("@/api/client", () => ({
+  api: h.apiMock,
+  fetchJobKinds: async () => CATALOG,
+  getJob: vi.fn(),
+}));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TaskCenter } from "./TaskCenter";
@@ -48,6 +67,8 @@ function mount(initial: any[]) {
 beforeEach(() => {
   h.state.jobs = [];
   h.apiMock.mockReset();
+  h.toast.success.mockReset();
+  h.toast.error.mockReset();
   h.apiMock.mockImplementation(async () => h.state.jobs);
 });
 
@@ -93,10 +114,42 @@ describe("任务完成后刷新它改动过的数据", () => {
     );
   });
 
-  it("失败的任务不刷新 —— 没有产物可看,白跑一趟请求", async () => {
-    const invalidated = mount(running("url_import"));
-    await finish("url_import", "failed", "boom");
-    await new Promise((r) => setTimeout(r, 3000));
-    expect(invalidated.some((key) => key[0] === "assets")).toBe(false);
+  it("失败也刷新 —— 部分成功时已经落地的产物同样得看得见", async () => {
+    const invalidated = mount(running("subtitle_dub"));
+    await finish("subtitle_dub", "failed", "第 3 句合成失败");
+    await waitFor(
+      () => expect(invalidated.some((key) => key[0] === "sequences")).toBe(true),
+      { timeout: 4000 },
+    );
+  });
+});
+
+describe("只有任务中心报完成,而且按目录决定报不报", () => {
+  it("做完了用目录里的名字说一声,带上任务自己的那句话", async () => {
+    mount(running("subtitle_dub"));
+    await finish("subtitle_dub", "succeeded");
+    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    expect(h.toast.success.mock.calls[0][0]).toBe("字幕配音 · jobDone");
+  });
+
+  it("预览代理成功了不说 —— 没人在等它;但照样刷新素材库", async () => {
+    const invalidated = mount(running("proxy"));
+    await finish("proxy", "succeeded");
+    await waitFor(() => expect(invalidated.some((key) => key[0] === "assets")).toBe(true), { timeout: 4000 });
+    expect(h.toast.success).not.toHaveBeenCalled();
+  });
+
+  it("预览代理失败了要说", async () => {
+    mount(running("proxy"));
+    await finish("proxy", "failed", "ffmpeg 退出");
+    await waitFor(() => expect(h.toast.error).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    expect(h.toast.error.mock.calls[0][1]).toEqual({ description: "ffmpeg 退出" });
+  });
+
+  it("目录里没有的种类按兜底那一条说", async () => {
+    mount(running("mystery"));
+    await finish("mystery", "succeeded");
+    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    expect(h.toast.success.mock.calls[0][0]).toBe("任务 · jobDone");
   });
 });

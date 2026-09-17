@@ -196,8 +196,8 @@ def acting_as(db, user_id: str | None = None):
         created_by=actor,
     )
     db.flush()
-    token = jobs_domain._current_parent_job.set(job.id)
+    token = jobs_domain.set_parent_job(job.id)
     try:
         yield actor
     finally:
-        jobs_domain._current_parent_job.reset(token)
+        jobs_domain.reset_parent_job(token)

@@ -6,6 +6,7 @@ run_subgraph 与主引擎共享同一套执行内核(execute_graph)。每次迭�
 
 from __future__ import annotations
 
+import contextvars
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from typing import Any, Iterator
@@ -15,7 +16,6 @@ from sqlalchemy.orm import Session
 from app.db.models import Workflow
 from app.domain.workflows import WorkflowDomainError, interpolate, validate_body_graph
 from app.domain.workflows.executors import register
-from app.domain.jobs import current_parent_job_id, reset_parent_job, set_parent_job
 from app.domain.workflows.executors.common import truthy
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
@@ -94,22 +94,14 @@ def loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
         )
     concurrency = _concurrency(config.get("concurrency"))
     total = len(items)
-    parent_job = current_parent_job_id()
 
     def iterate(index: int, item: Any) -> Any:
-        # 线程池里的线程不继承 contextvar:把外层任务的归属显式带进去,取消才传得到子图里
-        # (与 engine.run_node 同一个做法)。
-        token = set_parent_job(parent_job) if parent_job is not None else None
-        try:
-            with _blame_iteration(index, total, item=item):
-                ctx = run_subgraph(
-                    body,
-                    {"loop": {"item": item, "index": index}, "input": shared_inputs},
-                    workflow_id=workflow.id,
-                )
-        finally:
-            if token is not None:
-                reset_parent_job(token)
+        with _blame_iteration(index, total, item=item):
+            ctx = run_subgraph(
+                body,
+                {"loop": {"item": item, "index": index}, "input": shared_inputs},
+                workflow_id=workflow.id,
+            )
         if output_tpl:
             return interpolate(output_tpl, ctx)
         # 不写 output 时交出这一次的全部产物,**连同这一项本身**(`loop.item` / `loop.index`)——
@@ -140,7 +132,12 @@ def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[A
     """
     results: list[Any] = [None] * len(items)
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futures = {pool.submit(iterate, index, item): index for index, item in enumerate(items)}
+        # 线程池里的线程不继承 contextvar:每一项带着当前上下文进去(外层任务的归属、取消边界,
+        # 与 engine.run_node 同一个做法)。
+        futures = {
+            pool.submit(contextvars.copy_context().run, iterate, index, item): index
+            for index, item in enumerate(items)
+        }
         finished, _ = wait(futures, return_when=FIRST_EXCEPTION)
         if any(future.exception() is not None for future in finished):
             for future in futures:

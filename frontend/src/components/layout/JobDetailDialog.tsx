@@ -5,6 +5,7 @@ import { Activity, CheckCircle2, CircleAlert, ExternalLink, Loader2 } from "luci
 import { getJob, listJobEvents, type Job } from "@/api/client";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { useJobKinds } from "@/components/layout/jobKinds";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
@@ -30,6 +31,7 @@ export function JobDetailDialog({
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
+  const { kindOf } = useJobKinds();
   // `job` is a snapshot copied out of the list when the row was clicked and never re-synced,
   // so deriving "is it still running" from it left the dialog spinning on a stale progress bar
   // — and polling every 1.5s — for as long as it stayed open. Track the live row instead.
@@ -88,7 +90,7 @@ export function JobDetailDialog({
               )}
               {t(`runStatus_${active ? "running" : current.status}` as never)}
             </span>
-            <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{t(`jobKind${kindKey(current.kind)}` as never)}</span>
+            <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{kindOf(current.kind).label}</span>
           </div>
 
           {active && <Progress className="my-0.5" value={Math.round(current.progress * 100)} />}
@@ -188,18 +190,6 @@ function eventPayloadRemainder(payload: Record<string, unknown>): Record<string,
   const remainder = { ...payload };
   delete remainder.details;
   return remainder;
-}
-
-function kindKey(kind: string): string {
-  const map: Record<string, string> = {
-    render: "Render",
-    transcribe: "Transcribe",
-    ai_generation: "Generation",
-    scheduled: "Scheduled",
-    workflow: "Workflow",
-    publish: "Publish",
-  };
-  return map[kind] ?? "Other";
 }
 
 function eventText(payload: Record<string, unknown> | null | undefined): string | null {

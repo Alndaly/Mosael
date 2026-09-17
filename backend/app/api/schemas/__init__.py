@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.boards import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite
 from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
-from app.api.schemas.jobs import JobOut, TaskEventOut
+from app.api.schemas.jobs import JobKindCatalogOut, JobKindOut, JobOut, TaskEventOut
 from app.api.schemas.generation import SourceAssetRef
 from app.api.schemas.notifications import NotificationListOut, NotificationOut, NotifyRequest
 from app.api.schemas.collaboration import (

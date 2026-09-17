@@ -1,21 +1,20 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type Job } from "@/api/client";
 
 const isSettled = (status: string | undefined) => status === "succeeded" || status === "failed";
 
 /**
- * 盯着一个刚排上的任务,到终态时回调一次。
+ * 盯着一个刚排上的任务,在它跑完之前让发起的按钮保持忙碌。
  *
- * 合成、配音都是后台任务:点下去的那一刻界面上什么都不会变,产物要等它跑完才出现。
- * **得有人盯着** —— 不盯的话用户看到的是「点了没反应」,新素材、新音轨也不会自己冒出来。
- * 此前配音面板和字幕配音各写了一份(一份 setTimeout 自转,一份 useQuery),行为还不一样。
+ * **它不报完成,也不刷新产物** —— 那两件事归任务中心(ADR-0018):任务目录声明了每种任务
+ * 改动哪些数据、做完要不要说。此前这里的调用方各自弹一条"完成",任务中心又弹一条。
+ * 排上的那一刻让任务列表立刻重取,任务中心才能看到它从"在跑"变成"结束"。
  */
-export function useWatchedJob(onSettled: (job: Job) => void) {
+export function useWatchedJob() {
+  const qc = useQueryClient();
   const [jobId, setJobId] = React.useState<string | null>(null);
-  const callback = React.useRef(onSettled);
-  callback.current = onSettled;
   const job = useQuery({
     queryKey: ["job", jobId],
     enabled: Boolean(jobId),
@@ -23,9 +22,14 @@ export function useWatchedJob(onSettled: (job: Job) => void) {
     refetchInterval: (query) => (isSettled(query.state.data?.status) ? false : 1000),
   });
   React.useEffect(() => {
-    if (!jobId || job.data?.id !== jobId || !isSettled(job.data.status)) return;
-    callback.current(job.data);
-    setJobId(null);
+    if (jobId && job.data?.id === jobId && isSettled(job.data.status)) setJobId(null);
   }, [jobId, job.data]);
-  return { watch: setJobId, running: jobId !== null };
+  const watch = React.useCallback(
+    (id: string) => {
+      setJobId(id);
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    [qc],
+  );
+  return { watch, running: jobId !== null };
 }

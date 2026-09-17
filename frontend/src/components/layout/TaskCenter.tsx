@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AudioLines, Captions, CheckCircle2, CircleAlert, Clapperboard, Download, Film, GitBranch, Link as LinkIcon, ListChecks, Loader2, Mic, Send, Sparkles, Timer, Trash2, X } from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, ListChecks, Loader2, Trash2, X } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -8,7 +8,7 @@ import { api, getJob, type Job } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/layout/JobDetailDialog";
-import { gotoRecord } from "@/lib/deepLink";
+import { gotoJobPage, JobKindIcon, jobPage, queryKeysAffectedBy, shouldAnnounce, useJobKinds } from "@/components/layout/jobKinds";
 import { relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -27,6 +27,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = React.useState(false);
   // 深链通道(与 mosael:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
   const [detailJob, setDetailJob] = React.useState<Job | null>(null);
+  const { kindOf, ready: kindsReady } = useJobKinds();
   React.useEffect(() => {
     const onOpen = (event: Event) => {
       setOpen(true);
@@ -85,14 +86,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     setOpen(false);
   };
 
-  // 详情弹层里「前往对应页面」:发布/工作流/批量都直达对应的那条记录,其余到业务页。
-  const gotoJobPage = (job: Job) => {
-    const route = jobRoute(job);
-    if (!route) return;
-    const payload = (job.payload ?? {}) as Record<string, unknown>;
-    if (job.kind === "publish") gotoRecord(route, "mosael:open-publish-task", payload.task_id);
-    else if (job.kind === "workflow") gotoRecord(route, "mosael:open-workflow", payload.workflow_id);
-    else gotoRecord(route);
+  // 详情弹层里「前往对应页面」:去哪一页、打开哪条记录,由任务目录声明。
+  const gotoDetailPage = (job: Job) => {
+    gotoJobPage(job, kindOf(job.kind));
     setDetailJob(null);
   };
 
@@ -122,7 +118,8 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     prevStatuses.current = null;
   }, [workspaceId]);
   React.useEffect(() => {
-    if (!jobs.data) return;
+    // 目录没到之前不记基线:不知道一种任务该不该说,就等它到了再开始看。
+    if (!jobs.data || !kindsReady) return;
     if (prevStatuses.current === null) {
       prevStatuses.current = new Map(jobs.data.map((job) => [job.id, job.status]));
       return;
@@ -130,33 +127,30 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     for (const job of jobs.data) {
       const prev = prevStatuses.current.get(job.id);
       const terminal = job.status === "succeeded" || job.status === "failed";
-      // Toast on active→terminal, AND when a job first appears already terminal (prev undefined).
-      // A fast job (e.g. a workflow with a notify node) can go queued→done between two polls, so
-      // it's never seen active — without this it would silently skip its completion toast.
-      const shouldToast = terminal && (prev === undefined || ACTIVE.has(prev));
-      if (shouldToast) {
-        // **任务做完了,它改动的东西就得跟着刷新。** 此前这里只弹一句 toast:从链接下完的
-        // 视频不会出现在素材库,渲染产出、配音产出同理 —— 都要用户自己刷新页面才看得见,
-        // 而"任务完成"的提示就在眼前。逐个页面各自轮询是同一件事写十遍,所以放在这里一处:
-        // 任务中心本来就是唯一知道"哪个任务刚变成完成态"的地方。
-        if (job.status === "succeeded") {
-          for (const key of TOUCHES[job.kind] ?? DEFAULT_TOUCHES) {
-            void qc.invalidateQueries({ queryKey: [key] });
-          }
-        }
-        const label = t((KIND_META[job.kind]?.labelKey ?? "jobKindOther") as never);
-        if (job.status === "succeeded") toast.success(`${label} · ${t("jobDone")}`);
-        else toast.error(`${label} · ${t("jobFailed")}`, { description: job.error ?? undefined });
-        // 同一件事也告诉系统层。这里无条件调用、由主进程决定发不发:窗口收进托盘或切到别的
-        // app 时,上面这个 toast 弹在一个看不见的窗口里等于没弹,那时才需要系统通知。
-        window.mosaelDesktop?.notifyTask?.({
-          title: `${label} · ${job.status === "succeeded" ? t("jobDone") : t("jobFailed")}`,
-          body: job.error ?? job.message ?? "",
-        });
-      }
       prevStatuses.current.set(job.id, job.status);
+      // Settled on this poll: active→terminal, or first seen already terminal (prev undefined).
+      // A fast job (e.g. a workflow with a notify node) can go queued→done between two polls, so
+      // it's never seen active — without the second case it would never be announced.
+      if (!terminal || (prev !== undefined && !ACTIVE.has(prev))) continue;
+      const meta = kindOf(job.kind);
+      // **任务做完了,它改动的东西就得跟着刷新** —— 任务中心是唯一知道"哪个任务刚结束"的地方,
+      // 所以放在这里一处,而不是每个页面各自轮询。失败也刷:部分成功时已经落地的产物同样得看得见
+      // (字幕配音配好了一半)。
+      for (const key of queryKeysAffectedBy(meta)) {
+        void qc.invalidateQueries({ queryKey: [key] });
+      }
+      // **只有这里说"做完了"**(ADR-0018)。发起任务的组件只说"排上了";子任务不在这个列表里,
+      // 由父任务替它说。
+      if (!shouldAnnounce(meta, job.status)) continue;
+      const outcome = job.status === "succeeded" ? t("jobDone") : t("jobFailed");
+      const detail = (job.status === "failed" ? job.error : job.message) ?? undefined;
+      if (job.status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });
+      else toast.error(`${meta.label} · ${outcome}`, { description: detail });
+      // 同一件事也告诉系统层。这里无条件调用、由主进程决定发不发:窗口收进托盘或切到别的
+      // app 时,上面这个 toast 弹在一个看不见的窗口里等于没弹,那时才需要系统通知。
+      window.mosaelDesktop?.notifyTask?.({ title: `${meta.label} · ${outcome}`, body: detail ?? "" });
     }
-  }, [jobs.data, t, qc]);
+  }, [jobs.data, kindsReady, kindOf, t, qc]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -221,65 +215,16 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       <JobDetailDialog
         job={detailJob}
         onClose={() => setDetailJob(null)}
-        onGoto={detailJob && jobRoute(detailJob) ? () => gotoJobPage(detailJob) : undefined}
+        onGoto={detailJob && jobPage(detailJob, kindOf(detailJob.kind)) ? () => gotoDetailPage(detailJob) : undefined}
       />
     </Popover>
   );
 }
 
-/** 某种任务做完后,可能被它改动过的查询。
- *
- * **默认就含 assets**(见 DEFAULT_TOUCHES):绝大多数任务的产物都落进素材库,而漏掉一个 kind
- * 的代价是"做完了却要刷新页面才看得见"。新增任务类型时不写这张表也是对的,写了才是更准。 */
-const TOUCHES: Record<string, string[]> = {
-  url_import: ["assets"],
-  render: ["assets", "sequences"],
-  subtitle_dub: ["assets", "sequences"],
-  transcribe: ["assets", "transcript"],
-  workflow: ["assets", "sequences", "workflows"],
-  publish: ["publish-tasks"],
-  ai_generation: ["assets", "generation-jobs", "generation-sessions"],
-};
-
-const DEFAULT_TOUCHES = ["assets"];
-
-const KIND_META: Record<string, { icon: React.ReactNode; labelKey: string }> = {
-  render: { icon: <Download size={13} />, labelKey: "jobKindRender" },
-  transcribe: { icon: <Mic size={13} />, labelKey: "jobKindTranscribe" },
-  ai_generation: { icon: <Sparkles size={13} />, labelKey: "jobKindGeneration" },
-  scheduled: { icon: <Timer size={13} />, labelKey: "jobKindScheduled" },
-  workflow: { icon: <GitBranch size={13} />, labelKey: "jobKindWorkflow" },
-  publish: { icon: <Send size={13} />, labelKey: "jobKindPublish" },
-  // 这些种类真实存在(proxy 还是失败大户),没有条目就全落到「任务」—— 一列
-  // 十二条「任务 · 失败」,分不清是谁的什么活,这正是任务中心巡检里最响的一声。
-  proxy: { icon: <Clapperboard size={13} />, labelKey: "jobKindProxy" },
-  video_to_gif: { icon: <Film size={13} />, labelKey: "jobKindVideoGif" },
-  url_import: { icon: <LinkIcon size={13} />, labelKey: "jobKindUrlImport" },
-  subtitle_dub: { icon: <Captions size={13} />, labelKey: "jobKindSubtitleDub" },
-  tts: { icon: <AudioLines size={13} />, labelKey: "jobKindTts" },
-};
-
-/** 任务 → 对应详情页;payload 里有 project_id 就带上,编辑器直接落到项目。 */
-const KIND_ROUTE: Record<string, string> = {
-  render: "editor",
-  transcribe: "editor",
-  ai_generation: "ai",
-  scheduled: "scheduler",
-  workflow: "workflows",
-  publish: "publish",
-};
-
-function jobRoute(job: Job): string | null {
-  const view = KIND_ROUTE[job.kind];
-  if (!view) return null;
-  const projectId = ((job.payload ?? {}) as Record<string, unknown>).project_id;
-  return `/${view}${typeof projectId === "string" && projectId ? `?p=${projectId}` : ""}`;
-}
-
 function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number; onOpen?: () => void; onCancel?: () => void }) {
   const t = useI18n();
   const { locale } = usePreferences();
-  const meta = KIND_META[job.kind] ?? { icon: <Activity size={13} />, labelKey: "jobKindOther" };
+  const meta = useJobKinds().kindOf(job.kind);
   const running = ACTIVE.has(job.status);
   const failed = !running && job.status === "failed";
   const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
@@ -299,7 +244,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
           failed && "bg-[color-mix(in_oklab,var(--destructive)_12%,var(--background))] text-destructive",
         )}
       >
-        {meta.icon}
+        <JobKindIcon meta={meta} />
       </span>
       {/* 又一处单列 grid:`min-w-0` 管的是这个 div 自身的最小宽度,管不住**轨道** ——
           隐式列仍是 max-content,于是里面的 truncate 没有定数可截,内容直接顶出去。
@@ -307,7 +252,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[3px]">
         <div className="flex items-center justify-between gap-1.5 [&_strong]:text-ui-sm [&_strong]:font-semibold">
           <span className="flex min-w-0 items-baseline gap-1.5">
-            <strong className="shrink-0">{t(meta.labelKey as never)}</strong>
+            <strong className="shrink-0">{meta.label}</strong>
             {/* 干的是谁的活:素材名/序列名/提示词。没有它,一列失败全长一个样。 */}
             {subject && (
               <span className="min-w-0 truncate text-ui-xs text-muted-foreground" title={subject}>

@@ -94,6 +94,10 @@ def tick(db: Session) -> list[str]:
     return created
 
 
+#: 定时任务能排的种类 —— 下面的分支各管一种。任务中心按种类显示,所以它们也都得在任务目录里。
+SCHEDULABLE_KINDS = ("workflow", "ai_generation", "render")
+
+
 def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
     """Route known task kinds to their executors; unknown kinds stay queued."""
     payload: dict[str, Any] = task.payload or {}

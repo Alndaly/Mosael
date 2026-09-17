@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Mic, Settings2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,12 +47,8 @@ const OUTPUT_SOURCE: Record<AudioMode, string> = { speech: "tts", podcast: "podc
 export function AudioWorkspace({ workspace, switcher }: { workspace: Workspace; switcher?: React.ReactNode }) {
   const t = useI18n();
   const [mode, setMode] = usePersistentTab<AudioMode>("ai-studio-audio", "speech", ["speech", "podcast"]);
-  const qc = useQueryClient();
-  const job = useWatchedJob((finished) => {
-    void qc.invalidateQueries({ queryKey: ["assets"] });
-    if (finished.status === "succeeded") toast.success(t("audioGenerated"));
-    else toast.error(finished.error || t("voiceSynthFailed"));
-  });
+  // 做完了由任务中心说、由它刷新素材库;这里只管按钮忙不忙。
+  const job = useWatchedJob();
   const onQueued = (queued: Job) => {
     toast.message(t("audioGenerating"));
     job.watch(queued.id);
