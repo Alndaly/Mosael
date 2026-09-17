@@ -470,15 +470,15 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
     onError: (error) => toast.error(String((error as Error).message)),
   });
-  /* 拆成人声 + 伴奏。**排任务,不等结果** —— 一段长素材在本机跑十几分钟,而这里只是右键菜单
+  /* 拆成人声 + 背景音。**排任务,不等结果** —— 一段长素材在本机跑十几分钟,而这里只是右键菜单
      里的一下;完成后两份素材自己出现在素材库里(任务面板有进度和失败原因)。 */
   const separateAudioMutation = useMutation({
     mutationFn: (clipId: string) => {
       const clip = (sequence?.tracks ?? []).flatMap((track) => track.clips ?? []).find((one) => one.id === clipId);
-      if (!clip?.asset_id) throw new Error(t("separateClipAudio"));
+      if (!clip?.asset_id) throw new Error(t("separateAudioNoAsset"));
       return separateAssetAudio(clip.asset_id);
     },
-    onSuccess: () => toast.success(t("separateClipAudioQueued")),
+    onSuccess: () => toast.success(t("separateAudioQueued")),
     onError: (error) => toast.error(String((error as Error).message)),
   });
   const setEffectsMutation = useMutation({

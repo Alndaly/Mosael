@@ -130,7 +130,7 @@ export function TimelineClip({
             拆成人声和伴奏两份新素材。名字像,做的事是两回事,所以挨着放并各自说清楚。 */}
         {onSeparateAudio && (
           <ContextMenuItem onSelect={onSeparateAudio}>
-            <Mic /> {t("separateClipAudio")}
+            <Mic /> {t("separateAudio")}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />

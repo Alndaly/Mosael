@@ -5,9 +5,9 @@ import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Tag, Trash2, Upload, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
-import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -115,6 +115,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const convertGif = useMutation({
     mutationFn: (assetId: string) => convertVideoToGif(assetId),
     onSuccess: () => toast.success(t("assetConvertGifQueued")),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  // 拆成人声 + 背景音两份新素材(ADR-0016)。排任务,不等结果;没装引擎时后端直接说清楚。
+  const separateAudio = useMutation({
+    mutationFn: (assetId: string) => separateAssetAudio(assetId),
+    onSuccess: () => toast.success(t("separateAudioQueued")),
     onError: (error: Error) => toast.error(error.message),
   });
   // 从访达直接拖进来。**逐个传而不是并发** —— 一次拖十个视频,并发会把带宽和后端的
@@ -419,6 +425,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
                       {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
+                      {canSeparate(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
                       <PopoverClose asChild><Button variant="ghost" className="justify-start text-destructive" onClick={() => setDeleting(asset)}><Trash2 />{t("delete")}</Button></PopoverClose>
                     </PopoverContent></Popover>
                   </div>}
@@ -437,6 +444,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 {asset.kind === "video" && (
                   <ContextMenuItem disabled={convertGif.isPending} onSelect={() => convertGif.mutate(asset.id)}>
                     {convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} {t("assetConvertGif")}
+                  </ContextMenuItem>
+                )}
+                {canSeparate(asset) && (
+                  <ContextMenuItem disabled={separateAudio.isPending} onSelect={() => separateAudio.mutate(asset.id)}>
+                    {separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} {t("separateAudio")}
                   </ContextMenuItem>
                 )}
                 <ContextMenuSeparator />
@@ -592,4 +604,9 @@ export function formatSeconds(total: number): string {
   const seconds = Math.floor(abs % 60);
   const tenths = Math.floor((abs * 10) % 10);
   return `${sign}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
+}
+
+/** 有声音可拆的素材。视频也算 —— 后端先抽音轨再分离。 */
+function canSeparate(asset: Asset): boolean {
+  return asset.kind === "audio" || asset.kind === "video";
 }
