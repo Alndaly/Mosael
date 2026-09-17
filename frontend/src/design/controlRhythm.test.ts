@@ -42,7 +42,7 @@ const SRC = join(import.meta.dirname, "..");
  */
 const GRANDFATHERED = new Map<string, string>([
   // 圆形发送键是这一行的主操作,故意比左边那排 28px 的工具大一圈。
-  ["components/agent/CanvasAgentChat.tsx: 28/36", "发送键是主操作,故意更大"],
+  ["features/agent/CanvasAgentChat.tsx: 28/36", "发送键是主操作,故意更大"],
   ["features/ai-studio/AiStudio.tsx: 28/36", "同上"],
   ["features/ai-studio/ChatWorkspace.tsx: 28/36", "同上"],
   // 进度条/滑杆:轨道和滑块本来就不该和按钮一样高。

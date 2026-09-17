@@ -7,7 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { outputType, type RegistryLike } from "@/features/workflows/analyze";
 import type { Step } from "@/features/workflows/runSteps";
-import { WorkflowFailureDetails } from "@/features/workflows/WorkflowFailureDetails";
+import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 
 /**
  * 一次运行里,某个节点**真正产出了什么**。

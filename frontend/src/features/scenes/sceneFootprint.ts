@@ -10,21 +10,11 @@
  * 什么),而不是建模过程本身 —— 所以这个模块不依赖 three,可以单测。
  */
 
-/** 预览用的物体:后端 `scene_preview` 挑出来的那几个字段,不含造型解释。 */
-export interface PreviewObject {
-  kind: string;
-  position?: [number, number, number] | null;
-  rotation?: [number, number, number] | null;
-  scale?: [number, number, number] | null;
-  color?: string | null;
-  parameters?: { width?: number; depth?: number; radius?: number } | null;
-  /** 相机才有:运镜轨上的位置点。 */
-  path?: ([number, number, number] | null)[] | null;
-}
+//: 预览数据的形状是**接口给的**(后端 scene_preview 挑出来的那几个字段),所以它住在 api 那一层;
+//: 这里只解释它压在地面上是多大一块。
+import type { PreviewObject, ScenePreviewData } from "@/api/domains/scenes";
 
-export interface ScenePreviewData {
-  objects?: PreviewObject[] | null;
-}
+export type { PreviewObject, ScenePreviewData };
 
 /** 地面上的一块:中心 (x, z)、宽深 (w, d)、绕 Y 的角度(度)。 */
 export interface Footprint {

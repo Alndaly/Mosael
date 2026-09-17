@@ -409,6 +409,16 @@ Gateway 的边界与安全不变量见
 
 这条线不能混:把服务端实体塞进 Zustand 会立刻产生两份真相。
 
+### 分层:底下那几层不认识功能模块
+
+`components/`(通用件与外壳)、`lib/`、`api/`、`stores/` 是给所有功能用的,**不 import `features/…`**
+(由 `design/layering.test.ts` 守着);唯一的组合根是 `app/`。反过来是允许的,功能模块之间也允许
+互相用(画板用素材预览、剪辑台用配音面板)。
+
+智能体对话是一个**功能模块**而不是一组通用件:`features/agent/` 里是整套对话壳(气泡、工具调用、
+确认卡、语音、追踪视图),`features/ai-studio/` 只是把它摆进 AI 工作台那一页。此前它散在
+`components/agent/`(57 个文件)和 `features/ai-studio/` 两处,于是 components 反过来依赖 features。
+
 ### 关键约定
 
 - **时间线几何**是纯函数(`domain/timeline/geometry.ts`),组件绝不内联几何计算。吸附是**两级**的:目标轨片段边缘优先,播放头/零点/跨轨边缘只在本轨无命中时参与(单一候选池会让字幕 cue 边界劫持同轨对接)。
@@ -430,7 +440,7 @@ Gateway 的边界与安全不变量见
 - **详情恢复先恢复身份、再取数据**:`usePersistentSelection` 同步读取 localStorage 中的稳定 id，
   `CanvasDetailLoading` 在 React Query 返回前保留详情语义。工作流、画板、调度、插件和素材不能先以
   `null` 渲染列表页再异步切回详情，否则刷新会闪一次错误页面。
-- **工作区智能体只有一套壳**:`components/agent/CanvasAgentChat.tsx` 被剪辑、工作流和画板复用。
+- **工作区智能体只有一套壳**:`features/agent/CanvasAgentChat.tsx` 被剪辑、工作流和画板复用。
   会话池、流、确认卡、附件和会话切换不能在各业务页复制；停靠态是布局列，悬浮态才是 overlay。
   左上角标题由 `AgentSessionSwitcher` 直接渲染当前会话并提供搜索，不能再包一层有边框的 selector。
 

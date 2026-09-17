@@ -9,43 +9,43 @@ import { toast } from "sonner";
 import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
-import { ComposerChips } from "@/components/agent/ComposerChips";
+import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
+import { ComposerChips } from "@/features/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
-import { useEffectiveChatModel } from "@/features/ai-studio/effectiveModel";
+import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
-import { AgentStatusRow } from "@/components/agent/AgentStatusRow";
-import { ChatBubble } from "@/features/ai-studio/ChatBubble";
+import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
+import { ChatBubble } from "@/features/agent/ChatBubble";
 import { SessionList } from "@/features/ai-studio/SessionList";
-import { attachmentToken, chatMediaGallery } from "@/features/ai-studio/userMessage";
-import { type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
+import { attachmentToken, chatMediaGallery } from "@/features/agent/userMessage";
+import { type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { DictateButton } from "@/components/agent/DictateButton";
-import { ModelPicker } from "@/features/ai-studio/ModelPicker";
-import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
-import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
-import { type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { DictateButton } from "@/features/agent/DictateButton";
+import { ModelPicker } from "@/features/agent/ModelPicker";
+import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
+import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
-import { PlanCard, planHistory, type PlanStep } from "@/components/agent/PlanCard";
-import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
-import { QueuedMessages } from "@/components/agent/QueuedMessages";
-import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
-import { InlineQuestions } from "@/components/agent/InlineQuestions";
-import { AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
+import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
+import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
+import { QueuedMessages } from "@/features/agent/QueuedMessages";
+import { InlineConfirmations } from "@/features/agent/InlineConfirmations";
+import { InlineQuestions } from "@/features/agent/InlineQuestions";
+import { AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/features/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
-import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
+import { AgentStatusIcon, ToolName, toAgentStatus } from "@/features/agent/StatusIcon";
 import { readToolPayload } from "@/features/ai-studio/toolPayload";
-import { TraceStatsBar, TraceView } from "@/features/ai-studio/trace/TraceView";
-import { buildTurns } from "@/features/ai-studio/trace/traceModel";
+import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
+import { buildTurns } from "@/features/agent/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
 import { readSseData } from "@/lib/sse";
-import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, type SubagentRun } from "@/components/agent/SubagentPanel";
+import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, type SubagentRun } from "@/features/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -617,7 +617,7 @@ export function ChatWorkspace({
                     }
                   />
                   {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
-                      恰好在最需要它的时候不见了。改成应用级的浮标(components/agent/VoiceDock),
+                      恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
                       由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                   {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,

@@ -24,9 +24,9 @@ const SRC = path.resolve(__dirname, "..");
 
 /** 只查真正承载对话正文的文件 —— 别的滚动容器(设置页表单、列表)不适用这条。 */
 const FILES = [
-  "components/agent/CanvasAgentChat.tsx",
+  "features/agent/CanvasAgentChat.tsx",
   "features/ai-studio/ChatWorkspace.tsx",
-  "components/agent/ToolCalls.tsx",
+  "features/agent/ToolCalls.tsx",
 ];
 
 /** `<文件>:<片段>` → 为什么不需要锁横向。 */
@@ -81,7 +81,7 @@ describe("智能体对话的滚动容器锁死横向", () => {
  * 子项自己的 truncate 救不了 —— truncate 要父级先有确定宽度,而这里父级宽度正由内容决定。
  */
 describe("智能体正文的单列 grid 显式约束轨道", () => {
-  const AGENT_TURN = path.join(SRC, "components/agent/ToolCalls.tsx");
+  const AGENT_TURN = path.join(SRC, "features/agent/ToolCalls.tsx");
 
   it("AgentTurnContent 的容器给了 minmax(0,1fr)", () => {
     const text = fs.readFileSync(AGENT_TURN, "utf8");

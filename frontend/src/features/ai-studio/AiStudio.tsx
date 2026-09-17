@@ -34,7 +34,7 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
-import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
+import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -48,11 +48,11 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
 import { AudioWorkspace } from "@/features/ai-studio/AudioWorkspace";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
-import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
+import { generationSessionSelectionKey } from "@/features/agent/sessionSelection";
 import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/features/ai-studio/parameterPanel";
 import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
-import { MessageFooter, MessageTime, formatCostMicros } from "@/features/ai-studio/messageUsage";
+import { MessageFooter, MessageTime, formatCostMicros } from "@/features/agent/messageUsage";
 import {
   aspectRatioOptions,
   booleanParameterKeys,
@@ -315,7 +315,7 @@ function GenerateWorkspace({
   });
   const activeSession =
     (sessions.data ?? []).find((session) => session.id === sessionId) ?? (sessions.data ?? [])[0] ?? null;
-  //: 贴底跟随(见 components/agent/stickToBottom)。
+  //: 贴底跟随(见 features/agent/stickToBottom)。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
   const sessionJobs = useQuery({
     queryKey: ["generation-jobs", workspace.id, activeSession?.id],

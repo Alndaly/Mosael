@@ -42,11 +42,11 @@ const SRC = join(import.meta.dirname, "..", "..");
  * 也会红。
  */
 const GRANDFATHERED = new Set<string>([
-  "components/agent/SubagentPanel.tsx: h-6 w-6",
+  "features/agent/SubagentPanel.tsx: h-6 w-6",
   "features/ai-studio/AiStudio.tsx: h-6",
   "features/ai-studio/FrameSlotField.tsx: h-5 w-5",
   "features/ai-studio/FrameSlotField.tsx: h-6 w-6",
-  "features/ai-studio/trace/TraceView.tsx: h-6 w-6",
+  "features/agent/trace/TraceView.tsx: h-6 w-6",
   "features/editor/Inspector.tsx: h-6",
   "features/plugins/PluginsView.tsx: h-6",
   "features/settings/VoiceLibrarySection.tsx: h-6 w-6",

@@ -8,9 +8,9 @@ import { AssetInlinePreview } from "@/components/app/asset-preview";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { assetOutputs, parseIso, toSteps } from "@/features/workflows/runSteps";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
-import { WorkflowFailureDetails } from "@/features/workflows/WorkflowFailureDetails";
-import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
-import type { CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
+import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
+import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
+import type { CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { cn } from "@/lib/utils";
 
 const RUNNING = new Set(["queued", "running"]);

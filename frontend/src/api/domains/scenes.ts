@@ -1,7 +1,23 @@
 import type { components } from "@/api/generated/schema";
-import type { ScenePreviewData } from "@/features/scenes/sceneFootprint";
 import { api, API_BASE, getAuthToken } from "@/api/transport";
 export type Vec3 = [number, number, number];
+
+/** 预览用的物体:后端 `scene_preview` 挑出来的那几个字段,不含造型解释。 */
+export interface PreviewObject {
+  kind: string;
+  position?: [number, number, number] | null;
+  rotation?: [number, number, number] | null;
+  scale?: [number, number, number] | null;
+  color?: string | null;
+  parameters?: { width?: number; depth?: number; radius?: number } | null;
+  /** 相机才有:运镜轨上的位置点。 */
+  path?: ([number, number, number] | null)[] | null;
+}
+
+export interface ScenePreviewData {
+  objects?: PreviewObject[] | null;
+}
+
 /** 时间轨上的一个时刻。相机用 position + target + fov,物体用 position + rotation + scale。
  *  没填的字段表示"这一档不控制它" —— 所以这里**不能** Required。 */
 export type Keyframe = components["schemas"]["Keyframe"] & { time: number; position: Vec3 };

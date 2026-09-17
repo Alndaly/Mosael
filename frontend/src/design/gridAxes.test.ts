@@ -12,7 +12,7 @@
  *                            它压根没被压缩过,省略号出不来,右端的按钮被推出可视区
  *     外框能长(悬浮面板)     面板自己被撑宽,看着像「窗口被内容顶开」
  *
- * 智能体面板(`components/agent/CanvasAgentChat.tsx`)两种都中过:停靠时标题被硬裁、新建/
+ * 智能体面板(`features/agent/CanvasAgentChat.tsx`)两种都中过:停靠时标题被硬裁、新建/
  * 停靠/关闭三个按钮整体消失,悬浮时窗口宽到 885px。`features/ai-studio/ChatWorkspace.tsx`
  * 也撞过同一下,当时是给那一行子项补 `min-w-0` —— 有效,但只护住了那一行。
  *
@@ -40,10 +40,10 @@ const SRC = join(import.meta.dirname, "..");
  * **只减不增。** 新增一处会红,提示两轴一起声明;修好一处后不删这里也会红。
  */
 const GRANDFATHERED = new Set<string>([
-  "components/agent/SubagentPanel.tsx: grid-rows-[auto_minmax(0,1fr)]",
+  "features/agent/SubagentPanel.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/ai-studio/ChatWorkspace.tsx: grid-rows-[auto_minmax(0,1fr)_auto]",
-  "features/ai-studio/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)]",
-  "features/ai-studio/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)_auto]",
+  "features/agent/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)]",
+  "features/agent/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)_auto]",
   "features/auth/LoginView.tsx: grid-rows-[minmax(0,1fr)_auto]",
   "features/editor/EditorView.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/editor/Inspector.tsx: grid-rows-[auto_minmax(0,1fr)]",

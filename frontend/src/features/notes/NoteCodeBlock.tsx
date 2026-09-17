@@ -4,7 +4,7 @@ import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer, type NodeViewP
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Check, Copy } from "lucide-react";
-import { canonicalLanguage, codeHighlighter } from "@/components/agent/codeHighlighter";
+import { canonicalLanguage, codeHighlighter } from "@/features/agent/codeHighlighter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NONE, optionalValue } from "@/components/ui/selectSentinel";
 import { nodeLabels } from "./noteNodeUI";

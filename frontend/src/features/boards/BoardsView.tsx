@@ -47,7 +47,7 @@ import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
+import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import {
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,

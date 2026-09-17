@@ -38,9 +38,9 @@ import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
-import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
-import { VoiceDock } from "@/components/agent/VoiceDock";
-import { useAgentNavigation } from "@/components/agent/useAgentNavigation";
+import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
+import { VoiceDock } from "@/features/agent/VoiceDock";
+import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/layout/ServerPicker";

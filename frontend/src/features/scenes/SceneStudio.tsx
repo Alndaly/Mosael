@@ -77,7 +77,7 @@ import {
 import {
   CanvasAgentChat,
   type CanvasAgentMode,
-} from "@/components/agent/CanvasAgentChat";
+} from "@/features/agent/CanvasAgentChat";
 import { useAutosave } from "@/features/boards/useAutosave";
 import {
   MAX_KEYS,

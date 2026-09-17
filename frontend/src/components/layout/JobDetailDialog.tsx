@@ -12,7 +12,7 @@ import { ModalShell } from "@/components/app/modals";
 import { Progress } from "@/components/ui/progress";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { WorkflowFailureDetails } from "@/features/workflows/WorkflowFailureDetails";
+import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
 

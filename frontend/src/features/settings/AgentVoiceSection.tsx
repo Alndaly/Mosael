@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/features/settings/ui";
-import { SpeakButton } from "@/components/agent/SpeakButton";
+import { SpeakButton } from "@/features/agent/SpeakButton";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 

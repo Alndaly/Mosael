@@ -119,7 +119,7 @@ import { RefEditor } from "@/features/workflows/RefEditor";
 import { syncFromServer } from "@/features/workflows/serverSync";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
-import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
+import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import {
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,
@@ -153,7 +153,7 @@ import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSelection, usePersistentTab, usePersistentViewport } from "@/lib/usePersistentTab";
 
 const AGENT_MODES = ["docked", "floating"] as const;
-import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/features/workflows/useFloatingPanel";
+import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/components/app/useFloatingPanel";
 import {
   analyzeWorkflow,
   extractRefs,

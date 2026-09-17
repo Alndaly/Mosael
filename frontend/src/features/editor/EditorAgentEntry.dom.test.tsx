@@ -37,7 +37,7 @@ vi.mock("@/features/editor/useEditorPanels", () => ({
   }),
 }));
 
-vi.mock("@/components/agent/CanvasAgentChat", () => ({
+vi.mock("@/features/agent/CanvasAgentChat", () => ({
   CanvasAgentChat: ({ contextLine, onClose }: { contextLine: string; onClose: () => void }) => (
     <aside data-testid="editor-agent-panel" data-context={contextLine}>
       <button type="button" onClick={onClose}>close-agent</button>

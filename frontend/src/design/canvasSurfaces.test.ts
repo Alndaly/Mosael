@@ -81,7 +81,7 @@ describe("画布浮层", () => {
      * "停靠"在这里不等于"嵌进版面":整条右栏是 absolute、浮在画布之上的。真正嵌进版面的是
      * 3D 场景页那种 inline 停靠 —— 它走另一条分支,拿的是 bg-workspace-panel,本来就没有影子类。
      */
-    for (const path of ["components/agent/CanvasAgentChat.tsx", "features/workflows/WorkflowRunHistory.tsx"]) {
+    for (const path of ["features/agent/CanvasAgentChat.tsx", "features/workflows/WorkflowRunHistory.tsx"]) {
       const text = readFileSync(join(import.meta.dirname, "..", path), "utf8");
       // 取**最后**一次出现:第一次是 import,那一段里什么都没有,拿它切等于什么也没断言。
       const at = text.lastIndexOf("DOCKABLE_PANEL_FRAME_CLASS");

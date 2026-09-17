@@ -59,7 +59,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
+import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
