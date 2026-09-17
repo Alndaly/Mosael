@@ -177,7 +177,7 @@ class Test配音流程按可用性退让:
         退回的是"原声全没",不是"原声全在":后者才会让成片里两个人同时说话,而那正是
         用户报回来的那个症状。
         """
-        from app.domain.workflows.executors import subjobs
+        from app.domain.voices import original_audio as subjobs
 
         monkeypatch.setattr(subjobs, "_split_voice_from_music", lambda *a, **k: False)
         seen: list[str] = []
@@ -207,7 +207,7 @@ class Test配音流程按可用性退让:
             def get(self, model, key):
                 return _Seq()
 
-        applied = subjobs._handle_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
+        applied = subjobs.apply_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
         assert seen == ["muted"], seen
         #: 退回静音要**报出来** —— 背景音乐跟着没了,用户要从通知里知道,而不是看成片才发现。
         assert applied == "mute_fallback"
@@ -227,7 +227,7 @@ class Test配音流程按可用性退让:
         from app.domain import separation as sep
         from app.domain.render import build_plan_for_sequence
         from app.domain.sequences.history import redo, undo
-        from app.domain.workflows.executors import subjobs
+        from app.domain.voices import original_audio
         from tests.util import fresh_client
 
         fresh_client()
@@ -263,7 +263,7 @@ class Test配音流程按可用性退让:
 
         seq_id, dub_id, footage_id, background_id = ids
         with SessionLocal() as db:
-            assert subjobs._handle_original_audio(db, seq_id, dub_id, "separate", actor_id=None) == "separate"
+            assert original_audio.apply_original_audio(db, seq_id, dub_id, "separate", actor_id=None) == "separate"
         assert separated == [footage_id]
 
         def check(db) -> None:
@@ -290,7 +290,7 @@ class Test配音流程按可用性退让:
         """失败时调用方退回整轨静音;这之前不能留下半套背景音轨(它会跟着被静音,白占一条轨)。"""
         from app.domain import separation as sep
         from app.domain.sequences import operations as ops
-        from app.domain.workflows.executors import subjobs
+        from app.domain.voices import original_audio
 
         clips = [type("C", (), {"id": f"c{i}", "asset_id": f"a{i}", "muted": False})() for i in range(2)]
         track = type("T", (), {"id": "v", "kind": "video", "muted": False, "clips": clips})()
@@ -309,7 +309,7 @@ class Test配音流程按可用性退让:
         monkeypatch.setattr(sep, "available", lambda engine="": True)
         monkeypatch.setattr(sep, "separate_asset", separate)
         monkeypatch.setattr(ops, "detach_clip_audio", lambda *a, **k: pytest.fail("不该动时间线"))
-        assert subjobs._split_voice_from_music(_DB(), "s1", "dub", actor_id=None) is False
+        assert original_audio._split_voice_from_music(_DB(), "s1", "dub", actor_id=None) is False
 
 
 class Test当作任务跑:

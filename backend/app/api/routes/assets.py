@@ -86,27 +86,13 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     能往这个工作区里塞东西。
     """
     ensure_workspace_perm(db, user, body.workspace_id, "upload")
-    from app.media import ytdlp
+    from app.domain.assets.from_url import probe_url as probe
+    from app.media.ytdlp import YtdlpError
 
-    cookie_file = None
-    workdir = None
-    if body.profile_id:
-        import tempfile
-        from pathlib import Path as _Path
-
-        from app.domain.assets.from_url import _cookie_file
-
-        workdir = _Path(tempfile.mkdtemp(prefix="mosael-probe-"))
-        cookie_file = _cookie_file(body.workspace_id, body.profile_id, workdir)
     try:
-        listing = ytdlp.probe(body.url.strip(), cookie_file=cookie_file, start=body.start)
-    except ytdlp.YtdlpError as exc:
+        listing = probe(body.url, workspace_id=body.workspace_id, profile_id=body.profile_id or "", start=body.start)
+    except YtdlpError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    finally:
-        if workdir is not None:
-            import shutil
-
-            shutil.rmtree(workdir, ignore_errors=True)
     return {
         "title": listing.title,
         "is_playlist": listing.is_playlist,

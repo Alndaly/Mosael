@@ -498,22 +498,25 @@ def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: DbSession, use
     """
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
+    from app.domain.voices.engine_catalog import CLONE_ENGINE, synthesis_params
     from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
+    from app.domain.voices.voices import VoiceError
 
-    synthesis = body.model_dump(exclude={"clip_ids", "match_duration", "line"})
-    # 克隆引擎才认 voice_id,远端引擎才认 workspace_id —— 两边都传的话
-    # start_synthesis 会收到它这条路上根本没有的参数。
-    if body.engine == "clone":
-        synthesis.pop("provider_profile_id", None)
-        synthesis.pop("engine_model", None)
-        synthesis.pop("engine_voice", None)
-        synthesis.pop("engine_voice_resource", None)
-    else:
-        synthesis.pop("voice_id", None)
-        synthesis.pop("clone_engine", None)
-        synthesis.pop("clone_model", None)
-        synthesis["workspace_id"] = sequence.workspace_id
+    clone = (body.engine or CLONE_ENGINE) == CLONE_ENGINE
     try:
+        synthesis = synthesis_params(
+            db,
+            engine=body.engine,
+            voice=(body.voice_id or "") if clone else body.engine_voice,
+            speed=body.speed,
+            user_id=user.id,
+            workspace_id=sequence.workspace_id,
+            clone_engine=body.clone_engine,
+            clone_model=body.clone_model,
+            provider_profile_id=body.provider_profile_id,
+            engine_model=body.engine_model,
+            engine_voice_resource=body.engine_voice_resource,
+        )
         return start_subtitle_dub(
             db,
             sequence_id=sequence_id,
@@ -522,8 +525,9 @@ def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: DbSession, use
             line=body.line,
             created_by=user.id,
             synthesis=synthesis,
+            original_audio=body.original_audio,
         )
-    except DubError as exc:
+    except (DubError, VoiceError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

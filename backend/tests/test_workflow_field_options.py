@@ -105,10 +105,31 @@ def test_节点类型接口把选项来源发下去() -> None:
     assert "required_one_of" not in types["synthesize_speech"]
 
 
+class _VoiceDB:
+    """克隆那条会核对音色的工作区;单测里给一个只认得这一条音色的库。"""
+
+    def __init__(self, workspace_id: str) -> None:
+        self.workspace_id = workspace_id
+
+    def get(self, model, key):
+        return type("V", (), {"id": key, "workspace_id": self.workspace_id})()
+
+
 @pytest.mark.parametrize("engine", ["", "clone"])
 def test_执行体把克隆音色交给克隆那条(engine, monkeypatch) -> None:
     from app.domain.workflows.executors import subjobs
 
     monkeypatch.setattr(subjobs, "current_actor", lambda db: None)
-    params = subjobs._speech_params(None, {"engine": engine, "voice": "v1"}, what="测试")
-    assert params["voice_id"] == "v1" and "engine_voice" not in params
+    workflow = type("W", (), {"workspace_id": "w"})()
+    params = subjobs._speech_params(_VoiceDB("w"), workflow, {"engine": engine, "voice": "v1"}, what="测试")
+    assert params["voice_id"] == "v1" and "engine_voice" not in params and "workspace_id" not in params
+
+
+def test_执行体不收别的工作区的克隆音色(monkeypatch) -> None:
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors import subjobs
+
+    monkeypatch.setattr(subjobs, "current_actor", lambda db: None)
+    workflow = type("W", (), {"workspace_id": "w"})()
+    with pytest.raises(WorkflowDomainError, match="配音库里没有这个音色"):
+        subjobs._speech_params(_VoiceDB("别人的"), workflow, {"voice": "v1"}, what="测试")

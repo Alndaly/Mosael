@@ -13,7 +13,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from app.domain.boards import ITEM_KINDS, NOTE_COLORS, BoardDomainError, finite_number
+from app.domain.boards.canvas import ITEM_KINDS, NOTE_COLORS, BoardDomainError, BoardNotFound, finite_number
 
 BOARD_OP_KINDS = (
     "add_item",
@@ -42,7 +42,7 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
 def _require(by_id: dict[str, dict], item_id: str) -> dict:
     item = by_id.get(item_id)
     if item is None:
-        raise BoardDomainError(f"画板项不存在:{item_id or '(空)'}")
+        raise BoardNotFound(f"画板项不存在:{item_id or '(空)'}")
     return item
 
 

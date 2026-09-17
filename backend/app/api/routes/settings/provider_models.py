@@ -11,7 +11,9 @@ from app.domain import provider_models
 from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
-from .provider_profiles import _require_profile, _resolved_or_bare
+from app.domain.permissions import require_own_profile
+
+from .provider_profiles import _resolved_or_bare
 
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -140,7 +142,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     已配置的排在前面:那是用户实际在用的;其余可一键加入。
     """
     # 只读:任何登录用户都看得到这条连接下有哪些模型 —— 他要据此选自己的默认。
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     configured = provider_models.list_models(db, profile_id)
     rows = [_model_out(db, model, catalog, profile.vendor) for model in configured]
@@ -199,7 +201,7 @@ def add_provider_model(
 ) -> ProviderModelOut:
     """把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
     手填是为了私有部署与别名:目录查不到不等于不能用。"""
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     model_id = (body.model_id or "").strip()
     if not model_id:
         raise HTTPException(status_code=422, detail="模型 id 不能为空")
@@ -237,7 +239,7 @@ def update_provider_model(
     MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
     表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
     运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。"""
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     model = provider_models.get_model(db, profile_id, model_id)
     if model is None:
         raise HTTPException(status_code=404, detail="该连接下没有这个模型")
@@ -266,7 +268,7 @@ def update_provider_model(
 def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: CurrentUser) -> Response:
     """移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
     手填的则彻底消失 —— 它本来就只存在于这一行里。"""
-    _require_profile(db, profile_id, user)  # 归属判定,和这条连接上其余操作同一道门
+    require_own_profile(db, user, profile_id)  # 归属判定,和这条连接上其余操作同一道门
     model = provider_models.get_model(db, profile_id, model_id)
     if model is not None:
         db.delete(model)

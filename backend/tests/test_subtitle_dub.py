@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app.domain.voices.subtitle_dub import DubError, _speed_for, start_subtitle_dub
 from app.core.db import SessionLocal
-from tests.util import fresh_client
+from tests.util import fresh_client, make_voice
 
 
 def test_speed_matches_audio_to_the_subtitle_slot() -> None:
@@ -299,3 +299,129 @@ def test_一条字幕轨都没有时说的是没有字幕轨() -> None:
     with SessionLocal() as db:
         with pytest.raises(DubError, match="没有字幕轨"):
             subtitle_clip_ids(db, sequence["id"])
+
+
+class Test原声处理归配音本身:
+    """原声怎么办是**配音这件事**的一部分(voices/original_audio)。此前它长在工作流执行器里,
+    剪辑台和智能体发起的配音选不了 —— 配出来的片子里原声原样留着,两个人同时说话。"""
+
+    def _sequence_with_footage(self, client) -> tuple[str, str, str]:
+        from app.db.models import Asset, Clip, Sequence, Track
+
+        sequence_id, clip_id = _sequence_with_subtitle(client)
+        with SessionLocal() as db:
+            sequence = db.get(Sequence, sequence_id)
+            footage = Asset(workspace_id=sequence.workspace_id, kind="video", name="原片", file_key="media/o.mp4")
+            video = Track(sequence_id=sequence_id, kind="video", name="V9", position=9)
+            db.add_all([footage, video])
+            db.flush()
+            db.add(Clip(workspace_id=sequence.workspace_id, sequence_id=sequence_id, track_id=video.id,
+                        asset_id=footage.id, timeline_start=0, src_in=0, src_out=10))
+            db.commit()
+            return sequence_id, clip_id, video.id
+
+    def test_配音任务收尾时按选的那一档处理原声(self, monkeypatch) -> None:
+        import app.domain.voices.voices as voices_module
+        from app.db.models import Asset, Job, Sequence, Track
+        from app.domain.jobs import create_job, wait_for_idle_jobs
+
+        def fake_synthesis(db, *, text, project_id, created_by, **synthesis):
+            sequence = db.scalar(select(Sequence))
+            audio = Asset(workspace_id=sequence.workspace_id, kind="audio", name=text,
+                          file_key="media/d.wav", media_info={"duration": 2.0})
+            db.add(audio)
+            db.flush()
+            job = create_job(db, workspace_id=sequence.workspace_id, kind="tts", payload={}, created_by=None)
+            job.status = "succeeded"
+            job.result = {"asset_id": audio.id}
+            return job
+
+        monkeypatch.setattr(voices_module, "start_synthesis", fake_synthesis)
+        client = fresh_client()
+        sequence_id, clip_id, video_id = self._sequence_with_footage(client)
+        with SessionLocal() as db:
+            job_id = start_subtitle_dub(
+                db, sequence_id=sequence_id, clip_ids=[clip_id], match_duration=False, created_by=None,
+                synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": "w"},
+                original_audio="mute",
+            ).id
+        assert wait_for_idle_jobs(10)
+        with SessionLocal() as db:
+            job = db.get(Job, job_id)
+            assert job.status == "succeeded", job.error
+            assert job.result["original_audio"] == "mute"
+            assert db.get(Track, video_id).muted, "原片那条轨静音了"
+            assert not db.get(Track, job.result["track_id"]).muted, "配音轨不动"
+
+    def test_不认识的档位当场拒(self) -> None:
+        client = fresh_client()
+        sequence_id, clip_id = _sequence_with_subtitle(client)
+        with SessionLocal() as db, pytest.raises(DubError, match="原声处理方式"):
+            start_subtitle_dub(
+                db, sequence_id=sequence_id, clip_ids=[clip_id], match_duration=False, created_by=None,
+                synthesis={}, original_audio="louder",
+            )
+
+    @pytest.fixture
+    def captured(self, monkeypatch):
+        import app.domain.voices.subtitle_dub as dub
+
+        seen: dict = {}
+
+        def fake_start(db, **kwargs):
+            seen.update(kwargs)
+            raise DubError("到此为止:要看的是交下去的参数")
+
+        monkeypatch.setattr(dub, "start_subtitle_dub", fake_start)
+        return seen
+
+    def test_剪辑台的接口把选项和音色交下去(self, captured) -> None:
+        from app.db.models import Sequence
+
+        client = fresh_client()
+        sequence_id, clip_id = _sequence_with_subtitle(client)
+        with SessionLocal() as db:
+            voice = make_voice(db.get(Sequence, sequence_id).workspace_id)
+        response = client.post(
+            f"/api/sequences/{sequence_id}/dub-subtitles",
+            json={"clip_ids": [clip_id], "voice_id": voice, "original_audio": "separate", "clone_model": "m",
+                  "engine_model": "不属于克隆那条"},
+        )
+        assert response.status_code == 422 and "到此为止" in response.text, response.text
+        assert captured["original_audio"] == "separate"
+        assert captured["synthesis"] == {"engine": "clone", "speed": 1.0, "voice_id": voice, "clone_model": "m"}
+
+    def test_别的工作区的音色用不了(self) -> None:
+        client = fresh_client()
+        sequence_id, clip_id = _sequence_with_subtitle(client)
+        other = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
+        response = client.post(
+            f"/api/sequences/{sequence_id}/dub-subtitles",
+            json={"clip_ids": [clip_id], "voice_id": make_voice(other)},
+        )
+        assert response.status_code == 422 and "配音库里没有这个音色" in response.text
+
+    def test_智能体的确认卡把选项交下去_卡上写清原声会怎样(self, captured) -> None:
+        from app.db.models import ToolConfirmation
+        from app.domain.agent import confirmations
+
+        client = fresh_client()
+        sequence_id, clip_id = _sequence_with_subtitle(client)
+        with SessionLocal() as db:
+            from app.db.models import Sequence
+
+            workspace_id = db.get(Sequence, sequence_id).workspace_id
+            voice = make_voice(workspace_id)
+            payload = {"sequence_id": sequence_id, "clip_ids": [clip_id], "voice_id": voice, "original_audio": "mute"}
+            card = confirmations.request_confirmation(db, workspace_id=workspace_id, tool="dub_subtitles", payload=payload)
+            assert "原声静音" in card.summary
+            with pytest.raises(DubError, match="到此为止"):
+                confirmations._execute_approved(db, db.get(ToolConfirmation, card.id))
+        assert captured["original_audio"] == "mute"
+        assert captured["synthesis"]["voice_id"] == voice
+
+        with SessionLocal() as db, pytest.raises(confirmations.ConfirmationError, match="original_audio"):
+            confirmations.request_confirmation(
+                db, workspace_id=workspace_id, tool="dub_subtitles",
+                payload={**payload, "original_audio": "louder"},
+            )

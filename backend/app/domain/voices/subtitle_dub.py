@@ -24,6 +24,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, say
 from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
+from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, ORIGINAL_AUDIO_MODES, apply_original_audio
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +108,12 @@ def start_subtitle_dub(
     created_by: str | None,
     synthesis: dict,
     line: str = "all",
+    original_audio: str = DEFAULT_ORIGINAL_AUDIO,
 ) -> Job:
-    """给这些字幕条排一次配音。`synthesis` 原样转交 voices.start_synthesis(音色/引擎那一套)。"""
+    """给这些字幕条排一次配音。`synthesis` 原样转交 voices.start_synthesis(音色/引擎那一套);
+    `original_audio` 是配好之后原声怎么办(见 voices/original_audio)。"""
+    if original_audio not in ORIGINAL_AUDIO_MODES:
+        raise DubError(f"原声处理方式只能是 {' / '.join(ORIGINAL_AUDIO_MODES)}")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         raise DubError("时间线不存在")
@@ -128,6 +133,7 @@ def start_subtitle_dub(
             "match_duration": match_duration,
             "line": line,
             "synthesis": synthesis,
+            "original_audio": original_audio,
         },
         message="jobMsg_dubRunning",
         message_params={"done": 0, "total": len(clips)},
@@ -182,6 +188,7 @@ def _run_dub(job_id: str) -> None:
         match_duration = bool(payload.get("match_duration"))
         line = str(payload.get("line") or "all")
         synthesis = dict(payload.get("synthesis") or {})
+        original_audio = str(payload.get("original_audio") or "keep")
         # 现在取出来:commit 之后这些属性会过期,而 job 出了这个 with 就是 detached 的 ——
         # 到下一个 session 里再读 job.created_by 会去刷一个已经关掉的连接。
         created_by = job.created_by
@@ -271,6 +278,11 @@ def _run_dub(job_id: str) -> None:
                 job.error = "没有一条配音成功"
                 emit_job_event(db, job.id, "job.failed", {})
             else:
+                # 原声的处理放在**任务里**、成功之前:分离要跑一阵,而任务说"完成"时成片应当已经是
+                # 最终的样子。它自己开会话改时间线(每一步都是剪辑操作,各自提交)。
+                applied = apply_original_audio(db, sequence_id, track_id, original_audio, actor_id=created_by)
+                db.expire_all()
+                job = db.get(Job, job_id)
                 job.status = "succeeded"
                 job.progress = 1.0
                 # 部分失败也是成功的一种:配好的那些是真的配好了。但**不能都说成「完成」** ——
@@ -279,7 +291,7 @@ def _run_dub(job_id: str) -> None:
                     say(job, "jobMsg_dubPartial", done=done, failed=failed)
                 else:
                     say(job, "jobMsg_dubDone", done=done)
-                job.result = {"track_id": track_id, "done": done, "failed": failed}
+                job.result = {"track_id": track_id, "done": done, "failed": failed, "original_audio": applied}
                 emit_job_event(db, job.id, "job.succeeded", {"track_id": track_id})
             db.commit()
     except Exception as exc:  # noqa: BLE001 — 任何意外都要落进任务行,否则会话永远停在 running

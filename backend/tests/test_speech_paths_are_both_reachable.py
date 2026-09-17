@@ -44,7 +44,8 @@ class Test工作流节点:
         monkeypatch.setattr(subjobs, "wait_for_job", lambda _id: type("J", (), {"result": {"asset_id": "a1"}})())
         monkeypatch.setattr(subjobs, "current_actor", lambda _db: "u1")
         workflow = type("W", (), {"workspace_id": "ws-1"})()
-        return subjobs.synthesize_speech(None, workflow, config)
+        db = type("DB", (), {"get": lambda self, model, key: type("V", (), {"workspace_id": "ws-1"})()})()
+        return subjobs.synthesize_speech(db, workflow, config)
 
     def test_引擎音色一路传到底(self, captured, monkeypatch) -> None:
         """这条是修复本身:此前 engine / engine_voice 填了也没被传下去。音色现在是一格,

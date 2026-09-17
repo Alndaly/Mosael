@@ -179,10 +179,10 @@ def list_capability_refs(
     ]
     profiles.sort(key=lambda row: row["profile"])
     if profile_id:
-        from app.api.routes.settings.provider_profiles import _require_profile
+        from app.domain.permissions import require_own_profile
         from app.domain.generation.custom_profiles import custom_profiles_for
 
-        _require_profile(db, profile_id, user)
+        require_own_profile(db, user, profile_id)
         profiles.extend(
             {
                 "value": f"profile:{row.id}",
@@ -200,7 +200,7 @@ def list_capability_refs(
     if profile_id:
         from app.domain.generation.catalog import adapter_parameter_surface
 
-        vendor = _require_profile(db, profile_id, user).vendor
+        vendor = require_own_profile(db, user, profile_id).vendor
         fallback_keys = list(adapter_parameter_surface(vendor, kind))
     return {"models": models, "profiles": profiles, "fallback_keys": fallback_keys}
 

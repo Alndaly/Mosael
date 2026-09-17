@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.roles import role_at_least
 from app.core.usage_scope import bind_workspace
-from app.db.models import Asset, Sequence, User, WorkspaceMember
+from app.db.models import Asset, ProviderProfile, Sequence, User, WorkspaceMember
 
 
 class PermissionDenied(Exception):
@@ -188,3 +188,16 @@ def require_sequence_access(db: Session, user: User, sequence_id: str, *, perm: 
     else:
         ensure_workspace_perm(db, user, sequence.workspace_id, perm)
     return sequence
+
+
+def require_own_profile(db: Session, user: User, profile_id: str) -> ProviderProfile:
+    """**我自己那条**供应商连接,不是就当它不存在。
+
+    连接归人(见 db.models.ProviderProfile)。"别人的连接"和"不存在的连接"对他是同一件事 ——
+    回 403 等于告诉他这个 id 有效。归属判定只此一处:每个路由各写一遍的话,漏掉任何一处都不会
+    报错,只会让那条路径能读到、改到别人的东西。(此前它是设置路由里的私有函数,被七个路由借用。)
+    """
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None or profile.owner_user_id != user.id:
+        raise NotVisible("供应商不存在")
+    return profile

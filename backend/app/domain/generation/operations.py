@@ -54,6 +54,8 @@ def create_generation_job(
 ) -> tuple[GenerationJob, Any]:
     provider = provider.strip()
     model = model.strip()
+    if not provider or not model:
+        provider, model, provider_profile_id = _default_model(db, kind, created_by)
     try:
         resolved = resolve_generation_model(
             db,
@@ -122,6 +124,20 @@ def create_generation_job(
     db.refresh(generation)
     db.refresh(job)
     return generation, job
+
+
+def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, str, str | None]:
+    """没点名模型时用**这个人**在这种能力上的默认 —— 画板、定时任务、智能体都可能不点名。
+
+    此前这段在三个入口里各抄一份,工作流节点则干脆不认;放在漏斗里,四个入口就是同一个答案。
+    没有默认就直说,不替他挑一个(见 provider_models.resolve_default 的说明)。
+    """
+    from app.domain import provider_models
+
+    default = provider_models.resolve_default(db, kind, user_id)
+    if default is None or default.profile is None:
+        raise GenerationDomainError("还没有可用的生成模型,先去设置里配一个")
+    return default.profile.vendor, default.model_id, default.provider_profile_id
 
 
 def _validate_source_assets(db: Session, workspace_id: str, source_assets: list[dict[str, str]]) -> None:

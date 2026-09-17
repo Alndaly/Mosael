@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Clip, Sequence, Track, Transcript, Workflow
+from app.db.models import Asset, Clip, Sequence, Transcript, Workflow
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
@@ -113,29 +113,29 @@ def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
 @register("ai_generate")
 def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.generation import create_generation_job
-    from app.domain.generation.operations import parse_source_assets
+    from app.domain.generation.operations import GenerationDomainError, parse_source_assets
     from app.domain.generation.runner import start_generation_thread
 
-    provider = str(config.get("provider", "")).strip()
-    model = str(config.get("model", "")).strip()
     kind = str(config.get("kind", "image")).strip() or "image"
-    if not provider or not model:
-        raise WorkflowDomainError("AI 生成节点缺少真实供应商或模型")
-    generation, child = create_generation_job(
-        db,
-        workspace_id=workflow.workspace_id,
-        session_id=None,
-        project_id=None,
-        created_by=current_actor(db),
-        provider=provider,
-        provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
-        model=model,
-        kind=kind,
-        prompt=str(config.get("prompt", "")),
-        negative_prompt=str(config.get("negative_prompt", "")),
-        parameters=dict(config.get("parameters") or {}),
-        source_assets=parse_source_assets(config.get("source_assets"), kind=kind),
-    )
+    # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
+    try:
+        generation, child = create_generation_job(
+            db,
+            workspace_id=workflow.workspace_id,
+            session_id=None,
+            project_id=None,
+            created_by=current_actor(db),
+            provider=str(config.get("provider", "")),
+            provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
+            model=str(config.get("model", "")),
+            kind=kind,
+            prompt=str(config.get("prompt", "")),
+            negative_prompt=str(config.get("negative_prompt", "")),
+            parameters=dict(config.get("parameters") or {}),
+            source_assets=parse_source_assets(config.get("source_assets"), kind=kind),
+        )
+    except GenerationDomainError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
     db.commit()
     start_generation_thread(generation.id)
     wait_for_job(child.id)
@@ -177,28 +177,22 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
     }
 
 
-def _speech_params(db: Session, config: dict[str, Any], *, what: str) -> dict[str, Any]:
-    """「引擎 + 音色」两格 → 合成要的那组参数。语音合成和字幕配音共用。
+def _speech_params(db: Session, workflow: Workflow, config: dict[str, Any], *, what: str) -> dict[str, Any]:
+    """「引擎 + 音色」两格 → 合成要的那组参数(见 voices.engine_catalog.synthesis_params)。"""
+    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.voices import VoiceError
 
-    音色一格,按引擎分两种意思:克隆时是配音库里的音色 id(`voice_id`),其余是那个引擎的
-    音色(`engine_voice`)。两条路要的参数不是一个集合 —— 都塞过去,合成那边会收到它这条路上
-    根本没有的参数。火山的音色还要一个资源族,**这里自己查**,不靠界面选音色时顺手存下
-    (那样每个挑音色的地方都得记得,而忘了的后果是音色不生效、也不报错)。
-    """
-    from app.domain.voices.engine_catalog import voice_resource_for
-    from app.domain.workflows.field_options import CLONE_ENGINE
-
-    engine = str(config.get("engine") or "").strip() or CLONE_ENGINE
-    voice = str(config.get("voice") or "").strip()
-    if not voice:
-        raise WorkflowDomainError(f"{what}没有选音色")
-    params: dict[str, Any] = {"engine": engine, "speed": float(config.get("speed") or 1.0)}
-    if engine == CLONE_ENGINE:
-        params["voice_id"] = voice
-    else:
-        params["engine_voice"] = voice
-        params["engine_voice_resource"] = voice_resource_for(db, engine, voice, user_id=current_actor(db))
-    return params
+    try:
+        return synthesis_params(
+            db,
+            engine=str(config.get("engine") or ""),
+            voice=str(config.get("voice") or ""),
+            speed=float(config.get("speed") or 1.0),
+            user_id=current_actor(db),
+            workspace_id=workflow.workspace_id,
+        )
+    except VoiceError as exc:
+        raise WorkflowDomainError(f"{what}{exc}") from exc
 
 
 @register("synthesize_speech")
@@ -211,9 +205,7 @@ def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -
         text=str(config.get("text", "")),
         project_id=None,
         created_by=current_actor(db),
-        # 引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
-        workspace_id=workflow.workspace_id,
-        **_speech_params(db, config, what="语音合成"),
+        **_speech_params(db, workflow, config, what="语音合成"),
     )
     final = wait_for_job(child.id)
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
@@ -760,6 +752,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     atempo 变速(见 media/render_executor),无损、可撤销、事后还能在检查器里手动微调。
     """
     from app.core.i18n import get_current_locale, t
+    from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
     from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
 
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
@@ -767,12 +760,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     if not clip_ids:
         raise WorkflowDomainError("没有要配音的字幕条")
 
-    synthesis = _speech_params(db, config, what="字幕配音")
-    if synthesis["engine"] != "clone":
-        # 引擎那条得显式告诉它产出归谁(克隆那条按 Voice 行找工作区)。
-        synthesis["workspace_id"] = workflow.workspace_id
-
-    actor = current_actor(db)
+    synthesis = _speech_params(db, workflow, config, what="字幕配音")
     try:
         job = start_subtitle_dub(
             db,
@@ -780,147 +768,26 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
             clip_ids=clip_ids,
             match_duration=_yes_no(config, "match_duration", default=True),
             line=str(config.get("line") or "all"),
-            created_by=actor,
+            created_by=current_actor(db),
             synthesis=synthesis,
+            original_audio=str(config.get("original_audio") or DEFAULT_ORIGINAL_AUDIO).strip().lower(),
         )
     except DubError as exc:
         raise WorkflowDomainError(str(exc)) from exc
     # 等待预算按条数走:这一个任务里排着 N 次合成,而通用的 15 分钟上限在一段几十句的视频上
     # 必然误判成超时 —— 而那时前面几十条配音已经落到轨上了,「超时」这个说法是错的。
     final = wait_for_job(job.id, timeout_seconds=max(CHILD_JOB_TIMEOUT_SECONDS, 60 * len(clip_ids)))
-    # 这一等的功夫,配音 worker 在**别的会话里**把这条时间线改了一遍(加轨、插片段、改倍速)。
-    # 本会话手里那份还是等待之前的样子,而序列的 revision 是乐观锁的判据 —— 拿着旧版本号再写
-    # 一次,会被「这个序列刚被改过」当场挡掉。等完就当作什么都不认识,重新读。
-    db.expire_all()
     result = final.result or {}
-    track_id = str(result.get("track_id") or "")
-    applied = "keep"
-    if track_id:
-        mode = str(config.get("original_audio") or "duck").strip().lower()
-        applied = _handle_original_audio(db, sequence.id, track_id, mode, actor_id=actor)
+    #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。选了 separate 却没有
+    #: 分离引擎时这里是 mute_fallback —— 背景音乐跟着没了,这件事得有地方说出来。
+    applied = str(result.get("original_audio") or "keep")
     return {
-        "track_id": track_id,
+        "track_id": str(result.get("track_id") or ""),
         "done": int(result.get("done") or 0),
         "failed": int(result.get("failed") or 0),
-        # **实际**对原声做了什么。选了 separate 却没有分离引擎时,这里是 mute ——
-        # 背景音乐跟着没了,这件事得有地方说出来,而不是让人在成片里才发现。
         "original_audio": applied,
         "original_audio_note": t(f"dubOriginalAudio_{applied}", get_current_locale()),
     }
-
-
-def _carries_audio(track: Track) -> bool:
-    """这条轨上有没有可能发出声音 —— 音频轨算,带媒体片段的视频轨也算。"""
-    if track.kind == "audio":
-        return True
-    if track.kind != "video":
-        return False
-    return any(clip.asset_id for clip in (track.clips or []))
-
-
-def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode: str, *, actor_id: str | None) -> str:
-    """配音落轨之后,原声怎么办 —— 压低、静音,还是原样留着。返回**实际**用的那种。
-
-    **「压低」不等于「听不见」。** 闪避把原声压到 30%(≈ −10.5 dB),那是给「旁白盖在环境音
-    之上」准备的档位:环境音本来就该若隐若现。而译配是**用另一种语言的说话声替换说话声** ——
-    两边都是人声,压到 30% 的结果是观众同时听见两个人在说话,只是一个小声点。真机上报回来的
-    正是这个:「视频原本的文案对应的音频还在」。
-
-    所以译配那条流程用 `mute`:原片整段的声音在成片里不出现。它仍然**不删任何东西** ——
-    动的是轨道上那个静音位,轨还在、片段还在,取消静音就回到原样,和闪避同样可撤销。
-    带音乐的片子想留背景音时选 `duck`。
-
-    两种模式都**只动原有的**那几条轨,不动配音轨:闪避要求配音轨自己不闪避,否则没有任何一条
-    轨是"关键音源",闪避窗口算出来是空的。
-
-    **视频轨也要算。** 一条视频片段自带的声音和音频轨上的声音一样会被听见,而译配这条流程
-    恰恰把原片整段放在视频轨上(音频轨是空的)—— 只挑 kind=="audio" 的话,标记落在一条没有
-    片段的空轨上,成片里原声一分贝没降。带画面的轨只在真有媒体片段时才算数:纯文字/纯占位的
-    轨没有声音可压。
-    """
-    from app.domain.sequences.operations import SetTrackState, set_track_state
-
-    if mode == "keep":
-        return "keep"
-    if mode == "separate":
-        #: 分不成就退回整轨静音 —— **一个没装的可选引擎不该让一条本来能跑完的流程失败**
-        #: (ADR-0016 决定 4)。退回的是"原声全没",不是"原声全在":后者才会让成片里
-        #: 两个人同时说话,而那正是用户报回来的那个症状。
-        if _split_voice_from_music(db, sequence_id, dub_track_id, actor_id=actor_id):
-            return "separate"
-        logger.info("没有可用的音频分离引擎,原声整轨静音(序列 %s)", sequence_id)
-        mode = "mute_fallback"
-    sequence = db.get(Sequence, sequence_id)
-    if sequence is None:
-        return mode
-    # 先把要改的那几条挑出来:set_track_state 会 commit,而 commit 之后 sequence.tracks
-    # 上的对象全部过期 —— 边遍历边改的话,下一圈读 track.kind 会去重新查一遍库。
-    mute = mode in {"mute", "mute_fallback"}
-    targets = [
-        track.id
-        for track in (sequence.tracks or [])
-        if track.id != dub_track_id
-        and _carries_audio(track)
-        # 已经是那个状态的不重复记一次操作 —— 那只会在撤销栈里堆空步。
-        and (not track.muted if mute else not track.duck)
-    ]
-    for track_id in targets:
-        #: SetTrackState 是 frozen 的 —— 建好就不能再改字段,所以一次性构造。
-        set_track_state(
-            db,
-            sequence_id,
-            SetTrackState(
-                track_id=track_id,
-                muted=True if mute else None,
-                duck=None if mute else True,
-                actor_id=actor_id,
-            ),
-        )
-    return mode
-
-
-def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> bool:
-    """原声只留背景音,人声那半丢掉。成功返回 True。
-
-    这是 `original_audio: separate` 的实现。每个发声的片段走一次「分离音频」:背景音放到一条
-    音频轨上、时间对齐,源片段静音。**画面不动** —— 此前这里把视频片段直接指向了背景音素材,
-    而视频轨上的纯音频素材既不算画面、也不进混音,成片里原片那一段就只剩静音。
-    走剪辑操作而不是改行,所以和闪避、静音一样撤得回来;原素材一个字节不动。
-
-    **先全部分离完再动时间线**:分到一半失败时调用方退回整轨静音,不能留下半套背景音轨。
-    问不到引擎就返回 False,由调用方退回整轨静音 —— 见 ADR-0016 决定 4。
-    """
-    from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.separation import available, separate_asset
-    from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
-
-    if not available():
-        return False
-    sequence = db.get(Sequence, sequence_id)
-    if sequence is None:
-        return False
-    sources = [
-        clip
-        for track in sequence.tracks or []
-        if track.id != dub_track_id and not track.muted and _carries_audio(track)
-        for clip in track.clips or []
-        if clip.asset_id and not clip.muted
-    ]
-    backgrounds: dict[str, str] = {}
-    for asset_id in dict.fromkeys(clip.asset_id for clip in sources):
-        asset = db.get(Asset, asset_id)
-        if asset is None or asset.kind not in ("audio", "video"):
-            continue
-        try:
-            backgrounds[asset_id] = separate_asset(db, asset, engine="").background.id
-        except SeparationError as exc:
-            logger.warning("分离失败,原声退回静音:%s", exc)
-            return False
-    #: 先取出 id:每次操作都会 commit,之后 ORM 对象全部过期。
-    plan = [(clip.id, backgrounds[clip.asset_id]) for clip in sources if clip.asset_id in backgrounds]
-    for clip_id, background_id in plan:
-        detach_clip_audio(db, sequence_id, DetachClipAudio(clip_id=clip_id, audio_asset_id=background_id, actor_id=actor_id))
-    return bool(plan)
 
 
 @register("separate_audio")

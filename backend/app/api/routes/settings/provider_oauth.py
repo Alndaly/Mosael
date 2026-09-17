@@ -20,12 +20,14 @@ from app.domain.provider_auth import acquire_lease, commit_credential, read_cred
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
 from app.domain.providers import pi_provider_id
 
-from .provider_profiles import _profile_out, _require_profile
+from app.domain.permissions import require_own_profile
+
+from .provider_profiles import _profile_out
 
 router = APIRouter(tags=["settings"])
 
 def _oauth_profile(db: DbSession, profile_id: str, user: CurrentUser) -> ProviderProfile:
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     if profile.auth_type != "oauth" or not pi_provider_id(profile.vendor):
         raise HTTPException(status_code=400, detail="该供应商不是订阅计划,不需要授权登录")
     return profile

@@ -1328,8 +1328,6 @@ def test_scheduled_task_dispatches_workflow() -> None:
     assert fired.status_code == 200, fired.text
     job_id = fired.json()["job"]["id"]
 
-    from app.workers.scheduler import dispatch_job_for_task  # noqa: F401 — run 路由已内联派发
-
     deadline = time.monotonic() + 10
     status = "queued"
     while time.monotonic() < deadline:

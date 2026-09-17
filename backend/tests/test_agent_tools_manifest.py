@@ -38,7 +38,7 @@ def test_the_manifest_is_the_mcp_registry_exactly() -> None:
     get the expansion."""
     import asyncio
 
-    from app.api.routes.agent_tools import _PLUGIN_META_TOOLS
+    from app.domain.agent.tool_manifest import PLUGIN_META_TOOLS as _PLUGIN_META_TOOLS
 
     client = fresh_client()
     served = {tool["name"] for tool in _builtin(client)}

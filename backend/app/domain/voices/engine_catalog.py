@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 #: 播客引擎:一次产出一整段双人对话,不是"念一句话"那种 —— 念字的地方都不该列它。
 PODCAST_ENGINE = "volcano-podcast"
+#: 「克隆音色」这一项。没选引擎时按它算。
+CLONE_ENGINE = "clone"
 
 
 def active_model_for(engine_cls: type, user_id: str | None = None) -> str:
@@ -220,3 +222,49 @@ def voice_resource_for(db: Session, engine: str, voice: str, *, user_id: str | N
         if item.get("value") == voice:
             return str(item.get("resource_id") or "")
     return ""
+
+
+#: 只属于某一条路的附加项。另一条路收到它们会报"没有这个参数",所以按引擎挑着带。
+_CLONE_OPTIONS = ("clone_engine", "clone_model")
+_ENGINE_OPTIONS = ("provider_profile_id", "engine_model", "engine_voice_resource")
+
+
+def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0,
+                     user_id: str | None, workspace_id: str, **options: object) -> dict[str, object]:
+    """「引擎 + 一格音色」→ voices.start_synthesis 要的那组参数。念字的入口(工作流、智能体、
+    字幕配音)都走这里,不各自拼。
+
+    音色一格,按引擎分两种意思:克隆时是配音库里的音色 id(`voice_id`),其余是那个引擎的
+    音色(`engine_voice`)。两条路要的参数不是一个集合 —— 都塞过去,合成那边会收到它这条路上
+    根本没有的参数。火山的音色还要一个资源族,调用方没给就**这里自己查**,不靠界面选音色时
+    顺手存下。引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
+    `options` 是两条路各自的附加项(克隆权重、引擎连接/模型),不属于这条路的丢掉。
+    """
+    from app.domain.voices.voices import VoiceError
+
+    engine = (engine or "").strip() or CLONE_ENGINE
+    voice = (voice or "").strip()
+    if not voice:
+        raise VoiceError("没有选音色")
+    unknown = set(options) - set(_CLONE_OPTIONS) - set(_ENGINE_OPTIONS)
+    if unknown:
+        raise TypeError(f"synthesis_params 不认识:{sorted(unknown)}")
+    params: dict[str, object] = {"engine": engine, "speed": float(speed or 1.0)}
+    clone = engine == CLONE_ENGINE
+    for key in _CLONE_OPTIONS if clone else _ENGINE_OPTIONS:
+        if options.get(key):
+            params[key] = options[key]
+    if clone:
+        #: 音色 id 可能来自任何地方(上游节点的输出、模型填的参数)—— 收进这个工作区。
+        from app.db.models import Voice
+
+        row = db.get(Voice, voice)
+        if row is None or row.workspace_id != workspace_id:
+            raise VoiceError("这个工作区的配音库里没有这个音色")
+        params["voice_id"] = voice
+    else:
+        params["engine_voice"] = voice
+        params["workspace_id"] = workspace_id
+        if not params.get("engine_voice_resource"):
+            params["engine_voice_resource"] = voice_resource_for(db, engine, voice, user_id=user_id)
+    return params

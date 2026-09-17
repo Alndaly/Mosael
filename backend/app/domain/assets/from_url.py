@@ -210,6 +210,25 @@ def failure_report(failures: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int = 0):
+    """这个链接后面有什么(只读元数据)。带了浏览器档案就借它的登录态去探。
+
+    探和下是同一个 cookie 来源 —— 探得到、下不到(或反过来)的话,用户看到的列表就是假的。
+    """
+    import shutil
+    import tempfile
+
+    from app.media import ytdlp
+
+    workdir = Path(tempfile.mkdtemp(prefix="mosael-probe-")) if profile_id else None
+    try:
+        cookie_file = _cookie_file(workspace_id, profile_id, workdir) if workdir is not None else None
+        return ytdlp.probe(url.strip(), cookie_file=cookie_file, start=start)
+    finally:
+        if workdir is not None:
+            shutil.rmtree(workdir, ignore_errors=True)
+
+
 def _cookie_file(workspace_id: str, profile_id: str, workdir: Path) -> Path | None:
     """把浏览器池档案里的登录态借出来,写成 yt-dlp 认的 cookies.txt。
 

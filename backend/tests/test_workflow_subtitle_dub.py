@@ -16,7 +16,7 @@ from app.core.db import SessionLocal
 from app.db.models import Clip, Track, Workflow
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.executors import get_executor
-from tests.util import fresh_client
+from tests.util import fresh_client, make_voice
 
 
 def _setup() -> tuple[str, str]:
@@ -148,11 +148,13 @@ class Test字幕配音:
         try:
             with pytest.raises(RuntimeError):
                 _run("dub_subtitles", ws, {
-                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice": "v1",
+                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice": make_voice(ws),
                 })
         finally:
             dub.start_subtitle_dub = original
         assert seen["match_duration"] is True
+        #: 原声那一档同理:没动过就是节点声明的默认,交给配音任务去处理。
+        assert seen["original_audio"] == "duck"
 
     def test_明确关掉时就是关的(self) -> None:
         seen: dict = {}
@@ -169,7 +171,7 @@ class Test字幕配音:
         try:
             with pytest.raises(RuntimeError):
                 _run("dub_subtitles", ws, {
-                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice": "v1",
+                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice": make_voice(ws),
                     "match_duration": "no",
                 })
         finally:

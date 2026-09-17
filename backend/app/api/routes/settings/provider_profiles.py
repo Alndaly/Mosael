@@ -23,6 +23,7 @@ from app.core.config import settings as settings_config
 from app.db.models import ProviderCredential, ProviderProfile
 from app.domain import provider_credentials, provider_health, provider_models
 from app.domain.agent.host import mint_tool_token
+from app.domain.permissions import require_own_profile
 from app.domain.provider_auth import read_credential
 from app.domain.provider_credentials import ResolvedConnection, is_keyless
 from app.domain.provider_presets import ProviderField, provider_definition, provider_definitions
@@ -347,7 +348,7 @@ def put_my_credential(
 
     不要求部署管理员:连接与钥匙都归当前用户，只是端点配置和秘密/OAuth 状态分别保存、分别更新。
     """
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     credential = provider_credentials.upsert(
         db,
         profile.id,
@@ -367,7 +368,7 @@ def put_my_credential(
 @router.delete("/settings/providers/{profile_id}/credential", status_code=204)
 def delete_my_credential(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
     """撤回我自己的钥匙。**连接不动** —— 它不是我的。"""
-    _require_profile(db, profile_id, user)
+    require_own_profile(db, user, profile_id)
     provider_credentials.forget(db, profile_id, user.id)
     db.commit()
     return Response(status_code=204)
@@ -430,7 +431,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
     incoming = _config_from_body(body)
     if body.copy_credentials_from:
         # 只能从**自己的**连接复制密钥 —— 否则这就是一条读到别人钥匙的路。
-        source = _require_profile(db, body.copy_credentials_from, user)
+        source = require_own_profile(db, user, body.copy_credentials_from)
         for spec in _field_specs(body.vendor):
             if not spec.secret:
                 continue
@@ -456,7 +457,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
 def update_provider_profile(
     profile_id: str, body: ProviderProfileUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderProfileOut:
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch and body.name is not None:
         profile.name = body.name
@@ -491,21 +492,6 @@ def update_provider_profile(
     return _profile_out(db, profile, user)
 
 
-def _require_profile(db: DbSession, profile_id: str, user: CurrentUser) -> ProviderProfile:
-    """**我自己那条**连接,不是就 404。
-
-    连接归人(见 db.models.ProviderProfile)。"别人的连接"和"不存在的连接"对他是同一件事 ——
-    回 403 等于告诉他这个 id 有效,而他连它存不存在都不该知道。
-
-    归属判定只此一处:每个路由各写一遍 `db.get(ProviderProfile, id)` 的话,漏掉任何一处都不会
-    报错,只会让那条路径能读到、改到别人的东西。
-    """
-    profile = db.get(ProviderProfile, profile_id)
-    if profile is None or profile.owner_user_id != user.id:
-        raise HTTPException(status_code=404, detail="供应商不存在")
-    return profile
-
-
 
 def _resolved_or_bare(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> ResolvedConnection:
     """这条连接 + 我的钥匙;没有钥匙时给一个不带钥匙的 —— 目录取不到就是空列表,
@@ -533,7 +519,7 @@ def probe_provider_health(profile_id: str, db: DbSession, user: CurrentUser) -> 
     **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
     """
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     result = provider_health.probe(_resolved_or_bare(db, profile, user))
     return ProviderHealthOut(
         supported=result.supported,
@@ -546,7 +532,7 @@ def probe_provider_health(profile_id: str, db: DbSession, user: CurrentUser) -> 
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)
 def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     if profile is not None:
         db.delete(profile)
         db.commit()

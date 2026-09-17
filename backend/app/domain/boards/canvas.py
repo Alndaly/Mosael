@@ -35,6 +35,10 @@ class BoardDomainError(ValueError):
     pass
 
 
+class BoardNotFound(BoardDomainError):
+    """这个工作区里没有这张板(或这一项)。"""
+
+
 class BoardRevisionConflict(BoardDomainError):
     """The caller edited a projection older than the server's current board."""
 
@@ -321,8 +325,15 @@ def get_board(db: Session, workspace_id: str, board_id: str) -> Board:
     board = db.get(Board, board_id)
     # 按工作区再验一次:拿到别的工作区的 id 也不该读得出来。
     if board is None or board.workspace_id != workspace_id:
-        raise BoardDomainError("画板不存在")
+        raise BoardNotFound("画板不存在")
     return board
+
+
+def ensure_revision(board: Board, base_revision: int | None) -> None:
+    """调用方看到的是不是最新的这张板。**起任务之前**就要问 —— 等占位落地时才发现冲突,
+    任务已经起了、钱已经花了,而产出没有地方放。"""
+    if base_revision is not None and base_revision != board.revision:
+        raise BoardRevisionConflict(base_revision, board.revision)
 
 
 def _validate_scene_references(db: Session, workspace_id: str, canvas: dict, existing: dict | None = None) -> None:
@@ -586,7 +597,7 @@ def set_text_write_run(
     items = [dict(one) for one in (canvas.get("items") or [])]
     index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
     if index is None:
-        raise BoardDomainError(f"画板项不存在:{item_id or '(空)'}")
+        raise BoardNotFound(f"画板项不存在:{item_id or '(空)'}")
     run = {"status": status}
     if error.strip():
         run["error"] = error.strip()[:300]
@@ -622,7 +633,7 @@ def write_text(
     items = [dict(one) for one in (canvas.get("items") or [])]
     index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
     if index is None:
-        raise BoardDomainError(f"画板项不存在:{item_id or '(空)'}")
+        raise BoardNotFound(f"画板项不存在:{item_id or '(空)'}")
     updated = {**items[index], "text": text}
     if reset_form:
         form = dict(completed_form if completed_form is not None else updated.get("form") or {})

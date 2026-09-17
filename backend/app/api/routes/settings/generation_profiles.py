@@ -1,7 +1,7 @@
 """连接下的自定义参数组:增删改查。
 
 **为什么不放在生成那组路由里**:它归连接(见 db.models.GenerationCapabilityProfile),和这条
-连接下的模型、默认值走同一道归属门(`_require_profile`)。放到 /generation 下的话,归属判定
+连接下的模型、默认值走同一道归属门(`require_own_profile`)。放到 /generation 下的话,归属判定
 就得再发明一遍。
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.domain.generation.custom_profiles import (
     validate_capabilities,
 )
 
-from .provider_profiles import _require_profile
+from app.domain.permissions import require_own_profile
 
 router = APIRouter(tags=["settings"])
 
@@ -50,7 +50,7 @@ def _row(db, profile_id: str, ref_id: str) -> GenerationCapabilityProfile:
     response_model=list[GenerationCapabilityProfileOut],
 )
 def list_profiles(profile_id: str, db: DbSession, user: CurrentUser, kind: str = "image"):
-    _require_profile(db, profile_id, user)
+    require_own_profile(db, user, profile_id)
     return [_out(row) for row in custom_profiles_for(db, profile_id, kind)]
 
 
@@ -59,7 +59,7 @@ def list_profiles(profile_id: str, db: DbSession, user: CurrentUser, kind: str =
     response_model=GenerationCapabilityProfileOut,
 )
 def create_profile(profile_id: str, body: GenerationCapabilityProfileCreate, db: DbSession, user: CurrentUser):
-    _require_profile(db, profile_id, user)
+    require_own_profile(db, user, profile_id)
     try:
         capabilities = validate_capabilities(body.capabilities, body.kind)
     except CapabilityProfileError as exc:
@@ -85,7 +85,7 @@ def create_profile(profile_id: str, body: GenerationCapabilityProfileCreate, db:
 def update_profile(
     profile_id: str, ref_id: str, body: GenerationCapabilityProfileUpdate, db: DbSession, user: CurrentUser
 ):
-    _require_profile(db, profile_id, user)
+    require_own_profile(db, user, profile_id)
     row = _row(db, profile_id, ref_id)
     if body.name is not None:
         name = body.name.strip()
@@ -114,7 +114,7 @@ def delete_profile(profile_id: str, ref_id: str, db: DbSession, user: CurrentUse
     兜底 —— 用户以为还在生效的配置其实没了。先让他把模型改回"跟随目录",再删,数据里就永远
     回答得出"当时配的是什么"。数据库层也由 template_id 的 FK(RESTRICT)兜住同一个不变量。
     """
-    _require_profile(db, profile_id, user)
+    require_own_profile(db, user, profile_id)
     row = _row(db, profile_id, ref_id)
     from app.domain.generation.resolution import template_reference_count
 

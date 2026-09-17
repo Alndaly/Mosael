@@ -2,7 +2,7 @@
 
 **为什么抛领域异常而不是 HTTPException**:笔记不只从路由进来 —— 画板保存要校验它引用的
 文档、工作流的知识节点要读它、智能体工具也会写它。领域层抛 FastAPI 的异常,这些非 HTTP 的
-调用方就得反过来 catch HTTPException 再翻回自己的领域错误,而那正是此前 `domain/boards.py`
+调用方就得反过来 catch HTTPException 再翻回自己的领域错误,而那正是此前 `domain/boards/canvas.py`
 和 `workflows/executors/knowledge.py` 在做的事。
 
 状态码由边界统一翻(见 main.py 的异常处理器),每个子类各对应一个**故意的**答案。

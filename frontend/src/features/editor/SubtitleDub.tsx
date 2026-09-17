@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Type } from "lucide-react";
 import { toast } from "sonner";
 
-import { downloadF5Model, dubSubtitles, listF5Models, type Sequence } from "@/api/client";
+import { downloadF5Model, dubSubtitles, listF5Models, ORIGINAL_AUDIO_MODES, type OriginalAudio, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -58,6 +58,7 @@ export function SubtitleDub({
   const hasBilingual = targets.some((clip) => (clip.text_override ?? "").trim().includes("\n"));
   // 匹配段落长度默认**关**:变速会改语速听感,超出 ±20% 就明显不自然。
   const [matchDuration, setMatchDuration] = React.useState(false);
+  const [originalAudio, setOriginalAudio] = React.useState<OriginalAudio>("duck");
   //: 用哪份 F5 权重。空 = 按文字自动挑 —— 中日韩俄阿印能认出来,而法德西意芬都写拉丁字母,
   //: 没有任何字符能证明"这是法语而不是英语",只能由用户明说。
   const [weights, setWeights] = React.useState(NONE);
@@ -115,6 +116,7 @@ export function SubtitleDub({
         clip_ids: targets.map((clip) => clip.id),
         match_duration: matchDuration,
         line,
+        original_audio: originalAudio,
         ...(usesF5 ? { clone_model: optionalValue(weights) ?? "" } : {}),
       }),
     onSuccess: (queued) => {
@@ -173,6 +175,18 @@ export function SubtitleDub({
           </Select>
         </VoiceField>
       )}
+      <VoiceField label={t("subtitleDubOriginal")}>
+        <Select value={originalAudio} onValueChange={(next) => setOriginalAudio(next as OriginalAudio)}>
+          <SelectTrigger className="w-full min-w-0" aria-label={t("subtitleDubOriginal")} title={t("subtitleDubOriginalHint")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ORIGINAL_AUDIO_MODES.map((mode) => (
+              <SelectItem key={mode} value={mode}>{t(`subtitleDubOriginal_${mode}`)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </VoiceField>
       <div className="grid gap-2 text-ui-xs text-muted-foreground">
         {selected.length > 0 && (
           <label className="flex items-center justify-between gap-2">

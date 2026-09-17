@@ -51,7 +51,8 @@ def test_没点名条目时_卡上要写出整条轨有几条() -> None:
         summary = _card(db, ws, {"sequence_id": sequence_id, "track_id": track_id, "clip_ids": []})
     assert "3 条字幕" in summary, summary
     # 范围和后果照旧要说清。
-    assert "压回原段落长度" in summary and "原声不动" in summary
+    # 默认那一档是压低 —— 卡上说的必须是配音任务真会做的那件事。
+    assert "压回原段落长度" in summary and "原声压低" in summary
 
 
 def test_点名了条目就按点名的数() -> None:

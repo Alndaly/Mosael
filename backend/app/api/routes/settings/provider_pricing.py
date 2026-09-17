@@ -18,7 +18,7 @@ from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import supports_capability
 from app.domain.usage import create_pricing_rule, delete_pricing_rule, prefill_model_pricing, update_pricing_rule
 
-from .provider_profiles import _require_profile
+from app.domain.permissions import require_own_profile
 
 router = APIRouter(tags=["settings"])
 
@@ -70,7 +70,7 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
     目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
     """
     ensure_deployment_admin(db, user)
-    profile = _require_profile(db, profile_id, user)
+    profile = require_own_profile(db, user, profile_id)
     resolved = provider_credentials.resolve_connection(db, profile, user.id)
     if resolved is None:
         raise HTTPException(status_code=422, detail="这条连接还没有你的密钥,先填一把再来取目录报价")
@@ -104,7 +104,7 @@ def _pricing_payload_with_profile_defaults(
         profile_id = existing.provider_profile_id
     capability = payload.get("capability") or (existing.capability if existing is not None else "")
     if profile_id:
-        profile = _require_profile(db, profile_id, user)
+        profile = require_own_profile(db, user, profile_id)
         if capability and not supports_capability(profile.vendor, capability):
             raise HTTPException(status_code=422, detail=f"该供应商不支持 {capability} 能力")
         if not payload.get("provider"):

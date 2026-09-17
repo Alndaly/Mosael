@@ -103,7 +103,7 @@ def test_a_scheduled_task_is_shared_by_default() -> None:
     owner, workspace, mate = _team()
     task = owner.post(
         "/api/scheduled-tasks",
-        json={"workspace_id": workspace["id"], "name": "每晚发布", "kind": "noop", "trigger_type": "manual"},
+        json={"workspace_id": workspace["id"], "name": "每晚发布", "kind": "workflow", "trigger_type": "manual"},
     )
     assert task.status_code == 200, task.text
 
@@ -352,7 +352,7 @@ def test_a_scheduled_task_carries_its_owner() -> None:
     owner, workspace, mate = _team()
     task = owner.post(
         "/api/scheduled-tasks",
-        json={"workspace_id": workspace["id"], "name": "每晚发布", "kind": "noop", "trigger_type": "manual"},
+        json={"workspace_id": workspace["id"], "name": "每晚发布", "kind": "workflow", "trigger_type": "manual"},
     ).json()
 
     seen = mate.get(f"/api/scheduled-tasks?workspace_id={workspace['id']}").json()[0]

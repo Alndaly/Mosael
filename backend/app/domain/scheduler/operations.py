@@ -18,6 +18,10 @@ class SchedulerDomainError(ValueError):
     pass
 
 
+class SchedulerBusy(SchedulerDomainError):
+    """上一次还没跑完。定时任务不重入(plan §13.4)。"""
+
+
 def create_scheduled_task(
     db: Session,
     *,
@@ -31,6 +35,11 @@ def create_scheduled_task(
     enabled: bool,
     payload: dict[str, Any],
 ) -> ScheduledTask:
+    from app.domain.scheduler.executors import SCHEDULED_EXECUTORS
+
+    if kind not in SCHEDULED_EXECUTORS:
+        # 此前什么都收:认不出的种类建得出来,到点排一个任务,然后永远停在"排队中"。
+        raise SchedulerDomainError(f"定时任务只能是:{' / '.join(SCHEDULED_EXECUTORS)}")
     if trigger_type == "webhook" and not payload.get("webhook_secret"):
         # 外部触发路由不走登录态,按任务级密钥鉴权。
         payload = {**payload, "webhook_secret": secrets.token_urlsafe(24)}
@@ -62,7 +71,29 @@ def update_scheduled_task(db: Session, task: ScheduledTask, changes: dict[str, A
     return task
 
 
-def run_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskRun, Any]:
+def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskRun, Any]:
+    """跑一次定时任务。**三个触发入口共用**:调度循环到点、「立即运行」、webhook。
+
+    此前三处各拼一套:调度循环查了重入、webhook 查了(借 worker 模块的私有函数)、「立即运行」
+    没查 —— 连点两下就是两次并发的同一个任务。
+    """
+    from app.domain.scheduler.executors import dispatch_scheduled_job, has_active_run
+
+    if has_active_run(db, task.id):
+        raise SchedulerBusy("这个任务上一次还没跑完")
+    run, job = _open_run(db, task)
+    dispatch_scheduled_job(db, task, run, job)
+    if task.trigger_type == "once":
+        task.enabled = False
+        task.next_run_at = None
+    task.last_run_at = now()
+    db.commit()
+    db.refresh(run)
+    db.refresh(job)
+    return run, job
+
+
+def _open_run(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskRun, Any]:
     if not task.enabled:
         raise SchedulerDomainError("Scheduled task is disabled")
 

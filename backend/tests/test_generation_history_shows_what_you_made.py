@@ -7,7 +7,7 @@
 图不会丢(它进了素材库),丢的是带着提示词、参数和花费的那条记录:回不到历史里,也不进成本核算。
 
 界面那条路一直传 session_id,所以踩不到;踩得到的是另外四个入口,它们都传 session_id=None:
-`routes/boards.py`(从画板生成)、`workers/scheduler.py`(定时任务)、
+`routes/boards.py`(从画板生成)、`domain/scheduler/executors.py`(定时任务)、
 `workflows/executors/subjobs.py`(ai_generate 节点)、`agent/confirmations.py`(智能体生成)。
 """
 

@@ -14,7 +14,7 @@ import pathlib
 
 import pytest
 
-from app.domain.board_ops import DEFAULT_SIZE, apply_board_ops
+from app.domain.boards.ops import DEFAULT_SIZE, apply_board_ops
 from app.domain.boards import BoardDomainError, normalize_canvas
 
 RATCHET = True
@@ -89,7 +89,7 @@ def test_原画布不被就地改动() -> None:
 
 
 def test_新建的默认大小两端是同一组数() -> None:
-    """RATCHET:前端 boardNodes.DEFAULT_SIZE 和后端 board_ops.DEFAULT_SIZE 必须一致。
+    """RATCHET:前端 boardNodes.DEFAULT_SIZE 和后端 boards/ops.DEFAULT_SIZE 必须一致。
 
     智能体加的项比手动加的小一圈,看起来就像两种不同的东西。这是一份**跨栈手抄的表**,
     没有编译期约束能发现它们分了岔 —— 所以在这里比对。

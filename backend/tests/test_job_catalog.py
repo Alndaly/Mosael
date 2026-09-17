@@ -42,14 +42,14 @@ def test_代码里建的每种任务都在目录里() -> None:
 
 def test_目录里没有用不到的种类() -> None:
     """前端那张表曾列着一个后端从不创建的 `scheduled`。"""
-    from app.workers.scheduler import SCHEDULABLE_KINDS
+    from app.domain.scheduler import SCHEDULED_EXECUTORS as SCHEDULABLE_KINDS
 
     used = set(_created_kinds()) | set(SCHEDULABLE_KINDS)
     assert set(JOB_KINDS) <= used, f"没人创建的种类:{set(JOB_KINDS) - used}"
 
 
 def test_定时任务能排的种类都在目录里() -> None:
-    from app.workers.scheduler import SCHEDULABLE_KINDS
+    from app.domain.scheduler import SCHEDULED_EXECUTORS as SCHEDULABLE_KINDS
 
     assert set(SCHEDULABLE_KINDS) <= set(JOB_KINDS)
 

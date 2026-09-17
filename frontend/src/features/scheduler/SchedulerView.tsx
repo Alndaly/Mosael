@@ -23,6 +23,7 @@ import {
   type Workflow,
   type Workspace,
 } from "@/api/client";
+import { useJobKinds } from "@/components/layout/jobKinds";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { relativeTime } from "@/lib/time";
@@ -45,6 +46,7 @@ import { cn } from "@/lib/utils";
  */
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
+  const { kindOf } = useJobKinds();
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
   const [menuDeleting, setMenuDeleting] = React.useState<ScheduledTask | null>(null);
@@ -153,7 +155,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                     <span className={DETAIL_INDEX_TEXT}>
                       <strong>{task.name}</strong>
                       <small>
-                        {t(`taskKind_${task.kind}` as never)} · {t(`trigger_${task.trigger_type}` as never)}
+                        {kindOf(task.kind).label} · {t(`trigger_${task.trigger_type}` as never)}
                       </small>
                     </span>
                   </button>

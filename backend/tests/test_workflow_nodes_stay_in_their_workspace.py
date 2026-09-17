@@ -33,8 +33,8 @@ EXECUTORS = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "wo
 #: 出现这些键就意味着「这个节点要去动一个已有的实体」。
 ID_KEYS = frozenset({"sequence_id", "asset_id", "asset_ids", "clip_id", "board_id", "account_id"})
 
-#: 算作"收进工作区了"的调用。
-SCOPING_CALLS = frozenset({"_sequence_in", "_asset_in"})
+#: 算作"收进工作区了"的调用。`_speech_params` 经 voices.synthesis_params 核对克隆音色的工作区。
+SCOPING_CALLS = frozenset({"_sequence_in", "_asset_in", "_speech_params"})
 
 #: 豁免:这些节点里出现的 id 键不是"去动一个已有实体"。**只减不增**,每条写明理由。
 EXEMPT = {

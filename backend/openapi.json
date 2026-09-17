@@ -28676,6 +28676,17 @@
             "title": "Line",
             "default": "all"
           },
+          "original_audio": {
+            "type": "string",
+            "enum": [
+              "duck",
+              "mute",
+              "keep",
+              "separate"
+            ],
+            "title": "Original Audio",
+            "default": "duck"
+          },
           "engine": {
             "type": "string",
             "maxLength": 40,

@@ -3,27 +3,26 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.domain.jobs import expire_worker_leases, prune_task_events, say, finish_job, set_parent_job, reset_parent_job
-from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
-from app.domain.scheduler.operations import run_scheduled_task
+from app.db.models import ScheduledTask, now
+from app.domain.jobs import expire_worker_leases, prune_task_events
+from app.domain.scheduler import SchedulerBusy, trigger_scheduled_task
+from app.domain.scheduler.executors import sync_run_states
+from app.domain.scheduler.operations import compute_next_run_at
 
 """
-Scheduler runner (plan §13.4): a background loop that claims due tasks,
-creates runs + jobs, dispatches known job kinds, and syncs run states.
-The loop only triggers and records — heavy work happens in job workers.
+Scheduler runner (plan §13.4): a background loop that finds due tasks and triggers them.
+The loop only decides *when*; what a scheduled task does lives in domain/scheduler, shared
+with the run-now route and the webhook.
 """
 
 logger = logging.getLogger(__name__)
 
 TICK_SECONDS = 5.0
-TERMINAL_STATUSES = ("succeeded", "failed")
-ACTIVE_STATUSES = ("queued", "running")
 
 _stop_event: threading.Event | None = None
 
@@ -63,9 +62,9 @@ def _loop(stop: threading.Event) -> None:
 
 
 def tick(db: Session) -> list[str]:
-    """One pass: sync run states, then claim + dispatch due tasks. Returns run ids created."""
+    """One pass: sync run states, then trigger due tasks. Returns run ids created."""
     expire_worker_leases(db)
-    _sync_run_states(db)
+    sync_run_states(db)
 
     created: list[str] = []
     due = db.scalars(
@@ -76,146 +75,12 @@ def tick(db: Session) -> list[str]:
         )
     ).all()
     for task in due:
-        if _has_active_run(db, task.id):
-            # No reentry (plan §13.4): push the schedule forward and skip.
-            from app.domain.scheduler.operations import compute_next_run_at
-
+        try:
+            run, _job = trigger_scheduled_task(db, task)
+        except SchedulerBusy:
+            # No reentry: push the schedule forward and skip.
             task.next_run_at = compute_next_run_at(task.trigger_type, task.schedule, timezone=task.timezone)
             db.commit()
             continue
-        run, job = run_scheduled_task(db, task)
-        dispatch_job_for_task(db, task, run, job)
-        if task.trigger_type == "once":
-            task.enabled = False
-            task.next_run_at = None
-        task.last_run_at = now()
-        db.commit()
         created.append(run.id)
     return created
-
-
-#: 定时任务能排的种类 —— 下面的分支各管一种。任务中心按种类显示,所以它们也都得在任务目录里。
-SCHEDULABLE_KINDS = ("workflow", "ai_generation", "render")
-
-
-def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
-    """Route known task kinds to their executors; unknown kinds stay queued."""
-    payload: dict[str, Any] = task.payload or {}
-    token = set_parent_job(job.id)
-    try:
-        if task.kind == "workflow":
-            from app.db.models import Workflow
-            from app.domain.workflows.engine import start_workflow_job
-
-            workflow = db.get(Workflow, str(payload.get("workflow_id", "")))
-            if workflow is None:
-                raise RuntimeError("任务绑定的工作流不存在")
-            # 复用 run 的 job 作为工作流 job:引擎直接在它上面推进度/终态。
-            job.payload = {**job.payload, "workflow_id": workflow.id}
-            run.status = "running"
-            db.commit()
-            start_workflow_job(db, workflow, created_by=task.owner_user_id, params=dict(payload.get("params") or {}), job=job)
-        elif task.kind == "ai_generation":
-            from app.domain.generation import create_generation_job
-            from app.domain.generation.operations import parse_source_assets
-            from app.domain.generation.runner import start_generation_thread
-            from app.domain import provider_models
-
-            kind = str(payload.get("kind", "image")).strip() or "image"
-            provider = str(payload.get("provider", "")).strip()
-            provider_profile_id = str(payload.get("provider_profile_id", "")).strip()
-            model = str(payload.get("model", "")).strip()
-            if not provider or not model:
-                default = provider_models.resolve_default(db, kind, task.owner_user_id)
-                if default is not None:
-                    provider, model = default.profile.vendor, default.model_id
-                    provider_profile_id = default.provider_profile_id
-            if not provider or not model:
-                raise RuntimeError("AI 生成任务缺少真实供应商或模型")
-            generation, _generation_job = create_generation_job(
-                db,
-                workspace_id=task.workspace_id,
-                session_id=None,
-                project_id=task.project_id,
-                created_by=task.owner_user_id,
-                provider=provider,
-                provider_profile_id=provider_profile_id or None,
-                model=model,
-                kind=kind,
-                prompt=str(payload.get("prompt", "")),
-                negative_prompt=str(payload.get("negative_prompt", "")),
-                parameters=dict(payload.get("parameters") or {}),
-                source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
-            )
-            if not finish_job(db, job, status="running"):
-                db.commit()
-                return
-            say(job, f"Dispatched generation {generation.id}")
-            run.status = "running"
-            job.result = {"generation_id": generation.id, "generation_job_id": generation.job_id}
-            db.commit()
-            start_generation_thread(generation.id)
-        elif task.kind == "render":
-            from app.domain.render import start_export
-
-            sequence_id = str(payload.get("sequence_id", ""))
-            export_job = start_export(db, sequence_id, created_by=task.owner_user_id)
-            if not finish_job(db, job, status="running"):
-                db.commit()
-                return
-            say(job, f"Dispatched export {export_job.id}")
-            run.status = "running"
-            job.result = {"export_job_id": export_job.id}
-            db.commit()
-        else:
-            say(job, f"No executor for task kind {task.kind}")
-            db.commit()
-    except Exception as exc:
-        if not finish_job(db, job, status="failed", error=str(exc)[:500]):
-            db.commit()
-            return
-        job.error = str(exc)[:500]
-        run.status = "failed"
-        run.error = str(exc)[:500]
-        run.finished_at = now()
-        db.commit()
-    finally:
-        reset_parent_job(token)
-
-
-def _has_active_run(db: Session, task_id: str) -> bool:
-    active = db.scalar(
-        select(ScheduledTaskRun.id)
-        .join(Job, Job.id == ScheduledTaskRun.job_id, isouter=True)
-        .where(
-            ScheduledTaskRun.scheduled_task_id == task_id,
-            ScheduledTaskRun.status.in_(ACTIVE_STATUSES),
-        )
-        .limit(1)
-    )
-    return active is not None
-
-
-def _sync_run_states(db: Session) -> None:
-    """Copy terminal states from dispatched child jobs onto their runs."""
-    runs = db.scalars(
-        select(ScheduledTaskRun).where(ScheduledTaskRun.status.in_(ACTIVE_STATUSES))
-    ).all()
-    for run in runs:
-        if run.job_id is None:
-            continue
-        job = db.get(Job, run.job_id)
-        if job is None:
-            continue
-        child_job_id = (job.result or {}).get("generation_job_id") or (job.result or {}).get("export_job_id")
-        db.refresh(job)
-        source = job if job.status in TERMINAL_STATUSES else (db.get(Job, child_job_id) if child_job_id else job)
-        if source is not None and source.status in TERMINAL_STATUSES:
-            if source is not job and not finish_job(db, job, status=source.status, error=source.error):
-                source = job
-            run.status = source.status
-            run.error = source.error
-            run.finished_at = now()
-            job.status = source.status
-            say(job, source.message)
-    db.commit()

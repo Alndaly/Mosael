@@ -116,7 +116,7 @@ def gateway_complete(
     env = {**os.environ}
     if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
-    env = _proxy_env(env)
+    env = proxy_env(env)
     process = popen_text(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
@@ -271,7 +271,8 @@ def use_proxy_source(fn: "Callable[[dict[str, str]], dict[str, str]]") -> None:
     _proxy_source = fn
 
 
-def _proxy_env(base: dict[str, str]) -> dict[str, str]:
+def proxy_env(base: dict[str, str]) -> dict[str, str]:
+    """子进程的环境变量加上当前的出网代理。起 sidecar 的地方(对话、登录)都走它。"""
     return _proxy_source(base)
 
 
@@ -355,7 +356,7 @@ def _run_pi(
     if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     # 出站代理:Node 默认不认这几个变量,sidecar 自己会装 EnvHttpProxyAgent 来读(见 proxy.ts)。
-    env = _proxy_env(env)
+    env = proxy_env(env)
     process = popen_text(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
@@ -507,7 +508,7 @@ def compact_session(
     env = {**os.environ}
     if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
-    env = _proxy_env(env)
+    env = proxy_env(env)
     process = popen_text(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
@@ -557,7 +558,7 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
     env = {**os.environ}
     if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
-    env = _proxy_env(env)
+    env = proxy_env(env)
     process = popen_text(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )

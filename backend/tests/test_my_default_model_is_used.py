@@ -107,3 +107,54 @@ def test_every_default_lookup_names_the_person() -> None:
             if len(node.args) < 3 and not named:
                 offenders.append(f"{path}:{node.lineno}")
     assert not offenders, "这些地方取默认模型时没说清「谁的默认」:\n  " + "\n  ".join(offenders)
+
+
+class Test生成不点名模型时用我的默认:
+    """画板、定时任务、智能体都可能不点名模型。此前"用默认"这段在三个入口里各抄一份,
+    现在在生成漏斗里(generation.operations._default_model),四个入口同一个答案。"""
+
+    def _create(self, db, workspace_id: str, user_id: str | None):
+        from app.domain.generation import create_generation_job
+
+        return create_generation_job(
+            db, workspace_id=workspace_id, session_id=None, project_id=None, created_by=user_id,
+            provider="", model="", kind="image", prompt="p", negative_prompt="", parameters={}, source_assets=[],
+        )
+
+    def test_用我在这种能力上设的默认(self) -> None:
+        client = fresh_client()
+        workspace_id = client.post("/api/workspaces", json={"name": "W2"}).json()["id"]
+        with SessionLocal() as db:
+            profile = add_provider(db, name="百炼", vendor="alibaba", base_url="", api_key="k",
+                                   model="qwen-image", capability_ids=["image"])
+            db.commit()
+            me = db.query(User).order_by(User.created_at).first().id
+            generation, _job = self._create(db, workspace_id, me)
+            assert (generation.provider, generation.model, generation.provider_profile_id) == ("alibaba", "qwen-image", profile.id)
+
+    def test_没有默认就直说_不替我挑(self) -> None:
+        import pytest
+
+        from app.domain.generation.operations import GenerationDomainError
+
+        client = fresh_client()
+        workspace_id = client.post("/api/workspaces", json={"name": "W2"}).json()["id"]
+        with SessionLocal() as db:
+            add_provider(db, name="百炼", vendor="alibaba", base_url="", api_key="k",
+                         model="qwen-image", capability_ids=["image"], make_default=False)
+            db.commit()
+            me = db.query(User).order_by(User.created_at).first().id
+            with pytest.raises(GenerationDomainError, match="还没有可用的生成模型"):
+                self._create(db, workspace_id, me)
+
+    def test_入口不再各自兜底(self) -> None:
+        """棘轮:resolve_default 只在"解析默认"的那几处出现,生成的入口不该再自己调它。"""
+        import pathlib
+
+        app = pathlib.Path(__file__).resolve().parents[1] / "app"
+        for relative in ("api/routes/boards.py", "domain/scheduler/executors.py"):
+            assert "resolve_default" not in (app / relative).read_text(encoding="utf-8"), relative
+        confirmations = (app / "domain/agent/confirmations.py").read_text(encoding="utf-8")
+        start = confirmations.index('if confirmation.tool in ("generate_image", "generate_video")')
+        end = confirmations.index("if confirmation.tool", start + 10)
+        assert "resolve_default" not in confirmations[start:end]

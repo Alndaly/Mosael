@@ -21,7 +21,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from app.ai.sidecar.adapters import _proxy_env, pi_sidecar_command
+from app.ai.sidecar.adapters import proxy_env, pi_sidecar_command
 from app.core.child_process import popen_text
 
 logger = logging.getLogger(__name__)
@@ -190,7 +190,7 @@ def start_login(
     if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     # 授权换令牌走的是同一条出站链路 —— 被判地区不支持时,这一步和后面的对话请求一起被拒。
-    env = _proxy_env(env)
+    env = proxy_env(env)
     process = popen_text(
         [node, sidecar],
         stdin=subprocess.PIPE,

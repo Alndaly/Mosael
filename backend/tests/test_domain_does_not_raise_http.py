@@ -5,7 +5,7 @@
 那是把倒置换成了另一个更糟的倒置。
 
 **这条测试是补写的,因为它真的破过。** `domain/notes.py` 曾直接抛十二处 HTTPException,
-代价当场就显形在两个地方:`domain/boards.py` 校验画板引用的文档时要 catch 它,
+代价当场就显形在两个地方:`domain/boards/canvas.py` 校验画板引用的文档时要 catch 它,
 `workflows/executors/knowledge.py` 的两个节点也要。当时 `domain/permissions.py` 的文档字符串
 还写着"领域层此前 HTTPException 是 0 处" —— 措辞守不住不变量。
 

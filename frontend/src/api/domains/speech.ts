@@ -8,6 +8,12 @@ export type Transcript = components["schemas"]["TranscriptOut"];
 export type TtsEngine = components["schemas"]["TtsEngineOut"];
 export type TtsConfig = components["schemas"]["TtsConfigOut"];
 export type SeparationEngine = components["schemas"]["SeparationEngineOut"];
+/** 字幕配音之后原声怎么办。档位由后端声明(domain/voices/original_audio)。 */
+export type OriginalAudio = components["schemas"]["SubtitleDubRequest"]["original_audio"];
+export const ORIGINAL_AUDIO_MODES = ["duck", "mute", "keep", "separate"] as const satisfies readonly OriginalAudio[];
+// 后端多了一档而这里没列,编译就过不去。
+const allOriginalAudioModesListed: Exclude<OriginalAudio, (typeof ORIGINAL_AUDIO_MODES)[number]> extends never ? true : never = true;
+void allOriginalAudioModesListed;
 
 export function listAsrModels(): Promise<AsrModel[]> {
   return api<AsrModel[]>("/api/asr/models");
@@ -157,6 +163,7 @@ export function dubSubtitles(
     clip_ids: string[];
     match_duration?: boolean;
     line?: "all" | "first" | "last";
+    original_audio?: OriginalAudio;
     engine?: string;
     voice_id?: string | null;
     clone_engine?: string;

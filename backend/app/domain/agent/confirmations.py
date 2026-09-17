@@ -352,6 +352,10 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
         clip_ids = payload.get("clip_ids")
         if clip_ids is not None and not isinstance(clip_ids, list):
             raise ConfirmationError("clip_ids 要是一个数组(留空表示整条字幕轨)")
+        from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, ORIGINAL_AUDIO_MODES
+
+        if str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO) not in ORIGINAL_AUDIO_MODES:
+            raise ConfirmationError(f"original_audio 只能是 {' / '.join(ORIGINAL_AUDIO_MODES)}")
     if tool == "generate_podcast":
         mode = str(payload.get("mode") or "summarize")
         if mode not in {"summarize", "read", "research"}:
@@ -405,7 +409,7 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
 
     if tool == "edit_board":
         from app.db.models import Board
-        from app.domain.board_ops import BOARD_OP_KINDS, apply_board_ops
+        from app.domain.boards.ops import BOARD_OP_KINDS, apply_board_ops
         from app.domain.boards import BoardDomainError, normalize_canvas
 
         board = db.get(Board, str(payload.get("board_id", "")))
@@ -464,6 +468,15 @@ def _subtitle_cues(db: Session, tool: str, payload: dict[str, Any]) -> int | Non
         return None
 
 
+#: 卡上说清原声会怎样 —— 静音和"只去掉人声"都会改变成片的样子,用户得在批准前知道。
+_ORIGINAL_AUDIO_SUMMARY = {
+    "duck": "配音说话时原声压低",
+    "mute": "原声静音",
+    "keep": "原声不动",
+    "separate": "原声只去掉人声、留背景音(本机没有分离引擎时整轨静音)",
+}
+
+
 def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = None, *, subtitle_cues: int | None = None) -> str:
     if tool == "edit_timeline":
         kinds = [operation.get("kind", "?") for operation in payload.get("operations", [])]
@@ -483,7 +496,10 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
         else:
             scope = f"整条字幕轨({subtitle_cues} 条字幕)"
         fit = ",并变速压回原段落长度" if payload.get("match_duration", True) else ""
-        return f"给{scope}配音{fit}(新开一条配音轨,原声不动)"
+        from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
+
+        original = _ORIGINAL_AUDIO_SUMMARY.get(str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO), "")
+        return f"给{scope}配音{fit}(配到一条单独的配音轨;{original})"
     if tool == "separate_audio":
         #: 卡上说清**产出什么、原件动不动、要多久** —— 它是"这台机器忙很久"那一档。
         return "把这份素材拆成「人声」和「背景音」两份新素材(原素材不动;本机跑模型,长素材会很慢)"
@@ -698,27 +714,16 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         from app.domain.generation import create_generation_job
         from app.domain.generation.operations import parse_source_assets
         from app.domain.generation.runner import start_generation_thread
-        from app.domain import provider_models
         kind = "image" if confirmation.tool == "generate_image" else "video"
-        provider = str(payload.get("provider", "")).strip()
-        provider_profile_id = str(payload.get("provider_profile_id", "")).strip()
-        model = str(payload.get("model", "")).strip()
-        if not provider or not model:
-            default = provider_models.resolve_default(db, kind, actor)
-            if default is not None:
-                provider, model = default.profile.vendor, default.model_id
-                provider_profile_id = default.provider_profile_id
-        if not provider or not model:
-            raise RuntimeError("没有配置可用于生成的真实供应商和模型")
         generation, job = create_generation_job(
             db,
             workspace_id=confirmation.workspace_id,
             session_id=None,
             project_id=payload.get("project_id"),
             created_by=actor,
-            provider=provider,
-            provider_profile_id=provider_profile_id or None,
-            model=model,
+            provider=str(payload.get("provider", "")),
+            provider_profile_id=str(payload.get("provider_profile_id", "")).strip() or None,
+            model=str(payload.get("model", "")),
             kind=kind,
             prompt=str(payload["prompt"]),
             negative_prompt=str(payload.get("negative_prompt", "")),
@@ -757,20 +762,15 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         )
         return {"job_id": job.id}
     if confirmation.tool == "dub_subtitles":
+        from app.domain.voices.engine_catalog import CLONE_ENGINE, synthesis_params
+        from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
         from app.domain.voices.subtitle_dub import start_subtitle_dub, subtitle_clip_ids
 
         sequence_id = str(payload.get("sequence_id") or "")
         clip_ids = [str(one) for one in (payload.get("clip_ids") or []) if str(one).strip()]
         if not clip_ids:
             clip_ids = subtitle_clip_ids(db, sequence_id, str(payload.get("track_id") or ""))
-        engine = str(payload.get("engine") or "").strip() or "clone"
-        synthesis: dict[str, Any] = {"engine": engine, "speed": float(payload.get("speed") or 1.0)}
-        if engine == "clone":
-            synthesis["voice_id"] = str(payload.get("voice_id") or "")
-        else:
-            synthesis["engine_voice"] = str(payload.get("engine_voice") or "")
-            synthesis["engine_voice_resource"] = str(payload.get("engine_voice_resource") or "")
-            synthesis["workspace_id"] = confirmation.workspace_id
+        engine = str(payload.get("engine") or "").strip() or CLONE_ENGINE
         job = start_subtitle_dub(
             db,
             sequence_id=sequence_id,
@@ -778,7 +778,15 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
             match_duration=bool(payload.get("match_duration", True)),
             line=str(payload.get("line") or "all"),
             created_by=actor,
-            synthesis=synthesis,
+            synthesis=synthesis_params(
+                db,
+                engine=engine,
+                voice=str(payload.get("voice_id" if engine == CLONE_ENGINE else "engine_voice") or ""),
+                speed=float(payload.get("speed") or 1.0),
+                user_id=actor,
+                workspace_id=confirmation.workspace_id,
+            ),
+            original_audio=str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO),
         )
         return {"job_id": job.id}
     if confirmation.tool == "generate_podcast":
@@ -849,7 +857,7 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         return {"workflow_id": workflow.id, "nodes": len(new_graph.get("nodes", []))}
     if confirmation.tool == "edit_board":
         from app.db.models import Board
-        from app.domain.board_ops import apply_board_ops
+        from app.domain.boards.ops import apply_board_ops
         from app.domain.boards import update_board
 
         board = db.get(Board, str(payload["board_id"]))

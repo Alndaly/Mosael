@@ -925,7 +925,7 @@ def test_连过来的图片会让模型看着写() -> None:
 
 def test_连过来的_heic_会复用视觉分析的兼容图片() -> None:
     """画布与素材分析必须共享同一条归一化 Seam，不能把 HEIC 原字节伪装成 JPEG。"""
-    from app.api.routes.boards import _look_at
+    from app.domain.boards.actions import look_at as _look_at
     from app.core.db import SessionLocal
 
     client = fresh_client()
@@ -948,7 +948,7 @@ def test_连过来的_heic_会复用视觉分析的兼容图片() -> None:
 
 def test_连过来的_webp_会保留真实_mime() -> None:
     """浏览器原生格式不需要转码，但 MIME 也不能被非 PNG = JPEG 的旧规则改错。"""
-    from app.api.routes.boards import _look_at
+    from app.domain.boards.actions import look_at as _look_at
     from app.core.db import SessionLocal
 
     client = fresh_client()
@@ -979,7 +979,7 @@ def test_视频给画面_音频给转写_都不做多余的模型调用() -> Non
     """
     from unittest.mock import patch as mock_patch
 
-    from app.api.routes.boards import _look_at
+    from app.domain.boards.actions import look_at as _look_at
     from app.core.db import SessionLocal
 
     client = fresh_client()
@@ -1000,9 +1000,9 @@ def test_视频给画面_音频给转写_都不做多余的模型调用() -> Non
         assert materials == []
 
         # 没转写过的音频:跳过,不报错、也不顺手起任务。
-        with mock_patch("app.domain.analysis.service._asset_transcript_text", return_value=None):
+        with mock_patch("app.domain.analysis.service.asset_transcript_text", return_value=None):
             assert _look_at(db, ws, [audio_id]) == ([], [])
-        with mock_patch("app.domain.analysis.service._asset_transcript_text", return_value="他说了这些"):
+        with mock_patch("app.domain.analysis.service.asset_transcript_text", return_value="他说了这些"):
             parts, materials = _look_at(db, ws, [audio_id])
         assert parts == []
         assert materials and "他说了这些" in materials[0]
@@ -1016,7 +1016,7 @@ def test_视频给画面_音频给转写_都不做多余的模型调用() -> Non
 
 def test_够不着的素材一律跳过() -> None:
     """不存在的、别的工作区的 —— 一律当作没有,而不是报错让整次写作失败。"""
-    from app.api.routes.boards import _look_at
+    from app.domain.boards.actions import look_at as _look_at
     from app.core.db import SessionLocal
 
     client = fresh_client()
@@ -1123,7 +1123,7 @@ def test_截取范围写错时当场拒绝_而不是让_ffmpeg_去发现() -> No
 
     from app.core.db import SessionLocal
     from app.db.models import Asset
-    from app.domain.boards_trim import TrimError, start_trim
+    from app.domain.boards.trim import TrimError, start_trim
 
     client = fresh_client()
     ws = _workspace(client)

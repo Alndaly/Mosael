@@ -33,16 +33,7 @@ from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
-# 这里重新导出,是因为它们此前就叫这些名字(测试、mcp_server 的注释都指着这里)。
-from app.domain.agent.tool_manifest import (  # noqa: F401  (re-exported)
-    PLUGIN_TOOL_PREFIX,
-    ToolSpec,
-    _PLUGIN_META_TOOLS,
-    _plugin_tool_specs,
-    _registry,
-    agent_tool_name,
-    agent_tool_specs,
-)
+from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_name, agent_tool_specs, tool_registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent-tools"])
@@ -148,50 +139,35 @@ def invoke_agent_tool(
         ensure_workspace_member(db, user, workspace_id)
     if name.startswith(PLUGIN_TOOL_PREFIX):
         return _invoke_plugin_tool(db, name, body.arguments, user.id, workspace_id)
-    registry = _registry()
+    registry = tool_registry()
     fn = getattr(registry, name, None)
     if fn is None or not callable(fn) or name.startswith("_"):
         raise HTTPException(status_code=404, detail=f"Tool {name} not found")
 
-    # 工具体回连本 API,所以要带调用方的凭据 —— 按 context 绑定,因为同一个进程同时在跑很多轮。
-    #
-    # 用**调用方这次带进来的那份**,不再另铸一个。此前每次调用 mint_tool_token 建一行
-    # AuthSession,而 finally 里只重置 contextvar、行没人删 —— AuthSession 没有过期列,于是
-    # 一次十步的任务在库里留下十个永久的全权凭据。turn 级令牌那边早就发现并撤销了(见
-    # host.py 结尾),工具级这边按更高的频次把它长了回来。调用方手里那份本来就是有效的、
-    # 而且随 turn 结束被撤销,没有任何理由再复制一份出来。
-    reset = registry.set_api_token(token)
-    # The tool bodies call back over loopback, and this process knows its own address. Left to
-    # its import-time default the base URL is 127.0.0.1:8800, which is right only by
-    # coincidence — any other port and every tool answers 401 or reaches the wrong instance.
     from app.core.config import settings
 
-    base_reset = registry.set_api_base(f"http://{settings.backend_host}:{settings.backend_port}")
-    requested_by_reset = registry.set_requested_by(body.requested_by) if body.requested_by else None
     # 这次调用属于哪次对话:从**令牌**取,不从参数取。turn 令牌铸造时就带着它
     # (core/security.mint_service_session),而参数是调用方自己填的 —— 填上别人的会话 id 就能把
-    # 计划写进别人的对话。确认卡的归属同理,但它在 routes/confirmations 里直接读自己的令牌,
-    # 不经过这里。
+    # 计划写进别人的对话。
     auth = find_session(db, token)
-    agent_session_id = auth.agent_session_id if auth is not None else None
-    session_reset = registry.set_session_id(agent_session_id) if agent_session_id else None
     arguments, dropped = _fit_arguments(fn, body.arguments)
     if dropped:
         # 丢了什么要留痕:静默容错在排查时会变成"参数明明传了却没生效"。
         logger.info("tool %s: dropped unsupported arguments %s", name, dropped)
-    try:
-        result = fn(**arguments)
-    except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
-        accepted = ", ".join(_accepted_names(fn)) or "(无)"
-        raise HTTPException(status_code=422, detail=f"{exc};该工具接受的参数:{accepted}") from exc
-    except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
-        logger.warning("tool %s failed: %s", name, exc)
-        return {"error": str(exc)[:500]}
-    finally:
-        registry._API_TOKEN.reset(reset)
-        registry._API_BASE.reset(base_reset)
-        if requested_by_reset is not None:
-            registry._REQUESTED_BY.reset(requested_by_reset)
-        if session_reset is not None:
-            registry._SESSION_ID.reset(session_reset)
+    # 工具体回连本 API,所以要带调用方的凭据 —— 用**调用方这次带进来的那份**,不另铸一个
+    # (此前每次调用铸一行永久的 AuthSession)。地址用本进程自己的,不靠导入期默认的 8800。
+    with registry.calling_as(
+        token=token,
+        api_base=f"http://{settings.backend_host}:{settings.backend_port}",
+        requested_by=body.requested_by,
+        session_id=(auth.agent_session_id if auth is not None else None) or "",
+    ):
+        try:
+            result = fn(**arguments)
+        except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
+            accepted = ", ".join(_accepted_names(fn)) or "(无)"
+            raise HTTPException(status_code=422, detail=f"{exc};该工具接受的参数:{accepted}") from exc
+        except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
+            logger.warning("tool %s failed: %s", name, exc)
+            return {"error": str(exc)[:500]}
     return {"result": result}

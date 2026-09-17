@@ -35,8 +35,6 @@ class OptionContext:
 Option = dict[str, str]
 Source = Callable[[Session, OptionContext], list[Option]]
 
-#: 「克隆音色」在引擎清单里的 id。留空也按它算 —— 和执行体一致。
-CLONE_ENGINE = "clone"
 
 
 def _speech_engines(db: Session, ctx: OptionContext) -> list[Option]:
@@ -46,7 +44,7 @@ def _speech_engines(db: Session, ctx: OptionContext) -> list[Option]:
     它一次产出整段对话,不是"念一句话"的那种。克隆这一项总在:没装好时它的音色清单是空的,
     选择本身仍然成立。
     """
-    from app.domain.voices.engine_catalog import PODCAST_ENGINE, describe_engines
+    from app.domain.voices.engine_catalog import CLONE_ENGINE, PODCAST_ENGINE, describe_engines
 
     options: list[Option] = [{"value": CLONE_ENGINE, "label": t("wfSpeechEngineClone", ctx.locale)}]
     for engine in describe_engines(ctx.user_id):
@@ -60,7 +58,7 @@ def _speech_engines(db: Session, ctx: OptionContext) -> list[Option]:
 def _speech_voices(db: Session, ctx: OptionContext) -> list[Option]:
     """这个引擎下能用的音色。克隆 → 工作区音色库;其余 → 那个引擎自己的目录。"""
     from app.db.models import Voice
-    from app.domain.voices.engine_catalog import list_engine_voices
+    from app.domain.voices.engine_catalog import CLONE_ENGINE, list_engine_voices
 
     engine = ctx.parent.strip() or CLONE_ENGINE
     if engine == CLONE_ENGINE:

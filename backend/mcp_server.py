@@ -13,6 +13,7 @@ Env:  MOSAEL_API   (default http://127.0.0.1:8800)
 from __future__ import annotations
 
 from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+import contextlib
 import contextvars
 import os
 from typing import Any
@@ -287,6 +288,22 @@ _SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_sessio
 
 def set_session_id(session_id: str) -> contextvars.Token:
     return _SESSION_ID.set(session_id)
+
+
+@contextlib.contextmanager
+def calling_as(*, token: str, api_base: str, requested_by: str = "", session_id: str = ""):
+    """在进程内以某个调用方的身份跑工具(pi sidecar 那条路)。四个上下文变量一起设、一起还原 ——
+    调用方不必知道这里有几个、叫什么。"""
+    resets = [(_API_TOKEN, _API_TOKEN.set(token)), (_API_BASE, _API_BASE.set(api_base))]
+    if requested_by:
+        resets.append((_REQUESTED_BY, _REQUESTED_BY.set(requested_by)))
+    if session_id:
+        resets.append((_SESSION_ID, _SESSION_ID.set(session_id)))
+    try:
+        yield
+    finally:
+        for var, reset in reversed(resets):
+            var.reset(reset)
 
 
 def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
@@ -1693,6 +1710,7 @@ def dub_subtitles(
     voice_id: str = "",
     engine: str = "",
     engine_voice: str = "",
+    original_audio: str = "duck",
     workspace_id: str = "",
 ) -> dict[str, Any]:
     """Confirmation required: speak subtitle cues aloud onto a new dub track.
@@ -1707,6 +1725,10 @@ def dub_subtitles(
     cue to speak: all / first / last. Voice: either voice_id (a cloned voice from the
     user's voice library) or engine + engine_voice (a stock voice). The dub lands on
     its own audio track, so the user undoes the whole thing by deleting that one track.
+    original_audio says what happens to the existing sound once the dub is in: duck (lowered
+    while the dub speaks — narration over ambience), mute (translated dubbing: two voices at
+    once is wrong), keep, or separate (drop only the original voice, keep the music; falls back
+    to mute when no separation engine is installed).
     Do NOT use to create the subtitles themselves — use edit_timeline's insert_text_clip.
     """
     confirmation = _post(
@@ -1724,6 +1746,7 @@ def dub_subtitles(
                 "voice_id": voice_id,
                 "engine": engine,
                 "engine_voice": engine_voice,
+                "original_audio": original_audio,
             },
         },
     )

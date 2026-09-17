@@ -177,7 +177,7 @@ def build_messages(
     return [{"role": "user", "content": content}]
 
 
-def _asset_transcript_text(db: Session, asset_id: str) -> str | None:
+def asset_transcript_text(db: Session, asset_id: str) -> str | None:
     """把该素材已有转写拼成一段纯文本(按时间顺序);没有则 None。"""
     from app.domain.transcripts.operations import get_transcript_for_asset
 
@@ -362,7 +362,7 @@ def analyze_asset(
         actual_model = model or provider_models.model_id_for(db, profile, "chat")
         return {"answer": answer, "provider": profile.vendor, "model": actual_model, "mode": "image", "frames": 1}
 
-    transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂
+    transcript_text = asset_transcript_text(db, asset.id)  # 转写两条路都喂
     oauth_gateway = resolved_connection is not None and surface == "automation" and resolved_connection.auth_type == "oauth"
     if mode == "native" and oauth_gateway:
         raise AnalysisError("当前 OAuth 模型的自动化 Gateway 不支持原生视频，请改用抽帧模式")

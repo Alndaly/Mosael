@@ -12,7 +12,7 @@ from app.domain import provider_models
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
 from app.domain.providers import capability_ids_for_vendor
 
-from .provider_profiles import _require_profile
+from app.domain.permissions import require_own_profile
 
 router = APIRouter(tags=["settings"])
 
@@ -89,7 +89,7 @@ def set_provider_default(
     model = None
     model_id = body.model.strip()
     if body.provider_profile_id and model_id:
-        profile = _require_profile(db, body.provider_profile_id, user)
+        profile = require_own_profile(db, user, body.provider_profile_id)
         model = provider_models.get_model(db, body.provider_profile_id, model_id)
         # 能力校验放在建行之前:先建再拒会在库里留下一行没人要的模型。
         # 已有行按它自己的能力判,没有行按 vendor 预设判(新行正是这么回落的)。

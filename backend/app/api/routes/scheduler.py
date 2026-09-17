@@ -14,8 +14,13 @@ from app.api.schemas import (
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import ScheduledTask, ScheduledTaskRun
-from app.domain.scheduler import create_scheduled_task, run_scheduled_task, update_scheduled_task
-from app.domain.scheduler.operations import SchedulerDomainError
+from app.domain.scheduler import (
+    SchedulerBusy,
+    SchedulerDomainError,
+    create_scheduled_task,
+    trigger_scheduled_task,
+    update_scheduled_task,
+)
 
 router = APIRouter(tags=["scheduler"])
 
@@ -88,12 +93,11 @@ def run_task(task_id: str, db: DbSession, user: CurrentUser) -> RunScheduledTask
     task = _get_task(db, task_id)
     ensure_workspace_perm(db, user, task.workspace_id, "schedule")
     try:
-        run, job = run_scheduled_task(db, task)
+        run, job = trigger_scheduled_task(db, task)
+    except SchedulerBusy as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SchedulerDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    from app.workers.scheduler import dispatch_job_for_task
-
-    dispatch_job_for_task(db, task, run, job)
     return RunScheduledTaskResponse(
         task=ScheduledTaskOut.model_validate(task),
         run=ScheduledTaskRunOut.model_validate(run),

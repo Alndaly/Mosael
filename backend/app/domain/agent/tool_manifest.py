@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import BaseModel
 
 
-def _registry():
+def tool_registry():
     # Imported lazily: mcp_server sits at the repo root rather than inside the app package, and
     # importing it at module load would make the API's startup depend on the MCP library.
     import mcp_server
@@ -45,7 +45,7 @@ class ToolSpec(BaseModel):
 #: 展开成一等公民之后,这两个元工具就是同一份东西的第二条路径 —— 留着只会让模型在
 #: "直接调 plugin__x__y" 和 "先 list 再 invoke" 之间摇摆,而后者多烧一轮还更容易填错参数。
 #: 它们仍然留在 mcp_server.py 里:走 MCP 协议的客户端(Claude CLI 等)自己不做展开,靠它们发现。
-_PLUGIN_META_TOOLS = frozenset({"list_plugin_tools", "invoke_plugin_tool"})
+PLUGIN_META_TOOLS = frozenset({"list_plugin_tools", "invoke_plugin_tool"})
 
 PLUGIN_TOOL_PREFIX = "plugin__"
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_]+")
@@ -126,7 +126,7 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     分成两个函数而不是让水位那边再列一遍:第二份清单会漂移,而漂移后的水位仍然看起来像
     测量结果(这条路由的文档注释里记着上一次漂移的代价:子智能体静默少了十九个工具)。
     """
-    registry = _registry()
+    registry = tool_registry()
     tools = asyncio.run(registry.mcp.list_tools())
     specs = [
         ToolSpec(
@@ -145,6 +145,6 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
             read_only=tool.name in registry.READ_ONLY_TOOLS,
         )
         for tool in tools
-        if tool.name not in _PLUGIN_META_TOOLS
+        if tool.name not in PLUGIN_META_TOOLS
     ]
     return specs + _plugin_tool_specs(db, user_id)

@@ -10720,6 +10720,12 @@ export interface components {
              */
             line: string;
             /**
+             * Original Audio
+             * @default duck
+             * @enum {string}
+             */
+            original_audio: "duck" | "mute" | "keep" | "separate";
+            /**
              * Engine
              * @default clone
              */

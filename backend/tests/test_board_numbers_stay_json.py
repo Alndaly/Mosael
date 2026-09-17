@@ -40,7 +40,7 @@ def test_正常的数照旧() -> None:
 def test_算子那一侧同样挡() -> None:
     """智能体走的是 apply_board_ops,它有自己的 _number —— 两处都要挡,否则挡住的那条路
     只是把入口挪了一下。"""
-    from app.domain.board_ops import apply_board_ops
+    from app.domain.boards.ops import apply_board_ops
     from app.domain.boards import BoardDomainError as Err
 
     with pytest.raises(Err):

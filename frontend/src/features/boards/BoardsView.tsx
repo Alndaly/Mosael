@@ -262,7 +262,7 @@ function BoardDetail({
   const showMinimap = minimapMode === "on";
   const [canvas, setCanvas] = React.useState<Canvas | null>(board.canvas);
   const [picking, setPicking] = React.useState<{ kind: MediaKind; place: (assetId: string) => void } | null>(null);
-  //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards.py),
+  //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards/canvas.py),
   //: 所以不能像文档那样先落一个空节点再补 —— 那种节点存不下去。
   const [pickingScene, setPickingScene] = React.useState(false);
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。

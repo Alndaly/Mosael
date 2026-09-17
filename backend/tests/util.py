@@ -201,3 +201,15 @@ def acting_as(db, user_id: str | None = None):
         yield actor
     finally:
         jobs_domain.reset_parent_job(token)
+
+
+def make_voice(workspace_id: str, name: str = "测试音色") -> str:
+    """在这个工作区的配音库里建一条克隆音色,返回 id。克隆那条路会核对音色的工作区。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Voice
+
+    with SessionLocal() as db:
+        voice = Voice(workspace_id=workspace_id, name=name, reference_key="voices/ref.wav")
+        db.add(voice)
+        db.commit()
+        return voice.id

@@ -57,13 +57,13 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 钥匙只归 provider_credentials 域写 —— 「谁的钥匙」这个问题只该有一处答案。
     "ProviderCredential": ("app/domain/provider_credentials.py", "app/domain/provider_auth.py"),
     "ScheduledTask": ("app/domain/scheduler/",),
-    "ScheduledTaskRun": ("app/domain/scheduler/", "app/workers/scheduler.py"),
+    "ScheduledTaskRun": ("app/domain/scheduler/",),
     "Workflow": ("app/domain/workflows/",),
     "WorkflowRevision": ("app/domain/workflows/",),
     "Scene3D": ("app/domain/scenes.py",),
     "Scene3DRevision": ("app/domain/scenes.py",),
     "Scene3DModel": ("app/domain/scenes.py",),
-    "Board": ("app/domain/boards.py",),
+    "Board": ("app/domain/boards/",),
     "Note": ("app/domain/notes.py",),
     "NoteRevision": ("app/domain/notes.py",),
     # 发布
