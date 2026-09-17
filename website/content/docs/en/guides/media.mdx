@@ -86,12 +86,19 @@ Audio and video assets have two extra items in their More and right-click menus.
 assets and leave the original untouched**; they run as background tasks you can follow in the task
 panel. Right-clicking a clip in the editor offers the same two, applied to the asset behind the clip.
 
-- **Reduce noise…**: pick a method and a strength. *Built-in noise reduction* removes steady noise
-  such as air conditioning, fans and hum, leaves music alone and needs nothing installed; it measures
-  how loud the noise is before it acts, so one strength suits both faint and heavy hiss.
-  *Voice isolation* keeps only the voice and also handles crowds and street noise, but **the
-  background music goes with it**, and it needs a separation engine installed. A cleaned video keeps
-  its picture; only the sound changes.
+- **Reduce noise…**: pick a method and a strength. A cleaned video keeps its picture; only the sound
+  changes. The methods trade off differently:
+
+  | Method | Good for | Music | Setup |
+  | --- | --- | --- | --- |
+  | Built-in | Steady noise: air conditioning, fans, hum | Untouched | None |
+  | DeepFilterNet | Speech-led recordings, including keyboards, dishes and chatter; the most natural voice | Removed | Download once under Settings → On-device engines → Noise reduction (about 30 MB) |
+  | RNNoise | Same, lighter and not as good as DeepFilterNet | Lowered | None |
+  | Voice isolation | Only the voice, nothing else | Removed | Install a separation engine first |
+
+  Built-in is the default, because "reduce noise" rarely means "and drop the music". It measures how
+  loud the noise is before it acts, so one strength suits faint and heavy hiss alike; for speech-led
+  material DeepFilterNet does noticeably better.
 - **Separate voice and background**: split into a voice asset and a background asset. The background
   is everything except the voice: music, ambience, effects. The engine runs on this machine and must
   be installed first under Settings → On-device engines → Voice separation; a long asset takes many

@@ -1,5 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Settings2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { denoiseAsset, listDenoiseEngines, type DenoiseStrength } from "@/api/client";
@@ -8,7 +9,7 @@ import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
-import { gotoJob } from "@/lib/deepLink";
+import { gotoJob, gotoSettings } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 
 const STRENGTH_LABELS: Record<DenoiseStrength, MessageKey> = {
@@ -87,18 +88,40 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                   selected ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]" : "border-border hover:bg-secondary",
                 )}
               >
-                <span className="text-ui-sm font-medium">{one.label}</span>
-                {/* 会去掉音乐的那种**必须说出来** —— 用户说"降噪"时没想把配乐也拿掉。 */}
-                <span className="text-ui-xs leading-[1.45] text-muted-foreground">
-                  {!one.ready
-                    ? t("denoiseEngineUnready")
-                    : one.removes_music
-                      ? t("denoiseRemovesMusic")
-                      : t("denoiseKeepsMusic")}
+                <span className="flex flex-wrap items-center gap-1.5 text-ui-sm font-medium">
+                  {one.label}
+                  {/* 会去掉音乐的**单独标出来** —— 用户说"降噪"时没想把配乐也拿掉,而说明文字
+                      是会被略读的。 */}
+                  {one.removes_music && (
+                    <span className="rounded-sm bg-[color-mix(in_oklab,var(--warning)_16%,transparent)] px-1.5 py-px text-ui-2xs font-medium text-foreground">
+                      {t("denoiseRemovesMusicBadge")}
+                    </span>
+                  )}
                 </span>
+                <span className="text-ui-xs leading-[1.45] text-muted-foreground">{one.description}</span>
+                {/* 没准备好时说去哪儿准备 —— 这句话由引擎自己给,这里不认识任何引擎。 */}
+                {!one.ready && one.setup_hint && (
+                  <span className="flex flex-wrap items-center gap-2 text-ui-xs leading-[1.45] text-foreground">
+                    {one.setup_hint}
+                  </span>
+                )}
               </button>
             );
           })}
+          {/* 有要下载的引擎还没装时,给一个去设置的入口(放在单选项外面 —— 禁用的按钮里不能再套按钮)。 */}
+          {list.some((one) => one.installable && !one.ready) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="justify-self-start"
+              onClick={() => {
+                onClose();
+                gotoSettings("denoise");
+              }}
+            >
+              <Settings2 size={13} /> {t("denoiseManageEngines")}
+            </Button>
+          )}
         </div>
         {/* 没有档位的方式(人声提取)不摆这个旋钮 —— 拨了也没用。 */}
         {strengths.length > 0 && (

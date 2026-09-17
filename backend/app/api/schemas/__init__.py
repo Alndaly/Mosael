@@ -1336,19 +1336,27 @@ class InstallSourceUpdate(ApiModel):
 
 
 class DenoiseEngineOut(ApiModel):
-    """一个降噪引擎,以及现在能不能用。
+    """一个降噪引擎:它是什么、现在能不能用、要不要装。
 
-    `strengths` 为空 = 这个引擎没有档位(人声提取),界面据此不摆那个旋钮;
-    `removes_music` 为真时界面要说出来 —— 用户说"降噪"时没想把配乐也去掉。
+    界面**不认识任何引擎**,所以要显示的话都由这里给:`description` 说适合什么、代价是什么,
+    `setup_hint` 说没准备好时去哪儿准备,`removes_music` 让界面把"会去掉音乐"单独标出来。
+    `strengths` 为空 = 没有档位(人声提取),界面不摆那个旋钮。
+
+    `installable` 的引擎要下载一次,`status` 是 installed / missing / installing / failed /
+    unsupported(这个平台没有发布文件);其余引擎的 `status` 只有 ready / unavailable。
     """
 
     engine: str
     label: str
-    #: 现在能不能用。**不是后台探测的结果**(那种有"还没测过"的第三态,见转写/克隆的
-    #: runtime_checked):内置引擎恒为真,人声提取当场问注册表有没有分离引擎。
+    description: str
+    setup_hint: str = ""
     ready: bool
     strengths: list[str]
     removes_music: bool
+    installable: bool = False
+    status: str
+    message: str = ""
+    size_bytes: int = 0
 
 
 class SeparationEngineOut(ApiModel):

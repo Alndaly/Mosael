@@ -190,6 +190,11 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         "app.ai.providers.adapters.local.demucs_separation",
         # 内置降噪调的是随应用带的 ffmpeg,纯本机。
         "app.ai.providers.adapters.local.ffmpeg_denoise",
+        # RNNoise 也是 ffmpeg(arnndn 滤镜 + 打包的模型文件),纯本机。
+        "app.ai.providers.adapters.local.rnnoise_denoise",
+        # DeepFilterNet 起的是本机二进制。下载那一步在 runtime/denoise_models,走的是
+        # media_transfer.download_to_path(RetryingClient),不在这个模块里。
+        "app.ai.providers.adapters.local.deepfilter_denoise",
         # 人声提取只调分离契约拿人声那一条;真正干活的是分离适配器,它自己在这张表里有一条。
         "app.ai.providers.adapters.local.voice_isolation_denoise",
     }

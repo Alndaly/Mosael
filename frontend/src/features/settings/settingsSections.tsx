@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AudioLines,
+  AudioWaveform,
   Brain,
   Database,
   Download,
@@ -31,6 +32,7 @@ import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection
 import { BackendSection, ProxySection } from "@/features/settings/BackendSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
 import { DataDiagnosticsSection } from "@/features/settings/DataDiagnosticsSection";
+import { DenoiseEnginesSection } from "@/features/settings/DenoiseEnginesSection";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { InstallSourceSection } from "@/features/settings/InstallSourceSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
@@ -182,8 +184,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     ],
   },
   {
-    // 「装在这台机器上跑的模型」。每个引擎一页,共用的安装源单独一页 ——
-    // 它被三个引擎读,挂在哪一个名下都是错的说法。
+    // 「装在这台机器上跑的模型」。每种能力一页,共用的 pip 安装源单独一页 ——
+    // 它被转写、克隆、分离三个引擎读,挂在哪一个名下都是错的说法。
     title: "studioSettingsLocalEngines",
     sections: [
       { id: "transcribe", label: "settingsTranscribeTitle", icon: <Mic size={14} />, render: () => <AsrModelsSection /> },
@@ -204,6 +206,12 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "separationTitle",
         icon: <Scissors size={14} />,
         render: () => <SeparationEnginesSection />,
+      },
+      {
+        id: "denoise",
+        label: "denoiseEnginesTitle",
+        icon: <AudioWaveform size={14} />,
+        render: () => <DenoiseEnginesSection />,
       },
       {
         id: "install-source",

@@ -458,8 +458,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfNode_denoise_audio_asset_id": {"zh": "要降噪的素材(音频或视频都行)", "en": "The asset to clean up (audio or video)"},
     "wfNode_denoise_audio_engine": {
-        "zh": "用哪个降噪引擎。auto = 内置的频谱降噪(不装任何东西,不动音乐);voice-isolation = 只留人声(要先装人声分离引擎,会去掉音乐)。",
-        "en": "Which engine to use. auto is the built-in spectral denoiser (nothing to install, music untouched); voice-isolation keeps only the voice (needs a separation engine installed, and removes music).",
+        "zh": "用哪个降噪引擎。auto = 内置的频谱降噪(不装任何东西,不动音乐,只去持续的底噪);deepfilternet = 效果最好的语音降噪(要先在设置里下载);rnnoise = 轻量语音降噪;voice-isolation = 只留人声(要先装人声分离引擎)。后三种都会把音乐一起去掉。",
+        "en": "Which engine to use. auto is the built-in spectral denoiser (nothing to install, music untouched, steady noise only); deepfilternet is the best speech denoiser (download it in Settings first); rnnoise is a lightweight speech denoiser; voice-isolation keeps only the voice (needs a separation engine). The last three remove music as well.",
     },
     "wfNode_denoise_audio_strength": {
         "zh": "下手多重:light 只去最明显的底噪,medium 适合大多数录音,strong 去得最干净但可能让声音发闷。人声提取不看这一项。",
@@ -467,7 +467,29 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfOut_denoised_asset_id": {"zh": "降噪后", "en": "Cleaned"},
     "denoiseEngine_ffmpeg": {"zh": "内置降噪", "en": "Built-in noise reduction"},
-    "denoiseEngine_voice_isolation": {"zh": "人声提取(去掉音乐)", "en": "Voice isolation (removes music)"},
+    "denoiseEngine_voice_isolation": {"zh": "人声提取", "en": "Voice isolation"},
+    "denoiseEngine_deepfilternet": {"zh": "DeepFilterNet 语音降噪", "en": "DeepFilterNet speech enhancement"},
+    "denoiseEngine_rnnoise": {"zh": "RNNoise 语音降噪", "en": "RNNoise speech denoising"},
+    "denoiseDesc_ffmpeg": {
+        "zh": "去掉空调、风扇、电流声这类持续的底噪,音乐不受影响。一阵一阵的噪声(键盘、碗碟)基本去不掉。不用装任何东西。",
+        "en": "Removes steady noise such as air conditioning, fans and hum, and leaves music alone. Intermittent noise (keyboards, dishes) mostly stays. Nothing to install.",
+    },
+    "denoiseDesc_deepfilternet": {
+        "zh": "效果最好的语音降噪:持续的和一阵一阵的噪声都能去掉,说话声失真最小。音乐会被当成噪声去掉。需要先下载一次(约 30 MB)。",
+        "en": "The best speech denoising here: removes both steady and intermittent noise with the least damage to the voice. Music is treated as noise. Needs a one-time download (about 30 MB).",
+    },
+    "denoiseDesc_rnnoise": {
+        "zh": "轻量的语音降噪模型,一阵一阵的噪声也能压下去,效果不如 DeepFilterNet。音乐会被当成噪声压低。不用装任何东西。",
+        "en": "A lightweight speech model that also handles intermittent noise, though not as well as DeepFilterNet. Music is treated as noise. Nothing to install.",
+    },
+    "denoiseDesc_voice_isolation": {
+        "zh": "只留说话声:嘈杂人声、街道噪声也能去掉,但背景音乐和环境声会整个没了。借用人声分离引擎,长素材较慢。",
+        "en": "Keeps only the voice: removes crowds and street noise too, but background music and ambience go entirely. Uses the voice separation engine, so long assets are slow.",
+    },
+    "denoiseSetup_deepfilternet": {"zh": "先在「设置 → 本机引擎 → 降噪」里下载 DeepFilterNet", "en": "Download DeepFilterNet first under Settings → On-device engines → Noise reduction"},
+    "denoiseSetup_rnnoise": {"zh": "这台机器上的 ffmpeg 不带 RNNoise 滤镜(arnndn)", "en": "This machine's ffmpeg was built without the RNNoise filter (arnndn)"},
+    "denoiseSetup_voice_isolation": {"zh": "先在「设置 → 本机引擎 → 人声分离」里装好分离引擎", "en": "Install a separation engine first under Settings → On-device engines → Voice separation"},
+    "dlMsg_downloading": {"zh": "下载中…", "en": "Downloading…"},
     "wfOut_vocals_asset_id": {"zh": "人声", "en": "Voice"},
     "wfOut_background_asset_id": {"zh": "背景音", "en": "Background"},
     "wfNode_translate_lines_desc": {

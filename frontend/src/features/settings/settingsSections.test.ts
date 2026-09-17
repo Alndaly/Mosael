@@ -52,7 +52,7 @@ describe("设置页结构", () => {
 
   it("安装源是独立的一页,和三个本机引擎同组", () => {
     //: 它被转写、克隆、分离三个引擎共用 —— 挂在哪一个名下都是错的说法。
-    const engines = ["transcribe", "dubbing", "separation", "install-source"];
+    const engines = ["transcribe", "dubbing", "separation", "denoise", "install-source"];
     const groups = new Set(engines.map(groupOf));
     expect(groups.size).toBe(1);
     expect([...groups][0]).toBe("studioSettingsLocalEngines");
@@ -81,6 +81,8 @@ describe("深链", () => {
     ["providers:podcast", "provider-audio"],
     ["provider-pricing", "provider-pricing"],
     ["separation", "separation"],
+    //: 降噪对话框里「管理降噪引擎」发的就是它。
+    ["denoise", "denoise"],
   ])("%s 落到 %s", (link, id) => {
     //: 这几个是代码里实际发出去的深链 —— 页挪了位置,它们必须还落得到。
     expect(resolveSettingsLink(link)?.id).toBe(id);

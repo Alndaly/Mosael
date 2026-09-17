@@ -506,12 +506,17 @@ def denoise_audio(asset_id: str, strength: str = "medium", engine: str = "", wor
     """Confirmation required: reduce background noise in an audio or video asset, producing a
     NEW asset (a video keeps its picture; only the sound is replaced). The source is never changed.
 
-    Use it for hiss, hum, fans, air conditioning or room noise in recordings and footage.
     `strength` is light / medium / strong — medium suits most recordings; strong can dull the voice.
-    Leave `engine` empty for the built-in denoiser, which leaves music alone. Pass
-    `engine="voice-isolation"` only when the noise is crowds or traffic AND losing the music is
-    acceptable: it keeps nothing but the voice, needs a separation engine installed, and ignores
-    `strength`. Returns a job id once approved; the cleaned asset appears when the job finishes.
+
+    Engines (leave `engine` empty for the built-in one):
+    - built-in (default): steady noise only — hiss, hum, fans, air conditioning. Music is untouched.
+    - `deepfilternet`: the best choice for speech with any kind of noise, including keyboards,
+      clatter and chatter. Must be downloaded once in Settings; removes music as well.
+    - `rnnoise`: lighter speech denoiser, nothing to install; removes music as well.
+    - `voice-isolation`: keeps only the voice (needs a separation engine); ignores `strength`.
+    Pick a speech engine only when the asset is mainly speech AND losing background music is
+    acceptable — say so to the user. The card is refused up front if the engine is not ready.
+    Returns a job id once approved; the cleaned asset appears when the job finishes.
     """
     confirmation = _post(
         "/api/confirmations",

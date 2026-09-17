@@ -94,9 +94,10 @@ def filter_for(strength: str, levels: tuple[float, float] | None) -> str:
 class FfmpegDenoiseAdapter:
     engine_id = "ffmpeg"
     label_key = "denoiseEngine_ffmpeg"
+    description_key = "denoiseDesc_ffmpeg"
     strengths = STRENGTHS
     removes_music = False
-    setup_hint = ""
+    setup_hint_key = ""
 
     def runtime_ready(self) -> bool:
         # ffmpeg 是应用本体的依赖:没有它素材库都导不进东西,不在这里另做探测。

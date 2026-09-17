@@ -24,8 +24,13 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const BUILTIN = { engine: "ffmpeg", label: "内置降噪", ready: true, strengths: ["light", "medium", "strong"], removes_music: false };
-const ISOLATION = { engine: "voice-isolation", label: "人声提取", ready: true, strengths: [], removes_music: true };
+const BASE = { installable: false, status: "ready", setup_hint: "", message: "", size_bytes: 0 };
+const BUILTIN = { ...BASE, engine: "ffmpeg", label: "内置降噪", description: "去底噪,不动音乐", ready: true, strengths: ["light", "medium", "strong"], removes_music: false };
+const ISOLATION = { ...BASE, engine: "voice-isolation", label: "人声提取", description: "只留说话声", ready: true, strengths: [], removes_music: true };
+const DEEPFILTER = {
+  ...BASE, engine: "deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false, installable: true,
+  status: "missing", setup_hint: "先去设置里下载", strengths: ["light", "medium", "strong"], removes_music: true,
+};
 
 function renderDialog(engines = [BUILTIN, ISOLATION]) {
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
@@ -73,21 +78,42 @@ describe("降噪对话框", () => {
     await waitFor(() => expect(posts[0]?.body).toEqual({ engine: "ffmpeg", strength: "strong" }));
   });
 
-  it("人声提取:说出会去掉音乐,且不摆强度", async () => {
+  it("人声提取:标出会去掉音乐,且不摆强度", async () => {
     const user = userEvent.setup();
     const { posts } = renderDialog();
     const isolation = await screen.findByRole("radio", { name: /人声提取/ });
-    expect(isolation).toHaveTextContent("denoiseRemovesMusic");
+    expect(isolation).toHaveTextContent("denoiseRemovesMusicBadge");
+    expect(await screen.findByRole("radio", { name: /内置降噪/ })).not.toHaveTextContent("denoiseRemovesMusicBadge");
     await user.click(isolation);
     expect(screen.queryByRole("radiogroup", { name: "denoiseStrength" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "denoiseStart" }));
     await waitFor(() => expect(posts[0]?.body).toMatchObject({ engine: "voice-isolation" }));
   });
 
-  it("没准备好的方式点不了,并说清去哪准备", async () => {
-    renderDialog([BUILTIN, { ...ISOLATION, ready: false }]);
-    const isolation = await screen.findByRole("radio", { name: /人声提取/ });
-    expect(isolation).toBeDisabled();
-    expect(isolation).toHaveTextContent("denoiseEngineUnready");
+  it("没准备好的方式点不了,显示引擎自己给的提示和说明", async () => {
+    renderDialog([BUILTIN, DEEPFILTER]);
+    const deepfilter = await screen.findByRole("radio", { name: /DeepFilterNet/ });
+    expect(deepfilter).toBeDisabled();
+    expect(deepfilter).toHaveTextContent("先去设置里下载");
+    expect(deepfilter).toHaveTextContent("效果最好");
+  });
+
+  it("有要下载的引擎没装时,给一个去设置的入口", async () => {
+    const user = userEvent.setup();
+    const opened: string[] = [];
+    const listener = (event: Event) => opened.push(String((event as CustomEvent).detail));
+    window.addEventListener("mosael:open-settings", listener);
+    const { onClose } = renderDialog([BUILTIN, DEEPFILTER]);
+    await user.click(await screen.findByRole("button", { name: /denoiseManageEngines/ }));
+    expect(onClose).toHaveBeenCalled();
+    //: 深链事件是延迟发的(等设置页挂载),所以等它到。
+    await waitFor(() => expect(opened).toContain("denoise"));
+    window.removeEventListener("mosael:open-settings", listener);
+  });
+
+  it("都装好了就不摆这个入口", async () => {
+    renderDialog([BUILTIN, { ...DEEPFILTER, ready: true, status: "installed" }]);
+    await screen.findByRole("radio", { name: /DeepFilterNet/ });
+    expect(screen.queryByRole("button", { name: /denoiseManageEngines/ })).toBeNull();
   });
 });

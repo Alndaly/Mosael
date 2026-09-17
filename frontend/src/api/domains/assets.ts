@@ -151,6 +151,11 @@ export function listDenoiseEngines(): Promise<DenoiseEngine[]> {
   return api<DenoiseEngine[]>("/api/denoise/engines");
 }
 
+/** 下载并装上一个要装的降噪引擎(DeepFilterNet)。后台跑,轮询引擎清单看进度。 */
+export function installDenoiseEngine(engine: string): Promise<DenoiseEngine> {
+  return api<DenoiseEngine>(`/api/denoise/engines/${encodeURIComponent(engine)}/install`, { method: "POST" });
+}
+
 /** 降噪,产出一份**新**素材(视频保留画面、只换声音);原素材不动。排成任务。 */
 export function denoiseAsset(assetId: string, body: { engine?: string; strength?: DenoiseStrength } = {}): Promise<Job> {
   return api<Job>(`/api/assets/${assetId}/denoise`, { method: "POST", body: JSON.stringify(body) });

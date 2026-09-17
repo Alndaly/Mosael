@@ -49,14 +49,17 @@ class DenoiseRequest:
 class DenoiseAdapter(Protocol):
     engine_id: str
     label_key: str
+    #: 一句话说清它适合什么、代价是什么(i18n key)。界面照着显示 —— 前端不认识任何引擎,
+    #: 所以"这个会去掉音乐""这个要先装"这类话必须由引擎自己说。
+    description_key: str
     #: 这个引擎理解哪几档。空元组 = 它没有档位这回事(比如人声提取:要么是人声要么不是),
     #: 调用方据此不摆一个拨了没用的旋钮。
     strengths: tuple[str, ...]
     #: 会不会连音乐一起去掉。`auto` 只挑不会的那种 —— 用户说"降噪"时没有要求把配乐也拿掉。
     removes_music: bool
-    #: 没准备好时告诉用户去哪儿准备。**准备这一步不替用户做**:装几个 GB 的东西是设置里
-    #: 显式的一步,不该藏在"点一下降噪"后面。
-    setup_hint: str
+    #: 没准备好时告诉用户去哪儿准备(i18n key;永远就绪的引擎留空)。**准备这一步不替用户做**:
+    #: 下载、安装是设置里显式的一步,不该藏在"点一下降噪"后面。
+    setup_hint_key: str
 
     def runtime_ready(self) -> bool:
         """现在就能跑吗。**是问出来的,不是配置出来的**(同 SeparationAdapter)。"""

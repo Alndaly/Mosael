@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.runtime import separation_models as sm
+from app.ai.runtime.install_state import InstallProgress
 
 
 @pytest.fixture(autouse=True)
@@ -52,7 +53,7 @@ def test_装的时候不阻塞请求(monkeypatch) -> None:
 
 def test_已经在装的不许再点一次(monkeypatch) -> None:
     monkeypatch.setattr(sm, "runtime_ready", lambda engine: False)
-    sm._store.set("demucs", sm._Live(status="installing"))
+    sm._store.set("demucs", InstallProgress("installing"))
     with pytest.raises(RuntimeError, match="已经在安装"):
         sm.start_install("demucs")
 
@@ -81,7 +82,7 @@ def test_装好之后那条记录要清掉(monkeypatch) -> None:
     monkeypatch.setattr(sm, "ensure_runtime", lambda engine: None)
     ready = {"value": False}
     monkeypatch.setattr(sm, "runtime_ready", lambda engine: ready["value"])
-    sm._store.set("demucs", sm._Live(status="installing"))
+    sm._store.set("demucs", InstallProgress("installing"))
     ready["value"] = True
     sm._run_install("demucs")
     assert sm._store.get("demucs") is None

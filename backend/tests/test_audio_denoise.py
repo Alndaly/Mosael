@@ -263,8 +263,10 @@ class Test排队和开卡之前就判:
     def test_确认卡上说得出人声提取会去掉音乐(self) -> None:
         from app.domain.agent.confirmations import _summarize
 
-        assert "音乐" in _summarize("denoise_audio", {"resolved_engine": "voice-isolation"})
-        assert "强力" in _summarize("denoise_audio", {"resolved_engine": "ffmpeg", "strength": "strong"})
+        isolation = _summarize("denoise_audio", {"engine_name": "人声提取", "removes_music": True, "has_strengths": False, "strength": "medium"})
+        assert "音乐" in isolation and "人声提取" in isolation and "中度" not in isolation
+        builtin = _summarize("denoise_audio", {"engine_name": "内置降噪", "removes_music": False, "has_strengths": True, "strength": "strong"})
+        assert "强力" in builtin and "音乐" not in builtin
 
 
 @needs_ffmpeg
@@ -415,6 +417,11 @@ class Test工作流节点和确认卡:
             payload = {"asset_id": audio.id, "strength": ""}
             _validate_payload(db, "denoise_audio", workspace, payload)
             assert payload["strength"] == "medium" and payload["resolved_engine"] == "ffmpeg"
+            assert payload["removes_music"] is False
+
+            rnnoise = {"asset_id": audio.id, "engine": "rnnoise", "strength": "strong"}
+            _validate_payload(db, "denoise_audio", workspace, rnnoise)
+            assert rnnoise["removes_music"] is True, "语音模型会去掉音乐,卡上要说"
 
             with pytest.raises(ConfirmationError, match="档位"):
                 _validate_payload(db, "denoise_audio", workspace, {"asset_id": audio.id, "strength": "max"})

@@ -15,6 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.ai.providers.contracts.denoise import DenoiseError, DenoiseRequest
+from app.core.i18n import t
 from app.ai.providers.contracts.separation import VOCALS, SeparationAdapter, SeparationError, SeparationRequest
 
 #: 「给我一个现在跑得起来的分离引擎」—— 就是 registry.get_separation_adapter。
@@ -24,10 +25,11 @@ SeparationLookup = Callable[[str], SeparationAdapter | None]
 class VoiceIsolationDenoiseAdapter:
     engine_id = "voice-isolation"
     label_key = "denoiseEngine_voice_isolation"
+    description_key = "denoiseDesc_voice_isolation"
     #: 没有档位:一段声音要么是人声要么不是,"轻一点地提取人声"不是一个有意义的说法。
     strengths: tuple[str, ...] = ()
     removes_music = True
-    setup_hint = "人声提取要先装一个人声分离引擎(设置 → 本机引擎 → 人声分离)"
+    setup_hint_key = "denoiseSetup_voice_isolation"
 
     def __init__(self, separation: SeparationLookup) -> None:
         self._separation = separation
@@ -41,7 +43,7 @@ class VoiceIsolationDenoiseAdapter:
     def denoise(self, request: DenoiseRequest, out_path: Path) -> Path:
         engine = self._engine()
         if engine is None:
-            raise DenoiseError(self.setup_hint)
+            raise DenoiseError(t(self.setup_hint_key))
         work = out_path.parent / f"{out_path.stem}-stems"
         try:
             stems = engine.separate(SeparationRequest(audio_path=request.audio_path, stems=(VOCALS,)), work)

@@ -19,7 +19,9 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, DenoiseAdapter, DenoiseError, DenoiseRequest, checked_strength
 from app.ai.providers.registry import DENOISE_ADAPTERS, get_denoise_adapter
+from app.ai.runtime import denoise_models
 from app.core.db import SessionLocal
+from app.core.i18n import t
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
@@ -39,22 +41,43 @@ def ready_adapter(engine: str = "") -> DenoiseAdapter:
     if adapter is None:
         raise DenoiseError(f"没有这个降噪引擎:{engine}" if engine not in ("", "auto") else "没有可用的降噪引擎")
     if not adapter.runtime_ready():
-        raise DenoiseError(adapter.setup_hint or f"降噪引擎 {adapter.engine_id} 还没准备好")
+        raise DenoiseError(t(adapter.setup_hint_key) if adapter.setup_hint_key else f"降噪引擎 {adapter.engine_id} 还没准备好")
     return adapter
 
 
 def list_engines() -> list[dict]:
-    """给界面和节点的引擎清单。`label` 是 i18n key,在出口翻译。"""
-    return [
-        {
+    """给界面和节点的引擎清单。`label` / `description` / `setup_hint` 是 i18n key,在出口翻译。
+
+    要下载安装的引擎(见 runtime/denoise_models.INSTALLABLE)多带安装状态;其余的 `status`
+    只说能不能用。**引擎自己不知道"安装"这回事** —— 那是运行时那一层的事,在这里合起来。
+    """
+    rows = []
+    for adapter in DENOISE_ADAPTERS.values():
+        ready = adapter.runtime_ready()
+        row = {
             "engine": adapter.engine_id,
             "label": adapter.label_key,
-            "ready": adapter.runtime_ready(),
+            "description": adapter.description_key,
+            "setup_hint": "" if ready else adapter.setup_hint_key,
+            "ready": ready,
             "strengths": list(adapter.strengths),
             "removes_music": adapter.removes_music,
+            "installable": adapter.engine_id in denoise_models.INSTALLABLE,
+            "status": "ready" if ready else "unavailable",
+            "message": "",
+            "message_params": {},
+            "size_bytes": 0,
         }
-        for adapter in DENOISE_ADAPTERS.values()
-    ]
+        if row["installable"]:
+            row.update(denoise_models.install_status(adapter.engine_id))
+        rows.append(row)
+    return rows
+
+
+def install_engine(engine: str) -> dict:
+    """开始装这个引擎。装在后台跑;返回的是那一行的新状态。"""
+    denoise_models.start_install(engine)
+    return next(row for row in list_engines() if row["engine"] == engine)
 
 
 def denoise_asset(

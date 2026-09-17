@@ -3618,7 +3618,7 @@
           "denoise"
         ],
         "summary": "List Denoise Engines",
-        "description": "降噪引擎,以及现在能不能用。没有安装这一步 —— 内置的随应用带着,人声提取借的是分离引擎。",
+        "description": "降噪引擎,以及现在能不能用、要不要装。",
         "operationId": "list_denoise_engines_api_denoise_engines_get",
         "responses": {
           "200": {
@@ -3631,6 +3631,49 @@
                   },
                   "type": "array",
                   "title": "Response List Denoise Engines Api Denoise Engines Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/denoise/engines/{engine}/install": {
+      "post": {
+        "tags": [
+          "denoise"
+        ],
+        "summary": "Install Denoise Engine",
+        "description": "下载并装上这个引擎(后台跑)。\n\n往**后端主机**上放一个可执行文件是部署级动作,要部署管理员 —— 和装分离引擎、下转写模型同一条。",
+        "operationId": "install_denoise_engine_api_denoise_engines__engine__install_post",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DenoiseEngineOut"
                 }
               }
             }
@@ -21306,6 +21349,15 @@
             "type": "string",
             "title": "Label"
           },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "setup_hint": {
+            "type": "string",
+            "title": "Setup Hint",
+            "default": ""
+          },
           "ready": {
             "type": "boolean",
             "title": "Ready"
@@ -21320,18 +21372,39 @@
           "removes_music": {
             "type": "boolean",
             "title": "Removes Music"
+          },
+          "installable": {
+            "type": "boolean",
+            "title": "Installable",
+            "default": false
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "default": 0
           }
         },
         "type": "object",
         "required": [
           "engine",
           "label",
+          "description",
           "ready",
           "strengths",
-          "removes_music"
+          "removes_music",
+          "status"
         ],
         "title": "DenoiseEngineOut",
-        "description": "一个降噪引擎,以及现在能不能用。\n\n`strengths` 为空 = 这个引擎没有档位(人声提取),界面据此不摆那个旋钮;\n`removes_music` 为真时界面要说出来 —— 用户说\"降噪\"时没想把配乐也去掉。"
+        "description": "一个降噪引擎:它是什么、现在能不能用、要不要装。\n\n界面**不认识任何引擎**,所以要显示的话都由这里给:`description` 说适合什么、代价是什么,\n`setup_hint` 说没准备好时去哪儿准备,`removes_music` 让界面把\"会去掉音乐\"单独标出来。\n`strengths` 为空 = 没有档位(人声提取),界面不摆那个旋钮。\n\n`installable` 的引擎要下载一次,`status` 是 installed / missing / installing / failed /\nunsupported(这个平台没有发布文件);其余引擎的 `status` 只有 ready / unavailable。"
       },
       "DeploymentAdminUpdate": {
         "properties": {

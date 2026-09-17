@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-09-17. Follows the shape ADR 0016 set for separation.
+Accepted — 2026-09-17. Follows the shape ADR 0016 set for separation. Amended the same day: the
+two speech models (option B) are implemented — see "Amendment" at the end.
 
 ## Context
 
@@ -54,3 +55,34 @@ record only covers what differs.
   entry point changes.
 - `auto` is deterministic (the built-in engine) rather than "the best installed", because the only
   stronger engine today changes *what* is removed, not just *how well*.
+
+## Amendment — speech models (2026-09-17)
+
+Option B turned out to be unblocked, just not through Python:
+
+- **DeepFilterNet via its release binary, not its Python package.** `deepfilternet` 0.5.6 imports
+  `torchaudio.backend.common`, which current torchaudio no longer has, and no old-enough torch
+  installs on Python 3.13 — measured, the import fails. The same release ships `deep-filter`, a Rust
+  executable with the model compiled in: no torch, no virtualenv, 27–36 MB per platform.
+  `runtime/denoise_models` downloads it on an explicit settings action and **pins its SHA-256** per
+  platform (macOS arm64 / x86_64, Windows x64, Linux x86_64 — hashes computed from the release
+  files, which publish none). A mismatch discards the file and fails the install.
+- **RNNoise via ffmpeg's `arnndn`.** The filter is built into ffmpeg; the only missing piece is a
+  model file. `somnolent-hogwash` (trained on speech with fan / AC / computer noise, about 300 KB)
+  ships inside the app; its source, licence note and checksum sit next to it.
+
+Measured on synthetic speech (macOS `say`) with steady and intermittent noise, noise level in the
+clean track's pauses and log-spectral distance on speech frames (SI-SDR was rejected as a metric:
+the built-in engine's 70 Hz high-pass alone scores 13 dB on it through phase shift, not damage):
+
+| | Steady noise, −41 dB | Intermittent noise, −35 dB | Speech distortion | Music |
+| --- | --- | --- | --- | --- |
+| Built-in (afftdn, strong) | −10 dB | −0.4 dB | low | untouched |
+| RNNoise (full) | −16 dB | −19 dB | medium | −8 dB |
+| DeepFilterNet (full) | −12 dB (−15 at −24 dB limit) | −34 dB | lowest | removed (−44 dB) |
+
+Both models treat music as noise, so both declare `removes_music` and `auto` still means the
+built-in engine. Each adapter now also declares a `description_key` and a `setup_hint_key`: the
+interface lists engines without knowing any of them, so those sentences have to come from the
+engine. The install-progress state that separation kept privately moved to
+`runtime/install_state.InstallStore`, now shared by both.

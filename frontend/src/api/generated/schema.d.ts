@@ -1401,11 +1401,33 @@ export interface paths {
         };
         /**
          * List Denoise Engines
-         * @description 降噪引擎,以及现在能不能用。没有安装这一步 —— 内置的随应用带着,人声提取借的是分离引擎。
+         * @description 降噪引擎,以及现在能不能用、要不要装。
          */
         get: operations["list_denoise_engines_api_denoise_engines_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/denoise/engines/{engine}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Denoise Engine
+         * @description 下载并装上这个引擎(后台跑)。
+         *
+         *     往**后端主机**上放一个可执行文件是部署级动作,要部署管理员 —— 和装分离引擎、下转写模型同一条。
+         */
+        post: operations["install_denoise_engine_api_denoise_engines__engine__install_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7482,22 +7504,50 @@ export interface components {
         };
         /**
          * DenoiseEngineOut
-         * @description 一个降噪引擎,以及现在能不能用。
+         * @description 一个降噪引擎:它是什么、现在能不能用、要不要装。
          *
-         *     `strengths` 为空 = 这个引擎没有档位(人声提取),界面据此不摆那个旋钮;
-         *     `removes_music` 为真时界面要说出来 —— 用户说"降噪"时没想把配乐也去掉。
+         *     界面**不认识任何引擎**,所以要显示的话都由这里给:`description` 说适合什么、代价是什么,
+         *     `setup_hint` 说没准备好时去哪儿准备,`removes_music` 让界面把"会去掉音乐"单独标出来。
+         *     `strengths` 为空 = 没有档位(人声提取),界面不摆那个旋钮。
+         *
+         *     `installable` 的引擎要下载一次,`status` 是 installed / missing / installing / failed /
+         *     unsupported(这个平台没有发布文件);其余引擎的 `status` 只有 ready / unavailable。
          */
         DenoiseEngineOut: {
             /** Engine */
             engine: string;
             /** Label */
             label: string;
+            /** Description */
+            description: string;
+            /**
+             * Setup Hint
+             * @default
+             */
+            setup_hint: string;
             /** Ready */
             ready: boolean;
             /** Strengths */
             strengths: string[];
             /** Removes Music */
             removes_music: boolean;
+            /**
+             * Installable
+             * @default false
+             */
+            installable: boolean;
+            /** Status */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Size Bytes
+             * @default 0
+             */
+            size_bytes: number;
         };
         /** DeploymentAdminUpdate */
         DeploymentAdminUpdate: {
@@ -14510,6 +14560,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DenoiseEngineOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_denoise_engine_api_denoise_engines__engine__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engine: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DenoiseEngineOut"];
                 };
             };
             /** @description Validation Error */

@@ -20,7 +20,9 @@ from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapte
 from app.ai.providers.adapters.google.veo import VeoAdapter
 from app.ai.providers.adapters.kuaishou.kling.video import KlingVideoAdapter
 from app.ai.providers.adapters.local.demucs_separation import DemucsSeparationAdapter
+from app.ai.providers.adapters.local.deepfilter_denoise import DeepFilterDenoiseAdapter
 from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
+from app.ai.providers.adapters.local.rnnoise_denoise import RnnoiseDenoiseAdapter
 from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
 from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
 from app.ai.providers.adapters.minimax.video import MiniMaxVideoAdapter
@@ -143,11 +145,14 @@ def _index_denoise_adapters(adapters: Iterable[DenoiseAdapter]) -> dict[str, Den
     return indexed
 
 
-#: 降噪(ADR-0017)。**顺序就是 `auto` 的偏好**。人声提取借分离的能力,递进去的是
-#: 查询函数而不是某个分离引擎 —— 装了哪个分离引擎,它就用哪个。
+#: 降噪(ADR-0017)。顺序是界面上的排列:不动音乐的在前,语音模型按效果从好到轻,
+#: 最后是会把背景整个拿掉的人声提取。`auto` 只挑不动音乐的(见 get_denoise_adapter)。
+#: 人声提取借分离的能力,递进去的是查询函数而不是某个分离引擎 —— 装了哪个,它就用哪个。
 DENOISE_ADAPTERS = _index_denoise_adapters(
     (
         FfmpegDenoiseAdapter(),
+        DeepFilterDenoiseAdapter(),
+        RnnoiseDenoiseAdapter(),
         VoiceIsolationDenoiseAdapter(separation=get_separation_adapter),
     )
 )

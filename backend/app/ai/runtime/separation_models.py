@@ -18,11 +18,11 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app.ai.runtime.install_state import FAILED, INSTALLING, InstallProgress, InstallStore
 from app.core import interpreter, pip_install
 from app.core.child_process import run_logged
 from app.core.config import settings
@@ -52,37 +52,8 @@ TORCH_HOME = MANAGED_SEPARATION_ROOT / "torch"
 DEFAULT_MODEL = "htdemucs"
 
 
-# ---------------------------------------------------------------------------
-# 安装状态(只在内存里;盘上有没有那个解释器才是静息时的事实源)
-# ---------------------------------------------------------------------------
-@dataclass
-class _Live:
-    status: str = "idle"  # "installing" | "failed"
-    message: str = ""
-    #: message 是 key 时的模板参数(见 core/i18n.t)。翻译在出口做。
-    params: dict[str, str] = field(default_factory=dict)
-
-
-class _Store:
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._live: dict[str, _Live] = {}
-
-    def get(self, engine: str) -> _Live | None:
-        with self._lock:
-            live = self._live.get(engine)
-            return None if live is None else _Live(**live.__dict__)
-
-    def set(self, engine: str, live: _Live) -> None:
-        with self._lock:
-            self._live[engine] = live
-
-    def clear(self, engine: str) -> None:
-        with self._lock:
-            self._live.pop(engine, None)
-
-
-_store = _Store()
+#: 安装进度(内存那一半;盘上有没有解释器才是静息时的事实源)。
+_store = InstallStore()
 
 
 def managed_venv_dir(engine: str) -> Path:
@@ -168,18 +139,12 @@ def list_status() -> list[dict[str, Any]]:
 
 
 def _status_dict(engine: str) -> dict[str, Any]:
-    live = _store.get(engine)
     ready = runtime_ready(engine)
-    status = "installed" if ready else "missing"
-    if live is not None and live.status in {"installing", "failed"} and not ready:
-        status = live.status
     return {
         "engine": engine,
         "label": f"sepEngine_{engine}",
-        "status": status,
         "runtime_ready": ready,
-        "message": live.message if live else "",
-        "message_params": dict(live.params) if live else {},
+        **_store.status_fields(engine, ready=ready),
     }
 
 
@@ -189,21 +154,18 @@ def start_install(engine: str) -> dict[str, Any]:
         raise KeyError(engine)
     if runtime_ready(engine):
         return _status_dict(engine)
-    live = _store.get(engine)
-    if live is not None and live.status == "installing":
-        raise RuntimeError("这个引擎已经在安装中")
-    _store.set(engine, _Live(status="installing", message="dlMsg_creatingRuntime"))
+    _store.begin(engine, "dlMsg_creatingRuntime")
     threading.Thread(target=_run_install, args=(engine,), daemon=True).start()
     return _status_dict(engine)
 
 
 def _run_install(engine: str) -> None:
     try:
-        _store.set(engine, _Live(status="installing", message="dlMsg_installingDeps", params={"engine": engine}))
+        _store.set(engine, InstallProgress(INSTALLING, "dlMsg_installingDeps", {"engine": engine}))
         ensure_runtime(engine)
     except Exception as exc:  # noqa: BLE001 — 失败要留在状态里给用户看,不是吞掉
         logger.warning("安装分离引擎 %s 失败:%s", engine, exc)
         #: 原因**原样带出来**:pip 说不清时用户至少能把那句话搜一下。
-        _store.set(engine, _Live(status="failed", message=str(exc)))
+        _store.set(engine, InstallProgress(FAILED, str(exc)))
         return
     _store.clear(engine)

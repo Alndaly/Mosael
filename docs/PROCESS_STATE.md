@@ -68,7 +68,8 @@
   `app/ai/runtime/tts_models.py:_store`;以及 `app/ai/runtime/asr_models.py:_PROBED`、
   `app/ai/runtime/asr_models.py:_PROBING`、`app/ai/runtime/asr_models.py:_PROBE_GENERATION`、
   `app/ai/runtime/asr_models.py:_store`。
-- `app/ai/runtime/separation_models.py:_store` — 分离引擎的**安装进度**。和上面两个 `_store`
+- `app/ai/runtime/separation_models.py:_store`、`app/ai/runtime/denoise_models.py:_store` —
+  分离引擎、降噪引擎(DeepFilterNet)的**安装进度**,都是 `install_state.InstallStore`。和上面两个 `_store`
   同一类:静息时的事实源在盘上(那个托管 venv 的解释器在不在),内存这份只在"正在装"和
   "刚失败"时有话说。重启丢掉的是"有人正在装"这句话,而那个安装线程本来就随进程一起没了 ——
   重启后状态回到 missing,再点一次即可,不会出现"页面说装好了其实没装"。
