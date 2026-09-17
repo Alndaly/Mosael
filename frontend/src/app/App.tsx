@@ -1,5 +1,4 @@
 import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
-import { LoadingState } from "@/components/layout/LoadingState";
 import React from "react";
 import {
   QueryClient,
@@ -37,6 +36,7 @@ import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
+import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { VoiceDock } from "@/components/agent/VoiceDock";
@@ -56,27 +56,12 @@ import { cn } from "@/lib/utils";
 import { listenDesktopDeepLinks } from "@/lib/deepLink";
 import { useCreateProject } from "@/lib/useCreateProject";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AiStudio } from "@/features/ai-studio/AiStudio";
-import { EditorView } from "@/features/editor/EditorView";
-import { StatisticsView } from "@/features/home/StatisticsView";
-import { HomeView } from "@/features/home/HomeView";
-import { MediaLibraryView } from "@/features/media/MediaLibraryView";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
-import { PublishView } from "@/features/publish/PublishView";
-import { BrowserPoolView } from "@/features/browser-pool/BrowserPoolView";
-import { PluginsView } from "@/features/plugins/PluginsView";
-import { SchedulerView } from "@/features/scheduler/SchedulerView";
-import { NotesView } from "@/features/notes/NotesView";
-import { BoardsView } from "@/features/boards/BoardsView";
-import { WorkflowsView } from "@/features/workflows/WorkflowsView";
-import { AdminView } from "@/features/admin/AdminView";
-import { SettingsView } from "@/features/settings/SettingsView";
 
 // 页面是条件挂载(切页整棵卸载/重挂),默认 staleTime:0 会让每次切页都重拉 → 首帧空态闪一下。
 // 给个合理缓存窗口:短时间切回同页直接用缓存,不重拉不闪;需要实时的 query 各自设了 refetchInterval,
 // 不受影响。获焦不全量重拉(Electron 频繁获焦会加剧闪烁)。
 
-const SceneStudio = React.lazy(() => import("@/features/scenes/SceneStudio").then(m => ({default: m.SceneStudio})));
 
 const queryClient = new QueryClient({
   mutationCache: createMutationCache((message) => toast.error(message)),
@@ -540,38 +525,15 @@ function Studio({
         onCreateProject={() => createProject.mutate()}
         creatingProject={createProject.isPending}
       >
-        {view === "home" && (
-          <HomeView
-            workspace={workspace}
-            projects={projects.data ?? []}
-            onOpenProject={openProject}
-            onCreateProject={() => createProject.mutate()}
-            creatingProject={createProject.isPending}
-          />
-        )}
-        {view === "statistics" && <StatisticsView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
-        {view === "media" && <MediaLibraryView workspace={workspace} />}
-        {view === "notes" && <NotesView key={workspace.id} workspace={workspace} />}
-        {view === "scenes" && <React.Suspense fallback={<LoadingState label="正在加载 3D 工作台…" />}><SceneStudio key={workspace.id} workspace={workspace}/></React.Suspense>}
-        {view === "editor" && (
-          <EditorView
-            workspace={workspace}
-            project={project}
-            onCreateProject={() => createProject.mutate()}
-            creatingProject={createProject.isPending}
-          />
-        )}
-        {view === "ai" && <AiStudio workspace={workspace} />}
-        {view === "publish" && <PublishView workspace={workspace} />}
-        {view === "browser-pool" && <BrowserPoolView workspace={workspace} />}
-        {view === "settings" && <SettingsView workspace={workspace} />}
-        {view === "admin" && <AdminView />}
-        {view === "workflows" && <WorkflowsView workspace={workspace} />}
-        {view === "boards" && <BoardsView workspace={workspace} />}
-        {view === "scheduler" && (
-          <SchedulerView workspace={workspace} project={project} />
-        )}
-        {view === "plugins" && <PluginsView workspaceId={workspace.id} />}
+        {PAGE_RENDERERS[view]({
+          workspace,
+          project,
+          projects: projects.data ?? [],
+          openProject,
+          createProject: () => createProject.mutate(),
+          creatingProject: createProject.isPending,
+          t,
+        })}
         <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}

@@ -15,7 +15,10 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: keyof typeof zh) => zh[key],
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
-vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "u1", username: "kinda" }, logout: vi.fn() }) }));
+vi.mock("@/app/auth", () => ({
+  useAuth: () => ({ user: { id: "u1", username: "kinda" }, logout: vi.fn() }),
+  useIsDeploymentAdmin: () => false,
+}));
 
 const created: Workspace = { id: "ws-new", name: "新工作区", role: "owner" } as Workspace;
 /** 服务端的列表:建完之后**真的**会带上新工作区(用户说刷新之后看得见,所以服务端是对的)。 */

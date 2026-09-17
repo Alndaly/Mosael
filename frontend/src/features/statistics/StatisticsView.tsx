@@ -6,7 +6,7 @@ import { workspaceSummary, type ProjectWithStats, type Workspace } from "@/api/c
 import { useI18n } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
 import { Button } from "@/components/ui/button";
-import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart, UsageCostChart, UsageTokensChart } from "./HomeCharts";
+import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart, UsageCostChart, UsageTokensChart } from "./StatisticsCharts";
 
 const HOME_LIVE_REFRESH_MS = 5_000;
 

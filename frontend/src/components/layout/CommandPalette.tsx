@@ -1,31 +1,24 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Bot,
-  Boxes,
-  CalendarClock,
-  ChartNoAxesCombined,
   Clapperboard,
   FileAudio,
   FileImage,
   FileVideo,
-  FolderOpen,
   FolderPlus,
-  Home,
   Moon,
-  Plug,
   Rocket,
-  Scissors,
   SearchX,
-  Settings,
   Sun,
   Workflow,
 } from "lucide-react";
 
 import { api, listPublishTasks, listWorkflows, type Asset, type ProjectWithStats, type Workspace } from "@/api/client";
+import { useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Highlight } from "@/components/app/Highlight";
 import type { StudioView } from "@/components/layout/AppShell";
+import { NAV_ITEMS } from "@/components/layout/navLabels";
 import {
   CommandDialog,
   CommandGroup,
@@ -36,21 +29,6 @@ import {
 } from "@/components/ui/command";
 import { emitOpenEvent } from "@/lib/deepLink";
 
-
-/** 页面导航项:label 走 i18n,keywords 供英文/拼音前缀匹配。 */
-const NAV_ENTRIES: Array<{ view: StudioView; labelKey: string; keywords: string[]; icon: React.ReactNode }> = [
-  { view: "statistics", labelKey: "navStatistics", keywords: ["statistics", "analytics", "tongji", "usage"], icon: <ChartNoAxesCombined size={14} /> },
-  { view: "home", labelKey: "navHome", keywords: ["home", "shouye"], icon: <Home size={14} /> },
-  { view: "media", labelKey: "navMedia", keywords: ["media", "assets", "sucai"], icon: <FolderOpen size={14} /> },
-  { view: "editor", labelKey: "navEditor", keywords: ["editor", "cut", "jianji"], icon: <Scissors size={14} /> },
-  { view: "ai", labelKey: "navAi", keywords: ["ai", "chat", "agent"], icon: <Bot size={14} /> },
-  { view: "publish", labelKey: "navPublish", keywords: ["publish", "fabu"], icon: <Rocket size={14} /> },
-  { view: "workflows", labelKey: "navWorkflows", keywords: ["workflow", "flow", "gongzuoliu"], icon: <Workflow size={14} /> },
-  { view: "browser-pool", labelKey: "navBrowserPool", keywords: ["browser", "pool", "account", "liulanqi", "zhanghao"], icon: <Boxes size={14} /> },
-  { view: "settings", labelKey: "navSettings", keywords: ["settings", "shezhi"], icon: <Settings size={14} /> },
-  { view: "scheduler", labelKey: "schedulerTitle", keywords: ["schedule", "cron", "dingshi"], icon: <CalendarClock size={14} /> },
-  { view: "plugins", labelKey: "pluginsTitle", keywords: ["plugins", "chajian"], icon: <Plug size={14} /> },
-];
 
 const ASSET_ICONS: Record<string, React.ReactNode> = {
   video: <FileVideo size={14} />,
@@ -71,6 +49,7 @@ export function CommandPalette({
 }) {
   const t = useI18n();
   const { theme, setTheme } = usePreferences();
+  const isDeploymentAdmin = useIsDeploymentAdmin();
   const [open, setOpen] = React.useState(false);
   const [input, setInput] = React.useState("");
   const [query, setQuery] = React.useState("");
@@ -129,13 +108,16 @@ export function CommandPalette({
   });
 
   const q = query.toLowerCase();
+  // 页面清单读 navLabels 那一份。此前这里抄了一份,漏掉了笔记、3D 场景、画板、管理 —— ⌘K 跳不过去。
+  // 管理页和侧栏同一条:只对部署管理员出现(**藏起来的入口不是权限**,后端各自把关)。
+  const pages = NAV_ITEMS.filter((item) => item.placement !== "admin" || isDeploymentAdmin);
   const navMatches = q
-    ? NAV_ENTRIES.filter(
+    ? pages.filter(
         (entry) =>
-          t(entry.labelKey as never).toLowerCase().includes(q) ||
+          t(entry.labelKey).toLowerCase().includes(q) ||
           entry.keywords.some((keyword) => keyword.startsWith(q)),
       )
-    : NAV_ENTRIES;
+    : pages;
   const projectMatches = q ? projects.filter((project) => project.name.toLowerCase().includes(q)).slice(0, 6) : [];
   const assetMatches = q
     ? (assets.data ?? [])
@@ -251,8 +233,8 @@ export function CommandPalette({
           <CommandGroup heading={t("cmdkPages")}>
             {navMatches.map((entry) => (
               <CommandItem key={entry.view} value={`nav-${entry.view}`} onSelect={() => run(() => onNavigate(entry.view))}>
-                {entry.icon}
-                <Highlight text={t(entry.labelKey as never)} query={query} />
+                <entry.icon size={14} />
+                <Highlight text={t(entry.labelKey)} query={query} />
               </CommandItem>
             ))}
           </CommandGroup>

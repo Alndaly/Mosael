@@ -1,5 +1,5 @@
 import React from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   ApiOfflineError,
@@ -169,4 +169,18 @@ export function useAuth(): AuthState {
   const value = React.useContext(AuthContext);
   if (!value) throw new Error("useAuth must be used inside AuthProvider");
   return value;
+}
+
+/**
+ * 当前用户是不是部署管理员。侧栏和命令面板都要据此决定给不给「管理」入口 ——
+ * 两处各发一份一模一样的请求、各写一遍字段名,漂移起来就是"侧栏有、⌘K 没有"。
+ *
+ * **藏起来的入口不是权限**:后端每条 /api/admin 路由各自把关,这里只是不给不相干的人添乱。
+ */
+export function useIsDeploymentAdmin(): boolean {
+  const me = useQuery({
+    queryKey: ["auth-me"],
+    queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me"),
+  });
+  return me.data?.is_deployment_admin ?? false;
 }

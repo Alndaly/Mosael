@@ -713,6 +713,8 @@ export const messages = {
     scenesOpenSample: "打开三间展厅示例",
     scenesSelectDone: "完成选择",
     scenesLoading: "正在加载场景…",
+    //: 3D 工作台自己的代码(three.js)还在路上 —— 和上面"场景数据在路上"是两回事。
+    scenesStudioLoading: "正在加载 3D 工作台…",
     boardsName: "画板名",
     boardsEmptyTitle: "还没有画板",
     boardsEmptyHint: "画板是摊开想法的地方 —— 双击空白处写一张便签,贴几张参考图,把相关的圈到一起。",
@@ -3374,6 +3376,7 @@ export const messages = {
     scenesOpenSample: "Open the three-hall sample",
     scenesSelectDone: "Done selecting",
     scenesLoading: "Loading scenes…",
+    scenesStudioLoading: "Loading the 3D studio…",
     boardsName: "Board name",
     boardsEmptyTitle: "No boards yet",
     boardsEmptyHint: "A board is where ideas get spread out — double-click empty space for a note, drop in references, group what belongs together.",

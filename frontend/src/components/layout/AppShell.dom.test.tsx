@@ -9,7 +9,12 @@ import { NAV_ITEMS } from "./navLabels";
 
 const state = vi.hoisted(() => ({ admin: false }));
 vi.mock("@/api/client", async (original) => ({ ...await original<typeof import("@/api/client")>(), api: async () => ({ is_deployment_admin: state.admin }) }));
-vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { username: "studio" }, logout: vi.fn() }) }));
+// useIsDeploymentAdmin 用真的:它问的是 /api/auth/me,而上面那个 api 桩按 state.admin 回话 ——
+// 「管理员才看得到管理」这条就是从那一问开始的,桩掉它等于跳过了要测的东西。
+vi.mock("@/app/auth", async (original) => ({
+  ...(await original<typeof import("@/app/auth")>()),
+  useAuth: () => ({ user: { username: "studio" }, logout: vi.fn() }),
+}));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ theme: "light", locale: "zh-CN", setTheme: vi.fn(), setLocale: vi.fn() }),

@@ -1,18 +1,10 @@
 import React from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BookOpen,
-  Box,
-  ChartNoAxesCombined,
-  Bot,
   Boxes,
-  CalendarClock,
   Check,
   ChevronsUpDown,
-  FolderOpen,
   FolderPlus,
-  Home,
   Languages,
   LogOut,
   MonitorCog,
@@ -20,19 +12,15 @@ import {
   Pencil,
   PanelLeftClose,
   PanelLeftOpen,
-  Plug,
-  Rocket,
-  Scissors,
   Search,
   Settings,
-  ShieldCheck,
   Sun,
   Trash2,
-  Workflow, LayoutGrid } from "lucide-react";
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { api, createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
-import { useAuth } from "@/app/auth";
+import { createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
+import { useAuth, useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -43,37 +31,19 @@ import { TaskCenter } from "@/components/layout/TaskCenter";
 import { workspaceMenuState } from "@/components/layout/workspaceMenu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { NAV_ITEMS, navLabelKey, type StudioView } from "@/components/layout/navLabels";
+import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
 export type { StudioView } from "@/components/layout/navLabels";
 
-/** 图标是**侧栏**的事(面包屑不画图标),所以只有它留在这里;
-    「哪些页面、各叫什么」在 navLabels 那一份里。 */
-const ICONS: Record<StudioView, React.ReactNode> = {
-  home: <Home size={17} />,
-  statistics: <ChartNoAxesCombined size={17} />,
-  media: <FolderOpen size={17} />,
-  notes: <BookOpen size={17} />,
-  scenes: <Box size={17} />,
-  editor: <Scissors size={17} />,
-  ai: <Bot size={17} />,
-  publish: <Rocket size={17} />,
-  settings: <Settings size={17} />,
-  workflows: <Workflow size={17} />,
-  boards: <LayoutGrid size={17} />,
-  "browser-pool": <Boxes size={17} />,
-  scheduler: <CalendarClock size={17} />,
-  plugins: <Plug size={17} />,
-  admin: <ShieldCheck size={17} />,
-};
-
-const PRIMARY_NAV = NAV_ITEMS.filter((item) => item.group === "primary");
+/** 侧栏的几组,从那一份页面声明里按 placement 取 —— 侧栏不再自己记"哪些页在哪一组"。 */
+const PRIMARY_NAV = navItemsAt("primary");
 /** admin 那一格只对部署管理员显示。**藏起来的入口不是权限** —— 后端每条 /api/admin 路由
  *  各自把关,这里只是不给不相干的人添乱。 */
-const SECONDARY_NAV = NAV_ITEMS.filter((item) => item.group === "secondary");
-const ADMIN_NAV = NAV_ITEMS.filter((item) => item.group === "admin");
+const SECONDARY_NAV = navItemsAt("secondary");
+const ADMIN_NAV = navItemsAt("admin");
+const FOOTER_NAV = navItemsAt("footer");
 
 /** 只有「剪辑」工作在"当前项目"语境 —— 它编辑的就是某个项目的时间线。
     其余页面的面包屑显示页面名,否则设置/插件页也挂着项目名,既不合理也容易误解。
@@ -116,13 +86,7 @@ export function AppShell({
 }) {
   const t = useI18n();
   const { theme, setTheme, locale, setLocale } = usePreferences();
-  // 管理入口只对部署管理员显示。**藏起来的入口不是权限** —— 后端每条 /api/admin 路由各自
-  // 把关;这里只是不给不相干的人添乱。
-  const me = useQuery({
-    queryKey: ["auth-me"],
-    queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me"),
-  });
-  const isDeploymentAdmin = me.data?.is_deployment_admin ?? false;
+  const isDeploymentAdmin = useIsDeploymentAdmin();
   const [narrow, setNarrow] = React.useState(() => window.matchMedia("(max-width: 1199px)").matches);
   const [collapsed, setCollapsed] = React.useState<boolean | null>(() => {
     try {
@@ -152,6 +116,15 @@ export function AppShell({
       });
     });
   }, [t]);
+
+  const railItem = (item: NavItem) => {
+    const Icon = item.icon;
+    return (
+      <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={view === item.view} onClick={() => onViewChange(item.view)}>
+        <Icon size={17} />
+      </RailButton>
+    );
+  };
 
   return (
     <div data-studio-shell data-sidebar-collapsed={compact} className="grid h-screen grid-cols-[var(--studio-sidebar)_minmax(0,1fr)] grid-rows-[var(--window-chrome-height)_minmax(0,1fr)]" style={{ "--window-chrome-height": `${WINDOW_CHROME_HEIGHT}px`, "--studio-sidebar": compact ? "64px" : "224px" } as React.CSSProperties}>
@@ -246,22 +219,12 @@ export function AppShell({
           <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
         </div>
         <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 [@media(max-height:850px)]:gap-0.5 overflow-y-auto overflow-x-hidden">
-          {PRIMARY_NAV.filter((item) => item.view !== "settings").map((item) => (
-            <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={view === item.view} onClick={() => onViewChange(item.view)}>
-              {ICONS[item.view]}
-            </RailButton>
-          ))}
+          {PRIMARY_NAV.map(railItem)}
           <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-divider" />
-          {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map((item) => (
-            <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={view === item.view} onClick={() => onViewChange(item.view)}>
-              {ICONS[item.view]}
-            </RailButton>
-          ))}
+          {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map(railItem)}
         </nav>
         <div className="mt-3 grid shrink-0 gap-1 border-t border-divider pt-3">
-          <RailButton compact={compact} label={t("navSettings")} active={view === "settings"} onClick={() => onViewChange("settings")}>
-            {ICONS.settings}
-          </RailButton>
+          {FOOTER_NAV.map(railItem)}
           <RailUserMenu compact={compact} onOpenSettings={() => onViewChange("settings")} />
         </div>
       </aside>
