@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Switch } from "@/components/ui/switch";
 import { AdminActivityChart } from "./AdminActivityChart";
+import { RegistrationSection } from "./RegistrationSection";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { formatMicros } from "@/lib/money";
-import { DeploymentSection } from "@/features/settings/DeploymentSection";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
 
@@ -160,10 +160,11 @@ export function AdminView() {
             </span>
           </SettingsRow>
         ))}
+        {/* 开关和删除对最后一个管理员是灰的 —— 为什么灰,在这里说一次,而不是让人猜。 */}
+        <p className="mt-1.5 px-0.5 text-ui-xs leading-relaxed text-muted-foreground">{t("deployLastAdminDesc")}</p>
       </SettingsGroup>
 
-      {/* 邀请码与部署管理员的授予仍是同一段逻辑,原样复用,不复制一份。 */}
-      <DeploymentSection showAdmins={false} />
+      <RegistrationSection />
 
       <ConfirmDialog
         open={removing !== null}

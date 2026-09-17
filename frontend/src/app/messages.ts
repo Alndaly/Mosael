@@ -1487,14 +1487,9 @@ export const messages = {
     autopilotJudgeBadge: "与对话隔离",
     autopilotSaved: "准则已保存",
     autopilotAdminOnly: "只有管理员能改",
-    deployTitle: "部署",
     inviteCode: "邀请码",
     inviteCodePlaceholder: "向管理员索取",
     inviteCodeHint: "这个部署不开放自助注册。如果对方给了你一个码,填在这里。",
-    deployDesc: "这台后端本身的设置 —— 和某个工作区里谁能做什么是两件事。",
-    deployNotAdmin: "只有部署管理员能看这一页",
-    deployNotAdminDesc:
-      "「部署管理员」管的是这台后端:谁能进来、网络怎么出去、装哪些插件。它和你在某个工作区里的角色无关 —— 请找负责这个部署的人。",
     deployInvitesTitle: "注册邀请码",
     deployInvitesDesc:
       "这个部署已经关掉自助注册,新成员需要一个邀请码才能建账号。码是一次性的,7 天后失效。把它带外发给对方,他自己设密码 —— 密码不经过任何第三人之手。",
@@ -1514,8 +1509,6 @@ export const messages = {
     deployInviteUsed: "已使用",
     deployInviteOpen: "未使用",
     deployAdminsTitle: "部署管理员",
-    deployAdminsDesc:
-      "谁对这台后端负责 —— 改网络出口、装插件、设解释器路径、发注册邀请码。第一个注册的账号自动持有,之后只能由已有的管理员授予。",
     deployAdminBadge: "部署管理员",
     deployLastAdminDesc: "最后一个管理员不能收回:没有部署管理员,实例设置就再也改不了、邀请码也发不出来 —— 应用里没有任何路能救回来。",
     clip: "片段",
@@ -4142,14 +4135,9 @@ export const messages = {
     autopilotJudgeBadge: "isolated from the conversation",
     autopilotSaved: "Rules saved",
     autopilotAdminOnly: "Admins only",
-    deployTitle: "Deployment",
     inviteCode: "Invite code",
     inviteCodePlaceholder: "Ask whoever runs this deployment",
     inviteCodeHint: "This deployment does not allow self-serve signup. If someone gave you a code, enter it here.",
-    deployDesc: "Settings for this backend itself — separate from who can do what inside a workspace.",
-    deployNotAdmin: "Only a deployment admin can see this page",
-    deployNotAdminDesc:
-      "A deployment admin looks after this backend: who may join, how it reaches the network, which plugins are installed. It has nothing to do with your role in a workspace — ask whoever runs this deployment.",
     deployInvitesTitle: "Registration invites",
     deployInvitesDesc:
       "This deployment has self-serve signup turned off. A new member needs an invite code to create an account. Codes are single-use and expire after 7 days. Send one out of band — they choose their own password, so it never passes through anyone else's hands.",
@@ -4169,8 +4157,6 @@ export const messages = {
     deployInviteUsed: "Used",
     deployInviteOpen: "Unused",
     deployAdminsTitle: "Deployment admins",
-    deployAdminsDesc:
-      "Who looks after this backend — outbound network, plugins, interpreter paths, registration invites. The first account to register holds it; after that only an existing admin can grant it.",
     deployAdminBadge: "Deployment admin",
     deployLastAdminDesc: "With no deployment admin, instance settings can never be changed and no invites can be issued — nothing in the app can recover from that.",
     clip: "Clip",

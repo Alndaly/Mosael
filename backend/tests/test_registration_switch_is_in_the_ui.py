@@ -72,10 +72,10 @@ def test_the_ui_actually_has_the_switch() -> None:
     from pathlib import Path
 
     frontend = Path(__file__).resolve().parents[2] / "frontend" / "src"
-    section = (frontend / "features/settings/DeploymentSection.tsx").read_text()
+    section = (frontend / "features/admin/RegistrationSection.tsx").read_text()
     assert '"/api/admin/registration"' in section, "管理页没有调这个开关"
     assert "deployRegistrationOpen" in section
 
-    for name in ("app/messages.ts", "features/settings/DeploymentSection.tsx"):
+    for name in ("app/messages.ts", "features/admin/RegistrationSection.tsx"):
         text = (frontend / name).read_text()
         assert "MOSAEL_OPEN_REGISTRATION" not in text, f"{name} 还在教人改环境变量"
