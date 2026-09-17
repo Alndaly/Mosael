@@ -60,18 +60,17 @@ def _no_stragglers_from_the_previous_test():
 
 
 @pytest.fixture(autouse=True)
-def _reset_asr_runtime_probe():
-    """`asr_models.runtime_ready` / `transcription.resolve_transcription_runtime` 都带进程级缓存,而它们探测的是
-    **真实机器**(起子进程 import funasr)。不清的话,一个用例 monkeypatch 出来的结果会渗给下一个,
-    表现是单独跑全绿、全量跑红。"""
-    from app.ai.runtime import asr_models
+def _reset_runtime_probes():
+    """转写、克隆的「跑不跑得起来」和「正在下」都是**进程级**缓存,而它们探测的是真实机器
+    (起子进程 import funasr / f5_tts)。不清的话,一个用例 monkeypatch 出来的结果会渗给下一个,
+    表现是单独跑全绿、全量跑红 —— 三条路都清,而不是只清当时踩到的那一条。"""
+    from app.ai.runtime import asr_models, f5_models, tts_models
 
     def reset() -> None:
         asr_models.clear_runtime_probes()
-        # 下载状态也是进程级的:一个用例留下的 "downloading" 会让后面的用例读到别人的状态
-        # (而 start_download 还会因此拒绝服务:「已有模型正在下载」)。
-        with asr_models._store._lock:
-            asr_models._store._live.clear()
+        tts_models.clear_runtime_probes()
+        for module in (asr_models, tts_models, f5_models):
+            module._store.reset()
 
     reset()
     yield

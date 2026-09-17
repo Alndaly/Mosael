@@ -27,9 +27,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 APP = ROOT / "backend" / "app"
 DOC = ROOT / "docs" / "PROCESS_STATE.md"
 
-#: 会就地改容器的方法。漏掉一个的后果是漏报,不是误报。
+#: 会就地改一份进程内状态的方法。漏掉一个的后果是漏报,不是误报 —— 所以除了容器自带的那些,
+#: 也认我们自己那几个小状态类的写法(download_state 的 DownloadStore / ProbeCache)。
 MUTATORS = frozenset(
-    {"append", "add", "pop", "clear", "update", "discard", "setdefault", "remove", "extend", "popitem"}
+    {"append", "add", "pop", "clear", "update", "discard", "setdefault", "remove", "extend", "popitem",
+     "merge", "reset", "remember", "invalidate"}
 )
 
 
@@ -40,6 +42,26 @@ def _module_level_names(tree: ast.Module) -> set[str]:
             names |= {t.id for t in node.targets if isinstance(t, ast.Name)}
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             names.add(node.target.id)
+    return names
+
+
+def _context_vars(tree: ast.Module) -> set[str]:
+    """`ContextVar(...)` 绑的那些名字。**它们不是共享状态** —— 每个上下文各一份,重启丢掉的
+    不是"别人存进去的东西",而且第二个进程也不会因此打架(当前父任务、回执、计量归属)。"""
+    names: set[str] = set()
+    for node in tree.body:
+        target = None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0].id
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target = node.target.id
+        value = node.value if isinstance(node, (ast.Assign, ast.AnnAssign)) else None
+        call = value if isinstance(value, ast.Call) else None
+        name = ""
+        if call is not None:
+            name = getattr(call.func, "id", "") or getattr(call.func, "attr", "")
+        if target and name == "ContextVar":
+            names.add(target)
     return names
 
 
@@ -70,7 +92,7 @@ def _live_state() -> set[str]:
     for path in sorted(APP.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         relative = path.relative_to(ROOT / "backend").as_posix()
-        for name in _module_level_names(tree) & _mutated_names(tree):
+        for name in (_module_level_names(tree) & _mutated_names(tree)) - _context_vars(tree):
             found.add(f"{relative}:{name}")
     return found
 

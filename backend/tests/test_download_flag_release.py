@@ -25,7 +25,7 @@ def test_a_crashing_download_releases_the_flag(module, any_id, monkeypatch) -> N
         raise RuntimeError("worker could not start")
 
     monkeypatch.setattr(module, "_download_body", explode)
-    module._store.set(model_id, module._Live(status="downloading", message="准备下载…"))
+    module._store.set(model_id, module.DownloadProgress(status="downloading", message="准备下载…"))
 
     module._run_download(model_id)
 

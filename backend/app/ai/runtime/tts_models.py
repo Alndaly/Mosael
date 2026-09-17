@@ -17,7 +17,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -30,6 +30,8 @@ from app.core.rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
 from app.ai.runtime import remote_size
+
+from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
 
 logger = logging.getLogger(__name__)
 
@@ -534,43 +536,13 @@ def _resolve_engine_python(engine_id: str) -> str | None:
     return None
 
 
-#: 探测过的结果。**列状态只读这里,永远不等** —— 探测要起子进程 import torch,而列状态是
-#: 一次纯读的请求。这个仓库修过同一个形状:列供应商曾经在返回前替过期令牌去联网刷新
-#: (见 test_listing_connections_does_not_block),判据是"这个接口要回答的问题,不需要出网
-#: 就能回答";这里是同一句话的另一半 —— 不需要起子进程就能回答。
-_PROBED: dict[str, str | None] = {}
-_PROBING: set[str] = set()
-_PROBE_LOCK = threading.Lock()
-#: 探测的**代次**。`clear_runtime_probes()` 让它 +1,于是所有在飞的探测都成了上一代。
-#:
-#: 少了它有两个后果,都真实发生过:
-#:   · `_PROBING` 不清 —— 上一代那条还挂着"正在探测",新一代的探测**永远起不来**,
-#:     状态卡在「还没测过」;
-#:   · 就算清了,上一代那条跑完还是会把**过期答案写回缓存**,覆盖掉新探出来的那个。
-#: 所以判据不是"清空",是"只有当代的才算数"。
-_PROBE_GENERATION = 0
+#: 探过没探过、以及探出来的解释器路径(见 runtime/download_state.ProbeCache)。
+_probes = ProbeCache()
 
 
 def probe_in_background(engine_id: str) -> None:
     """确保这个引擎被探过一次。已经在探的不重复起线程。"""
-    with _PROBE_LOCK:
-        if engine_id in _PROBED or engine_id in _PROBING:
-            return
-        _PROBING.add(engine_id)
-        generation = _PROBE_GENERATION
-
-    def run() -> None:
-        python = None
-        try:
-            python = _resolve_engine_python(engine_id)
-        finally:
-            with _PROBE_LOCK:
-                # 上一代的结果一律丢掉 —— 它探的是改配置之前那套环境。
-                if generation == _PROBE_GENERATION:
-                    _PROBING.discard(engine_id)
-                    _PROBED[engine_id] = python
-
-    threading.Thread(target=run, daemon=True).start()
+    _probes.probe_in_background(engine_id, lambda: _resolve_engine_python(engine_id))
 
 
 def runtime_status(engine_id: str) -> tuple[bool, bool]:
@@ -579,9 +551,9 @@ def runtime_status(engine_id: str) -> tuple[bool, bool]:
     "还没测过"和"测过了、跑不起来"是两回事。把前者说成后者,就是拿一个未知冒充一个结论:
     界面会写着「未就绪」,而其实只是还没问。
     """
-    with _PROBE_LOCK:
-        if engine_id in _PROBED:
-            return bool(_PROBED[engine_id]), True
+    python, known = _probes.known(engine_id)
+    if known:
+        return bool(python), True
     probe_in_background(engine_id)
     return False, False
 
@@ -589,12 +561,10 @@ def runtime_status(engine_id: str) -> tuple[bool, bool]:
 def refresh_runtime_status(engine_id: str) -> bool:
     """**现在就探一次**并记下来。装完引擎之后调它 —— 否则下一次列状态还得等后台那一轮,
     用户刚点完「下载」看到的仍是"正在检查"。测试里也用它拿一个确定的答案。
+
+    走**公开的**那个:它是这件事唯一的入口,打桩/替换也都替它(私有的那个只是缓存层)。
     """
-    # 走**公开的**那个:它是这件事唯一的入口,打桩/替换也都替它(私有的那个只是缓存层)。
-    python = resolve_engine_python(engine_id)
-    with _PROBE_LOCK:
-        _PROBED[engine_id] = python
-    return bool(python)
+    return bool(_probes.remember(engine_id, resolve_engine_python(engine_id)))
 
 
 def resolve_engine_python(engine_id: str) -> str | None:
@@ -614,13 +584,9 @@ def clear_runtime_probes() -> None:
     """装完引擎、改完解释器路径之后叫一声,否则答案会停在"装之前"。"""
     # getattr:测试会把探测换成一个普通函数(没有 cache_clear)。作废缓存是清理动作,
     # 不该因为"被替换过"就炸。
-    global _PROBE_GENERATION
     getattr(_resolve_engine_python, "cache_clear", lambda: None)()
-    with _PROBE_LOCK:
-        _PROBED.clear()
-        # 在飞的那些连同它们的结果一起作废,位置也让出来 —— 否则新的探测起不来。
-        _PROBING.clear()
-        _PROBE_GENERATION += 1
+    # 在飞的那些连同它们的结果一起作废,位置也让出来 —— 否则新的探测起不来(见 ProbeCache)。
+    _probes.invalidate()
 
 
 def probe_interpreter(engine_id: str) -> dict[str, Any]:
@@ -634,53 +600,15 @@ def probe_interpreter(engine_id: str) -> dict[str, Any]:
     「还没测过」和「测过了、跑不起来」是两回事(同 runtime_status)——所以多给一个
     `worker_checked`,而不是把未知说成"没就绪"。
     """
-    with _PROBE_LOCK:
-        if engine_id in _PROBED:
-            python = _PROBED[engine_id]
-            return {"worker_ready": bool(python), "worker_python": python or "", "worker_checked": True}
+    python, known = _probes.known(engine_id)
+    if known:
+        return {"worker_ready": bool(python), "worker_python": python or "", "worker_checked": True}
     probe_in_background(engine_id)
     return {"worker_ready": False, "worker_python": "", "worker_checked": False}
 
 
-# ---------------------------------------------------------------------------
-# Live download state
-# ---------------------------------------------------------------------------
-@dataclass
-class _Live:
-    status: str = "idle"
-    downloaded: int = 0
-    total: int = 0
-    speed: float = 0.0
-    eta: float | None = None
-    message: str = ""
-    #: message 是 key 时的模板参数(见 core/i18n.t)。翻译在出口做,这里只负责把值带出来。
-    params: dict[str, str] = field(default_factory=dict)
-
-
-class _Store:
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._live: dict[str, _Live] = {}
-
-    def get(self, key: str) -> _Live | None:
-        with self._lock:
-            live = self._live.get(key)
-            return None if live is None else _Live(**live.__dict__)
-
-    def set(self, key: str, live: _Live) -> None:
-        with self._lock:
-            self._live[key] = live
-
-    def clear(self, key: str) -> None:
-        with self._lock:
-            self._live.pop(key, None)
-
-    def downloading(self) -> bool:
-        with self._lock:
-            return any(live.status == "downloading" for live in self._live.values())
-
-
-_store = _Store()
+#: 「正在下 / 刚下失败」的那一半(静息时盘上的文件才是事实源)。见 runtime/download_state。
+_store = DownloadStore()
 
 
 def _source_fields(engine: TtsEngine) -> dict[str, Any]:
@@ -890,7 +818,7 @@ def start_download(engine_id: str) -> dict[str, Any]:
     live = _store.get(engine.id)
     if live is not None and live.status == "downloading":
         raise RuntimeError(f"{engine.label} 已经在下载中")
-    _store.set(engine.id, _Live(status="downloading", message="dlMsg_preparing"))
+    _store.set(engine.id, DownloadProgress(status="downloading", message="dlMsg_preparing"))
     threading.Thread(target=_run_download, args=(engine.id,), daemon=True).start()
     return _status_dict(engine)
 
@@ -926,7 +854,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
             raise RuntimeError(
                 "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。"
             )
-        _store.set(engine_id, _Live(status="downloading", message="dlMsg_creatingRuntime"))
+        _store.set(engine_id, DownloadProgress(status="downloading", message="dlMsg_creatingRuntime"))
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         result = run_logged(
             [base, "-m", "venv", str(venv_dir)],
@@ -939,7 +867,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
         # 这一阶段**不报字节**:跑的是 pip(装 torch 等),它一个字节都不会落进权重缓存,
         # 而进度是按那个目录的增长算的。借用权重的 1.5GB 当分母,结果就是永远 0 MB / 1.5 GB。
         # 两件事量纲不同,就别共用一个进度条 —— 只报"在做哪一步"。
-        _Live(status="downloading", message="dlMsg_installingDeps", params={"engine": engine.label}),
+        DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": engine.label}),
     )
     # 装到托管 venv 里。超时给足 —— torch 在慢网络下很久。
     # pip 镜像来自设置页(与「模型下载源」分开:那个管 HF 权重,这个管 Python 包)。
@@ -966,7 +894,7 @@ def _ensure_fish_source() -> None:
     if (repo / tts_config.FISH_REPO_MARKER).is_file():
         return
     # 同上:拉的是 git 源码,不是权重 —— 没有分母就别摆一个。
-    _store.set("fish-speech", _Live(status="downloading", message="dlMsg_fetchingFishSource"))
+    _store.set("fish-speech", DownloadProgress(status="downloading", message="dlMsg_fetchingFishSource"))
     repo.parent.mkdir(parents=True, exist_ok=True)
     if repo.is_dir() and any(repo.iterdir()):
         # A prior half-clone — wipe so `git clone` into it succeeds.
@@ -1007,7 +935,7 @@ def _run_download(engine_id: str) -> None:
         _download_body(engine_id)
     except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
         logger.exception("model download failed")
-        _store.set(engine_id, _Live(status="failed", message=str(exc)[:400]))
+        _store.set(engine_id, DownloadProgress(status="failed", message=str(exc)[:400]))
 
 
 def _download_body(engine_id: str) -> None:
@@ -1027,7 +955,7 @@ def _download_body(engine_id: str) -> None:
             _ensure_fish_source()
         except RuntimeError as exc:
             logger.warning("拉取 %s 源码失败:%s", engine.id, exc)
-            _store.set(engine.id, _Live(status="failed", message=str(exc)[:400]))
+            _store.set(engine.id, DownloadProgress(status="failed", message=str(exc)[:400]))
             return
         # Snapshot weights into the managed model dir (flat: codec.pth at root) and measure it
         # for live progress — resolved_fish_model won't resolve until codec.pth lands.
@@ -1074,7 +1002,7 @@ def _download_body(engine_id: str) -> None:
         key, params = _fmt_eta(eta)
         if not key:
             key, params = "dlMsg_elapsed", {"m": str(elapsed // 60), "s": f"{elapsed % 60:02d}"}
-        _store.set(engine.id, _Live(status="downloading", downloaded=current, total=total_bytes,
+        _store.set(engine.id, DownloadProgress(status="downloading", downloaded=current, total=total_bytes,
                                     speed=speed, eta=eta, message=key, params=params))
 
     stderr = child.finish(600)
@@ -1104,7 +1032,7 @@ def _download_body(engine_id: str) -> None:
         if path is not None:
             reason = f"{reason}\n完整日志:{path}"
         logger.warning("下载 %s 失败(完整输出见 %s):%s", engine.id, path, (stderr or "(空)")[-800:])
-        _store.set(engine.id, _Live(status="failed", message=reason))
+        _store.set(engine.id, DownloadProgress(status="failed", message=reason))
     for path in (output_path, Path(str(output_path) + ".json")):
         try:
             path.unlink(missing_ok=True)

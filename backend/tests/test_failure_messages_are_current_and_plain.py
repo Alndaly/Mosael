@@ -48,7 +48,7 @@ def test_changing_the_download_source_drops_the_stale_failure() -> None:
     """换了源,上一次失败就不再描述"现在" —— 它得让位,而不是继续挂在卡片上。"""
     tts_models._store.set(
         "f5-tts",
-        tts_models._Live(status="failed", message="连不上模型下载源(https://hf-mirror.com):…"),
+        tts_models.DownloadProgress(status="failed", message="连不上模型下载源(https://hf-mirror.com):…"),
     )
 
     tts_models.forget_failures()
@@ -59,7 +59,7 @@ def test_changing_the_download_source_drops_the_stale_failure() -> None:
 
 def test_forgetting_failures_does_not_kill_a_running_download() -> None:
     """只丢掉失败。正在下的那条要是被清了,界面会以为它停了。"""
-    tts_models._store.set("fish-speech", tts_models._Live(status="downloading", message="下载中"))
+    tts_models._store.set("fish-speech", tts_models.DownloadProgress(status="downloading", message="下载中"))
     try:
         tts_models.forget_failures()
         live = tts_models._store.get("fish-speech")
@@ -88,7 +88,7 @@ def test_saving_the_settings_page_drops_it(monkeypatch) -> None:
     client = fresh_client()
     tts_models._store.set(
         "f5-tts",
-        tts_models._Live(status="failed", message="连不上模型下载源(https://hf-mirror.com):…"),
+        tts_models.DownloadProgress(status="failed", message="连不上模型下载源(https://hf-mirror.com):…"),
     )
 
     saved = client.put(

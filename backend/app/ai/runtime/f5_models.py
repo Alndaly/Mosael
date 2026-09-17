@@ -32,6 +32,8 @@ import logging
 from app.ai.runtime import remote_size
 from app.core.rate import DownloadRate
 
+from app.ai.runtime.download_state import DownloadProgress, DownloadStore
+
 logger = logging.getLogger(__name__)
 
 #: 量一次盘的间隔。和引擎权重、转写模型那两条路取同一个值 —— 三处报的是同一种东西,
@@ -249,8 +251,8 @@ def missing_for_language(script: str) -> F5Model | None:
 
 
 #: 下载状态。一次只下一个:这些文件都是 GB 级,并发下只会互相抢带宽。
-_lock = threading.Lock()
-_live: dict[str, dict[str, Any]] = {}
+#: 和转写模型、克隆引擎同一份实现(见 runtime/download_state)。
+_store = DownloadStore()
 
 
 def measured_total(model: F5Model, *, blocking: bool = False) -> tuple[int, bool]:
@@ -274,8 +276,7 @@ def measured_total(model: F5Model, *, blocking: bool = False) -> tuple[int, bool
 
 
 def status(model: F5Model) -> dict[str, Any]:
-    with _lock:
-        live = dict(_live.get(model.id) or {})
+    live = _store.get(model.id) or DownloadProgress(status="", progress=-1.0)
     total, estimated = measured_total(model)
     return {
         "id": model.id,
@@ -285,16 +286,16 @@ def status(model: F5Model) -> dict[str, Any]:
         "expected_bytes": total,
         "total_is_estimate": estimated,
         "installed": installed(model),
-        "status": live.get("status", "installed" if installed(model) else "missing"),
-        "progress": live.get("progress", 1.0 if installed(model) else 0.0),
+        "status": live.status or ("installed" if installed(model) else "missing"),
+        "progress": live.progress if live.progress >= 0 else (1.0 if installed(model) else 0.0),
         # 和引擎权重、转写模型那两条路报同样的东西 —— 三处报的是同一种事,形状不同只会让
         # 界面各写一套(而"三处两种做法"正是这条路进度不动的由来)。
-        "downloaded_bytes": live.get("downloaded", 0),
-        "total_bytes": live.get("total", 0),
-        "speed_bps": live.get("speed", 0.0),
-        "eta_seconds": live.get("eta"),
-        "message": live.get("message", ""),
-        "error": live.get("error", ""),
+        "downloaded_bytes": live.downloaded,
+        "total_bytes": live.total,
+        "speed_bps": live.speed,
+        "eta_seconds": live.eta,
+        "message": live.message,
+        "error": live.error,
     }
 
 
@@ -303,23 +304,16 @@ def list_status() -> list[dict[str, Any]]:
 
 
 def downloading() -> str:
-    with _lock:
-        for model_id, live in _live.items():
-            if live.get("status") == "downloading":
-                return model_id
-    return ""
+    """正在下的那一份权重(没有就是空串)。"""
+    return _store.busy_key()
 
 
 def set_live(model_id: str, **fields: Any) -> None:
-    with _lock:
-        live = dict(_live.get(model_id) or {})
-        live.update(fields)
-        _live[model_id] = live
+    _store.merge(model_id, **fields)
 
 
 def clear_live(model_id: str) -> None:
-    with _lock:
-        _live.pop(model_id, None)
+    _store.clear(model_id)
 
 
 def start_download(model_id: str) -> dict[str, Any]:

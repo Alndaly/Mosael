@@ -166,7 +166,7 @@ def test_download_progress_messages_take_params() -> None:
 
     tts_models._store.set(
         "f5-tts",
-        tts_models._Live(status="downloading", message="dlMsg_installingDeps", params={"engine": "F5-TTS"}),
+        tts_models.DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": "F5-TTS"}),
     )
     try:
         client = fresh_client()

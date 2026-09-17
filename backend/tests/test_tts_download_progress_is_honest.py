@@ -47,12 +47,12 @@ def test_the_runtime_phase_does_not_borrow_the_weights_size(monkeypatch) -> None
 
 
 def test_the_status_does_not_put_the_weights_size_back(monkeypatch) -> None:
-    """光在 _Live 里置 0 不够 —— `_status_dict` 曾经用 `live.total or expected_bytes` 把它顶回去。
+    """光在进度记录里置 0 不够 —— `_status_dict` 曾经用 `live.total or expected_bytes` 把它顶回去。
 
     这正是转写那边踩过的:改对了一处,另一处又把它填回来,界面上什么都没变。
     """
     monkeypatch.setattr(tts_models, "_is_installed", lambda engine: False)
-    tts_models._store.set("f5-tts", tts_models._Live(status="downloading", message="安装运行依赖…"))
+    tts_models._store.set("f5-tts", tts_models.DownloadProgress(status="downloading", message="安装运行依赖…"))
     try:
         row = tts_models.get_status("f5-tts")
         assert row["total_bytes"] == 0, f"没有分母的阶段被填上了分母:{row['total_bytes']}"
@@ -65,7 +65,7 @@ def test_the_weights_phase_still_reports_bytes() -> None:
     """真的在下权重时,分母要在 —— 这道闸只挡"量纲不同"的那一段。"""
     tts_models._store.set(
         "f5-tts",
-        tts_models._Live(status="downloading", downloaded=300_000_000, total=1_500_000_000, message="下载中"),
+        tts_models.DownloadProgress(status="downloading", downloaded=300_000_000, total=1_500_000_000, message="下载中"),
     )
     try:
         row = tts_models.get_status("f5-tts")

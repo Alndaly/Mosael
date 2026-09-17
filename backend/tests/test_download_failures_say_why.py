@@ -79,6 +79,9 @@ def test_the_failure_message_carries_the_real_error(monkeypatch) -> None:
         })(),
     )
     monkeypatch.setattr(tts_models, "_is_installed", lambda engine: False)
+    #: 运行环境当作已经备好 —— 这条测试要看的是**拉权重失败时那句话**。不挡的话,单独跑时
+    #: 建 venv 那一步会先撞上上面这个 Popen 桩(它替的不是那件事),测的就成了另一段代码。
+    monkeypatch.setattr(tts_models, "ensure_engine_runtime", lambda engine_id: None)
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: sys.executable)
     tts_models._store.clear("f5-tts")
 

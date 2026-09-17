@@ -124,11 +124,12 @@ def test_installing_the_runtime_works_on_an_already_downloaded_model(monkeypatch
     started: list[str] = []
     monkeypatch.setattr(asr_models, "_is_installed", lambda entry: True)
     monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: False)
-    # 桩要能接住**所有**起线程的调用:后台探测也走 threading.Thread,而它不带 args
-    # (见 asr_models.probe_in_background)。一个卡死参数形状的桩,会在别处加线程时炸。
+    # 桩要能接住**所有**起线程的调用:后台探测也走 threading.Thread,而它不带 args、还带 name
+    # (见 runtime/download_state.ProbeCache)。一个卡死参数形状的桩,会在别处加线程时炸 ——
+    # 而 threading 是同一个模块对象,这里一打桩,那边也走它。
     monkeypatch.setattr(
         asr_models.threading, "Thread",
-        lambda target, args=None, daemon=None: type(
+        lambda target, args=None, daemon=None, **_kwargs: type(
             "T", (), {"start": lambda self: started.append(args[0]) if args else None}
         )(),
     )

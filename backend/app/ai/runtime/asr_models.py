@@ -25,7 +25,7 @@ import subprocess
 import threading
 from functools import lru_cache
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.ai.runtime import workers
@@ -37,6 +37,8 @@ from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line
+
+from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
 
 logger = logging.getLogger(__name__)
 
@@ -304,45 +306,8 @@ def _is_installed(entry: ModelEntry) -> bool:
     return _measure(entry) >= int(total * _INSTALLED_FRACTION)
 
 
-# ---------------------------------------------------------------------------
-# Live download state (in-memory; disk detection is the source of truth at rest)
-# ---------------------------------------------------------------------------
-@dataclass
-class _Live:
-    status: str = "idle"  # "downloading" | "failed"
-    downloaded: int = 0
-    total: int = 0
-    speed: float = 0.0  # bytes/sec
-    eta: float | None = None  # seconds remaining
-    message: str = ""
-    #: message 是 key 时的模板参数(见 core/i18n.t)。翻译在出口做,这里只负责把值带出来。
-    params: dict[str, str] = field(default_factory=dict)
-
-
-class _Store:
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._live: dict[str, _Live] = {}
-
-    def get(self, model_id: str) -> _Live | None:
-        with self._lock:
-            live = self._live.get(model_id)
-            return None if live is None else _Live(**live.__dict__)
-
-    def set(self, model_id: str, live: _Live) -> None:
-        with self._lock:
-            self._live[model_id] = live
-
-    def clear(self, model_id: str) -> None:
-        with self._lock:
-            self._live.pop(model_id, None)
-
-    def downloading(self) -> bool:
-        with self._lock:
-            return any(live.status == "downloading" for live in self._live.values())
-
-
-_store = _Store()
+#: 「正在下 / 刚下失败」的那一半(静息时盘上的文件才是事实源)。见 runtime/download_state。
+_store = DownloadStore()
 
 
 def resolve_engine_python(engine: str) -> str | None:
@@ -353,51 +318,24 @@ def resolve_engine_python(engine: str) -> str | None:
         return None
 
 
-#: 探测过的结果。**列状态只读这里,永远不等** —— 探测要起子进程 import funasr(它会把
-#: torch 一起拉起来),而列模型是一次纯读的请求。用户那一页停在「正在连接后端…」就是这个。
-#: 克隆那边同一套(见 ai/runtime/tts_models),判据也是同一句:这个接口要回答的问题,不需要起
-#: 子进程就能回答。
-_PROBED: dict[str, bool] = {}
-_PROBING: set[str] = set()
-_PROBE_LOCK = threading.Lock()
-#: 探测代次。和克隆那边同一套(见 ai/runtime/tts_models 里那段说明):清缓存时 +1,
-#: 在飞的探测就成了上一代 —— 它既不该继续占着"正在探测"的位置,结果也不该写回来。
-_PROBE_GENERATION = 0
+#: 探过没探过(见 runtime/download_state.ProbeCache)。装完环境之后调 refresh_runtime_status。
+_probes = ProbeCache()
 
 
 def probe_in_background(engine: str) -> None:
-    with _PROBE_LOCK:
-        if engine in _PROBED or engine in _PROBING:
-            return
-        _PROBING.add(engine)
-        generation = _PROBE_GENERATION
-
-    def run() -> None:
-        ok = False
-        try:
-            ok = runtime_ready(engine)
-        finally:
-            with _PROBE_LOCK:
-                if generation == _PROBE_GENERATION:
-                    _PROBING.discard(engine)
-                    _PROBED[engine] = ok
-
-    threading.Thread(target=run, daemon=True).start()
+    _probes.probe_in_background(engine, lambda: runtime_ready(engine))
 
 
 def refresh_runtime_status(engine: str) -> bool:
     """现在就探一次并记下来(装完之后调,以及测试里要确定答案时)。"""
-    ok = runtime_ready(engine)
-    with _PROBE_LOCK:
-        _PROBED[engine] = ok
-    return ok
+    return bool(_probes.remember(engine, runtime_ready(engine)))
 
 
 def runtime_status(engine: str) -> tuple[bool, bool]:
     """(跑得起来吗, 测过了吗)。没测过就在后台起一次,先把已知的给出去。"""
-    with _PROBE_LOCK:
-        if engine in _PROBED:
-            return _PROBED[engine], True
+    value, known = _probes.known(engine)
+    if known:
+        return bool(value), True
     probe_in_background(engine)
     return False, False
 
@@ -406,13 +344,9 @@ def clear_runtime_probes() -> None:
     """装好环境之后把探测缓存清掉 —— 只有一处要清,因为只有一份缓存。"""
     # getattr:测试会把探测换成普通函数(没有 cache_clear)。清缓存是清理动作,不是判据,
     # 不该因为"被替换过"就炸。
-    global _PROBE_GENERATION
     getattr(_resolve_python, "cache_clear", lambda: None)()
     getattr(runtime_ready, "cache_clear", lambda: None)()
-    with _PROBE_LOCK:
-        _PROBED.clear()
-        _PROBING.clear()
-        _PROBE_GENERATION += 1
+    _probes.invalidate()
 
 
 @lru_cache(maxsize=4)
@@ -559,7 +493,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     venv_dir = managed_venv_dir(engine)
     venv_python = managed_venv_python(engine)
     if not venv_python.is_file():
-        _store.set(key, _Live(status="downloading", message="dlMsg_creatingRuntime"))
+        _store.set(key, DownloadProgress(status="downloading", message="dlMsg_creatingRuntime"))
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         # **不能用 sys.executable**:打包版里它是应用自己,`-m venv` 会把后端再启动一遍,
         # 然后把 uvicorn "端口已占用" 的日志当成"创建失败的原因"端给用户。
@@ -572,7 +506,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
         if created.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{blame_line(created.stderr or created.stdout, fallback='没有留下原因')}")
 
-    _store.set(key, _Live(status="downloading", message="dlMsg_installingDeps", params={"engine": engine}))
+    _store.set(key, DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": engine}))
     # **和克隆走同一个安装器**,包括设置页那个 pip 镜像 —— 此前这里没带,于是同一台机器上
     # 「声音克隆走镜像、转写直连 PyPI」,而设置项写的是「装引擎依赖时用的 pip 索引」。
     # 超时给足:torch 在慢网络下很久。
@@ -610,7 +544,7 @@ def start_download(model_id: str) -> dict[str, Any]:
     if live is not None and live.status == "downloading":
         raise RuntimeError(f"{entry.label} 已经在下载中")
     # 分母先留空:接下来可能是"装运行环境"(pip,量纲完全不同),真正开始拉模型时再填上。
-    _store.set(model_id, _Live(status="downloading", message="dlMsg_preparingShort"))
+    _store.set(model_id, DownloadProgress(status="downloading", message="dlMsg_preparingShort"))
     threading.Thread(target=_run_download, args=(model_id,), daemon=True).start()
     return _status_dict(entry)
 
@@ -635,7 +569,7 @@ def _run_download(model_id: str) -> None:
         _download_body(model_id)
     except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
         logger.exception("model download failed")
-        _store.set(model_id, _Live(status="failed", message=str(exc)[:400]))
+        _store.set(model_id, DownloadProgress(status="failed", message=str(exc)[:400]))
 
 
 def _download_body(model_id: str) -> None:
@@ -648,7 +582,7 @@ def _download_body(model_id: str) -> None:
         ensure_engine_runtime(entry.engine, progress_key=model_id)
         python = _resolve_python(entry.engine)
     except Exception as exc:  # noqa: BLE001
-        _store.set(model_id, _Live(status="failed", message=str(exc)[:400]))
+        _store.set(model_id, DownloadProgress(status="failed", message=str(exc)[:400]))
         return
 
     started = time.monotonic()
@@ -689,7 +623,7 @@ def _download_body(model_id: str) -> None:
         key, params = _fmt_eta(eta)
         if not key:
             key, params = "dlMsg_elapsed", {"m": str(elapsed // 60), "s": f"{elapsed % 60:02d}"}
-        _store.set(model_id, _Live(
+        _store.set(model_id, DownloadProgress(
             status="downloading", downloaded=current, total=download_total,
             speed=speed, eta=eta, message=key, params=params))
 
@@ -708,7 +642,7 @@ def _download_body(model_id: str) -> None:
         if path is not None and reason != "dlMsg_processDied":
             reason = f"{reason[:400]}\n完整日志:{path}"
         logger.warning("下载 %s 失败(完整输出见 %s)", model_id, path)
-        _store.set(model_id, _Live(status="failed", message=reason))
+        _store.set(model_id, DownloadProgress(status="failed", message=reason))
     try:
         output_path.unlink(missing_ok=True)
     except OSError:
