@@ -10783,7 +10783,7 @@
           "boards"
         ],
         "summary": "Generate",
-        "description": "在画板上生成一份素材,产出就地落回画布。\n\n**不自己实现生成** —— 汇进 create_generation_job 那条漏斗(AI 工作台、定时任务、\n工作流节点、智能体走的是同一条),于是描述符校验、能力探测、计量记账、任务中心全都白拿。\n这里只多做一件画板自己的事:先摆一个「正在生成」的占位,并把回执指向它。",
+        "description": "在画板上生成一份素材,产出就地落回画布(见 boards.actions.generate_on_board)。",
         "operationId": "generate_api_boards__board_id__generate_post",
         "parameters": [
           {
@@ -10836,7 +10836,7 @@
           "boards"
         ],
         "summary": "Write",
-        "description": "让 AI 往画板上的一张便签里写字。\n\n**不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒\n就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。\n\n**也不自己实现一遍「调 LLM」**:供应商解析走 require_connection、调用走 ai_chat.chat、计量走\nbillable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、\n记账口径迟早各走各的,而分岔了没有任何地方会报错。",
+        "description": "让 AI 往画板上的一张便签里写字(见 boards.actions.write_on_board)。",
         "operationId": "write_api_boards__board_id__write_post",
         "parameters": [
           {
@@ -10889,7 +10889,7 @@
           "boards"
         ],
         "summary": "Speak",
-        "description": "把一段文字念成音频,产出落回画板上那一格。\n\n**和出图出片同一套**:先摆占位、起任务、回执把 asset_id 填回来 —— 合成可能几十秒,还可能\n在另一台机器上跑。回执用 set_receipt 打在上下文里,之后 start_synthesis 建的任务自动带上\n(不用把 board 的概念塞进 voices 领域)。",
+        "description": "把一段文字念成音频,产出落回画板上那一格(见 boards.actions.speak_on_board)。",
         "operationId": "speak_api_boards__board_id__speak_post",
         "parameters": [
           {
@@ -10942,7 +10942,7 @@
           "boards"
         ],
         "summary": "Trim",
-        "description": "截出一段,产出落回画板上那一格。\n\n**原素材不动** —— 画板上的每一步都该是可回头的,就地改会让上一版消失。产出是一份新素材。",
+        "description": "截出一段,产出落回画板上那一格(见 boards.actions.trim_on_board)。",
         "operationId": "trim_api_boards__board_id__trim_post",
         "parameters": [
           {
