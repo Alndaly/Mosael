@@ -10,8 +10,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { api } = vi.hoisted(() => ({ api: vi.fn() }));
-vi.mock("@/api/client", () => ({ api, invalidatePlugins: () => undefined }));
+//: 路径在 api/domains/plugins 里,界面调的是**有名字的函数** —— 所以这里打桩的也是它们,
+//: 断言的是"带着哪个连接、哪个工具、哪些参数",而不是一串拼出来的 URL。
+const { listPluginCredentials, savePluginCredentials, invokePluginTool } = vi.hoisted(() => ({
+  listPluginCredentials: vi.fn(),
+  savePluginCredentials: vi.fn(),
+  invokePluginTool: vi.fn(),
+}));
+vi.mock("@/api/client", () => ({
+  listPluginCredentials,
+  savePluginCredentials,
+  invokePluginTool,
+  startPluginOauth: vi.fn(),
+  finishPluginOauth: vi.fn(),
+  invalidatePlugins: () => undefined,
+}));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
     ({
@@ -38,8 +51,10 @@ function wrap(node: React.ReactNode) {
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
-  api.mockReset();
-  api.mockResolvedValue([
+  listPluginCredentials.mockReset();
+  savePluginCredentials.mockReset();
+  invokePluginTool.mockReset();
+  listPluginCredentials.mockResolvedValue([
     { key: "APP_KEY", label: "AppKey", help: "", secret: true, filled: true, value: "" },
   ]);
 });
@@ -125,7 +140,7 @@ describe("素材工具的工作区归属", () => {
       name, label: name, description: "", read_only: false, exposed: true,
       input_schema: { properties: Object.fromEntries(Object.keys(input).map((key) => [key, { type: "string" }])) },
     };
-    api.mockResolvedValue({ id: "invocation", status: "succeeded", output });
+    invokePluginTool.mockResolvedValue({ id: "invocation", status: "succeeded", output });
     const props = { instanceId: "i1", tool, blockedReason: "", onToggle: () => undefined };
     const { client, rerender } = wrap(<ToolRow {...props} workspaceId="workspace-a" />);
     const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -134,10 +149,7 @@ describe("素材工具的工作区归属", () => {
       fireEvent.change(screen.getByLabelText(key), { target: { value } });
     }
     fireEvent.click(screen.getByRole("button", { name: "运行" }));
-    await waitFor(() => expect(api).toHaveBeenCalledWith(
-      `/api/plugins/instances/i1/tools/${name}/invoke`,
-      { method: "POST", body: JSON.stringify({ input, workspace_id: "workspace-a" }) },
-    ));
+    await waitFor(() => expect(invokePluginTool).toHaveBeenCalledWith("i1", name, { input, workspace_id: "workspace-a" }));
     if (name === "pan_import") {
       await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["assets", "workspace-a"] }));
     }
@@ -145,28 +157,25 @@ describe("素材工具的工作区归属", () => {
 
     rerender(<ToolRow {...props} workspaceId="workspace-b" />);
     fireEvent.click(screen.getByRole("button", { name: "运行" }));
-    await waitFor(() => expect(api).toHaveBeenLastCalledWith(
-      `/api/plugins/instances/i1/tools/${name}/invoke`,
-      { method: "POST", body: JSON.stringify({ input, workspace_id: "workspace-b" }) },
-    ));
+    await waitFor(() => expect(invokePluginTool).toHaveBeenLastCalledWith("i1", name, { input, workspace_id: "workspace-b" }));
   });
 });
 
 describe("typed plugin controls", () => {
   it("distinguishes an omitted boolean from an explicit false and preserves workspace scope", async () => {
-    api.mockResolvedValue({ id: "invocation", status: "succeeded", output: {} });
+    invokePluginTool.mockResolvedValue({ id: "invocation", status: "succeeded", output: {} });
     const tool = { name: "upload", label: "Upload", description: "", read_only: false, exposed: true,
       input_schema: { properties: { overwrite: { type: "boolean" }, options: { type: "object" } } } };
     wrap(<ToolRow workspaceId="workspace-a" instanceId="i1" tool={tool} blockedReason="" onToggle={() => undefined} />);
     fireEvent.click(screen.getByText("Upload"));
     fireEvent.click(screen.getByRole("button", { name: "运行" }));
-    await waitFor(() => expect(api).toHaveBeenCalledWith(expect.any(String), { method: "POST", body: JSON.stringify({ input: {}, workspace_id: "workspace-a" }) }));
+    await waitFor(() => expect(invokePluginTool).toHaveBeenCalledWith("i1", "upload", { input: {}, workspace_id: "workspace-a" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "运行" })).not.toBeDisabled());
     fireEvent.click(screen.getByRole("combobox", { name: "overwrite" }));
     fireEvent.click(await screen.findByRole("option", { name: "studioBooleanFalse" }));
     fireEvent.change(screen.getByRole("textbox", { name: "options" }), { target: { value: '{"copies":2}' } });
     fireEvent.click(screen.getByRole("button", { name: "运行" }));
-    await waitFor(() => expect(api).toHaveBeenLastCalledWith(expect.any(String), { method: "POST", body: JSON.stringify({ input: { overwrite: false, options: { copies: 2 } }, workspace_id: "workspace-a" }) }));
+    await waitFor(() => expect(invokePluginTool).toHaveBeenLastCalledWith("i1", "upload", { input: { overwrite: false, options: { copies: 2 } }, workspace_id: "workspace-a" }));
   });
 });
 

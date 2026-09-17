@@ -3,8 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Check, Download, Link2, Search, ShieldAlert, Store } from "lucide-react";
 import { toast } from "sonner";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { installPlugin, listPluginMarket, previewPluginInstall } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -14,8 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-type MarketEntry = components["schemas"]["PluginMarketEntry"];
-type InstallPreview = components["schemas"]["PluginInstallPreview"];
+type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>[number];
+type InstallPreview = Awaited<ReturnType<typeof previewPluginInstall>>;
 
 /**
  * 装的就是市场里这一版。
@@ -82,13 +81,13 @@ export function PluginMarketDialog({
 
   const market = useQuery({
     queryKey: ["plugin-market"],
-    queryFn: () => api<MarketEntry[]>("/api/plugins/market"),
+    queryFn: () => listPluginMarket(),
     retry: false,
   });
 
   const preview = useMutation({
     mutationFn: (target: string) =>
-      api<InstallPreview>("/api/plugins/install/preview", { method: "POST", body: JSON.stringify({ url: target }) }),
+      previewPluginInstall(target),
     onSuccess: (data, target) => {
       setUrlOpen(false);
       setPending({ url: target, preview: data });
@@ -98,7 +97,7 @@ export function PluginMarketDialog({
 
   const install = useMutation({
     mutationFn: ({ url: target, overwrite }: { url: string; overwrite: boolean }) =>
-      api("/api/plugins/install", { method: "POST", body: JSON.stringify({ url: target, overwrite }) }),
+      installPlugin(target, overwrite),
     onSuccess: () => {
       setPending(null);
       setUrl("");

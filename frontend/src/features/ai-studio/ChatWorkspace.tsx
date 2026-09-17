@@ -6,7 +6,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CircleDot, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
-import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
+import {
+  agentManifest,
+  API_BASE,
+  compactAgentSession,
+  createAgentSession,
+  dropQueuedMessage,
+  getAgentSession,
+  getAuthToken,
+  listAgentMessages,
+  listAgentQueue,
+  listAgentSessions,
+  listAgentTools,
+  listAgentUsageEvents,
+  sendAgentMessage,
+  steerQueuedMessage,
+  stopAgentSession,
+  type Workspace,
+} from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
@@ -83,12 +100,12 @@ export function ChatWorkspace({
   const attach = useComposerAttachments(workspace.id);
   const manifest = useQuery({
     queryKey: ["agent-manifest"],
-    queryFn: () => api<AgentManifest>("/api/agent/manifest"),
+    queryFn: () => agentManifest<AgentManifest>(),
     staleTime: 60_000,
   });
   const tools = useQuery({
     queryKey: ["agent-tools"],
-    queryFn: () => api<AgentTool[]>("/api/agent/tools"),
+    queryFn: () => listAgentTools<AgentTool>(),
     staleTime: 60_000,
   });
   const [streamText, setStreamText] = React.useState<string>("");
@@ -159,7 +176,7 @@ export function ChatWorkspace({
 
   const sessions = useQuery({
     queryKey: ["agent-sessions", workspace.id],
-    queryFn: () => api<AgentSession[]>(`/api/agent/sessions?workspace_id=${workspace.id}`),
+    queryFn: () => listAgentSessions(workspace.id),
   });
   const activeSession =
     (sessions.data ?? []).find((session) => session.id === sessionId) ?? (sessions.data ?? [])[0] ?? null;
@@ -169,14 +186,14 @@ export function ChatWorkspace({
   const messages = useQuery({
     queryKey: ["agent-messages", activeSession?.id],
     enabled: Boolean(activeSession),
-    queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${activeSession!.id}/messages`),
+    queryFn: () => listAgentMessages(activeSession!.id),
     refetchInterval: 1200,
     refetchOnWindowFocus: true,
   });
   const session = useQuery({
     queryKey: ["agent-session", activeSession?.id],
     enabled: Boolean(activeSession),
-    queryFn: () => api<AgentSession>(`/api/agent/sessions/${activeSession!.id}`),
+    queryFn: () => getAgentSession(activeSession!.id),
     refetchInterval: 1200,
     refetchOnWindowFocus: true,
   });
@@ -188,7 +205,7 @@ export function ChatWorkspace({
   const usageEvents = useQuery({
     queryKey: ["agent-usage-events", activeSession?.id],
     enabled: Boolean(activeSession),
-    queryFn: () => api<AgentUsageEvent[]>(`/api/agent/sessions/${activeSession!.id}/usage-events`),
+    queryFn: () => listAgentUsageEvents<AgentUsageEvent>(activeSession!.id),
     refetchInterval: running ? 1200 : false,
     refetchOnWindowFocus: true,
   });
@@ -197,7 +214,7 @@ export function ChatWorkspace({
   const queue = useQuery({
     queryKey: ["agent-queue", activeSession?.id],
     enabled: Boolean(activeSession) && running,
-    queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${activeSession!.id}/queue`),
+    queryFn: () => listAgentQueue(activeSession!.id),
     refetchInterval: 1500,
   });
   const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
@@ -207,14 +224,12 @@ export function ChatWorkspace({
   };
   const cancelQueued = useMutation({
     mutationFn: (messageId: string) =>
-      api(`/api/agent/sessions/${activeSession?.id}/queue/${messageId}`, { method: "DELETE" }),
+      dropQueuedMessage(String(activeSession?.id), messageId),
     onSuccess: refreshQueue,
   });
   const steerQueued = useMutation({
     mutationFn: (messageId: string) =>
-      api<{ steered: boolean }>(`/api/agent/sessions/${activeSession?.id}/queue/${messageId}/steer`, {
-        method: "POST",
-      }),
+      steerQueuedMessage(String(activeSession?.id), messageId),
     onSuccess: (result) => {
       // A turn that ended first leaves the message queued; it will run on its own, and saying
       // "steered" would be a lie about what the agent is doing.
@@ -224,7 +239,7 @@ export function ChatWorkspace({
   });
   const showStop = running && !draftText.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
-    mutationFn: () => api<{ stopped: boolean }>(`/api/agent/sessions/${activeSession?.id}/stop`, { method: "POST" }),
+    mutationFn: () => stopAgentSession(String(activeSession?.id)),
     // Nothing to report either way: a successful stop is visible as the turn ending, and
     // stopping a turn that just finished is a race the user cannot see.
     meta: { silentError: true },
@@ -247,10 +262,7 @@ export function ChatWorkspace({
 
   const createSession = useMutation({
     mutationFn: () =>
-      api<AgentSession>("/api/agent/sessions", {
-        method: "POST",
-        body: JSON.stringify({ workspace_id: workspace.id }),
-      }),
+      createAgentSession({ workspace_id: workspace.id }),
     onSuccess: (created) => {
       setSessionId(created.id);
       window.localStorage.setItem(sessionKey, created.id);
@@ -262,19 +274,12 @@ export function ChatWorkspace({
     mutationFn: async ({ content, references, document }: { content: string; references: AgentReference[]; document: JSONContent }) => {
       let targetId = activeSession?.id;
       if (!targetId) {
-        const created = await api<AgentSession>("/api/agent/sessions", {
-          method: "POST",
-          body: JSON.stringify({ workspace_id: workspace.id }),
-        });
+        const created = await createAgentSession({ workspace_id: workspace.id });
         targetId = created.id;
         setSessionId(created.id);
         window.localStorage.setItem(sessionKey, created.id);
       }
-      const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
-        method: "POST",
-        // 正文只写 @名字,id 走 references;document 留着让气泡把引用画回胶囊。
-        body: JSON.stringify({ content, context: noteAttach.context, references, body_document: document }),
-      });
+      const message = await sendAgentMessage(targetId, { content, context: noteAttach.context, references, body_document: document });
       return { message, targetId };
     },
     onSuccess: ({ targetId }, _content, _ctx) => {
@@ -357,9 +362,7 @@ export function ChatWorkspace({
 
   const compactContext = useMutation({
     mutationFn: () =>
-      api<{ compaction: CompactionInfo | null }>(`/api/agent/sessions/${activeSession!.id}/compact`, {
-        method: "POST",
-      }),
+      compactAgentSession<{ compaction: CompactionInfo | null }>(activeSession!.id),
     // 压成功了对话里会多一条整理记录,那本身就是反馈;**没得压和压失败必须说出来** ——
     // 此前两种情况都只是 loading 闪一下就没了,用户无从判断是没生效、还是不需要。
     onSuccess: (result) => {

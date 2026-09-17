@@ -17,7 +17,23 @@ import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/co
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { DictateButton } from "@/features/agent/DictateButton";
 
-import { API_BASE, api, getAuthToken, type Asset } from "@/api/client";
+import {
+  API_BASE,
+  type Asset,
+  compactAgentSession,
+  createAgentSession,
+  deleteAgentSession,
+  dropQueuedMessage,
+  getAgentSession,
+  getAuthToken,
+  listAgentMessages,
+  listAgentQueue,
+  listAgentSessions,
+  listAgentUsageEvents,
+  sendAgentMessage,
+  steerQueuedMessage,
+  stopAgentSession,
+} from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { UserMessageContent, attachmentToken } from "@/features/agent/userMessage";
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
@@ -44,7 +60,6 @@ import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from
 import { cn } from "@/lib/utils";
 import { readSseData } from "@/lib/sse";
 
-type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
 export type CanvasAgentMode = "docked" | "floating";
 
@@ -111,7 +126,7 @@ export function CanvasAgentChat({
   const sessionKey = agentSessionSelectionKey(workspaceId);
   const sessions = useQuery({
     queryKey: ["agent-sessions", workspaceId],
-    queryFn: () => api<AgentSession[]>(`/api/agent/sessions?workspace_id=${workspaceId}`),
+    queryFn: () => listAgentSessions(workspaceId),
     // 首条消息会把「新对话」自动改题,轮询让下拉里的标题跟上
     refetchInterval: 4000,
   });
@@ -144,10 +159,7 @@ export function CanvasAgentChat({
   };
   const newSession = useMutation({
     mutationFn: () =>
-      api<AgentSession>("/api/agent/sessions", {
-        method: "POST",
-        body: JSON.stringify({ workspace_id: workspaceId }),
-      }),
+      createAgentSession({ workspace_id: workspaceId }),
     onSuccess: (created) => {
       // 先播种缓存再切换:等 invalidate 重拉的间隙里 selectedId 在列表里找不到,
       // 会瞬间回落到默认会话——看起来就像「点了没反应」。
@@ -161,7 +173,7 @@ export function CanvasAgentChat({
   });
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
   const deleteSession = useMutation({
-    mutationFn: (id: string) => api(`/api/agent/sessions/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => deleteAgentSession(id),
     onSuccess: (_data, deletedId) => {
       setDeletingSession(null);
       const fallback = sessionList.find((item) => item.id !== deletedId) ?? null;
@@ -182,14 +194,14 @@ export function CanvasAgentChat({
   const messages = useQuery({
     queryKey: ["agent-messages", sessionId],
     enabled: Boolean(sessionId),
-    queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/messages`),
+    queryFn: () => listAgentMessages(sessionId),
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
   const live = useQuery({
     queryKey: ["agent-session", sessionId],
     enabled: Boolean(sessionId),
-    queryFn: () => api<AgentSession>(`/api/agent/sessions/${sessionId}`),
+    queryFn: () => getAgentSession(sessionId),
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
@@ -216,14 +228,14 @@ export function CanvasAgentChat({
   const queue = useQuery({
     queryKey: ["agent-queue", sessionId],
     enabled: Boolean(sessionId) && running,
-    queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/queue`),
+    queryFn: () => listAgentQueue(sessionId),
     refetchInterval: 1500,
   });
   // 计费/用量:与对话页同源,按 agent_message_id 归到各条回复(见 MessageUsageFooter)。
   const usageEvents = useQuery({
     queryKey: ["agent-usage-events", sessionId],
     enabled: Boolean(sessionId),
-    queryFn: () => api<AgentUsageEvent[]>(`/api/agent/sessions/${sessionId}/usage-events`),
+    queryFn: () => listAgentUsageEvents<AgentUsageEvent>(sessionId),
     refetchInterval: running ? 1200 : false,
   });
   const usageByMessage = React.useMemo(() => {
@@ -242,7 +254,7 @@ export function CanvasAgentChat({
    *  跟着消息一起刷新 —— 一轮结束后水位就该更新。 */
   const sessionDetail = useQuery({
     queryKey: ["agent-session", sessionId],
-    queryFn: () => api<AgentSession>(`/api/agent/sessions/${sessionId}`),
+    queryFn: () => getAgentSession(sessionId),
     enabled: Boolean(sessionId),
     refetchInterval: running ? 4000 : false,
   });
@@ -253,7 +265,7 @@ export function CanvasAgentChat({
   const context = (sessionDetail.data?.context ?? null) as ContextInfo | null;
 
   const compact = useMutation({
-    mutationFn: () => api<{ compaction: CompactionInfo | null }>(`/api/agent/sessions/${sessionId}/compact`, { method: "POST" }),
+    mutationFn: () => compactAgentSession<{ compaction: CompactionInfo | null }>(sessionId),
     // 压成功了对话里会多一条整理记录;没得压和压失败必须说出来,否则只是 loading 闪一下。
     onSuccess: (result) => {
       void messages.refetch();
@@ -268,17 +280,17 @@ export function CanvasAgentChat({
   };
   const cancelQueued = useMutation({
     mutationFn: (messageId: string) =>
-      api(`/api/agent/sessions/${sessionId}/queue/${messageId}`, { method: "DELETE" }),
+      dropQueuedMessage(sessionId, messageId),
     onSuccess: refreshQueue,
   });
   const steerQueued = useMutation({
     mutationFn: (messageId: string) =>
-      api<{ steered: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/steer`, { method: "POST" }),
+      steerQueuedMessage(sessionId, messageId),
     onSuccess: refreshQueue,
   });
   const showStop = running && !draftText.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
-    mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
+    mutationFn: () => stopAgentSession(sessionId),
     meta: { silentError: true },
   });
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
@@ -383,10 +395,7 @@ export function CanvasAgentChat({
       const context = [contextLine, fileBlock, noteAttach.context].filter(Boolean).join("\n\n");
       let targetId = sessionId;
       if (!targetId) {
-        const created = await api<AgentSession>("/api/agent/sessions", {
-          method: "POST",
-          body: JSON.stringify({ workspace_id: workspaceId }),
-        });
+        const created = await createAgentSession({ workspace_id: workspaceId });
         qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) => [
           created,
           ...(old ?? []).filter((item) => item.id !== created.id),
@@ -394,12 +403,7 @@ export function CanvasAgentChat({
         switchSession(created.id);
         targetId = created.id;
       }
-      const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
-        method: "POST",
-        // references / body_document:正文只写 @名字,id 走结构化字段;文档留着让气泡把
-        // 引用画回胶囊(见 domain/agent/host.references_context 与 ReferenceDocument)。
-        body: JSON.stringify({ content: visibleContent, context, references, body_document: document }),
-      });
+      const message = await sendAgentMessage(targetId, { content: visibleContent, context, references, body_document: document });
       return { message, targetId };
     },
     onSuccess: ({ targetId }) => {

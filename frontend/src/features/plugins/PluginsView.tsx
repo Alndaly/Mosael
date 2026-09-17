@@ -7,12 +7,29 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
 
 import {
-  api,
+  clearPluginInvocations,
+  createPluginInstance,
+  finishPluginOauth,
+  invokePluginTool,
+  listPluginCredentials,
+  listPluginInvocations,
+  listPluginPackages,
+  listPluginPermissions,
+  pluginDir,
+  refreshPluginInstance,
+  removePluginInstance,
+  removePluginInvocation,
+  removePluginPackage,
+  rescanPlugins,
+  savePluginCredentials,
+  setPluginCapabilities,
+  setPluginPermissions,
+  startPluginOauth,
+  updatePluginInstance,
   type PluginField,
   type PluginInstance,
   type PluginInvocation,
   type PluginPackage,
-  type PluginPermissionGrant,
 } from "@/api/client";
 import { toast } from "sonner";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -45,15 +62,15 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
 
-  const packages = useQuery({ queryKey: ["plugins"], queryFn: () => api<PluginPackage[]>("/api/plugins") });
+  const packages = useQuery({ queryKey: ["plugins"], queryFn: () => listPluginPackages() });
   // 插件目录由后端算、后端报:Windows 上它不是 `~/.mosael/`,文案里写死找不到地方。
   const pluginsDir = useQuery({
     queryKey: ["plugins-dir"],
-    queryFn: () => api<{ path: string }>("/api/plugins/dir"),
+    queryFn: () => pluginDir(),
     staleTime: Infinity,
   });
   const scan = useMutation({
-    mutationFn: () => api<PluginPackage[]>("/api/plugins/scan", { method: "POST" }),
+    mutationFn: () => rescanPlugins(),
     onSuccess: () => invalidatePlugins(qc),
   });
 
@@ -155,7 +172,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
   const [draft, setDraft] = React.useState<Record<string, string>>({});
 
   const uninstall = useMutation({
-    mutationFn: () => api(`/api/plugins/${pkg.id}`, { method: "DELETE" }),
+    mutationFn: () => removePluginPackage(pkg.id),
     onSuccess: () => {
       setConfirmUninstall(false);
       invalidatePlugins(qc);
@@ -163,10 +180,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
   });
   const createInstance = useMutation({
     mutationFn: () =>
-      api<PluginInstance>(`/api/plugins/${pkg.id}/instances`, {
-        method: "POST",
-        body: JSON.stringify({ config: draft }),
-      }),
+      createPluginInstance(pkg.id, { config: draft }),
     onSuccess: () => {
       // 建好就关窗、清草稿 —— 留着开会让人以为没成功,而新连接已经出现在下面的列表里了。
       setAddOpen(false);
@@ -416,40 +430,34 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
 
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
-      api<PluginInstance>(`/api/plugins/instances/${instance.id}`, { method: "PATCH", body: JSON.stringify(body) }),
+      updatePluginInstance(instance.id, body),
     onSuccess: () => invalidatePlugins(qc),
   });
   const remove = useMutation({
-    mutationFn: () => api(`/api/plugins/instances/${instance.id}`, { method: "DELETE" }),
+    mutationFn: () => removePluginInstance(instance.id),
     onSuccess: () => {
       setConfirmDelete(false);
       invalidatePlugins(qc);
     },
   });
   const refresh = useMutation({
-    mutationFn: () => api<PluginInstance>(`/api/plugins/instances/${instance.id}/refresh`, { method: "POST" }),
+    mutationFn: () => refreshPluginInstance(instance.id),
     onSuccess: () => invalidatePlugins(qc),
   });
   const setCapabilities = useMutation({
     mutationFn: (tools: Record<string, boolean>) =>
-      api<PluginInstance>(`/api/plugins/instances/${instance.id}/capabilities`, {
-        method: "PATCH",
-        body: JSON.stringify({ tools }),
-      }),
+      setPluginCapabilities(instance.id, { tools }),
     onSuccess: () => invalidatePlugins(qc),
   });
 
   const grants = useQuery({
     queryKey: ["plugin-permissions", instance.id],
-    queryFn: () => api<PluginPermissionGrant[]>(`/api/plugins/instances/${instance.id}/permissions`),
+    queryFn: () => listPluginPermissions(instance.id),
     enabled: (pkg.permissions ?? []).length > 0,
   });
   const setGrant = useMutation({
     mutationFn: (grantsBody: Record<string, boolean>) =>
-      api<PluginPermissionGrant[]>(`/api/plugins/instances/${instance.id}/permissions`, {
-        method: "PATCH",
-        body: JSON.stringify({ grants: grantsBody }),
-      }),
+      setPluginPermissions(instance.id, { grants: grantsBody }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["plugin-permissions", instance.id] });
       invalidatePlugins(qc);
@@ -672,7 +680,7 @@ function PluginOAuth({ instanceId, save }: { instanceId: string; save?: React.Re
   const [code, setCode] = React.useState("");
 
   const begin = useMutation({
-    mutationFn: () => api<{ authorize_url: string }>(`/api/plugins/instances/${instanceId}/oauth`),
+    mutationFn: () => startPluginOauth(instanceId),
     onSuccess: (data) => {
       setUrl(data.authorize_url);
       // 直接开出去 —— 主进程把 http(s) 交给系统浏览器(见 electron/main 的 setWindowOpenHandler)。
@@ -684,7 +692,7 @@ function PluginOAuth({ instanceId, save }: { instanceId: string; save?: React.Re
 
   const finish = useMutation({
     mutationFn: () =>
-      api(`/api/plugins/instances/${instanceId}/oauth`, { method: "POST", body: JSON.stringify({ code }) }),
+      finishPluginOauth(instanceId, code),
     onSuccess: () => {
       setUrl("");
       setCode("");
@@ -761,18 +769,14 @@ function GroupActions({ hint, children }: { hint?: string; children: React.React
 export function CredentialRows({ instanceId, oauth }: { instanceId: string; oauth: boolean }) {
   const t = useI18n();
   const qc = useQueryClient();
-  type Credential = { key: string; label: string; help: string; secret: boolean; filled: boolean; value: string };
   const credentials = useQuery({
     queryKey: ["plugin-credentials", instanceId],
-    queryFn: () => api<Credential[]>(`/api/plugins/instances/${instanceId}/credentials`),
+    queryFn: () => listPluginCredentials(instanceId),
   });
   const [draft, setDraft] = React.useState<Record<string, string>>({});
   const save = useMutation({
     mutationFn: () =>
-      api<Credential[]>(`/api/plugins/instances/${instanceId}/credentials`, {
-        method: "PATCH",
-        body: JSON.stringify({ values: draft }),
-      }),
+      savePluginCredentials(instanceId, draft),
     onSuccess: () => {
       setDraft({});
       void qc.invalidateQueries({ queryKey: ["plugin-credentials", instanceId] });
@@ -883,10 +887,7 @@ export const ToolRow = React.memo(function ToolRow({
           }
         } else input[key] = raw;
       }
-      return api<PluginInvocation>(`/api/plugins/instances/${instanceId}/tools/${tool.name}/invoke`, {
-        method: "POST",
-        body: JSON.stringify({ input, workspace_id: workspaceId }),
-      });
+      return invokePluginTool(instanceId, tool.name, { input, workspace_id: workspaceId });
     },
     onSuccess: (invocation) => {
       setResult(invocation);
@@ -983,15 +984,15 @@ function InvocationList({ instanceId }: { instanceId: string }) {
   const qc = useQueryClient();
   const invocations = useQuery({
     queryKey: ["plugin-invocations", instanceId],
-    queryFn: () => api<PluginInvocation[]>(`/api/plugins/invocations?instance_id=${instanceId}`),
+    queryFn: () => listPluginInvocations(instanceId),
   });
   const invalidate = () => qc.invalidateQueries({ queryKey: ["plugin-invocations", instanceId] });
   const clear = useMutation({
-    mutationFn: () => api(`/api/plugins/invocations?instance_id=${instanceId}`, { method: "DELETE" }),
+    mutationFn: () => clearPluginInvocations(instanceId),
     onSuccess: invalidate,
   });
   const remove = useMutation({
-    mutationFn: (id: string) => api(`/api/plugins/invocations/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => removePluginInvocation(id),
     onSuccess: invalidate,
   });
 

@@ -4,14 +4,6 @@ import { api } from "@/api/transport";
 export type GenerationOption = components["schemas"]["GenerationOptionOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];
-export type PluginPackage = components["schemas"]["PluginPackageOut"];
-export type PluginInstance = components["schemas"]["PluginInstanceOut"];
-export type PluginField = components["schemas"]["PluginFieldOut"];
-export type PluginToolState = components["schemas"]["PluginToolStateOut"];
-export type PluginTool = components["schemas"]["PluginToolOut"];
-export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
-export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
-export type PluginCredential = components["schemas"]["PluginCredentialOut"];
 
 /** A model exposed by one provider profile. Unknown limits remain null, never guessed. */
 export interface ProviderModel {
