@@ -1335,6 +1335,22 @@ class InstallSourceUpdate(ApiModel):
     pip_index: str = Field(default="", max_length=200)
 
 
+class DenoiseEngineOut(ApiModel):
+    """一个降噪引擎,以及现在能不能用。
+
+    `strengths` 为空 = 这个引擎没有档位(人声提取),界面据此不摆那个旋钮;
+    `removes_music` 为真时界面要说出来 —— 用户说"降噪"时没想把配乐也去掉。
+    """
+
+    engine: str
+    label: str
+    #: 现在能不能用。**不是后台探测的结果**(那种有"还没测过"的第三态,见转写/克隆的
+    #: runtime_checked):内置引擎恒为真,人声提取当场问注册表有没有分离引擎。
+    ready: bool
+    strengths: list[str]
+    removes_music: bool
+
+
 class SeparationEngineOut(ApiModel):
     """一个人声/背景音分离引擎装没装。
 
@@ -1725,6 +1741,13 @@ class VideoToGifRequest(ApiModel):
     width: int = Field(default=720, ge=64, le=1920)
     start: float = Field(default=0, ge=0)
     duration: float | None = Field(default=None, gt=0)
+
+
+class DenoiseAssetRequest(ApiModel):
+    """给一份素材降噪。空 engine = 内置引擎;档位的合法值由契约判(领域层报 422)。"""
+
+    engine: str = Field(default="", max_length=40)
+    strength: str = Field(default="medium", max_length=20)
 
 
 class AssetFrameRequest(ApiModel):

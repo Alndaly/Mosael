@@ -1125,6 +1125,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/denoise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Denoise Asset Audio
+         * @description 降噪,产出一份**新**素材;原素材不动(ADR-0017)。排成任务,理由同分离。
+         */
+        post: operations["denoise_asset_audio_api_assets__asset_id__denoise_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/file": {
         parameters: {
             query?: never;
@@ -1366,6 +1386,26 @@ export interface paths {
          *     和下载转写模型同一条:往**后端主机**上装东西是部署级动作,不属于任何工作区。
          */
         post: operations["install_separation_engine_api_separation_engines__engine__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/denoise/engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Denoise Engines
+         * @description 降噪引擎,以及现在能不能用。没有安装这一步 —— 内置的随应用带着,人声提取借的是分离引擎。
+         */
+        get: operations["list_denoise_engines_api_denoise_engines_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7423,6 +7463,41 @@ export interface components {
              * @default 0
              */
             failed: number;
+        };
+        /**
+         * DenoiseAssetRequest
+         * @description 给一份素材降噪。空 engine = 内置引擎;档位的合法值由契约判(领域层报 422)。
+         */
+        DenoiseAssetRequest: {
+            /**
+             * Engine
+             * @default
+             */
+            engine: string;
+            /**
+             * Strength
+             * @default medium
+             */
+            strength: string;
+        };
+        /**
+         * DenoiseEngineOut
+         * @description 一个降噪引擎,以及现在能不能用。
+         *
+         *     `strengths` 为空 = 这个引擎没有档位(人声提取),界面据此不摆那个旋钮;
+         *     `removes_music` 为真时界面要说出来 —— 用户说"降噪"时没想把配乐也去掉。
+         */
+        DenoiseEngineOut: {
+            /** Engine */
+            engine: string;
+            /** Label */
+            label: string;
+            /** Ready */
+            ready: boolean;
+            /** Strengths */
+            strengths: string[];
+            /** Removes Music */
+            removes_music: boolean;
         };
         /** DeploymentAdminUpdate */
         DeploymentAdminUpdate: {
@@ -13977,6 +14052,41 @@ export interface operations {
             };
         };
     };
+    denoise_asset_audio_api_assets__asset_id__denoise_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DenoiseAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_asset_file_api_assets__asset_id__file_get: {
         parameters: {
             query?: never;
@@ -14371,6 +14481,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeparationEngineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_denoise_engines_api_denoise_engines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DenoiseEngineOut"][];
                 };
             };
             /** @description Validation Error */

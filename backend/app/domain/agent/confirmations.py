@@ -31,6 +31,8 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     # 分离跑的是本机模型:不花供应商的钱,但会占满 CPU/GPU 十几分钟,而且产出两份新素材。
     # 按"渲染开销"那一档 —— 和它同档的都是"这台机器要忙很久"。
     "separate_audio": {"permission": "render-cost", "cost": "render"},
+    # 降噪同一档:本机算、不花供应商的钱,但要忙一阵,而且产出一份新素材。
+    "denoise_audio": {"permission": "render-cost", "cost": "render"},
     "generate_image": {"permission": "ai-cost", "cost": "ai"},
     "generate_video": {"permission": "ai-cost", "cost": "ai"},
     "generate_audio": {"permission": "ai-cost", "cost": "ai"},
@@ -291,6 +293,22 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
             raise ConfirmationError("这个工作区里没有这份素材")
         if asset.kind not in {"audio", "video"}:
             raise ConfirmationError("只有音频或视频素材可以分离")
+    if tool == "denoise_audio":
+        from app.ai.providers.contracts.denoise import DenoiseError, checked_strength
+        from app.db.models import Asset
+        from app.domain.denoise import DENOISABLE_KINDS, ready_adapter
+
+        asset = db.get(Asset, str(payload.get("asset_id") or ""))
+        if asset is None or asset.workspace_id != workspace_id:
+            raise ConfirmationError("这个工作区里没有这份素材")
+        if asset.kind not in DENOISABLE_KINDS:
+            raise ConfirmationError("只有音频或视频素材可以降噪")
+        # 引擎和档位在**开卡之前**就判:批准一张注定失败的卡,只是把同一句话推迟到点完之后。
+        try:
+            payload["strength"] = checked_strength(str(payload.get("strength") or ""))
+            payload["resolved_engine"] = ready_adapter(str(payload.get("engine") or "")).engine_id
+        except DenoiseError as exc:
+            raise ConfirmationError(str(exc)) from exc
     if tool == "convert_video_to_gif":
         from app.db.models import Asset
 
@@ -463,6 +481,11 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
     if tool == "separate_audio":
         #: 卡上说清**产出什么、原件动不动、要多久** —— 它是"这台机器忙很久"那一档。
         return "把这份素材拆成「人声」和「背景音」两份新素材(原素材不动;本机跑模型,长素材会很慢)"
+    if tool == "denoise_audio":
+        if payload.get("resolved_engine") == "voice-isolation":
+            return "给这份素材做人声提取:只留说话声,背景音乐和噪声一起去掉,产出一份新素材(原素材不动)"
+        strength = {"light": "轻度", "medium": "中度", "strong": "强力"}.get(str(payload.get("strength")), "")
+        return f"给这份素材做{strength}降噪,产出一份新素材(视频保留画面、只换声音;原素材不动)"
     if tool == "convert_video_to_gif":
         duration = payload.get("duration")
         clip = f"，截取 {duration} 秒" if duration not in (None, "") else ""
@@ -628,6 +651,21 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         # **起任务,不在这里同步跑完** —— 批准确认卡的那个请求不该挂十几分钟
         # (和 convert_video_to_gif 同款:返回 job_id,智能体按它问进度)。
         job = start_separation_job(db, asset=asset, created_by=actor, engine=str(payload.get("engine") or ""))
+        return {"job_id": job.id}
+    if confirmation.tool == "denoise_audio":
+        from app.db.models import Asset
+        from app.domain.denoise import start_denoise_job
+
+        asset = db.get(Asset, str(payload["asset_id"]))
+        if asset is None or asset.workspace_id != confirmation.workspace_id:
+            raise ValueError("素材不存在")
+        job = start_denoise_job(
+            db,
+            asset=asset,
+            created_by=actor,
+            engine=str(payload.get("engine") or ""),
+            strength=str(payload.get("strength") or ""),
+        )
         return {"job_id": job.id}
     if confirmation.tool == "convert_video_to_gif":
         from app.db.models import Asset

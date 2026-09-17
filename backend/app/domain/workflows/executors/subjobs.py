@@ -888,6 +888,26 @@ def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any])
     }
 
 
+@register("denoise_audio")
+def denoise_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """降噪,产出一份新素材。节点不认识任何引擎,只跟 domain.denoise 说话(ADR-0017)。"""
+    from app.ai.providers.contracts.denoise import DenoiseError
+    from app.domain.denoise import denoise_asset
+
+    # 收进工作区(同分离节点):asset_id 常常来自上游,不能让一个工作区的流程动另一个工作区的素材。
+    asset = _asset_in(db, workflow, str(config.get("asset_id") or "").strip())
+    try:
+        made, engine = denoise_asset(
+            db,
+            asset,
+            engine=str(config.get("engine") or ""),
+            strength=str(config.get("strength") or ""),
+        )
+    except DenoiseError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    return {"asset_id": made.id, "engine": engine}
+
+
 @register("asset")
 def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     """指向一份素材,把它的 id 交给下游。

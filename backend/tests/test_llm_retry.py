@@ -188,6 +188,10 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         # 分离跑在**本机**:这个模块起的是自己那个 venv 的子进程,一次 HTTP 都不发。
         # (权重下载发生在子进程里,由 demucs 自己做,不经过这一层。)
         "app.ai.providers.adapters.local.demucs_separation",
+        # 内置降噪调的是随应用带的 ffmpeg,纯本机。
+        "app.ai.providers.adapters.local.ffmpeg_denoise",
+        # 人声提取只调分离契约拿人声那一条;真正干活的是分离适配器,它自己在这张表里有一条。
+        "app.ai.providers.adapters.local.voice_isolation_denoise",
     }
 
     #: **不自己建连接**的模块 —— 请求是拿调用方给的 client 发的,而那个 client 就是

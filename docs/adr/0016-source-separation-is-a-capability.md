@@ -2,8 +2,10 @@
 
 ## Status
 
-Proposed — 2026-09-16. Not implemented. Extends the adapter organisation of ADR 0010 with a third
-capability and reuses the managed-runtime machinery that ASR and TTS already run on.
+Accepted — 2026-09-16, implemented in 1.4.0 (local Demucs adapter; the hosted-API slot is still
+empty). Extends the adapter organisation of ADR 0010 with a third capability and reuses the
+managed-runtime machinery that ASR and TTS already run on. ADR 0017 applies the same shape to noise
+reduction and replaces the audio extraction this record originally borrowed from transcription.
 
 ## Context
 

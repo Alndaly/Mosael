@@ -31,6 +31,7 @@ from app.ai.providers.registry import get_separation_adapter
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
+from app.media.audio_io import AudioIOError, as_audio
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
 
 logger = logging.getLogger(__name__)
@@ -64,8 +65,9 @@ def separate_asset(
 ) -> SeparatedAssets:
     """把这份素材拆成人声 + 背景音两份新素材。
 
-    输入可以是视频:分离引擎只认音频,所以先抽一条 wav 出来 —— 走的是转写那条现成的路
-    (`voices.transcription._extract_audio`),不另写一份 ffmpeg 调用。
+    输入可以是视频:分离引擎只认音频,所以先抽一条 wav 出来。**用的是保留原采样率的那条**
+    (media/audio_io)—— 此前借的是转写那条,会先降成 16 kHz 单声道,拆出来的背景音再进成片时
+    音质已经没了(ADR-0017 决定 6)。
     """
     adapter = get_separation_adapter(engine)
     if adapter is None:
@@ -81,7 +83,10 @@ def separate_asset(
 
     with tempfile.TemporaryDirectory(prefix="mosael-separate-") as tmp:
         work = Path(tmp)
-        audio = _as_audio(source, work)
+        try:
+            audio = as_audio(source, work)
+        except AudioIOError as exc:
+            raise SeparationError(str(exc)) from exc
         stems = adapter.separate(SeparationRequest(audio_path=audio), work / "out")
         made: dict[str, Asset] = {}
         for stem in (VOCALS, BACKGROUND):
@@ -107,17 +112,6 @@ def _source_path(asset: Asset) -> Path | None:
     if not asset.file_key:
         return None
     return resolve_key(asset.file_key)
-
-
-def _as_audio(source: Path, work: Path) -> Path:
-    """视频先抽音频;本来就是音频的原样用。"""
-    if source.suffix.lower() in {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"}:
-        return source
-    from app.domain.voices.transcription import _extract_audio
-
-    target = work / "source.wav"
-    _extract_audio(source, target)
-    return target
 
 
 # ---------------------------------------------------------------------------

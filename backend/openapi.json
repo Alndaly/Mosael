@@ -3018,6 +3018,59 @@
         }
       }
     },
+    "/api/assets/{asset_id}/denoise": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Denoise Asset Audio",
+        "description": "降噪,产出一份**新**素材;原素材不动(ADR-0017)。排成任务,理由同分离。",
+        "operationId": "denoise_asset_audio_api_assets__asset_id__denoise_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DenoiseAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/file": {
       "get": {
         "tags": [
@@ -3542,6 +3595,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SeparationEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/denoise/engines": {
+      "get": {
+        "tags": [
+          "denoise"
+        ],
+        "summary": "List Denoise Engines",
+        "description": "降噪引擎,以及现在能不能用。没有安装这一步 —— 内置的随应用带着,人声提取借的是分离引擎。",
+        "operationId": "list_denoise_engines_api_denoise_engines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DenoiseEngineOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Denoise Engines Api Denoise Engines Get"
                 }
               }
             }
@@ -21187,6 +21276,62 @@
           "day"
         ],
         "title": "DaySeriesPoint"
+      },
+      "DenoiseAssetRequest": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Engine",
+            "default": ""
+          },
+          "strength": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Strength",
+            "default": "medium"
+          }
+        },
+        "type": "object",
+        "title": "DenoiseAssetRequest",
+        "description": "给一份素材降噪。空 engine = 内置引擎;档位的合法值由契约判(领域层报 422)。"
+      },
+      "DenoiseEngineOut": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strengths"
+          },
+          "removes_music": {
+            "type": "boolean",
+            "title": "Removes Music"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine",
+          "label",
+          "ready",
+          "strengths",
+          "removes_music"
+        ],
+        "title": "DenoiseEngineOut",
+        "description": "一个降噪引擎,以及现在能不能用。\n\n`strengths` 为空 = 这个引擎没有档位(人声提取),界面据此不摆那个旋钮;\n`removes_music` 为真时界面要说出来 —— 用户说\"降噪\"时没想把配乐也去掉。"
       },
       "DeploymentAdminUpdate": {
         "properties": {

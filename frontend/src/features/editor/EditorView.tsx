@@ -70,6 +70,7 @@ import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/
 const EDITOR_GRID = { padding: 0, gap: 0 };
 import { useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
+import { DenoiseDialog } from "@/features/media/DenoiseDialog";
 import { FontFaces } from "@/features/editor/FontFaces";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
@@ -481,6 +482,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: () => toast.success(t("separateAudioQueued")),
     onError: (error) => toast.error(String((error as Error).message)),
   });
+  // 降噪选档位和方式要一个对话框(和素材库同一个),所以这里只记"给哪份素材"。
+  const [denoisingAsset, setDenoisingAsset] = React.useState<string | null>(null);
   const setEffectsMutation = useMutation({
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
       setClipEffects(sequence!.id, clipId, effects),
@@ -909,6 +912,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {/* Uploaded fonts must be registered before the monitor or the style panel can paint
           text in them. */}
       <FontFaces fonts={fonts.data ?? []} />
+      <DenoiseDialog assetId={denoisingAsset} onClose={() => setDenoisingAsset(null)} />
       <ConfirmDialog
         open={trackPendingRemoval !== null}
         title={t("removeTrackConfirmTitle")}
@@ -1125,6 +1129,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}
           onSeparateAudio={(clipId) => separateAudioMutation.mutate(clipId)}
+          onDenoise={setDenoisingAsset}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
 
         />

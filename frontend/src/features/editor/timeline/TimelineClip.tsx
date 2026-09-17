@@ -1,5 +1,5 @@
 import React from "react";
-import { AudioLines, Copy, Mic, Scissors, Trash2, Waves } from "lucide-react";
+import { AudioLines, AudioWaveform, Copy, Mic, Scissors, Trash2, Waves } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -25,6 +25,7 @@ export function TimelineClip({
   onDuplicate,
   onDetachAudio,
   onSeparateAudio,
+  onDenoise,
 }: {
   trackKind: string;
   name: string;
@@ -46,6 +47,7 @@ export function TimelineClip({
   onDuplicate?: () => void;
   onDetachAudio?: () => void;
   onSeparateAudio?: () => void;
+  onDenoise?: () => void;
 }) {
   const t = useI18n();
   const className = cn(
@@ -131,6 +133,11 @@ export function TimelineClip({
         {onSeparateAudio && (
           <ContextMenuItem onSelect={onSeparateAudio}>
             <Mic /> {t("separateAudio")}
+          </ContextMenuItem>
+        )}
+        {onDenoise && (
+          <ContextMenuItem onSelect={onDenoise}>
+            <AudioWaveform /> {t("denoiseAction")}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />

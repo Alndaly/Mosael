@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 
-from app.ai.providers.registry import SEPARATION_ADAPTERS
+from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
+from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
 from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_ROLE_LABELS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 
@@ -156,6 +157,7 @@ _FIELD_LABELS = {
     "dy": "wfField_dy",
     "end": "wfField_end",
     "engine": "wfField_engine",
+    "strength": "wfField_strength",
     "engine_voice": "wfField_engine_voice",
     "engine_voice_resource": "wfField_engine_voice_resource",
     "exact": "wfField_exact",
@@ -818,6 +820,31 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "output_types": {"vocals_asset_id": "asset", "background_asset_id": "asset"},
     },
+    #: 降噪(ADR-0017)。**产出一份新素材**:音频进音频出,视频进视频出(画面原样拷贝)。
+    "denoise_audio": {
+        "category": "wfCat_audio",
+        "label": "wfNode_denoise_audio",
+        "description": "wfNode_denoise_audio_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "description": "wfNode_denoise_audio_asset_id"},
+            # 选项从注册表读(同分离节点)。auto = 内置的那个,它不会顺手去掉音乐。
+            "engine": {
+                "type": "string",
+                "default": "auto",
+                "description": "wfNode_denoise_audio_engine",
+                "options": ["auto", *DENOISE_ADAPTERS],
+            },
+            "strength": {
+                "type": "string",
+                "default": DEFAULT_STRENGTH,
+                "description": "wfNode_denoise_audio_strength",
+                "options": list(STRENGTHS),
+            },
+        },
+        "outputs": ["asset_id", "engine"],
+        "output_labels": {"asset_id": "wfOut_denoised_asset_id"},
+        "output_types": {"asset_id": "asset"},
+    },
     "generate_subtitles": {
         "category": "wfCat_asset",
         "label": "wfNode_generate_subtitles",
@@ -1391,6 +1418,7 @@ INTERNAL_NODE_TYPES = frozenset(
         "translate",
         "translate_lines",
         "separate_audio",
+        "denoise_audio",
         "loop_foreach",
         "loop_while",
         "asset_query",

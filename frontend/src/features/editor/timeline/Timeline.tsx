@@ -76,6 +76,7 @@ export function Timeline({
   onDuplicateClip,
   onDetachAudio,
   onSeparateAudio,
+  onDenoise,
   onSetTrackState,
   toolbarExtra,
 }: {
@@ -101,6 +102,8 @@ export function Timeline({
   onDuplicateClip?: (clipId: string) => void;
   onDetachAudio?: (clipId: string) => void;
   onSeparateAudio?: (clipId: string) => void;
+  /** 给这个片段引用的素材降噪(产出新素材,片段本身不变)。 */
+  onDenoise?: (assetId: string) => void;
   onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean }) => void;
   toolbarExtra?: React.ReactNode;
 }) {
@@ -1047,6 +1050,11 @@ export function Timeline({
                       onSeparateAudio={
                         onSeparateAudio && clip.asset_id && (track.kind === "video" || track.kind === "audio")
                           ? () => onSeparateAudio(clip.id)
+                          : undefined
+                      }
+                      onDenoise={
+                        onDenoise && clip.asset_id && (track.kind === "video" || track.kind === "audio")
+                          ? () => onDenoise(clip.asset_id as string)
                           : undefined
                       }
                     />

@@ -80,6 +80,26 @@ batch: what downloaded stays in the library, and the failed count is reported.
 - Multi-select to tag or delete in bulk.
 - "Compare" puts two assets side by side for picking between versions.
 
+## Processing sound
+
+Audio and video assets have two extra items in their More and right-click menus. Both **create new
+assets and leave the original untouched**; they run as background tasks you can follow in the task
+panel. Right-clicking a clip in the editor offers the same two, applied to the asset behind the clip.
+
+- **Reduce noise…**: pick a method and a strength. *Built-in noise reduction* removes steady noise
+  such as air conditioning, fans and hum, leaves music alone and needs nothing installed; it measures
+  how loud the noise is before it acts, so one strength suits both faint and heavy hiss.
+  *Voice isolation* keeps only the voice and also handles crowds and street noise, but **the
+  background music goes with it**, and it needs a separation engine installed. A cleaned video keeps
+  its picture; only the sound changes.
+- **Separate voice and background**: split into a voice asset and a background asset. The background
+  is everything except the voice: music, ambience, effects. The engine runs on this machine and must
+  be installed first under Settings → On-device engines → Voice separation; a long asset takes many
+  minutes on a CPU.
+
+Workflows have matching *Reduce noise* and *Separate voice and background* nodes (under Audio), and
+the agent can do both too — it opens a confirmation card first.
+
 ## Convert video to GIF
 
 Right-click a video and choose **Convert to GIF**. Frame rate, width, start time and clip duration

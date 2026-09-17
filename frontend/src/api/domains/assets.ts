@@ -143,6 +143,19 @@ export function separateAssetAudio(assetId: string, engine = ""): Promise<Job> {
   return api<Job>(`/api/assets/${assetId}/separate${query}`, { method: "POST" });
 }
 
+export type DenoiseStrength = "light" | "medium" | "strong";
+export type DenoiseEngine = components["schemas"]["DenoiseEngineOut"];
+
+/** 降噪引擎,以及现在能不能用(ADR-0017)。 */
+export function listDenoiseEngines(): Promise<DenoiseEngine[]> {
+  return api<DenoiseEngine[]>("/api/denoise/engines");
+}
+
+/** 降噪,产出一份**新**素材(视频保留画面、只换声音);原素材不动。排成任务。 */
+export function denoiseAsset(assetId: string, body: { engine?: string; strength?: DenoiseStrength } = {}): Promise<Job> {
+  return api<Job>(`/api/assets/${assetId}/denoise`, { method: "POST", body: JSON.stringify(body) });
+}
+
 /** Create a new GIF asset without mutating the source video. */
 export function convertVideoToGif(
   assetId: string,

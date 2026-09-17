@@ -20,10 +20,13 @@ from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapte
 from app.ai.providers.adapters.google.veo import VeoAdapter
 from app.ai.providers.adapters.kuaishou.kling.video import KlingVideoAdapter
 from app.ai.providers.adapters.local.demucs_separation import DemucsSeparationAdapter
+from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
+from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
 from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
 from app.ai.providers.adapters.minimax.video import MiniMaxVideoAdapter
 from app.ai.providers.adapters.openai.image import OpenAIImageAdapter
 from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
+from app.ai.providers.contracts.denoise import DenoiseAdapter
 from app.ai.providers.contracts.generation import GenerationAdapter
 from app.ai.providers.contracts.separation import SeparationAdapter
 from app.ai.providers.contracts.speech import SpeechSynthesisError, SpeechAdapter
@@ -131,6 +134,38 @@ def get_separation_adapter(engine: str = "") -> SeparationAdapter | None:
     return None
 
 
+def _index_denoise_adapters(adapters: Iterable[DenoiseAdapter]) -> dict[str, DenoiseAdapter]:
+    indexed: dict[str, DenoiseAdapter] = {}
+    for adapter in adapters:
+        if adapter.engine_id in indexed:
+            raise RuntimeError(f"重复的降噪 Adapter:{adapter.engine_id}")
+        indexed[adapter.engine_id] = adapter
+    return indexed
+
+
+#: 降噪(ADR-0017)。**顺序就是 `auto` 的偏好**。人声提取借分离的能力,递进去的是
+#: 查询函数而不是某个分离引擎 —— 装了哪个分离引擎,它就用哪个。
+DENOISE_ADAPTERS = _index_denoise_adapters(
+    (
+        FfmpegDenoiseAdapter(),
+        VoiceIsolationDenoiseAdapter(separation=get_separation_adapter),
+    )
+)
+
+
+def get_denoise_adapter(engine: str = "") -> DenoiseAdapter | None:
+    """点名一个引擎;不点名(或 "auto")就给**现在跑得起来、且不会顺手去掉音乐**的第一个。
+
+    会去掉音乐的引擎(人声提取)只在点名时用:用户说"降噪",没有要求把配乐也拿掉。
+    """
+    if engine and engine != "auto":
+        return DENOISE_ADAPTERS.get(engine)
+    for adapter in DENOISE_ADAPTERS.values():
+        if not adapter.removes_music and adapter.runtime_ready():
+            return adapter
+    return None
+
+
 def has_capability_implementation(vendor_id: str, capability: str) -> bool:
     """Whether the composed runtime can execute one declared Provider capability."""
     if capability == "chat":
@@ -164,7 +199,9 @@ def build_speech_adapter(
 
 __all__ = [
     "REMOTE_SPEECH_ADAPTERS",
+    "DENOISE_ADAPTERS",
     "SEPARATION_ADAPTERS",
+    "get_denoise_adapter",
     "get_separation_adapter",
     "build_speech_adapter",
     "connection_vendor_for_speech_engine",

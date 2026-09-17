@@ -155,6 +155,7 @@ CONFIRMATION_TOOLS = frozenset(
         "render_sequence",
         "convert_video_to_gif",
         "separate_audio",
+        "denoise_audio",
         "generate_image",
         "generate_video",
         "generate_audio",
@@ -495,6 +496,30 @@ def separate_audio(asset_id: str, engine: str = "", workspace_id: str = "") -> d
             "tool": "separate_audio",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {"asset_id": asset_id, "engine": engine},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def denoise_audio(asset_id: str, strength: str = "medium", engine: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: reduce background noise in an audio or video asset, producing a
+    NEW asset (a video keeps its picture; only the sound is replaced). The source is never changed.
+
+    Use it for hiss, hum, fans, air conditioning or room noise in recordings and footage.
+    `strength` is light / medium / strong — medium suits most recordings; strong can dull the voice.
+    Leave `engine` empty for the built-in denoiser, which leaves music alone. Pass
+    `engine="voice-isolation"` only when the noise is crowds or traffic AND losing the music is
+    acceptable: it keeps nothing but the voice, needs a separation engine installed, and ignores
+    `strength`. Returns a job id once approved; the cleaned asset appears when the job finishes.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "denoise_audio",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "engine": engine, "strength": strength},
         },
     )
     return _confirmation_reply(confirmation)

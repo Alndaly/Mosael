@@ -55,6 +55,7 @@ NODE_TO_TOOL: dict[str, str] = {
     #: 而智能体本来就是一句一句地调 translate_text。
     "translate_lines": "translate_text",
     "separate_audio": "separate_audio",
+    "denoise_audio": "denoise_audio",
     "asset_query": "list_assets",
     "note_search": "search_notes",
     "note_read": "read_note",

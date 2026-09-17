@@ -49,9 +49,24 @@ it("有声音的素材才能分离人声与背景音,点了就排任务", async 
   await user.click(screen.getByRole("button", { name: "studioActions: still" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "rename" })).toBeInTheDocument());
   expect(screen.queryByRole("button", { name: "separateAudio" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "denoiseAction" })).not.toBeInTheDocument();
   await user.keyboard("{Escape}");
 
   await user.click(screen.getByRole("button", { name: "studioActions: clip" }));
   await user.click(await screen.findByRole("button", { name: "separateAudio" }));
   await waitFor(() => expect(separateAssetAudio).toHaveBeenCalledWith("clip"));
+});
+
+it("有声音的素材能降噪:点了打开降噪对话框", async () => {
+  localStorage.clear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  client.setQueryData(["assets", "ws"], [
+    { id: "clip", name: "clip", workspace_id: "ws", project_id: null, original_filename: "clip", file_key: "clip", kind: "audio", source: "imported", tags: [], media_info: {} } as Asset,
+  ]);
+  client.setQueryData(["denoise-engines"], []);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "studioActions: clip" }));
+  await user.click(await screen.findByRole("button", { name: "denoiseAction" }));
+  expect(await screen.findByRole("dialog", { name: "denoiseTitle" })).toBeInTheDocument();
 });

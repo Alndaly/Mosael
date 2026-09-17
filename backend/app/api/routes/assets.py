@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Job, Transcript, Project
@@ -429,6 +429,19 @@ def separate_asset_audio(asset_id: str, db: DbSession, user: CurrentUser, engine
     try:
         return start_separation_job(db, asset=asset, created_by=user.id, engine=engine)
     except SeparationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/assets/{asset_id}/denoise", response_model=JobOut)
+def denoise_asset_audio(asset_id: str, body: DenoiseAssetRequest, db: DbSession, user: CurrentUser) -> Job:
+    """降噪,产出一份**新**素材;原素材不动(ADR-0017)。排成任务,理由同分离。"""
+    from app.ai.providers.contracts.denoise import DenoiseError
+    from app.domain.denoise import start_denoise_job
+
+    asset = require_asset(db, user, asset_id, perm="edit")
+    try:
+        return start_denoise_job(db, asset=asset, created_by=user.id, engine=body.engine, strength=body.strength)
+    except DenoiseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

@@ -6,6 +6,7 @@ import {
   AlignLeft,
   AppWindow,
   AudioLines,
+  AudioWaveform,
   Bell,
   BookOpen,
   BookPlus,
@@ -115,6 +116,8 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   synthesize_speech: <AudioLines size={13} />,
   //: 把一条音轨剪成两条 —— 剪刀比音波更能说出"分开"这件事。
   separate_audio: <Scissors size={13} />,
+  //: 把一条毛糙的波形理平。
+  denoise_audio: <AudioWaveform size={13} />,
   browser_open: <AppWindow size={13} />,
   browser_navigate: <Globe size={13} />,
   browser_click: <MousePointerClick size={13} />,

@@ -5,7 +5,7 @@ import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
@@ -14,6 +14,7 @@ import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
+import { DenoiseDialog } from "@/features/media/DenoiseDialog";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -117,6 +118,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     onSuccess: () => toast.success(t("assetConvertGifQueued")),
     onError: (error: Error) => toast.error(error.message),
   });
+  const [denoising, setDenoising] = React.useState<string | null>(null);
   // 拆成人声 + 背景音两份新素材(ADR-0016)。排任务,不等结果;没装引擎时后端直接说清楚。
   const separateAudio = useMutation({
     mutationFn: (assetId: string) => separateAssetAudio(assetId),
@@ -425,7 +427,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
                       {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
-                      {canSeparate(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
+                      {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
+                      {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setDenoising(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
                       <PopoverClose asChild><Button variant="ghost" className="justify-start text-destructive" onClick={() => setDeleting(asset)}><Trash2 />{t("delete")}</Button></PopoverClose>
                     </PopoverContent></Popover>
                   </div>}
@@ -446,7 +449,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                     {convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} {t("assetConvertGif")}
                   </ContextMenuItem>
                 )}
-                {canSeparate(asset) && (
+                {hasSound(asset) && (
+                  <ContextMenuItem onSelect={() => setDenoising(asset.id)}>
+                    <AudioWaveform /> {t("denoiseAction")}
+                  </ContextMenuItem>
+                )}
+                {hasSound(asset) && (
                   <ContextMenuItem disabled={separateAudio.isPending} onSelect={() => separateAudio.mutate(asset.id)}>
                     {separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} {t("separateAudio")}
                   </ContextMenuItem>
@@ -462,6 +470,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       )}
 
       <AssetPreviewModal asset={previewing} onClose={() => setPreviewing(null)} />
+      <DenoiseDialog assetId={denoising} onClose={() => setDenoising(null)} />
       <RenameDialog
         open={renaming !== null}
         title={t("renameAsset")}
@@ -606,7 +615,7 @@ export function formatSeconds(total: number): string {
   return `${sign}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
 }
 
-/** 有声音可拆的素材。视频也算 —— 后端先抽音轨再分离。 */
-function canSeparate(asset: Asset): boolean {
+/** 有声音可处理的素材(分离、降噪)。视频也算 —— 后端先抽音轨,处理完再放回去。 */
+function hasSound(asset: Asset): boolean {
   return asset.kind === "audio" || asset.kind === "video";
 }

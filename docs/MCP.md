@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **76** 个工具,其中 **19** 个走确认卡、**1** 个停下来等用户作答。
+共 **77** 个工具,其中 **20** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -31,6 +31,7 @@ summaries — never raw internal schemas.
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
 | `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
+| `denoise_audio` | 确认卡 | Confirmation required: reduce background noise in an audio or video asset, producing a |
 | `dub_subtitles` | 确认卡 | Confirmation required: speak subtitle cues aloud onto a new dub track. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
 | `edit_scene` | 直接执行 | Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first. |

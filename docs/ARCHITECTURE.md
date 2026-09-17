@@ -523,17 +523,23 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 **不做网络微服务**——理由与边界见 [ADR-0001](adr/0001-no-network-microservices.md);
 统一语言见根目录 [CONTEXT.md](../CONTEXT.md)。
 
-### 人声与背景分离(提案)
+### 声音处理:分离与降噪是能力,不是流程里的一步(1.4.0)
 
-译配要替换的是**说话声**,而原片里说话声和背景音混在同一条轨上 —— 所以「把原声静音」会把音乐
-一起带走。缺的那个操作是分离:一条混音进去,人声/伴奏两条(或更多)出来;有了它,
-`original_audio: mute` 针对的才是**人声那条 stem**。
+两件事同一个形状 —— 契约(`ai/providers/contracts/{separation,denoise}.py`)只说要什么、拿到什么,
+不提引擎;实现在 `adapters/local/`;`registry.py` 是唯一装配点,重复 id 启动即失败;领域层
+(`domain/separation.py`、`domain/denoise.py`)负责素材那一侧:取声音、调引擎、登记**新**素材,
+原素材一个字节不动。四个入口(工作流节点、智能体工具、素材库、剪辑台右键)只跟领域层说话,
+加一个引擎不改任何入口。
 
-它不是配音流程的私有步骤:做纯音乐、做卡拉OK、给转写降噪问的是同一件事。所以它按能力组织 ——
-契约进 `ai/providers/contracts/`,本地实现走 `ai/runtime` 那套(独立托管 venv、按需下模型、
-常驻 worker),工作流节点 / 剪辑台 / MCP 读同一份注册表。配音流程**只问领域有没有可用引擎**,
-问不到就退回今天的整轨静音,不报错。详见
-[ADR-0016](adr/0016-source-separation-is-a-capability.md)(尚未实现)。
+- **分离**([ADR-0016](adr/0016-source-separation-is-a-capability.md)):Demucs 跑在自己的托管 venv
+  里(和转写、克隆的 torch 版本会打架)。配音节点 `original_audio: separate` 只问领域有没有可用
+  引擎,问不到就退回整轨静音。
+- **降噪**([ADR-0017](adr/0017-noise-reduction-is-a-capability.md)):内置引擎是 ffmpeg 的 `afftdn`,
+  **先量噪声底再下手**(写死的 `nf` 要么降不动、要么削人声),永远可用,`auto` 挑的就是它。
+  「人声提取」借分离的**契约**拿人声那一条 —— 注册表把 `get_separation_adapter` 递给它,不互相
+  import;它会连音乐一起去掉,所以 `auto` 从不挑它。
+- 两者取声音都走 `media/audio_io`,**保留原采样率和声道**;转写那条 `_extract_audio` 降到
+  16 kHz 单声道,只适合喂识别模型。视频降噪后画面原样拷贝、只换声音,产出的仍是视频。
 
 ### 生成参数从哪里来（1.4.0）
 
