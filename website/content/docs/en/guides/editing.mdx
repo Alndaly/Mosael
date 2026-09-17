@@ -68,7 +68,10 @@ workspace and reads the sentence. Google is the default — it costs nothing and
 
 ![Demo: inspect subtitle dubbing settings and open Transcript](/media/gifs/en/subtitle-dub.gif)
 
-Every cue carries its own dub button, and you can dub a batch. The audio lands on a dedicated **dub
+Dubbing happens on the **Voice** tab of the left panel: engine and voice at the top, how to dub these
+cues below. The scope follows the timeline selection — dub only the cues you selected, or the whole
+track when nothing is selected. The dub button beside each cue on the Subtitles tab simply selects that
+cue and switches to Voice. The audio lands on a dedicated **dub
 track**: the original audio is untouched, delete the track and you are back where you started, and
 dubbing again returns to that same track rather than stacking up a pile of one-clip tracks.
 
@@ -86,7 +89,11 @@ video track and the audio track is empty.
 - **Bilingual cues** ask which line to read. Feeding the whole cue to TTS reads the source and then the
   translation — a 3-second cue turns into twelve.
 - **Engine** is either local voice cloning or a remote engine (Edge / OpenAI / Volcano). For remote
-  engines the voice list is fetched per engine — Volcano's catalogue follows your account.
+  engines the voice list is fetched per engine — Volcano's catalogue follows your account. Local cloning
+  can switch between F5-TTS and Fish Speech per run, and the voice library sits further down the same tab.
+
+Reading arbitrary text aloud and making a podcast produce standalone audio assets that have nothing to
+do with the timeline; they live in [AI Studio → Audio](/docs/guides/ai-studio).
 
 > **When the language does not match, the engine does not error** — it reads the text with the rules
 > it knows, produces gibberish, and reports success. So it is caught at the moment you pick the engine,
@@ -96,8 +103,8 @@ video track and the audio track is empty.
 
 What local cloning can read **depends on which weights are installed**, not on the engine. The base
 weights are Chinese + English; Japanese, French, German, Spanish, Italian, Russian, Hindi, Arabic and
-Finnish each have a community finetune, and whichever is missing gets a download button right in the
-dub popover (~1.4 GB each).
+Finnish each have a community finetune, and whichever is missing gets a download button right on the
+Voice tab (~1.4 GB each).
 
 Japanese, Korean, Russian, Arabic and Hindi are recognised from the script itself — install the weights
 and they just work. French, German, Spanish, Italian and Finnish share the Latin alphabet with English:

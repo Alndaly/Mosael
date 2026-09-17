@@ -46,6 +46,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { OptionPicker } from "@/components/ui/option-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
+import { AudioWorkspace } from "@/features/ai-studio/AudioWorkspace";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/features/ai-studio/parameterPanel";
@@ -214,30 +215,29 @@ function defaultGenerationOption(options: GenerationEngineOption[], defaults: Pr
   return findGenerationOption(options, row.provider_profile_id, kind, row.model);
 }
 
+//: 生成分两页:图片/视频是按会话迭代的(同一个提示词改几轮),音频是一次一份、直接进素材库。
+const STUDIO_TABS = ["chat", "generate", "audio"] as const;
+type StudioTab = (typeof STUDIO_TABS)[number];
+const STUDIO_TAB_LABELS = { chat: "aiTabChat", generate: "aiTabGenerate", audio: "aiTabAudio" } as const;
+
 export function AiStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
-  const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
+  const [tab, setTab] = usePersistentTab<StudioTab>("ai-studio", "chat", STUDIO_TABS);
 
   const switcher = (
     <div className={SEGMENTED_LIST} role="tablist" aria-label="AI Studio">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === "chat"}
-        className={segmentedTriggerClass(tab === "chat")}
-        onClick={() => setTab("chat")}
-      >
-        {t("aiTabChat")}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === "generate"}
-        className={segmentedTriggerClass(tab === "generate")}
-        onClick={() => setTab("generate")}
-      >
-        {t("aiTabGenerate")}
-      </button>
+      {STUDIO_TABS.map((item) => (
+        <button
+          key={item}
+          type="button"
+          role="tab"
+          aria-selected={tab === item}
+          className={segmentedTriggerClass(tab === item)}
+          onClick={() => setTab(item)}
+        >
+          {t(STUDIO_TAB_LABELS[item])}
+        </button>
+      ))}
     </div>
   );
 
@@ -246,8 +246,10 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-workspace-panel">
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} switcher={switcher} />
-      ) : (
+      ) : tab === "generate" ? (
         <GenerateWorkspace workspace={workspace} switcher={switcher} />
+      ) : (
+        <AudioWorkspace workspace={workspace} switcher={switcher} />
       )}
     </div>
   );

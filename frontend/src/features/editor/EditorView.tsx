@@ -967,7 +967,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onAddToTimeline={addAssetToTimeline}
         />
       ) : panels.tab === "voice" ? (
-        <VoicePanel workspace={workspace} project={project} />
+        <VoicePanel workspace={workspace} project={project} sequence={sequence} onOpenSubtitles={() => panels.setTab("subtitle")} />
       ) : (
         <section aria-label={t(panels.tab === "transcript" ? "transcriptTab" : "subtitleTab")} className="editor-pane min-h-0 overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
           {panels.tab === "transcript" ? (
@@ -998,6 +998,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 subtitleStyleMutation.mutate(style);
               }}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+              onDub={() => panels.setTab("voice")}
             />
           )}
         </section>

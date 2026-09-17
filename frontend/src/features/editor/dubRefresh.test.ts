@@ -19,26 +19,31 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const PANEL = readFileSync(join(import.meta.dirname, "SubtitlePanel.tsx"), "utf8");
+const DUB = readFileSync(join(import.meta.dirname, "SubtitleDub.tsx"), "utf8");
+const WATCH = readFileSync(join(import.meta.dirname, "../voice/useWatchedJob.ts"), "utf8");
 
 /** 去掉注释 —— 免得这条棘轮被「注释里提到 assets」喂饱(这个仓库出过空棘轮)。 */
 function code(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
+/** 任务到终态时跑的那段回调 —— 而不是文件里任意一处 invalidate。 */
+function onSettled(): string {
+  const body = code(DUB);
+  return body.slice(body.indexOf("useWatchedJob("), body.indexOf("const run = useMutation"));
+}
+
 describe("配音完成后的缓存刷新", () => {
   it("时间线和素材库都要刷 —— 少刷素材,片段就显示成一串 id 且没有波形", () => {
-    const body = code(PANEL);
-    // 定位到跟着任务终态跑的那个 effect,而不是文件里任意一处 invalidate。
-    const effect = body.slice(body.indexOf("jobStatus !== \"succeeded\""), body.indexOf("const run = useMutation"));
-    expect(effect).toContain('queryKey: ["sequences"]');
-    expect(effect).toContain('queryKey: ["assets"]');
+    expect(onSettled()).toContain('queryKey: ["sequences"]');
+    expect(onSettled()).toContain('queryKey: ["assets"]');
   });
 
   it("失败也刷 —— 部分成功时已经落地的那几段同样得看得见", () => {
-    const body = code(PANEL);
-    const effect = body.slice(body.indexOf("jobStatus !== \"succeeded\""), body.indexOf("const run = useMutation"));
-    // 提前 return 的条件里必须**同时**含 failed,否则失败分支根本走不到刷新那两行。
-    expect(effect).toMatch(/jobStatus !== "succeeded" && jobStatus !== "failed"/);
+    // 刷新不能包在「成功了才」的分支里……
+    const callback = onSettled();
+    expect(callback.indexOf('queryKey: ["assets"]')).toBeLessThan(callback.indexOf('"succeeded"'));
+    // ……而回调本身在失败时也要被叫到。
+    expect(code(WATCH)).toMatch(/status === "succeeded" \|\| status === "failed"/);
   });
 });

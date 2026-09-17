@@ -24,13 +24,7 @@ const SRC = join(import.meta.dirname, "..");
 
 /** 存量:选项来自查询、却**故意**留着裸 Select 的地方。键是「文件: 那个查询变量名」。 */
 const GRANDFATHERED = new Map<string, string>([
-  [
-    "features/editor/VoicePanel.tsx: localEngines",
-    "每一项带三态运行环境徽标(已装/未装/还没测过),不是一行纯文字;引擎数量由我们打包决定,不会长",
-  ],
-  ["features/editor/VoicePanel.tsx: engines", "同上,TTS 引擎是我们打包进去的固定几个"],
-  ["features/settings/AgentVoiceSection.tsx: engines", "同上"],
-  ["features/editor/SubtitlePanel.tsx: f5Models", "只在装了多于一个权重时才出现,而权重是手动装的"],
+  ["features/settings/AgentVoiceSection.tsx: engines", "TTS 引擎是我们打包进去的固定几个,不会长"],
 ]);
 
 function sources(dir: string): string[] {

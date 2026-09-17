@@ -6,7 +6,7 @@ updated: 2026-09-09
 version: 1.4.0
 ---
 
-**AI Studio** switches between **Chat** and **Generate** in the top toolbar. The conversation toolbar also has **Conversation / Trace** and a toggle for the agent environment panel.
+**AI Studio** switches between **Chat**, **Generate** and **Audio** in the top toolbar. The conversation toolbar also has **Conversation / Trace** and a toggle for the agent environment panel.
 
 ## Chat: the agent operates your project
 
@@ -148,6 +148,21 @@ library or a pasted link.
 Asking the agent works the same way: "use these two images as first and last frame for a 5-second
 clip" and it will check what the model supports before sending — passing a parameter the model
 does not accept is rejected outright rather than quietly producing something else.
+
+
+## Audio: speech and podcasts
+
+**Audio** produces standalone audio assets. They land in the media library, and the most recent ones
+are listed below the form so you can play them in place.
+
+- **Speech**: pick an engine and a voice, then read a piece of text. The engines are the same as on the
+  editor's Voice tab: local voice cloning (F5-TTS / Fish Speech) or any remote engine. Local cloning
+  needs a voice first — upload or record a reference clip under Settings → Dubbing & voices.
+- **Podcast**: two speakers **rewrite** some material as a dialogue, **read** it as written, or
+  **research** a topic on the web and discuss it. Connect Volcano Podcast under Settings → AI audio first;
+  until then this tab shows a link to set it up.
+
+Dubbing the subtitles on a timeline happens on the editor's Voice tab — see [Editing](/docs/guides/editing).
 
 ## Feishu (Lark) binding
 

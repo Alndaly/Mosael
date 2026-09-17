@@ -2,6 +2,9 @@ import type { components } from "@/api/generated/schema";
 
 export type TtsEngineChoice = components["schemas"]["TtsEngineChoiceOut"];
 
+/** 播客引擎的 id。一次产出一整段双人对话 —— 它有自己的表单(AI 生成 → 音频 → 播客)。 */
+export const PODCAST_ENGINE = "volcano-podcast";
+
 /**
  * 能拿来「念一句话」的引擎。
  *
@@ -12,7 +15,7 @@ export type TtsEngineChoice = components["schemas"]["TtsEngineChoiceOut"];
  * 各写一份的结果是其中一处日后长出第二个播客引擎也没人记得排除。
  */
 export function speechEngineChoices(engines: TtsEngineChoice[] | undefined): TtsEngineChoice[] {
-  return (engines ?? []).filter((engine) => engine.id !== "volcano-podcast");
+  return (engines ?? []).filter((engine) => engine.id !== PODCAST_ENGINE);
 }
 
 /**

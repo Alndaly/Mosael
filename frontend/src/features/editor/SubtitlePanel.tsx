@@ -1,10 +1,9 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { AudioLines, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -14,30 +13,14 @@ import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle 
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
 
-import {
-  api,
-  dubSubtitles,
-  downloadF5Model,
-  listF5Models,
-  listTtsEngines,
-  listTtsVoices,
-  listVoices,
-  translateTexts,
-  type Clip,
-  type Job,
-  type Sequence,
-} from "@/api/client";
+import { translateTexts, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { NONE, optionalValue } from "@/components/ui/selectSentinel";
-import { speechEngineChoices } from "@/features/voice/speechEngines";
-import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from "@/features/editor/dubLanguage";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import { useEditorStore } from "@/stores/editorStore";
-import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 
 
@@ -61,6 +44,7 @@ export function SubtitlePanel({
   onPreviewStyle,
   onSetStyle,
   onDeleteClip,
+  onDub,
 }: {
   sequence: Sequence;
   onSetText: (clipId: string, text: string) => void;
@@ -77,6 +61,8 @@ export function SubtitlePanel({
   onPreviewStyle?: (style: Record<string, unknown>) => void;
   onSetStyle?: (style: Record<string, unknown>) => void;
   onDeleteClip: (clipId: string) => void;
+  /** 切到「配音」页。配音在那里做,这里只给入口。 */
+  onDub?: () => void;
 }) {
   const t = useI18n();
   const noteStrings = useNoteStrings();
@@ -169,8 +155,22 @@ export function SubtitlePanel({
                   {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
                 </button>
                 <span className="flex shrink-0 items-center gap-1">
-                  {/* 段落配音:你点的这一条就是范围,不必先去时间线上选中它。 */}
-                  <SubtitleDub sequence={sequence} subtitles={subtitles} only={clip} />
+                  {/* 给这一条配音 = 选中它、切到「配音」页。配音页的范围跟着选中走,
+                      所以不需要第二套"只配这一条"的表单。 */}
+                  {onDub && (
+                    <button
+                      type="button"
+                      className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      title={t("subtitleDubThis")}
+                      aria-label={t("subtitleDubThis")}
+                      onClick={() => {
+                        selectClip(clip.id);
+                        onDub();
+                      }}
+                    >
+                      <AudioLines size={12} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
@@ -213,7 +213,11 @@ export function SubtitlePanel({
         {subtitles.length > 0 && onApplyTexts && (
           <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
         )}
-        {subtitles.length > 0 && <SubtitleDub sequence={sequence} subtitles={subtitles} />}
+        {subtitles.length > 0 && onDub && (
+          <button type="button" className={PILL} title={t("subtitleDub")} onClick={onDub}>
+            <AudioLines size={12} /> {t("subtitleDub")}
+          </button>
+        )}
         {subtitles.length > 0 && (
           <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants} className={PILL}
             label={noteStrings.saveAll} />
@@ -223,328 +227,7 @@ export function SubtitlePanel({
   );
 }
 
-/** 一键翻译:把整轨字幕批量译成目标语言(Google 免费),一次提交、一步撤销。 */
-/**
- * 字幕配音:选中的字幕条 → 逐条合成 → 落到一条新的音频轨。
- *
- * **只列克隆音色**。远端引擎(火山等)的发音人挑选牵着资源族、模型、供应商三层选择,那套完整的
- * 选择器在「配音」标签页里 —— 在这儿再实现一遍就是同一个问题两处答案。这里要的是「用我已经
- * 建好的那个声音,把这几条念出来」。
- */
-function SubtitleDub({
-  sequence,
-  subtitles,
-  only,
-}: {
-  sequence: Sequence;
-  subtitles: Clip[];
-  /** 只配这一条(字幕卡片上的入口)。给了它就不再谈「选中的几条」—— 你点的就是范围。 */
-  only?: Clip;
-}) {
-  const t = useI18n();
-  const [open, setOpen] = React.useState(false);
-  // 引擎:克隆(用自己建的音色)或某个远端引擎(自带发音人)。此前这里写死了克隆 ——
-  // 于是没建过音色的人一个字都配不出来,而他明明配好了火山。
-  const [engine, setEngine] = React.useState("clone");
-  const [voiceId, setVoiceId] = React.useState("");
-  const [engineVoice, setEngineVoice] = React.useState("");
-  //: 用哪份克隆权重。空 = 按文字自动挑 —— 中日韩俄阿印能自动认出来,而法德西意芬都写拉丁
-  //: 字母,没有任何字符能证明"这是法语而不是英语",只能由用户明说。
-  const [cloneModel, setCloneModel] = React.useState(NONE);
-  // 匹配段落长度默认**关**:变速会改语速听感,超出 ±20% 就明显不自然。值不值这个代价由用户
-  // 按素材决定,而不是替他默认承受。开着时用的是片段自己的 speed,无损、可撤销、事后能微调。
-  const [matchDuration, setMatchDuration] = React.useState(false);
-  const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
-  const selectedSubtitles = React.useMemo(
-    () => subtitles.filter((clip) => selectedClipIds.includes(clip.id)),
-    [subtitles, selectedClipIds],
-  );
-  const [selectedOnly, setSelectedOnly] = React.useState(true);
-  // 双语字幕是「原文\n译文」两行。整段念 = 先念一遍原文再念一遍译文,一条 3 秒的字幕配出
-  // 12 秒的音。默认全念(单语字幕就该全念),有多行时才把这个选择摆出来。
-  const [line, setLine] = React.useState<"all" | "first" | "last">("all");
-  const scoped = selectedOnly && selectedSubtitles.length > 0;
-  const pool = only ? [only] : scoped ? selectedSubtitles : subtitles;
-  const targets = pool.filter((clip) => (clip.text_override ?? "").trim());
-  const hasBilingual = targets.some((clip) => (clip.text_override ?? "").trim().includes("\n"));
-
-  const voices = useQuery({
-    queryKey: ["voices", sequence.workspace_id],
-    queryFn: () => listVoices(sequence.workspace_id),
-    enabled: open && engine === "clone",
-  });
-  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000, enabled: open });
-  // 发音人按引擎现拉:火山的目录跟着账号走,不是引擎列表的一部分。
-  const engineVoices = useQuery({
-    queryKey: ["tts-voices", engine],
-    queryFn: () => listTtsVoices(engine),
-    enabled: open && engine !== "clone",
-  });
-  const voiceChoices = engineVoices.data ?? [];
-  const activeEngine = engines.data?.find((item) => item.id === engine);
-  const engineChoices = speechEngineChoices(engines.data);
-  React.useEffect(() => {
-    if (engine === "clone" && !voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
-  }, [voices.data, voiceId, engine]);
-  React.useEffect(() => {
-    setEngineVoice("");
-  }, [engine]);
-  const chosenVoice = voiceChoices.find((item) => item.value === (engineVoice || voiceChoices[0]?.value));
-  // 本地克隆的语言能力由**装了哪几份权重**决定,不是引擎的固有属性 —— 所以要问一下这台机器。
-  const f5Models = useQuery({
-    queryKey: ["f5-models"],
-    queryFn: listF5Models,
-    enabled: open && engine === "clone",
-    // 下载中就跟着刷:用户点完下载不该盯着一个不动的界面猜它有没有在跑。
-    refetchInterval: (query) => (query.state.data?.some((item) => item.status === "downloading") ? 1500 : false),
-  });
-  // 这段字幕是什么文字。每次算,不缓存 —— 判据只扫几行字符,比维护一个依赖数组便宜。
-  const wantScript = detectScript(targets.map((clip) => dubTextOf(clip, line)).join("\n"));
-  // 能念这段文字、但还没下的那份权重 —— 有它就把「下载」直接摆在这儿,而不是让用户去设置页找。
-  const missingModel = (f5Models.data ?? []).find(
-    // `?? []`:一个字段缺失的响应不该把整个字幕面板炸掉(测试里的桩就这么炸过一次)。
-    (model) => wantScript && (model.languages ?? []).includes(wantScript) && !model.installed,
-  );
-  const downloadModel = useMutation({
-    mutationFn: (modelId: string) => downloadF5Model(modelId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["f5-models"] }),
-    onError: (error: Error) => toast.error(error.message),
-  });
-  // **默认就选对**,而不是先落在第一个音色上再弹警告让用户猜要改什么。只在用户还没手动选过
-  // (engineVoice 为空)时动手,选过就不再覆盖 —— 那是他的决定。
-  React.useEffect(() => {
-    if (engine === "clone" || engineVoice || voiceChoices.length === 0) return;
-    const match = pickVoiceFor(wantScript, engine, voiceChoices);
-    if (match) setEngineVoice(match);
-  }, [engine, engineVoice, voiceChoices, wantScript]);
-  // 语言对不上时,引擎**不会报错** —— 它按自己那套发音规则硬念一遍,交出一段听不懂的声音。
-  // 后端会拦(audio/tts_language),但那是在排队之后;文本就在眼前,这一刻就该说。
-  // 克隆能念什么,取决于这台机器上装了哪几份权重 —— 现算,不写死。
-  const cloneLanguages = (f5Models.data ?? []).filter((m) => m.installed).flatMap((m) => m.languages ?? []);
-  const mismatch = unspeakable(
-    targets.map((clip) => dubTextOf(clip, line)),
-    engine,
-    engine === "clone" ? "" : engineVoice || voiceChoices[0]?.value || "",
-    cloneLanguages,
-  );
-  // 能不能配:克隆要有音色;远端引擎要么有目录、要么它自己说需要手填 id 而用户填了。
-  const ready =
-    engine === "clone"
-      ? Boolean(voiceId)
-      : voiceChoices.length > 0 || Boolean(engineVoice) || !activeEngine?.needs_voice_id;
-
-  // 配音是个后台任务:发起时时间线上什么都不会变,音频要等它跑完才落轨。**得有人盯着它** ——
-  // 不盯的话用户看到的是「点了没反应」,过一会儿也不会自己出现,除非手动切走再切回来。
-  // 这条 bug 就是这么被报上来的:配音其实成功了,只是那条新轨没进到界面里。
-  const qc = useQueryClient();
-  const [jobId, setJobId] = React.useState<string | null>(null);
-  const job = useQuery({
-    queryKey: ["job", jobId],
-    enabled: Boolean(jobId),
-    queryFn: () => api<Job>(`/api/jobs/${jobId}`),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "succeeded" || status === "failed" ? false : 1000;
-    },
-  });
-  const jobStatus = job.data?.status ?? null;
-  React.useEffect(() => {
-    if (jobStatus !== "succeeded" && jobStatus !== "failed") return;
-    // 时间线和**素材库**都要刷。只刷时间线的话,新片段引用的素材前端还不知道 ——
-    // 片段标题会回退成一串 id、波形也无从查起(它是按 asset.media_info.has_waveform 拉的),
-    // 看起来就像"配音没有波形"。失败也刷:部分成功时已经落地的那几段同样得看得见。
-    void qc.invalidateQueries({ queryKey: ["sequences"] });
-    void qc.invalidateQueries({ queryKey: ["assets"] });
-    if (jobStatus === "succeeded") toast.success(job.data?.message ?? t("subtitleDubDone"));
-    else toast.error(job.data?.message ?? t("subtitleDubFailed"), { description: job.data?.error ?? undefined });
-    setJobId(null);
-  }, [jobStatus, job.data, qc, t]);
-
-  const run = useMutation({
-    mutationFn: () =>
-      dubSubtitles(sequence.id, {
-        clip_ids: targets.map((clip) => clip.id),
-        match_duration: matchDuration,
-        line,
-        engine,
-        ...(engine === "clone"
-          ? { voice_id: voiceId, clone_model: optionalValue(cloneModel) ?? "" }
-          : {
-              // 下拉在没选时**显示**第一个,那就提交同一个 —— 否则引擎会安静地用它自己的默认音。
-              engine_voice: engineVoice || voiceChoices[0]?.value || "",
-              // 只有目录知道的资源族;不带的话火山回一个 55000000。
-              engine_voice_resource: chosenVoice?.resource_id ?? "",
-            }),
-      }),
-    onSuccess: (queued) => {
-      setOpen(false);
-      setJobId(queued.id);
-      // 只确认"排上了",不假装已经配好 —— 真正配好由上面那个 effect 在任务终态时说。
-      toast.success(t("subtitleDubQueued").replace("{n}", String(targets.length)));
-    },
-    onError: (error: Error) => toast.error(t("subtitleDubFailed"), { description: error.message }),
-  });
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        {only ? (
-          <button
-            type="button"
-            className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            title={t("subtitleDubThis")}
-            aria-label={t("subtitleDubThis")}
-          >
-            <AudioLines size={12} />
-          </button>
-        ) : (
-          <button type="button" className={PILL} title={t("subtitleDub")}>
-            <AudioLines size={12} /> {t("subtitleDub")}
-          </button>
-        )}
-      </PopoverTrigger>
-      <PopoverContent className="flex w-[240px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
-        <strong>{t("subtitleDub")}</strong>
-        <label className="grid gap-1 text-xs text-muted-foreground">
-          <span>{t("subtitleDubEngine")}</span>
-          <Select value={engine} onValueChange={setEngine}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {engineChoices.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-        {engine === "clone" && (f5Models.data ?? []).filter((m) => m.installed).length > 1 && (
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            <span>{t("subtitleDubWeights")}</span>
-            <Select value={cloneModel} onValueChange={setCloneModel}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {/* 「自动」排第一:中日韩俄阿印能按文字认出来,那是绝大多数情况。 */}
-                <SelectItem value={NONE}>{t("subtitleDubWeightsAuto")}</SelectItem>
-                {(f5Models.data ?? [])
-                  .filter((model) => model.installed)
-                  .map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.label}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </label>
-        )}
-        {engine === "clone" ? (
-          voices.isSuccess && (voices.data ?? []).length === 0 ? (
-            // 没有音色时不摆一个空下拉让人点 —— 直说下一步在哪。
-            <p className="m-0 text-xs leading-[1.6] text-muted-foreground">{t("subtitleDubNoVoice")}</p>
-          ) : (
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              <span>{t("subtitleDubVoice")}</span>
-              <OptionPicker
-                value={voiceId}
-                onChange={setVoiceId}
-                options={(voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }))}
-              />
-            </label>
-          )
-        ) : voiceChoices.length > 0 ? (
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            <span>{t("subtitleDubVoice")}</span>
-            <OptionPicker
-              value={engineVoice || voiceChoices[0].value}
-              onChange={setEngineVoice}
-              options={voiceChoices}
-            />
-          </label>
-        ) : activeEngine?.needs_voice_id ? (
-          // 目录拉不到(没配密钥、或这个引擎本来就要手填)时给输入框,而不是一个空下拉。
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            <span>{t("voiceEngineVoiceId")}</span>
-            <Input
-              className="h-7"
-              value={engineVoice}
-              placeholder={t("voiceEngineVoiceIdHint")}
-              onChange={(event) => setEngineVoice(event.target.value)}
-            />
-          </label>
-        ) : null}
-        {!only && selectedSubtitles.length > 0 && (
-          <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span>{t("subtitleTranslateSelectedOnly").replace("{n}", String(selectedSubtitles.length))}</span>
-            <Switch checked={selectedOnly} onCheckedChange={setSelectedOnly} />
-          </label>
-        )}
-        {/* 只在真有双语字幕时出现 —— 单语字幕摆一个「念哪一行」只会让人以为自己漏配了什么。 */}
-        {hasBilingual && (
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            <span>{t("subtitleDubLine")}</span>
-            <Select value={line} onValueChange={(next) => setLine(next as "all" | "first" | "last")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("subtitleDubLineAll")}</SelectItem>
-                <SelectItem value="first">{t("subtitleDubLineFirst")}</SelectItem>
-                <SelectItem value="last">{t("subtitleDubLineLast")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-        )}
-        <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span title={t("subtitleDubMatchHint")}>{t("subtitleDubMatch")}</span>
-          <Switch checked={matchDuration} onCheckedChange={setMatchDuration} />
-        </label>
-        {mismatch && (
-          <p className="m-0 rounded-md border border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-foreground">
-            {/* 说清楚**下一步动哪儿**:这个引擎里有能念的音色就让他换音色 —— 已经选对引擎却被
-                告知「换引擎」,只会让人以为选的这个不行(用户就是这么被绕进去的)。 */}
-            {engine === "clone" && missingModel
-              ? // 同一个占位符出现两次,replace 只换第一个 —— 界面上会留一个字面的 {lang}(真出过)。
-                t("subtitleDubModelMissing")
-                  .replaceAll("{lang}", t(`langName_${mismatch}` as never))
-                  .replace("{size}", (missingModel.expected_bytes / 1_000_000_000).toFixed(1))
-                : hasVoiceFor(mismatch, engine, voiceChoices)
-                  ? t("subtitleDubLangVoice").replaceAll("{lang}", t(`langName_${mismatch}` as never))
-                  : t("subtitleDubLangEngine").replaceAll("{lang}", t(`langName_${mismatch}` as never))}
-            {engine === "clone" && missingModel && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-1.5 w-full"
-                loading={downloadModel.isPending || missingModel.status === "downloading"}
-                onClick={() => downloadModel.mutate(missingModel.id)}
-              >
-                {/* 光有百分比不够:这些权重 1.3–5.4 GB,慢网络下一个百分点要好几分钟,
-                    而"看不出还要多久"和"卡住了"在用户眼里是同一件事。有实测总量就一并报出来。 */}
-                {missingModel.status === "downloading"
-                  ? missingModel.total_bytes > 0
-                    ? t("subtitleDubModelDownloadingSize")
-                        .replace("{n}", String(Math.round(missingModel.progress * 100)))
-                        .replace("{done}", formatBytes(missingModel.downloaded_bytes))
-                        .replace("{total}", formatBytes(missingModel.total_bytes))
-                    : t("subtitleDubModelDownloading").replace("{n}", String(Math.round(missingModel.progress * 100)))
-                  : t("subtitleDubModelDownload")}
-              </Button>
-            )}
-          </p>
-        )}
-        <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>
-        <Button size="sm" disabled={targets.length === 0 || !ready} loading={run.isPending} onClick={() => run.mutate()}>
-          {only ? t("subtitleDubApplyOne") : t("subtitleDubApply").replace("{n}", String(targets.length))}
-        </Button>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
+/** 一键翻译:把整轨字幕批量译成目标语言,一次提交、一步撤销。 */
 function SubtitleTranslate({
   workspaceId,
   subtitles,
