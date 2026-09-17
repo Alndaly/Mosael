@@ -4,7 +4,7 @@
 
 1. 内置引擎**真的降了噪、没动说话声** —— 用真 ffmpeg 量,不是断言滤镜字符串长什么样;
 2. 噪声底是**量出来的**:写死一个值,要么降不动,要么把人声削掉(实测过前一种);
-3. `auto` 不挑会去掉音乐的引擎;人声提取借的是分离的**契约**,跟着分离引擎在不在走;
+3. `auto` 不挑会去掉音乐的引擎;「只留人声」不算降噪,那是分离的事;
 4. 产出**新素材**:音频进音频出,视频进视频出,原素材不动;
 5. 不认得的档位、没准备好的引擎,在排队 / 开卡**之前**就说清楚;
 6. 分离和降噪取声音时**不降采样** —— 此前借转写那条路,先砍成 16 kHz 单声道。
@@ -21,7 +21,6 @@ from pathlib import Path
 import pytest
 
 from app.ai.providers.contracts.denoise import DenoiseError, DenoiseRequest, checked_strength
-from app.ai.providers.contracts.separation import VOCALS, SeparationRequest
 
 needs_ffmpeg = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
 
@@ -147,23 +146,6 @@ class Test档位:
             DenoiseRequest(Path("x.wav"), "loud")
 
 
-class _FakeSeparation:
-    engine_id = "fake-sep"
-
-    def __init__(self) -> None:
-        self.asked: list[tuple[str, ...]] = []
-
-    def runtime_ready(self) -> bool:
-        return True
-
-    def separate(self, request: SeparationRequest, out_dir: Path) -> dict[str, Path]:
-        self.asked.append(request.stems)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        path = out_dir / "vocals.wav"
-        path.write_bytes(b"RIFF-vocals")
-        return {VOCALS: path}
-
-
 class Test引擎的挑法:
     def test_auto_是内置的那个(self) -> None:
         from app.ai.providers.registry import get_denoise_adapter
@@ -174,14 +156,15 @@ class Test引擎的挑法:
     def test_auto_不挑会去掉音乐的引擎__哪怕它排在前面(self, monkeypatch) -> None:
         from app.ai.providers import registry
         from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
-        from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
+        from app.ai.providers.adapters.local.rnnoise_denoise import RnnoiseDenoiseAdapter
 
-        isolation = VoiceIsolationDenoiseAdapter(separation=lambda engine: _FakeSeparation())
+        speech = RnnoiseDenoiseAdapter()
         builtin = FfmpegDenoiseAdapter()
-        monkeypatch.setattr(registry, "DENOISE_ADAPTERS", {"voice-isolation": isolation, "ffmpeg": builtin})
+        monkeypatch.setattr(speech, "runtime_ready", lambda: True)
+        monkeypatch.setattr(registry, "DENOISE_ADAPTERS", {"rnnoise": speech, "ffmpeg": builtin})
         assert registry.get_denoise_adapter() is builtin
         #: 点名仍然拿得到。
-        assert registry.get_denoise_adapter("voice-isolation") is isolation
+        assert registry.get_denoise_adapter("rnnoise") is speech
 
     def test_重复的引擎装配时就失败(self) -> None:
         from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
@@ -200,30 +183,14 @@ class Test引擎的挑法:
         assert config["strength"]["options"] == list(STRENGTHS)
 
 
-class Test人声提取借的是分离的契约:
-    def test_跟着分离引擎在不在走(self) -> None:
-        from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
+class Test边界:
+    def test_只留人声不算降噪(self) -> None:
+        """那是分离的人声那一份。放进降噪,同一件事就有两个入口、两种说法(ADR-0017 修订二)。"""
+        from app.ai.providers.registry import DENOISE_ADAPTERS
 
-        assert VoiceIsolationDenoiseAdapter(separation=lambda engine: None).runtime_ready() is False
-        assert VoiceIsolationDenoiseAdapter(separation=lambda engine: _FakeSeparation()).runtime_ready() is True
-
-    def test_只要人声那一条__产物就是它(self, tmp_path) -> None:
-        from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
-
-        separation = _FakeSeparation()
-        out = VoiceIsolationDenoiseAdapter(separation=lambda engine: separation).denoise(
-            DenoiseRequest(tmp_path / "in.wav"), tmp_path / "out.wav"
-        )
-        assert separation.asked == [(VOCALS,)], "只该要人声 —— 多要一条就是多算一条"
-        assert out.read_bytes() == b"RIFF-vocals"
-
-    def test_没有分离引擎时说清楚去哪装(self, tmp_path) -> None:
-        from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
-
-        with pytest.raises(DenoiseError, match="人声分离"):
-            VoiceIsolationDenoiseAdapter(separation=lambda engine: None).denoise(
-                DenoiseRequest(tmp_path / "in.wav"), tmp_path / "out.wav"
-            )
+        assert "voice-isolation" not in DENOISE_ADAPTERS
+        for adapter in DENOISE_ADAPTERS.values():
+            assert "separation" not in type(adapter).__module__
 
     def test_契约不认识任何一个引擎(self) -> None:
         text = Path("app/ai/providers/contracts/denoise.py").read_text(encoding="utf-8").lower()
@@ -248,23 +215,28 @@ class Test排队和开卡之前就判:
                 None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None, strength="max"
             )
 
-    def test_引擎没准备好不排队__说清去哪准备(self, monkeypatch) -> None:
-        from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
+    def test_引擎没准备好不排队__说清去哪准备(self, monkeypatch, tmp_path) -> None:
+        from app.ai.runtime import denoise_models as dm
         from app.db.models import Asset
         from app.domain import denoise
 
-        cold = VoiceIsolationDenoiseAdapter(separation=lambda engine: None)
-        monkeypatch.setattr(denoise, "get_denoise_adapter", lambda engine="": cold if engine else None)
-        with pytest.raises(DenoiseError, match="人声分离"):
-            denoise.start_denoise_job(
-                None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None, engine="voice-isolation"
-            )
+        monkeypatch.setattr(dm, "deepfilter_path", lambda: tmp_path / "nothing")
+        dm.deepfilter_ready.cache_clear()
+        try:
+            with pytest.raises(DenoiseError, match="设置"):
+                denoise.start_denoise_job(
+                    None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None, engine="deepfilternet"
+                )
+        finally:
+            dm.deepfilter_ready.cache_clear()
 
-    def test_确认卡上说得出人声提取会去掉音乐(self) -> None:
+    def test_确认卡上说得出会去掉音乐(self) -> None:
         from app.domain.agent.confirmations import _summarize
 
-        isolation = _summarize("denoise_audio", {"engine_name": "人声提取", "removes_music": True, "has_strengths": False, "strength": "medium"})
-        assert "音乐" in isolation and "人声提取" in isolation and "中度" not in isolation
+        speech = _summarize("denoise_audio", {"engine_name": "DeepFilterNet 语音降噪", "removes_music": True, "has_strengths": True, "strength": "medium"})
+        assert "音乐" in speech and "DeepFilterNet" in speech and "中度" in speech
+        untiered = _summarize("denoise_audio", {"engine_name": "某引擎", "removes_music": False, "has_strengths": False, "strength": "medium"})
+        assert "中度" not in untiered, "没有档位的引擎不该在卡上说档位"
         builtin = _summarize("denoise_audio", {"engine_name": "内置降噪", "removes_music": False, "has_strengths": True, "strength": "strong"})
         assert "强力" in builtin and "音乐" not in builtin
 

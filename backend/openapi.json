@@ -21404,7 +21404,7 @@
           "status"
         ],
         "title": "DenoiseEngineOut",
-        "description": "一个降噪引擎:它是什么、现在能不能用、要不要装。\n\n界面**不认识任何引擎**,所以要显示的话都由这里给:`description` 说适合什么、代价是什么,\n`setup_hint` 说没准备好时去哪儿准备,`removes_music` 让界面把\"会去掉音乐\"单独标出来。\n`strengths` 为空 = 没有档位(人声提取),界面不摆那个旋钮。\n\n`installable` 的引擎要下载一次,`status` 是 installed / missing / installing / failed /\nunsupported(这个平台没有发布文件);其余引擎的 `status` 只有 ready / unavailable。"
+        "description": "一个降噪引擎:它是什么、现在能不能用、要不要装。\n\n界面**不认识任何引擎**,所以要显示的话都由这里给:`description` 说适合什么、代价是什么,\n`setup_hint` 说没准备好时去哪儿准备,`removes_music` 让界面把\"会去掉音乐\"单独标出来。\n`strengths` 为空 = 这个引擎没有档位,界面不摆那个旋钮。\n\n`installable` 的引擎要下载一次,`status` 是 installed / missing / installing / failed /\nunsupported(这个平台没有发布文件);其余引擎的 `status` 只有 ready / unavailable。"
       },
       "DeploymentAdminUpdate": {
         "properties": {

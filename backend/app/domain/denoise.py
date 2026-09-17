@@ -92,7 +92,7 @@ def denoise_asset(
     if asset.kind not in DENOISABLE_KINDS:
         raise DenoiseError("只有音频或视频素材可以降噪")
     adapter = ready_adapter(engine)
-    # 没有档位的引擎(人声提取)不看这个值 —— 但它照样要是一个认得出的档位。
+    # 没有档位的引擎不看这个值 —— 但它照样要是一个认得出的档位。
     request_strength = checked_strength(strength)
 
     source = _source_path(asset)

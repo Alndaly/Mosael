@@ -195,8 +195,6 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         # DeepFilterNet 起的是本机二进制。下载那一步在 runtime/denoise_models,走的是
         # media_transfer.download_to_path(RetryingClient),不在这个模块里。
         "app.ai.providers.adapters.local.deepfilter_denoise",
-        # 人声提取只调分离契约拿人声那一条;真正干活的是分离适配器,它自己在这张表里有一条。
-        "app.ai.providers.adapters.local.voice_isolation_denoise",
     }
 
     #: **不自己建连接**的模块 —— 请求是拿调用方给的 client 发的,而那个 client 就是

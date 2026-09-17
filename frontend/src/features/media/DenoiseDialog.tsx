@@ -123,7 +123,7 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
             </Button>
           )}
         </div>
-        {/* 没有档位的方式(人声提取)不摆这个旋钮 —— 拨了也没用。 */}
+        {/* 没有档位的引擎不摆这个旋钮 —— 拨了也没用。 */}
         {strengths.length > 0 && (
           <div className="grid gap-2">
             <span className="text-ui-sm font-medium">{t("denoiseStrength")}</span>

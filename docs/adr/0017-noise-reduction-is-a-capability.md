@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted — 2026-09-17. Follows the shape ADR 0016 set for separation. Amended the same day: the
-two speech models (option B) are implemented — see "Amendment" at the end.
+Accepted — 2026-09-17. Follows the shape ADR 0016 set for separation. Amended twice the same day:
+the two speech models (option B) are implemented, and voice isolation (option C) was withdrawn from
+this capability — see the amendments at the end.
 
 ## Context
 
@@ -86,3 +87,13 @@ built-in engine. Each adapter now also declares a `description_key` and a `setup
 interface lists engines without knowing any of them, so those sentences have to come from the
 engine. The install-progress state that separation kept privately moved to
 `runtime/install_state.InstallStore`, now shared by both.
+
+## Amendment 2 — voice isolation is not noise reduction (2026-09-17)
+
+Decision 2 listed a `voice-isolation` adapter that took the vocal stem from a separation engine. It
+is withdrawn. "Keep only the voice" is exactly what separation already produces (its voice stem),
+so offering it again under noise reduction gave one operation two entry points with two names, and
+put a choice that removes all music and ambience next to choices that clean up a recording. The two
+speech models above cover the case it was meant for (crowds, clatter) while keeping the sound of the
+room. Users who want the bare voice take separation's voice stem; the guides and the denoise node's
+description say so. The contract keeps `strengths = ()` for engines without levels.

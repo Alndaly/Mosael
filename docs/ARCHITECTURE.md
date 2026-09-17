@@ -534,15 +534,13 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 - **分离**([ADR-0016](adr/0016-source-separation-is-a-capability.md)):Demucs 跑在自己的托管 venv
   里(和转写、克隆的 torch 版本会打架)。配音节点 `original_audio: separate` 只问领域有没有可用
   引擎,问不到就退回整轨静音。
-- **降噪**([ADR-0017](adr/0017-noise-reduction-is-a-capability.md)),四个引擎:
+- **降噪**([ADR-0017](adr/0017-noise-reduction-is-a-capability.md)),三个引擎:
   - 内置 `ffmpeg`(afftdn):**先量噪声底再下手**(写死的 `nf` 要么降不动、要么削人声),永远可用,
     `auto` 挑的就是它;只对持续的底噪有效。
   - `deepfilternet`:官方发布的 Rust 二进制(Python 包和新 torchaudio 不兼容),设置里显式下载,
     按平台**固定 SHA-256** 校验(`runtime/denoise_models`)。效果最好。
   - `rnnoise`:ffmpeg 自带的 `arnndn` + 打包进应用的模型文件(`runtime/models/rnnoise/`)。
-  - `voice-isolation`:借分离的**契约**拿人声那一条 —— 注册表把 `get_separation_adapter` 递给它,
-    不互相 import。
-  后三个都会把音乐当噪声,`auto` 从不挑它们。引擎自己给出名字、说明、没准备好时的提示,界面
+  后两个都会把音乐当噪声,`auto` 从不挑它们。「只留人声」不在降噪里 —— 那是分离的人声那一份。引擎自己给出名字、说明、没准备好时的提示,界面
   不认识任何引擎。安装进度两种能力共用 `runtime/install_state.InstallStore`。
 - 两者取声音都走 `media/audio_io`,**保留原采样率和声道**;转写那条 `_extract_audio` 降到
   16 kHz 单声道,只适合喂识别模型。视频降噪后画面原样拷贝、只换声音,产出的仍是视频。

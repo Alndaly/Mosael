@@ -7508,7 +7508,7 @@ export interface components {
          *
          *     界面**不认识任何引擎**,所以要显示的话都由这里给:`description` 说适合什么、代价是什么,
          *     `setup_hint` 说没准备好时去哪儿准备,`removes_music` 让界面把"会去掉音乐"单独标出来。
-         *     `strengths` 为空 = 没有档位(人声提取),界面不摆那个旋钮。
+         *     `strengths` 为空 = 这个引擎没有档位,界面不摆那个旋钮。
          *
          *     `installable` 的引擎要下载一次,`status` 是 installed / missing / installing / failed /
          *     unsupported(这个平台没有发布文件);其余引擎的 `status` 只有 ready / unavailable。

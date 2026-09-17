@@ -26,13 +26,15 @@ afterEach(() => {
 
 const BASE = { installable: false, status: "ready", setup_hint: "", message: "", size_bytes: 0 };
 const BUILTIN = { ...BASE, engine: "ffmpeg", label: "内置降噪", description: "去底噪,不动音乐", ready: true, strengths: ["light", "medium", "strong"], removes_music: false };
-const ISOLATION = { ...BASE, engine: "voice-isolation", label: "人声提取", description: "只留说话声", ready: true, strengths: [], removes_music: true };
+const RNNOISE = { ...BASE, engine: "rnnoise", label: "RNNoise", description: "轻量语音降噪", ready: true, strengths: ["light", "medium", "strong"], removes_music: true };
+//: 没有档位的引擎 —— 界面不认识引擎,只看它声明了什么。
+const UNTIERED = { ...BASE, engine: "single", label: "单档引擎", description: "只有一种处理", ready: true, strengths: [], removes_music: false };
 const DEEPFILTER = {
   ...BASE, engine: "deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false, installable: true,
   status: "missing", setup_hint: "先去设置里下载", strengths: ["light", "medium", "strong"], removes_music: true,
 };
 
-function renderDialog(engines = [BUILTIN, ISOLATION]) {
+function renderDialog(engines: object[] = [BUILTIN, RNNOISE]) {
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -58,8 +60,8 @@ function renderDialog(engines = [BUILTIN, ISOLATION]) {
 describe("降噪对话框", () => {
   it("默认内置、中度,提交的就是这两样", async () => {
     const user = userEvent.setup();
-    // 人声提取排在前面也不该被默认选中 —— 用户说"降噪"时没想把配乐也去掉。
-    const { posts, onClose } = renderDialog([ISOLATION, BUILTIN]);
+    // 会去掉音乐的排在前面也不该被默认选中 —— 用户说"降噪"时没想把配乐也去掉。
+    const { posts, onClose } = renderDialog([RNNOISE, BUILTIN]);
     expect(await screen.findByRole("radio", { name: /内置降噪/ })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "denoiseStrengthMedium" })).toHaveAttribute("aria-checked", "true");
 
@@ -78,16 +80,23 @@ describe("降噪对话框", () => {
     await waitFor(() => expect(posts[0]?.body).toEqual({ engine: "ffmpeg", strength: "strong" }));
   });
 
-  it("人声提取:标出会去掉音乐,且不摆强度", async () => {
+  it("会去掉音乐的标出来", async () => {
     const user = userEvent.setup();
     const { posts } = renderDialog();
-    const isolation = await screen.findByRole("radio", { name: /人声提取/ });
-    expect(isolation).toHaveTextContent("denoiseRemovesMusicBadge");
+    const rnnoise = await screen.findByRole("radio", { name: /RNNoise/ });
+    expect(rnnoise).toHaveTextContent("denoiseRemovesMusicBadge");
     expect(await screen.findByRole("radio", { name: /内置降噪/ })).not.toHaveTextContent("denoiseRemovesMusicBadge");
-    await user.click(isolation);
-    expect(screen.queryByRole("radiogroup", { name: "denoiseStrength" })).toBeNull();
+    await user.click(rnnoise);
     await user.click(screen.getByRole("button", { name: "denoiseStart" }));
-    await waitFor(() => expect(posts[0]?.body).toMatchObject({ engine: "voice-isolation" }));
+    await waitFor(() => expect(posts[0]?.body).toEqual({ engine: "rnnoise", strength: "medium" }));
+  });
+
+  it("没有档位的引擎不摆强度", async () => {
+    const user = userEvent.setup();
+    renderDialog([BUILTIN, UNTIERED]);
+    expect(await screen.findByRole("radiogroup", { name: "denoiseStrength" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("radio", { name: /单档引擎/ }));
+    expect(screen.queryByRole("radiogroup", { name: "denoiseStrength" })).toBeNull();
   });
 
   it("没准备好的方式点不了,显示引擎自己给的提示和说明", async () => {

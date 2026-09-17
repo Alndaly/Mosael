@@ -94,11 +94,11 @@ panel. Right-clicking a clip in the editor offers the same two, applied to the a
   | Built-in | Steady noise: air conditioning, fans, hum | Untouched | None |
   | DeepFilterNet | Speech-led recordings, including keyboards, dishes and chatter; the most natural voice | Removed | Download once under Settings → On-device engines → Noise reduction (about 30 MB) |
   | RNNoise | Same, lighter and not as good as DeepFilterNet | Lowered | None |
-  | Voice isolation | Only the voice, nothing else | Removed | Install a separation engine first |
 
   Built-in is the default, because "reduce noise" rarely means "and drop the music". It measures how
   loud the noise is before it acts, so one strength suits faint and heavy hiss alike; for speech-led
-  material DeepFilterNet does noticeably better.
+  material DeepFilterNet does noticeably better. Keeping only the voice and nothing else is not
+  noise reduction: use *Separate voice and background* below and take the voice stem.
 - **Separate voice and background**: split into a voice asset and a background asset. The background
   is everything except the voice: music, ambience, effects. The engine runs on this machine and must
   be installed first under Settings → On-device engines → Voice separation; a long asset takes many

@@ -513,9 +513,9 @@ def denoise_audio(asset_id: str, strength: str = "medium", engine: str = "", wor
     - `deepfilternet`: the best choice for speech with any kind of noise, including keyboards,
       clatter and chatter. Must be downloaded once in Settings; removes music as well.
     - `rnnoise`: lighter speech denoiser, nothing to install; removes music as well.
-    - `voice-isolation`: keeps only the voice (needs a separation engine); ignores `strength`.
     Pick a speech engine only when the asset is mainly speech AND losing background music is
-    acceptable — say so to the user. The card is refused up front if the engine is not ready.
+    acceptable — say so to the user. To keep ONLY the voice, use separate_audio and take the
+    voice stem instead. The card is refused up front if the engine is not ready.
     Returns a job id once approved; the cleaned asset appears when the job finishes.
     """
     confirmation = _post(

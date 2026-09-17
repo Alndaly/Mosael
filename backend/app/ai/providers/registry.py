@@ -23,7 +23,6 @@ from app.ai.providers.adapters.local.demucs_separation import DemucsSeparationAd
 from app.ai.providers.adapters.local.deepfilter_denoise import DeepFilterDenoiseAdapter
 from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
 from app.ai.providers.adapters.local.rnnoise_denoise import RnnoiseDenoiseAdapter
-from app.ai.providers.adapters.local.voice_isolation_denoise import VoiceIsolationDenoiseAdapter
 from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
 from app.ai.providers.adapters.minimax.video import MiniMaxVideoAdapter
 from app.ai.providers.adapters.openai.image import OpenAIImageAdapter
@@ -145,15 +144,14 @@ def _index_denoise_adapters(adapters: Iterable[DenoiseAdapter]) -> dict[str, Den
     return indexed
 
 
-#: 降噪(ADR-0017)。顺序是界面上的排列:不动音乐的在前,语音模型按效果从好到轻,
-#: 最后是会把背景整个拿掉的人声提取。`auto` 只挑不动音乐的(见 get_denoise_adapter)。
-#: 人声提取借分离的能力,递进去的是查询函数而不是某个分离引擎 —— 装了哪个,它就用哪个。
+#: 降噪(ADR-0017)。顺序是界面上的排列:不动音乐的在前,语音模型按效果从好到轻。
+#: `auto` 只挑不动音乐的(见 get_denoise_adapter)。
+#: 「只留人声」**不在这里** —— 那是分离的人声那一份,不是一种降噪(ADR-0017 修订二)。
 DENOISE_ADAPTERS = _index_denoise_adapters(
     (
         FfmpegDenoiseAdapter(),
         DeepFilterDenoiseAdapter(),
         RnnoiseDenoiseAdapter(),
-        VoiceIsolationDenoiseAdapter(separation=get_separation_adapter),
     )
 )
 
@@ -161,7 +159,7 @@ DENOISE_ADAPTERS = _index_denoise_adapters(
 def get_denoise_adapter(engine: str = "") -> DenoiseAdapter | None:
     """点名一个引擎;不点名(或 "auto")就给**现在跑得起来、且不会顺手去掉音乐**的第一个。
 
-    会去掉音乐的引擎(人声提取)只在点名时用:用户说"降噪",没有要求把配乐也拿掉。
+    会去掉音乐的引擎(语音模型)只在点名时用:用户说"降噪",没有要求把配乐也拿掉。
     """
     if engine and engine != "auto":
         return DENOISE_ADAPTERS.get(engine)

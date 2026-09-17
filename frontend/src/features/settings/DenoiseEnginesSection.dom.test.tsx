@@ -28,7 +28,7 @@ const rows = (deepfilter: Record<string, unknown>) => [
     ...BASE, engine: "deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false,
     installable: true, status: "missing", size_bytes: 27_877_081, removes_music: true, ...deepfilter,
   },
-  { ...BASE, engine: "voice-isolation", label: "人声提取", description: "只留人声", ready: false, status: "unavailable", setup_hint: "先装分离引擎", removes_music: true },
+  { ...BASE, engine: "rnnoise", label: "RNNoise", description: "轻量", ready: false, status: "unavailable", setup_hint: "ffmpeg 不带这个滤镜", removes_music: true },
 ];
 
 function renderSection(deepfilter: Record<string, unknown> = {}) {
@@ -65,10 +65,10 @@ describe("降噪引擎设置页", () => {
 
   it("会去掉音乐的标出来,不需要装但用不了的说清原因", async () => {
     renderSection();
-    const isolation = await rowOf("人声提取");
-    expect(isolation).toHaveTextContent("denoiseRemovesMusicBadge");
-    expect(isolation).toHaveTextContent("先装分离引擎");
-    expect(isolation).toHaveTextContent("denoiseUnavailableLabel");
+    const rnnoise = await rowOf("RNNoise");
+    expect(rnnoise).toHaveTextContent("denoiseRemovesMusicBadge");
+    expect(rnnoise).toHaveTextContent("ffmpeg 不带这个滤镜");
+    expect(rnnoise).toHaveTextContent("denoiseUnavailableLabel");
     expect(await rowOf("内置降噪")).not.toHaveTextContent("denoiseRemovesMusicBadge");
   });
 

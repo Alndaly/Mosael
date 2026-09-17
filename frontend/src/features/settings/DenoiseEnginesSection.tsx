@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 /**
  * Settings → 降噪引擎(ADR-0017)。
  *
- * 一页看全**所有**降噪方式:哪些随应用带着、哪个要下载、哪个借用别的引擎、哪些会去掉音乐。
+ * 一页看全**所有**降噪方式:哪些随应用带着、哪个要下载、哪些会去掉音乐。
  * 只有要下载的那种有按钮 —— 往这台机器上放一个可执行文件是显式的一步,不藏在"点一下降噪"后面。
  *
  * 这一页不认识任何引擎:名字、说明、没准备好时的提示都由后端给。
@@ -78,7 +78,7 @@ function EngineRow({ engine, busy, onInstall }: { engine: DenoiseEngine; busy: b
             )}
           </div>
           <small className="text-ui-xs leading-[1.45] text-muted-foreground">{engine.description}</small>
-          {/* 不需要装、但现在用不了的(人声提取没有分离引擎):说清原因和去处。 */}
+          {/* 不需要装、但现在用不了的(比如 ffmpeg 没带 RNNoise 滤镜):说清原因。 */}
           {!engine.installable && !engine.ready && engine.setup_hint && (
             <small className="text-ui-xs text-foreground">{engine.setup_hint}</small>
           )}
