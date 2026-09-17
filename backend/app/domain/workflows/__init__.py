@@ -165,8 +165,6 @@ _FIELD_LABELS = {
     "at": "wfField_at",
     "max_duration": "wfField_max_duration",
     "strength": "wfField_strength",
-    "engine_voice": "wfField_engine_voice",
-    "engine_voice_resource": "wfField_engine_voice_resource",
     "exact": "wfField_exact",
     "expression": "wfField_expression",
     "file_path": "wfField_file_path",
@@ -252,7 +250,7 @@ _FIELD_LABELS = {
     "url_contains": "wfField_url_contains",
     "value": "wfField_value",
     "values": "wfField_values",
-    "voice_id": "wfField_voice_id",
+    "voice": "wfField_voice",
     "width": "wfField_width",
     "workflow_id": "wfField_workflow_id",
     # 下列主要出现在输出端,也可被同名配置字段复用。
@@ -712,46 +710,31 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_audio",
         "label": "wfNode_synthesize_speech",
         "description": "wfNode_synthesize_speech_desc",
-        # 两条路,**任选其一**:克隆音色(voice_id,念你自己录的那把嗓子)或者引擎音色
-        # (engine + engine_voice,用现成的)。所以两边都不是 required —— 缺哪一边由执行体
-        # 一次说清楚,而不是让表单在必填星号上撒谎(填了引擎音色照样被红星拦住)。
-        #
-        # **界面上只出现一对「引擎 + 音色」**:engine 先选嗓子从哪来(克隆 / 某个引擎),
-        # 音色那一格再按它列对应的清单。voice_id 和 engine_voice 是两个存储键,但它们从不
-        # 同时出现 —— 三个字段并排、名字还都带"音色",等于让用户自己去理解一个互斥关系,
-        # 而那种表单的典型结果是两个都填或者两个都空。
+        # **一对「引擎 + 音色」,音色只有一格。** 引擎先说嗓子从哪来(克隆 / 某个引擎),音色
+        # 那一格的清单跟着引擎变:克隆时是工作区音色库,选了引擎就是那个引擎的目录。
+        # 此前存成两个键(voice_id / engine_voice)再由前端按引擎只显示其一 —— 两个键的顺序
+        # 一前一后,于是换引擎时音色那一格上下跳,看起来就是两个音色框;而"显示哪一个"
+        # "顺手填资源号"都是前端按节点类型写死的特例。现在清单来源由 options_from 声明,
+        # 资源号由执行体自己查,前端不认识这个节点。
         "config": {
             "text": {"type": "template", "required": True},
-            # **引擎在前,音色紧跟其后** —— 先说嗓子从哪来,再从那一处挑一把。此前 voice_id 排在
-            # engine 前面、engine_voice 排在后面,于是选克隆时音色在上、选引擎时音色在下,
-            # 看起来像两个不同的音色框(用户报过)。
             "engine": {
                 "type": "string",
-                # 留空 = 克隆,和执行体一致;给个 default 只是让下拉一打开就显示"克隆音色",
-                # 而不是一个"请选择"——它并不往 config 里写值,老工作流照旧。
+                # 留空 = 克隆,和执行体一致。
                 "default": "clone",
-                "description": "wfNode_synthesize_speech_engine",
+                "options_from": "speech_engines",
+                "description": "wfNode_speech_engine",
             },
-            "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
-            # 换引擎就换了一整套音色 id,旧的那个在新引擎下不存在 —— 由 depends_on 声明,
-            # 前端的 withDependentsCleared 据此清空,不必为这个节点写一处特例。
-            "engine_voice": {
+            # 换引擎就换了一整套音色 id —— depends_on 让前端清掉旧值,也把引擎的值带给选项来源。
+            "voice": {
                 "type": "string",
+                "required": True,
                 "depends_on": "engine",
-                "description": "wfNode_synthesize_speech_engine_voice",
-            },
-            "engine_voice_resource": {
-                "advanced": True,
-                "type": "string",
-                "depends_on": "engine",
-                "description": "wfNode_synthesize_speech_engine_voice_resource",
+                "options_from": "speech_voices",
+                "description": "wfNode_speech_voice",
             },
             "speed": {"advanced": True, "type": "number", "description": "wfNode_synthesize_speech_speed"},
         },
-        # 「这几个里至少要有一个」。**per-field 的 required 表达不了二选一** —— 把两边都标成
-        # 必填是撒谎(填了引擎音色照样被红星拦),两边都不标则就绪度检查看不出"一个都没选",
-        # 于是节点在画布上是绿的、跑起来才失败,而那时用户已经等了前面几步。
-        "required_one_of": [["voice_id", "engine_voice"]],
         "outputs": ["asset_id"],
     },
     "notify": {
@@ -919,24 +902,22 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_dub_subtitles_original_audio",
             },
 
-            # 和「语音合成」逐字同形:同一对互斥的路(克隆音色 / 引擎音色),所以同一套键名、
-            # 同一条 required_one_of、同一份表单规则(前端 speechFields 按节点类型集合判)。
-            "engine": {"type": "string", "default": "clone", "description": "wfNode_synthesize_speech_engine"},
-            "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
-            "engine_voice": {
+            # 和「语音合成」同一对字段、同一份声明(见那里的说明)。
+            "engine": {
                 "type": "string",
-                "depends_on": "engine",
-                "description": "wfNode_synthesize_speech_engine_voice",
+                "default": "clone",
+                "options_from": "speech_engines",
+                "description": "wfNode_speech_engine",
             },
-            "engine_voice_resource": {
-                "advanced": True,
+            "voice": {
                 "type": "string",
+                "required": True,
                 "depends_on": "engine",
-                "description": "wfNode_synthesize_speech_engine_voice_resource",
+                "options_from": "speech_voices",
+                "description": "wfNode_speech_voice",
             },
             "speed": {"advanced": True, "type": "number", "description": "wfNode_synthesize_speech_speed"},
         },
-        "required_one_of": [["voice_id", "engine_voice"]],
         "outputs": ["track_id", "done", "failed", "original_audio", "original_audio_note"],
         "output_labels": {
             "original_audio": "wfOut_original_audio",

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
   "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so.",
-  "graph_hash": "cb5cc0814f30f1afb70e7bd2781a1302ae386609403a43a377e37f84cf3c20cc",
+  "graph_hash": "1d35eced39ba01b27bf97c7a4b8432fbfa080c6f4d42d4e4af2ba471a6fd15b7",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -147,7 +147,8 @@
           "match_duration": "yes",
           "line": "all",
           "original_audio": "separate",
-          "voice_id": ""
+          "engine": "clone",
+          "voice": ""
         },
         "inputs": [
           "sequence_id",

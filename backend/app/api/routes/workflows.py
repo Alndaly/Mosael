@@ -16,6 +16,7 @@ from app.api.schemas import (
     WorkflowAiEditRequest,
     WorkflowAiEditResponse,
     WorkflowCreate,
+    WorkflowFieldOptionOut,
     WorkflowImportRequest,
     WorkflowNodeTypeOut,
     WorkflowOut,
@@ -73,6 +74,10 @@ def _with_data_type(key: str, spec: Any) -> Any:
     depends_on = str(spec.get("depends_on") or "").strip()
     if depends_on:
         enriched["depends_on"] = depends_on
+    # 选项要现查的字段:来源名随声明发下去,前端对所有这种字段走同一个接口(见 field_options)。
+    options_from = str(spec.get("options_from") or "").strip()
+    if options_from:
+        enriched["options_from"] = options_from
     # object 字段用哪种编辑器:一行一对的映射,还是原始 JSON。
     editor = config_editor(key, spec)
     if editor:
@@ -109,8 +114,6 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
             # 画不画缩略图、连线时类型对不对得上 —— 此前这份知识是前端自己抄的一张表,
             # 「素材」节点本身就漏了,而插件节点它永远也覆盖不到。
             "config": {key: _translated_spec(_with_data_type(key, spec), locale) for key, spec in meta["config"].items()},
-            # 「这几个里至少要有一个」。就绪度检查要用它 —— 见 NODE_TYPES 里的说明。
-            "required_one_of": [list(group) for group in meta.get("required_one_of", ())],
             "outputs": list(meta["outputs"]),
             "output_types": {output: output_data_type(output, meta) for output in meta["outputs"]},
             # 英文键留给连线/导出,翻译后的名字留给人;两者不再混成一个字段。
@@ -125,6 +128,21 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
     for item in ordered:
         item.pop("category_key", None)  # 排序用的,不该出现在响应里
     return ordered
+
+
+@router.get("/workflows/field-options", response_model=list[WorkflowFieldOptionOut])
+def workflow_field_options(
+    source: str, workspace_id: str, db: DbSession, user: CurrentUser, parent: str = ""
+) -> list[dict]:
+    """节点字段的动态选项(字段声明里的 `options_from`)。`parent` 是它 depends_on 的那个字段的值。"""
+    from app.domain.workflows.field_options import FieldOptionsError, OptionContext, field_options
+
+    ensure_workspace_access(db, user, workspace_id)
+    context = OptionContext(workspace_id=workspace_id, user_id=user.id, parent=parent, locale=get_current_locale())
+    try:
+        return field_options(db, source, context)
+    except FieldOptionsError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/workflows", response_model=list[WorkflowOut])

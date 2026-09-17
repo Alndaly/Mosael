@@ -112,7 +112,7 @@ def test_整条链路跑完之后时间线上该有什么(stubs) -> None:
             node["config"]["asset_id"] = asset_id
         if node["id"] == "dubbing":
             # 引擎音色那条路:不需要配音库里有行,而两条路在这一步之后是同一条。
-            node["config"].update(engine="volcano", engine_voice="voice-a", voice_id="")
+            node["config"].update(engine="volcano", voice="voice-a")
 
     context, cancelled = execute_graph(graph, wf_id=workflow_id)
     assert not cancelled, context.get("__error__")

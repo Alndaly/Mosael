@@ -181,7 +181,7 @@ def test_目标语言和音色留在能选它们的那个控件上() -> None:
 
     `start.params` 在节点表里是无类型的 object,值那一列只能填字符串或引用上游输出,而起始
     节点没有上游(界面上就是一个点开写着「没有匹配的结果」的下拉)。留在节点上时,`target_lang`
-    有 9 种语言的下拉、`voice_id` 命中 nodePicksVoice 会拿到真正的音色选择器。
+    有 9 种语言的下拉、音色有按引擎列出的真正的选择器。
     要让「运行时问我一次」成立,缺的是**起始参数能声明类型**,那是引擎级的口子。
     """
     from app.domain.workflows import NODE_TYPES
@@ -191,10 +191,10 @@ def test_目标语言和音色留在能选它们的那个控件上() -> None:
     nodes = {node["id"]: node for node in graph["nodes"]}
 
     assert nodes["translate_lines"]["config"]["target_lang"] == "en"
-    assert nodes["dubbing"]["config"]["voice_id"] == "voice-1"
+    assert nodes["dubbing"]["config"]["voice"] == "voice-1"
     #: 判据不是"是个常量",而是**那一格真的有可选值**;没有 options 就又回到自由文本。
     assert NODE_TYPES["translate_lines"]["config"]["target_lang"]["options"], "语言那格得有下拉"
-    assert "voice_id" in NODE_TYPES["dub_subtitles"]["config"], "音色那格得在配音节点上"
+    assert NODE_TYPES["dub_subtitles"]["config"]["voice"]["options_from"], "音色那格得是选择器"
 
 
 def test_译配模板里一个循环节点都没有() -> None:

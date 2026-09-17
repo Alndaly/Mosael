@@ -36,7 +36,7 @@ export function configAssetId(
 }
 
 /** The compact configuration clue shown on a node card. */
-const SUMMARY_KEYS = ["model", "workflow_id", "voice_id", "seconds", "url", "tool_name"] as const;
+const SUMMARY_KEYS = ["model", "workflow_id", "voice", "seconds", "url", "tool_name"] as const;
 
 export function workflowConfigSummary(node: WorkflowGraph["nodes"][number]): string {
   const config = node.config ?? {};

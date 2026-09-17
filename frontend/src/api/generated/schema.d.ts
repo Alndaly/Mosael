@@ -1646,12 +1646,7 @@ export interface paths {
         };
         /**
          * List Tts Voices
-         * @description The voices an engine can speak in, live where the account allows it.
-         *
-         *     火山's catalogue depends on the account, and a voice used with the wrong resource family
-         *     fails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the
-         *     account and each voice carries its family. Without them, the built-in list still works;
-         *     it is smaller and can go stale, which is a far better failure than an empty dropdown.
+         * @description The voices an engine can speak in, live where the account allows it (see engine_catalog).
          */
         get: operations["list_tts_voices_api_tts_voices_get"];
         put?: never;
@@ -3337,6 +3332,26 @@ export interface paths {
          *     掉进"其它"里,而没有任何东西会报错。
          */
         get: operations["node_types_api_workflows_node_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workflows/field-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workflow Field Options
+         * @description 节点字段的动态选项(字段声明里的 `options_from`)。`parent` 是它 depends_on 的那个字段的值。
+         */
+        get: operations["workflow_field_options_api_workflows_field_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11456,6 +11471,16 @@ export interface components {
             template_id?: string | null;
         };
         /**
+         * WorkflowFieldOptionOut
+         * @description 节点字段的一个动态选项。
+         */
+        WorkflowFieldOptionOut: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /**
          * WorkflowImportRequest
          * @description 导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。
          */
@@ -11484,8 +11509,6 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
-            /** Required One Of */
-            required_one_of?: string[][];
             /** Outputs */
             outputs: string[];
             /** Output Types */
@@ -18623,6 +18646,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowNodeTypeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workflow_field_options_api_workflows_field_options_get: {
+        parameters: {
+            query: {
+                source: string;
+                workspace_id: string;
+                parent?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowFieldOptionOut"][];
                 };
             };
             /** @description Validation Error */

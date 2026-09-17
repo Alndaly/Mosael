@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned.",
-  "graph_hash": "5ece4c0d2c1ec4b622823daa153d291a226431a6732d563724a80d856712f5a6",
+  "graph_hash": "2d7ec04de594a34dfb9ed9480822aaa2e4fcbe05ebe84a8702db5c764aaa3fc1",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -504,8 +504,9 @@
                   "y": 300
                 },
                 "config": {
-                  "voice_id": "{{input.voice_id}}",
-                  "text": "{{loop.item.narration}}"
+                  "text": "{{loop.item.narration}}",
+                  "engine": "clone",
+                  "voice": "{{input.voice_id}}"
                 }
               }
             ],

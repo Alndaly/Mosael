@@ -177,36 +177,43 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
     }
 
 
+def _speech_params(db: Session, config: dict[str, Any], *, what: str) -> dict[str, Any]:
+    """「引擎 + 音色」两格 → 合成要的那组参数。语音合成和字幕配音共用。
+
+    音色一格,按引擎分两种意思:克隆时是配音库里的音色 id(`voice_id`),其余是那个引擎的
+    音色(`engine_voice`)。两条路要的参数不是一个集合 —— 都塞过去,合成那边会收到它这条路上
+    根本没有的参数。火山的音色还要一个资源族,**这里自己查**,不靠界面选音色时顺手存下
+    (那样每个挑音色的地方都得记得,而忘了的后果是音色不生效、也不报错)。
+    """
+    from app.domain.voices.engine_catalog import voice_resource_for
+    from app.domain.workflows.field_options import CLONE_ENGINE
+
+    engine = str(config.get("engine") or "").strip() or CLONE_ENGINE
+    voice = str(config.get("voice") or "").strip()
+    if not voice:
+        raise WorkflowDomainError(f"{what}没有选音色")
+    params: dict[str, Any] = {"engine": engine, "speed": float(config.get("speed") or 1.0)}
+    if engine == CLONE_ENGINE:
+        params["voice_id"] = voice
+    else:
+        params["engine_voice"] = voice
+        params["engine_voice_resource"] = voice_resource_for(db, engine, voice, user_id=current_actor(db))
+    return params
+
+
 @register("synthesize_speech")
 def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    """把文本念出来。两条路:克隆音色,或者引擎的现成音色。
-
-    **此前只有克隆那条,而且不是设计如此** —— 这里只传了 voice_id,于是 start_synthesis 的
-    `engine` 落到它的默认值 `"clone"`,而 clone 那条必须查到一行 Voice。没有任何一处写着
-    "这个节点只支持克隆音色",是一个默认参数替它做的决定;用户填了引擎音色也没用,因为
-    根本没传下去。字幕配音那条(subtitle_dub)一直是把整组合成参数原样转交的,那才是对的写法。
-
-    留空 engine 仍然走克隆:已经存下来的工作流里只有 voice_id,不能因为加了一条路就把它们弄坏。
-    """
+    """把文本念出来。音色是一格,引擎决定它指什么(见 `_speech_params`)。"""
     from app.domain.voices.voices import start_synthesis
 
-    engine = str(config.get("engine") or "").strip() or "clone"
-    voice_id = str(config.get("voice_id") or "").strip()
-    if engine == "clone" and not voice_id:
-        # 两边都空。说清楚有哪两条路 —— 「音色不存在」会让人以为是自己选的那个没了。
-        raise WorkflowDomainError("语音合成要么选一个克隆音色(配音库),要么选一个引擎音色")
     child = start_synthesis(
         db,
         text=str(config.get("text", "")),
         project_id=None,
         created_by=current_actor(db),
-        voice_id=voice_id or None,
         # 引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
         workspace_id=workflow.workspace_id,
-        engine=engine,
-        engine_voice=str(config.get("engine_voice") or ""),
-        engine_voice_resource=str(config.get("engine_voice_resource") or ""),
-        speed=float(config.get("speed") or 1.0),
+        **_speech_params(db, config, what="语音合成"),
     )
     final = wait_for_job(child.id)
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
@@ -760,18 +767,9 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     if not clip_ids:
         raise WorkflowDomainError("没有要配音的字幕条")
 
-    engine = str(config.get("engine") or "").strip() or "clone"
-    voice_id = str(config.get("voice_id") or "").strip()
-    if engine == "clone" and not voice_id:
-        raise WorkflowDomainError("字幕配音要么选一个克隆音色(配音库),要么选一个引擎音色")
-    # 两条路要的参数不是一个集合:克隆那条按 Voice 行找工作区,引擎那条得显式告诉它产出归谁。
-    # 把两边的键都塞过去,start_synthesis 会收到它这条路上根本没有的参数。
-    synthesis: dict[str, Any] = {"engine": engine, "speed": float(config.get("speed") or 1.0)}
-    if engine == "clone":
-        synthesis["voice_id"] = voice_id
-    else:
-        synthesis["engine_voice"] = str(config.get("engine_voice") or "")
-        synthesis["engine_voice_resource"] = str(config.get("engine_voice_resource") or "")
+    synthesis = _speech_params(db, config, what="字幕配音")
+    if synthesis["engine"] != "clone":
+        # 引擎那条得显式告诉它产出归谁(克隆那条按 Voice 行找工作区)。
         synthesis["workspace_id"] = workflow.workspace_id
 
     actor = current_actor(db)

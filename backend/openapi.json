@@ -4204,7 +4204,7 @@
           "voices"
         ],
         "summary": "List Tts Voices",
-        "description": "The voices an engine can speak in, live where the account allows it.\n\n火山's catalogue depends on the account, and a voice used with the wrong resource family\nfails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the\naccount and each voice carries its family. Without them, the built-in list still works;\nit is smaller and can go stale, which is a far better failure than an empty dropdown.",
+        "description": "The voices an engine can speak in, live where the account allows it (see engine_catalog).",
         "operationId": "list_tts_voices_api_tts_voices_get",
         "parameters": [
           {
@@ -9684,6 +9684,72 @@
                   },
                   "type": "array",
                   "title": "Response Node Types Api Workflows Node Types Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/field-options": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Workflow Field Options",
+        "description": "节点字段的动态选项(字段声明里的 `options_from`)。`parent` 是它 depends_on 的那个字段的值。",
+        "operationId": "workflow_field_options_api_workflows_field_options_get",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "parent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Parent"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowFieldOptionOut"
+                  },
+                  "title": "Response Workflow Field Options Api Workflows Field Options Get"
                 }
               }
             }
@@ -30003,6 +30069,25 @@
         ],
         "title": "WorkflowCreate"
       },
+      "WorkflowFieldOptionOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "WorkflowFieldOptionOut",
+        "description": "节点字段的一个动态选项。"
+      },
       "WorkflowImportRequest": {
         "properties": {
           "workspace_id": {
@@ -30046,16 +30131,6 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Config"
-          },
-          "required_one_of": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "type": "array",
-            "title": "Required One Of"
           },
           "outputs": {
             "items": {

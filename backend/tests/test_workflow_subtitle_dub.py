@@ -148,7 +148,7 @@ class Test字幕配音:
         try:
             with pytest.raises(RuntimeError):
                 _run("dub_subtitles", ws, {
-                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice_id": "v1",
+                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice": "v1",
                 })
         finally:
             dub.start_subtitle_dub = original
@@ -169,16 +169,16 @@ class Test字幕配音:
         try:
             with pytest.raises(RuntimeError):
                 _run("dub_subtitles", ws, {
-                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice_id": "v1",
+                    "sequence_id": sequence_id, "clip_ids": ["c1"], "voice": "v1",
                     "match_duration": "no",
                 })
         finally:
             dub.start_subtitle_dub = original
         assert seen["match_duration"] is False
 
-    def test_两条路都没选时说清有哪两条(self) -> None:
+    def test_没选音色时直说(self) -> None:
         ws, sequence_id = _setup()
-        with pytest.raises(WorkflowDomainError, match="克隆音色"):
+        with pytest.raises(WorkflowDomainError, match="没有选音色"):
             _run("dub_subtitles", ws, {"sequence_id": sequence_id, "clip_ids": ["c1"]})
 
     def test_别的工作区的时间线配不了(self) -> None:
@@ -186,7 +186,7 @@ class Test字幕配音:
         ws, _ = _setup()
         with pytest.raises(WorkflowDomainError, match="工作区"):
             _run("dub_subtitles", ws, {
-                "sequence_id": other_sequence, "clip_ids": ["c1"], "voice_id": "v1",
+                "sequence_id": other_sequence, "clip_ids": ["c1"], "voice": "v1",
             })
 
 

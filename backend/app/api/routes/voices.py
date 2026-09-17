@@ -216,72 +216,10 @@ def generate_podcast(body: PodcastRequest, db: DbSession, user: CurrentUser) -> 
 
 @router.get("/tts/voices", response_model=list[TtsVoiceOut])
 def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    """The voices an engine can speak in, live where the account allows it.
+    """The voices an engine can speak in, live where the account allows it (see engine_catalog)."""
+    from app.domain.voices.engine_catalog import list_engine_voices
 
-    火山's catalogue depends on the account, and a voice used with the wrong resource family
-    fails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the
-    account and each voice carries its family. Without them, the built-in list still works;
-    it is smaller and can go stale, which is a far better failure than an empty dropdown.
-    """
-    from app.ai.providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
-    from app.domain.voices.engine_catalog import describe_engines
-    from app.domain.providers import resolve_connection
-
-    # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
-    # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
-    # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
-    # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
-    from app.ai.providers import REMOTE_SPEECH_ADAPTERS, BailianSpeechAdapter
-
-    if engine in (BailianSpeechAdapter.engine_id, "alibaba-cosyvoice"):
-        # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的
-        # id 更是完全另一套)。这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的
-        # 音色、发出去的是 B 的请求 —— 用户选了个看着合法的音色,拿回一句"音色不存在"。
-        from app.domain.voices.engine_catalog import active_model_for
-
-        engine_cls = REMOTE_SPEECH_ADAPTERS[engine]
-        return [
-            {"value": voice, "label": voice}
-            for voice in engine_cls.voices_for(active_model_for(engine_cls, user.id))
-        ]
-
-
-
-    if engine != "volcano":
-        fixed = next((item for item in describe_engines(user.id) if item["id"] == engine), None)
-        voices = list(fixed.get("voices") or []) if fixed else []
-        # **标签要从所有带标签的清单里找**,不只是 edge。engine 目录里的 `voices` 是纯 id
-        # (schema 是 list[str]),而 edge / 播客 / 火山内置那三张表都是 (id, 名字) 成对的 ——
-        # 只查 edge 的话,播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`
-        # 这种一眼认不出谁是谁的原始 id(真机截图)。
-        labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
-        return [{"value": voice, "label": labels.get(voice, voice)} for voice in voices]
-
-    # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/provider_credentials) ——
-    # 列音色用的是我的账号,不是"这个部署里随便谁的"。
-    volcano = resolve_connection(db, "volcano", user_id=user.id)
-    ak, sk = str((volcano.extra if volcano else {}).get("ak") or ""), str((volcano.extra if volcano else {}).get("sk") or "")
-    if ak and sk:
-        from app.integrations.volc_openapi import VolcOpenAPIError, list_all_speakers
-
-        try:
-            live = list_all_speakers(ak, sk)
-        except VolcOpenAPIError as exc:
-            # Falling back beats failing: the user can still synthesise, and the reason the
-            # live list is missing belongs in the log rather than in a broken dropdown.
-            logger.info("volcano live voice list unavailable: %s", exc)
-        else:
-            if live:
-                return [
-                    {
-                        "value": speaker.get("VoiceType", ""),
-                        "label": speaker.get("Name") or speaker.get("VoiceType", ""),
-                        "resource_id": speaker.get("ResourceID", ""),
-                    }
-                    for speaker in live
-                    if speaker.get("VoiceType")
-                ]
-    return [{"value": voice, "label": label} for voice, label in VOLCANO_BUILTIN_VOICES]
+    return list_engine_voices(db, engine, user_id=user.id)
 
 
 @router.post("/tts/synthesize", response_model=JobOut)

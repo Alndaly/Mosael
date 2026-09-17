@@ -40,17 +40,8 @@ _PICKER_KEYS = {
     "plugin_id",
     "tool_name",
     "account_id",
-    "voice_id",
     "workflow_id",
     "session",
-    # 语音合成的引擎与该引擎下的音色:两份都是现查的接口清单(/api/tts/engines、
-    # /api/tts/voices),和上面的 model / voice_id 同一类。加进来是因为**新增了一个真正的
-    # 选择器**,不是拿这张表当规避手段 —— 界面里 options 优先于 type,把它们声明成 template
-    # 也只会得到同一个下拉,而 `@` 无从谈起。
-    "engine",
-    "engine_voice",
-    # 资源号跟着音色一起被填上(选音色时自动写入),用户不手打,所以也不是自由文本。
-    "engine_voice_resource",
 }
 
 
@@ -63,6 +54,9 @@ def test_自由文本字段都声明成了template() -> None:
         for key, meta in (spec.get("config") or {}).items()
         if (meta or {}).get("type", "string") == "string"
         and not (meta or {}).get("options")
+        # 声明了选项来源的字段本来就是选择器(清单由 field_options 现查)——
+        # 这条声明比下面按键名列的名单更直接,新的选择器应该走这里。
+        and not (meta or {}).get("options_from")
         and not (meta or {}).get("plugin_instances")
         and key not in _PICKER_KEYS
     ]

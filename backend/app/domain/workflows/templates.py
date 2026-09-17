@@ -545,8 +545,8 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
             # **目标语言和音色留在它们各自的节点上,不提成起始参数。**
             # 提上来看似更"通用",实际是把两个真控件换成一个自由文本框:`start.params` 在节点
             # 表里是无类型的 `{"type": "object"}`,值那一列只能填字符串或引用上游输出 ——
-            # 而起始节点没有上游。留在节点上,`target_lang` 有 9 种语言的下拉、`voice_id` 命中
-            # nodePicksVoice 会拿到真正的音色选择器。
+            # 而起始节点没有上游。留在节点上,`target_lang` 有 9 种语言的下拉、音色有
+            # 按引擎列出的真正的选择器。
             # 要让"运行时问我一次"成立,缺的是**起始参数能声明类型**这件事,那是引擎级的口子,
             # 不是这条模板能绕过去的。
             "config": {"params": {}},
@@ -640,7 +640,8 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
                 # 所以先拆:人声那半丢掉、背景音留着,配音叠在背景音之上。装了分离引擎才做得到,
                 # 没装就退回整轨静音(ADR-0016 决定 4:一个没装的可选引擎不该让流程失败)。
                 "original_audio": "separate",
-                "voice_id": voice_id,
+                "engine": "clone",
+                "voice": voice_id,
             },
         },
         {
@@ -712,7 +713,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
 def _first_voice_id(db: Session, workspace_id: str) -> str:
     """工作区里第一个可用音色,没有就空串。
 
-    模板不可能替用户猜一个音色,而 synthesize_speech 的 voice_id 是必填的。有就预填、
+    模板不可能替用户猜一个音色,而语音节点的音色是必填的。有就预填、
     没有就留空并整段跳过 —— 得到的是一部默片,而不是一个跑到第一镜就失败的工作流。
     """
     if not workspace_id:
@@ -763,7 +764,7 @@ JSON Schema 的对象。"""
     # 视频生成动辄一两分钟一条,这是整条流程最慢的地方。
     #
     # 口播有两道闸,因为两件事都可能缺:
-    # · 没选音色 —— voice_id 是 synthesize_speech 的必填项,而模板不可能替用户猜一个。
+    # · 没选音色 —— 音色是语音合成的必填项,而模板不可能替用户猜一个。
     #   空着就整段跳过:得到的是默片,而不是一个跑到一半失败的工作流。
     # · 这一镜没有口播 —— 分镜的 schema 明说"无则写空字符串",纯画面镜头是正常的。
     #   空文本交给合成会失败,而那一镜失败会拖垮整轮循环。
@@ -814,7 +815,8 @@ JSON Schema 的对象。"""
                 "type": "synthesize_speech",
                 "name": "合成该镜口播",
                 "position": {"x": 700, "y": 300},
-                "config": {"voice_id": "{{input.voice_id}}", "text": "{{loop.item.narration}}"},
+                # 开始节点里填的是配音库音色的 id,所以引擎是克隆;想用引擎音色,改这里的两格。
+                "config": {"text": "{{loop.item.narration}}", "engine": "clone", "voice": "{{input.voice_id}}"},
             },
         ],
         "edges": [

@@ -8,7 +8,7 @@ import React from "react";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import {
   Background,
@@ -69,6 +69,7 @@ import {
   createWorkflow,
   deleteWorkflow,
   exportWorkflowFile,
+  fetchWorkflowFieldOptions,
   fetchWorkflowNodeTypes,
   importWorkflow,
   listAssets,
@@ -76,9 +77,6 @@ import {
   listProviderModels,
   importAsset,
   listPublishAccounts,
-  listTtsEngines,
-  listTtsVoices,
-  listVoices,
   listWorkflows,
   runWorkflow,
   updateWorkflow,
@@ -117,7 +115,6 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
-import { nodePicksVoice, orderSpeechFields, speechFieldVisible } from "@/features/workflows/speechFields";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { syncFromServer } from "@/features/workflows/serverSync";
 import { MapField } from "@/features/workflows/MapField";
@@ -2434,6 +2431,8 @@ interface ConfigSpec {
   advanced?: boolean;
   /** 这个字段的值跟着谁走(后端 NODE_TYPES 声明)。父字段一换,这里的旧值就失效了。 */
   depends_on?: string;
+  /** 选项要现查:来源名(后端 field_options)。清单跟着 depends_on 那个字段的值变。 */
+  options_from?: string;
 }
 
 /** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
@@ -2861,7 +2860,7 @@ function LoopBodyEditor({
   );
 }
 
-function NodeInspector({
+export function NodeInspector({
   inert = false,
   step = null,
   node,
@@ -2978,25 +2977,22 @@ function NodeInspector({
     queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
     enabled: node.type === "ai_generate",
   });
-  const voices = useQuery({
-    queryKey: ["workflow-voices", workspaceId],
-    queryFn: () => listVoices(workspaceId),
-    enabled: nodePicksVoice(node.type),
+  // 选项要现查的字段(声明里带 options_from):每个字段一份查询,父字段一换就重查。
+  // 不认识具体节点 —— 音色、引擎这些清单从哪来、跟着谁变,都是后端声明的。
+  const optionSpecs = specs.filter(([, spec]) => Boolean(spec?.options_from));
+  const dynamicOptionResults = useQueries({
+    queries: optionSpecs.map(([key, spec]) => {
+      const parentKey = spec?.depends_on ?? "";
+      const parentSpec = parentKey ? ((meta?.config ?? {}) as Record<string, ConfigSpec>)[parentKey] : undefined;
+      const parent = parentKey ? String(config[parentKey] ?? parentSpec?.default ?? "") : "";
+      return {
+        queryKey: ["workflow-field-options", spec?.options_from, workspaceId, parent, key],
+        queryFn: () => fetchWorkflowFieldOptions(String(spec?.options_from), workspaceId, parent),
+        staleTime: 30_000,
+      };
+    }),
   });
-  // 引擎音色那条路。和配音、智能体语音问的是**同一组接口** —— 这里只是另一处选择,
-  // 不是另一份目录。
-  const ttsEngines = useQuery({
-    queryKey: ["tts-engines"],
-    queryFn: listTtsEngines,
-    enabled: nodePicksVoice(node.type),
-    staleTime: 30_000,
-  });
-  const pickedEngine = String(config.engine ?? "");
-  const ttsVoices = useQuery({
-    queryKey: ["tts-voices", pickedEngine],
-    queryFn: () => listTtsVoices(pickedEngine),
-    enabled: nodePicksVoice(node.type) && Boolean(pickedEngine),
-  });
+  const fetchedOptions = new Map(optionSpecs.map(([key], index) => [key, dynamicOptionResults[index]?.data ?? []]));
   // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
   const hasAssetField = specs.some(([, spec]) => fieldDataType(spec) === "asset");
   const assets = useQuery({
@@ -3063,15 +3059,7 @@ function NodeInspector({
 
   // 换了父字段就清掉依赖它的子字段 —— 规则抽在 dependents.ts(有测试),这里只负责接线。
   const setConfig = (key: string, value: unknown) => {
-    let next = withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>);
-    // 少数引擎(火山)的音色还带一个资源号,而它只有在**列音色时**才拿得到(那份清单是用
-    // 用户自己的密钥现查的)。选了音色顺手填上,否则用户得自己去别处把它抄过来 —— 而不抄
-    // 的后果是合成时那个音色不生效,并且不报错。
-    if (nodePicksVoice(node.type) && key === "engine_voice") {
-      const picked = (ttsVoices.data ?? []).find((one) => one.value === value);
-      next = { ...next, engine_voice_resource: picked?.resource_id ?? "" };
-    }
-    onChange({ config: next });
+    onChange({ config: withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>) });
   };
   const responseFormat = String(config.response_format || "text");
   const setTextConfig = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => setConfig(key, event.target.value);
@@ -3236,7 +3224,7 @@ function NodeInspector({
   /** (nodeType, key) → 动态下拉选项;返回 null 表示该字段不是动态选择。 */
   const dynamicOptions = (
     key: string,
-    spec?: { plugin_instances?: boolean },
+    spec?: { plugin_instances?: boolean; options_from?: string },
   ): Array<{ value: string; label: string }> | null => {
     /* 「用哪条连接」。**不是 llm 节点专属** —— 翻译节点的 engine 选 ai 之后问的是同一个问题,
        而它此前只拿到一个自由文本框:要用户去别处把连接 id 抄过来,配了好几条 AI 供应商的人
@@ -3276,20 +3264,8 @@ function NodeInspector({
     if (node.type === "publish" && key === "account_id") {
       return (publishAccounts.data ?? []).map((account) => ({ value: account.id, label: account.name }));
     }
-    if (nodePicksVoice(node.type) && key === "voice_id") {
-      return (voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }));
-    }
-    if (nodePicksVoice(node.type) && key === "engine") {
-      // 「克隆音色」排在引擎清单最前面:它和各个引擎是**同一个层次的选择** —— 嗓子从哪来。
-      // 把它单独做成另一个字段的话,界面上就会出现两格都叫"音色"的东西(用户报过)。
-      return [
-        { value: "clone", label: t("wfSpeechEngineClone") },
-        // 没就绪的引擎(缺 Key、没装运行环境)列出来只会让人选中之后才失败。
-        ...(ttsEngines.data ?? []).filter((one) => one.ready).map((one) => ({ value: one.id, label: one.label })),
-      ];
-    }
-    if (nodePicksVoice(node.type) && key === "engine_voice") {
-      return (ttsVoices.data ?? []).map((one) => ({ value: one.value, label: one.label }));
+    if (spec?.options_from) {
+      return fetchedOptions.get(key) ?? [];
     }
     if (node.type === "call_workflow" && key === "workflow_id") {
       // 列出可调用的工作流;选到自己/成环由后端运行时守卫拒绝。
@@ -3306,11 +3282,10 @@ function NodeInspector({
   };
 
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
-  const visibleSpecs = orderSpeechFields(node.type, specs)
+  // 顺序就是后端声明的顺序。
+  const visibleSpecs = specs
     .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
-    .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)))
-    // 语音合成的两条路互斥,只渲染当前那条 —— 规则和它的来龙去脉在 speechFields.ts。
-    .filter(([key]) => speechFieldVisible(node.type, key, config.engine));
+    .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)));
   // 分级:留空也能跑的专业旋钮收进折叠区(由后端 NODE_TYPES 的 advanced 声明),第一眼只留下
   // 决定「这个节点在做什么」的字段 —— 十几个采样参数一上来就糊到脸上,新手根本无从下手。
   const basicSpecs = visibleSpecs.filter(([, spec]) => !spec?.advanced);
@@ -3355,7 +3330,7 @@ function NodeInspector({
           const isObject = spec?.type === "object";
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: option }))
-            : dynamicOptions(key, spec as { plugin_instances?: boolean } | undefined);
+            : dynamicOptions(key, spec as { plugin_instances?: boolean; options_from?: string } | undefined);
           // 标签由节点声明提供(后端内置节点和运行时插件走同一份接口),最后才退到裸键名。
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
           // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
@@ -3364,7 +3339,7 @@ function NodeInspector({
           const boundEdge = connected ? dataEdgeFor(key) : null;
           const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
           return (
-            <div className={FIELD_BOX} key={key}>
+            <div className={FIELD_BOX} key={key} data-field-key={key}>
               <span>
                 {declaredLabel || key}
                 {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}

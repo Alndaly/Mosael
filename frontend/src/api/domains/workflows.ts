@@ -79,6 +79,19 @@ export function runWorkflow(workflowId: string, params: Record<string, unknown> 
   return api<Job>(`/api/workflows/${workflowId}/run`, { method: "POST", body: JSON.stringify({ params }) });
 }
 
+/**
+ * 节点字段的动态选项(字段声明里的 `options_from`)。`parent` 是它 `depends_on` 的那个字段现在的值。
+ * 所有这种字段走这一个接口 —— 前端不按节点类型写特例。
+ */
+export function fetchWorkflowFieldOptions(
+  source: string,
+  workspaceId: string,
+  parent = "",
+): Promise<Array<{ value: string; label: string }>> {
+  const params = new URLSearchParams({ source, workspace_id: workspaceId, parent });
+  return api(`/api/workflows/field-options?${params.toString()}`);
+}
+
 export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
   return api<WorkflowNodeType[]>("/api/workflows/node-types");
 }

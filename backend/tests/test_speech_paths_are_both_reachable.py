@@ -47,37 +47,38 @@ class Test工作流节点:
         return subjobs.synthesize_speech(None, workflow, config)
 
     def test_引擎音色一路传到底(self, captured, monkeypatch) -> None:
-        """这条是修复本身:此前 engine / engine_voice 填了也没被传下去。"""
-        self._run(
-            {
-                "text": "念一句",
-                "engine": "volcano",
-                "engine_voice": "zh_female_x",
-                "engine_voice_resource": "res-9",
-                "speed": 1.25,
-            },
-            monkeypatch,
+        """这条是修复本身:此前 engine / engine_voice 填了也没被传下去。音色现在是一格,
+        选了引擎时它就是那个引擎的音色;资源族由执行体自己查,不靠界面存。"""
+        from app.domain.voices import engine_catalog
+
+        monkeypatch.setattr(
+            engine_catalog, "list_engine_voices",
+            lambda db, engine, user_id: [{"value": "zh_female_x", "label": "x", "resource_id": "res-9"}],
         )
+        self._run({"text": "念一句", "engine": "volcano", "voice": "zh_female_x", "speed": 1.25}, monkeypatch)
         assert captured["engine"] == "volcano"
         assert captured["engine_voice"] == "zh_female_x"
         assert captured["engine_voice_resource"] == "res-9"
+        assert "voice_id" not in captured, "引擎那条不该收到克隆那条的参数"
         assert captured["speed"] == 1.25
         # 引擎那条要一个工作区来认领产出 —— 克隆那条是从 Voice 行上取的。
         assert captured["workspace_id"] == "ws-1"
 
-    def test_只填克隆音色时还是走克隆(self, captured, monkeypatch) -> None:
-        """已经存下来的工作流里只有 voice_id。加了一条路不能把它们弄坏。"""
-        self._run({"text": "念一句", "voice_id": "v-1"}, monkeypatch)
+    def test_克隆时音色就是配音库里的那一个(self, captured, monkeypatch) -> None:
+        self._run({"text": "念一句", "engine": "clone", "voice": "v-1"}, monkeypatch)
         assert captured["engine"] == "clone"
         assert captured["voice_id"] == "v-1"
+        assert "engine_voice" not in captured
 
-    def test_两边都空时说清楚有哪两条路(self, captured, monkeypatch) -> None:
-        """「音色不存在」会让人以为是自己选的那个没了 —— 而其实是一个都没选。"""
+    def test_没填引擎按克隆算(self, captured, monkeypatch) -> None:
+        self._run({"text": "念一句", "voice": "v-1"}, monkeypatch)
+        assert captured["engine"] == "clone" and captured["voice_id"] == "v-1"
+
+    def test_没选音色时直说(self, captured, monkeypatch) -> None:
         from app.domain.workflows import WorkflowDomainError
 
-        with pytest.raises(WorkflowDomainError) as error:
-            self._run({"text": "念一句"}, monkeypatch)
-        assert "克隆音色" in str(error.value) and "引擎音色" in str(error.value)
+        with pytest.raises(WorkflowDomainError, match="没有选音色"):
+            self._run({"text": "念一句", "engine": "edge"}, monkeypatch)
 
 
 class Test画板配音:
@@ -90,40 +91,24 @@ class Test画板配音:
         assert {"engine", "engine_voice", "engine_voice_resource", "speed"} <= fields
 
 
-def test_节点契约把两条路都摆出来() -> None:
-    """两边都不能是 required:填了引擎音色却被 voice_id 的红星拦住,等于表单在撒谎。"""
-    from app.domain.workflows import NODE_TYPES
-
-    config = NODE_TYPES["synthesize_speech"]["config"]
-    assert not config["voice_id"].get("required")
-    assert not config["engine"].get("required")
-    assert config["text"].get("required") is True
-    for key in ("engine", "engine_voice", "engine_voice_resource", "speed"):
-        assert key in config, key
-
-
-def test_界面上不会同时出现两格音色() -> None:
-    """互斥的两条路**不能摊成并排字段**。
-
-    第一版就是这么做的:音色(克隆)、引擎、引擎音色三格并排,两格名字里都带"音色",
-    各自还写着"用另一个时留空" —— 等于让用户自己去理解一个互斥关系,而那种表单的典型
-    结果是两个都填或者两个都空。用户一眼就说"重复了"。
-
-    现在是一对「引擎 + 音色」:engine 先选嗓子从哪来(克隆 / 某个引擎),音色那一格按它
-    列对应清单。存储上仍是 voice_id / engine_voice 两个键,但**从不同时渲染**
-    (见 WorkflowsView 的 visibleSpecs)。这里守住后端这一半:两个键的标签都是「音色」,
-    而说明里不再有"留空"这种要求用户自己推理的话。
+def test_音色是一格_清单跟着引擎变() -> None:
+    """此前存成 voice_id / engine_voice 两个键,由前端按引擎显示其一 —— 两个键一前一后,换引擎时
+    音色那一格上下跳,看起来就是两个音色框;"显示哪一个""顺手填资源号"都是前端按节点类型写死的
+    特例。现在:一格 `voice`,依赖 `engine`,两格的清单都由 options_from 声明,前端不认识这个节点。
     """
     from app.core.i18n import MESSAGES
-    from app.domain.workflows import NODE_TYPES, config_label
+    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.field_options import SOURCES
 
-    config = NODE_TYPES["synthesize_speech"]["config"]
-    labels = {key: MESSAGES[config_label(key, meta)]["zh"] for key, meta in config.items()}
-    assert labels["voice_id"] == labels["engine_voice"] == "音色"
-
-    for key in ("voice_id", "engine", "engine_voice"):
-        text = MESSAGES[config["engine" if key == "engine" else key]["description"]]["zh"]
-        assert "留空" not in text, f"{key} 的说明还在要求用户自己推理互斥关系:{text}"
-
-    # engine 是唯一入口,所以它得有个默认显示值,否则一打开是"请选择"而语义其实是克隆。
-    assert config["engine"]["default"] == "clone"
+    for node in ("synthesize_speech", "dub_subtitles"):
+        config = NODE_TYPES[node]["config"]
+        assert not {"voice_id", "engine_voice", "engine_voice_resource"} & set(config), node
+        keys = list(config)
+        #: 顺序就是界面顺序:先说嗓子从哪来,再挑一把。
+        assert keys.index("engine") + 1 == keys.index("voice"), keys
+        assert config["engine"]["default"] == "clone"
+        assert config["engine"]["options_from"] in SOURCES
+        assert config["voice"]["options_from"] in SOURCES
+        assert config["voice"]["depends_on"] == "engine"
+        assert config["voice"]["required"] is True
+        assert "留空" not in MESSAGES[config["voice"]["description"]]["zh"]

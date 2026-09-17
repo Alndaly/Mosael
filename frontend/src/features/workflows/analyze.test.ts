@@ -16,9 +16,8 @@ const registry: RegistryLike = {
     const table: Record<
       string,
       {
-        config?: Record<string, { type?: string; required?: boolean; data_type?: string }>;
+        config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string }>;
         output_types?: Record<string, string>;
-        required_one_of?: string[][];
       }
     > = {
       start: { config: { params: { type: "object" } } },
@@ -37,14 +36,13 @@ const registry: RegistryLike = {
       // 一起发过来 —— 前端不再自己维护一张"哪个字段是素材"的表。
       transcribe_asset: { config: { asset_id: { type: "template", required: true, data_type: "asset" } } },
       template: { config: { template: { type: "template", required: true } } },
-      // 二选一:克隆音色或引擎音色。两边都不是 required(标了就是撒谎),靠 required_one_of。
+      // 音色是一格(引擎决定它指什么),普通的必填就表达得了。
       synthesize_speech: {
         config: {
           text: { type: "template", required: true },
-          voice_id: { type: "string" },
-          engine_voice: { type: "string" },
+          engine: { type: "string", default: "clone" },
+          voice: { type: "string", required: true, depends_on: "engine" },
         },
-        required_one_of: [["voice_id", "engine_voice"]],
       },
       subgraph: { config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } } },
       loop_foreach: {
@@ -294,11 +292,10 @@ describe("analyzeWorkflow", () => {
 });
 
 
-describe("二选一的必填", () => {
+describe("语音节点的音色", () => {
   /**
-   * per-field 的 `required` 表达不了「这几个里至少要有一个」。语音合成要么克隆音色、
-   * 要么引擎音色:两边都标必填是撒谎(填了一边照样被红星拦),两边都不标则**一个都没选**
-   * 这件事在画布上看不出来 —— 节点是绿的,跑到那一步才失败,而那时前面几步已经花过时间和钱。
+   * 音色只有一格:引擎决定它指配音库里的哪把,还是某个引擎的哪个。此前存成两个键、靠
+   * 「二选一」规则判必填 —— 现在一格必填就够了,不需要额外的规则。
    */
   const node = (config: Record<string, unknown>) =>
     graph(
@@ -309,19 +306,19 @@ describe("二选一的必填", () => {
       [{ id: "e1", source: "start", target: "sp" }],
     );
 
-  it("一个都没填就报错，并指向组里第一个字段", () => {
-    const a = analyzeWorkflow(node({ text: "念一句" }), registry, fullCtx);
+  it("没选音色就报错", () => {
+    const a = analyzeWorkflow(node({ text: "念一句", engine: "edge" }), registry, fullCtx);
     expect(a.byNode.get("sp")).toContainEqual(
-      expect.objectContaining({ code: "required-missing", configKey: "voice_id", severity: "error" }),
+      expect.objectContaining({ code: "required-missing", configKey: "voice", severity: "error" }),
     );
     expect(a.runnable).toBe(false);
   });
 
-  it("填了任意一个就不报", () => {
-    for (const filled of [{ voice_id: "v1" }, { engine_voice: "zh_female_x" }]) {
-      const a = analyzeWorkflow(node({ text: "念一句", ...filled }), registry, fullCtx);
+  it("选了就不报 —— 不管是哪个引擎的", () => {
+    for (const config of [{ engine: "clone", voice: "v1" }, { engine: "edge", voice: "zh-CN-XiaoxiaoNeural" }]) {
+      const a = analyzeWorkflow(node({ text: "念一句", ...config }), registry, fullCtx);
       const missing = (a.byNode.get("sp") ?? []).filter((i) => i.code === "required-missing");
-      expect(missing, JSON.stringify(filled)).toEqual([]);
+      expect(missing, JSON.stringify(config)).toEqual([]);
     }
   });
 
@@ -330,11 +327,11 @@ describe("二选一的必填", () => {
     const g = graph(
       [
         { id: "start", type: "start", config: {} },
-        { id: "sp", type: "synthesize_speech", config: { text: "念一句", voice_id: "" } },
+        { id: "sp", type: "synthesize_speech", config: { text: "念一句", voice: "" } },
       ],
       [
         { id: "e1", source: "start", target: "sp" },
-        { id: "d1", source: "start", target: "sp", kind: "data", source_output: "params", target_input: "voice_id" },
+        { id: "d1", source: "start", target: "sp", kind: "data", source_output: "params", target_input: "voice" },
       ],
     );
     const missing = (analyzeWorkflow(g, registry, fullCtx).byNode.get("sp") ?? []).filter(
@@ -343,6 +340,7 @@ describe("二选一的必填", () => {
     expect(missing).toEqual([]);
   });
 });
+
 
 
 describe("循环体和子图里的节点", () => {
