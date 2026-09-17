@@ -2425,6 +2425,8 @@ interface ConfigSpec {
   description?: string;
   required?: boolean;
   options?: string[];
+  /** 选项的显示名(后端按语言翻好;值照旧是英文的,存进 config 的是它)。 */
+  option_labels?: Record<string, string>;
   /** 后端声明的默认值,拿来做占位提示(告诉用户"留空会用什么")。 */
   default?: string;
   /** 留空也能跑的专业旋钮 —— 收进折叠的「高级选项」,不在第一眼糊到用户脸上。 */
@@ -3329,7 +3331,7 @@ export function NodeInspector({
           const value = config[key];
           const isObject = spec?.type === "object";
           const options = spec?.options
-            ? spec.options.map((option) => ({ value: option, label: option }))
+            ? spec.options.map((option) => ({ value: option, label: spec.option_labels?.[option] ?? option }))
             : dynamicOptions(key, spec as { plugin_instances?: boolean; options_from?: string } | undefined);
           // 标签由节点声明提供(后端内置节点和运行时插件走同一份接口),最后才退到裸键名。
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();

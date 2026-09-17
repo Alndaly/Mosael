@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.i18n import get_current_locale, t
+from app.core.i18n import MESSAGES, get_current_locale, t
 from typing import Any, TYPE_CHECKING
 
 from app.api.schemas import (
@@ -113,7 +113,7 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
             # 每个配置字段带上**它装的是什么**(素材/时间线/…)。界面据此决定给不给素材选择器、
             # 画不画缩略图、连线时类型对不对得上 —— 此前这份知识是前端自己抄的一张表,
             # 「素材」节点本身就漏了,而插件节点它永远也覆盖不到。
-            "config": {key: _translated_spec(_with_data_type(key, spec), locale) for key, spec in meta["config"].items()},
+            "config": {key: _translated_spec(key, _with_data_type(key, spec), locale) for key, spec in meta["config"].items()},
             "outputs": list(meta["outputs"]),
             "output_types": {output: output_data_type(output, meta) for output in meta["outputs"]},
             # 英文键留给连线/导出,翻译后的名字留给人;两者不再混成一个字段。
@@ -410,7 +410,7 @@ def create_workflow_agent_session(workflow_id: str, db: DbSession, user: Current
     )
 
 
-def _translated_spec(spec: dict, locale: str) -> dict:
+def _translated_spec(key: str, spec: dict, locale: str) -> dict:
     """翻一个配置字段的说明。
 
     **有几条说明是现算的**(可用角色、可用生成参数、可用时间线算子)——它们的列表来自各自的
@@ -426,7 +426,27 @@ def _translated_spec(spec: dict, locale: str) -> dict:
         out["description"] = t(out["description"], locale, **(out.get("description_params") or {}))
     #: 参数是给翻译用的,不该出现在响应里(和 core/i18n 的 PARAMS_FIELD 同一个道理)。
     out.pop("description_params", None)
+    #: 下拉里的每一项也是给人看的。**值照旧是英文的**(存进 config、执行体认的是它),
+    #: 名字按语言翻 —— 此前界面上直接摆着 `duck` / `separate`,中文界面里也是这样。
+    #: 键名是 `wfOpt_<字段>_<值>`,回落到各字段通用的 `wfOpt__<值>`(是/否),再回落到值本身
+    #: (插件节点的选项没有登记处,照原样显示)。
+    if isinstance(out.get("options"), list):
+        out["option_labels"] = {str(option): option_label(key, str(option), locale) for option in out["options"]}
     return out
+
+
+#: 这些字段的选项是专业术语,原样显示比翻译清楚(HTTP 方法)。
+LITERAL_OPTION_FIELDS = frozenset({"method"})
+
+
+def option_label(field: str, value: str, locale: str) -> str:
+    """下拉里这一项显示成什么。见 _translated_spec 的说明。"""
+    if field in LITERAL_OPTION_FIELDS:
+        return value
+    for key in (f"wfOpt_{field}_{value}", f"wfOpt__{value}"):
+        if key in MESSAGES:
+            return t(key, locale)
+    return value
 
 
 def _get(db: DbSession, workflow_id: str) -> Workflow:
