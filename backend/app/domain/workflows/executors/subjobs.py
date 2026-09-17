@@ -880,41 +880,47 @@ def _handle_original_audio(db: Session, sequence_id: str, dub_track_id: str, mod
 
 
 def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> bool:
-    """把装着原声的那条轨换成它的**背景音**,人声那半丢掉。成功返回 True。
+    """原声只留背景音,人声那半丢掉。成功返回 True。
 
-    这是 `original_audio: separate` 的实现。做法是替换片段指向的素材,而不是改音频本身:
-    原素材一个字节不动(分离产出的是两份新素材),所以这一步和它上面那几步一样撤得回来。
+    这是 `original_audio: separate` 的实现。每个发声的片段走一次「分离音频」:背景音放到一条
+    音频轨上、时间对齐,源片段静音。**画面不动** —— 此前这里把视频片段直接指向了背景音素材,
+    而视频轨上的纯音频素材既不算画面、也不进混音,成片里原片那一段就只剩静音。
+    走剪辑操作而不是改行,所以和闪避、静音一样撤得回来;原素材一个字节不动。
 
-    **问得到引擎才做。** 问不到就返回 False,由调用方退回整轨静音 —— 见 ADR-0016 决定 4。
+    **先全部分离完再动时间线**:分到一半失败时调用方退回整轨静音,不能留下半套背景音轨。
+    问不到引擎就返回 False,由调用方退回整轨静音 —— 见 ADR-0016 决定 4。
     """
     from app.ai.providers.contracts.separation import SeparationError
     from app.domain.separation import available, separate_asset
+    from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
 
     if not available():
         return False
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         return False
-    swapped = False
-    for track in sequence.tracks or []:
-        if track.id == dub_track_id or not _carries_audio(track):
+    sources = [
+        clip
+        for track in sequence.tracks or []
+        if track.id != dub_track_id and not track.muted and _carries_audio(track)
+        for clip in track.clips or []
+        if clip.asset_id and not clip.muted
+    ]
+    backgrounds: dict[str, str] = {}
+    for asset_id in dict.fromkeys(clip.asset_id for clip in sources):
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.kind not in ("audio", "video"):
             continue
-        for clip in track.clips or []:
-            if not clip.asset_id:
-                continue
-            asset = db.get(Asset, clip.asset_id)
-            if asset is None:
-                continue
-            try:
-                made = separate_asset(db, asset, engine="")
-            except SeparationError as exc:
-                logger.warning("分离失败,这一段退回静音:%s", exc)
-                return False
-            clip.asset_id = made.background.id
-            swapped = True
-    if swapped:
-        db.commit()
-    return swapped
+        try:
+            backgrounds[asset_id] = separate_asset(db, asset, engine="").background.id
+        except SeparationError as exc:
+            logger.warning("分离失败,原声退回静音:%s", exc)
+            return False
+    #: 先取出 id:每次操作都会 commit,之后 ORM 对象全部过期。
+    plan = [(clip.id, backgrounds[clip.asset_id]) for clip in sources if clip.asset_id in backgrounds]
+    for clip_id, background_id in plan:
+        detach_clip_audio(db, sequence_id, DetachClipAudio(clip_id=clip_id, audio_asset_id=background_id, actor_id=actor_id))
+    return bool(plan)
 
 
 @register("separate_audio")

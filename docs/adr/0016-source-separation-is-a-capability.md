@@ -84,7 +84,10 @@ note. B follows for users who will not download a gigabyte or have no GPU.
 ## Consequences
 
 - Translated dubbing keeps the music: the flow separates, discards the vocal stem, and lays the dub
-  over the accompaniment. `original_audio: mute` then means "mute the vocal stem", which is what the
+  over the accompaniment. The accompaniment goes onto an audio track through the editor's own
+  "detach audio" operation (with the background stem as the detached audio), and the source clip is
+  muted — the picture stays where it was and the step is undoable. Pointing a video clip at the audio
+  stem instead, as the first version did, drops the clip from both the picture and the mix. `original_audio: mute` then means "mute the vocal stem", which is what the
   setting always claimed to mean.
 - Users who install nothing are not worse off than today, and the reason the option is greyed out is
   visible rather than silent.

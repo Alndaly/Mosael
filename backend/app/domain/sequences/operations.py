@@ -820,6 +820,9 @@ def set_clip_gain(db: Session, sequence_id: str, op: SetClipGain) -> Sequence:
 @dataclass(frozen=True)
 class DetachClipAudio:
     clip_id: str
+    #: 放到音频轨上的那份声音。缺省是片段自己的素材;译配分离人声时换成它的背景音 ——
+    #: 这时源片段也可以在音频轨上(之前已经分离过一次的原声)。
+    audio_asset_id: str | None = None
     actor_id: str | None = None
 
 
@@ -833,26 +836,36 @@ def _range_free(track: Track, start: float, end: float) -> bool:
 
 def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Sequence:
     """Split a video clip's audio onto an audio track (PR/DaVinci 分离音频): copy the clip's
-    audio to the first free audio track (creating one if needed) and mute the video clip so the
-    audio isn't doubled. The detached audio inherits the clip's speed/gain."""
+    audio to the first free audio track (creating one if needed) and mute the source clip so the
+    audio isn't doubled. The detached audio inherits the clip's speed/gain.
+
+    With `audio_asset_id` the copy plays *that* asset instead (same timing) — the dub flow puts a
+    clip's separated background there. Tracks with a role (the dub track) are never chosen.
+    """
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
     track = db.get(Track, clip.track_id)
-    if track is None or track.kind != "video":
+    replacing = bool(op.audio_asset_id)
+    if track is None or track.kind not in (("video", "audio") if replacing else ("video",)):
         raise SequenceDomainError("只能从视频片段分离音频")
     if not clip.asset_id:
         raise SequenceDomainError("该片段没有音频源")
+    audio_asset_id = op.audio_asset_id or clip.asset_id
+    if replacing:
+        audio_asset = db.get(Asset, audio_asset_id)
+        if audio_asset is None or audio_asset.workspace_id != sequence.workspace_id or audio_asset.kind not in ("audio", "video"):
+            raise SequenceDomainError("Asset not found")
     duration = timeline_span(clip)
     start, end = clip.timeline_start, clip.timeline_start + duration
 
-    audio_tracks = sorted((t for t in sequence.tracks if t.kind == "audio"), key=lambda t: t.position)
-    target = next((t for t in audio_tracks if _range_free(t, start, end)), None)
+    audio_tracks = sorted((t for t in sequence.tracks if t.kind == "audio" and not t.role), key=lambda t: t.position)
+    target = next((t for t in audio_tracks if t.id != track.id and _range_free(t, start, end)), None)
     created_track = None
     if target is None:
         target = Track(
             sequence_id=sequence.id,
             kind="audio",
-            name=f"A{len(audio_tracks) + 1}",
+            name=f"A{sum(1 for t in sequence.tracks if t.kind == 'audio') + 1}",
             position=max((t.position for t in sequence.tracks), default=-1) + 1,
         )
         db.add(target)
@@ -863,7 +876,7 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
         workspace_id=sequence.workspace_id,
         sequence_id=sequence.id,
         track_id=target.id,
-        asset_id=clip.asset_id,
+        asset_id=audio_asset_id,
         timeline_start=clip.timeline_start,
         src_in=clip.src_in,
         src_out=clip.src_out,
@@ -886,7 +899,7 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
             "audio_clip": {
                 "id": audio_clip.id,
                 "track_id": target.id,
-                "asset_id": clip.asset_id,
+                "asset_id": audio_asset_id,
                 "timeline_start": clip.timeline_start,
                 "src_in": clip.src_in,
                 "src_out": clip.src_out,
