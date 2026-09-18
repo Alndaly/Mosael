@@ -1,5 +1,5 @@
 import React from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   AlertTriangle,
@@ -59,7 +59,8 @@ import {
 
 import { api, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { OutputAssets } from "@/features/workflows/OutputAssets";
+import type { AssetOutput } from "@/features/workflows/runSteps";
 import { cn } from "@/lib/utils";
 
 /** 节点类型语义色(与轨道颜色同属内容色,不算点缀):
@@ -174,10 +175,10 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   outputs?: string[];
   /** 本次运行到这一步的状态。运行结束后保留,方便回看这次跑成什么样。 */
   run?: { status: "running" | "done" | "skipped" | "failed"; ms?: number; error?: string } | null;
-  /** 这一步产出的素材(节点注册表里声明为 asset 的输出)。节点上直接出缩略图。 */
-  runAssets?: string[];
-  /** 非素材产出的一行摘要 —— 节点上直接看见"这步给了什么"。 */
-  runSummary?: string;
+  /** 这一步产出的素材(节点注册表里声明为 asset 的输出),**连同它们各自的名字**。 */
+  runAssets?: AssetOutput[];
+  /** 非素材产出的一行摘要 —— 节点上直接看见"这步给了什么",以及那是**哪一个**产出。 */
+  runSummary?: { label: string; text: string } | null;
   /** **配置里指向的素材**(不是跑出来的)。素材节点没跑之前也该看得见自己指着哪张图。 */
   configAssetId?: string;
   /** 一行配置摘要:这个节点被配成做什么。没有它,一屏节点长得只有标题不一样。 */
@@ -196,42 +197,24 @@ export interface WorkflowNodeData extends Record<string, unknown> {
     条件节点右侧是「真/假」两个分支端点,其余节点单一出口。
     缺配置/失效引用/断连的节点在右上角挂一枚告警角标,一眼可辨。 */
 /** 节点上的产出预览:这一步生成了什么,直接摆在节点里 —— 不用再点开历史面板去找。
- *  素材可能已被删除(取不到就不渲染),所以查询失败是正常路径。 */
-function NodeResultPreview({ assetIds, roundedBottom }: { assetIds: string[]; roundedBottom: boolean }) {
-  const assets = useQueries({
-    queries: assetIds.slice(0, 2).map((id) => ({
-      queryKey: ["asset", id],
-      queryFn: () => api<Asset>(`/api/assets/${id}`),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
-  const ready = assets.map((q) => q.data).filter(Boolean) as Asset[];
-  if (ready.length === 0) return null;
+ *
+ *  素材和它的名字一起来(见 runSteps.AssetOutput):两份产出摆在一起时,「哪个是哪个」就是
+ *  这一刻唯一要回答的问题,而此前这里只收一串 id。怎么摆由 OutputAssets 说了算 —— 检查器
+ *  里的「本次产出」用的是同一份,两处不再各带一张"什么类型配什么尺寸"的表。 */
+function NodeResultPreview({ items, roundedBottom }: { items: AssetOutput[]; roundedBottom: boolean }) {
+  if (items.length === 0) return null;
   return (
-    // 预览统一高度并保留完整画面;只有进度条等拖动控件阻止节点拖动。
     // 预览层:**自己就是通栏的**,因为卡片不带内边距(见卡片那段说明)。多份并排时用 1px 的
     // 底色缝隙隔开,不画框 —— 框会让它读成贴上去的独立元件,而它是卡片自己的一段。
     // 连接点和角标也是 DOM 子节点,不能用 :last-child 判断视觉上的末层。
-    <div className={cn("grid grid-flow-col auto-cols-fr justify-stretch gap-px overflow-hidden border-t border-divider bg-workspace-subtle", roundedBottom && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
-      {ready.map((asset) => (
-        <AssetInlinePreview
-          key={asset.id}
-          assetId={asset.id}
-          name={asset.name || asset.original_filename}
-          kind={asset.kind}
-          lazy={false}
-          plain
-          className={
-            asset.kind === "image"
-              ? "block h-[108px] w-full object-contain"
-              : asset.kind === "video"
-                ? "h-[108px] w-full"
-                : "w-full"
-          }
-        />
-      ))}
-    </div>
+    <OutputAssets
+      items={items}
+      density="node"
+      className={cn(
+        "justify-stretch overflow-hidden border-t border-divider bg-workspace-subtle",
+        roundedBottom && "rounded-b-[calc(var(--wf-node-radius)-1px)]",
+      )}
+    />
   );
 }
 
@@ -331,15 +314,20 @@ function WorkflowNode({ data, selected }: NodeProps) {
       {/* 配置指向的素材:**没跑之前也该看得见自己指着哪张图**。跑过之后让位给产出预览 ——
           两张图并排会让人分不清哪张是输入哪张是输出。 */}
       {d.configAssetId && (d.runAssets ?? []).length === 0 && (
-        <NodeResultPreview assetIds={[d.configAssetId]} roundedBottom={!showIo && !d.runSummary} />
+        // 配置指向的那份**不报名字**:它不是产出,名字在字段那一栏里已经有了。
+        <NodeResultPreview items={[{ key: "", label: "", assetId: d.configAssetId }]} roundedBottom={!showIo && !d.runSummary} />
       )}
-      <NodeResultPreview assetIds={d.runAssets ?? []} roundedBottom={!showIo && !d.runSummary} />
+      <NodeResultPreview items={d.runAssets ?? []} roundedBottom={!showIo && !d.runSummary} />
       {/* 非素材的产出:模型回的那段话、抽出来的那个值。**跑完了却看不见**是此前最别扭的地方 ——
           想知道这一步到底给了什么,得在后面再接一个"通知"节点把它打出来。
           两行封顶:节点是张名片,不是日志窗口;全文在检查器里。 */}
       {d.runSummary && (
+        // **名字在前**:此前这里只有值,于是「分离人声与背景音」跑完,卡片上孤零零一个
+        // `demucs` —— 它是引擎名、是文件名还是别的什么,只能猜。名字由节点自己声明。
         <p className={cn("m-0 line-clamp-2 whitespace-pre-wrap break-words border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5 text-ui-2xs leading-[1.45] text-muted-foreground", !showIo && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
-          {d.runSummary}
+          <span className="font-medium text-foreground">{d.runSummary.label}</span>
+          {" "}
+          {d.runSummary.text}
         </p>
       )}
       {badge && (

@@ -1,5 +1,5 @@
 import type { TaskEvent } from "@/api/client";
-import { outputType, type RegistryLike } from "@/features/workflows/analyze";
+import { outputLabel, outputType, type DataType, type RegistryLike } from "@/features/workflows/analyze";
 
 /**
  * 一次运行的事件流 → 每个节点的状态。
@@ -76,16 +76,49 @@ export function stepsByNode(events: TaskEvent[]): Record<string, Step> {
   return Object.fromEntries(toSteps(events).map((step) => [step.nid, step]));
 }
 
-/** 这一步输出里由运行时节点注册表声明为素材的那些。
+/**
+ * 这一步产出了什么,**按节点自己的声明摊开**:稳定 key、给人看的名字、数据类型、这次的值。
  *
- *  以前历史面板把 `asset_id: 535f288eaeb4…` 一串裸十六进制直接铺在文本块里 —— 同一次生成,
- *  在智能体对话里是一张图,在执行历史里却要用户自己拿着 id 去素材库翻。 */
-export function assetOutputs(registry: RegistryLike, nodeType: string, outputs: Record<string, unknown>): string[] {
-  if (!nodeType) return [];
-  return Object.entries(outputs)
-    .filter(
-      ([key, value]) =>
-        outputType(registry, nodeType, key) === "asset" && typeof value === "string" && value.trim(),
-    )
-    .map(([, value]) => String(value));
+ * 以前历史面板把 `asset_id: 535f288eaeb4…` 一串裸十六进制直接铺在文本块里 —— 同一次生成,
+ * 在智能体对话里是一张图,在执行历史里却要用户自己拿着 id 去素材库翻。后来出了缩略图,
+ * 但**名字仍然被丢在这一步**:只剩下一串素材 id。于是「分离人声与背景音」跑完,卡片上是两个
+ * 一模一样的音频条,而右边接点上明明写着「人声」「背景音」—— 同一份产出,一边有名字一边没有。
+ *
+ * 画布和检查器都读这一份:两处各拼一遍,就是两种说法(此前一处给 id 列表、一处给首个标量)。
+ */
+export interface OutputRow {
+  /** 稳定 key —— 连线和 `{{node.key}}` 引用用的就是它。 */
+  key: string;
+  /** 给人看的名字。节点没声明就退回 key,不在前端另起一套。 */
+  label: string;
+  type: DataType;
+  value: unknown;
+}
+
+export function outputRows(
+  registry: RegistryLike,
+  nodeType: string,
+  outputs: Record<string, unknown> | undefined,
+): OutputRow[] {
+  if (!nodeType || !outputs) return [];
+  return Object.entries(outputs).map(([key, value]) => ({
+    key,
+    label: outputLabel(registry, nodeType, key) || key,
+    type: outputType(registry, nodeType, key),
+    value,
+  }));
+}
+
+/** 一份产出素材:名字跟着 id 一起走,到哪儿都还认得出它是哪一个输出。 */
+export interface AssetOutput {
+  key: string;
+  label: string;
+  assetId: string;
+}
+
+/** 这些行里指向素材的那些。空值不算 —— 没产出的输出不该在界面上占一个位置。 */
+export function assetOutputs(rows: OutputRow[]): AssetOutput[] {
+  return rows
+    .filter((row) => row.type === "asset" && typeof row.value === "string" && row.value.trim())
+    .map((row) => ({ key: row.key, label: row.label, assetId: String(row.value) }));
 }

@@ -160,7 +160,7 @@ import {
 } from "@/features/workflows/analyze";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
-import { assetOutputs, stepsByNode, type Step } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 import {
   WORKFLOW_NODE_TYPES,
@@ -1726,7 +1726,7 @@ function WorkflowEditor({
             ...node.data,
             badge,
             run: step ? { status: step.status, ms: step.ms, error: step.error } : null,
-            runAssets: step?.outputs ? assetOutputs(registry, node.data.nodeType as string, step.outputs) : [],
+            runAssets: assetOutputs(outputRows(registry, node.data.nodeType as string, step?.outputs)),
             runSummary: outputSummary(registry, node.data.nodeType as string, step?.outputs),
             // **这两项算在这里,不在 toWorkflowFlowNodes。** 那个函数跑在 useState 的初始化里,
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。

@@ -4,6 +4,7 @@ import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import {
   inputType,
+  outputLabel,
   outputType,
   typesCompatible,
   type DataType,
@@ -107,9 +108,8 @@ export function workflowPortPresentation(
       }),
     ),
     outputTypes: Object.fromEntries(outputs.map((key) => [key, outputType(registry, node.nodeType, key)])),
-    outputLabels: Object.fromEntries(
-      outputs.map((key) => [key, String(meta?.output_labels?.[key] ?? "").trim()]),
-    ),
+    //: 取名字只有一处(analyze.outputLabel)—— 接点、产出面板、节点卡片读的是同一句声明。
+    outputLabels: Object.fromEntries(outputs.map((key) => [key, outputLabel(registry, node.nodeType, key)])),
   };
 }
 

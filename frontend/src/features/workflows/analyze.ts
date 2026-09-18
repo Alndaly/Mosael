@@ -74,6 +74,17 @@ export function outputType(registry: RegistryLike, nodeType: string, output: str
   return normalizeDataType(registry.get(nodeType)?.output_types?.[output]);
 }
 
+/**
+ * 输出接点在人机界面上的名字。**只有这一处取法。**
+ *
+ * 没声明就给空串,由调用方决定退回什么(接点退回稳定 key 并用 mono 显示,产出面板退回 key)。
+ * 前端不编第二套名字:同一个输出在接点上叫「人声」、在产出里叫 `vocals_asset_id`,是同一件
+ * 东西说两种话 —— 而画布上那根线连的就是它。
+ */
+export function outputLabel(registry: RegistryLike, nodeType: string, output: string): string {
+  return String(registry.get(nodeType)?.output_labels?.[output] ?? "").trim();
+}
+
 /** 软兼容:any 通配;text 槽接受一切(都能字符串化);同类型兼容;否则不兼容。 */
 export function typesCompatible(source: DataType, target: DataType): boolean {
   if (target === "any" || source === "any" || target === "text") return true;
@@ -102,6 +113,8 @@ interface NodeMetaLike {
   /** 「这几个字段里至少要有一个」。**由后端声明**,不在这里按节点名写死 —— 见下面的说明。 */
   /** 每个输出承载的数据类型，由后端节点注册表统一声明。 */
   output_types?: Record<string, string>;
+  /** 每个输出在人机界面上的名字(「人声」「背景音」),同样由后端声明并按语言发下来。 */
+  output_labels?: Record<string, string>;
 }
 
 export interface RegistryLike {

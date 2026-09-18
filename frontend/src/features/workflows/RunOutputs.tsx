@@ -1,12 +1,10 @@
 import React from "react";
-import { useQueries } from "@tanstack/react-query";
 import { Check, ChevronRight, Copy } from "lucide-react";
 
-import { api, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { AssetInlinePreview } from "@/components/app/asset-preview";
-import { outputType, type RegistryLike } from "@/features/workflows/analyze";
-import type { Step } from "@/features/workflows/runSteps";
+import type { RegistryLike } from "@/features/workflows/analyze";
+import { OutputAssets } from "@/features/workflows/OutputAssets";
+import { assetOutputs, outputRows, type OutputRow, type Step } from "@/features/workflows/runSteps";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 
 /**
@@ -55,29 +53,35 @@ export function outputText(value: unknown): string {
   return String(value);
 }
 
-/** 一行摘要:给节点卡片用 —— 一眼看见"这步给了什么",不用点开检查器。 */
+/** 一行摘要:给节点卡片用 —— 一眼看见"这步给了什么",**以及那是哪一个产出**。
+ *
+ *  名字一起给:只有值的话,`demucs` 这种短值在卡片上就是一个无从判断的词。 */
 export function outputSummary(
   registry: RegistryLike,
   nodeType: string,
   outputs: Record<string, unknown> | undefined,
-): string {
-  if (!outputs) return "";
-  for (const [key, value] of Object.entries(outputs)) {
+): { label: string; text: string } | null {
+  for (const row of outputRows(registry, nodeType, outputs)) {
     // 素材另有缩略图,不在这儿重复;裸 id 也不是给人看的东西。
-    if (outputType(registry, nodeType, key) === "asset") continue;
-    const text = outputText(value).replace(/\s+/g, " ").trim();
-    if (text) return text;
+    if (row.type === "asset") continue;
+    const text = outputText(row.value).replace(/\s+/g, " ").trim();
+    if (text) return { label: row.label, text };
   }
-  return "";
+  return null;
 }
 
-function ValueRow({ name, value }: { name: string; value: unknown }) {
-  const text = outputText(value);
+function ValueRow({ row }: { row: OutputRow }) {
+  const text = outputText(row.value);
   const long = text.length > INLINE_LIMIT;
   return (
     <div className="grid min-w-0 gap-1 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] p-1.5">
       <div className="flex min-w-0 items-center gap-1">
-        <span className="truncate font-mono text-ui-2xs text-muted-foreground">{name}</span>
+        {/* 名字在前、稳定 key 在后:前者回答"这是什么",后者是 `{{节点.key}}` 里要写的那个词。
+            此前只有 key,而它是英文的 —— 同一个输出在右边接点上叫「引擎」,在这里叫 engine。 */}
+        <span className="truncate text-ui-2xs text-foreground">{row.label}</span>
+        {row.label !== row.key && (
+          <span className="shrink-0 font-mono text-ui-2xs text-muted-foreground">{row.key}</span>
+        )}
         <span className="ml-auto" />
         <CopyButton value={text} />
       </div>
@@ -102,49 +106,11 @@ function ValueRow({ name, value }: { name: string; value: unknown }) {
   );
 }
 
-function AssetRow({ assetIds }: { assetIds: string[] }) {
-  const assets = useQueries({
-    queries: assetIds.map((id) => ({
-      queryKey: ["asset", id],
-      queryFn: () => api<Asset>(`/api/assets/${id}`),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
-  // 素材可能已经被删掉 —— 取不到就不画,这是正常路径而不是错误。
-  const ready = assets.map((one) => one.data).filter(Boolean) as Asset[];
-  if (ready.length === 0) return null;
-  return (
-    <div className="grid grid-cols-2 gap-1">
-      {ready.map((asset) => (
-        <AssetInlinePreview
-          key={asset.id}
-          assetId={asset.id}
-          name={asset.name || asset.original_filename}
-          kind={asset.kind}
-          lazy={false}
-          plain
-          className={
-            asset.kind === "image"
-              ? "block h-[78px] w-full rounded-md border border-border object-cover"
-              : "h-[78px] w-full rounded-md border border-border bg-black object-cover"
-          }
-        />
-      ))}
-    </div>
-  );
-}
-
 export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLike; nodeType: string; step: Step }) {
   const t = useI18n();
-  const entries = Object.entries(step.outputs ?? {});
-  const assetIds = entries
-    .filter(
-      ([key, value]) =>
-        outputType(registry, nodeType, key) === "asset" && typeof value === "string" && value.trim(),
-    )
-    .map(([, value]) => String(value));
-  const scalars = entries.filter(([key]) => outputType(registry, nodeType, key) !== "asset");
+  const rows = outputRows(registry, nodeType, step.outputs);
+  const assets = assetOutputs(rows);
+  const scalars = rows.filter((row) => row.type !== "asset");
 
   return (
     <div className="grid min-w-0 gap-1.5 pt-2.5">
@@ -161,11 +127,11 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
         </pre>
       )}
       <WorkflowFailureDetails details={step.details} />
-      {assetIds.length > 0 && <AssetRow assetIds={assetIds} />}
-      {scalars.map(([key, value]) => (
-        <ValueRow key={key} name={key} value={value} />
+      {assets.length > 0 && <OutputAssets items={assets} density="panel" className="gap-2" />}
+      {scalars.map((row) => (
+        <ValueRow key={row.key} row={row} />
       ))}
-      {assetIds.length === 0 && scalars.length === 0 && !step.error && (
+      {assets.length === 0 && scalars.length === 0 && !step.error && (
         <span className="text-ui-xs font-normal text-muted-foreground">{t("wfRunNoOutputs")}</span>
       )}
     </div>

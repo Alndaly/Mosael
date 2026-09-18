@@ -1,12 +1,12 @@
 import React from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
 
-import { api, listJobEvents, listWorkflowRuns, type Asset, type Job } from "@/api/client";
+import { listJobEvents, listWorkflowRuns, type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { AssetInlinePreview } from "@/components/app/asset-preview";
 import type { RegistryLike } from "@/features/workflows/analyze";
-import { assetOutputs, parseIso, toSteps } from "@/features/workflows/runSteps";
+import { OutputAssets } from "@/features/workflows/OutputAssets";
+import { assetOutputs, outputRows, parseIso, toSteps } from "@/features/workflows/runSteps";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
@@ -29,38 +29,6 @@ function ms(a: string, b: string): number {
 
 
 /** 素材产出的预览条。素材可能已被删除(取不到就不渲染),所以查询失败是正常路径不是错误。 */
-function StepAssets({ assetIds }: { assetIds: string[] }) {
-  const assets = useQueries({
-    queries: assetIds.map((id) => ({
-      queryKey: ["asset", id],
-      queryFn: () => api<Asset>(`/api/assets/${id}`),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
-  const ready = assets.map((q) => q.data).filter(Boolean) as Asset[];
-  if (ready.length === 0) return null;
-  return (
-    <div className="mx-1.5 mb-1 mt-0.5 flex flex-wrap gap-1.5">
-      {ready.map((asset) => (
-        <AssetInlinePreview
-          key={asset.id}
-          assetId={asset.id}
-          name={asset.name || asset.original_filename}
-          kind={asset.kind}
-          // 历史面板是窄列,压到缩略图刻度。
-          className={
-            asset.kind === "image"
-              ? "block max-h-[120px] w-auto max-w-full object-contain"
-              : asset.kind === "video"
-                ? "max-h-[140px] max-w-full rounded-md border border-border bg-black"
-                : "w-full max-w-[240px]"
-          }
-        />
-      ))}
-    </div>
-  );
-}
 
 /** 输出摘要拼成可读文本:字符串原样(引擎侧已截断),其余 JSON 化。 */
 function outputsText(outputs: Record<string, unknown>): string {
@@ -304,8 +272,14 @@ export function WorkflowRunHistory({
                           <WorkflowFailureDetails details={s.details} />
                         </div>
                       )}
-                      {open && s.outputs && assetOutputs(registry, nodeTypeById[s.nid] ?? "", s.outputs).length > 0 && (
-                        <StepAssets assetIds={assetOutputs(registry, nodeTypeById[s.nid] ?? "", s.outputs)} />
+                      {/* 产出素材:和画布卡片、检查器用**同一个**组件 —— 此前这里第三次抄了那张
+                          "什么类型配什么尺寸"的表,于是同一份音频在三个地方长三个样子。 */}
+                      {open && (
+                        <OutputAssets
+                          items={assetOutputs(outputRows(registry, nodeTypeById[s.nid] ?? "", s.outputs))}
+                          density="panel"
+                          className="mx-1.5 mb-1 mt-0.5 gap-1.5"
+                        />
                       )}
                       {open && s.outputs && Object.keys(s.outputs).length > 0 && (
                         <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-ui-2xs leading-[1.55] text-muted-foreground">
