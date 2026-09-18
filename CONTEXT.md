@@ -163,7 +163,8 @@ _Avoid_: 把费用写进 `task_events`、把供应商账单逻辑散落在各 ad
 _Avoid_: 按工具名硬编码确认逻辑
 
 **上下文预算**:
-一次对话还能塞多少 token,由**模型的上下文窗口**决定(模型行的 `context_window` → 目录 → 保守回退 32000)。
+一次对话还能塞多少 token,由**模型的上下文窗口**决定(模型行的 `context_window` → 目录 → 双档回退:
+云端 128K,本机/LAN 32K,由 `fallback_context_window` 按 base_url 判定)。
 估算锚定在**最后一条带 usage 的助手消息**(供应商回的真实 input+output),此后的新消息按
 `CHARS_PER_TOKEN = 3.5` 估。sidecar(`compaction.ts`)与后端(`domain/context_meter.py`)各有一份实现,
 **回退值与估算规则必须逐字一致**——不一致时用户看到的水位和真正触发压缩的时机会对不上。
@@ -276,7 +277,7 @@ _Avoid_: 用一个 ref 同时描述图片与视频；由画板/工作流/MCP 各
 
 **AI 调用重试**:
 `domain/ai_retry.RetryingClient`(httpx.Client 子类,在 `send()` 里对 429/5xx/RequestError 指数退避重试)。
-它是**所有** AI 出站调用的统一入口(15 个模块),不是对话专属——生图、生视频、TTS、向量化同样会遇到限流。
+它是**所有** AI 出站调用的统一入口(21 个模块直接 import),不是对话专属——生图、生视频、TTS、向量化同样会遇到限流。
 _Avoid_: 在某一条调用路径里手写重试循环
 
 ## Relationships

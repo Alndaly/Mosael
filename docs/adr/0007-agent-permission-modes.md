@@ -1,6 +1,6 @@
 # ADR 0007:智能体的三档权限模式
 
-> 状态:**已决定,未实现**。设计定于 2026-08-02 的一次讨论,实现留给单独一轮。
+> 状态:**已落地**。设计定于 2026-08-02 的一次讨论;落地口径以下方指向的复验文档为准。
 > 相关:[MCP.md](../MCP.md) 的确认门控与 `external` 档、`domain/agent/confirmations.py`。
 >
 > **落地方案见 [AGENT_PERMISSION_MODES.md](../AGENT_PERMISSION_MODES.md)**,它对照代码复验了本文的

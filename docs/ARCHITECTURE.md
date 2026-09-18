@@ -341,15 +341,16 @@ Gateway 的边界与安全不变量见
 既容易撞限流,也会在对方改接口后变成后台里一直失败的任务。查不到不抛 5xx——"这家不支持"和
 "这次没查成"都是正常结果,统一的 500 错误提示会把两者吞成一句"请求失败"。
 
-**重试是所有 AI 调用共享的**(`domain/ai_retry.RetryingClient`,15 个模块用它)。它是 `httpx.Client`
+**重试是所有 AI 调用共享的**(`domain/ai_retry.RetryingClient`,21 个模块直接 import 它)。它是 `httpx.Client`
 子类,在 `send()` 里对 429/5xx/RequestError 做指数退避 + 抖动,因此对调用方完全透明。此前只有对话
 路径有重试,而限流对生图、生视频、TTS、向量化一视同仁。重试上限在设置 → **网络**(和出站代理同一页),进程级生效。
 
 ## 智能体的上下文:预算与整理
 
-**窗口来自模型**:模型行的 `context_window` → 供应商目录 → 保守回退 **32000**。这个回退值在 sidecar
-(`agent-sidecar/src/pi.ts`)和后端(`backend/app/domain/agent/host.py`)各有一份,**必须一致**——否则前端显示的水位
-和真正触发整理的时机会对不上。
+**窗口来自模型**:模型行的 `context_window` → 供应商目录 → 双档回退:云端 **128K**,本机/LAN **32K**
+(按 base_url 判定)。两个回退常量与判定逻辑在 sidecar(`agent-sidecar/src/compaction.ts`,`pi.ts` 引用)和
+后端(`backend/app/domain/agent/host.py` 的 `fallback_context_window`)各有一份,**必须一致**——否则前端显示的水位
+和真正触发整理的时机会对不上。两侧由 `contracts/context-meter-cases.json` 钉住。
 
 **用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(供应商回的 input+output),此后的新消息
 才按 `CHARS_PER_TOKEN = 3.5` 估。纯靠字符估会随对话变长持续跑偏。同一套锚定规则在
