@@ -51,7 +51,7 @@ def subgraph(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[st
         body, wf_id=workflow.id, initial_context=seed, entry_is_root=True
     )
     if _cancelled:
-        raise WorkflowDomainError("已取消")
+        raise WorkflowDomainError("wfErr_cancelled")
     output_tpl = config.get("output")
     if output_tpl:
         return {"output": interpolate(output_tpl, context)}
@@ -74,9 +74,9 @@ def _guard_recursion(db: Session, target_id: str, current_wf_id: str) -> None:
         job_id = job.parent_job_id
         depth += 1
     if target_id in chain:
-        raise WorkflowDomainError("工作流递归调用(直接或间接调用了自身),已阻止")
+        raise WorkflowDomainError("wfErr_recursiveCall")
     if depth >= MAX_NEST_DEPTH:
-        raise WorkflowDomainError(f"工作流嵌套过深(超过 {MAX_NEST_DEPTH} 层),已阻止")
+        raise WorkflowDomainError("wfErr_nestTooDeep", params={"max": MAX_NEST_DEPTH})
 
 
 @register("call_workflow")
@@ -85,10 +85,10 @@ def call_workflow(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
 
     target_id = str(config.get("workflow_id") or "").strip()
     if not target_id:
-        raise WorkflowDomainError("请选择要调用的工作流")
+        raise WorkflowDomainError("wfErr_pickWorkflow")
     target = db.get(Workflow, target_id)
     if target is None or target.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("被调用的工作流不存在")
+        raise WorkflowDomainError("wfErr_calledWorkflowMissing")
 
     _guard_recursion(db, target_id, workflow.id)
 

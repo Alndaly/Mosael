@@ -70,7 +70,7 @@ def count_words(payload):
 
 TOOLS = {"count_words": count_words}
 
-request = json.loads(sys.stdin.read())          # {"tool": "count_words", "input": {...}}
+request = json.loads(sys.stdin.read())          # {"tool": …, "input": {…}, "locale": "zh"}
 try:
     output = TOOLS[request["tool"]](request.get("input") or {})
     json.dump({"ok": True, "output": output}, sys.stdout, ensure_ascii=False)
@@ -377,7 +377,35 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 - `tools.declare[]` 的 `description`、`label`、`node.label`,和 `input_schema` 里各属性的 `description`
 - `tools.overrides[]` 的 `label`、`description`
 
-某种语言没写就退回**原文**,不是空白 —— 只写了中文的插件在英文界面上显示中文,总好过显示一片空白。
+挑哪一条:**要的那种语言 → 同一主语言的任意变体(`en-US` 认 `en`) → 你声明的原文语言
+(`default_locale`) → 部署缺省 → 你写的第一条**。某种语言没写就退回原文,不是空白 ——
+只写了中文的插件在英文界面上显示中文,总好过显示一片空白。
+
+```json
+{ "id": "dev.you.toolkit", "default_locale": "en", "name": { "en": "Toolkit", "zh": "工具箱" } }
+```
+
+`default_locale` 是**你那些裸字符串是用哪种语言写的**。不写也能跑(退到"你写的第一条"),
+写了才能在既没有中文也没有英文时挑得准 —— 比如你写了德语和法语,而界面是中文。
+
+### 跑出来的那些字,由你自己说
+
+清单里的文案我们替你挑;但工具**运行时产出**的文字(摘要、失败原因、枚举出来的项目名)
+只有你写得出。所以每次调用都告诉你**读的人在用哪种语言**:
+
+| 形态 | 怎么拿 |
+| --- | --- |
+| 进程插件 | 请求体里的 `locale`,以及环境变量 `MOSAEL_LOCALE` |
+| MCP · stdio | 环境变量 `MOSAEL_LOCALE` |
+| MCP · http | 请求头 `Accept-Language`(你自己在 `headers` 里写了同名头就以你的为准) |
+
+```python
+locale = request.get("locale") or os.environ.get("MOSAEL_LOCALE", "zh")
+return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Imported 3 files"}
+```
+
+**不混进 `input`**:语言是这次调用的上下文,不是工具的一个参数 —— 混进去的话,每个工具都得在
+自己的 `input_schema` 里声明一遍,而忘了声明的那个会把它当成非法参数拒掉。
 
 我们自己发的那几个插件由一道棘轮钉着:凡是中文文案都得配上 `en`
 (`backend/tests/test_plugin_manifest_i18n.py`)。你的插件不受这条约束,但样板就摆在那儿。
@@ -389,6 +417,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 | 字段 | 说明 |
 | --- | --- |
 | `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;`name` 可写成按语言分的对象 |
+| `default_locale` | 可选。你那些裸字符串是用哪种语言写的(见「多语言」),挑不到要的语言时先退到它 |
 | `manifest_version` | 当前是 `1`。老清单扫描时自动迁移并补上 |
 | `homepage` | **你的文档站**。界面在插件详情页、市场条目、安装确认三处给一个「文档」链接;不写就不画。只认 `http(s)` |
 | `runtime.kind` | `"process"` 或 `"mcp"` |

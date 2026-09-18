@@ -17,6 +17,7 @@ from app.api.schemas import (
     WorkflowAiEditResponse,
     WorkflowCreate,
     WorkflowFieldOptionOut,
+    WorkflowTemplateOut,
     WorkflowImportRequest,
     WorkflowNodeTypeOut,
     WorkflowOut,
@@ -134,6 +135,39 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
     return ordered
 
 
+@router.get("/workflows/templates", response_model=list[WorkflowTemplateOut])
+def workflow_templates() -> list[dict]:
+    """官方模板:叫什么、干什么、分几步、跑之前要备好什么。**按请求方的语言发下去。**
+
+    说明只有一份(domain/workflows/templates.TEMPLATE_CATALOG),应用的模板卡片和官网的模板页
+    读的是同一份 —— 此前是三套各写各的。图标留在前端(和节点图标、任务种类同一条规矩)。
+    """
+    from app.core.i18n import pick_text
+    from app.domain.workflows.templates import TEMPLATE_CATALOG
+
+    locale = get_current_locale()
+    return [
+        {
+            "id": str(template["id"]),
+            "name": pick_text(template["name"], locale),
+            "description": pick_text(template["summary"], locale),
+            "stages": [pick_text(stage, locale) for stage in _by_locale(template["stages"], locale)],
+            "requirements": [pick_text(one, locale) for one in _by_locale(template["requires"], locale)],
+        }
+        for template in TEMPLATE_CATALOG
+    ]
+
+
+def _by_locale(value: object, locale: str) -> list:
+    """一串按语言分的清单(`{"zh": [...], "en": [...]}`)。"""
+    if isinstance(value, dict):
+        from app.core.i18n import DEFAULT_LOCALE
+
+        picked = value.get(locale) or value.get(DEFAULT_LOCALE) or next(iter(value.values()), [])
+        return list(picked or [])
+    return list(value or [])
+
+
 @router.get("/workflows/field-options", response_model=list[WorkflowFieldOptionOut])
 def workflow_field_options(
     source: str,
@@ -181,7 +215,11 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
         if body.template_id:
             if graph is not None:
                 raise WorkflowDomainError("创建工作流时不能同时提交模板和自定义图")
-            graph = built_in_template_graph(db, body.template_id, user_id=user.id, workspace_id=body.workspace_id)
+            #: 节点名在造图这一刻定语言 —— 图落库之后就是用户的数据(见 templates.built_in_template_graph)。
+            graph = built_in_template_graph(
+                db, body.template_id, user_id=user.id, workspace_id=body.workspace_id,
+                locale=get_current_locale(),
+            )
         return create_workflow(
             db,
             workspace_id=body.workspace_id,

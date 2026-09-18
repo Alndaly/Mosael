@@ -261,3 +261,93 @@ def test_节点标签跟着界面语言走() -> None:
     assert zh["description"] != en["description"]
     assert zh["config"]["fs_id"]["description"] == "网盘文件 id"
     assert en["config"]["fs_id"]["description"] == "netdisk file id"
+
+
+class Test插件自己处理多语言:
+    """清单里的文案我们替它挑;工具**跑出来**的那些字只有插件自己写得出 —— 所以得让它知道
+    读的人用什么语言。"""
+
+    def test_按主语言匹配_不按整串相等(self) -> None:
+        """清单里的键是作者写的,他没有义务用我们这两个短标签(真见过 `en-US`)。"""
+        from app.domain.plugins.manifest import text_of
+
+        value = {"zh-CN": "起始目录", "en-US": "Start directory"}
+        assert text_of(value, "zh") == "起始目录"
+        assert text_of(value, "en") == "Start directory"
+        assert text_of({"EN": "Upper"}, "en") == "Upper"
+
+    def test_挑不到时先退作者声明的原文语言(self) -> None:
+        from app.domain.plugins.manifest import parse, text_of
+
+        value = {"de": "Startverzeichnis", "en": "Start directory"}
+        #: 没声明原文语言:退到部署缺省(zh)→ 也没有 → 作者写的第一条。
+        assert text_of(value, "fr") == "Startverzeichnis"
+        #: 声明了原文是英文:退到英文,而不是碰巧排在前面的那条。
+        assert text_of(value, "fr", author_locale="en") == "Start directory"
+        manifest = parse(
+            {"id": "x", "name": {"de": "Werkzeug", "en": "Toolkit"}, "version": "1", "default_locale": "en",
+             "runtime": {"kind": "process", "entry": "main.py"}},
+            "/tmp/x",
+        )
+        assert manifest.default_locale == "en"
+        assert manifest.text({"de": "A", "en": "B"}, "fr") == "B"
+
+    def test_进程插件拿得到这次要说的语言(self, monkeypatch, tmp_path) -> None:
+        """请求体和环境变量各给一份:读哪个都行。"""
+        import json
+
+        from app.core.i18n import set_current_locale
+        from app.domain.plugins import runtime
+        from app.domain.plugins.manifest import LOCALE_ENV
+
+        seen: dict = {}
+
+        class _Result:
+            returncode = 0
+            stdout = json.dumps({"ok": True, "output": {}})
+            stderr = ""
+
+        def fake_run(args, **kwargs):
+            seen["request"] = json.loads(kwargs["input"])
+            seen["env"] = kwargs["env"]
+            return _Result()
+
+        entry = tmp_path / "main.py"
+        entry.write_text("", encoding="utf-8")
+        monkeypatch.setattr(runtime, "run_logged", fake_run)
+        monkeypatch.setattr(runtime, "base_python", lambda: "/usr/bin/python3")
+        set_current_locale("en")
+        try:
+            runtime.execute_tool(tmp_path, "main.py", "fetch", {"q": "x"})
+        finally:
+            set_current_locale("zh")
+        assert seen["request"]["locale"] == "en"
+        assert seen["env"][LOCALE_ENV] == "en"
+        #: 输入照旧原样交给插件 —— 语言是**另一样东西**,不混进它的参数里。
+        assert seen["request"]["input"] == {"q": "x"}
+
+    def test_每条调用路径都告诉插件这次说哪种语言(self) -> None:
+        """棘轮:进程、MCP·stdio、MCP·http 三条路都要带上。漏一条的表现是那种形态的插件
+        永远只会说一种语言,而没有任何地方会报错。"""
+        import pathlib
+
+        domain = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "plugins"
+        runtime = (domain / "runtime.py").read_text(encoding="utf-8")
+        bridge = (domain / "mcp_bridge.py").read_text(encoding="utf-8")
+        #: 认的是**代码里用到了那个常量**(源码里写的是 LOCALE_ENV,不是它的值)。
+        assert "LOCALE_ENV: locale" in runtime and '"locale": locale' in runtime, "进程插件那条"
+        assert "LOCALE_ENV: get_current_locale()" in bridge, "MCP stdio 那条"
+        assert 'setdefault("Accept-Language"' in bridge, "MCP http 那条"
+
+    def test_我们自己发的插件都说得出原文是哪种语言(self) -> None:
+        """`default_locale` 不是必填(不写就退到作者写的第一条),但样板要摆在那儿。"""
+        import json
+        import pathlib
+
+        examples = pathlib.Path(__file__).resolve().parents[2] / "plugins" / "examples"
+        missing = [
+            path.parent.name
+            for path in sorted(examples.glob("*/mosael.plugin.json"))
+            if not str(json.loads(path.read_text(encoding="utf-8")).get("default_locale") or "").strip()
+        ]
+        assert not missing, f"这几个示例插件没声明原文语言:{missing}"

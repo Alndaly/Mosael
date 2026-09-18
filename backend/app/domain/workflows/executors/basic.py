@@ -68,10 +68,10 @@ def condition(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
     elif op in ("gt", "lt"):
         left_num, right_num = as_number(left), as_number(right)
         if left_num is None or right_num is None:
-            raise WorkflowDomainError(f"条件 {op} 需要数值,得到: {left_text!r} / {right_text!r}")
+            raise WorkflowDomainError("wfErr_conditionNeedsNumbers", params={"op": op, "left": left_text, "right": right_text})
         result = left_num > right_num if op == "gt" else left_num < right_num
     else:
-        raise WorkflowDomainError(f"未知条件运算符: {op}")
+        raise WorkflowDomainError("wfErr_unknownConditionOp", params={"op": op})
     return {"result": result}
 
 
@@ -203,7 +203,7 @@ def text_transform(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
     elif op == "length":
         out = str(len(text))
     else:
-        raise WorkflowDomainError(f"未知文本处理方式: {op}")
+        raise WorkflowDomainError("wfErr_unknownTextOp", params={"op": op})
     return {"text": out, "length": len(out)}
 
 

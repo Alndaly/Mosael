@@ -122,3 +122,9 @@ export function getWorkflowRevision(workflowId: string, revision: number): Promi
 export function restoreWorkflowRevision(workflowId: string, revision: number): Promise<Workflow> {
   return api<Workflow>(`/api/workflows/${workflowId}/revisions/${revision}/restore`, { method: "POST" });
 }
+
+/** 官方模板目录:名字、介绍、步骤、前置条件。文案由后端按语言选好(图标在前端)。 */
+export type WorkflowTemplate = components["schemas"]["WorkflowTemplateOut"];
+export function fetchWorkflowTemplates(): Promise<WorkflowTemplate[]> {
+  return api<WorkflowTemplate[]>("/api/workflows/templates");
+}

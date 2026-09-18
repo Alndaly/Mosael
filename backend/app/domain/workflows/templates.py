@@ -175,25 +175,182 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
     )
 
 
+#: 官方模板的**说明**:叫什么、干什么、分几步、跑之前要备好什么。图由上面那几个函数造,
+#: 这里只有给人看的那部分 —— 中英并排写在一处(翻译贴着它翻译的东西,和插件清单同一套)。
+#:
+#: 此前这份说明有**三套**:应用里的模板卡片(前端 messages.ts 里一串 key)、官网模板页
+#: (同步脚本里另写一份)、以及这里的图。三套各写各的,改一处不会让另外两处报错,只会让同一个
+#: 模板在三个地方讲三种话。现在应用和官网都读这一份。
+TEMPLATE_CATALOG: list[dict[str, Any]] = [
+    {
+        "id": "full_video_generation",
+        "name": {
+            "zh": "从主题到完整视频",
+            "en": "Topic to finished video"
+        },
+        "summary": {
+            "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。各镜同时生成以节省时间；可选添加旁白，每镜口播对齐到它自己的画面并配上字幕。",
+            "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned."
+        },
+        "requires": {
+            "zh": [
+                "AI 对话模型",
+                "支持文生视频的模型",
+                "旁白可选：克隆音色"
+            ],
+            "en": [
+                "Chat model",
+                "Text-to-video model",
+                "Optional narration: cloned voice"
+            ]
+        },
+        "stages": {
+            "zh": [
+                "输入主题",
+                "脚本与视觉方案",
+                "生成分镜",
+                "各镜同时生成",
+                "按顺序组装并配字幕",
+                "导出成片"
+            ],
+            "en": [
+                "Choose a topic",
+                "Script and visual direction",
+                "Storyboard",
+                "Generate shots in parallel",
+                "Assemble in order with captions",
+                "Export"
+            ]
+        }
+    },
+    {
+        "id": "transcript_video_cleanup",
+        "name": {
+            "zh": "口播与访谈智能整理",
+            "en": "Transcript-based video cleanup"
+        },
+        "summary": {
+            "zh": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
+            "en": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original."
+        },
+        "requires": {
+            "zh": [
+                "AI 对话模型",
+                "可用的转写引擎",
+                "待整理的视频素材"
+            ],
+            "en": [
+                "Chat model",
+                "Available transcription engine",
+                "Source video"
+            ]
+        },
+        "stages": {
+            "zh": [
+                "选择视频",
+                "去除底噪",
+                "生成逐字稿",
+                "诊断与裁切方案",
+                "波纹裁切",
+                "导出整理版"
+            ],
+            "en": [
+                "Choose a video",
+                "Remove hiss",
+                "Transcribe",
+                "Review and plan cuts",
+                "Ripple cut",
+                "Export"
+            ]
+        }
+    },
+    {
+        "id": "translated_dub",
+        "name": {
+            "zh": "视频译配 · 字幕与配音",
+            "en": "Translated dubbing with subtitles"
+        },
+        "summary": {
+            "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；没装人声分离引擎时整轨静音，完成通知里会说明。",
+            "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so."
+        },
+        "requires": {
+            "zh": [
+                "可用的转写引擎",
+                "翻译：AI 对话模型（节点上可换成 Google 翻译）",
+                "一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
+                "保住背景音乐：人声分离引擎（可选）",
+                "有人说话的视频素材"
+            ],
+            "en": [
+                "Available transcription engine",
+                "Translation: a chat model (switchable to Google Translate on the node)",
+                "A voice: a cloned voice, or a built-in voice from any engine",
+                "To keep the background music: a voice separation engine (optional)",
+                "A video with speech"
+            ]
+        },
+        "stages": {
+            "zh": [
+                "选择视频",
+                "生成带时间码逐字稿",
+                "逐句翻译",
+                "按原时间码铺译文字幕",
+                "逐条配音并压回原长度",
+                "导出译配成片"
+            ],
+            "en": [
+                "Choose a video",
+                "Transcribe with timecodes",
+                "Translate line by line",
+                "Lay subtitles on the original timecodes",
+                "Dub and time-compress",
+                "Export"
+            ]
+        }
+    }
+]
+
+
 def built_in_template_graph(
-    db: Session, template_id: str, *, user_id: str, workspace_id: str = ""
+    db: Session, template_id: str, *, user_id: str, workspace_id: str = "", locale: str | None = None
 ) -> dict[str, Any]:
+    """按模板造一张图。**节点名在这一刻定语言** —— 图一落库就是用户的数据(他随时可以改名),
+    出口再翻就等于翻用户自己写的字。翻译贴着模板里的节点写(见 core.i18n.pick_text),
+    和插件清单同一套。"""
     chat = _default_model(db, "chat", user_id)
     if template_id == FULL_VIDEO_GENERATION:
-        return full_video_generation_graph(
+        return localised_names(locale, full_video_generation_graph(
             chat=chat,
             # 这条工作流只给提示词,所以要的是**能文生视频**的那种,不是"video 的默认模型"。
             video=_text_to_video_model(db, user_id),
             # 音色是工作区的(克隆音色存在工作区名下),所以按工作区取,不按人。
             voice_id=_first_voice_id(db, workspace_id),
             db=db,
-        )
+        ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
-        return transcript_video_cleanup_graph(chat=chat)
+        return localised_names(locale, transcript_video_cleanup_graph(chat=chat))
     if template_id == TRANSLATED_DUB:
         # 音色和整片生成那条一样按工作区取:克隆音色存在工作区名下,不跟人走。
-        return translated_dub_graph(voice_id=_first_voice_id(db, workspace_id))
-    raise WorkflowDomainError(f"未知的内置工作流模板:{template_id}")
+        return localised_names(locale, translated_dub_graph(voice_id=_first_voice_id(db, workspace_id)))
+    raise WorkflowDomainError("wfErr_unknownTemplate", params={"id": template_id})
+
+
+def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]:
+    """把图里每个节点的名字定成一种语言(循环体/子图里的也算)。
+
+    **只动名字**:config 里的值是数据(提示词、模板串),不是给人看的标签 —— 翻它们等于改这条
+    工作流要做的事。
+    """
+    from app.core.i18n import pick_text
+
+    for node in graph.get("nodes") or []:
+        if isinstance(node, dict) and isinstance(node.get("name"), dict):
+            node["name"] = pick_text(node["name"], locale)
+        body = (node.get("config") or {}).get("body") if isinstance(node, dict) else None
+        if isinstance(body, dict):
+            localised_names(locale, body)
+    return graph
 
 
 def _object(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -357,7 +514,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "start",
             "type": "start",
-            "name": "设置智能整理尺度",
+            "name": {"zh": "设置智能整理尺度", "en": "Set the cleanup thresholds"},
             "position": {"x": 40, "y": 260},
             "config": {
                 "params": {
@@ -371,28 +528,28 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "source_video",
             "type": "asset",
-            "name": "选择要整理的视频",
+            "name": {"zh": "选择要整理的视频", "en": "Pick the video to clean up"},
             "position": {"x": 330, "y": 260},
             "config": {"asset_id": ""},
         },
         {
             "id": "clean_audio",
             "type": "denoise_audio",
-            "name": "去除底噪(产出新视频,原片不动)",
+            "name": {"zh": "去除底噪(产出新视频,原片不动)", "en": "Remove background noise (a new asset; the source is untouched)"},
             "position": {"x": 650, "y": 260},
             "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto", "strength": "medium"},
         },
         {
             "id": "verbatim_transcript",
             "type": "transcribe_asset",
-            "name": "生成带时间码逐字稿",
+            "name": {"zh": "生成带时间码逐字稿", "en": "Transcribe with timecodes"},
             "position": {"x": 970, "y": 100},
             "config": {"asset_id": "{{clean_audio.asset_id}}", "engine": "auto"},
         },
         {
             "id": "cleanup_project",
             "type": "project_sequence_create",
-            "name": "建立非破坏性整理副本",
+            "name": {"zh": "建立非破坏性整理副本", "en": "Create a non-destructive working copy"},
             "position": {"x": 970, "y": 420},
             "config": {
                 "name": "{{source_video.name}} · 智能整理",
@@ -404,7 +561,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "source_on_timeline",
             "type": "timeline_append",
-            "name": "把降噪后的视频放到新时间线",
+            "name": {"zh": "把降噪后的视频放到新时间线", "en": "Put the cleaned video on the new timeline"},
             "position": {"x": 1290, "y": 420},
             "config": {
                 "sequence_id": "{{cleanup_project.sequence_id}}",
@@ -417,7 +574,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "cleanup_plan",
             "type": "llm",
-            "name": "诊断杂乱问题并生成整理方案",
+            "name": {"zh": "诊断杂乱问题并生成整理方案", "en": "Diagnose the mess and draft a cleanup plan"},
             "position": {"x": 1610, "y": 260},
             "config": {
                 "profile_id": chat.profile_id,
@@ -449,7 +606,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "apply_cleanup",
             "type": "timeline_cut_ranges",
-            "name": "按逐字稿批量波纹整理",
+            "name": {"zh": "按逐字稿批量波纹整理", "en": "Ripple-cut the timeline from the transcript"},
             "position": {"x": 1930, "y": 260},
             "config": {
                 "sequence_id": "{{cleanup_project.sequence_id}}",
@@ -462,14 +619,14 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "export_clean_video",
             "type": "export_sequence",
-            "name": "导出智能整理版视频",
+            "name": {"zh": "导出智能整理版视频", "en": "Export the cleaned-up video"},
             "position": {"x": 2250, "y": 260},
             "config": {"sequence_id": "{{cleanup_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
-            "name": "整理完成通知",
+            "name": {"zh": "整理完成通知", "en": "Cleanup finished notice"},
             "position": {"x": 2570, "y": 260},
             "config": {
                 "title": "视频逐字稿与智能整理已完成",
@@ -479,7 +636,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {
             "id": "output",
             "type": "output",
-            "name": "交付逐字稿、方案与成片",
+            "name": {"zh": "交付逐字稿、方案与成片", "en": "Hand over the transcript, the plan and the export"},
             "position": {"x": 2890, "y": 260},
             "config": {
                 "values": {
@@ -540,7 +697,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "start",
             "type": "start",
-            "name": "开始译配",
+            "name": {"zh": "开始译配", "en": "Start the translated dub"},
             "position": {"x": -270, "y": 260},
             # **目标语言和音色留在它们各自的节点上,不提成起始参数。**
             # 提上来看似更"通用",实际是把两个真控件换成一个自由文本框:`start.params` 在节点
@@ -554,14 +711,14 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "source_video",
             "type": "asset",
-            "name": "选择要配音的视频",
+            "name": {"zh": "选择要配音的视频", "en": "Pick the video to dub"},
             "position": {"x": 40, "y": 260},
             "config": {"asset_id": ""},
         },
         {
             "id": "dub_project",
             "type": "project_sequence_create",
-            "name": "建立非破坏性配音副本",
+            "name": {"zh": "建立非破坏性配音副本", "en": "Create a non-destructive dubbing copy"},
             "position": {"x": 350, "y": 420},
             "config": {
                 "name": "{{source_video.name}} · 译配版",
@@ -573,7 +730,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "video_on_timeline",
             "type": "timeline_append",
-            "name": "把原视频接到时间线",
+            "name": {"zh": "把原视频接到时间线", "en": "Put the source video on the timeline"},
             "position": {"x": 670, "y": 420},
             "config": {
                 "sequence_id": "{{dub_project.sequence_id}}",
@@ -586,14 +743,14 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "verbatim_transcript",
             "type": "transcribe_asset",
-            "name": "生成带时间码逐字稿",
+            "name": {"zh": "生成带时间码逐字稿", "en": "Transcribe with timecodes"},
             "position": {"x": 350, "y": 120},
             "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto"},
         },
         {
             "id": "translate_lines",
             "type": "translate_lines",
-            "name": "逐句翻译成目标语言",
+            "name": {"zh": "逐句翻译成目标语言", "en": "Translate line by line into the target language"},
             "position": {"x": 990, "y": 120},
             "config": {
                 # 直接收 segments:节点自己从每段里取 text,不需要模板层写 `{{loop.item.text}}`。
@@ -610,7 +767,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "translated_subtitles",
             "type": "generate_subtitles",
-            "name": "按原时间码铺译文字幕",
+            "name": {"zh": "按原时间码铺译文字幕", "en": "Lay the translated subtitles on the original timecodes"},
             "position": {"x": 1310, "y": 260},
             "config": {
                 "sequence_id": "{{dub_project.sequence_id}}",
@@ -626,7 +783,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "dubbing",
             "type": "dub_subtitles",
-            "name": "逐条配音并压回原段落长度",
+            "name": {"zh": "逐条配音并压回原段落长度", "en": "Dub each line and fit it back into its slot"},
             "position": {"x": 1630, "y": 260},
             "config": {
                 "sequence_id": "{{dub_project.sequence_id}}",
@@ -647,14 +804,14 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "export_dubbed_video",
             "type": "export_sequence",
-            "name": "导出译配成片(字幕烧进画面)",
+            "name": {"zh": "导出译配成片(字幕烧进画面)", "en": "Export the dubbed video (subtitles burned in)"},
             "position": {"x": 1950, "y": 260},
             "config": {"sequence_id": "{{dub_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
-            "name": "译配完成通知",
+            "name": {"zh": "译配完成通知", "en": "Dubbing finished notice"},
             "position": {"x": 2260, "y": 260},
             "config": {
                 "title": "视频译配与字幕已完成",
@@ -666,7 +823,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         {
             "id": "output",
             "type": "output",
-            "name": "交付逐字稿、译文、字幕与成片",
+            "name": {"zh": "交付逐字稿、译文、字幕与成片", "en": "Hand over the transcript, the translation, the subtitles and the export"},
             "position": {"x": 2570, "y": 260},
             "config": {
                 "values": {
@@ -773,7 +930,10 @@ JSON Schema 的对象。"""
             {
                 "id": "generate_clip",
                 "type": "ai_generate",
-                "name": f"按分镜生成 {video_plan.clip_seconds} 秒视频片段",
+                "name": {
+                    "zh": f"按分镜生成 {video_plan.clip_seconds} 秒视频片段",
+                    "en": f"Generate the {video_plan.clip_seconds}s clip for this shot",
+                },
                 "position": {"x": 80, "y": 140},
                 "config": {
                     "provider": video.provider,
@@ -788,7 +948,7 @@ JSON Schema 的对象。"""
             {
                 "id": "organize_clip",
                 "type": "asset_update",
-                "name": "归档并命名镜头素材",
+                "name": {"zh": "归档并命名镜头素材", "en": "File and name the shot's asset"},
                 "position": {"x": 390, "y": 140},
                 "config": {
                     "asset_ids": "{{generate_clip.asset_id}}",
@@ -799,21 +959,21 @@ JSON Schema 的对象。"""
             {
                 "id": "has_voice",
                 "type": "condition",
-                "name": "选了配音音色吗",
+                "name": {"zh": "选了配音音色吗", "en": "Was a voice picked?"},
                 "position": {"x": 80, "y": 300},
                 "config": {"left": "{{input.voice_id}}", "op": "not_empty"},
             },
             {
                 "id": "has_narration",
                 "type": "condition",
-                "name": "这一镜有口播吗",
+                "name": {"zh": "这一镜有口播吗", "en": "Does this shot have narration?"},
                 "position": {"x": 390, "y": 300},
                 "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
             },
             {
                 "id": "narrate",
                 "type": "synthesize_speech",
-                "name": "合成该镜口播",
+                "name": {"zh": "合成该镜口播", "en": "Synthesise this shot's narration"},
                 "position": {"x": 700, "y": 300},
                 # 开始节点里填的是配音库音色的 id,所以引擎是克隆;想用引擎音色,改这里的两格。
                 "config": {"text": "{{loop.item.narration}}", "engine": "clone", "voice": "{{input.voice_id}}"},
@@ -832,7 +992,7 @@ JSON Schema 的对象。"""
             {
                 "id": "append_clip",
                 "type": "timeline_append",
-                "name": "按镜头顺序接入时间线",
+                "name": {"zh": "按镜头顺序接入时间线", "en": "Append this shot to the timeline in order"},
                 "position": {"x": 80, "y": 140},
                 "config": {
                     "sequence_id": "{{input.sequence_id}}",
@@ -845,14 +1005,14 @@ JSON Schema 的对象。"""
             {
                 "id": "has_audio",
                 "type": "condition",
-                "name": "这一镜合成了口播吗",
+                "name": {"zh": "这一镜合成了口播吗", "en": "Did this shot get narration?"},
                 "position": {"x": 390, "y": 140},
                 "config": {"left": "{{loop.item.narrate.asset_id}}", "op": "not_empty"},
             },
             {
                 "id": "append_narration",
                 "type": "timeline_append",
-                "name": "把口播对齐到这一镜",
+                "name": {"zh": "把口播对齐到这一镜", "en": "Align the narration to this shot"},
                 "position": {"x": 700, "y": 140},
                 "config": {
                     "sequence_id": "{{input.sequence_id}}",
@@ -871,7 +1031,7 @@ JSON Schema 的对象。"""
             {
                 "id": "caption",
                 "type": "template",
-                "name": "这一镜的字幕文本",
+                "name": {"zh": "这一镜的字幕文本", "en": "This shot's subtitle text"},
                 "position": {"x": 1010, "y": 140},
                 "config": {"template": "{{loop.item.loop.item.narration}}"},
             },
@@ -887,7 +1047,7 @@ JSON Schema 的对象。"""
         {
             "id": "start",
             "type": "start",
-            "name": "填写视频主题",
+            "name": {"zh": "填写视频主题", "en": "Describe the video you want"},
             "position": {"x": 40, "y": 300},
             "config": {
                 "params": {
@@ -911,7 +1071,7 @@ JSON Schema 的对象。"""
         {
             "id": "creative_brief",
             "type": "llm",
-            "name": "提炼核心主旨与创意简报",
+            "name": {"zh": "提炼核心主旨与创意简报", "en": "Distil the core idea into a creative brief"},
             "position": {"x": 340, "y": 300},
             "config": {
                 "profile_id": chat.profile_id,
@@ -937,7 +1097,7 @@ JSON Schema 的对象。"""
         {
             "id": "narrative_script",
             "type": "llm",
-            "name": "编写叙事脚本与时间节拍",
+            "name": {"zh": "编写叙事脚本与时间节拍", "en": "Write the narrative script and its beats"},
             "position": {"x": 680, "y": 80},
             "config": {
                 "profile_id": chat.profile_id,
@@ -961,7 +1121,7 @@ JSON Schema 的对象。"""
         {
             "id": "visual_bible",
             "type": "llm",
-            "name": "建立视觉圣经与连续性规则",
+            "name": {"zh": "建立视觉圣经与连续性规则", "en": "Build the visual bible and continuity rules"},
             "position": {"x": 680, "y": 520},
             "config": {
                 "profile_id": chat.profile_id,
@@ -984,7 +1144,7 @@ JSON Schema 的对象。"""
         {
             "id": "video_project",
             "type": "project_sequence_create",
-            "name": "建立成片项目与时间线",
+            "name": {"zh": "建立成片项目与时间线", "en": "Create the project and its timeline"},
             "position": {"x": 680, "y": 300},
             "config": {
                 "name": "{{creative_brief.json.title}} · 自动成片",
@@ -996,7 +1156,7 @@ JSON Schema 的对象。"""
         {
             "id": "storyboard",
             "type": "llm",
-            "name": "按时间拆解专业脚本与分镜",
+            "name": {"zh": "按时间拆解专业脚本与分镜", "en": "Break the script into timed shots"},
             "position": {"x": 1040, "y": 300},
             "config": {
                 "profile_id": chat.profile_id,
@@ -1028,7 +1188,7 @@ JSON Schema 的对象。"""
         {
             "id": "generate_shots",
             "type": "loop_foreach",
-            "name": "各镜同时生成画面与口播",
+            "name": {"zh": "各镜同时生成画面与口播", "en": "Generate every shot's picture and narration"},
             "position": {"x": 1400, "y": 300},
             "config": {
                 "items": "{{storyboard.json.shots}}",
@@ -1047,7 +1207,7 @@ JSON Schema 的对象。"""
         {
             "id": "assemble_timeline",
             "type": "loop_foreach",
-            "name": "按镜头顺序接上时间线",
+            "name": {"zh": "按镜头顺序接上时间线", "en": "Append the shots to the timeline in order"},
             "position": {"x": 1720, "y": 300},
             "config": {
                 "items": "{{generate_shots.results}}",
@@ -1065,7 +1225,7 @@ JSON Schema 的对象。"""
         {
             "id": "narration_subtitles",
             "type": "generate_subtitles",
-            "name": "把口播做成字幕",
+            "name": {"zh": "把口播做成字幕", "en": "Turn the narration into subtitles"},
             "position": {"x": 2040, "y": 300},
             "config": {
                 "sequence_id": "{{video_project.sequence_id}}",
@@ -1082,14 +1242,14 @@ JSON Schema 的对象。"""
         {
             "id": "export_final",
             "type": "export_sequence",
-            "name": "合成并导出最终视频",
+            "name": {"zh": "合成并导出最终视频", "en": "Compose and export the final video"},
             "position": {"x": 2360, "y": 300},
             "config": {"sequence_id": "{{video_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
-            "name": "成片完成通知",
+            "name": {"zh": "成片完成通知", "en": "Video finished notice"},
             "position": {"x": 2680, "y": 120},
             "config": {
                 "title": "视频已生成：{{creative_brief.json.title}}",
@@ -1099,7 +1259,7 @@ JSON Schema 的对象。"""
         {
             "id": "output",
             "type": "output",
-            "name": "交付完整制作结果",
+            "name": {"zh": "交付完整制作结果", "en": "Hand over the finished production"},
             "position": {"x": 2680, "y": 480},
             "config": {
                 "values": {

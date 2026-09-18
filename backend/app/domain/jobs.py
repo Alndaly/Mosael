@@ -162,6 +162,24 @@ def say(job: Job, key: str, **params: object) -> None:
     job.message = render_message(key, DEFAULT_LOCALE, job.message_params)
 
 
+def blame(exc: Exception) -> dict[str, Any]:
+    """一个异常 → 写进任务失败原因的那三样(`error` / `error_key` / `error_params`)。
+
+    和 `say` 同构,只是另一半:**落库的那句话不该冻住语言**。领域异常带 key 的(见
+    workflows.WorkflowDomainError)就把 key 和参数一起记上,接口按读的人的语言翻;
+    不带 key 的(第三方库、别的领域)只留那句话 —— 那是它自己的文本,我们翻不了。
+
+    传给 `finish_job(**blame(exc))` 用,所以返回的是字段名对得上的一份字典。
+    """
+    key = str(getattr(exc, "key", "") or "")
+    params = getattr(exc, "params", None)
+    return {
+        "error": str(exc)[:500],
+        "error_key": key[:80],
+        "error_params": {k: str(v) for k, v in (params or {}).items()},
+    }
+
+
 def lock_active_job(db: Session, job: Job) -> bool:
     """Acquire the SQLite write transaction before reading/changing an active job.
 

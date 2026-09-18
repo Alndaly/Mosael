@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Transcript-based video cleanup",
   "description": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original.",
-  "graph_hash": "4343e8f2cb57f3c754bc491a3cebf5a70a56fa6e89b01b7e443f3d904baa050f",
+  "graph_hash": "b57a60191004ece9e1e0be2cfe65fc914830f0c295ebc0c9b4835ac0347d1a8a",
   "graph": {
     "meta": {
       "template_id": "transcript_video_cleanup",
@@ -15,7 +15,7 @@
       {
         "id": "start",
         "type": "start",
-        "name": "设置智能整理尺度",
+        "name": "Set the cleanup thresholds",
         "position": {
           "x": 40,
           "y": 260
@@ -32,7 +32,7 @@
       {
         "id": "source_video",
         "type": "asset",
-        "name": "选择要整理的视频",
+        "name": "Pick the video to clean up",
         "position": {
           "x": 330,
           "y": 260
@@ -44,7 +44,7 @@
       {
         "id": "clean_audio",
         "type": "denoise_audio",
-        "name": "去除底噪(产出新视频,原片不动)",
+        "name": "Remove background noise (a new asset; the source is untouched)",
         "position": {
           "x": 650,
           "y": 260
@@ -61,7 +61,7 @@
       {
         "id": "verbatim_transcript",
         "type": "transcribe_asset",
-        "name": "生成带时间码逐字稿",
+        "name": "Transcribe with timecodes",
         "position": {
           "x": 970,
           "y": 100
@@ -77,7 +77,7 @@
       {
         "id": "cleanup_project",
         "type": "project_sequence_create",
-        "name": "建立非破坏性整理副本",
+        "name": "Create a non-destructive working copy",
         "position": {
           "x": 970,
           "y": 420
@@ -97,7 +97,7 @@
       {
         "id": "source_on_timeline",
         "type": "timeline_append",
-        "name": "把降噪后的视频放到新时间线",
+        "name": "Put the cleaned video on the new timeline",
         "position": {
           "x": 1290,
           "y": 420
@@ -119,7 +119,7 @@
       {
         "id": "cleanup_plan",
         "type": "llm",
-        "name": "诊断杂乱问题并生成整理方案",
+        "name": "Diagnose the mess and draft a cleanup plan",
         "position": {
           "x": 1610,
           "y": 260
@@ -282,7 +282,7 @@
       {
         "id": "apply_cleanup",
         "type": "timeline_cut_ranges",
-        "name": "按逐字稿批量波纹整理",
+        "name": "Ripple-cut the timeline from the transcript",
         "position": {
           "x": 1930,
           "y": 260
@@ -302,7 +302,7 @@
       {
         "id": "export_clean_video",
         "type": "export_sequence",
-        "name": "导出智能整理版视频",
+        "name": "Export the cleaned-up video",
         "position": {
           "x": 2250,
           "y": 260
@@ -317,7 +317,7 @@
       {
         "id": "done_notice",
         "type": "notify",
-        "name": "整理完成通知",
+        "name": "Cleanup finished notice",
         "position": {
           "x": 2570,
           "y": 260
@@ -330,7 +330,7 @@
       {
         "id": "output",
         "type": "output",
-        "name": "交付逐字稿、方案与成片",
+        "name": "Hand over the transcript, the plan and the export",
         "position": {
           "x": 2890,
           "y": 260

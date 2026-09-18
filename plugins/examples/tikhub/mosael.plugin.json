@@ -2,6 +2,7 @@
   "id": "dev.mosael.tikhub",
   "manifest_version": 1,
   "name": "TikHub",
+  "default_locale": "zh",
   "version": "1.0.1",
   "homepage": "https://docs.tikhub.io/",
   "runtime": {

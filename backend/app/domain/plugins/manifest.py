@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 #: i18n 是纯叶子(只依赖标准库),运行时 import 它不会把这个模块拖出叶子位置。
-from app.core.i18n import DEFAULT_LOCALE, get_current_locale
+from app.core.i18n import pick_text
 
 if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块是叶子
     from app.db.models import PluginPackage
@@ -28,7 +29,11 @@ KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FIELD_TYPES = ("string", "enum", "number", "boolean")
 
 
-def text_of(value: Any, locale: str | None = None) -> str:
+#: 这次调用要说哪种语言,插件自己也会拿到它(见 runtime/mcp_bridge 里的 MOSAEL_LOCALE)。
+LOCALE_ENV = "MOSAEL_LOCALE"
+
+
+def text_of(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
     """清单里一段**给人看的文字**。既可以是普通字符串,也可以是按语言分的对象:
 
         "label": "起始目录"
@@ -38,20 +43,9 @@ def text_of(value: Any, locale: str | None = None) -> str:
     那种表的键要和别处对得上,而对不上时不会报错,只会让那一条永远显示原文。这个项目在
     「手抄一张表」上栽过好几次。
 
-    退路是**给原文**,不是给空:插件只写了中文时,英文界面上看到中文,总好过看到一片空白。
+    挑法见 `core.i18n.pick_text`(内置模板的节点名走同一个:两边都是"数据自带的文案")。
     """
-    if isinstance(value, dict):
-        want = locale or get_current_locale()
-        for key in (want, DEFAULT_LOCALE):
-            picked = value.get(key)
-            if isinstance(picked, str) and picked.strip():
-                return picked
-        #: 连缺省语言都没有:退到作者写的第一条,而不是空串。
-        for picked in value.values():
-            if isinstance(picked, str) and picked.strip():
-                return picked
-        return ""
-    return str(value or "")
+    return pick_text(value, locale, author_locale=author_locale)
 
 
 @dataclass(frozen=True)
@@ -149,6 +143,13 @@ class Manifest:
     homepage: str = ""
     #: 声明了就能在设置页点「去授权」,不必手抄令牌(见 domain/plugins/oauth)。
     oauth: OAuthSpec | None = None
+    #: 清单里那些**裸字符串**是用哪种语言写的。挑不到要的语言时先退到它,再退到部署缺省 ——
+    #: 不写就退到作者写的第一条。它同时是告诉插件进程「这次要说哪种语言」的兜底(见 runtime)。
+    default_locale: str = ""
+
+    def text(self, value: Any, locale: str | None = None) -> str:
+        """按这份清单的语言习惯挑一段文字(见 text_of)。清单在手时一律走它。"""
+        return text_of(value, locale, author_locale=self.default_locale)
 
     @property
     def is_mcp(self) -> bool:
@@ -165,13 +166,13 @@ class ManifestError(ValueError):
     pass
 
 
-def _humanized(entry: dict[str, Any], *keys: str) -> dict[str, Any]:
+def _humanized(entry: dict[str, Any], *keys: str, pick: Callable[[Any], str] = text_of) -> dict[str, Any]:
     """把一个原样透传的字典里那几个给人看的键就地定下语言 —— 其余原封不动。
 
     技能、工具声明这些是整个字典往下传的(它们的形状由插件作者定,我们不该逐字段抄一遍),
     所以只挑名字确定的那几个键翻,别的一个字不动。
     """
-    picked = {k: text_of(entry[k]) for k in keys if k in entry}
+    picked = {k: pick(entry[k]) for k in keys if k in entry}
     return {**entry, **picked} if picked else entry
 
 
@@ -179,7 +180,7 @@ def _humanized(entry: dict[str, Any], *keys: str) -> dict[str, Any]:
 _SCHEMA_TEXT_KEYS = ("description", "title")
 
 
-def _humanized_schema(value: Any) -> Any:
+def _humanized_schema(value: Any, pick: Callable[[Any], str] = text_of) -> Any:
     """把 `input_schema` 里的 description / title 也定下语言。
 
     工具自己的 description 一直是翻的,而**参数的那一份不是** —— 于是试运行面板里每个
@@ -190,19 +191,19 @@ def _humanized_schema(value: Any) -> Any:
     oneOf、$defs 的任何一层,只认一层等于换个写法就又漏了。
     """
     if isinstance(value, dict):
-        out = {key: _humanized_schema(item) for key, item in value.items()}
+        out = {key: _humanized_schema(item, pick) for key, item in value.items()}
         for key in _SCHEMA_TEXT_KEYS:
             # 只有本来就是「语言对象」的才动。普通字符串经过 text_of 也原样返回,
             # 但显式判断能让"这里为什么不会误伤别的结构"一眼看得出来。
             if isinstance(value.get(key), dict):
-                out[key] = text_of(value[key])
+                out[key] = pick(value[key])
         return out
     if isinstance(value, list):
-        return [_humanized_schema(item) for item in value]
+        return [_humanized_schema(item, pick) for item in value]
     return value
 
 
-def _fields(raw: Any, *, secret: bool) -> list[Field]:
+def _fields(raw: Any, *, secret: bool, pick: Callable[[Any], str] = text_of) -> list[Field]:
     if not isinstance(raw, list):
         return []
     out: list[Field] = []
@@ -218,16 +219,16 @@ def _fields(raw: Any, *, secret: bool) -> list[Field]:
         if isinstance(raw_options, list):
             for option in raw_options:
                 if isinstance(option, dict) and option.get("value") is not None:
-                    options.append({"value": str(option["value"]), "label": text_of(option.get("label")) or str(option["value"])})
+                    options.append({"value": str(option["value"]), "label": pick(option.get("label")) or str(option["value"])})
                 elif isinstance(option, str):
                     options.append({"value": option, "label": option})
         declared_type = str(entry.get("type") or ("string" if not options else "enum"))
         out.append(
             Field(
                 key=key,
-                label=text_of(entry.get("label")) or key,
+                label=pick(entry.get("label")) or key,
                 type=declared_type if declared_type in FIELD_TYPES else "string",
-                help=text_of(entry.get("help")),
+                help=pick(entry.get("help")),
                 required=entry.get("required") is not False,
                 # 凭据默认按密文对待,漏标不该导致明文回显;配置默认明文。
                 secret=bool(entry.get("secret", secret)),
@@ -253,7 +254,7 @@ def runtime_of(raw: dict[str, Any]) -> Runtime:
     )
 
 
-def _tools_policy(raw: dict[str, Any]) -> tuple[str, list[str], dict[str, ToolOverride], list[dict[str, Any]]]:
+def _tools_policy(raw: dict[str, Any], pick: Callable[[Any], str] = text_of) -> tuple[str, list[str], dict[str, ToolOverride], list[dict[str, Any]]]:
     """→ (expose, recommended, overrides, 进程插件声明的工具)。
 
     `tools` 是个策略对象:`declare` 是进程插件的工具声明,`recommended` 是首次启用默认勾上
@@ -269,8 +270,8 @@ def _tools_policy(raw: dict[str, Any]) -> tuple[str, list[str], dict[str, ToolOv
         if not isinstance(spec, dict):
             continue
         overrides[str(name)] = ToolOverride(
-            label=text_of(spec.get("label")),
-            description=text_of(spec.get("description")),
+            label=pick(spec.get("label")),
+            description=pick(spec.get("description")),
             read_only=spec.get("read_only") is True,
             node=spec.get("node") if isinstance(spec.get("node"), dict) else None,
         )
@@ -297,12 +298,17 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
     for key in ("id", "version"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
             raise ManifestError(f"插件清单 {path} 缺少必填字段: {key}")
+    author_locale = str(raw.get("default_locale") or "").strip()
+
+    def pick(value: Any) -> str:
+        return text_of(value, author_locale=author_locale)
+
     #: 名字是给人看的,可以按语言写;但空的仍然是缺字段。
-    name = text_of(raw.get("name")).strip()
+    name = pick(raw.get("name")).strip()
     if not name:
         raise ManifestError(f"插件清单 {path} 缺少必填字段: name")
     instance = raw.get("instance") if isinstance(raw.get("instance"), dict) else {}
-    expose, recommended, overrides, declared = _tools_policy(raw)
+    expose, recommended, overrides, declared = _tools_policy(raw, pick)
     return Manifest(
         id=raw["id"].strip(),
         name=name,
@@ -310,16 +316,17 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         path=path,
         runtime=runtime_of(raw),
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str) and p.strip()],
-        skills=[_humanized(s, "name", "description") for s in (raw.get("skills") or []) if isinstance(s, dict)],
-        config=_fields(instance.get("config"), secret=False),
-        credentials=_fields(instance.get("credentials"), secret=True),
+        skills=[_humanized(s, "name", "description", pick=pick) for s in (raw.get("skills") or []) if isinstance(s, dict)],
+        config=_fields(instance.get("config"), secret=False, pick=pick),
+        credentials=_fields(instance.get("credentials"), secret=True, pick=pick),
         multiple=instance.get("multiple") is True,
-        name_template=text_of(instance.get("name_template")),
+        name_template=pick(instance.get("name_template")),
         expose=expose,
         recommended=recommended,
         overrides=overrides,
         declared_tools=declared,
         homepage=web_url(raw.get("homepage")),
+        default_locale=author_locale,
         # **读 instance 里那一层。** oauth 块引用的 client_id_field / stores 全是
         # instance.credentials 里的键,放在顶层的话作者会把它写在它引用的东西旁边(合理),
         # 然后得到一个静默消失的授权按钮 —— 这个坑第一个踩进去的就是写解析器的人。

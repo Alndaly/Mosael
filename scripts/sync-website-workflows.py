@@ -7,6 +7,7 @@ Run with backend/.venv/bin/python scripts/sync-website-workflows.py.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 import sys
@@ -16,68 +17,24 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app.domain.workflows.revisions import graph_digest
 from app.domain.workflows.templates import (
+    TEMPLATE_CATALOG,
     ModelChoice,
     full_video_generation_graph,
+    localised_names,
     transcript_video_cleanup_graph,
     translated_dub_graph,
 )
 
 
 def catalog_files() -> dict[str, str]:
-    templates = [
-        {
-            "id": "full_video_generation",
-            "name": {"zh": "从主题到完整视频", "en": "Topic to finished video"},
-            "summary": {
-                "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。各镜同时生成以节省时间；可选添加旁白，每镜口播对齐到它自己的画面并配上字幕。",
-                "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned.",
-            },
-            "requires": {
-                "zh": ["AI 对话模型", "支持文生视频的模型", "旁白可选：克隆音色"],
-                "en": ["Chat model", "Text-to-video model", "Optional narration: cloned voice"],
-            },
-            "stages": {
-                "zh": ["输入主题", "脚本与视觉方案", "生成分镜", "各镜同时生成", "按顺序组装并配字幕", "导出成片"],
-                "en": ["Choose a topic", "Script and visual direction", "Storyboard", "Generate shots in parallel", "Assemble in order with captions", "Export"],
-            },
-            "graph": full_video_generation_graph(chat=ModelChoice(), video=ModelChoice()),
-        },
-        {
-            "id": "transcript_video_cleanup",
-            "name": {"zh": "口播与访谈智能整理", "en": "Transcript-based video cleanup"},
-            "summary": {
-                "zh": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
-                "en": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original.",
-            },
-            "requires": {
-                "zh": ["AI 对话模型", "可用的转写引擎", "待整理的视频素材"],
-                "en": ["Chat model", "Available transcription engine", "Source video"],
-            },
-            "stages": {
-                "zh": ["选择视频", "去除底噪", "生成逐字稿", "诊断与裁切方案", "波纹裁切", "导出整理版"],
-                "en": ["Choose a video", "Remove hiss", "Transcribe", "Review and plan cuts", "Ripple cut", "Export"],
-            },
-            "graph": transcript_video_cleanup_graph(chat=ModelChoice()),
-        },
-        {
-            "id": "translated_dub",
-            "name": {"zh": "视频译配 · 字幕与配音", "en": "Translated dubbing with subtitles"},
-            "summary": {
-                "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；没装人声分离引擎时整轨静音，完成通知里会说明。",
-                "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so.",
-            },
-            "requires": {
-                "zh": ["可用的转写引擎", "翻译：AI 对话模型（节点上可换成 Google 翻译）", "一把嗓子：配音库的克隆音色，或某个引擎的现成音色", "保住背景音乐：人声分离引擎（可选）", "有人说话的视频素材"],
-                "en": ["Available transcription engine", "Translation: a chat model (switchable to Google Translate on the node)", "A voice: a cloned voice, or a built-in voice from any engine", "To keep the background music: a voice separation engine (optional)", "A video with speech"],
-            },
-            "stages": {
-                "zh": ["选择视频", "生成带时间码逐字稿", "逐句翻译", "按原时间码铺译文字幕", "逐条配音并压回原长度", "导出译配成片"],
-                "en": ["Choose a video", "Transcribe with timecodes", "Translate line by line", "Lay subtitles on the original timecodes", "Dub and time-compress", "Export"],
-            },
-            # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
-            "graph": translated_dub_graph(voice_id=""),
-        },
-    ]
+    #: 说明只有一份 —— 后端的模板目录(应用里的模板卡片读的也是它)。这里只补"这一份对应哪张图"。
+    graphs = {
+        "full_video_generation": full_video_generation_graph(chat=ModelChoice(), video=ModelChoice()),
+        "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice()),
+        # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
+        "translated_dub": translated_dub_graph(voice_id=""),
+    }
+    templates = [{**template, "graph": graphs[template["id"]]} for template in TEMPLATE_CATALOG]
     files: dict[str, str] = {}
     catalog = []
     for template in templates:
@@ -87,9 +44,13 @@ def catalog_files() -> dict[str, str]:
         for locale in ("zh", "en"):
             name = f'{template["id"]}.{locale}.mosael-workflow.json'
             entry["download"][locale] = f"/workflows/{name}"
+            #: **节点名按这一份的语言定下来。** 图里的名字是语言对象(翻译贴着节点写,见
+            #: domain/workflows/templates),而下载下来的这份是要被导入的 —— 导入方拿到的必须是
+            #: 一个名字,不是一个待挑的对象。
+            localised = localised_names(locale, copy.deepcopy(graph))
             payload = {"format": "mosael-workflow", "version": 1, "workflow_revision": 1,
                        "name": template["name"][locale], "description": template["summary"][locale],
-                       "graph_hash": graph_digest(graph), "graph": graph}
+                       "graph_hash": graph_digest(localised), "graph": localised}
             files[name] = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
         catalog.append(entry)
     files["catalog.json"] = json.dumps(catalog, ensure_ascii=False, indent=2) + "\n"

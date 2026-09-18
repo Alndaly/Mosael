@@ -32,6 +32,7 @@ from app.api.schemas.workflows import (
     WorkflowAiEditResponse,
     WorkflowCreate,
     WorkflowFieldOptionOut,
+    WorkflowTemplateOut,
     WorkflowImportRequest,
     WorkflowNodeTypeOut,
     WorkflowOut,

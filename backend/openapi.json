@@ -9733,6 +9733,42 @@
         }
       }
     },
+    "/api/workflows/templates": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Workflow Templates",
+        "description": "官方模板:叫什么、干什么、分几步、跑之前要备好什么。**按请求方的语言发下去。**\n\n说明只有一份(domain/workflows/templates.TEMPLATE_CATALOG),应用的模板卡片和官网的模板页\n读的是同一份 —— 此前是三套各写各的。图标留在前端(和节点图标、任务种类同一条规矩)。",
+        "operationId": "workflow_templates_api_workflows_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowTemplateOut"
+                  },
+                  "type": "array",
+                  "title": "Response Workflow Templates Api Workflows Templates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/field-options": {
       "get": {
         "tags": [
@@ -30500,6 +30536,44 @@
         },
         "type": "object",
         "title": "WorkflowRunRequest"
+      },
+      "WorkflowTemplateOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stages"
+          },
+          "requirements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requirements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description"
+        ],
+        "title": "WorkflowTemplateOut",
+        "description": "官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);\n图标由界面按 id 给,和节点图标、任务种类同一条规矩。"
       },
       "WorkflowUpdate": {
         "properties": {

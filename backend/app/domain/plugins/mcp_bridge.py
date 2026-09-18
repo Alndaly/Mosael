@@ -32,7 +32,8 @@ from typing import Any, Awaitable, Callable, TypeVar
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.domain.plugins.manifest import expand
+from app.core.i18n import get_current_locale
+from app.domain.plugins.manifest import LOCALE_ENV, expand
 
 #: 连接 + 握手 + 一次调用的总预算。和进程类插件的 60s 对齐。
 MCP_TIMEOUT_SECONDS = 60
@@ -70,6 +71,9 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
             "HOME": os.environ.get("HOME", ""),
             "LANG": os.environ.get("LANG", "en_US.UTF-8"),
             "MOSAEL_PLUGIN": "1",
+            #: 读的人用哪种语言(见 runtime 里那段说明)。MCP 的调用参数由服务自己定义,
+            #: 我们塞不进去,所以这条走环境变量;http 那条走 Accept-Language。
+            LOCALE_ENV: get_current_locale(),
             **env,
         }
         params = StdioServerParameters(
@@ -87,6 +91,8 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
         if not url:
             raise McpBridgeError("http 传输必须声明 url")
         headers = {str(k): expand(str(v), env) for k, v in (spec.get("headers") or {}).items()}
+        #: 作者没自己指定的话,带上读的人用的语言 —— 这是 HTTP 里说这件事的标准方式。
+        headers.setdefault("Accept-Language", get_current_locale())
         async with create_mcp_http_client(headers=headers or None) as http_client:
             async with streamable_http_client(url, http_client=http_client) as (read, write):
                 async with ClientSession(read, write) as session:

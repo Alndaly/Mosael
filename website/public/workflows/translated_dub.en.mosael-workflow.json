@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
   "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so.",
-  "graph_hash": "1d35eced39ba01b27bf97c7a4b8432fbfa080c6f4d42d4e4af2ba471a6fd15b7",
+  "graph_hash": "e15d82b90e76492f4bc167fc4d1cbde21cdae2f4cbca4e3451d02fd2a2800b04",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -15,7 +15,7 @@
       {
         "id": "start",
         "type": "start",
-        "name": "开始译配",
+        "name": "Start the translated dub",
         "position": {
           "x": -270,
           "y": 260
@@ -27,7 +27,7 @@
       {
         "id": "source_video",
         "type": "asset",
-        "name": "选择要配音的视频",
+        "name": "Pick the video to dub",
         "position": {
           "x": 40,
           "y": 260
@@ -39,7 +39,7 @@
       {
         "id": "dub_project",
         "type": "project_sequence_create",
-        "name": "建立非破坏性配音副本",
+        "name": "Create a non-destructive dubbing copy",
         "position": {
           "x": 350,
           "y": 420
@@ -59,7 +59,7 @@
       {
         "id": "video_on_timeline",
         "type": "timeline_append",
-        "name": "把原视频接到时间线",
+        "name": "Put the source video on the timeline",
         "position": {
           "x": 670,
           "y": 420
@@ -81,7 +81,7 @@
       {
         "id": "verbatim_transcript",
         "type": "transcribe_asset",
-        "name": "生成带时间码逐字稿",
+        "name": "Transcribe with timecodes",
         "position": {
           "x": 350,
           "y": 120
@@ -97,7 +97,7 @@
       {
         "id": "translate_lines",
         "type": "translate_lines",
-        "name": "逐句翻译成目标语言",
+        "name": "Translate line by line into the target language",
         "position": {
           "x": 990,
           "y": 120
@@ -114,7 +114,7 @@
       {
         "id": "translated_subtitles",
         "type": "generate_subtitles",
-        "name": "按原时间码铺译文字幕",
+        "name": "Lay the translated subtitles on the original timecodes",
         "position": {
           "x": 1310,
           "y": 260
@@ -136,7 +136,7 @@
       {
         "id": "dubbing",
         "type": "dub_subtitles",
-        "name": "逐条配音并压回原段落长度",
+        "name": "Dub each line and fit it back into its slot",
         "position": {
           "x": 1630,
           "y": 260
@@ -158,7 +158,7 @@
       {
         "id": "export_dubbed_video",
         "type": "export_sequence",
-        "name": "导出译配成片(字幕烧进画面)",
+        "name": "Export the dubbed video (subtitles burned in)",
         "position": {
           "x": 1950,
           "y": 260
@@ -173,7 +173,7 @@
       {
         "id": "done_notice",
         "type": "notify",
-        "name": "译配完成通知",
+        "name": "Dubbing finished notice",
         "position": {
           "x": 2260,
           "y": 260
@@ -186,7 +186,7 @@
       {
         "id": "output",
         "type": "output",
-        "name": "交付逐字稿、译文、字幕与成片",
+        "name": "Hand over the transcript, the translation, the subtitles and the export",
         "position": {
           "x": 2570,
           "y": 260

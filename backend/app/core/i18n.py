@@ -656,6 +656,103 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_close": {"zh": "关闭浏览器", "en": "Close browser"},
     "wfNode_browser_close_desc": {"zh": "关闭会话:临时会话顺带清掉 cookie/存储。用完记得关,免得视图常驻。", "en": "Close the session; a throwaway session also has its cookies and storage wiped. Close it when you are done, or the view stays around."},
     "wfNode_browser_close_session": {"zh": "要关闭的 session", "en": "The session to close"},
+    # ---- 工作流执行期的失败原因(WorkflowDomainError 的 key) ----
+    "wfErr_cancelled": {"zh": "已取消", "en": "Cancelled"},
+    "wfErr_assetNotInWorkspace": {"zh": "素材不在这个工作区里", "en": "That asset is not in this workspace"},
+    "wfErr_sequenceNotInWorkspace": {"zh": "序列不在这个工作区里", "en": "That timeline is not in this workspace"},
+    "wfErr_assetIdMissing": {"zh": "缺少 asset_id", "en": "asset_id is missing"},
+    "wfErr_trackNotOnSequence": {"zh": "这条时间线上没有那条轨道", "en": "That track is not on this timeline"},
+    "wfErr_revisionMissing": {"zh": "工作流执行绑定的修订快照不存在", "en": "The revision this run is bound to no longer exists"},
+    "wfErr_startExists": {"zh": "已有开始节点,不能再添加 start 节点", "en": "There is already a start node"},
+    "wfErr_connectDataNeedsPorts": {"zh": "connect_data 需要 source_output 和 target_input", "en": "connect_data needs source_output and target_input"},
+    "wfErr_recursiveCall": {"zh": "工作流递归调用(直接或间接调用了自身),已阻止", "en": "Blocked: the workflow calls itself, directly or indirectly"},
+    "wfErr_pickWorkflow": {"zh": "请选择要调用的工作流", "en": "Pick the workflow to call"},
+    "wfErr_calledWorkflowMissing": {"zh": "被调用的工作流不存在", "en": "The workflow being called does not exist"},
+    "wfErr_responseFormat": {"zh": "response_format 只能是 text/json_object/json_schema", "en": "response_format must be text, json_object or json_schema"},
+    "wfErr_schemaEmpty": {"zh": "JSON Schema 不能为空", "en": "The JSON Schema cannot be empty"},
+    "wfErr_llmPromptEmpty": {"zh": "LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。", "en": "The LLM node has no prompt: write one, or connect an upstream reference and make sure it produces output."},
+    "wfErr_llmNotJson": {"zh": "LLM 未返回合法 JSON", "en": "The model did not return valid JSON"},
+    "wfErr_browserSessionMissing": {"zh": "缺少浏览器会话:先用「打开浏览器」节点,并把它的 session 输出连过来", "en": "No browser session: add an Open browser node and connect its session output"},
+    "wfErr_uploadNeedsSource": {"zh": "上传节点需要 asset_id 或 file_path", "en": "The upload node needs asset_id or file_path"},
+    "wfErr_uploadAssetMissing": {"zh": "上传素材不存在", "en": "That asset does not exist"},
+    "wfErr_uploadAssetNoFile": {"zh": "上传素材没有文件", "en": "That asset has no file"},
+    "wfErr_pickPoolProfile": {"zh": "请选择浏览器池档案(session_mode=pool)", "en": "Pick a browser-pool profile (session_mode=pool)"},
+    "wfErr_waitNeedsCondition": {"zh": "等待节点需要 selector / url_contains / text 之一", "en": "The wait node needs one of selector, url_contains or text"},
+    "wfErr_loopItems": {"zh": "循环·遍历的 items 必须是列表(或多行文本)", "en": "For-each items must be a list (or multi-line text)"},
+    "wfErr_concurrencyInteger": {"zh": "同时跑几项(concurrency)要是一个整数", "en": "Concurrency must be an integer"},
+    "wfErr_notifyTitleEmpty": {"zh": "通知标题不能为空", "en": "The notification title cannot be empty"},
+    "wfErr_tagNoAssets": {"zh": "素材打标签:没有可处理的素材 id", "en": "Tag assets: no asset ids to work on"},
+    "wfErr_tagsEmpty": {"zh": "素材打标签:标签不能为空", "en": "Tag assets: the tags cannot be empty"},
+    "wfErr_updateNoAssets": {"zh": "素材整理:没有可处理的素材 id", "en": "Update assets: no asset ids to work on"},
+    "wfErr_updateNothingToDo": {"zh": "素材整理:至少要设置新名称或目标项目", "en": "Update assets: set a new name or a target project"},
+    "wfErr_projectNameEmpty": {"zh": "新建项目:项目名不能为空", "en": "New project: the name cannot be empty"},
+    "wfErr_sequenceProjectNameEmpty": {"zh": "新建成片项目:项目名不能为空", "en": "New video project: the name cannot be empty"},
+    "wfErr_canvasSizeRange": {"zh": "新建成片项目:画布宽高必须在 16 到 16384 之间", "en": "New video project: width and height must be between 16 and 16384"},
+    "wfErr_fpsRange": {"zh": "新建成片项目:帧率必须在 1 到 240 之间", "en": "New video project: the frame rate must be between 1 and 240"},
+    "wfErr_targetProjectMissing": {"zh": "素材整理:目标项目不存在,或不属于当前工作区", "en": "Update assets: the target project does not exist in this workspace"},
+    "wfErr_canvasNumbers": {"zh": "新建成片项目:宽、高和帧率必须是数字", "en": "New video project: width, height and frame rate must be numbers"},
+    "wfErr_childTimeout": {"zh": "子任务超时", "en": "The sub-task timed out"},
+    "wfErr_childMissing": {"zh": "子任务不存在", "en": "The sub-task no longer exists"},
+    "wfErr_queryTooLong": {"zh": "检索词不能超过 300 字", "en": "The search text cannot exceed 300 characters"},
+    "wfErr_noteBodyEmpty": {"zh": "笔记正文不能为空", "en": "The note body cannot be empty"},
+    "wfErr_transcriptMissing": {"zh": "转写完成但没有找到文稿", "en": "Transcription finished but no transcript was found"},
+    "wfErr_gifAssetNotInWorkspace": {"zh": "要转换的视频素材不在当前工作区", "en": "The video to convert is not in this workspace"},
+    "wfErr_publishAccountMissing": {"zh": "发布账号不存在", "en": "That publishing account does not exist"},
+    "wfErr_publishAssetMissing": {"zh": "发布素材不存在", "en": "The asset to publish does not exist"},
+    "wfErr_operationsEmpty": {"zh": "operations 要是一个非空数组", "en": "operations must be a non-empty array"},
+    "wfErr_inspectNeedsSequence": {"zh": "检视节点缺少 sequence_id", "en": "The inspect node needs a sequence_id"},
+    "wfErr_sequenceIdMissing": {"zh": "缺少 sequence_id", "en": "sequence_id is missing"},
+    "wfErr_trimRange": {"zh": "截取的结束时间要大于开始时间", "en": "The end time must be later than the start time"},
+    "wfErr_cutNeedsClip": {"zh": "批量裁切缺少 clip_id", "en": "The batch cut is missing a clip_id"},
+    "wfErr_clipNotOnSequence": {"zh": "要整理的片段不在这条时间线上", "en": "The clip to cut is not on this timeline"},
+    "wfErr_ratioRange": {"zh": "最低置信度和最大删除比例必须在 0–1 之间", "en": "The confidence floor and the removal cap must be between 0 and 1"},
+    "wfErr_rangesArray": {"zh": "裁切范围必须是数组", "en": "The cut ranges must be an array"},
+    "wfErr_segmentsArray": {"zh": "segments 要是一个段落数组(如 {{转写.segments}})", "en": "segments must be an array of transcript segments (e.g. {{transcribe.segments}})"},
+    "wfErr_textsArray": {"zh": "texts 要是一个字符串数组,或者一行一条的文本", "en": "texts must be an array of strings, or one line per entry"},
+    "wfErr_subtitleTrackFailed": {"zh": "新建字幕轨失败", "en": "Could not create the subtitle track"},
+    "wfErr_noSegments": {"zh": "没有可用来生成字幕的逐字稿段落", "en": "No transcript segments to build subtitles from"},
+    "wfErr_noUsableSegments": {"zh": "这些段落里没有一条能生成字幕(文本为空或时长为 0)", "en": "None of these segments can become a subtitle (empty text, or zero length)"},
+    "wfErr_noCuesToDub": {"zh": "没有要配音的字幕条", "en": "No subtitle cues to dub"},
+    "wfErr_assetNodeEmpty": {"zh": "素材节点没有选素材", "en": "The asset node has no asset selected"},
+    "wfErr_startNegative": {"zh": "落点不能是负数", "en": "The start point cannot be negative"},
+    "wfErr_ratioNumbers": {"zh": "最低置信度和最大删除比例必须是 0–1 的数字", "en": "The confidence floor and the removal cap must be numbers between 0 and 1"},
+    "wfErr_subtitlesOnSubtitleTrack": {"zh": "字幕只能放在字幕轨上", "en": "Subtitles can only go on a subtitle track"},
+    "wfErr_offsetSeconds": {"zh": "offset 要是一个秒数", "en": "offset must be a number of seconds"},
+    "wfErr_aiEditInvalidGraph": {"zh": "AI 没能产出一张合法的工作流:{reason}", "en": "The model did not produce a valid workflow: {reason}"},
+    "wfErr_noExecutor": {"zh": "节点类型 {type} 没有执行器", "en": "No executor for node type {type}"},
+    "wfErr_mustBeNumber": {"zh": "{field} 必须是数字", "en": "{field} must be a number"},
+    "wfErr_belowMin": {"zh": "{field} 不能小于 {min}", "en": "{field} cannot be below {min}"},
+    "wfErr_aboveMax": {"zh": "{field} 不能大于 {max}", "en": "{field} cannot be above {max}"},
+    "wfErr_mustBeInteger": {"zh": "{field} 必须是整数", "en": "{field} must be a whole number"},
+    "wfErr_schemaInvalid": {"zh": "JSON Schema 无效:{reason}", "en": "The JSON Schema is invalid: {reason}"},
+    "wfErr_unknownTextOp": {"zh": "未知的文本处理方式:{op}", "en": "Unknown text operation: {op}"},
+    "wfErr_unknownConditionOp": {"zh": "未知的比较方式:{op}", "en": "Unknown comparison: {op}"},
+    "wfErr_conditionNeedsNumbers": {"zh": "比较方式「{op}」要的是数字,拿到的是 {left} / {right}", "en": "The “{op}” comparison needs numbers; got {left} / {right}"},
+    "wfErr_childFailed": {"zh": "子任务失败:{reason}", "en": "The sub-task failed: {reason}"},
+    "wfErr_pluginToolFailed": {"zh": "插件工具失败:{reason}", "en": "The plugin tool failed: {reason}"},
+    "wfErr_pluginInstanceGone": {"zh": "节点选的连接已不可用(插件 {package});请在节点上重新选一个", "en": "The connection this node picked is gone (plugin {package}); choose another on the node"},
+    "wfErr_pluginNoInstance": {"zh": "没有可用的「{package}」连接:请在插件页新建并启用一个", "en": "No usable “{package}” connection: create and enable one on the Plugins page"},
+    "wfErr_pluginManyInstances": {"zh": "有多个「{package}」连接({names}),请在节点上选一个", "en": "Several “{package}” connections exist ({names}); pick one on the node"},
+    "wfErr_tagUnknownMode": {"zh": "素材打标签:未知的模式 {mode}", "en": "Tag assets: unknown mode {mode}"},
+    "wfErr_pluginNodeType": {"zh": "插件节点类型不合法:{type}", "en": "Invalid plugin node type: {type}"},
+    "wfErr_integerRange": {"zh": "{field}必须是 {min} 到 {max} 之间的整数", "en": "{field} must be a whole number between {min} and {max}"},
+    "wfErr_loopTooMany": {"zh": "循环·遍历拿到 {count} 项,超过上限 {cap};请先筛选或分批", "en": "The for-each got {count} items, over the {cap} cap; filter or split them first"},
+    "wfErr_loopIterationFailed": {"zh": "{where}失败:{reason}", "en": "{where} failed: {reason}"},
+    "wfErr_linesSegmentsMismatch": {"zh": "译文有 {lines} 条,逐字稿有 {segments} 段,对不上", "en": "{lines} translated lines against {segments} transcript segments — they do not line up"},
+    "wfErr_speechParams": {"zh": "{what}{reason}", "en": "{what}: {reason}"},
+    "wfErr_noSuchTrackKind": {"zh": "这条时间线上没有 {kind} 轨道,先加一条", "en": "This timeline has no {kind} track; add one first"},
+    "wfErr_operationsNotJson": {"zh": "operations 不是合法 JSON:{reason}", "en": "operations is not valid JSON: {reason}"},
+    "wfErr_rangesNotJson": {"zh": "裁切范围不是合法 JSON:{reason}", "en": "The cut ranges are not valid JSON: {reason}"},
+    "wfErr_segmentsNotJson": {"zh": "segments 不是合法 JSON:{reason}", "en": "segments is not valid JSON: {reason}"},
+    "wfErr_segmentTimecode": {"zh": "第 {index} 段的时间码不是数字", "en": "Segment {index} has a non-numeric timecode"},
+    "wfErr_nestTooDeep": {"zh": "工作流嵌套过深(超过 {max} 层),已阻止", "en": "Blocked: workflows nested deeper than {max}"},
+    "wfErr_nodeMissing": {"zh": "节点不存在:{id}", "en": "No such node: {id}"},
+    "wfErr_unknownNodeType": {"zh": "未知的节点类型:{type}", "en": "Unknown node type: {type}"},
+    "wfErr_nodeIdExists": {"zh": "节点 id 已存在:{id}", "en": "A node with id {id} already exists"},
+    "wfErr_unknownGraphOp": {"zh": "不支持的图操作:{kind}", "en": "Unsupported graph operation: {kind}"},
+    "wfErr_unknownTemplate": {"zh": "未知的内置工作流模板:{id}", "en": "Unknown built-in workflow template: {id}"},
+    "wfErr_cleanupTooMuch": {"zh": "整理方案准备删除 {seconds} 秒,超过允许的 {ratio};请收紧整理尺度或检查方案", "en": "The cleanup plan would remove {seconds}s, over the {ratio} cap; tighten the thresholds or review the plan"},
+    "wfErr_jsonSchemaMismatch": {"zh": "模型返回的 JSON 不符合 Schema:{reason}", "en": "The model's JSON does not match the schema: {reason}"},
     # ---- 工作流节点的下拉选项(wfOpt_<字段>_<值>;wfOpt__<值> 是各字段通用的是/否) ----
     "wfOpt__true": {"zh": "是", "en": "Yes"},
     "wfOpt__false": {"zh": "否", "en": "No"},
@@ -900,6 +997,38 @@ def _text(key: str, locale: str) -> str:
     if entry is None:
         return key
     return entry.get(locale) or entry.get(DEFAULT_LOCALE) or key
+
+
+def pick_text(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
+    """一段**贴着数据写的**多语言文字:`{"zh": "…", "en": "…"}`,也可以就是一个字符串。
+
+    和 `t()` 是两件事,不该混:`t` 翻的是**我们自己**的文案(key 在 MESSAGES 里,棘轮盯着两种
+    语言都得有);这里挑的是**数据自带**的文案 —— 插件清单里作者写的、内置模板里节点的名字。
+    那些东西没有全局 key 可言,翻译就写在它旁边("翻译贴着它翻译的那个东西写")。
+
+    挑哪一条:要的那种语言 → 同一主语言的任意变体(`en-US` 认 `en`)→ 作者声明的原文语言 →
+    部署缺省 → 写在最前面的那一条。**退路是给原文,不是给空**。
+    """
+    if not isinstance(value, dict):
+        return str(value or "")
+    want = locale or get_current_locale()
+    by_primary: dict[str, str] = {}
+    for key, picked in value.items():
+        if not isinstance(picked, str) or not picked.strip():
+            continue
+        by_primary.setdefault(_primary_tag(str(key)), picked)
+        if str(key).strip().lower() == str(want).strip().lower():
+            return picked
+    for candidate in (want, author_locale, DEFAULT_LOCALE):
+        picked = by_primary.get(_primary_tag(str(candidate))) if candidate else None
+        if picked:
+            return picked
+    return next(iter(by_primary.values()), "")
+
+
+def _primary_tag(tag: str) -> str:
+    """`zh-CN` / `zh_Hans` → `zh`。整串相等的话,一份写成 `en-US` 的翻译就白写了。"""
+    return tag.replace("_", "-").split("-")[0].strip().lower()
 
 
 def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:

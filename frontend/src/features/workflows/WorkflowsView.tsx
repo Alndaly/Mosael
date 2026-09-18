@@ -126,7 +126,7 @@ import { canvasInsets, centerCanvasViewport, fitCanvasViewport, visibleCanvasSiz
 import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
-import { WorkflowCommunityDialog, workflowTemplateText } from "@/features/workflows/WorkflowCommunityDialog";
+import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -351,18 +351,19 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     staleTime: Infinity,
   });
 
+  const templates = useWorkflowTemplates();
   const create = useMutation({
     mutationFn: (templateId?: WorkflowTemplateId) => {
       if (!templateId) {
         return createWorkflow({ workspace_id: workspace.id, name: t("wfDefaultName"), description: "" });
       }
-      // 名称和描述从模板声明里取(社区对话框那一份)—— 此前是一句三元判断,加第三个模板时
-      // 它不会报错,只会把新模板的名字显示成第一个模板的。
-      const text = workflowTemplateText(templateId);
+      // 名称和描述从**后端的模板目录**取(和社区对话框同一份)。此前是前端一张表,而它和
+      // 官网、后端各写各的 —— 同一个模板在三处讲三种话。
+      const text = templates.data?.find((one) => one.id === templateId);
       return createWorkflow({
         workspace_id: workspace.id,
-        name: t(text.title),
-        description: t(text.description),
+        name: text?.name ?? t("wfDefaultName"),
+        description: text?.description ?? "",
         template_id: templateId,
       });
     },

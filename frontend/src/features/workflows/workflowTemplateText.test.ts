@@ -1,31 +1,35 @@
-import { describe, expect, it } from "vitest";
-
-import { messages } from "@/app/messages";
-import { workflowTemplateText } from "@/features/workflows/WorkflowCommunityDialog";
-
 /**
  * 官方工作流的名字和介绍**只写一处**。
  *
- * 它此前写了两处:社区对话框里一份声明,新建那条路上一句三元判断
- * (`templateId === "transcript_video_cleanup" ? A : B`)。两个模板时那句话碰巧是对的,
- * 而加第三个模板时它**不会报错** —— 只会把新模板建成第一个模板的名字和介绍,
- * 然后这份工作流在列表里顶着别人的名字,直到有人点开它。
+ * 它此前写了三处:应用里的模板卡片(前端一张表)、官网模板页(同步脚本里另一份)、后端的图。
+ * 三处各写各的,改一处不会让另外两处报错 —— 同一个模板在三个地方讲三种话。现在只有后端的
+ * `TEMPLATE_CATALOG`,应用和官网都读它;前端只留图标。
  */
-describe("模板的名字从声明里来", () => {
-  it("每个模板拿到的是自己的那一份", () => {
-    const ids = ["full_video_generation", "transcript_video_cleanup", "translated_dub"] as const;
-    const titles = ids.map((id) => workflowTemplateText(id).title);
-    expect(new Set(titles).size).toBe(ids.length);
-    expect(workflowTemplateText("translated_dub").title).toBe("wfTranslatedDubTemplateName");
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+export const RATCHET = true;
+
+const DIALOG = readFileSync(join(import.meta.dirname, "WorkflowCommunityDialog.tsx"), "utf8");
+const CATALOG = readFileSync(
+  join(import.meta.dirname, "../../../../backend/app/domain/workflows/templates.py"),
+  "utf8",
+);
+
+describe("模板的名字只有一个产地", () => {
+  it("前端只留图标,文案从接口来", () => {
+    expect(DIALOG).toContain("fetchWorkflowTemplates");
+    //: 名字/介绍/步骤/前置条件一律不在前端写死。
+    expect(DIALOG).not.toMatch(/TemplateName|TemplateDescription|wfCommunityStage|wfCommunityRequirement[CV]/);
   });
 
-  it("指向的都是真的存在的文案键", () => {
-    for (const id of ["full_video_generation", "transcript_video_cleanup", "translated_dub"] as const) {
-      const { title, description } = workflowTemplateText(id);
-      for (const locale of ["zh-CN", "en-US"] as const) {
-        expect(messages[locale][title], `${locale}/${title}`).toBeTruthy();
-        expect(messages[locale][description], `${locale}/${description}`).toBeTruthy();
-      }
+  it("每个模板都有图标", () => {
+    const icons = DIALOG.slice(DIALOG.indexOf("TEMPLATE_ICONS"), DIALOG.indexOf("};", DIALOG.indexOf("TEMPLATE_ICONS")));
+    for (const id of ["full_video_generation", "transcript_video_cleanup", "translated_dub"]) {
+      expect(CATALOG, `${id} 不在后端目录里`).toContain(`"${id}"`);
+      expect(icons, `${id} 没有图标`).toContain(id);
     }
   });
 });

@@ -3360,6 +3360,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workflow Templates
+         * @description 官方模板:叫什么、干什么、分几步、跑之前要备好什么。**按请求方的语言发下去。**
+         *
+         *     说明只有一份(domain/workflows/templates.TEMPLATE_CATALOG),应用的模板卡片和官网的模板页
+         *     读的是同一份 —— 此前是三套各写各的。图标留在前端(和节点图标、任务种类同一条规矩)。
+         */
+        get: operations["workflow_templates_api_workflows_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/field-options": {
         parameters: {
             query?: never;
@@ -11654,6 +11677,23 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * WorkflowTemplateOut
+         * @description 官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);
+         *     图标由界面按 id 给,和节点图标、任务种类同一条规矩。
+         */
+        WorkflowTemplateOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Stages */
+            stages?: string[];
+            /** Requirements */
+            requirements?: string[];
+        };
         /** WorkflowUpdate */
         WorkflowUpdate: {
             /** Name */
@@ -18715,6 +18755,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowNodeTypeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workflow_templates_api_workflows_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTemplateOut"][];
                 };
             };
             /** @description Validation Error */

@@ -25,14 +25,14 @@ def wait_for_job(job_id: str, timeout_seconds: float = CHILD_JOB_TIMEOUT_SECONDS
         with SessionLocal() as db:
             job = db.get(Job, job_id)
             if job is None:
-                raise WorkflowDomainError("子任务不存在")
+                raise WorkflowDomainError("wfErr_childMissing")
             if job.status == "succeeded":
                 db.expunge(job)
                 return job
             if job.status == "failed":
-                raise WorkflowDomainError(f"子任务失败: {job.error or job.message}")
+                raise WorkflowDomainError("wfErr_childFailed", params={"reason": job.error or job.message})
         time.sleep(CHILD_POLL_SECONDS)
-    raise WorkflowDomainError("子任务超时")
+    raise WorkflowDomainError("wfErr_childTimeout")
 
 
 def id_list(value: Any) -> list[str]:

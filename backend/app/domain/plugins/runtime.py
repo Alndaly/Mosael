@@ -35,7 +35,9 @@ from typing import Any
 from app.core.interpreter import base_python
 from app.core.child_process import run_logged
 from app.core.text import blame_line
+from app.core.i18n import get_current_locale
 from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
+from app.domain.plugins.manifest import LOCALE_ENV
 
 PLUGIN_TIMEOUT_SECONDS = 60
 MAX_OUTPUT_BYTES = 1_000_000
@@ -105,12 +107,17 @@ def execute_tool(
     MOSAEL_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
     所以搬字节这件事得另开一条路。"""
     entry_path = resolve_entry(plugin_dir, entry)
-    request = json.dumps({"tool": tool_name, "input": input_payload}, ensure_ascii=False)
+    #: **这次调用要说哪种语言。** 清单里的文案我们替它挑(见 manifest.text_of),但工具**跑出来**
+    #: 的那些字(摘要、失败原因、枚举出来的项目名)只有插件自己写得出 —— 不告诉它读的人用什么
+    #: 语言,它就只能压一种。请求体和环境变量都给一份:进程插件读哪个都行,而 MCP 那条只有环境变量。
+    locale = get_current_locale()
+    request = json.dumps({"tool": tool_name, "input": input_payload, "locale": locale}, ensure_ascii=False)
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
         "LANG": os.environ.get("LANG", "en_US.UTF-8"),
         "MOSAEL_PLUGIN": "1",
+        LOCALE_ENV: locale,
         **({ARTIFACT_SCRATCH_ENV: str(scratch_dir)} if scratch_dir is not None else {}),
         **(credentials or {}),
     }

@@ -5,6 +5,7 @@
     "zh": "百度网盘",
     "en": "Baidu Netdisk"
   },
+  "default_locale": "zh",
   "version": "0.5.0",
   "homepage": "https://pan.baidu.com/union/doc/",
   "runtime": {

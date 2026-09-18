@@ -68,7 +68,7 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
         select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.created_at.desc())
     ).first()
     if transcript is None:
-        raise WorkflowDomainError("转写完成但没有找到文稿")
+        raise WorkflowDomainError("wfErr_transcriptMissing")
     db.refresh(transcript)
     segments = [
         {
@@ -157,7 +157,7 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
     asset = db.get(Asset, str(config.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("要转换的视频素材不在当前工作区")
+        raise WorkflowDomainError("wfErr_gifAssetNotInWorkspace")
     try:
         child = start_video_to_gif(
             db,
@@ -192,7 +192,7 @@ def _speech_params(db: Session, workflow: Workflow, config: dict[str, Any], *, w
             workspace_id=workflow.workspace_id,
         )
     except VoiceError as exc:
-        raise WorkflowDomainError(f"{what}{exc}") from exc
+        raise WorkflowDomainError("wfErr_speechParams", params={"what": what, "reason": exc}) from exc
 
 
 @register("synthesize_speech")
@@ -218,10 +218,10 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
 
     account = db.get(PublishAccount, str(config.get("account_id", "")))
     if account is None or account.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("发布账号不存在")
+        raise WorkflowDomainError("wfErr_publishAccountMissing")
     asset = db.get(Asset, str(config.get("asset_id", "")))
     if asset is None or asset.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("发布素材不存在")
+        raise WorkflowDomainError("wfErr_publishAssetMissing")
     task = start_publish(
         db,
         workspace_id=workflow.workspace_id,
@@ -263,9 +263,9 @@ def edit_timeline(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
         try:
             operations = json.loads(operations)
         except json.JSONDecodeError as exc:
-            raise WorkflowDomainError(f"operations 不是合法 JSON:{exc}") from exc
+            raise WorkflowDomainError("wfErr_operationsNotJson", params={"reason": exc}) from exc
     if not isinstance(operations, list) or not operations:
-        raise WorkflowDomainError("operations 要是一个非空数组")
+        raise WorkflowDomainError("wfErr_operationsEmpty")
     try:
         applied = apply_edit_operations(db, sequence_id, operations)
     except SequenceDomainError as exc:
@@ -283,10 +283,10 @@ def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     """
     sequence_id = str(config.get("sequence_id", "")).strip()
     if not sequence_id:
-        raise WorkflowDomainError("检视节点缺少 sequence_id")
+        raise WorkflowDomainError("wfErr_inspectNeedsSequence")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None or sequence.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("序列不在这个工作区里")
+        raise WorkflowDomainError("wfErr_sequenceNotInWorkspace")
     tracks = [
         {
             "id": track.id,
@@ -331,10 +331,10 @@ def _asset_in(db: Session, workflow: Workflow, asset_id: str) -> Asset:
     ——而转写结果是**要返回到工作流输出里**的,那是把别人的内容读出来。
     """
     if not asset_id:
-        raise WorkflowDomainError("缺少 asset_id")
+        raise WorkflowDomainError("wfErr_assetIdMissing")
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("素材不在这个工作区里")
+        raise WorkflowDomainError("wfErr_assetNotInWorkspace")
     return asset
 
 
@@ -345,10 +345,10 @@ def _sequence_in(db: Session, workflow: Workflow, sequence_id: str) -> Sequence:
     「用 A 工作区的工作流去改 B 工作区的时间线」。
     """
     if not sequence_id:
-        raise WorkflowDomainError("缺少 sequence_id")
+        raise WorkflowDomainError("wfErr_sequenceIdMissing")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None or sequence.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("序列不在这个工作区里")
+        raise WorkflowDomainError("wfErr_sequenceNotInWorkspace")
     return sequence
 
 
@@ -373,24 +373,24 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
     asset_id = str(config.get("asset_id", "")).strip()
     if not asset_id:
-        raise WorkflowDomainError("缺少 asset_id")
+        raise WorkflowDomainError("wfErr_assetIdMissing")
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("素材不在这个工作区里")
+        raise WorkflowDomainError("wfErr_assetNotInWorkspace")
 
     tracks = list(sequence.tracks or [])
     track_id = str(config.get("track_id", "")).strip()
     if track_id:
         track = next((one for one in tracks if one.id == track_id), None)
         if track is None:
-            raise WorkflowDomainError("这条时间线上没有那条轨道")
+            raise WorkflowDomainError("wfErr_trackNotOnSequence")
     else:
         # 留空就挑第一条同类轨道 —— 绝大多数时间线只有一条视频轨和一条音频轨,
         # 逼用户先跑一个「看一眼时间线」把 id 取出来是纯仪式。
         want = _TRACK_FOR_ASSET.get(asset.kind, "video")
         track = next((one for one in tracks if one.kind == want), None)
         if track is None:
-            raise WorkflowDomainError(f"这条时间线上没有 {want} 轨道,先加一条")
+            raise WorkflowDomainError("wfErr_noSuchTrackKind", params={"kind": want})
 
     # 截取范围:留空就是整段素材。
     src_in = float(config.get("start") or 0.0)
@@ -401,7 +401,7 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     fallback = float(probed) if probed else (STILL_SECONDS if asset.kind == "image" else 0.0)
     src_out = float(src_out) if src_out not in (None, "") else fallback
     if src_out <= src_in:
-        raise WorkflowDomainError("截取的结束时间要大于开始时间")
+        raise WorkflowDomainError("wfErr_trimRange")
 
     # 落点:给了 `at` 就放在那一秒(口播要对齐它那一镜的画面,而不是接在上一段口播后面);
     # 没给就接到末尾 —— 这条轨道上最后一个片段的终点,空轨道就是 0。
@@ -409,7 +409,7 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     if at not in (None, ""):
         timeline_start = float(at)
         if timeline_start < 0:
-            raise WorkflowDomainError("落点不能是负数")
+            raise WorkflowDomainError("wfErr_startNegative")
     else:
         timeline_start = max(
             (clip.timeline_start + timeline_span(clip) for clip in (track.clips or [])),
@@ -500,27 +500,27 @@ def timeline_cut_ranges(db: Session, workflow: Workflow, config: dict[str, Any])
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id") or "").strip())
     clip_id = str(config.get("clip_id") or "").strip()
     if not clip_id:
-        raise WorkflowDomainError("批量裁切缺少 clip_id")
+        raise WorkflowDomainError("wfErr_cutNeedsClip")
     clip = db.get(Clip, clip_id)
     if clip is None or clip.sequence_id != sequence.id:
-        raise WorkflowDomainError("要整理的片段不在这条时间线上")
+        raise WorkflowDomainError("wfErr_clipNotOnSequence")
     try:
         confidence_raw = config.get("min_confidence")
         ratio_raw = config.get("max_removal_ratio")
         min_confidence = float(0 if confidence_raw in (None, "") else confidence_raw)
         max_removal_ratio = float(1 if ratio_raw in (None, "") else ratio_raw)
     except (TypeError, ValueError) as exc:
-        raise WorkflowDomainError("最低置信度和最大删除比例必须是 0–1 的数字") from exc
+        raise WorkflowDomainError("wfErr_ratioNumbers") from exc
     if not 0 <= min_confidence <= 1 or not 0 <= max_removal_ratio <= 1:
-        raise WorkflowDomainError("最低置信度和最大删除比例必须在 0–1 之间")
+        raise WorkflowDomainError("wfErr_ratioRange")
     raw_ranges = config.get("ranges")
     if isinstance(raw_ranges, str):
         try:
             raw_ranges = json.loads(raw_ranges)
         except json.JSONDecodeError as exc:
-            raise WorkflowDomainError(f"裁切范围不是合法 JSON:{exc}") from exc
+            raise WorkflowDomainError("wfErr_rangesNotJson", params={"reason": exc}) from exc
     if not isinstance(raw_ranges, list):
-        raise WorkflowDomainError("裁切范围必须是数组")
+        raise WorkflowDomainError("wfErr_rangesArray")
 
     ranges: list[tuple[float, float]] = []
     normalized: list[dict[str, Any]] = []
@@ -560,8 +560,8 @@ def timeline_cut_ranges(db: Session, workflow: Workflow, config: dict[str, Any])
     source_seconds = max(clip.src_out - clip.src_in, 0.001)
     if removed_seconds / source_seconds > max_removal_ratio + 1e-9:
         raise WorkflowDomainError(
-            f"整理方案准备删除 {removed_seconds:.2f} 秒,超过允许的 {max_removal_ratio:.0%};"
-            "请收紧整理尺度或检查方案"
+            "wfErr_cleanupTooMuch",
+            params={"seconds": f"{removed_seconds:.2f}", "ratio": f"{max_removal_ratio:.0%}"},
         )
     try:
         cut_clip_ranges(db, sequence.id, CutClipRanges(clip_id=clip_id, ranges=tuple(ranges)))
@@ -606,9 +606,9 @@ def _segments_in(value: Any) -> list[dict[str, Any]]:
         try:
             value = json.loads(text)
         except json.JSONDecodeError as exc:
-            raise WorkflowDomainError(f"segments 不是合法 JSON:{exc}") from exc
+            raise WorkflowDomainError("wfErr_segmentsNotJson", params={"reason": exc}) from exc
     if not isinstance(value, list):
-        raise WorkflowDomainError("segments 要是一个段落数组(如 {{转写.segments}})")
+        raise WorkflowDomainError("wfErr_segmentsArray")
     return [item for item in value if isinstance(item, dict)]
 
 
@@ -635,7 +635,7 @@ def _lines_in(value: Any) -> list[str]:
         # 一行一条:手填时最自然的写法,也是 loop_foreach 的 items 认的那种。
         return text.splitlines()
     if not isinstance(parsed, list):
-        raise WorkflowDomainError("texts 要是一个字符串数组,或者一行一条的文本")
+        raise WorkflowDomainError("wfErr_textsArray")
     return [str(item) for item in parsed]
 
 
@@ -651,9 +651,9 @@ def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
     if track_id:
         track = next((one for one in tracks if one.id == track_id), None)
         if track is None:
-            raise WorkflowDomainError("这条时间线上没有那条轨道")
+            raise WorkflowDomainError("wfErr_trackNotOnSequence")
         if track.kind != "subtitle":
-            raise WorkflowDomainError("字幕只能放在字幕轨上")
+            raise WorkflowDomainError("wfErr_subtitlesOnSubtitleTrack")
         return track.id
     existing = [one for one in tracks if one.kind == "subtitle"]
     if existing:
@@ -664,7 +664,7 @@ def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
     db.refresh(sequence)
     created = next((one.id for one in (sequence.tracks or []) if one.id not in before), "")
     if not created:
-        raise WorkflowDomainError("新建字幕轨失败")
+        raise WorkflowDomainError("wfErr_subtitleTrackFailed")
     return created
 
 
@@ -689,15 +689,15 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
     if not segments:
         if allow_empty:
             return nothing
-        raise WorkflowDomainError("没有可用来生成字幕的逐字稿段落")
+        raise WorkflowDomainError("wfErr_noSegments")
     lines = _lines_in(config.get("texts"))
     if lines and len(lines) != len(segments):
-        raise WorkflowDomainError(f"译文有 {len(lines)} 条,逐字稿有 {len(segments)} 段,对不上")
+        raise WorkflowDomainError("wfErr_linesSegmentsMismatch", params={"lines": len(lines), "segments": len(segments)})
     keep_original = _yes_no(config, "keep_original", default=False)
     try:
         offset = float(config.get("offset") or 0.0)
     except (TypeError, ValueError):
-        raise WorkflowDomainError("offset 要是一个秒数") from None
+        raise WorkflowDomainError("wfErr_offsetSeconds") from None
 
     start_field = str(config.get("start_field") or "start").strip()
     end_field = str(config.get("end_field") or "end").strip()
@@ -708,7 +708,7 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
             start = float(_field(segment, start_field) or 0.0)
             end = float(_field(segment, end_field) or 0.0)
         except (TypeError, ValueError):
-            raise WorkflowDomainError(f"第 {index + 1} 段的时间码不是数字") from None
+            raise WorkflowDomainError("wfErr_segmentTimecode", params={"index": index + 1}) from None
         original = str(_field(segment, text_field) or "").strip()
         text = lines[index].strip() if lines else original
         if keep_original and lines and original and original != text:
@@ -720,7 +720,7 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
         if allow_empty:
             # 提前返回:连字幕轨都不建 —— 一条空轨挂在时间线上只会让人以为字幕丢了。
             return nothing
-        raise WorkflowDomainError("这些段落里没有一条能生成字幕(文本为空或时长为 0)")
+        raise WorkflowDomainError("wfErr_noUsableSegments")
 
     track_id = _subtitle_track(db, sequence, str(config.get("track_id", "")).strip())
     before = {clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])}
@@ -758,7 +758,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
     clip_ids = id_list(config.get("clip_ids"))
     if not clip_ids:
-        raise WorkflowDomainError("没有要配音的字幕条")
+        raise WorkflowDomainError("wfErr_noCuesToDub")
 
     synthesis = _speech_params(db, workflow, config, what="字幕配音")
     try:
@@ -846,10 +846,10 @@ def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[
     """
     asset_id = str(config.get("asset_id", "")).strip()
     if not asset_id:
-        raise WorkflowDomainError("素材节点没有选素材")
+        raise WorkflowDomainError("wfErr_assetNodeEmpty")
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("素材不在这个工作区里")
+        raise WorkflowDomainError("wfErr_assetNotInWorkspace")
     media_info = asset.media_info or {}
 
     def number(name: str, default: float) -> float:

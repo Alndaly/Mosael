@@ -83,7 +83,7 @@ def ai_edit_graph(
                 last_error = "；".join(errors)
                 continue
             return new_graph, str(payload.get("summary", ""))
-        raise WorkflowDomainError(f"AI 未能产出合法的工作流: {last_error}")
+        raise WorkflowDomainError("wfErr_aiEditInvalidGraph", params={"reason": last_error})
 
 
 def _parse_json(raw: str) -> dict[str, Any]:

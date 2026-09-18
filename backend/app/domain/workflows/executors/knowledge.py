@@ -18,14 +18,14 @@ def _integer(value, default, minimum, maximum, label):
             raise ValueError()
         return number
     except (ValueError, TypeError, OverflowError) as exc:
-        raise WorkflowDomainError(f"{label}必须是 {minimum} 到 {maximum} 的整数") from exc
+        raise WorkflowDomainError("wfErr_integerRange", params={"field": label, "min": minimum, "max": maximum}) from exc
 
 
 @register("note_search")
 def note_search(db: Session, workflow: Workflow, config: dict) -> dict:
     query = str(config.get("query") or "").strip()
     if len(query) > 300:
-        raise WorkflowDomainError("检索词不能超过 300 字")
+        raise WorkflowDomainError("wfErr_queryTooLong")
     limit = _integer(config.get("limit"), 10, 1, 50, "返回条数")
     offset = _integer(config.get("offset"), 0, 0, 1000000, "起始位置")
     rows = query_notes(db, workflow.workspace_id, query, limit=limit + 1, offset=offset)
@@ -59,7 +59,7 @@ def note_create(db: Session, workflow: Workflow, config: dict) -> dict:
         tags = tags if isinstance(tags, list) else str(tags).replace("，", ",").split(",")
         content = NoteContent(title=config.get("title") or "", markdown=config.get("markdown") or "", tags=tags)
         if not content.markdown.strip():
-            raise WorkflowDomainError("笔记正文不能为空")
+            raise WorkflowDomainError("wfErr_noteBodyEmpty")
         note = create_note(db, workflow.workspace_id, content)
         ref = read_reference(db, workflow.workspace_id, note.id)
         return {"note_id": ref["note_id"], "title": ref["title"], "revision": ref["revision"], "citation_url": ref["citation_url"]}

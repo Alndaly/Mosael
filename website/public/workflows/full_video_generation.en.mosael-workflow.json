@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned.",
-  "graph_hash": "2d7ec04de594a34dfb9ed9480822aaa2e4fcbe05ebe84a8702db5c764aaa3fc1",
+  "graph_hash": "ba99428a41e40bc1df8e6c278562672eddd18e7c6ead54ef72f38c7fd93ba166",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -15,7 +15,7 @@
       {
         "id": "start",
         "type": "start",
-        "name": "填写视频主题",
+        "name": "Describe the video you want",
         "position": {
           "x": 40,
           "y": 300
@@ -39,7 +39,7 @@
       {
         "id": "creative_brief",
         "type": "llm",
-        "name": "提炼核心主旨与创意简报",
+        "name": "Distil the core idea into a creative brief",
         "position": {
           "x": 340,
           "y": 300
@@ -110,7 +110,7 @@
       {
         "id": "narrative_script",
         "type": "llm",
-        "name": "编写叙事脚本与时间节拍",
+        "name": "Write the narrative script and its beats",
         "position": {
           "x": 680,
           "y": 80
@@ -189,7 +189,7 @@
       {
         "id": "visual_bible",
         "type": "llm",
-        "name": "建立视觉圣经与连续性规则",
+        "name": "Build the visual bible and continuity rules",
         "position": {
           "x": 680,
           "y": 520
@@ -252,7 +252,7 @@
       {
         "id": "video_project",
         "type": "project_sequence_create",
-        "name": "建立成片项目与时间线",
+        "name": "Create the project and its timeline",
         "position": {
           "x": 680,
           "y": 300
@@ -267,7 +267,7 @@
       {
         "id": "storyboard",
         "type": "llm",
-        "name": "按时间拆解专业脚本与分镜",
+        "name": "Break the script into timed shots",
         "position": {
           "x": 1040,
           "y": 300
@@ -419,7 +419,7 @@
       {
         "id": "generate_shots",
         "type": "loop_foreach",
-        "name": "各镜同时生成画面与口播",
+        "name": "Generate every shot's picture and narration",
         "position": {
           "x": 1400,
           "y": 300
@@ -435,7 +435,7 @@
               {
                 "id": "generate_clip",
                 "type": "ai_generate",
-                "name": "按分镜生成 5 秒视频片段",
+                "name": "Generate the 5s clip for this shot",
                 "position": {
                   "x": 80,
                   "y": 140
@@ -455,7 +455,7 @@
               {
                 "id": "organize_clip",
                 "type": "asset_update",
-                "name": "归档并命名镜头素材",
+                "name": "File and name the shot's asset",
                 "position": {
                   "x": 390,
                   "y": 140
@@ -472,7 +472,7 @@
               {
                 "id": "has_voice",
                 "type": "condition",
-                "name": "选了配音音色吗",
+                "name": "Was a voice picked?",
                 "position": {
                   "x": 80,
                   "y": 300
@@ -485,7 +485,7 @@
               {
                 "id": "has_narration",
                 "type": "condition",
-                "name": "这一镜有口播吗",
+                "name": "Does this shot have narration?",
                 "position": {
                   "x": 390,
                   "y": 300
@@ -498,7 +498,7 @@
               {
                 "id": "narrate",
                 "type": "synthesize_speech",
-                "name": "合成该镜口播",
+                "name": "Synthesise this shot's narration",
                 "position": {
                   "x": 700,
                   "y": 300
@@ -540,7 +540,7 @@
       {
         "id": "assemble_timeline",
         "type": "loop_foreach",
-        "name": "按镜头顺序接上时间线",
+        "name": "Append the shots to the timeline in order",
         "position": {
           "x": 1720,
           "y": 300
@@ -557,7 +557,7 @@
               {
                 "id": "append_clip",
                 "type": "timeline_append",
-                "name": "按镜头顺序接入时间线",
+                "name": "Append this shot to the timeline in order",
                 "position": {
                   "x": 80,
                   "y": 140
@@ -573,7 +573,7 @@
               {
                 "id": "has_audio",
                 "type": "condition",
-                "name": "这一镜合成了口播吗",
+                "name": "Did this shot get narration?",
                 "position": {
                   "x": 390,
                   "y": 140
@@ -586,7 +586,7 @@
               {
                 "id": "append_narration",
                 "type": "timeline_append",
-                "name": "把口播对齐到这一镜",
+                "name": "Align the narration to this shot",
                 "position": {
                   "x": 700,
                   "y": 140
@@ -605,7 +605,7 @@
               {
                 "id": "caption",
                 "type": "template",
-                "name": "这一镜的字幕文本",
+                "name": "This shot's subtitle text",
                 "position": {
                   "x": 1010,
                   "y": 140
@@ -652,7 +652,7 @@
       {
         "id": "narration_subtitles",
         "type": "generate_subtitles",
-        "name": "把口播做成字幕",
+        "name": "Turn the narration into subtitles",
         "position": {
           "x": 2040,
           "y": 300
@@ -673,7 +673,7 @@
       {
         "id": "export_final",
         "type": "export_sequence",
-        "name": "合成并导出最终视频",
+        "name": "Compose and export the final video",
         "position": {
           "x": 2360,
           "y": 300
@@ -688,7 +688,7 @@
       {
         "id": "done_notice",
         "type": "notify",
-        "name": "成片完成通知",
+        "name": "Video finished notice",
         "position": {
           "x": 2680,
           "y": 120
@@ -701,7 +701,7 @@
       {
         "id": "output",
         "type": "output",
-        "name": "交付完整制作结果",
+        "name": "Hand over the finished production",
         "position": {
           "x": 2680,
           "y": 480

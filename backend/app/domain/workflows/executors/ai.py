@@ -45,11 +45,11 @@ def _float_config(config: dict[str, Any], key: str, *, min_value: float | None =
     try:
         value = float(raw)
     except (TypeError, ValueError) as exc:
-        raise WorkflowDomainError(f"{key} 必须是数字") from exc
+        raise WorkflowDomainError("wfErr_mustBeNumber", params={"field": key}) from exc
     if min_value is not None and value < min_value:
-        raise WorkflowDomainError(f"{key} 不能小于 {min_value:g}")
+        raise WorkflowDomainError("wfErr_belowMin", params={"field": key, "min": f"{min_value:g}"})
     if max_value is not None and value > max_value:
-        raise WorkflowDomainError(f"{key} 不能大于 {max_value:g}")
+        raise WorkflowDomainError("wfErr_aboveMax", params={"field": key, "max": f"{max_value:g}"})
     return value
 
 
@@ -60,9 +60,9 @@ def _int_config(config: dict[str, Any], key: str, *, min_value: int | None = Non
     try:
         value = int(raw)
     except (TypeError, ValueError) as exc:
-        raise WorkflowDomainError(f"{key} 必须是整数") from exc
+        raise WorkflowDomainError("wfErr_mustBeInteger", params={"field": key}) from exc
     if min_value is not None and value < min_value:
-        raise WorkflowDomainError(f"{key} 不能小于 {min_value}")
+        raise WorkflowDomainError("wfErr_belowMin", params={"field": key, "min": min_value})
     return value
 
 
@@ -92,10 +92,10 @@ def _response_format(config: dict[str, Any]) -> dict[str, Any] | None:
     if mode == "json_object":
         return {"type": "json_object"}
     if mode != "json_schema":
-        raise WorkflowDomainError("response_format 只能是 text/json_object/json_schema")
+        raise WorkflowDomainError("wfErr_responseFormat")
     schema = config.get("json_schema")
     if not isinstance(schema, dict) or not schema:
-        raise WorkflowDomainError("JSON Schema 不能为空")
+        raise WorkflowDomainError("wfErr_schemaEmpty")
     name = str(config.get("json_schema_name") or schema.get("title") or "workflow_output").strip() or "workflow_output"
     return {
         "type": "json_schema",
@@ -171,7 +171,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     prompt = str(config.get("prompt", ""))
     # 空提示词是最常见的一类 400(prompt 切了「引用」却没绑上游、或上游给了空):提前拦下,给准信。
     if not prompt.strip():
-        raise WorkflowDomainError("LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。")
+        raise WorkflowDomainError("wfErr_llmPromptEmpty")
     messages.append({"role": "user", "content": prompt})
     try:
         target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
@@ -205,7 +205,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             result["json"] = _parse_json_response(text)
         except json.JSONDecodeError as exc:
             raise WorkflowDomainError(
-                "LLM 未返回合法 JSON",
+                "wfErr_llmNotJson",
                 details={
                     "kind": "llm_json_response",
                     "model": target.model,
@@ -218,10 +218,11 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             try:
                 validate_json_schema(instance=result["json"], schema=config.get("json_schema"))
             except SchemaError as exc:
-                raise WorkflowDomainError(f"JSON Schema 无效:{exc.message}") from exc
+                raise WorkflowDomainError("wfErr_schemaInvalid", params={"reason": exc.message}) from exc
             except ValidationError as exc:
                 raise WorkflowDomainError(
-                    f"LLM 返回的 JSON 不符合 Schema:{exc.message}",
+                    "wfErr_jsonSchemaMismatch",
+                    params={"reason": exc.message},
                     details={
                         "kind": "llm_json_response",
                         "model": target.model,

@@ -5,6 +5,7 @@
     "zh": "Blender MCP",
     "en": "Blender MCP"
   },
+  "default_locale": "zh",
   "version": "0.1.0",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
   "runtime": {

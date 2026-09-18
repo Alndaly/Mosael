@@ -68,10 +68,23 @@ class WorkflowDomainError(RuntimeError):
 
     ``details`` 是给任务事件/历史界面的结构化诊断，不拼进短错误文案。这样列表仍然可读，
     同时失败现场（例如 LLM 的真实响应）不会在异常跨过执行线程时被丢掉。
+
+    **第一个参数可以是 i18n 的 key,也可以是一句现成的话** —— 和任务消息那条路同构
+    (见 domain/jobs.say):认得出 key 就按读的人的语言翻,认不出就当字面量原样用。
+    失败原因会落库(Job.error_key / error_params),所以翻译发生在**读的时候**,而不是写的时候:
+    写入时翻会把语言冻死在那一刻,用户切成英文后历史任务里的失败原因仍是中文。
+
+    报错文本里的数据走 `params`,不要拼进句子 —— 拼进去那句话就只有一种语言了。
     """
 
-    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
+    def __init__(self, message: str, *, params: dict[str, Any] | None = None,
+                 details: dict[str, Any] | None = None) -> None:
+        from app.core.i18n import DEFAULT_LOCALE, render_message
+
+        self.key = message
+        self.params = {k: str(v) for k, v in (params or {}).items()}
+        #: str(exc) 给的是**缺省语言**那一句:日志、拼进别的错误里、直接读库的脚本都读它。
+        super().__init__(render_message(message, DEFAULT_LOCALE, self.params))
         self.details = details or {}
 
 

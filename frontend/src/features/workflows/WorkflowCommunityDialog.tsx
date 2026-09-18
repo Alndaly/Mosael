@@ -1,75 +1,32 @@
 import React from "react";
-import { Bot, CheckCircle2, Film, Languages, Search, SearchX, Scissors, Video } from "lucide-react";
+import { CheckCircle2, Film, Languages, Search, SearchX, Scissors } from "lucide-react";
 
-import type { Workflow, WorkflowGraph, WorkflowTemplateId } from "@/api/client";
-import type { MessageKey } from "@/app/messages";
+import { useQuery } from "@tanstack/react-query";
+
+import { fetchWorkflowTemplates, type Workflow, type WorkflowGraph, type WorkflowTemplateId } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-interface TemplateDefinition {
-  id: WorkflowTemplateId;
-  title: MessageKey;
-  description: MessageKey;
-  stages: MessageKey[];
-  requirements: MessageKey[];
-  icon: typeof Film;
-}
+/** 每个官方模板的图标。**只有图标在前端** —— 名字、介绍、步骤、前置条件都由后端随模板目录
+    发下来(`GET /api/workflows/templates`,见 domain/workflows/templates.TEMPLATE_CATALOG)。
+    此前这些文案在前端一份、官网同步脚本里一份、后端图里一份,三处各写各的。 */
+const TEMPLATE_ICONS: Record<string, typeof Film> = {
+  full_video_generation: Film,
+  transcript_video_cleanup: Scissors,
+  translated_dub: Languages,
+};
 
-export function workflowTemplateText(templateId: WorkflowTemplateId): { title: MessageKey; description: MessageKey } {
-  const template = TEMPLATES.find((one) => one.id === templateId) ?? TEMPLATES[0];
-  return { title: template.title, description: template.description };
+/** 拉一次模板目录。文案已经是当前语言 —— 切语言时全部查询作废,会自己重来。 */
+export function useWorkflowTemplates() {
+  return useQuery({
+    queryKey: ["workflow-templates"],
+    queryFn: fetchWorkflowTemplates,
+    staleTime: 5 * 60_000,
+  });
 }
-
-const TEMPLATES: TemplateDefinition[] = [
-  {
-    id: "full_video_generation",
-    title: "wfFullVideoTemplateName",
-    description: "wfFullVideoTemplateDescription",
-    stages: [
-      "wfCommunityStageBrief",
-      "wfCommunityStageNarrativeVisual",
-      "wfCommunityStageStoryboard",
-      "wfCommunityStageGenerateAssemble",
-      "wfCommunityStageExport",
-    ],
-    requirements: ["wfCommunityRequirementChat", "wfCommunityRequirementVideo"],
-    icon: Film,
-  },
-  {
-    id: "transcript_video_cleanup",
-    title: "wfTranscriptCleanupTemplateName",
-    description: "wfTranscriptCleanupTemplateDescription",
-    stages: [
-      "wfCommunityStagePickVideo",
-      "wfCommunityStageDenoise",
-      "wfCommunityStageTranscript",
-      "wfCommunityStageCleanupPlan",
-      "wfCommunityStageRippleCut",
-      "wfCommunityStageExport",
-    ],
-    requirements: ["wfCommunityRequirementChat"],
-    icon: Scissors,
-  },
-  {
-    id: "translated_dub",
-    title: "wfTranslatedDubTemplateName",
-    description: "wfTranslatedDubTemplateDescription",
-    stages: [
-      "wfCommunityStageDubProject",
-      "wfCommunityStageTranscript",
-      "wfCommunityStageTranslateLines",
-      "wfCommunityStageSubtitles",
-      "wfCommunityStageDub",
-      "wfCommunityStageExport",
-    ],
-    // 翻译走对话模型(免费的 Google 接口按出口 IP 封禁,官方模板不押在它上面),外加一把嗓子。
-    requirements: ["wfCommunityRequirementChat", "wfCommunityRequirementVoice"],
-    icon: Languages,
-  },
-];
 
 export function WorkflowCommunityDialog({
   open,
@@ -86,7 +43,9 @@ export function WorkflowCommunityDialog({
 }) {
   const t = useI18n();
   const [query, setQuery] = React.useState("");
-  const [selectedId, setSelectedId] = React.useState<WorkflowTemplateId>(TEMPLATES[0].id);
+  const templates = useWorkflowTemplates();
+  const rows = templates.data ?? [];
+  const [selectedId, setSelectedId] = React.useState("");
 
   React.useEffect(() => {
     if (!open) return;
@@ -104,11 +63,11 @@ export function WorkflowCommunityDialog({
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    return TEMPLATES.filter((template) => {
+    return rows.filter((template) => {
       if (!needle) return true;
-      return `${t(template.title)} ${t(template.description)}`.toLocaleLowerCase().includes(needle);
+      return `${template.name} ${template.description}`.toLocaleLowerCase().includes(needle);
     });
-  }, [query, t]);
+  }, [query, rows]);
 
   React.useEffect(() => {
     if (filtered.length > 0 && !filtered.some((template) => template.id === selectedId)) {
@@ -117,7 +76,7 @@ export function WorkflowCommunityDialog({
   }, [filtered, selectedId]);
 
   const selected = filtered.find((template) => template.id === selectedId) ?? filtered[0] ?? null;
-  const installed = selected ? installedCounts.get(selected.id) ?? 0 : 0;
+  const installed = selected ? installedCounts.get(selected.id as WorkflowTemplateId) ?? 0 : 0;
 
   return (
     <ModalShell
@@ -153,7 +112,7 @@ export function WorkflowCommunityDialog({
           <Button
             disabled={!selected}
             loading={selected !== null && installingId === selected.id}
-            onClick={() => selected && onInstall(selected.id)}
+            onClick={() => selected && onInstall(selected.id as WorkflowTemplateId)}
           >
             {installed > 0 ? t("wfCommunityAddAgain") : t("wfCommunityAdd")}
           </Button>
@@ -180,8 +139,8 @@ export function WorkflowCommunityDialog({
           >
             <div className="grid gap-2">
               {filtered.map((template) => {
-                const Icon = template.icon;
-                const count = installedCounts.get(template.id) ?? 0;
+                const Icon = TEMPLATE_ICONS[template.id] ?? Film;
+                const count = installedCounts.get(template.id as WorkflowTemplateId) ?? 0;
                 return (
                   <button
                     key={template.id}
@@ -201,13 +160,13 @@ export function WorkflowCommunityDialog({
                     </span>
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5">
-                        <strong className="truncate text-ui-sm text-foreground">{t(template.title)}</strong>
+                        <strong className="truncate text-ui-sm text-foreground">{template.name}</strong>
                         {count > 0 && <CheckCircle2 className="shrink-0 text-success" size={13} aria-label={t("wfCommunityInstalled")} />}
                       </span>
                       {/* 不能再加 `block`:line-clamp 靠的是 -webkit-box,block 会把它覆盖掉,
                           说明就整段铺开、把卡片撑高(真出过)。 */}
                       <span className="mt-1 line-clamp-2 text-ui-xs leading-relaxed text-muted-foreground">
-                        {t(template.description)}
+                        {template.description}
                       </span>
                     </span>
                   </button>
@@ -231,20 +190,20 @@ export function WorkflowCommunityDialog({
                       </span>
                     )}
                   </div>
-                  <h3 className="m-0 text-lg font-semibold text-foreground">{t(selected.title)}</h3>
-                  <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{t(selected.description)}</p>
+                  <h3 className="m-0 text-lg font-semibold text-foreground">{selected.name}</h3>
+                  <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{selected.description}</p>
                 </div>
 
                 <section className="grid gap-2.5">
                   <h4 className="m-0 text-ui-sm font-semibold text-foreground">{t("wfCommunityWorkflowIncludes")}</h4>
                   <ol className="m-0 grid list-none gap-0 p-0">
-                    {selected.stages.map((stage, index) => (
+                    {(selected.stages ?? []).map((stage, index) => (
                       <li key={stage} className="grid grid-cols-[24px_minmax(0,1fr)] gap-2">
                         <span className="relative grid size-6 place-items-center rounded-full border border-primary/30 bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] text-ui-xs font-semibold text-primary">
                           {index + 1}
-                          {index < selected.stages.length - 1 && <span className="absolute left-1/2 top-6 h-5 w-px -translate-x-1/2 bg-border" />}
+                          {index < (selected.stages ?? []).length - 1 && <span className="absolute left-1/2 top-6 h-5 w-px -translate-x-1/2 bg-border" />}
                         </span>
-                        <span className="pb-4 pt-0.5 text-ui-sm text-foreground">{t(stage)}</span>
+                        <span className="pb-4 pt-0.5 text-ui-sm text-foreground">{stage}</span>
                       </li>
                     ))}
                   </ol>
@@ -253,10 +212,12 @@ export function WorkflowCommunityDialog({
                 <section className="grid gap-2.5">
                   <h4 className="m-0 text-ui-sm font-semibold text-foreground">{t("wfCommunityRequirements")}</h4>
                   <div className="flex flex-wrap gap-2">
-                    {selected.requirements.map((requirement) => (
+                    {(selected.requirements ?? []).map((requirement) => (
                       <span key={requirement} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-ui-xs text-foreground">
-                        {requirement === "wfCommunityRequirementVideo" ? <Video size={13} /> : <Bot size={13} />}
-                        {t(requirement)}
+                        {/* 前置条件现在是一句话(后端按语言给),不再是几个固定的键 ——
+                            所以图标也回到一个:它标的是"这是一条前置条件",不是"这是哪一条"。 */}
+                        <CheckCircle2 size={13} />
+                        {requirement}
                       </span>
                     ))}
                   </div>

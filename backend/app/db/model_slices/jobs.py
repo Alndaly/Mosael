@@ -54,6 +54,11 @@ class Job(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: 失败原因的 key 与参数,和 message 那一对同一个道理:**落库的那句话不该冻住语言**。
+    #: 报错此前只有一句写死的中文,于是英文界面上的失败原因永远是中文。
+    #: 报错文本来自领域异常(见 workflows.WorkflowDomainError),认不出 key 就当字面量 —— 和 say 同构。
+    error_key: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    error_params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

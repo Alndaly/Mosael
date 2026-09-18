@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow, WorkflowRevision
-from app.domain.jobs import create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
+from app.domain.jobs import blame, create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
 from app.domain.workflows import (
     NODE_TYPES,
@@ -92,7 +92,7 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
             return
         try:
             if revision is None or revision.workflow_id != workflow.id:
-                raise WorkflowDomainError("工作流执行绑定的修订快照不存在")
+                raise WorkflowDomainError("wfErr_revisionMissing")
             logger.info("workflow job %s: running '%s'", job_id, workflow.name)
             run_workflow(db, workflow, revision, job, params)
             db.refresh(job)
@@ -100,7 +100,8 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
             logger.exception("workflow job %s ('%s') crashed", job_id, workflow.name)
             failure = _failure_payload(exc)
-            if not finish_job(db, job, status="failed", error=failure["error"]):
+            #: 失败原因连同它的 key 一起落库 —— 接口按读的人的语言翻(见 jobs.blame)。
+            if not finish_job(db, job, status="failed", **blame(exc)):
                 db.commit()
                 return
             # JobOut 也保留一份终态现场。事件流是完整时间线；result.failure 让只读取 job 的
@@ -224,13 +225,13 @@ def execute_graph(
             return merged
         handler = get_executor(ntype)
         if handler is None:
-            raise WorkflowDomainError(f"节点类型 {ntype} 没有执行器")
+            raise WorkflowDomainError("wfErr_noExecutor", params={"type": ntype})
         # Each pool has new threads, including nested graphs: restore the captured parent explicitly.
         token = set_parent_job(wf_job_id)
         try:
             with SessionLocal() as node_db:  # 每节点独立 session(非线程安全),workflow 本 session 重取
                 if is_cancelled():
-                    raise WorkflowDomainError("已取消")
+                    raise WorkflowDomainError("wfErr_cancelled")
                 wf = node_db.get(Workflow, wf_id)
                 return handler(node_db, wf, config)
         finally:

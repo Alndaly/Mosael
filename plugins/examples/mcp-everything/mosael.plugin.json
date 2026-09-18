@@ -5,6 +5,7 @@
     "zh": "MCP 接入范例",
     "en": "MCP Example"
   },
+  "default_locale": "zh",
   "version": "0.1.1",
   "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
   "runtime": {

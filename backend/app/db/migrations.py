@@ -362,7 +362,7 @@ def _migrate_prepared_publish_tasks() -> None:
 
 
 def _migrate_job_message_i18n() -> None:
-    """jobs 新增 message_key / message_params(任务消息的多语言)。
+    """jobs 新增 message_key / message_params / error_key / error_params(任务文案的多语言)。
 
     老行留空 —— 它们只留下了当年渲染的那句话,反推不出 key。接口见到空 key 就原样返回 message,
     所以历史任务显示成写入时的语言;**新任务从此跟着请求语言走**。这是数据本身的界限,不是兼容分支。
@@ -376,6 +376,11 @@ def _migrate_job_message_i18n() -> None:
             conn.execute(text("ALTER TABLE jobs ADD COLUMN message_key VARCHAR(80) NOT NULL DEFAULT ''"))
         if "message_params" not in existing:
             conn.execute(text("ALTER TABLE jobs ADD COLUMN message_params JSON NOT NULL DEFAULT '{}'"))
+        #: 失败原因同一对。老行同样留空 —— 反推不出 key,接口见到空 key 就原样返回那句话。
+        if "error_key" not in existing:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN error_key VARCHAR(80) NOT NULL DEFAULT ''"))
+        if "error_params" not in existing:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN error_params JSON NOT NULL DEFAULT '{}'"))
 
 
 def _drop_member_perm_overrides() -> None:

@@ -29,7 +29,7 @@ def _run_plugin_tool(
     except PluginDomainError as exc:  # 停用 / 撤权 / 删掉 —— 是这次运行的失败,不是服务端故障
         raise WorkflowDomainError(str(exc)) from exc
     if invocation.status != "succeeded":
-        raise WorkflowDomainError(f"插件工具失败: {invocation.error or invocation.status}")
+        raise WorkflowDomainError("wfErr_pluginToolFailed", params={"reason": invocation.error or invocation.status})
     return invocation.output
 
 
@@ -45,13 +45,13 @@ def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str)
     if chosen:
         if any(item["id"] == chosen for item in available):
             return chosen
-        raise WorkflowDomainError(f"节点选的连接已不可用(插件 {package_id});请在节点上重新选一个")
+        raise WorkflowDomainError("wfErr_pluginInstanceGone", params={"package": package_id})
     if len(available) == 1:
         return available[0]["id"]
     if not available:
-        raise WorkflowDomainError(f"没有可用的「{package_id}」连接:请在插件页新建并启用一个")
+        raise WorkflowDomainError("wfErr_pluginNoInstance", params={"package": package_id})
     names = "、".join(item["name"] for item in available)
-    raise WorkflowDomainError(f"有多个「{package_id}」连接({names}),请在节点上选一个")
+    raise WorkflowDomainError("wfErr_pluginManyInstances", params={"package": package_id, "names": names})
 
 
 @register("plugin_tool")
@@ -88,7 +88,7 @@ def plugin_node(node_type: str):
 
         parsed = parse_node_type(node_type)
         if parsed is None:
-            raise WorkflowDomainError(f"插件节点类型不合法: {node_type}")
+            raise WorkflowDomainError("wfErr_pluginNodeType", params={"type": node_type})
         package_id, tool_name = parsed
         instance_id = _resolve_instance(db, package_id, tool_name, str(config.get("instance_id") or ""))
         # 空字符串是编辑器给未填字段的种子值。原样发给工具会让"没填"和"填了空串"变成同一件事,
@@ -111,7 +111,7 @@ def plugin_node(node_type: str):
 def send_notify(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     title = str(config.get("title", "")).strip()
     if not title:
-        raise WorkflowDomainError("通知标题不能为空")
+        raise WorkflowDomainError("wfErr_notifyTitleEmpty")
     notify(
         db,
         workflow.workspace_id,
@@ -169,11 +169,11 @@ def asset_tag(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
     tags = id_list(config.get("tags"))
     mode = str(config.get("mode") or "add").strip() or "add"
     if mode not in ("add", "remove", "replace"):
-        raise WorkflowDomainError(f"素材打标签:未知的模式 {mode}")
+        raise WorkflowDomainError("wfErr_tagUnknownMode", params={"mode": mode})
     if not asset_ids:
-        raise WorkflowDomainError("素材打标签:没有可处理的素材 id")
+        raise WorkflowDomainError("wfErr_tagNoAssets")
     if not tags and mode != "replace":
-        raise WorkflowDomainError("素材打标签:标签不能为空")
+        raise WorkflowDomainError("wfErr_tagsEmpty")
 
     updated: list[dict[str, Any]] = []
     for asset_id in asset_ids:
@@ -204,13 +204,13 @@ def asset_update(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
     name = str(config.get("name") or "").strip()
     project_id = str(config.get("project_id") or "").strip()
     if not asset_ids:
-        raise WorkflowDomainError("素材整理:没有可处理的素材 id")
+        raise WorkflowDomainError("wfErr_updateNoAssets")
     if not name and not project_id:
-        raise WorkflowDomainError("素材整理:至少要设置新名称或目标项目")
+        raise WorkflowDomainError("wfErr_updateNothingToDo")
     if project_id:
         project = db.get(Project, project_id)
         if project is None or project.workspace_id != workflow.workspace_id:
-            raise WorkflowDomainError("素材整理:目标项目不存在,或不属于当前工作区")
+            raise WorkflowDomainError("wfErr_targetProjectMissing")
 
     updated: list[dict[str, Any]] = []
     for index, asset_id in enumerate(asset_ids):
@@ -232,7 +232,7 @@ def asset_update(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 def project_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     name = str(config.get("name") or "").strip()
     if not name:
-        raise WorkflowDomainError("新建项目:项目名不能为空")
+        raise WorkflowDomainError("wfErr_projectNameEmpty")
     project = Project(workspace_id=workflow.workspace_id, name=name)
     db.add(project)
     db.commit()
@@ -249,17 +249,17 @@ def project_sequence_create(db: Session, workflow: Workflow, config: dict[str, A
     """
     name = str(config.get("name") or "").strip()
     if not name:
-        raise WorkflowDomainError("新建成片项目:项目名不能为空")
+        raise WorkflowDomainError("wfErr_sequenceProjectNameEmpty")
     try:
         width = int(config.get("width") or 1920)
         height = int(config.get("height") or 1080)
         fps = float(config.get("fps") or 30)
     except (TypeError, ValueError) as exc:
-        raise WorkflowDomainError("新建成片项目:宽、高和帧率必须是数字") from exc
+        raise WorkflowDomainError("wfErr_canvasNumbers") from exc
     if not 16 <= width <= 16384 or not 16 <= height <= 16384:
-        raise WorkflowDomainError("新建成片项目:画布宽高必须在 16 到 16384 之间")
+        raise WorkflowDomainError("wfErr_canvasSizeRange")
     if not 1 <= fps <= 240:
-        raise WorkflowDomainError("新建成片项目:帧率必须在 1 到 240 之间")
+        raise WorkflowDomainError("wfErr_fpsRange")
 
     project = Project(workspace_id=workflow.workspace_id, name=name)
     scaffold = create_sequence_scaffold(

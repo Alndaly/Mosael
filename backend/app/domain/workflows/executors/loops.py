@@ -47,7 +47,7 @@ def run_subgraph(body: dict[str, Any], base_context: dict[str, Any], *, workflow
         body, wf_id=workflow_id, initial_context=base_context, entry_is_root=True
     )
     if _cancelled:
-        raise WorkflowDomainError("已取消")
+        raise WorkflowDomainError("wfErr_cancelled")
     return context
 
 
@@ -68,7 +68,7 @@ def _blame_iteration(index: int, total: int, *, item: Any = _NO_ITEM) -> Iterato
         where = f"第 {index + 1}/{total} 次迭代"
         if item is not _NO_ITEM:
             where += f"({_brief(item)})"
-        raise WorkflowDomainError(f"{where}失败:{exc}") from exc
+        raise WorkflowDomainError("wfErr_loopIterationFailed", params={"where": where, "reason": exc}) from exc
 
 
 def _brief(item: Any) -> str:
@@ -83,14 +83,14 @@ def loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
     if isinstance(items, str):
         items = [line.strip() for line in items.splitlines() if line.strip()]
     if not isinstance(items, list):
-        raise WorkflowDomainError("循环·遍历的 items 必须是列表(或多行文本)")
+        raise WorkflowDomainError("wfErr_loopItems")
     body = config.get("body") or {"nodes": [], "edges": []}
     output_tpl = config.get("output", "")
     inputs = config.get("inputs")
     shared_inputs = dict(inputs) if isinstance(inputs, dict) else {}
     if len(items) > LOOP_FOREACH_HARD_CAP:
         raise WorkflowDomainError(
-            f"循环·遍历的 items 有 {len(items)} 项,超过上限 {LOOP_FOREACH_HARD_CAP};请先筛选或分批"
+            "wfErr_loopTooMany", params={"count": len(items), "cap": LOOP_FOREACH_HARD_CAP}
         )
     concurrency = _concurrency(config.get("concurrency"))
     total = len(items)
@@ -119,7 +119,7 @@ def _concurrency(raw: Any) -> int:
     try:
         value = int(float(raw)) if raw not in (None, "") else 1
     except (TypeError, ValueError):
-        raise WorkflowDomainError("同时跑几项(concurrency)要是一个整数") from None
+        raise WorkflowDomainError("wfErr_concurrencyInteger") from None
     return max(1, min(value, LOOP_FOREACH_MAX_CONCURRENCY))
 
 

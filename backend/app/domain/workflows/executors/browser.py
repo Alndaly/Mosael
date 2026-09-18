@@ -20,7 +20,7 @@ from app.domain.workflows.executors import register
 def _session_id(config: dict[str, Any]) -> str:
     sid = str(config.get("session") or "").strip()
     if not sid:
-        raise WorkflowDomainError("缺少浏览器会话:先用「打开浏览器」节点,并把它的 session 输出连过来")
+        raise WorkflowDomainError("wfErr_browserSessionMissing")
     return sid
 
 
@@ -88,7 +88,7 @@ def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
         if mode == "pool":
             profile_id = str(config.get("profile_id") or "").strip()
             if not profile_id:
-                raise WorkflowDomainError("请选择浏览器池档案(session_mode=pool)")
+                raise WorkflowDomainError("wfErr_pickPoolProfile")
             session = browser.open_session(
                 db, workspace_id=workflow.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=workflow.id
             )
@@ -147,12 +147,12 @@ def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
     if asset_id and not path:
         asset = db.get(Asset, asset_id)
         if asset is None or asset.workspace_id != workflow.workspace_id:
-            raise WorkflowDomainError("上传素材不存在")
+            raise WorkflowDomainError("wfErr_uploadAssetMissing")
         if not asset.file_key:
-            raise WorkflowDomainError("上传素材没有文件")
+            raise WorkflowDomainError("wfErr_uploadAssetNoFile")
         path = str(resolve_key(asset.file_key))
     if not path:
-        raise WorkflowDomainError("上传节点需要 asset_id 或 file_path")
+        raise WorkflowDomainError("wfErr_uploadNeedsSource")
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
     _run(
         sid,
@@ -188,7 +188,7 @@ def browser_wait(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
     elif config.get("text"):
         args["text"] = str(config["text"])
     else:
-        raise WorkflowDomainError("等待节点需要 selector / url_contains / text 之一")
+        raise WorkflowDomainError("wfErr_waitNeedsCondition")
     _run(sid, "wait", args, timeout=timeout_ms / 1000 + 15)
     return {"session": sid}
 

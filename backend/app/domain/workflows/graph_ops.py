@@ -28,7 +28,7 @@ GRAPH_OP_KINDS = (
 def _require_node(by_id: dict[str, dict], node_id: str) -> dict:
     node = by_id.get(node_id)
     if node is None:
-        raise WorkflowDomainError(f"节点不存在: {node_id or '(空)'}")
+        raise WorkflowDomainError("wfErr_nodeMissing", params={"id": node_id or "(空)"})
     return node
 
 
@@ -59,12 +59,12 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
         if kind == "add_node":
             node_type = str(op.get("type", ""))
             if node_type not in NODE_TYPES:
-                raise WorkflowDomainError(f"未知节点类型: {node_type or '(空)'}")
+                raise WorkflowDomainError("wfErr_unknownNodeType", params={"type": node_type or "(空)"})
             if node_type == "start" and any(str(node.get("type")) == "start" for node in nodes):
-                raise WorkflowDomainError("已有开始节点,不能再添加 start 节点")
+                raise WorkflowDomainError("wfErr_startExists")
             node_id = str(op.get("node_id") or "").strip() or ("start" if node_type == "start" and "start" not in by_id else gen_node_id(node_type))
             if node_id in by_id:
-                raise WorkflowDomainError(f"节点 id 已存在: {node_id}")
+                raise WorkflowDomainError("wfErr_nodeIdExists", params={"id": node_id})
             node = {
                 "id": node_id,
                 "type": node_type,
@@ -94,7 +94,7 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
             _require_node(by_id, source)
             target_node = _require_node(by_id, target)
             if not output or not target_input:
-                raise WorkflowDomainError("connect_data 需要 source_output 和 target_input")
+                raise WorkflowDomainError("wfErr_connectDataNeedsPorts")
             # One data edge per (target, input): drop any existing binding for that input first.
             edges[:] = [
                 e
@@ -130,6 +130,6 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
             edge_id = str(op.get("edge_id", ""))
             edges[:] = [e for e in edges if str(e.get("id")) != edge_id]
         else:
-            raise WorkflowDomainError(f"不支持的图操作: {kind or '(空)'}")
+            raise WorkflowDomainError("wfErr_unknownGraphOp", params={"kind": kind or "(空)"})
 
     return g

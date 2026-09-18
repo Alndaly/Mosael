@@ -2,6 +2,7 @@
   "id": "dev.mosael.text-toolkit",
   "manifest_version": 1,
   "name": "Text Toolkit",
+  "default_locale": "zh",
   "version": "0.1.1",
   "runtime": {
     "kind": "process",
@@ -37,7 +38,15 @@
             "text"
           ]
         },
-        "read_only": true
+        "read_only": true,
+        "node": {
+          "output_labels": {
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
+          }
+        }
       },
       {
         "name": "extract_hashtags",
@@ -56,7 +65,15 @@
             "text"
           ]
         },
-        "read_only": true
+        "read_only": true,
+        "node": {
+          "output_labels": {
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
+          }
+        }
       }
     ]
   }

@@ -378,3 +378,67 @@ class Test分镜写了口播就要真的配上:
         # 画面和口播在生成那一轮里是两条互不依赖的支路 —— 口播失败不会拖住画面的顺序。
         roots = {n["id"] for n in generate["body"]["nodes"]} - {e["target"] for e in generate["body"]["edges"]}
         assert {"generate_clip", "has_voice"} <= roots
+
+
+def test_模板里的节点名跟着界面语言走() -> None:
+    """图一落库就是用户的数据(他随时能改名),所以语言在**造图那一刻**定,不在出口翻。
+
+    此前这些名字是写死的中文:英文用户从模板建一条流程,画布上一排中文节点。
+    """
+    from app.core.db import SessionLocal
+    from app.domain.workflows.templates import (
+        FULL_VIDEO_GENERATION,
+        TRANSCRIPT_VIDEO_CLEANUP,
+        TRANSLATED_DUB,
+        built_in_template_graph,
+    )
+    from tests.util import fresh_client
+
+    fresh_client()
+    with SessionLocal() as db:
+        for template_id in (FULL_VIDEO_GENERATION, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB):
+            for locale in ("zh", "en"):
+                graph = built_in_template_graph(db, template_id, user_id="", workspace_id="", locale=locale)
+                names = _names(graph)
+                assert names, template_id
+                assert all(isinstance(name, str) and name.strip() for name in names), f"{template_id} 有节点没名字"
+                chinese = [name for name in names if any("一" <= ch <= "鿿" for ch in name)]
+                if locale == "en":
+                    assert not chinese, f"{template_id} 的英文图里还有中文节点名:{chinese}"
+                else:
+                    assert chinese, f"{template_id} 的中文图怎么一个中文名都没有"
+
+
+def _names(graph: dict) -> list:
+    out = []
+    for node in graph.get("nodes") or []:
+        out.append(node.get("name"))
+        body = (node.get("config") or {}).get("body")
+        if isinstance(body, dict):
+            out.extend(_names(body))
+    return out
+
+
+def test_每个模板节点都写了中英两份名字() -> None:
+    """棘轮:名字是**贴着节点写的**语言对象(和插件清单同一套),漏一种语言就少一半界面。"""
+    import ast
+    import pathlib
+
+    source = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "workflows" / "templates.py"
+    missing = []
+    for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+        if not isinstance(node, ast.Dict):
+            continue
+        keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
+        if not {"id", "type", "name"} <= set(keys):
+            continue
+        for key, value in zip(node.keys, node.values):
+            if not (isinstance(key, ast.Constant) and key.value == "name"):
+                continue
+            if isinstance(value, ast.Constant):
+                missing.append(f"第 {value.lineno} 行:{value.value}(只有一种语言)")
+            elif isinstance(value, ast.Dict):
+                langs = {k.value for k in value.keys if isinstance(k, ast.Constant)}
+                if not {"zh", "en"} <= langs:
+                    missing.append(f"第 {value.lineno} 行:少了 {sorted({'zh', 'en'} - langs)}")
+    assert not missing, "\n".join(missing)
