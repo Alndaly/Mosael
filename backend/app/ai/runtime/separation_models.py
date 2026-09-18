@@ -65,7 +65,14 @@ class SeparationEngineSpec:
 #: 它需要的是"能跑"。CPU 也能跑,只是慢;有 MPS/CUDA 时 demucs 自己会用。
 ENGINES: dict[str, SeparationEngineSpec] = {
     #: demucs>=4.0.1 才有 demucs.api(worker 用的是它,不是命令行) —— 钉下限不钉上限。
-    "demucs": SeparationEngineSpec("demucs", "demucs.api", ("demucs>=4.0.1", "torch", "torchaudio")),
+    #:
+    #: **numpy 要自己写上。** demucs 4.1.0 在 `transformer.py` 里 `import numpy`,却没有把它列进
+    #: 自己的依赖;而 torch 从 2.13 起也不再拉 numpy 了。两件事一撞,pip 退 0、包一个不少,
+    #: `import demucs.api` 照样报 `No module named 'numpy'`。写在这里不是给上游打补丁,是把
+    #: "这个 venv 里要有什么才跑得起来"说全 —— 这张表本来就是这个意思,此前它替上游赌了一把。
+    "demucs": SeparationEngineSpec(
+        "demucs", "demucs.api", ("demucs>=4.0.1", "torch", "torchaudio", "numpy"),
+    ),
 }
 
 #: 托管的分离运行环境。和 asr / tts 的根目录分开,理由见模块说明。
