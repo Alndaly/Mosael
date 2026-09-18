@@ -75,12 +75,21 @@ cue and switches to Voice. The audio lands on a dedicated **dub
 track**: the original audio is untouched, delete the track and you are back where you started, and
 dubbing again returns to that same track rather than stacking up a pile of one-clip tracks.
 
-Once dubbing finishes, the track holding the original audio is marked **ducked** — it drops by about
-10 dB wherever the dub speaks. "Untouched" means the clips are not edited or deleted, not that the
-original plays at full volume under the dub; without ducking the export has two people talking at
-once. What gets ducked is whichever track actually carries sound, including a video clip's own audio
-— which is exactly the shape of the translated-dubbing workflow, where the source video sits on a
-video track and the audio track is empty.
+What happens to the **original audio** once the dub lands is a field on the same form, with four
+settings:
+
+- **Lower while the dub speaks** (default): the original drops by about 10 dB — right when it is
+  ambience or music.
+- **Mute**: the setting for translated dubbing. Both sides are speech, so lowering just leaves two
+  people talking at once, one of them quietly.
+- **Leave as is**: you handle it on the track yourself.
+- **Remove the voice**: split the original into voice and background first, drop the voice and keep
+  the music (needs a separation engine; without one the track is muted).
+
+None of the four deletes anything: they flip the track's mute/duck switch, or place the background
+stem on an audio track, and all of it can be undone. It applies to whichever track actually carries
+sound, including a video clip's own audio — which is exactly the shape of the translated-dubbing
+workflow, where the source video sits on a video track and the audio track is empty.
 
 - **Fit to cue length** (off by default): stretch or squeeze the voiceover to that cue's duration. It
   uses the clip's own speed, so the render applies atempo — lossless, undoable, still adjustable in the
