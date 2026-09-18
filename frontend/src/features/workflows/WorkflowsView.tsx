@@ -158,6 +158,7 @@ import {
   fieldDataType,
   isNestedScopeConfig,
 } from "@/features/workflows/analyze";
+import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { assetOutputs, outputRows, stepsByNode, type Step } from "@/features/workflows/runSteps";
@@ -2437,6 +2438,8 @@ interface ConfigSpec {
   depends_on?: string;
   /** 选项要现查:来源名(后端 field_options)。清单跟着 depends_on 那个字段的值变。 */
   options_from?: string;
+  /** 满足这些父字段取值时，本字段才参与表单、选项请求和校验。 */
+  active_when?: Record<string, unknown | unknown[]>;
 }
 
 /** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
@@ -2929,14 +2932,12 @@ export function NodeInspector({
     return found;
   }, [node.config, graph.nodes, scopeVariables]);
 
-  /* 「这条连接上有哪些模型 / 有哪些连接」。llm 和翻译节点问的是同一个问题 —— 翻译节点此前
-     连问都问不了:`model` 那一格根本不存在,于是 engine=ai 时用的永远是这条连接的默认对话模型。 */
-  const picksChatModel = ["llm", "translate", "translate_lines"].includes(node.type);
+  /* LLM 专区仍直接使用连接清单；其它声明了 options_from 的字段统一走 field-options。 */
+  const picksChatModel = node.type === "llm";
   // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
   const providers = useQuery({
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
-    //: 翻译节点选了 AI 引擎之后也要在这里挑连接 —— 不拉列表的话那个下拉永远是空的。
     enabled: picksChatModel || node.type === "ai_generate",
   });
   //: 插件的包与工具、发布账号、可调用工作流、对话连接与模型此前各拉一份清单、各写一段过滤,
@@ -2962,7 +2963,10 @@ export function NodeInspector({
   });
   // 选项要现查的字段(声明里带 options_from):每个字段一份查询,父字段一换就重查。
   // 不认识具体节点 —— 音色、引擎这些清单从哪来、跟着谁变,都是后端声明的。
-  const optionSpecs = specs.filter(([, spec]) => Boolean(spec?.options_from));
+  const allSpecs = (meta?.config ?? {}) as Record<string, ConfigSpec>;
+  const optionSpecs = specs.filter(([, spec]) =>
+    Boolean(spec?.options_from) && isWorkflowFieldActive(spec, config, allSpecs),
+  );
   const dynamicOptionResults = useQueries({
     queries: optionSpecs.map(([key, spec]) => {
       const parentKey = spec?.depends_on ?? "";
@@ -3236,6 +3240,7 @@ export function NodeInspector({
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
   // 顺序就是后端声明的顺序。
   const visibleSpecs = specs
+    .filter(([, spec]) => isWorkflowFieldActive(spec, config, allSpecs))
     .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
     .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)));
   // 分级:留空也能跑的专业旋钮收进折叠区(由后端 NODE_TYPES 的 advanced 声明),第一眼只留下
@@ -3252,10 +3257,10 @@ export function NodeInspector({
   //
   // 「预览」不在这儿:产出预览已经通栏长在节点卡片上,面板里再来一份就是同一张图上下叠两遍。
   const areas: string[] = [];
-  if (specs.length > 0) areas.push("config");
+  if (basicSpecs.length > 0) areas.push("config");
   // 「高级」自成一档,而不是正文底下一个折叠块:折叠块把「有没有更多可调的」藏在一次点击后面,
   // 而条上摆着就一眼看得见。**有才出** —— 没有高级项的节点条上不会多这一档。
-  if (specs.some(([, spec]) => spec?.advanced)) areas.push("advanced");
+  if (advancedSpecs.length > 0) areas.push("advanced");
   if (meta && meta.outputs.length > 0) areas.push("outputs");
   if (step) areas.push("run");
   const [pickedArea, setPickedArea] = React.useState<string | null>(null);

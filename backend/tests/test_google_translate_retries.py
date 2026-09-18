@@ -234,10 +234,13 @@ def test_翻译用哪个模型是能配的() -> None:
 
     for node_type in ("translate", "translate_lines"):
         config = NODE_TYPES[node_type]["config"]
+        assert config["engine"]["default"] == "google"
         assert "model" in config, node_type
         #: 换连接就换了一整套模型 id,旧的那个在新连接下不存在 —— 声明出来界面才会跟着变。
         assert config["model"]["depends_on"] == "profile_id"
         assert not config["profile_id"].get("advanced"), "选了 ai 之后它立刻要紧,不该收在高级里"
+        assert config["profile_id"]["active_when"] == {"engine": "ai"}
+        assert config["model"]["active_when"] == {"engine": "ai"}
 
 
 def test_模型一路传到调用目标(monkeypatch) -> None:

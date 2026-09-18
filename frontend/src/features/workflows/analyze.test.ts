@@ -16,7 +16,7 @@ const registry: RegistryLike = {
     const table: Record<
       string,
       {
-        config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string }>;
+        config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string; active_when?: Record<string, unknown> }>;
         output_types?: Record<string, string>;
       }
     > = {
@@ -42,6 +42,12 @@ const registry: RegistryLike = {
           text: { type: "template", required: true },
           engine: { type: "string", default: "clone" },
           voice: { type: "string", required: true, depends_on: "engine" },
+        },
+      },
+      conditional: {
+        config: {
+          engine: { type: "string", required: true, default: "google" },
+          profile_id: { type: "string", required: true, active_when: { engine: "ai" } },
         },
       },
       subgraph: { config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } } },
@@ -201,6 +207,20 @@ describe("analyzeWorkflow", () => {
     const a = analyzeWorkflow(g, registry, fullCtx);
     expect(a.byNode.get("llm-1")?.[0]).toMatchObject({ code: "required-missing", configKey: "prompt", severity: "error" });
     expect(a.runnable).toBe(false);
+  });
+
+  it("only requires fields active for the current configuration", () => {
+    const make = (engine: string) => graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "c", type: "conditional", config: { engine } },
+      ],
+      [{ id: "e", source: "start", target: "c" }],
+    );
+    expect(analyzeWorkflow(make("google"), registry, fullCtx).runnable).toBe(true);
+    expect(analyzeWorkflow(make("ai"), registry, fullCtx).byNode.get("c")).toEqual([
+      expect.objectContaining({ code: "required-missing", configKey: "profile_id" }),
+    ]);
   });
 
   it("flags a reference to a deleted node (stale-var)", () => {

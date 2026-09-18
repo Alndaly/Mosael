@@ -1,0 +1,40 @@
+{
+  "cases": [
+    { "name": "unconditional", "spec": {}, "config": {}, "specs": {}, "active": true },
+    {
+      "name": "scalar match",
+      "spec": { "active_when": { "engine": "ai" } },
+      "config": { "engine": "ai" },
+      "specs": { "engine": {} },
+      "active": true
+    },
+    {
+      "name": "scalar mismatch",
+      "spec": { "active_when": { "engine": "ai" } },
+      "config": { "engine": "google" },
+      "specs": { "engine": {} },
+      "active": false
+    },
+    {
+      "name": "parent default",
+      "spec": { "active_when": { "engine": "google" } },
+      "config": {},
+      "specs": { "engine": { "default": "google" } },
+      "active": true
+    },
+    {
+      "name": "one of several values",
+      "spec": { "active_when": { "engine": ["ai", "local"] } },
+      "config": { "engine": "local" },
+      "specs": { "engine": {} },
+      "active": true
+    },
+    {
+      "name": "runtime template stays configurable",
+      "spec": { "active_when": { "engine": "ai" } },
+      "config": { "engine": "{{start.engine}}" },
+      "specs": { "engine": {} },
+      "active": true
+    }
+  ]
+}

@@ -46,3 +46,43 @@ def test_依赖发到了接口上() -> None:
 
     assert _with_data_type("model", {"type": "string", "depends_on": "profile_id"})["depends_on"] == "profile_id"
     assert "depends_on" not in _with_data_type("model", {"type": "string"})
+
+
+def test_条件启用声明引用本节点字段() -> None:
+    """条件属于通用字段契约，写错父键时不能静默变成永远隐藏。"""
+    from app.domain.workflows import NODE_TYPES
+
+    broken = [
+        f"{node}.{key} -> {parent}"
+        for node, meta in NODE_TYPES.items()
+        for key, spec in (meta.get("config") or {}).items()
+        if isinstance(spec, dict)
+        for parent in (spec.get("active_when") or {})
+        if parent not in (meta.get("config") or {})
+    ]
+    assert not broken, f"这些启用条件引用了本节点没有的字段:{broken}"
+
+
+def test_条件启用同时约束运行前必填校验() -> None:
+    from app.domain.workflows import validate_graph
+
+    node_type = {
+        "external": False,
+        "config": {
+            "engine": {"type": "string", "required": True},
+            "profile_id": {"type": "string", "required": True, "active_when": {"engine": "ai"}},
+        },
+        "outputs": [],
+    }
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            {"id": "translate", "type": "conditional-test", "config": {"engine": "google"}},
+        ],
+        "edges": [{"id": "e", "source": "start", "target": "translate"}],
+    }
+    assert validate_graph(graph, extra_types={"conditional-test": node_type}) == []
+    graph["nodes"][1]["config"]["engine"] = "ai"
+    assert "节点 translate 缺少必填配置 profile_id" in validate_graph(
+        graph, extra_types={"conditional-test": node_type}
+    )

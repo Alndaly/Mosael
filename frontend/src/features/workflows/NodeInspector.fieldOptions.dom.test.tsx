@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -56,6 +56,8 @@ const META = {
     text: { type: "template", required: true, label: "文本" },
     engine: { type: "string", default: "clone", options_from: "speech_engines", label: "引擎" },
     voice: { type: "string", required: true, depends_on: "engine", options_from: "speech_voices", label: "音色" },
+    profile_id: { type: "string", active_when: { engine: "ai" }, label: "供应商配置" },
+    model: { type: "string", active_when: { engine: "ai" }, label: "模型" },
   },
   outputs: ["asset_id"],
   output_types: {},
@@ -124,5 +126,14 @@ describe("声明了选项来源的字段", () => {
     await user.click(within(engineField).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "Edge" }));
     expect(onChange).toHaveBeenCalledWith({ config: { text: "你好", engine: "edge", voice: "" } });
+  });
+
+  it("只渲染当前配置下启用的字段", async () => {
+    renderInspector({ text: "你好", engine: "google" });
+    await waitFor(() => expect(fieldLabels()).toEqual(["text", "engine", "voice"]));
+
+    cleanup();
+    renderInspector({ text: "你好", engine: "ai" });
+    await waitFor(() => expect(fieldLabels()).toEqual(expect.arrayContaining(["profile_id", "model"])));
   });
 });

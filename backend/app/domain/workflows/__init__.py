@@ -27,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
+from app.domain.workflows.field_activation import config_field_active
 
 
 def _source_assets_help() -> dict[str, str]:
@@ -801,11 +802,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "required": True,
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
-            "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"]},
-            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections"},
+            "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"], "default": "google"},
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections", "active_when": {"engine": "ai"}},
             # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
             # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
-            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True, "active_when": {"engine": "ai"}},
         },
         "outputs": ["text"],
     },
@@ -824,13 +825,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "required": True,
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
-            "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"]},
+            "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"], "default": "google"},
             # 选了 ai 之后「用哪条连接」立刻变成要紧事,所以它不在高级里。
             # depends_on:换引擎就换了这一格的意义(google 下它没用),声明出来界面才会跟着变。
-            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections"},
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections", "active_when": {"engine": "ai"}},
             # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
             # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
-            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True, "active_when": {"engine": "ai"}},
         },
         "outputs": ["texts", "count"],
         "output_types": {"texts": "json", "count": "number"},
@@ -1336,9 +1337,11 @@ def validate_graph(
         if node_type == "start":
             start_count += 1
         if require_config:
-            for key, spec in known_types[node_type]["config"].items():
-                if isinstance(spec, dict) and spec.get("required"):
-                    value = (node.get("config") or {}).get(key)
+            node_config = node.get("config") or {}
+            node_specs = known_types[node_type]["config"]
+            for key, spec in node_specs.items():
+                if isinstance(spec, dict) and spec.get("required") and config_field_active(spec, node_config, node_specs):
+                    value = node_config.get(key)
                     if value in (None, "") and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
     if require_start:

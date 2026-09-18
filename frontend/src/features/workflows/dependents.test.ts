@@ -46,6 +46,22 @@ describe("withDependentsCleared", () => {
     });
   });
 
+  it("清完整条依赖链", () => {
+    const specs = {
+      engine: {},
+      profile_id: { depends_on: "engine" },
+      model: { depends_on: "profile_id" },
+    };
+    expect(
+      withDependentsCleared(
+        { engine: "ai", profile_id: "kimi", model: "kimi-k3" },
+        "engine",
+        "google",
+        specs,
+      ),
+    ).toEqual({ engine: "google", profile_id: "", model: "" });
+  });
+
   it("没有依赖声明时就是普通赋值", () => {
     const before = { a: "1", b: "2" };
     expect(withDependentsCleared(before, "a", "9", { a: {}, b: {} })).toEqual({ a: "9", b: "2" });

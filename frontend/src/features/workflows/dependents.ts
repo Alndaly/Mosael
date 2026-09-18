@@ -24,8 +24,8 @@ export interface DependencySpec {
  * 几条边界,每条都有理由:
  *  · **值没变就什么都不做** —— 重新选中同一项(或组件重渲染回填)不该清掉用户填好的模型;
  *  · 子字段本来就是空的就不动它,免得把 `undefined` 写成 `""` 造出一次无谓的改动;
- *  · 只清**直接**依赖 `key` 的那一层。链式(A→B→C)时改 A 只清 B,而清 B 这个动作
- *    本身会再走一次这里,C 跟着 B 一起清 —— 不需要在这里递归。
+ *  · 清完整条依赖链。一次表单变更只会调用本函数一次，A→B→C 中改 A 时必须同时清 B/C，
+ *    否则隐藏后的 C 会把旧模型等值悄悄带进保存结果。
  */
 export function withDependentsCleared(
   config: Record<string, unknown>,
@@ -35,10 +35,17 @@ export function withDependentsCleared(
 ): Record<string, unknown> {
   const next = { ...config, [key]: value };
   if (config[key] === value) return next;
-  for (const [dependent, spec] of Object.entries(specs)) {
-    if (spec?.depends_on !== key) continue;
-    if (next[dependent] === undefined || next[dependent] === "") continue;
-    next[dependent] = "";
+  const queue = [key];
+  const visited = new Set<string>();
+  while (queue.length) {
+    const parent = queue.shift()!;
+    if (visited.has(parent)) continue;
+    visited.add(parent);
+    for (const [dependent, spec] of Object.entries(specs)) {
+      if (spec?.depends_on !== parent) continue;
+      if (next[dependent] !== undefined && next[dependent] !== "") next[dependent] = "";
+      queue.push(dependent);
+    }
   }
   return next;
 }

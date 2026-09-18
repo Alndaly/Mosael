@@ -1,5 +1,7 @@
 import type { WorkflowGraph } from "@/api/client";
 
+import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
+
 /**
  * 工作流"就绪度"分析:纯函数,单一事实来源,同时喂给画布告警角标、
  * 运行前 checklist、以及节点属性面板的失效引用标红。无 React、无 i18n —
@@ -103,6 +105,8 @@ export interface AnalyzeContext {
 interface ConfigSpecLike {
   type?: string;
   required?: boolean;
+  default?: unknown;
+  active_when?: Record<string, unknown | unknown[]>;
   /** 这个字段装的是什么(素材/时间线/…)。**后端推好一起发过来**,见 domain/workflows。 */
   data_type?: string;
 }
@@ -245,8 +249,10 @@ function collect(
       });
 
     // 必填字段 + 失效引用(逐字段)
-    for (const [key, rawSpec] of Object.entries(meta?.config ?? {})) {
+    const fieldSpecs = (meta?.config ?? {}) as Record<string, ConfigSpecLike>;
+    for (const [key, rawSpec] of Object.entries(fieldSpecs)) {
       const spec = (rawSpec ?? {}) as ConfigSpecLike;
+      if (!isWorkflowFieldActive(spec, config, fieldSpecs)) continue;
       if (spec.required && isEmpty(config[key]) && !dataBound.has(`${node.id}:${key}`)) {
         // AI 生成节点的 provider/model/kind 是**一次选择**的三个产物(选一个生成模型即全部填上),
         // 分开报会变成三条待办、指向三个界面上根本不存在的字段名。归成一条,指向那个选择器。
