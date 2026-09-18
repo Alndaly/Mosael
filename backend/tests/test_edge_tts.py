@@ -33,7 +33,7 @@ def _client():
 
 def test_edge_is_offered_without_a_key() -> None:
     """The whole point of the engine: usable before anything is configured."""
-    entry = next(e for e in describe_engines() if e["id"] == "edge")
+    entry = next(e for e in describe_engines(None) if e["id"] == "edge")
     assert entry["needs_key"] is False
     assert entry["voices"], "an empty dropdown would read as 'this engine has no voices'"
 
@@ -97,3 +97,39 @@ def test_empty_audio_is_an_error_not_a_silent_asset(fake_communicate, tmp_path) 
     fake_communicate.write_bytes = b""
     with pytest.raises(SpeechSynthesisError, match="空音频"):
         EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="你好"), tmp_path / "c.mp3")
+
+
+def test_每个引擎都说得出自己能不能用() -> None:
+    """「这个引擎现在能不能用」是**所有**引擎都要回答的问题。
+
+    它曾经只长在克隆那一条上,而只列就绪引擎的那个下拉(工作流节点的「引擎」)按它过滤 ——
+    于是除了克隆,一个都不剩,音色跟着也空了。真机截图抓到的。
+    """
+    from app.core.db import SessionLocal
+    from app.domain.voices.engine_catalog import describe_engines
+    from tests.util import fresh_client
+
+    fresh_client()
+    with SessionLocal() as db:
+        engines = describe_engines(db)
+    assert engines, "引擎目录是空的"
+    for engine in engines:
+        assert isinstance(engine.get("ready"), bool), f"{engine['id']} 没说自己能不能用"
+    by_id = {str(engine["id"]): engine for engine in engines}
+    #: 不要钥匙的随时能用;要钥匙而这个人没配的,不列出来 —— 列出来只会让人选中之后才失败。
+    assert by_id["edge"]["ready"] is True
+    assert by_id["openai"]["ready"] is False
+
+
+def test_没配连接时引擎清单只剩不要钥匙的那几个() -> None:
+    from app.core.db import SessionLocal
+    from app.domain.workflows.field_options import OptionContext, field_options
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        options = field_options(db, "speech_engines", OptionContext(workspace_id=workspace, user_id=None, parent="", locale="zh"))
+    values = [one["value"] for one in options]
+    assert values[0] == "clone", "克隆总在最前"
+    assert "edge" in values, "不要钥匙的引擎必须列得出来(真机上这里只剩了克隆)"

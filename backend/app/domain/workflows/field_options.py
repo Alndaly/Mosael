@@ -30,6 +30,11 @@ class OptionContext:
     #: `depends_on` 的那个字段现在的值;字段没有依赖时为空串。
     parent: str
     locale: str
+    #: 这个字段长在哪种节点上。插件节点的类型里带着包名(`plugin.<包>.<工具>`),
+    #: 「用哪条连接」要靠它 —— 而那是**节点的身份**,不是某个字段的值。
+    node_type: str = ""
+    #: 正在编辑的这张工作流(可调用工作流的清单要把自己排掉)。新建、未保存时为空。
+    workflow_id: str = ""
 
 
 Option = dict[str, str]
@@ -47,7 +52,7 @@ def _speech_engines(db: Session, ctx: OptionContext) -> list[Option]:
     from app.domain.voices.engine_catalog import CLONE_ENGINE, PODCAST_ENGINE, describe_engines
 
     options: list[Option] = [{"value": CLONE_ENGINE, "label": t("wfSpeechEngineClone", ctx.locale)}]
-    for engine in describe_engines(ctx.user_id):
+    for engine in describe_engines(db, ctx.user_id):
         engine_id = str(engine["id"])
         if engine_id in (CLONE_ENGINE, PODCAST_ENGINE) or not engine.get("ready"):
             continue
@@ -70,9 +75,113 @@ def _speech_voices(db: Session, ctx: OptionContext) -> list[Option]:
     ]
 
 
+def _chat_connections(db: Session, ctx: OptionContext) -> list[Option]:
+    """能拿来跑自动化对话的连接。**不是 llm 节点专属** —— 翻译节点选了 AI 引擎之后问的是
+    同一个问题,而它此前只有一个自由文本框:要用户去别处把连接 id 抄过来。
+
+    判据和界面上那份一致:启用的;订阅计划要连过;填 Key 的要有 base_url。
+    """
+    from app.domain.providers import list_enabled_connections
+
+    options: list[Option] = []
+    for profile in list_enabled_connections(db, owner_user_id=ctx.user_id):
+        usable = profile.oauth_linked if profile.auth_type == "oauth" else bool((profile.base_url or "").strip())
+        if usable:
+            options.append({"value": profile.id, "label": f"{profile.name}({profile.vendor})"})
+    return options
+
+
+def _chat_models(db: Session, ctx: OptionContext) -> list[Option]:
+    """这条连接上真实存在的模型。填不进去的死角由字段自己放行手填(allow_custom)——
+    新模型上线往往早于目录更新。"""
+    from app.domain import provider_models
+
+    if not ctx.parent.strip():
+        return []
+    rows = provider_models.list_models(db, ctx.parent.strip(), enabled_only=True)
+    return [{"value": row.model_id, "label": row.display_name or row.model_id} for row in rows]
+
+
+def _plugin_packages(db: Session, ctx: OptionContext) -> list[Option]:
+    """接进来的插件包(按包,不按实例:同一个包的两次接入提供的是同一批工具)。"""
+    from app.domain.plugins.tools import exposed
+
+    seen: dict[str, str] = {}
+    for tool in exposed(db, ctx.user_id):
+        seen.setdefault(str(tool["package_id"]), str(tool["instance_name"]))
+    return [{"value": package, "label": label} for package, label in seen.items()]
+
+
+def _plugin_tools(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个包暴露出来的工具。"""
+    from app.domain.plugins.tools import exposed
+
+    package = ctx.parent.strip() or _package_of(ctx.node_type)
+    names: dict[str, str] = {}
+    for tool in exposed(db, ctx.user_id):
+        if package and str(tool["package_id"]) != package:
+            continue
+        names.setdefault(str(tool["name"]), str(tool.get("label") or tool["name"]))
+    return [{"value": name, "label": label} for name, label in names.items()]
+
+
+def _plugin_instances(db: Session, ctx: OptionContext) -> list[Option]:
+    """用哪一次接入(哪条连接)。插件节点的包名在**节点类型**里,通用 plugin_tool 节点的在
+    它选中的那个包里 —— 两者都收在这一处,界面不必认识插件节点长什么样。"""
+    from app.domain.plugins.tools import exposed
+
+    package = _package_of(ctx.node_type) or ctx.parent.strip()
+    seen: dict[str, str] = {}
+    for tool in exposed(db, ctx.user_id):
+        if package and str(tool["package_id"]) != package:
+            continue
+        seen.setdefault(str(tool["instance_id"]), str(tool["instance_name"]))
+    return [{"value": instance, "label": label} for instance, label in seen.items()]
+
+
+def _package_of(node_type: str) -> str:
+    """`plugin.<包>.<工具>` → 包名;不是插件节点就是空串。"""
+    from app.domain.plugins.nodes import parse_node_type
+
+    parsed = parse_node_type(node_type)
+    return parsed[0] if parsed else ""
+
+
+def _publish_accounts(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个工作区里可用的发布账号。"""
+    from app.db.models import PublishAccount
+
+    rows = db.scalars(
+        select(PublishAccount)
+        .where(PublishAccount.workspace_id == ctx.workspace_id)
+        .order_by(PublishAccount.created_at)
+    )
+    return [{"value": row.id, "label": row.name} for row in rows]
+
+
+def _callable_workflows(db: Session, ctx: OptionContext) -> list[Option]:
+    """能被调用的工作流。**把自己排掉** —— 直接自调是一定成环的那一种,没有理由摆在清单里
+    (更深的环由运行时守卫拒绝)。"""
+    from app.db.models import Workflow
+
+    rows = db.scalars(
+        select(Workflow)
+        .where(Workflow.workspace_id == ctx.workspace_id)
+        .order_by(Workflow.updated_at.desc())
+    )
+    return [{"value": row.id, "label": row.name} for row in rows if row.id != ctx.workflow_id]
+
+
 SOURCES: dict[str, Source] = {
     "speech_engines": _speech_engines,
     "speech_voices": _speech_voices,
+    "chat_connections": _chat_connections,
+    "chat_models": _chat_models,
+    "plugin_packages": _plugin_packages,
+    "plugin_tools": _plugin_tools,
+    "plugin_instances": _plugin_instances,
+    "publish_accounts": _publish_accounts,
+    "callable_workflows": _callable_workflows,
 }
 
 

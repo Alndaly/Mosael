@@ -123,7 +123,7 @@ def test_the_engine_picker_says_it_up_front(monkeypatch) -> None:
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: None)
     tts_models.clear_runtime_probes()
     tts_models.refresh_runtime_status(tts_config.get().engine)
-    clone = next(row for row in tts.describe_engines() if row["id"] == "clone")
+    clone = next(row for row in tts.describe_engines(None) if row["id"] == "clone")
     assert clone["ready"] is False
     # 目录里存的是 key(见 core/i18n:领域数据不必知道语言),出口才翻。这里断言的是**说了哪句**,
     # 而不是那句话长什么样 —— 换个说法或者加一种语言都不该让这条用例红。
@@ -134,7 +134,7 @@ def test_the_engine_picker_says_it_up_front(monkeypatch) -> None:
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python3")
     tts_models.clear_runtime_probes()
     tts_models.refresh_runtime_status(tts_config.get().engine)
-    clone = next(row for row in tts.describe_engines() if row["id"] == "clone")
+    clone = next(row for row in tts.describe_engines(None) if row["id"] == "clone")
     assert clone["ready"] is True
     assert "下载" not in clone["note"]
 

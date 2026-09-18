@@ -52,7 +52,7 @@ def test_asr_tts_catalogs_store_keys_not_prose() -> None:
         for field in ("label", "detail"):
             if CJK.search(str(getattr(entry, field, "") or "")):
                 offenders.append(f"tts:{entry.id}.{field}")
-    for provider in tts.describe_engines():
+    for provider in tts.describe_engines(None):
         for field in ("label", "note"):
             if CJK.search(str(provider.get(field) or "")):
                 offenders.append(f"provider:{provider['id']}.{field}")

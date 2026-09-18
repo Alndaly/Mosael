@@ -194,7 +194,7 @@ def test_认不出的模型回空_由界面退回填id() -> None:
 def test_引擎目录声明了要能填音色id() -> None:
     from app.domain.voices.engine_catalog import describe_engines
 
-    entry = next(e for e in describe_engines() if e["id"] == "alibaba")
+    entry = next(e for e in describe_engines(None) if e["id"] == "alibaba")
     assert entry["needs_voice_id"] is True, "认不出的模型会得到一个空下拉,而不是输入框"
     assert entry["supports_speed"] is False
 
@@ -279,7 +279,7 @@ def test_v3plus不会误配到v3flash的表() -> None:
 
 
 def test_播客音色不能显示成原始id() -> None:
-    """真机截图抓到的回归:固定音色改从 describe_engines() 出之后,标签丢了 ——
+    """真机截图抓到的回归:固定音色改从 describe_engines(None) 出之后,标签丢了 ——
     engine 目录里的 voices 是纯 id,而 (id, 名字) 成对的表在别处。只查 edge 的话,
     播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`。"""
     from app.ai.providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
@@ -322,7 +322,7 @@ def test_两个引擎各自的音色和语速() -> None:
     from app.ai.providers import CosyVoiceSpeechAdapter
     from app.domain.voices.engine_catalog import describe_engines
 
-    entries = {e["id"]: e for e in describe_engines()}
+    entries = {e["id"]: e for e in describe_engines(None)}
     assert entries["alibaba"]["supports_speed"] is False
     assert entries[CosyVoiceSpeechAdapter.engine_id]["supports_speed"] is True
     # 音色两边完全不同,混用会被拒。

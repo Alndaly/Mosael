@@ -74,9 +74,7 @@ import {
   importWorkflow,
   listAssets,
   listJobEvents,
-  listProviderModels,
   importAsset,
-  listPublishAccounts,
   listWorkflows,
   runWorkflow,
   updateWorkflow,
@@ -2268,6 +2266,7 @@ function WorkflowEditor({
             graph={graph}
             registry={registry}
             workspaceId={workspaceId}
+            workflowId={workflow.id}
             onChange={(patch) => {
               // **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回
               // 一个字母 —— 用户以为撤销坏了,其实是它太尽责。用拖拽那同一套合并机制:
@@ -2425,6 +2424,8 @@ interface ConfigSpec {
   description?: string;
   required?: boolean;
   options?: string[];
+  /** 清单之外还能不能手填(模型名那种:新模型上线往往早于目录更新)。 */
+  allow_custom?: boolean;
   /** 选项的显示名(后端按语言翻好;值照旧是英文的,存进 config 的是它)。 */
   option_labels?: Record<string, string>;
   /** 后端声明的默认值,拿来做占位提示(告诉用户"留空会用什么")。 */
@@ -2840,6 +2841,7 @@ function LoopBodyEditor({
             registry={registry}
             scopeVariables={scopeVariables}
             workspaceId={workspaceId}
+            workflowId={workflowId}
             onChange={(patch) =>
               commit({ ...body, nodes: body.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)) })
             }
@@ -2871,6 +2873,7 @@ export function NodeInspector({
   registry,
   scopeVariables = EMPTY_SCOPE_VARIABLES,
   workspaceId,
+  workflowId = "",
   onChange,
   onApplyGraph,
   onDelete,
@@ -2888,6 +2891,8 @@ export function NodeInspector({
   /** 子图作用域的虚拟变量；它们不是图节点，但在运行时由循环/子图执行器注入。 */
   scopeVariables?: string[];
   workspaceId: string;
+  /** 正在编辑的这张图。可调用工作流的清单要把自己排掉;新建、未保存时为空。 */
+  workflowId?: string;
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>) => void;
   onApplyGraph: (next: WorkflowGraph) => void;
   onDelete?: () => void;
@@ -2933,33 +2938,8 @@ export function NodeInspector({
     //: 翻译节点选了 AI 引擎之后也要在这里挑连接 —— 不拉列表的话那个下拉永远是空的。
     enabled: picksChatModel || node.type === "ai_generate",
   });
-  const pluginTools = useQuery({
-    queryKey: ["plugin-tools"],
-    queryFn: () =>
-      api<Array<{ instance_id: string; instance_name: string; package_id: string; name: string }>>(
-        "/api/plugins/tools",
-      ),
-    enabled: node.type === "plugin_tool",
-  });
-  const callableWorkflows = useQuery({
-    queryKey: ["workflows", workspaceId],
-    queryFn: () => listWorkflows(workspaceId),
-    enabled: node.type === "call_workflow",
-  });
-  const publishAccounts = useQuery({
-    queryKey: ["publish-accounts", workspaceId],
-    queryFn: () => listPublishAccounts(workspaceId),
-    enabled: node.type === "publish",
-  });
-  // llm 节点的模型列表:所选供应商端点上真实可用的模型。以前这里是个纯文本框,
-  // 要用户凭记忆手打模型名 —— 打错了要等到运行时才报错。
-  const llmProfileId = picksChatModel ? String(config.profile_id || "") : "";
-  const llmModels = useQuery({
-    queryKey: ["provider-models", llmProfileId],
-    queryFn: () => listProviderModels(llmProfileId),
-    enabled: picksChatModel && Boolean(llmProfileId),
-    staleTime: 60_000,
-  });
+  //: 插件的包与工具、发布账号、可调用工作流、对话连接与模型此前各拉一份清单、各写一段过滤,
+  //: 现在都由后端按 `options_from` 给(见 domain/workflows/field_options)。
   const generationModels = useQuery({
     queryKey: ["generation-options", "all"],
     // 要完整类型:参数区靠 capabilities 决定渲染什么。以前这里只取了四个字段,
@@ -2988,8 +2968,12 @@ export function NodeInspector({
       const parentSpec = parentKey ? ((meta?.config ?? {}) as Record<string, ConfigSpec>)[parentKey] : undefined;
       const parent = parentKey ? String(config[parentKey] ?? parentSpec?.default ?? "") : "";
       return {
-        queryKey: ["workflow-field-options", spec?.options_from, workspaceId, parent, key],
-        queryFn: () => fetchWorkflowFieldOptions(String(spec?.options_from), workspaceId, parent),
+        queryKey: ["workflow-field-options", spec?.options_from, workspaceId, parent, node.type, workflowId, key],
+        queryFn: () =>
+          fetchWorkflowFieldOptions(String(spec?.options_from), workspaceId, parent, {
+            nodeType: node.type,
+            workflowId,
+          }),
         staleTime: 30_000,
       };
     }),
@@ -3221,59 +3205,24 @@ export function NodeInspector({
    * 素材/账号/音色这类**资源**是闭集:填一个不存在的 id 只会在运行时报错,所以下拉即全集。
    * 模型名不是:供应商上新模型往往早于我们的目录更新,只给下拉等于把人堵在「列表里没有、
    * 于是填不进去」的死角里。 */
-  const allowsCustomValue = (key: string) => key === "model";
+  //: 清单之外还能不能手填,由**声明**说了算(后端 allow_custom)——此前是按字段名猜 key === "model"。
+  const allowsCustomValue = (key: string) => Boolean(((meta?.config ?? {}) as Record<string, ConfigSpec>)[key]?.allow_custom);
 
-  /** (nodeType, key) → 动态下拉选项;返回 null 表示该字段不是动态选择。 */
+  /** 一个字段的下拉选项;返回 null 表示它不是下拉。
+
+      **不认识任何具体节点。** 选项从哪来由声明说了算:`options_from` 的去问后端那一个接口
+      (清单、依赖谁、怎么过滤都在后端 field_options),asset 型字段给工作区素材。此前这里按
+      节点类型写着一串 if —— 插件的包和工具、发布账号、可调用工作流、对话连接与模型各一条,
+      而插件节点是**运行时**才有的类型,前端那张表永远覆盖不到它。 */
   const dynamicOptions = (
     key: string,
-    spec?: { plugin_instances?: boolean; options_from?: string },
+    spec?: { options_from?: string },
   ): Array<{ value: string; label: string }> | null => {
-    /* 「用哪条连接」。**不是 llm 节点专属** —— 翻译节点的 engine 选 ai 之后问的是同一个问题,
-       而它此前只拿到一个自由文本框:要用户去别处把连接 id 抄过来,配了好几条 AI 供应商的人
-       在这里一条都选不出来。判据是字段名 + 这个节点真的会用它,不是节点类型硬编码。 */
-    if (key === "profile_id" && picksChatModel) {
-      return (providers.data ?? [])
-        .filter(supportsAutomationChat)
-        .map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
-    }
-    if (picksChatModel && key === "model") {
-      // 端点上真实存在的模型。allowsCustomValue 同时放行手填 —— 新模型上线往往早于目录更新,
-      // 只给下拉会把人堵死在一个「列表里没有,于是填不进去」的死角。
-      return (llmModels.data ?? []).map((m) => ({ value: m.id, label: m.id }));
-    }
-    // 「用哪个连接」:声明里标了 plugin_instances 的字段都走这里。插件节点(plugin.<包>.<工具>)
-    // 只列这个包的连接;老的通用 plugin_tool 节点按它 config 里选的包过滤。
-    if (spec?.plugin_instances) {
-      const parsed = node.type.startsWith("plugin.") ? node.type.slice("plugin.".length) : "";
-      const packageId = parsed ? parsed.slice(0, parsed.lastIndexOf(".")) : String(config.plugin_id ?? "");
-      const seen = new Map<string, string>();
-      for (const tool of pluginTools.data ?? []) {
-        if (packageId && tool.package_id !== packageId) continue;
-        seen.set(tool.instance_id, tool.instance_name);
-      }
-      return [...seen].map(([value, label]) => ({ value, label }));
-    }
-    if (node.type === "plugin_tool" && key === "plugin_id") {
-      const seen = new Map<string, string>();
-      for (const tool of pluginTools.data ?? []) seen.set(tool.package_id, tool.instance_name);
-      return [...seen].map(([value, label]) => ({ value, label }));
-    }
-    if (node.type === "plugin_tool" && key === "tool_name") {
-      return (pluginTools.data ?? [])
-        .filter((tool) => !config.plugin_id || tool.package_id === config.plugin_id)
-        .map((tool) => ({ value: tool.name, label: tool.name }));
-    }
-    if (node.type === "publish" && key === "account_id") {
-      return (publishAccounts.data ?? []).map((account) => ({ value: account.id, label: account.name }));
-    }
     if (spec?.options_from) {
       return fetchedOptions.get(key) ?? [];
     }
-    if (node.type === "call_workflow" && key === "workflow_id") {
-      // 列出可调用的工作流;选到自己/成环由后端运行时守卫拒绝。
-      return (callableWorkflows.data ?? []).map((wf) => ({ value: wf.id, label: wf.name }));
-    }
-    // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。
+    // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。按**数据类型**给,
+    // 不按节点 —— 任何声明成 asset 的字段都该能挑素材。
     if (fieldDataType(spec as ConfigSpec | undefined) === "asset") {
       return (assets.data ?? []).map((asset) => ({
         value: asset.id,
@@ -3332,7 +3281,7 @@ export function NodeInspector({
           const isObject = spec?.type === "object";
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: spec.option_labels?.[option] ?? option }))
-            : dynamicOptions(key, spec as { plugin_instances?: boolean; options_from?: string } | undefined);
+            : dynamicOptions(key, spec as { options_from?: string } | undefined);
           // 标签由节点声明提供(后端内置节点和运行时插件走同一份接口),最后才退到裸键名。
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
           // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。

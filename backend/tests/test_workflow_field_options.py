@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.db import SessionLocal
+from app.domain.workflows.field_options import OptionContext
 from tests.util import fresh_client
 
 
@@ -31,7 +32,6 @@ def test_声明里用到的来源都存在() -> None:
 
 
 def _ctx(workspace_id: str = "w", parent: str = ""):
-    from app.domain.workflows.field_options import OptionContext
 
     return OptionContext(workspace_id=workspace_id, user_id=None, parent=parent, locale="zh")
 
@@ -40,7 +40,7 @@ def test_引擎清单_克隆在前_只列就绪的_不列播客(monkeypatch) -> 
     from app.domain.voices import engine_catalog
     from app.domain.workflows.field_options import field_options
 
-    monkeypatch.setattr(engine_catalog, "describe_engines", lambda user_id=None: [
+    monkeypatch.setattr(engine_catalog, "describe_engines", lambda db=None, user_id=None: [
         {"id": "clone", "label": "ttsProvider_clone", "ready": False},
         {"id": "edge", "label": "Edge", "ready": True},
         {"id": "volcano", "label": "火山", "ready": False},
@@ -133,3 +133,81 @@ def test_执行体不收别的工作区的克隆音色(monkeypatch) -> None:
     workflow = type("W", (), {"workspace_id": "w"})()
     with pytest.raises(WorkflowDomainError, match="配音库里没有这个音色"):
         subjobs._speech_params(_VoiceDB("别人的"), workflow, {"voice": "v1"}, what="测试")
+
+
+class Test清单从哪来都由声明说了算:
+    """此前这些清单是前端按**节点类型**写死的一串 if:插件的包和工具、发布账号、可调用工作流、
+    对话连接与模型各一条。而插件节点是运行时才有的类型 —— 前端那张表永远覆盖不到它。
+
+    现在都是 `options_from` 的一个来源,前端不认识任何具体节点。
+    """
+
+    def test_声明都指向真实存在的来源(self) -> None:
+        from app.domain.plugins.nodes import node_meta
+        from app.domain.workflows import NODE_TYPES
+        from app.domain.workflows.field_options import SOURCES
+
+        declared = {
+            f"{name}.{key}": meta["options_from"]
+            for name, spec in NODE_TYPES.items()
+            for key, meta in (spec.get("config") or {}).items()
+            if isinstance(meta, dict) and meta.get("options_from")
+        }
+        #: 插件节点的声明是运行时生成的,一起查。
+        plugin = node_meta({"instance_id": "i", "instance_name": "n", "package_id": "p", "name": "t", "input_schema": {}})
+        declared.update({
+            f"plugin.{key}": meta["options_from"]
+            for key, meta in plugin["config"].items()
+            if isinstance(meta, dict) and meta.get("options_from")
+        })
+        assert {"llm.profile_id", "llm.model", "publish.account_id", "call_workflow.workflow_id",
+                "plugin_tool.plugin_id", "plugin_tool.tool_name", "plugin.instance_id"} <= set(declared)
+        missing = {field: source for field, source in declared.items() if source not in SOURCES}
+        assert not missing, f"这些字段声明的选项来源不存在:{missing}"
+
+    def test_可调用工作流把自己排掉(self) -> None:
+        client = fresh_client()
+        workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        graph = {"nodes": [{"id": "start", "type": "start", "config": {"params": {}}}], "edges": []}
+        mine = client.post("/api/workflows", json={"workspace_id": workspace, "name": "我自己", "graph": graph}).json()["id"]
+        other = client.post("/api/workflows", json={"workspace_id": workspace, "name": "别的", "graph": graph}).json()["id"]
+        with SessionLocal() as db:
+            from app.domain.workflows.field_options import field_options
+
+            options = field_options(db, "callable_workflows", _ctx(workspace))
+            assert {one["value"] for one in options} == {mine, other}
+            mine_excluded = field_options(db, "callable_workflows", OptionContext(
+                workspace_id=workspace, user_id=None, parent="", locale="zh", workflow_id=mine,
+            ))
+        assert [one["value"] for one in mine_excluded] == [other], "自调一定成环,不该摆在清单里"
+
+    def test_发布账号只列这个工作区的(self) -> None:
+        from app.db.models import PublishAccount
+        from app.domain.workflows.field_options import field_options
+
+        client = fresh_client()
+        mine = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        other = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
+        with SessionLocal() as db:
+            db.add_all([
+                PublishAccount(workspace_id=mine, platform="douyin", name="我的号"),
+                PublishAccount(workspace_id=other, platform="douyin", name="别人的号"),
+            ])
+            db.commit()
+            assert [one["label"] for one in field_options(db, "publish_accounts", _ctx(mine))] == ["我的号"]
+
+    def test_插件节点的连接按它自己的包过滤(self, monkeypatch) -> None:
+        """插件节点的包名在**节点类型**里(`plugin.<包>.<工具>`),不是某个字段的值 ——
+        所以它走 node_type 这条上下文,而不是 parent。"""
+        from app.domain.plugins import tools as plugin_tools
+        from app.domain.workflows.field_options import field_options
+
+        monkeypatch.setattr(plugin_tools, "exposed", lambda db, user_id: [
+            {"instance_id": "i-a", "instance_name": "B站", "package_id": "pkg.a", "name": "fetch"},
+            {"instance_id": "i-b", "instance_name": "抖音", "package_id": "pkg.b", "name": "fetch"},
+        ])
+        context = OptionContext(workspace_id="w", user_id=None, parent="", locale="zh", node_type="plugin.pkg.a.fetch")
+        assert [one["label"] for one in field_options(None, "plugin_instances", context)] == ["B站"]
+        #: 通用的 plugin_tool 节点按它选中的那个包过滤(那是字段的值,走 parent)。
+        by_field = OptionContext(workspace_id="w", user_id=None, parent="pkg.b", locale="zh")
+        assert [one["label"] for one in field_options(None, "plugin_instances", by_field)] == ["抖音"]

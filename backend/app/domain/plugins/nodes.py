@@ -164,7 +164,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
             "instance_id": {
                 "type": "string",
                 "description": "用哪个连接(同一个插件可以接多个)",
-                "plugin_instances": True,
+                "options_from": "plugin_instances",
                 # 只接了一个实例时留空即可 —— 正是「留空也能跑」,不该占第一屏。
                 "advanced": True,
             },

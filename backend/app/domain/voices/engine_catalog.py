@@ -58,12 +58,17 @@ def active_model_for(engine_cls: type, user_id: str | None = None) -> str:
         return default
 
 
-def describe_engines(user_id: str | None = None) -> list[dict[str, object]]:
+def describe_engines(db: Session | None, user_id: str | None = None) -> list[dict[str, object]]:
     """What the UI needs to render an engine picker, without importing the classes.
 
     本地克隆这一条的 note 跟着**这台机器上装没装引擎**变:装了就说怎么用,没装就说去哪装。
     在这里说,是因为这是用户**挑引擎**的那一刻 —— 比让他填完文本、点了生成、再收到一句
     「还没有可用的引擎」要早得多。
+
+    **每一条都带 `ready`**(见 `_engine_ready`)。它曾经只长在克隆那一条上,而"这个引擎现在
+    能不能用"是所有引擎都要回答的问题 —— 结果是:只列就绪引擎的那个下拉里,除了克隆一个都不剩。
+    给不出会话(没有 db)时,要钥匙的引擎按"不知道"算 = 不就绪:宁可少列一个,也不要让人选中之后
+    才失败。
     """
     from app.ai.runtime import tts_models
     from app.ai.runtime import config as tts_config
@@ -71,7 +76,7 @@ def describe_engines(user_id: str | None = None) -> list[dict[str, object]]:
     # **不等探测**:这个接口只是"引擎选择器要什么",而探测要起子进程 import torch。
     # 没测过时按"还没就绪"渲染,后台探完下一次拉列表就对了(见 tts_models.runtime_status)。
     clone_ready, _checked = tts_models.runtime_status(tts_config.get().engine)
-    return [
+    engines: list[dict[str, object]] = [
         {
             "id": "clone",
             "label": "ttsProvider_clone",
@@ -147,6 +152,26 @@ def describe_engines(user_id: str | None = None) -> list[dict[str, object]]:
             "note": "ttsProviderNote_volcano",
         },
     ]
+    for engine in engines:
+        engine.setdefault("ready", _engine_ready(db, str(engine["id"]), bool(engine["needs_key"]), user_id))
+    return engines
+
+
+def _engine_ready(db: Session | None, engine_id: str, needs_key: bool, user_id: str | None) -> bool:
+    """这个引擎**现在**能不能用 —— 不出网就能回答。
+
+    三种情况:本机克隆看装没装(上面已经探过);不要钥匙的(Edge)随时能用;要钥匙的要看
+    **这个人**有没有配好那条连接 —— 钥匙归人(见 domain/provider_credentials),别人配过不算。
+    """
+    if not needs_key:
+        return True
+    if db is None:
+        return False
+    from app.domain.providers import resolve_connection
+
+    vendor = connection_vendor_for_speech_engine(engine_id)
+    connection = resolve_connection(db, vendor, user_id=user_id)
+    return connection is not None and bool(connection.api_key or connection.extra)
 
 
 def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dict[str, str]]:
@@ -175,7 +200,7 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list
         ]
 
     if engine != "volcano":
-        fixed = next((item for item in describe_engines(user_id) if item["id"] == engine), None)
+        fixed = next((item for item in describe_engines(db, user_id) if item["id"] == engine), None)
         voices = list(fixed.get("voices") or []) if fixed else []
         # **标签要从所有带标签的清单里找**,不只是 edge。engine 目录里的 `voices` 是纯 id
         # (schema 是 list[str]),而 edge / 播客 / 火山内置那三张表都是 (id, 名字) 成对的 ——

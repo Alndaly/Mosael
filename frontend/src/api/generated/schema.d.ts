@@ -3369,7 +3369,11 @@ export interface paths {
         };
         /**
          * Workflow Field Options
-         * @description 节点字段的动态选项(字段声明里的 `options_from`)。`parent` 是它 depends_on 的那个字段的值。
+         * @description 节点字段的动态选项(字段声明里的 `options_from`)。
+         *
+         *     `parent` 是它 depends_on 的那个字段的值;`node_type` 是这个字段长在哪种节点上(插件节点的
+         *     包名在类型里);`workflow_id` 是正在编辑的那张图(可调用工作流要把自己排掉)。三样都是
+         *     **上下文**,不是某个来源的专用参数 —— 前端因此不必知道每个来源各要什么。
          */
         get: operations["workflow_field_options_api_workflows_field_options_get"];
         put?: never;
@@ -18730,6 +18734,8 @@ export interface operations {
                 source: string;
                 workspace_id: string;
                 parent?: string;
+                node_type?: string;
+                workflow_id?: string;
             };
             header?: never;
             path?: never;

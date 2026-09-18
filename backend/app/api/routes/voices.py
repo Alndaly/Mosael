@@ -185,12 +185,12 @@ def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
 
 
 @router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])
-def list_tts_engines(request: Request, user: CurrentUser) -> list[dict]:
+def list_tts_engines(request: Request, db: DbSession, user: CurrentUser) -> list[dict]:
     """Engines the配音 UI can offer, and what each one needs from the user."""
     from app.domain.voices.engine_catalog import describe_engines
 
     locale = normalize_locale(request.headers.get("accept-language"))
-    return [translate_fields(row, ("label", "note"), locale) for row in describe_engines(user.id)]
+    return [translate_fields(row, ("label", "note"), locale) for row in describe_engines(db, user.id)]
 
 
 @router.post("/tts/podcast", response_model=JobOut)

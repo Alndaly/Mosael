@@ -394,8 +394,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_llm_preset",
                 "options": ["precise", "balanced", "creative"],
             },
-            "profile_id": {"type": "string", "description": "wfNode_llm_profile_id"},
-            "model": {"type": "string", "description": "wfNode_llm_model", "depends_on": "profile_id"},
+            "profile_id": {"type": "string", "description": "wfNode_llm_profile_id", "options_from": "chat_connections"},
+            "model": {"type": "string", "description": "wfNode_llm_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
             "temperature": {"advanced": True, "type": "number", "description": "wfNode_llm_temperature"},
             "top_p": {"advanced": True, "type": "number", "description": "wfNode_llm_top_p"},
             "max_tokens": {"advanced": True, "type": "number", "description": "wfNode_llm_max_tokens"},
@@ -424,8 +424,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_plugin_tool",
         "description": "wfNode_plugin_tool_desc",
         "config": {
-            "plugin_id": {"type": "string", "required": True},
-            "tool_name": {"type": "string", "required": True, "depends_on": "plugin_id"},
+            "plugin_id": {"type": "string", "required": True, "options_from": "plugin_packages"},
+            "tool_name": {"type": "string", "required": True, "depends_on": "plugin_id", "options_from": "plugin_tools"},
             # 同一个插件可以接多个连接;留空且只有一个可用连接时自动用它。
             "instance_id": {"advanced": True, "type": "string", "description": "wfNode_plugin_tool_instance_id", "plugin_instances": True, "depends_on": "plugin_id"},
             "input": {"type": "object", "description": "wfNode_plugin_tool_input"},
@@ -613,7 +613,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description_params": _source_assets_help(),
             },
         },
-        "outputs": ["asset_id", "generation_id"],
+        #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是这次出的全部 ——
+        #: 图像接口的 n 能一次出好几张,不声明的话下游连不到它们(执行体一直在返回)。
+        "outputs": ["asset_id", "asset_ids", "generation_id"],
     },
     "video_to_gif": {
         "external": False,
@@ -635,7 +637,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_publish",
         "description": "wfNode_publish_desc",
         "config": {
-            "account_id": {"type": "string", "required": True, "description": "wfNode_publish_account_id"},
+            "account_id": {"type": "string", "required": True, "description": "wfNode_publish_account_id", "options_from": "publish_accounts"},
             "asset_id": {"type": "template", "required": True, "description": "wfNode_publish_asset_id"},
             "title": {"type": "template", "description": "wfNode_publish_title"},
             "description": {"type": "template"},
@@ -787,10 +789,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
             "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"]},
-            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine"},
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections"},
             # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
             # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
-            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id"},
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
         },
         "outputs": ["text"],
     },
@@ -812,10 +814,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"]},
             # 选了 ai 之后「用哪条连接」立刻变成要紧事,所以它不在高级里。
             # depends_on:换引擎就换了这一格的意义(google 下它没用),声明出来界面才会跟着变。
-            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine"},
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections"},
             # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
             # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
-            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id"},
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True},
         },
         "outputs": ["texts", "count"],
         "output_types": {"texts": "json", "count": "number"},
@@ -1078,7 +1080,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_call_workflow",
         "description": "wfNode_call_workflow_desc",
         "config": {
-            "workflow_id": {"type": "string", "required": True, "description": "wfNode_call_workflow_workflow_id"},
+            "workflow_id": {"type": "string", "required": True, "description": "wfNode_call_workflow_workflow_id", "options_from": "callable_workflows"},
             "inputs": {"type": "object", "description": "wfNode_call_workflow_inputs"},
         },
         "outputs": ["output"],

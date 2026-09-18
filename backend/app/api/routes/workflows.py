@@ -78,6 +78,10 @@ def _with_data_type(key: str, spec: Any) -> Any:
     options_from = str(spec.get("options_from") or "").strip()
     if options_from:
         enriched["options_from"] = options_from
+    # 清单之外还能手填吗。模型名就是这种:新模型上线往往早于目录更新,只给下拉会把人堵死在
+    # 「列表里没有,于是填不进去」的死角。**由声明说了算**,不由前端按字段名猜(此前是 key === "model")。
+    if spec.get("allow_custom"):
+        enriched["allow_custom"] = True
     # object 字段用哪种编辑器:一行一对的映射,还是原始 JSON。
     editor = config_editor(key, spec)
     if editor:
@@ -132,13 +136,31 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
 
 @router.get("/workflows/field-options", response_model=list[WorkflowFieldOptionOut])
 def workflow_field_options(
-    source: str, workspace_id: str, db: DbSession, user: CurrentUser, parent: str = ""
+    source: str,
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    parent: str = "",
+    node_type: str = "",
+    workflow_id: str = "",
 ) -> list[dict]:
-    """节点字段的动态选项(字段声明里的 `options_from`)。`parent` 是它 depends_on 的那个字段的值。"""
+    """节点字段的动态选项(字段声明里的 `options_from`)。
+
+    `parent` 是它 depends_on 的那个字段的值;`node_type` 是这个字段长在哪种节点上(插件节点的
+    包名在类型里);`workflow_id` 是正在编辑的那张图(可调用工作流要把自己排掉)。三样都是
+    **上下文**,不是某个来源的专用参数 —— 前端因此不必知道每个来源各要什么。
+    """
     from app.domain.workflows.field_options import FieldOptionsError, OptionContext, field_options
 
     ensure_workspace_access(db, user, workspace_id)
-    context = OptionContext(workspace_id=workspace_id, user_id=user.id, parent=parent, locale=get_current_locale())
+    context = OptionContext(
+        workspace_id=workspace_id,
+        user_id=user.id,
+        parent=parent,
+        locale=get_current_locale(),
+        node_type=node_type,
+        workflow_id=workflow_id,
+    )
     try:
         return field_options(db, source, context)
     except FieldOptionsError as exc:
