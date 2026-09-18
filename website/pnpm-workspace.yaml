@@ -3,5 +3,7 @@
 allowBuilds:
   sharp: true
   unrs-resolver: true
+# 供应链冷静期(分钟):只解析发布满 3 天的版本;exclude 只豁免我们盯着快速迭代的包。
+minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - lucide-react@1.35.0

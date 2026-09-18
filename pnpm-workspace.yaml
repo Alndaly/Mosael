@@ -13,6 +13,9 @@ allowBuilds:
   esbuild: true # 下载平台原生二进制
   protobufjs: false
 
+# 供应链冷静期(分钟):只解析发布满 3 天的版本,挡住"刚发布就被投毒"的窗口。
+# 没有本体时 exclude 名单会空转——先有这个键,下面的豁免才有意义。
+minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - '@earendil-works/pi-agent-core@0.83.0'
   - '@earendil-works/pi-ai@0.83.0'
