@@ -78,12 +78,17 @@ function EngineCard({
             <span className="text-ui-xs tabular-nums text-muted-foreground">{t("separationSize")}</span>
           </div>
           <small className="text-ui-xs text-muted-foreground">{t("separationEngineDetail")}</small>
-          {/* 失败的原因**原样显示** —— pip 说不清时,用户至少能把那句话搜一下。 */}
-          {engine.status === "failed" && engine.message && (
-            <small className="text-ui-xs text-destructive">{engine.message}</small>
+          {/* 「还没测过」和「测过了、跑不起来」是两回事 —— 探一次要起子进程 import torch,
+              不能卡在请求里,所以刚打开这一页时可能还没有答案。说成"未安装"是拿未知冒充结论。 */}
+          {!engine.runtime_checked && engine.status !== "installing" && (
+            <small className="text-ui-xs text-muted-foreground">{t("runtimeChecking")}</small>
           )}
-          {engine.status === "installing" && engine.message && (
-            <small className="text-ui-xs text-muted-foreground">{engine.message}</small>
+          {/* 原因**原样显示**:失败时是 pip 说的那句话(用户至少能搜一下),没装好时是
+              「运行环境不完整」—— 后者此前没有地方说,于是半装的环境只剩一个光秃秃的「未安装」。 */}
+          {engine.runtime_checked && engine.message && (
+            <small className={cn("text-ui-xs", engine.status === "failed" ? "text-destructive" : "text-muted-foreground")}>
+              {engine.message}
+            </small>
           )}
         </div>
         <div className="shrink-0">
@@ -98,7 +103,11 @@ function EngineCard({
               <Loader2 size={13} className="animate-mosael-spin" />
             </span>
           )}
-          {engine.status === "missing" && (
+          {/* 没测过就不摆按钮:这一刻还不知道它装没装,而「安装」和「已安装」都是结论。 */}
+          {engine.status === "missing" && !engine.runtime_checked && (
+            <Loader2 size={13} className="animate-mosael-spin text-muted-foreground" />
+          )}
+          {engine.status === "missing" && engine.runtime_checked && (
             <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
               <Download size={13} /> {t("separationInstall")}
             </Button>

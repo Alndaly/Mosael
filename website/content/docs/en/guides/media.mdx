@@ -102,7 +102,9 @@ panel. Right-clicking a clip in the editor offers the same two, applied to the a
 - **Separate voice and background**: split into a voice asset and a background asset. The background
   is everything except the voice: music, ambience, effects. The engine runs on this machine and must
   be installed first under Settings → On-device engines → Voice separation; a long asset takes many
-  minutes on a CPU.
+  minutes on a CPU. That page reports “Installed” only after actually loading the engine once — not
+  by looking for a directory; if an install was interrupted it says the runtime is incomplete, and
+  clicking Install again adds the missing dependencies.
 
 Workflows have matching *Reduce noise* and *Separate voice and background* nodes (under Audio), and
 the agent can do both too — it opens a confirmation card first.

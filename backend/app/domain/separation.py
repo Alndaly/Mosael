@@ -75,7 +75,16 @@ def separate_asset(
     if not adapter.runtime_ready():
         # 装是显式的一步:第一次要建 venv、装 torch、拉权重,那是几分钟到几十分钟的事,
         # 不该藏在"点一下分离"后面一声不响地发生。
-        adapter.ensure_runtime()
+        #
+        # **装不成也是"这次分离失败了"**,所以翻成这一层的错误类型:RuntimeError 逃出去
+        # 就成了节点抓不住的异常,用户看到的是一条没有下文的红线,而原因(pip 说的那句话)
+        # 恰好就在这个异常里。
+        try:
+            adapter.ensure_runtime()
+        except SeparationError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — 建环境失败的形状由下面那层决定,这里只负责翻译
+            raise SeparationError(str(exc)) from exc
 
     source = _source_path(asset)
     if source is None or not source.is_file():

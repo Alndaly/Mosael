@@ -575,7 +575,14 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 加一个引擎不改任何入口。
 
 - **分离**([ADR-0016](adr/0016-source-separation-is-a-capability.md)):Demucs 跑在自己的托管 venv
-  里(和转写、克隆的 torch 版本会打架)。字幕配音的「原声怎么办」(`domain/voices/original_audio`,
+  里(和转写、克隆的 torch 版本会打架)。**「装没装」的判据是起子进程 `import demucs.api`**,
+  和转写、克隆同一条(`runtime/separation_models.probe_runtime`,缓存在 `download_state.ProbeCache`
+  里,三种答案:跑得起来 / 跑不起来 / 还没测过)。此前这里看的是 `venv/bin/python` 在不在,于是
+  pip 装到一半断掉的环境写着「已安装」,而 `ensure_runtime` 看到"已安装"就早返回、永远不去修它 ——
+  用户拿到的是三个字「已安装」配一句「这个运行环境里没有 demucs:No module named 'numpy'」。
+  现在跑不起来就一路补到底(包括解释器在、依赖不全的那种),装完再探一次,还是起不来就带着
+  子进程说的那句话报出来。棘轮:`tests/test_runtime_readiness_is_an_import_probe.py`。
+  字幕配音的「原声怎么办」(`domain/voices/original_audio`,
   剪辑台、智能体、工作流三个入口共用,由配音任务收尾时处理)选 `separate` 时只问领域有没有可用
   引擎,问不到就退回整轨静音。问得到时每个发声的片段走一次剪辑台的「分离音频」,只是放到
   音频轨上的换成背景音:画面留在原处,源片段静音,可撤销。**不能**把视频片段直接指向背景音

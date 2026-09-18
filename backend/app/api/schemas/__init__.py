@@ -1367,13 +1367,17 @@ class SeparationEngineOut(ApiModel):
     """一个人声/背景音分离引擎装没装。
 
     和转写模型那一页同一条区分:**文件在不在盘上**和**跑不跑得起来**是两件事。这里只有后者
-    有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的就是"这个引擎的解释器在不在"。
+    有意义 —— 权重是第一次分离时引擎自己拉的,所以 `status` 说的是"这个引擎 import 得进来吗"。
+
+    `runtime_checked` 是第三种答案:**还没测过**。探一次要起子进程 import torch,而列状态是
+    一次纯读的请求,所以它不等 —— 界面据此接着轮询,而不是把"未知"画成"没装"。
     """
 
     engine: str
     label: str
     status: str  # "installed" | "missing" | "installing" | "failed"
     runtime_ready: bool = False
+    runtime_checked: bool = False
     #: 正在装的哪一步,或者失败的原因。空串 = 没什么要说的。
     message: str = ""
 

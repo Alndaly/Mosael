@@ -43,8 +43,16 @@ class DemucsSeparationAdapter:
 
     def separate(self, request: SeparationRequest, out_dir: Path) -> dict[str, Path]:
         python = separation_models.managed_venv_python(self.engine_id)
-        if not python.is_file():
-            raise SeparationError("音频分离的运行环境还没准备好")
+        # **判据是 import 得进来,不是解释器这个文件在不在**:半装的 venv 两者恰好一真一假,
+        # 而那时报出来的会是 worker 里那句「这个运行环境里没有 demucs:No module named 'numpy'」——
+        # 一句用户无从下手的话。跑不起来就在这儿说清楚,并把子进程自己说的那句带上。
+        if not separation_models.runtime_ready(self.engine_id):
+            blame = separation_models.runtime_blame(self.engine_id)
+            raise SeparationError(
+                f"音频分离的运行环境还没装好(去设置里装一次):{blame}"
+                if blame
+                else "音频分离的运行环境还没准备好,去设置里装一次"
+            )
         out_dir.mkdir(parents=True, exist_ok=True)
         payload = {
             "audio_path": str(request.audio_path),

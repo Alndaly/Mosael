@@ -460,6 +460,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_separate_audio_asset_id": {"zh": "要分离的素材(音频或视频都行)", "en": "The asset to separate (audio or video)"},
     "wfNode_separate_audio_engine": {"zh": "用哪个分离引擎。「自动」= 用本机现在装好的那个;引擎在「设置 → 本机引擎 → 人声分离」里装。", "en": "Which separation engine to use. Auto uses whichever is installed on this machine; install engines under Settings → On-device engines → Voice separation."},
     "sepEngine_demucs": {"zh": "Demucs(本机)", "en": "Demucs (local)"},
+    "sepMsg_brokenRuntime": {
+        # 解释器在、依赖却不全的那种(pip 装到一半断了)。不说"未安装" —— 用户明明记得装过。
+        "zh": "运行环境不完整(依赖没装齐),点「安装」补上",
+        "en": "The runtime is incomplete — some dependencies are missing. Click Install to repair it.",
+    },
     "wfNode_denoise_audio": {"zh": "降噪", "en": "Reduce noise"},
     "wfNode_denoise_audio_desc": {
         "zh": "给一份音频或视频降噪,产出一份**新素材**(视频的画面原样保留,只换声音),原素材不动。内置引擎适合空调、风扇、电流声这类持续的底噪,音乐不受影响;以说话为主的素材选 deepfilternet 效果最好,但它会把音乐一起去掉。只想要人声、别的都不要,用「分离人声与背景音」取人声那一份。",

@@ -63,8 +63,12 @@
 
 - `app/ai/model_catalog.py:_cache`、`app/ai/model_catalog.py:_refreshing` — 供应商模型清单,带 TTL。
 - `app/ai/runtime/remote_size.py:_cache`、`app/ai/runtime/remote_size.py:_refreshing` — 远端权重体积。
-- 引擎就绪探测:`app/ai/runtime/tts_models.py:_probes`、`app/ai/runtime/asr_models.py:_probes` ——
-  都是 `download_state.ProbeCache`(此前两份逐字相同的实现,其中一份修过的「探测代次」另一份没有)。
+- 引擎就绪探测:`app/ai/runtime/tts_models.py:_probes`、`app/ai/runtime/asr_models.py:_probes`、
+  `app/ai/runtime/separation_models.py:_probes` —— 都是 `download_state.ProbeCache`(此前两份逐字
+  相同的实现,其中一份修过的「探测代次」另一份没有)。探一次要起子进程 `import` 那个引擎,
+  重启后重探一遍即可;丢掉的只是"这台机器上问过了"这句话。
+  分离那一份是后加的:它此前把"解释器这个文件在不在"当成装没装,于是半装的 venv 报「已安装」
+  而每次分离都炸(见 `separation_models` 模块说明)。
 - 下载进度:`app/ai/runtime/tts_models.py:_store`、`app/ai/runtime/asr_models.py:_store`、
   `app/ai/runtime/f5_models.py:_store` —— 都是 `download_state.DownloadStore`。
 - `app/ai/runtime/separation_models.py:_store`、`app/ai/runtime/denoise_models.py:_store` —
