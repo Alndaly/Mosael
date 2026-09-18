@@ -81,11 +81,18 @@ def _chat_connections(db: Session, ctx: OptionContext) -> list[Option]:
 
     判据和界面上那份一致:启用的;订阅计划要连过;填 Key 的要有 base_url。
     """
+    from app.domain import provider_credentials
     from app.domain.providers import list_enabled_connections
 
     options: list[Option] = []
     for profile in list_enabled_connections(db, owner_user_id=ctx.user_id):
-        usable = profile.oauth_linked if profile.auth_type == "oauth" else bool((profile.base_url or "").strip())
+        if profile.auth_type == "oauth":
+            # 「连过没有」说的是当前用户自己那把钥匙 —— oauth_linked 是 API schema 上按用户
+            # 算出来的展示字段,不是模型列;领域层直接读它会当场 AttributeError。
+            credential = provider_credentials.get(db, profile.id, ctx.user_id) if ctx.user_id else None
+            usable = bool(credential and credential.oauth_credential)
+        else:
+            usable = bool((profile.base_url or "").strip())
         if usable:
             options.append({"value": profile.id, "label": f"{profile.name}({profile.vendor})"})
     return options

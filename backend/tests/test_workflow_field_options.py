@@ -211,3 +211,27 @@ class Test清单从哪来都由声明说了算:
         #: 通用的 plugin_tool 节点按它选中的那个包过滤(那是字段的值,走 parent)。
         by_field = OptionContext(workspace_id="w", user_id=None, parent="pkg.b", locale="zh")
         assert [one["label"] for one in field_options(None, "plugin_instances", by_field)] == ["抖音"]
+
+
+def test_对话连接的订阅计划按自己那把钥匙判断() -> None:
+    """oauth 连接的「可用」读的是当前用户自己那把凭据,不是档案行 —— 档案行上根本没有
+    oauth_linked(那是 API schema 按用户算出来的展示字段),领域层直接读它曾让整个
+    字段选项接口 500(AttributeError)。"""
+    from app.db.models import ProviderCredential, ProviderProfile, User
+    from app.domain.workflows.field_options import field_options
+
+    fresh_client()
+    with SessionLocal() as db:
+        user_id = db.query(User).filter(User.username == "tester").one().id
+        linked = ProviderProfile(owner_user_id=user_id, vendor="openai", name="订阅已登录", auth_type="oauth", enabled=True)
+        unlinked = ProviderProfile(owner_user_id=user_id, vendor="openai", name="订阅未登录", auth_type="oauth", enabled=True)
+        keyed = ProviderProfile(owner_user_id=user_id, vendor="openai-compatible", name="自填 Key", base_url="http://127.0.0.1:9", enabled=True)
+        keyless = ProviderProfile(owner_user_id=user_id, vendor="openai-compatible", name="没填地址", enabled=True)
+        db.add_all([linked, unlinked, keyed, keyless])
+        db.flush()
+        db.add(ProviderCredential(profile_id=linked.id, owner_user_id=user_id, oauth_credential={"access_token": "x"}))
+        db.commit()
+
+        options = field_options(db, "chat_connections", OptionContext(workspace_id="w", user_id=user_id, parent="", locale="zh"))
+
+        assert {one["value"] for one in options} == {linked.id, keyed.id}
