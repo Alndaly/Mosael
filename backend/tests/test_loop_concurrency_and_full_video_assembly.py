@@ -81,20 +81,44 @@ class Test循环并发:
         assert out["results"] == ["a", "b", "c", "d", "e"]
         assert peak == 3, f"没有真的同时跑(峰值 {peak})"
 
-    def test_失败时报序号最小的那项(self, fake_node) -> None:
+    def test_只有一项失败时_说清是哪一项(self, fake_node) -> None:
         ws = _workspace()
 
         def boom(db, workflow, config):
-            if config["item"] in {"c", "e"}:
-                time.sleep(0.02 if config["item"] == "c" else 0)
-                raise WorkflowDomainError(f"炸在 {config['item']}")
+            if config["item"] == "c":
+                raise WorkflowDomainError("炸在 c")
             return {"text": config["item"]}
 
         fake_node("template", boom)
         body = {"nodes": [{"id": "echo", "type": "template", "config": {"template": "x", "item": "{{loop.item}}"}}], "edges": []}
         with pytest.raises(WorkflowDomainError) as caught:
-            _loop(ws, {"items": ["a", "b", "c", "d", "e"], "body": body, "concurrency": 4})
-        assert "第 3/5 次迭代" in str(caught.value) and "炸在 c" in str(caught.value)
+            _loop(ws, {"items": ["a", "b", "c"], "body": body, "concurrency": 3})
+        assert "第 3/3 次迭代" in str(caught.value) and "炸在 c" in str(caught.value)
+
+    def test_几项同时失败_下一项不再开始_失败全部报出来(self, fake_node) -> None:
+        """**真机上付过账的那一个。** 并发 3、六镜:前三镜的视频同时"超时"失败,主线程还没来得及
+        叫停,线程池已经把第四镜捡起来提交了 —— 又一条视频,又扣一次钱。报错却只说"第 1 次迭代
+        失败",另外两镜像是好的。"""
+        ws = _workspace()
+        started: list[str] = []
+        lock = threading.Lock()
+
+        def paid_call(db, workflow, config):
+            with lock:
+                started.append(config["item"])
+            if config["item"] in {"1", "2", "3"}:
+                time.sleep(0.05)
+                raise WorkflowDomainError("Generation timed out")
+            return {"text": config["item"]}
+
+        fake_node("template", paid_call)
+        body = {"nodes": [{"id": "shot", "type": "template", "config": {"template": "x", "item": "{{loop.item}}"}}], "edges": []}
+        with pytest.raises(WorkflowDomainError) as caught:
+            _loop(ws, {"items": ["1", "2", "3", "4", "5", "6"], "body": body, "concurrency": 3})
+        assert sorted(started) == ["1", "2", "3"], f"失败之后又开始了付费的调用:{started}"
+        message = str(caught.value)
+        assert "1、2、3" in message, f"三项都失败了,却只报了一部分:{message}"
+        assert "3 次因此没有开始" in message
 
     def test_并发数有上限_写错就说(self, fake_node) -> None:
         ws = _workspace()

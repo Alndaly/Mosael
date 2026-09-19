@@ -7,7 +7,8 @@ run_subgraph 与主引擎共享同一套执行内核(execute_graph)。每次迭�
 from __future__ import annotations
 
 import contextvars
-from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
+import threading
+from concurrent.futures import ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -123,36 +124,74 @@ def _concurrency(raw: Any) -> int:
     return max(1, min(value, LOOP_FOREACH_MAX_CONCURRENCY))
 
 
+class _NotStarted(Exception):
+    """前面已经有一项失败,这一项就不开始了。"""
+
+
 def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[Any]:
     """几项同时跑,结果**按原顺序**交出。
 
     仍然 fail-fast:一项失败,还没开始的不再开始(已经在跑的跑完 —— 半截的供应商调用中途
-    扔下只会留下孤儿任务),然后抛出**序号最小**的那个失败。序号最小而不是最先抛出的:
-    并发时谁先炸是偶然的,报"第 2 项"比报"第 5 项"更稳定,也更接近顺序执行时看到的那句。
+    扔下只会留下孤儿任务)。
+
+    **"不再开始"要由每一项自己在开头检查,不能靠事后 cancel。** 此前是 `wait(FIRST_EXCEPTION)`
+    返回之后再逐个 `future.cancel()` —— 而失败那一项的线程一空出来,线程池立刻就把排队的下一项
+    捡起来跑了,主线程的 cancel 永远晚一步。真机上付过账:三条视频同时失败后,第四条视频照样
+    提交了出去,又扣了一次钱。所以停止信号在**失败那一刻、在同一个线程里**立起来,下一项开跑
+    前先看它。
+
+    失败**全部**报出来,不只报序号最小的那个:三项都失败时只说"第 1 项失败",用户会以为另外
+    两项是好的 —— 而它们每一项都可能对应一笔已经花出去的钱。
     """
     results: list[Any] = [None] * len(items)
+    stop = threading.Event()
+
+    def guarded(index: int, item: Any) -> Any:
+        if stop.is_set():
+            raise _NotStarted()
+        try:
+            return iterate(index, item)
+        except BaseException:
+            stop.set()
+            raise
+
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         # 线程池里的线程不继承 contextvar:每一项带着当前上下文进去(外层任务的归属、取消边界,
         # 与 engine.run_node 同一个做法)。
         futures = {
-            pool.submit(contextvars.copy_context().run, iterate, index, item): index
+            pool.submit(contextvars.copy_context().run, guarded, index, item): index
             for index, item in enumerate(items)
         }
-        finished, _ = wait(futures, return_when=FIRST_EXCEPTION)
-        if any(future.exception() is not None for future in finished):
-            for future in futures:
-                future.cancel()
-            wait(futures)
-        failures = sorted(
-            (index, future.exception())
-            for future, index in futures.items()
-            if not future.cancelled() and future.exception() is not None
-        )
-        if failures:
-            raise failures[0][1]
-        for future, index in futures.items():
-            results[index] = future.result()
+        wait(futures)
+    failures = sorted(
+        (index, future.exception())
+        for future, index in futures.items()
+        if future.exception() is not None and not isinstance(future.exception(), _NotStarted)
+    )
+    if failures:
+        skipped = sum(1 for future in futures if isinstance(future.exception(), _NotStarted))
+        raise _all_failures(failures, total=len(items), skipped=skipped)
+    for future, index in futures.items():
+        results[index] = future.result()
     return results
+
+
+def _all_failures(failures: list[tuple[int, BaseException]], *, total: int, skipped: int) -> BaseException:
+    """把几项失败合成一个错误。只有一项失败、也没有跳过的时候,原样交出那一项的错误。"""
+    first = failures[0][1]
+    if len(failures) == 1 and not skipped:
+        return first
+    reason = getattr(first, "params", {}).get("reason") or str(first)
+    return WorkflowDomainError(
+        "wfErr_loopIterationsFailed",
+        params={
+            "count": len(failures),
+            "total": total,
+            "which": "、".join(str(index + 1) for index, _ in failures),
+            "skipped": skipped,
+            "reason": reason,
+        },
+    )
 
 
 @register("loop_while")
