@@ -8,10 +8,8 @@
 
 两个毛病叠在一起：
 
-1. **同一个 429，批量那条路退避重试、逐句这条当场失败。** `translate_many` 一直用
-   `RetryingClient`，而工作流的翻译节点一句一次调用，走的是裸 `httpx.get` —— 设置页那句
-   「连接断开/超时/限流时自动重试」管的是所有 AI 调用，这里漏了一条缝。免费端点按 IP 限流，
-   而一条字幕轨就是几十上百次调用，正好是最需要重试的地方。
+1. 单句调用会对瞬时网络错误重试；批量 Google 路径则串行且遇到 429 立即停，避免多句并发重试
+   把代理出口打进 ``Sorry / unusual traffic``。AI 供应商仍走有限并发与通用重试。
 2. **错误正文把原文的百分号编码糊了一屏**：httpx 的 HTTPStatusError 带着完整 URL，而 URL 里
    是整段被编码的待译文本。真正有用的那半句（被限流了、可以换成 AI 翻译）淹在里面。
 """
@@ -110,6 +108,18 @@ def test_调用方给了_client_就用它__不另开一个(monkeypatch) -> None:
     with httpx.Client(transport=transport) as shared:
         assert tr.google_translate("你好", "en", client=shared) == "hello"
     assert opened["n"] == 0, "给了 client 还自己再开一个,等于每句一次握手"
+
+
+def test_google请求使用仍受支持的客户端标识() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["client"] = request.url.params["client"]
+        return _ok()
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert tr.google_translate("你好", "en", client=client) == "hello"
+    assert seen["client"] == "dict-chrome-ex"
 
 
 def test_批量节点收段落也收字符串__顺序就是对齐(monkeypatch) -> None:

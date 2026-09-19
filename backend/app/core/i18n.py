@@ -930,11 +930,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
         "en": "Provider \u300c{name}\u300d has no key of yours yet — set it in Settings first",
     },
-    #: 免费端点按 IP 限流,而一条字幕轨就是几十上百次调用。已经退避重试过还是 429,说明这会儿
-    #: 它不打算放行 —— 所以这句话要给出**另一条路**,而不只是复述状态码。
+    #: 免费端点没有稳定配额承诺，可能按客户端标识、出口或突发频率拒绝。说清下一条路，不把
+    #: 原因武断归到 IP —— 2026-09 的真实故障就是旧 client=gtx 被统一 429，换出口也无效。
     "translateErr_googleRateLimited": {
-        "zh": "Google 免费翻译接口拒绝了这台机器的请求(429)。它按出口 IP 封,而且往往不是一会儿就好 —— 机房、VPN、代理出口尤其容易中。把翻译节点的引擎换成「AI 翻译」即可:它走你自己的供应商,不受这个限制。",
-        "en": "Google's free translate endpoint refused this machine (429). It blocks by egress IP and often does not clear on its own \u2014 data-centre, VPN and proxy exits are the usual cases. Switch the translate node's engine to \u300cAI\u300d: it goes through your own provider and is not subject to this limit.",
+        "zh": "Google 免费翻译接口拒绝了请求(429)。这个非官方端点可能限制客户端标识、出口或突发频率。稍后再试，或者把翻译节点的引擎换成「AI 翻译」；AI 翻译走你自己的供应商。",
+        "en": "Google's unofficial free translate endpoint refused the request (429). It may limit client identities, network exits, or request bursts. Try again later, or switch the translate node's engine to \u300cAI\u300d to use your own provider.",
     },
     "translateErr_googleHttp": {
         "zh": "Google 免费翻译接口返回 {status}。稍后再试,或者把翻译节点的引擎换成「AI 翻译」。",

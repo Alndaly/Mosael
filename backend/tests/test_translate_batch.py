@@ -1,8 +1,7 @@
-"""Batch translation runs its round-trips concurrently.
+"""批量翻译按引擎采用不同的流控。
 
-A subtitle track is N independent network calls. Doing them one after another made translating
-a 21-cue track take N × latency; these tests pin that they now overlap, that order and empty
-cues survive, and that the DB is not touched from a worker thread."""
+AI 供应商有正式配额，可以有限并发；Google 免费端点会限制客户端标识、出口或突发请求，只能串行。这里
+同时钉住顺序、空字幕占位，以及 DB 不进入工作线程。"""
 
 from __future__ import annotations
 
@@ -14,8 +13,7 @@ import pytest
 from app.domain import translate as tr
 
 
-def test_batch_overlaps_instead_of_running_one_after_another(monkeypatch) -> None:
-    delay = 0.1
+def test_google_batch_is_serial_instead_of_bursting_the_free_endpoint(monkeypatch) -> None:
     in_flight = 0
     peak = 0
     lock = threading.Lock()
@@ -25,30 +23,29 @@ def test_batch_overlaps_instead_of_running_one_after_another(monkeypatch) -> Non
         with lock:
             in_flight += 1
             peak = max(peak, in_flight)
-        time.sleep(delay)
+        time.sleep(0.01)
         with lock:
             in_flight -= 1
         return f"[{target}] {text}"
 
     monkeypatch.setattr(tr, "google_translate", fake_google)
+    monkeypatch.setattr(tr, "_GOOGLE_MIN_INTERVAL_SECONDS", 0)
 
     texts = [f"cue {i}" for i in range(16)]
     started = time.perf_counter()
     out = tr.translate_many(None, texts, "en", user_id=None)
-    elapsed = time.perf_counter() - started
+    _elapsed = time.perf_counter() - started
 
-    assert out == [f"[en] cue {i}" for i in range(16)], "order must survive the pool"
-    assert peak > 1, "calls never overlapped — the batch is still sequential"
-    # Sequential would be 16 × 0.1s = 1.6s. With the pool capped at 8 it is ~2 waves.
-    assert elapsed < 16 * delay * 0.6, f"took {elapsed:.2f}s, barely better than sequential"
+    assert out == [f"[en] cue {i}" for i in range(16)], "串行流控不能改变字幕顺序"
+    assert peak == 1, "免费端点不该收到并发突发请求"
 
 
-def test_concurrency_is_bounded(monkeypatch) -> None:
+def test_ai_concurrency_is_bounded(monkeypatch) -> None:
     in_flight = 0
     peak = 0
     lock = threading.Lock()
 
-    def fake_google(text, target, source="auto", client=None):
+    def fake_ai(chat_target, text, target, client=None, call=None):
         nonlocal in_flight, peak
         with lock:
             in_flight += 1
@@ -58,10 +55,31 @@ def test_concurrency_is_bounded(monkeypatch) -> None:
             in_flight -= 1
         return text
 
-    monkeypatch.setattr(tr, "google_translate", fake_google)
-    tr.translate_many(None, [f"c{i}" for i in range(64)], "en", user_id=None)
-    # Unbounded would open 64 sockets at once and get rate-limited by the free endpoint.
-    assert peak <= tr._MAX_PARALLEL
+    class Billing:
+        def __enter__(self): return None
+        def __exit__(self, *_args): return False
+
+    monkeypatch.setattr(tr, "resolve_ai_chat_target", lambda *args, **kwargs: object())
+    monkeypatch.setattr(tr, "ai_translate_with", fake_ai)
+    monkeypatch.setattr(tr, "billable", lambda *args, **kwargs: Billing())
+    tr.translate_many(None, [f"c{i}" for i in range(64)], "en", user_id=None, engine="ai")
+    assert 1 < peak <= tr._MAX_PARALLEL
+
+
+def test_google_batch_disables_retry_storm(monkeypatch) -> None:
+    seen: list[int | None] = []
+
+    class Client:
+        def __init__(self, *args, max_retries=None, **kwargs):
+            seen.append(max_retries)
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+
+    monkeypatch.setattr(tr.ai_retry, "RetryingClient", Client)
+    monkeypatch.setattr(tr, "google_translate", lambda text, target, source="auto", client=None: text)
+    monkeypatch.setattr(tr, "_GOOGLE_MIN_INTERVAL_SECONDS", 0)
+    assert tr.translate_many(None, ["a", "b"], "en", user_id=None) == ["a", "b"]
+    assert seen == [0]
 
 
 def test_empty_cues_pass_through_without_a_network_call(monkeypatch) -> None:
@@ -72,6 +90,7 @@ def test_empty_cues_pass_through_without_a_network_call(monkeypatch) -> None:
         return f"T:{text}"
 
     monkeypatch.setattr(tr, "google_translate", fake_google)
+    monkeypatch.setattr(tr, "_GOOGLE_MIN_INTERVAL_SECONDS", 0)
     out = tr.translate_many(None, ["hello", "", "   ", "world"], "en", user_id=None)
     assert out == ["T:hello", "", "", "T:world"]
     assert calls == ["hello", "world"], "blank cues must not cost a round-trip"
@@ -84,6 +103,7 @@ def test_one_failure_fails_the_batch(monkeypatch) -> None:
         return text
 
     monkeypatch.setattr(tr, "google_translate", fake_google)
+    monkeypatch.setattr(tr, "_GOOGLE_MIN_INTERVAL_SECONDS", 0)
     with pytest.raises(tr.TranslateError):
         tr.translate_many(None, ["ok", "bad", "ok2"], "en", user_id=None)
 

@@ -11,6 +11,7 @@ two choices from one place. Kept dependency-light (httpx only).
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import time
 
 import httpx
 
@@ -21,10 +22,11 @@ from app.domain.usage import BillableCall, billable
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
 _TIMEOUT = 30
-# Translating a subtitle track means one independent network round-trip per cue, so they run
-# concurrently rather than one after another. Bounded, not unbounded: Google's free endpoint
-# rate-limits a burst, and a 200-cue track would otherwise open 200 sockets at once.
+# AI 供应商的字幕请求有限并发；Google 免费端点走下面的单通道节流。
 _MAX_PARALLEL = 8
+# 免费端点会按客户端标识、出口或突发频率拒绝请求。请求本身通常比这个间隔慢，但本地代理
+# 命中快速链路时仍要把起始时间摊开；它不是供应商 API，不能把并发当成稳定能力。
+_GOOGLE_MIN_INTERVAL_SECONDS = 0.35
 
 # Target languages surfaced in the UI (google codes; the AI path takes the same codes as hints).
 LANGUAGES: tuple[tuple[str, str], ...] = (
@@ -149,7 +151,10 @@ def google_translate(text: str, target: str, source: str = "auto", client: httpx
     try:
         response = http.get(
             _GOOGLE_URL,
-            params={"client": "gtx", "sl": source, "tl": target, "dt": "t", "q": text},
+            # `gtx` 是旧的匿名客户端标识。2026-09 起，Google 会跨多个出口统一把它打到
+            # Sorry/429，而同一请求用 Chrome 字典客户端仍正常返回；不要再把这种响应误判成
+            # 某一个代理 IP 被封。
+            params={"client": "dict-chrome-ex", "sl": source, "tl": target, "dt": "t", "q": text},
             timeout=_TIMEOUT,
         )
         response.raise_for_status()
@@ -183,8 +188,9 @@ def translate_many(
 ) -> list[str]:
     """Translate a batch, running the round-trips concurrently.
 
-    Each cue is an independent network call, so a subtitle track used to cost
-    len(texts) × latency — about ten seconds for a typical track. They now overlap.
+    AI 供应商的各句调用可以并行。Google 免费端点则必须串行并限制请求起始频率：它会按客户
+    端标识、出口或突发流量拒绝请求，8 路并发可能把本来可用的路径打进
+    ``Sorry / unusual traffic``，随后连单请求都会持续 429。
 
     Two things are deliberately done before the pool starts: the chat target is resolved from the DB
     (a Session is single-threaded), and one httpx.Client is created so the batch shares
@@ -207,14 +213,21 @@ def translate_many(
             for index, translated in pool.map(run_in_scope(translate_one), indexed):
                 results[index] = translated
 
-    # 共享 client 用 RetryingClient 而不是裸 httpx.Client:共享连接是为了省掉每条字幕一次 TLS
-    # 握手,但不该因此丢掉重试 —— 设置页那句「连接断开/超时/限流时自动重试」管的是所有 AI 调用。
-    # 经模块引用而不是 from-import:全项目只有 ai_retry.RetryingClient 一个打桩点,
-    # 直接 import 进来会让它变成第二个,测试就得两处都打。
+    if chat_target is None:  # google:免费端点,不产生供应商用量,不开记账
+        # 429 后立刻停：通用 RetryingClient 的指数重试适合有正式配额的供应商 API，但 Google
+        # 免费端点会把同一出口的并发重试视为更多异常流量。共享连接仍保留，省掉逐句 TLS 握手。
+        with ai_retry.RetryingClient(timeout=_TIMEOUT * 2, max_retries=0) as client:
+            last_started = 0.0
+            for index, text in indexed:
+                wait = _GOOGLE_MIN_INTERVAL_SECONDS - (time.monotonic() - last_started)
+                if wait > 0:
+                    time.sleep(wait)
+                last_started = time.monotonic()
+                results[index] = google_translate(text, target, client=client)
+        return results
+
+    # AI 供应商是有正式配额的 API，保留并发与通用重试策略。
     with ai_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
-        if chat_target is None:  # google:免费端点,不产生供应商用量,不开记账
-            run(lambda item: (item[0], google_translate(item[1], target, client=client)))
-            return results
         # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
         # "这次翻译花了多少"。
         with billable(db, capability="chat", operation="translate_batch") as call:
