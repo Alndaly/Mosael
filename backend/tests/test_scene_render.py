@@ -132,3 +132,17 @@ def test_运镜参考视频和镜头一样长(tmp_path) -> None:
         capture_output=True, text=True, check=True,
     )
     assert float(probe.stdout.strip()) == pytest.approx(2.0, abs=0.1)
+
+
+def test_分组里的相机照样按世界坐标拍() -> None:
+    """工作台拍摄用的是一台独立的相机,直接按 position / target 摆(SceneViewport 的 pose())——
+    相机挂在哪个分组下都不影响它拍到什么。套上分组变换的话,同一个镜头在两边是两个构图。"""
+    box = {"id": "b", "kind": "box", "position": [0, 0, 0], "color": "#ffffff"}
+    loose = render_frame(_scene([box]), "s", 0, supersample=1).image
+    rig = {"id": "rig", "kind": "group", "position": [30, 0, 0]}
+    grouped = SceneContent.model_validate({
+        "objects": [box, rig, {"id": "cam", "kind": "camera", "parent_id": "rig", "position": [0, 1, 5], "target": [0, 1, 0], "fov": 40}],
+        "shots": [{"id": "s", "duration": 5, "camera_id": "cam"}],
+        "background": "#000000",
+    })
+    assert np.array_equal(np.asarray(loose), np.asarray(render_frame(grouped, "s", 0, supersample=1).image))

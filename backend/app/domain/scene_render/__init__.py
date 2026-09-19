@@ -105,17 +105,13 @@ def _visible(obj: SceneObject, objects: dict[str, SceneObject]) -> bool:
     return True
 
 
-def _camera(content: SceneContent, shot: SceneShot, time: float, world: dict[str, np.ndarray]) -> CameraPose:
+def _camera(content: SceneContent, shot: SceneShot, time: float) -> CameraPose:
+    """这一刻的机位。**位置和看向点都是世界坐标,不管相机挂在哪个分组下** —— 工作台拍摄用的是一台
+    独立的相机,直接按采样出来的 position / target 摆(SceneViewport 的 `pose()`),这里照同一个约定。"""
     camera = next((obj for obj in content.objects if obj.id == shot.camera_id), None)
     if camera is None or camera.kind != "camera":
         raise SceneRenderError(f"镜头「{shot.name}」没有可用的机位")
-    pose = sample_camera(camera, shot, time)
-    if camera.parent_id:
-        # 在分组里的相机:位置跟着分组走;看向的点是世界坐标(three.js 的 lookAt 就是这么定义的)。
-        parent = world[camera.parent_id]
-        position = tuple((parent @ np.array([*pose.position, 1.0]))[:3])
-        return CameraPose(position, pose.target, pose.fov)
-    return pose
+    return sample_camera(camera, shot, time)
 
 
 def _triangles(content: SceneContent, world: dict[str, np.ndarray]) -> tuple[Triangles, int]:
@@ -169,7 +165,7 @@ def render_frame(content: SceneContent, shot_id: str, time: float, *, supersampl
     """这个镜头在第 `time` 秒的白模画面。"""
     shot = find_shot(content, shot_id)
     world = _world_matrices(content, shot, time)
-    camera = _camera(content, shot, time, world)
+    camera = _camera(content, shot, time)
     tris, skipped = _triangles(content, world)
     width, height = FRAME_SIZES[shot.aspect]
     background = np.array([int(content.background[i:i + 2], 16) / 255 for i in (1, 3, 5)])
