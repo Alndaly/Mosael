@@ -189,6 +189,7 @@ def render_shot_video(content: SceneContent, shot_id: str, target: Path) -> Path
     """整个镜头的运镜参考视频(H.264 MP4)。物体有动画的也一起动。"""
     from app.core.child_process import run_logged
     from app.core.config import settings
+    from app.core.text import blame_line
 
     shot = find_shot(content, shot_id)
     count = max(2, int(math.ceil(shot.duration * VIDEO_RENDER_FPS)) + 1)
@@ -210,7 +211,8 @@ def render_shot_video(content: SceneContent, shot_id: str, target: Path) -> Path
             timeout=600,
         )
     if completed.returncode != 0 or not target.is_file():
-        raise SceneRenderError(f"白模运镜视频编码失败:{(completed.stderr or '').strip()[-300:]}")
+        # 挑**说明原因的那一行**,不按位置裁(见 core/text.blame_line)。
+        raise SceneRenderError(f"白模运镜视频编码失败:{blame_line(completed.stderr or '', fallback='ffmpeg 没有说原因')}")
     return target
 
 
@@ -218,7 +220,68 @@ __all__ = [
     "FRAME_SIZES",
     "RenderedFrame",
     "SceneRenderError",
+    "describe_camera_move",
     "find_shot",
     "render_frame",
     "render_shot_video",
 ]
+
+
+def describe_camera_move(start: CameraPose, end: CameraPose) -> str:
+    """把一个镜头的起止机位说成一句**镜头语言**(英文,直接进生成提示词)。
+
+    模型读不懂坐标,但读得懂「35mm、机位 1.6 米、向主体推近 2 米、向左摇 10°」。这些数都是
+    从机位轨迹里算出来的,不是再让 LLM 编一遍 —— 编的那一遍会和白模参考帧对不上。
+
+    焦段按全画幅的竖直 24mm 画幅换算(和 Blender 那边的约定一致:lens = 12 / tan(fov/2))。
+    """
+
+    def lens(fov: float) -> int:
+        return int(round(12 / math.tan(math.radians(fov) / 2)))
+
+    p0, p1 = np.asarray(start.position), np.asarray(end.position)
+    t0, t1 = np.asarray(start.target), np.asarray(end.target)
+    parts = [f"{lens(start.fov)}mm lens, camera {p0[1]:.1f} m above the floor"]
+
+    forward = (t0 - p0) / max(float(np.linalg.norm(t0 - p0)), 1e-6)
+    right = np.cross(forward, np.array([0.0, 1.0, 0.0]))
+    right = right / max(float(np.linalg.norm(right)), 1e-6)
+    moved = float(np.linalg.norm(p1 - p0))
+    #: 三种移动分开认:**到主体的距离**变了是推拉,**绕着主体转**是环绕,**主体跟着一起走**是跟拍/横移。
+    #: 只看"朝前走了多少"的话,环绕会被说成推近 —— 相机确实离主体的起点更近了,但那不是推。
+    radial = float(np.linalg.norm(p0 - t0) - np.linalg.norm(p1 - t1))
+    flat0, flat1 = (p0 - t0)[[0, 2]], (p1 - t1)[[0, 2]]
+    orbit = math.degrees(math.atan2(flat0[0] * flat1[1] - flat0[1] * flat1[0], float(np.dot(flat0, flat1))))
+    target_shift = float(np.linalg.norm(t1 - t0))
+    sideways = "right" if float(np.dot(p1 - p0, right)) > 0 else "left"
+    if moved > 0.15:
+        if abs(orbit) > 12 and target_shift < moved * 0.5:
+            parts.append(f"orbit {sideways} {abs(orbit):.0f}° around the subject")
+        elif target_shift >= moved * 0.5 and abs(radial) < moved * 0.5:
+            parts.append(f"tracking shot, camera travels {sideways if abs(float(np.dot(p1 - p0, right))) > moved * 0.5 else 'forward'} {moved:.1f} m with the subject")
+        if abs(radial) > 0.3:
+            parts.append(f"dolly {'in' if radial > 0 else 'out'} {abs(radial):.1f} m")
+        vertical = float(p1[1] - p0[1])
+        if abs(vertical) > 0.3:
+            parts.append(f"crane {'up' if vertical > 0 else 'down'} {abs(vertical):.1f} m")
+    else:
+        #: 机位不动时,朝向的变化才是摇/俯仰。机位在动时朝向跟着变是移动的一部分,不另说。
+        def heading(p: np.ndarray, t: np.ndarray) -> float:
+            d = t - p
+            return math.degrees(math.atan2(d[0], -d[2]))
+
+        def pitch(p: np.ndarray, t: np.ndarray) -> float:
+            d = (t - p) / max(float(np.linalg.norm(t - p)), 1e-6)
+            return math.degrees(math.asin(max(-1.0, min(1.0, float(d[1])))))
+
+        turn = (heading(p1, t1) - heading(p0, t0) + 180) % 360 - 180
+        if abs(turn) > 3:
+            parts.append(f"pan {'right' if turn > 0 else 'left'} {abs(turn):.0f}°")
+        tilt = pitch(p1, t1) - pitch(p0, t0)
+        if abs(tilt) > 3:
+            parts.append(f"tilt {'up' if tilt > 0 else 'down'} {abs(tilt):.0f}°")
+    if lens(end.fov) != lens(start.fov):
+        parts.append(f"zoom to {lens(end.fov)}mm")
+    if len(parts) == 1:
+        parts.append("locked-off static camera")
+    return ", ".join(parts)
