@@ -1,4 +1,4 @@
-"""整条译配链路真的跑得起来:逐字稿 → 逐句翻译 → 字幕 → 变速配音 → 闪避。
+"""整条译配链路真的跑得起来:逐字稿 → 逐句翻译 → 字幕 → 变速配音 → 分离原声。
 
 **单个节点各自对,不等于这条链路对。** 这条工作流的价值全在几处交接上:译文的顺序要和段落
 一一对上、时间码要来自原段落而不是译文、字幕的落点要加上视频接在第几秒、配音要按自己那一条
@@ -29,7 +29,7 @@ SYNTH_SECONDS = 4.0
 
 @pytest.fixture
 def stubs(monkeypatch):
-    from app.domain import render, translate as translate_domain
+    from app.domain import render, separation, translate as translate_domain
     from app.domain.voices import transcription, voices
 
     def fake_transcribe(db, asset_id, *, created_by=None, language="", engine=""):
@@ -81,11 +81,27 @@ def stubs(monkeypatch):
         db.commit()
         return job
 
+    def fake_separate(db, asset, **kwargs):
+        """分离模型是外部能力；这里交出背景 stem，时间线操作仍走真实实现。"""
+        background = Asset(
+            workspace_id=asset.workspace_id,
+            project_id=asset.project_id,
+            kind="audio",
+            source="separated",
+            name=f"{asset.name} · 背景音",
+            media_info={"duration": asset.media_info.get("duration", 0)},
+        )
+        db.add(background)
+        db.flush()
+        return type("Separated", (), {"background": background})()
+
     monkeypatch.setattr(transcription, "start_transcription", fake_transcribe)
     monkeypatch.setattr(translate_domain, "translate", fake_translate)
     monkeypatch.setattr(translate_domain, "translate_many", fake_translate_many)
     monkeypatch.setattr(voices, "start_synthesis", fake_synthesis)
     monkeypatch.setattr(render, "start_export", fake_export)
+    monkeypatch.setattr(separation, "available", lambda engine="": True)
+    monkeypatch.setattr(separation, "separate_asset", fake_separate)
 
 
 def _video_asset() -> tuple[str, str, str]:
@@ -140,7 +156,7 @@ def test_整条链路跑完之后时间线上该有什么(stubs) -> None:
         # 4 秒的音频塞进 2 秒的段落 = 2 倍速。这就是"快进缩放到原音频段落长度"。
         assert [round(c.speed, 3) for c in dubbed] == [2.0, 2.0]
 
-        # 原声不删,只闪避 —— 整条配音轨删掉就回到原样。
+        # 原声素材与画面都不删；源片段静音，分离出的背景音在独立音频轨上。
         video_clips = by_kind["video"]
         assert len(video_clips) == 1 and video_clips[0].asset_id == asset_id
         # **按「声音在哪」断言,不是按「轨是什么类型」。** 这条流程把原片整段放在**视频轨**上,
@@ -148,13 +164,12 @@ def test_整条链路跑完之后时间线上该有什么(stubs) -> None:
         # 而成片里原声一分贝没降(实测最小二乘增益 0.996)。
         original = tracks[video_clips[0].track_id]
         assert original.id != dub_track.id
-        # **译配要的是替换,不是叠加。** 闪避只压到 30%(≈ −10.5 dB),而两边都是人声 ——
-        # 成片里就是两个人同时说话,只是一个小声点(真机上报回来的正是这个)。所以这条流程
-        # 把原声**静音**:不删任何东西,动的是轨上那个开关,随时能改回来。
-        #: 这台测试机上没有分离引擎,所以走的是**退回**那条路:整轨静音。
-        #: 装了引擎时换成"把片段指向伴奏素材",由 test_分离可用时保住背景音乐 钉住。
-        assert original.muted, "没有分离引擎时要退回整轨静音,而不是让整条流程失败"
+        assert video_clips[0].muted, "原片片段自己的声音要关掉，人声不能和译配叠在一起"
+        backgrounds = [clip for clip in by_kind["audio"] if clip.track_id != dub_track.id]
+        assert len(backgrounds) == 1 and backgrounds[0].timeline_start == 0
+        assert backgrounds[0].asset.name.endswith("背景音")
         assert not dub_track.muted, "配音轨自己不能被静音 —— 那样成片里就什么都没有了"
 
     assert context["dubbing"]["done"] == 2 and context["dubbing"]["failed"] == 0
+    assert context["dubbing"]["original_audio"] == "separate"
     assert context["translated_subtitles"]["count"] == 2
