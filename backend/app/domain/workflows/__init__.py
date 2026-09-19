@@ -633,8 +633,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             # **不标 advanced。** 它是图生视频/参考生视频的唯一入口 —— 藏进高级等于把一整类
             # 用法藏起来,而判据的第二条正是"它是不是这个节点在做的事"。
+            #: 值是**行的列表**,每行 `素材:角色`;某一行可以是一整串引用(一组这样的行)。
             "source_assets": {
                 "type": "template",
+                "lines": True,
                 "description": "wfNode_ai_generate_source_assets",
                 "description_params": _source_assets_help(),
             },
@@ -1675,10 +1677,10 @@ def create_workflow(
     revision_note: str = "",
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
-    from app.domain.workflows.normalization import canonicalize_data_bindings
+    from app.domain.workflows.normalization import normalize_graph
 
     extra_types = _plugin_types(db)
-    graph = canonicalize_data_bindings(graph, node_types={**NODE_TYPES, **extra_types})
+    graph = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
     # 保存放行「还没配完」:必填缺失交给就绪检查与运行时,否则新节点存不下来。
     errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=extra_types)
     if errors:
@@ -1710,10 +1712,10 @@ def update_workflow(
 ) -> Workflow:
     graph = changes.get("graph")
     if "graph" in changes and changes["graph"] is not None:
-        from app.domain.workflows.normalization import canonicalize_data_bindings
+        from app.domain.workflows.normalization import normalize_graph
 
         extra_types = _plugin_types(db)
-        graph = canonicalize_data_bindings(graph, node_types={**NODE_TYPES, **extra_types})
+        graph = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
         errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=extra_types)
         if errors:
             raise WorkflowDomainError("；".join(errors))

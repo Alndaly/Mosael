@@ -1,8 +1,10 @@
 /**
- * 生成节点的输入素材,在配置里存成**每行一条 `素材id` 或 `素材id:角色`** 的文本。
+ * 生成节点的输入素材,在配置里存成**行的列表**:每行一条 `素材id` 或 `素材id:角色`。
  *
- * 存成文本是有道理的:工作流里这一格常常不是一个固定的素材,而是上游节点的输出
- * (`{{ai-generate-1.asset_id}}`)—— 那种东西只有模板串装得下,下拉装不下。
+ * 行而不是固定的素材选择,是因为工作流里这一格常常是上游节点的输出(`{{ai-generate-1.asset_id}}`)
+ * —— 那种东西只有模板串装得下,下拉装不下。**列表**而不是一整段多行文本,是因为某一行可以正好是
+ * 一整串引用(`{{角色三视图.results}}`),插值后是一组;装进一段文本的话它会和别的行拼成一个字符串,
+ * 列表被 `str()` 成 `['…']`。后端的图规范化和迁移保证库里只有列表(见 workflows/normalization)。
  *
  * 但**让用户直接写这段文本不行**。角色名要背(first_frame 还是 firstFrame?),冒号要记,
  * 写错了不报错 —— 后端拿不到角色就按默认走,于是"我明明挂了尾帧"的片子里没有尾帧。
@@ -17,13 +19,23 @@ export interface SourceAssetLine {
   role: string;
 }
 
+/** 读配置里存的那一格。**只认列表**(规范形状);别的形状不是这一格该有的值。 */
+export function readSourceAssets(value: unknown): SourceAssetLine[] {
+  return Array.isArray(value) ? parseSourceAssetText(value.map(String).join("\n")) : [];
+}
+
+/** 写回配置。 */
+export function writeSourceAssets(lines: SourceAssetLine[]): string[] {
+  return sourceAssetText(lines).split("\n").filter(Boolean);
+}
+
 /**
- * 把文本解析成一条条素材。
+ * 把一段多行文本解析成一条条素材(「其他素材」那个自由文本框的输入)。
  *
  * 不写角色的行**保留空角色**,而不是替它猜一个 —— 后端有自己的默认(图生视频按首帧、
  * 图生图按参考图),在这里猜等于把那条默认抄第二遍,而两份默认迟早会不一致。
  */
-export function parseSourceAssets(text: string): SourceAssetLine[] {
+export function parseSourceAssetText(text: string): SourceAssetLine[] {
   return String(text || "")
     .split("\n")
     .map((line) => line.trim())
@@ -39,7 +51,7 @@ export function parseSourceAssets(text: string): SourceAssetLine[] {
 }
 
 /** 反过来。空值的行直接丢掉 —— 一个只有角色没有素材的条目对后端毫无意义。 */
-export function serializeSourceAssets(lines: SourceAssetLine[]): string {
+export function sourceAssetText(lines: SourceAssetLine[]): string {
   return lines
     .filter((line) => line.value.trim())
     .map((line) => (line.role ? `${line.value.trim()}:${line.role}` : line.value.trim()))

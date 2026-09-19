@@ -92,8 +92,10 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import {
   extraLines,
-  parseSourceAssets,
-  serializeSourceAssets,
+  parseSourceAssetText,
+  readSourceAssets,
+  sourceAssetText,
+  writeSourceAssets,
   valueForRole,
   withRole,
 } from "@/features/workflows/sourceAssetLines";
@@ -3184,9 +3186,9 @@ export function NodeInspector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [genModel, genParams.resolution]);
 
-  /** 配置里那段 `id:role` 文本,解析成一条条素材。 */
+  /** 配置里那一列 `id:role`,解析成一条条素材。 */
   const genSourceLines = React.useMemo(
-    () => parseSourceAssets(String(config.source_assets ?? "")),
+    () => readSourceAssets(config.source_assets),
     [config.source_assets],
   );
   /** 这个模型认哪几种素材角色 —— 描述符说了算,不按 kind 猜。 */
@@ -3731,7 +3733,7 @@ export function NodeInspector({
                   allowCustomValue
                   className="w-full"
                   onValueChange={(next: string) =>
-                    setConfig("source_assets", serializeSourceAssets(withRole(genSourceLines, role, next)))
+                    setConfig("source_assets", writeSourceAssets(withRole(genSourceLines, role, next)))
                   }
                 />
               </div>
@@ -3743,16 +3745,16 @@ export function NodeInspector({
                 <span>{t("wfGenSourceExtra")}</span>
                 <RefEditor
                   rows={Math.min(genExtraSourceLines.length + 1, 4)}
-                  value={serializeSourceAssets(genExtraSourceLines)}
+                  value={sourceAssetText(genExtraSourceLines)}
                   variables={variables}
                   onChange={(next: string) =>
                     setConfig(
                       "source_assets",
-                      serializeSourceAssets([
+                      writeSourceAssets([
                         ...genSourceLines.filter(
                           (line) => line.role && (genSourceRoles as readonly string[]).includes(line.role),
                         ),
-                        ...parseSourceAssets(next),
+                        ...parseSourceAssetText(next),
                       ]),
                     )
                   }

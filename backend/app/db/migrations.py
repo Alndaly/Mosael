@@ -1934,6 +1934,39 @@ def _backfill_plugin_instances() -> None:
             conn.execute(text("ALTER TABLE plugin_packages DROP COLUMN enabled"))
 
 
+def _migrate_line_fields_are_lists() -> None:
+    """声明为「行列表」的字段(`"lines": True`,目前是生成节点的输入素材)从多行文本改成列表。
+
+    规范形状变了(见 workflows/normalization.canonicalize_line_fields):某一行可以是一整串引用
+    (`{{角色三视图.results}}`),插值后是一组,多行文本装不下它。保存和导入已经只写列表;库里已存的
+    在这里一次转好,编辑器只认列表,不为旧的多行文本留分支。
+
+    只改表示、不改语义(按行拆开,空行丢掉)。排在修订迁移之前:它会发现图变了,追加一份修订并
+    校正摘要,不覆盖旧快照。
+    """
+    if "workflows" not in set(inspect(engine).get_table_names()):
+        return
+    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.normalization import canonicalize_line_fields
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
+        for row in rows:
+            raw_graph = row["graph"]
+            try:
+                graph = json.loads(raw_graph) if isinstance(raw_graph, str) else raw_graph
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(graph, dict):
+                continue
+            normalized = canonicalize_line_fields(graph, node_types=NODE_TYPES)
+            if normalized != graph:
+                conn.execute(
+                    text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                    {"graph": json.dumps(normalized, ensure_ascii=False), "id": row["id"]},
+                )
+
+
 def _migrate_job_keys_are_keys() -> None:
     """jobs 的 message_key / error_key 里只能是**文案 key**(或空)。
 
@@ -2085,6 +2118,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_generation_capability_profiles,
                 _migrate_browser_boolean_options,
                 _migrate_official_workflow_data_bindings,
+                _migrate_line_fields_are_lists,
                 _migrate_workflow_revisions,
                 # Projection comes last so rows synthesized by earlier migrations are visible
                 # immediately, rather than waiting for the next application startup.

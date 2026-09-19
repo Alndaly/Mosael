@@ -15,6 +15,44 @@ from typing import Any
 PURE_REFERENCE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
 
+def normalize_graph(graph: dict[str, Any], *, node_types: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """**图的规范形状**:保存、导入、官方模板、迁移都经过这一个入口。
+
+    两件事:声明为「行列表」的字段统一成列表(见 canonicalize_line_fields),精确的
+    `{{节点.输出}}` 升级成数据边(见 canonicalize_data_bindings)。库里只存规范形状,
+    读取端和编辑器因此只认一种。
+    """
+    return canonicalize_data_bindings(canonicalize_line_fields(graph, node_types=node_types), node_types=node_types)
+
+
+def canonicalize_line_fields(graph: dict[str, Any], *, node_types: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """声明了 `"lines": True` 的字段,值统一成**行的列表**(一段多行文本按行拆开)。
+
+    为什么要是列表:某一行可以正好是一整串引用(`{{角色三视图.results}}`),插值后是一组值,
+    解析时摊平 —— 全部角色的三视图一次接进参考图。存成一整段多行文本的话,这一行在插值时
+    和别的行拼在同一个字符串里,列表被 `str()` 成 `['…', '…']`,当场就坏。
+    """
+    normalized = deepcopy(graph)
+    _lines_in(normalized, node_types)
+    return normalized
+
+
+def _lines_in(graph: dict[str, Any], node_types: dict[str, dict[str, Any]]) -> None:
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        config = node.get("config")
+        if not isinstance(config, dict):
+            continue
+        specs = (node_types.get(str(node.get("type", ""))) or {}).get("config") or {}
+        for key, spec in specs.items():
+            if isinstance(spec, dict) and spec.get("lines") and isinstance(config.get(key), str):
+                config[key] = [line.strip() for line in config[key].splitlines() if line.strip()]
+        body = config.get("body")
+        if isinstance(body, dict) and isinstance(body.get("nodes"), list):
+            _lines_in(body, node_types)
+
+
 def canonicalize_data_bindings(
     graph: dict[str, Any],
     *,

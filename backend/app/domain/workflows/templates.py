@@ -15,7 +15,7 @@ from app.domain.generation.resolution import resolve_row
 from app.domain.provider_defaults import get_row
 from app.domain.provider_models import effective_capabilities
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
-from app.domain.workflows.normalization import canonicalize_data_bindings
+from app.domain.workflows.normalization import normalize_graph
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -673,7 +673,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         "nodes": nodes,
         "edges": edges,
     }
-    return canonicalize_data_bindings(graph, node_types=NODE_TYPES)
+    return normalize_graph(graph, node_types=NODE_TYPES)
 
 
 def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
@@ -862,7 +862,7 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         "nodes": nodes,
         "edges": edges,
     }
-    return canonicalize_data_bindings(graph, node_types=NODE_TYPES)
+    return normalize_graph(graph, node_types=NODE_TYPES)
 
 
 def _first_voice_id(db: Session, workspace_id: str) -> str:
@@ -1296,4 +1296,4 @@ JSON Schema 的对象。"""
         "nodes": nodes,
         "edges": edges,
     }
-    return canonicalize_data_bindings(graph, node_types=NODE_TYPES)
+    return normalize_graph(graph, node_types=NODE_TYPES)
