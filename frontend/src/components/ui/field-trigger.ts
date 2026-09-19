@@ -1,3 +1,5 @@
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+
 /**
  * 「看起来像输入框的下拉触发器」的唯一样式来源。
  *
@@ -15,7 +17,7 @@
  * 会把整个面板顶穿,truncate 完全不生效,右侧箭头被挤没。都归零后 w-full 才真正生效。
  */
 export const FIELD_TRIGGER_CLASS =
-  "flex h-10 w-full min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-field-border bg-field px-3 py-2 text-ui-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate";
+  `flex ${CONTROL_HEIGHT.md} w-full min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-field-border bg-field px-3 py-2 text-ui-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate`;
 
 /** 触发器右侧的下拉箭头。尺寸与透明度跟着触发器走,三种控件同一个写法。 */
 export const FIELD_TRIGGER_CHEVRON = "h-4 w-4 shrink-0 opacity-50";

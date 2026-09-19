@@ -3,6 +3,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Loader2 } from "lucide-react"
 
+import { CONTROL_HEIGHT, CONTROL_SQUARE } from "@/components/ui/control-size"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
@@ -14,30 +15,33 @@ const buttonVariants = cva(
           "bg-action text-action-foreground  hover:bg-action/90",
         destructive:
           "bg-destructive text-destructive-foreground  hover:bg-destructive/90",
+        //: 描边和输入框、下拉框是**同一种描边**(field-border):一行里的输入框、下拉框、描边按钮
+        //: 外轮廓一样清楚。此前用的是分隔线色,在弹窗里几乎看不见,按钮的可见轮廓比旁边的
+        //: 实心按钮小一圈 —— 两个 40px 的按钮看起来不一样高。
         outline:
-          "border border-border bg-control hover:bg-secondary hover:text-foreground",
+          "border border-field-border bg-control hover:bg-secondary hover:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground  hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 rounded-md px-4 py-2",
+        default: `${CONTROL_HEIGHT.md} rounded-md px-4 py-2`,
         // 28px 的带文字胶囊。工具栏那一行放的都是次要动作,sm(32px)在里面偏高、px-3 偏宽;
         // 高度压到 28 之后 text-ui-sm 会把胶囊顶满,所以这一档自带 text-ui-xs —— 字号跟着
         // 高度走,不必每个调用点再补一遍。
-        xs: "h-7 rounded-md px-2.5 text-ui-xs",
-        sm: "h-8 rounded-md px-3",
-        lg: "h-11 rounded-md px-6",
-        icon: "h-9 w-9 rounded-md",
+        xs: `${CONTROL_HEIGHT.xs} rounded-md px-2.5 text-ui-xs`,
+        sm: `${CONTROL_HEIGHT.sm} rounded-md px-3`,
+        lg: `${CONTROL_HEIGHT.lg} rounded-md px-6`,
+        icon: `${CONTROL_SQUARE.md} rounded-md`,
         // 与 sm 同高的方形图标按钮。卡片、工具栏这类窄容器里,次要动作放不下文字标签,
         // 而 icon(36px)在一排 sm(32px)按钮中间会高出一截。
-        "icon-sm": "size-8 rounded-md",
+        "icon-sm": `${CONTROL_SQUARE.sm} rounded-md`,
         // 28px:全应用工具栏的**实际**刻度(时间线、编辑器、设置页、智能体输入框都是这一档)。
         // 这一档以前没有 token,于是几十处各自写 `h-7 w-7` 盖在 size="icon" 上 —— 盖漏一处
         // 就是一个 36px 的圆按钮杵在一排 28px 控件中间,智能体输入框刚栽过这一下。
         // 棘轮:`components/ui/buttonScale.test.ts` 拦下一处再手搓。
-        "icon-xs": "size-7 rounded-md",
+        "icon-xs": `${CONTROL_SQUARE.xs} rounded-md`,
       },
     },
     defaultVariants: {
