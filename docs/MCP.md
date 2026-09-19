@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **79** 个工具,其中 **21** 个走确认卡、**1** 个停下来等用户作答。
+共 **80** 个工具,其中 **21** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -89,6 +89,7 @@ summaries — never raw internal schemas.
 | `update_asset_tags` | 直接执行 | Runs directly: replace an EXISTING media asset's tag list. |
 | `update_plan` | 直接执行 | Runs directly: publish/refresh your task plan for the current conversation. |
 | `update_workflow` | 确认卡 | Confirmation required: rename a workflow or replace its ENTIRE graph. |
+| `view_scene` | 直接执行 | Read-only: LOOK at a 3D scene — returns rendered images you can see. Free, local, ~1 s per view. |
 | `web_search` | 直接执行 | Read-only: search the public web for up-to-date external information. |
 
 <!-- END generated: tools -->

@@ -19,6 +19,7 @@ import {
 
 import { BackendCredentialStore } from "./credentials.js";
 import type { RunTurnRequest } from "./protocol.js";
+import { dropToolImages, keepRecentToolImages } from "./toolImages.js";
 // 规范入口(不是 `/compat` —— 那是上游标注为「临时、将随 ModelManager 迁移删除」的兼容层)。
 // 这个入口能用的前提是构建带 --ignore-annotations,原因见 package.json 里的说明。
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
@@ -610,7 +611,11 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     },
     streamFn,
     // 轮内兜底:只防单轮里工具调用把消息堆爆,正常对话碰不到。
-    transformContext: async (messages) => guardRunawayTurn(messages, Number(model?.contextWindow) || FALLBACK_CONTEXT_WINDOW),
+    transformContext: async (messages) =>
+      guardRunawayTurn(
+        keepRecentToolImages(messages, Boolean(model?.input?.includes("image"))),
+        Number(model?.contextWindow) || FALLBACK_CONTEXT_WINDOW,
+      ),
   });
   const turnStartIndex = priorMessages.length;
   // One queued message per turn, in the order they were sent. Draining the whole queue at
@@ -662,7 +667,8 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     if (agent.signal?.aborted || String(err).includes("abort")) aborted = true;
     else throw err;
   }
-  const messages = agent.state.messages;
+  // 工具截图不进会话状态:下一轮重发上一轮的画面没有意义(见 toolImages.ts)。
+  const messages = dropToolImages(agent.state.messages);
   const turnMessages = messages.slice(turnStartIndex);
   // 最近一条标记为 error 的消息即本轮的失败原因(如 base_url 不是 OpenAI 兼容端点、
   // 模型不存在、鉴权失败)。

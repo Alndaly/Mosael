@@ -23,6 +23,7 @@ list_plugin_tools/invoke_plugin_tool 那两个元工具后面。理由是发现�
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 from typing import Any
 
@@ -170,4 +171,24 @@ def invoke_agent_tool(
         except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
             logger.warning("tool %s failed: %s", name, exc)
             return {"error": str(exc)[:500]}
-    return {"result": result}
+    return _as_payload(result)
+
+
+def _as_payload(result: Any) -> dict[str, Any]:
+    """工具的返回值 → 这条 HTTP 通道的形状。
+
+    多数工具返回普通数据,原样放进 `result`。**会给模型看图的工具**返回 MCP 标准内容块
+    (文字 + 图片,见 mcp_server._with_images):文字解析回数据进 `result`,图片单独放进
+    `images`,由 sidecar 交给模型当视觉输入。只有这一种形状,不按工具名特判。
+    """
+    from mcp.types import ImageContent, TextContent
+
+    if not (isinstance(result, list) and result and all(isinstance(b, (TextContent, ImageContent)) for b in result)):
+        return {"result": result}
+    text = "\n".join(block.text for block in result if isinstance(block, TextContent))
+    try:
+        value: Any = json.loads(text)
+    except ValueError:
+        value = text
+    images = [{"mime_type": b.mime_type, "data": b.data} for b in result if isinstance(b, ImageContent)]
+    return {"result": value, "images": images}

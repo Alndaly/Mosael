@@ -209,6 +209,24 @@ function jsonResult(data: unknown): AgentToolResult<{ data: unknown }> {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: { data } };
 }
 
+interface ToolImage { mime_type: string; data: string }
+
+/**
+ * 带图的结果:文字照旧,图片作为**视觉输入**跟在后面 —— 模型能看见它,而不是读到一串 base64。
+ *
+ * `details` 里不放图片本身,只记张数:details 会原样发给后端存进这次对话的记录,一张图几十 KB,
+ * 建模时一轮几十张,记录会被撑成几 MB。给 UI 的是"看了几张",画面本身属于那一刻的模型。
+ */
+function imageResult(data: unknown, images: ToolImage[]): AgentToolResult<{ data: unknown; images: number }> {
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(data, null, 2) },
+      ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mime_type })),
+    ],
+    details: { data, images: images.length },
+  };
+}
+
 interface ToolSpec {
   name: string;
   description: string;
@@ -283,8 +301,9 @@ export async function buildAllTools(
             // **不再转述 sessionId**:这次调用属于哪次对话,后端从 token 认出来(turn 令牌铸造时
             // 就带着它)。转述的东西可以被伪造,而确认卡的归属决定它出现在谁面前、以后还决定
             // 要不要自动放行。
-          }, signal)) as { result?: unknown; error?: string };
+          }, signal)) as { result?: unknown; error?: string; images?: ToolImage[] };
           if (response?.error) throw new Error(response.error);
+          if (response?.images?.length) return imageResult(response.result ?? null, response.images);
           if (spec.awaits_answer) {
             // 选择卡:调用只立起了卡,这一轮停在这里等用户挑 —— 答案于是作为**工具结果**
             // 回到它被问的那个位置,不用靠一条伪造的用户消息把模型重新叫醒。

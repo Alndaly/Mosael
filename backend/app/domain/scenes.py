@@ -385,6 +385,45 @@ def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, obje
 #: 所以默认只要静帧,用得上运镜视频(交给视频模型当参考视频)的时候再要。
 REFERENCE_RENDERS = ("stills", "video", "both")
 
+#: 一次最多看几张。每张图都进模型上下文,一次要四个角度通常说明它其实在找别的东西。
+VIEW_LIMIT = 4
+
+
+def view_scene(scene: Scene3D, *, views: list[str], shot_id: str = "", time: float = 0.0) -> dict:
+    """把场景渲成几张图**给智能体看** —— 改完摆位后自己检查,而不是凭数字想象。不登记素材、不落盘。
+
+    `views` 里的 `shot` 是那个镜头的机位看到的画面(构图),其余是自由视角(见
+    scene_render.FREE_VIEWS):从上面看布局、从正面/侧面看高度关系。不超采样:给模型检查摆位用,
+    边缘锯齿无所谓,而智能体一轮里会看很多次,快四倍比好看有用。
+    """
+    import base64
+    import io
+
+    from app.domain.scene_render import FREE_VIEWS, SceneRenderError, find_shot, render_frame, render_view
+
+    wanted = list(dict.fromkeys(views or ["shot", "overview"]))[:VIEW_LIMIT]
+    unknown = [one for one in wanted if one != "shot" and one not in FREE_VIEWS]
+    if unknown:
+        raise SceneDomainError(f"不认识的视角 {', '.join(unknown)};可选 shot、{'、'.join(FREE_VIEWS)}")
+    content = SceneContent.model_validate(scene.content)
+    images, skipped = [], 0
+    try:
+        shot = find_shot(content, shot_id) if shot_id else content.shots[0]
+        for view in wanted:
+            if view == "shot":
+                frame = render_frame(content, shot.id, min(time, shot.duration), supersample=1)
+            else:
+                frame = render_view(content, view, time=time, shot_id=shot.id, supersample=1)
+            buffer = io.BytesIO()
+            frame.image.save(buffer, "JPEG", quality=85)
+            images.append({"view": view, "mime_type": "image/jpeg",
+                           "data": base64.b64encode(buffer.getvalue()).decode()})
+            skipped = frame.skipped_models
+    except SceneRenderError as exc:
+        raise SceneDomainError(str(exc)) from exc
+    return {"revision": scene.revision, "shot_id": shot.id, "time": time,
+            "skipped_models": skipped, "images": images}
+
 
 def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render: str = "stills",
                            project_id: str | None = None) -> dict:

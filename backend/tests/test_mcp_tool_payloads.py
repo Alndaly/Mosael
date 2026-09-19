@@ -44,6 +44,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "create_scene": {"name": "Scene smoke test"},
     "edit_scene": {"scene_id": "no-such-scene", "base_revision": 1},
     "render_scene_references": {"scene_id": "no-such-scene", "shot_id": "shot-1"},
+    "view_scene": {"scene_id": "no-such-scene", "views": ["shot", "top"]},
     "create_note": {"title": "冒烟笔记", "markdown": "正文"},
     "append_note": {"note_id": "no-such-note", "base_revision": 1, "markdown": "补充"},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会

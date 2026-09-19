@@ -146,3 +146,61 @@ def test_分组里的相机照样按世界坐标拍() -> None:
         "background": "#000000",
     })
     assert np.array_equal(np.asarray(loose), np.asarray(render_frame(grouped, "s", 0, supersample=1).image))
+
+
+class Test自由视角给智能体自己检查:
+    """view_scene 的那几个角度:改完摆位后从上面、侧面看一眼,而不是凭数字想象。"""
+
+    def test_俯瞰把远处的物体也装进画面(self) -> None:
+        near = {"id": "a", "kind": "box", "position": [0, 0, 0], "color": "#ff0000"}
+        far = {"id": "b", "kind": "box", "position": [12, 0, -8], "color": "#00ff00"}
+        from app.domain.scene_render import render_view
+
+        image = np.asarray(render_view(_scene([near, far]), "overview", supersample=1).image).astype(int)
+        assert (image[..., 0] > 80).any() and (image[..., 1] > 80).any(), "两个盒子都该在画面里"
+
+    def test_顶视图看得出左右前后(self) -> None:
+        """顶视时 +X 仍在画面右边 —— 布局图左右颠倒的话,模型会照着反的去挪。"""
+        from app.domain.scene_render import render_view
+
+        left = {"id": "l", "kind": "box", "position": [-3, 0, 0], "color": "#ff0000"}
+        right = {"id": "r", "kind": "box", "position": [3, 0, 0], "color": "#0000ff"}
+        image = np.asarray(render_view(_scene([left, right]), "top", supersample=1).image).astype(int)
+        red = np.argwhere(image[..., 0] > image[..., 2] + 60)[:, 1].mean()
+        blue = np.argwhere(image[..., 2] > image[..., 0] + 60)[:, 1].mean()
+        assert red < blue
+
+    def test_默认看第一个镜头的机位和俯瞰(self) -> None:
+        from types import SimpleNamespace
+
+        from app.domain.scenes import view_scene
+
+        content = _scene([{"id": "b", "kind": "box"}]).model_dump(mode="json")
+        out = view_scene(SimpleNamespace(content=content, revision=3), views=[])
+        assert [one["view"] for one in out["images"]] == ["shot", "overview"]
+        assert out["shot_id"] == "s" and out["images"][0]["mime_type"] == "image/jpeg"
+
+    def test_不认识的视角直接说可选项(self) -> None:
+        from types import SimpleNamespace
+
+        from app.domain.scenes import SceneDomainError, view_scene
+
+        content = _scene([]).model_dump(mode="json")
+        with pytest.raises(SceneDomainError, match="overview"):
+            view_scene(SimpleNamespace(content=content, revision=1), views=["fisheye"])
+
+
+def test_看图工具返回的是图片块_通道上拆成文字和图片() -> None:
+    """模型要**看见**画面:MCP 客户端收到标准图片块;HTTP 通道拆成 result + images,
+    不能把几十万字符的 base64 塞进 JSON 让模型去读。"""
+    from mcp.types import ImageContent, TextContent
+
+    import mcp_server
+    from app.api.routes.agent_tools import _as_payload
+
+    blocks = mcp_server._with_images({"revision": 2, "images": [{"view": "top", "mime_type": "image/jpeg", "data": "QQ=="}]})
+    assert isinstance(blocks[0], TextContent) and isinstance(blocks[1], ImageContent)
+    assert "QQ==" not in blocks[0].text
+    assert _as_payload(blocks) == {"result": {"revision": 2, "image_views": ["top"]},
+                                   "images": [{"mime_type": "image/jpeg", "data": "QQ=="}]}
+    assert _as_payload({"plain": 1}) == {"result": {"plain": 1}}

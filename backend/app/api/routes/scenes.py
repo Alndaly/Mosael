@@ -1,4 +1,6 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Response
+from typing import Annotated
+
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
@@ -8,7 +10,7 @@ from app.db.models import Scene3D, Scene3DModel, Scene3DRevision
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.scenes import (apply_scene_operations, create_scene, delete_scene_model_files,
                                 get_scene, import_model, model_file, render_shot_references, save_scene,
-                                scene_preview)
+                                scene_preview, view_scene)
 
 router = APIRouter(tags=["3D scenes"])
 
@@ -100,6 +102,14 @@ def delete_scene(scene_id: str, workspace_id: str, db: DbSession, user: CurrentU
     db.delete(scene)
     db.commit()
     return Response(status_code=204)
+
+
+@router.get("/scenes/{scene_id}/view")
+def view(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
+         views: Annotated[list[str], Query()] = [], shot_id: str = "", time: float = 0.0):  # noqa: B006
+    """渲几张图给智能体看。不写素材库、不落盘 —— 只读。"""
+    ensure_workspace_access(db, user, workspace_id)
+    return view_scene(get_scene(db, workspace_id, scene_id), views=views, shot_id=shot_id, time=time)
 
 
 @router.post("/scenes/{scene_id}/shots/{shot_id}/references", response_model=SceneReferenceOut)

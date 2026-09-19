@@ -15,10 +15,12 @@ from __future__ import annotations
 from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 import contextlib
 import contextvars
+import json
 import os
 from typing import Any
 
 import httpx
+from mcp.types import ImageContent, TextContent
 # mcp 2.0 把 FastMCP 改名为 MCPServer(mcp.server.fastmcp 整个模块已移除),装饰器与 run() 不变。
 from mcp.server.mcpserver import MCPServer
 
@@ -80,9 +82,9 @@ def _raise_with_detail(response: httpx.Response) -> None:
     raise ValueError(message)
 
 
-def _get(path: str, params: dict[str, Any] | None = None) -> Any:
+def _get(path: str, params: dict[str, Any] | None = None, *, timeout: float = 15) -> Any:
     headers = _auth_headers()
-    with httpx.Client(base_url=api_base(), timeout=15, headers=headers) as client:
+    with httpx.Client(base_url=api_base(), timeout=timeout, headers=headers) as client:
         response = client.get(path, params=params)
         _raise_with_detail(response)
         return response.json()
@@ -213,6 +215,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_memories",
         "list_scenes",
         "get_scene",
+        "view_scene",
         "search_notes",
         "read_note",
         "list_plugin_tools",
@@ -307,6 +310,21 @@ def calling_as(*, token: str, api_base: str, requested_by: str = "", session_id:
     finally:
         for var, reset in reversed(resets):
             var.reset(reset)
+
+
+def _with_images(data: dict[str, Any]) -> list[TextContent | ImageContent]:
+    """把 `data["images"]` 摘出来,变成**模型真的看得见**的图片块;其余字段留在文字里。
+
+    返回 MCP 的标准内容块,而不是把 base64 塞进 JSON:走 MCP 协议的客户端(Claude CLI 等)
+    原样收到图片;走 HTTP 的 pi sidecar 由 /api/agent/tools 翻成 `{result, images}` 再转给模型
+    (见 api/routes/agent_tools._as_payload)。塞进 JSON 的话,模型读到的是几十万字符的乱码。
+    """
+    images = data.pop("images", []) or []
+    data["image_views"] = [one.get("view", "") for one in images]
+    return [
+        TextContent(type="text", text=json.dumps(data, ensure_ascii=False)),
+        *(ImageContent(type="image", data=one["data"], mime_type=one["mime_type"]) for one in images),
+    ]
 
 
 def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
@@ -1304,6 +1322,26 @@ def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] 
     return _post(f"/api/scenes/{scene_id}/operations", {"workspace_id": workspace_id or _default_workspace_id(),
         "base_revision": base_revision, "objects": objects or [], "remove_ids": remove_ids or [],
         "shots": shots, "name": name})
+
+
+@mcp.tool()
+def view_scene(scene_id: str, views: list[str] | None = None, shot_id: str = "", time: float = 0.0,
+               workspace_id: str = "") -> list[TextContent | ImageContent]:
+    """Read-only: LOOK at a 3D scene — returns rendered images you can see. Free, local, ~1 s per view.
+
+    Call it after edit_scene to check your work instead of trusting the numbers: objects sunk into
+    the floor, floating, overlapping, blocking a doorway, or framed badly all show up at a glance.
+    views (max 4): 'shot' = what the shot's camera sees at `time` seconds (composition);
+    'overview' = the whole scene from a high 3/4 angle; 'top' = plan view (layout, paths);
+    'front' / 'side' = elevations (heights, stacking). Default ['shot', 'overview'].
+    shot_id picks the shot (default: the first). Graybox only: each object in its own flat color;
+    imported models are not drawn (skipped_models counts them).
+    """
+    data = _get(f"/api/scenes/{scene_id}/view", {
+        "workspace_id": workspace_id or _default_workspace_id(),
+        "views": views or [], "shot_id": shot_id, "time": time,
+    }, timeout=60)  # 本机渲染:复杂场景四个角度要几秒,15s 的默认读超时不够
+    return _with_images(data)
 
 
 @mcp.tool()

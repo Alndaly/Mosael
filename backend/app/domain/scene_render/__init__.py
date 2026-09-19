@@ -164,10 +164,50 @@ def find_shot(content: SceneContent, shot_id: str) -> SceneShot:
 def render_frame(content: SceneContent, shot_id: str, time: float, *, supersample: int = STILL_SUPERSAMPLE) -> RenderedFrame:
     """这个镜头在第 `time` 秒的白模画面。"""
     shot = find_shot(content, shot_id)
+    return _render(content, shot, time, _camera(content, shot, time), FRAME_SIZES[shot.aspect], supersample)
+
+
+#: 自由视角:不是哪个镜头的机位,而是「从哪个方向看整个场景」。给智能体改完摆位后自己检查用 ——
+#: 镜头机位只拍得到构图里那一块,物体摆穿了、飘在半空、挡在门口,往往要从上面才看得出来。
+#: 值是 (方位角, 仰角),度。顶视不取 90°:look_at 的上方向是 +Y,正对下方时退化。
+FREE_VIEWS = {"overview": (45.0, 35.0), "top": (0.0, 88.0), "front": (0.0, 8.0), "side": (90.0, 8.0)}
+FREE_VIEW_FOV = 40.0
+
+
+def free_view_camera(content: SceneContent, view: str, shot: SceneShot, time: float = 0.0) -> CameraPose:
+    """把整个场景(`shot` 第 `time` 秒的样子)装进画面的一台相机。朝向由 `FREE_VIEWS` 给,距离按包围球算。"""
+    if view not in FREE_VIEWS:
+        raise SceneRenderError(f"不认识的视角 {view},可选:{', '.join(FREE_VIEWS)}")
+    tris, _ = _triangles(content, _world_matrices(content, shot, time))
+    if len(tris.corners):
+        points = tris.corners.reshape(-1, 3)
+        low, high = points.min(axis=0), points.max(axis=0)
+    else:
+        low, high = np.array([-2.0, 0.0, -2.0]), np.array([2.0, 2.0, 2.0])
+    center = (low + high) / 2
+    radius = max(0.5, float(np.linalg.norm(high - low)) / 2)
+    azimuth, elevation = (math.radians(v) for v in FREE_VIEWS[view])
+    direction = np.array([math.cos(elevation) * math.sin(azimuth), math.sin(elevation),
+                          math.cos(elevation) * math.cos(azimuth)])
+    distance = radius / math.sin(math.radians(FREE_VIEW_FOV) / 2) * 1.05
+    position = center + direction * distance
+    return CameraPose(position=tuple(float(v) for v in position), target=tuple(float(v) for v in center),
+                      fov=FREE_VIEW_FOV)
+
+
+def render_view(content: SceneContent, view: str, *, time: float = 0.0, shot_id: str = "",
+                supersample: int = STILL_SUPERSAMPLE) -> RenderedFrame:
+    """自由视角的白模画面(16:9)。`shot_id`(默认第一个镜头)只决定"此刻"物体动画走到哪 —— 不用它的机位。"""
+    shot = find_shot(content, shot_id) if shot_id else content.shots[0]
+    camera = free_view_camera(content, view, shot, time)
+    return _render(content, shot, time, camera, FRAME_SIZES["16:9"], supersample)
+
+
+def _render(content: SceneContent, shot: SceneShot, time: float, camera: CameraPose,
+            size: tuple[int, int], supersample: int) -> RenderedFrame:
     world = _world_matrices(content, shot, time)
-    camera = _camera(content, shot, time)
     tris, skipped = _triangles(content, world)
-    width, height = FRAME_SIZES[shot.aspect]
+    width, height = size
     background = np.array([int(content.background[i:i + 2], 16) / 255 for i in (1, 3, 5)])
     pixels = render(
         tris, _lighting(content, world),
@@ -217,8 +257,11 @@ __all__ = [
     "RenderedFrame",
     "SceneRenderError",
     "describe_camera_move",
+    "FREE_VIEWS",
     "find_shot",
+    "free_view_camera",
     "render_frame",
+    "render_view",
     "render_shot_video",
 ]
 
