@@ -33,6 +33,9 @@ dependencies = [
   # 工作流结构化输出在供应商不支持 response_format 时会降级为提示词约束；结果必须在本地
   # 重新按同一份 Schema 校验，不能把“能 json.loads”误当成契约满足。
   "jsonschema>=4.23",
+  # 3D 白模参考帧在后端渲染(domain/scene_render):z-buffer 光栅化 + 阴影图。纯 Python 逐像素
+  # 跑不动一帧 960x540,而工作流跑在后端 —— 工作台那个 three.js 渲染器在这里够不着。
+  "numpy>=2.1",
 ]
 
 [dependency-groups]
