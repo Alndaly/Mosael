@@ -92,6 +92,23 @@ TaskEvent 行只在总线创建。
 - **只有任务中心播报**:它按目录给顶层任务弹提示、发系统通知、刷新改动过的数据。发起任务的
   组件只说"排上了"。站内通知(铃铛)不变。
 
+**付过钱的远端工作不会被我们放弃**([ADR-0019](adr/0019-paid-remote-work-is-never-abandoned.md)):
+提交给供应商之后,只有两种结束方式 —— 远端给出终态,或者用户取消。
+
+- 回执在开始等的那一刻落库:`poll_until_ready`(七家异步适配器唯一共同经过的轮询循环)把轮询路径
+  报给运行器装的 `RemoteTaskWatch`,运行器写进 `Job.payload.remote_task`。
+- 提交和取回是两步:每家异步适配器实现 `resume(poll_path, …)`(`generate` = 提交 + 这一半)并声明
+  `supports_resume`;漏了的会被棘轮拦下。
+- 后端重启时,有回执的生成任务**接着取**(`jobs.register_resumer`),不再判"中断,请重新发起" ——
+  照那句话做就是再付一次;开发时 `--reload` 每改一行代码就是一次重启。
+- 轮询上限 6 小时,只防"供应商永远不回话";`wait_for_job` 没有自己的超时(取消会级联到子孙任务)。
+- 循环一项失败后不再开始新的迭代(停止信号在失败的那个线程里立起来),失败全部报出来。
+
+**失败原因只有认得出的才当 key**(`core/i18n.is_message_key`):任务消息和工作流错误都接受"key 或
+一句现成的话",判断只在这一处。认不出的原样显示、不当模板填、不当 key 落库 —— 此前一句带 JSON
+花括号的 LLM 报错被截成 80 字存进 `error_key`,读的时候拿它当模板 format,一条坏行把整个执行历史
+接口打成 500,面板上看起来就是"一次都没跑过"。
+
 ### 创意画板:生成能力的第五个入口
 
 画板(`domain/boards`)是一张无限画布,上面摆的是便签、图片、视频、音频、文档引用、3D 场景引用和分组框。它**不自己
@@ -460,9 +477,12 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 - **表单一律 shadcn Form**(react-hook-form + zod),字段级错误就地红字,表单级错误用 destructive Alert。
 - **拖拽一律 dnd-kit**(原生 HTML5 DnD 在 Electron 下真实鼠标不触发);dnd 相关 hooks 必须在任何 early-return 之前。
 - **文案全部走 i18n**(`app/messages.ts`,zh-CN / en-US 双份,键必须成对)。
-- **深链事件通道**:跨页面跳转用 `mosael:open-*` CustomEvent(当前有 workflow /
-  publish task / settings)。派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发
-  (目标视图挂载慢时单发会丢);Mosael 没有知识库能力,不保留对应的事件或兼容分支。
+- **深链事件通道**:跨页面跳转用 `mosael:open-*` CustomEvent(workflow / publish task /
+  settings / board / asset)。"打开哪一条"是一封**待取的信**(`lib/deepLink.ts`):发的一方
+  放进信箱并立即广播一次;收的一方用 `useOpenRequest` —— 已挂载的当场收,还没挂载的挂载时
+  自己来取,接不住(那一条还没加载出来)就返回 `false` 留着,列表到货后再投。此前是 80/300/800ms
+  定时连发,赌对方什么时候准备好:慢机器上三次都赶不上就丢;页面卸掉之后定时器照样触发,在 CI 上
+  撞上已经拆掉的 jsdom 把整轮测试打红。Mosael 没有知识库能力,不保留对应的事件或兼容分支。
 - **详情恢复先恢复身份、再取数据**:`usePersistentSelection` 同步读取 localStorage 中的稳定 id，
   `CanvasDetailLoading` 在 React Query 返回前保留详情语义。工作流、画板、调度、插件和素材不能先以
   `null` 渲染列表页再异步切回详情，否则刷新会闪一次错误页面。

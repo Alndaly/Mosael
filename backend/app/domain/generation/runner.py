@@ -15,14 +15,18 @@ from app.ai.providers import (
     GenerationResult,
     GenerationAdapterContext,
     GenerationAdapterError,
+    RemoteTaskWatch,
     SourceAsset,
     get_generation_adapter,
+    watching_remote_tasks,
 )
 from app.ai.providers.contracts.generation import sanitize_adapter_error
+from sqlalchemy import select
+
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain import provider_models
-from app.domain.jobs import dispatch_job, emit_job_event, finish_job, say
+from app.domain.jobs import dispatch_job, emit_job_event, finish_job, register_resumer, say
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.domain.usage import billable
@@ -48,7 +52,46 @@ def start_generation_thread(generation_id: str) -> None:
         dispatch_job(db, job, lambda: _run_generation(generation_id))
 
 
-def _run_generation(generation_id: str) -> None:
+#: 远端任务回执在 Job.payload 里的那一栏。见 `_remember_remote_task`。
+REMOTE_TASK_FIELD = "remote_task"
+
+
+def remote_poll_path(job: Job) -> str:
+    """这个生成任务已经提交出去的远端任务(轮询路径);还没提交过就是空串。"""
+    return str(((job.payload or {}).get(REMOTE_TASK_FIELD) or {}).get("poll_path") or "")
+
+
+def can_resume(db, job: Job) -> bool:
+    """这个任务有没有一个已经提交出去、而且这一家能接着取的远端任务。"""
+    poll_path = remote_poll_path(job)
+    if not poll_path:
+        return False
+    generation = db.scalars(select(GenerationJob).where(GenerationJob.job_id == job.id)).first()
+    adapter = get_generation_adapter(generation.provider, generation.kind) if generation is not None else None
+    return bool(adapter is not None and adapter.supports_resume)
+
+
+def resume_generation(job_id: str) -> bool:
+    """**接着取**一个已经提交过的生成任务,不再提交。能开始取回就返回 True。
+
+    后端重启时由 `jobs.reconcile_orphaned_jobs` 叫到(见文件末尾的 register_resumer):此前
+    重启把正在生成的任务一律判成"中断,请重新发起" —— 而远端还在生成、还在扣费,用户照提示
+    重来就是再付一次,第一次那条成片永远没人去取。开发时尤其要命:`--reload` 每改一行代码就
+    重启一次。
+    """
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        if job is None or not can_resume(db, job):
+            return False
+        generation = db.scalars(select(GenerationJob).where(GenerationJob.job_id == job_id)).one()
+        poll_path = remote_poll_path(job)
+        generation_id = generation.id
+        say(job, "jobMsg_generationResuming")
+        emit_job_event(db, job.id, "job.resumed", {"poll_path": poll_path})
+        return dispatch_job(db, job, lambda: _run_generation(generation_id, resume_from=poll_path))
+
+
+def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
     with SessionLocal() as db:
         generation = db.get(GenerationJob, generation_id)
         if generation is None or not generation.job_id:
@@ -111,10 +154,15 @@ def _run_generation(generation_id: str) -> None:
                 sources=_sources_for_generation(db, generation),
             )
             adapter.validate_request(request)
-            if adapter.supports_progress_callbacks:
-                result = adapter.generate(request, context, workdir, callbacks=_job_callbacks(db, job))
-            else:
-                result = adapter.generate(request, context, workdir)
+            #: 远端任务一出现就落库(见 contracts.generation.watching_remote_tasks)——从那一刻起
+            #: 它在花钱,回执只活在适配器的局部变量里的话,线程一死就再也找不回来。
+            with watching_remote_tasks(_remote_task_watch(db, job)):
+                if resume_from:
+                    result = adapter.resume(resume_from, request, context, workdir)
+                elif adapter.supports_progress_callbacks:
+                    result = adapter.generate(request, context, workdir, callbacks=_job_callbacks(db, job))
+                else:
+                    result = adapter.generate(request, context, workdir)
             if not finish_job(db, job, status="running"):
                 _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
                 db.commit()
@@ -206,6 +254,19 @@ def _job_callbacks(db, job: Job):
         return job.status not in ("queued", "running")
 
     return GenerationProgressCallbacks(on_progress=on_progress, is_cancelled=is_cancelled)
+
+
+def _remote_task_watch(db, job: Job) -> RemoteTaskWatch:
+    def remember(poll_path: str) -> None:
+        job.payload = {**(job.payload or {}), REMOTE_TASK_FIELD: {"poll_path": poll_path}}
+        db.commit()
+        logger.info("generation job %s: remote task %s", job.id, poll_path)
+
+    def is_cancelled() -> bool:
+        db.refresh(job)
+        return job.status not in ("queued", "running")
+
+    return RemoteTaskWatch(remember=remember, is_cancelled=is_cancelled)
 
 
 def _fail(db, job: Job, message: str) -> None:
@@ -304,3 +365,8 @@ def _record_generation_usage(
 def _asset_name(prompt: str, model: str) -> str:
     summary = prompt.strip().splitlines()[0][:40] if prompt.strip() else "Generation"
     return f"{summary} · {model}"
+
+
+#: 重启后这一类任务**接着取**,而不是判失败。登记在总线上(见 jobs.register_resumer),
+#: 总线不认识"生成"这件事,只认识"这一类有办法接着干"。
+register_resumer("ai_generation", can_resume=can_resume, resume=resume_generation)

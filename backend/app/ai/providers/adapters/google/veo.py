@@ -85,38 +85,57 @@ class VeoAdapter(GenerationAdapter):
     vendor_id = "google"
     media_kind = "video"
 
+    supports_resume = True
+
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
-        if not context.api_key:
-            raise GenerationAdapterError("Google API key is not configured (settings → 生成服务)")
-        base_url = (context.base_url or GEMINI_BASE).rstrip("/")
         model = resolve_model(request, context)
-        payload = build_submit_payload(_with_first_frame_inline(request, context.api_key))
-        headers = {"x-goog-api-key": context.api_key}
         try:
-            with RetryingClient(base_url=base_url, timeout=60, headers=headers, follow_redirects=True) as client:
+            with self._client(context) as client:
+                payload = build_submit_payload(_with_first_frame_inline(request, context.api_key))
                 submit = client.post(f"/models/{model}:predictLongRunning", json=payload)
                 submit.raise_for_status()
                 operation_name = submit.json().get("name") or ""
                 if not operation_name:
                     raise GenerationAdapterError("Provider did not return an operation name")
-
-                uri, poll_payload = poll_until_ready(
-                    client, f"/{operation_name.lstrip('/')}", extract_video_uri
-                )
-
-                output_dir.mkdir(parents=True, exist_ok=True)
-                target = output_dir / "generated.mp4"
-                # Gemini may return either its own file URI (needs x-goog-api-key) or a signed
-                # storage URL. The transfer seam sends the key only to the configured API origin.
-                download_to_path(
-                    uri,
-                    target,
-                    trusted_base_url=base_url,
-                    trusted_headers=headers,
-                )
-                return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
+                return self._collect(client, f"/{operation_name.lstrip('/')}", request, context, output_dir)
         except httpx.HTTPError as exc:
             raise GenerationAdapterError(adapter_http_error("Google Veo request failed", exc, context.api_key)) from exc
+
+    def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
+        try:
+            with self._client(context) as client:
+                return self._collect(client, poll_path, request, context, output_dir)
+        except httpx.HTTPError as exc:
+            raise GenerationAdapterError(adapter_http_error("Google Veo request failed", exc, context.api_key)) from exc
+
+    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
+        if not context.api_key:
+            raise GenerationAdapterError("Google API key is not configured (settings → 生成服务)")
+        return RetryingClient(
+            base_url=_base_url(context), timeout=60, headers={"x-goog-api-key": context.api_key}, follow_redirects=True,
+        )
+
+    def _collect(
+        self, client: RetryingClient, poll_path: str, request: GenerationRequest,
+        context: GenerationAdapterContext, output_dir: Path,
+    ) -> GenerationResult:
+        """提交之后的那一半。`generate` 和 `resume` 共用。"""
+        uri, poll_payload = poll_until_ready(client, poll_path, extract_video_uri)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        target = output_dir / "generated.mp4"
+        # Gemini may return either its own file URI (needs x-goog-api-key) or a signed
+        # storage URL. The transfer seam sends the key only to the configured API origin.
+        download_to_path(
+            uri,
+            target,
+            trusted_base_url=_base_url(context),
+            trusted_headers={"x-goog-api-key": context.api_key},
+        )
+        return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
+
+
+def _base_url(context: GenerationAdapterContext) -> str:
+    return (context.base_url or GEMINI_BASE).rstrip("/")
 
 
 def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> GenerationRequest:

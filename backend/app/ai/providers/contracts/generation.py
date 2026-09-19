@@ -12,9 +12,11 @@ import mimetypes
 import re
 import time
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from collections import Counter
 from typing import Any, TypeVar
 
@@ -197,9 +199,30 @@ class GenerationAdapter(ABC):
             if "resolution" in request.parameters and not str(request.parameters["resolution"]).strip():
                 raise GenerationAdapterError("resolution must not be empty")
 
+    #: 能不能接着取回一个**已经提交过**的远端任务(见 `resume`)。走异步任务的那几家都是。
+    supports_resume: bool = False
+
     @abstractmethod
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         """Run submit→poll→download synchronously; return the media file plus provider usage."""
+
+    def resume(
+        self,
+        poll_path: str,
+        request: GenerationRequest,
+        context: GenerationAdapterContext,
+        output_dir: Path,
+    ) -> GenerationResult:
+        """**不再提交**,接着等 `poll_path` 那个远端任务,取回成片。
+
+        `generate` = 提交 + 这一半。拆开是因为"提交"那一下就花了钱,而"等"和"取"是可以
+        重来的:后端重启、线程被杀,远端任务照样在生成、照样扣费。此前重启一律判"中断,请重新
+        发起",用户照做就是**再付一次**,而第一次那条成片永远没人去取。
+
+        `poll_path` 是那一家自己的轮询路径(由 `poll_until_ready` 在开始等的那一刻报给运行器
+        落库,见 `watching_remote_tasks`)。
+        """
+        raise GenerationAdapterError(f"{self.vendor_id} 不支持取回已提交的任务")
 
 
 def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
@@ -277,7 +300,42 @@ def image_file_to_data_url(path: Path) -> str:
 #: 异步任务的默认节奏。各家可以覆盖,但没有理由的话就用这一份 —— 此前七个文件各定义了一次
 #: 自己的 POLL_INTERVAL,而它们的值本来就一样。
 POLL_INTERVAL_SECONDS = 2.0
-POLL_TIMEOUT_SECONDS = 300.0
+#: **这个上限只防"供应商永远不回话",不是"我们等烦了"。**
+#:
+#: 此前是 300 秒,而它是按"一条视频大概多久"定的 —— 可远端任务一旦提交就在花钱,我们这边
+#: 放弃等待并不会让它停下。真机上付过账:Seedance 并发三条,各自 5 分 40 秒到 7 分钟生成完、
+#: 扣了费,而我们在第 300 秒就把三条都判成「Generation timed out」,远端任务号只在一个局部变量
+#: 里,判完就再也找不回来。供应商有自己的终态和过期时间(方舟的 execution_expires_after 是
+#: 48 小时),真正的结束只有两种:远端给出终态,或者用户取消。
+POLL_TIMEOUT_SECONDS = 6 * 3600.0
+
+
+@dataclass(frozen=True)
+class RemoteTaskWatch:
+    """运行器交给轮询循环的两样东西。
+
+    `remember(poll_path)`:远端任务一出现就记下来 —— 从这一刻起它在花钱,丢了回执就是丢了钱。
+    `is_cancelled()`:用户取消了就停下来,别再替一个没人要的结果等下去。
+
+    经由 contextvar 传进 `poll_until_ready`,**不经过适配器**:七家各自把 task_id 放在局部变量
+    里,让每家都记得去报,等于让每家都有机会忘记。轮询循环是它们唯一共同经过的地方。
+    """
+
+    remember: Callable[[str], None]
+    is_cancelled: Callable[[], bool]
+
+
+_REMOTE_TASK_WATCH: ContextVar[RemoteTaskWatch | None] = ContextVar("remote_task_watch", default=None)
+
+
+@contextmanager
+def watching_remote_tasks(watch: RemoteTaskWatch) -> Iterator[None]:
+    """在这段里发出去的远端任务,都报给 `watch`。运行器在调适配器前后包一层。"""
+    token = _REMOTE_TASK_WATCH.set(watch)
+    try:
+        yield
+    finally:
+        _REMOTE_TASK_WATCH.reset(token)
 
 
 #: 轮询到手的产物形状由那一家决定:一个地址,或者一串(图像接口的 n 一次给多张)。
@@ -306,9 +364,15 @@ def poll_until_ready(
     计时用 `time.monotonic()` 而不是 `time.time()`:墙钟会跳(NTP 校时、夏令时),跳一下
     要么把还在跑的任务判成超时,要么让它多等一个小时。六家原本都用的是墙钟。
     """
+    watch = _REMOTE_TASK_WATCH.get()
+    if watch is not None:
+        #: **开始等之前先报回执。** 这是远端任务号唯一一次离开适配器的局部变量。
+        watch.remember(poll_path)
     deadline = time.monotonic() + timeout
     payload: dict[str, Any] = {}
     while time.monotonic() < deadline:
+        if watch is not None and watch.is_cancelled():
+            raise GenerationAdapterError("已取消")
         response = client.get(poll_path)
         response.raise_for_status()
         payload = response.json()
@@ -318,7 +382,8 @@ def poll_until_ready(
         time.sleep(interval)
     # 超时文案让调用方给:有几家写的是自己的措辞(「MiniMax 视频生成超时」),那句话会一路
     # 显示到用户眼前,收成一份通用句子等于把"是哪一家超时了"这个信息删掉。
-    raise GenerationAdapterError(timed_out_message)
+    # 远端任务号一起说出来:走到这里它多半仍在花钱,那是唯一能让人去供应商后台找回它的线索。
+    raise GenerationAdapterError(f"{timed_out_message}(远端任务 {poll_path} 在 {timeout / 3600:g} 小时内没有结束)")
 
 
 #: 每个角色对应的「直接给个 url」参数名。界面既可以选素材库里的图,也可以粘一个外链;

@@ -19,7 +19,7 @@ from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors.common import CHILD_JOB_TIMEOUT_SECONDS, id_list, truthy, wait_for_job
+from app.domain.workflows.executors.common import id_list, truthy, wait_for_job
 
 logger = logging.getLogger(__name__)
 
@@ -774,9 +774,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
         )
     except DubError as exc:
         raise WorkflowDomainError(str(exc)) from exc
-    # 等待预算按条数走:这一个任务里排着 N 次合成,而通用的 15 分钟上限在一段几十句的视频上
-    # 必然误判成超时 —— 而那时前面几十条配音已经落到轨上了,「超时」这个说法是错的。
-    final = wait_for_job(job.id, timeout_seconds=max(CHILD_JOB_TIMEOUT_SECONDS, 60 * len(clip_ids)))
+    final = wait_for_job(job.id)
     result = final.result or {}
     #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。历史任务可能留有
     #: mute_fallback；新任务对用户明确选择的 separate 不再静默降级。

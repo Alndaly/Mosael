@@ -111,7 +111,29 @@ class MiniMaxVideoAdapter(GenerationAdapter):
     vendor_id = "minimax"
     media_kind = "video"
 
+    supports_resume = True
+
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
+        try:
+            with self._client(context) as client:
+                submit = client.post(SUBMIT_PATH, json=build_submit_payload(request, context))
+                submit.raise_for_status()
+                submitted = submit.json()
+                task_id = submitted.get("task_id") or (submitted.get("task") or {}).get("id") or ""
+                if not task_id:
+                    raise GenerationAdapterError(f"MiniMax 没有返回任务 id:{str(submitted)[:200]}")
+                return self._collect(client, f"{QUERY_PATH}/{task_id}", request, output_dir)
+        except httpx.HTTPError as exc:
+            raise GenerationAdapterError(adapter_http_error("MiniMax 请求失败", exc, context.api_key)) from exc
+
+    def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
+        try:
+            with self._client(context) as client:
+                return self._collect(client, poll_path, request, output_dir)
+        except httpx.HTTPError as exc:
+            raise GenerationAdapterError(adapter_http_error("MiniMax 请求失败", exc, context.api_key)) from exc
+
+    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
             raise GenerationAdapterError("MiniMax 视频生成需要 API Key,请在设置 → AI 视频里配置")
         base_url = (context.base_url or BASE_URL).rstrip("/")
@@ -121,25 +143,17 @@ class MiniMaxVideoAdapter(GenerationAdapter):
             if base_url.endswith(suffix):
                 base_url = base_url[: -len(suffix)]
         headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
-        try:
-            with RetryingClient(base_url=base_url, timeout=30, headers=headers) as client:
-                submit = client.post(SUBMIT_PATH, json=build_submit_payload(request, context))
-                submit.raise_for_status()
-                submitted = submit.json()
-                task_id = submitted.get("task_id") or (submitted.get("task") or {}).get("id") or ""
-                if not task_id:
-                    raise GenerationAdapterError(f"MiniMax 没有返回任务 id:{str(submitted)[:200]}")
+        return RetryingClient(base_url=base_url, timeout=30, headers=headers)
 
-                url, poll_payload = poll_until_ready(
-                    client, f"{QUERY_PATH}/{task_id}", extract_video_url,
-                    timed_out_message="MiniMax 视频生成超时",
-                )
-
-                output_dir.mkdir(parents=True, exist_ok=True)
-                target = output_dir / "generated.mp4"
-                download_to_path(url, target, timeout=120)
-                return GenerationResult(
-                    output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload
-                )
-        except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("MiniMax 请求失败", exc, context.api_key)) from exc
+    def _collect(self, client: RetryingClient, poll_path: str, request: GenerationRequest, output_dir: Path) -> GenerationResult:
+        """提交之后的那一半。`generate` 和 `resume` 共用。"""
+        url, poll_payload = poll_until_ready(
+            client, poll_path, extract_video_url,
+            timed_out_message="MiniMax 视频生成超时",
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        target = output_dir / "generated.mp4"
+        download_to_path(url, target, timeout=120)
+        return GenerationResult(
+            output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload
+        )

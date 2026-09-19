@@ -53,7 +53,9 @@ switch it to `deepfilternet` (download it first under Settings → On-device eng
 - **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets.
   A node hanging off one outlet runs only when that branch holds; a data connection it takes a value from elsewhere decides only the value, never whether it runs.
 - A **for-each loop** runs one item after another by default. When items don't depend on each other (such as generating each shot), raise
-  "Concurrency" to 2–4 under Advanced; results keep their original order and any failure stops the loop. Without an iteration output,
+  "Concurrency" to 2–4 under Advanced; results keep their original order. Once any item fails, **no new item starts** (items
+  already running finish, and anything they submitted for generation is still collected), and the error lists every failed item and
+  how many were not started. Without an iteration output,
   each item returns everything that round produced plus the item itself (`loop.item`), so a later loop can iterate over the results.
 - **Text to speech and Dub subtitles** ask for the engine first, then the voice: with "Cloned voice" the voice list is your
   voice library; pick an engine and the list becomes that engine's voices. Changing the engine clears the chosen voice. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.

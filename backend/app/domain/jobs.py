@@ -496,26 +496,56 @@ def current_actor(db: Session) -> str | None:
     return job.created_by if job is not None else None
 
 
-def reconcile_orphaned_jobs(db: Session) -> int:
-    """Fail in-process jobs left `queued`/`running` by a backend restart.
+@dataclass(frozen=True)
+class _Resumer:
+    can_resume: Callable[[Session, Job], bool]
+    resume: Callable[[str], bool]
 
-    Their daemon-thread workers cannot survive the process, so they would
-    otherwise sit frozen at their last progress forever. Publish jobs are exempt
-    (external worker). Returns the number of jobs reconciled.
+
+#: kind → 重启之后"接着干"的办法。总线不认识任何一类活,只认识"这一类有办法接着干"。
+_RESUMERS: dict[str, _Resumer] = {}
+
+
+def register_resumer(
+    kind: str, *, can_resume: Callable[[Session, Job], bool], resume: Callable[[str], bool]
+) -> None:
+    """登记:这一类任务被重启打断时,如果 `can_resume` 说行,就 `resume(job_id)` 接着干。
+
+    为什么要有这一条:有些活在进程外**继续发生**。生成视频提交给供应商之后,远端照样在生成、
+    照样扣费 —— 把它判成"中断,请重新发起",用户照做就是再付一次,而第一次那条成片永远没人去取。
+    """
+    _RESUMERS[kind] = _Resumer(can_resume=can_resume, resume=resume)
+
+
+def reconcile_orphaned_jobs(db: Session) -> int:
+    """Settle in-process jobs left `queued`/`running` by a backend restart.
+
+    Their daemon-thread workers cannot survive the process, so they would otherwise sit frozen at
+    their last progress forever. Publish jobs are exempt (external worker). A kind that registered
+    a resumer (see `register_resumer`) and says it can pick the job up is **resumed** instead of
+    failed. Returns the number of jobs failed.
     """
     stale = db.scalars(
         select(Job)
         .where(Job.status.in_(("queued", "running")))
         .where(Job.kind.notin_(external_kinds()))
     ).all()
-    for job in stale:
+    resumable = [job for job in stale if job.kind in _RESUMERS and _RESUMERS[job.kind].can_resume(db, job)]
+    failed = [job for job in stale if job not in resumable]
+    for job in failed:
         job.status = "failed"
         say(job, "jobMsg_interrupted")
         job.error = "后端重启导致任务中断,请重新发起"
         db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
     if stale:
         db.commit()
-    return len(stale) + expire_worker_leases(db)
+    #: 先落库那些失败的,再接着干能接的 —— resume 自己开会话,不能夹在这个事务中间。
+    for job in resumable:
+        if not _RESUMERS[job.kind].resume(job.id):
+            logger.warning("job %s [%s] said it could resume but did not", job.id, job.kind)
+    if resumable:
+        logger.info("resumed %d job(s) whose remote work outlived the restart", len(resumable))
+    return len(failed) + expire_worker_leases(db)
 
 
 def _cancel_job_row(db: Session, job: Job) -> bool:

@@ -49,6 +49,11 @@ _Avoid_: 队列服务、调度中心
 **准入槽**:
 按 kind 的信号量并发上限(render 2 / ASR 1 / TTS 1 / 生成 4),防单机 OOM;external 模式下等价于 worker 侧并发容量。
 
+**远端回执(remote task)**:
+一个已经提交给供应商的异步生成任务的轮询路径,存在 `Job.payload.remote_task`。从提交那一刻起它在花钱;
+有回执的任务重启后**接着取**(取回 / resume),不再提交。见 [ADR-0019](docs/adr/0019-paid-remote-work-is-never-abandoned.md)。
+_Avoid_: 超时(对付费的远端工作,我们这边没有"等太久"这回事)、重新发起
+
 ### 工作流
 
 **节点注册表(NODE_TYPES)**:

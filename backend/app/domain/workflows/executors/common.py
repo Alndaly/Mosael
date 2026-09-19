@@ -9,19 +9,21 @@ from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain.workflows import WorkflowDomainError
 
-CHILD_JOB_TIMEOUT_SECONDS = 15 * 60
 CHILD_POLL_SECONDS = 2.0
 
 
-def wait_for_job(job_id: str, timeout_seconds: float = CHILD_JOB_TIMEOUT_SECONDS) -> Job:
+def wait_for_job(job_id: str) -> Job:
     """轮询子 job 到终态(用独立会话,避免长事务)。
 
-    `timeout_seconds` 可调,是因为「一个子任务」的规模并不齐:字幕配音那一个任务里排着**每条
-    字幕各一次**合成,而这里的通用上限是按单次调用定的 —— 一段几十句的视频照那个上限必然被
-    判成超时,可那时前面几十条配音已经落到轨上了,「超时」这个说法本身就是错的。
+    **没有"等太久就放弃"这一条。** 此前有(通用 15 分钟,字幕配音按条数放宽),而放弃等待并不会
+    让子任务停下 —— 它照样在生成、照样扣费,只是做完之后没人要了。付过账:三条 Seedance 在第
+    300 秒被判超时,火山那边 6 分钟后全部生成成功、全部扣费,成片无人认领。
+
+    结束只有两种:子任务落终态,或者用户取消 —— 取消工作流会级联到它的所有子孙任务(见
+    jobs.cancel_job),子任务随之落终态,这里就自然返回了。子任务各自有自己的上限(生成任务的
+    轮询上限防的是"供应商永远不回话",见 contracts.generation.POLL_TIMEOUT_SECONDS)。
     """
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
+    while True:
         with SessionLocal() as db:
             job = db.get(Job, job_id)
             if job is None:
@@ -32,7 +34,6 @@ def wait_for_job(job_id: str, timeout_seconds: float = CHILD_JOB_TIMEOUT_SECONDS
             if job.status == "failed":
                 raise WorkflowDomainError("wfErr_childFailed", params={"reason": job.error or job.message})
         time.sleep(CHILD_POLL_SECONDS)
-    raise WorkflowDomainError("wfErr_childTimeout")
 
 
 def id_list(value: Any) -> list[str]:

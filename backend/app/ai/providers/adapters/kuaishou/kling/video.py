@@ -214,15 +214,12 @@ class KlingVideoAdapter(GenerationAdapter):
     vendor_id = "kuaishou"
     media_kind = "video"
 
+    supports_resume = True
+
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
-        if not context.api_key:
-            raise GenerationAdapterError("Kling Access Key/API key is not configured (settings → 生成服务)")
-        base_url = (context.base_url or KLING_BASE).rstrip("/")
-        model = resolve_model(request, context)
-        v3 = uses_contents_array(model)
-        headers = {"Authorization": auth_header(context), "Content-Type": "application/json"}
+        v3 = uses_contents_array(resolve_model(request, context))
         try:
-            with RetryingClient(base_url=base_url, timeout=60, headers=headers, follow_redirects=True) as client:
+            with self._client(context) as client:
                 if v3:
                     # 多图参考:先把那几张图变成一个主体(查得到就复用,查不到才建),再引用它。
                     # 这一步是**另一个异步任务**,得在提交生成之前跑完 —— 拼请求体的时候顺手做
@@ -248,14 +245,35 @@ class KlingVideoAdapter(GenerationAdapter):
 
                 # v3 查任务走统一端点；旧协议仍在生成资源路径下查询。
                 poll_path = f"/tasks?task_ids={task_id}" if v3 else f"{endpoint}/{task_id}"
-                url, poll_payload = poll_until_ready(client, poll_path, extract_video_url_v3 if v3 else extract_video_url)
-
-                output_dir.mkdir(parents=True, exist_ok=True)
-                target = output_dir / "generated.mp4"
-                download_to_path(url, target)
-                return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
+                return self._collect(client, poll_path, request, context, output_dir)
         except httpx.HTTPError as exc:
             raise GenerationAdapterError(adapter_http_error("Kling request failed", exc, context.api_key)) from exc
+
+    def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
+        try:
+            with self._client(context) as client:
+                return self._collect(client, poll_path, request, context, output_dir)
+        except httpx.HTTPError as exc:
+            raise GenerationAdapterError(adapter_http_error("Kling request failed", exc, context.api_key)) from exc
+
+    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
+        if not context.api_key:
+            raise GenerationAdapterError("Kling Access Key/API key is not configured (settings → 生成服务)")
+        #: 鉴权头每次现签(JWT 带过期时间)—— 取回时隔了一次重启,旧的那张早过期了。
+        headers = {"Authorization": auth_header(context), "Content-Type": "application/json"}
+        return RetryingClient(base_url=(context.base_url or KLING_BASE).rstrip("/"), timeout=60, headers=headers, follow_redirects=True)
+
+    def _collect(
+        self, client: RetryingClient, poll_path: str, request: GenerationRequest,
+        context: GenerationAdapterContext, output_dir: Path,
+    ) -> GenerationResult:
+        """提交之后的那一半。`generate` 和 `resume` 共用。v3 与否从模型名重算 —— 它不随任务变。"""
+        v3 = uses_contents_array(resolve_model(request, context))
+        url, poll_payload = poll_until_ready(client, poll_path, extract_video_url_v3 if v3 else extract_video_url)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        target = output_dir / "generated.mp4"
+        download_to_path(url, target)
+        return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
 
 
 def auth_header(context: GenerationAdapterContext) -> str:

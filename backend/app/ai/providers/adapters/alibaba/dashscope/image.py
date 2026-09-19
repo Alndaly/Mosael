@@ -151,11 +151,13 @@ def _download_all(urls: list[str], output_dir: Path) -> list[Path]:
 class QwenImageAdapter(GenerationAdapter):
     vendor_id = "alibaba"
     media_kind = "image"
+    #: 只有**异步**那条(文生图)会留下可以取回的远端任务;参考图编辑是同步接口,一次请求就给
+    #: 结果 —— 它不经过 poll_until_ready,也就不会有回执落库,resume 永远不会被叫到它身上。
+    supports_resume = True
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
             raise GenerationAdapterError("DashScope API key is not configured (settings → 生成服务)")
-        base_url = resolve_dashscope_base(context)
         try:
             # URL 与本地素材同属 reference_image。只看 sources_for 会让 URL-only 请求
             # 静默走到文生图端点，参考图完全没被使用。
@@ -170,17 +172,29 @@ class QwenImageAdapter(GenerationAdapter):
                     targets = _download_all(urls, output_dir)
                     return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=submit.json())
 
-            headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
-            with RetryingClient(base_url=base_url, timeout=30, headers=headers) as client:
+            with self._async_client(context) as client:
                 submit = client.post(SUBMIT_PATH, json=build_submit_payload(request))
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
                 if not task_id:
                     raise GenerationAdapterError("Provider did not return a task id")
-
-                urls, poll_payload = poll_until_ready(client, f"/api/v1/tasks/{task_id}", extract_result_urls)
-
-                targets = _download_all(urls, output_dir)
-                return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=poll_payload)
+                return self._collect(client, f"/api/v1/tasks/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
             raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc
+
+    def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
+        try:
+            with self._async_client(context) as client:
+                return self._collect(client, poll_path, request, output_dir)
+        except httpx.HTTPError as exc:
+            raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc
+
+    def _async_client(self, context: GenerationAdapterContext) -> RetryingClient:
+        headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
+        return RetryingClient(base_url=resolve_dashscope_base(context), timeout=30, headers=headers)
+
+    def _collect(self, client: RetryingClient, poll_path: str, request: GenerationRequest, output_dir: Path) -> GenerationResult:
+        """提交之后的那一半。`generate` 和 `resume` 共用。"""
+        urls, poll_payload = poll_until_ready(client, poll_path, extract_result_urls)
+        targets = _download_all(urls, output_dir)
+        return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=poll_payload)

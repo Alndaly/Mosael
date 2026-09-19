@@ -123,6 +123,10 @@ In **Generate** mode the left column is the **generation model** catalog, the mi
 
 - Pick a model → write a prompt → send; the job queues and finished results land in the media library.
 - Whether a model can run depends on **its vendor's key** being configured; with no usable model, a banner at the top links to settings.
+- **Once submitted, it waits for the result.** Video generation often takes minutes, longer when the vendor is busy. Mosael never
+  gives up on a task you have already paid for because it took "too long" — it ends only when the vendor reports it finished (or
+  failed), or when you cancel it in the task center. The same holds across a backend restart: the result is **picked up again**
+  instead of asking you to start over (which would charge you twice).
 
 ### The controls follow the model
 

@@ -160,6 +160,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_genericFailed": {"zh": "{what} 失败", "en": "{what} failed"},
     "jobMsg_generationQueued": {"zh": "已提交给生成服务", "en": "Submitted to the generation provider"},
     "jobMsg_generationRunning": {"zh": "生成中", "en": "Generating"},
+    #: 重启之后接着取已经提交给供应商的那一条 —— 不再提交,不会再扣一次费。
+    "jobMsg_generationResuming": {"zh": "后端重启过,正在接着取回已提交的生成结果", "en": "The backend restarted; picking up the result of the already-submitted generation"},
     "jobMsg_generationDone": {"zh": "生成完成", "en": "Generation complete"},
     "jobMsg_generationFailed": {"zh": "生成失败", "en": "Generation failed"},
     "jobMsg_waitingWorker": {"zh": "等待执行器认领", "en": "Waiting for a worker to claim it"},
@@ -699,7 +701,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_fpsRange": {"zh": "新建成片项目:帧率必须在 1 到 240 之间", "en": "New video project: the frame rate must be between 1 and 240"},
     "wfErr_targetProjectMissing": {"zh": "素材整理:目标项目不存在,或不属于当前工作区", "en": "Update assets: the target project does not exist in this workspace"},
     "wfErr_canvasNumbers": {"zh": "新建成片项目:宽、高和帧率必须是数字", "en": "New video project: width, height and frame rate must be numbers"},
-    "wfErr_childTimeout": {"zh": "子任务超时", "en": "The sub-task timed out"},
     "wfErr_childMissing": {"zh": "子任务不存在", "en": "The sub-task no longer exists"},
     "wfErr_queryTooLong": {"zh": "检索词不能超过 300 字", "en": "The search text cannot exceed 300 characters"},
     "wfErr_noteBodyEmpty": {"zh": "笔记正文不能为空", "en": "The note body cannot be empty"},

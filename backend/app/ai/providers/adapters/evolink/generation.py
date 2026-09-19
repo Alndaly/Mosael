@@ -46,8 +46,10 @@ from app.ai.providers.media_transfer import download_to_path
 
 BASE_URL = "https://api.evolink.ai/v1"
 FILES_BASE_URL = "https://files-api.evolink.ai"
+#: 这家的网关排队久,轮得勤没有意义。**上限不在这里另定**:用共用的那一个(见
+#: contracts.generation.POLL_TIMEOUT_SECONDS)—— 此前这里的 600 秒是"我们等烦了",而远端任务
+#: 不会因为我们放弃等待就停下、不再扣费。
 POLL_INTERVAL_SECONDS = 10.0
-POLL_TIMEOUT_SECONDS = 600.0
 
 #: 图片角色的迭代顺序即 `image_urls` 的数组顺序:首帧在前、尾帧在后(网关按位置认帧)。
 #: 参考图和帧不会同时出现 —— 描述符按模型 id 把两条路分开了,所以进同一个数组是安全的。
@@ -237,6 +239,7 @@ def download_results(urls: list[str], output_dir: Path, kind: str) -> list[Path]
 
 
 class EvolinkGenerationAdapter(GenerationAdapter):
+    supports_resume = True
     vendor_id = "evolink"
 
     #: 这个网关是**纯转发**:构造请求时不看模型名,而且每一项标量都是"给了才发"
@@ -280,7 +283,6 @@ class EvolinkGenerationAdapter(GenerationAdapter):
             raise GenerationAdapterError("Evolink 生成需要 API Key，请在设置 → AI 服务中配置")
         if request.kind != self.media_kind:
             raise GenerationAdapterError(f"Evolink {self.media_kind} adapter received a {request.kind} request")
-        headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
         try:
             media = collect_media_urls(request, context)
             payload = (
@@ -291,24 +293,38 @@ class EvolinkGenerationAdapter(GenerationAdapter):
                 )
             )
             path = "/images/generations" if self.media_kind == "image" else "/videos/generations"
-            with RetryingClient(base_url=resolve_base_url(context), headers=headers, timeout=60) as client:
+            with self._client(context) as client:
                 response = client.post(path, json=payload)
                 response.raise_for_status()
                 task_id = _task_id(response.json())
                 if not task_id:
                     raise GenerationAdapterError(f"Evolink 没有返回任务 id: {str(response.json())[:200]}")
-                urls, terminal = poll_until_ready(
-                    client,
-                    f"/tasks/{task_id}",
-                    extract_result_urls,
-                    interval=POLL_INTERVAL_SECONDS,
-                    timeout=POLL_TIMEOUT_SECONDS,
-                    timed_out_message="Evolink 生成超时",
-                )
-            return GenerationResult(
-                output_paths=download_results(urls, output_dir, self.media_kind),
-                usage=metering_from_request(request),
-                raw_usage=terminal,
-            )
+                return self._collect(client, f"/tasks/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
             raise GenerationAdapterError(adapter_http_error("Evolink 请求失败", exc, context.api_key)) from exc
+
+    def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
+        try:
+            with self._client(context) as client:
+                return self._collect(client, poll_path, request, output_dir)
+        except httpx.HTTPError as exc:
+            raise GenerationAdapterError(adapter_http_error("Evolink 请求失败", exc, context.api_key)) from exc
+
+    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
+        if not context.api_key:
+            raise GenerationAdapterError("Evolink 生成需要 API Key，请在设置 → AI 服务中配置")
+        headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
+        return RetryingClient(base_url=resolve_base_url(context), headers=headers, timeout=60)
+
+    def _collect(self, client: RetryingClient, poll_path: str, request: GenerationRequest, output_dir: Path) -> GenerationResult:
+        """提交之后的那一半。`generate` 和 `resume` 共用。"""
+        urls, terminal = poll_until_ready(
+            client, poll_path, extract_result_urls,
+            interval=POLL_INTERVAL_SECONDS,
+            timed_out_message="Evolink 生成超时",
+        )
+        return GenerationResult(
+            output_paths=download_results(urls, output_dir, self.media_kind),
+            usage=metering_from_request(request),
+            raw_usage=terminal,
+        )

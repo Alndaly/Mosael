@@ -91,7 +91,9 @@
 
 - `app/domain/agent/confirmable/registry.py:_TOOLS` — 确认卡工具的登记表。
 - `app/domain/jobs.py:_EXECUTION_MODES`(每个 kind 在进程内跑还是交给外部执行器)、
-  `app/domain/jobs.py:_RECEIPT_DELIVERERS`
+  `app/domain/jobs.py:_RECEIPT_DELIVERERS`、
+  `app/domain/jobs.py:_RESUMERS`(重启后哪一类任务能**接着干**而不是判失败 —— 目前只有生成:
+  提交给供应商之后远端照样在生成、照样扣费。回执本身落在 `Job.payload.remote_task`,不在内存里)
 - `app/domain/sequences/undo/__init__.py:_REGISTRY`
 - `app/domain/workflows/executors/__init__.py:_REGISTRY`、
   `app/domain/workflows/executors/__init__.py:_PREFIX_REGISTRY`
