@@ -1554,7 +1554,7 @@ function SceneEditor({
               onModeChange={setAgent}
               onClose={() => setAgent(null)}
               rectKey="scene-studio-agent"
-              contextLine={`当前 3D 场景 scene_id=${initial.id}，workspace_id=${initial.workspace_id}。先用 get_scene 读取最新场景，再用 edit_scene 修改对象、材质、灯光或镜头，每改一步用 view_scene 看一眼结果再继续。单位米，旋转角度。`}
+              contextLine={`当前 3D 场景 scene_id=${initial.id}，workspace_id=${initial.workspace_id}。先用 get_scene 读取最新场景，再用 edit_scene 修改对象、材质、灯光或镜头，每改一步用 view_scene 看一眼结果再继续。基本体拼不出来的造型可以在用户的 Blender 里建（blender_execute + blender_look），再用 blender_import_to_scene 收进本场景。单位米，旋转角度。`}
               emptyHint="描述空间、物体或镜头，让助手协助搭建。"
               placeholder="例如：给展厅加一组台阶，然后设计推进镜头…"
             />

@@ -223,7 +223,9 @@ def _instance(db: DbSession, instance) -> dict:
         "enabled": instance.enabled,
         "config": instance.config or {},
         "blocked_reason": inst.blocked_reason(db, instance),
-        "tools": [{**tool, "exposed": tool["name"] in chosen} for tool in tools_domain.all_tools(db, instance)],
+        # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。
+        "tools": [{**tool, "exposed": tool["name"] in chosen} for tool in tools_domain.all_tools(db, instance)
+                  if not tool["internal"]],
     }
 
 

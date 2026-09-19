@@ -47,7 +47,7 @@ class Ruling:
 
 
 #: 三类操作各自的档位键。顺序即界面顺序。
-GATED = ("http_request", "publish", "run_code", "run_host_code")
+GATED = ("http_request", "publish", "run_code", "run_host_code", "blender")
 
 #: 认得的档位。**存进来的任何别的值都读成 ask** —— 一个不认识的字符串必须落到最保守的那一档,
 #: 而不是落到"最后一个 elif"碰巧是什么。前后空格、大小写不同的写法都算不认识:配置里的
@@ -78,26 +78,31 @@ def normalize(raw: Any) -> dict[str, Any]:
 
 #: 工具名 → 它归哪一档。
 #: 沙箱里跑和不隔离地跑是**两档**:对「算个数」放开,不该连带放开「动我的文件」。
+#: Blender 建模自成一档:它也是本机代码,但放开「在 Blender 里建模」是建模时的常态(一轮几十步),
+#: 不该因此连带放开「在电脑上随便跑代码」。
 _TOOL_GATE = {"http_request": "http_request", "publish_asset": "publish", "run_code": "run_code",
-              "run_host_code": "run_host_code"}
+              "run_host_code": "run_host_code", "blender_execute": "blender"}
 
 _ASK_REASON = {
     "http_request": "对外请求交给判断者",
     "publish": "公开发布交给判断者",
     "run_code": "沙箱执行代码交给判断者",
     "run_host_code": "不隔离执行代码交给判断者",
+    "blender": "Blender 建模交给判断者",
 }
 _ALLOW_REASON = {
     "http_request": "对外请求已设为完全放行",
     "publish": "公开发布已设为完全放行",
     "run_code": "沙箱执行代码已设为完全放行",
     "run_host_code": "不隔离执行代码已设为完全放行",
+    "blender": "Blender 建模已设为完全放行",
 }
 _DENY_REASON = {
     "http_request": "对外请求默认要人确认",
     "publish": "公开发布默认要人确认",
     "run_code": "沙箱执行代码默认要人确认",
     "run_host_code": "不隔离执行代码默认要人确认",
+    "blender": "Blender 建模默认要人确认",
 }
 
 

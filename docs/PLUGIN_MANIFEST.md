@@ -302,6 +302,15 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 你的代码,没有确认门也照样能发请求、写文件。所以默认落在保守那侧。宁可让子智能体少一个工具,
 也不要让它在一次「帮我查一下」里替用户发了条微博。
 
+### 只供宿主使用
+
+`overrides.<工具>.internal: true` 的工具**只给 Mosael 自己的适配层调**(例如 3D 场景与 Blender
+的互通脚本),不出现在插件页的勾选列表里,智能体和工作流都调不到 —— 图里存着也拒绝执行。
+
+用在插件自带一个不经确认的原始入口、而 Mosael 已经有**带确认卡**的同一能力时:Blender MCP 的
+`execute_blender_code` 就是这样,智能体建模走内置的 `blender_execute`。两条路并存的话,不经确认
+的那条就是绕开确认卡的后门。
+
 ### 权限
 
 `permissions` 是一组自由字符串(`network:example`、`assets:read`…)。**逐项授权,全部授予之后
@@ -432,7 +441,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
 | `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉) |
-| `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `node` |
+| `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `node` / `internal` |
 | `input_schema` 属性的 `x-advanced` | 标成高级,收进面板的「高级」一档。判据:**留空也能跑**的才算 |
 
 ## 范例

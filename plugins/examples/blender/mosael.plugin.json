@@ -6,7 +6,7 @@
     "en": "Blender MCP"
   },
   "default_locale": "zh",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
   "runtime": {
     "kind": "mcp",
@@ -37,8 +37,7 @@
     "expose": "selected",
     "recommended": [
       "get_scene_info",
-      "get_object_info",
-      "execute_blender_code"
+      "get_object_info"
     ],
     "overrides": {
       "get_scene_info": {
@@ -70,9 +69,10 @@
         },
         "read_only": false,
         "description": {
-          "zh": "在本机 Blender 内运行 Python 建模操作。可以修改物体、材质、灯光与相机。先查询场景；不要清空其他工程或访问无关文件。发送过的 Mosael 场景使用 Mosael 命名的独立 Scene，接收按钮只读取对应 Scene。",
-          "en": "Run Python modeling operations in local Blender. Inspect the scene first; preserve unrelated projects and files. Mosael transfers use a separate named Scene; receiving reads only that Scene."
-        }
+          "zh": "原始的 Blender 代码执行入口。只供 3D 场景互通的固定脚本使用；智能体建模走内置的 blender_execute（有确认卡与独立放行档）。",
+          "en": "Raw Blender code execution, used only by the 3D scene exchange's fixed scripts. Agent modeling goes through the built-in blender_execute (approval card, own autopilot gate)."
+        },
+        "internal": true
       }
     }
   },

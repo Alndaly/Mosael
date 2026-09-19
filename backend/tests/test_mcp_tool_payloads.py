@@ -45,6 +45,11 @@ ARGS: dict[str, dict[str, Any]] = {
     "edit_scene": {"scene_id": "no-such-scene", "base_revision": 1},
     "render_scene_references": {"scene_id": "no-such-scene", "shot_id": "shot-1"},
     "view_scene": {"scene_id": "no-such-scene", "views": ["shot", "top"]},
+    # 没有 Blender 连接:后端答 404/409,但载荷形状照样要被路由接住。
+    "blender_inspect": {},
+    "blender_look": {"views": ["top", "camera"], "objects": ["Roof"], "shading": "solid"},
+    "blender_import_to_scene": {"scene_id": "no-such-scene", "base_revision": 1, "objects": ["Roof"],
+                                "position": [0, 0, 0]},
     "create_note": {"title": "冒烟笔记", "markdown": "正文"},
     "append_note": {"note_id": "no-such-note", "base_revision": 1, "markdown": "补充"},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会
@@ -118,8 +123,8 @@ def _route_through(monkeypatch, client) -> list[tuple[str, str, int, str]]:
         mcp_server._raise_with_detail(response)
         return response.json() if response.content else None
 
-    monkeypatch.setattr(mcp_server, "_get", lambda path, params=None: call("GET", path, params=params))
-    monkeypatch.setattr(mcp_server, "_post", lambda path, payload: call("POST", path, json=payload))
+    monkeypatch.setattr(mcp_server, "_get", lambda path, params=None, **_: call("GET", path, params=params))
+    monkeypatch.setattr(mcp_server, "_post", lambda path, payload, **_: call("POST", path, json=payload))
     monkeypatch.setattr(mcp_server, "_patch", lambda path, payload: call("PATCH", path, json=payload))
     monkeypatch.setattr(mcp_server, "_put", lambda path, payload: call("PUT", path, json=payload))
     monkeypatch.setattr(mcp_server, "_delete", lambda path: call("DELETE", path))

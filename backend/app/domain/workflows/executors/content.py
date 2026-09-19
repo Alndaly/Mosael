@@ -20,8 +20,12 @@ def _run_plugin_tool(
     db: Session, instance_id: str, tool_name: str, payload: dict[str, Any], *, workspace_id: str
 ) -> dict[str, Any]:
     from app.domain.plugins import PluginDomainError
-    from app.domain.plugins.tools import invoke
+    from app.domain.plugins.tools import find, invoke
 
+    tool = find(db, instance_id, tool_name)
+    if tool is not None and tool["internal"]:
+        # 只给宿主适配层调的工具(见 plugins/manifest.ToolOverride.internal):图里存着也不跑。
+        raise WorkflowDomainError("wfErr_pluginToolInternal", params={"tool": tool_name})
     try:
         # 带上工作区:插件交出的**文件**产出要收进这个工作区的素材库,输出里换成 asset_id。
         # 不带的话,一个从网盘拉文件的节点在工作流里跑不通 —— 它没地方放拿到的东西。

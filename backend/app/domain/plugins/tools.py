@@ -86,6 +86,7 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 # (MCP 插件只能这么写 —— 它的清单是从服务拉的)。任一处标了就算。
                 "read_only": bool((override and override.read_only) or tool.get("read_only")),
                 "node": (override.node if override else None) or tool.get("node"),
+                "internal": bool(override and override.internal),
             }
         )
     return out
@@ -150,7 +151,7 @@ def exposed(db: Session, user_id: str | None) -> list[dict[str, Any]]:
             continue
         chosen = inst.exposed_tools(db, instance.id)
         for tool in all_tools(db, instance):
-            if tool["name"] not in chosen:
+            if tool["name"] not in chosen or tool["internal"]:
                 continue
             out.append({**tool, "instance_id": instance.id, "instance_name": instance.name, "package_id": package.id})
     return out

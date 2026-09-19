@@ -7,13 +7,17 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **80** 个工具,其中 **21** 个走确认卡、**1** 个停下来等用户作答。
+共 **84** 个工具,其中 **22** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
 | `analyze_asset` | 直接执行 | Analyze an EXISTING image/video media asset with a multimodal model. |
 | `append_note` | 直接执行 | Append requested writing or research to a note without replacing existing content. |
 | `ask_user` | 等作答 | Ask the user to choose between options you cannot decide for them. |
+| `blender_execute` | 确认卡 | Confirmation required: run Python (bpy) inside the user's open Blender to model. |
+| `blender_import_to_scene` | 直接执行 | Bring what you modeled in Blender into a Mosael 3D scene as ONE model object. |
+| `blender_inspect` | 直接执行 | Read-only: what is in the Blender scene the user has open right now — every object's name, |
+| `blender_look` | 直接执行 | Read-only: LOOK at the open Blender scene — returns rendered images you can see. |
 | `browser_click` | 直接执行 | Click an element by CSS selector or visible text in the open session (one of selector/text). |
 | `browser_close` | 直接执行 | Close a browser session (frees the view; a throwaway session's cookies/storage are wiped). |
 | `browser_evaluate` | 直接执行 | Advanced: evaluate a JS expression in the open session's page and return its value. |

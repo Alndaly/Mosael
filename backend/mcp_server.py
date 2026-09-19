@@ -90,9 +90,9 @@ def _get(path: str, params: dict[str, Any] | None = None, *, timeout: float = 15
         return response.json()
 
 
-def _post(path: str, payload: dict[str, Any]) -> Any:
+def _post(path: str, payload: dict[str, Any], *, timeout: float = 30) -> Any:
     headers = _auth_headers()
-    with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
+    with httpx.Client(base_url=api_base(), timeout=timeout, headers=headers) as client:
         response = client.post(path, json=payload)
         _raise_with_detail(response)
         return response.json()
@@ -174,6 +174,7 @@ CONFIRMATION_TOOLS = frozenset(
         "publish_asset",
         "run_code",
         "run_host_code",
+        "blender_execute",
         "http_request",
     }
 )
@@ -216,6 +217,8 @@ READ_ONLY_TOOLS = frozenset(
         "list_scenes",
         "get_scene",
         "view_scene",
+        "blender_inspect",
+        "blender_look",
         "search_notes",
         "read_note",
         "list_plugin_tools",
@@ -246,6 +249,7 @@ ANSWER_TOOLS = frozenset({"ask_user"})
 #: 那段说的两件事。
 MUTATING_TOOLS = frozenset(
     {
+        "blender_import_to_scene",
         "browser_click",
         "browser_close",
         "browser_evaluate",
@@ -1342,6 +1346,79 @@ def view_scene(scene_id: str, views: list[str] | None = None, shot_id: str = "",
         "views": views or [], "shot_id": shot_id, "time": time,
     }, timeout=60)  # 本机渲染:复杂场景四个角度要几秒,15s 的默认读超时不够
     return _with_images(data)
+
+
+@mcp.tool()
+def blender_inspect(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Read-only: what is in the Blender scene the user has open right now — every object's name,
+    type, parent, location, rotation (degrees), scale, dimensions (metres) and, for meshes, vertex /
+    face counts, modifiers and materials. Blender is Z-up. Call this before blender_execute so your
+    code targets objects that exist. Needs the Blender MCP plugin and the Blender add-on running."""
+    params = {"workspace_id": workspace_id or _default_workspace_id(), "instance_id": instance_id}
+    return _get("/api/scenes/blender/agent/inspect", params, timeout=60)
+
+
+@mcp.tool()
+def blender_look(views: list[str] | None = None, objects: list[str] | None = None, shading: str = "solid",
+                 instance_id: str = "", workspace_id: str = "") -> list[TextContent | ImageContent]:
+    """Read-only: LOOK at the open Blender scene — returns rendered images you can see.
+
+    Use it after every blender_execute to check the shape instead of trusting your code.
+    views (max 4): 'overview' (high 3/4), 'front' (from -Y), 'side' (from +X), 'back', 'top',
+    'camera' (the scene's active camera). Views auto-frame all visible geometry, or only the
+    named `objects`. shading='solid' is fast (≈1 s, studio light + cavity; colour comes from each
+    material's Viewport Display colour, so set `mat.diffuse_color` too); 'rendered' uses EEVEE to
+    show real materials and lights (slower). Render settings are restored afterwards.
+    """
+    data = _get("/api/scenes/blender/agent/look", {
+        "workspace_id": workspace_id or _default_workspace_id(), "views": views or [],
+        "objects": objects or [], "shading": shading, "instance_id": instance_id,
+    }, timeout=180)
+    return _with_images(data)
+
+
+@mcp.tool()
+def blender_execute(code: str, purpose: str = "", instance_id: str = "") -> dict[str, Any]:
+    """Confirmation required: run Python (bpy) inside the user's open Blender to model.
+
+    This is full Blender: bmesh, modifiers (bevel, subdivision, boolean, array, mirror, solidify),
+    curves, geometry nodes, materials (Principled BSDF), lights, cameras. `bpy`, `Vector` and `math`
+    are preloaded; print() output comes back as `printed`, and a variable named `output` comes back
+    as `output`. If your code raises, you get the traceback — fix it and try again.
+    Work in small steps: one part per call, then blender_look to check it. Name objects clearly,
+    keep real-world scale in metres, and do not delete or modify objects you did not create unless
+    the user asked. An undo step is pushed first, so the user can ⌘Z it in Blender.
+    `purpose` is a short phrase shown on the approval card ("凉亭的四根柱子").
+    Blender's Python is not a sandbox — it can read and write the user's files — hence approval.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "blender_execute",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"code": code, "purpose": purpose, "instance_id": instance_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def blender_import_to_scene(scene_id: str, base_revision: int, name: str = "", objects: list[str] | None = None,
+                            position: list[float] | None = None, instance_id: str = "",
+                            workspace_id: str = "") -> dict[str, Any]:
+    """Bring what you modeled in Blender into a Mosael 3D scene as ONE model object.
+
+    Exports the open Blender scene — or only the named `objects` (with their children) — as GLB and
+    adds it to the scene at `position` ([x,y,z] metres, Mosael is Y-up; default origin). base_revision
+    must be the scene's current revision (get_scene). Returns object_id / model_id / new revision.
+    Afterwards arrange it with edit_scene and check with view_scene — note view_scene draws imported
+    models as missing (graybox renderer), so use blender_look to judge the model itself.
+    """
+    return _post(f"/api/scenes/{scene_id}/blender/agent/import", {
+        "workspace_id": workspace_id or _default_workspace_id(), "base_revision": base_revision,
+        "name": name, "objects": objects or [], "position": position, "instance_id": instance_id,
+    }, timeout=180)  # Blender 导出大场景要一会儿
 
 
 @mcp.tool()

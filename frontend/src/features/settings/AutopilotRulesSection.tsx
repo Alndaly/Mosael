@@ -16,10 +16,11 @@ type Rules = {
   publish: Level;
   run_code: Level;
   run_host_code: Level;
+  blender: Level;
   notes: string;
 };
 
-const EMPTY: Rules = { http_request: "ask", publish: "ask", run_code: "ask", run_host_code: "ask", notes: "" };
+const EMPTY: Rules = { http_request: "ask", publish: "ask", run_code: "ask", run_host_code: "ask", blender: "ask", notes: "" };
 
 /** 几类撤不回来的操作,同一种判据。顺序即页面顺序。沙箱与不隔离是两档:放开前者不连带后者。 */
 const GATES = [
@@ -27,6 +28,7 @@ const GATES = [
   { key: "publish", label: "autopilotPublish", desc: "autopilotPublishDesc" },
   { key: "run_code", label: "autopilotRunCode", desc: "autopilotRunCodeDesc" },
   { key: "run_host_code", label: "autopilotRunHostCode", desc: "autopilotRunHostCodeDesc" },
+  { key: "blender", label: "autopilotBlender", desc: "autopilotBlenderDesc" },
 ] as const;
 
 /**

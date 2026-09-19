@@ -198,7 +198,196 @@ def pull(payload):
             'warnings': warnings, 'blender_version': bpy.app.version_string}
 
 
+# ---------------------------------------------------------------------------------------------
+# 智能体用的四个操作:看结构、看画面、跑建模代码、把做好的东西导出来。
+#
+# 都作用在**当前正在编辑的那个 Blender 场景**上 —— 和 pull 一样。用 `bpy.context.scene` 而不是
+# `context.window.scene`:MCP Add-on 里两者是同一个,而无界面(--background)时没有 window ——
+# 这几个操作因此能在无界面的 Blender 里被测试真跑一遍(tests/test_blender_worker_live.py)。智能体在这里建模,就是在
+# 用户眼前这个工程里建;它看到的、导出的,也就是用户此刻看到的那一份。
+# ---------------------------------------------------------------------------------------------
+
+#: 超过这么多物体只列前面这些 —— 一个几千物体的工程整份交给模型,读不完也用不上。
+INSPECT_LIMIT = 300
+#: 自由视角:(方位角, 仰角),度。方位 0 = 从 -Y 看过去,和 Blender 的「前视图」(小键盘 1)一致;
+#: 90 = 从 +X 看,即「右视图」。顶视不取 90°:相机上方向是 +Y,正对下方时退化。
+LOOK_VIEWS = {'overview': (35, 30), 'front': (0, 5), 'side': (90, 5), 'back': (180, 5), 'top': (0, 89)}
+LOOK_SIZE = (960, 540)
+LOOK_FOV = 40
+
+
+def _rounded(values, digits=3):
+    return [round(float(v), digits) for v in values]
+
+
+def inspect(payload):
+    scene = bpy.context.scene
+    objects = []
+    for obj in list(scene.objects)[:INSPECT_LIMIT]:
+        entry = {'name': obj.name, 'type': obj.type, 'parent': obj.parent.name if obj.parent else None,
+                 'location': _rounded(obj.location), 'rotation_deg': _rounded([math.degrees(v) for v in obj.rotation_euler], 1),
+                 'scale': _rounded(obj.scale), 'dimensions': _rounded(obj.dimensions), 'visible': obj.visible_get()}
+        if obj.type == 'MESH':
+            entry.update(vertices=len(obj.data.vertices), faces=len(obj.data.polygons),
+                         modifiers=[m.type for m in obj.modifiers],
+                         materials=[slot.material.name for slot in obj.material_slots if slot.material])
+        objects.append(entry)
+    return {'scene_name': scene.name, 'blender_version': bpy.app.version_string,
+            'unit': scene.unit_settings.system, 'unit_scale': scene.unit_settings.scale_length,
+            'object_count': len(scene.objects), 'truncated': len(scene.objects) > INSPECT_LIMIT,
+            'active_camera': scene.camera.name if scene.camera else None,
+            'mosael_source_id': scene.get('mosael_source_id'), 'objects': objects}
+
+
+def _bounds(scene, names):
+    points = []
+    for obj in scene.objects:
+        if obj.type not in {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT'} or not obj.visible_get():
+            continue
+        if names and obj.name not in names:
+            continue
+        points += [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    if not points:
+        raise ValueError('没有可以取景的可见物体' + ('(按名字没找到:' + '、'.join(names) + ')' if names else ''))
+    low = Vector([min(p[i] for p in points) for i in range(3)])
+    high = Vector([max(p[i] for p in points) for i in range(3)])
+    return (low + high) / 2, max((high - low).length / 2, 0.1)
+
+
+def _engine(shading):
+    if shading == 'solid':
+        return 'BLENDER_WORKBENCH'
+    engines = bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items.keys()
+    return 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in engines else 'BLENDER_EEVEE'
+
+
+def look(payload):
+    """渲几张图给智能体看。**临时**改渲染设置、加一台临时相机,渲完全部还原 —— 用户的工程不留痕。"""
+    scene = bpy.context.scene
+    names = payload.get('objects') or []
+    center, radius = _bounds(scene, names)
+    render, shading = scene.render, scene.display.shading
+    saved = (render.engine, scene.camera, render.resolution_x, render.resolution_y, render.resolution_percentage,
+             render.filepath, render.image_settings.file_format, render.film_transparent,
+             shading.light, shading.color_type, shading.show_cavity)
+    #: 实体模式用一块中性灰做背景:没有 World 时 Workbench 渲出来是纯黑,深色物体直接融进去。
+    #: 材质预览模式不换 —— 那时 World 就是光照的一部分。
+    world = scene.world
+    backdrop = bpy.data.worlds.new('mosael-look') if payload.get('shading', 'solid') == 'solid' else None
+    if backdrop is not None:
+        backdrop.color = (0.3, 0.32, 0.35)
+        scene.world = backdrop
+    data = bpy.data.cameras.new('mosael-look')
+    camera = bpy.data.objects.new('mosael-look', data)
+    scene.collection.objects.link(camera)
+    images, warnings = [], []
+    try:
+        render.engine = _engine(payload.get('shading', 'solid'))
+        render.resolution_x, render.resolution_y = LOOK_SIZE
+        render.resolution_percentage = 100
+        render.image_settings.file_format = 'JPEG'
+        render.film_transparent = False
+        shading.light, shading.color_type, shading.show_cavity = 'STUDIO', 'MATERIAL', True
+        if render.engine != 'BLENDER_WORKBENCH' and hasattr(scene, 'eevee'):
+            scene.eevee.taa_render_samples = 16
+        data.sensor_fit = 'VERTICAL'
+        data.angle = math.radians(LOOK_FOV)
+        for index, view in enumerate(payload['views']):
+            if view == 'camera':
+                if saved[1] is None:
+                    warnings.append('场景里没有活动相机,跳过 camera 视角。')
+                    continue
+                scene.camera = saved[1]
+            else:
+                azimuth, elevation = (math.radians(v) for v in LOOK_VIEWS[view])
+                direction = Vector((math.sin(azimuth) * math.cos(elevation), -math.cos(azimuth) * math.cos(elevation), math.sin(elevation)))
+                # 包围球比包围盒松得多(一块大地面就能把球撑大一圈),按球算再乘 0.7 才不至于把
+                # 东西缩在画面中间一小块 —— 立面视角下也不会切边,见 test_blender_worker_live。
+                distance = radius / math.sin(math.radians(LOOK_FOV) / 2) * 0.7
+                camera.location = center + direction * distance
+                camera.rotation_euler = (-direction).to_track_quat('-Z', 'Y').to_euler()
+                data.clip_start, data.clip_end = max(0.001, distance * 0.01), distance * 4
+                scene.camera = camera
+            path = str(Path(payload['folder']) / ('%d-%s.jpg' % (index, view)))
+            render.filepath = path
+            bpy.ops.render.render(write_still=True)
+            images.append({'view': view, 'path': path})
+    finally:
+        (render.engine, scene.camera, render.resolution_x, render.resolution_y, render.resolution_percentage,
+         render.filepath, render.image_settings.file_format, render.film_transparent,
+         shading.light, shading.color_type, shading.show_cavity) = saved
+        bpy.data.objects.remove(camera)
+        bpy.data.cameras.remove(data)
+        if backdrop is not None:
+            scene.world = world
+            bpy.data.worlds.remove(backdrop)
+    return {'scene_name': scene.name, 'images': images, 'warnings': warnings}
+
+
+def _jsonable(value):
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return repr(value)[:2000]
+
+
+def execute(payload):
+    """跑智能体写的建模代码。先压一个撤销点:用户在 Blender 里按 ⌘Z 就能退回去。
+
+    出错不抛:把 traceback 交回去,模型据此改代码再试 —— 抛出去的话,上游只剩一句
+    "Blender 未完成同步",模型不知道是第几行、什么错。
+    """
+    import contextlib
+    import io
+    import traceback
+
+    try:
+        bpy.ops.ed.undo_push(message='Mosael 智能体建模')
+    except Exception:
+        pass
+    scope = {'bpy': bpy, 'Vector': Vector, 'math': math}
+    printed = io.StringIO()
+    error = None
+    try:
+        with contextlib.redirect_stdout(printed):
+            exec(compile(payload['code'], '<agent>', 'exec'), scope)
+    except Exception:
+        error = traceback.format_exc(limit=6)
+    return {'error': error, 'printed': printed.getvalue()[-20000:], 'output': _jsonable(scope.get('output')),
+            'scene_name': bpy.context.scene.name, 'object_count': len(bpy.context.scene.objects)}
+
+
+def export(payload):
+    """把当前场景(或按名字挑出来的那几个物体,连同它们的子物体)导成 GLB。选择状态原样还原。"""
+    scene = bpy.context.scene
+    names = set(payload.get('objects') or [])
+    if not names:
+        if not any(o.type == 'MESH' for o in scene.objects):
+            raise ValueError('当前 Blender 场景里没有网格物体。')
+        warnings = export_glb(payload['output_path'], export_extras=False)
+        return {'scene_name': scene.name, 'object_count': len(scene.objects), 'warnings': warnings}
+    picked = [o for o in scene.objects if o.name in names]
+    missing = names - {o.name for o in picked}
+    if missing:
+        raise ValueError('Blender 场景里没有这些物体:' + '、'.join(sorted(missing)))
+    for obj in list(picked):
+        picked += [child for child in obj.children_recursive if child not in picked]
+    previous = [o for o in scene.objects if o.select_get()]
+    active = bpy.context.view_layer.objects.active
+    try:
+        for obj in scene.objects:
+            obj.select_set(obj in picked)
+        warnings = export_glb(payload['output_path'], export_extras=False, use_selection=True)
+    finally:
+        for obj in scene.objects:
+            obj.select_set(obj in previous)
+        bpy.context.view_layer.objects.active = active
+    return {'scene_name': scene.name, 'object_count': len(picked), 'warnings': warnings}
+
+
 def run(operation, payload):
-    value = {'send': send, 'receive': receive, 'pull': pull}[operation](payload)
+    value = {'send': send, 'receive': receive, 'pull': pull, 'inspect': inspect, 'look': look,
+             'execute': execute, 'export': export}[operation](payload)
     Path(payload['result_path']).write_text(json.dumps(value), encoding='utf-8')
     print('MOSAEL_BRIDGE_COMPLETE')

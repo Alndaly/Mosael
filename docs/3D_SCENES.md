@@ -59,6 +59,8 @@
 
 接回的几何体是整体模型，不是逐对象合并；关联镜头最多采样 100 个关键帧，采用线性插值保留采样节奏。高级材质、骨骼动画、物理和原生修改器应保留在 Blender 工程里。直接获取任意 Blender 场景暂不导入其相机，会给出提示。
 
+智能体也能直接在 Blender 里建模：`blender_inspect` 读场景结构，`blender_look` 渲几个角度的图交给模型看，`blender_execute` 执行模型写的 `bpy` 代码（走确认卡，执行前压撤销点，自动放行里有独立的「Blender 建模」一档），`blender_import_to_scene` 把做好的东西作为一个模型物体加进当前场景。循环是「执行一小步 → 看一眼 → 修正」。
+
 完整安装说明见 [Blender 插件](../plugins/examples/blender/README.md)。这里提供场景搭建和镜头预演，不包含雕刻、布尔建模或后台 Cycles 渲染队列。
 
 ## 保存与开发契约

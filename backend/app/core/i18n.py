@@ -778,6 +778,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_conditionNeedsNumbers": {"zh": "比较方式「{op}」要的是数字,拿到的是 {left} / {right}", "en": "The “{op}” comparison needs numbers; got {left} / {right}"},
     "wfErr_childFailed": {"zh": "子任务失败:{reason}", "en": "The sub-task failed: {reason}"},
     "wfErr_pluginToolFailed": {"zh": "插件工具失败:{reason}", "en": "The plugin tool failed: {reason}"},
+    "wfErr_pluginToolInternal": {
+        "zh": "工具 {tool} 只供 Mosael 内部使用,不能在工作流里调用",
+        "en": "The tool {tool} is reserved for Mosael itself and cannot run in a workflow",
+    },
     "wfErr_pluginInstanceGone": {"zh": "节点选的连接已不可用(插件 {package});请在节点上重新选一个", "en": "The connection this node picked is gone (plugin {package}); choose another on the node"},
     "wfErr_pluginNoInstance": {"zh": "没有可用的「{package}」连接:请在插件页新建并启用一个", "en": "No usable “{package}” connection: create and enable one on the Plugins page"},
     "wfErr_pluginManyInstances": {"zh": "有多个「{package}」连接({names}),请在节点上选一个", "en": "Several “{package}” connections exist ({names}); pick one on the node"},

@@ -115,6 +115,10 @@ class ToolOverride:
     description: str = ""
     read_only: bool = False
     node: dict[str, Any] | None = None
+    #: 只给宿主自己的适配层调(比如 3D 场景与 Blender 的互通),**不暴露给智能体和工作流**。
+    #: 用在「插件自带一个不经确认的原始入口、而 Mosael 已经有带确认卡的同一能力」时 ——
+    #: 两条路并存,不经确认的那条就是绕开确认的后门。
+    internal: bool = False
 
 
 @dataclass(frozen=True)
@@ -258,7 +262,7 @@ def _tools_policy(raw: dict[str, Any], pick: Callable[[Any], str] = text_of) -> 
     """→ (expose, recommended, overrides, 进程插件声明的工具)。
 
     `tools` 是个策略对象:`declare` 是进程插件的工具声明,`recommended` 是首次启用默认勾上
-    的那些,`overrides` 按名字覆盖(目前只认 read_only 和 node)。三个名字各说各的 ——
+    的那些,`overrides` 按名字覆盖(目前只认 read_only、node 和 internal)。三个名字各说各的 ——
     此前它是个数组,同时承担这三种语义,读的人得先知道 kind 才能理解那个字段。
     """
     tools = raw.get("tools")
@@ -274,6 +278,7 @@ def _tools_policy(raw: dict[str, Any], pick: Callable[[Any], str] = text_of) -> 
             description=pick(spec.get("description")),
             read_only=spec.get("read_only") is True,
             node=spec.get("node") if isinstance(spec.get("node"), dict) else None,
+            internal=spec.get("internal") is True,
         )
     declared = [
         _humanized_schema(_humanized(t, "label", "description"))
