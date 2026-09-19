@@ -141,10 +141,15 @@
   outline-offset: 2px;
 }
 .scene-workspace {
+  /* 两栏的宽度由 useResizableSidebar 记住,经这两个变量交给这里 —— 断点规则(窄屏时藏栏、
+     退成单栏)因此仍留在样式表里,不会被内联的 grid-template-columns 盖掉。 */
+  --scene-side-width: 304px;
+  --scene-agent-width: 400px;
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 304px;
+  grid-template-columns: minmax(280px, 1fr) var(--scene-side-width);
   overflow: hidden;
   /* **不用卡片,用分割线。** 和剪辑页同构(editor.css 的 `.editor-pane` 就是一行
      `border-inline-end: 1px solid var(--divider)`):区块之间只有 1px 线,没有圆角、没有
@@ -531,14 +536,26 @@
    物体,看不到那份列表恰恰最别扭。宽屏放得下三栏(视口 + 物体 + 助手),只有窄到装不下时
    才二选一,那时留下助手(你刚点开它,那是当下的意图)。780px 以下再退成单栏。 */
 .scene-workspace[data-agent="true"] {
-  grid-template-columns: minmax(280px, 1fr) 280px 340px;
+  grid-template-columns: minmax(280px, 1fr) var(--scene-side-width) var(--scene-agent-width);
+}
+
+/* 栏与栏之间的拖柄:和剪辑页同一套(lib/useResizableSidebar 的 HANDLE_COLUMN),压在分割线正中。
+   **位置跟着栏走,显隐也跟着栏走** —— 栏被断点藏起来时,它的拖柄一起藏,否则会剩一根
+   拖不动任何东西的竖条。 */
+.scene-resize-side,
+.scene-resize-agent {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
 }
 
 @media (max-width: 1400px) {
   .scene-workspace[data-agent="true"] {
-    grid-template-columns: minmax(280px, 1fr) 340px;
+    grid-template-columns: minmax(280px, 1fr) var(--scene-agent-width);
   }
-  .scene-workspace[data-agent="true"] > .scene-side {
+  .scene-workspace[data-agent="true"] > .scene-side,
+  .scene-workspace[data-agent="true"] > .scene-resize-side {
     display: none;
   }
 }
@@ -919,6 +936,10 @@
   .scene-workspace[data-agent="true"] {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
+  }
+  .scene-resize-side,
+  .scene-resize-agent {
+    display: none;
   }
   .scene-stage {
     min-height: 420px;

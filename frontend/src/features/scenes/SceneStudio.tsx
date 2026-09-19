@@ -2,6 +2,7 @@ import { RenameDialog } from "@/components/app/modals";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
+import { HANDLE_COLUMN, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { SceneList } from "./SceneList";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -340,6 +341,10 @@ function SceneEditor({
      * 换一个时刻它就回到轨上。这个状态就是那段"还没记下来的样子"。
      */
     [posing, setPosing] = React.useState<string | null>(null);
+  //: 两栏可拖宽,和剪辑页同一套。智能体栏的上下限和工作流、画板、剪辑页的智能体栏一致。
+  const sidePanel = useResizableSidebar("scene-side", { min: 240, max: 480, fallback: 304 });
+  const agentPanel = useResizableSidebar("scene-agent", { min: 320, max: 640, fallback: 400 });
+  const agentDocked = agent === "docked";
   const preview = viewMode === "camera";
   const observing = viewMode === "observe";
   const setPreview = (value: boolean) => setViewMode(value ? "camera" : "edit");
@@ -1111,8 +1116,29 @@ function SceneEditor({
       )}
       <div
         className="scene-workspace"
-        data-agent={agent === "docked"}
+        data-agent={agentDocked}
+        style={{
+          "--scene-side-width": `${sidePanel.width}px`,
+          "--scene-agent-width": `${agentPanel.width}px`,
+        } as React.CSSProperties}
       >
+        {/* 分割线式排法(栏间 0 缝),拖柄压在线的正中 —— 和剪辑页一样,见 handleOffset。 */}
+        <div
+          className={cn("scene-resize-side", HANDLE_COLUMN)}
+          style={{ right: handleOffset(sidePanel.width, { padding: agentDocked ? agentPanel.width : 0, gap: 0 }) }}
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={sidePanel.startDragFromRight}
+        />
+        {agentDocked && (
+          <div
+            className={cn("scene-resize-agent", HANDLE_COLUMN)}
+            style={{ right: handleOffset(agentPanel.width, { gap: 0 }) }}
+            role="separator"
+            aria-orientation="vertical"
+            onPointerDown={agentPanel.startDragFromRight}
+          />
+        )}
         <main className="scene-stage">
           <div className="scene-stage-bar">
             {/* 三个步骤撤掉之后,这三个名字要能自己说清楚在看什么:
