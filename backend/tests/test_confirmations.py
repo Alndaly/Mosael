@@ -406,7 +406,7 @@ def test_run_code_confirmation_runs_the_same_code_path_as_the_node() -> None:
         },
     ).json()
     assert confirmation["status"] == "pending"
-    assert "在你的机器上运行" in confirmation["summary"]
+    assert "隔离沙箱" in confirmation["summary"]
 
     approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")

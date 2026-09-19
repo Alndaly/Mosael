@@ -15,16 +15,18 @@ type Rules = {
   http_request: Level;
   publish: Level;
   run_code: Level;
+  run_host_code: Level;
   notes: string;
 };
 
-const EMPTY: Rules = { http_request: "ask", publish: "ask", run_code: "ask", notes: "" };
+const EMPTY: Rules = { http_request: "ask", publish: "ask", run_code: "ask", run_host_code: "ask", notes: "" };
 
-/** 三类撤不回来的操作,同一种判据。顺序即页面顺序。 */
+/** 几类撤不回来的操作,同一种判据。顺序即页面顺序。沙箱与不隔离是两档:放开前者不连带后者。 */
 const GATES = [
   { key: "http_request", label: "autopilotHttp", desc: "autopilotHttpDesc" },
   { key: "publish", label: "autopilotPublish", desc: "autopilotPublishDesc" },
   { key: "run_code", label: "autopilotRunCode", desc: "autopilotRunCodeDesc" },
+  { key: "run_host_code", label: "autopilotRunHostCode", desc: "autopilotRunHostCodeDesc" },
 ] as const;
 
 /**

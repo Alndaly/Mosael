@@ -5,7 +5,7 @@ from typing import Any
 
 """放行准则:auto 档下,`external` 那一类调用要不要问人。
 
-三类撤不回来的操作,**同一种判据**,各有三档:
+几类撤不回来的操作,**同一种判据**,各有三档:
 
     ask    (默认) 一律弹卡问人,判断者不参与
     judge  交给那个与对话隔离的判断者,由它决定放行还是问人
@@ -47,7 +47,7 @@ class Ruling:
 
 
 #: 三类操作各自的档位键。顺序即界面顺序。
-GATED = ("http_request", "publish", "run_code")
+GATED = ("http_request", "publish", "run_code", "run_host_code")
 
 #: 认得的档位。**存进来的任何别的值都读成 ask** —— 一个不认识的字符串必须落到最保守的那一档,
 #: 而不是落到"最后一个 elif"碰巧是什么。前后空格、大小写不同的写法都算不认识:配置里的
@@ -56,7 +56,7 @@ LEVELS = ("ask", "judge", "always")
 
 
 def default_rules() -> dict[str, Any]:
-    """没配过的工作区就是这一份:三类都问人,判断者一次都不调。"""
+    """没配过的工作区就是这一份:每一类都问人,判断者一次都不调。"""
     return {key: "ask" for key in GATED} | {"notes": ""}
 
 
@@ -77,22 +77,27 @@ def normalize(raw: Any) -> dict[str, Any]:
 
 
 #: 工具名 → 它归哪一档。
-_TOOL_GATE = {"http_request": "http_request", "publish_asset": "publish", "run_code": "run_code"}
+#: 沙箱里跑和不隔离地跑是**两档**:对「算个数」放开,不该连带放开「动我的文件」。
+_TOOL_GATE = {"http_request": "http_request", "publish_asset": "publish", "run_code": "run_code",
+              "run_host_code": "run_host_code"}
 
 _ASK_REASON = {
     "http_request": "对外请求交给判断者",
     "publish": "公开发布交给判断者",
-    "run_code": "本机执行代码交给判断者",
+    "run_code": "沙箱执行代码交给判断者",
+    "run_host_code": "不隔离执行代码交给判断者",
 }
 _ALLOW_REASON = {
     "http_request": "对外请求已设为完全放行",
     "publish": "公开发布已设为完全放行",
-    "run_code": "本机执行代码已设为完全放行",
+    "run_code": "沙箱执行代码已设为完全放行",
+    "run_host_code": "不隔离执行代码已设为完全放行",
 }
 _DENY_REASON = {
     "http_request": "对外请求默认要人确认",
     "publish": "公开发布默认要人确认",
-    "run_code": "本机执行代码默认要人确认",
+    "run_code": "沙箱执行代码默认要人确认",
+    "run_host_code": "不隔离执行代码默认要人确认",
 }
 
 

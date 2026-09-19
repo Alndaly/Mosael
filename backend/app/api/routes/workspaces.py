@@ -105,7 +105,8 @@ def set_autopilot_rules(
     # owner/admin」,不是「这台机器的主人」—— 它拦得住 editor,拦不住别处的管理员。这不是这条准则
     # 的问题,是整套作用域模型里缺一层(见 docs/ADR 待议)。共用同一道闸的意义正在于此:那天它收紧,
     # 这里跟着一起收紧,不需要有人记得回来改第二处。
-    if incoming["run_code"] == "judge" and autopilot_rules.normalize(workspace.autopilot_rules)["run_code"] != "judge":
+    current = autopilot_rules.normalize(workspace.autopilot_rules)
+    if any(incoming[key] == "judge" and current[key] != "judge" for key in ("run_code", "run_host_code")):
         try:
             ensure_workspace_role(db, user, workspace_id, "admin")
         except PermissionDenied as exc:

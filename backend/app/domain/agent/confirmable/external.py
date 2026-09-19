@@ -76,13 +76,35 @@ def _validate_run_code(db: Session, workspace_id: str, payload: dict[str, Any]) 
 def _summarize_run_code(db: Session, payload: dict[str, Any]) -> str:
     code = str(payload.get("code") or "")
     head = code.strip().splitlines()[0][:60] if code.strip() else ""
-    return f"⚠️ 在你的机器上运行一段 Python({len(code)} 字符){f': {head}…' if head else ''}"
+    return f"在隔离沙箱里运行一段 Python({len(code)} 字符,无网络、看不到你的文件){f': {head}…' if head else ''}"
 
 def _execute_run_code(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.domain.workflows.executors.basic import run_python
 
     return run_python(str(payload.get("code") or ""), dict(payload.get("inputs") or {}))
+
+def _validate_run_host_code(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    from app.domain import host_code
+
+    reason = host_code.available()
+    if reason:
+        raise ConfirmationError(reason)
+
+def _summarize_run_host_code(db: Session, payload: dict[str, Any]) -> str:
+    code = str(payload.get("code") or "")
+    head = code.strip().splitlines()[0][:60] if code.strip() else ""
+    return (f"⚠️ **不隔离**,直接在你的电脑上运行一段 Python({len(code)} 字符),可读写你的文件"
+            f"{f': {head}…' if head else ''}")
+
+def _execute_run_host_code(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    from app.domain import host_code
+
+    payload = confirmation.payload
+    try:
+        return host_code.run(str(payload.get("code") or ""), dict(payload.get("inputs") or {}))
+    except host_code.HostCodeError as exc:
+        raise ValueError(str(exc)) from exc
 
 def _validate_browser_open(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     url = str(payload.get("url") or "").strip()
@@ -174,6 +196,16 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_run_code,
     execute=_execute_run_code,
     validate=_validate_run_code,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="run_host_code",
+    permission="external",
+    cost="none",
+    summarize=_summarize_run_host_code,
+    execute=_execute_run_host_code,
+    validate=_validate_run_host_code,
 ))
 
 

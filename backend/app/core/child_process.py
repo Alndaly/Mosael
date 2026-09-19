@@ -249,7 +249,7 @@ class ProcessOutputLimitExceeded(RuntimeError):
 
 
 def run_bounded(args, *, input: bytes = b"", timeout: float, max_output_bytes: int,
-                env: dict[str, str] | None = None, what: str) -> subprocess.CompletedProcess:
+                env: dict[str, str] | None = None, cwd: str | None = None, what: str) -> subprocess.CompletedProcess:
     """Binary pipes with a deadline covering stdin and bounded, concurrent output collection.
 
     A line iterator or communicate() would buffer an arbitrarily long line/output before
@@ -257,7 +257,7 @@ def run_bounded(args, *, input: bytes = b"", timeout: float, max_output_bytes: i
     """
     started = time.monotonic()
     process = popen_text(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         text=False, env=env)
+                         text=False, env=env, cwd=cwd)
     output, errors = bytearray(), bytearray()
     exceeded = threading.Event()
     lock = threading.Lock()

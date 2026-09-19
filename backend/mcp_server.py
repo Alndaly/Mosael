@@ -171,6 +171,7 @@ CONFIRMATION_TOOLS = frozenset(
         "browser_pool_open",
         "publish_asset",
         "run_code",
+        "run_host_code",
         "http_request",
     }
 )
@@ -2017,17 +2018,41 @@ def http_request(
 
 @mcp.tool()
 def run_code(code: str, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Confirmation required: run a short Python snippet locally and return `output`.
+    """Confirmation required: run a short Python snippet in an ISOLATED sandbox and return `output`.
 
     Use for computation the other tools cannot express (parsing, math, reshaping data).
     The snippet reads `inputs` (a dict) and must assign its result to `output`.
-    It runs on the user's machine — that is why it always asks first.
+    The sandbox has no network and cannot see the user's files (standard library only). To act
+    on the user's own computer — their files, local programs — use run_host_code instead.
     """
     confirmation = _post(
         "/api/confirmations",
         {
             "workspace_id": _default_workspace_id(),
             "tool": "run_code",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"code": code, "inputs": inputs or {}},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def run_host_code(code: str, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Confirmation required: run Python directly on the user's computer, NOT isolated.
+
+    For work whose whole point is the local machine: reading or organising the user's files,
+    calling locally installed programs, touching paths they gave you. It runs as the user, in
+    their home directory, with full file access (credential-like env vars are removed) — so use
+    run_code for pure computation, and state plainly in your reply what this one changed.
+    The snippet reads `inputs` and assigns its result to `output`; print() output is returned
+    as `printed`. Only available on the local desktop app. Time limit 120 s.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "run_host_code",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {"code": code, "inputs": inputs or {}},
         },
