@@ -5,6 +5,7 @@ import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
+import { useOpenRequest } from "@/lib/deepLink";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
@@ -327,14 +328,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const [communityOpen, setCommunityOpen] = React.useState(false);
 
   // 通知/任务中心深链(mosael:open-* 事件通道):直接选中对应工作流。
-  React.useEffect(() => {
-    const onOpenWorkflow = (event: Event) => {
-      const id = (event as CustomEvent<string>).detail;
-      if (typeof id === "string" && id) setSelectedId(id);
-    };
-    window.addEventListener("mosael:open-workflow", onOpenWorkflow);
-    return () => window.removeEventListener("mosael:open-workflow", onOpenWorkflow);
-  }, []);
+  useOpenRequest("mosael:open-workflow", (id) => setSelectedId(id));
 
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],

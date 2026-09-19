@@ -4,6 +4,7 @@ import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import React from "react";
+import { useOpenRequest } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
@@ -96,16 +97,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const refresh = () => qc.invalidateQueries({ queryKey: ["assets"] });
 
   // Cmd+K 面板选中素材后跳转到本页并直接打开预览。
-  React.useEffect(() => {
-    const onOpenAsset = (event: Event) => {
-      const assetId = (event as CustomEvent<string>).detail;
-      const asset = (assets.data ?? []).find((item) => item.id === assetId);
-      if (!asset) return;
-      // 统一先进详情卡(图片也一样),要看大图再从卡里点开;避免图片直接跳全屏、看不到数据。
-      setPreviewing(asset);
-    };
-    window.addEventListener("mosael:open-asset", onOpenAsset);
-    return () => window.removeEventListener("mosael:open-asset", onOpenAsset);
+  // 那一份还没加载出来时接不住 —— 返回 false,请求留在信箱里,列表到货后再投(见 lib/deepLink)。
+  useOpenRequest("mosael:open-asset", (assetId) => {
+    const asset = (assets.data ?? []).find((item) => item.id === assetId);
+    if (!asset) return false;
+    // 统一先进详情卡(图片也一样),要看大图再从卡里点开;避免图片直接跳全屏、看不到数据。
+    setPreviewing(asset);
   }, [assets.data]);
 
   const uploadAsset = useMutation({

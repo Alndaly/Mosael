@@ -1,5 +1,6 @@
 import React from "react";
 
+import { useOpenRequest } from "@/lib/deepLink";
 import type { Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
@@ -36,16 +37,12 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   };
 
   // 深链:别处(如工作流「模型未配置」提示)→ mosael:open-settings 直达对应页。
-  React.useEffect(() => {
-    const onOpen = (event: Event) => {
-      const target = resolveSettingsLink((event as CustomEvent<string>).detail);
-      if (!target) return;
-      setSection(target.id);
-      setFocusCapability(target.focus);
-    };
-    window.addEventListener("mosael:open-settings", onOpen);
-    return () => window.removeEventListener("mosael:open-settings", onOpen);
-  }, []);
+  useOpenRequest("mosael:open-settings", (link) => {
+    const target = resolveSettingsLink(link);
+    if (!target) return;
+    setSection(target.id);
+    setFocusCapability(target.focus);
+  });
 
   const query = navSearch.toLocaleLowerCase();
   const matches = (label: string) => label.toLocaleLowerCase().includes(query);

@@ -1,10 +1,51 @@
-/** 挂载竞速兜底:目标视图挂载、注册监听器的时机不定(懒加载/慢查询),
- *  单次延迟派发会丢事件。改为 80/300/800ms 三连发 — 监听器打开同一条记录
- *  是幂等的,晚到的重复派发无副作用。 */
+import React from "react";
+
+/**
+ * 「打开某一条记录」的请求,**放进信箱**,而不是按时间猜对方什么时候准备好。
+ *
+ * 目标页面什么时候挂载、它的列表什么时候加载完,发请求的一方不知道。此前的做法是按 80 / 300 /
+ * 800ms 连发三次,赌其中一次赶上 —— 慢一点的机器上三次都赶不上,请求就丢了;而页面早就卸掉之后
+ * 那几个定时器还会照样触发(CI 上就是这么红的:测试结束、jsdom 拆掉,800ms 那一发撞上一个
+ * 不存在的 window)。
+ *
+ * 现在:请求留在信箱里,并立即广播一次。已经挂着的页面当场收;还没挂载的,挂载时自己来取;
+ * 接不住(列表还没加载出那一条)就先留着,等它说准备好了再投。收下就从信箱里拿走,不会重复打开。
+ */
+const mailbox = new Map<string, string>();
+
 export function emitOpenEvent(event: string, id: string): void {
-  for (const delay of [80, 300, 800]) {
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent(event, { detail: id })), delay);
-  }
+  mailbox.set(event, id);
+  window.dispatchEvent(new CustomEvent(event, { detail: id }));
+}
+
+/**
+ * 收 `mosael:open-*` 的那一侧。`onOpen` 返回 `false` 表示"现在还接不住"(比如那一条还没加载出来),
+ * 请求就留在信箱里;`deps` 一变(列表到货了)再投一次。
+ */
+export function useOpenRequest(event: string, onOpen: (id: string) => boolean | void, deps: React.DependencyList = []): void {
+  const handler = React.useRef(onOpen);
+  handler.current = onOpen;
+  const deliver = React.useCallback(
+    (id: string) => {
+      if (handler.current(id) === false) return;
+      if (mailbox.get(event) === id) mailbox.delete(event);
+    },
+    [event],
+  );
+  // 挂载时、以及接收方说"准备好了"(deps 变了)时,取一次信箱。
+  React.useEffect(() => {
+    const waiting = mailbox.get(event);
+    if (waiting) deliver(waiting);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliver, event, ...deps]);
+  React.useEffect(() => {
+    const onEvent = (e: Event) => {
+      const id = (e as CustomEvent<unknown>).detail;
+      if (typeof id === "string" && id) deliver(id);
+    };
+    window.addEventListener(event, onEvent);
+    return () => window.removeEventListener(event, onEvent);
+  }, [deliver, event]);
 }
 
 /** 深链通道:跳到业务页,并在页面挂载后用 mosael:open-* 事件打开指定记录。 */

@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { useMultiSelect } from "@/lib/useMultiSelect";
-import { gotoRecord } from "@/lib/deepLink";
+import { gotoRecord, useOpenRequest } from "@/lib/deepLink";
 import { useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -48,16 +48,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
 
   // 任务中心深链(mosael:open-* 事件通道):直接选中那条发布记录。
-  React.useEffect(() => {
-    const onOpenTask = (event: Event) => {
-      const id = (event as CustomEvent<string>).detail;
-      if (typeof id === "string" && id) {
-        setOpenId(id);
-      }
-    };
-    window.addEventListener("mosael:open-publish-task", onOpenTask);
-    return () => window.removeEventListener("mosael:open-publish-task", onOpenTask);
-  }, []);
+  useOpenRequest("mosael:open-publish-task", (id) => setOpenId(id));
   const [creating, setCreating] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PublishTask | null>(null);
 

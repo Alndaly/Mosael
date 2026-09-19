@@ -2,6 +2,7 @@ import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolba
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
+import { useOpenRequest } from "@/lib/deepLink";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -91,11 +92,11 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   );
   const open = list.find((board) => board.id === openId) ?? null;
   React.useEffect(() => { const id = new URLSearchParams(location.hash.split("?")[1] ?? "").get("board"); if (id && list.some(b => b.id === id)) { setOpenId(id); history.replaceState(null, "", "#/boards"); } }, [list, setOpenId]);
-  React.useEffect(() => {
-    const onOpen = (event: Event) => { const id = (event as CustomEvent<string>).detail; if (list.some(b => b.id === id)) setOpenId(id); };
-    window.addEventListener("mosael:open-board", onOpen);
-    return () => window.removeEventListener("mosael:open-board", onOpen);
-  }, [list, setOpenId]);
+  // 那一张还没加载出来时接不住 —— 返回 false,请求留在信箱里,列表到货后再投(见 lib/deepLink)。
+  useOpenRequest("mosael:open-board", (id) => {
+    if (!list.some((b) => b.id === id)) return false;
+    setOpenId(id);
+  }, [list]);
 
   const create = useMutation({
     mutationFn: () => createBoard({ workspace_id: workspace.id }),

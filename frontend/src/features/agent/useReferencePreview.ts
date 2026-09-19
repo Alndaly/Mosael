@@ -15,7 +15,7 @@ import type { AgentReference, ReferenceKind } from "@/features/agent/references"
  * hash 变了却没有任何东西去重读它:`location.hash` 不是响应式的,那个 effect 的依赖里也没有它。
  * 结果就是点了没反应。
  *
- * 仓库里本来就有这条通道(lib/deepLink 的 gotoRecord + 三连发),画板和工作流也早就在听
+ * 仓库里本来就有这条通道(lib/deepLink 的 gotoRecord + 信箱),画板和工作流也早就在听
  * 对应的事件了 —— 这里此前绕过它直接写 hash,才把自己关在了"只有跨页才灵"的一半里。
  * 笔记不需要事件:NotesView 自己听着 hashchange。
  */
