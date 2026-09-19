@@ -55,17 +55,41 @@ def test_认得出的_key_照旧翻() -> None:
     assert blame(WorkflowDomainError("wfErr_noExecutor", params={"type": "demo"}))["error_key"] == "wfErr_noExecutor"
 
 
-def test_库里已有的坏行不拖垮列表() -> None:
-    """改正之前落下的行:`error_key` 是一句被截成 80 字的原话。读的时候用完整那句 `error`。"""
-    from app.api.schemas import JobOut
+def test_迁移把库里的坏_key_改掉_还救回被截掉的原因() -> None:
+    """改正之前落下的行:error_key 是被截成 80 字的原话,error 只剩花括号之前那一截。
 
-    job = Job(
-        id="j", workspace_id="w", kind="workflow", status="failed", progress=1.0,
-        message="", message_key="", message_params={}, payload={}, result={},
-        error="调用 LLM失败:Error: 403", error_key=RAW[:80], error_params={},
-        created_at=now(), updated_at=now(),
-    )
-    assert JobOut.model_validate(job).error == "调用 LLM失败:Error: 403"
+    读取端不为这种行留分支(见 _rendered),由迁移一次改掉:key 清空,error 换成那 80 字 ——
+    它比残留的 error 完整。"""
+    from app.core.db import SessionLocal
+    from app.db.migrations import _migrate_job_keys_are_keys
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        broken = Job(
+            workspace_id=ws, kind="workflow", status="failed", progress=1.0,
+            message="Generating", message_key="Generating", message_params={}, payload={}, result={},
+            error="调用 LLM失败:Error: 403", error_key=RAW[:80], error_params={},
+        )
+        fine = Job(
+            workspace_id=ws, kind="workflow", status="failed", progress=1.0,
+            message="", message_key="", message_params={}, payload={}, result={},
+            error="节点类型 demo 没有执行器", error_key="wfErr_noExecutor", error_params={"type": "demo"},
+        )
+        db.add_all([broken, fine])
+        db.commit()
+        broken_id, fine_id = broken.id, fine.id
+
+    _migrate_job_keys_are_keys()
+    _migrate_job_keys_are_keys()  # 幂等:每次启动都会跑
+
+    with SessionLocal() as db:
+        repaired = db.get(Job, broken_id)
+        assert repaired.error_key == "" and repaired.message_key == ""
+        assert repaired.error == RAW[:80], "80 字的那一截比残留的 error 完整,要挪回来"
+        untouched = db.get(Job, fine_id)
+        assert untouched.error_key == "wfErr_noExecutor" and untouched.error_params == {"type": "demo"}
 
 
 def test_别的工作流跑得再多_这个的历史也还在() -> None:
@@ -79,18 +103,18 @@ def test_别的工作流跑得再多_这个的历史也还在() -> None:
     mine = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "我的", "graph": graph}).json()
     other = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "别人的", "graph": graph}).json()
 
-    def run(workflow_id: str, index: int, error_key: str = "") -> Job:
+    def run(workflow_id: str, index: int) -> Job:
         return Job(
             id=f"{workflow_id[:8]}-{index}", workspace_id=ws["id"], kind="workflow", status="failed",
             progress=1.0, message="", message_key="", message_params={},
             payload={"workflow_id": workflow_id}, result={},
-            error="调用 LLM失败:Error: 403", error_key=error_key, error_params={},
+            error="调用 LLM失败:Error: 403", error_key="", error_params={},
             created_at=now(), updated_at=now(),
         )
 
     with SessionLocal() as db:
-        #: 我的那两次在前面,其中一次是改正之前那种坏行。
-        db.add(run(mine["id"], 0, error_key=RAW[:80]))
+        #: 我的那两次在前面。
+        db.add(run(mine["id"], 0))
         db.add(run(mine["id"], 1))
         db.flush()
         #: 然后别人的跑了 60 次,全都比我的新。

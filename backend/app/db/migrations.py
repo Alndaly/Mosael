@@ -1934,6 +1934,41 @@ def _backfill_plugin_instances() -> None:
             conn.execute(text("ALTER TABLE plugin_packages DROP COLUMN enabled"))
 
 
+def _migrate_job_keys_are_keys() -> None:
+    """jobs 的 message_key / error_key 里只能是**文案 key**(或空)。
+
+    改正之前(见 core/i18n.is_message_key),`WorkflowDomainError(str(exc))` 把第三方报错原文当 key,
+    `blame()` 截成 80 字写进 error_key;读的时候拿它当模板 format,花括号一炸,整个执行历史接口 500。
+    写入端已经不会再这么写了 —— 库里已有的那些在这里一次改掉,读取端只认新形状,不为旧行留分支。
+
+    顺手救回失败原因:当年写 `error` 时,原文里花括号之后的部分被当成"填不上的占位符"抹掉了
+    (只剩「调用 LLM失败:Error: 403」),而那半截"key"里还留着原文的前 80 个字 —— 比 `error`
+    完整,就挪回 `error`。
+
+    每次启动都跑、幂等:不变式是 key ∈ 文案表 ∪ {""},将来删掉某条文案时,引用它的旧行也会在
+    这里被清掉(显示退回到落库时渲好的那句 message/error)。
+    """
+    from app.core.i18n import MESSAGES
+
+    if "jobs" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, message_key, error_key, error FROM jobs WHERE message_key != '' OR error_key != ''")
+        ).fetchall()
+        for job_id, message_key, error_key, error in rows:
+            if message_key and message_key not in MESSAGES:
+                conn.execute(
+                    text("UPDATE jobs SET message_key = '', message_params = '{}' WHERE id = :id"), {"id": job_id}
+                )
+            if error_key and error_key not in MESSAGES:
+                recovered = error_key if len(error_key) > len(error or "") and error_key.startswith(error or "") else error
+                conn.execute(
+                    text("UPDATE jobs SET error_key = '', error_params = '{}', error = :error WHERE id = :id"),
+                    {"error": recovered, "id": job_id},
+                )
+
+
 def _migrate_job_worker_leases() -> None:
     with engine.begin() as conn:
         columns = {row[1] for row in conn.execute(text("PRAGMA table_info(jobs)"))}
@@ -2043,6 +2078,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_resource_ownership,
                 _migrate_publish_task_options,
                 _migrate_job_message_i18n,
+                _migrate_job_keys_are_keys,
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
                 _migrate_provider_model_capability_ref,

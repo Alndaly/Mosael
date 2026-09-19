@@ -41,7 +41,7 @@ class JobOut(OrmModel):
     翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,
     漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。
 
-    老任务没有 key(它们只留下了当年渲染的那句话),原样返回 —— 那是数据本身的界限。
+    没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。
     """
 
     id: str
@@ -83,17 +83,17 @@ class JobOut(OrmModel):
     @field_validator("error", mode="before")
     @classmethod
     def _translate_error(cls, value: object, info: ValidationInfo) -> object:
-        """失败原因同样按请求方的语言翻。老任务只留下了当年那句话,原样返回。"""
+        """失败原因同样按请求方的语言翻。没有 key 的(第三方原话)原样返回。"""
         return _rendered(value, info, "error_key", "error_params")
 
 
 def _rendered(value: object, info: ValidationInfo, key_field: str, params_field: str) -> object:
-    from app.core.i18n import get_current_locale, is_message_key, render_message
+    from app.core.i18n import get_current_locale, render_message
 
     data = info.data if isinstance(info.data, dict) else {}
     key = data.get(key_field) or ""
-    #: 认不出的 key 不是 key:库里有改正之前落下的、被截成 80 字的报错原文。它们用 `value`
-    #: (完整那一句)显示,而不是拿半截 key 去翻 —— **一条坏行不能拖垮整个列表**。
-    if not is_message_key(key):
+    #: key 列里只会是文案 key 或空(写入端由 core/i18n.is_message_key 把关,旧数据由迁移
+    #: _migrate_job_keys_are_keys 改过),所以这里不再为"认不出的 key"留分支。
+    if not key:
         return value
     return render_message(key, get_current_locale(), data.get(params_field) or {})
