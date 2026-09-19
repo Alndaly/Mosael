@@ -259,6 +259,8 @@ MUTATING_TOOLS = frozenset(
         "remember",
         "create_scene",
         "edit_scene",
+        #: 渲出来的是新素材 —— 往素材库里写东西。
+        "render_scene_references",
         "create_note",
         "append_note",
         "transcribe_asset",
@@ -1282,22 +1284,41 @@ def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] 
                name: str | None = None, workspace_id: str = "") -> dict[str, Any]:
     """Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first.
     objects: up to 100 partial updates keyed by id, or new objects with id, name and kind.
-    kind: box, sphere, cylinder, plane, room, stairs, group, model, light. Optional position,
-    rotation and scale are XYZ triples (metres/degrees); parent_id must reference a group.
-    parameters: width,height,depth,radius,steps,door_width,door_height. Room has a floor and
-    four walls, centered doors in front/back, no ceiling. Stairs climb along +Z. Primitives
-    stand on local y=0; sphere center is at radius. color is #RRGGBB; roughness/metalness 0..1.
+    kind: box, sphere, cylinder, plane, room, stairs, table, figure, group, model, light, camera.
+    Optional position, rotation and scale are XYZ triples (metres/degrees); parent_id must reference
+    a group. parameters: width,height,depth,radius,steps,door_width,door_height. Room has a floor and
+    four walls, centered doors in front/back, no ceiling. Stairs climb along +Z. figure is a person
+    stand-in (height = parameters.height, shoulders = width). Primitives stand on local y=0; sphere
+    center is at radius. color is #RRGGBB; roughness/metalness 0..1. Y is up, floor at y=0.
     Imported models require an existing model_id from this SAME scene; never invent one.
-    remove_ids deletes objects AND descendants. shots, when supplied, replaces the shot list:
-    [{id,name,duration:0.1..120,aspect:'16:9'|'9:16'|'1:1',easing:'linear'|'smooth',
-    frames:[{time,position:[x,y,z],target:[x,y,z],fov:10..120}]}]. Times must start at 0,
-    strictly increase and not exceed duration. Plan collision-free camera paths yourself;
-    interpolation does not perform collision avoidance. No executable code is accepted.
+    Cameras are objects: {kind:'camera', position, target:[x,y,z], fov:10..120 (vertical degrees)}.
+    A moving camera or object has track:[{time, position, target (cameras), fov (cameras),
+    rotation/scale (objects)}]; times strictly increase. remove_ids deletes objects AND descendants.
+    shots, when supplied, replaces the shot list: [{id, name, duration:0.1..120,
+    aspect:'16:9'|'9:16'|'1:1', easing:'linear'|'smooth', camera_id}] — each shot names the camera
+    object that films it; the camera's track is the camera move. Plan collision-free camera paths
+    yourself; interpolation does not perform collision avoidance. No executable code is accepted.
     If revision conflicts, re-read and merge; never overwrite changes blindly.
     """
     return _post(f"/api/scenes/{scene_id}/operations", {"workspace_id": workspace_id or _default_workspace_id(),
         "base_revision": base_revision, "objects": objects or [], "remove_ids": remove_ids or [],
         "shots": shots, "name": name})
+
+
+@mcp.tool()
+def render_scene_references(scene_id: str, shot_id: str, render: str = "stills", project_id: str = "",
+                            workspace_id: str = "") -> dict[str, Any]:
+    """Render blockout references of one shot of a 3D scene and save them as assets:
+    render='stills' (first + last frame, ~2 s), 'video' (the camera move as an MP4, ~30 s for 5 s),
+    or 'both'. Returns first_frame_asset_id / last_frame_asset_id / video_asset_id (empty when not
+    rendered), camera_move (camera language computed from the camera path — lens, height,
+    dolly/pan/orbit — ready to paste into a generation prompt) and skipped_models (imported GLB
+    models are not rendered). Rendered locally, free. Use the frames as reference_image or
+    first_frame/last_frame, and the video as reference_video, for generate_image / generate_video."""
+    return _post(f"/api/scenes/{scene_id}/shots/{shot_id}/references", {
+        "workspace_id": workspace_id or _default_workspace_id(), "render": render,
+        "project_id": project_id or None,
+    })
 
 
 @mcp.tool()

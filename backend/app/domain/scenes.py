@@ -379,3 +379,61 @@ def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, obje
     except ValidationError as exc:
         raise SceneDomainError(str(exc)) from exc
     return save_scene(db, scene, base_revision, name if name is not None else scene.name, validated)
+
+
+#: 「渲染白模参考」渲哪几样。静帧两张约两秒;运镜视频要逐帧渲,一个 5 秒镜头半分钟上下 ——
+#: 所以默认只要静帧,用得上运镜视频(交给视频模型当参考视频)的时候再要。
+REFERENCE_RENDERS = ("stills", "video", "both")
+
+
+def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render: str = "stills",
+                           project_id: str | None = None) -> dict:
+    """从一个镜头渲出白模参考,登记成本工作区的素材。**工作流节点、接口、智能体工具共用这一份。**
+
+    返回首帧/尾帧/运镜视频的素材 id(没渲的是空串)、一句从机位轨迹算出来的镜头语言,以及
+    有几个导入模型没渲进去(后端渲不了 GLB,见 domain/scene_render)。
+    """
+    import tempfile
+
+    from app.domain.assets.importer import register_file_asset
+    from app.domain.scene_render import SceneRenderError, describe_camera_move, find_shot, render_frame, render_shot_video
+
+    if render not in REFERENCE_RENDERS:
+        raise SceneDomainError(f"render must be one of {', '.join(REFERENCE_RENDERS)}")
+    content = SceneContent.model_validate(scene.content)
+    try:
+        shot = find_shot(content, shot_id)
+        first = render_frame(content, shot.id, 0)
+        last = render_frame(content, shot.id, shot.duration)
+    except SceneRenderError as exc:
+        raise SceneDomainError(str(exc)) from exc
+
+    label = f"{scene.name} · {shot.name}"
+    out = {
+        "first_frame_asset_id": "",
+        "last_frame_asset_id": "",
+        "video_asset_id": "",
+        "camera_move": describe_camera_move(first.camera, last.camera),
+        "skipped_models": first.skipped_models,
+    }
+    with tempfile.TemporaryDirectory(prefix="mosael-graybox-") as folder:
+        work = Path(folder)
+
+        def keep(path: Path, name: str) -> str:
+            return register_file_asset(
+                db, workspace_id=scene.workspace_id, project_id=project_id,
+                source_path=path, name=name, source="graybox",
+            ).id
+
+        if render in ("stills", "both"):
+            first.image.save(work / "first.png")
+            last.image.save(work / "last.png")
+            out["first_frame_asset_id"] = keep(work / "first.png", f"{label} · 白模首帧")
+            out["last_frame_asset_id"] = keep(work / "last.png", f"{label} · 白模尾帧")
+        if render in ("video", "both"):
+            try:
+                video = render_shot_video(content, shot.id, work / "move.mp4")
+            except SceneRenderError as exc:
+                raise SceneDomainError(str(exc)) from exc
+            out["video_asset_id"] = keep(video, f"{label} · 白模运镜")
+    return out

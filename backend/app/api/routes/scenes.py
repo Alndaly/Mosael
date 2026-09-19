@@ -2,11 +2,13 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas.scenes import SceneCreate, SceneUpdate, SceneOut, SceneOperations
+from app.api.schemas.scenes import (SceneCreate, SceneOperations, SceneOut, SceneReferenceOut,
+                                    SceneReferenceRequest, SceneUpdate)
 from app.db.models import Scene3D, Scene3DModel, Scene3DRevision
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.scenes import (apply_scene_operations, create_scene, delete_scene_model_files,
-                                get_scene, import_model, model_file, save_scene, scene_preview)
+                                get_scene, import_model, model_file, render_shot_references, save_scene,
+                                scene_preview)
 
 router = APIRouter(tags=["3D scenes"])
 
@@ -98,3 +100,11 @@ def delete_scene(scene_id: str, workspace_id: str, db: DbSession, user: CurrentU
     db.delete(scene)
     db.commit()
     return Response(status_code=204)
+
+
+@router.post("/scenes/{scene_id}/shots/{shot_id}/references", response_model=SceneReferenceOut)
+def references(scene_id: str, shot_id: str, body: SceneReferenceRequest, db: DbSession, user: CurrentUser):
+    """渲这个镜头的白模参考(首尾静帧 / 运镜视频),登记成素材。会往素材库里写东西,所以要 edit。"""
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    scene = get_scene(db, body.workspace_id, scene_id)
+    return render_shot_references(db, scene, shot_id, render=body.render, project_id=body.project_id)

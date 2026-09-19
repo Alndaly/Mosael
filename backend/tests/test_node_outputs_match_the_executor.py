@@ -24,6 +24,9 @@ EXECUTORS = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "wo
 INDIRECT = {
     # 把 notes.read_reference 的整份结果摊开(键由那个函数定),见 tests/test_notes.py。
     "note_read",
+    # 返回 domain/scenes.render_shot_references 的结果(接口和智能体工具共用那一份),
+    # 键由 tests/test_scene_workflow_nodes.py 钉着。
+    "scene_render",
     # 循环/子图:输出是子图跑出来的东西,形状由体内的 output 节点决定。
     "loop_foreach",
     "loop_while",

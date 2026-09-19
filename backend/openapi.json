@@ -9423,6 +9423,68 @@
         }
       }
     },
+    "/api/scenes/{scene_id}/shots/{shot_id}/references": {
+      "post": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "References",
+        "description": "渲这个镜头的白模参考(首尾静帧 / 运镜视频),登记成素材。会往素材库里写东西,所以要 edit。",
+        "operationId": "references_api_scenes__scene_id__shots__shot_id__references_post",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "shot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Shot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneReferenceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneReferenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/scheduled-tasks": {
       "post": {
         "tags": [
@@ -22967,7 +23029,7 @@
           "updated_at"
         ],
         "title": "JobOut",
-        "description": "任务出口。**message 在这里按请求方的语言翻**。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n老任务没有 key(它们只留下了当年渲染的那句话),原样返回 —— 那是数据本身的界限。"
+        "description": "任务出口。**message 在这里按请求方的语言翻**。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。"
       },
       "Keyframe": {
         "properties": {
@@ -27626,6 +27688,69 @@
           "updated_at"
         ],
         "title": "SceneOut"
+      },
+      "SceneReferenceOut": {
+        "properties": {
+          "first_frame_asset_id": {
+            "type": "string",
+            "title": "First Frame Asset Id"
+          },
+          "last_frame_asset_id": {
+            "type": "string",
+            "title": "Last Frame Asset Id"
+          },
+          "video_asset_id": {
+            "type": "string",
+            "title": "Video Asset Id"
+          },
+          "camera_move": {
+            "type": "string",
+            "title": "Camera Move"
+          },
+          "skipped_models": {
+            "type": "integer",
+            "title": "Skipped Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_frame_asset_id",
+          "last_frame_asset_id",
+          "video_asset_id",
+          "camera_move",
+          "skipped_models"
+        ],
+        "title": "SceneReferenceOut"
+      },
+      "SceneReferenceRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "render": {
+            "type": "string",
+            "title": "Render",
+            "default": "stills"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "SceneReferenceRequest",
+        "description": "从一个镜头渲白模参考(见 domain/scenes.render_shot_references)。"
       },
       "SceneShot": {
         "properties": {

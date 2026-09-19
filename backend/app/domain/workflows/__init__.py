@@ -17,6 +17,7 @@ from __future__ import annotations
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
 from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_ROLE_LABELS
+from app.domain.scenes import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 
 import json
@@ -114,6 +115,8 @@ NODE_CATEGORIES: tuple[str, ...] = (
     "wfCat_ai",
     "wfCat_audio",
     "wfCat_asset",
+    #: 3D 白模:搭场景、渲参考。跟在「素材」后面 —— 它产出的就是给生成用的参考素材。
+    "wfCat_3d",
     "wfCat_knowledge",
     "wfCat_data",
     "wfCat_publish",
@@ -299,6 +302,12 @@ _FIELD_LABELS = {
     "updated": "wfField_updated",
     "video_track_id": "wfField_video_track_id",
     "waited": "wfField_waited",
+    "layout": "wfField_layout",
+    "scene_id": "wfField_scene_id",
+    "shot_id": "wfField_shot_id",
+    "shot_ids": "wfField_shot_ids",
+    "shot_count": "wfField_shot_count",
+    "render": "wfField_render",
 }
 
 
@@ -839,6 +848,50 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"texts": "json", "count": "number"},
     },
     #: 人声/背景音分离(ADR-0016)。**产出两份新素材,原素材一个字节不动。**
+    #: 3D 白模(见 executors/scenes.py 与 domain/scene_render)。
+    "scene_create": {
+        "external": False,
+        "category": "wfCat_3d",
+        "label": "wfNode_scene_create",
+        "description": "wfNode_scene_create_desc",
+        "config": {
+            "name": {"type": "template", "description": "wfNode_scene_create_name"},
+            #: 布景就是 SceneContent 的形状 —— 物体、机位轨迹、镜头、打光。通常接一个 LLM 的结构化输出。
+            "layout": {"type": "template", "required": True, "data_type": "json", "description": "wfNode_scene_create_layout"},
+        },
+        "outputs": ["scene_id", "shot_ids", "shot_count"],
+        "output_types": {"shot_ids": "json", "shot_count": "number"},
+    },
+    "scene_render": {
+        "external": False,
+        "category": "wfCat_3d",
+        "label": "wfNode_scene_render",
+        "description": "wfNode_scene_render_desc",
+        "config": {
+            "scene_id": {"type": "template", "required": True, "description": "wfNode_scene_render_scene_id"},
+            "shot_id": {"type": "template", "required": True, "description": "wfNode_scene_render_shot_id"},
+            #: 允许手填:整片流程里"这一镜要不要运镜视频"是逐镜决定的,值来自上游(`{{…}}`)。
+            "render": {
+                "type": "string", "default": "stills", "options": list(REFERENCE_RENDERS),
+                "allow_custom": True, "description": "wfNode_scene_render_render",
+            },
+            "project_id": {"advanced": True, "type": "template", "description": "wfNode_scene_render_project_id"},
+        },
+        "outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id", "camera_move", "skipped_models"],
+        "output_labels": {
+            "first_frame_asset_id": "wfOut_graybox_first_frame",
+            "last_frame_asset_id": "wfOut_graybox_last_frame",
+            "video_asset_id": "wfOut_graybox_video",
+            "camera_move": "wfOut_camera_move",
+            "skipped_models": "wfOut_skipped_models",
+        },
+        "output_types": {
+            "first_frame_asset_id": "asset",
+            "last_frame_asset_id": "asset",
+            "video_asset_id": "asset",
+            "skipped_models": "number",
+        },
+    },
     "separate_audio": {
         "external": False,
         "category": "wfCat_audio",

@@ -55,6 +55,9 @@ NODE_TO_TOOL: dict[str, str] = {
     #: 而智能体本来就是一句一句地调 translate_text。
     "translate_lines": "translate_text",
     "separate_audio": "separate_audio",
+    #: 节点收一整份布景一次建好;智能体是先 create_scene、再逐步 edit_scene —— 同一个目标。
+    "scene_create": "create_scene",
+    "scene_render": "render_scene_references",
     "denoise_audio": "denoise_audio",
     "asset_query": "list_assets",
     "note_search": "search_notes",

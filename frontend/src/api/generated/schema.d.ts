@@ -3266,6 +3266,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scenes/{scene_id}/shots/{shot_id}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * References
+         * @description 渲这个镜头的白模参考(首尾静帧 / 运镜视频),登记成素材。会往素材库里写东西,所以要 edit。
+         */
+        post: operations["references_api_scenes__scene_id__shots__shot_id__references_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scheduled-tasks": {
         parameters: {
             query?: never;
@@ -8135,7 +8155,7 @@ export interface components {
          *     翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,
          *     漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。
          *
-         *     老任务没有 key(它们只留下了当年渲染的那句话),原样返回 —— 那是数据本身的界限。
+         *     没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。
          */
         JobOut: {
             /** Id */
@@ -10224,6 +10244,34 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** SceneReferenceOut */
+        SceneReferenceOut: {
+            /** First Frame Asset Id */
+            first_frame_asset_id: string;
+            /** Last Frame Asset Id */
+            last_frame_asset_id: string;
+            /** Video Asset Id */
+            video_asset_id: string;
+            /** Camera Move */
+            camera_move: string;
+            /** Skipped Models */
+            skipped_models: number;
+        };
+        /**
+         * SceneReferenceRequest
+         * @description 从一个镜头渲白模参考(见 domain/scenes.render_shot_references)。
+         */
+        SceneReferenceRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Render
+             * @default stills
+             */
+            render: string;
+            /** Project Id */
+            project_id?: string | null;
         };
         /**
          * SceneShot
@@ -18543,6 +18591,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SceneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    references_api_scenes__scene_id__shots__shot_id__references_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scene_id: string;
+                shot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneReferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneReferenceOut"];
                 };
             };
             /** @description Validation Error */

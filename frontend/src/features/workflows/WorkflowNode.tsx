@@ -10,11 +10,13 @@ import {
   Bell,
   BookOpen,
   BookPlus,
+  Box,
   Boxes,
   Braces,
   Captions,
   CaseSensitive,
   CheckCircle2,
+  Clapperboard,
   Code2,
   Download,
   Eraser,
@@ -119,6 +121,9 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   separate_audio: <Scissors size={13} />,
   //: 把一条毛糙的波形理平。
   denoise_audio: <AudioWaveform size={13} />,
+  //: 3D 白模:搭一个盒子,再从机位上"拍"它。
+  scene_create: <Box size={13} />,
+  scene_render: <Clapperboard size={13} />,
   browser_open: <AppWindow size={13} />,
   browser_navigate: <Globe size={13} />,
   browser_click: <MousePointerClick size={13} />,
