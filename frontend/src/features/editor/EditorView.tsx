@@ -66,8 +66,6 @@ import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 
-// Shared pane edges use no padding or gutter; resize handles straddle those edges.
-const EDITOR_GRID = { padding: 0, gap: 0 };
 import { useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
 import { DenoiseDialog } from "@/features/media/DenoiseDialog";
@@ -933,7 +931,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           padding + timeline height + row gap. */}
       <div
         className={`absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`}
-        style={{ left: handleOffset(panels.leftWidth, EDITOR_GRID), bottom: panelsRowBottom }}
+        style={{ left: handleOffset(panels.leftWidth), bottom: panelsRowBottom }}
         onPointerDown={panels.startDrag("left")}
       />
       {inspectorInGrid && (
@@ -941,7 +939,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           className={`absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`}
           style={{
             right: handleOffset(panels.sizes.right, {
-              padding: dockedAgent ? agentSidebar.width : 0, gap: 0,
+              padding: dockedAgent ? agentSidebar.width : 0,
             }),
             bottom: panelsRowBottom,
           }}
@@ -951,7 +949,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {dockedAgent && (
         <div
           className={`absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`}
-          style={{ right: handleOffset(agentSidebar.width, EDITOR_GRID), bottom: panelsRowBottom }}
+          style={{ right: handleOffset(agentSidebar.width), bottom: panelsRowBottom }}
           role="separator"
           aria-orientation="vertical"
           onPointerDown={agentSidebar.startDragFromRight}
@@ -959,7 +957,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       )}
       <div
         className={`absolute left-0 right-0 z-10 ${HANDLE_ROW}`}
-        style={{ bottom: handleOffset(panels.sizes.timeline, EDITOR_GRID) }}
+        style={{ bottom: handleOffset(panels.sizes.timeline) }}
         onPointerDown={panels.startDrag("timeline")}
       />
       {panels.tab === "media" ? (

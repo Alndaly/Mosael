@@ -50,7 +50,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-workspace-panel">
-      <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]" style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
+      <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]" style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
         <nav className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-divider bg-workspace-subtle px-4 py-5 max-[880px]:max-h-48 max-[880px]:border-b max-[880px]:border-r-0" aria-label={t("settingsTitle")}>
           <Input className="shrink-0" aria-label={t("studioSettingsSearch")} placeholder={t("studioSettingsSearch")} value={navSearch} onChange={e => setNavSearch(e.target.value)} />
           {SETTINGS_GROUPS.map((group) => {

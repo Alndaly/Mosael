@@ -2351,7 +2351,7 @@ function WorkflowEditor({
             {dockedAgent && dockedHistory && (
               <div
                 className={ROW_HANDLE_CLASS}
-                style={{ top: handleOffset(agentRow.height) }}
+                style={{ top: handleOffset(agentRow.height, { gap: 8 }) }}
                 onPointerDown={agentRow.startDrag}
               />
             )}

@@ -1125,7 +1125,7 @@ function SceneEditor({
         {/* 分割线式排法(栏间 0 缝),拖柄压在线的正中 —— 和剪辑页一样,见 handleOffset。 */}
         <div
           className={cn("scene-resize-side", HANDLE_COLUMN)}
-          style={{ right: handleOffset(sidePanel.width, { padding: agentDocked ? agentPanel.width : 0, gap: 0 }) }}
+          style={{ right: handleOffset(sidePanel.width, { padding: agentDocked ? agentPanel.width : 0 }) }}
           role="separator"
           aria-orientation="vertical"
           onPointerDown={sidePanel.startDragFromRight}
@@ -1133,7 +1133,7 @@ function SceneEditor({
         {agentDocked && (
           <div
             className={cn("scene-resize-agent", HANDLE_COLUMN)}
-            style={{ right: handleOffset(agentPanel.width, { gap: 0 }) }}
+            style={{ right: handleOffset(agentPanel.width) }}
             role="separator"
             aria-orientation="vertical"
             onPointerDown={agentPanel.startDragFromRight}

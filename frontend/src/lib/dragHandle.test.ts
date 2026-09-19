@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { HANDLE_COLUMN, HANDLE_PILL, HANDLE_ROW } from "./useResizableSidebar";
+import { HANDLE_COLUMN, HANDLE_PILL, HANDLE_ROW, HANDLE_SIZE, handleOffset } from "./useResizableSidebar";
 
 const SRC = join(import.meta.dirname, "..");
 const DEFINITION = join(SRC, "lib", "useResizableSidebar.ts");
@@ -48,6 +48,19 @@ describe("拖柄只有一份定义", () => {
     expect(HANDLE_ROW).toContain(HANDLE_PILL);
     expect(HANDLE_COLUMN).toContain("cursor-col-resize");
     expect(HANDLE_ROW).toContain("cursor-row-resize");
+  });
+
+  it("停靠的栏之间只有分割线、没有缝 —— 手柄压在线上", () => {
+    // 判据:用到可拖侧栏的页面,它那个 `relative grid` 容器上不该再有列间距。
+    // 有的话,手柄要么悬在离线几像素的空白里,要么每页一个样(这一轮就是这么被发现的)。
+    // 画布上的浮动卡片(RightDockResizeHandle)不是停靠栏,卡片之间本来就有缝。
+    const offenders = sources(SRC)
+      .filter((path) => /useResizableSidebar|useSidePanels/.test(readFileSync(path, "utf8")))
+      .filter((path) => !readFileSync(path, "utf8").includes("RightDockResizeHandle"))
+      .filter((path) => /["`]relative grid[^"`]*\bgap-\d/.test(readFileSync(path, "utf8")))
+      .map((path) => path.slice(SRC.length + 1));
+    expect(offenders).toEqual([]);
+    expect(handleOffset(300)).toBe(300 - HANDLE_SIZE / 2);
   });
 
   it("这道棘轮扫得到东西 —— 别变成空转", () => {

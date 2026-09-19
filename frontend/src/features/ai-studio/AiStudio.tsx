@@ -726,7 +726,7 @@ function GenerateWorkspace({
 
   return (
     <div
-      className="relative grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]"
+      className="relative grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]"
       style={{ gridTemplateColumns: columns }}
     >
       {/* 和对话页同一套(lib/useResizableSidebar):同一个形状不该有两份实现,

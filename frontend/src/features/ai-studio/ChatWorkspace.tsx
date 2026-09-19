@@ -418,14 +418,14 @@ export function ChatWorkspace({
     // 而「智能体环境」是开工前的配置视图 —— 两者在同一屏上争的是同一份宽度。
     <div
       className={cn(
-        "relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-2 max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]",
+        "relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]",
         !showRight
           ? "grid-cols-[240px_minmax(0,1fr)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]"
           : "grid-cols-[240px_minmax(0,1fr)_300px] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]",
       )}
       style={{ gridTemplateColumns: columns }}
     >
-      {/* 拖柄骑在 8px 的列间隙正中,7px 宽、中间一根会亮的细线 —— 和剪辑页同款。 */}
+      {/* 拖柄压在栏与栏之间那条分割线上 —— 和剪辑页同款。 */}
       {!single && (
         <div
           className={SIDEBAR_HANDLE_CLASS}

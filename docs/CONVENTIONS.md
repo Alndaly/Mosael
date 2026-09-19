@@ -24,6 +24,11 @@
   `SettingsGroup`,相邻 section 由 `SettingsSectionStack` 插入 `Separator`;同类数据行使用
   `SettingsList` 的分割线,不要给每个 section、每一行再套圆角边框和背景。输入控件、可选择卡片、
   独立状态面板等确实需要交互或语义边界的元素可以保留边框。
+- **停靠的栏之间只有一条 1px 分割线,没有缝。** 可拖宽的栏用 `lib/useResizableSidebar`
+  (`useResizableSidebar` / `useSidePanels` / `HANDLE_COLUMN` + `handleOffset`),拖柄压在那条线的
+  正中;grid 上不要再加 `gap-*`,否则拖柄会悬在离线几像素的空白里、和别的页一处有缝一处没缝。
+  只有画布上的浮动卡片(`RightDockResizeHandle`、工作流右侧上下两块)之间真有缝,那里显式传
+  `handleOffset(size, { gap: 8 })`。棘轮:`lib/dragHandle.test.ts`。
 - 每个新界面都要同时管好浅色和深色。
 - **控件的字号字重直接写在控件上就行。** `design/tokens.css` 里那条
   `button, input, select, textarea { font: inherit }` 曾经是无层级的,压过 `@layer utilities`,

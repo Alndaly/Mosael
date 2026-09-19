@@ -1,5 +1,5 @@
 import React from "react";
-import { COMPACT_SIDEBAR_BOUNDS, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
+import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { cn } from "@/lib/utils";
 
 /** Full-bleed management pages: transparent heading, then independently scrolling panes. */
@@ -20,7 +20,7 @@ export function CollectionDetail({ storageKey, label, index, selected, children 
     <aside aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-divider bg-workspace-subtle max-[880px]:border-r-0 max-[880px]:border-b">
       <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:flex max-[880px]:items-center max-[880px]:overflow-x-auto max-[880px]:p-3">{index}</div>
     </aside>
-    <div {...sidebar.handleProps} style={{ left: handleOffset(sidebar.width, { gap: 0 }) }} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
+    <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
     <div data-slot="collection-detail-content" className={cn("@container/settings grid min-h-0 min-w-0 overflow-y-auto px-6 py-6 xl:px-8", selected ? "content-start" : "place-items-center")}>
       {children}
     </div>
