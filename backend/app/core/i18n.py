@@ -998,6 +998,20 @@ def _drop_placeholders(text: str) -> str:
     return "".join(literals).strip().rstrip(":：,，、-—").strip()
 
 
+def is_message_key(text: str) -> bool:
+    """这是**我们自己的一条文案 key**,还是一句现成的话?
+
+    任务消息(`jobs.say`)和工作流错误(`WorkflowDomainError`)都接受"key 或一句话"——两者共用
+    一个参数,于是必须有**一个**地方判断到底是哪一种,而不是各处各猜。判据只有一条:在不在
+    MESSAGES 里。认不出的就是字面量:原样显示,**不当模板填**,也**不当 key 落库**。
+
+    这一条是付过账才收进来的:第三方报错原文(LLM 返回的 403 JSON)被当成 key 截成 80 字存进
+    `error_key`,读的时候又拿它当模板去 format —— 花括号一炸,整个执行历史接口 500,
+    而面板上什么都不说,看起来就是"一次运行都没有"。
+    """
+    return text in MESSAGES
+
+
 def _text(key: str, locale: str) -> str:
     """这条 key 在这个语言下的原文。**查不到就原样返回 key**,不抛错:一条文案缺翻译不该让整个
     接口 500。它会以 key 的样子出现在界面上——难看,但看得见,而棘轮保证它进不了主干。"""
@@ -1067,6 +1081,10 @@ def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any
     就该消失;而界面文案里的花括号是要给人看的写法,碰都不该碰。此前两者共用一条路,于是给任务
     消息补占位符的那次改动,顺手把三条节点提示打成了残句。
     """
+    #: 认不出的 key 是一句现成的话,不是模板 —— 它里面的花括号是内容(JSON、代码),不是槽。
+    #: 拿它去 format,要么抛错、要么把 `{"error": …}` 当占位符抹掉(见 is_message_key)。
+    if not is_message_key(key):
+        return key
     text = _text(key, locale)
     try:
         return text.format(**(params or {}))

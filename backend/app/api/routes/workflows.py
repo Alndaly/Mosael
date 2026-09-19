@@ -376,13 +376,19 @@ def list_runs(workflow_id: str, db: DbSession, user: CurrentUser, limit: int = 5
     the existing GET /jobs/{job_id}/events (workflow.node.* events)."""
     workflow = _get(db, workflow_id)
     ensure_workspace_access(db, user, workflow.workspace_id)
-    jobs = db.scalars(
+    #: **按工作流在库里筛,再取前 N 条。** 此前是先取整个工作区最新的 N 个工作流任务、再在这里
+    #: 按 workflow_id 过滤 —— 同一个工作区里别的工作流多跑几次,这个工作流的记录就被挤出前 N 条,
+    #: 历史面板随之变空,而它其实跑过很多次。
+    return list(db.scalars(
         select(Job)
-        .where(Job.kind == "workflow", Job.workspace_id == workflow.workspace_id)
+        .where(
+            Job.kind == "workflow",
+            Job.workspace_id == workflow.workspace_id,
+            Job.payload["workflow_id"].as_string() == workflow_id,
+        )
         .order_by(Job.created_at.desc())
         .limit(max(1, min(200, limit)))
-    ).all()
-    return [job for job in jobs if (job.payload or {}).get("workflow_id") == workflow_id]
+    ).all())
 
 
 @router.post("/workflows/{workflow_id}/ai-edit", response_model=WorkflowAiEditResponse)

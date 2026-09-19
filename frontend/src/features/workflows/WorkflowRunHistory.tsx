@@ -176,10 +176,27 @@ export function WorkflowRunHistory({
         {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
             不会被固定的上下分栏推到面板底部。 */}
         <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1">
-          {runs.data && runs.data.length === 0 && (
-            <div className="grid h-full place-items-center">
-              <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryEmpty")}</p>
+          {/* **四种状态都要说出来**:读取中、读取失败、确实没有、有。此前只处理了后两种,
+              于是接口一 500(一条失败原因里的花括号把整个列表打挂),面板就是一片空白 ——
+              看起来和"一次都没跑过"一模一样,而用户明明跑过很多次。 */}
+          {runs.isPending && (
+            <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryLoading")}</p>
+          )}
+          {runs.isError && (
+            <div role="alert" className="grid justify-items-center gap-1.5 px-2 py-3 text-center">
+              <p className="m-0 text-ui-xs text-destructive">{t("wfHistoryLoadFailed")}</p>
+              <p className="m-0 break-words text-ui-2xs text-muted-foreground">{(runs.error as Error)?.message}</p>
+              <button
+                type="button"
+                className="cursor-pointer rounded-md border border-border bg-transparent px-2 py-0.5 text-ui-xs text-foreground hover:bg-secondary"
+                onClick={() => void runs.refetch()}
+              >
+                {t("retry")}
+              </button>
             </div>
+          )}
+          {runs.data && runs.data.length === 0 && (
+            <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryEmpty")}</p>
           )}
           {(runs.data ?? []).map((run) => (
             <button
@@ -208,9 +225,13 @@ export function WorkflowRunHistory({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
           {!selected ? (
-            <div className="grid h-full place-items-center">
-              <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryPick")}</p>
-            </div>
+            // 「选一次运行」只在**有得选**的时候说 —— 列表是空的、还在读、或者读挂了时,这句话是在
+            // 让人去点一个不存在的东西。
+            (runs.data?.length ?? 0) > 0 && (
+              <div className="grid h-full place-items-center">
+                <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryPick")}</p>
+              </div>
+            )
           ) : (
             <>
               {selected.error && (

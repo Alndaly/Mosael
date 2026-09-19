@@ -155,9 +155,11 @@ def say(job: Job, key: str, **params: object) -> None:
     为什么不只存 key:这一列**落库**,任务记录活得比一次请求久,写入时就翻会把语言冻死在那一刻 ——
     用户切成英文后历史任务仍是中文,而那正是这次要修的毛病。
     """
-    from app.core.i18n import DEFAULT_LOCALE, render_message
+    from app.core.i18n import DEFAULT_LOCALE, is_message_key, render_message
 
-    job.message_key = key
+    #: 有几处传进来的是一句现成的话(子任务转述的消息、第三方的原话)。它不是 key,不该当 key
+    #: 落库 —— 否则读的时候会被当模板再填一遍(见 core/i18n.is_message_key)。
+    job.message_key = key if is_message_key(key) else ""
     job.message_params = {k: str(v) for k, v in params.items()}
     job.message = render_message(key, DEFAULT_LOCALE, job.message_params)
 
@@ -171,11 +173,14 @@ def blame(exc: Exception) -> dict[str, Any]:
 
     传给 `finish_job(**blame(exc))` 用,所以返回的是字段名对得上的一份字典。
     """
+    from app.core.i18n import is_message_key
+
     key = str(getattr(exc, "key", "") or "")
     params = getattr(exc, "params", None)
     return {
         "error": str(exc)[:500],
-        "error_key": key[:80],
+        #: 不截断:截断的 key 就不是 key 了。此前的 `[:80]` 正是一句 403 报错被切成"半截 key"的地方。
+        "error_key": key if is_message_key(key) else "",
         "error_params": {k: str(v) for k, v in (params or {}).items()},
     }
 

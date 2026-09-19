@@ -88,10 +88,12 @@ class JobOut(OrmModel):
 
 
 def _rendered(value: object, info: ValidationInfo, key_field: str, params_field: str) -> object:
-    from app.core.i18n import get_current_locale, render_message
+    from app.core.i18n import get_current_locale, is_message_key, render_message
 
     data = info.data if isinstance(info.data, dict) else {}
     key = data.get(key_field) or ""
-    if not key:
+    #: 认不出的 key 不是 key:库里有改正之前落下的、被截成 80 字的报错原文。它们用 `value`
+    #: (完整那一句)显示,而不是拿半截 key 去翻 —— **一条坏行不能拖垮整个列表**。
+    if not is_message_key(key):
         return value
     return render_message(key, get_current_locale(), data.get(params_field) or {})
