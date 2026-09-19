@@ -1426,6 +1426,12 @@ def validate_graph(
             errors.append(f"条件节点的分支端点必须是 true/false: {source}")
         adjacency.setdefault(source, []).append(target)
         indegree[target] = indegree.get(target, 0) + 1
+    #: 引用即依赖(见 reference_dependencies):一个节点引用了它自己的下游,就是一个环 ——
+    #: 此前它照样能跑,只是取到空值,而这是最难发现的那种失败。
+    for target, sources in reference_dependencies({"nodes": nodes}).items():
+        for source in sources:
+            adjacency.setdefault(source, []).append(target)
+            indegree[target] = indegree.get(target, 0) + 1
 
     # Kahn 拓扑排序检环
     queue = [node_id for node_id, degree in indegree.items() if degree == 0]
@@ -1439,7 +1445,7 @@ def validate_graph(
             if degrees[nxt] == 0:
                 queue.append(nxt)
     if seen_ids and visited != len(seen_ids):
-        errors.append("工作流包含环路,必须是有向无环图")
+        errors.append("工作流包含环路(连线或 {{节点.…}} 引用绕回了自己),必须是有向无环图")
     return errors
 
 
@@ -1560,8 +1566,36 @@ def external_nodes_in_graph(graph: Any) -> set[str]:
     return _nodes_of_types(graph, EXTERNAL_NODE_TYPES)
 
 
+def reference_dependencies(graph: dict[str, Any]) -> dict[str, set[str]]:
+    """每个节点通过 `{{节点.…}}` **引用**了本图里的哪些节点。**引用即依赖**,只在这里算。
+
+    此前"引用了谁"和"等谁跑完"是两件脱钩的事:引擎只按边调度,而规范化只会把「顶层字段、恰好
+    两段路径」的引用变成数据边 —— `{{分镜.json.shots}}`(三段)或嵌在循环 `inputs` 对象里的
+    `{{start.voice_id}}` 都不产生边。于是一个节点可能在它引用的节点跑完之前就开始,取到的是空值:
+    官方模板靠作者手工补的控制边碰巧排好了顺序,用户自己搭的图则不一定。
+
+    现在拓扑排序、环路校验、引擎调度都读这一份:被引用的节点落定(跑完或被跳过)之前,引用它的
+    节点不开始;引用造成环路时保存/运行就报错。只决定**先后**,不决定"该不该跑"(那仍由控制边说了算)。
+
+    内嵌子图(循环体 / subgraph)的 body/output/condition 属于**内层**作用域,不算在这一层的依赖里;
+    它们的 `inputs` / `items` 在这一层解析,算。
+    """
+    nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
+    ids = {str(node.get("id", "")) for node in nodes}
+    deps: dict[str, set[str]] = {}
+    for node in nodes:
+        node_id = str(node.get("id", ""))
+        config = dict(node.get("config") or {})
+        if node.get("type") in NESTED_BODY_TYPES:
+            for key in NESTED_BODY_RAW_KEYS:
+                config.pop(key, None)
+        roots = {match.group(1).strip().split(".")[0] for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False))}
+        deps[node_id] = (roots & ids) - {node_id}
+    return deps
+
+
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:
-    """稳定拓扑序(按 nodes 数组原顺序打破平局)。假定 graph 已通过校验。"""
+    """稳定拓扑序(按 nodes 数组原顺序打破平局)。连线和引用都算依赖。假定 graph 已通过校验。"""
     nodes = list(graph.get("nodes") or [])
     edges = list(graph.get("edges") or [])
     indegree = {str(n["id"]): 0 for n in nodes}
@@ -1569,6 +1603,10 @@ def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:
     for edge in edges:
         adjacency.setdefault(str(edge["source"]), []).append(str(edge["target"]))
         indegree[str(edge["target"])] += 1
+    for target, sources in reference_dependencies(graph).items():
+        for source in sources:
+            adjacency.setdefault(source, []).append(target)
+            indegree[target] += 1
     order: list[dict[str, Any]] = []
     by_id = {str(n["id"]): n for n in nodes}
     ready = [str(n["id"]) for n in nodes if indegree[str(n["id"])] == 0]

@@ -27,6 +27,7 @@ from app.domain.notifications import notify
 from app.domain.workflows import (
     NODE_TYPES,
     WorkflowDomainError,
+    reference_dependencies,
     topo_order,
     validate_graph,
 )
@@ -158,6 +159,10 @@ def execute_graph(
         source, target = str(edge.get("source")), str(edge.get("target"))
         if source in nodes_by_id and target in nodes_by_id:
             incoming[target].append(edge)
+    #: 一个节点要等**所有**上游落定才开始:连线的来源,加上它 `{{…}}` 引用到的节点(引用即依赖,
+    #: 见 workflows.reference_dependencies)。后者只管先后,不管该不该跑 —— 那是 incoming_active 的事。
+    references = reference_dependencies(graph)
+    waits_for = {nid: {str(edge.get("source")) for edge in incoming[nid]} | references.get(nid, set()) for nid in nodes_by_id}
     total = max(len(order_ids), 1)
     wf_job_id = job.id if job is not None else current_parent_job_id()
     has_job = job is not None and db is not None
@@ -254,7 +259,7 @@ def execute_graph(
             for nid in order_ids:
                 if nid in scheduled:
                     continue
-                if not all(str(edge.get("source")) in done for edge in incoming.get(nid, [])):
+                if not waits_for[nid] <= done:
                     continue
                 scheduled.add(nid)
                 if not is_entry(nid) and not incoming_active(nid):
