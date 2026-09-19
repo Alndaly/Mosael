@@ -7,18 +7,31 @@
 
 from __future__ import annotations
 
-import logging
-
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Sequence, Track
 
-logger = logging.getLogger(__name__)
-
-#: 界面、智能体、工作流共用的那几档。实际用了哪一档由 apply_original_audio 返回 ——
-#: separate 在没有分离引擎时退回 mute_fallback。
+#: 界面、智能体、工作流共用的那几档。
 ORIGINAL_AUDIO_MODES = ("duck", "mute", "keep", "separate")
 DEFAULT_ORIGINAL_AUDIO = "duck"
+
+
+class OriginalAudioError(RuntimeError):
+    """用户要求的原声处理方式无法如实执行。"""
+
+
+def ensure_original_audio_mode(mode: str) -> None:
+    """在排配音任务前验证选择，避免做完配音才发现分离能力不存在。"""
+    if mode not in ORIGINAL_AUDIO_MODES:
+        raise OriginalAudioError(f"原声处理方式只能是 {' / '.join(ORIGINAL_AUDIO_MODES)}")
+    if mode == "separate":
+        from app.domain.separation import available
+
+        if not available():
+            raise OriginalAudioError(
+                "选择了「只去掉人声」，但音频分离引擎尚不可用；请先到设置中安装分离引擎，"
+                "或明确改选「静音」"
+            )
 
 
 def _carries_audio(track: Track) -> bool:
@@ -31,7 +44,7 @@ def _carries_audio(track: Track) -> bool:
 
 
 def apply_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode: str, *, actor_id: str | None) -> str:
-    """配音落轨之后,原声怎么办 —— 压低、静音,还是原样留着。返回**实际**用的那种。
+    """配音落轨之后,原声怎么办 —— 压低、静音,还是原样留着。
 
     **「压低」不等于「听不见」。** 闪避把原声压到 30%(≈ −10.5 dB),那是给「旁白盖在环境音
     之上」准备的档位:环境音本来就该若隐若现。而译配是**用另一种语言的说话声替换说话声** ——
@@ -52,24 +65,18 @@ def apply_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode:
     """
     from app.domain.sequences.operations import SetTrackState, set_track_state
 
-    if mode not in ORIGINAL_AUDIO_MODES:
-        raise ValueError(f"原声处理方式只能是 {' / '.join(ORIGINAL_AUDIO_MODES)}")
+    ensure_original_audio_mode(mode)
     if mode == "keep":
         return "keep"
     if mode == "separate":
-        #: 分不成就退回整轨静音 —— **一个没装的可选引擎不该让一条本来能跑完的流程失败**
-        #: (ADR-0016 决定 4)。退回的是"原声全没",不是"原声全在":后者才会让成片里
-        #: 两个人同时说话,而那正是用户报回来的那个症状。
-        if _split_voice_from_music(db, sequence_id, dub_track_id, actor_id=actor_id):
-            return "separate"
-        logger.info("没有可用的音频分离引擎,原声整轨静音(序列 %s)", sequence_id)
-        mode = "mute_fallback"
+        _split_voice_from_music(db, sequence_id, dub_track_id, actor_id=actor_id)
+        return "separate"
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         return mode
     # 先把要改的那几条挑出来:set_track_state 会 commit,而 commit 之后 sequence.tracks
     # 上的对象全部过期 —— 边遍历边改的话,下一圈读 track.kind 会去重新查一遍库。
-    mute = mode in {"mute", "mute_fallback"}
+    mute = mode == "mute"
     targets = [
         track.id
         for track in (sequence.tracks or [])
@@ -93,26 +100,26 @@ def apply_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode:
     return mode
 
 
-def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> bool:
-    """原声只留背景音,人声那半丢掉。成功返回 True。
+def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> None:
+    """原声只留背景音,人声那半丢掉；无法完整执行就报错。
 
     这是 `original_audio: separate` 的实现。每个发声的片段走一次「分离音频」:背景音放到一条
     音频轨上、时间对齐,源片段静音。**画面不动** —— 此前这里把视频片段直接指向了背景音素材,
     而视频轨上的纯音频素材既不算画面、也不进混音,成片里原片那一段就只剩静音。
     走剪辑操作而不是改行,所以和闪避、静音一样撤得回来;原素材一个字节不动。
 
-    **先全部分离完再动时间线**:分到一半失败时调用方退回整轨静音,不能留下半套背景音轨。
-    问不到引擎就返回 False,由调用方退回整轨静音 —— 见 ADR-0016 决定 4。
+    **先全部分离完再动时间线**:分到一半失败时不能留下半套背景音轨。用户明确选择的是
+    ``separate``，任何静音降级都会改变成片语义，因此失败必须原样上报。
     """
     from app.ai.providers.contracts.separation import SeparationError
     from app.domain.separation import available, separate_asset
     from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
 
     if not available():
-        return False
+        raise OriginalAudioError("音频分离引擎尚不可用；请先到设置中安装")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
-        return False
+        raise OriginalAudioError("时间线不存在")
     sources = [
         clip
         for track in sequence.tracks or []
@@ -128,10 +135,8 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
         try:
             backgrounds[asset_id] = separate_asset(db, asset, engine="").background.id
         except SeparationError as exc:
-            logger.warning("分离失败,原声退回静音:%s", exc)
-            return False
+            raise OriginalAudioError(f"只去掉人声失败：{exc}") from exc
     #: 先取出 id:每次操作都会 commit,之后 ORM 对象全部过期。
     plan = [(clip.id, backgrounds[clip.asset_id]) for clip in sources if clip.asset_id in backgrounds]
     for clip_id, background_id in plan:
         detach_clip_audio(db, sequence_id, DetachClipAudio(clip_id=clip_id, audio_asset_id=background_id, actor_id=actor_id))
-    return bool(plan)

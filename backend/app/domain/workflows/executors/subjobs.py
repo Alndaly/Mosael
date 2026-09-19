@@ -778,8 +778,8 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     # 必然误判成超时 —— 而那时前面几十条配音已经落到轨上了,「超时」这个说法是错的。
     final = wait_for_job(job.id, timeout_seconds=max(CHILD_JOB_TIMEOUT_SECONDS, 60 * len(clip_ids)))
     result = final.result or {}
-    #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。选了 separate 却没有
-    #: 分离引擎时这里是 mute_fallback —— 背景音乐跟着没了,这件事得有地方说出来。
+    #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。历史任务可能留有
+    #: mute_fallback；新任务对用户明确选择的 separate 不再静默降级。
     applied = str(result.get("original_audio") or "keep")
     return {
         "track_id": str(result.get("track_id") or ""),

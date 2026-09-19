@@ -102,22 +102,22 @@
       "en": "Translated dubbing with subtitles"
     },
     "summary": {
-      "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；没装人声分离引擎时整轨静音，完成通知里会说明。",
-      "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so."
+      "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
+      "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts."
     },
     "requires": {
       "zh": [
         "可用的转写引擎",
         "翻译：AI 对话模型（节点上可换成 Google 翻译）",
         "一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
-        "保住背景音乐：人声分离引擎（可选）",
+        "人声分离引擎（需提前安装）",
         "有人说话的视频素材"
       ],
       "en": [
         "Available transcription engine",
         "Translation: a chat model (switchable to Google Translate on the node)",
         "A voice: a cloned voice, or a built-in voice from any engine",
-        "To keep the background music: a voice separation engine (optional)",
+        "A voice separation engine installed in advance",
         "A video with speech"
       ]
     },

@@ -161,7 +161,7 @@ import {
 import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
-import { assetOutputs, outputRows, stepsByNode, type Step } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 import {
   WORKFLOW_NODE_TYPES,
@@ -1520,7 +1520,7 @@ function WorkflowEditor({
     // 后者要等整条流程收尾,中间那段画布就不动了。
     refetchInterval: (q) => {
       const list = (q.state.data as TaskEvent[] | undefined) ?? [];
-      const done = list.some((e) => e.type === "workflow.finished" || e.type === "workflow.failed");
+      const done = list.some(runEventIsTerminal);
       return done ? false : 800;
     },
   });

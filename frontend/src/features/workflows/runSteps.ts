@@ -23,13 +23,24 @@ export type Step = {
   details?: Record<string, unknown>;
 };
 
+const TERMINAL_RUN_EVENTS = new Set(["workflow.failed", "workflow.cancelled", "job.failed", "job.cancelled"]);
+
+/** 总任务已经失败或取消时，节点投影也必须收口；否则最后一个 started 会永远转圈。 */
+export function runEventIsTerminal(event: TaskEvent): boolean {
+  return event.type === "workflow.finished" || TERMINAL_RUN_EVENTS.has(event.type);
+}
 
 /** Reduce a run's task events into an ordered per-node step list (Dify-style detail). */
 export function toSteps(events: TaskEvent[]): Step[] {
   const order: string[] = [];
   const byNode = new Map<string, Step>();
   const sorted = [...events].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+  let terminalFailureAt: number | undefined;
   for (const e of sorted) {
+    if (TERMINAL_RUN_EVENTS.has(e.type)) {
+      terminalFailureAt = e.created_at ? parseIso(e.created_at) : undefined;
+      continue;
+    }
     const p = (e.payload ?? {}) as {
       node_id?: string;
       name?: string;
@@ -66,6 +77,15 @@ export function toSteps(events: TaskEvent[]): Step[] {
     } else if (e.type === "workflow.node.skipped") {
       if (!byNode.has(nid)) order.push(nid);
       byNode.set(nid, { nid, name: p.name ?? nid, status: "skipped" });
+    }
+  }
+  if (terminalFailureAt !== undefined || sorted.some((event) => TERMINAL_RUN_EVENTS.has(event.type))) {
+    for (const step of byNode.values()) {
+      if (step.status !== "running") continue;
+      step.status = "failed";
+      if (step.startAt != null && terminalFailureAt != null) {
+        step.ms = Math.max(0, terminalFailureAt - step.startAt);
+      }
     }
   }
   return order.map((nid) => byNode.get(nid)!).filter(Boolean);

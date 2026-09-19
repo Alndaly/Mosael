@@ -179,7 +179,7 @@ def test_full_video_narration_lands_on_its_own_shot() -> None:
 
 
 def test_translated_dub_notice_says_what_happened_to_the_original_audio() -> None:
-    """选了「分离」却没有分离引擎时会退回整轨静音 —— 背景音乐跟着没了,通知里得说。"""
+    """成功通知引用实际处理方式；分离不可用时任务会在到达通知节点前失败。"""
     graph = translated_dub_graph()
     notice = next(node for node in graph["nodes"] if node["id"] == "done_notice")
     references = json.dumps(notice, ensure_ascii=False) + json.dumps(graph["edges"], ensure_ascii=False)

@@ -362,6 +362,24 @@ class Test原声处理归配音本身:
                 synthesis={}, original_audio="louder",
             )
 
+    def test_明确选择只去人声时_没装分离引擎就不排任务(self, monkeypatch) -> None:
+        from app.domain import separation
+
+        client = fresh_client()
+        sequence_id, clip_id = _sequence_with_subtitle(client)
+        monkeypatch.setattr(separation, "available", lambda engine="": False)
+
+        with SessionLocal() as db, pytest.raises(DubError, match="只去掉人声.*安装分离引擎"):
+            start_subtitle_dub(
+                db,
+                sequence_id=sequence_id,
+                clip_ids=[clip_id],
+                match_duration=False,
+                created_by=None,
+                synthesis={},
+                original_audio="separate",
+            )
+
     @pytest.fixture
     def captured(self, monkeypatch):
         import app.domain.voices.subtitle_dub as dub

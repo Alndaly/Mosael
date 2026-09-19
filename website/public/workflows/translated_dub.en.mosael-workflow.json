@@ -3,7 +3,7 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
-  "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so.",
+  "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts.",
   "graph_hash": "e15d82b90e76492f4bc167fc4d1cbde21cdae2f4cbca4e3451d02fd2a2800b04",
   "graph": {
     "meta": {

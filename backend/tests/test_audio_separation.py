@@ -8,7 +8,7 @@
 1. 可用性是**问出来的**,不是配置出来的;
 2. 分离**产出新素材**,原素材一个字节不动;
 3. 少给一条 stem 就报错,不静默返回半份;
-4. 没装引擎时,配音流程**退回静音**而不是失败。
+4. 用户明确选择分离时,能力不可用就失败,绝不静默改成整轨静音。
 """
 
 from __future__ import annotations
@@ -170,16 +170,13 @@ class Test契约不认识任何一个引擎:
         assert "import app." not in text and "from app." not in text
 
 
-class Test配音流程按可用性退让:
-    def test_没装引擎时退回整轨静音__而不是整条流程失败(self, monkeypatch) -> None:
-        """**一个没装的可选引擎不该让一条本来能跑完的流程失败**(ADR-0016 决定 4)。
-
-        退回的是"原声全没",不是"原声全在":后者才会让成片里两个人同时说话,而那正是
-        用户报回来的那个症状。
-        """
+class Test配音流程忠实执行用户选择:
+    def test_没装引擎时明确失败__不擅自静音(self, monkeypatch) -> None:
         from app.domain.voices import original_audio as subjobs
 
-        monkeypatch.setattr(subjobs, "_split_voice_from_music", lambda *a, **k: False)
+        from app.domain import separation
+
+        monkeypatch.setattr(separation, "available", lambda engine="": False)
         seen: list[str] = []
 
         def fake_set_state(db, sequence_id, state):
@@ -207,13 +204,9 @@ class Test配音流程按可用性退让:
             def get(self, model, key):
                 return _Seq()
 
-        applied = subjobs.apply_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
-        assert seen == ["muted"], seen
-        #: 退回静音要**报出来** —— 背景音乐跟着没了,用户要从通知里知道,而不是看成片才发现。
-        assert applied == "mute_fallback"
-        from app.core.i18n import t
-
-        assert "背景音乐" in t(f"dubOriginalAudio_{applied}") and "设置" in t(f"dubOriginalAudio_{applied}")
+        with pytest.raises(subjobs.OriginalAudioError, match="分离引擎"):
+            subjobs.apply_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
+        assert seen == [], "用户选的是分离，不得偷偷改成整轨静音"
 
     def test_分离可用时_画面留着_原声换成背景音_撤得回来(self, monkeypatch) -> None:
         """成功那条路,在**真的时间线**上看成片会是什么样。
@@ -287,7 +280,7 @@ class Test配音流程按可用性退让:
             check(db)
 
     def test_分到一半失败_时间线一点没动(self, monkeypatch) -> None:
-        """失败时调用方退回整轨静音;这之前不能留下半套背景音轨(它会跟着被静音,白占一条轨)。"""
+        """失败必须上报；这之前不能留下半套背景音轨。"""
         from app.domain import separation as sep
         from app.domain.sequences import operations as ops
         from app.domain.voices import original_audio
@@ -309,7 +302,8 @@ class Test配音流程按可用性退让:
         monkeypatch.setattr(sep, "available", lambda engine="": True)
         monkeypatch.setattr(sep, "separate_asset", separate)
         monkeypatch.setattr(ops, "detach_clip_audio", lambda *a, **k: pytest.fail("不该动时间线"))
-        assert original_audio._split_voice_from_music(_DB(), "s1", "dub", actor_id=None) is False
+        with pytest.raises(original_audio.OriginalAudioError, match="第二段炸了"):
+            original_audio._split_voice_from_music(_DB(), "s1", "dub", actor_id=None)
 
 
 class Test当作任务跑:

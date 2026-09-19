@@ -271,22 +271,22 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": "Translated dubbing with subtitles"
         },
         "summary": {
-            "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；没装人声分离引擎时整轨静音，完成通知里会说明。",
-            "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; without a separation engine the original track is muted, and the completion notice says so."
+            "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
+            "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts."
         },
         "requires": {
             "zh": [
                 "可用的转写引擎",
                 "翻译：AI 对话模型（节点上可换成 Google 翻译）",
                 "一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
-                "保住背景音乐：人声分离引擎（可选）",
+                "人声分离引擎（需提前安装）",
                 "有人说话的视频素材"
             ],
             "en": [
                 "Available transcription engine",
                 "Translation: a chat model (switchable to Google Translate on the node)",
                 "A voice: a cloned voice, or a built-in voice from any engine",
-                "To keep the background music: a voice separation engine (optional)",
+                "A voice separation engine installed in advance",
                 "A video with speech"
             ]
         },
@@ -794,8 +794,8 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
                 # 观众听见的是两个人同时说话,只是一个小声点(真机上报回来的正是这个)。
                 #
                 # 但整轨静音会把**背景音乐**一起带走 —— 说话声和音乐混在同一条轨上。
-                # 所以先拆:人声那半丢掉、背景音留着,配音叠在背景音之上。装了分离引擎才做得到,
-                # 没装就退回整轨静音(ADR-0016 决定 4:一个没装的可选引擎不该让流程失败)。
+                # 所以先拆:人声那半丢掉、背景音留着,配音叠在背景音之上。装了分离引擎才做得到；
+                # 没装时在排配音任务前明确失败，绝不能把用户选择静默改成整轨静音。
                 "original_audio": "separate",
                 "engine": "clone",
                 "voice": voice_id,
@@ -815,8 +815,6 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
             "position": {"x": 2260, "y": 260},
             "config": {
                 "title": "视频译配与字幕已完成",
-                # 原声那一句**必须说**:选了「分离」却没装分离引擎时,流程会退回整轨静音 ——
-                # 背景音乐跟着没了。不说的话,用户要到看成片时才发现。
                 "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。{{dubbing.original_audio_note}}",
             },
         },

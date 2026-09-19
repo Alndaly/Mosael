@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-09-16, implemented in 1.4.0 (local Demucs adapter; the hosted-API slot is still
+Accepted — 2026-09-16; amended 2026-09-19 to make separation failure explicit. Implemented in 1.4.0 (local Demucs adapter; the hosted-API slot is still
 empty). Extends the adapter organisation of ADR 0010 with a third capability and reuses the
 managed-runtime machinery that ASR and TTS already run on. ADR 0017 applies the same shape to noise
 reduction and replaces the audio extraction this record originally borrowed from transcription.
@@ -50,8 +50,9 @@ The second one carries a warning written after it was violated:
 | **B. Hosted API** | LALAL.AI, Moises, AudioShake | Comparable or better | Billed per minute; the whole track is uploaded | Privacy — the user's footage leaves the machine — plus one more credential to hold |
 | **C. ffmpeg approximation** | Centre-channel cancellation (`pan`, `stereotools`) | Only when the voice is centred in a stereo mix, and it damages the rest | None | Useless on mono and on most re-encoded web video |
 
-C cannot be the answer, but it is worth keeping as the behaviour when no engine is installed: the
-feature then exists in the interface and says what it is doing, instead of disappearing.
+C cannot be the answer. Substituting it, whole-track mute, or any other approximation would change
+the user's explicit request. When no engine is installed, the interface can explain how to make the
+capability available, but execution must stop before the dubbing job is queued.
 
 A is the first implementation because it needs no credential, no billing surface and no privacy
 note. B follows for users who will not download a gigabyte or have no GPU.
@@ -74,8 +75,10 @@ note. B follows for users who will not download a gigabyte or have no GPU.
    removing what was added.
 
 4. **The dubbing flow asks the domain whether separation is available; it never imports an
-   adapter.** When no engine is installed the flow falls back to today's behaviour (mute the whole
-   original) and says so. A missing optional engine must not fail a workflow that was working.
+   adapter.** Choosing `separate` is an explicit output contract. If no engine is ready, preflight
+   rejects the job with an actionable error. If separation fails after the job starts, the task
+   fails without muting the source track. Whole-track mute only happens when the user explicitly
+   chooses `mute`.
 
 5. **One capability, one registry, several entry points.** The workflow node, the editor action and
    the MCP tool all read the same registry. Adding an engine is one adapter plus one registration;
@@ -89,8 +92,9 @@ note. B follows for users who will not download a gigabyte or have no GPU.
   muted — the picture stays where it was and the step is undoable. Pointing a video clip at the audio
   stem instead, as the first version did, drops the clip from both the picture and the mix. `original_audio: mute` then means "mute the vocal stem", which is what the
   setting always claimed to mean.
-- Users who install nothing are not worse off than today, and the reason the option is greyed out is
-  visible rather than silent.
+- Users who install nothing get an actionable explanation before expensive dubbing work starts.
+  Existing workflows that explicitly select separation fail visibly until the capability is ready;
+  their output is never silently changed.
 - A third managed virtualenv is a real cost: another multi-gigabyte install path to keep working,
   another set of "is it installed, how much is left to download" states in the interface. It is
   accepted because the alternative — sharing a venv with ASR or TTS — breaks an engine the user

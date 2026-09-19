@@ -60,4 +60,33 @@ describe("工作流失败步骤", () => {
       },
     ]);
   });
+
+  it("总任务因后端重启中断时收口仍在运行的节点", () => {
+    const events = [
+      {
+        id: "e1",
+        job_id: "j1",
+        type: "workflow.node.started",
+        created_at: "2026-09-19T04:00:00Z",
+        payload: { node_id: "translate", name: "逐句翻译" },
+      },
+      {
+        id: "e2",
+        job_id: "j1",
+        type: "job.failed",
+        created_at: "2026-09-19T04:01:30Z",
+        payload: { reason: "backend_restart" },
+      },
+    ] as TaskEvent[];
+
+    expect(toSteps(events)).toEqual([
+      {
+        nid: "translate",
+        name: "逐句翻译",
+        status: "failed",
+        startAt: Date.parse("2026-09-19T04:00:00Z"),
+        ms: 90_000,
+      },
+    ]);
+  });
 });

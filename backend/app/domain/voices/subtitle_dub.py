@@ -24,7 +24,12 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, say
 from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
-from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, ORIGINAL_AUDIO_MODES, apply_original_audio
+from app.domain.voices.original_audio import (
+    DEFAULT_ORIGINAL_AUDIO,
+    OriginalAudioError,
+    apply_original_audio,
+    ensure_original_audio_mode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +117,10 @@ def start_subtitle_dub(
 ) -> Job:
     """给这些字幕条排一次配音。`synthesis` 原样转交 voices.start_synthesis(音色/引擎那一套);
     `original_audio` 是配好之后原声怎么办(见 voices/original_audio)。"""
-    if original_audio not in ORIGINAL_AUDIO_MODES:
-        raise DubError(f"原声处理方式只能是 {' / '.join(ORIGINAL_AUDIO_MODES)}")
+    try:
+        ensure_original_audio_mode(original_audio)
+    except OriginalAudioError as exc:
+        raise DubError(str(exc)) from exc
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         raise DubError("时间线不存在")

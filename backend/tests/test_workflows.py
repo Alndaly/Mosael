@@ -1436,8 +1436,8 @@ def test_parallel_branches_run_concurrently() -> None:
     """
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    # 输出 "开始,结束"。用字符串而不是 list:job.result 的上下文会经 _trim_outputs 收敛,
-    # list 会被折成 "[2 items]",时间戳就没了。
+    # 输出 "开始,结束"。这里用字符串便于直接比较区间；工作流结果中的普通列表会保留内容，
+    # 只有超过快照上限的列表才截断并附上剩余项数。
     sleeper = "import time\n_s = time.time()\ntime.sleep(1.0)\noutput = f'{_s},{time.time()}'"
     graph = {
         "nodes": [

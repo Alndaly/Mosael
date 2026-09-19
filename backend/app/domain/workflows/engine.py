@@ -356,16 +356,45 @@ def run_workflow(
     return context
 
 
+_OUTPUT_LIST_LIMIT = 200
+_OUTPUT_OBJECT_LIMIT = 100
+
+
+def _trim_output_value(value: Any, *, depth: int = 0) -> Any:
+    """把运行产出收敛成有界、但仍可检查的 JSON。
+
+    旧实现把**所有数组**直接改成 ``"[124 items]"``。这控制了事件体积，却也把调试工作流最
+    需要的内容永久丢掉了：用户知道生成了 124 个片段，却一个 id 都看不到。这里保留有限数量
+    的真实元素，并递归限制字符串、对象宽度和深度；体积仍有上限，检查器也终于能逐项展开。
+    """
+    if isinstance(value, str):
+        limit = 2000 if depth == 0 else 500
+        return value if len(value) <= limit else value[:limit] + "…"
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    if depth >= 4:
+        if isinstance(value, list):
+            return f"[{len(value)} items]"
+        if isinstance(value, dict):
+            return f"[{len(value)} fields]"
+        return str(value)[:500]
+    if isinstance(value, list):
+        shown = [_trim_output_value(item, depth=depth + 1) for item in value[:_OUTPUT_LIST_LIMIT]]
+        if len(value) > _OUTPUT_LIST_LIMIT:
+            shown.append(f"… {len(value) - _OUTPUT_LIST_LIMIT} more items")
+        return shown
+    if isinstance(value, dict):
+        pairs = list(value.items())
+        shown = {
+            str(key): _trim_output_value(item, depth=depth + 1)
+            for key, item in pairs[:_OUTPUT_OBJECT_LIMIT]
+        }
+        if len(pairs) > _OUTPUT_OBJECT_LIMIT:
+            shown["…"] = f"{len(pairs) - _OUTPUT_OBJECT_LIMIT} more fields"
+        return shown
+    return str(value)[:500]
+
+
 def _trim_outputs(outputs: dict[str, Any]) -> dict[str, Any]:
-    """事件/结果里只存可读摘要,长文本截断,复杂对象计数。"""
-    trimmed: dict[str, Any] = {}
-    for key, value in outputs.items():
-        if isinstance(value, str):
-            trimmed[key] = value if len(value) <= 2000 else value[:2000] + "…"
-        elif isinstance(value, list):
-            trimmed[key] = f"[{len(value)} items]"
-        elif isinstance(value, (int, float, bool)) or value is None:
-            trimmed[key] = value
-        else:
-            trimmed[key] = str(value)[:500]
-    return trimmed
+    """事件/结果里存有界的可读快照；数组与对象保留可检查的内容。"""
+    return {key: _trim_output_value(value) for key, value in outputs.items()}

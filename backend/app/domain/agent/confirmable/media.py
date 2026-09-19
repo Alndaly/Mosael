@@ -21,7 +21,7 @@ _ORIGINAL_AUDIO_SUMMARY = {
     "duck": "配音说话时原声压低",
     "mute": "原声静音",
     "keep": "原声不动",
-    "separate": "原声只去掉人声、留背景音(本机没有分离引擎时整轨静音)",
+    "separate": "原声只去掉人声、留背景音(需要本机已装好分离引擎)",
 }
 
 
@@ -344,5 +344,4 @@ confirmable_tool(ConfirmableTool(
     execute=_execute_convert_video_to_gif,
     validate=_validate_convert_video_to_gif,
 ))
-
 
