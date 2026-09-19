@@ -46,6 +46,13 @@ SOURCE_ROLE_HELP = {
 KEYFRAME_GROUP = ["first_frame", "last_frame"]
 REFERENCE_GROUP = ["reference_image", "reference_video", "reference_audio"]
 
+#: 「这一次用哪一组素材」。上面两组在 Seedance 这类模型上**互斥**(火山原话见下方
+#: exclusive_source_groups)。整片流程里每一镜走哪条路是逐镜决定的:两组素材都接上,再由这一项
+#: 选一组 —— 比为两条路各画一个生成节点、再在下游合流干净。选了一组就丢掉与它互斥的那一组,
+#: 两组之外的角色(待编辑的视频、驱动音频……)不受影响。
+SOURCE_GROUPS = ("all", "keyframes", "references")
+SOURCE_GROUP_DROPS = {"keyframes": tuple(REFERENCE_GROUP), "references": tuple(KEYFRAME_GROUP)}
+
 #: 火山 Seedance 2 与 MiniMax H3 给的数字**一模一样**(9 / 3 / 3),两家的报错措辞不同但
 #: 结论相同,所以这里合成一份共用常量,而不是抄两遍。
 REFERENCE_SCENE_LIMITS = {"reference_image": 9, "reference_video": 3, "reference_audio": 3}

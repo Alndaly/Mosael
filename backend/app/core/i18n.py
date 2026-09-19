@@ -323,6 +323,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_shot_ids": {"zh": "镜头列表", "en": "Shots"},
     "wfField_shot_count": {"zh": "镜头数", "en": "Shot count"},
     "wfField_render": {"zh": "渲染内容", "en": "Render"},
+    "wfField_source_group": {"zh": "用哪一组素材", "en": "Which sources to use"},
     #: 节点面板的分组名。
     "wfCat_flow": {"zh": "流程", "en": "Flow"},
     "wfCat_ai": {"zh": "AI", "en": "AI"},
@@ -416,6 +417,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_ai_generate_kind": {"zh": "生成类型", "en": "What to generate"},
     "wfNode_ai_generate_negative_prompt": {"zh": "部分模型支持", "en": "Supported by some models"},
     "wfNode_ai_generate_parameters": {"zh": "取值随模型而定 —— 逐模型的可用清单看 /api/generation/options 里那个模型的 capabilities.parameter_keys。目录里出现过的有:{keys}", "en": "Values depend on the model — for the per-model list see that model's capabilities.parameter_keys under /api/generation/options. Ones that appear in the catalogue: {keys}"},
+    "wfNode_ai_generate_source_group": {
+        "zh": "有的模型(如 Seedance)首尾帧和参考素材不能同时用。两组都接上时,在这里选这一次用哪一组,另一组会被忽略;「全部」表示原样全部交给模型",
+        "en": "Some models (such as Seedance) cannot combine first/last frames with reference media. With both connected, choose which group this run uses and the other is ignored; All passes everything to the model",
+    },
     "wfNode_ai_generate_source_assets": {"zh": "每行一条 `素材id` 或 `素材id:角色`。角色:{roles_zh};不写角色时图生视频按首帧、图生图按参考图。", "en": "One `asset_id` or `asset_id:role` per line. Roles: {roles}. With no role, image-to-video treats it as the first frame and image-to-image as a reference image."},
     "wfNode_publish": {"zh": "发布", "en": "Publish"},
     "wfNode_publish_desc": {"zh": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。", "en": "Publish to Douyin / Xiaohongshu / Weixin Channels / Bilibili using an already signed-in account (carried out by the desktop app's embedded browser)."},
@@ -844,6 +849,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_op_replace": {"zh": "替换", "en": "Replace"},
     "wfOpt_op_regex_extract": {"zh": "正则提取", "en": "Extract with regex"},
     "wfOpt_op_length": {"zh": "取长度", "en": "Length"},
+    "wfOpt_source_group_all": {"zh": "全部", "en": "All"},
+    "wfOpt_source_group_keyframes": {"zh": "首尾帧", "en": "First/last frames"},
+    "wfOpt_source_group_references": {"zh": "参考素材", "en": "References"},
     "wfOpt_render_stills": {"zh": "首尾静帧", "en": "First and last frame"},
     "wfOpt_render_video": {"zh": "运镜视频", "en": "Camera-move video"},
     "wfOpt_render_both": {"zh": "静帧和运镜视频", "en": "Stills and video"},

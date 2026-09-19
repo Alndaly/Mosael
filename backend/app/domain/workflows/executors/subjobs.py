@@ -113,7 +113,7 @@ def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
 @register("ai_generate")
 def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.generation import create_generation_job
-    from app.domain.generation.operations import GenerationDomainError, parse_source_assets
+    from app.domain.generation.operations import GenerationDomainError, keep_source_group, parse_source_assets
     from app.domain.generation.runner import start_generation_thread
 
     kind = str(config.get("kind", "image")).strip() or "image"
@@ -132,7 +132,10 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
             prompt=str(config.get("prompt", "")),
             negative_prompt=str(config.get("negative_prompt", "")),
             parameters=dict(config.get("parameters") or {}),
-            source_assets=parse_source_assets(config.get("source_assets"), kind=kind),
+            source_assets=keep_source_group(
+                parse_source_assets(config.get("source_assets"), kind=kind),
+                str(config.get("source_group") or "all").strip(),
+            ),
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError(str(exc)) from exc

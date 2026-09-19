@@ -16,7 +16,12 @@ from app.ai.providers import (
     get_generation_adapter,
     roles_supplied_via_url,
 )
-from app.domain.generation.catalog import SOURCE_ROLE_LABELS, known_capabilities_for
+from app.domain.generation.catalog import (
+    SOURCE_GROUP_DROPS,
+    SOURCE_GROUPS,
+    SOURCE_ROLE_LABELS,
+    known_capabilities_for,
+)
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
@@ -219,6 +224,14 @@ def _vendor_can_generate(db: Session, vendor: str, kind: str) -> bool:
 DEFAULT_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE}
 
 
+def keep_source_group(sources: list[dict[str, str]], group: str) -> list[dict[str, str]]:
+    """只留这一组(以及两组之外的角色,例如待编辑的视频);`all` 原样返回。分组见 catalog.SOURCE_GROUPS。"""
+    if group not in SOURCE_GROUPS:
+        raise GenerationDomainError(f"素材分组只能是 {' / '.join(SOURCE_GROUPS)}")
+    dropped = set(SOURCE_GROUP_DROPS.get(group, ()))
+    return [source for source in sources if source["role"] not in dropped]
+
+
 #: 模板串的样子。只有它里面的冒号可以不是角色分隔符 —— 别处的冒号一律当成在写角色。
 _TEMPLATE = re.compile(r"\{\{.*\}\}")
 
@@ -238,7 +251,11 @@ def parse_source_assets(value: Any, *, kind: str) -> list[dict[str, str]]:
     if isinstance(value, str):
         items = [part.strip() for part in value.replace(",", "\n").replace("，", "\n").split("\n")]
     elif isinstance(value, (list, tuple)):
-        items = list(value)
+        #: **某一项本身就是一组** —— 工作流里写 `{{角色三视图.results}}` 这种整串引用时,插值保留
+        #: 列表原样(见 workflows.interpolate)。摊平成同一层,和一条一条写出来是一回事。
+        items = []
+        for item in value:
+            items.extend(item if isinstance(item, (list, tuple)) else [item])
     else:
         return []
     out: list[dict[str, str]] = []

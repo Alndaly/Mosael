@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
-from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_ROLE_LABELS
+from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.scenes import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 
@@ -308,6 +308,7 @@ _FIELD_LABELS = {
     "shot_ids": "wfField_shot_ids",
     "shot_count": "wfField_shot_count",
     "render": "wfField_render",
+    "source_group": "wfField_source_group",
 }
 
 
@@ -636,6 +637,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "type": "template",
                 "description": "wfNode_ai_generate_source_assets",
                 "description_params": _source_assets_help(),
+            },
+            #: 首尾帧组和参考素材组互斥时用哪一组(见 generation/catalog.SOURCE_GROUPS)。
+            #: 允许手填:整片流程里是逐镜决定的,值来自上游(`{{…}}`)。
+            "source_group": {
+                "advanced": True, "type": "string", "default": "all", "options": list(SOURCE_GROUPS),
+                "allow_custom": True, "description": "wfNode_ai_generate_source_group",
             },
         },
         #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是这次出的全部 ——
