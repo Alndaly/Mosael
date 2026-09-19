@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "从主题到完整视频",
-  "description": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。各镜同时生成以节省时间；可选添加旁白，每镜口播对齐到它自己的画面并配上字幕。",
-  "graph_hash": "2d7ec04de594a34dfb9ed9480822aaa2e4fcbe05ebe84a8702db5c764aaa3fc1",
+  "description": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
+  "graph_hash": "b098c1925830da0196bb12e8cd8e7bf33f66bc85262b2d21761bbd6fd5602082",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 5,
+      "template_version": 6,
       "source": "official"
     },
     "nodes": [
@@ -28,6 +28,7 @@
             "tone": "专业、清晰、克制且有电影感",
             "language": "简体中文",
             "aspect_ratio": "16:9",
+            "frame_size": "",
             "resolution": "720p",
             "width": 1920,
             "height": 1080,
@@ -189,7 +190,7 @@
       {
         "id": "visual_bible",
         "type": "llm",
-        "name": "建立视觉圣经与连续性规则",
+        "name": "定角色、场景与视觉圣经",
         "position": {
           "x": 680,
           "y": 520
@@ -198,8 +199,8 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是摄影指导、美术指导和连续性监制。根据创意简报建立可供多个视频片段共享的\n视觉圣经，明确主体、环境、光线、色彩、镜头语言与连续性规则。规则必须具体到视频生成模型可以复用，\n避免空泛风格词；不得要求画面生成字幕、UI、Logo 或水印。只输出符合 JSON Schema 的对象。",
-          "prompt": "创意简报：\n{{creative_brief.text}}\n\n画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。\n请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则。",
+          "system": "你是摄影指导、美术指导、角色设计和连续性监制。根据创意简报建立全片共享的视觉圣经：\n主体、环境、光线、色彩、镜头语言与连续性规则，规则要具体到生成模型可以复用，避免空泛风格词。\n同时定下**出镜角色**(最多 4 个；appearance 用英文写到能画出三视图的程度：年龄、脸型发型、服装与配色、\n体型、标志性道具)和**场景**(最多 3 个；description 用英文写空间、陈设、材质与光源，给出大致的\n长宽高)。每个角色分一个不同的白模颜色，并在 blockout_legend 里用英文说明颜色与角色的对应。\nstyle_prompt 是一句英文画风，全片每张图、每段视频都会带上。不得要求画面生成字幕、UI、Logo 或水印。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "创意简报：\n{{creative_brief.text}}\n\n画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。\n请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。",
           "response_format": "json_schema",
           "json_schema_name": "professional_video_visual_bible",
           "json_schema": {
@@ -231,6 +232,109 @@
               },
               "global_negative_prompt": {
                 "type": "string"
+              },
+              "characters": {
+                "type": "array",
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$",
+                      "description": "英文小写短 id,如 hero"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "description": "在故事里是谁"
+                    },
+                    "appearance": {
+                      "type": "string",
+                      "description": "英文,交给图像模型画三视图:年龄、脸型发型、服装与配色、体型与身高、标志性道具"
+                    },
+                    "height_m": {
+                      "type": "number",
+                      "minimum": 0.5,
+                      "maximum": 2.5
+                    },
+                    "blockout_color": {
+                      "type": "string",
+                      "enum": [
+                        "#d9534f",
+                        "#4a7fd6",
+                        "#5cb85c",
+                        "#e0a030"
+                      ],
+                      "description": "白模里这个人偶的颜色,每个角色不同"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "role",
+                    "appearance",
+                    "height_m",
+                    "blockout_color"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "出镜的角色(最多 4 个);纯物件/风景的片子可以为空"
+              },
+              "locations": {
+                "type": "array",
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "英文,交给图像模型画场景设定图:空间、时代、材质、关键陈设、光源"
+                    },
+                    "width_m": {
+                      "type": "number",
+                      "minimum": 2,
+                      "maximum": 60
+                    },
+                    "depth_m": {
+                      "type": "number",
+                      "minimum": 2,
+                      "maximum": 60
+                    },
+                    "height_m": {
+                      "type": "number",
+                      "minimum": 2,
+                      "maximum": 20
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "width_m",
+                    "depth_m",
+                    "height_m"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "全片用到的场景(最多 3 个)"
+              },
+              "style_prompt": {
+                "type": "string",
+                "description": "英文一句话的全片画风,每张图、每段视频都会带上"
+              },
+              "blockout_legend": {
+                "type": "string",
+                "description": "英文,说明白模里各颜色人偶分别是谁,如 'red mannequin = Lin (class president), blue mannequin = Kai'"
               }
             },
             "required": [
@@ -240,13 +344,17 @@
               "lighting_plan",
               "color_palette",
               "continuity_rules",
-              "global_negative_prompt"
+              "global_negative_prompt",
+              "characters",
+              "locations",
+              "style_prompt",
+              "blockout_legend"
             ],
             "additionalProperties": false
           },
           "json_schema_strict": "true",
           "temperature": 0.55,
-          "max_tokens": 4000
+          "max_tokens": 5000
         }
       },
       {
@@ -265,9 +373,87 @@
         }
       },
       {
+        "id": "character_sheets",
+        "type": "loop_foreach",
+        "name": "画每个角色的三视图",
+        "position": {
+          "x": 1040,
+          "y": 620
+        },
+        "config": {
+          "items": "{{visual_bible.json.characters}}",
+          "inputs": {
+            "style": "{{visual_bible.json.style_prompt}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "sheet",
+                "type": "ai_generate",
+                "name": "画这个角色的三视图",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "Character turnaround reference sheet for {{loop.item.name}}: {{loop.item.appearance}}. Three full-body views of the same character side by side — front, side profile, back — identical outfit and proportions, relaxed A-pose, plain white background, soft even studio light, no text, no labels, no borders. {{input.style}}",
+                  "parameters": {}
+                }
+              }
+            ],
+            "edges": []
+          },
+          "output": "{{sheet.asset_id}}:reference_image",
+          "concurrency": 3
+        }
+      },
+      {
+        "id": "location_art",
+        "type": "loop_foreach",
+        "name": "画每个场景的设定图",
+        "position": {
+          "x": 1040,
+          "y": 820
+        },
+        "config": {
+          "items": "{{visual_bible.json.locations}}",
+          "inputs": {
+            "style": "{{visual_bible.json.style_prompt}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "art",
+                "type": "ai_generate",
+                "name": "画这个场景的设定图",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
+                  "parameters": {}
+                }
+              }
+            ],
+            "edges": []
+          },
+          "output": "{{art.asset_id}}:reference_image",
+          "concurrency": 3
+        }
+      },
+      {
         "id": "storyboard",
         "type": "llm",
-        "name": "按时间拆解专业脚本与分镜",
+        "name": "按时间拆解分镜与机位",
         "position": {
           "x": 1040,
           "y": 300
@@ -276,8 +462,8 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是导演、摄影指导、分镜师和视频生成提示词工程师。把创意简报拆成连续的\n5 秒镜头。每镜必须给出精确起止时间、口播、景别、机位、构图、主体动作、光线、色彩、声音设计、\n连续性和运镜。运镜不得只写“推进/环绕”：必须写明镜头从哪里开始、沿什么路径、以何速度移动、\n在哪里结束，以及运动如何服务叙事。所有镜头时间必须首尾相接，不重叠、不留空；首镜建立钩子，\n中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来不得超过 5 秒：\n中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进这一镜，\n听起来会很赶。generation_prompt 使用英文，能独立交给视频模型，完整复述\n主体、环境、风格、镜头语言、动作节拍、运镜和连续性；主体动作必须能在 5 秒内完成；\n画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
-          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经与连续性规则：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 5 秒，镜头数按目标时长除以\n5；若不能整除，向不少于目标时长的最近倍数取整。时间码从 0 开始连续编号。",
+          "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n5 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 5 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 5 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
+          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 5 秒，镜头数按目标时长除以 5；若不能整除，\n向不少于目标时长的最近倍数取整。时间码从 0 开始连续编号。",
           "response_format": "json_schema",
           "json_schema_name": "professional_timed_storyboard",
           "json_schema": {
@@ -325,25 +511,66 @@
                       "type": "string",
                       "description": "该时间段的口播或对白，念出来不超过 5 秒；无则写空字符串"
                     },
-                    "scene": {
+                    "location_id": {
                       "type": "string",
-                      "description": "人物、环境、道具与前中后景关系"
+                      "description": "视觉圣经里的场景 id"
+                    },
+                    "characters": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "这一镜出镜的角色 id"
+                    },
+                    "blocking": {
+                      "type": "string",
+                      "description": "人物站位与走位:谁在哪、朝向哪、从哪走到哪(米为单位的相对位置)"
                     },
                     "shot_size": {
                       "type": "string",
-                      "description": "景别及其叙事理由"
+                      "enum": [
+                        "extreme wide",
+                        "wide",
+                        "full",
+                        "medium",
+                        "medium close-up",
+                        "close-up",
+                        "extreme close-up"
+                      ]
                     },
                     "camera_angle": {
                       "type": "string",
-                      "description": "机位高度、俯仰、视线与镜头焦段"
+                      "enum": [
+                        "eye level",
+                        "high angle",
+                        "low angle",
+                        "overhead",
+                        "dutch angle"
+                      ]
                     },
-                    "composition": {
-                      "type": "string",
-                      "description": "构图、视觉重心、留白与运动方向"
+                    "lens_mm": {
+                      "type": "integer",
+                      "minimum": 14,
+                      "maximum": 200,
+                      "description": "等效全画幅焦段"
                     },
                     "camera_movement": {
                       "type": "string",
-                      "description": "运镜路径、起止构图、速度、加减速和稳定方式"
+                      "enum": [
+                        "static",
+                        "dolly in",
+                        "dolly out",
+                        "pan",
+                        "tilt",
+                        "tracking",
+                        "orbit",
+                        "crane up",
+                        "crane down"
+                      ]
+                    },
+                    "camera_path": {
+                      "type": "string",
+                      "description": "机位从哪里开始、沿什么路径、到哪里结束,起止构图各是什么"
                     },
                     "subject_action": {
                       "type": "string",
@@ -352,8 +579,9 @@
                     "lighting": {
                       "type": "string"
                     },
-                    "color_palette": {
-                      "type": "string"
+                    "sound_design": {
+                      "type": "string",
+                      "description": "环境声、拟音、音乐节拍与静默点"
                     },
                     "transition_in": {
                       "type": "string"
@@ -361,17 +589,24 @@
                     "transition_out": {
                       "type": "string"
                     },
-                    "sound_design": {
-                      "type": "string",
-                      "description": "环境声、拟音、音乐节拍与静默点"
-                    },
                     "continuity_notes": {
                       "type": "string",
                       "description": "人物、服装、空间、光向和运动连续性"
                     },
+                    "reference_mode": {
+                      "type": "string",
+                      "enum": [
+                        "keyframes"
+                      ],
+                      "description": "这一镜用哪条路出片:keyframes = 先按白模机位画首帧(需要时加尾帧)再生成视频,构图最稳;references = 直接把角色三视图、场景设定图和白模运镜视频交给视频模型,适合复杂运镜"
+                    },
+                    "first_frame_prompt": {
+                      "type": "string",
+                      "description": "英文,这一镜第一帧画面的完整描述(人物、动作、表情、环境、光线、画风),交给图像模型画首帧"
+                    },
                     "generation_prompt": {
                       "type": "string",
-                      "description": "可直接交给视频模型的英文提示词，必须包含明确运镜与 5 秒动作"
+                      "description": "英文,交给视频模型:主体动作节拍(须能在 5 秒内完成)、表演、环境变化、光影;不要写机位参数(会从白模自动补上),不要要求字幕、UI、Logo 或水印"
                     },
                     "negative_prompt": {
                       "type": "string"
@@ -384,18 +619,22 @@
                     "duration_seconds",
                     "story_beat",
                     "narration",
-                    "scene",
+                    "location_id",
+                    "characters",
+                    "blocking",
                     "shot_size",
                     "camera_angle",
-                    "composition",
+                    "lens_mm",
                     "camera_movement",
+                    "camera_path",
                     "subject_action",
                     "lighting",
-                    "color_palette",
+                    "sound_design",
                     "transition_in",
                     "transition_out",
-                    "sound_design",
                     "continuity_notes",
+                    "reference_mode",
+                    "first_frame_prompt",
                     "generation_prompt",
                     "negative_prompt"
                   ],
@@ -413,43 +652,449 @@
           },
           "json_schema_strict": "true",
           "temperature": 0.65,
-          "max_tokens": 10000
+          "max_tokens": 12000
         }
+      },
+      {
+        "id": "set_design",
+        "type": "llm",
+        "name": "设计 3D 白模布景与机位",
+        "position": {
+          "x": 1400,
+          "y": 300
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "precise",
+          "system": "你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。\n输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。\n\n坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。第 n 镜(shot_number = n)的布景台\n整体放在 x = n*40 附近(台与台之间互不干扰)，台内的每一个物体和这一镜相机的 position / target 都要把\nx 加上 n*40。\n\n每个布景台：\n- 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*40,0,0]，\n  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。\n- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。\n- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;\n  color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。\n  id 写成 \"<角色id>-<n>\"。\n- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们。\n\n每镜一台相机：kind=\"camera\",id=\"cam-<n>\";position 是起始机位,target 是起始看向点(一般是主体的胸口\n或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,\n35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,\n仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,\n中景 1.5~2.5 米,全景 3~5 米)。\n运镜写在相机的 track 上：static 不写 track;其余至少两档 {time:0,...} 和 {time:5,...}\n(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,\n跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。\n\nshots:每镜一条 {id:\"shot-<n>\", name:\"镜头 <n>\", duration:5, aspect:画幅, easing:\"smooth\",\ncamera_id:\"cam-<n>\"}。lighting 按视觉圣经的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、\n高度角、强度(2~5)、色温和软硬;preset 写 \"custom\"。background 写 \"#20242c\",ambient 写 1.5。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "视觉圣经(角色身高与白模颜色、场景尺寸)：\n{{visual_bible.text}}\n\n分镜(每镜的场景、出镜角色、站位、景别、机位角度、焦段、运镜与路径)：\n{{storyboard.text}}\n\n画幅：{{start.aspect_ratio}}。请给每个镜头搭一个布景台并放好相机。",
+          "response_format": "json_schema",
+          "json_schema_name": "blockout_scene",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "objects": {
+                "type": "array",
+                "maxItems": 480,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "room",
+                        "box",
+                        "cylinder",
+                        "sphere",
+                        "plane",
+                        "stairs",
+                        "table",
+                        "figure",
+                        "camera"
+                      ]
+                    },
+                    "position": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "rotation": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "width": {
+                          "type": "number",
+                          "minimum": 0.01
+                        },
+                        "height": {
+                          "type": "number",
+                          "minimum": 0.01
+                        },
+                        "depth": {
+                          "type": "number",
+                          "minimum": 0.01
+                        },
+                        "radius": {
+                          "type": "number",
+                          "minimum": 0.01
+                        },
+                        "steps": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 64
+                        }
+                      },
+                      "required": [
+                        "width",
+                        "height",
+                        "depth",
+                        "radius",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "color": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "target": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "fov": {
+                      "type": "number",
+                      "minimum": 10,
+                      "maximum": 120
+                    },
+                    "track": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "time": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "position": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
+                          },
+                          "target": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
+                          },
+                          "fov": {
+                            "type": "number",
+                            "minimum": 10,
+                            "maximum": 120
+                          }
+                        },
+                        "required": [
+                          "time",
+                          "position",
+                          "target",
+                          "fov"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "kind",
+                    "position",
+                    "rotation",
+                    "parameters",
+                    "color",
+                    "target",
+                    "fov",
+                    "track"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "shots": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": "number",
+                      "minimum": 0.1,
+                      "maximum": 120
+                    },
+                    "aspect": {
+                      "type": "string",
+                      "enum": [
+                        "16:9",
+                        "9:16",
+                        "1:1"
+                      ]
+                    },
+                    "easing": {
+                      "type": "string",
+                      "enum": [
+                        "smooth",
+                        "linear"
+                      ]
+                    },
+                    "camera_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "duration",
+                    "aspect",
+                    "easing",
+                    "camera_id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "lighting": {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "type": "string",
+                    "enum": [
+                      "custom"
+                    ]
+                  },
+                  "azimuth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 359
+                  },
+                  "elevation": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 90
+                  },
+                  "intensity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 20
+                  },
+                  "temperature": {
+                    "type": "integer",
+                    "minimum": 1500,
+                    "maximum": 12000
+                  },
+                  "softness": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "preset",
+                  "azimuth",
+                  "elevation",
+                  "intensity",
+                  "temperature",
+                  "softness"
+                ],
+                "additionalProperties": false
+              },
+              "background": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "ambient": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "objects",
+              "shots",
+              "lighting",
+              "background",
+              "ambient"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.2,
+          "max_tokens": 16000
+        }
+      },
+      {
+        "id": "build_set",
+        "type": "scene_create",
+        "name": "搭建 3D 白模场景",
+        "position": {
+          "x": 1720,
+          "y": 300
+        },
+        "config": {
+          "name": "{{creative_brief.json.title}} · 白模",
+          "layout": ""
+        },
+        "inputs": [
+          "layout"
+        ]
       },
       {
         "id": "generate_shots",
         "type": "loop_foreach",
-        "name": "各镜同时生成画面与口播",
+        "name": "逐镜生成画面与口播",
         "position": {
-          "x": 1400,
+          "x": 2040,
           "y": 300
         },
         "config": {
           "items": "{{storyboard.json.shots}}",
           "inputs": {
             "project_id": "{{video_project.project_id}}",
-            "voice_id": "{{start.voice_id}}"
+            "voice_id": "{{start.voice_id}}",
+            "scene_id": "{{build_set.scene_id}}",
+            "sheets": "{{character_sheets.results}}",
+            "locations": "{{location_art.results}}",
+            "style": "{{visual_bible.json.style_prompt}}",
+            "legend": "{{visual_bible.json.blockout_legend}}",
+            "frame_size": "{{start.frame_size}}",
+            "aspect_ratio": "{{start.aspect_ratio}}",
+            "resolution": "{{start.resolution}}"
           },
           "body": {
             "nodes": [
               {
-                "id": "generate_clip",
-                "type": "ai_generate",
-                "name": "按分镜生成 5 秒视频片段",
+                "id": "render_blockout",
+                "type": "scene_render",
+                "name": "渲染本镜白模参考",
                 "position": {
                   "x": 80,
                   "y": 140
+                },
+                "config": {
+                  "scene_id": "{{input.scene_id}}",
+                  "shot_id": "shot-{{loop.item.shot_number}}",
+                  "render": "both",
+                  "project_id": "{{input.project_id}}"
+                }
+              },
+              {
+                "id": "is_keyframes",
+                "type": "condition",
+                "name": "这一镜走首尾帧吗",
+                "position": {
+                  "x": 390,
+                  "y": 60
+                },
+                "config": {
+                  "left": "{{loop.item.reference_mode}}",
+                  "op": "equals",
+                  "right": "keyframes"
+                }
+              },
+              {
+                "id": "paint_first_frame",
+                "type": "ai_generate",
+                "name": "按白模机位画首帧",
+                "position": {
+                  "x": 700,
+                  "y": 60
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "{{loop.item.first_frame_prompt}} Reference images: the first one is a grey 3D blockout of this exact shot — match its camera angle, lens, framing, horizon line and the placement of the coloured mannequins exactly ({{input.legend}}); the mannequins are stand-ins, render them as the real characters. The character turnaround sheets fix each character's face, hair, outfit and proportions; the location concept art fixes the set. Only the characters described above appear. {{input.style}}",
+                  "parameters": {},
+                  "source_assets": [
+                    "{{render_blockout.first_frame_asset_id}}:reference_image",
+                    "{{input.sheets}}",
+                    "{{input.locations}}"
+                  ]
+                }
+              },
+              {
+                "id": "needs_last_frame",
+                "type": "condition",
+                "name": "这一镜要尾帧吗",
+                "position": {
+                  "x": 1010,
+                  "y": 60
+                },
+                "config": {
+                  "left": "{{loop.item.last_frame_prompt}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "paint_last_frame",
+                "type": "ai_generate",
+                "name": "按白模机位画尾帧",
+                "position": {
+                  "x": 1320,
+                  "y": 60
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the second reference image — keep characters, wardrobe, lighting and set continuous. Reference images: the first one is a grey 3D blockout of this exact shot — match its camera angle, lens, framing, horizon line and the placement of the coloured mannequins exactly ({{input.legend}}); the mannequins are stand-ins, render them as the real characters. The character turnaround sheets fix each character's face, hair, outfit and proportions; the location concept art fixes the set. Only the characters described above appear. {{input.style}}",
+                  "parameters": {},
+                  "source_assets": [
+                    "{{render_blockout.last_frame_asset_id}}:reference_image",
+                    "{{paint_first_frame.asset_id}}:reference_image",
+                    "{{input.sheets}}",
+                    "{{input.locations}}"
+                  ]
+                }
+              },
+              {
+                "id": "generate_clip",
+                "type": "ai_generate",
+                "name": "生成 5 秒镜头",
+                "position": {
+                  "x": 1320,
+                  "y": 260
                 },
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
-                  "prompt": "{{loop.item.generation_prompt}}",
+                  "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{input.style}}",
                   "negative_prompt": "{{loop.item.negative_prompt}}",
                   "parameters": {
                     "duration_seconds": 5
-                  }
+                  },
+                  "source_assets": [
+                    "{{paint_first_frame.asset_id}}:first_frame",
+                    "{{paint_last_frame.asset_id}}:last_frame",
+                    "{{input.sheets}}",
+                    "{{input.locations}}",
+                    "{{render_blockout.first_frame_asset_id}}:reference_image",
+                    "{{render_blockout.video_asset_id}}:reference_video"
+                  ],
+                  "source_group": "{{loop.item.reference_mode}}"
                 }
               },
               {
@@ -457,8 +1102,8 @@
                 "type": "asset_update",
                 "name": "归档并命名镜头素材",
                 "position": {
-                  "x": 390,
-                  "y": 140
+                  "x": 1630,
+                  "y": 260
                 },
                 "config": {
                   "asset_ids": "",
@@ -475,7 +1120,7 @@
                 "name": "选了配音音色吗",
                 "position": {
                   "x": 80,
-                  "y": 300
+                  "y": 420
                 },
                 "config": {
                   "left": "{{input.voice_id}}",
@@ -488,7 +1133,7 @@
                 "name": "这一镜有口播吗",
                 "position": {
                   "x": 390,
-                  "y": 300
+                  "y": 420
                 },
                 "config": {
                   "left": "{{loop.item.narration}}",
@@ -501,7 +1146,7 @@
                 "name": "合成该镜口播",
                 "position": {
                   "x": 700,
-                  "y": 300
+                  "y": 420
                 },
                 "config": {
                   "text": "{{loop.item.narration}}",
@@ -511,6 +1156,33 @@
               }
             ],
             "edges": [
+              {
+                "id": "shot_blockout_mode",
+                "source": "render_blockout",
+                "target": "is_keyframes"
+              },
+              {
+                "id": "shot_mode_first",
+                "source": "is_keyframes",
+                "target": "paint_first_frame",
+                "branch": "true"
+              },
+              {
+                "id": "shot_first_needs_last",
+                "source": "paint_first_frame",
+                "target": "needs_last_frame"
+              },
+              {
+                "id": "shot_needs_last",
+                "source": "needs_last_frame",
+                "target": "paint_last_frame",
+                "branch": "true"
+              },
+              {
+                "id": "shot_blockout_generate",
+                "source": "render_blockout",
+                "target": "generate_clip"
+              },
               {
                 "id": "shot_voice_gate_narration",
                 "source": "has_voice",
@@ -542,7 +1214,7 @@
         "type": "loop_foreach",
         "name": "按镜头顺序接上时间线",
         "position": {
-          "x": 1720,
+          "x": 2360,
           "y": 300
         },
         "config": {
@@ -654,7 +1326,7 @@
         "type": "generate_subtitles",
         "name": "把口播做成字幕",
         "position": {
-          "x": 2040,
+          "x": 2680,
           "y": 300
         },
         "config": {
@@ -675,7 +1347,7 @@
         "type": "export_sequence",
         "name": "合成并导出最终视频",
         "position": {
-          "x": 2360,
+          "x": 3000,
           "y": 300
         },
         "config": {
@@ -690,12 +1362,12 @@
         "type": "notify",
         "name": "成片完成通知",
         "position": {
-          "x": 2680,
+          "x": 3320,
           "y": 120
         },
         "config": {
           "title": "视频已生成：{{creative_brief.json.title}}",
-          "body": "脚本、分镜、视频片段和最终合成均已完成。最终素材 ID：{{export_final.asset_id}}"
+          "body": "脚本、角色三视图、3D 白模、各镜视频和最终合成均已完成。最终素材 ID：{{export_final.asset_id}}"
         }
       },
       {
@@ -703,7 +1375,7 @@
         "type": "output",
         "name": "交付完整制作结果",
         "position": {
-          "x": 2680,
+          "x": 3320,
           "y": 480
         },
         "config": {
@@ -714,6 +1386,9 @@
             "narrative_script": "{{narrative_script.json}}",
             "visual_bible": "{{visual_bible.json}}",
             "storyboard": "{{storyboard.json}}",
+            "character_sheets": "{{character_sheets.results}}",
+            "location_art": "{{location_art.results}}",
+            "blockout_scene_id": "{{build_set.scene_id}}",
             "shots": "{{generate_shots.results}}",
             "subtitle_count": "{{narration_subtitles.count}}",
             "project_id": "{{video_project.project_id}}",
@@ -745,6 +1420,16 @@
         "target": "video_project"
       },
       {
+        "id": "visual_sheets",
+        "source": "visual_bible",
+        "target": "character_sheets"
+      },
+      {
+        "id": "visual_locations",
+        "source": "visual_bible",
+        "target": "location_art"
+      },
+      {
         "id": "narrative_storyboard",
         "source": "narrative_script",
         "target": "storyboard"
@@ -755,8 +1440,23 @@
         "target": "storyboard"
       },
       {
-        "id": "storyboard_generate",
+        "id": "storyboard_set",
         "source": "storyboard",
+        "target": "set_design"
+      },
+      {
+        "id": "build_generate",
+        "source": "build_set",
+        "target": "generate_shots"
+      },
+      {
+        "id": "sheets_generate",
+        "source": "character_sheets",
+        "target": "generate_shots"
+      },
+      {
+        "id": "locations_generate",
+        "source": "location_art",
         "target": "generate_shots"
       },
       {
@@ -778,6 +1478,14 @@
         "id": "export_output",
         "source": "export_final",
         "target": "output"
+      },
+      {
+        "id": "d-set_design-json-build_set-layout",
+        "source": "set_design",
+        "target": "build_set",
+        "kind": "data",
+        "source_output": "json",
+        "target_input": "layout"
       },
       {
         "id": "d-generate_shots-results-assemble_timeline-items",

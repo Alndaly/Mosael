@@ -17,6 +17,7 @@ from app.domain.provider_models import effective_capabilities
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.normalization import normalize_graph
 from sqlalchemy import select
+from app.ai.providers import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from sqlalchemy.orm import Session
 
 FULL_VIDEO_GENERATION = "full_video_generation"
@@ -39,6 +40,24 @@ class VideoPlan:
     width: int = 1920
     height: int = 1080
     parameters: dict[str, Any] | None = None
+    #: 这个视频模型收哪几种参考(见 _video_plan)。决定分镜里每一镜**能选**哪条路:
+    #: 首帧(+尾帧)锁构图,或者参考图/参考视频锁人物与运镜。
+    keyframes: bool = True
+    last_frame: bool = False
+    references: bool = False
+    reference_video: bool = False
+
+    @property
+    def modes(self) -> list[str]:
+        return [mode for mode, ok in (("keyframes", self.keyframes), ("references", self.references)) if ok]
+
+
+@dataclass(frozen=True)
+class ImagePlan:
+    """图像模型的两种尺寸:关键帧(和成片同画幅)、角色三视图(横向,三个视角并排)。认不出的模型不传尺寸。"""
+
+    frame_sizes: dict[str, str]
+    sheet_size: str = ""
 
 
 def _default_model(db: Session, capability: str, user_id: str) -> ModelChoice:
@@ -53,8 +72,8 @@ def _default_model(db: Session, capability: str, user_id: str) -> ModelChoice:
     )
 
 
-def _resolved_video_capabilities(db: Session | None, choice: ModelChoice) -> dict[str, Any] | None:
-    """这个模型在 video 下的能力描述符;认不出返回 None(**不猜**)。
+def _capabilities(db: Session | None, choice: ModelChoice, kind: str) -> dict[str, Any] | None:
+    """这个模型在这种生成能力下的描述符;认不出返回 None(**不猜**)。
 
     点了名连接且有库可查时走逐模型解析 —— 用户自定义的声明(见 generation/resolution.py)
     在这条路上生效。纯静态上下文(官网模板导出、不建库的单元测试)传 ``db=None``,
@@ -70,64 +89,80 @@ def _resolved_video_capabilities(db: Session | None, choice: ModelChoice) -> dic
             )
         )
         if model is not None:
-            resolved = resolve_row(db, model, "video")
+            resolved = resolve_row(db, model, kind)
             return resolved.capabilities if resolved.capabilities_known else None
-    return known_capabilities_for(choice.provider, choice.model, "video")
+    return known_capabilities_for(choice.provider, choice.model, kind)
 
 
-def _supports_text_to_video(db: Session | None, choice: ModelChoice) -> bool:
-    """这个模型能不能只凭一段文字出片。
+#: 关键帧图要同时参考:白模帧 1 张 + 角色三视图最多 4 张 + 场景设定图最多 3 张 + (尾帧时)首帧 1 张。
+REFERENCE_IMAGES_NEEDED = 9
 
-    认不出来的模型(用户自建、ComfyUI)算**能** —— 落到"不认识"的时候拿窄名单去拦,
-    会把本来能用的模型挡在外面(见 known_capabilities_for 的说明)。
-    """
-    capabilities = _resolved_video_capabilities(db, choice)
+
+def _can_take_references(db: Session | None, choice: ModelChoice) -> bool:
+    """图像模型能不能带着一组参考图出图。认不出的算能(用户自建的、ComfyUI 查不到能力表)。"""
+    capabilities = _capabilities(db, choice, "image")
     if capabilities is None:
         return bool(choice.model)
-    return "text-to-video" in (capabilities.get("modes") or ())
+    limit = int((capabilities.get("source_limits") or {}).get(REFERENCE_IMAGE) or 0)
+    return "image-to-image" in (capabilities.get("modes") or ()) and limit >= REFERENCE_IMAGES_NEEDED
 
 
-def _text_to_video_model(db: Session, user_id: str) -> ModelChoice:
-    """给示范工作流挑一个**能纯文生视频**的模型。
+def _can_shoot_from_references(db: Session | None, choice: ModelChoice) -> bool:
+    """视频模型能不能从首帧或参考素材出片 —— 这条流程每一镜都给其中之一,从不只给一段文字。"""
+    plan = _video_plan(db, choice)
+    return bool(choice.model) and (plan.keyframes or plan.references)
 
-    不能直接用 video 能力的默认模型:图生视频类的模型(seedance-*-image-to-video、
-    wan2.7-i2v 这些,内置目录里有十来个)只声明了 image-to-video —— 而这条工作流的
-    generate_clip 只给一段提示词,没有首帧可喂。默认模型恰好是其中之一时,生成的示范
-    工作流从第一次运行起就是坏的,而报错发生在跑到那一步之后,离"我只是打开了示范模板"
-    已经很远了。
 
-    默认模型能文生视频就用它(用户自己的选择优先);不能就在他**已经配好的**模型里挑一个
-    能的。一个都没有时留空 —— 节点上的模型格空着,界面会让他去选,那比塞一个必然失败的
-    模型进去诚实。
-    """
-    chosen = _default_model(db, "video", user_id)
-    if _supports_text_to_video(db, chosen):
+def _pick(db: Session, user_id: str, kind: str, usable) -> ModelChoice:
+    """默认模型合用就用它(用户自己的选择优先);不合用就在他**已经配好的**模型里挑一个合用的。
+    一个都没有时留空 —— 节点上的模型格空着,界面会让他去选,那比塞一个必然失败的进去诚实。"""
+    chosen = _default_model(db, kind, user_id)
+    if usable(db, chosen):
         return chosen
-    # 「是不是视频模型」不是一个列 —— 能力是从行上写的、模型名推的、vendor 预设里
-    # 依次得出的(见 provider_models.effective_capabilities)。所以只能取出已启用的行
-    # 再逐个问,不能在 SQL 里筛。
     from app.domain import provider_models
 
-    rows = provider_models.models_for_capability(db, "video", user_id=user_id)
-    for model in rows:
-        if model.profile is None or not model.profile.enabled:
+    for model in provider_models.models_for_capability(db, kind, user_id=user_id):
+        if model.profile is None or not model.profile.enabled or kind not in effective_capabilities(model):
             continue
-        if "video" not in effective_capabilities(model):
-            continue
-        candidate = ModelChoice(
-            profile_id=model.provider_profile_id,
-            provider=model.profile.vendor,
-            model=model.model_id,
-        )
-        if _supports_text_to_video(db, candidate):
+        candidate = ModelChoice(profile_id=model.provider_profile_id, provider=model.profile.vendor, model=model.model_id)
+        if usable(db, candidate):
             return candidate
     return ModelChoice()
 
 
+def _shot_video_model(db: Session, user_id: str) -> ModelChoice:
+    return _pick(db, user_id, "video", _can_shoot_from_references)
+
+
+def _reference_image_model(db: Session, user_id: str) -> ModelChoice:
+    return _pick(db, user_id, "image", _can_take_references)
+
+
+def _image_plan(db: Session | None, choice: ModelChoice) -> ImagePlan:
+    """从图像模型的尺寸表里挑:关键帧和成片同画幅,三视图取最宽的横幅。认不出就不传尺寸。"""
+    capabilities = _capabilities(db, choice, "image")
+    sizes = [str(size).lower().replace("*", "x") for size in (capabilities or {}).get("sizes") or ()]
+    minimum = int((capabilities or {}).get("min_size_pixels") or 0)
+
+    def parsed(size: str) -> tuple[int, int]:
+        width, height = (int(value) for value in size.split("x", 1))
+        return width, height
+
+    def best(ratio: float, *, largest: bool) -> str:
+        fitting = [s for s in sizes if abs(parsed(s)[0] / parsed(s)[1] - ratio) < 0.02 and parsed(s)[0] * parsed(s)[1] >= minimum]
+        if not fitting:
+            return ""
+        return sorted(fitting, key=lambda s: parsed(s)[0] * parsed(s)[1], reverse=largest)[0]
+
+    frames = {aspect: best(ratio, largest=False) for aspect, ratio in (("16:9", 16 / 9), ("9:16", 9 / 16), ("1:1", 1.0))}
+    return ImagePlan(frame_sizes={aspect: size for aspect, size in frames.items() if size}, sheet_size=best(16 / 9, largest=True))
+
+
 def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
     """从模型能力目录挑一组肯定合法的默认值；未知模型只给生成契约的通用时长。"""
-    capabilities = _resolved_video_capabilities(db, choice)
+    capabilities = _capabilities(db, choice, "video")
     if capabilities is None:
+        #: 认不出的模型只按最通用的那条走:首帧生视频。不猜它收参考素材。
         return VideoPlan(parameters={"duration_seconds": 5})
 
     keys = set(capabilities.get("parameter_keys") or ())
@@ -172,6 +207,10 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
         width=size_width,
         height=size_height,
         parameters=parameters,
+        keyframes=FIRST_FRAME in keys,
+        last_frame=LAST_FRAME in keys,
+        references=REFERENCE_IMAGE in keys,
+        reference_video=REFERENCE_VIDEO in keys,
     )
 
 
@@ -189,35 +228,41 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": "Topic to finished video"
         },
         "summary": {
-            "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。各镜同时生成以节省时间；可选添加旁白，每镜口播对齐到它自己的画面并配上字幕。",
-            "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned."
+            "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
+            "en": "Turn a topic into a creative brief, script and visual bible, draw a turnaround sheet for every character and concept art for every location, auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video."
         },
         "requires": {
             "zh": [
                 "AI 对话模型",
-                "支持文生视频的模型",
+                "能带参考图出图的图像模型（如 Seedream 4）",
+                "支持首帧或参考素材的视频模型（如 Seedance 2.0）",
                 "旁白可选：克隆音色"
             ],
             "en": [
                 "Chat model",
-                "Text-to-video model",
+                "Image model that takes reference images (e.g. Seedream 4)",
+                "Video model that takes a first frame or references (e.g. Seedance 2.0)",
                 "Optional narration: cloned voice"
             ]
         },
         "stages": {
             "zh": [
                 "输入主题",
-                "脚本与视觉方案",
-                "生成分镜",
-                "各镜同时生成",
+                "脚本、角色与视觉圣经",
+                "角色三视图与场景设定图",
+                "分镜与机位",
+                "搭建 3D 白模",
+                "逐镜：白模参考 → 首尾帧 → 视频",
                 "按顺序组装并配字幕",
                 "导出成片"
             ],
             "en": [
                 "Choose a topic",
-                "Script and visual direction",
-                "Storyboard",
-                "Generate shots in parallel",
+                "Script, characters and visual bible",
+                "Character turnarounds and location art",
+                "Storyboard and camera set-ups",
+                "Build the 3D blockout",
+                "Per shot: blockout → keyframes → video",
                 "Assemble in order with captions",
                 "Export"
             ]
@@ -322,8 +367,9 @@ def built_in_template_graph(
     if template_id == FULL_VIDEO_GENERATION:
         return localised_names(locale, full_video_generation_graph(
             chat=chat,
-            # 这条工作流只给提示词,所以要的是**能文生视频**的那种,不是"video 的默认模型"。
-            video=_text_to_video_model(db, user_id),
+            # 三视图和关键帧都要带一组参考图出图;每一镜都给首帧或参考素材,不只给一段文字。
+            image=_reference_image_model(db, user_id),
+            video=_shot_video_model(db, user_id),
             # 音色是工作区的(克隆音色存在工作区名下),所以按工作区取,不按人。
             voice_id=_first_voice_id(db, workspace_id),
             db=db,
@@ -397,7 +443,30 @@ def _narrative_script_schema() -> dict[str, Any]:
     return _object(fields, list(fields))
 
 
+#: 白模里给人物上的颜色。视觉圣经给每个角色分一个,布景照着上色,关键帧提示词照着说"红色人偶是谁"。
+BLOCKOUT_COLORS = ["#d9534f", "#4a7fd6", "#5cb85c", "#e0a030"]
+
+
 def _visual_bible_schema() -> dict[str, Any]:
+    character = {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,30}$", "description": "英文小写短 id,如 hero"},
+        "name": {"type": "string"},
+        "role": {"type": "string", "description": "在故事里是谁"},
+        "appearance": {
+            "type": "string",
+            "description": "英文,交给图像模型画三视图:年龄、脸型发型、服装与配色、体型与身高、标志性道具",
+        },
+        "height_m": {"type": "number", "minimum": 0.5, "maximum": 2.5},
+        "blockout_color": {"type": "string", "enum": BLOCKOUT_COLORS, "description": "白模里这个人偶的颜色,每个角色不同"},
+    }
+    location = {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,30}$"},
+        "name": {"type": "string"},
+        "description": {"type": "string", "description": "英文,交给图像模型画场景设定图:空间、时代、材质、关键陈设、光源"},
+        "width_m": {"type": "number", "minimum": 2, "maximum": 60},
+        "depth_m": {"type": "number", "minimum": 2, "maximum": 60},
+        "height_m": {"type": "number", "minimum": 2, "maximum": 20},
+    }
     fields = {
         "subject_bible": {"type": "string", "description": "人物或主体跨镜头保持一致的外观与行为"},
         "environment_bible": {"type": "string", "description": "空间、时代、材质与关键道具约束"},
@@ -406,51 +475,136 @@ def _visual_bible_schema() -> dict[str, Any]:
         "color_palette": {"type": "string"},
         "continuity_rules": {"type": "array", "items": {"type": "string"}},
         "global_negative_prompt": {"type": "string"},
+        "characters": {
+            "type": "array", "maxItems": 4, "items": _object(character, list(character)),
+            "description": "出镜的角色(最多 4 个);纯物件/风景的片子可以为空",
+        },
+        "locations": {
+            "type": "array", "maxItems": 3, "items": _object(location, list(location)),
+            "description": "全片用到的场景(最多 3 个)",
+        },
+        "style_prompt": {"type": "string", "description": "英文一句话的全片画风,每张图、每段视频都会带上"},
+        "blockout_legend": {
+            "type": "string",
+            "description": "英文,说明白模里各颜色人偶分别是谁,如 'red mannequin = Lin (class president), blue mannequin = Kai'",
+        },
     }
     return _object(fields, list(fields))
 
 
-def _shot_schema(clip_seconds: int) -> dict[str, Any]:
-    fields = {
+SHOT_SIZES = ["extreme wide", "wide", "full", "medium", "medium close-up", "close-up", "extreme close-up"]
+CAMERA_ANGLES = ["eye level", "high angle", "low angle", "overhead", "dutch angle"]
+CAMERA_MOVES = ["static", "dolly in", "dolly out", "pan", "tilt", "tracking", "orbit", "crane up", "crane down"]
+
+
+def _shot_schema(plan: VideoPlan) -> dict[str, Any]:
+    clip = plan.clip_seconds
+    fields: dict[str, Any] = {
         "shot_number": {"type": "integer", "minimum": 1},
         "start_seconds": {"type": "number", "minimum": 0},
         "end_seconds": {"type": "number", "exclusiveMinimum": 0},
-        "duration_seconds": {"type": "number", "minimum": clip_seconds, "maximum": clip_seconds},
+        "duration_seconds": {"type": "number", "minimum": clip, "maximum": clip},
         "story_beat": {"type": "string", "description": "该镜头推进叙事的唯一任务"},
         "narration": {
             "type": "string",
-            "description": f"该时间段的口播或对白，念出来不超过 {clip_seconds} 秒；无则写空字符串",
+            "description": f"该时间段的口播或对白，念出来不超过 {clip} 秒；无则写空字符串",
         },
-        "scene": {"type": "string", "description": "人物、环境、道具与前中后景关系"},
-        "shot_size": {"type": "string", "description": "景别及其叙事理由"},
-        "camera_angle": {"type": "string", "description": "机位高度、俯仰、视线与镜头焦段"},
-        "composition": {"type": "string", "description": "构图、视觉重心、留白与运动方向"},
-        "camera_movement": {
-            "type": "string",
-            "description": "运镜路径、起止构图、速度、加减速和稳定方式",
-        },
-        "subject_action": {"type": "string", "description": f"主体在 {clip_seconds} 秒内可完成的动作节拍"},
+        "location_id": {"type": "string", "description": "视觉圣经里的场景 id"},
+        "characters": {"type": "array", "items": {"type": "string"}, "description": "这一镜出镜的角色 id"},
+        "blocking": {"type": "string", "description": "人物站位与走位:谁在哪、朝向哪、从哪走到哪(米为单位的相对位置)"},
+        "shot_size": {"type": "string", "enum": SHOT_SIZES},
+        "camera_angle": {"type": "string", "enum": CAMERA_ANGLES},
+        "lens_mm": {"type": "integer", "minimum": 14, "maximum": 200, "description": "等效全画幅焦段"},
+        "camera_movement": {"type": "string", "enum": CAMERA_MOVES},
+        "camera_path": {"type": "string", "description": "机位从哪里开始、沿什么路径、到哪里结束,起止构图各是什么"},
+        "subject_action": {"type": "string", "description": f"主体在 {clip} 秒内可完成的动作节拍"},
         "lighting": {"type": "string"},
-        "color_palette": {"type": "string"},
+        "sound_design": {"type": "string", "description": "环境声、拟音、音乐节拍与静默点"},
         "transition_in": {"type": "string"},
         "transition_out": {"type": "string"},
-        "sound_design": {"type": "string", "description": "环境声、拟音、音乐节拍与静默点"},
         "continuity_notes": {"type": "string", "description": "人物、服装、空间、光向和运动连续性"},
+        "reference_mode": {
+            "type": "string", "enum": plan.modes,
+            "description": "这一镜用哪条路出片:keyframes = 先按白模机位画首帧(需要时加尾帧)再生成视频,构图最稳;"
+                           "references = 直接把角色三视图、场景设定图和白模运镜视频交给视频模型,适合复杂运镜",
+        },
+        "first_frame_prompt": {
+            "type": "string",
+            "description": "英文,这一镜第一帧画面的完整描述(人物、动作、表情、环境、光线、画风),交给图像模型画首帧",
+        },
         "generation_prompt": {
             "type": "string",
-            "description": f"可直接交给视频模型的英文提示词，必须包含明确运镜与 {clip_seconds} 秒动作",
+            "description": f"英文,交给视频模型:主体动作节拍(须能在 {clip} 秒内完成)、表演、环境变化、光影;"
+                           "不要写机位参数(会从白模自动补上),不要要求字幕、UI、Logo 或水印",
         },
         "negative_prompt": {"type": "string"},
+    }
+    if plan.last_frame:
+        fields["last_frame_prompt"] = {
+            "type": "string",
+            "description": "英文,这一镜最后一帧的完整描述;只在结束构图必须精确(大幅运镜、落版、衔接下一镜)时写,否则写空字符串",
+        }
+    return _object(fields, list(fields))
+
+
+def _storyboard_schema(plan: VideoPlan) -> dict[str, Any]:
+    fields = {
+        "total_duration_seconds": {"type": "number", "minimum": plan.clip_seconds},
+        "timeline_summary": {"type": "string"},
+        "continuity_bible": {"type": "string", "description": "所有镜头共享的人物、场景、风格连续性约束"},
+        "shots": {"type": "array", "minItems": 1, "items": _shot_schema(plan)},
     }
     return _object(fields, list(fields))
 
 
-def _storyboard_schema(clip_seconds: int) -> dict[str, Any]:
+#: 布景用得到的物体种类 —— SceneObject.kind 里除了导入模型(没有文件)和灯之外的那些。
+SET_KINDS = ["room", "box", "cylinder", "sphere", "plane", "stairs", "table", "figure", "camera"]
+
+
+def _set_design_schema() -> dict[str, Any]:
+    """布景的形状 = 3D 场景的数据格式(SceneContent),只收这条流程用得到的那部分。
+
+    所有字段都列成必填(结构化输出的严格模式要求如此);用不上的给中性值 —— 非相机的 target/fov
+    给 [0,1,0] / 45,不动的物体 track 给空数组。
+    """
+    vec3 = {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
+    keyframe = {"time": {"type": "number", "minimum": 0}, "position": vec3, "target": vec3,
+                "fov": {"type": "number", "minimum": 10, "maximum": 120}}
+    parameters = {
+        "width": {"type": "number", "minimum": 0.01}, "height": {"type": "number", "minimum": 0.01},
+        "depth": {"type": "number", "minimum": 0.01}, "radius": {"type": "number", "minimum": 0.01},
+        "steps": {"type": "integer", "minimum": 1, "maximum": 64},
+    }
+    obj = {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+        "name": {"type": "string"},
+        "kind": {"type": "string", "enum": SET_KINDS},
+        "position": vec3, "rotation": vec3,
+        "parameters": _object(parameters, list(parameters)),
+        "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+        "target": vec3, "fov": {"type": "number", "minimum": 10, "maximum": 120},
+        "track": {"type": "array", "items": _object(keyframe, list(keyframe))},
+    }
+    shot = {
+        "id": {"type": "string"}, "name": {"type": "string"},
+        "duration": {"type": "number", "minimum": 0.1, "maximum": 120},
+        "aspect": {"type": "string", "enum": ["16:9", "9:16", "1:1"]},
+        "easing": {"type": "string", "enum": ["smooth", "linear"]},
+        "camera_id": {"type": "string"},
+    }
+    lighting = {
+        "preset": {"type": "string", "enum": ["custom"]},
+        "azimuth": {"type": "number", "minimum": 0, "maximum": 359}, "elevation": {"type": "number", "minimum": 0, "maximum": 90},
+        "intensity": {"type": "number", "minimum": 0, "maximum": 20},
+        "temperature": {"type": "integer", "minimum": 1500, "maximum": 12000},
+        "softness": {"type": "number", "minimum": 0, "maximum": 1},
+    }
     fields = {
-        "total_duration_seconds": {"type": "number", "minimum": clip_seconds},
-        "timeline_summary": {"type": "string"},
-        "continuity_bible": {"type": "string", "description": "所有镜头共享的人物、场景、风格连续性约束"},
-        "shots": {"type": "array", "minItems": 1, "items": _shot_schema(clip_seconds)},
+        "objects": {"type": "array", "maxItems": 480, "items": _object(obj, list(obj))},
+        "shots": {"type": "array", "minItems": 1, "maxItems": 32, "items": _object(shot, list(shot))},
+        "lighting": _object(lighting, list(lighting)),
+        "background": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+        "ambient": {"type": "number", "minimum": 0, "maximum": 10},
     }
     return _object(fields, list(fields))
 
@@ -880,15 +1034,33 @@ def _first_voice_id(db: Session, workspace_id: str) -> str:
 
 
 def full_video_generation_graph(
-    *, chat: ModelChoice, video: ModelChoice, voice_id: str = "", db: Session | None = None
+    *, chat: ModelChoice, image: ModelChoice, video: ModelChoice, voice_id: str = "", db: Session | None = None
 ) -> dict[str, Any]:
-    """主题 → 主旨 → 并行脚本/视觉开发 → 时间分镜 → 各镜并发生成 → 按序上时间线 → 口播字幕 → 导出。
+    """主题 → 主旨 → 脚本 / 视觉圣经 → 角色三视图 + 场景设定图 → 分镜 → 3D 白模布景 → 逐镜:
+    白模参考 → 首帧(需要时加尾帧)→ 视频 → 按序上时间线 → 口播字幕 → 导出。
 
-    ``db`` 让视频模型的默认参数能读到用户自定义的参数声明;官网导出等无库上下文留空,
-    退回内置目录(见 _resolved_video_capabilities)。
+    此前每一镜只有一段文字提示词:构图、机位、人物长相全靠视频模型猜,几镜之间谁也对不上谁。
+    现在一致性和镜头语言各有实物依据:
+
+    - **人物**:每个角色先画一张三视图,之后所有关键帧和参考都带着它;
+    - **场景**:每个场景先画一张设定图;
+    - **构图与机位**:LLM 按分镜搭 3D 白模,每镜一个布景台、一台相机(推拉摇移都在相机轨迹上),
+      后端渲出白模首尾帧和运镜视频,镜头语言从机位轨迹**算出来**进提示词;
+    - **每镜两条路之一**(Seedance 这类模型上两组素材互斥,见 generation/catalog.SOURCE_GROUPS):
+      `keyframes` 先按白模机位画首帧(需要时加尾帧)再出片,构图最稳;`references` 把三视图、
+      设定图、白模帧和运镜视频直接交给视频模型,适合复杂运镜。走哪条由分镜逐镜决定,能选哪几条
+      由视频模型的能力决定(见 VideoPlan.modes)。
+
+    ``db`` 让模型的默认参数能读到用户自定义的参数声明;官网导出等无库上下文留空,退回内置目录。
     """
-
     video_plan = _video_plan(db, video)
+    image_plan = _image_plan(db, image)
+    clip = video_plan.clip_seconds
+    aspect = video_plan.aspect_ratio if video_plan.aspect_ratio in ("16:9", "9:16", "1:1") else "16:9"
+    frame_size = image_plan.frame_sizes.get(aspect, "")
+    image_parameters = {"size": "{{input.frame_size}}"} if frame_size else {}
+    sheet_parameters = {"size": image_plan.sheet_size} if image_plan.sheet_size else {}
+    modes_text = " / ".join(video_plan.modes)
 
     brief_system = """你是资深创意总监和纪录片策划。先把用户给出的主题收敛为全片唯一核心主旨，
 建立清晰的受众收益、叙事因果和可执行视觉母题。不要编造未经输入支持的具体数字、引语、人物经历
@@ -898,56 +1070,169 @@ def full_video_generation_graph(
 的事实。按目标时长拆成首尾连续的叙事节拍：开头尽快建立观看理由，中段用因果而不是信息堆砌推进，
 结尾回收主旨。口播要自然、可说、符合指定语言。只输出符合 JSON Schema 的对象。"""
 
-    visual_system = """你是摄影指导、美术指导和连续性监制。根据创意简报建立可供多个视频片段共享的
-视觉圣经，明确主体、环境、光线、色彩、镜头语言与连续性规则。规则必须具体到视频生成模型可以复用，
-避免空泛风格词；不得要求画面生成字幕、UI、Logo 或水印。只输出符合 JSON Schema 的对象。"""
+    visual_system = """你是摄影指导、美术指导、角色设计和连续性监制。根据创意简报建立全片共享的视觉圣经：
+主体、环境、光线、色彩、镜头语言与连续性规则，规则要具体到生成模型可以复用，避免空泛风格词。
+同时定下**出镜角色**(最多 4 个；appearance 用英文写到能画出三视图的程度：年龄、脸型发型、服装与配色、
+体型、标志性道具)和**场景**(最多 3 个；description 用英文写空间、陈设、材质与光源，给出大致的
+长宽高)。每个角色分一个不同的白模颜色，并在 blockout_legend 里用英文说明颜色与角色的对应。
+style_prompt 是一句英文画风，全片每张图、每段视频都会带上。不得要求画面生成字幕、UI、Logo 或水印。
+只输出符合 JSON Schema 的对象。"""
 
-    storyboard_system = f"""你是导演、摄影指导、分镜师和视频生成提示词工程师。把创意简报拆成连续的
-{video_plan.clip_seconds} 秒镜头。每镜必须给出精确起止时间、口播、景别、机位、构图、主体动作、光线、色彩、声音设计、
-连续性和运镜。运镜不得只写“推进/环绕”：必须写明镜头从哪里开始、沿什么路径、以何速度移动、
-在哪里结束，以及运动如何服务叙事。所有镜头时间必须首尾相接，不重叠、不留空；首镜建立钩子，
-中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来不得超过 {video_plan.clip_seconds} 秒：
-中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进这一镜，
-听起来会很赶。generation_prompt 使用英文，能独立交给视频模型，完整复述
-主体、环境、风格、镜头语言、动作节拍、运镜和连续性；主体动作必须能在 {video_plan.clip_seconds} 秒内完成；
-画面中不要生成字幕、UI、Logo 或水印。
+    storyboard_system = f"""你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的
+{clip} 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、
+机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须
+首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来
+不得超过 {clip} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进
+这一镜，听起来会很赶。
+
+每镜选一条出片路径(reference_mode,可选:{modes_text}):keyframes 先按白模机位画首帧再生成,
+构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,
+适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。
+generation_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 {clip} 秒内完成；
+**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。
 transition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合
 JSON Schema 的对象。"""
 
-    # 逐镜的活分两段:**生成**各镜互不依赖,可以同时跑;**上时间线**要按镜头顺序,只能一镜
-    # 一镜来。此前两件事在同一个循环里,于是 N 个镜头的视频生成也只能排着队一个一个等 ——
-    # 视频生成动辄一两分钟一条,这是整条流程最慢的地方。
-    #
-    # 口播有两道闸,因为两件事都可能缺:
-    # · 没选音色 —— 音色是语音合成的必填项,而模板不可能替用户猜一个。
-    #   空着就整段跳过:得到的是默片,而不是一个跑到一半失败的工作流。
-    # · 这一镜没有口播 —— 分镜的 schema 明说"无则写空字符串",纯画面镜头是正常的。
-    #   空文本交给合成会失败,而那一镜失败会拖垮整轮循环。
+    set_system = f"""你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。
+输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。
+
+坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。第 n 镜(shot_number = n)的布景台
+整体放在 x = n*40 附近(台与台之间互不干扰)，台内的每一个物体和这一镜相机的 position / target 都要把
+x 加上 n*40。
+
+每个布景台：
+- 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*40,0,0]，
+  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。
+- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。
+- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;
+  color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。
+  id 写成 "<角色id>-<n>"。
+- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们。
+
+每镜一台相机：kind="camera",id="cam-<n>";position 是起始机位,target 是起始看向点(一般是主体的胸口
+或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,
+35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,
+仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,
+中景 1.5~2.5 米,全景 3~5 米)。
+运镜写在相机的 track 上：static 不写 track;其余至少两档 {{time:0,...}} 和 {{time:{clip},...}}
+(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,
+跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。
+
+shots:每镜一条 {{id:"shot-<n>", name:"镜头 <n>", duration:{clip}, aspect:画幅, easing:"smooth",
+camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、
+高度角、强度(2~5)、色温和软硬;preset 写 "custom"。background 写 "#20242c",ambient 写 1.5。
+只输出符合 JSON Schema 的对象。"""
+
+    frame_prompt_tail = (
+        " Reference images: the first one is a grey 3D blockout of this exact shot — match its camera angle, lens, "
+        "framing, horizon line and the placement of the coloured mannequins exactly ({{input.legend}}); the "
+        "mannequins are stand-ins, render them as the real characters. The character turnaround sheets fix each "
+        "character's face, hair, outfit and proportions; the location concept art fixes the set. Only the characters "
+        "described above appear. {{input.style}}"
+    )
+
     generate_body = {
         "nodes": [
             {
+                "id": "render_blockout",
+                "type": "scene_render",
+                "name": {"zh": "渲染本镜白模参考", "en": "Render this shot's blockout"},
+                "position": {"x": 80, "y": 140},
+                "config": {
+                    "scene_id": "{{input.scene_id}}",
+                    "shot_id": "shot-{{loop.item.shot_number}}",
+                    #: 静帧给首尾帧那条路,运镜视频给参考那条路。两样都渲:运镜视频也是给人检查机位的。
+                    "render": "both",
+                    "project_id": "{{input.project_id}}",
+                },
+            },
+            {
+                "id": "is_keyframes",
+                "type": "condition",
+                "name": {"zh": "这一镜走首尾帧吗", "en": "Does this shot use keyframes?"},
+                "position": {"x": 390, "y": 60},
+                "config": {"left": "{{loop.item.reference_mode}}", "op": "equals", "right": "keyframes"},
+            },
+            {
+                "id": "paint_first_frame",
+                "type": "ai_generate",
+                "name": {"zh": "按白模机位画首帧", "en": "Paint the first frame on the blockout"},
+                "position": {"x": 700, "y": 60},
+                "config": {
+                    "provider": image.provider,
+                    "provider_profile_id": image.profile_id,
+                    "model": image.model,
+                    "kind": "image",
+                    "prompt": "{{loop.item.first_frame_prompt}}" + frame_prompt_tail,
+                    "parameters": image_parameters,
+                    "source_assets": [
+                        "{{render_blockout.first_frame_asset_id}}:reference_image",
+                        "{{input.sheets}}",
+                        "{{input.locations}}",
+                    ],
+                },
+            },
+            {
+                "id": "needs_last_frame",
+                "type": "condition",
+                "name": {"zh": "这一镜要尾帧吗", "en": "Does this shot need a last frame?"},
+                "position": {"x": 1010, "y": 60},
+                "config": {"left": "{{loop.item.last_frame_prompt}}", "op": "not_empty"},
+            },
+            {
+                "id": "paint_last_frame",
+                "type": "ai_generate",
+                "name": {"zh": "按白模机位画尾帧", "en": "Paint the last frame on the blockout"},
+                "position": {"x": 1320, "y": 60},
+                "config": {
+                    "provider": image.provider,
+                    "provider_profile_id": image.profile_id,
+                    "model": image.model,
+                    "kind": "image",
+                    "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame "
+                              "is the second reference image — keep characters, wardrobe, lighting and set continuous."
+                              + frame_prompt_tail,
+                    "parameters": image_parameters,
+                    "source_assets": [
+                        "{{render_blockout.last_frame_asset_id}}:reference_image",
+                        "{{paint_first_frame.asset_id}}:reference_image",
+                        "{{input.sheets}}",
+                        "{{input.locations}}",
+                    ],
+                },
+            },
+            {
                 "id": "generate_clip",
                 "type": "ai_generate",
-                "name": {
-                    "zh": f"按分镜生成 {video_plan.clip_seconds} 秒视频片段",
-                    "en": f"Generate the {video_plan.clip_seconds}s clip for this shot",
-                },
-                "position": {"x": 80, "y": 140},
+                "name": {"zh": f"生成 {clip} 秒镜头", "en": f"Generate the {clip}s shot"},
+                "position": {"x": 1320, "y": 260},
                 "config": {
                     "provider": video.provider,
                     "provider_profile_id": video.profile_id,
                     "model": video.model,
                     "kind": "video",
-                    "prompt": "{{loop.item.generation_prompt}}",
+                    "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. "
+                              "Keep every character exactly as in the references. {{input.style}}",
                     "negative_prompt": "{{loop.item.negative_prompt}}",
                     "parameters": video_plan.parameters or {},
+                    #: 两组都接上,由 source_group 逐镜选一组(Seedance 上两组互斥)。没跑的首尾帧是空行,
+                    #: 自然消失;`{{input.sheets}}` 这样的整组引用在运行时摊平。
+                    "source_assets": [
+                        "{{paint_first_frame.asset_id}}:first_frame",
+                        "{{paint_last_frame.asset_id}}:last_frame",
+                        "{{input.sheets}}",
+                        "{{input.locations}}",
+                        "{{render_blockout.first_frame_asset_id}}:reference_image",
+                        "{{render_blockout.video_asset_id}}:reference_video",
+                    ],
+                    "source_group": "{{loop.item.reference_mode}}",
                 },
             },
             {
                 "id": "organize_clip",
                 "type": "asset_update",
                 "name": {"zh": "归档并命名镜头素材", "en": "File and name the shot's asset"},
-                "position": {"x": 390, "y": 140},
+                "position": {"x": 1630, "y": 260},
                 "config": {
                     "asset_ids": "{{generate_clip.asset_id}}",
                     "name": "镜头 {{loop.item.shot_number}}",
@@ -958,26 +1243,33 @@ JSON Schema 的对象。"""
                 "id": "has_voice",
                 "type": "condition",
                 "name": {"zh": "选了配音音色吗", "en": "Was a voice picked?"},
-                "position": {"x": 80, "y": 300},
+                "position": {"x": 80, "y": 420},
                 "config": {"left": "{{input.voice_id}}", "op": "not_empty"},
             },
             {
                 "id": "has_narration",
                 "type": "condition",
                 "name": {"zh": "这一镜有口播吗", "en": "Does this shot have narration?"},
-                "position": {"x": 390, "y": 300},
+                "position": {"x": 390, "y": 420},
                 "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
             },
             {
                 "id": "narrate",
                 "type": "synthesize_speech",
                 "name": {"zh": "合成该镜口播", "en": "Synthesise this shot's narration"},
-                "position": {"x": 700, "y": 300},
+                "position": {"x": 700, "y": 420},
                 # 开始节点里填的是配音库音色的 id,所以引擎是克隆;想用引擎音色,改这里的两格。
                 "config": {"text": "{{loop.item.narration}}", "engine": "clone", "voice": "{{input.voice_id}}"},
             },
         ],
         "edges": [
+            {"id": "shot_blockout_mode", "source": "render_blockout", "target": "is_keyframes"},
+            {"id": "shot_mode_first", "source": "is_keyframes", "target": "paint_first_frame", "branch": "true"},
+            {"id": "shot_first_needs_last", "source": "paint_first_frame", "target": "needs_last_frame"},
+            {"id": "shot_needs_last", "source": "needs_last_frame", "target": "paint_last_frame", "branch": "true"},
+            #: 生成视频只挂在白模之后:首尾帧那两个节点在参考那条路上会被跳过,而它们被引用 ——
+            #: 引用即依赖,生成会等它们落定(跑完或被跳过)再开始。
+            {"id": "shot_blockout_generate", "source": "render_blockout", "target": "generate_clip"},
             {"id": "shot_generate_organize", "source": "generate_clip", "target": "organize_clip"},
             {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "branch": "true"},
             {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "branch": "true"},
@@ -997,7 +1289,7 @@ JSON Schema 的对象。"""
                     "asset_id": "{{loop.item.generate_clip.asset_id}}",
                     "track_id": "{{input.video_track_id}}",
                     "start": 0,
-                    "end": video_plan.clip_seconds,
+                    "end": clip,
                 },
             },
             {
@@ -1016,14 +1308,11 @@ JSON Schema 的对象。"""
                     "sequence_id": "{{input.sequence_id}}",
                     "asset_id": "{{loop.item.narrate.asset_id}}",
                     "track_id": "{{input.audio_track_id}}",
-                    # **放在这一镜画面开始的那一秒**,不是接在上一段口播后面。此前是后者:
-                    # 口播长短不一,第 n 段落在前 n−1 段口播时长之和上,越往后和画面错得越多。
-                    # 用的是画面片段**实际**落下的位置,不是分镜里写的 start_seconds —— 那是
-                    # 模型写的数字,画面按顺序接在前一镜后面,两者不必一致。
+                    # **放在这一镜画面开始的那一秒**,不是接在上一段口播后面。用的是画面片段**实际**
+                    # 落下的位置,不是分镜里写的 start_seconds。
                     "at": "{{append_clip.timeline_start}}",
                     # 不裁(硬裁会把话切掉半句),比镜头长就加速塞进去,最多 1.5 倍。
-                    # 分镜提示词里已经按语速给了字数上限,这一道是兜底。
-                    "max_duration": video_plan.clip_seconds,
+                    "max_duration": clip,
                 },
             },
             {
@@ -1040,6 +1329,44 @@ JSON Schema 的对象。"""
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
     }
+    sheet_body = {
+        "nodes": [{
+            "id": "sheet",
+            "type": "ai_generate",
+            "name": {"zh": "画这个角色的三视图", "en": "Draw this character's turnaround"},
+            "position": {"x": 80, "y": 140},
+            "config": {
+                "provider": image.provider,
+                "provider_profile_id": image.profile_id,
+                "model": image.model,
+                "kind": "image",
+                "prompt": "Character turnaround reference sheet for {{loop.item.name}}: {{loop.item.appearance}}. "
+                          "Three full-body views of the same character side by side — front, side profile, back — "
+                          "identical outfit and proportions, relaxed A-pose, plain white background, soft even studio "
+                          "light, no text, no labels, no borders. {{input.style}}",
+                "parameters": sheet_parameters,
+            },
+        }],
+        "edges": [],
+    }
+    location_body = {
+        "nodes": [{
+            "id": "art",
+            "type": "ai_generate",
+            "name": {"zh": "画这个场景的设定图", "en": "Paint this location's concept art"},
+            "position": {"x": 80, "y": 140},
+            "config": {
+                "provider": image.provider,
+                "provider_profile_id": image.profile_id,
+                "model": image.model,
+                "kind": "image",
+                "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. "
+                          "Wide view of the empty set, no people, no text. {{input.style}}",
+                "parameters": sheet_parameters,
+            },
+        }],
+        "edges": [],
+    }
 
     nodes: list[dict[str, Any]] = [
         {
@@ -1054,14 +1381,15 @@ JSON Schema 的对象。"""
                     "audience": "对该主题感兴趣的大众观众",
                     "tone": "专业、清晰、克制且有电影感",
                     "language": "简体中文",
-                    "aspect_ratio": video_plan.aspect_ratio,
+                    #: 画幅只能是 16:9 / 9:16 / 1:1(3D 白模的镜头只有这三种)。改画幅时把
+                    #: frame_size(关键帧图的尺寸)也改成同比例的一档。
+                    "aspect_ratio": aspect,
+                    "frame_size": frame_size,
                     "resolution": video_plan.resolution,
                     "width": video_plan.width,
                     "height": video_plan.height,
                     "fps": 30,
-                    # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败 ——
-                    # 见循环体里那两道闸。工作区里已经有音色时预填第一个,省掉"我明明有音色
-                    # 却还要去别处把 id 抄过来"这一步。
+                    # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败。
                     "voice_id": voice_id,
                 }
             },
@@ -1119,7 +1447,7 @@ JSON Schema 的对象。"""
         {
             "id": "visual_bible",
             "type": "llm",
-            "name": {"zh": "建立视觉圣经与连续性规则", "en": "Build the visual bible and continuity rules"},
+            "name": {"zh": "定角色、场景与视觉圣经", "en": "Define characters, locations and the visual bible"},
             "position": {"x": 680, "y": 520},
             "config": {
                 "profile_id": chat.profile_id,
@@ -1130,13 +1458,13 @@ JSON Schema 的对象。"""
 {{creative_brief.text}}
 
 画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。
-请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则。""",
+请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。""",
                 "response_format": "json_schema",
                 "json_schema_name": "professional_video_visual_bible",
                 "json_schema": _visual_bible_schema(),
                 "json_schema_strict": "true",
                 "temperature": 0.55,
-                "max_tokens": 4000,
+                "max_tokens": 5000,
             },
         },
         {
@@ -1152,9 +1480,36 @@ JSON Schema 的对象。"""
             },
         },
         {
+            "id": "character_sheets",
+            "type": "loop_foreach",
+            "name": {"zh": "画每个角色的三视图", "en": "Draw every character's turnaround"},
+            "position": {"x": 1040, "y": 620},
+            "config": {
+                "items": "{{visual_bible.json.characters}}",
+                "inputs": {"style": "{{visual_bible.json.style_prompt}}"},
+                "body": sheet_body,
+                #: 每项交出一行 `素材:reference_image` —— 下游把整组一次接进参考图。
+                "output": "{{sheet.asset_id}}:reference_image",
+                "concurrency": 3,
+            },
+        },
+        {
+            "id": "location_art",
+            "type": "loop_foreach",
+            "name": {"zh": "画每个场景的设定图", "en": "Paint every location's concept art"},
+            "position": {"x": 1040, "y": 820},
+            "config": {
+                "items": "{{visual_bible.json.locations}}",
+                "inputs": {"style": "{{visual_bible.json.style_prompt}}"},
+                "body": location_body,
+                "output": "{{art.asset_id}}:reference_image",
+                "concurrency": 3,
+            },
+        },
+        {
             "id": "storyboard",
             "type": "llm",
-            "name": {"zh": "按时间拆解专业脚本与分镜", "en": "Break the script into timed shots"},
+            "name": {"zh": "按时间拆解分镜与机位", "en": "Break the script into timed shots and camera set-ups"},
             "position": {"x": 1040, "y": 300},
             "config": {
                 "profile_id": chat.profile_id,
@@ -1169,30 +1524,73 @@ JSON Schema 的对象。"""
 叙事脚本与节拍：
 {{{{narrative_script.text}}}}
 
-视觉圣经与连续性规则：
+视觉圣经(含角色与场景 id)：
 {{{{visual_bible.text}}}}
 
 成片目标时长：{{{{start.target_duration_seconds}}}} 秒；画幅：{{{{start.aspect_ratio}}}}；
-语言：{{{{start.language}}}}。每个镜头固定 {video_plan.clip_seconds} 秒，镜头数按目标时长除以
-{video_plan.clip_seconds}；若不能整除，向不少于目标时长的最近倍数取整。时间码从 0 开始连续编号。""",
+语言：{{{{start.language}}}}。每个镜头固定 {clip} 秒，镜头数按目标时长除以 {clip}；若不能整除，
+向不少于目标时长的最近倍数取整。时间码从 0 开始连续编号。""",
                 "response_format": "json_schema",
                 "json_schema_name": "professional_timed_storyboard",
-                "json_schema": _storyboard_schema(video_plan.clip_seconds),
+                "json_schema": _storyboard_schema(video_plan),
                 "json_schema_strict": "true",
                 "temperature": 0.65,
-                "max_tokens": 10000,
+                "max_tokens": 12000,
+            },
+        },
+        {
+            "id": "set_design",
+            "type": "llm",
+            "name": {"zh": "设计 3D 白模布景与机位", "en": "Design the 3D blockout sets and cameras"},
+            "position": {"x": 1400, "y": 300},
+            "config": {
+                "profile_id": chat.profile_id,
+                "model": chat.model,
+                "preset": "precise",
+                "system": set_system,
+                "prompt": """视觉圣经(角色身高与白模颜色、场景尺寸)：
+{{visual_bible.text}}
+
+分镜(每镜的场景、出镜角色、站位、景别、机位角度、焦段、运镜与路径)：
+{{storyboard.text}}
+
+画幅：{{start.aspect_ratio}}。请给每个镜头搭一个布景台并放好相机。""",
+                "response_format": "json_schema",
+                "json_schema_name": "blockout_scene",
+                "json_schema": _set_design_schema(),
+                "json_schema_strict": "true",
+                "temperature": 0.2,
+                "max_tokens": 16000,
+            },
+        },
+        {
+            "id": "build_set",
+            "type": "scene_create",
+            "name": {"zh": "搭建 3D 白模场景", "en": "Build the 3D blockout scene"},
+            "position": {"x": 1720, "y": 300},
+            "config": {
+                "name": "{{creative_brief.json.title}} · 白模",
+                "layout": "{{set_design.json}}",
             },
         },
         {
             "id": "generate_shots",
             "type": "loop_foreach",
-            "name": {"zh": "各镜同时生成画面与口播", "en": "Generate every shot's picture and narration"},
-            "position": {"x": 1400, "y": 300},
+            "name": {"zh": "逐镜生成画面与口播", "en": "Generate every shot's picture and narration"},
+            "position": {"x": 2040, "y": 300},
             "config": {
                 "items": "{{storyboard.json.shots}}",
                 "inputs": {
                     "project_id": "{{video_project.project_id}}",
                     "voice_id": "{{start.voice_id}}",
+                    "scene_id": "{{build_set.scene_id}}",
+                    "sheets": "{{character_sheets.results}}",
+                    "locations": "{{location_art.results}}",
+                    "style": "{{visual_bible.json.style_prompt}}",
+                    "legend": "{{visual_bible.json.blockout_legend}}",
+                    "frame_size": "{{start.frame_size}}",
+                    "aspect_ratio": "{{start.aspect_ratio}}",
+                    "resolution": "{{start.resolution}}",
                 },
                 "body": generate_body,
                 # 不写 output:每一项交出那一镜的全部产物(画面、口播)连同分镜本身,
@@ -1206,7 +1604,7 @@ JSON Schema 的对象。"""
             "id": "assemble_timeline",
             "type": "loop_foreach",
             "name": {"zh": "按镜头顺序接上时间线", "en": "Append the shots to the timeline in order"},
-            "position": {"x": 1720, "y": 300},
+            "position": {"x": 2360, "y": 300},
             "config": {
                 "items": "{{generate_shots.results}}",
                 "inputs": {
@@ -1224,12 +1622,10 @@ JSON Schema 的对象。"""
             "id": "narration_subtitles",
             "type": "generate_subtitles",
             "name": {"zh": "把口播做成字幕", "en": "Turn the narration into subtitles"},
-            "position": {"x": 2040, "y": 300},
+            "position": {"x": 2680, "y": 300},
             "config": {
                 "sequence_id": "{{video_project.sequence_id}}",
                 "segments": "{{assemble_timeline.results}}",
-                # 每一项是上一段那一轮的产物:起止取口播**实际**落下的位置(可能被加速过),
-                # 文本取那一镜的口播。没有口播的镜头起止为空,自动跳过。
                 "start_field": "append_narration.timeline_start",
                 "end_field": "append_narration.timeline_end",
                 "text_field": "caption.text",
@@ -1241,24 +1637,24 @@ JSON Schema 的对象。"""
             "id": "export_final",
             "type": "export_sequence",
             "name": {"zh": "合成并导出最终视频", "en": "Compose and export the final video"},
-            "position": {"x": 2360, "y": 300},
+            "position": {"x": 3000, "y": 300},
             "config": {"sequence_id": "{{video_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
             "name": {"zh": "成片完成通知", "en": "Video finished notice"},
-            "position": {"x": 2680, "y": 120},
+            "position": {"x": 3320, "y": 120},
             "config": {
                 "title": "视频已生成：{{creative_brief.json.title}}",
-                "body": "脚本、分镜、视频片段和最终合成均已完成。最终素材 ID：{{export_final.asset_id}}",
+                "body": "脚本、角色三视图、3D 白模、各镜视频和最终合成均已完成。最终素材 ID：{{export_final.asset_id}}",
             },
         },
         {
             "id": "output",
             "type": "output",
             "name": {"zh": "交付完整制作结果", "en": "Hand over the finished production"},
-            "position": {"x": 2680, "y": 480},
+            "position": {"x": 3320, "y": 480},
             "config": {
                 "values": {
                     "title": "{{creative_brief.json.title}}",
@@ -1267,6 +1663,9 @@ JSON Schema 的对象。"""
                     "narrative_script": "{{narrative_script.json}}",
                     "visual_bible": "{{visual_bible.json}}",
                     "storyboard": "{{storyboard.json}}",
+                    "character_sheets": "{{character_sheets.results}}",
+                    "location_art": "{{location_art.results}}",
+                    "blockout_scene_id": "{{build_set.scene_id}}",
                     "shots": "{{generate_shots.results}}",
                     "subtitle_count": "{{narration_subtitles.count}}",
                     "project_id": "{{video_project.project_id}}",
@@ -1281,9 +1680,15 @@ JSON Schema 的对象。"""
         {"id": "brief_narrative", "source": "creative_brief", "target": "narrative_script"},
         {"id": "brief_visual", "source": "creative_brief", "target": "visual_bible"},
         {"id": "brief_project", "source": "creative_brief", "target": "video_project"},
+        {"id": "visual_sheets", "source": "visual_bible", "target": "character_sheets"},
+        {"id": "visual_locations", "source": "visual_bible", "target": "location_art"},
         {"id": "narrative_storyboard", "source": "narrative_script", "target": "storyboard"},
         {"id": "visual_storyboard", "source": "visual_bible", "target": "storyboard"},
-        {"id": "storyboard_generate", "source": "storyboard", "target": "generate_shots"},
+        {"id": "storyboard_set", "source": "storyboard", "target": "set_design"},
+        {"id": "set_build", "source": "set_design", "target": "build_set"},
+        {"id": "build_generate", "source": "build_set", "target": "generate_shots"},
+        {"id": "sheets_generate", "source": "character_sheets", "target": "generate_shots"},
+        {"id": "locations_generate", "source": "location_art", "target": "generate_shots"},
         {"id": "project_generate", "source": "video_project", "target": "generate_shots"},
         {"id": "generate_assemble", "source": "generate_shots", "target": "assemble_timeline"},
         {"id": "assemble_subtitles", "source": "assemble_timeline", "target": "narration_subtitles"},
@@ -1292,7 +1697,7 @@ JSON Schema 的对象。"""
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 5, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 6, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

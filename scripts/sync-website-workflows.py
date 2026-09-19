@@ -29,7 +29,7 @@ from app.domain.workflows.templates import (
 def catalog_files() -> dict[str, str]:
     #: 说明只有一份 —— 后端的模板目录(应用里的模板卡片读的也是它)。这里只补"这一份对应哪张图"。
     graphs = {
-        "full_video_generation": full_video_generation_graph(chat=ModelChoice(), video=ModelChoice()),
+        "full_video_generation": full_video_generation_graph(chat=ModelChoice(), image=ModelChoice(), video=ModelChoice()),
         "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice()),
         # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
         "translated_dub": translated_dub_graph(voice_id=""),

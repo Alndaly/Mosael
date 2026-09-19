@@ -6,42 +6,48 @@
       "en": "Topic to finished video"
     },
     "summary": {
-      "zh": "输入一个主题，生成创意主旨、脚本、视觉方案与分镜，逐镜生成视频并组装导出。各镜同时生成以节省时间；可选添加旁白，每镜口播对齐到它自己的画面并配上字幕。",
-      "en": "Turn a topic into a creative brief, script, visual direction and storyboard, then generate, assemble and export the video. Shots are generated in parallel to save time. Narration is optional; each shot's narration is aligned to its own picture and captioned."
+      "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
+      "en": "Turn a topic into a creative brief, script and visual bible, draw a turnaround sheet for every character and concept art for every location, auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video."
     },
     "requires": {
       "zh": [
         "AI 对话模型",
-        "支持文生视频的模型",
+        "能带参考图出图的图像模型（如 Seedream 4）",
+        "支持首帧或参考素材的视频模型（如 Seedance 2.0）",
         "旁白可选：克隆音色"
       ],
       "en": [
         "Chat model",
-        "Text-to-video model",
+        "Image model that takes reference images (e.g. Seedream 4)",
+        "Video model that takes a first frame or references (e.g. Seedance 2.0)",
         "Optional narration: cloned voice"
       ]
     },
     "stages": {
       "zh": [
         "输入主题",
-        "脚本与视觉方案",
-        "生成分镜",
-        "各镜同时生成",
+        "脚本、角色与视觉圣经",
+        "角色三视图与场景设定图",
+        "分镜与机位",
+        "搭建 3D 白模",
+        "逐镜：白模参考 → 首尾帧 → 视频",
         "按顺序组装并配字幕",
         "导出成片"
       ],
       "en": [
         "Choose a topic",
-        "Script and visual direction",
-        "Storyboard",
-        "Generate shots in parallel",
+        "Script, characters and visual bible",
+        "Character turnarounds and location art",
+        "Storyboard and camera set-ups",
+        "Build the 3D blockout",
+        "Per shot: blockout → keyframes → video",
         "Assemble in order with captions",
         "Export"
       ]
     },
     "author": "Mosael",
-    "version": 5,
-    "nodes": 12,
+    "version": 6,
+    "nodes": 16,
     "download": {
       "zh": "/workflows/full_video_generation.zh.mosael-workflow.json",
       "en": "/workflows/full_video_generation.en.mosael-workflow.json"

@@ -216,16 +216,26 @@ def _middle_of_full_video(fake_node, *, shots, voice_id, project) -> tuple[dict[
 
     graph = full_video_generation_graph(
         chat=ModelChoice(profile_id="c", provider="o", model="m"),
+        image=ModelChoice(profile_id="i", provider="f", model="im"),
         video=ModelChoice(profile_id="v", provider="f", model="vm"),
     )
     wanted = {"generate_shots", "assemble_timeline", "narration_subtitles"}
     fixtures = {
         "storyboard": {"json": {"shots": shots}},
         "video_project": project,
-        "start": {"voice_id": voice_id},
+        "start": {"voice_id": voice_id, "frame_size": "", "aspect_ratio": "16:9", "resolution": "720p"},
+        "build_set": {"scene_id": "scene-1"},
+        "character_sheets": {"results": []},
+        "location_art": {"results": []},
+        "visual_bible": {"json": {"style_prompt": "", "blockout_legend": ""}},
     }
     #: 假节点用 `code` 类型 —— 这三个节点的循环体里都没有它,换掉不会波及被测的部分。
     fake_node("code", lambda db, workflow, config: fixtures[config["fixture"]])
+    #: 白模渲染换成假的:这里测的是生成、上时间线和口播字幕,不是渲染器(它另有 test_scene_render)。
+    fake_node("scene_render", lambda db, workflow, config: {
+        "first_frame_asset_id": "", "last_frame_asset_id": "", "video_asset_id": "",
+        "camera_move": "static", "skipped_models": 0,
+    })
     nodes = [{"id": key, "type": "code", "config": {"fixture": key}} for key in fixtures]
     nodes += [node for node in graph["nodes"] if node["id"] in wanted]
     edges = [edge for edge in graph["edges"] if edge["target"] in wanted and edge["source"] in wanted | set(fixtures)]
@@ -237,7 +247,9 @@ def _assemble_seconds() -> float:
     """每镜多长由模板按视频模型定;从模板里读,不在测试里另写一个数。"""
     from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
 
-    graph = full_video_generation_graph(chat=ModelChoice(), video=ModelChoice(profile_id="v", provider="f", model="vm"))
+    graph = full_video_generation_graph(
+        chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(profile_id="v", provider="f", model="vm")
+    )
     assemble = next(node for node in graph["nodes"] if node["id"] == "assemble_timeline")
     return float(assemble["config"]["body"]["nodes"][0]["config"]["end"])
 
@@ -258,7 +270,8 @@ class Test整片生成的中段:
 
         def fake_generate(db, workflow, config):
             time.sleep(0.02)
-            return {"asset_id": _asset(ws, "video", 20.0, config["prompt"])}
+            #: 提示词后面会补上机位与画风,素材按分镜那段(第一个词)命名。
+            return {"asset_id": _asset(ws, "video", 20.0, config["prompt"].split()[0])}
 
         def fake_speech(db, workflow, config):
             return {"asset_id": _asset(ws, "audio", narration_seconds[config["text"]], config["text"])}

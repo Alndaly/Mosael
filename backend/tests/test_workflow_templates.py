@@ -62,17 +62,27 @@ def _invalid_references(
     return invalid
 
 
+SEEDANCE = ModelChoice(profile_id="video-profile", provider="bytedance", model="doubao-seedance-2-0-260128")
+SEEDREAM = ModelChoice(profile_id="image-profile", provider="bytedance", model="doubao-seedream-4-0-250828")
+CHAT = ModelChoice(profile_id="chat-profile", provider="openai", model="chat-model")
+
+
+def _full_video(**overrides) -> dict[str, Any]:
+    return full_video_generation_graph(**{"chat": CHAT, "image": SEEDREAM, "video": SEEDANCE, **overrides})
+
+
+def _node(graph: dict[str, Any], node_id: str) -> dict[str, Any]:
+    return next(node for node in graph["nodes"] if node["id"] == node_id)
+
+
 def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
-    graph = full_video_generation_graph(
-        chat=ModelChoice(profile_id="chat-profile", provider="openai", model="chat-model"),
-        video=ModelChoice(profile_id="video-profile", provider="fal", model="video-model"),
-    )
+    graph = _full_video()
 
     assert validate_graph(graph) == []
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 5,
+        "template_version": 6,
         "source": "official",
     }
 
@@ -80,14 +90,17 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     for edge in graph["edges"]:
         successors.setdefault(edge["source"], set()).add(edge["target"])
     assert successors["creative_brief"] == {"narrative_script", "visual_bible", "video_project"}
+    #: 角色三视图、场景设定图和分镜都从视觉圣经出发,三视图与设定图并行画。
+    assert successors["visual_bible"] == {"character_sheets", "location_art", "storyboard"}
+    assert successors["storyboard"] == {"set_design"}
+    assert successors["set_design"] == {"build_set"}
     assert successors["export_final"] == {"done_notice", "output"}
 
-    generate = next(node for node in graph["nodes"] if node["id"] == "generate_shots")
-    assemble = next(node for node in graph["nodes"] if node["id"] == "assemble_timeline")
-    for loop in (generate, assemble):
-        body = loop["config"]["body"]
+    for loop_id in ("character_sheets", "location_art", "generate_shots", "assemble_timeline"):
+        body = _node(graph, loop_id)["config"]["body"]
         assert validate_graph(body, require_start=False) == []
         assert _invalid_references(body, virtual_roots={"loop", "input"}) == []
+    generate, assemble = _node(graph, "generate_shots"), _node(graph, "assemble_timeline")
     #: 生成可以同时跑(视频生成是整条流程最慢的一步);上时间线必须一镜接一镜。
     assert generate["config"]["concurrency"] == 3
     assert assemble["config"]["concurrency"] == 1
@@ -96,18 +109,81 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert successors["narration_subtitles"] == {"export_final"}
     organize = next(node for node in generate["config"]["body"]["nodes"] if node["id"] == "organize_clip")
     assert organize["inputs"] == ["asset_ids"]
-    assert any(
-        edge.get("kind") == "data"
-        and edge.get("source") == "generate_clip"
-        and edge.get("source_output") == "asset_id"
-        and edge.get("target") == "organize_clip"
-        and edge.get("target_input") == "asset_ids"
-        for edge in generate["config"]["body"]["edges"]
-    )
-    subtitles = next(node for node in graph["nodes"] if node["id"] == "narration_subtitles")
+    subtitles = _node(graph, "narration_subtitles")
     #: 整片没有口播时交出 0 条,不让一条已经生成完的片子在导出前失败。
     assert subtitles["config"]["allow_empty"] == "yes"
     assert subtitles["config"]["text_field"] == "caption.text"
+
+
+class Test每一镜都有实物参考:
+    """此前每一镜只有一段文字提示词:构图、机位、人物长相全靠视频模型猜,几镜之间谁也对不上谁。"""
+
+    def _body(self, **overrides) -> dict[str, dict[str, Any]]:
+        return {n["id"]: n for n in _node(_full_video(**overrides), "generate_shots")["config"]["body"]["nodes"]}
+
+    def test_每镜先渲白模_视频挂在白模之后(self) -> None:
+        body = self._body()
+        assert body["render_blockout"]["type"] == "scene_render"
+        assert body["render_blockout"]["config"]["shot_id"] == "shot-{{loop.item.shot_number}}"
+        assert "{{render_blockout.camera_move}}" in body["generate_clip"]["config"]["prompt"], "镜头语言从机位轨迹算,进提示词"
+
+    def test_两组素材都接上_由分镜逐镜选一组(self) -> None:
+        clip = self._body()["generate_clip"]["config"]
+        assert clip["source_group"] == "{{loop.item.reference_mode}}"
+        roles = {line.rsplit(":", 1)[1] for line in clip["source_assets"] if ":" in line}
+        assert {"first_frame", "last_frame", "reference_image", "reference_video"} <= roles
+        assert "{{input.sheets}}" in clip["source_assets"], "全部角色的三视图整组接进来"
+
+    def test_首帧按白模机位画_带着三视图和设定图(self) -> None:
+        first = self._body()["paint_first_frame"]["config"]
+        assert first["kind"] == "image" and first["model"] == SEEDREAM.model
+        assert first["source_assets"][0] == "{{render_blockout.first_frame_asset_id}}:reference_image"
+        assert {"{{input.sheets}}", "{{input.locations}}"} <= set(first["source_assets"])
+
+    def test_尾帧接着首帧画(self) -> None:
+        last = self._body()["paint_last_frame"]["config"]
+        assert "{{paint_first_frame.asset_id}}:reference_image" in last["source_assets"]
+
+    def test_角色三视图按角色逐个画_交出整组参考行(self) -> None:
+        sheets = _node(_full_video(), "character_sheets")["config"]
+        assert sheets["items"] == "{{visual_bible.json.characters}}"
+        assert sheets["output"] == "{{sheet.asset_id}}:reference_image"
+
+    def test_布景直接建成_3D_场景(self) -> None:
+        build = _node(_full_video(), "build_set")
+        assert build["type"] == "scene_create"
+        assert _node(_full_video(), "set_design")["config"]["json_schema_name"] == "blockout_scene"
+
+
+class Test分镜能选的路跟着视频模型走:
+    """Seedance 上首尾帧组和参考素材组互斥;不同模型收的参考也不同 —— 分镜只能在模型真收的里面选。"""
+
+    def _shot(self, video: ModelChoice) -> dict[str, Any]:
+        storyboard = _node(_full_video(video=video), "storyboard")
+        return storyboard["config"]["json_schema"]["properties"]["shots"]["items"]["properties"]
+
+    def test_两种都收的模型两条路都能选_还能给尾帧(self) -> None:
+        shot = self._shot(SEEDANCE)
+        assert shot["reference_mode"]["enum"] == ["keyframes", "references"]
+        assert "last_frame_prompt" in shot
+
+    def test_认不出的模型只走首帧(self) -> None:
+        """不猜它收参考素材 —— 首帧生视频是最通用的那条。"""
+        shot = self._shot(ModelChoice(provider="self-hosted", model="my-own-i2v"))
+        assert shot["reference_mode"]["enum"] == ["keyframes"]
+        assert "last_frame_prompt" not in shot
+
+
+def test_布景的形状就是_3D_场景的数据格式() -> None:
+    """布景 LLM 的输出直接交给 scene_create 按 SceneContent 校验 —— 两边的字段必须对得上。"""
+    from app.domain.scene_types import SceneContent, SceneObject, SceneShot
+    from app.domain.workflows.templates import _set_design_schema
+
+    schema = _set_design_schema()
+    assert set(schema["properties"]) <= set(SceneContent.model_fields)
+    obj = schema["properties"]["objects"]["items"]["properties"]
+    assert set(obj) <= set(SceneObject.model_fields)
+    assert set(schema["properties"]["shots"]["items"]["properties"]) <= set(SceneShot.model_fields)
 
 
 def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
@@ -162,10 +238,7 @@ def test_full_video_narration_lands_on_its_own_shot() -> None:
     此前是后者:口播长短不一,第 n 段落在前 n−1 段口播时长之和上,越往后和画面错得越多。
     (实际跑一遍的验证见 test_loop_concurrency_and_full_video_assembly。)
     """
-    graph = full_video_generation_graph(
-        chat=ModelChoice(profile_id="chat-profile", provider="openai", model="chat-model"),
-        video=ModelChoice(profile_id="video-profile", provider="fal", model="video-model"),
-    )
+    graph = _full_video()
     assemble = next(node for node in graph["nodes"] if node["id"] == "assemble_timeline")
     body = assemble["config"]["body"]
     narration = next(node for node in body["nodes"] if node["id"] == "append_narration")
@@ -219,93 +292,52 @@ def test_data_binding_normalization_is_lossless_and_idempotent() -> None:
 
 
 class Test示范工作流要挑得动的模型:
-    """`generate_clip` **只给一段提示词**,所以模型必须能纯文生视频。
+    """三视图和关键帧都要**带一组参考图**出图;每一镜都给首帧或参考素材,不只给一段文字。
+    默认模型不合用时绕开它挑一个合用的;一个都没有就留空(界面会让他去选)。"""
 
-    内置目录里有十几个只声明 image-to-video 的视频模型(seedance-*-image-to-video、
-    wan2.7-i2v 等)。用户的 video 默认模型恰好是其中之一时,示范工作流从第一次运行起就是
-    坏的 —— 而报错发生在跑到那一步之后,离"我只是打开了示范模板"已经很远,没人会往
-    "模板挑错了模型"上想。
-    """
-
-    def test_只会图生视频的模型不该被选中(self) -> None:
-        from app.domain.workflows.templates import _supports_text_to_video
-
-        # 内置目录里真实存在的两类,直接拿它们断言 —— 编一个假模型名会落进"不认识"那条路。
-        # db=None = 纯静态上下文:不点名连接,只看内置目录。
-        assert not _supports_text_to_video(None, ModelChoice(provider="alibaba", model="wan2.7-i2v"))
-        assert _supports_text_to_video(None, ModelChoice(provider="minimax", model="MiniMax-H3"))
-
-    def test_认不出来的模型算能(self) -> None:
-        """用户自建的、ComfyUI 的工作流查不到能力表。落到"不认识"时拿窄名单去拦,
-        会把本来能用的模型挡在外面 —— 见 known_capabilities_for 的说明。"""
-        from app.domain.workflows.templates import _supports_text_to_video
-
-        assert _supports_text_to_video(None, ModelChoice(provider="self-hosted", model="my-own-t2v"))
-        # 但"根本没有模型"不算能:那是空,不是未知。
-        assert not _supports_text_to_video(None, ModelChoice())
-
-    def test_生成节点不喂首帧所以不能用图生视频(self) -> None:
-        """把节点实际的输入摆出来:它只有 prompt / negative_prompt / parameters,
-        没有任何首帧字段。这条测试在有人给 generate_clip 加首帧时会失败 —— 那时候
-        上面挑模型的规矩就该跟着改,而不是让两边悄悄对不上。"""
-        graph = full_video_generation_graph(
-            chat=ModelChoice(provider="p", model="c"),
-            video=ModelChoice(provider="minimax", model="MiniMax-H3"),
-        )
-        # 它在「各镜同时生成」那个循环的 body 里,不是顶层节点。
-        loop = next(n for n in graph["nodes"] if n["id"] == "generate_shots")
-        node = next(n for n in loop["config"]["body"]["nodes"] if n["id"] == "generate_clip")
-        config = node["config"]
-        assert config["prompt"]
-        assert not any(key in config for key in ("first_frame", "image", "asset_id", "first_frame_url"))
-
-
-class Test挑模型走真实的库:
-    """上面几条验的是判断规则,这一条验的是**选择**:默认模型只会图生视频时,
-    真的会绕开它去挑另一个。规则对而选择错,症状和完全没修一模一样。"""
-
-    def _model(self, db, owner: str, vendor: str, model_id: str):
+    def _model(self, db, owner: str, vendor: str, model_id: str, capability: str):
         from app.db.models import ProviderModel, ProviderProfile
 
         profile = ProviderProfile(owner_user_id=owner, vendor=vendor, name=vendor, enabled=True)
         db.add(profile)
         db.flush()
-        row = ProviderModel(
-            provider_profile_id=profile.id, model_id=model_id, enabled=True, capability_ids=["video"]
-        )
+        row = ProviderModel(provider_profile_id=profile.id, model_id=model_id, enabled=True, capability_ids=[capability])
         db.add(row)
         db.flush()
         return row
 
-    def test_默认是图生视频时换一个能文生视频的(self) -> None:
+    def test_判断规则(self) -> None:
+        from app.domain.workflows.templates import _can_shoot_from_references, _can_take_references
+
+        assert _can_take_references(None, SEEDREAM), "Seedream 4 收 14 张参考图"
+        assert not _can_take_references(None, ModelChoice(provider="bytedance", model="doubao-seedream-3-0-t2i-250415")), "只会文生图"
+        assert _can_shoot_from_references(None, SEEDANCE)
+        assert not _can_shoot_from_references(None, ModelChoice()), "没有模型不算能"
+
+    def test_默认图像模型只会文生图时换一个能带参考的(self) -> None:
         from app.core.db import SessionLocal
         from app.domain.provider_defaults import set_default
-        from app.domain.workflows.templates import _text_to_video_model
+        from app.domain.workflows.templates import _reference_image_model
         from tests.util import fresh_client
 
         fresh_client()
-        user_id = "u1"
         with SessionLocal() as db:
-            # 用户把默认设成了只会图生视频的那个。
-            i2v = self._model(db, user_id, "alibaba", "wan2.7-i2v")
-            t2v = self._model(db, user_id, "minimax", "MiniMax-H3")
-            set_default(db, "video", i2v, owner_user_id=user_id)
+            t2i = self._model(db, "u1", "bytedance", "doubao-seedream-3-0-t2i-250415", "image")
+            i2i = self._model(db, "u1", "bytedance", "doubao-seedream-4-0-250828", "image")
+            set_default(db, "image", t2i, owner_user_id="u1")
             db.commit()
+            assert _reference_image_model(db, "u1").model == i2i.model_id
 
-            picked = _text_to_video_model(db, user_id)
-            assert picked.model == t2v.model_id, "只会图生视频的默认模型必须被绕开"
-
-    def test_一个能文生视频的都没有就留空(self) -> None:
-        """留空好过塞一个必然失败的进去:节点上的模型格空着,界面会让他去选。"""
+    def test_一个合用的都没有就留空(self) -> None:
         from app.core.db import SessionLocal
-        from app.domain.workflows.templates import _text_to_video_model
+        from app.domain.workflows.templates import _reference_image_model
         from tests.util import fresh_client
 
         fresh_client()
         with SessionLocal() as db:
-            self._model(db, "u1", "alibaba", "wan2.7-i2v")
+            self._model(db, "u1", "bytedance", "doubao-seedream-3-0-t2i-250415", "image")
             db.commit()
-            assert _text_to_video_model(db, "u1").model == ""
+            assert _reference_image_model(db, "u1").model == ""
 
 
 class Test分镜写了口播就要真的配上:
@@ -315,11 +347,7 @@ class Test分镜写了口播就要真的配上:
 
     def _loops(self, voice_id: str = "v1") -> tuple[dict[str, Any], dict[str, Any]]:
         """(各镜同时生成, 按镜头顺序接上时间线) 两个循环的 config。"""
-        graph = full_video_generation_graph(
-            chat=ModelChoice(provider="p", model="c"),
-            video=ModelChoice(provider="minimax", model="MiniMax-H3"),
-            voice_id=voice_id,
-        )
+        graph = _full_video(voice_id=voice_id)
         by_id = {n["id"]: n for n in graph["nodes"]}
         return by_id["generate_shots"]["config"], by_id["assemble_timeline"]["config"]
 
@@ -376,8 +404,9 @@ class Test分镜写了口播就要真的配上:
         assert placed["append_clip"]["config"]["track_id"] == "{{input.video_track_id}}"
         assert placed["append_clip"]["config"]["asset_id"] == "{{loop.item.generate_clip.asset_id}}"
         # 画面和口播在生成那一轮里是两条互不依赖的支路 —— 口播失败不会拖住画面的顺序。
+        # 画面那条从白模开始(白模 → 首帧/尾帧 → 视频)。
         roots = {n["id"] for n in generate["body"]["nodes"]} - {e["target"] for e in generate["body"]["edges"]}
-        assert {"generate_clip", "has_voice"} <= roots
+        assert {"render_blockout", "has_voice"} <= roots
 
 
 def test_模板里的节点名跟着界面语言走() -> None:
