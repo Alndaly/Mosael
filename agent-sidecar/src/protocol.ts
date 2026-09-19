@@ -233,7 +233,16 @@ export type Event =
   //: 把失败记在最后一条 assistant 消息上),此时工具可能已经调过很多次、副作用已经落库。
   //: 不交出来的话,后端只能把记忆回滚到上一次成功 —— 模型下次醒来时不知道自己做过那些事,
   //: 于是会再做一遍。
-  | { type: "error"; turnId: string | null; message: string; sessionState?: unknown; usage?: Record<string, unknown> }
+  | {
+      type: "error";
+      turnId: string | null;
+      message: string;
+      /** 机器可读原因，避免后端把输出额度耗尽误判成供应商配置错误。 */
+      code?: "output_limit";
+      sessionState?: unknown;
+      usage?: Record<string, unknown>;
+      context?: { tokens: number; window: number };
+    }
   // ── 登录流程 ───────────────────────────────────────────────────────────────
   // pi 要展示给用户的东西(授权链接、设备码、进度)原样转发:`event` 就是 pi 的 AuthEvent,
   // 不在这里翻译成自定义结构 —— 上游加一种事件类型时,前端至少还能拿到原文。

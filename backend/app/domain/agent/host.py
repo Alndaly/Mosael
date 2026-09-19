@@ -1032,14 +1032,17 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             if getattr(exc, "adapter_state", None) is not None:
                 session.adapter_state = exc.adapter_state
             usage = _usage_from_started(turn_started)
-            usage["metering"] = _turn_metering(prompt, "", None)
+            usage["metering"] = _turn_metering(prompt, "", getattr(exc, "usage", None))
             assistant_message = AgentMessage(
                 session_id=session.id,
                 role="assistant",
                 # 说得出原因就说原因 —— 「请稍后重试」对一次超时是错的建议。
                 content=getattr(exc, "human", "") or "智能体执行失败，请稍后重试。",
                 error=str(exc)[:800],
-                payload={"usage": usage},
+                payload={
+                    "usage": usage,
+                    **({"context": exc.context} if getattr(exc, "context", None) else {}),
+                },
             )
             db.add(assistant_message)
             db.flush()
@@ -1058,7 +1061,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                     agent_message_id=assistant_message.id,
                     idempotency_key=f"agent-message:{assistant_message.id}",
                 ) as call:
-                    call.meter(usage["metering"])
+                    call.meter(usage["metering"], raw=getattr(exc, "usage", None) or {})
                     call.mark_failed()
         except Exception as exc:  # worker threads must never die silently
             logger.exception("Agent turn crashed")

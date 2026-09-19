@@ -29,7 +29,7 @@ await build({
   packages: "external",
   ignoreAnnotations: true,
 });
-const { buildModels } = await import(pathToFileURL(outfile).href);
+const { buildModels, outputLimitMessage } = await import(pathToFileURL(outfile).href);
 const source = await readFile(path.join(import.meta.dirname, "..", "src", "pi.ts"), "utf8");
 
 test("reasoning 默认开 —— 否则思考档位两个方向都发不出去", () => {
@@ -64,6 +64,33 @@ test("无效的零窗口不覆盖云端 128K 回退", () => {
     contextWindow: 0,
   });
   assert.equal(model.contextWindow, 128_000);
+});
+
+test("未知模型维持 4K 输出回退", () => {
+  const { model } = buildModels("https://api.example.com/v1", "k", "unknown");
+  assert.equal(model.maxTokens, 4096);
+});
+
+test("已声明思考档位的 128K 模型默认给 16K 输出", () => {
+  const { model } = buildModels("https://api.deepseek.com", "k", "reasoner", {
+    contextWindow: 128_000,
+    thinkingLevelMap: { off: "none", high: "high" },
+  });
+  assert.equal(model.maxTokens, 16_384);
+});
+
+test("推理模型的默认输出不超过上下文四分之一", () => {
+  const { model } = buildModels("http://localhost:11434/v1", "", "reasoner", {
+    contextWindow: 32_000,
+    thinkingLevelMap: { off: null, high: "high" },
+  });
+  assert.equal(model.maxTokens, 8_000);
+});
+
+test("输出额度耗尽不再误报上下文不足", () => {
+  const message = outputLimitMessage("length", "我", 16_384);
+  assert.match(message, /16,384 Token 输出额度/);
+  assert.doesNotMatch(message, /上下文不足|上下文空间不足/);
 });
 
 test("必须走 streamSimple —— 思考档位的翻译只发生在它里面", () => {

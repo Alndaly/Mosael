@@ -353,6 +353,11 @@ Gateway 的边界与安全不变量见
 后端(`backend/app/domain/agent/host.py` 的 `fallback_context_window`)各有一份,**必须一致**——否则前端显示的水位
 和真正触发整理的时机会对不上。两侧由 `contracts/context-meter-cases.json` 钉住。
 
+**输出预算和上下文水位是两件事**:`stopReason=length` 表示本轮 `maxTokens` 已耗尽，推理 token 也计入；
+它不能被解释成上下文窗口已满。目录未声明输出上限时，普通兼容模型保守回退到 4K，声明了思考档位的
+推理模型回退到 16K 且不超过上下文窗口的四分之一。失败事件仍须携带真实 usage 与 context，供消息用量、
+计费和上下文水位展示使用。
+
 **用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(供应商回的 input+output),此后的新消息
 才按 `CHARS_PER_TOKEN = 3.5` 估。纯靠字符估会随对话变长持续跑偏。同一套锚定规则在
 `agent-sidecar/src/compaction.ts` 与 `backend/app/domain/context_meter.py` 各实现一次——前者决定何时
@@ -586,7 +591,7 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
   子进程说的那句话报出来。棘轮:`tests/test_runtime_readiness_is_an_import_probe.py`。
   字幕配音的「原声怎么办」(`domain/voices/original_audio`,
   剪辑台、智能体、工作流三个入口共用,由配音任务收尾时处理)选 `separate` 时只问领域有没有可用
-  引擎,问不到就退回整轨静音。问得到时每个发声的片段走一次剪辑台的「分离音频」,只是放到
+  引擎；问不到就在排队前明确失败，执行中分离失败也原样上报，绝不静默改成整轨静音。问得到时每个发声的片段走一次剪辑台的「分离音频」,只是放到
   音频轨上的换成背景音:画面留在原处,源片段静音,可撤销。**不能**把视频片段直接指向背景音
   素材 —— 视频轨上的纯音频素材既不算画面、也不进混音,成片里就只剩静音。
 - **降噪**([ADR-0017](adr/0017-noise-reduction-is-a-capability.md)),三个引擎:

@@ -71,7 +71,15 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
     else if (result.errorMessage) {
       // 带上 sessionState:这一轮**跑过**,只是结果是错的。丢掉它等于让后端把记忆回滚到
       // 上一次成功,而那几次工具调用的副作用是真的留在库里了。
-      send({ type: "error", turnId, message: result.errorMessage, sessionState: result.sessionState, usage: result.usage });
+      send({
+        type: "error",
+        turnId,
+        message: result.errorMessage,
+        code: result.errorCode,
+        sessionState: result.sessionState,
+        usage: result.usage,
+        context: result.context,
+      });
       return;
     }
     send({

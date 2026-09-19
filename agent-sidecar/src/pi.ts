@@ -18,6 +18,7 @@ import {
 } from "@earendil-works/pi-ai";
 
 import { BackendCredentialStore } from "./credentials.js";
+import type { RunTurnRequest } from "./protocol.js";
 // 规范入口(不是 `/compat` —— 那是上游标注为「临时、将随 ModelManager 迁移删除」的兼容层)。
 // 这个入口能用的前提是构建带 --ignore-annotations,原因见 package.json 里的说明。
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
@@ -206,6 +207,31 @@ async function prepareContext(
 }
 
 const FALLBACK_MAX_TOKENS = 4096;
+const FALLBACK_REASONING_MAX_TOKENS = 16_384;
+
+/**
+ * 目录没有给 maxTokens 时仍要给模型一份够用的输出预算。
+ *
+ * 对普通兼容端点维持 4K，避免把未知服务直接压垮；只有后端给出了经过验证的思考档位表时，
+ * 才按推理模型处理。推理 token 也计入输出额度，4K 很容易全部花在思考上，最后只剩一个字。
+ * 同时最多占上下文的四分之一，避免小窗口本地模型没有输入空间。
+ */
+export function fallbackMaxTokens(
+  contextWindow: number,
+  thinkingLevelMap?: Record<string, string | null> | null,
+): number {
+  if (!thinkingLevelMap) return FALLBACK_MAX_TOKENS;
+  return Math.max(
+    FALLBACK_MAX_TOKENS,
+    Math.min(FALLBACK_REASONING_MAX_TOKENS, Math.floor(contextWindow / 4)),
+  );
+}
+
+/** stopReason=length 是输出预算耗尽，不等于上下文窗口已满。 */
+export function outputLimitMessage(stopReason: string | undefined, text: string, maxTokens: number): string | undefined {
+  if (stopReason !== "length" || text.trim().length >= 24) return undefined;
+  return `模型已用完本轮 ${maxTokens.toLocaleString("en-US")} Token 输出额度（思考过程也计入），还没来得及形成完整回复。请降低思考强度，或在模型设置中提高「最大输出 Token」后重试。`;
+}
 
 /** A single-provider Models collection targeting an OpenAI-compatible endpoint. */
 export function buildModels(
@@ -223,6 +249,10 @@ export function buildModels(
     developerRole?: boolean | null;
   } = {},
 ): { models: Models; model: Model<"openai-completions"> } {
+  const contextWindow =
+    typeof limits.contextWindow === "number" && limits.contextWindow > 0
+      ? limits.contextWindow
+      : fallbackContextWindow(baseUrl);
   const model: Model<"openai-completions"> = {
     id: modelId,
     name: modelId,
@@ -250,14 +280,11 @@ export function buildModels(
     ...(limits.thinkingLevelMap ? { thinkingLevelMap: limits.thinkingLevelMap } : {}),
     input: limits.vision ? ["text", "image"] : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow:
-      typeof limits.contextWindow === "number" && limits.contextWindow > 0
-        ? limits.contextWindow
-        : fallbackContextWindow(baseUrl),
+    contextWindow,
     maxTokens:
       typeof limits.maxOutputTokens === "number" && limits.maxOutputTokens > 0
         ? limits.maxOutputTokens
-        : FALLBACK_MAX_TOKENS,
+        : fallbackMaxTokens(contextWindow, limits.thinkingLevelMap),
     // Ollama / vLLM / LM Studio 等本地 OpenAI 兼容服务不认 developer role 与 reasoning_effort
     compat: {
       supportsDeveloperRole: limits.developerRole ?? false,
@@ -410,18 +437,8 @@ export interface PiTurnInput {
   systemPrompt: string;
   prompt: string;
   images?: ImageContent[];
-  provider: {
-    baseUrl: string;
-    apiKey: string;
-    contextWindow?: number | null;
-    maxOutputTokens?: number | null;
-    /** 非空 = 订阅计划,用 pi 现成的 Provider(见 SUBSCRIPTION_PROVIDERS)。 */
-    piProvider?: string;
-    /** 订阅计划的当前凭据(pi 的 Credential 原样),随帧发下来省一次网络往返。 */
-    credential?: Credential | null;
-    /** 凭据写回后端时用;订阅计划必填。 */
-    profileId?: string;
-  };
+  /** 直接复用传输协议里的供应商声明，避免新增能力字段时桥两侧再次漂移。 */
+  provider: NonNullable<RunTurnRequest["provider"]>;
   model: string;
   tools: AgentTool[];
   /** 回连 Mosael 的地址与凭证 —— 订阅计划刷新令牌时要写回后端。 */
@@ -449,6 +466,7 @@ export interface PiTurnResult {
    * 上游只会看到一个空的 turn_done,配置错误就变成了"什么都没发生"。
    */
   errorMessage?: string;
+  errorCode?: "output_limit";
   /** True when the run was stopped by abort() rather than finishing on its own. */
   aborted?: boolean;
   /** 本轮结束时的上下文水位(前端画进度条)。 */
@@ -658,14 +676,15 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     .find((message) => (message as { role?: string }).role === "assistant") as
     | { stopReason?: string }
     | undefined;
-  const tinyTruncation = terminal?.stopReason === "length" && full.trim().length < 24;
+  const outputLimit = outputLimitMessage(terminal?.stopReason, full, Number(model?.maxTokens) || FALLBACK_MAX_TOKENS);
   return {
     text: full,
     usage: collectUsage(messages, turnStartIndex),
     sessionState: messages,
     errorMessage: aborted
       ? undefined
-      : failed?.errorMessage ?? (tinyTruncation ? "上下文空间不足，模型回复被截断。请整理上下文后重试。" : undefined),
+      : failed?.errorMessage ?? outputLimit,
+    errorCode: !aborted && !failed?.errorMessage && outputLimit ? "output_limit" : undefined,
     aborted,
     // 每轮都回报水位:前端据此画进度条。窗口按**当前模型**给 —— 换个模型上限就变了,
     // 用一个全局常量会在小窗口模型上显示成"还早得很"。

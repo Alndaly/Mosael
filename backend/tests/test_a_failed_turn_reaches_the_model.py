@@ -110,6 +110,9 @@ def test_sidecar_在错误事件里带上记忆() -> None:
     from pathlib import Path
 
     source = (Path(__file__).resolve().parents[2] / "agent-sidecar" / "src" / "index.ts").read_text()
-    error_send = source.split('type: "error", turnId, message: result.errorMessage', 1)
+    error_send = source.split('message: result.errorMessage', 1)
     assert len(error_send) == 2, "错误事件的发送点变了,这条测试要跟着改"
-    assert "sessionState: result.sessionState" in error_send[1][:200], "错误事件没有带上 sessionState"
+    error_payload = error_send[1][:700]
+    assert "sessionState: result.sessionState" in error_payload, "错误事件没有带上 sessionState"
+    assert "usage: result.usage" in error_payload, "错误事件没有带上真实用量"
+    assert "context: result.context" in error_payload, "错误事件没有带上上下文水位"

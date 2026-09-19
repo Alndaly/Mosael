@@ -232,6 +232,40 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     assert client.get(f"/api/agent/sessions/{session['id']}").json()["status"] == "idle"
 
 
+def test_failed_turn_keeps_real_usage_and_context(monkeypatch) -> None:
+    """失败不代表没产生用量；sidecar 已拿到的计量和水位必须一路进消息。"""
+    real_usage = {
+        "input_tokens": 239,
+        "output_tokens": 4096,
+        "cache_read_tokens": 37760,
+        "total_tokens": 42095,
+    }
+
+    def failing_run_turn(*args, **kwargs):
+        raise adapters.AdapterError(
+            "模型已用完本轮 4,096 Token 输出额度",
+            human="模型已用完本轮 4,096 Token 输出额度",
+            usage=real_usage,
+            context={"tokens": 42183, "window": 128000},
+            code="output_limit",
+        )
+
+    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    client = fresh_client()
+    _configured(client)
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
+    assert host.wait_for_idle_turns()
+
+    messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
+    failed = messages[-1]
+    assert failed["content"] == "模型已用完本轮 4,096 Token 输出额度"
+    assert failed["payload"]["context"] == {"tokens": 42183, "window": 128000}
+    assert failed["payload"]["usage"]["metering"]["output_tokens"] == 4096
+    assert failed["payload"]["usage"]["metering"]["total_tokens"] == 42095
+
+
 def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
     """原因往往就在手边,而气泡上是一句常量 —— 对一次超时来说那还是**错的建议**。
 

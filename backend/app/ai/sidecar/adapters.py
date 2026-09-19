@@ -41,14 +41,27 @@ class AdapterError(RuntimeError):
     `human` 是**这次失败能对用户说的那句话**,有就用它当气泡正文。原因往往就在手边(超过 600 秒
     没返回、模型一个字都没回),而气泡上却是一句「请稍后重试」—— 对一次超时来说,那还是**错的
     建议**:同一个慢模型再跑一遍仍然会超时。拿不到人话时(比如只有 sidecar 的 stderr)才退回常量。
+
+    `usage` 与 `context` 也属于失败现场。供应商已经完成的推理照样产生用量；丢掉它们会让失败气泡
+    显示成按用户输入字符估出来的几百 Token，并让计费记录与上下文水位同时失真。
     """
 
     def __init__(
-        self, message: str, adapter_state: object | None = None, *, human: str = ""
+        self,
+        message: str,
+        adapter_state: object | None = None,
+        *,
+        human: str = "",
+        usage: dict | None = None,
+        context: dict | None = None,
+        code: str = "",
     ) -> None:
         super().__init__(message)
         self.adapter_state = adapter_state
         self.human = human
+        self.usage = usage
+        self.context = context
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -416,9 +429,19 @@ def _run_pi(
                 # 鉴权失败),给一句可操作的提示;已经跑起来后的失败就只报原始错误。
                 # 失败也可能带着记忆回来(见 AdapterError 的说明)。
                 failed_state = event.get("sessionState")
+                failed_usage = event.get("usage")
+                failed_context = event.get("context")
+                error_code = str(event.get("code") or "")
+                error_kwargs = {
+                    "usage": failed_usage if isinstance(failed_usage, dict) else None,
+                    "context": failed_context if isinstance(failed_context, dict) else None,
+                    "code": error_code,
+                }
+                if error_code == "output_limit":
+                    raise AdapterError(detail, failed_state, human=detail, **error_kwargs)
                 if not saw_tool:
-                    raise AdapterError(f"{detail}\n{_PROVIDER_HINT}", failed_state)
-                raise AdapterError(detail, failed_state)
+                    raise AdapterError(f"{detail}\n{_PROVIDER_HINT}", failed_state, **error_kwargs)
+                raise AdapterError(detail, failed_state, **error_kwargs)
             elif kind == "aborted":
                 aborted = True
     finally:
