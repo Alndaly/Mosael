@@ -87,7 +87,7 @@ class TestDeepFilterNet安装:
         monkeypatch.setattr(dm, "deepfilter_binary_spec", lambda: spec)
 
     def test_哈希对得上才装__装完就绪(self, monkeypatch, runtime) -> None:
-        from app.ai.providers import media_transfer
+        from app.ai import media_transfer
 
         content = b"#!/bin/sh\necho ok\n"
         self._pretend_platform(monkeypatch, runtime, content)
@@ -101,7 +101,7 @@ class TestDeepFilterNet安装:
 
     def test_哈希对不上就拒装__不留半截文件(self, monkeypatch, runtime) -> None:
         """发布页上的文件被换掉时,宁可装不上,也不去运行一个没见过的东西。"""
-        from app.ai.providers import media_transfer
+        from app.ai import media_transfer
 
         self._pretend_platform(monkeypatch, runtime, b"the real one")
         monkeypatch.setattr(media_transfer, "download_to_path", _fake_download(b"something else"))
@@ -112,7 +112,7 @@ class TestDeepFilterNet安装:
         assert list(runtime.MANAGED_DENOISE_ROOT.iterdir()) == [], "校验失败的文件要删掉"
 
     def test_装失败_原因留在状态里(self, monkeypatch, runtime) -> None:
-        from app.ai.providers import media_transfer
+        from app.ai import media_transfer
 
         self._pretend_platform(monkeypatch, runtime, b"the real one")
         monkeypatch.setattr(media_transfer, "download_to_path", _fake_download(b"tampered"))

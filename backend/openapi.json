@@ -8763,6 +8763,7 @@
           "Blender"
         ],
         "summary": "Send",
+        "description": "把场景发进 Blender。GLB 在后端生成(见 bridge.send)—— 不再由浏览器导出上传。",
         "operationId": "send_api_scenes__scene_id__blender_post",
         "parameters": [
           {
@@ -8778,9 +8779,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "multipart/form-data": {
+            "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_send_api_scenes__scene_id__blender_post"
+                "$ref": "#/components/schemas/BlenderSendRequest"
               }
             }
           }
@@ -8912,6 +8913,195 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/blender/agent/inspect": {
+      "get": {
+        "tags": [
+          "Blender"
+        ],
+        "summary": "Agent Inspect",
+        "description": "当前 Blender 场景里有什么。固定脚本,只读。",
+        "operationId": "agent_inspect_api_scenes_blender_agent_inspect_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "instance_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/blender/agent/look": {
+      "get": {
+        "tags": [
+          "Blender"
+        ],
+        "summary": "Agent Look",
+        "description": "把当前 Blender 场景渲成几张图给智能体看。临时改渲染设置,渲完还原。",
+        "operationId": "agent_look_api_scenes_blender_agent_look_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "views",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "title": "Views"
+            }
+          },
+          {
+            "name": "objects",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "title": "Objects"
+            }
+          },
+          {
+            "name": "shading",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "solid",
+              "title": "Shading"
+            }
+          },
+          {
+            "name": "instance_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/blender/agent/import": {
+      "post": {
+        "tags": [
+          "Blender"
+        ],
+        "summary": "Agent Import",
+        "description": "把 Blender 里做好的东西作为一个模型物体加进这个场景。",
+        "operationId": "agent_import_api_scenes__scene_id__blender_agent_import_post",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlenderImportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -9407,6 +9597,89 @@
                 "schema": {
                   "$ref": "#/components/schemas/SceneOut"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/view": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "View",
+        "description": "渲几张图给智能体看。不写素材库、不落盘 —— 只读。",
+        "operationId": "view_api_scenes__scene_id__view_get",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "views",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "title": "Views"
+            }
+          },
+          {
+            "name": "shot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Shot Id"
+            }
+          },
+          {
+            "name": "time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0.0,
+              "title": "Time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -19699,6 +19972,84 @@
         "type": "object",
         "title": "AutopilotRulesBody"
       },
+      "BlenderImportRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "base_revision": {
+            "type": "integer",
+            "title": "Base Revision"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Objects",
+            "default": []
+          },
+          "position": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "instance_id": {
+            "type": "string",
+            "title": "Instance Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "base_revision"
+        ],
+        "title": "BlenderImportRequest"
+      },
+      "BlenderSendRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "instance_id": {
+            "type": "string",
+            "title": "Instance Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "shot_id": {
+            "type": "string",
+            "title": "Shot Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "instance_id",
+          "revision",
+          "shot_id"
+        ],
+        "title": "BlenderSendRequest"
+      },
       "BoardCreate": {
         "properties": {
           "workspace_id": {
@@ -20161,40 +20512,6 @@
           "file"
         ],
         "title": "Body_import_asset_api_assets_import_post"
-      },
-      "Body_send_api_scenes__scene_id__blender_post": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "instance_id": {
-            "type": "string",
-            "title": "Instance Id"
-          },
-          "revision": {
-            "type": "integer",
-            "title": "Revision"
-          },
-          "shot_id": {
-            "type": "string",
-            "title": "Shot Id"
-          },
-          "file": {
-            "type": "string",
-            "contentMediaType": "application/octet-stream",
-            "title": "File"
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "instance_id",
-          "revision",
-          "shot_id",
-          "file"
-        ],
-        "title": "Body_send_api_scenes__scene_id__blender_post"
       },
       "Body_stage_restore_api_settings_data_restore_stage_post": {
         "properties": {

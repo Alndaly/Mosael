@@ -23,7 +23,7 @@ LOWER_LAYERS = ("app.domain", "app.core", "app.media", "app.ai", "app.ai.runtime
 def _modules() -> list[tuple[str, Path]]:
     mods = []
     # 看**当前工作树**而不是 git 索引。新增模块尚未 git add 时正是最该检查分层的时刻；
-    # 旧实现看不见它，会把 `app.ai.providers.media_transfer` 错认成已知父包
+    # 旧实现看不见它，会把 `app.ai.media_transfer` 错认成已知父包
     # `app.ai.providers`，既可能制造假环，也可能漏掉新文件里的真环。
     for path in sorted((BACKEND / APP).rglob("*.py")):
         if "__pycache__" in path.parts:

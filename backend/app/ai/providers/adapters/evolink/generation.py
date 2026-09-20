@@ -42,7 +42,7 @@ from app.ai.providers.contracts.generation import (
 )
 from app.core.http_retry import RetryingClient
 from app.media.image_preview import browser_compatible_image
-from app.ai.providers.media_transfer import download_to_path
+from app.ai.media_transfer import download_to_path
 
 BASE_URL = "https://api.evolink.ai/v1"
 FILES_BASE_URL = "https://files-api.evolink.ai"

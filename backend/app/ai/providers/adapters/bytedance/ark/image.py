@@ -18,7 +18,7 @@ from app.ai.providers.contracts.generation import (
     metering_from_request,
     adapter_http_error,
 )
-from app.ai.providers.media_transfer import download_to_path
+from app.ai.media_transfer import download_to_path
 
 """
 ByteDance Seedream(豆包生图)adapter。

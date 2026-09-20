@@ -141,7 +141,7 @@ def _run_install(engine: str) -> None:
 
 
 def _install_deepfilter() -> Path:
-    from app.ai.providers.media_transfer import download_to_path
+    from app.ai.media_transfer import download_to_path
 
     spec = deepfilter_binary_spec()
     if spec is None:

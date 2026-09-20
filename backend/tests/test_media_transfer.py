@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.ai.providers.media_transfer import download_to_path, trusted_headers_for_url
+from app.ai.media_transfer import download_to_path, trusted_headers_for_url
 
 
 def test_下载凭据只发给明确受信的同源地址() -> None:
@@ -58,7 +58,7 @@ def test_下载跳转到外域后会丢弃凭据(tmp_path: Path, monkeypatch) ->
                 return FakeResponse(status=302, location="https://objects.example/result.mp4")
             return FakeResponse(status=200, body=b"video")
 
-    monkeypatch.setattr("app.ai.providers.media_transfer.RetryingClient", FakeClient)
+    monkeypatch.setattr("app.ai.media_transfer.RetryingClient", FakeClient)
     target = tmp_path / "result.mp4"
     download_to_path(
         "https://api.example/v1/files/1",

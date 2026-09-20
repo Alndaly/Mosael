@@ -21,7 +21,7 @@ from app.ai.providers.contracts.generation import (
     adapter_http_error,
     source_url_values,
 )
-from app.ai.providers.media_transfer import fetch_bytes
+from app.ai.media_transfer import fetch_bytes
 
 """
 OpenAI Images-compatible adapter:

@@ -170,7 +170,7 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         # Implementation,再显式补上共享媒体传输 Seam 和不在 providers 下的 AI 调用方。
         if not is_pkg
     ] + [
-        "app.ai.providers.media_transfer",
+        "app.ai.media_transfer",
         "app.domain.generation.prompt_optimizer",
         "app.domain.workflows.ai_edit",
         "app.domain.analysis.service",

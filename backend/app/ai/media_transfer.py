@@ -1,5 +1,9 @@
 """Safe transfer of provider input/output media across HTTP trust boundaries.
 
+住在 `ai/` 下而不是 `ai/providers/` 下:下载模型权重的运行时(`ai/runtime`)也要用它,而它
+放在 providers 里时,runtime 只能反过来 import providers —— 后端唯一的一处双向依赖就是这么
+来的。这段代码谁都不属于:它是「跨信任边界搬一份媒体」这件事本身。
+
 Provider API clients carry bearer/API-key headers. Generated assets usually live on a
 pre-signed object-storage URL, and user-supplied source URLs may point anywhere. Reusing the
 API client for either leaks credentials (or invalidates the signature). This module is the

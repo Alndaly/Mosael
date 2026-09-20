@@ -15,7 +15,7 @@ from app.ai.providers.contracts.generation import (
     sanitize_adapter_error,
     source_values,
 )
-from app.ai.providers.media_transfer import DownloadedBytes
+from app.ai.media_transfer import DownloadedBytes
 from app.ai.providers.adapters.kuaishou.kling.video import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
 from app.ai.providers.adapters.openai.image import (
     OpenAIImageAdapter,

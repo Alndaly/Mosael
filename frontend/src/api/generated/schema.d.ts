@@ -3096,7 +3096,10 @@ export interface paths {
         /** History */
         get: operations["history_api_scenes__scene_id__blender_get"];
         put?: never;
-        /** Send */
+        /**
+         * Send
+         * @description 把场景发进 Blender。GLB 在后端生成(见 bridge.send)—— 不再由浏览器导出上传。
+         */
         post: operations["send_api_scenes__scene_id__blender_post"];
         delete?: never;
         options?: never;
@@ -3138,6 +3141,66 @@ export interface paths {
         get: operations["project_api_scenes__scene_id__blender__transfer_id__project_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/blender/agent/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agent Inspect
+         * @description 当前 Blender 场景里有什么。固定脚本,只读。
+         */
+        get: operations["agent_inspect_api_scenes_blender_agent_inspect_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/blender/agent/look": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agent Look
+         * @description 把当前 Blender 场景渲成几张图给智能体看。临时改渲染设置,渲完还原。
+         */
+        get: operations["agent_look_api_scenes_blender_agent_look_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}/blender/agent/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Agent Import
+         * @description 把 Blender 里做好的东西作为一个模型物体加进这个场景。
+         */
+        post: operations["agent_import_api_scenes__scene_id__blender_agent_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3260,6 +3323,26 @@ export interface paths {
         put?: never;
         /** Operations */
         post: operations["operations_api_scenes__scene_id__operations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * View
+         * @description 渲几张图给智能体看。不写素材库、不落盘 —— 只读。
+         */
+        get: operations["view_api_scenes__scene_id__view_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6760,6 +6843,41 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** BlenderImportRequest */
+        BlenderImportRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Base Revision */
+            base_revision: number;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Objects
+             * @default []
+             */
+            objects: string[];
+            /** Position */
+            position?: number[] | null;
+            /**
+             * Instance Id
+             * @default
+             */
+            instance_id: string;
+        };
+        /** BlenderSendRequest */
+        BlenderSendRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Instance Id */
+            instance_id: string;
+            /** Revision */
+            revision: number;
+            /** Shot Id */
+            shot_id: string;
+        };
         /** BoardCreate */
         BoardCreate: {
             /** Workspace Id */
@@ -6999,19 +7117,6 @@ export interface components {
             project_id?: string | null;
             /** Name */
             name?: string | null;
-            /** File */
-            file: string;
-        };
-        /** Body_send_api_scenes__scene_id__blender_post */
-        Body_send_api_scenes__scene_id__blender_post: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Instance Id */
-            instance_id: string;
-            /** Revision */
-            revision: number;
-            /** Shot Id */
-            shot_id: string;
             /** File */
             file: string;
         };
@@ -18177,7 +18282,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_send_api_scenes__scene_id__blender_post"];
+                "application/json": components["schemas"]["BlenderSendRequest"];
             };
         };
         responses: {
@@ -18249,6 +18354,108 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_inspect_api_scenes_blender_agent_inspect_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                instance_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_look_api_scenes_blender_agent_look_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                views?: string[];
+                objects?: string[];
+                shading?: string;
+                instance_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_import_api_scenes__scene_id__blender_agent_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlenderImportRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -18591,6 +18798,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SceneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    view_api_scenes__scene_id__view_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                views?: string[];
+                shot_id?: string;
+                time?: number;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -50,9 +50,13 @@ def test_adapter不反向导入公共门面或registry() -> None:
     assert not offenders, f"Adapter 只能依赖 contracts 或共享基础设施:{offenders}"
 
 
-def test_provider根目录只保留公共interface装配和共享下载seam() -> None:
+def test_provider根目录只保留公共interface装配() -> None:
+    """跨信任边界搬媒体的那个 seam 住在 `app/ai/media_transfer.py`,不在这里 ——
+    下载模型权重的 `ai/runtime` 也要用它,放在 providers 下面会逼得 runtime 反过来
+    依赖 providers(后端此前唯一的一处双向依赖)。"""
     actual = {path.name for path in PROVIDERS.glob("*.py")}
-    assert actual == {"__init__.py", "media_transfer.py", "registry.py"}
+    assert actual == {"__init__.py", "registry.py"}
+    assert (PROVIDERS.parent / "media_transfer.py").is_file()
 
 
 def test_adapter根目录按企业或平台分组() -> None:
