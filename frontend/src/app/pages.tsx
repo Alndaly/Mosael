@@ -3,23 +3,27 @@ import React from "react";
 import type { ProjectWithStats, Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import type { StudioView } from "@/components/layout/navLabels";
-import { LoadingState } from "@/components/layout/LoadingState";
-import { AdminView } from "@/features/admin/AdminView";
-import { AiStudio } from "@/features/ai-studio/AiStudio";
-import { BoardsView } from "@/features/boards/BoardsView";
-import { BrowserPoolView } from "@/features/browser-pool/BrowserPoolView";
-import { EditorView } from "@/features/editor/EditorView";
 import { HomeView } from "@/features/home/HomeView";
-import { MediaLibraryView } from "@/features/media/MediaLibraryView";
-import { NotesView } from "@/features/notes/NotesView";
-import { PluginsView } from "@/features/plugins/PluginsView";
-import { PublishView } from "@/features/publish/PublishView";
-import { SchedulerView } from "@/features/scheduler/SchedulerView";
-import { SettingsView } from "@/features/settings/SettingsView";
-import { StatisticsView } from "@/features/statistics/StatisticsView";
-import { WorkflowsView } from "@/features/workflows/WorkflowsView";
 
-// 3D 工作台带着 three.js,首屏不该为它付代价。
+/**
+ * **页面按需加载。** 打开一次素材库,不该先解析工作流的图编辑器、笔记的富文本内核和 3D 的
+ * three.js —— 它们此前全在同一个 4.2 MB 的主包里,每次启动都要解析一遍。
+ *
+ * 只有首屏那一页(home)是直接 import 的:它一定会被渲染,给它加一层 Suspense 只会多一次闪烁。
+ */
+const AdminView = React.lazy(() => import("@/features/admin/AdminView").then((m) => ({ default: m.AdminView })));
+const AiStudio = React.lazy(() => import("@/features/ai-studio/AiStudio").then((m) => ({ default: m.AiStudio })));
+const BoardsView = React.lazy(() => import("@/features/boards/BoardsView").then((m) => ({ default: m.BoardsView })));
+const BrowserPoolView = React.lazy(() => import("@/features/browser-pool/BrowserPoolView").then((m) => ({ default: m.BrowserPoolView })));
+const EditorView = React.lazy(() => import("@/features/editor/EditorView").then((m) => ({ default: m.EditorView })));
+const MediaLibraryView = React.lazy(() => import("@/features/media/MediaLibraryView").then((m) => ({ default: m.MediaLibraryView })));
+const NotesView = React.lazy(() => import("@/features/notes/NotesView").then((m) => ({ default: m.NotesView })));
+const PluginsView = React.lazy(() => import("@/features/plugins/PluginsView").then((m) => ({ default: m.PluginsView })));
+const PublishView = React.lazy(() => import("@/features/publish/PublishView").then((m) => ({ default: m.PublishView })));
+const SchedulerView = React.lazy(() => import("@/features/scheduler/SchedulerView").then((m) => ({ default: m.SchedulerView })));
+const SettingsView = React.lazy(() => import("@/features/settings/SettingsView").then((m) => ({ default: m.SettingsView })));
+const StatisticsView = React.lazy(() => import("@/features/statistics/StatisticsView").then((m) => ({ default: m.StatisticsView })));
+const WorkflowsView = React.lazy(() => import("@/features/workflows/WorkflowsView").then((m) => ({ default: m.WorkflowsView })));
 const SceneStudio = React.lazy(() => import("@/features/scenes/SceneStudio").then((m) => ({ default: m.SceneStudio })));
 
 /** 每个页面渲染时能拿到的东西。页面自己挑要用的那几样。 */
@@ -53,11 +57,7 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
   statistics: (ctx) => <StatisticsView workspace={ctx.workspace} projects={ctx.projects} onOpenProject={ctx.openProject} />,
   media: (ctx) => <MediaLibraryView workspace={ctx.workspace} />,
   notes: (ctx) => <NotesView key={ctx.workspace.id} workspace={ctx.workspace} />,
-  scenes: (ctx) => (
-    <React.Suspense fallback={<LoadingState label={ctx.t("scenesStudioLoading")} />}>
-      <SceneStudio key={ctx.workspace.id} workspace={ctx.workspace} />
-    </React.Suspense>
-  ),
+  scenes: (ctx) => <SceneStudio key={ctx.workspace.id} workspace={ctx.workspace} />,
   boards: (ctx) => <BoardsView workspace={ctx.workspace} />,
   editor: (ctx) => (
     <EditorView

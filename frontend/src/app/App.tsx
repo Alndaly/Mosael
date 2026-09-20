@@ -38,6 +38,7 @@ import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
 import { VoiceDock } from "@/features/agent/VoiceDock";
 import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
@@ -525,6 +526,9 @@ function Studio({
         onCreateProject={() => createProject.mutate()}
         creatingProject={createProject.isPending}
       >
+        {/* 页面按需加载(见 app/pages.tsx),所以渲染出口统一兜一层 —— 每个页面各写一次
+            Suspense 的话,漏写的那一页在首次打开时会直接抛,而不是转一下菊花。 */}
+        <React.Suspense fallback={<LoadingState label={t("pageLoading")} />}>
         {PAGE_RENDERERS[view]({
           workspace,
           project,
@@ -534,6 +538,7 @@ function Studio({
           creatingProject: createProject.isPending,
           t,
         })}
+        </React.Suspense>
         <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}
