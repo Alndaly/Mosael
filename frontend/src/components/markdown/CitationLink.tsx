@@ -1,6 +1,6 @@
 import React from "react";
 import { BookOpen, Globe } from "lucide-react";
-import { canonicalSourceUrl, type Citation } from "./citations";
+import { canonicalSourceUrl, type Citation } from "./links";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export const CitationContext = React.createContext<Map<string, Citation>>(new Map());

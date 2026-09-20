@@ -5,7 +5,7 @@ import { api, assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { gotoRecord } from "@/lib/deepLink";
 import { type NoteSource, noteHref } from "@/api/domains/notes";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { AgentMarkdown } from "@/features/agent/Markdown";
+import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { useNoteStrings } from "./strings";
 
 export function SourceLink({ source, workspaceId }: { source: NoteSource; workspaceId: string }) {

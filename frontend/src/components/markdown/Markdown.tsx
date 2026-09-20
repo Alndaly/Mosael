@@ -3,7 +3,7 @@ import { CodeBlock, CodeBlockCopyButton, Streamdown, type Components } from "str
 
 import { WrapText } from "lucide-react";
 
-import { codeHighlighter } from "@/features/agent/codeHighlighter";
+import { codeHighlighter } from "@/components/markdown/codeHighlighter";
 import { cn } from "@/lib/utils";
 import { CitationLink } from "./CitationLink";
 

@@ -59,7 +59,7 @@ import { AnnotationControls } from "@/features/markers/AnnotationControls";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { canvasInsets } from "@/components/app/fitCanvasViewport";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
-import { useAutosave } from "@/features/boards/useAutosave";
+import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { boardSettlementPatch, itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";

@@ -10,7 +10,7 @@ vi.mock("@/api/client", () => ({ listComments: api.list, addComment: api.add, de
 vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "me" } }) }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ ViewportPortal: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
-vi.mock("@/features/boards/BoardCommentComposer", () => ({ BoardCommentComposer: ({ onSubmit }: { onSubmit: (draft: unknown) => void }) => <button onClick={() => onSubmit({ body: "Review this shot", bodyDocument: { type: "doc" }, mentionedUserIds: [] })}>Submit draft</button> }));
+vi.mock("@/features/collaboration/CommentComposer", () => ({ CommentComposer: ({ onSubmit }: { onSubmit: (draft: unknown) => void }) => <button onClick={() => onSubmit({ body: "Review this shot", bodyDocument: { type: "doc" }, mentionedUserIds: [] })}>Submit draft</button> }));
 
 const comment = { id: "c1", author_id: "me", body: "Existing comment", anchor: { x: 50, y: 60 }, author: { username: "Me" } };
 function Harness() {

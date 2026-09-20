@@ -16,7 +16,7 @@ import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const highlight = vi.fn();
-vi.mock("@/features/agent/codeHighlighter", () => ({
+vi.mock("@/components/markdown/codeHighlighter", () => ({
   codeHighlighter: {
     supportsLanguage: () => true,
     getThemes: () => ({ light: "github-light", dark: "github-dark" }),

@@ -1,11 +1,10 @@
+/** 从这一轮的工具调用里把「它看过哪些来源」提出来 —— 智能体特有,不是通用的 Markdown 能力。 */
+import type { Citation } from "@/components/markdown/links";
+import { canonicalSourceUrl } from "@/components/markdown/links";
+
 import type { AgentTimelineItem } from "./ToolCalls";
 
-export type Citation = { href: string; title: string; label: string; kind: "web" | "note"; excerpt: string };
-export function canonicalSourceUrl(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  if (/^#\/notes\?note=[\w-]+&revision=\d+$/.test(value)) return value;
-  try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null; } catch { return null; }
-}
+/** 工具结果外面裹了几层壳(details.data / result / content[]);这里剥到真正的数据。 */
 function unwrap(value: unknown): unknown {
   if (typeof value === "string") { try { return unwrap(JSON.parse(value)); } catch { return null; } }
   if (!value || typeof value !== "object") return value;
@@ -18,6 +17,7 @@ function unwrap(value: unknown): unknown {
 }
 /** Only structured results from successful source-reading tools earn a source badge.
  * Ordinary assistant-provided links remain ordinary links, never evidence badges. */
+
 export function collectCitations(timeline: AgentTimelineItem[] = []): Map<string, Citation> {
   const found = new Map<string, Citation>();
   for (const item of timeline) {

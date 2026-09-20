@@ -17,7 +17,7 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
+import { useSamplePlayer } from "@/lib/useSamplePlayer";
 import { UploadVoiceDialog } from "@/features/voice/VoiceCreationDialogs";
 import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/features/settings/ui";
 

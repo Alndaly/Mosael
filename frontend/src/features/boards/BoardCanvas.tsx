@@ -1,5 +1,5 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
-import { CommentCard } from "./CommentCard";
+import { CommentCard } from "@/features/collaboration/CommentCard";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
 import { useQueries } from "@tanstack/react-query";
@@ -50,7 +50,7 @@ import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
-import { BoardCommentComposer, type CommentDraft } from "@/features/boards/BoardCommentComposer";
+import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
@@ -1273,7 +1273,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                   <MessageSquare size={13} />
                 </button>
                 <div className="-ml-3.5 -translate-y-3">
-                  <BoardCommentComposer
+                  <CommentComposer
                     members={members}
                     onCancel={() => setDraftAnchor(null)}
                     onSubmit={async (draft) => {

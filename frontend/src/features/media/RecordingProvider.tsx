@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { importAsset } from "@/api/client";
-import { Recorder } from "@/features/editor/Recorder";
+import { Recorder } from "./Recorder";
 
 type RecordingDestination = {
   projectId?: string;

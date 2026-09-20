@@ -16,9 +16,10 @@ import { describe, expect, it } from "vitest";
  *   · 只有 min-height、内容多了自己长高的编辑器 → **不挂**(它根本没有可滚的东西)
  *   · 面板外框、内边距、工具行、按钮 → **不挂**
  *
- * 评论输入框那条更早的用例(BoardCommentComposer.dom.test.tsx「触控板滚动经过评论编辑器时
+ * 评论输入框那条更早的用例(CommentComposer.dom.test.tsx「触控板滚动经过评论编辑器时
  * 继续交给画布平移」)先定下了这个规矩,这条把它扩到画布上其余的浮层。
  */
+/** 画布上的浮层不止长在这个目录里 —— 评论那几块归协作域(画板和工作流两个画布都用它)。 */
 const read = (name: string) => readFileSync(join(import.meta.dirname, name), "utf8");
 
 /** 组件根节点那一行的类名(cn(CANVAS_WINDOW_SURFACE_CLASS, "…") 里的字面量部分)。 */
@@ -32,8 +33,8 @@ describe("画布浮层与滚轮", () => {
     "NoteComposer.tsx",
     "AudioComposer.tsx",
     "TrimComposer.tsx",
-    "CommentCard.tsx",
-    "BoardCommentComposer.tsx",
+    "../collaboration/CommentCard.tsx",
+    "../collaboration/CommentComposer.tsx",
   ];
 
   for (const name of panels) {
@@ -54,7 +55,7 @@ describe("画布浮层与滚轮", () => {
 
   it("真的会滚的那两处仍然挂着", () => {
     // 少了这两处,用户在评论正文里滚动会把整张画布拖走 —— 反向的同一个毛病。
-    expect(read("CommentCard.tsx")).toMatch(/nowheel max-h-64 overflow-y-auto/);
+    expect(read("../collaboration/CommentCard.tsx")).toMatch(/nowheel max-h-64 overflow-y-auto/);
     expect(read("AudioComposer.tsx")).toMatch(/className="nowheel w-full resize-none/);
   });
 });

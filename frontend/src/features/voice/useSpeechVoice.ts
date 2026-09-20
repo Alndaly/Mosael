@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getTtsConfig, listTtsEngines, listTtsModels, listTtsVoices, listVoices } from "@/api/client";
-import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
+import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { speechEngineChoices } from "@/features/voice/speechEngines";
 
 /** 合成请求里「谁来念」那几个字段。/voices/{id}/synthesize、/tts/synthesize、字幕配音收的都是它。 */

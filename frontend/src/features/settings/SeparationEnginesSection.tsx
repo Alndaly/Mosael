@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
-import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
+import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 
 /**
  * Settings → 人声/背景音分离引擎(ADR-0016)。

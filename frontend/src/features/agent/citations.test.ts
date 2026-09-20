@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { canonicalSourceUrl, collectCitations } from "./citations";
-import type { AgentTimelineItem } from "./ToolCalls";
+import { canonicalSourceUrl } from "@/components/markdown/links";
+import { collectCitations } from "@/features/agent/citations";
+import type { AgentTimelineItem } from "@/features/agent/ToolCalls";
 const tool = (name: string, result: unknown, status: "done" | "error" = "done"): AgentTimelineItem => ({type: "tool", tool: {id: name, name, result, status}});
 describe("source citations", () => {
   it("only promotes successful source tool results, with pi and MCP envelopes", () => {

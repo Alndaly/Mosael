@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import type { ComposerChip } from "@/features/agent/ComposerChips";
+import type { ComposerChip } from "@/lib/composerChip";
 import { useNoteStrings } from "./strings";
 
 export function useNoteAttachments(workspaceId: string) {

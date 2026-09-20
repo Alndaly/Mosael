@@ -4,7 +4,7 @@ import { FileText, Music } from "lucide-react";
 import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
-import type { ComposerChip } from "@/features/agent/ComposerChips";
+import type { ComposerChip } from "@/lib/composerChip";
 import { toast } from "sonner";
 
 /**

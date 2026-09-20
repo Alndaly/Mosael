@@ -4,7 +4,7 @@ import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music } 
 
 import { api, assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { AgentMarkdown } from "@/features/agent/Markdown";
+import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
@@ -14,8 +14,8 @@ import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
-import { CitationContext } from "./CitationLink";
-import { collectCitations } from "./citations";
+import { CitationContext } from "@/components/markdown/CitationLink";
+import { collectCitations } from "@/features/agent/citations";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
 export type ToolCall = {

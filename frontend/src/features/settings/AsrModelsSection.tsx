@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
-import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
+import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 
 
 

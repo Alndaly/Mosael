@@ -18,18 +18,9 @@ import { cn } from "@/lib/utils";
  * 这里只管**怎么显示**:缩略图、名字、去掉、点开。每一样东西怎么来的、点开该看到什么,
  * 由提供它的那一方在 ComposerChip 里说明(媒体走全局灯箱,文本和笔记走这里的只读弹层)。
  */
-export interface ComposerChip {
-  id: string;
-  label: string;
-  /** 有画面的给缩略图(图片、视频封面);没有的给图标。 */
-  thumbnail?: string;
-  icon: React.ReactNode;
-  /** 自己处理的预览 —— 媒体交给全局灯箱,那里有翻页、Esc 和层级。 */
-  onOpen?: () => void;
-  /** 一段读一读的字(文本附件、笔记正文)。交给下面那个共用的只读弹层,不必各开一个。 */
-  text?: { title: string; body: string };
-  onRemove: () => void;
-}
+import type { ComposerChip } from "@/lib/composerChip";
+
+export type { ComposerChip };
 
 export function ComposerChips({
   chips,

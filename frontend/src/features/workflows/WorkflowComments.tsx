@@ -6,8 +6,8 @@ import { addComment, deleteComment, listComments, listMembers } from "@/api/clie
 import { errorText } from "@/api/errorMessage";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
-import { CommentCard } from "@/features/boards/CommentCard";
-import { BoardCommentComposer, type CommentDraft } from "@/features/boards/BoardCommentComposer";
+import { CommentCard } from "@/features/collaboration/CommentCard";
+import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
 
 type Point = { x: number; y: number; node_id?: string };
@@ -60,7 +60,7 @@ export function useWorkflowComments(workspaceId: string, workflowId: string) {
     })}
     {active && draft && <div className="nodrag nopan nowheel pointer-events-auto absolute z-30 w-72" style={{ left: draft.x, top: draft.y }}
       onPointerDown={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-      <BoardCommentComposer members={members.data?.members ?? []} onSubmit={submit} onCancel={() => setDraft(null)} />
+      <CommentComposer members={members.data?.members ?? []} onSubmit={submit} onCancel={() => setDraft(null)} />
     </div>}
   </ViewportPortal>;
   /** 从讨论侧栏跳过来:进评论模式、把批注显出来、选中它。视口居中归调用方(它才有 RF 实例)。 */

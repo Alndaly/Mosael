@@ -1,6 +1,5 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import React from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -10,15 +9,10 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { BoardCommentComposer, type CommentDraft } from "./BoardCommentComposer";
-import { CommentMembers, commentDocument, commentExtensions, COMMENT_TEXT } from "./commentDocument";
+import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
+import { commentDocument } from "@/features/collaboration/commentDocument";
+import { CommentContent } from "@/features/collaboration/CommentContent";
 
-export function CommentContent({ comment, members }: { comment: CollaborationComment; members: WorkspaceMember[] }) {
-  const editor = useEditor({ extensions: commentExtensions(), content: commentDocument(comment), editable: false,
-    editorProps: { attributes: { class: cn(COMMENT_TEXT, "outline-none") } } });
-  React.useEffect(() => { editor?.commands.setContent(commentDocument(comment), { emitUpdate: false }); }, [editor, comment.body, comment.body_document]);
-  return <CommentMembers.Provider value={members}><EditorContent editor={editor} /></CommentMembers.Provider>;
-}
 
 export function CommentCard({ comment, members, currentUserId, onDelete, onClose }: {
   comment: CollaborationComment; members: WorkspaceMember[]; currentUserId?: string | null;
@@ -40,7 +34,7 @@ export function CommentCard({ comment, members, currentUserId, onDelete, onClose
     onError: error => toast.error(errorText(error)),
   });
   const remove = useMutation({ mutationFn: async () => onDelete?.(), onError: error => toast.error(errorText(error)) });
-  if (editing && own) return <BoardCommentComposer key={comment.id} members={members} initialContent={commentDocument(comment)} editing
+  if (editing && own) return <CommentComposer key={comment.id} members={members} initialContent={commentDocument(comment)} editing
     onSubmit={draft => save.mutateAsync(draft)} onCancel={() => setEditing(false)} />;
   return <div data-board-comment-overlay="" className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan pointer-events-auto w-72 overflow-hidden text-left")}
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>

@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
-import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
+import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 
 
 type ConfigForm = { engine: string; python_path: string; source: string; fish_repo_dir: string; fish_model_dir: string };

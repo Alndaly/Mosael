@@ -3,7 +3,7 @@ import React from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useAutosave } from "@/features/boards/useAutosave";
+import { useAutosave } from "@/lib/useAutosave";
 
 function deferred() {
   let resolve!: () => void;

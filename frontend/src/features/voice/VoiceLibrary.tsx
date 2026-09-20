@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
+import { useSamplePlayer } from "@/lib/useSamplePlayer";
 import { UploadVoiceDialog, VoiceFromSpeakerDialog } from "@/features/voice/VoiceCreationDialogs";
 import { cn } from "@/lib/utils";
 

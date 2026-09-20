@@ -6,7 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
-import { BoardCommentComposer, collectMentionedUserIds } from "./BoardCommentComposer";
+import { CommentComposer, collectMentionedUserIds } from "./CommentComposer";
 
 afterEach(cleanup);
 beforeAll(() => {
@@ -35,7 +35,7 @@ describe("画布评论编辑器", () => {
     const onCanvasPointerDown = vi.fn();
     const view = render(
       <div onPointerDown={onCanvasPointerDown}>
-        <BoardCommentComposer
+        <CommentComposer
           members={[]}
           onSubmit={vi.fn()}
           onCancel={vi.fn()}
@@ -57,7 +57,7 @@ describe("画布评论编辑器", () => {
     const onCanvasWheel = vi.fn();
     const view = render(
       <div onWheel={onCanvasWheel}>
-        <BoardCommentComposer members={[]} onSubmit={vi.fn()} onCancel={vi.fn()} />
+        <CommentComposer members={[]} onSubmit={vi.fn()} onCancel={vi.fn()} />
       </div>,
     );
     const editor = await waitFor(() =>
@@ -73,7 +73,7 @@ describe("画布评论编辑器", () => {
   it("提交结构化正文与纯文本摘要", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const view = render(
-      <BoardCommentComposer
+      <CommentComposer
         members={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}

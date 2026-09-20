@@ -38,7 +38,7 @@ export function collectMentionedUserIds(document: CommentDocument | null): strin
   return found;
 }
 
-export function BoardCommentComposer({
+export function CommentComposer({
   members,
   onSubmit,
   onCancel,

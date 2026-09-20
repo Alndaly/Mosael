@@ -7,7 +7,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CommentContent } from "@/features/boards/CommentCard";
+import { CommentContent } from "@/features/collaboration/CommentContent";
 import { relativeTime } from "@/lib/time";
 
 /**

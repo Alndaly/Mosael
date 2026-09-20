@@ -1,6 +1,6 @@
 import React from "react";
 
-import { codeHighlighter } from "@/features/agent/codeHighlighter";
+import { codeHighlighter } from "@/components/markdown/codeHighlighter";
 import { cn } from "@/lib/utils";
 
 /**

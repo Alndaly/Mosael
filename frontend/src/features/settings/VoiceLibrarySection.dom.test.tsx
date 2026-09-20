@@ -20,7 +20,7 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
 }));
 
-vi.mock("@/features/editor/useSamplePlayer", () => ({
+vi.mock("@/lib/useSamplePlayer", () => ({
   useSamplePlayer: () => ({ playingId: null, toggle: vi.fn() }),
 }));
 

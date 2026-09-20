@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { type DenoiseEngine, installDenoiseEngine, listDenoiseEngines } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
+import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";

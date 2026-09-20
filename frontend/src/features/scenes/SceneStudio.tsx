@@ -79,7 +79,7 @@ import {
   CanvasAgentChat,
   type CanvasAgentMode,
 } from "@/features/agent/CanvasAgentChat";
-import { useAutosave } from "@/features/boards/useAutosave";
+import { useAutosave } from "@/lib/useAutosave";
 import {
   MAX_KEYS,
   frameForObject,
