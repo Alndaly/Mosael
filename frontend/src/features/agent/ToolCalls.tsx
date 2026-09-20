@@ -127,8 +127,14 @@ export function collectAssetIds(value: unknown, out: Set<string> = new Set()): S
   } else if (value && typeof value === "object") {
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
       if (PLAN_KEYS.has(key)) continue;
-      if (/asset_?id/i.test(key) && typeof val === "string" && val.trim()) out.add(val.trim());
-      else collectAssetIds(val, out);
+      //: 单数是一个 id,复数是一串 id。**两种都要认** —— 生成任务的产物正是放在
+      //: `result.asset_ids` 里(domain/generation/runner),而此前只收字符串值,
+      //: 于是数组里那几份刚生成出来的图,恰恰是这块预览最该显示的东西,一张都不显示。
+      if (/asset_?id/i.test(key)) {
+        if (typeof val === "string" && val.trim()) out.add(val.trim());
+        else if (Array.isArray(val)) for (const item of val) if (typeof item === "string" && item.trim()) out.add(item.trim());
+        else collectAssetIds(val, out);
+      } else collectAssetIds(val, out);
     }
   }
   return out;
@@ -136,7 +142,6 @@ export function collectAssetIds(value: unknown, out: Set<string> = new Set()): S
 
 /** 媒体预览卡:按素材 kind 渲染图/视频/音频,让智能体「返回」的素材在聊天里可见可播。 */
 function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePreviewItem[] }) {
-  const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const asset = useQuery({
     queryKey: ["agent-asset", assetId],
@@ -151,13 +156,8 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
       </div>
     );
   }
-  if (asset.isError || !asset.data) {
-    return (
-      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
-        <FileWarning size={13} /> {t("agentMediaMissing")}
-      </div>
-    );
-  }
+  //: 取不到的由 MediaPreviewGrid 统一收成一行,不在这里各画一张灰块(见那边的说明)。
+  if (asset.isError || !asset.data) return null;
   const src = asset.data.kind === "image" ? assetPreviewUrl(asset.data.id) : assetFileUrl(asset.data.id);
   return (
     <figure className="m-0 flex max-w-[240px] flex-col gap-1">
@@ -198,6 +198,7 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
 /** 一个工具结果的全部媒体产出。画廊在这里拼:每张卡各自查自己的素材,
  *  但点开图片时要把**这一批**里的图/视频一起交给灯箱,才能左右翻。 */
 function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
+  const t = useI18n();
   const queries = useQueries({
     queries: assetIds.map((id) => ({
       queryKey: ["agent-asset", id],
@@ -215,11 +216,29 @@ function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
       title: asset.name,
       video: asset.kind === "video",
     }));
+  /**
+   * **取不到的不占一张卡。**
+   *
+   * 聊天记录逐字留着工具结果,而里面的素材 id 是**当时的事实**:后来在素材库里删掉几个,
+   * 那条旧消息下面就挂出一片和成功卡一样大的灰块 —— 一次 42 步的长对话能挂出十几张,
+   * 看上去像"坏了一大片",而它说的只是"这些东西你后来删了"。
+   *
+   * 所以失败的收成一行小字。不完全藏起来:一份素材凭空消失和一份从来没生成出来,
+   * 对着历史记录排查时是两件事。
+   */
+  const resolved = assetIds.filter((_, index) => queries[index].data);
+  const missing = queries.filter((query) => query.isError).length;
+  if (resolved.length === 0 && missing === 0) return null;
   return (
-    <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5 flex flex-wrap gap-2")}>
-      {assetIds.map((id) => (
+    <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5 flex flex-wrap items-center gap-2")}>
+      {resolved.map((id) => (
         <MediaPreview key={id} assetId={id} gallery={gallery} />
       ))}
+      {missing > 0 && (
+        <span className="flex items-center gap-1 text-ui-xs text-muted-foreground">
+          <FileWarning size={12} /> {t("agentMediaDeleted").replace("{n}", String(missing))}
+        </span>
+      )}
     </div>
   );
 }

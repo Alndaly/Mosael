@@ -9,6 +9,13 @@ describe("媒体预览的素材来源", () => {
     expect([...collectAssetIds({ asset_ids: [], results: [{ asset_id: "a2" }] })]).toEqual(["a2"]);
   });
 
+  it("复数的 asset_ids 是一串 id,也要收", () => {
+    // 生成任务把产物放在 result.asset_ids(domain/generation/runner);只收字符串值的话,
+    // 刚生成出来的那几张图一张都不显示 —— 而那正是这块预览存在的理由。
+    expect([...collectAssetIds({ asset_ids: ["a1", "a2"] })]).toEqual(["a1", "a2"]);
+    expect([...collectAssetIds({ result: { asset_ids: ["a3"] }, asset_id: "a4" })]).toEqual(["a3", "a4"]);
+  });
+
   it("工作流图里的不收 —— 那是计划,不是这次碰过的媒体", () => {
     const workflow = {
       name: "主题自动成片",
