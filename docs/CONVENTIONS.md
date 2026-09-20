@@ -20,9 +20,11 @@
   `sm`/`icon-sm` 32px、`default`/`icon` 36px、`lg` 40px。缺一档就往 `buttonVariants` 里加一档 ——
   就地写 `h-7 w-7` 盖住 `size="icon"` 的代价是漏一处就露 8px,智能体输入框栽过这一下。
   棘轮:`components/ui/buttonScale.test.ts`,一次性尺寸列在它的 `GRANDFATHERED` 里。
-- 设置页只保留页面主面板这一层容器。section 使用 `features/settings/ui.tsx` 的平面
-  `SettingsGroup`,相邻 section 由 `SettingsSectionStack` 插入 `Separator`;同类数据行使用
-  `SettingsList` 的分割线,不要给每个 section、每一行再套圆角边框和背景。输入控件、可选择卡片、
+- 设置页只保留页面主面板这一层容器。section 使用 `components/settings/settings-layout.tsx` 的平面
+  `SettingsGroup`(设置、插件、定时任务、管理四页共用),相邻 section 之间那条线由
+  `SettingsSectionStack` 用**相邻兄弟选择器**画在后一节身上 —— 不插独立元素:此前是「index > 0
+  就插一条」,于是一个只走 portal 的孩子(AlertDialog)就能让页面末尾多出一条底下什么都没有的线。
+  同类数据行使用 `SettingsList` 的分割线,不要给每个 section、每一行再套圆角边框和背景。输入控件、可选择卡片、
   独立状态面板等确实需要交互或语义边界的元素可以保留边框。
 - **停靠的栏之间只有一条 1px 分割线,没有缝。** 可拖宽的栏用 `lib/useResizableSidebar`
   (`useResizableSidebar` / `useSidePanels` / `HANDLE_COLUMN` + `handleOffset`),拖柄压在那条线的

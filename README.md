@@ -107,7 +107,7 @@ Complete user guides live at **[mosael.com](https://mosael.com)**; their source 
 | Document | Covers |
 | --- | --- |
 | [CHANGELOG.md](CHANGELOG.md) | User-visible changes by release |
-| [docs/3D_SCENES.md](docs/3D_SCENES.md) | Editable 3D scenes, camera paths, exports and model-independent generation |
+| [docs/3D_SCENES.md](docs/3D_SCENES.md) | 3D scene data shape, the geometry contract shared by three renderers, and the agent's scene/Blender tools |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Bootstrap, domain boundaries, data model, and key conventions |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | Publishing matrix, embedded browser, worker protocol, and troubleshooting |
 | [docs/MCP.md](docs/MCP.md) | Agent tools and confirmation cards |

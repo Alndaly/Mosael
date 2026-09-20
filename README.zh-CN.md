@@ -106,7 +106,7 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 | 文档 | 内容 |
 | --- | --- |
 | [CHANGELOG.md](CHANGELOG.md) | 各版本的用户可见变更 |
-| [docs/3D_SCENES.md](docs/3D_SCENES.md) | 3D 场景、相机轨道、导出与生成参考 |
+| [docs/3D_SCENES.md](docs/3D_SCENES.md) | 3D 场景的数据形状、三份渲染实现共用的几何契约,以及智能体的场景/Blender 工具 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 启动流程、领域边界、数据模型与关键约定 |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | 发布矩阵、内嵌浏览器、worker 协议与排错 |
 | [docs/MCP.md](docs/MCP.md) | 智能体工具与确认卡 |

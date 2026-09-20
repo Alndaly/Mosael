@@ -24,7 +24,13 @@ The **＋** beside **场景中的物体** opens a searchable, grouped menu of pr
 
 Use the gizmo or inspector to edit position, rotation and scale. Units are meters and degrees; snapping uses 0.25 meters, 15 degrees and 0.1 scale steps. Edit object materials and scene background, ambient light, key-light direction, intensity, temperature and softness.
 
-Whole sidebar sections can collapse; properties inside a section remain visible. Drag the panel boundaries to resize them. Objects can be copied, hidden, grouped and deleted. A camera referenced by a shot, or a group containing that camera, cannot be deleted while the shot still uses it.
+Whole sidebar sections can collapse; properties inside a section remain visible. Drag the panel boundaries to resize them, including the left edge of the inspector and of the docked modeling assistant; widths are remembered. Objects can be copied, hidden, grouped and deleted. A camera referenced by a shot, or a group containing that camera, cannot be deleted while the shot still uses it.
+
+## The modeling assistant
+
+The assistant on the right builds the scene with the chat model you selected: describe the space and the objects, and it edits this scene directly. After each step it renders the scene as a few blockout images and **looks at them** — the shot camera's framing plus an overview, a top view and front/side elevations — to catch objects sunk into the floor, floating, overlapping or blocking a doorway, none of which show up in the numbers. Those images are used only within that turn and never enter your media library; models without vision skip this step.
+
+For shapes the primitives cannot express — architectural detail, props, machinery — it can model directly in your Blender; see **Models and Blender** below.
 
 ## One timeline for every object
 
@@ -45,6 +51,8 @@ The single toolbar contains shot selection, add shot, playback, time, insert/del
 
 Lighting information accompanies the prompt. An optional clay reference renders neutral materials to emphasize lighting and composition; it is separate from the normal textured frame. Camera helpers are excluded from frames, videos and GLB exports.
 
+Workflows can use the same scene as a reference: the backend has its own blockout renderer for the reference frames and the camera-move video, and what it draws — geometry, camera interpolation, light direction — matches what this page shows. It draws blockout only; imported GLB models are skipped and reported.
+
 **导出文件** saves frames, camera previews and models. Preview encoding uses deterministic MP4 frames where supported, with a WebM recording fallback when necessary.
 
 ## Models and Blender
@@ -54,6 +62,8 @@ Import self-contained GLB 2.0 files up to 512 MB or embedded-resource glTF 2.0 u
 Install and enable the local Blender MCP connection using the [plugin guide](/docs/guides/plugins). **Blender** in the toolbar checks the connection, sends a saved scene and its camera tracks, receives changes and downloads the associated `.blend` file. Receiving replaces the current scene as one undoable edit, or creates a separate scene if requested. **从 Blender 获取** in the library imports geometry from the currently open Blender scene without a previous send.
 
 Received geometry is one model, not an object-by-object merge. Associated cameras are sampled to at most 100 keys with linear timing. Keep advanced materials, skeletal animation, physics and native modifiers in the Blender project. Direct import from an arbitrary open Blender scene does not import cameras and reports that limitation. Mosael does not provide sculpting, Boolean modeling or a background Cycles rendering queue.
+
+The modeling assistant can also work in Blender directly: it sends the current scene across (the same path the toolbar button uses, so no browser page has to be open), reads the scene, renders views to look at, runs modeling code, and brings the result back as one model in the current scene. Running code asks for your approval and pushes an undo step first, so you can ⌘Z it in Blender; if approving every step of a long modeling session gets tedious, the autopilot settings have a separate gate for Blender modeling.
 
 ## Saving
 
