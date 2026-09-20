@@ -75,11 +75,13 @@ import {
   importWorkflow,
   listAssets,
   listJobEvents,
+  listWorkflowRuns,
   importAsset,
   listWorkflows,
   runWorkflow,
   updateWorkflow,
   type GenerationOption,
+  type Job,
   type TaskEvent,
   type Workflow,
   type WorkflowGraph,
@@ -165,6 +167,7 @@ import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
+import { boundRunId, RUN_ACTIVE } from "@/features/workflows/boundRun";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 import {
   WORKFLOW_NODE_TYPES,
@@ -1501,10 +1504,27 @@ function WorkflowEditor({
     mutationFn: () => deleteWorkflow(workflow.id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] }),
   });
-  /** 本次运行的 job。留着是为了在画布上实时标状态 —— 运行完不清,方便回看这次跑成什么样;
-   *  再次运行或切换工作流时被顶掉。 */
-  const [runJobId, setRunJobId] = React.useState<string | null>(null);
-  React.useEffect(() => setRunJobId(null), [workflow.id]);
+  /** 自己在这一页点「运行」起的那次。运行完不清,方便回看这次跑成什么样;再次运行或切换工作流
+   *  时被顶掉。 */
+  const [startedJobId, setStartedJobId] = React.useState<string | null>(null);
+  React.useEffect(() => setStartedJobId(null), [workflow.id]);
+  /** 这个工作流最近的几次运行。**不是为了历史面板**,是为了认出**别处发起的**那一次:
+   *
+   *  子工作流是被父流程的 `call_workflow` 起来的(它有自己的 job,见 executors/subworkflow),
+   *  点进它的画布时这一页从没调用过 run,于是画布一个节点状态都没有、没有 loading —— 明明正在跑,
+   *  看着像根本没开始。重开一个正在跑的工作流也是同一回事。
+   *
+   *  所以画布绑的是「自己起的那次 → 否则这个工作流最近的一次运行」。 */
+  const runs = useQuery({
+    queryKey: ["workflow-runs", workflow.id],
+    queryFn: () => listWorkflowRuns(workflow.id),
+    refetchIntervalInBackground: true,
+    // 在跑就跟紧;没在跑也**保持一个慢轮询** —— 父流程可能几分钟后才走到调用这一步,
+    // 而那时我们正开着它的画布等着看。停掉的话这一页永远等不到那次运行出现。
+    refetchInterval: (q) =>
+      ((q.state.data as Job[] | undefined) ?? []).some((one) => RUN_ACTIVE.has(one.status)) ? 2000 : 8000,
+  });
+  const runJobId = React.useMemo(() => boundRunId(startedJobId, runs.data), [startedJobId, runs.data]);
   const runEvents = useQuery({
     queryKey: ["job-events", runJobId],
     queryFn: () => listJobEvents(runJobId ?? ""),
@@ -1524,7 +1544,7 @@ function WorkflowEditor({
   const run = useMutation({
     mutationFn: () => runWorkflow(workflow.id),
     onSuccess: (job) => {
-      setRunJobId(job.id);
+      setStartedJobId(job.id);
       toast.success(t("wfRunQueued"));
       void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
     },
