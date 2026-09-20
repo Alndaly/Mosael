@@ -1,4 +1,5 @@
 import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
+import { assetKeys } from "@/api/queryKeys";
 import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
@@ -893,7 +894,7 @@ export const ToolRow = React.memo(function ToolRow({
       setResult(invocation);
       void qc.invalidateQueries({ queryKey: ["plugin-invocations", instanceId] });
       if (invocation.status === "succeeded" && invocation.output.asset_id) {
-        void qc.invalidateQueries({ queryKey: ["assets", workspaceId] });
+        void qc.invalidateQueries({ queryKey: assetKeys.all(workspaceId) });
       }
     },
   });

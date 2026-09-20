@@ -1,4 +1,5 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
+import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
 import { ArrowUp, Loader2, Sparkles } from "lucide-react";
@@ -72,7 +73,7 @@ export function NoteComposer({
 
   //: `@` 的候选:图片、视频、音频都能引。后端会按类别摊开(图片和视频给画面,音频给转写)——
   //: 只列图片的话,用户明明连得上视频,却 @ 不到它。
-  const library = useQuery({ queryKey: ["assets", workspaceId], queryFn: () => listAssets(workspaceId) });
+  const library = useQuery({ queryKey: assetKeys.list(workspaceId), queryFn: () => listAssets(workspaceId) });
   const candidates = React.useCallback(
     (query: string) => {
       const needle = query.trim().toLowerCase();

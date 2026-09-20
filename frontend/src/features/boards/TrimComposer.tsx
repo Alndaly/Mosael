@@ -1,4 +1,5 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
+import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
 import { Camera, Loader2, Scissors, Volume2, VolumeX } from "lucide-react";
@@ -42,7 +43,7 @@ export function TrimComposer({
   const t = useI18n();
   //: 时长从素材库里查 —— 画布上的项只记着 asset_id,而"拖到哪儿是第几秒"全靠它。
   //: 查不到就不画那条轨(退回填秒数),而不是猜一个:猜错会把长素材截短。
-  const library = useQuery({ queryKey: ["assets", workspaceId], queryFn: () => listAssets(workspaceId) });
+  const library = useQuery({ queryKey: assetKeys.list(workspaceId), queryFn: () => listAssets(workspaceId) });
   const duration = React.useMemo(() => {
     const asset = (library.data ?? []).find((one: Asset) => one.id === assetId);
     const value = Number((asset?.media_info as { duration?: number } | undefined)?.duration);

@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
 
@@ -82,14 +83,14 @@ export function MediaPool({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
       setRenaming(null);
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
     },
   });
   const saveTags = useMutation({
     mutationFn: ({ id, tags }: { id: string; tags: string[] }) => setAssetTags(id, tags),
     onSuccess: () => {
       setEditingTags(null);
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
     },
   });
   const remove = useMutation({
@@ -97,7 +98,7 @@ export function MediaPool({
     onSuccess: () => {
       setDeleting(null);
       setDeleteError(null);
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
     },
     onError: (error) => setDeleteError(String((error as Error).message)),
   });

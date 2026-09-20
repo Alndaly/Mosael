@@ -1,4 +1,5 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
+import { assetKeys } from "@/api/queryKeys";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { documentPrompt } from "./boardDocumentSources";
 import { MODAL_SURFACE } from "@/components/ui/floating";
@@ -554,7 +555,7 @@ export function NodeComposer({
   //: **面板一开就预取**,不等到敲下 @ 才拉。插件是在每次按键时问一次候选的:等到那一刻
   //: 才发请求的话,第一次敲 @ 手上是空的 —— 菜单不出,用户得再多敲一个字它才冒出来。
   const library = useQuery({
-    queryKey: ["assets", workspaceId],
+    queryKey: assetKeys.list(workspaceId),
     queryFn: () => listAssets(workspaceId),
     enabled: slots.length > 0,
   });

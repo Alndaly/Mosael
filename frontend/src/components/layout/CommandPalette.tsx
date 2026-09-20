@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 import {
   Clapperboard,
@@ -87,7 +88,7 @@ export function CommandPalette({
   const assets = useQuery({
     // Same key as the media library — same request. Two keys meant the palette warmed one
     // cache entry and the page read the other, so a deep link landed on an empty list.
-    queryKey: ["assets", workspace.id],
+    queryKey: assetKeys.list(workspace.id),
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
     enabled: open && query.length > 0,
     staleTime: 30_000,

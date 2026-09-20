@@ -1,4 +1,5 @@
 import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
+import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import {
   QueryClient,
@@ -500,7 +501,7 @@ function Studio({
       ).then((settled) => {
         const ok = settled.filter((r) => r.status === "fulfilled").length;
         if (ok) {
-          void qc.invalidateQueries({ queryKey: ["assets", workspace.id] });
+          void qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) });
           toast.success(t("importedAssets").replace("{n}", String(ok)));
         }
         const failed = settled.length - ok;

@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCheck, ShieldAlert, X } from "lucide-react";
 
@@ -91,7 +92,7 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
       void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
       void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "unowned"] });
       void qc.invalidateQueries({ queryKey: ["sequences"] });
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
       void qc.invalidateQueries({ queryKey: ["jobs"] });
       void qc.invalidateQueries({ queryKey: ["workflows"] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs"] });

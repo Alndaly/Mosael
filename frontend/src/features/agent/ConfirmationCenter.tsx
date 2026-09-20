@@ -1,4 +1,5 @@
 import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { assetKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldAlert, X } from "lucide-react";
@@ -32,7 +33,7 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
       void qc.invalidateQueries({ queryKey: ["sequences"] });
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
       void qc.invalidateQueries({ queryKey: ["jobs"] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs"] });
     },

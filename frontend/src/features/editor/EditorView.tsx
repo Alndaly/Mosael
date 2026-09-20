@@ -1,4 +1,5 @@
 import "./editor.css";
+import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
@@ -143,7 +144,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
 
   const assets = useQuery({
-    queryKey: ["assets", workspace.id, project.id],
+    queryKey: assetKeys.list(workspace.id, project.id),
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}&project_id=${project.id}`),
   });
   const sequences = useQuery({
@@ -218,7 +219,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   const uploadAsset = useMutation({
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: project.id, file }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["assets", workspace.id, project.id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) }),
   });
   const createSequence = useMutation({
     mutationFn: () =>
@@ -618,7 +619,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const grabFrameMutation = useMutation({
     mutationFn: () => grabSequenceFrame(sequence!.id, useEditorStore.getState().playhead),
     onSuccess: (asset) => {
-      void qc.invalidateQueries({ queryKey: ["assets", workspace.id, project.id] });
+      void qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) });
       toast.success(t("editorGrabFrameDone"), { description: asset.name });
     },
     onError: (error) => toast.error(t("editorGrabFrameFailed"), { description: (error as Error).message }),
@@ -1046,7 +1047,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           assets={assets.data ?? []}
           onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
           onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
-          onRefreshAssets={() => void qc.invalidateQueries({ queryKey: ["assets", workspace.id, project.id] })}
+          onRefreshAssets={() => void qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) })}
         />
       </section>
       {showInspector &&
@@ -1239,8 +1240,7 @@ function ExportControl({
   const status = jobId ? (job.data?.status ?? "queued") : null;
   React.useEffect(() => {
     if (status === "succeeded") {
-      void qc.invalidateQueries({ queryKey: ["assets", workspaceId, projectId] });
-      void qc.invalidateQueries({ queryKey: ["assets", workspaceId] });
+      void qc.invalidateQueries({ queryKey: assetKeys.all(workspaceId) });
     }
   }, [status, qc, workspaceId, projectId]);
 

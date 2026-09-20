@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Mic, Settings2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
@@ -241,7 +242,7 @@ function RecentAudio({ workspace, source }: { workspace: Workspace; source: stri
   const { locale } = usePreferences();
   // 与素材库同一个缓存键:那边导入/删除,这里跟着变;这里生成完一刷,那边也有。
   const assets = useQuery({
-    queryKey: ["assets", workspace.id],
+    queryKey: assetKeys.list(workspace.id),
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
   });
   const recent = (assets.data ?? [])

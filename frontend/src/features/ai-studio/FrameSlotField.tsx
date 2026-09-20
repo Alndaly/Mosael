@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, Music, Plus, X } from "lucide-react";
 
@@ -50,8 +51,8 @@ function useUpload(workspaceId: string, onDone: (assets: Asset[]) => void) {
       Promise.all(files.map((file) => importAsset({ workspaceId, file, name: file.name }))),
     onSuccess: (assets: Asset[]) => {
       onDone(assets);
-      void qc.invalidateQueries({ queryKey: ["assets", workspaceId] });
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: assetKeys.all(workspaceId) });
+      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
     },
   });
 }

@@ -1,4 +1,5 @@
 import { ACTION_MENU } from "@/components/ui/floating";
+import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -124,7 +125,7 @@ export function HomeView({
   }, [projects, search, sortKey, collection]);
   // Reuse the workspace asset cache. Only project-owned media can illustrate that project.
   const artwork = useQuery({
-    queryKey: ["assets", workspace.id],
+    queryKey: assetKeys.list(workspace.id),
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
     enabled: projects.length > 0,
   });

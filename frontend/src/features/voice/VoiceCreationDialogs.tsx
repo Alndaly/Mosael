@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Mic, Square, Upload, X } from "lucide-react";
 import { toast } from "sonner";
@@ -227,7 +228,7 @@ export function VoiceFromSpeakerDialog({
   const [name, setName] = React.useState("");
   const formId = React.useId();
   const assets = useQuery({
-    queryKey: ["assets", workspace.id, project.id],
+    queryKey: assetKeys.list(workspace.id, project.id),
     queryFn: () => listAssets(workspace.id, project.id),
     enabled: open,
   });

@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { importAsset } from "@/api/client";
@@ -40,7 +41,7 @@ export function RecordingProvider({
     mutationFn: ({ target, file }: { target: ActiveRecordingDestination; file: File }) =>
       importAsset({ workspaceId: target.workspaceId, projectId: target.projectId, file }),
     onSuccess: (_asset, variables) =>
-      queryClient.invalidateQueries({ queryKey: ["assets", variables.target.workspaceId] }),
+      queryClient.invalidateQueries({ queryKey: assetKeys.all(variables.target.workspaceId) }),
   });
 
   const openRecorder = React.useCallback(

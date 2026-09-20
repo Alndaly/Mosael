@@ -1,4 +1,5 @@
 import { LoadingState } from "@/components/layout/LoadingState";
+import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -460,7 +461,7 @@ function CreatePublishDialog({
   const [options, setOptions] = React.useState<Record<string, unknown>>({});
 
   const assets = useQuery({
-    queryKey: ["assets", workspace.id],
+    queryKey: assetKeys.list(workspace.id),
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
     enabled: open,
   });

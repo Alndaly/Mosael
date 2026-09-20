@@ -1,4 +1,5 @@
 import React from "react";
+import { assetKeys } from "@/api/queryKeys";
 import { Music } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -42,7 +43,7 @@ export function AssetPickerDialog({
   const [keyword, setKeyword] = React.useState("");
 
   const assets = useQuery({
-    queryKey: ["assets", workspaceId],
+    queryKey: assetKeys.list(workspaceId),
     queryFn: () => listAssets(workspaceId),
     enabled: open,
   });

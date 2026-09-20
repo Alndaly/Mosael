@@ -1,4 +1,5 @@
 import { LoadingState } from "@/components/layout/LoadingState";
+import { assetKeys } from "@/api/queryKeys";
 import { ACTION_MENU } from "@/components/ui/floating";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
@@ -83,7 +84,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [actionMenuId, setActionMenuId] = React.useState<string | null>(null);
 
   const assets = useQuery({
-    queryKey: ["assets", workspace.id],
+    queryKey: assetKeys.list(workspace.id),
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
   });
   // 多选的状态机是共用的(见 lib/useMultiSelect)—— 素材、发布记录、工作流三处同一份。
@@ -94,7 +95,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     () => (assets.data ?? []).filter((asset) => selectedIds.has(asset.id) && asset.kind === "image"),
     [assets.data, selectedIds],
   );
-  const refresh = () => qc.invalidateQueries({ queryKey: ["assets"] });
+  const refresh = () => qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
 
   // Cmd+K 面板选中素材后跳转到本页并直接打开预览。
   // 那一份还没加载出来时接不住 —— 返回 false,请求留在信箱里,列表到货后再投(见 lib/deepLink)。
@@ -391,7 +392,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         workspace={workspace}
         // 下载跑在后台任务里,完成时素材库要自己刷新 —— 不刷的话新素材要切走再切回来才看得见
         // (配音那条路正是这么被报上来的)。
-        onQueued={() => void qc.invalidateQueries({ queryKey: ["assets"] })}
+        onQueued={() => void qc.invalidateQueries({ queryKey: assetKeys.everywhere() })}
       />
 
       {assets.isPending ? <LoadingState className="h-auto flex-1" /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : (assets.data ?? []).length === 0 ? (

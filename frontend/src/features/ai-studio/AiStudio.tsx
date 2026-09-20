@@ -1,4 +1,5 @@
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -711,7 +712,7 @@ function GenerateWorkspace({
   const succeededCount = (jobs.data ?? []).filter((job) => job.status === "succeeded").length;
   React.useEffect(() => {
     if (succeededCount > 0) {
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     }
