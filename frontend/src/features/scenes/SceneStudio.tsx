@@ -879,14 +879,11 @@ function SceneEditor({
             //: 和「恢复历史版本」走同一条路(update → change):进撤销栈、由自动保存落库。
             //: 接收因此是一次可撤销的编辑,而不是一次绕过编辑器的写库。
             apply={(content) => { update(content); setSelected(null); setTime(0); setPlaying(false); }}
+            //: 只交出「发哪一版」—— GLB 由后端按这个修订生成(domain/scene_render/gltf),
+            //: 所以草稿必须先落库:发的是库里那一份,不是屏幕上这一份。
             prepare={async () => {
-            const snapshot = JSON.stringify(current.current);
-            if (snapshot !== saved.current) throw new Error("请等待场景保存完成后重试。");
-            const sourceRevision = revision.current;
-            const blob = await view.current!.glb();
-            if (snapshot !== JSON.stringify(current.current) || revision.current !== sourceRevision)
-              throw new Error("场景在导出时发生变化，请重新发送。");
-            return { revision: sourceRevision, shotId, blob };
+            if (JSON.stringify(current.current) !== saved.current) throw new Error("请等待场景保存完成后重试。");
+            return { revision: revision.current, shotId };
           }} />
           {/* **「生成素材」从一个步骤变成一个入口。**
               它不是"搭完场景之后的第三步" —— 它是随时可以做的一件事:摆好一个画面就能去生成,

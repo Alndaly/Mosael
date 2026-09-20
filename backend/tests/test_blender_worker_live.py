@@ -85,6 +85,52 @@ def test_look_渲出图片且还原渲染设置(tmp_path) -> None:
     assert all(Path(one["path"]).stat().st_size > 1000 for one in out["images"])
 
 
+def test_发送_把后端生成的场景_连同导入的模型一起摆进_Blender(tmp_path) -> None:
+    """端到端:后端生成 GLB → Blender 里出现同样的物体、分组、镜头;导入的模型挂在它的锚点下。"""
+    from app.domain.scene_render import find_shot
+    from app.domain.scene_render.gltf import write_glb
+    from app.domain.scene_types import SceneContent
+
+    model = tmp_path / "prop.glb"
+    _run(tmp_path, "export", {"objects": [], "output_path": str(model)},
+         setup="bpy.ops.mesh.primitive_cone_add(location=(0, 0, 1)); bpy.context.object.name = 'Prop'")
+
+    content = SceneContent.model_validate({
+        "objects": [
+            {"id": "g", "kind": "group", "name": "展厅", "position": [3, 0, 0]},
+            {"id": "room", "kind": "room", "name": "房间", "parent_id": "g",
+             "parameters": {"width": 6, "height": 3, "depth": 5}},
+            {"id": "m", "kind": "model", "name": "道具", "model_id": "mdl", "position": [-2, 0, 0]},
+            {"id": "cam", "kind": "camera", "position": [0, 1.6, 7], "target": [0, 1.2, 0], "fov": 45},
+        ],
+        "shots": [{"id": "s", "name": "主镜", "camera_id": "cam", "duration": 3}],
+    })
+    scene_glb = tmp_path / "scene.glb"
+    written = write_glb(content, find_shot(content, "s"), scene_glb)
+    assert written["models"] == [{"object_id": "m", "model_id": "mdl"}]
+
+    from app.domain.blender.bridge import shots_with_frames
+
+    snapshot = {"id": "sc", "name": "展厅", "content": {**content.model_dump(mode="json"),
+                                                        "shots": shots_with_frames(content.model_dump(mode="json"))}}
+    out = _run(tmp_path, "send", {
+        "snapshot": snapshot, "shot_id": "s", "transfer_id": "t1", "input_path": str(scene_glb),
+        "models": [{"object_id": "m", "name": "道具", "path": str(model)}],
+        "blend_path": str(tmp_path / "scene.blend"),
+    })
+    assert out["warnings"] == [] and out["camera_count"] == 1
+    assert (tmp_path / "scene.blend").is_file()
+
+    listing = _run(tmp_path, "inspect", {}, setup=(
+        "bpy.ops.wm.open_mainfile(filepath=%r)\n" % str(tmp_path / "scene.blend")
+        + "bpy.context.window.scene = next(s for s in bpy.data.scenes if s.get('mosael_transfer_id') == 't1')"))
+    by_name = {obj["name"]: obj for obj in listing["objects"]}
+    assert by_name["房间"]["parent"] == "展厅"
+    assert by_name["房间"]["dimensions"] == [6.15, 5.15, 3.08], "米制尺寸原样过去(含墙厚)"
+    assert by_name["Prop"]["parent"] == "道具", "导入的模型挂在它的锚点下"
+    assert [o for o in listing["objects"] if o["type"] == "CAMERA"], "镜头成了真正的 Blender 相机"
+
+
 def test_export_只导出点名的物体(tmp_path) -> None:
     setup = CUBE + "\nbpy.ops.mesh.primitive_uv_sphere_add(location=(4, 0, 1)); bpy.context.object.name = 'Ball'"
     target = tmp_path / "model.glb"

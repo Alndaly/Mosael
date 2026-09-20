@@ -48,7 +48,7 @@ function open(apply = vi.fn()) {
         scene={scene}
         pending={false}
         busy={false}
-        prepare={vi.fn(async () => ({ revision: 3, shotId: "shot-1", blob: new Blob() }))}
+        prepare={vi.fn(async () => ({ revision: 3, shotId: "shot-1" }))}
         apply={apply}
         work={vi.fn(async (_label: string, fn: () => Promise<void>) => { await fn(); })}
       />

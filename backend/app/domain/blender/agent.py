@@ -17,12 +17,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import select
-
 from app.core.config import settings
-from app.db.models import PluginInstance
 from app.domain.blender import bridge
-from app.domain.blender.bridge import BlenderConflict, BlenderDomainError, BlenderNotFound, BlenderUnavailable
+from app.domain.blender.bridge import BlenderConflict, BlenderDomainError, BlenderUnavailable
 
 #: 与 worker.LOOK_VIEWS 同一组名字,外加 `camera`(Blender 场景里的活动相机)。
 LOOK_VIEWS = ("overview", "front", "side", "back", "top", "camera")
@@ -31,22 +28,8 @@ LOOK_SHADINGS = ("solid", "rendered")
 LOOK_LIMIT = 4
 
 
-def resolve(db, user, instance_id: str = ""):
-    """这次用哪个 Blender 连接。没指定就用他自己的第一个**可用**连接 —— 多数人只有一个。"""
-    if instance_id:
-        return bridge.connection(db, user, instance_id)
-    rows = db.scalars(select(PluginInstance).where(
-        PluginInstance.owner_user_id == user.id, PluginInstance.package_id == bridge.PACKAGE,
-        PluginInstance.enabled.is_(True))).all()
-    if not rows:
-        raise BlenderNotFound('还没有连接 Blender:在插件页安装并启用「Blender MCP」,并在 Blender 里开启 MCP Add-on。')
-    reasons = []
-    for row in rows:
-        try:
-            return bridge.connection(db, user, row.id)
-        except BlenderDomainError as exc:
-            reasons.append(str(exc))
-    raise BlenderConflict(reasons[0])
+#: 用哪个连接的判断和按钮那条路是同一份(bridge.resolve):智能体不传 instance_id,取第一个可用的。
+resolve = bridge.resolve
 
 
 @contextmanager

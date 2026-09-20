@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from sqlalchemy import select
@@ -44,12 +44,19 @@ def history(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     return bridge.history(get_scene(db, workspace_id, scene_id), user)
 
 
+class BlenderSendRequest(BaseModel):
+    workspace_id: str
+    instance_id: str
+    revision: int
+    shot_id: str
+
+
 @router.post('/{scene_id}/blender')
-def send(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Form(...),
-         instance_id: str = Form(...), revision: int = Form(...), shot_id: str = Form(...), file: UploadFile = File(...)):
-    ensure_workspace_perm(db, user, workspace_id, 'edit')
-    scene = get_scene(db, workspace_id, scene_id)
-    return bridge.send(db, user, scene, instance_id, revision, shot_id, file.file, size=file.size)
+def send(scene_id: str, body: BlenderSendRequest, db: DbSession, user: CurrentUser):
+    """把场景发进 Blender。GLB 在后端生成(见 bridge.send)—— 不再由浏览器导出上传。"""
+    ensure_workspace_perm(db, user, body.workspace_id, 'edit')
+    scene = get_scene(db, body.workspace_id, scene_id)
+    return bridge.send(db, user, scene, body.instance_id, body.revision, body.shot_id)
 
 
 @router.post('/{scene_id}/blender/{transfer_id}/receive')

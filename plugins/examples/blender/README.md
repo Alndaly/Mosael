@@ -30,7 +30,7 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 ## 使用
 
 - **从 Blender 获取**（3D 场景列表页）：把 Blender 里**当前打开的那个场景**取成一个新的 Mosael 场景，不要求先发送过 —— 手上已经有 Blender 工程时从这里进来。只取几何体：Mosael 的镜头要知道「看向哪里」，而那个距离只有从 Mosael 发送过去的相机才带着，任意 Blender 相机无从得知，所以相机不一起取回（有相机会明确提示），镜头在 Mosael 这边重新设计。
-- **发送当前场景**：等待保存完成，将当前可见模型、支持的材质/灯光和全部镜头发到一个独立的 `Mosael · 场景名称` Blender Scene，不清空其他 Scene。选中的镜头成为 Blender 活动相机。
+- **发送当前场景**：等待保存完成，将当前可见模型、材质/灯光和全部镜头发到一个独立的 `Mosael · 场景名称` Blender Scene，不清空其他 Scene。选中的镜头成为 Blender 活动相机。GLB 由**后端**按已落库的那一版生成（不再由浏览器导出上传），所以智能体也能发送——见 `blender_send_scene`。导入的 GLB 模型各自作为文件导入，挂在场景里对应的位置上。
 - 在 Blender 中编辑模型、修改器、材质或相机。也可以让 Mosael 的智能体（建模助手或对话页，模型由你选择）直接在 Blender 里建模，见下一节。
 - **接收 Blender 修改**：读取对应发送记录的 Scene，**更新当前场景**。模型作为一个整体 GLB 导入；相机回传为可编辑的镜头关键帧。它是当前场景上的一次普通改动 —— ⌘Z 可撤销，接收前的那一版也留在版本记录里。
 - **另存为新场景**：想让原场景一个字节都不动时用它，接收结果会去到一个独立的新场景（此前这是唯一的接收方式）。接着用「打开接收的场景」检查模型和镜头，继续走已有的镜头预览、首尾帧及参考视频生成流程。
@@ -45,6 +45,7 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 - `blender_inspect`：列出物体、类型、层级、变换、尺寸、修改器与材质。只读。
 - `blender_look`：自动取景渲几张图（俯瞰 / 正面 / 侧面 / 背面 / 顶视 / 场景相机）作为视觉输入交给模型。`solid` 用 Workbench，约一秒；`rendered` 用 EEVEE 看真实材质。渲染设置临时修改，渲完还原。只读。
 - `blender_execute`：执行模型写的 `bpy` 建模代码——bmesh、修改器、曲线、几何节点、材质都可以用。**走确认卡**：Blender 的 Python 不是沙箱。执行前压一个撤销点，可以在 Blender 里 ⌘Z；代码报错时 traceback 交回给模型，由它修改后重试。自动放行里有独立的「Blender 建模」一档，放开它不会连带放开「不隔离执行代码」。
+- `blender_send_scene`：把 Mosael 场景（白模几何、分组、材质、全部镜头）发进 Blender，和界面上的「发送当前场景」同一条路。
 - `blender_import_to_scene`：把整个 Blender 场景、或按名字挑出的物体（含子物体）作为一个模型物体加进 Mosael 场景。
 
 建模循环是「执行一小步 → 看一眼 → 修正」。模型本身能不能看图决定了第二步是否生效；不支持看图的模型收不到截图，会得到一句说明。

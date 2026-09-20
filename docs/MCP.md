@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **84** 个工具,其中 **22** 个走确认卡、**1** 个停下来等用户作答。
+共 **85** 个工具,其中 **22** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -18,6 +18,7 @@ summaries — never raw internal schemas.
 | `blender_import_to_scene` | 直接执行 | Bring what you modeled in Blender into a Mosael 3D scene as ONE model object. |
 | `blender_inspect` | 直接执行 | Read-only: what is in the Blender scene the user has open right now — every object's name, |
 | `blender_look` | 直接执行 | Read-only: LOOK at the open Blender scene — returns rendered images you can see. |
+| `blender_send_scene` | 直接执行 | Send a Mosael 3D scene into Blender, so you can refine it there with real modeling. |
 | `browser_click` | 直接执行 | Click an element by CSS selector or visible text in the open session (one of selector/text). |
 | `browser_close` | 直接执行 | Close a browser session (frees the view; a throwaway session's cookies/storage are wiped). |
 | `browser_evaluate` | 直接执行 | Advanced: evaluate a JS expression in the open session's page and return its value. |

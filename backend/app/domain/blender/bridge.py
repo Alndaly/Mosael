@@ -67,6 +67,29 @@ def connection(db, user, instance_id):
     return instance
 
 
+def resolve(db, user, instance_id=''):
+    """这次用哪个 Blender 连接。没指定就用他自己的第一个**可用**连接 —— 多数人只有一个。
+
+    界面上那个下拉总会带着 id 过来;智能体不该被迫先列一遍连接再挑一个,那是一整轮对话。
+    """
+    from sqlalchemy import select
+
+    if instance_id:
+        return connection(db, user, instance_id)
+    rows = db.scalars(select(PluginInstance).where(
+        PluginInstance.owner_user_id == user.id, PluginInstance.package_id == PACKAGE,
+        PluginInstance.enabled.is_(True))).all()
+    if not rows:
+        raise BlenderNotFound('还没有连接 Blender:在插件页安装并启用「Blender MCP」,并在 Blender 里开启 MCP Add-on。')
+    reasons = []
+    for row in rows:
+        try:
+            return connection(db, user, row.id)
+        except BlenderDomainError as exc:
+            reasons.append(str(exc))
+    raise BlenderConflict(reasons[0])
+
+
 @contextmanager
 def exclusive(instance_id):
     with _guard:
@@ -206,8 +229,23 @@ def apply_shot_frames(content, flat):
     return content
 
 
-def send(db, user, scene, instance_id, revision, shot_id, source, *, size=None):
-    instance = connection(db, user, instance_id)
+def send(db, user, scene, instance_id, revision, shot_id):
+    """把这个场景发进 Blender。**GLB 由后端自己生成**(domain/scene_render/gltf)。
+
+    此前这一份是浏览器用 three.js 导出再上传的,于是"发送场景"这件事要求有人正开着那个页面 ——
+    跑在后端的智能体根本做不到。现在界面按钮和智能体工具走同一个实现、同一份几何。
+
+    导入的 GLB 模型不塞进生成的那一份里:它们是各自独立的文件(可能还带着 Draco/KTX2 压缩),
+    解开再编一遍毫无必要。生成的 GLB 里给每个模型物体留一个带 `mosael_object_id` 的空节点,
+    Blender 那边把对应的文件导进来挂上去(见 worker.attach_models)。
+    """
+    from app.db.models import Scene3DModel
+    from app.domain.scene_render import find_shot
+    from app.domain.scene_render.gltf import write_glb
+    from app.domain.scene_types import SceneContent
+    from app.domain.scenes import model_file
+
+    instance = resolve(db, user, instance_id)
     if revision != scene.revision:
         raise BlenderConflict('场景已变更，请等待保存完成后重新发送。')
     if shot_id not in {s['id'] for s in scene.content['shots']}:
@@ -216,11 +254,16 @@ def send(db, user, scene, instance_id, revision, shot_id, source, *, size=None):
         transfer_id = str(uuid4())
         folder = root(scene) / transfer_id
         folder.mkdir(parents=True)
-        # 分块落盘再从文件校验 —— 这一份是浏览器导出的整个场景,没有理由先进一趟内存。
-        with (folder / 'input.glb').open('wb') as out:
-            shutil.copyfileobj(source, out, 1024 * 1024)
-        if validate_model_file(folder / 'input.glb') != 'glb':
-            raise BlenderDomainError('场景传输需要 GLB。')
+        content = SceneContent.model_validate(scene.content)
+        written = write_glb(content, find_shot(content, shot_id), folder / 'input.glb')
+        models = []
+        for entry in written['models']:
+            model = db.get(Scene3DModel, entry['model_id'])
+            if model is None or model.scene_id != scene.id:
+                continue
+            path = model_file(model)
+            if path.is_file():
+                models.append({'object_id': entry['object_id'], 'name': model.name, 'path': str(path)})
         snapshot = {'id': scene.id, 'name': scene.name, 'content': scene.content}
         record = {'id': transfer_id, 'owner': user.id, 'instance_id': instance.id, 'source_revision': revision,
                   'snapshot': snapshot, 'status': 'sending', 'created_at': datetime.now(timezone.utc).isoformat()}
@@ -229,9 +272,9 @@ def send(db, user, scene, instance_id, revision, shot_id, source, *, size=None):
             worker_snapshot = {**snapshot, 'content': {**snapshot['content'],
                 'shots': shots_with_frames(snapshot['content'])}}
             result = execute(db, instance, 'send', {'snapshot': worker_snapshot, 'shot_id': shot_id, 'transfer_id': transfer_id,
-                'input_path': str(folder / 'input.glb'), 'blend_path': str(folder / 'scene.blend'),
+                'input_path': str(folder / 'input.glb'), 'models': models, 'blend_path': str(folder / 'scene.blend'),
                 'result_path': str(folder / 'sent.json')}, scene.workspace_id)
-            record.update(status='ready', scene_name=result['scene_name'])
+            record.update(status='ready', scene_name=result['scene_name'], warnings=result.get('warnings', []))
         except Exception as exc:
             record.update(status='failed', error=str(getattr(exc, 'detail', exc)))
             raise

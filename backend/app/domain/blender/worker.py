@@ -90,6 +90,31 @@ def export_glb(path, **overrides):
             '材质请在 Mosael 里重新指定，或用 .blend 保留原始设置。（' + reason + '）']
 
 
+def attach_models(scene, models):
+    """把导入的模型文件各自导进来,挂到生成的 GLB 里给它留的那个空节点下。
+
+    模型不打包进场景那一份 GLB(后端不解别人的压缩网格),所以这里补上:按 `mosael_object_id`
+    找到锚点,导入文件,把新出现的根物体认作它的孩子 —— 姿态因此来自锚点,和 Mosael 里一致。
+    """
+    warnings = []
+    anchors = {o.get('mosael_object_id'): o for o in scene.objects if o.get('mosael_object_id')}
+    for entry in models:
+        anchor = anchors.get(entry['object_id'])
+        if anchor is None:
+            warnings.append('模型「' + entry['name'] + '」没有找到对应的位置，已跳过。')
+            continue
+        before = set(scene.objects)
+        try:
+            bpy.ops.import_scene.gltf(filepath=entry['path'])
+        except Exception as exc:
+            warnings.append('模型「' + entry['name'] + '」导入失败：' + str(exc).strip().splitlines()[-1][:160])
+            continue
+        for obj in [o for o in scene.objects if o not in before]:
+            if obj.parent is None:
+                obj.parent = anchor
+    return warnings
+
+
 def send(payload):
     snapshot = payload['snapshot']
     old = bpy.context.window.scene
@@ -99,6 +124,7 @@ def send(payload):
     bpy.context.window.scene = scene
     try:
         bpy.ops.import_scene.gltf(filepath=payload['input_path'])
+        warnings = attach_models(scene, payload.get('models') or [])
         scene.render.fps = 30
         scene.render.fps_base = 1
         scene.world = bpy.data.worlds.new(scene.name)
@@ -114,7 +140,8 @@ def send(payload):
         scene.frame_end = max(1, math.ceil(selected_shot['duration']*30))
         scene.frame_set(1)
         bpy.data.libraries.write(payload['blend_path'], {scene}, fake_user=True)
-        return {'scene_name': scene.name, 'object_count': len(scene.objects), 'camera_count': len(cameras), 'blender_version': bpy.app.version_string}
+        return {'scene_name': scene.name, 'object_count': len(scene.objects), 'camera_count': len(cameras),
+                'warnings': warnings, 'blender_version': bpy.app.version_string}
     except Exception:
         bpy.context.window.scene = old
         bpy.data.scenes.remove(scene)

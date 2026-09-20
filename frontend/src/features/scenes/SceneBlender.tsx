@@ -48,7 +48,10 @@ export function SceneBlender({
   scene: Scene;
   pending: boolean;
   busy: boolean;
-  prepare: () => Promise<{ revision: number; shotId: string; blob: Blob }>;
+  /** 这一刻可以发什么:**已经落库的**那个修订和当前镜头。GLB 由后端按这个修订自己生成 ——
+   *  此前这里要交出一份浏览器导出的 blob,于是"发送场景"这件事必须有人开着这个页面,
+   *  跑在后端的智能体做不到。 */
+  prepare: () => Promise<{ revision: number; shotId: string }>;
   /** 把接回来的内容当成当前场景上的一次普通改动写下去 —— 可撤销,由自动保存落库。 */
   apply: (content: SceneContent) => void;
   work: (label: string, fn: () => Promise<void>) => Promise<void>;
@@ -229,15 +232,14 @@ export function SceneBlender({
               onClick={() =>
                 void run("发送到 Blender", async () => {
                   const ready = await prepare();
-                  const body = new FormData();
-                  body.set("workspace_id", scene.workspace_id);
-                  body.set("instance_id", instance);
-                  body.set("revision", String(ready.revision));
-                  body.set("shot_id", ready.shotId);
-                  body.set("file", ready.blob, "scene.glb");
                   const result = await api<Transfer>(base, {
                     method: "POST",
-                    body,
+                    body: JSON.stringify({
+                      workspace_id: scene.workspace_id,
+                      instance_id: instance,
+                      revision: ready.revision,
+                      shot_id: ready.shotId,
+                    }),
                   });
                   setSelectedTransfer(result.id);
                   setMessage(`已发送 · ${result.scene_name}`);

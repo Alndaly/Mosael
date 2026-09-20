@@ -250,6 +250,7 @@ ANSWER_TOOLS = frozenset({"ask_user"})
 MUTATING_TOOLS = frozenset(
     {
         "blender_import_to_scene",
+        "blender_send_scene",
         "browser_click",
         "browser_close",
         "browser_evaluate",
@@ -1401,6 +1402,27 @@ def blender_execute(code: str, purpose: str = "", instance_id: str = "") -> dict
         },
     )
     return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def blender_send_scene(scene_id: str, shot_id: str = "", instance_id: str = "",
+                       workspace_id: str = "") -> dict[str, Any]:
+    """Send a Mosael 3D scene into Blender, so you can refine it there with real modeling.
+
+    Opens a separate `Mosael · <name>` Blender scene holding the blockout geometry (groups and
+    materials kept), every shot as a real Blender camera with its move baked, and the shot you
+    name as the active camera. Imported GLB models come along as their own objects. Nothing else
+    in the user's Blender project is touched. The scene must be saved first: pass its current
+    revision's shot, and if the scene changed meanwhile, re-read it with get_scene and send again.
+    Then work with blender_inspect / blender_execute / blender_look, and bring the result back
+    with blender_import_to_scene (or the user's 「接收 Blender 修改」 button, which returns
+    geometry AND camera moves into this same scene).
+    """
+    scene = _get(f"/api/scenes/{scene_id}", {"workspace_id": workspace_id or _default_workspace_id()})
+    return _post(f"/api/scenes/{scene_id}/blender", {
+        "workspace_id": workspace_id or _default_workspace_id(), "instance_id": instance_id,
+        "revision": scene["revision"], "shot_id": shot_id or scene["content"]["shots"][0]["id"],
+    }, timeout=180)
 
 
 @mcp.tool()

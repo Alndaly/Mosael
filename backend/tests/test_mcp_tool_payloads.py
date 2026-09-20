@@ -50,6 +50,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "blender_look": {"views": ["top", "camera"], "objects": ["Roof"], "shading": "solid"},
     "blender_import_to_scene": {"scene_id": "no-such-scene", "base_revision": 1, "objects": ["Roof"],
                                 "position": [0, 0, 0]},
+    "blender_send_scene": {"scene_id": "no-such-scene", "shot_id": "shot-1"},
     "create_note": {"title": "冒烟笔记", "markdown": "正文"},
     "append_note": {"note_id": "no-such-note", "base_revision": 1, "markdown": "补充"},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会
