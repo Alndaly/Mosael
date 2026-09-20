@@ -61,6 +61,26 @@ def test_lookup_handles_the_id_shapes_we_actually_see(model_id: str, expected_wi
     assert known_limits(model_id).context_window == expected_window
 
 
+@pytest.mark.parametrize(
+    ("model_id", "expected"),
+    [
+        # 家族兜底:表里没写 claude-opus-4-1,它仍拿得到 Claude 的保守下限,而不是掉回 128K。
+        ("anthropic/claude-opus-4-1", 200_000),
+        ("claude-3-5-sonnet-20241022", 200_000),
+        # 具体型号盖掉兜底。
+        ("claude-opus-4-8", 1_000_000),
+        # 同代不同档:gpt-5.x 里 5.2 起才是 1M 一档。
+        ("gpt-5.1-codex", 400_000),
+        ("gpt-5.6-sol", 1_000_000),
+        # 更长的那条赢,不是先匹配到的那条。
+        ("qwen3-coder-flash", 1_000_000),
+        ("qwen3-coder-2026", 256_000),
+    ],
+)
+def test_longest_prefix_wins(model_id: str, expected: int) -> None:
+    assert known_limits(model_id).context_window == expected
+
+
 def test_unknown_model_gets_nothing_rather_than_a_guess() -> None:
     assert known_limits("some-private-finetune-v3") == model_limits.Limits()
     assert known_limits("") == model_limits.Limits()

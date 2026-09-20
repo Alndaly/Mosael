@@ -16,19 +16,25 @@
 1. **按模型名前缀匹配,不按 vendor。** 中转端点的 vendor 一律是 `openai-compatible`,
    后面挂的可能是任何一家;OpenRouter 的 id 还带 `厂商/` 前缀。按 vendor 查表在这两种
    最常见的配置下必然落空 —— 那正是 `domain/thinking._by_model_name` 踩过的坑。
-2. **最长前缀赢。** `grok-4.6` 要用它自己那条,而不是 `grok-4` 那条。
-3. **宁可报小,不可报大。** 表里的数一律向下取整到整千/整万(1,048,576 → 1,000,000,
-   393,216 → 384,000)。窗口报小只是早一点压缩;报大则是发出去被服务端拒,整轮对话失败。
+2. **最长前缀赢。** `grok-4.6` 要用它自己那条,而不是 `grok-4` 那条。这也让**家族兜底**
+   成立:`claude-` 给整个家族一个保守的 200K/64K,具体型号的那几条再逐个盖掉它。没有兜底
+   的话,表里漏掉一个新型号 = 那个型号直接掉回 128K,而它的同门明明都写着 1M。
+3. **宁可报小,不可报大。** 表里的数一律向下取整到整千(1,048,576 → 1,000,000,
+   393,216 → 384,000,65,535 → 65,000)。窗口报小只是早一点压缩;报大则是发出去被服务端拒,
+   整轮对话失败。同理,拿不准的一律不写 —— 不写就走回退,而回退是安全的。
 
 ## 来源(2026-09 查证)
 
-- Anthropic —— platform.claude.com 模型总览表(官方)
-- OpenAI —— developers.openai.com/api/docs/models(官方)
+- OpenAI —— developers.openai.com/api/docs/models 及各模型页(官方)
+- Anthropic —— platform.claude.com 模型总览表与各模型页(官方)
 - DeepSeek —— api-docs.deepseek.com 定价页(官方)
 - xAI —— docs.x.ai/developers/models(官方,只列窗口,不列输出上限 → 输出留空)
-- Kimi —— platform.kimi.ai 定价页(官方,同样只列窗口)
-- Google / 智谱 GLM / 通义千问 / MiniMax / 豆包 —— 第三方汇总(OpenRouter、各家模型页),
-  官方文档未给出结构化的上限表。按第 3 条向下取整后收录。
+- Kimi / Moonshot —— platform.kimi.ai 定价页(官方,同样只列窗口)
+- 智谱 GLM —— docs.z.ai 模型页
+- Google Gemini / 通义千问 / MiniMax / 豆包 / 开源权重(Llama、Mistral)—— 第三方汇总
+  (OpenRouter 与各家模型页),官方文档未给出结构化的上限表。按第 3 条向下取整后收录。
+
+**百度文心、腾讯混元等暂不收录**:这一轮没查到可引用的结构化上限,按第 3 条宁可不写。
 """
 
 from __future__ import annotations
@@ -69,40 +75,88 @@ class Limits:
 #: 模型名前缀 → 上限。**只写查证过的**,其余留给回退(见模块头)。
 #: 维护方式:改一条就更新模块头的来源与日期;`tests/test_model_limits.py` 盯着这张表的形状。
 KNOWN_LIMITS: dict[str, Limits] = {
-    # —— OpenAI(官方文档:1.05M 窗口 / 128K 输出)——
+    # —— OpenAI ——(developers.openai.com/api/docs/models,官方)
     "gpt-6": Limits(1_000_000, 128_000),
     "gpt-5.6": Limits(1_000_000, 128_000),
-    # —— Anthropic(官方文档)——
+    "gpt-5.4": Limits(1_000_000, 128_000),
+    "gpt-5.2": Limits(1_000_000, 128_000),
+    #: gpt-5 / 5.1 / 5-mini 那一代是 400K 一档,和 5.2 起的 1.05M 不是一回事。
+    "gpt-5": Limits(400_000, 128_000),
+    "gpt-4.1": Limits(1_000_000, 32_000),
+    "gpt-4o": Limits(128_000, 16_000),
+    "o3": Limits(200_000, 100_000),
+    "o4-mini": Limits(200_000, 100_000),
+    # —— Anthropic ——(platform.claude.com 各模型页,官方)
+    #: 家族兜底:4.x 起每个 Claude 至少 200K/64K。更长的前缀会盖掉它(最长前缀赢)。
+    "claude-": Limits(200_000, 64_000),
+    "claude-3": Limits(200_000, 4_000),
     "claude-opus-5": Limits(1_000_000, 128_000),
     "claude-sonnet-5": Limits(1_000_000, 128_000),
     "claude-fable-5": Limits(1_000_000, 128_000),
+    "claude-opus-4-8": Limits(1_000_000, 128_000),
+    "claude-opus-4-7": Limits(1_000_000, 128_000),
+    "claude-opus-4-6": Limits(1_000_000, 128_000),
+    "claude-sonnet-4-6": Limits(1_000_000, 64_000),
     "claude-haiku-4-5": Limits(200_000, 64_000),
-    # —— DeepSeek(官方定价页:1M 窗口 / 384K 输出上限)——
+    # —— DeepSeek ——(api-docs.deepseek.com 定价页,官方)
     "deepseek-v4": Limits(1_000_000, 384_000),
     "deepseek-flash": Limits(1_000_000, 384_000),
-    # —— Google Gemini(第三方汇总:1M 窗口 / 64K 输出)——
+    #: chat / reasoner 是老别名,当前定价页已不列;按 V3.x 的保守值给。
+    "deepseek-chat": Limits(128_000, 8_000),
+    "deepseek-reasoner": Limits(128_000, 64_000),
+    "deepseek-v3": Limits(128_000, 64_000),
+    # —— Google Gemini ——(第三方汇总;官方文档未给结构化上限表)
     "gemini-3": Limits(1_000_000, 64_000),
-    # —— xAI Grok(官方只列窗口,输出上限未公布 → 留空走回退)——
+    "gemini-2.5": Limits(1_000_000, 64_000),
+    "gemini-2.0": Limits(1_000_000, 8_000),
+    # —— xAI Grok ——(docs.x.ai/developers/models,官方;该页只列窗口,输出上限未公布)
     "grok-4.6": Limits(500_000, None),
     "grok-4.5": Limits(500_000, None),
     "grok-4.3": Limits(1_000_000, None),
     "grok-4.20": Limits(1_000_000, None),
+    "grok-4.1-fast": Limits(2_000_000, None),
+    "grok-4": Limits(256_000, None),
+    "grok-3": Limits(131_000, None),
+    "grok-code": Limits(256_000, None),
     "grok-build-0.1": Limits(256_000, None),
-    # —— Kimi(官方定价页,同样只列窗口)——
+    # —— Kimi / Moonshot ——(platform.kimi.ai 定价页,官方;同样只列窗口)
     "kimi-k3": Limits(1_000_000, None),
     "kimi-k2.7": Limits(256_000, None),
     "kimi-k2.6": Limits(256_000, None),
-    # —— 智谱 GLM(第三方汇总)——
-    "glm-5.3": Limits(1_000_000, 128_000),
-    "glm-5.2": Limits(1_000_000, 128_000),
-    # —— 通义千问(第三方汇总)——
-    "qwen3.8-max": Limits(1_000_000, 128_000),
-    "qwen3-max": Limits(256_000, 64_000),
-    # —— MiniMax(第三方汇总:204,800 窗口 / 131,072 输出)——
+    "kimi-k2": Limits(128_000, None),
+    "moonshot-v1-128k": Limits(128_000, None),
+    "moonshot-v1-32k": Limits(32_000, None),
+    "moonshot-v1-8k": Limits(8_000, None),
+    # —— 智谱 GLM ——(docs.z.ai 与第三方汇总)
+    "glm-5": Limits(1_000_000, 128_000),
+    "glm-4.6": Limits(200_000, 16_000),
+    "glm-4.5": Limits(128_000, 98_000),
+    "glm-4": Limits(128_000, 4_000),
+    # —— 通义千问 ——(第三方汇总:OpenRouter 的模型页)
+    "qwen3.8-max": Limits(1_000_000, 131_000),
+    "qwen3.6": Limits(1_000_000, 65_000),
+    "qwen3.5": Limits(1_000_000, 65_000),
+    "qwen3-max": Limits(256_000, 65_000),
+    "qwen3-coder-flash": Limits(1_000_000, 65_000),
+    "qwen3-coder-plus": Limits(998_000, 65_000),
+    "qwen3-coder-next": Limits(262_000, 262_000),
+    "qwen3-coder": Limits(256_000, 65_000),
+    "qwen-long": Limits(10_000_000, 8_000),
+    "qwen-turbo": Limits(1_000_000, 8_000),
+    "qwen-plus": Limits(128_000, 8_000),
+    "qwen-max": Limits(32_000, 8_000),
+    # —— MiniMax ——(第三方汇总)
     "minimax-m2": Limits(200_000, 128_000),
-    # —— 豆包(第三方汇总)——
+    "minimax-m1": Limits(1_000_000, 40_000),
+    # —— 豆包 / 火山方舟 ——(第三方汇总)
     "doubao-seed-evolving": Limits(1_000_000, 256_000),
     "doubao-seed-2.1": Limits(256_000, 256_000),
+    "doubao-seed-1.6": Limits(256_000, 32_000),
+    # —— 开源权重(常挂在中转或本地端点后面)——(第三方汇总)
+    #: Scout 宣称的 10M 是理论值,没有端点真的按那个提供服务 —— 按第 3 条取保守值。
+    "llama-4": Limits(1_000_000, 8_000),
+    "llama-3": Limits(128_000, 8_000),
+    "mistral-large": Limits(128_000, 8_000),
 }
 
 
