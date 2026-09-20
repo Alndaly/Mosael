@@ -1,4 +1,5 @@
 import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
+import { watchBodyPointerLock } from "@/lib/bodyPointerLock";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import {
@@ -77,6 +78,10 @@ const queryClient = new QueryClient({
 });
 
 export function App() {
+  // **整页点不动**的兜底:Radix 偶发把 body 的 pointer-events:none 留在那儿(浮层还开着就被
+  // 卸载、或两个浮层的清理互相打架),此后整个应用只能刷新。挂在最外层 —— 留下锁的那个浮层
+  // 可能是任何一处的 Select / 右键菜单 / 弹窗,盯住锁本身才兜得全。见 lib/bodyPointerLock。
+  React.useEffect(() => watchBodyPointerLock(), []);
   return (
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>

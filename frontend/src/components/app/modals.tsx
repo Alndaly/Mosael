@@ -21,25 +21,16 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { Input } from "@/components/ui/input";
 
 /**
- * Radix 偶发在弹窗关闭时把 `<body>` 的 pointer-events:none 留住,整页点不动、必须刷新。
- * 常见于弹窗由 ContextMenu/DropdownMenu 触发:菜单关闭的清理与弹窗打开竞争,弹窗再关时只跑了
- * 自己那份,菜单留下的锁没人清。这里在 open→false 后兜底:若 DOM 里确无仍打开的 Radix 浮层,
- * 就把 body 的 pointer-events 复位(有其它浮层开着则不动,避免误清坏别人的模态屏蔽)。
+ * Radix 偶发把 `<body>` 的 pointer-events:none 留住,整页点不动、必须刷新。
+ *
+ * 兜底**已经搬到全局**(`lib/bodyPointerLock`,挂在 App 根上)。原来这里有一份只盯自己
+ * open→false 的局部版本,它漏掉的恰恰是最常见的两种:浮层**还开着就被整块卸载**(无限画布上
+ * 点一下空白处就是这样,此时 open 自始至终是 true),以及关掉之后 250ms 内就卸载(它的清理
+ * 函数把那次检查取消了)。而且留下锁的那个浮层常常根本不是 ModalShell —— Select、右键菜单、
+ * 图片预览都能上锁,它们谁都不认识 ModalShell。
+ *
+ * 所以这里不再各自兜:盯住锁本身的那一份对所有来源都成立。
  */
-function useUnlockBodyOnClose(open: boolean): void {
-  React.useEffect(() => {
-    if (open) return;
-    const id = window.setTimeout(() => {
-      const stillOpen = document.querySelector(
-        '[data-state="open"][role="dialog"], [data-state="open"][role="alertdialog"], [data-radix-menu-content][data-state="open"], [data-radix-popper-content-wrapper] [data-state="open"]',
-      );
-      if (!stillOpen && document.body.style.pointerEvents === "none") {
-        document.body.style.pointerEvents = "";
-      }
-    }, 250);
-    return () => window.clearTimeout(id);
-  }, [open]);
-}
 
 /** Shared modal shell (no native dialogs per frontend rules). */
 /**
@@ -96,7 +87,6 @@ export function ModalShell({
   /** Non-modal panels leave the rest of the application interactive and omit the overlay. */
   modal?: boolean;
 }) {
-  useUnlockBodyOnClose(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={modal}>
       <DialogContent
@@ -219,7 +209,6 @@ export function ConfirmDialog({
   onConfirm: () => void;
 }) {
   const t = useI18n();
-  useUnlockBodyOnClose(open);
   return (
     <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <AlertDialogContent>

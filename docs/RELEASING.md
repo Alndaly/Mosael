@@ -99,13 +99,24 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 
 ## 5. 创建草稿并正式发布
 
-安装包验证完成后，以**成功构建的 SHA**为目标创建草稿。没有 tag 时 GitHub 会按 `--target` 创建；若已有 tag，先确认其指向一致。
+安装包验证完成后,**先在本地打 tag 并推上去**,再用那个 tag 建草稿。
 
 ```bash
-gh release create vVERSION --target BUILD_SHA --draft --title 'Mosael vVERSION' \
+git tag -a vVERSION BUILD_SHA -m 'Mosael vVERSION'
+git push origin vVERSION
+git tag -l vVERSION && git rev-parse vVERSION   # 与 BUILD_SHA 核对
+gh release create vVERSION --draft --title 'Mosael vVERSION' \
   --notes-file /path/to/release-notes.md /path/to/assets/*
 gh release view vVERSION --json isDraft,assets,targetCommitish,url
 ```
+
+**为什么不让 `gh` 去建 tag。** `gh release create --target SHA` 在没有 tag 时会由 GitHub
+**服务端**建一个,而 `git push` 只推本地已有的引用、不会把服务端新建的 tag 拉回来 —— 于是本地
+`git tag` 里没有这一版,发完之后看着像"既没有 tag 也没有 release"(1.4.0 和 1.4.1 都是这样,
+1.4.1 当场被问了)。本地先打就不存在这个落差,而且 tag 指向哪个提交由你自己确认过,不是事后
+去问 GitHub。`gh release create` 见到 tag 已存在就直接用它。
+
+tag 推上去之后**不要再移动它**:公开版本不可覆盖或移动 tag。
 
 检查八个附件的文件名、大小和 GitHub API 返回的 SHA-256 digest，与本地 `shasum -a 256` 比较。若仓库事件触发了额外自动构建，先分辨本机交接 run 和自动 run；不得绕过失败的必要验证发布其他产物。
 
