@@ -1,6 +1,6 @@
 """把一组世界坐标下的三角形,从一台机位渲成一张图。z-buffer + 主光阴影图。
 
-光照对照工作台(`SceneViewport.tsx`):半球环境光(天空白、地面 #666879,强度 = 场景的
+光照对照工作台(`SceneViewport.tsx` / `lighting.ts`,由 `contracts/scene-3d-cases.json` 钉住):半球环境光(天空白、地面 #666879,强度 = 场景的
 ambient)+ 一盏平行主光(方向由方位角/高度角定,颜色按色温,带阴影)+ 场景里的点光源;
 ACES Filmic 色调映射、sRGB 输出。材质只取漫反射 —— 白模要传的是**光的结构和构图**,
 不是高光(见前端 clayReference.ts 那段"为什么送灰模")。
@@ -58,7 +58,9 @@ def hex_to_linear(value: str) -> np.ndarray:
 
 
 def kelvin_rgb(kelvin: float) -> np.ndarray:
-    """对照前端 lighting.kelvinRgb(Tanner Helland 的近似)。前端把结果当线性色用,这里也一样。"""
+    """对照前端 lighting.kelvinRgb(Tanner Helland 的近似);两侧的值由 `contracts/scene-3d-cases.json` 钉住。
+
+    前端把结果当线性色用,这里也一样。"""
     t = min(40000, max(1000, kelvin)) / 100
     red = 255 if t <= 66 else 329.698727446 * (t - 60) ** -0.1332047592
     green = 99.4708025861 * math.log(t) - 161.1195681661 if t <= 66 else 288.1221695283 * (t - 60) ** -0.0755148492

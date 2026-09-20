@@ -3,7 +3,7 @@
 为什么要有这一份:把场景发到 Blender 此前只有一条路 —— 浏览器用 three.js 把当前视口导成 GLB
 再上传。那条路要求有人正开着那个页面,于是智能体(跑在后端)根本发不了场景,只能在 Blender 里
 从头建。现在发送收口到这里:界面上的按钮和智能体调的工具走同一个实现,同一份几何
-(`meshes.meshes_for`,和渲染器、和工作台的 three.js 一一对照)。
+(`meshes.meshes_for`,和渲染器、和工作台的 three.js 一一对照,由 `contracts/scene-3d-cases.json` 钉住)。
 
 导出的是**基本体**:每个物体一个节点,分组保持父子关系,颜色/粗糙度/金属度进 PBR 材质,
 点光源用 KHR_lights_punctual。导入的 GLB 模型不在这里 —— 它们是独立的文件,由 Blender 那边

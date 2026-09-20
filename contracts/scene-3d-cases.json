@@ -1,0 +1,489 @@
+{
+  "contract": "scene-3d",
+  "version": 1,
+  "readme": "../contracts/README.md",
+  "description": "3D 场景的几何、关键帧插值与光照换算:工作台的 three.js、后端的白模渲染器、以及发往 Blender 的 GLB 必须描述同一个场景。",
+  "notes": [
+    "几何按物体自己的坐标系给,单位米;y 是上。",
+    "tolerance 是米/度/归一化色值的绝对误差。",
+    "相机、灯、分组的 rendered=false 指**渲染与导出**里没有它们的几何;工作台可以画编辑辅助物(机位模型、灯泡标记),那不是场景内容。"
+  ],
+  "tolerance": 0.001,
+  "geometry": [
+    {
+      "name": "box-default",
+      "why": "立方体站在自己的 y=0 上,不是以原点为中心 —— 摆到地面上时两侧必须一致。",
+      "object": {
+        "kind": "box",
+        "parameters": {}
+      },
+      "parts": 1,
+      "min": [
+        -1.0,
+        0.0,
+        -1.0
+      ],
+      "max": [
+        1.0,
+        2.0,
+        1.0
+      ]
+    },
+    {
+      "name": "plane-thin",
+      "why": "地板是一块有厚度的板,且**向下**长 —— 反了的话贴着地面的东西会陷进去。",
+      "object": {
+        "kind": "plane",
+        "parameters": {}
+      },
+      "parts": 1,
+      "min": [
+        -1.0,
+        -0.04,
+        -1.0
+      ],
+      "max": [
+        1.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "sphere-sits-on-ground",
+      "why": "球心在 y=radius:球也站在地上,不是半埋着。",
+      "object": {
+        "kind": "sphere",
+        "parameters": {}
+      },
+      "parts": 1,
+      "min": [
+        -1.0,
+        0.0,
+        -1.0
+      ],
+      "max": [
+        1.0,
+        2.0,
+        1.0
+      ]
+    },
+    {
+      "name": "cylinder-sits-on-ground",
+      "why": "柱子同理,底面在 y=0。",
+      "object": {
+        "kind": "cylinder",
+        "parameters": {}
+      },
+      "parts": 1,
+      "min": [
+        -1.0,
+        0.0,
+        -1.0
+      ],
+      "max": [
+        1.0,
+        2.0,
+        1.0
+      ]
+    },
+    {
+      "name": "room-walls-and-doors",
+      "why": "房间 = 地面 + 四面墙 + 两道门楣 = 9 块;墙有厚度,所以包围盒比内空间大。",
+      "object": {
+        "kind": "room",
+        "parameters": {
+          "width": 6,
+          "height": 3,
+          "depth": 5
+        }
+      },
+      "parts": 9,
+      "min": [
+        -3.075,
+        -0.08,
+        -2.575
+      ],
+      "max": [
+        3.075,
+        3.0,
+        2.575
+      ]
+    },
+    {
+      "name": "stairs-climb-along-z",
+      "why": "有几级就是几块,沿 +Z 往上走,总高等于 height。",
+      "object": {
+        "kind": "stairs",
+        "parameters": {
+          "steps": 4
+        }
+      },
+      "parts": 4,
+      "min": [
+        -1.0,
+        0.0,
+        -1.0
+      ],
+      "max": [
+        1.0,
+        2.0,
+        1.0
+      ]
+    },
+    {
+      "name": "table-top-and-four-legs",
+      "why": "桌面 + 四条腿 = 5 块,桌面顶在 height。",
+      "object": {
+        "kind": "table",
+        "parameters": {}
+      },
+      "parts": 5,
+      "min": [
+        -1.0,
+        0.0,
+        -1.0
+      ],
+      "max": [
+        1.0,
+        2.0,
+        1.0
+      ]
+    },
+    {
+      "name": "figure-is-a-ruler",
+      "why": "人形是给构图当尺子的:**有多高就是多高**,肩宽由 width 决定。比例漂了,所有参考图里的人就不是一个人。",
+      "object": {
+        "kind": "figure",
+        "parameters": {
+          "width": 0.45,
+          "height": 1.7,
+          "depth": 0.25
+        }
+      },
+      "parts": 7,
+      "min": [
+        -0.354,
+        0.0,
+        -0.1511
+      ],
+      "max": [
+        0.354,
+        1.7,
+        0.1511
+      ]
+    }
+  ],
+  "aids": [
+    {
+      "name": "camera-is-not-in-the-picture",
+      "why": "相机是被拍的那一方的工具,不是布景 —— 工作台画一个机位模型给人拖,渲染和导出里它必须不存在。",
+      "object": {
+        "kind": "camera",
+        "parameters": {}
+      },
+      "rendered": false
+    },
+    {
+      "name": "light-marker-is-an-editor-aid",
+      "why": "灯泡那个小球是为了能点中它,不是场景里真有一颗球。它进了画面就是一个凭空多出来的物体。",
+      "object": {
+        "kind": "light",
+        "parameters": {}
+      },
+      "rendered": false
+    },
+    {
+      "name": "group-has-no-geometry-of-its-own",
+      "why": "分组只带着孩子走。",
+      "object": {
+        "kind": "group",
+        "parameters": {}
+      },
+      "rendered": false
+    }
+  ],
+  "sampling": {
+    "camera": {
+      "why": "运镜按 smoothstep 缓动,不是线性:四分之一处是 0.15625 而不是 0.25。两侧算得不一样,预览和参考视频就是两个镜头。",
+      "object": {
+        "kind": "camera",
+        "position": [
+          0,
+          0,
+          10
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "fov": 40,
+        "track": [
+          {
+            "time": 0,
+            "position": [
+              0,
+              0,
+              10
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "fov": 40
+          },
+          {
+            "time": 4,
+            "position": [
+              4,
+              0,
+              10
+            ],
+            "target": [
+              2,
+              1,
+              0
+            ],
+            "fov": 20
+          }
+        ]
+      },
+      "shot": {
+        "duration": 5,
+        "easing": "smooth"
+      },
+      "samples": [
+        {
+          "t": 0,
+          "position": [
+            0,
+            0,
+            10
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
+          "fov": 40
+        },
+        {
+          "t": 1,
+          "position": [
+            0.625,
+            0,
+            10
+          ],
+          "target": [
+            0.3125,
+            0.15625,
+            0
+          ],
+          "fov": 36.875
+        },
+        {
+          "t": 2,
+          "position": [
+            2,
+            0,
+            10
+          ],
+          "target": [
+            1,
+            0.5,
+            0
+          ],
+          "fov": 30
+        },
+        {
+          "t": 4.5,
+          "position": [
+            4,
+            0,
+            10
+          ],
+          "target": [
+            2,
+            1,
+            0
+          ],
+          "fov": 20
+        }
+      ]
+    },
+    "object": {
+      "why": "关键帧没写的字段沿用静止值(第一帧没写旋转,就用物体自己的 90°);超出最后一帧保持最后一帧。",
+      "object": {
+        "kind": "box",
+        "rotation": [
+          0,
+          90,
+          0
+        ],
+        "track": [
+          {
+            "time": 0,
+            "position": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "time": 2,
+            "position": [
+              2,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              180,
+              0
+            ],
+            "scale": [
+              2,
+              2,
+              2
+            ]
+          }
+        ]
+      },
+      "shot": {
+        "duration": 5,
+        "easing": "linear"
+      },
+      "samples": [
+        {
+          "t": 0,
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            90,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "t": 1,
+          "position": [
+            1,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            135,
+            0
+          ],
+          "scale": [
+            1.5,
+            1.5,
+            1.5
+          ]
+        },
+        {
+          "t": 3,
+          "position": [
+            2,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            180,
+            0
+          ],
+          "scale": [
+            2,
+            2,
+            2
+          ]
+        }
+      ]
+    }
+  },
+  "lighting": {
+    "why": "色温和太阳方向决定画面的冷暖与影子朝向。算得不一样,白模参考图给模型的光照提示就是错的。",
+    "kelvin": [
+      {
+        "kelvin": 2000,
+        "rgb": [
+          1,
+          0.536739,
+          0.054526
+        ]
+      },
+      {
+        "kelvin": 4000,
+        "rgb": [
+          1,
+          0.807122,
+          0.651299
+        ]
+      },
+      {
+        "kelvin": 5600,
+        "rgb": [
+          1,
+          0.938374,
+          0.88349
+        ]
+      },
+      {
+        "kelvin": 6500,
+        "rgb": [
+          1,
+          0.99651,
+          0.980557
+        ]
+      },
+      {
+        "kelvin": 9000,
+        "rgb": [
+          0.821897,
+          0.873961,
+          1
+        ]
+      }
+    ],
+    "sun": [
+      {
+        "azimuth": 0,
+        "elevation": 0,
+        "direction": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "azimuth": 45,
+        "elevation": 30,
+        "direction": [
+          0.612372,
+          0.5,
+          0.612372
+        ]
+      },
+      {
+        "azimuth": 120,
+        "elevation": 60,
+        "direction": [
+          0.433013,
+          0.866025,
+          -0.25
+        ]
+      }
+    ]
+  }
+}
