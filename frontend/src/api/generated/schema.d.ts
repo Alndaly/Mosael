@@ -4570,7 +4570,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Provider Pricing Rules */
+        /**
+         * List Provider Pricing Rules
+         * @description 这个工作区的计价规则。
+         *
+         *     **不给 workspace_id 就是看全库** —— 那是这台机器的运维视图,只给部署管理员:此前它对任何
+         *     登录用户开放,于是 A 工作区的成员能读到 B 工作区谈下来的单价。写入一直是 deployment admin,
+         *     读却没有门 —— 一张表两套判据,漏的那一半不会报错。
+         */
         get: operations["list_provider_pricing_rules_api_settings_provider_pricing_rules_get"];
         put?: never;
         /** Create Provider Pricing Rule */

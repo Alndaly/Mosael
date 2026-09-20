@@ -13,7 +13,7 @@ from app.api.schemas import (
 )
 from app.db.models import ProviderPricingRule
 from app.domain import provider_credentials
-from app.domain.permissions import ensure_deployment_admin
+from app.domain.permissions import ensure_deployment_admin, ensure_workspace_access
 from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import supports_capability
 from app.domain.usage import create_pricing_rule, delete_pricing_rule, prefill_model_pricing, update_pricing_rule
@@ -116,6 +116,16 @@ def _pricing_payload_with_profile_defaults(
 def list_provider_pricing_rules(
     db: DbSession, user: CurrentUser, workspace_id: str | None = None
 ) -> list[ProviderPricingRuleOut]:
+    """这个工作区的计价规则。
+
+    **不给 workspace_id 就是看全库** —— 那是这台机器的运维视图,只给部署管理员:此前它对任何
+    登录用户开放,于是 A 工作区的成员能读到 B 工作区谈下来的单价。写入一直是 deployment admin,
+    读却没有门 —— 一张表两套判据,漏的那一半不会报错。
+    """
+    if workspace_id:
+        ensure_workspace_access(db, user, workspace_id)
+    else:
+        ensure_deployment_admin(db, user)
     stmt = select(ProviderPricingRule).order_by(
         ProviderPricingRule.capability.asc(),
         ProviderPricingRule.provider.asc(),
