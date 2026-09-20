@@ -101,9 +101,13 @@ export function ReferenceBadge({
       data-agent-ref-kind={kind}
       data-agent-ref-id={id}
       title={name}
+      //: 底色**不能用调色板里的具名面色**(原来是 bg-secondary)。这颗胶囊同时出现在输入框里
+      //: 和消息气泡里,而用户气泡自己就是 bg-secondary —— 两者一模一样,胶囊在气泡里完全消失,
+      //: 只剩一行灰字挨着正文。改成"在当前底色上再压一层前景色":无论压在哪张面上、在哪个
+      //: 主题下,它都比背后的面深/浅一档,边框再补一道轮廓。
       className={cn(
-        "inline-flex max-w-[200px] items-center gap-1 rounded-md bg-secondary px-1 py-0.5 align-baseline text-ui-2xs text-foreground",
-        onOpen && "cursor-pointer hover:bg-secondary/70",
+        "inline-flex max-w-[200px] items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] px-1 py-0.5 align-baseline text-ui-2xs text-foreground",
+        onOpen && "cursor-pointer hover:bg-[color-mix(in_srgb,var(--foreground)_18%,transparent)]",
         className,
       )}
     >

@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ComposerChip } from "@/lib/composerChip";
 import { useNoteStrings } from "./strings";
@@ -25,7 +26,10 @@ export function useNoteAttachments(workspaceId: string) {
     summary: selected.map(n => `@${n.title || s.untitled}`).join(" "),
     hasNotes: selected.length > 0,
     onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === "@" && !event.nativeEvent.isComposing) { event.preventDefault(); show(event.currentTarget); return true; } return false; },
-    trigger: <button type="button" className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary" ref={trigger} title={s.addReference} aria-label={s.addReference} onClick={() => show(trigger.current)}><BookOpen size={14} /></button>,
+    // 用**同一个** Button(ghost / icon-xs),不是照着它的尺寸手搓一个:此前这里是手搓的
+    // `text-muted-foreground`,而同排的回形针、话筒走 Button 的默认前景色 —— 三个并排的图标
+    // 里这一个明显暗一截,读起来像是禁用的。尺寸本来就一样(icon-xs = size-7)。
+    trigger: <Button ref={trigger} type="button" variant="ghost" size="icon-xs" title={s.addReference} aria-label={s.addReference} onClick={() => show(trigger.current)}><BookOpen size={14} /></Button>,
     // 小条自己不画了 —— 和附件拼在同一排里,由 ComposerChips 统一渲染(见那边的注释)。
     // 正文点开就能看:listNotes 返回的就是完整的笔记,不必为了预览再问一次服务端。
     chips: selected.map<ComposerChip>(note => ({
