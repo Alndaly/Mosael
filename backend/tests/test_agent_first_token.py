@@ -9,38 +9,40 @@
 from __future__ import annotations
 
 from app.domain.agent import host
+from app.domain.agent import stream as agent_stream
+from app.domain.agent import prompt as agent_prompt
 
 
 def test_first_token_is_stamped_once_and_thinking_counts() -> None:
     session = "s-first-token"
-    host._stream_reset(session)
-    assert host.get_stream_state(session)["first_token_at"] is None
+    agent_stream._stream_reset(session)
+    assert agent_stream.get_stream_state(session)["first_token_at"] is None
 
     # 思考先到 —— 对着「思考中…」等了八秒的人不会因为吐的是思考就觉得自己没在等。
-    host._stream_thinking(session, {"type": "thinking", "delta": "想一下"})
-    first = host.get_stream_state(session)["first_token_at"]
+    agent_stream._stream_thinking(session, {"type": "thinking", "delta": "想一下"})
+    first = agent_stream.get_stream_state(session)["first_token_at"]
     assert first is not None
 
     # 后面的增量不能把这个时刻往后推,否则测出来的永远是"最后一个 token"。
-    host._stream_thinking(session, {"type": "thinking", "delta": "再想想"})
-    host._stream_append(session, "正文")
-    assert host.get_stream_state(session)["first_token_at"] == first
+    agent_stream._stream_thinking(session, {"type": "thinking", "delta": "再想想"})
+    agent_stream._stream_append(session, "正文")
+    assert agent_stream.get_stream_state(session)["first_token_at"] == first
 
 
 def test_stream_append_alone_also_stamps() -> None:
     """有的链路不发思考事件,直接吐正文 —— 那一刻同样是"第一个字"。"""
     session = "s-first-token-text"
-    host._stream_reset(session)
-    host._stream_append(session, "直接开说")
-    assert host.get_stream_state(session)["first_token_at"] is not None
+    agent_stream._stream_reset(session)
+    agent_stream._stream_append(session, "直接开说")
+    assert agent_stream.get_stream_state(session)["first_token_at"] is not None
 
 
 def test_empty_thinking_delta_does_not_stamp() -> None:
     """空 delta 不是一个 token。让它打点的话,收到一个空事件的轮会报出 ~0s 的首 token。"""
     session = "s-first-token-empty"
-    host._stream_reset(session)
-    host._stream_thinking(session, {"type": "thinking", "delta": ""})
-    assert host.get_stream_state(session)["first_token_at"] is None
+    agent_stream._stream_reset(session)
+    agent_stream._stream_thinking(session, {"type": "thinking", "delta": ""})
+    assert agent_stream.get_stream_state(session)["first_token_at"] is None
 
 
 def test_usage_omits_first_token_when_never_stamped() -> None:
@@ -76,16 +78,16 @@ def test_prompt_snapshot_only_records_changes() -> None:
 
     with SessionLocal() as db:
         # 第一轮:一次都没记过 —— 这就是基线,必须留下,否则轨迹上永远看不到系统提示。
-        first = host._prompt_snapshot(db, session["id"], "系统提示 A")
+        first = agent_prompt._prompt_snapshot(db, session["id"], "系统提示 A")
         assert first is not None and first["system"] == "系统提示 A"
 
         db.add(AgentMessage(session_id=session["id"], role="assistant", content="", payload={"prompt": first}))
         db.commit()
 
         # 没变:不再记一份。轨迹上多一条一模一样的 SYSTEM 只是噪音。
-        assert host._prompt_snapshot(db, session["id"], "系统提示 A") is None
+        assert agent_prompt._prompt_snapshot(db, session["id"], "系统提示 A") is None
 
         # 变了(比如刚 remember 了一条、或计划推进了一步):记新的全文。
-        changed = host._prompt_snapshot(db, session["id"], "系统提示 A + 新记忆")
+        changed = agent_prompt._prompt_snapshot(db, session["id"], "系统提示 A + 新记忆")
         assert changed is not None and changed["system"] == "系统提示 A + 新记忆"
         assert changed["hash"] != first["hash"]

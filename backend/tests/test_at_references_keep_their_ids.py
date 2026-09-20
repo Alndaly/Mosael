@@ -11,10 +11,11 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.domain.agent import host
+from app.domain.agent import prompt as agent_prompt
 
 
 def test_引用清单说得出是谁_去哪儿读() -> None:
-    text = host.references_context(
+    text = agent_prompt.references_context(
         [
             {"kind": "note", "id": "n1", "name": "mosael"},
             {"kind": "asset", "id": "a1", "name": "运镜练习.mp4"},
@@ -33,13 +34,13 @@ def test_引用清单说得出是谁_去哪儿读() -> None:
 
 
 def test_没有引用就不挂一段空清单() -> None:
-    assert host.references_context([]) == ""
-    assert host.references_context(None) == ""
+    assert agent_prompt.references_context([]) == ""
+    assert agent_prompt.references_context(None) == ""
 
 
 def test_缺id的条目直接丢掉() -> None:
     # 没有 id 的引用对模型毫无用处 —— 列出来只会让它拿一个空串去调工具。
-    assert host.references_context([{"kind": "note", "name": "无名"}]) == ""
+    assert agent_prompt.references_context([{"kind": "note", "name": "无名"}]) == ""
 
 
 def test_落库的正文里没有id() -> None:
@@ -59,7 +60,7 @@ def test_落库的正文里没有id() -> None:
 def test_清单里点名的工具真的存在() -> None:
     """引用清单会告诉模型「用 read_note 读」—— 那个名字必须真的是一个工具。
 
-    这是一处**跨文件的耦合**:名字写在 host._REFERENCE_HOW 里,而工具定义在 mcp_server.py。
+    这是一处**跨文件的耦合**:名字写在 agent_prompt._REFERENCE_HOW 里,而工具定义在 mcp_server.py。
     改名的一方不会知道另一方在引用它,而错了也不报错 —— 模型会去调一个不存在的工具,
     白跑一轮,然后大概率自己编一个理由继续往下走。
 
@@ -67,7 +68,7 @@ def test_清单里点名的工具真的存在() -> None:
     """
     import mcp_server
 
-    for _label, tool in host._REFERENCE_HOW.values():
+    for _label, tool in agent_prompt._REFERENCE_HOW.values():
         if not tool:
             continue
         assert callable(getattr(mcp_server, tool, None)), f"{tool} 不是 mcp_server 里的工具"
@@ -86,7 +87,7 @@ def test_删掉的对象明说已不存在(tmp_path) -> None:
     board = client.post("/api/boards", json={"workspace_id": ws["id"], "name": "故事板"}).json()
 
     with SessionLocal() as db:
-        text = host.references_context(
+        text = agent_prompt.references_context(
             [
                 {"kind": "board", "id": board["id"], "name": "旧名字"},
                 {"kind": "board", "id": "没有这个", "name": "幽灵"},
@@ -113,7 +114,7 @@ def test_别的工作区的_id_当作不存在(tmp_path) -> None:
     board = client.post("/api/boards", json={"workspace_id": theirs["id"], "name": "机密"}).json()
 
     with SessionLocal() as db:
-        text = host.references_context(
+        text = agent_prompt.references_context(
             [{"kind": "board", "id": board["id"], "name": "机密"}], db=db, workspace_id=mine["id"]
         )
 
@@ -135,8 +136,8 @@ def test_排队发出的那条也带着引用清单() -> None:
         "references": [{"kind": "asset", "id": "a1", "name": "运镜练习"}],
         "context": "先看看这个",
     }
-    queued = host.user_prompt("把 @运镜练习 改长一点", payload)
-    direct = host.user_prompt("把 @运镜练习 改长一点", {"references": payload["references"], "context": payload["context"]})
+    queued = agent_prompt.user_prompt("把 @运镜练习 改长一点", payload)
+    direct = agent_prompt.user_prompt("把 @运镜练习 改长一点", {"references": payload["references"], "context": payload["context"]})
 
     assert queued == direct
     assert "id=a1" in queued

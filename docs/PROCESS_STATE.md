@@ -38,7 +38,7 @@
 | --- | --- | --- |
 | `app/ai/runtime/tts_daemon.py:_POOL` | 常驻 TTS 工作进程池 | 重启后第一次合成要重新加载模型(十几秒到几分钟)。第二个后端进程会**再养一份**,显存翻倍。 |
 | `app/ai/runtime/asr_daemon.py:_POOL` | 常驻 ASR 工作进程池 | 同上。语音对话的首句延迟就取决于这个池热没热。 |
-| `app/domain/agent/host.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的)。 |
+| `app/domain/agent/stream.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的)。 |
 | `app/domain/jobs.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
 | `app/api/routes/job_worker.py:_HEARTBEATS`<br>`app/api/routes/browser_worker.py:_HEARTBEATS` | 执行器在线状态 | 有意做成进程内 —— worker 的在线本就随后端进程存在。但多进程下"在线"会随请求落到哪个进程而闪烁。 |
 | `app/integrations/feishu/service.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |

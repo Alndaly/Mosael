@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.core import interpreter
 from app.ai.sidecar.adapters import AdapterError, run_turn
+from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE
 from app.domain.agent.host import (
-    SYSTEM_PROMPT_TEMPLATE,
     append_message,
     get_or_create_external_session,
     resolve_chat_provider,

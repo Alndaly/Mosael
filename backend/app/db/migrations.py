@@ -1194,7 +1194,7 @@ def _migrate_agent_notice_envelope_out_of_content() -> None:
 
     这句信封(「【来自另一个智能体会话的通知】发起会话 id:<32位>」)是写给模型的,此前被拼进
     了 content —— 而 content 正是用户在对话里看到的那一份,于是界面上就多出一行方括号标签
-    加一串十六进制。现在信封只在拼提示词时加(见 ai/agent/host.agent_notice_envelope),
+    加一串十六进制。现在信封只在拼提示词时加(见 domain/agent/prompt.agent_notice_envelope),
     「谁发来的」在库里只留一个表示:payload.from_agent_session。
 
     存量这么写的消息在这里一次性改正,而不是让前端去认那个前缀 —— 靠字符串匹配认信封,正是

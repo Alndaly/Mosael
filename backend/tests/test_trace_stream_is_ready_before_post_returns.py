@@ -14,6 +14,7 @@ from __future__ import annotations
 import threading
 
 from app.domain.agent import host
+from app.domain.agent import stream as agent_stream
 
 
 def test_起线程之前流就已经开着(monkeypatch) -> None:
@@ -28,7 +29,7 @@ def test_起线程之前流就已经开着(monkeypatch) -> None:
     real_start = threading.Thread.start
 
     def watching_start(self):  # 线程真正跑起来之前,先看一眼流的状态
-        seen.append(host.get_stream_state("s-1")["done"])
+        seen.append(agent_stream.get_stream_state("s-1")["done"])
         real_start(self)
 
     monkeypatch.setattr(threading.Thread, "start", watching_start)
@@ -40,4 +41,4 @@ def test_起线程之前流就已经开着(monkeypatch) -> None:
 
 
 def test_没有回合在跑时仍然是关着的() -> None:
-    assert host.get_stream_state("从没跑过的会话")["done"] is True
+    assert agent_stream.get_stream_state("从没跑过的会话")["done"] is True

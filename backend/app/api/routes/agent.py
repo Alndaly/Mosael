@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
 
 from app.domain.agent import host
+from app.domain.agent import stream as agent_stream
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -299,7 +300,7 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
     async def generator():
         last_seq = -1
         while True:
-            state = host.get_stream_state(session_id)
+            state = agent_stream.get_stream_state(session_id)
             if state["seq"] != last_seq:
                 last_seq = state["seq"]
                 yield (

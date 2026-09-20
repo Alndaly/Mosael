@@ -5,6 +5,8 @@ from base64 import b64decode
 
 from app.ai.sidecar import adapters
 from app.domain.agent import host
+from app.domain.agent import stream as agent_stream
+from app.domain.agent import prompt as agent_prompt
 from app.ai.sidecar.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.core.config import settings
@@ -42,7 +44,7 @@ def wait_idle(client, session_id: str, seconds: float = 8) -> str:
 def test_system_prompt_separates_workflow_edits_from_timeline_edits() -> None:
     """The workflow side panel asks the same general agent to edit a graph. The global
     prompt must not steer node deletion into the video timeline tool."""
-    prompt = host.SYSTEM_PROMPT_TEMPLATE
+    prompt = agent_prompt.SYSTEM_PROMPT_TEMPLATE
     assert "edit_workflow" in prompt
     assert "remove_node" in prompt
     assert "edit_timeline 只用于视频时间线" in prompt
@@ -63,19 +65,19 @@ def test_turn_metering_estimates_tokens_when_adapter_usage_is_missing() -> None:
 
 def test_stream_timeline_preserves_text_tool_text_order() -> None:
     session_id = "timeline-order-test"
-    host._stream_reset(session_id)
-    host._stream_append(session_id, "先说明。")
-    host._stream_tool_event(
+    agent_stream._stream_reset(session_id)
+    agent_stream._stream_append(session_id, "先说明。")
+    agent_stream._stream_tool_event(
         session_id,
         {"type": "tool_start", "toolCallId": "tool-1", "name": "list_workflows", "args": {"workspace_id": "w"}},
     )
-    host._stream_tool_event(
+    agent_stream._stream_tool_event(
         session_id,
         {"type": "tool_end", "toolCallId": "tool-1", "result": [{"name": "新工作流"}], "isError": False},
     )
-    host._stream_append(session_id, "再总结。")
+    agent_stream._stream_append(session_id, "再总结。")
 
-    state = host.get_stream_state(session_id)
+    state = agent_stream.get_stream_state(session_id)
 
     assert [item["type"] for item in state["timeline"]] == ["text", "tool", "text"]
     assert state["timeline"][0]["text"] == "先说明。"
@@ -483,27 +485,27 @@ def test_思考块在正文开始时结束_不依赖供应商发_thinking_end() 
     转圈,底下正文却已经写完了 —— 用户看到的是自相矛盾的两句话。正文开始本身就是确凿证据。
     """
     session_id = "s-thinking"
-    host._stream_reset(session_id)
-    host._stream_thinking(session_id, {"type": "thinking_delta", "delta": "先想一下"})
-    assert host.get_stream_state(session_id)["timeline"][-1] == {
+    agent_stream._stream_reset(session_id)
+    agent_stream._stream_thinking(session_id, {"type": "thinking_delta", "delta": "先想一下"})
+    assert agent_stream.get_stream_state(session_id)["timeline"][-1] == {
         "type": "thinking",
         "text": "先想一下",
         "done": False,
     }
 
-    host._stream_append(session_id, "正文开始")
-    timeline = host.get_stream_state(session_id)["timeline"]
+    agent_stream._stream_append(session_id, "正文开始")
+    timeline = agent_stream.get_stream_state(session_id)["timeline"]
     assert timeline[0]["type"] == "thinking" and timeline[0]["done"] is True
     assert timeline[1] == {"type": "text", "text": "正文开始"}
 
     # 之后再有思考(工具循环里常见)是**新的一块**,不会续到已结束的那块上
-    host._stream_thinking(session_id, {"type": "thinking_delta", "delta": "再想想"})
-    timeline = host.get_stream_state(session_id)["timeline"]
+    agent_stream._stream_thinking(session_id, {"type": "thinking_delta", "delta": "再想想"})
+    timeline = agent_stream.get_stream_state(session_id)["timeline"]
     assert timeline[2] == {"type": "thinking", "text": "再想想", "done": False}
 
     # 调工具同样意味着思考结束
-    host._stream_tool_event(session_id, {"type": "tool_start", "toolCallId": "c1", "name": "list_assets", "args": {}})
-    timeline = host.get_stream_state(session_id)["timeline"]
+    agent_stream._stream_tool_event(session_id, {"type": "tool_start", "toolCallId": "c1", "name": "list_assets", "args": {}})
+    timeline = agent_stream.get_stream_state(session_id)["timeline"]
     assert timeline[2]["done"] is True
     assert timeline[3]["type"] == "tool"
 
@@ -511,35 +513,34 @@ def test_思考块在正文开始时结束_不依赖供应商发_thinking_end() 
 def test_一轮结束时不会留下思考中() -> None:
     """只思考、没说话的一轮(被取消、或模型只回了思考)也不该留一个转不完的圈。"""
     session_id = "s-thinking-only"
-    host._stream_reset(session_id)
-    host._stream_thinking(session_id, {"type": "thinking_delta", "delta": "想了但没说"})
-    host._stream_finish(session_id, "")
-    timeline = host.get_stream_state(session_id)["timeline"]
+    agent_stream._stream_reset(session_id)
+    agent_stream._stream_thinking(session_id, {"type": "thinking_delta", "delta": "想了但没说"})
+    agent_stream._stream_finish(session_id, "")
+    timeline = agent_stream.get_stream_state(session_id)["timeline"]
     assert timeline == [{"type": "thinking", "text": "想了但没说", "done": True}]
 
 
 def test_子智能体的每一步进时间线_并嵌在父调用名下() -> None:
     """subtool 事件 → 时间线条目。没有它,run_subagent 是一段几十秒的静默 ——
     旧的 onSubagentStep 回调从来没被接线,这次直接换成完整的 start/end 事件流。"""
-    from app.domain.agent import host
 
     session_id = "sub-trace-test"
-    host._stream_reset(session_id)
+    agent_stream._stream_reset(session_id)
     try:
-        host._stream_tool_event(session_id, {
+        agent_stream._stream_tool_event(session_id, {
             "type": "subtool", "phase": "start", "parentCallId": "parent-1",
             "toolCallId": "c1", "toolName": "list_assets", "args": {"kind": "video"},
         })
-        state = host.get_stream_state(session_id)
+        state = agent_stream.get_stream_state(session_id)
         assert state["timeline"][-1]["type"] == "subtool"
         assert state["timeline"][-1]["parent_id"] == "parent-1"
         assert state["timeline"][-1]["tool"]["status"] == "running"
 
-        host._stream_tool_event(session_id, {
+        agent_stream._stream_tool_event(session_id, {
             "type": "subtool", "phase": "end", "parentCallId": "parent-1",
             "toolCallId": "c1", "toolName": "list_assets", "result": {"ok": True}, "isError": False,
         })
-        state = host.get_stream_state(session_id)
+        state = agent_stream.get_stream_state(session_id)
         entry = state["timeline"][-1]
         assert entry["tool"]["status"] == "done"
         assert entry["tool"]["result"] == {"ok": True}
@@ -547,49 +548,48 @@ def test_子智能体的每一步进时间线_并嵌在父调用名下() -> None
         assert isinstance(entry["tool"]["usage"].get("duration_seconds"), float)
 
         # 失败的一步要标成 error —— 子智能体里的失败不该被压平成"done"
-        host._stream_tool_event(session_id, {
+        agent_stream._stream_tool_event(session_id, {
             "type": "subtool", "phase": "start", "parentCallId": "parent-1",
             "toolCallId": "c2", "toolName": "fetch_url", "args": {},
         })
-        host._stream_tool_event(session_id, {
+        agent_stream._stream_tool_event(session_id, {
             "type": "subtool", "phase": "end", "parentCallId": "parent-1",
             "toolCallId": "c2", "toolName": "fetch_url", "result": "boom", "isError": True,
         })
-        state = host.get_stream_state(session_id)
+        state = agent_stream.get_stream_state(session_id)
         assert state["timeline"][-1]["tool"]["status"] == "error"
     finally:
-        host._stream_reset(session_id)
+        agent_stream._stream_reset(session_id)
 
 
 def test_后台子智能体跑完_存档填回发起那张卡() -> None:
     """subagent_result 事件 → run_subagent 卡的 details.subagent。非阻塞派发的卡瞬间
     就 done 了(回执是「已派发」),存档要等子智能体真跑完才回填 —— 丢了这个事件,
     界面上那张卡永远停在「已派发、无档案」。"""
-    from app.domain.agent import host
 
     session_id = "subagent-result-test"
-    host._stream_reset(session_id)
+    agent_stream._stream_reset(session_id)
     try:
         # 派发:工具卡开卡、立即收卡(dispatched 回执)
-        host._stream_tool_event(session_id, {
+        agent_stream._stream_tool_event(session_id, {
             "type": "tool_start", "toolCallId": "parent-1", "name": "run_subagent", "args": {"task": "查素材"},
         })
-        host._stream_tool_event(session_id, {
+        agent_stream._stream_tool_event(session_id, {
             "type": "tool_end", "toolCallId": "parent-1",
             "result": {"content": [], "details": {"subagent_dispatched": True}}, "isError": False,
         })
         # 后台跑完:存档回填,不动原 content/details 里已有的东西
         archive = {"task": "查素材", "steps": 2, "error": None, "trace": [{"type": "text", "text": "结论"}]}
-        host._stream_tool_event(session_id, {
+        agent_stream._stream_tool_event(session_id, {
             "type": "subagent_result", "parentCallId": "parent-1", "archive": archive,
         })
-        state = host.get_stream_state(session_id)
+        state = agent_stream.get_stream_state(session_id)
         card = state["timeline"][-1]["tool"]
         assert card["result"]["details"]["subagent"] == archive
         assert card["result"]["details"]["subagent_dispatched"] is True  # 原有标记不被洗掉
         assert card["status"] == "done"
     finally:
-        host._stream_reset(session_id)
+        agent_stream._stream_reset(session_id)
 
 
 def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> None:
@@ -640,7 +640,7 @@ def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> Non
 def test_落库时subtool不被丢掉() -> None:
     """流式期间嵌套卡都在,一刷新全没了 —— _timeline_for_payload 只认三种类型,
     subtool 被静默丢弃。真机上第一次派发就撞上:存档在、时间线里却零条子步。"""
-    from app.domain.agent.host import _timeline_for_payload
+    from app.domain.agent.stream import _timeline_for_payload
 
     stream_state = {
         "timeline": [
