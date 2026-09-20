@@ -157,7 +157,7 @@ def test_没名字时给个默认名() -> None:
 
 def test_启动迁移把旧节点状态收进run并持久化() -> None:
     from app.core.db import SessionLocal
-    from app.db.migrations import init_db
+    from app.db.migrations import _migrate_board_canvas_state
     from app.db.models import Board
 
     client = fresh_client()
@@ -175,7 +175,9 @@ def test_启动迁移把旧节点状态收进run并持久化() -> None:
         }
         db.commit()
 
-    init_db()
+    #: 直接调这个迁移,而不是走 init_db:一次性迁移跑过就记账了(见 migration_runner),
+    #: 让启动再跑一遍是在验一件已经不成立的事。
+    _migrate_board_canvas_state()
 
     canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
     assert canvas["items"][0]["run"] == {"status": "running", "job_id": "job-1"}
@@ -183,8 +185,8 @@ def test_启动迁移把旧节点状态收进run并持久化() -> None:
     assert canvas["items"][1]["run"] == {"status": "failed", "error": "上游失败"}
     assert all("job_id" not in item and "error" not in item for item in canvas["items"])
 
-    # Re-running startup is a no-op and must not recreate legacy fields.
-    init_db()
+    # 再跑一遍是空操作,不会把旧字段又变回来。
+    _migrate_board_canvas_state()
     with SessionLocal() as db:
         stored = db.get(Board, board_id)
         assert stored is not None

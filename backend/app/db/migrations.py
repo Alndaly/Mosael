@@ -2024,10 +2024,26 @@ def _create_current_schema() -> None:
 
 
 def _steps(phase: MigrationPhase, *operations: Any) -> tuple[MigrationStep, ...]:
-    """Give private Python operations stable, log-friendly migration identities."""
+    """Give private Python operations stable, log-friendly migration identities.
+
+    默认是**一次性**的:跑成功就记进 schema_migrations,下次启动跳过(见 migration_runner)。
+    """
 
     return tuple(
         MigrationStep(operation.__name__.lstrip("_").replace("_", "-"), phase, operation)
+        for operation in operations
+    )
+
+
+def _recurring(phase: MigrationPhase, *operations: Any) -> tuple[MigrationStep, ...]:
+    """**对账**,不是迁移:每次启动都要跑,不记账。
+
+    判据是「它处理的东西还会再出现」:孤儿共享记录会随新的删除再产生;job 的消息键要跟着
+    文案表变;当前 schema 要为新表跑 create_all。而「把某列的旧形状转成新形状」只会有一次。
+    """
+
+    return tuple(
+        MigrationStep(operation.__name__.lstrip("_").replace("_", "-"), phase, operation, once=False)
         for operation in operations
     )
 
@@ -2075,7 +2091,6 @@ def migration_plan() -> MigrationPlan:
                 _migrate_source_assets_get_a_role,
                 _migrate_workflow_source_assets,
                 _migrate_plugin_registry_url,
-                _cleanup_orphan_resource_shares,
                 _migrate_generation_job_message_keys,
                 _migrate_agent_session_order,
                 _migrate_agent_notice_envelope_out_of_content,
@@ -2089,11 +2104,8 @@ def migration_plan() -> MigrationPlan:
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
             ),
-            MigrationStep(
-                "create-current-schema",
-                MigrationPhase.SCHEMA,
-                _create_current_schema,
-            ),
+            #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
+            *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
                 _migrate_drop_local_publish_accounts,
@@ -2111,7 +2123,6 @@ def migration_plan() -> MigrationPlan:
                 _migrate_resource_ownership,
                 _migrate_publish_task_options,
                 _migrate_job_message_i18n,
-                _migrate_job_keys_are_keys,
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
                 _migrate_provider_model_capability_ref,
@@ -2123,6 +2134,12 @@ def migration_plan() -> MigrationPlan:
                 # Projection comes last so rows synthesized by earlier migrations are visible
                 # immediately, rather than waiting for the next application startup.
                 _backfill_activity_events,
+            ),
+            #: 这两条是**对账**不是迁移:孤儿共享会随以后的删除再产生,job 的消息键要跟着文案表变。
+            *_recurring(
+                MigrationPhase.AFTER_SCHEMA,
+                _cleanup_orphan_resource_shares,
+                _migrate_job_keys_are_keys,
             ),
             *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs),
         )

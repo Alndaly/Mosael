@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Generator
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -46,7 +46,12 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
 
 
 def now() -> datetime:
-    return datetime.utcnow()
+    """朴素 UTC 时间戳。**和 `db/model_base.now` 是同一个语义**(那边是给 ORM 列的默认值)。
+
+    `datetime.utcnow()` 自 Python 3.12 起已废弃(3.15 计划移除),而它是全库时间戳的来源之一,
+    所以这里换成等价的写法:`datetime.now(UTC)` 再摘掉 tzinfo —— 值一模一样,库里已有的行不受影响。
+    """
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def session_scope() -> Generator[Session, None, None]:
