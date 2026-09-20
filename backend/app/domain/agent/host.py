@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import ipaddress
 import json
 import logging
 import math
 import threading
 import time
-from urllib.parse import urlparse
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -34,6 +32,7 @@ from app.domain.agent.textclean import decode_byte_fallback
 from app.domain import provider_models
 from app.domain.provider_runtime import sidecar_provider
 from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context_tokens
+from app.domain.model_limits import fallback_context_window
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session, revoke_session
@@ -923,47 +922,6 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
     # 压完的水位**在这边重算**,不用 sidecar 回报的那份:后者只有 {tokens, window},没有分项。
     # 两条路给两种形状,界面就得判断"这次有没有明细" —— 而那正是同一个数有两个来源的代价。
     return {"context": session_context(db, session), "compaction": result.compaction}
-
-
-#: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的两个 fallback 常量一致** ——
-#: 云端按 128K、本机/LAN 按 32K；界面与运行时用不同值会让水位和压缩行为对不上。
-#: 由 contracts/context-meter-cases.json 钉住,两侧测试跑同一份语料。
-FALLBACK_CONTEXT_WINDOW = 128000
-LOCAL_FALLBACK_CONTEXT_WINDOW = 32000
-#: 目录没给「一次最多能说多长」时的回退。同样由那份语料钉住(max_output_cases)。
-FALLBACK_MAX_OUTPUT_TOKENS = 4096
-FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 16384
-
-
-def fallback_max_output_tokens(context_window: int, *, thinking: bool) -> int:
-    """目录没给单次输出额度时用多少。**和 sidecar 同一个形状**(pi.ts 的 fallbackMaxTokens)。
-
-    思考 token 和正文共用这份额度,所以对推理模型给得宽 —— 4K 很容易全花在思考上,最后一个字
-    都没说出来(那正是用户会看到的「已用完本轮输出额度」)。但不超过窗口的四分之一:输出占掉
-    大半个窗口,就没剩下多少装对话了。
-    """
-    if not thinking:
-        return FALLBACK_MAX_OUTPUT_TOKENS
-    return max(FALLBACK_MAX_OUTPUT_TOKENS, min(FALLBACK_REASONING_MAX_OUTPUT_TOKENS, context_window // 4))
-
-
-def fallback_context_window(base_url: str) -> int:
-    """未知云模型按 128K；本机/LAN 推理端点继续采用保守窗口。"""
-    try:
-        hostname = (urlparse(base_url).hostname or "").lower()
-        if hostname == "localhost" or hostname.endswith(".local"):
-            return LOCAL_FALLBACK_CONTEXT_WINDOW
-        if hostname and ipaddress.ip_address(hostname).is_private:
-            return LOCAL_FALLBACK_CONTEXT_WINDOW
-    except ValueError:
-        pass
-    return FALLBACK_CONTEXT_WINDOW
-
-
-
-
-
-
 
 
 def tool_definition_tokens(db: Session, user_id: str | None = None) -> int:

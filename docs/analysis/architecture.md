@@ -425,7 +425,7 @@ sequenceDiagram
 
 ### 8.4 上下文预算与整理(双端一致机制)
 
-- **窗口来自模型**:模型行 `context_window` → 供应商目录 → 回退。**注意:代码已演进为双回退**——云端 128K(`FALLBACK_CONTEXT_WINDOW = 128000`)、本机/LAN 32K(`LOCAL_FALLBACK_CONTEXT_WINDOW = 32000`),按 base_url 的 hostname 判私网;两侧(host.py:1362-1376 与 compaction.ts:60+)同一套规则,由 `contracts/context-meter-cases.json` 钉死。CONTEXT.md 里"保守回退 32000"的表述已落后于代码(见 §13 观察)。
+- **窗口来自模型**:模型行 `context_window` → 供应商目录 → **内置查证表**(`backend/app/domain/model_limits.py`,2026-09 起)→ 回退。回退是**双回退**——云端 128K(`FALLBACK_CONTEXT_WINDOW`)、本机/LAN 32K(`LOCAL_FALLBACK_CONTEXT_WINDOW`),按 base_url 的 hostname 判私网;两侧(`domain/model_limits.py` 与 `compaction.ts:60+`)同一套规则,由 `contracts/context-meter-cases.json` 钉死。合并只发生在 `model_limits.resolve` 一处,运行时(`provider_runtime`)与设置页共用它。
 - **用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(input+output),此后新消息按 `CHARS_PER_TOKEN = 3.5` 估——sidecar(compaction.ts:47)与后端(context_meter.py:28)逐字一致。
 - **整理发生在两轮之间**,不在 `transformContext`(那个每次 LLM 调用都跑):超窗口 `COMPACT_RATIO = 0.8` 时把早期对话交给模型摘要,保留最近 `KEEP_RECENT = 8` 条;**切点必须回退到一条 user 消息**(否则留下没有 tool_call 的孤儿 tool_result,下一轮 400);摘要失败降级截断但**如实回报**——静默降级会让用户以为上下文还在。
 

@@ -25689,6 +25689,13 @@
             ],
             "title": "Developer Role"
           },
+          "thinking_levels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Thinking Levels"
+          },
           "generation_capability_ref": {
             "anyOf": [
               {

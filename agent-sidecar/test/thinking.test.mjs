@@ -71,12 +71,20 @@ test("未知模型维持 4K 输出回退", () => {
   assert.equal(model.maxTokens, 4096);
 });
 
-test("已声明思考档位的 128K 模型默认给 16K 输出", () => {
+test("已声明思考档位的大窗口模型默认给到 32K 输出上限", () => {
+  const { model } = buildModels("https://api.deepseek.com", "k", "reasoner", {
+    contextWindow: 200_000,
+    thinkingLevelMap: { off: "none", high: "high" },
+  });
+  assert.equal(model.maxTokens, 32_768);
+});
+
+test("推理模型的默认输出仍封在上下文四分之一 —— 128K 窗口到不了 32K", () => {
   const { model } = buildModels("https://api.deepseek.com", "k", "reasoner", {
     contextWindow: 128_000,
     thinkingLevelMap: { off: "none", high: "high" },
   });
-  assert.equal(model.maxTokens, 16_384);
+  assert.equal(model.maxTokens, 32_000);
 });
 
 test("推理模型的默认输出不超过上下文四分之一", () => {

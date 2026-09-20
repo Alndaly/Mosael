@@ -208,7 +208,7 @@ async function prepareContext(
 }
 
 const FALLBACK_MAX_TOKENS = 4096;
-const FALLBACK_REASONING_MAX_TOKENS = 16_384;
+const FALLBACK_REASONING_MAX_TOKENS = 32_768;
 
 /**
  * 目录没有给 maxTokens 时仍要给模型一份够用的输出预算。

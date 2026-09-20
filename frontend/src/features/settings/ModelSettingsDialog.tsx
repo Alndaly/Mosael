@@ -280,15 +280,22 @@ export function ModelSettingsDialog({
 
   const current = draft ?? settings.data ?? null;
   const source = settings.data?.context_window_source ?? "fallback";
-  // 目录给了就把它当占位提示:用户清空输入框时,回到的正是这个值。
-  const inherited = source === "catalog" ? settings.data?.context_window : null;
   const outputSource = settings.data?.max_output_tokens_source ?? "fallback";
-  const inheritedOutput = outputSource === "catalog" ? settings.data?.max_output_tokens : null;
-  //: 回退值**由后端给**,不在这里再算一份。此前这里写死 32000,而远程端点运行时用的是
-  //: 128000 —— 界面告诉用户的数和请求真正带的数不是一个,于是「为什么只有这么点输出额度」
-  //: 从界面上根本推不出来。
+  //: 查到的**上限**(目录报的,或内置查证表里的)。和下面的 effective 是两回事。
+  const knownWindow = settings.data?.context_window ?? 0;
+  const knownOutput = settings.data?.max_output_tokens ?? 0;
+  //: 不是用户自己填的那份上限。输入框里的值和它相等时保存成 null —— 把继承来的值钉死,
+  //: 供应商哪天调了上限就跟不上了,而用户以为自己什么都没改。
+  const inherited = source === "override" ? null : (settings.data?.context_window ?? null);
+  const inheritedOutput = outputSource === "override" ? null : (settings.data?.max_output_tokens ?? null);
+  //: 清空输入框时实际会发出去的那两个数,**由后端给**,不在这里再算一份。此前这里写死
+  //: 32000,而远程端点运行时用的是 128000 —— 界面告诉用户的数和请求真正带的数不是一个,
+  //: 于是「为什么只有这么点输出额度」从界面上根本推不出来。
   const effectiveWindow = settings.data?.effective_context_window ?? 0;
   const effectiveOutput = settings.data?.effective_max_output_tokens ?? 0;
+  //: 上限比默认预算高时,这两个数会不一样(DeepSeek 上限 384,000,默认按 65,536 发)。
+  //: 只在不一样时多说一句 —— 相等时那句话是废话。
+  const outputCapped = outputSource !== "override" && knownOutput > 0 && effectiveOutput < knownOutput;
   // 上下文窗口与那几个兼容开关只对**对话**模型有意义 —— 给一个生图模型显示"支持 developer 角色"
   // 纯属噪音,还会让人以为漏配了什么。
   //
@@ -362,7 +369,9 @@ export function ModelSettingsDialog({
         <div className="grid gap-1.5">
           <span className="text-ui-md font-medium text-foreground">{t("modelCapabilities")}</span>
           {/* 能力放在最前:它决定下面显示什么 —— 生图模型没有上下文窗口,也不认 developer 角色。
-              留空表示跟随 vendor 预设。 */}
+              留空表示跟随 vendor 预设。这句话说的就是这件事:少了它,读者只能从"点掉 chat
+              之后下面少了一半"倒着猜这一组管什么。 */}
+          <p className="m-0 text-xs leading-[1.45] text-muted-foreground">{t("modelCapabilitiesHint")}</p>
           <div className="flex flex-wrap gap-1.5">
             {capabilityOptions.map((capability) => {
               // **按生效值高亮**,而不是只按显式设置。列表行上的标签画的就是生效值 ——
@@ -433,7 +442,7 @@ export function ModelSettingsDialog({
                 // 对比之下更明显。
                 className="bg-panel"
                 value={current?.context_window ?? ""}
-                placeholder={String(inherited ?? effectiveWindow)}
+                placeholder={String(effectiveWindow)}
                 onChange={(event) =>
                   setDraft((prev) =>
                     prev ? { ...prev, context_window: event.target.value ? Number(event.target.value) : null } : prev,
@@ -445,8 +454,10 @@ export function ModelSettingsDialog({
               {source === "override"
                 ? t("modelSettingsSourceOverride")
                 : source === "catalog"
-                  ? t("modelSettingsSourceCatalog").replace("{n}", String(inherited ?? 0))
-                  : t("modelSettingsSourceFallback").replace("{n}", String(effectiveWindow))}
+                  ? t("modelSettingsSourceCatalog").replace("{n}", String(knownWindow))
+                  : source === "builtin"
+                    ? t("modelSettingsSourceBuiltin").replace("{n}", String(knownWindow))
+                    : t("modelSettingsSourceFallback").replace("{n}", String(effectiveWindow))}
             </p>
             <p className="m-0 text-xs leading-[1.45] text-muted-foreground">{t("modelSettingsContextWindowHint")}</p>
 
@@ -463,7 +474,7 @@ export function ModelSettingsDialog({
                 min={256}
                 className="bg-panel"
                 value={current?.max_output_tokens ?? ""}
-                placeholder={String(inheritedOutput ?? effectiveOutput)}
+                placeholder={String(effectiveOutput)}
                 onChange={(event) =>
                   setDraft((prev) =>
                     prev
@@ -477,9 +488,16 @@ export function ModelSettingsDialog({
               {outputSource === "override"
                 ? t("modelSettingsOutputSourceOverride")
                 : outputSource === "catalog"
-                  ? t("modelSettingsOutputSourceCatalog").replace("{n}", String(inheritedOutput ?? 0))
-                  : t("modelSettingsOutputSourceFallback").replace("{n}", String(effectiveOutput))}
+                  ? t("modelSettingsOutputSourceCatalog").replace("{n}", String(knownOutput))
+                  : outputSource === "builtin"
+                    ? t("modelSettingsOutputSourceBuiltin").replace("{n}", String(knownOutput))
+                    : t("modelSettingsOutputSourceFallback").replace("{n}", String(effectiveOutput))}
             </p>
+            {outputCapped && (
+              <p className="m-0 text-xs leading-[1.45] text-muted-foreground">
+                {t("modelSettingsOutputCapped").replace("{n}", String(effectiveOutput))}
+              </p>
+            )}
             <p className="m-0 text-xs leading-[1.45] text-muted-foreground">{t("modelSettingsMaxOutputHint")}</p>
           </div>
         )}
@@ -507,6 +525,17 @@ export function ModelSettingsDialog({
                   value={current.reasoning}
                   onChange={(next) => setDraft((prev) => (prev ? { ...prev, reasoning: next } : prev))}
                 />
+                {/* 「推理模型」是**开关总闸**,而档位发不发得出去是另一件事(见后端
+                    domain/thinking)。两者此前只有前者露在界面上,于是"开着却没有档位"
+                    读起来像配漏了 —— 而它恰恰是我们主动不给的。 */}
+                <p className="m-0 pl-0.5 text-xs leading-[1.45] text-muted-foreground">
+                  {(settings.data?.thinking_levels ?? []).length > 0
+                    ? t("modelSettingsThinkingLevels").replace(
+                        "{list}",
+                        (settings.data?.thinking_levels ?? []).join(" / "),
+                      )
+                    : t("modelSettingsThinkingLevelsNone")}
+                </p>
                 <AdvancedToggle
                   label={t("modelSettingsVision")}
                   hint={t("modelSettingsVisionHint")}

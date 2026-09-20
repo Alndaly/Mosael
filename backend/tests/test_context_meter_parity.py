@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.agent.host import (
+from app.domain.model_limits import (
     FALLBACK_CONTEXT_WINDOW,
     FALLBACK_MAX_OUTPUT_TOKENS,
     FALLBACK_REASONING_MAX_OUTPUT_TOKENS,

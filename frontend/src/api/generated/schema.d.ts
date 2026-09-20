@@ -9468,6 +9468,8 @@ export interface components {
             reasoning_effort?: boolean | null;
             /** Developer Role */
             developer_role?: boolean | null;
+            /** Thinking Levels */
+            thinking_levels?: string[];
             /** Generation Capability Ref */
             generation_capability_ref?: string | null;
             /** Generation Capability Refs */

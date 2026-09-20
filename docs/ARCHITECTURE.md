@@ -378,15 +378,23 @@ Gateway 的边界与安全不变量见
 
 ## 智能体的上下文:预算与整理
 
-**窗口来自模型**:模型行的 `context_window` → 供应商目录 → 双档回退:云端 **128K**,本机/LAN **32K**
-(按 base_url 判定)。两个回退常量与判定逻辑在 sidecar(`agent-sidecar/src/compaction.ts`,`pi.ts` 引用)和
-后端(`backend/app/domain/agent/host.py` 的 `fallback_context_window`)各有一份,**必须一致**——否则前端显示的水位
-和真正触发整理的时机会对不上。两侧由 `contracts/context-meter-cases.json` 钉住。
+**窗口来自模型**:模型行的 `context_window` → 供应商目录 → **内置查证表** → 双档回退:云端 **128K**,
+本机/LAN **32K**(按 base_url 判定)。四层合并**只在 `backend/app/domain/model_limits.py` 的 `resolve()`
+一处发生**,运行时(`domain/provider_runtime`)与设置页共用它 —— 界面显示的数和请求真正带的数必须是同一个。
 
-**输出预算和上下文水位是两件事**:`stopReason=length` 表示本轮 `maxTokens` 已耗尽，推理 token 也计入；
-它不能被解释成上下文窗口已满。目录未声明输出上限时，普通兼容模型保守回退到 4K，声明了思考档位的
-推理模型回退到 16K 且不超过上下文窗口的四分之一。失败事件仍须携带真实 usage 与 context，供消息用量、
-计费和上下文水位展示使用。
+内置表(同一模块的 `KNOWN_LIMITS`)是手写的查证结果:多数端点的 `/models` 根本不报上限,于是 1M 窗口的
+模型会被当成 128K。按**模型名前缀**匹配、不按 vendor(中转端点的 vendor 一律是 `openai-compatible`,
+OpenRouter 的 id 还带 `厂商/` 前缀),最长前缀赢,数值一律向下取整 —— 报小只是早一点整理,报大是整轮请求被拒。
+
+两个回退常量与判定逻辑在 sidecar(`agent-sidecar/src/compaction.ts`,`pi.ts` 引用)和后端各有一份,
+**必须一致**——否则前端显示的水位和真正触发整理的时机会对不上。两侧由 `contracts/context-meter-cases.json`
+钉住;内置表只在后端(sidecar 拿到的是后端算好的数),所以它不进契约。
+
+**输出预算和上下文水位是两件事**:`stopReason=length` 表示本轮 `maxTokens` 已耗尽,推理 token 也计入;
+它不能被解释成上下文窗口已满。知道模型上限时按 `OUTPUT_BUDGET_CAP = 65536` 封顶(**那是预算,不是上限**:
+`max_tokens` 在部分接口上要和输入一起装进窗口);查不到上限时,普通兼容模型保守回退到 4K,声明了思考档位的
+推理模型回退到 32K,两者都不超过上下文窗口的四分之一。用户在模型设置里填的值不受封顶约束 —— 那一格存在的
+意义就是突破默认预算。失败事件仍须携带真实 usage 与 context,供消息用量、计费和上下文水位展示使用。
 
 **用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(供应商回的 input+output),此后的新消息
 才按 `CHARS_PER_TOKEN = 3.5` 估。纯靠字符估会随对话变长持续跑偏。同一套锚定规则在

@@ -270,14 +270,24 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 
 ## 12. 同一个常量在 sidecar 和后端各写了一份 — ✅ 已由契约钉住
 
-四个回退常量在 `agent-sidecar/src/{pi,compaction}.ts` 与 `backend/app/domain/agent/host.py`
+四个回退常量在 `agent-sidecar/src/{pi,compaction}.ts` 与 `backend/app/domain/model_limits.py`
 各有一份:`FALLBACK_CONTEXT_WINDOW = 128000`、`LOCAL_FALLBACK_CONTEXT_WINDOW = 32000`
-(本机/LAN 端点)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 16384`,
+(本机/LAN 端点)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 32768`,
 以及 `CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
 
 不是疏忽:整理决策必须在 sidecar 里做(它才拿得到消息与 usage),而水位显示必须在后端算(前端只认
 REST)。现在由 [`contracts/context-meter-cases.json`](../contracts/context-meter-cases.json) 说了算 ——
 常量和两条回退公式(窗口按端点、输出额度按窗口与思考能力)都有语料,两侧各跑一遍。
+
+**回退只是最后一手。** 真实上限的来源依次是:用户在模型设置里填的 → 供应商 `/models` 目录 →
+`backend/app/domain/model_limits.py` 里内置的查证表 → 上面那几个回退常量。内置表**只在后端**,
+sidecar 拿到的是后端算好的数(见 `domain/provider_runtime.sidecar_provider`),所以它不进契约 ——
+进契约的是两侧都要会算的那份回退。
+
+内置表是**手写的查证结果**,没有上游会纠正它:改一条就更新模块头的来源与日期,
+`backend/tests/test_model_limits.py` 盯着形状(小写键、无厂商前缀、向下取整到整千、输出不超窗口)。
+表里记的是模型**能接受的最大值**;不填「最大输出 Token」时实际发出去的是
+`OUTPUT_BUDGET_CAP = 65536` 封顶后的预算 —— 两个数在设置页分别显示,别把它们合成一个。
 
 **前端曾是悄悄的第三份**:模型设置弹窗里写死 `FALLBACK_CONTEXT_WINDOW = 32000`,而远程端点运行时
 用的是 128000 —— 用户看到「当前按 32000 使用」,请求却按 128000 发,于是「为什么输出额度只有

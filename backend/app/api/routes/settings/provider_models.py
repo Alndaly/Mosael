@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from app.ai.model_catalog import fetch_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
-from app.domain import provider_models
+from app.domain import model_limits, provider_models, thinking
 from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
@@ -68,49 +68,48 @@ def _is_known_model(vendor: str, model_id: str, catalog: dict[str, dict]) -> boo
     return any(model_id in builtin_models_for(vendor, kind) for kind in ("image", "video"))
 
 
-def _effective_limits(
-    *, base_url: str, vendor: str, model_id: str, window: int | None, output: int | None
-) -> tuple[int, int]:
-    """运行时真正会用的那两个数 —— **界面显示这个**,而不是自己再算一份回退。
+def _known_fields(
+    *, base_url: str, vendor: str, model_id: str, entry: dict, model=None
+) -> dict:
+    """关于这个模型我们**知道什么**:两个上限、它们各自的来源、运行时真会用的那两个数,
+    以及发得出去的思考档位。**三个出口共用这一处**。
 
-    弹窗此前写死了 `FALLBACK_CONTEXT_WINDOW = 32000`,而远程端点运行时用的是 128000
-    (32000 只给本机/局域网):用户看到的数和请求真正带的数不是一个,于是「为什么只有 16,384
-    输出额度」这种问题从界面上根本推不出来。回退的形状由 contracts/context-meter-cases.json
-    钉住两侧一致。
-
-    `window` / `output` 是已经合并过「用户填的 → 目录给的」之后的值,None 表示两边都没有。
+    界面显示的必须是运行时会用的数,而不是界面自己再算一份回退 —— 弹窗此前写死
+    `FALLBACK_CONTEXT_WINDOW = 32000`,而远程端点运行时用的是 128000(32000 只给本机/
+    局域网):用户看到的数和请求真正带的数不是一个,于是「为什么只有 16,384 输出额度」
+    这种问题从界面上根本推不出来。合并规则在 domain/model_limits 一处。
     """
-    from app.domain import thinking
-    from app.domain.agent.host import fallback_context_window, fallback_max_output_tokens
-
-    effective_window = window or fallback_context_window(base_url)
-    # 和 provider_models.runtime_values 同一条判据:有一档能发得出去,才算思考模型。
-    profile = thinking.profile_for(vendor, model_id)
-    thinks = any(mapped is not None for mapped in profile.level_map.values())
-    return int(effective_window), int(output or fallback_max_output_tokens(effective_window, thinking=thinks))
+    resolved = model_limits.resolve(
+        model_id=model_id,
+        base_url=base_url,
+        vendor=vendor,
+        override_window=getattr(model, "context_window", None),
+        override_output=getattr(model, "max_output_tokens", None),
+        catalog_window=entry.get("context_window"),
+        catalog_output=entry.get("max_output_tokens"),
+    )
+    return {
+        "context_window": resolved.context_window,
+        "context_window_source": resolved.context_window_source,
+        "max_output_tokens": resolved.max_output_tokens,
+        "max_output_tokens_source": resolved.max_output_tokens_source,
+        "effective_context_window": resolved.effective_context_window,
+        "effective_max_output_tokens": resolved.effective_max_output_tokens,
+        # 和会话里的模型选择器同一条判据(provider_defaults 那边也查这张表):档位由
+        # domain/thinking 说了算,查不到的模型一档都发不出去 —— 设置页要说出来,否则
+        # 用户只会看到「推理模型」开着、会话里却一个档位都没有,以为是自己漏配了什么。
+        "thinking_levels": thinking.profile_for(vendor, model_id).levels(),
+    }
 
 
 def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> ProviderModelOut:
-    entry = catalog.get(model.model_id) or {}
-    catalog_window = entry.get("context_window")
-    if model.context_window:
-        window, source = model.context_window, "override"
-    elif catalog_window:
-        window, source = catalog_window, "catalog"
-    else:
-        window, source = None, "fallback"
-    if model.max_output_tokens:
-        output_source = "override"
-    elif entry.get("max_output_tokens"):
-        output_source = "catalog"
-    else:
-        output_source = "fallback"
-    effective_window, effective_output = _effective_limits(
+    vendor = vendor or (model.profile.vendor if model.profile else "")
+    known = _known_fields(
         base_url=(model.profile.base_url if model.profile else "") or "",
-        vendor=vendor or (model.profile.vendor if model.profile else ""),
+        vendor=vendor,
         model_id=model.model_id,
-        window=window,
-        output=model.max_output_tokens or entry.get("max_output_tokens"),
+        entry=catalog.get(model.model_id) or {},
+        model=model,
     )
     from app.domain.generation.resolution import declaration_refs_for_model, resolve_row
 
@@ -127,14 +126,9 @@ def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> Provide
         effective_capability_ids=provider_models.effective_capabilities(model),
         enabled=model.enabled,
         configured=True,
-        in_catalog=_is_known_model(vendor or (model.profile.vendor if model.profile else ""), model.model_id, catalog),
+        in_catalog=_is_known_model(vendor, model.model_id, catalog),
         source=model.source,
-        context_window=window,
-        context_window_source=source,
-        max_output_tokens=model.max_output_tokens or entry.get("max_output_tokens"),
-        max_output_tokens_source=output_source,
-        effective_context_window=effective_window,
-        effective_max_output_tokens=effective_output,
+        **known,
         reasoning=model.reasoning,
         vision=model.vision,
         reasoning_effort=model.reasoning_effort,
@@ -194,13 +188,9 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
                 configured=False,
                 in_catalog=True,
                 enabled=False,  # 没配置过 = 还没启用,加入后才进选择器
-                context_window=entry.get("context_window"),
-                context_window_source="catalog" if entry.get("context_window") else "fallback",
-                max_output_tokens=entry.get("max_output_tokens"),
-                max_output_tokens_source="catalog" if entry.get("max_output_tokens") else "fallback",
-                **dict(zip(("effective_context_window", "effective_max_output_tokens"), _effective_limits(
-                    base_url=profile.base_url or "", vendor=profile.vendor, model_id=model_id,
-                    window=entry.get("context_window"), output=entry.get("max_output_tokens")), strict=True)),
+                **_known_fields(
+                    base_url=profile.base_url or "", vendor=profile.vendor, model_id=model_id, entry=entry
+                ),
                 # 和落库后 effective_capabilities 走同一条判据 —— 否则列表里显示的能力
                 # 和加进去之后的能力对不上,而用户是照着列表做的决定。
                 effective_capability_ids=(
@@ -228,13 +218,9 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
                     # 是静态的",而那是实现细节,不是用户要分辨的东西。
                     in_catalog=True,
                     enabled=False,
-                    context_window=None,
-                    context_window_source="fallback",
-                    max_output_tokens=None,
-                    max_output_tokens_source="fallback",
-                    **dict(zip(("effective_context_window", "effective_max_output_tokens"), _effective_limits(
-                        base_url=profile.base_url or "", vendor=profile.vendor, model_id=model_id,
-                        window=None, output=None), strict=True)),
+                    **_known_fields(
+                        base_url=profile.base_url or "", vendor=profile.vendor, model_id=model_id, entry={}
+                    ),
                     effective_capability_ids=[kind],
                 )
             )

@@ -1,20 +1,20 @@
 {
   "contract": "context-meter",
-  "version": 3,
+  "version": 4,
   "readme": "contracts/README.md",
   "description": "上下文水位:一组 pi 消息占了多少 token。sidecar 用它决定**压不压**,后端用它在界面上显示**还能聊多久**。两边算出不同的数,就会出现「水位显示 90% 而压缩迟迟不触发」。后端 backend/tests/test_context_meter_parity.py 与 sidecar test/context-meter.parity.test.mjs 跑同一份语料。同一份语料还钉住**模型的两个运行时上限**:上下文窗口和单次输出额度 —— 它们一起决定「能聊多久」和「一次能说多长」,而且都在目录查不到模型时要各自回退。",
   "notes": [
     "锚点规则:从后往前找**最近一条带 usage 的 assistant 消息**;它的 usage 就是供应商上次实际看到的量,锚之后的消息才需要估算;一条 usage 都没有就整段估算。",
     "usage 里 input/output 都为空(或都是 0)的不算锚 —— 那种消息说明不了供应商看到了多少。",
     "语料里的文本刻意只用 BMP 字符(ASCII 与常用汉字):Python 的 len() 数码点、JS 的 .length 数 UTF-16 码元,两者只在非 BMP(emoji、罕用字)上分叉。那是一个估算器可以接受的近似,写进契约只会逼两侧互相迁就,所以不放进来 —— 与 ADR-0004 把调色留在契约之外是同一类取舍。",
-    "`max_output_cases` 是**回退**,不是上限本身:目录或用户给了真实值就用真实值。回退的形状要两侧一致,否则界面上显示的额度和请求真正带的 max_tokens 不是一个数。"
+    "`max_output_cases` 是**回退中的回退**:目录、用户设置、以及后端内置的查证表(backend/app/domain/model_limits.py)都没有这个模型时才走到这里。回退的形状要两侧一致,否则界面上显示的额度和请求真正带的 max_tokens 不是一个数。内置表只在后端,sidecar 拿到的是后端算好的数 —— 表不进契约,回退进。"
   ],
   "constants": {
     "chars_per_token": 3.5,
     "fallback_context_window": 128000,
     "local_fallback_context_window": 32000,
     "fallback_max_output_tokens": 4096,
-    "fallback_reasoning_max_output_tokens": 16384
+    "fallback_reasoning_max_output_tokens": 32768
   },
   "fallback_cases": [
     {
@@ -183,15 +183,22 @@
       "max_output_tokens": 4096
     },
     {
+      "name": "reasoning-huge-window",
+      "why": "思考 token 和正文共用这份额度,4K 很容易全花在思考上,只剩一个字。窗口够大时给到上限 32K。",
+      "context_window": 200000,
+      "thinking": true,
+      "max_output_tokens": 32768
+    },
+    {
       "name": "reasoning-large-window",
-      "why": "思考 token 和正文共用这份额度,4K 很容易全花在思考上,只剩一个字。大窗口模型给到上限 16K。",
+      "why": "输出额度不该超过窗口的四分之一 —— 128K 窗口封在 32,000,还没顶到 32,768 那条线。",
       "context_window": 128000,
       "thinking": true,
-      "max_output_tokens": 16384
+      "max_output_tokens": 32000
     },
     {
       "name": "reasoning-small-window",
-      "why": "输出额度不该超过窗口的四分之一 —— 32K 窗口给 16K 输出,剩下的装不下几轮对话。",
+      "why": "本机小模型的窗口正是靠四分之一这一项兜住的:32K 窗口只给 8K 输出。",
       "context_window": 32000,
       "thinking": true,
       "max_output_tokens": 8000

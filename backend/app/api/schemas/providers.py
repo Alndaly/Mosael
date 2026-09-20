@@ -40,6 +40,9 @@ class ProviderModelOut(ApiModel):
     vision: bool | None = None
     reasoning_effort: bool | None = None
     developer_role: bool | None = None
+    #: 这个模型**真正发得出去**的思考档位(见 domain/thinking)。空 = 一档都发不出。
+    #: 设置页据此在「推理模型」旁边说清楚:开着这个开关也不会有档位可选,那不是配错了。
+    thinking_levels: list[str] = Field(default_factory=list)
     #: 生成参数按什么来 —— `model:<provider>/<model>` 或 `profile:<id>`,留空 = 跟随目录。
     generation_capability_ref: str | None = None
     #: 按生成类型分别声明。双能力模型不能让 image 与 video 共用一个引用。
