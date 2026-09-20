@@ -75,7 +75,9 @@ def test_look_渲出图片且还原渲染设置(tmp_path) -> None:
     result = tmp_path / "look.json"
     script = tmp_path / "look.py"
     script.write_text("import bpy\nbpy.ops.wm.read_factory_settings(use_empty=True)\n" + setup + "\n"
-                      + command("look", {"views": ["overview", "top"], "objects": [], "shading": "solid",
+                      + command("look", {"views": [{"name": "overview", "azimuth": 35, "elevation": 30},
+                                                   {"name": "top", "azimuth": 0, "elevation": 89}],
+                                         "objects": [], "shading": "solid",
                                          "folder": str(folder), "result_path": str(result)}) + check, encoding="utf-8")
     completed = subprocess.run([BLENDER, "--background", "--factory-startup", "--python-exit-code", "1",
                                 "--python", str(script)], capture_output=True, text=True, timeout=180)

@@ -21,8 +21,14 @@ from app.core.config import settings
 from app.domain.blender import bridge
 from app.domain.blender.bridge import BlenderConflict, BlenderDomainError, BlenderUnavailable
 
-#: 与 worker.LOOK_VIEWS 同一组名字,外加 `camera`(Blender 场景里的活动相机)。
-LOOK_VIEWS = ("overview", "front", "side", "back", "top", "camera")
+#: 能从哪些角度看 Blender 里的东西 —— **只此一处**,角度随调用一起发给 worker。
+#: 值是 (方位角, 仰角),度:方位 0 = 从 -Y 看过去,和 Blender 的「前视图」(小键盘 1)一致;
+#: 90 = 从 +X 看,即「右视图」。顶视不取 90°:相机上方向是 +Y,正对下方时退化。
+#: `camera` 是个例外 —— 它用 Blender 场景自己的活动相机,没有角度。
+LOOK_VIEWS: dict[str, tuple[float, float] | None] = {
+    "overview": (35, 30), "front": (0, 5), "side": (90, 5), "back": (180, 5), "top": (0, 89),
+    "camera": None,
+}
 LOOK_SHADINGS = ("solid", "rendered")
 #: 和 view_scene 同一个上限:每张图都进模型上下文。
 LOOK_LIMIT = 4
@@ -65,7 +71,9 @@ def look(db, user, workspace_id: str, *, views: list[str], objects: list[str] | 
         raise BlenderDomainError(f"shading 只能是 {' 或 '.join(LOOK_SHADINGS)}")
     instance = resolve(db, user, instance_id)
     with _workspace_folder(workspace_id) as folder:
-        result = _run(db, instance, 'look', {'views': wanted, 'objects': objects or [], 'shading': shading,
+        views = [{'name': name, 'azimuth': (LOOK_VIEWS[name] or (0, 0))[0],
+                  'elevation': (LOOK_VIEWS[name] or (0, 0))[1]} for name in wanted]
+        result = _run(db, instance, 'look', {'views': views, 'objects': objects or [], 'shading': shading,
                                              'folder': str(folder)}, workspace_id, folder)
         images = []
         for one in result.get('images', []):

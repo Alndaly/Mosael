@@ -48,14 +48,17 @@ def test_look_把渲出来的图读成_base64_临时目录用完即删(fake_blen
     def render(payload):
         folder = Path(payload["folder"])
         for view in payload["views"]:
-            (folder / f"{view}.jpg").write_bytes(b"\xff\xd8jpeg")
-        return {"scene_name": "S", "images": [{"view": v, "path": str(folder / f"{v}.jpg")} for v in payload["views"]]}
+            (folder / f"{view['name']}.jpg").write_bytes(b"\xff\xd8jpeg")
+        return {"scene_name": "S",
+                "images": [{"view": v["name"], "path": str(folder / f"{v['name']}.jpg")} for v in payload["views"]]}
 
     fake_blender.replies["look"] = render
     setup_scene()
     with SessionLocal() as db:
         out = blender_agent.look(db, _user(db), "ws", views=["overview", "top", "overview"])
     assert [one["view"] for one in out["images"]] == ["overview", "top"], "重复的视角只渲一次"
+    assert fake_blender.calls[0][1]["views"][0] == {"name": "overview", "azimuth": 35, "elevation": 30}, \
+        "角度只在宿主那一份里写,随调用发给 worker"
     assert out["images"][0]["data"] == "/9hqcGVn"
     assert not Path(fake_blender.calls[0][1]["folder"]).exists()
 

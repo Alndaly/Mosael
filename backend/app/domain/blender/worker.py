@@ -236,9 +236,9 @@ def pull(payload):
 
 #: 超过这么多物体只列前面这些 —— 一个几千物体的工程整份交给模型,读不完也用不上。
 INSPECT_LIMIT = 300
-#: 自由视角:(方位角, 仰角),度。方位 0 = 从 -Y 看过去,和 Blender 的「前视图」(小键盘 1)一致;
-#: 90 = 从 +X 看,即「右视图」。顶视不取 90°:相机上方向是 +Y,正对下方时退化。
-LOOK_VIEWS = {'overview': (35, 30), 'front': (0, 5), 'side': (90, 5), 'back': (180, 5), 'top': (0, 89)}
+#: 视角的角度**随 payload 一起来**(见 blender/agent.py 的 LOOK_VIEWS)——
+#: 同一份名字和角度不写两遍:这边是跑在别人 Blender 里的脚本,导不进宿主的模块,
+#: 所以由宿主把 (方位角, 仰角) 一起发过来,这里只负责按角度摆相机。
 LOOK_SIZE = (960, 540)
 LOOK_FOV = 40
 
@@ -320,13 +320,14 @@ def look(payload):
         data.sensor_fit = 'VERTICAL'
         data.angle = math.radians(LOOK_FOV)
         for index, view in enumerate(payload['views']):
-            if view == 'camera':
+            name = view['name']
+            if name == 'camera':
                 if saved[1] is None:
                     warnings.append('场景里没有活动相机,跳过 camera 视角。')
                     continue
                 scene.camera = saved[1]
             else:
-                azimuth, elevation = (math.radians(v) for v in LOOK_VIEWS[view])
+                azimuth, elevation = (math.radians(v) for v in (view['azimuth'], view['elevation']))
                 direction = Vector((math.sin(azimuth) * math.cos(elevation), -math.cos(azimuth) * math.cos(elevation), math.sin(elevation)))
                 # 包围球比包围盒松得多(一块大地面就能把球撑大一圈),按球算再乘 0.7 才不至于把
                 # 东西缩在画面中间一小块 —— 立面视角下也不会切边,见 test_blender_worker_live。
@@ -335,10 +336,10 @@ def look(payload):
                 camera.rotation_euler = (-direction).to_track_quat('-Z', 'Y').to_euler()
                 data.clip_start, data.clip_end = max(0.001, distance * 0.01), distance * 4
                 scene.camera = camera
-            path = str(Path(payload['folder']) / ('%d-%s.jpg' % (index, view)))
+            path = str(Path(payload['folder']) / ('%d-%s.jpg' % (index, name)))
             render.filepath = path
             bpy.ops.render.render(write_still=True)
-            images.append({'view': view, 'path': path})
+            images.append({'view': name, 'path': path})
     finally:
         (render.engine, scene.camera, render.resolution_x, render.resolution_y, render.resolution_percentage,
          render.filepath, render.image_settings.file_format, render.film_transparent,
