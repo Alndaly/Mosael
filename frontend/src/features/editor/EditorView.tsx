@@ -2,7 +2,7 @@ import "./editor.css";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
+import { Bot, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 import { useRecorder } from "@/features/media/RecordingProvider";
@@ -1006,41 +1006,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           )}
         </section>
       )}
-      <section className="editor-monitor grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--monitor-bg)]">
-        {/* 监视器上方的操作条:**只放和「此刻这一画面」有关的动作**。
-            播放/快进那些在下面的走带条上,和这里不是一类事:那些是「走到哪一帧」,
-            这里是「拿这一帧做什么」。
-
-            **颜色不跟应用主题走。** 监视器这块底是恒定深色的(画面要在中性底上看),所以
-            这里和下面的走带条用同一套写死的浅灰/白 —— 跟主题走的话,浅色模式下就是深字
-            压在深底上,一个字都看不清。
-
-            分割线写成 `border-b-[color:…]` 而不是 `border-white/10`:这个项目用的是自定义
-            色板,**没有 `white` 这个色阶**,那条类根本不会生成 —— 于是边框退回 preflight 的
-            主题色(浅色模式下是一条不透明的浅灰),看着又粗又亮。加 `color:` 前缀是因为
-            `border-b-[…]` 的方括号里放长度会被当成边框宽度。 */}
-        <div className="flex h-11 shrink-0 items-center justify-end gap-1 px-4 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 px-2 text-ui-xs"
-            title={t("editorSplitHere")}
-            onClick={() => splitAtPlayhead()}
-          >
-            <Scissors size={12} /> {t("editorSplitHere")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 px-2 text-ui-xs"
-            title={t("editorGrabFrameTitle")}
-            loading={grabFrameMutation.isPending}
-            onClick={() => grabFrameMutation.mutate()}
-          >
-            <Camera size={12} /> {t("editorGrabFrame")}
-          </Button>
-
-        </div>
+      {/* 单行:`auto` 那一行原本给监视器上方的操作条,操作条搬进时间线工具栏之后,
+          Monitor 落进 auto 行 —— 高度按内容算,画框直接塌成一条。 */}
+      <section className="editor-monitor grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden bg-[var(--monitor-bg)]">
         <Monitor
           sequence={sequence}
           subtitleStyleOverride={styleDraft}
@@ -1124,6 +1092,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onDeleteClips={(clipIds) => deleteClipsMutation.mutate(clipIds)}
           onRippleDeleteClips={(clipIds) => rippleDeleteMutation.mutate(clipIds)}
           onSplitClip={(clipId) => splitAtPlayhead(clipId)}
+          onGrabFrame={() => grabFrameMutation.mutate()}
+          grabbingFrame={grabFrameMutation.isPending}
           onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}

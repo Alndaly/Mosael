@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, BetweenHorizontalStart, ChevronDown, ChevronUp, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -73,6 +73,8 @@ export function Timeline({
   onRippleDeleteClips,
   onSplitClip,
   onSplitClipAt,
+  onGrabFrame,
+  grabbingFrame = false,
   onDuplicateClip,
   onDetachAudio,
   onSeparateAudio,
@@ -97,8 +99,12 @@ export function Timeline({
   onDeleteClips?: (clipIds: string[]) => void;
   onRippleDeleteClip?: (clipId: string) => void;
   onRippleDeleteClips?: (clipIds: string[]) => void;
-  onSplitClip?: (clipId: string) => void;
+  /** 不给 clipId 就切播放头下的那一段(没选中东西时也能用)。 */
+  onSplitClip?: (clipId?: string) => void;
   onSplitClipAt?: (clipId: string, srcTime: number) => void;
+  /** 把播放头这一帧存成素材。和剪刀一样是**播放头**的动作,所以排在它旁边。 */
+  onGrabFrame?: () => void;
+  grabbingFrame?: boolean;
   onDuplicateClip?: (clipId: string) => void;
   onDetachAudio?: (clipId: string) => void;
   onSeparateAudio?: (clipId: string) => void;
@@ -664,14 +670,26 @@ export function Timeline({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  disabled={!selectedClipIds.length}
-                  onClick={() => selectedClipIds[0] && onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
+                  // **没选中东西时也能用**:切的是播放头下的那一段。这一条原本只在监视器上方
+                  // 那排里有(「在此切一刀」),而这里的剪刀灰着 —— 同一个动作两个入口、两种
+                  // 可用条件,用户只会觉得剪刀坏了。
+                  onClick={() => onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
                   aria-label={t("splitAtPlayhead")}
                 >
                   <Scissors size={14} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t("splitAtPlayhead")}</TooltipContent>
+            </Tooltip>
+          )}
+          {onGrabFrame && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-sm" loading={grabbingFrame} onClick={onGrabFrame} aria-label={t("editorGrabFrame")}>
+                  <Camera size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("editorGrabFrameTitle")}</TooltipContent>
             </Tooltip>
           )}
           {onDuplicateClip && (

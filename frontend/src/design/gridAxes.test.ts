@@ -45,7 +45,6 @@ const GRANDFATHERED = new Set<string>([
   "features/agent/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)]",
   "features/agent/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)_auto]",
   "features/auth/LoginView.tsx: grid-rows-[minmax(0,1fr)_auto]",
-  "features/editor/EditorView.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/editor/Inspector.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/media/AssetCompareView.tsx: grid-rows-[minmax(0,1fr)_auto]",
   "features/media/AssetCompareView.tsx: grid-rows-[auto_minmax(0,1fr)]",
