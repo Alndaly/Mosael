@@ -43,7 +43,7 @@ import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
 import { formatInvocationResult } from "@/features/plugins/invocationResult";

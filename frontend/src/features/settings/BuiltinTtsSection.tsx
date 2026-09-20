@@ -5,7 +5,7 @@ import { listTtsEngines } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 
-import { SettingsGroup, SettingsRow } from "./ui";
+import { SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 
 /**
  * 无需供应商档案的配音引擎(本地克隆、Edge 免费语音)。设置页只有「档案」时,

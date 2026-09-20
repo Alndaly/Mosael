@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
-from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     InviteMemberRequest,
-    DailyActivityOut,
-    DailyPublishOut,
     MembersOut,
     RenameRequest,
     SetRoleRequest,
@@ -19,40 +16,13 @@ from app.api.schemas import (
 )
 from app.domain.permissions import PermissionDenied, ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role, workspace_role
 from app.db.models import (
-    Asset,
-    Job,
-    Project,
-    PublishAccount,
-    PublishTask,
-    Sequence,
     User,
-    Workflow,
     Workspace,
     WorkspaceMember,
 )
-from app.domain import members as members_svc
+from app.domain import dashboard, members as members_svc
 
 router = APIRouter(tags=["workspaces"])
-
-#: 发布任务的状态怎么归到首页那三档。**三个集合合起来必须正好是 TASK_STATUSES**
-#: (由 test_publish_statuses_are_all_classified 钉住)—— 下面那个兜底会把没归类的状态
-#: 悄悄算成"进行中",于是漏掉一个的表现不是报错,是首页永远显示有几条在跑。
-#: `queued` 曾经就在这里,而发布任务根本没有这个状态(建出来是 pending,之后只走 report_task)。
-PUBLISH_ACTIVE_STATUSES = frozenset({"pending", "running"})
-PUBLISH_BLOCKED_STATUSES = frozenset({"login_required", "waiting_manual", "permission_required", "blocked"})
-
-
-def _publish_summary_bucket(status: str) -> str:
-    if status == "success":
-        return "succeeded"
-    if status in ("failed", "cancelled"):
-        return "failed"
-    if status in PUBLISH_BLOCKED_STATUSES:
-        return "blocked"
-    if status in PUBLISH_ACTIVE_STATUSES:
-        return "active"
-    return "active"
-
 
 @router.patch("/workspaces/{workspace_id}")
 def rename_workspace(workspace_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> dict:
@@ -286,111 +256,10 @@ def remove_member(workspace_id: str, user_id: str, db: DbSession, user: CurrentU
 
 @router.get("/workspaces/{workspace_id}/summary", response_model=WorkspaceSummaryOut)
 def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> WorkspaceSummaryOut:
-    """首页仪表:工作区一屏统计。只读聚合,单请求给全。"""
-    from datetime import datetime, timedelta
+    """首页仪表:工作区一屏统计。只读聚合,单请求给全。
 
-    from sqlalchemy import func
-
-    from app.db.models import now
-    from app.domain.usage import summarize_usage
-
+    聚合本身在 `domain/dashboard`:它回答的是「这个工作区里发生了什么」,和 HTTP 没关系,
+    而且不止一个入口要问。留在路由里的那一百来行 SQL,别的入口一行也复用不了。
+    """
     ensure_workspace_access(db, user, workspace_id)
-
-    def count(stmt) -> int:
-        return int(db.scalar(stmt) or 0)
-
-    week_ago = now() - timedelta(days=7)
-    scoped = lambda model: select(func.count()).select_from(model).where(model.workspace_id == workspace_id)  # noqa: E731
-
-    # 活动图:近 14 天逐日成功/失败(按终态时间 updated_at 归日,UTC),缺日补零。
-    span_start = (now() - timedelta(days=13)).date()
-    day_rows = db.execute(
-        select(func.date(Job.updated_at), Job.status, func.count())
-        .where(
-            Job.workspace_id == workspace_id,
-            Job.status.in_(("succeeded", "failed")),
-            Job.updated_at >= datetime.combine(span_start, datetime.min.time()),
-        )
-        .group_by(func.date(Job.updated_at), Job.status)
-    ).all()
-    by_day: dict[str, dict[str, int]] = {}
-    for day, status, count_ in day_rows:
-        by_day.setdefault(str(day), {})[str(status)] = int(count_)
-    daily = [
-        DailyActivityOut(
-            date=str(span_start + timedelta(days=offset)),
-            succeeded=by_day.get(str(span_start + timedelta(days=offset)), {}).get("succeeded", 0),
-            failed=by_day.get(str(span_start + timedelta(days=offset)), {}).get("failed", 0),
-        )
-        for offset in range(14)
-    ]
-
-    publish_day_rows = db.execute(
-        select(func.date(PublishTask.updated_at), PublishTask.status, func.count())
-        .where(
-            PublishTask.workspace_id == workspace_id,
-            PublishTask.updated_at >= datetime.combine(span_start, datetime.min.time()),
-        )
-        .group_by(func.date(PublishTask.updated_at), PublishTask.status)
-    ).all()
-    publish_by_day: dict[str, dict[str, int]] = {}
-    for day, status, count_ in publish_day_rows:
-        bucket = _publish_summary_bucket(str(status))
-        publish_by_day.setdefault(str(day), {}).setdefault(bucket, 0)
-        publish_by_day[str(day)][bucket] += int(count_)
-    publish_daily = [
-        DailyPublishOut(
-            date=str(span_start + timedelta(days=offset)),
-            succeeded=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("succeeded", 0),
-            failed=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("failed", 0),
-            active=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("active", 0),
-            blocked=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("blocked", 0),
-        )
-        for offset in range(14)
-    ]
-
-    kind_rows = db.execute(
-        select(Asset.kind, func.count()).where(Asset.workspace_id == workspace_id).group_by(Asset.kind)
-    ).all()
-    asset_kinds = {str(kind): int(count_) for kind, count_ in kind_rows}
-    publish_platform_rows = db.execute(
-        select(PublishAccount.platform, func.count())
-        .select_from(PublishTask)
-        .join(PublishAccount, PublishAccount.id == PublishTask.account_id)
-        .where(PublishTask.workspace_id == workspace_id)
-        .group_by(PublishAccount.platform)
-    ).all()
-    publish_platforms = {str(platform): int(count_) for platform, count_ in publish_platform_rows}
-    usage = summarize_usage(db, workspace_id=workspace_id, days=14)
-
-    return WorkspaceSummaryOut(
-        daily=daily,
-        asset_kinds=asset_kinds,
-        publish_daily=publish_daily,
-        publish_platforms=publish_platforms,
-        usage_cost_micros=usage.total_cost_micros,
-        usage_currency=usage.currency,
-        usage_event_count=usage.event_count,
-        usage_unknown_cost_events=usage.unknown_cost_events,
-        usage_unpriced=usage.unpriced,
-        usage_duration_seconds=usage.duration_seconds,
-        usage_token_count=usage.token_count,
-        usage_cache_read_tokens=usage.cache_read_tokens,
-        usage_cache_write_tokens=usage.cache_write_tokens,
-        usage_cache_hit_ratio=usage.cache_hit_ratio,
-        usage_daily=usage.daily,
-        usage_token_daily=usage.token_daily,
-        usage_by_capability=usage.by_capability,
-        usage_by_provider=usage.by_provider,
-        project_count=count(scoped(Project)),
-        asset_count=count(scoped(Asset)),
-        sequence_count=count(scoped(Sequence)),
-        workflow_count=count(scoped(Workflow)),
-        running_jobs=count(scoped(Job).where(Job.status.in_(("queued", "running")))),
-        week_jobs_succeeded=count(scoped(Job).where(Job.status == "succeeded", Job.updated_at >= week_ago)),
-        week_jobs_failed=count(scoped(Job).where(Job.status == "failed", Job.updated_at >= week_ago)),
-        publish_accounts=count(scoped(PublishAccount)),
-        week_published=count(
-            scoped(PublishTask).where(PublishTask.status == "success", PublishTask.updated_at >= week_ago)
-        ),
-    )
+    return WorkspaceSummaryOut(**dashboard.workspace_summary(db, workspace_id))

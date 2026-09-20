@@ -10,7 +10,7 @@ import { ServerPicker } from "@/components/layout/ServerPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow, SettingsSectionStack } from "@/features/settings/ui";
+import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";
 
 type NetworkConfig = components["schemas"]["NetworkConfigOut"];
 

@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSamplePlayer } from "@/lib/useSamplePlayer";
 import { UploadVoiceDialog } from "@/features/voice/VoiceCreationDialogs";
-import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/components/settings/settings-layout";
 
 /**
  * Settings →「声音克隆」里的音色库。

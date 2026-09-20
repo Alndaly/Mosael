@@ -7,7 +7,7 @@ import { type AsrModel, downloadAsrModel, listAsrModels } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";

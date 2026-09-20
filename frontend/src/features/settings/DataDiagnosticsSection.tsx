@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/features/settings/ui";
+import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";
 
 export function DataDiagnosticsSection() {
   const t = useI18n();

@@ -9,7 +9,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 
 export function AppearanceSection() {

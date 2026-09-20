@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
-import { SettingsList, SettingsListItem } from "@/features/settings/ui";
+import { SettingsList, SettingsListItem } from "@/components/settings/settings-layout";
 
 type ProviderModel = components["schemas"]["ProviderModelOut"];
 

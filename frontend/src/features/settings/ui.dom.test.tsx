@@ -12,7 +12,7 @@ import {
   SettingsListItem,
   SettingsRow,
   SettingsSectionStack,
-} from "./ui";
+} from "@/components/settings/settings-layout";
 
 describe("settings section layout", () => {
   it("keeps groups flat inside the page panel", () => {

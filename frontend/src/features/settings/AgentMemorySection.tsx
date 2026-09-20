@@ -10,7 +10,7 @@ import { useI18n } from "@/app/preferences";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 
 type AgentMemory = components["schemas"]["AgentMemoryOut"];

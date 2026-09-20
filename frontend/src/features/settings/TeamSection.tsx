@@ -32,7 +32,7 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { relativeTime } from "@/lib/time";
 
 /** Per-permission icon for the member-permissions popover (scannability). */

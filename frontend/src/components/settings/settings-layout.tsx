@@ -14,6 +14,10 @@ import { cn } from "@/lib/utils";
  * only Rows and Blocks. Any other element between two of them — including a display:none
  * one, which sibling selectors do not skip — adds or shifts a divider.
  * Hidden file inputs belong inside the Row whose control opens them.
+ *
+ * 住在 components/ 而不是 features/settings/ 里:设置、插件、定时任务、管理四个页面都是这个
+ * 版式,而前三个曾经要 import 第四个的内部文件才能画一行设置 —— 一套给大家用的版式不该长在
+ * 某个功能里面(棘轮:features/featureBoundaries.test.ts 管的是同一件事的更严重形态)。
  */
 
 export function SettingsGroup({

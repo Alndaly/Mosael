@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { type SeparationEngine, installSeparationEngine, listSeparationEngines } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 

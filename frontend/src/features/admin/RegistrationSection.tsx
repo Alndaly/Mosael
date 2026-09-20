@@ -18,7 +18,7 @@ import {
   SettingsRow,
   SettingsSectionStack,
   SETTINGS_FIELD_WIDTH,
-} from "@/features/settings/ui";
+} from "@/components/settings/settings-layout";
 
 type Invite = { code: string; note: string; used: boolean; expires_at: string };
 

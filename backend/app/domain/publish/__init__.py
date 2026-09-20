@@ -225,6 +225,29 @@ TASK_STATUSES = (
 TERMINAL_TASK_STATUSES = frozenset({"success", "failed", "cancelled"})
 BINDING_STATUSES = ("unknown", "checking", "bound", "login_required", "manual_required", "permission_required")
 
+#: 发布任务的状态怎么归到首页那三档。**三个集合合起来必须正好是 TASK_STATUSES**
+#: (由 test_publish_statuses_are_all_classified 钉住)—— 下面那个兜底会把没归类的状态
+#: 悄悄算成"进行中",于是漏掉一个的表现不是报错,是首页永远显示有几条在跑。
+#: `queued` 曾经就在这里,而发布任务根本没有这个状态(建出来是 pending,之后只走 report_task)。
+#:
+#: 住在发布域里:它说的是**发布任务的状态**,不是首页那个接口的事。此前它长在
+#: api/routes/workspaces.py 里,于是要用它的人(首页聚合、以后的日报)得去 import 一个路由模块。
+ACTIVE_STATUSES = frozenset({"pending", "running"})
+BLOCKED_STATUSES = frozenset({"login_required", "waiting_manual", "permission_required", "blocked"})
+
+
+def summary_bucket(status: str) -> str:
+    """一个发布任务在首页那三档里算哪一档。"""
+    if status == "success":
+        return "succeeded"
+    if status in ("failed", "cancelled"):
+        return "failed"
+    if status in BLOCKED_STATUSES:
+        return "blocked"
+    if status in ACTIVE_STATUSES:
+        return "active"
+    return "active"
+
 
 def normalize_platform(platform: str) -> str:
     raw = (platform or "").strip()

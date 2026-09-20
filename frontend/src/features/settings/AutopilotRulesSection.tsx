@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 
 type Level = "ask" | "judge" | "always";
 type Rules = {

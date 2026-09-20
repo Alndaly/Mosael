@@ -16,7 +16,7 @@ RATCHET = True
 
 
 def _sets():
-    from app.api.routes.workspaces import PUBLISH_ACTIVE_STATUSES, PUBLISH_BLOCKED_STATUSES
+    from app.domain.publish import ACTIVE_STATUSES as PUBLISH_ACTIVE_STATUSES, BLOCKED_STATUSES as PUBLISH_BLOCKED_STATUSES
     from app.domain.publish import TERMINAL_TASK_STATUSES
 
     return {
@@ -56,9 +56,9 @@ def test_三档互不重叠() -> None:
 
 def test_归档函数和集合说的是一回事() -> None:
     """集合对了,分档函数也可能自己另写一套判断 —— 那才是首页真正读的东西。"""
-    from app.api.routes.workspaces import _publish_summary_bucket
+    from app.domain.publish import summary_bucket as _publish_summary_bucket
     from app.domain.publish import TERMINAL_TASK_STATUSES
-    from app.api.routes.workspaces import PUBLISH_ACTIVE_STATUSES, PUBLISH_BLOCKED_STATUSES
+    from app.domain.publish import ACTIVE_STATUSES as PUBLISH_ACTIVE_STATUSES, BLOCKED_STATUSES as PUBLISH_BLOCKED_STATUSES
 
     for status in TERMINAL_TASK_STATUSES:
         expected = "succeeded" if status == "success" else "failed"

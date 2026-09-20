@@ -22,7 +22,7 @@ import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/compone
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
-import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 

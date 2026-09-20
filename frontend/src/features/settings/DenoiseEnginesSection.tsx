@@ -7,7 +7,7 @@ import { type DenoiseEngine, installDenoiseEngine, listDenoiseEngines } from "@/
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 

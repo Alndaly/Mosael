@@ -15,7 +15,7 @@ import { AdminActivityChart } from "./AdminActivityChart";
 import { RegistrationSection } from "./RegistrationSection";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { formatMicros } from "@/lib/money";
-import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { relativeTime } from "@/lib/time";
 
 type AdminUser = components["schemas"]["AdminUserOut"];

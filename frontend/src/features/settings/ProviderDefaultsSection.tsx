@@ -5,7 +5,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];

@@ -13,7 +13,7 @@ import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsEmpty, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
+import { SettingsEmpty, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 

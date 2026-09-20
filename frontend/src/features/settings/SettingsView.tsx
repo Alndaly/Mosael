@@ -6,7 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
-import { SettingsSectionStack } from "@/features/settings/ui";
+import { SettingsSectionStack } from "@/components/settings/settings-layout";
 import {
   ALL_SECTIONS,
   DEFAULT_SECTION_ID,

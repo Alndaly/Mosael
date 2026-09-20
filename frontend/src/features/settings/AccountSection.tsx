@@ -9,7 +9,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 
 export function AccountSection() {

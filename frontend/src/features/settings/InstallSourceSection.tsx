@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { getInstallSource, updateInstallSource } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 
 /** 预设的镜像 key。空串 = 官方 PyPI(后端据此不传 --index-url)。 */
 const PRESETS = ["pypi", "tsinghua", "aliyun", "tencent"] as const;
