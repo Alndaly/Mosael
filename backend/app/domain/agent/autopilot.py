@@ -105,7 +105,7 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
         return Decision(
             approve=True, mode="auto", detail={"permission": permission, "used": used, "limit": COST_AUTO_LIMIT}
         )
-    # external:撤不回来的那一档。规则先判 —— 明确拒绝就到此为止(判断者翻不了案),明确允许就
+    # external / destroy:撤不回来的那两档。规则先判 —— 明确拒绝就到此为止(判断者翻不了案),明确允许就
     # 直接放行(确定性的答案不该花一次模型调用)。只有规则没覆盖的才往下问判断者,而那要花几秒,
     # 所以交给后台并压一个 hold_until(见 consider)。
     ruling = rules.evaluate(confirmation.tool, confirmation.payload or {}, _rules_for(db, confirmation))

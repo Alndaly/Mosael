@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **85** 个工具,其中 **22** 个走确认卡、**1** 个停下来等用户作答。
+共 **87** 个工具,其中 **24** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -36,6 +36,8 @@ summaries — never raw internal schemas.
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
 | `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
+| `delete_assets` | 确认卡 | Confirmation required: PERMANENTLY delete media assets. This cannot be undone. |
+| `delete_projects` | 确认卡 | Confirmation required: PERMANENTLY delete projects and their timelines. |
 | `denoise_audio` | 确认卡 | Confirmation required: reduce background noise in an audio or video asset, producing a |
 | `dub_subtitles` | 确认卡 | Confirmation required: speak subtitle cues aloud onto a new dub track. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
@@ -126,6 +128,19 @@ summaries — never raw internal schemas.
 
 工作流画布能做的事智能体都能做 —— 由 `tests/test_agent_workflow_parity.py` 钉住:节点类型
 没有对应工具、又没写明为什么不需要,测试就红。
+
+### The `destroy` tier
+
+`delete_assets` and `delete_projects` are the only tools on this tier. Their consequences are
+*inside* this application — so `external` is the wrong word — but they are not undoable: the
+asset's file is removed from disk, a deleted project takes its timelines with it. `edit` is
+defined as "recoverable at worst", so putting a delete there would be a lie told on the one line
+the user reads before clicking approve.
+
+In autopilot, `destroy` falls through to the same branch as `external`: there is no enumerable
+criterion that makes a deletion safe, so it always goes back to a human. Deleting assets that a
+timeline uses is allowed — those clips become offline placeholders (see `domain/assets/deletion`)
+and the card says how many.
 
 ### The `external` tier
 

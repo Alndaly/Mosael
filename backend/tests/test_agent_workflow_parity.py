@@ -141,15 +141,25 @@ def test_两份确认清单必须一致() -> None:
 
 def test_确认卡的权限档次前端都有文案() -> None:
     """权限档次是用户点批准前唯一会看的那行字。前端按查表取文案,漏掉的档次会原样显示成
-    机器名(如 "external"),所以这里守住:每一档都要有 messages.ts 里的键。"""
+    机器名(如 "external"),所以这里守住:每一档都要有 messages.ts 里的键。
+
+    档次 → 文案键那张表**从 PermissionBadge.tsx 里读出来**,不在这里再抄一遍 —— 抄一遍的话
+    前端改了键名、这里照旧全绿,而守的就是这两者一致。
+    """
+    import re
     from pathlib import Path
 
-    from app.domain.agent.confirmable import tool_specs
+    from app.domain.agent.confirmable import PERMISSIONS, tool_specs
 
-    messages = (Path(__file__).resolve().parents[2] / "frontend/src/app/messages.ts").read_text("utf-8")
-    keys = {"edit": "permEdit", "ai-cost": "permAiCost", "render-cost": "permRenderCost", "external": "permExternal"}
-    for definition in tool_specs().values():
-        permission = definition.permission
+    frontend = Path(__file__).resolve().parents[2] / "frontend/src"
+    badge = (frontend / "features/agent/PermissionBadge.tsx").read_text("utf-8")
+    table = re.search(r"const LABEL_KEYS = \{(.*?)\} as const;", badge, re.S)
+    assert table is not None, "PermissionBadge.tsx 里找不到 LABEL_KEYS —— 改了形状就回来改这条"
+    keys = dict(re.findall(r'"?([\w-]+)"?:\s*"(\w+)"', table.group(1)))
+    messages = (frontend / "app/messages.ts").read_text("utf-8")
+    # 每一档都要有键,**不管现在有没有工具挂在上面** —— 新加的档往往先落在 PERMISSIONS 里,
+    # 等第一个工具挂上去才发现文案没写,而那时它已经出现在用户面前了。
+    for permission in {*PERMISSIONS, *(one.permission for one in tool_specs().values())}:
         assert permission in keys, f"新权限档次 {permission} 没有前端文案键"
         assert f"{keys[permission]}:" in messages, f"messages.ts 里缺 {keys[permission]}"
 

@@ -176,6 +176,8 @@ CONFIRMATION_TOOLS = frozenset(
         "run_host_code",
         "blender_execute",
         "http_request",
+        "delete_assets",
+        "delete_projects",
     }
 )
 
@@ -1946,6 +1948,55 @@ def update_asset(asset_id: str, name: str = "", project_id: str = "") -> dict[st
     if not body:
         return {"error": "nothing to update: pass name and/or project_id"}
     return _patch(f"/api/assets/{asset_id}", body)
+
+
+@mcp.tool()
+def delete_assets(asset_ids: list[str], workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: PERMANENTLY delete media assets. This cannot be undone.
+
+    The files are removed from disk. Timeline clips that use them are NOT
+    deleted: they keep their position and duration and are marked "media
+    offline", and the sequence will refuse to export until they are removed or
+    replaced. The confirmation card tells the user how many clips that is.
+
+    Pass every asset the user wants gone in ONE call (max 20) so they approve
+    one card instead of twenty. Call list_assets first and show the user the
+    list if there is any ambiguity about WHICH assets they mean — you cannot
+    take this back. Do NOT use this to tidy up on your own initiative.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "delete_assets",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_ids": asset_ids},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def delete_projects(project_ids: list[str], workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: PERMANENTLY delete projects and their timelines.
+
+    Assets inside a project are NOT deleted — they go back to the workspace
+    level. The sequences (timelines) in the project ARE deleted with it, and
+    that cannot be undone.
+
+    Pass every project in ONE call (max 20). Call list_projects first and show
+    the user which ones you mean if there is any ambiguity.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "delete_projects",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"project_ids": project_ids},
+        },
+    )
+    return _confirmation_reply(confirmation)
 
 
 @mcp.tool()

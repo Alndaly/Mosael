@@ -104,7 +104,12 @@
 | `run_workflow` | `ai-cost` | 扫 graph:含外部节点 → **`external`**,否则 `ai-cost` |
 | `edit_workflow` | `edit` | 扫 **ops 应用后**的图(复用已有的 `_graph_to_persist`) |
 | `create/update_workflow` | `edit` | 扫 `payload["graph"]` |
+| `delete_assets` / `delete_projects` | `destroy` | 不必派生;这一档没有"某些参数更安全"的说法 |
 | 其余 | —— | 不变 |
+
+**`destroy` 档**(2026-09 加):后果在这个应用**之内**但撤不回来 —— 素材文件从盘上清掉、
+项目连着时间线一起没。挂 `edit` 是说谎(那一档的定义就是"最坏也撤得回"),挂 `external`
+也不对(后果就在这里)。自动放行里它和 `external` 同一条路:没有可枚举的放行判据,一律回到人。
 
 **外部节点集**:`code`、`http_request`、`publish`、`browser_*`、`plugin_tool`,以及
 `call_workflow`(它按 id 引用另一张图,`privileged_nodes_in_graph` 不跟过去 —— 已验证返回

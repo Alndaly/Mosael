@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 
 #: 权限档次(plan §17.4)。"edit" 最坏也撤得回;"render-cost"/"ai-cost" 花的是时间或钱;
 #: "external" 的后果在这个应用之外 —— 发出去的帖子、别人服务器上的改动、本机跑过的代码。
-PERMISSIONS = ("edit", "render-cost", "ai-cost", "external")
+#:
+#: "destroy" 是**在这个应用之内、但撤不回**的那一档:删素材会把文件从盘上清掉,删项目会连着
+#: 它的序列一起没。挂 "edit" 是说谎(那一档的定义就是"最坏也撤得回"),挂 "external" 也不对
+#: (后果就在这个应用里)。自成一档之后,自动放行里它和 external 走同一条路 —— 没有可枚举的
+#: 放行判据,一律回到人。
+PERMISSIONS = ("edit", "destroy", "render-cost", "ai-cost", "external")
 COSTS = ("none", "render", "ai")
 
 

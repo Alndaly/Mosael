@@ -5,16 +5,15 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
-from app.db.models import Asset, Clip, Job, Transcript, Project
-from app.db.models import Sequence as SequenceModel
+from app.db.models import Asset, Job, Transcript, Project
 from app.core.config import settings
-from app.domain.assets import import_uploaded_asset, register_file_asset
+from app.domain.assets import delete_asset_with_clips, import_uploaded_asset, register_file_asset
 from app.domain.assets.proxies import start_proxy_job
 from app.domain.assets.source_url import find_transcript_by_source
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
@@ -250,39 +249,9 @@ def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentU
 def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "delete")
-    # **引用不再阻止删除。** 此前这里直接 422「请先从时间线移除」,而用户手上往往有十几条
-    # 序列,得自己一条条翻出来 —— 想删掉一个素材,先做一遍搜索工作。达芬奇的做法是删了就删了,
-    # 引用它的片段变成"媒体脱机";这里照它来:片段留在原位、时长不变,只是没有画面可放,
-    # 用户随时能看见是哪一段、原来是哪个文件。
-    #
-    # asset_id 上的外键是 RESTRICT,所以要**先**把引用摘掉再删,而不是指望级联。
-    snapshot = {
-        "asset_id": asset.id,
-        "name": asset.name,
-        "kind": asset.kind,
-        # 时长在 media_info 里,顶层没有这个字段(见 db/model_slices 的 Asset)。
-        "duration": (asset.media_info or {}).get("duration"),
-    }
-    touched: set[str] = set()
-    for clip in db.scalars(select(Clip).where(Clip.asset_id == asset_id)):
-        clip.offline_asset = dict(snapshot)
-        clip.asset_id = None
-        touched.add(clip.sequence_id)
-    # **改了片段就要把序列的版本号推上去。** 序列的 JSON 响应按 (id, revision) 缓存,编辑器
-    # 也是靠轮询 revision 判断"要不要重取" —— 不推的话,时间线上那一段会一直显示成原来的样子,
-    # 直到下一次有人编辑这条序列。这不是"顺手做的事",少了它这个功能在界面上根本不生效。
-    #
-    # 不记成可撤销的时间线操作:素材文件已经删了,撤销只能还回一个指向空文件的片段。
-    if touched:
-        db.execute(update(SequenceModel).where(SequenceModel.id.in_(touched)).values(revision=SequenceModel.revision + 1))
-    db.flush()
-    file_dir = resolve_key(asset.file_key).parent if asset.file_key else None
-    db.delete(asset)
-    db.commit()
-    if file_dir is not None and file_dir.is_dir():
-        import shutil
-
-        shutil.rmtree(file_dir, ignore_errors=True)
+    # 删除的三个后果(清文件、引用它的片段转脱机占位、受影响序列推版本号)全在
+    # domain/assets/deletion 一处 —— 智能体的确认卡走同一个函数。
+    delete_asset_with_clips(db, asset)
     return Response(status_code=204)
 
 
