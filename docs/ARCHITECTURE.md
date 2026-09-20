@@ -189,8 +189,8 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 `Base.metadata.create_all` 建出新装机需要的全部表,再依次跑 `app/db/migrations.py` 里的一串 `_migrate_*`
 函数,给**已装机**补上 `create_all` 不会施加的变更(加列、改外键、回填)。
 
-改表结构因此是两步:①改拥有该表的 `model_slices/<domain>.py`(尚未切片的表仍在 `models.py`,
-新装机由 ORM metadata 得到正确结构);②加一个 `_migrate_*`(已装机由此跟上)。只做①的话,
+改表结构因此是两步:①改拥有该表的 `model_slices/<domain>.py`(新装机由 ORM metadata
+得到正确结构);②加一个 `_migrate_*`(已装机由此跟上)。只做①的话,
 新装机正常、老用户升级后崩在缺列上。
 
 发版 CI 还会运行 `test/bundle.smoke.mjs`:它先用 `test/upgrade_db_fixture.py` 造一份最小旧库,再真正
@@ -210,10 +210,13 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 文件布局可以按领域切片:`app/db/model_slices/*`、`app/api/schemas/*`、`frontend/src/api/domains/*`
 提高 Locality,但切片不是公共 Interface。调用方仍分别只从 `app.db.models`、`app.api.schemas`、
 `@/api/client` 这三个统一装配入口导入,因此继续拆文件不会把布局变化扩散到全仓。
-当前已完成 browser、publish、jobs/task-events、notifications、scheduler、workflows、boards 的三侧切片；
-`SourceAssetRef` 也已作为生成域共享 schema 独立出来，boards 只依赖该契约而不反向依赖装配入口。
+**三侧都已切完**：53 个 ORM 类分在 `model_slices/` 的 20 个文件里、204 个 schema 分在
+`api/schemas/` 的 24 个文件里，前端 `api/domains/` 同构；两个装配入口现在各只剩三四十行转发，
+里面**不定义任何东西**。`SourceAssetRef` 作为生成域的共享 schema 独立成文件，boards 只依赖该契约
+而不反向依赖装配入口。
 `tests/test_domain_assembly_entries.py` 与 `frontend/src/api/clientAssembly.test.ts` 钉住重导出身份和 ORM
-metadata 注册，防止“文件移动成功、统一入口漏装配”这种只在运行期出现的错误。
+metadata 注册，防止“文件移动成功、统一入口漏装配”这种只在运行期出现的错误 —— 前者已从逐域手写的
+断言换成三条通用不变量，新切一个域自动被覆盖。
 
 **代码节点是内容,隔离是执行器责任**:工作流的 `code` 节点与其他节点一样按
 `edit` 授权。它通过 `app/domain/sandbox` 执行:默认无网、不继承后端环境变量,
