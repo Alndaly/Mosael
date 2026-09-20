@@ -123,6 +123,19 @@ export function Monitor({
 
   const activeClip =
     videoClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  //: 播放头下有脱机片段(素材被删了)。合成器拿不到源,画出来的是一片黑 —— 而"一片黑"
+  //: 和"这里本来就没内容"长得一模一样。达芬奇在这里画一块写着 MEDIA OFFLINE 的红屏,
+  //: 就是为了让它不可能被当成正常画面。
+  const offlineClip = React.useMemo(
+    () =>
+      (sequence.tracks ?? [])
+        .flatMap((track) => track.clips ?? [])
+        .find(
+          (clip) =>
+            clip.offline_asset && playhead >= clip.timeline_start && playhead < clipEnd(clip),
+        ) ?? null,
+    [sequence, playhead],
+  );
   
   // 改画幅:画框宽高比 + 填充模式(cover 裁剪 / contain 留黑边 / blur 模糊背景)。
   const fillMode = ((sequence.reframe as { fill_mode?: string } | undefined)?.fill_mode ?? "cover") as
@@ -387,7 +400,21 @@ export function Monitor({
           {previewBlock && (
             <PreviewUnavailable state={previewBlock.state} assets={previewBlock.assets} onRetried={onRefreshAssets} />
           )}
-          {!activeClip && (
+          {offlineClip && (
+            /* 压在合成画面之上、在变换手柄(z-[4])之下:它是一块状态提示,不该挡住
+               用户对这一段做别的操作(选中、改变换、删除)。 */
+            <div className="pointer-events-none absolute inset-0 z-[3] grid place-items-center bg-[color-mix(in_srgb,var(--destructive)_55%,#000)] px-6 text-center">
+              <div className="grid gap-1.5">
+                <span className="text-ui-md font-semibold uppercase tracking-[0.12em] text-white">
+                  {t("clipOffline")}
+                </span>
+                <span className="text-ui-sm text-[rgb(255_255_255/0.75)]">
+                  {String((offlineClip.offline_asset as { name?: string } | null)?.name ?? "")}
+                </span>
+              </div>
+            </div>
+          )}
+          {!activeClip && !offlineClip && (
             <div className="grid h-full w-full place-items-center bg-black object-contain">
               <span className="px-5 text-center text-ui-sm text-[rgb(255_255_255/0.4)]">{t("monitorBlankHint")}</span>
             </div>

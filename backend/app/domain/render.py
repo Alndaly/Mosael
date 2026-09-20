@@ -89,6 +89,18 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     if sequence is None:
         raise LookupError("Sequence not found")
 
+    # **脱机片段挡在导出之前。** 素材被删掉之后,引用它的片段既不是画面片段(查不到 kind)
+    # 也不是文字片段(没有 text_override),下面每一条筛选都会把它漏掉 —— 于是导出静默地
+    # 少一段,成片短了一截而没有任何提示,等发出去才发现。时间线上它是看得见的红色占位,
+    # 导出时也必须看得见。
+    offline = [clip for track in sequence.tracks for clip in track.clips if clip.offline]
+    if offline:
+        names = sorted({str((clip.offline_asset or {}).get("name") or "?") for clip in offline})
+        raise RenderPlanError(
+            f"有 {len(offline)} 个片段的素材已被删除({'、'.join(names[:3])}"
+            f"{' 等' if len(names) > 3 else ''}):请先把这些片段从时间线上删掉,或换上别的素材。"
+        )
+
     def clip_dict(clip) -> dict:
         return {
             "id": clip.id,

@@ -7379,6 +7379,10 @@ export interface components {
             linked_clip_id: string | null;
             /** Text Override */
             text_override: string | null;
+            /** Offline Asset */
+            offline_asset?: {
+                [key: string]: unknown;
+            } | null;
             /** Effects */
             effects: {
                 [key: string]: unknown;

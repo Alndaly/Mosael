@@ -73,6 +73,13 @@ class Clip(Base):
     muted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     linked_clip_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     text_override: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: 素材被删掉之后留下的**脱机占位**:`{asset_id, name, kind, duration}`。素材还在时恒为 None。
+    #:
+    #: 为什么要留一份快照而不是让 asset_id 悬空:`asset_id` 上的外键是 RESTRICT,悬空根本存不下;
+    #: 而单把 asset_id 置空的话,这一段就和「文字片段」(同样没有 asset_id)长得一模一样 ——
+    #: 界面分不出"这里本来有东西、现在没了"和"这里本来就是一行字"。名字也要一起留:脱机占位
+    #: 上写不出原来是哪个文件的话,用户没法把它对回去。
+    offline_asset: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=None)
     effects: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     # 片段变换(缩放/位移/旋转/透明度);空 = 恒等。{scale,x,y,rotation,opacity}
     transform: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -86,7 +93,17 @@ class Clip(Base):
 
     @property
     def asset_kind(self) -> str:
-        return self.asset.kind if self.asset is not None else ""
+        """这一段的媒体类型。脱机片段回报**它原来的**类型 —— 轨道还是那条轨道。"""
+        if self.asset is not None:
+            return self.asset.kind
+        if self.offline_asset:
+            return str(self.offline_asset.get("kind") or "")
+        return ""
+
+    @property
+    def offline(self) -> bool:
+        """素材已被删除。和"这是一行文字"不是一回事 —— 两者的 asset_id 都是空。"""
+        return bool(self.offline_asset)
 
 
 class SequenceOperation(Base):

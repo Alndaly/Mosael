@@ -1,5 +1,5 @@
 import React from "react";
-import { AudioLines, AudioWaveform, Copy, Mic, Scissors, Trash2, Waves } from "lucide-react";
+import { AudioLines, AudioWaveform, Copy, Mic, Scissors, Trash2, Unlink, Waves } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 export function TimelineClip({
   trackKind,
   name,
+  offline = false,
   left,
   width,
   shiftPx = 0,
@@ -29,6 +30,8 @@ export function TimelineClip({
 }: {
   trackKind: string;
   name: string;
+  /** 素材已被删除:片段留在原位,但没有画面可放。达芬奇的「媒体脱机」。 */
+  offline?: boolean;
   left: number;
   width: number;
   /** 相对 left 的水平位移(px):拖拽中的本体与涟漪让位的邻居都走 transform。 */
@@ -62,6 +65,11 @@ export function TimelineClip({
     animate && "transition-[left,width,transform] duration-200 ease-out motion-reduce:transition-none",
     selected && "z-[2] border-primary shadow-[0_0_0_1px_var(--primary)]",
     dragging && "z-[3] cursor-grabbing opacity-[0.92] duration-0",
+    // 脱机:斜纹 + 警示色。**要一眼看出来**,而不是"这一段颜色好像浅一点" —— 它在成片里
+    // 是一个洞,用户必须在时间线上就发现,而不是导出被拒时才知道。斜纹排在轨道底色之后,
+    // 靠 tailwind-merge 的后者胜出盖掉 bg-*。
+    offline &&
+      "border-destructive/70 bg-[repeating-linear-gradient(135deg,color-mix(in_srgb,var(--destructive)_26%,transparent)_0_6px,transparent_6px_12px)] text-foreground",
   );
 
   const clip = (
@@ -85,7 +93,7 @@ export function TimelineClip({
       data-selected={selected || undefined}
       role="button"
       tabIndex={-1}
-      title={name}
+      title={offline ? `${t("clipOffline")} · ${name}` : name}
     >
       {peaks && peaks.length > 0 && (
         <svg className="pointer-events-none absolute inset-x-px inset-y-0.5 h-[calc(100%-4px)] w-[calc(100%-2px)] [&_polygon]:fill-current [&_polygon]:opacity-30" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
@@ -98,7 +106,10 @@ export function TimelineClip({
           if (event.button === 0) onTrimPointerDown(event, "start");
         }}
       />
-      <span className="pointer-events-none relative z-[1] flex-1 truncate px-1.5 text-ui-xs font-semibold">{name}</span>
+      <span className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-1 px-1.5 text-ui-xs font-semibold">
+        {offline && <Unlink size={11} className="shrink-0 text-destructive" aria-hidden />}
+        <span className="truncate">{name}</span>
+      </span>
       <span
         className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden right-0 rounded-r-md after:right-[3px]"
         onPointerDown={(event) => {

@@ -191,7 +191,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   });
   const batchRemove = useMutation({
     mutationFn: async () => {
-      // 时间线占用中的素材会被后端 422 拒绝;逐个尝试,失败的留下并提示。
+      // 逐个尝试,失败的留下并提示。(被时间线引用**不再**是失败的理由:那些片段会转成
+      // 脱机占位。这里剩下的是权限、文件被占用这类真正的失败。)
       const failures: string[] = [];
       for (const id of selectedIds) {
         try {

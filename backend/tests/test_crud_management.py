@@ -37,7 +37,12 @@ def test_project_asset_list_includes_workspace_level_assets() -> None:
     assert names == {"workspace-level", "mine"}, names  # 别的项目的素材仍然不串场
 
 
-def test_asset_rename_and_delete_blocked_when_in_use() -> None:
+def test_asset_rename_and_delete_takes_referencing_clips_offline() -> None:
+    """删得掉,而引用它的片段**留在原位**变成脱机占位 —— 达芬奇的做法。
+
+    此前这里是 422「请先从时间线移除」:想删一个素材,得先自己在十几条序列里翻出每一段。
+    现在删除是删除,时间线上留下一个看得见的占位,用户随时知道是哪一段、原来是哪个文件。
+    """
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
@@ -59,12 +64,29 @@ def test_asset_rename_and_delete_blocked_when_in_use() -> None:
         json={"track_id": track["id"], "asset_id": asset["id"], "timeline_start": 0, "src_in": 0, "src_out": 5},
     ).json()
 
-    blocked = client.delete(f"/api/assets/{asset['id']}")
-    assert blocked.status_code == 422  # in use on the timeline
-
     clip = next(t for t in state["tracks"] if t["kind"] == "video")["clips"][0]
-    client.delete(f"/api/sequences/{sequence['id']}/clips/{clip['id']}")
     assert client.delete(f"/api/assets/{asset['id']}").status_code == 204
+
+    after = client.get(f"/api/sequences/{sequence['id']}").json()
+    offline = next(t for t in after["tracks"] if t["kind"] == "video")["clips"][0]
+    assert offline["id"] == clip["id"], "片段不该跟着素材一起消失 —— 消失了就没人知道这里少了什么"
+    assert offline["asset_id"] is None
+    # 快照里留着名字:占位上写不出原来是哪个文件的话,用户没法把它对回去。
+    assert offline["offline_asset"]["name"] == "B-roll"
+    assert offline["offline_asset"]["asset_id"] == asset["id"]
+    assert offline["asset_kind"] == "video", "轨道还是那条轨道"
+    # 时长不变 —— 后面的片段不该因为这次删除整体前移。
+    assert offline["src_out"] == 5
+
+    # **导出挡在这里**:脱机片段既不是画面也不是文字,再往下每一条筛选都会漏掉它,
+    # 于是成片会静默地短一截。宁可拒,也不要交一个少了一段的成片。
+    refused = client.post(f"/api/sequences/{sequence['id']}/export")
+    assert refused.status_code == 422
+    assert "B-roll" in refused.json()["detail"]
+
+    # 把那一段删掉,挡住导出的理由就没了(空序列还会因为别的理由被拒,那是另一回事)。
+    client.delete(f"/api/sequences/{sequence['id']}/clips/{clip['id']}")
+    assert "已被删除" not in client.post(f"/api/sequences/{sequence['id']}/export").text
 
 
 def test_asset_tags_update_dedupes_and_trims() -> None:

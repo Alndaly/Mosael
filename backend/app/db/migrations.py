@@ -2017,6 +2017,18 @@ def _migrate_job_worker_leases() -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status_lease_expires ON jobs(status, lease_expires_at)"))
 
 
+def _migrate_clip_offline_asset() -> None:
+    """片段记住"素材曾经是什么"。
+
+    在此之前,被时间线引用的素材**删不掉**(接口直接 422,让用户先去每条序列里找出来删掉)。
+    现在删得掉了,引用它的片段转成脱机占位 —— 而占位要显示成什么,全靠这一列里的那份快照。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(clips)"))}
+        if columns and "offline_asset" not in columns:
+            conn.execute(text("ALTER TABLE clips ADD COLUMN offline_asset JSON"))
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -2101,6 +2113,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_parent,
                 _migrate_job_worker_leases,
                 _migrate_browser_pool,
+                _migrate_clip_offline_asset,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
             ),

@@ -84,7 +84,12 @@ export function Inspector({
   // 同上:切走再回来还在这一栏。
   const [tab, setTab] = usePersistentTab<"props" | "color">("editor-inspector", "props", INSPECTOR_TABS);
   const asset = selectedClip?.asset_id ? assets.find((item) => item.id === selectedClip.asset_id) : null;
-  const isTextClip = Boolean(selectedClip && !selectedClip.asset_id && selectedClip.text_override != null);
+  const offlineAsset = (selectedClip?.offline_asset ?? null) as { name?: string } | null;
+  //: 脱机片段的 asset_id 同样为空,但它不是文字片段 —— 少了这一项,一段被删掉素材的画面
+  //: 会被当成花字,右栏给出一个空的文本框让用户去改。
+  const isTextClip = Boolean(
+    selectedClip && !selectedClip.asset_id && !offlineAsset && selectedClip.text_override != null,
+  );
   const isVisualClip = asset?.kind === "video" || asset?.kind === "image";
   const effects = (selectedClip?.effects ?? {}) as {
     fade_in?: number;
@@ -216,8 +221,10 @@ export function Inspector({
           <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
             <dl>
               <dt>{t("asset")}</dt>
-              <dd className="truncate" title={asset?.name}>
-                {asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? (isTitleText ? t("titleText") : t("subtitleText"))}
+              <dd className="truncate" title={offlineAsset ? `${t("clipOffline")} · ${offlineAsset.name ?? ""}` : asset?.name}>
+                {offlineAsset
+                  ? offlineAsset.name || t("clipOffline")
+                  : asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? (isTitleText ? t("titleText") : t("subtitleText"))}
               </dd>
               <dt>{t("timelineRange")}</dt>
               <dd className="timecode">
@@ -232,6 +239,13 @@ export function Inspector({
               <dt>{t("speed")}</dt>
               <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
             </dl>
+            {offlineAsset && (
+              /* 说清楚**现在怎么办**:这一段还在时间线上占着位置,但导出会被拒。
+                 只说"素材已删除"的话,用户下一步不知道该做什么。 */
+              <p className="m-0 rounded-md border border-destructive/50 bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-2.5 py-2 text-xs leading-[1.5] text-foreground">
+                {t("clipOfflineHint")}
+              </p>
+            )}
             {isTextClip && onSetText && (
               <div className="grid gap-3 border-t border-border pt-4">
                 <span className="text-ui-sm font-semibold text-muted-foreground">{isTitleText ? t("titleText") : t("subtitleText")}</span>

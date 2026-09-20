@@ -1023,7 +1023,16 @@ export function Timeline({
                     <TimelineClip
                       key={clip.id}
                       trackKind={track.kind}
-                      name={clip.text_override ?? (clip.asset_id ? assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8) : "")}
+                      offline={Boolean(clip.offline_asset)}
+                      // 脱机片段显示**它原来的**素材名 —— 那是用户唯一能拿来对回去的线索。
+                      name={
+                        clip.text_override ??
+                        (clip.offline_asset
+                          ? String(clip.offline_asset.name || t("clipOffline"))
+                          : clip.asset_id
+                            ? assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8)
+                            : "")
+                      }
                       left={timeToPx(baseLeft, pxPerSecond)}
                       shiftPx={timeToPx(shiftTime, pxPerSecond)}
                       width={clipWidth}

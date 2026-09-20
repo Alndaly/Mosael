@@ -21162,6 +21162,18 @@
             ],
             "title": "Text Override"
           },
+          "offline_asset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offline Asset"
+          },
           "effects": {
             "additionalProperties": true,
             "type": "object",
