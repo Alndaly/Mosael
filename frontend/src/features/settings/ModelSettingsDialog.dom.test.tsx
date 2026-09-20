@@ -19,7 +19,11 @@ vi.mock("@/api/client", () => ({ api: vi.fn(async () => ({ models: [], profiles:
 const model = (capabilities: string[], known = true, refs: Record<string, string> = {}) => ({
   id: "m", display_name: "", capability_ids: capabilities, effective_capability_ids: capabilities,
   enabled: true, configured: true, in_catalog: true, source: "manual",
-  context_window: null, context_window_source: "fallback", max_output_tokens: null,
+  context_window: null, context_window_source: "fallback",
+  max_output_tokens: null, max_output_tokens_source: "fallback",
+  //: 运行时真正会用的那两个数由后端给 —— 界面不再自己算一份回退(弹窗曾写死 32000,
+  //: 而远程端点运行时用的是 128000)。
+  effective_context_window: 128000, effective_max_output_tokens: 16384,
   reasoning: null, vision: null, reasoning_effort: null, developer_role: null,
   generation_capability_ref: null,
   /* 声明按 (模型, kind) 分行 —— 双能力模型的两个 kind 各指各的(ADR-0013)。 */
@@ -150,4 +154,28 @@ it("「编辑这一份」只在选中的是自己建的那种时出现", () => {
   } finally {
     REFS.data = { models: [], profiles: [] };
   }
+});
+
+
+it("两个上限都能调,显示的是**运行时真正会用的数**", () => {
+  /*
+   * 「模型已用完本轮 16,384 Token 输出额度」那条报错让用户去模型设置里提高「最大输出 Token」,
+   * 而这一栏此前根本不存在 —— 话指向了一个找不到的地方。
+   *
+   * 占位值也要是真的:弹窗曾写死 32000,而远程端点运行时用的是 128000。
+   */
+  open(["chat"]);
+  const window = screen.getByLabelText("modelSettingsContextWindow") as HTMLInputElement;
+  const output = screen.getByLabelText("modelSettingsMaxOutput") as HTMLInputElement;
+  expect(window.placeholder).toBe("128000");
+  expect(output.placeholder).toBe("16384");
+
+  fireEvent.change(output, { target: { value: "65536" } });
+  expect((screen.getByLabelText("modelSettingsMaxOutput") as HTMLInputElement).value).toBe("65536");
+});
+
+it("生成模型不显示这两项 —— 它们只对对话有意义", () => {
+  open(["image"]);
+  expect(screen.queryByLabelText("modelSettingsMaxOutput")).toBeNull();
+  expect(screen.queryByLabelText("modelSettingsContextWindow")).toBeNull();
 });

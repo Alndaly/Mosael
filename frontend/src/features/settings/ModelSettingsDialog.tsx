@@ -33,9 +33,6 @@ type ModelSettingsDraft = Omit<ModelSettings, "generation_capability_refs"> & {
  * 而它其实绝大多数时候一个字都不用改。
  */
 
-/** 端点和目录都没给时,sidecar 用的保守回退。界面上要显示出来 —— 否则"空着"会被读成"不限"。 */
-const FALLBACK_CONTEXT_WINDOW = 32000;
-
 type VendorPreset = components["schemas"]["VendorPresetOut"];
 
 /**
@@ -285,6 +282,13 @@ export function ModelSettingsDialog({
   const source = settings.data?.context_window_source ?? "fallback";
   // 目录给了就把它当占位提示:用户清空输入框时,回到的正是这个值。
   const inherited = source === "catalog" ? settings.data?.context_window : null;
+  const outputSource = settings.data?.max_output_tokens_source ?? "fallback";
+  const inheritedOutput = outputSource === "catalog" ? settings.data?.max_output_tokens : null;
+  //: 回退值**由后端给**,不在这里再算一份。此前这里写死 32000,而远程端点运行时用的是
+  //: 128000 —— 界面告诉用户的数和请求真正带的数不是一个,于是「为什么只有这么点输出额度」
+  //: 从界面上根本推不出来。
+  const effectiveWindow = settings.data?.effective_context_window ?? 0;
+  const effectiveOutput = settings.data?.effective_max_output_tokens ?? 0;
   // 上下文窗口与那几个兼容开关只对**对话**模型有意义 —— 给一个生图模型显示"支持 developer 角色"
   // 纯属噪音,还会让人以为漏配了什么。
   //
@@ -338,6 +342,10 @@ export function ModelSettingsDialog({
           save.mutate({
             capability_ids: current.capability_ids ?? [],
             context_window: source === "override" || current.context_window !== inherited ? current.context_window : null,
+            max_output_tokens:
+              outputSource === "override" || current.max_output_tokens !== inheritedOutput
+                ? current.max_output_tokens
+                : null,
             reasoning: current.reasoning,
             vision: current.vision,
             reasoning_effort: current.reasoning_effort,
@@ -425,7 +433,7 @@ export function ModelSettingsDialog({
                 // 对比之下更明显。
                 className="bg-panel"
                 value={current?.context_window ?? ""}
-                placeholder={String(inherited ?? FALLBACK_CONTEXT_WINDOW)}
+                placeholder={String(inherited ?? effectiveWindow)}
                 onChange={(event) =>
                   setDraft((prev) =>
                     prev ? { ...prev, context_window: event.target.value ? Number(event.target.value) : null } : prev,
@@ -438,8 +446,41 @@ export function ModelSettingsDialog({
                 ? t("modelSettingsSourceOverride")
                 : source === "catalog"
                   ? t("modelSettingsSourceCatalog").replace("{n}", String(inherited ?? 0))
-                  : t("modelSettingsSourceFallback").replace("{n}", String(FALLBACK_CONTEXT_WINDOW))}
+                  : t("modelSettingsSourceFallback").replace("{n}", String(effectiveWindow))}
             </p>
+            <p className="m-0 text-xs leading-[1.45] text-muted-foreground">{t("modelSettingsContextWindowHint")}</p>
+
+            {/* 输出额度。**和上下文是两件事**:上面那个是"能聊多久",这个是"一次能说多长" ——
+                而思考 token 也花在这一份额度里,不够时模型会把它全花在思考上,一个字都没说出来
+                就被截断(用户看到的是「已用完本轮输出额度」,而此前界面上根本没有这一项可调)。 */}
+            <div className="grid gap-1">
+              <label className="text-ui-sm font-medium text-foreground" htmlFor="max-output">
+                {t("modelSettingsMaxOutput")}
+              </label>
+              <Input
+                id="max-output"
+                type="number"
+                min={256}
+                className="bg-panel"
+                value={current?.max_output_tokens ?? ""}
+                placeholder={String(inheritedOutput ?? effectiveOutput)}
+                onChange={(event) =>
+                  setDraft((prev) =>
+                    prev
+                      ? { ...prev, max_output_tokens: event.target.value ? Number(event.target.value) : null }
+                      : prev,
+                  )
+                }
+              />
+            </div>
+            <p className="m-0 text-xs leading-[1.45] text-muted-foreground">
+              {outputSource === "override"
+                ? t("modelSettingsOutputSourceOverride")
+                : outputSource === "catalog"
+                  ? t("modelSettingsOutputSourceCatalog").replace("{n}", String(inheritedOutput ?? 0))
+                  : t("modelSettingsOutputSourceFallback").replace("{n}", String(effectiveOutput))}
+            </p>
+            <p className="m-0 text-xs leading-[1.45] text-muted-foreground">{t("modelSettingsMaxOutputHint")}</p>
           </div>
         )}
 

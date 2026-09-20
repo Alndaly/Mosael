@@ -9445,6 +9445,21 @@ export interface components {
             context_window_source: string;
             /** Max Output Tokens */
             max_output_tokens?: number | null;
+            /**
+             * Max Output Tokens Source
+             * @default fallback
+             */
+            max_output_tokens_source: string;
+            /**
+             * Effective Context Window
+             * @default 0
+             */
+            effective_context_window: number;
+            /**
+             * Effective Max Output Tokens
+             * @default 0
+             */
+            effective_max_output_tokens: number;
             /** Reasoning */
             reasoning?: boolean | null;
             /** Vision */

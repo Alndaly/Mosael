@@ -268,17 +268,21 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 - 这类"字段名对不上"的故障**类型全绿、单测全绿**,因为两侧都在自说自话。判据只有一条:
   拿真实凭据跑一次。
 
-## 12. 同一个常量在 sidecar 和后端各写了一份
+## 12. 同一个常量在 sidecar 和后端各写了一份 — ✅ 已由契约钉住
 
-`FALLBACK_CONTEXT_WINDOW = 32000`(`agent-sidecar/src/pi.ts` ↔ `backend/app/domain/agent/host.py`)与
-`CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
+四个回退常量在 `agent-sidecar/src/{pi,compaction}.ts` 与 `backend/app/domain/agent/host.py`
+各有一份:`FALLBACK_CONTEXT_WINDOW = 128000`、`LOCAL_FALLBACK_CONTEXT_WINDOW = 32000`
+(本机/LAN 端点)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 16384`,
+以及 `CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
 
 不是疏忽:整理决策必须在 sidecar 里做(它才拿得到消息与 usage),而水位显示必须在后端算(前端只认
-REST)。但**改一处不改另一处**的后果是隐性的——前端说「剩余 40%」,而 sidecar 已经按另一套数字
-整理过了,用户看到的和实际发生的对不上,还没有任何报错。
+REST)。现在由 [`contracts/context-meter-cases.json`](../contracts/context-meter-cases.json) 说了算 ——
+常量和两条回退公式(窗口按端点、输出额度按窗口与思考能力)都有语料,两侧各跑一遍。
 
-改这两个值时**两侧一起改**,并在 PR 里说明。将来若要收口,方向是让后端从 sidecar 拿一次配置,
-而不是再抄第三份。
+**前端曾是悄悄的第三份**:模型设置弹窗里写死 `FALLBACK_CONTEXT_WINDOW = 32000`,而远程端点运行时
+用的是 128000 —— 用户看到「当前按 32000 使用」,请求却按 128000 发,于是「为什么输出额度只有
+16,384」(= min(16384, 128000/4))从界面上根本推不出来。那一份已经删掉:生效值由接口下发
+(`effective_context_window` / `effective_max_output_tokens`),界面只负责显示。
 
 ## 13. 视觉输入格式归一化 — ✅ 已收口(2026-08-31)
 

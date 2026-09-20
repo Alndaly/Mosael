@@ -1,24 +1,42 @@
 {
   "contract": "context-meter",
-  "version": 2,
+  "version": 3,
   "readme": "contracts/README.md",
-  "description": "上下文水位:一组 pi 消息占了多少 token。sidecar 用它决定**压不压**,后端用它在界面上显示**还能聊多久**。两边算出不同的数,就会出现「水位显示 90% 而压缩迟迟不触发」。后端 backend/tests/test_context_meter_parity.py 与 sidecar test/context-meter.parity.test.mjs 跑同一份语料。",
+  "description": "上下文水位:一组 pi 消息占了多少 token。sidecar 用它决定**压不压**,后端用它在界面上显示**还能聊多久**。两边算出不同的数,就会出现「水位显示 90% 而压缩迟迟不触发」。后端 backend/tests/test_context_meter_parity.py 与 sidecar test/context-meter.parity.test.mjs 跑同一份语料。同一份语料还钉住**模型的两个运行时上限**:上下文窗口和单次输出额度 —— 它们一起决定「能聊多久」和「一次能说多长」,而且都在目录查不到模型时要各自回退。",
   "notes": [
     "锚点规则:从后往前找**最近一条带 usage 的 assistant 消息**;它的 usage 就是供应商上次实际看到的量,锚之后的消息才需要估算;一条 usage 都没有就整段估算。",
     "usage 里 input/output 都为空(或都是 0)的不算锚 —— 那种消息说明不了供应商看到了多少。",
-    "语料里的文本刻意只用 BMP 字符(ASCII 与常用汉字):Python 的 len() 数码点、JS 的 .length 数 UTF-16 码元,两者只在非 BMP(emoji、罕用字)上分叉。那是一个估算器可以接受的近似,写进契约只会逼两侧互相迁就,所以不放进来 —— 与 ADR-0004 把调色留在契约之外是同一类取舍。"
+    "语料里的文本刻意只用 BMP 字符(ASCII 与常用汉字):Python 的 len() 数码点、JS 的 .length 数 UTF-16 码元,两者只在非 BMP(emoji、罕用字)上分叉。那是一个估算器可以接受的近似,写进契约只会逼两侧互相迁就,所以不放进来 —— 与 ADR-0004 把调色留在契约之外是同一类取舍。",
+    "`max_output_cases` 是**回退**,不是上限本身:目录或用户给了真实值就用真实值。回退的形状要两侧一致,否则界面上显示的额度和请求真正带的 max_tokens 不是一个数。"
   ],
   "constants": {
     "chars_per_token": 3.5,
     "fallback_context_window": 128000,
-    "local_fallback_context_window": 32000
+    "local_fallback_context_window": 32000,
+    "fallback_max_output_tokens": 4096,
+    "fallback_reasoning_max_output_tokens": 16384
   },
   "fallback_cases": [
-    { "base_url": "https://api.example.com/v1", "context_window": 128000 },
-    { "base_url": "", "context_window": 128000 },
-    { "base_url": "http://127.0.0.1:11434/v1", "context_window": 32000 },
-    { "base_url": "http://localhost:1234/v1", "context_window": 32000 },
-    { "base_url": "http://192.168.1.20:8000/v1", "context_window": 32000 }
+    {
+      "base_url": "https://api.example.com/v1",
+      "context_window": 128000
+    },
+    {
+      "base_url": "",
+      "context_window": 128000
+    },
+    {
+      "base_url": "http://127.0.0.1:11434/v1",
+      "context_window": 32000
+    },
+    {
+      "base_url": "http://localhost:1234/v1",
+      "context_window": 32000
+    },
+    {
+      "base_url": "http://192.168.1.20:8000/v1",
+      "context_window": 32000
+    }
   ],
   "cases": [
     {
@@ -31,8 +49,14 @@
       "name": "no-usage-anywhere",
       "why": "首轮、或供应商不回报用量时整段估算 —— 两侧必须用同一个 chars_per_token 和同一个向上取整。",
       "messages": [
-        { "role": "user", "content": "1234567" },
-        { "role": "assistant", "content": "12345678901234" }
+        {
+          "role": "user",
+          "content": "1234567"
+        },
+        {
+          "role": "assistant",
+          "content": "12345678901234"
+        }
       ],
       "context_tokens": 6
     },
@@ -40,10 +64,30 @@
       "name": "anchor-is-the-last-assistant-with-usage",
       "why": "锚之前的消息一概不再估算 —— 它们已经含在供应商回报的数字里了。抄成「从头累加」会把长对话越算越离谱。",
       "messages": [
-        { "role": "user", "content": "这是一段很早以前的提问,不该被再数一遍" },
-        { "role": "assistant", "content": "早期回复", "usage": { "input": 100, "output": 20 } },
-        { "role": "user", "content": "后来又问了一句" },
-        { "role": "assistant", "content": "后来的回复", "usage": { "input": 500, "output": 40 } }
+        {
+          "role": "user",
+          "content": "这是一段很早以前的提问,不该被再数一遍"
+        },
+        {
+          "role": "assistant",
+          "content": "早期回复",
+          "usage": {
+            "input": 100,
+            "output": 20
+          }
+        },
+        {
+          "role": "user",
+          "content": "后来又问了一句"
+        },
+        {
+          "role": "assistant",
+          "content": "后来的回复",
+          "usage": {
+            "input": 500,
+            "output": 40
+          }
+        }
       ],
       "context_tokens": 540
     },
@@ -51,8 +95,19 @@
       "name": "cache-read-counts-toward-the-window",
       "why": "**缓存命中的部分照样占窗口。** 它在计价上另算(便宜十倍),但「还能装多少」问的是占地方。开了 prompt caching 之后 input 只剩新增的一小段、绝大部分记在 cacheRead 上 —— 漏掉它,水位会系统性偏乐观,压缩迟迟不触发,最后某一轮直接超窗失败。",
       "messages": [
-        { "role": "user", "content": "问题" },
-        { "role": "assistant", "content": "回答", "usage": { "input": 300, "output": 50, "cacheRead": 12000 } }
+        {
+          "role": "user",
+          "content": "问题"
+        },
+        {
+          "role": "assistant",
+          "content": "回答",
+          "usage": {
+            "input": 300,
+            "output": 50,
+            "cacheRead": 12000
+          }
+        }
       ],
       "context_tokens": 12350
     },
@@ -60,8 +115,18 @@
       "name": "messages-after-the-anchor-are-estimated",
       "why": "锚之后新增的用户提问与工具结果还没被供应商看到过,只能估。",
       "messages": [
-        { "role": "assistant", "content": "锚", "usage": { "input": 1000, "output": 0 } },
-        { "role": "user", "content": "1234567" }
+        {
+          "role": "assistant",
+          "content": "锚",
+          "usage": {
+            "input": 1000,
+            "output": 0
+          }
+        },
+        {
+          "role": "user",
+          "content": "1234567"
+        }
       ],
       "context_tokens": 1002
     },
@@ -69,8 +134,18 @@
       "name": "empty-usage-is-not-an-anchor",
       "why": "usage 存在但 input/output 全为 0,说明不了供应商看到了多少 —— 继续往前找,找不到就整段估算。",
       "messages": [
-        { "role": "user", "content": "1234567" },
-        { "role": "assistant", "content": "12345678901234", "usage": { "input": 0, "output": 0 } }
+        {
+          "role": "user",
+          "content": "1234567"
+        },
+        {
+          "role": "assistant",
+          "content": "12345678901234",
+          "usage": {
+            "input": 0,
+            "output": 0
+          }
+        }
       ],
       "context_tokens": 6
     },
@@ -81,12 +156,52 @@
         {
           "role": "assistant",
           "content": [
-            { "type": "text", "text": "好的" },
-            { "type": "tool_use", "input": { "a": "1", "b": "2", "c": "3" } }
+            {
+              "type": "text",
+              "text": "好的"
+            },
+            {
+              "type": "tool_use",
+              "input": {
+                "a": "1",
+                "b": "2",
+                "c": "3"
+              }
+            }
           ]
         }
       ],
       "context_tokens": 8
+    }
+  ],
+  "max_output_cases": [
+    {
+      "name": "unknown-plain-model",
+      "why": "目录没有这个模型、也没有验证过的思考档位表 → 保守的 4K,不把未知端点压垮。",
+      "context_window": 128000,
+      "thinking": false,
+      "max_output_tokens": 4096
+    },
+    {
+      "name": "reasoning-large-window",
+      "why": "思考 token 和正文共用这份额度,4K 很容易全花在思考上,只剩一个字。大窗口模型给到上限 16K。",
+      "context_window": 128000,
+      "thinking": true,
+      "max_output_tokens": 16384
+    },
+    {
+      "name": "reasoning-small-window",
+      "why": "输出额度不该超过窗口的四分之一 —— 32K 窗口给 16K 输出,剩下的装不下几轮对话。",
+      "context_window": 32000,
+      "thinking": true,
+      "max_output_tokens": 8000
+    },
+    {
+      "name": "reasoning-tiny-window",
+      "why": "四分之一低于 4K 时仍保 4K:再少就连一句完整回答都写不完。",
+      "context_window": 8000,
+      "thinking": true,
+      "max_output_tokens": 4096
     }
   ]
 }

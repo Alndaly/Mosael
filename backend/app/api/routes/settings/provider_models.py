@@ -68,6 +68,28 @@ def _is_known_model(vendor: str, model_id: str, catalog: dict[str, dict]) -> boo
     return any(model_id in builtin_models_for(vendor, kind) for kind in ("image", "video"))
 
 
+def _effective_limits(
+    *, base_url: str, vendor: str, model_id: str, window: int | None, output: int | None
+) -> tuple[int, int]:
+    """运行时真正会用的那两个数 —— **界面显示这个**,而不是自己再算一份回退。
+
+    弹窗此前写死了 `FALLBACK_CONTEXT_WINDOW = 32000`,而远程端点运行时用的是 128000
+    (32000 只给本机/局域网):用户看到的数和请求真正带的数不是一个,于是「为什么只有 16,384
+    输出额度」这种问题从界面上根本推不出来。回退的形状由 contracts/context-meter-cases.json
+    钉住两侧一致。
+
+    `window` / `output` 是已经合并过「用户填的 → 目录给的」之后的值,None 表示两边都没有。
+    """
+    from app.domain import thinking
+    from app.domain.agent.host import fallback_context_window, fallback_max_output_tokens
+
+    effective_window = window or fallback_context_window(base_url)
+    # 和 provider_models.runtime_values 同一条判据:有一档能发得出去,才算思考模型。
+    profile = thinking.profile_for(vendor, model_id)
+    thinks = any(mapped is not None for mapped in profile.level_map.values())
+    return int(effective_window), int(output or fallback_max_output_tokens(effective_window, thinking=thinks))
+
+
 def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> ProviderModelOut:
     entry = catalog.get(model.model_id) or {}
     catalog_window = entry.get("context_window")
@@ -77,6 +99,19 @@ def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> Provide
         window, source = catalog_window, "catalog"
     else:
         window, source = None, "fallback"
+    if model.max_output_tokens:
+        output_source = "override"
+    elif entry.get("max_output_tokens"):
+        output_source = "catalog"
+    else:
+        output_source = "fallback"
+    effective_window, effective_output = _effective_limits(
+        base_url=(model.profile.base_url if model.profile else "") or "",
+        vendor=vendor or (model.profile.vendor if model.profile else ""),
+        model_id=model.model_id,
+        window=window,
+        output=model.max_output_tokens or entry.get("max_output_tokens"),
+    )
     from app.domain.generation.resolution import declaration_refs_for_model, resolve_row
 
     refs = declaration_refs_for_model(db, model)
@@ -97,6 +132,9 @@ def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> Provide
         context_window=window,
         context_window_source=source,
         max_output_tokens=model.max_output_tokens or entry.get("max_output_tokens"),
+        max_output_tokens_source=output_source,
+        effective_context_window=effective_window,
+        effective_max_output_tokens=effective_output,
         reasoning=model.reasoning,
         vision=model.vision,
         reasoning_effort=model.reasoning_effort,
@@ -159,6 +197,10 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
                 context_window=entry.get("context_window"),
                 context_window_source="catalog" if entry.get("context_window") else "fallback",
                 max_output_tokens=entry.get("max_output_tokens"),
+                max_output_tokens_source="catalog" if entry.get("max_output_tokens") else "fallback",
+                **dict(zip(("effective_context_window", "effective_max_output_tokens"), _effective_limits(
+                    base_url=profile.base_url or "", vendor=profile.vendor, model_id=model_id,
+                    window=entry.get("context_window"), output=entry.get("max_output_tokens")), strict=True)),
                 # 和落库后 effective_capabilities 走同一条判据 —— 否则列表里显示的能力
                 # 和加进去之后的能力对不上,而用户是照着列表做的决定。
                 effective_capability_ids=(
@@ -189,6 +231,10 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
                     context_window=None,
                     context_window_source="fallback",
                     max_output_tokens=None,
+                    max_output_tokens_source="fallback",
+                    **dict(zip(("effective_context_window", "effective_max_output_tokens"), _effective_limits(
+                        base_url=profile.base_url or "", vendor=profile.vendor, model_id=model_id,
+                        window=None, output=None), strict=True)),
                     effective_capability_ids=[kind],
                 )
             )

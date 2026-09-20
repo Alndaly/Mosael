@@ -23,7 +23,14 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.agent.host import FALLBACK_CONTEXT_WINDOW, LOCAL_FALLBACK_CONTEXT_WINDOW, fallback_context_window
+from app.domain.agent.host import (
+    FALLBACK_CONTEXT_WINDOW,
+    FALLBACK_MAX_OUTPUT_TOKENS,
+    FALLBACK_REASONING_MAX_OUTPUT_TOKENS,
+    LOCAL_FALLBACK_CONTEXT_WINDOW,
+    fallback_context_window,
+    fallback_max_output_tokens,
+)
 from app.domain.context_meter import CHARS_PER_TOKEN, context_tokens
 
 _CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "context-meter-cases.json"
@@ -57,11 +64,22 @@ def test_constants_match_the_contract() -> None:
     assert CHARS_PER_TOKEN == constants["chars_per_token"]
     assert FALLBACK_CONTEXT_WINDOW == constants["fallback_context_window"]
     assert LOCAL_FALLBACK_CONTEXT_WINDOW == constants["local_fallback_context_window"]
+    assert FALLBACK_MAX_OUTPUT_TOKENS == constants["fallback_max_output_tokens"]
+    assert FALLBACK_REASONING_MAX_OUTPUT_TOKENS == constants["fallback_reasoning_max_output_tokens"]
 
 
 @pytest.mark.parametrize("case", _load()["fallback_cases"])
 def test_unknown_model_window_fallback_matches_contract(case: dict) -> None:
     assert fallback_context_window(case["base_url"]) == case["context_window"]
+
+
+@pytest.mark.parametrize("case", _load()["max_output_cases"], ids=lambda case: case["name"])
+def test_unknown_model_output_budget_matches_contract(case: dict) -> None:
+    """目录查不到模型时,一次最多能说多长。**思考 token 和正文共用这份额度** —— 算少了,
+    模型会把额度全花在思考上、一个字都没说出来(用户看到的就是「已用完本轮输出额度」);
+    算多了,输出占掉大半个窗口,剩不下多少装对话。两侧必须是同一个公式。"""
+    actual = fallback_max_output_tokens(case["context_window"], thinking=case["thinking"])
+    assert actual == case["max_output_tokens"], case["why"]
 
 
 @pytest.mark.parametrize("case", _cases(), ids=_ids())

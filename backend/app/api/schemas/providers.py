@@ -27,9 +27,15 @@ class ProviderModelOut(ApiModel):
     configured: bool = False
     in_catalog: bool = False
     source: str = "catalog"
+    #: 用户填过的 / 目录给的窗口。为空 = 两边都没有,运行时按 effective_context_window 走。
     context_window: int | None = None
     context_window_source: str = "fallback"
     max_output_tokens: int | None = None
+    max_output_tokens_source: str = "fallback"
+    #: **运行时真正会用的那两个数**,包含回退。界面显示它们,而不是自己再算一份回退 ——
+    #: 弹窗此前写死了 32000,而远程端点运行时用的是 128000:用户看到的数和请求带的数不是一个。
+    effective_context_window: int = 0
+    effective_max_output_tokens: int = 0
     reasoning: bool | None = None
     vision: bool | None = None
     reasoning_effort: bool | None = None

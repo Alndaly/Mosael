@@ -29,7 +29,9 @@ const contract = JSON.parse(
 
 // 源码是 TS,和 compaction.test.mjs 一样用 esbuild 的 JS API 现编译再 import。
 async function load(entry) {
-  const outfile = path.join(mkdtempSync(path.join(tmpdir(), "parity-")), "out.mjs");
+  //: 产物落在 dist/ 而不是临时目录 —— pi.ts 留着 `@earendil-works/*` 外部依赖,
+  //: 从 /tmp 下 import 时解析不到 node_modules。
+  const outfile = path.join(here, "..", "dist", `parity-${entry.replace(/\W/g, "-")}.mjs`);
   await build({
     entryPoints: [path.join(here, "..", "src", entry)],
     outfile,
@@ -42,6 +44,7 @@ async function load(entry) {
 }
 
 const { contextTokens, CHARS_PER_TOKEN, FALLBACK_CONTEXT_WINDOW, LOCAL_FALLBACK_CONTEXT_WINDOW, fallbackContextWindow } = await load("compaction.ts");
+const { fallbackMaxTokens } = await load("pi.ts");
 
 test("语料在,且带版本号 —— 找不到就静默跳过是最坏的结果", () => {
   assert.equal(contract.contract, "context-meter");
@@ -58,6 +61,15 @@ test("两个常量由语料说了算,不再靠两侧注释互相叮嘱", () => {
 for (const testCase of contract.fallback_cases) {
   test(`${testCase.base_url || "empty"} · 未知模型窗口回退`, () => {
     assert.equal(fallbackContextWindow(testCase.base_url), testCase.context_window);
+  });
+}
+
+// 一次最多能说多长。思考 token 和正文共用这份额度 —— 两侧算得不一样时,界面显示的额度
+// 和请求真正带的 max_tokens 就不是一个数,而「为什么只有这么点输出」从界面上推不出来。
+for (const testCase of contract.max_output_cases) {
+  test(`${testCase.name} · 未知模型输出额度回退`, () => {
+    const levels = testCase.thinking ? { low: "low", high: "high" } : null;
+    assert.equal(fallbackMaxTokens(testCase.context_window, levels), testCase.max_output_tokens, testCase.why);
   });
 }
 

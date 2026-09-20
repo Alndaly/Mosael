@@ -25630,6 +25630,21 @@
             ],
             "title": "Max Output Tokens"
           },
+          "max_output_tokens_source": {
+            "type": "string",
+            "title": "Max Output Tokens Source",
+            "default": "fallback"
+          },
+          "effective_context_window": {
+            "type": "integer",
+            "title": "Effective Context Window",
+            "default": 0
+          },
+          "effective_max_output_tokens": {
+            "type": "integer",
+            "title": "Effective Max Output Tokens",
+            "default": 0
+          },
           "reasoning": {
             "anyOf": [
               {

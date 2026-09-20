@@ -930,6 +930,21 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
 #: 由 contracts/context-meter-cases.json 钉住,两侧测试跑同一份语料。
 FALLBACK_CONTEXT_WINDOW = 128000
 LOCAL_FALLBACK_CONTEXT_WINDOW = 32000
+#: 目录没给「一次最多能说多长」时的回退。同样由那份语料钉住(max_output_cases)。
+FALLBACK_MAX_OUTPUT_TOKENS = 4096
+FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 16384
+
+
+def fallback_max_output_tokens(context_window: int, *, thinking: bool) -> int:
+    """目录没给单次输出额度时用多少。**和 sidecar 同一个形状**(pi.ts 的 fallbackMaxTokens)。
+
+    思考 token 和正文共用这份额度,所以对推理模型给得宽 —— 4K 很容易全花在思考上,最后一个字
+    都没说出来(那正是用户会看到的「已用完本轮输出额度」)。但不超过窗口的四分之一:输出占掉
+    大半个窗口,就没剩下多少装对话了。
+    """
+    if not thinking:
+        return FALLBACK_MAX_OUTPUT_TOKENS
+    return max(FALLBACK_MAX_OUTPUT_TOKENS, min(FALLBACK_REASONING_MAX_OUTPUT_TOKENS, context_window // 4))
 
 
 def fallback_context_window(base_url: str) -> int:
