@@ -256,10 +256,8 @@ def remove_member(workspace_id: str, user_id: str, db: DbSession, user: CurrentU
 
 @router.get("/workspaces/{workspace_id}/summary", response_model=WorkspaceSummaryOut)
 def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> WorkspaceSummaryOut:
-    """首页仪表:工作区一屏统计。只读聚合,单请求给全。
-
-    聚合本身在 `domain/dashboard`:它回答的是「这个工作区里发生了什么」,和 HTTP 没关系,
-    而且不止一个入口要问。留在路由里的那一百来行 SQL,别的入口一行也复用不了。
-    """
+    # 聚合在 domain/dashboard:它回答的是「这个工作区里发生了什么」,和 HTTP 没关系,而且不止
+    # 一个入口要问。**路由的 docstring 会原样进 OpenAPI 的 description**,所以这段写成注释。
+    """首页仪表:工作区一屏统计。只读聚合,单请求给全。"""
     ensure_workspace_access(db, user, workspace_id)
     return WorkspaceSummaryOut(**dashboard.workspace_summary(db, workspace_id))
