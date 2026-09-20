@@ -133,6 +133,16 @@ def test_跑代码只有确认卡一条路_插件的原始入口不暴露() -> N
     assert "execute_blender_code" not in manifest.recommended
 
 
+def test_权限领域不认识_Blender_是什么() -> None:
+    """档位由每张确认卡自己声明。此前 rules.py 手写着档位键和三份理由文案,于是接一个第三方
+    软件要在权限领域里改四处 —— 而它不该知道 Blender、Docker 或任何具体东西叫什么。"""
+    from app.domain.agent import rules
+
+    source = Path(rules.__file__).read_text(encoding="utf-8")
+    assert "blender" not in source.lower(), "权限领域里不该出现具体功能的名字"
+    assert rules.gates()["blender"] == "Blender 建模", "档位和它的名字来自确认卡注册表"
+
+
 def test_internal_工具不进智能体工具表_也不进插件页(monkeypatch) -> None:
     from app.domain.plugins import tools as plugin_tools
 

@@ -46,8 +46,18 @@ class Ruling:
         return self.outcome == DENY
 
 
-#: 三类操作各自的档位键。顺序即界面顺序。
-GATED = ("http_request", "publish", "run_code", "run_host_code", "blender")
+def gates() -> dict[str, str]:
+    """有哪些档、各自叫什么 —— **从确认卡注册表推导**。
+
+    此前这里手写着一串档位键和三份理由文案,于是每接一个新能力都要在权限领域里改四处 ——
+    而它不该认识任何一个具体的第三方软件叫什么。现在每张确认卡自己声明 `gate` 和
+    `gate_label`(见 confirmable/registry),这里只负责把它们收起来。
+    """
+    from app.domain.agent import confirmable
+
+    found = {tool.gate: tool.gate_label for tool in confirmable.tool_specs().values() if tool.gate}
+    return dict(sorted(found.items()))
+
 
 #: 认得的档位。**存进来的任何别的值都读成 ask** —— 一个不认识的字符串必须落到最保守的那一档,
 #: 而不是落到"最后一个 elif"碰巧是什么。前后空格、大小写不同的写法都算不认识:配置里的
@@ -57,7 +67,7 @@ LEVELS = ("ask", "judge", "always")
 
 def default_rules() -> dict[str, Any]:
     """没配过的工作区就是这一份:每一类都问人,判断者一次都不调。"""
-    return {key: "ask" for key in GATED} | {"notes": ""}
+    return {key: "ask" for key in gates()} | {"notes": ""}
 
 
 def normalize(raw: Any) -> dict[str, Any]:
@@ -69,41 +79,22 @@ def normalize(raw: Any) -> dict[str, Any]:
     """
     data = raw if isinstance(raw, dict) else {}
     out: dict[str, Any] = {}
-    for key in GATED:
+    for key in gates():
         level = str(data.get(key) or "ask")
         out[key] = level if level in LEVELS else "ask"
     out["notes"] = str(data.get("notes") or "")[:2000]
     return out
 
 
-#: 工具名 → 它归哪一档。
-#: 沙箱里跑和不隔离地跑是**两档**:对「算个数」放开,不该连带放开「动我的文件」。
-#: Blender 建模自成一档:它也是本机代码,但放开「在 Blender 里建模」是建模时的常态(一轮几十步),
-#: 不该因此连带放开「在电脑上随便跑代码」。
-_TOOL_GATE = {"http_request": "http_request", "publish_asset": "publish", "run_code": "run_code",
-              "run_host_code": "run_host_code", "blender_execute": "blender"}
+def _tool_gate() -> dict[str, str]:
+    """工具名 → 它归哪一档。同样来自注册表。
 
-_ASK_REASON = {
-    "http_request": "对外请求交给判断者",
-    "publish": "公开发布交给判断者",
-    "run_code": "沙箱执行代码交给判断者",
-    "run_host_code": "不隔离执行代码交给判断者",
-    "blender": "Blender 建模交给判断者",
-}
-_ALLOW_REASON = {
-    "http_request": "对外请求已设为完全放行",
-    "publish": "公开发布已设为完全放行",
-    "run_code": "沙箱执行代码已设为完全放行",
-    "run_host_code": "不隔离执行代码已设为完全放行",
-    "blender": "Blender 建模已设为完全放行",
-}
-_DENY_REASON = {
-    "http_request": "对外请求默认要人确认",
-    "publish": "公开发布默认要人确认",
-    "run_code": "沙箱执行代码默认要人确认",
-    "run_host_code": "不隔离执行代码默认要人确认",
-    "blender": "Blender 建模默认要人确认",
-}
+    一个能力可以自成一档:沙箱里跑和不隔离地跑就是两档 —— 对「算个数」放开,不该连带放开
+    「动我的文件」。谁和谁分开,由那几张卡自己说了算。
+    """
+    from app.domain.agent import confirmable
+
+    return {name: tool.gate for name, tool in confirmable.tool_specs().items() if tool.gate}
 
 
 def evaluate(tool: str, payload: dict[str, Any], rules: dict[str, Any]) -> Ruling:
@@ -113,14 +104,15 @@ def evaluate(tool: str, payload: dict[str, Any], rules: dict[str, Any]) -> Rulin
     `ask` → DENY(弹卡)。
     """
     rules = normalize(rules)
-    gate = _TOOL_GATE.get(tool)
+    gate = _tool_gate().get(tool)
     if gate is None:
         # 其余 external(如 browser_pool_open、含外部节点的工作流)没有可枚举的判据 ——
         # 用户的登录身份、一整张图的后果,都不是一条准则能说清的。一律回到人。
         return Ruling(DENY, "这类操作没有可配置的放行判据")
+    label = gates()[gate]
     level = rules[gate]
     if level == "always":
-        return Ruling(ALLOW, _ALLOW_REASON[gate])
+        return Ruling(ALLOW, f"{label}已设为完全放行")
     if level == "judge":
-        return Ruling(ASK, _ASK_REASON[gate])
-    return Ruling(DENY, _DENY_REASON[gate])
+        return Ruling(ASK, f"{label}交给判断者")
+    return Ruling(DENY, f"{label}默认要人确认")

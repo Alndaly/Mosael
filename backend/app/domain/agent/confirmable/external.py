@@ -106,38 +106,6 @@ def _execute_run_host_code(db: Session, confirmation: Any, actor: str | None) ->
     except host_code.HostCodeError as exc:
         raise ValueError(str(exc)) from exc
 
-def _validate_blender_execute(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
-    from app.core.config import settings
-
-    if not settings.local_desktop:
-        raise ConfirmationError("Blender 建模只在本机桌面版可用 —— Blender 要和 Mosael 跑在同一台电脑上。")
-    if not str(payload.get("code") or "").strip():
-        raise ConfirmationError("没有要在 Blender 里执行的代码")
-
-def _summarize_blender_execute(db: Session, payload: dict[str, Any]) -> str:
-    code = str(payload.get("code") or "")
-    purpose = str(payload.get("purpose") or "").strip()[:80]
-    lines = len(code.strip().splitlines())
-    return (f"⚠️ 在你的 Blender 里执行建模代码({lines} 行){f':{purpose}' if purpose else ''}"
-            " —— Blender 的 Python 不是沙箱,可读写本机文件;执行前已压撤销点,可在 Blender 里 ⌘Z")
-
-def _execute_blender_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.db.models import User
-    from app.domain.blender import agent as blender_agent
-
-    # 连接归人:用批准这张卡的那个人的 Blender。自动放行时 actor 是开模式的人(见 autopilot)。
-    user = db.get(User, actor) if actor else None
-    if user is None:
-        raise ValueError("找不到批准这次操作的用户")
-    payload = confirmation.payload
-    result = blender_agent.execute(db, user, confirmation.workspace_id, str(payload.get("code") or ""),
-                                   str(payload.get("instance_id") or ""))
-    if result.get("error"):
-        # 代码自己的错:把 traceback 交回去,模型据此改了再试。traceback 在 worker 那边已按层数
-        # 收过(limit=6),这里不再按位置裁 —— 裁掉的往往正是写着错因的最后一行。
-        raise ValueError(f"Blender 里的代码出错了:\n{result['error']}")
-    return result
-
 def _validate_browser_open(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     url = str(payload.get("url") or "").strip()
     if url and not (url.startswith("http://") or url.startswith("https://")):
@@ -206,6 +174,8 @@ confirmable_tool(ConfirmableTool(
     name="publish_asset",
     permission="external",
     cost="none",
+    gate="publish",
+    gate_label="公开发布",
     summarize=_summarize_publish_asset,
     execute=_execute_publish_asset,
 ))
@@ -215,6 +185,8 @@ confirmable_tool(ConfirmableTool(
     name="http_request",
     permission="external",
     cost="none",
+    gate="http_request",
+    gate_label="对外请求",
     summarize=_summarize_http_request,
     execute=_execute_http_request,
     validate=_validate_http_request,
@@ -225,6 +197,8 @@ confirmable_tool(ConfirmableTool(
     name="run_code",
     permission="external",
     cost="none",
+    gate="run_code",
+    gate_label="沙箱执行代码",
     summarize=_summarize_run_code,
     execute=_execute_run_code,
     validate=_validate_run_code,
@@ -235,19 +209,11 @@ confirmable_tool(ConfirmableTool(
     name="run_host_code",
     permission="external",
     cost="none",
+    gate="run_host_code",
+    gate_label="不隔离执行代码",
     summarize=_summarize_run_host_code,
     execute=_execute_run_host_code,
     validate=_validate_run_host_code,
-))
-
-
-confirmable_tool(ConfirmableTool(
-    name="blender_execute",
-    permission="external",
-    cost="none",
-    summarize=_summarize_blender_execute,
-    execute=_execute_blender_execute,
-    validate=_validate_blender_execute,
 ))
 
 

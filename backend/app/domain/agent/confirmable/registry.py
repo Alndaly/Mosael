@@ -30,6 +30,11 @@ class ConfirmableTool:
     summarize: Callable[[Session, dict[str, Any]], str]
     execute: Callable[[Session, Any, str | None], dict[str, Any]]
     validate: Callable[[Session, str, dict[str, Any]], None] | None = None
+    #: 自动放行里的哪一档(`domain/agent/rules`)。空 = 这类操作没有可枚举的判据,一律回到人。
+    #: **由工具自己声明**,而不是让权限领域去列一张工具名单 —— 它不该认识 Blender 是什么。
+    gate: str = ""
+    #: 这一档在放行理由里怎么称呼("Blender 建模")。声明了 gate 就要给。
+    gate_label: str = ""
     #: 这次调用实际属于哪一档 —— 返回更高的那一档,或 None 表示就按声明的来。
     #: 静态表说不清后果:同一个 edit_workflow,加一个文本节点和加一个 code 节点不是一回事。
     escalate: Callable[[Session, str, dict[str, Any]], str | None] | None = None
@@ -37,6 +42,8 @@ class ConfirmableTool:
     def __post_init__(self) -> None:
         if self.permission not in PERMISSIONS or self.cost not in COSTS:
             raise ValueError(f"{self.name}:权限/开销档次不认识")
+        if bool(self.gate) != bool(self.gate_label):
+            raise ValueError(f"{self.name}:声明了放行档就要给它一个名字(反之亦然)")
 
 
 _TOOLS: dict[str, ConfirmableTool] = {}
