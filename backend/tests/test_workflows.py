@@ -754,9 +754,15 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
     assert captured["url"] == "https://example.test/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer sk-test"
     assert captured["timeout"] == ai_nodes.LLM_TIMEOUT_SECONDS
+    #: **第三条消息是 Schema 本身。** 它此前只进 response_format,而那一项能不能生效完全看供应商
+    #: (DeepSeek 只支持 json_object,不认的端点还会被网关降级到纯文本)—— 于是模型收到的是一句
+    #: 「只输出符合 JSON Schema 的对象」,而那个 Schema 它从来没见过。两次真实失败都出在这里。
+    sent = captured["json"]["messages"]
+    assert sent[:2] == [{"role": "system", "content": "只返回 JSON"}, {"role": "user", "content": "生成标题"}]
+    assert len(sent) == 3 and '"title"' in sent[2]["content"]
     assert captured["json"] == {
         "model": "gpt-custom",
-        "messages": [{"role": "system", "content": "只返回 JSON"}, {"role": "user", "content": "生成标题"}],
+        "messages": sent,
         "temperature": 0.2,
         "top_p": 0.8,
         "frequency_penalty": 0.1,

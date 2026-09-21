@@ -97,3 +97,33 @@ def test_重试次数是有限的() -> None:
     """每一次都是一次付费调用。要么第二次就对,要么是提示词和 schema 本身打架 ——
     后者再试十次一样,而账单是真的。"""
     assert JSON_REPAIR_ATTEMPTS == 1
+
+
+def test_Schema_要贴给模型看() -> None:
+    """**这是两次失败的共同根因。**
+
+    Schema 此前只进 `payload.response_format`,而那一项能不能生效完全看供应商:DeepSeek 只支持
+    `{"type":"json_object"}`,根本没有 json_schema;不认这个参数的端点还会被网关逐级降级到纯文本。
+    于是模型收到的是一句「只输出符合 JSON Schema 的对象」—— 而那个 Schema 它从来没见过。
+    """
+    from app.domain.workflows.executors.ai import _schema_for_prompt
+
+    text = _schema_for_prompt(CONFIG)
+    assert '"minimum":2' in text, "Schema 正文必须在里面,不能只说一句「要符合 Schema」"
+    #: 这两条是实测栽过的坑:一次是整份 JSON 没闭合(数组被引号包住、内部引号没转义)。
+    assert "包进字符串" in text
+    assert "转义" in text
+
+
+def test_不要_JSON_的那一轮不贴() -> None:
+    from app.domain.workflows.executors.ai import _schema_for_prompt
+
+    assert _schema_for_prompt({"response_format": "text"}) == ""
+    assert _schema_for_prompt({"response_format": "json_schema"}) == "", "没有 schema 就没什么可贴的"
+
+
+def test_json_object_也贴() -> None:
+    """那一档只保证「是合法 JSON」,字段形状仍然全靠模型自觉 —— 更需要看见 Schema。"""
+    from app.domain.workflows.executors.ai import _schema_for_prompt
+
+    assert '"minimum":2' in _schema_for_prompt({**CONFIG, "response_format": "json_object"})

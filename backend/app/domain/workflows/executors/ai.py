@@ -169,6 +169,25 @@ def _parse_json_response(text: str) -> Any:
         raise strict_error
 
 
+def _schema_for_prompt(config: dict[str, Any]) -> str:
+    """要贴给模型看的那份 Schema;这一轮不要 JSON 就返回空串。
+
+    `json_object` 也贴:那一档只保证"是合法 JSON",字段形状仍然全靠模型自觉。
+    """
+    mode = str(config.get("response_format") or "text")
+    if mode not in {"json_schema", "json_object"}:
+        return ""
+    schema = config.get("json_schema")
+    if not isinstance(schema, dict) or not schema:
+        return ""
+    body = json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+    return (
+        "你这一轮的回答必须是**一个**符合下面这份 JSON Schema 的 JSON 对象,"
+        "不要 Markdown 围栏、不要任何解释文字,不要把数组或对象包进字符串里,"
+        "字符串内部的引号要转义:\n" + body
+    )
+
+
 def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
     payload: dict[str, Any] = {"model": model, "messages": messages}
     temperature = _float_config(config, "temperature", min_value=0, max_value=2)
@@ -279,6 +298,19 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     if not prompt.strip():
         raise WorkflowDomainError("wfErr_llmPromptEmpty")
     messages.append({"role": "user", "content": prompt})
+    # **把 Schema 本身也给模型看。**
+    #
+    # 此前它只进 `payload.response_format`,而那一项能不能生效**完全看供应商**:DeepSeek 只支持
+    # `{"type":"json_object"}`,根本没有 json_schema;不认这个参数的端点还会被网关逐级降级
+    # (json_schema → json_object → 纯文本,见 domain/ai_chat)。于是在这些端点上,模型收到的是
+    # 一句"只输出符合 JSON Schema 的对象"—— **而那个 Schema 它从来没见过**。
+    #
+    # 两次真实失败都出在这里:一次是某个字段超出了它看不见的取值范围,一次是整份 JSON 根本没闭合。
+    # 对本来就支持结构化输出的端点,多这一段只是多几百 token,而且官方也建议照写;对不支持的,
+    # 这是能不能用的分别。
+    schema_text = _schema_for_prompt(config)
+    if schema_text:
+        messages.append({"role": "user", "content": schema_text})
     wants_json = str(config.get("response_format") or "text") in {"json_object", "json_schema"}
     try:
         target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
