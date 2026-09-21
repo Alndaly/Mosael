@@ -18,10 +18,13 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
-# Bump this exactly when startup migrations change the persistent database shape.
-# SQLite stores it in the database header, making a real upgrade distinguishable
-# from an ordinary restart before any migration code touches user data.
-DATABASE_SCHEMA_VERSION = 3
+# 这个数现在**只做一件事:拦住降级** —— 库被更新的版本迁移过之后,老版本不许再动它。
+# 它不再决定"要不要拍快照":那个决定改由「有没有待跑的一次性迁移」回答(见 MigrationPlan.pending)。
+#
+# 为什么改:这个常量自 2026-09-04 起没被 bump 过,而其间新增了十四个迁移(含一次 DROP TABLE
+# 加搬文件)。于是 `current == target`,快照一次都没拍过 —— **机制没坏,开关一直关着**。
+# 靠人记得改一个数才生效的保险,迟早会在它最该生效的那次是关着的。
+DATABASE_SCHEMA_VERSION = 4
 
 
 class DatabaseVersionTooNew(RuntimeError):
@@ -70,13 +73,22 @@ def create_upgrade_snapshot(path: Path, *, from_version: int, to_version: int) -
         raise
 
 
-def snapshot_before_upgrade(path: Path, *, target_version: int) -> Path | None:
+def snapshot_before_upgrade(path: Path, *, target_version: int, pending: int = 0) -> Path | None:
+    """要动用户的数据之前,先留一份。
+
+    `pending` 是**这次启动真要跑的一次性迁移条数**(见 MigrationPlan.pending)。它才是"要不要
+    拍"的判据:版本号相等不代表没有迁移要跑 —— 那正是此前这道保险形同虚设的原因。
+
+    版本号留下来只管一件事:**拦住降级**。库被更新的版本迁移过之后,老版本不许再动它。
+    """
     current_version, has_schema = _state(path)
     if current_version > target_version:
         raise DatabaseVersionTooNew(
             f"database schema v{current_version} is newer than supported v{target_version}"
         )
-    if current_version == target_version or not has_schema:
+    if not has_schema:
+        return None  # 空库没什么可备份的
+    if current_version == target_version and pending <= 0:
         return None
     return create_upgrade_snapshot(path, from_version=current_version, to_version=target_version)
 

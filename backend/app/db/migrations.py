@@ -1668,8 +1668,13 @@ def init_db() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
-    snapshot_before_upgrade(settings.db_path, target_version=DATABASE_SCHEMA_VERSION)
-    migration_plan().run()
+    plan = migration_plan()
+    # **先问要不要拍快照,再跑。** 判据是"有没有待跑的一次性迁移",不是版本号相不相等 ——
+    # 后者要人记得改一个常量,而它整整十四个迁移没被改过(见 db/safety 顶上那段)。
+    snapshot_before_upgrade(
+        settings.db_path, target_version=DATABASE_SCHEMA_VERSION, pending=len(plan.pending())
+    )
+    plan.run()
     mark_database_version(settings.db_path, DATABASE_SCHEMA_VERSION)
 
 

@@ -78,6 +78,20 @@ class MigrationPlan:
             names.add(step.name)
             previous = step.phase
 
+    def pending(self) -> tuple[str, ...]:
+        """还没跑过的一次性迁移。**用来决定要不要先拍快照** —— 见 db/safety。
+
+        此前那个决定看的是 `DATABASE_SCHEMA_VERSION` 这个手写常量:它自 2026-09-04 起没被 bump 过,
+        而其间新增了十四个迁移(含一次 DROP TABLE 加搬文件)。于是 `current == target`,
+        `snapshot_before_upgrade` 直接返回 None —— **机制没坏,开关一直关着**。
+        靠人记得改一个数才生效的保险,迟早会在它最该生效的那次是关着的。
+
+        改成问记账本:有没有真要跑的一次性迁移。有就拍,没有就不拍 —— 这个判据不会忘。
+        对账步骤(recurring)不算,它们每次启动都跑,不代表数据形状要变。
+        """
+        applied = _Ledger().applied()
+        return tuple(step.name for step in self.steps if step.once and step.name not in applied)
+
     def run(self) -> None:
         ledger = _Ledger()
         applied = ledger.applied()
