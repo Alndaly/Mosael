@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import base64
+import re
 import shutil
 from contextlib import contextmanager
 from pathlib import Path
@@ -29,9 +30,35 @@ LOOK_VIEWS: dict[str, tuple[float, float] | None] = {
     "overview": (35, 30), "front": (0, 5), "side": (90, 5), "back": (180, 5), "top": (0, 89),
     "camera": None,
 }
-LOOK_SHADINGS = ("solid", "rendered")
+#: 预设之外还能写 `"<方位角>/<仰角>"`(度)。六个固定机位够看整体摆位,**不够看细节**:
+#: 一个铰链、一处接缝、两件东西之间的缝隙,往往正好躲在这六个方向的正面或侧面里 ——
+#: 而"换个角度再看一眼"正是建模时最常做的动作。
+ANGLE_VIEW = re.compile(r"^(-?\d+(?:\.\d+)?)\s*/\s*(-?\d+(?:\.\d+)?)$")
+#: `xray` 是**看穿**:两件东西是不是真的穿在一起、内部有没有多出来的几何,实体着色下全被表面
+#: 盖住。此前想给的是线框,实测 Workbench 的线框只在视口里有,F12 渲出来是空背景 ——
+#: 而空图和"没建出来"长得一模一样,这种回答比没有更坏。
+LOOK_SHADINGS = ("solid", "xray", "rendered")
+#: 取景倍数:>1 更近,<1 更远。1 是把选中的东西整个装进画面。
+#: 上限 8 —— 再近就只剩几个像素的三角形,看不出任何东西。
+ZOOM_RANGE = (0.2, 8.0)
 #: 和 view_scene 同一个上限:每张图都进模型上下文。
 LOOK_LIMIT = 4
+
+
+def _angles(name: str) -> tuple[float, float]:
+    """一个视角条目 → (方位角, 仰角)。预设名,或 `"<az>/<el>"`。"""
+    if name in LOOK_VIEWS:
+        return LOOK_VIEWS[name] or (0.0, 0.0)
+    matched = ANGLE_VIEW.match(name.strip())
+    if matched is None:
+        raise BlenderDomainError(
+            f"不认识的视角 {name};可选 {'、'.join(LOOK_VIEWS)},或者写「方位角/仰角」如 120/25"
+        )
+    elevation = float(matched.group(2))
+    if not -89 <= elevation <= 89:
+        # ±90° 时相机的上方向退化(正对下方看时"哪边是上"没有定义),画面会莫名其妙地转。
+        raise BlenderDomainError(f"仰角要在 -89 到 89 之间,给的是 {elevation}")
+    return float(matched.group(1)), elevation
 
 
 #: 用哪个连接的判断和按钮那条路是同一份(bridge.resolve):智能体不传 instance_id,取第一个可用的。
@@ -62,19 +89,20 @@ def inspect(db, user, workspace_id: str, instance_id: str = '') -> dict:
 
 
 def look(db, user, workspace_id: str, *, views: list[str], objects: list[str] | None = None,
-         shading: str = 'solid', instance_id: str = '') -> dict:
+         shading: str = 'solid', zoom: float = 1.0, instance_id: str = '') -> dict:
     wanted = list(dict.fromkeys(views or ['overview']))[:LOOK_LIMIT]
-    unknown = [one for one in wanted if one not in LOOK_VIEWS]
-    if unknown:
-        raise BlenderDomainError(f"不认识的视角 {', '.join(unknown)};可选 {'、'.join(LOOK_VIEWS)}")
+    angles = [_angles(name) for name in wanted]   # 不认识的在这里就报出来,不白跑一趟 Blender
     if shading not in LOOK_SHADINGS:
         raise BlenderDomainError(f"shading 只能是 {' 或 '.join(LOOK_SHADINGS)}")
+    low, high = ZOOM_RANGE
+    if not low <= zoom <= high:
+        raise BlenderDomainError(f"zoom 要在 {low} 到 {high} 之间,给的是 {zoom}")
     instance = resolve(db, user, instance_id)
     with _workspace_folder(workspace_id) as folder:
-        views = [{'name': name, 'azimuth': (LOOK_VIEWS[name] or (0, 0))[0],
-                  'elevation': (LOOK_VIEWS[name] or (0, 0))[1]} for name in wanted]
+        views = [{'name': name, 'azimuth': angle[0], 'elevation': angle[1]}
+                 for name, angle in zip(wanted, angles)]
         result = _run(db, instance, 'look', {'views': views, 'objects': objects or [], 'shading': shading,
-                                             'folder': str(folder)}, workspace_id, folder)
+                                             'zoom': zoom, 'folder': str(folder)}, workspace_id, folder)
         images = []
         for one in result.get('images', []):
             path = Path(one['path'])

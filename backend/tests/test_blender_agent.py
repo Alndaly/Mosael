@@ -165,3 +165,60 @@ def test_internal_工具不进智能体工具表_也不进插件页(monkeypatch)
             return SimpleNamespace(id="dev.mosael.blender")
 
     assert [tool["name"] for tool in plugin_tools.exposed(FakeDb(), "u")] == ["get_scene_info"]
+
+
+class Test看得更细一点:
+    """六个固定机位够看整体摆位,**不够看细节**。
+
+    一个铰链、一处接缝、两件东西之间的缝隙,往往正好躲在这六个方向的正面或侧面里;而整场景
+    取景下,一个细节只有几个像素 —— 那时它和"没建出来"长得一模一样。「换个角度、凑近一点、
+    看穿它」正是建模时最常做的三个动作。
+    """
+
+    def test_自定义角度按方位角_仰角写(self, fake_blender) -> None:
+        fake_blender.replies["look"] = {"scene_name": "S", "images": []}
+        setup_scene()
+        with SessionLocal() as db:
+            blender_agent.look(db, _user(db), "ws", views=["120/25", "-45/-10"])
+        assert fake_blender.calls[0][1]["views"] == [
+            {"name": "120/25", "azimuth": 120.0, "elevation": 25.0},
+            {"name": "-45/-10", "azimuth": -45.0, "elevation": -10.0},
+        ]
+
+    def test_仰角到不了正上方_那里_哪边是上_没有定义(self, fake_blender) -> None:
+        # ±90° 时相机的上方向退化,画面会莫名其妙地转 —— 而那看起来像模型歪了。
+        setup_scene()
+        with SessionLocal() as db, pytest.raises(BlenderDomainError, match="仰角"):
+            blender_agent.look(db, _user(db), "ws", views=["0/90"])
+        assert fake_blender.calls == []
+
+    def test_写错的角度先拒_而且告诉他怎么写(self, fake_blender) -> None:
+        setup_scene()
+        with SessionLocal() as db, pytest.raises(BlenderDomainError, match="120/25"):
+            blender_agent.look(db, _user(db), "ws", views=["120,25"])
+        assert fake_blender.calls == []
+
+    def test_zoom_超范围先拒(self, fake_blender) -> None:
+        setup_scene()
+        with SessionLocal() as db, pytest.raises(BlenderDomainError, match="zoom"):
+            blender_agent.look(db, _user(db), "ws", views=["top"], zoom=50)
+        assert fake_blender.calls == []
+
+    def test_zoom_随调用发给_worker(self, fake_blender) -> None:
+        fake_blender.replies["look"] = {"scene_name": "S", "images": []}
+        setup_scene()
+        with SessionLocal() as db:
+            blender_agent.look(db, _user(db), "ws", views=["top"], zoom=2.5)
+        assert fake_blender.calls[0][1]["zoom"] == 2.5
+
+    def test_看穿是一档着色_线框不是(self, fake_blender) -> None:
+        """线框只在 Blender 的视口里有:F12 渲出来是一张空背景(实测 5.2,设了
+        wireframe_color_type 也一样)。空图和"没建出来"长得一模一样,这种回答比没有更坏。"""
+        fake_blender.replies["look"] = {"scene_name": "S", "images": []}
+        setup_scene()
+        with SessionLocal() as db:
+            blender_agent.look(db, _user(db), "ws", views=["top"], shading="xray")
+            with pytest.raises(BlenderDomainError, match="shading"):
+                blender_agent.look(db, _user(db), "ws", views=["top"], shading="wireframe")
+        assert fake_blender.calls[0][1]["shading"] == "xray"
+        assert len(fake_blender.calls) == 1

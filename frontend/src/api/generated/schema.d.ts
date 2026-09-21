@@ -18455,6 +18455,7 @@ export interface operations {
                 views?: string[];
                 objects?: string[];
                 shading?: string;
+                zoom?: number;
                 instance_id?: string;
             };
             header?: never;

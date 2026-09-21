@@ -282,7 +282,7 @@ def _bounds(scene, names):
 
 
 def _engine(shading):
-    if shading == 'solid':
+    if shading in ('solid', 'xray'):
         return 'BLENDER_WORKBENCH'
     engines = bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items.keys()
     return 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in engines else 'BLENDER_EEVEE'
@@ -293,14 +293,18 @@ def look(payload):
     scene = bpy.context.scene
     names = payload.get('objects') or []
     center, radius = _bounds(scene, names)
+    # 取景倍数:>1 靠近。整体摆位看 1 就够,而细节(铰链、接缝、两件东西之间的缝隙)在
+    # 整场景取景下只有几个像素 —— 那时它和"没建出来"长得一模一样。
+    zoom = float(payload.get('zoom') or 1.0)
+    mode = payload.get('shading', 'solid')
     render, shading = scene.render, scene.display.shading
     saved = (render.engine, scene.camera, render.resolution_x, render.resolution_y, render.resolution_percentage,
              render.filepath, render.image_settings.file_format, render.film_transparent,
-             shading.light, shading.color_type, shading.show_cavity)
+             shading.light, shading.color_type, shading.show_cavity, shading.show_xray)
     #: 实体模式用一块中性灰做背景:没有 World 时 Workbench 渲出来是纯黑,深色物体直接融进去。
     #: 材质预览模式不换 —— 那时 World 就是光照的一部分。
     world = scene.world
-    backdrop = bpy.data.worlds.new('mosael-look') if payload.get('shading', 'solid') == 'solid' else None
+    backdrop = bpy.data.worlds.new('mosael-look') if mode in ('solid', 'xray') else None
     if backdrop is not None:
         backdrop.color = (0.3, 0.32, 0.35)
         scene.world = backdrop
@@ -309,12 +313,16 @@ def look(payload):
     scene.collection.objects.link(camera)
     images, warnings = [], []
     try:
-        render.engine = _engine(payload.get('shading', 'solid'))
+        render.engine = _engine(mode)
         render.resolution_x, render.resolution_y = LOOK_SIZE
         render.resolution_percentage = 100
         render.image_settings.file_format = 'JPEG'
         render.film_transparent = False
         shading.light, shading.color_type, shading.show_cavity = 'STUDIO', 'MATERIAL', True
+        # 透视:看两件东西是不是真的穿在一起、内部有没有多出来的几何 —— 实体着色下这些全被
+        # 表面盖住。**不用线框**:Workbench 的线框是视口着色模式,F12 渲出来是一张空背景
+        # (实测 Blender 5.2,设了 wireframe_color_type 也一样),而空图和"没建出来"长得一模一样。
+        shading.show_xray = mode == 'xray'
         if render.engine != 'BLENDER_WORKBENCH' and hasattr(scene, 'eevee'):
             scene.eevee.taa_render_samples = 16
         data.sensor_fit = 'VERTICAL'
@@ -331,19 +339,22 @@ def look(payload):
                 direction = Vector((math.sin(azimuth) * math.cos(elevation), -math.cos(azimuth) * math.cos(elevation), math.sin(elevation)))
                 # 包围球比包围盒松得多(一块大地面就能把球撑大一圈),按球算再乘 0.7 才不至于把
                 # 东西缩在画面中间一小块 —— 立面视角下也不会切边,见 test_blender_worker_live。
-                distance = radius / math.sin(math.radians(LOOK_FOV) / 2) * 0.7
+                distance = radius / math.sin(math.radians(LOOK_FOV) / 2) * 0.7 / max(zoom, 0.01)
                 camera.location = center + direction * distance
                 camera.rotation_euler = (-direction).to_track_quat('-Z', 'Y').to_euler()
                 data.clip_start, data.clip_end = max(0.001, distance * 0.01), distance * 4
                 scene.camera = camera
-            path = str(Path(payload['folder']) / ('%d-%s.jpg' % (index, name)))
+            # 文件名只用序号:视角名现在可以是 "125/18" 这种自定义角度,**里面的斜杠会被当成
+            # 目录** —— 实测第二张图落进了一个叫 125 的子目录里,而上游按路径找不到它。
+            # 回给调用方的 `view` 仍然是原样的名字。
+            path = str(Path(payload['folder']) / ('%d.jpg' % index))
             render.filepath = path
             bpy.ops.render.render(write_still=True)
             images.append({'view': name, 'path': path})
     finally:
         (render.engine, scene.camera, render.resolution_x, render.resolution_y, render.resolution_percentage,
          render.filepath, render.image_settings.file_format, render.film_transparent,
-         shading.light, shading.color_type, shading.show_cavity) = saved
+         shading.light, shading.color_type, shading.show_cavity, shading.show_xray) = saved
         bpy.data.objects.remove(camera)
         bpy.data.cameras.remove(data)
         if backdrop is not None:

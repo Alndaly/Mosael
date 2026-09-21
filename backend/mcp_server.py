@@ -1377,19 +1377,28 @@ def blender_inspect(instance_id: str = "", workspace_id: str = "") -> dict[str, 
 
 @mcp.tool()
 def blender_look(views: list[str] | None = None, objects: list[str] | None = None, shading: str = "solid",
-                 instance_id: str = "", workspace_id: str = "") -> list[TextContent | ImageContent]:
+                 zoom: float = 1.0, instance_id: str = "",
+                 workspace_id: str = "") -> list[TextContent | ImageContent]:
     """Read-only: LOOK at the open Blender scene — returns rendered images you can see.
 
     Use it after every blender_execute to check the shape instead of trusting your code.
-    views (max 4): 'overview' (high 3/4), 'front' (from -Y), 'side' (from +X), 'back', 'top',
-    'camera' (the scene's active camera). Views auto-frame all visible geometry, or only the
-    named `objects`. shading='solid' is fast (≈1 s, studio light + cavity; colour comes from each
-    material's Viewport Display colour, so set `mat.diffuse_color` too); 'rendered' uses EEVEE to
-    show real materials and lights (slower). Render settings are restored afterwards.
+    views (max 4): the presets 'overview' (high 3/4), 'front' (from -Y), 'side' (from +X), 'back',
+    'top', 'camera' (the scene's active camera) — OR any angle as "<azimuth>/<elevation>" in
+    degrees, e.g. "120/25" or "-45/60" (azimuth 0 = front, 90 = right; elevation -89..89). Reach
+    for a custom angle whenever a detail hides behind a face in all six presets.
+    Views auto-frame all visible geometry, or only the named `objects` — naming the part you just
+    built is the cheapest way to get close to it.
+    zoom (0.2–8, default 1): >1 moves in, <1 pulls back. A detail that is a few pixels wide at
+    zoom 1 looks exactly like a part you never built.
+    shading='solid' is fast (≈1 s, studio light + cavity; colour comes from each material's
+    Viewport Display colour, so set `mat.diffuse_color` too); 'xray' is see-through — use it to
+    check whether two parts actually intersect, or whether there is stray geometry inside, which a
+    solid render hides completely; 'rendered' uses EEVEE to show real materials and lights
+    (slower). Render settings are restored afterwards.
     """
     data = _get("/api/scenes/blender/agent/look", {
         "workspace_id": workspace_id or _default_workspace_id(), "views": views or [],
-        "objects": objects or [], "shading": shading, "instance_id": instance_id,
+        "objects": objects or [], "shading": shading, "zoom": zoom, "instance_id": instance_id,
     }, timeout=180)
     return _with_images(data)
 

@@ -94,11 +94,11 @@ def agent_inspect(workspace_id: str, db: DbSession, user: CurrentUser, instance_
 @router.get('/blender/agent/look')
 def agent_look(workspace_id: str, db: DbSession, user: CurrentUser,
                views: Annotated[list[str], Query()] = [], objects: Annotated[list[str], Query()] = [],  # noqa: B006
-               shading: str = 'solid', instance_id: str = ''):
+               shading: str = 'solid', zoom: float = 1.0, instance_id: str = ''):
     """把当前 Blender 场景渲成几张图给智能体看。临时改渲染设置,渲完还原。"""
     ensure_workspace_access(db, user, workspace_id)
     return blender_agent.look(db, user, workspace_id, views=views, objects=objects, shading=shading,
-                              instance_id=instance_id)
+                              zoom=zoom, instance_id=instance_id)
 
 
 class BlenderImportRequest(BaseModel):

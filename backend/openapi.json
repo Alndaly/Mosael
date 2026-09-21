@@ -9041,6 +9041,16 @@
             }
           },
           {
+            "name": "zoom",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 1.0,
+              "title": "Zoom"
+            }
+          },
+          {
             "name": "instance_id",
             "in": "query",
             "required": false,
