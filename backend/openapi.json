@@ -9453,30 +9453,57 @@
         }
       }
     },
-    "/api/scenes/{scene_id}/models": {
+    "/api/scene-models": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Models",
+        "operationId": "models_api_scene_models_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "3D scenes"
         ],
         "summary": "Upload",
-        "operationId": "upload_api_scenes__scene_id__models_post",
-        "parameters": [
-          {
-            "name": "scene_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Scene Id"
-            }
-          }
-        ],
+        "operationId": "upload_api_scene_models_post",
         "requestBody": {
           "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_upload_api_scenes__scene_id__models_post"
+                "$ref": "#/components/schemas/Body_upload_api_scene_models_post"
               }
             }
           }
@@ -9503,23 +9530,56 @@
         }
       }
     },
-    "/api/scenes/{scene_id}/models/{model_id}": {
+    "/api/scene-models/{model_id}": {
+      "delete": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Remove Model",
+        "operationId": "remove_model_api_scene_models__model_id__delete",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "3D scenes"
         ],
         "summary": "Model Data",
-        "operationId": "model_data_api_scenes__scene_id__models__model_id__get",
+        "operationId": "model_data_api_scene_models__model_id__get",
         "parameters": [
-          {
-            "name": "scene_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Scene Id"
-            }
-          },
           {
             "name": "model_id",
             "in": "path",
@@ -20528,7 +20588,7 @@
         ],
         "title": "Body_stage_restore_api_settings_data_restore_stage_post"
       },
-      "Body_upload_api_scenes__scene_id__models_post": {
+      "Body_upload_api_scene_models_post": {
         "properties": {
           "workspace_id": {
             "type": "string",
@@ -20545,7 +20605,7 @@
           "workspace_id",
           "file"
         ],
-        "title": "Body_upload_api_scenes__scene_id__models_post"
+        "title": "Body_upload_api_scene_models_post"
       },
       "Body_upload_avatar_api_auth_me_avatar_post": {
         "properties": {

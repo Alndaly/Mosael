@@ -3278,24 +3278,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/scenes/{scene_id}/models": {
+    "/api/scene-models": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Models */
+        get: operations["models_api_scene_models_get"];
         put?: never;
         /** Upload */
-        post: operations["upload_api_scenes__scene_id__models_post"];
+        post: operations["upload_api_scene_models_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/scenes/{scene_id}/models/{model_id}": {
+    "/api/scene-models/{model_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3303,10 +3304,11 @@ export interface paths {
             cookie?: never;
         };
         /** Model Data */
-        get: operations["model_data_api_scenes__scene_id__models__model_id__get"];
+        get: operations["model_data_api_scene_models__model_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove Model */
+        delete: operations["remove_model_api_scene_models__model_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7132,8 +7134,8 @@ export interface components {
             /** File */
             file: string;
         };
-        /** Body_upload_api_scenes__scene_id__models_post */
-        Body_upload_api_scenes__scene_id__models_post: {
+        /** Body_upload_api_scene_models_post */
+        Body_upload_api_scene_models_post: {
             /** Workspace Id */
             workspace_id: string;
             /** File */
@@ -18746,18 +18748,47 @@ export interface operations {
             };
         };
     };
-    upload_api_scenes__scene_id__models_post: {
+    models_api_scene_models_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_api_scene_models_post: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                scene_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_api_scenes__scene_id__models_post"];
+                "multipart/form-data": components["schemas"]["Body_upload_api_scene_models_post"];
             };
         };
         responses: {
@@ -18781,14 +18812,13 @@ export interface operations {
             };
         };
     };
-    model_data_api_scenes__scene_id__models__model_id__get: {
+    model_data_api_scene_models__model_id__get: {
         parameters: {
             query: {
                 workspace_id: string;
             };
             header?: never;
             path: {
-                scene_id: string;
                 model_id: string;
             };
             cookie?: never;
@@ -18803,6 +18833,37 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_model_api_scene_models__model_id__delete: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

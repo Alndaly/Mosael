@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
 from app.domain.scene_types import SceneContent
-from app.domain.scenes import create_scene_with_model, import_model, validate_model_file
+from app.domain.scenes import create_scene, import_model, validate_model_file
 from .scripts import command
 
 class BlenderDomainError(ValueError):
@@ -315,14 +315,13 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
         exported = attempt / 'model.glb'
         if not exported.is_file():
             raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。')
-        fmt = validate_model_file(exported)
-        # 落到当前场景:模型先进库(建行归场景域,ADR-0003),内容交回编辑器去写。
-        if into_current:
-            with exported.open('rb') as stream:
-                model_id = import_model(db, scene, 'Blender model', stream,
-                                        declared_size=exported.stat().st_size).id
-        else:
-            model_id = uuid4().hex
+        validate_model_file(exported)
+        # 模型先进库(建行归场景域,ADR-0003)。它归**工作区**,所以两条路(落到当前场景 /
+        # 建一个新场景)都是同一步 —— 此前新建那条要等场景有了 id 才挂得上模型,于是多出
+        # 一个「场景+模型+修订一把落地」的特例函数。
+        with exported.open('rb') as stream:
+            model_id = import_model(db, scene.workspace_id, 'Blender model', stream,
+                                    declared_size=exported.stat().st_size).id
         try:
             # 接回来的场景 = 一个 Blender 模型 + 原来那些机位(带回传的运镜)。相机是物体,
             # 所以它们和模型一起进 objects;镜头仍然只是"用哪台机位、拍多久"。
@@ -340,11 +339,8 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
             record.update(warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
             write_record(folder, record)
             return {**summary(record), 'content': content.model_dump(mode='json')}
-        # 场景、模型、初始修订一起落地。**建行归场景域**(ADR-0003),这里只描述要建什么。
-        received = create_scene_with_model(
-            db, workspace_id=scene.workspace_id, name=record['snapshot']['name'] + ' · Blender',
-            content=content, model_id=model_id, model_name='Blender model',
-            model_format=fmt, model_source=exported)
+        # **建行归场景域**(ADR-0003),这里只描述要建什么。模型已经在这个工作区里了。
+        received = create_scene(db, scene.workspace_id, record['snapshot']['name'] + ' · Blender', content)
         record.update(received_scene_id=received.id, warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
         write_record(folder, record)
         return summary(record)
@@ -373,18 +369,17 @@ def pull(db, user, workspace_id, instance_id):
             exported = folder / 'model.glb'
             if not exported.is_file():
                 raise BlenderUnavailable('Blender 没有导出可用的模型，请重试。')
-            fmt = validate_model_file(exported)
-            model_id = uuid4().hex
+            validate_model_file(exported)
+            with exported.open('rb') as stream:
+                model_id = import_model(db, workspace_id, 'Blender model', stream,
+                                        declared_size=exported.stat().st_size).id
             # 从默认内容长出来:它自带一台机位和一个指着它的镜头,而镜头没有机位是非法的。
             # 直接给一份只有模型的 objects,等于交出一个引用了不存在机位的场景。
             blank = SceneContent().model_dump(mode='json')
             content = SceneContent.model_validate({**blank, 'objects': [
                 *blank['objects'],
                 {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
-            scene = create_scene_with_model(
-                db, workspace_id=workspace_id, name=result.get('scene_name') or 'Blender 场景',
-                content=content, model_id=model_id, model_name='Blender model',
-                model_format=fmt, model_source=exported)
+            scene = create_scene(db, workspace_id, result.get('scene_name') or 'Blender 场景', content)
         finally:
             #: 临时目录用完即删 —— 字节已经拷进场景的模型目录,这里没有第二个读者。
             shutil.rmtree(folder, ignore_errors=True)

@@ -124,7 +124,7 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
         assert received['received_scene_id']!=scene.id
         new=db.get(Scene3D,received['received_scene_id'])
         model=db.get(Scene3DModel,_model_object(new.content)['model_id'])
-        assert model.scene_id==new.id and model_file(model).read_bytes()==glb()
+        assert model.workspace_id==new.workspace_id and model_file(model).read_bytes()==glb()
         assert scene.revision==1 and [o['kind'] for o in scene.content['objects']]==['camera']
         assert [s['id'] for s in new.content['shots']]==[s['id'] for s in initial['content']['shots']]
         assert bridge.history(scene,user)[0]['received_scene_id']==new.id
@@ -175,7 +175,7 @@ def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypat
 
         content=received['content']
         model=db.get(Scene3DModel,_model_object(content)['model_id'])
-        assert model.scene_id==scene.id and model_file(model).read_bytes()==glb()   # 模型归当前场景
+        assert model.workspace_id==scene.workspace_id and model_file(model).read_bytes()==glb()   # 模型归工作区
         assert [s['id'] for s in content['shots']]==[s['id'] for s in initial['content']['shots']]
 
         db.refresh(scene)
@@ -207,7 +207,7 @@ def test_pull_takes_the_open_blender_scene_without_a_prior_send(monkeypatch, tmp
         scene=db.get(Scene3D,result['scene_id'])
         assert scene.name=='客厅' and scene.workspace_id==ws
         model=db.get(Scene3DModel,_model_object(scene.content)['model_id'])
-        assert model.scene_id==scene.id and model_file(model).read_bytes()==glb()
+        assert model.workspace_id==scene.workspace_id and model_file(model).read_bytes()==glb()
         assert len(scene.content['shots'])==1            # 默认镜头,由用户重新设计
         assert any('相机' in w for w in result['warnings'])
         assert not list((tmp_path/'blender-bridge'/ws/'_pull').glob('*'))

@@ -67,9 +67,24 @@ JSON 数据传入(视角的角度也是),它只按发过去的数据干活。真
 设计背景见 [Blender 接入调研](design/blender-integration.md),安装见
 [插件说明](../plugins/examples/blender/README.md)。
 
+## 模型归工作区
+
+导入的 3D 模型是**工作区级的素材**,不属于某个场景:`POST /api/scene-models` 传,
+`GET /api/scene-models` 列,`DELETE` 删(**还有场景摆着它就不让删**,并说出是哪几个)。
+删场景不删模型;删工作区才连文件一起清(`delete_workspace_model_files`,和字体、LUT 同一套)。
+
+此前它挂在 `scene_id` 上,于是同一件道具每个场景都要重新导一份,而**工作流每跑一次都新建
+一个场景** —— 在 Blender 里建好的产品模型因此永远进不了自动成片的布景:那个场景还不存在,
+模型就没处挂。`create_scene` 里那句"建完场景再导模型"、以及专为 Blender 接回而设的
+`create_scene_with_model` 特例,都是同一个错位的产物,改归工作区之后一起消失了。
+
+老数据由 `_migrate_scene_models_to_workspace` 自动搬(表结构 + 文件目录,可重入),
+见 `tests/test_scene_models_move_to_workspace_migration.py`。
+
 ## 其他约束
 
 - 模型导入:自包含 GLB 2.0 ≤512 MB、内嵌 glTF 2.0 ≤100 MB,支持 Draco/KTX2/meshopt;
   实时上限 5000 节点 / 2000 网格;不加载模型里声明的外部网址或本地路径。
+  (后端白模渲染器另有面数预算,且解不开 Draco/meshopt —— 见上面那一节。)
 - 每条轨最多 100 帧,镜头时长最多 120 秒。
 - 保存是带修订的 CAS,冲突不静默覆盖;场景、模型、画板引用都验工作区归属。

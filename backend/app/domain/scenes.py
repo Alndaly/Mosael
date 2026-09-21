@@ -94,17 +94,25 @@ def get_scene(db: Session, workspace_id: str, scene_id: str) -> Scene3D:
     return scene
 
 
-def check_models(db: Session, scene_id: str, content: SceneContent):
+def check_models(db: Session, workspace_id: str, content: SceneContent):
+    """场景引用的模型都得是**这个工作区的**。
+
+    边界是工作区而不是场景:模型归工作区(见 Scene3DModel 的说明),一件道具导一次、处处能摆。
+    拦的仍然是同一件事 —— 别人工作区的模型在这里既看不到也下载不到,引用它只会得到一个
+    加载失败的空位。
+    """
     ids = {o.model_id for o in content.objects if o.model_id}
     if ids:
-        owned = set(db.scalars(select(Scene3DModel.id).where(Scene3DModel.scene_id == scene_id, Scene3DModel.id.in_(ids))))
+        owned = set(db.scalars(select(Scene3DModel.id).where(
+            Scene3DModel.workspace_id == workspace_id, Scene3DModel.id.in_(ids))))
         if owned != ids:
-            raise SceneDomainError("Imported model does not belong to this scene")
+            raise SceneDomainError("Imported model does not belong to this workspace")
 
 
 def create_scene(db: Session, workspace_id: str, name: str, content: SceneContent) -> Scene3D:
-    if any(o.model_id for o in content.objects):
-        raise SceneDomainError("Import models after creating the scene")
+    # 建场景时就可以引用模型 —— 模型归工作区,先于场景存在。此前这里拦着"建完再导",
+    # 那是模型挂在场景下面时的必然:那会儿场景还没有 id,模型没处挂。
+    check_models(db, workspace_id, content)
     scene = Scene3D(workspace_id=workspace_id, name=name, content=content.model_dump(mode="json"))
     db.add(scene)
     db.flush()
@@ -117,7 +125,7 @@ def create_scene(db: Session, workspace_id: str, name: str, content: SceneConten
 def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, content: SceneContent) -> Scene3D:
     if scene.revision != base_revision:
         raise SceneConflict("Scene changed elsewhere. Keep your draft and reload before saving.")
-    check_models(db, scene.id, content)
+    check_models(db, scene.workspace_id, content)
     data = content.model_dump(mode="json")
     if data == scene.content and name == scene.name:
         return scene
@@ -250,8 +258,8 @@ def validate_model(data: bytes, *, size: int | None = None) -> str:
 CHUNK = 1024 * 1024
 
 
-def _model_slot(workspace_id: str, scene_id: str) -> Path:
-    directory = scene_model_dir(workspace_id, scene_id)
+def _model_slot(workspace_id: str) -> Path:
+    directory = scene_model_dir(workspace_id)
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 
@@ -264,9 +272,9 @@ def _peek_format(source: BinaryIO) -> str:
     return "glb" if magic == b"glTF" else "gltf"
 
 
-def import_model(db: Session, scene: Scene3D, name: str, source: BinaryIO,
+def import_model(db: Session, workspace_id: str, name: str, source: BinaryIO,
                  *, declared_size: int | None = None) -> Scene3DModel:
-    """把一份模型收进这个场景。**从流分块搬到磁盘,任何时候都不整份进内存。**
+    """把一份模型收进这个**工作区**。**从流分块搬到磁盘,任何时候都不整份进内存。**
 
     顺序是:先按声明的大小挡一道(一份 2 GB 的文件不必落盘就能拒绝)、分块拷到 `.part`、
     校验(GLB 只读文件头和那段 JSON)、改名、落行。
@@ -279,7 +287,7 @@ def import_model(db: Session, scene: Scene3D, name: str, source: BinaryIO,
         _refuse_too_large(declared_size, fmt)
 
     model_id = uuid4().hex
-    directory = _model_slot(scene.workspace_id, scene.id)
+    directory = _model_slot(workspace_id)
     staged = directory / f"{model_id}.part"
     try:
         size = 0
@@ -296,8 +304,8 @@ def import_model(db: Session, scene: Scene3D, name: str, source: BinaryIO,
         staged.unlink(missing_ok=True)
         raise
 
-    model = Scene3DModel(id=model_id, scene_id=scene.id, name=name[:160], format=fmt,
-                         file_key=scene_model_key(scene.workspace_id, scene.id, final.name), size=size)
+    model = Scene3DModel(id=model_id, workspace_id=workspace_id, name=name[:160], format=fmt,
+                         file_key=scene_model_key(workspace_id, final.name), size=size)
     db.add(model)
     try:
         db.commit()
@@ -314,50 +322,48 @@ def model_file(model: Scene3DModel) -> Path:
     return resolve_key(model.file_key)
 
 
-def delete_scene_model_files(scene: Scene3D) -> None:
-    """删场景时连它的模型文件一起删。**行是 CASCADE 走的,文件没人管** —— 和字体、LUT 同一套
-    (`delete_font_files`),由删除那条路显式调用。"""
-    directory = scene_model_dir(scene.workspace_id, scene.id)
+def list_models(db: Session, workspace_id: str) -> list[Scene3DModel]:
+    """这个工作区里能摆的模型。选择器、工作流、智能体都读这一份。"""
+    return list(db.scalars(
+        select(Scene3DModel).where(Scene3DModel.workspace_id == workspace_id).order_by(Scene3DModel.name)
+    ))
+
+
+def scenes_using_model(db: Session, workspace_id: str, model_id: str) -> list[str]:
+    """还有哪些场景摆着这份模型(名字)。删之前要知道 —— 删了那些场景里就是一个空位。"""
+    using = []
+    for scene in db.scalars(select(Scene3D).where(Scene3D.workspace_id == workspace_id)):
+        objects = (scene.content or {}).get("objects") or []
+        if any(isinstance(o, dict) and o.get("model_id") == model_id for o in objects):
+            using.append(scene.name)
+    return using
+
+
+def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
+    """删一份模型的行和文件。**还有场景摆着它就不让删**,并说出是哪几个。
+
+    此前模型随场景 CASCADE 一起走,没有"还有谁在用"的问题 —— 它只属于那一个场景。现在它
+    归工作区、能被多个场景摆,删掉就是在别处留一个加载失败的空位,而那个空位没有任何线索
+    说明它本来是什么。
+    """
+    model = db.get(Scene3DModel, model_id)
+    if model is None or model.workspace_id != workspace_id:
+        raise SceneNotFound("Model not found")
+    using = scenes_using_model(db, workspace_id, model_id)
+    if using:
+        raise SceneDomainError("还有场景在用这份模型:" + "、".join(using[:5]) + "。先把它们里面的这件物体删掉。")
+    path = model_file(model)
+    db.delete(model)
+    db.commit()
+    path.unlink(missing_ok=True)   # 行没了才删文件:反过来的话,删文件成功、提交失败就只剩一条指空的行
+
+
+def delete_workspace_model_files(workspace_id: str) -> None:
+    """删工作区时把它的模型文件一起删。**行是 CASCADE 走的,文件没人管** —— 和字体、LUT
+    同一套(`delete_font_files`),由删除那条路显式调用。"""
+    directory = scene_model_dir(workspace_id)
     if directory.is_dir():
         shutil.rmtree(directory, ignore_errors=True)
-
-
-def create_scene_with_model(db: Session, *, workspace_id: str, name: str, content: SceneContent,
-                            model_id: str, model_name: str, model_format: str,
-                            model_source: Path) -> Scene3D:
-    """建一个场景,连同它自带的那份导入模型和初始修订,**一个事务里落地**。
-
-    Blender 接回来的场景就是这个形状:场景、模型、修订三样要么一起在,要么一起不在 ——
-    少了模型的场景在编辑器里是个空壳,而没有场景的模型没有任何入口能删掉。
-
-    `create_scene` 明确拒绝内容里带 `model_id`(先建场景、再导模型),这里是那条规则的
-    **唯一例外**:模型此刻就在手上,分两步反而必然留下一个中间态。
-
-    它存在的另一个理由是**数据归属**(ADR-0003):Scene3D / Scene3DModel / Scene3DRevision
-    三张表归这个模块,所以行只在这里建;Blender 互通调它,而不是自己 `Scene3D(...)`。
-
-    收的是**路径不是字节**:一份 500 MB 的模型没有理由为了换个地方而先进内存一趟。
-    """
-    scene = Scene3D(workspace_id=workspace_id, name=name[:160], content=content.model_dump(mode="json"))
-    db.add(scene)
-    db.flush()
-    directory = _model_slot(workspace_id, scene.id)
-    final = directory / f"{model_id}.{model_format}"
-    shutil.copyfile(model_source, final)
-    size = final.stat().st_size
-    db.add(Scene3DModel(id=model_id, scene_id=scene.id, name=model_name[:160],
-                        format=model_format, file_key=scene_model_key(workspace_id, scene.id, final.name),
-                        size=size))
-    db.add(Scene3DRevision(scene_id=scene.id, revision=1,
-                           snapshot={"name": scene.name, "content": scene.content}))
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        final.unlink(missing_ok=True)
-        raise
-    db.refresh(scene)
-    return scene
 
 
 def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, objects: list[dict], remove_ids: list[str], shots: list[dict] | None, name: str | None) -> Scene3D:
@@ -406,15 +412,16 @@ def model_library(db: Session, scene: Scene3D, content: SceneContent) -> ModelLi
     if not wanted:
         return ModelLibrary()
     rows = db.scalars(
-        select(Scene3DModel).where(Scene3DModel.scene_id == scene.id, Scene3DModel.id.in_(wanted))
+        select(Scene3DModel).where(Scene3DModel.workspace_id == scene.workspace_id,
+                                   Scene3DModel.id.in_(wanted))
     ).all()
     library = library_for({row.id: resolve_key(row.file_key) for row in rows if row.file_key})
     missing = wanted - {row.id for row in rows}
     if not missing:
         return library
-    # 物体指着一份这个场景里没有的模型 —— 照样要说出来,否则画面里少一件道具而没人知道为什么。
+    # 物体指着一份这个工作区里没有的模型 —— 照样要说出来,否则画面里少一件道具而没人知道为什么。
     return ModelLibrary(meshes=library.meshes,
-                        failures={**library.failures, **{one: "这个场景里找不到这份模型。" for one in missing}})
+                        failures={**library.failures, **{one: "这个工作区里找不到这份模型。" for one in missing}})
 
 
 def model_warnings(db: Session, scene: Scene3D, library: ModelLibrary) -> list[str]:
@@ -422,7 +429,7 @@ def model_warnings(db: Session, scene: Scene3D, library: ModelLibrary) -> list[s
     if not library.failures:
         return []
     names = dict(db.execute(
-        select(Scene3DModel.id, Scene3DModel.name).where(Scene3DModel.scene_id == scene.id)
+        select(Scene3DModel.id, Scene3DModel.name).where(Scene3DModel.workspace_id == scene.workspace_id)
     ).all())
     return [f"「{names.get(model_id, model_id)}」没有渲进白模:{reason}"
             for model_id, reason in library.failures.items()]

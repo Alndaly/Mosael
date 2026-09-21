@@ -8,9 +8,9 @@ from app.api.schemas.scenes import (SceneCreate, SceneOperations, SceneOut, Scen
                                     SceneReferenceRequest, SceneUpdate)
 from app.db.models import Scene3D, Scene3DModel, Scene3DRevision
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.scenes import (apply_scene_operations, create_scene, delete_scene_model_files,
-                                get_scene, import_model, model_file, render_shot_references, save_scene,
-                                scene_preview, view_scene)
+from app.domain.scenes import (apply_scene_operations, create_scene, delete_model, get_scene,
+                                import_model, list_models, model_file, render_shot_references,
+                                save_scene, scene_preview, view_scene)
 
 router = APIRouter(tags=["3D scenes"])
 
@@ -60,22 +60,35 @@ def revision_content(scene_id: str, revision: int, workspace_id: str, db: DbSess
     return row.snapshot
 
 
-@router.post("/scenes/{scene_id}/models")
-async def upload(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Form(...), file: UploadFile = File(...)):
+# 模型归**工作区**,不归某个场景(见 db.model_slices.scenes.Scene3DModel):一件道具导一次、
+# 处处能摆,而工作流每跑一次都新建一个场景 —— 挂在场景下面时它永远进不了自动成片的布景。
+@router.get("/scene-models")
+def models(workspace_id: str, db: DbSession, user: CurrentUser):
+    ensure_workspace_access(db, user, workspace_id)
+    return [{"id": m.id, "name": m.name, "format": m.format, "size": m.size} for m in list_models(db, workspace_id)]
+
+
+@router.post("/scene-models")
+async def upload(db: DbSession, user: CurrentUser, workspace_id: str = Form(...), file: UploadFile = File(...)):
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    scene = get_scene(db, workspace_id, scene_id)
     # **把文件对象直接交出去,一个字节都不经过这里。** multipart 解析时整份已经落到临时文件上,
     # `file.file` 就是那个句柄;`file.size` 是真实大小,用来在落盘之前就挡掉超限的。
-    model = import_model(db, scene, file.filename or "Model", file.file, declared_size=file.size)
-    return {"id": model.id, "name": model.name, "format": model.format}
+    model = import_model(db, workspace_id, file.filename or "Model", file.file, declared_size=file.size)
+    return {"id": model.id, "name": model.name, "format": model.format, "size": model.size}
 
 
-@router.get("/scenes/{scene_id}/models/{model_id}")
-def model_data(scene_id: str, model_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
+@router.delete("/scene-models/{model_id}", status_code=204)
+def remove_model(model_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    delete_model(db, workspace_id, model_id)
+    return Response(status_code=204)
+
+
+@router.get("/scene-models/{model_id}")
+def model_data(model_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     ensure_workspace_access(db, user, workspace_id)
-    get_scene(db, workspace_id, scene_id)
     model = db.get(Scene3DModel, model_id)
-    if model is None or model.scene_id != scene_id:
+    if model is None or model.workspace_id != workspace_id:
         raise HTTPException(404, "Model not found")
     # **流式发文件,不把它读进内存。** 此前是 `Response(model.data)`:一份 100 MB 的模型,
     # 每个并发下载各占一份内存。FileResponse 走 sendfile,顺带自带 Range 支持。
@@ -97,8 +110,8 @@ def operations(scene_id: str, body: SceneOperations, db: DbSession, user: Curren
 def delete_scene(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, workspace_id, "edit")
     scene = get_scene(db, workspace_id, scene_id)
-    # 行随场景 CASCADE 一起走;**文件不会** —— 和字体、LUT 同一套,由这里显式清掉。
-    delete_scene_model_files(scene)
+    # 模型**不跟着场景走**:它归工作区,别的场景可能还摆着同一件道具。要删模型走
+    # DELETE /scene-models/{id},那条会先说清楚还有谁在用。
     db.delete(scene)
     db.commit()
     return Response(status_code=204)

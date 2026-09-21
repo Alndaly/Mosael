@@ -61,6 +61,7 @@ import {
   createScene,
   deleteScene,
   getScene,
+  listSceneModels,
   listScenes,
   saveScene,
   uploadSceneModel,
@@ -142,6 +143,10 @@ const ADD_OPTIONS: {
   { value: "__import__", label: "导入 GLB / glTF", group: "其它", keywords: ["import", "glb", "gltf", "daoru", "model"],
     description: "从文件导入已有模型" },
 ];
+
+/** 一个模型在「添加」菜单里占的那一项。前缀把它和内置形状分开 —— 模型的 id 是十六进制串,
+ *  和 kind 撞不上,但靠"撞不上"来区分是等着出事。 */
+const MODEL_PREFIX = "model:";
 
 const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
@@ -298,6 +303,25 @@ function SceneEditor({
 }) {
   const [navigation] = useCanvasInputMode();
   const [renaming, setRenaming] = React.useState(false);
+  /** 这个工作区里已经有的模型。**它们归工作区,不归场景** —— 所以在「添加」里和几何体
+   *  并排列出来,一件道具导一次、哪个场景都摆得上,不必每个场景重新传一遍。 */
+  const sceneModels = useQuery({
+    queryKey: ["scene-models", initial.workspace_id],
+    queryFn: () => listSceneModels(initial.workspace_id),
+  });
+  const addOptions = React.useMemo(
+    () => [
+      ...ADD_OPTIONS,
+      ...(sceneModels.data ?? []).map((m) => ({
+        value: MODEL_PREFIX + m.id,
+        label: m.name,
+        group: "模型库",
+        keywords: ["model", "glb", "moxing", m.name],
+        description: `${(m.size / 1024 / 1024).toFixed(1)} MB · ${m.format.toUpperCase()}`,
+      })),
+    ],
+    [sceneModels.data],
+  );
   const studioRoot = React.useRef<HTMLDivElement>(null);
   const fullscreen = useSceneFullscreen(studioRoot);
   const qc = useQueryClient(),
@@ -636,15 +660,21 @@ function SceneEditor({
       }
     }
   }
+  /** 把模型库里的一份摆进场景。模型归工作区,所以这一步不需要上传 —— 它已经在了。 */
+  function placeModel(name: string, modelId: string) {
+    const o = makeObject("model", { name, model_id: modelId });
+    update({
+      ...current.current.content,
+      objects: [...current.current.content.objects, o],
+    });
+    setSelected(o.id);
+  }
   async function importModel(f: File) {
     await work("导入模型", async () => {
-      const m = await uploadSceneModel(initial.workspace_id, initial.id, f);
-      const o = makeObject("model", { name: m.name, model_id: m.id });
-      update({
-        ...current.current.content,
-        objects: [...current.current.content.objects, o],
-      });
-      setSelected(o.id);
+      const m = await uploadSceneModel(initial.workspace_id, f);
+      // 传完就进了工作区的模型库,别的场景也摆得上了 —— 让那份列表立刻看得到。
+      void qc.invalidateQueries({ queryKey: ["scene-models", initial.workspace_id] });
+      placeModel(m.name, m.id);
     });
   }
   async function assetFrame(t: number, options?: { clay?: boolean }) {
@@ -1427,11 +1457,15 @@ function SceneEditor({
                       value=""
                       onValueChange={(kind) => {
                         if (kind === "__import__") file.current?.click();
-                        else add(kind as SceneObject["kind"]);
+                        else if (kind.startsWith(MODEL_PREFIX)) {
+                          const id = kind.slice(MODEL_PREFIX.length);
+                          const m = sceneModels.data?.find((one) => one.id === id);
+                          if (m) placeModel(m.name, m.id);
+                        } else add(kind as SceneObject["kind"]);
                       }}
                       searchPlaceholder="搜索物体类型"
                       emptyText="没有匹配的类型"
-                      options={ADD_OPTIONS}
+                      options={addOptions}
                       trigger={
                         <Button variant="ghost" size="icon-sm" title="添加物体" aria-label="添加物体">
                           <Plus size={16} />

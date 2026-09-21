@@ -104,7 +104,8 @@ def import_to_scene(db, user, scene, *, base_revision: int, name: str = '', obje
     """把 Blender 里做好的东西(整个场景,或按名字挑的几个物体)作为**一个模型物体**加进 Mosael 场景。
 
     先比修订再导出:场景已经被别人改过的话,不必让 Blender 白导一趟。写入仍走 save_scene 的
-    CAS —— 两次检查之间被改了,那一次照样冲突,模型文件留在场景目录里等下一次引用。
+    CAS —— 两次检查之间被改了,那一次照样冲突,而模型已经在这个工作区里了(它归工作区,不归
+    场景),下一次直接摆上去就行,不必再导一遍。
     """
     from app.domain.scenes import apply_scene_operations, import_model
 
@@ -119,7 +120,7 @@ def import_to_scene(db, user, scene, *, base_revision: int, name: str = '', obje
             raise BlenderUnavailable('Blender 没有导出可用的模型,请重试。')
         label = (name or result.get('scene_name') or 'Blender 模型').strip()[:160]
         with output.open('rb') as stream:
-            model = import_model(db, scene, label, stream, declared_size=output.stat().st_size)
+            model = import_model(db, scene.workspace_id, label, stream, declared_size=output.stat().st_size)
     object_id = f'blender-{uuid4().hex[:10]}'
     entry = {'id': object_id, 'kind': 'model', 'name': label, 'model_id': model.id}
     if position is not None:

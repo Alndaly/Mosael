@@ -288,12 +288,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       };
       const loadModel = (id: string) => {
         if (!models.has(id)) {
-          const promise = readSceneModel(
-            props.workspace,
-            props.sceneId,
-            id,
-            abort.signal,
-          )
+          const promise = readSceneModel(props.workspace, id, abort.signal)
             .then((data) =>
               gltfLoader(renderer).parseAsync(
                 new TextDecoder().decode(data.slice(0, 4)) === "glTF"

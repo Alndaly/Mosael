@@ -41,24 +41,66 @@ def test_invalid_scene_hierarchy_camera_and_nonfinite():
     assert r.status_code == 422, r.text
 
 
-def test_model_import_is_self_contained_and_scene_scoped():
+def test_model_import_is_self_contained_and_workspace_scoped():
+    """模型只收自包含的那种,而它的边界是**工作区**:同一件道具在这个工作区里处处能摆,
+    别人的工作区既看不到也引用不了。
+
+    此前边界是场景 —— 于是同一件道具每个场景都得重新导一份,而工作流每跑一次都新建一个
+    场景,Blender 里建好的产品模型因此永远进不了自动成片的布景。
+    """
     c, ws, scene = setup_scene()
-    path = f"/api/scenes/{scene['id']}/models"
     def upload(doc):
-        return c.post(path, data={'workspace_id': ws}, files={'file': ('model.gltf', json.dumps(doc).encode(), 'model/gltf+json')})
+        return c.post('/api/scene-models', data={'workspace_id': ws},
+                      files={'file': ('model.gltf', json.dumps(doc).encode(), 'model/gltf+json')})
     assert upload({'asset': {'version': '2.0'}, 'buffers': [{'uri': 'https://example.com/model.bin'}]}).status_code == 422
     assert upload({'asset': {'version': '2.0'}, 'images': [{'uri': 'file:///etc/passwd'}]}).status_code == 422
     model = upload({'asset': {'version': '2.0'}, 'scenes': [{'nodes': []}], 'scene': 0})
     assert model.status_code == 200, model.text
     mid = model.json()['id']
+    assert [m['id'] for m in c.get('/api/scene-models', params={'workspace_id': ws}).json()] == [mid]
+
+    # 同一个工作区里的**另一个**场景照样摆得上 —— 这正是此前做不到的那件事。
     second = c.post('/api/scenes', json={'workspace_id': ws}).json()
-    assert c.get(f"/api/scenes/{second['id']}/models/{mid}", params={'workspace_id': ws}).status_code == 404
     second['content']['objects'] = [
         next(o for o in second['content']['objects'] if o['kind'] == 'camera'),
         {'id': 'model', 'kind': 'model', 'model_id': mid},
     ]
     r = c.patch('/api/scenes/' + second['id'], json={'workspace_id': ws, 'name': 'Other', 'base_revision': 1, 'content': second['content']})
-    assert r.status_code == 422
+    assert r.status_code == 200, r.text
+
+    # 别人的工作区不行:看不到、下不到、引用不了。
+    other = c.post('/api/workspaces', json={'name': 'Other'}).json()['id']
+    assert c.get(f'/api/scene-models/{mid}', params={'workspace_id': other}).status_code == 404
+    elsewhere = c.post('/api/scenes', json={'workspace_id': other}).json()
+    elsewhere['content']['objects'] = [
+        next(o for o in elsewhere['content']['objects'] if o['kind'] == 'camera'),
+        {'id': 'model', 'kind': 'model', 'model_id': mid},
+    ]
+    assert c.patch('/api/scenes/' + elsewhere['id'], json={'workspace_id': other, 'name': 'X', 'base_revision': 1,
+                                                           'content': elsewhere['content']}).status_code == 422
+
+
+def test_还有场景摆着它就不让删模型_并且说出是哪几个():
+    """模型归工作区之后,删它会在**别的场景**里留一个加载失败的空位,而那个空位没有任何
+    线索说明它本来是什么。所以先说清楚谁在用。"""
+    c, ws, scene = setup_scene()
+    mid = c.post('/api/scene-models', data={'workspace_id': ws},
+                 files={'file': ('m.gltf', json.dumps({'asset': {'version': '2.0'}, 'scenes': [{'nodes': []}], 'scene': 0}).encode(),
+                                 'model/gltf+json')}).json()['id']
+    scene['content']['objects'] = [
+        next(o for o in scene['content']['objects'] if o['kind'] == 'camera'),
+        {'id': 'prop', 'kind': 'model', 'model_id': mid},
+    ]
+    c.patch('/api/scenes/' + scene['id'], json={'workspace_id': ws, 'name': '有道具的场景', 'base_revision': 1,
+                                                'content': scene['content']})
+    r = c.delete(f'/api/scene-models/{mid}', params={'workspace_id': ws})
+    assert r.status_code == 422 and '有道具的场景' in r.text, r.text
+
+    # 场景删了,模型还在 —— 它是素材,不是场景的一部分。这时才删得掉。
+    assert c.delete('/api/scenes/' + scene['id'], params={'workspace_id': ws}).status_code == 204
+    assert [m['id'] for m in c.get('/api/scene-models', params={'workspace_id': ws}).json()] == [mid]
+    assert c.delete(f'/api/scene-models/{mid}', params={'workspace_id': ws}).status_code == 204
+    assert c.get('/api/scene-models', params={'workspace_id': ws}).json() == []
 
 
 def _glb_bytes(tmp_path, **params):
@@ -86,7 +128,7 @@ def test_导入的模型真的出现在白模画面里(tmp_path):
     from PIL import Image
 
     c, ws, scene = setup_scene()
-    mid = c.post(f"/api/scenes/{scene['id']}/models", data={'workspace_id': ws},
+    mid = c.post('/api/scene-models', data={'workspace_id': ws},
                  files={'file': ('prop.glb', _glb_bytes(tmp_path), 'model/gltf-binary')}).json()['id']
     camera = next(o for o in scene['content']['objects'] if o['kind'] == 'camera')
     scene['content']['objects'] = [camera, {'id': 'prop', 'kind': 'model', 'model_id': mid, 'position': [0, 0, 0]}]
@@ -116,7 +158,7 @@ def test_读不了的模型不是悄悄少一块_而是说清楚为什么(tmp_pa
     patched = (_struct.pack('<4sII', b'glTF', 2, 12 + 8 + len(payload) + len(rest))
                + _struct.pack('<II', len(payload), 0x4E4F534A) + payload + rest)
 
-    mid = c.post(f"/api/scenes/{scene['id']}/models", data={'workspace_id': ws},
+    mid = c.post('/api/scene-models', data={'workspace_id': ws},
                  files={'file': ('prop.glb', patched, 'model/gltf-binary')}).json()['id']
     camera = next(o for o in scene['content']['objects'] if o['kind'] == 'camera')
     scene['content']['objects'] = [camera, {'id': 'prop', 'kind': 'model', 'name': '压缩过的道具', 'model_id': mid}]
@@ -163,7 +205,7 @@ def test_delete_scene_is_workspace_scoped_and_cascades_owned_data():
     other = c.post('/api/workspaces', json={'name': 'Other'}).json()['id']
     assert c.delete(path, params={'workspace_id': other}).status_code == 404
     assert c.get(path, params={'workspace_id': ws}).status_code == 200
-    model = c.post(path + '/models', data={'workspace_id': ws}, files={'file': ('empty.gltf', json.dumps({'asset': {'version': '2.0'}}).encode(), 'model/gltf+json')})
+    model = c.post('/api/scene-models', data={'workspace_id': ws}, files={'file': ('empty.gltf', json.dumps({'asset': {'version': '2.0'}}).encode(), 'model/gltf+json')})
     assert model.status_code == 200, model.text
     retained = c.post('/api/scenes', json={'workspace_id': ws, 'name': 'Keep'}).json()
     assert c.delete(path, params={'workspace_id': ws}).status_code == 204
@@ -171,7 +213,8 @@ def test_delete_scene_is_workspace_scoped_and_cascades_owned_data():
     assert c.get(f"/api/scenes/{retained['id']}", params={'workspace_id': ws}).status_code == 200
     assert c.delete(path, params={'workspace_id': ws}).status_code == 404
     with SessionLocal() as db:
-        assert db.get(Scene3DModel, model.json()['id']) is None
+        # 修订随场景 CASCADE 走;**模型不走** —— 它归工作区,别的场景可能还摆着同一件道具。
+        assert db.get(Scene3DModel, model.json()['id']) is not None
         assert not db.scalars(select(Scene3DRevision).where(Scene3DRevision.scene_id == scene['id'])).all()
 
 

@@ -14,8 +14,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import shutil
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import inspect, text
@@ -1539,7 +1541,11 @@ def _migrate_scene_models_to_disk() -> None:
     搬完才 DROP 那一列:中途失败的话,下次启动重跑,已经写好的文件被原样覆盖(内容一样),
     没有半个状态。
     """
-    from app.media.paths import scene_model_dir, scene_model_key
+    #: 当年那一版的目录形状,**照抄在这里**:后来模型改归工作区、目录不再按场景分
+    #: (见 _migrate_scene_models_to_workspace),而迁移写的是它那个年代的布局 ——
+    #: 跟着 paths.py 变的话,这一步会把老数据搬到一个下一步不认识的地方。
+    def legacy_slot(workspace_id: str, scene_id: str) -> Path:
+        return settings.media_dir / "scene-models" / workspace_id / scene_id
 
     inspector = inspect(engine)
     if "scene_3d_models" not in set(inspector.get_table_names()):
@@ -1566,10 +1572,10 @@ def _migrate_scene_models_to_disk() -> None:
             data = conn.execute(text("SELECT data FROM scene_3d_models WHERE id = :id"), {"id": model_id}).scalar()
         if data is None:
             continue
-        directory = scene_model_dir(workspace_id, scene_id)
+        directory = legacy_slot(workspace_id, scene_id)
         directory.mkdir(parents=True, exist_ok=True)
         (directory / f"{model_id}.{fmt}").write_bytes(data)
-        key = scene_model_key(workspace_id, scene_id, f"{model_id}.{fmt}")
+        key = str(Path("media") / "scene-models" / workspace_id / scene_id / f"{model_id}.{fmt}")
         with engine.begin() as conn:
             conn.execute(text("UPDATE scene_3d_models SET file_key = :key, size = :size WHERE id = :id"),
                          {"key": key, "size": len(data), "id": model_id})
@@ -1579,6 +1585,79 @@ def _migrate_scene_models_to_disk() -> None:
         conn.execute(text("ALTER TABLE scene_3d_models DROP COLUMN data"))
     if moved:
         logger.info("把 %d 份 3D 模型的字节从数据库挪到了 %s", moved, settings.media_dir / "scene-models")
+
+
+def _migrate_scene_models_to_workspace() -> None:
+    """3D 模型从「归场景」改成「归工作区」:表上的 scene_id → workspace_id,文件从
+    `media/scene-models/<ws>/<scene>/` 提到 `media/scene-models/<ws>/`。
+
+    为什么要改:模型挂在场景下面时,同一件道具在每个场景里都得重新导一份,而**工作流每跑
+    一次都新建一个场景** —— 于是在 Blender 里建好的产品模型永远进不了自动成片的布景:那个
+    场景还不存在,模型就没处挂。工作区才是它真正的边界(和素材、字体、LUT 一样)。
+
+    顺序是**先搬文件再换表**:文件搬到一半崩了,下次启动重跑,已经在新位置的那些按
+    "在新位置就跳过"处理,没有半个状态;表还没换,所以旧的 file_key 仍然指得到东西。
+
+    scene 已经不在了的孤儿行跟着丢掉 —— 它们的场景没了,没有任何入口能再看到它们。
+    """
+    inspector = inspect(engine)
+    if "scene_3d_models" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("scene_3d_models")}
+    if "scene_id" not in columns:   # 已经搬过了
+        return
+
+    with engine.connect() as conn:
+        rows = list(conn.execute(text(
+            "SELECT m.id, m.format, m.file_key, s.workspace_id FROM scene_3d_models m "
+            "JOIN scenes_3d s ON s.id = m.scene_id"
+        )))
+    keys: dict[str, str] = {}
+    for model_id, fmt, file_key, workspace_id in rows:
+        target_dir = settings.media_dir / "scene-models" / workspace_id
+        target = target_dir / f"{model_id}.{fmt}"
+        keys[model_id] = str(Path("media") / "scene-models" / workspace_id / f"{model_id}.{fmt}")
+        if target.is_file():
+            continue
+        source = settings.data_dir / file_key if file_key else None
+        if source is None or not source.is_file():
+            continue   # 文件本来就不在了;行照样搬,界面上会说"模型文件已不在,请重新导入"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(target))
+
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE scene_3d_models_new ("
+            " id VARCHAR(64) NOT NULL PRIMARY KEY,"
+            " workspace_id VARCHAR(64) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,"
+            " name VARCHAR(160) NOT NULL,"
+            " format VARCHAR(10) NOT NULL,"
+            " file_key VARCHAR(512) NOT NULL DEFAULT '',"
+            " size INTEGER NOT NULL DEFAULT 0)"
+        ))
+        conn.execute(text(
+            "INSERT INTO scene_3d_models_new (id, workspace_id, name, format, file_key, size) "
+            "SELECT m.id, s.workspace_id, m.name, m.format, m.file_key, m.size FROM scene_3d_models m "
+            "JOIN scenes_3d s ON s.id = m.scene_id"
+        ))
+        for model_id, key in keys.items():
+            conn.execute(text("UPDATE scene_3d_models_new SET file_key = :key WHERE id = :id"),
+                         {"key": key, "id": model_id})
+        conn.execute(text("DROP TABLE scene_3d_models"))
+        conn.execute(text("ALTER TABLE scene_3d_models_new RENAME TO scene_3d_models"))
+        conn.execute(text("CREATE INDEX ix_scene_3d_models_workspace_id ON scene_3d_models (workspace_id)"))
+
+    # 空下来的按场景分的目录收掉,免得备份里留着一堆空壳。
+    root = settings.media_dir / "scene-models"
+    if root.is_dir():
+        for workspace in root.iterdir():
+            if not workspace.is_dir():
+                continue
+            for leftover in workspace.iterdir():
+                if leftover.is_dir() and not any(leftover.iterdir()):
+                    leftover.rmdir()
+    if rows:
+        logger.info("把 %d 份 3D 模型从「归场景」改成了「归工作区」", len(rows))
 
 
 def init_db() -> None:
@@ -2111,6 +2190,9 @@ def migration_plan() -> MigrationPlan:
                 # 它 ALTER 表并搬文件。**必须在 SCHEMA 之前** —— create_all 不会给已有的表补列,
                 # 而 SCHEMA 之后 ORM 上的 Scene3DModel 已经指望 file_key 存在了。
                 _migrate_scene_models_to_disk,
+                # 紧跟着上一步:它搬的是上一步刚落到磁盘上的那些文件,而且同样要在 SCHEMA
+                # 之前 —— create_all 不会把已有表的 scene_id 换成 workspace_id。
+                _migrate_scene_models_to_workspace,
                 _migrate_scene_cameras_become_objects,
                 _migrate_source_assets_get_a_role,
                 _migrate_workflow_source_assets,

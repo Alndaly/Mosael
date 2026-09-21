@@ -96,6 +96,11 @@ def delete_workspace(workspace_id: str, db: DbSession, user: CurrentUser) -> Res
     if workspace is not None:
         db.delete(workspace)  # FK cascade removes members and all scoped resources
         db.commit()
+        # 行是 CASCADE 走的,**文件不会** —— 3D 模型归工作区(见 domain/scenes),和字体、
+        # LUT 同一套,由删除那条路显式清掉。
+        from app.domain.scenes import delete_workspace_model_files
+
+        delete_workspace_model_files(workspace_id)
     return Response(status_code=204)
 
 

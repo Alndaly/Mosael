@@ -63,25 +63,32 @@ export const saveScene = (scene: Scene) =>
       base_revision: scene.revision,
     }),
   });
-export async function uploadSceneModel(ws: string, scene: string, file: File) {
+/** 导入的 3D 模型归**工作区**,不归某个场景:一件道具导一次,哪个场景都摆得上。 */
+export interface SceneModel {
+  id: string;
+  name: string;
+  format: string;
+  size: number;
+}
+export const listSceneModels = (ws: string) =>
+  api<SceneModel[]>(`/api/scene-models?${query(ws)}`);
+export async function uploadSceneModel(ws: string, file: File) {
   const body = new FormData();
   body.set("workspace_id", ws);
   body.set("file", file);
-  return api<{ id: string; name: string; format: string }>(
-    `/api/scenes/${scene}/models`,
-    { method: "POST", body },
-  );
+  return api<SceneModel>(`/api/scene-models`, { method: "POST", body });
 }
+export const deleteSceneModel = (ws: string, id: string) =>
+  api<void>(`/api/scene-models/${id}?${query(ws)}`, { method: "DELETE" });
 export async function readSceneModel(
   ws: string,
-  scene: string,
   id: string,
   signal?: AbortSignal,
 ) {
-  const res = await fetch(
-    `${API_BASE}/api/scenes/${scene}/models/${id}?${query(ws)}`,
-    { headers: { Authorization: `Bearer ${getAuthToken()}` }, signal },
-  );
+  const res = await fetch(`${API_BASE}/api/scene-models/${id}?${query(ws)}`, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+    signal,
+  });
   if (!res.ok) throw new Error(`Model load failed (${res.status})`);
   return res.arrayBuffer();
 }
