@@ -484,6 +484,7 @@ from app.domain.workflows.templates import MAX_SHOTS_CEILING, TEMPLATE_CATALOG  
 from app.domain.workflows.templates_business import (  # noqa: E402
     BUSINESS_TEMPLATE_CATALOG,
     fabric_lookbook_graph,
+    footage_montage_graph,
     highlight_shorts_graph,
     product_on_model_graph,
     product_pitch_short_graph,
@@ -496,6 +497,7 @@ def _business_graphs() -> dict[str, dict[str, Any]]:
         "product_on_model": product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE),
         "product_pitch_short": product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
         "fabric_lookbook": fabric_lookbook_graph(chat=CHAT, image=SEEDREAM),
+        "footage_montage": footage_montage_graph(chat=CHAT, voice_id="voice-1"),
     }
 
 
@@ -602,6 +604,7 @@ def test_模板卡片和图一一对应() -> None:
         FULL_VIDEO_GENERATION,
         HIGHLIGHT_SHORTS,
         PRODUCT_ON_MODEL,
+        FOOTAGE_MONTAGE,
         PRODUCT_PITCH_SHORT,
         TRANSCRIPT_VIDEO_CLEANUP,
         TRANSLATED_DUB,
@@ -609,7 +612,7 @@ def test_模板卡片和图一一对应() -> None:
 
     known = {
         FULL_VIDEO_GENERATION, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
-        HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK,
+        HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK, FOOTAGE_MONTAGE,
     }
     assert {card["id"] for card in TEMPLATE_CATALOG} == known
     for card in BUSINESS_TEMPLATE_CATALOG:
@@ -634,3 +637,64 @@ def test_镜头数有一道成本闸门() -> None:
     assert "{{start.max_shots}}" in storyboard["prompt"]
     #: 和上限打架时缩短成片,而不是压缩单镜 —— 单镜时长是视频模型的固定档位,压不了。
     assert "以上限为准" in storyboard["prompt"]
+
+
+def test_混剪的音画按每一段自己的起点对齐() -> None:
+    """口播不是一条音轨铺到底 —— 每一段的旁白落在**这一段自己的起点**上。
+
+    那个起点由 `timeline_append` 运行时回报,不是算出来的:前面几段实际多长不重要,音画都落在
+    同一个数上。改成累计求和的话,某一段稍短一点,后面全部越走越偏,而成片看起来是完整的 ——
+    要有人从头听一遍才发现对不上。字幕用同一个起点做偏移,所以两者永远同步。
+    """
+    graph = footage_montage_graph(chat=CHAT, voice_id="voice-1")
+    loop = _node(graph, "lay_segments")["config"]
+    #: 归一化把 `{{place_shot.timeline_start}}` 落成了**数据边** —— 于是它同时是一条真实依赖:
+    #: 旁白和字幕都等这一段接上去、拿到它的落点之后才动。
+    bindings = {
+        (edge["source"], edge["source_output"], edge["target"], edge["target_input"])
+        for edge in loop["body"]["edges"]
+        if edge.get("kind") == "data"
+    }
+    assert ("place_shot", "timeline_start", "place_voice", "at") in bindings
+    assert ("place_shot", "timeline_start", "caption_shot", "offset") in bindings
+    #: 顺序就是叙事,不能并发。
+    assert loop["concurrency"] == 1
+
+
+def test_混剪没有音色也能用() -> None:
+    """很多企业片本来就是纯字幕。旁白那两步由条件挡掉,字幕照出 ——
+    而不是让整条模板因为没克隆过嗓子就用不了。"""
+    graph = footage_montage_graph(chat=CHAT, voice_id="")
+    body = {one["id"]: one for one in _node(graph, "lay_segments")["config"]["body"]["nodes"]}
+    assert body["has_voice"]["config"] == {"left": "{{input.voice_id}}", "op": "not_empty"}
+    #: 字幕不挂在那个条件后面 —— 它和有没有旁白无关,只等这一段的落点。
+    edges = _node(graph, "lay_segments")["config"]["body"]["edges"]
+    into_caption = {edge["source"] for edge in edges if edge["target"] == "caption_shot"}
+    assert into_caption == {"place_shot"}
+    assert body["caption_shot"]["config"]["allow_empty"] == "yes"
+
+
+def test_混剪是从一批素材出发的() -> None:
+    """此前每个模板的起点都是**一条**素材。企业手里是一堆,而"先讲什么后讲什么"正是要让模型做的事。"""
+    graph = footage_montage_graph(chat=CHAT, voice_id="voice-1")
+    assert _node(graph, "footage")["type"] == "asset_query"
+    assert _node(graph, "footage")["config"]["kind"] == "video"
+    #: 清单要进提示词,否则模型无从挑起。
+    prompt = _node(graph, "montage_plan")["config"]["prompt"]
+    assert "{{footage.assets}}" in prompt
+    #: id 抄错这一段就是空的,所以提示词和 schema 都要说死。
+    system = _node(graph, "montage_plan")["config"]["system"]
+    assert "原样抄" in system
+    segment = _node(graph, "montage_plan")["config"]["json_schema"]["properties"]["segments"]["items"]
+    assert "原样抄" in segment["properties"]["asset_id"]["description"]
+
+
+def test_混剪不生成任何画面() -> None:
+    """画面就是用户自己的素材。哪天有人往里加一个 ai_generate,卡片上那句话就成了谎。"""
+    graph = footage_montage_graph(chat=CHAT, voice_id="voice-1")
+    kinds = {node["type"] for node in graph["nodes"]}
+    for node in graph["nodes"]:
+        body = (node.get("config") or {}).get("body")
+        if isinstance(body, dict):
+            kinds |= {inner["type"] for inner in body["nodes"]}
+    assert "ai_generate" not in kinds

@@ -25,6 +25,7 @@ HIGHLIGHT_SHORTS = "highlight_shorts"
 PRODUCT_ON_MODEL = "product_on_model"
 PRODUCT_PITCH_SHORT = "product_pitch_short"
 FABRIC_LOOKBOOK = "fabric_lookbook"
+FOOTAGE_MONTAGE = "footage_montage"
 
 #: 竖屏。短视频平台的默认画幅 —— 横屏素材按 cover 居中裁进来(和剪辑台的「改画幅」同一套)。
 VERTICAL = {"width": 1080, "height": 1920}
@@ -1099,6 +1100,22 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         },
     },
     {
+        "id": FOOTAGE_MONTAGE,
+        "name": {"zh": "自有素材混剪 · 配音与字幕", "en": "Montage from your own footage"},
+        "summary": {
+            "zh": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材和留多久、写好旁白,然后按顺序接上时间线,逐段配音并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。",
+            "en": "Pull a tagged batch of footage you already shot, let the model order the story, decide which clip each beat uses and how long it runs, and write the narration; then lay every segment on the timeline in order, speak and caption each one, and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only.",
+        },
+        "requires": {
+            "zh": ["AI 对话模型", "一批打了同一个标签的视频素材", "旁白可选:配音库的克隆音色"],
+            "en": ["Chat model", "A batch of video assets sharing one tag", "Optional narration: a cloned voice"],
+        },
+        "stages": {
+            "zh": ["填主题与素材标签", "按标签取出素材", "排出叙事顺序与旁白", "按顺序接上时间线", "逐段配音并铺字幕", "导出成片"],
+            "en": ["Topic and footage tag", "Fetch the footage by tag", "Order the story and write the narration", "Lay the segments in order", "Speak and caption each one", "Export"],
+        },
+    },
+    {
         "id": FABRIC_LOOKBOOK,
         "name": {"zh": "面料 → 应用效果图与规格页", "en": "Fabric into applications and a spec sheet"},
         "summary": {
@@ -1115,3 +1132,289 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         },
     },
 ]
+
+
+# --------------------------------------------------------------------------------------
+# 5 · 自有素材混剪(企业宣传 / 产线介绍 / 展会回顾)
+# --------------------------------------------------------------------------------------
+
+
+def _montage_schema() -> dict[str, Any]:
+    caption = _object(
+        {
+            # 和切片模板同一条:**相对这一段自己的开头**。这一段落在成片第几秒是运行时才知道的
+            # (由 timeline_append 回报),所以模型不需要、也不该去算累计时间。
+            "start": {"type": "number", "minimum": 0, "description": "相对本段开头的秒数"},
+            "end": {"type": "number", "minimum": 0},
+            "text": _str("这一句字幕,短句"),
+        },
+        ["start", "end", "text"],
+    )
+    segment = _object(
+        {
+            "segment_title": _str("这一段在讲什么,中文,给人看的"),
+            "asset_id": _str("用素材清单里的哪一条,**原样抄它的 id**,不要改写、不要编"),
+            "source_name": _str("那条素材的名字,抄一遍,方便人核对选得对不对"),
+            "src_start": {"type": "number", "minimum": 0, "description": "从这条素材的第几秒开始取"},
+            "seconds": {"type": "number", "minimum": 1.5, "maximum": 20, "description": "这一段用多长"},
+            "narration": _str("这一段的口播原文,中文;念出来不超过本段时长,没有旁白就写空字符串"),
+            "captions": {"type": "array", "items": caption, "minItems": 1},
+            "why": _str("为什么这一段放在这个位置"),
+        },
+        ["segment_title", "asset_id", "source_name", "src_start", "seconds", "narration", "captions", "why"],
+    )
+    return _object(
+        {
+            "storyline": _str("整条片子的叙事线,一两句话"),
+            "segments": {"type": "array", "items": segment, "minItems": 2, "maxItems": 24},
+            "unused_note": _str("哪些素材没用上、为什么;全用上了写空字符串"),
+        },
+        ["storyline", "segments", "unused_note"],
+    )
+
+
+def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
+    """一批自有素材 → 规划叙事顺序 → 按顺序接上时间线 → 逐段配音与字幕 → 导出。
+
+    **这是企业最常见、而此前一个模板都没覆盖的形态。** 工厂有车间、产线、检测、发货的零散素材;
+    服装厂有面料特写、生产线、成衣、质检;展会结束有一堆现场片段。他们要的不是生成画面 ——
+    画面早就拍好了,缺的是"先讲什么、后讲什么、每段留多久、配什么话"。
+
+    和别的模板的三处不同:
+
+    - **起点是一批素材,不是一条。** 用 `asset_query` 按标签批量取,这是所有模板里第一个这么做的。
+      素材清单(名字 + 时长)交给模型去排顺序,而不是让用户自己拖时间线。
+    - **不生成任何画面。** 和「长视频切多条竖屏」一样,除了配音没有生成开销。
+    - **口播按段对齐,不是一条音轨铺到底。** 每一段的旁白单独合成,落在**这一段自己的起点**上
+      —— 起点由 `timeline_append` 运行时回报(`timeline_start`),所以不管前面几段实际多长,
+      音画都不会越走越偏。字幕同理,用同一个起点做偏移。
+
+    没有配音音色时整条仍然可用:旁白那两步被条件挡掉,字幕照出 —— 很多企业片本来就是纯字幕。
+    """
+    system = """你是企业宣传片的编导。用户会给你一批**已经拍好**的素材(每条有名字和时长)和一个主题，
+你要把它们排成一条讲得通的片子。
+
+硬性要求：
+- asset_id 必须**原样抄自素材清单**。不要改写、不要缩短、更不要编一个出来——抄错这一段就是空的。
+- 每一段的 seconds 不能超过那条素材从 src_start 起的剩余时长。
+- 顺序要有叙事:开头给出观看理由,中段按因果或流程推进,结尾落到一个明确的信息或行动。
+  不要按素材的文件名顺序排。
+- narration 念出来不能超过这一段的 seconds:中文按每秒约 4 个字估，宁短勿长；
+  这一段不需要旁白就写空字符串。
+- captions 的时间码**相对这一段自己的开头**，不是成片时间。
+- 只描述素材里真的有的东西。不要编造产能、资质、检测结论、客户名称或任何数字——
+  没有依据的话一句都不要写。
+- 素材不够讲完这个主题时，宁可做短一点，并在 unused_note 里说明缺什么。
+
+只输出符合 JSON Schema 的对象。"""
+
+    body_nodes: list[dict[str, Any]] = [
+        {
+            "id": "place_shot",
+            "type": "timeline_append",
+            "name": {"zh": "把这一段接上去", "en": "Append this segment"},
+            "position": {"x": 80, "y": 140},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                "asset_id": "{{loop.item.asset_id}}",
+                "track_id": "{{input.video_track_id}}",
+                "start": "{{loop.item.src_start}}",
+                "max_duration": "{{loop.item.seconds}}",
+            },
+        },
+        {
+            "id": "has_voice",
+            "type": "condition",
+            "name": {"zh": "配了音色吗", "en": "Is a voice configured?"},
+            "position": {"x": 400, "y": 300},
+            "config": {"left": "{{input.voice_id}}", "op": "not_empty"},
+        },
+        {
+            "id": "has_narration",
+            "type": "condition",
+            "name": {"zh": "这一段有旁白吗", "en": "Does this segment have narration?"},
+            "position": {"x": 720, "y": 300},
+            "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
+        },
+        {
+            "id": "narrate",
+            "type": "synthesize_speech",
+            "name": {"zh": "念这一段的旁白", "en": "Speak this segment's narration"},
+            "position": {"x": 1040, "y": 300},
+            "config": {"text": "{{loop.item.narration}}", "engine": "clone", "voice": "{{input.voice_id}}"},
+        },
+        {
+            "id": "place_voice",
+            "type": "timeline_append",
+            "name": {"zh": "把旁白对齐到这一段的起点", "en": "Align the narration to this segment's start"},
+            "position": {"x": 1360, "y": 300},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                "asset_id": "{{narrate.asset_id}}",
+                "track_id": "{{input.audio_track_id}}",
+                # **起点由上面那一步运行时回报**,不是算出来的。前面几段实际多长不重要,
+                # 音画都落在同一个数上,不会越走越偏。
+                "at": "{{place_shot.timeline_start}}",
+            },
+        },
+        {
+            "id": "caption_shot",
+            "type": "generate_subtitles",
+            "name": {"zh": "铺这一段的字幕", "en": "Lay this segment's captions"},
+            "position": {"x": 400, "y": 60},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                "segments": "{{loop.item.captions}}",
+                # 同一个起点。字幕轨第一段建出来,后面几段自动落到同一条上(见 _subtitle_track)。
+                "offset": "{{place_shot.timeline_start}}",
+                "allow_empty": "yes",
+            },
+        },
+    ]
+    body_edges = [
+        {"id": "shot_caption", "source": "place_shot", "target": "caption_shot"},
+        {"id": "shot_voice", "source": "place_shot", "target": "has_voice"},
+        {"id": "voice_narration", "source": "has_voice", "target": "has_narration"},
+        {"id": "narration_speak", "source": "has_narration", "target": "narrate"},
+        {"id": "speak_place", "source": "narrate", "target": "place_voice"},
+    ]
+
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "start",
+            "type": "start",
+            "name": {"zh": "填主题与素材标签", "en": "Topic and footage tag"},
+            "position": {"x": 40, "y": 260},
+            "config": {
+                "params": {
+                    "topic": "请把这里改成这条片子要讲的事",
+                    "footage_tag": "给要混剪的素材打上同一个标签,把它写在这里",
+                    "audience": "潜在客户与合作方",
+                    "tone": "专业、克制、可信",
+                    "target_duration_seconds": 60,
+                    "voice_id": voice_id,
+                    "width": 1920,
+                    "height": 1080,
+                    "fps": 30,
+                }
+            },
+        },
+        {
+            "id": "footage",
+            "type": "asset_query",
+            "name": {"zh": "按标签取出这批素材", "en": "Fetch the footage by tag"},
+            "position": {"x": 330, "y": 260},
+            "config": {"kind": "video", "tags": "{{start.footage_tag}}", "limit": 60},
+        },
+        {
+            "id": "montage_plan",
+            "type": "llm",
+            "name": {"zh": "排出叙事顺序与旁白", "en": "Order the story and write the narration"},
+            "position": {"x": 650, "y": 260},
+            "config": {
+                "profile_id": getattr(chat, "profile_id", ""),
+                "model": getattr(chat, "model", ""),
+                "preset": "precise",
+                "system": system,
+                "prompt": """这条片子要讲的事：{{start.topic}}
+目标观众：{{start.audience}}
+语气：{{start.tone}}
+成片目标时长：{{start.target_duration_seconds}} 秒
+
+可用素材清单（共 {{footage.count}} 条，含 id、名字与时长）：
+{{footage.assets}}
+
+请把它们排成一条讲得通的片子。再强调一次：asset_id 必须原样抄清单里的 id；
+captions 的时间码相对每一段自己的开头。""",
+                "response_format": "json_schema",
+                "json_schema_name": "footage_montage_plan",
+                "json_schema": _montage_schema(),
+                "json_schema_strict": "true",
+                "temperature": 0.4,
+                "max_tokens": 16000,
+            },
+        },
+        {
+            "id": "montage_project",
+            "type": "project_sequence_create",
+            "name": {"zh": "建立成片时间线", "en": "Create the timeline"},
+            "position": {"x": 650, "y": 460},
+            "config": {
+                "name": "{{start.topic}} · 混剪",
+                "width": "{{start.width}}",
+                "height": "{{start.height}}",
+                "fps": "{{start.fps}}",
+            },
+        },
+        {
+            "id": "lay_segments",
+            "type": "loop_foreach",
+            "name": {"zh": "按顺序接上时间线并配音配字幕", "en": "Lay every segment, with narration and captions"},
+            "position": {"x": 970, "y": 260},
+            "config": {
+                "items": "{{montage_plan.json.segments}}",
+                "inputs": {
+                    "sequence_id": "{{montage_project.sequence_id}}",
+                    "video_track_id": "{{montage_project.video_track_id}}",
+                    "audio_track_id": "{{montage_project.audio_track_id}}",
+                    "voice_id": "{{start.voice_id}}",
+                },
+                "body": {"nodes": body_nodes, "edges": body_edges},
+                # **顺序就是叙事**,并发的落位顺序是谁先回来谁在前。
+                "concurrency": 1,
+                "output": "{{place_shot.clip_id}}",
+            },
+        },
+        {
+            "id": "export_montage",
+            "type": "export_sequence",
+            "name": {"zh": "导出混剪成片", "en": "Export the montage"},
+            "position": {"x": 1290, "y": 260},
+            "config": {"sequence_id": "{{montage_project.sequence_id}}"},
+        },
+        {
+            "id": "done_notice",
+            "type": "notify",
+            "name": {"zh": "混剪完成通知", "en": "Montage ready"},
+            "position": {"x": 1610, "y": 260},
+            "config": {
+                "title": "混剪成片已导出",
+                "body": "{{start.topic}} 已用 {{lay_segments.count}} 段素材完成混剪。",
+            },
+        },
+        {
+            "id": "output",
+            "type": "output",
+            "name": {"zh": "交付成片与剪辑方案", "en": "Hand over the cut and the plan"},
+            "position": {"x": 1930, "y": 260},
+            "config": {
+                "values": {
+                    "final_asset_id": "{{export_montage.asset_id}}",
+                    "sequence_id": "{{montage_project.sequence_id}}",
+                    "plan": "{{montage_plan.json}}",
+                    "storyline": "{{montage_plan.json.storyline}}",
+                    "unused_note": "{{montage_plan.json.unused_note}}",
+                    "segment_clip_ids": "{{lay_segments.results}}",
+                    "footage_count": "{{footage.count}}",
+                }
+            },
+        },
+    ]
+    edges = [
+        {"id": "start_footage", "source": "start", "target": "footage"},
+        {"id": "start_project", "source": "start", "target": "montage_project"},
+        {"id": "footage_plan", "source": "footage", "target": "montage_plan"},
+        {"id": "plan_lay", "source": "montage_plan", "target": "lay_segments"},
+        {"id": "project_lay", "source": "montage_project", "target": "lay_segments"},
+        {"id": "lay_export", "source": "lay_segments", "target": "export_montage"},
+        {"id": "export_notice", "source": "export_montage", "target": "done_notice"},
+        {"id": "notice_output", "source": "done_notice", "target": "output"},
+    ]
+    return normalize_graph(
+        {
+            "meta": {"template_id": FOOTAGE_MONTAGE, "template_version": 1, "source": "official"},
+            "nodes": nodes,
+            "edges": edges,
+        },
+        node_types=NODE_TYPES,
+    )

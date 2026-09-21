@@ -300,6 +300,54 @@
     }
   },
   {
+    "id": "footage_montage",
+    "name": {
+      "zh": "自有素材混剪 · 配音与字幕",
+      "en": "Montage from your own footage"
+    },
+    "summary": {
+      "zh": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材和留多久、写好旁白,然后按顺序接上时间线,逐段配音并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。",
+      "en": "Pull a tagged batch of footage you already shot, let the model order the story, decide which clip each beat uses and how long it runs, and write the narration; then lay every segment on the timeline in order, speak and caption each one, and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only."
+    },
+    "requires": {
+      "zh": [
+        "AI 对话模型",
+        "一批打了同一个标签的视频素材",
+        "旁白可选:配音库的克隆音色"
+      ],
+      "en": [
+        "Chat model",
+        "A batch of video assets sharing one tag",
+        "Optional narration: a cloned voice"
+      ]
+    },
+    "stages": {
+      "zh": [
+        "填主题与素材标签",
+        "按标签取出素材",
+        "排出叙事顺序与旁白",
+        "按顺序接上时间线",
+        "逐段配音并铺字幕",
+        "导出成片"
+      ],
+      "en": [
+        "Topic and footage tag",
+        "Fetch the footage by tag",
+        "Order the story and write the narration",
+        "Lay the segments in order",
+        "Speak and caption each one",
+        "Export"
+      ]
+    },
+    "author": "Mosael",
+    "version": 1,
+    "nodes": 8,
+    "download": {
+      "zh": "/workflows/footage_montage.zh.mosael-workflow.json",
+      "en": "/workflows/footage_montage.en.mosael-workflow.json"
+    }
+  },
+  {
     "id": "fabric_lookbook",
     "name": {
       "zh": "面料 → 应用效果图与规格页",

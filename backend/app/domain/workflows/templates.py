@@ -19,10 +19,12 @@ from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_business import (
     BUSINESS_TEMPLATE_CATALOG,
     FABRIC_LOOKBOOK,
+    FOOTAGE_MONTAGE,
     HIGHLIGHT_SHORTS,
     PRODUCT_ON_MODEL,
     PRODUCT_PITCH_SHORT,
     fabric_lookbook_graph,
+    footage_montage_graph,
     highlight_shorts_graph,
     product_on_model_graph,
     product_pitch_short_graph,
@@ -409,6 +411,9 @@ def built_in_template_graph(
             image=_reference_image_model(db, user_id),
             voice_id=_first_voice_id(db, workspace_id),
         ))
+    if template_id == FOOTAGE_MONTAGE:
+        # 不生成画面,所以只要对话模型;音色按工作区取,没有就只出字幕(图里由条件挡掉旁白那两步)。
+        return localised_names(locale, footage_montage_graph(chat=chat, voice_id=_first_voice_id(db, workspace_id)))
     if template_id == FABRIC_LOOKBOOK:
         return localised_names(locale, fabric_lookbook_graph(
             chat=chat,

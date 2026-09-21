@@ -1,0 +1,444 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "Montage from your own footage",
+  "description": "Pull a tagged batch of footage you already shot, let the model order the story, decide which clip each beat uses and how long it runs, and write the narration; then lay every segment on the timeline in order, speak and caption each one, and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only.",
+  "graph_hash": "e9c2dc0c4528c237b7050a1e76ac2c33baac88ecdba11674a6a5750b8eb3f644",
+  "graph": {
+    "meta": {
+      "template_id": "footage_montage",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "Topic and footage tag",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "config": {
+          "params": {
+            "topic": "请把这里改成这条片子要讲的事",
+            "footage_tag": "给要混剪的素材打上同一个标签,把它写在这里",
+            "audience": "潜在客户与合作方",
+            "tone": "专业、克制、可信",
+            "target_duration_seconds": 60,
+            "voice_id": "",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30
+          }
+        }
+      },
+      {
+        "id": "footage",
+        "type": "asset_query",
+        "name": "Fetch the footage by tag",
+        "position": {
+          "x": 330,
+          "y": 260
+        },
+        "config": {
+          "kind": "video",
+          "tags": "{{start.footage_tag}}",
+          "limit": 60
+        }
+      },
+      {
+        "id": "montage_plan",
+        "type": "llm",
+        "name": "Order the story and write the narration",
+        "position": {
+          "x": 650,
+          "y": 260
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "precise",
+          "system": "你是企业宣传片的编导。用户会给你一批**已经拍好**的素材(每条有名字和时长)和一个主题，\n你要把它们排成一条讲得通的片子。\n\n硬性要求：\n- asset_id 必须**原样抄自素材清单**。不要改写、不要缩短、更不要编一个出来——抄错这一段就是空的。\n- 每一段的 seconds 不能超过那条素材从 src_start 起的剩余时长。\n- 顺序要有叙事:开头给出观看理由,中段按因果或流程推进,结尾落到一个明确的信息或行动。\n  不要按素材的文件名顺序排。\n- narration 念出来不能超过这一段的 seconds:中文按每秒约 4 个字估，宁短勿长；\n  这一段不需要旁白就写空字符串。\n- captions 的时间码**相对这一段自己的开头**，不是成片时间。\n- 只描述素材里真的有的东西。不要编造产能、资质、检测结论、客户名称或任何数字——\n  没有依据的话一句都不要写。\n- 素材不够讲完这个主题时，宁可做短一点，并在 unused_note 里说明缺什么。\n\n只输出符合 JSON Schema 的对象。",
+          "prompt": "这条片子要讲的事：{{start.topic}}\n目标观众：{{start.audience}}\n语气：{{start.tone}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n可用素材清单（共 {{footage.count}} 条，含 id、名字与时长）：\n{{footage.assets}}\n\n请把它们排成一条讲得通的片子。再强调一次：asset_id 必须原样抄清单里的 id；\ncaptions 的时间码相对每一段自己的开头。",
+          "response_format": "json_schema",
+          "json_schema_name": "footage_montage_plan",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "storyline": {
+                "type": "string",
+                "description": "整条片子的叙事线,一两句话"
+              },
+              "segments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "segment_title": {
+                      "type": "string",
+                      "description": "这一段在讲什么,中文,给人看的"
+                    },
+                    "asset_id": {
+                      "type": "string",
+                      "description": "用素材清单里的哪一条,**原样抄它的 id**,不要改写、不要编"
+                    },
+                    "source_name": {
+                      "type": "string",
+                      "description": "那条素材的名字,抄一遍,方便人核对选得对不对"
+                    },
+                    "src_start": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "从这条素材的第几秒开始取"
+                    },
+                    "seconds": {
+                      "type": "number",
+                      "minimum": 1.5,
+                      "maximum": 20,
+                      "description": "这一段用多长"
+                    },
+                    "narration": {
+                      "type": "string",
+                      "description": "这一段的口播原文,中文;念出来不超过本段时长,没有旁白就写空字符串"
+                    },
+                    "captions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "start": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "相对本段开头的秒数"
+                          },
+                          "end": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "text": {
+                            "type": "string",
+                            "description": "这一句字幕,短句"
+                          }
+                        },
+                        "required": [
+                          "start",
+                          "end",
+                          "text"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "minItems": 1
+                    },
+                    "why": {
+                      "type": "string",
+                      "description": "为什么这一段放在这个位置"
+                    }
+                  },
+                  "required": [
+                    "segment_title",
+                    "asset_id",
+                    "source_name",
+                    "src_start",
+                    "seconds",
+                    "narration",
+                    "captions",
+                    "why"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 2,
+                "maxItems": 24
+              },
+              "unused_note": {
+                "type": "string",
+                "description": "哪些素材没用上、为什么;全用上了写空字符串"
+              }
+            },
+            "required": [
+              "storyline",
+              "segments",
+              "unused_note"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.4,
+          "max_tokens": 16000
+        }
+      },
+      {
+        "id": "montage_project",
+        "type": "project_sequence_create",
+        "name": "Create the timeline",
+        "position": {
+          "x": 650,
+          "y": 460
+        },
+        "config": {
+          "name": "{{start.topic}} · 混剪",
+          "width": "{{start.width}}",
+          "height": "{{start.height}}",
+          "fps": "{{start.fps}}"
+        }
+      },
+      {
+        "id": "lay_segments",
+        "type": "loop_foreach",
+        "name": "Lay every segment, with narration and captions",
+        "position": {
+          "x": 970,
+          "y": 260
+        },
+        "config": {
+          "items": "{{montage_plan.json.segments}}",
+          "inputs": {
+            "sequence_id": "{{montage_project.sequence_id}}",
+            "video_track_id": "{{montage_project.video_track_id}}",
+            "audio_track_id": "{{montage_project.audio_track_id}}",
+            "voice_id": "{{start.voice_id}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "place_shot",
+                "type": "timeline_append",
+                "name": "Append this segment",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "{{loop.item.asset_id}}",
+                  "track_id": "{{input.video_track_id}}",
+                  "start": "{{loop.item.src_start}}",
+                  "max_duration": "{{loop.item.seconds}}"
+                }
+              },
+              {
+                "id": "has_voice",
+                "type": "condition",
+                "name": "Is a voice configured?",
+                "position": {
+                  "x": 400,
+                  "y": 300
+                },
+                "config": {
+                  "left": "{{input.voice_id}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "has_narration",
+                "type": "condition",
+                "name": "Does this segment have narration?",
+                "position": {
+                  "x": 720,
+                  "y": 300
+                },
+                "config": {
+                  "left": "{{loop.item.narration}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "narrate",
+                "type": "synthesize_speech",
+                "name": "Speak this segment's narration",
+                "position": {
+                  "x": 1040,
+                  "y": 300
+                },
+                "config": {
+                  "text": "{{loop.item.narration}}",
+                  "engine": "clone",
+                  "voice": "{{input.voice_id}}"
+                }
+              },
+              {
+                "id": "place_voice",
+                "type": "timeline_append",
+                "name": "Align the narration to this segment's start",
+                "position": {
+                  "x": 1360,
+                  "y": 300
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "",
+                  "track_id": "{{input.audio_track_id}}",
+                  "at": ""
+                },
+                "inputs": [
+                  "asset_id",
+                  "at"
+                ]
+              },
+              {
+                "id": "caption_shot",
+                "type": "generate_subtitles",
+                "name": "Lay this segment's captions",
+                "position": {
+                  "x": 400,
+                  "y": 60
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "segments": "{{loop.item.captions}}",
+                  "offset": "",
+                  "allow_empty": "yes"
+                },
+                "inputs": [
+                  "offset"
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "id": "shot_voice",
+                "source": "place_shot",
+                "target": "has_voice"
+              },
+              {
+                "id": "voice_narration",
+                "source": "has_voice",
+                "target": "has_narration"
+              },
+              {
+                "id": "narration_speak",
+                "source": "has_narration",
+                "target": "narrate"
+              },
+              {
+                "id": "d-narrate-asset_id-place_voice-asset_id",
+                "source": "narrate",
+                "target": "place_voice",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_id"
+              },
+              {
+                "id": "d-place_shot-timeline_start-place_voice-at",
+                "source": "place_shot",
+                "target": "place_voice",
+                "kind": "data",
+                "source_output": "timeline_start",
+                "target_input": "at"
+              },
+              {
+                "id": "d-place_shot-timeline_start-caption_shot-offset",
+                "source": "place_shot",
+                "target": "caption_shot",
+                "kind": "data",
+                "source_output": "timeline_start",
+                "target_input": "offset"
+              }
+            ]
+          },
+          "concurrency": 1,
+          "output": "{{place_shot.clip_id}}"
+        }
+      },
+      {
+        "id": "export_montage",
+        "type": "export_sequence",
+        "name": "Export the montage",
+        "position": {
+          "x": 1290,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "Montage ready",
+        "position": {
+          "x": 1610,
+          "y": 260
+        },
+        "config": {
+          "title": "混剪成片已导出",
+          "body": "{{start.topic}} 已用 {{lay_segments.count}} 段素材完成混剪。"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "Hand over the cut and the plan",
+        "position": {
+          "x": 1930,
+          "y": 260
+        },
+        "config": {
+          "values": {
+            "final_asset_id": "{{export_montage.asset_id}}",
+            "sequence_id": "{{montage_project.sequence_id}}",
+            "plan": "{{montage_plan.json}}",
+            "storyline": "{{montage_plan.json.storyline}}",
+            "unused_note": "{{montage_plan.json.unused_note}}",
+            "segment_clip_ids": "{{lay_segments.results}}",
+            "footage_count": "{{footage.count}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_footage",
+        "source": "start",
+        "target": "footage"
+      },
+      {
+        "id": "start_project",
+        "source": "start",
+        "target": "montage_project"
+      },
+      {
+        "id": "footage_plan",
+        "source": "footage",
+        "target": "montage_plan"
+      },
+      {
+        "id": "plan_lay",
+        "source": "montage_plan",
+        "target": "lay_segments"
+      },
+      {
+        "id": "project_lay",
+        "source": "montage_project",
+        "target": "lay_segments"
+      },
+      {
+        "id": "lay_export",
+        "source": "lay_segments",
+        "target": "export_montage"
+      },
+      {
+        "id": "export_notice",
+        "source": "export_montage",
+        "target": "done_notice"
+      },
+      {
+        "id": "notice_output",
+        "source": "done_notice",
+        "target": "output"
+      },
+      {
+        "id": "d-montage_project-sequence_id-export_montage-sequence_id",
+        "source": "montage_project",
+        "target": "export_montage",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      }
+    ]
+  }
+}
