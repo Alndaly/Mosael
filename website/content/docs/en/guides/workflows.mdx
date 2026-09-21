@@ -3,7 +3,7 @@ title: Visual workflows
 description: Connect media, models and tools, check inputs and run repeatable creative tasks.
 order: 6
 updated: 2026-09-17
-version: 1.4.1
+version: 1.4.2
 ---
 
 Workflows connect media, models and tools into reusable steps. Configure node inputs and run the readiness check before starting a flow. Use schedules or webhooks for recurring work. Run history keeps node inputs, results and errors available for inspection.
@@ -16,7 +16,7 @@ The [website workflow catalog](/workflows) includes Topic to finished video, Tra
 2. Choose your workspace in the app, open Workflows, then use Import workflow to select the file.
 3. Open the imported graph, choose your own providers and models, supply the required media and pass the readiness check before running.
 
-Downloads contain no account secrets or private assets, and do not automatically select local default models. Use v1.4.1 or
+Downloads contain no account secrets or private assets, and do not automatically select local default models. Use v1.4.2 or
 later. Template node names and prompts are currently in Chinese.
 
 | Template | What it does | Needs |
@@ -100,6 +100,17 @@ The toolbar's **readiness check** aggregates all blockers: missing required fiel
 - Problem nodes get a **warning badge** on the canvas (red = blocking, amber = advisory) with a tooltip listing the issues.
 - With errors present the **Run** button is disabled; each issue is clickable and jumps to the node.
 - After deleting an upstream node, fields referencing it are marked **stale** and can be re-pointed or cleared.
+
+Once a run starts, the toolbar's **Run** button becomes **Stop**, and the run's detail dialog in the task
+centre carries **Cancel task** as well. Cancelling is **node-grained**: it stops after the current step
+finishes, whatever it already produced (assets, timelines, 3D scenes) is kept, and derived sub-tasks are
+cancelled with it.
+
+The **Available 3D props** node lists this workspace's 3D models (usually modelled in Blender and brought
+back in) as a catalogue — each one's id, name and measured width/height/depth — to feed into the prompt of
+the node that designs the blockout, so a set can hold real props instead of boxes and cylinders. Leave it
+empty for every model in the workspace; models that cannot be read (compressed mesh, over the triangle
+budget, missing file) are left out and noted.
 
 The **Video to GIF** node takes a video asset id plus frame rate, width, start time and duration. It
 outputs a **new GIF asset id** and never overwrites the source video.

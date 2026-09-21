@@ -3,7 +3,7 @@ title: 3D scenes & animation
 description: Build spaces, keyframe cameras and objects, and use shots as image or video references.
 order: 17
 updated: 2026-09-09
-version: 1.4.1
+version: 1.4.2
 ---
 
 The workspace combines a viewport, object inspector and animation timeline on one page. Some 3D controls currently retain Chinese labels in the English interface; the labels below match those controls.
@@ -51,11 +51,13 @@ The single toolbar contains shot selection, add shot, playback, time, insert/del
 
 Lighting information accompanies the prompt. An optional clay reference renders neutral materials to emphasize lighting and composition; it is separate from the normal textured frame. Camera helpers are excluded from frames, videos and GLB exports.
 
-Workflows can use the same scene as a reference: the backend has its own blockout renderer for the reference frames and the camera-move video, and what it draws — geometry, camera interpolation, light direction — matches what this page shows. It draws blockout only; imported GLB models are skipped and reported.
+Workflows can use the same scene as a reference: the backend has its own blockout renderer for the reference frames and the camera-move video, and what it draws — geometry, camera interpolation, light direction — matches what this page shows. **Imported models are drawn too**, using their own material colours. Anything it cannot draw — a Draco- or meshopt-compressed mesh, a model over the reference frame's triangle budget, a missing file — is reported one by one with the reason, rather than quietly leaving a gap.
 
 **导出文件** saves frames, camera previews and models. Preview encoding uses deterministic MP4 frames where supported, with a WebM recording fallback when necessary.
 
 ## Models and Blender
+
+Imported models belong to the **workspace, not to one scene**: import once and place the same prop in any scene in that workspace — the **+** menu lists them under **模型库**. Deleting a scene does not delete its models; deleting a model itself is refused while a scene still places it, and the refusal names those scenes.
 
 Import self-contained GLB 2.0 files up to 512 MB or embedded-resource glTF 2.0 up to 100 MB. Draco, KTX2 and meshopt are supported. Real-time limits are 5,000 nodes and 2,000 meshes. External URLs and filesystem references inside models are rejected.
 
@@ -63,7 +65,7 @@ Install and enable the local Blender MCP connection using the [plugin guide](/do
 
 Received geometry is one model, not an object-by-object merge. Associated cameras are sampled to at most 100 keys with linear timing. Keep advanced materials, skeletal animation, physics and native modifiers in the Blender project. Direct import from an arbitrary open Blender scene does not import cameras and reports that limitation. Mosael does not provide sculpting, Boolean modeling or a background Cycles rendering queue.
 
-The modeling assistant can also work in Blender directly: it sends the current scene across (the same path the toolbar button uses, so no browser page has to be open), reads the scene, renders views to look at, runs modeling code, and brings the result back as one model in the current scene. Running code asks for your approval and pushes an undo step first, so you can ⌘Z it in Blender; if approving every step of a long modeling session gets tedious, the autopilot settings have a separate gate for Blender modeling.
+The modeling assistant can also work in Blender directly: it sends the current scene across (the same path the toolbar button uses, so no browser page has to be open), reads the scene, renders views to look at, runs modeling code, and brings the result back as one model in the current scene. **Looking is not limited to the six presets**: it can ask for any azimuth and elevation, move the camera in, frame only the part it just built, and switch to see-through shading to check whether two parts actually intersect — at whole-scene framing a seam is a few pixels wide, and that looks exactly like a part that was never built. Running code asks for your approval and pushes an undo step first, so you can ⌘Z it in Blender; if approving every step of a long modeling session gets tedious, the autopilot settings have a separate gate for Blender modeling.
 
 ## Saving
 
