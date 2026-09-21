@@ -381,3 +381,73 @@ export function cameraPreset(
     };
   });
 }
+
+/** 物体列表里的一行:是谁、在第几层、下面还有没有东西。 */
+export interface TreeRow {
+  object: SceneObject;
+  /** 顶层是 0,每进一层组加一。**列表的缩进按它来** —— 而不是"有没有父级"。 */
+  depth: number;
+  /** 它下面直接挂着几个。0 就是叶子,折叠箭头不该出现。 */
+  children: number;
+}
+
+/**
+ * 把物体摊成**树的顺序**:父在前,它的后代紧跟其后,再轮到下一个兄弟。
+ *
+ * 此前列表是按 `objects` 数组原样画的,缩进写成 `paddingLeft: o.parent_id ? 24 : 10` ——
+ * 两个问题:
+ *
+ * 1. **只有两级。** 组里再放一个组,显示上和它的兄弟一样平 —— 数据层一直支持任意层数
+ *    (`parent_id` + 后端的环与深度校验),界面上看不出来而已。
+ * 2. **顺序不对。** 数组顺序不等于树的顺序,把一个物体移进某个组之后,那一行不会挪到组下面,
+ *    只是在原地多缩进一点 —— 看上去像没生效。
+ *
+ * `collapsed` 里的组,后代整片跳过(但那一行自己还在,带着"下面有几个")。
+ *
+ * **父级不存在的孤儿当顶层处理**,而不是丢掉:后端拒得了环,但一份手工改过的场景仍可能指着
+ * 一个已经删掉的组 —— 那时把它藏起来比画在顶层糟得多(用户会以为物体丢了)。
+ */
+export function objectTree(
+  content: SceneContent,
+  collapsed?: ReadonlySet<string>,
+): TreeRow[] {
+  const known = new Set(content.objects.map((o) => o.id));
+  const childrenOf = new Map<string | null, SceneObject[]>();
+  for (const object of content.objects) {
+    const parent = object.parent_id && known.has(object.parent_id) ? object.parent_id : null;
+    const bucket = childrenOf.get(parent);
+    if (bucket) bucket.push(object);
+    else childrenOf.set(parent, [object]);
+  }
+  const rows: TreeRow[] = [];
+  const walk = (parent: string | null, depth: number, guard: Set<string>) => {
+    for (const object of childrenOf.get(parent) ?? []) {
+      // 环在后端是拒绝的,但界面不该因为一份坏数据就挂掉 —— 走过的不再走。
+      if (guard.has(object.id)) continue;
+      guard.add(object.id);
+      const children = (childrenOf.get(object.id) ?? []).length;
+      rows.push({ object, depth, children });
+      if (!collapsed?.has(object.id)) walk(object.id, depth + 1, guard);
+    }
+  };
+  walk(null, 0, new Set());
+  return rows;
+}
+
+/**
+ * 一个组在「所属组」下拉里显示成什么 —— **带上它的上级**。
+ *
+ * 下拉此前只写名字,而「添加 → 组」建出来的都叫「组」:嵌套之后一列全是「组」,选哪个全靠猜。
+ */
+export function groupPath(content: SceneContent, id: string): string {
+  const byId = new Map(content.objects.map((o) => [o.id, o]));
+  const parts: string[] = [];
+  let current = byId.get(id);
+  const seen = new Set<string>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    parts.unshift(current.name);
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+  return parts.join(" / ");
+}

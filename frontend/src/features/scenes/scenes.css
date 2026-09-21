@@ -663,8 +663,16 @@
 /* 需要整行底色的那几样从这里反向撑出去 —— 边距仍然只有一份定义。
    撑到距面板边 8px(不是 0):行自己还有 8px 内距,两段加起来正好等于上面标题的 16px,
    于是文字对齐,而底色比文字宽出 8px 一圈。 */
+.scene-object-list {
+  /* 折叠箭头那一格的宽度。**声明在列表上** —— CSS 变量只往下继承,写在行上的话它自己的
+     外边距(下面那条)读不到。 */
+  --scene-twist-width: 16px;
+}
 .scene-panel-body > .scene-object-list {
-  margin-inline: calc((var(--scene-side-gutter) - 8px) * -1);
+  /* **左边整列推满一个槽宽,右边照旧。** 折叠箭头占住的那一格正好落在面板内距里,于是名字前
+     那个图标仍然和上面的标题在同一条竖线上 —— 不推的话,整列会因为多了个箭头而右移一格,
+     而那一格是凭空多出来的缩进。右边没有箭头,所以维持原来的 -8px。 */
+  margin-inline: calc(var(--scene-twist-width) * -1) calc((var(--scene-side-gutter) - 8px) * -1);
 }
 .scene-labeled-tool {
   height: 32px;
@@ -1024,6 +1032,10 @@
   border-radius: 7px;
   padding-right: 4px;
 }
+/* 箭头已经占掉了名字左边那一格,按钮不必再补内距 —— 补了就是双份,图标会比标题右一截。 */
+.scene-object-row > .scene-object-twist + button {
+  padding-left: 0;
+}
 .scene-object-row > button:first-child {
   flex: 1;
   min-width: 0;
@@ -1243,4 +1255,29 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 55%, transparent);
   outline: none;
   opacity: 1 !important;
+}
+
+/* 物体列表里那个折叠箭头。**没孩子的行也占同宽的一格**(用一个空 span),否则名字会随
+   "有没有孩子"左右跳一格,而那看起来像列表自己在抖。
+   宽度和面板内距同值(见 .scene-panel-body > .scene-object-list 那段):它正好落在内距里。 */
+.scene-object-twist {
+  flex: 0 0 auto;
+  width: var(--scene-twist-width);
+  /* 和同一行的删除键同高 —— 一行里两个控件不同高是看得出来的(design/controlRhythm.test.ts)。 */
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  border-radius: 4px;
+}
+button.scene-object-twist:hover {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+.scene-object-twist svg {
+  transition: transform 120ms ease;
 }

@@ -27,6 +27,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Box,
+  Boxes,
   Camera,
   Image as ImageIcon,
   Check,
@@ -39,7 +40,9 @@ import {
   ChevronLast,
   HelpCircle,
   Focus,
+  Folder,
   History,
+  Lightbulb,
   Loader2,
   Magnet,
   Move,
@@ -51,6 +54,7 @@ import {
   Scaling,
   Trash2,
   Sparkles,
+  Video,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
@@ -100,6 +104,7 @@ import {
   makeObject,
   makeShot,
   objectLabels,
+  objectTree,
   removeObjects,
   uid,
 } from "./sceneGraph";
@@ -147,6 +152,15 @@ const ADD_OPTIONS: {
 /** 一个模型在「添加」菜单里占的那一项。前缀把它和内置形状分开 —— 模型的 id 是十六进制串,
  *  和 kind 撞不上,但靠"撞不上"来区分是等着出事。 */
 const MODEL_PREFIX = "model:";
+
+/** 列表里那个小图标。**组、相机、灯要分得出来** —— 全是同一个方块的话,树的结构没人看得懂。 */
+function ObjectKindIcon({ kind }: { kind: SceneObject["kind"] }) {
+  if (kind === "group") return <Folder size={14} />;
+  if (kind === "camera") return <Video size={14} />;
+  if (kind === "light") return <Lightbulb size={14} />;
+  if (kind === "model") return <Boxes size={14} />;
+  return <Box size={14} />;
+}
 
 const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
@@ -303,6 +317,8 @@ function SceneEditor({
 }) {
   const [navigation] = useCanvasInputMode();
   const [renaming, setRenaming] = React.useState(false);
+  /** 收起来的那些组。**不持久化** —— 它是"我这会儿在看哪一块",不是设置。 */
+  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set());
   /** 这个工作区里已经有的模型。**它们归工作区,不归场景** —— 所以在「添加」里和几何体
    *  并排列出来,一件道具导一次、哪个场景都摆得上,不必每个场景重新传一遍。 */
   const sceneModels = useQuery({
@@ -1483,9 +1499,43 @@ function SceneEditor({
                       <p>点击「添加」选择形状，也可以导入已有的 3D 模型。</p>
                     </div>
                   )}
-                  <div className="scene-object-list">
-                    {draft.content.objects.map((o) => (
-                      <div className="scene-object-row" key={o.id}>
+                  {/* **按树的顺序画,缩进按层数来。** 此前是数组原样铺开、缩进写成
+                      `o.parent_id ? 24 : 10` —— 只有两级,组里再放组和它的兄弟一样平;
+                      而把一个物体移进组之后那一行也不会挪到组下面,看上去像没生效。 */}
+                  <div className="scene-object-list" role="tree" aria-label="场景中的物体">
+                    {objectTree(draft.content, collapsed).map(({ object: o, depth, children }) => (
+                      <div
+                        className="scene-object-row"
+                        key={o.id}
+                        role="treeitem"
+                        aria-level={depth + 1}
+                        aria-expanded={children ? !collapsed.has(o.id) : undefined}
+                      >
+                        {/* 有孩子才给折叠箭头:79 个物体摊平是一屏翻不完的列表,而收起来之后
+                            它就是八行。没孩子的留一块同宽的空位,名字才对得齐。 */}
+                        {children ? (
+                          <button
+                            className="scene-object-twist"
+                            style={{ marginLeft: depth * 12 }}
+                            aria-label={`${collapsed.has(o.id) ? "展开" : "收起"} ${o.name}`}
+                            onClick={() =>
+                              setCollapsed((was) => {
+                                const next = new Set(was);
+                                if (!next.delete(o.id)) next.add(o.id);
+                                return next;
+                              })
+                            }
+                          >
+                            <ChevronRight
+                              size={13}
+                              style={{
+                                transform: collapsed.has(o.id) ? undefined : "rotate(90deg)",
+                              }}
+                            />
+                          </button>
+                        ) : (
+                          <span className="scene-object-twist" style={{ marginLeft: depth * 12 }} />
+                        )}
                         <button
                           aria-pressed={selected === o.id}
                           onClick={() => {
@@ -1494,10 +1544,10 @@ function SceneEditor({
                             requestAnimationFrame(() => view.current?.focus());
                           }}
                           onDoubleClick={() => view.current?.focus()}
-                          style={{ paddingLeft: o.parent_id ? 24 : 10 }}
                         >
-                          <Box size={14} />
+                          <ObjectKindIcon kind={o.kind} />
                           <span>{o.name}</span>
+                          {children > 0 && collapsed.has(o.id) && <small>{children} 项</small>}
                           {o.hidden && <small>隐藏</small>}
                         </button>
                         <button

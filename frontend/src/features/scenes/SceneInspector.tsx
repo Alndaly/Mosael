@@ -14,7 +14,7 @@ import {
 import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/scenes";
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
-import { duplicateObject, groupTargets, makeObject, moveToGroup } from "./sceneGraph";
+import { duplicateObject, groupPath, groupTargets, makeObject, moveToGroup } from "./sceneGraph";
 export function SceneInspector({
   content,
   object,
@@ -60,9 +60,11 @@ export function SceneInspector({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={TOP_LEVEL}>不在组里</SelectItem>
+                    {/* 带上上级:「添加 → 组」建出来的都叫「组」,嵌套之后一列全是「组」,
+                        选哪个全靠猜。 */}
                     {groupTargets(content, object.id).map((group) => (
                       <SelectItem key={group.id} value={group.id}>
-                        {group.name}
+                        {groupPath(content, group.id)}
                       </SelectItem>
                     ))}
                   </SelectContent>
