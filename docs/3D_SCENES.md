@@ -50,6 +50,7 @@ Blender 精简一次,而不是悄悄渲下去。
 | `blender_inspect` / `blender_look` | 读 Blender 场景结构 / 渲几个角度给模型看 | 只读 |
 | `blender_execute` | 在 Blender 里跑 `bpy` 建模代码 | 确认卡,`external` 档,自动放行里单独一档 |
 | `blender_import_to_scene` | 把 Blender 里做好的东西作为一个模型物体加进场景 | 无 |
+| `list_scene_models` | 这个工作区里有哪些导入模型可以摆(id、名字、格式、大小) | 只读 |
 
 工具结果里的图片只在当轮上下文里保留最近几张,轮末不写进会话状态(见
 `agent-sidecar/src/toolImages.ts`)。
@@ -66,6 +67,23 @@ JSON 数据传入(视角的角度也是),它只按发过去的数据干活。真
 
 设计背景见 [Blender 接入调研](design/blender-integration.md),安装见
 [插件说明](../plugins/examples/blender/README.md)。
+
+## 工作流里的 3D
+
+| 节点 | 作用 |
+| --- | --- |
+| `scene_props` 可用的 3D 道具 | 把这个工作区里的模型列成清单(id、名字、**实测**长宽高)交给布景师。留空 = 全部。读不了的不进清单并注明 |
+| `scene_create` 搭建 3D 白模场景 | 把一份布景(SceneContent 的形状)建成真场景 |
+| `scene_render` 渲染白模参考 | 从某个镜头渲首尾帧 / 运镜视频,登记成素材 |
+
+道具清单这一环是必要的:设计布景的是一个 LLM,它不可能凭空写出一串模型 id —— 没有清单时,
+自动流程里的布景**永远只能是基本体拼的**,在 Blender 里建好的产品模型进不去。有了清单,布景
+schema 里的 `kind: "model"` + `model_id` 才有东西可填(见 `templates.SET_KINDS`)。
+
+尺寸是量出来的不是填的:节点读一遍 GLB 取包围盒。布景师要靠它决定摆在哪、和人偶比多高,而
+"这个模型多大"只有文件自己知道,让人手填等于请他抄一遍,抄错了没人发现。
+
+智能体那边是同一个问题,所以是同一份清单:`list_scene_models`。
 
 ## 模型归工作区
 

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "从主题到完整视频",
   "description": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
-  "graph_hash": "417684108400742f165f0ddc1f590a56bf01d14d90e6b18e80943660d311731a",
+  "graph_hash": "56a8a1b3a0f88e9c6df1b964723a1be45307c636aa41071e9ae283291ecbbd1f",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 7,
+      "template_version": 8,
       "source": "official"
     },
     "nodes": [
@@ -658,6 +658,18 @@
         }
       },
       {
+        "id": "props",
+        "type": "scene_props",
+        "name": "可用的 3D 道具",
+        "position": {
+          "x": 1400,
+          "y": 460
+        },
+        "config": {
+          "model_ids": ""
+        }
+      },
+      {
         "id": "set_design",
         "type": "llm",
         "name": "设计 3D 白模布景与机位",
@@ -669,8 +681,8 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。\n输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。\n\n坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。\n\n**台距 D 由布景尺寸算出来,不是固定值。** 取视觉圣经里最大的那个场景的 width_m 与 depth_m 中较大的\n那个,加 8 米;若不足 12 米就按 12 米。第 n 镜(shot_number = n)的布景台整体放在 x = n*D 附近,\n台内每一个物体和这一镜相机的 position / target 都要把 x 加上 n*D。\n**不要用固定的 40 米**:三四米宽的卧室按 40 米排开,台与台之间会空出三十多米,整个白模散成一串\n看不清的小点;而六十米的大场景在 40 米台距下会直接和隔壁穿模。\n\n**每个布景台先出一个组。** kind=\"group\",id=\"bay-<n>\",name=\"镜头 <n> · <这一镜的场景名>\",\nposition 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物体(room、陈设、figure、相机)\n都把 parent_id 写成 \"bay-<n>\"。组只为收纳,它在原点,所以**不改变任何坐标** —— 上面那条\"都写世界\n坐标\"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。\n\n每个布景台：\n- 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*40,0,0]，\n  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。\n- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。\n- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;\n  color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。\n  id 写成 \"<角色id>-<n>\"。\n- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们。\n\n每镜一台相机：kind=\"camera\",id=\"cam-<n>\";position 是起始机位,target 是起始看向点(一般是主体的胸口\n或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,\n35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,\n仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,\n中景 1.5~2.5 米,全景 3~5 米)。\n运镜写在相机的 track 上：static 不写 track;其余至少两档 {time:0,...} 和 {time:5,...}\n(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,\n跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。\n\nshots:每镜一条 {id:\"shot-<n>\", name:\"镜头 <n>\", duration:5, aspect:画幅, easing:\"smooth\",\ncamera_id:\"cam-<n>\"}。lighting 按视觉圣经的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、\n高度角、强度(2~5)、色温和软硬;preset 写 \"custom\"。background 写 \"#20242c\",ambient 写 1.5。\n只输出符合 JSON Schema 的对象。",
-          "prompt": "视觉圣经(角色身高与白模颜色、场景尺寸)：\n{{visual_bible.text}}\n\n分镜(每镜的场景、出镜角色、站位、景别、机位角度、焦段、运镜与路径)：\n{{storyboard.text}}\n\n画幅：{{start.aspect_ratio}}。请给每个镜头搭一个布景台并放好相机。",
+          "system": "你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。\n输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。\n\n坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。\n\n**台距 D 由布景尺寸算出来,不是固定值。** 取视觉圣经里最大的那个场景的 width_m 与 depth_m 中较大的\n那个,加 8 米;若不足 12 米就按 12 米。第 n 镜(shot_number = n)的布景台整体放在 x = n*D 附近,\n台内每一个物体和这一镜相机的 position / target 都要把 x 加上 n*D。\n**不要用固定的 40 米**:三四米宽的卧室按 40 米排开,台与台之间会空出三十多米,整个白模散成一串\n看不清的小点;而六十米的大场景在 40 米台距下会直接和隔壁穿模。\n\n**每个布景台先出一个组。** kind=\"group\",id=\"bay-<n>\",name=\"镜头 <n> · <这一镜的场景名>\",\nposition 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物体(room、陈设、figure、相机)\n都把 parent_id 写成 \"bay-<n>\"。组只为收纳,它在原点,所以**不改变任何坐标** —— 上面那条\"都写世界\n坐标\"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。\n\n每个布景台：\n- 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*40,0,0]，\n  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。\n- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。\n- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;\n  color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。\n  id 写成 \"<角色id>-<n>\"。\n- **能用真道具就别用方块拼。** 下面那份「可用的 3D 道具」清单里的东西是已经建好的真实模型:\n  kind=\"model\",model_id 写清单里那个 id,name 写道具名,position/rotation 照常摆。清单里给了\n  每件道具实测的长宽高,按它和 figure(人)的比例摆,不要再用 parameters 去\"设定\"它的尺寸\n  (模型自带尺寸,parameters 对它无效)。清单为空就全用基本体。\n- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们;\n  非 model 的物体 model_id 写空字符串。\n\n每镜一台相机：kind=\"camera\",id=\"cam-<n>\";position 是起始机位,target 是起始看向点(一般是主体的胸口\n或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,\n35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,\n仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,\n中景 1.5~2.5 米,全景 3~5 米)。\n运镜写在相机的 track 上：static 不写 track;其余至少两档 {time:0,...} 和 {time:5,...}\n(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,\n跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。\n\nshots:每镜一条 {id:\"shot-<n>\", name:\"镜头 <n>\", duration:5, aspect:画幅, easing:\"smooth\",\ncamera_id:\"cam-<n>\"}。lighting 按视觉圣经的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、\n高度角、强度(2~5)、色温和软硬;preset 写 \"custom\"。background 写 \"#20242c\",ambient 写 1.5。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "视觉圣经(角色身高与白模颜色、场景尺寸)：\n{{visual_bible.text}}\n\n分镜(每镜的场景、出镜角色、站位、景别、机位角度、焦段、运镜与路径)：\n{{storyboard.text}}\n\n可用的 3D 道具(kind=\"model\" 时 model_id 只能从这里选;尺寸是实测值)：\n{{props.catalog}}\n\n画幅：{{start.aspect_ratio}}。请给每个镜头搭一个布景台并放好相机。",
           "response_format": "json_schema",
           "json_schema_name": "blockout_scene",
           "json_schema": {
@@ -701,6 +713,7 @@
                         "stairs",
                         "table",
                         "figure",
+                        "model",
                         "camera"
                       ]
                     },
@@ -722,6 +735,9 @@
                       },
                       "minItems": 3,
                       "maxItems": 3
+                    },
+                    "model_id": {
+                      "type": "string"
                     },
                     "parameters": {
                       "type": "object",
@@ -822,6 +838,7 @@
                     "parent_id",
                     "position",
                     "rotation",
+                    "model_id",
                     "parameters",
                     "color",
                     "target",

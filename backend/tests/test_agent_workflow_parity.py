@@ -41,6 +41,8 @@ NODE_TO_TOOL: dict[str, str] = {
     "dub_subtitles": "dub_subtitles",
     "llm": "",  # 见 NOT_A_TOOL
     "plugin_tool": "",  # 插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个名字
+    # 布景师要知道「有哪些道具能摆」。智能体那边是同一个问题,所以是同一份清单。
+    "scene_props": "list_scene_models",
     "transcribe_asset": "transcribe_asset",
     "export_sequence": "render_sequence",
     "video_to_gif": "convert_video_to_gif",

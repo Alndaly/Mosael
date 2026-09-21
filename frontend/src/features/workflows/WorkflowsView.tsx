@@ -169,6 +169,7 @@ import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { boundRunId, RUN_ACTIVE } from "@/features/workflows/boundRun";
+import { ScenePropsField } from "@/features/workflows/ScenePropsField";
 import { errorText } from "@/api/errorMessage";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 import {
@@ -3386,6 +3387,10 @@ export function NodeInspector({
                 </div>
               ) : node.type === "note_read" && key === "note_id" ? (
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
+              ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "scene_models" ? (
+                // 专用控件由**后端的字段声明**点名(editor: "scene_models"),不是这里按
+                // 节点类型 + 字段名认出来的 —— 后者是这份注册表一直在消灭的那种手抄表。
+                <ScenePropsField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
               ) : options ? (
                 spec?.options ? (
                   <OptionPicker

@@ -179,7 +179,19 @@ def _callable_workflows(db: Session, ctx: OptionContext) -> list[Option]:
     return [{"value": row.id, "label": row.name} for row in rows if row.id != ctx.workflow_id]
 
 
+def _scene_models(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个工作区里的 3D 模型 —— 能摆进白模布景的道具。
+
+    模型归工作区(见 domain/scenes),所以这份清单不依赖任何一个场景:工作流每跑一次都新建
+    场景,按场景列的话它永远是空的。
+    """
+    from app.domain.scenes import list_models
+
+    return [{"value": model.id, "label": model.name} for model in list_models(db, ctx.workspace_id)]
+
+
 SOURCES: dict[str, Source] = {
+    "scene_models": _scene_models,
     "speech_engines": _speech_engines,
     "speech_voices": _speech_voices,
     "chat_connections": _chat_connections,

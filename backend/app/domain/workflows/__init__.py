@@ -137,12 +137,17 @@ _RAW_JSON_FIELDS = {"json_schema"}
 
 
 def config_editor(key: str, spec: dict[str, Any]) -> str:
-    """这个字段用哪种编辑器:map(一行一对)/ json(原始 JSON)/ 空(非 object,按类型走)。"""
-    if str(spec.get("type") or "") != "object":
-        return ""
+    """这个字段用哪种编辑器:map(一行一对)/ json(原始 JSON)/ 某个专用控件 / 空(按类型走)。
+
+    **声明写了就听声明,不管是什么类型** —— 有些字段的值形状很普通(一串逗号分隔的 id),
+    但挑它的过程不普通(要列出这个工作区里的 3D 模型、能多选)。此前这里只认 object,于是
+    这种字段只能靠前端按「节点类型 + 字段名」认出来,而那正是这份注册表要消灭的那种手抄表。
+    """
     explicit = str(spec.get("editor") or "").strip()
     if explicit:
         return explicit
+    if str(spec.get("type") or "") != "object":
+        return ""
     return "json" if key in _RAW_JSON_FIELDS else "map"
 
 
@@ -304,6 +309,7 @@ _FIELD_LABELS = {
     "waited": "wfField_waited",
     "layout": "wfField_layout",
     "scene_id": "wfField_scene_id",
+    "model_ids": "wfField_model_ids",
     "shot_id": "wfField_shot_id",
     "shot_ids": "wfField_shot_ids",
     "shot_count": "wfField_shot_count",
@@ -858,6 +864,28 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     #: 人声/背景音分离(ADR-0016)。**产出两份新素材,原素材一个字节不动。**
     #: 3D 白模(见 executors/scenes.py 与 domain/scene_render)。
+    #: 交给布景师的**道具清单**:这个工作区里(通常是在 Blender 里建好再收进来的)哪些模型
+    #: 可以摆进布景,各自多大。没有它的话,设计布景的那个 LLM 不可能凭空写出一串模型 id ——
+    #: 于是自动流程里的布景永远只能是基本体拼的。
+    "scene_props": {
+        "external": False,
+        "category": "wfCat_3d",
+        "label": "wfNode_scene_props",
+        "description": "wfNode_scene_props_desc",
+        "config": {
+            #: 值是一串逗号分隔的模型 id。挑的过程要列出这个工作区的模型、能多选,
+            #: 所以给它一个专用控件(见 config_editor 的说明)。
+            "model_ids": {"type": "template", "editor": "scene_models",
+                          "description": "wfNode_scene_props_model_ids"},
+        },
+        "outputs": ["catalog", "model_ids", "count"],
+        "output_labels": {
+            "catalog": "wfOut_props_catalog",
+            "model_ids": "wfOut_props_model_ids",
+            "count": "wfOut_props_count",
+        },
+        "output_types": {"model_ids": "json", "count": "number"},
+    },
     "scene_create": {
         "external": False,
         "category": "wfCat_3d",

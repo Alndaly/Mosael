@@ -611,7 +611,11 @@ def _storyboard_schema(plan: VideoPlan) -> dict[str, Any]:
 #: 布景用得到的物体种类 —— SceneObject.kind 里除了导入模型(没有文件)和灯之外的那些。
 #: `group` 是**收纳**用的:八个布景台摊平就是七十多条重名的列表(「出租屋卧室」出现八次),
 #: 谁也分不出哪个是哪个。每台一个组之后,列表是八行。
-SET_KINDS = ["group", "room", "box", "cylinder", "sphere", "plane", "stairs", "table", "figure", "camera"]
+#: `model` 是**导入的模型**(通常在 Blender 里建好再收进工作区):基本体拼不出来的产品、道具、
+#: 设备。它要配一个 model_id,而布景师是从上游「可用的 3D 道具」节点给的清单里拿到那个 id 的 ——
+#: 没有那份清单时清单为空,布景师就只用基本体(提示词里说了)。
+SET_KINDS = ["group", "room", "box", "cylinder", "sphere", "plane", "stairs", "table", "figure",
+             "model", "camera"]
 
 
 def _set_design_schema() -> dict[str, Any]:
@@ -636,6 +640,9 @@ def _set_design_schema() -> dict[str, Any]:
         #: 所以用空串而不是 null 表示「没有父级」。
         "parent_id": {"type": "string"},
         "position": vec3, "rotation": vec3,
+        #: 只有 kind="model" 用得上:上游道具清单里的那个 id。其余物体写空字符串
+        #: (严格模式要求每一格都在)。
+        "model_id": {"type": "string"},
         "parameters": _object(parameters, list(parameters)),
         "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
         "target": vec3, "fov": {"type": "number", "minimum": 10, "maximum": 120},
@@ -1172,7 +1179,12 @@ position 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物�
 - 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;
   color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。
   id 写成 "<角色id>-<n>"。
-- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们。
+- **能用真道具就别用方块拼。** 下面那份「可用的 3D 道具」清单里的东西是已经建好的真实模型:
+  kind="model",model_id 写清单里那个 id,name 写道具名,position/rotation 照常摆。清单里给了
+  每件道具实测的长宽高,按它和 figure(人)的比例摆,不要再用 parameters 去"设定"它的尺寸
+  (模型自带尺寸,parameters 对它无效)。清单为空就全用基本体。
+- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们;
+  非 model 的物体 model_id 写空字符串。
 
 每镜一台相机：kind="camera",id="cam-<n>";position 是起始机位,target 是起始看向点(一般是主体的胸口
 或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,
@@ -1608,6 +1620,15 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
             },
         },
         {
+            #: 留空 = 这个工作区里的全部模型。模板装出来时通常一份都没有,清单因此是空的,
+            #: 布景师照旧只用基本体 —— 等用户在 Blender 里建好道具收进来,不改图就生效。
+            "id": "props",
+            "type": "scene_props",
+            "name": {"zh": "可用的 3D 道具", "en": "Available 3D props"},
+            "position": {"x": 1400, "y": 460},
+            "config": {"model_ids": ""},
+        },
+        {
             "id": "set_design",
             "type": "llm",
             "name": {"zh": "设计 3D 白模布景与机位", "en": "Design the 3D blockout sets and cameras"},
@@ -1622,6 +1643,9 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
 
 分镜(每镜的场景、出镜角色、站位、景别、机位角度、焦段、运镜与路径)：
 {{storyboard.text}}
+
+可用的 3D 道具(kind="model" 时 model_id 只能从这里选;尺寸是实测值)：
+{{props.catalog}}
 
 画幅：{{start.aspect_ratio}}。请给每个镜头搭一个布景台并放好相机。""",
                 "response_format": "json_schema",
@@ -1766,7 +1790,7 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 7, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 8, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

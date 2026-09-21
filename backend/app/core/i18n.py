@@ -467,6 +467,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_translate_engine": {"zh": "翻译引擎(默认 Google 免费)", "en": "Translation engine (Google's free one by default)"},
     "wfNode_translate_lines": {"zh": "批量翻译", "en": "Translate lines"},
     "wfNode_separate_audio": {"zh": "分离人声与背景音", "en": "Separate voice and background"},
+    "wfField_model_ids": {"zh": "允许用的道具", "en": "Props that may be used"},
+    "wfNode_scene_props": {"zh": "可用的 3D 道具", "en": "Available 3D props"},
+    "wfNode_scene_props_desc": {
+        "zh": "把这个工作区里的 3D 模型(通常是在 Blender 里建好再收进来的)列成一份清单交给布景师:每一份的 id、名字和实测的长宽高。接进设计布景那个节点的提示词,它就能把真实道具摆进白模,而不是只用基本体拼。留空 = 这个工作区里的全部模型。读不了的(压缩网格、面数超预算、文件不在)不进清单,并在清单里说明。",
+        "en": "List this workspace's 3D models (usually modelled in Blender and brought back in) as a catalogue for the set designer: each one's id, name and measured width/height/depth. Feed it into the prompt of the node that designs the blockout and it can place real props instead of only primitives. Leave empty for every model in the workspace. Models that cannot be read (compressed mesh, over the triangle budget, missing file) are left out and noted in the catalogue.",
+    },
+    "wfNode_scene_props_model_ids": {
+        "zh": "允许摆哪几份模型,留空表示全部",
+        "en": "Which models may be placed; empty means all of them",
+    },
+    "wfOut_props_catalog": {"zh": "道具清单", "en": "Prop catalogue"},
+    "wfOut_props_model_ids": {"zh": "可用道具 id", "en": "Usable prop ids"},
+    "wfOut_props_count": {"zh": "可用道具数", "en": "Usable props"},
     "wfNode_scene_create": {"zh": "搭建 3D 白模场景", "en": "Build a 3D blockout scene"},
     "wfNode_scene_create_desc": {
         "zh": "把一份布景(物体、机位轨迹、镜头、打光)建成一个 3D 场景,出现在「3D 场景」列表里,可以打开在工作台里调整。布景通常接一个 AI 对话节点的结构化输出;坐标以米为单位,Y 朝上,地面在 y=0。",
@@ -479,8 +492,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfNode_scene_render": {"zh": "渲染白模参考", "en": "Render blockout references"},
     "wfNode_scene_render_desc": {
-        "zh": "从 3D 场景的某个镜头渲出白模首帧、尾帧和运镜视频,作为新素材交给图像/视频生成当参考;同时给出一句从机位轨迹算出来的镜头语言(焦段、机位高度、推拉摇移),可以直接拼进提示词。在本机渲染,不花钱;导入的 3D 模型渲不出来。",
-        "en": "Render the first frame, last frame and camera-move video of one shot in a 3D scene as new assets to use as references for image or video generation, plus a line of camera language computed from the camera path (lens, height, dolly/pan/orbit) that can go straight into a prompt. Rendered locally at no cost; imported 3D models are not rendered.",
+        "zh": "从 3D 场景的某个镜头渲出白模首帧、尾帧和运镜视频,作为新素材交给图像/视频生成当参考;同时给出一句从机位轨迹算出来的镜头语言(焦段、机位高度、推拉摇移),可以直接拼进提示词。在本机渲染,不花钱;导入的 3D 模型也会画进去(读不了的在 skipped_models 里报数)。",
+        "en": "Render the first frame, last frame and camera-move video of one shot in a 3D scene as new assets to use as references for image or video generation, plus a line of camera language computed from the camera path (lens, height, dolly/pan/orbit) that can go straight into a prompt. Rendered locally at no cost; imported 3D models are drawn too (any that could not be read are counted in skipped_models).",
     },
     "wfNode_scene_render_scene_id": {"zh": "要渲的 3D 场景,如 {{搭建白模.scene_id}}", "en": "The 3D scene to render, e.g. {{build_blockout.scene_id}}"},
     "wfNode_scene_render_shot_id": {"zh": "场景里哪个镜头(镜头 id)", "en": "Which shot in the scene (shot id)"},

@@ -40,6 +40,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "search_notes": {"query": "灵感"},
     "read_note": {"note_id": "no-such-note"},
     "list_scenes": {},
+    "list_scene_models": {},
     "get_scene": {"scene_id": "no-such-scene"},
     "create_scene": {"name": "Scene smoke test"},
     "edit_scene": {"scene_id": "no-such-scene", "base_revision": 1},

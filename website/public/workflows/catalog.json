@@ -46,8 +46,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 7,
-    "nodes": 16,
+    "version": 8,
+    "nodes": 17,
     "download": {
       "zh": "/workflows/full_video_generation.zh.mosael-workflow.json",
       "en": "/workflows/full_video_generation.en.mosael-workflow.json"

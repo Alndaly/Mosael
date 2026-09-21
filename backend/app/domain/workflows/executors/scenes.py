@@ -49,6 +49,50 @@ def _canonical(layout: dict[str, Any]) -> dict[str, Any]:
     return {**layout, "objects": objects}
 
 
+@register("scene_props")
+def scene_props(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """交给布景师的道具清单:这个工作区里哪些模型能摆,各自多大。
+
+    **尺寸是量出来的,不是填的**:读一遍 GLB 取包围盒。布景师要靠它决定摆在哪、和人偶比多高 ——
+    而"这个模型多大"只有文件自己知道,让人在节点里手填等于请他抄一遍,抄错了没人发现。
+
+    读不了的那几份(压缩网格、超预算、文件不在)**不进清单**,并在 `catalog` 里说一句 ——
+    列出来只会让布景师摆上一件渲不出来的东西,而那时画面里是个空位。
+    """
+    import numpy as np
+
+    from app.db.models import Scene3DModel
+    from app.domain.scene_render.model_mesh import read_model, UnsupportedModel
+    from app.domain.scenes import list_models, model_file
+
+    wanted = [one.strip() for one in str(config.get("model_ids") or "").split(",") if one.strip()]
+    available = {model.id: model for model in list_models(db, workflow.workspace_id)}
+    chosen: list[Scene3DModel] = ([available[one] for one in wanted if one in available]
+                                  if wanted else list(available.values()))
+
+    lines: list[str] = []
+    notes: list[str] = []
+    usable: list[str] = []
+    for model in chosen:
+        try:
+            parts = read_model(model_file(model))
+        except (UnsupportedModel, OSError, ValueError) as exc:
+            notes.append(f"(「{model.name}」这次用不了:{exc})")
+            continue
+        points = np.concatenate([part.vertices for part in parts])
+        size = points.max(axis=0) - points.min(axis=0)
+        lines.append(f"- {model.id} · {model.name} · 宽 {size[0]:.2f} × 高 {size[1]:.2f} × 深 {size[2]:.2f} 米")
+        usable.append(model.id)
+
+    missing = [one for one in wanted if one not in available]
+    if missing:
+        notes.append(f"(指定的 {len(missing)} 份模型不在这个工作区里,已跳过)")
+    catalog = "\n".join(lines) if lines else "(没有可用的 3D 道具,这次只用基本体搭布景。)"
+    if notes:
+        catalog = catalog + "\n" + "\n".join(notes)
+    return {"catalog": catalog, "model_ids": usable, "count": len(usable)}
+
+
 @register("scene_create")
 def scene_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.scene_types import SceneContent

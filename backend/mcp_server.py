@@ -217,6 +217,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_jobs",
         "list_memories",
         "list_scenes",
+        "list_scene_models",
         "get_scene",
         "view_scene",
         "blender_inspect",
@@ -1329,6 +1330,17 @@ def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] 
     return _post(f"/api/scenes/{scene_id}/operations", {"workspace_id": workspace_id or _default_workspace_id(),
         "base_revision": base_revision, "objects": objects or [], "remove_ids": remove_ids or [],
         "shots": shots, "name": name})
+
+
+@mcp.tool()
+def list_scene_models(workspace_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: the imported 3D models available in this workspace, with id, name, format and size.
+
+    Models belong to the WORKSPACE, not to one scene: import (or blender_import_to_scene) once and
+    place the same prop in any scene. Use an id here as `model_id` on a `kind: "model"` object in
+    edit_scene to place it. view_scene draws these models, so you can check the placement yourself.
+    """
+    return _get("/api/scene-models", {"workspace_id": workspace_id or _default_workspace_id()})
 
 
 @mcp.tool()
