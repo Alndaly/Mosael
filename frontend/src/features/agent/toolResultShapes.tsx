@@ -7,6 +7,7 @@ import { errorText } from "@/api/errorMessage";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { gotoJob, gotoRecord } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
+import { AnsweredChoiceCard } from "@/features/agent/AnsweredChoice";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -531,6 +532,7 @@ function SummaryCard({ value }: { value: Record<string, unknown> }) {
  * objects and the first match wins.
  */
 export type ResultShape =
+  | "answer"
   | "assets"
   | "search"
   | "projects"
@@ -559,6 +561,31 @@ export type ResultShape =
  * quietly regress into showing an unrelated result as a broken asset list. Order matters — several
  * shapes are arrays of objects, and the first match wins, so the specific tests come first.
  */
+/**
+ * `ask_user` 的结果:**用户选了什么**。
+ *
+ * 此前它掉进通用的键值摘要,卡片上是「状态 answered / answers 2 个字段」—— 而这次调用的全部
+ * 意义就是那个选择。要看它得去展开原始 JSON,翻过一整段选项定义才找得到答案。
+ *
+ * 画法直接复用对话里那张「你选了哪一项」卡(features/agent/AnsweredChoice):同一件事在两个
+ * 地方出现,长成两个样子的话,读的人得认两遍。
+ */
+function AskUserAnswer({ value }: { value: Record<string, unknown> }) {
+  const answers = isRecord(value.answers) ? value.answers : null;
+  if (!answers || Object.keys(answers).length === 0)
+    return <AnsweredChoiceCard answers={{ dismissed: true }} />;
+  return (
+    <AnsweredChoiceCard
+      answers={{
+        picked: Object.entries(answers).map(([question, picked]) => ({
+          question,
+          choices: (Array.isArray(picked) ? picked : [picked]).map((one) => String(one)),
+        })),
+      }}
+    />
+  );
+}
+
 export function detectShape(value: unknown): ResultShape {
   if (value == null) return null;
   if (typeof value === "string") return value.trim() ? "text" : "empty";
@@ -573,6 +600,12 @@ export function detectShape(value: unknown): ResultShape {
   if (Array.isArray(value) && value.every(isRecord)) return "records";
 
   if (isRecord(value)) {
+    // ask_user 的回包:{status, answers} 或 {status: "dismissed", skipped}。
+    // **它此前掉进了通用的键值摘要**,于是卡片上写的是「状态 answered / answers 2 个字段」——
+    // 唯独没有用户到底选了什么。而这次调用的**全部意义**就是那个选择。
+    if (isRecord(value.answers) || value.skipped === true || value.status === "dismissed") {
+      if ("status" in value || "skipped" in value) return "answer";
+    }
     if (Array.isArray(value.assets) && "count" in value) return "assetBundle";
     if (Array.isArray(value.updated) && "count" in value) return "updated";
     if ("status" in value && "output" in value && "error" in value) return "pluginOutput";
@@ -610,6 +643,8 @@ function longTextOf(value: Record<string, unknown> | string): string {
 
 export function ToolResultCard({ value }: { value: unknown }): React.ReactElement | null {
   switch (detectShape(value)) {
+    case "answer":
+      return <AskUserAnswer value={value as Record<string, unknown>} />;
     case "assets":
       return <AssetList rows={value as Record<string, unknown>[]} />;
     case "search":

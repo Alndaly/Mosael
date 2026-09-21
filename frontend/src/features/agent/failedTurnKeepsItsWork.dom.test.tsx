@@ -28,6 +28,7 @@ vi.mock("@/app/preferences", () => ({
 
 import { AgentErrorCard, AgentTurnContent } from "./ToolCalls";
 import { AnsweredChoiceCard } from "./AnsweredChoice";
+import { ToolResultCard } from "./toolResultShapes";
 
 describe("失败的一轮", () => {
   it("过程和失败原因同时在，而不是二选一", () => {
@@ -70,6 +71,35 @@ describe("答完的选择卡", () => {
 
   it("跳过了也说清楚 —— 模型收到的是「他不答」", () => {
     render(<AnsweredChoiceCard answers={{ dismissed: true }} />);
+    expect(screen.getByText("你跳过了这几个问题,让它自己判断")).toBeTruthy();
+  });
+});
+
+/**
+ * `ask_user` 这一步的结果卡要写着**用户选了什么**。
+ *
+ * 此前它掉进通用的键值摘要:卡片上是「状态 answered / answers 2 个字段」—— 而这次调用的
+ * 全部意义就是那个选择。要看它得展开原始 JSON,翻过一整段选项定义才找得到。
+ */
+describe("ask_user 的结果卡", () => {
+  it("画出问题和选中的那一项,而不是「answers 2 个字段」", () => {
+    render(
+      <ToolResultCard
+        value={{
+          status: "answered",
+          answers: { "这次要做成什么规格？": ["16:9 横屏"], "从哪儿开始？": "先搭主体" },
+        }}
+      />,
+    );
+    expect(screen.getByText("这次要做成什么规格？")).toBeTruthy();
+    expect(screen.getByText("16:9 横屏")).toBeTruthy();
+    // 单选也画得出来(后端存的是列表,但别处可能给单值)。
+    expect(screen.getByText("先搭主体")).toBeTruthy();
+    expect(screen.queryByText(/个字段/)).toBeNull();
+  });
+
+  it("跳过了也说清楚", () => {
+    render(<ToolResultCard value={{ status: "dismissed", skipped: true }} />);
     expect(screen.getByText("你跳过了这几个问题,让它自己判断")).toBeTruthy();
   });
 });
