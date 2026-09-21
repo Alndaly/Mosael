@@ -39,6 +39,13 @@ logger = logging.getLogger(__name__)
 #: 它们本来就是 UTF-8,替换不会落在上面。
 TEXT_IO: dict[str, str] = {"encoding": "utf-8", "errors": "replace"}
 
+#: `finish()` 等子进程自己退出的上限,超过就杀。
+#:
+#: 和构造函数那个 `timeout` 是**两件事**:那个是「这一轮跑太久」,这个是「stdout 都读完了、
+#: stdin 都关了,它还不退」。后者在本仓库有真实成因 —— Node 的 sidecar 里挂着没人管的后台
+#: promise,事件循环不空就不退。20 秒:到这一步该产出的都产出了,再等只是在赌。
+REAP_TIMEOUT = 20.0
+
 
 def popen_text(args, **kwargs) -> subprocess.Popen:
     """按行说话的子进程**只从这一个口子起**。
@@ -142,11 +149,37 @@ class ChildProcess:
         # 同样会被端到界面上(下载失败那句话就来自这里)。
         return strip_ansi("".join(self._stderr))[-limit:]
 
-    def finish(self, limit: int = 2000) -> str:
-        """Stop the watchdog, reap the child, and return the tail of its stderr."""
-        if self._killer is not None:
-            self._killer.cancel()
-        self._process.wait()
+    def finish(self, limit: int = 2000, *, reap_timeout: float = REAP_TIMEOUT) -> str:
+        """Reap the child, **then** stop the watchdog, and return the tail of its stderr.
+
+        **这两步的顺序就是这个方法的全部要点。** 原先是先 `cancel()` 再无限期 `wait()` ——
+        也就是这个类在它唯一的收尾出口上,做的第一件事是拔掉文件开头那句话说的那颗牙
+        (「A deadline only has teeth if something kills the child」)。子进程只要不自己退,
+        `wait()` 就永远不返回,而此时已经没有任何东西能打断它。
+
+        现场:pi sidecar 那一轮被用户按「停止」结束,stdin 关了,`main()` 返回了,但 Node 要等
+        事件循环空了才退,而后台子智能体还挂着在飞的 HTTP 请求。于是 `wait()` 不返回 →
+        调用方 `finally` 里「把会话拨回 idle」那段永远执行不到 → **界面上那个会话永远停在
+        「思考中」**,之后每条消息都被拒绝(见 test_sidecar_backpressure 开头记的同一个症状:
+        那次是 stderr 管道死锁,这次是另一条通往同一个症状的路)。
+
+        所以收尾自己也要有时限,而且是**独立的第二个数**:看门狗管的是「这一轮跑太久」,
+        `reap_timeout` 管的是「stdout 都读完了它还不退」。两件事,两个数。看门狗留到 `wait()`
+        真的返回之后再撤 —— 它在这期间开火是**对的**,那正是它存在的理由。
+        """
+        try:
+            self._process.wait(timeout=reap_timeout)
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "子进程 pid=%s 在 stdout 读完后 %.0f 秒仍未退出,强制结束", self._process.pid, reap_timeout
+            )
+            # 不置 timed_out:这一轮**已经出了结果**,只是子进程赖着不走。把它说成超时会让
+            # 调用方把一次成功的回合报成「运行超过 N 秒未返回」。
+            self.kill()
+            self._process.wait()
+        finally:
+            if self._killer is not None:
+                self._killer.cancel()
         self._drain.join(timeout=1.0)
         return self.stderr_tail(limit)
 
