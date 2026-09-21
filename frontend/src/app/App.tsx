@@ -1,5 +1,6 @@
 import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
 import { watchBodyPointerLock } from "@/lib/bodyPointerLock";
+import { PageBoundary } from "@/app/PageBoundary";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import {
@@ -534,6 +535,10 @@ function Studio({
       >
         {/* 页面按需加载(见 app/pages.tsx),所以渲染出口统一兜一层 —— 每个页面各写一次
             Suspense 的话,漏写的那一页在首次打开时会直接抛,而不是转一下菊花。 */}
+        {/* 按需加载多了一种此前不存在的失败:那一块 JS 没取到。React.lazy 会把它**往上抛**,
+            而 Suspense 不接错误 —— 没有这层边界的话整棵树卸掉,用户拿到一个永久白屏,
+            连回上一页都做不到。见 app/PageBoundary。 */}
+        <PageBoundary resetKey={view}>
         <React.Suspense fallback={<LoadingState label={t("pageLoading")} />}>
         {PAGE_RENDERERS[view]({
           workspace,
@@ -545,6 +550,7 @@ function Studio({
           t,
         })}
         </React.Suspense>
+        </PageBoundary>
         <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}

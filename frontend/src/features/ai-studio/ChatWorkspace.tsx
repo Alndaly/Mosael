@@ -42,6 +42,7 @@ import { SessionList } from "@/features/ai-studio/SessionList";
 import { attachmentToken, chatMediaGallery } from "@/features/agent/userMessage";
 import { type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { DictateButton } from "@/features/agent/DictateButton";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
@@ -198,6 +199,9 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
+  //: 会话清单还在路上,或者选中的这条会话的消息还在路上。两者都不算"这条会话是空的"。
+  //: `enabled` 为假时 React Query 的 status 也是 pending,所以要先确认真的有一条会话在读。
+  const sessionLoading = sessions.isPending || (Boolean(activeSession) && messages.isPending);
   //: 免提模式念的就是最后一条**成功**的助手回复;失败的那条由 failure 单独念(它的 content
   //: 是「智能体执行失败」这类占位,念它等于什么都没说)。
   
@@ -548,7 +552,16 @@ export function ChatWorkspace({
                   <AgentStatusRow label={t("chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
                 </div>
               )}
-              {(messages.data ?? []).length === 0 && !running && (
+              {/* **「还没读到」和「读过了,是空的」必须分开。**
+                  此前这里只看 `length === 0`,而读取中 `data` 是 undefined —— 于是打开一条有
+                  几十轮历史的会话时,先给你看一屏「开始新对话」的欢迎页,几秒后消息才顶进来。
+                  那不是"少了个 loading",是**显示了相反的状态**:它在说这条会话是空的。 */}
+              {sessionLoading && !running && (
+                <div className="m-auto w-full max-w-[780px]">
+                  <LoadingState label={t("chatLoadingSession")} />
+                </div>
+              )}
+              {!sessionLoading && (messages.data ?? []).length === 0 && !running && (
                 <div className="m-auto w-full max-w-[780px]">
                   <div className="mx-auto max-w-xl px-6 py-10">
                     <Sparkles className="mb-6 size-9 text-primary" strokeWidth={1.4} />
