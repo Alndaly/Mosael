@@ -53,6 +53,7 @@ import {
   Repeat,
   Search,
   Spline,
+  Square,
   Store,
   Trash2,
   Type,
@@ -66,6 +67,7 @@ import { toast } from "sonner";
 
 import {
   api,
+  cancelJob,
   createWorkflow,
   deleteWorkflow,
   exportWorkflowFile,
@@ -167,6 +169,7 @@ import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { boundRunId, RUN_ACTIVE } from "@/features/workflows/boundRun";
+import { errorText } from "@/api/errorMessage";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 import {
   WORKFLOW_NODE_TYPES,
@@ -1540,6 +1543,19 @@ function WorkflowEditor({
     },
   });
   const runByNode = React.useMemo(() => stepsByNode(runEvents.data ?? []), [runEvents.data]);
+  /** 绑定的那次运行**此刻还在跑吗** —— 工具栏据此在「运行」和「停止」之间切换。
+   *  按 runs 列表里那一行的状态判,而不是 run.isPending:后者只覆盖"把任务排进队列"
+   *  那一下(几十毫秒),排完就回 false,而工作流才刚开始跑。 */
+  const running = (runs.data ?? []).some((one) => one.id === runJobId && RUN_ACTIVE.has(one.status));
+  const stop = useMutation({
+    mutationFn: () => cancelJob(runJobId!),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
+      void qc.invalidateQueries({ queryKey: ["job-events", runJobId] });
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    onError: (error: Error) => toast.error(errorText(error)),
+  });
   const run = useMutation({
     mutationFn: () => runWorkflow(workflow.id),
     onSuccess: (job) => {
@@ -1877,16 +1893,34 @@ function WorkflowEditor({
                 >
                   <History size={14} />
                 </Button>
-                <Button
-                  size="icon-sm"
-                  disabled={dirty || !analysis.runnable}
-                  loading={run.isPending}
-                  aria-label={t("wfRun")}
-                  title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
-                  onClick={() => run.mutate()}
-                >
-                  <Play size={14} />
-                </Button>
+                {/* **在跑的时候,这颗按钮是「停止」。**
+                    此前它一直是 ▶:点完之后画布上节点一个个亮起来,而工具栏里没有任何出口 ——
+                    唯一能取消的地方是任务中心列表那一行的 ×,没人会想到去那儿找。
+                    看着它跑的这一页就该能停下它。 */}
+                {running ? (
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
+                    className="hover:border-destructive/50 hover:text-destructive"
+                    loading={stop.isPending}
+                    aria-label={t("wfStop")}
+                    title={t("jobCancelHint")}
+                    onClick={() => stop.mutate()}
+                  >
+                    <Square size={14} />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon-sm"
+                    disabled={dirty || !analysis.runnable}
+                    loading={run.isPending}
+                    aria-label={t("wfRun")}
+                    title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
+                    onClick={() => run.mutate()}
+                  >
+                    <Play size={14} />
+                  </Button>
+                )}
               </CanvasToolbarGroup>
               <CanvasToolbarGroup label={t("more")}>
                 <ActionMenu

@@ -1,8 +1,10 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Activity, CheckCircle2, CircleAlert, ExternalLink, Loader2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, CheckCircle2, CircleAlert, ExternalLink, Loader2, Square } from "lucide-react";
+import { toast } from "sonner";
 
-import { getJob, listJobEvents, type Job } from "@/api/client";
+import { cancelJob, getJob, listJobEvents, type Job } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { JobEventList } from "@/components/layout/JobEvents";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -29,6 +31,7 @@ export function JobDetailDialog({
   gotoLabel?: string;
 }) {
   const t = useI18n();
+  const qc = useQueryClient();
   const { locale } = usePreferences();
   const { kindOf } = useJobKinds();
   // `job` is a snapshot copied out of the list when the row was clicked and never re-synced,
@@ -54,6 +57,22 @@ export function JobDetailDialog({
   // 工作流派生的子任务(发布/导出/转写/生成/配音)在这里「收纳」展示——任务中心已不再平铺它们。
   const children = useJobChildren(job?.id ?? null, active);
 
+  /**
+   * 中止就放在**看着它跑的这一页**。
+   *
+   * 此前取消只在任务中心列表那一行上 —— 而点开详情看进度之后,这里没有任何出口:用户看着
+   * 一个 38% 的进度条,合理的结论是"启动了就停不下来"。能做的事必须出现在人正看着它的地方。
+   */
+  const stop = useMutation({
+    mutationFn: () => cancelJob(current!.id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["job", current?.id] });
+      void qc.invalidateQueries({ queryKey: ["job-events", current?.id] });
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    onError: (error: Error) => toast.error(errorText(error)),
+  });
+
   return (
     <ModalShell
       open={!!job}
@@ -62,6 +81,18 @@ export function JobDetailDialog({
       footer={
         current ? (
           <>
+            {active && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mr-auto hover:border-destructive/50 hover:text-destructive"
+                loading={stop.isPending}
+                title={t("jobCancelHint")}
+                onClick={() => stop.mutate()}
+              >
+                <Square size={13} /> {t("jobCancel")}
+              </Button>
+            )}
             {onGoto && <Button size="sm" variant="outline" onClick={onGoto}><ExternalLink size={13} /> {gotoLabel ?? t("jobDetailGoto")}</Button>}
             <Button size="sm" onClick={onClose}>{t("close")}</Button>
           </>

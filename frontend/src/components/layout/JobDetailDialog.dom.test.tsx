@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Job } from "@/api/client";
@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
     "ARK request failed: https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks; " +
     '{"code":"InputImageSensitiveContentDetected.PrivacyInformation","request_id":"021788160646919b9f489096afc36acf450c00ec3935d23a968bb2"}',
   events: [] as Array<Record<string, unknown>>,
+  cancelled: [] as string[],
 }));
 
 vi.mock("@/app/preferences", () => ({
@@ -24,7 +25,13 @@ vi.mock("@/api/client", () => ({
   getJob: async () => null,
   listJobChildren: async () => [],
   listJobEvents: async () => h.events,
+  cancelJob: async (id: string) => {
+    h.cancelled.push(id);
+    return null;
+  },
 }));
+vi.mock("@/api/errorMessage", () => ({ errorText: (e: Error) => e.message }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 import { JobDetailDialog } from "./JobDetailDialog";
 
@@ -93,5 +100,38 @@ describe("任务执行详情宽度", () => {
     expect(await screen.findByText("模型说：稍等，我来整理。")).toBeTruthy();
     expect(screen.getByText("json_object")).toBeTruthy();
     expect(screen.getByText(/Expecting value/)).toBeTruthy();
+  });
+});
+
+
+/**
+ * 用户报的是「工作流启动后无法中止?」 —— 他正看着这个弹窗里 38% 的进度条。
+ *
+ * 后端一直能取消(domain/jobs.cancel_job,节点粒度),但界面上**唯一**的入口是任务中心
+ * 列表那一行上的 ×。点开详情看进度之后,这里没有任何出口,于是合理的结论就是"停不下来"。
+ * 能做的事必须出现在人正看着它的地方。
+ */
+describe("运行中的任务能在详情里停下", () => {
+  function mount(status: string) {
+    h.events = [];
+    h.cancelled = [];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <JobDetailDialog job={{ ...job, kind: "workflow", status } as Job} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("在跑的时候有「取消任务」,点了就真的调用取消", async () => {
+    mount("running");
+    const button = await screen.findByRole("button", { name: /jobCancel/ });
+    fireEvent.click(button);
+    await vi.waitFor(() => expect(h.cancelled).toEqual(["job-1"]));
+  });
+
+  it("已经结束的不给这个按钮 —— 点了只会得到一句「任务已结束」", () => {
+    mount("succeeded");
+    expect(screen.queryByRole("button", { name: /jobCancel/ })).toBeNull();
   });
 });

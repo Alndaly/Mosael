@@ -16,6 +16,12 @@ export function listJobEvents(jobId: string): Promise<TaskEvent[]> {
   return api<TaskEvent[]>(`/api/jobs/${jobId}/events`);
 }
 
+/** 中止一个还在跑的任务。**节点粒度** —— 正在执行的那一步跑完,引擎在下一个节点边界看到
+ *  已取消就停下(见后端 domain/jobs.cancel_job);派生的子任务一并取消。 */
+export function cancelJob(jobId: string): Promise<Job> {
+  return api<Job>(`/api/jobs/${jobId}/cancel`, { method: "POST" });
+}
+
 /** 工作流 job 派生的子任务(发布/导出/转写/生成/配音),在任务详情里「收纳」展示。 */
 export function listJobChildren(jobId: string): Promise<Job[]> {
   return api<Job[]>(`/api/jobs/${jobId}/children`);
