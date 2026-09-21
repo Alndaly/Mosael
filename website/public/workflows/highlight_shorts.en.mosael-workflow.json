@@ -1,0 +1,369 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "Long video into vertical clips",
+  "description": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own, then give each one its own vertical timeline, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
+  "graph_hash": "21a12b035248a7fe3db35612d9b6c69cfd3432cef6f07f46e139f9067bc83b6f",
+  "graph": {
+    "meta": {
+      "template_id": "highlight_shorts",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "Set the clip rules",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "config": {
+          "params": {
+            "target_count": 6,
+            "min_seconds": 18,
+            "max_seconds": 58,
+            "audience": "刷竖屏短视频的年轻观众",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30
+          }
+        }
+      },
+      {
+        "id": "source_video",
+        "type": "asset",
+        "name": "Pick the long video",
+        "position": {
+          "x": 330,
+          "y": 260
+        },
+        "config": {
+          "asset_id": ""
+        }
+      },
+      {
+        "id": "transcript",
+        "type": "transcribe_asset",
+        "name": "Transcribe with timecodes",
+        "position": {
+          "x": 650,
+          "y": 260
+        },
+        "config": {
+          "asset_id": "",
+          "engine": "auto"
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
+        "id": "highlights",
+        "type": "llm",
+        "name": "Pick the clips that stand alone",
+        "position": {
+          "x": 970,
+          "y": 260
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "precise",
+          "system": "你是短视频运营和剪辑师。你会收到一条长视频(口播、访谈或直播回放)的带时间码逐字稿，\n任务是从里面挑出能**独立成立**的片段：不依赖前文也听得懂、有一个完整的观点或故事、开头三秒就有\n抓人的理由。\n\n硬性要求：\n- 每条片段的时长必须在给定的上下限之间；片段之间不得重叠；起止时间必须落在素材时长内。\n- 起止时间要卡在**句子边界**上，不要从半句话开始或结束。\n- 只挑真的够格的。素材里没有那么多高光时，宁可少给几条，并在 skipped_reason 里说明——\n  凑数的片段发出去是在消耗账号。\n- captions 是**重写过的短句**：每句不超过 18 个字，去掉口头禅和重复，保留原意和原话的语气；\n  时间码相对这一条片段的开头（第一句从 0 附近开始），不是原片时间。\n- 不要编造素材里没有的内容。\n\n只输出符合 JSON Schema 的对象。",
+          "prompt": "素材名称：{{source_video.name}}\n素材时长：{{source_video.duration}} 秒\n目标观众：{{start.audience}}\n想要几条：{{start.target_count}}\n每条时长：不短于 {{start.min_seconds}} 秒，不长于 {{start.max_seconds}} 秒\n\n下面是按原视频源时间记录的逐字稿 JSON，每段含 start/end/text：\n{{transcript.timed_text}}\n\n请挑出片段并按要求输出。再强调一次：captions 的时间码是**相对每条片段自己的开头**。",
+          "response_format": "json_schema",
+          "json_schema_name": "highlight_clips",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "clips": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "description": "这条切片的标题,直接可当发布标题"
+                    },
+                    "hook": {
+                      "type": "string",
+                      "description": "前三秒要说的钩子"
+                    },
+                    "start_seconds": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "在原片里的起点"
+                    },
+                    "end_seconds": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "在原片里的终点"
+                    },
+                    "why": {
+                      "type": "string",
+                      "description": "为什么这一段能独立成立"
+                    },
+                    "captions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "start": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "相对本条切片开头的秒数"
+                          },
+                          "end": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "text": {
+                            "type": "string",
+                            "description": "这一句字幕,重写过的短句,不是逐字稿原文"
+                          }
+                        },
+                        "required": [
+                          "start",
+                          "end",
+                          "text"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "hook",
+                    "start_seconds",
+                    "end_seconds",
+                    "why",
+                    "captions"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              },
+              "skipped_reason": {
+                "type": "string",
+                "description": "素材里可用高光不足时,说明原因;够用就写空字符串"
+              }
+            },
+            "required": [
+              "clips",
+              "skipped_reason"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.3,
+          "max_tokens": 16000
+        }
+      },
+      {
+        "id": "cut_clips",
+        "type": "loop_foreach",
+        "name": "Cut each one into a vertical export",
+        "position": {
+          "x": 1290,
+          "y": 260
+        },
+        "config": {
+          "items": "{{highlights.json.clips}}",
+          "inputs": {
+            "source_asset_id": "{{source_video.asset_id}}",
+            "width": "{{start.width}}",
+            "height": "{{start.height}}",
+            "fps": "{{start.fps}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "clip_sequence",
+                "type": "project_sequence_create",
+                "name": "Create a vertical timeline for this clip",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "name": "{{loop.item.title}}",
+                  "width": "{{input.width}}",
+                  "height": "{{input.height}}",
+                  "fps": "{{input.fps}}"
+                }
+              },
+              {
+                "id": "place_range",
+                "type": "timeline_append",
+                "name": "Take that range from the source",
+                "position": {
+                  "x": 400,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "",
+                  "asset_id": "{{input.source_asset_id}}",
+                  "track_id": "",
+                  "start": "{{loop.item.start_seconds}}",
+                  "end": "{{loop.item.end_seconds}}"
+                },
+                "inputs": [
+                  "sequence_id",
+                  "track_id"
+                ]
+              },
+              {
+                "id": "burn_captions",
+                "type": "generate_subtitles",
+                "name": "Lay the rewritten captions",
+                "position": {
+                  "x": 720,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "",
+                  "segments": "{{loop.item.captions}}",
+                  "offset": 0
+                },
+                "inputs": [
+                  "sequence_id"
+                ]
+              },
+              {
+                "id": "export_clip",
+                "type": "export_sequence",
+                "name": "Export this clip",
+                "position": {
+                  "x": 1040,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": ""
+                },
+                "inputs": [
+                  "sequence_id"
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "id": "place_caption",
+                "source": "place_range",
+                "target": "burn_captions"
+              },
+              {
+                "id": "caption_export",
+                "source": "burn_captions",
+                "target": "export_clip"
+              },
+              {
+                "id": "d-clip_sequence-sequence_id-place_range-sequence_id",
+                "source": "clip_sequence",
+                "target": "place_range",
+                "kind": "data",
+                "source_output": "sequence_id",
+                "target_input": "sequence_id"
+              },
+              {
+                "id": "d-clip_sequence-video_track_id-place_range-track_id",
+                "source": "clip_sequence",
+                "target": "place_range",
+                "kind": "data",
+                "source_output": "video_track_id",
+                "target_input": "track_id"
+              },
+              {
+                "id": "d-clip_sequence-sequence_id-burn_captions-sequence_id",
+                "source": "clip_sequence",
+                "target": "burn_captions",
+                "kind": "data",
+                "source_output": "sequence_id",
+                "target_input": "sequence_id"
+              },
+              {
+                "id": "d-clip_sequence-sequence_id-export_clip-sequence_id",
+                "source": "clip_sequence",
+                "target": "export_clip",
+                "kind": "data",
+                "source_output": "sequence_id",
+                "target_input": "sequence_id"
+              }
+            ]
+          },
+          "output": "{{export_clip.asset_id}}",
+          "concurrency": 2
+        }
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "Clips ready",
+        "position": {
+          "x": 1610,
+          "y": 260
+        },
+        "config": {
+          "title": "竖屏切片已导出",
+          "body": "{{source_video.name}} 已切出 {{cut_clips.count}} 条竖屏成片,均带字幕。"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "Hand over the clips and titles",
+        "position": {
+          "x": 1930,
+          "y": 260
+        },
+        "config": {
+          "values": {
+            "source_asset_id": "{{source_video.asset_id}}",
+            "clip_asset_ids": "{{cut_clips.results}}",
+            "clip_count": "{{cut_clips.count}}",
+            "plan": "{{highlights.json}}",
+            "skipped_reason": "{{highlights.json.skipped_reason}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_source",
+        "source": "start",
+        "target": "source_video"
+      },
+      {
+        "id": "transcript_highlights",
+        "source": "transcript",
+        "target": "highlights"
+      },
+      {
+        "id": "highlights_cut",
+        "source": "highlights",
+        "target": "cut_clips"
+      },
+      {
+        "id": "cut_notice",
+        "source": "cut_clips",
+        "target": "done_notice"
+      },
+      {
+        "id": "notice_output",
+        "source": "done_notice",
+        "target": "output"
+      },
+      {
+        "id": "d-source_video-asset_id-transcript-asset_id",
+        "source": "source_video",
+        "target": "transcript",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      }
+    ]
+  }
+}

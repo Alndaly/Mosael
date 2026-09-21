@@ -1,0 +1,273 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "Fabric into applications and a spec sheet",
+  "description": "From one fabric photo and its specs, plan the products it genuinely suits, render each one in a real space, and produce a one-page proposal you can send to a client. The spec sheet only restates the numbers you provide; anything missing is marked as needing mill confirmation.",
+  "graph_hash": "f72f4af5b005d5ed80a6cf1dc42bdbae076f472d2dc62875c5a381f41b1b9bbd",
+  "graph": {
+    "meta": {
+      "template_id": "fabric_lookbook",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "Fabric specs",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "config": {
+          "params": {
+            "fabric_name": "",
+            "composition": "成分,如 60% 棉 40% 亚麻",
+            "weight_gsm": "",
+            "width_cm": "",
+            "hand_feel": "手感与垂坠,一句话",
+            "target_client": "家纺采购 / 服装品牌",
+            "application_count": 4
+          }
+        }
+      },
+      {
+        "id": "fabric_photo",
+        "type": "asset",
+        "name": "Pick the fabric photo",
+        "position": {
+          "x": 330,
+          "y": 260
+        },
+        "config": {
+          "asset_id": ""
+        }
+      },
+      {
+        "id": "fabric_plan",
+        "type": "llm",
+        "name": "Plan the applications and the spec sheet",
+        "position": {
+          "x": 650,
+          "y": 260
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "precise",
+          "system": "你是面料商的技术销售和陈列企划。客户给你一块面料的参数，你要做两件事：\n\n1. 规划几种这块料**真的适合**的应用（家纺、服装、软装等），每种给一张成品效果图的英文提示词。\n   效果图要把成品放在真实空间里，让人一眼看出垂坠感、厚度和纹理，不是平铺特写。\n2. 写一页规格卡。\n\n硬性要求：\n- 规格卡**只能复述用户给出的参数**。成分、克重、幅宽、缩率、色牢度这些是要负责任的数字，\n  用户没给就不要写；确实需要但没有的，写「需与工厂确认」。\n- 不要承诺任何认证、检测结论或环保资质。\n- image_prompt 用英文，不要写机位参数，不要在画面里生成文字或水印。\n- 你**看不到**那块面料的图，所以不要描述它的花型和颜色细节——那由参考图保证。\n\n只输出符合 JSON Schema 的对象。",
+          "prompt": "面料名称：{{start.fabric_name}}\n成分：{{start.composition}}\n克重：{{start.weight_gsm}}\n幅宽：{{start.width_cm}}\n手感与垂坠：{{start.hand_feel}}\n客户类型：{{start.target_client}}\n要几种应用：{{start.application_count}}\n\n请输出应用规划与规格卡。没给的参数不要编。",
+          "response_format": "json_schema",
+          "json_schema_name": "fabric_lookbook_plan",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "spec_markdown": {
+                "type": "string",
+                "description": "规格卡正文,Markdown,中文;只写用户给出的参数,不要编造"
+              },
+              "applications": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "product_type": {
+                      "type": "string",
+                      "description": "做成什么,中文,如「窗帘」「单人沙发」「长袖衬衫」"
+                    },
+                    "why_it_suits": {
+                      "type": "string",
+                      "description": "为什么这块料适合做它,中文,一句话"
+                    },
+                    "image_prompt": {
+                      "type": "string",
+                      "description": "完整出图提示词,英文:成品在真实空间里的样子"
+                    }
+                  },
+                  "required": [
+                    "product_type",
+                    "why_it_suits",
+                    "image_prompt"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              },
+              "care_notes": {
+                "type": "string",
+                "description": "养护与工艺提示,中文;不确定的写「需与工厂确认」"
+              }
+            },
+            "required": [
+              "spec_markdown",
+              "applications",
+              "care_notes"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.4,
+          "max_tokens": 8000
+        }
+      },
+      {
+        "id": "render_applications",
+        "type": "loop_foreach",
+        "name": "Render each application",
+        "position": {
+          "x": 970,
+          "y": 260
+        },
+        "config": {
+          "items": "{{fabric_plan.json.applications}}",
+          "inputs": {
+            "fabric_asset_id": "{{fabric_photo.asset_id}}",
+            "fabric_name": "{{start.fabric_name}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "application_shot",
+                "type": "ai_generate",
+                "name": "Render this application",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "{{loop.item.image_prompt}} The reference image is the actual fabric, photographed flat. Reproduce its weave, texture, colour, sheen and print scale EXACTLY on the finished product; do not restyle or recolour it. Photorealistic interior or product photography, natural light, no text, no watermark.",
+                  "negative_prompt": "different fabric, altered weave, changed colour, distorted pattern scale, text, watermark, plastic looking material",
+                  "parameters": {},
+                  "source_assets": [
+                    "{{input.fabric_asset_id}}:reference_image"
+                  ]
+                }
+              },
+              {
+                "id": "tag_shot",
+                "type": "asset_tag",
+                "name": "Tag it with the fabric",
+                "position": {
+                  "x": 400,
+                  "y": 140
+                },
+                "config": {
+                  "asset_ids": "",
+                  "tags": "面料提案,{{input.fabric_name}}",
+                  "mode": "add"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "id": "d-application_shot-asset_id-tag_shot-asset_ids",
+                "source": "application_shot",
+                "target": "tag_shot",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
+          },
+          "output": "{{application_shot.asset_id}}",
+          "concurrency": 2
+        }
+      },
+      {
+        "id": "spec_note",
+        "type": "note_create",
+        "name": "Write the spec sheet to send",
+        "position": {
+          "x": 1290,
+          "y": 260
+        },
+        "config": {
+          "title": "{{start.fabric_name}} · 规格与应用提案",
+          "markdown": "{{fabric_plan.json.spec_markdown}}\n\n## 适合做什么\n\n{{fabric_plan.json.applications}}\n\n## 养护与工艺\n\n{{fabric_plan.json.care_notes}}\n\n---\n\n效果图为 AI 依据本面料实拍图生成,用于沟通版型与观感;**成分、克重、幅宽、色牢度以工厂实测为准**。\n",
+          "tags": "面料提案"
+        }
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "Proposal ready",
+        "position": {
+          "x": 1610,
+          "y": 260
+        },
+        "config": {
+          "title": "面料提案已生成",
+          "body": "{{start.fabric_name}} 已出 {{render_applications.count}} 张应用效果图,规格页已存进笔记。"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "Hand over the renders and the spec sheet",
+        "position": {
+          "x": 1930,
+          "y": 260
+        },
+        "config": {
+          "values": {
+            "fabric_asset_id": "{{fabric_photo.asset_id}}",
+            "render_asset_ids": "{{render_applications.results}}",
+            "render_count": "{{render_applications.count}}",
+            "plan": "{{fabric_plan.json}}",
+            "spec_note_id": "{{spec_note.note_id}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_photo",
+        "source": "start",
+        "target": "fabric_photo"
+      },
+      {
+        "id": "start_plan",
+        "source": "start",
+        "target": "fabric_plan"
+      },
+      {
+        "id": "photo_render",
+        "source": "fabric_photo",
+        "target": "render_applications"
+      },
+      {
+        "id": "plan_render",
+        "source": "fabric_plan",
+        "target": "render_applications"
+      },
+      {
+        "id": "plan_note",
+        "source": "fabric_plan",
+        "target": "spec_note"
+      },
+      {
+        "id": "render_notice",
+        "source": "render_applications",
+        "target": "done_notice"
+      },
+      {
+        "id": "note_notice",
+        "source": "spec_note",
+        "target": "done_notice"
+      },
+      {
+        "id": "notice_output",
+        "source": "done_notice",
+        "target": "output"
+      }
+    ]
+  }
+}

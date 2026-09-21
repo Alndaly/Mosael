@@ -24,6 +24,12 @@ from app.domain.workflows.templates import (
     transcript_video_cleanup_graph,
     translated_dub_graph,
 )
+from app.domain.workflows.templates_business import (
+    fabric_lookbook_graph,
+    highlight_shorts_graph,
+    product_on_model_graph,
+    product_pitch_short_graph,
+)
 
 
 def catalog_files() -> dict[str, str]:
@@ -33,6 +39,15 @@ def catalog_files() -> dict[str, str]:
         "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice()),
         # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
         "translated_dub": translated_dub_graph(voice_id=""),
+        "highlight_shorts": highlight_shorts_graph(chat=ModelChoice()),
+        #: 空的 ModelChoice 表示"这台机器上还没选默认模型" —— 官网那份本来就不该带任何本机选择。
+        #: 上身图这条因此按**带视频**导出:图里多一个节点,用户没有视频模型时在画布上删掉它即可;
+        #: 反过来(导成不带视频)则是有视频模型的人看不到那一步,而他不会知道本来有。
+        "product_on_model": product_on_model_graph(
+            chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(model="placeholder"),
+        ),
+        "product_pitch_short": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id=""),
+        "fabric_lookbook": fabric_lookbook_graph(chat=ModelChoice(), image=ModelChoice()),
     }
     templates = [{**template, "graph": graphs[template["id"]]} for template in TEMPLATE_CATALOG]
     files: dict[str, str] = {}

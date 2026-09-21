@@ -453,9 +453,12 @@ def test_每个模板节点都写了中英两份名字() -> None:
     import ast
     import pathlib
 
-    source = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "workflows" / "templates.py"
+    workflows = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "workflows"
+    #: **两份模板文件都要扫。** 只扫 templates.py 的话,新加的那个文件天生免检 ——
+    #: 而"漏一种语言"恰恰是新写模板时最容易犯的。
+    sources = [workflows / "templates.py", workflows / "templates_business.py"]
     missing = []
-    for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+    for node in ast.walk(ast.parse("\n".join(one.read_text(encoding="utf-8") for one in sources))):
         if not isinstance(node, ast.Dict):
             continue
         keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
@@ -471,3 +474,163 @@ def test_每个模板节点都写了中英两份名字() -> None:
                 if not {"zh", "en"} <= langs:
                     missing.append(f"第 {value.lineno} 行:少了 {sorted({'zh', 'en'} - langs)}")
     assert not missing, "\n".join(missing)
+
+
+# --------------------------------------------------------------------------------------
+# 起点是「用户手里已有的东西」的那四个模板
+# --------------------------------------------------------------------------------------
+
+from app.domain.workflows.templates import MAX_SHOTS_CEILING, TEMPLATE_CATALOG  # noqa: E402
+from app.domain.workflows.templates_business import (  # noqa: E402
+    BUSINESS_TEMPLATE_CATALOG,
+    fabric_lookbook_graph,
+    highlight_shorts_graph,
+    product_on_model_graph,
+    product_pitch_short_graph,
+)
+
+
+def _business_graphs() -> dict[str, dict[str, Any]]:
+    return {
+        "highlight_shorts": highlight_shorts_graph(chat=CHAT),
+        "product_on_model": product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE),
+        "product_pitch_short": product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+        "fabric_lookbook": fabric_lookbook_graph(chat=CHAT, image=SEEDREAM),
+    }
+
+
+def test_四个新模板的图和循环体都成立() -> None:
+    """和三个老模板同一套判据:图本身合法,而且**每一处 `{{…}}` 都指得到东西**。
+
+    引用写错在这里不会报错 —— 跑起来才发现取到空值,而那时已经花掉了几次付费调用。
+    """
+    for template_id, graph in _business_graphs().items():
+        # 素材那一格是**留给用户装好模板之后自己挑的**,所以不要求它已经填上
+        # (和 transcript_video_cleanup 同一条)。
+        assert validate_graph(graph, require_config=False) == [], template_id
+        assert _invalid_references(graph) == [], template_id
+        assert graph["meta"]["template_id"] == template_id
+        assert graph["meta"]["source"] == "official"
+        for node in graph["nodes"]:
+            body = (node.get("config") or {}).get("body")
+            if isinstance(body, dict):
+                assert validate_graph(body, require_start=False) == [], f"{template_id}/{node['id']}"
+                assert _invalid_references(body, virtual_roots={"loop", "input"}) == [], f"{template_id}/{node['id']}"
+
+
+def test_切片模板不花任何生成费用() -> None:
+    """它的全部价值就在这里:转写 + 一次对话 + 截取 + 导出,**没有一次付费生成**。
+
+    哪天有人往里加一个 ai_generate,这条会红 —— 那时它就不再是"门槛最低的那个模板"了,
+    模板卡片上「不花生成费用」那句话也就成了谎。
+    """
+    graph = highlight_shorts_graph(chat=CHAT)
+    kinds = {node["type"] for node in graph["nodes"]}
+    for node in graph["nodes"]:
+        body = (node.get("config") or {}).get("body")
+        if isinstance(body, dict):
+            kinds |= {inner["type"] for inner in body["nodes"]}
+    assert "ai_generate" not in kinds
+    assert "synthesize_speech" not in kinds
+
+
+def test_切片的字幕时间码相对自己那一条() -> None:
+    """切出来的序列从 0 开始,字幕当然也要从 0 开始。
+
+    漏掉这一条的表现很隐蔽:片子能导出、字幕也在,只是全都跑到片尾之后去了 —— 看着像没有字幕。
+    """
+    graph = highlight_shorts_graph(chat=CHAT)
+    loop = _node(graph, "cut_clips")
+    captions = next(one for one in loop["config"]["body"]["nodes"] if one["id"] == "burn_captions")
+    assert captions["config"]["segments"] == "{{loop.item.captions}}"
+    assert captions["config"]["offset"] == 0
+    #: 提示词里必须写明这一点,否则模型给的是原片时间。
+    assert "相对" in _node(graph, "highlights")["config"]["system"]
+
+
+def test_商品图贯穿每一次生成() -> None:
+    """这几个模板的全部要点:生成的是「这件东西在别处」,不是「一件像它的东西」。
+
+    商品图**每一次生成都要带上**,不是只喂第一次;视频那一步还要把刚出的上身图当首帧,
+    否则动起来的那个人可能换了一身衣服。
+    """
+    graph = product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
+    body = _node(graph, "shoot_scenes")["config"]["body"]["nodes"]
+    image_node = next(one for one in body if one["id"] == "on_model")
+    assert "{{input.product_asset_id}}:reference_image" in image_node["config"]["source_assets"]
+    assert "EXACTLY" in image_node["config"]["prompt"]
+    assert image_node["config"]["negative_prompt"]
+
+    clip = next(one for one in body if one["id"] == "on_model_clip")
+    assert "{{on_model.asset_id}}:first_frame" in clip["config"]["source_assets"]
+    assert "{{input.product_asset_id}}:reference_image" in clip["config"]["source_assets"]
+
+
+def test_没有视频模型时上身图模板仍然可用() -> None:
+    """视频是**可选**的一步。没有合适的视频模型就只出静图,而不是让整条模板用不了 ——
+    服装客户最常见的诉求本来就是"给我几张能投的图"。"""
+    graph = product_on_model_graph(chat=CHAT, image=SEEDREAM, video=ModelChoice())
+    body = _node(graph, "shoot_scenes")["config"]["body"]["nodes"]
+    assert {one["id"] for one in body} == {"on_model", "file_image"}
+    assert validate_graph(graph, require_config=False) == []
+    #: 计划里也不该再要视频提示词 —— 要了就是让模型白写一段没人用的东西。
+    scene_props = _node(graph, "lookbook_plan")["config"]["json_schema"]["properties"]["scenes"]["items"]
+    assert "video_prompt" not in scene_props["properties"]
+
+
+def test_带货短片的画面必须按拍顺序落位() -> None:
+    """并发的落位顺序是谁先回来谁在前 —— 画面就和口播对不上了。"""
+    graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1")
+    assert _node(graph, "shoot_beats")["config"]["concurrency"] == 1
+
+
+def test_面料规格页不许编数字() -> None:
+    """成分、克重、幅宽是要负责任的数字,编一个出来比不写更糟。"""
+    graph = fabric_lookbook_graph(chat=CHAT, image=SEEDREAM)
+    system = _node(graph, "fabric_plan")["config"]["system"]
+    assert "只能复述用户给出的参数" in system
+    assert "需与工厂确认" in system
+    #: 发给客户的那一页要自己带免责声明 —— 效果图是生成的,不是实拍。
+    assert "以工厂实测为准" in _node(graph, "spec_note")["config"]["markdown"]
+
+
+def test_模板卡片和图一一对应() -> None:
+    """卡片是用户**照着判断自己能不能跑**的那份东西。有卡片没图 = 点了报错;
+    有图没卡片 = 这个模板根本没人找得到。"""
+    from app.domain.workflows.templates import (
+        FABRIC_LOOKBOOK,
+        FULL_VIDEO_GENERATION,
+        HIGHLIGHT_SHORTS,
+        PRODUCT_ON_MODEL,
+        PRODUCT_PITCH_SHORT,
+        TRANSCRIPT_VIDEO_CLEANUP,
+        TRANSLATED_DUB,
+    )
+
+    known = {
+        FULL_VIDEO_GENERATION, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
+        HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK,
+    }
+    assert {card["id"] for card in TEMPLATE_CATALOG} == known
+    for card in BUSINESS_TEMPLATE_CATALOG:
+        for field in ("name", "summary"):
+            assert {"zh", "en"} <= set(card[field]), f"{card['id']}.{field}"
+        for field in ("requires", "stages"):
+            assert {"zh", "en"} <= set(card[field]), f"{card['id']}.{field}"
+            assert card[field]["zh"] and card[field]["en"], f"{card['id']}.{field} 是空的"
+
+
+def test_镜头数有一道成本闸门() -> None:
+    """每一镜都是一次付费的视频生成,而镜头数此前完全由模型按时长算 —— 跑之前看不到要花多少。
+
+    用户那个数走提示词(他可以调),schema 上另有一道硬天花板;两者**故意拉开距离** ——
+    贴太近的话模型多给一镜就是整条流程作废,而那正是要避免的失败方式。
+    """
+    graph = _full_video()
+    default = _node(graph, "start")["config"]["params"]["max_shots"]
+    storyboard = _node(graph, "storyboard")["config"]
+    assert storyboard["json_schema"]["properties"]["shots"]["maxItems"] == MAX_SHOTS_CEILING
+    assert MAX_SHOTS_CEILING > default * 2, "天花板要比默认值宽出一截"
+    assert "{{start.max_shots}}" in storyboard["prompt"]
+    #: 和上限打架时缩短成片,而不是压缩单镜 —— 单镜时长是视频模型的固定档位,压不了。
+    assert "以上限为准" in storyboard["prompt"]

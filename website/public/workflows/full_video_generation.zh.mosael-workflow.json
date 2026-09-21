@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "从主题到完整视频",
   "description": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
-  "graph_hash": "b098c1925830da0196bb12e8cd8e7bf33f66bc85262b2d21761bbd6fd5602082",
+  "graph_hash": "6d4fd847cefccedd0a6477d1850f55e37c644dadb06daab04693aef5a41cf55d",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -24,6 +24,7 @@
           "params": {
             "topic": "请把这里改成你的视频主题",
             "target_duration_seconds": 30,
+            "max_shots": 8,
             "audience": "对该主题感兴趣的大众观众",
             "tone": "专业、清晰、克制且有电影感",
             "language": "简体中文",
@@ -463,7 +464,7 @@
           "model": "",
           "preset": "creative",
           "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n5 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 5 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 5 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
-          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 5 秒，镜头数按目标时长除以 5；若不能整除，\n向不少于目标时长的最近倍数取整。时间码从 0 开始连续编号。",
+          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 5 秒。镜头数 = 目标时长 ÷ 5 向上取整，\n但**最多 {{start.max_shots}} 镜**；两者冲突时以上限为准，把成片做短一点，\n**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 5 秒。时间码从 0 开始连续编号。",
           "response_format": "json_schema",
           "json_schema_name": "professional_timed_storyboard",
           "json_schema": {
@@ -483,6 +484,7 @@
               "shots": {
                 "type": "array",
                 "minItems": 1,
+                "maxItems": 24,
                 "items": {
                   "type": "object",
                   "properties": {

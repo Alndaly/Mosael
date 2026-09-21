@@ -1,0 +1,347 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "Product photo into on-model shots",
+  "description": "From one flat-lay or fabric photo, plan a few sellable scenes and shoot an on-model image for each; where a video model is available, put every scene in motion too. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. The copy lines are saved as a note.",
+  "graph_hash": "205b3d70656e3eef5c122b16939fca5ffb7b4842758caea0a080b5ce7a62b0ca",
+  "graph": {
+    "meta": {
+      "template_id": "product_on_model",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "Describe the product and the audience",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "config": {
+          "params": {
+            "product_name": "",
+            "product_brief": "品类、颜色、材质、版型,一两句话",
+            "audience": "25-35 岁都市通勤女性",
+            "season": "春秋",
+            "brand_tone": "简洁、克制、质感",
+            "scene_count": 4
+          }
+        }
+      },
+      {
+        "id": "product_photo",
+        "type": "asset",
+        "name": "Pick the product photo",
+        "position": {
+          "x": 330,
+          "y": 260
+        },
+        "config": {
+          "asset_id": ""
+        }
+      },
+      {
+        "id": "shoot_project",
+        "type": "project_sequence_create",
+        "name": "Create a project for this shoot",
+        "position": {
+          "x": 650,
+          "y": 420
+        },
+        "config": {
+          "name": "{{start.product_name}} · 上身图",
+          "width": 1080,
+          "height": 1920,
+          "fps": 30
+        }
+      },
+      {
+        "id": "lookbook_plan",
+        "type": "llm",
+        "name": "Plan the scenes to shoot",
+        "position": {
+          "x": 650,
+          "y": 120
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "creative",
+          "system": "你是服装 / 面料品牌的视觉企划和电商内容负责人。用户会给你一件商品的基本信息和目标人群，\n你要规划几组**能直接投放**的模特上身场景。\n\n硬性要求：\n- 每一组是一个真实存在的穿着场合，彼此要拉开差别（场合、光线、季节感、构图各不相同），\n  不要只换背景色。\n- image_prompt 用英文完整描述画面：模特、姿态、取景、环境、光线、氛围。**不要写机位参数**，\n  也不要在画面里生成文字、logo 水印或 UI。\n- 你**看不到**那张商品图，所以不要描述商品本身的细节——那由参考图保证。你只描述\"穿着它的人\n  在什么场合、怎么站、光怎么打\"。提到商品时用 the product / the garment 指代。\n- copy_lines 是中文卖点短句，可以直接配在图上或发在详情页，不要写成广告腔的空话。\n\n只输出符合 JSON Schema 的对象。",
+          "prompt": "商品名称：{{start.product_name}}\n商品信息：{{start.product_brief}}\n目标人群：{{start.audience}}\n季节：{{start.season}}\n品牌调性：{{start.brand_tone}}\n要几组场景：{{start.scene_count}}\n\n请规划这几组场景并输出。记住：你看不到商品图，不要描述商品本身。",
+          "response_format": "json_schema",
+          "json_schema_name": "product_lookbook_plan",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "product_summary": {
+                "type": "string",
+                "description": "用一句话复述这件商品的可见特征,证明你看懂了参数"
+              },
+              "scenes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "scene_label": {
+                      "type": "string",
+                      "description": "这组图的场合名,给人看的,如「通勤 · 清晨街头」"
+                    },
+                    "model_brief": {
+                      "type": "string",
+                      "description": "模特设定,英文:年龄段、体型、发型、妆容、神态"
+                    },
+                    "setting": {
+                      "type": "string",
+                      "description": "场景与光线,英文"
+                    },
+                    "pose": {
+                      "type": "string",
+                      "description": "姿态与取景,英文;要能看清商品的版型"
+                    },
+                    "image_prompt": {
+                      "type": "string",
+                      "description": "完整出图提示词,英文,不含机位参数"
+                    },
+                    "video_prompt": {
+                      "type": "string",
+                      "description": "这组的 5 秒视频提示词,英文:模特的动作节拍与轻微运镜"
+                    }
+                  },
+                  "required": [
+                    "scene_label",
+                    "model_brief",
+                    "setting",
+                    "pose",
+                    "image_prompt",
+                    "video_prompt"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              },
+              "copy_lines": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "description": "可直接用的中文卖点短句,每条不超过 20 字"
+              }
+            },
+            "required": [
+              "product_summary",
+              "scenes",
+              "copy_lines"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.7,
+          "max_tokens": 8000
+        }
+      },
+      {
+        "id": "shoot_scenes",
+        "type": "loop_foreach",
+        "name": "Shoot each scene",
+        "position": {
+          "x": 970,
+          "y": 260
+        },
+        "config": {
+          "items": "{{lookbook_plan.json.scenes}}",
+          "inputs": {
+            "product_asset_id": "{{product_photo.asset_id}}",
+            "product_name": "{{start.product_name}}",
+            "project_id": "{{shoot_project.project_id}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "on_model",
+                "type": "ai_generate",
+                "name": "Shoot this scene on a model",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "{{loop.item.image_prompt}} Model: {{loop.item.model_brief}}. Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. The reference image is the product itself, photographed flat. Photorealistic commercial fashion photography, no text, no watermark.",
+                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
+                  "parameters": {},
+                  "source_assets": [
+                    "{{input.product_asset_id}}:reference_image"
+                  ]
+                }
+              },
+              {
+                "id": "file_image",
+                "type": "asset_update",
+                "name": "File this scene's image",
+                "position": {
+                  "x": 400,
+                  "y": 140
+                },
+                "config": {
+                  "asset_ids": "",
+                  "name": "{{input.product_name}} · {{loop.item.scene_label}}",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
+              },
+              {
+                "id": "on_model_clip",
+                "type": "ai_generate",
+                "name": "Put this scene in motion",
+                "position": {
+                  "x": 720,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "placeholder",
+                  "kind": "video",
+                  "prompt": "{{loop.item.video_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Subtle, natural motion only; the garment must stay readable throughout.",
+                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
+                  "parameters": {
+                    "duration_seconds": 5
+                  },
+                  "source_assets": [
+                    "{{on_model.asset_id}}:first_frame",
+                    "{{input.product_asset_id}}:reference_image"
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "file_clip",
+                "source": "file_image",
+                "target": "on_model_clip"
+              },
+              {
+                "id": "d-on_model-asset_id-file_image-asset_ids",
+                "source": "on_model",
+                "target": "file_image",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
+          },
+          "output": "{{on_model_clip.asset_id}}",
+          "concurrency": 2
+        }
+      },
+      {
+        "id": "copy_note",
+        "type": "note_create",
+        "name": "Save the copy as a note",
+        "position": {
+          "x": 1290,
+          "y": 420
+        },
+        "config": {
+          "title": "{{start.product_name}} · 卖点与场景",
+          "markdown": "## 商品\n\n{{lookbook_plan.json.product_summary}}\n\n## 卖点短句\n\n{{lookbook_plan.json.copy_lines}}\n\n## 拍摄场景\n\n{{lookbook_plan.json.scenes}}\n",
+          "tags": "商品素材"
+        }
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "Shoot finished",
+        "position": {
+          "x": 1290,
+          "y": 120
+        },
+        "config": {
+          "title": "模特上身图已生成",
+          "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,卖点文案已存进笔记。"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "Hand over the images and the copy",
+        "position": {
+          "x": 1610,
+          "y": 260
+        },
+        "config": {
+          "values": {
+            "product_asset_id": "{{product_photo.asset_id}}",
+            "generated_asset_ids": "{{shoot_scenes.results}}",
+            "scene_count": "{{shoot_scenes.count}}",
+            "plan": "{{lookbook_plan.json}}",
+            "copy_note_id": "{{copy_note.note_id}}",
+            "project_id": "{{shoot_project.project_id}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_photo",
+        "source": "start",
+        "target": "product_photo"
+      },
+      {
+        "id": "start_plan",
+        "source": "start",
+        "target": "lookbook_plan"
+      },
+      {
+        "id": "photo_project",
+        "source": "product_photo",
+        "target": "shoot_project"
+      },
+      {
+        "id": "plan_shoot",
+        "source": "lookbook_plan",
+        "target": "shoot_scenes"
+      },
+      {
+        "id": "photo_shoot",
+        "source": "product_photo",
+        "target": "shoot_scenes"
+      },
+      {
+        "id": "project_shoot",
+        "source": "shoot_project",
+        "target": "shoot_scenes"
+      },
+      {
+        "id": "plan_note",
+        "source": "lookbook_plan",
+        "target": "copy_note"
+      },
+      {
+        "id": "shoot_notice",
+        "source": "shoot_scenes",
+        "target": "done_notice"
+      },
+      {
+        "id": "notice_output",
+        "source": "done_notice",
+        "target": "output"
+      },
+      {
+        "id": "note_output",
+        "source": "copy_note",
+        "target": "output"
+      }
+    ]
+  }
+}

@@ -16,6 +16,17 @@ from app.domain.provider_defaults import get_row
 from app.domain.provider_models import effective_capabilities
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.templates_business import (
+    BUSINESS_TEMPLATE_CATALOG,
+    FABRIC_LOOKBOOK,
+    HIGHLIGHT_SHORTS,
+    PRODUCT_ON_MODEL,
+    PRODUCT_PITCH_SHORT,
+    fabric_lookbook_graph,
+    highlight_shorts_graph,
+    product_on_model_graph,
+    product_pitch_short_graph,
+)
 from sqlalchemy import select
 from app.ai.providers import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from sqlalchemy.orm import Session
@@ -220,6 +231,8 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
 #: 此前这份说明有**三套**:应用里的模板卡片(前端 messages.ts 里一串 key)、官网模板页
 #: (同步脚本里另写一份)、以及这里的图。三套各写各的,改一处不会让另外两处报错,只会让同一个
 #: 模板在三个地方讲三种话。现在应用和官网都读这一份。
+#: 模板库里的卡片。前三条是"无中生有"和"一进一出";后四条(templates_business)是**起点为用户
+#: 手里已有的东西** —— 一条长视频、一张商品图。拼在一起是因为模板库只有一份清单。
 TEMPLATE_CATALOG: list[dict[str, Any]] = [
     {
         "id": "full_video_generation",
@@ -354,7 +367,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             ]
         }
     }
-]
+] + BUSINESS_TEMPLATE_CATALOG
 
 
 def built_in_template_graph(
@@ -379,6 +392,28 @@ def built_in_template_graph(
     if template_id == TRANSLATED_DUB:
         # 音色和整片生成那条一样按工作区取:克隆音色存在工作区名下,不跟人走。
         return localised_names(locale, translated_dub_graph(voice_id=_first_voice_id(db, workspace_id)))
+    if template_id == HIGHLIGHT_SHORTS:
+        # 不生成画面,所以只要对话模型;转写引擎由节点自己挑。
+        return localised_names(locale, highlight_shorts_graph(chat=chat))
+    if template_id == PRODUCT_ON_MODEL:
+        return localised_names(locale, product_on_model_graph(
+            chat=chat,
+            # 商品图要当参考图贯穿每一次出图,所以挑的是"能带参考图出图"的那个,不是随便一个图像模型。
+            image=_reference_image_model(db, user_id),
+            # 视频是**可选**的一步:没有合适的视频模型就只出静图,而不是让整条模板用不了。
+            video=_shot_video_model(db, user_id),
+        ))
+    if template_id == PRODUCT_PITCH_SHORT:
+        return localised_names(locale, product_pitch_short_graph(
+            chat=chat,
+            image=_reference_image_model(db, user_id),
+            voice_id=_first_voice_id(db, workspace_id),
+        ))
+    if template_id == FABRIC_LOOKBOOK:
+        return localised_names(locale, fabric_lookbook_graph(
+            chat=chat,
+            image=_reference_image_model(db, user_id),
+        ))
     raise WorkflowDomainError("wfErr_unknownTemplate", params={"id": template_id})
 
 
@@ -547,12 +582,23 @@ def _shot_schema(plan: VideoPlan) -> dict[str, Any]:
     return _object(fields, list(fields))
 
 
+#: 分镜**最多**能有几镜。这是 schema 上的硬天花板,不是用户那个数 —— 两者分工不同:
+#:
+#: 用户在 `start.max_shots` 里填的是"我这次想要几镜",走提示词,模型可以据此把成片缩短;
+#: 这里是"再怎么样也不能超过"。每一镜都是一次付费的视频生成,而跑之前用户看不到账单 ——
+#: 模型一次给出四十镜的后果是四十次扣费,那不该由一句提示词兜着。
+#:
+#: 故意比默认值宽出一截:两者贴太近的话,模型多给一镜就是整条流程作废(schema 不匹配当场失败),
+#: 而那正是我们要避免的失败方式。
+MAX_SHOTS_CEILING = 24
+
+
 def _storyboard_schema(plan: VideoPlan) -> dict[str, Any]:
     fields = {
         "total_duration_seconds": {"type": "number", "minimum": plan.clip_seconds},
         "timeline_summary": {"type": "string"},
         "continuity_bible": {"type": "string", "description": "所有镜头共享的人物、场景、风格连续性约束"},
-        "shots": {"type": "array", "minItems": 1, "items": _shot_schema(plan)},
+        "shots": {"type": "array", "minItems": 1, "maxItems": MAX_SHOTS_CEILING, "items": _shot_schema(plan)},
     }
     return _object(fields, list(fields))
 
@@ -1378,6 +1424,9 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
                 "params": {
                     "topic": "请把这里改成你的视频主题",
                     "target_duration_seconds": 30,
+                    #: 这一次最多做几镜。**它是成本的闸门**:每一镜都是一次付费的视频生成,
+                    #: 而镜头数此前完全由模型按时长算,跑之前看不到要花多少。
+                    "max_shots": 8,
                     "audience": "对该主题感兴趣的大众观众",
                     "tone": "专业、清晰、克制且有电影感",
                     "language": "简体中文",
@@ -1528,8 +1577,9 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
 {{{{visual_bible.text}}}}
 
 成片目标时长：{{{{start.target_duration_seconds}}}} 秒；画幅：{{{{start.aspect_ratio}}}}；
-语言：{{{{start.language}}}}。每个镜头固定 {clip} 秒，镜头数按目标时长除以 {clip}；若不能整除，
-向不少于目标时长的最近倍数取整。时间码从 0 开始连续编号。""",
+语言：{{{{start.language}}}}。每个镜头固定 {clip} 秒。镜头数 = 目标时长 ÷ {clip} 向上取整，
+但**最多 {{{{start.max_shots}}}} 镜**；两者冲突时以上限为准，把成片做短一点，
+**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 {clip} 秒。时间码从 0 开始连续编号。""",
                 "response_format": "json_schema",
                 "json_schema_name": "professional_timed_storyboard",
                 "json_schema": _storyboard_schema(video_plan),

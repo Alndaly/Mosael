@@ -1,0 +1,381 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "商品 → 带货口播短视频",
+  "description": "给一张商品图和几条卖点,写一条分拍的口播脚本,每一拍出一张带商品的画面、按这一拍的时长铺上时间线,配上口播与屏幕短句,导出竖屏成片。卖点只用你给的那几条,不编功效和数据。",
+  "graph_hash": "c085b9b28ae6503237f04858e1975cf85a83b12d6c56af8bcd3feb9520b40ed0",
+  "graph": {
+    "meta": {
+      "template_id": "product_pitch_short",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "填商品与卖点",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "config": {
+          "params": {
+            "product_name": "",
+            "selling_points": "一行一条,只写你能负责的卖点",
+            "audience": "刷竖屏短视频的年轻观众",
+            "target_duration_seconds": 30,
+            "voice_id": "",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30
+          }
+        }
+      },
+      {
+        "id": "product_photo",
+        "type": "asset",
+        "name": "选择商品图",
+        "position": {
+          "x": 330,
+          "y": 260
+        },
+        "config": {
+          "asset_id": ""
+        }
+      },
+      {
+        "id": "pitch_script",
+        "type": "llm",
+        "name": "写分拍口播脚本",
+        "position": {
+          "x": 650,
+          "y": 120
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "creative",
+          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的\n口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n\n只输出符合 JSON Schema 的对象。",
+          "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和要接近目标时长。",
+          "response_format": "json_schema",
+          "json_schema_name": "product_pitch_script",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "hook_line": {
+                "type": "string",
+                "description": "前三秒的钩子,中文"
+              },
+              "beats": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "narration": {
+                      "type": "string",
+                      "description": "这一拍要念的口播原文,中文;念出来不超过本拍时长"
+                    },
+                    "seconds": {
+                      "type": "number",
+                      "minimum": 2,
+                      "maximum": 8,
+                      "description": "这一拍多长"
+                    },
+                    "visual_prompt": {
+                      "type": "string",
+                      "description": "这一拍的画面,英文;商品必须在画面里"
+                    },
+                    "caption": {
+                      "type": "string",
+                      "description": "屏幕上的短句,不超过 14 字"
+                    }
+                  },
+                  "required": [
+                    "narration",
+                    "seconds",
+                    "visual_prompt",
+                    "caption"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 2
+              },
+              "call_to_action": {
+                "type": "string",
+                "description": "结尾行动号召,中文"
+              }
+            },
+            "required": [
+              "hook_line",
+              "beats",
+              "call_to_action"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.6,
+          "max_tokens": 6000
+        }
+      },
+      {
+        "id": "pitch_project",
+        "type": "project_sequence_create",
+        "name": "建立竖屏成片时间线",
+        "position": {
+          "x": 650,
+          "y": 420
+        },
+        "config": {
+          "name": "{{start.product_name}} · 带货短片",
+          "width": "{{start.width}}",
+          "height": "{{start.height}}",
+          "fps": "{{start.fps}}"
+        }
+      },
+      {
+        "id": "shoot_beats",
+        "type": "loop_foreach",
+        "name": "逐拍出画面并上时间线",
+        "position": {
+          "x": 970,
+          "y": 260
+        },
+        "config": {
+          "items": "{{pitch_script.json.beats}}",
+          "inputs": {
+            "product_asset_id": "{{product_photo.asset_id}}",
+            "sequence_id": "{{pitch_project.sequence_id}}",
+            "video_track_id": "{{pitch_project.video_track_id}}",
+            "project_id": "{{pitch_project.project_id}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "beat_frame",
+                "type": "ai_generate",
+                "name": "出这一拍的画面",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "{{loop.item.visual_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Vertical composition for a phone screen, photorealistic, no text, no logo overlay, no watermark.",
+                  "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
+                  "parameters": {},
+                  "source_assets": [
+                    "{{input.product_asset_id}}:reference_image"
+                  ]
+                }
+              },
+              {
+                "id": "beat_on_timeline",
+                "type": "timeline_append",
+                "name": "按这一拍的时长铺上去",
+                "position": {
+                  "x": 400,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "",
+                  "track_id": "{{input.video_track_id}}",
+                  "max_duration": "{{loop.item.seconds}}"
+                },
+                "inputs": [
+                  "asset_id"
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
+                "source": "beat_frame",
+                "target": "beat_on_timeline",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_id"
+              }
+            ]
+          },
+          "concurrency": 1,
+          "output": "{{beat_on_timeline.clip_id}}"
+        }
+      },
+      {
+        "id": "voice_over",
+        "type": "synthesize_speech",
+        "name": "合成整条口播",
+        "position": {
+          "x": 970,
+          "y": 480
+        },
+        "config": {
+          "text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
+          "engine": "clone",
+          "voice": "{{start.voice_id}}"
+        }
+      },
+      {
+        "id": "voice_on_timeline",
+        "type": "timeline_append",
+        "name": "把口播放到音频轨",
+        "position": {
+          "x": 1290,
+          "y": 480
+        },
+        "config": {
+          "sequence_id": "",
+          "asset_id": "",
+          "track_id": "",
+          "at": 0
+        },
+        "inputs": [
+          "sequence_id",
+          "asset_id",
+          "track_id"
+        ]
+      },
+      {
+        "id": "export_short",
+        "type": "export_sequence",
+        "name": "导出成片",
+        "position": {
+          "x": 1610,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "成片完成通知",
+        "position": {
+          "x": 1930,
+          "y": 260
+        },
+        "config": {
+          "title": "带货短片已导出",
+          "body": "{{start.product_name}} 的口播短片已完成,共 {{shoot_beats.count}} 拍。"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "交付成片与脚本",
+        "position": {
+          "x": 2250,
+          "y": 260
+        },
+        "config": {
+          "values": {
+            "final_asset_id": "{{export_short.asset_id}}",
+            "script": "{{pitch_script.json}}",
+            "beat_clip_ids": "{{shoot_beats.results}}",
+            "voice_asset_id": "{{voice_over.asset_id}}",
+            "sequence_id": "{{pitch_project.sequence_id}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_photo",
+        "source": "start",
+        "target": "product_photo"
+      },
+      {
+        "id": "start_script",
+        "source": "start",
+        "target": "pitch_script"
+      },
+      {
+        "id": "start_project",
+        "source": "start",
+        "target": "pitch_project"
+      },
+      {
+        "id": "script_shoot",
+        "source": "pitch_script",
+        "target": "shoot_beats"
+      },
+      {
+        "id": "project_shoot",
+        "source": "pitch_project",
+        "target": "shoot_beats"
+      },
+      {
+        "id": "photo_shoot",
+        "source": "product_photo",
+        "target": "shoot_beats"
+      },
+      {
+        "id": "script_voice",
+        "source": "pitch_script",
+        "target": "voice_over"
+      },
+      {
+        "id": "shoot_export",
+        "source": "shoot_beats",
+        "target": "export_short"
+      },
+      {
+        "id": "voice_export",
+        "source": "voice_on_timeline",
+        "target": "export_short"
+      },
+      {
+        "id": "export_notice",
+        "source": "export_short",
+        "target": "done_notice"
+      },
+      {
+        "id": "notice_output",
+        "source": "done_notice",
+        "target": "output"
+      },
+      {
+        "id": "d-pitch_project-sequence_id-voice_on_timeline-sequence_id",
+        "source": "pitch_project",
+        "target": "voice_on_timeline",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-voice_over-asset_id-voice_on_timeline-asset_id",
+        "source": "voice_over",
+        "target": "voice_on_timeline",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-pitch_project-audio_track_id-voice_on_timeline-track_id",
+        "source": "pitch_project",
+        "target": "voice_on_timeline",
+        "kind": "data",
+        "source_output": "audio_track_id",
+        "target_input": "track_id"
+      },
+      {
+        "id": "d-pitch_project-sequence_id-export_short-sequence_id",
+        "source": "pitch_project",
+        "target": "export_short",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      }
+    ]
+  }
+}
