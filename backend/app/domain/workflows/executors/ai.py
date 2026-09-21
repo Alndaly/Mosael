@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from jsonschema import SchemaError, ValidationError, validate as validate_json_schema
+from jsonschema.validators import validator_for
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
@@ -107,6 +108,19 @@ def _response_format(config: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+#: 去掉 ```json 围栏之后,正文的第一个字符。用来区分两种完全不同的失败。
+_FENCE = ("```json", "```JSON", "```")
+
+
+def _unfenced(text: str) -> str:
+    body = text.strip()
+    for fence in _FENCE:
+        if body.startswith(fence):
+            body = body[len(fence):].lstrip()
+            break
+    return body
+
+
 def _parse_json_response(text: str) -> Any:
     """Parse one JSON value even when a text-only model wraps it in prose.
 
@@ -115,11 +129,35 @@ def _parse_json_response(text: str) -> Any:
     short explanation around an otherwise valid value. ``raw_decode`` keeps the
     fallback structural (and safe for nested JSON) without trying to repair a
     truncated or malformed answer.
+
+    **但捞回来的必须是"被散文包着的那个值",不能是"一个坏结构里的碎片"。**
+
+    此前这里对所有失败一视同仁:从头扫,遇到第一个能 `raw_decode` 成功的 `[` 或 `{` 就返回。
+    模型返回一个**自身格式错误**的大对象时(实测:它把 `continuity_rules` 的数组用引号包成了
+    字符串,里面的引号又没转义),从 0 开始解析必然失败,于是这个兜底往下扫,捞到了那个数组 ——
+    把答案里的一个字段当成整个答案交了出去。
+
+    后果是**报错指向了完全错误的地方**:下游 schema 校验说「这个 list 不是 object」,用户看到的
+    是一长串连续性规则加一句 is not of type 'object',而真正的毛病是"这个 JSON 根本没闭合"。
+    比直接报解析失败糟得多 —— 后者至少是真话。
+
+    判据:正文(去掉围栏后)**以 `{` 或 `[` 开头**,说明模型本来就在返回纯 JSON,那它没解析成功
+    就是坏的,照实报。只有正文不以括号开头(真的是散文里裹着一个值)才往下扫。
     """
     try:
         return json.loads(text)
     except json.JSONDecodeError as strict_error:
         decoder = json.JSONDecoder()
+        body = _unfenced(text)
+        if body[:1] in ("{", "["):
+            # 它本来就在返回 JSON(可能裹着 ```json 围栏)。从**正文开头**解一次:
+            # 成功就是围栏的事,失败就是这份 JSON 自己坏了 —— 后者绝不往下捞碎片,
+            # 捞出来的只会是答案里的一个字段,而错误会因此指向完全无关的地方。
+            try:
+                value, _end = decoder.raw_decode(body, 0)
+            except json.JSONDecodeError:
+                raise strict_error from None
+            return value
         for index, character in enumerate(text):
             if character not in "[{":
                 continue
@@ -162,6 +200,74 @@ def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str
     return payload
 
 
+#: 校验不过时最多再让模型改几次。**1 就够**:这类错要么第二次就对(它拿到了具体哪一格错了),
+#: 要么是提示词和 schema 本身打架(比如"每镜 2~3 秒"配上"总长 20 秒、约 9 镜"),再试十次一样。
+#: 而每一次都是一次付费调用,所以不能为了"总有一次能过"无限试。
+JSON_REPAIR_ATTEMPTS = 1
+
+
+class _BadJson(Exception):
+    """模型这次的回答不合格,以及**要怎么跟它说**。
+
+    `feedback` 是原样发回给模型的那句话 —— 它必须说清楚哪一格错了,否则模型只能瞎改。
+    """
+
+    def __init__(self, key: str, reason: str, feedback: str, details: dict[str, Any]) -> None:
+        super().__init__(reason)
+        self.key = key
+        self.reason = reason
+        self.feedback = feedback
+        self.details = details
+
+
+def _schema_failure(error: ValidationError) -> tuple[str, str]:
+    """(给人看的原因, 发回给模型的话)。
+
+    **带上出错的字段路径。** 此前只取 `exc.message`,于是界面上是一句「1 is less than the
+    minimum of 2」——哪个字段、第几个镜头都不说,用户和我都得翻开原始返回自己数。
+    `json_path` 本来就在异常身上(`$.shots[8].duration_seconds`),白扔了。
+    """
+    path = error.json_path if hasattr(error, "json_path") else "$"
+    reason = f"{path}:{error.message}" if path and path != "$" else error.message
+    return reason, f"{path} 不符合 Schema:{error.message}"
+
+
+def _json_result(text: str, raw_text: str, config: dict[str, Any], model: str) -> Any:
+    """解析并校验这一次的回答;不合格就抛 `_BadJson`(带上要跟模型说的话)。"""
+    base = {
+        "kind": "llm_json_response",
+        "model": model,
+        "response_format": str(config.get("response_format")),
+        "raw_response": raw_text,
+    }
+    try:
+        value = _parse_json_response(text)
+    except json.JSONDecodeError as exc:
+        raise _BadJson(
+            "wfErr_llmNotJson",
+            str(exc),
+            f"你上一次的回答不是合法 JSON:{exc}。请只输出一个完整、可直接 json.loads 的对象,"
+            "不要用 Markdown 围栏,不要把数组或对象包进字符串里,字符串内部的引号要转义。",
+            {**base, "parse_error": str(exc)},
+        ) from exc
+    if str(config.get("response_format")) == "json_schema":
+        try:
+            validate_json_schema(instance=value, schema=config.get("json_schema"))
+        except SchemaError:
+            # schema 自己写错了 —— 不是模型的问题,重试没有意义,交给上层照实报。
+            raise
+        except ValidationError as exc:
+            reason, feedback = _schema_failure(exc)
+            raise _BadJson(
+                "wfErr_jsonSchemaMismatch",
+                reason,
+                f"你上一次的回答不符合 JSON Schema:{feedback}。请只改这一处,其余内容原样保留,"
+                "重新输出完整对象。",
+                {**base, "response_format": "json_schema", "schema_error": reason},
+            ) from exc
+    return value
+
+
 @register("llm")
 def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     profile = require_connection(db, config.get("profile_id"), user_id=current_actor(db), error=WorkflowDomainError)
@@ -173,10 +279,19 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     if not prompt.strip():
         raise WorkflowDomainError("wfErr_llmPromptEmpty")
     messages.append({"role": "user", "content": prompt})
+    wants_json = str(config.get("response_format") or "text") in {"json_object", "json_schema"}
     try:
         target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
         payload = _request_payload(config, target.model, messages)
         allow_response_format_fallback = "response_format" in payload
+        # **schema 本身写错要在花钱之前就发现。** 它和"模型答得不对"是两回事:前者重试一百次也一样,
+        # 而下面那个循环会为了让模型改对再调一次 —— 先在这里把坏 schema 挡掉,免得白花那一次。
+        if str(config.get("response_format")) == "json_schema":
+            schema = config.get("json_schema")
+            try:
+                validator_for(schema).check_schema(schema)
+            except SchemaError as exc:
+                raise WorkflowDomainError("wfErr_schemaInvalid", params={"reason": exc.message}) from exc
         with billable(
             db,
             capability="chat",
@@ -185,52 +300,45 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             source_type="workflow",
             source_id=workflow.id,
         ) as call:
-            raw_text = chat(
-                target,
-                messages,
-                temperature=float(payload.pop("temperature", 0.4)),
-                timeout=LLM_TIMEOUT_SECONDS,
-                extra=payload,
-                max_retries=configured_max_retries(db),
-                call=call,
-                label="调用 LLM",
-                allow_response_format_fallback=allow_response_format_fallback,
-            )
-            text = raw_text.strip()
+            turn = list(messages)
+            bad: _BadJson | None = None
+            # **不合格就把错误发回去,让它改。** 这类错模型一轮就能自纠(它拿到了具体哪一格错了),
+            # 而此前一次不合格就让整条流程作废 —— 实测那次:67 秒、三次已经成功的付费调用,
+            # 全废在 200 多个字段里的一个上。
+            for attempt in range(JSON_REPAIR_ATTEMPTS + 1):
+                raw_text = chat(
+                    target,
+                    turn,
+                    temperature=float(payload.get("temperature", 0.4)),
+                    timeout=LLM_TIMEOUT_SECONDS,
+                    extra={key: value for key, value in payload.items() if key != "temperature"},
+                    max_retries=configured_max_retries(db),
+                    call=call,
+                    label="调用 LLM" if attempt == 0 else "重新生成 JSON",
+                    allow_response_format_fallback=allow_response_format_fallback,
+                )
+                text = raw_text.strip()
+                if not wants_json:
+                    bad = None
+                    break
+                try:
+                    parsed = _json_result(text, raw_text, config, target.model)
+                except _BadJson as exc:
+                    bad = exc
+                    if attempt >= JSON_REPAIR_ATTEMPTS:
+                        break
+                    # 把它自己的回答和错处一起发回去 —— 只说"错了"它不知道改哪儿。
+                    turn = [*turn, {"role": "assistant", "content": text}, {"role": "user", "content": exc.feedback}]
+                    continue
+                bad = None
+                break
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
+    if bad is not None:
+        raise WorkflowDomainError(bad.key, params={"reason": bad.reason}, details=bad.details)
     result: dict[str, Any] = {"text": text}
-    if str(config.get("response_format") or "text") in {"json_object", "json_schema"}:
-        try:
-            result["json"] = _parse_json_response(text)
-        except json.JSONDecodeError as exc:
-            raise WorkflowDomainError(
-                "wfErr_llmNotJson",
-                details={
-                    "kind": "llm_json_response",
-                    "model": target.model,
-                    "response_format": str(config.get("response_format")),
-                    "raw_response": raw_text,
-                    "parse_error": str(exc),
-                },
-            ) from exc
-        if str(config.get("response_format")) == "json_schema":
-            try:
-                validate_json_schema(instance=result["json"], schema=config.get("json_schema"))
-            except SchemaError as exc:
-                raise WorkflowDomainError("wfErr_schemaInvalid", params={"reason": exc.message}) from exc
-            except ValidationError as exc:
-                raise WorkflowDomainError(
-                    "wfErr_jsonSchemaMismatch",
-                    params={"reason": exc.message},
-                    details={
-                        "kind": "llm_json_response",
-                        "model": target.model,
-                        "response_format": "json_schema",
-                        "raw_response": raw_text,
-                        "schema_error": exc.message,
-                    },
-                ) from exc
+    if wants_json:
+        result["json"] = parsed
     return result
 
 
