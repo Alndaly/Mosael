@@ -13,6 +13,7 @@ import { cloneSceneForExport } from "./sceneExport";
 import React from "react";
 import * as THREE from "three";
 
+import { createInfiniteGrid } from "./infiniteGrid";
 import { geometryObject } from "./sceneMeshes";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
@@ -230,11 +231,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         sun.shadow.blurSamples = lighting.softness > 0.5 ? 16 : 8;
         fitShadow();
       };
-      const grid = new THREE.GridHelper(40, 40, 0x6b7480, 0x6b7480);
-      (grid.material as THREE.Material).transparent = true;
-      (grid.material as THREE.Material).opacity = 0.17;
-      grid.position.y = -0.09;
-      scene.add(grid);
+      // 着色器网格,没有边(见 infiniteGrid)。此前是一块写死 40 米的 GridHelper:到 ±20 米
+      // 就断出一条直边,而轨道控制允许拉到 1000 米 —— 飞出二十米之后地面参照直接没了。
+      const grid = createInfiniteGrid();
+      scene.add(grid.object);
       const editorCamera = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
       editorCamera.position.set(12, 10, 14);
       const shootingCamera = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
@@ -548,7 +548,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             node.rotation.set(...(at.rotation.map(THREE.MathUtils.degToRad) as Vec3));
             node.scale.fromArray(at.scale);
           }
-        grid.visible = !p.preview;
+        grid.object.visible = !p.preview;
         if (path) path.visible = !!p.observing;
         observer.group.visible = !!p.observing;
         transform.enabled = !p.preview && !p.observing;
@@ -587,7 +587,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         } else {
           renderer.setClearColor(0x000000, 0);
           renderer.clear();
-          renderer.render(scene, p.observing ? observerCamera : editorCamera);
+          const viewing = p.observing ? observerCamera : editorCamera;
+          // 换档和淡出都按"相机离地多远"算,所以每帧都要交给它当前的机位。
+          grid.update(viewing);
+          renderer.render(scene, viewing);
           if (p.observing) {
             const box = cameraInset(w, h, aspect);
             renderer.setViewport(
@@ -604,7 +607,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             );
             renderer.setScissorTest(true);
             renderer.clearDepth();
-            grid.visible = false;
+            grid.object.visible = false;
             if (path) path.visible = false;
             observer.group.visible = false;
             renderer.render(scene, shootingCamera);
@@ -913,8 +916,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           path.geometry.dispose();
           (path.material as THREE.Material).dispose();
         }
-        grid.geometry.dispose();
-        (grid.material as THREE.Material).dispose();
+        grid.dispose();
         renderer.dispose();
         renderer.domElement.remove();
         runtime.current = null;
