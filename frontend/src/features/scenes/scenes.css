@@ -61,6 +61,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  /* 和它下面那一行之间要有线。此前两行直接贴着:工作区那边刻意不画上边线(注释在
+     .scene-workspace 上,理由是"上面已经有一条"),而页头这边也没画 —— 于是一条都没有,
+     标题行和视角切换行糊成一块。舞台工具条和属性栏各自的下边线都在,单单这一根是漏的。 */
+  border-bottom: 1px solid var(--divider);
   /* 与下方内容对齐。工作区改成通栏(分割线相接、无外边距)之后,页头若还留着 20px 内缩,
      返回箭头和标题就比画布左边缘往里错一截 —— 那正是"看着怪"的来源。 */
   padding: 8px var(--scene-stage-gutter);
@@ -966,6 +970,23 @@
   width: 100vw;
   height: 100dvh;
   background: var(--background);
+}
+
+/* **全屏就是只看这个 3D 视图。** 此前它只是把整个编辑器铺满屏幕 —— 页头、时间线、属性栏、
+   智能体栏一样不少,于是"全屏"和"最大化窗口"没有区别,而人按它是想把画面看大。
+   留下的只有视口自己那一条工具栏:退出的按钮在上面,不留就只剩 Esc 一条路(而且没人看得出来)。
+   视口本身不重新挂载,所以模型、机位和正在跑的动画都留在原地(见上面那段)。 */
+.scene-studio[data-screen-mode] > .scene-header,
+.scene-studio[data-screen-mode] .scene-side,
+.scene-studio[data-screen-mode] .scene-timeline,
+.scene-studio[data-screen-mode] .scene-agent-dock,
+.scene-studio[data-screen-mode] .scene-agent-floating,
+.scene-studio[data-screen-mode] .scene-resize-side,
+.scene-studio[data-screen-mode] .scene-resize-agent {
+  display: none;
+}
+.scene-studio[data-screen-mode] .scene-workspace {
+  grid-template-columns: 1fr;
 }
 
 .scene-heading {

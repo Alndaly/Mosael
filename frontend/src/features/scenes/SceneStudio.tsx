@@ -1256,9 +1256,10 @@ function SceneEditor({
               <CanvasInputModeSwitch />
               <button
                 className="scene-labeled-tool"
-                aria-label={
-                  fullscreen.active ? "退出编辑器全屏" : "编辑器全屏"
-                }
+                /* 它全屏的是**这个视口**,不是整个编辑器 —— 按钮本来就长在视口自己那条
+                   工具栏上,而人按它是想把画面看大。 */
+                aria-label={fullscreen.active ? "退出全屏" : "只看 3D 画面(全屏)"}
+                title={fullscreen.active ? "退出全屏(Esc)" : "只看 3D 画面:隐藏页头、时间线和右侧栏"}
                 aria-pressed={fullscreen.active}
                 onClick={() => void fullscreen.toggle()}
               >
