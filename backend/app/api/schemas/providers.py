@@ -40,6 +40,11 @@ class ProviderModelOut(ApiModel):
     vision: bool | None = None
     reasoning_effort: bool | None = None
     developer_role: bool | None = None
+    #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**(见 domain/structured_output)。
+    structured_output: bool | None = None
+    #: 查证过的结论:True/False = 已知,None = 没查证过(维持现状:照发,被拒了再降级)。
+    #: 和上面那一格是两回事 —— 那是"用户填了什么",这是"我们知道什么"。
+    known_structured_output: bool | None = None
     #: 这个模型**真正发得出去**的思考档位(见 domain/thinking)。空 = 一档都发不出。
     #: 设置页据此在「推理模型」旁边说清楚:开着这个开关也不会有档位可选,那不是配错了。
     thinking_levels: list[str] = Field(default_factory=list)
@@ -66,6 +71,7 @@ class ProviderModelUpdate(ApiModel):
     vision: bool | None = None
     reasoning_effort: bool | None = None
     developer_role: bool | None = None
+    structured_output: bool | None = None
     generation_capability_ref: str | None = None
     generation_capability_refs: dict[str, str | None] | None = None
 

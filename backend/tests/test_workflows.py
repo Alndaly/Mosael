@@ -963,8 +963,11 @@ def test_llm_node_falls_back_when_json_mode_returns_empty_content(monkeypatch) -
             db.commit()
 
     assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
+    #: **不再白发那一次 json_schema。** DeepSeek 已经查证过不支持(见 domain/structured_output),
+    #: 而这个 handler 演的正是它:json_schema 必被 400。既然结论是已知的,就直接从 json_object 起步 ——
+    #: 那一个往返是必然白花的,而且用户还会在日志里看到一条看不懂的 400。
+    #: 降级链本身没动:json_object 回空内容时照样退到纯文本。
     assert [(one.get("response_format") or {}).get("type") for one in attempts] == [
-        "json_schema",
         "json_object",
         None,
     ]

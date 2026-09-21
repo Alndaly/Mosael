@@ -2017,6 +2017,18 @@ def _migrate_job_worker_leases() -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status_lease_expires ON jobs(status, lease_expires_at)"))
 
 
+def _migrate_model_structured_output() -> None:
+    """模型行记得下「这个端点支不支持 json_schema」。
+
+    此前没有任何地方写得下这件事,于是不支持的端点上 Schema 只是个事后本地校验,而用户看不出来 ——
+    他在节点里写着 strict,实际跑的却是纯文本(见 domain/structured_output)。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_models)"))}
+        if columns and "structured_output" not in columns:
+            conn.execute(text("ALTER TABLE provider_models ADD COLUMN structured_output BOOLEAN"))
+
+
 def _migrate_clip_offline_asset() -> None:
     """片段记住"素材曾经是什么"。
 
@@ -2114,6 +2126,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_worker_leases,
                 _migrate_browser_pool,
                 _migrate_clip_offline_asset,
+                _migrate_model_structured_output,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
             ),

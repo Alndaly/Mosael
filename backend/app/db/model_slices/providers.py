@@ -134,6 +134,9 @@ class ProviderModel(Base):
     vision: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     reasoning_effort: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     developer_role: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**(见 domain/structured_output)。
+    #: 留空 = 跟随查证过的结论;查不到就维持现状(照发,被拒了由网关降级)。
+    structured_output: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     #: 生成参数(尺寸/时长/参考图…)**按什么来**。上面那几格都是对话模型的开关,生成模型此前一格
     #: 都没有 —— 于是用户明知道自己那行 `gpt-image-2-client` 就是 gpt-image-2、明知道某个中转的
     #: gemini 支持尺寸,却没有任何地方写得下来,只能等我们往静态目录里补一行。

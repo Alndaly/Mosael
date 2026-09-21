@@ -31,6 +31,7 @@ RUNTIME_FIELDS = (
     "vision",
     "reasoning_effort",
     "developer_role",
+    "structured_output",
     #: 生成参数按什么来。和上面几格同一个约定 —— 留空 = 跟随目录。
     "generation_capability_ref",
 )

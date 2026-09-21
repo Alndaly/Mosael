@@ -25701,6 +25701,28 @@
             ],
             "title": "Developer Role"
           },
+          "structured_output": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structured Output"
+          },
+          "known_structured_output": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Structured Output"
+          },
           "thinking_levels": {
             "items": {
               "type": "string"
@@ -25862,6 +25884,17 @@
               }
             ],
             "title": "Developer Role"
+          },
+          "structured_output": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structured Output"
           },
           "generation_capability_ref": {
             "anyOf": [

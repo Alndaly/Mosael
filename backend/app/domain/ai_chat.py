@@ -65,6 +65,9 @@ class ChatTarget:
     gateway_provider: dict[str, Any] | None = field(default=None, repr=False)
     gateway_api_base: str = ""
     gateway_token: str = field(default="", repr=False)
+    #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**。`None` = 不知道(照发,被拒了再降级)。
+    #: 见 domain/structured_output。
+    structured_output: bool | None = None
 
 
 def target_for(
@@ -101,6 +104,7 @@ def target_for(
             gateway_api_base=f"http://{settings.backend_host}:{settings.backend_port}",
             # 短期服务令牌只给 sidecar 回写**这个人自己的** OAuth 刷新结果；不发给浏览器。
             gateway_token=mint_service_session(db, profile.owner_user_id),
+            structured_output=_structured_output(db, profile, resolved),
         )
     #: **地址空着就在这儿说清楚。** 不拦的话拼出来的是 "/chat/completions",httpx 抛的是
     #: 「Request URL is missing an 'http://' or 'https://' protocol」—— 用户看到这句,
@@ -119,7 +123,22 @@ def target_for(
         profile_id=profile.id,
         vendor=profile.vendor or "",
         name=profile.name,
+        structured_output=_structured_output(db, profile, resolved),
     )
+
+
+def _structured_output(db: Session, profile: ResolvedConnection, model: str) -> bool | None:
+    """这个端点支不支持 json_schema:用户在模型设置里填的优先,没填就用查证过的结论。
+
+    取不到模型行也不算错 —— 没配置过的模型照样能用,只是没有任何覆盖。
+    """
+    from app.domain import provider_models, structured_output
+
+    row = provider_models.get_model(db, profile.id, model)
+    return structured_output.effective_support(
+        profile.vendor or "", getattr(row, "structured_output", None)
+    )
+
 
 def chat(
     target: ChatTarget,

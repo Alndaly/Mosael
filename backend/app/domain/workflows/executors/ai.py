@@ -235,6 +235,24 @@ def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str
     return payload
 
 
+def _honour_structured_output(payload: dict[str, Any], supported: bool | None) -> dict[str, Any]:
+    """已经查证过不支持 json_schema 的端点,就别把那一档发出去。
+
+    `None` 是**不知道**,照发 —— 网关那条降级链(json_schema → json_object → 纯文本)本来就是
+    对的,只是白花一个往返。而已知不支持时那个往返是**必然**白花的:DeepSeek 这类端点会 400,
+    然后我们降一档重来。直接降到 json_object,少一次请求,也少一次"用户看不懂的 400"。
+
+    **不降到纯文本**:json_object 至少保证语法合法,而 Schema 正文已经在消息里了
+    (见 `_schema_for_prompt`),形状仍然管得住。
+    """
+    if supported is not False:
+        return payload
+    current = payload.get("response_format")
+    if isinstance(current, dict) and current.get("type") == "json_schema":
+        payload["response_format"] = {"type": "json_object"}
+    return payload
+
+
 #: 校验不过时最多再让模型改几次。**1 就够**:这类错要么第二次就对(它拿到了具体哪一格错了),
 #: 要么是提示词和 schema 本身打架(比如"每镜 2~3 秒"配上"总长 20 秒、约 9 镜"),再试十次一样。
 #: 而每一次都是一次付费调用,所以不能为了"总有一次能过"无限试。
@@ -330,7 +348,9 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     wants_json = str(config.get("response_format") or "text") in {"json_object", "json_schema"}
     try:
         target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
-        payload = _request_payload(config, target.model, messages)
+        payload = _honour_structured_output(
+            _request_payload(config, target.model, messages), target.structured_output
+        )
         allow_response_format_fallback = "response_format" in payload
         # **schema 本身写错要在花钱之前就发现。** 它和"模型答得不对"是两回事:前者重试一百次也一样,
         # 而下面那个循环会为了让模型改对再调一次 —— 先在这里把坏 schema 挡掉,免得白花那一次。

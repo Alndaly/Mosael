@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from app.ai.model_catalog import fetch_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
-from app.domain import model_limits, provider_models, thinking
+from app.domain import model_limits, provider_models, structured_output, thinking
 from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
@@ -99,6 +99,8 @@ def _known_fields(
         # domain/thinking 说了算,查不到的模型一档都发不出去 —— 设置页要说出来,否则
         # 用户只会看到「推理模型」开着、会话里却一个档位都没有,以为是自己漏配了什么。
         "thinking_levels": thinking.profile_for(vendor, model_id).levels(),
+        # 查证过的结论。和模型行上那一格分开给 —— 界面要能说出「你没填,而我们知道这个端点不支持」。
+        "known_structured_output": structured_output.known_support(vendor),
     }
 
 
@@ -128,6 +130,7 @@ def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> Provide
         configured=True,
         in_catalog=_is_known_model(vendor, model.model_id, catalog),
         source=model.source,
+        structured_output=model.structured_output,
         **known,
         reasoning=model.reasoning,
         vision=model.vision,

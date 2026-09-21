@@ -9472,6 +9472,10 @@ export interface components {
             reasoning_effort?: boolean | null;
             /** Developer Role */
             developer_role?: boolean | null;
+            /** Structured Output */
+            structured_output?: boolean | null;
+            /** Known Structured Output */
+            known_structured_output?: boolean | null;
             /** Thinking Levels */
             thinking_levels?: string[];
             /** Generation Capability Ref */
@@ -9515,6 +9519,8 @@ export interface components {
             reasoning_effort?: boolean | null;
             /** Developer Role */
             developer_role?: boolean | null;
+            /** Structured Output */
+            structured_output?: boolean | null;
             /** Generation Capability Ref */
             generation_capability_ref?: string | null;
             /** Generation Capability Refs */

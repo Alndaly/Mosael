@@ -282,6 +282,8 @@ export function ModelSettingsDialog({
   const source = settings.data?.context_window_source ?? "fallback";
   const outputSource = settings.data?.max_output_tokens_source ?? "fallback";
   //: 查到的**上限**(目录报的,或内置查证表里的)。和下面的 effective 是两回事。
+  //: 查证过的结论(True/False/未查证)。和用户填的那一格是两回事。
+  const knownStructured = settings.data?.known_structured_output ?? null;
   const knownWindow = settings.data?.context_window ?? 0;
   const knownOutput = settings.data?.max_output_tokens ?? 0;
   //: 不是用户自己填的那份上限。输入框里的值和它相等时保存成 null —— 把继承来的值钉死,
@@ -357,6 +359,7 @@ export function ModelSettingsDialog({
             vision: current.vision,
             reasoning_effort: current.reasoning_effort,
             developer_role: current.developer_role,
+            structured_output: current.structured_output,
             generation_capability_refs: current.generation_capability_refs ?? {},
           });
         }}
@@ -554,6 +557,22 @@ export function ModelSettingsDialog({
                   value={current.developer_role}
                   onChange={(next) => setDraft((prev) => (prev ? { ...prev, developer_role: next } : prev))}
                 />
+                <AdvancedToggle
+                  label={t("modelSettingsStructuredOutput")}
+                  hint={t("modelSettingsStructuredOutputHint")}
+                  value={current.structured_output}
+                  onChange={(next) => setDraft((prev) => (prev ? { ...prev, structured_output: next } : prev))}
+                />
+                {/* **「我们知道什么」和「你填了什么」分开说。** 不支持 json_schema 的端点上,
+                    Schema 只是个事后本地校验 —— 而用户在节点里写着 strict,完全看不出来。
+                    两次真实失败都是这么来的(字段超范围、整份 JSON 没闭合)。 */}
+                <p className="m-0 pl-0.5 text-xs leading-[1.45] text-muted-foreground">
+                  {knownStructured === true
+                    ? t("modelSettingsStructuredOutputKnownOn")
+                    : knownStructured === false
+                      ? t("modelSettingsStructuredOutputKnownOff")
+                      : t("modelSettingsStructuredOutputUnknown")}
+                </p>
               </div>
             )}
           </div>
