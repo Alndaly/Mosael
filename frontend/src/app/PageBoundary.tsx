@@ -50,8 +50,11 @@ class Boundary extends React.Component<Props, State> {
   render(): React.ReactNode {
     if (!this.state.error) return this.props.children;
     return (
-      <div role="alert" className="grid min-h-0 place-items-center p-8">
-        <div className="grid max-w-md justify-items-center gap-3 text-center">
+      /* **撑满这一页再居中。** 此前是 `grid min-h-0 place-items-center` —— `place-items-center`
+         只在格子里居中,而格子本身没有高度,于是整块缩成内容高、贴在页面顶上。和 LoadingState
+         同一套:自己撑满可用高度,内容用 `m-auto` 落在正中。 */
+      <div role="alert" className="flex h-full min-h-0 w-full flex-col overflow-auto p-8">
+        <div className="m-auto grid max-w-md shrink-0 justify-items-center gap-3 text-center">
           <p className="m-0 text-ui-md text-foreground">{this.props.label}</p>
           {/* 原始信息留着 —— 它是"这一块没取到"和"这一页自己崩了"的唯一区别。 */}
           <p className="m-0 text-ui-xs text-muted-foreground [overflow-wrap:anywhere]">

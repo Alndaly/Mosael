@@ -13,6 +13,8 @@ import { cloneSceneForExport } from "./sceneExport";
 import React from "react";
 import * as THREE from "three";
 
+import { SceneAxisGizmo } from "./SceneAxisGizmo";
+import { axisVector, type AxisName, type Orientation } from "./axisGizmo";
 import { createInfiniteGrid } from "./infiniteGrid";
 import { geometryObject } from "./sceneMeshes";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -135,6 +137,23 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       handle: ViewportHandle;
     } | null>(null);
     const [fatal, setFatal] = React.useState("");
+    /** 角上那个坐标轴控件和渲染循环之间的两根线。**用 ref 不用 state** —— 朝向每帧都在变,
+     *  而这两个东西本身从头到尾是同一个。 */
+    const orientationListener = React.useRef<((o: Orientation) => void) | null>(null);
+    const lookAlongAxis = React.useRef<((axis: AxisName, sign: 1 | -1) => void) | null>(null);
+    const subscribeOrientation = React.useCallback(
+      (listener: (o: Orientation) => void) => {
+        orientationListener.current = listener;
+        return () => {
+          orientationListener.current = null;
+        };
+      },
+      [],
+    );
+    const pickAxis = React.useCallback(
+      (axis: AxisName, sign: 1 | -1) => lookAlongAxis.current?.(axis, sign),
+      [],
+    );
     const [inset, setInset] = React.useState({
       width: 0,
       height: 0,
@@ -462,6 +481,37 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         }
       });
       resize.observe(element);
+      /** 把相机朝向交给角上那个坐标轴控件。**只在真的转了才通知** —— 每帧 setState 会让那棵
+       *  小树每秒重渲六十次,而绝大多数帧里相机根本没动。阈值取一个肉眼看不出的角度。 */
+      const lastOrientation = new THREE.Quaternion();
+      const spareOrientation = new THREE.Quaternion();
+      let orientationPrimed = false;
+      function publishOrientation(camera: THREE.Camera) {
+        const listener = orientationListener.current;
+        if (!listener) return;
+        camera.getWorldQuaternion(spareOrientation);
+        // 点积接近 ±1 就是"几乎没转"。取绝对值:四元数的 q 和 -q 是同一个朝向。
+        if (orientationPrimed && Math.abs(spareOrientation.dot(lastOrientation)) > 0.99999) return;
+        orientationPrimed = true;
+        lastOrientation.copy(spareOrientation);
+        listener([spareOrientation.x, spareOrientation.y, spareOrientation.z, spareOrientation.w]);
+      }
+      /** 点了轴柄:站到目标的那一侧,**距离不变**。和工具栏「视角」里那几档同一条路。 */
+      lookAlongAxis.current = (axis: AxisName, sign: 1 | -1) => {
+        const observing = !!latest.current.observing;
+        const controls = observing ? observerOrbit : orbit;
+        const camera = observing ? observerCamera : editorCamera;
+        const target = controls.target.clone();
+        const distance = Math.max(5, camera.position.distanceTo(target));
+        const [x, y, z] = axisVector(axis, sign);
+        const direction = new THREE.Vector3(x, y, z);
+        // 正对上/下看时相机的上方向退化(「哪边是上」没有定义,画面会莫名其妙地转),
+        // 给一点偏置把它定住 —— 和工具栏的「顶视」用的是同一个办法。
+        if (Math.abs(y) > 0.999) direction.z += 0.001;
+        controls.update();
+        camera.position.copy(target).addScaledVector(direction.normalize(), distance);
+        controls.update();
+      };
       let lastPath = "",
         observedShot = "";
       function frameOverview(
@@ -590,6 +640,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           const viewing = p.observing ? observerCamera : editorCamera;
           // 换档和淡出都按"相机离地多远"算,所以每帧都要交给它当前的机位。
           grid.update(viewing);
+          publishOrientation(viewing);
           renderer.render(scene, viewing);
           if (p.observing) {
             const box = cameraInset(w, h, aspect);
@@ -943,6 +994,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
     }, [props.shot.aspect]);
     return (
       <div className="scene-viewport" ref={host} aria-label="3D 场景视窗">
+        {/* 出片预览时不显示:那一格画的是成片,控件属于编辑器。 */}
+        {!props.preview && !fatal && (
+          <SceneAxisGizmo subscribe={subscribeOrientation} onPick={pickAxis} />
+        )}
         {props.observing && !fatal && (
           <>
             <div className="scene-motion-legend">
