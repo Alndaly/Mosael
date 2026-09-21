@@ -329,7 +329,11 @@ def _chat_gateway(
 #: OpenAI 兼容接口的硬性要求:用 `response_format: json_object` 时,**提示词里必须出现
 #: "json" 这个词**,否则直接 400。deepseek、月之暗面等跟着 OpenAI 的实现都照做。
 _JSON_MODE_HINT = "Respond with a single valid JSON object."
-_JSON_FALLBACK_MARKER = "Mosael response-format compatibility contract"
+#: 「这条消息里已经带着 JSON 契约了」。降级路径据此不再另贴一份 —— 工作流的 LLM 节点在发请求
+#: 之前就会把 Schema 贴进去(见 workflows/executors/ai._schema_for_prompt),两边各贴一次的话,
+#: 同一份 Schema 会在一次请求里出现两遍,白烧几千 token。
+JSON_CONTRACT_MARKER = "Mosael response-format compatibility contract"
+_JSON_FALLBACK_MARKER = JSON_CONTRACT_MARKER
 
 
 def _satisfy_json_mode(messages: list[dict[str, Any]], response_format: Any) -> list[dict[str, Any]]:

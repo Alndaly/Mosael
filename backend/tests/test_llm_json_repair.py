@@ -115,11 +115,17 @@ def test_Schema_要贴给模型看() -> None:
     assert "转义" in text
 
 
-def test_不要_JSON_的那一轮不贴() -> None:
+def test_只有纯文本那一轮不贴() -> None:
+    """判据是**这一轮要不要 JSON**,不是"有没有 Schema"。
+
+    没有 Schema 时形状约束不了,但「必须是一个 JSON 对象」仍然要说 —— 而且那句话本身就带上了
+    DeepSeek 要找的那个 "json"(见上一条)。此前这里返回空串,于是那种节点必然 400。
+    """
     from app.domain.workflows.executors.ai import _schema_for_prompt
 
     assert _schema_for_prompt({"response_format": "text"}) == ""
-    assert _schema_for_prompt({"response_format": "json_schema"}) == "", "没有 schema 就没什么可贴的"
+    assert _schema_for_prompt({}) == ""
+    assert _schema_for_prompt({"response_format": "json_schema"}) != ""
 
 
 def test_json_object_也贴() -> None:
@@ -127,3 +133,35 @@ def test_json_object_也贴() -> None:
     from app.domain.workflows.executors.ai import _schema_for_prompt
 
     assert '"minimum":2' in _schema_for_prompt({**CONFIG, "response_format": "json_object"})
+
+
+def test_没有_Schema_的_json_object_也要带上_json_这个词() -> None:
+    """DeepSeek 在 `response_format: json_object` 下硬性要求提示词里出现 "json",否则直接 400:
+    `Prompt must contain the word 'json' in some form`。
+
+    没给 Schema 的节点此前什么都不贴 —— 那条请求必然失败,用户的任务记录里就躺着这一条。
+    """
+    from app.domain.workflows.executors.ai import _schema_for_prompt
+
+    text = _schema_for_prompt({"response_format": "json_object"})
+    assert text, "没有 Schema 也要贴一句,否则这条请求在 DeepSeek 上必然 400"
+    assert "json" in text.lower()
+
+
+def test_契约只贴一次() -> None:
+    """网关降级时也会贴一份契约。两边各贴一次的话,同一份 Schema 会在一次请求里出现两遍 ——
+    storyboard 那种 4KB 的 Schema,白烧上千 token。靠同一个标记互相认出来。"""
+    from app.domain.ai_chat import JSON_CONTRACT_MARKER, _downgrade_response_format_payload
+    from app.domain.workflows.executors.ai import _schema_for_prompt
+
+    contract = _schema_for_prompt(CONFIG)
+    assert contract.startswith(JSON_CONTRACT_MARKER)
+    payload = {
+        "messages": [{"role": "user", "content": "做点什么"}, {"role": "user", "content": contract}],
+        "response_format": {"type": "json_schema", "json_schema": {"schema": SCHEMA}},
+    }
+    downgraded = _downgrade_response_format_payload(payload)
+    assert downgraded is not None
+    #: 降级发生了(response_format 换档),但没有再多插一条契约。
+    assert downgraded["response_format"] == {"type": "json_object"}
+    assert len(downgraded["messages"]) == len(payload["messages"])

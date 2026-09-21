@@ -170,21 +170,37 @@ def _parse_json_response(text: str) -> Any:
 
 
 def _schema_for_prompt(config: dict[str, Any]) -> str:
-    """要贴给模型看的那份 Schema;这一轮不要 JSON 就返回空串。
+    """这一轮要贴给模型看的 JSON 约定;不要 JSON 就返回空串。
 
-    `json_object` 也贴:那一档只保证"是合法 JSON",字段形状仍然全靠模型自觉。
+    两件事都在这里办:
+
+    1. **把 Schema 正文给它看。** 它此前只进 `payload.response_format`,而那一项能不能生效完全
+       看供应商 —— 不生效时模型收到的是一句"要符合 Schema",而那个 Schema 它从来没见过。
+    2. **让请求里一定出现 "json" 这个词。** DeepSeek 在 `response_format: json_object` 下硬性
+       要求提示词里带这个词,否则直接 400:`Prompt must contain the word 'json' in some form`。
+       没有 Schema 的 json_object 节点此前什么都不贴,于是那条请求必然失败 —— 用户的任务记录里
+       就躺着这一条。所以没有 Schema 时也要贴一句短的。
+
+    开头带上网关那条兼容标记:降级路径(`ai_chat._downgrade_response_format_payload`)见到它就
+    不再另贴一份契约,免得同一份 Schema 在一次请求里出现两遍。
     """
+    from app.domain.ai_chat import JSON_CONTRACT_MARKER
+
     mode = str(config.get("response_format") or "text")
     if mode not in {"json_schema", "json_object"}:
         return ""
+    common = (
+        "不要 Markdown 围栏、不要任何解释文字,不要把数组或对象包进字符串里,字符串内部的引号要转义。"
+    )
     schema = config.get("json_schema")
     if not isinstance(schema, dict) or not schema:
-        return ""
+        # json_object 但没给 Schema:形状约束不了,但"必须是一个 JSON 对象"仍要说,
+        # 而且这句话本身就带上了那个供应商要找的 "json"。
+        return f"{JSON_CONTRACT_MARKER}\n你这一轮的回答必须是**一个** JSON 对象(JSON object)。{common}"
     body = json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
     return (
-        "你这一轮的回答必须是**一个**符合下面这份 JSON Schema 的 JSON 对象,"
-        "不要 Markdown 围栏、不要任何解释文字,不要把数组或对象包进字符串里,"
-        "字符串内部的引号要转义:\n" + body
+        f"{JSON_CONTRACT_MARKER}\n"
+        f"你这一轮的回答必须是**一个**符合下面这份 JSON Schema 的 JSON 对象。{common}\n{body}"
     )
 
 
