@@ -116,7 +116,13 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn("px-2 py-1.5 text-sm font-semibold", className)}
+    /* **分组标题要一眼看出「这不是能点的那一行」。** 此前它和选项同字号、还更粗,唯一的区别
+       是没有勾选位 —— 于是一列里粗一行细一行,读起来像两种选项而不是"一组的名字"。
+       小一号 + 次要色 + 字距,是这套界面里"标签"一贯的样子(和设置页的分区标题同一档)。 */
+    className={cn(
+      "px-2 pb-1 pt-2.5 text-ui-2xs font-medium uppercase tracking-[0.04em] text-muted-foreground",
+      className,
+    )}
     {...props}
   />
 ))

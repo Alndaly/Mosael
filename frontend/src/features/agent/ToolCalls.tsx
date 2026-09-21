@@ -9,7 +9,7 @@ import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-p
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
-import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
+import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -397,7 +397,9 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
 export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
   if (!tools || tools.length === 0) return null;
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1 self-stretch">
+    // 字号挂在容器上:行的根是 <button>,而全局那条 `button { font: inherit }` 会把根上的
+    // 字号吃掉(同一段坑见 agentRow.ts 里 AGENT_ROW_TEXT_CLASS 的说明)。
+    <div className={cn("flex w-full min-w-0 flex-col gap-1 self-stretch", AGENT_ROW_TEXT_CLASS)}>
       {tools.map((tool) => (
         <ToolCallCard key={tool.id} tool={tool} />
       ))}

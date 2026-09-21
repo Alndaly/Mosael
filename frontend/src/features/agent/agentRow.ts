@@ -20,8 +20,24 @@
  * 免得下次有人只看见"gap 不一致"就把它抹平(我就干过一次)。
  */
 
+/**
+ * **时间线这一栏的字号。**
+ *
+ * 助手的正文是 `text-ui-md`(16px),而工具步骤、思考、结果卡说的是"机器那一侧发生了什么" ——
+ * 它们该比正文小一档,否则一条工具返回的清单会比回答本身还抢眼(实测:`list_scenes` 返回的
+ * 七个场景名,每行都和正文一样大,整段读起来像正文被一列文件名打断了)。
+ *
+ * 此前没有任何地方写下这个字号,于是它**从外层继承**成了 16px。文件开头那段说的「画布助手那句
+ * 『智能体思考中…』字号从外层继承成了 text-ui-md」是同一个毛病的另一处 —— 那次是单独给那一行
+ * 补了字号。补一处、漏一处,所以这次挂在"一行"这个概念上:谁用这几个类,谁就是这一栏里的一行。
+ *
+ * **只定这一档。** 行内更次要的东西(耗时、标签、代码块)各自显式写 `text-ui-xs` / `2xs`,
+ * 层级仍在;没写的就跟这一档,而不是跟正文。
+ */
+export const AGENT_ROW_TEXT_CLASS = "text-ui-sm";
+
 /** 行外框。配 `<Marker className={AGENT_ROW_CLASS}>` 用。 */
-export const AGENT_ROW_CLASS = "gap-1 rounded-md px-1.5 py-1";
+export const AGENT_ROW_CLASS = "gap-1 rounded-md px-1.5 py-1 text-ui-sm";
 
 /**
  * 行内图标。**显式给 size-3**:Marker 会把没有 size- 类的 svg 统一撑到 16px,
@@ -30,7 +46,7 @@ export const AGENT_ROW_CLASS = "gap-1 rounded-md px-1.5 py-1";
 export const AGENT_ROW_ICON_CLASS = "size-3";
 
 /** 展开的明细:挂在一条从图标中线垂下来的竖线上,正文和标题同一个起点。 */
-export const AGENT_ROW_BODY_CLASS = "ml-[13px] border-l border-border pl-3";
+export const AGENT_ROW_BODY_CLASS = "ml-[13px] border-l border-border pl-3 text-ui-sm";
 
 /**
  * 正文块的外框,让它和标记行**在纵向上算同一种块**。

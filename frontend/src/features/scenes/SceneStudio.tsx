@@ -36,6 +36,8 @@ import {
   Maximize,
   Minimize,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ChevronFirst,
   ChevronLast,
   HelpCircle,
@@ -347,6 +349,12 @@ function SceneEditor({
     })),
     current = React.useRef(draft);
   current.current = draft;
+  /** 有孩子的那些物体(组,以及任何被当成父级用的东西)—— 一键收拢要作用在它们身上。 */
+  const groupIds = React.useMemo(
+    () => objectTree(draft.content).filter((row) => row.children > 0).map((row) => row.object.id),
+    [draft.content],
+  );
+  const allCollapsed = groupIds.length > 0 && groupIds.every((id) => collapsed.has(id));
   const revision = React.useRef(initial.revision),
     saved = React.useRef(JSON.stringify(draft)),
     [error, setError] = React.useState(""),
@@ -1467,6 +1475,21 @@ function SceneEditor({
                   count={draft.content.objects.length}
                   actions={
                     <>
+                    {/* **一键收拢/展开。** 79 个物体摊平是一屏翻不完的列表,而一个个点箭头收
+                        同样难受。按钮的语义跟着当前状态走:还有组开着就是「全部收起」,全收起了
+                        才变成「全部展开」—— 一个按钮两种意思,但任何时刻它只表示其中一种,
+                        而那一种正是你此刻想要的。没有组时不出现(它没有可操作的对象)。 */}
+                    {groupIds.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title={allCollapsed ? "展开全部分组" : "收起全部分组"}
+                        aria-label={allCollapsed ? "展开全部分组" : "收起全部分组"}
+                        onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groupIds))}
+                      >
+                        {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
+                      </Button>
+                    )}
                     {/* 用 SearchableSelect 而不是手写弹层:物体种类只会越来越多,而手写那个
                         既不分组、又没有高度上限(十几项就把屏幕撑满)、也搜不了。这颗控件
                         本来就是给"选项多到普通 Select 会溢出屏幕"准备的。 */}
