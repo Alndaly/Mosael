@@ -48,6 +48,7 @@ import { InlineQuestions } from "@/features/agent/InlineQuestions";
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
@@ -517,6 +518,8 @@ export function CanvasAgentChat({
                 compaction?: CompactionInfo;
                 /** 用户消息:编辑器原样的文档,气泡照它把引用画回胶囊。 */
                 body_document?: JSONContent;
+                /** 用户消息:这条是一次**选择的回执**,问的什么、选的哪一项都在里面。 */
+                answers?: AnsweredChoice;
               }
             | null;
           const duration = payload?.usage?.duration_seconds;
@@ -540,13 +543,21 @@ export function CanvasAgentChat({
                 </div>
               )}
               {message.role === "assistant" ? (
-                message.error ? (
-                  <AgentErrorCard content={message.content} error={message.error} />
-                ) : (
+                /* 和 ChatBubble 同一条:过程在上、失败原因在下,而不是二选一。 */
+                <>
                   <AgentTurnContent timeline={payload?.timeline} />
-                )
+                  {message.error && (
+                    <div className={payload?.timeline?.length ? "mt-2" : undefined}>
+                      <AgentErrorCard content={message.content} error={message.error} />
+                    </div>
+                  )}
+                </>
               ) : (
-                <UserMessageContent content={message.content} document={payload?.body_document} />
+                payload?.answers ? (
+                  <AnsweredChoiceCard answers={payload.answers} />
+                ) : (
+                  <UserMessageContent content={message.content} document={payload?.body_document} />
+                )
               )}
               {message.role === "assistant" && (
                 <MessageUsageFooter

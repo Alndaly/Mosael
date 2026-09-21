@@ -2301,6 +2301,8 @@ export const messages = {
     wfPropsNone: "这个工作区还没有 3D 模型。在工作台里导入,或在 Blender 里建好后收进来。",
     wfPropsAll: "一个都不勾 = 这个工作区里的全部模型",
     wfPropsPicked: "只准用勾中的这 {n} 份",
+    agentChoiceAnswered: "你在选择卡上选了",
+    agentChoiceDismissed: "你跳过了这几个问题,让它自己判断",
     jobCancel: "取消任务",
     //: 取消是**节点粒度**的:正在跑的那一步会跑完。说清楚,否则点了之后进度条还在动,
     //: 看起来像没生效。
@@ -4743,6 +4745,8 @@ export const messages = {
     wfPropsNone: "No 3D models in this workspace yet. Import one in the workbench, or model it in Blender and bring it back.",
     wfPropsAll: "Nothing ticked means every model in this workspace",
     wfPropsPicked: "Only these {n} may be placed",
+    agentChoiceAnswered: "You picked",
+    agentChoiceDismissed: "You skipped these questions and let it decide",
     jobCancel: "Cancel task",
     jobCancelHint: "Stops after the current step finishes; what it already produced is kept",
     wfStop: "Stop run",

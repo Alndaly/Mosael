@@ -159,7 +159,22 @@ def deliver_to_session(db: Session, row: AgentQuestion, user: User) -> None:
     session = db.get(AgentSession, row.session_id)
     if session is None:
         return
-    host.post_user_message(db, session, _as_user_words(row), user, steer_if_running=True)
+    # 正文要像用户自己说的话(模型读的是它),而**结构另存一份**:一次选择在对话里不该退化成
+    # 一段自述 —— 界面据此画回「问的是什么、选的是哪一项」,而不是一行「我选好了:…」。
+    host.post_user_message(db, session, _as_user_words(row), user,
+                           answers=_answer_record(row), steer_if_running=True)
+
+
+def _answer_record(row: AgentQuestion) -> dict | None:
+    """这次作答的结构:问了什么、选了哪几项、是不是跳过了。界面画卡片用它。"""
+    if row.status == "dismissed":
+        return {"dismissed": True}
+    picked = row.answers or {}
+    if not picked:
+        return None
+    return {"picked": [{"question": question,
+                        "choices": list(one) if isinstance(one, list) else [one]}
+                       for question, one in picked.items()]}
 
 
 def _as_user_words(row: AgentQuestion) -> str:

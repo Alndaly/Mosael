@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 
 import { CompactionNotice, type CompactionInfo } from "@/features/agent/ContextMeter";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
 import type { JSONContent } from "@tiptap/react";
 
@@ -76,6 +77,8 @@ export function ChatBubble({
         body_document?: JSONContent;
         /** notify_agent_session 发来的:发起会话的 id(结构化来源,不靠信封文案)。 */
         from_agent_session?: string;
+        /** 用户消息:这条是一次**选择的回执**,问的什么、选的哪一项都在里面。 */
+        answers?: AnsweredChoice;
       }
     | null;
   // 手动压缩留下的是一条 role=system、内容为空的消息,只承载压缩标记。
@@ -111,11 +114,17 @@ export function ChatBubble({
         </div>
       )}
       {message.role === "assistant" ? (
-        message.error ? (
-          <AgentErrorCard content={message.content} error={message.error} />
-        ) : (
+        /* **失败的那一轮,已经做过的事照样要看得见。** 此前这里是二选一:只要带 error 就
+           只画错误卡 —— 一次跑了三分钟、调了十来次工具的对话,最后一步断线,用户看到的就只剩
+           一句「执行失败」。过程在上、失败原因在下,顺序本身就说明了"跑到哪儿断的"。 */
+        <>
           <AgentTurnContent timeline={payload?.timeline} />
-        )
+          {message.error && (
+            <div className={payload?.timeline?.length ? "mt-2" : undefined}>
+              <AgentErrorCard content={message.content} error={message.error} />
+            </div>
+          )}
+        </>
       ) : (
         <div
           className={
@@ -126,7 +135,12 @@ export function ChatBubble({
         >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}
           <div className={fromAgent ? "whitespace-pre-wrap" : undefined}>
-            <UserMessageContent content={message.content} document={payload?.body_document} mediaGallery={mediaGallery} />
+            {/* 一次选择在对话里不该退化成一段自述:有结构就照结构画,没有(老消息)才退回正文。 */}
+            {payload?.answers ? (
+              <AnsweredChoiceCard answers={payload.answers} />
+            ) : (
+              <UserMessageContent content={message.content} document={payload?.body_document} mediaGallery={mediaGallery} />
+            )}
           </div>
         </div>
       )}

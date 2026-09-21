@@ -347,9 +347,14 @@ def post_user_message(
     body_document: dict | None = None,
     origin_session_id: str | None = None,
     origin_job_id: str | None = None,
+    answers: dict | None = None,
     steer_if_running: bool = False,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread.
+
+    `answers` 也是给回答用的:{问题: 选中项}。正文照旧要像用户自己说的话(模型读的是它),
+    但**一次选择不该在对话里退化成一段自述** —— 结构留在这里,界面据此画回「问的是什么、
+    选的是哪一项」,而不是一行「我选好了:…」。
 
     `steer_if_running` 是给**回答**用的:选择卡的答案、跳过的回执 —— 这条消息是对模型自己
     提的那个问题的回复,不是"用户碰巧提早打的下一句"。排队的默认语义在那里是错的:模型
@@ -384,6 +389,7 @@ def post_user_message(
                     **({"references": references} if references else {}),
                     **({"body_document": body_document} if body_document else {}),
                     **({"context": context.strip()} if context and context.strip() else {}),
+                    **({"answers": answers} if answers else {}),
                     **origin_marker,
                 },
             )
@@ -410,6 +416,7 @@ def post_user_message(
                 **({"references": references} if references else {}),
                 **({"body_document": body_document} if body_document else {}),
                 **({"context": context.strip()} if context and context.strip() else {}),
+                **({"answers": answers} if answers else {}),
                 **origin_marker,
             },
         )
@@ -435,6 +442,7 @@ def post_user_message(
             **({"references": references} if references else {}),
             **({"body_document": body_document} if body_document else {}),
             **({"context": context.strip()} if context and context.strip() else {}),
+            **({"answers": answers} if answers else {}),
             **origin_marker,
         },
     )
@@ -478,6 +486,20 @@ def _start_turn(session_id: str, prompt: str, token: str) -> None:
     threading.Thread(
         target=_run_turn_thread, args=(session_id, prompt, token), daemon=True, name=TURN_THREAD_NAME
     ).start()
+
+
+def _failed_turn_timeline(session_id: str) -> dict:
+    """失败那一轮已经发生过的过程,整理成和成功轮同一种形状。
+
+    **取不到也不能让收尾崩掉** —— 这里已经在 except 里了,再抛一次就没人写那条失败消息,
+    会话会永远卡在 running。所以整段兜住,取不到就当这一轮没有过程。
+    """
+    try:
+        timeline = _timeline_for_payload(get_stream_state(session_id), "")
+    except Exception:  # noqa: BLE001 —— 收尾路径:有记录更好,没有也不能连累错误消息落库
+        logger.exception("failed to capture the timeline of a failed turn")
+        return {}
+    return {"timeline": timeline} if timeline else {}
 
 
 def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
@@ -606,6 +628,11 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 error=str(exc)[:800],
                 payload={
                     "usage": usage,
+                    # **失败的那一轮,过程照样要留下来。** 上面那段已经说了失败点之前的工具调用
+                    # 真的发生过 —— 记忆回存了,而给人看的记录此前没有:一次跑了三分钟、调了十来次
+                    # 工具的对话,只要最后一步断线,用户看到的就只剩一句「执行失败」。模型知道自己
+                    # 做过什么,用户不知道,这是最糟的一种不对称。
+                    **_failed_turn_timeline(session_id),
                     **({"context": exc.context} if getattr(exc, "context", None) else {}),
                 },
             )
@@ -637,7 +664,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 role="assistant",
                 content="智能体执行异常。",
                 error=str(exc)[:800],
-                payload={"usage": usage},
+                payload={"usage": usage, **_failed_turn_timeline(session_id)},
             )
             db.add(assistant_message)
             db.flush()

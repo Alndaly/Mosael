@@ -219,3 +219,47 @@ class Test接口:
         res = client.post(f"/api/agent/questions/{qid}/answer", json={"answers": {"这段成片发到哪儿?": ["B站"]}})
         assert res.status_code == 200 and res.json()["status"] == "answered"
         assert client.get(f"/api/agent/questions?session_id={sid}").json() == []
+
+
+class Test答完的那条记录:
+    """选择卡答完就消失,所以要在对话里留一条痕迹 —— 这一点原本就是对的。
+
+    错的是留下来的形状:正文被拼成一句「我选好了:· 问题:答案」当**用户消息**发回去,于是
+    一次选择在对话里退化成一段你自己说的话,问题和选项的结构全丢了,看起来还像是你手打的。
+    正文照留(模型读的是它),结构另存一份,界面据此画回「问的是什么、选的是哪一项」。
+    """
+
+    def _answered(self, picked: dict) -> AgentQuestion:
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        with SessionLocal() as db:
+            row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
+            q.answer(db, row, picked)
+            db.expunge(row)
+            return row
+
+    def test_结构和正文各存一份(self) -> None:
+        row = self._answered({"这段成片发到哪儿?": ["B站"]})
+        record = q._answer_record(row)
+        assert record == {"picked": [{"question": "这段成片发到哪儿?", "choices": ["B站"]}]}
+        # 正文仍然像用户自己说的话 —— 模型读的是它。
+        assert "我选好了" in q._as_user_words(row)
+
+    def test_跳过也留得下来(self) -> None:
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        with SessionLocal() as db:
+            row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
+            q.dismiss(db, row)
+            assert q._answer_record(row) == {"dismissed": True}
+
+    def test_一个都没选时不留空结构(self) -> None:
+        """没有内容的结构会让界面画出一张空卡 —— 那比退回正文更糟。"""
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
+        with SessionLocal() as db:
+            row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
+            assert q._answer_record(row) is None

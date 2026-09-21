@@ -653,3 +653,51 @@ def test_落库时subtool不被丢掉() -> None:
     kinds = [item["type"] for item in timeline]
     assert kinds == ["tool", "subtool", "text"], kinds
     assert timeline[1]["parent_id"] == "p1"
+
+
+def test_失败的一轮把已经做过的事留在记录里(monkeypatch) -> None:
+    """一次跑了三分钟、调了十来次工具的对话,只要最后一步断线,用户看到的就只剩一句
+    「执行失败」—— 而那几次工具调用**真的发生过**,它们改过的东西留在库里。
+
+    旁边那段注释早就写着"失败也回存记忆":模型知道自己做过什么,而给人看的记录没有。
+    这种不对称是最糟的一种 —— 用户以为什么都没发生,于是从头再来一遍。
+    """
+    def failing_run_turn(*args, **kwargs):
+        kwargs["on_delta"]("我先看了八个房间的白模。")
+        kwargs["on_tool"]({"type": "tool_start", "toolCallId": "t1", "name": "view_scene",
+                           "args": {"views": ["overview"]}})
+        kwargs["on_tool"]({"type": "tool_end", "toolCallId": "t1", "result": "ok", "isError": False})
+        raise adapters.AdapterError("Connection error.", human="智能体执行失败，请稍后重试。")
+
+    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    client = fresh_client()
+    _configured(client)
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "分析一下建模情况"})
+    assert host.wait_for_idle_turns()
+
+    failed = client.get(f"/api/agent/sessions/{session['id']}/messages").json()[-1]
+    assert failed["error"] == "Connection error."
+    timeline = failed["payload"]["timeline"]
+    kinds = [item["type"] for item in timeline]
+    assert "tool" in kinds, f"工具调用没留下来:{timeline}"
+    assert any(item.get("type") == "text" and "八个房间" in item.get("text", "") for item in timeline), \
+        f"已经吐出来的正文没留下来:{timeline}"
+
+
+def test_没有过程的失败不会凭空多出一条空记录(monkeypatch) -> None:
+    """失败在第一步(连供应商都没解析出来)时,timeline 该是没有,而不是一条空的。"""
+    def failing_run_turn(*args, **kwargs):
+        raise adapters.AdapterError("boom")
+
+    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    client = fresh_client()
+    _configured(client)
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
+    assert host.wait_for_idle_turns()
+
+    failed = client.get(f"/api/agent/sessions/{session['id']}/messages").json()[-1]
+    assert "timeline" not in failed["payload"]
