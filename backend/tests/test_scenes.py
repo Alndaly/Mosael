@@ -61,6 +61,72 @@ def test_model_import_is_self_contained_and_scene_scoped():
     assert r.status_code == 422
 
 
+def _glb_bytes(tmp_path, **params):
+    """一份真 GLB —— 用后端自己的写入器造,读的那一侧和写的那一侧对表。"""
+    from app.domain.scene_render import find_shot
+    from app.domain.scene_render.gltf import write_glb
+    from app.domain.scene_types import SceneContent
+
+    content = SceneContent.model_validate({
+        "objects": [{"id": "b", "kind": "box", "color": "#ff2200", "parameters": params or {"width": 2, "height": 2, "depth": 2}},
+                    {"id": "cam", "kind": "camera", "position": [0, 2, 6], "target": [0, 1, 0]}],
+        "shots": [{"id": "s", "camera_id": "cam", "duration": 2}],
+    })
+    target = tmp_path / "prop.glb"
+    write_glb(content, find_shot(content, "s"), target)
+    return target.read_bytes()
+
+
+def test_导入的模型真的出现在白模画面里(tmp_path):
+    """此前它在工作台(three.js)里看得见,而后端渲出来的参考帧里**根本不存在** ——
+    两边都不报错,只是少了一块。少一件道具必须要么画上,要么说出来。"""
+    import base64
+
+    import numpy as np
+    from PIL import Image
+
+    c, ws, scene = setup_scene()
+    mid = c.post(f"/api/scenes/{scene['id']}/models", data={'workspace_id': ws},
+                 files={'file': ('prop.glb', _glb_bytes(tmp_path), 'model/gltf-binary')}).json()['id']
+    camera = next(o for o in scene['content']['objects'] if o['kind'] == 'camera')
+    scene['content']['objects'] = [camera, {'id': 'prop', 'kind': 'model', 'model_id': mid, 'position': [0, 0, 0]}]
+    r = c.patch('/api/scenes/' + scene['id'], json={'workspace_id': ws, 'name': 'Prop', 'base_revision': 1,
+                                                    'content': scene['content']})
+    assert r.status_code == 200, r.text
+
+    out = c.get(f"/api/scenes/{scene['id']}/view", params={'workspace_id': ws, 'views': ['shot']}).json()
+    assert out['skipped_models'] == 0 and out['model_warnings'] == [], out
+    pixels = np.asarray(Image.open(__import__('io').BytesIO(base64.b64decode(out['images'][0]['data'])))).astype(int)
+    assert (pixels[..., 0] > pixels[..., 2] + 40).any(), "那个红箱子该在画面里"
+
+
+def test_读不了的模型不是悄悄少一块_而是说清楚为什么(tmp_path):
+    import json as _json
+    import struct as _struct
+
+    c, ws, scene = setup_scene()
+    # 把一份正常 GLB 改成声明了 Draco 压缩 —— 解不开,但必须说出解不开的是哪一件、为什么。
+    raw = _glb_bytes(tmp_path)
+    length, _ = _struct.unpack_from('<II', raw, 12)
+    doc = _json.loads(raw[20:20 + length].decode())
+    doc['extensionsRequired'] = ['KHR_draco_mesh_compression']
+    payload = _json.dumps(doc, separators=(',', ':')).encode()
+    payload += b' ' * (-len(payload) % 4)
+    rest = raw[20 + length:]
+    patched = (_struct.pack('<4sII', b'glTF', 2, 12 + 8 + len(payload) + len(rest))
+               + _struct.pack('<II', len(payload), 0x4E4F534A) + payload + rest)
+
+    mid = c.post(f"/api/scenes/{scene['id']}/models", data={'workspace_id': ws},
+                 files={'file': ('prop.glb', patched, 'model/gltf-binary')}).json()['id']
+    camera = next(o for o in scene['content']['objects'] if o['kind'] == 'camera')
+    scene['content']['objects'] = [camera, {'id': 'prop', 'kind': 'model', 'name': '压缩过的道具', 'model_id': mid}]
+    c.patch('/api/scenes/' + scene['id'], json={'workspace_id': ws, 'name': 'Prop', 'base_revision': 1,
+                                                'content': scene['content']})
+    out = c.get(f"/api/scenes/{scene['id']}/view", params={'workspace_id': ws, 'views': ['shot']}).json()
+    assert out['skipped_models'] == 1
+    assert len(out['model_warnings']) == 1 and 'Draco' in out['model_warnings'][0], out['model_warnings']
+
+
 def test_agent_operations_merge_and_delete_hierarchy_atomically():
     c, ws, scene = setup_scene()
     path = f"/api/scenes/{scene['id']}/operations"

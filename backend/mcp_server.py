@@ -1341,8 +1341,10 @@ def view_scene(scene_id: str, views: list[str] | None = None, shot_id: str = "",
     views (max 4): 'shot' = what the shot's camera sees at `time` seconds (composition);
     'overview' = the whole scene from a high 3/4 angle; 'top' = plan view (layout, paths);
     'front' / 'side' = elevations (heights, stacking). Default ['shot', 'overview'].
-    shot_id picks the shot (default: the first). Graybox only: each object in its own flat color;
-    imported models are not drawn (skipped_models counts them).
+    shot_id picks the shot (default: the first). Graybox only: each object in its own flat color.
+    Imported models ARE drawn, using their own base colors. A model that could not be drawn (Draco
+    compression, over the triangle budget, missing file) is counted in skipped_models and explained
+    in model_warnings — read those instead of assuming the frame is complete.
     """
     data = _get(f"/api/scenes/{scene_id}/view", {
         "workspace_id": workspace_id or _default_workspace_id(),
@@ -1436,8 +1438,10 @@ def blender_import_to_scene(scene_id: str, base_revision: int, name: str = "", o
     Exports the open Blender scene — or only the named `objects` (with their children) — as GLB and
     adds it to the scene at `position` ([x,y,z] metres, Mosael is Y-up; default origin). base_revision
     must be the scene's current revision (get_scene). Returns object_id / model_id / new revision.
-    Afterwards arrange it with edit_scene and check with view_scene — note view_scene draws imported
-    models as missing (graybox renderer), so use blender_look to judge the model itself.
+    Afterwards arrange it with edit_scene and check with view_scene, which now draws imported models
+    too — so the frame shows the prop in place among the blockout. Keep the mesh under the renderer's
+    triangle budget (decimate in Blender before exporting); view_scene says so in model_warnings when
+    it cannot draw one. blender_look still judges the model itself better (Blender's own shading).
     """
     return _post(f"/api/scenes/{scene_id}/blender/agent/import", {
         "workspace_id": workspace_id or _default_workspace_id(), "base_revision": base_revision,
@@ -1452,8 +1456,9 @@ def render_scene_references(scene_id: str, shot_id: str, render: str = "stills",
     render='stills' (first + last frame, ~2 s), 'video' (the camera move as an MP4, ~30 s for 5 s),
     or 'both'. Returns first_frame_asset_id / last_frame_asset_id / video_asset_id (empty when not
     rendered), camera_move (camera language computed from the camera path — lens, height,
-    dolly/pan/orbit — ready to paste into a generation prompt) and skipped_models (imported GLB
-    models are not rendered). Rendered locally, free. Use the frames as reference_image or
+    dolly/pan/orbit — ready to paste into a generation prompt). Imported models are rendered;
+    skipped_models / model_warnings report any that could not be (compressed mesh, over the triangle
+    budget, missing file) — check them before trusting the frame. Rendered locally, free. Use the frames as reference_image or
     first_frame/last_frame, and the video as reference_video, for generate_image / generate_video."""
     return _post(f"/api/scenes/{scene_id}/shots/{shot_id}/references", {
         "workspace_id": workspace_id or _default_workspace_id(), "render": render,

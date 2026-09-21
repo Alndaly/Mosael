@@ -27,8 +27,18 @@
 (`scene3d.parity.test.ts` / `tests/test_scene_3d_parity.py`)。**改语义时先改语料**,看着两侧一起红,
 再改两侧实现。
 
-后端渲染器只渲白模(每个物体取自己的颜色做漫反射),导入的 GLB 渲不出来,`skipped_models`
-如实报数。
+后端渲染器只渲白模(每个物体取自己的颜色做漫反射)。**导入的 GLB 也画**,由
+[`scene_render/model_mesh.py`](../backend/app/domain/scene_render/model_mesh.py) 读成三角形,
+颜色跟着图元自己的材质走(一份模型里有多种材质)。
+
+这一份存在的理由:此前 `kind="model"` 的物体在后端被整个跳过 —— 工作台(three.js)里看得见,
+而自动流程渲给图像/视频模型的每一张参考帧里那件道具是空的,两边都不报错。于是"在 Blender
+里建模"那条链的产出,进不了自动成片的画面。
+
+读不了的照样如实报出来:`skipped_models` 报数量,`model_warnings` 逐条说是哪一件、为什么
+(压缩网格、数据在另一个文件里、超过 `TRIANGLE_BUDGET`)。面数有预算是因为光栅器是逐三角形的
+Python 循环(约 26 µs/三角形),一份几十万面的模型会让一次导出看起来像卡死 —— 超了就让人回
+Blender 精简一次,而不是悄悄渲下去。
 
 ## 智能体的工具
 

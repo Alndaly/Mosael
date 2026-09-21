@@ -10396,6 +10396,11 @@ export interface components {
             camera_move: string;
             /** Skipped Models */
             skipped_models: number;
+            /**
+             * Model Warnings
+             * @default []
+             */
+            model_warnings: string[];
         };
         /**
          * SceneReferenceRequest

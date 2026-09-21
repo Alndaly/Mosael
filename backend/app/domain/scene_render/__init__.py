@@ -8,7 +8,9 @@
 三个文件开头的对照说明),材质只取每个物体的颜色做漫反射。它是给图像/视频模型看"构图和
 光从哪来"的,不是成片。
 
-导入的 GLB 模型渲不出来(可能带 Draco/KTX2 压缩),`skipped_models` 如实报出来。
+导入的模型由 `model_mesh` 读成三角形,调用方**把整份模型库一次装好传进来**(渲一段视频要
+七十多帧,每帧重解一遍 GLB 是七十多倍的无用功);没传、或某一份读不了(Draco 压缩、面数超预算),
+`skipped_models` 如实报出来,不假装它在。
 """
 
 from __future__ import annotations
@@ -21,7 +23,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from app.domain.scene_render.meshes import UNSUPPORTED, meshes_for
+from app.domain.scene_render.meshes import FROM_FILE, meshes_for
+from app.domain.scene_render.model_mesh import ModelLibrary
 from app.domain.scene_render.raster import (
     Lighting,
     PointLight,
@@ -114,23 +117,32 @@ def _camera(content: SceneContent, shot: SceneShot, time: float) -> CameraPose:
     return sample_camera(camera, shot, time)
 
 
-def _triangles(content: SceneContent, world: dict[str, np.ndarray]) -> tuple[Triangles, int]:
+def _triangles(content: SceneContent, world: dict[str, np.ndarray],
+               models: ModelLibrary | None = None) -> tuple[Triangles, int]:
     objects = {obj.id: obj for obj in content.objects}
     corners, albedo, metal = [], [], []
     skipped = 0
     for obj in content.objects:
         if not _visible(obj, objects):
             continue
-        if obj.kind in UNSUPPORTED:
-            skipped += 1
-            continue
+        parts = meshes_for(obj)
+        if obj.kind in FROM_FILE:
+            # 模型的几何在文件里。库里没有它(没传库,或那一份读不了)就记一笔跳过 ——
+            # **少画一件道具必须说出来**,否则参考帧里那块是空的,而两边都不报错。
+            parts = models.get(obj.model_id) if models else []
+            if not parts:
+                skipped += 1
+                continue
         matrix = world[obj.id]
         color = hex_to_linear(obj.color)
-        for mesh in meshes_for(obj):
+        for mesh in parts:
             points = np.concatenate([mesh.vertices, np.ones((len(mesh.vertices), 1))], axis=1) @ matrix.T
             corners.append(points[:, :3][mesh.faces])
-            albedo.append(np.repeat(color[None, :], len(mesh.faces), axis=0))
-            metal.append(np.full(len(mesh.faces), obj.metalness))
+            # 图元自带颜色的(导入的模型)跟自己的,没有的跟物体 —— 见 meshes.Mesh.color。
+            tint = color if mesh.color is None else mesh.color
+            shine = obj.metalness if mesh.metalness is None else mesh.metalness
+            albedo.append(np.repeat(tint[None, :], len(mesh.faces), axis=0))
+            metal.append(np.full(len(mesh.faces), shine))
     if not corners:
         return Triangles(np.zeros((0, 3, 3)), np.zeros((0, 3)), np.zeros(0)), skipped
     return Triangles(np.concatenate(corners), np.concatenate(albedo), np.concatenate(metal)), skipped
@@ -161,10 +173,11 @@ def find_shot(content: SceneContent, shot_id: str) -> SceneShot:
     return shot
 
 
-def render_frame(content: SceneContent, shot_id: str, time: float, *, supersample: int = STILL_SUPERSAMPLE) -> RenderedFrame:
+def render_frame(content: SceneContent, shot_id: str, time: float, *, supersample: int = STILL_SUPERSAMPLE,
+                 models: ModelLibrary | None = None) -> RenderedFrame:
     """这个镜头在第 `time` 秒的白模画面。"""
     shot = find_shot(content, shot_id)
-    return _render(content, shot, time, _camera(content, shot, time), FRAME_SIZES[shot.aspect], supersample)
+    return _render(content, shot, time, _camera(content, shot, time), FRAME_SIZES[shot.aspect], supersample, models)
 
 
 #: 自由视角:不是哪个镜头的机位,而是「从哪个方向看整个场景」。给智能体改完摆位后自己检查用 ——
@@ -174,11 +187,15 @@ FREE_VIEWS = {"overview": (45.0, 35.0), "top": (0.0, 88.0), "front": (0.0, 8.0),
 FREE_VIEW_FOV = 40.0
 
 
-def free_view_camera(content: SceneContent, view: str, shot: SceneShot, time: float = 0.0) -> CameraPose:
-    """把整个场景(`shot` 第 `time` 秒的样子)装进画面的一台相机。朝向由 `FREE_VIEWS` 给,距离按包围球算。"""
+def free_view_camera(content: SceneContent, view: str, shot: SceneShot, time: float = 0.0,
+                     models: ModelLibrary | None = None) -> CameraPose:
+    """把整个场景(`shot` 第 `time` 秒的样子)装进画面的一台相机。朝向由 `FREE_VIEWS` 给,距离按包围球算。
+
+    模型库要一起传:取景按包围盒算,而导入的模型往往是场景里最大的那件东西 ——
+    不算它的话,自由视角会把它切掉一半。"""
     if view not in FREE_VIEWS:
         raise SceneRenderError(f"不认识的视角 {view},可选:{', '.join(FREE_VIEWS)}")
-    tris, _ = _triangles(content, _world_matrices(content, shot, time))
+    tris, _ = _triangles(content, _world_matrices(content, shot, time), models)
     if len(tris.corners):
         points = tris.corners.reshape(-1, 3)
         low, high = points.min(axis=0), points.max(axis=0)
@@ -196,17 +213,17 @@ def free_view_camera(content: SceneContent, view: str, shot: SceneShot, time: fl
 
 
 def render_view(content: SceneContent, view: str, *, time: float = 0.0, shot_id: str = "",
-                supersample: int = STILL_SUPERSAMPLE) -> RenderedFrame:
+                supersample: int = STILL_SUPERSAMPLE, models: ModelLibrary | None = None) -> RenderedFrame:
     """自由视角的白模画面(16:9)。`shot_id`(默认第一个镜头)只决定"此刻"物体动画走到哪 —— 不用它的机位。"""
     shot = find_shot(content, shot_id) if shot_id else content.shots[0]
-    camera = free_view_camera(content, view, shot, time)
-    return _render(content, shot, time, camera, FRAME_SIZES["16:9"], supersample)
+    camera = free_view_camera(content, view, shot, time, models)
+    return _render(content, shot, time, camera, FRAME_SIZES["16:9"], supersample, models)
 
 
 def _render(content: SceneContent, shot: SceneShot, time: float, camera: CameraPose,
-            size: tuple[int, int], supersample: int) -> RenderedFrame:
+            size: tuple[int, int], supersample: int, models: ModelLibrary | None = None) -> RenderedFrame:
     world = _world_matrices(content, shot, time)
-    tris, skipped = _triangles(content, world)
+    tris, skipped = _triangles(content, world, models)
     width, height = size
     background = np.array([int(content.background[i:i + 2], 16) / 255 for i in (1, 3, 5)])
     pixels = render(
@@ -221,7 +238,8 @@ def _render(content: SceneContent, shot: SceneShot, time: float, camera: CameraP
     return RenderedFrame(image=image, camera=camera, skipped_models=skipped)
 
 
-def render_shot_video(content: SceneContent, shot_id: str, target: Path) -> Path:
+def render_shot_video(content: SceneContent, shot_id: str, target: Path,
+                      models: ModelLibrary | None = None) -> Path:
     """整个镜头的运镜参考视频(H.264 MP4)。物体有动画的也一起动。"""
     from app.core.child_process import run_logged
     from app.core.config import settings
@@ -232,7 +250,7 @@ def render_shot_video(content: SceneContent, shot_id: str, target: Path) -> Path
     with tempfile.TemporaryDirectory(prefix="mosael-graybox-") as folder:
         for index in range(count):
             time = min(shot.duration, index / VIDEO_RENDER_FPS)
-            render_frame(content, shot_id, time, supersample=1).image.save(Path(folder) / f"{index:05d}.png")
+            render_frame(content, shot_id, time, supersample=1, models=models).image.save(Path(folder) / f"{index:05d}.png")
         target.parent.mkdir(parents=True, exist_ok=True)
         completed = run_logged(
             [

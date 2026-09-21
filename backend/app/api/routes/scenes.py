@@ -109,7 +109,7 @@ def view(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
          views: Annotated[list[str], Query()] = [], shot_id: str = "", time: float = 0.0):  # noqa: B006
     """渲几张图给智能体看。不写素材库、不落盘 —— 只读。"""
     ensure_workspace_access(db, user, workspace_id)
-    return view_scene(get_scene(db, workspace_id, scene_id), views=views, shot_id=shot_id, time=time)
+    return view_scene(db, get_scene(db, workspace_id, scene_id), views=views, shot_id=shot_id, time=time)
 
 
 @router.post("/scenes/{scene_id}/shots/{shot_id}/references", response_model=SceneReferenceOut)

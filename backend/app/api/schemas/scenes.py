@@ -48,4 +48,7 @@ class SceneReferenceOut(ApiModel):
     video_asset_id: str
     #: 从机位轨迹算出来的镜头语言(英文),可以直接拼进生成提示词。
     camera_move: str
+    #: 有几件导入模型没渲进画面(读不了、或超过面数预算)。**0 才是"都画上了"**。
     skipped_models: int
+    #: 上面那几件分别是为什么,给人看的那句。空列表 = 没有遗漏。
+    model_warnings: list[str] = []

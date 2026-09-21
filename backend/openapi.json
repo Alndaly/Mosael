@@ -28095,6 +28095,14 @@
           "skipped_models": {
             "type": "integer",
             "title": "Skipped Models"
+          },
+          "model_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Model Warnings",
+            "default": []
           }
         },
         "type": "object",

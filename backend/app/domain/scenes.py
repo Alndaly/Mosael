@@ -5,6 +5,8 @@
 调用方就得反过来 catch 再翻回自己的领域错误。状态码由边界统一翻(见 main.py 的处理器),
 与 `domain/permissions`、`domain/notes` 同构。
 """
+from __future__ import annotations
+
 import json
 import shutil
 import struct
@@ -17,7 +19,10 @@ from app.db.models import Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.domain.scene_types import SceneContent
 from app.media.paths import resolve_key, scene_model_dir, scene_model_key
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
+
+if TYPE_CHECKING:  # 渲染器带着 numpy,按这个文件一贯的做法留到函数里再导
+    from app.domain.scene_render.model_mesh import ModelLibrary
 
 
 class SceneDomainError(ValueError):
@@ -389,7 +394,41 @@ REFERENCE_RENDERS = ("stills", "video", "both")
 VIEW_LIMIT = 4
 
 
-def view_scene(scene: Scene3D, *, views: list[str], shot_id: str = "", time: float = 0.0) -> dict:
+def model_library(db: Session, scene: Scene3D, content: SceneContent) -> ModelLibrary:
+    """这个场景**用到的**导入模型的几何。渲染前装一次,整段渲染共用。
+
+    只读 content 里真的被引用的那几份:场景目录里可能还躺着换下来的旧模型,解一份没人看的
+    GLB 是白花的时间。**一个模型都没引用时连库都不查** —— 绝大多数白模场景是这一档。
+    """
+    from app.domain.scene_render.model_mesh import ModelLibrary, library_for
+
+    wanted = {obj.model_id for obj in content.objects if obj.kind == "model" and obj.model_id}
+    if not wanted:
+        return ModelLibrary()
+    rows = db.scalars(
+        select(Scene3DModel).where(Scene3DModel.scene_id == scene.id, Scene3DModel.id.in_(wanted))
+    ).all()
+    library = library_for({row.id: resolve_key(row.file_key) for row in rows if row.file_key})
+    missing = wanted - {row.id for row in rows}
+    if not missing:
+        return library
+    # 物体指着一份这个场景里没有的模型 —— 照样要说出来,否则画面里少一件道具而没人知道为什么。
+    return ModelLibrary(meshes=library.meshes,
+                        failures={**library.failures, **{one: "这个场景里找不到这份模型。" for one in missing}})
+
+
+def model_warnings(db: Session, scene: Scene3D, library: ModelLibrary) -> list[str]:
+    """读不了的那几份,说成人话(带模型的名字)。**空列表才是"都渲进去了"**。"""
+    if not library.failures:
+        return []
+    names = dict(db.execute(
+        select(Scene3DModel.id, Scene3DModel.name).where(Scene3DModel.scene_id == scene.id)
+    ).all())
+    return [f"「{names.get(model_id, model_id)}」没有渲进白模:{reason}"
+            for model_id, reason in library.failures.items()]
+
+
+def view_scene(db: Session, scene: Scene3D, *, views: list[str], shot_id: str = "", time: float = 0.0) -> dict:
     """把场景渲成几张图**给智能体看** —— 改完摆位后自己检查,而不是凭数字想象。不登记素材、不落盘。
 
     `views` 里的 `shot` 是那个镜头的机位看到的画面(构图),其余是自由视角(见
@@ -406,14 +445,15 @@ def view_scene(scene: Scene3D, *, views: list[str], shot_id: str = "", time: flo
     if unknown:
         raise SceneDomainError(f"不认识的视角 {', '.join(unknown)};可选 shot、{'、'.join(FREE_VIEWS)}")
     content = SceneContent.model_validate(scene.content)
+    library = model_library(db, scene, content)
     images, skipped = [], 0
     try:
         shot = find_shot(content, shot_id) if shot_id else content.shots[0]
         for view in wanted:
             if view == "shot":
-                frame = render_frame(content, shot.id, min(time, shot.duration), supersample=1)
+                frame = render_frame(content, shot.id, min(time, shot.duration), supersample=1, models=library)
             else:
-                frame = render_view(content, view, time=time, shot_id=shot.id, supersample=1)
+                frame = render_view(content, view, time=time, shot_id=shot.id, supersample=1, models=library)
             buffer = io.BytesIO()
             frame.image.save(buffer, "JPEG", quality=85)
             images.append({"view": view, "mime_type": "image/jpeg",
@@ -422,7 +462,7 @@ def view_scene(scene: Scene3D, *, views: list[str], shot_id: str = "", time: flo
     except SceneRenderError as exc:
         raise SceneDomainError(str(exc)) from exc
     return {"revision": scene.revision, "shot_id": shot.id, "time": time,
-            "skipped_models": skipped, "images": images}
+            "skipped_models": skipped, "model_warnings": model_warnings(db, scene, library), "images": images}
 
 
 def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render: str = "stills",
@@ -440,10 +480,11 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
     if render not in REFERENCE_RENDERS:
         raise SceneDomainError(f"render must be one of {', '.join(REFERENCE_RENDERS)}")
     content = SceneContent.model_validate(scene.content)
+    library = model_library(db, scene, content)
     try:
         shot = find_shot(content, shot_id)
-        first = render_frame(content, shot.id, 0)
-        last = render_frame(content, shot.id, shot.duration)
+        first = render_frame(content, shot.id, 0, models=library)
+        last = render_frame(content, shot.id, shot.duration, models=library)
     except SceneRenderError as exc:
         raise SceneDomainError(str(exc)) from exc
 
@@ -454,6 +495,7 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
         "video_asset_id": "",
         "camera_move": describe_camera_move(first.camera, last.camera),
         "skipped_models": first.skipped_models,
+        "model_warnings": model_warnings(db, scene, library),
     }
     with tempfile.TemporaryDirectory(prefix="mosael-graybox-") as folder:
         work = Path(folder)
@@ -471,7 +513,7 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
             out["last_frame_asset_id"] = keep(work / "last.png", f"{label} · 白模尾帧")
         if render in ("video", "both"):
             try:
-                video = render_shot_video(content, shot.id, work / "move.mp4")
+                video = render_shot_video(content, shot.id, work / "move.mp4", library)
             except SceneRenderError as exc:
                 raise SceneDomainError(str(exc)) from exc
             out["video_asset_id"] = keep(video, f"{label} · 白模运镜")

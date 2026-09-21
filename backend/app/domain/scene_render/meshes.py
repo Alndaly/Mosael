@@ -21,14 +21,20 @@ from app.domain.scene_types import SceneObject
 
 #: 这几种没有可见几何:相机不拍自己(前端标了 editorOnly),分组只是容器,灯另算光照。
 NO_GEOMETRY = {"camera", "group", "light"}
-#: 导入的模型在后端渲不出来(GLB 可能带 Draco/KTX2 压缩)。如实报出来,不假装它在。
-UNSUPPORTED = {"model"}
+#: 导入的模型不在这里:它的几何在**文件**里,而这一份是纯函数 —— 只看物体,不碰磁盘。
+#: 由 `model_mesh.ModelLibrary` 读出来,渲染器在 `_triangles` 里按 model_id 取(见那边的说明)。
+FROM_FILE = {"model"}
 
 
 @dataclass
 class Mesh:
     vertices: np.ndarray  # (n, 3)
     faces: np.ndarray  # (m, 3) int
+    #: 线性空间的基色。**None = 跟随物体自己的 color** —— 基本体都是这样,一个物体一个颜色。
+    #: 导入的模型不一样:一份 GLB 里有多种材质,颜色得跟着图元走,否则整件道具会被刷成一色。
+    color: np.ndarray | None = None
+    #: 同上。None = 跟随物体的 metalness。
+    metalness: float | None = None
 
 
 def _outward(vertices: np.ndarray, faces: np.ndarray, center: np.ndarray) -> np.ndarray:
@@ -122,7 +128,7 @@ def meshes_for(obj: SceneObject) -> list[Mesh]:
     """这个物体在它自己的坐标系里的全部几何。"""
     p = obj.parameters
     kind = obj.kind
-    if kind in NO_GEOMETRY or kind in UNSUPPORTED:
+    if kind in NO_GEOMETRY or kind in FROM_FILE:
         return []
     if kind == "box":
         return [box(p.width, p.height, p.depth)]

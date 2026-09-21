@@ -176,7 +176,8 @@ class Test自由视角给智能体自己检查:
         from app.domain.scenes import view_scene
 
         content = _scene([{"id": "b", "kind": "box"}]).model_dump(mode="json")
-        out = view_scene(SimpleNamespace(content=content, revision=3), views=[])
+        # 场景里没有导入模型,所以取模型库那一步根本不查库(见 scenes.model_library 的早返回)。
+        out = view_scene(None, SimpleNamespace(content=content, revision=3), views=[])
         assert [one["view"] for one in out["images"]] == ["shot", "overview"]
         assert out["shot_id"] == "s" and out["images"][0]["mime_type"] == "image/jpeg"
 
@@ -187,7 +188,7 @@ class Test自由视角给智能体自己检查:
 
         content = _scene([]).model_dump(mode="json")
         with pytest.raises(SceneDomainError, match="overview"):
-            view_scene(SimpleNamespace(content=content, revision=1), views=["fisheye"])
+            view_scene(None, SimpleNamespace(content=content, revision=1), views=["fisheye"])
 
 
 def test_看图工具返回的是图片块_通道上拆成文字和图片() -> None:
