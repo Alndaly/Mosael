@@ -132,12 +132,25 @@ export async function runSubagent(input: {
     }
   });
 
+  // 父轮被中止时,子智能体也要停 —— **否则这一行不接,整条链就断在这里**:
+  //
+  // 子智能体是一整个 agent 循环,没有自己的时限。它在后台跑,promise 挂在事件循环上,
+  // 于是 Node 的 `main()` 早就返回了却不退;后端 `finish()` 等不到它 →「把会话拨回 idle」
+  // 那段永远执行不到 → 界面上那个会话永远停在「思考中」。
+  //
+  // 这个参数**一直都在**:类型里声明了,pi.ts 也老老实实传了 —— 只是函数体里从来没有读过它。
+  // 四层俱全、最后一环没接上,而 TypeScript 不会说什么,因为它是可选的。
+  if (input.signal?.aborted) return { report: "", steps, trace, error: "父轮已中止" };
+  const stop = () => agent.abort();
+  input.signal?.addEventListener("abort", stop, { once: true });
   try {
     await agent.prompt(input.task);
   } catch (err) {
     const message = String(err);
     log("subagent failed:", message);
     return { report: "", steps, trace, error: message };
+  } finally {
+    input.signal?.removeEventListener("abort", stop);
   }
   // AgentMessage 是个联合类型(assistant / toolResult / bash 执行…),不是每一支都有 content。
   // 取最后一条**带文本正文**的 assistant 消息 —— 那就是它写给主智能体的结论。

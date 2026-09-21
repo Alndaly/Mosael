@@ -650,7 +650,14 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     // 等全部跑完,把没送达的报告作为一条通知消息续一轮 —— 模型消化完(可能因此又派新的,
     // 所以是循环)才算真正结束。丢报告是不可接受的:sidecar 是回合级进程,这轮不送,永远没了。
     for (;;) {
-      if (agent.signal?.aborted) break;
+      if (agent.signal?.aborted) {
+        // 中止也要等后台子智能体真的停下。它们现在收得到同一个中止信号(见 subagent.ts),
+        // 所以这一等是有限的 —— 等的是把在飞的请求收掉,不是等它们跑完。
+        // 直接 break 的话 promise 还挂在事件循环里,Node 不退,只能等后端强杀收场。
+        // 报告在这条路上确实丢了,**但这是用户按的「停止」**,和正常结束那条路的语义不同。
+        await subagents.drain().catch(() => []);
+        break;
+      }
       const settled = await subagents.drain();
       if (settled.length === 0) break;
       const notice = settled
