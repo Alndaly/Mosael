@@ -67,6 +67,40 @@
           "symbol": "APPEND_SEPARATOR"
         }
       ]
+    },
+    {
+      "name": "credential_lease_ttl_seconds",
+      "value": 30,
+      "why": "OAuth 凭据刷新租约的 TTL。后端按它判断「持有者是不是死了」,sidecar 按它算续租间隔(取三分之一)。sidecar 把它猜小了会白白多续几次(无害),猜大了则在真正的 TTL 过去之后才续——租约被别人顶替,于是**两个 sidecar 同时拿同一份一次性 refresh token 去刷新**,先手刚存好的凭据当场失效,用户看到「刚登录就被登出」,偶发且难复现。",
+      "implementations": [
+        {
+          "runtime": "python",
+          "location": "backend/app/domain/provider_auth.py",
+          "symbol": "LEASE_TTL_SECONDS"
+        },
+        {
+          "runtime": "agent-sidecar",
+          "location": "agent-sidecar/src/credentials.ts",
+          "symbol": "CREDENTIAL_LEASE_TTL_SECONDS"
+        }
+      ]
+    },
+    {
+      "name": "credential_acquire_timeout_seconds",
+      "value": 20,
+      "why": "后端 `acquire_lease` 等别人释放的上限,超过才返回 409。**sidecar 必须知道这个数**:它收到一个 409 意味着已经等过这么久,而不是「几秒」。早先 sidecar 的注释写的是「它几秒内会结束」,于是按 400/800/1200ms 退避重试 3 次,以为自己总共等了 2.4 秒 —— 实际这一轮对话在凭据上最多站住约 80 秒。两侧对同一段等待的理解差了三十倍,而没有任何一处同时看得见这两个数。",
+      "implementations": [
+        {
+          "runtime": "python",
+          "location": "backend/app/domain/provider_auth.py",
+          "symbol": "ACQUIRE_TIMEOUT_SECONDS"
+        },
+        {
+          "runtime": "agent-sidecar",
+          "location": "agent-sidecar/src/credentials.ts",
+          "symbol": "CREDENTIAL_ACQUIRE_TIMEOUT_SECONDS"
+        }
+      ]
     }
   ]
 }

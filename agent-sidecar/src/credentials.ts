@@ -17,9 +17,26 @@ import type { Credential, CredentialInfo, CredentialStore } from "@earendil-work
 
 import { log } from "./protocol.js";
 
-/** acquire 撞上别人持锁时的重试。刷新本身是一次 HTTP,等待通常在一秒内结束。 */
+/**
+ * acquire 撞上别人持锁时的重试。
+ *
+ * **注意这里的等待远不止这几个 ms**:后端的 `acquire_lease` 自己就先阻塞了
+ * `ACQUIRE_TIMEOUT_SECONDS`(见下方常量)才返回 409。所以收到一个 409 意味着**已经等过 20 秒**,
+ * 重试 3 次 = 这一轮对话在凭据上最多站住约 80 秒。早先这里的注释写的是「它几秒内会结束」,
+ * 两侧对同一段等待的理解差了三十倍。两个预算见 contracts/shared-constants.json。
+ */
 const ACQUIRE_RETRIES = 3;
 const ACQUIRE_RETRY_MS = 400;
+
+/**
+ * 后端租约的 TTL 和 acquire 等待上限。**两侧都要认,而谁也不拥有** ——
+ * 见 contracts/shared-constants.json,那里写了各自猜错会发生什么。
+ */
+export const CREDENTIAL_LEASE_TTL_SECONDS = 30;
+export const CREDENTIAL_ACQUIRE_TIMEOUT_SECONDS = 20;
+
+/** 续租间隔:TTL 的三分之一 —— 丢一两次续租也还在期限内。从 TTL 推出来,不另写一个数。 */
+const RENEW_EVERY_MS = (CREDENTIAL_LEASE_TTL_SECONDS / 3) * 1000;
 
 interface LeaseResponse {
   lease: string;
@@ -74,15 +91,23 @@ export class BackendCredentialStore implements CredentialStore {
     if (!lease) throw new Error("凭据加锁失败:重试耗尽");
 
     let next: Credential | undefined;
+    // 刷新期间一直续租 —— TTL 用来发现死掉的持有者,不该用来罚慢的那个。
+    const renewing = setInterval(() => {
+      void this.post("/renew", { lease: lease.lease }).catch(() => undefined);
+    }, RENEW_EVERY_MS);
+    // 这个进程的存活不该被一个定时器吊着(sidecar 是回合级进程,收尾时要能退干净)。
+    renewing.unref?.();
     try {
       // 传库里的值而不是 seeded:别人刚刷新过的话,这里读到的才是有效的那份,
       // 用旧的去换只会拿到 invalid_grant。
       next = await fn(lease.credential ?? undefined);
     } catch (error) {
       // 刷新失败就立刻放手,不然下一轮对话要白等一个 TTL。
+      clearInterval(renewing);
       await this.post("/release", { lease: lease.lease }).catch(() => undefined);
       throw error;
     }
+    clearInterval(renewing);
 
     // pi 的契约:fn 返回 undefined 表示不改动。
     if (next === undefined) {
@@ -90,14 +115,37 @@ export class BackendCredentialStore implements CredentialStore {
       return lease.credential ?? undefined;
     }
 
-    const res = await this.post("/commit", { lease: lease.lease, credential: next });
+    // `base_version` 带回去:后端据此判断「我拿到租约之后有没有别人写过」。没人写过时它会
+    // **照写**,因为手上这份是刚换出来的唯一有效凭据 —— 丢掉它下一轮就是 invalid_grant。
+    const res = await this.post("/commit", {
+      lease: lease.lease,
+      credential: next,
+      base_version: lease.version,
+    });
     if (!res.ok) {
-      // 409 = 租约超时被顶替,库里已是别人刷出来的新凭据。本轮内存里这份仍然可用,
-      // 所以只记一笔往下走,而不是让整轮对话失败。
-      log(`credential commit rejected (${res.status}); 本轮继续使用内存中的凭据`);
+      // 409 有**两种**原因,而它们要的处置正好相反 —— 早先这里把两种合并成一种,只往 stderr
+      // 写一行:对「被顶替」是对的(别人刚写了新凭据,我这份该丢),对「只是我慢了」是
+      // 破坏性的(丢掉的是唯一有效的那一份)。现在后端把第二种直接写进去了,所以能走到这里的
+      // 只剩 superseded;真出现别的 code,要看得见而不是被一行日志吃掉。
+      const code = await this.leaseCode(res);
+      if (code === "superseded") {
+        log("credential commit superseded:库里已是别人刷出来的新凭据,本轮继续使用内存中的这份");
+      } else {
+        log(`credential commit rejected (${res.status}, code=${code ?? "?"});本轮继续使用内存中的凭据`);
+      }
     }
     this.seeded = next;
     return next;
+  }
+
+  /** 后端在 409 的 detail 里带的机器可读原因。读不出来返回 undefined。 */
+  private async leaseCode(res: Response): Promise<string | undefined> {
+    try {
+      const body = (await res.json()) as { detail?: { code?: string } | string };
+      return typeof body.detail === "object" ? body.detail?.code : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async delete(): Promise<void> {

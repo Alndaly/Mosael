@@ -194,3 +194,113 @@ def client_fixture():
     # 供应商配置属于实例级设置,要求调用者在某个工作区里是 admin/owner(见 ensure_instance_admin)。
     client.post("/api/workspaces", json={"name": "W"})
     return client, _profile(client)
+
+
+# ---------------------------------------------------------------------------
+# 租约过期 ≠ 被顶替:两件事长得像,处置正好相反
+# ---------------------------------------------------------------------------
+
+
+def test_租约只是自己超时时_照写不误(client_fixture) -> None:
+    """**没有别人写过**的情况下拒绝写入,丢掉的是唯一有效的那份凭据。
+
+    订阅制的 refresh token 是一次性的:换出新 access token 的同时旧的作废。所以调用方手上这份
+    是刚换出来的、库里那份已经被供应商作废了 —— 拒绝写入不是保守,是让用户下一轮 `invalid_grant`
+    被登出。而这正是整套租约机制存在的全部理由,它原先在自己的收尾分支上被重新引入了。
+
+    互斥要防的是「两次刷新互相覆盖」,所以判据不是「我的租约还在不在」,而是
+    **「我拿到租约之后有没有别人写过」**。
+    """
+    from app.core.db import SessionLocal
+    from app.domain import provider_credentials
+
+    client, profile_id = client_fixture
+    lease = acquire_lease(profile_id, _me())
+    with SessionLocal() as db:
+        base = (provider_credentials.get(db, profile_id, _me()) or None)
+        base_version = (base.credential_version if base else 0) or 0
+    release_lease(profile_id, _me(), lease)  # 模拟:TTL 到了,而**没有人**接手
+
+    with SessionLocal() as db:
+        row = commit_credential(
+            db, profile_id, _me(), lease,
+            {"type": "oauth", "access": "刚换出来的", "refresh": "r2", "expires": 2},
+            base_version=base_version,
+        )
+        assert read_credential(row)["access"] == "刚换出来的", "唯一有效的那份凭据被丢掉了"
+
+
+def test_有人在这期间写过就该丢掉自己这份(client_fixture) -> None:
+    """被顶替是另一回事:别人刷出来的才是新的,我这份该丢。"""
+    from app.core.db import SessionLocal
+    from app.domain import provider_credentials
+
+    client, profile_id = client_fixture
+    stale = acquire_lease(profile_id, _me())
+    with SessionLocal() as db:
+        base = provider_credentials.get(db, profile_id, _me())
+        base_version = (base.credential_version if base else 0) or 0
+    release_lease(profile_id, _me(), stale)
+
+    fresh = acquire_lease(profile_id, _me())
+    with SessionLocal() as db:
+        commit_credential(db, profile_id, _me(), fresh, {"type": "oauth", "access": "别人刷的", "refresh": "r3"})
+
+    with SessionLocal() as db, pytest.raises(CredentialLeaseError):
+        commit_credential(
+            db, profile_id, _me(), stale, {"type": "oauth", "access": "我的旧的"}, base_version=base_version
+        )
+    with SessionLocal() as db:
+        assert read_credential(provider_credentials.get(db, profile_id, _me()))["access"] == "别人刷的"
+
+
+def test_两种失败带着不同的code() -> None:
+    """`code` 是给另一个运行时看的 —— sidecar 必须分得清这两件事,因为处置正好相反。"""
+    from app.domain.provider_auth import _check_lease, _lease_key
+
+    key = _lease_key("p-code", "u")
+    mine = acquire_lease("p-code", "u")
+    other = None
+    try:
+        release_lease("p-code", "u", mine)
+        # 没人接手:expired
+        with pytest.raises(CredentialLeaseError) as expired:
+            _check_lease(key, mine)
+        assert expired.value.code == "expired"
+
+        # 有人接手:superseded
+        other = acquire_lease("p-code", "u")
+        with pytest.raises(CredentialLeaseError) as superseded:
+            _check_lease(key, mine)
+        assert superseded.value.code == "superseded"
+    finally:
+        if other:
+            release_lease("p-code", "u", other)
+
+
+def test_续租让慢的那次不被顶替() -> None:
+    """TTL 用来发现**死掉的**持有者,不该用来罚慢的那个 —— 一次走代理的跨境刷新很容易超过 30 秒。"""
+    from app.domain.provider_auth import renew_lease
+
+    token = acquire_lease("p-renew", "u")
+    try:
+        assert renew_lease("p-renew", "u", token) is True
+        # 别人的 token 续不上
+        assert renew_lease("p-renew", "u", "别人的") is False
+    finally:
+        release_lease("p-renew", "u", token)
+
+
+def test_续租的租约不会在原TTL处过期(monkeypatch) -> None:
+    import app.domain.provider_auth as auth
+
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(auth, "_now", lambda: clock["t"])
+    token = auth.acquire_lease("p-ttl", "u")
+    try:
+        clock["t"] += auth.LEASE_TTL_SECONDS - 1
+        assert auth.renew_lease("p-ttl", "u", token) is True
+        clock["t"] += auth.LEASE_TTL_SECONDS - 1  # 早已越过原来的到期点
+        auth._check_lease(auth._lease_key("p-ttl", "u"), token)  # 不该抛
+    finally:
+        auth.release_lease("p-ttl", "u", token)

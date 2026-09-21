@@ -17,6 +17,7 @@ token 通常是**一次性**的 —— 换出新 access token 的同时旧 refre
 
 from __future__ import annotations
 
+import logging
 import secrets
 import threading
 import time
@@ -35,9 +36,20 @@ _POLL_SECONDS = 0.05
 
 AUTH_TYPES = ("api_key", "oauth")
 
+logger = logging.getLogger(__name__)
+
 
 class CredentialLeaseError(RuntimeError):
-    """租约不可用:要么等不到,要么已过期/被顶替。"""
+    """租约不可用。
+
+    `code` 是给**另一个运行时**看的:sidecar 收到 409 时必须分得清这两件事,
+    因为它们要的处置**正好相反**(见 `commit_credential` 的说明)。
+    消息文本给人看,`code` 给机器看 —— 和 `error` 事件上已有的 `code: "output_limit"` 同一个做法。
+    """
+
+    def __init__(self, message: str, code: str = "lease_unavailable") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass
@@ -75,8 +87,24 @@ def acquire_lease(profile_id: str, user_id: str, *, timeout: float = ACQUIRE_TIM
                 _leases[key] = _Lease(token=token, expires_at=_now() + LEASE_TTL_SECONDS)
                 return token
         if _now() >= deadline:
-            raise CredentialLeaseError("凭据正被另一次刷新占用,请重试")
+            raise CredentialLeaseError("凭据正被另一次刷新占用,请重试", code="busy")
         time.sleep(_POLL_SECONDS)
+
+
+def renew_lease(profile_id: str, user_id: str, token: str) -> bool:
+    """续租。持有者在刷新期间定期调它,让 TTL 只用来发现**死掉的**持有者,而不是罚慢的那个。
+
+    TTL 短是对的(持有者崩了不能把某个供应商永久锁死),但一次跨境 OAuth 刷新还要走用户配的
+    出网代理,30 秒并不宽裕。不续租的话,慢一点就会被别人顶替 —— 于是**两个 sidecar 同时拿
+    同一份凭据去刷新**,正是模块开头说的那个灾难。
+    """
+    key = _lease_key(profile_id, user_id)
+    with _lock:
+        held = _leases.get(key)
+        if held is None or held.token != token:
+            return False
+        _leases[key] = _Lease(token=token, expires_at=_now() + LEASE_TTL_SECONDS)
+        return True
 
 
 def release_lease(profile_id: str, user_id: str, token: str) -> None:
@@ -91,10 +119,12 @@ def release_lease(profile_id: str, user_id: str, token: str) -> None:
 def _check_lease(key: str, token: str) -> None:
     with _lock:
         held = _leases.get(key)
-    if held is None or held.token != token:
-        raise CredentialLeaseError("租约已失效(超时或被顶替),本次刷新结果不予写入")
-    if held.expires_at <= _now():
-        raise CredentialLeaseError("租约已超时,本次刷新结果不予写入")
+    if held is not None and held.token != token:
+        # 有**别人**正拿着它 —— 他刷出来的才是新的,我这份该丢。
+        raise CredentialLeaseError("租约已被顶替,本次刷新结果不予写入", code="superseded")
+    if held is None or held.expires_at <= _now():
+        # 没有别人,只是我自己慢了。这两件事长得像,处置正好相反。
+        raise CredentialLeaseError("租约已超时,本次刷新结果不予写入", code="expired")
 
 
 def read_credential(credential: ProviderCredential | None) -> dict | None:
@@ -108,15 +138,41 @@ def read_credential(credential: ProviderCredential | None) -> dict | None:
 
 
 def commit_credential(
-    db: Session, profile_id: str, user_id: str, lease_token: str, credential: dict | None
+    db: Session, profile_id: str, user_id: str, lease_token: str, credential: dict | None,
+    *, base_version: int | None = None,
 ) -> ProviderCredential:
     """持租约写回凭据(credential=None 即登出)。写完即释放。
 
     凭据**原样**存:各家 OAuth 的附加字段由 pi 解释,这里拆一次就等于把协议复制进 Python。
     只校验最低限度的形状,把明显不是凭据的东西挡在库外。
+
+    ## 租约过期时为什么**照写不误**
+
+    订阅制的 refresh token 是一次性的:换出新 access token 的同时旧的作废(见模块开头)。
+    所以调用方手上这份 `credential` 是**刚换出来的、唯一有效的**那一份 —— 拒绝写入不是"保守",
+    而是把它丢掉,库里留着一个已经被供应商作废的 refresh token。下一轮 `invalid_grant`,
+    用户被登出。**而这正是整套租约机制存在的全部理由**,它原先在自己的收尾分支上被重新引入了。
+
+    互斥要防的是「两次刷新互相覆盖」。判据因此不是「我的租约还在不在」,而是
+    **「我拿到租约之后,有没有别人写过」** —— 那是 `credential_version` 精确回答得了的问题。
+    没人写过就没有什么需要保护,照写;写过了才该丢掉我这份(`superseded`)。
+
+    `base_version` 由调用方在 acquire 时拿到并带回来。不传时退回旧行为(严格拒绝),
+    这样没升级的调用方不会突然变得更宽松。
     """
     key = _lease_key(profile_id, user_id)
-    _check_lease(key, lease_token)
+    try:
+        _check_lease(key, lease_token)
+    except CredentialLeaseError as exc:
+        stored = provider_credentials.get(db, profile_id, user_id)
+        current_version = (stored.credential_version if stored else 0) or 0
+        if base_version is None or current_version != base_version:
+            raise
+        logger.warning(
+            "provider %s 的租约已过期(%s),但这期间没有别人写过(v%s)—— 照写:"
+            "这份凭据是刚换出来的唯一有效的那一份,丢掉它下一轮就会 invalid_grant",
+            profile_id, exc.code, current_version,
+        )
     profile = db.get(ProviderProfile, profile_id)
     if profile is None or profile.owner_user_id != user_id:
         release_lease(profile_id, user_id, lease_token)

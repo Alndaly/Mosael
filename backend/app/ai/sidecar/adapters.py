@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import os
 import shutil
@@ -17,6 +18,8 @@ flow through the confirmation cards.
 """
 
 from app.core.child_process import ChildProcess, popen_text
+
+logger = logging.getLogger(__name__)
 
 TURN_TIMEOUT_SECONDS = 600
 
@@ -198,6 +201,10 @@ def run_turn(
     raise AdapterError(f"Unknown agent adapter: {adapter}")
 
 
+#: 等 sidecar 回一句「接住了没有」的上限。本地管道一个来回,对面收到帧就立刻回 ——
+#: 给到 3 秒是留给"stdin 循环正忙着处理上一帧"这种情况,不是留给网络。
+ACK_TIMEOUT_SECONDS = 3.0
+
 class _LiveTurn:
     """The stdin of a sidecar whose turn is still running.
 
@@ -211,6 +218,11 @@ class _LiveTurn:
         self._lock = threading.Lock()
         self.turn_id = turn_id
         self.closed = False
+        # 一次只允许一个等回执的帧在飞 —— 回执事件只带 turnId,认不出是哪一帧的。
+        self._ack_lock = threading.Lock()
+        self._ack = threading.Event()
+        self._ack_type: str | None = None
+        self._ack_value: bool | None = None
 
     def send(self, frame: dict) -> bool:
         """Write one frame. False when the turn already ended, so callers can fall back."""
@@ -227,6 +239,35 @@ class _LiveTurn:
                 self.closed = True
                 return False
 
+    def send_awaiting_ack(self, frame: dict, *, ack_type: str, timeout: float = ACK_TIMEOUT_SECONDS) -> bool:
+        """Write one frame and wait for the sidecar to say whether it took it.
+
+        **「字节写出去了吗」和「对面接住了吗」是两个问题**,而这一层原先只答得上第一个。
+        99% 的情况下答案相同,所以它一直看着是对的 —— 命中那 1% 时,用户丢的是自己刚打的
+        一句话:后端把「写成功」当成「插进去了」,于是把那条消息的 `queued` 标摘掉,
+        而它既没进正在跑的那一轮,也不会再被排队执行。
+
+        sidecar 一侧**早就把答案发出来了**(`queued{pending}`,注释写着"说出来是为了让后端
+        把它当成普通的下一轮发过去而不是丢掉"),只是后端的事件循环里没有它的分支。
+        """
+        with self._ack_lock:
+            self._ack_type = ack_type
+            self._ack_value = None
+            self._ack.clear()
+            if not self.send(frame):
+                return False
+            if not self._ack.wait(timeout):
+                logger.warning("sidecar 未在 %.1f 秒内回执 %s,按「没接住」处理", timeout, ack_type)
+                return False
+            return bool(self._ack_value)
+
+    def ack(self, ack_type: str, value: bool) -> None:
+        """读流的线程读到一条回执事件时调这里。"""
+        if self._ack_type != ack_type:
+            return
+        self._ack_value = value
+        self._ack.set()
+
     def close(self) -> None:
         with self._lock:
             self.closed = True
@@ -234,6 +275,9 @@ class _LiveTurn:
                 self._stdin.close()
             except Exception:  # noqa: BLE001 — the process may already be gone
                 pass
+        # 这一轮没了,任何还在等回执的调用方应当立刻拿到「没接住」,而不是干等满超时。
+        self._ack_value = False
+        self._ack.set()
 
 
 #: Running turns by session id. An API request arrives on a different thread from the one
@@ -248,7 +292,9 @@ def steer_turn(session_id: str, prompt: str, mode: str = "steer") -> bool:
         live = _LIVE.get(session_id)
     if live is None:
         return False
-    return live.send({"type": "steer", "turnId": live.turn_id, "prompt": prompt, "mode": mode})
+    return live.send_awaiting_ack(
+        {"type": "steer", "turnId": live.turn_id, "prompt": prompt, "mode": mode}, ack_type="queued"
+    )
 
 
 def set_turn_queue(session_id: str, prompts: list[str]) -> bool:
@@ -261,16 +307,23 @@ def set_turn_queue(session_id: str, prompts: list[str]) -> bool:
         live = _LIVE.get(session_id)
     if live is None:
         return False
-    return live.send({"type": "queue", "turnId": live.turn_id, "prompts": prompts})
+    return live.send_awaiting_ack(
+        {"type": "queue", "turnId": live.turn_id, "prompts": prompts}, ack_type="queued"
+    )
 
 
 def abort_turn(session_id: str) -> bool:
-    """Stop the running turn, keeping whatever it produced. False when nothing is running."""
+    """Stop the running turn, keeping whatever it produced. False when nothing is running.
+
+    同样等一句回执:一轮刚开始的那几百毫秒里,sidecar 的 `active` 表还是空的
+    (它在 `await buildAllTools(...)` 之后才写),原先那条 abort 落进空里**一声不吭**,
+    而这一层返回 true —— 界面显示已停止,那一轮继续跑到底。
+    """
     with _LIVE_LOCK:
         live = _LIVE.get(session_id)
     if live is None:
         return False
-    return live.send({"type": "abort", "turnId": live.turn_id})
+    return live.send_awaiting_ack({"type": "abort", "turnId": live.turn_id}, ack_type="aborted_ack")
 
 
 #: 谁来补代理设置。**默认原样返回** —— 这一层是基础设施,不认识"网络配置"存在哪张表。
@@ -409,6 +462,12 @@ def _run_pi(
                 saw_tool = True
                 if on_tool is not None:
                     on_tool(event)
+            elif kind == "queued":
+                # 「这条插进去了吗」的回执。pending=False 意味着那一轮在用户打字和这一帧
+                # 到达之间结束了 —— 调用方据此把消息当成普通的下一轮发,而不是摘掉队列标。
+                live.ack("queued", bool(event.get("pending")))
+            elif kind == "aborted_ack":
+                live.ack("aborted_ack", bool(event.get("accepted")))
             elif kind == "turn_done":
                 result_text = str(event.get("text", ""))
                 result_state = event.get("sessionState")

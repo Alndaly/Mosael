@@ -31,6 +31,16 @@ import { buildAllTools } from "./tools.js";
  * addressable from outside the call that is awaiting it.
  */
 const active = new Map<string, Agent>();
+/** 已经派发、还没结束的轮次 —— 用来回答「你要停的那一轮到底还在不在」。 */
+const running = new Set<string>();
+/**
+ * 在 Agent 就绪**之前**就被按了停止的轮次。
+ *
+ * `active` 要到 `onAgentReady` 才写,而那发生在 `await buildAllTools(...)`(一次 HTTP)之后。
+ * 那几百毫秒里来的 abort 原先落进空里**一声不吭**,后端却把它当成停住了 —— 界面显示已停止,
+ * 那一轮继续跑到底。把意图记下来,就绪时立刻兑现。
+ */
+const abortPending = new Set<string>();
 
 /** 进行中的登录:loginId -> 取消开关。授权可能持续几分钟,用户随时可能关掉弹窗。 */
 const logins = new Map<string, AbortController>();
@@ -53,7 +63,11 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         sessionState: msg.sessionState,
         forceCompact: msg.forceCompact,
         thinkingLevel: msg.thinkingLevel,
-        onAgentReady: (agent) => active.set(turnId, agent),
+        onAgentReady: (agent) => {
+          active.set(turnId, agent);
+          // 就绪之前按下的停止,在这里兑现 —— 否则那几百毫秒里「按了等于没按」。
+          if (abortPending.delete(turnId)) agent.abort();
+        },
       },
       {
         onDelta: (delta) => send({ type: "text_delta", turnId, delta }),
@@ -167,9 +181,14 @@ async function main(): Promise<void> {
         // Deliberately NOT awaited. Awaiting here stops stdin from being read until the turn
         // ends, which would make steer and abort frames — the only frames that matter while a
         // turn is running — impossible to deliver.
+        running.add(msg.turnId);
         void handleRunTurn(msg)
           .catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) }))
-          .finally(() => active.delete(msg.turnId));
+          .finally(() => {
+            active.delete(msg.turnId);
+            abortPending.delete(msg.turnId);
+            running.delete(msg.turnId);
+          });
       } else if (msg.type === "gateway_complete") {
         void handleGatewayCompletion(msg).catch((err) =>
           send({ type: "error", turnId: msg.turnId, message: String(err) }),
@@ -203,7 +222,12 @@ async function main(): Promise<void> {
         // 同样不 await:压缩要调一次模型做摘要,期间 stdin 仍要能收 abort。
         void handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) }));
       } else if (msg.type === "abort") {
-        active.get(msg.turnId)?.abort();
+        const agent = active.get(msg.turnId);
+        if (agent) agent.abort();
+        else if (running.has(msg.turnId)) abortPending.add(msg.turnId);
+        // 回执:后端据此知道「按下去到底算不算数」。accepted=false 只有一个意思 ——
+        // 那一轮已经结束了,没有东西可停(不是错误,界面上不该报)。
+        send({ type: "aborted_ack", turnId: msg.turnId, accepted: running.has(msg.turnId) });
       } else if (msg.type === "auth_login") {
         const controller = new AbortController();
         logins.set(msg.loginId, controller);

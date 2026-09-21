@@ -53,10 +53,13 @@ def _as_value(literal: str) -> object:
     text = literal.strip()
     if text.startswith(('"', "'")):
         return text[1:-1]
-    try:
-        return int(text)
-    except ValueError:
-        return text
+    text = text.replace("_", "")  # TS 里的 10_000
+    for cast in (int, float):
+        try:
+            return cast(text)
+        except ValueError:
+            continue
+    return text
 
 
 def test_contract_file_is_present_and_versioned() -> None:

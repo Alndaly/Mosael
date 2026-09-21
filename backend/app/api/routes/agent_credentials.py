@@ -30,6 +30,7 @@ from app.domain.provider_auth import (
     commit_credential,
     read_credential,
     release_lease,
+    renew_lease,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,9 @@ class CommitIn(BaseModel):
     lease: str
     #: 刷新后的凭据;None 表示删除(登出)。
     credential: dict | None = None
+    #: acquire 时拿到的版本号。租约过期时靠它判断「这期间有没有别人写过」——
+    #: 没人写过就照写,因为手上这份是刚换出来的唯一有效凭据(见 commit_credential)。
+    base_version: int | None = None
 
 
 class CommitOut(BaseModel):
@@ -67,7 +71,7 @@ def acquire_credential_lease(profile_id: str, db: DbSession, user: CurrentUser) 
     try:
         lease = acquire_lease(profile_id, user.id)
     except CredentialLeaseError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail={"message": str(exc), "code": exc.code}) from exc
     mine = provider_credentials.get(db, profile_id, user.id)
     return LeaseOut(
         lease=lease, credential=read_credential(mine), version=(mine.credential_version if mine else 0) or 0
@@ -79,11 +83,27 @@ def commit_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user
     """持租约写回刷新结果并释放。租约已超时被顶替时返回 409 —— 此时写回会覆盖别人的新凭据。"""
     _require_owned_profile(db, profile_id, user.id)
     try:
-        row = commit_credential(db, profile_id, user.id, body.lease, body.credential)
+        row = commit_credential(
+            db, profile_id, user.id, body.lease, body.credential, base_version=body.base_version
+        )
     except CredentialLeaseError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        # `code` 给机器看:调用方要分得清「被顶替」(丢掉自己这份是对的)和别的失败。
+        raise HTTPException(status_code=409, detail={"message": str(exc), "code": exc.code}) from exc
     logger.info("provider %s oauth credential updated (v%s)", profile_id, row.credential_version)
     return CommitOut(version=row.credential_version or 0)
+
+
+@router.post("/agent/provider-credentials/{profile_id}/renew", status_code=204)
+def renew_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user: CurrentUser) -> None:
+    """续租。持有者在刷新期间定期调它 —— TTL 用来发现死掉的持有者,不该用来罚慢的那个。
+
+    续不上(已被顶替)返回 409:那说明别人已经接手,调用方该知道自己这一份要作废。
+    """
+    _require_owned_profile(db, profile_id, user.id)
+    if not renew_lease(profile_id, user.id, body.lease):
+        raise HTTPException(
+            status_code=409, detail={"message": "租约已被顶替,续租失败", "code": "superseded"}
+        )
 
 
 @router.post("/agent/provider-credentials/{profile_id}/release", status_code=204)
