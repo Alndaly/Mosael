@@ -1275,8 +1275,11 @@
   color: var(--muted-foreground);
   border-radius: 4px;
 }
+/* **只变颜色,不再铺一块底色。** 行自己在 hover 时已经有一块底了,箭头再铺一块,就是两块
+   圆角不同、灰度不同的底叠在一起 —— 看起来像框中框。而这一格又窄又高(18×30),铺出来是
+   一根竖条,更显得突兀。变亮 + 手型指针已经说清楚"这里可以点";键盘焦点由全局的 focus-visible
+   画环(见 design/tokens.css),那一条本来就不靠底色。 */
 button.scene-object-twist:hover {
-  background: var(--secondary);
   color: var(--foreground);
 }
 .scene-object-twist svg {
