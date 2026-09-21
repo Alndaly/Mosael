@@ -116,7 +116,7 @@ describe("「所属组」下拉带上上级", () => {
   });
 });
 
-describe("折叠箭头落在面板内距里,名字不会被它顶右一格", () => {
+describe("一行的左右位置只有一处说了算", () => {
   const css = readFileSync(new URL("./scenes.css", import.meta.url), "utf8");
   const rule = (selector: string) => {
     const at = css.indexOf(`${selector} {`);
@@ -124,20 +124,39 @@ describe("折叠箭头落在面板内距里,名字不会被它顶右一格", () 
     return css.slice(at, css.indexOf("}", at));
   };
 
-  it("整列往左推满一个箭头宽 —— 不推的话是凭空多出来的一格缩进", () => {
-    // 加箭头之前:列表 -8px、按钮内距 8px,于是图标正好落在标题那条竖线上。
-    // 加了 16px 的箭头之后如果不推,整列会整体右移 16px。
-    expect(rule(".scene-panel-body > .scene-object-list")).toContain(
-      "margin-inline: calc(var(--scene-twist-width) * -1)",
+  /**
+   * 重构之前是四处各说一句:列表的负外边距、名字按钮的 8px 内距、行的 padding-right,
+   * 再加一条"有箭头时把按钮内距清零"的补丁。每加一样东西就要再调一处,而调错的表现是
+   * 高亮比行宽、箭头戳出面板、缩进凭空多一格 —— 全都不报错,只是看着别扭。
+   */
+  it("三格宽度由行的 grid 定,行内元素不再自己决定左右", () => {
+    expect(rule(".scene-object-row")).toContain("grid-template-columns:");
+    // 箭头和删除键都不写 width:那是 grid 的事。写了就又多一处说了算的地方。
+    expect(rule(".scene-object-twist")).not.toContain("width:");
+  });
+
+  it("缩进加在行的左内距上 —— 高亮从行首起,缩进落在高亮里面", () => {
+    // 加在子元素的 margin 上的话,缩进会把整行往右推,于是深层的行高亮比浅层的窄一截。
+    expect(rule(".scene-object-row")).toContain(
+      "padding-left: calc(var(--row-bleed) + var(--row-indent) * var(--depth, 0))",
     );
-    expect(rule(".scene-object-list")).toContain("--scene-twist-width: 16px");
+    expect(rule(".scene-object-row")).toContain("padding-right: var(--row-bleed)");
   });
 
-  it("箭头已经占了那一格,名字按钮就不再补左内距 —— 补了是双份", () => {
-    expect(rule(".scene-object-row > .scene-object-twist + button")).toContain("padding-left: 0");
+  it("往外让的那一点两边一样宽 —— 不对称是上一版留下的毛病", () => {
+    expect(rule(".scene-panel-body > .scene-object-list")).toContain(
+      "margin-inline: calc(var(--row-bleed) * -1)",
+    );
   });
 
-  it("没孩子的行也占同宽的一格,名字才不会随「有没有孩子」左右跳", () => {
-    expect(rule(".scene-object-twist")).toContain("width: var(--scene-twist-width)");
+  it("三格的尺寸只在列表上写一次", () => {
+    const list = rule(".scene-object-list");
+    for (const token of ["--row-twist:", "--row-indent:", "--row-height:", "--row-bleed:"])
+      expect(list).toContain(token);
+  });
+
+  it("一行里三个控件同高 —— 不同高是看得出来的", () => {
+    for (const selector of [".scene-object-twist", ".scene-object-name", ".scene-object-row .scene-object-delete"])
+      expect(rule(selector)).toContain("height: var(--row-height)");
   });
 });

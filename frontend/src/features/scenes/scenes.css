@@ -162,34 +162,25 @@
      **这里不再画上边线** —— 步骤条底下已经有一条,两条会叠在一起变成一根粗线。 */
 }
 
-/* **底色画在整行上,不画在按钮上。**
-   一行是"名字 + 删除"两个按钮;底色只给名字那个的话,它右边那截(删除键所在的位置)
-   就空着,而 hover 命中的又是整行 —— 看起来就是高亮比行窄一块、还和右边的图标错开。
+/* ============================================================================
+   物体列表:一行 = [折叠箭头][图标 + 名字][删除]。
+   **左右位置只有一处说了算** —— 行自己的那条 grid。
+   
+   重构之前是四处各说一句:列表的负外边距、名字按钮的 8px 内距、行的 padding-right、
+   再加一条"有箭头时把按钮内距清零"的补丁。每加一样东西就要再调一处,而调错的表现是
+   高亮比行宽、箭头戳出面板、缩进凭空多一格 —— 全都不报错,只是看着别扭。
 
-   此前是用负外边距把按钮铺宽的:那是**列表项还只有一个按钮时**写的,加了删除键、行变成
-   flex 之后,那对负边距同时作用在两个按钮上,于是高亮整体左移 8px、右端又盖过删除键。
+   现在:
+   - 三格宽度由 `grid-template-columns` 定,行内没有任何元素再自己决定左右;
+   - 缩进加在**行的左内距**上,所以高亮从行首起、缩进落在高亮里面(而不是把行推走);
+   - 高亮就是整行(hover 和选中都画在 .scene-object-row 上),两侧各往外让 8px,
+     让它比文字宽一圈 —— 和这一栏里别的整行底色同一个做法。
 
-   那 8px 现在由 `.scene-panel-body > .scene-object-list` 的负外边距给出(面板体的内距是
-   16px,退回 8px 正好),文字再自己补 8px —— 和上面的标题仍在同一条竖线上。
-
-   **一节里只有一个滚动条。** 列表此前自己带 `max-height: 210px; overflow: auto`,而面板体
-   本身也在滚(见 .scene-panel-body)—— 同一节里两条滚动条套着,而且外层那条几乎总是把内层
-   切在半行上。高度归面板(它按 flex 分配,长的那节自己滚),列表只管内容。 */
+   **一节里只有一个滚动条。** 列表不自己滚:高度归面板(它按 flex 分配,长的那节自己滚)。
+   ============================================================================ */
 .scene-object-list button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 9px;
-  text-align: left;
-  padding: 8px;
-  border-radius: 7px;
   background: transparent;
-}
-.scene-object-list button span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  flex: 1;
+  border-radius: 6px;
 }
 .scene-object-list svg {
   flex-shrink: 0;
@@ -664,15 +655,17 @@
    撑到距面板边 8px(不是 0):行自己还有 8px 内距,两段加起来正好等于上面标题的 16px,
    于是文字对齐,而底色比文字宽出 8px 一圈。 */
 .scene-object-list {
-  /* 折叠箭头那一格的宽度。**声明在列表上** —— CSS 变量只往下继承,写在行上的话它自己的
-     外边距(下面那条)读不到。 */
-  --scene-twist-width: 16px;
+  /* 三格的宽度和每层缩进 —— **只在这里写一次**,行和箭头都从这儿取。 */
+  --row-twist: 18px;
+  --row-indent: 14px;
+  --row-height: 30px;
+  --row-bleed: 8px;
+  display: grid;
+  gap: 1px;
 }
 .scene-panel-body > .scene-object-list {
-  /* **左边整列推满一个槽宽,右边照旧。** 折叠箭头占住的那一格正好落在面板内距里,于是名字前
-     那个图标仍然和上面的标题在同一条竖线上 —— 不推的话,整列会因为多了个箭头而右移一格,
-     而那一格是凭空多出来的缩进。右边没有箭头,所以维持原来的 -8px。 */
-  margin-inline: calc(var(--scene-twist-width) * -1) calc((var(--scene-side-gutter) - 8px) * -1);
+  /* 两侧各往外让一点,让整行底色比文字宽一圈。**两边一样** —— 不对称是上一版留下的毛病。 */
+  margin-inline: calc(var(--row-bleed) * -1);
 }
 .scene-labeled-tool {
   height: 32px;
@@ -1026,24 +1019,35 @@
 }
 
 .scene-object-row {
+  display: grid;
+  grid-template-columns: var(--row-twist) minmax(0, 1fr) var(--row-height);
+  align-items: center;
+  border-radius: 7px;
+  /* 缩进加在**行的内距**上:高亮从行首起,缩进落在高亮里面。加在子元素的 margin 上的话,
+     缩进会把整行往右推,于是深层的行高亮比浅层的窄一截。 */
+  padding-left: calc(var(--row-bleed) + var(--row-indent) * var(--depth, 0));
+  padding-right: var(--row-bleed);
+}
+.scene-object-name {
   display: flex;
   align-items: center;
-  gap: 2px;
-  border-radius: 7px;
-  padding-right: 4px;
-}
-/* 箭头已经占掉了名字左边那一格,按钮不必再补内距 —— 补了就是双份,图标会比标题右一截。 */
-.scene-object-row > .scene-object-twist + button {
-  padding-left: 0;
-}
-.scene-object-row > button:first-child {
-  flex: 1;
+  gap: 8px;
   min-width: 0;
+  height: var(--row-height);
+  padding: 0 4px;
+  text-align: left;
+}
+.scene-object-name > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
 }
 .scene-object-row .scene-object-delete {
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
+  width: var(--row-height);
+  height: var(--row-height);
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
   padding: 0;
   color: var(--muted-foreground);
@@ -1257,14 +1261,11 @@
   opacity: 1 !important;
 }
 
-/* 物体列表里那个折叠箭头。**没孩子的行也占同宽的一格**(用一个空 span),否则名字会随
-   "有没有孩子"左右跳一格,而那看起来像列表自己在抖。
-   宽度和面板内距同值(见 .scene-panel-body > .scene-object-list 那段):它正好落在内距里。 */
+/* 折叠箭头。**没孩子的行也占同一格**(渲染成一个空 span),否则名字会随"有没有孩子"
+   左右跳一格,而那看起来像列表自己在抖。宽度来自行的那条 grid,这里不再自己定。 */
 .scene-object-twist {
-  flex: 0 0 auto;
-  width: var(--scene-twist-width);
   /* 和同一行的删除键同高 —— 一行里两个控件不同高是看得出来的(design/controlRhythm.test.ts)。 */
-  height: 30px;
+  height: var(--row-height);
   display: inline-flex;
   align-items: center;
   justify-content: center;

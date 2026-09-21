@@ -1510,13 +1510,14 @@ function SceneEditor({
                         role="treeitem"
                         aria-level={depth + 1}
                         aria-expanded={children ? !collapsed.has(o.id) : undefined}
+                        // 缩进只经过这一个值:行的左内距按它算(见 scenes.css 里那段)。
+                        style={{ "--depth": depth } as React.CSSProperties}
                       >
-                        {/* 有孩子才给折叠箭头:79 个物体摊平是一屏翻不完的列表,而收起来之后
+                        {/* 有孩子才给折叠箭头:79 个物体摊平是一屏翻不完的列表,收起来之后
                             它就是八行。没孩子的留一块同宽的空位,名字才对得齐。 */}
                         {children ? (
                           <button
                             className="scene-object-twist"
-                            style={{ marginLeft: depth * 12 }}
                             aria-label={`${collapsed.has(o.id) ? "展开" : "收起"} ${o.name}`}
                             onClick={() =>
                               setCollapsed((was) => {
@@ -1534,9 +1535,10 @@ function SceneEditor({
                             />
                           </button>
                         ) : (
-                          <span className="scene-object-twist" style={{ marginLeft: depth * 12 }} />
+                          <span className="scene-object-twist" />
                         )}
                         <button
+                          className="scene-object-name"
                           aria-pressed={selected === o.id}
                           onClick={() => {
                             setSelected(o.id);
