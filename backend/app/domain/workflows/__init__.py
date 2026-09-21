@@ -914,19 +914,22 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "project_id": {"advanced": True, "type": "template", "description": "wfNode_scene_render_project_id"},
         },
-        "outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id", "camera_move", "skipped_models"],
+        "outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id", "camera_move",
+                    "skipped_models", "model_warnings"],
         "output_labels": {
             "first_frame_asset_id": "wfOut_graybox_first_frame",
             "last_frame_asset_id": "wfOut_graybox_last_frame",
             "video_asset_id": "wfOut_graybox_video",
             "camera_move": "wfOut_camera_move",
             "skipped_models": "wfOut_skipped_models",
+            "model_warnings": "wfOut_model_warnings",
         },
         "output_types": {
             "first_frame_asset_id": "asset",
             "last_frame_asset_id": "asset",
             "video_asset_id": "asset",
             "skipped_models": "number",
+            "model_warnings": "json",
         },
     },
     "separate_audio": {

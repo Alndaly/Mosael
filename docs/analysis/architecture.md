@@ -8,18 +8,23 @@
 
 ## 0. 规模速览(实测)
 
+> 下表按 **1.4.2**(2026-09-21)重测。括号里是 2026-09-18 首次分析时的值,留着是为了看出
+> 这三天动了哪儿 —— 增长集中在 3D 与工作流两块。
+
 | 维度 | 实测值 | 说明 |
 | --- | --- | --- |
-| 后端应用代码 | ~69,900 行 Python(`backend/app`,149 个领域文件) | 41 个路由模块(`backend/app/api/routes/`) |
-| 后端测试 | 369 个测试文件、~55,500 行 | 测试/代码比约 0.79,其中大量是"棘轮"测试 |
-| 前端 | ~127,500 行 TS/TSX(`frontend/src`) | React 19 + Vite + Tailwind v4 |
+| 后端应用代码 | ~76,700 行 Python(`backend/app`,168 个领域文件)(原 ~69,900 / 149) | 41 个路由模块(`backend/app/api/routes/`) |
+| 后端测试 | 395 个测试文件、~59,200 行(原 369 / ~55,500) | 测试/代码比约 0.77,其中大量是"棘轮"测试 |
+| 前端 | ~131,200 行 TS/TSX(`frontend/src`)(原 ~127,500) | React 19 + Vite + Tailwind v4 |
 | Electron 壳 | ~16,100 行(`electron/*.cjs|ts` + `electron/system/`) | 主进程 + preload + 系统能力层 |
-| agent-sidecar | ~2,300 行 TS | pi Agent 运行时,JSONL/stdin 协议 |
-| 工作流执行器 | 2,358 行(`backend/app/domain/workflows/executors/`,10 个文件) | 按域分组而非按节点一文件 |
-| 数据库迁移函数 | 51 个 `_migrate_*`(`backend/app/db/migrations.py`,2,059 行) | 无迁移框架 |
-| 契约语料 | 9 份 JSON(`contracts/`) | 语言中立、多侧测试各跑一遍(实测份数,见总报告 §4.2) |
-| ADR | 18 份(`docs/adr/0001`–`0018`) | 2026-08 至 2026-09 密集决策期 |
-| MCP 工具 | 77 个(20 个走确认卡、1 个等作答) | `docs/MCP.md` 由工具注册表生成 |
+| agent-sidecar | ~2,400 行 TS | pi Agent 运行时,JSONL/stdin 协议 |
+| 工作流执行器 | 2,715 行(`backend/app/domain/workflows/executors/`,11 个文件)(原 2,358 / 10) | 按域分组而非按节点一文件 |
+| 工作流节点类型 | 56 种(`NODE_TYPES`) | 每一种要么有对应的智能体工具,要么在 `NOT_A_TOOL` 里写明为什么 |
+| 数据库迁移函数 | 63 个(`backend/app/db/migrations.py`,2,254 行)(原 51 / 2,059) | 无迁移框架 |
+| 契约语料 | 11 份 JSON(`contracts/`)(原 9) | 语言中立、多侧测试各跑一遍;实测 11/11 两侧都在跑 |
+| 棘轮测试 | 101 个文件带 `RATCHET` 标记 | 由 `scripts/sync-ratchet-docs.py` 同步进 `docs/CONVENTIONS.md` |
+| ADR | 19 份(`docs/adr/0001`–`0019`)(原 18) | 2026-08 至 2026-09 密集决策期 |
+| MCP 工具 | 88 个,其中 24 个走确认卡、1 个停下来等作答(原 77 / 20 / 1) | `docs/MCP.md` 由工具注册表生成,数取自那一行 |
 
 ---
 

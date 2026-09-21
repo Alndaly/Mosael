@@ -536,6 +536,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_graybox_video": {"zh": "白模运镜视频", "en": "Blockout camera move"},
     "wfOut_camera_move": {"zh": "镜头语言", "en": "Camera language"},
     "wfOut_skipped_models": {"zh": "未渲染的导入模型", "en": "Imported models not rendered"},
+    "wfOut_model_warnings": {"zh": "没渲进去的是哪几件、为什么", "en": "Which models were left out, and why"},
     "dubOriginalAudio_keep": {"zh": "原声保留原样。", "en": "The original audio was left as it was."},
     "dubOriginalAudio_duck": {"zh": "配音说话时原声被压低。", "en": "The original audio is lowered while the dub speaks."},
     "dubOriginalAudio_mute": {"zh": "原声整轨静音。", "en": "The original audio track is muted."},
