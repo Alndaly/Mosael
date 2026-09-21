@@ -582,9 +582,9 @@
 }
 
 /* **每一节自己滚,整栏不滚。**
-   `flex: 1 1 auto` 让每节先按内容取高度,空间不够时按各自的高度比例收缩 —— 短的那节
-   (比如只有几个物体的列表)不会被一节很长的检查器挤没,而长的那一节自己滚。
-   `min-height: 0` 少不了:flex 子项默认不肯缩到内容以下,少了它 overflow 永远不触发。 */
+   展开的几节**等分**这一栏(见 .scene-panel[data-open="true"] 上那段:基准取 0 而不是内容高度),
+   内容多的那一节自己滚。`min-height: 0` 少不了:flex 子项默认不肯缩到内容以下,少了它
+   overflow 永远不触发。 */
 .scene-side-scroll {
   flex: 1;
   min-height: 0;
@@ -647,6 +647,10 @@
 
    竖向节奏同理:一个 gap 管到底,子块自己不再另加 margin。 */
 .scene-panel-body {
+  /* **整行底色比文字宽出多少 —— 只在这里写一次。** 面板里凡是"一整行可点/可高亮"的东西
+     都从这个值反向撑出去。此前物体列表和预设列表各写一个 8px:两个数碰巧相等,而加第三处时
+     没人知道该抄哪一个,也没有任何东西会在它们分岔时报错。 */
+  --scene-row-bleed: 8px;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
@@ -663,7 +667,8 @@
   --row-twist: 18px;
   --row-indent: 14px;
   --row-height: 30px;
-  --row-bleed: 8px;
+  /* 往外让多少跟着面板走(见 .scene-panel-body),不自己定一个数。 */
+  --row-bleed: var(--scene-row-bleed, 8px);
   display: grid;
   gap: 1px;
 }
@@ -822,8 +827,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px;
-  margin-inline: -8px;
+  /* 和物体列表同一个值:两处都是"一整行可点",底色该一样宽。 */
+  padding: 8px var(--scene-row-bleed, 8px);
+  margin-inline: calc(var(--scene-row-bleed, 8px) * -1);
   text-align: left;
   border-radius: 7px;
   background: transparent;

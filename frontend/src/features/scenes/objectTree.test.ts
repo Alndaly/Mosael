@@ -155,6 +155,14 @@ describe("一行的左右位置只有一处说了算", () => {
       expect(list).toContain(token);
   });
 
+  it("「整行底色宽出多少」跟着面板走,不在列表里另定一个数", () => {
+    // 此前物体列表和预设列表各写一个 8px:两个数碰巧相等,而加第三处时没人知道该抄哪一个,
+    // 也没有任何东西会在它们分岔时报错。
+    expect(rule(".scene-object-list")).toContain("--row-bleed: var(--scene-row-bleed");
+    expect(rule(".scene-panel-body")).toContain("--scene-row-bleed:");
+    expect(rule(".scene-preset-list > button")).toContain("var(--scene-row-bleed");
+  });
+
   it("一行里三个控件同高 —— 不同高是看得出来的", () => {
     for (const selector of [".scene-object-twist", ".scene-object-name", ".scene-object-row .scene-object-delete"])
       expect(rule(selector)).toContain("height: var(--row-height)");
