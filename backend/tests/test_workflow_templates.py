@@ -82,7 +82,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 6,
+        "template_version": 7,
         "source": "official",
     }
 
@@ -698,3 +698,44 @@ def test_混剪不生成任何画面() -> None:
         if isinstance(body, dict):
             kinds |= {inner["type"] for inner in body["nodes"]}
     assert "ai_generate" not in kinds
+
+
+def test_白模的台距由布景尺寸算出来_而不是写死() -> None:
+    """用户报的「3D 白模的位置、布局非常奇怪」就是这一条。
+
+    此前提示词写死「第 n 镜的布景台放在 x = n*40」。而一间三四米宽的卧室按 40 米排开,台与台
+    之间空出三十多米 —— 实测那个场景八个台摊在 320 米上,视口里是一串看不清的小点。
+    反过来也不对:视觉圣经允许 60 米的大场景,那在 40 米台距下会直接和隔壁穿模 ——
+    这个常数本来就是为了"互不干扰"存在的,结果两头都不成立。
+    """
+    system = _node(_full_video(), "set_design")["config"]["system"]
+    assert "x = n*40" not in system
+    assert "不要用固定的 40 米" in system
+    #: 台距要从视觉圣经里的场景尺寸推出来。
+    assert "width_m" in system and "台距" in system
+
+
+def test_每个布景台收进一个组() -> None:
+    """八个台摊平就是七十多条重名的列表(「出租屋卧室」出现八次),谁也分不出哪个是哪个。
+
+    组**放在原点**,所以它只负责收纳、不改变任何坐标 —— 相机与渲染那套算法一点不用动。
+    """
+    graph = _full_video()
+    props = _node(graph, "set_design")["config"]["json_schema"]["properties"]["objects"]["items"]["properties"]
+    assert "parent_id" in props, "schema 里没有 parent_id 的话,模型根本分不了组"
+    assert "group" in props["kind"]["enum"]
+    system = _node(graph, "set_design")["config"]["system"]
+    assert 'id="bay-<n>"' in system
+    assert "不改变任何坐标" in system
+
+
+def test_布景台的组是场景格式本来就支持的() -> None:
+    """不是新发明一个概念:SceneContent 早就有 group 和 parent_id,只是模板的 schema 没放开。
+    所以 scene_create 那一步一个字都不用改。"""
+    import typing
+
+    from app.domain.scene_types import SceneObject
+
+    kinds = typing.get_args(SceneObject.model_fields["kind"].annotation)
+    assert "group" in kinds, kinds
+    assert "parent_id" in SceneObject.model_fields

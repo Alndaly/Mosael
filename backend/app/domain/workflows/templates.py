@@ -609,7 +609,9 @@ def _storyboard_schema(plan: VideoPlan) -> dict[str, Any]:
 
 
 #: 布景用得到的物体种类 —— SceneObject.kind 里除了导入模型(没有文件)和灯之外的那些。
-SET_KINDS = ["room", "box", "cylinder", "sphere", "plane", "stairs", "table", "figure", "camera"]
+#: `group` 是**收纳**用的:八个布景台摊平就是七十多条重名的列表(「出租屋卧室」出现八次),
+#: 谁也分不出哪个是哪个。每台一个组之后,列表是八行。
+SET_KINDS = ["group", "room", "box", "cylinder", "sphere", "plane", "stairs", "table", "figure", "camera"]
 
 
 def _set_design_schema() -> dict[str, Any]:
@@ -630,6 +632,9 @@ def _set_design_schema() -> dict[str, Any]:
         "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
         "name": {"type": "string"},
         "kind": {"type": "string", "enum": SET_KINDS},
+        #: 归到哪个布景台的组下面;顶层物体(组自己)写空字符串。严格模式要求每一格都在,
+        #: 所以用空串而不是 null 表示「没有父级」。
+        "parent_id": {"type": "string"},
         "position": vec3, "rotation": vec3,
         "parameters": _object(parameters, list(parameters)),
         "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
@@ -1147,9 +1152,18 @@ JSON Schema 的对象。"""
     set_system = f"""你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。
 输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。
 
-坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。第 n 镜(shot_number = n)的布景台
-整体放在 x = n*40 附近(台与台之间互不干扰)，台内的每一个物体和这一镜相机的 position / target 都要把
-x 加上 n*40。
+坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。
+
+**台距 D 由布景尺寸算出来,不是固定值。** 取视觉圣经里最大的那个场景的 width_m 与 depth_m 中较大的
+那个,加 8 米;若不足 12 米就按 12 米。第 n 镜(shot_number = n)的布景台整体放在 x = n*D 附近,
+台内每一个物体和这一镜相机的 position / target 都要把 x 加上 n*D。
+**不要用固定的 40 米**:三四米宽的卧室按 40 米排开,台与台之间会空出三十多米,整个白模散成一串
+看不清的小点;而六十米的大场景在 40 米台距下会直接和隔壁穿模。
+
+**每个布景台先出一个组。** kind="group",id="bay-<n>",name="镜头 <n> · <这一镜的场景名>",
+position 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物体(room、陈设、figure、相机)
+都把 parent_id 写成 "bay-<n>"。组只为收纳,它在原点,所以**不改变任何坐标** —— 上面那条"都写世界
+坐标"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。
 
 每个布景台：
 - 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*40,0,0]，
@@ -1752,7 +1766,7 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 6, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 7, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
