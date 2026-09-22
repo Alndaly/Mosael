@@ -83,8 +83,14 @@ jobs:
       # 再生成出来的那份。此前两端靠手工同步,漂移没有任何闸 —— 已经实测漂过一次
       # (BoardGenerate.provider_profile_id 进了路由没进快照)。
       - name: OpenAPI snapshot and generated schema are fresh
+        # `cd` 放进子 shell,每条命令各占一行。原先写成
+        #   cd backend && uv run ... --check && cd ..
+        # 而 `set -e` 对 AND-OR 列表里**非末位**的命令不生效 —— `--check` 失败时既不退出、
+        # 也不报自己的错,只是 `cd ..` 没执行;于是后面那句 git diff 在 backend/ 里跑,
+        # 报出 "unknown revision or path not in the working tree"。一条闸报了个完全无关的
+        # 原因,比不报更难查(实测:真实原因是 openapi.json 没重新导出,查了两轮才找到)。
         run: |
-          cd backend && uv run python scripts/export_openapi.py --check && cd ..
+          (cd backend && uv run python scripts/export_openapi.py --check)
           pnpm gen:api
           git diff --exit-code frontend/src/api/generated/schema.d.ts
 
