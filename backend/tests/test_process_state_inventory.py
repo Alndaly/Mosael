@@ -122,3 +122,43 @@ def test_清单里不留已经不存在的条目() -> None:
     assert not stale, (
         "docs/PROCESS_STATE.md 提到的这些已经不在代码里了,删掉对应条目:\n  " + "\n  ".join(stale)
     )
+
+
+#: 第三节「启动时装配的配置快照」里,**测试之间不还原就会串台**的那几处。
+#:
+#: 清单本身不区分"读了就没事"和"改了会影响别人" —— 它回答的是"起第二个进程会怎样"。
+#: 而测试套里的问题是另一个:一条测试改了它,后面所有测试都跟着变。
+_MUST_BE_RESTORED = {
+    "app/core/http_retry.py:_max_retries": "出站重试次数;一条测试 PUT 成 6,后面所有会重试的测试都退避六次",
+    "app/ai/runtime/config.py:_cached": "TTS 运行时配置的缓存:一条测试装配过之后,后面的测试读到的是它那一份",
+    "app/ai/runtime/config.py:_source": "那份配置是从哪儿来的(库 / 环境变量 / 默认),同上",
+}
+
+
+def test_会串台的进程状态都有重置钩子() -> None:
+    """**登记不等于受控。**
+
+    体系做到了"把进程级状态写下来"(这份清单 + 上面那两条测试强制它完整),但此前没做到
+    "测试之间把它还原" —— 于是 16 条登记的状态里**一条都没有重置钩子**,而登记本身制造了
+    一种已受控的错觉。
+
+    表现不是失败,是**慢**:实测同一条测试单独跑 4.68 秒、跟在 test_llm_retry 后面跑 26.37 秒,
+    全量里 49.5 秒。测试全绿,而"慢"在三千多个点里是看不见的。
+    """
+    import inspect
+
+    from tests import conftest
+
+    source = inspect.getsource(conftest)
+    registered = {f"{module.replace('.', '/')}.py:{attribute}"
+                  for module, attribute in conftest._SNAPSHOT_STATE}
+    missing = sorted(set(_MUST_BE_RESTORED) - registered)
+    assert not missing, (
+        "这几处进程级状态会在测试之间串台,而 conftest 没有还原它们:\n  " + "\n  ".join(missing)
+    )
+    assert "_restore_process_snapshots" in source, "还原那条 fixture 没了"
+
+
+def test_每一条都说得出为什么要还原() -> None:
+    for where, reason in _MUST_BE_RESTORED.items():
+        assert len(reason.strip()) > 8, f"{where} 没写清楚为什么"

@@ -215,7 +215,10 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 团队成员是**邀请制**:管理员按用户名发邀请(`workspace_invitations`),对方在站内通知里接受/拒绝。
 工作区授权只使用 `owner > admin > editor > viewer` 四级角色,不再维护逐权限覆盖矩阵。
 每张表归一个领域所有(`app/domain/ownership.py`),行创建只发生在拥有方,棘轮测试强制
-(见 [ADR-0003](adr/0003-data-ownership-over-splitting-models.md))。
+(见 [ADR-0003](adr/0003-data-ownership-over-splitting-models.md))。**今天有 11 处存量越界,
+全在路由层,写在棘轮的 ALLOWLIST 里只减不增。** 此前它们看不见:整个 `app/api/routes/`
+写在豁免前缀里,理由是「路由是薄转译」—— 于是这句话在文档里是全称,在代码里不是。
+一个被普遍相信的保证比一个没有的保证更坏,因为它让人不再去看。
 文件布局可以按领域切片:`app/db/model_slices/*`、`app/api/schemas/*`、`frontend/src/api/domains/*`
 提高 Locality,但切片不是公共 Interface。调用方仍分别只从 `app.db.models`、`app.api.schemas`、
 `@/api/client` 这三个统一装配入口导入,因此继续拆文件不会把布局变化扩散到全仓。

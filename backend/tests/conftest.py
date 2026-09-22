@@ -132,3 +132,42 @@ def _remote_size_says_unknown(monkeypatch):
 
     monkeypatch.setattr(remote_size, "cached_files", lambda *a, **kw: None)
     monkeypatch.setattr(remote_size, "files_for", lambda *a, **kw: None)
+
+
+#: `docs/PROCESS_STATE.md` 第三节登记的那几处**启动时装配的配置快照**。
+#:
+#: 它们是进程级的可变状态,而测试之间没有人还原它们 —— 于是一条测试把
+#: `/api/settings/ai-runtime` 的 `max_retries` PUT 成 6,后面**所有**会重试的测试都跟着
+#: 退避六次。实测:同一条"连不上时目录为空"的测试单独跑 4.68 秒,跟在 test_llm_retry 后面
+#: 跑 26.37 秒(5.6 倍),全量里涨到 49.5 秒 —— 因为还有别处把它推到了 9。
+#:
+#: **测试全绿,只是慢;而"慢"在三千多个点里是看不见的。**
+#:
+#: 体系做到了"把进程级状态写下来"(PROCESS_STATE.md + test_process_state_inventory 强制
+#: 清单完整),但没做到"测试之间把它还原" —— **登记本身制造了一种已受控的错觉**。
+_SNAPSHOT_STATE = (
+    ("app.core.http_retry", "_max_retries"),
+    ("app.ai.runtime.config", "_cached"),
+    ("app.ai.runtime.config", "_source"),
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_process_snapshots():
+    """每条测试跑完把那几处配置快照还原成它进来时的样子。
+
+    还原的是**进来时**的值而不是模块默认值:有的测试会在 fixture 里故意设好一个值,
+    按默认值还原等于把那条测试自己的布置也抹掉。
+    """
+    import importlib
+
+    saved = []
+    for module_name, attribute in _SNAPSHOT_STATE:
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:  # pragma: no cover —— 模块搬家时不该让整套测试炸掉
+            continue
+        saved.append((module, attribute, getattr(module, attribute, None)))
+    yield
+    for module, attribute, value in saved:
+        setattr(module, attribute, value)

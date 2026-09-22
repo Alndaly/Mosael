@@ -8,6 +8,7 @@ SQLAlchemy 模型可以放进 `app/db/model_slices/<domain>.py`,但这些文件�
 文件切片只改善 locality，不代表数据归属。「谁能写」仍只有一个答案：每张表归一个领域 module
 所有(`app/domain/ownership.py`)，行创建只发生在拥有方，跨领域需要新行时调用拥有方的领域函数。
 归属由 AST 棘轮测试强制(`tests/test_data_ownership_ratchet.py`)：存量越界 allowlist 只减不增，
+**而「强制」的范围以那条测试的扫描面为准** —— 2026-09-23 之前 `app/api/routes/` 整层被豁免(理由写的是「路由是薄转译」),那下面 11 处越界一处都不会被看见。现在豁免撤掉,它们进了 allowlist:已知债务要是一份看得见、会被数的清单,而不是一个让整层消失的前缀。
 新表必须登记归属。
 
 **Supersedes the original 2026-08 decision not to split files.** 实际维护中，`models.py`、schema 与

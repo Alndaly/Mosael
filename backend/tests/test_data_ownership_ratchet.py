@@ -22,9 +22,29 @@ from app.domain.ownership import EXEMPT_PREFIXES, TABLE_OWNERS
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 # (文件, 模型) 存量越界——每一条都是已知债务,修复后从这里删除。
-# 2026-07-21 清零:AuthSession 铸造收敛进 core.security.mint_service_session,
-# AgentMessage 写入收敛进 agent host 的 append_message。保持为空。
-ALLOWLIST: frozenset[tuple[str, str]] = frozenset()
+#
+# 2026-07-21 清零过一次。**2026-09-23 重新装上 11 条,不是退步,是把藏起来的债务摆出来**:
+# `app/api/routes/` 此前整层写在 `ownership.EXEMPT_PREFIXES` 里,理由是"路由是薄转译" ——
+# 于是那下面的 19 处直接建行一处都不会被看见,而 ADR-0003、ARCHITECTURE.md 和一次审计的
+# 「没有发现问题的地方」三处都把"棘轮强制"当成了既成事实。
+#
+# **一个被普遍相信的保证,和一个没有的保证,不是同一种风险 —— 前者更坏**,因为它让人不再去看。
+# 豁免写在**被检查方**(domain/ownership)而不是检查方,读这条测试的人也看不到它。
+#
+# 名单只减不增:每修掉一处就从这里删一行,测试会提醒。
+ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
+    ("app/api/routes/assets.py", "Asset"),
+    ("app/api/routes/feishu.py", "FeishuBot"),
+    ("app/api/routes/oauth.py", "User"),
+    ("app/api/routes/projects.py", "Workspace"),
+    ("app/api/routes/projects.py", "WorkspaceMember"),
+    ("app/api/routes/sequences.py", "Sequence"),
+    ("app/api/routes/sequences.py", "Track"),
+    ("app/api/routes/settings/provider_profiles.py", "ProviderProfile"),
+    ("app/api/routes/settings/system.py", "AiRuntimeConfig"),
+    ("app/api/routes/settings/system.py", "TtsConfig"),
+    ("app/api/routes/voices.py", "TtsConfig"),
+})
 
 
 def _scan() -> set[tuple[str, str]]:
