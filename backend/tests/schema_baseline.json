@@ -1,4 +1,17 @@
 {
+  "activity_events": [
+    "action",
+    "actor_id",
+    "created_at",
+    "id",
+    "payload",
+    "source_id",
+    "source_type",
+    "subject_id",
+    "subject_type",
+    "summary",
+    "workspace_id"
+  ],
   "agent_memories": [
     "content",
     "created_at",
@@ -17,6 +30,16 @@
     "role",
     "session_id"
   ],
+  "agent_questions": [
+    "answered_at",
+    "answers",
+    "created_at",
+    "id",
+    "questions",
+    "session_id",
+    "status",
+    "workspace_id"
+  ],
   "agent_sessions": [
     "adapter",
     "adapter_state",
@@ -32,6 +55,18 @@
     "title",
     "updated_at",
     "workspace_id"
+  ],
+  "agent_voice_prefs": [
+    "enabled",
+    "engine",
+    "engine_model",
+    "engine_voice",
+    "engine_voice_resource",
+    "owner_user_id",
+    "provider_profile_id",
+    "speed",
+    "updated_at",
+    "voice_id"
   ],
   "ai_runtime_config": [
     "id",
@@ -56,6 +91,14 @@
     "created_at",
     "token",
     "user_id"
+  ],
+  "boards": [
+    "canvas",
+    "created_at",
+    "id",
+    "name",
+    "updated_at",
+    "workspace_id"
   ],
   "browser_actions": [
     "action",
@@ -118,6 +161,26 @@
     "updated_at",
     "workspace_id"
   ],
+  "comment_mentions": [
+    "comment_id",
+    "created_at",
+    "user_id"
+  ],
+  "comments": [
+    "author_id",
+    "body",
+    "created_at",
+    "id",
+    "subject_id",
+    "subject_type",
+    "updated_at",
+    "workspace_id"
+  ],
+  "deployment_config": [
+    "id",
+    "open_registration",
+    "updated_at"
+  ],
   "feishu_bind_codes": [
     "code",
     "expires_at",
@@ -160,6 +223,24 @@
     "parameters",
     "prompt",
     "provider"
+  ],
+  "generation_capability_declarations": [
+    "catalog_ref",
+    "created_at",
+    "id",
+    "kind",
+    "provider_model_id",
+    "template_id",
+    "updated_at"
+  ],
+  "generation_capability_profiles": [
+    "capabilities",
+    "created_at",
+    "id",
+    "kind",
+    "name",
+    "provider_profile_id",
+    "updated_at"
   ],
   "generation_jobs": [
     "created_at",
@@ -213,6 +294,27 @@
     "no_proxy",
     "proxy_url",
     "updated_at"
+  ],
+  "note_revisions": [
+    "created_at",
+    "note_id",
+    "revision",
+    "snapshot"
+  ],
+  "notes": [
+    "created_at",
+    "favorite",
+    "id",
+    "markdown",
+    "project_id",
+    "revision",
+    "sources",
+    "tags",
+    "title",
+    "topics",
+    "trashed",
+    "updated_at",
+    "workspace_id"
   ],
   "notifications": [
     "body",
@@ -287,8 +389,14 @@
     "workspace_id"
   ],
   "provider_credentials": [
+    "api_key",
     "created_at",
+    "credential_version",
+    "model_catalog",
+    "oauth_credential",
+    "owner_user_id",
     "profile_id",
+    "secrets",
     "updated_at"
   ],
   "provider_defaults": [
@@ -410,6 +518,42 @@
     "shared_by",
     "workspace_id"
   ],
+  "reviews": [
+    "created_at",
+    "decided_at",
+    "decided_by",
+    "decision_note",
+    "id",
+    "note",
+    "requested_by",
+    "reviewer_id",
+    "status",
+    "subject_id",
+    "subject_type",
+    "workspace_id"
+  ],
+  "scene_3d_models": [
+    "data",
+    "format",
+    "id",
+    "name",
+    "scene_id"
+  ],
+  "scene_3d_revisions": [
+    "created_at",
+    "revision",
+    "scene_id",
+    "snapshot"
+  ],
+  "scenes_3d": [
+    "content",
+    "created_at",
+    "id",
+    "name",
+    "revision",
+    "updated_at",
+    "workspace_id"
+  ],
   "scheduled_task_runs": [
     "error",
     "finished_at",
@@ -470,6 +614,16 @@
     "subtitle_style",
     "updated_at",
     "width",
+    "workspace_id"
+  ],
+  "session_groups": [
+    "created_at",
+    "id",
+    "kind",
+    "name",
+    "owner_user_id",
+    "sort_order",
+    "updated_at",
     "workspace_id"
   ],
   "task_events": [
@@ -558,6 +712,17 @@
     "source_speaker",
     "updated_at",
     "workspace_id"
+  ],
+  "workflow_revisions": [
+    "created_at",
+    "created_by",
+    "graph",
+    "graph_hash",
+    "id",
+    "note",
+    "revision",
+    "source",
+    "workflow_id"
   ],
   "workflows": [
     "created_at",

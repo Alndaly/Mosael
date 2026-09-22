@@ -2341,6 +2341,13 @@ def migration_plan() -> MigrationPlan:
         (
             *_steps(
                 MigrationPhase.BEFORE_SCHEMA,
+                # **它必须排在所有读 `users.is_deployment_admin` 的迁移之前。** 三条迁移
+                # (connections-get-an-owner、plugin-instances-get-an-owner、provider-credentials)
+                # 用「谁是部署管理员」回填归属,而加这一列的正是这一步 —— 它此前排在它们后面。
+                # 在一个老到还没有这一列的库上,后端**启动就炸**在 `no such column:
+                # is_deployment_admin`;这一路此前没有任何测试跑过(见
+                # test_schema_migrations_cover_the_models)。它只碰 users,没有前置。
+                _migrate_deployment_admin,
                 _migrate_provider_capabilities,
                 _migrate_provider_defaults_per_person,
                 # It scans ENCRYPTED_COLUMNS; migrations above must first expose those columns.
@@ -2358,7 +2365,6 @@ def migration_plan() -> MigrationPlan:
                 _migrate_tool_confirmations_session,
                 _migrate_auth_session_expiry,
                 _migrate_permission_modes,
-                _migrate_deployment_admin,
                 _drop_member_perm_overrides,
                 _migrate_tts_pip_index,
                 _migrate_agent_thinking_level,
