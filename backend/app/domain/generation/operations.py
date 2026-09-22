@@ -427,8 +427,10 @@ def validate_against_capabilities(
         counts[role] += 1
     # 外链与素材库同权:`<role>_url` 供的角色也计入 —— 只数 source_assets 的话,
     # 粘链接(不选素材)的用户会被 requires_source 误拦在「必须给一份首帧」上。
+    # 素材库那一路单独留一份:有些角色只收公网直链,而素材库里的文件是走 data URL 发过去的。
+    from_library = Counter(counts)
     counts.update(roles_supplied_via_url(parameters, kind))
-    _check_source_counts(provider, model, capabilities, counts)
+    _check_source_counts(provider, model, capabilities, counts, from_library)
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
 
 
@@ -469,6 +471,7 @@ def _check_source_counts(
     model: str,
     capabilities: dict[str, Any],
     counts: Counter[str],
+    from_library: Counter[str] | None = None,
 ) -> None:
     """按描述符查三件事:**每种给了几份、两组有没有混着用、有没有该搭伴的落了单**。
 
@@ -519,4 +522,17 @@ def _check_source_counts(
             raise GenerationDomainError(
                 f"{provider}/{model} 的{_label(role)}不能单独使用,"
                 f"要搭配{'或'.join(_label(one) for one in companions)}一起给"
+            )
+
+    # **有些角色只收公网直链。** 素材库里的文件是走 data URL(base64)发出去的,而方舟的
+    # 参考视频不收那一种:`reference_video must be provided as a web url`。
+    #
+    # 这一条尤其该拦在提交之前:参考图和参考视频在界面上挂法一模一样,用户没有任何线索知道
+    # 其中一种不能用本地文件;供应商的回话是一长串英文 400,中间夹着一个 Request id;
+    # 而且**它是在花钱之后才来的** —— 一段 base64 视频还得先整个传上去。
+    for role in capabilities.get("web_url_only_roles") or []:
+        if (from_library or Counter()).get(role):
+            raise GenerationDomainError(
+                f"{provider}/{model} 的{_label(role)}只收公网直链,不能用素材库里的文件 —— "
+                f"请改成一条可公开访问的链接(界面上直接粘链接即可)"
             )

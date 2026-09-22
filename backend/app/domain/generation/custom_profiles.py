@@ -59,6 +59,7 @@ _KNOWN_KEYS: dict[str, str] = {
     "exclusive_source_groups": "str_list_list",
     "requires_source": "str_list_list",
     "requires_companion": "str_to_str_list",
+    "web_url_only_roles": "str_list",
 }
 
 _KINDS = ("image", "video")
@@ -96,6 +97,7 @@ _FIELD_GROUPS: dict[str, str] = {
     "exclusive_source_groups": "advanced",
     "requires_source": "advanced",
     "requires_companion": "advanced",
+    "web_url_only_roles": "advanced",
     "boolean_parameters": "advanced",
     "supports_audio": "advanced",
     "supports_generate_audio": "advanced",

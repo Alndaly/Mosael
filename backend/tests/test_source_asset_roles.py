@@ -20,6 +20,7 @@ from app.ai.providers.contracts.generation import (
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
     GenerationRequest,
     SourceAsset,
     source_value,
@@ -166,3 +167,97 @@ def test_互斥素材给用户领域错误而不是内部_NameError() -> None:
             {"exclusive_source_groups": [[FIRST_FRAME], [REFERENCE_IMAGE]]},
             Counter({FIRST_FRAME: 1, REFERENCE_IMAGE: 1}),
         )
+
+
+# ---------------------------------------------------------------------------
+# 有些角色只收公网直链 —— 素材库里的文件走的是 data URL,发过去必然 400
+# ---------------------------------------------------------------------------
+
+
+def test_只收公网直链的角色_挂素材库文件要在提交前就拦下() -> None:
+    """用户挂一段本地参考视频跑 Seedance,拿到的是:
+
+        ARK request failed: Client error '400 Bad Request' … body: {"error":
+        {"code":"InvalidParameter","message":"The parameter `content` specified in the request
+        is not valid: reference_video must be provided as a web url", …}}
+
+    素材库里的文件是走 data URL(base64)发出去的 —— 参考**图**可以,参考**视频**不行。
+    两者在界面上挂法一模一样,用户没有任何线索知道其中一种不能用本地文件。
+
+    更要紧的是这个 400 **来得太晚**:一段 base64 视频得先整个传上去,才换回一句英文报错,
+    中间还夹着一个 Request id。所以这一条和 source_limits / requires_companion 一样,
+    是描述符上声明、提交前就查的。
+    """
+    from app.domain.generation.operations import GenerationDomainError, _check_source_counts
+
+    capabilities = {"web_url_only_roles": [REFERENCE_VIDEO]}
+    with pytest.raises(GenerationDomainError, match="只收公网直链"):
+        _check_source_counts(
+            "bytedance", "seedance-2", capabilities,
+            Counter({REFERENCE_VIDEO: 1}),
+            Counter({REFERENCE_VIDEO: 1}),  # 素材库那一路
+        )
+
+
+def test_粘链接那一路照常放行() -> None:
+    """限制是"必须是公网直链",不是"不能用参考视频"。粘链接进来的本来就是直链。"""
+    from app.domain.generation.operations import _check_source_counts
+
+    _check_source_counts(
+        "bytedance", "seedance-2", {"web_url_only_roles": [REFERENCE_VIDEO]},
+        Counter({REFERENCE_VIDEO: 1}),  # 总数(外链供的)
+        Counter(),                       # 素材库那一路:一份都没有
+    )
+
+
+def test_没声明这条限制的供应商不受影响() -> None:
+    from app.domain.generation.operations import _check_source_counts
+
+    _check_source_counts("alibaba", "wan", {}, Counter({REFERENCE_VIDEO: 1}), Counter({REFERENCE_VIDEO: 1}))
+
+
+def test_方舟的描述符真的声明了它() -> None:
+    """声明写在描述符上而不是适配器里的 if —— 否则 fast/mini 这些继承来的变体会漏掉。"""
+    from app.domain.generation.catalog import (
+        SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
+        SEEDANCE_2_VIDEO_CAPABILITIES,
+    )
+
+    for caps in (SEEDANCE_2_VIDEO_CAPABILITIES, SEEDANCE_2_SMALL_VIDEO_CAPABILITIES):
+        assert caps.get("web_url_only_roles") == [REFERENCE_VIDEO]
+
+
+#: 方舟 Seedance 2.0 在内置目录里的真实 model_id。写成常量而不是字面量:抄错一个日期后缀,
+#: `capabilities_for` 会静默回落到一份只有 modes/parameter_keys 的空描述符 —— 于是校验什么
+#: 都不拦,测试绿着,而被测的那条规矩根本没被走到。第一版就是这么写错的。
+SEEDANCE_2 = "doubao-seedance-2-0-260128"
+
+
+def test_走真实校验入口_挂本地参考视频当场被拦() -> None:
+    """**这一条走公共入口**,上面那几条打的是内部函数。
+
+    接线本身(把素材库那一路单独数一份并传下去)是这次改动的一半,而只测内部函数的话,
+    接线错了照样全绿 —— 这个教训这一轮已经交过一次学费。
+
+    界面、智能体、工作流、定时任务四条路都汇到 `validate_against_capabilities`,
+    所以在这里拦一次,四条路一起受益。
+    """
+    from app.domain.generation.operations import GenerationDomainError, validate_against_capabilities
+
+    with pytest.raises(GenerationDomainError, match="只收公网直链"):
+        validate_against_capabilities(
+            "bytedance", SEEDANCE_2, "video",
+            {"duration_seconds": 5, "resolution": "720p"},
+            [{"role": REFERENCE_VIDEO, "asset_id": "a1"}],
+        )
+
+
+def test_走真实校验入口_粘链接照常通过() -> None:
+    from app.domain.generation.operations import validate_against_capabilities
+
+    validate_against_capabilities(
+        "bytedance", SEEDANCE_2, "video",
+        {"duration_seconds": 5, "resolution": "720p",
+         "reference_video_url": "https://example.com/clip.mp4"},
+        [],
+    )
