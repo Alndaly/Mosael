@@ -21,6 +21,9 @@ from app.db.models import AgentQuestion, AgentSession, User, now
 MAX_QUESTIONS = 4
 MAX_OPTIONS = 6
 MAX_HEADER_CHARS = 12
+#: 「其它」那一栏的自由文本上限。它会原样变成喂给模型的一条用户消息,
+#: 所以它和别的用户输入一样要有界(见仓库里 MAX_TEXT_CHARS 那条约定)。
+MAX_FREE_TEXT_CHARS = 2000
 
 
 class QuestionError(ValueError):
@@ -92,8 +95,15 @@ def ask(db: Session, *, workspace_id: str, session_id: str, questions: Any) -> A
 def answer(db: Session, row: AgentQuestion, answers: dict[str, Any]) -> AgentQuestion:
     """记下用户挑了什么。
 
-    只认**这次问的那些问题**里出现过的选项 —— 界面之外的调用方(或者一个改坏了的前端)
-    塞进来的东西,不该变成模型看到的"用户说的话"。
+    只认**这次问过的那些问题** —— 没问过的问题一律拒。
+
+    **选项不限定在给出的那几个里**:「其它」走自由文本,那是这张卡的设计之一。此前这段
+    docstring 写的是"只认出现过的选项",而代码从来没那么做过(`allowed` 里那个 label 集合
+    算出来只用来判断问题问没问过)—— **一个算出来却没用上的变量,既不会被 lint 报,也不会
+    有任何行为差异**,它唯一的证据就是那段与代码不符的说明,而说明在上面。
+
+    自由文本因此有两条真的约束(此前只写在注释里,没写成代码):**一条**(自由文本不是多选)、
+    **有长度上限**。它会经 `_as_user_words` 原样变成对话里的一条用户消息喂给模型。
     """
     if row.status != "pending":
         raise QuestionError("这个问题已经回答过了")
@@ -104,10 +114,21 @@ def answer(db: Session, row: AgentQuestion, answers: dict[str, Any]) -> AgentQue
         if labels is None:
             raise QuestionError(f"没有问过这个问题:{question}")
         chosen = picked if isinstance(picked, list) else [picked]
-        # 「其它」走自由文本:不在选项里的值原样收下,但只有一条(自由文本不是多选)。
-        cleaned[str(question)] = [str(one) for one in chosen if str(one).strip()]
-        if not cleaned[str(question)]:
+        # 「其它」走自由文本:不在选项里的值原样收下。
+        values = [str(one).strip() for one in chosen if str(one).strip()]
+        if not values:
             raise QuestionError(f"「{question}」没有选任何一项")
+        # **把注释里那两条写成代码。** 它们此前只是注释,而注释拦不住任何东西 ——
+        # 这段文本会原样变成对话里的一条用户消息喂给模型。
+        free_text = [one for one in values if one not in labels]
+        if free_text and len(values) > 1:
+            raise QuestionError(f"「{question}」的自由文本只能有一条")
+        for one in free_text:
+            if len(one) > MAX_FREE_TEXT_CHARS:
+                raise QuestionError(
+                    f"「{question}」的自由文本太长(上限 {MAX_FREE_TEXT_CHARS} 字)"
+                )
+        cleaned[str(question)] = values
     row.answers = cleaned
     row.status = "answered"
     row.answered_at = now()

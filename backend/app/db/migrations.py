@@ -2250,6 +2250,28 @@ def _migrate_job_worker_leases() -> None:
             if name not in columns:
                 conn.execute(text(ddl))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status_lease_expires ON jobs(status, lease_expires_at)"))
+        # **把最后半步走完。** 只加列不回填的话,那些"租约列还不存在时就已经 running"的行
+        # 永远没有租约,于是读路径要长一条 `lease_expires_at IS NULL` 的兼容分支 ——
+        # 而本仓库的规矩是不写兼容、旧数据用迁移(ADR-0006)。迁移停在最后一环之前,
+        # 剩下的半步就变成了读路径上一条永久的税。
+        #
+        # 结局和 `expire_worker_leases` 对它们的处置一致:它们的执行器早就不在了
+        # (这次升级重启过后端),判失败并说清原因。**不是重跑** —— 可能带副作用的活儿
+        # 不自动重复,那是 jobs 模块从头就定的规矩。
+        from app.domain.jobs import external_kinds
+
+        #: `publish` 不在内:它有自己的一套认领(见 publish/worker),不走 job 的租约。
+        kinds = [kind for kind in external_kinds() if kind != "publish"]
+        if kinds and "error_key" in columns:
+            placeholders = ", ".join(f":k{i}" for i in range(len(kinds)))
+            conn.execute(
+                text(
+                    f"UPDATE jobs SET status = 'failed', error_key = 'jobErr_leaseExpired' "
+                    f"WHERE status IN ('queued', 'running') AND lease_expires_at IS NULL "
+                    f"AND kind IN ({placeholders})"
+                ),
+                {f"k{i}": kind for i, kind in enumerate(kinds)},
+            )
 
 
 def _migrate_model_structured_output() -> None:

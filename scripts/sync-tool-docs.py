@@ -23,6 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs" / "MCP.md"
 BEGIN = "<!-- BEGIN generated: tools -->"
 END = "<!-- END generated: tools -->"
+#: 时间线算子那份清单同样腐烂过 —— 它在标记之外手写着,而且发现时已经少了两项
+#: (`set_clip_transform` / `insert_text_clip`)。同一个道理:从代码生成。
+OPS_BEGIN = "<!-- BEGIN generated: timeline-ops -->"
+OPS_END = "<!-- END generated: timeline-ops -->"
 
 
 def _first_sentence(text: str) -> str:
@@ -60,6 +64,22 @@ def render() -> str:
     return "\n".join([BEGIN, "", *header, *rows, "", END])
 
 
+def render_ops() -> str:
+    """`edit_timeline` 认的那些算子 —— 从 `EDIT_OP_KINDS` 生成,它自己又是派发表算出来的。"""
+    sys.path.insert(0, str(ROOT / "backend"))
+    from app.domain.sequences.operations import EDIT_OP_KINDS
+
+    listed = "、".join(f"`{kind}`" for kind in EDIT_OP_KINDS)
+    return "\n".join([
+        OPS_BEGIN, "",
+        f"`edit_timeline` 认 **{len(EDIT_OP_KINDS)}** 种算子:{listed}。",
+        "",
+        "这一份从 `domain/sequences/operations` 的派发表生成 —— 那张表是唯一那份数据,"
+        "`EDIT_OP_KINDS` 和派发都从它算出来(见 test_timeline_ops_have_one_list)。",
+        "", OPS_END,
+    ])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="只检查是否同步,不写入")
@@ -71,6 +91,9 @@ def main() -> int:
         return 2
     block = render()
     updated = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END), lambda _: block, text, flags=re.S)
+    if OPS_BEGIN in updated and OPS_END in updated:
+        ops = render_ops()
+        updated = re.sub(re.escape(OPS_BEGIN) + r".*?" + re.escape(OPS_END), lambda _: ops, updated, flags=re.S)
 
     if args.check:
         if updated != text:

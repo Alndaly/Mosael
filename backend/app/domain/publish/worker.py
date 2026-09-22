@@ -70,9 +70,9 @@ def reclaim_orphaned_running(db: Session, exclude_accounts: list[str], *, worker
         #: 只有认领者说了才算数;拿自己的集合去判别人的任务,结论必然是"孤儿",于是两个
         #: 执行器会互相把对方正在跑的任务标成中断,而错误文案还写着"请到平台确认是否已发布"。
         #:
-        #: `worker` 为空 = 老执行器不报身份。那时保持原样(单执行器部署行为不变);而认得
-        #: 自己名字的执行器,不去碰无主的老任务 —— 它不知道那是谁的,交给判据 2 兜底。
-        mine = task.claimed_by == worker if worker else True
+        #: 认领者说了才算数,没有例外 —— `worker` 现在是必填的(见 routes/publish_worker)。
+        #: 无主的老任务不归任何人,交给判据 2 兜底。
+        mine = task.claimed_by == worker
         orphaned = mine and task.account_id not in exclude_accounts
         #: **判据 2 是全局的,而且必须是。** 执行器彻底死掉之后没人再来认领它的任务,
         #: 只有"多久没动静"这条能把它们收回来 —— 限制成只有认领者能判,等于它们永远挂着。

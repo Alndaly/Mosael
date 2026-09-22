@@ -1782,20 +1782,44 @@ def _record_operation(
 
 #: 一组时间线操作的种类。**这是"能对时间线做什么"的清单**,不是某一个界面的清单 ——
 #: 智能体的 edit_timeline、工作流的时间线节点、将来任何别的入口,认的都是这一份。
-EDIT_OP_KINDS = (
-    "insert_clip",
-    "move_clip",
-    "trim_clip",
-    "delete_clip",
-    "cut_clip_range",
-    "add_track",
-    "remove_track",
-    "set_clip_effects",
-    "set_clip_transform",
+#: **「能对时间线做什么」的唯一那份数据。**
+#:
+#: 智能体的 `edit_timeline`、工作流的时间线节点、将来任何别的入口,认的都是这一份;
+#: `EDIT_OP_KINDS` 和派发都从它算出来,所以**两者不可能漂**。
+#:
+#: 此前清单和派发是两份手写的元组与 `if/elif`,恰好对得上,而没有任何东西比对它们 ——
+#: 加一项忘了另一边:加在元组里 → 运行时"不认识的时间线操作";加在派发里 → 校验先把它拦掉。
+#: 这正是"两个数碰巧相等所以一直没人发现"那个形状。
+#:
+#: 而且它**当时不是全集**:28 个变更操作里只列了 10 个。于是"把这段调成 1.5 倍速"、
+#: "把这条字幕的样式改一下"在对话里和工作流里都做不到 —— 而领域层做得到。
+#: 缺席的表现是**功能缺失**,不是报错,用户只会觉得"智能体不会调速"。
+_EDIT_OPS: dict[str, tuple[type, Any]] = {
+    "insert_clip": (InsertClip, insert_clip),
+    "move_clip": (MoveClip, move_clip),
+    "move_clips_batch": (MoveClipsBatch, move_clips_batch),
+    "trim_clip": (TrimClip, trim_clip),
+    "split_clip": (SplitClip, split_clip),
+    "delete_clip": (DeleteClip, delete_clip),
+    "ripple_delete_clip": (RippleDeleteClip, ripple_delete_clip),
+    "cut_clip_range": (CutClipRange, cut_clip_range),
+    "add_track": (AddTrack, add_track),
+    "remove_track": (RemoveTrack, remove_track),
+    "set_clip_effects": (SetClipEffects, set_clip_effects),
+    "set_clip_transform": (SetClipTransform, set_clip_transform),
+    "set_clip_speed": (SetClipSpeed, set_clip_speed),
+    "set_clip_gain": (SetClipGain, set_clip_gain),
+    "detach_clip_audio": (DetachClipAudio, detach_clip_audio),
     # 字幕条就是一段没有素材的文本片段。它此前不在清单里,于是"给这个视频加字幕"在对话里
     # 根本做不到 —— 而那是这个应用最常被要求做的几件事之一。
-    "insert_text_clip",
-)
+    "insert_text_clip": (InsertTextClip, insert_text_clip),
+    "set_clip_text": (SetClipText, set_clip_text),
+    "set_subtitle_style": (SetSubtitleStyle, set_subtitle_style),
+    "set_sequence_reframe": (SetSequenceReframe, set_sequence_reframe),
+}
+
+EDIT_OP_KINDS = tuple(_EDIT_OPS)
+
 
 
 def apply_edit_operations(db: Session, sequence_id: str, operations: list[dict[str, Any]]) -> int:
@@ -1808,29 +1832,14 @@ def apply_edit_operations(db: Session, sequence_id: str, operations: list[dict[s
     applied = 0
     for operation in operations:
         kind = operation["kind"]
-        args = {key: value for key, value in operation.items() if key != "kind"}
-        if kind == "insert_clip":
-            insert_clip(db, sequence_id, InsertClip(**args))
-        elif kind == "move_clip":
-            move_clip(db, sequence_id, MoveClip(**args))
-        elif kind == "trim_clip":
-            trim_clip(db, sequence_id, TrimClip(**args))
-        elif kind == "delete_clip":
-            delete_clip(db, sequence_id, DeleteClip(**args))
-        elif kind == "cut_clip_range":
-            cut_clip_range(db, sequence_id, CutClipRange(**args))
-        elif kind == "add_track":
-            # 操作自己的名字占了 "kind",所以轨道类型走 track_kind。
-            add_track(db, sequence_id, AddTrack(kind=str(args.get("track_kind", "video"))))
-        elif kind == "remove_track":
-            remove_track(db, sequence_id, RemoveTrack(**args))
-        elif kind == "set_clip_effects":
-            set_clip_effects(db, sequence_id, SetClipEffects(**args))
-        elif kind == "set_clip_transform":
-            set_clip_transform(db, sequence_id, SetClipTransform(**args))
-        elif kind == "insert_text_clip":
-            insert_text_clip(db, sequence_id, InsertTextClip(**args))
-        else:
+        spec = _EDIT_OPS.get(kind)
+        if spec is None:
             raise SequenceDomainError(f"不认识的时间线操作: {kind}")
+        request, handler = spec
+        args = {key: value for key, value in operation.items() if key != "kind"}
+        #: `add_track` 的轨道类型走 `track_kind`:操作自己的名字已经占了 `kind`。
+        if kind == "add_track":
+            args = {"kind": str(args.get("track_kind", "video"))}
+        handler(db, sequence_id, request(**args))
         applied += 1
     return applied

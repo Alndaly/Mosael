@@ -312,18 +312,42 @@ class TestLeases:
             assert db.get(Job, claimed["id"]).status == "running"
 
 
-def test_old_running_worker_without_lease_is_reconciled(external_demo):
+def test_没有租约的老任务由迁移一次性了结_而不是读路径天天判它(external_demo):
+    """**兼容分支搬进了迁移。**
+
+    `_migrate_job_worker_leases` 此前只加列、不回填,于是那些"租约列还不存在时就已经 running"
+    的行永远没有租约 —— 读路径因此长着一条 `lease_expires_at IS NULL` 的分支。迁移停在最后
+    一环之前,剩下的半步就变成了读路径上一条**永久的税**:每加一个判据都要问"那条老分支下
+    它该怎么办",而那条分支平时没人走、坏了也没人发现(ADR-0006:不写兼容,旧数据用迁移)。
+
+    现在迁移把它们直接判失败(结局和 `expire_worker_leases` 对它们的处置一致),读路径只剩
+    一条判据:**租约到点了**。
+    """
     from datetime import timedelta
+
+    from sqlalchemy import text
+
+    from app.core.db import engine
+    from app.db.migrations import _migrate_job_worker_leases
     from app.db.model_base import now
+
     ws = _workspace()
     jid = _make_job(ws)
     with SessionLocal() as db:
         job = db.get(Job, jid)
         job.status = "running"
         job.updated_at = now() - timedelta(minutes=5)
+        job.lease_expires_at = None
         db.commit()
-        assert reconcile_orphaned_jobs(db) == 1
-        assert db.get(Job, jid).status == "failed"
+        # 读路径不再管它 —— 没有租约就不是"租约到点了"。
+        assert reconcile_orphaned_jobs(db) == 0
+
+    _migrate_job_worker_leases()
+    with engine.begin() as conn:
+        row = conn.execute(text("SELECT status, error_key FROM jobs WHERE id = :id"),
+                           {"id": jid}).mappings().first()
+    assert row["status"] == "failed", "迁移没把没有租约的老任务了结掉"
+    assert row["error_key"] == "jobErr_leaseExpired", "失败原因没有 key —— 英文用户读到的是中文"
 
 
 def test_lease_migration_is_idempotent_and_preserves_existing_jobs(monkeypatch):

@@ -24,8 +24,16 @@ router = APIRouter(tags=["publish-worker"])
 class ClaimRequest(BaseModel):
     exclude_accounts: list[str] = Field(default_factory=list)
     #: 执行器的稳定身份(跨重启不变)。多执行器下用它分辨任务归属 —— 见
-    #: publish/worker.reclaim_orphaned_running。老执行器不报,那时行为和以前一样。
-    worker: str = Field(default="", max_length=64)
+    #: publish/worker.reclaim_orphaned_running。
+    #:
+    #: **必填。** 此前它可空,读路径那边配一条「为空 = 老执行器不报身份」的兼容分支 ——
+    #: 而执行器就在这个仓库里、跟后端**同一个安装包**发布,`readWorkerId()`
+    #: (electron/publish/publishBackend.ts)永远返回一个非空 id(环境变量 → 落盘的文件 →
+    #: 现生成一个 uuid)。所以那条分支在这个产品里永远走不到,它只是给"两个执行器会互相把
+    #: 对方的任务判成孤儿"这个已经想清楚的问题留了一个**假的例外口**。
+    #:
+    #: 一旦接受"给同包发布的客户端留版本分支"这个理由,worker 协议以后每加一个字段都会再长一条。
+    worker: str = Field(min_length=1, max_length=64)
 
 
 class ReportRequest(BaseModel):

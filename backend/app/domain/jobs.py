@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, delete, event, inspect, or_, select
+from sqlalchemy import delete, event, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
@@ -669,18 +669,21 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
 def expire_worker_leases(db: Session) -> int:
     """Settle abandoned work; never automatically repeat a potentially billable side effect."""
     now = models_now()
-    legacy_kinds = set(external_kinds()) - {"publish"}
-    candidates = db.scalars(select(Job).where(Job.status == "running", or_(
-        Job.lease_expires_at <= now,
-        and_(Job.lease_expires_at.is_(None), Job.kind.in_(legacy_kinds), Job.updated_at <= now - timedelta(seconds=WORKER_LEASE_SECONDS)),
-    ))).all()
+    #: **判据只有一条:租约到点了。** 此前这里还有一条 `lease_expires_at IS NULL` 的兼容分支,
+    #: 伺候"租约列还不存在时就已经 running 的行"—— 而那本该由迁移一次性了结的
+    #: (`_migrate_job_worker_leases` 现在把它们直接判失败)。迁移停在最后一环之前,
+    #: 剩下的半步就会变成读路径上一条永久的税:每加一个判据都要问"那条老分支下它该怎么办",
+    #: 而那条分支平时没人走、坏了也没人发现。
+    candidates = db.scalars(
+        select(Job).where(Job.status == "running", Job.lease_expires_at <= now)
+    ).all()
     expired = 0
     for job in candidates:
         if not lock_active_job(db, job):
             continue
         db.refresh(job, ["lease_expires_at", "updated_at"])
         # A heartbeat may have renewed after the candidate query but before our write lock.
-        if (job.lease_expires_at and job.lease_expires_at > now) or (job.lease_expires_at is None and job.updated_at > now - timedelta(seconds=WORKER_LEASE_SECONDS)):
+        if job.lease_expires_at is None or job.lease_expires_at > now:
             continue
         if finish_job(
             db, job, status="failed",

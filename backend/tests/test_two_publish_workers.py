@@ -110,13 +110,18 @@ def test_同一个账号不会被两个执行器同时认领() -> None:
     assert _status(second["id"]) == "pending"
 
 
-def test_不报身份的执行器行为不变() -> None:
-    """单执行器部署(老执行器不带 worker 字段)照旧:认领、重启后自愈,一切不变。"""
+def test_执行器身份是必填的() -> None:
+    """**不报身份的那条路没了。**
+
+    此前认领可以不带 `worker`,读路径配一条「为空 = 老执行器不报身份」的兼容分支。而执行器
+    就在这个仓库里、跟后端**同一个安装包**发布,`readWorkerId()`
+    (electron/publish/publishBackend.ts)永远返回一个非空 id(环境变量 → 落盘的文件 →
+    现生成一个 uuid)—— 那条分支在这个产品里**永远走不到**,它只是给"两个执行器会互相把
+    对方的任务判成孤儿"这个已经想清楚的问题留了一个假的例外口。
+
+    一旦接受"给同包发布的客户端留版本分支"这个理由,worker 协议以后每加一个字段都会再长一条。
+    """
     client = _client()
-    _, account, task = setup_browser_task(client)
-    got = client.post("/api/publish/worker/claim", json={"exclude_accounts": []}).json()["task"]
-    assert got["id"] == task["id"]
-    assert _status(task["id"]) == "running"
-    # 空手再来一轮 = 老的"重启即自愈"路径。
-    client.post("/api/publish/worker/claim", json={"exclude_accounts": []})
-    assert _status(task["id"]) == "failed"
+    setup_browser_task(client)
+    refused = client.post("/api/publish/worker/claim", json={"exclude_accounts": []})
+    assert refused.status_code == 422, "不报身份的认领又被放行了"

@@ -206,9 +206,13 @@ Interactive Card; then republish). Neither is settable via API, so one-click bot
 do it for you. When they are missing the send fails with `200340` and the backend degrades to a
 plain-text notice that says which switches to flip — it does not fail silently.
 
-`edit_timeline` operation kinds: `insert_clip`, `move_clip`, `trim_clip`,
-`delete_clip`, `cut_clip_range`, `add_track` (`track_kind`), `remove_track`,
-`set_clip_effects`.
+<!-- BEGIN generated: timeline-ops -->
+
+`edit_timeline` 认 **19** 种算子:`insert_clip`、`move_clip`、`move_clips_batch`、`trim_clip`、`split_clip`、`delete_clip`、`ripple_delete_clip`、`cut_clip_range`、`add_track`、`remove_track`、`set_clip_effects`、`set_clip_transform`、`set_clip_speed`、`set_clip_gain`、`detach_clip_audio`、`insert_text_clip`、`set_clip_text`、`set_subtitle_style`、`set_sequence_reframe`。
+
+这一份从 `domain/sequences/operations` 的派发表生成 —— 那张表是唯一那份数据,`EDIT_OP_KINDS` 和派发都从它算出来(见 test_timeline_ops_have_one_list)。
+
+<!-- END generated: timeline-ops -->
 
 All tools default to the first workspace when `workspace_id` is omitted.
 `inspect_sequence` accepts either `sequence_id` or `project_id` (most recent

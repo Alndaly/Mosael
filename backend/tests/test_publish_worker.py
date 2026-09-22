@@ -27,6 +27,12 @@ def setup_browser_task(client) -> tuple[dict, dict, dict]:
     return ws, account, task
 
 
+#: 执行器身份现在是**必填**的(见 routes/publish_worker 的说明)—— 那条「为空 = 老执行器」
+#: 的兼容分支在这个产品里永远走不到:执行器跟后端同一个安装包发布,`readWorkerId()` 永远
+#: 返回一个非空 id。测试也照真实调用来写,不然测的是一条线上不存在的路。
+WORKER = "w-test"
+
+
 def test_browser_platform_waits_for_worker_and_reports() -> None:
     client = fresh_client()
     # These tests drive the worker channel, which now needs its shared key.
@@ -38,13 +44,13 @@ def test_browser_platform_waits_for_worker_and_reports() -> None:
     assert listed[0]["status"] == "pending"
 
     # worker 认领(免鉴权通道)→ running,拿到绝对视频路径
-    claimed = client.post("/api/publish/worker/claim", json={"exclude_accounts": []}).json()
+    claimed = client.post("/api/publish/worker/claim", json={"exclude_accounts": [], "worker": WORKER}).json()
     assert claimed["task"]["id"] == task["id"]
     assert claimed["task"]["platform"] == "douyin"
     assert claimed["task"]["video_path"].endswith("clip.mp4")
 
     # 同账号任务在 exclude 列表里 → 认领不到
-    again = client.post("/api/publish/worker/claim", json={"exclude_accounts": [account["id"]]}).json()
+    again = client.post("/api/publish/worker/claim", json={"exclude_accounts": [account["id"]], "worker": WORKER}).json()
     assert again["task"] is None
 
     # 中间富状态 → job 保持 running;终态 success → job succeeded
@@ -70,16 +76,16 @@ def test_orphaned_running_task_is_reclaimed_on_fresh_claim() -> None:
     client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
     ws, account, task = setup_browser_task(client)
 
-    claimed = client.post("/api/publish/worker/claim", json={"exclude_accounts": []}).json()
+    claimed = client.post("/api/publish/worker/claim", json={"exclude_accounts": [], "worker": WORKER}).json()
     assert claimed["task"]["id"] == task["id"]
     assert client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()[0]["status"] == "running"
 
     # 账号仍在在跑集合里(worker 正常处理中)→ 不回收
-    client.post("/api/publish/worker/claim", json={"exclude_accounts": [account["id"]]})
+    client.post("/api/publish/worker/claim", json={"exclude_accounts": [account["id"]], "worker": WORKER})
     assert client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()[0]["status"] == "running"
 
     # 执行器重启:在跑集合空了,这条 running 的 owner 已消失 → 自愈成 failed
-    client.post("/api/publish/worker/claim", json={"exclude_accounts": []})
+    client.post("/api/publish/worker/claim", json={"exclude_accounts": [], "worker": WORKER})
     healed = client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()[0]
     assert healed["status"] == "failed"
     assert "发布器中断" in (healed["error"] or "")
@@ -165,7 +171,7 @@ def test_worker_can_observe_cancellation_before_submit():
     client = fresh_client()
     client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
     _, _, task = setup_browser_task(client)
-    client.post("/api/publish/worker/claim", json={})
+    client.post("/api/publish/worker/claim", json={"worker": WORKER})
     url = f"/api/publish/worker/task/{task['id']}"
     assert client.get(url).json()["status"] == "running"
     assert client.post(f"/api/jobs/{task['job_id']}/cancel").status_code == 200

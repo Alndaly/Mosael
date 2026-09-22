@@ -469,15 +469,32 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
     Do NOT use for workflow canvas nodes/edges such as add_node, connect,
     set_node_config, remove_node, or remove_edge — use edit_workflow for those.
 
-    operations: list of {kind, ...args}. Supported kinds: insert_clip
-    (track_id, asset_id, timeline_start, src_in, src_out), move_clip
-    (clip_id, timeline_start), trim_clip (clip_id, timeline_start, src_in,
-    src_out), delete_clip (clip_id), cut_clip_range (clip_id, src_start,
-    src_end), add_track (track_kind), remove_track (track_id),
-    set_clip_effects (clip_id, effects), set_clip_transform (clip_id, transform:
-    scale / position / rotation / opacity — reframe, pan, zoom or fade one clip),
-    insert_text_clip (track_id of a SUBTITLE track, text, timeline_start, duration)
-    — one subtitle cue; send one operation per cue to caption a video.
+    operations: list of {kind, ...args}. Supported kinds:
+
+    Place and move — insert_clip (track_id, asset_id, timeline_start, src_in,
+    src_out), move_clip (clip_id, timeline_start), move_clips_batch (moves: a
+    list of {clip_id, timeline_start}, applied all-or-nothing).
+
+    Cut and trim — trim_clip (clip_id, timeline_start, src_in, src_out),
+    split_clip (clip_id, at), delete_clip (clip_id), ripple_delete_clip
+    (clip_id — later clips slide left to close the gap), cut_clip_range
+    (clip_id, src_start, src_end).
+
+    Tracks — add_track (track_kind), remove_track (track_id),
+    detach_clip_audio (clip_id — moves a video clip's audio onto its own track).
+
+    Look and sound — set_clip_effects (clip_id, effects), set_clip_transform
+    (clip_id, transform: scale / position / rotation / opacity — reframe, pan,
+    zoom or fade one clip), set_clip_speed (clip_id, speed — 1.5 is 1.5x),
+    set_clip_gain (clip_id, gain / muted), set_sequence_reframe (width, height,
+    fit — e.g. turn a landscape sequence portrait).
+
+    Subtitles — insert_text_clip (track_id of a SUBTITLE track, text,
+    timeline_start, duration) — one subtitle cue; send one operation per cue to
+    caption a video. set_clip_text (clip_id, text) edits one cue;
+    set_subtitle_style (style) sets size / colour / background / position for
+    the whole sequence.
+
     Every applied edit is undoable by the user.
     """
     if _looks_like_workflow_graph_ops(operations):
