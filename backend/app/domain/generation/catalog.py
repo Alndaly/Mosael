@@ -427,13 +427,17 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
     "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP],
     # 参考音频不能单独上场,得搭着参考图或参考视频给 —— 接口自己这么说的。
     "requires_companion": {"reference_audio": ["reference_image", "reference_video"]},
-    # **参考视频只收公网直链。** 参考图可以走 data URL(base64),参考视频不行 ——
-    # 接口原话:`The parameter "content" specified in the request is not valid:
-    # reference_video must be provided as a web url`。
+    # **参考视频只能按链接交付,不能内联。** 官方文档:`image_url` 收公网 http(s) 链接、
+    # Base64 data URL、以及方舟自家素材库的 `asset://<ID>`;而 `video_url` **只收前者和后者,
+    # 明确不收 Base64**。接口的原话是
+    # `reference_video must be provided as a web url`。
+    #
+    # 参考视频本身是支持的(2.0 收 3 段、2–15 秒、≤200MB、mp4/mov、H.264/H.265)——
+    # 不成立的只是"把本地文件编码进请求体"这一种交付方式。
     #
     # 只写 reference_video 这一条:参考音频有没有同样的限制没核过,而这个仓库的规矩是
     # **只写有把握的**(推错比不推更糟)。哪天核到了再加。
-    "web_url_only_roles": ["reference_video"],
+    "url_only_roles": ["reference_video"],
     "duration_seconds": [],
     "default_duration_seconds": 5,
     # 文档:Seedance 2.0 默认 720p,可选 480p/720p/1080p/**4k**。fast 与 mini 只到 720p,

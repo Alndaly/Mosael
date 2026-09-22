@@ -24,6 +24,7 @@ from app.ai.providers.contracts.generation import (
     GenerationRequest,
     SourceAsset,
     source_value,
+    source_values,
 )
 
 
@@ -170,62 +171,8 @@ def test_互斥素材给用户领域错误而不是内部_NameError() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 有些角色只收公网直链 —— 素材库里的文件走的是 data URL,发过去必然 400
+# 交付形式:内联字节 vs 一条链接 —— 哪一种可用是供应商按角色定的
 # ---------------------------------------------------------------------------
-
-
-def test_只收公网直链的角色_挂素材库文件要在提交前就拦下() -> None:
-    """用户挂一段本地参考视频跑 Seedance,拿到的是:
-
-        ARK request failed: Client error '400 Bad Request' … body: {"error":
-        {"code":"InvalidParameter","message":"The parameter `content` specified in the request
-        is not valid: reference_video must be provided as a web url", …}}
-
-    素材库里的文件是走 data URL(base64)发出去的 —— 参考**图**可以,参考**视频**不行。
-    两者在界面上挂法一模一样,用户没有任何线索知道其中一种不能用本地文件。
-
-    更要紧的是这个 400 **来得太晚**:一段 base64 视频得先整个传上去,才换回一句英文报错,
-    中间还夹着一个 Request id。所以这一条和 source_limits / requires_companion 一样,
-    是描述符上声明、提交前就查的。
-    """
-    from app.domain.generation.operations import GenerationDomainError, _check_source_counts
-
-    capabilities = {"web_url_only_roles": [REFERENCE_VIDEO]}
-    with pytest.raises(GenerationDomainError, match="只收公网直链"):
-        _check_source_counts(
-            "bytedance", "seedance-2", capabilities,
-            Counter({REFERENCE_VIDEO: 1}),
-            Counter({REFERENCE_VIDEO: 1}),  # 素材库那一路
-        )
-
-
-def test_粘链接那一路照常放行() -> None:
-    """限制是"必须是公网直链",不是"不能用参考视频"。粘链接进来的本来就是直链。"""
-    from app.domain.generation.operations import _check_source_counts
-
-    _check_source_counts(
-        "bytedance", "seedance-2", {"web_url_only_roles": [REFERENCE_VIDEO]},
-        Counter({REFERENCE_VIDEO: 1}),  # 总数(外链供的)
-        Counter(),                       # 素材库那一路:一份都没有
-    )
-
-
-def test_没声明这条限制的供应商不受影响() -> None:
-    from app.domain.generation.operations import _check_source_counts
-
-    _check_source_counts("alibaba", "wan", {}, Counter({REFERENCE_VIDEO: 1}), Counter({REFERENCE_VIDEO: 1}))
-
-
-def test_方舟的描述符真的声明了它() -> None:
-    """声明写在描述符上而不是适配器里的 if —— 否则 fast/mini 这些继承来的变体会漏掉。"""
-    from app.domain.generation.catalog import (
-        SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
-        SEEDANCE_2_VIDEO_CAPABILITIES,
-    )
-
-    for caps in (SEEDANCE_2_VIDEO_CAPABILITIES, SEEDANCE_2_SMALL_VIDEO_CAPABILITIES):
-        assert caps.get("web_url_only_roles") == [REFERENCE_VIDEO]
-
 
 #: 方舟 Seedance 2.0 在内置目录里的真实 model_id。写成常量而不是字面量:抄错一个日期后缀,
 #: `capabilities_for` 会静默回落到一份只有 modes/parameter_keys 的空描述符 —— 于是校验什么
@@ -233,31 +180,126 @@ def test_方舟的描述符真的声明了它() -> None:
 SEEDANCE_2 = "doubao-seedance-2-0-260128"
 
 
-def test_走真实校验入口_挂本地参考视频当场被拦() -> None:
-    """**这一条走公共入口**,上面那几条打的是内部函数。
+def test_有直链的素材_照常放行(tmp_path: Path) -> None:
+    """**参考视频是支持的。** 不成立的只是"把本地文件编码进请求体"这一种交付方式。
 
-    接线本身(把素材库那一路单独数一份并传下去)是这次改动的一半,而只测内部函数的话,
-    接线错了照样全绿 —— 这个教训这一轮已经交过一次学费。
-
-    界面、智能体、工作流、定时任务四条路都汇到 `validate_against_capabilities`,
-    所以在这里拦一次,四条路一起受益。
+    官方文档:`image_url` 收公网链接 / Base64 data URL / `asset://<ID>`;`video_url`
+    只收前者和后者,**明确不收 Base64**。素材是从一条公网直链导入的,就有链接可用 ——
+    这时功能完全可用,不该被拦。
     """
-    from app.domain.generation.operations import GenerationDomainError, validate_against_capabilities
-
-    with pytest.raises(GenerationDomainError, match="只收公网直链"):
-        validate_against_capabilities(
-            "bytedance", SEEDANCE_2, "video",
-            {"duration_seconds": 5, "resolution": "720p"},
-            [{"role": REFERENCE_VIDEO, "asset_id": "a1"}],
-        )
-
-
-def test_走真实校验入口_粘链接照常通过() -> None:
-    from app.domain.generation.operations import validate_against_capabilities
-
-    validate_against_capabilities(
-        "bytedance", SEEDANCE_2, "video",
-        {"duration_seconds": 5, "resolution": "720p",
-         "reference_video_url": "https://example.com/clip.mp4"},
-        [],
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    request = GenerationRequest(
+        kind="video", model=SEEDANCE_2, prompt="照这个风格",
+        sources=(SourceAsset(role=REFERENCE_VIDEO, path=clip,
+                             public_url="https://cdn.example.com/clip.mp4"),),
     )
+    assert source_values(request, REFERENCE_VIDEO) == ("https://cdn.example.com/clip.mp4",)
+
+
+def test_没有直链就内联_而那是别家收的形式(tmp_path: Path) -> None:
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    request = GenerationRequest(
+        kind="video", model="wan", prompt="照这个风格",
+        sources=(SourceAsset(role=REFERENCE_VIDEO, path=clip),),
+    )
+    assert source_values(request, REFERENCE_VIDEO)[0].startswith("data:")
+
+
+def test_图片仍然内联_哪怕有直链(tmp_path: Path) -> None:
+    """base64 是各家都收的形式,而且不依赖对方能不能访问到我们给的地址。改它没有收益,只有风险。"""
+    still = tmp_path / "a.png"
+    still.write_bytes(b"\x89PNG\r\n\x1a\n")
+    request = GenerationRequest(
+        kind="video", model=SEEDANCE_2, prompt="x",
+        sources=(SourceAsset(role=REFERENCE_IMAGE, path=still,
+                             public_url="https://cdn.example.com/a.png"),),
+    )
+    assert source_values(request, REFERENCE_IMAGE)[0].startswith("data:")
+
+
+def test_页面地址不算直链() -> None:
+    """从 yt-dlp 导入的素材,`source_url` 记的是**播放页**地址。把它当直链发过去,
+    对面下载到的是一坨 HTML —— 那种失败比一个明确的拦截更难查。"""
+    from app.ai.providers.contracts.generation import direct_media_url
+
+    assert direct_media_url("https://cdn.example.com/clip.mp4") == "https://cdn.example.com/clip.mp4"
+    assert direct_media_url("https://cdn.example.com/clip.MP4?t=3") is not None
+    assert direct_media_url("https://www.bilibili.com/video/BV1xx") is None
+    assert direct_media_url("file:///Users/me/clip.mp4") is None
+    assert direct_media_url("") is None
+    assert direct_media_url(None) is None
+
+
+def test_方舟的描述符声明了这条交付限制() -> None:
+    """声明写在描述符上而不是适配器里的 if —— 否则 fast/mini 这些 `**` 继承来的变体会漏掉。"""
+    from app.domain.generation.catalog import (
+        SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
+        SEEDANCE_2_VIDEO_CAPABILITIES,
+    )
+
+    for caps in (SEEDANCE_2_VIDEO_CAPABILITIES, SEEDANCE_2_SMALL_VIDEO_CAPABILITIES):
+        assert caps.get("url_only_roles") == [REFERENCE_VIDEO]
+
+
+def test_提交前就说清楚_而且只拦真没有链接的那一份() -> None:
+    """走**完整提交链**(界面/智能体/工作流/定时任务四条路都汇到 `create_generation_job`)。
+
+    用户挂一段**本地**参考视频跑 Seedance,此前拿到的是花钱之后才来的一句英文 400:
+
+        The parameter `content` specified in the request is not valid:
+        reference_video must be provided as a web url
+
+    而挂一段**从链接导入**的素材,功能本来就是好的 —— 这一条钉住两者不能被一视同仁。
+    修对了的判据不是"拦住了",是"该拦的拦、该放的放"。
+    """
+    from sqlalchemy import select
+
+    from app.core.db import SessionLocal
+    from app.db.models import Asset, ProviderProfile, User
+    from app.domain import provider_models
+    from app.domain.generation.operations import GenerationDomainError, create_generation_job
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    pid = client.post(
+        "/api/settings/providers",
+        json={"vendor": "bytedance", "name": "方舟", "api_key": "sk-test",
+              "base_url": "https://ark.cn-beijing.volces.com/api/v3"},
+    ).json()["id"]
+    client.put(f"/api/settings/providers/{pid}/credential", json={"api_key": "sk-test"})
+    with SessionLocal() as db:
+        provider_models.upsert(db, db.get(ProviderProfile, pid), SEEDANCE_2,
+                               source="manual", capability_ids=["video"])
+        db.commit()
+        user_id = db.scalars(select(User).where(User.username == "tester")).first().id
+
+    def _clip(name: str, source_url: str | None) -> str:
+        with SessionLocal() as db:
+            asset = Asset(
+                workspace_id=ws, kind="video", name=name, original_filename=f"{name}.mp4",
+                file_key=f"{ws}/{name}.mp4", source="imported",
+                media_info={"source_url": source_url} if source_url else {},
+            )
+            db.add(asset)
+            db.commit()
+            return asset.id
+
+    local, linked = _clip("本地片段", None), _clip("从链接导入的", "https://cdn.example.com/clip.mp4")
+
+    def _submit(asset_id: str):
+        with SessionLocal() as db:
+            return create_generation_job(
+                db, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
+                provider="bytedance", provider_profile_id=pid, model=SEEDANCE_2, kind="video",
+                prompt="照这个风格来", negative_prompt="",
+                parameters={"duration_seconds": 5, "resolution": "720p"},
+                source_assets=[{"role": REFERENCE_VIDEO, "asset_id": asset_id}],
+            )
+
+    with pytest.raises(GenerationDomainError, match="只能按链接给"):
+        _submit(local)
+    # 从链接导入的那一份:**拦不该落在它头上**。参考视频本身是支持的。
+    _submit(linked)

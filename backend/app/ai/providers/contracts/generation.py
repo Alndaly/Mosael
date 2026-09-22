@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 from collections.abc import Callable, Iterator
 from collections import Counter
 from typing import Any, TypeVar
@@ -85,12 +86,42 @@ VIDEO_INPUT_ROLES = (SOURCE_VIDEO, FIRST_CLIP)
 DRIVING_ROLES = (DRIVING_AUDIO,)
 
 
+#: 能原样交给供应商去下载的媒体后缀。**判的是"这是不是一条直链",不是"这是不是网址"** ——
+#: 从 yt-dlp 导入的素材,`source_url` 记的是一个**页面**地址(B 站 / YouTube 的播放页),
+#: 把它当直链发过去,对面下载到的是一坨 HTML。
+_DIRECT_MEDIA_SUFFIXES = (
+    ".mp4", ".mov", ".m4v", ".webm",
+    ".mp3", ".wav", ".m4a", ".aac", ".flac",
+    ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp",
+)
+
+
+def direct_media_url(url: str | None) -> str | None:
+    """这条地址能不能原样交给供应商去下载;不能就返回 None。"""
+    text = (url or "").strip()
+    if not text.lower().startswith(("http://", "https://")):
+        return None
+    return text if urlsplit(text).path.lower().endswith(_DIRECT_MEDIA_SUFFIXES) else None
+
+
 @dataclass(frozen=True)
 class SourceAsset:
-    """一份输入素材,带着它的用途。"""
+    """一份输入素材,带着它的用途和**它能怎么被交付**。
+
+    `public_url`:这份素材在公网上的直链 —— 只有"从这样一条链接导入的"素材才有。
+
+    **一份素材有两种交付方式:内联字节(base64 data URL)或者一条链接。** 哪一种可用是
+    供应商按角色定的,不是我们选的:方舟的参考图两种都收,参考视频**只收链接**
+    (公网 http(s) 直链,或它自家素材库的 `asset://<ID>`;官方文档明写不收 Base64)。
+    而本地文件这条路发出去的正是 base64。
+
+    所以这一格存在:有直链时优先用直链 —— 既让参考视频真的可用,也免去把一段最大 200MB
+    的视频编码进 JSON 请求体。
+    """
 
     role: str
     path: Path
+    public_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -469,7 +500,14 @@ def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
     首尾帧这种天然只有一份的角色照样可以用它,拿回来的元组长度就是 1。
     """
     urls = list(source_url_values(request.parameters, role, request.kind))
-    urls.extend(image_file_to_data_url(path) for path in request.sources_for(role))
+    for item in request.sources:
+        if item.role != role:
+            continue
+        # 视频和音频**优先走直链**:base64 在这两类上要么被拒(方舟的参考视频),要么把一段
+        # 几十上百 MB 的文件编码进 JSON 请求体。图片保持内联 —— 那是各家都收的形式,而且
+        # 不依赖对方能不能访问到我们给的地址。
+        inline_only = role in KEYFRAME_ROLES or role == REFERENCE_IMAGE
+        urls.append(item.public_url if item.public_url and not inline_only else image_file_to_data_url(item.path))
     return tuple(urls)
 
 

@@ -13,6 +13,7 @@ from app.ai.providers import (
     REFERENCE_IMAGE,
     SOURCE_ROLES,
     allowed_source_url_parameters,
+    direct_media_url,
     get_generation_adapter,
     roles_supplied_via_url,
 )
@@ -85,7 +86,10 @@ def create_generation_job(
         source_assets,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
     )
-    _validate_source_assets(db, workspace_id, source_assets)
+    _validate_source_assets(
+        db, workspace_id, source_assets,
+        capabilities=resolved.capabilities if resolved.capabilities_known else None,
+    )
     negative_prompt = requested_negative_prompt(negative_prompt, parameters)
 
     session = _resolve_session(
@@ -145,21 +149,39 @@ def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, st
     return default.profile.vendor, default.model_id, default.provider_profile_id
 
 
-def _validate_source_assets(db: Session, workspace_id: str, source_assets: list[dict[str, str]]) -> None:
-    """在创建任务前确认引用仍有效。
+def _validate_source_assets(
+    db: Session,
+    workspace_id: str,
+    source_assets: list[dict[str, str]],
+    capabilities: dict[str, Any] | None = None,
+) -> None:
+    """在创建任务前确认引用仍有效,**并且它能按这家要的形式交付**。
 
     以前到 worker 真正下载/读取素材时才发现引用已删除或来自别的工作区。此时界面已经进入
     loading，用户只得到一句没有素材名称的异步失败。同步拦截既不制造一个注定失败的任务，
     也能明确告诉他该重新连接哪一个槽位。runner 仍会复查，以覆盖提交后被删除的竞态。
+
+    **交付形式**:一份素材有两种发法 —— 内联字节(base64 data URL)或者一条链接。哪一种
+    可用是供应商按角色定的:方舟的参考图两种都收,参考视频**只收链接**(官方文档明写不收
+    Base64)。素材是从一条公网直链导入的就有链接可用,照常放行;是本地文件就只有内联那一种,
+    这家用不了 —— 而那个 400 是**花钱之后**才来的(一段最大 200MB 的视频得先整个传上去),
+    回话还是一长串英文,中间夹着一个 Request id。
     """
+    url_only = set((capabilities or {}).get("url_only_roles") or [])
     for entry in source_assets:
         asset_id = str(entry.get("asset_id") or "").strip()
         role = str(entry.get("role") or FIRST_FRAME)
         asset = db.get(Asset, asset_id)
+        label = SOURCE_ROLE_LABELS.get(role, role)
         if asset is None or asset.workspace_id != workspace_id:
-            label = SOURCE_ROLE_LABELS.get(role, role)
             short = f"（{asset_id[:12]}…）" if asset_id else ""
             raise GenerationDomainError(f"{label}素材{short}已删除或不在当前工作区，请重新连接或选择")
+        if role in url_only and not direct_media_url((asset.media_info or {}).get("source_url")):
+            raise GenerationDomainError(
+                f"这个模型的{label}只能按链接给,不能上传本地文件 —— "
+                f"「{asset.name}」是本地素材,没有可公开访问的地址。"
+                f"请改用一条公网直链(界面上直接粘链接即可),或先把它传到一个能公开访问的地方"
+            )
 
 
 def _resolve_provider_profile(
@@ -427,10 +449,8 @@ def validate_against_capabilities(
         counts[role] += 1
     # 外链与素材库同权:`<role>_url` 供的角色也计入 —— 只数 source_assets 的话,
     # 粘链接(不选素材)的用户会被 requires_source 误拦在「必须给一份首帧」上。
-    # 素材库那一路单独留一份:有些角色只收公网直链,而素材库里的文件是走 data URL 发过去的。
-    from_library = Counter(counts)
     counts.update(roles_supplied_via_url(parameters, kind))
-    _check_source_counts(provider, model, capabilities, counts, from_library)
+    _check_source_counts(provider, model, capabilities, counts)
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
 
 
@@ -471,7 +491,6 @@ def _check_source_counts(
     model: str,
     capabilities: dict[str, Any],
     counts: Counter[str],
-    from_library: Counter[str] | None = None,
 ) -> None:
     """按描述符查三件事:**每种给了几份、两组有没有混着用、有没有该搭伴的落了单**。
 
@@ -522,17 +541,4 @@ def _check_source_counts(
             raise GenerationDomainError(
                 f"{provider}/{model} 的{_label(role)}不能单独使用,"
                 f"要搭配{'或'.join(_label(one) for one in companions)}一起给"
-            )
-
-    # **有些角色只收公网直链。** 素材库里的文件是走 data URL(base64)发出去的,而方舟的
-    # 参考视频不收那一种:`reference_video must be provided as a web url`。
-    #
-    # 这一条尤其该拦在提交之前:参考图和参考视频在界面上挂法一模一样,用户没有任何线索知道
-    # 其中一种不能用本地文件;供应商的回话是一长串英文 400,中间夹着一个 Request id;
-    # 而且**它是在花钱之后才来的** —— 一段 base64 视频还得先整个传上去。
-    for role in capabilities.get("web_url_only_roles") or []:
-        if (from_library or Counter()).get(role):
-            raise GenerationDomainError(
-                f"{provider}/{model} 的{_label(role)}只收公网直链,不能用素材库里的文件 —— "
-                f"请改成一条可公开访问的链接(界面上直接粘链接即可)"
             )

@@ -26,6 +26,7 @@ from app.ai.providers.adapters.bytedance.volcano.podcast import (
     synthesize_volcano_podcast,
 )
 from app.ai.providers.contracts.generation import (
+    direct_media_url,
     DRIVING_AUDIO,
     FIRST_CLIP,
     FIRST_FRAME,
@@ -64,6 +65,7 @@ from app.ai.providers.registry import (
 )
 
 __all__ = [
+    "direct_media_url",
     "DASHSCOPE_NATIVE_BASE",
     "DRIVING_AUDIO",
     "EDGE_BUILTIN_VOICES",

@@ -20,7 +20,7 @@ from app.ai.providers import (
     get_generation_adapter,
     watching_remote_tasks,
 )
-from app.ai.providers.contracts.generation import sanitize_adapter_error
+from app.ai.providers.contracts.generation import direct_media_url, sanitize_adapter_error
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
@@ -315,7 +315,15 @@ def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset,
         path = resolve_key(asset.file_key)
         if not path.is_file():
             raise GenerationAdapterError(f"{label}素材文件不存在")
-        sources.append(SourceAsset(role=role, path=path))
+        # 这份素材在公网上的直链(只有"从链接导入的"素材才有)。有直链时,视频/音频角色
+        # 优先走直链发出去 —— 见 contracts.generation.SourceAsset:方舟的参考视频只收链接。
+        sources.append(
+            SourceAsset(
+                role=role,
+                path=path,
+                public_url=direct_media_url((asset.media_info or {}).get("source_url")),
+            )
+        )
     return tuple(sources)
 
 
