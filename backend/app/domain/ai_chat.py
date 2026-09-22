@@ -179,6 +179,9 @@ def _max_output_tokens(db: Session, profile: ResolvedConnection, model: str) -> 
         override_output=getattr(row, "max_output_tokens", None),
         catalog_window=catalog.context_window if catalog else None,
         catalog_output=catalog.max_output_tokens if catalog else None,
+        # 用户在模型设置里勾的「推理模型」。查证不到这个模型的思考行为时,就听他的 ——
+        # 中转/本地端点上挂的推理模型全靠这一格。
+        reasoning=getattr(row, "reasoning", None),
     ).effective_max_output_tokens
 
 

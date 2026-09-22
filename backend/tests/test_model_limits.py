@@ -135,3 +135,62 @@ def test_unknown_cloud_model_keeps_the_conservative_fallback() -> None:
     )
     assert resolved.effective_context_window == FALLBACK_CONTEXT_WINDOW
     assert resolved.effective_max_output_tokens == 4096
+
+
+# ---------------------------------------------------------------------------
+# 「发不出思考档位」≠「这个模型不思考」
+# ---------------------------------------------------------------------------
+
+
+class Test思考吃不吃输出额度:
+    """`ThinkingProfile` 描述的是**我们能怎么控制它**,预算计算需要的是**它的行为是什么**。
+
+    两个问题此前共用一个数据结构:`resolve` 拿 `level_map` 全是 None 推出「不思考」,
+    于是任何一个没查证过思考格式的模型都拿到 4096 的非推理额度。而 `profile_for` 的文档
+    **明写**了 qwen 和 GLM 不在表里「不是漏了」—— 是因为它们用的不是 `reasoning_effort`,
+    我们这条路发不出去。**发不出去 ≠ 不思考。**
+
+    受影响的是中转/本地端点上挂的推理模型:用户勾了「推理模型」、窗口也认出来了,
+    输出额度还是 4096 —— 而 model_limits 模块头记的那个真实故障(一轮思考还没说完就报
+    已用完输出额度)正是这么来的。
+    """
+
+    def test_勾了推理模型的未知模型_额度必须高于非推理档(self) -> None:
+        from app.domain.model_limits import FALLBACK_MAX_OUTPUT_TOKENS, resolve
+
+        kwargs = dict(model_id="my-custom-thinker", base_url="http://127.0.0.1:11434/v1",
+                      vendor="openai-compatible")
+        plain = resolve(**kwargs).effective_max_output_tokens
+        ticked = resolve(**kwargs, reasoning=True).effective_max_output_tokens
+
+        assert plain == FALLBACK_MAX_OUTPUT_TOKENS, "没勾时保守取非推理档,这条是对照"
+        assert ticked > FALLBACK_MAX_OUTPUT_TOKENS, (
+            "用户勾了「推理模型」,而输出额度还是非推理那一档 —— 一轮思考没说完就会报额度用尽"
+        )
+
+    def test_查证过会思考的_不用勾也算数(self) -> None:
+        """qwen / GLM / r1 这类:我们发不出它们的档位,但它们确实在思考。"""
+        from app.domain.model_limits import FALLBACK_MAX_OUTPUT_TOKENS, resolve
+
+        for model in ("qwen3-235b", "deepseek-r1-distill-32b", "glm-4.6"):
+            got = resolve(model_id=model, base_url="http://127.0.0.1:11434/v1",
+                          vendor="openai-compatible").effective_max_output_tokens
+            assert got > FALLBACK_MAX_OUTPUT_TOKENS, f"{model} 被当成了不思考"
+
+    def test_查证过的结论压过用户的猜测(self) -> None:
+        """勾不勾都一样 —— 查证过的行为比一个复选框更可信。"""
+        from app.domain.model_limits import resolve
+
+        kwargs = dict(model_id="qwen3-235b", base_url="http://127.0.0.1:11434/v1",
+                      vendor="openai-compatible")
+        assert (resolve(**kwargs).effective_max_output_tokens
+                == resolve(**kwargs, reasoning=False).effective_max_output_tokens)
+
+    def test_两个谓词回答的是两个问题(self) -> None:
+        from app.domain.thinking import UNKNOWN, burns_output_budget, profile_for
+
+        # qwen:发不出档位(UNKNOWN),但确实思考。这一对正是原先那个 bug 的形状。
+        assert profile_for("openai-compatible", "qwen3-235b") is UNKNOWN
+        assert burns_output_budget("openai-compatible", "qwen3-235b") is True
+        # 真不知道的返回 None,**不是 False** —— False 会把用户勾的那一格盖掉。
+        assert burns_output_budget("openai-compatible", "llama-3-70b") is None

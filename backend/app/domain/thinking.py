@@ -115,6 +115,35 @@ def _by_model_name(name: str) -> ThinkingProfile:
     return UNKNOWN
 
 
+#: 查证过「会思考、而且思考吃输出额度」的那几家 —— 我们发不发得出档位是另一回事。
+#:
+#: 这两件事此前共用一个数据结构,于是 `model_limits.resolve` 拿 `level_map` 全是 None 推出
+#: 「这个模型不思考」,给了 4096 的非推理额度。**发不出去 ≠ 不思考**:模块头列的六家里,
+#: qwen 和 GLM 就是"会思考但我们这条路发不出档位",而 `profile_for` 的文档明写了它们不在表里
+#: 「不是漏了」。把控制能力当成行为描述,是这一类表最容易踩的坑。
+_THINKS_BY_NAME = ("qwen3", "qwq", "deepseek-r1", "glm-4.5", "glm-4.6", "glm-5")
+
+
+def burns_output_budget(vendor: str, model_id: str) -> bool | None:
+    """这个模型的推理**会不会吃掉输出额度**。
+
+    和 `profile_for` 回答的是**两个不同的问题**:那一个问「我们能怎么控制它」(发不发得出
+    `reasoning_effort`、关不关得掉),这一个问「它的行为是什么」。两个答案在 qwen / GLM /
+    未知推理模型上是相反的。
+
+    `None` = 不知道 —— 由模型行上用户勾的「推理模型」决定;都没有才保守取 False。
+    **不返回 False 表示"查不到"**:那正是原先那个 bug 的形状。
+    """
+    if profile_for(vendor, model_id) is not UNKNOWN:
+        # 声明得出档位,说明它就是个推理模型。
+        return True
+    name = (model_id or "").lower()
+    if any(family in name for family in _THINKS_BY_NAME):
+        # 发不出档位,但确实在思考(qwen 用 enable_thinking、GLM 用 thinking.type)。
+        return True
+    return None
+
+
 def profile_for(vendor: str, model_id: str) -> ThinkingProfile:
     """按 vendor + 模型名给出思考能力。**只写查证过的**,其余走 UNKNOWN。
 

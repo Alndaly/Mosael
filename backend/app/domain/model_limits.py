@@ -245,6 +245,7 @@ def resolve(
     override_output: int | None = None,
     catalog_window: int | None = None,
     catalog_output: int | None = None,
+    reasoning: bool | None = None,
 ) -> Resolved:
     """这个模型的两个上限,以及运行时会用的那两个数。**唯一的合并处。**
 
@@ -252,6 +253,9 @@ def resolve(
     是因为目录是这个端点**自己**的说法:中转商完全可能把 1M 的模型限到 128K,那时该听它的。
 
     用户填的输出额度**不受 OUTPUT_BUDGET_CAP 约束**:那一格存在的意义就是突破默认预算。
+
+    `reasoning` 是模型行上用户勾的「推理模型」。只在**查证不到**这个模型的思考行为时才用它
+    —— 查证过的结论压过用户的猜测,而两者都没有时保守当成不思考。
     """
     builtin = known_limits(model_id)
 
@@ -277,12 +281,19 @@ def resolve(
     if output_source == "override":
         effective_output = int(output or 0)
     else:
-        # 和 provider_models.runtime_limits 同一条判据:有一档能发得出去,才算思考模型。
-        profile = thinking.profile_for(vendor, model_id)
+        # **「发不发得出档位」和「思考吃不吃输出额度」是两个问题。**
+        #
+        # 这里原先复用的是 `runtime_limits` 那条判据(有一档能发得出去,才算思考模型)——
+        # 注释诚实地记录了自己在复用哪条判据,但**那条判据回答的是另一个问题**。于是任何一个
+        # 我们没查证过思考格式的模型都被当成不思考,拿到 4096 的非推理额度:用户在中转/本地
+        # 端点上挂 deepseek-r1、qwq,勾了「推理模型」、窗口也认出来了,输出额度还是 4096。
+        #
+        # 顺序:查证过的行为 → 用户勾的那一格 → 保守取 False。
+        known = thinking.burns_output_budget(vendor, model_id)
         effective_output = output_budget(
             context_window=effective_window,
             model_max_output=output,
-            thinking=any(mapped is not None for mapped in profile.level_map.values()),
+            thinking=known if known is not None else bool(reasoning),
         )
     return Resolved(
         context_window=window,

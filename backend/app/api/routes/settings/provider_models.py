@@ -87,6 +87,9 @@ def _known_fields(
         override_output=getattr(model, "max_output_tokens", None),
         catalog_window=entry.get("context_window"),
         catalog_output=entry.get("max_output_tokens"),
+        # 设置页显示的这行字写着「运行时真正会用的数」—— 那就得和运行时用同一组入参,
+        # 包括用户自己勾的「推理模型」。
+        reasoning=getattr(model, "reasoning", None),
     )
     return {
         "context_window": resolved.context_window,

@@ -42,7 +42,6 @@ SIDECAR = (
 #: 只有 sidecar 用得上的格子。**每一条都要写清楚为什么**,而且这张表只减不增 ——
 #: 它是一份"已知债务"清单,不是一个让整类字段消失的开关。
 SIDECAR_ONLY: dict[str, str] = {
-    "reasoning": "是否推理模型:pi 靠它决定要不要带 thinkingLevelMap。直连通道不自己管思考档位(见下条)。",
     "reasoning_effort": (
         "思考档位。**各家的参数不是同一套词,猜错一个值就是整轮 400**(见 domain/thinking),"
         "所以直连通道要发它必须先经查证过的按 vendor 映射 —— 那是 AI 审计 2.4 那条的活。"
@@ -91,7 +90,8 @@ def test_每一格在两条通道上都有落点() -> None:
 
 def test_只给sidecar的那张表只减不增() -> None:
     """每一格不接都要一直说得出理由。表变长时,先问问是不是又漏接了一条通道。"""
-    assert len(SIDECAR_ONLY) <= 6, "又多了一格只有一条通道读得到的参数 —— 先确认那是真的合理"
+    # 6 → 5:`reasoning` 已经接上直连通道(查证不到思考行为时用它定输出预算)。
+    assert len(SIDECAR_ONLY) <= 5, "又多了一格只有一条通道读得到的参数 —— 先确认那是真的合理"
     for name, reason in SIDECAR_ONLY.items():
         assert name in RUNTIME_FIELDS, f"{name} 已经不是运行时参数了,从表里删掉"
         assert len(reason.strip()) > 20, f"{name} 的理由太短,写清楚为什么只有一条通道需要它"

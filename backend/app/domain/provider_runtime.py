@@ -40,6 +40,7 @@ def sidecar_provider(db: Session, profile: ResolvedConnection, model: str) -> di
             override_output=row.max_output_tokens if row else None,
             catalog_window=catalog.context_window if catalog else None,
             catalog_output=catalog.max_output_tokens if catalog else None,
+            reasoning=row.reasoning if row else None,
         )
         payload["context_window"] = resolved.effective_context_window
         payload["max_output_tokens"] = resolved.effective_max_output_tokens
