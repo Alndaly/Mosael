@@ -618,6 +618,22 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 工作流画布里的 AI 编辑也是同一套:每条工作流一个常驻智能体会话(`external_key = workflow:<id>`),
 有记忆,改图走 `update_workflow` 工具 + 确认卡,画布检测到 `updated_at` 变化自动同步(未脏时)。
 
+### sidecar 的生死
+
+后端 spawn 它、用 stdin 喂帧,正常退出路径是**stdin 关了就退**。这条路在两种情况下到不了,
+两种都留下一个 3.5MB 的 node 进程,没人管也没人看得见:
+
+- **EOF 永远不来**:管道的写端只要还被任何一个进程持有就不关,而后端 fork 出的别的子进程会
+  继承这个 fd。后端被 SIGKILL 之后,只要那些孙子进程还在,sidecar 就收不到 EOF;
+- **EOF 来了但事件循环没空**:轮次是**故意不 await** 的(await 会让 stdin 停读),读循环结束时
+  可能还挂着一次没返回的模型请求 —— 远端任务的轮询上限是六小时。
+
+所以读循环结束时显式 `process.exit(0)`,并且另有一条看门狗按 `process.ppid` 判断父进程还在
+不在(`agent-sidecar/src/lifetime.ts`)。判据用 ppid 而不是「ping 得到后端吗」:父进程一死,
+内核立刻把孤儿挂到 init/launchd 名下,ppid 变成 1 —— 这是**内核给的事实**,不需要对方还能
+答话,而后端正是在答不上话的时候才需要这条。看门狗的定时器 `unref()`:它自己不能成为
+"进程还有事做"的理由,否则会把它要防的那件事变成必然。
+
 ### 子智能体
 
 `run_subagent` 把一段独立调查派给**同进程内**的子智能体(sidecar 里另起一个 pi Agent,

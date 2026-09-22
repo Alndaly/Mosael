@@ -20,6 +20,7 @@ import {
   type RefreshCredentialRequest,
   type Request,
 } from "./protocol.js";
+import { watchParent } from "./lifetime.js";
 import { installProxyFromEnv } from "./proxy.js";
 import { refreshCredential, runCompaction, runGatewayCompletion, runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
@@ -163,6 +164,13 @@ async function handleCompact(msg: CompactRequest): Promise<void> {
 async function main(): Promise<void> {
   // 必须在任何请求之前:setGlobalDispatcher 只影响之后发起的请求。
   installProxyFromEnv();
+  // 后端没了就跟着退 —— 见 lifetime.ts:stdin 的 EOF 在两种情况下到不了。
+  watchParent({
+    ppid: () => process.ppid,
+    exit: (code) => process.exit(code),
+    log,
+    setInterval: (fn, ms) => setInterval(fn, ms),
+  });
   const rl = readline.createInterface({ input: process.stdin });
   send({ type: "ready" });
   log("started; awaiting run_turn frames on stdin");
@@ -253,7 +261,11 @@ async function main(): Promise<void> {
       send({ type: "error", turnId: (msg as { turnId?: string }).turnId ?? null, message: String(err) });
     }
   }
+  // **真的退出**,而不是让 main() 返回。轮次是故意不 await 的,读循环结束时可能还挂着一次
+  // 没返回的模型请求 —— 那些 promise 会把事件循环钉住(远端任务的轮询上限是六小时),
+  // 于是"stdin 关了就退"这句日志打完,进程还在。
   log("stdin closed; exiting");
+  process.exit(0);
 }
 
 main().catch((err) => {
