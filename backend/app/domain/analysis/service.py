@@ -14,7 +14,7 @@ import httpx
 from app.domain import provider_models
 from app.core import http_retry as ai_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
 from app.domain.ai_chat import AiChatError, chat, target_for
-from app.domain.usage import BillableCall, billable
+from app.domain.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.generation import sanitize_adapter_error
@@ -351,6 +351,7 @@ def analyze_asset(
         profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
         with billable(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+            idempotency_key=once("analyze_asset"),
             source_type="asset", source_id=asset.id,
         ) as call:
             messages = build_messages(asset, prompt, [image_path.read_bytes()], image_mime=image_mime)
@@ -380,6 +381,7 @@ def analyze_asset(
         # 原生视频理解是这套里最贵的调用之一,以前完全不在账上。
         with billable(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+            idempotency_key=once("analyze_asset"),
             source_type="asset", source_id=asset.id,
         ) as call:
             answer = _analyze_video_native(
@@ -407,6 +409,7 @@ def analyze_asset(
     images = extract_video_frames(path)  # 帧数按时长自适应
     with billable(
         db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+        idempotency_key=once("analyze_asset"),
         source_type="asset", source_id=asset.id,
     ) as call:
         messages = build_messages(asset, prompt, images, transcript=transcript_text)

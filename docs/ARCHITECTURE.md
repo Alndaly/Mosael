@@ -380,7 +380,14 @@ Gateway 的边界与安全不变量见
 
 **窗口来自模型**:模型行的 `context_window` → 供应商目录 → **内置查证表** → 双档回退:云端 **128K**,
 本机/LAN **32K**(按 base_url 判定)。四层合并**只在 `backend/app/domain/model_limits.py` 的 `resolve()`
-一处发生**,运行时(`domain/provider_runtime`)与设置页共用它 —— 界面显示的数和请求真正带的数必须是同一个。
+一处发生**,**三条执行通道**都经过它:智能体那条(`domain/provider_runtime`)、直连 HTTP 那条
+(`domain/ai_chat.target_for`,翻译/素材分析/工作流 LLM/AI 编排/发布文案/提示词优化/画板写作/放行判断
+八个调用点)、以及设置页的回显 —— 界面显示的数和请求真正带的数必须是同一个。
+
+直连那条此前**根本不经过它**:模型设置里填的「最大输出 Token」在那八个调用点上一个字节都发不出去,
+而设置页那行写着「运行时真正会用的数」。`RUNTIME_FIELDS` 里每一格是不是两条通道都有落点,
+由 `test_runtime_fields_reach_both_channels.py` 钉住;只有一条通道用得上的要在 `SIDECAR_ONLY`
+里写明理由。
 
 内置表(同一模块的 `KNOWN_LIMITS`)是手写的查证结果:多数端点的 `/models` 根本不报上限,于是 1M 窗口的
 模型会被当成 128K。按**模型名前缀**匹配、不按 vendor(中转端点的 vendor 一律是 `openai-compatible`,
@@ -392,8 +399,15 @@ OpenRouter 的 id 还带 `厂商/` 前缀),最长前缀赢,数值一律向下取
 
 **输出预算和上下文水位是两件事**:`stopReason=length` 表示本轮 `maxTokens` 已耗尽,推理 token 也计入;
 它不能被解释成上下文窗口已满。知道模型上限时按 `OUTPUT_BUDGET_CAP = 65536` 封顶(**那是预算,不是上限**:
-`max_tokens` 在部分接口上要和输入一起装进窗口);查不到上限时,普通兼容模型保守回退到 4K,声明了思考档位的
-推理模型回退到 32K,两者都不超过上下文窗口的四分之一。用户在模型设置里填的值不受封顶约束 —— 那一格存在的
+`max_tokens` 在部分接口上要和输入一起装进窗口);查不到上限时,普通兼容模型保守回退到 4K,推理模型回退到 32K,
+两者都不超过上下文窗口的四分之一。
+
+**判"是不是推理模型"用的是行为,不是我们的控制能力。** 这两件事此前共用一个数据结构:判据是
+`thinking.profile_for(...)` 里有没有一档发得出去 —— 而那条判据回答的是「我发不发 thinkingLevelMap」。
+qwen 和 GLM 用的不是 `reasoning_effort`(前者 `enable_thinking`、后者 `thinking.type`),我们这条路
+发不出去,于是它们连同任何没查证过格式的推理模型都被当成"不思考",拿到 4K 的非推理额度。
+现在 `thinking.burns_output_budget()` 单独回答行为那一问,**`None` 表示不知道**(不是 False),
+由模型行上用户勾的「推理模型」决定;都没有才保守取 False。用户在模型设置里填的值不受封顶约束 —— 那一格存在的
 意义就是突破默认预算。失败事件仍须携带真实 usage 与 context,供消息用量、计费和上下文水位展示使用。
 
 **用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(供应商回的 input+output),此后的新消息

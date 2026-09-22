@@ -18,7 +18,7 @@ import httpx
 from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.core import http_retry as ai_retry
-from app.domain.usage import BillableCall, billable
+from app.domain.usage import BillableCall, billable, once
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
 _TIMEOUT = 30
@@ -230,6 +230,7 @@ def translate_many(
     with ai_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
         # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
         # "这次翻译花了多少"。
-        with billable(db, capability="chat", operation="translate_batch") as call:
+        with billable(db, capability="chat", operation="translate_batch",
+                      idempotency_key=once("translate_batch")) as call:
             run(lambda item: (item[0], ai_translate_with(chat_target, item[1], target, client=client, call=call)))
     return results

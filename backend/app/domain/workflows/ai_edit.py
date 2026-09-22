@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
-from app.domain.usage import BillableCall, billable
+from app.domain.usage import BillableCall, billable, once
 from app.domain.providers import require_connection
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
 
@@ -64,6 +64,7 @@ def ai_edit_graph(
         db,
         capability="chat",
         operation="workflow_ai_edit",
+        idempotency_key=once("workflow_ai_edit"),
         workspace_id=workspace_id,
         source_type="workflow",
         source_id=workflow_id,

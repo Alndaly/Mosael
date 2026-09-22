@@ -115,8 +115,15 @@ class ResidentWorker:
         timeout: float,
     ) -> dict:
         assert self.process.stdin is not None and self.process.stdout is not None
-        with self._pipe_lock:
+        # **等不到管道就说出来**,而不是无声地等满前一个请求的 timeout(默认 1800 秒)。
+        # 同一个 worker 一次只能跑一个请求,第二个调用方原先会在这里挂到天荒地老,期间不检查
+        # 取消 —— 用户那一侧的表现是"点了没反应"。
+        if not self._pipe_lock.acquire(timeout=timeout):
+            raise RuntimeError(f"{self.engine} 的{self._noun}正忙,等待超过 {timeout:.0f} 秒")
+        try:
             return self._request_locked(payload, on_progress=on_progress, timeout=timeout)
+        finally:
+            self._pipe_lock.release()
 
     def _request_locked(
         self,
@@ -125,8 +132,25 @@ class ResidentWorker:
         on_progress: Callable[[dict], None] | None,
         timeout: float,
     ) -> dict:
+        # **`busy` 只有一个归位处。** 原先它在 `_read_until_done` 的每条出口各清一次,而
+        # `stdin.write` 抛异常时(子进程关了 stdin,抛的是 `BrokenPipeError`)一条都走不到 ——
+        # 于是 `busy` 永远是 True,而 `_reap_once` 明确跳过 busy 的,闲置回收永远不会碰它;
+        # 进程本体还活着的话 `_ensure` 还会把这个坏 worker 一直发回去,十几 GB 显存也一直挂着。
+        # 表现是"配音这功能一直报一句看不懂的错、重启才好",指向不了进程池。
         self.busy = True
         self.last_used = time.monotonic()
+        try:
+            return self._send_and_read(payload, on_progress=on_progress, timeout=timeout)
+        finally:
+            self.busy = False
+
+    def _send_and_read(
+        self,
+        payload: dict,
+        *,
+        on_progress: Callable[[dict], None] | None,
+        timeout: float,
+    ) -> dict:
         self.process.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
         self.process.stdin.flush()
 
@@ -162,16 +186,13 @@ class ResidentWorker:
                     on_progress(event)
                 continue
             if kind == "error":
-                self.busy = False
                 raise RuntimeError(event.get("message") or f"{self._noun}失败")
             if kind == "done":
                 self.last_used = time.monotonic()
-                self.busy = False
                 return event
             logger.debug("未知事件:%s", event)
         # 走到这里 = stdout 关了(进程死了)或超时。**最坏的失败是没有回音** ——
         # 那看起来和"还在跑"一模一样,所以必须变成一个明确的错误。
-        self.busy = False
         self.kill()
         if self.timed_out:
             raise RuntimeError(f"{self._noun}超时,没有回音 —— 进程已被终止")
@@ -218,8 +239,15 @@ class WorkerPool:
         worker = self._ensure(engine, python, env)
         try:
             return worker.request(payload, on_progress=on_progress, timeout=timeout)
-        except RuntimeError:
-            # 死掉的进程不留在池子里 —— 下一次请求该拿到一个新的,而不是同一个尸体。
+        except Exception:
+            # **判据是"请求失败了就假定这个 worker 不可信"**,不是"失败的类型对不对得上"。
+            #
+            # 原先这里只捕 `RuntimeError`(我们自己抛的那一种),而 `stdin.write` 在子进程关掉
+            # stdin 时抛的是 `BrokenPipeError`(OSError 的子类)—— 那个 worker 于是留在池子里,
+            # 而池子要防的是"这个 worker 不能再用了",两者不是一回事。
+            #
+            # `except Exception` 不吃 KeyboardInterrupt / SystemExit(它们是 BaseException),
+            # 停机时不会把 worker 误判成坏的。
             with self._lock:
                 if self._workers.get((engine, python)) is worker:
                     self._workers.pop((engine, python), None)

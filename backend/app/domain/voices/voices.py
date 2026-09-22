@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain import provider_models
-from app.domain.usage import billable
+from app.domain.usage import billable, once
 from app.ai.runtime import tts_daemon, tts_models
 from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
 from app.core.db import SessionLocal
@@ -725,6 +725,7 @@ def speak_to_file(
         db,
         capability="tts",
         operation="synthesize_speech",
+        idempotency_key=once("synthesize_speech"),
         workspace_id=workspace_id,
         provider=engine,
         model=model,
@@ -900,6 +901,8 @@ def _run_podcast_body(
                 source_type="job",
                 source_id=job_id,
                 job_id=job_id,
+                # 一个播客任务只合成一次,任务 id 就是那个稳定的工作单元 —— 崩了重跑不会重复计费。
+                idempotency_key=f"podcast:{job_id}",
             ) as call:
                 # 播客按输入文本量计费,和 TTS 同一类;说话人数会影响时长,一并记下来。
                 call.meter(characters=len(text or topic or ""), speakers=len(speakers or []), requests=1)

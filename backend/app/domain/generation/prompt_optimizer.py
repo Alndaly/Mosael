@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
-from app.domain.usage import BillableCall, billable
+from app.domain.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
 from app.domain import provider_models
@@ -204,7 +204,8 @@ def optimize_image_prompt(
     except AiChatError as exc:
         raise PromptOptimizeError(str(exc)) from exc
     # 归属走环境上下文:路由已经过了 ensure_workspace_perm,那里把工作区绑好了。
-    with billable(db, capability="chat", operation="optimize_prompt") as call:
+    with billable(db, capability="chat", operation="optimize_prompt",
+                  idempotency_key=once("optimize_prompt")) as call:
         data = _chat_json(target, _build_system_prompt(guide, ui_language), raw_prompt.strip(), call)
     prompt = str(data.get("prompt") or "").strip()
     if not prompt:

@@ -319,7 +319,7 @@ sequenceDiagram
 
 ### 10.3 用量台账(`domain/usage.py`,721 行)
 
-`provider_usage_events` + `provider_pricing_rules` 两表。调用方只上报计量,价格估算与幂等写入收敛在台账(`billable` 上下文管理器,`host.py:1000-1014` 用法:幂等键 `agent-message:{id}`)。缓存读/写是独立计价桶("供应商侧 prompt_tokens 含缓存,而 pi 上报前已减掉……此前这两项无单位可匹配,被静默丢弃——长上下文重复对话会显著少算");`prefill_model_pricing` 三原则:**只补不改**("目录报价只是挂牌价,自动覆盖等于悄悄改账")、**0 不写**("0 是'订阅内含'不是'免费'")、**规则始终是唯一计费来源**("pi 自己也算 cost,但那份不进账")。失败轮次也记账:`call.mark_failed()`——"失败的轮次同样花了钱"(host.py:1046-1062)。
+`provider_usage_events` + `provider_pricing_rules` 两表。调用方只上报计量,价格估算与幂等写入收敛在台账(`billable` 上下文管理器,`host.py` 用法:幂等键 `agent-message:{id}`)。**幂等键是必填的,没有隐式兜底**:此前兜底键把时间戳编进键里(`f"{operation}:{source_id}:{毫秒}"`),于是任何重放都生成新键、必然重复入账——而文档当时写的是「重放不会重复入账」,一个在它该生效的那次不生效的保护比没有更坏。现在有稳定工作单元的(job / 生成任务 / 智能体消息 / 确认卡)传从它算出来的键,重放不可能发生的(请求作用域内的同步调用)传 `once(operation)`,那个名字本身就写着「这一次不受重放保护」。`test_billing_keys_are_deliberate.py` 盯着每处 `billable(` 都说出自己的键,以及这个参数一直是必填的。另外每处 `chat()` 调用都必须带 `call=`(`test_every_chat_call_is_billed.py`,豁免表断言为空)——`agent/judge` 曾是唯一一个既没传 `call=` 也没有 `billable(...)` 的付费调用点。缓存读/写是独立计价桶("供应商侧 prompt_tokens 含缓存,而 pi 上报前已减掉……此前这两项无单位可匹配,被静默丢弃——长上下文重复对话会显著少算");`prefill_model_pricing` 三原则:**只补不改**("目录报价只是挂牌价,自动覆盖等于悄悄改账")、**0 不写**("0 是'订阅内含'不是'免费'")、**规则始终是唯一计费来源**("pi 自己也算 cost,但那份不进账")。失败轮次也记账:`call.mark_failed()`——"失败的轮次同样花了钱"(host.py:1046-1062)。
 
 ### 10.4 订阅额度
 

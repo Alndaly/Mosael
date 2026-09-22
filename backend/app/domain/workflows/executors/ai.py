@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Workflow
 from app.core.usage_scope import workspace_scope
 from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
-from app.domain.usage import billable
+from app.domain.usage import billable, once
 from app.domain.providers import require_connection
 from app.domain.workflows import WorkflowDomainError
 from app.domain.jobs import current_actor
@@ -401,6 +401,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             db,
             capability="chat",
             operation="workflow_llm",
+            idempotency_key=once("workflow_llm"),
             workspace_id=workflow.workspace_id,
             source_type="workflow",
             source_id=workflow.id,

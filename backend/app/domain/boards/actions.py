@@ -202,7 +202,7 @@ def write_on_board(
     """
     from app.domain.ai_chat import AiChatError, chat, target_for
     from app.domain.providers import require_connection
-    from app.domain.usage import billable
+    from app.domain.usage import billable, once
 
     prompt = prompt.strip()
     if not prompt:
@@ -231,6 +231,7 @@ def write_on_board(
             db,
             capability="chat",
             operation="board_write",
+            idempotency_key=once("board_write"),
             workspace_id=workspace_id,
             provider=target.vendor,
             model=target.model,

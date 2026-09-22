@@ -118,7 +118,7 @@ def ask(
             raise RuntimeError("没有可用于判断的对话模型")
         target = target_for(db, profile)
     from app.core.db import SessionLocal as _Session
-    from app.domain.usage import billable
+    from app.domain.usage import billable, once
 
     with _Session() as billing_db, billable(
         billing_db,
@@ -127,6 +127,8 @@ def ask(
         workspace_id=workspace_id,
         source_type=source_type,
         source_id=source_id,
+        # 一张卡只判一次,卡 id 就是那个稳定的工作单元。
+        idempotency_key=f"agent-judge:{source_id}" if source_id else once("agent_judge"),
     ) as call:
         raw = chat(
             target,

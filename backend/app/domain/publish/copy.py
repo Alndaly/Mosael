@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Transcript
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
-from app.domain.usage import BillableCall, billable
+from app.domain.usage import BillableCall, billable, once
 from app.domain.providers import require_connection
 from app.domain.publish import PublishDomainError
 
@@ -62,6 +62,7 @@ def generate_copy(
         db,
         capability="chat",
         operation="publish_copy",
+        idempotency_key=once("publish_copy"),
         workspace_id=workspace_id,
         source_type="asset",
         source_id=asset_id or "",

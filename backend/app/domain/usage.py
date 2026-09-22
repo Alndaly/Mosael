@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
+from uuid import uuid4
 import time
 from typing import Any
 
@@ -651,6 +652,23 @@ class BillableCall:
         )
 
 
+def once(operation: str) -> str:
+    """一个**只保证唯一、不保证幂等**的记账键。
+
+    用在"重放不可能发生"的调用上:请求作用域内的同步调用 —— 进程一死,调用方连返回都没有,
+    没有任何东西会把它再跑一遍。这类调用没有稳定的工作单元可以当键。
+
+    **它存在是为了让这个选择看得见。** 此前这是 `billable` 里一句隐式兜底
+    (`f"{operation}:{source_id}:{时间戳}"`),而时间戳在键里意味着**任何重放都会生成新键**,
+    必然重复入账 —— 兜底键实际上等于"不去重"。而 `billable` 和 `record_usage` 的文档都写着
+    「重放同一次调用不会重复入账」。一个在它该生效的那次不生效的保护,比没有保护更坏。
+
+    有稳定工作单元的(job、生成任务、智能体消息)**不要用它** —— 那些是真会被重放的,
+    传一个从工作单元算出来的键。
+    """
+    return f"once:{operation}:{uuid4().hex}"
+
+
 @contextmanager
 def billable(
     db: Session,
@@ -663,9 +681,9 @@ def billable(
     provider_profile_id: str | None = None,
     source_type: str = "",
     source_id: str = "",
+    idempotency_key: str,
     job_id: str | None = None,
     agent_message_id: str | None = None,
-    idempotency_key: str = "",
     started: float | None = None,
 ) -> Iterator[BillableCall]:
     """包住一次供应商调用,结束时记一条账。
@@ -679,7 +697,17 @@ def billable(
       自己 commit 一次,那几处都写了注释。
     - **成败**:块里抛异常就记 failed 再原样抛出。失败的调用同样花钱(很多供应商按请求计费),
       而且"最近失败了多少次"本身就是用户想在账上看到的。
-    - **幂等**:不给就按 operation + source 生成。重放同一次调用不会重复入账。
+    - **幂等**:`idempotency_key` 是**必填的**。重放同一次调用不会重复入账 —— 而这句话只有在
+      键真的稳定时才成立,所以不再有隐式兜底。
+
+      有稳定工作单元的(job、生成任务、智能体消息)传一个从它算出来的键:重放时命中同一行,
+      不会重复计费。重放不可能发生的(请求作用域内的同步调用 —— 进程一死调用方连返回都没有)
+      传 `once(operation)`,那个名字本身就说明这一次不受重放保护。
+
+      **必填是这条的关键。** 此前兜底键是 `f"{operation}:{source_id}:{时间戳}"` —— 时间戳在
+      键里,任何重放都会生成新键,于是必然重复入账;而这段文档当时写的是"重放不会重复入账"。
+      一个在它该生效的那次不生效的保护,比没有保护更坏,因为下一个需要重放保护的调用点会
+      照着文档不传键。
     """
     # started 可由调用方传入:生成任务跨越几分钟,那段时间不在这个 with 块里,计时该由跑任务
     # 的人说了算(time.monotonic 的基准)。
@@ -707,7 +735,6 @@ def billable(
             # 要么该显式带上归属 —— 两者都不满足是个建模问题,不该无声无息。
             logger.warning("用量无法归属(operation=%s capability=%s):当前上下文没有工作区", operation, capability)
         else:
-            key = idempotency_key or f"{operation}:{call.source_id or id(call)}:{int(began * 1000)}"
             try:
                 call.event = record_usage(
                     db,
@@ -721,7 +748,7 @@ def billable(
                     source_id=call.source_id,
                     job_id=call.job_id,
                     agent_message_id=call.agent_message_id,
-                    idempotency_key=key,
+                    idempotency_key=idempotency_key,
                     status=call.status,
                     duration_seconds=round(max(0.0, time.monotonic() - began), 3),
                     units=call.units,
