@@ -166,13 +166,20 @@ def deliver_to_session(db: Session, row: AgentQuestion, user: User) -> None:
 
 
 def _answer_record(row: AgentQuestion) -> dict | None:
-    """这次作答的结构:问了什么、选了哪几项、是不是跳过了。界面画卡片用它。"""
+    """这次作答的结构:问了什么、选了哪几项、是不是跳过了。界面画卡片用它。
+
+    带上 `question_id`:同一次作答在对话里会留下**两份**痕迹 —— `ask_user` 那次工具调用的
+    结果,和这条送回会话的回执消息。阻塞那条路上两份都在,界面画两遍(用户看到同一个选择
+    紧挨着出现两次);超时那条路上工具结果是 `pending`,回执是唯一记录,必须画。
+    界面靠这个 id 分辨这两种情形,而不是猜。
+    """
     if row.status == "dismissed":
-        return {"dismissed": True}
+        return {"dismissed": True, "question_id": row.id}
     picked = row.answers or {}
     if not picked:
         return None
-    return {"picked": [{"question": question,
+    return {"question_id": row.id,
+            "picked": [{"question": question,
                         "choices": list(one) if isinstance(one, list) else [one]}
                        for question, one in picked.items()]}
 

@@ -242,7 +242,14 @@ class Test答完的那条记录:
     def test_结构和正文各存一份(self) -> None:
         row = self._answered({"这段成片发到哪儿?": ["B站"]})
         record = q._answer_record(row)
-        assert record == {"picked": [{"question": "这段成片发到哪儿?", "choices": ["B站"]}]}
+        assert record == {
+            # `question_id` 是钥匙:同一次作答在对话里会留下**两份**痕迹 —— `ask_user` 那次
+            # 工具调用的结果,和这条送回会话的回执。阻塞那条路上两份都在,界面据这个 id 认出
+            # 它们说的是同一件事,只画一次;超时那条路上工具结果是 pending,回执是唯一记录,
+            # 必须画。靠猜的话错的方向是把唯一那份也藏掉。
+            "question_id": row.id,
+            "picked": [{"question": "这段成片发到哪儿?", "choices": ["B站"]}],
+        }
         # 正文仍然像用户自己说的话 —— 模型读的是它。
         assert "我选好了" in q._as_user_words(row)
 
@@ -253,7 +260,7 @@ class Test答完的那条记录:
         with SessionLocal() as db:
             row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
             q.dismiss(db, row)
-            assert q._answer_record(row) == {"dismissed": True}
+            assert q._answer_record(row) == {"dismissed": True, "question_id": row.id}
 
     def test_一个都没选时不留空结构(self) -> None:
         """没有内容的结构会让界面画出一张空卡 —— 那比退回正文更糟。"""

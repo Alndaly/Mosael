@@ -185,14 +185,20 @@ async function awaitAnswer(
   const settled = await awaitCard<Question>(
     () => apiGet(apiBase, token, `/api/agent/questions/${questionId}`, undefined, signal) as Promise<Question>,
     (cur) => {
-      if (cur.status === "answered") return { status: "answered", answers: cur.answers ?? {} };
-      if (cur.status === "dismissed") return { status: "dismissed", skipped: true };
+      // **带上 question_id。** 同一次作答会在对话里留下两份痕迹:这条工具结果,和后端送回
+      // 会话的那条回执消息。界面据这个 id 认出"这两份说的是同一件事",于是只画一次。
+      // 没有钥匙的话就只能靠猜(比如"有没有一条 answered 的 ask_user"),而猜错的方向是
+      // **把唯一的那份痕迹也藏掉** —— 超时那条路上工具结果是 pending,回执才是唯一记录。
+      if (cur.status === "answered")
+        return { status: "answered", answers: cur.answers ?? {}, question_id: questionId };
+      if (cur.status === "dismissed") return { status: "dismissed", skipped: true, question_id: questionId };
       return undefined;
     },
     signal,
   );
   return settled ?? {
     status: "pending",
+    question_id: questionId,
     message:
       "用户还没作答。按你自己的判断继续或者先收尾,**不要再问一遍** —— 他答了之后答案会自己送到这次对话里。",
   };

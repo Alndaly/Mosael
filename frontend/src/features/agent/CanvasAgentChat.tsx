@@ -49,6 +49,7 @@ import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/features/agent/ToolCalls";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
+import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
@@ -250,6 +251,13 @@ export function CanvasAgentChat({
     return byMessage;
   }, [usageEvents.data]);
   const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+
+  // 和 ChatWorkspace 同一条规矩,同一个函数:答案已经被 `ask_user` 的工具结果记下的回执
+  // 不再画一遍(见 features/agent/answerRecords)。两个面板各写一遍的话,这条迟早在其中
+  // 一个上失效 —— 那正是「同一条流式协议两个面板各实现一遍」那个毛病的来路。
+  const allMessages = messages.data ?? [];
+  const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
+  const visibleMessages = allMessages.filter((message) => !isRedundantAnswerRecord(message, recordedQuestions));
 
   /** 会话详情:列表接口不带水位(那要为每个会话各算一次,而界面只看当前这个)。
    *  跟着消息一起刷新 —— 一轮结束后水位就该更新。 */
@@ -510,7 +518,7 @@ export function CanvasAgentChat({
             <span>{emptyHint}</span>
           </div>
         )}
-        {(messages.data ?? []).map((message) => {
+        {visibleMessages.map((message) => {
           const payload = message.payload as
             | {
                 usage?: { duration_seconds?: number };

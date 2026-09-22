@@ -54,6 +54,7 @@ import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { InlineConfirmations } from "@/features/agent/InlineConfirmations";
 import { InlineQuestions } from "@/features/agent/InlineQuestions";
+import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/features/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/features/agent/StatusIcon";
@@ -333,7 +334,14 @@ export function ChatWorkspace({
     attach.clear();
   };
 
-  const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
+  // 回执消息里,答案已经被 `ask_user` 的工具结果记下的那些不再画 —— 同一次选择此前会紧挨着
+  // 出现两遍(上面一张独立的卡,下面 ask_user 那一行展开还是它)。判据见 answerRecords:
+  // 靠 question_id 对上才算,猜的话错的方向是把唯一那份痕迹也藏掉。
+  const allMessages = messages.data ?? [];
+  const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
+  const visibleMessages = allMessages.filter(
+    (message) => !queuedIds.has(message.id) && !isRedundantAnswerRecord(message, recordedQuestions),
+  );
   const mediaGallery = React.useMemo(() => chatMediaGallery(visibleMessages), [visibleMessages]);
   //: 「N 个子代理」的数据源:历史消息的 timeline 摊平,再接上正在流的这一轮 ——
   //: 子代理跑到一半时就该在列表里(转着圈),不是等它跑完才出现。
