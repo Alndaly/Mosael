@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.core.http_retry import auth_headers
+
 #: 目录变动很慢(供应商上新模型),但也不能永不刷新。
 _TTL_SECONDS = 300
 _FETCH_TIMEOUT = 8
@@ -104,7 +106,7 @@ def fetch_models(base_url: str, api_key: str, *, use_cache: bool = True) -> list
     try:
         resp = httpx.get(
             f"{base}/models",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=auth_headers(api_key),
             timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()

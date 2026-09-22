@@ -25,6 +25,29 @@ _MAX_SLEEP_SECONDS = 8.0
 _max_retries = DEFAULT_MAX_RETRIES
 
 
+def auth_headers(api_key: str | None) -> dict[str, str]:
+    """Bearer 头 —— **空密钥不发这个头**。
+
+    `f"Bearer {''}"` 的值是 `"Bearer "`(带尾随空格),而那是一个**非法头值**:h11 在发送时
+    直接抛 `LocalProtocolError: Illegal header value b'Bearer '`。本地 / 无鉴权端点
+    (Ollama、LM Studio、vLLM)正是空密钥的那一批。
+
+    **住在这里是因为它有过第二处。** `ai_chat` 那边写对了、还写了理由,而
+    `ai/model_catalog.fetch_models` 不知道那一处存在,无条件发头 —— 于是抛的异常落进一个
+    `except Exception`(端点不可达和不实现 /models 都只是「没有目录」),被当成「这个端点
+    没有模型」,还往缓存里写一条失败记录,每 60 秒重试一次并再次失败。
+
+    四处后果全是静默的,而且看着都像"本来就该这样":设置页的模型选择器对本地端点永远是空的;
+    价格预填拿不到目录报价;`sidecar_provider` 的 `cached_model` 恒为 None,于是一个 128K 的
+    本地 qwen3 按 32000 的回退窗口提前四倍开始压缩 —— 设置页显示的 `context_window_source`
+    是 `"fallback"`,**它说的是真话,只是没说"我压根问不出来"**。
+
+    判据:加第三个 OpenAI 兼容调用点时,用不用再想一遍这件事。
+    """
+    key = (api_key or "").strip()
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
 def set_max_retries(value: int) -> None:
     """设置页写入后调用。夹到 [0, 10]:0 = 不重试。"""
     global _max_retries

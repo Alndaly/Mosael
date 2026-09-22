@@ -260,7 +260,7 @@ def chat(
             on_downgrade=on_downgrade,
         )
     url = f"{target.base_url.rstrip('/')}/chat/completions"
-    headers = _auth_headers(target.api_key)
+    headers = ai_retry.auth_headers(target.api_key)
     if call is not None:
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
 
@@ -561,11 +561,6 @@ def _downgrade_response_format_payload(payload: dict[str, Any]) -> dict[str, Any
         fallback.pop("response_format", None)
         fallback["messages"] = messages
     return fallback
-
-
-def _auth_headers(api_key: str) -> dict[str, str]:
-    """空密钥(本地 / 无鉴权端点)不发 Authorization —— 否则 'Bearer ' 是非法头值,httpx 直接抛。"""
-    return {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
 
 def _sanitize(message: str, credential: str | None) -> str:
