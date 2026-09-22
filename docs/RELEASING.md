@@ -11,7 +11,17 @@
 - 版本号要改的地方不止 `package.json`。官网的测试会逐项核对，漏一处就红在 `'1.3.0' !== '1.3.1'`：
   `website/public/media/capture-manifest.json` 顶层的 `documentedVersion`、每篇
   `website/content/docs/**/*.mdx` frontmatter 的 `version`、中英下载页的「已正式发布」、
-  `website/README.md` 的「当前文档对应」，以及 `website/src/lib/release-copy.ts` 里这一版的中英亮点。
+  `website/README.md` 的「当前文档对应」、`website/content/docs/*/about/project.mdx` 的
+  「文档适用于」、`website/content/docs/*/guides/workflows.mdx` 正文里那处，以及
+  `website/src/lib/release-copy.ts` 里这一版的中英亮点。
+
+  **这句话曾经不是实话**：它说「逐项核对」，而测试只核对了 5 处中的 2 处（`documentedVersion`
+  和 frontmatter）。这比什么都不写更危险 —— 这句话的作用正是让发版的人**不用逐个去查**，
+  于是下载页正文漏改时 CI 是绿的，而用户在官网上看到「上一版已正式发布」。现在那条测试
+  **扫整棵 `website/content/docs` 和 `website/README.md`**，不再维护一份「哪些文件带版本号」
+  的清单：正文里出现的每个 `X.Y.Z` 都必须等于当前版本，所以上面这份地址清单是给人读的，
+  漏写一处不会让测试失明。两处豁免是地址无关的 —— 代码围栏里是别的东西的数据（插件清单的
+  `"version": "0.1.0"`），以及**同一行里已经出现当前版本**的那种历史段落。
 - 截图批次的 sourceCommit/capturedAt/**批次内的 version** 是拍摄来源，不因发版而伪造更新。
   它和上面那个 `documentedVersion` 是两回事：前者说「这批是什么时候拍的」，后者说「这份文档对应哪个版本」。
   （这两个曾被读成一个，于是整节都没改，CI 才红的。）
