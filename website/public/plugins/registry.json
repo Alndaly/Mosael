@@ -1,6 +1,42 @@
 {
   "plugins": [
     {
+      "id": "dev.mosael.aliyun-oss",
+      "name": {
+        "zh": "阿里云 OSS",
+        "en": "Alibaba Cloud OSS"
+      },
+      "version": "0.1.0",
+      "description": {
+        "zh": "把素材库里的文件传到阿里云 OSS,换回一条**公网直链** —— 有些供应商只收链接不收本地文件(方舟 Seedance 的参考视频就是一例)。也能把桶里的东西拉回素材库。",
+        "en": "Upload assets to Alibaba Cloud OSS and get a public link back — some providers only accept a URL, not a local file (Seedance's reference video is one). Also pulls objects back into the library."
+      },
+      "author": "Mosael",
+      "homepage": "https://help.aliyun.com/zh/oss/",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.aliyun-oss.zip",
+      "permissions": [
+        "network:oss"
+      ]
+    },
+    {
+      "id": "dev.mosael.aws-s3",
+      "name": {
+        "zh": "Amazon S3",
+        "en": "Amazon S3"
+      },
+      "version": "0.1.0",
+      "description": {
+        "zh": "把素材库里的文件传到Amazon S3,换回一条**公网直链** —— 有些供应商只收链接不收本地文件(方舟 Seedance 的参考视频就是一例)。也能把桶里的东西拉回素材库。",
+        "en": "Upload assets to Amazon S3 and get a public link back — some providers only accept a URL, not a local file (Seedance's reference video is one). Also pulls objects back into the library."
+      },
+      "author": "Mosael",
+      "homepage": "https://docs.aws.amazon.com/AmazonS3/latest/API/",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.aws-s3.zip",
+      "permissions": [
+        "network:s3"
+      ]
+    },
+    {
       "id": "dev.mosael.baidu-pan",
       "name": {
         "zh": "百度网盘",
@@ -83,6 +119,24 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.tikhub.zip",
       "permissions": [
         "network:tikhub"
+      ]
+    },
+    {
+      "id": "dev.mosael.volcengine-tos",
+      "name": {
+        "zh": "火山引擎 TOS",
+        "en": "Volcengine TOS"
+      },
+      "version": "0.1.0",
+      "description": {
+        "zh": "把素材库里的文件传到火山引擎 TOS,换回一条**公网直链** —— 有些供应商只收链接不收本地文件(方舟 Seedance 的参考视频就是一例)。也能把桶里的东西拉回素材库。**方舟自己的文档就推荐这一家**(「建议存放在 TOS 对象存储服务中」)。",
+        "en": "Upload assets to Volcengine TOS and get a public link back — some providers only accept a URL, not a local file (Seedance's reference video is one). Also pulls objects back into the library."
+      },
+      "author": "Mosael",
+      "homepage": "https://www.volcengine.com/docs/6349",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.volcengine-tos.zip",
+      "permissions": [
+        "network:tos"
       ]
     }
   ]

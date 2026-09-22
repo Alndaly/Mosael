@@ -180,7 +180,8 @@ def _validate_source_assets(
             raise GenerationDomainError(
                 f"这个模型的{label}只能按链接给,不能上传本地文件 —— "
                 f"「{asset.name}」是本地素材,没有可公开访问的地址。"
-                f"请改用一条公网直链(界面上直接粘链接即可),或先把它传到一个能公开访问的地方"
+                f"装一个对象存储插件(火山引擎 TOS / 阿里云 OSS / Amazon S3),"
+                f"用它的「上传」工具换一条直链再填进来;或者直接粘一条你已有的公网直链"
             )
 
 

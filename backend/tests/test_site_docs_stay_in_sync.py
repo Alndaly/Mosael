@@ -66,7 +66,8 @@ def test_指南的_order_不撞车() -> None:
 def test_范例的数目和目录一致() -> None:
     """写死的数目每加一个范例就错一次,而没有任何东西会提醒。"""
     actual = len([p for p in (ROOT / "plugins" / "examples").iterdir() if p.is_dir()])
-    words = {3: ("三个", "Three"), 4: ("四个", "Four"), 5: ("五个", "Five"), 6: ("六个", "Six")}
+    words = {3: ("三个", "Three"), 4: ("四个", "Four"), 5: ("五个", "Five"),
+             6: ("六个", "Six"), 7: ("七个", "Seven"), 8: ("八个", "Eight")}
     assert actual in words, f"范例有 {actual} 个,给这条测试的 words 表补上对应的写法"
     zh_word, en_word = words[actual]
     zh_text = (DOCS / "zh" / "guides" / "plugins.mdx").read_text(encoding="utf-8")

@@ -141,7 +141,7 @@ which plugin is missing.
 
 ## Examples
 
-Five of them live under `plugins/examples/` in the repository:
+Eight of them live under `plugins/examples/` in the repository:
 
 - `text-toolkit` — pure functions, no dependencies, no credentials.
 - `tikhub` — local script plus credentials plus network. Reads public data from Douyin, TikTok,
@@ -154,6 +154,15 @@ Five of them live under `plugins/examples/` in the repository:
   add-on as a plugin and declares each tool as read-only or writing (inspecting the scene and
   its objects only read; editing the model writes), so you decide per tool what the agent may
   do on its own and what needs your confirmation.
+- `volcengine-tos` / `aliyun-oss` / `aws-s3` — three object stores. **One body, three dialects**:
+  the HTTP surface is the same and only the signing differs, so the two shared files are
+  byte-identical copies across the three packages (a test pins that).
+
+  They close one concrete gap: Mosael is local-first, so your assets live on your own disk with
+  **no public address**, while some providers only take a URL — Seedance's reference video is one
+  (a reference **image** may be Base64, a reference **video** may not). `*_upload` puts the asset
+  up and hands back a **time-limited direct link** (the signature lives in the query string, so the
+  bucket need not be public-read); paste it straight into the generation node.
 
 ## Create a connection
 

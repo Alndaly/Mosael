@@ -446,14 +446,23 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 
 ## 范例
 
-`plugins/examples/` 下四个,覆盖各种形态:
+`plugins/examples/` 下八个,覆盖各种形态:
 
 - **text-toolkit** — 纯函数,零依赖零凭据,`expose: "all"`
 - **baidu-pan** — 本地脚本 + 凭据自动续期 + 收发文件 + 工作流节点
 - **tikhub** — 零代码接 MCP + 多连接 + 枚举配置 + 凭据
 - **mcp-everything** — 最小的 MCP 接入声明
+- **blender** — 接一台本机跑着的 Blender,工具按只读/可写分开申报
+- **volcengine-tos** / **aliyun-oss** / **aws-s3** — 对象存储三家。**同一套主体、三份方言**:
+  接口是同一套(PUT/GET 对象、list-objects-v2),只有签名不同,所以 `sigv4.py` 和
+  `storage.py` 在三个包里是**字节相同**的拷贝(由 `test_storage_plugins_share_one_core.py`
+  钉住),各自的 `main.py` 只给端点、配置键和方言。
 
-四个都写了中英两份文案,可以直接照着抄多语言的写法。
+  它们解决的是一个具体的断链:Mosael 是本地优先的,素材没有公网地址,而有些供应商**只收链接**
+  —— 方舟 Seedance 的参考视频就是一例(参考图可以走 Base64,参考视频不行)。
+  `*_upload` 把素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。
+
+八个都写了中英两份文案,可以直接照着抄多语言的写法。
 
 ## 接口
 
