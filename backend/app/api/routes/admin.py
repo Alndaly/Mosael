@@ -71,6 +71,7 @@ def list_users(db: DbSession, user: CurrentUser) -> list[AdminUserOut]:
             created_at=person.created_at,
             last_seen_at=latest[person.id].last_seen_at if person.id in latest else None,
             client_version=latest[person.id].client_version if person.id in latest else "",
+            client_surface=latest[person.id].client_surface if person.id in latest else "",
             workspaces=int(counts.get(person.id, 0)),
         )
         for person in people

@@ -22,8 +22,10 @@ from app.core.config import settings
 def cors_origins(monkeypatch):
     """按需重建 app —— CORS 中间件是在 create_app 里装的,改配置得重新装一次。"""
 
-    def build(value: str):
+    def build(value: str, *, port: int | None = None):
         monkeypatch.setattr(settings, "cors_origins", value)
+        if port is not None:
+            monkeypatch.setattr(settings, "backend_port", port)
         main = importlib.import_module("app.main")
         app = main.create_app()
         for middleware in app.user_middleware:
@@ -66,3 +68,15 @@ def test_通配符不会因为可配置而混进来(cors_origins) -> None:
     origins = cors_origins("*")
     assert origins.count("*") <= 1
     assert "null" in origins
+
+
+def test_后端自己那条来源跟着端口走(cors_origins) -> None:
+    """端口是可配的(MOSAEL_BACKEND_PORT),而这两条此前写死 8800。
+
+    换了端口,后端托管的那份前端就只剩 CORS 错误 —— 而浏览器给的那句话里不会提到端口,
+    看起来像后端坏了。写死的那个数和 `settings.backend_port` 是同一件事的两个答案。
+    """
+    assert "http://127.0.0.1:8800" in cors_origins("")
+    origins = cors_origins("", port=9100)
+    assert "http://127.0.0.1:9100" in origins and "http://localhost:9100" in origins
+    assert "http://127.0.0.1:8800" not in origins

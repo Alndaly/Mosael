@@ -41,25 +41,42 @@ def test_a_deployment_admin_can() -> None:
 
 
 def test_the_client_reports_its_own_version() -> None:
-    """版本由客户端在请求头里报 —— 后端进程的版本回答不了"**他**装的是哪一版"。"""
+    """身份由客户端在请求头里报 —— 后端进程的版本回答不了"**他**装的是哪一版"。
+
+    语法 `<界面>/<版本>`(见 api/deps/auth.parse_client_header):此前只有版本一栏,
+    而浏览器扩展往里塞的是产品名,管理页于是显示「vbrowser-extension」。
+    """
     admin, mate = _admin_and_member()
-    mate.headers["X-Mosael-Client"] = "0.7.3"
+    mate.headers["X-Mosael-Client"] = "app/0.7.3"
     mate.get("/api/auth/me")
 
     rows = {row["username"]: row for row in admin.get("/api/admin/users").json()}
     assert rows["mate"]["client_version"] == "0.7.3"
+    assert rows["mate"]["client_surface"] == "app"
 
 
 def test_a_newer_version_replaces_the_old_one() -> None:
     """他升级了就该显示新的 —— 这一栏说的是"他现在跑的是哪一版"。"""
     admin, mate = _admin_and_member()
-    mate.headers["X-Mosael-Client"] = "0.7.3"
+    mate.headers["X-Mosael-Client"] = "app/0.7.3"
     mate.get("/api/auth/me")
-    mate.headers["X-Mosael-Client"] = "0.9.1"
+    mate.headers["X-Mosael-Client"] = "app/0.9.1"
     mate.get("/api/auth/me")
 
     rows = {row["username"]: row for row in admin.get("/api/admin/users").json()}
     assert rows["mate"]["client_version"] == "0.9.1"
+
+
+def test_换了个界面也跟着换() -> None:
+    """同一个人同一份凭据,从桌面端切到浏览器扩展 —— 两栏都要跟上,不能只换一半。"""
+    admin, mate = _admin_and_member()
+    mate.headers["X-Mosael-Client"] = "app/0.7.3"
+    mate.get("/api/auth/me")
+    mate.headers["X-Mosael-Client"] = "browser-extension/0.7.3"
+    mate.get("/api/auth/me")
+
+    row = {one["username"]: one for one in admin.get("/api/admin/users").json()}["mate"]
+    assert (row["client_surface"], row["client_version"]) == ("browser-extension", "0.7.3")
 
 
 def test_a_client_that_never_says_leaves_it_blank() -> None:
@@ -73,10 +90,15 @@ def test_a_client_that_never_says_leaves_it_blank() -> None:
 def test_a_junk_version_string_does_not_get_stored() -> None:
     """请求头是外部输入。只收像版本号的,别让它变成一条能塞任意文本的通道。"""
     admin, mate = _admin_and_member()
-    mate.headers["X-Mosael-Client"] = "<script>alert(1)</script>" + "x" * 500
+    mate.headers["X-Mosael-Client"] = "app/<script>alert(1)</script>" + "x" * 500
     mate.get("/api/auth/me")
     rows = {row["username"]: row for row in admin.get("/api/admin/users").json()}
     assert rows["mate"]["client_version"] == ""
+    # 界面那一半同样是外部输入:只认我们自己发的那几个,它也会原样显示给管理员。
+    mate.headers["X-Mosael-Client"] = "evil/1.0.0"
+    mate.get("/api/auth/me")
+    rows = {row["username"]: row for row in admin.get("/api/admin/users").json()}
+    assert rows["mate"]["client_surface"] == ""
 
 
 def test_last_seen_follows_the_person() -> None:

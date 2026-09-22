@@ -501,6 +501,16 @@ qwen 和 GLM 用的不是 `reasoning_effort`(前者 `enable_thinking`、后者 `
 MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的文案我们替它挑,而工具跑出来的
 那些字只有它自己写得出。
 
+**每个客户端都要把读的人的语言报上来**,后端的翻译全靠这一栏(中间件 `_carry_locale`)。
+浏览器扩展曾经写死 `Accept-Language: zh-CN`:英文用户在扩展里收到的每一句后端文案都是中文,
+而扩展自己的界面跟着浏览器语言走 —— 两半对不上,且没有任何地方会报错。
+
+**客户端自报身份**的请求头是 `X-Mosael-Client`,语法 `<界面>/<版本>`(`app/1.4.3`、
+`browser-extension/0.1.0`),在 `api/deps/auth.parse_client_header` **一处**解析,拆进
+`auth_sessions` 的 `client_surface` / `client_version` 两列。认不出来就一对空串 ——
+"不知道"是这两栏的合法状态,比编一个假的诚实。此前它只有一栏、没有语法:前端发版本号、
+扩展发产品名,于是管理页把扩展那一行渲染成「vbrowser-extension」。
+
 ### 分层:底下那几层不认识功能模块
 
 `components/`(通用件与外壳)、`lib/`、`api/`、`stores/` 是给所有功能用的,**不 import `features/…`**

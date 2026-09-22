@@ -16,12 +16,32 @@ from app.core.db import session_scope
 from app.core.security import find_session, renew_if_stale
 from app.db.models import AuthSession, User, now
 
-#: 客户端自报版本的请求头。前端在 api/client 里统一带上(见 __APP_VERSION__)。
+#: 客户端自报身份的请求头,语法是 `<界面>/<版本>`(例如 `app/1.4.3`、`browser-extension/0.1.0`)。
 CLIENT_VERSION_HEADER = "X-Mosael-Client"
 
-#: 版本号里能出现的字符。请求头是**外部输入** —— 只收像版本号的东西,别让这一栏变成一条
-#: 能塞任意文本的通道(它会被原样显示在管理员的表格里)。
-_VERSION_SHAPE = re.compile(r"^[0-9A-Za-z.+\-]{1,32}$")
+#: 允许的界面。**这一栏会显示给管理员**,所以只认识我们自己发的那几个客户端 ——
+#: 请求头是外部输入,不能让它变成一条能塞任意文本的通道。
+CLIENT_SURFACES = ("app", "browser-extension")
+
+#: `<界面>/<版本>`。版本部分只收像版本号的东西,同上。
+_CLIENT_SHAPE = re.compile(
+    r"^(?P<surface>" + "|".join(CLIENT_SURFACES) + r")/(?P<version>[0-9A-Za-z.+\-]{1,32})$"
+)
+
+
+def parse_client_header(value: str) -> tuple[str, str]:
+    """`X-Mosael-Client` → (界面, 版本)。认不出来就是一对空串。
+
+    **这个头此前是两个意思。** 前端发的是 `__APP_VERSION__`(`1.4.2`),而浏览器扩展发的是
+    字面量 `browser-extension` —— 同一栏,一个是版本,一个是产品名。后端把它原样存进
+    `auth_sessions.client_version`,管理页再照着渲染 `v{...}`:扩展用户那一行显示的是
+    **「vbrowser-extension」**。两边各自都"对",错在没有人定义过这一栏是什么。
+
+    认不出来就当没报(空)—— 老客户端在野外升不动,而"不知道"本来就是这一栏的合法状态,
+    比编一个假的诚实。这不是兼容分支:它是对外部输入的校验,没有第二条代码路径。
+    """
+    found = _CLIENT_SHAPE.match(value.strip())
+    return (found.group("surface"), found.group("version")) if found else ("", "")
 
 
 def presented_token(
@@ -70,13 +90,14 @@ def _record_client(db: Session, session: AuthSession, request: Request) -> None:
     放在这里是因为它是**唯一**的登录身份收口点:每一个带凭据的请求都经过它,所以不需要在
     任何路由上再挂一次,也就不会有"这条路由忘了记"。
     """
-    reported = (request.headers.get(CLIENT_VERSION_HEADER) or "").strip()
-    version = reported if _VERSION_SHAPE.match(reported) else ""
+    surface, version = parse_client_header(request.headers.get(CLIENT_VERSION_HEADER) or "")
     stamp = now()
-    # 每个请求都写一次太吵(登录会话一天几千个请求)。只在版本变了、或上次记录已经过了一分钟
-    # 时才写 —— "最近在用"这件事不需要秒级精度。
-    if version and version != session.client_version:
+    # 每个请求都写一次太吵(登录会话一天几千个请求)。只在自报的身份变了、或上次记录已经过了
+    # 一分钟时才写 —— "最近在用"这件事不需要秒级精度。
+    changed = version and (version != session.client_version or surface != session.client_surface)
+    if changed:
         session.client_version = version
+        session.client_surface = surface
     elif session.last_seen_at is not None and (stamp - session.last_seen_at).total_seconds() < 60:
         return
     session.last_seen_at = stamp

@@ -50,6 +50,9 @@ class AdminUserOut(ApiModel):
     #: 他现在跑的客户端版本。**由客户端自报**,空 = 那个客户端不报(老版本)——
     #: 空着而不是编一个,"不知道"和"0.0.0"是两回事。
     client_version: str = ""
+    #: 哪个界面(`app` / `browser-extension`)。和版本分开:挤成一栏的时候,扩展把产品名
+    #: 塞进了版本栏,管理页于是显示「vbrowser-extension」。
+    client_surface: str = ""
     workspaces: int = 0
 
 

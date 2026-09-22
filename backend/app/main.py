@@ -307,8 +307,11 @@ def create_app() -> FastAPI:
             # 一对前后端,用来在不碰你正在用的那套数据的前提下看界面。少了这两条它只能拿到 CORS 错误。
             "http://localhost:5273",
             "http://127.0.0.1:5273",
-            "http://localhost:8800",   # backend serving the built frontend
-            "http://127.0.0.1:8800",
+            # 后端自己托管打包好的前端时的来源。**端口跟着 settings 走** —— 它是可配的
+            # (MOSAEL_BACKEND_PORT),而这两行此前写死 8800:换了端口就只剩 CORS 错误,
+            # 而错误信息里不会提到端口,查起来要绕一圈。
+            f"http://localhost:{settings.backend_port}",
+            f"http://127.0.0.1:{settings.backend_port}",
             # 部署到服务器时额外允许的来源(MOSAEL_CORS_ORIGINS,逗号分隔)。上面那份是照桌面端
             # 写死的;前端本来就能指向任意后端(设置里的「服务端地址」),而"几个人共用一台
             # 服务器"这件事此前卡在这份写死的名单上。**要哪个域名写哪个域名,不接受 `*`** ——

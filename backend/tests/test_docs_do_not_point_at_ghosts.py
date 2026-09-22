@@ -50,13 +50,18 @@ def _top_level_dirs(root: pathlib.Path) -> list[str]:
 def _path_re(top_level: list[str]) -> re.Pattern[str]:
     """看起来像仓库内代码文件的东西。
 
-    后缀**不枚举**:一个点加 1-5 位字母数字收尾,后面不许再跟单词字符或点。上一版列了 9 种
-    后缀并特意把 `tsx` 排在 `ts` 前面(否则 `.tsx` 被截成 `.ts`,报一个假路径)—— 那份排序
-    注释本身就是「枚举会出错」的证据。贪婪匹配到最后一个点,`preload.bundle.cjs` 整段拿下。
+    后缀**不枚举**:一个点加「字母打头的 1-5 位字母数字」收尾,后面不许再跟单词字符或点。
+    上一版列了 9 种后缀并特意把 `tsx` 排在 `ts` 前面(否则 `.tsx` 被截成 `.ts`,报一个假路径)
+    —— 那份排序注释本身就是「枚举会出错」的证据。贪婪匹配到最后一个点,
+    `preload.bundle.cjs` 整段拿下。
+
+    **后缀必须字母打头**:否则 `browser-extension/0.1.0` 这种「目录名 + 版本号」会被读成一个
+    路径(`browser-extension` 是真的顶层目录,`.0` 像个后缀)—— 实测在 ARCHITECTURE.md 里
+    误报过一次。仓库里没有任何一个后缀是数字打头的(`git ls-files` 核过)。
     """
     alternatives = "|".join(re.escape(one) for one in top_level)
     return re.compile(
-        rf"(?<![\w/])((?:{alternatives})/[\w./-]+\.[A-Za-z0-9]{{1,5}})(?![\w.])"
+        rf"(?<![\w/])((?:{alternatives})/[\w./-]+\.[A-Za-z][A-Za-z0-9]{{0,4}})(?![\w.])"
     )
 
 

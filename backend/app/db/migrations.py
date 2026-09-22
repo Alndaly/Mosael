@@ -900,6 +900,27 @@ def _migrate_client_version() -> None:
             conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN last_seen_at DATETIME"))
 
 
+def _migrate_client_surface() -> None:
+    """`auth_sessions` 补 `client_surface`:自报身份里「哪个界面」那一半。
+
+    此前只有一栏 `client_version`,而浏览器扩展往里塞的是产品名 `browser-extension` ——
+    管理页照着渲染 `v{...}`,于是那一行写着「vbrowser-extension」。两个问题挤一栏,总会有
+    一个客户端把它读成另一个意思。
+
+    老行留空:它们报的是旧语法(裸版本号),新语法认不出来 —— 而"不知道"本来就是这一栏
+    的合法状态。用户的客户端升上来之后,下一个请求就把两栏一起写对。
+    """
+    inspector = inspect(engine)
+    if "auth_sessions" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(auth_sessions)"))}
+        if "client_surface" not in existing:
+            conn.execute(
+                text("ALTER TABLE auth_sessions ADD COLUMN client_surface VARCHAR(32) NOT NULL DEFAULT ''")
+            )
+
+
 def _migrate_job_actor() -> None:
     """`jobs` 补 `created_by`:这活儿**替谁干**。
 
@@ -2359,6 +2380,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_drop_the_knowledge_base,
                 _migrate_hash_session_tokens,
                 _migrate_client_version,
+                _migrate_client_surface,
                 _migrate_job_actor,
                 _migrate_provider_credentials,
                 _drop_shared_credentials,

@@ -22,6 +22,14 @@ type AdminUser = components["schemas"]["AdminUserOut"];
 type Overview = components["schemas"]["AdminOverviewOut"];
 
 /**
+ * 「哪个界面」要不要加个前缀。
+ *
+ * `app` 是默认那一个,不加前缀(每一行都写「桌面端」等于什么都没说);扩展加。
+ * 空 = 老客户端报的是旧语法(裸版本号),那就只显示版本 —— 编一个界面出来比留白更糟。
+ */
+const SURFACE_LABEL = { "browser-extension": "adminSurfaceExtension" } as const;
+
+/**
  * 管理员控制台 —— **这台部署**的状况。
  *
  * 和「设置」是两件事,所以它是侧边栏里独立的一格,不挤在设置页里:设置回答"我怎么用这个应用"
@@ -130,9 +138,17 @@ export function AdminView() {
             } · ${row.workspaces} ${t("adminWorkspacesUnit")}`}
           >
             <span className="flex items-center gap-2">
-              {/* 版本由客户端自报;报不上来的老客户端显示"未知",不编一个号出来。 */}
+              {/* 版本由客户端自报;报不上来的老客户端显示"未知",不编一个号出来。
+                  界面和版本是**两栏**:此前只有一栏,而浏览器扩展往里塞的是产品名,
+                  于是这里渲染出「vbrowser-extension」。 */}
               <code className="timecode text-ui-xs text-muted-foreground">
-                {row.client_version ? `v${row.client_version}` : t("adminUnknownVersion")}
+                {row.client_version
+                  ? `${
+                      row.client_surface in SURFACE_LABEL
+                        ? `${t(SURFACE_LABEL[row.client_surface as keyof typeof SURFACE_LABEL])} `
+                        : ""
+                    }v${row.client_version}`
+                  : t("adminUnknownVersion")}
               </code>
               {row.is_deployment_admin && (
                 <Badge variant="default" className="gap-1">

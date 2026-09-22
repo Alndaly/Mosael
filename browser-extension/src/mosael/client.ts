@@ -37,6 +37,30 @@ type AuthResult = {
 
 const TRANSLATE_BATCH = 500;
 
+/**
+ * 这个扩展自报的身份,语法 `<界面>/<版本>`(见 backend/app/api/deps/auth.parse_client_header)。
+ *
+ * 此前这里发的是字面量 `"browser-extension"`,而桌面端发的是版本号 —— **同一栏两个意思**。
+ * 后端把它原样存进 `auth_sessions.client_version`,管理页照着渲染 `v{...}`:扩展用户那一行
+ * 写着「vbrowser-extension」。版本从 manifest 取,不再手抄一份。
+ */
+function clientHeader(): string {
+  // 单元测试和构建脚本不在扩展上下文里,chrome 不存在 —— 那时报不出版本,也就不报。
+  const version = globalThis.chrome?.runtime?.getManifest?.()?.version;
+  return version ? `browser-extension/${version}` : "";
+}
+
+/**
+ * 这次请求该用哪种语言。
+ *
+ * 此前写死 `zh-CN`:后端的任务消息、节点名、错误文案都按这一栏翻(见 core/i18n),
+ * 于是**英文用户在扩展里收到的每一句后端文案都是中文** —— 而扩展自己的界面是跟着浏览器
+ * 语言走的,两半对不上。取浏览器的 UI 语言,和扩展界面同一个来源。
+ */
+function acceptLanguage(): string {
+  return globalThis.chrome?.i18n?.getUILanguage?.() || globalThis.navigator?.language || "en";
+}
+
 function cleanBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }
@@ -79,8 +103,8 @@ export class MosaelClient {
       ...init,
       headers: {
         ...(form ? {} : { "Content-Type": "application/json" }),
-        "Accept-Language": "zh-CN",
-        "X-Mosael-Client": "browser-extension",
+        "Accept-Language": acceptLanguage(),
+        ...(clientHeader() ? { "X-Mosael-Client": clientHeader() } : {}),
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
         ...(init.headers || {}),
       },

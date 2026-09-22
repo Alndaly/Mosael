@@ -18565,6 +18565,11 @@
             "title": "Client Version",
             "default": ""
           },
+          "client_surface": {
+            "type": "string",
+            "title": "Client Surface",
+            "default": ""
+          },
           "workspaces": {
             "type": "integer",
             "title": "Workspaces",

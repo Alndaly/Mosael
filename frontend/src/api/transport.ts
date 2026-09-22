@@ -62,7 +62,10 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 /** Unified HTTP seam for every domain client. */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const auth: Record<string, string> = {
-    "X-Mosael-Client": __APP_VERSION__,
+    // 语法是 `<界面>/<版本>`(见 backend/app/api/deps/auth.parse_client_header)。此前这里只发
+    // 版本号,而浏览器扩展发的是字面量 `browser-extension` —— 同一栏两个意思,管理页于是
+    // 把扩展那一行渲染成「vbrowser-extension」。
+    "X-Mosael-Client": `app/${__APP_VERSION__}`,
     "Accept-Language": apiLocale,
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   };

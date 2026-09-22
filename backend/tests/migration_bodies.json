@@ -22,6 +22,7 @@
   "migrate-browser-boolean-options": "8656267a8529d045",
   "migrate-browser-pool": "ba842907261bd6f7",
   "migrate-called-workflows-declare-their-output": "6a833294a868356a",
+  "migrate-client-surface": "086834ef6ae8661e",
   "migrate-client-version": "af8a418cbc4b01c8",
   "migrate-clip-offline-asset": "3e878c268a57f4bc",
   "migrate-comment-canvas-context": "695d8506e3332bd8",

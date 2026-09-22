@@ -6200,6 +6200,11 @@ export interface components {
              */
             client_version: string;
             /**
+             * Client Surface
+             * @default
+             */
+            client_surface: string;
+            /**
              * Workspaces
              * @default 0
              */
