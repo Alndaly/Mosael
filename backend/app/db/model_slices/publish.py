@@ -36,7 +36,6 @@ class PublishAccount(Base):
     binding_status: Mapped[str] = mapped_column(String(40), nullable=False, default="unknown")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    profile_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 

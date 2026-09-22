@@ -16,8 +16,6 @@ export interface RunTurnRequest {
   /** Current-turn images; pi.ts applies them only when the selected model declares image input. */
   images?: Array<{ data: string; mimeType: string }>;
   systemPrompt: string;
-  /** Prior turns, already trimmed by the backend (may be empty). */
-  history?: Array<{ role: "user" | "assistant"; content: string }>;
   workspaceId: string;
   /** Base URL + bearer token for calling Mosael's HTTP API from tools (S3+). */
   apiBase: string;

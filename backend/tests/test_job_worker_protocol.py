@@ -288,7 +288,6 @@ class TestLeases:
     def test_heartbeat_survives_memory_reset_and_only_renews_its_claim(self, external_demo):
         from datetime import timedelta
         from app.db.model_base import now
-        from app.api.routes import job_worker
         client = fresh_client()
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
         _make_job(ws)
@@ -299,7 +298,9 @@ class TestLeases:
             row = db.get(Job, claimed["id"])
             row.lease_expires_at = now() + timedelta(seconds=5)
             db.commit()
-        job_worker._HEARTBEATS.clear()  # simulate the backend losing its process-local state
+        # 曾经这里要 `job_worker._HEARTBEATS.clear()` 来"模拟后端丢掉进程内状态"——
+        # 而那个字典全仓零个读者,清不清都一样。续约的判据从头到尾都在**任务行的 lease 上**
+        # (renew_worker_leases 比对 worker 与 lease_token),不在任何进程内的东西上。
         body = {"worker": "other", "claims": [{"job_id": claimed["id"], "lease_token": claimed["lease_token"]}]}
         assert client.post("/api/jobs/worker/heartbeat", json=body, headers=headers).json()["renewed"] == []
         body["worker"] = "w"

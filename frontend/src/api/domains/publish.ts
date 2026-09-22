@@ -39,6 +39,17 @@ export function recheckPublishAccount(accountId: string): Promise<PublishAccount
   return api<PublishAccount>(`/api/publish/accounts/${accountId}/recheck`, { method: "POST" });
 }
 
+/**
+ * 桌面执行器还在不在。
+ *
+ * 它是**另一个进程**(Electron 主进程里的发布执行器),后端只负责排队 —— 执行器没起来的话,
+ * 任务就停在 queued 上不动,而界面此前对此一个字都不说:用户看到的是"发布了但什么都没发生"。
+ * 这条接口一直存在,而它的**唯一调用方是它自己的测试**(见进程审计 2.10)。
+ */
+export function publishWorkerOnline(): Promise<{ online: boolean }> {
+  return api<{ online: boolean }>("/api/publish/worker/status");
+}
+
 export function listPublishTasks(workspaceId: string): Promise<PublishTask[]> {
   return api<PublishTask[]>(`/api/publish/tasks?workspace_id=${workspaceId}`);
 }

@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -18,9 +17,6 @@ from app.db.models import Job
 from app.domain.jobs import claim_next_job, external_kinds, renew_worker_leases, report_job
 
 router = APIRouter(tags=["job-worker"])
-
-# worker_id → {last_seen, kinds};进程内即可(worker 在线状态本就随后端进程存在)。
-_HEARTBEATS: dict[str, dict[str, Any]] = {}
 
 
 class ClaimRequest(BaseModel):
@@ -89,6 +85,7 @@ def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
 
 @router.post("/jobs/worker/heartbeat")
 def heartbeat(body: HeartbeatRequest, db: DbSession) -> dict[str, Any]:
-    _HEARTBEATS[body.worker] = {"last_seen": time.time(), "kinds": list(body.kinds)}
+    # 曾经有一个 `_HEARTBEATS` 字典记在这里 —— 全仓零个读者,而它按 worker 名字无限长。
+    # 续约真正发生在下面那一行(任务行上的 lease),这条心跳的作用就是**带着 claims 来续约**。
     renewed = renew_worker_leases(db, worker=body.worker, claims=[claim.model_dump() for claim in body.claims])
     return {"ok": True, "external_kinds": list(external_kinds()), "renewed": renewed}

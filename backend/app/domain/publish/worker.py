@@ -300,7 +300,6 @@ def patch_account(
     account_id: str,
     binding_status: str | None = None,
     last_error: str | None = None,
-    profile_name: str | None = None,
 ) -> PublishAccount:
     account = db.get(PublishAccount, account_id)
     if account is None:
@@ -311,8 +310,6 @@ def patch_account(
         account.binding_status = binding_status
         account.last_checked_at = now()
     account.last_error = last_error
-    if profile_name is not None:
-        account.profile_name = profile_name[:120]
     db.commit()
     db.refresh(account)
     return account

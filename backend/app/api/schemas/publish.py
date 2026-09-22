@@ -63,7 +63,6 @@ class PublishAccountOut(OrmModel):
     binding_status: str = "unknown"
     last_error: str | None = None
     last_checked_at: datetime | None = None
-    profile_name: str | None = None
     created_at: datetime
 
 

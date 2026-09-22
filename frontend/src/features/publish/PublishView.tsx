@@ -15,6 +15,7 @@ import {
   listPublishAccounts,
   listPublishPlatforms,
   listPublishTasks,
+  publishWorkerOnline,
   type Asset,
   type PublishAccount,
   type PublishTask,
@@ -61,6 +62,19 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     refetchOnWindowFocus: true,
   });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-tasks", workspace.id] });
+
+  // 有活儿排着的时候才问「执行器在不在」—— 它是**另一个进程**(Electron 主进程里的发布
+  // 执行器),后端只负责排队。执行器没起来,任务就停在 queued 上不动,而界面此前对此一个字
+  // 都不说:用户看到的是"点了发布,然后什么都没发生"。没有待办时不问,省得每 10 秒一次空轮询。
+  const waiting = (tasks.data ?? []).some((task) => ACTIVE.has(task.status));
+  const worker = useQuery({
+    queryKey: ["publish-worker-status"],
+    queryFn: publishWorkerOnline,
+    enabled: waiting,
+    refetchInterval: waiting ? 10_000 : false,
+  });
+  // 只在**确知离线**时说话:还没问到答案不等于离线,那会在刚进页面的一瞬闪一条假警报。
+  const executorOffline = waiting && worker.isSuccess && !worker.data.online;
 
   const batchRemove = useMutation({
     mutationFn: async () => {
@@ -224,6 +238,12 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     <div className={STUDIO_PAGE}>
       <div className="flex h-full min-h-0 flex-col gap-7">
       {seg}
+      {executorOffline && (
+        <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-ui-sm text-warning">
+          <CircleAlert size={15} className="shrink-0" />
+          <span>{t("publishExecutorOffline")}</span>
+        </div>
+      )}
       <CollectionTabs label={t("publishTabRecords")} value={statusFilter} onChange={setStatusFilter} items={[{value:"all", label:t("studioAll")}, {value:"active", label:t("batchStatus_running")}, {value:"succeeded", label:t("batchStatus_succeeded")}, {value:"attention", label:t("studioNeedsAttention")}]} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}

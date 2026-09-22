@@ -900,6 +900,25 @@ def _migrate_client_version() -> None:
             conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN last_seen_at DATETIME"))
 
 
+def _drop_publish_account_profile_name() -> None:
+    """`publish_accounts` 去掉 `profile_name` —— 这一列在**每一台机器上都是 NULL**。
+
+    后端收它、落库、放进 `PublishAccountOut`;而桌面执行器那侧的 `patchAccount` 签名里
+    **根本没有这个字段**,从来没人发过。一列永远为空的数据,和一条写在出参里的空承诺。
+
+    按仓库规矩,死字段是删掉而不是留着 —— 留着的代价是下一个人会以为它有数据,照它写
+    分支。SQLite 3.35+ 支持 DROP COLUMN;没有这一列的老库(它本来就是后加的)也不需要
+    额外分支,下面那句 `in existing` 就是判据。
+    """
+    inspector = inspect(engine)
+    if "publish_accounts" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(publish_accounts)"))}
+        if "profile_name" in existing:
+            conn.execute(text("ALTER TABLE publish_accounts DROP COLUMN profile_name"))
+
+
 def _migrate_client_surface() -> None:
     """`auth_sessions` 补 `client_surface`:自报身份里「哪个界面」那一半。
 
@@ -2381,6 +2400,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_hash_session_tokens,
                 _migrate_client_version,
                 _migrate_client_surface,
+                _drop_publish_account_profile_name,
                 _migrate_job_actor,
                 _migrate_provider_credentials,
                 _drop_shared_credentials,

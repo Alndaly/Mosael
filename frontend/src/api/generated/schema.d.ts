@@ -593,7 +593,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Heartbeat */
+        /**
+         * Heartbeat
+         * @description 执行器报「我还在」。
+         *
+         *     **这里不记任何东西。** 曾经有一个 `_HEARTBEATS` 字典写进去 —— 全仓零个读者,而它按
+         *     worker 名字无限长。租约续期走的是任务行上的 lease,不看这个字典;而"执行器在不在"
+         *     这个问题在发布那条链上由 `domain/publish/worker.worker_online()` 回答(有人读)。
+         *     留着这条路由是因为执行器确实会打它,而 404 会被它当成后端出问题。
+         */
         post: operations["heartbeat_api_browser_worker_heartbeat_post"];
         delete?: never;
         options?: never;
@@ -6069,8 +6077,6 @@ export interface components {
             binding_status?: string | null;
             /** Last Error */
             last_error?: string | null;
-            /** Profile Name */
-            profile_name?: string | null;
         };
         /** ActRequest */
         ActRequest: {
@@ -9927,8 +9933,6 @@ export interface components {
             last_error?: string | null;
             /** Last Checked At */
             last_checked_at?: string | null;
-            /** Profile Name */
-            profile_name?: string | null;
             /**
              * Created At
              * Format: date-time

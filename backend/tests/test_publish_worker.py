@@ -135,7 +135,7 @@ def test_title_limit_and_binding_check_flow() -> None:
     assert client.get("/api/publish/worker/status").json()["online"] is True
 
 
-def test_account_recheck_and_profile() -> None:
+def test_account_recheck() -> None:
     client = fresh_client()
     # These tests drive the worker channel, which now needs its shared key.
     client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
@@ -145,14 +145,17 @@ def test_account_recheck_and_profile() -> None:
         json={"workspace_id": ws["id"], "platform": "b站", "name": "B站矩阵一号", "config": {}},
     ).json()
 
-    # worker 回报 bound + 平台昵称
+    # worker 回报 bound
+    #
+    # 这里曾经还带一个 `profile_name`(平台昵称)。它在**每一台机器上都是 NULL**:执行器那侧
+    # 的 patchAccount 签名里根本没有这个字段,从来没人发过 —— 只有这条测试在发。已随列一起
+    # 删掉(见迁移 drop-publish-account-profile-name)。
     client.patch(
         "/api/publish/worker/account",
-        json={"account_id": account["id"], "binding_status": "bound", "profile_name": "小美的频道"},
+        json={"account_id": account["id"], "binding_status": "bound"},
     )
     got = client.get(f"/api/publish/accounts?workspace_id={ws['id']}").json()[0]
     assert got["binding_status"] == "bound"
-    assert got["profile_name"] == "小美的频道"
     assert got["last_checked_at"] is not None
 
     # 手动复检:归零登录态,等执行器下轮巡检认领
