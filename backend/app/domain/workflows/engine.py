@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
+from app.core.i18n import DEFAULT_LOCALE, t
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import blame, create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
@@ -201,7 +202,21 @@ def execute_graph(
             return parent is None or parent.status not in ("queued", "running")
 
     def node_label(nid: str) -> str:
-        return str(nodes_by_id[nid].get("name") or NODE_TYPES[node_types[nid]]["label"])
+        """这个节点在事件里叫什么。**回退到目录时要翻** —— 那一格存的是 i18n key。
+
+        事件进 `task_events`,前端的执行历史原样把 `name` 画出来,而前端**没有任何
+        `wfNode_` 的字典**(全仓零命中)。所以不翻的话,执行历史里那一行就是
+        `wfNode_scene_render`。
+
+        和 `say()` 同构:这里渲染成默认语言,`name_key` 一起进 payload,出口可以按读的人
+        的语言重翻。平时走不到这条回退(模板和手工建的节点都有名字),只有智能体建的、
+        或者名字被清空的才会露出来 —— 而那正是最难发现的那一类。
+        """
+        return str(nodes_by_id[nid].get("name") or t(NODE_TYPES[node_types[nid]]["label"], DEFAULT_LOCALE))
+
+    def node_label_key(nid: str) -> str:
+        """节点名的 key(节点自己有名字时为空 —— 那是用户写的字,不是文案)。"""
+        return "" if nodes_by_id[nid].get("name") else str(NODE_TYPES[node_types[nid]]["label"])
 
     def event(kind: str, payload: dict[str, Any]) -> None:
         if has_job:
@@ -288,13 +303,13 @@ def execute_graph(
                 if not is_entry(nid) and not incoming_active(nid):
                     with lock:
                         done.add(nid)
-                    event("workflow.node.skipped", {"node_id": nid, "name": node_label(nid)})
+                    event("workflow.node.skipped", {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid)})
                     processed += 1
                     if has_job:
                         job.progress = processed / total
                         db.commit()
                     continue
-                event("workflow.node.started", {"node_id": nid, "node_type": node_types[nid], "name": node_label(nid)})
+                event("workflow.node.started", {"node_id": nid, "node_type": node_types[nid], "name": node_label(nid), "name_key": node_label_key(nid)})
                 futures[pool.submit(contextvars.copy_context().run, run_node, nid)] = nid
 
         schedule_ready()
@@ -311,7 +326,7 @@ def execute_graph(
                     error = exc
                     event(
                         "workflow.node.failed",
-                        {"node_id": nid, "name": node_label(nid), **_failure_payload(exc)},
+                        {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid), **_failure_payload(exc)},
                     )
                     break
                 with lock:
@@ -319,7 +334,8 @@ def execute_graph(
                     executed.add(nid)
                     done.add(nid)
                 processed += 1
-                event("workflow.node.finished", {"node_id": nid, "name": node_label(nid), "outputs": _trim_outputs(outputs)})
+                event("workflow.node.finished", {"node_id": nid, "name": node_label(nid),
+                                                 "name_key": node_label_key(nid), "outputs": _trim_outputs(outputs)})
                 if has_job:
                     job.progress = processed / total
                     db.commit()
@@ -328,7 +344,8 @@ def execute_graph(
         if cancelled:
             event("workflow.cancelled", {"pending": len(futures)})
             for pending_nid in futures.values():
-                event("workflow.node.failed", {"node_id": pending_nid, "name": node_label(pending_nid), "error": "已取消"})
+                event("workflow.node.failed", {"node_id": pending_nid, "name": node_label(pending_nid), "name_key": node_label_key(pending_nid),
+                         "error": t("jobErr_cancelled", DEFAULT_LOCALE), "error_key": "jobErr_cancelled"})
 
     cancelled = cancelled or is_cancelled()
     if error is not None and not cancelled:

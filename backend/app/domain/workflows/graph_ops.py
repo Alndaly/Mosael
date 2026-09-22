@@ -68,7 +68,14 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
             node = {
                 "id": node_id,
                 "type": node_type,
-                "name": str(op.get("name") or NODE_TYPES[node_type]["label"]),
+                # **不写名字。** `NODE_TYPES[...]["label"]` 存的是 i18n key(目录里存 key、
+                # 出口才翻,由 test_backend_i18n 那道棘轮强制),把它当人话写进去的话,
+                # 画布上那个节点从此就叫 `wfNode_scene_render` —— 而且它**随图落库**,
+                # 是写进用户数据的错,不只是显示错,改对翻译之后还得靠迁移救回来。
+                #
+                # 留空就够了:显示时没有 name 会回退到**翻译后**的 label(见界面那一侧),
+                # 而那正是用户想看到的。
+                "name": str(op.get("name") or ""),
                 "position": op.get("position") or next_position(),
                 "config": dict(op.get("config") or {}),
             }

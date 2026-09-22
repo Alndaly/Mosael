@@ -339,6 +339,51 @@ def scenes_using_model(db: Session, workspace_id: str, model_id: str) -> list[st
     return using
 
 
+def boards_using_scene(db: Session, workspace_id: str, scene_id: str) -> list[str]:
+    """还有哪些画板摆着这个 3D 场景(名字)。"""
+    from app.db.models import Board
+
+    using: list[str] = []
+    for board in db.scalars(select(Board).where(Board.workspace_id == workspace_id)):
+        items = ((board.canvas or {}).get("items")) or []
+        if any(isinstance(item, dict) and item.get("scene_id") == scene_id for item in items):
+            using.append(board.name)
+    return using
+
+
+def delete_scene(db: Session, workspace_id: str, scene_id: str) -> None:
+    """删一个 3D 场景。**还有画板摆着它就不让删**,并说出是哪几个 —— 和 `delete_model` 同构。
+
+    ## 为什么删除必须在领域层
+
+    此前这件事**整个落在路由里**(`routes/scenes.py` 里一句裸的 `db.delete(scene)`),而
+    `domain/scenes` 里根本没有 `delete_scene` 这个函数。于是"被引用者被删除时怎么办"在同一层
+    里有三种答案,而只有两种是想过的:
+
+    | 被删的 | 行为 |
+    | --- | --- |
+    | 导入模型 | 拒绝,并点名还有哪几个场景在用 |
+    | 笔记 | 允许;画板上那条坏引用仍可移动、可删除(专门留了豁免) |
+    | 3D 场景 | 允许,**且没有任何人检查画板** |
+
+    第三条的后果是可验证的:画板保存时 `_validate_scene_references` 要求每个 `scene_id` 都
+    属于本工作区。场景删掉之后,引用它的那张画板**此后任何一次保存都 422** —— 哪怕用户只是
+    挪了一张便签;而错误里不说是哪一个节点,唯一的出路是自己找到那个 3D 节点删掉。
+
+    `delete_model` 的说明把这件事想得很透(「删掉就是在别处留一个加载失败的空位,而那个空位
+    没有任何线索说明它本来是什么」)—— 那段推理对场景一字不差地成立,只是没人把它搬过去,
+    **因为场景的删除不在领域层**。三种答案不是三次权衡的结果,是两次权衡加一次空缺。
+    """
+    scene = get_scene(db, workspace_id, scene_id)
+    using = boards_using_scene(db, workspace_id, scene_id)
+    if using:
+        raise SceneDomainError(
+            "还有画板在用这个场景:" + "、".join(using[:5]) + "。先把它们里面的这个 3D 节点删掉。"
+        )
+    db.delete(scene)
+    db.commit()
+
+
 def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
     """删一份模型的行和文件。**还有场景摆着它就不让删**,并说出是哪几个。
 

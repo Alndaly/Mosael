@@ -11,6 +11,9 @@ from app.domain.permissions import ensure_workspace_access, ensure_workspace_per
 from app.domain.scenes import (apply_scene_operations, create_scene, delete_model, get_scene,
                                 import_model, list_models, model_file, render_shot_references,
                                 save_scene, scene_preview, view_scene)
+#: 路由函数也叫 delete_scene(接口名),所以领域那个换个名字进来 —— 同名的两个东西
+#: 放在一个文件里,读的人得每次判断是哪一个。
+from app.domain.scenes import delete_scene as remove_scene
 
 router = APIRouter(tags=["3D scenes"])
 
@@ -109,11 +112,10 @@ def operations(scene_id: str, body: SceneOperations, db: DbSession, user: Curren
 @router.delete("/scenes/{scene_id}", status_code=204)
 def delete_scene(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    scene = get_scene(db, workspace_id, scene_id)
-    # 模型**不跟着场景走**:它归工作区,别的场景可能还摆着同一件道具。要删模型走
-    # DELETE /scene-models/{id},那条会先说清楚还有谁在用。
-    db.delete(scene)
-    db.commit()
+    # 删除的**引用完整性决定**在领域层(domain/scenes.delete_scene),不在这里 ——
+    # 路由是薄转译。此前这一句是裸的 `db.delete(scene)`,于是"还有谁在用"这件事在场景这条
+    # 路上根本没人问,而同一层的模型那条路问了。
+    remove_scene(db, workspace_id, scene_id)
     return Response(status_code=204)
 
 

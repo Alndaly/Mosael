@@ -213,3 +213,30 @@ def make_voice(workspace_id: str, name: str = "测试音色") -> str:
         db.add(voice)
         db.commit()
         return voice.id
+
+
+def executable_source(module_or_path: object) -> str:
+    """一个模块**会被执行的那部分**源码 —— 注释和 docstring 都剥掉。
+
+    这条助手存在,是因为同一个错在这一轮里犯了五次:测试想断言"某段旧代码不在了",于是在源码
+    文本里搜它 —— 而**解释这次改动的注释里正好引用了那段旧代码**,断言当场打到自己身上。
+
+    判据和扫描面差一点点,棘轮就会误报或漏报;而误报和漏报一样坏,因为它教人学会忽略它。
+    """
+    import ast
+    import inspect
+    from pathlib import Path as _Path
+
+    if isinstance(module_or_path, (str, _Path)):
+        source = _Path(module_or_path).read_text(encoding="utf-8")
+    else:
+        source = inspect.getsource(module_or_path)  # type: ignore[arg-type]
+    tree = ast.parse(source)
+    # ast.unparse 只输出语法树 —— 注释本来就不在树里,docstring 在这里显式摘掉。
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = getattr(node, "body", [])
+            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
+                    and isinstance(body[0].value.value, str):
+                node.body = body[1:] or [ast.Pass()]
+    return ast.unparse(tree)

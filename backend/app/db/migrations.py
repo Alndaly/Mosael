@@ -188,6 +188,45 @@ def _migrate_official_workflow_data_bindings() -> None:
             )
 
 
+def _migrate_node_names_are_not_i18n_keys() -> None:
+    """把被当成人话写进图里的 `wfNode_*` 节点名清掉。
+
+    `graph_ops.add_node` 此前在没给名字时回退到 `NODE_TYPES[type]["label"]` —— 而那一格存的是
+    **i18n key**(目录里存 key、出口才翻)。于是智能体建的节点在画布上从此叫
+    `wfNode_scene_render`,而且**随图落库**:这是写进用户数据的错,不只是显示错。
+
+    清成空串就够了:没有名字时显示会回退到**翻译后**的 label,而那正是用户想看到的 ——
+    所以这次迁移不是"补一个值",是"把一个不该存在的值拿掉"。
+    """
+    if "workflows" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
+        cleared = 0
+        for row in rows:
+            raw = row["graph"]
+            try:
+                graph = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(graph, dict):
+                continue
+            touched = False
+            for node in graph.get("nodes") or []:
+                if isinstance(node, dict) and str(node.get("name") or "").startswith("wfNode_"):
+                    node["name"] = ""
+                    touched = True
+            if not touched:
+                continue
+            conn.execute(
+                text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                {"graph": json.dumps(graph, ensure_ascii=False), "id": row["id"]},
+            )
+            cleared += 1
+        if cleared:
+            logger.info("清掉了 %d 个工作流里被写成 i18n key 的节点名", cleared)
+
+
 def _migrate_called_workflows_declare_their_output() -> None:
     """被别的工作流 `call_workflow` 调用、却没有「输出」节点的图,补上一个输出节点。
 
@@ -2357,6 +2396,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_official_workflow_data_bindings,
                 # 必须在 _migrate_workflow_revisions 之前:补完输出节点,下面那一步才会把
                 # 这次语义改动记成一条新的不可变修订。
+                _migrate_node_names_are_not_i18n_keys,
                 _migrate_called_workflows_declare_their_output,
                 _migrate_line_fields_are_lists,
                 _migrate_workflow_revisions,
