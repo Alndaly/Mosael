@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pydantic import Field
+from pydantic import Field, computed_field
 from app.api.schemas.base import ApiModel, OrmModel
 
 class AssetCreate(ApiModel):
@@ -29,6 +29,23 @@ class AssetOut(OrmModel):
     tags: list[str] = Field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def proxy_expected(self) -> bool:
+        """这份素材会不会有代理。**前端不该用缺省值去猜后端的配置。**
+
+        预览只走 WebCodecs + 代理这一条路(ADR-0004),画不出来时必须给一个说得清的状态。
+        而 `generate_proxies` 关掉时后端既不建任务也不写 `proxy_status` —— 素材上**什么都
+        没说**,于是前端读到空串,落进「未知一律当作还在转」那一档:遮罩写「转码中,等一会儿
+        就好」,一件永远不会发生的事,外加每 2 秒轮询一次。
+
+        算出来而不是存进 `media_info`:这是一个服务端配置,存进去的话开关一翻就得带迁移,
+        而且每份素材里存的都是同一句话。
+        """
+        from app.domain.assets.proxies import proxies_possible
+
+        return proxies_possible(self)
 
 
 class AssetUpdate(ApiModel):

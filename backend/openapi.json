@@ -17934,6 +17934,52 @@
         }
       }
     },
+    "/api/agent/provider-credentials/{profile_id}/renew": {
+      "post": {
+        "tags": [
+          "agent-credentials"
+        ],
+        "summary": "Renew Credential Lease",
+        "description": "续租。持有者在刷新期间定期调它 —— TTL 用来发现死掉的持有者,不该用来罚慢的那个。\n\n续不上(已被顶替)返回 409:那说明别人已经接手,调用方该知道自己这一份要作废。",
+        "operationId": "renew_credential_lease_api_agent_provider_credentials__profile_id__renew_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/provider-credentials/{profile_id}/release": {
       "post": {
         "tags": [
@@ -19930,6 +19976,12 @@
               }
             ],
             "title": "Updated At"
+          },
+          "proxy_expected": {
+            "type": "boolean",
+            "title": "Proxy Expected",
+            "description": "这份素材会不会有代理。**前端不该用缺省值去猜后端的配置。**\n\n预览只走 WebCodecs + 代理这一条路(ADR-0004),画不出来时必须给一个说得清的状态。\n而 `generate_proxies` 关掉时后端既不建任务也不写 `proxy_status` —— 素材上**什么都\n没说**,于是前端读到空串,落进「未知一律当作还在转」那一档:遮罩写「转码中,等一会儿\n就好」,一件永远不会发生的事,外加每 2 秒轮询一次。\n\n算出来而不是存进 `media_info`:这是一个服务端配置,存进去的话开关一翻就得带迁移,\n而且每份素材里存的都是同一句话。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -19942,7 +19994,8 @@
           "name",
           "original_filename",
           "file_key",
-          "media_info"
+          "media_info",
+          "proxy_expected"
         ],
         "title": "AssetOut"
       },
@@ -21568,6 +21621,17 @@
               }
             ],
             "title": "Credential"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
           }
         },
         "type": "object",

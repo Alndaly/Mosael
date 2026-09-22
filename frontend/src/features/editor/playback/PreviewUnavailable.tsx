@@ -4,7 +4,7 @@ import { Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { api, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import type { AssetPreviewState } from "@/features/editor/playback/previewReadiness";
+import type { PreviewBlockState } from "@/features/editor/playback/previewReadiness";
 
 /**
  * 画面画不出来时铺在监视器上的说明层。
@@ -20,7 +20,7 @@ export function PreviewUnavailable({
   assets,
   onRetried,
 }: {
-  state: Exclude<AssetPreviewState, "ready"> | "unsupported";
+  state: PreviewBlockState;
   /** 处于该状态的素材;`unsupported` 时为空(问题不在素材上)。 */
   assets: Asset[];
   /** 重新生成代理已提交:调用方据此立刻刷新素材,别等下一轮轮询。 */
@@ -31,6 +31,8 @@ export function PreviewUnavailable({
   const [retryError, setRetryError] = React.useState(false);
 
   // 只有「代理有问题」的两种状态能靠重新生成自救;转码中只需要等,不支持则与素材无关。
+  // `proxies-disabled` 尤其不能给按钮:那个按钮打的 /proxy 在这种配置下是**空操作**,
+  // 点了什么也不会发生 —— 一个假的自救手段比没有更坏。
   const canRetry = state === "failed" || state === "undecodable";
 
   const retry = async () => {
@@ -50,6 +52,7 @@ export function PreviewUnavailable({
     transcoding: { title: t("previewTranscoding"), hint: t("previewTranscodingHint") },
     failed: { title: t("previewFailed"), hint: t("previewFailedHint") },
     undecodable: { title: t("previewUndecodable"), hint: t("previewUndecodableHint") },
+    "proxies-disabled": { title: t("previewProxiesDisabled"), hint: t("previewProxiesDisabledHint") },
     unsupported: { title: t("previewUnsupported"), hint: t("previewUnsupportedHint") },
   }[state];
 

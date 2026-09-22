@@ -20,7 +20,7 @@ it("keeps only the current asset action menu open and closes it for a context me
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(["assets", "ws"], ["one", "two", "three"].map(id => ({
-    id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind: "image", source: "imported", tags: [], media_info: {},
+    id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind: "image", source: "imported", tags: [], media_info: {}, proxy_expected: false,
   }) as Asset));
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
@@ -41,7 +41,7 @@ it("有声音的素材才能分离人声与背景音,点了就排任务", async 
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   const asset = (id: string, kind: Asset["kind"]) =>
-    ({ id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind, source: "imported", tags: [], media_info: {} }) as Asset;
+    ({ id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind, source: "imported", tags: [], media_info: {}, proxy_expected: false }) as Asset;
   client.setQueryData(["assets", "ws"], [asset("clip", "video"), asset("still", "image")]);
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
@@ -61,7 +61,7 @@ it("有声音的素材能降噪:点了打开降噪对话框", async () => {
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(["assets", "ws"], [
-    { id: "clip", name: "clip", workspace_id: "ws", project_id: null, original_filename: "clip", file_key: "clip", kind: "audio", source: "imported", tags: [], media_info: {} } as Asset,
+    { id: "clip", name: "clip", workspace_id: "ws", project_id: null, original_filename: "clip", file_key: "clip", kind: "audio", source: "imported", tags: [], media_info: {}, proxy_expected: false } as Asset,
   ]);
   client.setQueryData(["denoise-engines"], []);
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);

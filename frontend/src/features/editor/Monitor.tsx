@@ -12,7 +12,7 @@ import { WebAudioMixer } from "@/features/editor/playback/WebAudioMixer";
 import { buildAudioSources } from "@/features/editor/playback/audioMix";
 import { compositorSupported } from "@/features/editor/playback/compositorFlag";
 import { PreviewUnavailable } from "@/features/editor/playback/PreviewUnavailable";
-import { blockingPreviewState } from "@/features/editor/playback/previewReadiness";
+import { blockingPreviewState, resolvesOnItsOwn } from "@/features/editor/playback/previewReadiness";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
@@ -311,8 +311,10 @@ export function Monitor({
     () => (webCodecsOk ? blockingPreviewState(activeVisualAssets, undecodable) : { state: "unsupported" as const, assets: [] }),
     [webCodecsOk, activeVisualAssets, undecodable],
   );
-  // 代理还在转时轮询素材:否则转好了界面也不会自己活过来,用户只能手动刷新。
-  const pendingProxy = previewBlock?.state === "transcoding";
+  // 会自己好起来的状态才轮询素材:否则转好了界面也不会自己活过来,用户只能手动刷新。
+  // 反过来,**永远不会好的状态不能轮询** —— 这台后端关掉了代理生成时,原先那句
+  // `=== "transcoding"` 会一直成立,于是每 2 秒问一次素材,问到用户关掉页面为止。
+  const pendingProxy = previewBlock ? resolvesOnItsOwn(previewBlock.state) : false;
   React.useEffect(() => {
     if (!pendingProxy || !onRefreshAssets) return;
     const timer = window.setInterval(onRefreshAssets, 2000);

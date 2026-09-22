@@ -47,13 +47,27 @@ def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None 
     db.commit()
 
 
+def proxies_possible(asset: Asset) -> bool:
+    """这份素材**会不会**有代理 —— 三个条件和 `start_proxy_job` 的守卫是同一组。
+
+    收敛成一个谓词,是因为这个答案要出现在**两个地方**:这里(建不建任务)和接口
+    (`AssetOut.proxy_expected`,前端据此决定遮罩上说什么)。原先只有前者,后者靠前端猜:
+    `generate_proxies` 关掉时后端不建任务、也不写 `proxy_status`,于是前端永远读到空串,
+    落进「未知一律当作还在转」那一档 —— 遮罩上写着「转码中,等一会儿就好」,而那是一件
+    **永远不会发生的事**,同时每 2 秒轮询一次素材。
+
+    参数只用 `.kind` / `.file_key`,所以 ORM 行和出参模型都传得进来。
+    """
+    return bool(settings.generate_proxies and asset.kind == "video" and asset.file_key)
+
+
 def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force: bool = False) -> Job | None:
     """Queue proxy generation for a video asset (in-process daemon thread).
 
     No-op (returns None) when proxies are disabled, the asset isn't a file-backed
     video, or a proxy is already ready/in-flight (unless `force`).
     """
-    if not settings.generate_proxies or asset.kind != "video" or not asset.file_key:
+    if not proxies_possible(asset):
         return None
     if not force and proxy_status(asset) in ("ready", "pending"):
         return None

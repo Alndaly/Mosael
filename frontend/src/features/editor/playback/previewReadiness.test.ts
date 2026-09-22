@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { Asset } from "@/api/client";
-import { assetPreviewState, blockingPreviewState } from "@/features/editor/playback/previewReadiness";
+import {
+  assetPreviewState,
+  blockingPreviewState,
+  resolvesOnItsOwn,
+} from "@/features/editor/playback/previewReadiness";
 
-const asset = (id: string, kind: string, proxy?: string): Asset =>
-  ({ id, kind, media_info: proxy === undefined ? {} : { proxy_status: proxy } }) as unknown as Asset;
+/** `proxyExpected` 默认 true —— 那是日常配置(`generate_proxies` 缺省开着)。 */
+const asset = (id: string, kind: string, proxy?: string, proxyExpected = true): Asset =>
+  ({
+    id,
+    kind,
+    proxy_expected: proxyExpected,
+    media_info: proxy === undefined ? {} : { proxy_status: proxy },
+  }) as unknown as Asset;
 
 const none: ReadonlySet<string> = new Set();
 
@@ -82,4 +92,56 @@ describe("代理还没转好时,别说「本机无法解码」", () => {
   it("代理已就绪 + 解码失败 → 这才真是「本机解不动」", () => {
     expect(assetPreviewState(asset("v", "video", "ready"), new Set(["v"]))).toBe("undecodable");
   });
+});
+
+
+/**
+ * 这台后端**不生成代理**时,「等一会儿就好」是一件永远不会发生的事。
+ *
+ * `generate_proxies` 关掉(或素材没有 file_key)时,后端既不建任务也不写 `proxy_status`。
+ * 前端于是读到空串,落进「未知一律当作还在转」那一档 —— 遮罩上写「转码中,等一会儿就好」,
+ * 而 Monitor 那个"转码中就轮询"的 effect 每 2 秒问一次素材,问到用户关掉页面为止。
+ * 遮罩上那个「重新生成代理」按钮打的 /proxy 在这种配置下同样是空操作,自救手段也失效。
+ *
+ * 那一档的设计理由(把未知显示成错误会让用户去点一个不需要的重试)在这里刚好反过来:
+ * 用户需要知道的恰恰是"这台后端不生成代理"。答案现在由后端算(`AssetOut.proxy_expected`)
+ * —— **前端不该用缺省值去猜后端的配置**。
+ */
+describe("后端不生成代理时", () => {
+  it("说清是配置问题,而不是「还在转」", () => {
+    expect(assetPreviewState(asset("v", "video", undefined, false), none)).toBe("proxies-disabled");
+  });
+
+  it("已经转好的代理照样能放 —— 开关是之后才关的,不影响它", () => {
+    expect(assetPreviewState(asset("v", "video", "ready", false), none)).toBe("ready");
+  });
+
+  it("已经失败的仍报失败", () => {
+    expect(assetPreviewState(asset("v", "video", "failed", false), none)).toBe("failed");
+  });
+
+  it("图片不受影响", () => {
+    expect(assetPreviewState(asset("i", "image", undefined, false), none)).toBe("ready");
+  });
+
+  it("这一档比「还在转」更该被报出来:后者会自愈,前者永远不会", () => {
+    const blocked = blockingPreviewState(
+      [asset("a", "video", "pending"), asset("b", "video", undefined, false)],
+      none,
+    );
+    expect(blocked?.state).toBe("proxies-disabled");
+  });
+});
+
+describe("要不要轮询素材", () => {
+  it("只有会自己好起来的那一档才轮询", () => {
+    expect(resolvesOnItsOwn("transcoding")).toBe(true);
+  });
+
+  it.each(["proxies-disabled", "failed", "undecodable", "ready"] as const)(
+    "%s 不轮询 —— 等下去不会有结果",
+    (state) => {
+      expect(resolvesOnItsOwn(state)).toBe(false);
+    },
+  );
 });

@@ -5945,6 +5945,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/provider-credentials/{profile_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew Credential Lease
+         * @description 续租。持有者在刷新期间定期调它 —— TTL 用来发现死掉的持有者,不该用来罚慢的那个。
+         *
+         *     续不上(已被顶替)返回 409:那说明别人已经接手,调用方该知道自己这一份要作废。
+         */
+        post: operations["renew_credential_lease_api_agent_provider_credentials__profile_id__renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/provider-credentials/{profile_id}/release": {
         parameters: {
             query?: never;
@@ -6819,6 +6841,19 @@ export interface components {
             created_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
+            /**
+             * Proxy Expected
+             * @description 这份素材会不会有代理。**前端不该用缺省值去猜后端的配置。**
+             *
+             *     预览只走 WebCodecs + 代理这一条路(ADR-0004),画不出来时必须给一个说得清的状态。
+             *     而 `generate_proxies` 关掉时后端既不建任务也不写 `proxy_status` —— 素材上**什么都
+             *     没说**,于是前端读到空串,落进「未知一律当作还在转」那一档:遮罩写「转码中,等一会儿
+             *     就好」,一件永远不会发生的事,外加每 2 秒轮询一次。
+             *
+             *     算出来而不是存进 `media_info`:这是一个服务端配置,存进去的话开关一翻就得带迁移,
+             *     而且每份素材里存的都是同一句话。
+             */
+            readonly proxy_expected: boolean;
         };
         /** AssetUpdate */
         AssetUpdate: {
@@ -7503,6 +7538,8 @@ export interface components {
             credential?: {
                 [key: string]: unknown;
             } | null;
+            /** Base Version */
+            base_version?: number | null;
         };
         /** CommitOut */
         CommitOut: {
@@ -24669,6 +24706,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CommitOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_credential_lease_api_agent_provider_credentials__profile_id__renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
