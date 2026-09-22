@@ -31739,11 +31739,14 @@
           "worker": {
             "type": "string",
             "maxLength": 64,
-            "title": "Worker",
-            "default": ""
+            "minLength": 1,
+            "title": "Worker"
           }
         },
         "type": "object",
+        "required": [
+          "worker"
+        ],
         "title": "ClaimRequest"
       },
       "app__api__routes__publish_worker__ReportRequest": {

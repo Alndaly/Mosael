@@ -12156,10 +12156,7 @@ export interface components {
         app__api__routes__publish_worker__ClaimRequest: {
             /** Exclude Accounts */
             exclude_accounts?: string[];
-            /**
-             * Worker
-             * @default
-             */
+            /** Worker */
             worker: string;
         };
         /** ReportRequest */
