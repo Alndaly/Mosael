@@ -185,20 +185,14 @@ async function awaitAnswer(
   const settled = await awaitCard<Question>(
     () => apiGet(apiBase, token, `/api/agent/questions/${questionId}`, undefined, signal) as Promise<Question>,
     (cur) => {
-      // **带上 question_id。** 同一次作答会在对话里留下两份痕迹:这条工具结果,和后端送回
-      // 会话的那条回执消息。界面据这个 id 认出"这两份说的是同一件事",于是只画一次。
-      // 没有钥匙的话就只能靠猜(比如"有没有一条 answered 的 ask_user"),而猜错的方向是
-      // **把唯一的那份痕迹也藏掉** —— 超时那条路上工具结果是 pending,回执才是唯一记录。
-      if (cur.status === "answered")
-        return { status: "answered", answers: cur.answers ?? {}, question_id: questionId };
-      if (cur.status === "dismissed") return { status: "dismissed", skipped: true, question_id: questionId };
+      if (cur.status === "answered") return { status: "answered", answers: cur.answers ?? {} };
+      if (cur.status === "dismissed") return { status: "dismissed", skipped: true };
       return undefined;
     },
     signal,
   );
   return settled ?? {
     status: "pending",
-    question_id: questionId,
     message:
       "用户还没作答。按你自己的判断继续或者先收尾,**不要再问一遍** —— 他答了之后答案会自己送到这次对话里。",
   };
@@ -213,6 +207,27 @@ async function awaitAnswer(
  */
 function jsonResult(data: unknown): AgentToolResult<{ data: unknown }> {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: { data } };
+}
+
+/**
+ * 选择卡的结果:**答案给模型,卡片身份只进 UI 存档。**
+ *
+ * `question_id` 是"去轮询"那条协议的残留,对模型是噪音 —— 它拿到的该是"用户选了什么",
+ * 不是一个它做不了任何事的 id(见 test/await-user-cards)。
+ *
+ * 但界面需要它:同一次作答在对话里会留下两份痕迹 —— 这条工具结果,和后端送回会话的那条
+ * 回执消息。阻塞那条路上两份都在,画两遍;超时那条路上工具结果是 `pending`,回执是唯一
+ * 记录,必须画。界面靠这个 id 分辨这两种情形,而**猜错的方向是把唯一那份也藏掉**。
+ *
+ * 所以两份不一样,而这正是 `AgentToolResult` 那个 content / details 分法的用途 ——
+ * `imageResult` 早就是这么做的(图片本身不进 details,只记张数)。
+ */
+function answerResult(data: unknown, questionId: string): AgentToolResult<{ data: unknown }> {
+  const forUi = data && typeof data === "object" ? { ...(data as object), question_id: questionId } : data;
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    details: { data: forUi },
+  };
 }
 
 interface ToolImage { mime_type: string; data: string }
@@ -316,7 +331,7 @@ export async function buildAllTools(
             const card = (response?.result ?? {}) as { question_id?: string; error?: string };
             // 没有会话上下文时后端回的是一句 error(飞书 / 外部客户端),照原样给模型。
             if (!card.question_id) return jsonResult(response?.result ?? null);
-            return jsonResult(await awaitAnswer(apiBase, token, card.question_id, signal));
+            return answerResult(await awaitAnswer(apiBase, token, card.question_id, signal), card.question_id);
           }
           if (!spec.confirmation) return jsonResult(response?.result ?? null);
           // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。

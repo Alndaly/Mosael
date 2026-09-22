@@ -108,8 +108,14 @@ const askUserResult = (plan, waitMs) => callTool("ask_user", plan, waitMs);
   assert.ok(polls >= 2, `没等 —— 只查了 ${polls} 次就返回了`);
   assert.equal(result.details.data.status, "answered");
   assert.deepEqual(result.details.data.answers, { "走哪条": ["英文"] });
-  // question_id 不该出现在模型看到的东西里:它是"去轮询"那条协议的残留。
-  assert.ok(!JSON.stringify(result.details.data).includes("q1"), "工具结果里还留着 question_id");
+  // question_id 不该出现在**模型看到的东西**里:它是"去轮询"那条协议的残留,模型拿它做不了
+  // 任何事。`content` 才是模型读的那一份 —— 此前这条断言打的是 `details.data`,而那时
+  // `jsonResult` 让两份完全相同,所以断哪一份都一样。
+  assert.ok(!JSON.stringify(result.content).includes("q1"), "模型看到的结果里还留着 question_id");
+  // 而**界面需要它**:同一次作答会留下两份痕迹(这条工具结果、和后端送回会话的回执),
+  // 阻塞这条路上两份都在,界面靠这个 id 认出它们说的是同一件事,只画一遍。超时那条路上
+  // 工具结果是 pending、回执是唯一记录 —— 所以猜不得,必须有钥匙。
+  assert.equal(result.details.data.question_id, "q1", "界面拿不到卡片身份,去重只能靠猜");
 }
 
 // 2) 用户跳过 → 说清是跳过,模型按自己的判断继续

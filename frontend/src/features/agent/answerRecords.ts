@@ -22,13 +22,16 @@
  * 都要用它 —— 各写一遍的话,这条规矩迟早在其中一个上失效。
  */
 import type { AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { toolResultData } from "@/features/agent/toolResultShapes";
 
 /** 时间线里 `ask_user` 已经记下答案的那些问题 id。 */
 export function questionsRecordedByTools(timeline: readonly AgentTimelineItem[] | undefined): Set<string> {
   const recorded = new Set<string>();
   for (const item of timeline ?? []) {
     if (item.type !== "tool" || item.tool.name !== "ask_user") continue;
-    const result = item.tool.result;
+    // **要解包。** 时间线里存的是 pi 原样的 `AgentToolResult`(`{content, details}`),
+    // 而给界面看的那一份在 `details.data` 里 —— 直接读 `tool.result` 拿到的是外壳。
+    const result = toolResultData(item.tool.result);
     if (!result || typeof result !== "object") continue;
     const { status, question_id: questionId } = result as { status?: unknown; question_id?: unknown };
     // 只有 answered / dismissed 才算"记下了"。`pending` 说的正是"工具没等到" ——

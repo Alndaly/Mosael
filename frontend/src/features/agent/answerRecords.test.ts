@@ -16,8 +16,21 @@ import {
   recordedQuestionIds,
 } from "@/features/agent/answerRecords";
 
-const askUser = (result: unknown) =>
-  ({ type: "tool", tool: { id: "t1", name: "ask_user", status: "done", result } }) as never;
+/**
+ * **按真实形状造**:时间线里存的是 pi 原样的 `AgentToolResult`(`{content, details}`),
+ * 给界面看的那一份在 `details.data` 里。第一版这里直接把解包后的对象塞进 `result`,
+ * 于是测试全绿而线上读到的是外壳 —— 一条绕过真实形状的测试,证明不了任何事。
+ */
+const askUser = (data: unknown) =>
+  ({
+    type: "tool",
+    tool: {
+      id: "t1",
+      name: "ask_user",
+      status: "done",
+      result: { content: [{ type: "text", text: JSON.stringify(data) }], details: { data } },
+    },
+  }) as never;
 
 const record = (questionId?: string) => ({
   payload: { answers: { question_id: questionId, picked: [{ question: "宏大?", choices: ["远古巨柱神殿"] }] } },
