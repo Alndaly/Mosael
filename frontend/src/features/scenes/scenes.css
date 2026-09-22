@@ -1,3 +1,14 @@
+/* **整份表包在 `@layer components` 里。** Tailwind v4 的工具类都在 `@layer utilities`,
+   而**不分层的 CSS 胜过任何分层 CSS**,与特异性无关 —— 所以这份表此前压死了这两个页面上
+   所有同属性的工具类:class 还老老实实挂在 DOM 上,只是不算数,而且没有任何地方会报错。
+
+   这个项目在同一个坑里栽过两次(见 design/unlayeredGlobals.test.ts 里记的那两次),
+   立了棘轮,而那条棘轮只读 tokens.css —— 于是这两份页面样式表整份在它的扫描面之外。
+   现在它扫 frontend/src 下的每一份 .css。
+
+   不重新缩进:包一层的语义就是两行,把 1300 行整体右移只会让这次改动没法读。 */
+@layer components {
+
 .scene-library,
 .scene-studio {
   /* 整页共用的两个量:左右内距,以及工具条控件的高度。**定义在页面根上** ——
@@ -802,7 +813,7 @@
 
 .scene-panel-heading h2,
 .scene-output-panel h2 {
-  font-size: 16px;
+  font-size: var(--text-ui-md);
   line-height: 1.5;
   font-weight: 600;
 }
@@ -1083,8 +1094,8 @@
 .scene-blender-connection > *,
 .scene-blender-connection [role="combobox"] { height: var(--scene-control-height); }
 .scene-blender-heading { justify-content: space-between; }
-.scene-blender-heading p, .scene-blender small, .scene-blender-result > span { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
-.scene-blender-heading strong { font-size: 14px; }
+.scene-blender-heading p, .scene-blender small, .scene-blender-result > span { color: var(--muted-foreground); font-size: var(--text-ui-xs); line-height: 1.6; }
+.scene-blender-heading strong { font-size: var(--text-ui-sm); }
 .scene-blender-connection > :first-child { flex: 1; min-width: 0; }
 .scene-blender-action { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; text-align: left; background: color-mix(in srgb, var(--muted) 55%, transparent); transition: background-color 180ms ease, color 180ms ease, opacity 180ms ease; }
 .scene-blender-action:hover:not(:disabled) { background: var(--accent); }
@@ -1093,7 +1104,7 @@
 .scene-blender-action strong { font-size: 13px; font-weight: 500; }
 .scene-blender-result { display: grid; gap: 8px; }
 .scene-blender-result > div { flex-wrap: wrap; }
-.scene-blender-status, .scene-blender-error { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.scene-blender-status, .scene-blender-error { font-size: var(--text-ui-xs); line-height: 1.6; overflow-wrap: anywhere; }
 .scene-blender-status { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
 .scene-blender-error { color: var(--destructive); }
 /* 空状态里的下一步链接。EmptyState 是居中布局,所以链接也居中 —— 靠左会在标题下方
@@ -1153,7 +1164,7 @@
   border-radius: 7px;
   background: rgb(20 24 30 / 82%);
   color: #f2f4f8;
-  font-size: 11px;
+  font-size: var(--text-ui-2xs);
   backdrop-filter: blur(12px);
   border: 1px solid rgb(255 255 255 / 12%);
 }
@@ -1191,7 +1202,7 @@
   color: #f2f4f8;
   background: rgb(20 24 30 / 92%);
   border: 1px solid rgb(255 255 255 / 25%);
-  font-size: 11px;
+  font-size: var(--text-ui-2xs);
 }
 .scene-camera-inset small {
   color: #bdc8dc;
@@ -1294,4 +1305,5 @@ button.scene-object-twist:hover {
 }
 .scene-object-twist svg {
   transition: transform 120ms ease;
+}
 }

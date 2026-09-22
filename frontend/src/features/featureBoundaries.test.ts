@@ -48,16 +48,75 @@ function dependencies(): Map<string, Set<string>> {
   return edges;
 }
 
-describe("功能模块的边界", () => {
-  it("没有两个功能互相依赖", () => {
-    const edges = dependencies();
-    const cycles: string[] = [];
-    for (const [feature, others] of edges) {
-      for (const other of others) {
-        if (edges.get(other)?.has(feature) && feature < other) cycles.push(`${feature} ↔ ${other}`);
+/**
+ * 依赖图里所有的环,不只是 A ↔ B。
+ *
+ * **判据此前只认二元环**(`edges.get(other)?.has(feature)`)—— 而 A → B → C → A 在
+ * "谁依赖谁说不清了"这件事上和二元环一模一样:从任何一端读进去都会绕回原地,改一个 hook
+ * 仍然要同时想三个页面。二元只是**当时找到的那六对**碰巧长的样子,不是这条规矩的边界。
+ *
+ * 用 Tarjan 找强连通分量:一个分量里多于一个结点,里面的每一对就都能互相到达。
+ * 这同时把二元环覆盖了 —— 它是 n=2 的那种。
+ */
+function cycles(edges: Map<string, Set<string>>): string[] {
+  let counter = 0;
+  const index = new Map<string, number>();
+  const low = new Map<string, number>();
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const found: string[] = [];
+
+  const visit = (node: string): void => {
+    index.set(node, counter);
+    low.set(node, counter);
+    counter += 1;
+    stack.push(node);
+    onStack.add(node);
+    for (const next of edges.get(node) ?? []) {
+      if (!edges.has(next)) continue; // 指向一个不存在的功能:那是别的问题
+      if (!index.has(next)) {
+        visit(next);
+        low.set(node, Math.min(low.get(node)!, low.get(next)!));
+      } else if (onStack.has(next)) {
+        low.set(node, Math.min(low.get(node)!, index.get(next)!));
       }
     }
-    expect(cycles, "互相依赖的功能:把它们共用的那个东西挪到 lib/ 或 components/,或者归还给它真正的领域").toEqual([]);
+    if (low.get(node) !== index.get(node)) return;
+    const component: string[] = [];
+    for (;;) {
+      const popped = stack.pop()!;
+      onStack.delete(popped);
+      component.push(popped);
+      if (popped === node) break;
+    }
+    if (component.length > 1) found.push(component.sort().join(" ↔ "));
+  };
+
+  for (const node of edges.keys()) if (!index.has(node)) visit(node);
+  return found.sort();
+}
+
+describe("功能模块的边界", () => {
+  it("依赖图里没有环 —— 二元的,和更长的", () => {
+    expect(
+      cycles(dependencies()),
+      "互相依赖的功能:把它们共用的那个东西挪到 lib/ 或 components/,或者归还给它真正的领域",
+    ).toEqual([]);
+  });
+
+  it("三元环也拦得住 —— 二元只是当时找到的那六对碰巧长的样子", () => {
+    const edges = new Map([
+      ["a", new Set(["b"])],
+      ["b", new Set(["c"])],
+      ["c", new Set(["a"])],
+      ["d", new Set(["a"])], // 单向依赖不算环
+    ]);
+    expect(cycles(edges)).toEqual(["a ↔ b ↔ c"]);
+  });
+
+  it("二元环照旧拦得住", () => {
+    const edges = new Map([["a", new Set(["b"])], ["b", new Set(["a"])]]);
+    expect(cycles(edges)).toEqual(["a ↔ b"]);
   });
 
   it("这道棘轮扫得到东西 —— 别变成空转", () => {

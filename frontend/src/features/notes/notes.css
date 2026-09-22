@@ -1,3 +1,14 @@
+/* **整份表包在 `@layer components` 里。** Tailwind v4 的工具类都在 `@layer utilities`,
+   而**不分层的 CSS 胜过任何分层 CSS**,与特异性无关 —— 所以这份表此前压死了这两个页面上
+   所有同属性的工具类:class 还老老实实挂在 DOM 上,只是不算数,而且没有任何地方会报错。
+
+   这个项目在同一个坑里栽过两次(见 design/unlayeredGlobals.test.ts 里记的那两次),
+   立了棘轮,而那条棘轮只读 tokens.css —— 于是这两份页面样式表整份在它的扫描面之外。
+   现在它扫 frontend/src 下的每一份 .css。
+
+   不重新缩进:包一层的语义就是两行,把 1300 行整体右移只会让这次改动没法读。 */
+@layer components {
+
 /* 正文栏的宽度是一个量:标题、正文和顶上那两条提示带都对着它排,不然提示读起来像掉在页面外面。 */
 .notes-layout { --note-column:740px; display:flex; height:100%; min-height:0; min-width:0; background:transparent; }
 .notes-index { flex:0 0 276px; min-width:0; display:flex; flex-direction:column; background:var(--workspace-subtle); padding:16px 12px; gap:14px; }
@@ -209,3 +220,4 @@
 .note-error-notice .note-notice-row > span { display:flex; align-items:center; gap:6px; min-width:0; }
 .note-error-notice svg { flex-shrink:0; color:var(--destructive); }
 .note-document-header .note-status[data-state=error] { color:var(--destructive); }
+}
