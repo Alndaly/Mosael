@@ -29,8 +29,8 @@ from app.api.schemas import (
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.workflows import (
+    available_node_types,
     NODE_CATEGORIES,
-    NODE_TYPES,
     config_data_type,
     config_editor,
     config_label,
@@ -41,7 +41,6 @@ from app.domain.workflows import (
     list_workflows,
     update_workflow,
 )
-from app.domain.plugins.nodes import plugin_node_types
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.revisions import (
     WorkflowRevisionError,
@@ -101,7 +100,10 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
     order = {name: index for index, name in enumerate(NODE_CATEGORIES)}
     # 插件节点跟内置节点走同一条路出去:同样的字段、同样的分组、同样的排序。前端因此不需要
     # 知道"这一项是插件来的" —— 它在画布上就该跟别的节点没有区别。
-    registry = {**NODE_TYPES, **plugin_node_types(db, user.id)}
+    #
+    # **这份组装只有一处**(domain/workflows.available_node_types):AI 编排此前自己组了一份
+    # 只有内置节点的,于是模型不知道插件节点存在,而校验又把图里原样留着的插件节点判成未知类型。
+    registry = available_node_types(db, user_id=user.id)
     #: 目录里存 key,**出口才翻** —— 和发布平台目录、TTS 引擎目录同一条(见 core/i18n)。
     #: 语言从 Accept-Language 来,不是从某个全局配置来:这是个多租户、可远程部署的后端,
     #: 没有「服务端语言」这回事。

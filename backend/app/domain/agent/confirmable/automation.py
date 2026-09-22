@@ -27,10 +27,19 @@ def _workflow_in(db: Session, workspace_id: str, payload: dict[str, Any]):
 
 
 
-def _check_graph(graph: object) -> None:
+def _check_graph(db: Session, graph: object) -> None:
+    """校验模型提出的这张图。
+
+    **`extra_types` 必须带上。** 智能体完全可以用插件节点搭图(它们和内置节点在画布上没有
+    区别,`plugin_node_types` 存在的全部意义就是这个)。不带的话,那个节点被判成未知类型,
+    卡上报出「该插件未安装或未启用」—— 插件明明装着、开着,而用户会照着这句话去插件页找问题。
+    """
+    from app.domain.plugins.nodes import plugin_node_types
     from app.domain.workflows import validate_graph
 
-    errors = validate_graph(graph, require_config=False, allow_missing_start=True)
+    errors = validate_graph(
+        graph, require_config=False, allow_missing_start=True, extra_types=plugin_node_types(db)
+    )
     if errors:
         raise ConfirmationError("；".join(errors))
 
@@ -50,7 +59,7 @@ def _validate_create_workflow(db: Session, workspace_id: str, payload: dict[str,
     if not str(payload.get("name", "")).strip():
         raise ConfirmationError("create_workflow requires a name")
     if payload.get("graph") is not None:
-        _check_graph(payload["graph"])
+        _check_graph(db, payload["graph"])
 
 
 def _summarize_create_workflow(db: Session, payload: dict[str, Any]) -> str:
@@ -77,7 +86,7 @@ def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) 
 def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     _workflow_in(db, workspace_id, payload)
     if payload.get("graph") is not None:
-        _check_graph(payload["graph"])
+        _check_graph(db, payload["graph"])
 
 
 def _summarize_update_workflow(db: Session, payload: dict[str, Any]) -> str:
@@ -120,7 +129,7 @@ def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, A
         preview = apply_graph_ops(workflow.graph or {}, operations)
     except WorkflowDomainError as exc:
         raise ConfirmationError(str(exc)) from exc
-    _check_graph(preview)
+    _check_graph(db, preview)
 
 
 def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> str:

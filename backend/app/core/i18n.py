@@ -732,6 +732,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_recursiveCall": {"zh": "工作流递归调用(直接或间接调用了自身),已阻止", "en": "Blocked: the workflow calls itself, directly or indirectly"},
     "wfErr_pickWorkflow": {"zh": "请选择要调用的工作流", "en": "Pick the workflow to call"},
     "wfErr_calledWorkflowMissing": {"zh": "被调用的工作流不存在", "en": "The workflow being called does not exist"},
+    "wfErr_calledWorkflowHasNoOutput": {
+        "zh": "被调用的工作流「{name}」没有「输出」节点 —— 加一个,并在里面声明要交给调用方的那几个值",
+        "en": "The called workflow \u300c{name}\u300d has no Output node — add one and declare the values it hands back",
+    },
     "wfErr_responseFormat": {"zh": "response_format 只能是 text/json_object/json_schema", "en": "response_format must be text, json_object or json_schema"},
     "wfErr_schemaEmpty": {"zh": "JSON Schema 不能为空", "en": "The JSON Schema cannot be empty"},
     "wfErr_llmPromptEmpty": {"zh": "LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。", "en": "The LLM node has no prompt: write one, or connect an upstream reference and make sure it produces output."},

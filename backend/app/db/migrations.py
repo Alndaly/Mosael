@@ -188,6 +188,97 @@ def _migrate_official_workflow_data_bindings() -> None:
             )
 
 
+def _migrate_called_workflows_declare_their_output() -> None:
+    """被别的工作流 `call_workflow` 调用、却没有「输出」节点的图,补上一个输出节点。
+
+    ## 为什么要迁移,而不是留一条兼容分支
+
+    `call_workflow` 此前的返回是
+
+        result.get("output") or result.get("context") or {}
+
+    —— 被调图没有输出节点时,退回**整份上下文**。那份上下文是给人看的快照,过了 `_trim_outputs`
+    (长字符串截断、列表只留 200 项、对象只留 100 个字段),于是一份长文案、一段 LLM 回答、
+    一串 id 列表经这条退路传上去会**安静地少一截**。而「输出」节点的说明写着:被调用时调用方拿的
+    就是这个契约 —— 一个契约不能有"契约给不出东西时换一种形状"的退路。
+
+    这条退路是明写的向后兼容分支,而本仓库的规矩是**不写兼容,改形状带迁移**(ADR-0006)。
+    所以退路删掉,老数据在这里补齐:给每个终端节点(没有出边的那些)的每一个输出声明一个名字,
+    形如 `{节点id}_{输出名}: "{{节点id.输出名}}"`。**这正是老行为的显式版本** —— 暴露的还是
+    那些值,只是从此有名有姓、而且不再被裁剪。
+
+    只改 `workflows.graph`(当前图)。修订是不可变快照,不动它们:拿老修订跑的任务会拿到
+    `wfErr_calledWorkflowHasNoOutput` 那句明确的话(「加一个输出节点」),而不是一份少了一截
+    的数据 —— **说得出口的失败比悄悄错掉好**。
+    """
+    if "workflows" not in set(inspect(engine).get_table_names()):
+        return
+    from app.domain.workflows import NODE_TYPES
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
+        graphs: dict[str, dict] = {}
+        called: set[str] = set()
+        for row in rows:
+            raw = row["graph"]
+            try:
+                graph = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(graph, dict):
+                continue
+            graphs[row["id"]] = graph
+            for node in graph.get("nodes") or []:
+                if isinstance(node, dict) and node.get("type") == "call_workflow":
+                    target = (node.get("config") or {}).get("workflow_id")
+                    if isinstance(target, str) and target:
+                        called.add(target)
+
+        patched = 0
+        for workflow_id in sorted(called):
+            graph = graphs.get(workflow_id)
+            if graph is None:
+                continue
+            nodes = [node for node in (graph.get("nodes") or []) if isinstance(node, dict)]
+            if any(node.get("type") == "output" for node in nodes):
+                continue
+            sources = {
+                str(edge.get("source"))
+                for edge in (graph.get("edges") or [])
+                if isinstance(edge, dict)
+            }
+            values: dict[str, str] = {}
+            for node in nodes:
+                nid = str(node.get("id") or "")
+                if not nid or nid in sources:
+                    continue  # 有出边的不是终端节点
+                spec = NODE_TYPES.get(str(node.get("type")))
+                for out in (spec or {}).get("outputs") or []:
+                    if str(out).startswith("*"):
+                        continue  # 运行时才知道名字的,声明不出来
+                    values[f"{nid}_{out}"] = f"{{{{{nid}.{out}}}}}"
+            if not values:
+                continue
+            graph["nodes"] = [*nodes, {
+                "id": "output_migrated",
+                "type": "output",
+                "name": "输出",
+                "config": {"values": values},
+            }]
+            graph["edges"] = [*(graph.get("edges") or []), *(
+                {"source": nid, "target": "output_migrated"}
+                for nid in sorted({key.rsplit("_", 1)[0] for key in values})
+                if any(node.get("id") == nid for node in nodes)
+            )]
+            conn.execute(
+                text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                {"graph": json.dumps(graph, ensure_ascii=False), "id": workflow_id},
+            )
+            patched += 1
+        if patched:
+            logger.info("给 %d 个被调用的工作流补上了「输出」节点", patched)
+
+
 def _migrate_resource_ownership() -> None:
     """五张表补 `owner_user_id`,并给每条已存在的记录建一行「共享给它当前所在的工作区」。
 
@@ -2242,6 +2333,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_generation_capability_profiles,
                 _migrate_browser_boolean_options,
                 _migrate_official_workflow_data_bindings,
+                # 必须在 _migrate_workflow_revisions 之前:补完输出节点,下面那一步才会把
+                # 这次语义改动记成一条新的不可变修订。
+                _migrate_called_workflows_declare_their_output,
                 _migrate_line_fields_are_lists,
                 _migrate_workflow_revisions,
                 # Projection comes last so rows synthesized by earlier migrations are visible

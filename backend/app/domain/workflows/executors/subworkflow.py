@@ -98,5 +98,20 @@ def call_workflow(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     child = start_workflow_job(db, target, created_by=current_actor(db), params=params)
     final = wait_for_job(child.id, release=db)
     result = final.result or {}
-    # 优先给「输出」节点声明的具名输出;没有则退回整份上下文(向后兼容)。
-    return {"output": result.get("output") or result.get("context") or {}}
+    # **判有无,不判真假;而且没有退路。**
+    #
+    # 「输出」节点的说明写着:被 call_workflow 调用时,调用方拿的就是这个契约。一个契约不能有
+    # 一条"契约给不出东西时换一种形状"的退路 —— 那等于没有契约。此前这里是
+    #
+    #     result.get("output") or result.get("context") or {}
+    #
+    # 两个毛病叠在一起:`or` 判真假,所以被调图**有**输出节点、这次恰好产出空字典时(条件分支
+    # 没走到、上游返回空)会掉进整份上下文 —— 调用方拿到的是**完全不同的形状**;而那一份还是
+    # **被裁剪过的**(`_trim_outputs`:顶层字符串超 2000 字截断加 `…`、列表只留 200 项、对象只留
+    # 100 个字段),于是一份长文案、一段 LLM 回答、一串 id 列表经这条退路传上去会安静地少一截。
+    #
+    # 裁剪的本意是给**人**看的快照(事件体积有上限),而它同时被当成了给机器用的数据源 ——
+    # 两个读者共用一份字段,只有一个读者需要有界。现在 `context` 只服务前者。
+    if "output" not in result:
+        raise WorkflowDomainError("wfErr_calledWorkflowHasNoOutput", params={"name": target.name})
+    return {"output": result["output"]}

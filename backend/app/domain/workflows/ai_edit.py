@@ -16,7 +16,13 @@ from sqlalchemy.orm import Session
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.usage import BillableCall, billable, once
 from app.domain.providers import require_connection
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
+from app.core.i18n import get_current_locale, t
+from app.domain.workflows import (
+    NODE_TYPES,
+    WorkflowDomainError,
+    available_node_types,
+    validate_graph,
+)
 
 TIMEOUT_SECONDS = 120
 
@@ -51,10 +57,32 @@ def ai_edit_graph(
         target = target_for(db, profile, surface="automation")
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
+    # **给模型的是人话,不是 i18n key。** `NODE_TYPES` 里的 label/description 存的是 key
+    # (`wfNode_scene_render_desc` 这种,由 test_backend_i18n 那道棘轮强制),接口那条路在出口
+    # `t(...)` 翻一次 —— 而这条路原先原样发了出去,模型收到的系统提示里每个节点的说明就是
+    # 一串 key。表现只是"编排质量下降",没人会把它归因到提示词里少了翻译。
+    #
+    # 插件节点也在里面:`available_node_types` 是唯一那份组装(见它的说明)。
+    locale = get_current_locale()
+    node_types = available_node_types(db, user_id=user_id)
     registry = json.dumps(
-        {key: {"label": meta["label"], "config": meta["config"], "outputs": meta["outputs"]} for key, meta in NODE_TYPES.items()},
+        {
+            key: {
+                "label": t(meta["label"], locale),
+                "description": t(meta.get("description", ""), locale),
+                "config": {
+                    name: {**spec, "description": t(spec.get("description", ""), locale)}
+                    for name, spec in meta["config"].items()
+                },
+                "outputs": meta["outputs"],
+            }
+            for key, meta in node_types.items()
+        },
         ensure_ascii=False,
     )
+    # 插件节点要让校验也认得 —— 提示词要求模型"保留用户没让你改的部分",于是它们会原样留在
+    # 输出里。不传的话那一步报的是「该插件未安装或未启用」:一句**指向别处**的错误。
+    extra_types = {key: meta for key, meta in node_types.items() if key not in NODE_TYPES}
     system = _SYSTEM % registry
     user = f"当前工作流 graph:\n{json.dumps(graph, ensure_ascii=False)}\n\n用户指令:{instruction}"
 
@@ -79,7 +107,7 @@ def ai_edit_graph(
             except (KeyError, ValueError) as exc:
                 last_error = f"JSON 解析失败: {exc}"
                 continue
-            errors = validate_graph(new_graph, require_config=False)
+            errors = validate_graph(new_graph, require_config=False, extra_types=extra_types)
             if errors:
                 last_error = "；".join(errors)
                 continue

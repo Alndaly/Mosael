@@ -333,6 +333,26 @@ def config_label(key: str, spec: dict[str, Any]) -> str:
     return explicit or _FIELD_LABELS.get(key, "") or _humanize_field_key(key)
 
 
+def available_node_types(db: Session, *, user_id: str | None = None) -> dict[str, dict[str, Any]]:
+    """**这台机器上此刻可用的全部节点类型** —— 内置的加上插件的。
+
+    收敛成一个函数,是因为它此前被组装了两次:接口层一次(内置 + 插件 + 翻译 + 排序),
+    AI 编排里一次(**只有内置,什么都没有**)。于是同一句"可用节点类型"在两条路上含义不同:
+
+    - 模型不知道插件节点存在 —— 而 `plugin_node_types` 存在的全部意义就是让插件节点
+      "和内置节点没有区别";
+    - 更糟的是校验:AI 编排调 `validate_graph` 时不带 `extra_types`,而提示词又要求模型
+      "保留用户没让你改的部分",于是图里原样留着的那个插件节点被判成未知类型,报出
+      **「该插件未安装或未启用」** —— 插件明明装着、开着,画布上跑得好好的,而用户会照着
+      这句话去插件页找问题。
+
+    `db` 是必需的:装了什么插件是**用户机器上的事实**,不是这份代码的常量(见 plugins/nodes)。
+    """
+    from app.domain.plugins.nodes import plugin_node_types
+
+    return {**NODE_TYPES, **plugin_node_types(db, user_id)}
+
+
 def output_label(key: str, node_spec: dict[str, Any]) -> str:
     """输出接点的显示名;英文 key 本身仍是连线与序列化契约。"""
     declared = node_spec.get("output_labels")
