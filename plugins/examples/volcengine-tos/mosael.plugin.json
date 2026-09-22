@@ -15,6 +15,9 @@
   "permissions": [
     "network:tos"
   ],
+  "provides": [
+    "public_url"
+  ],
   "skills": [
     {
       "id": "tos_storage",

@@ -147,6 +147,13 @@ class Manifest:
     homepage: str = ""
     #: 声明了就能在设置页点「去授权」,不必手抄令牌(见 domain/plugins/oauth)。
     oauth: OAuthSpec | None = None
+    #: 这个插件**能替宿主做成哪几件事**。今天只有一项:`public_url` —— 「把一份本地素材变成
+    #: 一条公网可下载的地址」。
+    #:
+    #: **声明,不是猜。** 宿主需要这个能力时(比如某家生成模型的参考视频只收链接),得找得到
+    #: 一个能做这件事的插件;靠工具名后缀 `_upload` 去猜的话,任何一个叫这个名字的工具都会被
+    #: 当成对象存储,而猜错的表现是把用户的素材传去了别的地方。
+    provides: list[str] = field(default_factory=list)
     #: 清单里那些**裸字符串**是用哪种语言写的。挑不到要的语言时先退到它,再退到部署缺省 ——
     #: 不写就退到作者写的第一条。它同时是告诉插件进程「这次要说哪种语言」的兜底(见 runtime)。
     default_locale: str = ""
@@ -331,6 +338,7 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         overrides=overrides,
         declared_tools=declared,
         homepage=web_url(raw.get("homepage")),
+        provides=[str(one) for one in (raw.get("provides") or []) if isinstance(one, str)],
         default_locale=author_locale,
         # **读 instance 里那一层。** oauth 块引用的 client_id_field / stores 全是
         # instance.credentials 里的键,放在顶层的话作者会把它写在它引用的东西旁边(合理),

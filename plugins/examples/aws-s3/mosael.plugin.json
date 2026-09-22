@@ -15,6 +15,9 @@
   "permissions": [
     "network:s3"
   ],
+  "provides": [
+    "public_url"
+  ],
   "skills": [
     {
       "id": "s3_storage",

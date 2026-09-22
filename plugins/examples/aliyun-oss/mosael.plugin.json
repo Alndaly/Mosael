@@ -15,6 +15,9 @@
   "permissions": [
     "network:oss"
   ],
+  "provides": [
+    "public_url"
+  ],
   "skills": [
     {
       "id": "oss_storage",

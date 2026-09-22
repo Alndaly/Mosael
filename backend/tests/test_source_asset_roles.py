@@ -246,13 +246,16 @@ def test_方舟的描述符声明了这条交付限制() -> None:
 def test_提交前就说清楚_而且只拦真没有链接的那一份() -> None:
     """走**完整提交链**(界面/智能体/工作流/定时任务四条路都汇到 `create_generation_job`)。
 
-    用户挂一段**本地**参考视频跑 Seedance,此前拿到的是花钱之后才来的一句英文 400:
+    用户挂一段**本地**参考视频跑 Seedance,最早拿到的是花钱之后才来的一句英文 400:
 
         The parameter `content` specified in the request is not valid:
         reference_video must be provided as a web url
 
     而挂一段**从链接导入**的素材,功能本来就是好的 —— 这一条钉住两者不能被一视同仁。
-    修对了的判据不是"拦住了",是"该拦的拦、该放的放"。
+
+    **而且拦是最后一招**:装了对象存储插件的话,提交时会自动把本地素材传上去换一条直链
+    (见 domain/generation/public_links)。这条测试跑在没装插件的环境里,所以走的是拦那一支 ——
+    它断言的是**那句话说清了下一步**("装一个对象存储插件"),而不是"请自行上传"。
     """
     from sqlalchemy import select
 
@@ -299,7 +302,8 @@ def test_提交前就说清楚_而且只拦真没有链接的那一份() -> None
                 source_assets=[{"role": REFERENCE_VIDEO, "asset_id": asset_id}],
             )
 
-    with pytest.raises(GenerationDomainError, match="只能按链接给"):
+    # **没装对象存储插件时**才拦,而且要说清下一步是"装一个",不是"自己想办法"。
+    with pytest.raises(GenerationDomainError, match="对象存储插件"):
         _submit(local)
     # 从链接导入的那一份:**拦不该落在它头上**。参考视频本身是支持的。
     _submit(linked)

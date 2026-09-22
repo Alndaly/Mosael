@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 
 from collections import Counter
@@ -26,6 +27,8 @@ from app.domain.generation.catalog import (
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
+
+logger = logging.getLogger(__name__)
 
 
 class GenerationDomainError(ValueError):
@@ -86,10 +89,16 @@ def create_generation_job(
         source_assets,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
     )
-    _validate_source_assets(
+    uploaded = _validate_source_assets(
         db, workspace_id, source_assets,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
     )
+    if uploaded:
+        # 换到的直链回填进 `<role>_url` —— 从这里往下,它和"用户自己粘了一条链接"走同一条路。
+        # 那条路适配器早就认得(见 contracts.generation.source_url_values),所以下游一行都不用改。
+        parameters = {**parameters, **{f"{role}_url": url for role, url in uploaded.items()}}
+        source_assets = [entry for entry in source_assets
+                         if str(entry.get("role") or "") not in uploaded]
     negative_prompt = requested_negative_prompt(negative_prompt, parameters)
 
     session = _resolve_session(
@@ -154,7 +163,7 @@ def _validate_source_assets(
     workspace_id: str,
     source_assets: list[dict[str, str]],
     capabilities: dict[str, Any] | None = None,
-) -> None:
+) -> dict[str, str]:
     """在创建任务前确认引用仍有效,**并且它能按这家要的形式交付**。
 
     以前到 worker 真正下载/读取素材时才发现引用已删除或来自别的工作区。此时界面已经进入
@@ -168,6 +177,9 @@ def _validate_source_assets(
     回话还是一长串英文,中间夹着一个 Request id。
     """
     url_only = set((capabilities or {}).get("url_only_roles") or [])
+    #: 传上去之后拿到的直链,按角色收着 —— 调用方把它回填进 `<role>_url`,于是适配器那一侧
+    #: 走的就是"用户粘了一条链接"那条现成的路,不必认识"这份素材其实是本地的"。
+    uploaded: dict[str, str] = {}
     for entry in source_assets:
         asset_id = str(entry.get("asset_id") or "").strip()
         role = str(entry.get("role") or FIRST_FRAME)
@@ -176,13 +188,25 @@ def _validate_source_assets(
         if asset is None or asset.workspace_id != workspace_id:
             short = f"（{asset_id[:12]}…）" if asset_id else ""
             raise GenerationDomainError(f"{label}素材{short}已删除或不在当前工作区，请重新连接或选择")
+
         if role in url_only and not direct_media_url((asset.media_info or {}).get("source_url")):
-            raise GenerationDomainError(
-                f"这个模型的{label}只能按链接给,不能上传本地文件 —— "
-                f"「{asset.name}」是本地素材,没有可公开访问的地址。"
-                f"装一个对象存储插件(火山引擎 TOS / 阿里云 OSS / Amazon S3),"
-                f"用它的「上传」工具换一条直链再填进来;或者直接粘一条你已有的公网直链"
-            )
+            # **多走一步,而不是把问题退回给用户。** 这一项只收链接,而素材是本地的 ——
+            # 那就找一个声明了 `public_url` 能力的插件(对象存储三家)传上去,拿一条限时直链。
+            #
+            # 传不了的三种情形(没装 / 没配好 / 传失败)各说各的下一步,见 public_links。
+            # 在这里做而不是在 runner 里,是因为**这一步要在提交之前完成**:一条传不上去的
+            # 素材应当当场说清楚,而不是排进队列、几秒后变成一条任务失败。
+            from app.domain.generation.public_links import NoUploader, public_url_for
+
+            try:
+                url, via = public_url_for(
+                    db, workspace_id=workspace_id, asset_id=asset.id, asset_name=asset.name
+                )
+            except NoUploader as exc:
+                raise GenerationDomainError(str(exc)) from exc
+            uploaded[role] = url
+            logger.info("%s:「%s」经「%s」换到公网直链", label, asset.name, via)
+    return uploaded
 
 
 def _resolve_provider_profile(
