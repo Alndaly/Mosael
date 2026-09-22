@@ -10,6 +10,8 @@
  * 一字不差,所以它由 `contracts/marker-shortcut-cases.json` 钉住,两侧跑同一份语料。
  */
 
+import type { Node } from "@xyflow/react";
+
 import type { MessageKey } from "@/app/messages";
 import { normalizeCombo, reservedOwner, type Combo } from "@/lib/shortcuts";
 
@@ -70,4 +72,32 @@ export function newMarkerId(markers: CanvasMarker[]): string {
 /** 按下的这个键归哪个标记?没有就是 null。 */
 export function markerForCombo(markers: CanvasMarker[], combo: Combo): CanvasMarker | null {
   return markers.find((one) => one.shortcut === combo) ?? null;
+}
+
+/**
+ * 标记在 React Flow 里也是节点(拖动、选中、⌫ 删除因此都白拿),但 **id 带前缀**。
+ *
+ * 图里的 `markers` 和 `nodes` 是两份列表,不带前缀的话,一个和节点(或画板项)重名的标记
+ * 会把它顶掉。两块画布此前各写一个 `"marker:"` —— 两个字符串碰巧相等,而它们一旦分岔,
+ * 表现是"标记读不回来了 / 和节点互相顶掉":不报错,只在重名时才出现。
+ */
+export const MARKER_PREFIX = "marker:";
+
+/**
+ * 标记 → React Flow 节点。两块画布共用这一份。
+ *
+ * `zIndex` 由**画布自己给**:规则是"旗子压在本画布所有内容之上",而"所有内容"是哪几层、
+ * 各是多少,只有那块画布知道。它要从画布自己的层次表里取(`LAYERS`),**不许在调用处现挑
+ * 一个数** —— 此前两块画布一个写 2、一个写 950,不是谁错了,是"最上面"在两边各自是一个
+ * 凭手感挑的常数,而没有任何地方写下过那条规则。棘轮:`features/canvasLayers.test.ts`。
+ */
+export function toMarkerNodes(markers: CanvasMarker[], zIndex: number): Node[] {
+  return markers.map((marker) => ({
+    id: MARKER_PREFIX + marker.id,
+    type: "marker",
+    position: { x: marker.x, y: marker.y },
+    data: { marker },
+    zIndex,
+    connectable: false,
+  }));
 }

@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 
+import { toMarkerNodes } from "@/features/markers/markers";
 import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import {
@@ -49,21 +50,16 @@ export function workflowConfigSummary(node: WorkflowGraph["nodes"][number]): str
 }
 
 /**
- * 标记在 React Flow 里也是节点(拖动、选中、⌫ 删除因此都白拿),但 id 带前缀 —— 图里
- * 的 `markers` 和 `nodes` 是两份列表,不带前缀的话,一个和节点重名的标记会把它顶掉。
+ * 这块画布的层次 —— **一处说了算**。理由见 markers.toMarkerNodes 上那段说明。
+ *
+ * 950 是个大数,因为 React Flow 把连线画在它自己的一层上:节点要压到连线之上才需要跨过
+ * 那一层。节点本身不设 zIndex(走默认),所以这张表只有一行 —— 但它是那条"旗子在最上面"
+ * 的规则**唯一**写下来的地方,而不是调用处一个看不出所以然的字面量。
  */
-export const MARKER_PREFIX = "marker:";
+const LAYERS = { marker: 950 } as const;
 
 export function toMarkerFlowNodes(graph: WorkflowGraph): Node[] {
-  return (graph.markers ?? []).map((marker) => ({
-    id: MARKER_PREFIX + marker.id,
-    type: "marker",
-    position: { x: marker.x, y: marker.y },
-    data: { marker },
-    // 压在节点之上:它是贴在画布上的一枚旗子,被节点盖住就点不到了。
-    zIndex: 950,
-    connectable: false,
-  }));
+  return toMarkerNodes(graph.markers ?? [], LAYERS.marker);
 }
 
 /** Domain graph → React Flow presentation. The domain graph remains the source of truth. */

@@ -53,7 +53,14 @@ import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
-import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
+import {
+  MARKER_PREFIX,
+  MAX_MARKERS,
+  newMarkerId,
+  nextMarkerName,
+  toMarkerNodes,
+  type CanvasMarker,
+} from "@/features/markers/markers";
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 
 /**
@@ -95,21 +102,20 @@ export interface BoardCanvasApi {
 /** 画板的节点 + 标记。**标记不是画板项**,所以它进不了 BOARD_NODE_TYPES 那张按 kind 索引的表。 */
 const CANVAS_NODE_TYPES = { ...BOARD_NODE_TYPES, marker: MarkerPin };
 
-/** 标记在 React Flow 里也是节点(这样拖动、选中、删除都白拿),但 id 带前缀,
- *  汇出时按类型分回两份 —— 不带前缀的话,一个和画板项重名的标记会把它顶掉。 */
-const MARKER_PREFIX = "marker:";
-
-function toMarkerNodes(markers: CanvasMarker[]): Node[] {
-  return markers.map((marker) => ({
-    id: MARKER_PREFIX + marker.id,
-    type: "marker",
-    position: { x: marker.x, y: marker.y },
-    data: { marker },
-    // 压在分组框(0)和画板项(1)之上:它是一枚贴在画布上的旗子,被别的东西盖住就点不到了。
-    zIndex: 2,
-    connectable: false,
-  }));
-}
+/**
+ * 这块画布的层次 —— **一处说了算**。
+ *
+ * 规则是"旗子压在所有内容之上"。它此前是调用处一个凭手感挑的 `zIndex: 2`,而工作流那块画布
+ * 写的是 950:两个数不是谁错了,是同一条规则在两边各挑了一个常数,而规则本身没写在任何地方。
+ * 加一种新节点类型时,该挑几没有参照系可查。
+ */
+const LAYERS = {
+  /** 分组框永远在最底 —— 它是背景,盖住上面的项就没法点了。 */
+  frame: 0,
+  item: 1,
+  /** 一枚贴在画布上的旗子,被别的东西盖住就点不到了。 */
+  marker: 2,
+} as const;
 
 function toNodes(items: BoardItem[]): Node[] {
   return items.map((item) => ({
@@ -119,8 +125,7 @@ function toNodes(items: BoardItem[]): Node[] {
     width: item.width ?? DEFAULT_SIZE[item.kind].width,
     height: item.height ?? DEFAULT_SIZE[item.kind].height,
     data: { item },
-    // 分组框永远在最底 —— 它是背景,盖住上面的项就没法点了。
-    zIndex: item.kind === "frame" ? 0 : 1,
+    zIndex: item.kind === "frame" ? LAYERS.frame : LAYERS.item,
   }));
 }
 
@@ -361,7 +366,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   } | null>(null);
   const suppressCommentClick = React.useRef<string | null>(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [])]);
+  const [nodes, setNodes, onNodesChange] = useNodesState([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
     canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
   );
@@ -633,7 +638,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         y: Math.round(center.y),
       };
       placed = true;
-      return [...current.map((node) => ({ ...node, selected: false })), ...toMarkerNodes([marker]).map((node) => ({ ...node, selected: true }))];
+      return [...current.map((node) => ({ ...node, selected: false })), ...toMarkerNodes([marker], LAYERS.marker).map((node) => ({ ...node, selected: true }))];
     });
     if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
   }, [setNodes, t, insetsOf]);
@@ -670,7 +675,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     (snapshot: string) => {
       const canvas = JSON.parse(snapshot) as Canvas;
       restoring.current = snapshot;
-      setNodes([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [])]);
+      setNodes([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)]);
       setEdges(canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })));
     },
     [setNodes, setEdges],

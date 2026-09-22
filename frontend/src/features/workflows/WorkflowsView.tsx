@@ -183,11 +183,10 @@ import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
-import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
+import { MARKER_PREFIX, MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 import {
   configAssetId,
-  MARKER_PREFIX,
   toWorkflowFlowEdges,
   toWorkflowFlowNodes,
   withSingleNodeSelected,
