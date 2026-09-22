@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import json
 import pathlib
 import re
 import subprocess
@@ -34,9 +33,6 @@ ALLOWLIST = {
     "agent-sidecar/sidecar.cjs",
     # 占位符,意思是「随便哪份契约」,不指某个文件。
     "contracts/xxx.json",
-    # 审计报告里记的是「它曾经在,已核实为未跟踪的本地构建产物并删掉了」—— 报告说的就是
-    # 它不该存在。留着这条比改报告诚实。
-    "backend/mosael-backend.spec",
 }
 
 
@@ -70,23 +66,41 @@ def _docs() -> list[pathlib.Path]:
     return [one for one in found if one.exists()]
 
 
+def _ignored_by_git(root: pathlib.Path, paths: list[str]) -> set[str]:
+    """`.gitignore` 说「这不是源码」的那些 —— 构建产物在干净检出上本来就不存在。
+
+    此前这里解析根 `package.json` 里的 `--outfile=`。那份推导也是手写的扫描面:
+    `agent-sidecar/dist/sidecar.cjs` 的声明在**子包**的 package.json 里(而且是相对路径),
+    `frontend/dist/index.html` 根本没人写 —— Vite 的 outDir 用的是默认值。两条都在 CI 上红了,
+    而本机因为构建过所以是绿的。
+
+    `.gitignore` 才是这件事的权威:它逐条写明哪些路径是产物、为什么不入库。而且它**不会**
+    顺手放过拼错的名字 —— 那几个 esbuild bundle 在 .gitignore 里是一个一个列的,
+    `electron/typo.bundle.cjs` 不在其中。
+    """
+    if not paths:
+        return set()
+    listed = subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "--stdin"],
+        input="\n".join(paths),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {line.strip() for line in listed.stdout.splitlines() if line.strip()}
+
+
 def _missing_code_paths(
     root: pathlib.Path, text: str, *, top_level: list[str] | None = None
 ) -> list[str]:
-    # 构建产物可以尚未生成,但必须有真实的构建声明。不能按 .bundle.cjs 后缀
-    # 一概豁免,否则拼错的产物路径也会被放过。
-    scripts = json.loads((root / "package.json").read_text(encoding="utf-8"))["scripts"]
-    outputs = {
-        output
-        for command in scripts.values()
-        for output in re.findall(r"--outfile=([\w./-]+)", command)
-    }
     pattern = _path_re(top_level if top_level is not None else _top_level_dirs(root))
-    return [
+    candidates = [
         path
         for path in sorted(set(pattern.findall(text)))
-        if path not in outputs and path not in ALLOWLIST and not (root / path).exists()
+        if path not in ALLOWLIST and not (root / path).exists()
     ]
+    ignored = _ignored_by_git(root, candidates)
+    return [path for path in candidates if path not in ignored]
 
 
 def test_文档里的代码路径都还在() -> None:
@@ -104,9 +118,10 @@ def test_文档里的代码路径都还在() -> None:
 
 
 def test_干净检出允许已声明的产物但仍拒绝失效路径(tmp_path: pathlib.Path) -> None:
-    (tmp_path / "package.json").write_text(json.dumps({
-        "scripts": {"build:preload": "esbuild electron/preload.cjs --outfile=electron/preload.bundle.cjs"},
-    }), encoding="utf-8")
+    """产物不在 ≠ 路径失效。判据是 `.gitignore` 认不认它,而不是它长得像不像产物。"""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    # 和仓库真实的 .gitignore 同一种写法:bundle 逐个列名,所以拼错的那个不在其中。
+    (tmp_path / ".gitignore").write_text("dist/\nelectron/preload.bundle.cjs\n", encoding="utf-8")
     (tmp_path / "electron").mkdir()
     (tmp_path / "electron" / "preload.cjs").write_text("", encoding="utf-8")
     found = _missing_code_paths(
@@ -120,9 +135,21 @@ def test_干净检出允许已声明的产物但仍拒绝失效路径(tmp_path: 
     assert found == ["electron/deleted.cjs", "electron/typo.bundle.cjs"]
 
 
+def test_子包和默认出目录的产物也算数(tmp_path: pathlib.Path) -> None:
+    """CI 上红的正是这两条:声明在子包里(相对路径),或者压根没人写(Vite 的默认 outDir)。"""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("dist/\n", encoding="utf-8")
+    found = _missing_code_paths(
+        tmp_path,
+        "`agent-sidecar/dist/sidecar.cjs` `frontend/dist/index.html` `frontend/src/gone.tsx`",
+        top_level=["agent-sidecar", "frontend"],
+    )
+    assert found == ["frontend/src/gone.tsx"]
+
+
 def test_后缀不再枚举_没列过的那些也在扫描面内(tmp_path: pathlib.Path) -> None:
     """上一版只认 9 种后缀,`.yml`/`.sh`/`.spec` 指到哪儿都不报。"""
-    (tmp_path / "package.json").write_text(json.dumps({"scripts": {}}), encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     found = _missing_code_paths(
         tmp_path,
         "`.github/workflows/ci.yml` `scripts/notarize.sh` `backend/x.spec` `frontend/a.tsx`",
