@@ -113,7 +113,7 @@
 
 **这一条是本次审计里质量最高的部分。**
 
-- 回执一出现就落库:`contracts/generation.py:368-372`,经 contextvar 传,不经过适配器 —— 理由
+- 回执一出现就落库:`generation.py:368-372`,经 contextvar 传,不经过适配器 —— 理由
   (「让每家都记得去报,等于让每家都有机会忘记」)写在 `RemoteTaskWatch:311` 上。
 - 轮询上限 6 小时,明写「只防供应商永远不回话,不是我们等烦了」:`generation.py:434`。
 - 超时消息带上远端任务号:`generation.py:383`。
@@ -136,7 +136,7 @@
 - 一次性迁移:`runtime/config.py:115-142`、`runtime/asr_models.py:135-157`
   (两处都明写「**不留作兼容候选**」并说明为什么);
 - `db/migrations.py:2099` 的 `_migrate_model_structured_output` —— 加列迁移,不是读时分支;
-- `contracts/generation.py:422` 的「兼容别名」指的是 `video_url` 这类 **URL 参数别名**,
+- `generation.py:422` 的「兼容别名」指的是 `video_url` 这类 **URL 参数别名**,
   而且收敛在 `ROLE_URL_PARAMETERS:389` 一张表里,不是历史版本分支。
 
 仓库规矩在这一层是成立的。
@@ -510,7 +510,7 @@ double-booking」(`usage.py:217-219`)。
   `allowed_parameter_keys:291` 被校验器和棘轮**共用**,防的正是"两边分头演进";
   描述符查不到的模型放行而不是猜着拦。
 - **素材角色语义** —— 首尾帧 / 参考 / 视频输入 / 驱动音频四组互斥,
-  `KEYFRAME_ROLES` vs `REFERENCE_ROLES`(`contracts/generation.py:84-88`)按供应商硬约束
+  `KEYFRAME_ROLES` vs `REFERENCE_ROLES`(`generation.py:84-88`)按供应商硬约束
   建模;`image_url` 这个无角色别名按 kind 解释,收敛成一条规则
   (`generation.py:452-458`)而不是让每个适配器各自解释。
 - **多产出** —— `GenerationResult.output_paths` 是一串(`generation.py:120`),
