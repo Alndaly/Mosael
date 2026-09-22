@@ -135,19 +135,46 @@ function currentVideoFrame(): CapturedVideoFrame {
   };
 }
 
+function seek(seconds: number): ContentResponse {
+  const video = videoElement();
+  video.currentTime = Math.max(0, Math.min(Number.isFinite(video.duration) ? video.duration : seconds, seconds));
+  return { ok: true, data: { currentTime: video.currentTime } };
+}
+
+/**
+ * 分发一条来自侧边栏的消息。
+ *
+ * **每一种都要自己写一条分支。** 此前最后一段没有条件:前面六种都不匹配就直接当成 SEEK 处理
+ * —— 于是 `ContentRequest` 里加第七种,它会被**悄悄**当成跳转,`message.seconds` 是
+ * undefined,`video.currentTime` 被赋成 NaN。没有报错,只是画面莫名其妙地不动或回到开头,
+ * 而排查的人会去看跳转那段代码,它看起来完全正常。
+ *
+ * `default` 里那个 `never` 让**编译器**接管这件事:往联合类型里加一种而不加分支,
+ * `tsc --noEmit` 当场红。这比任何运行时检查都早,也不需要有人记得写测试。
+ */
 async function handle(message: ContentRequest): Promise<ContentResponse> {
   try {
-    if (message.type === "GET_CONTEXT") return { ok: true, data: currentContext() };
-    if (message.type === "GET_TRANSCRIPT") return { ok: true, data: await readTranscript(message.trackId) };
-    if (message.type === "CAPTURE_VIDEO_FRAME") return { ok: true, data: currentVideoFrame() };
-    if (message.type === "PREPARE_FRAME_CAPTURE") return { ok: true, data: await prepareFrameCapture() };
-    if (message.type === "RESTORE_FRAME_CAPTURE") {
-      restoreFrameCapture();
-      return { ok: true, data: { currentTime: videoElement().currentTime } };
+    switch (message.type) {
+      case "GET_CONTEXT":
+        return { ok: true, data: currentContext() };
+      case "GET_TRANSCRIPT":
+        return { ok: true, data: await readTranscript(message.trackId) };
+      case "CAPTURE_VIDEO_FRAME":
+        return { ok: true, data: currentVideoFrame() };
+      case "PREPARE_FRAME_CAPTURE":
+        return { ok: true, data: await prepareFrameCapture() };
+      case "RESTORE_FRAME_CAPTURE":
+        restoreFrameCapture();
+        return { ok: true, data: { currentTime: videoElement().currentTime } };
+      case "SEEK":
+        return seek(message.seconds);
+      default: {
+        const unhandled: never = message;
+        // 运行时也要有话说:侧边栏和内容脚本是**分别注入**的,浏览器可能让新侧边栏对着
+        // 还没换的老内容脚本讲话 —— 那时编译期的保证不在现场。
+        return { ok: false, error: `不认识的消息:${(unhandled as ContentRequest).type}` };
+      }
     }
-    const video = videoElement();
-    video.currentTime = Math.max(0, Math.min(Number.isFinite(video.duration) ? video.duration : message.seconds, message.seconds));
-    return { ok: true, data: { currentTime: video.currentTime } };
   } catch (cause) {
     return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
   }

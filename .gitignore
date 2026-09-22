@@ -22,6 +22,8 @@ dist/
 # esbuild 单文件 bundle:main.cjs 在运行时加载它们,由对应的 build:* 脚本生成。
 # 不入库是因为它们是纯产物;代价是**新克隆必须先构建**,所以 dev 脚本(frontend 的 electron:dev)
 # 里这些 bundle 都要构建到位,否则跑起来会缺少桌面桥、发布执行器或系统能力层。
+# 这句话曾经不是实话(sidecar 根本不构建、system 构建一次就不再 watch),现在由
+# backend/tests/test_dev_mode_builds_what_the_app_loads.py 盯着。
 electron/publish.bundle.cjs
 electron/system.bundle.cjs
 electron/preload.bundle.cjs
