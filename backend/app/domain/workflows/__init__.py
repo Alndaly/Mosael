@@ -448,7 +448,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["true", "false"],
             },
         },
-        "outputs": ["text", "json"],
+        #: `response_format_used`:这一轮**实际**跑在哪一档(json_schema / json_object / text)。
+        #: 配置上写着 json_schema 不等于它生效了 —— 端点可能已查证不支持、可能当场 400、
+        #: 也可能在这一档下返回空正文,三种情况都会降级。降级本身是对的,坏的是它一声不吭:
+        #: 那时模型只是"看过一份贴在提示词里的 Schema",没有任何东西强制它遵守。
+        "outputs": ["text", "json", "response_format_used"],
+        "output_labels": {"response_format_used": "wfOut_response_format_used"},
     },
     "plugin_tool": {
         "external": True,

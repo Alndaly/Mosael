@@ -750,7 +750,8 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
                 },
             )
 
-    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
+    # `response_format_used` 是**实际跑在哪一档**。这里端点支持 json_schema,所以没降。
+    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}, "response_format_used": "json_schema"}
     assert captured["url"] == "https://example.test/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer sk-test"
     assert captured["timeout"] == ai_nodes.LLM_TIMEOUT_SECONDS
@@ -824,7 +825,7 @@ def test_llm_node_parses_json_wrapped_by_text_model(monkeypatch, content: str) -
                 },
             )
 
-    assert result == {"text": content, "json": {"title": "海边"}}
+    assert result == {"text": content, "json": {"title": "海边"}, "response_format_used": "json_object"}
 
 
 def test_llm_node_falls_back_when_provider_rejects_response_format(monkeypatch) -> None:
@@ -880,7 +881,10 @@ def test_llm_node_falls_back_when_provider_rejects_response_format(monkeypatch) 
                 },
             )
 
-    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
+    # **降到了纯文本,而节点把这件事说出来了。** 此前这一轮的实际档位在任何地方都不存在:
+    # 节点输出没有、失败详情里那个 response_format 取自 config(是配置的那一档)、账上也没有。
+    # 于是模型在没有硬约束的情况下答歪时,用户以为是模型笨,而不是那份图纸从没被强制执行过。
+    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}, "response_format_used": "text"}
     assert [one.get("response_format", {}).get("type") for one in attempts] == [
         "json_schema",
         "json_object",
@@ -962,7 +966,7 @@ def test_llm_node_falls_back_when_json_mode_returns_empty_content(monkeypatch) -
             )
             db.commit()
 
-    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
+    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}, "response_format_used": "text"}
     #: **不再白发那一次 json_schema。** DeepSeek 已经查证过不支持(见 domain/structured_output),
     #: 而这个 handler 演的正是它:json_schema 必被 400。既然结论是已知的,就直接从 json_object 起步 ——
     #: 那一个往返是必然白花的,而且用户还会在日志里看到一条看不懂的 400。
@@ -1044,7 +1048,7 @@ def test_llm_node_uses_the_tool_free_gateway_for_oauth(monkeypatch) -> None:
         with acting_as(db):
             result = ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "写一句"})
 
-    assert result == {"text": "订阅模型回答"}
+    assert result == {"text": "订阅模型回答", "response_format_used": "text"}
     assert captured["provider"]["pi_provider"] == "kimi-coding"
     assert captured["model"] == "k3"
     assert captured["prompt"] == "写一句"
@@ -1659,3 +1663,134 @@ def test_llm_节点会把用量记进账(monkeypatch) -> None:
         assert event.operation == "workflow_llm"
         assert event.units["input_tokens"] == 11
         assert event.units["output_tokens"] == 7
+
+
+def test_订阅授权那条路也会降级_而不是一个硬400(monkeypatch) -> None:
+    """**同一个节点、同一份配置,两种连接不能两种行为。**
+
+    `chat()` 此前在任何 fallback 逻辑之前就 return 到 `_chat_gateway`,连
+    `allow_response_format_fallback` 都没往下传。于是连 API Key 的连接会优雅降级
+    (json_schema → json_object → 纯文本),连订阅授权的就是一个硬 400 —— 而界面上这两种
+    连接长得一模一样。静默忽略一个「我已经允许你降级」的承诺是最坏的一种处理。
+    """
+    from app.ai.sidecar import adapters
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    attempts: list[dict] = []
+
+    def fake_gateway(**kwargs):
+        attempts.append(kwargs)
+        sampling = (kwargs.get("options") or {}).get("samplingParams") or {}
+        kind = (sampling.get("response_format") or {}).get("type")
+        if kind == "json_schema":
+            raise adapters.AdapterError("response_format json_schema is not supported by this provider")
+        return adapters.GatewayResult(text='{"title":"海边"}', usage={"input": 7, "output": 3})
+
+    monkeypatch.setattr(adapters, "gateway_complete", fake_gateway)
+    with SessionLocal() as db:
+        profile = add_provider(
+            db,
+            name="Kimi Code",
+            vendor="kimi-coding",
+            base_url="",
+            auth_type="oauth",
+            oauth_credential={"access_token": "x"},
+            model="k3",
+            capability_ids=["chat"],
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        with acting_as(db):
+            result = ai_nodes.llm(
+                db,
+                workflow,
+                {
+                    "profile_id": profile.id,
+                    "prompt": "生成标题",
+                    "response_format": "json_schema",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"title": {"type": "string"}},
+                        "required": ["title"],
+                    },
+                },
+            )
+
+    assert result["json"] == {"title": "海边"}
+    assert result["response_format_used"] == "json_object", "降了一档,而且说出来了"
+    kinds = [
+        ((one.get("options") or {}).get("samplingParams") or {}).get("response_format", {}).get("type")
+        for one in attempts
+    ]
+    assert kinds == ["json_schema", "json_object"], f"网关那条路没有走降级链:{kinds}"
+
+
+def test_没被强制过的Schema_报错时要说出来(monkeypatch) -> None:
+    """本地那次 Schema 校验,在两种完全不同的情况下原先报**同一句话**。
+
+    「有硬约束却违反了」→ 模型没按图纸做,重试一次通常就对。
+    「本来就没有硬约束」→ 那份图纸只在提示词里露过一面,没有任何东西强制它遵守;
+    用户能动手的方向完全不同(换个端点 / 简化 Schema)。而节点上明明写着 json_schema + strict,
+    所以他会以为是模型笨。
+    """
+    import json as _json
+
+    import httpx
+
+    from app.core import http_retry as ai_retry
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = _json.loads(request.content)
+        if (body.get("response_format") or {}).get("type") == "json_schema":
+            return httpx.Response(
+                400,
+                request=request,
+                json={"error": {"message": "response_format json_schema is not supported"}},
+            )
+        # 降级之后模型答了个不符合 Schema 的东西(title 该是字符串)
+        return httpx.Response(
+            200, request=request, json={"choices": [{"message": {"content": '{"title": 42}'}}]}
+        )
+
+    real = ai_retry.RetryingClient
+    monkeypatch.setattr(
+        ai_retry, "RetryingClient",
+        lambda *a, **k: real(*a, **{**k, "transport": httpx.MockTransport(handler)}),
+    )
+    monkeypatch.setattr(ai_retry.time, "sleep", lambda *a, **k: None)
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db, name="P", vendor="openai", base_url="https://example.test/v1",
+            api_key="sk-test", model="m", capability_ids=["chat"],
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        with acting_as(db), pytest.raises(WorkflowDomainError) as raised:
+            ai_nodes.llm(
+                db, workflow,
+                {
+                    "profile_id": profile.id,
+                    "prompt": "生成标题",
+                    "response_format": "json_schema",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"title": {"type": "string"}},
+                        "required": ["title"],
+                    },
+                },
+            )
+
+    reason = str((raised.value.params or {}).get("reason", ""))
+    assert "无法把 Schema 当成硬约束" in reason, f"报错没说清图纸从没被强制过:{reason}"
+    details = raised.value.details or {}
+    assert details.get("schema_enforced") is False
+    assert details.get("response_format_used") in {"json_object", "text"}

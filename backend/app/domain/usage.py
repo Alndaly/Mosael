@@ -630,6 +630,17 @@ class BillableCall:
         if raw:
             self.raw_usage = raw
 
+    def annotate(self, **fields: Any) -> None:
+        """往 `raw_usage` 里**加**几条注解,不动已经记下的计量。
+
+        和 `meter(raw=…)` 的区别是后者**覆盖** raw_usage —— 拿它记注解会把 token 用量冲掉。
+        用来记那些"发生过、而且有成本"的事:比如 response_format 降了一档,那是一个多出来的
+        往返,账上看不见的话,"这条流程为什么比预期贵"永远查不出来。
+        """
+        if not fields:
+            return
+        self.raw_usage = {**(self.raw_usage or {}), **fields}
+
     def meter_openai_tokens(self, raw: Any) -> None:
         """OpenAI 风格回包的 `usage` 字段。对话类调用最常见的一种计量。"""
         tokens = raw if isinstance(raw, dict) else {}

@@ -529,6 +529,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "How hard to go: Light removes only the obvious hiss, Medium suits most recordings, Strong is the cleanest but can dull the voice.",
     },
     "wfOut_denoised_asset_id": {"zh": "降噪后", "en": "Cleaned"},
+    "wfOut_response_format_used": {"zh": "实际输出档位", "en": "Format actually used"},
     "wfOut_original_audio": {"zh": "原声实际处理方式", "en": "What happened to the original audio"},
     "wfOut_original_audio_note": {"zh": "原声处理说明", "en": "Original audio note"},
     "wfOut_graybox_first_frame": {"zh": "白模首帧", "en": "Blockout first frame"},

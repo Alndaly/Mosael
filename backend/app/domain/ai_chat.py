@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -45,6 +46,28 @@ logger = logging.getLogger(__name__)
 
 #: 默认超时。本地模型冷启动可能很慢,所以调用方普遍会往上调而不是往下调。
 DEFAULT_TIMEOUT_SECONDS = 60.0
+
+
+#: 降级发生时叫一下:`(从哪一档, 到哪一档, 为什么)`。
+DowngradeReporter = Callable[[str, str, str], None]
+
+
+def _report_downgrade(
+    reporter: DowngradeReporter | None,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    reason: str,
+) -> None:
+    """降级说出来。报告器自己抛异常不该把这一轮弄失败 —— 它只是旁路的诊断。"""
+    if reporter is None:
+        return
+    from_tier, to_tier = response_format_tier(before), response_format_tier(after)
+    if from_tier == to_tier:
+        return
+    try:
+        reporter(from_tier, to_tier, reason)
+    except Exception:  # noqa: BLE001 — 诊断通道不该反过来弄坏被诊断的那件事
+        logger.warning("降级回调抛了异常,已忽略", exc_info=True)
 
 
 class AiChatError(RuntimeError):
@@ -185,12 +208,19 @@ def chat(
     call: BillableCall | None = None,
     label: str = "AI 调用",
     allow_response_format_fallback: bool = False,
+    on_downgrade: DowngradeReporter | None = None,
 ) -> str:
     """跑一次对话补全,返回助手消息的文本。
 
     client 给了就复用它(整批字幕共用连接,省掉每条一次 TLS 握手);此时重试由该 client 决定。
     call 给了就把 token 计量报进那次记账(见 domain/usage.billable)。
     allow_response_format_fallback 只供会在本地继续解析/校验 JSON 的调用方开启。
+
+    on_downgrade 在**每一次降级发生时**被叫一下。降级本身是对的(不这么做就是一个用户看不懂
+    的 400),坏的是它**一声不吭**:这一轮实际跑在三档中的哪一档,此前没有任何地方说得出来。
+    后果不是"少一条日志" —— 调用方在本地做的那次 Schema 校验,于是在「本来就没有硬约束」和
+    「有硬约束却违反了」这两种完全不同的情况下报同一句话,用户以为是模型笨,而不是那份图纸
+    从来没被强制执行过。
     """
     payload: dict[str, Any] = {"model": target.model, "messages": messages, "temperature": temperature}
     if json_object:
@@ -223,6 +253,8 @@ def chat(
             client=client,
             call=call,
             label=label,
+            allow_response_format_fallback=allow_response_format_fallback,
+            on_downgrade=on_downgrade,
         )
     url = f"{target.base_url.rstrip('/')}/chat/completions"
     headers = _auth_headers(target.api_key)
@@ -245,6 +277,7 @@ def chat(
                 )
                 if fallback is None:
                     raise
+                _report_downgrade(on_downgrade, payload, fallback, "供应商明确拒绝了这一档")
                 payload = fallback
                 continue
             body = response.json()
@@ -257,6 +290,7 @@ def chat(
             if allow_response_format_fallback and not content.strip():
                 fallback = _downgrade_response_format_payload(payload)
                 if fallback is not None:
+                    _report_downgrade(on_downgrade, payload, fallback, "这一档下返回了空正文")
                     payload = fallback
                     continue
             break
@@ -327,41 +361,68 @@ def _chat_gateway(
     client: httpx.Client | None,
     call: BillableCall | None,
     label: str,
+    allow_response_format_fallback: bool = False,
+    on_downgrade: DowngradeReporter | None = None,
 ) -> str:
+    """订阅授权那条路。**降级链和直连那条是同一条。**
+
+    此前这里整个没有降级:`chat()` 在任何 fallback 逻辑之前就 return 到这儿,
+    连 `allow_response_format_fallback` 都没往下传。后果是同一个工作流 LLM 节点、同一份配置,
+    连 API Key 连接会优雅降级,连订阅授权就是一个硬 400 —— **而界面上这两种连接长得一样**。
+    静默忽略一个「我已经允许你降级」的承诺,是最坏的一种处理。
+    """
     if client is not None:
         raise AiChatError(f"{label}失败:OAuth Gateway 不支持复用调用方 HTTP 连接")
     from app.ai.sidecar.adapters import AdapterError, gateway_complete
 
-    system_prompt, prompt, images = _gateway_prompt(payload.get("messages") or [])
-    sampling = {
-        key: value
-        for key, value in payload.items()
-        if key not in {"model", "messages", "temperature", "max_tokens", "max_completion_tokens"}
-    }
-    options: dict[str, Any] = {
-        "temperature": payload.get("temperature"),
-        "maxRetries": max_retries if max_retries is not None else ai_retry.current_max_retries(),
-        "timeoutMs": max(1, int(timeout * 1000)),
-    }
-    max_tokens = payload.get("max_tokens") or payload.get("max_completion_tokens")
-    if max_tokens is not None:
-        options["maxTokens"] = int(max_tokens)
-    if sampling:
-        options["samplingParams"] = sampling
     try:
-        result = gateway_complete(
-            system_prompt=system_prompt,
-            prompt=prompt,
-            images=images,
-            provider=target.gateway_provider or {},
-            model=target.model,
-            api_base=target.gateway_api_base,
-            token=target.gateway_token,
-            options=options,
-            timeout=timeout,
-        )
-    except AdapterError as exc:
-        raise AiChatError(_sanitize(f"{label}失败:{exc}", target.gateway_token)) from exc
+        while True:
+            system_prompt, prompt, images = _gateway_prompt(payload.get("messages") or [])
+            sampling = {
+                key: value
+                for key, value in payload.items()
+                if key not in {"model", "messages", "temperature", "max_tokens", "max_completion_tokens"}
+            }
+            options: dict[str, Any] = {
+                "temperature": payload.get("temperature"),
+                "maxRetries": max_retries if max_retries is not None else ai_retry.current_max_retries(),
+                "timeoutMs": max(1, int(timeout * 1000)),
+            }
+            max_tokens = payload.get("max_tokens") or payload.get("max_completion_tokens")
+            if max_tokens is not None:
+                options["maxTokens"] = int(max_tokens)
+            if sampling:
+                options["samplingParams"] = sampling
+            try:
+                result = gateway_complete(
+                    system_prompt=system_prompt,
+                    prompt=prompt,
+                    images=images,
+                    provider=target.gateway_provider or {},
+                    model=target.model,
+                    api_base=target.gateway_api_base,
+                    token=target.gateway_token,
+                    options=options,
+                    timeout=timeout,
+                )
+            except AdapterError as exc:
+                fallback = (
+                    _downgrade_response_format_payload(payload)
+                    if allow_response_format_fallback and _rejects_response_format(str(exc))
+                    else None
+                )
+                if fallback is None:
+                    raise AiChatError(_sanitize(f"{label}失败:{exc}", target.gateway_token)) from exc
+                _report_downgrade(on_downgrade, payload, fallback, "供应商明确拒绝了这一档")
+                payload = fallback
+                continue
+            if allow_response_format_fallback and not (result.text or "").strip():
+                fallback = _downgrade_response_format_payload(payload)
+                if fallback is not None:
+                    _report_downgrade(on_downgrade, payload, fallback, "这一档下返回了空正文")
+                    payload = fallback
+                    continue
+            break
     finally:
         if target.gateway_token:
             from app.core.db import SessionLocal
@@ -408,6 +469,33 @@ def _satisfy_json_mode(messages: list[dict[str, Any]], response_format: Any) -> 
     return [{"role": "system", "content": _JSON_MODE_HINT}, *messages]
 
 
+#: 结构化输出的三档,从强到弱。**降级就是在这条链上往右走一步。**
+RESPONSE_FORMAT_TIERS = ("json_schema", "json_object", "text")
+
+
+def response_format_tier(payload: dict[str, Any]) -> str:
+    """这份 payload 此刻在哪一档。没有 response_format 就是纯文本。"""
+    current = payload.get("response_format")
+    if isinstance(current, dict) and current.get("type") in {"json_schema", "json_object"}:
+        return str(current["type"])
+    return "text"
+
+
+def _rejects_response_format(detail: str) -> bool:
+    """这段错误文本说的是「我不支持 response_format」吗。
+
+    两条通道(直连 HTTP / OAuth 网关)都要问这个问题,所以收敛成一处 —— 原先只有直连那边有,
+    于是同一个 LLM 节点连 API Key 时优雅降级、连订阅授权时是一个硬 400。
+    """
+    lowered = detail.lower()
+    if "response_format" not in lowered:
+        return False
+    return any(
+        phrase in lowered
+        for phrase in ("unavailable", "not supported", "unsupported", "must be one of")
+    )
+
+
 def _response_format_fallback_payload(payload: dict[str, Any], response: httpx.Response) -> dict[str, Any] | None:
     """供应商明确不支持结构化输出时，逐级降级而不丢失 JSON 契约。
 
@@ -430,11 +518,7 @@ def _response_format_fallback_payload(payload: dict[str, Any], response: httpx.R
             detail += " " + str(error.get("message") or "").lower()
         elif error:
             detail += " " + str(error).lower()
-    unsupported = any(
-        phrase in detail
-        for phrase in ("unavailable", "not supported", "unsupported", "must be one of")
-    )
-    if "response_format" not in detail or not unsupported:
+    if not _rejects_response_format(detail):
         return None
 
     return _downgrade_response_format_payload(payload)

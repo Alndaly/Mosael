@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
 from app.core.usage_scope import workspace_scope
-from app.domain.ai_chat import AiChatError, chat, target_for
+from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
 from app.domain.usage import billable
 from app.domain.providers import require_connection
 from app.domain.workflows import WorkflowDomainError
@@ -253,6 +253,20 @@ def _honour_structured_output(payload: dict[str, Any], supported: bool | None) -
     return payload
 
 
+def _enforced_locally(config: dict[str, Any], used_tier: str) -> bool:
+    """这次调用里,那份 Schema 到底**有没有**被供应商当成硬约束。
+
+    配置上写着 json_schema 不等于它生效了:端点可能已查证不支持(上面那次预降级)、
+    可能当场 400、也可能在这一档下返回空正文(见 domain/ai_chat 的降级链)。
+    三种情况下模型都只是"看过一份贴在提示词里的 Schema",没有任何东西强制它遵守。
+
+    这个区别要说出来,因为本地那次校验在两种完全不同的情况下会报**同一句话**:
+    用户节点上明明写着 json_schema + strict,于是他以为是模型笨,而不是那份图纸从来没
+    被强制执行过。
+    """
+    return str(config.get("response_format")) == "json_schema" and used_tier == "json_schema"
+
+
 #: 校验不过时最多再让模型改几次。**1 就够**:这类错要么第二次就对(它拿到了具体哪一格错了),
 #: 要么是提示词和 schema 本身打架(比如"每镜 2~3 秒"配上"总长 20 秒、约 9 镜"),再试十次一样。
 #: 而每一次都是一次付费调用,所以不能为了"总有一次能过"无限试。
@@ -285,8 +299,14 @@ def _schema_failure(error: ValidationError) -> tuple[str, str]:
     return reason, f"{path} 不符合 Schema:{error.message}"
 
 
-def _json_result(text: str, raw_text: str, config: dict[str, Any], model: str) -> Any:
-    """解析并校验这一次的回答;不合格就抛 `_BadJson`(带上要跟模型说的话)。"""
+def _json_result(
+    text: str, raw_text: str, config: dict[str, Any], model: str, *, used_tier: str = "json_schema"
+) -> Any:
+    """解析并校验这一次的回答;不合格就抛 `_BadJson`(带上要跟模型说的话)。
+
+    `used_tier` 是这一轮**实际跑在**哪一档 —— 校验失败时要说清是「有硬约束却违反了」
+    还是「本来就没有硬约束」,那是两件完全不同的事。
+    """
     base = {
         "kind": "llm_json_response",
         "model": model,
@@ -311,12 +331,19 @@ def _json_result(text: str, raw_text: str, config: dict[str, Any], model: str) -
             raise
         except ValidationError as exc:
             reason, feedback = _schema_failure(exc)
+            enforced = _enforced_locally(config, used_tier)
+            if not enforced:
+                # **这一句是给人看的**:用户节点上写着 json_schema + strict,答歪了会以为
+                # 是模型笨。而真相是那份图纸从来没被这个端点强制执行过 —— 它只在提示词里
+                # 露过一面。能动手的方向完全不同(换个端点 / 简化 Schema),所以要说出来。
+                reason = f"{reason}(这一档实际跑在 {used_tier}:该端点无法把 Schema 当成硬约束)"
             raise _BadJson(
                 "wfErr_jsonSchemaMismatch",
                 reason,
                 f"你上一次的回答不符合 JSON Schema:{feedback}。请只改这一处,其余内容原样保留,"
                 "重新输出完整对象。",
-                {**base, "response_format": "json_schema", "schema_error": reason},
+                {**base, "response_format": "json_schema", "schema_error": reason,
+                 "response_format_used": used_tier, "schema_enforced": enforced},
             ) from exc
     return value
 
@@ -348,10 +375,20 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     wants_json = str(config.get("response_format") or "text") in {"json_object", "json_schema"}
     try:
         target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
-        payload = _honour_structured_output(
-            _request_payload(config, target.model, messages), target.structured_output
-        )
+        requested = _request_payload(config, target.model, messages)
+        payload = _honour_structured_output(requested, target.structured_output)
         allow_response_format_fallback = "response_format" in payload
+        # 这一轮**实际**跑在哪一档。预降级(上面那次)和运行中的两次降级都会改它 ——
+        # 此前这个事实在任何地方都不存在:节点输出没有、失败详情里那个 response_format 取自
+        # config(是**配置的**那一档)、账上也没有。降级成功时一切正常,只有模型在没有硬约束
+        # 的情况下答歪了,用户才会看到一句 Schema 不符,然后以为是模型笨。
+        used_tier = response_format_tier(payload)
+        downgrades: list[dict[str, str]] = []
+
+        def _note_downgrade(from_tier: str, to_tier: str, reason: str) -> None:
+            nonlocal used_tier
+            used_tier = to_tier
+            downgrades.append({"from": from_tier, "to": to_tier, "reason": reason})
         # **schema 本身写错要在花钱之前就发现。** 它和"模型答得不对"是两回事:前者重试一百次也一样,
         # 而下面那个循环会为了让模型改对再调一次 —— 先在这里把坏 schema 挡掉,免得白花那一次。
         if str(config.get("response_format")) == "json_schema":
@@ -384,13 +421,14 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
                     call=call,
                     label="调用 LLM" if attempt == 0 else "重新生成 JSON",
                     allow_response_format_fallback=allow_response_format_fallback,
+                    on_downgrade=_note_downgrade,
                 )
                 text = raw_text.strip()
                 if not wants_json:
                     bad = None
                     break
                 try:
-                    parsed = _json_result(text, raw_text, config, target.model)
+                    parsed = _json_result(text, raw_text, config, target.model, used_tier=used_tier)
                 except _BadJson as exc:
                     bad = exc
                     if attempt >= JSON_REPAIR_ATTEMPTS:
@@ -400,6 +438,10 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
                     continue
                 bad = None
                 break
+            # 降级有成本(每一次都是一个多出来的往返)。账上该看得见 —— 否则"这条流程为什么
+            # 比预期贵"永远查不出来。
+            if downgrades:
+                call.annotate(response_format_downgrades=downgrades)
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
     if bad is not None:
@@ -407,6 +449,9 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     result: dict[str, Any] = {"text": text}
     if wants_json:
         result["json"] = parsed
+    # **接出去**:后面的节点和用户都该看得见这一轮实际跑在哪一档。声明在 NODE_TYPES 里,
+    # 由 test_executor_outputs_are_declared 强制两边对齐。
+    result["response_format_used"] = used_tier
     return result
 
 
