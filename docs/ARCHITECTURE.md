@@ -202,6 +202,17 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 永远建不出来)、清孤儿共享、job 消息键归一 —— 它们处理的东西会不断再产生,用 `_recurring()`
 声明,不记账。失败的迁移不记账,下次启动重来。棘轮:`tests/test_migration_ledger.py`。
 
+**记过账的迁移,身体不能再改**:那台机器再也不会碰它,所以事后改函数体对**所有已经升过的
+机器无效** —— 而 bug 留在的恰恰是有历史数据、最需要修的那些库上。要改行为就新开一个步骤名
+(新名字 = 新的一行账 = 老机器会跑)。指纹记在 `tests/migration_bodies.json` 里,算在
+**可执行源码**上,所以补注释和 docstring 不受影响。棘轮:
+`tests/test_migration_bodies_are_frozen.py`。
+
+**步骤在计划里的位置也是语义**:加列的那一步必须排在读这一列的步骤之前。
+`tests/test_schema_migrations_cover_the_models.py` 按 `schema_baseline.json` 建一个老库、
+把全套迁移真的跑一遍,再对模型的每一列 —— 它就是这么抓到 `migrate-deployment-admin`
+排在三条读 `users.is_deployment_admin` 的迁移之后、老库启动直接炸的。
+
 发版 CI 还会运行 `test/bundle.smoke.mjs`:它先用 `test/upgrade_db_fixture.py` 造一份最小旧库,再真正
 启动打包后的 Electron。通过条件不是「安装包能解压」,而是冻结后端完成升级并健康、打包 renderer
 完成加载,最后旧库新增字段与数据仍正确。这条冒烟覆盖的是源码单测碰不到的打包路径和启动顺序。
