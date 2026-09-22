@@ -20,7 +20,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
+from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import blame, create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
@@ -38,6 +38,18 @@ from app.domain.workflows.revisions import WorkflowRevisionError, current_workfl
 logger = logging.getLogger(__name__)
 
 MAX_PARALLEL_NODES = 8
+
+#: **同时能有多少个节点占着数据库连接。**
+#:
+#: 这是全仓"先拿槽再开会话"那条规矩(见 domain/jobs 的 RENDER_SLOTS 那段注释)在工作流这一层
+#: 的落地 —— 而此前它在这一层**不存在**:`MAX_PARALLEL_NODES = 8`、循环体的 4、嵌套深度 8,
+#: 三个常数写在三个文件里,每一个单看都克制,**而它们是相乘的**。一个"8 个并行节点、每个都是
+#: call_workflow"的图就要 8 + 8 ×(子驱动 + 子节点)条连接,而池子只有 15。越线之后是
+#: `QueuePool limit of size 5 overflow 10 reached`,由 blame() 原样记进 job.error。
+#:
+#: **嵌套天然被压住**:这是模块级的一个信号量,子图的节点和父图的节点从同一份预算里取,
+#: 所以乘积进不来。数从池子自己算出来(见 core/db.pool_capacity),不另写一个。
+NODE_CONNECTIONS = threading.Semaphore(max(1, pool_capacity() - POOL_RESERVE))
 
 
 def start_workflow_job(
@@ -172,9 +184,18 @@ def execute_graph(
     done: set[str] = set()  # executed ∪ skipped
     lock = threading.Lock()
 
-    def is_cancelled() -> bool:
+    def is_cancelled(db: Session | None = None) -> bool:
+        """这一轮被取消了吗。
+
+        `db` 给了就**复用它**,别再开第二条连接。原先 `run_node` 在自己的会话里面调这个函数,
+        而它又开一条 —— 每个节点起步的一瞬间占 2 条,8 个并行节点加驱动线程就是 17,而池子
+        只有 15:**顶层单独就能越线**。
+        """
         if wf_job_id is None:
             return False
+        if db is not None:
+            parent = db.get(Job, wf_job_id)
+            return parent is None or parent.status not in ("queued", "running")
         with SessionLocal() as check_db:
             parent = check_db.get(Job, wf_job_id)
             return parent is None or parent.status not in ("queued", "running")
@@ -234,8 +255,10 @@ def execute_graph(
         # Each pool has new threads, including nested graphs: restore the captured parent explicitly.
         token = set_parent_job(wf_job_id)
         try:
-            with SessionLocal() as node_db:  # 每节点独立 session(非线程安全),workflow 本 session 重取
-                if is_cancelled():
+            # **先拿预算,再开会话** —— 顺序就是这条规矩的全部(见 NODE_CONNECTIONS)。
+            # 反过来的话,等的那个线程已经把连接攥在手里了。
+            with NODE_CONNECTIONS, SessionLocal() as node_db:  # 每节点独立 session(非线程安全)
+                if is_cancelled(node_db):
                     raise WorkflowDomainError("wfErr_cancelled")
                 wf = node_db.get(Workflow, wf_id)
                 return handler(node_db, wf, config)

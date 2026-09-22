@@ -243,7 +243,7 @@ sequenceDiagram
 | --- | --- | --- |
 | 节点注册表 `NODE_TYPES` | `app/domain/workflows/__init__.py` | 元数据:驱动校验、画布 UI、智能体提示;表单完全由 `config` 声明生成 |
 | 执行器注册表 | `executors/`(`__init__.py` 的 `_REGISTRY` + `_PREFIX_REGISTRY`) | 行为:签名 `handler(db, workflow, config) -> dict`,与 NODE_TYPES 一一对应 |
-| 引擎 | `executors/../engine.py`(371 行) | 纯 DAG 调度器:拓扑、并行(`MAX_PARALLEL_NODES = 8` 线程池)、条件路由、取消边界、事件与进度。**对具体领域零 import** |
+| 引擎 | `executors/../engine.py`(371 行) | 纯 DAG 调度器:拓扑、并行(`MAX_PARALLEL_NODES = 8` 线程池)、**连接预算**(`NODE_CONNECTIONS`,按池容量派发,嵌套共用一份)、条件路由、取消边界、事件与进度。**对具体领域零 import** |
 
 「编辑器不认识任何具体节点」是这条架构的灵魂:加一个节点 = 元数据声明 + 一个执行器,引擎、编辑器、智能体都不动。字段声明表的每一条(`type`/`required`/`advanced`/`options`/`depends_on`/`outputs`/`description`/`allow_custom`/`options_from`)都有棘轮守着,因为共同点是**违反了不会报错**——界面照常渲染,只是安静地少一块能力(`docs/ARCHITECTURE.md` 字段声明表)。实测棘轮包括 `test_node_config_declared.py`、`test_node_outputs_match_the_executor.py`、`test_every_node_type_has_an_icon.py` 等。
 

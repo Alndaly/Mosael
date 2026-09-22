@@ -41,7 +41,13 @@ class Test工作流节点:
     def _run(self, config: dict[str, Any], monkeypatch):
         from app.domain.workflows.executors import subjobs
 
-        monkeypatch.setattr(subjobs, "wait_for_job", lambda _id: type("J", (), {"result": {"asset_id": "a1"}})())
+        # 签名跟着真的 `wait_for_job` 走:`release=` 是调用方在等待期间交还的会话
+        # (见 executors/common —— 不还就是一群等着的父节点占满连接预算)。替身少一个参数,
+        # 等于把"调用点有没有把会话交出去"这件事从测试里挖掉。
+        monkeypatch.setattr(
+            subjobs, "wait_for_job",
+            lambda _id, *, release=None: type("J", (), {"result": {"asset_id": "a1"}})(),
+        )
         monkeypatch.setattr(subjobs, "current_actor", lambda _db: "u1")
         workflow = type("W", (), {"workspace_id": "ws-1"})()
         db = type("DB", (), {"get": lambda self, model, key: type("V", (), {"workspace_id": "ws-1"})()})()

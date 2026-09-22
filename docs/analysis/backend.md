@@ -228,7 +228,7 @@ publish 因任务粒度是 `PublishTask` 仍走 `/api/publish/worker/*`(`app/dom
 
 ### 6.2 引擎语义(`domain/workflows/engine.py`)
 
-- 线程池并行(`MAX_PARALLEL_NODES=8`),前驱全完成的节点即调度,独立分支**同时**跑;
+- 线程池并行(`MAX_PARALLEL_NODES=8`),前驱全完成的节点即调度,独立分支**同时**跑;**而同时能占几条数据库连接由另一个数说了算**(`NODE_CONNECTIONS`,从 `core/db.pool_capacity()` 减去给 HTTP/任务总线的预留算出来)。两者不是一回事:并行度嵌套时会相乘(8 × 循环体 4 × 嵌套 8),连接预算是模块级的一份,子图和父图从同一份里取,所以乘积进不来。等待子任务的节点(`wait_for_job(..., release=db)`)在等待期间把会话和预算一起交还 —— 不还就是死锁:一群等着的父节点占满预算,而它们等的正是子图里取不到预算的节点。见 `test_nested_graphs_stay_inside_the_pool.py`;
 - **条件路由**:有控制边时只看控制边,数据边不决定"该不该跑"(`engine.py:195-201` 注释记录了教训:"一个挂在条件分支'真'出口上的节点,只要另有一条数据边从别处取值,分支为假时也照跑");未被活跃入边触达的节点整段跳过(Dify 语义);
 - 每节点独立 DB session(`engine.py:232`:"每节点独立 session(非线程安全)");线程池新线程显式恢复父任务 contextvar(`set_parent_job`,engine.py:230);
 - 任一节点失败即整流失败;取消时给未跑节点补发 `workflow.node.failed` 事件;

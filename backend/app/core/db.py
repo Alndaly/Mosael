@@ -36,6 +36,27 @@ engine = create_engine(settings.database_url, connect_args={"check_same_thread":
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+def pool_capacity() -> int:
+    """这个池子同时能给出多少条连接 —— `pool_size + max_overflow`。
+
+    **从池子自己问出来,不另写一个数。** 写死的话,改 `create_engine` 的人不会知道还有第二处
+    要跟着改,而不一致的表现是 `TimeoutError: QueuePool limit of size 5 overflow 10 reached`
+    被原样记进 job.error:用户看到一句 SQLAlchemy 的英文。
+    """
+    pool = engine.pool
+    return int(pool.size()) + int(getattr(pool, "_max_overflow", 0) or 0)
+
+
+#: 留给"不走工作流引擎"的那些人:HTTP 请求、任务总线、回收线程、定时器。
+#:
+#: 工作流引擎是全仓唯一会**同时**开很多会话的一层,所以它必须按池子的容量派发 —— 而不是按
+#: 一个和池子无关的并发数。此前三个常数各写在三个文件里(`MAX_PARALLEL_NODES = 8`、
+#: `LOOP_FOREACH_MAX_CONCURRENCY = 4`、`MAX_NEST_DEPTH = 8`),每一个单看都克制,**而它们是
+#: 相乘的,没有任何一处写下它们的乘积要小于什么**。小图跑起来一切正常,规模上去才崩,
+#: 而崩的那一刻错误指向的是随便哪个节点。
+POOL_RESERVE = 5
+
+
 @event.listens_for(engine, "connect")
 def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
     cursor = dbapi_connection.cursor()

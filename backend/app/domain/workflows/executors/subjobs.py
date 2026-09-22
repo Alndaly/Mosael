@@ -63,7 +63,7 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
         created_by=current_actor(db),
         engine=str(config.get("engine") or "auto"),
     )
-    wait_for_job(child.id)
+    wait_for_job(child.id, release=db)
     transcript = db.scalars(
         select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.created_at.desc())
     ).first()
@@ -105,7 +105,7 @@ def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     # 所以不挡的话,A 工作区的工作流能在 B 工作区里起一个渲染任务并拿到产出的 asset_id。
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
     child = start_export(db, sequence.id, created_by=current_actor(db))
-    final = wait_for_job(child.id)
+    final = wait_for_job(child.id, release=db)
     asset_id = str((final.result or {}).get("asset_id", ""))
     return {"asset_id": asset_id}
 
@@ -141,7 +141,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
         raise WorkflowDomainError(str(exc)) from exc
     db.commit()
     start_generation_thread(generation.id)
-    wait_for_job(child.id)
+    wait_for_job(child.id, release=db)
     db.refresh(generation)
     db.refresh(child)
     #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是全部 —— 生成一次可能出多张
@@ -173,7 +173,7 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
         )
     except VideoGifError as exc:
         raise WorkflowDomainError(str(exc)) from exc
-    final = wait_for_job(child.id)
+    final = wait_for_job(child.id, release=db)
     return {
         "asset_id": str((final.result or {}).get("asset_id") or ""),
         "source_asset_id": asset.id,
@@ -210,7 +210,7 @@ def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -
         created_by=current_actor(db),
         **_speech_params(db, workflow, config, what="语音合成"),
     )
-    final = wait_for_job(child.id)
+    final = wait_for_job(child.id, release=db)
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
 
 
@@ -235,7 +235,7 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
         created_by=current_actor(db),
         tags=[],
     )
-    final = wait_for_job(task.job_id or "")
+    final = wait_for_job(task.job_id or "", release=db)
     return {"result": final.result or {}}
 
 
@@ -777,7 +777,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
         )
     except DubError as exc:
         raise WorkflowDomainError(str(exc)) from exc
-    final = wait_for_job(job.id)
+    final = wait_for_job(job.id, release=db)
     result = final.result or {}
     #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。历史任务可能留有
     #: mute_fallback；新任务对用户明确选择的 separate 不再静默降级。

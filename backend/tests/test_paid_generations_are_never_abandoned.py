@@ -100,10 +100,22 @@ def test_每一家走异步任务的适配器都能取回() -> None:
 
 
 def test_等子任务没有自己的超时() -> None:
+    """钉的是「**没有放弃等待这一条**」,不是"参数恰好只有一个"。
+
+    原先写成 `参数列表 == ["job_id"]`,于是加一个和超时无关的参数(`release=`,等待期间把
+    调用方的会话和连接预算交还)也会让它红 —— 一条断言比它自己的理由更严,红的时候说不清
+    到底违反了什么。ADR-0019 要的是:放弃等待不会让子任务停下,它照样在生成、照样扣费,
+    只是做完之后没人要了。
+    """
     from app.domain.workflows.executors.common import wait_for_job
 
-    assert list(inspect.signature(wait_for_job).parameters) == ["job_id"], (
-        "放弃等待不会让子任务停下 —— 它照样在花钱,只是做完之后没人要了"
+    parameters = inspect.signature(wait_for_job).parameters
+    deadlines = [name for name in parameters if any(
+        word in name.lower() for word in ("timeout", "deadline", "max_wait", "give_up", "expire")
+    )]
+    assert not deadlines, (
+        f"`wait_for_job` 又长出了放弃等待的参数({deadlines})—— 放弃等待不会让子任务停下,"
+        "它照样在花钱,只是做完之后没人要了(ADR-0019)"
     )
 
 
