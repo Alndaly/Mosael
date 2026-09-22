@@ -263,3 +263,23 @@ def _collect_artifact(
         db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
     )
     return {**{k: v for k, v in output.items() if k != "artifact"}, "asset_id": ref, "asset_name": name}
+
+
+def reconcile_orphaned_invocations(db: Session) -> int:
+    """重启把跑到一半的插件调用判成失败 —— 它们的子进程 / MCP 连接随旧进程一起没了。
+
+    调用**之前**先落一行 `status="running"`,然后才去跑子进程或 MCP。后端在这中间被杀 ——
+    开发态 `--reload` 每改一次文件就是一次 —— 这一行就**永远停在 running**,而插件页的调用
+    记录会一直把它列出来,看起来像一次挂住的调用。
+
+    「跨进程执行的东西在重启后要有人收尾」这条规矩在这个仓库里已经建立过四次(jobs、
+    agent session、browser、素材),而这是第五处漏掉的。所以它现在登记在
+    `domain/restart.py` 的那张表上,由一条棘轮问「你有收尾吗」,不再靠人记得。
+    """
+    stale = list(db.scalars(select(PluginInvocation).where(PluginInvocation.status == "running")))
+    for invocation in stale:
+        invocation.status = "failed"
+        invocation.error = "后端重启,这次调用没有结果"
+    if stale:
+        db.commit()
+    return len(stale)

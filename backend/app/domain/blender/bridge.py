@@ -389,3 +389,34 @@ def pull(db, user, workspace_id, instance_id):
                             '而这个距离只有从 Mosael 发送过去的相机才带着。请在这里重新设计镜头。'
                             % result['camera_count'])
         return {'scene_id': scene.id, 'name': scene.name, 'warnings': warnings}
+
+
+def reconcile_orphaned_transfers() -> int:
+    """重启把停在 `sending` 的互通记录判成失败。
+
+    `send()` 先写 `status='sending'` 再去跑 Blender,正常路径靠 `finally` 改写成 ready/failed
+    —— 进程被杀就写不到。留下来的那份:`receive()` 要求 `status == 'ready'` 所以接不回来,
+    而 `history()` 会**永远**把它列在历史里,看起来像一次还在进行的同步。
+
+    这是一份磁盘记录而不是一张表,所以它不在 `domain/restart.py` 那张按表推导的清单上 ——
+    但它是同一条规矩的第六处(见那份文件的说明)。扫的是整棵 `blender-bridge/`:
+    这一步在**启动时**跑,那时没有任何请求在飞,`sending` 只可能是上一个进程留下的。
+    """
+    base = Path(settings.data_dir) / 'blender-bridge'
+    if not base.exists():
+        return 0
+    healed = 0
+    for path in base.glob('*/*/*/transfer.json'):
+        try:
+            record = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if record.get('status') != 'sending':
+            continue
+        record.update(status='failed', error='后端重启,这次同步没有完成')
+        try:
+            write_record(path.parent, record)
+        except OSError:
+            continue
+        healed += 1
+    return healed
