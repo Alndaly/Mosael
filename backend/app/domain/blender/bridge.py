@@ -9,6 +9,7 @@
 import json
 import shutil
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,18 @@ class BlenderConflict(BlenderDomainError):
     """当前状态下做不了:不是本机、连接被禁用、正在同步、或者场景已经变了。"""
 
     status = 409
+
+
+class BlenderTimeout(BlenderDomainError):
+    """**我等得不够久**,不是对面坏了。
+
+    这两件事此前在出口混成一句「Blender 未响应,请检查 Add-on 连接」—— 而那时 Blender 正在
+    好好地跑,排查方向于是从第一步就被指向了 Add-on。更坏的一半:超时之后**没人告诉 Blender
+    停**,`exclusive()` 那把锁当场释放,而那边的脚本还在它自己的主线程上跑。用户看到失败就
+    重试,第二次排在第一次后面 —— 又是一次超时。所以这句话要明说「别立刻重试」。
+    """
+
+    status = 504
 
 
 class BlenderUnavailable(BlenderDomainError):
@@ -102,12 +115,41 @@ def exclusive(instance_id):
         lock.release()
 
 
-def call(db, instance, tool, payload, workspace_id=None):
+#: 一次**场景互通**(send / receive / pull)允许跑多久。
+#:
+#: **它不该是插件运行时那 60 秒。** 那个数对标的是「一个插件工具该跑多久」,而这 60 秒里要装下:
+#: `uvx --python 3.11 blender-mcp` **起一个子进程**(而且每次调用都重连、不常驻)、MCP 握手、
+#: 逐帧 `keyframe_insert`(每个镜头 ceil(duration*30) 帧 × 4 条 data path)、逐个模型
+#: `import_scene.gltf`、最后 `export_glb`(材质失败还要再导一遍)。大一点的场景必然超时,
+#: 用户看到的是「Blender 未响应」,而 Blender 其实正在好好地跑。
+#:
+#: 五分钟是按上面那条清单估的。这条路由由**界面**发起,上面没有更短的预算压着它。
+BLENDER_SYNC_TIMEOUT_SECONDS = 300
+
+#: 智能体的 inspect / look / execute 允许跑多久。
+#:
+#: **比上面那个短,因为上面还站着一个等得更急的人**:这几个工具由 MCP 客户端调用,
+#: 而 `mcp_server.py` 给的客户端预算是 180 秒。后端等得比调用方久没有任何意义 ——
+#: 对方早就放弃了,而我们还占着那把独占锁,用户的下一次操作被挡在外面。
+#: 两者的先后由 contracts/shared-constants.json 的 budgets 钉着。
+BLENDER_AGENT_TIMEOUT_SECONDS = 150
+
+
+def call(db, instance, tool, payload, workspace_id=None, timeout=BLENDER_SYNC_TIMEOUT_SECONDS):
+    started = time.monotonic()
     try:
-        result = tools.invoke(db, instance.id, tool, payload, workspace_id=workspace_id)
+        result = tools.invoke(db, instance.id, tool, payload,
+                              workspace_id=workspace_id, timeout=timeout)
     except PluginDomainError as exc:
         raise BlenderConflict(str(exc)) from exc
     if result.status != 'succeeded':
+        # **「我等得不够久」和「对面坏了」是两件事。** 判据用**实际等了多久**,不去嗅错误
+        # 文本 —— 前者是事实,后者是措辞,而措辞会变。
+        if time.monotonic() - started >= timeout - 1:
+            raise BlenderTimeout(
+                f'这一步等了 {int(timeout)} 秒还没回来。Blender 那边很可能**还在跑** —— '
+                '先切过去看一眼,不要立刻重试:重试会排在它后面,同样等不到。'
+            )
         raise BlenderUnavailable(result.error or 'Blender 未响应，请检查 Add-on 连接。')
     output = result.output
     # FastMCP wraps string return values in structuredContent.result.
@@ -161,8 +203,8 @@ def history(scene, user):
     return sorted(records, key=lambda r: r['created_at'], reverse=True)[:30]
 
 
-def execute(db, instance, operation, payload, workspace_id):
-    output = call(db, instance, 'execute_blender_code', {'code': command(operation, payload), 'user_prompt': 'Mosael 3D 场景互通'}, workspace_id)
+def execute(db, instance, operation, payload, workspace_id, timeout=BLENDER_SYNC_TIMEOUT_SECONDS):
+    output = call(db, instance, 'execute_blender_code', {'code': command(operation, payload), 'user_prompt': 'Mosael 3D 场景互通'}, workspace_id, timeout)
     result = Path(payload['result_path'])
     # Upstream may return errors as ordinary text. A unique completion file is mandatory.
     if not result.is_file():

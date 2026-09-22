@@ -4,7 +4,8 @@
   "readme": "contracts/README.md",
   "description": "少数几个「两个运行时都要认、而谁也不拥有」的常量。不一致时没有任何报错 —— 只是行为悄悄错开,所以每一条都写清了错开之后用户会看到什么。",
   "notes": [
-    "只放**没法单向下发**的常量。能由一侧算出来再传给另一侧的(例如面板圆角经 IPC 下发)不属于这里 —— 那种本来就只有一份。"
+    "只放**没法单向下发**的常量。能由一侧算出来再传给另一侧的(例如面板圆角经 IPC 下发)不属于这里 —— 那种本来就只有一份。",
+    "常量说的是「两边必须**相等**」;`budgets` 说的是「一边必须**装得下**另一边」—— 跨进程的时间预算属于后者,而这份契约里此前一条都没有。它们错开时同样没有任何报错,只是等待在两侧的含义悄悄不同。"
   ],
   "constants": [
     {
@@ -101,6 +102,76 @@
           "symbol": "CREDENTIAL_ACQUIRE_TIMEOUT_SECONDS"
         }
       ]
+    }
+  ],
+  "budgets": [
+    {
+      "name": "confirmation_wait_fits_inside_the_turn",
+      "rule": "less_than",
+      "why": "一张确认卡最多等多久,必须压在后端那一轮的总时限底下。超过它:卡还亮着,而那一轮已经被判超时 —— 用户点了批准,什么都不会发生,两侧都不报错。这层关系此前只写在 tools.ts 的一段注释里,而改 Python 那个 600 的人没有任何理由来读一段 TypeScript 注释。",
+      "inner": {
+        "runtime": "agent-sidecar",
+        "location": "agent-sidecar/src/tools.ts",
+        "symbol": "CARD_WAIT_CEILING_MS",
+        "unit": "ms"
+      },
+      "outer": {
+        "runtime": "python",
+        "location": "backend/app/ai/sidecar/adapters.py",
+        "symbol": "TURN_TIMEOUT_SECONDS",
+        "unit": "s"
+      }
+    },
+    {
+      "name": "plugin_call_fits_inside_the_tool_call",
+      "rule": "less_than",
+      "why": "后端跑一次插件工具的预算,必须装得进 sidecar 等一次工具调用的预算。反过来的话 sidecar 早就放弃了,而后端还在跑 —— 它占着的那份资源(插件子进程、独占锁)没人知道要等多久,而模型收到的是一句超时,于是它会重试,把同一件事再做一遍。",
+      "inner": {
+        "runtime": "python",
+        "location": "backend/app/domain/plugins/runtime.py",
+        "symbol": "PLUGIN_TIMEOUT_SECONDS",
+        "unit": "s"
+      },
+      "outer": {
+        "runtime": "agent-sidecar",
+        "location": "agent-sidecar/src/tools.ts",
+        "symbol": "TOOL_CALL_TIMEOUT_MS",
+        "unit": "ms"
+      }
+    },
+    {
+      "name": "mcp_call_fits_inside_the_tool_call",
+      "rule": "less_than",
+      "why": "同上,MCP 那条传输的预算。两条并列而不是合成一条:它们是两种传输,各自可以有各自的理由变,而**都要装进同一个外层**。",
+      "inner": {
+        "runtime": "python",
+        "location": "backend/app/domain/plugins/mcp_bridge.py",
+        "symbol": "MCP_TIMEOUT_SECONDS",
+        "unit": "s"
+      },
+      "outer": {
+        "runtime": "agent-sidecar",
+        "location": "agent-sidecar/src/tools.ts",
+        "symbol": "TOOL_CALL_TIMEOUT_MS",
+        "unit": "ms"
+      }
+    },
+    {
+      "name": "blender_agent_step_fits_inside_the_mcp_client",
+      "rule": "less_than",
+      "why": "智能体的 blender_inspect / look / execute 由 MCP 客户端调用,而 mcp_server 给它的 HTTP 预算是 180 秒。后端等得比调用方久没有任何意义:对方早就放弃了,而我们还占着那把独占锁 —— 用户的下一次操作被挡在外面,且没有人说得出为什么。(Blender **场景互通**那条是另一个数,它由界面发起,上面没有更短的预算压着。)",
+      "inner": {
+        "runtime": "python",
+        "location": "backend/app/domain/blender/bridge.py",
+        "symbol": "BLENDER_AGENT_TIMEOUT_SECONDS",
+        "unit": "s"
+      },
+      "outer": {
+        "runtime": "python",
+        "location": "backend/mcp_server.py",
+        "symbol": "BLENDER_CLIENT_TIMEOUT_SECONDS",
+        "unit": "s"
+      }
     }
   ]
 }

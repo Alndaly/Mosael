@@ -39,12 +39,26 @@ from app.core.i18n import get_current_locale
 from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
 from app.domain.plugins.manifest import LOCALE_ENV
 
+#: 一次插件工具调用的**默认**预算。对标的是「一个插件工具该跑多久」。
+#:
+#: **借道这条运行时的产品功能不该继承它。** Blender 互通就是借道的:它在这 60 秒里要装下
+#: `uvx` 冷启动 + MCP 握手 + 逐帧写关键帧 + 导出 glb —— 大一点的场景必然超时,而用户看到的
+#: 是一句「Blender 未响应,请检查 Add-on 连接」,排查方向直接被指向 Add-on。所以预算是
+#: 调用方可以给的**参数**,不是这条通道写死的常量(见 blender/bridge.BLENDER_TIMEOUT_SECONDS)。
 PLUGIN_TIMEOUT_SECONDS = 60
 MAX_OUTPUT_BYTES = 1_000_000
 
 
 class PluginRuntimeError(RuntimeError):
     pass
+
+
+class PluginTimeout(PluginRuntimeError):
+    """**我等得不够久**,不是对面坏了。
+
+    这两件事此前在出口混成一句话。借道这条运行时的功能(Blender 互通)因此把「超时」
+    说成了「Add-on 没连上」—— 而那时 Blender 其实正在好好地跑,于是排查从第一步就走错了路。
+    """
 
 
 @dataclass(frozen=True)
@@ -96,6 +110,7 @@ def execute_tool(
     input_payload: dict[str, Any],
     credentials: dict[str, str] | None = None,
     scratch_dir: Path | None = None,
+    timeout: float = PLUGIN_TIMEOUT_SECONDS,
 ) -> ToolResult:
     """Run the plugin entry once. Returns the tool output dict; raises
     PluginRuntimeError with an actionable message on any failure.
@@ -132,11 +147,11 @@ def execute_tool(
             input=request,
             capture_output=True,
             text=True,
-            timeout=PLUGIN_TIMEOUT_SECONDS,
+            timeout=timeout,
             cwd=entry_path.parent,
             env=env, what="插件命令")
     except subprocess.TimeoutExpired as exc:
-        raise PluginRuntimeError(f"插件执行超时({PLUGIN_TIMEOUT_SECONDS}s)") from exc
+        raise PluginTimeout(f"插件执行超时({timeout:g}s)") from exc
     duration_ms = int((time.monotonic() - started) * 1000)
 
     if result.returncode != 0:
@@ -164,4 +179,4 @@ def execute_tool(
     return ToolResult(output=output, state=dict(state or {}))
 
 
-__all__ = ["PluginRuntimeError", "ToolResult", "execute_tool", "check_required_input", "resolve_entry", "PLUGIN_TIMEOUT_SECONDS"]
+__all__ = ["PluginRuntimeError", "PluginTimeout", "ToolResult", "execute_tool", "check_required_input", "resolve_entry", "PLUGIN_TIMEOUT_SECONDS"]

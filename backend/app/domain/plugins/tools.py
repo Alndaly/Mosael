@@ -172,8 +172,13 @@ def invoke(
     *,
     workspace_id: str | None = None,
     project_id: str | None = None,
+    timeout: float | None = None,
 ) -> PluginInvocation:
     """跑一次工具。**插件唯一的执行路径。**
+
+    `timeout` 不给就用这条运行时的默认预算(60s)。**借道这条通道的产品功能要自己给** ——
+    那 60 秒对标的是「一个插件工具该跑多久」,而 Blender 互通是一条产品功能,只是借道;
+    借道不该继承调用者的预算(见 runtime.PLUGIN_TIMEOUT_SECONDS 上那段说明)。
 
     给了 workspace_id 的话,插件交出的文件产出会在这里收进素材库(见 artifacts):
     输出里的 `artifact` 换成 `asset_id`,调用方拿到的就是一个素材 id,和其它产素材的
@@ -203,7 +208,13 @@ def invoke(
         if manifest.is_mcp:
             # MCP 那一侧没有 state 槽 —— 它是别人的协议,我们不往里加字段。要记东西的插件
             # 走进程形态(见 domain/plugins/state 的说明)。
-            output = mcp_call(_runtime_manifest(manifest), tool_name, payload, inst.secrets_for(db, instance))
+            output = mcp_call(
+                _runtime_manifest(manifest),
+                tool_name,
+                payload,
+                inst.secrets_for(db, instance),
+                **({"timeout": timeout} if timeout is not None else {}),
+            )
         else:
             scratch = make_scratch_dir()
             # 声明为素材的输入换成插件看得见的本地路径(见 plugins/inputs)。
@@ -217,6 +228,7 @@ def invoke(
                 resolved,
                 inst.process_env(db, instance),
                 scratch_dir=scratch,
+                **({"timeout": timeout} if timeout is not None else {}),
             )
             output = result.output
             # 先落状态再收产出:刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子

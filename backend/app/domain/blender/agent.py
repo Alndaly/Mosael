@@ -77,9 +77,10 @@ def _workspace_folder(workspace_id: str):
 
 
 def _run(db, instance, operation: str, payload: dict, workspace_id: str, folder: Path) -> dict:
+    """智能体这条路用**更短**的那个预算 —— 上面站着 MCP 客户端的 180 秒(见 bridge 里的说明)。"""
     with bridge.exclusive(instance.id):
         return bridge.execute(db, instance, operation, {**payload, 'result_path': str(folder / 'result.json')},
-                              workspace_id)
+                              workspace_id, bridge.BLENDER_AGENT_TIMEOUT_SECONDS)
 
 
 def inspect(db, user, workspace_id: str, instance_id: str = '') -> dict:

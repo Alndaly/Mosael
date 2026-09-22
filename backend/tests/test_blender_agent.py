@@ -31,13 +31,16 @@ def fake_blender(monkeypatch, tmp_path):
     calls: list[tuple[str, dict]] = []
     replies: dict = {}
 
-    def execute(db, instance, operation, payload, workspace_id):
+    budgets: list[float] = []
+
+    def execute(db, instance, operation, payload, workspace_id, timeout=bridge.BLENDER_SYNC_TIMEOUT_SECONDS):
         calls.append((operation, payload))
+        budgets.append(timeout)
         reply = replies[operation]
         return reply(payload) if callable(reply) else reply
 
     monkeypatch.setattr(bridge, "execute", execute)
-    return SimpleNamespace(calls=calls, replies=replies)
+    return SimpleNamespace(calls=calls, replies=replies, budgets=budgets)
 
 
 def _user(db):
@@ -222,3 +225,17 @@ class Test看得更细一点:
                 blender_agent.look(db, _user(db), "ws", views=["top"], shading="wireframe")
         assert fake_blender.calls[0][1]["shading"] == "xray"
         assert len(fake_blender.calls) == 1
+
+
+def test_智能体这条路用的是更短的那个预算(fake_blender) -> None:
+    """上面站着 MCP 客户端的 180 秒 —— 后端等得比调用方久没有意义:对方早放弃了,
+    而我们还占着那把独占锁,用户的下一次操作被挡在外面。
+
+    这条盯的是**实际传下去的那个数**,不是常量本身相不相等 —— 假 Blender 把它记下来。
+    """
+    fake_blender.replies["inspect"] = {"objects": []}
+    with SessionLocal() as db:
+        blender_agent.inspect(db, _user(db), "ws")
+
+    assert fake_blender.budgets == [bridge.BLENDER_AGENT_TIMEOUT_SECONDS]
+    assert bridge.BLENDER_AGENT_TIMEOUT_SECONDS < bridge.BLENDER_SYNC_TIMEOUT_SECONDS

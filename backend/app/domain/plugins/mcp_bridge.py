@@ -35,7 +35,8 @@ from mcp.client.stdio import stdio_client
 from app.core.i18n import get_current_locale
 from app.domain.plugins.manifest import LOCALE_ENV, expand
 
-#: 连接 + 握手 + 一次调用的总预算。和进程类插件的 60s 对齐。
+#: 连接 + 握手 + 一次调用的**默认**总预算。和进程类插件的 60s 对齐。
+#: 借道这条通道的产品功能可以自带预算 —— 见 runtime.PLUGIN_TIMEOUT_SECONDS 上那段说明。
 MCP_TIMEOUT_SECONDS = 60
 
 T = TypeVar("T")
@@ -43,6 +44,10 @@ T = TypeVar("T")
 
 class McpBridgeError(RuntimeError):
     pass
+
+
+class McpTimeout(McpBridgeError):
+    """**我等得不够久**,不是对面坏了。理由见 runtime.PluginTimeout。"""
 
 
 def is_mcp(manifest: dict[str, Any]) -> bool:
@@ -102,15 +107,20 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
     raise McpBridgeError(f"不支持的 MCP 传输方式: {transport}(支持 stdio / http)")
 
 
-def _sync(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[ClientSession], Awaitable[T]]) -> T:
+def _sync(
+    manifest: dict[str, Any],
+    env: dict[str, str],
+    fn: Callable[[ClientSession], Awaitable[T]],
+    timeout: float = MCP_TIMEOUT_SECONDS,
+) -> T:
     """在自己的事件循环里跑一次。调用方是同步的(FastAPI 的同步端点在线程池里,
     工作流引擎也在线程里),所以这里可以直接 asyncio.run。"""
     try:
-        return asyncio.run(asyncio.wait_for(_run(manifest, env, fn), timeout=MCP_TIMEOUT_SECONDS))
+        return asyncio.run(asyncio.wait_for(_run(manifest, env, fn), timeout=timeout))
     except McpBridgeError:
         raise
     except asyncio.TimeoutError as exc:
-        raise McpBridgeError(f"MCP 插件响应超时({MCP_TIMEOUT_SECONDS}s)") from exc
+        raise McpTimeout(f"MCP 插件响应超时({timeout:g}s)") from exc
     except Exception as exc:  # noqa: BLE001 — 传输层的异常五花八门,统一成一句能看懂的
         raise McpBridgeError(f"连接 MCP 插件失败: {type(exc).__name__}: {exc}"[:400]) from exc
 
@@ -166,4 +176,4 @@ def _text(result: Any) -> str:
     return "\n".join(part for part in parts if part).strip()
 
 
-__all__ = ["MCP_TIMEOUT_SECONDS", "McpBridgeError", "call_tool", "discover_tools", "is_mcp"]
+__all__ = ["MCP_TIMEOUT_SECONDS", "McpBridgeError", "McpTimeout", "call_tool", "discover_tools", "is_mcp"]

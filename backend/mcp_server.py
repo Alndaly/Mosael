@@ -82,6 +82,13 @@ def _raise_with_detail(response: httpx.Response) -> None:
     raise ValueError(message)
 
 
+#: 智能体那几个 Blender 工具等后端多久。**后端那一侧必须比它短** ——
+#: 等得比调用方久没有任何意义:对方早就放弃了,而后端还占着那把独占锁,用户的下一次操作被挡
+#: 在外面。先后关系由 contracts/shared-constants.json 的 budgets 钉着
+#: (对面是 blender/bridge.BLENDER_AGENT_TIMEOUT_SECONDS)。
+BLENDER_CLIENT_TIMEOUT_SECONDS = 180
+
+
 def _get(path: str, params: dict[str, Any] | None = None, *, timeout: float = 15) -> Any:
     headers = _auth_headers()
     with httpx.Client(base_url=api_base(), timeout=timeout, headers=headers) as client:
@@ -1416,7 +1423,7 @@ def blender_look(views: list[str] | None = None, objects: list[str] | None = Non
     data = _get("/api/scenes/blender/agent/look", {
         "workspace_id": workspace_id or _default_workspace_id(), "views": views or [],
         "objects": objects or [], "shading": shading, "zoom": zoom, "instance_id": instance_id,
-    }, timeout=180)
+    }, timeout=BLENDER_CLIENT_TIMEOUT_SECONDS)
     return _with_images(data)
 
 
@@ -1464,7 +1471,7 @@ def blender_send_scene(scene_id: str, shot_id: str = "", instance_id: str = "",
     return _post(f"/api/scenes/{scene_id}/blender", {
         "workspace_id": workspace_id or _default_workspace_id(), "instance_id": instance_id,
         "revision": scene["revision"], "shot_id": shot_id or scene["content"]["shots"][0]["id"],
-    }, timeout=180)
+    }, timeout=BLENDER_CLIENT_TIMEOUT_SECONDS)
 
 
 @mcp.tool()
@@ -1484,7 +1491,7 @@ def blender_import_to_scene(scene_id: str, base_revision: int, name: str = "", o
     return _post(f"/api/scenes/{scene_id}/blender/agent/import", {
         "workspace_id": workspace_id or _default_workspace_id(), "base_revision": base_revision,
         "name": name, "objects": objects or [], "position": position, "instance_id": instance_id,
-    }, timeout=180)  # Blender 导出大场景要一会儿
+    }, timeout=BLENDER_CLIENT_TIMEOUT_SECONDS)
 
 
 @mcp.tool()

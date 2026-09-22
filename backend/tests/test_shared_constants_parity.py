@@ -82,6 +82,49 @@ def test_every_runtime_agrees(constant: dict) -> None:
         )
 
 
+#: 单位 → 换算成秒的系数。预算写在各自运行时惯用的单位里(TS 用毫秒),比较之前先对齐。
+_TO_SECONDS = {"s": 1.0, "ms": 0.001}
+
+
+def _budgets() -> list[dict]:
+    return _load().get("budgets", [])
+
+
+def _budget_ids() -> list[str]:
+    return [item["name"] for item in _budgets()]
+
+
+def _seconds(side: dict) -> float:
+    path = REPO / side["location"]
+    assert path.is_file(), f"契约记的位置不存在了 —— {side['location']}"
+    value = _as_value(_literal_from_source(path, side["symbol"]))
+    assert isinstance(value, (int, float)), (
+        f"{side['location']} 的 {side['symbol']} 读出来是 {value!r} —— 预算必须是个字面量数字,"
+        "否则这条契约读不到它(提成具名常量就是为了这个)"
+    )
+    return float(value) * _TO_SECONDS[side["unit"]]
+
+
+def test_有预算这一节() -> None:
+    """跨进程的时间预算此前**一条都不在契约里** —— 它们只以注释的形式写在其中一侧。
+
+    常量那一节说的是「两边必须相等」,而时间预算的关系是「一边必须装得下另一边」。
+    两者错开时同样没有任何报错,只是等待在两侧的含义悄悄不同。
+    """
+    assert len(_budgets()) >= 4, "budgets 一节空了或缩水了 —— 那正是这条契约要防的"
+
+
+@pytest.mark.parametrize("budget", _budgets(), ids=_budget_ids())
+def test_内层预算装得进外层(budget: dict) -> None:
+    assert budget["rule"] == "less_than", f"还不认识的关系:{budget['rule']}"
+    inner, outer = _seconds(budget["inner"]), _seconds(budget["outer"])
+    assert inner < outer, (
+        f"{budget['name']}:内层 {budget['inner']['symbol']} = {inner}s,"
+        f"外层 {budget['outer']['symbol']} = {outer}s —— 内层必须更短。\n"
+        f"  为什么要紧:{budget['why']}"
+    )
+
+
 def test_python_side_is_read_by_import_not_only_by_regex() -> None:
     """正则读的是源码,import 读的是**真正跑的那个** —— Python 侧两条都要对得上。"""
     from app.core.db import PARTITION_PREFIX

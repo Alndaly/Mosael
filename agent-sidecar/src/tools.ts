@@ -35,6 +35,16 @@ import { log } from "./protocol.js";
  */
 const TOOL_CALL_TIMEOUT_MS = 180_000;
 
+/**
+ * 一张确认卡最多等多久。
+ *
+ * **压在后端 TURN_TIMEOUT_SECONDS(600s)底下** —— 超过它,卡还亮着而那一轮已经被判超时,
+ * 用户点批准之后什么都不会发生。这条关系此前只写在这里的注释里,而**改 Python 那个 600 的人
+ * 没有任何理由来读一段 TypeScript 注释**。现在它由 contracts/shared-constants.json 的
+ * budgets 钉着(提成具名常量,就是为了让那条契约读得到它)。
+ */
+const CARD_WAIT_CEILING_MS = 590_000;
+
 /** 把这一轮的取消信号和调用时限合成一个:停止这一轮时,在飞的 HTTP 也要真的断掉。 */
 function deadline(signal: AbortSignal | undefined, ms: number): AbortSignal {
   const limit = AbortSignal.timeout(ms);
@@ -133,7 +143,7 @@ async function awaitCard<T>(
   settle: (current: T) => unknown | undefined,
   signal: AbortSignal | undefined,
 ): Promise<unknown | undefined> {
-  const ceiling = Number(process.env.MOSAEL_CARD_WAIT_MS) || 590_000;
+  const ceiling = Number(process.env.MOSAEL_CARD_WAIT_MS) || CARD_WAIT_CEILING_MS;
   const step = Math.min(1500, ceiling);
   for (let waited = 0; waited < ceiling; waited += step) {
     const settled = settle(await read());
