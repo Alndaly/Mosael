@@ -47,7 +47,7 @@ interface EditorState {
   volume: number;
   muted: boolean;
   pxPerSecond: number;
-  selectedClipId: string | null;
+  /** 选中的片段。**只有这一份** —— 单选是"长度为一的列表",见 selectedClipId 选择器。 */
   selectedClipIds: string[];
   dragDraft: DragDraft | null;
   draggingAsset: DraggingAsset | null;
@@ -82,7 +82,6 @@ export const useEditorStore = create<EditorState>((set) => ({
   volume: 1,
   muted: false,
   pxPerSecond: DEFAULT_PX_PER_SECOND,
-  selectedClipId: null,
   selectedClipIds: [],
   dragDraft: null,
   draggingAsset: null,
@@ -104,18 +103,31 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({
       pxPerSecond: Math.min(MAX_PX_PER_SECOND, Math.max(MIN_PX_PER_SECOND, state.pxPerSecond * factor)),
     })),
-  selectClip: (clipId) => set({ selectedClipId: clipId, selectedClipIds: clipId ? [clipId] : [] }),
+  selectClip: (clipId) => set({ selectedClipIds: clipId ? [clipId] : [] }),
   toggleSelectClip: (clipId) =>
     set((state) => {
       const ids = state.selectedClipIds.includes(clipId)
         ? state.selectedClipIds.filter((id) => id !== clipId)
         : [...state.selectedClipIds, clipId];
-      return { selectedClipIds: ids, selectedClipId: ids[ids.length - 1] ?? null };
+      return { selectedClipIds: ids };
     }),
-  selectClips: (clipIds) => set({ selectedClipIds: clipIds, selectedClipId: clipIds[clipIds.length - 1] ?? null }),
+  selectClips: (clipIds) => set({ selectedClipIds: clipIds }),
   setDragDraft: (draft) => set({ dragDraft: draft }),
   setDraggingAsset: (asset) => set({ draggingAsset: asset }),
   setTool: (tool) => set({ tool }),
   setEditMode: (editMode) => set({ editMode }),
   toggleEditMode: () => set((state) => ({ editMode: state.editMode === "insert" ? "overwrite" : "insert" })),
 }));
+
+/**
+ * 当前"那一个"选中的片段 —— 属性面板、右键菜单、单片段快捷键读的都是它。
+ *
+ * **它是派生值,不是第二份状态。** 此前 store 里同时存 `selectedClipId` 和
+ * `selectedClipIds`,恒等式由**每个写入口各自记得**维持:三个入口今天都写对了,所以两者
+ * 永远一致 —— 而第四个入口("选中某轨全部片段"、"撤销后恢复选区")只要漏一行,两个读者就会
+ * 看到不同的选中态,表现成"属性面板显示的是另一个片段",没有任何东西会报错。
+ *
+ * 取**最后一个**:多选是按点击顺序累加的,最后点的那个就是"现在说的这个"。
+ */
+export const selectedClipId = (state: EditorState): string | null =>
+  state.selectedClipIds[state.selectedClipIds.length - 1] ?? null;

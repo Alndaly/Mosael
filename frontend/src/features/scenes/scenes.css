@@ -16,6 +16,12 @@
      而 fallback 就是"看起来对了但改一处不会一起变"的由来。 */
   --scene-stage-gutter: 12px;
   --scene-control-height: 32px;
+  /* **整行底色比文字宽出多少 —— 只在这里写一次。** 凡是"一整行可点/可高亮"的东西都从
+     这个值反向撑出去。它此前定义在 `.scene-panel-body` 上,而三个使用点各自带着 `, 8px`
+     兜底 —— 于是这个 8 实际上写了四遍。今天三处都落在面板里,兜底取不到,所以"碰巧是对的";
+     哪天有人把行列表搬到面板外(浮层里的列表、dope sheet 的行),那一处会**静默回到 8px**。
+     兜底值就是第二处定义。提到页面根之后,不需要兜底了。 */
+  --scene-row-bleed: 8px;
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -658,10 +664,6 @@
 
    竖向节奏同理:一个 gap 管到底,子块自己不再另加 margin。 */
 .scene-panel-body {
-  /* **整行底色比文字宽出多少 —— 只在这里写一次。** 面板里凡是"一整行可点/可高亮"的东西
-     都从这个值反向撑出去。此前物体列表和预设列表各写一个 8px:两个数碰巧相等,而加第三处时
-     没人知道该抄哪一个,也没有任何东西会在它们分岔时报错。 */
-  --scene-row-bleed: 8px;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
@@ -679,7 +681,7 @@
   --row-indent: 14px;
   --row-height: 30px;
   /* 往外让多少跟着面板走(见 .scene-panel-body),不自己定一个数。 */
-  --row-bleed: var(--scene-row-bleed, 8px);
+  --row-bleed: var(--scene-row-bleed);
   display: grid;
   gap: 1px;
 }
@@ -839,8 +841,8 @@
   align-items: center;
   gap: 10px;
   /* 和物体列表同一个值:两处都是"一整行可点",底色该一样宽。 */
-  padding: 8px var(--scene-row-bleed, 8px);
-  margin-inline: calc(var(--scene-row-bleed, 8px) * -1);
+  padding: 8px var(--scene-row-bleed);
+  margin-inline: calc(var(--scene-row-bleed) * -1);
   text-align: left;
   border-radius: 7px;
   background: transparent;

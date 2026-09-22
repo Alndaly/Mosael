@@ -67,7 +67,7 @@ import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 
-import { useEditorStore } from "@/stores/editorStore";
+import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
 import { DenoiseDialog } from "@/features/media/DenoiseDialog";
 import { FontFaces } from "@/features/editor/FontFaces";
@@ -119,7 +119,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const t = useI18n();
   const qc = useQueryClient();
   const { openRecorder } = useRecorder();
-  const selectedClipId = useEditorStore((state) => state.selectedClipId);
+  const selectedClipId = useEditorStore(selectedClipIdOf);
   // 在哪个 tab 是**这个人怎么用这个工具**的一部分,不是这一刻的临时值 —— 切走再回来不该重置
   // (面板宽度早就是这么存的,见 PANEL_SIZES_KEY)。用项目里已有的那个钩子,它自带白名单:
   // 哪天某个 tab 被删掉,存着旧值的用户不会卡在一个不存在的页面上。
@@ -562,7 +562,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 而不是撤销",实则撤销发生了、只是选中被清了。属性/transform 撤销时片段还在,保留选中。
   const keepSelectionIfPresent = (updated: Sequence) => {
     applySequence(updated);
-    const sel = useEditorStore.getState().selectedClipId;
+    const sel = selectedClipIdOf(useEditorStore.getState());
     const stillThere = sel != null && (updated.tracks ?? []).some((tr) => (tr.clips ?? []).some((c) => c.id === sel));
     if (sel != null && !stillThere) useEditorStore.getState().selectClip(null);
   };
@@ -597,7 +597,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     (clipId?: string) => {
       if (!sequence) return;
       const playhead = useEditorStore.getState().playhead;
-      const targetId = clipId ?? useEditorStore.getState().selectedClipId;
+      const targetId = clipId ?? selectedClipIdOf(useEditorStore.getState());
       const all = (sequence.tracks ?? []).flatMap((track) => track.clips ?? []);
       const clip = targetId
         ? all.find((item) => item.id === targetId)
@@ -628,7 +628,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const duplicateClip = React.useCallback(
     (clipId?: string) => {
       if (!sequence) return;
-      const targetId = clipId ?? useEditorStore.getState().selectedClipId;
+      const targetId = clipId ?? selectedClipIdOf(useEditorStore.getState());
       if (!targetId) return;
       for (const track of sequence.tracks ?? []) {
         const clip = (track.clips ?? []).find((item) => item.id === targetId);
@@ -653,7 +653,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const clipboardRef = React.useRef<{ assetId: string; srcIn: number; srcOut: number; trackId: string } | null>(null);
   const findSelectedClip = React.useCallback(() => {
     if (!sequence) return null;
-    const id = useEditorStore.getState().selectedClipId;
+    const id = selectedClipIdOf(useEditorStore.getState());
     if (!id) return null;
     for (const track of sequence.tracks ?? []) {
       const clip = (track.clips ?? []).find((item) => item.id === id);

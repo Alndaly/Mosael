@@ -155,12 +155,20 @@ describe("一行的左右位置只有一处说了算", () => {
       expect(list).toContain(token);
   });
 
-  it("「整行底色宽出多少」跟着面板走,不在列表里另定一个数", () => {
-    // 此前物体列表和预设列表各写一个 8px:两个数碰巧相等,而加第三处时没人知道该抄哪一个,
-    // 也没有任何东西会在它们分岔时报错。
-    expect(rule(".scene-object-list")).toContain("--row-bleed: var(--scene-row-bleed");
-    expect(rule(".scene-panel-body")).toContain("--scene-row-bleed:");
-    expect(rule(".scene-preset-list > button")).toContain("var(--scene-row-bleed");
+  it("「整行底色宽出多少」只在页面根上写一次,用的地方**不带字面量兜底**", () => {
+    // 此前物体列表和预设列表各写一个 8px:两个数碰巧相等,而加第三处时没人知道该抄哪一个。
+    // 收敛过一次之后,三个使用点仍各自带着 `, 8px` 兜底 —— 这个 8 于是写了四遍,
+    // 而**兜底值就是第二处定义**。今天三处都落在面板里、取不到兜底,所以"碰巧是对的";
+    // 哪天有人把行列表搬到面板外(浮层里的列表、dope sheet 的行),那一处会静默回到 8px。
+    expect(rule(".scene-library,\n.scene-studio")).toContain("--scene-row-bleed:");
+
+    // 断言**字面量不存在**,而不只是"引用存在" —— 上一版断的是后者,而 `var(--x, 8px)`
+    // 两个条件同时成立:它既引用了,又自己写了一个数。
+    for (const selector of [".scene-object-list", ".scene-preset-list > button"]) {
+      const declaration = rule(selector);
+      expect(declaration).toContain("var(--scene-row-bleed)");
+      expect(declaration, `${selector} 里还留着字面量兜底`).not.toMatch(/--scene-row-bleed\s*,/);
+    }
   });
 
   it("一行里三个控件同高 —— 不同高是看得出来的", () => {
