@@ -77,12 +77,19 @@ class Chat:
         return {row["id"] for row in rows}
 
 
-def _stub_judge(monkeypatch, verdict, *, record: list | None = None):
+def _stub_judge(monkeypatch, verdict, *, record: list | None = None, billing: list | None = None):
     # 签名与真的 `ask` 一致 —— 替身悄悄少一个参数,就等于把"调用点有没有传对"这件事
     # 从测试里挖掉了(那正是 user_id 漏了整整一版没人发现的原因)。
-    def fake(request, *, user_id):
+    # `workspace_id` / `source_*` 是记账的归属:判断者是一次真的付费调用,归属不明的话
+    # 它会落进"没能定价"那一栏,而那一栏存在的意义是告诉用户少配了哪条价格规则。
+    def fake(request, *, user_id, workspace_id="", source_type="", source_id=""):
         if record is not None:
             record.append(request)
+        if billing is not None:
+            billing.append({
+                "user_id": user_id, "workspace_id": workspace_id,
+                "source_type": source_type, "source_id": source_id,
+            })
         if isinstance(verdict, Exception):
             raise verdict
         return verdict
@@ -286,7 +293,9 @@ def test_a_card_under_review_is_not_shown_yet(monkeypatch) -> None:
     chat = Chat()
     chat.set_rules({"run_code": "judge"})
 
-    def slow(request, *, user_id):
+    # 签名同样要跟着真的 `ask` 走 —— 少一个参数,线程里就是一个 TypeError,卡当场被退回待办,
+    # 而这条测试断言的正是"它不在待办里",于是失败的原因看起来完全不相干。
+    def slow(request, *, user_id, workspace_id="", source_type="", source_id=""):
         time.sleep(0.4)
         return ALLOW
 
@@ -502,3 +511,26 @@ def test_judge_ask_必须显式说明替谁判断() -> None:
     assert parameter.default is inspect.Parameter.empty
     with pytest.raises(TypeError):
         judge.ask(judge.build_request("publish", {}, {}))  # type: ignore[call-arg]
+
+
+def test_判断者拿得到记账归属(monkeypatch) -> None:
+    """判断者是一次**真的付费调用** —— 自动驾驶下每张"规则既没允许也没拒绝"的卡都会打一次模型。
+
+    它此前是全仓八个 `chat()` 调用点里唯一一个既没传 `call=`、外面也没有 `billable(...)` 的。
+    看不出来,是因为判断跑在后台线程上、产物只是一张卡的放行/拦截,用户感知不到"刚才打了一次
+    模型";而 `billable` 那条「归属不了就 warning」的保护在这里也不会响 —— 压根没进那个
+    上下文管理器。首页的 Token 图和成本统计缺的这部分,不会以任何形式提示。
+    """
+    billing: list[dict] = []
+    chat = Chat()
+    chat.set_rules({"run_code": "judge"})
+    _stub_judge(monkeypatch, ALLOW, billing=billing)
+
+    card = chat.card("run_code", {"code": "output = 1", "inputs": {}})
+
+    assert billing, "判断者根本没被调到,这条测试的前提没成立"
+    attribution = billing[0]
+    assert attribution["user_id"], "花的是谁的额度都说不出来"
+    assert attribution["workspace_id"], "这笔账算在哪个工作区头上 —— 不传就只能记一条归属不明的"
+    assert attribution["source_type"] == "tool_confirmation"
+    assert attribution["source_id"] == card["id"]

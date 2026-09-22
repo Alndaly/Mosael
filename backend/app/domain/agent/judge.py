@@ -85,7 +85,14 @@ def build_request(tool: str, args: dict[str, Any], rules: dict[str, Any]) -> Jud
     return JudgeRequest(tool=tool, args=dict(args or {}), rules=dict(rules or {}))
 
 
-def ask(request: JudgeRequest, *, user_id: str | None) -> Verdict:
+def ask(
+    request: JudgeRequest,
+    *,
+    user_id: str | None,
+    workspace_id: str = "",
+    source_type: str = "",
+    source_id: str = "",
+) -> Verdict:
     """问一次模型。抛异常 = 判不了 —— 调用方按拒绝处理(见 autopilot)。
 
     单独开一次数据库会话:判断跑在后台线程上,不该借用请求那条。用**这个人**默认的对话模型
@@ -94,6 +101,13 @@ def ask(request: JudgeRequest, *, user_id: str | None) -> Verdict:
     `user_id` 是必填关键字:判断花的是他的额度、用的是他的钥匙。做成必填而不是可选,是因为
     漏掉的那个调用点会安静地退回"没有可用模型",而调用方把它当成判不了、退回问人 ——
     一次静默降级,看起来就像"判断者这功能就是不好使"。
+
+    **这是一次真的付费调用,所以它要记账。** 此前它是全仓八个 `chat()` 调用点里唯一一个
+    既没传 `call=`、外面也没有 `billable(...)` 的 —— 判断跑在后台线程上,产物是一张确认卡
+    的放行/拦截,用户感知不到"刚才打了一次模型",于是首页的 Token 图和成本统计缺的这部分
+    不会以任何形式提示。而 `billable` 那条「归属不了就 warning」的保护在这里也不会响:
+    **压根没进那个上下文管理器**。`ai_chat` 的模块头把「用量:一条都不记」列为它当初存在的
+    四个理由之一,而 judge 是在那之后新加的调用点,原样复现了被消灭的那个毛病。
     """
     from app.core.db import SessionLocal
     from app.domain.ai_chat import chat, target_for
@@ -103,14 +117,26 @@ def ask(request: JudgeRequest, *, user_id: str | None) -> Verdict:
         if profile is None:
             raise RuntimeError("没有可用于判断的对话模型")
         target = target_for(db, profile)
-    raw = chat(
-        target,
-        request.as_messages(),
-        temperature=0.0,
-        timeout=JUDGE_TIMEOUT_SECONDS,
-        json_object=True,
-        label="放行判断",
-    )
+    from app.core.db import SessionLocal as _Session
+    from app.domain.usage import billable
+
+    with _Session() as billing_db, billable(
+        billing_db,
+        capability="chat",
+        operation="agent_judge",
+        workspace_id=workspace_id,
+        source_type=source_type,
+        source_id=source_id,
+    ) as call:
+        raw = chat(
+            target,
+            request.as_messages(),
+            temperature=0.0,
+            timeout=JUDGE_TIMEOUT_SECONDS,
+            json_object=True,
+            label="放行判断",
+            call=call,
+        )
     return _parse(raw, model=target.model)
 
 

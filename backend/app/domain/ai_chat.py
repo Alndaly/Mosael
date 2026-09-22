@@ -375,6 +375,13 @@ def _chat_gateway(
         raise AiChatError(f"{label}失败:OAuth Gateway 不支持复用调用方 HTTP 连接")
     from app.ai.sidecar.adapters import AdapterError, gateway_complete
 
+    # **在发请求之前说清这条账是谁的**,和直连那条对齐。原先放在成功之后,于是调用失败时
+    # 那条账没有 provider / model,会落进 `UsageSummary.unpriced` 里那堆"没能定价"的记录 ——
+    # 而那一栏存在的意义恰恰是告诉用户"你少配了哪条价格规则",混进根本不该在那儿的行之后,
+    # 它就不再说得清任何事。
+    if call is not None:
+        call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
+
     try:
         while True:
             system_prompt, prompt, images = _gateway_prompt(payload.get("messages") or [])
@@ -433,7 +440,6 @@ def _chat_gateway(
                 db.commit()
     if call is not None:
         usage = result.usage or {}
-        call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
         call.meter(
             input_tokens=int(usage.get("input") or usage.get("input_tokens") or 0),
             output_tokens=int(usage.get("output") or usage.get("output_tokens") or 0),

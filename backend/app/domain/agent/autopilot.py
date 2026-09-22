@@ -207,8 +207,17 @@ def _judge_thread(confirmation_id: str, user_id: str) -> None:
         tool, payload = confirmation.tool, dict(confirmation.payload or {})
         request = judge_module.build_request(tool, payload, _rules_for(db, confirmation))
         detail = dict(confirmation.decision_detail or {})
+        # 归属:这一次判断花的钱算在这张卡所在的工作区头上。不传的话 `billable` 只能记一条
+        # 归属不明的账,而那一栏存在的意义是告诉用户"你少配了哪条价格规则"。
+        workspace_id = confirmation.workspace_id
         try:
-            verdict = judge_module.ask(request, user_id=user_id)
+            verdict = judge_module.ask(
+                request,
+                user_id=user_id,
+                workspace_id=workspace_id,
+                source_type="tool_confirmation",
+                source_id=confirmation_id,
+            )
         except Exception as exc:  # noqa: BLE001 —— 超时/网络/解析不出来,都算判不了
             logger.warning("judge could not settle confirmation %s: %s", confirmation_id, exc)
             _release(db, confirmation_id, {**detail, "judge_failed": str(exc)[:300]})
