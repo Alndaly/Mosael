@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.agent.confirmable.registry import ConfirmableTool, confirmable_tool
+from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 
 
@@ -21,8 +21,8 @@ def _validate_generate_image(db: Session, workspace_id: str, payload: dict[str, 
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
         raise ConfirmationError("Generation requires a prompt")
 
-def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> str:
-    return f"生成图片: {_asked_for(payload)}"
+def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_generateImage", {"asked": _asked_for(payload)}
 
 def _execute_generate_image(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
@@ -52,8 +52,8 @@ def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, 
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
         raise ConfirmationError("Generation requires a prompt")
 
-def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> str:
-    return f"生成视频: {_asked_for(payload)}"
+def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_generateVideo", {"asked": _asked_for(payload)}
 
 def _execute_generate_video(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
@@ -83,8 +83,8 @@ def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, 
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
         raise ConfirmationError("Generation requires a prompt")
 
-def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> str:
-    return f"生成音频: {_asked_for(payload)}"
+def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_generateAudio", {"asked": _asked_for(payload)}
 
 def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
@@ -128,8 +128,8 @@ def _validate_generate_podcast(db: Session, workspace_id: str, payload: dict[str
     if not str(required or "").strip():
         raise ConfirmationError("Podcast generation requires text or topic")
 
-def _summarize_generate_podcast(db: Session, payload: dict[str, Any]) -> str:
-    return f"生成播客: {_asked_for(payload)}"
+def _summarize_generate_podcast(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_generatePodcast", {"asked": _asked_for(payload)}
 
 def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload

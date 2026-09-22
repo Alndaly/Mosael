@@ -14,6 +14,7 @@ from sqlalchemy import and_, delete, event, inspect, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.i18n import DEFAULT_LOCALE, t
 from app.db.models import Job, TaskEvent
 from app.db.models import now as models_now
 
@@ -535,7 +536,11 @@ def reconcile_orphaned_jobs(db: Session) -> int:
     for job in failed:
         job.status = "failed"
         say(job, "jobMsg_interrupted")
-        job.error = "后端重启导致任务中断,请重新发起"
+        #: **失败原因和任务消息同一条规矩**:落库的话存 key,出口按读的人的语言翻。
+        #: 此前这一句是写死的中文,于是英文用户的任务列表里它永远是中文 —— 而
+        #: `error_key` / `error_params` 这套东西早就齐了,只是总线自己没用。
+        job.error_key = "jobErr_backendRestart"
+        job.error = t("jobErr_backendRestart", DEFAULT_LOCALE)
         db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
     if stale:
         db.commit()
@@ -553,7 +558,8 @@ def _cancel_job_row(db: Session, job: Job) -> bool:
     if job.status not in ("queued", "running") or not lock_active_job(db, job):
         return False
     job.status = "failed"
-    job.error = "已取消"
+    job.error_key = "jobErr_cancelled"
+    job.error = t("jobErr_cancelled", DEFAULT_LOCALE)
     say(job, "jobMsg_cancelled")
     db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={}))
     # Stop the actual work, not just the row describing it.
@@ -676,8 +682,11 @@ def expire_worker_leases(db: Session) -> int:
         # A heartbeat may have renewed after the candidate query but before our write lock.
         if (job.lease_expires_at and job.lease_expires_at > now) or (job.lease_expires_at is None and job.updated_at > now - timedelta(seconds=WORKER_LEASE_SECONDS)):
             continue
-        if finish_job(db, job, status="failed", error="执行器失联,任务已停止；请检查产出后重新发起"):
-            say(job, "执行器失联")
+        if finish_job(
+            db, job, status="failed",
+            error=t("jobErr_leaseExpired", DEFAULT_LOCALE), error_key="jobErr_leaseExpired",
+        ):
+            say(job, "jobMsg_leaseExpired")
             db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "worker_lease_expired"}))
             _cancel_descendants(db, job.id)
             expired += 1

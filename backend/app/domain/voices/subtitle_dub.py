@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.i18n import DEFAULT_LOCALE, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, say
 from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
@@ -282,7 +283,9 @@ def _run_dub(job_id: str) -> None:
             if done == 0:
                 job.status = "failed"
                 say(job, "jobMsg_dubFailed")
-                job.error = "没有一条配音成功"
+                #: 失败原因和任务消息同一条规矩:落库存 key,出口按读的人的语言翻。
+                job.error_key = "jobErr_noDubSucceeded"
+                job.error = t("jobErr_noDubSucceeded", DEFAULT_LOCALE)
                 emit_job_event(db, job.id, "job.failed", {})
             else:
                 # 原声的处理放在**任务里**、成功之前:分离要跑一阵,而任务说"完成"时成片应当已经是

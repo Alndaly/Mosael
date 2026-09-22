@@ -16,7 +16,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Project
-from app.domain.agent.confirmable.registry import ConfirmableTool, confirmable_tool
+from app.core.i18n import fragment
+from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 
 #: 一张卡最多删多少个。不是性能上限,是**读得完**的上限:卡上列不下的东西,用户点批准时
@@ -78,11 +79,13 @@ def _validate_delete_assets(db: Session, workspace_id: str, payload: dict[str, A
     payload["_clips"] = _count(db, Clip, Clip.asset_id, [row.id for row in rows])
 
 
-def _summarize_delete_assets(db: Session, payload: dict[str, Any]) -> str:
-    count = int(payload.get("_count") or 0)
+def _summarize_delete_assets(db: Session, payload: dict[str, Any]) -> Summary:
     clips = int(payload.get("_clips") or 0)
-    tail = f",时间线上引用它们的 {clips} 个片段会变成「素材已删除」" if clips else ""
-    return f"永久删除 {count} 个素材({payload.get('_names') or ''}){tail} —— 文件会从磁盘上清掉,撤不回来"
+    return "confirm_deleteAssets", {
+        "count": int(payload.get("_count") or 0),
+        "names": payload.get("_names") or "",
+        "tail": fragment("confirm_deleteAssetsClips", clips=clips) if clips else "",
+    }
 
 
 def _execute_delete_assets(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -112,13 +115,16 @@ def _validate_delete_projects(db: Session, workspace_id: str, payload: dict[str,
     payload["_assets"] = _count(db, Asset, Asset.project_id, [row.id for row in rows])
 
 
-def _summarize_delete_projects(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_delete_projects(db: Session, payload: dict[str, Any]) -> Summary:
     count = int(payload.get("_count") or 0)
     assets = int(payload.get("_assets") or 0)
     # 素材**不跟着删**(它们只是 project_id 置空,回到工作区级)。这句话一定要说:否则用户
     # 会以为批准删项目就等于把里面的素材也清了,反过来也会不敢批。
-    tail = f";里面的 {assets} 个素材不会被删,会回到工作区" if assets else ""
-    return f"永久删除 {count} 个项目({payload.get('_names') or ''}),连同它们的时间线{tail} —— 撤不回来"
+    return "confirm_deleteProjects", {
+        "count": count,
+        "names": payload.get("_names") or "",
+        "tail": fragment("confirm_deleteProjectsAssets", assets=assets) if assets else "",
+    }
 
 
 def _execute_delete_projects(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:

@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from app.core.i18n import DEFAULT_LOCALE, render_nested
 from app.db.models import ToolConfirmation, User, now
 from app.domain.agent.confirmable import tool_spec
 from app.domain.agent.errors import ConfirmationError
@@ -60,11 +61,17 @@ def request_confirmation(
         raise ConfirmationError(f"Unknown mutating tool: {tool}")
     if spec.validate is not None:
         spec.validate(db, workspace_id, payload)
+    #: **key 和参数才是事实,渲染出来的那一行只是默认语言的快照。**
+    #: 确认卡是授权界面 —— 用户点「批准」之前唯一会读的就是这一行,而卡落库、活得比一次请求久。
+    #: 写入时就翻会把语言冻死在那一刻(`Job.message` 为这件事付过账,见 domain/jobs.say)。
+    summary_key, summary_params = spec.summarize(db, payload)
     confirmation = ToolConfirmation(
         workspace_id=workspace_id,
         tool=tool,
         permission=effective_permission(db, tool, payload),
-        summary=spec.summarize(db, payload),
+        summary=render_nested(summary_key, summary_params, DEFAULT_LOCALE),
+        summary_key=summary_key,
+        summary_params=summary_params,
         payload=payload,
         requested_by=requested_by,
         session_id=session_id,

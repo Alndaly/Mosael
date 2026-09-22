@@ -9,7 +9,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.agent.confirmable.registry import ConfirmableTool, confirmable_tool
+from app.core.i18n import fragment
+from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.confirmable.graphs import external_warning, graph_under_review
 from app.domain.workflows import external_nodes_in_graph
@@ -62,9 +63,13 @@ def _validate_create_workflow(db: Session, workspace_id: str, payload: dict[str,
         _check_graph(db, payload["graph"])
 
 
-def _summarize_create_workflow(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_create_workflow(db: Session, payload: dict[str, Any]) -> Summary:
     nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
-    return f"创建工作流「{payload.get('name', '')}」({nodes or 1} 个节点)" + external_warning(external_nodes_in_graph(graph_under_review(db, "create_workflow", payload)))
+    return "confirm_createWorkflow", {
+        "name": payload.get("name", ""),
+        "nodes": nodes or 1,
+        "warning": external_warning(external_nodes_in_graph(graph_under_review(db, "create_workflow", payload))),
+    }
 
 
 def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -89,10 +94,12 @@ def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str,
         _check_graph(db, payload["graph"])
 
 
-def _summarize_update_workflow(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_update_workflow(db: Session, payload: dict[str, Any]) -> Summary:
     nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
-    head = f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
-    return head + external_warning(external_nodes_in_graph(graph_under_review(db, "update_workflow", payload)))
+    warning = external_warning(external_nodes_in_graph(graph_under_review(db, "update_workflow", payload)))
+    if nodes:
+        return "confirm_updateWorkflow", {"nodes": nodes, "warning": warning}
+    return "confirm_updateWorkflowPlain", {"warning": warning}
 
 
 def _execute_update_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -132,7 +139,7 @@ def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, A
     _check_graph(db, preview)
 
 
-def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> Summary:
     ops = [op for op in payload.get("operations", []) if isinstance(op, dict)]
     kinds = [op.get("kind", "?") for op in ops]
     # A `code` node runs arbitrary local Python when the workflow is later run, so say so
@@ -140,11 +147,14 @@ def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> str:
     adds_code = any(
         op.get("kind") == "add_node" and str(op.get("node_type") or op.get("type")) == "code" for op in ops
     )
-    head = f"{len(kinds)} 个工作流编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
     # code 那句更具体(点名"运行时执行本地 Python"),留着;其余外部节点走通用那句。
-    if adds_code:
-        return head + "  ⚠️ 含代码节点(运行时执行本地 Python)"
-    return head + external_warning(external_nodes_in_graph(graph_under_review(db, "edit_workflow", payload)))
+    warning = (fragment("confirm_editWorkflowCode") if adds_code
+               else external_warning(external_nodes_in_graph(graph_under_review(db, "edit_workflow", payload))))
+    return "confirm_editWorkflow", {
+        "count": len(kinds),
+        "kinds": ", ".join(kinds[:6]) + ("…" if len(kinds) > 6 else ""),
+        "warning": warning,
+    }
 
 
 def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -172,10 +182,12 @@ def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, An
 
 
 
-def _summarize_run_workflow(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_run_workflow(db: Session, payload: dict[str, Any]) -> Summary:
     name = str(payload.get("name") or payload.get("workflow_id") or "")
-    head = f"运行工作流{f'「{name}」' if name else ''}(可能产生 AI/渲染消耗)"
-    return head + external_warning(external_nodes_in_graph(graph_under_review(db, "run_workflow", payload)))
+    return "confirm_runWorkflow", {
+        "named": fragment("confirm_workflowNamed", name=name) if name else "",
+        "warning": external_warning(external_nodes_in_graph(graph_under_review(db, "run_workflow", payload))),
+    }
 
 
 def _execute_run_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -211,9 +223,12 @@ def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]
         raise ConfirmationError(str(exc)) from exc
 
 
-def _summarize_edit_board(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_edit_board(db: Session, payload: dict[str, Any]) -> Summary:
     kinds = [op.get("kind", "?") for op in payload.get("operations", []) if isinstance(op, dict)]
-    return f"{len(kinds)} 个画板编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
+    return "confirm_editBoard", {
+        "count": len(kinds),
+        "kinds": ", ".join(kinds[:6]) + ("…" if len(kinds) > 6 else ""),
+    }
 
 
 def _execute_edit_board(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:

@@ -13,7 +13,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.agent.confirmable.registry import ConfirmableTool, confirmable_tool
+from app.core.i18n import fragment
+from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 
 
@@ -25,12 +26,13 @@ def _validate_blender_execute(db: Session, workspace_id: str, payload: dict[str,
     if not str(payload.get("code") or "").strip():
         raise ConfirmationError("没有要在 Blender 里执行的代码")
 
-def _summarize_blender_execute(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_blender_execute(db: Session, payload: dict[str, Any]) -> Summary:
     code = str(payload.get("code") or "")
     purpose = str(payload.get("purpose") or "").strip()[:80]
-    lines = len(code.strip().splitlines())
-    return (f"⚠️ 在你的 Blender 里执行建模代码({lines} 行){f':{purpose}' if purpose else ''}"
-            " —— Blender 的 Python 不是沙箱,可读写本机文件;执行前已压撤销点,可在 Blender 里 ⌘Z")
+    return "confirm_blenderExecute", {
+        "lines": len(code.strip().splitlines()),
+        "purpose": fragment("confirm_blenderPurpose", purpose=purpose) if purpose else "",
+    }
 
 def _execute_blender_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     from app.db.models import User

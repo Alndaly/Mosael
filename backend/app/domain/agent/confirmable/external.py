@@ -10,16 +10,18 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.agent.confirmable.registry import ConfirmableTool, confirmable_tool
+from app.core.i18n import fragment
+from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from sqlalchemy import select
 
 from app.db.models import PublishAccount
 
 
-def _summarize_publish_asset(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_publish_asset(db: Session, payload: dict[str, Any]) -> Summary:
     title = str(payload.get("title") or "").strip()
-    return f"⚠️ 用你的账号**公开发布**{f'「{title}」' if title else '一条内容'}"
+    what = fragment("confirm_publishTitled", title=title) if title else fragment("confirm_publishUntitled")
+    return "confirm_publishAsset", {"what": what}
 
 def _execute_publish_asset(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
@@ -51,8 +53,11 @@ def _validate_http_request(db: Session, workspace_id: str, payload: dict[str, An
         # 一张说不清要请求什么的卡,没有让用户去点批准的道理。
         raise ConfirmationError("只能请求 http(s) 网址")
 
-def _summarize_http_request(db: Session, payload: dict[str, Any]) -> str:
-    return f"⚠️ 向外部发起 {payload.get('method', 'POST')} 请求: {str(payload.get('url') or '')[:120]}"
+def _summarize_http_request(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_httpRequest", {
+        "method": payload.get("method", "POST"),
+        "url": str(payload.get("url") or "")[:120],
+    }
 
 def _execute_http_request(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
@@ -73,10 +78,13 @@ def _validate_run_code(db: Session, workspace_id: str, payload: dict[str, Any]) 
             "这台机器上没有可用的代码隔离环境,因此不执行代码。请在部署机上安装并启动 Docker。"
         )
 
-def _summarize_run_code(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_run_code(db: Session, payload: dict[str, Any]) -> Summary:
     code = str(payload.get("code") or "")
     head = code.strip().splitlines()[0][:60] if code.strip() else ""
-    return f"在隔离沙箱里运行一段 Python({len(code)} 字符,无网络、看不到你的文件){f': {head}…' if head else ''}"
+    return "confirm_runCode", {
+        "chars": len(code),
+        "head": fragment("confirm_codeHead", head=head) if head else "",
+    }
 
 def _execute_run_code(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
@@ -91,11 +99,13 @@ def _validate_run_host_code(db: Session, workspace_id: str, payload: dict[str, A
     if reason:
         raise ConfirmationError(reason)
 
-def _summarize_run_host_code(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_run_host_code(db: Session, payload: dict[str, Any]) -> Summary:
     code = str(payload.get("code") or "")
     head = code.strip().splitlines()[0][:60] if code.strip() else ""
-    return (f"⚠️ **不隔离**,直接在你的电脑上运行一段 Python({len(code)} 字符),可读写你的文件"
-            f"{f': {head}…' if head else ''}")
+    return "confirm_runHostCode", {
+        "chars": len(code),
+        "head": fragment("confirm_codeHead", head=head) if head else "",
+    }
 
 def _execute_run_host_code(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     from app.domain import host_code
@@ -111,10 +121,13 @@ def _validate_browser_open(db: Session, workspace_id: str, payload: dict[str, An
     if url and not (url.startswith("http://") or url.startswith("https://")):
         raise ConfirmationError("浏览器只能打开 http(s) 网址")
 
-def _summarize_browser_open(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_browser_open(db: Session, payload: dict[str, Any]) -> Summary:
     url = str(payload.get("url") or "").strip()
-    mode = "具名持久" if str(payload.get("session_mode")) == "named" else "临时"
-    return f"智能体打开{mode}浏览器" + (f" → {url}" if url else "")
+    named = str(payload.get("session_mode")) == "named"
+    return "confirm_browserOpen", {
+        "mode": fragment("confirm_browserNamed" if named else "confirm_browserEphemeral"),
+        "target": fragment("confirm_browserTarget", url=url) if url else "",
+    }
 
 def _execute_browser_open(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
@@ -147,12 +160,16 @@ def _validate_browser_pool_open(db: Session, workspace_id: str, payload: dict[st
     account = db.scalar(select(PublishAccount).where(PublishAccount.profile_id == profile.id))
     payload["platform"] = account.platform if account else None
 
-def _summarize_browser_pool_open(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_browser_pool_open(db: Session, payload: dict[str, Any]) -> Summary:
     name = str(payload.get("profile_name") or payload.get("profile_id") or "")
     platform = payload.get("platform")
-    who = f"「{name}」" + (f"({platform} 发布账号)" if platform else "(通用档案)")
+    who = (fragment("confirm_profilePublish", name=name, platform=platform) if platform
+           else fragment("confirm_profileGeneric", name=name))
     url = str(payload.get("url") or "").strip()
-    return f"⚠️ 智能体请求复用你的浏览器档案 {who} 的登录身份跑任务" + (f" → {url}" if url else "")
+    return "confirm_browserPoolOpen", {
+        "who": who,
+        "target": fragment("confirm_browserTarget", url=url) if url else "",
+    }
 
 def _execute_browser_pool_open(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload

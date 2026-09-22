@@ -8,7 +8,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.agent.confirmable.registry import ConfirmableTool, confirmable_tool
+from app.core.i18n import fragment
+from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.db.models import Sequence
 from app.domain.sequences import operations as seq_ops
@@ -17,11 +18,13 @@ from app.domain.sequences import operations as seq_ops
 EDIT_OP_KINDS = seq_ops.EDIT_OP_KINDS
 
 #: 卡上说清原声会怎样 —— 静音和「只去掉人声」都会改变成片的样子,用户得在批准前知道。
+#: 原声怎么处理 —— **值是文案 key,不是文案**:它会被拼进落库的那句话里,写死就等于把语言
+#: 冻在写它那天(和 NODE_TYPES 的 label 同一条规矩)。
 _ORIGINAL_AUDIO_SUMMARY = {
-    "duck": "配音说话时原声压低",
-    "mute": "原声静音",
-    "keep": "原声不动",
-    "separate": "原声只去掉人声、留背景音(需要本机已装好分离引擎)",
+    "duck": "confirm_originalDuck",
+    "mute": "confirm_originalMute",
+    "keep": "confirm_originalKeep",
+    "separate": "confirm_originalSeparate",
 }
 
 
@@ -67,9 +70,12 @@ def _validate_edit_timeline(db: Session, workspace_id: str, payload: dict[str, A
             raise ConfirmationError(f"Unsupported timeline operation: {kind}")
 
 
-def _summarize_edit_timeline(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_edit_timeline(db: Session, payload: dict[str, Any]) -> Summary:
     kinds = [operation.get("kind", "?") for operation in payload.get("operations", [])]
-    return f"{len(kinds)} 个时间线操作: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
+    return "confirm_editTimeline", {
+        "count": len(kinds),
+        "kinds": ", ".join(kinds[:6]) + ("…" if len(kinds) > 6 else ""),
+    }
 
 
 def _execute_edit_timeline(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -84,8 +90,8 @@ def _validate_render_sequence(db: Session, workspace_id: str, payload: dict[str,
     _sequence_in(db, workspace_id, payload)
 
 
-def _summarize_render_sequence(db: Session, payload: dict[str, Any]) -> str:
-    return "导出时间线为 mp4"
+def _summarize_render_sequence(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_renderSequence", {}
 
 
 def _execute_render_sequence(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -118,16 +124,16 @@ def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
     # 3 条也可能是 300 条。真去数一遍,零就是真的零,那时写出来反而是对的。
     subtitle_cues = _subtitle_cue_count(db, payload)
     if count:
-        scope = f"{count} 条字幕"
+        scope = fragment("confirm_dubScopeClips", count=count)
     elif subtitle_cues is None:
-        scope = "整条字幕轨"
+        scope = fragment("confirm_dubScopeTrack")
     else:
-        scope = f"整条字幕轨({subtitle_cues} 条字幕)"
-    fit = ",并变速压回原段落长度" if payload.get("match_duration", True) else ""
+        scope = fragment("confirm_dubScopeTrackCounted", count=subtitle_cues)
+    fit = fragment("confirm_dubFit") if payload.get("match_duration", True) else ""
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
 
-    original = _ORIGINAL_AUDIO_SUMMARY.get(str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO), "")
-    return f"给{scope}配音{fit}(配到一条单独的配音轨;{original})"
+    original = fragment(_ORIGINAL_AUDIO_SUMMARY.get(str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO), ""))
+    return "confirm_dubSubtitles", {"scope": scope, "fit": fit, "original": original}
 
 
 def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -171,8 +177,8 @@ def _validate_separate_audio(db: Session, workspace_id: str, payload: dict[str, 
         raise ConfirmationError("只有音频或视频素材可以分离")
 
 
-def _summarize_separate_audio(db: Session, payload: dict[str, Any]) -> str:
-    return "把这份素材拆成「人声」和「背景音」两份新素材(原素材不动;本机跑模型,长素材会很慢)"
+def _summarize_separate_audio(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_separateAudio", {}
 
 
 def _execute_separate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -213,13 +219,24 @@ def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, A
         raise ConfirmationError(str(exc)) from exc
 
 
-def _summarize_denoise_audio(db: Session, payload: dict[str, Any]) -> str:
-    strength = {"light": "轻度", "medium": "中度", "strong": "强力"}.get(str(payload.get("strength")), "")
-    head = f"用{payload.get('engine_name') or '内置降噪'}"
-    if payload.get("has_strengths", True) and strength:
-        head += f"做{strength}降噪"
-    music = ";**背景音乐也会被当成噪声去掉**" if payload.get("removes_music") else ""
-    return f"{head},产出一份新素材(视频保留画面、只换声音;原素材不动){music}"
+#: 强度档的文案 key。**值是 key 不是文案** —— 这张表本身也会被读到界面上。
+_DENOISE_STRENGTH = {
+    "light": "confirm_denoiseLight",
+    "medium": "confirm_denoiseMedium",
+    "strong": "confirm_denoiseStrong",
+}
+
+
+def _summarize_denoise_audio(db: Session, payload: dict[str, Any]) -> Summary:
+    level_key = _DENOISE_STRENGTH.get(str(payload.get("strength")), "")
+    strength = ""
+    if payload.get("has_strengths", True) and level_key:
+        strength = fragment("confirm_denoiseStrength", level=fragment(level_key))
+    return "confirm_denoiseAudio", {
+        "engine": payload.get("engine_name") or fragment("confirm_denoiseDefaultEngine"),
+        "strength": strength,
+        "music": fragment("confirm_denoiseRemovesMusic") if payload.get("removes_music") else "",
+    }
 
 
 def _execute_denoise_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -260,10 +277,13 @@ def _validate_convert_video_to_gif(db: Session, workspace_id: str, payload: dict
         raise ConfirmationError("GIF 参数超出允许范围")
 
 
-def _summarize_convert_video_to_gif(db: Session, payload: dict[str, Any]) -> str:
+def _summarize_convert_video_to_gif(db: Session, payload: dict[str, Any]) -> Summary:
     duration = payload.get("duration")
-    clip = f"，截取 {duration} 秒" if duration not in (None, "") else ""
-    return f"把视频转成新的 GIF（{payload.get('fps', 12)} fps，宽 {payload.get('width', 720)} px{clip}），原视频不变"
+    return "confirm_videoToGif", {
+        "fps": payload.get("fps", 12),
+        "width": payload.get("width", 720),
+        "clip": fragment("confirm_gifClip", duration=duration) if duration not in (None, "") else "",
+    }
 
 
 def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:

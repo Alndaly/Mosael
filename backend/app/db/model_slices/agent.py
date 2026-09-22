@@ -190,7 +190,12 @@ class ToolConfirmation(Base):
     session_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=False)
     tool: Mapped[str] = mapped_column(String(80), nullable=False)
     permission: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: 卡上那句话。**存的是渲染好的默认语言**,而真正的事实是下面那两列 ——
+    #: 出口(ConfirmationOut)按读的人的语言重新渲染,与 JobOut 同构。老卡没有 key,
+    #: 那时这一列就是它自己的原话,原样返回。
     summary: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    summary_key: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    summary_params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

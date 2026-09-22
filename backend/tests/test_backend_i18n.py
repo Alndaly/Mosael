@@ -238,24 +238,67 @@ def test_old_jobs_without_a_key_are_returned_as_written() -> None:
 
 
 def test_nobody_writes_prose_into_job_message() -> None:
-    """任务消息只能经 `say()` 写(它同时写下 key、参数和渲染结果)。
+    """**落库的任务文案不能冻住语言** —— 消息那一半和失败原因那一半都算。
 
-    直接 `job.message = "转写完成"` 的那条从此不会被翻译,而且**没有任何东西会提示写的人** ——
-    它在 diff 里就是一行普通赋值。这条棘轮就是那个提示。
+    任务记录活得比一次请求久:写入时就翻,会把语言冻死在那一刻,用户切成英文后历史任务仍是中文。
+
+    ## 判据按**不变量**写,不按"当时唯一那种违反方式"
+
+    第一版扫的是 `".message = " in line and CJK.search(line) and "job.message" in line` ——
+    一行赋值语句。而不变量有**三个入口**,它只守住了一个:
+
+    1. `job.message = "中文"`(它守住了);
+    2. `say(job, "执行器失联")` —— 既没有 `.message = ` 也没有 `job.message`,一个字都不匹配。
+       全仓约 50 处 `say(` 里就这一处传了中文字面量,安安静静地活着;
+    3. `job.error = "已取消"` / `finish_job(..., error="中文")` —— 扫描范围里根本没有 `.error`。
+       而 `error_key` / `error_params` 这套东西是**完整**的(列、迁移、出口校验器、`blame()`
+       全都在),只是总线自己的三条终态一条都没用它。前两句在 MESSAGES 里本来就有对应的 key,
+       只用在 `message` 那一列上 —— **同一句话,一列是 key,另一列是冻死的文本**。
+
+    所以改成读 AST,按不变量的三个入口各查一遍。上一轮 §1.3 付过同样的账(执行器输出那条
+    棘轮第一版只认 `return {字面量}`)。
     """
+    import ast
     import pathlib
+
+    from app.core.i18n import MESSAGES
 
     root = pathlib.Path(__file__).resolve().parent.parent / "app"
     offenders: list[str] = []
-    for path in root.rglob("*.py"):
-        for lineno, line in enumerate(path.read_text().splitlines(), 1):
-            if ".message = " not in line or not CJK.search(line):
+
+    def _is_cjk_literal(node: ast.AST) -> bool:
+        return isinstance(node, ast.Constant) and isinstance(node.value, str) and bool(CJK.search(node.value))
+
+    for path in sorted(root.rglob("*.py")):
+        where = path.relative_to(root)
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            # ① job.message / job.error 直接被赋中文
+            if isinstance(node, ast.Assign) and _is_cjk_literal(node.value):
+                for target in node.targets:
+                    if isinstance(target, ast.Attribute) and target.attr in {"message", "error"}:
+                        owner = getattr(target.value, "id", "") or getattr(target.value, "attr", "")
+                        if owner in {"job", "self"}:
+                            offenders.append(f"{where}:{node.lineno} 给 {owner}.{target.attr} 写了中文")
+            if not isinstance(node, ast.Call):
                 continue
-            # 允许:say() 内部那一行(它才是渲染的地方),以及局部变量/异常的 message。
-            if "job.message" not in line and "self.message" not in line:
-                continue
-            offenders.append(f"{path.relative_to(root)}:{lineno}")
-    assert offenders == [], "这些地方直接给 job.message 写了中文,应改用 domain.jobs.say()"
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            # ② say(job, "中文") —— 第一个位置参数之后那个必须是 MESSAGES 里的 key
+            if name == "say" and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+                key = node.args[1].value
+                if isinstance(key, str) and key not in MESSAGES:
+                    offenders.append(f"{where}:{node.lineno} say() 收到的不是 MESSAGES 里的 key:{key!r}")
+            # ③ finish_job(..., error="中文") 而没有同时给 error_key
+            if name in {"finish_job", "fail_job"}:
+                bad = [kw for kw in node.keywords if kw.arg == "error" and _is_cjk_literal(kw.value)]
+                has_key = any(kw.arg == "error_key" for kw in node.keywords)
+                if bad and not has_key:
+                    offenders.append(f"{where}:{node.lineno} error= 写了中文却没给 error_key")
+
+    assert offenders == [], (
+        "这些地方把**落库的**任务文案冻成了某一种语言(消息走 domain.jobs.say 的 key,"
+        "失败原因走 error_key + error_params,见 blame()):\n  " + "\n  ".join(offenders)
+    )
 
 
 def test_工作流节点目录里存的是_key_不是文案() -> None:

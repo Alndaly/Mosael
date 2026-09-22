@@ -60,7 +60,7 @@ def graph_under_review(db: Session, tool: str, payload: dict[str, Any]) -> objec
     return graph_to_persist(db, tool, payload)
 
 
-def external_warning(external: set[str] | None) -> str:
+def external_warning(external: set[str] | None) -> Any:
     """把「这张图会伸到应用外面去」写成人话,挂在摘要末尾。
 
     摘要是用户点批准之前唯一会读的一行。`edit_workflow` 早就为 code 节点这么做了(见
@@ -69,11 +69,14 @@ def external_warning(external: set[str] | None) -> str:
     """
     if not external:
         return ""
-    from app.core.i18n import get_current_locale, t
+    from app.core.i18n import fragment
     from app.domain.workflows import NODE_TYPES
 
-    #: 目录里存的是 key(见 core/i18n),这句话是给**用户**看的 —— 直接拼进去的话卡上会写
-    #: 「含 wfNode_code 节点」。这里就是出口,所以在这里翻。
-    locale = get_current_locale()
-    labels = sorted(t(str((NODE_TYPES.get(name) or {}).get("label") or name), locale) for name in external)
-    return f"  ⚠️ 含{'、'.join(labels)}节点(后果在本应用之外,撤不回)"
+    #: **这里不是出口。** 原先这里 `t(..., get_current_locale())` 当场翻 —— 而确认卡由
+    #: sidecar / MCP 调进来,那条路不带 Accept-Language(查过,零命中),所以 locale 恒为 zh:
+    #: 那个 t() 实际上是一条走不到的分支,而包着它的那句话本来就是写死的中文。
+    #:
+    #: 真正的出口是 `ConfirmationOut`(按读的人的语言翻,与 JobOut 同构)。所以这里连节点名
+    #: 一起留成 key,交给出口渲染。
+    labels = sorted(str((NODE_TYPES.get(name) or {}).get("label") or name) for name in external)
+    return fragment("confirm_externalNodes", labels=[fragment(label) for label in labels])

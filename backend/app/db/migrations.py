@@ -1836,6 +1836,27 @@ def _migrate_board_revision() -> None:
         conn.execute(text("ALTER TABLE boards ADD COLUMN revision INTEGER NOT NULL DEFAULT 1"))
 
 
+def _migrate_confirmation_summary_i18n() -> None:
+    """已装机的库补上 `tool_confirmations.summary_key` / `summary_params`。
+
+    `create_all` 只建缺失的**表**,从不给已存在的表加列 —— 少了这一步,新装机一切正常,
+    升级的机器上后端起不来(no such column)。
+
+    **存量卡不回填。** 它们的 `summary` 就是当时那句话,而当时那句话是中文写死的 —— 没有
+    key 可以反推。出口见到 key 为空就原样返回它(和 `JobOut` 对老任务的处理一字不差:
+    历史记录保持它当时的原话,而从此以后新写的都是 key)。
+    """
+    inspector = inspect(engine)
+    if "tool_confirmations" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("tool_confirmations")}
+    with engine.begin() as conn:
+        if "summary_key" not in columns:
+            conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN summary_key VARCHAR(80) NOT NULL DEFAULT ''"))
+        if "summary_params" not in columns:
+            conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN summary_params JSON NOT NULL DEFAULT '{}'"))
+
+
 def _migrate_publish_task_claimed_by() -> None:
     """已装机的库补上 publish_tasks.claimed_by。
 
@@ -2317,6 +2338,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_comment_canvas_context,
                 _migrate_agent_pending_view,
                 _migrate_publish_task_claimed_by,
+                _migrate_confirmation_summary_i18n,
                 _migrate_board_canvas_state,
                 _backfill_browser_pool,
                 _backfill_provider_models,

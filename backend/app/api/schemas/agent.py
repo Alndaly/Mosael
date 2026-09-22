@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
-from pydantic import Field
+from pydantic import Field, ValidationInfo, field_validator
 from app.api.schemas.base import ApiModel, OrmModel
 
 class AgentContextPart(ApiModel):
@@ -240,6 +240,8 @@ class ConfirmationOut(OrmModel):
     tool: str
     permission: str
     summary: str
+    summary_key: str = ""
+    summary_params: dict = {}
     payload: dict
     status: str
     result: dict
@@ -249,6 +251,22 @@ class ConfirmationOut(OrmModel):
     decided_by: str | None = None
     created_at: datetime
     resolved_at: datetime | None
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def _translate_summary(cls, value: object, info: ValidationInfo) -> object:
+        """卡上那句话按**读的人**的语言翻,与 JobOut 同构。
+
+        确认卡是授权界面:一个英文用户读不懂的授权提示,等于没有提示。
+        老卡没有 key,那时 `summary` 就是它自己的原话,原样返回。
+        """
+        from app.core.i18n import get_current_locale, render_nested
+
+        data = info.data if isinstance(info.data, dict) else {}
+        key = str(data.get("summary_key") or "")
+        if not key:
+            return value
+        return render_nested(key, data.get("summary_params") or {}, get_current_locale())
 
 
 class AgentSkillOut(ApiModel):

@@ -7576,6 +7576,18 @@ export interface components {
             permission: string;
             /** Summary */
             summary: string;
+            /**
+             * Summary Key
+             * @default
+             */
+            summary_key: string;
+            /**
+             * Summary Params
+             * @default {}
+             */
+            summary_params: {
+                [key: string]: unknown;
+            };
             /** Payload */
             payload: {
                 [key: string]: unknown;

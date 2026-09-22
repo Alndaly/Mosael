@@ -167,6 +167,130 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_waitingWorker": {"zh": "等待执行器认领", "en": "Waiting for a worker to claim it"},
     "jobMsg_interrupted": {"zh": "已中断", "en": "Interrupted"},
     "jobMsg_cancelled": {"zh": "已取消", "en": "Cancelled"},
+    "jobMsg_leaseExpired": {"zh": "执行器失联", "en": "Worker lost"},
+    #: 失败**原因**那一半。此前这三句是写死的中文 —— `error_key` / `error_params` 这套
+    #: 东西是完整的(列、迁移、出口校验器、blame() 都在),而总线自己的三条终态一条都没用它。
+    "jobErr_backendRestart": {
+        "zh": "后端重启导致任务中断,请重新发起",
+        "en": "The backend restarted and interrupted this task; please start it again",
+    },
+    "jobErr_cancelled": {"zh": "已取消", "en": "Cancelled"},
+    "jobErr_noDubSucceeded": {"zh": "没有一条配音成功", "en": "No line was dubbed successfully"},
+
+    # ---- 确认卡的措辞 ----------------------------------------------------------------
+    #: **确认卡是授权界面**:用户点「批准」之前唯一会读的就是这一行。所以它和任务消息同一条
+    #: 规矩 —— 落库存 key,出口按读的人的语言翻。此前 23 个摘要返回的都是写死的中文,
+    #: 于是英文用户读到的授权提示永远是中文,等于没有提示。
+    "confirm_editTimeline": {
+        "zh": "{count} 个时间线操作: {kinds}",
+        "en": "{count} timeline operations: {kinds}",
+    },
+    "confirm_renderSequence": {"zh": "导出时间线为 mp4", "en": "Export the timeline as mp4"},
+    "confirm_dubSubtitles": {
+        "zh": "给{scope}配音{fit}(配到一条单独的配音轨;{original})",
+        "en": "Dub {scope}{fit} (onto its own dub track; {original})",
+    },
+    "confirm_dubScopeClips": {"zh": "{count} 条字幕", "en": "{count} subtitles"},
+    "confirm_dubScopeTrack": {"zh": "整条字幕轨", "en": "the whole subtitle track"},
+    "confirm_dubScopeTrackCounted": {
+        "zh": "整条字幕轨({count} 条字幕)",
+        "en": "the whole subtitle track ({count} subtitles)",
+    },
+    "confirm_dubFit": {"zh": ",并变速压回原段落长度", "en": ", time-stretched back to each segment's length"},
+    "confirm_separateAudio": {
+        "zh": "把这份素材拆成「人声」和「背景音」两份新素材(原素材不动;本机跑模型,长素材会很慢)",
+        "en": "Split this asset into separate voice and background tracks (the original is untouched; runs locally, slow on long media)",
+    },
+    "confirm_denoiseAudio": {
+        "zh": "用{engine}{strength},产出一份新素材(视频保留画面、只换声音;原素材不动){music}",
+        "en": "Denoise with {engine}{strength}, producing a new asset (video keeps its picture, only the audio changes; the original is untouched){music}",
+    },
+    "confirm_denoiseStrength": {"zh": "做{level}降噪", "en": " at {level} strength"},
+    "confirm_denoiseLight": {"zh": "轻度", "en": "light"},
+    "confirm_denoiseMedium": {"zh": "中度", "en": "medium"},
+    "confirm_denoiseStrong": {"zh": "强力", "en": "strong"},
+    "confirm_denoiseDefaultEngine": {"zh": "内置降噪", "en": "the built-in denoiser"},
+    "confirm_denoiseRemovesMusic": {
+        "zh": ";**背景音乐也会被当成噪声去掉**",
+        "en": "; **background music will be removed as noise too**",
+    },
+    "confirm_videoToGif": {
+        "zh": "把视频转成新的 GIF({fps} fps,宽 {width} px{clip}),原视频不变",
+        "en": "Convert the video into a new GIF ({fps} fps, {width} px wide{clip}); the video is unchanged",
+    },
+    "confirm_gifClip": {"zh": ",截取 {duration} 秒", "en": ", taking {duration}s"},
+    "confirm_originalDuck": {"zh": "配音说话时原声压低", "en": "duck the original while the dub speaks"},
+    "confirm_originalMute": {"zh": "原声静音", "en": "mute the original"},
+    "confirm_originalKeep": {"zh": "原声不动", "en": "leave the original as is"},
+    "confirm_generateImage": {"zh": "生成图片: {asked}", "en": "Generate an image: {asked}"},
+    "confirm_generateVideo": {"zh": "生成视频: {asked}", "en": "Generate a video: {asked}"},
+    "confirm_generateAudio": {"zh": "生成音频: {asked}", "en": "Generate audio: {asked}"},
+    "confirm_generatePodcast": {"zh": "生成播客: {asked}", "en": "Generate a podcast: {asked}"},
+    "punct_listSep": {"zh": "、", "en": ", "},
+    "confirm_createWorkflow": {"zh": "创建工作流「{name}」({nodes} 个节点){warning}", "en": "Create workflow \u300c{name}\u300d ({nodes} nodes){warning}"},
+    "confirm_updateWorkflow": {"zh": "修改工作流({nodes} 个节点){warning}", "en": "Update workflow ({nodes} nodes){warning}"},
+    "confirm_updateWorkflowPlain": {"zh": "修改工作流{warning}", "en": "Update workflow{warning}"},
+    "confirm_editWorkflow": {"zh": "{count} 个工作流编辑: {kinds}{warning}", "en": "{count} workflow edits: {kinds}{warning}"},
+    "confirm_editWorkflowCode": {"zh": "  ⚠️ 含代码节点(运行时执行本地 Python)", "en": "  ⚠️ Includes a code node (runs local Python when the workflow runs)"},
+    "confirm_runWorkflow": {"zh": "运行工作流{named}(可能产生 AI/渲染消耗){warning}", "en": "Run workflow{named} (may incur AI/render cost){warning}"},
+    "confirm_workflowNamed": {"zh": "「{name}」", "en": " \u300c{name}\u300d"},
+    "confirm_editBoard": {"zh": "{count} 个画板编辑: {kinds}", "en": "{count} board edits: {kinds}"},
+    "confirm_externalNodes": {
+        "zh": "  ⚠️ 含{labels}节点(后果在本应用之外,撤不回)",
+        "en": "  ⚠️ Includes {labels} nodes (their effects are outside this app and cannot be undone)",
+    },
+    "confirm_blenderExecute": {
+        "zh": "⚠️ 在你的 Blender 里执行建模代码({lines} 行){purpose} —— Blender 的 Python 不是沙箱,可读写本机文件;执行前已压撤销点,可在 Blender 里 ⌘Z",
+        "en": "⚠️ Run modelling code in your Blender ({lines} lines){purpose} — Blender's Python is not a sandbox and can read and write local files; an undo point was pushed first, so ⌘Z works in Blender",
+    },
+    "confirm_blenderPurpose": {"zh": ":{purpose}", "en": ": {purpose}"},
+    "confirm_deleteAssets": {
+        "zh": "永久删除 {count} 个素材({names}){tail} —— 文件会从磁盘上清掉,撤不回来",
+        "en": "Permanently delete {count} assets ({names}){tail} — the files are removed from disk and cannot be recovered",
+    },
+    "confirm_deleteAssetsClips": {
+        "zh": ",时间线上引用它们的 {clips} 个片段会变成「素材已删除」",
+        "en": ", and {clips} clips referencing them on the timeline become \u300casset deleted\u300d",
+    },
+    "confirm_deleteProjects": {
+        "zh": "永久删除 {count} 个项目({names}),连同它们的时间线{tail} —— 撤不回来",
+        "en": "Permanently delete {count} projects ({names}) along with their timelines{tail} — this cannot be undone",
+    },
+    "confirm_deleteProjectsAssets": {
+        "zh": ";里面的 {assets} 个素材不会被删,会回到工作区",
+        "en": "; the {assets} assets inside are not deleted and return to the workspace",
+    },
+    "confirm_publishAsset": {"zh": "⚠️ 用你的账号**公开发布**{what}", "en": "⚠️ **Publish publicly** with your account: {what}"},
+    "confirm_publishTitled": {"zh": "「{title}」", "en": "\u300c{title}\u300d"},
+    "confirm_publishUntitled": {"zh": "一条内容", "en": "one item"},
+    "confirm_httpRequest": {"zh": "⚠️ 向外部发起 {method} 请求: {url}", "en": "⚠️ Make an outbound {method} request to {url}"},
+    "confirm_runCode": {
+        "zh": "在隔离沙箱里运行一段 Python({chars} 字符,无网络、看不到你的文件){head}",
+        "en": "Run Python in an isolated sandbox ({chars} chars, no network, cannot see your files){head}",
+    },
+    "confirm_runHostCode": {
+        "zh": "⚠️ **不隔离**,直接在你的电脑上运行一段 Python({chars} 字符),可读写你的文件{head}",
+        "en": "⚠️ **Not isolated** — run Python directly on your computer ({chars} chars); it can read and write your files{head}",
+    },
+    "confirm_codeHead": {"zh": ": {head}…", "en": ": {head}…"},
+    "confirm_browserOpen": {"zh": "智能体打开{mode}浏览器{target}", "en": "The agent opens a {mode} browser{target}"},
+    "confirm_browserNamed": {"zh": "具名持久", "en": "named, persistent"},
+    "confirm_browserEphemeral": {"zh": "临时", "en": "temporary"},
+    "confirm_browserTarget": {"zh": " → {url}", "en": " → {url}"},
+    "confirm_browserPoolOpen": {
+        "zh": "⚠️ 智能体请求复用你的浏览器档案 {who} 的登录身份跑任务{target}",
+        "en": "⚠️ The agent asks to reuse the signed-in identity of your browser profile {who}{target}",
+    },
+    "confirm_profilePublish": {"zh": "「{name}」({platform} 发布账号)", "en": "\u300c{name}\u300d ({platform} publishing account)"},
+    "confirm_profileGeneric": {"zh": "「{name}」(通用档案)", "en": "\u300c{name}\u300d (general profile)"},
+    "confirm_originalSeparate": {
+        "zh": "原声只去掉人声、留背景音(需要本机已装好分离引擎)",
+        "en": "strip only the voice from the original, keeping the background (needs the separation engine installed locally)",
+    },
+    "jobErr_leaseExpired": {
+        "zh": "执行器失联,任务已停止;请检查产出后重新发起",
+        "en": "The worker went away and the task stopped; check the output and start it again",
+    },
     "jobMsg_claimed": {"zh": "执行器已认领", "en": "Claimed by a worker"},
     "jobMsg_workflowQueued": {"zh": "工作流排队中: {name}", "en": "Workflow queued: {name}"},
     "jobMsg_workflowRunning": {"zh": "工作流运行中: {name}", "en": "Workflow running: {name}"},
@@ -1150,6 +1274,34 @@ def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:
         return text.format(**params)
     except (KeyError, IndexError, ValueError):
         return _drop_placeholders(text)
+
+
+def fragment(key: str, **params: Any) -> Any:
+    """摘要里被拼进去的**那半句**,留成 key 而不是当场翻成字。
+
+    确认卡的措辞是拼出来的(「给 *12 条字幕* 配音 *,并变速压回原段落长度*」),而拼进去的
+    每一段自己也是文案。当场翻的话,外层就算存了 key,内层还是冻成了写它那天的语言。
+
+    返回的是一个带 `__key` 的小字典,`render_nested` 渲染时递归展开 —— 它落进
+    `summary_params`(JSON 列),所以形状必须是能 JSON 化的。
+    """
+    return {"__key": key, "params": params} if key else ""
+
+
+def render_nested(key: str, params: Any, locale: str = DEFAULT_LOCALE) -> str:
+    """渲染一条**可以嵌套**的文案:参数里带 `__key` 的那些先各自渲染,再填进外层。"""
+
+    def resolve(value: Any) -> Any:
+        if isinstance(value, dict) and "__key" in value:
+            return render_nested(str(value["__key"]), value.get("params") or {}, locale)
+        if isinstance(value, list):
+            # **连接号也随语言变**:中文用顿号,英文用逗号加空格。先翻每一段,再按读的人的
+            # 习惯连起来 —— 反过来(先连再翻)得到的是一串翻不动的拼接物。
+            return _text("punct_listSep", locale).join(str(resolve(one)) for one in value)
+        return value
+
+    resolved = {name: resolve(value) for name, value in (params or {}).items()}
+    return render_message(key, locale, resolved)
 
 
 def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any] | None = None) -> str:

@@ -21717,6 +21717,17 @@
             "type": "string",
             "title": "Summary"
           },
+          "summary_key": {
+            "type": "string",
+            "title": "Summary Key",
+            "default": ""
+          },
+          "summary_params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Summary Params",
+            "default": {}
+          },
           "payload": {
             "additionalProperties": true,
             "type": "object",

@@ -233,8 +233,12 @@ class Test排队和开卡之前就判:
     def test_确认卡上说得出会去掉音乐(self) -> None:
         from app.domain.agent.confirmable import tool_spec
 
-        def _summarize(tool: str, payload: dict) -> str:
-            return tool_spec(tool).summarize(None, payload)
+        def _summarize(tool: str, payload: dict, locale: str = "zh") -> str:
+            # 渲染之后再断言:卡上那句话现在存的是 (key, 参数),出口才翻(见 confirmable/registry)。
+            from app.core.i18n import render_nested
+
+            key, params = tool_spec(tool).summarize(None, payload)
+            return render_nested(key, params, locale)
 
         speech = _summarize("denoise_audio", {"engine_name": "DeepFilterNet 语音降噪", "removes_music": True, "has_strengths": True, "strength": "medium"})
         assert "音乐" in speech and "DeepFilterNet" in speech and "中度" in speech
