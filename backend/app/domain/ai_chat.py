@@ -68,6 +68,14 @@ class ChatTarget:
     #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**。`None` = 不知道(照发,被拒了再降级)。
     #: 见 domain/structured_output。
     structured_output: bool | None = None
+    #: 这一轮最多能出多少 token —— `model_limits.resolve` 合并出来的那个数
+    #: (用户在模型设置里填的 → 供应商目录 → 内置表 → 回退)。
+    #:
+    #: **在此之前这条通道一个字节都发不出去。** 用户在「模型设置」里填「最大输出 Token」,
+    #: 那个值只进两个地方:拼给 pi 的 payload,和设置页自己回显的那几行。而设置页那一行
+    #: 写的是「运行时真正会用的数」—— 这句话在智能体那条路上是真的,在直连这八个调用点上
+    #: 是假的,而界面上两者长得一模一样。
+    max_output_tokens: int | None = None
 
 
 def target_for(
@@ -100,6 +108,7 @@ def target_for(
             vendor=profile.vendor or "",
             name=profile.name,
             execution_surface="gateway",
+            max_output_tokens=_max_output_tokens(db, profile, resolved),
             gateway_provider=sidecar_provider(db, profile, resolved),
             gateway_api_base=f"http://{settings.backend_host}:{settings.backend_port}",
             # 短期服务令牌只给 sidecar 回写**这个人自己的** OAuth 刷新结果；不发给浏览器。
@@ -124,7 +133,30 @@ def target_for(
         vendor=profile.vendor or "",
         name=profile.name,
         structured_output=_structured_output(db, profile, resolved),
+        max_output_tokens=_max_output_tokens(db, profile, resolved),
     )
+
+
+def _max_output_tokens(db: Session, profile: ResolvedConnection, model: str) -> int | None:
+    """这一轮的输出上限 —— 和智能体那条路走**同一个** `model_limits.resolve`。
+
+    `resolve` 的文档写着「唯一的合并处」,那句话是成立的:问题从来不是有第二处合并,
+    而是**有一条通道根本不经过它**。这个函数就是让它经过。
+    """
+    from app.domain import model_limits, provider_models
+    from app.ai.model_catalog import cached_model
+
+    row = provider_models.get_model(db, profile.id, model)
+    catalog = cached_model(profile.base_url or "", profile.api_key or "", model)
+    return model_limits.resolve(
+        model_id=model,
+        base_url=profile.base_url or "",
+        vendor=profile.vendor or "",
+        override_window=getattr(row, "context_window", None),
+        override_output=getattr(row, "max_output_tokens", None),
+        catalog_window=catalog.context_window if catalog else None,
+        catalog_output=catalog.max_output_tokens if catalog else None,
+    ).effective_max_output_tokens
 
 
 def _structured_output(db: Session, profile: ResolvedConnection, model: str) -> bool | None:
@@ -177,6 +209,10 @@ def chat(
         and payload["response_format"].get("type") in {"json_schema", "json_object"}
     ):
         payload.setdefault("thinking", {"type": "disabled"})
+    # **`setdefault`**:工作流 LLM 节点上那一格(executors/ai.py)是更具体的意图,它先说了算;
+    # 没人说过时,才用模型设置里那个数 —— 而不是让供应商拿它自己的默认值(通常小得多)决定。
+    if target.max_output_tokens:
+        payload.setdefault("max_tokens", target.max_output_tokens)
     payload["messages"] = _satisfy_json_mode(payload.get("messages") or [], payload.get("response_format"))
     if target.execution_surface == "gateway":
         return _chat_gateway(
