@@ -5,7 +5,7 @@ import { useI18n } from "@/app/preferences";
 import { fetchWaveform } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mediaClock, usePlayback } from "./media-playback";
+import { mediaClock, usePlayback, useScrub } from "./media-playback";
 
 /** Full preview transport. The viewing area and controls never overlap. */
 export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
@@ -37,6 +37,7 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
     return () => { active = false; };
   }, [assetId, kind]);
   const duration = Number.isFinite(total) ? total : 0;
+  const { shown, scrub, release } = useScrub(ref, at);
   const props = {
     src, autoPlay, preload: "metadata", ...bind,
     onLoadedMetadata: (event: React.SyntheticEvent<HTMLMediaElement>) => setTotal(event.currentTarget.duration),
@@ -67,15 +68,18 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
         {error && <p role="status" className="absolute inset-x-4 bottom-4 rounded-lg bg-popover p-3 text-center text-ui-sm text-destructive">{t("mediaPlaybackError")}</p>}
       </div>
       <div className="grid gap-2 border-t border-divider bg-workspace-panel px-4 py-3">
-        <input type="range" aria-label={t("mediaSeek")} min={0} max={duration || 1} step="0.01" value={Math.min(at, duration)} disabled={!duration}
-          onChange={(event) => { if (ref.current) ref.current.currentTime = Number(event.target.value); }}
-          style={{ "--media-progress": `${duration ? at / duration * 100 : 0}%` } as React.CSSProperties}
+        <input type="range" aria-label={t("mediaSeek")} min={0} max={duration || 1} step="0.01" value={Math.min(shown, duration)} disabled={!duration}
+          onChange={(event) => scrub(Number(event.target.value))}
+          onPointerUp={release}
+          onPointerCancel={release}
+          onKeyUp={release}
+          style={{ "--media-progress": `${duration ? shown / duration * 100 : 0}%` } as React.CSSProperties}
           className="media-preview-range h-4 w-full cursor-pointer disabled:cursor-default" />
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button variant="ghost" size="icon-sm" aria-label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle}>
             {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
           </Button>
-          <span className="mr-auto text-ui-xs tabular-nums text-muted-foreground">{mediaClock(at)} / {mediaClock(duration)}</span>
+          <span className="mr-auto text-ui-xs tabular-nums text-muted-foreground">{mediaClock(shown)} / {mediaClock(duration)}</span>
           <Button variant="ghost" size="icon-sm" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute}>
             {muted || volume === 0 ? <VolumeX /> : <Volume2 />}
           </Button>
