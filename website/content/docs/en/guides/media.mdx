@@ -3,7 +3,7 @@ title: Media library
 description: Import, record and download media, then find it with previews, tags and search.
 order: 7
 updated: 2026-09-17
-version: 1.5.0
+version: 1.5.1
 ---
 
 The media library is where every file enters Mosael: local uploads, screen/camera recordings,
@@ -14,7 +14,11 @@ downloads from a link, and the output of renders, dubbing and AI generation. The
 
 ## Importing
 
-- **Upload** a file, or drag it onto the window.
+- **Upload** files (several at once), or drag them onto the window. Multiple files upload one after
+  another; one failure does not stop the rest, and you are told how many came in and which did not, and why.
+  QuickTime `.mov` videos such as Mac screen recordings are repackaged into an `.mp4` container as they
+  are imported — the picture and sound are copied as-is, not re-encoded, so quality is unchanged; scrubbing
+  them in the app just stops stalling.
 - **Record** the screen, camera, microphone, or screen and camera together; recordings land in the library.
 - **From a link** — see below.
 
@@ -29,7 +33,10 @@ Enable **Mirror camera** for a selfie-style composition. Both the camera preview
 are flipped horizontally, while the screen asset stays unchanged. The choice is remembered for later recordings.
 
 Mosael does not access the camera or microphone merely because the recorder was opened. After selecting a mode
-that needs those devices, choose **Allow access** to trigger the operating-system prompts. A denied permission
+that needs those devices, choose **Allow access** to trigger the operating-system prompts. Once access is granted,
+selecting a mode with the camera opens it right away with a live preview (mirroring applies to the preview too), and
+recording takes over that same stream — so the dark first moments while a freshly opened camera settles its exposure
+are not recorded. Switching to a mode without the camera, or closing the recorder, releases it. A denied permission
 stays visible as an actionable state with links to the relevant system settings and a retry action. Screen and
 system-audio consent is requested by the operating system's sharing picker, as required by macOS.
 
@@ -71,14 +78,25 @@ export a cookie jar from somewhere else.
 
 Available quality depends on the site, asset and sign-in state. Use the options returned by the current probe.
 
+For multi-part videos and collections, every item in the listing carries its own title (the collection name is
+already in the header, so it is not repeated), and downloaded assets are named after it.
+
+When nothing can be fetched, the message says which case it is: the **site or link type is not supported**, the
+link **really has no** video or audio, a **sign-in identity is needed** (pick a signed-in one under the identity
+selector above), the content is **unavailable** (private, removed or region-locked), or the **network** could not
+reach it.
+
 Downloads run as a background job with progress in the task centre. One failure does not sink the
 batch: what downloaded stays in the library, and the failed count is reported.
 
 ## Tags and filters
 
-- Filter by type (video / audio / image) or by tag from the toolbar.
+- Filter by type (video / audio / image) or by tag from the toolbar. Several tags can be ticked at once;
+  with two or more you choose between **all of them** and **any of them**.
 - Multi-select to tag or delete in bulk.
-- "Compare" puts two assets side by side for picking between versions.
+- **Compare**: multi-select assets of one kind to lay them side by side and pick a version. Images sit next
+  to each other; videos share one screen and one play button, start muted (click a speaker to hear only that
+  one), and frame stepping and timeline scrubbing apply to all of them at once.
 
 ## Processing sound
 

@@ -6,7 +6,7 @@ export const API_BASE = (
   typeof window === "undefined" ? DEFAULT_API_BASE : window.localStorage.getItem(SERVER_KEY) || DEFAULT_API_BASE
 ).replace(/\/+$/, "");
 
-/** 后端在「这次请求建了任务」时带的响应头(见 backend 的 main._announce_new_jobs)。 */
+/** 后端在「这次请求建了任务」时带的响应头(见 backend 的 app/api/middleware.AnnounceNewJobs)。 */
 export const NEW_JOBS_HEADER = "X-Mosael-New-Jobs";
 /**
  * 看到那个头就广播这个事件,由 App 统一刷新所有任务列表。

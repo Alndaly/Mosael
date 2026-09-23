@@ -78,7 +78,7 @@ def reset_receipt(token: contextvars.Token) -> None:
 
 
 #: 这一次 HTTP 请求里建出来的任务。中间件在请求开始时放一个空列表进来,create_job 往里记,
-#: 请求结束时有记录就在响应头上告诉前端(见 main 的 _announce_new_jobs)。
+#: 请求结束时有记录就在响应头上告诉前端(见 app/api/middleware 的 AnnounceNewJobs)。
 #:
 #: 为什么在总线上记,而不是让每个「开始 xx」的按钮自己去刷新任务中心:建任务的接口有几十个,
 #: 返回的也不都是 job(生成返回会话、画板返回画板、确认卡返回确认卡)。此前只有少数几处记得

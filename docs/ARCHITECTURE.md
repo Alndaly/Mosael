@@ -509,7 +509,7 @@ qwen 和 GLM 用的不是 `reasoning_effort`(前者 `enable_thinking`、后者 `
 MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的文案我们替它挑,而工具跑出来的
 那些字只有它自己写得出。
 
-**每个客户端都要把读的人的语言报上来**,后端的翻译全靠这一栏(中间件 `_carry_locale`)。
+**每个客户端都要把读的人的语言报上来**,后端的翻译全靠这一栏(中间件 `CarryLocale`,在 `app/api/middleware.py`)。
 浏览器扩展曾经写死 `Accept-Language: zh-CN`:英文用户在扩展里收到的每一句后端文案都是中文,
 而扩展自己的界面跟着浏览器语言走 —— 两半对不上,且没有任何地方会报错。
 
@@ -518,6 +518,17 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 `auth_sessions` 的 `client_surface` / `client_version` 两列。认不出来就一对空串 ——
 "不知道"是这两栏的合法状态,比编一个假的诚实。此前它只有一栏、没有语法:前端发版本号、
 扩展发产品名,于是管理页把扩展那一行渲染成「vbrowser-extension」。
+
+**反方向,后端也用响应头告诉客户端一件事:这次请求建了任务。** `X-Mosael-New-Jobs: N` 由中间件
+`AnnounceNewJobs` 在任务总线 `create_job` 记下的基础上统一加(`jobs.watch_new_jobs`),CORS 点名
+放行;前端请求层看到它就广播 `mosael:jobs-created`,App 让所有 `["jobs", …]` 列表失效。建任务的
+接口有几十个、返回的也不都是 job —— 此前只有少数几个按钮记得自己刷新任务中心,其余的要等下一轮
+轮询(空闲时 8 秒)。后台线程里派生的子任务不经过请求,仍靠轮询。
+
+**请求中间件一律写成纯 ASGI**(`app/api/middleware.py`、`core/rate_limit.py`,补响应头共用
+`core/asgi.adding_headers`),不用 `@app.middleware("http")`。后者把响应体放进一条内存管道、在另一个
+任务里转发;拖视频进度条时浏览器每次跳转都中止上一个按范围读取的请求,而管道那头还在往下推。实测一条
+370MB 录屏在 Chromium 里单次跳转,三层这样的中间件是 0.17–14.5 秒,纯 ASGI 是 0.03–3.7 秒。
 
 ### 分层:底下那几层不认识功能模块
 
