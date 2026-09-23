@@ -707,8 +707,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "title": {"type": "template", "description": "wfNode_publish_title"},
             "description": {"type": "template"},
         },
-        "outputs": ["result"],
+        # post_id / post_url:发出去的那条作品在平台上的 ID 与链接(见 domain/publish/post.py),
+        # 下游拿它去查这条作品的数据。平台接口没读到时是空串。
+        "outputs": ["post_id", "post_url", "result"],
         "output_types": {"result": "json"},
+        "output_labels": {"post_id": "wfOut_post_id", "post_url": "wfOut_post_url"},
     },
     "condition": {
         "external": False,

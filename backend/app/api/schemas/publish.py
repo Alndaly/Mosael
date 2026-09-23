@@ -77,6 +77,16 @@ class PublishCreate(ApiModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
+class PublishedPostOut(ApiModel):
+    """发出去的那一条作品。`post_id` 为空说明发布时没从平台读到(不是没发出去)。"""
+
+    platform: str
+    post_id: str
+    url: str
+    ids: dict[str, str]
+    published_at: str
+
+
 class PublishTaskOut(ApiModel):
     id: str
     workspace_id: str
@@ -91,6 +101,7 @@ class PublishTaskOut(ApiModel):
     status: str
     error: str | None
     result: dict
+    post: PublishedPostOut | None = None
     job_id: str | None
     created_at: datetime
 

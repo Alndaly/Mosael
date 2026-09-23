@@ -654,6 +654,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfOut_denoised_asset_id": {"zh": "降噪后", "en": "Cleaned"},
     "wfOut_response_format_used": {"zh": "实际输出档位", "en": "Format actually used"},
+    "wfOut_post_id": {"zh": "作品 ID", "en": "Post ID"},
+    "wfOut_post_url": {"zh": "作品链接", "en": "Post link"},
     "wfOut_original_audio": {"zh": "原声实际处理方式", "en": "What happened to the original audio"},
     "wfOut_original_audio_note": {"zh": "原声处理说明", "en": "Original audio note"},
     "wfOut_graybox_first_frame": {"zh": "白模首帧", "en": "Blockout first frame"},

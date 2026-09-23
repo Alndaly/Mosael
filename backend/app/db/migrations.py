@@ -2021,6 +2021,22 @@ def _migrate_publish_task_claimed_by() -> None:
             conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN claimed_by VARCHAR(64) NOT NULL DEFAULT ''"))
 
 
+def _migrate_publish_task_post() -> None:
+    """已装机的库补上 publish_tasks.post(发出去的那条作品的平台 ID 与链接)。
+
+    `create_all` 只建缺失的**表**,从不给已存在的表加列。老任务发的时候没记,这一列就是空 dict ——
+    那些作品的 ID 当时没抓,事后补不出来,不假装有。
+    """
+
+    inspector = inspect(engine)
+    if "publish_tasks" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("publish_tasks")}
+    if "post" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN post JSON NOT NULL DEFAULT '{}'"))
+
+
 def _migrate_agent_pending_view() -> None:
     """已装机的库补上 agent_sessions.pending_view。
 
@@ -2535,6 +2551,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_comment_canvas_context,
                 _migrate_agent_pending_view,
                 _migrate_publish_task_claimed_by,
+                _migrate_publish_task_post,
                 _migrate_confirmation_summary_i18n,
                 _migrate_board_canvas_state,
                 _backfill_browser_pool,

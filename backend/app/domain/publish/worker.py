@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Job, PublishAccount, PublishTask, now
 from app.domain.jobs import emit_job_event, say
 from app.domain.notifications import notify
+from app.domain.publish.post import published_post
 from app.domain.publish import (
     BINDING_STATUSES,
     PUBLISH_PLATFORMS,
@@ -165,7 +166,9 @@ def report_task(
     status: str,
     error_message: str | None = None,
     screenshot_path: str | None = None,
+    post: dict[str, Any] | None = None,
 ) -> PublishTask:
+    """执行器回报一次状态。`post` 是发成功时读到的那条作品(见 domain/publish/post.py)。"""
     if status not in TASK_STATUSES:
         raise PublishDomainError(f"未知任务状态: {status}")
     task = db.get(PublishTask, task_id)
@@ -178,6 +181,9 @@ def report_task(
     task.status = status
     task.error_message = error_message
     task.screenshot_path = screenshot_path
+    if status == "success" and previous != "success":
+        account = db.get(PublishAccount, task.account_id)
+        task.post = published_post(account.platform if account else "", post, at=now())
     _sync_job(db, task)
     if status != previous:
         _notify_status(db, task)
@@ -229,7 +235,9 @@ def _sync_job(db: Session, task: PublishTask) -> None:
         job.status = "succeeded"
         job.progress = 1.0
         say(job, "jobMsg_publishDone", title=task.title)
-        job.result = {"platform_status": task.status}
+        # 作品信息跟着进 job 结果:工作流的发布节点等的是 job,下游节点(比如拿作品 ID 去查数据)
+        # 从这里取。
+        job.result = {"platform_status": task.status, "post": dict(task.post or {})}
         emit_job_event(db, job.id, "publish.finished", {"status": task.status})
     elif task.status in ("failed", "cancelled"):
         job.status = "failed"

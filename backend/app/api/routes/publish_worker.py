@@ -41,6 +41,8 @@ class ReportRequest(BaseModel):
     status: str
     error_message: str | None = None
     screenshot_path: str | None = None
+    #: 发成功时读到的那条作品:{post_id, url, ids}。逐项收窄在 domain/publish/post.py。
+    post: dict[str, Any] | None = None
 
 
 class AccountPatchRequest(BaseModel):
@@ -71,6 +73,7 @@ def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
             status=body.status,
             error_message=body.error_message,
             screenshot_path=body.screenshot_path,
+            post=body.post,
         )
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

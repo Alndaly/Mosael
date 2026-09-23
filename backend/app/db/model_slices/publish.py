@@ -56,6 +56,10 @@ class PublishTask(Base):
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     screenshot_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: 发出去的**那一条作品**:平台上的作品 ID、链接、发布时间(形状见 domain/publish/post.py)。
+    #: 发成功才有,否则是空 dict。后续要查这条作品的数据(TikHub 之类按作品 ID 取播放、评论),
+    #: 靠的就是它 —— 发完不记,事后只能按标题去平台上猜是哪一条。
+    post: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     #: 是哪个执行器认领的。**多执行器下,「孤儿任务」只能由认领它的那个来判** —— 那条判据是
     #: 「这个账号不在我当前在跑的集合里」,而这句话只有认领者说了才算数。别人拿自己的集合去判,
     #: 会把对方正在跑的任务判成中断(见 publish/worker.reclaim_orphaned_running)。

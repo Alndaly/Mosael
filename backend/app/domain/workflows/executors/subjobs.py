@@ -236,7 +236,9 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
         tags=[],
     )
     final = wait_for_job(task.job_id or "", release=db)
-    return {"result": final.result or {}}
+    result = final.result or {}
+    post = result.get("post") if isinstance(result.get("post"), dict) else {}
+    return {"post_id": str(post.get("post_id") or ""), "post_url": str(post.get("url") or ""), "result": result}
 
 
 

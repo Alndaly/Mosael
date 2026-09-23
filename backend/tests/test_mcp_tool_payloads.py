@@ -73,6 +73,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "open_view": {"view": "home"},
     "list_plugin_tools": {},
     "list_publish_accounts": {},
+    "list_publish_tasks": {},
     "browser_pool_list": {},
     "translate_text": {"text": "hello", "target": "zh"},
     "create_project": {"name": "冒烟项目"},

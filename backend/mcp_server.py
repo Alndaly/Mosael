@@ -234,6 +234,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_plugin_tools",
         "list_projects",
         "list_publish_accounts",
+        "list_publish_tasks",
         "list_workflow_node_types",
         "list_workflows",
         "list_workspaces",
@@ -2228,6 +2229,23 @@ def publish_asset(
 def list_publish_accounts(workspace_id: str = "") -> list[dict[str, Any]]:
     """Read-only: the platform accounts already logged in, for publish_asset."""
     return _get("/api/publish/accounts", {"workspace_id": workspace_id or _default_workspace_id()})
+
+
+@mcp.tool()
+def list_publish_tasks(status: str = "", limit: int = 20, workspace_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: recent publish tasks, newest first, with what was published where.
+
+    A successful task carries `post`: {platform, post_id, url, ids, published_at} — the post's
+    ID on the platform (Douyin/TikTok aweme_id, Bilibili bvid, Xiaohongshu note_id, YouTube
+    video id). Use it to look the post up later (e.g. TikHub stats by that ID). An empty
+    post_id means the platform's reply was not read at publish time — do not guess one from
+    the title. `status` filters (success / failed / running / pending …).
+    """
+    tasks = _get("/api/publish/tasks", {"workspace_id": workspace_id or _default_workspace_id()})
+    if status:
+        tasks = [task for task in tasks if task.get("status") == status]
+    keep = ("id", "platform", "account_name", "asset_id", "asset_name", "title", "status", "error", "post", "created_at")
+    return [{key: task.get(key) for key in keep} for task in tasks[: max(1, min(int(limit or 20), 100))]]
 
 
 @mcp.tool()

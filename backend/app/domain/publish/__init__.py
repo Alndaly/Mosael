@@ -366,6 +366,7 @@ def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
         "status": status,
         "error": task.error_message or (job.error if job else None),
         "result": job.result if job else {},
+        "post": dict(task.post) if task.post else None,
         "job_id": task.job_id,
         "created_at": task.created_at,
     }

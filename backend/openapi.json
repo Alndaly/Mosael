@@ -27282,6 +27282,16 @@
             "type": "object",
             "title": "Result"
           },
+          "post": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublishedPostOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "job_id": {
             "anyOf": [
               {
@@ -27318,6 +27328,43 @@
           "created_at"
         ],
         "title": "PublishTaskOut"
+      },
+      "PublishedPostOut": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "post_id": {
+            "type": "string",
+            "title": "Post Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Ids"
+          },
+          "published_at": {
+            "type": "string",
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "post_id",
+          "url",
+          "ids",
+          "published_at"
+        ],
+        "title": "PublishedPostOut",
+        "description": "发出去的那一条作品。`post_id` 为空说明发布时没从平台读到(不是没发出去)。"
       },
       "RegisterCredentials": {
         "properties": {
@@ -31509,6 +31556,18 @@
               }
             ],
             "title": "Screenshot Path"
+          },
+          "post": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post"
           }
         },
         "type": "object",
