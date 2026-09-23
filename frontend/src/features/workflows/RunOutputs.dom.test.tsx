@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
-vi.mock("@/api/client", () => ({ api: vi.fn(), assetFileUrl: (id: string) => `/f/${id}` }));
+vi.mock("@/api/client", () => ({ api: vi.fn(), assetFileUrl: (id: string) => `/f/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}` }));
 vi.mock("@/components/app/asset-preview", () => ({
   AssetInlinePreview: ({ assetId }: { assetId: string }) => <img data-testid="asset" alt="" src={`/t/${assetId}`} />,
 }));

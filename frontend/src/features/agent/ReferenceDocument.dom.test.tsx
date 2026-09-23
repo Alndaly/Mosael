@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
-  assetFileUrl: (id: string) => `/file/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,

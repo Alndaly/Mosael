@@ -1,7 +1,7 @@
 import React from "react";
 import { Pause, Play, Repeat, SkipBack, StepBack, StepForward, Volume2, VolumeX, X } from "lucide-react";
 
-import { assetFileUrl, type Asset } from "@/api/client";
+import {assetPlaybackUrl, type Asset} from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -213,7 +213,7 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
                       refs.current.set(asset.id, element);
                     } else refs.current.delete(asset.id);
                   }}
-                  src={assetFileUrl(asset.id)}
+                  src={assetPlaybackUrl(asset.id)}
                   preload="auto"
                   playsInline
                   className="absolute inset-0 h-full w-full object-contain"

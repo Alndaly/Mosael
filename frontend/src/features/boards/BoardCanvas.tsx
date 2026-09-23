@@ -32,7 +32,7 @@ import {
 } from "@xyflow/react";
 import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
+import {assetPlaybackUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember} from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { centerCanvasViewport, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
@@ -1631,7 +1631,7 @@ function ItemToolbar({
               openImagePreview({
                 src: item.kind === "image"
                   ? assetPreviewUrl(item.asset_id as string)
-                  : assetFileUrl(item.asset_id as string),
+                  : assetPlaybackUrl(item.asset_id as string),
                 title: item.text || "",
                 //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
                 video: item.kind === "video",

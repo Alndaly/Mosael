@@ -25,7 +25,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 vi.mock("@/api/client", async () => ({
-  assetFileUrl: (id: string) => `/files/${id}`,
+  assetFileUrl: (id: string) => `/files/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
   assetPreviewUrl: (id: string) => `/previews/${id}`,
   assetThumbnailUrl: (id: string) => `/thumbnails/${id}`,
 }));
@@ -56,7 +56,7 @@ describe("生成节点的参考素材预览", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "预览参考视频" }));
     expect(openImagePreview).toHaveBeenCalledWith({
-      src: "/files/video-1",
+      src: "/play/video-1",
       title: "参考视频",
       video: true,
     });

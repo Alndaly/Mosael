@@ -1,7 +1,7 @@
 import React from "react";
 import { Maximize2, Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
-import { assetFileUrl } from "@/api/client";
+import {assetPlaybackUrl} from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
@@ -184,7 +184,7 @@ export function VideoPlayer({
     <div className={cn("group/player relative h-full w-full overflow-hidden bg-black", className)}>
       <video
         ref={ref}
-        src={assetSrc ?? assetFileUrl(assetId ?? "")}
+        src={assetSrc ?? assetPlaybackUrl(assetId ?? "")}
         preload="metadata"
         autoPlay={autoPlay}
         playsInline

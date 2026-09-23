@@ -7,7 +7,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
-vi.mock("@/api/client", () => ({ assetFileUrl: (id: string) => `/file/${id}` }));
+vi.mock("@/api/client", () => ({ assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}` }));
 
 import type { Asset } from "@/api/client";
 import { VideoCompareView } from "./VideoCompareView";
@@ -35,7 +35,7 @@ it("几条视频铺在一屏,一个播放键让它们一起播", () => {
   const videos = renderView();
   expect(videos).toHaveLength(3);
   fireEvent.click(screen.getByRole("button", { name: "videoComparePlay" }));
-  expect(played.sort()).toEqual(["/file/a", "/file/b", "/file/c"]);
+  expect(played.sort()).toEqual(["/play/a", "/play/b", "/play/c"]);
 });
 
 it("默认都静音;点某一条的喇叭只听它", () => {

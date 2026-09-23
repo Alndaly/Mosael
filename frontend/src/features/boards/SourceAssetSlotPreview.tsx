@@ -1,7 +1,7 @@
 import React from "react";
 import { AudioLines, X } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
+import {assetPlaybackUrl, assetPreviewUrl, assetThumbnailUrl} from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
@@ -46,7 +46,7 @@ export function SourceAssetSlotPreview({
       title={previewLabel}
       onClick={() =>
         openImagePreview({
-          src: kind === "video" ? assetFileUrl(assetId) : assetPreviewUrl(assetId),
+          src: kind === "video" ? assetPlaybackUrl(assetId) : assetPreviewUrl(assetId),
           title: label,
           ...(kind === "video" ? { video: true } : {}),
         })

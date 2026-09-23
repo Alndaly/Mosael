@@ -4,18 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Mic, Settings2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  api,
-  assetFileUrl,
-  generatePodcast,
-  listTtsEngines,
-  listTtsVoices,
-  synthesizeVoice,
-  synthesizeWithEngine,
-  type Asset,
-  type Job,
-  type Workspace,
-} from "@/api/client";
+import {api, assetPlaybackUrl, generatePodcast, listTtsEngines, listTtsVoices, synthesizeVoice, synthesizeWithEngine, type Asset, type Job, type Workspace} from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -269,7 +258,7 @@ function RecentAudio({ workspace, source }: { workspace: Workspace; source: stri
                 </span>
               )}
             </div>
-            <audio className="h-8 w-full" controls preload="none" src={assetFileUrl(asset.id)} />
+            <audio className="h-8 w-full" controls preload="none" src={assetPlaybackUrl(asset.id)} />
           </li>
         ))}
       </ul>

@@ -9,7 +9,7 @@ vi.mock("@/components/app/image-preview", () => ({
   useImagePreview: () => ({ openImagePreview }),
 }));
 vi.mock("@/api/client", () => ({
-  assetFileUrl: (id: string) => `/file/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
 }));
 

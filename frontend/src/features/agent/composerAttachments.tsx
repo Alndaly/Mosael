@@ -1,7 +1,7 @@
 import React from "react";
 import { FileText, Music } from "lucide-react";
 
-import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
+import {assetPlaybackUrl, assetThumbnailUrl, importAsset, type Asset} from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import type { ComposerChip } from "@/lib/composerChip";
@@ -119,7 +119,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
     // 图和视频一起进画廊:点开任意一张都能左右翻,不必关掉再点下一张。
     const gallery: ImagePreviewItem[] = media
       .filter((asset) => asset.kind === "image" || asset.kind === "video")
-      .map((asset) => ({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" }));
+      .map((asset) => ({ src: assetPlaybackUrl(asset.id), title: asset.name, video: asset.kind === "video" }));
     return [
       ...media.map((asset, index) => ({
         id: asset.id,
@@ -132,7 +132,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
             ? undefined
             : () =>
                 openImagePreview({
-                  src: assetFileUrl(asset.id),
+                  src: assetPlaybackUrl(asset.id),
                   title: asset.name,
                   video: asset.kind === "video",
                   gallery,

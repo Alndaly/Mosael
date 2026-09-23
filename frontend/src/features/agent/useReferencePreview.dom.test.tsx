@@ -6,7 +6,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const apiCall = vi.fn();
 vi.mock("@/api/transport", () => ({ api: (path: string) => apiCall(path) }));
-vi.mock("@/api/client", () => ({ assetFileUrl: (id: string) => `/file/${id}` }));
+vi.mock("@/api/client", () => ({ assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}` }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => ({ agentRefGone: "「{name}」已经不在了", agentRefGoneHint: "可能已被删除" })[key] ?? key,
 }));
@@ -81,7 +81,7 @@ describe("点开引用", () => {
   it("图片走灯箱", async () => {
     apiCall.mockResolvedValue({ id: "a1", name: "图", kind: "image" });
     await click({ kind: "asset", id: "a1", name: "图" });
-    expect(openImagePreview).toHaveBeenCalledWith(expect.objectContaining({ src: "/file/a1", video: false }));
+    expect(openImagePreview).toHaveBeenCalledWith(expect.objectContaining({ src: "/play/a1", video: false }));
   });
 
   it("没有画面的素材去素材库里定位 —— 总比点了没反应强", async () => {

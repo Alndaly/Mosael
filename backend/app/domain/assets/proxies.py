@@ -32,6 +32,32 @@ def proxy_status(asset: Asset) -> str:
     return str((asset.media_info or {}).get("proxy_status") or "none")
 
 
+#: 浏览器一秒能流畅软解/硬解的像素量上限:约等于 4K60(H.264 level 5.2 的上限是每秒约 5.3 亿
+#: 像素)。超过它的原片 —— 比如 Retina 录屏 3456×2234@120fps,每秒 9.3 亿像素 —— 硬件解码器
+#: 不接,落到软解,每拖一下进度条都要从上一个关键帧软解一百多帧超大画面,界面卡好几秒。
+PLAYBACK_PIXEL_RATE_BUDGET = 3840 * 2160 * 60
+
+
+def playback_path(asset: Asset) -> Path:
+    """界面上「播放这份素材」该读哪个文件:原片放得动就放原片,放不动且代理转好了就放代理。
+
+    **由后端决定,不让每个播放器自己猜**:素材详情、对比、画板、对话里的附件都在放视频,
+    判据写在一处,换阈值、以后按编码判断也只改这里。下载和混音要的是原文件,不走这里。
+    """
+    source = resolve_key(asset.file_key)
+    if asset.kind != "video" or proxy_status(asset) != "ready":
+        return source
+    info = asset.media_info or {}
+    try:
+        pixel_rate = float(info.get("width") or 0) * float(info.get("height") or 0) * float(info.get("fps") or 0)
+    except (TypeError, ValueError):
+        return source
+    if pixel_rate <= PLAYBACK_PIXEL_RATE_BUDGET:
+        return source
+    proxy = proxy_path(source.parent)
+    return proxy if proxy.is_file() else source
+
+
 def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None = None) -> None:
     """Reassign media_info (a plain JSON column) so SQLAlchemy tracks the change."""
     asset = db.get(Asset, asset_id)

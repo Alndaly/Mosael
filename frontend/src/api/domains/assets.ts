@@ -14,7 +14,7 @@ export interface WaveformData {
   peaks: number[];
 }
 
-function assetUrl(assetId: string, representation: "file" | "preview" | "thumbnail" | "filmstrip" | "proxy") {
+function assetUrl(assetId: string, representation: "file" | "playback" | "preview" | "thumbnail" | "filmstrip" | "proxy") {
   const token = getAuthToken();
   const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/assets/${assetId}/${representation}${suffix}`;
@@ -56,6 +56,15 @@ export function importLocalAsset(workspaceId: string, path: string, projectId?: 
 /** Original asset bytes. Media elements carry auth in the query because they cannot add headers. */
 export function assetFileUrl(assetId: string): string {
   return assetUrl(assetId, "file");
+}
+
+/**
+ * 界面上**播放**用的地址:原片放得动就是原片,放不动(超出浏览器解码规格的大录屏)就是预览代理,
+ * 由后端决定(见 backend domain/assets/proxies.playback_path)。<video>/<audio> 一律用它;
+ * 要原文件本身(下载、解码成波形/混音)才用 assetFileUrl。
+ */
+export function assetPlaybackUrl(assetId: string): string {
+  return assetUrl(assetId, "playback");
 }
 
 /** Browser-compatible full-size preview; HEIC originals are derived to JPEG on demand. */
