@@ -126,7 +126,7 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 
 - Node.js 24+
 - pnpm
-- Python 3.13 与 [uv](https://docs.astral.sh/uv/)
+- Python 3.14 与 [uv](https://docs.astral.sh/uv/)
 - ffmpeg（完整媒体测试需要）
 
 安装依赖：

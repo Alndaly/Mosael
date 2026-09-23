@@ -123,7 +123,7 @@ Mosael 现在反过来:执行器**明确不是沙箱**(见 §2.2),于是只好�
 
 执行预算为 256 MiB 内存（不额外使用 swap）、64 个进程、1 个 CPU，默认运行 15 秒（调用方可指定）。stdout 与 stderr 共用 256 KiB 流式预算，超限立即停止。每次创建独立容器，结束、超时和输出超限都强制移除整个容器，包括脱离父进程的子进程；无法清理时明确报错。Docker CLI 的连接配置只用于宿主机控制，不传入用户代码。
 
-部署准备：安装并启动 Docker，执行 `docker pull python:3.13-alpine`。代码调用不自动拉镜像，缺镜像或没有可用的资源限制时拒绝执行；编辑、保存代码节点不受影响。实现与回归见 `app/domain/sandbox`、`tests/test_sandbox.py`、`tests/test_bounded_process_output.py`。内存与 swap 相等的设置依据 [Docker 资源限制说明](https://docs.docker.com/engine/containers/resource_constraints/)。
+部署准备：安装并启动 Docker，执行 `docker pull python:3.14-alpine`。代码调用不自动拉镜像，缺镜像或没有可用的资源限制时拒绝执行；编辑、保存代码节点不受影响。实现与回归见 `app/domain/sandbox`、`tests/test_sandbox.py`、`tests/test_bounded_process_output.py`。内存与 swap 相等的设置依据 [Docker 资源限制说明](https://docs.docker.com/engine/containers/resource_constraints/)。
 
 ### D3 「某人的」东西加上主人,并且默认不共享
 

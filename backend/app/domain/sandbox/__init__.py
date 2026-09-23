@@ -80,12 +80,12 @@ class _DockerSandbox:
     """独立容器:`--network=none`、只读根、非 root、内存与进程数上限。
 
     这是 Linux 部署上唯一的一条路(原生 seccomp 后端还没做),也是任何平台上最强的一条。
-    镜像用官方 `python:3.13-alpine` —— 不自己烤镜像是因为「沙箱里有什么库」应该是一个能看懂、
+    镜像用官方 `python:3.14-alpine` —— 不自己烤镜像是因为「沙箱里有什么库」应该是一个能看懂、
     能复现的事实,而不是藏在一个本仓库特有的 Dockerfile 里。
     """
 
     name = "docker"
-    image = "python:3.13-alpine"
+    image = "python:3.14-alpine"
 
     def available(self) -> bool:
         self.executable = shutil.which("docker")

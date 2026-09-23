@@ -1,7 +1,7 @@
 [project]
 name = "mosael-backend"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
@@ -59,7 +59,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py314"
 
 [tool.ruff.lint]
 # **选能抓缺陷的,不选风格。** 打开 ruff 的全套会得到七百多条,其中绝大多数是这个代码库

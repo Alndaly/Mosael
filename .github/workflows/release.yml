@@ -197,7 +197,7 @@ jobs:
         run: npm pkg set version="${GITHUB_REF_NAME#v}"
 
       - name: Install backend (uv)
-        run: cd backend && uv sync --frozen --python 3.13
+        run: cd backend && uv sync --frozen --python 3.14
 
       # 声音克隆随包分发的独立 CPython(~48MB)。必须在 electron-builder 之前:
       # extraResources 打包时会读 build/python。失败即让构建红——缺了它,打包版后端

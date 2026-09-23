@@ -47,13 +47,13 @@ jobs:
             sleep 1
           done
           test "$(docker info --format '{{.OSType}} {{.MemoryLimit}} {{.SwapLimit}} {{.PidsLimit}}')" = "linux true true true"
-          docker pull python:3.13-alpine
+          docker pull python:3.14-alpine
 
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
           pnpm --dir website install --frozen-lockfile
-          cd backend && uv sync --frozen --python 3.13
+          cd backend && uv sync --frozen --python 3.14
 
       - name: Validate release version
         if: startsWith(github.ref, 'refs/tags/v')

@@ -53,7 +53,7 @@ graph TD
         VENV["ASR/TTS/分离 托管 venv 工作进程池(ai/runtime/*_daemon.py)"]
         FF["ffmpeg / yt-dlp / deep-filter(降噪 Rust 二进制)"]
         PLG["插件子进程(process 类)或 MCP http/stdio 客户端"]
-        DKR["Docker 容器(code 节点沙箱,python:3.13-alpine)"]
+        DKR["Docker 容器(code 节点沙箱,python:3.14-alpine)"]
         FSBOT["飞书 bot 子进程(integrations/feishu,lark SDK 硬约束)"]
     end
 
@@ -553,12 +553,12 @@ stateDiagram-v2
 
 ### 12.1 code 节点:隔离问题,不是授权问题(ADR-0008 D2)
 
-`app/domain/sandbox`(单文件 `__init__.py`,7.8KB):全平台统一 Docker(`python:3.13-alpine`),无网络、只读根、非 root、禁提权、不挂载宿主机目录;预算 256MiB 内存(=swap)、64 进程、1 CPU、默认 15 秒;stdout/stderr 共享 256KiB 流式预算;每次独立容器,结束/超时/超限强制移除。**无可用隔离后端时 fail closed**——缺镜像或没有资源限制就拒绝执行,编辑保存不受影响。原 macOS `sandbox-exec` 后端因 home 外读取缺口与无硬内存边界被移除;旧的 `PRIVILEGED_NODE_TYPES` / `ensure_graph_node_privileges` 已删,**不得以普通子进程回落**。于是 `code` 节点退回普通内容编辑权限——"谁有资格写 code 节点"被证明是个错问题,正确的问题是"任何人写的代码跑起来能不能伤到别人"。
+`app/domain/sandbox`(单文件 `__init__.py`,7.8KB):全平台统一 Docker(`python:3.14-alpine`),无网络、只读根、非 root、禁提权、不挂载宿主机目录;预算 256MiB 内存(=swap)、64 进程、1 CPU、默认 15 秒;stdout/stderr 共享 256KiB 流式预算;每次独立容器,结束/超时/超限强制移除。**无可用隔离后端时 fail closed**——缺镜像或没有资源限制就拒绝执行,编辑保存不受影响。原 macOS `sandbox-exec` 后端因 home 外读取缺口与无硬内存边界被移除;旧的 `PRIVILEGED_NODE_TYPES` / `ensure_graph_node_privileges` 已删,**不得以普通子进程回落**。于是 `code` 节点退回普通内容编辑权限——"谁有资格写 code 节点"被证明是个错问题,正确的问题是"任何人写的代码跑起来能不能伤到别人"。
 
 ```mermaid
 flowchart TD
     CODE["工作流 code 节点"] --> CHECK{"Docker 隔离后端可用?"}
-    CHECK -->|"可用"| RUN["python:3.13-alpine 独立容器<br/>无网络 · 只读根 · 非 root · 禁提权<br/>256MiB 内存 · 64 进程 · 1 CPU · 默认 15s<br/>stdout/stderr 共享 256KiB 流式预算"]
+    CHECK -->|"可用"| RUN["python:3.14-alpine 独立容器<br/>无网络 · 只读根 · 非 root · 禁提权<br/>256MiB 内存 · 64 进程 · 1 CPU · 默认 15s<br/>stdout/stderr 共享 256KiB 流式预算"]
     RUN --> CLEAN["结束/超时/超限强制移除容器"]
     CHECK -->|"缺镜像或无资源限制"| DENY["fail closed:拒绝执行<br/>不得以普通子进程回落<br/>编辑保存不受影响"]
 ```
