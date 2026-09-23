@@ -611,6 +611,58 @@ def test_音频项和图片视频同一套三状态() -> None:
     assert done["asset_id"] == "snd"
 
 
+def test_失败之后重新生成_画布上是这一轮的占位而不是上一轮的失败() -> None:
+    """真机:一个视频节点上一轮失败了(方舟 400),改好后点生成 —— 后端两次都把任务交给了
+    方舟,画布却一直挂着上一轮的失败,用户以为没点中又点了一次,多花了一次钱。
+
+    原因是保存画布时那道「终态必须赢」的闸:它防的是任务结束后客户端存回提交前的旧快照,
+    而摆新占位时库里正好是上一轮的 failed,新一轮的 running 被它当成旧快照打了回去。
+    """
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.domain.boards import deliver_generated, place_pending, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+    with SessionLocal() as db:
+        deliver_generated(db, SimpleNamespace(id="job-x", status="failed", result=None, error="ARK 400"),
+                          receipt_to_item(board_id, item_id))
+        placed = place_pending(db, workspace_id=ws, board_id=board_id, item={
+            "id": item_id, "kind": "image", "x": 0, "y": 0,
+            "run": {"status": "running", "job_id": "job-y"}, "form": {"prompt": "改好的提示词"},
+        })
+
+    item = placed.canvas["items"][0]
+    assert item["run"] == {"status": "running", "job_id": "job-y"}, f"新一轮被打回了上一轮的状态:{item['run']}"
+
+    # 闸本身还在:这一轮结束后,客户端手上那份 running 快照存回来,终态照样赢。
+    stale = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+    with SessionLocal() as db:
+        deliver_generated(db, SimpleNamespace(id="job-y", status="failed", result=None, error="又挂了"),
+                          receipt_to_item(board_id, item_id))
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    assert got["canvas"]["items"][0]["run"] == {"status": "failed", "error": "又挂了"}
+
+
+def test_便签写挂了之后重写_能重新进入写作中() -> None:
+    from app.core.db import SessionLocal
+    from app.domain.boards import set_text_write_run
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post("/api/boards", json={
+        "workspace_id": ws,
+        "canvas": {"items": [{"id": "note-1", "kind": "note", "x": 0, "y": 0, "text": ""}], "edges": []},
+    }).json()["id"]
+    with SessionLocal() as db:
+        set_text_write_run(db, workspace_id=ws, board_id=board_id, item_id="note-1", status="failed", error="模型超时")
+        again = set_text_write_run(db, workspace_id=ws, board_id=board_id, item_id="note-1", status="running")
+
+    assert again.canvas["items"][0]["run"] == {"status": "running"}
+
+
 def test_在已有的空槽上生成不会撞上自己() -> None:
     """在画布上**已经存在**的那一格里点生成 —— 占位要就地更新,不是再追加一份。
 

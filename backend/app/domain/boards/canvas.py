@@ -397,11 +397,17 @@ def update_board(
     canvas: Any = None,
     base_revision: int | None = None,
     actor_id: str | None = None,
+    starts_run: bool = False,
 ) -> Board:
     """改名和改画布是同一个入口,因为它们都是"这张板变了"。
 
     **两者都可以单独传**:自动保存只发 canvas,重命名只发 name —— 各发各的那一半,
     另一半不该被 None 覆盖掉。
+
+    `starts_run`:这一次写入是服务端**自己开启新一轮运行**(摆生成占位、便签开始写),
+    不是客户端存回来的快照。那种写入不过 `_keep_arrived_results` —— 那道闸防的是「任务结束后
+    客户端拿着提交前的旧快照存回来」,而重新生成时库里正好是上一轮的终态,新一轮的 running
+    会被它当成旧快照打回去:后端新任务照常跑(照常扣钱),画布上却还挂着上次的失败。
     """
     board = get_board(db, workspace_id, board_id)
     expected = board.revision if base_revision is None else base_revision
@@ -415,7 +421,8 @@ def update_board(
             raise BoardDomainError("画板名不能为空")
         next_name = cleaned
     if canvas is not None:
-        next_canvas = _keep_arrived_results(board.canvas, normalize_canvas(canvas))
+        normalized = normalize_canvas(canvas)
+        next_canvas = normalized if starts_run else _keep_arrived_results(board.canvas, normalized)
         _validate_scene_references(db, workspace_id, next_canvas, board.canvas)
     if next_name == board.name and next_canvas == board.canvas:
         return board
@@ -575,6 +582,7 @@ def place_pending(
         canvas={**canvas, "items": items},
         base_revision=base_revision,
         actor_id=actor_id,
+        starts_run=True,
     )
 
 
@@ -609,6 +617,8 @@ def set_text_write_run(
         canvas={**canvas, "items": items},
         base_revision=base_revision,
         actor_id=actor_id,
+        # 上一次写挂了、这次重写:库里是 failed,不能让它把这一轮的 running 打回去。
+        starts_run=status == "running",
     )
 
 
