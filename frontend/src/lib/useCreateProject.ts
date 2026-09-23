@@ -22,7 +22,9 @@ export function nextProjectName(stem: string, existing: { name: string }[]): str
 }
 
 /**
- * 新建项目并跳进它 —— 三个入口(首页、顶栏项目切换器、剪辑页空态)共用一份。
+ * 新建项目 —— 几个入口(首页、顶栏项目切换器、剪辑页空态)共用一份。建好之后做什么由调用方
+ * 决定:切换器和剪辑页空态直接打开它;首页留在原地、把新项目高亮出来。名字可以由调用方给
+ * (首页先弹窗让人起名),不给就用下一个不重名的默认名。
  *
  * 抽出来不只是去重:`onSuccess` 里那步「先写缓存再跳转」是必须的,而它很容易在复制时
  * 被漏掉。App 侧解析当前项目用的是 `find(projectId) ?? list[0]` 兜底,列表还没刷出新
@@ -38,11 +40,14 @@ export function useCreateProject(workspaceId: string, onCreated: (projectId: str
   const key = ["projects", workspaceId];
 
   return useMutation({
-    mutationFn: () => {
+    mutationFn: (name?: string) => {
       const existing = qc.getQueryData<ProjectWithStats[]>(key) ?? [];
       return api<Project>("/api/projects", {
         method: "POST",
-        body: JSON.stringify({ workspace_id: workspaceId, name: nextProjectName(t("projectDefault"), existing) }),
+        body: JSON.stringify({
+          workspace_id: workspaceId,
+          name: name?.trim() || nextProjectName(t("projectDefault"), existing),
+        }),
       });
     },
     onSuccess: (created) => {

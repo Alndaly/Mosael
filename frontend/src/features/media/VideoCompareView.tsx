@@ -171,7 +171,7 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
 
   return (
     // 与图片对比同一种覆盖层(系统窗口控件避让、跟随主题的底色),说明见 AssetCompareView。
-    <div className="fixed inset-0 z-[140] grid grid-rows-[auto_minmax(0,1fr)_auto] bg-background text-foreground [.is-desktop_&]:[-webkit-app-region:no-drag]">
+    <div className="fixed inset-0 z-[140] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] bg-background text-foreground [.is-desktop_&]:[-webkit-app-region:no-drag]">
       <div
         style={{ minHeight: WINDOW_CHROME_HEIGHT }}
         className={cn(
@@ -203,7 +203,7 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
           const audible = soundId === asset.id;
           const ended = time >= durationOf(asset) - 0.01 && asset.id !== clock.id;
           return (
-            <div key={asset.id} className="relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border bg-panel-subtle">
+            <div key={asset.id} className="relative grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border bg-panel-subtle">
               <div className="relative min-h-0 bg-black">
                 <video
                   ref={(element) => {

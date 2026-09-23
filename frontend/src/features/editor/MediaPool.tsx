@@ -207,6 +207,7 @@ export function MediaPool({
         title={t("renameAsset")}
         initialValue={renaming?.name ?? ""}
         onCancel={() => setRenaming(null)}
+        pending={rename.isPending}
         onSubmit={(name) => renaming && rename.mutate({ id: renaming.id, name })}
       />
       <TagsDialog

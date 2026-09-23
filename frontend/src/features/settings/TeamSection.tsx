@@ -99,6 +99,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
       toast.success(t("saved"));
     },
     onError: onErr,
+    onSettled: () => setRenameOpen(false),
   });
   const deleteMut = useMutation({
     mutationFn: () => deleteWorkspace(wid),
@@ -190,10 +191,8 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         title={t("renameWorkspace")}
         initialValue={workspace.name}
         onCancel={() => setRenameOpen(false)}
-        onSubmit={(name) => {
-          setRenameOpen(false);
-          renameMut.mutate(name);
-        }}
+        pending={renameMut.isPending}
+        onSubmit={(name) => renameMut.mutate(name)}
       />
       <ConfirmDialog
         open={deleteOpen}

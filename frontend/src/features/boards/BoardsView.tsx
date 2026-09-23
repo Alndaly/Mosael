@@ -646,14 +646,23 @@ function BoardDetail({
   //: 改名走**全站那一个** RenameDialog(设置、首页、会话列表、工作流都走它)。此前这里是
   //: 就地把标题换成一个输入框 —— 少一处确认、少一条校验(空名靠 onBlur 悄悄回滚),
   //: 而"改个名字"在这个应用里已经有答案了,画板没有理由是第九种。
+  const [savingName, setSavingName] = React.useState(false);
   const rename = (next: string) => {
-    setRenaming(false);
-    if (next === board.name) return;
+    if (next === board.name) {
+      setRenaming(false);
+      return;
+    }
+    // 存完再关:进行中确认键转圈(见 RenameDialog 的 pending)。
+    setSavingName(true);
     updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, name: next })
-      .then(acceptBoard)
+      .then((fresh) => {
+        acceptBoard(fresh);
+        setRenaming(false);
+      })
       .catch(async (error: Error) => {
         if (!(await recoverConflict(error))) toast.error(error.message);
-      });
+      })
+      .finally(() => setSavingName(false));
   };
 
   // 版式跟着工作流详情页:**画布铺满,两组胶囊浮在上面** —— 左边是身份(回哪儿去、这是谁),
@@ -920,6 +929,7 @@ function BoardDetail({
         title={t("rename")}
         initialValue={board.name}
         onCancel={() => setRenaming(false)}
+        pending={savingName}
         onSubmit={rename}
       />
 

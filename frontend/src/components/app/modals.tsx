@@ -138,16 +138,25 @@ export function ModalShell({
   );
 }
 
+/**
+ * 填一个名字(重命名、新建)。和 ConfirmDialog 一样,**`pending` 必填**:提交后要等服务端,
+ * 这期间确认键转圈、按不动、弹窗关不掉 —— 否则用户只能看着一个静止的弹窗猜有没有提交上。
+ */
 export function RenameDialog({
   open,
   title,
   initialValue,
+  pending,
+  confirmLabel,
   onCancel,
   onSubmit,
 }: {
   open: boolean;
   title: string;
   initialValue: string;
+  pending: boolean;
+  /** 确认键上写什么;不给就是「确认」(新建时写「创建」)。 */
+  confirmLabel?: string;
   onCancel: () => void;
   onSubmit: (value: string) => void;
 }) {
@@ -165,15 +174,15 @@ export function RenameDialog({
   return (
     <ModalShell
       open={open}
-      onOpenChange={(next) => !next && onCancel()}
+      onOpenChange={(next) => !next && !pending && onCancel()}
       title={title}
       footer={
         <>
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>
             {t("cancel")}
           </Button>
-          <Button type="submit" form={formId}>
-            {t("confirm")}
+          <Button type="submit" form={formId} loading={pending}>
+            {confirmLabel ?? t("confirm")}
           </Button>
         </>
       }

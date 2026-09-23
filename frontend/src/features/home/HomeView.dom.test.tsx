@@ -11,7 +11,10 @@ vi.mock("@/api/client", async original => ({
   ...await original<typeof import("@/api/client")>(),
   workspaceSummary: mocks.summary,
   deleteProject: mocks.deleteProject,
-  api: async () => ({ text: "A quiet moment", author: "Studio", source: "" }),
+  api: async (path: string, init?: { body?: string }) =>
+    path === "/api/projects"
+      ? { id: "brand-new", workspace_id: "studio-a", name: JSON.parse(init?.body ?? "{}").name, active_sequence_id: null }
+      : { text: "A quiet moment", author: "Studio", source: "" },
   assetThumbnailUrl: (id: string) => `/thumbnail/${id}`,
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en-US" }) }));
@@ -29,8 +32,7 @@ beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 
 it("opens and filters projects in both presentations and draws the cover the backend picked", async () => {
   const open = vi.fn();
-  const create = vi.fn();
-  const view = render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} onCreateProject={create} creatingProject={false} />));
+  const view = render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} />));
   const header = screen.getByRole("banner");
   expect(view.container.firstElementChild?.firstElementChild).toBe(header);
   expect(within(header).getByText("Studio A")).toBeVisible();
@@ -49,14 +51,19 @@ it("opens and filters projects in both presentations and draws the cover the bac
   expect(screen.queryByRole("button", { name: "Older film" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "searchProjects" }), { target: { value: "missing" } });
   expect(screen.getByText("homeNoSearchResults")).toBeVisible();
+  // 新建:先弹窗起名,建好留在首页,不跳走。
   fireEvent.click(screen.getByRole("button", { name: "createProject" }));
-  expect(create).toHaveBeenCalledOnce();
+  const naming = await screen.findByRole("dialog");
+  fireEvent.change(within(naming).getByRole("textbox"), { target: { value: "My new film" } });
+  fireEvent.click(within(naming).getByRole("button", { name: "createProjectConfirm" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(open).not.toHaveBeenCalledWith("brand-new");
   expect(mocks.summary).not.toHaveBeenCalled();
 });
 
 it("能批量选中项目一起删 —— 选择模式下点卡片是勾选,不是打开", async () => {
   const open = vi.fn();
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} onCreateProject={vi.fn()} creatingProject={false} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} />));
 
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Newer film" }));
@@ -71,7 +78,7 @@ it("能批量选中项目一起删 —— 选择模式下点卡片是勾选,不�
 });
 
 it("选择模式下点这一行的空白处也能勾上", () => {
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} onCreateProject={vi.fn()} creatingProject={false} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
   fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   const row = screen.getByRole("button", { name: "mediaSelectMode: Older film" }).closest("article")!;
@@ -84,7 +91,7 @@ it("选择模式下点这一行的空白处也能勾上", () => {
 
 it("点这一行的空白处就打开项目;点「…」菜单不会顺带打开", () => {
   const open = vi.fn();
-  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} onCreateProject={vi.fn()} creatingProject={false} />));
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} />));
   fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
   const row = screen.getByRole("button", { name: "homeOpenEditor: Older film" }).closest("article")!;
   fireEvent.click(row);

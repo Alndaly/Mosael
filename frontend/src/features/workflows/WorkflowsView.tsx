@@ -670,6 +670,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         title={t("rename")}
         initialValue={menuRenaming?.name ?? ""}
         onCancel={() => setMenuRenaming(null)}
+        pending={menuRename.isPending}
         onSubmit={(name) => menuRenaming && menuRename.mutate({ id: menuRenaming.id, name })}
       />
       <ConfirmDialog
@@ -2466,6 +2467,7 @@ function WorkflowEditor({
         title={t("rename")}
         initialValue={workflow.name}
         onCancel={() => setRenaming(false)}
+        pending={rename.isPending}
         onSubmit={(name) => rename.mutate(name)}
       />
       <ConfirmDialog

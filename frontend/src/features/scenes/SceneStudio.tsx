@@ -889,7 +889,7 @@ function SceneEditor({
       className="scene-studio"
       data-screen-mode={fullscreen.active ? "editor" : undefined}
     >
-      <RenameDialog open={renaming} title="重命名场景" initialValue={draft.name} onCancel={() => setRenaming(false)} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
+      <RenameDialog open={renaming} title="重命名场景" initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
       <header className="scene-header">
         <Tool label="返回场景列表" onClick={onBack}>
           <ArrowLeft size={17} />

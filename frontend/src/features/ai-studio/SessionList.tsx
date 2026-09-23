@@ -492,6 +492,7 @@ export function SessionList({
         title={t("chatNewGroup")}
         initialValue=""
         onCancel={() => setCreatingGroup(false)}
+        pending={addGroup.isPending}
         onSubmit={(name) => addGroup.mutate(name)}
       />
       <RenameDialog
@@ -499,6 +500,7 @@ export function SessionList({
         title={t("chatRenameGroup")}
         initialValue={renamingGroup?.name ?? ""}
         onCancel={() => setRenamingGroup(null)}
+        pending={editGroup.isPending}
         onSubmit={(name) => renamingGroup && editGroup.mutate({ id: renamingGroup.id, name })}
       />
       <ConfirmDialog
@@ -514,6 +516,7 @@ export function SessionList({
         title={t(spec.renameTitle)}
         initialValue={renamingSession?.title ?? ""}
         onCancel={() => setRenamingSession(null)}
+        pending={renameSession.isPending}
         onSubmit={(name) => renamingSession && renameSession.mutate({ id: renamingSession.id, name })}
       />
       <ConfirmDialog

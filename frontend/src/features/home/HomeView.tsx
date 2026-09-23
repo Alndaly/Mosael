@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { useMultiSelect } from "@/lib/useMultiSelect";
+import { nextProjectName, useCreateProject } from "@/lib/useCreateProject";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { toast } from "sonner";
 
@@ -41,19 +42,30 @@ export function HomeView({
   workspace,
   projects,
   onOpenProject,
-  onCreateProject,
-  creatingProject,
 }: {
   workspace: Workspace;
   projects: ProjectWithStats[];
   onOpenProject: (projectId: string) => void;
-  onCreateProject: () => void;
-  creatingProject: boolean;
 }) {
   const t = useI18n();
   
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Project | null>(null);
+  //: 新建:先弹窗起名,建好**留在首页**,新项目滚到看得见的地方、高亮一下 —— 此前一点就建了个
+  //: 「未命名项目 N」并直接跳进剪辑页,看起来像只是跳了个页面,根本没意识到建了东西。
+  const [naming, setNaming] = React.useState(false);
+  const [justCreated, setJustCreated] = React.useState<string | null>(null);
+  const create = useCreateProject(workspace.id, (id) => {
+    setNaming(false);
+    setSearch("");
+    setJustCreated(id);
+  });
+  React.useEffect(() => {
+    if (!justCreated) return;
+    document.querySelector(`[data-project-id="${justCreated}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const timer = window.setTimeout(() => setJustCreated(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [justCreated, projects]);
   const [deleting, setDeleting] = React.useState<Project | null>(null);
   const [search, setSearch] = React.useState("");
   const [collection, setCollection] = usePersistentTab<"recent" | "all">("home-collection", "recent", ["recent", "all"]);
@@ -186,7 +198,7 @@ export function HomeView({
   return (
     <div className={STUDIO_PAGE}>
       <HomeHero
-        actions={<Button onClick={onCreateProject} loading={creatingProject}><FolderPlus />{t("createProject")}</Button>}
+        actions={<Button onClick={() => setNaming(true)}><FolderPlus />{t("createProject")}</Button>}
         greeting={t(greetingKey)}
         workspaceName={workspace.name}
         now={now}
@@ -240,7 +252,7 @@ export function HomeView({
           title={t("homeEmptyTitle")}
           body={t("homeEmptyBody")}
           action={
-            <Button onClick={onCreateProject} disabled={creatingProject}>
+            <Button onClick={() => setNaming(true)}>
               <FolderPlus size={15} /> {t("createProject")}
             </Button>
           }
@@ -249,19 +261,29 @@ export function HomeView({
         <>
           {visible.length === 0 && <p className="py-10 text-center text-muted-foreground">{t("homeNoSearchResults")}</p>}
           {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
-            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} />)}
+            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} highlighted={justCreated === project.id} />)}
           </div>}
           <div className="grid gap-1 empty:hidden">
-            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} />)}
+            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} highlighted={justCreated === project.id} />)}
           </div>
         </>
       )}
 
       <RenameDialog
+        open={naming}
+        title={t("createProject")}
+        initialValue={nextProjectName(t("projectDefault"), projects)}
+        confirmLabel={t("createProjectConfirm")}
+        pending={create.isPending}
+        onCancel={() => setNaming(false)}
+        onSubmit={(name) => create.mutate(name)}
+      />
+      <RenameDialog
         open={renaming !== null}
         title={t("renameProject")}
         initialValue={renaming?.name ?? ""}
         onCancel={() => setRenaming(null)}
+        pending={rename.isPending}
         onSubmit={(name) => renaming && rename.mutate({ id: renaming.id, name })}
       />
       <ConfirmDialog
@@ -285,11 +307,13 @@ export function HomeView({
 }
 
 /** Every presentation shares the same actions; images always belong to this project. */
-function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle }: {
+function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle, highlighted = false }: {
   project: ProjectWithStats; featured?: boolean; className?: string;
   onOpen: (id: string) => void; onRename: (project: Project) => void; onDelete: (project: Project) => void;
   /** 选择模式下点卡片是勾选,不是打开;单条的操作菜单收起来(批量动作在工具条上)。 */
   selecting?: boolean; selected?: boolean; onToggle?: (id: string) => void;
+  /** 刚建好的那一个:亮一下,让人一眼看到它在哪儿。 */
+  highlighted?: boolean;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -307,6 +331,7 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   return <ContextMenu>
     <ContextMenuTrigger asChild>
       <article
+        data-project-id={project.id}
         aria-selected={selecting ? selected : undefined}
         onClick={activate}
         className={cn(
@@ -314,6 +339,7 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
           featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel",
           //: 列表行选中:整行一层淡淡的主色底,不给每行各套一圈边框 —— 连着选几行时,一圈圈边框摞在一起很乱。
           selecting && selected && !featured && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",
+          highlighted && "rounded-lg ring-2 ring-primary/60 ring-offset-2 ring-offset-background transition-shadow",
           className,
         )}
       >

@@ -340,6 +340,7 @@ function WorkspaceSwitcher({
       toast.success(t("saved"));
     },
     onError: (error: Error) => toast.error(error.message),
+    onSettled: () => setRenaming(null),
   });
 
   const removeMut = useMutation({
@@ -371,6 +372,7 @@ function WorkspaceSwitcher({
       onSelectWorkspace?.(created.id);
     },
     onError: (error: Error) => toast.error(error.message),
+    onSettled: () => setCreating(false),
   });
 
   if (!onSelectWorkspace) {
@@ -428,22 +430,20 @@ function WorkspaceSwitcher({
         title={t("workspaceNew")}
         initialValue=""
         onCancel={() => setCreating(false)}
-        onSubmit={(name) => {
-          setCreating(false);
-          createMut.mutate(name);
-        }}
+        pending={createMut.isPending}
+        onSubmit={(name) => createMut.mutate(name)}
       />
       <RenameDialog
         open={renaming !== null}
         title={t("renameWorkspace")}
         initialValue={renaming?.name ?? ""}
         onCancel={() => setRenaming(null)}
+        pending={renameMut.isPending}
         onSubmit={(name) => {
-          const target = renaming;
-          setRenaming(null);
-          if (target && name.trim() && name.trim() !== target.name) {
-            renameMut.mutate({ id: target.id, name: name.trim() });
-          }
+          if (!renaming) return;
+          // 名字没变就不必等服务端,直接关。
+          if (name.trim() === renaming.name) setRenaming(null);
+          else renameMut.mutate({ id: renaming.id, name: name.trim() });
         }}
       />
       <ConfirmDialog

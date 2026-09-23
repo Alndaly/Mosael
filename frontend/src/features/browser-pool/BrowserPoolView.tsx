@@ -386,6 +386,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         title={t("rename")}
         initialValue={renaming?.name ?? ""}
         onCancel={() => setRenaming(null)}
+        pending={patchName.isPending}
         onSubmit={(name) => renaming && patchName.mutate({ p: renaming, name })}
       />
       {proxyEditing && (

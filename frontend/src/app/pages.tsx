@@ -50,8 +50,6 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
       workspace={ctx.workspace}
       projects={ctx.projects}
       onOpenProject={ctx.openProject}
-      onCreateProject={ctx.createProject}
-      creatingProject={ctx.creatingProject}
     />
   ),
   statistics: (ctx) => <StatisticsView workspace={ctx.workspace} projects={ctx.projects} onOpenProject={ctx.openProject} />,
