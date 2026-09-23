@@ -6,7 +6,7 @@ Mosael 是本地优先的:素材库里的文件在你自己的盘上,**没有公
 方舟 Seedance 的参考视频就是一例(官方文档:「请确保 URL 是公网可公开访问的链接」),
 它收公网 http(s) 直链,**明确不收 Base64**。
 
-`s3_upload` 就是那座桥:传上去,交回一条**限时**直链(签名在查询串里,桶不必设成公共读),
+`oss_upload` 就是那座桥:传上去,交回一条**限时**直链(签名在查询串里,桶不必设成公共读),
 直接粘进生成节点的「参考视频」那一格。
 
 签名是纯标准库手写的(见 sigv4.py)—— 插件进程里没有 boto3,也不该为了签四个请求装一整个 SDK。
@@ -24,7 +24,7 @@ def _bucket() -> storage.Bucket:
     region = os.environ.get("OSS_REGION", "cn-hangzhou").strip() or "cn-hangzhou"
     endpoint = os.environ.get("OSS_ENDPOINT", "").strip() or f"oss-{region}.aliyuncs.com"
     return storage.Bucket(
-        flavor=sigv4.OSS,
+        dialect=sigv4.OSS,
         endpoint=endpoint,
         bucket=os.environ.get("OSS_BUCKET", "").strip(),
         region=region,

@@ -93,7 +93,7 @@ def public_url_for(db: "Session", *, workspace_id: str, asset_id: str, asset_nam
     if not candidates:
         raise NoUploader(
             f"「{asset_name}」是本地素材,而这个模型的这一项只收公网链接。"
-            "装一个对象存储插件(火山引擎 TOS / 阿里云 OSS / Amazon S3)之后它会自动传上去 ——"
+            "装一个对象存储插件(火山引擎 TOS / 阿里云 OSS / 腾讯云 COS / Amazon S3)之后它会自动传上去 ——"
             "在「插件」页里装并填上桶和密钥;或者直接粘一条你已有的公网直链。"
         )
     instance, _manifest = candidates[0]

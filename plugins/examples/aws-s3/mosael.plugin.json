@@ -6,7 +6,7 @@
     "en": "Amazon S3"
   },
   "default_locale": "zh",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "homepage": "https://docs.aws.amazon.com/AmazonS3/latest/API/",
   "author": {
     "name": "Mosael",

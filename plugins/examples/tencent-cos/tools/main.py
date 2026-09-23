@@ -1,4 +1,4 @@
-"""火山引擎 TOS —— 把素材传上去、换一条公网直链,以及把桶里的东西拉回素材库。
+"""腾讯云 COS —— 把素材传上去、换一条公网直链,以及把桶里的东西拉回素材库。
 
 ## 它是为什么存在的
 
@@ -6,31 +6,30 @@ Mosael 是本地优先的:素材库里的文件在你自己的盘上,**没有公
 方舟 Seedance 的参考视频就是一例(官方文档:「请确保 URL 是公网可公开访问的链接」),
 它收公网 http(s) 直链,**明确不收 Base64**。
 
-**这一家尤其对得上号**:方舟自己的文档就推荐「存放在 TOS 对象存储服务中,
-并配置为公共读」。`tos_upload` 就是那座桥:传上去,交回一条**限时**直链(签名在查询串里,桶不必设成公共读),
+`cos_upload` 就是那座桥:传上去,交回一条**限时**直链(签名在查询串里,桶不必设成公共读),
 直接粘进生成节点的「参考视频」那一格。
 
-签名是纯标准库手写的(见 sigv4.py)—— 插件进程里没有 boto3,也不该为了签四个请求装一整个 SDK。
+签名是纯标准库手写的(见 qsign.py)—— 插件进程里没有官方 SDK,也不该为了签四个请求装一整个。
 """
 from __future__ import annotations
 
 import os
 
-import sigv4
+import qsign
 import storage
 from storage import StorageError, line
 
 
 def _bucket() -> storage.Bucket:
-    region = os.environ.get("TOS_REGION", "cn-beijing").strip() or "cn-beijing"
-    endpoint = os.environ.get("TOS_ENDPOINT", "").strip() or f"tos-{region}.volces.com"
+    region = os.environ.get("COS_REGION", "ap-guangzhou").strip() or "ap-guangzhou"
+    endpoint = os.environ.get("COS_ENDPOINT", "").strip() or f"cos.{region}.myqcloud.com"
     return storage.Bucket(
-        dialect=sigv4.TOS,
+        dialect=qsign.COS,
         endpoint=endpoint,
-        bucket=os.environ.get("TOS_BUCKET", "").strip(),
+        bucket=os.environ.get("COS_BUCKET", "").strip(),
         region=region,
-        access_key=os.environ.get("TOS_ACCESS_KEY", "").strip(),
-        secret=os.environ.get("TOS_SECRET_KEY", "").strip(),
+        access_key=os.environ.get("COS_SECRET_ID", "").strip(),
+        secret=os.environ.get("COS_SECRET_KEY", "").strip(),
     )
 
 
@@ -51,8 +50,8 @@ def upload(payload: dict, locale: str) -> dict:
         "expires_in": expires,
         "summary": line(
             locale,
-            f"已传到 tos://{bucket.bucket}/{key},直链 {expires} 秒内有效",
-            f"Uploaded to tos://{bucket.bucket}/{key}; the link is valid for {expires}s",
+            f"已传到 cos://{bucket.bucket}/{key},直链 {expires} 秒内有效",
+            f"Uploaded to cos://{bucket.bucket}/{key}; the link is valid for {expires}s",
         ),
     }
 
@@ -88,4 +87,4 @@ def listing(payload: dict, locale: str) -> dict:
 
 
 if __name__ == "__main__":
-    storage.run({"tos_upload": upload, "tos_presign": presign, "tos_fetch": fetch, "tos_list": listing})
+    storage.run({"cos_upload": upload, "cos_presign": presign, "cos_fetch": fetch, "cos_list": listing})

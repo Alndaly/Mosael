@@ -34,8 +34,9 @@ Mosael 是**本地优先**的:素材库里的文件在你自己的盘上,没有�
 所以 `sigv4.py` 写成可参数化的一份,三个插件传各自的方言 —— 抄三遍的话,漂掉的那一处表现是
 **403**,而不是报错。
 
-三个插件是独立可分发的包,所以 `sigv4.py` 和 `storage.py` 在三个包里各有一份**字节相同**的
-拷贝,由 `backend/tests/test_storage_plugins_share_one_core.py` 钉住。拷贝不可怕,
+上传、列目录这些主体(`tools/storage.py`)和腾讯云 COS 插件也是共用的 —— 它不认识任何一种签名,
+签名方言由插件交给它。几个插件是独立可分发的包,所以 `storage.py`(四个包)和 `sigv4.py`(三个包)
+各有一份**字节相同**的拷贝,由 `backend/tests/test_storage_plugins_share_one_core.py` 钉住。拷贝不可怕,
 **悄悄漂掉的拷贝**才可怕。
 
 ## 权限与密钥

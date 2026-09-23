@@ -11,6 +11,7 @@ SignedHeaders 重算,这两种都对。
 
 from __future__ import annotations
 
+import datetime
 import sys
 from pathlib import Path
 
@@ -36,10 +37,10 @@ def bucket(monkeypatch: pytest.MonkeyPatch):
     finally:
         sys.path.pop(0)
     sent: list[dict] = []
-    monkeypatch.setattr(storage, "_stamp", lambda: "20260923T080000Z")
+    monkeypatch.setattr(storage, "_now", lambda: datetime.datetime(2026, 9, 23, 8, 0, tzinfo=datetime.UTC))
     monkeypatch.setattr(storage, "_request",
                         lambda url, *, method, headers, body=None: (sent.append(headers), b"<ListBucketResult/>")[1])
-    one = storage.Bucket(flavor=sigv4.TOS, endpoint="tos-cn-beijing.volces.com", bucket="examplebucket",
+    one = storage.Bucket(dialect=sigv4.TOS, endpoint="tos-cn-beijing.volces.com", bucket="examplebucket",
                          region="cn-beijing", access_key="AKLTExampleAccessKey",
                          secret="ExampleSecretKeyForVectorsOnly0000")
     return one, sent

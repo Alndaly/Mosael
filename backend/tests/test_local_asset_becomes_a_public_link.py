@@ -137,13 +137,13 @@ def test_多个可用时选哪一个是稳定的(monkeypatch) -> None:
     assert picked == sorted(names), "选择顺序不稳定"
 
 
-def test_三个官方插件都声明了这个能力() -> None:
+def test_官方的对象存储插件都声明了这个能力() -> None:
     import json
     from pathlib import Path
 
     from app.domain.plugins.manifest import parse
 
     root = Path(__file__).resolve().parents[2] / "plugins" / "examples"
-    for name in ("aws-s3", "volcengine-tos", "aliyun-oss"):
+    for name in ("aws-s3", "volcengine-tos", "aliyun-oss", "tencent-cos"):
         manifest = parse(json.loads((root / name / "mosael.plugin.json").read_text(encoding="utf-8")), name)
         assert "public_url" in manifest.provides, f"{name} 没声明 public_url —— 宿主找不到它"

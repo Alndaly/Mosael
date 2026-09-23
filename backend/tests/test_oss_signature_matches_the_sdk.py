@@ -21,6 +21,7 @@ SigningContext(product="oss", region, bucket, key, signing_time),调 `SignerV4()
 
 from __future__ import annotations
 
+import datetime
 import sys
 from pathlib import Path
 
@@ -51,9 +52,9 @@ def bucket(monkeypatch: pytest.MonkeyPatch):
         sent.append({"url": url, "method": method, "headers": headers})
         return b'<?xml version="1.0"?><ListBucketResult></ListBucketResult>'
 
-    monkeypatch.setattr(storage, "_stamp", lambda: "20260923T080000Z")
+    monkeypatch.setattr(storage, "_now", lambda: datetime.datetime(2026, 9, 23, 8, 0, tzinfo=datetime.UTC))
     monkeypatch.setattr(storage, "_request", fake_request)
-    one = storage.Bucket(flavor=sigv4.OSS, endpoint="oss-cn-hangzhou.aliyuncs.com", bucket="examplebucket",
+    one = storage.Bucket(dialect=sigv4.OSS, endpoint="oss-cn-hangzhou.aliyuncs.com", bucket="examplebucket",
                          region="cn-hangzhou", access_key=AK, secret=SK)
     return one, sent
 

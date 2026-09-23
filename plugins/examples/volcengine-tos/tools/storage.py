@@ -1,13 +1,23 @@
 """对象存储插件的共用主体:上传、取限时直链、下载回素材库、列目录。
 
-## 为什么三家共用这一份
+## 为什么几家共用这一份
 
-S3、火山 TOS、阿里云 OSS 的 HTTP 接口**是同一套**(PUT/GET 对象、list-objects-v2),
-只有签名方言不同(见 sigv4.Flavor)。三份各写一遍的话,差异会出现在那些平时走不到的地方 ——
-比如 key 里带中文时的转义、list 的分页参数 —— 而那种差异的表现是 403 或"少了几条",
+S3、火山 TOS、阿里云 OSS、腾讯云 COS 的 HTTP 接口**是同一套**(PUT/GET 对象、列目录、
+虚拟主机式寻址、XML 错误体),**只有签名不同**。几份各写一遍的话,差异会出现在那些平时走不到的
+地方 —— 比如 key 里带中文时的转义、list 的分页参数 —— 而那种差异的表现是 403 或"少了几条",
 不是报错。
 
-三个插件各自是独立可分发的包,所以这个文件在三个包里各有一份**字节相同**的拷贝,
+所以这里**不认识任何一种签名**:签名是一个方言对象(`Bucket(dialect=…)`),由插件自己带来 ——
+SigV4 系三家用 sigv4.Flavor,腾讯云用 qsign.Cos。方言要回答三件事:
+
+- `sign(bucket, method=, path=, params=, headers=, body=, now=)` → 真正发出去的请求头(含签名);
+- `presign(bucket, method=, path=, expires=, now=)` → 限时直链的查询串;
+- `list_v2`:列目录用不用 `list-type=2`(COS 只有 V1)。
+
+`path` 交过去的是**未转义**的 `/对象键` —— 各家对路径的规范化不同(SigV4 签转义后的,
+COS 签原文),由方言自己处理;发请求用的 URL 由这里统一转义。
+
+几个插件各自是独立可分发的包,所以这个文件在每个包里各有一份**字节相同**的拷贝,
 由棘轮钉住(backend/tests/test_storage_plugins_share_one_core.py)。拷贝不可怕,
 **悄悄漂掉的拷贝**才可怕。
 
@@ -28,8 +38,6 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-import sigv4
-
 #: 限时直链的默认有效期。一小时够一次生成任务用完(方舟自己的任务过期是 48 小时,
 #: 但它在**提交时**就把文件取走了),又不会把一条可公开下载的地址长期留在外面。
 DEFAULT_EXPIRES = 3600
@@ -46,8 +54,17 @@ class StorageError(RuntimeError):
     """说得出口的失败。消息直接进工具结果,所以要是一句人话。"""
 
 
-def _stamp() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+def _now() -> _dt.datetime:
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
+def quote(value: str, *, safe: str = "/") -> str:
+    """RFC 3986 转义,`~` 不转。发出去的 URL 用它;签名里的规范化由方言自己做。"""
+    return urllib.parse.quote(value, safe=safe + "~")
+
+
+def query_string(params: dict[str, str]) -> str:
+    return "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(params.items()))
 
 
 def _request(url: str, *, method: str, headers: dict[str, str], body: bytes | None = None) -> bytes:
@@ -73,13 +90,13 @@ def _request(url: str, *, method: str, headers: dict[str, str], body: bytes | No
 class Bucket:
     """一个桶。**端点由配置给**,所以同一套代码也能连自建的 S3 兼容服务。"""
 
-    def __init__(self, *, flavor: sigv4.Flavor, endpoint: str, bucket: str, region: str,
+    def __init__(self, *, dialect, endpoint: str, bucket: str, region: str,
                  access_key: str, secret: str) -> None:
         if not bucket:
             raise StorageError("没有配置桶名")
         if not access_key or not secret:
             raise StorageError("没有配置访问密钥")
-        self.flavor, self.bucket, self.region = flavor, bucket, region
+        self.dialect, self.bucket, self.region = dialect, bucket, region
         self.access_key, self.secret = access_key, secret
         # 用户常把整条 URL 贴进来(带协议、带路径),只取主机名。
         host = endpoint.strip().replace("https://", "").replace("http://", "").strip("/").split("/")[0]
@@ -92,60 +109,45 @@ class Bucket:
                 "接入点要填完整域名,通常留空,会按区域自动拼。"
             )
         self.host = host
-        #: **虚拟主机式寻址**(桶名在域名里)是三家的默认,路径式正在被淘汰。
+        #: **虚拟主机式寻址**(桶名在域名里)是几家的默认,路径式正在被淘汰。
         if not self.host.startswith(f"{bucket}."):
             self.host = f"{bucket}.{self.host}"
         self.base = f"https://{self.host}"
 
-    def _path(self, key: str) -> str:
-        return "/" + sigv4.quote(key.lstrip("/"))
+    @staticmethod
+    def _key_path(key: str) -> str:
+        """未转义的 `/对象键` —— 交给方言去签。"""
+        return "/" + key.lstrip("/")
+
+    def _send(self, method: str, path: str, *, params: dict[str, str] | None = None,
+              headers: dict[str, str] | None = None, body: bytes | None = None) -> bytes:
+        params = params or {}
+        signed = self.dialect.sign(self, method=method, path=path, params=params,
+                                   headers={"host": self.host, **(headers or {})}, body=body, now=_now())
+        url = self.base + quote(path) + (f"?{query_string(params)}" if params else "")
+        return _request(url, method=method, headers=signed, body=body)
 
     def put(self, key: str, data: bytes, *, content_type: str = "application/octet-stream") -> None:
-        stamp = _stamp()
-        payload = sigv4.UNSIGNED if self.flavor.unsigned_payload_only else sigv4.sha256_hex(data)
-        headers = {
-            "host": self.host,
-            self.flavor.date_header: stamp,
-            self.flavor.sha_header: payload,
-            "content-type": content_type,
-            "content-length": str(len(data)),
-        }
-        headers["authorization"] = sigv4.authorization(
-            method="PUT", path=self._path(key), query="", headers=headers, payload_hash=payload,
-            access_key=self.access_key, secret=self.secret, region=self.region,
-            stamp=stamp, flavor=self.flavor, bucket=self.bucket,
-        )
-        _request(self.base + self._path(key), method="PUT", headers=headers, body=data)
+        self._send("PUT", self._key_path(key), body=data,
+                   headers={"content-type": content_type, "content-length": str(len(data))})
 
     def presign(self, key: str, *, expires: int = DEFAULT_EXPIRES, method: str = "GET") -> str:
         """一条**限时**直链。桶不必设成公共读 —— 签名在查询串里,谁拿到谁能下。"""
-        query = sigv4.presigned_query(
-            method=method, path=self._path(key), host=self.host, expires=expires,
-            access_key=self.access_key, secret=self.secret, region=self.region,
-            stamp=_stamp(), flavor=self.flavor, bucket=self.bucket,
-        )
-        return f"{self.base}{self._path(key)}?{query}"
+        path = self._key_path(key)
+        query = self.dialect.presign(self, method=method, path=path, expires=expires, now=_now())
+        return f"{self.base}{quote(path)}?{query}"
 
     def public_url(self, key: str) -> str:
         """桶设成公共读时的那条地址。**没设的话它会 403** —— 所以工具同时交回限时直链。"""
-        return f"{self.base}{self._path(key)}"
+        return f"{self.base}{quote(self._key_path(key))}"
 
     def listing(self, prefix: str = "", limit: int = 100) -> list[dict]:
-        stamp = _stamp()
-        params = {"list-type": "2", "max-keys": str(max(1, min(int(limit or 100), MAX_KEYS)))}
+        params = {"max-keys": str(max(1, min(int(limit or 100), MAX_KEYS)))}
+        if self.dialect.list_v2:
+            params["list-type"] = "2"
         if prefix:
             params["prefix"] = prefix
-        query = "&".join(f"{sigv4.quote(k, safe='')}={sigv4.quote(v, safe='')}"
-                         for k, v in sorted(params.items()))
-        payload = sigv4.UNSIGNED
-        headers = {"host": self.host, self.flavor.date_header: stamp, self.flavor.sha_header: payload}
-        headers["authorization"] = sigv4.authorization(
-            method="GET", path="/", query=query, headers=headers, payload_hash=payload,
-            access_key=self.access_key, secret=self.secret, region=self.region,
-            stamp=stamp, flavor=self.flavor, bucket=self.bucket,
-        )
-        body = _request(f"{self.base}/?{query}", method="GET", headers=headers)
-        root = ET.fromstring(body)
+        root = ET.fromstring(self._send("GET", "/", params=params))
         namespace = root.tag.split("}")[0] + "}" if "}" in root.tag else ""
         out = []
         for item in root.findall(f"{namespace}Contents"):
@@ -172,7 +174,7 @@ def content_type_of(name: str) -> str:
 
 
 def run(tools: dict) -> None:
-    """stdio 协议的外壳:读一个请求,写一个响应。三个插件共用。"""
+    """stdio 协议的外壳:读一个请求,写一个响应。几个存储插件共用。"""
     try:
         request = json.loads(sys.stdin.read() or "{}")
     except json.JSONDecodeError as exc:

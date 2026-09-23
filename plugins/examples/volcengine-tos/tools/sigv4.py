@@ -6,6 +6,9 @@
 三家对象存储(S3 / 火山 TOS / 阿里云 OSS)的签名**同源但不同字**:算法名、日期头、
 scope 的结尾、密钥派生链的第一步各不相同。所以这一份写成可参数化的,三个插件各传各的 ——
 而不是三份各抄一遍(抄出来的那两份迟早在某一处漂掉,而漂掉的表现是 403,不是报错)。
+
+`Flavor` 同时就是 storage.Bucket 要的那个**签名方言**(sign / presign / list_v2)。
+腾讯云 COS 的签名不是 SigV4 这一系,它带自己的方言(qsign.py),不在这里。
 """
 from __future__ import annotations
 
@@ -43,6 +46,30 @@ class Flavor:
     #: 所以那一家不签正文哈希。
     unsigned_payload_only: bool = False
 
+    #: 列目录用 list-objects-v2。三家都支持。
+    list_v2 = True
+
+    # —— storage.Bucket 用的方言接口 ——
+
+    def sign(self, bucket, *, method: str, path: str, params: dict[str, str], headers: dict[str, str],
+             body: bytes | None, now) -> dict[str, str]:
+        stamp = now.strftime("%Y%m%dT%H%M%SZ")
+        payload = UNSIGNED if body is None or self.unsigned_payload_only else sha256_hex(body)
+        signed = {**headers, self.date_header: stamp, self.sha_header: payload}
+        signed["authorization"] = authorization(
+            method=method, path=quote(path), query=canonical_query(params), headers=signed,
+            payload_hash=payload, access_key=bucket.access_key, secret=bucket.secret,
+            region=bucket.region, stamp=stamp, flavor=self, bucket=bucket.bucket,
+        )
+        return signed
+
+    def presign(self, bucket, *, method: str, path: str, expires: int, now) -> str:
+        return presigned_query(
+            method=method, path=quote(path), host=bucket.host, expires=expires,
+            access_key=bucket.access_key, secret=bucket.secret, region=bucket.region,
+            stamp=now.strftime("%Y%m%dT%H%M%SZ"), flavor=self, bucket=bucket.bucket,
+        )
+
 
 def _amz_style(prefix: str) -> dict[str, str]:
     return {
@@ -77,6 +104,10 @@ def quote(value: str, *, safe: str = "/") -> str:
     """RFC 3986 转义。**`~` 不能被转义** —— 这是 SigV4 和 urllib 默认行为不一样的地方,
     也是签名对不上时最难查的一处:服务端按自己的规则重算,差一个字符就是 403。"""
     return urllib.parse.quote(value, safe=safe + "~")
+
+
+def canonical_query(params: dict[str, str]) -> str:
+    return "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(params.items()))
 
 
 def signing_key(secret: str, date: str, region: str, flavor: Flavor) -> bytes:
@@ -154,7 +185,7 @@ def presigned_query(
     }
     if "signed_headers" in names:  # 阿里云没有这个参数(见 Flavor.aliyun_v4)
         params[names["signed_headers"]] = "host"
-    query = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(params.items()))
+    query = canonical_query(params)
     canonical, _ = canonical_request(
         method, canonical_path(path, bucket, flavor), query, {"host": host}, UNSIGNED, flavor)
     to_sign = "\n".join([flavor.algorithm, stamp, scope, sha256_hex(canonical.encode("utf-8"))])

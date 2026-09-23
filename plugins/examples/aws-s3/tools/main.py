@@ -24,7 +24,7 @@ def _bucket() -> storage.Bucket:
     region = os.environ.get("S3_REGION", "us-east-1").strip() or "us-east-1"
     endpoint = os.environ.get("S3_ENDPOINT", "").strip() or f"s3.{region}.amazonaws.com"
     return storage.Bucket(
-        flavor=sigv4.AWS,
+        dialect=sigv4.AWS,
         endpoint=endpoint,
         bucket=os.environ.get("S3_BUCKET", "").strip(),
         region=region,

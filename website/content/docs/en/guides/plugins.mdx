@@ -160,9 +160,10 @@ These live under `plugins/examples/` in the repository — examples and official
   It also shows how a plugin declares its own time budget and keeps hundreds of MB of
   dependencies in a data directory that survives updates. Needs Node.js 18+; Remotion is free
   for individuals and companies of up to 3 people, larger companies need its company license.
-- `volcengine-tos` / `aliyun-oss` / `aws-s3` — three object stores. **One body, three dialects**:
-  the HTTP surface is the same and only the signing differs, so the two shared files are
-  byte-identical copies across the three packages (a test pins that).
+- `volcengine-tos` / `aliyun-oss` / `aws-s3` / `tencent-cos` — four object stores. **One body,
+  a signing dialect each**: the HTTP surface is the same and only the signing differs, so the
+  shared storage core is a byte-identical copy in every package (a test pins that), and each
+  signature is checked against the vendor's official SDK.
 
   They close one concrete gap: Mosael is local-first, so your assets live on your own disk with
   **no public address**, while some providers only take a URL — Seedance's reference video is one
