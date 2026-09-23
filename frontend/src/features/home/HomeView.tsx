@@ -296,14 +296,18 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   // 封面由后端给:时间线上最早出现的画面,没有时是项目自己的第一张图(见 routes/projects._covers)。
   const cover = project.cover_asset_id;
   React.useEffect(() => setFailed(false), [cover]);
-  const open = () => (selecting ? onToggle?.(project.id) : onOpen(project.id));
+  //: 选择模式下**整行 / 整张卡**都是勾选区域(点空白处也算),由外层 article 接;里面的封面和标题
+  //: 这时不再自己处理,冒泡上去 —— 各处理一次的话,点封面会勾上又立刻取消。
+  const open = () => { if (!selecting) onOpen(project.id); };
   // 列表行的背景向外延伸，抵消自身内边距，让封面和操作按钮对齐上方精选卡片。
   return <ContextMenu>
     <ContextMenuTrigger asChild>
       <article
         aria-selected={selecting ? selected : undefined}
+        onClick={selecting ? () => onToggle?.(project.id) : undefined}
         className={cn(
           "group min-h-0 min-w-0",
+          selecting && "cursor-pointer",
           featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel",
           //: 列表行选中:整行一层淡淡的主色底,不给每行各套一圈边框 —— 连着选几行时,一圈圈边框摞在一起很乱。
           selecting && selected && !featured && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",

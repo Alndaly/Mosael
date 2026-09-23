@@ -69,3 +69,15 @@ it("能批量选中项目一起删 —— 选择模式下点卡片是勾选,不�
   await waitFor(() => expect(mocks.deleteProject).toHaveBeenCalledTimes(2));
   expect(mocks.deleteProject.mock.calls.map((call) => call[0]).sort()).toEqual(["newer", "older"]);
 });
+
+it("选择模式下点这一行的空白处也能勾上", () => {
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} onCreateProject={vi.fn()} creatingProject={false} />));
+  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
+  const row = screen.getByRole("button", { name: "mediaSelectMode: Older film" }).closest("article")!;
+  fireEvent.click(row);
+  expect(row).toHaveAttribute("aria-selected", "true");
+  // 点封面本身:只翻一次,不会勾上又立刻取消。
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Older film" }));
+  expect(row).toHaveAttribute("aria-selected", "false");
+});
