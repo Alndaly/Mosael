@@ -16,6 +16,7 @@ import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
+import { VideoCompareView } from "@/features/media/VideoCompareView";
 import { DenoiseDialog } from "@/features/media/DenoiseDialog";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -90,11 +91,19 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   // 多选的状态机是共用的(见 lib/useMultiSelect)—— 素材、发布记录、工作流三处同一份。
   const { selectMode, setSelectMode, selectedIds, toggle: toggleSelected, selectAll, allSelected, clear: clearSelection, exit: exitSelectMode } =
     useMultiSelect(assets.data ?? [], (asset) => asset.id);
-  /** 选中项里能参与对比的(只有图片)。 */
-  const comparable = React.useMemo(
-    () => (assets.data ?? []).filter((asset) => selectedIds.has(asset.id) && asset.kind === "image"),
+  /** 选中项里能参与对比的:图片和视频各是一套对比,**不混** —— 图片比的是同一处细节(联动缩放),
+   *  视频比的是同一时刻(联动播放)。混选时两套都不成立,按钮禁用并说明。 */
+  const selectedAssets = React.useMemo(
+    () => (assets.data ?? []).filter((asset) => selectedIds.has(asset.id)),
     [assets.data, selectedIds],
   );
+  const compareKind: "image" | "video" | null = React.useMemo(() => {
+    const kinds = new Set(selectedAssets.map((asset) => asset.kind));
+    if (kinds.size !== 1) return null;
+    const [only] = kinds;
+    return only === "image" || only === "video" ? only : null;
+  }, [selectedAssets]);
+  const comparable = compareKind ? selectedAssets : [];
   const refresh = () => qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
 
   // Cmd+K 面板选中素材后跳转到本页并直接打开预览。
@@ -357,7 +366,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                     <ListChecks size={13} />{" "}
                     {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
                   </Button>
-                  {/* 对比只对图片有意义;视频要同步播放/逐帧,是另一套设计。少于两张时禁用并说明原因。 */}
+                  {/* 图片:联动缩放平移;视频:联动播放。选的不是同一种、或不到两个时禁用并说明原因。 */}
                   <Button
                     variant="outline"
                     size="default"
@@ -519,9 +528,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         pending={batchRemove.isPending}
         onConfirm={() => batchRemove.mutate()}
       />
-      {comparing && comparable.length >= 2 && (
+      {comparing && comparable.length >= 2 && (compareKind === "video" ? (
+        <VideoCompareView assets={comparable} onClose={() => setComparing(false)} />
+      ) : (
         <AssetCompareView assets={comparable} onClose={() => setComparing(false)} />
-      )}
+      ))}
       </div>
     </div>
   );

@@ -39,7 +39,7 @@ function dimensionsOf(asset: Asset): { w: number; h: number } | null {
 }
 
 /** 网格里单元格的最小可用高度。低于这个值就不再硬塞进一屏,改为滚动。 */
-const MIN_CELL = 150;
+export const MIN_CELL = 150;
 const GRID_GAP = 8;
 
 /**
@@ -55,7 +55,7 @@ const GRID_GAP = 8;
  * 张数多到单元格低于 MIN_CELL 时放弃铺满,退回定高滚动 —— 硬塞一屏的结果是每张都小到
  * 分辨不出差异,而这个视图存在的意义就是分辨差异。
  */
-function useBestFit(count: number, aspect: number) {
+export function useBestFit(count: number, aspect: number) {
   // 回调 ref 而不是 useRef:切到滑动分割再切回来,这个 div 是重新挂载的新节点,
   // 空依赖的 effect 不会重新观察它,尺寸会永远停在切走前的那一份。
   const [node, setNode] = React.useState<HTMLDivElement | null>(null);
