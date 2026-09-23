@@ -418,7 +418,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 >
                   <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.name} />
                   <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
-                  {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} />}
+                  {/* 列表行里勾选圈放在行右侧、垂直居中 —— 右上角是给卡片的,一行只有 80px 高,贴在顶上看着像掉了。 */}
+                  {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} className={display === "list" ? "right-3 top-1/2 -translate-y-1/2" : undefined} />}
                   {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
                     <Popover open={actionMenuId === asset.id} onOpenChange={open => setActionMenuId(current => open ? asset.id : current === asset.id ? null : current)}><PopoverTrigger asChild><Button variant="secondary" size="icon-xs" aria-label={`${t("studioActions")}: ${asset.name}`}><MoreHorizontal /></Button></PopoverTrigger>
                     <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end" onCloseAutoFocus={event => { if (actionMenuId && actionMenuId !== asset.id) event.preventDefault(); }}>
@@ -531,8 +532,11 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
     <article
       className={cn(
         "cursor-pointer rounded-lg transition-colors",
-        list ? "flex items-center gap-5 py-4 pr-12 hover:bg-secondary/40" : "grid gap-3",
-        selected && "border-primary shadow-[0_0_0_1px_var(--primary)]",
+        list ? "-mx-3 flex items-center gap-5 px-3 py-4 pr-12 hover:bg-secondary/40" : "grid gap-3",
+        //: 选中:卡片描一圈主色;**列表行铺一层淡主色底,不描边** —— 连着选几行时,一圈圈描边
+        //: 叠在一起(上一行的下沿压着下一行的上沿)很乱,底色连成一片才读得出「这几行选中了」。
+        selected && !list && "border-primary shadow-[0_0_0_1px_var(--primary)]",
+        selected && list && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",
       )}
     >
       <div className={cn("relative grid shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground", list ? "h-20 w-32" : "aspect-video")}>

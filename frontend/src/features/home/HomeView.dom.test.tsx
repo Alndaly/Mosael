@@ -6,7 +6,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { ProjectWithStats, Workspace } from "@/api/client";
 import { HomeView } from "./HomeView";
 
-const mocks = vi.hoisted(() => ({ summary: vi.fn(), navigate: vi.fn(), deleteProject: vi.fn(async () => undefined) }));
+const mocks = vi.hoisted(() => ({ summary: vi.fn(), navigate: vi.fn(), deleteProject: vi.fn(async (_id: string) => undefined) }));
 vi.mock("@/api/client", async original => ({
   ...await original<typeof import("@/api/client")>(),
   workspaceSummary: mocks.summary,
