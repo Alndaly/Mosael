@@ -401,6 +401,7 @@ function PublishDetail({
   task: PublishTask;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
   
   return (
@@ -457,6 +458,13 @@ function PublishDetail({
               ) : (
                 <p className="m-0 text-muted-foreground">{t("publishPostMissing")}</p>
               )}
+            </InfoRow>
+          )}
+          {task.post?.published_at && (
+            <InfoRow label={t("publishPostAt")}>
+              <time className="timecode text-xs text-muted-foreground" dateTime={task.post.published_at}>
+                {new Date(task.post.published_at).toLocaleString(locale)}
+              </time>
             </InfoRow>
           )}
           {task.status === "failed" && task.error && (

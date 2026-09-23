@@ -475,7 +475,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 
 ## 范例
 
-`plugins/examples/` 下十个,覆盖各种形态:
+`plugins/examples/` 下的范例覆盖各种形态(不写数目 —— 每加一个就错一次):
 
 - **text-toolkit** — 纯函数,零依赖零凭据,`expose: "all"`
 - **baidu-pan** — 本地脚本 + 凭据自动续期 + 收发文件 + 工作流节点
@@ -496,7 +496,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
   —— 方舟 Seedance 的参考视频就是一例(参考图可以走 Base64,参考视频不行)。
   `*_upload` 把素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。
 
-十个都写了中英两份文案,可以直接照着抄多语言的写法。
+它们都写了中英两份文案,可以直接照着抄多语言的写法。
 
 ## 声明「我能替宿主做成什么」
 

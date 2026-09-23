@@ -63,18 +63,14 @@ def test_指南的_order_不撞车() -> None:
         assert not clashes, "\n  ".join(clashes)
 
 
-def test_范例的数目和目录一致() -> None:
-    """写死的数目每加一个范例就错一次,而没有任何东西会提醒。"""
-    actual = len([p for p in (ROOT / "plugins" / "examples").iterdir() if p.is_dir()])
-    words = {3: ("三个", "Three"), 4: ("四个", "Four"), 5: ("五个", "Five"),
-             6: ("六个", "Six"), 7: ("七个", "Seven"), 8: ("八个", "Eight")}
-    assert actual in words, f"范例有 {actual} 个,给这条测试的 words 表补上对应的写法"
-    zh_word, en_word = words[actual]
+def test_范例都写进了文档_而且不写死数目() -> None:
+    """写死的数目每加一个范例就错一次,而没有任何东西会提醒 —— 所以文档不写数目
+    (「这些都是范例」),这里只管**每个范例目录都被提到**:加了一个却不写进去,
+    和数目写错是同一件事。"""
     zh_text = (DOCS / "zh" / "guides" / "plugins.mdx").read_text(encoding="utf-8")
     en_text = (DOCS / "en" / "guides" / "plugins.mdx").read_text(encoding="utf-8")
-    assert f"下有{zh_word}" in zh_text, f"中文版没说「下有{zh_word}」(实际 {actual} 个)"
-    assert f"{en_word} of them live" in en_text, f"英文版没说「{en_word} of them」(实际 {actual} 个)"
-    # 每个范例目录都该被提到 —— 加了一个却不写进去,和数目写错是同一件事。
+    for pattern in (r"下有[一二三四五六七八九十]+个", r"\b(Three|Four|Five|Six|Seven|Eight|Nine|Ten) of them live"):
+        assert not re.search(pattern, zh_text + en_text), f"文档又写死了范例的数目:{pattern}"
     for example in sorted(p.name for p in (ROOT / "plugins" / "examples").iterdir() if p.is_dir()):
         assert example in zh_text, f"中文版没提到范例 {example}"
         assert example in en_text, f"英文版没提到范例 {example}"

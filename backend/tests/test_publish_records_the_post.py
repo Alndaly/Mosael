@@ -98,3 +98,28 @@ def test_工作流发布节点把作品ID和链接交给下游() -> None:
 
     spec = NODE_TYPES["publish"]
     assert {"post_id", "post_url"} <= set(spec["outputs"])
+
+
+def test_已装机的库补上post列_老任务是空的_再跑一次什么都不做() -> None:
+    """升级的机器上,publish_tasks 已经存在而没有 post 列 —— create_all 不给已有的表加列。"""
+    import json
+
+    from sqlalchemy import inspect, text
+
+    from app.core.db import engine
+    from app.db.migrations import _migrate_publish_task_post
+
+    client = _client()
+    _, _, task = setup_browser_task(client)
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE publish_tasks DROP COLUMN post"))
+    engine.dispose()
+
+    _migrate_publish_task_post()
+    _migrate_publish_task_post()  # 第二次:列已经在了,什么都不做
+
+    assert "post" in {column["name"] for column in inspect(engine).get_columns("publish_tasks")}
+    with engine.begin() as connection:
+        stored = connection.execute(text("SELECT post FROM publish_tasks WHERE id = :id"), {"id": task["id"]}).scalar_one()
+    # 老任务发的时候没记 —— 那些作品的 ID 事后补不出来,不假装有。
+    assert json.loads(stored) == {}
