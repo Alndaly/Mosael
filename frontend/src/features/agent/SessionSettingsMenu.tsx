@@ -7,6 +7,7 @@ import { ContextMeter, type ContextInfo } from "@/features/agent/ContextMeter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AutoApprovalTrace } from "@/features/agent/AutoApprovalTrace";
 import { ACCENT, PERMISSION_MODE_ICON, PermissionModePicker, permissionModeOf } from "@/features/agent/PermissionModePicker";
 import { AnalysisModePicker } from "@/features/agent/AnalysisModePicker";
 import { ThinkingLevelPicker } from "@/features/agent/ThinkingLevelPicker";
@@ -74,6 +75,9 @@ export function SessionSettingsMenu({
           </span>
           <PermissionModePicker session={session} />
         </div>
+        {/* 自动放行留了痕,而此前人看不到 —— 前端对 /api/confirmations 的两个调用点都写死
+            status=pending,于是"决策之后"的那一半在界面上不存在(见 AutoApprovalTrace)。 */}
+        <AutoApprovalTrace workspaceId={session.workspace_id} sessionId={session.id} />
         <div className="grid gap-1.5">
           <span className="text-ui-xs font-medium text-muted-foreground">{t("agentThinkingLevel")}</span>
           <ThinkingLevelPicker session={session} />

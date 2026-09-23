@@ -4,6 +4,7 @@ import { ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export const PERMISSION_MODE_ICON = {
  */
 export function PermissionModePicker({ session }: { session: AgentSession | null }) {
   const t = useI18n();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [pendingBypass, setPendingBypass] = React.useState(false);
 
@@ -60,6 +62,15 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
   if (!session) return null;
   const mode = permissionModeOf(session);
   const Icon = PERMISSION_MODE_ICON[mode];
+  /**
+   * **这一档是别人开的,对你不生效。**
+   *
+   * `autopilot.decide` 的第三道闸:「模式是**授权动作**,只对做出授权的那个人生效」——
+   * 飞书群聊共用一个会话,群里任何人发消息都跑在它上面。于是 B 看到档位开着 auto,
+   * 而他的每一次调用照样弹卡,界面此前没有任何地方能告诉他为什么。
+   * 一个看着是开的、却不生效的开关,用户多半会归结为"这功能不稳定"。
+   */
+  const setByOther = Boolean(session.mode_set_by && user && session.mode_set_by !== user.id);
 
   return (
     <>
@@ -100,6 +111,13 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
           ))}
         </SelectContent>
       </Select>
+
+      {setByOther && mode !== "manual" && (
+        <p className="m-0 flex items-start gap-1.5 text-ui-2xs leading-snug text-warning">
+          <ShieldQuestion size={12} className="mt-[2px] shrink-0" />
+          {t("permModeSetByOther")}
+        </p>
+      )}
 
       {/* 二次确认:这一档放开的是撤不回来的动作,不该一次点击就滑过去。 */}
       <ModalShell

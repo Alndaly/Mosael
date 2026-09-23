@@ -1330,6 +1330,11 @@ export const messages = {
     permModeManualHint: "每个写操作都问你一次(默认)",
     permModeAutoHint: "可撤销的编辑直接放行;花钱的连开几次后再问;对外生效的照常问",
     permModeBypassHint: "所有操作都不再问你,包括公开发布、对外请求、本机执行代码",
+    permModeSetByOther: "这一档是别人开的 —— 权限只对开它的那个人生效,你的每一次操作仍会逐条问你。",
+    permTraceTitle: "这次对话自动放行了 {n} 次",
+    permTraceGateAuto: "auto 档放行",
+    permTraceGateBypass: "bypass 档放行",
+    permTraceGateSessionAllow: "你点过「本会话始终允许」",
     permModeBypassConfirmTitle: "确认开启「全部放行」?",
     permModeBypassConfirmBody:
       "这次对话里,智能体将不再就任何操作征求你的同意 —— 包括用你的账号公开发布、向外部服务发请求、在这台机器上运行代码。这些后果不在 Mosael 里,撤不回来。每条记录仍然可查。",
@@ -3785,6 +3790,11 @@ export const messages = {
     permModeManualHint: "Every write action asks you first (default)",
     permModeAutoHint: "Undoable edits go through; billable ones ask again after a run; outside-this-app still asks",
     permModeBypassHint: "Nothing is asked — including publishing, outbound requests and running code on this machine",
+    permModeSetByOther: "Someone else set this mode — it only applies to whoever set it, so you are still asked every time.",
+    permTraceTitle: "Auto-approved {n} time(s) in this chat",
+    permTraceGateAuto: "approved by auto mode",
+    permTraceGateBypass: "approved by bypass mode",
+    permTraceGateSessionAllow: "you chose “always allow in this chat”",
     permModeBypassConfirmTitle: "Turn on \u201CApprove everything\u201D?",
     permModeBypassConfirmBody:
       "In this conversation the agent will stop asking for your consent to anything \u2014 including publishing under your account, calling external services, and running code on this machine. Those consequences are not inside Mosael and cannot be undone. Every action is still recorded.",

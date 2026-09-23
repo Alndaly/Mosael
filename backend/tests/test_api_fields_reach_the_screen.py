@@ -42,16 +42,13 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     "ScheduledTaskOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
     "SessionGroupOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
     "SessionGroupOut.sort_order": "读者是后端的 ORDER BY:界面**设**它(见 SessionGroupUpdate),拿回来的列表已经排好了",
-    "AgentSessionOut.mode_set_by": "留痕:这档权限是谁开的。审计用,不上界面",
     "WorkflowRevisionOut.created_by": "留痕:这一版是谁存的",
     "WorkflowRevisionDetailOut.created_by": "留痕:这一版是谁存的",
     "AgentQuestionOut.answered_at": "留痕:什么时候答的",
-    "ConfirmationOut.resolved_at": "留痕:什么时候批的",
     "ProviderQuotaOut.fetched_at": "留痕:这份额度是什么时候取的",
     # —— 给 sidecar / MCP 那一侧读的确认卡
     "ConfirmationOut.summary_key": "卡片摘要的未翻译形态。界面读翻好的 summary,这两个给别的运行时",
     "ConfirmationOut.summary_params": "卡片摘要的参数,和 summary_key 一起给别的运行时",
-    "ConfirmationOut.decision_mode": "自动放行的档位,由 sidecar 决定要不要停下来等",
     # —— 凭据租约:sidecar 持有并原样带回,界面不碰
     "LeaseOut.lease": "sidecar 的租约令牌,原样带回给后端",
     # —— 后端/插件宿主内部的指路
