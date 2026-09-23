@@ -103,7 +103,7 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 - 公证完成的 macOS arm64 `.dmg`。
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
-- `plugins/examples/*` 的五个插件 ZIP：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。
+- `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。
 
 不要混用不同 commit 的桌面包或插件。开始打包后 main 如有新提交，用原提交的独立 checkout 打包附件，或完整重建新提交；不要让 tag 指向未被测试的代码。
 
