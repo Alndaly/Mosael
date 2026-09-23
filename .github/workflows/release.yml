@@ -234,9 +234,10 @@ jobs:
           LOCAL_NOTARIZATION: ${{ github.event_name == 'workflow_dispatch' && inputs.notarization == 'local' }}
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
-            # umask 只罩住 profile 这一个文件。它此前写在整段开头,于是 electron-builder 的输出
-            # 也成了 drwx------ —— 同一台 Mac 的其他账户打不开(verify-mac-signing 现在查这一条)。
-            (umask 077 && printf '%s' "$MACOS_PROVISION_PROFILE" | base64 --decode > build/mosael.provisionprofile)
+            # 描述文件**不是秘密**:它会原样嵌进每个发出去的包(Contents/embedded.provisionprofile)。
+            # 此前用 umask 077 写它 —— 先是罩住了整段、让整个 .app 变成 drwx------,收窄之后
+            # 这个文件本身仍是 600、被原样拷进包里。两次都是 verify-mac-signing 的权限检查抓到的。
+            printf '%s' "$MACOS_PROVISION_PROFILE" | base64 --decode > build/mosael.provisionprofile
             if [ "$LOCAL_NOTARIZATION" = "true" ]; then
               pnpm exec electron-builder --mac dir --publish never -c.mac.notarize=false
               node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app --signature-only
