@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "./field-trigger";
 
 const UI = __dirname;
 const FILES = {
@@ -52,4 +53,12 @@ describe("下拉触发器只有一份样式", () => {
       .filter((line) => line.includes("<ChevronDown") && !line.includes("FIELD_TRIGGER_CHEVRON"));
     expect(adhoc, "箭头和触发器是同一个视觉单元,别单独写").toEqual([]);
   });
+});
+
+it("值靠左、箭头顶到最右 —— 「图标 + 值 + 箭头」时值不会被摆到正中", () => {
+  // justify-between 下三样东西里中间那个会居中:短值(「跟随系统默认」)居中,长值被截断又贴左,
+  // 同一排两个下拉一个居中一个靠左。
+  expect(FIELD_TRIGGER_CLASS).not.toMatch(/\bjustify-(between|center)\b/);
+  expect(FIELD_TRIGGER_CLASS).toMatch(/\btext-left\b/);
+  expect(FIELD_TRIGGER_CHEVRON).toMatch(/\bml-auto\b/);
 });

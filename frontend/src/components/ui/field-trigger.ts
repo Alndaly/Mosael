@@ -15,9 +15,13 @@ import { CONTROL_HEIGHT } from "@/components/ui/control-size";
  * **两级 min-w-0 缺一不可**:值 span 是 flex 子项,触发器自身又常是 grid/flex 子项,
  * `min-width:auto` 会把它钉在内容最小宽度上 —— 长模型 id(doubao-seedance-1-0-pro-250528)
  * 会把整个面板顶穿,truncate 完全不生效,右侧箭头被挤没。都归零后 w-full 才真正生效。
+ *
+ * **值一律靠左,箭头靠 ml-auto 顶到最右**,不用 justify-between:触发器里常常是「图标 + 值 +
+ * 箭头」三样,justify-between 会把中间那个值摆到正中 —— 值短时(「跟随系统默认」)居中,
+ * 值长被截断时又贴左,同一排两个下拉一个居中一个靠左。按钮默认的 text-align:center 也得压掉。
  */
 export const FIELD_TRIGGER_CLASS =
-  `flex ${CONTROL_HEIGHT.md} w-full min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-field-border bg-field px-3 py-2 text-ui-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate`;
+  `flex ${CONTROL_HEIGHT.md} w-full min-w-0 items-center justify-start gap-1.5 text-left whitespace-nowrap rounded-md border border-field-border bg-field px-3 py-2 text-ui-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate`;
 
 /** 触发器右侧的下拉箭头。尺寸与透明度跟着触发器走,三种控件同一个写法。 */
-export const FIELD_TRIGGER_CHEVRON = "h-4 w-4 shrink-0 opacity-50";
+export const FIELD_TRIGGER_CHEVRON = "ml-auto h-4 w-4 shrink-0 opacity-50";
