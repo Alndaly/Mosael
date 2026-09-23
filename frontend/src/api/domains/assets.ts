@@ -4,25 +4,9 @@ import { API_BASE, api, getAuthToken } from "@/api/transport";
 
 export type Asset = components["schemas"]["AssetOut"];
 
-export interface RemoteEntry {
-  id: string;
-  url: string;
-  title: string;
-  duration: number | null;
-  uploader: string;
-  thumbnail: string;
-  /** Actual available height choices, highest first. Empty means the shallow probe did not know. */
-  heights?: number[];
-}
+export type RemoteEntry = components["schemas"]["RemoteEntryOut"];
 
-export interface UrlProbe {
-  title: string;
-  is_playlist: boolean;
-  entries: RemoteEntry[];
-  truncated: boolean;
-  /** One-based offset of this page. */
-  start?: number;
-}
+export type UrlProbe = components["schemas"]["UrlProbeResponse"];
 
 export interface WaveformData {
   version: number;

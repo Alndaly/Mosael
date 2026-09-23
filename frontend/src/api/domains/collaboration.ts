@@ -1,63 +1,15 @@
+import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
 
-export interface CollaborationActor {
-  id: string | null;
-  username: string;
-  display_name: string;
-  avatar_key: string;
-}
+export type CollaborationActor = components["schemas"]["ActorOut"];
 
-export interface ActivityEvent {
-  id: string;
-  workspace_id: string;
-  actor_id: string | null;
-  actor: CollaborationActor | null;
-  action: string;
-  subject_type: string;
-  subject_id: string;
-  summary: string;
-  payload: Record<string, unknown>;
-  created_at: string;
-}
+export type ActivityEvent = components["schemas"]["ActivityOut"];
 
-export interface CollaborationComment {
-  id: string;
-  workspace_id: string;
-  subject_type: string;
-  subject_id: string;
-  author_id: string | null;
-  author: CollaborationActor | null;
-  body: string;
-  mentioned_user_ids: string[];
-  anchor: CollaborationCommentAnchor | null;
-  body_document: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
+export type CollaborationComment = components["schemas"]["CommentOut"];
 
-export interface CollaborationCommentAnchor {
-  kind?: "canvas";
-  x?: number;
-  y?: number;
-  node_id?: string;
-}
+export type CollaborationCommentAnchor = components["schemas"]["CanvasCommentAnchor"];
 
-export interface CollaborationReview {
-  id: string;
-  workspace_id: string;
-  subject_type: string;
-  subject_id: string;
-  requested_by: string | null;
-  requester: CollaborationActor | null;
-  reviewer_id: string;
-  reviewer: CollaborationActor | null;
-  status: "pending" | "approved" | "changes_requested" | "cancelled";
-  note: string;
-  decision_note: string;
-  decided_by: string | null;
-  created_at: string;
-  decided_at: string | null;
-}
+export type CollaborationReview = components["schemas"]["ReviewOut"];
 
 function subjectQuery(workspaceId: string, subjectType: string, subjectId: string): string {
   return new URLSearchParams({ workspace_id: workspaceId, subject_type: subjectType, subject_id: subjectId }).toString();

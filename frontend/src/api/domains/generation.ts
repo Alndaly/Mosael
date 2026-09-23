@@ -6,18 +6,11 @@ export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];
 
 /** A model exposed by one provider profile. Unknown limits remain null, never guessed. */
-export interface ProviderModel {
-  id: string;
-  context_window: number | null;
-  max_output_tokens: number | null;
-}
+/** 这里只要这几栏 —— 用 `Pick` 而不是手写一个同形的 interface:少写一栏是**有意收窄**,
+ *  而手写那份在后端改名/删字段时不会有任何反应。 */
+export type ProviderModel = Pick<components["schemas"]["ProviderModelOut"], "id" | "context_window" | "max_output_tokens">;
 
-export interface PromptOptimizeResult {
-  prompt: string;
-  negative_prompt: string;
-  notes: string;
-  platform: string;
-}
+export type PromptOptimizeResult = components["schemas"]["PromptOptimizeResponse"];
 
 export interface ComfyWorkflow {
   path: string;

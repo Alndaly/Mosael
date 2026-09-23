@@ -79,23 +79,9 @@ export function synthesizeVoice(
 }
 
 /** A remote/local synthesis choice offered by the dubbing UI. */
-export interface TtsEngineChoice {
-  id: string;
-  label: string;
-  needs_key: boolean;
-  needs_voice_id: boolean;
-  voices: string[];
-  supports_speed: boolean;
-  note: string;
-  ready: boolean;
-}
+export type TtsEngineChoice = components["schemas"]["TtsEngineChoiceOut"];
 
-export interface TtsVoice {
-  value: string;
-  label: string;
-  /** Volcengine resource family echoed during synthesis. */
-  resource_id: string;
-}
+export type TtsVoice = components["schemas"]["TtsVoiceOut"];
 
 export function listTtsVoices(engine: string): Promise<TtsVoice[]> {
   return api<TtsVoice[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}`);

@@ -18,7 +18,7 @@ beforeAll(() => {
 });
 const comment: CollaborationComment = {
   id: "c", workspace_id: "w", subject_type: "board", subject_id: "b", author_id: "me", author: null,
-  body: "@同事 看这里", mentioned_user_ids: ["mate"], anchor: { x: 120, y: 50 }, created_at: "", updated_at: "",
+  body: "@同事 看这里", mentioned_user_ids: ["mate"], anchor: { kind: "canvas", x: 120, y: 50 }, created_at: "", updated_at: "",
   body_document: { type: "doc", content: [{ type: "paragraph", content: [
     { type: "userMention", attrs: { userId: "mate", label: "同事" } }, { type: "text", text: " 看这里" },
   ] }] },

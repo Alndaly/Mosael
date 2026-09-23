@@ -34,7 +34,7 @@ import { relativeTime } from "@/lib/time";
  */
 export type CollaborationSubject = "board" | "workflow";
 
-function actorName(actor: CollaborationActor | null, fallback: string): string {
+function actorName(actor: CollaborationActor | null | undefined, fallback: string): string {
   return actor?.display_name || actor?.username || fallback;
 }
 
@@ -139,10 +139,12 @@ export function CollaborationSheet({
                         <span className="truncate">{comment.anchor.node_id}</span>
                       </span>
                     )}
-                    {comment.mentioned_user_ids.length > 0 && (
+                    {/* 接口上它是可选的(手写那份影子类型把它写成必有,于是这里一直当它必有)。
+                        老评论没有这一栏,`.length` 会当场炸掉整块讨论列表。 */}
+                    {(comment.mentioned_user_ids?.length ?? 0) > 0 && (
                       <span className="flex items-center gap-1">
                         <AtSign size={11} className="shrink-0" />
-                        <span className="tabular-nums">{comment.mentioned_user_ids.length}</span>
+                        <span className="tabular-nums">{comment.mentioned_user_ids?.length}</span>
                       </span>
                     )}
                     {locatable(comment) && (

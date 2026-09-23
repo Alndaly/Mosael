@@ -203,7 +203,7 @@ export function canPlaceCommentDraft(
   return commentMode && !hasDraft && !gestureMoved && !dismissedActiveComment;
 }
 
-export function canMoveComment(authorId: string | null, currentUserId: string | null | undefined): boolean {
+export function canMoveComment(authorId: string | null | undefined, currentUserId: string | null | undefined): boolean {
   return Boolean(authorId && currentUserId && authorId === currentUserId);
 }
 
@@ -1153,7 +1153,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                         pointerId: event.pointerId,
                         startScreen: { x: event.clientX, y: event.clientY },
                         origin: { x, y },
-                        nodeId: comment.anchor?.node_id,
+                        nodeId: comment.anchor?.node_id ?? undefined,
                         moved: false,
                       };
                     }}

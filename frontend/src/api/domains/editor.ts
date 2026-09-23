@@ -292,11 +292,7 @@ export function redoSequence(sequenceId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/redo`, { method: "POST" });
 }
 
-export interface ExportParams {
-  resolution: "original" | "1080p" | "720p" | "480p";
-  fps: number | null;
-  quality: "high" | "standard" | "compact";
-}
+export type ExportParams = components["schemas"]["ExportRequest"];
 
 export function exportSequence(sequenceId: string, params?: ExportParams): Promise<Job> {
   return api<Job>(`/api/sequences/${sequenceId}/export`, {
@@ -305,14 +301,7 @@ export function exportSequence(sequenceId: string, params?: ExportParams): Promi
   });
 }
 
-export interface Lut {
-  id: string;
-  workspace_id: string;
-  name: string;
-  original_filename: string;
-  size: number;
-  created_at?: string | null;
-}
+export type Lut = components["schemas"]["LutOut"];
 
 export function listLuts(workspaceId: string): Promise<Lut[]> {
   return api<Lut[]>(`/api/luts?workspace_id=${workspaceId}`);
@@ -330,15 +319,7 @@ export function deleteLut(lutId: string): Promise<void> {
   return api<void>(`/api/luts/${lutId}`, { method: "DELETE" });
 }
 
-export interface Font {
-  id: string;
-  workspace_id: string;
-  /** Family from the font name table, which is what libass matches during export. */
-  family: string;
-  original_filename: string;
-  size: number;
-  created_at?: string | null;
-}
+export type Font = components["schemas"]["FontOut"];
 
 export function listFonts(workspaceId: string): Promise<Font[]> {
   return api<Font[]>(`/api/fonts?workspace_id=${workspaceId}`);

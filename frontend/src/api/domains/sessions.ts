@@ -4,12 +4,9 @@ import { api } from "@/api/transport";
 export type SessionGroup = components["schemas"]["SessionGroupOut"];
 export type SessionGroupKind = "agent" | "generation";
 
-export interface CapabilityModel {
-  provider_profile_id: string;
-  provider_name: string;
-  model: string;
-  display_name: string;
-}
+/** 这里只要这几栏 —— 用 `Pick` 而不是手写一个同形的 interface:少写一栏是**有意收窄**,
+ *  而手写那份在后端改名/删字段时不会有任何反应。 */
+export type CapabilityModel = Pick<components["schemas"]["CapabilityModelOut"], "provider_profile_id" | "provider_name" | "model" | "display_name">;
 
 export function listSessionGroups(workspaceId: string, kind: SessionGroupKind): Promise<SessionGroup[]> {
   return api<SessionGroup[]>(`/api/session-groups?workspace_id=${workspaceId}&kind=${kind}`);
