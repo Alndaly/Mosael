@@ -14,6 +14,7 @@ import {
   invokePluginTool,
   listPluginCredentials,
   listPluginInvocations,
+  listPluginMarket,
   listPluginPackages,
   listPluginPermissions,
   pluginDir,
@@ -33,8 +34,7 @@ import {
   type PluginPackage,
 } from "@/api/client";
 import { toast } from "sonner";
-import { useI18n, usePreferences } from "@/app/preferences";
-import { docsUrl } from "@/lib/deepLink";
+import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -166,7 +166,8 @@ function ScanButton({ pending, onScan }: { pending: boolean; onScan: () => void 
 
 function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: string }) {
   const t = useI18n();
-  const { locale } = usePreferences();
+  const market = useQuery({ queryKey: ["plugin-market"], queryFn: () => listPluginMarket(), retry: false });
+  const docs = pkg.docs || market.data?.find((entry) => entry.id === pkg.id)?.docs || "";
   const qc = useQueryClient();
   const [confirmUninstall, setConfirmUninstall] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
@@ -239,15 +240,19 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
                 <Plus size={13} /> {t("pluginNewConnection")}
               </Button>
             )}
-            {/* 「文档」指向**这个插件在 Mosael 里怎么用**的那一页(清单的 docs,已按语言挑好):
-                连接是什么、凭据填哪儿、工具各干什么 —— 这些百度网盘的 API 文档一个字都没有。
-                插件没写 docs 才退到通用的插件指南。
-                插件背后那家服务的站点(homepage)另给一颗,声明了才画:一个点不开的按钮比没有更糟。 */}
-            <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
-              <a href={pkg.docs || docsUrl("guides/plugins", locale)} target="_blank" rel="noreferrer noopener">
-                <BookOpen size={13} /> {t("pluginDocs")}
-              </a>
-            </Button>
+            {/* 「文档」指向**这个插件在 Mosael 里怎么用**的那一页(已按语言挑好):连接是什么、
+                凭据填哪儿、工具各干什么 —— 这些百度网盘的 API 文档一个字都没有。
+                装着的那一版清单里没写(写 docs 之前发的版本),就用市场索引里同一个插件的那一页 ——
+                文档说的是这个插件,不是这一版。两边都没有就不画:此前退到通用的「插件指南」,
+                点下去看到的是怎么装插件,不是这个插件怎么用。
+                插件背后那家服务的站点(homepage)另给一颗,声明了才画。 */}
+            {docs && (
+              <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
+                <a href={docs} target="_blank" rel="noreferrer noopener">
+                  <BookOpen size={13} /> {t("pluginDocs")}
+                </a>
+              </Button>
+            )}
             {pkg.homepage && (
               <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
                 <a href={pkg.homepage} target="_blank" rel="noreferrer noopener">
