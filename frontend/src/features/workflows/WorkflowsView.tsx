@@ -193,6 +193,7 @@ import {
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
+import { leaveClipboardToSystem } from "@/lib/shortcuts";
 
 /** 主画布的节点类型。标记不是工作流节点(它不执行、不连线),但它在 React Flow 里得有个
  *  渲染器 —— 所以它加在这里,而不是加进 WORKFLOW_NODE_TYPES(那张表是"能跑的节点")。
@@ -1159,6 +1160,8 @@ function WorkflowEditor({
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
       const key = event.key.toLowerCase();
       if (key === "c") {
+        // 选中了文字就是要复制文字:不拿画布上还选着的节点顶替(见 leaveClipboardToSystem)。
+        if (leaveClipboardToSystem(event)) return;
         if (copySelection()) event.preventDefault();
       } else if (key === "v") {
         if (pasteClipboard()) event.preventDefault();

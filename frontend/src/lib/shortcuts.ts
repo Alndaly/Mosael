@@ -150,3 +150,25 @@ export const RESERVED_COMBOS: ReadonlyArray<{ combo: Combo; owner: MessageKey }>
 export function reservedOwner(combo: Combo): MessageKey | null {
   return RESERVED_COMBOS.find((one) => one.combo === combo)?.owner ?? null;
 }
+
+/**
+ * 这次 ⌘C / ⌘X 该不该**交给系统**:焦点在可编辑的地方,或者页面上有一段选中的文字。
+ *
+ * 画布和时间线都把 ⌘C 接过来复制节点 / 片段。它们此前只让开输入框 —— 于是在执行历史里
+ * 选中一段输出、按 ⌘C,复制走的是画布上还选着的那个节点,文字复制不下来(真机)。
+ * 用户选中了文字,就是在说「我要复制这段字」:这时候谁都不该截。
+ */
+export function leaveClipboardToSystem(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement | null;
+  if (
+    target &&
+    (target.isContentEditable ||
+      /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
+      // 富文本编辑器里焦点常落在可编辑区的**子元素**上;isContentEditable 在个别环境里也没有实现。
+      target.closest?.('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]'))
+  ) {
+    return true;
+  }
+  const selection = typeof window === "undefined" ? null : window.getSelection();
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
+}

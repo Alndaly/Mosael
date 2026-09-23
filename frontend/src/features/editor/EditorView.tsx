@@ -80,6 +80,7 @@ import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
+import { leaveClipboardToSystem } from "@/lib/shortcuts";
 
 export function EditorView({
   workspace,
@@ -723,9 +724,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         event.preventDefault();
         duplicateClip();
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
+        if (leaveClipboardToSystem(event)) return;
         event.preventDefault();
         copyClip();
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "x") {
+        if (leaveClipboardToSystem(event)) return;
         event.preventDefault();
         cutClip();
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
