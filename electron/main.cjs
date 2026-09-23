@@ -13,6 +13,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { loginShellPath } = require("./login-shell-path.cjs");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const {
@@ -279,6 +280,9 @@ async function ensureBackend() {
     MOSAEL_APP_VERSION: app.getVersion(),
   };
   if (!isDev) {
+    // 打包版从 Finder / Dock 启动时 PATH 是 launchd 的最小集,插件找不到 node / uvx(见 login-shell-path)。
+    // 开发时是从终端起的,PATH 本来就对,不必多起一个 shell。
+    backendEnv.PATH = loginShellPath();
     // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
     backendEnv.MOSAEL_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
     backendEnv.MOSAEL_AGENT_BIN_NODE = process.execPath;
