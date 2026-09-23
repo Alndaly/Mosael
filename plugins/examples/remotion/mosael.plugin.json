@@ -1,0 +1,219 @@
+{
+  "manifest_version": 1,
+  "id": "dev.mosael.remotion",
+  "name": {
+    "zh": "Remotion 动画",
+    "en": "Remotion Animation"
+  },
+  "default_locale": "zh",
+  "version": "0.1.0",
+  "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
+  "runtime": {
+    "kind": "process",
+    "entry": "tools/main.py"
+  },
+  "permissions": [
+    "process:spawn",
+    "network:npm",
+    "filesystem:write"
+  ],
+  "skills": [
+    {
+      "id": "remotion",
+      "description": {
+        "zh": "用代码做动画视频,零生成费用:知识点讲解、公式推导、代码演示、数据图表。要讲准确的东西(文字、公式、步骤、数字)用它;要真实画面(人物、场景、实拍感)用视频生成模型。讲解视频给内容就能出片;更自由的画面写一段 Remotion 组件代码。需要本机装有 Node.js 18+。Remotion 对个人与 3 人以内的公司免费,更大的公司需要购买 Remotion 公司许可。",
+        "en": "Make animated videos with code, at no generation cost: lesson explainers, formula walk-throughs, code demos, data charts. Use it when accuracy matters (text, formulas, steps, numbers); use a video generation model for realistic footage. Explainers need only content; anything freer is a short Remotion component. Needs Node.js 18+ on this computer. Remotion is free for individuals and companies of up to 3 people; larger companies need a Remotion company license."
+      }
+    }
+  ],
+  "instance": {
+    "multiple": false,
+    "config": [
+      {
+        "key": "NPM_REGISTRY",
+        "label": {
+          "zh": "npm 镜像",
+          "en": "npm registry"
+        },
+        "type": "string",
+        "required": false,
+        "help": {
+          "zh": "可选。留空用官方源;国内网络可以填 https://registry.npmmirror.com。只在第一次准备渲染环境时用到。",
+          "en": "Optional. Leave empty for the official registry. Used only when preparing the rendering environment."
+        }
+      },
+      {
+        "key": "BROWSER_EXECUTABLE",
+        "label": {
+          "zh": "浏览器路径",
+          "en": "Browser path"
+        },
+        "type": "string",
+        "required": false,
+        "help": {
+          "zh": "可选。留空时先下载 Remotion 自带的浏览器,下不下来就用本机的 Chrome / Edge;想固定用某一个浏览器时填它的可执行文件路径。",
+          "en": "Optional. When empty, Remotion's own browser is downloaded, falling back to a local Chrome / Edge; set a path to always use one browser."
+        }
+      }
+    ],
+    "credentials": [
+      {
+        "key": "REMOTION_LICENSE_KEY",
+        "label": {
+          "zh": "Remotion 许可证密钥",
+          "en": "Remotion license key"
+        },
+        "required": false,
+        "help": {
+          "zh": "可选。个人和 3 人以内的公司不需要;更大的公司按 Remotion 许可条款需要购买公司许可,在这里填它的密钥。",
+          "en": "Optional. Not needed for individuals or companies of up to 3 people; larger companies need a Remotion company license and put its key here."
+        }
+      }
+    ]
+  },
+  "tools": {
+    "expose": "all",
+    "declare": [
+      {
+        "name": "remotion_setup",
+        "label": {
+          "zh": "准备渲染环境",
+          "en": "Prepare the renderer"
+        },
+        "description": {
+          "zh": "安装 Remotion 与渲染用的浏览器。第一次要几十秒到几分钟,之后几乎是瞬间完成。渲染工具在环境缺失时会自动补,但第一次最好在插件页先跑一下它。",
+          "en": "Install Remotion and the rendering browser. The first run takes from tens of seconds to a few minutes; after that it is near-instant. The render tools fill in anything missing, but run this once from the plugin page first."
+        },
+        "timeout_seconds": 900,
+        "input_schema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "remotion_explainer",
+        "label": {
+          "zh": "讲解视频",
+          "en": "Explainer video"
+        },
+        "description": {
+          "zh": "给内容,出一段知识点讲解视频(mp4,进素材库):标题 → 一节一节讲(小标题、逐条出现的要点、KaTeX 公式、逐行出现的代码、提示)→ 要点回顾。每段多长按内容算,不用给时间轴。讲数学、物理、编程、概念解释、操作步骤都合适。",
+          "en": "Turn content into a lesson explainer video (mp4, into the asset library): a title, then sections (heading, points that appear one by one, a KaTeX formula, code that appears line by line, a note), then key takeaways. Timing follows the content; no timeline needed. Good for maths, physics, programming, concepts and how-tos."
+        },
+        "timeout_seconds": 170,
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": {"zh": "视频标题,最多 80 字。", "en": "Video title, up to 80 characters."}
+            },
+            "subtitle": {
+              "type": "string",
+              "description": {"zh": "副标题,一句话说清讲什么。", "en": "Subtitle: one line on what it covers."}
+            },
+            "label": {
+              "type": "string",
+              "description": {"zh": "标题上方的小标签,如「数学 · 第 3 课」。", "en": "Small tag above the title, e.g. \"Maths · Lesson 3\"."}
+            },
+            "sections": {
+              "type": "array",
+              "description": {"zh": "一节一节讲的内容,1 到 12 节。", "en": "The sections, 1 to 12."},
+              "items": {
+                "type": "object",
+                "properties": {
+                  "heading": {"type": "string", "description": {"zh": "这一节的小标题。", "en": "Section heading."}},
+                  "points": {"type": "array", "items": {"type": "string"}, "description": {"zh": "要点,逐条出现,最多 6 条、每条 140 字以内。", "en": "Points shown one by one, up to 6, 140 characters each."}},
+                  "formula": {"type": "string", "description": {"zh": "一条公式,LaTeX 写法(如 a^2 + b^2 = c^2),由 KaTeX 排版。", "en": "One formula in LaTeX (e.g. a^2 + b^2 = c^2), typeset with KaTeX."}},
+                  "code": {"type": "string", "description": {"zh": "一段代码,逐行出现,最多显示 24 行。", "en": "A code snippet shown line by line, up to 24 lines."}},
+                  "note": {"type": "string", "description": {"zh": "一句提示或易错点,放在这一节最后。", "en": "A tip or common pitfall, shown last."}}
+                },
+                "required": ["heading"]
+              }
+            },
+            "summary": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": {"zh": "结尾的要点回顾,最多 6 条。", "en": "Key takeaways at the end, up to 6."}
+            },
+            "aspect": {
+              "type": "string",
+              "enum": ["16:9", "9:16", "1:1"],
+              "description": {"zh": "画幅:横屏 16:9(默认)、竖屏 9:16、方形 1:1。", "en": "Aspect: 16:9 (default), 9:16 or 1:1."}
+            },
+            "theme": {
+              "type": "string",
+              "enum": ["dark", "light"],
+              "description": {"zh": "深色(默认)或浅色。", "en": "Dark (default) or light."}
+            },
+            "accent": {
+              "type": "string",
+              "description": {"zh": "强调色,#RRGGBB。", "en": "Accent colour, #RRGGBB."}
+            },
+            "filename": {
+              "type": "string",
+              "description": {"zh": "产出文件名,留空用 explainer.mp4。", "en": "Output file name; explainer.mp4 when empty."}
+            }
+          },
+          "required": ["title", "sections"]
+        },
+        "node": {
+          "output_labels": {
+            "summary": {"zh": "一句话", "en": "In one line"},
+            "seconds": {"zh": "时长(秒)", "en": "Length (s)"}
+          }
+        }
+      },
+      {
+        "name": "remotion_animation",
+        "label": {
+          "zh": "自定义动画",
+          "en": "Custom animation"
+        },
+        "description": {
+          "zh": "用一段 Remotion 组件代码渲染动画(mp4,进素材库)。代码是一个 TSX 模块,`export default` 一个组件,它收到 `{ data }`(即这里传的 data);用 useCurrentFrame / useVideoConfig / interpolate / spring / AbsoluteFill / Sequence(都从 'remotion' 导入)做动画。只能 import react、remotion、katex。报错会原样返回,改了再调即可。讲解类内容优先用「讲解视频」。",
+          "en": "Render an animation from a Remotion component (mp4, into the asset library). The code is a TSX module that `export default`s a component receiving `{ data }` (the data given here); animate with useCurrentFrame / useVideoConfig / interpolate / spring / AbsoluteFill / Sequence from 'remotion'. Only react, remotion and katex can be imported. Errors come back verbatim, so fix and call again. Prefer the explainer tool for lesson-style content."
+        },
+        "timeout_seconds": 170,
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": {"zh": "TSX 模块源码,export default 一个 React 组件。", "en": "TSX module source that export defaults a React component."}
+            },
+            "seconds": {
+              "type": "number",
+              "description": {"zh": "时长,0.5 到 120 秒。", "en": "Length, 0.5 to 120 seconds."}
+            },
+            "aspect": {
+              "type": "string",
+              "enum": ["16:9", "9:16", "1:1"],
+              "description": {"zh": "画幅,默认 16:9(1920×1080)。", "en": "Aspect, 16:9 by default (1920×1080)."}
+            },
+            "fps": {
+              "type": "integer",
+              "enum": [24, 25, 30, 60],
+              "description": {"zh": "帧率,默认 30。", "en": "Frame rate, 30 by default."}
+            },
+            "data": {
+              "type": "object",
+              "description": {"zh": "交给组件的数据(组件从 props.data 读)。", "en": "Data passed to the component (read from props.data)."}
+            },
+            "filename": {
+              "type": "string",
+              "description": {"zh": "产出文件名,留空用 animation.mp4。", "en": "Output file name; animation.mp4 when empty."}
+            }
+          },
+          "required": ["code", "seconds"]
+        },
+        "node": {
+          "output_labels": {
+            "summary": {"zh": "一句话", "en": "In one line"},
+            "seconds": {"zh": "时长(秒)", "en": "Length (s)"}
+          }
+        }
+      }
+    ]
+  }
+}

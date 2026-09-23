@@ -193,6 +193,23 @@ Only keys **declared** in the manifest can be written. Writing an undeclared key
 rather than being ignored — ignoring it means you think it was saved, you get the old value next
 time, and the error surfaces somewhere else half an hour later.
 
+## Running longer, keeping big things
+
+One call runs for **60 seconds** by default. A tool that genuinely needs longer (rendering a
+video) declares `timeout_seconds` on its `declare` entry, capped at 1800; anything that is not a
+positive number is ignored. The agent waits at most 180 seconds for a single tool call, so keep
+agent-facing tools under that and split heavy preparation into its own step.
+
+The plugin directory **is not storage**: updating a plugin replaces the whole directory. Keep
+anything expensive (hundreds of MB of dependencies, downloaded models) in
+`MOSAEL_PLUGIN_DATA_DIR` — one per plugin, kept across calls and updates, removed with the plugin.
+
+```json
+{ "name": "render", "timeout_seconds": 170, "input_schema": { … } }
+```
+
+See the [Remotion plugin](/plugins/remotion): dependencies live in the data directory and the render tool declares its own budget.
+
 ## Making it a workflow node
 
 Tools work in the agent by default. To make one a workflow node too, add `node` to it:

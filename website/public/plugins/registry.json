@@ -94,6 +94,26 @@
       ]
     },
     {
+      "id": "dev.mosael.remotion",
+      "name": {
+        "zh": "Remotion 动画",
+        "en": "Remotion Animation"
+      },
+      "version": "0.1.0",
+      "description": {
+        "zh": "用代码做动画视频,零生成费用:知识点讲解、公式推导、代码演示、数据图表。要讲准确的东西(文字、公式、步骤、数字)用它;要真实画面(人物、场景、实拍感)用视频生成模型。讲解视频给内容就能出片;更自由的画面写一段 Remotion 组件代码。需要本机装有 Node.js 18+。Remotion 对个人与 3 人以内的公司免费,更大的公司需要购买 Remotion 公司许可。",
+        "en": "Make animated videos with code, at no generation cost: lesson explainers, formula walk-throughs, code demos, data charts. Use it when accuracy matters (text, formulas, steps, numbers); use a video generation model for realistic footage. Explainers need only content; anything freer is a short Remotion component. Needs Node.js 18+ on this computer. Remotion is free for individuals and companies of up to 3 people; larger companies need a Remotion company license."
+      },
+      "author": "Mosael",
+      "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.remotion.zip",
+      "permissions": [
+        "process:spawn",
+        "network:npm",
+        "filesystem:write"
+      ]
+    },
+    {
       "id": "dev.mosael.text-toolkit",
       "name": "Text Toolkit",
       "version": "0.1.1",

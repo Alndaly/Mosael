@@ -1,0 +1,14 @@
+{
+  "name": "mosael-remotion-workspace",
+  "private": true,
+  "type": "module",
+  "description": "Installed by the Mosael Remotion plugin into its data directory. Versions are pinned: the plugin's tools are tested against exactly these.",
+  "dependencies": {
+    "@remotion/bundler": "4.0.526",
+    "@remotion/renderer": "4.0.526",
+    "katex": "0.18.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.526"
+  }
+}
