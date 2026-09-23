@@ -7,9 +7,6 @@ settings:
 overrides:
   '@electron/get': ^5.1.0
 
-patchedDependencies:
-  app-builder-lib@26.15.3: 4688f96749e3d76cf27bc535d874470bf264610a331db13644df7715d699acf1
-
 importers:
 
   .:
@@ -25,8 +22,8 @@ importers:
         specifier: ^44.4.3
         version: 44.4.3(supports-color@10.2.2)
       electron-builder:
-        specifier: ^26.15.3
-        version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2)
+        specifier: ^26.16.1
+        version: 26.16.1(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2)
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -1017,6 +1014,10 @@ packages:
   '@noble/hashes@1.4.0':
     resolution: {integrity: sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==}
     engines: {node: '>= 16'}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@noble/hashes@2.4.0':
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
@@ -2564,12 +2565,12 @@ packages:
     resolution: {integrity: sha512-bN798gFfQX+viw3R7yrGWRqnrN2oRkEkUjjl4JNn4E8GxxbjtG3FbrEIIY3l8/hrwUwIeCZvi4QuOTP4MErVug==}
     engines: {node: '>=12'}
 
-  app-builder-lib@26.15.3:
-    resolution: {integrity: sha512-2VnyWkqsP5v5XbBhL3tD5Syx8iNPBYsoU7kY4S2fz7wg8Rj/nztWKCUzGKaFRTv0Xwf3/H058CR1Kvtd/3lRow==}
+  app-builder-lib@26.16.1:
+    resolution: {integrity: sha512-FhaO6YOup01ZfQW0Z6gt3AyukJjv1gW4uFK47jTgwcHZKqyN/fSlK2LqPf9tAeZYLP2bRJLDzeOkRImsw2X4Pg==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
-      dmg-builder: 26.15.3
-      electron-builder-squirrel-windows: 26.15.3
+      dmg-builder: 26.16.1
+      electron-builder-squirrel-windows: 26.16.1
 
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
@@ -2658,8 +2659,8 @@ packages:
     resolution: {integrity: sha512-g/kR520giAFYkSXTzcmF3kqQq7wi8F6N6SzeDgZrqTBN+VHdmgWOyTdD1yD7AATDId/yXLvuP34CxW46/BwCdw==}
     engines: {node: '>=12.0.0'}
 
-  builder-util@26.15.3:
-    resolution: {integrity: sha512-q2hn7Mbo2nFNkVekPiHFx6Nfo3hURmES3tfBn+k5Pqxl2RkmP3QGqZUhH/q9Pch/4G05NRhPjDlVj1O8q4Txvw==}
+  builder-util@26.16.0:
+    resolution: {integrity: sha512-RLyJhB7Si3YkzKR9ubQslWuXW3Vhs3CGe1i+SeixBZ0qTd1mk3XBmssvY22TlB6CS5blyko8Gu1JzpYk8UkYAg==}
     engines: {node: '>=14.0.0'}
 
   bytestreamjs@2.0.1:
@@ -2945,8 +2946,8 @@ packages:
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
 
-  dmg-builder@26.15.3:
-    resolution: {integrity: sha512-O3zJUFUYHJKgzPqioHxfxzBzlSC1eXCSr79gMSBKBP5AgjjpmrydMsMLotEg9fAJF36vdUncb+4ndRNxoPdlSQ==}
+  dmg-builder@26.16.1:
+    resolution: {integrity: sha512-pnI/3Qb24Uk+rMTgIUrsVUKosVgwmBUdF8Zeb8TexOSbpq8MWc7v6l+n+FrEqVkjNZwzBN+XpDS9ENgZ/rkWAw==}
 
   dom-accessibility-api@0.5.16:
     resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
@@ -2977,16 +2978,16 @@ packages:
     engines: {node: '>=0.10.0'}
     hasBin: true
 
-  electron-builder-squirrel-windows@26.15.3:
-    resolution: {integrity: sha512-Jc19XPV9y9+2bAdZPkXuVNGNIEFBq9poHC61l8Kv6FdK7DRG3+Ic0rerC0DXOaeHNz8yW0fg/JnF8GQROOF5MA==}
+  electron-builder-squirrel-windows@26.16.1:
+    resolution: {integrity: sha512-w0y44wSaT1l6R7CAGmeHn4nHPfvzDyCAU1xJyi1w9SbPYJpYn76SmHDzqHf8Y7l91cPWTdPYBpGQtB2T5mJ08A==}
 
-  electron-builder@26.15.3:
-    resolution: {integrity: sha512-a1KM5heqS3gQCZzizXEI8RjJy3QVogULPdeSknt76uLDpBIW/HDGsMg/XgP0riP6PI9COsRvFITKKGDqA8fJxA==}
+  electron-builder@26.16.1:
+    resolution: {integrity: sha512-LrLK65QX5PUYYODXqp23FKrV7CILTtVY7mrJckNknO9jLNSMiqFkKbSMiDRw4CjOADMPVDdWLxY4mezOZWswxg==}
     engines: {node: '>=14.0.0'}
     hasBin: true
 
-  electron-publish@26.15.3:
-    resolution: {integrity: sha512-g/2bn8YTavY4cuS5F+jOS7zmZbXXBV8KZ8yHKfJjFPoKtzBqrpCdNPxBd3tqdBwP7BVd0lGzf7Bk2s0KesWZ4Q==}
+  electron-publish@26.16.0:
+    resolution: {integrity: sha512-Vt3KzQIiw9BImvNOYtndg9Mjki+tl4+1sQiC/+G5j8khWaENOJFWodiB+sUl6yyHwtd37avehskdtPw7f8y/+Q==}
 
   electron-winstaller@5.4.0:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
@@ -5615,7 +5616,10 @@ snapshots:
 
   '@noble/hashes@1.4.0': {}
 
-  '@noble/hashes@2.4.0': {}
+  '@noble/hashes@1.8.0': {}
+
+  '@noble/hashes@2.4.0':
+    optional: true
 
   '@oxc-project/types@0.150.0': {}
 
@@ -7031,7 +7035,7 @@ snapshots:
 
   ansi-styles@6.2.1: {}
 
-  app-builder-lib@26.15.3(patch_hash=4688f96749e3d76cf27bc535d874470bf264610a331db13644df7715d699acf1)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2):
+  app-builder-lib@26.16.1(dmg-builder@26.16.1)(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2):
     dependencies:
       '@electron/asar': 3.4.1
       '@electron/fuses': 1.8.0
@@ -7041,23 +7045,23 @@ snapshots:
       '@electron/rebuild': 4.2.0(supports-color@10.2.2)
       '@electron/universal': 2.0.3(supports-color@10.2.2)
       '@malept/flatpak-bundler': 0.4.0(supports-color@10.2.2)
-      '@noble/hashes': 2.4.0
+      '@noble/hashes': 1.8.0
       '@peculiar/webcrypto': 1.7.1
       '@types/fs-extra': 9.0.13
       ajv: 8.20.0
       asn1js: 3.0.10
       async-exit-hook: 2.0.1
-      builder-util: 26.15.3(supports-color@10.2.2)
+      builder-util: 26.16.0(supports-color@10.2.2)
       builder-util-runtime: 9.7.0(supports-color@10.2.2)
       chromium-pickle-js: 0.2.0
       ci-info: 4.3.1
       debug: 4.4.3(supports-color@10.2.2)
-      dmg-builder: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2)
+      dmg-builder: 26.16.1(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2)
       dotenv: 16.4.5
       dotenv-expand: 11.0.6
       ejs: 3.1.8
-      electron-builder-squirrel-windows: 26.15.3(dmg-builder@26.15.3)(supports-color@10.2.2)
-      electron-publish: 26.15.3(supports-color@10.2.2)
+      electron-builder-squirrel-windows: 26.16.1(dmg-builder@26.16.1)(supports-color@10.2.2)
+      electron-publish: 26.16.0(supports-color@10.2.2)
       fs-extra: 10.1.0
       hosted-git-info: 4.1.0
       isbinaryfile: 5.0.7
@@ -7161,7 +7165,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  builder-util@26.15.3(supports-color@10.2.2):
+  builder-util@26.16.0(supports-color@10.2.2):
     dependencies:
       '@types/debug': 4.1.13
       builder-util-runtime: 9.7.0(supports-color@10.2.2)
@@ -7247,7 +7251,7 @@ snapshots:
 
   cliui@8.0.1:
     dependencies:
-      string-width: 4.2.3
+      string-width: 4.2.0
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
 
@@ -7445,10 +7449,10 @@ snapshots:
       minimatch: 3.1.5
       p-limit: 3.1.0
 
-  dmg-builder@26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2):
+  dmg-builder@26.16.1(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2):
     dependencies:
-      app-builder-lib: 26.15.3(patch_hash=4688f96749e3d76cf27bc535d874470bf264610a331db13644df7715d699acf1)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2)
-      builder-util: 26.15.3(supports-color@10.2.2)
+      app-builder-lib: 26.16.1(dmg-builder@26.16.1)(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2)
+      builder-util: 26.16.0(supports-color@10.2.2)
       fs-extra: 10.1.0
       js-yaml: 4.3.2
     transitivePeerDependencies:
@@ -7483,23 +7487,23 @@ snapshots:
     dependencies:
       jake: 10.8.5
 
-  electron-builder-squirrel-windows@26.15.3(dmg-builder@26.15.3)(supports-color@10.2.2):
+  electron-builder-squirrel-windows@26.16.1(dmg-builder@26.16.1)(supports-color@10.2.2):
     dependencies:
-      app-builder-lib: 26.15.3(patch_hash=4688f96749e3d76cf27bc535d874470bf264610a331db13644df7715d699acf1)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2)
-      builder-util: 26.15.3(supports-color@10.2.2)
+      app-builder-lib: 26.16.1(dmg-builder@26.16.1)(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2)
+      builder-util: 26.16.0(supports-color@10.2.2)
       electron-winstaller: 5.4.0(supports-color@10.2.2)
     transitivePeerDependencies:
       - dmg-builder
       - supports-color
 
-  electron-builder@26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2):
+  electron-builder@26.16.1(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2):
     dependencies:
-      app-builder-lib: 26.15.3(patch_hash=4688f96749e3d76cf27bc535d874470bf264610a331db13644df7715d699acf1)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2)
-      builder-util: 26.15.3(supports-color@10.2.2)
+      app-builder-lib: 26.16.1(dmg-builder@26.16.1)(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2)
+      builder-util: 26.16.0(supports-color@10.2.2)
       builder-util-runtime: 9.7.0(supports-color@10.2.2)
       chalk: 4.1.2
       ci-info: 4.4.0
-      dmg-builder: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2)
+      dmg-builder: 26.16.1(electron-builder-squirrel-windows@26.16.1)(supports-color@10.2.2)
       fs-extra: 10.1.0
       lazy-val: 1.0.5
       simple-update-notifier: 2.0.0
@@ -7508,11 +7512,11 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
-  electron-publish@26.15.3(supports-color@10.2.2):
+  electron-publish@26.16.0(supports-color@10.2.2):
     dependencies:
       '@types/fs-extra': 9.0.13
       aws4: 1.13.2
-      builder-util: 26.15.3(supports-color@10.2.2)
+      builder-util: 26.16.0(supports-color@10.2.2)
       builder-util-runtime: 9.7.0(supports-color@10.2.2)
       chalk: 4.1.2
       form-data: 4.0.6
@@ -9656,8 +9660,8 @@ snapshots:
   wrap-ansi@7.0.0:
     dependencies:
       ansi-styles: 4.0.0
-      string-width: 4.2.3
-      strip-ansi: 6.0.1
+      string-width: 4.2.0
+      strip-ansi: 6.0.0
 
   wrap-ansi@9.0.0:
     dependencies:

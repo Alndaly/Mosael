@@ -339,8 +339,8 @@ Touch ID（WebAuthn）也被纳入发布验证链：`electron/webauthn.cjs` 从�
 - 根 `packageManager: pnpm@11.20.0`，锁文件 `pnpm-lock.yaml`（359KB）+ website 独立锁文件，CI 全程 `--frozen-lockfile`。
 - `pnpm-workspace.yaml` 的供应链控制：
   - `onlyBuiltDependencies: [electron, electron-winstaller, esbuild]` + `allowBuilds` 逐个点名——"依赖的 install 脚本默认不跑（pnpm 的安全默认值）……漏了会让 `pnpm install --frozen-lockfile` 直接失败"；
-  - `overrides: { "@electron/get": "^5.1.0" }`——钉住 electron-builder 26.15.3 的缺陷依赖声明（app-builder-lib 用了只存在于 5.x 的 API 却声明 `^3.0.0`，"npm/yarn 的扁平化会碰巧提升到 5.x 而看不出问题，pnpm 会如实暴露"）；
-  - `patchedDependencies: app-builder-lib@26.15.3 → patches/app-builder-lib@26.15.3.patch`——修复"导入证书后误用 PKCS#12 密码解锁随机密码的临时钥匙串"（`SecKeychainUnlock` 失败），由 `electron/mac-signing.test.ts` 用两份独立加密证书覆盖；
+  - `overrides: { "@electron/get": "^5.1.0" }`——钉住 electron-builder(26.15.3 至 26.16.1)的缺陷依赖声明（app-builder-lib 用了只存在于 5.x 的 API 却声明 `^3.0.0`，"npm/yarn 的扁平化会碰巧提升到 5.x 而看不出问题，pnpm 会如实暴露"）；
+  - ~~`patchedDependencies: app-builder-lib@26.15.3`~~——曾修复"导入证书后误用 PKCS#12 密码解锁随机密码的临时钥匙串"（`SecKeychainUnlock` 失败）。上游 26.16.1 已修,升到 26.16.1 时删除补丁;`electron/mac-signing.test.ts` 用两份独立加密证书直接验上游代码;
   - 根目录注释记录 `openapi-typescript` 必须挂根 devDependencies 的布局坑（peer 是 TS ^5 而 frontend 用 TS 7，`ts.factory` 在原生实现里是 undefined——"overrides 和 packageExtensions 都改不了 peer 的解析，试过"）。
 - **疑点（见 §8 风险 R3）**：两个 workspace 文件都只有 `minimumReleaseAgeExclude` 而**没有 `minimumReleaseAge` 本体**（实测 grep 全仓库无 `^minimumReleaseAge:`），排除名单当前是空转配置。
 

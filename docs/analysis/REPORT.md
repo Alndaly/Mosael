@@ -187,7 +187,7 @@ graph TD
 5. **CI 单一门禁**:`tests.yml` 抽成 `workflow_call` 被 ci 与 release 共用("两份会漂,漂的方向必然是发版那份更严");`needs.test.result == 'success'` 显式写出,堵住 `!cancelled()` 让测试红了照样出包的陷阱。
 6. **打包冒烟是真 E2E**:`test/bundle.smoke.mjs` 造最小旧库 fixture,启动真实打包 Electron,断言后端升级+健康+renderer 加载+desktop 桥可用,退出后验证旧库升级正确——钉死"新装机好、老用户崩"这类桌面应用最痛的回归。
 7. **发布是"云端签名 + 本机钥匙串公证交接"两段式**:GitHub 只有签名 secrets,Apple 公证凭据只在维护者本机 `mosael-release` profile;缺公证凭据报 notice 而非假红("假红叉比没有红叉更坏");先草稿后转正防半成品版本;八件套附件含 5 个插件 ZIP。
-8. **供应链控制细致**:`--frozen-lockfile` 全域、install 脚本逐个点名、pnpm patch 修 app-builder-lib 签名缺陷且有测试覆盖、setup-uv 锁 commit SHA。
+8. **供应链控制细致**:`--frozen-lockfile` 全域、install 脚本逐个点名、app-builder-lib 签名缺陷曾用 pnpm patch 修、上游修复后删掉,测试仍在验上游代码、setup-uv 锁 commit SHA。
 9. **lint 哲学"少而精、能当闸用"**:ruff 只选 F/E9/B("开局七百条警告和没有 lint 是同一回事"——首次运行即抓出 judge.py 里活的 NameError);前端因 typescript-eslint 不支持 TS 7 转 oxlint,只开 14 条零告警规则。
 10. **文档自身被测试守住**:`test_docs_do_not_point_at_ghosts.py`(文档指的代码路径必须存在)、`test_ratchet_docs_in_sync.py`(棘轮的棘轮)、`test_site_docs_stay_in_sync.py`(官网中英对齐);18 份 ADR + 302 行 CONTEXT.md + 623 行 CHANGELOG。
 
