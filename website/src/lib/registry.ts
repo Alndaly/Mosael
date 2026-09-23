@@ -28,6 +28,14 @@ export type PluginEntry = {
   slug: string;
   /** 它带来哪些工具。MCP 插件的清单在服务那边,这里是空的。 */
   tools: { name: string; description: string }[];
+  /** 谁写的、去哪儿找他(清单的 `author`)。社区里的插件不全是官方的,署名要看得见。 */
+  author: { name: string; url: string };
+  /** 插件背后那家服务的站点(清单的 `homepage`)。 */
+  homepage: string;
+  /** 用之前要填的凭据(按清单里的标签),装之前就该知道要准备什么。 */
+  credentials: string[];
+  /** 官方维护的:这份列表读的是仓库里 `plugins/examples/` 下的插件,目前都是。 */
+  official: boolean;
 };
 
 /**
@@ -47,6 +55,9 @@ type Manifest = {
   id?: string;
   name?: Text;
   version?: string;
+  homepage?: string;
+  author?: { name?: Text; url?: string };
+  instance?: { credentials?: { key?: string; label?: Text; required?: boolean }[] };
   runtime?: { kind?: string };
   permissions?: string[];
   skills?: { description?: Text }[];
@@ -54,6 +65,11 @@ type Manifest = {
 };
 
 const EXAMPLES = path.join(process.cwd(), "..", "plugins", "examples");
+
+/** 清单里的链接会直接变成页面上的 `<a href>`:只认 http(s),和应用里的规则一样。 */
+function httpUrl(value: string | undefined): string {
+  return typeof value === "string" && /^https?:\/\//.test(value) ? value : "";
+}
 
 export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
   if (!fs.existsSync(EXAMPLES)) return [];
@@ -70,12 +86,20 @@ export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
         version: manifest.version ?? "",
         kind: kind === "mcp" ? "mcp" : "script",
         permissions: manifest.permissions ?? [],
-        summary: textOf(manifest.skills?.[0]?.description, locale),
+        // 技能描述是写给智能体的,里面会有 **强调** —— 卡片上是纯文本,星号原样露出来很难看。
+        summary: textOf(manifest.skills?.[0]?.description, locale).replace(/\*\*(.+?)\*\*/g, "$1"),
         source: `plugins/examples/${path.basename(path.dirname(file))}`,
         slug: path.basename(path.dirname(file)),
         tools: (manifest.tools?.declare ?? [])
           .filter((tool) => tool.name)
           .map((tool) => ({ name: tool.name ?? "", description: textOf(tool.description, locale) })),
+        author: { name: textOf(manifest.author?.name, locale), url: httpUrl(manifest.author?.url) },
+        homepage: httpUrl(manifest.homepage),
+        credentials: (manifest.instance?.credentials ?? [])
+          .filter((credential) => credential.required !== false)
+          .map((credential) => textOf(credential.label, locale) || credential.key || "")
+          .filter(Boolean),
+        official: true,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -99,6 +123,8 @@ export function readPluginDoc(slug: string): string | null {
 /** Official downloadable templates, generated from the application's template factories. */
 export type WorkflowEntry = {
   id: string;
+  /** URL 里那一段:`/workflows/<slug>`。模板 id 用下划线,URL 用连字符。 */
+  slug: string;
   name: string;
   summary: string;
   nodes: number;
@@ -109,7 +135,7 @@ export type WorkflowEntry = {
   graph: string;
 };
 
-type WorkflowRecord = Omit<WorkflowEntry, "name" | "summary" | "requires" | "stages" | "graph"> & {
+type WorkflowRecord = Omit<WorkflowEntry, "slug" | "name" | "summary" | "requires" | "stages" | "graph"> & {
   name: Record<Locale, string>;
   summary: Record<Locale, string>;
   requires: Record<Locale, string[]>;
@@ -120,8 +146,12 @@ type WorkflowRecord = Omit<WorkflowEntry, "name" | "summary" | "requires" | "sta
 export function listWorkflows(locale: Locale = DEFAULT_LOCALE): WorkflowEntry[] {
   const catalog = JSON.parse(fs.readFileSync(path.join(process.cwd(), "public/workflows/catalog.json"), "utf8")) as WorkflowRecord[];
   return catalog.map((entry) => ({
-    id: entry.id, author: entry.author, version: entry.version, nodes: entry.nodes,
+    id: entry.id, slug: entry.id.replaceAll("_", "-"), author: entry.author, version: entry.version, nodes: entry.nodes,
     name: entry.name[locale], summary: entry.summary[locale], requires: entry.requires[locale],
     stages: entry.stages[locale], graph: entry.download[locale],
   }));
+}
+
+export function findWorkflow(slug: string, locale: Locale = DEFAULT_LOCALE): WorkflowEntry | null {
+  return listWorkflows(locale).find((workflow) => workflow.slug === slug) ?? null;
 }
