@@ -47,6 +47,7 @@
   "migrate-job-worker-leases": "96ded71e21f2035a",
   "migrate-line-fields-are-lists": "7b87009b22fc77c8",
   "migrate-model-structured-output": "1ace9375f453b53b",
+  "migrate-mov-videos-become-mp4": "6d1b2a8be0f80c80",
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
   "migrate-official-workflow-data-bindings": "4149f3e6496c5393",
   "migrate-permission-modes": "bbacb632b8f0e565",

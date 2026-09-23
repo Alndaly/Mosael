@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, new_id
 from app.media.paths import asset_dir, asset_key, resolve_key
-from app.media.probe import guess_kind, probe_media, remux_in_place
+from app.media.probe import guess_kind, probe_media, remux_in_place, repackage_as_mp4
 from app.domain.assets.proxies import start_proxy_job
 from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import generate_waveform, waveform_path
@@ -157,6 +157,9 @@ def _import_stream(
         shutil.copyfileobj(stream, out)
 
     kind = guess_kind(target, content_type)
+    if kind == "video" and (repackaged := repackage_as_mp4(target)) is not None:
+        # 录屏这类 .mov 在界面里拖进度条会卡住;原样换成 mp4 容器(见 repackage_as_mp4)。
+        target, original = repackaged, repackaged.name
     media_info = _probe_with_duration_repair(target, kind)
     if generate_thumbnail(target, kind, target_dir) is not None:
         media_info = {**media_info, "has_thumbnail": True}

@@ -108,6 +108,46 @@ def remux_in_place(path: Path) -> bool:
     return False
 
 
+#: 在浏览器里拖不动的容器。QuickTime(Mac 录屏、iPhone 视频)的数据排布让 Chromium 每次跳转
+#: 都在文件里来回跳读、发出上百个中途放弃的按范围请求:一条 370MB 的录屏单次跳转 0.06–2.4 秒,
+#: 同样的画面和声音换成 mp4 容器(不重编码)只要 0.03–0.17 秒(实测,同一台机器同一个服务)。
+REPACKAGED_SUFFIXES = frozenset({".mov", ".qt"})
+
+
+def repackage_as_mp4(path: Path) -> Path | None:
+    """把 .mov 里的画面和声音**原样**搬进同名 .mp4(`-c copy`,不重编码,画质不变),删掉 .mov。
+
+    返回新路径;不是这类容器、或编码放不进 mp4(ProRes、PCM 音轨之类)就返回 None,原文件不动。
+    时间码、章节这类数据轨不搬 —— mp4 装不下,界面也用不到。
+    """
+    if path.suffix.lower() not in REPACKAGED_SUFFIXES:
+        return None
+    target = path.with_suffix(".mp4")
+    partial = path.with_name(path.stem + ".repackage.mp4")
+    try:
+        codec = run_logged(
+            [settings.ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name",
+             "-of", "csv=p=0", str(path)],
+            check=True, capture_output=True, text=True, timeout=30, what="容器重封装", level=logging.DEBUG,
+        ).stdout.strip()
+        # HEVC 进 mp4 要标成 hvc1,Chromium/Safari 才认;H.264 等不需要。
+        tag = ["-tag:v", "hvc1"] if codec == "hevc" else []
+        run_logged(
+            [settings.ffmpeg, "-y", "-v", "error", "-i", str(path), "-map", "0:v", "-map", "0:a?", "-c", "copy",
+             *tag, "-movflags", "+faststart", str(partial)],
+            check=True, capture_output=True, timeout=600, what="容器重封装", level=logging.DEBUG,
+        )
+    except Exception:
+        partial.unlink(missing_ok=True)
+        return None
+    if not partial.is_file() or partial.stat().st_size == 0:
+        partial.unlink(missing_ok=True)
+        return None
+    partial.replace(target)
+    path.unlink(missing_ok=True)
+    return target
+
+
 # ffprobe is cheap but not free; a long timeline should not fork one per source at once.
 _MAX_PARALLEL_PROBES = 8
 

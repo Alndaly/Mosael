@@ -2172,6 +2172,46 @@ def _migrate_thumbnails_keep_transparency() -> None:
         migrate_jpeg_thumbnail(source, kind, source.parent)
 
 
+def _migrate_mov_videos_become_mp4() -> None:
+    """已经在库里的 .mov 视频原样换成 .mp4 容器(不重编码),与导入时的做法一致。
+
+    为什么换见 media/probe.repackage_as_mp4:QuickTime 容器在界面里拖进度条会卡好几秒。
+    文件换好了才改行;换好了但行还没改(上次中途断了)时,下次看到同名 .mp4 就只改行。
+    """
+    from app.media.paths import resolve_key
+    from app.media.probe import REPACKAGED_SUFFIXES, repackage_as_mp4
+
+    inspector = inspect(engine)
+    if "assets" not in set(inspector.get_table_names()):
+        return
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT id, name, original_filename, file_key FROM assets WHERE kind = 'video' AND file_key != ''")
+        ).all()
+    for asset_id, name, original, file_key in rows:
+        key = Path(file_key)
+        if key.suffix.lower() not in REPACKAGED_SUFFIXES:
+            continue
+        source = resolve_key(file_key)
+        target = source.with_suffix(".mp4")
+        if source.is_file() and repackage_as_mp4(source) is None:
+            continue  # 编码放不进 mp4(ProRes 之类):留着 .mov
+        if not target.is_file():
+            continue
+        renamed = str(Path(original or key.name).with_suffix(".mp4"))
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE assets SET file_key = :key, original_filename = :original, name = :name WHERE id = :id"),
+                {
+                    "key": str(key.with_suffix(".mp4")),
+                    "original": renamed,
+                    # 名字还是默认的文件名时一起换;用户改过的名字不动。
+                    "name": renamed if name == original else name,
+                    "id": asset_id,
+                },
+            )
+
+
 def _drop_venvs_built_on_another_python() -> None:
     """托管 venv 是用另一个次版本的解释器建的,就删掉,让引擎回到「未安装」。
 
@@ -2603,7 +2643,12 @@ def migration_plan() -> MigrationPlan:
                 _cleanup_orphan_resource_shares,
                 _migrate_job_keys_are_keys,
             ),
-            *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs, _migrate_thumbnails_keep_transparency),
+            *_steps(
+                MigrationPhase.FILESYSTEM,
+                _migrate_shared_venvs,
+                _migrate_thumbnails_keep_transparency,
+                _migrate_mov_videos_become_mp4,
+            ),
             #: 对账:随包解释器换次版本后,旧 venv 跑不起来了。放在搬共用 venv 之后,搬过来的也要过这一道。
             *_recurring(MigrationPhase.FILESYSTEM, _drop_venvs_built_on_another_python),
         )
