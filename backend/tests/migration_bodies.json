@@ -69,6 +69,7 @@
   "migrate-session-groups-serve-both": "df30d38a56c6b759",
   "migrate-shared-venvs": "26c7c33f9f8280c6",
   "migrate-source-assets-get-a-role": "17d49cdaf1d8fd8f",
+  "migrate-thumbnails-keep-transparency": "39a26d3fc75ce497",
   "migrate-tool-confirmations-session": "281cd8f29573a7e5",
   "migrate-track-role": "457042e5cf4d394c",
   "migrate-tts-pip-index": "09d510e6314d67fd",

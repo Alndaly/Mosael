@@ -21,7 +21,7 @@ from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDoma
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 from app.media.proxy import proxy_path
-from app.media.thumbnails import generate_thumbnail, thumbnail_path
+from app.media.thumbnails import THUMBNAIL_MEDIA_TYPE, generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
 
 router = APIRouter(tags=["assets"])
@@ -475,7 +475,7 @@ def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> File
         generate_thumbnail(source, asset.kind, source.parent)  # backfill for pre-thumbnail imports
     if not thumb.is_file():
         raise HTTPException(status_code=404, detail="Thumbnail not available")
-    return FileResponse(thumb, media_type="image/jpeg")
+    return FileResponse(thumb, media_type=THUMBNAIL_MEDIA_TYPE)
 
 
 @router.post("/assets/{asset_id}/frame", response_model=AssetOut)

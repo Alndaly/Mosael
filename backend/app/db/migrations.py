@@ -2154,6 +2154,24 @@ def _migrate_shared_venvs() -> None:
     asr_models.migrate_shared_venv()
 
 
+def _migrate_thumbnails_keep_transparency() -> None:
+    """缩略图从 JPEG 换成 WebP(JPEG 没有透明通道,透明 PNG 的缩略图四角发黑、边缘起毛)。
+
+    逐个素材换掉旧文件;做法住在 media/thumbnails(同 _migrate_shared_venvs 的理由,函数内 import)。
+    """
+    from app.media.paths import resolve_key
+    from app.media.thumbnails import migrate_jpeg_thumbnail
+
+    inspector = inspect(engine)
+    if "assets" not in set(inspector.get_table_names()):
+        return
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT kind, file_key FROM assets WHERE file_key IS NOT NULL AND file_key != ''")).all()
+    for kind, file_key in rows:
+        source = resolve_key(file_key)
+        migrate_jpeg_thumbnail(source, kind, source.parent)
+
+
 def _drop_venvs_built_on_another_python() -> None:
     """托管 venv 是用另一个次版本的解释器建的,就删掉,让引擎回到「未安装」。
 
@@ -2585,7 +2603,7 @@ def migration_plan() -> MigrationPlan:
                 _cleanup_orphan_resource_shares,
                 _migrate_job_keys_are_keys,
             ),
-            *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs),
+            *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs, _migrate_thumbnails_keep_transparency),
             #: 对账:随包解释器换次版本后,旧 venv 跑不起来了。放在搬共用 venv 之后,搬过来的也要过这一道。
             *_recurring(MigrationPhase.FILESYSTEM, _drop_venvs_built_on_another_python),
         )
