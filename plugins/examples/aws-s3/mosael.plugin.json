@@ -68,6 +68,7 @@
           "en": "Endpoint"
         },
         "type": "string",
+        "required": false,
         "help": {
           "zh": "通常留空,按区域拼成 s3.<区域>.amazonaws.com。连自建的 S3 兼容服务(MinIO、R2)时填它自己的地址,如 minio.example.com 或 localhost:9000 —— 不是地域名。",
           "en": "Usually empty: built as s3.<region>.amazonaws.com. For an S3-compatible service (MinIO, R2) give its host, e.g. minio.example.com or localhost:9000 — not a region."

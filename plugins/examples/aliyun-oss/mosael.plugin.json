@@ -68,6 +68,7 @@
           "en": "Endpoint"
         },
         "type": "string",
+        "required": false,
         "help": {
           "zh": "通常留空,按区域拼成 oss-<区域>.aliyuncs.com。要填就填完整域名,如 oss-cn-shanghai.aliyuncs.com —— 不是地域名。",
           "en": "Usually empty: built as oss-<region>.aliyuncs.com. If set, give the full host, e.g. oss-cn-shanghai.aliyuncs.com — not a region."

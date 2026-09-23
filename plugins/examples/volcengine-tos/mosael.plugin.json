@@ -68,6 +68,7 @@
           "en": "Endpoint"
         },
         "type": "string",
+        "required": false,
         "help": {
           "zh": "通常留空,按区域拼成 tos-<区域>.volces.com。要填就填完整域名,如 tos-cn-beijing.volces.com —— 不是地域名。",
           "en": "Usually empty: built as tos-<region>.volces.com. If set, give the full host, e.g. tos-cn-beijing.volces.com — not a region."
