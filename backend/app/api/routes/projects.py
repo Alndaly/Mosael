@@ -87,6 +87,8 @@ def list_projects(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
         ).all()
     )
 
+    covers = _covers(db, projects)
+
     return [
         ProjectWithStatsOut(
             id=p.id,
@@ -96,11 +98,57 @@ def list_projects(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
             asset_count=asset_counts.get(p.id, 0),
             sequence_count=sequence_counts.get(p.id, 0),
             timeline_duration=float(durations.get(p.id) or 0.0),
+            cover_asset_id=covers.get(p.id),
             created_at=p.created_at,
             updated_at=max(filter(None, [p.updated_at, sequence_updates.get(p.id)])),
         )
         for p in projects
     ]
+
+
+_VISUAL = ("image", "video")
+
+
+def _covers(db: DbSession, projects: list[Project]) -> dict[str, str]:
+    """每个项目卡片的封面:**时间线上最早出现的那个画面**。
+
+    此前封面由前端从「归属这个项目的素材」里挑第一张 —— 可时间线上的片段常常引用工作区里
+    别处的素材(从别的项目、素材库拖进来的),于是时间线第一帧明明有图,卡片却显示
+    「等待你的第一个画面」。
+
+    看的是当前序列(没有就取最近改过的那一条);时间线上还没有画面时,才退到项目自己的
+    第一张图 / 第一段视频。
+    """
+    ids = [p.id for p in projects]
+    active = {p.id: p.active_sequence_id for p in projects}
+    rows = db.execute(
+        select(Sequence.project_id, Sequence.id, Sequence.updated_at, Clip.asset_id)
+        .join(Clip, Clip.sequence_id == Sequence.id)
+        .join(Track, Track.id == Clip.track_id)
+        .join(Asset, Asset.id == Clip.asset_id)
+        .where(Sequence.project_id.in_(ids), Asset.kind.in_(_VISUAL))
+        .order_by(Clip.timeline_start, Track.position)
+    ).all()
+    first_by_sequence: dict[str, str] = {}
+    latest: dict[str, tuple] = {}
+    for project_id, sequence_id, updated_at, asset_id in rows:
+        first_by_sequence.setdefault(sequence_id, asset_id)
+        if project_id not in latest or updated_at > latest[project_id][0]:
+            latest[project_id] = (updated_at, sequence_id)
+    covers: dict[str, str] = {}
+    for project_id in ids:
+        sequence_id = active[project_id] if active[project_id] in first_by_sequence else latest.get(project_id, (None, None))[1]
+        if sequence_id:
+            covers[project_id] = first_by_sequence[sequence_id]
+    missing = [pid for pid in ids if pid not in covers]
+    if missing:
+        for project_id, asset_id in db.execute(
+            select(Asset.project_id, Asset.id)
+            .where(Asset.project_id.in_(missing), Asset.kind.in_(_VISUAL))
+            .order_by(Asset.created_at)
+        ).all():
+            covers.setdefault(project_id, asset_id)
+    return covers
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectOut)

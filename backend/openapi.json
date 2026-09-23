@@ -25337,6 +25337,17 @@
             "title": "Timeline Duration",
             "default": 0.0
           },
+          "cover_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Asset Id"
+          },
           "created_at": {
             "anyOf": [
               {

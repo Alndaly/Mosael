@@ -24,5 +24,7 @@ class ProjectWithStatsOut(ProjectOut):
     asset_count: int = 0
     sequence_count: int = 0
     timeline_duration: float = 0.0
+    #: 卡片封面:时间线上最早出现的画面,没有时是项目自己的第一张图 / 第一段视频。
+    cover_asset_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

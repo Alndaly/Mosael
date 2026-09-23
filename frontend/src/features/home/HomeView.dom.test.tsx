@@ -3,14 +3,14 @@ import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { Asset, ProjectWithStats, Workspace } from "@/api/client";
+import type { ProjectWithStats, Workspace } from "@/api/client";
 import { HomeView } from "./HomeView";
 
-const mocks = vi.hoisted(() => ({ summary: vi.fn(), assets: [] as unknown[], navigate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ summary: vi.fn(), navigate: vi.fn() }));
 vi.mock("@/api/client", async original => ({
   ...await original<typeof import("@/api/client")>(),
   workspaceSummary: mocks.summary,
-  api: async (path: string) => path.startsWith("/api/assets") ? mocks.assets : { text: "A quiet moment", author: "Studio", source: "" },
+  api: async () => ({ text: "A quiet moment", author: "Studio", source: "" }),
   assetThumbnailUrl: (id: string) => `/thumbnail/${id}`,
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en-US" }) }));
@@ -18,18 +18,15 @@ vi.mock("@/lib/deepLink", () => ({ gotoRecord: mocks.navigate }));
 const workspace = { id: "studio-a", name: "Studio A" } as Workspace;
 const projects = [
   { id: "older", name: "Older film", updated_at: "2026-09-01", created_at: "2026-08-01" },
-  { id: "newer", name: "Newer film", updated_at: "2026-09-06", created_at: "2026-09-01" },
+  // 封面由后端算好给(时间线上最早出现的画面),卡片只管画。
+  { id: "newer", name: "Newer film", updated_at: "2026-09-06", created_at: "2026-09-01", cover_asset_id: "cover" },
 ] as ProjectWithStats[];
 function provider(children: React.ReactNode) {
   return <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{children}</QueryClientProvider>;
 }
-beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); mocks.assets = []; });
+beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 
-it("opens and filters projects in both presentations and only uses their own media", async () => {
-  mocks.assets = [
-    { id: "unassigned", kind: "image", project_id: null },
-    { id: "cover", kind: "image", project_id: "newer" },
-  ] as Asset[];
+it("opens and filters projects in both presentations and draws the cover the backend picked", async () => {
   const open = vi.fn();
   const create = vi.fn();
   const view = render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} onCreateProject={create} creatingProject={false} />));
@@ -40,7 +37,7 @@ it("opens and filters projects in both presentations and only uses their own med
   expect(within(header).getByRole("button", { name: "homePoemRefresh" })).toBeEnabled();
   expect(within(header).getByRole("button", { name: "createProject" })).toBeEnabled();
   await waitFor(() => expect(view.container.querySelector('img[src="/thumbnail/cover"]')).not.toBeNull());
-  expect(view.container.querySelector('img[src="/thumbnail/unassigned"]')).toBeNull();
+  expect(view.container.querySelectorAll("img")).toHaveLength(1);
   fireEvent.error(view.container.querySelector('img[src="/thumbnail/cover"]')!);
   fireEvent.click(screen.getByRole("button", { name: "homeOpenEditor: Newer film" }));
   expect(open).toHaveBeenLastCalledWith("newer");

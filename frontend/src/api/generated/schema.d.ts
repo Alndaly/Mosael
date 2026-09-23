@@ -9369,6 +9369,8 @@ export interface components {
              * @default 0
              */
             timeline_duration: number;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
             /** Created At */
             created_at?: string | null;
             /** Updated At */

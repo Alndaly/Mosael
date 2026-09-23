@@ -1,7 +1,6 @@
 import { ACTION_MENU } from "@/components/ui/floating";
-import { assetKeys } from "@/api/queryKeys";
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Clapperboard,
   Film,
@@ -14,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { api, assetThumbnailUrl, type Asset, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { HomeHero } from "@/features/home/HomeHero";
@@ -123,19 +122,6 @@ export function HomeView({
       return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
     });
   }, [projects, search, sortKey, collection]);
-  // Reuse the workspace asset cache. Only project-owned media can illustrate that project.
-  const artwork = useQuery({
-    queryKey: assetKeys.list(workspace.id),
-    queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
-    enabled: projects.length > 0,
-  });
-  const covers = React.useMemo(() => {
-    const result = new Map<string, Asset>();
-    for (const asset of artwork.data ?? []) {
-      if (asset.project_id && (asset.kind === "image" || asset.kind === "video") && !result.has(asset.project_id)) result.set(asset.project_id, asset);
-    }
-    return result;
-  }, [artwork.data]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
 
   const rename = useMutation({
@@ -206,10 +192,10 @@ export function HomeView({
         <>
           {visible.length === 0 && <p className="py-10 text-center text-muted-foreground">{t("homeNoSearchResults")}</p>}
           {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
-            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} cover={covers.get(project.id)} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
+            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
           </div>}
           <div className="grid gap-1 empty:hidden">
-            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} cover={covers.get(project.id)} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
+            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
           </div>
         </>
       )}
@@ -233,22 +219,24 @@ export function HomeView({
 }
 
 /** Every presentation shares the same actions; images always belong to this project. */
-function ProjectPresentation({ project, cover, featured = false, className, onOpen, onRename, onDelete }: {
-  project: ProjectWithStats; cover?: Asset; featured?: boolean; className?: string;
+function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete }: {
+  project: ProjectWithStats; featured?: boolean; className?: string;
   onOpen: (id: string) => void; onRename: (project: Project) => void; onDelete: (project: Project) => void;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
-  React.useEffect(() => setFailed(false), [cover?.id]);
+  // 封面由后端给:时间线上最早出现的画面,没有时是项目自己的第一张图(见 routes/projects._covers)。
+  const cover = project.cover_asset_id;
+  React.useEffect(() => setFailed(false), [cover]);
   const open = () => onOpen(project.id);
   // 列表行的背景向外延伸，抵消自身内边距，让封面和操作按钮对齐上方精选卡片。
   return <ContextMenu>
     <ContextMenuTrigger asChild>
       <article className={cn("group min-h-0 min-w-0", featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel", className)}>
         <button type="button" onClick={open} aria-label={`${t("homeOpenEditor")}: ${project.name}`} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20")}>
-          {cover && !failed ? <img src={assetThumbnailUrl(cover.id)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
+          {cover && !failed ? <img src={assetThumbnailUrl(cover)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
           {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
         </button>
         <div className={cn("flex min-w-0 items-start gap-2", !featured && "flex-1 items-center")}>
