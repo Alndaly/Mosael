@@ -356,6 +356,8 @@ function WorkspaceSwitcher({
       toast.success(t("workspaceDeleted"));
     },
     onError: (error: Error) => toast.error(error.message),
+    // 删完(成没成)再关确认框 —— 进行中它一直开着、确认键转圈。
+    onSettled: () => setRemoving(null),
   });
 
   const createMut = useMutation({
@@ -449,10 +451,9 @@ function WorkspaceSwitcher({
         title={t("deleteWorkspace")}
         body={t("deleteWorkspaceConfirm").replace("{name}", removing?.name ?? "")}
         onCancel={() => setRemoving(null)}
+        pending={removeMut.isPending}
         onConfirm={() => {
-          const target = removing;
-          setRemoving(null);
-          if (target) removeMut.mutate(target.id);
+          if (removing) removeMut.mutate(removing.id);
         }}
       />
     </>

@@ -215,7 +215,7 @@ export function HomeView({
               >
                 <Trash2 size={13} /> {t("delete")}
               </Button>
-              <Button variant="ghost" onClick={exit}>
+              <Button variant="outline" onClick={exit}>
                 <X size={13} /> {t("cancel")}
               </Button>
             </>
@@ -269,6 +269,7 @@ export function HomeView({
         title={t("deleteConfirmTitle")}
         body={t("deleteProjectBody")}
         onCancel={() => setDeleting(null)}
+        pending={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
       <ConfirmDialog
@@ -276,6 +277,7 @@ export function HomeView({
         title={t("deleteConfirmTitle")}
         body={t("deleteProjectsBody").replace("{n}", String(selectedIds.size))}
         onCancel={() => setBatchDeleting(false)}
+        pending={batchRemove.isPending}
         onConfirm={() => batchRemove.mutate()}
       />
     </div>

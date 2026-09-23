@@ -193,6 +193,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
         title={t("deleteConfirmTitle")}
         body={t("deleteTaskDesc")}
         onCancel={() => setMenuDeleting(null)}
+        pending={menuRemove.isPending}
         onConfirm={() => menuDeleting && menuRemove.mutate(menuDeleting.id)}
       />
     </div>
@@ -510,6 +511,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         title={t("deleteConfirmTitle")}
         body={t("deleteTaskBody")}
         onCancel={() => setDeleting(false)}
+        pending={deleteTask.isPending}
         onConfirm={() => deleteTask.mutate()}
       />
     </div>

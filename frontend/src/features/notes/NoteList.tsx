@@ -409,6 +409,7 @@ export function NoteList({
         onCancel={() => {
           if (!busy) setRemove([]);
         }}
+        pending={busy}
         onConfirm={() => void run("delete", remove)}
       />
     </>

@@ -107,6 +107,8 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
       toast.success(t("workspaceDeleted"));
     },
     onError: onErr,
+    // 删完(成没成)再关确认框 —— 进行中它一直开着、确认键转圈。
+    onSettled: () => setDeleteOpen(false),
   });
 
   return (
@@ -167,6 +169,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             roleLabel={roleLabel}
             onRole={(role) => roleMut.mutate({ userId: m.user_id, role })}
             onRemove={() => removeMut.mutate(m.user_id)}
+            removing={removeMut.isPending && removeMut.variables === m.user_id}
           />
         ))}
       </SettingsListBlock>
@@ -197,10 +200,8 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         title={t("deleteWorkspace")}
         body={t("deleteWorkspaceConfirm").replace("{name}", workspace.name)}
         onCancel={() => setDeleteOpen(false)}
-        onConfirm={() => {
-          setDeleteOpen(false);
-          deleteMut.mutate();
-        }}
+        pending={deleteMut.isPending}
+        onConfirm={() => deleteMut.mutate()}
       />
     </SettingsGroup>
   );
@@ -233,6 +234,7 @@ function MemberRow({
   roleLabel,
   onRole,
   onRemove,
+  removing,
 }: {
   member: WorkspaceMember;
   canManage: boolean;
@@ -241,6 +243,8 @@ function MemberRow({
   roleLabel: (role: string) => string;
   onRole: (role: string) => void;
   onRemove: () => void;
+  /** 移除 / 退出正在进行 —— 确认框开着、确认键转圈,完成后这一行自己就没了。 */
+  removing: boolean;
 }) {
   const t = useI18n();
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -294,10 +298,8 @@ function MemberRow({
               title={isSelf ? t("teamLeave") : t("teamRemove")}
               body={(isSelf ? t("teamLeaveConfirm") : t("teamRemoveConfirm")).replace("{name}", member.username)}
               onCancel={() => setConfirmOpen(false)}
-              onConfirm={() => {
-                setConfirmOpen(false);
-                onRemove();
-              }}
+              pending={removing}
+              onConfirm={onRemove}
             />
           </>
         )}

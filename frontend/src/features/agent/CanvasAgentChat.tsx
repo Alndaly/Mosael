@@ -628,6 +628,7 @@ export function CanvasAgentChat({
         title={t("deleteConfirmTitle")}
         body={t("deleteSessionBody")}
         onCancel={() => setDeletingSession(null)}
+        pending={deleteSession.isPending}
         onConfirm={() => deletingSession && deleteSession.mutate(deletingSession.id)}
       />
     </aside>

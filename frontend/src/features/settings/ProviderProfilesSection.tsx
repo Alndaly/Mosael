@@ -263,7 +263,10 @@ export function ProviderProfilesSection({
   });
   const remove = useMutation({
     mutationFn: (id: string) => api(`/api/settings/providers/${id}`, { method: "DELETE" }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      refresh();
+      setRemoving(null);
+    },
   });
 
   /* 批量:同一批临时试的端点、或换供应商后要整体停掉的一组,逐个点开关会点很久。
@@ -455,9 +458,9 @@ export function ProviderProfilesSection({
           .replace("{name}", removing?.name ?? "")
           .replace("{caps}", (removing?.capability_ids ?? []).map((id) => t(`capability_${id}` as never)).join("、") || "—")}
         onCancel={() => setRemoving(null)}
+        pending={remove.isPending}
         onConfirm={() => {
           if (removing) remove.mutate(removing.id);
-          setRemoving(null);
         }}
       />
       <ConfirmDialog
@@ -465,6 +468,7 @@ export function ProviderProfilesSection({
         title={t("bulkDeleteConfirm").replace("{n}", String(bulk.count))}
         body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
         onCancel={() => setBulkDeleting(false)}
+        pending={bulkRemove.isPending}
         onConfirm={() => bulkRemove.mutate(bulk.selectedIds)}
       />
 

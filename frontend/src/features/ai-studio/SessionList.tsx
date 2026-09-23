@@ -506,6 +506,7 @@ export function SessionList({
         title={t("deleteConfirmTitle")}
         body={t(spec.deleteGroupBody)}
         onCancel={() => setDeletingGroup(null)}
+        pending={removeGroup.isPending}
         onConfirm={() => deletingGroup && removeGroup.mutate(deletingGroup.id)}
       />
       <RenameDialog
@@ -520,6 +521,7 @@ export function SessionList({
         title={t("deleteConfirmTitle")}
         body={t(spec.deleteBody)}
         onCancel={() => setDeletingSession(null)}
+        pending={removeSession.isPending}
         onConfirm={() => deletingSession && removeSession.mutate(deletingSession.id)}
       />
       <ConfirmDialog
@@ -527,6 +529,7 @@ export function SessionList({
         title={t("deleteConfirmTitle")}
         body={t(spec.deleteManyBody).replace("{n}", String(selectedIds.size))}
         onCancel={() => setBatchDeleting(false)}
+        pending={batchRemove.isPending}
         onConfirm={() => batchRemove.mutate()}
       />
     </>

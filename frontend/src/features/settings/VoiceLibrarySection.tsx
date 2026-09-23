@@ -51,6 +51,7 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
     onSuccess: () => {
       invalidate();
       toast.success(t("voiceDeleted"));
+      setDeleting(null);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -111,9 +112,9 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
         // 删音色不会动已经生成的配音(那些是素材),但**这把嗓子以后配不出来了** —— 说清楚。
         body={t("voiceDeleteBody").replace("{name}", deleting?.name ?? "")}
         onCancel={() => setDeleting(null)}
+        pending={remove.isPending}
         onConfirm={() => {
           if (deleting) remove.mutate(deleting.id);
-          setDeleting(null);
         }}
       />
     </SettingsGroup>

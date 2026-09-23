@@ -368,6 +368,7 @@ export function SceneList({
         onCancel={() => {
           if (!busy) setRemove([]);
         }}
+        pending={busy}
         onConfirm={() => void confirmDelete()}
       />
     </div>

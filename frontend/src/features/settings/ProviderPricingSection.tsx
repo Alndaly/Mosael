@@ -441,6 +441,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         title={t("bulkDeleteConfirm").replace("{n}", String(bulk.count))}
         body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
         onCancel={() => setBulkDeleting(false)}
+        pending={removeMany.isPending}
         onConfirm={() => removeMany.mutate(bulk.selectedIds)}
       />
 

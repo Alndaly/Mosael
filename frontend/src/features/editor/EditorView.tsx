@@ -922,6 +922,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           .replace("{name}", trackPendingRemoval?.name ?? "")
           .replace("{n}", String(trackPendingRemoval?.clips ?? 0))}
         onCancel={() => setTrackPendingRemoval(null)}
+        pending={removeTrackMutation.isPending}
         onConfirm={() =>
           trackPendingRemoval &&
           removeTrackMutation.mutate({ trackId: trackPendingRemoval.id, withClips: true })

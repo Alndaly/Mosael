@@ -384,7 +384,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   >
                     <Trash2 size={13} /> {t("delete")}
                   </Button>
-                  <Button variant="ghost" size="default" onClick={exitSelectMode}>
+                  <Button variant="outline" size="default" onClick={exitSelectMode}>
                     <X size={13} /> {t("cancel")}
                   </Button>
 
@@ -505,6 +505,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           setDeleting(null);
           setDeleteError(null);
         }}
+        pending={remove.isPending}
         onConfirm={() => {
           if (deleting) remove.mutate(deleting.id);
           else setDeleteError(null);
@@ -515,6 +516,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         title={t("deleteConfirmTitle")}
         body={t("deleteAssetsBody").replace("{n}", String(selectedIds.size))}
         onCancel={() => setBatchDeleting(false)}
+        pending={batchRemove.isPending}
         onConfirm={() => batchRemove.mutate()}
       />
       {comparing && comparable.length >= 2 && (

@@ -220,6 +220,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
         title={t("pluginUninstallTitle").replace("{name}", pkg.name)}
         body={t("pluginUninstallBody")}
         onCancel={() => setConfirmUninstall(false)}
+        pending={uninstall.isPending}
         onConfirm={() => uninstall.mutate()}
       />
 
@@ -543,6 +544,7 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
         title={t("pluginDeleteConnectionTitle").replace("{name}", instance.name)}
         body={t("pluginDeleteConnectionBody")}
         onCancel={() => setConfirmDelete(false)}
+        pending={remove.isPending}
         onConfirm={() => remove.mutate()}
       />
 

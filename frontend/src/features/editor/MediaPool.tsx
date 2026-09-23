@@ -224,6 +224,7 @@ export function MediaPool({
           setDeleting(null);
           setDeleteError(null);
         }}
+        pending={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
     </section>

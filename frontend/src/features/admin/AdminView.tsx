@@ -189,6 +189,7 @@ export function AdminView() {
         // 说清后果再问 —— 这一步不可撤销,而"删掉账号"四个字没说他的工作区也跟着走。
         body={t("adminDeleteUserBody").replace("{name}", removing?.display_name || removing?.username || "")}
         onCancel={() => setRemoving(null)}
+        pending={removeUser.isPending}
         onConfirm={() => removing && removeUser.mutate(removing.id)}
       />
     </div>

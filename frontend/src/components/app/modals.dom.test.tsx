@@ -73,3 +73,30 @@ describe("ModalShell sticky layout", () => {
     expect(footer?.className).not.toMatch(/space-x-/);
   });
 });
+
+import { ConfirmDialog } from "./modals";
+import { fireEvent } from "@testing-library/react";
+
+describe("ConfirmDialog 进行中", () => {
+  it("确认后要等一阵的动作:确认键转圈,两个键都按不动,Esc 也关不掉", () => {
+    const onCancel = vi.fn();
+    const onConfirm = vi.fn();
+    render(<ConfirmDialog open pending title="删除?" onCancel={onCancel} onConfirm={onConfirm} />);
+
+    const confirm = screen.getByRole("button", { name: /confirm/ });
+    expect(confirm).toHaveAttribute("aria-busy", "true");
+    expect(confirm).toBeDisabled();
+    expect(screen.getByRole("button", { name: "cancel" })).toBeDisabled();
+
+    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("没在进行时照常:确认就调用、不自己关(由调用方在完成后关)", () => {
+    const onConfirm = vi.fn();
+    render(<ConfirmDialog open pending={false} title="删除?" onCancel={vi.fn()} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole("button", { name: "confirm" }));
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+});

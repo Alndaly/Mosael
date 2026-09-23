@@ -6,7 +6,6 @@ import { z } from "zod";
 import { useI18n } from "@/app/preferences";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -199,22 +198,32 @@ export function RenameDialog({
   );
 }
 
+/**
+ * 二次确认。**`pending` 是必填的** —— 确认之后要等一阵的动作(删除一批、卸载、移除成员)
+ * 在完成前必须看得出「正在做」:确认键转圈,两个键都按不动,弹窗也关不掉。此前确认后没有任何
+ * 反馈,用户只能盯着一个静止的弹窗猜是不是没点上,再点一次就是再删一次。
+ *
+ * 必填而不是可选:可选的话,新加的确认弹窗照样会漏,而漏的表现正是上面那种「没反应」。
+ * 确认后立刻就结束的(纯本地操作)显式传 `pending={false}`。漏传是类型错误 —— 类型检查就是那道闸。
+ */
 export function ConfirmDialog({
   open,
   title,
   body,
+  pending,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
   title: string;
   body?: string;
+  pending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const t = useI18n();
   return (
-    <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
+    <AlertDialog open={open} onOpenChange={(next) => !next && !pending && onCancel()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
@@ -222,18 +231,17 @@ export function ConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           {/* Confirm and cancel share the same control scale as form dialogs. */}
-          <AlertDialogCancel>
+          <AlertDialogCancel disabled={pending}>
             {t("cancel")}
           </AlertDialogCancel>
-          <AlertDialogAction
+          {/* 用 Button 而不是 AlertDialogAction:后者一点就关,而这里要等动作做完。 */}
+          <Button
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            onClick={(event) => {
-              event.preventDefault();
-              onConfirm();
-            }}
+            loading={pending}
+            onClick={onConfirm}
           >
             {t("confirm")}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

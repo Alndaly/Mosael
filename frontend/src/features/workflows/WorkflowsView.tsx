@@ -595,7 +595,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               >
                 <Trash2 size={13} /> {t("delete")}
               </Button>
-              <Button variant="ghost" onClick={exit}>
+              <Button variant="outline" onClick={exit}>
                 <X size={13} /> {t("cancel")}
               </Button>
             </>
@@ -677,6 +677,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         title={t("deleteConfirmTitle")}
         body={t("wfDeleteBody")}
         onCancel={() => setBatchDeleting(false)}
+        pending={batchRemove.isPending}
         onConfirm={() => batchRemove.mutate()}
       />
       <ConfirmDialog
@@ -684,6 +685,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         title={t("deleteConfirmTitle")}
         body={t("wfDeleteBody")}
         onCancel={() => setMenuDeleting(null)}
+        pending={menuRemove.isPending}
         onConfirm={() => menuDeleting && menuRemove.mutate(menuDeleting.id)}
       />
     </div>
@@ -2471,6 +2473,7 @@ function WorkflowEditor({
         title={t("deleteConfirmTitle")}
         body={t("wfDeleteBody")}
         onCancel={() => setDeleting(false)}
+        pending={remove.isPending}
         onConfirm={() => remove.mutate()}
       />
       <WorkflowRevisionHistory

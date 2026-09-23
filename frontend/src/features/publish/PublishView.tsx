@@ -159,6 +159,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           deleteWarningKey((tasks.data ?? []).filter((task) => selectedIds.has(task.id)).map((task) => task.status)) as never,
         )}
         onCancel={() => setBatchDeleting(false)}
+        pending={batchRemove.isPending}
         onConfirm={() => batchRemove.mutate()}
       />
       <ConfirmDialog
@@ -166,6 +167,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         title={t("deleteConfirmTitle")}
         body={t(deleteWarningKey(deleting ? [deleting.status] : []) as never)}
         onCancel={() => setDeleting(null)}
+        pending={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
     </>
@@ -192,7 +194,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             >
               <Trash2 size={13} /> {t("delete")}
             </Button>
-            <Button variant="ghost" size="default" onClick={exit}>
+            <Button variant="outline" size="default" onClick={exit}>
               <X size={13} /> {t("cancel")}
             </Button>
           </>

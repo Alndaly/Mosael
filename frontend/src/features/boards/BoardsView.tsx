@@ -174,6 +174,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
                 board={board}
                 onOpen={() => setOpenId(board.id)}
                 onDelete={() => remove.mutate(board.id)}
+                deleting={remove.isPending && remove.variables === board.id}
               />
             ))}
           </div>
@@ -183,7 +184,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function BoardCard({ board, onOpen, onDelete }: { board: Board; onOpen: () => void; onDelete: () => void }) {
+function BoardCard({ board, onOpen, onDelete, deleting }: { board: Board; onOpen: () => void; onDelete: () => void; deleting: boolean }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const [confirming, setConfirming] = React.useState(false);
@@ -204,10 +205,9 @@ function BoardCard({ board, onOpen, onDelete }: { board: Board; onOpen: () => vo
         title={t("boardsDeleteTitle")}
         body={board.name}
         onCancel={() => setConfirming(false)}
-        onConfirm={() => {
-          setConfirming(false);
-          onDelete();
-        }}
+        // 删完这张卡自己就没了;失败时确认框留着,可以重试或取消。
+        pending={deleting}
+        onConfirm={onDelete}
       />
     </>
   );
@@ -229,6 +229,7 @@ function BoardDetail({
   const { user } = useAuth();
   const [renaming, setRenaming] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const [deletingBoard, setDeletingBoard] = React.useState(false);
   const [collaborationOpen, setCollaborationOpen] = React.useState(false);
   const [commentMode, setCommentMode] = React.useState(false);
   const [markerMode, setMarkerMode] = React.useState(false);
@@ -943,12 +944,17 @@ function BoardDetail({
         title={t("boardsDeleteTitle")}
         body={board.name}
         onCancel={() => setConfirmingDelete(false)}
+        pending={deletingBoard}
         onConfirm={() => {
-          setConfirmingDelete(false);
-          void deleteBoard(board.id, workspaceId).then(() => {
-            onSaved();
-            onBack();
-          });
+          setDeletingBoard(true);
+          void deleteBoard(board.id, workspaceId)
+            .then(() => {
+              setConfirmingDelete(false);
+              onSaved();
+              onBack();
+            })
+            .catch((error: Error) => toast.error(error.message))
+            .finally(() => setDeletingBoard(false));
         }}
       />
 

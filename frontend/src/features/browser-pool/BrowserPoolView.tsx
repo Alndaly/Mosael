@@ -401,6 +401,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         title={t("delete")}
         body={removing?.bound_account_id ? t("poolDeleteBoundBody") : t("poolDeleteBody")}
         onCancel={() => setRemoving(null)}
+        pending={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing)}
       />
     </div>
