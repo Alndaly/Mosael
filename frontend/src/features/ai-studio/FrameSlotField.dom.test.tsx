@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
 vi.mock("@/api/client", () => ({
-  assetFileUrl: (id: string) => `/f/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
+  assetFileUrl: (id: string) => `/f/${id}`,
   assetThumbnailUrl: (id: string) => `/t/${id}`,
   importAsset: vi.fn(),
 }));

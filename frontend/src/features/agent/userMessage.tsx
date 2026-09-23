@@ -4,7 +4,7 @@ import type { JSONContent } from "@tiptap/react";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { documentText } from "@/features/agent/ChatComposer";
 import { ReferenceDocument } from "@/features/agent/ReferenceDocument";
-import {assetPlaybackUrl, assetPreviewUrl} from "@/api/client";
+import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 
 /**
@@ -45,7 +45,7 @@ export function chatMediaGallery(messages: readonly { role?: string; content: st
       if (seen.has(attachment.assetId)) continue;
       seen.add(attachment.assetId);
       gallery.push({
-        src: attachment.kind === "image" ? assetPreviewUrl(attachment.assetId) : assetPlaybackUrl(attachment.assetId),
+        src: attachment.kind === "image" ? assetPreviewUrl(attachment.assetId) : assetFileUrl(attachment.assetId),
         title: attachment.name,
         ...(attachment.kind === "video" ? { video: true } : {}),
       });

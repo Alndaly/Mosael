@@ -537,24 +537,6 @@ def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileR
     return FileResponse(waveform, media_type="application/json")
 
 
-@router.get("/assets/{asset_id}/playback")
-def get_asset_playback(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
-    """界面上播放用的那份文件:原片放得动就是原片,放不动就是预览代理(见 proxies.playback_path)。"""
-    from app.domain.assets.proxies import playback_path
-
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_access(db, user, asset.workspace_id)
-    path = playback_path(asset)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Asset file missing")
-    source = resolve_key(asset.file_key)
-    if path == source:
-        media_type = mimetypes.guess_type(asset.original_filename or path.name)[0] or "application/octet-stream"
-    else:
-        media_type = "video/mp4"
-    return FileResponse(path, media_type=media_type)
-
-
 @router.get("/assets/{asset_id}/proxy")
 def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     """The 720p preview proxy the compositor decodes (see media/proxy.py)."""

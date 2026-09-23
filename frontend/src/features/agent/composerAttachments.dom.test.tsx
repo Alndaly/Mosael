@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const importAsset = vi.fn();
 vi.mock("@/api/client", () => ({
   importAsset: (...args: unknown[]) => importAsset(...args),
-  assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
 }));
 const openImagePreview = vi.fn();

@@ -2,7 +2,7 @@ import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music } from "lucide-react";
 
-import {api, assetPlaybackUrl, assetPreviewUrl, type Asset} from "@/api/client";
+import { api, assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
@@ -158,7 +158,7 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
   }
   //: 取不到的由 MediaPreviewGrid 统一收成一行,不在这里各画一张灰块(见那边的说明)。
   if (asset.isError || !asset.data) return null;
-  const src = asset.data.kind === "image" ? assetPreviewUrl(asset.data.id) : assetPlaybackUrl(asset.data.id);
+  const src = asset.data.kind === "image" ? assetPreviewUrl(asset.data.id) : assetFileUrl(asset.data.id);
   return (
     <figure className="m-0 flex max-w-[240px] flex-col gap-1">
       {asset.data.kind === "image" ? (
@@ -212,7 +212,7 @@ function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
     .filter((asset): asset is Asset => Boolean(asset))
     .filter((asset) => asset.kind === "image" || asset.kind === "video")
     .map((asset) => ({
-      src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetPlaybackUrl(asset.id),
+      src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
       title: asset.name,
       video: asset.kind === "video",
     }));

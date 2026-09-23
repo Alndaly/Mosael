@@ -2,7 +2,7 @@ import React from "react";
 import { useOnViewportChange } from "@xyflow/react";
 import { Play } from "lucide-react";
 
-import {assetPlaybackUrl, assetThumbnailUrl} from "@/api/client";
+import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { cn } from "@/lib/utils";
 
@@ -145,5 +145,5 @@ export function BoardVideo({
 
 /** 画板上的音频节点 —— 这里只负责按 id 取带令牌的地址。 */
 export function BoardAudio({ assetId, className }: { assetId: string; className?: string }) {
-  return <AudioPlayerBar src={assetPlaybackUrl(assetId)} className={className} />;
+  return <AudioPlayerBar src={assetFileUrl(assetId)} className={className} />;
 }

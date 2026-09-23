@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/api/client", () => ({
-  assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
 }));
 

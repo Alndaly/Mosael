@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
-  assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
 }));
 

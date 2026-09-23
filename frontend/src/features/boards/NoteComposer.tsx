@@ -16,7 +16,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { Film, Music, X } from "lucide-react";
 
-import {assetPlaybackUrl, assetPreviewUrl, assetThumbnailUrl} from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
@@ -160,7 +160,7 @@ export function NoteComposer({
                   type="button"
                   title={asset.name || asset.original_filename || ""}
                   onClick={() => openImagePreview({
-                    src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetPlaybackUrl(asset.id),
+                    src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
                     title: asset.name || "",
                     ...(asset.kind === "video" ? { video: true } : {}),
                   })}

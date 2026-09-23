@@ -19,7 +19,20 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import {api, assetPlaybackUrl, assetPreviewUrl, assetThumbnailUrl, listComfyuiWorkflows, listComfyuiWorkflowParams, optimizeImagePrompt, type GenerationCreateResponse, type GenerationJob, type GenerationOption, type Job, type Workspace} from "@/api/client";
+import {
+  api,
+  assetFileUrl,
+  assetPreviewUrl,
+  assetThumbnailUrl,
+  listComfyuiWorkflows,
+  listComfyuiWorkflowParams,
+  optimizeImagePrompt,
+  type GenerationCreateResponse,
+  type GenerationJob,
+  type GenerationOption,
+  type Job,
+  type Workspace,
+} from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
@@ -1271,7 +1284,7 @@ function GenerationTurn({
         {generation.result_asset_id && generation.kind === "video" ? (
           <video
             className="block max-h-[420px] w-full max-w-[min(560px,100%)] rounded-lg border border-border bg-[#05070a]"
-            src={assetPlaybackUrl(generation.result_asset_id)}
+            src={assetFileUrl(generation.result_asset_id)}
             poster={assetThumbnailUrl(generation.result_asset_id)}
             controls
             preload="metadata"

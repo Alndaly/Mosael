@@ -1,7 +1,7 @@
 import React from "react";
 import { Paperclip } from "lucide-react";
 
-import {assetFileUrl, assetPlaybackUrl, assetPreviewUrl} from "@/api/client";
+import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
@@ -51,8 +51,7 @@ export function AssetInlinePreview({
   const { openImagePreview } = useImagePreview();
   const [imageFailure, setImageFailure] = React.useState({ assetId: "", stage: 0 });
   const stage = imageFailure.assetId === assetId ? imageFailure.stage : 0;
-  // 图片:先用浏览器能解的预览图,失败再退回原图;音视频走播放地址(放不动的大原片会换成代理)。
-  const src = kind === "image" ? (stage === 0 ? assetPreviewUrl(assetId) : assetFileUrl(assetId)) : assetPlaybackUrl(assetId);
+  const src = kind === "image" && stage === 0 ? assetPreviewUrl(assetId) : assetFileUrl(assetId);
   const openPreview = () =>
     openImagePreview({
       src,

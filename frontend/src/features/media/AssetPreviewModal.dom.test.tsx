@@ -7,7 +7,7 @@ const openImagePreview = vi.fn();
 let imagePreviewOpen = false;
 
 vi.mock("@/api/client", () => ({
-  assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
   fetchWaveform: async () => ({ peaks: [] }),
 }));
@@ -67,7 +67,7 @@ describe("AssetPreviewModal", () => {
     // Dialog content is portaled into document.body, outside Testing Library's render container.
     const audio = document.querySelector("audio");
     expect(audio).not.toBeNull();
-    expect(audio?.getAttribute("src")).toBe("/play/audio-asset");
+    expect(audio?.getAttribute("src")).toBe("/file/audio-asset");
     expect(audio?.hasAttribute("controls")).toBe(false);
     expect(audio?.hasAttribute("autoplay")).toBe(true);
     expect(screen.getByRole("button", { name: "boardPlay" })).toBeInTheDocument();

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
-  assetFileUrl: (id: string) => `/file/${id}`, assetPlaybackUrl: (id: string) => `/play/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
 }));
 
@@ -25,7 +25,7 @@ describe("聊天媒体画廊", () => {
 
     expect(chatMediaGallery(messages)).toEqual([
       { src: "/preview/a", title: "第一张.HEIC" },
-      { src: "/play/v", title: "片段.mp4", video: true },
+      { src: "/file/v", title: "片段.mp4", video: true },
       { src: "/preview/b", title: "第二张.png" },
     ]);
   });

@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 
-import {assetPlaybackUrl, type Asset} from "@/api/client";
+import { assetFileUrl, type Asset } from "@/api/client";
 import { api } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -80,6 +80,6 @@ export function useReferencePreview() {
       window.location.hash = `#/media?asset=${encodeURIComponent(asset.id)}`;
       return;
     }
-    openImagePreview({ src: assetPlaybackUrl(asset.id), title: asset.name, video: asset.kind === "video" });
+    openImagePreview({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" });
   };
 }
