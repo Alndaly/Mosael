@@ -116,6 +116,21 @@ export function PluginMarketDialog({
 
   const entries = market.data ?? [];
   const shown = entries.filter((entry) => matches(entry, query));
+
+  //: 官网「在 Mosael 中打开」一个还没装的插件:市场一到货就直接弹出**安装确认**(列出它要的权限),
+  //: 不让人在列表里再点一次。装不装仍由那张确认卡上的按钮决定。每个 focusId 只自动弹一次 ——
+  //: 关掉确认卡之后,列表还在,想装再点。
+  const autoPreviewed = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!open || !focusId || autoPreviewed.current === focusId || pending || preview.isPending) return;
+    const target = entries.find((entry) => entry.id === focusId);
+    if (!target) return;
+    autoPreviewed.current = focusId;
+    preview.mutate(target.download);
+  }, [open, focusId, entries, pending, preview]);
+  React.useEffect(() => {
+    if (!open) autoPreviewed.current = null;
+  }, [open]);
   const perms = pending?.preview.permissions ?? [];
   const toolNames = pending?.preview.tools ?? [];
 
