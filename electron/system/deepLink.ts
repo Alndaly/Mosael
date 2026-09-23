@@ -14,7 +14,13 @@
  *
  * ## 形状
  *   mosael://open?view=workflows&id=<记录 id>
+ *   mosael://open?view=plugins&market=<插件 id>        —— 打开插件市场、找到这个插件
+ *   mosael://open?view=workflows&template=<模板 id>    —— 打开工作流社区、选中这个模板
  * view 必须在白名单里(和前端 StudioView 一一对应);id 可选,用于打开具体记录。
+ *
+ * `market` / `template` 是官网社区页「在 Mosael 中打开」用的:官网上看的是**还没装**的插件、
+ * **还没添加**的模板,它们在本机没有记录 id。同样只导航 —— 打开市场、选中那一项,装不装、
+ * 添加不添加仍由人点。各自只在对应的页面上认,字符集同样限死。
  */
 
 /** 与前端 StudioView 一致。白名单而非透传:避免把任意字符串塞进 location.hash。 */
@@ -38,9 +44,17 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 export const PROTOCOL = "mosael";
 
+/** 插件 id 形如 `dev.mosael.remotion`(带点),模板 id 形如 `full_video_generation`。 */
+const MARKET_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
+const TEMPLATE_PATTERN = /^[a-z0-9_]{1,64}$/;
+
 export interface DeepLink {
   view: string;
   id?: string;
+  /** 插件市场里要找的那个插件(只在 view=plugins 时)。 */
+  market?: string;
+  /** 工作流社区里要选中的模板(只在 view=workflows 时)。 */
+  template?: string;
 }
 
 /** 解析失败一律返回 null(不抛):输入来自外部,不可信也不该让主进程崩。 */
@@ -61,8 +75,17 @@ export function parseDeepLink(raw: string): DeepLink | null {
 
   const id = url.searchParams.get("id");
   if (id && !ID_PATTERN.test(id)) return null;
+  const market = url.searchParams.get("market");
+  if (market && (view !== "plugins" || !MARKET_PATTERN.test(market))) return null;
+  const template = url.searchParams.get("template");
+  if (template && (view !== "workflows" || !TEMPLATE_PATTERN.test(template))) return null;
 
-  return id ? { view, id } : { view };
+  return {
+    view,
+    ...(id ? { id } : {}),
+    ...(market ? { market } : {}),
+    ...(template ? { template } : {}),
+  };
 }
 
 /** 从进程参数里挑出深链(Windows/Linux 上协议唤起是作为命令行参数传进来的)。 */

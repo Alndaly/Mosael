@@ -58,8 +58,8 @@ export default async function WorkflowDetailPage({
               <Download className="size-4" aria-hidden />
               {t.workflows.download}
             </ActionLink>
-            {/* 深链只导航、不执行:把应用弹到工作流页,导入仍由人点。 */}
-            <ActionLink href="mosael://open?view=workflows">{t.community.openInApp}</ActionLink>
+            {/* 深链只导航、不执行:打开工作流社区、选中这个模板,添加副本仍由人点。 */}
+            <ActionLink href={`mosael://open?view=workflows&template=${encodeURIComponent(workflow.id)}`}>{t.community.openInApp}</ActionLink>
           </>
         }
       />

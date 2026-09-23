@@ -106,8 +106,9 @@ export default async function PluginDetailPage({
         summary={plugin.summary}
         actions={
           <>
-            {/* 深链只导航、不执行(electron/system/deepLink.ts):最多把应用弹到插件页。 */}
-            <ActionLink href="mosael://open?view=plugins" primary>
+            {/* 深链只导航、不执行(electron/system/deepLink.ts):装过了就打开它的插件页,没装就
+                打开市场、找到它 —— 装不装仍由人点。 */}
+            <ActionLink href={`mosael://open?view=plugins&market=${encodeURIComponent(plugin.id)}`} primary>
               {t.community.openInApp}
             </ActionLink>
             <ActionLink href={`${SITE.repo}/tree/main/${plugin.source}`}>

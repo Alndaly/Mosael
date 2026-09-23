@@ -35,6 +35,7 @@ import {
 } from "@/api/client";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
+import { OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -86,6 +87,21 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   //: 挤在那条几百像素宽的侧栏里 —— 一个用来浏览的列表被塞进了一个用来选中的列表的位置。
   //: 现在它是头部的一个按钮 + 一张弹窗,宽度归它自己。
   const [marketOpen, setMarketOpen] = React.useState(false);
+  const [marketFocus, setMarketFocus] = React.useState<string | null>(null);
+  //: 官网「在 Mosael 中打开」:装过了就选中它的页,没装就打开市场、找到它 —— 装不装由人点。
+  useOpenRequest(
+    OPEN_PLUGIN_IN_MARKET,
+    (pluginId) => {
+      if (!packages.isSuccess) return false;
+      if (packages.data.some((item) => item.id === pluginId)) {
+        setSelectedId(pluginId);
+      } else {
+        setMarketFocus(pluginId);
+        setMarketOpen(true);
+      }
+    },
+    [packages.isSuccess],
+  );
   const empty = packages.isSuccess && list.length === 0;
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
 
@@ -93,7 +109,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
   if (empty) return <div className={COLLECTION_DETAIL_PAGE}>
     {heading}<div className="flex min-h-0 flex-1 overflow-y-auto"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
-    <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
+    <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onInstalled={() => invalidatePlugins(qc)} />
   </div>;
 
   return (
@@ -145,7 +161,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
       </CollectionDetail>
-      <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
+      <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onInstalled={() => invalidatePlugins(qc)} />
     </div>
   );
 }

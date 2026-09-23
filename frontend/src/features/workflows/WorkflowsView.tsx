@@ -5,7 +5,7 @@ import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
-import { useOpenRequest } from "@/lib/deepLink";
+import { OPEN_WORKFLOW_TEMPLATE, useOpenRequest } from "@/lib/deepLink";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
@@ -334,6 +334,12 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
   const [communityOpen, setCommunityOpen] = React.useState(false);
+  const [communityFocus, setCommunityFocus] = React.useState<string | null>(null);
+  //: 官网「在 Mosael 中打开」:打开工作流社区、选中那个模板 —— 添加副本仍由人点。
+  useOpenRequest(OPEN_WORKFLOW_TEMPLATE, (templateId) => {
+    setCommunityFocus(templateId);
+    setCommunityOpen(true);
+  });
 
   // 通知/任务中心深链(mosael:open-* 事件通道):直接选中对应工作流。
   useOpenRequest("mosael:open-workflow", (id) => setSelectedId(id));
@@ -483,7 +489,11 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       open={communityOpen}
       workflows={workflows.data ?? []}
       installingId={create.isPending ? (create.variables ?? null) : null}
-      onOpenChange={setCommunityOpen}
+      focusTemplate={communityFocus}
+      onOpenChange={(next) => {
+        setCommunityOpen(next);
+        if (!next) setCommunityFocus(null);
+      }}
       onInstall={(templateId) => create.mutate(templateId)}
     />
   );

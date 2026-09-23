@@ -34,12 +34,15 @@ export function WorkflowCommunityDialog({
   installingId,
   onOpenChange,
   onInstall,
+  focusTemplate,
 }: {
   open: boolean;
   workflows: Workflow[];
   installingId: WorkflowTemplateId | null;
   onOpenChange: (open: boolean) => void;
   onInstall: (templateId: WorkflowTemplateId) => void;
+  /** 打开时选中这个模板(官网「在 Mosael 中打开」)。 */
+  focusTemplate?: string | null;
 }) {
   const t = useI18n();
   const [query, setQuery] = React.useState("");
@@ -50,7 +53,8 @@ export function WorkflowCommunityDialog({
   React.useEffect(() => {
     if (!open) return;
     setQuery("");
-  }, [open]);
+    if (focusTemplate) setSelectedId(focusTemplate);
+  }, [open, focusTemplate]);
 
   const installedCounts = React.useMemo(() => {
     const counts = new Map<WorkflowTemplateId, number>();

@@ -67,10 +67,13 @@ export function PluginMarketDialog({
   open,
   onOpenChange,
   onInstalled,
+  focusId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onInstalled: () => void;
+  /** 打开时直接找到这个插件(官网「在 Mosael 中打开」):搜索框里填上它的 id,列表只剩它一条。 */
+  focusId?: string | null;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -78,6 +81,9 @@ export function PluginMarketDialog({
   const [url, setUrl] = React.useState("");
   const [urlOpen, setUrlOpen] = React.useState(false);
   const [pending, setPending] = React.useState<{ url: string; preview: InstallPreview } | null>(null);
+  React.useEffect(() => {
+    if (open && focusId) setQuery(focusId);
+  }, [open, focusId]);
 
   const market = useQuery({
     queryKey: ["plugin-market"],

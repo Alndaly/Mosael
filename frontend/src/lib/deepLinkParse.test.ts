@@ -11,6 +11,20 @@ describe("mosael:// 深链解析", () => {
     expect(parseDeepLink("mosael://open?view=publish&id=abc123")).toEqual({ view: "publish", id: "abc123" });
   });
 
+  it("官网社区页的「在 Mosael 中打开」:没装的插件、没添加的模板,各自只在对应页面上认", () => {
+    expect(parseDeepLink("mosael://open?view=plugins&market=dev.mosael.remotion")).toEqual({
+      view: "plugins", market: "dev.mosael.remotion",
+    });
+    expect(parseDeepLink("mosael://open?view=workflows&template=product_pitch_short")).toEqual({
+      view: "workflows", template: "product_pitch_short",
+    });
+    // 放错页面、字符集不对,整条不认 —— 不是"忽略那个参数照常跳",免得半截生效。
+    expect(parseDeepLink("mosael://open?view=workflows&market=dev.mosael.remotion")).toBeNull();
+    expect(parseDeepLink("mosael://open?view=plugins&template=x")).toBeNull();
+    expect(parseDeepLink("mosael://open?view=plugins&market=../../x")).toBeNull();
+    expect(parseDeepLink("mosael://open?view=workflows&template=Full-Video")).toBeNull();
+  });
+
   it("拒绝不在白名单里的 view —— 否则等于把任意字符串塞进 location.hash", () => {
     expect(parseDeepLink("mosael://open?view=../../etc/passwd")).toBeNull();
     expect(parseDeepLink("mosael://open?view=")).toBeNull();

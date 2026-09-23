@@ -74,6 +74,11 @@ export function gotoSettings(section: string): void {
   gotoRecord("/settings", "mosael:open-settings", section);
 }
 
+/** 打开插件市场并找到某个插件(官网「在 Mosael 中打开」)。已经装了就直接选中它。 */
+export const OPEN_PLUGIN_IN_MARKET = "mosael:open-plugin-market";
+/** 打开工作流社区并选中某个官方模板(官网「在 Mosael 中打开」)。 */
+export const OPEN_WORKFLOW_TEMPLATE = "mosael:open-workflow-template";
+
 /** 页面 → 打开单条记录的事件名(mosael:// 深链、任务中心「前往」共用)。没有对应事件的页面就只跳页。 */
 export const VIEW_RECORD_EVENTS: Record<string, string> = {
   workflows: "mosael:open-workflow",
@@ -90,8 +95,12 @@ export const VIEW_RECORD_EVENTS: Record<string, string> = {
  */
 export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () => void {
   const onLink = (event: Event) => {
-    const link = (event as CustomEvent<{ view?: string; id?: string }>).detail;
+    const link = (event as CustomEvent<{ view?: string; id?: string; market?: string; template?: string }>).detail;
     if (!link?.view) return;
+    //: 官网社区页的「在 Mosael 中打开」:没装的插件、没添加的模板在本机没有记录 id,
+    //: 要的是「打开市场 / 社区,找到它」—— 装、添加仍由人点(只导航,见 electron/system/deepLink)。
+    if (link.market) return gotoRecord("/plugins", OPEN_PLUGIN_IN_MARKET, link.market);
+    if (link.template) return gotoRecord("/workflows", OPEN_WORKFLOW_TEMPLATE, link.template);
     gotoRecord(`/${link.view}`, VIEW_RECORD_EVENTS[link.view], link.id);
   };
   const onOpenFiles = (event: Event) => {
