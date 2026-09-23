@@ -49,10 +49,15 @@ describe("文案表", () => {
   const keys = [...messages.matchAll(/^ {4}(\w+):/gm)].map((one) => one[1]);
   const code = sources(SRC).map((path) => readFileSync(path, "utf8")).join("\n");
   const fragments = templateFragments(code);
+  // 源码里所有被引号包住的单词,**扫一遍**收进集合。此前是每个键各编一条正则、各扫一遍全部
+  // 源码(两千多个键 × 几 MB),单跑 1.8s,全量并行时常撞 5s 超时 —— 失败原因是「慢」,
+  // 而不是「有没人用的文案」,这比不测更糟。判据不变:键被 ' " ` 之一包住地出现过(收尾的引号用前瞻,不吃掉 —— 紧挨着的
+  // 两个 `"a""b"` 共用中间那个引号,吃掉的话后一个就漏了)。
+  const quoted = new Set([...code.matchAll(/["'`](\w+)(?=["'`])/g)].map((one) => one[1]));
 
   it("没有没人用的条目", () => {
     const unused = [...new Set(keys)].filter((key) => {
-      if (new RegExp(`["'\`]${key}["'\`]`).test(code)) return false;
+      if (quoted.has(key)) return false;
       if ([...fragments].some((piece) => key.startsWith(piece) || key.endsWith(piece))) return false;
       return true;
     });
