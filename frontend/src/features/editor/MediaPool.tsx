@@ -23,13 +23,13 @@ type KindFilter = (typeof KIND_FILTERS)[number];
 export function MediaPool({
   assets,
   uploading,
-  onImportFile,
+  onImportFiles,
   onRecord,
   onAddToTimeline,
 }: {
   assets: Asset[];
   uploading: boolean;
-  onImportFile: (file: File) => void;
+  onImportFiles: (files: File[]) => void;
   onRecord: () => void;
   onAddToTimeline: (asset: Asset) => void;
 }) {
@@ -114,10 +114,11 @@ export function MediaPool({
               <input
                 type="file"
                 accept="video/*,audio/*,image/*"
+                multiple
                 className="hidden"
                 onChange={(event) => {
-                  const file = event.currentTarget.files?.[0];
-                  if (file) onImportFile(file);
+                  const files = [...(event.currentTarget.files ?? [])];
+                  if (files.length > 0) onImportFiles(files);
                   event.currentTarget.value = "";
                 }}
               />

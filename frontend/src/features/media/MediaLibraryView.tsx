@@ -9,7 +9,7 @@ import { useOpenRequest } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
-import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/RecordingProvider";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
+import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { MediaTagFilter, type TagMatch } from "./MediaTagFilter";
 import { TagsDialog } from "@/features/media/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -115,11 +116,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     setPreviewing(asset);
   }, [assets.data]);
 
-  const uploadAsset = useMutation({
-    // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。
-    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file }),
-    onSuccess: refresh,
-  });
+  // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。按钮多选和拖进来是同一条路。
+  const importFiles = useImportMediaFiles({ workspaceId: workspace.id });
   const convertGif = useMutation({
     mutationFn: (assetId: string) => convertVideoToGif(assetId),
     onSuccess: () => toast.success(t("assetConvertGifQueued")),
@@ -132,22 +130,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     onSuccess: () => toast.success(t("separateAudioQueued")),
     onError: (error: Error) => toast.error(error.message),
   });
-  // 从访达直接拖进来。**逐个传而不是并发** —— 一次拖十个视频,并发会把带宽和后端的
-  // 转码队列同时打满,而用户看到的是十个都卡着不动。
-  const dropUpload = useMutation({
-    mutationFn: async (files: File[]) => {
-      for (const file of files) {
-        await importAsset({ workspaceId: workspace.id, file });
-      }
-      return files.length;
-    },
-    onSuccess: (count) => {
-      refresh();
-      toast.success(t("mediaDropped").replace("{n}", String(count)));
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-  const drop = useFileDrop((files) => dropUpload.mutate(files), isMediaFile);
+  const drop = useFileDrop((files) => importFiles.mutate(files), isMediaFile);
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
@@ -264,10 +247,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     // 挂在滚动容器里的话,absolute 会跟着内容一起滚走,滚到一半松手时提示已经在屏幕外了。
     <div className="relative h-full min-h-0" {...drop.handlers}>
       {/* inset-0 一点不留:留边就会在四角露出没被盖住的缝。落点是整块区域,不是某个方框。 */}
-      {(drop.active || dropUpload.isPending) && (
+      {(drop.active || importFiles.isPending) && (
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
           <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
-            {dropUpload.isPending ? (
+            {importFiles.isPending ? (
               <>
                 <Loader2 size={20} className="animate-mosael-spin" />
                 {t("mediaDropUploading")}
@@ -292,15 +275,16 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 ref={importInputRef}
                 type="file"
                 accept="video/*,audio/*,image/*"
+                multiple
                 className="hidden"
-                disabled={uploadAsset.isPending}
+                disabled={importFiles.isPending}
                 onChange={(event) => {
-                  const file = event.currentTarget.files?.[0];
-                  if (file) uploadAsset.mutate(file);
+                  const files = [...(event.currentTarget.files ?? [])];
+                  if (files.length > 0) importFiles.mutate(files);
                   event.currentTarget.value = "";
                 }}
               />
-              <Button size="default" loading={uploadAsset.isPending} onClick={() => importInputRef.current?.click()}>
+              <Button size="default" loading={importFiles.isPending} onClick={() => importInputRef.current?.click()}>
                 <ImagePlus />{t("import")}
               </Button>
               <Button variant="outline" size="default" onClick={() => setUrlImportOpen(true)}>

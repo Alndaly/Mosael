@@ -24,7 +24,6 @@ import {
   rippleDeleteClipsBatch,
   exportSequence,
   type ExportParams,
-  importAsset,
   insertClip,
   insertTextClip,
   moveClip,
@@ -70,6 +69,7 @@ import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/
 import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
 import { DenoiseDialog } from "@/features/media/DenoiseDialog";
+import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { FontFaces } from "@/features/editor/FontFaces";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
@@ -218,10 +218,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     }
   }, [sequence]);
 
-  const uploadAsset = useMutation({
-    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: project.id, file }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) }),
-  });
+  const importFiles = useImportMediaFiles({ workspaceId: workspace.id, projectId: project.id });
   const createSequence = useMutation({
     mutationFn: () =>
       api<Sequence>("/api/sequences", {
@@ -968,8 +965,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {panels.tab === "media" ? (
         <MediaPool
           assets={assets.data ?? []}
-          uploading={uploadAsset.isPending}
-          onImportFile={(file) => uploadAsset.mutate(file)}
+          uploading={importFiles.isPending}
+          onImportFiles={(files) => importFiles.mutate(files)}
           onRecord={() => openRecorder({ projectId: project.id })}
           onAddToTimeline={addAssetToTimeline}
         />
