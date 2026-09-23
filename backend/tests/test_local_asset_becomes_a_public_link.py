@@ -123,7 +123,7 @@ def test_配好了几家却没定默认_当场问而不是替他挑(world) -> No
         _upload(world)
     message = str(raised.value)
     assert "阿里云 OSS" in message and "腾讯云 COS" in message
-    assert "设置 → 视频生成" in message and "素材外链" in message, "没说去哪儿定"
+    assert "设置 → 素材外链" in message, "没说去哪儿定"
     assert world["calls"] == []
 
 
@@ -211,7 +211,7 @@ def test_官方的对象存储插件都声明了这个能力_也声明了由哪�
 
 
 def test_在设置里选素材外链用哪一家_只能选自己的() -> None:
-    """配了几家存储时用哪一家,是个人的选择 —— 和默认模型一样放在设置里(视频生成页)。"""
+    """配了几家存储时用哪一家,是个人的选择 —— 和默认模型一样放在设置里,自己一页(只收链接的不止视频)。"""
     from tests.test_plugins import install
     from tests.util import second_client
 

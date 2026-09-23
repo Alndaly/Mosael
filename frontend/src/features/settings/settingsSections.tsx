@@ -6,6 +6,7 @@ import {
   Database,
   Download,
   Globe,
+  Link2,
   ImageIcon,
   MessageSquare,
   Mic,
@@ -132,13 +133,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "providerVideoTitle",
         icon: <Video size={14} />,
         capabilities: ["video"],
-        render: (ctx) => (
-          <>
-            {providerPage("video", "providerVideoTitle", "providerVideoDesc")(ctx)}
-            {/* 只收链接的输入(Seedance 的参考视频)用哪一家存储换直链 —— 个人选择,和默认模型同类。 */}
-            <AssetLinkStorageSection />
-          </>
-        ),
+        render: providerPage("video", "providerVideoTitle", "providerVideoDesc"),
       },
       {
         // **只放云端的配音与播客连接。** 内置配音引擎、声音克隆是本机的,归「本机引擎」;
@@ -236,6 +231,14 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "feishuTitle",
         icon: <MessageSquare size={14} />,
         render: ({ workspace }) => <FeishuSection workspace={workspace} />,
+      },
+      {
+        // **自己一页,不挂在某一种能力下面。** 只收链接的输入不止视频(参考视频、视频编辑的源视频,
+        // 以后可能还有图片、音频),它回答的是「本地素材怎么经我的存储交给外面的服务」。
+        id: "asset-links",
+        label: "assetLinkTitle",
+        icon: <Link2 size={14} />,
+        render: () => <AssetLinkStorageSection />,
       },
       {
         // 出站代理 + 失败重试:回答的是同一个问题 —— 所有 AI 调用怎么出去。

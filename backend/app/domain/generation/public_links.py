@@ -23,7 +23,7 @@ Mosael 是本地优先的:素材在用户自己的盘上,没有公网地址。�
 - **只看发起人自己的实例。** 存储实例是个人的(桶和密钥都是他的);此前查的是整个部署里的全部
   实例,多人部署时 A 的素材会用 B 的桶和密钥传上去 —— 文件落在别人的桶里,钱也记在别人头上。
 - **只看配好的。** 桶名、密钥缺一项的不算候选。
-- **配好了一家就用它;配好了几家,用他定为默认的那家**(「设置 → 视频生成」的「素材外链」,
+- **配好了一家就用它;配好了几家,用他定为默认的那家**(「设置 → 素材外链」,
   存在 PluginCapabilityDefault)。**没定就当场问,不替他挑** —— 此前按实例名的字母序取第一个,
   谁被用上取决于它叫什么。
 - 上传工具由工具自己声明(清单里工具上的 `provides`),不按 `_upload` 后缀猜。
@@ -152,7 +152,7 @@ def choose_uploader(db: "Session", owner_user_id: str | None, asset_name: str):
             names = "、".join(f"「{pair[0].name}」" for pair in ready)
             raise NoUploader(
                 f"你配好了几家对象存储({names}),「{asset_name}」要传去哪一家还没定。"
-                "去「设置 → 视频生成」的「素材外链」里选一家,再生成一次。"
+                "去「设置 → 素材外链」里选一家,再生成一次。"
             )
     instance, manifest = chosen
     missing = _missing(db, instance)
