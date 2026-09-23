@@ -121,15 +121,17 @@ export function PluginMarketDialog({
       className="w-[680px] max-w-[92vw]"
       // 找东西的那一条**钉在头里**:滚到第十个插件时,搜索框还在原地。
       header={
-        <div className="flex min-w-0 items-center gap-1.5">
+        // 输入框和按钮都用**系统默认的尺寸与圆角**(Input / Button 的 md 档)—— 此前这里各自
+        // 覆写了 h-8 / rounded-lg,于是和应用里别处的输入框对不上。
+        <div className="flex min-w-0 items-center gap-2">
         <span className="relative min-w-0 flex-1">
           <Search
-            size={13}
+            size={14}
             aria-hidden
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
-            className="h-8 w-full min-w-0 rounded-lg border-border bg-field pl-[30px] pr-2.5 text-foreground [&]:text-ui-sm"
+            className="pl-9"
             placeholder={t("pluginMarketSearch")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -140,7 +142,7 @@ export function PluginMarketDialog({
             一个是"我已经知道要装哪个 zip",后者一年用一次。 */}
         <Popover open={urlOpen} onOpenChange={setUrlOpen}>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="shrink-0" aria-expanded={urlOpen}>
+            <Button variant="outline" className="shrink-0" aria-expanded={urlOpen}>
               <Link2 size={13} />
               {t("pluginInstallFromUrl")}
             </Button>
@@ -152,7 +154,7 @@ export function PluginMarketDialog({
               <span className="flex min-w-0 items-center gap-1.5">
                 <Input
                   autoFocus
-                  className="h-8 min-w-0 flex-1 rounded-lg border-border bg-field px-2.5 text-foreground [&]:text-ui-sm"
+                  className="min-w-0 flex-1"
                   placeholder={t("pluginInstallUrlPlaceholder")}
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
@@ -162,7 +164,6 @@ export function PluginMarketDialog({
                 />
                 <Button
                   className="shrink-0"
-                  size="sm"
                   disabled={!url.trim()}
                   //: **只认自己那一条 URL。** 光看 isPending 的话,市场里任何一张卡片在预览,
                   //: 这个按钮都会跟着转 —— 用户按的是那边,转的是这边。

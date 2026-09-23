@@ -106,7 +106,10 @@ export function ModalShell({
         <DialogHeader
           data-slot="modal-header"
           className={cn(
-            "sticky top-0 z-10 shrink-0 px-6 pb-0 pt-6",
+            // **头尾和正文之间的留白长在头尾上,不长在正文上。** 此前是头部 pb-0 + 正文 py-6:
+            // 静止时看着一样,可正文一滚,那 24px 就跟着滚走了 —— 列表直接顶到搜索框下沿,
+            // 像是被搜索框压住。正文只留 pt-1 / pb-1,给首尾那个输入框的聚焦光圈(ring-2)不被裁掉。
+            "sticky top-0 z-10 shrink-0 px-6 pb-5 pt-6",
             header && "gap-2.5",
           )}
         >
@@ -116,7 +119,8 @@ export function ModalShell({
         <div
           data-slot="modal-body"
           className={cn(
-            "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-6 py-6 [scrollbar-gutter:stable]",
+            "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-6 pt-1 [scrollbar-gutter:stable]",
+            footer ? "pb-1" : "pb-6",
             bodyClassName,
           )}
         >
@@ -125,7 +129,7 @@ export function ModalShell({
         {footer && (
           <DialogFooter
             data-slot="modal-footer"
-            className="sticky bottom-0 z-10 shrink-0 gap-2 px-6 pb-6 pt-0 sm:items-center"
+            className="sticky bottom-0 z-10 shrink-0 gap-2 px-6 pb-6 pt-5 sm:items-center"
           >
             {footer}
           </DialogFooter>

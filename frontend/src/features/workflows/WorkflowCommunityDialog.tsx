@@ -86,7 +86,10 @@ export function WorkflowCommunityDialog({
       className="w-[min(920px,calc(100vw-24px))] max-w-none"
       // 正文和头部、底部用**同一套左右边距**(ModalShell 的 px-6)。此前这里是 p-0,左侧列表只靠
       // 自己的 p-3 缩进,于是列表比标题和搜索框往外凸出一截。
-      bodyClassName="px-6 py-5"
+      //
+      // 宽屏下正文自己不滚,**两列各滚各的**:左边列表往下翻时,右边正在看的那份详情不该跟着
+      // 跑掉;右边详情很长时,也不该把左边列表一起推出视野。窄屏是一列,还是整体滚。
+      bodyClassName="md:flex md:flex-col md:overflow-hidden"
       header={
         <div className="grid gap-2.5">
           <p className="m-0 text-ui-xs font-normal leading-relaxed text-muted-foreground">
@@ -129,11 +132,11 @@ export function WorkflowCommunityDialog({
           </div>
         </div>
       ) : (
-        <div className="grid min-h-[430px] md:grid-cols-[310px_minmax(0,1fr)]">
+        <div className="grid min-h-[430px] md:min-h-0 md:flex-1 md:grid-cols-[310px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
           {/* 两列之间一条分隔线,线两侧的留白相等(pr-5 / pl-5);外侧不再加内边距 ——
               外侧的边距由正文统一给。 */}
           <div
-            className="border-b border-border/60 pb-4 md:border-b-0 md:border-r md:pb-0 md:pr-5"
+            className="border-b border-border/60 pb-4 md:min-h-0 md:overflow-y-auto md:overscroll-contain md:border-b-0 md:border-r md:pb-0 md:pr-5"
             role="listbox"
             aria-label={t("wfCommunityTitle")}
           >
@@ -175,7 +178,7 @@ export function WorkflowCommunityDialog({
             </div>
           </div>
 
-          <div className="min-w-0 pt-4 md:pl-5 md:pt-0">
+          <div className="min-w-0 pt-4 md:min-h-0 md:overflow-y-auto md:overscroll-contain md:pl-5 md:pt-0">
             {selected && (
               <div className="grid gap-5">
                 <div className="grid gap-2">

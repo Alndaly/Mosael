@@ -37,7 +37,10 @@ describe("ModalShell sticky layout", () => {
     expect(body?.className).toContain("overflow-y-auto");
     expect(body?.className).not.toMatch(/bg-(popover|panel|background)/);
     expect(body?.className).not.toContain("backdrop-blur-xl");
-    expect(body?.className).toContain("py-6");
+    // 留白在头尾上:正文一滚,它不会跟着滚走(见 ModalShell 的说明)。
+    expect(header?.className).toContain("pb-5");
+    expect(footer?.className).toContain("pt-5");
+    expect(body?.className).not.toMatch(/\b(py|pt)-[2-9]/);
     expect(footer?.className).toContain("sticky");
     expect(footer?.className).toContain("bottom-0");
     expect(footer?.className).toContain("sm:items-center");

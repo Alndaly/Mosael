@@ -332,7 +332,7 @@ export function Recorder({
         recording &&
           "!bottom-3 !left-auto !right-3 !top-auto !w-[360px] !max-w-[calc(100vw-1.5rem)] !translate-x-0 !translate-y-0",
       )}
-      bodyClassName={recording ? "px-3 py-3" : undefined}
+      bodyClassName={recording ? "px-3" : undefined}
       footer={
         <div className="flex w-full min-w-0 items-center justify-between gap-4">
           <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
