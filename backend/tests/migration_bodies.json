@@ -38,6 +38,7 @@
   "migrate-drop-local-publish-accounts": "b97ce4a14e2492d1",
   "migrate-drop-the-knowledge-base": "c39e0c0dd9556d7f",
   "migrate-encrypt-secrets": "29857ecc953f3cab",
+  "migrate-frame-rate-is-not-a-time-base": "9b84333df81d2b37",
   "migrate-generation-capability-profiles": "4efdae207a221ca1",
   "migrate-generation-job-message-keys": "d177d5028f24c28a",
   "migrate-hash-session-tokens": "fbeeb21a62f043b8",

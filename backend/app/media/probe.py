@@ -47,7 +47,7 @@ def probe_media(path: Path) -> dict[str, Any]:
                 "-v",
                 "error",
                 "-show_entries",
-                "format=duration:stream=codec_type,width,height,r_frame_rate",
+                "format=duration:stream=codec_type,width,height,r_frame_rate,avg_frame_rate",
                 "-of",
                 "json",
                 str(path),
@@ -73,9 +73,34 @@ def probe_media(path: Path) -> dict[str, Any]:
         if stream.get("codec_type") == "video":
             info["width"] = stream.get("width")
             info["height"] = stream.get("height")
-            info["fps"] = _parse_rate(stream.get("r_frame_rate"))
+            info["fps"] = _frame_rate(path, stream, info.get("duration"))
             break
     return {k: v for k, v in info.items() if v is not None}
+
+
+#: 超过它的「帧率」不是帧率,是容器的时间单位。浏览器 MediaRecorder 录的 webm 以毫秒计时,
+#: ffprobe 给出的 r_frame_rate / avg_frame_rate 都是 1000/1 —— 素材详情于是写着「1000fps」。
+MAX_PLAUSIBLE_FPS = 240.0
+
+
+def _frame_rate(path: Path, stream: dict[str, Any], duration: float | None) -> float | None:
+    """标称帧率说得通就用它;说不通(是时间单位)就用平均帧率;还说不通就数帧:帧数 ÷ 时长。"""
+    for key in ("r_frame_rate", "avg_frame_rate"):
+        rate = _parse_rate(stream.get(key))
+        if rate and rate <= MAX_PLAUSIBLE_FPS:
+            return rate
+    if not duration:
+        return None
+    try:
+        proc = run_logged(
+            [settings.ffprobe, "-v", "error", "-select_streams", "v:0", "-count_packets",
+             "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(path)],
+            check=True, capture_output=True, text=True, timeout=60, what="媒体探测", level=logging.DEBUG,
+        )
+        frames = int(proc.stdout.strip().split(",")[0])
+    except Exception:
+        return None
+    return round(frames / duration, 3) if frames > 0 else None
 
 
 def remux_in_place(path: Path) -> bool:

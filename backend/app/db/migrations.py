@@ -2212,6 +2212,36 @@ def _migrate_mov_videos_become_mp4() -> None:
             )
 
 
+def _migrate_frame_rate_is_not_a_time_base() -> None:
+    """浏览器录的 webm 以毫秒计时,此前探测把 1000/1 当成了帧率(素材详情写着「1000fps」)。
+
+    帧率超过 media/probe.MAX_PLAUSIBLE_FPS 的视频按现在的探测重算一遍;重算不出来就去掉这个值,
+    界面上不显示比显示一个错的好。
+    """
+    from app.media.paths import resolve_key
+    from app.media.probe import MAX_PLAUSIBLE_FPS, probe_media
+
+    inspector = inspect(engine)
+    if "assets" not in set(inspector.get_table_names()):
+        return
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, file_key, media_info FROM assets WHERE kind = 'video' AND file_key != ''")).all()
+    for asset_id, file_key, raw in rows:
+        info = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+        fps = info.get("fps")
+        if not isinstance(fps, (int, float)) or fps <= MAX_PLAUSIBLE_FPS:
+            continue
+        source = resolve_key(file_key)
+        fixed = probe_media(source).get("fps") if source.is_file() else None
+        if fixed is None:
+            info.pop("fps", None)
+        else:
+            info["fps"] = fixed
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE assets SET media_info = :info WHERE id = :id"),
+                         {"info": json.dumps(info, ensure_ascii=False), "id": asset_id})
+
+
 def _drop_venvs_built_on_another_python() -> None:
     """托管 venv 是用另一个次版本的解释器建的,就删掉,让引擎回到「未安装」。
 
@@ -2648,6 +2678,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_shared_venvs,
                 _migrate_thumbnails_keep_transparency,
                 _migrate_mov_videos_become_mp4,
+                _migrate_frame_rate_is_not_a_time_base,
             ),
             #: 对账:随包解释器换次版本后,旧 venv 跑不起来了。放在搬共用 venv 之后,搬过来的也要过这一道。
             *_recurring(MigrationPhase.FILESYSTEM, _drop_venvs_built_on_another_python),
