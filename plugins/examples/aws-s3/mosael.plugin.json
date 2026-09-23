@@ -6,7 +6,7 @@
     "en": "Amazon S3"
   },
   "default_locale": "zh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage": "https://docs.aws.amazon.com/AmazonS3/latest/API/",
   "runtime": {
     "kind": "process",
@@ -69,8 +69,8 @@
         },
         "type": "string",
         "help": {
-          "zh": "留空按区域拼 s3.<区域>.amazonaws.com。连自建的 S3 兼容服务(MinIO、R2)时填它自己的地址。",
-          "en": "Empty means s3.<region>.amazonaws.com. Set it to point at an S3-compatible service (MinIO, R2)."
+          "zh": "通常留空,按区域拼成 s3.<区域>.amazonaws.com。连自建的 S3 兼容服务(MinIO、R2)时填它自己的地址,如 minio.example.com 或 localhost:9000 —— 不是地域名。",
+          "en": "Usually empty: built as s3.<region>.amazonaws.com. For an S3-compatible service (MinIO, R2) give its host, e.g. minio.example.com or localhost:9000 — not a region."
         }
       }
     ],

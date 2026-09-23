@@ -24,6 +24,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -63,7 +64,10 @@ def _request(url: str, *, method: str, headers: dict[str, str], body: bytes | No
             message = detail[:300]
         raise StorageError(f"{exc.code} {message or detail[:300]}") from exc
     except urllib.error.URLError as exc:
-        raise StorageError(f"连不上对象存储:{exc.reason}") from exc
+        # **带上连的是哪个主机。** 底层原因常常看不出地址错了:开着代理时,一个不存在的域名
+        # 不会报"解析失败",而是被代理接下再断开,变成一句 SSL UNEXPECTED_EOF。
+        host = urllib.parse.urlsplit(url).hostname or url
+        raise StorageError(f"连不上对象存储 {host}:{exc.reason}") from exc
 
 
 class Bucket:
@@ -77,7 +81,17 @@ class Bucket:
             raise StorageError("没有配置访问密钥")
         self.flavor, self.bucket, self.region = flavor, bucket, region
         self.access_key, self.secret = access_key, secret
-        self.host = endpoint.replace("https://", "").replace("http://", "").strip("/")
+        # 用户常把整条 URL 贴进来(带协议、带路径),只取主机名。
+        host = endpoint.strip().replace("https://", "").replace("http://", "").strip("/").split("/")[0]
+        if "." not in host and ":" not in host and host != "localhost":
+            # 最常见的填法错误:把地域(cn-shanghai / us-east-1)填进了接入点。照原样拼出来的
+            # `桶名.cn-shanghai` 不是一个域名,而报出来的往往是一句看不懂的网络错误。
+            # 自建的 S3 兼容服务(localhost:9000、minio:9000)带端口或就是 localhost,不在此列。
+            raise StorageError(
+                f"接入点「{endpoint}」不是一个域名 —— 看起来像地域。地域填在「区域」那一格;"
+                "接入点要填完整域名,通常留空,会按区域自动拼。"
+            )
+        self.host = host
         #: **虚拟主机式寻址**(桶名在域名里)是三家的默认,路径式正在被淘汰。
         if not self.host.startswith(f"{bucket}."):
             self.host = f"{bucket}.{self.host}"

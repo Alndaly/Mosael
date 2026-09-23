@@ -6,7 +6,7 @@
     "en": "Alibaba Cloud OSS"
   },
   "default_locale": "zh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage": "https://help.aliyun.com/zh/oss/",
   "runtime": {
     "kind": "process",
@@ -69,8 +69,8 @@
         },
         "type": "string",
         "help": {
-          "zh": "留空按区域拼 oss-<区域>.aliyuncs.com。",
-          "en": "Empty means oss-<region>.aliyuncs.com."
+          "zh": "通常留空,按区域拼成 oss-<区域>.aliyuncs.com。要填就填完整域名,如 oss-cn-shanghai.aliyuncs.com —— 不是地域名。",
+          "en": "Usually empty: built as oss-<region>.aliyuncs.com. If set, give the full host, e.g. oss-cn-shanghai.aliyuncs.com — not a region."
         }
       }
     ],
