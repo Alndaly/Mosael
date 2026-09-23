@@ -8,12 +8,10 @@ import { toast } from "sonner";
 
 import {
   agentManifest,
-  API_BASE,
   compactAgentSession,
   createAgentSession,
   dropQueuedMessage,
   getAgentSession,
-  getAuthToken,
   listAgentMessages,
   listAgentQueue,
   listAgentSessions,
@@ -26,6 +24,7 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
 import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
@@ -63,7 +62,6 @@ import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
 import { buildTurns } from "@/features/agent/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
-import { readSseData } from "@/lib/sse";
 import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, type SubagentRun } from "@/features/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -110,71 +108,11 @@ export function ChatWorkspace({
     queryFn: () => listAgentTools<AgentTool>(),
     staleTime: 60_000,
   });
-  const [streamText, setStreamText] = React.useState<string>("");
-  const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
+  // 连流 → 攒状态 → 收尾失效:**只有一份**,和画布助手共用(见 useAgentTurnStream)。
+  // 此前两个面板各写一遍,而收尾那一步已经分岔 —— 隔壁每答完一句都会闪一下。
+  const { streamText, streamTimeline, attach: attachStream } = useAgentTurnStream();
   //「对话」读答案,「轨迹」读执行。记住选择:排查问题的人往往连着看好几个会话的轨迹。
   const [view, setView] = usePersistentTab<"chat" | "trace">("agent-view", "chat", ["chat", "trace"]);
-  const streamingRef = React.useRef<string | null>(null);
-
-  // Aborts whatever stream is open. The reader used to run `for(;;) await reader.read()` with
-  // no way to stop it: unmounting the view or switching session left it reading forever, each
-  // leak pinning an HTTP/1.1 connection. Past the browser's ~6-per-host cap, EVERY other
-  // request in the app queues behind them and the whole UI appears to freeze.
-  const abortRef = React.useRef<AbortController | null>(null);
-
-  const attachStream = React.useCallback(
-    async (targetSessionId: string) => {
-      if (streamingRef.current === targetSessionId) return;
-      abortRef.current?.abort(); // switching sessions must close the previous stream
-      const controller = new AbortController();
-      abortRef.current = controller;
-      streamingRef.current = targetSessionId;
-      setStreamText("");
-      setStreamTimeline([]);
-      try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_BASE}/api/agent/sessions/${targetSessionId}/stream`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          signal: controller.signal,
-        });
-        if (!response.ok || !response.body) return;
-        for await (const data of readSseData(response.body)) {
-          try {
-            const payload = JSON.parse(data) as {
-              text: string;
-              done: boolean;
-              timeline?: AgentTimelineItem[];
-            };
-            if (streamingRef.current === targetSessionId) {
-              setStreamText(payload.text);
-              setStreamTimeline(payload.timeline ?? []);
-            }
-          } catch {
-            // A bad event must not tear down later updates from the same stream.
-          }
-        }
-      } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-        // An aborted stream was replaced or unmounted — the successor owns the state now, and
-        // invalidating on the way out would refetch for a view that may be gone.
-        if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
-          streamingRef.current = null;
-          // 临时流式气泡的显示条件是 running(来自 agent-session 状态)&& streamText。要消除「回答
-          // 完成那一刻整页闪烁」,得让 running 转 false(气泡消失)与正式消息出现落在同一帧:一起
-          // await messages + session 的 refetch,两者同时 settle → React 批处理同帧重渲染,正式气泡
-          // 就位的同刻临时气泡消失,无空白也无重复。之后再清 streamText 只是收尾(气泡已因 running 消失)。
-          await Promise.all([
-            qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] }),
-            qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] }),
-          ]);
-          setStreamText("");
-          setStreamTimeline([]);
-          void qc.invalidateQueries({ queryKey: ["agent-usage-events", targetSessionId] });
-        }
-      }
-    },
-    [qc],
-  );
 
   const sessions = useQuery({
     queryKey: ["agent-sessions", workspace.id],
@@ -300,19 +238,8 @@ export function ChatWorkspace({
 
   // Reconnect to an in-flight turn (e.g. after switching sessions or reload).
   React.useEffect(() => {
-    if (running && activeSession && streamingRef.current !== activeSession.id) {
-      void attachStream(activeSession.id);
-    }
+    if (running && activeSession) void attachStream(activeSession.id);
   }, [running, activeSession, attachStream]);
-
-  // Close the stream on unmount. Views are conditionally mounted, so this is routine, not rare.
-  React.useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-      abortRef.current = null;
-      streamingRef.current = null;
-    };
-  }, []);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();

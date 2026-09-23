@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 
 import asyncio
-import json
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
@@ -33,6 +32,7 @@ from app.api.schemas import (
     AgentSessionOut,
     AgentSessionUpdate,
     AgentSkillOut,
+    AgentStreamEvent,
     ProviderUsageEventOut,
 )
 from app.core.config import app_version
@@ -292,9 +292,14 @@ def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> R
     return Response(status_code=204)
 
 
-@router.get("/agent/sessions/{session_id}/stream")
+@router.get("/agent/sessions/{session_id}/stream", response_model=AgentStreamEvent)
 async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> StreamingResponse:
-    """SSE: live token stream of the in-flight turn (snapshots, then done)."""
+    """SSE: live token stream of the in-flight turn (snapshots, then done).
+
+    `response_model` 在这里**只为把帧的形状写进 openapi**:返回的是 `StreamingResponse`,
+    FastAPI 对直接返回的 Response 不做序列化,所以它不影响流本身。有了它,前端两个消费者
+    就从生成类型取形状,不再各写一份 `as {...}` 断言 —— 那两份此前已经不一样了。
+    """
     _require_session(db, user, session_id)
 
     async def generator():
@@ -305,13 +310,11 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
                 last_seq = state["seq"]
                 yield (
                     "data: "
-                    + json.dumps(
-                        {
-                            "text": state["text"],
-                            "done": state["done"],
-                            "timeline": state.get("timeline", []),
-                        }
-                    )
+                    + AgentStreamEvent(
+                        text=state["text"],
+                        done=state["done"],
+                        timeline=state.get("timeline", []),
+                    ).model_dump_json()
                     + "\n\n"
                 )
             if state["done"]:

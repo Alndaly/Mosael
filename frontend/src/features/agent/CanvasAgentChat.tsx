@@ -13,19 +13,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
 import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { DictateButton } from "@/features/agent/DictateButton";
 
 import {
-  API_BASE,
   type Asset,
   compactAgentSession,
   createAgentSession,
   deleteAgentSession,
   dropQueuedMessage,
   getAgentSession,
-  getAuthToken,
   listAgentMessages,
   listAgentQueue,
   listAgentSessions,
@@ -60,7 +59,6 @@ import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/featu
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { cn } from "@/lib/utils";
-import { readSseData } from "@/lib/sse";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 export type CanvasAgentMode = "docked" | "floating";
@@ -109,13 +107,14 @@ export function CanvasAgentChat({
   const draftText = React.useMemo(() => documentText(draft), [draft]);
   const draftRefs = React.useMemo(() => collectReferences(draft), [draft]);
   const noteAttach = useNoteAttachments(workspaceId);
-  const [streamText, setStreamText] = React.useState("");
-  const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
+  // 连流 → 攒状态 → 收尾失效:**只有一份**,和 AI 工作台共用(见 useAgentTurnStream)。
+  // 此前这里各写了一遍,而收尾那一步停在没修之前的写法 —— 每答完一句都会闪一下,
+  // 而那个 bug 在隔壁文件里早就被诊断、注释、修好过。
+  const { streamText, streamTimeline, attach: attachStream, reset: resetStream } = useAgentTurnStream();
   // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspaceId);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
-  const streamingRef = React.useRef<string | null>(null);
   const isFloating = mode === "floating";
 
   // 悬浮窗的拖动/缩放/位置记忆走共用 hook —— 执行历史面板用的是同一套。
@@ -144,18 +143,12 @@ export function CanvasAgentChat({
   const switchSession = (nextId: string) => {
     if (nextId === selectedId) return;
     // 旧会话的流不许串进新视图:先掐流、清流态,再切。
-    abortRef.current?.abort();
-    streamingRef.current = null;
-    setStreamText("");
-    setStreamTimeline([]);
+    resetStream();
     setSelectedId(nextId);
     window.localStorage.setItem(sessionKey, nextId);
   };
   const clearSessionSelection = () => {
-    abortRef.current?.abort();
-    streamingRef.current = null;
-    setStreamText("");
-    setStreamTimeline([]);
+    resetStream();
     setSelectedId(null);
     window.localStorage.removeItem(sessionKey);
   };
@@ -316,70 +309,10 @@ export function CanvasAgentChat({
     return () => window.clearInterval(timer);
   }, [running, sessionId]);
 
-  // Same leak as the AI-studio chat: an unstoppable reader pins an HTTP/1.1 connection, and
-  // this panel is conditionally mounted by each workspace surface, so closing it
-  // mid-stream is the normal case rather than an edge one.
-  const abortRef = React.useRef<AbortController | null>(null);
-
-  const attachStream = React.useCallback(
-    async (targetSessionId: string) => {
-      if (streamingRef.current === targetSessionId) return;
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-      streamingRef.current = targetSessionId;
-      setStreamText("");
-      setStreamTimeline([]);
-      try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_BASE}/api/agent/sessions/${targetSessionId}/stream`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          signal: controller.signal,
-        });
-        if (!response.ok || !response.body) return;
-        for await (const data of readSseData(response.body)) {
-          try {
-            const payload = JSON.parse(data) as {
-              text: string;
-              timeline?: AgentTimelineItem[];
-            };
-            if (streamingRef.current === targetSessionId) {
-              setStreamText(payload.text);
-              setStreamTimeline(payload.timeline ?? []);
-            }
-          } catch {
-            // A bad event must not tear down later updates from the same stream.
-          }
-        }
-      } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-        if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
-          streamingRef.current = null;
-          setStreamText("");
-          setStreamTimeline([]);
-          void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
-          void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
-          // 回合结束后计费事件才落库,而 usage-events 只在 running 时轮询——不主动失效,这条回复
-          // 的 token/费用就一直缺(见对话页同款失效)。
-          void qc.invalidateQueries({ queryKey: ["agent-usage-events", targetSessionId] });
-        }
-      }
-    },
-    [qc],
-  );
 
   React.useEffect(() => {
-    if (running && sessionId && streamingRef.current !== sessionId) void attachStream(sessionId);
+    if (running && sessionId) void attachStream(sessionId);
   }, [running, sessionId, attachStream]);
-
-  // Close the stream on unmount — the panel is toggled open and shut routinely.
-  React.useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-      abortRef.current = null;
-      streamingRef.current = null;
-    };
-  }, []);
 
   const send = useMutation({
     mutationFn: async ({

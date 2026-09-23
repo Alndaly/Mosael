@@ -5591,6 +5591,10 @@ export interface paths {
         /**
          * Stream Agent Turn
          * @description SSE: live token stream of the in-flight turn (snapshots, then done).
+         *
+         *     `response_model` 在这里**只为把帧的形状写进 openapi**:返回的是 `StreamingResponse`,
+         *     FastAPI 对直接返回的 Response 不做序列化,所以它不影响流本身。有了它,前端两个消费者
+         *     就从生成类型取形状,不再各写一份 `as {...}` 断言 —— 那两份此前已经不一样了。
          */
         get: operations["stream_agent_turn_api_agent_sessions__session_id__stream_get"];
         put?: never;
@@ -6602,6 +6606,33 @@ export interface components {
             text: string;
             /** Workspace Id */
             workspace_id: string;
+        };
+        /**
+         * AgentStreamEvent
+         * @description SSE 上一帧:这一轮**到此刻为止**的全量快照(不是增量)。
+         *
+         *     它此前没有 schema —— 形状由路由现场拼一个 dict,前端两个消费者各写一份 `as {...}` 断言,
+         *     而 `as` 绕过类型检查:少写一个字段不报错,多写一个也不报错。实测两份断言**已经不一样**
+         *     (画布那份没有 `done`)。给它一个 schema,前端就从生成类型取,不再手抄。
+         *
+         *     挂在流式路由的 `response_model` 上纯粹是为了让它进 openapi:路由返回的是
+         *     `StreamingResponse`,FastAPI 对直接返回的 Response 不做序列化,所以这条声明不影响流本身。
+         */
+        AgentStreamEvent: {
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /**
+             * Done
+             * @default false
+             */
+            done: boolean;
+            /** Timeline */
+            timeline?: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * AgentVoiceOut
@@ -23973,7 +24004,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AgentStreamEvent"];
                 };
             };
             /** @description Validation Error */

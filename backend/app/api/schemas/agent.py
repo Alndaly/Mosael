@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from pydantic import Field, ValidationInfo, field_validator
 from app.api.schemas.base import ApiModel, OrmModel
 
@@ -283,3 +283,23 @@ class AgentManifestOut(ApiModel):
     version: str
     openapi_url: str
     skills: list[AgentSkillOut]
+
+
+class AgentStreamEvent(ApiModel):
+    """SSE 上一帧:这一轮**到此刻为止**的全量快照(不是增量)。
+
+    它此前没有 schema —— 形状由路由现场拼一个 dict,前端两个消费者各写一份 `as {...}` 断言,
+    而 `as` 绕过类型检查:少写一个字段不报错,多写一个也不报错。实测两份断言**已经不一样**
+    (画布那份没有 `done`)。给它一个 schema,前端就从生成类型取,不再手抄。
+
+    挂在流式路由的 `response_model` 上纯粹是为了让它进 openapi:路由返回的是
+    `StreamingResponse`,FastAPI 对直接返回的 Response 不做序列化,所以这条声明不影响流本身。
+    """
+
+    #: 这一轮到此刻的正文。全量,不是增量 —— 客户端直接赋值即可。
+    text: str = ""
+    #: 这一轮结束了。**后端发完它就 break。** 客户端读它来收尾,而不是靠"流关了"去推断:
+    #: 那个推断在中间设备拖着连接不关的时候会一直等下去。
+    done: bool = False
+    #: 执行轨迹(工具调用、子智能体、确认卡),同样是全量快照。
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
