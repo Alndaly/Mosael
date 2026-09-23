@@ -53,5 +53,18 @@ if (typeof document !== "undefined") {
     Element.prototype.releasePointerCapture = () => {};
   }
   Element.prototype.scrollIntoView ??= () => {};
+
+  // jsdom 30.1 的焦点回归:获得焦点的元素被移出 DOM 后,它把「上一个焦点」记成 document;
+  // 下一次 focus() 时就对 document 派发 blur,并按规则转发到 window。浏览器不会这样 —— 焦点
+  // 在同一个文档里移动时,文档同时在新旧两条焦点链上,规范里它不失焦。
+  // 而 radix 的菜单打开期间一收到 window 的 blur 就关菜单,于是「上一条测试卸载时焦点正在菜单
+  // 里」的下一条菜单测试,菜单开了立刻又关,表现为 9 条毫不相干的失败。
+  // 只拦这一种:目标是 window、relatedTarget 是本页里的元素 —— 真的窗口失焦 relatedTarget 是 null。
+  // 「目标是 window」用 eventPhase 判:vitest 暴露的全局 window 和 jsdom 派发时的 Window 不是同一个引用。
+  // 验证能否删:去掉这段跑 src/test/jsdomFocus.dom.test.tsx。
+  window.addEventListener("blur", (event) => {
+    const next = (event as FocusEvent).relatedTarget;
+    if (event.eventPhase === Event.AT_TARGET && next instanceof Node && document.contains(next)) event.stopImmediatePropagation();
+  }, true);
 }
 export {};
