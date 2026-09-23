@@ -81,7 +81,7 @@ describe("深链", () => {
     ["providers:podcast", "provider-audio"],
     ["provider-pricing", "provider-pricing"],
     ["separation", "separation"],
-    //: 降噪对话框里「管理降噪引擎」发的就是它。
+    //: 降噪对话框里没装的引擎旁边的「去下载」发的就是它。
     ["denoise", "denoise"],
   ])("%s 落到 %s", (link, id) => {
     //: 这几个是代码里实际发出去的深链 —— 页挪了位置,它们必须还落得到。

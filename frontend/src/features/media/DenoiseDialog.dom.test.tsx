@@ -103,7 +103,8 @@ describe("降噪对话框", () => {
     renderDialog([BUILTIN, DEEPFILTER]);
     const deepfilter = await screen.findByRole("radio", { name: /DeepFilterNet/ });
     expect(deepfilter).toBeDisabled();
-    expect(deepfilter).toHaveTextContent("先去设置里下载");
+    //: 提示在单选项下面单独一栏(不跟着变灰),读屏仍把它念成这个选项的说明。
+    expect(deepfilter).toHaveAccessibleDescription("先去设置里下载");
     expect(deepfilter).toHaveTextContent("效果最好");
   });
 
@@ -113,7 +114,7 @@ describe("降噪对话框", () => {
     const listener = (event: Event) => opened.push(String((event as CustomEvent).detail));
     window.addEventListener("mosael:open-settings", listener);
     const { onClose } = renderDialog([BUILTIN, DEEPFILTER]);
-    await user.click(await screen.findByRole("button", { name: /denoiseManageEngines/ }));
+    await user.click(await screen.findByRole("button", { name: /denoiseGoDownload/ }));
     expect(onClose).toHaveBeenCalled();
     //: 深链事件是延迟发的(等设置页挂载),所以等它到。
     await waitFor(() => expect(opened).toContain("denoise"));
@@ -123,6 +124,6 @@ describe("降噪对话框", () => {
   it("都装好了就不摆这个入口", async () => {
     renderDialog([BUILTIN, { ...DEEPFILTER, ready: true, status: "installed" }]);
     await screen.findByRole("radio", { name: /DeepFilterNet/ });
-    expect(screen.queryByRole("button", { name: /denoiseManageEngines/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /denoiseGoDownload/ })).toBeNull();
   });
 });
