@@ -1321,6 +1321,59 @@ export class PageDriver {
     }
   }
 
+  /**
+   * 截获这一页发出的、URL 命中 `endpoint` 的响应正文,直到 `stop()`。
+   *
+   * 用来读平台发布接口返回的作品 ID(见 publishedPost.ts)。走 CDP 的 Network 域:页面自己的
+   * fetch/XHR 我们改不了也不该改,但浏览器看得见它们的响应。只收命中的那几个,正文截到 256KB ——
+   * 这不是抓包,是等一个确定的回执。
+   *
+   * 出任何错都只是「没读到」:发布本身不能因为记录失败而失败。
+   */
+  captureResponses(endpoint: RegExp): { stop(): Promise<Array<{ url: string; body: string }>> } {
+    const pending = new Map<string, string>();
+    const bodies: Array<Promise<{ url: string; body: string } | null>> = [];
+    const onMessage = (_event: unknown, method: string, params: Record<string, unknown>): void => {
+      if (method === "Network.responseReceived") {
+        const response = params.response as { url?: string } | undefined;
+        if (response?.url && endpoint.test(response.url)) pending.set(String(params.requestId), response.url);
+      } else if (method === "Network.loadingFinished") {
+        const requestId = String(params.requestId);
+        const url = pending.get(requestId);
+        if (!url) return;
+        pending.delete(requestId);
+        bodies.push(
+          (this.wc.debugger.sendCommand("Network.getResponseBody", { requestId }) as Promise<{ body?: string; base64Encoded?: boolean }>)
+            .then((result) => {
+              const raw = result.base64Encoded ? Buffer.from(result.body ?? "", "base64").toString("utf8") : (result.body ?? "");
+              return { url, body: raw.slice(0, 256 * 1024) };
+            })
+            .catch(() => null),
+        );
+      }
+    };
+    try {
+      this.ensureDebugger();
+      this.wc.debugger.on("message", onMessage);
+      void this.wc.debugger.sendCommand("Network.enable").catch(() => undefined);
+    } catch (error) {
+      plog("captureResponses unavailable:", String(error).slice(0, 120));
+    }
+    return {
+      stop: async () => {
+        try {
+          this.wc.debugger.removeListener("message", onMessage);
+          // 只在「提交 → 等确认」这一段开着(PUBLISHING.md:不让 CDP 常驻干扰页面)。
+          void this.wc.debugger.sendCommand("Network.disable").catch(() => undefined);
+        } catch {
+          // webContents 已销毁
+        }
+        const settled = await Promise.all(bodies);
+        return settled.filter((item): item is { url: string; body: string } => item !== null);
+      },
+    };
+  }
+
   detach(): void {
     if (this.debuggerAttached) {
       try {

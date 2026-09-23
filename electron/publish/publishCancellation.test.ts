@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const adapter = Object.fromEntries(["openCreatorPage", "checkLogin", "uploadVideo", "fillTitle", "fillTags", "submit", "waitResult"].map(k => [k, vi.fn(async () => true)]));
-  const driver = { setAbortSignal: vi.fn(), setMetricsOverride: vi.fn(), clearMetricsOverride: vi.fn(async () => {}), url: () => "about:blank" };
+  const driver = { setAbortSignal: vi.fn(), captureResponses: vi.fn(() => ({ stop: async () => [] })), setMetricsOverride: vi.fn(), clearMetricsOverride: vi.fn(async () => {}), url: () => "about:blank" };
   const views = { attachWindow: vi.fn(), getDriver: () => driver, panelAttach: vi.fn(), panelDetach: vi.fn(), isPanelled: () => true, configureAccount: vi.fn(async () => {}) };
   const backend = { heartbeat: vi.fn(async () => {}), markDue: vi.fn(async () => {}), claimTask: vi.fn(), claimCheck: vi.fn(async () => ({ account: null })), patchAccount: vi.fn(async () => {}), reportTask: vi.fn(async () => {}), taskStatus: vi.fn(async () => ({ status: "running" })) };
   return { adapter, driver, views, backend };
@@ -40,5 +40,5 @@ it("active tasks still submit and report success", async () => {
   startPublishWorker({ window: {} as never });
   await vi.advanceTimersByTimeAsync(15_000);
   expect(mocks.adapter.submit).toHaveBeenCalledOnce();
-  expect(mocks.backend.reportTask).toHaveBeenCalledWith("task", { status: "success" });
+  expect(mocks.backend.reportTask).toHaveBeenCalledWith("task", { status: "success", post: null });
 });

@@ -33,7 +33,7 @@
 | 端点 | 用途 |
 | --- | --- |
 | `POST /worker/claim` | 认领最老的 pending 任务并原子翻成 running。带上执行器身份(`worker`),排除**任何执行器**正在跑的账号 → 同账号串行 |
-| `PATCH /worker/report` | 回报富状态:`pending/running/success/failed/login_required/waiting_manual/permission_required/blocked/cancelled`(权威清单在 `domain/publish.TASK_STATUSES`,`report_task` 按它校验) |
+| `PATCH /worker/report` | 回报富状态:`pending/running/success/failed/login_required/waiting_manual/permission_required/blocked/cancelled`(权威清单在 `domain/publish.TASK_STATUSES`,`report_task` 按它校验)。`success` 时带上 `post`(见下) |
 | `POST /worker/claim-check` | 认领一个待复检登录态的账号 |
 | `POST /worker/mark-due` | 开机全量巡检:把所有账号标记待复检 |
 | `PATCH /worker/account` | 回写 `binding_status` / `last_error` / `profile_name`(平台侧昵称) |
@@ -41,6 +41,23 @@
 
 任务富状态会同步映射到任务总线的 `job`,并产生站内通知(成功/失败/需重登/被拦截…)。
 **已取消的任务不给后到的回报复活**(`report_task` 里的规则)。
+
+### 发出去的那条作品(`post`)
+
+发成功时,任务记下这条作品在平台上的 ID 与链接(`publish_tasks.post`:`platform / post_id /
+url / ids / published_at`),之后按作品 ID 查数据(TikHub 之类)就靠它。任务列表接口、job 结果
+(工作流发布节点的 `post_id` / `post_url` 输出)、智能体的 `list_publish_tasks` 都能读到。
+
+ID 是执行器从**平台自己的发布接口的响应**里读的(`electron/publish/publishedPost.ts`):
+点提交前开始监听那一个接口,等到平台确认后停。读原文而不是 JSON.parse —— 抖音 / TikTok
+的 19 位 ID 过一次 JS 数字就错了;每个平台的 ID 都有形状校验。读不到就是空 `post_id`,不编。
+YouTube 另有一路:详情页上的 youtu.be 链接(适配器早就在读,用来认「这一支」)。
+
+监听用的是上传视频时已经 attach 的 debugger,只在「提交 → 等确认」这一段 `Network.enable`,
+停下就 `Network.disable` —— 不违反下面「不常驻 CDP」那一条。
+
+> 各平台发布接口的地址与字段来自它们的网页端在用的那一版;平台改版后读不到时,执行器日志里
+> `runTask post:` 那一行会列出截到了哪些响应、读出了什么,照着改 `POST_SOURCES` 即可。
 
 ### 多个执行器
 

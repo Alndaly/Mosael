@@ -3,7 +3,7 @@ import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, ListChecks, Loader2, Plus, Rocket, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Check, CheckCircle2, CircleAlert, ExternalLink, ListChecks, Loader2, Plus, Rocket, Sparkles, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteWarningKey } from "@/features/publish/publishDeleteWarning";
@@ -437,11 +437,26 @@ function PublishDetail({
               </div>
             </InfoRow>
           )}
-          {task.status === "succeeded" && task.result.target != null && (
-            <InfoRow label={t("publishResult")}>
-              <code className="timecode inline-flex items-center gap-[5px] text-xs text-muted-foreground [overflow-wrap:anywhere]" title={String(task.result.target)}>
-                <FolderOutput size={12} className="shrink-0" /> {String(task.result.target)}
-              </code>
+          {/* 发出去的那条作品在平台上的 ID —— 之后按它查数据(TikHub 之类)。没读到就明说,不留一个空格子。 */}
+          {task.post && (
+            <InfoRow label={t("publishPost")}>
+              {task.post.post_id ? (
+                <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <code className="timecode text-xs [overflow-wrap:anywhere]">{task.post.post_id}</code>
+                  {task.post.url && (
+                    <a
+                      href={task.post.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 text-ui-xs text-primary underline-offset-2 hover:underline"
+                    >
+                      <ExternalLink size={12} /> {t("publishPostOpen")}
+                    </a>
+                  )}
+                </span>
+              ) : (
+                <p className="m-0 text-muted-foreground">{t("publishPostMissing")}</p>
+              )}
             </InfoRow>
           )}
           {task.status === "failed" && task.error && (

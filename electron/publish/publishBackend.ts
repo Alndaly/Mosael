@@ -1,5 +1,6 @@
 // 发布执行器 ↔ Mosael 后端(/api/publish)的薄客户端。后端是任务的单一事实源:执行器
 // 认领待办、回报状态、更新账号登录态,都走这里。本地默认 owner,后端 publish 权限门放行本地。
+import type { PublishedPost } from "./publishedPost";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -136,7 +137,13 @@ export function taskStatus(taskId: string): Promise<{ id: string; status: string
 
 export function reportTask(
   taskId: string,
-  patch: { status: string; error_message?: string | null; screenshot_path?: string | null },
+  patch: {
+    status: string;
+    error_message?: string | null;
+    screenshot_path?: string | null;
+    /** 发成功时读到的那条作品(见 publishedPost.ts)。 */
+    post?: PublishedPost | null;
+  },
 ): Promise<unknown> {
   // /worker/* 免鉴权、按 id 跨 owner 定位(执行器是无 token 的 Node 进程)。
   return req("/worker/report", "PATCH", { task_id: taskId, ...patch });

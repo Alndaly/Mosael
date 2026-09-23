@@ -203,6 +203,10 @@ export class YoutubeAdapter implements PublishAdapter {
     await this.driver.clickCss(this.s.doneButton);
   }
 
+  knownPostId(): string | null {
+    return this.uploadedId;
+  }
+
   async waitResult(): Promise<void> {
     // 「发出去了」= 上传对话框已关闭 **且** 这一支稿件出现在频道内容里。
     //

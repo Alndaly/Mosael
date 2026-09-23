@@ -12,6 +12,8 @@ export interface PublishAdapter {
   fillTags(tags: string[]): Promise<void>;
   submit(): Promise<void>;
   waitResult(): Promise<void>;
+  /** 适配器在页面上已经确认过的作品 ID(有的平台详情页会直接显示)。接口没读到时补上。 */
+  knownPostId?(): string | null;
 }
 
 export const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

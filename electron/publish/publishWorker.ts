@@ -19,6 +19,7 @@ import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
 import { resolvePlatform } from "./platforms";
+import { findPost, postEndpoint } from "./publishedPost";
 import type { PageDriver } from "./pageDriver";
 import type { LiveViewFrame, PublishTask, ViewState } from "./types";
 import * as backend from "./publishBackend";
@@ -267,6 +268,8 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     controller.signal.throwIfAborted();
   };
   let polling = false;
+  /** 发布接口的响应监听;失败 / 取消时在 finally 里撤掉。 */
+  let capture: { stop(): Promise<unknown> } | null = null;
   const cancellationTimer = setInterval(() => {
     if (polling || controller.signal.aborted) return;
     polling = true;
@@ -321,13 +324,21 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     await adapter.fillTags(t.tags);
     await delay(stepDelay());
 
+    // 从点提交之前开始听平台的发布接口:作品 ID 就在它的响应里(见 publishedPost.ts)。
+    const endpoint = postEndpoint(resolvePlatform(t.platform).id);
+    const listening = endpoint ? driver.captureResponses(endpoint) : null;
+    capture = listening;
     await step(tr("提交投稿"));
     await adapter.submit();
     await delay(stepDelay());
     await step(tr("等待平台确认"));
     await adapter.waitResult();
+    const responses = listening ? await listening.stop() : [];
+    capture = null;
+    const post = findPost(resolvePlatform(t.platform).id, responses, adapter.knownPostId?.() ?? null);
+    plog("runTask post:", t.id, { responses: responses.map((r) => r.url), post });
     await step(tr("发布成功"), true);
-    await backend.reportTask(t.id, { status: "success" });
+    await backend.reportTask(t.id, { status: "success", post });
     plog("runTask success:", t.id);
     settle(t, "success");
   } catch (error) {
@@ -378,6 +389,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     if (hasLive) requestFront(t.accountId);
   } finally {
     clearInterval(cancellationTimer);
+    await capture?.stop().catch(() => undefined);
     mirror.stop();
     // 撤面板 + 撤视口覆盖:任务结束后视图可能被用户从「查看页面」亮出来,带着面板缩放或覆盖
     // 都会和窗口尺寸对不上。panelDetach 会顺手把 zoomFactor 还原成 1(它按 origin 持久化)。

@@ -10119,6 +10119,7 @@ export interface components {
             result: {
                 [key: string]: unknown;
             };
+            post?: components["schemas"]["PublishedPostOut"] | null;
             /** Job Id */
             job_id: string | null;
             /**
@@ -10126,6 +10127,24 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * PublishedPostOut
+         * @description 发出去的那一条作品。`post_id` 为空说明发布时没从平台读到(不是没发出去)。
+         */
+        PublishedPostOut: {
+            /** Platform */
+            platform: string;
+            /** Post Id */
+            post_id: string;
+            /** Url */
+            url: string;
+            /** Ids */
+            ids: {
+                [key: string]: string;
+            };
+            /** Published At */
+            published_at: string;
         };
         /** RegisterCredentials */
         RegisterCredentials: {
@@ -12146,6 +12165,10 @@ export interface components {
             error_message?: string | null;
             /** Screenshot Path */
             screenshot_path?: string | null;
+            /** Post */
+            post?: {
+                [key: string]: unknown;
+            } | null;
         };
     };
     responses: never;
