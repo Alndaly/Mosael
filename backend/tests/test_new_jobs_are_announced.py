@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from app.main import NEW_JOBS_HEADER
+from app.api.middleware import NEW_JOBS_HEADER
 from tests.util import fresh_client
 
 

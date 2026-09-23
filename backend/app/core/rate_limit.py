@@ -16,6 +16,9 @@ from typing import Callable, Protocol
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from app.core.asgi import adding_headers
 
 
 class RateLimitSettings(Protocol):
@@ -160,25 +163,32 @@ def _session_identity(request: Request, client: str) -> str:
     return f"session:{digest}"
 
 
-def install_rate_limiting(app: FastAPI, settings: RateLimitSettings) -> WindowLimiter:
-    limiter = WindowLimiter()
+class _RateLimit:
+    """纯 ASGI 中间件(理由见 app/api/middleware:BaseHTTPMiddleware 会拖慢大文件响应)。"""
 
-    @app.middleware("http")
-    async def _rate_limit(request: Request, call_next):  # type: ignore[no-untyped-def]
-        if not enabled_for(settings):
-            return await call_next(request)
-        rule = classify(request.method, request.url.path, settings)
+    def __init__(self, app: ASGIApp, *, settings: RateLimitSettings, limiter: WindowLimiter) -> None:
+        self.app = app
+        self.settings = settings
+        self.limiter = limiter
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not enabled_for(self.settings):
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
+        rule = classify(request.method, request.url.path, self.settings)
         if rule is None:
-            return await call_next(request)
-        client = _client_identity(request, settings)
+            await self.app(scope, receive, send)
+            return
+        client = _client_identity(request, self.settings)
         identity = _session_identity(request, client) if rule.identity == "session" else client
         # A session bucket keeps users behind one NAT independent.  A wider IP safety bucket also
         # prevents an attacker from rotating arbitrary invalid Bearer strings to create new keys.
         if rule.identity == "session":
             client_rule = LimitRule(f"{rule.name}:client", rule.limit * 4, rule.window_seconds)
-            client_decision = limiter.check(client_rule, client)
+            client_decision = self.limiter.check(client_rule, client)
             if not client_decision.allowed:
-                return JSONResponse(
+                await JSONResponse(
                     status_code=429,
                     content={"detail": "请求过于频繁，请稍后再试"},
                     headers={
@@ -186,23 +196,27 @@ def install_rate_limiting(app: FastAPI, settings: RateLimitSettings) -> WindowLi
                         "X-RateLimit-Limit": str(client_decision.limit),
                         "X-RateLimit-Remaining": "0",
                     },
-                )
-        decision = limiter.check(rule, identity)
+                )(scope, receive, send)
+                return
+        decision = self.limiter.check(rule, identity)
         headers = {
             "X-RateLimit-Limit": str(decision.limit),
             "X-RateLimit-Remaining": str(decision.remaining),
         }
         if not decision.allowed:
             headers["Retry-After"] = str(decision.retry_after)
-            return JSONResponse(
+            await JSONResponse(
                 status_code=429,
                 content={"detail": "请求过于频繁，请稍后再试"},
                 headers=headers,
-            )
-        response = await call_next(request)
-        response.headers.update(headers)
-        return response
+            )(scope, receive, send)
+            return
+        await self.app(scope, receive, adding_headers(send, lambda: headers))
 
+
+def install_rate_limiting(app: FastAPI, settings: RateLimitSettings) -> WindowLimiter:
+    limiter = WindowLimiter()
+    app.add_middleware(_RateLimit, settings=settings, limiter=limiter)
     return limiter
 
 

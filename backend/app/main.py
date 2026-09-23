@@ -56,7 +56,7 @@ from app.api.routes.notes import router as notes_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.core.config import settings
-from app.core.i18n import normalize_locale, set_current_locale
+from app.api.middleware import NEW_JOBS_HEADER, AnnounceNewJobs, CarryLocale
 from app.api.deps import require_worker_key
 from app.core.logging import configure_logging
 from app.core.rate_limit import install_rate_limiting
@@ -73,13 +73,11 @@ from app.domain.blender.bridge import BlenderDomainError
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.blender.bridge import reconcile_orphaned_transfers as reconcile_blender_transfers
-from app.domain.jobs import register_external_kind, stop_watching_new_jobs, watch_new_jobs
+from app.domain.jobs import register_external_kind
 from app.domain.restart import reconcile_after_restart
 from app.domain.assets.proxies import reconcile_missing_proxies
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 
-#: 「这次请求建了几个任务」的响应头。前端的 api/transport 认这个名字。
-NEW_JOBS_HEADER = "X-Mosael-New-Jobs"
 
 
 @asynccontextmanager
@@ -272,6 +270,10 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Mosael API", version="0.1.0", lifespan=lifespan)
     _install_permission_handlers(app)
     install_rate_limiting(app, settings)
+    # 这几层都是纯 ASGI(见 api/middleware 的说明:包在大文件响应外面的 BaseHTTPMiddleware
+    # 会让拖视频进度条慢好几倍)。
+    app.add_middleware(CarryLocale)
+    app.add_middleware(AnnounceNewJobs)
     # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend
     # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather
     # than a same-origin policy.
@@ -294,32 +296,6 @@ def create_app() -> FastAPI:
     # handler even when the browser refuses to hand back the body. Naming the origins we
     # actually ship from is also what keeps the next route that ships open by mistake from
     # being readable by every page at once.
-    @app.middleware("http")
-    async def _carry_locale(request, call_next):  # type: ignore[no-untyped-def]
-        """把这次请求的语言放进 ContextVar,序列化那一层照它翻(见 core/i18n)。
-
-        **放在中间件而不是各路由里**:任务消息由十几个接口返回,每处各取一次请求头就是同一个问题
-        十几个答案 —— 漏一个,那一屏的任务就还是另一种语言。
-        """
-        set_current_locale(normalize_locale(request.headers.get("accept-language")))
-        return await call_next(request)
-
-    @app.middleware("http")
-    async def _announce_new_jobs(request, call_next):  # type: ignore[no-untyped-def]
-        """这次请求建了任务,就在响应头上说一声,前端据此立刻刷新任务列表(见 jobs.watch_new_jobs)。
-
-        放在中间件而不是各路由里,理由同 _carry_locale:建任务的接口有几十个,各自记得通知就是
-        几十处要记得的事 —— 漏掉的那些,任务要等下一轮轮询才出现在任务中心。
-        """
-        created, token = watch_new_jobs()
-        try:
-            response = await call_next(request)
-        finally:
-            stop_watching_new_jobs(token)
-        if created:
-            response.headers[NEW_JOBS_HEADER] = str(len(created))
-        return response
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
