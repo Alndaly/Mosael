@@ -9,8 +9,6 @@ export type CollaborationComment = components["schemas"]["CommentOut"];
 
 export type CollaborationCommentAnchor = components["schemas"]["CanvasCommentAnchor"];
 
-export type CollaborationReview = components["schemas"]["ReviewOut"];
-
 function subjectQuery(workspaceId: string, subjectType: string, subjectId: string): string {
   return new URLSearchParams({ workspace_id: workspaceId, subject_type: subjectType, subject_id: subjectId }).toString();
 }
@@ -63,23 +61,3 @@ export function deleteComment(commentId: string, workspaceId: string): Promise<v
   });
 }
 
-export function listReviews(workspaceId: string, subjectType: string, subjectId: string): Promise<CollaborationReview[]> {
-  return api<CollaborationReview[]>(`/api/reviews?${subjectQuery(workspaceId, subjectType, subjectId)}`);
-}
-
-export function requestReview(body: {
-  workspace_id: string;
-  subject_type: "board" | "workflow" | "sequence" | "asset";
-  subject_id: string;
-  reviewer_id: string;
-  note?: string;
-}): Promise<CollaborationReview> {
-  return api<CollaborationReview>("/api/reviews", { method: "POST", body: JSON.stringify(body) });
-}
-
-export function decideReview(reviewId: string, status: "approved" | "changes_requested" | "cancelled", note = ""): Promise<CollaborationReview> {
-  return api<CollaborationReview>(`/api/reviews/${reviewId}/decision`, {
-    method: "POST",
-    body: JSON.stringify({ status, note }),
-  });
-}

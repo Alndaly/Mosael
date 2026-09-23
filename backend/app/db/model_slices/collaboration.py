@@ -66,22 +66,3 @@ class CommentMention(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
-class Review(Base):
-    __tablename__ = "reviews"
-    __table_args__ = (
-        Index("idx_reviews_subject_created", "workspace_id", "subject_type", "subject_id", "created_at"),
-        Index("idx_reviews_reviewer_status", "reviewer_id", "status"),
-    )
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    subject_type: Mapped[str] = mapped_column(String(40), nullable=False)
-    subject_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    requested_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    reviewer_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", server_default="pending")
-    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    decision_note: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    decided_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

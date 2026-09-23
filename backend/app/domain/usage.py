@@ -34,11 +34,12 @@ class UsageSummary:
     currency: str
     event_count: int
     unknown_cost_events: int
-    duration_seconds: float
-    token_count: int
-    #: 缓存读/写各自的总量,以及命中率(cacheRead / 提示词总量)。
-    cache_read_tokens: int
-    cache_write_tokens: int
+    #: 缓存命中率(cacheRead / 提示词总量)。
+    #:
+    #: 这里曾经还有四个**总量**:duration_seconds / token_count / cache_read_tokens /
+    #: cache_write_tokens。它们随首页那八个没人读的字段一起从接口上删掉之后,只剩测试在读 ——
+    #: 那是"没人要的东西留在原地"低一层的样子,一起清掉。逐日那两串(daily / token_daily)
+    #: 还在,图表读的就是它们;命中率留着,因为它是**算出来的结论**,不是又一个可以自己加总的数。
     cache_hit_ratio: float
     daily: list[dict[str, Any]]
     token_daily: list[dict[str, Any]]
@@ -346,10 +347,10 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     unpriced_index: dict[tuple[str, str, str], int] = {}
     total_cost = 0
     unknown = 0
-    duration = 0.0
-    token_count = 0
+    #: 命中率的**分子**。另外三个累加器(总时长、总 token、缓存写入总量)随它们在
+    #: `UsageSummary` 上的字段一起删了 —— 那些字段没人读之后,这里每条用量事件都要加一遍的
+    #: 计算就是白做的。逐日那几列还在(图表读的是它们),不受影响。
     cache_read_total = 0
-    cache_write_total = 0
     #: 命中率的分母是**提示词总量** = input + cacheRead + cacheWrite(三者不相交),
     #: 不是 total_tokens —— 把补全 token 算进去会让这个比例随回答长短漂移。
     prompt_total = 0
@@ -357,9 +358,7 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     for event in rows:
         amount = int(event.cost_micros or 0)
         tokens = _token_usage(event.units or {})
-        token_count += tokens["total_tokens"]
         cache_read_total += tokens["cache_read_tokens"]
-        cache_write_total += tokens["cache_write_tokens"]
         prompt_total += tokens["input_tokens"] + tokens["cache_read_tokens"] + tokens["cache_write_tokens"]
         if event.cost_micros is not None:
             total_cost += amount
@@ -368,8 +367,6 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
             unknown += 1
             key = (event.provider or "", event.model or "", event.capability or "")
             unpriced_index[key] = unpriced_index.get(key, 0) + 1
-        if event.duration_seconds:
-            duration += float(event.duration_seconds)
         day = str(event.created_at.date())
         if day in daily_index:
             daily_index[day]["cost_micros"] += amount
@@ -390,10 +387,6 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
         currency=currency,
         event_count=len(rows),
         unknown_cost_events=unknown,
-        duration_seconds=round(duration, 1),
-        token_count=token_count,
-        cache_read_tokens=cache_read_total,
-        cache_write_tokens=cache_write_total,
         cache_hit_ratio=round(cache_read_total / prompt_total, 4) if prompt_total > 0 else 0.0,
         daily=daily,
         token_daily=[

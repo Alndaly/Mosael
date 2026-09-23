@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
 from app.db.models import (
     ActivityEvent,
@@ -18,12 +18,10 @@ from app.db.models import (
     Board,
     Comment,
     CommentMention,
-    Review,
     Sequence,
     User,
     Workflow,
     WorkspaceMember,
-    now,
 )
 from app.domain.notifications import notify
 
@@ -330,134 +328,3 @@ def delete_comment(db: Session, comment: Comment, *, actor_id: str) -> None:
     db.flush()
 
 
-def request_review(
-    db: Session,
-    *,
-    workspace_id: str,
-    subject_type: str,
-    subject_id: str,
-    requested_by: str,
-    reviewer_id: str,
-    note: str = "",
-) -> Review:
-    ensure_subject(db, workspace_id, subject_type, subject_id)
-    member = db.scalar(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == reviewer_id,
-        )
-    )
-    if member is None:
-        raise CollaborationError("审阅人不是该工作区成员")
-    review = Review(
-        workspace_id=workspace_id,
-        subject_type=subject_type,
-        subject_id=subject_id,
-        requested_by=requested_by,
-        reviewer_id=reviewer_id,
-        note=note.strip()[:2000],
-    )
-    db.add(review)
-    db.flush()
-    notify(
-        db,
-        workspace_id,
-        type="team",
-        title="有新的审阅请求",
-        body=review.note,
-        payload={"review_id": review.id, "subject_type": subject_type, "subject_id": subject_id},
-        user_id=reviewer_id,
-    )
-    record_activity(
-        db,
-        workspace_id=workspace_id,
-        actor_id=requested_by,
-        action="review.requested",
-        subject_type=subject_type,
-        subject_id=subject_id,
-        summary="发起了审阅",
-        payload={"review_id": review.id, "reviewer_id": reviewer_id},
-    )
-    return review
-
-
-def decide_review(
-    db: Session, review: Review, *, actor_id: str, status: str, note: str = ""
-) -> Review:
-    if status not in ("approved", "changes_requested", "cancelled"):
-        raise CollaborationError("审阅决定不合法")
-    if review.status != "pending":
-        raise CollaborationError("这项审阅已经结束")
-    if status == "cancelled":
-        if actor_id != review.requested_by:
-            raise CollaborationError("只有发起人可以取消审阅")
-    elif actor_id != review.reviewer_id:
-        raise CollaborationError("只有指定审阅人可以作出决定")
-    review.status = status
-    review.decision_note = note.strip()[:2000]
-    review.decided_by = actor_id
-    review.decided_at = now()
-    record_activity(
-        db,
-        workspace_id=review.workspace_id,
-        actor_id=actor_id,
-        action=f"review.{status}",
-        subject_type=review.subject_type,
-        subject_id=review.subject_id,
-        summary={
-            "approved": "通过了审阅",
-            "changes_requested": "要求修改",
-            "cancelled": "取消了审阅",
-        }[status],
-        payload={"review_id": review.id},
-    )
-    target = review.requested_by
-    if target and target != actor_id:
-        notify(
-            db,
-            review.workspace_id,
-            type="team",
-            title="审阅已有结果",
-            body=review.decision_note,
-            payload={"review_id": review.id, "status": status},
-            user_id=target,
-        )
-    return review
-
-
-def list_reviews(db: Session, workspace_id: str, subject_type: str, subject_id: str) -> list[dict[str, Any]]:
-    ensure_subject(db, workspace_id, subject_type, subject_id)
-    reviewer_user = aliased(User)
-    requester_user = aliased(User)
-    rows = db.execute(
-        select(Review, reviewer_user, requester_user)
-        .outerjoin(reviewer_user, reviewer_user.id == Review.reviewer_id)
-        .outerjoin(requester_user, requester_user.id == Review.requested_by)
-        .where(
-            Review.workspace_id == workspace_id,
-            Review.subject_type == subject_type,
-            Review.subject_id == subject_id,
-        )
-        .order_by(Review.created_at.desc())
-    ).all()
-    result: list[dict[str, Any]] = []
-    for review, reviewer, requester in rows:
-        result.append(
-            {
-                "id": review.id,
-                "workspace_id": review.workspace_id,
-                "subject_type": review.subject_type,
-                "subject_id": review.subject_id,
-                "requested_by": review.requested_by,
-                "requester": _actor(requester, review.requested_by),
-                "reviewer_id": review.reviewer_id,
-                "reviewer": _actor(reviewer, review.reviewer_id),
-                "status": review.status,
-                "note": review.note,
-                "decision_note": review.decision_note,
-                "decided_by": review.decided_by,
-                "created_at": review.created_at,
-                "decided_at": review.decided_at,
-            }
-        )
-    return result

@@ -108,7 +108,9 @@ def test_summarize_usage_estimates_token_count_from_character_units() -> None:
 
     with SessionLocal() as db:
         summary = summarize_usage(db, workspace_id=ws)
-    assert summary.token_count == 16
+    # 按字符估 token 的那一步:4 个输入字符 → 4,12 个输出字符 → 12。
+    # (这里曾经断的是 `summary.token_count == 16` 那个**总量** —— 它随首页那批没人读的字段
+    #  一起删了,而估算逻辑本身由下面这两行验着,一行都没少。)
     assert summary.token_daily[-1]["input_tokens"] == 4
     assert summary.token_daily[-1]["output_tokens"] == 12
 

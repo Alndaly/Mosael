@@ -76,31 +76,3 @@ class CommentOut(ApiModel):
     updated_at: datetime
 
 
-class ReviewCreate(ApiModel):
-    workspace_id: str
-    subject_type: SubjectType
-    subject_id: str
-    reviewer_id: str
-    note: str = Field(default="", max_length=2000)
-
-
-class ReviewDecision(ApiModel):
-    status: Literal["approved", "changes_requested", "cancelled"]
-    note: str = Field(default="", max_length=2000)
-
-
-class ReviewOut(ApiModel):
-    id: str
-    workspace_id: str
-    subject_type: str
-    subject_id: str
-    requested_by: str | None = None
-    requester: ActorOut | None = None
-    reviewer_id: str
-    reviewer: ActorOut | None = None
-    status: str
-    note: str
-    decision_note: str
-    decided_by: str | None = None
-    created_at: datetime
-    decided_at: datetime | None = None

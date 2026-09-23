@@ -75,17 +75,9 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     "TtsEngineOut.needs_source": "要不要本地权重,后端判",
     "TtsEngineOut.source_ready": "本地权重就绪与否,后端判",
     "TtsEngineOut.source_dir": "本地路径,不该上界面",
-    # —— 协作:活动流与评审
+    # —— 协作:活动流
     "ActivityOut.actor_id": "界面显示的是 actor 那个对象(名字和头像),原始 id 不上屏",
     "ConfirmationOut.decided_by": "留痕:记在谁头上。界面显示的是哪一档放的,不是一个用户 id",
-    #: 下面三条的实情是:**评审这条链在界面上还没有入口** —— `listReviews` / `requestReview` /
-    #: `decideReview` 三个客户端函数全仓零调用。它们不是"给别的运行时的",是还没接上的。
-    #: 记在这里而不是删掉:接口和后端逻辑都在,缺的是那一屏。
-    "ReviewOut.requester": "评审那一屏还没做,整条链在界面上没有入口(见本行上方说明)",
-    "ReviewOut.reviewer": "同上:评审那一屏还没做",
-    "ReviewOut.decision_note": "同上:评审那一屏还没做",
-    "ReviewOut.decided_by": "同上:评审那一屏还没做",
-    "ReviewOut.decided_at": "同上:评审那一屏还没做",
     # —— 邀请
     "InvitationOut.invitee_name": "受邀人昵称,发邀请那一侧不显示它",
     "TranscriptTokenOut.token_index": "逐词时间轴里的序号,前端按数组下标走",

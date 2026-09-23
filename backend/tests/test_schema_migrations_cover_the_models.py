@@ -61,11 +61,32 @@ def test_基线覆盖模型里的每一张表() -> None:
     )
 
 
-def test_the_baseline_only_lists_tables_that_still_exist() -> None:
-    """删表之后基线也该跟着删 —— 留着一张不存在的表,棘轮就在守一个不存在的约定。"""
-    live = {table.name for table in Base.metadata.sorted_tables}
-    stale = sorted(set(_baseline()) - live)
-    assert not stale, f"基线里这些表已经不在模型里了:{stale}"
+def test_离开模型的表_升级之后真的没了() -> None:
+    """基线描述的是**老库**,而老库里确实有那些后来被删掉的表 —— 所以判据不是"基线里不许
+    有模型外的表",而是**它们升级之后必须真的被删掉**。
+
+    此前这条写成「基线里的表都还在模型里」:删一张表就得把它从基线里抹掉,于是删表那条迁移
+    在种子库上永远走 no-op 分支(表压根不在)—— 它从没在有数据的库上真跑过。而按结果判还能
+    抓住另一种错:模型里删了、却没写 drop 迁移,老用户的库里**永远**留着一张没人认的表。
+    """
+    from app.core.config import settings
+    from app.db.migrations import init_db
+    from tests.util import fresh_client
+
+    gone = sorted(set(_baseline()) - {table.name for table in Base.metadata.sorted_tables})
+    if not gone:
+        return
+    fresh_client()
+    _build_baseline_database(settings.db_path, seeded=True)
+    init_db()
+    with sqlite3.connect(settings.db_path) as connection:
+        present = {row[0] for row in connection.execute("select name from sqlite_master where type='table'")}
+    lingering = sorted(set(gone) & present)
+    assert not lingering, (
+        "这些表已经离开了模型,而升级之后它们还在老库里 —— 没有迁移删它们:\n  "
+        + "\n  ".join(lingering)
+        + "\n给每张补一条 DROP TABLE 迁移(参考 migrations._drop_reviews_table)。"
+    )
 
 
 #: 一列该塞什么。按**名字**猜,不按类型 —— 目标不是造一份真实数据,是让每条迁移的

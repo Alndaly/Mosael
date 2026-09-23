@@ -900,6 +900,25 @@ def _migrate_client_version() -> None:
             conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN last_seen_at DATETIME"))
 
 
+def _drop_reviews_table() -> None:
+    """删掉 `reviews` —— 一个**完整的后端功能,而界面上零入口**。
+
+    表、领域、路由、测试都在,而前端、i18n、MCP 工具、智能体工具**没有任何一处**碰过它:
+    `listReviews` / `requestReview` / `decideReview` 三个客户端函数全仓零调用。
+    它是由 `test_api_fields_reach_the_screen`(ReviewOut 的六个字段没人读)顺出来的。
+
+    留着的代价和 `linked_clip_id` 一样:下一个人读到它会以为评审已经做好,去查"为什么点不到"。
+    2026-09-23 与用户确认后整条删;真要做评审时按那时的需求重新建模,而不是继承一份没人用过
+    的形状。活动流里已有的 `review.requested` / `review.decided` 记录**原样留着** ——
+    那是发生过的事,不因为功能没了就抹掉。
+    """
+    inspector = inspect(engine)
+    if "reviews" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE reviews"))
+
+
 def _migrate_browser_action_leases() -> None:
     """`browser_actions` 补 ADR-0002 的租约三件套(lease_worker / lease_token / lease_expires_at)。
 
@@ -2453,6 +2472,7 @@ def migration_plan() -> MigrationPlan:
                 _drop_publish_account_profile_name,
                 _drop_clip_linked_clip_id,
                 _migrate_browser_action_leases,
+                _drop_reviews_table,
                 _migrate_job_actor,
                 _migrate_provider_credentials,
                 _drop_shared_credentials,

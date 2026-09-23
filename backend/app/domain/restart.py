@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 NOT_ORPHANED_BY_RESTART: dict[str, str] = {
     "agent_questions": "在等**人**回答,不在等进程。重启不改变「还没人答」这件事。",
     "tool_confirmations": "同上:在等人点批准。(那一轮留下的卡由 reconcile_orphaned_agent_sessions 作废。)",
-    "reviews": "在等**人**审阅,不在等进程 —— 重启不改变「还没人看」这件事。",
     "workspace_invitations": "在等**人**接受邀请;它的终结条件是对方点了,不是某个进程跑完。",
     "publish_tasks": (
         "由**执行器下一次认领**时自愈:它重启后在跑集合是空的,那些 running 的 owner 已消失,"

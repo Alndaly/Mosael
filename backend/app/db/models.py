@@ -21,7 +21,7 @@ from app.db.model_slices.scheduler import ScheduledTask, ScheduledTaskRun  # noq
 from app.db.model_slices.workflows import Workflow, WorkflowRevision  # noqa: E402,F401
 from app.db.model_slices.boards import Board  # noqa: E402,F401
 from app.db.model_slices.notes import Note, NoteRevision  # noqa: E402,F401
-from app.db.model_slices.collaboration import ActivityEvent, Comment, CommentMention, Review  # noqa: E402,F401
+from app.db.model_slices.collaboration import ActivityEvent, Comment, CommentMention  # noqa: E402,F401
 from app.db.model_slices.publish import PublishAccount, PublishTask  # noqa: E402,F401
 from app.db.model_slices.browser import BrowserAction, BrowserProfile, BrowserSession  # noqa: E402,F401
 from app.db.model_slices.scenes import Scene3D, Scene3DRevision, Scene3DModel  # noqa: E402,F401

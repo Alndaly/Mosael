@@ -216,40 +216,6 @@ def test_comment_author_can_delete_own_comment_but_team_member_cannot() -> None:
     assert activity[0]["payload"] == {"comment_id": created["id"]}
 
 
-def test_review_can_only_be_decided_by_assigned_reviewer() -> None:
-    owner, mate, workspace, users = _team()
-    board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()
-    review = owner.post(
-        "/api/reviews",
-        json={
-            "workspace_id": workspace["id"],
-            "subject_type": "board",
-            "subject_id": board["id"],
-            "reviewer_id": users["mate"],
-            "note": "请确认可以交付",
-        },
-    ).json()
-    denied = owner.post(f"/api/reviews/{review['id']}/decision", json={"status": "approved"})
-    assert denied.status_code == 403
-    approved = mate.post(
-        f"/api/reviews/{review['id']}/decision",
-        json={"status": "approved", "note": "可以交付"},
-    )
-    assert approved.status_code == 200, approved.text
-    assert approved.json()["status"] == "approved"
-    assert approved.json()["reviewer"]["username"] == "mate"
-
-    actions = [
-        one["action"]
-        for one in owner.get(
-            "/api/activity",
-            params={"workspace_id": workspace["id"], "subject_type": "board", "subject_id": board["id"]},
-        ).json()
-    ]
-    assert "review.requested" in actions
-    assert "review.approved" in actions
-
-
 def test_comment_edit_preserves_anchor_and_updates_mentions_without_duplicate_notifications() -> None:
     owner, mate, workspace, users = _team()
     board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()

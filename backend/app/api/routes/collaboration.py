@@ -9,23 +9,17 @@ from app.api.schemas.collaboration import (
     CommentCreate,
     CommentContentUpdate,
     CommentOut,
-    ReviewCreate,
-    ReviewDecision,
-    ReviewOut,
 )
-from app.db.models import Comment, Review
+from app.db.models import Comment
 from app.domain.collaboration import (
     CollaborationError,
     CommentOwnershipError,
     create_comment,
     delete_comment,
     edit_comment,
-    decide_review,
     list_activity,
     list_comments,
-    list_reviews,
     move_comment,
-    request_review,
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 
@@ -151,55 +145,3 @@ def remove_comment(comment_id: str, workspace_id: str, db: DbSession, user: Curr
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
-@router.get("/reviews", response_model=list[ReviewOut])
-def reviews(
-    workspace_id: str,
-    subject_type: str,
-    subject_id: str,
-    db: DbSession,
-    user: CurrentUser,
-) -> list[dict]:
-    ensure_workspace_access(db, user, workspace_id)
-    try:
-        return list_reviews(db, workspace_id, subject_type, subject_id)
-    except CollaborationError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.post("/reviews", response_model=ReviewOut)
-def add_review(body: ReviewCreate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    try:
-        review = request_review(
-            db,
-            workspace_id=body.workspace_id,
-            subject_type=body.subject_type,
-            subject_id=body.subject_id,
-            requested_by=user.id,
-            reviewer_id=body.reviewer_id,
-            note=body.note,
-        )
-        review_id = review.id
-        db.commit()
-        return next(one for one in list_reviews(db, body.workspace_id, body.subject_type, body.subject_id) if one["id"] == review_id)
-    except CollaborationError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/reviews/{review_id}/decision", response_model=ReviewOut)
-def review_decision(review_id: str, body: ReviewDecision, db: DbSession, user: CurrentUser) -> dict:
-    review = db.get(Review, review_id)
-    if review is None:
-        raise HTTPException(status_code=404, detail="审阅不存在")
-    # 审阅决定会改变团队可交付状态，必须和创建评论/审阅一样显式声明写权限；
-    # “恰好是指定 reviewer”只回答谁能决定，不替代工作区授权。
-    ensure_workspace_perm(db, user, review.workspace_id, "edit")
-    try:
-        decide_review(db, review, actor_id=user.id, status=body.status, note=body.note)
-        workspace_id, subject_type, subject_id = review.workspace_id, review.subject_type, review.subject_id
-        db.commit()
-        return next(one for one in list_reviews(db, workspace_id, subject_type, subject_id) if one["id"] == review_id)
-    except CollaborationError as exc:
-        db.rollback()
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
