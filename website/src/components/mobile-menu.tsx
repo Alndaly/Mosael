@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, Moon, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { createPortal } from "react-dom";
+import { DownloadLink } from "@/components/download-link";
 
 import { GithubMark } from "@/components/icons";
 import { isNavLinkActive } from "@/components/nav-link";
@@ -120,14 +121,12 @@ export function MobileMenu({
               <GithubMark className="size-4" />
               {labels.github}
             </a>
-            <a
-              href={SITE.releases}
-              target="_blank"
-              rel="noreferrer"
+            <DownloadLink
+              locale={locale}
               className="mt-4 rounded-full bg-primary px-4 py-3 text-center font-semibold text-primary-foreground"
             >
               {labels.download}
-            </a>
+            </DownloadLink>
           </div>
         </div>,
         document.body,

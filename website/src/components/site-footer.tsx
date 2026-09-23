@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DownloadLink } from "@/components/download-link";
 
 import { BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
@@ -40,7 +41,8 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       links: [
         { label: t.footer.github, href: SITE.repo, external: true },
         { label: t.footer.authorX, href: SITE.authorX, external: true },
-        { label: t.footer.download, href: SITE.releases, external: true },
+        // 下载分国内 / 海外两条路,href 只是占位 —— 渲染时交给 DownloadLink 按访客挑。
+        { label: t.footer.download, href: SITE.releases, external: true, download: true },
         { label: t.nav.changelog, href: localePath(locale, "/changelog") },
         { label: t.footer.issues, href: `${SITE.repo}/issues`, external: true },
       ],
@@ -66,7 +68,11 @@ export function SiteFooter({ locale }: { locale: Locale }) {
               <ul className="m-0 list-none space-y-4 p-0 leading-6">
                 {column.links.map((link) => (
                   <li key={link.href} className="m-0">
-                    {"external" in link && link.external ? (
+                    {"download" in link && link.download ? (
+                      <DownloadLink locale={locale} className="text-white/52 transition-colors hover:text-white">
+                        {link.label}
+                      </DownloadLink>
+                    ) : "external" in link && link.external ? (
                       <a
                         className="inline-flex items-center gap-1.5 text-white/52 transition-colors hover:text-white"
                         href={link.href}

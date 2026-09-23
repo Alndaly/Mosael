@@ -209,6 +209,17 @@ const zh = {
     "contribute": "分享你的工作流",
     "contributeBody": "有可复用的流程？欢迎附上导出文件、使用说明与所需能力。"
 },
+  downloadChannel: {
+    china: "国内下载",
+    chinaVia: "百度网盘",
+    global: "GitHub 下载",
+    globalVia: "GitHub Releases",
+    code: "提取码",
+    recommended: "推荐",
+    chinaBody: "网盘里按版本号分好了文件夹,打开最新版本那一个。",
+    globalBody: "全部版本与更新说明都在 Releases 页面。",
+    switchHint: "按你的时区推荐;两条路下载的是同一份安装包,选哪条都行。",
+  },
   footer: {
     tagline: "让灵感落进时间线",
     community: "社区",
@@ -431,6 +442,17 @@ const en: Messages = {
     "contribute": "Share a workflow",
     "contributeBody": "Have a reusable workflow? Submit its exported file, instructions and required capabilities."
 },
+  downloadChannel: {
+    china: "Download in China",
+    chinaVia: "Baidu Netdisk",
+    global: "Download from GitHub",
+    globalVia: "GitHub Releases",
+    code: "Extraction code",
+    recommended: "Recommended",
+    chinaBody: "Folders are named by version; open the newest one.",
+    globalBody: "Every version and its release notes are on the Releases page.",
+    switchHint: "Recommended from your time zone; both carry the same installers, pick either.",
+  },
   footer: {
     tagline: "Where ideas find their timeline",
     community: "Community",

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CircleAlert, Info, Lightbulb, OctagonAlert } from "lucide-react";
 
 import { QrCards } from "@/components/qr-cards";
+import { DownloadChoice } from "@/components/download-link";
 import { localePath, type Locale } from "@/i18n/config";
 import { Recording } from "@/components/recording";
 import { Shot } from "@/components/shot";
@@ -111,6 +112,7 @@ export function mdxComponents(locale: Locale) {
   Shot,
   Recording,
   QrCards,
+  DownloadChoice: () => <DownloadChoice locale={locale} />,
   img: MdxImage,
   p: MdxParagraph,
   h2: anchored("h2"),

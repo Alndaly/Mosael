@@ -9,7 +9,8 @@ import { BrandIcon, BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
 import { QrCards } from "@/components/qr-cards";
 import { Reveal } from "@/components/reveal";
-import { isLocale, localePath } from "@/i18n/config";
+import { isLocale, localePath, type Locale } from "@/i18n/config";
+import { DownloadLink } from "@/components/download-link";
 import { getMessages } from "@/i18n/messages";
 import { SITE } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -36,13 +37,13 @@ function ProductShot({ src, alt, priority = false }: { src: string; alt: string;
   return <Shot src={src} alt={alt} priority={priority} framed />;
 }
 
-function PrimaryActions({ download, source, inverted = false }: { download: string; source: string; inverted?: boolean }) {
+function PrimaryActions({ locale, download, source, inverted = false }: { locale: Locale; download: string; source: string; inverted?: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-      <a href={SITE.releases} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/86 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+      <DownloadLink locale={locale} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/86 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         <Download className="size-4" aria-hidden />
         {download}
-      </a>
+      </DownloadLink>
       <a href={SITE.repo} target="_blank" rel="noreferrer" className={cn("inline-flex min-h-12 items-center justify-center gap-2 rounded-full border px-6 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", inverted ? "border-white/20 text-white hover:bg-white/8" : "border-border/80 bg-paper/40 text-foreground hover:bg-white/50 dark:hover:bg-white/8")}>
         <GithubMark className="size-4" />
         {source}
@@ -69,7 +70,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <p className="m-0 inline-flex items-center gap-2 text-xs font-bold tracking-[0.16em] text-primary uppercase"><span className="size-1.5 rounded-full bg-primary" />{t.eyebrow}</p>
           <h1 className="mt-7 mb-0 max-w-[16ch] font-display text-[clamp(3.4rem,7.5vw,6.8rem)] leading-[0.88] font-[720] tracking-[-0.065em] text-balance">{t.titleLead} <span className="bg-gradient-to-r from-[#5a43ea] via-[#a74fec] to-[#ff8b78] bg-clip-text text-transparent">{t.titleAccent}</span></h1>
           <p className="mt-8 mb-0 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">{t.lede}</p>
-          <div className="mt-9"><PrimaryActions download={t.ctaDownload} source={t.ctaSource} /></div>
+          <div className="mt-9"><PrimaryActions locale={locale} download={t.ctaDownload} source={t.ctaSource} /></div>
           <p className="mt-5 mb-0 text-xs leading-5 text-muted-foreground">{t.platforms}</p>
         </Reveal>
         <Reveal className="relative mx-auto mt-10 max-w-[92rem] sm:mt-12" delay={90}>
@@ -147,7 +148,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       </section>
 
       <section className="bg-[#17141f] px-5 py-24 text-center text-[#fbf9ff] sm:px-8 sm:py-36">
-        <Reveal className="mx-auto flex max-w-5xl flex-col items-center"><BrandWordmark className="w-32" /><h2 className="mt-10 mb-0 max-w-[12ch] font-display text-[clamp(3rem,7vw,6.5rem)] leading-[0.92] font-[710] tracking-[-0.06em] text-balance">{t.closingTitle}</h2><p className="mt-6 mb-0 max-w-xl text-base leading-8 text-white/60">{t.closingBody}</p><div className="mt-9"><PrimaryActions download={t.ctaDownload} source={t.ctaSource} inverted /></div><p className="mt-5 mb-0 text-xs text-white/42">{t.platforms}</p></Reveal>
+        <Reveal className="mx-auto flex max-w-5xl flex-col items-center"><BrandWordmark className="w-32" /><h2 className="mt-10 mb-0 max-w-[12ch] font-display text-[clamp(3rem,7vw,6.5rem)] leading-[0.92] font-[710] tracking-[-0.06em] text-balance">{t.closingTitle}</h2><p className="mt-6 mb-0 max-w-xl text-base leading-8 text-white/60">{t.closingBody}</p><div className="mt-9"><PrimaryActions locale={locale} download={t.ctaDownload} source={t.ctaSource} inverted /></div><p className="mt-5 mb-0 text-xs text-white/42">{t.platforms}</p></Reveal>
       </section>
     </div>
   );

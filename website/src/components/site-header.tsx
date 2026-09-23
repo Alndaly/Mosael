@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DownloadLink } from "@/components/download-link";
 
 import { BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
@@ -66,14 +67,12 @@ export function SiteHeader({ locale }: { locale: Locale }) {
           >
             <GithubMark className="size-4" />
           </a>
-          <a
-            href={SITE.releases}
-            target="_blank"
-            rel="noreferrer"
+          <DownloadLink
+            locale={locale}
             className="hidden min-h-10 items-center rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/88 lg:inline-flex"
           >
             {t.nav.download}
-          </a>
+          </DownloadLink>
           <MobileMenu
             locale={locale}
             links={links}
