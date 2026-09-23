@@ -122,6 +122,14 @@ class ToolOverride:
 
 
 @dataclass(frozen=True)
+class Author:
+    """谁做的、去哪儿找他。名字可以按语言分(和清单里别的文案一样),主页只认 http(s)。"""
+
+    name: str = ""
+    url: str = ""
+
+
+@dataclass(frozen=True)
 class Manifest:
     id: str
     name: str
@@ -145,6 +153,12 @@ class Manifest:
     #: 插件**自己的**文档/主页。界面上给一个「文档」链接 —— 一个插件带来几十个工具、一串权限
     #: 和一套要去某个后台申请的凭据,而这些怎么用只有作者说得清;我们能做的是把人送到那儿。
     homepage: str = ""
+    #: 作者。插件是别人的代码,装之前、用的时候都该看得见是谁写的、去哪儿找他。
+    author: Author = field(default_factory=Author)
+    #: **这个插件在 Mosael 里怎么用**的文档。和 homepage 不是一回事:homepage 常常是它背后那家
+    #: 服务的站点(百度网盘的开放平台文档),而「在这里怎么配、工具各干什么」只有插件自己的文档讲。
+    #: 可以按语言分(`{"zh": …, "en": …}`),界面挑看的人那种语言的。
+    docs: str = ""
     #: 声明了就能在设置页点「去授权」,不必手抄令牌(见 domain/plugins/oauth)。
     oauth: OAuthSpec | None = None
     #: 这个插件**能替宿主做成哪几件事**。今天只有一项:`public_url` —— 「把一份本地素材变成
@@ -354,6 +368,8 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         overrides=overrides,
         declared_tools=declared,
         homepage=web_url(raw.get("homepage")),
+        author=_author(raw.get("author"), pick),
+        docs=web_url(pick(raw.get("docs"))),
         provides=[str(one) for one in (raw.get("provides") or []) if isinstance(one, str)],
         default_locale=author_locale,
         # **读 instance 里那一层。** oauth 块引用的 client_id_field / stores 全是
@@ -361,6 +377,13 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         # 然后得到一个静默消失的授权按钮 —— 这个坑第一个踩进去的就是写解析器的人。
         oauth=_oauth(instance.get("oauth")),
     )
+
+
+def _author(raw: object, pick: Callable[[Any], str] = text_of) -> Author:
+    """`{"name": …, "url": …}`。只有这一种写法 —— 两种写法并存,读的人就得记两种。"""
+    if not isinstance(raw, dict):
+        return Author()
+    return Author(name=pick(raw.get("name")).strip(), url=web_url(raw.get("url")))
 
 
 def _oauth(raw: object) -> OAuthSpec | None:

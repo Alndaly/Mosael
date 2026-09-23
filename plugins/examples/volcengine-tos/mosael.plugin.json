@@ -8,6 +8,14 @@
   "default_locale": "zh",
   "version": "0.1.1",
   "homepage": "https://www.volcengine.com/docs/6349",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/volcengine-tos",
+    "en": "https://mosael.com/en/plugins/volcengine-tos"
+  },
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"

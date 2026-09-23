@@ -3,7 +3,15 @@
   "manifest_version": 1,
   "name": "Text Toolkit",
   "default_locale": "zh",
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/text-toolkit",
+    "en": "https://mosael.com/en/plugins/text-toolkit"
+  },
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"

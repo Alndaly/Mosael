@@ -8,6 +8,14 @@
   "default_locale": "zh",
   "version": "0.1.1",
   "homepage": "https://help.aliyun.com/zh/oss/",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/aliyun-oss",
+    "en": "https://mosael.com/en/plugins/aliyun-oss"
+  },
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"

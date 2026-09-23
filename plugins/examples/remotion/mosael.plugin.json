@@ -8,6 +8,14 @@
   "default_locale": "zh",
   "version": "0.1.0",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/remotion",
+    "en": "https://mosael.com/en/plugins/remotion"
+  },
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"

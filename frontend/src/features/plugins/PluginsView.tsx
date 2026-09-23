@@ -211,7 +211,26 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
           身份该在版面顶端只出现一次,后面全是它的内容。 */}
       <header className="grid gap-5 border-b border-divider pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="m-0 truncate text-xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
+          <div className="grid min-w-0 gap-0.5">
+            <h2 className="m-0 truncate text-xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
+            {/* 谁写的、去哪儿找他:插件是别人的代码,用的时候也该看得见。 */}
+            <p className="m-0 truncate text-ui-sm text-muted-foreground">
+              v{pkg.version}
+              {pkg.author_name && (
+                <>
+                  {" · "}
+                  {t("pluginAuthor")}{" "}
+                  {pkg.author_url ? (
+                    <a href={pkg.author_url} target="_blank" rel="noreferrer noopener" className="text-foreground/80 underline-offset-2 hover:underline">
+                      {pkg.author_name}
+                    </a>
+                  ) : (
+                    pkg.author_name
+                  )}
+                </>
+              )}
+            </p>
+          </div>
           <span className="flex shrink-0 items-center gap-1">
             {/* 「新建连接」排在最前:它是这一页最常做的事。卸载留在最后 —— 破坏性动作
                 不该和常用动作贴在一起,手滑的代价不对等。 */}
@@ -220,14 +239,12 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
                 <Plus size={13} /> {t("pluginNewConnection")}
               </Button>
             )}
-            {/* 「文档」指向 **Mosael 自己的插件文档**,不是插件作者的站点。
-                这一页上的问题是"连接是什么、凭据填哪儿、权限为什么要授、工具为什么默认不开"
-                —— 那些是本应用的概念,只有我们说得清;把人送到百度网盘的 API 文档上,
-                他要找的东西那儿一个字都没有。
-                插件作者的站点仍然给,但**标明是它自己的主页**(声明了才画:一个点不开的
-                按钮比没有更糟)。 */}
+            {/* 「文档」指向**这个插件在 Mosael 里怎么用**的那一页(清单的 docs,已按语言挑好):
+                连接是什么、凭据填哪儿、工具各干什么 —— 这些百度网盘的 API 文档一个字都没有。
+                插件没写 docs 才退到通用的插件指南。
+                插件背后那家服务的站点(homepage)另给一颗,声明了才画:一个点不开的按钮比没有更糟。 */}
             <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
-              <a href={docsUrl("guides/plugins", locale)} target="_blank" rel="noreferrer noopener">
+              <a href={pkg.docs || docsUrl("guides/plugins", locale)} target="_blank" rel="noreferrer noopener">
                 <BookOpen size={13} /> {t("pluginDocs")}
               </a>
             </Button>

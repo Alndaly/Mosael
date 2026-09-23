@@ -82,6 +82,9 @@ def browse_market(db: DbSession, user: CurrentUser) -> list[PluginMarketEntry]:
     return [
         PluginMarketEntry(
             **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download")},
+            author_url=web_url(entry.get("author_url")),
+            #: docs 在索引里也可以按语言分,和名字、简介一样在这儿定语言。
+            docs=web_url(text_of(entry.get("docs"))),
             #: 索引里的名字和简介照搬清单,而清单里它们可以是按语言分的对象 —— 在这儿定语言。
             name=text_of(entry.get("name")),
             description=text_of(entry.get("description")),
@@ -117,6 +120,9 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
         #: 只取这一个字段,不跑整份 parse —— 这份清单还没装上,它可能是畸形的,而
         #: 「预览」正是用来看清楚它的那一步,不该被它自己打成 500。
         homepage=web_url(raw.get("homepage")),
+        author_name=text_of((raw.get("author") or {}).get("name")) if isinstance(raw.get("author"), dict) else "",
+        author_url=web_url((raw.get("author") or {}).get("url")) if isinstance(raw.get("author"), dict) else "",
+        docs=web_url(text_of(raw.get("docs"))),
         installed=existing is not None,
         installed_version=existing.version if existing else "",
     )
@@ -186,6 +192,9 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                 "multiple": manifest.multiple,
                 "permissions": manifest.permissions,
                 "homepage": manifest.homepage,
+                "author_name": manifest.author.name,
+                "author_url": manifest.author.url,
+                "docs": manifest.docs,
                 "config_fields": [_field(f) for f in manifest.config],
                 "credential_fields": [_field(f) for f in manifest.credentials],
                 #: 声明了 OAuth 就给一个「去授权」的入口,不必手抄令牌(见 domain/plugins/oauth)。

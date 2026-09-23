@@ -40,7 +40,12 @@ def entry(manifest_path: Path) -> dict:
         "version": raw.get("version", ""),
         # 描述取第一条技能的说明 —— 那句话本来就是写给"这东西是干嘛的"的。
         "description": (skills[0].get("description") if skills else "") or "",
-        "author": "Mosael",
+        # 作者从清单来(清单里是 {name, url})。**author 仍是一个字符串** —— 已经装着的旧版本
+        # 按字符串读它;改成对象的话,它们的市场里会显示一串 {'name': …}。主页另起一个键。
+        "author": str((raw.get("author") or {}).get("name") or ""),
+        "author_url": str((raw.get("author") or {}).get("url") or ""),
+        # 在 Mosael 里怎么用的文档,可按语言分;原样带过去,由读的一方挑语言。
+        "docs": raw.get("docs") or "",
         # 主页**先用插件自己写的**:那是它的文档站,是用户装之前真正想看的东西。
         # 没写才退到仓库里它的目录 —— 至少还能读到源码和 README。
         "homepage": str(raw.get("homepage") or "").strip()

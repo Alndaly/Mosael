@@ -6,8 +6,16 @@
     "en": "MCP Example"
   },
   "default_locale": "zh",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/mcp-everything",
+    "en": "https://mosael.com/en/plugins/mcp-everything"
+  },
   "runtime": {
     "kind": "mcp",
     "transport": "stdio",

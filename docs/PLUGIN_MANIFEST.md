@@ -359,6 +359,20 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 不写也行:市场里的条目会退回到它在仓库里的目录,至少还能读到源码和 README。
 
+### 使用文档与作者
+
+`homepage` 常常是插件**背后那家服务**的站点(百度网盘开放平台、TikHub 的 API 文档)。而「在 Mosael 里
+怎么配、每个工具干什么」要另一页讲 —— 写在 `docs` 里,可以按语言分:
+
+```json
+"docs": { "zh": "https://example.com/zh/my-plugin", "en": "https://example.com/en/my-plugin" },
+"author": { "name": { "zh": "某某工作室", "en": "Some Studio" }, "url": "https://example.com" }
+```
+
+有 `docs` 时,插件详情页、市场条目、安装确认里的「文档」都指向它;没有才退到 `homepage` / 通用的插件指南。
+`author` 显示在这三处的名字旁边,有 `url` 就能点进作者主页。两者都只认 `http(s)`。官方插件的 `docs`
+指向官网上各自那一页(`mosael.com/<语言>/plugins/<目录名>`),有测试钉住。
+
 ---
 
 ## 用户会看到什么
@@ -442,6 +456,8 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `default_locale` | 可选。你那些裸字符串是用哪种语言写的(见「多语言」),挑不到要的语言时先退到它 |
 | `manifest_version` | 当前是 `1`。老清单扫描时自动迁移并补上 |
 | `homepage` | **你的文档站**。界面在插件详情页、市场条目、安装确认三处给一个「文档」链接;不写就不画。只认 `http(s)` |
+| `docs` | 在 Mosael 里怎么用的文档,可按语言分;有它时「文档」指向它 |
+| `author` | `{name, url}`,`name` 可按语言分;显示在名字旁边,`url` 可点 |
 | `runtime.kind` | `"process"` 或 `"mcp"` |
 | `runtime.entry` | 本地脚本入口,相对插件目录,必须在目录内 |
 | `runtime.transport` / `command` / `args` / `url` / `headers` | MCP 的连接方式 |

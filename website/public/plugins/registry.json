@@ -12,6 +12,11 @@
         "en": "Upload assets to Alibaba Cloud OSS and get a public link back — some providers only accept a URL, not a local file (Seedance's reference video is one). Also pulls objects back into the library."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/aliyun-oss",
+        "en": "https://mosael.com/en/plugins/aliyun-oss"
+      },
       "homepage": "https://help.aliyun.com/zh/oss/",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.aliyun-oss.zip",
       "permissions": [
@@ -30,6 +35,11 @@
         "en": "Upload assets to Amazon S3 and get a public link back — some providers only accept a URL, not a local file (Seedance's reference video is one). Also pulls objects back into the library."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/aws-s3",
+        "en": "https://mosael.com/en/plugins/aws-s3"
+      },
       "homepage": "https://docs.aws.amazon.com/AmazonS3/latest/API/",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.aws-s3.zip",
       "permissions": [
@@ -42,12 +52,17 @@
         "zh": "百度网盘",
         "en": "Baidu Netdisk"
       },
-      "version": "0.5.0",
+      "version": "0.5.1",
       "description": {
         "zh": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。",
         "en": "Move files between Baidu Netdisk and the asset library. To pull: find an fs_id with pan_list or pan_search, then bring it in with pan_import. To push: use pan_upload to save something from the asset library to the netdisk (pass an asset_id and a target path)."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/baidu-pan",
+        "en": "https://mosael.com/en/plugins/baidu-pan"
+      },
       "homepage": "https://pan.baidu.com/union/doc/",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.baidu-pan.zip",
       "permissions": [
@@ -66,6 +81,11 @@
         "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.0.3 add-on."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/blender",
+        "en": "https://mosael.com/en/plugins/blender"
+      },
       "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.blender.zip",
       "permissions": [
@@ -81,12 +101,17 @@
         "zh": "MCP 接入范例",
         "en": "MCP Example"
       },
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": {
         "zh": "把一个现成的 MCP server 接成 Mosael 插件的范例。工具清单由 server 自己提供,不写在这个文件里。",
         "en": "An example of wiring an existing MCP server up as an Mosael plugin. The tool list comes from the server itself, not from this file."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/mcp-everything",
+        "en": "https://mosael.com/en/plugins/mcp-everything"
+      },
       "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.mcp-everything.zip",
       "permissions": [
@@ -105,6 +130,11 @@
         "en": "Make animated videos with code, at no generation cost: lesson explainers, formula walk-throughs, code demos, data charts. Use it when accuracy matters (text, formulas, steps, numbers); use a video generation model for realistic footage. Explainers need only content; anything freer is a short Remotion component. Needs Node.js 18+ on this computer. Remotion is free for individuals and companies of up to 3 people; larger companies need a Remotion company license."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/remotion",
+        "en": "https://mosael.com/en/plugins/remotion"
+      },
       "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.remotion.zip",
       "permissions": [
@@ -116,12 +146,17 @@
     {
       "id": "dev.mosael.text-toolkit",
       "name": "Text Toolkit",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": {
         "zh": "文本小工具:统计字数、提取话题标签、生成标题候选。纯本地计算,无需任何权限。",
         "en": "Small text utilities: count words, pull out hashtags, draft title candidates. All local, no permissions needed."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/text-toolkit",
+        "en": "https://mosael.com/en/plugins/text-toolkit"
+      },
       "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/text-toolkit",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.text-toolkit.zip",
       "permissions": []
@@ -129,12 +164,17 @@
     {
       "id": "dev.mosael.tikhub",
       "name": "TikHub",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": {
         "zh": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。",
         "en": "Read public data from Douyin / TikTok / Xiaohongshu / Bilibili / Kuaishou and other platforms: post details, creator profiles and their posts, keyword search, trending charts. For topic research, studying comparable accounts, and finding footage ideas."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/tikhub",
+        "en": "https://mosael.com/en/plugins/tikhub"
+      },
       "homepage": "https://docs.tikhub.io/",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.tikhub.zip",
       "permissions": [
@@ -153,6 +193,11 @@
         "en": "Upload assets to Volcengine TOS and get a public link back — some providers only accept a URL, not a local file (Seedance's reference video is one). Also pulls objects back into the library."
       },
       "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/volcengine-tos",
+        "en": "https://mosael.com/en/plugins/volcengine-tos"
+      },
       "homepage": "https://www.volcengine.com/docs/6349",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.volcengine-tos.zip",
       "permissions": [

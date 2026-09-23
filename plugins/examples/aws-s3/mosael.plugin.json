@@ -8,6 +8,14 @@
   "default_locale": "zh",
   "version": "0.1.1",
   "homepage": "https://docs.aws.amazon.com/AmazonS3/latest/API/",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/aws-s3",
+    "en": "https://mosael.com/en/plugins/aws-s3"
+  },
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"

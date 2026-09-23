@@ -236,9 +236,21 @@ export function PluginMarketDialog({
             <div className="flex flex-wrap items-baseline gap-x-1.5">
               <strong className="text-ui-md font-semibold">{pending.preview.name || pending.preview.id}</strong>
               <small className="text-ui-xs text-muted-foreground">v{pending.preview.version}</small>
-              {pending.preview.homepage && (
+              {pending.preview.author_name && (
+                <small className="text-ui-xs text-muted-foreground">
+                  · {t("pluginAuthor")}{" "}
+                  {pending.preview.author_url ? (
+                    <a href={pending.preview.author_url} target="_blank" rel="noreferrer noopener" className="hover:underline">
+                      {pending.preview.author_name}
+                    </a>
+                  ) : (
+                    pending.preview.author_name
+                  )}
+                </small>
+              )}
+              {(pending.preview.docs || pending.preview.homepage) && (
                 <a
-                  href={pending.preview.homepage}
+                  href={pending.preview.docs || pending.preview.homepage}
                   target="_blank"
                   rel="noreferrer noopener"
                   className="inline-flex items-center gap-0.5 text-ui-xs text-primary hover:underline"
@@ -321,14 +333,26 @@ function MarketRow({ entry, busy, onPick }: { entry: MarketEntry; busy: boolean;
           <small className="flex flex-wrap items-center gap-x-1.5 text-ui-xs text-muted-foreground">
             <span>
               v{entry.version}
-              {entry.author && ` · ${entry.author}`}
+              {entry.author && (
+                <>
+                  {" · "}
+                  {entry.author_url ? (
+                    <a href={entry.author_url} target="_blank" rel="noreferrer noopener" className="hover:underline">
+                      {entry.author}
+                    </a>
+                  ) : (
+                    entry.author
+                  )}
+                </>
+              )}
               {stance === "update" && ` · ${t("pluginInstalled").replace("{v}", entry.installed_version)}`}
             </span>
             {/* **装之前就该能读文档。** 权限和工具这里已经摊开了,但"它到底怎么用、凭据去哪儿
                 申请"只有作者说得清 —— 而那正是决定装不装的最后一问。 */}
-            {entry.homepage && (
+            {/* 优先插件自己的使用文档(docs);没写才退到它的主页。 */}
+            {(entry.docs || entry.homepage) && (
               <a
-                href={entry.homepage}
+                href={entry.docs || entry.homepage}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="inline-flex items-center gap-0.5 text-primary hover:underline"

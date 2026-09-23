@@ -8930,6 +8930,21 @@ export interface components {
              */
             homepage: string;
             /**
+             * Author Name
+             * @default
+             */
+            author_name: string;
+            /**
+             * Author Url
+             * @default
+             */
+            author_url: string;
+            /**
+             * Docs
+             * @default
+             */
+            docs: string;
+            /**
              * Installed
              * @default false
              */
@@ -9058,10 +9073,20 @@ export interface components {
              */
             author: string;
             /**
+             * Author Url
+             * @default
+             */
+            author_url: string;
+            /**
              * Homepage
              * @default
              */
             homepage: string;
+            /**
+             * Docs
+             * @default
+             */
+            docs: string;
             /**
              * Download
              * @default
@@ -9113,6 +9138,21 @@ export interface components {
              * @default
              */
             homepage: string;
+            /**
+             * Author Name
+             * @default
+             */
+            author_name: string;
+            /**
+             * Author Url
+             * @default
+             */
+            author_url: string;
+            /**
+             * Docs
+             * @default
+             */
+            docs: string;
             /** Config Fields */
             config_fields?: components["schemas"]["PluginFieldOut"][];
             /** Credential Fields */

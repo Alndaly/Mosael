@@ -3,8 +3,16 @@
   "manifest_version": 1,
   "name": "TikHub",
   "default_locale": "zh",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "homepage": "https://docs.tikhub.io/",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/tikhub",
+    "en": "https://mosael.com/en/plugins/tikhub"
+  },
   "runtime": {
     "kind": "mcp",
     "transport": "http",

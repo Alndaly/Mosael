@@ -6,8 +6,16 @@
     "en": "Baidu Netdisk"
   },
   "default_locale": "zh",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "homepage": "https://pan.baidu.com/union/doc/",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/baidu-pan",
+    "en": "https://mosael.com/en/plugins/baidu-pan"
+  },
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"

@@ -55,6 +55,10 @@ class PluginPackageOut(ApiModel):
     permissions: list[str] = Field(default_factory=list)
     #: 插件自己的文档/主页。空 = 作者没写,界面就不画那个链接。
     homepage: str = ""
+    author_name: str = ""
+    author_url: str = ""
+    #: 这个插件在 Mosael 里怎么用的文档(已按看的人的语言挑好)。空 = 没写。
+    docs: str = ""
     config_fields: list[PluginFieldOut] = Field(default_factory=list)
     credential_fields: list[PluginFieldOut] = Field(default_factory=list)
     #: 这个插件能不能自己走 OAuth。界面据此决定要不要给「去授权」。
@@ -70,7 +74,9 @@ class PluginMarketEntry(ApiModel):
     description: str = ""
     version: str = ""
     author: str = ""
+    author_url: str = ""
     homepage: str = ""
+    docs: str = ""
     download: str = ""
     permissions: list[str] = Field(default_factory=list)
     #: 这台机器上装没装过同 id 的包。装过的话界面给的是「更新」而不是「安装」。
@@ -95,6 +101,9 @@ class PluginInstallPreview(ApiModel):
     permissions: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
     homepage: str = ""
+    author_name: str = ""
+    author_url: str = ""
+    docs: str = ""
     installed: bool = False
     installed_version: str = ""
 

@@ -24577,6 +24577,21 @@
             "title": "Homepage",
             "default": ""
           },
+          "author_name": {
+            "type": "string",
+            "title": "Author Name",
+            "default": ""
+          },
+          "author_url": {
+            "type": "string",
+            "title": "Author Url",
+            "default": ""
+          },
+          "docs": {
+            "type": "string",
+            "title": "Docs",
+            "default": ""
+          },
           "installed": {
             "type": "boolean",
             "title": "Installed",
@@ -24823,9 +24838,19 @@
             "title": "Author",
             "default": ""
           },
+          "author_url": {
+            "type": "string",
+            "title": "Author Url",
+            "default": ""
+          },
           "homepage": {
             "type": "string",
             "title": "Homepage",
+            "default": ""
+          },
+          "docs": {
+            "type": "string",
+            "title": "Docs",
             "default": ""
           },
           "download": {
@@ -24908,6 +24933,21 @@
           "homepage": {
             "type": "string",
             "title": "Homepage",
+            "default": ""
+          },
+          "author_name": {
+            "type": "string",
+            "title": "Author Name",
+            "default": ""
+          },
+          "author_url": {
+            "type": "string",
+            "title": "Author Url",
+            "default": ""
+          },
+          "docs": {
+            "type": "string",
+            "title": "Docs",
             "default": ""
           },
           "config_fields": {
