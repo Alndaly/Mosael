@@ -336,7 +336,7 @@ Touch ID（WebAuthn）也被纳入发布验证链：`electron/webauthn.cjs` 从�
 
 ### 6.1 JS 侧
 
-- 根 `packageManager: pnpm@11.20.0`，锁文件 `pnpm-lock.yaml`（359KB）+ website 独立锁文件，CI 全程 `--frozen-lockfile`。
+- 根 `packageManager: pnpm@12.5.1`（工作区成员不另写），锁文件 `pnpm-lock.yaml`+ website 独立锁文件，CI 全程 `--frozen-lockfile`。
 - `pnpm-workspace.yaml` 的供应链控制：
   - `onlyBuiltDependencies: [electron, electron-winstaller, esbuild]` + `allowBuilds` 逐个点名——"依赖的 install 脚本默认不跑（pnpm 的安全默认值）……漏了会让 `pnpm install --frozen-lockfile` 直接失败"；
   - `overrides: { "@electron/get": "^5.1.0" }`——钉住 electron-builder(26.15.3 至 26.16.1)的缺陷依赖声明（app-builder-lib 用了只存在于 5.x 的 API 却声明 `^3.0.0`，"npm/yarn 的扁平化会碰巧提升到 5.x 而看不出问题，pnpm 会如实暴露"）；
