@@ -128,7 +128,7 @@ gh release view vVERSION --json isDraft,assets,targetCommitish,url
 
 tag 推上去之后**不要再移动它**:公开版本不可覆盖或移动 tag。
 
-检查八个附件的文件名、大小和 GitHub API 返回的 SHA-256 digest，与本地 `shasum -a 256` 比较。若仓库事件触发了额外自动构建，先分辨本机交接 run 和自动 run；不得绕过失败的必要验证发布其他产物。
+逐个检查附件(DMG、EXE、扩展包,加上 `plugins/examples/` 下每个插件一个 ZIP)的文件名、大小和 GitHub API 返回的 SHA-256 digest，与本地 `shasum -a 256` 比较。若仓库事件触发了额外自动构建，先分辨本机交接 run 和自动 run；不得绕过失败的必要验证发布其他产物。
 
 所有检查完成后，执行用户已授权的正式发布：
 

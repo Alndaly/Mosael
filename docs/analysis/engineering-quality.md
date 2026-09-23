@@ -324,7 +324,7 @@ sequenceDiagram
 
 - **版本号多处同步清单**（RELEASING.md 第 11-18 行）：`website/public/media/capture-manifest.json` 的 `documentedVersion`、每篇 MDX frontmatter 的 `version`、中英下载页、`website/README.md`、`website/src/lib/release-copy.ts`——官网测试逐项核对，"漏一处就红在 `'1.3.0' !== '1.3.1'`"；且明确区分截图批次的 `sourceCommit/capturedAt`（拍摄来源，不伪造更新）与 `documentedVersion`（文档对应版本），"这两个曾被读成一个，于是整节都没改，CI 才红的"。
 - 代理/时间戳故障处理（MACOS_SIGNING.md 第 43 行、RELEASING.md 第 89 行）：`timestamp.apple.com` 与 `api.apple-cloudkit.com` 的网络要求、fake-IP/TUN 模式的坑、本机实际成功的临时直连例外方案（finally/trap 还原），"不应通过禁用 TLS 验证或系统安全检查解决"。
-- 秘钥纪律：不导出钥匙串密码到聊天/脚本/日志/仓库；Windows 构建不获得 Apple 凭据（release.yml 第 228-232 行 env 按 `runner.os == 'macOS'` 条件注入）；`umask 077` 后解码描述文件。
+- 秘钥纪律：不导出钥匙串密码到聊天/脚本/日志/仓库；Windows 构建不获得 Apple 凭据（release.yml 第 228-232 行 env 按 `runner.os == 'macOS'` 条件注入）；解码描述文件时只在那一行的子 shell 里 `umask 077`(它曾写在整段开头,连 `Mosael.app` 也成了 `drwx------`,见 docs/validation/2026-09-23-release-1.4.3.md)。
 - 过程证据落 `docs/validation/`（现有 7 份，含 `2026-09-09-release-1.2.0.md`、`2026-09-10-release-1.3.0.md`、`2026-09-11-release-1.3.1.md` 三次发布记录）。
 - 若未来五项 secrets 配齐，tag 自动发布路径**无需改工作流**即可恢复（signing job 的 notice 设计）。
 
