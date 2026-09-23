@@ -103,10 +103,6 @@ def workspace_summary(db: Session, workspace_id: str) -> dict[str, Any]:
         usage_event_count=usage.event_count,
         usage_unknown_cost_events=usage.unknown_cost_events,
         usage_unpriced=usage.unpriced,
-        usage_duration_seconds=usage.duration_seconds,
-        usage_token_count=usage.token_count,
-        usage_cache_read_tokens=usage.cache_read_tokens,
-        usage_cache_write_tokens=usage.cache_write_tokens,
         usage_cache_hit_ratio=usage.cache_hit_ratio,
         usage_daily=usage.daily,
         usage_token_daily=usage.token_daily,
@@ -119,7 +115,6 @@ def workspace_summary(db: Session, workspace_id: str) -> dict[str, Any]:
         running_jobs=count(scoped(Job).where(Job.status.in_(("queued", "running")))),
         week_jobs_succeeded=count(scoped(Job).where(Job.status == "succeeded", Job.updated_at >= week_ago)),
         week_jobs_failed=count(scoped(Job).where(Job.status == "failed", Job.updated_at >= week_ago)),
-        publish_accounts=count(scoped(PublishAccount)),
         week_published=count(
             scoped(PublishTask).where(PublishTask.status == "success", PublishTask.updated_at >= week_ago)
         ),

@@ -5,8 +5,9 @@ import { Activity, Clapperboard, Clock3, Coins, Film, Layers, Megaphone, Workflo
 import { workspaceSummary, type ProjectWithStats, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
+import { formatMicros } from "@/lib/money";
 import { Button } from "@/components/ui/button";
-import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart, UsageCostChart, UsageTokensChart } from "./StatisticsCharts";
+import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart, UsageByProvider, UsageCostChart, UsageTokensChart } from "./StatisticsCharts";
 
 const HOME_LIVE_REFRESH_MS = 5_000;
 
@@ -52,7 +53,11 @@ export function StatisticsView({ workspace, projects, onOpenProject }: {
         { key: "homeStatRunningJobs", value: stats.running_jobs, icon: <Activity size={13} />, action: openTaskCenter },
         {
           key: "homeStatAiUsage",
-          value: stats.usage_event_count,
+          // **这块磁贴显示的是钱,不是次数。** 它此前显示 `usage_event_count`(调用了几次),
+          // 而同一个回包里就躺着 `usage_cost_micros` 和配套的 `usage_currency` —— 后者被读了
+          // (传给费用图),前者没有:"货币单位"用上了,"钱数"没用上。而"这个月花了多少"
+          // 才是打开首页想知道的那个数,次数回答不了它(一次视频生成抵得上几百次对话)。
+          value: formatMicros(stats.usage_cost_micros, stats.usage_currency),
           icon: <Coins size={13} />,
           goto: "/ai",
           extra:
@@ -91,7 +96,8 @@ export function StatisticsView({ workspace, projects, onOpenProject }: {
               }}
             >
               <span className="col-start-2 row-start-1 inline-flex text-muted-foreground">{tile.icon}</span>
-              <strong className="col-start-1 row-start-2 text-3xl font-semibold leading-tight tabular-nums">{tile.value}</strong>
+              {/* 这里现在可能是一串钱("0.0004 USD"),不再只是一个小整数 —— 窄屏上要能截断。 */}
+              <strong className="col-start-1 row-start-2 truncate text-3xl font-semibold leading-tight tabular-nums" title={String(tile.value)}>{tile.value}</strong>
               <span className="col-start-1 row-start-1 truncate text-ui-xs text-muted-foreground">
                 {t(tile.key)}
                 {"extra" in tile && tile.extra ? <em className="not-italic text-destructive"> · {tile.extra}</em> : null}
@@ -127,6 +133,9 @@ export function StatisticsView({ workspace, projects, onOpenProject }: {
               unknown={stats.usage_unknown_cost_events}
               unpriced={stats.usage_unpriced}
             />
+            {/* 看完总额之后的下一个问题就是"钱花在谁身上" —— 这份分摊后端一直在算,
+                只是没人读(见前端审计 2.2)。 */}
+            <UsageByProvider byProvider={stats.usage_by_provider} currency={stats.usage_currency} />
           </div>
           <div className="grid content-start gap-4 rounded-lg border border-border bg-panel p-5">
             <h2 className="m-0 flex items-center justify-between gap-2 text-ui-sm font-semibold text-foreground">

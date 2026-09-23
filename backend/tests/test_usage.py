@@ -156,8 +156,8 @@ def test_workspace_summary_includes_usage_rollup() -> None:
     assert summary["usage_cost_micros"] == 120_000
     assert summary["usage_event_count"] == 2
     assert summary["usage_unknown_cost_events"] == 1
-    assert summary["usage_duration_seconds"] == 4.2
-    assert summary["usage_token_count"] == 205
+    # 总时长与总 token 曾经也在这个回包里 —— 界面一次都没读过,已随另外三个一起删
+    # (见 tests/test_api_fields_reach_the_screen.py)。逐日那两串仍在,图表读的就是它们。
     assert summary["usage_daily"][-1]["events"] == 2
     assert summary["usage_token_daily"][-1] == {
         "date": summary["usage_daily"][-1]["date"],
@@ -230,8 +230,7 @@ def test_缓存读写单列并算出命中率() -> None:
         )
         db.commit()
     summary = client.get(f"/api/workspaces/{ws}/summary").json()
-    assert summary["usage_cache_read_tokens"] == 700
-    assert summary["usage_cache_write_tokens"] == 0
+    # 缓存读写的**总数**不在回包里(界面不读)—— 命中率和逐日那两列在,它们才是图上看的东西。
     # 700 / (300 + 700 + 0) = 0.7
     assert summary["usage_cache_hit_ratio"] == 0.7
     assert summary["usage_token_daily"][-1]["cache_read_tokens"] == 700

@@ -42,7 +42,7 @@ def test_summary_counts_scoped_to_the_workspace() -> None:
     assert summary["running_jobs"] == 1
     assert summary["week_jobs_succeeded"] == 1
     assert summary["week_jobs_failed"] == 0
-    assert summary["publish_accounts"] == 1
+    # `publish_accounts`(发布账号数)曾经也在这里 —— 界面一次都没读过,已删。
     assert summary["week_published"] == 1
     assert summary["publish_daily"][-1]["succeeded"] == 1
     assert summary["publish_platforms"] == {"folder": 1}

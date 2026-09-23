@@ -31365,10 +31365,6 @@
             "type": "integer",
             "title": "Week Jobs Failed"
           },
-          "publish_accounts": {
-            "type": "integer",
-            "title": "Publish Accounts"
-          },
           "week_published": {
             "type": "integer",
             "title": "Week Published"
@@ -31429,26 +31425,6 @@
             "type": "array",
             "title": "Usage Unpriced"
           },
-          "usage_duration_seconds": {
-            "type": "number",
-            "title": "Usage Duration Seconds",
-            "default": 0
-          },
-          "usage_token_count": {
-            "type": "integer",
-            "title": "Usage Token Count",
-            "default": 0
-          },
-          "usage_cache_read_tokens": {
-            "type": "integer",
-            "title": "Usage Cache Read Tokens",
-            "default": 0
-          },
-          "usage_cache_write_tokens": {
-            "type": "integer",
-            "title": "Usage Cache Write Tokens",
-            "default": 0
-          },
           "usage_cache_hit_ratio": {
             "type": "number",
             "title": "Usage Cache Hit Ratio",
@@ -31492,7 +31468,6 @@
           "running_jobs",
           "week_jobs_succeeded",
           "week_jobs_failed",
-          "publish_accounts",
           "week_published",
           "daily",
           "asset_kinds",
@@ -31500,7 +31475,7 @@
           "publish_platforms"
         ],
         "title": "WorkspaceSummaryOut",
-        "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"
+        "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。\n\n**这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是\n界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的\n聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。\n\n两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,\n配套的 `usage_currency` 反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的\n连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。"
       },
       "app__api__routes__browser_worker__ClaimRequest": {
         "properties": {

@@ -421,3 +421,56 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
     </div>
   );
 }
+
+/**
+ * 近 14 天的花费**按供应商拆开** —— 一行横条,不另占一整块。
+ *
+ * `usage_by_provider` 和 `usage_by_capability` 一直躺在首页那个回包里没人读:后端每次打开
+ * 首页都把近 14 天的用量事件 join 一遍价格规则算出来,然后扔掉。而"这个月的钱花在谁身上"
+ * 恰恰是看完总额之后的下一个问题 —— 此前只能去 AI 页一家家点开看。
+ *
+ * 名字**按 micros 排**而不是按次数:一次视频生成抵得上几百次对话,按次数排会把最贵的那家
+ * 排到最后。值也是钱,不是次数(字段名里的 `by_provider` 没说这件事,它存的是 cost micros)。
+ */
+export function UsageByProvider({
+  byProvider,
+  currency,
+}: {
+  byProvider: WorkspaceSummary["usage_by_provider"];
+  currency: string;
+}) {
+  const t = useI18n();
+  const entries = Object.entries(byProvider ?? {})
+    .filter(([, micros]) => micros > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((sum, [, micros]) => sum + micros, 0);
+  // 定不出价的时候总额是 0 —— 那时上面那张图已经在说"缺哪个模型的价"了,这里不再重复一遍。
+  if (total === 0) return null;
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--muted-foreground)_18%,transparent)]">
+        {entries.map(([provider, micros], index) => (
+          <span
+            key={provider}
+            className="h-full"
+            style={{ width: `${(micros / total) * 100}%`, background: PLATFORM_COLORS[index % PLATFORM_COLORS.length] }}
+          />
+        ))}
+      </div>
+      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-x-4 gap-y-1 p-0">
+        {entries.map(([provider, micros], index) => (
+          <li key={provider} className="flex items-center gap-1.5 text-ui-2xs text-muted-foreground">
+            <span
+              className="size-2 shrink-0 rounded-[3px]"
+              style={{ background: PLATFORM_COLORS[index % PLATFORM_COLORS.length] }}
+            />
+            <span className="truncate">{provider}</span>
+            <span className="ml-auto shrink-0 tabular-nums text-foreground">{formatMicros(micros, currency)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="m-0 text-ui-2xs text-muted-foreground">{t("homeChartUsageByProvider")}</p>
+    </div>
+  );
+}

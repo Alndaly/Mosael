@@ -11996,6 +11996,14 @@ export interface components {
         /**
          * WorkspaceSummaryOut
          * @description 首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。
+         *
+         *     **这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是
+         *     界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的
+         *     聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。
+         *
+         *     两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,
+         *     配套的 `usage_currency` 反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的
+         *     连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。
          */
         WorkspaceSummaryOut: {
             /** Project Count */
@@ -12012,8 +12020,6 @@ export interface components {
             week_jobs_succeeded: number;
             /** Week Jobs Failed */
             week_jobs_failed: number;
-            /** Publish Accounts */
-            publish_accounts: number;
             /** Week Published */
             week_published: number;
             /** Daily */
@@ -12052,26 +12058,6 @@ export interface components {
             usage_unpriced?: {
                 [key: string]: unknown;
             }[];
-            /**
-             * Usage Duration Seconds
-             * @default 0
-             */
-            usage_duration_seconds: number;
-            /**
-             * Usage Token Count
-             * @default 0
-             */
-            usage_token_count: number;
-            /**
-             * Usage Cache Read Tokens
-             * @default 0
-             */
-            usage_cache_read_tokens: number;
-            /**
-             * Usage Cache Write Tokens
-             * @default 0
-             */
-            usage_cache_write_tokens: number;
             /**
              * Usage Cache Hit Ratio
              * @default 0

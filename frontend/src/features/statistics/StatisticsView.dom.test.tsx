@@ -22,6 +22,7 @@ vi.mock("./StatisticsCharts", () => ({
   ActivityChart: () => <div>Activity chart</div>, AssetKindsChart: () => <div>Asset chart</div>,
   PublishActivityChart: () => <div>Publishing chart</div>, PublishPlatformsChart: () => <div>Platforms chart</div>,
   UsageCostChart: () => <div>Cost chart</div>, UsageTokensChart: () => <div>Tokens chart</div>,
+  UsageByProvider: () => <div>Provider chart</div>,
 }));
 const workspace = { id: "studio-a", name: "Studio A" } as Workspace;
 const projects = [
@@ -34,7 +35,7 @@ function provider(children: React.ReactNode) {
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); mocks.assets = []; });
 
 it("keeps the full statistics overview scoped to the workspace and preserves all destinations", async () => {
-  mocks.summary.mockResolvedValue({ project_count: 2, asset_count: 3, sequence_count: 1, workflow_count: 4, running_jobs: 5, usage_event_count: 6, week_jobs_succeeded: 7, week_published: 8, usage_unknown_cost_events: 0, week_jobs_failed: 0, usage_cache_hit_ratio: 0 });
+  mocks.summary.mockResolvedValue({ project_count: 2, asset_count: 3, sequence_count: 1, workflow_count: 4, running_jobs: 5, usage_event_count: 6, usage_cost_micros: 12_340_000, usage_currency: "USD", week_jobs_succeeded: 7, week_published: 8, usage_unknown_cost_events: 0, week_jobs_failed: 0, usage_cache_hit_ratio: 0 });
   const open = vi.fn();
   const tasks = vi.fn();
   window.addEventListener("mosael:open-tasks", tasks);
@@ -42,7 +43,11 @@ it("keeps the full statistics overview scoped to the workspace and preserves all
   await screen.findByRole("button", { name: /homeStatProjects/ });
   expect(mocks.summary).toHaveBeenCalledWith("studio-a");
   expect(screen.getAllByRole("button")).toHaveLength(8);
-  expect(screen.getAllByText(/chart$/)).toHaveLength(6);
+  expect(screen.getAllByText(/chart$/)).toHaveLength(7);
+  // **AI 用量那块磁贴显示的是钱,不是次数。** 它此前显示 usage_event_count(6),而同一个
+  // 回包里就躺着 usage_cost_micros —— 而"这个月花了多少"才是打开首页想知道的那个数。
+  expect(screen.getByRole("button", { name: /homeStatAiUsage/ })).toHaveTextContent("12.34 USD");
+  expect(screen.queryByRole("button", { name: /homeStatAiUsage/ })).not.toHaveTextContent(/\b6\b/);
   for (const [label, path] of [["Projects", "/home"], ["Assets", "/media"], ["Workflows", "/workflows"], ["AiUsage", "/ai"], ["WeekPublished", "/publish"]]) {
     fireEvent.click(screen.getByRole("button", { name: new RegExp(`homeStat${label}`) }));
     expect(mocks.navigate).toHaveBeenLastCalledWith(path);

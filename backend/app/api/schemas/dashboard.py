@@ -71,7 +71,16 @@ class DailyUsageTokensOut(ApiModel):
 
 
 class WorkspaceSummaryOut(ApiModel):
-    """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"""
+    """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。
+
+    **这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是
+    界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的
+    聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。
+
+    两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,
+    配套的 `usage_currency` 反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的
+    连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。
+    """
 
     project_count: int
     asset_count: int
@@ -80,7 +89,6 @@ class WorkspaceSummaryOut(ApiModel):
     running_jobs: int
     week_jobs_succeeded: int
     week_jobs_failed: int
-    publish_accounts: int
     week_published: int
     # 图表数据:近 14 天逐日任务活动(旧→新,缺日补零)与素材类型构成
     daily: list[DailyActivityOut]
@@ -96,10 +104,6 @@ class WorkspaceSummaryOut(ApiModel):
     #: 没能定价的「供应商 + 模型 + 能力」及其次数。界面据此说清**缺哪个模型的价**,
     #: 而不是笼统一句「暂无价格规则」——后者在用户配了规则、只是没配这个模型时是错的。
     usage_unpriced: list[dict] = Field(default_factory=list)
-    usage_duration_seconds: float = 0
-    usage_token_count: int = 0
-    usage_cache_read_tokens: int = 0
-    usage_cache_write_tokens: int = 0
     #: cacheRead / 提示词总量(input + cacheRead + cacheWrite)。0..1。
     usage_cache_hit_ratio: float = 0.0
     usage_daily: list[DailyUsageOut] = Field(default_factory=list)
