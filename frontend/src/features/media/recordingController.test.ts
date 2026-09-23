@@ -55,20 +55,26 @@ function dependencies(overrides: Partial<RecordingControllerDependencies> = {}) 
 
 const filenames = { screen: "screen", camera: "camera", mic: "mic" };
 
+function cameraSource(stream: MediaStream | Promise<MediaStream>) {
+  return { take: vi.fn(() => Promise.resolve(stream)) };
+}
+
+const noCamera = { take: vi.fn(() => Promise.reject(new Error("no camera expected"))) };
+
 describe("recording controller", () => {
   it("acquires screen and camera as independent session inputs", async () => {
     const screen = fakeStream({ audio: true });
     const camera = fakeStream({ audio: true });
     const deps = dependencies();
     deps.getDisplayMedia.mockResolvedValue(screen.stream);
-    deps.getUserMedia.mockResolvedValue(camera.stream);
+    const camera$ = cameraSource(camera.stream);
     const requestStop = vi.fn();
     const controller = createRecordingController(deps.value);
 
     const active = await controller.start({
       source: "screenCamera",
       captureSystemAudio: true,
-      cameraId: "camera-1",
+      camera: camera$,
       micId: "mic-1",
       mirrorCamera: false,
       filenames,
@@ -76,10 +82,9 @@ describe("recording controller", () => {
     });
 
     expect(deps.getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: true });
-    expect(deps.getUserMedia).toHaveBeenCalledWith({
-      video: { deviceId: { exact: "camera-1" } },
-      audio: { deviceId: { exact: "mic-1" } },
-    });
+    // The camera comes from the caller's (already open) camera source, never a second getUserMedia.
+    expect(camera$.take).toHaveBeenCalledOnce();
+    expect(deps.getUserMedia).not.toHaveBeenCalled();
     expect(deps.createSession).toHaveBeenCalledWith(
       [
         { kind: "screen", stream: screen.stream, filenamePrefix: "screen" },
@@ -100,12 +105,12 @@ describe("recording controller", () => {
     const mirrored = { stream: fakeStream().stream, release: vi.fn() };
     const createMirroredCapture = vi.fn(() => mirrored);
     const deps = dependencies({ createMirroredCapture });
-    deps.getUserMedia.mockResolvedValue(camera.stream);
     const controller = createRecordingController(deps.value);
 
     const active = await controller.start({
       source: "camera",
       captureSystemAudio: false,
+      camera: cameraSource(camera.stream),
       mirrorCamera: true,
       filenames,
       requestStop: vi.fn(),
@@ -129,6 +134,7 @@ describe("recording controller", () => {
       controller.start({
         source: "screen",
         captureSystemAudio: true,
+        camera: noCamera,
         mirrorCamera: false,
         filenames,
         requestStop: vi.fn(),
@@ -143,13 +149,13 @@ describe("recording controller", () => {
     const screen = fakeStream({ audio: true });
     const deps = dependencies();
     deps.getDisplayMedia.mockResolvedValue(screen.stream);
-    deps.getUserMedia.mockRejectedValue(new DOMException("denied", "NotAllowedError"));
     const controller = createRecordingController(deps.value);
 
     await expect(
       controller.start({
         source: "screenCamera",
         captureSystemAudio: true,
+        camera: { take: () => Promise.reject(new DOMException("denied", "NotAllowedError")) },
         mirrorCamera: false,
         filenames,
         requestStop: vi.fn(),
@@ -168,6 +174,7 @@ describe("recording controller", () => {
     await controller.start({
       source: "screen",
       captureSystemAudio: true,
+      camera: noCamera,
       mirrorCamera: false,
       filenames,
       requestStop: vi.fn(),
@@ -195,6 +202,7 @@ describe("recording controller", () => {
     const starting = controller.start({
       source: "screen",
       captureSystemAudio: true,
+      camera: noCamera,
       mirrorCamera: false,
       filenames,
       requestStop: vi.fn(),
@@ -206,5 +214,52 @@ describe("recording controller", () => {
     await expect(starting).rejects.toMatchObject({ name: "RecordingCancelledError" });
     expect(screen.videoTrack.stop).toHaveBeenCalledOnce();
     expect(screen.audioTrack.stop).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the camera with its source when the screen picker is dismissed", async () => {
+    const deps = dependencies();
+    deps.getDisplayMedia.mockRejectedValue(new DOMException("dismissed", "NotAllowedError"));
+    const camera$ = cameraSource(fakeStream().stream);
+    const controller = createRecordingController(deps.value);
+
+    await expect(
+      controller.start({
+        source: "screenCamera",
+        captureSystemAudio: true,
+        camera: camera$,
+        mirrorCamera: false,
+        filenames,
+        requestStop: vi.fn(),
+      }),
+    ).rejects.toMatchObject({ issue: "screen" } satisfies Partial<RecordingStartError>);
+
+    expect(camera$.take).not.toHaveBeenCalled();
+  });
+
+  it("stops a taken camera when the UI closes while it is being handed over", async () => {
+    const camera = fakeStream({ audio: true });
+    const deps = dependencies();
+    let resolveCamera!: (stream: MediaStream) => void;
+    const controller = createRecordingController(deps.value);
+    const starting = controller.start({
+      source: "camera",
+      captureSystemAudio: false,
+      camera: cameraSource(
+        new Promise<MediaStream>((resolve) => {
+          resolveCamera = resolve;
+        }),
+      ),
+      mirrorCamera: false,
+      filenames,
+      requestStop: vi.fn(),
+    });
+
+    controller.cancel();
+    resolveCamera(camera.stream);
+
+    await expect(starting).rejects.toMatchObject({ name: "RecordingCancelledError" });
+    expect(camera.videoTrack.stop).toHaveBeenCalledOnce();
+    expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
+    expect(deps.createSession).not.toHaveBeenCalled();
   });
 });

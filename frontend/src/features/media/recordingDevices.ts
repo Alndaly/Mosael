@@ -17,3 +17,8 @@ export function selectableRecordingDevices(
     return true;
   });
 }
+
+/** Constrains a capture to the chosen device; an empty id means the system default device. */
+export function exactRecordingDevice(deviceId: string | undefined): MediaTrackConstraints | true {
+  return deviceId ? { deviceId: { exact: deviceId } } : true;
+}

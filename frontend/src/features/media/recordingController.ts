@@ -1,4 +1,5 @@
 import { createMirroredCameraCapture, type CameraCapture } from "./cameraCapture";
+import { exactRecordingDevice } from "./recordingDevices";
 import {
   createRecordingSession,
   releaseRecordingInputs,
@@ -10,10 +11,18 @@ import {
 export type RecordingSource = "screen" | "camera" | "screenCamera" | "mic";
 export type RecordingPermissionIssue = "screen" | "systemAudio" | "cameraMicrophone" | "microphone";
 
+/**
+ * Supplies the camera + microphone stream for camera sources. Ownership transfers on take():
+ * the recording stops the stream when it ends or fails to start.
+ */
+export interface RecordingCameraSource {
+  take(): Promise<MediaStream>;
+}
+
 export interface RecordingStartOptions {
   source: RecordingSource;
   captureSystemAudio: boolean;
-  cameraId?: string;
+  camera: RecordingCameraSource;
   micId?: string;
   mirrorCamera: boolean;
   filenames: Record<RecordingKind, string>;
@@ -70,15 +79,14 @@ function stopStream(stream: MediaStream): void {
   stream.getTracks().forEach((track) => track.stop());
 }
 
-function exactDevice(deviceId: string | undefined): MediaTrackConstraints | true {
-  return deviceId ? { deviceId: { exact: deviceId } } : true;
-}
-
 /**
  * Owns capture acquisition and the recording session as one lifecycle.
  *
  * React may render or replace preview elements at any time, so no capture reads from or binds
- * to the DOM: previews only display the returned streams. Partial acquisition, mirrored-camera
+ * to the DOM: previews only display the returned streams. The camera is not opened here: it
+ * comes from the caller's camera source, which has normally had it open (and its exposure
+ * settled) since before recording, and is taken only after the screen picker succeeds, so a
+ * cancelled picker leaves the camera with the source. Partial acquisition, mirrored-camera
  * resources, native screen-stop events, cancellation during a pending system picker, and
  * concurrent finalization all converge here so every capture has exactly one release path.
  */
@@ -152,10 +160,7 @@ export function createRecordingController(
 
         if (capturesCamera) {
           acquisitionIssue = "cameraMicrophone";
-          cameraStream = await dependencies.mediaDevices.getUserMedia({
-            video: exactDevice(options.cameraId),
-            audio: exactDevice(options.micId),
-          });
+          cameraStream = await options.camera.take();
           acquiredStreams.add(cameraStream);
           assertStarting();
 
@@ -180,7 +185,7 @@ export function createRecordingController(
         if (options.source === "mic") {
           acquisitionIssue = "microphone";
           const micStream = await dependencies.mediaDevices.getUserMedia({
-            audio: exactDevice(options.micId),
+            audio: exactRecordingDevice(options.micId),
           });
           acquiredStreams.add(micStream);
           assertStarting();

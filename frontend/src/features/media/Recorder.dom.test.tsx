@@ -87,7 +87,9 @@ describe("Recorder", () => {
     localStorage.clear();
     FakeMediaRecorder.streams = [];
     enumerateDevices.mockReset().mockResolvedValue([]);
-    getUserMedia.mockReset();
+    // A camera that never answers unless a test says otherwise, as when the recorder stays open
+    // after a recording and reopens its preview.
+    getUserMedia.mockReset().mockReturnValue(new Promise<MediaStream>(() => {}));
     getDisplayMedia.mockReset();
     vi.mocked(toast.error).mockReset();
     Object.defineProperty(navigator, "mediaDevices", {
@@ -420,5 +422,222 @@ describe("Recorder", () => {
     await waitFor(() => expect(screenCapture.track.stop).toHaveBeenCalledOnce());
     expect(onRecorded).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /recordStart/ })).toBeEnabled();
+  });
+
+  describe("camera preview before recording", () => {
+    function grantInputs() {
+      Object.defineProperty(window, "mosaelDesktop", {
+        configurable: true,
+        value: { platform: "darwin", recordingPermissions: { getStatus: vi.fn().mockResolvedValue("granted") } },
+      });
+    }
+
+    function ClosingRecorder({ onRecorded }: { onRecorded: (files: File[]) => void }) {
+      const [open, setOpen] = React.useState(true);
+      return <Recorder open={open} onOpenChange={setOpen} onRecorded={onRecorded} />;
+    }
+
+    function previewVideo() {
+      const videos = [...document.querySelectorAll("video")];
+      return videos[videos.length - 1];
+    }
+
+    it("shows the live camera once access is granted, mirrored when the user asks for it", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+      expect(getUserMedia).toHaveBeenCalledWith({ video: true, audio: true });
+      expect(screen.queryByText("record_camera_placeholder")).not.toBeInTheDocument();
+      expect(previewVideo()).not.toHaveClass("-scale-x-100");
+
+      await user.click(screen.getByRole("switch", { name: "recordCameraMirror" }));
+      expect(previewVideo()).toHaveClass("-scale-x-100");
+      expect(camera.track.stop).not.toHaveBeenCalled();
+    });
+
+    it("records the previewed camera instead of opening it again when recording starts", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      const onRecorded = vi.fn();
+      const user = userEvent.setup();
+
+      render(<ClosingRecorder onRecorded={onRecorded} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await screen.findByRole("button", { name: /recordStop/ });
+
+      expect(getUserMedia).toHaveBeenCalledOnce();
+      expect(FakeMediaRecorder.streams).toEqual([camera.stream]);
+      expect(previewVideo().srcObject).toBe(camera.stream);
+      expect(camera.track.stop).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole("button", { name: /recordStop/ }));
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledOnce());
+      expect(getUserMedia).toHaveBeenCalledOnce();
+      expect(camera.track.stop).toHaveBeenCalledOnce();
+      expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
+    });
+
+    it("keeps the previewed camera for the screen and camera session until the screen is picked", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      const screenCapture = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_screenCamera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+      expect(screen.getByText("record_screen_placeholder")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await screen.findByRole("button", { name: /recordStop/ });
+
+      expect(getUserMedia).toHaveBeenCalledOnce();
+      expect(FakeMediaRecorder.streams).toEqual([screenCapture.stream, camera.stream]);
+    });
+
+    it("releases the camera when switching to a source without one", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+      await user.click(screen.getByRole("button", { name: "record_mic" }));
+
+      expect(camera.track.stop).toHaveBeenCalledOnce();
+      expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
+      expect(getUserMedia).toHaveBeenCalledOnce();
+    });
+
+    it("releases the camera when the recorder closes or unmounts", async () => {
+      grantInputs();
+      const first = fakeStream({ audio: true });
+      const second = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(first.stream).mockResolvedValueOnce(second.stream);
+      const user = userEvent.setup();
+
+      const view = render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(first.stream));
+
+      view.rerender(<Recorder open={false} onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      expect(first.track.stop).toHaveBeenCalledOnce();
+
+      view.rerender(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(second.stream));
+      view.unmount();
+      expect(second.track.stop).toHaveBeenCalledOnce();
+    });
+
+    it("reopens the camera with the newly selected device", async () => {
+      grantInputs();
+      enumerateDevices.mockResolvedValue([fakeDevice("videoinput", "camera-2", "Desk Camera")]);
+      const first = fakeStream({ audio: true });
+      const second = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(first.stream).mockResolvedValueOnce(second.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(first.stream));
+      await user.click(screen.getByRole("combobox", { name: "recordCamera" }));
+      await user.click(await screen.findByRole("option", { name: "Desk Camera" }));
+
+      await waitFor(() => expect(previewVideo().srcObject).toBe(second.stream));
+      expect(first.track.stop).toHaveBeenCalledOnce();
+      expect(second.track.stop).not.toHaveBeenCalled();
+      expect(getUserMedia).toHaveBeenLastCalledWith({
+        video: { deviceId: { exact: "camera-2" } },
+        audio: true,
+      });
+    });
+
+    it("keeps the preview when the screen picker fails, and never leaks a camera the recording took", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      const reopened = fakeStream({ audio: true });
+      const mute = fakeStream();
+      const screenCapture = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream).mockResolvedValueOnce(reopened.stream);
+      getDisplayMedia.mockResolvedValueOnce(mute.stream).mockResolvedValueOnce(screenCapture.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_screenCamera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+
+      // Requested device audio is missing: the screen fails before the camera is taken.
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await waitFor(() => expect(mute.track.stop).toHaveBeenCalledOnce());
+      expect(camera.track.stop).not.toHaveBeenCalled();
+      expect(previewVideo().srcObject).toBe(camera.stream);
+
+      // The recorder cannot be created after the camera was taken: the session releases it and
+      // the dialog opens a fresh preview.
+      vi.stubGlobal(
+        "MediaRecorder",
+        class {
+          constructor() {
+            throw new Error("unsupported");
+          }
+        },
+      );
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await waitFor(() => expect(camera.track.stop).toHaveBeenCalledOnce());
+      expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
+      expect(screenCapture.track.stop).toHaveBeenCalledOnce();
+      await waitFor(() => expect(previewVideo().srcObject).toBe(reopened.stream));
+      expect(getUserMedia).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("button", { name: /recordStart/ })).toBeEnabled();
+    });
+
+    it("releases the camera when the recorder closes while the screen picker is open", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      getDisplayMedia.mockReturnValueOnce(new Promise<MediaStream>(() => {}));
+      const user = userEvent.setup();
+
+      const view = render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_screenCamera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      view.rerender(<Recorder open={false} onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+      expect(camera.track.stop).toHaveBeenCalledOnce();
+      expect(getUserMedia).toHaveBeenCalledOnce();
+    });
+
+    it("surfaces a camera that cannot be opened through the permission recovery state", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      getUserMedia
+        .mockRejectedValueOnce(new DOMException("in use", "NotReadableError"))
+        .mockResolvedValueOnce(camera.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("recordInputPermissionTitle");
+      await user.click(screen.getByRole("button", { name: "recordRetry" }));
+
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(FakeMediaRecorder.streams).toEqual([]);
+    });
   });
 });

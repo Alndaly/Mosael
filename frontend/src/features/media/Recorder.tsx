@@ -19,6 +19,7 @@ import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { createCameraPreview } from "./cameraPreview";
 import { selectableRecordingDevices } from "./recordingDevices";
 import {
   createRecordingController,
@@ -33,6 +34,10 @@ import { EmptyRecordingError } from "./recordingSession";
 const SOURCES: readonly RecordingSource[] = ["screen", "camera", "screenCamera", "mic"];
 const CAMERA_MIRROR_STORAGE_KEY = "mosael.recorder.cameraMirror";
 const SYSTEM_AUDIO_STORAGE_KEY = "mosael.recorder.systemAudio";
+
+type InputPermission = "camera" | "microphone";
+type GrantedInputs = Readonly<Record<InputPermission, boolean>>;
+const NO_INPUTS_GRANTED: GrantedInputs = { camera: false, microphone: false };
 
 interface PreviewStreams {
   screen: MediaStream | null;
@@ -67,6 +72,15 @@ function LivePreviewVideo({
   return <video ref={videoRef} {...props} />;
 }
 
+function PreviewPlaceholder({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-panel-inset px-3 text-center text-xs text-muted-foreground">
+      {icon}
+      <span>{text}</span>
+    </div>
+  );
+}
+
 /** Capture screen / webcam / mic via MediaRecorder and hand independent files to the caller.
  *  A screen + camera session deliberately stays as two assets. Screen capture in the packaged
  *  app needs the Electron main-process display-media handler (electron/main.cjs). */
@@ -86,6 +100,7 @@ export function Recorder({
   const capturesMicrophone = source !== "screen";
   const [recording, setRecording] = React.useState(false);
   const [starting, setStarting] = React.useState(false);
+  const [stopping, setStopping] = React.useState(false);
   const [secs, setSecs] = React.useState(0);
   const [previewStreams, setPreviewStreams] = React.useState<PreviewStreams>({ screen: null, camera: null });
   const controllerRef = React.useRef<RecordingController | null>(null);
@@ -104,11 +119,42 @@ export function Recorder({
     () => localStorage.getItem(SYSTEM_AUDIO_STORAGE_KEY) !== "false",
   );
   const [permissionIssue, setPermissionIssue] = React.useState<RecordingPermissionIssue | null>(null);
-  const [inputPermissionsReady, setInputPermissionsReady] = React.useState(false);
+  // Tracked per device kind, so readiness always matches the current source's own inputs: a
+  // microphone grant never counts as camera access, and switching between sources that need the
+  // same inputs keeps the camera open rather than dropping and reopening it.
+  const [grantedInputs, setGrantedInputs] = React.useState<GrantedInputs>(NO_INPUTS_GRANTED);
+  const inputPermissionsReady =
+    (!capturesCamera || grantedInputs.camera) && (!capturesMicrophone || grantedInputs.microphone);
   const [requestingPermissions, setRequestingPermissions] = React.useState(false);
   const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
   const audioCtxRef = React.useRef<AudioContext | null>(null);
   const levelRafRef = React.useRef<number | null>(null);
+
+  // 摄像头在录制前就打开:既给出实时预览,也让自动曝光在按下「开始录制」前收敛好;
+  // 开始录制时录制会话直接接管这条流(cameraPreview.take),不再重开摄像头。
+  // 只在已获授权时打开,不在弹窗打开时偷偷触发系统授权。
+  const [cameraPreview] = React.useState(() => createCameraPreview());
+  const cameraPreviewState = React.useSyncExternalStore(cameraPreview.subscribe, cameraPreview.getState);
+  // Bumped to retry a failed preview; open() is a no-op while a stream for the devices is live.
+  const [cameraPreviewAttempt, setCameraPreviewAttempt] = React.useState(0);
+  const previewsCamera = open && capturesCamera && inputPermissionsReady && !recording && !stopping;
+  React.useEffect(() => {
+    if (!previewsCamera) {
+      cameraPreview.close();
+      return;
+    }
+    // A starting recording may be about to take this stream; replacing it now would hand the
+    // recording a camera that has not settled. Selection is locked while starting, and a
+    // failed start re-runs this effect, which reopens the camera if it had been taken.
+    if (starting) return;
+    cameraPreview.open({ cameraId, micId });
+  }, [cameraId, cameraPreview, cameraPreviewAttempt, micId, previewsCamera, starting]);
+  React.useEffect(() => () => cameraPreview.close(), [cameraPreview]);
+  const cameraPreviewFailed = cameraPreviewState.error !== null;
+  // While recording, the stream the recording owns; before that, the preview's own stream.
+  const cameraStream = previewStreams.camera ?? cameraPreviewState.stream;
+  const visiblePermissionIssue: RecordingPermissionIssue | null =
+    permissionIssue ?? (cameraPreviewFailed ? "cameraMicrophone" : null);
 
   const enumerateInputDevices = React.useCallback(async () => {
     try {
@@ -128,10 +174,13 @@ export function Recorder({
   }, [enumerateInputDevices, open]);
 
   React.useEffect(() => {
-    if (!open || recording) return;
+    if (!open) {
+      setGrantedInputs(NO_INPUTS_GRANTED);
+      return;
+    }
+    if (recording) return;
     let disposed = false;
     setPermissionIssue(null);
-    setInputPermissionsReady(false);
     const bridge = window.mosaelDesktop?.recordingPermissions;
     const check = bridge?.getStatus;
     if (!check) return;
@@ -141,12 +190,18 @@ export function Recorder({
         const status = await check("screen");
         if (!disposed && (status === "denied" || status === "restricted")) setPermissionIssue("screen");
       }
-      const required: Array<"camera" | "microphone"> = [];
+      const required: InputPermission[] = [];
       if (capturesCamera) required.push("camera");
       if (capturesMicrophone) required.push("microphone");
       if (required.length === 0) return;
-      const statuses = await Promise.all(required.map((kind) => check(kind)));
-      if (!disposed) setInputPermissionsReady(statuses.every((status) => status === "granted"));
+      const statuses = await Promise.all(required.map(async (kind) => [kind, await check(kind)] as const));
+      if (disposed) return;
+      // "unknown" (platforms without a native status) keeps what an explicit request established.
+      const known = statuses.filter(([, status]) => status !== "unknown");
+      setGrantedInputs((current) => ({
+        ...current,
+        ...Object.fromEntries(known.map(([kind, status]) => [kind, status === "granted"])),
+      }));
     };
     void readStatuses().catch(() => undefined);
     return () => {
@@ -157,7 +212,7 @@ export function Recorder({
   const requestInputPermissions = React.useCallback(async () => {
     setRequestingPermissions(true);
     setPermissionIssue(null);
-    const required: Array<"camera" | "microphone"> = [];
+    const required: InputPermission[] = [];
     if (capturesCamera) required.push("camera");
     if (capturesMicrophone) required.push("microphone");
     const bridgeRequest = window.mosaelDesktop?.recordingPermissions?.request;
@@ -177,7 +232,8 @@ export function Recorder({
         });
         probe.getTracks().forEach((track) => track.stop());
       }
-      setInputPermissionsReady(true);
+      setGrantedInputs((current) => ({ ...current, ...Object.fromEntries(required.map((kind) => [kind, true])) }));
+      setCameraPreviewAttempt((attempt) => attempt + 1);
       await enumerateInputDevices();
     } catch {
       setPermissionIssue(capturesCamera ? "cameraMicrophone" : "microphone");
@@ -239,6 +295,8 @@ export function Recorder({
     // event cannot both finalize and import the same files.
     controllerRef.current = null;
     setRecording(false);
+    // Keeps the camera closed while the recording finalizes: a successful stop closes the dialog.
+    setStopping(true);
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
     try {
@@ -248,6 +306,7 @@ export function Recorder({
     } catch (error) {
       toast.error(t(error instanceof EmptyRecordingError ? "recordEmpty" : "recordFailed"));
     } finally {
+      setStopping(false);
       cleanupUi();
     }
   }, [cleanupUi, onOpenChange, onRecorded, t]);
@@ -268,7 +327,7 @@ export function Recorder({
       const active = await controller.start({
         source,
         captureSystemAudio,
-        cameraId,
+        camera: { take: () => cameraPreview.take({ cameraId, micId }) },
         micId,
         mirrorCamera,
         filenames: {
@@ -284,7 +343,10 @@ export function Recorder({
       setRecording(true);
       setSecs(0);
       timerRef.current = window.setInterval(() => setSecs((value) => value + 1), 1000);
-      setInputPermissionsReady(capturesMicrophone);
+      setGrantedInputs((current) => ({
+        camera: current.camera || capturesCamera,
+        microphone: current.microphone || capturesMicrophone,
+      }));
     } catch (error) {
       if (controllerRef.current === controller) controllerRef.current = null;
       setStarting(false);
@@ -323,7 +385,7 @@ export function Recorder({
             {t(`record_${source}_hint` as never) as string}
           </span>
           {!recording ? (
-            <Button className="shrink-0" size="sm" disabled={starting} onClick={start}>
+            <Button className="shrink-0" size="sm" disabled={starting || stopping} onClick={start}>
               <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
             </Button>
           ) : (
@@ -351,6 +413,7 @@ export function Recorder({
                   source === s &&
                     "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground",
                 )}
+                disabled={starting}
                 onClick={() => setSource(s)}
               >
                 {s === "screen" ? (
@@ -377,7 +440,8 @@ export function Recorder({
             recording && "bg-black",
           )}
         >
-          {/* Previews only display the controller's streams; recording never reads from them. In
+          {/* Previews only display streams; recording never reads from them. Before recording
+              the camera pane shows the warmed-up preview stream the recording will take over. In
               dual mode the split preview makes the two independent outputs explicit. */}
           {source === "screenCamera" ? (
             <div className="grid h-full w-full grid-cols-2 gap-px bg-border">
@@ -388,6 +452,9 @@ export function Recorder({
                   muted
                   playsInline
                 />
+                {!previewStreams.screen && (
+                  <PreviewPlaceholder icon={<ScreenIcon size={24} />} text={t("record_screen_placeholder")} />
+                )}
                 {recording && (
                   <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-ui-xs text-white">
                     {t("record_screen")}
@@ -396,11 +463,14 @@ export function Recorder({
               </div>
               <div className="relative min-w-0 overflow-hidden bg-black">
                 <LivePreviewVideo
-                  stream={previewStreams.camera}
+                  stream={cameraStream}
                   className={cn("h-full w-full object-contain", mirrorCamera && "-scale-x-100")}
                   muted
                   playsInline
                 />
+                {!cameraStream && (
+                  <PreviewPlaceholder icon={<Video size={24} />} text={t("record_camera_placeholder")} />
+                )}
                 {recording && (
                   <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-ui-xs text-white">
                     {t("record_camera")}
@@ -409,41 +479,35 @@ export function Recorder({
               </div>
             </div>
           ) : source === "screen" ? (
-            <LivePreviewVideo
-              stream={previewStreams.screen}
-              className="h-full w-full bg-black object-contain"
-              muted
-              playsInline
-            />
+            <>
+              <LivePreviewVideo
+                stream={previewStreams.screen}
+                className="h-full w-full bg-black object-contain"
+                muted
+                playsInline
+              />
+              {!previewStreams.screen && (
+                <PreviewPlaceholder icon={<ScreenIcon size={24} />} text={t("record_screen_placeholder")} />
+              )}
+            </>
           ) : source === "camera" ? (
-            <LivePreviewVideo
-              stream={previewStreams.camera}
-              className={cn("h-full w-full bg-black object-contain", mirrorCamera && "-scale-x-100")}
-              muted
-              playsInline
-            />
-          ) : null}
-          {recording && source === "mic" && (
+            <>
+              <LivePreviewVideo
+                stream={cameraStream}
+                className={cn("h-full w-full bg-black object-contain", mirrorCamera && "-scale-x-100")}
+                muted
+                playsInline
+              />
+              {!cameraStream && (
+                <PreviewPlaceholder icon={<Video size={24} />} text={t("record_camera_placeholder")} />
+              )}
+            </>
+          ) : recording ? (
             <div className="text-[color-mix(in_oklab,var(--primary)_70%,#fff)]">
               <Mic size={30} />
             </div>
-          )}
-          {!recording && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-panel-inset text-xs text-muted-foreground">
-              {source === "screen" ? (
-                <ScreenIcon size={24} />
-              ) : source === "camera" ? (
-                <Video size={24} />
-              ) : source === "screenCamera" ? (
-                <span className="inline-flex items-center gap-1" aria-hidden>
-                  <ScreenIcon size={24} />
-                  <Video size={22} />
-                </span>
-              ) : (
-                <Mic size={24} />
-              )}
-              <span>{t(`record_${source}_placeholder` as never) as string}</span>
-            </div>
+          ) : (
+            <PreviewPlaceholder icon={<Mic size={24} />} text={t("record_mic_placeholder")} />
           )}
           {recording && (
             <span
@@ -476,7 +540,7 @@ export function Recorder({
           </label>
         )}
 
-        {capturesMicrophone && !recording && !inputPermissionsReady && !permissionIssue && (
+        {capturesMicrophone && !recording && !inputPermissionsReady && !visiblePermissionIssue && (
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel px-3 py-2.5">
             <span className="flex min-w-0 items-start gap-2">
               <ShieldCheck size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
@@ -497,7 +561,7 @@ export function Recorder({
           </div>
         )}
 
-        {permissionIssue && !recording && (
+        {visiblePermissionIssue && !recording && (
           <div
             role="alert"
             className="grid gap-2 rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2.5"
@@ -507,18 +571,18 @@ export function Recorder({
               <span className="grid min-w-0 gap-0.5">
                 <span className="text-xs font-medium text-foreground">
                   {t(
-                    permissionIssue === "systemAudio"
+                    visiblePermissionIssue === "systemAudio"
                       ? "recordSystemAudioPermissionTitle"
-                      : permissionIssue === "screen"
+                      : visiblePermissionIssue === "screen"
                         ? "recordScreenPermissionTitle"
                         : "recordInputPermissionTitle",
                   )}
                 </span>
                 <span className="text-ui-xs leading-[1.4] text-muted-foreground">
                   {t(
-                    permissionIssue === "systemAudio"
+                    visiblePermissionIssue === "systemAudio"
                       ? "recordSystemAudioPermissionHint"
-                      : permissionIssue === "screen"
+                      : visiblePermissionIssue === "screen"
                         ? "recordScreenPermissionHint"
                         : "recordInputPermissionHint",
                   )}
@@ -526,7 +590,7 @@ export function Recorder({
               </span>
             </span>
             <div className="flex flex-wrap justify-end gap-2">
-              {(permissionIssue === "screen" || permissionIssue === "systemAudio") &&
+              {(visiblePermissionIssue === "screen" || visiblePermissionIssue === "systemAudio") &&
                 window.mosaelDesktop?.recordingPermissions?.openSettings && (
                   <Button
                     size="sm"
@@ -536,7 +600,7 @@ export function Recorder({
                     <Settings size={12} /> {t("recordOpenSystemSettings")}
                   </Button>
                 )}
-              {(permissionIssue === "cameraMicrophone" || permissionIssue === "microphone") && (
+              {(visiblePermissionIssue === "cameraMicrophone" || visiblePermissionIssue === "microphone") && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -546,10 +610,10 @@ export function Recorder({
                   {t("recordRequestPermissions")}
                 </Button>
               )}
-              {(permissionIssue === "cameraMicrophone" || permissionIssue === "microphone") &&
+              {(visiblePermissionIssue === "cameraMicrophone" || visiblePermissionIssue === "microphone") &&
                 window.mosaelDesktop?.recordingPermissions?.openSettings && (
                   <>
-                    {permissionIssue === "cameraMicrophone" && (
+                    {visiblePermissionIssue === "cameraMicrophone" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -571,7 +635,16 @@ export function Recorder({
                     </Button>
                   </>
                 )}
-              <Button size="sm" onClick={() => void start()}>
+              <Button
+                size="sm"
+                onClick={() =>
+                  // A preview failure is retried by reopening the preview, so the recording still
+                  // starts from a camera that has settled.
+                  permissionIssue === null && cameraPreviewFailed
+                    ? setCameraPreviewAttempt((attempt) => attempt + 1)
+                    : void start()
+                }
+              >
                 {t("recordRetry")}
               </Button>
             </div>
@@ -596,7 +669,7 @@ export function Recorder({
                     setCameraId(id);
                     localStorage.setItem("mosael.recorder.camera", id);
                   }}
-                  disabled={recording}
+                  disabled={recording || starting}
                 >
                   <SelectTrigger className="h-8" title={t("recordCamera")} aria-label={t("recordCamera")}>
                     <Video size={12} className="shrink-0 text-muted-foreground" />
@@ -619,7 +692,7 @@ export function Recorder({
                   setMicId(id);
                   localStorage.setItem("mosael.recorder.mic", id);
                 }}
-                disabled={recording}
+                disabled={recording || starting}
               >
                 <SelectTrigger className="h-8" title={t("recordMic")} aria-label={t("recordMic")}>
                   <Mic size={12} className="shrink-0 text-muted-foreground" />
