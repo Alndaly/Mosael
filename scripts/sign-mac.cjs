@@ -38,14 +38,14 @@ function isTransientSigningFailure(error) {
     || text.includes("Operation not permitted");
 }
 
-async function signMac(options) {
-  const { signAsync } = require("@electron/osx-sign");
+/** 重试循环本身。`sign` 由调用方给 —— 生产里是 @electron/osx-sign 的 `sign`,测试里是一个假的。 */
+async function signWith(sign, options) {
   const ignored = options.ignore == null ? [] : [options.ignore].flat();
   const ignore = (file) => ignored.some((rule) =>
     typeof rule === "function" ? rule(file) : Boolean(file.match(rule))) || !needsCodeSignature(file);
   for (let attempt = 0; ; attempt++) {
     try {
-      return await signAsync({ ...options, ignore });
+      return await sign({ ...options, ignore });
     } catch (error) {
       if (attempt >= 2 || !isTransientSigningFailure(error)) throw error;
       // **重试要出声。** 静默重试等于把「这次构建其实撞了一下」藏起来 —— 下次它变成必现的
@@ -57,6 +57,13 @@ async function signMac(options) {
   }
 }
 
+/** electron-builder 的 `mac.sign` 钩子。osx-sign 2.x 只发 ESM,入口叫 `sign`(1.x 是 `signAsync`)。 */
+async function signMac(options) {
+  const { sign } = await import("@electron/osx-sign");
+  return signWith(sign, options);
+}
+
 module.exports = signMac;
+module.exports.signWith = signWith;
 module.exports.needsCodeSignature = needsCodeSignature;
 module.exports.isTransientSigningFailure = isTransientSigningFailure;

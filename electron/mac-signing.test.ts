@@ -4,7 +4,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 import { afterAll, describe, expect, it, vi } from "vitest";
-const { needsCodeSignature, isTransientSigningFailure } =
+const { needsCodeSignature, isTransientSigningFailure, signWith } =
   createRequire(import.meta.url)("../scripts/sign-mac.cjs");
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "mosael-signing-test-"));
 afterAll(() => fs.rmSync(temporary, { recursive: true, force: true }));
@@ -95,45 +95,32 @@ describe("会自己好的签名失败", () => {
   });
 });
 
+describe("签名钩子接的是装着的那一版 osx-sign", () => {
+  // 1.x 的入口叫 signAsync、CommonJS;2.x 改名 sign、只发 ESM。钩子取错名字的话,
+  // 只有云端带证书的那次打包才会炸 —— 在这里先炸。
+  it("它导出 sign", async () => {
+    const osxSign = await import("@electron/osx-sign");
+    expect(typeof osxSign.sign).toBe("function");
+  });
+});
+
 describe("签名重试", () => {
   // 上面那两条只证明「认得出这几句话」。这一条证明**循环真的会重来** ——
   // 谓词写对了但循环写错(条件反了、或者 throw 排在重试之前),症状同样是构建红掉。
-  //
-  // 用 require.cache 塞一个假的 @electron/osx-sign:sign-mac.cjs 是在函数体里 require 它的,
-  // 所以注入来得及。vi.doMock 在这里没用 —— createRequire 走的是 CommonJS 解析,绕开了 vitest。
-  const require_ = createRequire(import.meta.url);
-  function withFakeSigner<T>(signAsync: () => Promise<unknown>, run: (signMac: never) => T): T {
-    const id = require_.resolve("@electron/osx-sign");
-    const saved = require_.cache[id];
-    require_.cache[id] = { id, filename: id, loaded: true, exports: { signAsync } } as never;
-    delete require_.cache[require_.resolve("../scripts/sign-mac.cjs")];
-    try {
-      return run(require_("../scripts/sign-mac.cjs"));
-    } finally {
-      if (saved) require_.cache[id] = saved;
-      else delete require_.cache[id];
-      delete require_.cache[require_.resolve("../scripts/sign-mac.cjs")];
-    }
-  }
-
+  // 循环和真正的签名函数分开(signWith),所以这里直接喂一个假的,不用去动模块缓存。
   it("撞上会自己好的失败时重来,并最终返回成功的结果", async () => {
     let calls = 0;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      await withFakeSigner(
-        async () => {
-          calls += 1;
-          if (calls === 1) throw new Error('/x/a.so: internal error in Code Signing subsystem');
-          return "signed";
-        },
-        async (signMac: never) => {
-          vi.useFakeTimers();
-          const pending = (signMac as unknown as (o: unknown) => Promise<string>)({ app: "/x/A.app" });
-          await vi.advanceTimersByTimeAsync(5000);
-          await expect(pending).resolves.toBe("signed");
-          vi.useRealTimers();
-        },
-      );
+      vi.useFakeTimers();
+      const pending = signWith(async () => {
+        calls += 1;
+        if (calls === 1) throw new Error('/x/a.so: internal error in Code Signing subsystem');
+        return "signed";
+      }, { app: "/x/A.app" });
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(pending).resolves.toBe("signed");
+      vi.useRealTimers();
       expect(calls).toBe(2);
       // 重试必须留下痕迹,否则下次没人知道这次构建撞过。
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("第 1 次签名失败"));
@@ -145,14 +132,9 @@ describe("签名重试", () => {
 
   it("不会为认不出的失败白等两轮退避", async () => {
     let calls = 0;
-    await withFakeSigner(
-      async () => { calls += 1; throw new Error("no identity found"); },
-      async (signMac: never) => {
-        await expect(
-          (signMac as unknown as (o: unknown) => Promise<string>)({ app: "/x/A.app" }),
-        ).rejects.toThrow("no identity found");
-      },
-    );
+    await expect(
+      signWith(async () => { calls += 1; throw new Error("no identity found"); }, { app: "/x/A.app" }),
+    ).rejects.toThrow("no identity found");
     expect(calls).toBe(1);
   });
 });
