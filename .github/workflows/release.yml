@@ -105,7 +105,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - name: Install browser extension dependencies
         run: pnpm install --frozen-lockfile --filter mosael-browser-extension...
@@ -175,7 +175,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       # setup-uv 从 v8 起不再发浮动主版本 tag(每个版本只有精确 tag),官方 README 也改为推荐锁
       # commit SHA。所以这一条与上面几个写法不同,不是笔误。升级时连注释一起换。

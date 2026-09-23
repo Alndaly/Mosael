@@ -125,7 +125,7 @@ Complete user guides live at **[mosael.com](https://mosael.com)**; their source 
 
 ### Requirements
 
-- Node.js 22+
+- Node.js 24+
 - pnpm
 - Python 3.13 and [uv](https://docs.astral.sh/uv/)
 - ffmpeg (required by the complete media test suite)
