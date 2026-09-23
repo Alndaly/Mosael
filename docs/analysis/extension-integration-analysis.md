@@ -318,7 +318,7 @@ flowchart TD
 | `baidu-pan` | process + OAuth + state + artifact + asset 输入 | 最完整范例:三步上传协议、dlink+headers 交宿主下载、refresh_token 轮换 |
 | `tikhub` | MCP over http | `${TIKHUB_PLATFORM}` 占位符、16 平台枚举、`multiple:true`、name_template |
 | `mcp-everything` | MCP stdio | 最小接入声明(`npx -y @modelcontextprotocol/server-everything`) |
-| `blender` | MCP stdio(uvx blender-mcp==1.9.1) | 见 §3,官方场景互通的载体 |
+| `blender` | MCP stdio(uvx mcp-for-blender==2.0.3) | 见 §3,官方场景互通的载体 |
 
 官方插件由 `backend/tests/test_plugin_manifest_i18n.py` 钉住中英双语。
 
@@ -339,7 +339,7 @@ inputs/state/oauth/nodes/i18n/blender 等十余个专项文件。
 
 ### 3.1 插件壳(`plugins/examples/blender/mosael.plugin.json`)
 
-- `runtime`: stdio 起 `uvx --python 3.11 blender-mcp==1.9.1`(上游 ahujasid/blender-mcp);
+- `runtime`: stdio 起 `uvx --python 3.14 mcp-for-blender==2.0.3`(上游 ahujasid/mcp-for-blender,2.0 之前叫 blender-mcp);
   版本钉死,与 README/`install-extension.py:43` 的 `DEFAULT_UPSTREAM` 一致。
 - `permissions`: `process:spawn / network:localhost / filesystem:read / filesystem:write`——如实申报。
 - config: `BLENDER_HOST`(枚举,只允许 127.0.0.1/localhost/::1)/ `BLENDER_PORT`(默认 9876)/

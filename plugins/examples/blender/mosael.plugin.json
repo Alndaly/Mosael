@@ -6,7 +6,7 @@
     "en": "Blender MCP"
   },
   "default_locale": "zh",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
   "runtime": {
     "kind": "mcp",
@@ -14,8 +14,8 @@
     "command": "uvx",
     "args": [
       "--python",
-      "3.11",
-      "blender-mcp==1.9.1"
+      "3.14",
+      "mcp-for-blender==2.0.3"
     ]
   },
   "permissions": [
@@ -28,8 +28,8 @@
     {
       "id": "blender",
       "description": {
-        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 1.9.1 Add-on。",
-        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 1.9.1 add-on."
+        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 2.0.3 Add-on。",
+        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.0.3 add-on."
       }
     }
   ],

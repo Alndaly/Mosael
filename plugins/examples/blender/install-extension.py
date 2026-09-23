@@ -3,7 +3,7 @@
 
 ## 为什么需要这个脚本
 
-上游 `blender-mcp` 只发**旧式单文件** add-on(`bl_info` 声明兼容 Blender 3.0),它的
+上游(`mcp-for-blender`,2.0 之前叫 `blender-mcp`)只发**旧式单文件** add-on(`bl_info` 声明兼容 Blender 3.0),它的
 `install-addon` 把文件放进 `scripts/addons/`。那在 Blender 4.2 之前是唯一的形状。
 
 Blender 4.2 起分成两套:Extensions(`blender_manifest.toml`)和 legacy add-ons。
@@ -12,7 +12,7 @@ Blender 4.2 起分成两套:Extensions(`blender_manifest.toml`)和 legacy add-on
 
 ## 它做什么
 
-1. 从 `blender-mcp` 包里取出那份 add-on(`bundled/addon.py`,上游 install-addon 也只是拷它);
+1. 从 `mcp-for-blender` 包里取出那份 add-on(`bundled/addon.py`,上游 install-addon 也只是拷它);
 2. 读 `bl_info` 拿版本号,生成 `blender_manifest.toml`,**权限按它实际用的写**;
 3. 装进 `extensions/user_default/blender_mcp/`;
 4. **删掉同版本的 legacy 副本**。两份并存会抢同一个 9876 端口,而那种冲突的症状是"时好时坏"。
@@ -23,7 +23,7 @@ Blender 4.2 起分成两套:Extensions(`blender_manifest.toml`)和 legacy add-on
 
     uv run plugins/examples/blender/install-extension.py
 
-    --version 1.9.1          # 装哪个上游版本(默认与 README 钉的一致)
+    --version 2.0.3          # 装哪个上游版本(默认与 README 钉的一致)
     --blender 5.2            # 只装到某个 Blender 版本(默认:所有 >= 4.2 的)
     --list                   # 只看会装到哪里,不动手
 
@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 #: 与 README 钉的一致。改这里要连 README 一起改 —— Add-on 与 MCP server 的协议版本是配套的。
-DEFAULT_UPSTREAM = "1.9.1"
+DEFAULT_UPSTREAM = "2.0.3"
 
 #: Extensions 体系从 4.2 开始。更早的 Blender 只能用 legacy,那时该跑上游的 install-addon。
 MIN_EXTENSION_BLENDER = (4, 2)
@@ -92,13 +92,13 @@ def upstream_addon(version: str) -> tuple[str, str]:
     )
     try:
         result = subprocess.run(
-            ["uvx", "--python", "3.11", "--with", f"blender-mcp=={version}", "python", "-c", code],
+            ["uvx", "--python", "3.14", "--with", f"mcp-for-blender=={version}", "python", "-c", code],
             capture_output=True, text=True, check=True,
         )
     except FileNotFoundError as exc:
         raise SystemExit("找不到 uvx。先装 uv:https://docs.astral.sh/uv/getting-started/installation/") from exc
     except subprocess.CalledProcessError as exc:
-        raise SystemExit(f"取 blender-mcp=={version} 失败:\n{exc.stderr.strip()[:800]}") from exc
+        raise SystemExit(f"取 mcp-for-blender=={version} 失败:\n{exc.stderr.strip()[:800]}") from exc
 
     source_path = Path(result.stdout.strip())
     if not source_path.is_file():
@@ -123,10 +123,10 @@ id = "{EXTENSION_ID}"
 version = "{addon_version}"
 name = "MCP for Blender"
 tagline = "Connect Blender to Mosael and agents over MCP"
-maintainer = "BlenderMCP <https://github.com/ahujasid/blender-mcp>"
+maintainer = "BlenderMCP <https://github.com/ahujasid/mcp-for-blender>"
 type = "add-on"
 
-website = "https://github.com/ahujasid/blender-mcp"
+website = "https://github.com/ahujasid/mcp-for-blender"
 tags = ["Development", "Import-Export"]
 
 blender_version_min = "{MIN_EXTENSION_BLENDER[0]}.{MIN_EXTENSION_BLENDER[1]}.0"
@@ -163,7 +163,7 @@ def install(config_dir: Path, source: str, addon_version: str, dry_run: bool) ->
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--version", default=DEFAULT_UPSTREAM, help=f"上游 blender-mcp 版本(默认 {DEFAULT_UPSTREAM})")
+    parser.add_argument("--version", default=DEFAULT_UPSTREAM, help=f"上游 mcp-for-blender 版本(默认 {DEFAULT_UPSTREAM})")
     parser.add_argument("--blender", help="只装到这个 Blender 版本,例如 5.2")
     parser.add_argument("--list", action="store_true", help="只看会装到哪里,不动手")
     args = parser.parse_args()
@@ -176,7 +176,7 @@ def main() -> int:
         return 1
 
     source, addon_version = upstream_addon(args.version)
-    print(f"blender-mcp {args.version} · add-on {addon_version}")
+    print(f"mcp-for-blender {args.version} · add-on {addon_version}")
     for version, config_dir in targets:
         label = ".".join(str(p) for p in version)
         for note in install(config_dir, source, addon_version, args.list):

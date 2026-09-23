@@ -1,6 +1,6 @@
 # Blender MCP for Mosael
 
-Connect your chosen Mosael agent to local Blender, then exchange models and camera shots from the **3D 场景 → Blender** menu. This plugin uses the community [Blender MCP](https://github.com/ahujasid/blender-mcp) server, pinned to **1.9.1**. It does not require Astra or a separate modeling-model API key.
+Connect your chosen Mosael agent to local Blender, then exchange models and camera shots from the **3D 场景 → Blender** menu. This plugin uses the community [MCP for Blender](https://github.com/ahujasid/mcp-for-blender) server (published as `mcp-for-blender`; called `blender-mcp` before 2.0), pinned to **2.0.3**. It does not require Astra or a separate modeling-model API key.
 
 ## 安装
 
@@ -17,7 +17,7 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
    删掉同版本的 legacy 副本，两份并存会抢同一个 9876 端口。
 
    默认装到所有 4.2 及以上的 Blender；`--blender 5.2` 只装一个，`--list` 先看会装到哪里。
-   仍要用旧体系(Blender 4.2 以下)时才跑 `uvx --python 3.11 blender-mcp==1.9.1 install-addon`。
+   仍要用旧体系(Blender 4.2 以下)时才跑 `uvx --python 3.14 mcp-for-blender==2.0.3 install-addon`。
 
    装好后在 Blender 的 Preferences → Add-ons 中搜 MCP，勾选 **MCP for Blender**。这是社区插件，
    不是 Blender 官方插件。

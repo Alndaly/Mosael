@@ -118,7 +118,7 @@ def exclusive(instance_id):
 #: 一次**场景互通**(send / receive / pull)允许跑多久。
 #:
 #: **它不该是插件运行时那 60 秒。** 那个数对标的是「一个插件工具该跑多久」,而这 60 秒里要装下:
-#: `uvx --python 3.11 blender-mcp` **起一个子进程**(而且每次调用都重连、不常驻)、MCP 握手、
+#: `uvx --python 3.14 mcp-for-blender` **起一个子进程**(而且每次调用都重连、不常驻)、MCP 握手、
 #: 逐帧 `keyframe_insert`(每个镜头 ceil(duration*30) 帧 × 4 条 data path)、逐个模型
 #: `import_scene.gltf`、最后 `export_glb`(材质失败还要再导一遍)。大一点的场景必然超时,
 #: 用户看到的是「Blender 未响应」,而 Blender 其实正在好好地跑。
