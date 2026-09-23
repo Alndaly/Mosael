@@ -1380,6 +1380,47 @@ def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
     return plugin_node_types(db)
 
 
+def _missing_required_in_bodies(
+    owner: str, config: dict[str, Any], known_types: dict[str, dict[str, Any]]
+) -> list[str]:
+    """内嵌子图(循环体 / subgraph)里缺的必填项,带上它住在谁里面。
+
+    只查必填,不查引用:引用要不要报错取决于内层作用域播了什么(`loop` / `input`),
+    那只有体自己说得清(见 `_unresolvable_body_refs` 上那段)。而"缺一个必填项"与作用域无关。
+    """
+    body = config.get("body")
+    if not isinstance(body, dict):
+        return []
+    nodes = body.get("nodes")
+    if not isinstance(nodes, list):
+        return []
+    bound = {
+        (str(edge.get("target")), str(edge.get("target_input")))
+        for edge in (body.get("edges") or [])
+        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input")
+    }
+    found: list[str] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        node_id = str(node.get("id", ""))
+        meta = known_types.get(str(node.get("type", "")))
+        if not meta:
+            continue
+        inner_config = node.get("config") or {}
+        specs = meta["config"]
+        for key, spec in specs.items():
+            if not (isinstance(spec, dict) and spec.get("required")):
+                continue
+            if not config_field_active(spec, inner_config, specs):
+                continue
+            if inner_config.get(key) in (None, "") and (node_id, key) not in bound \
+                    and key not in (node.get("inputs") or []):
+                found.append(f"节点 {owner} 的子图里,节点 {node_id} 缺少必填配置 {key}")
+        found.extend(_missing_required_in_bodies(f"{owner}/{node_id}", inner_config, known_types))
+    return found
+
+
 def validate_graph(
     graph: dict[str, Any],
     *,
@@ -1464,6 +1505,14 @@ def validate_graph(
                     value = node_config.get(key)
                     if value in (None, "") and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
+            #: **必填检查要下到循环体里。** 体内的引用(`{{loop.item}}`)只有体自己说得清,所以
+            #: `_unresolvable_body_refs` 不下探;而"这个节点缺一个必填项"与作用域无关,下得去。
+            #:
+            #: 不下探的代价是真实的:体内缺一项的工作流**能启动** —— 它占一个任务位、把循环之前
+            #: 的步骤全跑完(在「从主题到完整视频」里那是好几次付费的 AI 调用),然后才死在
+            #: 循环上;而同一处遗漏写在顶层是当场 422、免费、且指得准。实测:顶层校验返回 []
+            #: 而体内校验说得出「节点 sheet 缺少必填配置 provider」。
+            errors.extend(_missing_required_in_bodies(node_id, node_config, known_types))
     if require_start:
         if start_count > 1 or (start_count == 0 and not allow_missing_start):
             errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
