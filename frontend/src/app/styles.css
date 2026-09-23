@@ -20,6 +20,14 @@
 }
 
 @layer components {
+  /* 带定位的浮层(下拉、弹出框、右键菜单、提示)一律不当拖拽区。
+     顶栏和页头在桌面端声明了 -webkit-app-region: drag,而拖拽区由系统在页面之前截走输入 ——
+     浮层盖在上面、z-index 再高也没用,只有显式 no-drag 能把这块减掉。浮层都经 Portal 挂在
+     body 末尾,DOM 顺序在拖拽区之后,no-drag 生效。统一写在这里,不靠每个浮层各自记得。
+     (FLOATING_COLLISION_PADDING 让它们默认不进顶栏;这一条管调用方自己改了边距、或是窗口
+     小到躲不开的时候。) */
+  .is-desktop [data-radix-popper-content-wrapper] { -webkit-app-region: no-drag; }
+
   .media-preview-range { appearance: none; background: transparent; outline: none; }
   .media-preview-range::-webkit-slider-runnable-track {
     height: 3px;

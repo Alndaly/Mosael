@@ -1,4 +1,17 @@
-/** Shared visual language; positioning and focus management belong to each primitive. */
+import { WINDOW_CHROME_HEIGHT } from "@/lib/windowChrome";
+
+/** Shared visual language; focus management belongs to each primitive. */
+
+/**
+ * 浮层躲避碰撞时的边距 —— **顶部要让出整条顶栏**,不只是窗口边缘。
+ *
+ * Radix 只知道视口,不知道顶栏:它会把一个向上翻的下拉稳稳地放在顶栏底下。而顶栏在桌面端是
+ * 窗口拖拽区(-webkit-app-region: drag),拖拽区由系统在页面之前截走输入,z-index 对它无效 ——
+ * 于是落在那 56px 里的选项看得见、点不动(真机:节点里素材下拉的前几项)。
+ * 所有带定位的浮层(Popover / Select / ContextMenu / Tooltip)默认都用它;调用方给了自己的
+ * collisionPadding 就以调用方为准。
+ */
+export const FLOATING_COLLISION_PADDING = { top: WINDOW_CHROME_HEIGHT + 8, right: 8, bottom: 8, left: 8 } as const;
 /**
  * 浮层的表面。`floating-surface` 这个类名不是装饰:tokens.css 用它把 `--divider` 换成
  * 贴着**这层**表面算的那一版 —— 页面的分隔色画到 popover 上就消失了(深色下

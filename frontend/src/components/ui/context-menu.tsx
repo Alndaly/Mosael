@@ -4,7 +4,7 @@ import * as React from "react"
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
 
-import { FLOATING_SURFACE, FLOATING_MOTION, MENU_ITEM, MENU_SEPARATOR } from "./floating"
+import { FLOATING_SURFACE, FLOATING_MOTION, MENU_ITEM, MENU_SEPARATOR, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
 
@@ -52,6 +52,7 @@ const ContextMenuSubContent = React.forwardRef<
   <ContextMenuPrimitive.Portal>
     <ContextMenuPrimitive.SubContent
       ref={ref}
+      collisionPadding={FLOATING_COLLISION_PADDING}
       className={cn(
         FLOATING_SURFACE, FLOATING_MOTION,
         "z-50 min-w-48 max-w-[min(24rem,calc(100vw-1rem))] max-h-[var(--radix-context-menu-content-available-height)] overflow-y-auto p-1.5",
@@ -70,6 +71,7 @@ const ContextMenuContent = React.forwardRef<
   <ContextMenuPrimitive.Portal>
     <ContextMenuPrimitive.Content
       ref={ref}
+      collisionPadding={FLOATING_COLLISION_PADDING}
       className={cn(
         FLOATING_SURFACE, FLOATING_MOTION,
         "z-50 max-h-[var(--radix-context-menu-content-available-height)] min-w-48 max-w-[min(24rem,calc(100vw-1rem))] overflow-y-auto overflow-x-hidden p-1.5",

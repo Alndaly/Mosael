@@ -117,7 +117,9 @@ export function SearchableSelect({
             一句长描述能把浮层顶到整屏宽(实测就是如此)。给个够读一行的固定宽度,超出截断。 */}
         <PopoverContent
           className={cn(
-            "p-0",
+            // 浮层自己不滚(overflow-hidden 盖掉 PopoverContent 默认的 overflow-y-auto),滚的是下面
+            // 那份列表 —— 否则搜索框会跟着内容一起滚走。
+            "p-0 overflow-hidden",
             hasDescriptions ? "w-[360px] max-w-[calc(100vw-24px)]" : "w-[--radix-popover-trigger-width]",
             contentClassName,
           )}
@@ -125,7 +127,9 @@ export function SearchableSelect({
         >
           <Command>
             <CommandInput placeholder={searchPlaceholder ?? "搜索…"} className="h-9" />
-            <CommandList className="max-h-[300px]">
+            {/* 列表限高 = min(300px, 可用高度 − 搜索框)。只写 300px 的话,矮窗口里浮层整块比可用
+                空间高,被推出窗口外、连搜索框一起看不见(真机:节点的素材下拉)。 */}
+            <CommandList className="max-h-[min(300px,calc(var(--radix-popover-content-available-height,100vh)-2.75rem))]">
               <CommandEmpty>{emptyText ?? "无匹配项"}</CommandEmpty>
               {groups.map(([heading, groupItems]) => {
                 const rows = groupItems.map((item) => (

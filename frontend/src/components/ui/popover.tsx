@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
-import { FLOATING_SURFACE, FLOATING_MOTION } from "./floating"
+import { FLOATING_SURFACE, FLOATING_MOTION, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
 
@@ -34,9 +34,12 @@ const PopoverContent = React.forwardRef<
       ref={ref}
       align={align}
       sideOffset={sideOffset}
+      collisionPadding={FLOATING_COLLISION_PADDING}
       className={cn(
         FLOATING_SURFACE, FLOATING_MOTION,
-        "z-50 w-72 max-w-[calc(100vw-1rem)] p-4 outline-none",
+        // 限高交给 Radix 算的可用高度(已扣掉顶栏,见 FLOATING_COLLISION_PADDING):内容比可用
+        // 空间高时在浮层里滚,而不是整块被推出窗口 —— 被推出去的那一截连滚都滚不到。
+        "z-50 w-72 max-w-[calc(100vw-1rem)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-4 outline-none",
         className
       )}
       {...props}

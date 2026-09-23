@@ -5,7 +5,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
-import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR } from "./floating"
+import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
 
@@ -92,6 +92,7 @@ const SelectContent = React.forwardRef<
         className
       )}
       position={position}
+      collisionPadding={FLOATING_COLLISION_PADDING}
       {...props}
     >
       <SelectScrollUpButton />
