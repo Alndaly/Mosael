@@ -4,6 +4,7 @@ import { Pause, Play, Repeat, SkipBack, StepBack, StepForward, Volume2, VolumeX,
 import { assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { seekTo } from "@/lib/coalescedSeek";
 import { cn } from "@/lib/utils";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { MIN_CELL, useBestFit } from "./AssetCompareView";
@@ -78,7 +79,8 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
         const video = refs.current.get(asset.id);
         if (!video) continue;
         const end = durationOf(asset) || video.duration || 0;
-        video.currentTime = Math.min(target, Math.max(0, end - 0.001));
+        //: 拖时间轴时几条一起跳,沿途的跳转合并掉(见 lib/coalescedSeek)。
+        seekTo(video, Math.min(target, Math.max(0, end - 0.001)));
       }
       setTime(target);
     },

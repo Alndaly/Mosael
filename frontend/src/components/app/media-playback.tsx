@@ -3,6 +3,7 @@ import { Maximize2, Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 import { assetFileUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { seekTo } from "@/lib/coalescedSeek";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,6 +67,22 @@ export function usePlayback(ref: React.RefObject<HTMLMediaElement | null>) {
 }
 
 /**
+ * 拖进度条:条跟着指针走,画面跳到**最新**的位置(沿途的跳转合并掉,见 lib/coalescedSeek)。
+ *
+ * 自绘的 Scrubber 和原生 range 滑块共用。拖动中显示的是指针位置,不是画面位置 —— 跳转被
+ * 合并后画面落后于指针是常态,条要是跟着画面走,拖起来就一顿一顿、还会往回弹。
+ */
+export function useScrub(media: React.RefObject<HTMLMediaElement | null>, at: number) {
+  const [dragAt, setDragAt] = React.useState<number | null>(null);
+  const scrub = React.useCallback((time: number) => {
+    setDragAt(time);
+    if (media.current) seekTo(media.current, time);
+  }, [media]);
+  const release = React.useCallback(() => setDragAt(null), []);
+  return { shown: dragAt ?? at, scrub, release };
+}
+
+/**
  * 进度条。按下就跟手,松开才停。
  *
  * **用指针捕获而不是只听 pointerdown** —— 不捕获的话,拖着拖着划出条外就断了,而进度条
@@ -87,12 +104,13 @@ export function Scrubber({
   trackClassName?: string;
 }) {
   const t = useI18n();
+  const { shown, scrub, release } = useScrub(media, at);
   const seek = (event: React.PointerEvent<HTMLDivElement>) => {
     const element = media.current;
     const box = event.currentTarget.getBoundingClientRect();
     if (!element || box.width <= 0 || !Number.isFinite(element.duration)) return;
     const ratio = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
-    element.currentTime = ratio * element.duration;
+    scrub(ratio * element.duration);
   };
 
   return (
@@ -101,7 +119,7 @@ export function Scrubber({
       aria-label={t("mediaSeek")}
       aria-valuemin={0}
       aria-valuemax={Number.isFinite(total) ? total : 0}
-      aria-valuenow={at}
+      aria-valuenow={shown}
       tabIndex={0}
       onKeyDown={(event) => {
         const element = media.current;
@@ -111,7 +129,7 @@ export function Scrubber({
         if (value === null) return;
         event.preventDefault();
         event.stopPropagation();
-        element.currentTime = Math.max(0, Math.min(element.duration, value));
+        seekTo(element, Math.max(0, Math.min(element.duration, value)));
       }}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -120,13 +138,17 @@ export function Scrubber({
       onPointerMove={(event) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) seek(event);
       }}
-      onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+      onPointerUp={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        release();
+      }}
+      onPointerCancel={release}
       className={cn("nodrag nopan group/bar cursor-pointer rounded-sm py-1.5 focus-visible:outline-2 focus-visible:outline-ring", className)}
     >
       <div className={cn("h-0.5 w-full rounded-full transition-all group-hover/bar:h-1", trackClassName)}>
         <div
           className="h-full rounded-full bg-current"
-          style={{ width: `${total > 0 ? Math.min(100, (at / total) * 100) : 0}%` }}
+          style={{ width: `${total > 0 ? Math.min(100, (shown / total) * 100) : 0}%` }}
         />
       </div>
     </div>
