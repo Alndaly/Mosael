@@ -122,24 +122,25 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                       <span className="text-ui-xs leading-[1.5] text-muted-foreground">{one.description}</span>
                     </span>
                   </button>
-                  {/* 没准备好时说去哪儿准备 —— 这句话由引擎自己给,这里不认识任何引擎。放在单选项
-                      下面单独一栏(禁用的按钮里不能再套按钮),不跟着变灰,要能读清楚。 */}
+                  {/* 没准备好时说去哪儿准备 —— 这句话由引擎自己给,这里不认识任何引擎。它接在说明下面、
+                      和文字对齐,只是不跟着变灰;不另起一条色带 —— 那样一张卡被切成两截,和别的卡不像一组。
+                      放在单选按钮外面,是因为禁用的按钮里不能再套按钮。 */}
                   {needsSetup && (
-                    <div className="flex items-center justify-between gap-3 border-t border-divider bg-panel-inset/60 py-2 pl-[2.625rem] pr-2">
-                      <span id={hintId} className="min-w-0 text-ui-xs leading-[1.5] text-foreground">
+                    <div className="-mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 pb-3 pl-[2.625rem] pr-3.5 text-ui-xs leading-[1.5]">
+                      <span id={hintId} className="text-muted-foreground">
                         {one.setup_hint}
                       </span>
                       {one.installable && (
                         <Button
-                          size="sm"
-                          variant="outline"
-                          className="shrink-0"
+                          variant="link"
+                          size="xs"
+                          className="h-auto gap-1 px-0 font-medium"
                           onClick={() => {
                             onClose();
                             gotoSettings("denoise");
                           }}
                         >
-                          <Download size={13} /> {t("denoiseGoDownload")}
+                          <Download size={12} /> {t("denoiseGoDownload")}
                         </Button>
                       )}
                     </div>
