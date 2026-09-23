@@ -95,8 +95,11 @@ def test_三家的方言各不相同_而且没有派生错() -> None:
     # scope 的结尾同理。
     assert (sigv4.AWS.terminator, sigv4.TOS.terminator, sigv4.OSS.terminator) == (
         "aws4_request", "request", "aliyun_v4_request")
-    # 阿里云的规范化请求多一行 AdditionalHeaders,另外两家没有。
-    assert sigv4.OSS.additional_headers_line and not sigv4.AWS.additional_headers_line
+    # 阿里云 V4 的**结构**也不同(AdditionalHeaders、只签默认头、URI 带桶名)—— 只有它开这个开关。
+    # 光有这几行名字对不上的断言是不够的:名字全对、结构错,照样 400。结构由
+    # test_oss_signature_matches_the_sdk 拿官方 SDK 的向量钉住。
+    assert sigv4.OSS.aliyun_v4 and not sigv4.AWS.aliyun_v4 and not sigv4.TOS.aliyun_v4
+    assert "signed_headers" not in sigv4.OSS.query_names
 
 
 def test_三个插件都在市场索引里() -> None:

@@ -113,7 +113,7 @@ class Bucket:
         headers["authorization"] = sigv4.authorization(
             method="PUT", path=self._path(key), query="", headers=headers, payload_hash=payload,
             access_key=self.access_key, secret=self.secret, region=self.region,
-            stamp=stamp, flavor=self.flavor,
+            stamp=stamp, flavor=self.flavor, bucket=self.bucket,
         )
         _request(self.base + self._path(key), method="PUT", headers=headers, body=data)
 
@@ -122,7 +122,7 @@ class Bucket:
         query = sigv4.presigned_query(
             method=method, path=self._path(key), host=self.host, expires=expires,
             access_key=self.access_key, secret=self.secret, region=self.region,
-            stamp=_stamp(), flavor=self.flavor,
+            stamp=_stamp(), flavor=self.flavor, bucket=self.bucket,
         )
         return f"{self.base}{self._path(key)}?{query}"
 
@@ -142,7 +142,7 @@ class Bucket:
         headers["authorization"] = sigv4.authorization(
             method="GET", path="/", query=query, headers=headers, payload_hash=payload,
             access_key=self.access_key, secret=self.secret, region=self.region,
-            stamp=stamp, flavor=self.flavor,
+            stamp=stamp, flavor=self.flavor, bucket=self.bucket,
         )
         body = _request(f"{self.base}/?{query}", method="GET", headers=headers)
         root = ET.fromstring(body)

@@ -31,9 +31,14 @@ class Flavor:
     #: `x-oss-signature-version`,而另外两家叫 `X-…-Algorithm`。派生的话会得到一个名字
     #: 对不上的参数,而服务端只会回 403,不会说"你这个参数名不对"。
     query_names: "dict[str, str]"
-    #: 阿里云在规范化请求里**多一行** `AdditionalHeaders`(即使为空也要占一行)。少这一行
-    #: 或多这一行,服务端算出来的都是另一个签名 —— 表现是 403,而不是"格式不对"。
-    additional_headers_line: bool = False
+    #: **阿里云 V4 与 AWS SigV4 的结构差异**(不只是换几个名字 —— 当初只换了名字,于是算法对、
+    #: 格式错,真请求回的是 `400 Unknown parameter in Authorization header`):
+    #:   · 只签默认那几类头:`x-oss-*`、`content-type`、`content-md5`(host 不签);
+    #:   · 规范化请求里那一行是 `AdditionalHeaders`(我们不加附加头,所以是空行),不是 `SignedHeaders`;
+    #:   · Authorization 里没有 `SignedHeaders`,逗号后不带空格;预签名串里也没有那个参数;
+    #:   · 规范化 URI 带桶名:`/桶/对象`、列目录是 `/桶/` —— 虚拟主机式寻址也一样。
+    #: 核对来源是官方 SDK(alibabacloud-oss-v2 的 SignerV4),向量见 test_oss_signature_matches_the_sdk。
+    aliyun_v4: bool = False
     #: 阿里云的 `x-oss-content-sha256` 目前**只收 `UNSIGNED-PAYLOAD`**(文档原话),
     #: 所以那一家不签正文哈希。
     unsigned_payload_only: bool = False
@@ -55,8 +60,8 @@ TOS = Flavor("TOS4-HMAC-SHA256", "", "tos", "request", "x-tos-date",
 OSS = Flavor(
     "OSS4-HMAC-SHA256", "aliyun_v4", "oss", "aliyun_v4_request", "x-oss-date", "x-oss-content-sha256",
     {"algorithm": "x-oss-signature-version", "credential": "x-oss-credential", "date": "x-oss-date",
-     "expires": "x-oss-expires", "signed_headers": "x-oss-signed-headers", "signature": "x-oss-signature"},
-    additional_headers_line=True, unsigned_payload_only=True,
+     "expires": "x-oss-expires", "signature": "x-oss-signature"},
+    aliyun_v4=True, unsigned_payload_only=True,
 )
 
 
@@ -82,16 +87,29 @@ def signing_key(secret: str, date: str, region: str, flavor: Flavor) -> bytes:
     return _hmac(key, flavor.terminator)
 
 
+def _signs(flavor: "Flavor | None", name: str) -> bool:
+    """这个头进不进签名。AWS 系全签;阿里云只签默认那几类(见 Flavor.aliyun_v4)。"""
+    if flavor is None or not flavor.aliyun_v4:
+        return True
+    return name.startswith("x-oss-") or name in ("content-type", "content-md5")
+
+
+def canonical_path(path: str, bucket: str, flavor: "Flavor | None") -> str:
+    """规范化 URI。阿里云要带桶名(`/桶/对象`),另外两家就是请求路径本身。"""
+    return f"/{bucket}{path}" if flavor is not None and flavor.aliyun_v4 else path
+
+
 def canonical_request(
     method: str, path: str, query: str, headers: dict[str, str], payload_hash: str,
     flavor: "Flavor | None" = None,
 ) -> tuple[str, str]:
     """规范化请求 + 签名头清单。头名小写、按 ASCII 排序、值去掉首尾空格。"""
     items = sorted((name.lower(), str(value).strip()) for name, value in headers.items())
+    items = [(name, value) for name, value in items if _signs(flavor, name)]
     signed = ";".join(name for name, _ in items)
     lines = [method, path, query, "".join(f"{name}:{value}\n" for name, value in items)]
-    if flavor is not None and flavor.additional_headers_line:
-        lines.append("")  # AdditionalHeaders:阿里云要这一行,哪怕是空的
+    if flavor is not None and flavor.aliyun_v4:
+        lines.append("")  # AdditionalHeaders:我们不加附加头,这一行是空的 —— 但必须占着
     else:
         lines.append(signed)
     lines.append(payload_hash)
@@ -100,22 +118,25 @@ def canonical_request(
 
 def authorization(
     *, method: str, path: str, query: str, headers: dict[str, str], payload_hash: str,
-    access_key: str, secret: str, region: str, stamp: str, flavor: Flavor,
+    access_key: str, secret: str, region: str, stamp: str, flavor: Flavor, bucket: str = "",
 ) -> str:
-    """`Authorization` 头的值。"""
+    """`Authorization` 头的值。`bucket` 只有阿里云用得到(规范化 URI 里要它)。"""
     date = stamp[:8]
-    canonical, signed = canonical_request(method, path, query, headers, payload_hash, flavor)
+    canonical, signed = canonical_request(
+        method, canonical_path(path, bucket, flavor), query, headers, payload_hash, flavor)
     scope = f"{date}/{region}/{flavor.service}/{flavor.terminator}"
     to_sign = "\n".join([flavor.algorithm, stamp, scope, sha256_hex(canonical.encode("utf-8"))])
     signature = hmac.new(signing_key(secret, date, region, flavor), to_sign.encode("utf-8"),
                          hashlib.sha256).hexdigest()
+    if flavor.aliyun_v4:
+        return f"{flavor.algorithm} Credential={access_key}/{scope},Signature={signature}"
     return (f"{flavor.algorithm} Credential={access_key}/{scope}, "
             f"SignedHeaders={signed}, Signature={signature}")
 
 
 def presigned_query(
     *, method: str, path: str, host: str, expires: int,
-    access_key: str, secret: str, region: str, stamp: str, flavor: Flavor,
+    access_key: str, secret: str, region: str, stamp: str, flavor: Flavor, bucket: str = "",
 ) -> str:
     """一条**限时**的直链的查询串。
 
@@ -130,10 +151,12 @@ def presigned_query(
         names["credential"]: f"{access_key}/{scope}",
         names["date"]: stamp,
         names["expires"]: str(expires),
-        names["signed_headers"]: "host",
     }
+    if "signed_headers" in names:  # 阿里云没有这个参数(见 Flavor.aliyun_v4)
+        params[names["signed_headers"]] = "host"
     query = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(params.items()))
-    canonical, _ = canonical_request(method, path, query, {"host": host}, UNSIGNED, flavor)
+    canonical, _ = canonical_request(
+        method, canonical_path(path, bucket, flavor), query, {"host": host}, UNSIGNED, flavor)
     to_sign = "\n".join([flavor.algorithm, stamp, scope, sha256_hex(canonical.encode("utf-8"))])
     signature = hmac.new(signing_key(secret, date, region, flavor), to_sign.encode("utf-8"),
                          hashlib.sha256).hexdigest()
