@@ -30,19 +30,18 @@ export function AssetLinkStorageSection() {
   });
 
   const options = state.data?.options ?? [];
-  const automatic = options.find((option) => option.instance_id === state.data?.automatic);
   const ready = options.filter((option) => (option.missing ?? []).length === 0);
 
-  //: 「没选」这一格说的是**实际会怎样**:只配好一家就自动用它;几家都配好就会在生成时问;
-  //: 一家都没有就去插件页装。一条横线什么都没说。
+  //: 「不指定」这一项说的是**不指定时会怎样**,只取决于配好了哪几家 —— 和现在选没选无关
+  //: (此前跟着当前选择走,选定一家之后它改口成「还没有配好的存储」)。
   const unsetLabel =
     options.length === 0
       ? t("assetLinkNone")
-      : automatic
-        ? t("assetLinkAuto").replace("{name}", automatic.name)
-        : ready.length > 1
-          ? t("assetLinkAsk")
-          : t("assetLinkNoneReady");
+      : ready.length === 0
+        ? t("assetLinkNoneReady")
+        : ready.length === 1
+          ? t("assetLinkAuto").replace("{name}", ready[0].name)
+          : t("assetLinkAsk");
 
   const unready = options.filter((option) => (option.missing ?? []).length > 0);
 

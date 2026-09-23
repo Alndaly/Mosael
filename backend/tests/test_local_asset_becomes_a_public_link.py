@@ -245,3 +245,10 @@ def test_只配好一家时_设置里显示会自动用它(world) -> None:
     with SessionLocal() as db:
         state = storage_choices(db, "alice")
     assert state["current"] is None and state["automatic"] == only
+
+    # 选定它之后,「不选会用哪家」不跟着变 —— 此前变成 None,界面改口成「还没有配好的存储」。
+    with SessionLocal() as db:
+        db.add(PluginCapabilityDefault(owner_user_id="alice", capability="public_url", instance_id=only))
+        db.commit()
+        state = storage_choices(db, "alice")
+    assert state["current"] == only and state["automatic"] == only

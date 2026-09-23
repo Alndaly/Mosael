@@ -198,7 +198,7 @@ class AssetLinkStorageOption(ApiModel):
 class AssetLinkStorageOut(ApiModel):
     #: 我定的那一家;没定是 None。
     current: str | None = None
-    #: 没定时实际会用的那一家(只有一家配好时);几家都配好又没定时是 None —— 生成时会当场问。
+    #: 不定的话会用的那一家(只有一家配好时),和现在定没定无关;几家都配好时是 None —— 不定就会当场问。
     automatic: str | None = None
     options: list[AssetLinkStorageOption] = Field(default_factory=list)
 

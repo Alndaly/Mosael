@@ -122,7 +122,9 @@ def storage_choices(db: "Session", owner_user_id: str) -> dict:
         chosen = None
     return {
         "current": chosen,
-        "automatic": ready[0]["instance_id"] if chosen is None and len(ready) == 1 else None,
+        #: **不选的话**会用哪一家(只有一家配好时)—— 和当前选没选无关。此前选定之后它变成 None,
+        #: 界面上「不选」那一项就跟着改口成「还没有配好的存储」,明明刚选的那家就配好了。
+        "automatic": ready[0]["instance_id"] if len(ready) == 1 else None,
         "options": options,
     }
 
