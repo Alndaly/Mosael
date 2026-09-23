@@ -101,3 +101,22 @@ it("点这一行的空白处就打开项目;点「…」菜单不会顺带打开
   fireEvent.click(screen.getByRole("button", { name: "projectActions: Older film" }));
   expect(open).toHaveBeenCalledTimes(1);
 });
+
+it("刚建好的项目亮的样子和选中一样:卡片圈封面、列表行铺底,不在整张卡外面再套一圈", async () => {
+  const view = render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
+  fireEvent.click(screen.getByRole("button", { name: "createProject" }));
+  const naming = await screen.findByRole("dialog");
+  fireEvent.click(within(naming).getByRole("button", { name: "createProjectConfirm" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  const created = { id: "brand-new", name: "Brand new", updated_at: "2026-09-24", created_at: "2026-09-24" } as ProjectWithStats;
+  view.rerender(provider(<HomeView workspace={workspace} projects={[created, ...projects]} onOpenProject={vi.fn()} />));
+
+  const card = view.container.querySelector('[data-project-id="brand-new"]')!;
+  expect(card.className).not.toMatch(/\bring-/);
+  expect(within(card as HTMLElement).getByRole("button", { name: "homeOpenEditor: Brand new" })).toHaveClass("ring-2", "ring-primary");
+
+  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  const row = view.container.querySelector('[data-project-id="brand-new"]')!;
+  expect(row.className).not.toMatch(/\bring-/);
+  expect(row.className).toContain("var(--primary)_8%");
+});

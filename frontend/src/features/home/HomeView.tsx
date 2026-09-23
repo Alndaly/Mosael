@@ -325,6 +325,9 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   //: **整行 / 整张卡**都是可点区域(点空白处也算),由外层 article 统一接:平时是打开,选择模式下
   //: 是勾选。里面的封面和标题只是给键盘用的按钮,点击冒泡上去 —— 各处理一次的话,选择模式下点
   //: 封面会勾上又立刻取消,平时会打开两次。
+  //: 刚建好的那个和选中的长得一样(卡片是封面一圈主色,列表行是一层主色底),只是过两秒自己褪掉 ——
+  //: 另起一套「整张卡外面再套一圈」的样式,把标题也圈进去,和选中态不是一个语言。
+  const marked = (selecting && selected) || highlighted;
   const activate = () => (selecting ? onToggle?.(project.id) : onOpen(project.id));
   const open = () => onOpen(project.id);
   // 列表行的背景向外延伸，抵消自身内边距，让封面和操作按钮对齐上方精选卡片。
@@ -338,12 +341,11 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
           "group min-h-0 min-w-0 cursor-pointer",
           featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel",
           //: 列表行选中:整行一层淡淡的主色底,不给每行各套一圈边框 —— 连着选几行时,一圈圈边框摞在一起很乱。
-          selecting && selected && !featured && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",
-          highlighted && "rounded-lg ring-2 ring-primary/60 ring-offset-2 ring-offset-background transition-shadow",
+          marked && !featured && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",
           className,
         )}
       >
-        <button type="button" aria-label={`${selecting ? t("mediaSelectMode") : t("homeOpenEditor")}: ${project.name}`} aria-pressed={selecting ? selected : undefined} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20", selecting && selected && featured && "ring-2 ring-primary")}>
+        <button type="button" aria-label={`${selecting ? t("mediaSelectMode") : t("homeOpenEditor")}: ${project.name}`} aria-pressed={selecting ? selected : undefined} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20", featured && "transition-shadow", marked && featured && "ring-2 ring-primary")}>
           {cover && !failed ? <img src={assetThumbnailUrl(cover)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
           {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
           {selecting && <SelectionCheck selected={selected} />}
