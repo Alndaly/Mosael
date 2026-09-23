@@ -107,6 +107,26 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 
 不要混用不同 commit 的桌面包或插件。开始打包后 main 如有新提交，用原提交的独立 checkout 打包附件，或完整重建新提交；不要让 tag 指向未被测试的代码。
 
+**全部附件最后汇总到仓库根的 `dist/VERSION/`**（`dist/` 已被 git 忽略），连同一份 `SHA256SUMS`：
+
+```bash
+mkdir -p dist/VERSION && cp /path/to/verified/assets/* dist/VERSION/
+(cd dist/VERSION && shasum -a 256 $(ls | grep -v SHA256SUMS) > SHA256SUMS)
+```
+
+这个目录就是这一版交付的全部东西：下面建 Release 传的是它，国内网盘传的也是它。本机留着，以后要核对某一版
+发出去的到底是什么，打开对应版本号的子目录即可。
+
+### 国内下载（百度网盘）
+
+官网给中国大陆的访客指向百度网盘上的**一个文件夹的永久分享**（`website/src/lib/site.ts` 的 `baiduPan`），
+文件夹里按版本号一个子文件夹，和 `dist/` 同构。所以每次发版只做一件事：把 `dist/VERSION/` 整个上传到那个
+分享文件夹下（网盘客户端拖进去即可），**官网的链接不用改**。上传完在网盘里核对文件数和大小与 `SHA256SUMS`
+一致；网盘不支持的话至少核对大小。
+
+`baiduPan.url` 为空时官网不显示国内选项、一律走 GitHub —— 所以换分享链接前先确认新链接能打开，再改
+`site.ts`。
+
 ## 5. 创建草稿并正式发布
 
 安装包验证完成后,**先在本地打 tag 并推上去**,再用那个 tag 建草稿。
@@ -116,7 +136,7 @@ git tag -a vVERSION BUILD_SHA -m 'Mosael vVERSION'
 git push origin vVERSION
 git tag -l vVERSION && git rev-parse vVERSION   # 与 BUILD_SHA 核对
 gh release create vVERSION --draft --title 'Mosael vVERSION' \
-  --notes-file /path/to/release-notes.md /path/to/assets/*
+  --notes-file /path/to/release-notes.md $(ls dist/VERSION/* | grep -v SHA256SUMS)
 gh release view vVERSION --json isDraft,assets,targetCommitish,url
 ```
 
