@@ -233,9 +233,11 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 文件布局可以按领域切片:`app/db/model_slices/*`、`app/api/schemas/*`、`frontend/src/api/domains/*`
 提高 Locality,但切片不是公共 Interface。调用方仍分别只从 `app.db.models`、`app.api.schemas`、
 `@/api/client` 这三个统一装配入口导入,因此继续拆文件不会把布局变化扩散到全仓。
-**三侧都已切完**：53 个 ORM 类分在 `model_slices/` 的 20 个文件里、204 个 schema 分在
-`api/schemas/` 的 24 个文件里，前端 `api/domains/` 同构；两个装配入口现在各只剩三四十行转发，
-里面**不定义任何东西**。`SourceAssetRef` 作为生成域的共享 schema 独立成文件，boards 只依赖该契约
+**三侧都已切完**：ORM 类分在 `model_slices/` 里、schema 分在 `api/schemas/` 里，前端
+`api/domains/` 同构；两个装配入口只剩一串转发，里面**不定义任何东西**。
+（这里曾经写着确切的类数与文件数。每次拆分它们都会多几个，而没有任何东西提醒去改这句话 ——
+一个写在散文里的数字，唯一的作用是在一年后骗人，而"分在若干个文件里"这个信息去掉数字照样成立。
+要数就去数：`ls backend/app/db/model_slices | wc -l`。）`SourceAssetRef` 作为生成域的共享 schema 独立成文件，boards 只依赖该契约
 而不反向依赖装配入口。
 `tests/test_domain_assembly_entries.py` 与 `frontend/src/api/clientAssembly.test.ts` 钉住重导出身份和 ORM
 metadata 注册，防止“文件移动成功、统一入口漏装配”这种只在运行期出现的错误 —— 前者已从逐域手写的
@@ -386,7 +388,7 @@ Gateway 的边界与安全不变量见
 既容易撞限流,也会在对方改接口后变成后台里一直失败的任务。查不到不抛 5xx——"这家不支持"和
 "这次没查成"都是正常结果,统一的 500 错误提示会把两者吞成一句"请求失败"。
 
-**重试是所有 AI 调用共享的**(`domain/ai_retry.RetryingClient`,21 个模块直接 import 它)。它是 `httpx.Client`
+**重试是所有 AI 调用共享的**(`RetryingClient`,凡是发出站请求的那些模块都从它派生)。它是 `httpx.Client`
 子类,在 `send()` 里对 429/5xx/RequestError 做指数退避 + 抖动,因此对调用方完全透明。此前只有对话
 路径有重试,而限流对生图、生视频、TTS、向量化一视同仁。重试上限在设置 → **网络**(和出站代理同一页),进程级生效。
 
@@ -519,7 +521,8 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 
 智能体对话是一个**功能模块**而不是一组通用件:`features/agent/` 里是整套对话壳(气泡、工具调用、
 确认卡、语音、追踪视图),`features/ai-studio/` 只是把它摆进 AI 工作台那一页。此前它散在
-`components/agent/`(57 个文件)和 `features/ai-studio/` 两处,于是 components 反过来依赖 features。
+`components/agent/` 和 `features/ai-studio/` 两处(那个目录现在已经不存在),于是 components
+反过来依赖 features。
 
 ### 关键约定
 

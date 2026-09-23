@@ -71,6 +71,25 @@ def _docs() -> list[pathlib.Path]:
     return [one for one in found if one.exists()]
 
 
+def _ratchets() -> list[pathlib.Path]:
+    """标了 RATCHET 的那些测试文件。
+
+    **棘轮的 docstring 也是文档,而且是信息密度最高的那一批** —— 它写的是"为什么有这条、
+    防的是哪次真实事故、挡不住什么"。它同样没有任何同步机制:实测 `typeScale.test.ts` 的
+    说明写着"四档 text-ui-* 用 clamp() 跟视口联动",而 token 表里是六个、且是固定像素。
+    散文没法测,但**它指到的路径可以** —— 那是这类文字能被机器守住的那一半。
+    """
+    found: list[pathlib.Path] = []
+    for base, pattern, marker in (
+        (ROOT / "backend" / "tests", "test_*.py", "RATCHET = True"),
+        (ROOT / "frontend" / "src", "*.test.ts*", "export const RATCHET = true"),
+    ):
+        for path in sorted(base.rglob(pattern)):
+            if marker in path.read_text(encoding="utf-8"):
+                found.append(path)
+    return found
+
+
 def _ignored_by_git(root: pathlib.Path, paths: list[str]) -> set[str]:
     """`.gitignore` 说「这不是源码」的那些 —— 构建产物在干净检出上本来就不存在。
 
@@ -120,6 +139,29 @@ def test_文档里的代码路径都还在() -> None:
         for path in _missing_code_paths(ROOT, text, top_level=top_level):
             ghosts.append(f"{doc.relative_to(ROOT)} → {path}")
     assert not ghosts, "文档指到了不存在的文件(搬过家或改了名):\n  " + "\n  ".join(ghosts)
+
+
+def test_棘轮说明里指到的路径也都还在() -> None:
+    """棘轮的 docstring 指到的文件必须存在 —— 它比散文更该守得住,因为读它的人正在改那段代码。"""
+    ratchets = _ratchets()
+    # 扫描面站得住:一个棘轮都没认出来的话,下面那句 assert 天然成立。
+    assert len(ratchets) > 40, f"只认出 {len(ratchets)} 条棘轮 —— 标记的写法变了?"
+
+    top_level = _top_level_dirs(ROOT)
+    ghosts: list[str] = []
+    for path in ratchets:
+        # **这份文件自己除外。** 它的说明里逐条列着"搬过家的那三个路径",那是它存在的理由 ——
+        # 要求它们存在,等于要求这条棘轮从没抓到过东西。(第一次跑这条测试时,唯一的三条
+        # 报警正是它自己。)
+        if path.name == "test_docs_do_not_point_at_ghosts.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        # 只看开头那段说明,不看测试体:测试体里出现的路径常常是**故意造的假路径**
+        # (tmp_path 的用例、变异验证的样例),那些本来就不该存在。
+        head = text[: text.find("\nRATCHET") if "\nRATCHET" in text else min(len(text), 4000)]
+        for one in _missing_code_paths(ROOT, head, top_level=top_level):
+            ghosts.append(f"{path.relative_to(ROOT)} → {one}")
+    assert not ghosts, "棘轮说明里指到了不存在的文件:\n  " + "\n  ".join(ghosts)
 
 
 def test_干净检出允许已声明的产物但仍拒绝失效路径(tmp_path: pathlib.Path) -> None:

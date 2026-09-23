@@ -13,7 +13,7 @@
 
 - 交互控件一律用 JSX 上的 Tailwind 类加本地的 shadcn/ui 组件。不写全局类,也不搞共享的
   class 字符串文件 —— 那两样都会变成第二个样式系统。
-- 字号走 `text-ui-*` 四档 token,不写死像素。写死的 `text-[11px]` 不跟屏幕走,而且各写各的;
+- 字号走 `text-ui-*` token(有哪几档由 `design/tokens.css` 说了算),不写死像素。写死的 `text-[11px]` 不跟屏幕走,而且各写各的;
   这一条有棘轮守着(`lib/typeScale.test.ts`),特例列在它的 `ALLOWED` 里。
 - 圆角走 8px 刻度,分段控件是胶囊形,表单填充用 `--field`。不用投影。
 - 按钮高度走 `Button` 的 `size` 档,不在 className 里改高宽。四档:`xs`/`icon-xs` 28px(工具栏)、

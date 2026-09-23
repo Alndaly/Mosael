@@ -5,10 +5,15 @@
  * 以及**各写各的** —— 全应用曾有 8 种相近尺寸(10/10.5/11/11.5/12/12.5/13/13.5)混着用,
  * 同一层级的东西在不同页面不一样大,而那半个像素的差别不是设计决定,是 673 处各自写出来的。
  *
- * 现在四档 `text-ui-*` 用 clamp() 跟视口联动(1280 宽处等于原来的像素值,层级关系不变)。
+ * 现在字号走 `--text-ui-*` 这一组 token(定义在 `design/tokens.css`),用哪几档由那份文件说了算。
  * 这条棘轮拦的是「下一处又写死一个 px」。
  *
- * 少数确实是特例的尺寸(徽标 9px、大标题 22px…)不在这四档里,列在 ALLOWED 里放行 ——
+ * **这段说明本身曾经在说谎**:它写着"四档"且"用 clamp() 跟视口联动",而 token 表里是六个、
+ * 而且是固定像素 —— 棘轮的 docstring 是这套体系里信息密度最高的一批文字,却没有任何东西
+ * 在守它。所以现在这里不写档数:档位从 `tokens.css` 读(见 `tiers()`),一个数写在散文里,
+ * 唯一的作用是在下一次加档时骗人。
+ *
+ * 少数确实是特例的尺寸(徽标 9px、大标题 22px…)不在这组 token 里,列在 ALLOWED 里放行 ——
  * **要放行就写进来**,这样"例外"是一份看得见的清单,而不是散在各文件里的既成事实。
  *
  * **扫描面包括 `.css`。** 第一版只扫 `.ts/.tsx`,理由大概是"写死像素是 Tailwind 的
@@ -27,8 +32,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SRC = join(import.meta.dirname, "..");
+
+/** `design/tokens.css` 里现有的那几档 —— **档位由那份文件说了算**,这里不复述一个数。 */
+function tiers(): string[] {
+  const css = readFileSync(join(SRC, "design", "tokens.css"), "utf8");
+  return [...css.matchAll(/--text-ui-([\w-]+):\s*([\d.]+px)/g)].map((one) => `${one[1]}=${one[2]}`);
+}
 /**
- * 四档之外的特例:徽标/角标(9–10px)、正文与区块标题(13–26px)。
+ * token 之外的特例:徽标/角标(9–10px)、正文与区块标题(13–26px)。
  *
  * 13px 和 10px 是从样式表那一侧扫出来的:token 表里没有对应档(11/12/14/16/18/32),
  * 而把它们就近归一会改变现有的视觉层级 —— 那是一次设计决定,不该顺手夹在一条棘轮的改动里。
@@ -53,7 +64,7 @@ function sourceFiles(dir: string): string[] {
 const HARDCODED = /text-\[([0-9.]+px)\]|font-size:\s*([0-9.]+px)/g;
 
 describe("界面字号", () => {
-  it("四档 token 覆盖的尺寸不许再写死像素", () => {
+  it("token 覆盖的尺寸不许再写死像素", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(SRC)) {
       for (const match of readFileSync(file, "utf8").matchAll(HARDCODED)) {
@@ -62,6 +73,13 @@ describe("界面字号", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("档位从 tokens.css 读,不在说明里复述一个数", () => {
+    // 这段说明曾经写着"四档",而表里是六个 —— 一个写在散文里的数,唯一的作用是下次加档时骗人。
+    const found = tiers();
+    expect(found.length).toBeGreaterThanOrEqual(5);
+    expect(found.join(" ")).toContain("2xs=");
   });
 
   it("扫描面里确实有样式表 —— 别再变成只扫 .ts", () => {

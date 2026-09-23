@@ -146,7 +146,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 宽度恰好为 0 会弹回默认宽而不是收到最小值 —— 拖得越狠反而越宽)。`useEditorPanels.test.ts`
 钉住了这个区分。
 
-**`Editor` 还剩 37 处 useQuery/useMutation**,其中约 30 条是同一件事:对当前序列做一次编辑
+**`Editor` 里那一大把 useQuery/useMutation**,绝大多数是同一件事:对当前序列做一次编辑
 (插入/移动/裁剪/删除/分割/调速/变换…),共用 `applySequence` / `settleWith` /
 `resyncAfterFailedDrag` 三个回调。这是一个内聚的组 —— 该整组抽成 `useSequenceMutations`,
 而不是按"面板编排 / 变换与合成"那样横着切。低优先,顺手做。
@@ -222,7 +222,7 @@ base 归属由 [`contracts/scene-cases.json`](../contracts/scene-cases.json) 双
 
 pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,`createModels()` 会在
 `ModelsImpl` 所在的惰性块初始化之前就跑,于是**每一轮对话**都报 `is not a constructor` ——
-而源码正确、tsc 全绿、822 个后端测试全绿。这类故障只有把产物真正跑起来才看得见。
+而源码正确、tsc 全绿、后端测试全绿。这类故障只有把产物真正跑起来才看得见。
 
 - 从 `@earendil-works/pi-ai/compat` 引入(它在包的 `sideEffects` 白名单里,不会被摇掉),
   不要用 `api/*.lazy`。换入口即绿,是**入口**问题不是版本问题。
