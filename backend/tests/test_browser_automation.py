@@ -81,7 +81,14 @@ def test_run_action_roundtrip_returns_worker_result() -> None:
     assert action["partition"] == f"ephemeral-{sid}"  # 执行器拿到隔离分区
     worker.patch(
         "/api/browser/worker/report",
-        json={"action_id": action["id"], "status": "done", "result": {"value": "Hello"}, "last_url": "https://x.test/"},
+        json={
+            "action_id": action["id"],
+            "status": "done",
+            "result": {"value": "Hello"},
+            "last_url": "https://x.test/",
+            # 认领时拿到的令牌要原样带回(ADR-0002)—— 不带就会被拒,那正是这道闸的作用。
+            "lease_token": action["lease_token"],
+        },
     )
 
     t.join(timeout=5)
@@ -109,7 +116,7 @@ def test_run_action_failure_propagates() -> None:
     action = _claim(worker)
     worker.patch(
         "/api/browser/worker/report",
-        json={"action_id": action["id"], "status": "failed", "error": "元素未找到"},
+        json={"action_id": action["id"], "status": "failed", "error": "元素未找到", "lease_token": action["lease_token"]},
     )
     t.join(timeout=5)
     assert "元素未找到" in holder.get("error", "")
@@ -145,3 +152,94 @@ def test_reconcile_fails_pending_and_closes_sessions() -> None:
         assert db.get(BrowserSession, sid).status == "closed"
         acts = db.scalars(select(BrowserAction).where(BrowserAction.session_id == sid)).all()
         assert acts and all(a.status == "failed" for a in acts)
+
+
+# ---------- ADR-0002:这条通道此前一条都没落 ----------
+
+
+def test_认领带回租约三件套() -> None:
+    """认领要告诉执行器:这次的令牌是什么、什么时候到期。
+
+    此前 `ClaimRequest.worker` 收下了却**一次都没用过**,表上也没有对应的列 —— 于是
+    "这个执行器还在吗""这条回报是不是它自己领的那条"在这条通道上都没有答案。
+    """
+    _, ws = _workspace()
+    worker = worker_client()
+    with SessionLocal() as db:
+        sid = browser.open_session(db, workspace_id=ws).id
+        db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
+        db.commit()
+
+    action = _claim(worker)
+    assert action["lease_token"] and action["lease_expires_at"]
+    with SessionLocal() as db:
+        row = db.get(BrowserAction, action["id"])
+        assert row.lease_worker == "test"
+        assert row.lease_token == action["lease_token"]
+        assert row.lease_expires_at is not None
+
+
+def test_令牌对不上的回报被拒() -> None:
+    """一个失联又活过来的执行器,不该把结果写在**新执行器正在干的那一份**上。"""
+    _, ws = _workspace()
+    worker = worker_client()
+    with SessionLocal() as db:
+        sid = browser.open_session(db, workspace_id=ws).id
+        db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
+        db.commit()
+
+    action = _claim(worker)
+    refused = worker.patch(
+        "/api/browser/worker/report",
+        json={"action_id": action["id"], "status": "done", "result": {"v": 1}, "lease_token": "someone-else"},
+    )
+    assert refused.status_code == 422
+    with SessionLocal() as db:
+        assert db.get(BrowserAction, action["id"]).status == "running"  # 没被写坏
+
+
+def test_心跳续约_续不上的要说出来() -> None:
+    """心跳的作用是**带着 claims 来续约**,而不是只说一句"我还在"。
+
+    续不上只有三种可能:不是你领的、令牌不对、已经判过期 —— 三种都不该让那个执行器继续写结果。
+    """
+    _, ws = _workspace()
+    worker = worker_client()
+    with SessionLocal() as db:
+        sid = browser.open_session(db, workspace_id=ws).id
+        db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
+        db.commit()
+
+    action = _claim(worker)
+    body = {"worker": "test", "claims": [{"action_id": action["id"], "lease_token": action["lease_token"]}]}
+    assert worker.post("/api/browser/worker/heartbeat", json=body).json()["renewed"] == [action["id"]]
+
+    # 换一个身份来续同一条:续不上。
+    other = {"worker": "another", "claims": body["claims"]}
+    assert worker.post("/api/browser/worker/heartbeat", json=other).json()["renewed"] == []
+
+
+def test_租约到点的动作判失败_可重试() -> None:
+    """执行器崩了/被杀了/网断了 —— 动作不会自己回来,而调用方只会等到一个"执行器未响应"。"""
+    from datetime import timedelta
+
+    from app.db.models import now
+
+    _, ws = _workspace()
+    worker = worker_client()
+    with SessionLocal() as db:
+        sid = browser.open_session(db, workspace_id=ws).id
+        db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
+        db.commit()
+
+    action = _claim(worker)
+    with SessionLocal() as db:
+        row = db.get(BrowserAction, action["id"])
+        row.lease_expires_at = now() - timedelta(seconds=1)
+        db.commit()
+
+    with SessionLocal() as db:
+        assert browser.expire_action_leases(db) == 1
+        row = db.get(BrowserAction, action["id"])
+        assert row.status == "failed"
+        assert "租约" in (row.error or "")

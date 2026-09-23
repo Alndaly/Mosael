@@ -64,5 +64,15 @@ class BrowserAction(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: 认领它的执行器(ADR-0002 的三件套之一)。**必须跨重启稳定** —— 执行器重启后第一拍要
+    #: 认出自己那些没跑完的动作并收回来,那是这个判据存在的全部理由。此前这一栏根本不存在:
+    #: `claim_next_action(worker=...)` 收下了这个参数却**一次都没用过**,客户端发的也是字面量
+    #: "browser" 而不是身份 —— 于是"这个执行器还在吗"这个问题在这条通道上没有答案。
+    lease_worker: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 这一次认领的凭据。回报时必须原样带回:老执行器的迟到回报会被它挡下来,
+    #: 而不是覆盖掉新执行器正在干的那一份。
+    lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 租约到点 = 认领它的那个执行器不在了。到点的动作判失败,可重试。
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

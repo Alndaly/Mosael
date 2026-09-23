@@ -900,6 +900,37 @@ def _migrate_client_version() -> None:
             conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN last_seen_at DATETIME"))
 
 
+def _migrate_browser_action_leases() -> None:
+    """`browser_actions` 补 ADR-0002 的租约三件套(lease_worker / lease_token / lease_expires_at)。
+
+    这条通道此前一条都没落:认领不记谁领的、回报不校验令牌、心跳只说"我还在"。单执行器下
+    工作正常,而多执行器或执行器崩溃时没有任何东西保证正确 —— 隔壁两条通道都有。
+
+    老行(升级那一刻还停在 queued/running 的)**直接判失败**:它们是上一个进程留下的,
+    执行器视图早随那个进程消失了,留着只会让调用方一直等到超时。不给它们补一个空租约 ——
+    那等于在读路径上留一条"租约为空怎么办"的永久分支(见 jobs.expire_worker_leases 里记的
+    那次教训)。
+    """
+    inspector = inspect(engine)
+    if "browser_actions" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(browser_actions)"))}
+        for name, ddl in (
+            ("lease_worker", "VARCHAR(64)"),
+            ("lease_token", "VARCHAR(64)"),
+            ("lease_expires_at", "DATETIME"),
+        ):
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE browser_actions ADD COLUMN {name} {ddl}"))
+        conn.execute(
+            text(
+                "UPDATE browser_actions SET status = 'failed', error = '后端升级导致中断' "
+                "WHERE status IN ('queued', 'running')"
+            )
+        )
+
+
 def _drop_clip_linked_clip_id() -> None:
     """`clips` 去掉 `linked_clip_id` —— 这一列在**每一台机器上都是 null**。
 
@@ -2421,6 +2452,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_client_surface,
                 _drop_publish_account_profile_name,
                 _drop_clip_linked_clip_id,
+                _migrate_browser_action_leases,
                 _migrate_job_actor,
                 _migrate_provider_credentials,
                 _drop_shared_credentials,

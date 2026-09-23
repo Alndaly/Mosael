@@ -21,6 +21,7 @@
   "migrate-auth-session-expiry": "d4d2606528ce1a4e",
   "migrate-board-canvas-state": "2504b622f26face3",
   "migrate-board-revision": "b3c8bd07a61449c4",
+  "migrate-browser-action-leases": "db82d8419ae90156",
   "migrate-browser-boolean-options": "8656267a8529d045",
   "migrate-browser-pool": "ba842907261bd6f7",
   "migrate-called-workflows-declare-their-output": "6a833294a868356a",

@@ -44,7 +44,10 @@ async function loop(gen: number): Promise<void> {
   while (gen === generation) {
     let didWork = false;
     try {
-      await browserBackend.heartbeat();
+      // 心跳带着手上那些动作去续约,并把**没续上**的还回来 —— 那几条已经不归我了
+      // (被判过期、或被别的执行器接走),接着干只会盖掉别人正在干的那一份。
+      const lost = await browserBackend.heartbeat();
+      for (const id of lost) plog("browser lease lost, abandoning action:", id);
       const action = await browserBackend.claim();
       if (action && gen === generation) {
         didWork = true;

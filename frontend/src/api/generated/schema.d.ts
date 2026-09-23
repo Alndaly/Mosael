@@ -595,12 +595,13 @@ export interface paths {
         put?: never;
         /**
          * Heartbeat
-         * @description 执行器报「我还在」。
+         * @description 执行器报「我还在」,并**给手上那些动作续约**。
          *
-         *     **这里不记任何东西。** 曾经有一个 `_HEARTBEATS` 字典写进去 —— 全仓零个读者,而它按
-         *     worker 名字无限长。租约续期走的是任务行上的 lease,不看这个字典;而"执行器在不在"
-         *     这个问题在发布那条链上由 `domain/publish/worker.worker_online()` 回答(有人读)。
-         *     留着这条路由是因为执行器确实会打它,而 404 会被它当成后端出问题。
+         *     返回 `renewed`:真的续上了的那些 id。没续上的,执行器那边该停手 —— 它手上那条已经被
+         *     判过期、或者被别人接走了,再写结果只会盖掉别人正在干的那一份。
+         *
+         *     这里不再记任何进程内状态。曾经有一个 `_HEARTBEATS` 字典写进去,全仓零个读者,而它按
+         *     worker 名字无限长;"这个执行器还在吗"的答案现在写在**动作行的租约上**,和另外两条通道一样。
          */
         post: operations["heartbeat_api_browser_worker_heartbeat_post"];
         delete?: never;
@@ -8420,13 +8421,6 @@ export interface components {
                 number
             ] | null;
         };
-        /** LeaseClaim */
-        LeaseClaim: {
-            /** Job Id */
-            job_id: string;
-            /** Lease Token */
-            lease_token: string;
-        };
         /** LeaseOut */
         LeaseOut: {
             /** Lease */
@@ -12091,6 +12085,15 @@ export interface components {
              * @default
              */
             worker: string;
+            /** Claims */
+            claims?: components["schemas"]["app__api__routes__browser_worker__LeaseClaim"][];
+        };
+        /** LeaseClaim */
+        app__api__routes__browser_worker__LeaseClaim: {
+            /** Action Id */
+            action_id: string;
+            /** Lease Token */
+            lease_token: string;
         };
         /** ReportRequest */
         app__api__routes__browser_worker__ReportRequest: {
@@ -12106,6 +12109,8 @@ export interface components {
             error?: string | null;
             /** Last Url */
             last_url?: string | null;
+            /** Lease Token */
+            lease_token?: string | null;
         };
         /** ClaimRequest */
         app__api__routes__job_worker__ClaimRequest: {
@@ -12120,11 +12125,18 @@ export interface components {
         /** HeartbeatRequest */
         app__api__routes__job_worker__HeartbeatRequest: {
             /** Claims */
-            claims?: components["schemas"]["LeaseClaim"][];
+            claims?: components["schemas"]["app__api__routes__job_worker__LeaseClaim"][];
             /** Worker */
             worker: string;
             /** Kinds */
             kinds?: string[];
+        };
+        /** LeaseClaim */
+        app__api__routes__job_worker__LeaseClaim: {
+            /** Job Id */
+            job_id: string;
+            /** Lease Token */
+            lease_token: string;
         };
         /** ReportRequest */
         app__api__routes__job_worker__ReportRequest: {

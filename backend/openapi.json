@@ -1318,7 +1318,7 @@
           "browser-worker"
         ],
         "summary": "Heartbeat",
-        "description": "执行器报「我还在」。\n\n**这里不记任何东西。** 曾经有一个 `_HEARTBEATS` 字典写进去 —— 全仓零个读者,而它按\nworker 名字无限长。租约续期走的是任务行上的 lease,不看这个字典;而\"执行器在不在\"\n这个问题在发布那条链上由 `domain/publish/worker.worker_online()` 回答(有人读)。\n留着这条路由是因为执行器确实会打它,而 404 会被它当成后端出问题。",
+        "description": "执行器报「我还在」,并**给手上那些动作续约**。\n\n返回 `renewed`:真的续上了的那些 id。没续上的,执行器那边该停手 —— 它手上那条已经被\n判过期、或者被别人接走了,再写结果只会盖掉别人正在干的那一份。\n\n这里不再记任何进程内状态。曾经有一个 `_HEARTBEATS` 字典写进去,全仓零个读者,而它按\nworker 名字无限长;\"这个执行器还在吗\"的答案现在写在**动作行的租约上**,和另外两条通道一样。",
         "operationId": "heartbeat_api_browser_worker_heartbeat_post",
         "requestBody": {
           "content": {
@@ -23635,26 +23635,6 @@
         "title": "Keyframe",
         "description": "时间轨上的一个时刻。**相机和物体共用一种形状**,按各自用得上的字段填。\n\n相机用 `position` + `target` + `fov`:瞄一个点比给欧拉角好摆(镜头总是\"看着什么\"),\n而且 Blender 往返本来就是按这个约定烘焙的。物体用 `position` + `rotation` + `scale`。\n没填的字段表示\"这一档不控制它\"。\n\n共用一种形状而不是分两个类,是因为**时间轴上的插值逻辑只该有一份**:分开写的话,\n\"缓动怎么算\"\"端点怎么取\"就有两个实现,而它们必然会分岔。"
       },
-      "LeaseClaim": {
-        "properties": {
-          "job_id": {
-            "type": "string",
-            "title": "Job Id"
-          },
-          "lease_token": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Lease Token"
-          }
-        },
-        "type": "object",
-        "required": [
-          "job_id",
-          "lease_token"
-        ],
-        "title": "LeaseClaim"
-      },
       "LeaseOut": {
         "properties": {
           "lease": {
@@ -31481,6 +31461,7 @@
         "properties": {
           "worker": {
             "type": "string",
+            "maxLength": 64,
             "title": "Worker",
             "default": ""
           }
@@ -31492,12 +31473,41 @@
         "properties": {
           "worker": {
             "type": "string",
+            "maxLength": 64,
             "title": "Worker",
             "default": ""
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/app__api__routes__browser_worker__LeaseClaim"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Claims"
           }
         },
         "type": "object",
         "title": "HeartbeatRequest"
+      },
+      "app__api__routes__browser_worker__LeaseClaim": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "lease_token": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Lease Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "lease_token"
+        ],
+        "title": "LeaseClaim"
       },
       "app__api__routes__browser_worker__ReportRequest": {
         "properties": {
@@ -31542,6 +31552,18 @@
               }
             ],
             "title": "Last Url"
+          },
+          "lease_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Token"
           }
         },
         "type": "object",
@@ -31574,7 +31596,7 @@
         "properties": {
           "claims": {
             "items": {
-              "$ref": "#/components/schemas/LeaseClaim"
+              "$ref": "#/components/schemas/app__api__routes__job_worker__LeaseClaim"
             },
             "type": "array",
             "maxItems": 1000,
@@ -31598,6 +31620,26 @@
           "worker"
         ],
         "title": "HeartbeatRequest"
+      },
+      "app__api__routes__job_worker__LeaseClaim": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "lease_token": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Lease Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "lease_token"
+        ],
+        "title": "LeaseClaim"
       },
       "app__api__routes__job_worker__ReportRequest": {
         "properties": {

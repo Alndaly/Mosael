@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import re
 import time
+import uuid
+from datetime import timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -29,6 +31,13 @@ ACTION_TIMEOUT_SECONDS = 120.0
 _ACTION_POLL_SECONDS = 0.2
 # worker 回报间隔外的兜底:running 动作超过这个时长没落终态,视为执行器掉线,回收。
 STALE_ACTION_SECONDS = 5 * 60
+
+#: 认领一个动作之后租约活多久。**和 ADR-0002 给任务通道定的是同一个数** —— 它们是同一条
+#: 契约的两个实现,分头挑一个数就等于把契约写成了两份。执行器每 20 秒心跳一次来续。
+#:
+#: 这条通道此前**一条都没落**:没有租约、没有 worker 身份、心跳只报在线。今天单执行器下它
+#: 工作正常,问题是没有任何东西能在多执行器或执行器崩溃时保证正确 —— 而隔壁两条通道都有。
+WORKER_LEASE_SECONDS = 60
 
 # 文档用途;worker 是动作合法性的最终裁判。
 KNOWN_ACTIONS = (
@@ -270,18 +279,76 @@ def run_action(
 # ---------- worker 侧:claim / report ----------
 
 
+def expire_action_leases(db: Session) -> int:
+    """租约到点的动作判失败。**判据只有一条:到点了。**
+
+    到点意味着认领它的那个执行器不再心跳 —— 它崩了、被杀了、或者网断了。动作停在 running
+    上不会自己回来,而调用方那边只会等到一个"执行器未响应"的超时,看不出是谁的问题。
+    """
+    stamp = now()
+    stale = db.scalars(
+        select(BrowserAction).where(
+            BrowserAction.status == "running",
+            BrowserAction.lease_expires_at.is_not(None),
+            BrowserAction.lease_expires_at <= stamp,
+        )
+    ).all()
+    for act in stale:
+        act.status = "failed"
+        act.error = "执行器失联(租约到期)"
+    if stale:
+        db.commit()
+    return len(stale)
+
+
+def renew_action_leases(db: Session, *, worker: str, claims: list[dict[str, str]]) -> list[str]:
+    """心跳续约。返回**真的续上了**的那些动作 id —— 没续上的,执行器那边该停手。
+
+    续不上只有三种可能:这条不是你认领的、令牌不对、或者它已经被判过期了。三种都不该让那个
+    执行器继续在一个别人正在干的动作上写结果。
+    """
+    expire_action_leases(db)
+    stamp = now()
+    renewed: list[str] = []
+    for claim in claims:
+        count = db.execute(
+            update(BrowserAction)
+            .where(
+                BrowserAction.id == claim.get("action_id"),
+                BrowserAction.status == "running",
+                BrowserAction.lease_worker == worker,
+                BrowserAction.lease_token == claim.get("lease_token"),
+                BrowserAction.lease_expires_at > stamp,
+            )
+            .values(lease_expires_at=stamp + timedelta(seconds=WORKER_LEASE_SECONDS))
+        ).rowcount
+        if count:
+            renewed.append(str(claim.get("action_id")))
+    db.commit()
+    return renewed
+
+
 def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
-    """认领最老的 queued 动作,CAS 翻 running,带上会话分区信息返回给执行器。"""
+    """认领最老的 queued 动作,CAS 翻 running,带上会话分区信息返回给执行器。
+
+    **认领时落租约三件套**(ADR-0002):谁领的、这次的令牌、什么时候到期。此前 `worker` 这个
+    参数收下了却一次都没用过,表里也没有对应的列 —— 于是"这个执行器还在吗""这条回报是不是
+    它自己领的那条"在这条通道上都没有答案。
+    """
+    # 先把上一个执行器丢下的收掉:它们本该被这一次认领接走,而不是一直占着 running。
+    expire_action_leases(db)
     while True:
         act = db.scalars(
             select(BrowserAction).where(BrowserAction.status == "queued").order_by(BrowserAction.created_at).limit(1)
         ).first()
         if act is None:
             return None
+        token = uuid.uuid4().hex
+        expires = now() + timedelta(seconds=WORKER_LEASE_SECONDS)
         changed = db.execute(
             update(BrowserAction)
             .where(BrowserAction.id == act.id, BrowserAction.status == "queued")
-            .values(status="running")
+            .values(status="running", lease_worker=worker or None, lease_token=token, lease_expires_at=expires)
         ).rowcount
         db.commit()
         if not changed:
@@ -294,6 +361,8 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
             "kind": session.kind if session else "ephemeral",
             "action": act.action,
             "args": dict(act.args or {}),
+            "lease_token": token,
+            "lease_expires_at": expires.isoformat() + "Z",
         }
 
 
@@ -305,8 +374,14 @@ def report_action(
     result: dict | None = None,
     error: str | None = None,
     last_url: str | None = None,
+    lease_token: str | None = None,
 ) -> BrowserAction:
-    """执行器回报动作结果。终态幂等:不覆盖已 done/failed 的动作。"""
+    """执行器回报动作结果。终态幂等:不覆盖已 done/failed 的动作。
+
+    **回报要带上认领时拿到的令牌。** 不带或者对不上就拒绝:那意味着这条动作已经不是你的了
+    (租约过期后被别人接走,或者你是重启前的那个自己)。没有这道检查时,一个失联又活过来的
+    执行器会把结果写在**新执行器正在干的那一份**上,而两边都不报错。
+    """
     if status not in ("running", "done", "failed"):
         raise ValueError("非法动作状态")
     act = db.get(BrowserAction, action_id)
@@ -314,7 +389,12 @@ def report_action(
         raise ValueError("动作不存在")
     if act.status in ("done", "failed"):
         return act
+    if act.lease_token and lease_token != act.lease_token:
+        raise ValueError("租约令牌不匹配:这条动作已经不归你了")
     act.status = status
+    if status == "running":
+        # 回报本身也算一次心跳 —— 正在干活的证据比一个单独的心跳帧更硬。
+        act.lease_expires_at = now() + timedelta(seconds=WORKER_LEASE_SECONDS)
     if result is not None:
         act.result = result
     if error is not None:
