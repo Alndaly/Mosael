@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 #: 探测时最多列多少条。频道链接能有上万条,全列出来对界面和用户都没有意义 ——
 #: 而且 yt-dlp 要为此翻很多页。想要更多的,让他把链接换成更具体的那一个。
 MAX_ENTRIES = 200
+
+#: 浅层条目缺标题时,同时补几条的元数据。补一条约 0.6 s(实测 B 站分 P),200 条串行要两分钟;
+#: 开太多又容易被站点当成刷接口(B 站回 412)。
+RESOLVE_WORKERS = 6
 
 #: 下载单条的超时。长视频 + 慢网络是常态,给得宽;超时不是"下得慢",是"这条再也不会回来"。
 DOWNLOAD_TIMEOUT_SECONDS = 60 * 60
@@ -71,7 +76,18 @@ _REMOTE_COMPONENTS = ["ejs:github"]
 
 
 class YtdlpError(RuntimeError):
-    pass
+    """取不到的原因,带文案 key(见 core/i18n 的 `urlImportErr_*`)。
+
+    领域里不拼句子:出口(路由)按请求方的语言翻 `key` + `params`;`str(exc)` 是缺省语言的那句,
+    给日志和任务失败清单用。原因怎么分见 `classify`。
+    """
+
+    def __init__(self, key: str, **params: object) -> None:
+        from app.core.i18n import DEFAULT_LOCALE, t
+
+        self.key = key
+        self.params = params
+        super().__init__(t(key, DEFAULT_LOCALE, **params))
 
 
 @lru_cache(maxsize=1)
@@ -145,22 +161,59 @@ def _heights(raw: dict[str, Any]) -> tuple[int, ...]:
     return tuple(sorted(seen, reverse=True))
 
 
-def _entry(raw: dict[str, Any], fallback_url: str) -> RemoteEntry:
+def _entry(raw: dict[str, Any], fallback_url: str, *, within: str = "") -> RemoteEntry:
+    """`within`:这一条所在列表的标题。条目标题以它开头时去掉这段 —— 列表标题已经在表头,
+    而 B 站分 P 的标题是「合集标题 p02 分P名」:合集标题动辄七八十个字,整段照搬的话每行
+    截断后只剩同一段开头,真正区分各条的分 P 名全被挤到看不见的地方。"""
     video_id = str(raw.get("id") or "")
     url = str(raw.get("webpage_url") or raw.get("url") or "")
     # extract_flat 的条目常常只给 id;拼回标准地址,下载那一步才有东西可用。
     if not url.startswith("http") and video_id:
         url = f"https://www.youtube.com/watch?v={video_id}"
+    title = str(raw.get("title") or "").strip()
+    if within and title.startswith(within):
+        title = title[len(within):].strip(" -–—_|:：·") or title
     duration = raw.get("duration")
     return RemoteEntry(
         id=video_id,
         url=url or fallback_url,
-        title=str(raw.get("title") or video_id or "未命名"),
+        title=title or video_id or "未命名",
         duration=float(duration) if isinstance(duration, (int, float)) else None,
         uploader=str(raw.get("uploader") or raw.get("channel") or ""),
         thumbnail=str(raw.get("thumbnail") or ""),
         heights=_heights(raw),
     )
+
+
+def _fill_untitled(yt_dlp: Any, options: dict[str, Any], entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """浅层条目没带标题的,逐条补一次元数据。
+
+    有些站点的播放列表只给每条一个地址:B 站多 P 视频的浅层条目就只有
+    `{"_type": "url", "url": ".../BV…?p=2"}` —— 没有 id、没有标题,分 P 名明明在它自己取到的
+    分 P 表里,却没放进条目。界面于是列出 N 行「未命名」,下载下来的素材也分不出谁是谁。
+
+    补的方式与站点无关:对那一条再问一次 yt-dlp,`process=False` 只跑站点解析、不挑格式、
+    不碰媒体流。有标题的条目(YouTube 列表等)一条也不多问,所以这一步只在需要时才花时间。
+    某条补不上就原样留着 —— 列表照样能用,只是那一条没名字,不该因为它让整次探测失败。
+    """
+    missing = [index for index, raw in enumerate(entries) if not raw.get("title") and raw.get("url")]
+    if not missing:
+        return entries
+
+    def resolve(raw: dict[str, Any]) -> dict[str, Any]:
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(str(raw["url"]), download=False, process=False)
+        except Exception:  # noqa: BLE001 — 补不上的那一条保持原样,不拖垮整份清单
+            logger.debug("yt-dlp 补不上条目 %s 的元数据", raw.get("url"), exc_info=True)
+            return raw
+        return {**raw, **info} if isinstance(info, dict) else raw
+
+    filled = list(entries)
+    with ThreadPoolExecutor(max_workers=min(RESOLVE_WORKERS, len(missing))) as pool:
+        for index, info in zip(missing, pool.map(resolve, [entries[index] for index in missing])):
+            filled[index] = info
+    return filled
 
 
 def probe(url: str, *, cookie_file: Path | None = None, start: int = 1) -> RemoteListing:
@@ -192,16 +245,17 @@ def probe(url: str, *, cookie_file: Path | None = None, start: int = 1) -> Remot
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as exc:  # noqa: BLE001 — yt-dlp 的异常层次很深,对调用方只有"取不到"
-        raise YtdlpError(_explain(exc)) from exc
+        raise classify(exc) from exc
     if not info:
-        raise YtdlpError("这个链接取不到任何内容")
+        raise YtdlpError("urlImportErr_noMedia")
 
     entries = [entry for entry in (info.get("entries") or []) if isinstance(entry, dict)]
     if entries:
+        title = str(info.get("title") or "")
         return RemoteListing(
-            title=str(info.get("title") or ""),
+            title=title,
             is_playlist=True,
-            entries=[_entry(raw, url) for raw in entries],
+            entries=[_entry(raw, url, within=title) for raw in _fill_untitled(yt_dlp, options, entries)],
             truncated=len(entries) >= MAX_ENTRIES,
             start=max(1, start),
         )
@@ -276,7 +330,7 @@ def download(
             info = ydl.extract_info(url, download=True)
             path = Path(ydl.prepare_filename(info))
     except Exception as exc:  # noqa: BLE001
-        raise YtdlpError(_explain(exc)) from exc
+        raise classify(exc) from exc
 
     if path.is_file():
         return path
@@ -285,7 +339,7 @@ def download(
     for candidate in sorted(target_dir.glob(f"{glob_escape(stem)}.*")):
         if candidate.is_file():
             return candidate
-    raise YtdlpError("下载报成功,但没找到落地的文件")
+    raise YtdlpError("urlImportErr_fileMissing")
 
 
 def glob_escape(text: str) -> str:
@@ -293,40 +347,89 @@ def glob_escape(text: str) -> str:
     return "".join("[" + char + "]" if char in "[]*?" else char for char in text)
 
 
-def _explain(exc: Exception) -> str:
-    """把 yt-dlp 的报错变成一句能行动的话。
+#: 各类原因在 yt-dlp 报错原文里的说法(小写)。**顺序就是判定顺序**,先中先得:
+#: 「Private video. Sign in if you've been granted access」同时带着「private」和「sign in」,
+#: 它首先是一条私密内容,登录只是有权限的人才有用的补救。
+_REASONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("urlImportErr_unsupported", ("unsupported url", "is not a valid url")),
+    ("urlImportErr_unavailable", ("private video", "this video is private", "is private")),
+    (
+        "urlImportErr_loginRequired",
+        (
+            "sign in", "log in", "login required", "registered users", "--cookies", "not a bot",
+            "members-only", "members only", "premium", "requires payment", "purchase", "subscription",
+        ),
+    ),
+    (
+        "urlImportErr_geoBlocked",
+        ("geo restrict", "available in your country", "available from your location", "ip address is blocked"),
+    ),
+    ("urlImportErr_notFound", ("http error 404", "http error 410")),
+    ("urlImportErr_unavailable", ("unavailable", "removed", "deleted", "does not exist", "taken down")),
+    ("urlImportErr_forbidden", ("http error 403", "http error 412", "forbidden", "precondition failed")),
+    ("urlImportErr_formatMismatch", ("requested format is not available",)),
+    ("urlImportErr_drm", ("drm protected",)),
+    ("urlImportErr_noMedia", ("no video formats", "no formats found", "no video", "no media", "only images are available")),
+    ("urlImportErr_mergeFailed", ("ffmpeg exited", "postprocessing: conversion failed")),
+    (
+        "urlImportErr_network",
+        (
+            "timed out", "timeout", "connection refused", "connection reset", "connection aborted",
+            "unable to connect", "failed to resolve", "name or service not known", "nodename nor servname",
+            "temporary failure in name resolution", "network is unreachable", "remote end closed",
+            "ssl:", "proxy error", "cannot connect to proxy",
+        ),
+    ),
+)
 
-    它的原始信息里混着大量 URL、格式 id 和 traceback;用户要的是"为什么不行、我能做什么"。
+
+def _causes(exc: BaseException) -> list[BaseException]:
+    """yt-dlp 把真正的原因包了好几层:`DownloadError.exc_info` → `ExtractorError.cause` → `HTTPError`。
+    只看最外层的话,类型永远是 DownloadError,原文里也只剩一句转述。"""
+    chain: list[BaseException] = []
+    pending: list[object] = [exc]
+    while pending:
+        current = pending.pop(0)
+        if not isinstance(current, BaseException) or any(current is seen for seen in chain):
+            continue
+        chain.append(current)
+        exc_info = getattr(current, "exc_info", None)
+        if isinstance(exc_info, tuple) and len(exc_info) > 1:
+            pending.append(exc_info[1])
+        pending.extend((getattr(current, "cause", None), current.__cause__, current.__context__))
+    return chain
+
+
+def classify(exc: BaseException) -> YtdlpError:
+    """把 yt-dlp 的报错归成一个原因 —— 每个原因对应一句能照着做的话。
+
+    **「不支持」和「没有」必须分开。** 站点不认识(没有专门的解析器、通用解析器在页面里也没找到
+    视频)时 yt-dlp 抛 `UnsupportedError`;站点认识但这一条确实没有媒体流时报的是
+    「No video formats found」。两者曾共用一句「这个链接里没有可下载的视频」,于是不支持的网站
+    被说成里面没有视频,而要登录、被删除、被地区限制的那些又各自落进别的桶或兜底。
+
+    先按**异常类型**判(不受措辞改动影响),再按原文里的说法判。认不出来的给原文最后一行 ——
+    yt-dlp 把结论放在最后,而它总比一句空泛的「失败了」有用。
     """
-    text = str(exc)
-    lowered = text.lower()
-    if "private" in lowered or "members-only" in lowered:
-        return "这条内容是私有的 / 会员专属,没有登录态就取不到。"
-    if "sign in" in lowered or "cookies" in lowered or "bot" in lowered:
-        return "站点要求登录或人机验证才能取这条内容。"
-    if "ip address is blocked" in lowered or "geo restricted" in lowered or "not available in your country" in lowered:
-        return "当前网络出口被站点或地区策略限制。请为浏览器档案配置可用代理后重试。"
-    if "http error 403" in lowered or "http error 412" in lowered or "forbidden" in lowered or "precondition failed" in lowered:
-        return "站点拒绝了匿名取流。请选择已登录的浏览器档案，或为档案配置可用代理后重试。"
-    if "requested format is not available" in lowered:
-        return (
-            "这个站点没有给出可下载的格式。多半是登录态与取流方式对不上 —— "
-            "换一个登录身份、或者先不选登录身份再试一次。"
-        )
-    if "unsupported url" in lowered or "no video" in lowered:
-        return "这个链接里没有可下载的视频。"
-    if "unavailable" in lowered or "removed" in lowered:
-        return "这条内容已下架或在当前地区不可用。"
-    if "http error 404" in lowered or "http error 410" in lowered:
-        # 最常见的一种,却一直漏在兜底里 —— 用户看到的是
-        # 「ERROR: [BiliBili] 1xx…: Unable to download webpage: HTTP Error 404: Not Found」。
-        # 链接打错和内容被删对用户是同一件事:这个地址现在指不到东西。
-        return "这个地址取不到内容(404)。链接可能打错了,或者这条内容已经被删除。"
-    if "ffmpeg exited" in lowered:
-        # 视频和声音是两条流,合并由 ffmpeg 做。它失败时报的是一个退出码,对用户毫无意义。
-        return "音视频合并失败(ffmpeg)。改成「只要音频」通常能绕开;若一直如此,可能是这条流的格式特殊。"
-    if "timed out" in lowered or "timeout" in lowered:
-        return "连接超时 —— 网络到这个站点不通,或者需要代理。"
-    # 兜底:取最后一行(yt-dlp 把结论放在最后),砍到能读的长度。
-    last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), text)
-    return last[:300]
+    from yt_dlp.networking.exceptions import HTTPError, TransportError
+    from yt_dlp.utils import GeoRestrictedError, UnsupportedError
+
+    chain = _causes(exc)
+    if any(isinstance(cause, UnsupportedError) for cause in chain):
+        return YtdlpError("urlImportErr_unsupported")
+    if any(isinstance(cause, GeoRestrictedError) for cause in chain):
+        return YtdlpError("urlImportErr_geoBlocked")
+    text = "\n".join(str(cause) for cause in chain).lower()
+    for key, phrases in _REASONS:
+        if any(phrase in text for phrase in phrases):
+            return YtdlpError(key)
+    statuses = {cause.status for cause in chain if isinstance(cause, HTTPError)}
+    if statuses & {404, 410}:
+        return YtdlpError("urlImportErr_notFound")
+    if statuses & {401, 403, 412}:
+        return YtdlpError("urlImportErr_forbidden")
+    if any(isinstance(cause, TransportError) for cause in chain):
+        return YtdlpError("urlImportErr_network")
+    raw = str(exc)
+    last = next((line.strip() for line in reversed(raw.splitlines()) if line.strip()), raw)
+    return YtdlpError("urlImportErr_other", detail=last[:300])

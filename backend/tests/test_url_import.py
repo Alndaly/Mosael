@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 import pytest
+from yt_dlp.networking.exceptions import TransportError
+from yt_dlp.utils import DownloadError, ExtractorError, GeoRestrictedError, UnsupportedError
 
 from app.domain.assets.from_url import MAX_ITEMS, UrlImportError, start_url_import
 from app.domain.assets.source_url import source_url_key
@@ -80,22 +82,96 @@ def test_only_video_or_audio() -> None:
             )
 
 
-def test_error_messages_say_what_to_do() -> None:
-    """yt-dlp 的原始报错里混着 URL、格式 id 和 traceback。用户要的是「为什么不行、我能做什么」。"""
-    assert "私有" in ytdlp._explain(Exception("ERROR: Private video. Sign in if you've been granted access"))
-    assert "下架" in ytdlp._explain(Exception("ERROR: Video unavailable"))
-    assert "超时" in ytdlp._explain(Exception("ERROR: The read operation timed out"))
-    assert "浏览器档案" in ytdlp._explain(Exception("HTTP Error 412: Precondition Failed"))
-    assert "代理" in ytdlp._explain(Exception("Your IP address is blocked from accessing this post"))
-    # 404 是最常见的一种(链接打错、内容被删),却一直漏在兜底里 —— 用户看到的是
-    # 「ERROR: [BiliBili] 1xx…: Unable to download webpage: HTTP Error 404: Not Found」。
-    explained = ytdlp._explain(Exception(
-        "ERROR: [BiliBili] 1xx411c7X: Unable to download webpage: HTTP Error 404: Not Found"
-    ))
-    assert "404" in explained and "删除" in explained
-    assert "Unable to download webpage" not in explained
-    # 认不出来的照样要给一句话,而不是空串。
-    assert ytdlp._explain(Exception("something else entirely")).strip()
+def _download_error(inner: BaseException) -> BaseException:
+    """yt-dlp 抛给调用方的形状:外面一层 DownloadError,真正的原因藏在 exc_info 里。"""
+    return DownloadError(f"ERROR: {inner}", (type(inner), inner, None))
+
+
+class Test取不到时说清是哪一种原因:
+    """「不支持」和「没有」是两回事。
+
+    此前 Unsupported URL 和 no video 共用一句「这个链接里没有可下载的视频」:站点根本不认识,
+    却被说成里面没有视频;要登录、被删除、被地区限制的又各落各的桶。样本都是 yt-dlp 的原话。
+    """
+
+    @pytest.mark.parametrize(
+        ("error", "key"),
+        [
+            # 站点不认识(通用解析器在页面里也没找到视频)—— 不是「里面没有视频」。
+            (_download_error(UnsupportedError("https://example.com/article")), "urlImportErr_unsupported"),
+            (Exception("ERROR: 'foo' is not a valid URL. Set --default-search"), "urlImportErr_unsupported"),
+            # 站点认识,这一条确实没有媒体流。
+            (Exception("ERROR: [BiliBili] BV1xx: No video formats found!"), "urlImportErr_noMedia"),
+            (Exception("ERROR: [Gettr] abc: There's no video in this post."), "urlImportErr_noMedia"),
+            # 要登录:yt-dlp 的 raise_login_required 原话,以及 YouTube 的人机验证。
+            (
+                _download_error(ExtractorError(
+                    "This video is only available for registered users. Use --cookies-from-browser or --cookies "
+                    "for the authentication.", expected=True,
+                )),
+                "urlImportErr_loginRequired",
+            ),
+            (Exception("ERROR: [youtube] abc: Sign in to confirm you’re not a bot"), "urlImportErr_loginRequired"),
+            (Exception("ERROR: [youtube] abc: Join this channel to get access to members-only content"), "urlImportErr_loginRequired"),
+            # 私密 / 删除 / 下架:内容本身不可用。私密那句同时带着「Sign in」,但它首先是私密的。
+            (Exception("ERROR: [youtube] abc: Private video. Sign in if you've been granted access to this video"), "urlImportErr_unavailable"),
+            (Exception("ERROR: [youtube] abc: Video unavailable. This video has been removed by the uploader"), "urlImportErr_unavailable"),
+            # 地区。
+            (
+                _download_error(GeoRestrictedError(
+                    "This video is not available from your location due to geo restriction",
+                )),
+                "urlImportErr_geoBlocked",
+            ),
+            (Exception("ERROR: [youtube] abc: The uploader has not made this video available in your country"), "urlImportErr_geoBlocked"),
+            (Exception("Your IP address is blocked from accessing this post"), "urlImportErr_geoBlocked"),
+            # 网络:按类型认(TransportError 的原文可以是任何话)也按原话认。
+            (
+                _download_error(TransportError(
+                    msg="EOF occurred in violation of protocol",
+                )),
+                "urlImportErr_network",
+            ),
+            (Exception("ERROR: [BiliBili] BV1: Unable to download webpage: The read operation timed out"), "urlImportErr_network"),
+            (Exception("ERROR: Unable to download webpage: <urlopen error [Errno 61] Connection refused>"), "urlImportErr_network"),
+            # 其余几类沿用原来的判断。
+            (Exception("ERROR: [BiliBili] 1xx411c7X: Unable to download webpage: HTTP Error 404: Not Found"), "urlImportErr_notFound"),
+            (Exception("HTTP Error 412: Precondition Failed"), "urlImportErr_forbidden"),
+            (Exception("ERROR: [youtube] abc: Requested format is not available"), "urlImportErr_formatMismatch"),
+            (Exception("ERROR: [x] abc: This video is DRM protected"), "urlImportErr_drm"),
+            (Exception("ERROR: Postprocessing: ffmpeg exited with code 1"), "urlImportErr_mergeFailed"),
+        ],
+    )
+    def test_按原因归类(self, error, key: str) -> None:
+        assert ytdlp.classify(error).key == key
+
+    def test_不支持和没有说的不是同一句话(self) -> None:
+        from app.core.i18n import t
+
+        unsupported = ytdlp.classify(Exception("ERROR: Unsupported URL: https://example.com/article"))
+        empty = ytdlp.classify(Exception("ERROR: [BiliBili] BV1: No video formats found!"))
+        assert str(unsupported) != str(empty)
+        assert "不支持" in str(unsupported) and "没有找到视频或音频" in str(empty)
+        assert "isn't supported" in t(unsupported.key, "en")
+
+    def test_认不出来的给原文最后一行(self) -> None:
+        error = ytdlp.classify(Exception("Traceback …\nERROR: something else entirely"))
+        assert error.key == "urlImportErr_other"
+        assert "something else entirely" in str(error) and "Traceback" not in str(error)
+
+    def test_探测失败按请求方的语言说(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def unsupported(*args, **kwargs):
+            raise ytdlp.YtdlpError("urlImportErr_unsupported")
+
+        monkeypatch.setattr(ytdlp, "probe", unsupported)
+        client = fresh_client()
+        workspace_id = _workspace(client)
+        body = {"workspace_id": workspace_id, "url": "https://example.com/article"}
+        english = client.post("/api/assets/probe-url", json=body, headers={"Accept-Language": "en-US"})
+        chinese = client.post("/api/assets/probe-url", json=body, headers={"Accept-Language": "zh-CN"})
+        assert english.status_code == chinese.status_code == 422
+        assert "isn't supported" in english.json()["detail"]
+        assert "不支持" in chinese.json()["detail"]
 
 
 def test_titles_with_glob_characters_can_still_be_found() -> None:
@@ -325,3 +401,150 @@ class Test没下成的那几条要说清为什么:
         from app.domain.assets.from_url import failure_report
 
         assert failure_report([]) == "没有一条下载成功"
+
+
+#: yt-dlp 2026.08.19 对 B 站多 P 视频 `extract_flat="in_playlist"` 的真实输出(截取三条)。
+#: 条目只有地址 —— 没有 id、没有标题,分 P 名不在这里。
+_BILIBILI_COLLECTION = "【ComfyUI】MiniMaxH3最强人物替换 ！宗主第二式多人替换也能稳住？动作迁移与角色替换的开源天花板工作流"
+_BILIBILI_FLAT = {
+    "_type": "playlist",
+    "id": "BV1qEtn6ZEWe",
+    "title": _BILIBILI_COLLECTION,
+    "extractor": "BiliBili",
+    "entries": [
+        {"ie_key": "BiliBili", "_type": "url", "url": f"https://www.bilibili.com/video/BV1qEtn6ZEWe?p={part}"}
+        for part in (1, 2, 3)
+    ],
+}
+#: 同一版本对单个分 P 地址 `process=False` 的输出(只留用得到的字段)。
+_BILIBILI_PARTS = {
+    f"https://www.bilibili.com/video/BV1qEtn6ZEWe?p={part}": {
+        "_type": "video",
+        "id": f"BV1qEtn6ZEWe_p{part}",
+        "title": f"{_BILIBILI_COLLECTION} p{part:02d} {name}",
+        "webpage_url": f"https://www.bilibili.com/video/BV1qEtn6ZEWe?p={part}",
+        "duration": duration,
+        "uploader": "comfyui大本营",
+        "thumbnail": "http://i1.hdslb.com/bfs/archive/x.jpg",
+        "formats": [{"height": 1080}, {"height": 720}],
+    }
+    for part, name, duration in (
+        (1, "开篇", 393.531),
+        (2, "全新ComfyUI中文桌面版", 432.217),
+        (3, "01.ComfyUI 界面的常用按钮和功能", 1153.195),
+    )
+}
+
+
+class Test浅层条目没标题时逐条补:
+    """B 站多 P 视频探出来九行「未命名」。
+
+    浅层探测里每条只有 `{"_type": "url", "url": "…?p=2"}` —— 分 P 名 yt-dlp 自己取到了,
+    却没放进条目。补法与站点无关:对缺标题的那几条再问一次(`process=False`,不挑格式、不下载)。
+    """
+
+    def _fake_ytdlp(self, monkeypatch: pytest.MonkeyPatch, flat: dict, *, broken: frozenset[str] = frozenset()) -> list[tuple]:
+        import sys
+        import types
+
+        calls: list[tuple] = []
+
+        class FakeYDL:
+            def __init__(self, options):
+                self.options = options
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def extract_info(self, url, download=False, process=True):
+                calls.append((url, download, process))
+                if url in _BILIBILI_PARTS:
+                    if url in broken:
+                        raise RuntimeError("HTTP Error 412: Precondition Failed")
+                    return dict(_BILIBILI_PARTS[url])
+                return dict(flat)
+
+        fake = types.ModuleType("yt_dlp")
+        fake.YoutubeDL = FakeYDL  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "yt_dlp", fake)
+        return calls
+
+    def test_分P条目带上各自的标题(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._fake_ytdlp(monkeypatch, _BILIBILI_FLAT)
+        listing = ytdlp.probe("https://www.bilibili.com/video/BV1qEtn6ZEWe/?t=6")
+
+        assert listing.title == _BILIBILI_COLLECTION
+        # 合集标题已经在表头;每行只留区分各条的那段,不然截断后九行看起来一模一样。
+        assert [entry.title for entry in listing.entries] == [
+            "p01 开篇", "p02 全新ComfyUI中文桌面版", "p03 01.ComfyUI 界面的常用按钮和功能",
+        ]
+        assert [entry.id for entry in listing.entries] == ["BV1qEtn6ZEWe_p1", "BV1qEtn6ZEWe_p2", "BV1qEtn6ZEWe_p3"]
+        assert listing.entries[1].url == "https://www.bilibili.com/video/BV1qEtn6ZEWe?p=2"
+        assert listing.entries[1].duration == 432.217
+        assert listing.entries[1].heights == (1080, 720)
+        # 补元数据绝不能碰媒体流。
+        per_entry = [call for call in calls if call[0] in _BILIBILI_PARTS]
+        assert len(per_entry) == 3
+        assert all(download is False and process is False for _, download, process in per_entry)
+
+    def test_已有标题的条目一条也不多问(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        titled = {**_BILIBILI_FLAT, "entries": [{"id": "a", "title": "第一条", "url": "https://example.com/a"}]}
+        calls = self._fake_ytdlp(monkeypatch, titled)
+        listing = ytdlp.probe("https://example.com/list")
+        assert [entry.title for entry in listing.entries] == ["第一条"]
+        assert len(calls) == 1
+
+    def test_某条补不上不拖垮整份清单(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        broken = "https://www.bilibili.com/video/BV1qEtn6ZEWe?p=2"
+        self._fake_ytdlp(monkeypatch, _BILIBILI_FLAT, broken=frozenset({broken}))
+        listing = ytdlp.probe("https://www.bilibili.com/video/BV1qEtn6ZEWe")
+        assert [entry.title for entry in listing.entries] == ["p01 开篇", "未命名", "p03 01.ComfyUI 界面的常用按钮和功能"]
+        assert listing.entries[1].url == broken
+
+
+def test_imported_assets_take_the_entry_title(monkeypatch: pytest.MonkeyPatch) -> None:
+    """用户勾的是哪个名字,素材就叫哪个名字。
+
+    落地文件名按 `%(title).120B [%(id)s]` 截断;B 站分 P 的标题前面是七八十字的合集标题,
+    截掉的恰好是分 P 名 —— 九条入库后名字只差末尾的 `[BV…_p2]`。
+    """
+    from types import SimpleNamespace
+
+    from app.domain.assets import from_url
+
+    truncated = "【ComfyUI】MiniMaxH3最强人物替换 ！宗主第二式多人替换也能稳住？动作迁移与角 [BV1qEtn6ZEWe_p2].mp4"
+
+    def fake_download(url, *, target_dir, **kwargs):
+        path = target_dir / truncated
+        path.write_bytes(b"x")
+        return path
+
+    names: list[str] = []
+
+    def fake_register(db, *, name, **kwargs):
+        names.append(name)
+        return SimpleNamespace(id=f"asset-{len(names)}", media_info={})
+
+    monkeypatch.setattr(from_url.ytdlp, "download", fake_download)
+    monkeypatch.setattr(from_url, "register_file_asset", fake_register)
+    monkeypatch.setattr(from_url, "dispatch_job", lambda *args, **kwargs: None)
+
+    client = fresh_client()
+    workspace_id = _workspace(client)
+    with SessionLocal() as db:
+        job = start_url_import(
+            db, workspace_id=workspace_id, project_id=None, kind="video", created_by=None,
+            items=[
+                {"url": "https://www.bilibili.com/video/BV1qEtn6ZEWe?p=2", "title": "p02 全新ComfyUI中文桌面版"},
+                {"url": "https://www.bilibili.com/video/BV1qEtn6ZEWe?p=3", "title": ""},
+            ],
+        )
+        db.commit()
+        job_id = job.id
+    from_url._run(job_id)
+
+    # 没给标题(直接调接口)时才退回落地文件名。
+    assert names == ["p02 全新ComfyUI中文桌面版.mp4", truncated]

@@ -48,7 +48,8 @@ def start_url_import(
     profile_id: str | None = None,
     max_height: int = 0,
 ) -> Job:
-    """给这些链接排一次下载。`items` 是 `[{url, title}]` —— 标题来自探测,用于任务消息。"""
+    """给这些链接排一次下载。`items` 是 `[{url, title}]` —— 标题是用户勾选时看到的那个名字
+    (来自探测),任务消息和入库后的素材名都用它。"""
     chosen = [item for item in items if str(item.get("url") or "").strip()]
     if not chosen:
         raise UrlImportError("没有选中任何条目")
@@ -127,7 +128,7 @@ def _run(job_id: str) -> None:
                 )
             except ytdlp.YtdlpError as exc:
                 failed += 1
-                # 原因**本来就是现成的**:ytdlp._explain 已经把「HTTP Error 403」这类翻成了
+                # 原因**本来就是现成的**:ytdlp.classify 已经把「HTTP Error 403」这类翻成了
                 # 「站点拒绝了匿名取流,请选择已登录的浏览器档案」。它此前只进日志,而用户看到的
                 # 是一句「没有一条下载成功」—— 既不说是哪一条,也不说该怎么办。
                 failures.append((title[:40] or str(item.get("url") or "")[:40], str(exc)))
@@ -140,7 +141,7 @@ def _run(job_id: str) -> None:
                     workspace_id=workspace_id,
                     project_id=project_id,
                     source_path=path,
-                    name=path.name,
+                    name=asset_name(item, path),
                     source="downloaded",
                 )
                 remember_asset_source(asset, item["url"])
@@ -187,6 +188,21 @@ def _run(job_id: str) -> None:
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+def asset_name(item: dict[str, Any], path: Path) -> str:
+    """入库叫什么:**用户勾的是哪个名字,素材就叫哪个名字**。
+
+    落地文件名是 yt-dlp 按 `%(title).120B [%(id)s]` 拼的 —— 120 字节是给文件系统留的余量,
+    而 B 站分 P 的标题是「合集标题 p02 分P名」,合集标题一长,截掉的恰好是区分各条的分 P 名:
+    同一批九条入库后名字只差末尾的 `[BV…_p2]`。探测时给出的条目标题没有这个限制。
+    调用方没给标题时(直接调接口)才退回落地文件名。
+    """
+    title = str(item.get("title") or "").strip()
+    if not title:
+        return path.name
+    # 素材名列宽 240;留出扩展名的位置。
+    return f"{title[:200]}{path.suffix}"
+
+
 #: 失败清单最多列几条。一批 50 条全挂时,把 50 行原因糊进任务详情只会让人一行都不看;
 #: 前几条加一句「还有 N 条」足够定位,而完整的那份仍在日志里。
 _MAX_LISTED_FAILURES = 8
@@ -195,7 +211,7 @@ _MAX_LISTED_FAILURES = 8
 def failure_report(failures: list[tuple[str, str]]) -> str:
     """没下成的那几条各自为什么。
 
-    yt-dlp 的原始报错混着 URL、格式 id 和 traceback,但 ytdlp._explain 已经把它翻成了一句
+    yt-dlp 的原始报错混着 URL、格式 id 和 traceback,但 ytdlp.classify 已经把它翻成了一句
     能行动的话。这里只负责把那几句**带着是哪一条**交到用户面前。
     """
     if not failures:

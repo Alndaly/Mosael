@@ -86,13 +86,15 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     能往这个工作区里塞东西。
     """
     ensure_workspace_perm(db, user, body.workspace_id, "upload")
+    from app.core.i18n import get_current_locale, t
     from app.domain.assets.from_url import probe_url as probe
     from app.media.ytdlp import YtdlpError
 
     try:
         listing = probe(body.url, workspace_id=body.workspace_id, profile_id=body.profile_id or "", start=body.start)
     except YtdlpError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # 出口才翻:领域抛的是原因 key,这里按请求方的 Accept-Language 渲染。
+        raise HTTPException(status_code=422, detail=t(exc.key, get_current_locale(), **exc.params)) from exc
     return {
         "title": listing.title,
         "is_playlist": listing.is_playlist,

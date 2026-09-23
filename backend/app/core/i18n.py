@@ -142,6 +142,58 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Imported {done} item(s), {failed} failed",
     },
     "jobMsg_urlImportFailed": {"zh": "从链接下载失败", "en": "Downloading from links failed"},
+    # ---- 从链接导入:取不到的原因(见 media/ytdlp.classify) ----
+    #: **「不支持」和「没有」是两回事。** 此前 Unsupported URL 和 no video 共用一句「这个链接里
+    #: 没有可下载的视频」—— 站点根本不认识,却被说成里面没有视频,用户只会换着链接反复试。
+    "urlImportErr_unsupported": {
+        "zh": "不支持这个网站或这种链接。换成某一条视频自己的页面地址再试。",
+        "en": "This site or kind of link isn't supported. Try the page address of one specific video instead.",
+    },
+    "urlImportErr_noMedia": {
+        "zh": "这个链接里没有找到视频或音频。",
+        "en": "No video or audio was found at this link.",
+    },
+    "urlImportErr_loginRequired": {
+        "zh": "这条内容要登录才能取。在「登录身份」里选一个已登录该站点的浏览器档案再试。",
+        "en": "This content requires signing in. Choose a browser profile that is signed in to this site under “Signed-in identity” and try again.",
+    },
+    "urlImportErr_unavailable": {
+        "zh": "这条内容不可用:可能是私密的、已被删除或已下架。",
+        "en": "This content isn't available: it may be private, deleted or taken down.",
+    },
+    "urlImportErr_geoBlocked": {
+        "zh": "这条内容在当前网络所在的地区看不到,或出口 IP 被站点限制。请为浏览器档案配置可用代理后重试。",
+        "en": "This content isn't available from your current network's region, or the site blocks its IP. Set a working proxy for the browser profile and try again.",
+    },
+    "urlImportErr_notFound": {
+        "zh": "这个地址取不到内容(404)。链接可能打错了,或者这条内容已经被删除。",
+        "en": "Nothing was found at this address (404). The link may be mistyped, or the content has been deleted.",
+    },
+    "urlImportErr_forbidden": {
+        "zh": "站点拒绝了匿名取流。请在「登录身份」里选一个已登录的浏览器档案,或为档案配置可用代理后重试。",
+        "en": "The site refused anonymous access. Choose a signed-in browser profile under “Signed-in identity”, or set a working proxy for it, and try again.",
+    },
+    "urlImportErr_formatMismatch": {
+        "zh": "这个站点没有给出可下载的格式。多半是登录身份与取流方式对不上 —— 换一个登录身份,或者先不选登录身份再试一次。",
+        "en": "The site offered no downloadable format. The signed-in identity likely doesn't match how the stream is fetched — try another identity, or none.",
+    },
+    "urlImportErr_drm": {
+        "zh": "这条内容受 DRM 版权保护,无法下载。",
+        "en": "This content is DRM-protected and can't be downloaded.",
+    },
+    "urlImportErr_mergeFailed": {
+        "zh": "音视频合并失败(ffmpeg)。改成「只要音频」通常能绕开;若一直如此,可能是这条流的格式特殊。",
+        "en": "Merging video and audio failed (ffmpeg). Choosing audio only usually works around it; if it keeps happening, the stream format may be unusual.",
+    },
+    "urlImportErr_network": {
+        "zh": "网络连不上这个站点(超时或连接失败)。检查网络,或为浏览器档案配置可用代理后重试。",
+        "en": "Couldn't reach this site (timed out or the connection failed). Check the network, or set a working proxy for the browser profile, and try again.",
+    },
+    "urlImportErr_fileMissing": {
+        "zh": "下载报成功,但没找到落地的文件。",
+        "en": "The download reported success, but the file wasn't found.",
+    },
+    "urlImportErr_other": {"zh": "取不到这条内容:{detail}", "en": "Couldn't fetch this: {detail}"},
     "f5Model_base": {"zh": "基础模型(中文 / 英文)", "en": "Base model (Chinese / English)"},
     "f5Model_ja": {"zh": "日语模型", "en": "Japanese model"},
     "f5ModelNote_base": {
