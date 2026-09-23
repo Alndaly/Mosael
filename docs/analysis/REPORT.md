@@ -44,7 +44,7 @@ graph TB
         SC["agent-sidecar<br/>(pi Agent, JSONL/stdin, 回合级)"]
         AI["ASR/TTS/分离 托管 venv 池"]
         FF["ffmpeg / yt-dlp / 降噪"]
-        SB["Docker 沙箱<br/>python:3.13-alpine, fail-closed"]
+        SB["Docker 沙箱<br/>python:3.14-alpine, fail-closed"]
         PL["插件子进程 / MCP 客户端"]
     end
 
@@ -317,7 +317,7 @@ code 节点无 Docker 就拒绝执行,不得以普通子进程回落;worker key 
 | 7 | **中** | **发布 Bus Factor = 1**:公证依赖维护者本机钥匙串 `mosael-release` + 手工十余步;"一个人 + 一台 Mac"。流程文档极佳,但仍是单点。Windows 包无代码签名(SmartScreen 警告伤转化)。 | `docs/RELEASING.md`、`docs/MACOS_SIGNING.md` |
 | 8 | ~~低(立刻可修)~~ ✅ 已修复 | ~~**`minimumReleaseAge` 空转配置** + **`mosael-backend.spec` 陈旧漂移**~~:已补 `minimumReleaseAge: 4320`(3 天冷静期);spec 核实为未跟踪的本地构建产物,已删除。 | `pnpm-workspace.yaml:16`、`package.json:17` |
 | 9 | **低** | **单体大文件认知负荷**:WorkflowsView.tsx 3,967 行、messages.ts 5,320 行、mcp_server.py 2,183 行等;靠文件头长注释维系,功能内聚但定位成本高。 | t3/t4 报告实测 |
-| 10 | **低** | **其余已知取舍**:回合级 sidecar 每轮 spawn 的固定开销;MCP 插件每次调用重连(stdio 冷启延迟未实测);51 个 `_migrate_*` 长期膨胀(退休门槛 v0.1.0);插件市场无签名无审核(防线压在安装时);三个 Python 版本共存(3.11 声明/3.13 CI/3.12.11 随包);扩展无自动更新通道;`react-hooks/exhaustive-deps` 37 处与 React Compiler 规则 ~120 处搁置。 | 各分报告风险节 |
+| 10 | **低** | **其余已知取舍**:回合级 sidecar 每轮 spawn 的固定开销;MCP 插件每次调用重连(stdio 冷启延迟未实测);51 个 `_migrate_*` 长期膨胀(退休门槛 v0.1.0);插件市场无签名无审核(防线压在安装时);Python 收成两个版本:后端 3.14、随包解释器 3.13.15(whisperx 尚不支持 3.14;此前是 3.11 声明/3.13 CI/3.12.11 随包三版共存);扩展无自动更新通道;`react-hooks/exhaustive-deps` 37 处与 React Compiler 规则 ~120 处搁置。 | 各分报告风险节 |
 
 ---
 
@@ -331,7 +331,7 @@ code 节点无 Docker 就拒绝执行,不得以普通子进程回落;worker key 
 6. **把高收益共享语义补进契约语料(随改随补)**:`_ATTACHED_ASSET` 正则 ↔ `ATTACHMENT_TOKEN`、thinkingLevelMap 语义是已点名的漂移候选;措辞扫描器已铺好路,补语料是顺势动作。
 7. **团队服务器模式下量化轮询压力(先测再改)**:5+ 条客户端轮询回路在并发下的 QPS 值得一次实测;若成问题,确认卡/回执两条最有希望并入 SSE。
 8. **发布流水线脚本化交接 + 中长期云端公证(按发布频率决定)**:短期把 RELEASING.md 十余步脚本化降 Bus Factor;工作流已为五项 secrets 配齐预留零改动恢复路径。
-9. **声音克隆 venv 安装路径补一条打包级冒烟(R4 收口)**:bundle 冒烟覆盖了启动与升级,但不覆盖 3.12.11 解释器上 f5-tts 依赖安装这条最重的按需路径。
+9. **声音克隆 venv 安装路径补一条打包级冒烟(R4 收口)**:bundle 冒烟覆盖了启动与升级,但不覆盖随包解释器上 f5-tts 依赖安装这条最重的按需路径。
 10. **不建议现在做的**:拆分微服务(ADR-0001 已论证)、统一三种撤销机制(各自贴合事实来源是有意设计)、把调色写进契约("只会逼两边互相迁就到都变差")、给 lint 加规则("开局七百条警告和没有 lint 是同一回事")。
 
 ---

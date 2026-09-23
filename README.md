@@ -135,6 +135,7 @@ Install dependencies:
 ```bash
 pnpm install
 cd backend && uv sync && cd ..
+pnpm fetch:tts-python   # the interpreter local engines' environments are built with — same one the app ships
 ```
 
 Browser development mode with frontend hot reload:

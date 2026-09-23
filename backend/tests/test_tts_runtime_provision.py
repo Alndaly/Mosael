@@ -51,12 +51,30 @@ def test_base_python_prefers_the_injected_bundled_interpreter(monkeypatch: pytes
     assert interpreter.base_python() == str(fake)
 
 
-def test_base_python_ignores_a_missing_injected_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """注入了但文件不在(资源没打进去)→ 退回本解释器,而不是拿着坏路径去建 venv。"""
+def test_base_python_ignores_a_missing_injected_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """注入了但文件不在(资源没打进去)→ 往下找,而不是拿着坏路径去建 venv。"""
     monkeypatch.setenv("MOSAEL_TTS_BASE_PYTHON", "/nope/python3")
+    monkeypatch.setattr(interpreter, "REPO_BUNDLED_PYTHON", tmp_path / "missing" / "python3")
     import sys
 
     assert interpreter.base_python() == sys.executable
+
+
+def test_base_python_in_dev_prefers_the_repo_copy_of_the_bundled_one(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """开发时建 venv 用的,要和打包版是同一个解释器 —— 而不是后端自己。
+
+    两者次版本可以不同(后端 3.14、随包 3.13:whisperx 还不支持 3.14)。用后端自己建,
+    开发时验到的就是一个用户根本不会遇到的环境:whisperx 在开发机上装不上,在用户那里装得上。
+    """
+    monkeypatch.delenv("MOSAEL_TTS_BASE_PYTHON", raising=False)
+    bundled = tmp_path / "build" / "python" / "bin" / "python3"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(interpreter, "REPO_BUNDLED_PYTHON", bundled)
+
+    assert interpreter.base_python() == str(bundled)
 
 
 def test_provision_is_skipped_when_an_interpreter_already_works(monkeypatch: pytest.MonkeyPatch) -> None:

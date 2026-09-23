@@ -68,11 +68,15 @@ def test_对账型的每次都跑_而且不进记账表() -> None:
 
 def test_真实计划里_只有对账那几步是每次都跑的() -> None:
     """**create_all 必须每次跑**:记账跳过它,新版本加的表就再也建不出来 —— 而表缺了不会在启动时
-    报错,要等第一次查询才炸。另外两条处理的东西会不断再产生(孤儿共享、job 的消息键)。"""
+    报错,要等第一次查询才炸。另外两条处理的东西会不断再产生(孤儿共享、job 的消息键)。
+    最后一条对的是托管 venv 和随包解释器的次版本 —— 每次随包解释器换次版本,都会再出现一批。"""
     from app.db.migrations import migration_plan
 
     recurring = {step.name for step in migration_plan().steps if not step.once}
-    assert recurring == {"create-current-schema", "cleanup-orphan-resource-shares", "migrate-job-keys-are-keys"}
+    assert recurring == {
+        "create-current-schema", "cleanup-orphan-resource-shares", "migrate-job-keys-are-keys",
+        "drop-venvs-built-on-another-python",
+    }
 
 
 def test_升级已有库时_一次性迁移仍然会跑一遍() -> None:

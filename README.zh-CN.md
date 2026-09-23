@@ -134,6 +134,7 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 ```bash
 pnpm install
 cd backend && uv sync && cd ..
+pnpm fetch:tts-python   # 本机引擎(声音克隆、转写、分离)建环境用的解释器,和安装包里带的是同一个
 ```
 
 浏览器开发模式（支持前端热更新）：

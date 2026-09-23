@@ -163,7 +163,7 @@ def _common_args(index_url: str) -> list[str]:
 def _upgrade_pip(python: Path | str, *, index_url: str, env: dict[str, str] | None) -> None:
     """先把这个 venv 里的 pip 升上去,再让它去装几个 GB。
 
-    venv 里的 pip 来自 ensurepip,是**打包 CPython 时冻结的那个**(3.12.11 里是 25.0.1)——
+    venv 里的 pip 来自 ensurepip,是**打包 CPython 时冻结的那个**(3.13.15 里是 26.2.1)——
     随着应用发布得越久,它只会越旧。而它恰恰是负责下载和解压这几个 GB 的程序:断点续传、
     解压时的内存占用、失败时说人话的程度,全在后来的版本里改过。让一个越来越旧的 pip
     去干最重的那件活,没有道理。

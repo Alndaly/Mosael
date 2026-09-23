@@ -2138,6 +2138,22 @@ def _migrate_shared_venvs() -> None:
     asr_models.migrate_shared_venv()
 
 
+def _drop_venvs_built_on_another_python() -> None:
+    """托管 venv 是用另一个次版本的解释器建的,就删掉,让引擎回到「未安装」。
+
+    随包的解释器会随应用升级换次版本(这一次是 3.12 → 3.13),而 venv 不能跨次版本用 —— 留着它,
+    引擎看起来「装好了」却一跑就炸。这是**对账**不是一次性迁移:下一次换次版本时同样的事会
+    再发生,判据(venv 的版本 ≠ 现在建 venv 用的解释器的版本)也不随哪一次升级而变。
+    """
+    from app.ai.runtime import asr_models, config as tts_config, separation_models
+    from app.core.interpreter import drop_venvs_built_on_another_python
+
+    for venv in drop_venvs_built_on_another_python((
+        tts_config.MANAGED_TTS_ROOT, asr_models.MANAGED_ASR_ROOT, separation_models.MANAGED_SEPARATION_ROOT,
+    )):
+        logger.info("删掉用另一个 Python 次版本建的托管运行环境,用到时按现在的解释器重装:%s", venv)
+
+
 def _migrate_browser_boolean_options() -> None:
     """三个浏览器节点的是非选项从「否 / 是」迁成「false / true」。
 
@@ -2553,5 +2569,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_keys_are_keys,
             ),
             *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs),
+            #: 对账:随包解释器换次版本后,旧 venv 跑不起来了。放在搬共用 venv 之后,搬过来的也要过这一道。
+            *_recurring(MigrationPhase.FILESYSTEM, _drop_venvs_built_on_another_python),
         )
     )

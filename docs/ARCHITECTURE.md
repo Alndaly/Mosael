@@ -265,10 +265,16 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 
 - **随包只带解释器**(`build/python`,~48MB,由 `pnpm fetch:tts-python` 在构建期抓取)。
   打包版后端是 PyInstaller 冻结二进制、`sys.executable` 指向自己**建不了 venv**,所以壳经
-  `MOSAEL_TTS_BASE_PYTHON` 把它指给后端(`electron/main.cjs`)。
+  `MOSAEL_TTS_BASE_PYTHON` 把它指给后端(`electron/main.cjs`)。**开发时也用它**:
+  `interpreter.base_python()` 在注入之后先找仓库里的 `build/python`,而不是后端自己 ——
+  两者次版本可以不同(后端 3.14;随包 3.13,因为 whisperx 还不支持 3.14),托管 venv 装不装得上
+  取决于建它的解释器。
 - **重的部分按需装**:用户点「下载」时 `ensure_engine_runtime` 用那个解释器在
-  `~/.mosael/tts/venv` 建环境、装引擎依赖,再拉模型权重。顺序不能反——权重是用那个环境里的
-  huggingface_hub 拉的。
+  `~/.mosael/tts/venv-<引擎>` 建环境(一个引擎一份,转写、分离同理)、装引擎依赖,再拉模型权重。
+  顺序不能反——权重是用那个环境里的 huggingface_hub 拉的。
+- **随包解释器换次版本时**,旧 venv 跑不起来了(site-packages 和扩展都绑着建它的那个版本)。
+  启动对账 `drop-venvs-built-on-another-python` 删掉它们,引擎回到「未安装」,点一次下载按新解释器重装;
+  权重不在 venv 里,不受影响。
 
 探测顺序是 用户覆盖 → 托管 venv → 本进程解释器(`tts_models.candidate_pythons`),所以点过下载
 之后自动可用。设置页的「TTS 解释器」因此是**高级覆盖项**,留空是常态。

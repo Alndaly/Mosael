@@ -25,8 +25,11 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "build", "python");
 
 // python-build-standalone:预编译、可重定位的 CPython,专为"随应用分发"设计。
-const RELEASE = "20250818";
-const PY = "3.12.11";
+const RELEASE = "20260901";
+// **3.13,不是 3.14。** 这个解释器建的 venv 要装转写引擎 whisperx,而它到最新的 3.8.6 为止都声明
+// Requires-Python <3.14 —— 3.14 上 pip 直接找不到能装的版本。其余引擎(f5-tts、fish-speech、
+// funasr、demucs)3.14 都装得上。whisperx 放开 3.14 之后再升;后端自己早已是 3.14,它不 import whisperx。
+const PY = "3.13.15";
 const TARGETS = {
   "darwin-arm64": `cpython-${PY}+${RELEASE}-aarch64-apple-darwin-install_only_stripped.tar.gz`,
   "darwin-x64": `cpython-${PY}+${RELEASE}-x86_64-apple-darwin-install_only_stripped.tar.gz`,
@@ -52,10 +55,25 @@ async function exists(p) {
   }
 }
 
-if (!process.env.FORCE && (await exists(interpreter))) {
-  console.log(`[tts-python] 已存在,跳过:${path.relative(ROOT, interpreter)}(FORCE=1 可强制重抓)`);
+/** 已经在的那个解释器是什么版本;不在或跑不起来返回空串。 */
+async function presentVersion() {
+  if (!(await exists(interpreter))) return "";
+  try {
+    const { stdout } = await run(interpreter, ["-c", "import sys; print(sys.version.split()[0])"]);
+    return stdout.trim();
+  } catch {
+    return "";
+  }
+}
+
+// **只看「在不在」是不够的**:换了 PY 之后,本机和 CI 缓存里那个旧解释器照样「在」,
+// 于是新版本号写在这里、打进包里的却还是旧的。版本对得上才跳过。
+const present = await presentVersion();
+if (!process.env.FORCE && present === PY) {
+  console.log(`[tts-python] 已是 ${PY},跳过:${path.relative(ROOT, interpreter)}(FORCE=1 可强制重抓)`);
   process.exit(0);
 }
+if (present) console.log(`[tts-python] 现有的是 ${present},换成 ${PY}`);
 
 const url = `https://github.com/astral-sh/python-build-standalone/releases/download/${RELEASE}/${asset}`;
 console.log(`[tts-python] 下载 ${asset}`);

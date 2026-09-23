@@ -170,7 +170,7 @@ graph TD
 - **没有任何覆盖率度量**：`backend/pyproject.toml` 无 pytest-cov，`frontend/package.json` 无 `@vitest/coverage`。覆盖率完全盲区——不过考虑到 89 道棘轮 + 契约语料走的是"定点防守关键不变量"路线，这更像是有意的取舍而非疏漏；但代价是"哪些领域测试稀薄"没有数据回答。
 - **无 UI E2E**：编辑器拖拽、画布交互这类最复杂的用户路径只有单测+棘轮，没有浏览器级回归。
 - ffmpeg 依赖的 9 个测试文件在无 ffmpeg 环境会**整体 skip**——CI 因此显式 `apt-get install ffmpeg`（`tests.yml` 第 36-39 行注释："那样这道闸看着是绿的，实际没验到最该验的那部分"）。
-- 沙箱（代码节点隔离）测试依赖 Docker，CI 显式等待 dockerd 并断言 `OSType/MemoryLimit/SwapLimit/PidsLimit` 四项能力、预拉 `python:3.13-alpine`（`tests.yml` 第 43-50 行），并声明"环境不可用必须阻止发版，不能让隔离用例被跳过后仍然显示测试通过"。
+- 沙箱（代码节点隔离）测试依赖 Docker，CI 显式等待 dockerd 并断言 `OSType/MemoryLimit/SwapLimit/PidsLimit` 四项能力、预拉 `python:3.14-alpine`（`tests.yml` 第 43-50 行），并声明"环境不可用必须阻止发版，不能让隔离用例被跳过后仍然显示测试通过"。
 
 ---
 
@@ -200,7 +200,7 @@ main 推送与所有 PR 触发，concurrency 同分支新推送作废旧运行�
 
 抽成 `workflow_call` 供 ci.yml 与 release.yml 共用，注释解释为什么："两份会漂，而漂的方向必然是『发版那份更严』，于是主干上跑的其实是另一道更松的闸。"步骤顺序：
 
-1. 依赖安装（pnpm `--frozen-lockfile` + website 独立工作区 + `uv sync --frozen --python 3.13`）；
+1. 依赖安装（pnpm `--frozen-lockfile` + website 独立工作区 + `uv sync --frozen --python 3.14`）；
 2. tag 触发时校验 `package.json` 版本 == tag 版本；
 3. **Lint 放在测试前**（"它几秒钟就跑完，而且它抓的那类问题在测试里往往表现为一个八竿子打不着的报错"）；
 4. 后端 `pytest -q`；前端 `vitest run`（类型检查由 `build` 脚本的 `tsc --noEmit` 覆盖）；
@@ -235,7 +235,7 @@ graph TD
     SB["sidecar:esbuild 单文件 sidecar.cjs<br/>必须 --ignore-annotations"]
     EL["electron 三段 esbuild<br/>preload / publisher / system"]
     PY["后端:uv run PyInstaller --onedir mosael-backend<br/>--add-data 卫星 worker + RNNoise 模型"]
-    TTS["fetch-tts-python.mjs<br/>独立 CPython 3.12.11(约 40MB)"]
+    TTS["fetch-tts-python.mjs<br/>独立 CPython 3.13.15(约 40MB)"]
     EB["electron-builder:extraResources 映射<br/>backend/ + sidecar.cjs + python/"]
     MAC["mac:scripts/sign-mac.cjs 自定义签名<br/>forceCodeSigning + hardenedRuntime + provisionprofile"]
     WIN["win:NSIS(build/installer.nsh)"]
@@ -273,7 +273,7 @@ uv run --frozen python -m PyInstaller --noconfirm --clean --onedir --name mosael
 { "from": "build/python", "to": "python" }
 ```
 
-第三项是 `scripts/fetch-tts-python.mjs` 抓取的 python-build-standalone 独立 CPython 3.12.11（约 40MB）——注释解释：PyInstaller 冻结二进制的 `sys.executable` 指向自己，建不了 venv，而声音克隆（f5-tts/fish-speech）需要真 Python；只带解释器不带引擎依赖是因为 torch 栈 2.5-3.5GB"会把安装包从 ~700MB 顶到约 4GB"。
+第三项是 `scripts/fetch-tts-python.mjs` 抓取的 python-build-standalone 独立 CPython 3.13.15（约 40MB）——注释解释：PyInstaller 冻结二进制的 `sys.executable` 指向自己，建不了 venv，而声音克隆（f5-tts/fish-speech）需要真 Python；只带解释器不带引擎依赖是因为 torch 栈 2.5-3.5GB"会把安装包从 ~700MB 顶到约 4GB"。
 
 ### 4.3 前端 → Electron
 
@@ -346,7 +346,7 @@ Touch ID（WebAuthn）也被纳入发布验证链：`electron/webauthn.cjs` 从�
 
 ### 6.2 Python 侧
 
-uv 管理：`backend/pyproject.toml` + `uv.lock`（revision 3）。CI 统一 `uv sync --frozen --python 3.13`。依赖声明的注释同样体现"吃过的亏"：`beautifulsoup4`"此前一直没声明，靠环境里碰巧装着——一次 `uv sync` 就把它清掉了，而后端从那一刻起连启动都启动不了"；`websockets`/`cryptography`/`pillow-heif` 显式声明而非借用传递依赖，"依赖别人的传递依赖意味着对方换实现时这里会静默失效——密钥读不出来的失效方式尤其难查"。`requires-python = ">=3.11"` 而 CI/打包实际用 3.13、随包 TTS 解释器是 3.12.11——三个 Python 版本共存，各有分工但值得留意（见风险 R4）。
+uv 管理：`backend/pyproject.toml` + `uv.lock`（revision 3）。CI 统一 `uv sync --frozen --python 3.14`。依赖声明的注释同样体现"吃过的亏"：`beautifulsoup4`"此前一直没声明，靠环境里碰巧装着——一次 `uv sync` 就把它清掉了，而后端从那一刻起连启动都启动不了"；`websockets`/`cryptography`/`pillow-heif` 显式声明而非借用传递依赖，"依赖别人的传递依赖意味着对方换实现时这里会静默失效——密钥读不出来的失效方式尤其难查"。`requires-python = ">=3.14"`，CI、PyInstaller 打包与代码沙箱镜像（`python:3.14-alpine`）统一在 3.14；随包解释器是 3.13.15（whisperx 到 3.8.6 为止要求 <3.14），开发时建托管 venv 也用它（见风险 R4）。
 
 ---
 
@@ -399,7 +399,7 @@ uv 管理：`backend/pyproject.toml` + `uv.lock`（revision 3）。CI 统一 `uv
 | R1 | **无 UI 级 E2E**：编辑器拖拽、画布交互、播放器这些最复杂的路径只有单测与 jsdom 组件测试（jsdom 本身也是后补的，`vite.config.ts` 注释自述此前"所有 UI 回归只能靠人手在浏览器里看"）。契约管住了跨端语义，但管不住前端单端内的交互回归。 | `frontend/vite.config.ts` test 段注释；全仓无 playwright/e2e 测试配置 | 对编辑器核心手势（一次手势=一条操作、批量撤销）补少量 Playwright 冒烟；不必求全覆盖 |
 | R2 | **覆盖率全盲**：无任何覆盖率度量，2746+1472 条测试的"分布盲区"（哪些领域薄）无从量化。棘轮是定点防守，回答不了"面"的问题。 | pyproject.toml 无 pytest-cov；frontend 无 @vitest/coverage | 至少在后端跑一次 `pytest --cov` 出报告纳入 docs/validation/，识别薄弱领域后决定是否需要门禁 |
 | R3 | **`minimumReleaseAgeExclude` 空转**：两处 workspace 文件都配置了排除名单，但全仓库没有 `minimumReleaseAge` 本体——依赖冷静期实际未生效（除非依赖维护者全局 npmrc，而 CI 不会有）。排除名单的存在还容易给人"已开启"的错觉。 | `pnpm-workspace.yaml:16`、`website/pnpm-workspace.yaml`；grep 全仓无 `^minimumReleaseAge:` | 要么补上 `minimumReleaseAge`（如 3-7 天）让排除名单生效，要么删掉排除名单避免假象 |
-| R4 | **三个 Python 版本共存**：声明 `>=3.11`、CI/打包用 3.13、随包 TTS 解释器 3.12.11。pytest 只在 3.13 上跑，打包产物与声音克隆 venv 的实际运行版本没有被同一套测试直接覆盖（bundle 冒烟覆盖了启动与升级，但不覆盖声音克隆依赖安装）。 | `backend/pyproject.toml`、`tests.yml`、`scripts/fetch-tts-python.mjs` | 可接受但应在 docs 中显式记录版本矩阵；声音克隆的 venv 安装路径值得一条打包级冒烟 |
+| R4 | **两个 Python 版本各司其职**（此前三个）：后端（声明、CI、打包、沙箱）统一在 3.14；随包解释器 3.13.15，只用来建托管 venv——whisperx 还不支持 3.14。开发时建 venv 也用随包那一份，开发和用户是同一个环境。随包解释器换次版本时，旧 venv 由启动对账 `drop-venvs-built-on-another-python` 删掉重装。声音克隆依赖安装仍没有打包级冒烟。 | `backend/pyproject.toml`、`tests.yml`、`scripts/fetch-tts-python.mjs`、`app/core/interpreter.py` | 声音克隆的 venv 安装路径仍值得一条打包级冒烟 |
 | R5 | **`backend/mosael-backend.spec` 疑似陈旧**：spec 的 `datas` 缺 `separation.py`、`line_protocol.py` 与 RNNoise 模型，而实际构建走 `package.json` 的 `build:backend` 内联参数（两者内容已漂移）。任何"按惯例用 spec 文件"的尝试都会打出缺文件的包。 | 对比 `backend/mosael-backend.spec:8` 与 `package.json:17` | 删除 spec 或改为由 build:backend 引用，消除第二事实源 |
 | R6 | **发布交接是单点人工流程**：公证依赖维护者本机钥匙串 profile `mosael-release` 与手工执行 RELEASING.md 的十余步；`gh release create` 推 tag 会顺带触发自动路径，靠 signing job 的 notice 设计兜底。流程文档极佳，但仍是"一个人 + 一台 Mac"的 Bus Factor=1。 | `docs/RELEASING.md`、`docs/MACOS_SIGNING.md`、release.yml signing job | 中长期配齐五项 secrets 走云端公证（工作流已为此预留零改动恢复路径）；短期至少把交接步骤脚本化 |
 | R7 | **Windows 包无代码签名**：文档明确"不要把它描述为 Windows 代码签名包"，SmartScreen 警告会伤害分发转化；Linux 不出包、Intel Mac 需自签 runner。 | release.yml 第 165-167 行注释；RELEASING.md §4 | 已知取舍，列入路线图即可 |
