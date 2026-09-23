@@ -21258,17 +21258,6 @@
             "type": "boolean",
             "title": "Muted"
           },
-          "linked_clip_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Linked Clip Id"
-          },
           "text_override": {
             "anyOf": [
               {
@@ -21316,7 +21305,6 @@
           "speed",
           "gain",
           "muted",
-          "linked_clip_id",
           "text_override",
           "effects"
         ],

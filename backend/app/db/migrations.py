@@ -900,6 +900,25 @@ def _migrate_client_version() -> None:
             conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN last_seen_at DATETIME"))
 
 
+def _drop_clip_linked_clip_id() -> None:
+    """`clips` 去掉 `linked_clip_id` —— 这一列在**每一台机器上都是 null**。
+
+    它本来要装的是"分离音频之后两段是链接的"(拖一个另一个跟着走、删一个另一个一起删),
+    数据形状、接口出参、前端生成类型、撤销还原清单五处都为它让了路 —— 而
+    `detach_clip_audio` 那个本该建立配对的操作从头到尾没设过它,全仓零赋值。
+
+    这比没有这个字段更贵:下一个人读到它会以为链接已经实现,去查"为什么没生效",
+    而真相是从来没人写过它。功能要做的时候按真实需求重新建模,不留这个空承诺。
+    """
+    inspector = inspect(engine)
+    if "clips" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(clips)"))}
+        if "linked_clip_id" in existing:
+            conn.execute(text("ALTER TABLE clips DROP COLUMN linked_clip_id"))
+
+
 def _drop_publish_account_profile_name() -> None:
     """`publish_accounts` 去掉 `profile_name` —— 这一列在**每一台机器上都是 NULL**。
 
@@ -2401,6 +2420,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_client_version,
                 _migrate_client_surface,
                 _drop_publish_account_profile_name,
+                _drop_clip_linked_clip_id,
                 _migrate_job_actor,
                 _migrate_provider_credentials,
                 _drop_shared_credentials,

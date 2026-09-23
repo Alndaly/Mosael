@@ -7423,8 +7423,6 @@ export interface components {
             gain: number;
             /** Muted */
             muted: boolean;
-            /** Linked Clip Id */
-            linked_clip_id: string | null;
             /** Text Override */
             text_override: string | null;
             /** Offline Asset */

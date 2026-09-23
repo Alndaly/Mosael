@@ -71,7 +71,6 @@ class Clip(Base):
     speed: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     gain: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     muted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    linked_clip_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     text_override: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: 素材被删掉之后留下的**脱机占位**:`{asset_id, name, kind, duration}`。素材还在时恒为 None。
     #:

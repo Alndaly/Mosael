@@ -45,7 +45,6 @@ def restore_clip_row(db: Session, sequence: Sequence, payload: dict) -> None:
             speed=payload.get("speed", 1.0),
             gain=payload.get("gain", 1.0),
             muted=payload.get("muted", False),
-            linked_clip_id=payload.get("linked_clip_id"),
             effects=payload.get("effects") or {},
             transform=payload.get("transform") or {},
             text_override=payload.get("text_override"),

@@ -33,7 +33,6 @@ class ClipOut(OrmModel):
     speed: float
     gain: float
     muted: bool
-    linked_clip_id: str | None
     text_override: str | None
     #: 素材已被删除时的占位:`{asset_id, name, kind, duration}`;素材还在就是 None。
     #: **不能只看 asset_id 为空**——文字片段的 asset_id 同样为空,而它不是脱机。

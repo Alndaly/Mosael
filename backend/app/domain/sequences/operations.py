@@ -1553,12 +1553,15 @@ def _clip_payload(clip: Clip) -> dict[str, Any]:
 #: delete used to hand back a clip at 1x, unity gain, unmuted and ungraded, and a subtitle with
 #: no text at all. Read back with .get() and a default so operations recorded before this
 #: existed still replay.
-RESTORABLE_CLIP_FIELDS = ("speed", "gain", "muted", "linked_clip_id", "effects", "transform", "text_override")
+RESTORABLE_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override")
 
 #: What a piece carved out of a clip inherits. A half is still the same footage at the same
 #: speed with the same grade, and half a caption still says what the caption said — rebuilding a
-#: piece from position alone reset all of it. linked_clip_id is excluded: that pairs two specific
-#: rows, and the pieces are new rows.
+#: piece from position alone reset all of it.
+#:
+#: 这里曾经还排除过一个 `linked_clip_id`,理由写得很认真(「那配对的是两个具体的行,而切出来
+#: 的是新行」)—— 而那个字段**从来没有任何一处写过它**,永远是 null:一个不存在的配对,
+#: 被精心地排除在继承之外。已连列带 schema 一起删掉(见迁移 drop-clip-linked-clip-id)。
 INHERITED_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override")
 
 
