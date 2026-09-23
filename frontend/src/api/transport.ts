@@ -6,6 +6,16 @@ export const API_BASE = (
   typeof window === "undefined" ? DEFAULT_API_BASE : window.localStorage.getItem(SERVER_KEY) || DEFAULT_API_BASE
 ).replace(/\/+$/, "");
 
+/** 后端在「这次请求建了任务」时带的响应头(见 backend 的 main._announce_new_jobs)。 */
+export const NEW_JOBS_HEADER = "X-Mosael-New-Jobs";
+/**
+ * 看到那个头就广播这个事件,由 App 统一刷新所有任务列表。
+ *
+ * 不让各个「开始 xx」按钮自己去刷新:建任务的接口几十个,记得刷新的只有少数几处,其余的
+ * 任务要等任务中心下一轮轮询(空闲时 8 秒)才出现。
+ */
+export const JOBS_CREATED_EVENT = "mosael:jobs-created";
+
 export function setServerUrl(url: string | null): void {
   if (url && url.replace(/\/+$/, "") !== DEFAULT_API_BASE) {
     window.localStorage.setItem(SERVER_KEY, url.replace(/\/+$/, ""));
@@ -90,6 +100,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       `[api] ${method} ${path} → ${response.status} ${response.statusText}${body ? `: ${body}` : ""}`,
     );
     throw new ApiError(humanError(response.status, response.statusText, body), response.status, body);
+  }
+  if (response.headers.has(NEW_JOBS_HEADER) && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(JOBS_CREATED_EVENT));
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

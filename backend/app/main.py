@@ -73,10 +73,13 @@ from app.domain.blender.bridge import BlenderDomainError
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.blender.bridge import reconcile_orphaned_transfers as reconcile_blender_transfers
-from app.domain.jobs import register_external_kind
+from app.domain.jobs import register_external_kind, stop_watching_new_jobs, watch_new_jobs
 from app.domain.restart import reconcile_after_restart
 from app.domain.assets.proxies import reconcile_missing_proxies
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
+
+#: 「这次请求建了几个任务」的响应头。前端的 api/transport 认这个名字。
+NEW_JOBS_HEADER = "X-Mosael-New-Jobs"
 
 
 @asynccontextmanager
@@ -301,6 +304,22 @@ def create_app() -> FastAPI:
         set_current_locale(normalize_locale(request.headers.get("accept-language")))
         return await call_next(request)
 
+    @app.middleware("http")
+    async def _announce_new_jobs(request, call_next):  # type: ignore[no-untyped-def]
+        """这次请求建了任务,就在响应头上说一声,前端据此立刻刷新任务列表(见 jobs.watch_new_jobs)。
+
+        放在中间件而不是各路由里,理由同 _carry_locale:建任务的接口有几十个,各自记得通知就是
+        几十处要记得的事 —— 漏掉的那些,任务要等下一轮轮询才出现在任务中心。
+        """
+        created, token = watch_new_jobs()
+        try:
+            response = await call_next(request)
+        finally:
+            stop_watching_new_jobs(token)
+        if created:
+            response.headers[NEW_JOBS_HEADER] = str(len(created))
+        return response
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -330,6 +349,8 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
+        # 跨源时浏览器默认只让页面读到几个基础响应头;这个要点名放行,前端才看得见。
+        expose_headers=[NEW_JOBS_HEADER],
     )
 
     app.include_router(health_router, prefix="/api")

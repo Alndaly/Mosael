@@ -25,7 +25,7 @@ function bodiesSentTo(mock: typeof fetchMock): Array<{ texts: string[]; target_l
 }
 
 function reply(payload: unknown) {
-  return { ok: true, status: 200, json: async () => payload } as unknown as Response;
+  return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
 }
 
 describe("翻译分批", () => {

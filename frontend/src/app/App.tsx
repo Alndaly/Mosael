@@ -1,6 +1,7 @@
 import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
 import { watchBodyPointerLock } from "@/lib/bodyPointerLock";
 import { PageBoundary } from "@/app/PageBoundary";
+import { JOBS_CREATED_EVENT } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import {
@@ -83,6 +84,13 @@ export function App() {
   // 卸载、或两个浮层的清理互相打架),此后整个应用只能刷新。挂在最外层 —— 留下锁的那个浮层
   // 可能是任何一处的 Select / 右键菜单 / 弹窗,盯住锁本身才兜得全。见 lib/bodyPointerLock。
   React.useEffect(() => watchBodyPointerLock(), []);
+  // 哪个请求建了任务,所有任务列表(任务中心、AI 工作台、转写面板……)都立刻刷新 ——
+  // 它们的键都以 "jobs" 开头。见 api/transport 的 JOBS_CREATED_EVENT。
+  React.useEffect(() => {
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    window.addEventListener(JOBS_CREATED_EVENT, refresh);
+    return () => window.removeEventListener(JOBS_CREATED_EVENT, refresh);
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>

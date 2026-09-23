@@ -76,6 +76,30 @@ def set_receipt(receipt: dict[str, Any] | None) -> contextvars.Token:
 def reset_receipt(token: contextvars.Token) -> None:
     _current_receipt.reset(token)
 
+
+#: 这一次 HTTP 请求里建出来的任务。中间件在请求开始时放一个空列表进来,create_job 往里记,
+#: 请求结束时有记录就在响应头上告诉前端(见 main 的 _announce_new_jobs)。
+#:
+#: 为什么在总线上记,而不是让每个「开始 xx」的按钮自己去刷新任务中心:建任务的接口有几十个,
+#: 返回的也不都是 job(生成返回会话、画板返回画板、确认卡返回确认卡)。此前只有少数几处记得
+#: 刷新,其余的(人声分离、转写、导出……)要等任务中心下一轮轮询 —— 空闲时 8 秒一次,
+#: 用户看到的就是「点了开始,好几秒后任务才进队列」。
+#:
+#: 后台线程里派生的子任务不会记进来:新线程不继承 contextvar,而那时请求早已结束。
+_request_new_jobs: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "mosael_request_new_jobs", default=None
+)
+
+
+def watch_new_jobs() -> tuple[list[str], contextvars.Token]:
+    """从现在起记下建出来的任务 id。返回那份列表和用于 stop_watching_new_jobs 的 token。"""
+    created: list[str] = []
+    return created, _request_new_jobs.set(created)
+
+
+def stop_watching_new_jobs(token: contextvars.Token) -> None:
+    _request_new_jobs.reset(token)
+
 # Children (ffmpeg, ASR/TTS workers) belonging to a running job, so cancelling can actually
 # stop the work. Without this, cancel only flipped a database row: ffmpeg ran to completion,
 # burning CPU the user had asked to stop, and then the worker overwrote the cancellation with
@@ -481,6 +505,9 @@ def create_job(
             "message": job.message,
         },
     ))
+    watching = _request_new_jobs.get()
+    if watching is not None:
+        watching.append(job.id)
     logger.info("job %s [%s] created (workspace=%s)", job.id, kind, workspace_id)
     return job
 

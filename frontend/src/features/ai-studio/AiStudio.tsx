@@ -662,7 +662,6 @@ function GenerateWorkspace({
       setPrompt("");
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
     },
   });
   // 分平台提示词优化:按当前所选图像模型的平台习惯重写提示框内容(与助手技能共用同一后端)。

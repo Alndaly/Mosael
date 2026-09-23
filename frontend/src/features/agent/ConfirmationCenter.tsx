@@ -34,7 +34,6 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
       void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
       void qc.invalidateQueries({ queryKey: ["sequences"] });
       void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs"] });
     },
   });

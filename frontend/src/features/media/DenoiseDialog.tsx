@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Download, Info } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,7 +29,6 @@ const STRENGTH_LABELS: Record<DenoiseStrength, MessageKey> = {
  */
 export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; onClose: () => void }) {
   const t = useI18n();
-  const qc = useQueryClient();
   const open = assetId !== null;
   const engines = useQuery({ queryKey: ["denoise-engines"], queryFn: listDenoiseEngines, enabled: open, staleTime: 30_000 });
   const [engine, setEngine] = React.useState("");
@@ -49,7 +48,6 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
   const run = useMutation({
     mutationFn: () => denoiseAsset(assetId as string, { engine: chosen?.engine ?? "", strength }),
     onSuccess: (job) => {
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
       toast.success(t("denoiseQueued"), { action: { label: t("denoiseViewTask"), onClick: () => gotoJob(job.id) } });
       onClose();
     },
