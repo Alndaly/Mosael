@@ -1,8 +1,7 @@
-# sharp 要跑安装脚本(next/image 的图片优化靠它),unrs-resolver 是 eslint 的解析器。
-# pnpm 默认拦下所有 postinstall,这两个不放行安装会直接中止。显式列出,而不是全局关掉检查。
+# sharp 要跑安装脚本(next/image 的图片优化靠它)。
+# pnpm 默认拦下所有 postinstall,不放行安装会直接中止。显式列出,而不是全局关掉检查。
 allowBuilds:
   sharp: true
-  unrs-resolver: true
 # 供应链冷静期(分钟):只解析发布满 3 天的版本。
 minimumReleaseAge: 4320
 # 豁免只在必须用一个未满 3 天的版本时临时加、指名到版本;那个版本过了冷静期就删掉。

@@ -24,7 +24,36 @@ import {
 import { SITE } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-const listeners = new Set<(channel: Channel) => void>();
+/**
+ * 一页上所有入口共用的那份选择,做成一个外部 store 交给 useSyncExternalStore。
+ *
+ * 服务端快照是按语言给的默认值,客户端快照读访客自己选过的 / 按时区判的 —— 两端不同正是
+ * server snapshot 要处理的情形:水合那一帧用前者,之后换成后者,不会 hydration 不一致。
+ */
+const listeners = new Set<() => void>();
+let chosen: Channel | null = null;
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function currentChoice(): Channel {
+  chosen ??= initialChoice();
+  return chosen;
+}
+
+function choose(next: Channel) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    // 存不下就只在这一页生效。
+  }
+  chosen = next;
+  listeners.forEach((notify) => notify());
+}
 
 function initialChoice(): Channel {
   let stored: string | null = null;
@@ -43,22 +72,7 @@ function initialChoice(): Channel {
 }
 
 export function useDownloadChannel(locale: Locale): [Channel, (next: Channel) => void] {
-  const [channel, setChannel] = React.useState<Channel>(() => defaultChannel(locale, SITE.baiduPan));
-  React.useEffect(() => {
-    setChannel(initialChoice());
-    listeners.add(setChannel);
-    return () => {
-      listeners.delete(setChannel);
-    };
-  }, []);
-  const choose = React.useCallback((next: Channel) => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // 存不下就只在这一页生效。
-    }
-    listeners.forEach((notify) => notify(next));
-  }, []);
+  const channel = React.useSyncExternalStore(subscribe, currentChoice, () => defaultChannel(locale, SITE.baiduPan));
   return [channel, choose];
 }
 

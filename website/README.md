@@ -61,9 +61,12 @@ props 传。
 
 ## 已知的坑
 
-- **`pnpm lint` 跑不了**。typescript-eslint 还不支持 TypeScript 7(`does not support TS 7.0`),
-  而「依赖取最新版」是这个站的前提。类型检查没有丢:`next build` 会调 `tsc`
-  (`experimental.useTypeScriptCli`)。等 typescript-eslint 跟上就能恢复。
+- **lint 用 oxlint,不是 eslint**。typescript-eslint 拒绝 TypeScript 7(`does not support TS 7.0`),
+  而「依赖取最新版」是这个站的前提;oxlint 自带 TS/TSX 解析、不依赖 `typescript` 包,和
+  frontend 是同一套(见 `frontend/LINT.md`)。`.oxlintrc.json` 开了 correctness 整类,加上
+  eslint-config-next 原先那几组插件(React、hooks、Next.js、jsx-a11y),全部按 error 算,
+  现在是零告警。它挂在仓库根的 `pnpm lint` 里,CI 的 Lint 步骤会跑。类型检查不归它:
+  `next build` 会调 `tsc`(`experimental.useTypeScriptCli`)。
 - **`/` 没有页面**,由 `next.config.ts` 的 redirects 送到默认语言(`/en`,见
   `src/i18n/config.ts` 的 `DEFAULT_LOCALE`)。全站路由都在 `[locale]` 段下,因为
   `<html lang>` 必须跟着语言变,而真正的根布局拿不到动态参数。这里不做 Accept-Language

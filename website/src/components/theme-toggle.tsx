@@ -1,8 +1,9 @@
 "use client";
 
-import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+
+import { useMounted } from "@/lib/use-mounted";
 
 /**
  * 深浅色开关。
@@ -15,8 +16,7 @@ import { useTheme } from "next-themes";
  */
 export function ThemeToggle({ label }: { label: string }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
 
   const isDark = resolvedTheme === "dark";
   return (

@@ -73,10 +73,15 @@ export function NavProgress() {
     };
   }, [start]);
 
-  // 路径变了 = 新页面已经渲染,补满再淡出。
+  // 路径变了 = 新页面已经渲染,补满再淡出。补满在渲染期做(React 文档里「随 prop 变化调整
+  // state」的写法),effect 只管定时器 —— 放进 effect 里 setValue 会先画一帧旧进度再改。
+  const [settledPath, setSettledPath] = React.useState(pathname);
+  if (settledPath !== pathname) {
+    setSettledPath(pathname);
+    setValue(100);
+  }
   React.useEffect(() => {
     clearTimers();
-    setValue(100);
     const done = window.setTimeout(stop, 220);
     return () => window.clearTimeout(done);
   }, [pathname, clearTimers, stop]);

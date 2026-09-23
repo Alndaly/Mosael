@@ -30,7 +30,7 @@ export function HomeShowcase({ windows, label, explore }: {
 
   return (
     <div aria-label={label} className="relative">
-      <div className="mb-7 flex justify-center gap-1 sm:gap-3" role="group" aria-label={label}>
+      <fieldset className="mb-7 flex min-w-0 justify-center gap-1 sm:gap-3" aria-label={label}>
         {windows.map((window) => {
           const Icon = icons[window.id];
           return (
@@ -42,7 +42,7 @@ export function HomeShowcase({ windows, label, explore }: {
             </button>
           );
         })}
-      </div>
+      </fieldset>
       <div className="relative aspect-[1440/940] sm:aspect-[1.52]" data-showcase-stage>
         {windows.map((window) => {
           const front = window.id === active;

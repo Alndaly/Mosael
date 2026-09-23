@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "test": "node --experimental-strip-types --test test/*.test.mjs"
   },
   "dependencies": {
@@ -33,8 +34,7 @@
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "eslint": "^10.11.0",
-    "eslint-config-next": "16.3.5",
+    "oxlint": "^1.83.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   }

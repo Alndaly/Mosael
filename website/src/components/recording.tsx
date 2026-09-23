@@ -12,6 +12,8 @@ export function Recording({ src, poster, caption }: { src: string; poster: strin
         <video
           key={String(isDark)}
           controls
+          // 录屏本来就没有音轨(record-doc-media.py 用 -an 截的),标出来也省得屏幕阅读器找字幕轨。
+          muted
           playsInline
           preload="none"
           aria-label={caption}

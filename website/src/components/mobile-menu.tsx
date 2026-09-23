@@ -12,6 +12,7 @@ import { GithubMark } from "@/components/icons";
 import { isNavLinkActive } from "@/components/nav-link";
 import { LOCALE_LABEL, LOCALES, type Locale } from "@/i18n/config";
 import { SITE } from "@/lib/site";
+import { useMounted } from "@/lib/use-mounted";
 import { cn } from "@/lib/utils";
 
 /**
@@ -33,16 +34,16 @@ export function MobileMenu({
   links: { href: string; match: string | readonly string[]; exact?: boolean; label: string }[];
   labels: { menu: string; language: string; github: string; download: string; theme: string };
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [mounted, setMounted] = React.useState(false);
+  const mounted = useMounted();
   const { resolvedTheme, setTheme } = useTheme();
   const pathname = usePathname();
+  // 记的是「在哪一页打开的」而不是开关本身:换了页它就不再等于当前路径,菜单自然收起,
+  // 不需要一个跟在路由后面再把状态改一遍的 effect。
+  const [openedAt, setOpenedAt] = React.useState<string | null>(null);
+  const open = openedAt === pathname;
 
-  React.useEffect(() => setMounted(true), []);
   const other = LOCALES.find((item) => item !== locale) ?? locale;
   const rest = pathname.split("/").slice(2).join("/");
-
-  React.useEffect(() => setOpen(false), [pathname]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -58,7 +59,7 @@ export function MobileMenu({
     <>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpenedAt(open ? null : pathname)}
         aria-label={labels.menu}
         aria-expanded={open}
         className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:hidden"

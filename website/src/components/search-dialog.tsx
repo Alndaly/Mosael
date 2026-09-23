@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
-import { createPortal } from "react-dom";
 
 import type { Locale } from "@/i18n/config";
 import type { SearchEntry } from "@/lib/search";
@@ -87,15 +86,16 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
   const [active, setActive] = React.useState(0);
   const loaded = React.useRef(false);
   const listRef = React.useRef<HTMLUListElement>(null);
+  const dialogRef = React.useRef<HTMLDialogElement>(null);
 
   // ⌘K / Ctrl+K 打开。装在 window 上而不是某个输入框上 —— 它是全站快捷键。
+  // Esc 不在这里:模态 <dialog> 自己会关,关了走 onClose。
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         setOpen((value) => !value);
       }
-      if (event.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -124,7 +124,13 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
       .map((item) => item.entry);
   }, [entries, query]);
 
-  React.useEffect(() => setActive(0), [query]);
+  /**
+   * 用原生模态 <dialog>:焦点圈在框里、背后的页面变 inert、Esc 关闭,都是 showModal() 给的,
+   * 不用自己拼。它只在挂上之后才能 showModal,所以放在 effect 里。
+   */
+  React.useEffect(() => {
+    if (open) dialogRef.current?.showModal();
+  }, [open]);
 
   /**
    * 开着的时候锁住页面滚动。
@@ -156,6 +162,7 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
     (entry: SearchEntry) => {
       setOpen(false);
       setQuery("");
+      setActive(0);
       router.push(entry.href);
     },
     [router],
@@ -175,95 +182,96 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
         <span className="hidden font-mono text-xs tracking-wider lg:inline">⌘K</span>
       </button>
 
-      {open && createPortal(
-        <div
-          data-search-overlay
-          className="fixed inset-0 z-100 flex items-start justify-center bg-ink/45 p-4 pt-[12vh]"
-          onClick={() => setOpen(false)}
-          role="presentation"
+      {open && (
+        // 点遮罩关闭:::backdrop 上的点击落在 <dialog> 本身,点框里的内容 target 是子元素。
+        // 这层交互是鼠标的便利,键盘那条路是 Esc(原生 cancel),所以不补键盘事件;
+        // jsx-a11y 把 <dialog> 当非交互元素,在这里是误报。
+        // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+        <dialog
+          ref={dialogRef}
+          aria-label={labels.search}
+          onClose={() => setOpen(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+          className="mx-auto mt-[12vh] w-[calc(100%-2rem)] max-w-2xl overflow-hidden rounded-2xl border border-border bg-paper p-0 text-foreground backdrop:bg-ink/45"
         >
-          <div
-            className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-paper"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal
-            aria-label={labels.search}
-          >
-            <div className="flex items-center gap-3 border-b border-border px-4">
-              <Search className="size-5 shrink-0" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setActive((index) => Math.min(index + 1, results.length - 1));
-                  } else if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setActive((index) => Math.max(index - 1, 0));
-                  } else if (event.key === "Enter" && results[active]) {
-                    event.preventDefault();
-                    go(results[active]);
-                  }
-                }}
-                placeholder={labels.placeholder}
-                className="h-14 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-              />
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="shrink-0 font-mono text-xs tracking-wider text-muted-foreground uppercase hover:text-foreground"
-              >
-                Esc
-              </button>
-            </div>
-
-            <ul ref={listRef} className="m-0 max-h-[60vh] list-none overflow-y-auto overscroll-contain p-0">
-              {query.trim() === "" ? (
-                <li className="m-0 px-4 py-8 text-center text-sm text-muted-foreground">{labels.hint}</li>
-              ) : results.length === 0 ? (
-                <li className="m-0 px-4 py-8 text-center text-sm text-muted-foreground">{labels.empty}</li>
-              ) : (
-                results.map((entry, index) => (
-                  <li key={`${entry.href}-${index}`} className="m-0">
-                    <button
-                      type="button"
-                      onMouseEnter={() => setActive(index)}
-                      onClick={() => go(entry)}
-                      className={cn(
-                        "block w-full border-b border-border/70 px-4 py-3 text-left transition-colors",
-                        index === active && "bg-primary text-primary-foreground",
-                      )}
-                    >
-                      <p className="m-0 flex items-baseline gap-2">
-                        <span className="font-display font-bold">
-                          <Highlight text={entry.heading || entry.title} query={needle} active={index === active} />
-                        </span>
-                        <span
-                          className={cn(
-                            "font-mono text-[0.65rem] tracking-wider uppercase",
-                            index === active ? "opacity-80" : "text-muted-foreground",
-                          )}
-                        >
-                          {entry.section} · {entry.title}
-                        </span>
-                      </p>
-                      {entry.body && (
-                        <p
-                          className={cn("m-0 mt-1 text-sm", index === active ? "opacity-90" : "text-muted-foreground")}
-                        >
-                          <Highlight text={excerpt(entry.body, needle)} query={needle} active={index === active} />
-                        </p>
-                      )}
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
+          <div className="flex items-center gap-3 border-b border-border px-4">
+            <Search className="size-5 shrink-0" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActive(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActive((index) => Math.min(index + 1, results.length - 1));
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActive((index) => Math.max(index - 1, 0));
+                } else if (event.key === "Enter" && results[active]) {
+                  event.preventDefault();
+                  go(results[active]);
+                }
+              }}
+              placeholder={labels.placeholder}
+              className="h-14 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+            />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="shrink-0 font-mono text-xs tracking-wider text-muted-foreground uppercase hover:text-foreground"
+            >
+              Esc
+            </button>
           </div>
-        </div>,
-        document.body,
+
+          <ul ref={listRef} className="m-0 max-h-[60vh] list-none overflow-y-auto overscroll-contain p-0">
+            {query.trim() === "" ? (
+              <li className="m-0 px-4 py-8 text-center text-sm text-muted-foreground">{labels.hint}</li>
+            ) : results.length === 0 ? (
+              <li className="m-0 px-4 py-8 text-center text-sm text-muted-foreground">{labels.empty}</li>
+            ) : (
+              results.map((entry, index) => (
+                <li key={`${entry.href}-${index}`} className="m-0">
+                  <button
+                    type="button"
+                    onMouseEnter={() => setActive(index)}
+                    onClick={() => go(entry)}
+                    className={cn(
+                      "block w-full border-b border-border/70 px-4 py-3 text-left transition-colors",
+                      index === active && "bg-primary text-primary-foreground",
+                    )}
+                  >
+                    <p className="m-0 flex items-baseline gap-2">
+                      <span className="font-display font-bold">
+                        <Highlight text={entry.heading || entry.title} query={needle} active={index === active} />
+                      </span>
+                      <span
+                        className={cn(
+                          "font-mono text-[0.65rem] tracking-wider uppercase",
+                          index === active ? "opacity-80" : "text-muted-foreground",
+                        )}
+                      >
+                        {entry.section} · {entry.title}
+                      </span>
+                    </p>
+                    {entry.body && (
+                      <p
+                        className={cn("m-0 mt-1 text-sm", index === active ? "opacity-90" : "text-muted-foreground")}
+                      >
+                        <Highlight text={excerpt(entry.body, needle)} query={needle} active={index === active} />
+                      </p>
+                    )}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </dialog>
       )}
     </>
   );

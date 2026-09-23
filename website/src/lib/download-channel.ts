@@ -31,7 +31,7 @@ export const STORAGE_KEY = "mosael-download-channel";
 
 /** 国内渠道**有链接**才算可用 —— 没配好之前不给访客一个点了打不开的按钮。 */
 export function chinaAvailable(mirror: ChinaMirror): boolean {
-  return /^https:\/\//.test(mirror.url);
+  return mirror.url.startsWith("https://");
 }
 
 export function detectChannel(

@@ -113,7 +113,7 @@ test('每一处写在正文里的版本号都等于当前版本', () => {
         }
         // 围栏里是**别的东西**的数据（插件清单的 "version": "0.1.0"、示例 JSON），
         // 不是读者读成「当前发布版」的那句话。frontmatter 的 version 由上面那条核。
-        if (fenced || /^version:/.test(line.trim())) return;
+        if (fenced || line.trim().startsWith('version:')) return;
 
         const found = [...line.matchAll(VERSION_SHAPED)].map((m) => m[1]);
         if (found.length === 0) return;

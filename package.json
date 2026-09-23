@@ -11,7 +11,7 @@
   "packageManager": "pnpm@12.5.1",
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
-    "lint": "pnpm --dir frontend lint && cd backend && uv run ruff check app tests",
+    "lint": "pnpm --dir frontend lint && pnpm --dir website lint && cd backend && uv run ruff check app tests",
     "build:sidecar": "pnpm --dir agent-sidecar build",
     "build:extension": "pnpm --dir browser-extension build",
     "build:backend": "cd backend && uv run --frozen python -m PyInstaller --noconfirm --clean --onedir --name mosael-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on --add-data app/ai/runtime/workers/tts.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/tts_protocol.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/asr.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/asr_protocol.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/separation.py:app/ai/runtime/workers --add-data app/ai/runtime/models/rnnoise/somnolent-hogwash.rnnn:app/ai/runtime/models/rnnoise --add-data app/ai/runtime/workers/line_protocol.py:app/ai/runtime/workers --add-data app/domain/blender/worker.py:app/domain/blender run_backend.py",

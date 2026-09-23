@@ -176,14 +176,14 @@ export function PluginBrowser({ locale, plugins }: { locale: Locale; plugins: Pl
     <div className="grid gap-6">
       <div className="flex flex-wrap items-center gap-3">
         <SearchBox value={query} onChange={setQuery} placeholder={t.plugins.search} />
-        <div className="flex flex-wrap gap-2" role="group" aria-label={t.community.type}>
+        <fieldset className="flex min-w-0 flex-wrap gap-2" aria-label={t.community.type}>
           {kinds.map((option) => (
             <Chip key={option.id} active={kind === option.id} onClick={() => setKind(option.id)}>
               {option.label}
               <span className="font-mono text-[0.6875rem] tabular-nums opacity-70">{option.count}</span>
             </Chip>
           ))}
-        </div>
+        </fieldset>
       </div>
       {shown.length > 0 ? (
         <ul className={GRID}>
