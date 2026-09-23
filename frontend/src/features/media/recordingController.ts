@@ -18,10 +18,6 @@ export interface RecordingStartOptions {
   mirrorCamera: boolean;
   filenames: Record<RecordingKind, string>;
   requestStop: () => void;
-  previewElements?: {
-    screen?: HTMLVideoElement | null;
-    camera?: HTMLVideoElement | null;
-  };
 }
 
 export interface ActiveRecording {
@@ -46,7 +42,7 @@ interface RecordingMediaDevices {
 export interface RecordingControllerDependencies {
   mediaDevices: RecordingMediaDevices;
   createSession: typeof createRecordingSession;
-  createMirroredCapture(source: MediaStream, video: HTMLVideoElement): CameraCapture;
+  createMirroredCapture(source: MediaStream): CameraCapture;
 }
 
 export class RecordingStartError extends Error {
@@ -81,10 +77,10 @@ function exactDevice(deviceId: string | undefined): MediaTrackConstraints | true
 /**
  * Owns capture acquisition and the recording session as one lifecycle.
  *
- * React may render or replace preview elements at any time, but it never owns the
- * underlying streams. Partial acquisition, mirrored-camera resources, native screen-stop
- * events, cancellation during a pending system picker, and concurrent finalization all
- * converge here so every capture has exactly one release path.
+ * React may render or replace preview elements at any time, so no capture reads from or binds
+ * to the DOM: previews only display the returned streams. Partial acquisition, mirrored-camera
+ * resources, native screen-stop events, cancellation during a pending system picker, and
+ * concurrent finalization all converge here so every capture has exactly one release path.
  */
 export function createRecordingController(
   dependencies: RecordingControllerDependencies = {
@@ -128,11 +124,6 @@ export function createRecordingController(
       let acquisitionIssue: Exclude<RecordingPermissionIssue, "systemAudio"> | null = null;
 
       const transferToInput = (stream: MediaStream) => acquiredStreams.delete(stream);
-      const bindPreview = async (element: HTMLVideoElement | null | undefined, stream: MediaStream) => {
-        if (!element) return;
-        element.srcObject = stream;
-        await element.play().catch(() => undefined);
-      };
 
       try {
         const capturesScreen = options.source === "screen" || options.source === "screenCamera";
@@ -157,7 +148,6 @@ export function createRecordingController(
             filenamePrefix: options.filenames.screen,
           });
           transferToInput(screenStream);
-          await bindPreview(options.previewElements?.screen, screenStream);
         }
 
         if (capturesCamera) {
@@ -168,12 +158,9 @@ export function createRecordingController(
           });
           acquiredStreams.add(cameraStream);
           assertStarting();
-          await bindPreview(options.previewElements?.camera, cameraStream);
 
           if (options.mirrorCamera) {
-            const cameraPreview = options.previewElements?.camera;
-            if (!cameraPreview) throw new Error("A camera preview is required to record mirrored frames.");
-            const capture = dependencies.createMirroredCapture(cameraStream, cameraPreview);
+            const capture = dependencies.createMirroredCapture(cameraStream);
             inputs.push({
               kind: "camera",
               stream: capture.stream,

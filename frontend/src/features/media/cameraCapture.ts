@@ -3,64 +3,74 @@ export interface CameraCapture {
   release(): void;
 }
 
-const DEFAULT_WIDTH = 1280;
-const DEFAULT_HEIGHT = 720;
-const DEFAULT_FRAME_RATE = 30;
+/** Chromium's window-exposed track processor (Electron's renderer is always Chromium). */
+interface TrackProcessorGlobal {
+  MediaStreamTrackProcessor?: new (init: { track: MediaStreamTrack }) => {
+    readonly readable: ReadableStream<VideoFrame>;
+  };
+}
 
 /**
  * Builds a camera-only recording stream whose video frames are flipped horizontally.
- * The source audio is passed through unchanged. The returned release function owns both
- * streams so callers cannot accidentally leave the camera active after recording stops.
+ *
+ * Frames are pulled from the camera track itself and each one is mirrored onto a canvas and
+ * emitted as exactly one recorded frame. Nothing reads from a DOM <video> element or waits
+ * for page rendering: the recorder's preview element is replaced by React when recording
+ * starts, and a media element removed from the document pauses, which used to freeze the
+ * recording on the camera's first, still under-exposed frames. Source audio passes through
+ * unchanged.
+ * The returned release function owns both streams so the camera cannot outlive the recording.
  */
-export function createMirroredCameraCapture(source: MediaStream, video: HTMLVideoElement): CameraCapture {
+export function createMirroredCameraCapture(source: MediaStream): CameraCapture {
   const sourceVideoTrack = source.getVideoTracks()[0];
   if (!sourceVideoTrack) throw new Error("A mirrored camera capture needs a video track.");
 
-  const settings = sourceVideoTrack.getSettings();
-  const width = video.videoWidth || settings.width || DEFAULT_WIDTH;
-  const height = video.videoHeight || settings.height || DEFAULT_HEIGHT;
-  const frameRate = Math.min(60, Math.max(1, settings.frameRate || DEFAULT_FRAME_RATE));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  const { MediaStreamTrackProcessor: TrackProcessor } = globalThis as unknown as TrackProcessorGlobal;
+  if (!TrackProcessor) throw new Error("Camera mirroring is not supported by this runtime.");
 
+  const canvas = document.createElement("canvas");
+  // Keep the default canvas. With `{ alpha: false }` Chromium encodes the frames with a different
+  // YUV matrix, and the backend's ffmpeg (thumbnails, proxies, export) then decodes them lighter.
   const context = canvas.getContext("2d");
   if (!context) throw new Error("The camera mirror canvas is unavailable.");
-  if (typeof canvas.captureStream !== "function") {
-    throw new Error("Camera mirroring is not supported by this browser.");
-  }
 
-  const stream = canvas.captureStream(frameRate);
+  // Frame rate 0: the canvas only emits a frame when one is requested, i.e. once per camera frame.
+  const stream = canvas.captureStream(0);
+  const mirroredTrack = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
+  if (!mirroredTrack) throw new Error("The camera mirror canvas produced no video track.");
   for (const track of source.getAudioTracks()) stream.addTrack(track);
 
-  let frameRequest: number | null = null;
-  let released = false;
-  const renderFrame = () => {
-    if (released) return;
-    try {
-      context.clearRect(0, 0, width, height);
-      context.save();
+  const stopMirroring = new AbortController();
+  const mirrorFrames = new WritableStream<VideoFrame>({
+    write(frame) {
       try {
-        context.translate(width, 0);
-        context.scale(-1, 1);
-        context.drawImage(video, 0, 0, width, height);
+        const width = frame.displayWidth;
+        const height = frame.displayHeight;
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        context.setTransform(-1, 0, 0, 1, width, 0);
+        context.drawImage(frame, 0, 0, width, height);
+        mirroredTrack.requestFrame();
       } finally {
-        context.restore();
+        frame.close();
       }
-    } catch {
-      // A stream can briefly have track metadata before its first drawable frame. Keep waiting.
-    } finally {
-      if (!released) frameRequest = requestAnimationFrame(renderFrame);
-    }
-  };
-  frameRequest = requestAnimationFrame(renderFrame);
+    },
+  });
+  // The pipe settles when the camera ends or release() aborts it; either way the tracks are
+  // stopped by release(), so there is nothing further to report here.
+  void new TrackProcessor({ track: sourceVideoTrack }).readable
+    .pipeTo(mirrorFrames, { signal: stopMirroring.signal })
+    .catch(() => undefined);
 
+  let released = false;
   return {
     stream,
     release() {
       if (released) return;
       released = true;
-      if (frameRequest !== null) cancelAnimationFrame(frameRequest);
+      stopMirroring.abort();
       const tracks = new Set([...source.getTracks(), ...stream.getTracks()]);
       tracks.forEach((track) => track.stop());
     },

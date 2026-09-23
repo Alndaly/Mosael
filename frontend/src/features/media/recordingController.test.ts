@@ -95,6 +95,30 @@ describe("recording controller", () => {
     expect(requestStop).toHaveBeenCalledOnce();
   });
 
+  it("mirrors the camera from its stream alone, while the preview shows the raw camera", async () => {
+    const camera = fakeStream({ audio: true });
+    const mirrored = { stream: fakeStream().stream, release: vi.fn() };
+    const createMirroredCapture = vi.fn(() => mirrored);
+    const deps = dependencies({ createMirroredCapture });
+    deps.getUserMedia.mockResolvedValue(camera.stream);
+    const controller = createRecordingController(deps.value);
+
+    const active = await controller.start({
+      source: "camera",
+      captureSystemAudio: false,
+      mirrorCamera: true,
+      filenames,
+      requestStop: vi.fn(),
+    });
+
+    expect(createMirroredCapture).toHaveBeenCalledWith(camera.stream);
+    expect(deps.createSession).toHaveBeenCalledWith(
+      [{ kind: "camera", stream: mirrored.stream, filenamePrefix: "camera", release: mirrored.release }],
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+    expect(active.previewStreams).toEqual({ screen: null, camera: camera.stream });
+  });
+
   it("rejects missing requested system audio and releases the partial capture", async () => {
     const screen = fakeStream();
     const deps = dependencies();

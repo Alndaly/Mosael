@@ -327,19 +327,33 @@ describe("Recorder", () => {
     const screenCapture = fakeStream({ audio: true });
     const cameraCapture = fakeStream();
     const mirroredCapture = fakeStream();
+    const requestFrame = vi.fn();
+    Object.assign(mirroredCapture.track, { requestFrame });
     Object.assign(mirroredCapture.stream, { addTrack: vi.fn() });
+    const drawImage = vi.fn();
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-      clearRect: vi.fn(),
-      drawImage: vi.fn(),
-      restore: vi.fn(),
-      save: vi.fn(),
-      scale: vi.fn(),
-      translate: vi.fn(),
+      drawImage,
+      setTransform: vi.fn(),
     } as unknown as CanvasRenderingContext2D);
     Object.defineProperty(HTMLCanvasElement.prototype, "captureStream", {
       configurable: true,
       value: vi.fn(() => mirroredCapture.stream),
     });
+    let cameraFrames!: ReadableStreamDefaultController<VideoFrame>;
+    const processedTracks: unknown[] = [];
+    vi.stubGlobal(
+      "MediaStreamTrackProcessor",
+      class {
+        readonly readable = new ReadableStream<VideoFrame>({
+          start: (controller) => {
+            cameraFrames = controller;
+          },
+        });
+        constructor({ track }: { track: MediaStreamTrack }) {
+          processedTracks.push(track);
+        }
+      },
+    );
     getUserMedia.mockResolvedValueOnce(cameraCapture.stream);
     getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
     localStorage.setItem("mosael.recorder.cameraMirror", "true");
@@ -353,6 +367,14 @@ describe("Recorder", () => {
     await screen.findByRole("button", { name: /recordStop/ });
 
     expect(FakeMediaRecorder.streams).toEqual([screenCapture.stream, mirroredCapture.stream]);
+    expect(processedTracks).toEqual([cameraCapture.track]);
+
+    // Starting swaps the dialog content, replacing (and so pausing) the setup preview element.
+    // Camera frames that arrive afterwards must still reach the recording.
+    const frame = { displayWidth: 1280, displayHeight: 720, close: vi.fn() } as unknown as VideoFrame;
+    cameraFrames.enqueue(frame);
+    await waitFor(() => expect(requestFrame).toHaveBeenCalledOnce());
+    expect(drawImage).toHaveBeenCalledWith(frame, 0, 0, 1280, 720);
 
     await user.click(screen.getByRole("button", { name: /recordStop/ }));
     await waitFor(() => expect(onRecorded).toHaveBeenCalledOnce());

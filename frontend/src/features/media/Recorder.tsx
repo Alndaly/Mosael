@@ -43,24 +43,16 @@ interface PreviewStreams {
  * A live preview owns the DOM-to-stream binding, rather than treating it as a one-off command.
  * Radix replaces its dialog content when the recorder changes from modal setup to a non-modal
  * floating controller. This component is mounted with the replacement <video>, so the active
- * stream is attached again instead of leaving the new element black.
+ * stream is attached again instead of leaving the new element black. The element is display-only:
+ * captures never read frames from it, because the element it replaces is paused once detached.
  */
 function LivePreviewVideo({
   stream,
-  previewRef,
   ...props
 }: React.VideoHTMLAttributes<HTMLVideoElement> & {
   stream: MediaStream | null;
-  previewRef: React.MutableRefObject<HTMLVideoElement | null>;
 }) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const assignRef = React.useCallback(
-    (video: HTMLVideoElement | null) => {
-      videoRef.current = video;
-      previewRef.current = video;
-    },
-    [previewRef],
-  );
 
   React.useEffect(() => {
     const video = videoRef.current;
@@ -72,7 +64,7 @@ function LivePreviewVideo({
     };
   }, [stream]);
 
-  return <video ref={assignRef} {...props} />;
+  return <video ref={videoRef} {...props} />;
 }
 
 /** Capture screen / webcam / mic via MediaRecorder and hand independent files to the caller.
@@ -96,8 +88,6 @@ export function Recorder({
   const [starting, setStarting] = React.useState(false);
   const [secs, setSecs] = React.useState(0);
   const [previewStreams, setPreviewStreams] = React.useState<PreviewStreams>({ screen: null, camera: null });
-  const screenVideoRef = React.useRef<HTMLVideoElement | null>(null);
-  const cameraVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const controllerRef = React.useRef<RecordingController | null>(null);
   const timerRef = React.useRef<number | null>(null);
 
@@ -232,8 +222,6 @@ export function Recorder({
     timerRef.current = null;
     stopLevelMeter();
     setPreviewStreams({ screen: null, camera: null });
-    if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
-    if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
   }, [stopLevelMeter]);
 
   const cancel = React.useCallback(() => {
@@ -289,10 +277,6 @@ export function Recorder({
           mic: t("record_mic_file"),
         },
         requestStop: () => void stop(),
-        previewElements: {
-          screen: screenVideoRef.current,
-          camera: cameraVideoRef.current,
-        },
       });
       setPreviewStreams(active.previewStreams);
       if (active.levelStream) startLevelMeter(active.levelStream);
@@ -393,13 +377,12 @@ export function Recorder({
             recording && "bg-black",
           )}
         >
-          {/* Video stays mounted for the selected source so refs are stable when start() attaches
-              streams. In dual mode the split preview makes the two independent outputs explicit. */}
+          {/* Previews only display the controller's streams; recording never reads from them. In
+              dual mode the split preview makes the two independent outputs explicit. */}
           {source === "screenCamera" ? (
             <div className="grid h-full w-full grid-cols-2 gap-px bg-border">
               <div className="relative min-w-0 overflow-hidden bg-black">
                 <LivePreviewVideo
-                  previewRef={screenVideoRef}
                   stream={previewStreams.screen}
                   className="h-full w-full object-contain"
                   muted
@@ -413,7 +396,6 @@ export function Recorder({
               </div>
               <div className="relative min-w-0 overflow-hidden bg-black">
                 <LivePreviewVideo
-                  previewRef={cameraVideoRef}
                   stream={previewStreams.camera}
                   className={cn("h-full w-full object-contain", mirrorCamera && "-scale-x-100")}
                   muted
@@ -428,7 +410,6 @@ export function Recorder({
             </div>
           ) : source === "screen" ? (
             <LivePreviewVideo
-              previewRef={screenVideoRef}
               stream={previewStreams.screen}
               className="h-full w-full bg-black object-contain"
               muted
@@ -436,7 +417,6 @@ export function Recorder({
             />
           ) : source === "camera" ? (
             <LivePreviewVideo
-              previewRef={cameraVideoRef}
               stream={previewStreams.camera}
               className={cn("h-full w-full bg-black object-contain", mirrorCamera && "-scale-x-100")}
               muted
