@@ -110,6 +110,9 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginPermissionGrant": ("app/domain/plugins/",),
     "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),
+    "PluginCapabilityDefault": ("app/domain/plugins/",),
+    #: 素材外链的缓存由生成链路写(传完记下、过期重传),见 generation/public_links。
+    "PluginPublicLink": ("app/domain/generation/public_links.py",),
 }
 
 #: 不受这条规矩约束的层。

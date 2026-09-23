@@ -36,6 +36,7 @@ import { DenoiseEnginesSection } from "@/features/settings/DenoiseEnginesSection
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { InstallSourceSection } from "@/features/settings/InstallSourceSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
+import { AssetLinkStorageSection } from "@/features/settings/AssetLinkStorageSection";
 import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { SeparationEnginesSection } from "@/features/settings/SeparationEnginesSection";
@@ -131,7 +132,13 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "providerVideoTitle",
         icon: <Video size={14} />,
         capabilities: ["video"],
-        render: providerPage("video", "providerVideoTitle", "providerVideoDesc"),
+        render: (ctx) => (
+          <>
+            {providerPage("video", "providerVideoTitle", "providerVideoDesc")(ctx)}
+            {/* 只收链接的输入(Seedance 的参考视频)用哪一家存储换直链 —— 个人选择,和默认模型同类。 */}
+            <AssetLinkStorageSection />
+          </>
+        ),
       },
       {
         // **只放云端的配音与播客连接。** 内置配音引擎、声音克隆是本机的,归「本机引擎」;

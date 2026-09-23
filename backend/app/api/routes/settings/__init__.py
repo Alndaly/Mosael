@@ -14,6 +14,7 @@ from app.api.routes.settings.provider_pricing import router as provider_pricing_
 from app.api.routes.settings.provider_profiles import router as provider_profiles_router
 from app.api.routes.settings.system import router as system_router
 from app.api.routes.settings.data import router as data_router
+from app.api.routes.settings.asset_links import router as asset_links_router
 
 router = APIRouter()
 for subrouter in (
@@ -25,5 +26,6 @@ for subrouter in (
     provider_pricing_router,
     system_router,
     data_router,
+    asset_links_router,
 ):
     router.include_router(subrouter)

@@ -115,3 +115,37 @@ class PluginInvocation(Base):
     output: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class PluginCapabilityDefault(Base):
+    """某个人把哪一个插件实例定为某项能力的默认 —— 今天只有 `public_url`(素材外链)。
+
+    **一个人配了几家对象存储时,用哪一家必须由他说了算。** 此前按实例名的字母序取第一个:
+    谁被用上取决于它叫什么,而排第一的那个没配好时整条生成直接报错,不会换到配好的那一家。
+
+    在「设置 → 视频生成」的「素材外链」里定。按人分:存储实例本来就是个人的
+    (PluginInstance.owner_user_id),默认当然也是。实例删掉时
+    这一条跟着删(外键级联),不会留下一个指向不存在实例的「默认」。
+    """
+
+    __tablename__ = "plugin_capability_defaults"
+
+    owner_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    capability: Mapped[str] = mapped_column(String(40), primary_key=True)
+    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class PluginPublicLink(Base):
+    """传到对象存储后拿到的那条**限时直链**,按(素材, 存储实例)记住。
+
+    同一份参考视频点两次生成,此前就传两次 —— 最大 200MB 的文件,每次都重新上传。链接还在
+    有效期内就直接用;快到期(留一小时余量,供应商在提交时取文件)才重传。
+    """
+
+    __tablename__ = "plugin_public_links"
+
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True)
+    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

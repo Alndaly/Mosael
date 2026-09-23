@@ -340,6 +340,12 @@
     "instance_id",
     "tool_name"
   ],
+  "plugin_capability_defaults": [
+    "owner_user_id",
+    "capability",
+    "instance_id",
+    "updated_at"
+  ],
   "plugin_credentials": [
     "created_at",
     "instance_id",
@@ -379,6 +385,12 @@
     "instance_id",
     "permission",
     "updated_at"
+  ],
+  "plugin_public_links": [
+    "asset_id",
+    "instance_id",
+    "url",
+    "expires_at"
   ],
   "projects": [
     "active_sequence_id",

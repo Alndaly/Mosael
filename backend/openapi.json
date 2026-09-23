@@ -14070,6 +14070,76 @@
         }
       }
     },
+    "/api/settings/asset-link-storage": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Asset Link Storage",
+        "operationId": "get_asset_link_storage_api_settings_asset_link_storage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetLinkStorageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Asset Link Storage",
+        "operationId": "set_asset_link_storage_api_settings_asset_link_storage_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetLinkStorageUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetLinkStorageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/shares/{kind}/{resource_id}": {
       "post": {
         "tags": [
@@ -19766,6 +19836,83 @@
         "type": "object",
         "title": "AssetFrameRequest",
         "description": "从一段视频里取某一时刻的一帧,存成一份新素材。"
+      },
+      "AssetLinkStorageOption": {
+        "properties": {
+          "instance_id": {
+            "type": "string",
+            "title": "Instance Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance_id",
+          "name"
+        ],
+        "title": "AssetLinkStorageOption"
+      },
+      "AssetLinkStorageOut": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "automatic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automatic"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/AssetLinkStorageOption"
+            },
+            "type": "array",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "title": "AssetLinkStorageOut"
+      },
+      "AssetLinkStorageUpdate": {
+        "properties": {
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          }
+        },
+        "type": "object",
+        "title": "AssetLinkStorageUpdate"
       },
       "AssetOut": {
         "properties": {

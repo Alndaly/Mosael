@@ -184,3 +184,24 @@ class PluginInvocationOut(OrmModel):
     output: dict
     error: str | None
     created_at: datetime
+
+
+# --- 素材外链用哪一家存储(设置 → 视频生成) ---
+
+class AssetLinkStorageOption(ApiModel):
+    instance_id: str
+    name: str
+    #: 还缺哪些必填项;空 = 配好了,选得了。
+    missing: list[str] = Field(default_factory=list)
+
+
+class AssetLinkStorageOut(ApiModel):
+    #: 我定的那一家;没定是 None。
+    current: str | None = None
+    #: 没定时实际会用的那一家(只有一家配好时);几家都配好又没定时是 None —— 生成时会当场问。
+    automatic: str | None = None
+    options: list[AssetLinkStorageOption] = Field(default_factory=list)
+
+
+class AssetLinkStorageUpdate(ApiModel):
+    instance_id: str | None = None

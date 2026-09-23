@@ -109,6 +109,9 @@
     "declare": [
       {
         "name": "cos_upload",
+        "provides": [
+          "public_url"
+        ],
         "description": {
           "zh": "把一份素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。这就是「本地文件怎么变成公网链接」的答案 —— 直接粘进生成节点的参考视频那一格。",
           "en": "Upload an asset and hand back a time-limited direct link (the signature lives in the query string, so the bucket need not be public-read). This is how a local file becomes a URL."

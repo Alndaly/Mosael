@@ -556,6 +556,7 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
         <CredentialRows instanceId={instance.id} oauth={Boolean(pkg.oauth)} />
       )}
 
+
       {(grants.data ?? []).map((grant) => (
         <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
           <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">

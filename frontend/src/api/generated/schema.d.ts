@@ -4687,6 +4687,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/asset-link-storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Asset Link Storage */
+        get: operations["get_asset_link_storage_api_settings_asset_link_storage_get"];
+        /** Set Asset Link Storage */
+        put: operations["set_asset_link_storage_api_settings_asset_link_storage_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shares/{kind}/{resource_id}": {
         parameters: {
             query?: never;
@@ -6820,6 +6838,29 @@ export interface components {
             at: number;
             /** Project Id */
             project_id?: string | null;
+        };
+        /** AssetLinkStorageOption */
+        AssetLinkStorageOption: {
+            /** Instance Id */
+            instance_id: string;
+            /** Name */
+            name: string;
+            /** Missing */
+            missing?: string[];
+        };
+        /** AssetLinkStorageOut */
+        AssetLinkStorageOut: {
+            /** Current */
+            current?: string | null;
+            /** Automatic */
+            automatic?: string | null;
+            /** Options */
+            options?: components["schemas"]["AssetLinkStorageOption"][];
+        };
+        /** AssetLinkStorageUpdate */
+        AssetLinkStorageUpdate: {
+            /** Instance Id */
+            instance_id?: string | null;
         };
         /** AssetOut */
         AssetOut: {
@@ -21982,6 +22023,68 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_asset_link_storage_api_settings_asset_link_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetLinkStorageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_asset_link_storage_api_settings_asset_link_storage_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetLinkStorageUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetLinkStorageOut"];
                 };
             };
             /** @description Validation Error */

@@ -92,6 +92,7 @@ def create_generation_job(
     uploaded = _validate_source_assets(
         db, workspace_id, source_assets,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
+        owner_user_id=created_by,
     )
     if uploaded:
         # 换到的直链回填进 `<role>_url` —— 从这里往下,它和"用户自己粘了一条链接"走同一条路。
@@ -163,6 +164,8 @@ def _validate_source_assets(
     workspace_id: str,
     source_assets: list[dict[str, str]],
     capabilities: dict[str, Any] | None = None,
+    *,
+    owner_user_id: str | None,
 ) -> dict[str, str]:
     """在创建任务前确认引用仍有效,**并且它能按这家要的形式交付**。
 
@@ -199,8 +202,10 @@ def _validate_source_assets(
             from app.domain.generation.public_links import NoUploader, public_url_for
 
             try:
+                # 传到**发起人自己的**存储里 —— 桶和密钥是他的(见 public_links 的「用哪一家」)。
                 url, via = public_url_for(
-                    db, workspace_id=workspace_id, asset_id=asset.id, asset_name=asset.name
+                    db, owner_user_id=owner_user_id, workspace_id=workspace_id,
+                    asset_id=asset.id, asset_name=asset.name,
                 )
             except NoUploader as exc:
                 raise GenerationDomainError(str(exc)) from exc

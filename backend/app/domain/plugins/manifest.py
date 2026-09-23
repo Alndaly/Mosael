@@ -172,6 +172,18 @@ class Manifest:
     #: 不写就退到作者写的第一条。它同时是告诉插件进程「这次要说哪种语言」的兜底(见 runtime)。
     default_locale: str = ""
 
+    def tool_providing(self, capability: str) -> str:
+        """清单里**声明自己负责** `capability` 的那个工具名(工具声明上的 `provides`);没有就是空串。
+
+        能力声明在包上(`provides`)说的是「这个插件能做这件事」,而做这件事的是哪一个工具,
+        要由工具自己说 —— 此前宿主按 `_upload` 后缀去猜,和上面「声明,不是猜」自相矛盾。
+        """
+        for tool in self.declared_tools:
+            provides = tool.get("provides")
+            if isinstance(provides, list) and capability in provides:
+                return str(tool.get("name") or "")
+        return ""
+
     def text(self, value: Any, locale: str | None = None) -> str:
         """按这份清单的语言习惯挑一段文字(见 text_of)。清单在手时一律走它。"""
         return text_of(value, locale, author_locale=self.default_locale)
@@ -351,6 +363,13 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         raise ManifestError(f"插件清单 {path} 缺少必填字段: name")
     instance = raw.get("instance") if isinstance(raw.get("instance"), dict) else {}
     expose, recommended, overrides, declared = _tools_policy(raw, pick)
+    # 工具上声明的能力必须是包声明过的 —— 包上没说「我能换公网地址」,某个工具却自称负责它,
+    # 两处说的不是一回事,宿主不该替作者选一个信。
+    package_provides = {str(one) for one in (raw.get("provides") or []) if isinstance(one, str)}
+    for tool in declared:
+        extra = set(tool.get("provides") or []) - package_provides if isinstance(tool.get("provides"), list) else set()
+        if extra:
+            raise ManifestError(f"插件清单 {path} 的工具 {tool.get('name')} 声明了包上没有的能力: {', '.join(sorted(extra))}")
     return Manifest(
         id=raw["id"].strip(),
         name=name,
