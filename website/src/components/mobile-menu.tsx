@@ -30,7 +30,7 @@ export function MobileMenu({
   labels,
 }: {
   locale: Locale;
-  links: { href: string; match: string; exact?: boolean; label: string }[];
+  links: { href: string; match: string | readonly string[]; exact?: boolean; label: string }[];
   labels: { menu: string; language: string; github: string; download: string; theme: string };
 }) {
   const [open, setOpen] = React.useState(false);

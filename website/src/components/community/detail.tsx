@@ -41,7 +41,9 @@ export function DetailHeader({
       <PageGlow />
       <div className="mx-auto max-w-[76rem] px-5 pt-30 pb-10 sm:px-8 sm:pt-34">
         <nav aria-label="breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-          <span>{t.name}</span>
+          <Link href={localePath(locale, "/plugins")} className="hover:text-foreground">
+            {t.name}
+          </Link>
           <ChevronRight className="size-3.5" aria-hidden />
           <Link href={localePath(locale, section.href)} className="hover:text-foreground">
             {section.label}

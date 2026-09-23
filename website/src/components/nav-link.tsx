@@ -5,8 +5,15 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-export function isNavLinkActive(pathname: string, match: string, exact = false) {
-  return exact ? pathname === match : pathname === match || pathname.startsWith(`${match}/`);
+/**
+ * 这一项在当前页上算不算「在这儿」。`match` 可以给几个前缀:一个导航项下面可以有几个分区 ——
+ * 「社区」同时管着 /plugins 和 /workflows,两处的地址都不改(插件清单里的文档链接指着它们)。
+ */
+export function isNavLinkActive(pathname: string, match: string | readonly string[], exact = false) {
+  const prefixes = typeof match === "string" ? [match] : match;
+  return prefixes.some((prefix) =>
+    exact ? pathname === prefix : pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }
 
 /** 站头导航项。首页必须精确匹配；文档等栏目按路径前缀匹配。 */
@@ -17,7 +24,7 @@ export function NavLink({
   children,
 }: {
   href: string;
-  match?: string;
+  match?: string | readonly string[];
   exact?: boolean;
   children: React.ReactNode;
 }) {

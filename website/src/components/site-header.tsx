@@ -18,8 +18,12 @@ export function SiteHeader({ locale }: { locale: Locale }) {
   const t = getMessages(locale);
   const links = [
     { href: localePath(locale), match: localePath(locale), exact: true, label: t.nav.product },
-    { href: localePath(locale, "/workflows"), match: localePath(locale, "/workflows"), label: t.nav.workflows },
-    { href: localePath(locale, "/plugins"), match: localePath(locale, "/plugins"), label: t.nav.plugins },
+    // 插件和工作流是同一个社区的两个分区(页头里有标签页切换),导航上只占一格。
+    {
+      href: localePath(locale, "/plugins"),
+      match: [localePath(locale, "/plugins"), localePath(locale, "/workflows")],
+      label: t.nav.community,
+    },
     { href: localePath(locale, "/changelog"), match: localePath(locale, "/changelog"), label: t.nav.changelog },
     { href: docHref(locale, firstDoc(locale)), match: localePath(locale, "/docs"), label: t.nav.docs },
   ];
