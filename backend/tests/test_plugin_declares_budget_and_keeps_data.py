@@ -116,3 +116,20 @@ def test_持久目录的名字不会逃出根目录() -> None:
     root = runtime.data_dir_for("x").parent
     for hostile in ("../../etc", "a/../../b", "..", ""):
         assert runtime.data_dir_for(hostile).parent == root
+
+
+def test_Windows上子进程要的系统变量都在_凭据以外的东西不多带(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows 上缺 SYSTEMROOT,Python 连初始化都过不去;npm 要 APPDATA 放缓存。"""
+    monkeypatch.setattr(runtime.sys, "platform", "win32")
+    fake = {"PATH": r"C:\\Windows", "SystemRoot": r"C:\\Windows", "APPDATA": r"C:\\Users\\u\\AppData\\Roaming",
+            "TEMP": r"C:\\Temp", "OPENAI_API_KEY": "sk-应用自己的", "MOSAEL_DATA_DIR": r"C:\\data"}
+    monkeypatch.setattr(runtime.os, "environ", fake)
+    env = runtime.base_env()
+    assert env["SYSTEMROOT"] == r"C:\\Windows" and env["APPDATA"].endswith("Roaming") and env["TEMP"] == r"C:\\Temp"
+    assert "OPENAI_API_KEY" not in env and "MOSAEL_DATA_DIR" not in env
+
+
+def test_其他平台只有那三个(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    monkeypatch.setattr(runtime.os, "environ", {"PATH": "/usr/bin", "HOME": "/Users/u", "SYSTEMROOT": "x", "SECRET": "y"})
+    assert set(runtime.base_env()) == {"PATH", "HOME", "LANG"}
