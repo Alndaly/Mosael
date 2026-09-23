@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AdminActivityChart } from "./AdminActivityChart";
 import { RegistrationSection } from "./RegistrationSection";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -155,29 +156,29 @@ export function AdminView() {
                   <ShieldCheck size={11} /> {t("deployAdminBadge")}
                 </Badge>
               )}
-              <Switch
-                checked={row.is_deployment_admin}
-                // 最后一个部署管理员不能被收回 —— 后端会 409,这里先不给点。
-                disabled={setAdmin.isPending || (row.is_deployment_admin && admins <= 1)}
-                onCheckedChange={(granted) => setAdmin.mutate({ id: row.id, granted })}
-                aria-label={t("deployAdminsTitle")}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-destructive"
-                // 最后一个管理员删不得,同上。
-                disabled={removeUser.isPending || (row.is_deployment_admin && admins <= 1)}
-                onClick={() => setRemoving(row)}
-                aria-label={t("adminDeleteUser")}
-              >
-                <Trash2 size={13} />
-              </Button>
+              <LastAdminHint active={row.is_deployment_admin && admins <= 1}>
+                <Switch
+                  checked={row.is_deployment_admin}
+                  // 最后一个部署管理员不能被收回 —— 后端会 409,这里先不给点。
+                  disabled={setAdmin.isPending || (row.is_deployment_admin && admins <= 1)}
+                  onCheckedChange={(granted) => setAdmin.mutate({ id: row.id, granted })}
+                  aria-label={t("deployAdminsTitle")}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-destructive"
+                  // 最后一个管理员删不得,同上。
+                  disabled={removeUser.isPending || (row.is_deployment_admin && admins <= 1)}
+                  onClick={() => setRemoving(row)}
+                  aria-label={t("adminDeleteUser")}
+                >
+                  <Trash2 size={13} />
+                </Button>
+              </LastAdminHint>
             </span>
           </SettingsRow>
         ))}
-        {/* 开关和删除对最后一个管理员是灰的 —— 为什么灰,在这里说一次,而不是让人猜。 */}
-        <p className="mt-1.5 px-0.5 text-ui-xs leading-relaxed text-muted-foreground">{t("deployLastAdminDesc")}</p>
       </SettingsGroup>
 
       <RegistrationSection />
@@ -191,6 +192,28 @@ export function AdminView() {
         onConfirm={() => removing && removeUser.mutate(removing.id)}
       />
     </div>
+  );
+}
+
+/**
+ * 最后一个部署管理员那一行的开关和删除是灰的 —— **为什么灰,就在灰的东西上说**。
+ *
+ * 此前这句话是账户列表底下的一段常驻文字:离那两个控件隔着整张列表,而且作为分组的子项,
+ * 上面还被画了一根分割线,看着像一行没有内容的账户。禁用的控件收不到悬停,所以提示挂在
+ * 外面包着的那一层上。
+ */
+function LastAdminHint({ active, children }: { active: boolean; children: React.ReactNode }) {
+  const t = useI18n();
+  if (!active) return <>{children}</>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex items-center gap-2" tabIndex={0} aria-label={t("deployLastAdminDesc")}>
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[260px]">{t("deployLastAdminDesc")}</TooltipContent>
+    </Tooltip>
   );
 }
 
