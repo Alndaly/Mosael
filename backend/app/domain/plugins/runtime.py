@@ -46,6 +46,21 @@ from app.domain.plugins.manifest import LOCALE_ENV
 #: 是一句「Blender 未响应,请检查 Add-on 连接」,排查方向直接被指向 Add-on。所以预算是
 #: 调用方可以给的**参数**,不是这条通道写死的常量(见 blender/bridge.BLENDER_TIMEOUT_SECONDS)。
 PLUGIN_TIMEOUT_SECONDS = 60
+
+#: 插件自己的**持久**目录,经这个环境变量告诉它。
+#:
+#: 插件目录本身不能当存储用:更新插件就是把整个目录换掉(registry.install_archive)。而有的插件
+#: 要攒一份很贵的东西 —— Remotion 插件装的 node_modules 和渲染用的浏览器有几百 MB,每次更新
+#: 都重装一遍是不可接受的。它和 MOSAEL_PLUGIN_OUTPUT_DIR 正相反:那个是这一次调用的、用完就删。
+DATA_ENV = "MOSAEL_PLUGIN_DATA_DIR"
+
+
+def data_dir_for(package_id: str) -> Path:
+    """一个插件的持久目录(不保证存在)。卸载时随包一起删(见 packages.uninstall)。"""
+    from app.core.config import settings
+
+    safe = "".join(ch if ch.isalnum() or ch in "-_." else "-" for ch in package_id).strip(".") or "plugin"
+    return settings.data_dir / "plugin-data" / safe
 MAX_OUTPUT_BYTES = 1_000_000
 
 
@@ -111,6 +126,7 @@ def execute_tool(
     credentials: dict[str, str] | None = None,
     scratch_dir: Path | None = None,
     timeout: float = PLUGIN_TIMEOUT_SECONDS,
+    data_dir: Path | None = None,
 ) -> ToolResult:
     """Run the plugin entry once. Returns the tool output dict; raises
     PluginRuntimeError with an actionable message on any failure.
@@ -134,6 +150,7 @@ def execute_tool(
         "MOSAEL_PLUGIN": "1",
         LOCALE_ENV: locale,
         **({ARTIFACT_SCRATCH_ENV: str(scratch_dir)} if scratch_dir is not None else {}),
+        **({DATA_ENV: str(data_dir)} if data_dir is not None else {}),
         **(credentials or {}),
     }
     started = time.monotonic()
@@ -179,4 +196,7 @@ def execute_tool(
     return ToolResult(output=output, state=dict(state or {}))
 
 
-__all__ = ["PluginRuntimeError", "PluginTimeout", "ToolResult", "execute_tool", "check_required_input", "resolve_entry", "PLUGIN_TIMEOUT_SECONDS"]
+__all__ = [
+    "DATA_ENV", "PluginRuntimeError", "PluginTimeout", "ToolResult", "check_required_input", "data_dir_for",
+    "execute_tool", "resolve_entry", "PLUGIN_TIMEOUT_SECONDS",
+]

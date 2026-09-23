@@ -19,6 +19,7 @@ from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import PATH_KEY, ManifestError, parse
 from app.domain.plugins.migrations import CANONICAL_FILENAME, LEGACY_FILENAMES, migrate_directory
+from app.domain.plugins.runtime import data_dir_for
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,8 @@ def uninstall(db: Session, package_id: str, plugins_dir: Path) -> None:
             shutil.rmtree(path)
         elif path.is_dir():
             logger.warning("plugin %s: refusing to remove %s (not a direct child of %s)", package_id, path, root)
+    # 持久目录随包一起走:卸载后留着它,下次装回来就会读到上一个版本攒下的东西(甚至别人的)。
+    shutil.rmtree(data_dir_for(package_id), ignore_errors=True)
     db.delete(package)
     db.commit()
 

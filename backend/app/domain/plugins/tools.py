@@ -19,7 +19,7 @@ from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, mak
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest, text_of
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
-from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
+from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, data_dir_for, execute_tool
 
 
 def _short_description_label(description: str) -> str:
@@ -57,6 +57,28 @@ def _display_label(tool: dict[str, Any], override_label: str = "") -> str:
     )
 
 
+#: 插件自己能声明的最长预算。再长的活该拆步(先准备、再干活),而不是让一次调用挂半小时。
+MAX_DECLARED_TIMEOUT_SECONDS = 1800
+
+
+def _declared_timeout(tool: dict[str, Any]) -> float | None:
+    """进程插件在 declare 里写的 `timeout_seconds`。没写、写错都当没写(用运行时的默认 60s)。
+
+    **预算该由最知道活有多重的一方给。** 此前只有调用方能给(Blender 互通自己传),插件自己
+    说不出「我这一步要三分钟」—— 于是一个渲染视频的工具,不管从哪里调都会在第 60 秒被掐掉。
+    """
+    raw = tool.get("timeout_seconds")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        return None
+    return float(min(raw, MAX_DECLARED_TIMEOUT_SECONDS))
+
+
+def _ensure_data_dir(package_id: str) -> Path:
+    path = data_dir_for(package_id)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
     """这个实例**拥有**的工具(不管暴不暴露)。插件页的勾选列表用它。
 
@@ -87,6 +109,8 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 "read_only": bool((override and override.read_only) or tool.get("read_only")),
                 "node": (override.node if override else None) or tool.get("node"),
                 "internal": bool(override and override.internal),
+                # MCP 的清单是对方服务给的,那里没有这个字段 —— 只认进程插件自己声明的。
+                "timeout_seconds": None if manifest.is_mcp else _declared_timeout(tool),
             }
         )
     return out
@@ -176,7 +200,8 @@ def invoke(
 ) -> PluginInvocation:
     """跑一次工具。**插件唯一的执行路径。**
 
-    `timeout` 不给就用这条运行时的默认预算(60s)。**借道这条通道的产品功能要自己给** ——
+    `timeout` 不给就用**工具自己声明的** `timeout_seconds`,再没有就用运行时的默认预算(60s)。
+    **借道这条通道的产品功能要自己给** ——
     那 60 秒对标的是「一个插件工具该跑多久」,而 Blender 互通是一条产品功能,只是借道;
     借道不该继承调用者的预算(见 runtime.PLUGIN_TIMEOUT_SECONDS 上那段说明)。
 
@@ -193,6 +218,8 @@ def invoke(
     tool = find(db, instance_id, tool_name)
     if tool is None:
         raise PluginDomainError(f"「{instance.name}」没有工具 {tool_name}")
+    if timeout is None:
+        timeout = tool.get("timeout_seconds")
 
     invocation = PluginInvocation(
         instance_id=instance.id, tool_name=tool_name, status="running", input=payload, output={}
@@ -228,6 +255,7 @@ def invoke(
                 resolved,
                 inst.process_env(db, instance),
                 scratch_dir=scratch,
+                data_dir=_ensure_data_dir(manifest.id),
                 **({"timeout": timeout} if timeout is not None else {}),
             )
             output = result.output

@@ -302,6 +302,19 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 你的代码,没有确认门也照样能发请求、写文件。所以默认落在保守那侧。宁可让子智能体少一个工具,
 也不要让它在一次「帮我查一下」里替用户发了条微博。
 
+### 预算
+
+一次调用默认最多跑 60 秒(`runtime.PLUGIN_TIMEOUT_SECONDS`)。进程插件可以在 `declare` 的那条工具上写
+`timeout_seconds`,上限 1800(`tools.MAX_DECLARED_TIMEOUT_SECONDS`);不是正数就当没写。调用方显式给了
+预算(Blender 互通)时以调用方为准。**预算该由最知道活有多重的一方给** —— 此前只有调用方能给,插件
+说不出「这一步要三分钟」。智能体那一侧单次工具调用最多等 180 秒(`agent-sidecar/src/tools.ts`)。
+
+### 持久目录
+
+`MOSAEL_PLUGIN_DATA_DIR`:每个插件一份(`<数据目录>/plugin-data/<id>`),跨调用、跨更新都在,卸载时
+随包一起删。和 `MOSAEL_PLUGIN_OUTPUT_DIR` 正相反 —— 那个是这一次调用的、用完就删。插件目录本身不能
+当存储:更新就是整目录替换。
+
 ### 只供宿主使用
 
 `overrides.<工具>.internal: true` 的工具**只给 Mosael 自己的适配层调**(例如 3D 场景与 Blender
