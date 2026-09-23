@@ -298,39 +298,42 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   // 封面由后端给:时间线上最早出现的画面,没有时是项目自己的第一张图(见 routes/projects._covers)。
   const cover = project.cover_asset_id;
   React.useEffect(() => setFailed(false), [cover]);
-  //: 选择模式下**整行 / 整张卡**都是勾选区域(点空白处也算),由外层 article 接;里面的封面和标题
-  //: 这时不再自己处理,冒泡上去 —— 各处理一次的话,点封面会勾上又立刻取消。
-  const open = () => { if (!selecting) onOpen(project.id); };
+  //: **整行 / 整张卡**都是可点区域(点空白处也算),由外层 article 统一接:平时是打开,选择模式下
+  //: 是勾选。里面的封面和标题只是给键盘用的按钮,点击冒泡上去 —— 各处理一次的话,选择模式下点
+  //: 封面会勾上又立刻取消,平时会打开两次。
+  const activate = () => (selecting ? onToggle?.(project.id) : onOpen(project.id));
+  const open = () => onOpen(project.id);
   // 列表行的背景向外延伸，抵消自身内边距，让封面和操作按钮对齐上方精选卡片。
   return <ContextMenu>
     <ContextMenuTrigger asChild>
       <article
         aria-selected={selecting ? selected : undefined}
-        onClick={selecting ? () => onToggle?.(project.id) : undefined}
+        onClick={activate}
         className={cn(
-          "group min-h-0 min-w-0",
-          selecting && "cursor-pointer",
+          "group min-h-0 min-w-0 cursor-pointer",
           featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel",
           //: 列表行选中:整行一层淡淡的主色底,不给每行各套一圈边框 —— 连着选几行时,一圈圈边框摞在一起很乱。
           selecting && selected && !featured && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",
           className,
         )}
       >
-        <button type="button" onClick={open} aria-label={`${selecting ? t("mediaSelectMode") : t("homeOpenEditor")}: ${project.name}`} aria-pressed={selecting ? selected : undefined} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20", selecting && selected && featured && "ring-2 ring-primary")}>
+        <button type="button" aria-label={`${selecting ? t("mediaSelectMode") : t("homeOpenEditor")}: ${project.name}`} aria-pressed={selecting ? selected : undefined} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20", selecting && selected && featured && "ring-2 ring-primary")}>
           {cover && !failed ? <img src={assetThumbnailUrl(cover)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
           {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
           {selecting && <SelectionCheck selected={selected} />}
         </button>
         <div className={cn("flex min-w-0 items-start gap-2", !featured && "flex-1 items-center")}>
           <div className="min-w-0 flex-1">
-            <button type="button" onClick={open} className={cn("block max-w-full cursor-pointer truncate rounded text-left font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "text-lg" : "text-ui-md")} title={project.name}>{project.name}</button>
+            <button type="button" className={cn("block max-w-full cursor-pointer truncate rounded text-left font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "text-lg" : "text-ui-md")} title={project.name}>{project.name}</button>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1"><Film size={12} />{t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}</span>
               <span className="inline-flex items-center gap-1"><Layers size={12} />{t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}</span>
               {project.updated_at && <span title={project.created_at ? t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at)) : undefined}>{t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}</span>}
             </div>
           </div>
-          {!selecting && <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+          {/* 菜单里的点击不能冒泡到整行 —— 否则点「…」或菜单里的「重命名」会顺带把项目打开。
+              Popover 的内容虽然渲染在 portal 里,React 的事件仍按组件树冒泡。 */}
+          {!selecting && <span className="contents" onClick={(event) => event.stopPropagation()}><Popover open={menuOpen} onOpenChange={setMenuOpen}>
             <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`${t("projectActions")}: ${project.name}`}><MoreHorizontal /></Button></PopoverTrigger>
             <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end">
               <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); open(); }}><Scissors />{t("homeOpenEditor")}</Button>
@@ -338,7 +341,7 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
               <div className="mx-2 my-1 h-px bg-divider" />
               <Button variant="ghost" className="justify-start text-destructive hover:text-destructive" onClick={() => { setMenuOpen(false); onDelete(project); }}><Trash2 />{t("delete")}</Button>
             </PopoverContent>
-          </Popover>}
+          </Popover></span>}
         </div>
       </article>
     </ContextMenuTrigger>

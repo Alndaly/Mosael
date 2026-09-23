@@ -81,3 +81,16 @@ it("选择模式下点这一行的空白处也能勾上", () => {
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Older film" }));
   expect(row).toHaveAttribute("aria-selected", "false");
 });
+
+it("点这一行的空白处就打开项目;点「…」菜单不会顺带打开", () => {
+  const open = vi.fn();
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} onCreateProject={vi.fn()} creatingProject={false} />));
+  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  const row = screen.getByRole("button", { name: "homeOpenEditor: Older film" }).closest("article")!;
+  fireEvent.click(row);
+  expect(open).toHaveBeenLastCalledWith("older");
+  expect(open).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByRole("button", { name: "projectActions: Older film" }));
+  expect(open).toHaveBeenCalledTimes(1);
+});
