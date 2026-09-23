@@ -129,3 +129,43 @@ export function usePersistentViewport(key: string): {
 
   return { saved, remember };
 }
+
+
+/**
+ * 会活过导航的「选中了**哪几个**」—— 素材库的标签筛选是这个形状(可以同时勾几个标签)。
+ *
+ * 和 `usePersistentSelection` 同一个立场:合法值是动态的(标签会被删),存着的每一个都要对着
+ * 当前候选验一遍,验不过的就当没选 —— 否则素材库会因为一个已经不存在的标签空得莫名其妙。
+ * `ids === undefined` 表示候选还没加载,这时原样保留、等它到货再验。
+ */
+export function usePersistentSet(
+  key: string,
+  ids: readonly string[] | undefined,
+): [string[], (value: string[]) => void] {
+  const storageKey = `mosael:selected-set:${key}`;
+  const [selected, setSelected] = React.useState<string[]>(() => {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((one): one is string => typeof one === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const set = React.useCallback(
+    (value: string[]) => {
+      setSelected(value);
+      try {
+        if (value.length === 0) localStorage.removeItem(storageKey);
+        else localStorage.setItem(storageKey, JSON.stringify(value));
+      } catch {
+        // 隐私模式 / 无 storage:退化为纯内存状态即可。
+      }
+    },
+    [storageKey],
+  );
+  const valid = React.useMemo(
+    () => (ids === undefined ? selected : selected.filter((one) => ids.includes(one))),
+    [selected, ids],
+  );
+  return [valid, set];
+}

@@ -25,11 +25,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/RecordingProvider";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
-import { MediaTagFilter } from "./MediaTagFilter";
+import { MediaTagFilter, type TagMatch } from "./MediaTagFilter";
 import { TagsDialog } from "@/features/media/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
-import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
@@ -218,25 +218,29 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     return [...set].sort((a, b) => a.localeCompare(b, "zh-CN"));
   }, [assets.data]);
 
-  // 标签筛选同理。用 selection 而不是 tab:合法值是**动态的**(标签会被删),存着一个已经不存在
-  // 的标签时当作没筛 —— 否则素材库会空得莫名其妙。
-  const [tagFilter, setTagFilter] = usePersistentSelection(
-    "media-tag",
+  // 标签筛选同理,而且可以同时勾几个。合法值是**动态的**(标签会被删),存着一个已经不存在的标签时
+  // 当作没勾 —— 否则素材库会空得莫名其妙。
+  const [tagFilter, setTagFilter] = usePersistentSet(
+    "media-tags",
     assets.data === undefined ? undefined : allTags,
   );
+  const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("media-tag-match", "all", ["all", "any"]);
 
   const visible = React.useMemo(() => {
     const query = search.trim().toLowerCase();
     const matched = (assets.data ?? []).filter(
       (asset) =>
         (kindFilter === "all" || asset.kind === kindFilter) &&
-        (tagFilter === null || assetTags(asset).includes(tagFilter)) &&
+        (tagFilter.length === 0 ||
+          (tagMatch === "all"
+            ? tagFilter.every((tag) => assetTags(asset).includes(tag))
+            : tagFilter.some((tag) => assetTags(asset).includes(tag)))) &&
         (query === "" ||
           asset.name.toLowerCase().includes(query) ||
           assetTags(asset).some((tag) => tag.toLowerCase().includes(query))),
     );
     return [...matched].sort((a, b) => compareAssets(a, b, sortKey));
-  }, [assets.data, kindFilter, tagFilter, search, sortKey]);
+  }, [assets.data, kindFilter, tagFilter, tagMatch, search, sortKey]);
 
 
   const kindLabel: Record<KindFilter, string> = {
@@ -331,7 +335,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   <SelectItem value="duration">{t("sortDuration")}</SelectItem>
                 </SelectContent>
               </Select>
-              {allTags.length > 0 && <MediaTagFilter tags={allTags} value={tagFilter} onChange={setTagFilter} />}
+              {allTags.length > 0 && <MediaTagFilter tags={allTags} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
             </div>
             {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
             <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
