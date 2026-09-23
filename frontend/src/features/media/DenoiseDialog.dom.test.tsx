@@ -103,9 +103,17 @@ describe("降噪对话框", () => {
     renderDialog([BUILTIN, DEEPFILTER]);
     const deepfilter = await screen.findByRole("radio", { name: /DeepFilterNet/ });
     expect(deepfilter).toBeDisabled();
-    //: 提示在单选项下面单独一栏(不跟着变灰),读屏仍把它念成这个选项的说明。
+    //: 能下载的引擎,屏幕上是右上角的「去下载」,引擎给的那句提示仍是这个选项的读屏说明。
     expect(deepfilter).toHaveAccessibleDescription("先去设置里下载");
     expect(deepfilter).toHaveTextContent("效果最好");
+  });
+
+  it("没法下载的引擎(没有按钮可点)才把准备提示写在说明下面", async () => {
+    renderDialog([BUILTIN, { ...DEEPFILTER, installable: false, setup_hint: "需要系统组件" }]);
+    const deepfilter = await screen.findByRole("radio", { name: /DeepFilterNet/ });
+    expect(screen.getByText("需要系统组件")).not.toHaveClass("sr-only");
+    expect(deepfilter).toHaveAccessibleDescription("需要系统组件");
+    expect(screen.queryByRole("button", { name: /denoiseGoDownload/ })).toBeNull();
   });
 
   it("有要下载的引擎没装时,给一个去设置的入口", async () => {

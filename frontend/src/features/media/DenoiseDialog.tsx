@@ -81,11 +81,17 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
               const selected = one.engine === chosen?.engine;
               const hintId = `denoise-hint-${one.engine}`;
               const needsSetup = !one.ready && Boolean(one.setup_hint);
+              //: 能下载的引擎,入口就是卡片右上角一个「去下载」—— 按钮本身说清了要做什么,引擎给的
+              //: 「去设置里哪儿下载」只作悬停提示和读屏说明;另起一行写出来会和说明文字抢,还和按钮说同一件事。
+              //: 不能下载的(比如缺系统组件)没有按钮可点,这句话才照常写在说明下面。
+              const downloadable = !one.ready && one.installable;
               return (
                 <div
                   key={one.engine}
                   className={cn(
-                    "overflow-hidden rounded-lg border transition-colors",
+                    //: 键盘焦点画在整张卡外面、隔开一点。画在里面的单选按钮上(ring-inset)的话,选中卡的主色
+                    //: 边框里又套一圈焦点环,弹窗一打开焦点落在第一项上,看着就是两道边。
+                    "flex items-start overflow-hidden rounded-lg border ring-offset-2 ring-offset-background transition-colors has-[button[role=radio]:focus-visible]:ring-2 has-[button[role=radio]:focus-visible]:ring-ring",
                     selected ? "border-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]" : "border-border",
                   )}
                 >
@@ -96,7 +102,7 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                     aria-describedby={needsSetup ? hintId : undefined}
                     disabled={!one.ready}
                     onClick={() => setEngine(one.engine)}
-                    className="flex w-full cursor-pointer items-start gap-3 px-3.5 py-3 text-left transition-colors enabled:hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed"
+                    className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 self-stretch px-3.5 py-3 text-left transition-colors enabled:hover:bg-secondary/60 focus-visible:outline-none disabled:cursor-not-allowed"
                   >
                     {/* 单选圆点:选中的那一张一眼能认出来,不只靠边框颜色。 */}
                     <span
@@ -104,12 +110,13 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                       className={cn(
                         "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
                         selected ? "border-primary" : "border-muted-foreground/50",
+                        !one.ready && "opacity-60",
                       )}
                     >
                       {selected && <span className="size-2 rounded-full bg-primary" />}
                     </span>
-                    <span className={cn("grid min-w-0 gap-1", !one.ready && "opacity-60")}>
-                      <span className="flex flex-wrap items-center gap-2 text-ui-sm font-medium leading-5">
+                    <span className="grid min-w-0 gap-1">
+                      <span className={cn("flex flex-wrap items-center gap-2 text-ui-sm font-medium leading-5", !one.ready && "opacity-60")}>
                         {one.label}
                         {/* 会去掉音乐的**单独标出来** —— 用户说"降噪"时没想把配乐也拿掉,而说明文字
                             是会被略读的。 */}
@@ -119,31 +126,29 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                           </span>
                         )}
                       </span>
-                      <span className="text-ui-xs leading-[1.5] text-muted-foreground">{one.description}</span>
+                      <span className={cn("text-ui-xs leading-[1.5] text-muted-foreground", !one.ready && "opacity-60")}>{one.description}</span>
+                      {/* 没准备好时说去哪儿准备 —— 这句话由引擎自己给,这里不认识任何引擎。 */}
+                      {needsSetup && (
+                        <span id={hintId} className={cn("text-ui-xs leading-[1.5] text-muted-foreground", downloadable && "sr-only")}>
+                          {one.setup_hint}
+                        </span>
+                      )}
                     </span>
                   </button>
-                  {/* 没准备好时说去哪儿准备 —— 这句话由引擎自己给,这里不认识任何引擎。它接在说明下面、
-                      和文字对齐,只是不跟着变灰;不另起一条色带 —— 那样一张卡被切成两截,和别的卡不像一组。
-                      放在单选按钮外面,是因为禁用的按钮里不能再套按钮。 */}
-                  {needsSetup && (
-                    <div className="-mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 pb-3 pl-[2.625rem] pr-3.5 text-ui-xs leading-[1.5]">
-                      <span id={hintId} className="text-muted-foreground">
-                        {one.setup_hint}
-                      </span>
-                      {one.installable && (
-                        <Button
-                          variant="link"
-                          size="xs"
-                          className="h-auto gap-1 px-0 font-medium"
-                          onClick={() => {
-                            onClose();
-                            gotoSettings("denoise");
-                          }}
-                        >
-                          <Download size={12} /> {t("denoiseGoDownload")}
-                        </Button>
-                      )}
-                    </div>
+                  {/* 放在单选按钮外面:禁用的按钮里不能再套按钮。 */}
+                  {downloadable && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      className="mr-3 mt-2.5 shrink-0"
+                      title={one.setup_hint || undefined}
+                      onClick={() => {
+                        onClose();
+                        gotoSettings("denoise");
+                      }}
+                    >
+                      <Download size={12} /> {t("denoiseGoDownload")}
+                    </Button>
                   )}
                 </div>
               );
