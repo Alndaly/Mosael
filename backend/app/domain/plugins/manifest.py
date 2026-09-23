@@ -191,6 +191,19 @@ def _humanized(entry: dict[str, Any], *keys: str, pick: Callable[[Any], str] = t
 _SCHEMA_TEXT_KEYS = ("description", "title")
 
 
+#: 这些键下面是「名字 → 子 schema」的表:键是**字段名**,不是关键字。一个参数就叫 `title` 或
+#: `description`(发布类插件里再常见不过)时,不能把它当成说明文字去翻 —— 那会把整个字段的
+#: schema 换成一个字符串(Remotion 插件的 `title` 参数就这样丢了类型和说明)。
+_SCHEMA_NAME_MAPS = frozenset({"properties", "patternProperties", "$defs", "definitions", "dependentSchemas"})
+
+
+def _named_schemas(value: Any, pick: Callable[[Any], str]) -> Any:
+    """名字 → 子 schema:名字原样保留,每个子 schema 照常走一遍。"""
+    if isinstance(value, dict):
+        return {name: _humanized_schema(item, pick) for name, item in value.items()}
+    return _humanized_schema(value, pick)
+
+
 def _humanized_schema(value: Any, pick: Callable[[Any], str] = text_of) -> Any:
     """把 `input_schema` 里的 description / title 也定下语言。
 
@@ -202,7 +215,10 @@ def _humanized_schema(value: Any, pick: Callable[[Any], str] = text_of) -> Any:
     oneOf、$defs 的任何一层,只认一层等于换个写法就又漏了。
     """
     if isinstance(value, dict):
-        out = {key: _humanized_schema(item, pick) for key, item in value.items()}
+        out = {
+            key: _named_schemas(item, pick) if key in _SCHEMA_NAME_MAPS else _humanized_schema(item, pick)
+            for key, item in value.items()
+        }
         for key in _SCHEMA_TEXT_KEYS:
             # 只有本来就是「语言对象」的才动。普通字符串经过 text_of 也原样返回,
             # 但显式判断能让"这里为什么不会误伤别的结构"一眼看得出来。

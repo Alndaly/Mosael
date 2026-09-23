@@ -123,6 +123,34 @@ def test_文档链接只认_http() -> None:
         assert parse({**base, "homepage": bad}, "").homepage == "", bad
 
 
+def test_参数就叫title或description时_不被当成说明文字() -> None:
+    """`properties` 下面的键是**字段名**。此前整棵树里凡是叫 title / description 的双语对象都当
+    说明文字翻 —— 于是一个名叫 `title` 的参数,整个 schema 被换成了一个字符串(Remotion 插件
+    「讲解视频」的标题参数就这样丢了类型;发布类插件的 `description` 参数同理)。"""
+    from app.domain.plugins.manifest import parse
+
+    title_schema = {"type": "string", "description": {"zh": "视频标题", "en": "Video title"}}
+    raw = {
+        "id": "x.y", "manifest_version": 1, "name": "X", "version": "1", "_path": "/tmp/x",
+        "tools": {"declare": [{
+            "name": "t",
+            "input_schema": {
+                "type": "object",
+                "title": {"zh": "整个输入", "en": "The whole input"},
+                "properties": {"title": title_schema, "description": {"type": "string"}, "ref": {"$ref": "#/$defs/title"}},
+                "$defs": {"title": title_schema},
+            },
+        }]},
+    }
+    set_current_locale("en")
+    schema = parse(raw, "x").declared_tools[0]["input_schema"]
+    assert schema["properties"]["title"] == {"type": "string", "description": "Video title"}
+    assert schema["properties"]["description"] == {"type": "string"}
+    assert schema["$defs"]["title"] == {"type": "string", "description": "Video title"}
+    # 真正的关键字 title(描述整个 schema 的那个)照旧翻。
+    assert schema["title"] == "The whole input"
+
+
 def test_input_schema_里的说明也要定语言() -> None:
     """参数说明写成双语对象时,界面上不能出现 `[object Object]`。
 
