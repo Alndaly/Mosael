@@ -2,8 +2,10 @@ import { ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  Check,
   Clapperboard,
   Film,
+  ListChecks,
   FolderPlus,
   Layers,
   MoreHorizontal,
@@ -11,6 +13,7 @@ import {
   Pencil,
   Scissors,
   Trash2,
+  X,
 } from "lucide-react";
 
 import { api, assetThumbnailUrl, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
@@ -29,6 +32,9 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { useMultiSelect } from "@/lib/useMultiSelect";
+import { SelectionCheck } from "@/components/app/SelectionCheck";
+import { toast } from "sonner";
 
 
 export function HomeView({
@@ -124,6 +130,32 @@ export function HomeView({
   }, [projects, search, sortKey, collection]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
 
+  // 多选与素材、工作流、发布同一份状态机(见 lib/useMultiSelect):退出即清空、全选只作用于
+  // 当前看得见的那些(搜索之后)、被删掉的自动剔除。
+  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
+    useMultiSelect(visible, (project) => project.id);
+  const [batchDeleting, setBatchDeleting] = React.useState(false);
+  const batchRemove = useMutation({
+    mutationFn: async () => {
+      // 没有批量接口:逐条删,失败的报出去(和工作流、素材页同一种做法)。
+      const failures: string[] = [];
+      for (const id of selectedIds) {
+        try {
+          await deleteProject(id);
+        } catch (error) {
+          failures.push(String((error as Error).message));
+        }
+      }
+      return failures;
+    },
+    onSuccess: (failures) => {
+      clear();
+      if (failures.length > 0) toast.error(failures.join("\n"));
+      void refresh();
+    },
+    onSettled: () => setBatchDeleting(false),
+  });
+
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameProject(id, name),
     onSuccess: () => {
@@ -167,6 +199,31 @@ export function HomeView({
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <CollectionTabs label={t("homeProjectsTitle")} value={collection} onChange={mode => { setCollection(mode); if (mode === "recent") setSortKey("updated"); }} items={[{ value: "recent", label: t("homeRecent") }, { value: "all", label: t("homeAll") }]} />
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {projects.length > 0 && (selectMode ? (
+            <>
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
+                {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
+              </span>
+              <Button variant="outline" onClick={() => selectAll(visible)}>
+                <ListChecks size={13} /> {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+              </Button>
+              <Button
+                variant="outline"
+                className="hover:border-destructive/50 hover:text-destructive"
+                disabled={selectedIds.size === 0}
+                onClick={() => setBatchDeleting(true)}
+              >
+                <Trash2 size={13} /> {t("delete")}
+              </Button>
+              <Button variant="ghost" onClick={exit}>
+                <X size={13} /> {t("cancel")}
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={() => setSelectMode(true)}>
+              <Check size={13} /> {t("mediaSelectMode")}
+            </Button>
+          ))}
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
           <Select value={collection === "recent" ? "updated" : sortKey} onValueChange={(value) => { setSortKey(value as "updated" | "created" | "name"); setCollection("all"); }}>
             <SelectTrigger className="w-auto min-w-36" aria-label={t("sortUpdated")}><SelectValue /></SelectTrigger>
@@ -192,10 +249,10 @@ export function HomeView({
         <>
           {visible.length === 0 && <p className="py-10 text-center text-muted-foreground">{t("homeNoSearchResults")}</p>}
           {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
-            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
+            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} />)}
           </div>}
           <div className="grid gap-1 empty:hidden">
-            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
+            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} />)}
           </div>
         </>
       )}
@@ -214,14 +271,23 @@ export function HomeView({
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
+      <ConfirmDialog
+        open={batchDeleting}
+        title={t("deleteConfirmTitle")}
+        body={t("deleteProjectsBody").replace("{n}", String(selectedIds.size))}
+        onCancel={() => setBatchDeleting(false)}
+        onConfirm={() => batchRemove.mutate()}
+      />
     </div>
   );
 }
 
 /** Every presentation shares the same actions; images always belong to this project. */
-function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete }: {
+function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle }: {
   project: ProjectWithStats; featured?: boolean; className?: string;
   onOpen: (id: string) => void; onRename: (project: Project) => void; onDelete: (project: Project) => void;
+  /** 选择模式下点卡片是勾选,不是打开;单条的操作菜单收起来(批量动作在工具条上)。 */
+  selecting?: boolean; selected?: boolean; onToggle?: (id: string) => void;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -230,14 +296,24 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   // 封面由后端给:时间线上最早出现的画面,没有时是项目自己的第一张图(见 routes/projects._covers)。
   const cover = project.cover_asset_id;
   React.useEffect(() => setFailed(false), [cover]);
-  const open = () => onOpen(project.id);
+  const open = () => (selecting ? onToggle?.(project.id) : onOpen(project.id));
   // 列表行的背景向外延伸，抵消自身内边距，让封面和操作按钮对齐上方精选卡片。
   return <ContextMenu>
     <ContextMenuTrigger asChild>
-      <article className={cn("group min-h-0 min-w-0", featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel", className)}>
-        <button type="button" onClick={open} aria-label={`${t("homeOpenEditor")}: ${project.name}`} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20")}>
+      <article
+        aria-selected={selecting ? selected : undefined}
+        className={cn(
+          "group min-h-0 min-w-0",
+          featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel",
+          //: 列表行选中:整行一层淡淡的主色底,不给每行各套一圈边框 —— 连着选几行时,一圈圈边框摞在一起很乱。
+          selecting && selected && !featured && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",
+          className,
+        )}
+      >
+        <button type="button" onClick={open} aria-label={`${selecting ? t("mediaSelectMode") : t("homeOpenEditor")}: ${project.name}`} aria-pressed={selecting ? selected : undefined} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20", selecting && selected && featured && "ring-2 ring-primary")}>
           {cover && !failed ? <img src={assetThumbnailUrl(cover)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
           {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
+          {selecting && <SelectionCheck selected={selected} />}
         </button>
         <div className={cn("flex min-w-0 items-start gap-2", !featured && "flex-1 items-center")}>
           <div className="min-w-0 flex-1">
@@ -248,7 +324,7 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
               {project.updated_at && <span title={project.created_at ? t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at)) : undefined}>{t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}</span>}
             </div>
           </div>
-          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+          {!selecting && <Popover open={menuOpen} onOpenChange={setMenuOpen}>
             <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`${t("projectActions")}: ${project.name}`}><MoreHorizontal /></Button></PopoverTrigger>
             <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end">
               <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); open(); }}><Scissors />{t("homeOpenEditor")}</Button>
@@ -256,7 +332,7 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
               <div className="mx-2 my-1 h-px bg-divider" />
               <Button variant="ghost" className="justify-start text-destructive hover:text-destructive" onClick={() => { setMenuOpen(false); onDelete(project); }}><Trash2 />{t("delete")}</Button>
             </PopoverContent>
-          </Popover>
+          </Popover>}
         </div>
       </article>
     </ContextMenuTrigger>

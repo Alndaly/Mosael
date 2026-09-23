@@ -6,10 +6,11 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { ProjectWithStats, Workspace } from "@/api/client";
 import { HomeView } from "./HomeView";
 
-const mocks = vi.hoisted(() => ({ summary: vi.fn(), navigate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ summary: vi.fn(), navigate: vi.fn(), deleteProject: vi.fn(async () => undefined) }));
 vi.mock("@/api/client", async original => ({
   ...await original<typeof import("@/api/client")>(),
   workspaceSummary: mocks.summary,
+  deleteProject: mocks.deleteProject,
   api: async () => ({ text: "A quiet moment", author: "Studio", source: "" }),
   assetThumbnailUrl: (id: string) => `/thumbnail/${id}`,
 }));
@@ -51,4 +52,20 @@ it("opens and filters projects in both presentations and draws the cover the bac
   fireEvent.click(screen.getByRole("button", { name: "createProject" }));
   expect(create).toHaveBeenCalledOnce();
   expect(mocks.summary).not.toHaveBeenCalled();
+});
+
+it("能批量选中项目一起删 —— 选择模式下点卡片是勾选,不是打开", async () => {
+  const open = vi.fn();
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} onCreateProject={vi.fn()} creatingProject={false} />));
+
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Newer film" }));
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Older film" }));
+  expect(open).not.toHaveBeenCalled();
+  expect(screen.getByText("mediaSelectedCount")).toBeVisible();
+
+  fireEvent.click(screen.getByRole("button", { name: "delete" }));
+  fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
+  await waitFor(() => expect(mocks.deleteProject).toHaveBeenCalledTimes(2));
+  expect(mocks.deleteProject.mock.calls.map((call) => call[0]).sort()).toEqual(["newer", "older"]);
 });
