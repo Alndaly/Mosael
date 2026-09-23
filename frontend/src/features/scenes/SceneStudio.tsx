@@ -11,6 +11,7 @@ import { SceneBlenderPull } from "./SceneBlenderPull";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { readSceneSnap, writeSceneSnap } from "./sceneSnap";
 import { readClayReference, writeClayReference } from "./clayReference";
+import { blockoutPrompt } from "./blockoutPrompt";
 import { lightingPrompt, presetById } from "./lighting";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
@@ -793,13 +794,15 @@ function SceneEditor({
           // **打光要一起说出去。** 参考帧只表达"光从哪来"(靠影子),而"这是什么光"——
           // 暖的冷的、硬的柔的、什么场合 —— 只有文字说得清。此前这句只提构图和运镜,
           // 光完全由模型自己发挥,于是同一场景的两个镜头打光对不上,剪到一起就穿帮。
-          prompt: [
-            kind === "image"
-              ? `参考 3D 场景「${draft.name}」的画面构图、空间布局与摄像机视角，生成精细的图片。`
-              : `参考 3D 场景「${draft.name}」的构图、空间布局和运镜，生成最终视频。`,
-            `打光：${lightingPrompt(draft.content.lighting)}。`,
-            clay ? "另一张灰模参考图只用于读取光影与体积，不要照搬它的灰色材质。" : "",
-          ].filter(Boolean).join(""),
+          //: 另外两件事同样要说:参考只是白模占位(不说的话成片会照着灰模画),以及画面里有什么
+          //: (白模里的形状各是什么)。见 blockoutPrompt。
+          prompt: blockoutPrompt({
+            kind: kind === "image" ? "image" : "video",
+            sceneName: draft.name,
+            objects: draft.content.objects,
+            lighting: lightingPrompt(draft.content.lighting),
+            clay: kind === "image" && clay,
+          }),
           source_assets: sources,
           mode: kind === "frames" ? "first_frame" : undefined,
           parameters: {
