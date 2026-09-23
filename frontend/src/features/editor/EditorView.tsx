@@ -1198,7 +1198,11 @@ function ExportControl({
   };
   const startExport = useMutation({
     mutationFn: (body: ExportParams) => exportSequence(sequenceId, body),
-    onSuccess: (job) => setJobId(job.id),
+    // 导出任务建好了再关配置框 —— 此前先关再发请求,按下去到任务出现之间什么反馈都没有。
+    onSuccess: (job) => {
+      setJobId(job.id);
+      setConfigOpen(false);
+    },
   });
   const job = useQuery({
     queryKey: ["job", jobId],
@@ -1250,7 +1254,7 @@ function ExportControl({
         footer={
           <>
             <span className="mr-auto text-ui-xs text-muted-foreground">{t("exportConfigHint")}</span>
-            <Button size="sm" onClick={() => { setConfigOpen(false); startExport.mutate(params); }}>
+            <Button size="sm" loading={startExport.isPending} onClick={() => startExport.mutate(params)}>
               <Download size={13} /> {t("exportStart")}
             </Button>
           </>
