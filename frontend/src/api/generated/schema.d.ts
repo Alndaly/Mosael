@@ -8675,11 +8675,6 @@ export interface components {
              * @default
              */
             no_proxy: string;
-            /**
-             * Effective No Proxy
-             * @default
-             */
-            effective_no_proxy: string;
         };
         /** NetworkConfigUpdate */
         NetworkConfigUpdate: {

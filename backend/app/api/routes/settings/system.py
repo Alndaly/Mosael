@@ -15,7 +15,7 @@ from app.api.schemas import (
 )
 from app.core.http_retry import set_max_retries
 from app.db.models import AiRuntimeConfig, NetworkConfig
-from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
+from app.domain.network import apply_to_process, get_config as get_network
 from app.domain.permissions import ensure_deployment_admin
 
 router = APIRouter(tags=["settings"])
@@ -25,7 +25,6 @@ def _network_out(row: NetworkConfig) -> NetworkConfigOut:
     return NetworkConfigOut(
         proxy_url=row.proxy_url,
         no_proxy=row.no_proxy,
-        effective_no_proxy=effective_no_proxy(row.no_proxy),
     )
 
 

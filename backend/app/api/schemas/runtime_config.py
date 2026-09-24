@@ -10,8 +10,6 @@ class NetworkConfigOut(ApiModel):
 
     proxy_url: str = ""
     no_proxy: str = ""
-    #: 实际生效的绕过列表(= 用户填的 + 强制补上的回环)。回显出来,省得用户以为本机回连也被代理了。
-    effective_no_proxy: str = ""
 
 
 class NetworkConfigUpdate(ApiModel):

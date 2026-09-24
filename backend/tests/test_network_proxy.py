@@ -90,7 +90,7 @@ def test_domestic_endpoints_are_bypassed_by_default() -> None:
     飞书 / 火山 / 百炼这些跟着走境外代理只会更慢甚至不通,所以新装就预填上。"""
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
-    bypass = client.get("/api/settings/network").json()["effective_no_proxy"].split(",")
+    bypass = [one.strip() for one in client.get("/api/settings/network").json()["no_proxy"].split(",")]
     for host in ("open.feishu.cn", "openspeech.bytedance.com", "dashscope.aliyuncs.com"):
         assert host in bypass, f"{host} 不在默认绕过列表里"
 
@@ -100,12 +100,13 @@ def test_default_bypass_is_a_default_not_a_rule() -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
     body = client.put("/api/settings/network", json={"proxy_url": "http://p:1", "no_proxy": ""}).json()
-    bypass = body["effective_no_proxy"].split(",")
-    assert "open.feishu.cn" not in bypass, "国内端点应当删得掉"
-    assert "127.0.0.1" in bypass, "但回环不行"
+    assert body["no_proxy"] == "", "国内端点应当删得掉"
+    # 但回环不行 —— 看的是**真正生效的地方**:写进进程环境的 NO_PROXY。
+    bypass = os.environ.get("NO_PROXY", "").split(",")
+    assert "127.0.0.1" in bypass and "open.feishu.cn" not in bypass
 
 
-def test_settings_round_trip_and_effective_list_is_echoed() -> None:
+def test_settings_round_trip_and_the_effective_list_reaches_the_process() -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
 
@@ -117,8 +118,8 @@ def test_settings_round_trip_and_effective_list_is_echoed() -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["proxy_url"] == "http://127.0.0.1:7890", "首尾空格要吃掉——粘贴时很容易带上"
-    # 回显实际生效的绕过列表,省得用户以为本机回连也被代理了。
-    assert body["effective_no_proxy"] == "example.com,localhost,127.0.0.1,::1,0.0.0.0"
+    # 真正生效的绕过列表 = 用户填的 + 强制补上的回环(设置页不再回显这一份,见 ProxySection)。
+    assert os.environ.get("NO_PROXY") == "example.com,localhost,127.0.0.1,::1,0.0.0.0"
 
     # 立刻对本进程生效:后端自己的 httpx 调用不必等重启。
     assert os.environ.get("HTTPS_PROXY") == "http://127.0.0.1:7890"

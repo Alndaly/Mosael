@@ -24194,11 +24194,6 @@
             "type": "string",
             "title": "No Proxy",
             "default": ""
-          },
-          "effective_no_proxy": {
-            "type": "string",
-            "title": "Effective No Proxy",
-            "default": ""
           }
         },
         "type": "object",

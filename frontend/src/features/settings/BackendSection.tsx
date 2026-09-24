@@ -10,6 +10,7 @@ import { ServerPicker } from "@/components/layout/ServerPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";
 
 type NetworkConfig = components["schemas"]["NetworkConfigOut"];
@@ -109,14 +110,20 @@ export function ProxySection() {
     queryKey: ["network-config"],
     queryFn: () => api<NetworkConfig>("/api/settings/network"),
   });
+  // 绕过列表**一行一个**地编辑,存回去仍是逗号分隔(后端两种都认,见 domain/network)。
+  // 此前是一个单行输入框装着九个逗号串起来的域名,只看得见前两个半,读起来像凭空冒出来的。
+  const toLines = (value: string) => value.split(/[,，\n]/).map((one) => one.trim()).filter(Boolean).join("\n");
   const [form, setForm] = React.useState<{ proxy_url: string; no_proxy: string } | null>(null);
   const current = form ?? {
     proxy_url: config.data?.proxy_url ?? "",
-    no_proxy: config.data?.no_proxy ?? "",
+    no_proxy: toLines(config.data?.no_proxy ?? ""),
   };
   const save = useMutation({
     mutationFn: () =>
-      api<NetworkConfig>("/api/settings/network", { method: "PUT", body: JSON.stringify(current) }),
+      api<NetworkConfig>("/api/settings/network", {
+        method: "PUT",
+        body: JSON.stringify({ proxy_url: current.proxy_url.trim(), no_proxy: toLines(current.no_proxy).split("\n").join(", ") }),
+      }),
     onSuccess: (next) => {
       setForm(null);
       qc.setQueryData(["network-config"], next);
@@ -124,10 +131,18 @@ export function ProxySection() {
   });
   const dirty =
     form !== null &&
-    (form.proxy_url !== (config.data?.proxy_url ?? "") || form.no_proxy !== (config.data?.no_proxy ?? ""));
+    (form.proxy_url !== (config.data?.proxy_url ?? "") || toLines(form.no_proxy) !== toLines(config.data?.no_proxy ?? ""));
 
   return (
-    <SettingsGroup title={t("proxyTitle")} description={t("proxyDesc")}>
+    <SettingsGroup
+      title={t("proxyTitle")}
+      description={t("proxyDesc")}
+      actions={
+        <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
+          {t("save")}
+        </Button>
+      }
+    >
       <SettingsRow label={t("proxyUrl")} description={t("proxyUrlDesc")}>
         <Input
           className={SETTINGS_FIELD_WIDTH}
@@ -136,21 +151,17 @@ export function ProxySection() {
           onChange={(e) => setForm({ ...current, proxy_url: e.target.value })}
         />
       </SettingsRow>
-      <SettingsRow label={t("proxyNoProxy")} description={t("proxyNoProxyDesc")}>
-        <Input
-          className={SETTINGS_FIELD_WIDTH}
-          placeholder="example.com, 10.0.0.0/8"
+      {/* 此前还有一行「实际生效」:它只是上面这份列表再加上四个回环地址,几乎一字不差地重复了
+          一遍,而且截断成一行 —— 读者看不出它和上面有什么不同。回环强制直连这件事在说明里一句话
+          讲清就够了。保存键也不再挂在那一行上,移到这一节的抬头。 */}
+      <SettingsRow label={t("proxyNoProxy")} description={t("proxyNoProxyDesc")} stacked>
+        <Textarea
+          className="min-h-32 font-mono text-ui-sm"
+          spellCheck={false}
+          placeholder={"example.com\n10.0.0.0/8"}
           value={current.no_proxy}
           onChange={(e) => setForm({ ...current, no_proxy: e.target.value })}
         />
-      </SettingsRow>
-      <SettingsRow label={t("proxyEffective")} description="">
-        <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">
-          {config.data?.effective_no_proxy || "…"}
-        </code>
-        <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
-          {t("save")}
-        </Button>
       </SettingsRow>
     </SettingsGroup>
   );
