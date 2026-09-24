@@ -66,6 +66,15 @@ it("切走再回来,打开的还是刚才那篇", async () => {
   expect(window.location.hash).toContain("note=n7");
 });
 
+it("「全部 / 收藏 / 回收站」切走再回来还在原来那一栏", () => {
+  const first = mountView();
+  fireEvent.click(screen.getByRole("button", { name: "回收站" }));
+  first.unmount();
+  mountView();
+  expect(screen.getByRole("button", { name: "回收站" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "全部笔记" })).toHaveAttribute("aria-pressed", "false");
+});
+
 it("拖进来几个 .md 各成一篇,别的文件不碰,建完打开最后一篇", async () => {
   const view = mountView();
   const layout = view.container.querySelector(".notes-layout")!;

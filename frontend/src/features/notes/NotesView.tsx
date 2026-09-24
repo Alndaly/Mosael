@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, BookOpen, CheckSquare, SearchX, MoreHorizontal, Check, Loader2, PenLine, X, Plus, Star, Download, Upload, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
+import { AlertCircle, BookOpen, CheckSquare, SearchX, MoreHorizontal, Check, Loader2, PenLine, X, Plus, Star, Download, Import, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MENU_ITEM, MENU_SEPARATOR } from "@/components/ui/floating";
 import { useFileDrop } from "@/lib/useFileDrop";
 import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { NoteEditor, NoteReader } from "./NoteEditor";
 import { SourceLink } from "./NoteSources";
@@ -34,6 +35,7 @@ function rememberedNote(workspaceId: string) { try { return window.localStorage.
 function rememberNote(workspaceId: string, id: string | null) {
   try { if (id) window.localStorage.setItem(lastNoteKey(workspaceId), id); else window.localStorage.removeItem(lastNoteKey(workspaceId)); } catch { /* 记不住只是少一个便利 */ }
 }
+const NOTE_FILTERS = ["all", "favorite", "trash"] as const;
 const MARKDOWN_IMPORT_LIMIT = 500_000;
 const isMarkdownFile = (file: File) => /\.(md|markdown|txt)$/i.test(file.name);
 export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources">) {
@@ -55,7 +57,8 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   const controller = React.useRef<NoteController | null>(null);
 
   const [q, setQ] = React.useState(""); const search = React.useDeferredValue(q);
-  const [filter, setFilter] = React.useState("all"); const [topic, setTopic] = React.useState("");
+  // 「全部 / 收藏 / 回收站」记住:切到别的页再回来还在原来那一栏(和上次打开的那篇一样)。
+  const [filter, setFilter] = usePersistentTab("notes-filter", "all", NOTE_FILTERS); const [topic, setTopic] = React.useState("");
   const [focus, setFocus] = React.useState(() => !!locationNote() && window.matchMedia("(max-width: 740px)").matches); const input = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => { const read = () => setId(locationNote()); window.addEventListener("hashchange", read); return () => window.removeEventListener("hashchange", read); }, []);
   const notes = useInfiniteQuery({ queryKey: ["notes", workspace.id, search, filter === "trash"], initialPageParam: 0,
@@ -116,10 +119,10 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   // 只拖图片/音视频时不接:那是往正文里插图(编辑器自己处理),不是导入笔记。
   const drop = useFileDrop(files => void importFiles(files), isMarkdownFile, types => types.some(type => !/^(image|video|audio)\//.test(type)));
   return <div className={`notes-layout ${!focus ? "notes-show-list" : ""}`} {...drop.handlers}>
-    {drop.active && <div className="notes-drop" aria-hidden="true"><span><Upload size={20} />{s.dropHint}</span></div>}
-    {!focus && <aside className="notes-index" style={{ "--notes-index-width": `${sidebar.width}px` } as React.CSSProperties}><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><button className="note-icon" aria-label={s.import} title={s.import} onClick={() => input.current?.click()}><Upload size={16} /></button><button className="note-icon" title={s.selectNotes} aria-label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></button><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={16} /></button></div></header>
+    {drop.active && <div className="notes-drop" aria-hidden="true"><span><Import size={20} />{s.dropHint}</span></div>}
+    {!focus && <aside className="notes-index" style={{ "--notes-index-width": `${sidebar.width}px` } as React.CSSProperties}><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><button className="note-icon" aria-label={s.import} title={s.import} onClick={() => input.current?.click()}><Import size={16} /></button><button className="note-icon" title={s.selectNotes} aria-label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></button><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={16} /></button></div></header>
       <Input aria-label={s.search} placeholder={s.search} value={q} onChange={e => setQ(e.target.value)} />
-      <nav className="notes-filter">{[["all", s.all], ["favorite", s.favorite], ["trash", s.trash]].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => { setFilter(key); setTopic(""); window.location.hash = "#/notes"; }}>{label}</button>)}</nav>
+      <nav className="notes-filter">{([["all", s.all], ["favorite", s.favorite], ["trash", s.trash]] as const).map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => { setFilter(key); setTopic(""); window.location.hash = "#/notes"; }}>{label}</button>)}</nav>
       {!!topics.length && <SearchableSelect value={topic} onValueChange={setTopic} options={[{value: "", label: s.topics}, ...topics.map(t => ({value:t,label:t}))]} placeholder={s.topics} />}
       <NoteList key={`${workspace.id}:${search}:${filter}:${topic}`} notes={shown} currentId={id} selecting={selecting} onSelecting={setSelecting}
         onOpen={noteId=>{openNote(noteId);if(window.matchMedia("(max-width: 740px)").matches)setFocus(true);}}
