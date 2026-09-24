@@ -24,8 +24,18 @@ vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ ope
 vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: undefined }) }));
 
 import { AgentTurnContent } from "@/features/agent/ToolCalls";
+import { formatElapsedSeconds } from "@/lib/time";
 
 describe("思考块", () => {
+  it("结束后右侧显示用了多久,和工具卡同一种写法;还在想的时候不显示", () => {
+    const { rerender } = render(
+      <AgentTurnContent timeline={[{ type: "thinking", text: "想", done: false }]} />,
+    );
+    expect(screen.queryByText(/^\d+(\.\d)?s$/)).toBeNull();
+    rerender(<AgentTurnContent timeline={[{ type: "thinking", text: "想", done: true, duration_seconds: 7.4 }]} />);
+    expect(screen.getByText("agentThought").closest("button")?.textContent).toContain(formatElapsedSeconds(7.4));
+  });
+
   it("进行中展开并转圈", () => {
     const { container } = render(
       <AgentTurnContent timeline={[{ type: "thinking", text: "先看看素材库", done: false }]} />,

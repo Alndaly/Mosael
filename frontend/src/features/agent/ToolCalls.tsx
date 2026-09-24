@@ -38,7 +38,7 @@ export type AgentTimelineItem =
       嵌套显示在父卡之后 —— 没有它,run_subagent 是一段几十秒的静默。 */
   | { type: "subtool"; parent_id?: string; tool: ToolCall }
   /** 思考块。`done=false` 表示正在思考(展开并转圈),结束后默认收起。 */
-  | { type: "thinking"; text: string; done?: boolean };
+  | { type: "thinking"; text: string; done?: boolean; duration_seconds?: number };
 
 /** 取一段短摘要塞进折叠态标题(参考 Claude/Codex:折叠时也能看出这步在干嘛)。 */
 /**
@@ -416,7 +416,7 @@ export function agentTurnParts(
     if (item.type === "text") {
       parts.push({ type: "text", text: item.text });
     } else if (item.type === "thinking") {
-      parts.push({ type: "thinking", text: item.text, done: item.done });
+      parts.push({ type: "thinking", text: item.text, done: item.done, duration_seconds: item.duration_seconds });
     } else if (item.type === "subtool") {
       parts.push({ type: "subtool", parent_id: item.parent_id, tool: item.tool });
     } else {
@@ -429,7 +429,7 @@ export function agentTurnParts(
 
 type TurnBlock =
   | { type: "tools"; tools: ToolCall[] }
-  | { type: "thinking"; text: string; done?: boolean }
+  | { type: "thinking"; text: string; done?: boolean; duration_seconds?: number }
   | { type: "text"; text: string };
 
 /**
@@ -450,7 +450,7 @@ export function turnBlocks(timeline: AgentTimelineItem[] | undefined): TurnBlock
       if (last?.type === "tools") last.tools.push(item.tool);
       else blocks.push({ type: "tools", tools: [item.tool] });
     } else if (item.type === "thinking") {
-      blocks.push({ type: "thinking", text: item.text, done: item.done });
+      blocks.push({ type: "thinking", text: item.text, done: item.done, duration_seconds: item.duration_seconds });
     } else if (item.type === "text" && item.text) {
       blocks.push({ type: "text", text: item.text });
     }
@@ -467,7 +467,7 @@ export function turnBlocks(timeline: AgentTimelineItem[] | undefined): TurnBlock
  *
  * 思考不进正文:它不是回答,复制按钮不该把它一起复制走,落库也不该混进消息内容。
  */
-function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
+function ThinkingBlock({ text, done, durationSeconds }: { text: string; done?: boolean; durationSeconds?: number }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(!done);
   // 从"思考中"变成"已结束"时自动收起;用户手动展开过的不再强行改动。
@@ -494,6 +494,12 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <span className="flex-none">{done ? t("agentThought") : t("agentThinking")}</span>
+            {/* 用时和工具卡同一个位置、同一种写法:靠右、等宽数字。后端在这段思考收起时记下
+                (domain/agent/stream._close_open_thinking);还在想的时候没有,不显示。 */}
+            <span className="min-w-0 flex-1" aria-hidden />
+            {done && typeof durationSeconds === "number" && (
+              <span className="flex-none pl-1.5 text-ui-xs tabular-nums">{formatElapsedSeconds(durationSeconds)}</span>
+            )}
           </MarkerContent>
           {text && (
             <ChevronRight
@@ -538,7 +544,7 @@ export function AgentTurnContent({
           // 而不是外层这个"块与块之间"的 gap-2.5 —— 见 turnBlocks 的说明。
           <ToolCalls key={`tools-${item.tools[0].id}-${index}`} tools={item.tools} />
         ) : item.type === "thinking" ? (
-          <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} />
+          <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} durationSeconds={item.duration_seconds} />
         ) : item.type === "text" && item.text ? (
           // 补上和标记行同一份上下内缩(见 AGENT_TEXT_BLOCK_CLASS):不然"一个空行"会有三种宽度。
           <div key={`text-${index}`} className={AGENT_TEXT_BLOCK_CLASS}>

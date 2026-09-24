@@ -517,7 +517,25 @@ def test_一轮结束时不会留下思考中() -> None:
     agent_stream._stream_thinking(session_id, {"type": "thinking_delta", "delta": "想了但没说"})
     agent_stream._stream_finish(session_id, "")
     timeline = agent_stream.get_stream_state(session_id)["timeline"]
-    assert timeline == [{"type": "thinking", "text": "想了但没说", "done": True}]
+    assert [{k: v for k, v in item.items() if k != "duration_seconds"} for item in timeline] == [
+        {"type": "thinking", "text": "想了但没说", "done": True}
+    ]
+
+
+def test_思考块收起时记下用了多久_落库时带着(monkeypatch) -> None:
+    """「已思考」右侧和工具卡一样显示用时。起点记在流状态里,收起时写进块;落库保留它。"""
+    clock = iter([100.0, 100.0, 107.4])  # 首个 token 时刻、思考起点、思考结束
+    monkeypatch.setattr(agent_stream.time, "monotonic", lambda: next(clock))
+    session_id = "s-thinking-duration"
+    agent_stream._stream_reset(session_id)
+    agent_stream._stream_thinking(session_id, {"type": "thinking_delta", "delta": "先想一下"})
+    agent_stream._stream_thinking(session_id, {"type": "thinking_delta", "delta": ",再想想"})  # 续写不重置起点
+    agent_stream._stream_thinking(session_id, {"type": "thinking_end"})
+    state = agent_stream.get_stream_state(session_id)
+    assert state["timeline"][0]["duration_seconds"] == 7.4
+    assert "thinking_started" not in state
+    saved = agent_stream._timeline_for_payload(state, "")
+    assert saved[0] == {"type": "thinking", "text": "先想一下,再想想", "done": True, "duration_seconds": 7.4}
 
 
 def test_子智能体的每一步进时间线_并嵌在父调用名下() -> None:

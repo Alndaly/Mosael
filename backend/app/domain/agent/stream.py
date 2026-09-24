@@ -48,7 +48,7 @@ def _stream_reset(session_id: str) -> None:
         }
 
 
-def _close_open_thinking(timeline: list[dict]) -> None:
+def _close_open_thinking(state: dict) -> None:
     """把最后一块还开着的思考标记为结束。
 
     **不能只靠 `thinking_end`**:它取决于供应商发不发那个事件,而有的(如 k3 这条链路)思考完
@@ -58,9 +58,16 @@ def _close_open_thinking(timeline: list[dict]) -> None:
     正文开始、或者开始调工具,本身就是思考已经结束的确凿证据,不需要供应商再宣布一次。
 
     只看末尾一项:任何往时间线追加的路径都会先调这个函数,所以还开着的思考块只可能在最后。
+
+    收起时记下这段思考用了多久(`duration_seconds`),界面在「已思考」右侧显示,和工具卡一样。
+    起点记在流状态里(`thinking_started`)而不是块上 —— 单调时钟的读数对前端没有意义。
     """
+    timeline: list[dict] = state.setdefault("timeline", [])
     if timeline and timeline[-1].get("type") == "thinking" and not timeline[-1].get("done"):
         timeline[-1]["done"] = True
+        started = state.pop("thinking_started", None)
+        if started is not None:
+            timeline[-1]["duration_seconds"] = round(max(0.0, time.monotonic() - started), 1)
 
 
 def _stream_tool_event(session_id: str, event: dict) -> None:
@@ -124,7 +131,7 @@ def _stream_tool_event(session_id: str, event: dict) -> None:
             state["seq"] += 1
             return
         if event.get("type") == "tool_start":
-            _close_open_thinking(timeline)
+            _close_open_thinking(state)
             tool_call_id = str(event.get("toolCallId") or "")
             started_at = now().isoformat()
             state.setdefault("tool_starts", {})[tool_call_id] = time.monotonic()
@@ -167,10 +174,7 @@ def _stream_thinking(session_id: str, event: dict) -> None:
             return
         timeline: list[dict] = state.setdefault("timeline", [])
         if event.get("type") == "thinking_end":
-            for item in reversed(timeline):
-                if item.get("type") == "thinking":
-                    item["done"] = True
-                    break
+            _close_open_thinking(state)
         else:
             delta = str(event.get("delta", ""))
             if not delta:
@@ -181,6 +185,7 @@ def _stream_thinking(session_id: str, event: dict) -> None:
                 timeline[-1]["text"] = str(timeline[-1].get("text", "")) + delta
             else:
                 timeline.append({"type": "thinking", "text": delta, "done": False})
+                state["thinking_started"] = time.monotonic()
         state["seq"] += 1
 
 
@@ -201,7 +206,7 @@ def _stream_append(session_id: str, delta: str) -> None:
             state["text"] += delta
             timeline: list[dict] = state.setdefault("timeline", [])
             # 正文开始 = 思考结束,不等供应商发 thinking_end(有的根本不发)。
-            _close_open_thinking(timeline)
+            _close_open_thinking(state)
             if timeline and timeline[-1].get("type") == "text":
                 timeline[-1]["text"] = str(timeline[-1].get("text", "")) + delta
             else:
@@ -215,7 +220,7 @@ def _stream_finish(session_id: str, final_text: str) -> None:
         state["text"] = final_text
         timeline: list[dict] = state.setdefault("timeline", [])
         # 一轮结束时无论如何都不该再有"思考中"——哪怕这轮只思考没说话。
-        _close_open_thinking(timeline)
+        _close_open_thinking(state)
         existing_text = "".join(str(item.get("text", "")) for item in timeline if item.get("type") == "text")
         if final_text and not existing_text:
             timeline.append({"type": "text", "text": final_text})
@@ -253,7 +258,10 @@ def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
             if text:
                 # 落库时一律标 done:重新打开会话时那段思考早就结束了,留 False 会让它
                 # 顶着一个永远转不完的"思考中"。
-                timeline.append({"type": "thinking", "text": text, "done": True})
+                block: dict = {"type": "thinking", "text": text, "done": True}
+                if isinstance(item.get("duration_seconds"), (int, float)):
+                    block["duration_seconds"] = item["duration_seconds"]
+                timeline.append(block)
     existing_text = "".join(str(item.get("text", "")) for item in timeline if item.get("type") == "text")
     if final_text and not existing_text:
         timeline.append({"type": "text", "text": final_text})
