@@ -19,7 +19,8 @@ import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { createCameraPreview } from "./cameraPreview";
+import { createInputPreview } from "./inputPreview";
+import { MicrophoneLevelMeter } from "./MicrophoneLevelMeter";
 import { selectableRecordingDevices } from "./recordingDevices";
 import {
   createRecordingController,
@@ -42,7 +43,10 @@ const NO_INPUTS_GRANTED: GrantedInputs = { camera: false, microphone: false };
 interface PreviewStreams {
   screen: MediaStream | null;
   camera: MediaStream | null;
+  microphone: MediaStream | null;
 }
+
+const NO_PREVIEW_STREAMS: PreviewStreams = { screen: null, camera: null, microphone: null };
 
 /**
  * A live preview owns the DOM-to-stream binding, rather than treating it as a one-off command.
@@ -102,7 +106,7 @@ export function Recorder({
   const [starting, setStarting] = React.useState(false);
   const [stopping, setStopping] = React.useState(false);
   const [secs, setSecs] = React.useState(0);
-  const [previewStreams, setPreviewStreams] = React.useState<PreviewStreams>({ screen: null, camera: null });
+  const [previewStreams, setPreviewStreams] = React.useState<PreviewStreams>(NO_PREVIEW_STREAMS);
   const controllerRef = React.useRef<RecordingController | null>(null);
   const timerRef = React.useRef<number | null>(null);
 
@@ -126,35 +130,35 @@ export function Recorder({
   const inputPermissionsReady =
     (!capturesCamera || grantedInputs.camera) && (!capturesMicrophone || grantedInputs.microphone);
   const [requestingPermissions, setRequestingPermissions] = React.useState(false);
-  const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
-  const audioCtxRef = React.useRef<AudioContext | null>(null);
-  const levelRafRef = React.useRef<number | null>(null);
 
-  // 摄像头在录制前就打开:既给出实时预览,也让自动曝光在按下「开始录制」前收敛好;
-  // 开始录制时录制会话直接接管这条流(cameraPreview.take),不再重开摄像头。
-  // 只在已获授权时打开,不在弹窗打开时偷偷触发系统授权。
-  const [cameraPreview] = React.useState(() => createCameraPreview());
-  const cameraPreviewState = React.useSyncExternalStore(cameraPreview.subscribe, cameraPreview.getState);
-  // Bumped to retry a failed preview; open() is a no-op while a stream for the devices is live.
-  const [cameraPreviewAttempt, setCameraPreviewAttempt] = React.useState(0);
-  const previewsCamera = open && capturesCamera && inputPermissionsReady && !recording && !stopping;
+  // 摄像头/麦克风在录制前就打开:摄像头给出实时预览、让自动曝光在按下「开始录制」前收敛好,
+  // 麦克风给出实时电平(哑设备在开录前就现形);开始录制时录制会话直接接管这条流
+  // (inputPreview.take),不再重开设备。只在已获授权时打开,不在弹窗打开时偷偷触发系统授权。
+  const [inputPreview] = React.useState(() => createInputPreview());
+  const inputPreviewState = React.useSyncExternalStore(inputPreview.subscribe, inputPreview.getState);
+  // Bumped to retry a failed preview; open() is a no-op while a stream for the inputs is live.
+  const [inputPreviewAttempt, setInputPreviewAttempt] = React.useState(0);
+  // Every source that records a microphone opens its inputs; a null camera opens the microphone alone.
+  const previewCameraId = capturesCamera ? cameraId : null;
+  const previewsInputs = open && capturesMicrophone && inputPermissionsReady && !recording && !stopping;
   React.useEffect(() => {
-    if (!previewsCamera) {
-      cameraPreview.close();
+    if (!previewsInputs) {
+      inputPreview.close();
       return;
     }
     // A starting recording may be about to take this stream; replacing it now would hand the
     // recording a camera that has not settled. Selection is locked while starting, and a
-    // failed start re-runs this effect, which reopens the camera if it had been taken.
+    // failed start re-runs this effect, which reopens the inputs if they had been taken.
     if (starting) return;
-    cameraPreview.open({ cameraId, micId });
-  }, [cameraId, cameraPreview, cameraPreviewAttempt, micId, previewsCamera, starting]);
-  React.useEffect(() => () => cameraPreview.close(), [cameraPreview]);
-  const cameraPreviewFailed = cameraPreviewState.error !== null;
-  // While recording, the stream the recording owns; before that, the preview's own stream.
-  const cameraStream = previewStreams.camera ?? cameraPreviewState.stream;
+    inputPreview.open({ cameraId: previewCameraId, micId });
+  }, [inputPreview, inputPreviewAttempt, micId, previewCameraId, previewsInputs, starting]);
+  React.useEffect(() => () => inputPreview.close(), [inputPreview]);
+  const inputPreviewFailed = inputPreviewState.error !== null;
+  // While recording, the streams the recording owns; before that, the preview's own stream.
+  const cameraStream = previewStreams.camera ?? (capturesCamera ? inputPreviewState.stream : null);
+  const microphoneStream = recording ? previewStreams.microphone : inputPreviewState.stream;
   const visiblePermissionIssue: RecordingPermissionIssue | null =
-    permissionIssue ?? (cameraPreviewFailed ? "cameraMicrophone" : null);
+    permissionIssue ?? (inputPreviewFailed ? (capturesCamera ? "cameraMicrophone" : "microphone") : null);
 
   const enumerateInputDevices = React.useCallback(async () => {
     try {
@@ -233,7 +237,7 @@ export function Recorder({
         probe.getTracks().forEach((track) => track.stop());
       }
       setGrantedInputs((current) => ({ ...current, ...Object.fromEntries(required.map((kind) => [kind, true])) }));
-      setCameraPreviewAttempt((attempt) => attempt + 1);
+      setInputPreviewAttempt((attempt) => attempt + 1);
       await enumerateInputDevices();
     } catch {
       setPermissionIssue(capturesCamera ? "cameraMicrophone" : "microphone");
@@ -243,42 +247,11 @@ export function Recorder({
     }
   }, [capturesCamera, capturesMicrophone, enumerateInputDevices, t]);
 
-  const stopLevelMeter = React.useCallback(() => {
-    if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
-    levelRafRef.current = null;
-    void audioCtxRef.current?.close().catch(() => undefined);
-    audioCtxRef.current = null;
-    setLevel(0);
-  }, []);
-
-  const startLevelMeter = React.useCallback((stream: MediaStream) => {
-    if (stream.getAudioTracks().length === 0) return;
-    try {
-      const ctx = new AudioContext();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      audioCtxRef.current = ctx;
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        analyser.getByteTimeDomainData(data);
-        let peak = 0;
-        for (const value of data) peak = Math.max(peak, Math.abs(value - 128) / 128);
-        setLevel(peak);
-        levelRafRef.current = requestAnimationFrame(tick);
-      };
-      tick();
-    } catch {
-      /* 电平表纯属提示,失败不影响录制 */
-    }
-  }, []);
-
   const cleanupUi = React.useCallback(() => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
-    stopLevelMeter();
-    setPreviewStreams({ screen: null, camera: null });
-  }, [stopLevelMeter]);
+    setPreviewStreams(NO_PREVIEW_STREAMS);
+  }, []);
 
   const cancel = React.useCallback(() => {
     controllerRef.current?.cancel();
@@ -327,8 +300,7 @@ export function Recorder({
       const active = await controller.start({
         source,
         captureSystemAudio,
-        camera: { take: () => cameraPreview.take({ cameraId, micId }) },
-        micId,
+        inputs: { take: () => inputPreview.take({ cameraId: previewCameraId, micId }) },
         mirrorCamera,
         filenames: {
           screen: t("record_screen_file"),
@@ -338,7 +310,6 @@ export function Recorder({
         requestStop: () => void stop(),
       });
       setPreviewStreams(active.previewStreams);
-      if (active.levelStream) startLevelMeter(active.levelStream);
       setStarting(false);
       setRecording(true);
       setSecs(0);
@@ -640,8 +611,8 @@ export function Recorder({
                 onClick={() =>
                   // A preview failure is retried by reopening the preview, so the recording still
                   // starts from a camera that has settled.
-                  permissionIssue === null && cameraPreviewFailed
-                    ? setCameraPreviewAttempt((attempt) => attempt + 1)
+                  permissionIssue === null && inputPreviewFailed
+                    ? setInputPreviewAttempt((attempt) => attempt + 1)
                     : void start()
                 }
               >
@@ -651,8 +622,7 @@ export function Recorder({
           </div>
         )}
 
-        {/* 设备选择 + 输入电平:摄像头/麦克风模式可指定设备;电平柱有声即动,
-            哑设备(录了 0 秒那种)当场现形。录制中锁定选择。 */}
+        {/* 设备选择:摄像头/麦克风模式可指定设备,录制中锁定选择。 */}
         {capturesMicrophone && !recording && (
           <div className="grid gap-1.5">
             <div
@@ -725,22 +695,12 @@ export function Recorder({
                 />
               </label>
             )}
-            {recording && (
-              <div className="flex items-center gap-2" title={t("recordLevel")}>
-                <Mic size={11} className="shrink-0 text-muted-foreground" />
-                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-panel-inset">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-[width] duration-75",
-                      level > 0.02 ? "bg-[var(--success)]" : "bg-border-strong",
-                    )}
-                    style={{ width: `${Math.min(100, Math.round(level * 130))}%` }}
-                  />
-                </div>
-              </div>
-            )}
           </div>
         )}
+
+        {/* 输入电平:只要麦克风真的开着(录制前的预览流、录制中接管的同一条流)就显示;
+            电平柱有声即动,哑设备(录了 0 秒那种)开录前就现形。换麦克风即换流、换电平。 */}
+        {capturesMicrophone && microphoneStream && <MicrophoneLevelMeter stream={microphoneStream} />}
       </div>
     </ModalShell>
   );

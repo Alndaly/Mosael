@@ -37,15 +37,13 @@ function dependencies(overrides: Partial<RecordingControllerDependencies> = {}) 
     cancel: vi.fn(),
   };
   const getDisplayMedia = vi.fn();
-  const getUserMedia = vi.fn();
   const createSession = vi.fn((_inputs: readonly RecordingInput[]) => session);
   return {
     session,
     getDisplayMedia,
-    getUserMedia,
     createSession,
     value: {
-      mediaDevices: { getDisplayMedia, getUserMedia },
+      mediaDevices: { getDisplayMedia },
       createSession,
       createMirroredCapture: vi.fn(),
       ...overrides,
@@ -55,11 +53,11 @@ function dependencies(overrides: Partial<RecordingControllerDependencies> = {}) 
 
 const filenames = { screen: "screen", camera: "camera", mic: "mic" };
 
-function cameraSource(stream: MediaStream | Promise<MediaStream>) {
+function inputSource(stream: MediaStream | Promise<MediaStream>) {
   return { take: vi.fn(() => Promise.resolve(stream)) };
 }
 
-const noCamera = { take: vi.fn(() => Promise.reject(new Error("no camera expected"))) };
+const noInputs = { take: vi.fn(() => Promise.reject(new Error("no camera expected"))) };
 
 describe("recording controller", () => {
   it("acquires screen and camera as independent session inputs", async () => {
@@ -67,24 +65,22 @@ describe("recording controller", () => {
     const camera = fakeStream({ audio: true });
     const deps = dependencies();
     deps.getDisplayMedia.mockResolvedValue(screen.stream);
-    const camera$ = cameraSource(camera.stream);
+    const camera$ = inputSource(camera.stream);
     const requestStop = vi.fn();
     const controller = createRecordingController(deps.value);
 
     const active = await controller.start({
       source: "screenCamera",
       captureSystemAudio: true,
-      camera: camera$,
-      micId: "mic-1",
+      inputs: camera$,
       mirrorCamera: false,
       filenames,
       requestStop,
     });
 
     expect(deps.getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: true });
-    // The camera comes from the caller's (already open) camera source, never a second getUserMedia.
+    // The camera comes from the caller's (already open) input source.
     expect(camera$.take).toHaveBeenCalledOnce();
-    expect(deps.getUserMedia).not.toHaveBeenCalled();
     expect(deps.createSession).toHaveBeenCalledWith(
       [
         { kind: "screen", stream: screen.stream, filenamePrefix: "screen" },
@@ -93,8 +89,12 @@ describe("recording controller", () => {
       expect.objectContaining({ onError: expect.any(Function) }),
     );
     expect(deps.session.start).toHaveBeenCalledOnce();
-    expect(active.previewStreams).toEqual({ screen: screen.stream, camera: camera.stream });
-    expect(active.levelStream).toBe(camera.stream);
+    // The level follows the microphone carried by the camera stream, never the screen's device audio.
+    expect(active.previewStreams).toEqual({
+      screen: screen.stream,
+      camera: camera.stream,
+      microphone: camera.stream,
+    });
 
     screen.end();
     expect(requestStop).toHaveBeenCalledOnce();
@@ -110,7 +110,7 @@ describe("recording controller", () => {
     const active = await controller.start({
       source: "camera",
       captureSystemAudio: false,
-      camera: cameraSource(camera.stream),
+      inputs: inputSource(camera.stream),
       mirrorCamera: true,
       filenames,
       requestStop: vi.fn(),
@@ -121,7 +121,48 @@ describe("recording controller", () => {
       [{ kind: "camera", stream: mirrored.stream, filenamePrefix: "camera", release: mirrored.release }],
       expect.objectContaining({ onError: expect.any(Function) }),
     );
-    expect(active.previewStreams).toEqual({ screen: null, camera: camera.stream });
+    expect(active.previewStreams).toEqual({ screen: null, camera: camera.stream, microphone: camera.stream });
+  });
+
+  it("records the microphone taken from the input source", async () => {
+    const microphone = fakeStream({ audio: true });
+    const deps = dependencies();
+    const microphone$ = inputSource(microphone.stream);
+    const controller = createRecordingController(deps.value);
+
+    const active = await controller.start({
+      source: "mic",
+      captureSystemAudio: false,
+      inputs: microphone$,
+      mirrorCamera: false,
+      filenames,
+      requestStop: vi.fn(),
+    });
+
+    expect(microphone$.take).toHaveBeenCalledOnce();
+    expect(deps.createSession).toHaveBeenCalledWith(
+      [{ kind: "mic", stream: microphone.stream, filenamePrefix: "mic" }],
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+    expect(active.previewStreams).toEqual({ screen: null, camera: null, microphone: microphone.stream });
+  });
+
+  it("reports no microphone for a screen recording, even with device audio", async () => {
+    const screen = fakeStream({ audio: true });
+    const deps = dependencies();
+    deps.getDisplayMedia.mockResolvedValue(screen.stream);
+    const controller = createRecordingController(deps.value);
+
+    const active = await controller.start({
+      source: "screen",
+      captureSystemAudio: true,
+      inputs: noInputs,
+      mirrorCamera: false,
+      filenames,
+      requestStop: vi.fn(),
+    });
+
+    expect(active.previewStreams).toEqual({ screen: screen.stream, camera: null, microphone: null });
   });
 
   it("rejects missing requested system audio and releases the partial capture", async () => {
@@ -134,7 +175,7 @@ describe("recording controller", () => {
       controller.start({
         source: "screen",
         captureSystemAudio: true,
-        camera: noCamera,
+        inputs: noInputs,
         mirrorCamera: false,
         filenames,
         requestStop: vi.fn(),
@@ -155,7 +196,7 @@ describe("recording controller", () => {
       controller.start({
         source: "screenCamera",
         captureSystemAudio: true,
-        camera: { take: () => Promise.reject(new DOMException("denied", "NotAllowedError")) },
+        inputs: { take: () => Promise.reject(new DOMException("denied", "NotAllowedError")) },
         mirrorCamera: false,
         filenames,
         requestStop: vi.fn(),
@@ -174,7 +215,7 @@ describe("recording controller", () => {
     await controller.start({
       source: "screen",
       captureSystemAudio: true,
-      camera: noCamera,
+      inputs: noInputs,
       mirrorCamera: false,
       filenames,
       requestStop: vi.fn(),
@@ -202,7 +243,7 @@ describe("recording controller", () => {
     const starting = controller.start({
       source: "screen",
       captureSystemAudio: true,
-      camera: noCamera,
+      inputs: noInputs,
       mirrorCamera: false,
       filenames,
       requestStop: vi.fn(),
@@ -219,14 +260,14 @@ describe("recording controller", () => {
   it("leaves the camera with its source when the screen picker is dismissed", async () => {
     const deps = dependencies();
     deps.getDisplayMedia.mockRejectedValue(new DOMException("dismissed", "NotAllowedError"));
-    const camera$ = cameraSource(fakeStream().stream);
+    const camera$ = inputSource(fakeStream().stream);
     const controller = createRecordingController(deps.value);
 
     await expect(
       controller.start({
         source: "screenCamera",
         captureSystemAudio: true,
-        camera: camera$,
+        inputs: camera$,
         mirrorCamera: false,
         filenames,
         requestStop: vi.fn(),
@@ -244,7 +285,7 @@ describe("recording controller", () => {
     const starting = controller.start({
       source: "camera",
       captureSystemAudio: false,
-      camera: cameraSource(
+      inputs: inputSource(
         new Promise<MediaStream>((resolve) => {
           resolveCamera = resolve;
         }),

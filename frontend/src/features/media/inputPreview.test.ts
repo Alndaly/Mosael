@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createCameraPreview } from "./cameraPreview";
+import { createInputPreview } from "./inputPreview";
 
 function fakeStream() {
   const video = { stop: vi.fn() };
@@ -22,11 +22,11 @@ function deferred<T>() {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const devices = { cameraId: "camera-1", micId: "mic-1" };
 
-describe("camera preview", () => {
+describe("input preview", () => {
   it("opens the chosen camera and microphone and publishes the live stream", async () => {
     const camera = fakeStream();
     const getUserMedia = vi.fn().mockResolvedValue(camera.stream);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
     const listener = vi.fn();
     preview.subscribe(listener);
 
@@ -45,18 +45,49 @@ describe("camera preview", () => {
 
   it("uses the system default devices when none is chosen", async () => {
     const getUserMedia = vi.fn().mockResolvedValue(fakeStream().stream);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
 
     preview.open({ cameraId: "", micId: "" });
 
     expect(getUserMedia).toHaveBeenCalledWith({ video: true, audio: true });
   });
 
+  it("opens the microphone alone for a preview without a camera", async () => {
+    const microphone = fakeStream();
+    const getUserMedia = vi.fn().mockResolvedValue(microphone.stream);
+    const preview = createInputPreview({ getUserMedia });
+
+    preview.open({ cameraId: null, micId: "mic-1" });
+    await flush();
+
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: { exact: "mic-1" } } });
+    expect(preview.getState().stream).toBe(microphone.stream);
+    await expect(preview.take({ cameraId: null, micId: "mic-1" })).resolves.toBe(microphone.stream);
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(microphone.stopped()).toBe(false);
+  });
+
+  it("treats a microphone-only preview and a default-camera preview as different inputs", async () => {
+    const microphone = fakeStream();
+    const camera = fakeStream();
+    const getUserMedia = vi.fn().mockResolvedValueOnce(microphone.stream).mockResolvedValueOnce(camera.stream);
+    const preview = createInputPreview({ getUserMedia });
+
+    preview.open({ cameraId: null, micId: "" });
+    await flush();
+    preview.open({ cameraId: "", micId: "" });
+    await flush();
+
+    expect(microphone.stopped()).toBe(true);
+    expect(getUserMedia).toHaveBeenLastCalledWith({ video: true, audio: true });
+    expect(preview.getState().stream).toBe(camera.stream);
+  });
+
   it("replaces the stream when the device selection changes", async () => {
     const first = fakeStream();
     const second = fakeStream();
     const getUserMedia = vi.fn().mockResolvedValueOnce(first.stream).mockResolvedValueOnce(second.stream);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
 
     preview.open(devices);
     await flush();
@@ -73,7 +104,7 @@ describe("camera preview", () => {
     const lateCamera = fakeStream();
     const current = fakeStream();
     const getUserMedia = vi.fn().mockReturnValueOnce(late.promise).mockResolvedValueOnce(current.stream);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
 
     preview.open(devices);
     preview.open({ ...devices, micId: "mic-2" });
@@ -91,7 +122,7 @@ describe("camera preview", () => {
   it("hands the open stream over without stopping it or opening the camera again", async () => {
     const camera = fakeStream();
     const getUserMedia = vi.fn().mockResolvedValue(camera.stream);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
     preview.open(devices);
     await flush();
 
@@ -107,7 +138,7 @@ describe("camera preview", () => {
     const pending = deferred<MediaStream>();
     const camera = fakeStream();
     const getUserMedia = vi.fn().mockReturnValue(pending.promise);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
     preview.open(devices);
 
     const taken = preview.take(devices);
@@ -125,7 +156,7 @@ describe("camera preview", () => {
     const stale = fakeStream();
     const fresh = fakeStream();
     const getUserMedia = vi.fn().mockResolvedValueOnce(stale.stream).mockResolvedValueOnce(fresh.stream);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
     preview.open(devices);
     await flush();
 
@@ -142,7 +173,7 @@ describe("camera preview", () => {
     const denied = new DOMException("denied", "NotAllowedError");
     const camera = fakeStream();
     const getUserMedia = vi.fn().mockRejectedValueOnce(denied).mockResolvedValueOnce(camera.stream);
-    const preview = createCameraPreview({ getUserMedia });
+    const preview = createInputPreview({ getUserMedia });
 
     preview.open(devices);
     await flush();

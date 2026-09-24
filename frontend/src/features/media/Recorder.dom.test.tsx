@@ -9,6 +9,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 import { Recorder } from "./Recorder";
 import { toast } from "sonner";
+import { FakeAudioContext } from "@/test/fakeAudioContext";
 
 const originalCanvasCaptureStream = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, "captureStream");
 
@@ -74,6 +75,31 @@ function fakeStream({ audio = false }: { audio?: boolean } = {}) {
   };
 }
 
+/** A microphone-only stream, as the mic source opens it. */
+function fakeMicrophone() {
+  const audioTrack = { stop: vi.fn(), readyState: "live" as MediaStreamTrackState };
+  return {
+    stream: {
+      getTracks: () => [audioTrack],
+      getVideoTracks: () => [],
+      getAudioTracks: () => [audioTrack],
+    } as unknown as MediaStream,
+    audioTrack,
+  };
+}
+
+/** Grants camera and microphone through the desktop bridge, so the recorder may open them. */
+function grantInputs() {
+  Object.defineProperty(window, "mosaelDesktop", {
+    configurable: true,
+    value: { platform: "darwin", recordingPermissions: { getStatus: vi.fn().mockResolvedValue("granted") } },
+  });
+}
+
+function levelMeter() {
+  return screen.queryByRole("meter", { name: "recordLevel" });
+}
+
 function fakeDevice(kind: MediaDeviceKind, deviceId: string, label: string): MediaDeviceInfo {
   return { kind, deviceId, label, groupId: "group", toJSON: () => ({}) };
 }
@@ -97,6 +123,8 @@ describe("Recorder", () => {
       value: { enumerateDevices, getUserMedia, getDisplayMedia },
     });
     vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+    FakeAudioContext.reset();
+    vi.stubGlobal("AudioContext", FakeAudioContext);
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
     Reflect.deleteProperty(window, "mosaelDesktop");
   });
@@ -425,13 +453,6 @@ describe("Recorder", () => {
   });
 
   describe("camera preview before recording", () => {
-    function grantInputs() {
-      Object.defineProperty(window, "mosaelDesktop", {
-        configurable: true,
-        value: { platform: "darwin", recordingPermissions: { getStatus: vi.fn().mockResolvedValue("granted") } },
-      });
-    }
-
     function ClosingRecorder({ onRecorded }: { onRecorded: (files: File[]) => void }) {
       const [open, setOpen] = React.useState(true);
       return <Recorder open={open} onOpenChange={setOpen} onRecorded={onRecorded} />;
@@ -505,10 +526,27 @@ describe("Recorder", () => {
       expect(FakeMediaRecorder.streams).toEqual([screenCapture.stream, camera.stream]);
     });
 
-    it("releases the camera when switching to a source without one", async () => {
+    it("releases the camera when switching to a source without camera or microphone", async () => {
       grantInputs();
       const camera = fakeStream({ audio: true });
       getUserMedia.mockResolvedValueOnce(camera.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+      await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
+      await user.click(screen.getByRole("button", { name: "record_screen" }));
+
+      expect(camera.track.stop).toHaveBeenCalledOnce();
+      expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
+      expect(getUserMedia).toHaveBeenCalledOnce();
+    });
+
+    it("releases the camera and keeps only the microphone when switching to the mic source", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      const microphone = fakeMicrophone();
+      getUserMedia.mockResolvedValueOnce(camera.stream).mockResolvedValueOnce(microphone.stream);
       const user = userEvent.setup();
 
       render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
@@ -518,7 +556,8 @@ describe("Recorder", () => {
 
       expect(camera.track.stop).toHaveBeenCalledOnce();
       expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
-      expect(getUserMedia).toHaveBeenCalledOnce();
+      expect(getUserMedia).toHaveBeenLastCalledWith({ audio: true });
+      expect(document.querySelector("video")).toBeNull();
     });
 
     it("releases the camera when the recorder closes or unmounts", async () => {
@@ -638,6 +677,165 @@ describe("Recorder", () => {
       await waitFor(() => expect(previewVideo().srcObject).toBe(camera.stream));
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       expect(FakeMediaRecorder.streams).toEqual([]);
+    });
+  });
+
+  describe("microphone level", () => {
+    function currentAudioGraph() {
+      return FakeAudioContext.instances[FakeAudioContext.instances.length - 1];
+    }
+
+    function openAudioGraphs() {
+      return FakeAudioContext.instances.filter((context) => !context.closed);
+    }
+
+    it("shows the level of the previewed camera's microphone before and while recording", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      const onRecorded = vi.fn();
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={onRecorded} />);
+      expect(levelMeter()).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+
+      await waitFor(() => expect(levelMeter()).toBeInTheDocument());
+      expect(currentAudioGraph().stream).toBe(camera.stream);
+      expect(openAudioGraphs()).toHaveLength(1);
+
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await screen.findByRole("button", { name: /recordStop/ });
+      // The floating controller measures the very stream the recording took over.
+      expect(levelMeter()).toBeInTheDocument();
+      expect(currentAudioGraph().stream).toBe(camera.stream);
+      expect(openAudioGraphs()).toHaveLength(1);
+
+      await user.click(screen.getByRole("button", { name: /recordStop/ }));
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledOnce());
+      expect(openAudioGraphs()).toHaveLength(0);
+    });
+
+    it("shows the level for the screen and camera session from the camera's microphone", async () => {
+      grantInputs();
+      const camera = fakeStream({ audio: true });
+      const screenCapture = fakeStream({ audio: true });
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_screenCamera" }));
+      await waitFor(() => expect(levelMeter()).toBeInTheDocument());
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await screen.findByRole("button", { name: /recordStop/ });
+
+      expect(levelMeter()).toBeInTheDocument();
+      expect(currentAudioGraph().stream).toBe(camera.stream);
+      expect(openAudioGraphs()).toHaveLength(1);
+    });
+
+    it("shows no level when the open stream carries no microphone", async () => {
+      grantInputs();
+      const camera = fakeStream();
+      getUserMedia.mockResolvedValueOnce(camera.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_camera" }));
+      await waitFor(() => expect(document.querySelector("video")?.srcObject).toBe(camera.stream));
+
+      expect(levelMeter()).not.toBeInTheDocument();
+      expect(FakeAudioContext.instances).toHaveLength(0);
+    });
+
+    it("shows no microphone level while recording the screen alone, even with device audio", async () => {
+      const screenCapture = fakeStream({ audio: true });
+      getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await screen.findByRole("button", { name: /recordStop/ });
+
+      expect(levelMeter()).not.toBeInTheDocument();
+      expect(FakeAudioContext.instances).toHaveLength(0);
+    });
+
+    it("does not open the microphone for the mic source before access is granted", async () => {
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await waitFor(() => expect(enumerateDevices).toHaveBeenCalledOnce());
+      await user.click(screen.getByRole("button", { name: "record_mic" }));
+
+      expect(getUserMedia).not.toHaveBeenCalled();
+      expect(levelMeter()).not.toBeInTheDocument();
+    });
+
+    it("opens the microphone alone for the mic source and records that same stream", async () => {
+      grantInputs();
+      const microphone = fakeMicrophone();
+      getUserMedia.mockResolvedValueOnce(microphone.stream);
+      const onRecorded = vi.fn();
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={onRecorded} />);
+      await user.click(screen.getByRole("button", { name: "record_mic" }));
+
+      await waitFor(() => expect(levelMeter()).toBeInTheDocument());
+      expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+      expect(currentAudioGraph().stream).toBe(microphone.stream);
+
+      await user.click(screen.getByRole("button", { name: /recordStart/ }));
+      await screen.findByRole("button", { name: /recordStop/ });
+      expect(getUserMedia).toHaveBeenCalledOnce();
+      expect(FakeMediaRecorder.streams).toEqual([microphone.stream]);
+      expect(microphone.audioTrack.stop).not.toHaveBeenCalled();
+      expect(levelMeter()).toBeInTheDocument();
+      expect(currentAudioGraph().stream).toBe(microphone.stream);
+
+      await user.click(screen.getByRole("button", { name: /recordStop/ }));
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledOnce());
+      expect(microphone.audioTrack.stop).toHaveBeenCalledOnce();
+      expect(openAudioGraphs()).toHaveLength(0);
+    });
+
+    it("follows the newly selected microphone", async () => {
+      grantInputs();
+      enumerateDevices.mockResolvedValue([fakeDevice("audioinput", "mic-2", "USB Microphone")]);
+      const first = fakeMicrophone();
+      const second = fakeMicrophone();
+      getUserMedia.mockResolvedValueOnce(first.stream).mockResolvedValueOnce(second.stream);
+      const user = userEvent.setup();
+
+      render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_mic" }));
+      await waitFor(() => expect(currentAudioGraph()?.stream).toBe(first.stream));
+      await user.click(screen.getByRole("combobox", { name: "recordMic" }));
+      await user.click(await screen.findByRole("option", { name: "USB Microphone" }));
+
+      await waitFor(() => expect(currentAudioGraph().stream).toBe(second.stream));
+      expect(getUserMedia).toHaveBeenLastCalledWith({ audio: { deviceId: { exact: "mic-2" } } });
+      expect(first.audioTrack.stop).toHaveBeenCalledOnce();
+      expect(openAudioGraphs()).toEqual([currentAudioGraph()]);
+      expect(levelMeter()).toBeInTheDocument();
+    });
+
+    it("closes the audio graph and releases the microphone when the recorder unmounts", async () => {
+      grantInputs();
+      const microphone = fakeMicrophone();
+      getUserMedia.mockResolvedValueOnce(microphone.stream);
+      const user = userEvent.setup();
+
+      const view = render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "record_mic" }));
+      await waitFor(() => expect(levelMeter()).toBeInTheDocument());
+
+      view.unmount();
+
+      expect(openAudioGraphs()).toHaveLength(0);
+      expect(microphone.audioTrack.stop).toHaveBeenCalledOnce();
     });
   });
 });
