@@ -12,11 +12,12 @@ import {
   makeObject,
   makeShot,
   removeObjects,
+  removeShot,
   sampleCamera,
   sampleObject,
 } from "./sceneGraph";
 describe("editable scene graph", () => {
-  it("does not remove a shot camera, including through its containing group", () => {
+  it("does not remove the last shot's camera, including through its containing group", () => {
     const content = initialScene(zh);
     const camera = cameraOfShot(content, content.shots[0])!;
     expect(removeObjects(content, [camera.id])).toBe(content);
@@ -27,6 +28,28 @@ describe("editable scene graph", () => {
     const spare = makeObject("camera");
     content.objects.push(spare);
     expect(removeObjects(content, [spare.id]).objects).not.toContain(spare);
+  });
+  it("deleting another shot's camera takes that shot along instead of refusing", () => {
+    const content = initialScene(zh);
+    const { camera, shot } = makeShot("镜头 2");
+    content.objects.push(camera);
+    content.shots.push(shot);
+    const next = removeObjects(content, [camera.id]);
+    expect(next.objects).not.toContain(camera);
+    expect(next.shots.map((s) => s.id)).toEqual([content.shots[0].id]);
+  });
+  it("removes a shot with its own camera, keeps a camera another shot still uses, never the last shot", () => {
+    const content = initialScene(zh);
+    expect(removeShot(content, content.shots[0].id)).toBe(content);
+    const { camera, shot } = makeShot("镜头 2");
+    content.objects.push(camera);
+    content.shots.push(shot);
+    const next = removeShot(content, shot.id);
+    expect(next.shots).toEqual([content.shots[0]]);
+    expect(next.objects).not.toContain(camera);
+    const sharing = { ...shot, id: "shot-3", camera_id: content.shots[0].camera_id };
+    const kept = removeShot({ ...content, shots: [...content.shots, sharing] }, sharing.id);
+    expect(kept.objects).toBe(content.objects);
   });
   it("samples every camera key exactly and holds at the bounds", () => {
     const content = initialScene(zh, true);

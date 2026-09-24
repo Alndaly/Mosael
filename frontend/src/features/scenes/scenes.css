@@ -393,12 +393,6 @@
   align-items: center;
   flex-wrap: nowrap;
   gap: 4px;
-  min-height: var(--scene-control-height);
-}
-.scene-shot-row > [role="combobox"] {
-  width: 150px;
-  flex-shrink: 1;
-  min-width: 70px;
 }
 .scene-spacer {
   flex: 1;
@@ -435,7 +429,6 @@
 .scene-dope-toolbar > .scene-spacer { flex: 1; }
 .scene-dope-search { display: block; position: relative; width: 100%; }
 .scene-dope-search > svg { position: absolute; top: 50%; left: 8px; translate: 0 -50%; color: var(--muted-foreground); }
-.scene-dope-search input { padding-left: 28px; }
 .scene-dope-count { white-space: nowrap; color: var(--muted-foreground); font-size: var(--text-ui-2xs); padding-inline: 4px; }
 .scene-dope-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; border-block: 1px solid var(--divider); scrollbar-gutter: stable; }
 .scene-dope-sheet { width: 100%; }
@@ -507,15 +500,25 @@
   backdrop-filter: blur(8px);
   background: var(--modal-surface);
 }
+/* 横贯页头下方的提示带。左缘和页头的返回键对齐(同一个 gutter),按钮靠右、用 xs 刻度和
+   这句话同字号;动作用主色字,静止时不带底,悬停才出底 —— 和笔记页那几条提示带一个写法。 */
 .scene-notice {
-  padding: 10px 18px;
+  padding: 4px var(--scene-stage-gutter);
+  min-height: 36px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px 8px;
   flex-wrap: wrap;
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-bottom: 1px solid var(--divider);
+  background: color-mix(in srgb, var(--primary) 6%, var(--background));
   font-size: var(--text-ui-xs);
 }
+.scene-notice > svg { flex-shrink: 0; color: var(--primary); }
+.scene-notice > span:not(.scene-notice-actions) { min-width: 0; }
+.scene-notice[data-tone="error"] { background: color-mix(in srgb, var(--destructive) 6%, var(--background)); }
+.scene-notice[data-tone="error"] > svg { color: var(--destructive); }
+.scene-notice-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.scene-notice-actions > button { color: var(--primary); }
 .scene-history {
   max-height: 55vh;
   overflow: auto;
@@ -1208,10 +1211,7 @@
   font: 10px var(--font-mono);
   white-space: nowrap;
 }
-.scene-stage-bar .scene-labeled-tool,
-.scene-shot-row > .scene-tool,
-.scene-shot-row > button,
-.scene-shot-row > [role="combobox"] {
+.scene-stage-bar .scene-labeled-tool {
   height: var(--scene-control-height);
 }
 .scene-stage-bar .scene-labeled-tool {
@@ -1224,10 +1224,6 @@
 .scene-preset-list > button > svg,
 .scene-choice > svg {
   flex-shrink: 0;
-}
-.scene-shot-row > .scene-tool {
-  background: var(--secondary);
-  border: 1px solid var(--border);
 }
 .scene-stage-bar,
 .scene-timeline {

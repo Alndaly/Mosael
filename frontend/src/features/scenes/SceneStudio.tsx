@@ -27,28 +27,31 @@ import React from "react";
 import { SceneSubsection } from "./SceneSubsection";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArchiveRestore,
   ArrowLeft,
   Box,
   Boxes,
   Camera,
-  Image as ImageIcon,
   Check,
   CheckSquare,
-  Download,
-  Maximize,
-  Minimize,
+  ChevronFirst,
+  ChevronLast,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
-  ChevronFirst,
-  ChevronLast,
-  HelpCircle,
+  CircleAlert,
+  Download,
   Focus,
   Folder,
+  HelpCircle,
   History,
+  Image as ImageIcon,
   Lightbulb,
   Loader2,
   Magnet,
+  Maximize,
+  Minimize,
+  Minus,
   Move,
   Pause,
   Play,
@@ -56,8 +59,8 @@ import {
   RotateCcw,
   RotateCw,
   Scaling,
-  Trash2,
   Sparkles,
+  Trash2,
   Video,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -110,6 +113,7 @@ import {
   objectLabels,
   objectTree,
   removeObjects,
+  removeShot,
   uid,
 } from "./sceneGraph";
 import { SHOT_FPS } from "./encodeVideo";
@@ -476,12 +480,16 @@ function SceneEditor({
     });
   }
   function removeSceneObjects(ids: string[]) {
-    const content = removeObjects(current.current.content, ids);
-    if (content === current.current.content) {
-      toast.error(t("sceneCantDeleteShotCamera"));
+    const before = current.current.content;
+    const content = removeObjects(before, ids);
+    if (content === before) {
+      toast.error(t("sceneCantDeleteLastShotCamera"));
       return;
     }
     update(content);
+    // 镜头是跟着机位一起走的 —— 说出来,不然镜头下拉里少了一项却没人知道为什么。
+    const gone = before.shots.filter((s) => !content.shots.includes(s));
+    if (gone.length) toast.info(t("sceneShotsRemovedWithCamera").replace("{names}", gone.map((s) => s.name).join(t("listSeparator"))));
     if (!content.objects.some(object => object.id === selected)) setSelected(null);
   }
   function undo() {
@@ -1127,55 +1135,59 @@ function SceneEditor({
           </Popover>
         </div>
       </header>
+      {/* 两条提示带同一副骨架:图标 + 一句话 + 靠右的 xs 文字按钮。此前按钮是 sm(14px 字、
+          32px 高)跟在 12px 的句子后面,读起来像句子里突然放大的两个词,而不是两个动作。 */}
       {error && (
-        <div className="scene-notice" role="alert">
-          {t("sceneSaveFailed").replace("{error}", error)}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setDraft({ ...current.current })}
-          >
-            {t("retry")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              download(
-                new Blob([JSON.stringify(draft, null, 2)], {
-                  type: "application/json",
-                }),
-                `${draft.name}-${t("sceneDraftFileSuffix")}.json`,
-              )
-            }
-          >
-            {t("sceneExportDraft")}
-          </Button>
+        <div className="scene-notice" data-tone="error" role="alert">
+          <CircleAlert size={14} aria-hidden="true" />
+          <span>{t("sceneSaveFailed").replace("{error}", error)}</span>
+          <span className="scene-notice-actions">
+            <Button size="xs" variant="ghost" onClick={() => setDraft({ ...current.current })}>
+              {t("retry")}
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() =>
+                download(
+                  new Blob([JSON.stringify(draft, null, 2)], {
+                    type: "application/json",
+                  }),
+                  `${draft.name}-${t("sceneDraftFileSuffix")}.json`,
+                )
+              }
+            >
+              {t("sceneExportDraft")}
+            </Button>
+          </span>
         </div>
       )}
       {recovery && (
-        <div className="scene-notice">
-          {t("sceneDraftFound")}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              change(recovery);
-              setRecovery(null);
-            }}
-          >
-            {t("sceneRestoreDraft")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setRecovery(null);
-              localStorage.removeItem(cacheKey);
-            }}
-          >
-            {t("sceneUseSaved")}
-          </Button>
+        <div className="scene-notice" role="status">
+          <ArchiveRestore size={14} aria-hidden="true" />
+          <span>{t("sceneDraftFound")}</span>
+          <span className="scene-notice-actions">
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => {
+                change(recovery);
+                setRecovery(null);
+              }}
+            >
+              {t("sceneRestoreDraft")}
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => {
+                setRecovery(null);
+                localStorage.removeItem(cacheKey);
+              }}
+            >
+              {t("sceneUseSaved")}
+            </Button>
+          </span>
         </div>
       )}
       <div
@@ -1410,19 +1422,26 @@ function SceneEditor({
                   两者共用一条横轴才对得齐。 */}
               <SceneDopeSheet
                 controls={<div className="scene-shot-row">
-                <Camera size={16} />
+                {/* 这一行和右边的打帧、缩放同处一条工具栏,**用同一套 xs 刻度**:28px 的
+                    icon-xs 按钮、h-7 的选择框。此前这里是 32px 的 scene-tool 加一枚悬在外面的
+                    16px 相机图标,和同行的按钮差着一档,图标也和选择框各是各的盒子。 */}
                 <Pick
                   label={t("sceneCurrentShot")}
                   value={shot.id}
                   options={draft.content.shots.map((s) => [s.id, s.name])}
+                  className="h-7 w-[150px] min-w-[70px] shrink px-2.5 text-ui-xs"
+                  icon={<Camera size={14} className="shrink-0 text-muted-foreground" />}
                   onChange={(id) => {
                     setShotId(id);
                     setTime(0);
                     setPlaying(false);
                   }}
                 />
-                <Tool
-                  label={t("sceneNewShot")}
+                <Button
+                  size="icon-xs"
+                  variant="outline"
+                  title={t("sceneNewShot")}
+                  aria-label={t("sceneNewShot")}
                   disabled={draft.content.shots.length >= 32}
                   onClick={() => {
                     // 新建镜头 = 新建一台机位 + 一个用它的镜头。**它们成对出现** ——
@@ -1443,18 +1462,40 @@ function SceneEditor({
                     setTime(0);
                   }}
                 >
-                  <Plus size={16} />
-                </Tool>
+                  <Plus />
+                </Button>
+                {/* 删镜头连同它的机位(见 removeShot)。此前没有这个入口,于是「新建镜头」建出来
+                    的机位在物体列表里怎么都删不掉。最后一个镜头不能删 —— 场景至少要有一个。 */}
+                <Button
+                  size="icon-xs"
+                  variant="outline"
+                  title={t("sceneDeleteShot")}
+                  aria-label={t("sceneDeleteShot")}
+                  disabled={draft.content.shots.length <= 1 || !!busy}
+                  onClick={() => {
+                    const at = draft.content.shots.indexOf(shot);
+                    const next = removeShot(draft.content, shot.id);
+                    update(next);
+                    setShotId(next.shots[Math.max(0, at - 1)].id);
+                    setTime(0);
+                    setPlaying(false);
+                  }}
+                >
+                  <Minus />
+                </Button>
                 <span className="scene-tool-divider" aria-hidden="true" />
-                <Tool label={t("sceneGoToStart")} onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst size={16} /></Tool>
-                <Tool
-                  label={playing ? t("scenePause") : t("scenePlayShot")}
+                <Button size="icon-xs" variant="ghost" title={t("sceneGoToStart")} aria-label={t("sceneGoToStart")} onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst /></Button>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  title={playing ? t("scenePause") : t("scenePlayShot")}
+                  aria-label={playing ? t("scenePause") : t("scenePlayShot")}
                   disabled={!!busy}
                   onClick={togglePlayback}
                 >
-                  {playing ? <Pause size={17} /> : <Play size={17} />}
-                </Tool>
-                <Tool label={t("sceneGoToEnd")} onClick={() => { setTime(shot.duration); setPlaying(false); }}><ChevronLast size={16} /></Tool>
+                  {playing ? <Pause /> : <Play />}
+                </Button>
+                <Button size="icon-xs" variant="ghost" title={t("sceneGoToEnd")} aria-label={t("sceneGoToEnd")} onClick={() => { setTime(shot.duration); setPlaying(false); }}><ChevronLast /></Button>
                 <span className="scene-time">
                   {time.toFixed(1)} / {shot.duration.toFixed(1)} s
                 </span>

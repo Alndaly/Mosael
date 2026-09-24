@@ -6,11 +6,15 @@ export function Pick({
   options,
   onChange,
   label,
+  icon,
+  className,
 }: {
   value: string;
   options: [string, string][];
   onChange: (v: string) => void;
   label: string;
+  icon?: React.ReactNode;
+  className?: string;
 }) {
   // 物体/机位清单跟着场景走,一多就得能搜(阈值在 OptionPicker 里)。
   return (
@@ -19,6 +23,8 @@ export function Pick({
       onChange={onChange}
       options={options.map(([id, name]) => ({ value: id, label: name }))}
       ariaLabel={label}
+      icon={icon}
+      className={className}
     />
   );
 }

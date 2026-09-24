@@ -130,7 +130,7 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
         <Popover>
           <PopoverTrigger asChild><Button size="icon-xs" variant={query || animatedOnly ? "secondary" : "ghost"} aria-label={t("sceneAnimSearch")} title={t("sceneAnimSearch")}><ListFilter /></Button></PopoverTrigger>
           <PopoverContent align="end" className="grid w-64 gap-3 p-3">
-            <label className="scene-dope-search"><Search size={14}/><Input className="h-7 text-ui-xs" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} /></label>
+            <label className="scene-dope-search"><Search size={14}/><Input className="h-7 pl-7 text-ui-xs" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} /></label>
             <Button size="xs" variant={animatedOnly ? "secondary" : "outline"} aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
           </PopoverContent>
         </Popover>

@@ -264,11 +264,30 @@ export function removeObjects(
         changed = true;
       }
   }
-  // A shot must keep its camera, including when deleting an ancestor group.
-  if (content.shots.some(shot => removed.has(shot.camera_id))) return content;
+  // **镜头跟着它的机位一起删**(连删它所在的组也算)。此前是一律拒删,而界面上又没有删镜头
+  // 的入口 —— 「新建镜头」建出来的那台机位就成了永远删不掉的东西,用户只看到一句「请保留」。
+  // 场景至少要有一个镜头(后端 min_length=1),所以只有**最后一个镜头**的机位才拒。
+  const shots = content.shots.filter((shot) => !removed.has(shot.camera_id));
+  if (!shots.length) return content;
   return {
     ...content,
     objects: content.objects.filter((o) => !removed.has(o.id)),
+    shots: shots.length === content.shots.length ? content.shots : shots,
+  };
+}
+/**
+ * 删一个镜头,连同它的机位 —— 和 {@link makeShot} 成对:新建镜头就是新建一台机位 + 一个用它
+ * 的镜头,删也成对删。**机位还被别的镜头用着时留下**。最后一个镜头删不掉,原样返回。
+ */
+export function removeShot(content: SceneContent, shotId: string): SceneContent {
+  const shot = content.shots.find((s) => s.id === shotId);
+  if (!shot || content.shots.length <= 1) return content;
+  const shots = content.shots.filter((s) => s !== shot);
+  const shared = shots.some((s) => s.camera_id === shot.camera_id);
+  return {
+    ...content,
+    shots,
+    objects: shared ? content.objects : content.objects.filter((o) => o.id !== shot.camera_id),
   };
 }
 /** 一个物体和它所有后代的 id。删除、复制、移动都要它 —— 三处此前各写了一遍同一个循环。 */
