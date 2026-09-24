@@ -202,7 +202,7 @@ def test_pull_takes_the_open_blender_scene_without_a_prior_send(monkeypatch, tmp
         assert operation=='pull'
         Path(payload['output_path']).write_bytes(glb())
         return {'scene_name':'客厅','object_count':7,'cameras':[camera],'lights':[light],
-                'warnings':['相机「Top」没有取回：画面有滚转或正对上下方，Mosael 的镜头始终保持水平。']}
+                'warnings':[{'key': 'blenderWarn_cameraRolled', 'params': {'name': 'Top'}}]}
     monkeypatch.setattr(bridge,'execute',fake_execute)
     with SessionLocal() as db:
         user=db.scalar(select(User))

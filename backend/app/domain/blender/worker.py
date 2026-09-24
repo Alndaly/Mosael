@@ -6,6 +6,12 @@ from pathlib import Path
 from mathutils import Vector
 
 
+def _warning(key, **params):
+    """一条提示:只说「是哪一种」和参数。这段代码跑在 Blender 里,拿不到 Mosael 的文案表 ——
+    翻成句子是后端的事(bridge.render_warnings,按请求方的语言)。"""
+    return {'key': key, 'params': params}
+
+
 def axis(v):
     return Vector((v[0], -v[2], v[1]))
 
@@ -101,13 +107,13 @@ def attach_models(scene, models):
     for entry in models:
         anchor = anchors.get(entry['object_id'])
         if anchor is None:
-            warnings.append('模型「' + entry['name'] + '」没有找到对应的位置，已跳过。')
+            warnings.append(_warning('blenderWarn_modelUnplaced', name=entry['name']))
             continue
         before = set(scene.objects)
         try:
             bpy.ops.import_scene.gltf(filepath=entry['path'])
         except Exception as exc:
-            warnings.append('模型「' + entry['name'] + '」导入失败：' + str(exc).strip().splitlines()[-1][:160])
+            warnings.append(_warning('blenderWarn_modelFailed', name=entry['name'], detail=str(exc).strip().splitlines()[-1][:160]))
             continue
         for obj in [o for o in scene.objects if o not in before]:
             if obj.parent is None:
@@ -164,7 +170,7 @@ def receive(payload):
             camera = cameras.get(source['id'])
             shot = dict(source)
             if camera is None:
-                warnings.append('镜头「'+source['name']+'」不存在，保留发送时的镜头。')
+                warnings.append(_warning('blenderWarn_shotMissing', name=source['name']))
                 shots.append(shot)
                 continue
             dimensions(scene, source['aspect'])
@@ -182,7 +188,7 @@ def receive(payload):
                 expected = direction.to_track_quat('-Z', 'Y')
                 if evaluated.data.type != 'PERSP' or abs(rotation.dot(expected)) < .99999:
                     frames = []
-                    warnings.append('镜头「'+source['name']+'」使用正交或倾斜视角，保留发送时的镜头。')
+                    warnings.append(_warning('blenderWarn_shotUnsupportedView', name=source['name']))
                     break
                 target = p+direction*max(.01, evaluated.get('mosael_target_distance', 5))
                 corners = evaluated.data.view_frame(scene=scene)
@@ -191,7 +197,7 @@ def receive(payload):
             if frames:
                 shot['frames'], shot['easing'] = frames, 'linear'
                 if count == 100:
-                    warnings.append('镜头「'+source['name']+'」已采样为 100 个关键帧，请检查运动。')
+                    warnings.append(_warning('blenderWarn_shotSampled', name=source['name']))
             shots.append(shot)
         # Snapshot the geometry at the first frame, without mixing native cameras into the model.
         scene.frame_set(1)
@@ -397,7 +403,7 @@ def pulled_cameras(scene):
                 data = evaluated.data
                 if data.type != 'PERSP':
                     rejected.add(camera.name)
-                    warnings.append('相机「'+camera.name+'」没有取回：它是正交或全景相机，Mosael 只有透视镜头。')
+                    warnings.append(_warning('blenderWarn_cameraNotPerspective', name=camera.name))
                     continue
                 matrix = [list(row) for row in evaluated.matrix_world]
                 position, forward, _ = camera_axes(matrix)
@@ -406,7 +412,7 @@ def pulled_cameras(scene):
                 key = camera_key(time, matrix, distance, fov)
                 if key is None:
                     rejected.add(camera.name)
-                    warnings.append('相机「'+camera.name+'」没有取回：画面有滚转或正对上下方，Mosael 的镜头始终保持水平。')
+                    warnings.append(_warning('blenderWarn_cameraRolled', name=camera.name))
                     continue
                 keys[camera.name].append(key)
     finally:
@@ -421,9 +427,9 @@ def pulled_cameras(scene):
         if len(frames) > 1:
             entry['duration'] = round(duration, 5)
             if len(frames) == SAMPLE_LIMIT:
-                warnings.append('镜头「'+camera.name+'」已采样为 100 个关键帧，请检查运动。')
+                warnings.append(_warning('blenderWarn_shotSampled', name=camera.name))
             if truncated:
-                warnings.append('镜头「'+camera.name+'」只取了 Blender 时间线的前 120 秒。')
+                warnings.append(_warning('blenderWarn_shotTruncated', name=camera.name))
         pulled.append(entry)
     return pulled, warnings
 
@@ -588,7 +594,7 @@ def look(payload):
             name = view['name']
             if name == 'camera':
                 if saved[1] is None:
-                    warnings.append('场景里没有活动相机,跳过 camera 视角。')
+                    warnings.append(_warning('blenderWarn_noActiveCamera'))
                     continue
                 scene.camera = saved[1]
             else:

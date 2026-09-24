@@ -17,7 +17,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 from pydantic import ValidationError
 from app.core.config import settings
-from app.core.i18n import LocalizedError, t
+from app.core.i18n import LocalizedError, get_current_locale, t
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
 from app.domain.scene_render.gltf import LIGHT_UNIT
@@ -59,6 +59,14 @@ class BlenderUnavailable(BlenderDomainError):
     """**上游的问题。** Blender 没响应、或回了读不懂/过大的数据。"""
 
     status = 502
+
+
+def render_warnings(items: object) -> list[str]:
+    """Blender 那边和这里攒下的提示(`{key, params}`)按**这次请求**的语言翻成句子。
+
+    同步记录里存的是翻好的这一份:它是那一次操作当时看到的样子,之后不再重翻。
+    """
+    return [t(item['key'], get_current_locale(), **(item.get('params') or {})) for item in (items or [])]
 
 
 #: Blender MCP Add-on 没开、端口不对时,上游原样回的那句话。认出它就换成一句能照着做的话。
@@ -308,7 +316,7 @@ def native_cameras(cameras):
     for entry in cameras:
         name = (entry.get('name') or 'Camera')[:160]
         if len(shots) >= _limit('shots'):
-            warnings.append('相机「%s」没有取回：一个场景最多 %d 个镜头。' % (name, _limit('shots')))
+            warnings.append({'key': 'blenderWarn_cameraOverLimit', 'params': {'name': name, 'limit': _limit('shots')}})
             continue
         index = len(shots) + 1
         camera = {'id': 'blender-camera-%d' % index, 'kind': 'camera', 'name': name}
@@ -322,7 +330,7 @@ def native_cameras(cameras):
             SceneObject.model_validate(camera)
             SceneShot.model_validate(shot)
         except ValidationError:
-            warnings.append('相机「%s」没有取回：位置或视角超出 Mosael 支持的范围。' % name)
+            warnings.append({'key': 'blenderWarn_cameraOutOfRange', 'params': {'name': name}})
             continue
         objects.append(camera)
         shots.append(shot)
@@ -391,10 +399,10 @@ def native_lights(lights, room):
             suns.append(entry)
             continue
         if kind not in ('POINT', 'SPOT', 'AREA'):
-            notes.append('灯光「%s」没有取回：Mosael 不认识 %s 类型的灯。' % (name, kind))
+            notes.append({'key': 'blenderWarn_lightUnknownType', 'params': {'name': name, 'kind': kind}})
             continue
         if len(objects) >= room:
-            notes.append('灯光「%s」没有取回：一个场景最多 %d 个物体。' % (name, _limit('objects')))
+            notes.append({'key': 'blenderWarn_lightOverLimit', 'params': {'name': name, 'limit': _limit('objects')}})
             continue
         light = {'id': 'blender-light-%d' % (len(objects) + 1), 'kind': 'light', 'name': name,
                  'position': entry['position'], 'color': linear_to_hex(entry['color']),
@@ -402,13 +410,13 @@ def native_lights(lights, room):
         try:
             SceneObject.model_validate(light)
         except ValidationError:
-            notes.append('灯光「%s」没有取回：位置或亮度超出 Mosael 支持的范围。' % name)
+            notes.append({'key': 'blenderWarn_lightOutOfRange', 'params': {'name': name}})
             continue
         objects.append(light)
         if kind == 'SPOT':
-            notes.append('聚光灯「%s」按点光取回：Mosael 没有聚光，%d° 的光锥没有带过来。' % (name, round(entry.get('spot_size', 0))))
+            notes.append({'key': 'blenderWarn_spotAsPoint', 'params': {'name': name, 'angle': round(entry.get('spot_size', 0))}})
         elif kind == 'AREA':
-            notes.append('面光「%s」按点光取回：Mosael 没有面光，面积和朝向没有带过来。' % name)
+            notes.append({'key': 'blenderWarn_areaAsPoint', 'params': {'name': name}})
     lighting = None
     if suns:
         # 看得见的优先,再比实际亮度(强度 × 颜色最亮的那个分量)。
@@ -416,7 +424,7 @@ def native_lights(lights, room):
         name = (sun.get('name') or 'Sun')[:160]
         for other in suns:
             if other is not sun:
-                notes.append('太阳「%s」没有取回：Mosael 只有一盏主光，已用「%s」。' % ((other.get('name') or 'Sun')[:160], name))
+                notes.append({'key': 'blenderWarn_extraSun', 'params': {'name': (other.get('name') or 'Sun')[:160], 'used': name}})
         # 主光的方向是**指向光源**的(raster.sun_direction),太阳的光线方向反过来就是。
         toward = [-v for v in sun['direction']]
         elevation = math.degrees(math.asin(max(-1.0, min(1.0, toward[1]))))
@@ -424,15 +432,13 @@ def native_lights(lights, room):
         kelvin, deviation = nearest_temperature(sun['color'])
         intensity = sun_intensity(sun['power'])*max(sun['color'])
         ceiling = next(m.le for m in SceneLighting.model_fields['intensity'].metadata if getattr(m, 'le', None) is not None)
-        clauses = []
+        # 每种近似各一句完整的话(各自能翻),而不是拼成一句带分号的长句。
         if elevation < 0:
-            clauses.append('光从地平线以下射来，已按贴地（仰角 0°）处理')
+            notes.append({'key': 'blenderWarn_sunBelowHorizon', 'params': {'name': name}})
         if intensity > ceiling:
-            clauses.append('强度超出 Mosael 的上限，已按 %g 处理' % ceiling)
+            notes.append({'key': 'blenderWarn_sunTooBright', 'params': {'name': name, 'value': f'{ceiling:g}'}})
         if deviation > .1:
-            clauses.append('颜色不是色温能表示的，已按最接近的 %d K 处理' % kelvin)
-        if clauses:
-            notes.append('太阳「%s」已作为场景主光；%s。' % (name, '；'.join(clauses)))
+            notes.append({'key': 'blenderWarn_sunColor', 'params': {'name': name, 'kelvin': kelvin}})
         # 软硬保留默认:Mosael 的 softness 是阴影贴图的模糊半径,不是太阳的角直径,两者之间没有能讲清的换算。
         lighting = SceneLighting(preset='custom', azimuth=round(azimuth, 3) % 360, elevation=round(max(0.0, elevation), 3),
                                  intensity=round(min(intensity, ceiling), 4), temperature=kelvin)
@@ -484,7 +490,7 @@ def send(db, user, scene, instance_id, revision, shot_id):
             result = execute(db, instance, 'send', {'snapshot': worker_snapshot, 'shot_id': shot_id, 'transfer_id': transfer_id,
                 'input_path': str(folder / 'input.glb'), 'models': models, 'blend_path': str(folder / 'scene.blend'),
                 'result_path': str(folder / 'sent.json')}, scene.workspace_id)
-            record.update(status='ready', scene_name=result['scene_name'], warnings=result.get('warnings', []))
+            record.update(status='ready', scene_name=result['scene_name'], warnings=render_warnings(result.get('warnings')))
         except Exception as exc:
             record.update(status='failed', error=str(getattr(exc, 'detail', exc)))
             raise
@@ -541,17 +547,17 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
             cameras = [{**o, 'parent_id': None} for o in snapshot.get('objects', []) if o.get('kind') == 'camera']
             received = apply_shot_frames({'objects': cameras, 'shots': [dict(s) for s in snapshot.get('shots', [])]}, result['shots'])
             content = SceneContent.model_validate({**snapshot, 'shots': received['shots'],
-                'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id},
+                'objects': [{'id': 'blender-model', 'kind': 'model', 'name': t('blenderDefaultModelName', get_current_locale()), 'model_id': model_id},
                             *received['objects']]})
         except (ValidationError, KeyError) as exc:
             raise BlenderDomainError('blenderErr_shotOutOfRange') from exc
         if into_current:
-            record.update(warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
+            record.update(warnings=render_warnings(result.get('warnings')), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
             write_record(folder, record)
             return {**summary(record), 'content': content.model_dump(mode='json')}
         # **建行归场景域**(ADR-0003),这里只描述要建什么。模型已经在这个工作区里了。
         received = create_scene(db, scene.workspace_id, record['snapshot']['name'] + ' · Blender', content)
-        record.update(received_scene_id=received.id, warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
+        record.update(received_scene_id=received.id, warnings=render_warnings(result.get('warnings')), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
         write_record(folder, record)
         return summary(record)
 
@@ -590,18 +596,18 @@ def pull(db, user, workspace_id, instance_id):
             blank = SceneContent().model_dump(mode='json')
             if shots:
                 blank.update(objects=cameras, shots=shots)
-            model = {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}
+            model = {'id': 'blender-model', 'kind': 'model', 'name': t('blenderDefaultModelName', get_current_locale()), 'model_id': model_id}
             lights, lighting, notes = native_lights(result.get('lights') or [],
                                                     _limit('objects') - len(blank['objects']) - 1)
             warnings += notes
             if lighting is not None:
                 blank['lighting'] = lighting.model_dump(mode='json')
             content = SceneContent.model_validate({**blank, 'objects': [*blank['objects'], model, *lights]})
-            scene = create_scene(db, workspace_id, result.get('scene_name') or 'Blender 场景', content)
+            scene = create_scene(db, workspace_id, result.get('scene_name') or t('blenderDefaultSceneName', get_current_locale()), content)
         finally:
             #: 临时目录用完即删 —— 字节已经拷进场景的模型目录,这里没有第二个读者。
             shutil.rmtree(folder, ignore_errors=True)
-        return {'scene_id': scene.id, 'name': scene.name, 'warnings': warnings}
+        return {'scene_id': scene.id, 'name': scene.name, 'warnings': render_warnings(warnings)}
 
 
 def reconcile_orphaned_transfers() -> int:

@@ -20,7 +20,7 @@ from uuid import uuid4
 
 from app.core.config import settings
 from app.domain.blender import bridge
-from app.domain.blender.bridge import BlenderConflict, BlenderDomainError, BlenderUnavailable
+from app.domain.blender.bridge import BlenderConflict, BlenderDomainError, BlenderUnavailable, render_warnings
 
 #: 能从哪些角度看 Blender 里的东西 —— **只此一处**,角度随调用一起发给 worker。
 #: 值是 (方位角, 仰角),度:方位 0 = 从 -Y 看过去,和 Blender 的「前视图」(小键盘 1)一致;
@@ -110,7 +110,7 @@ def look(db, user, workspace_id: str, *, views: list[str], objects: list[str] | 
                 raise BlenderUnavailable('blenderErr_noRender')
             images.append({'view': one['view'], 'mime_type': 'image/jpeg',
                            'data': base64.b64encode(path.read_bytes()).decode()})
-    return {'scene_name': result.get('scene_name'), 'shading': shading, 'warnings': result.get('warnings', []),
+    return {'scene_name': result.get('scene_name'), 'shading': shading, 'warnings': render_warnings(result.get('warnings')),
             'images': images}
 
 
@@ -154,4 +154,4 @@ def import_to_scene(db, user, scene, *, base_revision: int, name: str = '', obje
         entry['position'] = position
     saved = apply_scene_operations(db, scene, base_revision, [entry], [], None, None)
     return {'object_id': object_id, 'model_id': model.id, 'revision': saved.revision,
-            'warnings': result.get('warnings', [])}
+            'warnings': render_warnings(result.get('warnings'))}

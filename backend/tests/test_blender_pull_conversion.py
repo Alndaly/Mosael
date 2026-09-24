@@ -111,7 +111,7 @@ def test_native_cameras_skip_one_by_one_with_a_reason():
     many = [{'name': 'Cam %d' % i, 'aspect': '16:9', 'frames': [_key(0, (i, 3, 8))]} for i in range(33)]
     objects, shots, warnings = bridge.native_cameras([too_wide, *many])
     assert len(shots) == 32 and objects[0]['name'] == 'Cam 0'
-    assert warnings == ['相机「Fisheye」没有取回：位置或视角超出 Mosael 支持的范围。',
+    assert bridge.render_warnings(warnings) == ['相机「Fisheye」没有取回：位置或视角超出 Mosael 支持的范围。',
                         '相机「Cam 32」没有取回：一个场景最多 32 个镜头。']
 
 
@@ -136,7 +136,7 @@ def test_a_point_light_sent_to_blender_comes_back_the_same():
 def test_spot_and_area_lights_come_back_as_points_and_say_what_was_lost():
     objects, _, notes = bridge.native_lights([_light('SPOT', 1000, spot_size=45.0), _light('AREA', 500)], 10)
     assert [o['kind'] for o in objects] == ['light', 'light']
-    assert notes == ['聚光灯「Spot」按点光取回：Mosael 没有聚光，45° 的光锥没有带过来。',
+    assert bridge.render_warnings(notes) == ['聚光灯「Spot」按点光取回：Mosael 没有聚光，45° 的光锥没有带过来。',
                      '面光「Area」按点光取回：Mosael 没有面光，面积和朝向没有带过来。']
 
 
@@ -156,12 +156,15 @@ def test_sun_approximations_are_spelled_out():
     objects, lighting, notes = bridge.native_lights([below, brighter], 10)
     # 看得见的优先,哪怕另一个更亮。
     assert lighting.elevation == 0 and lighting.intensity == 20
-    assert notes[0] == '太阳「Noon」没有取回：Mosael 只有一盏主光，已用「Moon」。'
-    assert notes[1].startswith('太阳「Moon」已作为场景主光；光从地平线以下射来')
-    assert '强度超出 Mosael 的上限' in notes[1] and '颜色不是色温能表示的' in notes[1]
+    rendered = bridge.render_warnings(notes)
+    assert rendered[0] == '太阳「Noon」没有取回：Mosael 只有一盏主光，已用「Moon」。'
+    # 每种近似各一句完整的话(各自能翻),不拼成一句长句。
+    assert rendered[1] == '太阳「Moon」的光从地平线以下射来，已按贴地（仰角 0°）处理。'
+    assert rendered[2].startswith('太阳「Moon」的强度超出 Mosael 的上限')
+    assert rendered[3].startswith('太阳「Moon」的颜色不是色温能表示的')
 
 
 def test_lights_beyond_the_object_limit_are_named():
     objects, _, notes = bridge.native_lights([_light('POINT', 100, name='A'), _light('POINT', 100, name='B')], 1)
     assert [o['name'] for o in objects] == ['A']
-    assert notes == ['灯光「B」没有取回：一个场景最多 500 个物体。']
+    assert bridge.render_warnings(notes) == ['灯光「B」没有取回：一个场景最多 500 个物体。']

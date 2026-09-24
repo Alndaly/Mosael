@@ -211,9 +211,10 @@ def test_pull_取回原生相机和灯光(tmp_path) -> None:
     assert dolly["duration"] == 1 and len(dolly["frames"]) == 25
     assert _close(dolly["frames"][0]["position"], [0, 1, 12]) and _close(dolly["frames"][-1]["position"], [0, 1, 6])
     assert _close(dolly["frames"][0]["target"], [0, 1, 1])
-    assert sorted(w for w in out["warnings"] if "相机" in w) == [
-        "相机「Ortho」没有取回：它是正交或全景相机，Mosael 只有透视镜头。",
-        "相机「Top」没有取回：画面有滚转或正对上下方，Mosael 的镜头始终保持水平。"]
+    # Blender 那边只回「是哪一种」和参数,句子由后端按语言翻(bridge.render_warnings)。
+    assert sorted((w["key"], w["params"]["name"]) for w in out["warnings"] if w["key"].startswith("blenderWarn_camera")) == [
+        ("blenderWarn_cameraNotPerspective", "Ortho"),
+        ("blenderWarn_cameraRolled", "Top")]
     _, shots, _ = native_cameras(out["cameras"])
     assert [s["name"] for s in shots] == ["Aimed", "Dolly", "Focused", "Tracked"]
 
