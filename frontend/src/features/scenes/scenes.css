@@ -1127,6 +1127,9 @@
 .scene-blender-action:hover:not(:disabled) { background: var(--accent); }
 .scene-blender-action:disabled { opacity: .45; cursor: default; }
 .scene-blender-action > span { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+/* 图标不许被文字挤小:说明一长(接收时要念出整个场景名),flex 就按比例压 svg,同样 19px 的
+   两枚图标并排时一大一小。 */
+.scene-blender-action > svg { flex-shrink: 0; }
 .scene-blender-action strong { font-size: 13px; font-weight: 500; }
 .scene-blender-result { display: grid; gap: 8px; }
 .scene-blender-result > div { flex-wrap: wrap; }

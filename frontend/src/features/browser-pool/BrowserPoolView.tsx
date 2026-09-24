@@ -164,6 +164,21 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
     return true;
   };
 
+  /**
+   * 重新登录 = **先退出,再去登录页**。只打开登录页不够:网站见到分区里还有一个有效会话,
+   * 往往直接把人从登录页弹回首页(或者续期了事)—— 用户点了「重新登录」,看到的却是一次莫名的
+   * 跳转,换号也换不成。先清掉这个账号分区里的登录数据,登录页才一定是登录页。
+   */
+  const relogin = async (p: BrowserProfile) => {
+    try {
+      await window.mosaelPublish!.signOut(p.bound_account_id!, p.platform!);
+    } catch (e) {
+      toast.error((e as Error).message);
+      return;
+    }
+    login(p);
+  };
+
   const login = (p: BrowserProfile) => {
     if (p.bound_account_id && p.platform) {
       window.mosaelPublish
@@ -394,7 +409,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                           variant="ghost"
                           title={t("poolRelogin")}
                           aria-label={t("poolRelogin")}
-                          onClick={() => login(p)}
+                          disabled={!window.mosaelPublish?.signOut}
+                          onClick={() => void relogin(p)}
                         >
                           {/* 不用 LogIn:那枚「箭头进门」被读成了退出登录(线上有人点它想登出)。 */}
                           <KeyRound />
