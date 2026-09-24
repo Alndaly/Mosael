@@ -2527,6 +2527,14 @@ def _migrate_clip_offline_asset() -> None:
             conn.execute(text("ALTER TABLE clips ADD COLUMN offline_asset JSON"))
 
 
+def _migrate_browser_profile_start_url() -> None:
+    """通用档案记下下次从哪一页开(见 BrowserProfile.start_url)。老档案留空 —— 它们从没记过。"""
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(browser_profiles)"))}
+        if columns and "start_url" not in columns:
+            conn.execute(text("ALTER TABLE browser_profiles ADD COLUMN start_url VARCHAR(2000)"))
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -2627,6 +2635,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_browser_pool,
                 _migrate_clip_offline_asset,
                 _migrate_model_structured_output,
+                _migrate_browser_profile_start_url,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
             ),

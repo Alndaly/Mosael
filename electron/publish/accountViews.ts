@@ -163,7 +163,12 @@ export class AccountViewManager {
   /** 通用:在给定分区开一个内嵌视图、亮出并导航到 url —— 供「浏览器池」通用档案登录复用**同一套**
    *  内嵌视图(与发布账号登录一致:同容器、同「返回 Mosael」、同顶栏工具条),不弹外部系统窗。
    *  viewId 用分区名(唯一,且不与发布 accountId 冲突)。 */
-  async openView(opts: { viewId: string; partition: string; name?: string; url: string; proxy?: string | null }): Promise<void> {
+  /**
+   * `resume`:这个视图还开着页面的话就原样亮出来,不导航 —— 通用档案是一个一直保留的浏览器,
+   * 「打开」要回到上次停下的那一页,而不是每次跳回第一次输入的地址。视图已经没了(重启过)
+   * 才按 `url` 开,调用方给的是上次关掉时记下的地址。
+   */
+  async openView(opts: { viewId: string; partition: string; name?: string; url: string; proxy?: string | null; resume?: boolean }): Promise<void> {
     // 池档案的分区名直接来自数据库,不经 partitionFor,故这里也要触发一次遗留目录迁移。
     this.partitions.set(opts.viewId, opts.partition);
     if (opts.name) this.names.set(opts.viewId, opts.name);
@@ -177,8 +182,11 @@ export class AccountViewManager {
       });
       this.appliedProxy.set(opts.partition, normalizedProxy);
     }
+    const existing = this.views.get(opts.viewId);
+    const current = this.alive(existing) ? existing.webContents.getURL() : "";
     const { view } = this.ensure(opts.viewId);
     this.show(opts.viewId);
+    if (opts.resume && current && current !== "about:blank") return;
     const url = normalizeAddress(opts.url);
     if (url) void view.webContents.loadURL(url);
   }
@@ -556,10 +564,15 @@ export class AccountViewManager {
     this.forget(accountId);
   }
 
-  /** Wipe the account's persisted login state (cookies, localStorage, caches). */
-  async clearAccountData(accountId: string): Promise<void> {
+  /**
+   * Wipe the account's persisted login state (cookies, localStorage, caches).
+   *
+   * 池档案的分区名来自数据库,本次运行没打开过的档案不在 partitions 里 —— 调用方把分区名一起
+   * 给过来,否则会按发布账号的约定拼出一个根本不存在的分区,清了个寂寞。
+   */
+  async clearAccountData(accountId: string, partitionName?: string): Promise<void> {
     this.destroy(accountId);
-    const partition = this.partitionFor(accountId);
+    const partition = partitionName ?? this.partitionFor(accountId);
     this.appliedProxy.delete(partition);
     const accountSession = session.fromPartition(partition);
     await accountSession.clearStorageData();

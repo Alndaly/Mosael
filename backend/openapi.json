@@ -18199,6 +18199,59 @@
           }
         }
       }
+    },
+    "/api/browser/profiles/{profile_id}/opened": {
+      "post": {
+        "tags": [
+          "browser-profiles"
+        ],
+        "summary": "Record Opened",
+        "description": "人在应用里用过这个档案:记下它停在哪一页(下次从这里开)和时间。\n\n打开一个新网址时、以及收起内嵌浏览器时各记一次 —— 后者才是「上次关掉时的那一页」。\n\n此前手动打开不留任何痕迹 —— 只有工作流/智能体借档案(domain/browser 的 acquire)才更新\nlast_used_at,于是一个刚登过、天天在用的档案卡片上一直写着「尚未使用」。",
+        "operationId": "record_opened_api_browser_profiles__profile_id__opened_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowserProfileOpened"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -20824,6 +20877,22 @@
         ],
         "title": "BrowserProfileCreate"
       },
+      "BrowserProfileOpened": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "pattern": "^https?://",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "BrowserProfileOpened"
+      },
       "BrowserProfileOut": {
         "properties": {
           "id": {
@@ -20868,6 +20937,17 @@
               }
             ],
             "title": "Last Used At"
+          },
+          "start_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Url"
           },
           "created_at": {
             "type": "string",

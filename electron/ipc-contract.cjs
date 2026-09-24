@@ -32,6 +32,8 @@ const IPC = Object.freeze({
     publishPanelLayout: "publish:panelLayout",
     publishClosePanel: "publish:closePanel",
     browserOpenLogin: "browser:openLogin",
+    publishSignOut: "publish:signOut",
+    browserClearProfile: "browser:clearProfile",
   }),
   send: Object.freeze({
     titleOverlay: "mosael:title-overlay",
@@ -126,7 +128,20 @@ function parseBrowserLogin(value) {
     url,
     name: typeof payload.name === "string" ? payload.name.trim() : "",
     proxy: typeof payload.proxy === "string" && payload.proxy.trim() ? payload.proxy.trim() : null,
+    // 视图还开着就接着用,不导航(见 AccountViewManager.openView)。
+    resume: payload.resume === true,
   };
+}
+
+/** 清掉一个通用档案的登录数据。和 parseBrowserLogin 同一道闸:只认 persist:pool-* 分区。 */
+function parseBrowserProfile(value) {
+  const channel = IPC.invoke.browserClearProfile;
+  const payload = record(value, channel);
+  const partition = requiredString(payload, "partition", channel);
+  if (!partition.startsWith("persist:pool-")) {
+    throw new TypeError(`${channel}: partition must start with persist:pool-`);
+  }
+  return { partition };
 }
 
 function parseTitleOverlay(value) {
@@ -181,6 +196,7 @@ module.exports = {
   parseAuthToken,
   parseRestoreStage,
   parseBrowserLogin,
+  parseBrowserProfile,
   parseLocale,
   parsePanelId,
   parsePanelLayout,

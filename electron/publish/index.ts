@@ -6,6 +6,8 @@ export {
   openLogin,
   openPoolLogin,
   openPage,
+  signOutAccount,
+  clearPoolProfile,
   inspectAccount,
   navigateView,
   viewBack,

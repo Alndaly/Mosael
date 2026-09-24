@@ -17,7 +17,9 @@ const contract = require("./ipc-contract.cjs") as {
     url: string;
     name: string;
     proxy: string | null;
+    resume: boolean;
   };
+  parseBrowserProfile: (value: unknown) => { partition: string };
   parsePanelLayout: (value: unknown) => Record<string, number>;
   parseAuthToken: (value: unknown, channel: string) => { token: string };
   parseRestoreStage: (value: unknown) => { stageId: string };
@@ -72,11 +74,16 @@ describe("Electron IPC contract", () => {
       url: "https://example.com/login",
       name: "Example",
       proxy: null,
+      resume: false,
     });
     expect(() => contract.parseBrowserLogin({ partition: "persist:publish-user", url: "https://example.com" }))
       .toThrow(/partition/);
     expect(() => contract.parseBrowserLogin({ partition: "persist:pool-user", url: "file:\/\/\/tmp/x" }))
       .toThrow(/http/);
+
+    // 清登录数据是破坏性的:只许碰通用档案的分区,发布账号走 publish:signOut。
+    expect(contract.parseBrowserProfile({ partition: "persist:pool-user" })).toEqual({ partition: "persist:pool-user" });
+    expect(() => contract.parseBrowserProfile({ partition: "persist:mosael-account" })).toThrow(/partition/);
 
     expect(contract.parsePanelLayout({ x: 10, y: 20, width: undefined, ignored: 3 })).toEqual({ x: 10, y: 20 });
     expect(() => contract.parsePanelLayout({ width: Number.NaN })).toThrow(/width/);

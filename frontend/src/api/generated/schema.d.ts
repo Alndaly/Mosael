@@ -6053,6 +6053,31 @@ export interface paths {
         patch: operations["update_profile_api_browser_profiles__profile_id__patch"];
         trace?: never;
     };
+    "/api/browser/profiles/{profile_id}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Opened
+         * @description 人在应用里用过这个档案:记下它停在哪一页(下次从这里开)和时间。
+         *
+         *     打开一个新网址时、以及收起内嵌浏览器时各记一次 —— 后者才是「上次关掉时的那一页」。
+         *
+         *     此前手动打开不留任何痕迹 —— 只有工作流/智能体借档案(domain/browser 的 acquire)才更新
+         *     last_used_at,于是一个刚登过、天天在用的档案卡片上一直写着「尚未使用」。
+         */
+        post: operations["record_opened_api_browser_profiles__profile_id__opened_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7285,6 +7310,11 @@ export interface components {
             /** Proxy */
             proxy?: string | null;
         };
+        /** BrowserProfileOpened */
+        BrowserProfileOpened: {
+            /** Url */
+            url: string;
+        };
         /** BrowserProfileOut */
         BrowserProfileOut: {
             /** Id */
@@ -7301,6 +7331,8 @@ export interface components {
             enabled: boolean;
             /** Last Used At */
             last_used_at?: string | null;
+            /** Start Url */
+            start_url?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -24972,6 +25004,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BrowserProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_opened_api_browser_profiles__profile_id__opened_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserProfileOpened"];
             };
         };
         responses: {

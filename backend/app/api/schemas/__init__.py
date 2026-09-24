@@ -12,7 +12,7 @@ from __future__ import annotations
 from app.api.schemas.base import ApiModel, OrmModel  # noqa: F401
 from app.api.schemas.agent import AgentCompactOut, AgentContextOut, AgentContextPart, AgentManifestOut, AgentMemoryCreate, AgentMemoryOut, AgentMemoryUpdate, AgentMessageCreate, AgentMessageOut, AgentPendingView, AgentPlanUpdate, AgentQuestionAnswer, AgentQuestionCreate, AgentQuestionItem, AgentQuestionOption, AgentQuestionOut, AgentReferenceIn, AgentSessionCreate, AgentSessionOut, AgentSessionUpdate, AgentSkillOut, AgentStreamEvent, ConfirmationCreate, ConfirmationOut, SessionGroupCreate, SessionGroupOut, SessionGroupUpdate  # noqa: F401
 from app.api.schemas.boards import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite  # noqa: F401
-from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate  # noqa: F401
+from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOpened, BrowserProfileOut, BrowserProfileUpdate  # noqa: F401
 from app.api.schemas.collaboration import ActivityOut, ActorOut, CanvasCommentAnchor, CommentAnchorUpdate, CommentContentUpdate, CommentCreate, CommentOut  # noqa: F401
 from app.api.schemas.dashboard import AdminOverviewOut, DailyActivityOut, DailyPublishOut, DailyUsageOut, DailyUsageTokensOut, DaySeriesPoint, UserSpendPoint, WorkspaceSummaryOut  # noqa: F401
 from app.api.schemas.feishu import FeishuBindCodeOut, FeishuBindingOut, FeishuBotCreate, FeishuBotOut, FeishuBotUpdate, FeishuOnboardingOut  # noqa: F401

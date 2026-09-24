@@ -598,6 +598,7 @@ export async function openPoolLogin(opts: {
   url: string;
   name?: string;
   proxy?: string | null;
+  resume?: boolean;
 }): Promise<void> {
   if (!views) throw new Error(tr("publishErr_notReady"));
   if (views.visibleAccountId && views.visibleAccountId !== opts.partition)
@@ -608,6 +609,7 @@ export async function openPoolLogin(opts: {
     name: opts.name,
     url: opts.url,
     proxy: opts.proxy ?? null,
+    resume: opts.resume === true,
   });
 }
 
@@ -717,6 +719,31 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
     endLogin(gen, accountId);
     throw error;
   }
+}
+
+/**
+ * 退出登录:清掉这个账号分区里的 cookie / 本地存储 / 缓存,账号回到「需登录」。
+ *
+ * 此前没有这个动作 —— 卡片上只有「重新登录」,它会带人去平台登录页,而平台见到一个已登录的
+ * 会话往往直接续期、把人弹回首页,于是「点了之后还是已登录」。在平台网页里点退出同样靠不住:
+ * 有的平台(B 站)只让当前页面的会话失效,分区里别处的 cookie 还在。清分区是唯一确定的做法。
+ */
+export async function signOutAccount(accountId: string): Promise<void> {
+  if (!views) throw new Error(tr("publishErr_notReady"));
+  if (running.has(accountId)) throw new Error(tr("publishErr_accountBusy"));
+  // 登录轮询还挂着的话先收掉 —— 否则它下一拍在空分区上问一次,把刚写的状态又改一遍。
+  if (loginAccounts.has(accountId)) endLogin(generation, accountId, true);
+  await views.clearAccountData(accountId);
+  plog("signed out (partition cleared):", accountId);
+  await backend.patchAccount(accountId, { binding_status: "login_required", last_error: null });
+}
+
+/** 通用档案「清除登录数据」:和退出登录同一件事,只是这里没有平台、也没有登录态要回写。 */
+export async function clearPoolProfile(partition: string): Promise<void> {
+  if (!views) throw new Error(tr("publishErr_notReady"));
+  // 池档案的视图 id 就是分区名(见 openPoolLogin)。
+  await views.clearAccountData(partition, partition);
+  plog("pool profile cleared:", partition);
 }
 
 /** 手动打开某账号的平台页面:亮出其视图。若该视图已有页面(如刚「仅准备」好的发布表单——hide

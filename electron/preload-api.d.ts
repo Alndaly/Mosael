@@ -42,6 +42,8 @@ export interface LiveViewFrame {
 export interface MosaelPublishBridge {
   login(accountId: string, platform: string): Promise<void>;
   openPage(accountId: string, platform: string): Promise<void>;
+  /** 退出登录:清掉这个账号分区里的 cookie/存储,账号回到「需登录」。 */
+  signOut(accountId: string, platform: string): Promise<void>;
   inspect(accountId: string, platform: string): Promise<boolean>;
   navigate(url: string): Promise<void>;
   back(): Promise<void>;
@@ -61,7 +63,11 @@ export interface MosaelBrowserBridge {
     url: string;
     name?: string;
     proxy?: string | null;
+    /** 视图还开着就原样亮出来(回到上次那一页);否则打开 url。 */
+    resume?: boolean;
   }): Promise<{ ok: boolean; error?: string }>;
+  /** 清掉一个通用档案里存着的全部登录数据(cookie / 本地存储 / 缓存)。 */
+  clearProfile(partition: string): Promise<void>;
 }
 
 export interface MosaelDesktopBridge {

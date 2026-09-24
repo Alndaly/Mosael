@@ -2,7 +2,7 @@ import React from "react";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Boxes, ExternalLink, Globe, LogIn, Plus, RefreshCcw, Trash2, Users, Users2 } from "lucide-react";
+import { Boxes, Eraser, ExternalLink, Globe, KeyRound, LogIn, LogOut, Plus, RefreshCcw, SquarePen, Trash2, Users, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -13,6 +13,7 @@ import {
   listPublishPlatforms,
   patchPublishAccount,
   recheckPublishAccount,
+  recordBrowserProfileOpened,
   setResourceShared,
   updateBrowserProfile,
   type BrowserProfile,
@@ -44,7 +45,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   const [renaming, setRenaming] = React.useState<BrowserProfile | null>(null);
   const [proxyEditing, setProxyEditing] = React.useState<BrowserProfile | null>(null);
   const [removing, setRemoving] = React.useState<BrowserProfile | null>(null);
-  const [loginFor, setLoginFor] = React.useState<BrowserProfile | null>(null);
+  const [openFor, setOpenFor] = React.useState<BrowserProfile | null>(null);
+  const [signingOut, setSigningOut] = React.useState<BrowserProfile | null>(null);
 
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms });
   const profiles = useQuery({
@@ -128,6 +130,40 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // 退出登录 / 清除登录数据:清掉档案分区里的 cookie 和本地存储。发布账号回到「需登录」
+  // (主进程回写);通用档案没有登录态可写,只是清干净。
+  const signOut = useMutation({
+    mutationFn: async (p: BrowserProfile) => {
+      if (p.bound_account_id && p.platform) await window.mosaelPublish!.signOut(p.bound_account_id, p.platform);
+      else await window.mosaelBrowser!.clearProfile(p.partition);
+    },
+    onSuccess: (_, p) => {
+      toast.success(p.bound_account_id ? t("poolSignedOut") : t("poolDataCleared"));
+      setSigningOut(null);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const canSignOut = (p: BrowserProfile) =>
+    p.bound_account_id ? Boolean(window.mosaelPublish?.signOut) : Boolean(window.mosaelBrowser?.clearProfile);
+
+  /**
+   * 通用档案 = 一个会一直保留的浏览器。它认不出任何站点的登录态,所以这里不谈「去登录」,
+   * 只管打开 —— **回到上次停下的那一页**:视图还开着就原样亮出来(resume),视图没了(重启过)
+   * 就开上次收起时记下的地址(start_url,见下面收起时那一段)。一次都没开过才问要开哪个。
+   * 「打开其他网址」是唯一会导航走的入口。
+   */
+  const openSite = async (p: BrowserProfile, url: string, resume = false): Promise<boolean> => {
+    const res = await window.mosaelBrowser?.openLogin?.({ partition: p.partition, url, name: p.name, proxy: p.proxy, resume });
+    if (!res?.ok) {
+      toast.error(res?.error ?? t("poolOpenFailed"));
+      return false;
+    }
+    if (!resume) await recordBrowserProfileOpened(p.id, url).catch(() => undefined); // 记不下也不耽误已经打开的页面
+    refresh();
+    return true;
+  };
+
   const login = (p: BrowserProfile) => {
     if (p.bound_account_id && p.platform) {
       window.mosaelPublish
@@ -142,7 +178,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         })
         .catch((e: Error) => toast.error(e.message));
     } else if (window.mosaelBrowser?.openLogin) {
-      setLoginFor(p); // 通用档案:填登录网址 → 在该档案分区开可见登录窗
+      if (p.start_url) void openSite(p, p.start_url, true);
+      else setOpenFor(p);
     } else {
       toast.info(t("publishNeedDesktop"));
     }
@@ -165,10 +202,23 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
    * 页面焦点事件在这里帮不上忙,内嵌视图是盖在窗口上的一层,收起它不会触发窗口 focus。
    */
   const wasVisible = React.useRef(false);
+  // 收起那一刻的状态里已经没有地址了,所以一路记着最后一次「亮着」时停在哪。
+  const lastShown = React.useRef<{ viewId: string | null; url?: string }>({ viewId: null });
+  const itemsRef = React.useRef<BrowserProfile[]>([]);
+  itemsRef.current = profiles.data ?? [];
   React.useEffect(
     () =>
       window.mosaelPublish?.onViewState((next) => {
-        if (wasVisible.current && !next.visible) refresh();
+        if (next.visible) lastShown.current = { viewId: next.accountId, url: next.url };
+        if (wasVisible.current && !next.visible) {
+          // 通用档案收起时记下停在哪一页 —— 下次(哪怕重启过、视图已经没了)从这里接着开。
+          // 通用档案的视图 id 就是它的分区名(见 openPoolLogin)。
+          const { viewId, url } = lastShown.current;
+          const pool = itemsRef.current.find((one) => !one.bound_account_id && one.partition === viewId);
+          if (pool && url && /^https?:\/\//i.test(url) && url !== pool.start_url) {
+            void recordBrowserProfileOpened(pool.id, url).catch(() => undefined).finally(refresh);
+          } else refresh();
+        }
         wasVisible.current = next.visible;
       }),
     // refresh 只依赖 qc 与 workspace.id,重建监听没有意义 —— 用 ref 读最新的即可。
@@ -254,6 +304,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         { label: t("rename"), onSelect: () => setRenaming(p) },
                         { label: t("publishProxySet"), icon: <Globe />, onSelect: () => setProxyEditing(p) },
                         ...(p.is_mine ? [{ label: p.shared ? t("poolUnshare") : t("poolShare"), icon: <Users2 />, disabled: share.isPending, onSelect: () => share.mutate({p, shared:!p.shared}) }] : []),
+                        ...(canSignOut(p) && (!bound || loggedIn) ? [{ label: bound ? t("poolSignOut") : t("poolClearData"), icon: bound ? <LogOut /> : <Eraser />, onSelect: () => setSigningOut(p) }] : []),
                         { label: t("delete"), icon: <Trash2 />, destructive:true, onSelect: () => setRemoving(p) },
                       ]} />
                       {p.proxy && (
@@ -291,9 +342,10 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         ? p.last_checked_at
                           ? t("publishLastChecked").replace("{t}", relativeTime(p.last_checked_at, locale))
                           : t("publishNeverChecked")
-                        : p.last_used_at
-                          ? t("poolLastUsed").replace("{t}", relativeTime(p.last_used_at, locale))
-                          : t("poolNeverUsed")}
+                        : [
+                            p.last_used_at ? t("poolLastUsed").replace("{t}", relativeTime(p.last_used_at, locale)) : t("poolNeverUsed"),
+                            p.start_url && hostOf(p.start_url),
+                          ].filter(Boolean).join(" · ")}
                     </small>
                     <small className={cn("truncate text-ui-xs text-destructive", !p.last_error && "invisible")}>
                       {p.last_error ?? " "}
@@ -312,7 +364,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         disabled={bound ? !window.mosaelPublish : !window.mosaelBrowser?.openLogin}
                         onClick={() => (loggedIn ? openPage(p) : login(p))}
                       >
-                        {loggedIn ? (
+                        {loggedIn || !bound ? (
                           <>
                             <ExternalLink size={13} /> {t("poolOpen")}
                           </>
@@ -322,6 +374,19 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                           </>
                         )}
                       </Button>
+                      {/* 通用档案记得上次的网址,主按钮就直接接着开;要换一个站点走这里。 */}
+                      {!bound && p.start_url && (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          title={t("poolOpenOther")}
+                          aria-label={t("poolOpenOther")}
+                          disabled={!window.mosaelBrowser?.openLogin}
+                          onClick={() => setOpenFor(p)}
+                        >
+                          <SquarePen />
+                        </Button>
+                      )}
                       {/* 已登录时「重新登录」退居次要动作:换号/掉线自查还需要它,但它不该是默认那一下。 */}
                       {loggedIn && (
                         <Button
@@ -331,7 +396,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                           aria-label={t("poolRelogin")}
                           onClick={() => login(p)}
                         >
-                          <LogIn />
+                          {/* 不用 LogIn:那枚「箭头进门」被读成了退出登录(线上有人点它想登出)。 */}
+                          <KeyRound />
                         </Button>
                       )}
                       {bound && (
@@ -369,6 +435,11 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <Users2 /> {p.shared ? t("poolUnshare") : t("poolShare")}
                     </ContextMenuItem>
                   )}
+                  {canSignOut(p) && (!bound || loggedIn) && (
+                    <ContextMenuItem onSelect={() => setSigningOut(p)}>
+                      {bound ? <LogOut /> : <Eraser />} {bound ? t("poolSignOut") : t("poolClearData")}
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setRemoving(p)}>
                     <Trash2 /> {t("delete")}
                   </ContextMenuItem>
@@ -379,7 +450,15 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
       </div>
 
       <AddAccountDialog open={addingAccount} workspace={workspace} onClose={() => setAddingAccount(false)} />
-      {loginFor && <LoginUrlDialog profile={loginFor} onCancel={() => setLoginFor(null)} onDone={refresh} />}
+      {openFor && <OpenSiteDialog profile={openFor} onCancel={() => setOpenFor(null)} onOpen={(url) => openSite(openFor, url)} />}
+      <ConfirmDialog
+        open={signingOut !== null}
+        title={signingOut?.bound_account_id ? t("poolSignOut") : t("poolClearData")}
+        body={signingOut?.bound_account_id ? t("poolSignOutBody") : t("poolClearDataBody")}
+        onCancel={() => setSigningOut(null)}
+        pending={signOut.isPending}
+        onConfirm={() => signingOut && signOut.mutate(signingOut)}
+      />
       {creating && <CreateProfileDialog onCancel={() => setCreating(false)} onCreate={(b) => create.mutate(b)} pending={create.isPending} />}
       <RenameDialog
         open={renaming !== null}
@@ -409,42 +488,44 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function LoginUrlDialog({
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function OpenSiteDialog({
   profile,
   onCancel,
-  onDone,
+  onOpen,
 }: {
   profile: BrowserProfile;
   onCancel: () => void;
-  onDone: () => void;
+  onOpen: (url: string) => Promise<boolean>;
 }) {
   const t = useI18n();
-  const [url, setUrl] = React.useState("");
+  const [url, setUrl] = React.useState(profile.start_url ?? "");
   const [pending, setPending] = React.useState(false);
   const open = async () => {
     let u = url.trim();
     if (!u) return;
     if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
     setPending(true);
-    const res = await window.mosaelBrowser?.openLogin?.({ partition: profile.partition, url: u, name: profile.name, proxy: profile.proxy });
+    const ok = await onOpen(u);
     setPending(false);
-    if (res?.ok) {
-      toast.success(t("poolLoginOpened"));
-      onDone();
-      onCancel();
-    } else {
-      toast.error(res?.error ?? t("poolLoginFailed"));
-    }
+    if (ok) onCancel();
   };
   return (
     <ModalShell
       open
       onOpenChange={(next) => !next && onCancel()}
-      title={t("poolLoginTitle").replace("{name}", profile.name)}
+      title={t("poolOpenTitle").replace("{name}", profile.name)}
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
-          <Button size="sm" disabled={pending || !url.trim()} onClick={open}>{t("poolLogin")}</Button>
+          <Button size="sm" disabled={pending || !url.trim()} onClick={open}>{t("poolOpen")}</Button>
         </>
       }
     >
@@ -452,11 +533,11 @@ function LoginUrlDialog({
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com/login"
+          placeholder="https://example.com"
           autoFocus
           onKeyDown={(e) => e.key === "Enter" && open()}
         />
-        <small className="text-ui-xs text-muted-foreground">{t("poolLoginHint")}</small>
+        <small className="text-ui-xs text-muted-foreground">{t("poolOpenHint")}</small>
       </div>
     </ModalShell>
   );

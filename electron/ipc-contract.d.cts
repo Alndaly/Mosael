@@ -21,6 +21,8 @@ export const IPC: {
     publishPanelLayout: "publish:panelLayout";
     publishClosePanel: "publish:closePanel";
     browserOpenLogin: "browser:openLogin";
+    publishSignOut: "publish:signOut";
+    browserClearProfile: "browser:clearProfile";
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
     dataApplyRestore: "data:applyRestore";
@@ -50,7 +52,9 @@ export function parseRestoreStage(value: unknown): { stageId: string };
 export function parseUrlRequest(value: unknown, channel: string): { url: string };
 export function parsePanelId(value: unknown): { id: string };
 export function parsePanelLayout(value: unknown): Partial<Record<"x" | "y" | "width" | "height", number>>;
+export function parseBrowserProfile(value: unknown): { partition: string };
 export function parseBrowserLogin(value: unknown): {
+  resume: boolean;
   partition: string;
   url: string;
   name: string;

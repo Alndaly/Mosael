@@ -25,6 +25,7 @@
   "migrate-browser-action-leases": "db82d8419ae90156",
   "migrate-browser-boolean-options": "8656267a8529d045",
   "migrate-browser-pool": "ba842907261bd6f7",
+  "migrate-browser-profile-start-url": "06bb87ab55e17075",
   "migrate-called-workflows-declare-their-output": "6a833294a868356a",
   "migrate-client-surface": "086834ef6ae8661e",
   "migrate-client-version": "af8a418cbc4b01c8",

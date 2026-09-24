@@ -25,6 +25,10 @@ class BrowserProfile(Base):
     proxy: Mapped[str | None] = mapped_column(String(300), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    #: 通用档案下次从哪一页开:上次收起内嵌浏览器时停在的地址(没收起过就是第一次输入的那个)。
+    #: 通用档案就是一个**可持久化的浏览器会话** —— 认不出任何站点的登录态,所以卡片不谈「登没
+    #: 登录」,只管「回到上次那一页」。发布账号的档案不用它。
+    start_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

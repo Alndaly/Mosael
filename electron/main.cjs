@@ -28,6 +28,7 @@ const {
   IPC,
   parseAuthToken,
   parseBrowserLogin,
+  parseBrowserProfile,
   parseLocale,
   parsePanelId,
   parsePanelLayout,
@@ -720,6 +721,14 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.publishOpenPage, (_e, payload) => {
     const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishOpenPage);
     return requirePublish().openPage(accountId, platform);
+  });
+  ipcMain.handle(IPC.invoke.publishSignOut, (_e, payload) => {
+    const { accountId } = parsePublishTarget(payload, IPC.invoke.publishSignOut);
+    return requirePublish().signOutAccount(accountId);
+  });
+  ipcMain.handle(IPC.invoke.browserClearProfile, (_e, payload) => {
+    const { partition } = parseBrowserProfile(payload);
+    return requirePublish().clearPoolProfile(partition);
   });
   ipcMain.handle(IPC.invoke.publishInspect, (_e, payload) => {
     const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishInspect);

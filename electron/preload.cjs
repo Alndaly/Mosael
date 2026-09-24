@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld("mosaelDesktop", desktopBridge);
 const publishBridge = {
   login: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishLogin, { accountId, platform }),
   openPage: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishOpenPage, { accountId, platform }),
+  signOut: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishSignOut, { accountId, platform }),
   inspect: (accountId, platform) => ipcRenderer.invoke(IPC.invoke.publishInspect, { accountId, platform }),
   navigate: (url) => ipcRenderer.invoke(IPC.invoke.publishNavigate, { url }),
   back: () => ipcRenderer.invoke(IPC.invoke.publishBack),
@@ -131,5 +132,6 @@ const browserBridge = {
   onFrame: (callback) => onEvent(IPC.event.browserFrame, callback),
   // 通用池档案登录:在该档案分区开内嵌视图登任意站点(见 main.cjs browser:openLogin)。
   openLogin: (opts) => ipcRenderer.invoke(IPC.invoke.browserOpenLogin, opts),
+  clearProfile: (partition) => ipcRenderer.invoke(IPC.invoke.browserClearProfile, { partition }),
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);

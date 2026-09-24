@@ -183,3 +183,46 @@ def test_cannot_delete_bound_or_busy_profile() -> None:
         browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A")
         with pytest.raises(browser.BrowserDomainError):
             browser.delete_profile(db, ws, pid)
+
+
+def test_manually_opening_a_generic_profile_is_remembered() -> None:
+    """通用档案是一个可持久化的浏览器会话:手动打开要留痕 —— 记住网址,「最近使用」跟着走。
+
+    此前只有工作流/智能体借档案才更新 last_used_at,一个刚登过、天天手动在用的档案卡片上
+    一直写着「尚未使用」;下次打开还得再敲一遍网址。
+    """
+    client = fresh_client()
+    ws = _ws(client)
+    prof = client.post("/api/browser/profiles", json={"workspace_id": ws, "name": "编程导航"}).json()
+    assert prof["start_url"] is None and prof["last_used_at"] is None
+    r = client.post(f"/api/browser/profiles/{prof['id']}/opened", json={"url": "https://www.codefather.cn/"})
+    assert r.status_code == 200, r.text
+    assert r.json()["start_url"] == "https://www.codefather.cn/"
+    assert r.json()["last_used_at"] is not None
+    listed = client.get(f"/api/browser/profiles?workspace_id={ws}").json()
+    assert [p["start_url"] for p in listed if p["id"] == prof["id"]] == ["https://www.codefather.cn/"]
+    # 只收 http(s):这个网址会原样交给内嵌浏览器打开。
+    bad = client.post(f"/api/browser/profiles/{prof['id']}/opened", json={"url": "file:///etc/passwd"})
+    assert bad.status_code == 422
+    assert client.post("/api/browser/profiles/nope/opened", json={"url": "https://a.b/"}).status_code == 404
+
+
+def test_migrate_browser_profile_start_url_adds_the_column_once() -> None:
+    """老库的 browser_profiles 没有 start_url:迁移补上这一列,老档案留空,重跑什么都不做。"""
+    from sqlalchemy import text
+
+    from app.core.db import engine
+    from app.db.migrations import _migrate_browser_profile_start_url
+
+    client = fresh_client()
+    ws = _ws(client)
+    prof = client.post("/api/browser/profiles", json={"workspace_id": ws, "name": "老档案"}).json()
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE browser_profiles DROP COLUMN start_url"))
+    _migrate_browser_profile_start_url()
+    _migrate_browser_profile_start_url()
+    with engine.begin() as conn:
+        columns = [row[1] for row in conn.execute(text("PRAGMA table_info(browser_profiles)"))]
+        kept = conn.execute(text("SELECT name, start_url FROM browser_profiles WHERE id = :id"), {"id": prof["id"]}).one()
+    assert columns.count("start_url") == 1
+    assert tuple(kept) == ("老档案", None)

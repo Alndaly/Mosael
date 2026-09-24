@@ -12,9 +12,9 @@ from sqlalchemy import select
 from app.core.i18n import tr
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
+from app.api.schemas import BrowserProfileCreate, BrowserProfileOpened, BrowserProfileOut, BrowserProfileUpdate
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import BrowserProfile, PublishAccount, User
+from app.db.models import BrowserProfile, PublishAccount, User, now
 from app.domain import browser
 
 router = APIRouter(tags=["browser-profiles"])
@@ -31,6 +31,7 @@ def _serialize(db, prof: BrowserProfile, user: User, shared: set[str]) -> Browse
         proxy=prof.proxy,
         enabled=prof.enabled,
         last_used_at=prof.last_used_at,
+        start_url=prof.start_url,
         created_at=prof.created_at,
         platform=account.platform if account else None,
         bound_account_id=account.id if account else None,
@@ -82,6 +83,27 @@ def update_profile(
         )
     except browser.BrowserDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", prof.workspace_id))
+
+
+@router.post("/browser/profiles/{profile_id}/opened", response_model=BrowserProfileOut)
+def record_opened(
+    profile_id: str, body: BrowserProfileOpened, db: DbSession, user: CurrentUser
+) -> BrowserProfileOut:
+    """人在应用里用过这个档案:记下它停在哪一页(下次从这里开)和时间。
+
+    打开一个新网址时、以及收起内嵌浏览器时各记一次 —— 后者才是「上次关掉时的那一页」。
+
+    此前手动打开不留任何痕迹 —— 只有工作流/智能体借档案(domain/browser 的 acquire)才更新
+    last_used_at,于是一个刚登过、天天在用的档案卡片上一直写着「尚未使用」。
+    """
+    prof = db.get(BrowserProfile, profile_id)
+    if prof is None or not sharing.may_use(db, "browser_profile", prof, user):
+        raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
+    ensure_workspace_perm(db, user, prof.workspace_id, "edit")
+    prof.start_url = body.url
+    prof.last_used_at = now()
+    db.commit()
     return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", prof.workspace_id))
 
 

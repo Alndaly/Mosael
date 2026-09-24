@@ -16,6 +16,7 @@ class BrowserProfileOut(ApiModel):
     proxy: str | None = None
     enabled: bool
     last_used_at: datetime | None = None
+    start_url: str | None = None
     created_at: datetime
     # 若被发布账号绑定,回其平台/账号 id + 登录态(浏览器池页据此标注「发布账号」并显示登录状态、
     # 复用登录/复检动作);通用档案这些为 None。
@@ -33,6 +34,10 @@ class BrowserProfileCreate(ApiModel):
     workspace_id: str
     name: str = Field(min_length=1, max_length=160)
     proxy: str | None = None
+
+
+class BrowserProfileOpened(ApiModel):
+    url: str = Field(min_length=1, max_length=2000, pattern=r"^https?://")
 
 
 class BrowserProfileUpdate(ApiModel):
