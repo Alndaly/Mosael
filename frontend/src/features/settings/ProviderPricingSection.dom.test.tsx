@@ -82,26 +82,28 @@ it("按目录预填只转点的那一行,其余只是按不动;结果带上是�
   let finish: (r: Response) => void = () => {};
   mount((resolve) => { finish = resolve; });
   fireEvent.click(await screen.findByRole("button", { name: /pricingPrefill/ }));
-  const deepseek = await screen.findByRole("button", { name: "DeepSeek" });
-  const qwen = screen.getByRole("button", { name: "百炼qwen" });
+  const deepseek = await screen.findByRole("button", { name: "pricingPrefillOne: DeepSeek" });
+  const qwen = screen.getByRole("button", { name: "pricingPrefillOne: 百炼qwen" });
   fireEvent.click(deepseek);
   await waitFor(() => expect(deepseek).toHaveAttribute("aria-busy", "true"));
   expect(qwen).not.toHaveAttribute("aria-busy", "true");
   expect(qwen).toBeDisabled();
 
   finish(json(outcome({ models_seen: 4, models_with_price: 3, unpriced_models: ["deepseek-chat"] })));
-  await screen.findByText("pricingPrefillResultFor");
+  // 结果写在**这一家自己那一行**底下,不是另起一块堆在最下面。
+  const row = deepseek.closest("li")!;
+  await waitFor(() => expect(within(row).getByText("pricingPrefillUnpriced")).toBeTruthy());
   expect(qwen).not.toBeDisabled();
-  // 还剩哪些要手填,点名说出来 —— 那才是用户接下来要做的事。
-  expect(screen.getByText("pricingPrefillUnpriced")).toBeTruthy();
+  expect(within(qwen.closest("li")!).queryByText("pricingPrefillUnpriced")).toBeNull();
+  expect(deepseek).toHaveAccessibleName("pricingPrefillAgain: DeepSeek");
 });
 
 it("全部预填挨个跑:一次只转一行,每家的结果各记一条,一家失败不打断其余几家", async () => {
   const pending: Array<{ url: string; resolve: (r: Response) => void }> = [];
   const calls = mount((resolve) => pending.push({ url: "", resolve }));
   fireEvent.click(await screen.findByRole("button", { name: /pricingPrefill$/ }));
-  const deepseek = await screen.findByRole("button", { name: "DeepSeek" });
-  const qwen = screen.getByRole("button", { name: "百炼qwen" });
+  const deepseek = await screen.findByRole("button", { name: "pricingPrefillOne: DeepSeek" });
+  const qwen = screen.getByRole("button", { name: "pricingPrefillOne: 百炼qwen" });
   fireEvent.click(screen.getByRole("button", { name: /pricingPrefillAll/ }));
 
   await waitFor(() => expect(deepseek).toHaveAttribute("aria-busy", "true"));
@@ -116,10 +118,9 @@ it("全部预填挨个跑:一次只转一行,每家的结果各记一条,一家�
   expect(prefillCalls[1]).toMatch(/^POST .*\/providers\/p2\/pricing\/prefill$/);
 
   pending[1].resolve(json(outcome({ created: 3, created_from_reference: 3, models_seen: 3, models_with_price: 3 })));
-  await waitFor(() => expect(screen.getAllByText("pricingPrefillResultFor")).toHaveLength(2));
-  expect(screen.getByText("no key")).toBeTruthy();
-  expect(screen.getByText("pricingPrefillDone")).toBeTruthy();
-  expect(screen.getByText("pricingPrefillAllPriced")).toBeTruthy();
+  await waitFor(() => expect(within(qwen.closest("li")!).getByText("pricingPrefillDone")).toBeTruthy());
+  expect(within(deepseek.closest("li")!).getByText("no key")).toBeTruthy();
+  expect(within(qwen.closest("li")!).getByText("pricingPrefillAllPriced")).toBeTruthy();
 });
 
 it("删一条规则先确认,确认了才发 DELETE", async () => {
@@ -211,7 +212,7 @@ it("预填结果里单独说一句有几条带分时段价格", async () => {
   let finish: (r: Response) => void = () => {};
   mount((resolve) => { finish = resolve; });
   fireEvent.click(await screen.findByRole("button", { name: /pricingPrefill$/ }));
-  const deepseek = await screen.findByRole("button", { name: "DeepSeek" });
+  const deepseek = await screen.findByRole("button", { name: "pricingPrefillOne: DeepSeek" });
   fireEvent.click(deepseek);
   await waitFor(() => expect(deepseek).toHaveAttribute("aria-busy", "true"));
   finish(json(outcome({ created: 6, created_from_reference: 6, created_with_time_prices: 6, models_seen: 2, models_with_price: 2 })));

@@ -399,6 +399,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         open={prefillOpen}
         onOpenChange={setPrefillOpen}
         title={t("pricingPrefill")}
+        className="w-[560px] max-w-[calc(100vw-24px)]"
         footer={
           <>
             <Button type="button" variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>{t("close")}</Button>
@@ -414,50 +415,71 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
           </>
         }
       >
-        <div className="grid gap-2.5">
-          <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("pricingPrefillHint")}</p>
-          <div className="grid gap-1.5">
-            {(profiles.data ?? []).map((profile) => (
-              <Button
-                key={profile.id}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="justify-start"
-                // **只转点的那一行。** 此前所有行共用一个 isPending,点一家,整列一起转圈变灰,
-                // 看起来像是全部在跑、又像是全坏了。其余行在请求期间只是按不动。
-                loading={prefill.isPending && prefill.variables === profile.id}
-                disabled={prefillBusy && prefill.variables !== profile.id}
-                onClick={() => prefill.mutate(profile.id)}
-              >
-                {profile.name}
-              </Button>
-            ))}
-          </div>
-          {prefillResults.length > 0 && (
-            <ul className="m-0 grid list-none gap-1.5 p-0">
-              {prefillResults.map((outcome) => (
-                <li key={outcome.profileId} className="text-ui-xs leading-[1.5] text-foreground">
-                  <strong className="font-medium">
-                    {t("pricingPrefillResultFor").replace("{name}", (profiles.data ?? []).find((p) => p.id === outcome.profileId)?.name ?? "")}
-                  </strong>
-                  {outcome.error !== undefined ? (
-                    <span className="text-destructive">{outcome.error}</span>
-                  ) : (
-                    <PrefillSummary result={outcome.result} />
+        {/* 一家一行:名字在左、这一家自己的「预填」在右、结果就写在这一行底下。此前是一列通栏的
+            按钮、结果另起一块堆在最下面 —— 点完要自己对着名字去找是哪一行的结果。 */}
+        <div className="grid gap-3">
+          <p className="m-0 text-ui-sm leading-[1.5] text-muted-foreground">{t("pricingPrefillHint")}</p>
+          <ul className="m-0 grid list-none divide-y divide-divider rounded-lg border border-border p-0">
+            {(profiles.data ?? []).map((profile) => {
+              const outcome = prefillResults.find((one) => one.profileId === profile.id);
+              const running = prefill.isPending && prefill.variables === profile.id;
+              return (
+                <li key={profile.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-3 py-2.5">
+                  <div className="grid min-w-0 gap-0.5">
+                    <span className="truncate text-ui-sm font-medium">{profile.name}</span>
+                    <small className="truncate text-ui-xs text-muted-foreground">{profile.vendor}</small>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    // **只转点的那一行。** 此前所有行共用一个 isPending,点一家,整列一起转圈变灰。
+                    loading={running}
+                    disabled={prefillBusy && !running}
+                    aria-label={`${outcome ? t("pricingPrefillAgain") : t("pricingPrefillOne")}: ${profile.name}`}
+                    onClick={() => prefill.mutate(profile.id)}
+                  >
+                    {outcome ? t("pricingPrefillAgain") : t("pricingPrefillOne")}
+                  </Button>
+                  {outcome && (
+                    <div className="col-span-2 text-ui-xs leading-[1.5] text-foreground">
+                      {outcome.error !== undefined ? (
+                        <span className="text-destructive">{outcome.error}</span>
+                      ) : (
+                        <PrefillSummary result={outcome.result} />
+                      )}
+                    </div>
                   )}
                 </li>
-              ))}
-            </ul>
-          )}
+              );
+            })}
+          </ul>
         </div>
       </ModalShell>
       <ModalShell
         open={adding || editing !== null}
         onOpenChange={(next) => !next && closeModal()}
         title={editing ? t("pricingRuleEdit") : t("pricingRuleAdd")}
+        // 表单里有「计费单位 / 单价 / 币种」一排和分时段价格的时段卡片,默认 360px 装不下:
+        // 钟点被截成「09…」、单位被截成「CNY / 百万输入…」。宽度写法和插件市场那一类弹窗一致。
+        className="w-[600px] max-w-[calc(100vw-24px)]"
         footer={
           <>
+            {editing && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mr-auto text-destructive hover:text-destructive"
+                onClick={() => {
+                  const rule = editing;
+                  closeModal();
+                  setDeleting(rule);
+                }}
+              >
+                <Trash2 size={13} /> {t("pricingRuleDeleteOne")}
+              </Button>
+            )}
             <Button type="button" variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
             <Button type="submit" form={pricingFormId} size="sm" disabled={!canSubmit || create.isPending || update.isPending}>
               {editing ? t("save") : t("pricingRuleAdd")}
@@ -469,7 +491,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
           id={pricingFormId}
           // 字段一律用 DIALOG_FIELD:此前是整个 <label> 带 font-semibold,里面的下拉、输入框、备注
           // 全都继承成粗体 —— 该加粗的只有字段标题那一行。
-          className="grid gap-3"
+          // 按**弹窗自己的宽度**排(容器查询),不按窗口:宽时并排两列、单位单价币种一行;窄了逐个叠起来。
+          className="@container/pricing-form grid gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             if (!canSubmit) return;
@@ -477,6 +500,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             else create.mutate();
           }}
         >
+          <div className="grid gap-3 @min-[480px]/pricing-form:grid-cols-2">
           <label className={DIALOG_FIELD}>
             <span>{t("pricingCapability")}</span>
             <Select value={form.capability} onValueChange={(value) => setForm((current) => ({ ...current, capability: value }))}>
@@ -509,6 +533,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               ]}
             />
           </label>
+          </div>
           <label className={DIALOG_FIELD}>
             <span>{t("pricingModel")}</span>
             <Input
@@ -517,7 +542,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))}
             />
           </label>
-          <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_96px] gap-2">
+          <div className="grid gap-3 @min-[480px]/pricing-form:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_7rem]">
             <label className={DIALOG_FIELD}>
               <span>{t("pricingBillingUnit")}</span>
               <Select value={form.billingUnit} onValueChange={(value) => setForm((current) => ({ ...current, billingUnit: value }))}>
@@ -558,6 +583,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             timeZone={form.timeZone}
             defaultTimeZone={vendorTimeZone}
             baseAmount={form.unitAmount}
+            unitHint={`${form.currency.trim().toUpperCase() || "USD"} / ${unitLabel(form.billingUnit)}`}
             onChange={({ windows, timeZone }) => setForm((current) => ({ ...current, timeWindows: windows, timeZone }))}
           />
           <label className={DIALOG_FIELD}>

@@ -144,6 +144,7 @@ export function TimePricesEditor({
   timeZone,
   defaultTimeZone,
   baseAmount,
+  unitHint,
   onChange,
 }: {
   windows: WindowDraft[];
@@ -151,6 +152,8 @@ export function TimePricesEditor({
   /** 加第一段时预选的时区:这家已有规则用的时区(预填的 DeepSeek 是北京时间),否则本机时区。 */
   defaultTimeZone: string;
   baseAmount: string;
+  /** 时段单价的单位,和规则的基础单价同一个(「USD / 百万输入 Token」)—— 时段只改金额,不改单位。 */
+  unitHint: string;
   onChange: (next: { windows: WindowDraft[]; timeZone: string }) => void;
 }) {
   const t = useI18n();
@@ -181,24 +184,25 @@ export function TimePricesEditor({
         </label>
       )}
       {windows.map((window, index) => (
-        <div key={index} className="grid gap-2 rounded-md border border-divider p-2" data-testid="pricing-time-window">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
-            <TimePicker
-              ariaLabel={t("pricingTimeWindowStart")}
-              value={window.start}
-              onChange={(start) => set(index, { start })}
-            />
-            <span className="text-muted-foreground" aria-hidden="true">–</span>
-            <TimePicker ariaLabel={t("pricingTimeWindowEnd")} value={window.end} onChange={(end) => set(index, { end })} />
-            <Input
-              type="number"
-              min="0"
-              step="0.000001"
-              aria-label={t("pricingTimeWindowAmount")}
-              value={window.amount}
-              placeholder="0.000000"
-              onChange={(event) => set(index, { amount: event.target.value })}
-            />
+        <div key={index} className="grid gap-3 rounded-md border border-divider p-3" data-testid="pricing-time-window">
+          {/* 每一格都要带标题:此前时间后面只有一个写着 0.000000 的框,看不出那是这段时间的单价,
+              也看不出单位 —— 单位跟着规则走,写在框里。 */}
+          {/* 三行:时间、这段时间的单价、适用的星期。弹窗只有这么宽,挤成一行时钟点和单位都被截断
+              (「09…」「CNY / 百万输入…」),而这里每一个字都是要看清的。 */}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+            <div className={DIALOG_FIELD}>
+              <span>{t("pricingTimeWindowTime")}</span>
+              <div className="flex items-center gap-2">
+                <TimePicker
+                  className="w-36"
+                  ariaLabel={t("pricingTimeWindowStart")}
+                  value={window.start}
+                  onChange={(start) => set(index, { start })}
+                />
+                <span className="text-muted-foreground" aria-hidden="true">–</span>
+                <TimePicker className="w-36" ariaLabel={t("pricingTimeWindowEnd")} value={window.end} onChange={(end) => set(index, { end })} />
+              </div>
+            </div>
             <Button
               type="button"
               variant="ghost"
@@ -207,26 +211,67 @@ export function TimePricesEditor({
               title={t("pricingTimeWindowRemove")}
               onClick={() => onChange({ timeZone: windows.length > 1 ? timeZone : "", windows: windows.filter((_, i) => i !== index) })}
             >
-              <Trash2 size={13} />
+              <Trash2 size={14} />
             </Button>
           </div>
-          <div role="group" aria-label={t("pricingTimeWindowDays")} className="flex flex-wrap gap-1">
-            {ALL_DAYS.map((day) => {
-              const on = window.weekdays.includes(day);
-              return (
-                <Button
-                  key={day}
-                  type="button"
-                  size="sm"
-                  variant={on ? "secondary" : "outline"}
-                  aria-pressed={on}
-                  className={on ? "text-foreground" : "text-muted-foreground"}
-                  onClick={() => toggleDay(index, day)}
-                >
-                  {dayName(day)}
-                </Button>
-              );
-            })}
+          <label className={DIALOG_FIELD}>
+            <span>{t("pricingTimeWindowAmount")}</span>
+            <span className="relative block">
+              <Input
+                type="number"
+                min="0"
+                step="0.000001"
+                className="pr-40"
+                aria-label={t("pricingTimeWindowAmount")}
+                value={window.amount}
+                placeholder="0.000000"
+                onChange={(event) => set(index, { amount: event.target.value })}
+              />
+              <small className="pointer-events-none absolute right-3 top-1/2 max-w-36 -translate-y-1/2 truncate text-ui-xs text-muted-foreground">
+                {unitHint}
+              </small>
+            </span>
+          </label>
+          <div className="grid gap-2">
+            <span className="text-ui-xs text-muted-foreground">{t("pricingTimeWindowDays")}</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* 常用的三种一键选;选中态用主色,不选的是描边 —— 此前两种状态几乎一个颜色,看不出选了哪几天。 */}
+              {([["pricingEveryDay", ALL_DAYS], ["pricingWorkdays", WORKDAYS], ["pricingWeekends", WEEKENDS]] as const).map(([key, days]) => {
+                const on = sameDays(window.weekdays, [...days]);
+                return (
+                  <Button
+                    key={key}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-pressed={on}
+                    className={on ? "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary" : "text-muted-foreground"}
+                    onClick={() => set(index, { weekdays: [...days] })}
+                  >
+                    {t(key)}
+                  </Button>
+                );
+              })}
+              <span className="mx-1 h-5 w-px bg-divider" aria-hidden="true" />
+              <div role="group" aria-label={t("pricingTimeWindowDays")} className="flex flex-wrap gap-1.5">
+                {ALL_DAYS.map((day) => {
+                  const on = window.weekdays.includes(day);
+                  return (
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      aria-pressed={on}
+                      className={on ? "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary" : "text-muted-foreground"}
+                      onClick={() => toggleDay(index, day)}
+                    >
+                      {dayName(day)}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       ))}

@@ -1,5 +1,5 @@
 import React from "react";
-import { LayoutGrid, List, Pencil, Search, Trash2 } from "lucide-react";
+import { Clock, Info, LayoutGrid, List, Pencil, Search, Trash2 } from "lucide-react";
 
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
@@ -97,14 +97,16 @@ export function PricingRuleFilters({
   const set = (patch: Partial<RuleFilters>) => onChange({ ...filters, ...patch });
   const filtered = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
   const ruleCount = groups.reduce((sum, group) => sum + group.rules.length, 0);
-  const picker = "h-8 w-auto min-w-[8.5rem] max-w-[12rem] px-2.5 text-ui-xs";
+  // **和素材库那一行同一套刻度**:标准高度的输入框和下拉(border-border bg-control),视图切换是
+  // 标准尺寸的描边按钮。此前这里用了 h-8 + 小一号的字,和系统里别的筛选栏、设置表单比矮一截。
+  const picker = "w-auto min-w-36 max-w-52 border-border bg-control";
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[12rem] flex-1">
-          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <div className="relative min-w-48 flex-1">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
-            className="h-8 pl-8 text-ui-xs"
+            className="border-border bg-control pl-9"
             value={filters.query}
             placeholder={t("pricingSearch")}
             aria-label={t("pricingSearch")}
@@ -156,9 +158,8 @@ export function PricingRuleFilters({
         />
         <div className="ml-auto flex items-center gap-1" role="group" aria-label={t("pricingViewLabel")}>
           <Button
-            size="icon-sm"
             variant="outline"
-            className={cn(display === "grid" && "border-primary/40 bg-accent text-primary")}
+            className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")}
             aria-label={t("studioGridView")}
             title={t("studioGridView")}
             aria-pressed={display === "grid"}
@@ -167,9 +168,8 @@ export function PricingRuleFilters({
             <LayoutGrid />
           </Button>
           <Button
-            size="icon-sm"
             variant="outline"
-            className={cn(display === "list" && "border-primary/40 bg-accent text-primary")}
+            className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")}
             aria-label={t("studioListView")}
             title={t("studioListView")}
             aria-pressed={display === "list"}
@@ -179,7 +179,7 @@ export function PricingRuleFilters({
           </Button>
         </div>
       </div>
-      <div className="flex items-center gap-2 text-ui-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
         <span>
           {filtered
             ? t("pricingCountFiltered").replace("{shown}", String(shown)).replace("{models}", String(groups.length))
@@ -293,31 +293,55 @@ export function PricingRuleGroups({
   );
 
   if (display === "list") {
+    // **列表是一张紧凑的表**:一个模型一行,价格压成一排小块(点一块就改那一条),备注收进一个
+    // 提示图标。此前列表模式是把卡片摊平 —— 单位和金额隔着半屏、出处链接占两三行、删除键孤零零
+    // 挂在最右,一行有卡片三行那么高,既不比卡片看得多,也不比卡片好扫。
     return (
       <div className="grid divide-y divide-divider">
-        {groups.map((group) => (
-          <div
-            key={group.key}
-            className={cn(
-              "grid items-start gap-x-3 gap-y-1 py-3",
-              bulk.active ? "grid-cols-[auto_minmax(0,14rem)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto]",
-              bulk.isSelected(group.key) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
-            )}
-          >
-            {bulk.active && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
-            <div className="grid min-w-0 gap-0.5 pt-1">
-              <strong className="truncate text-ui-sm font-semibold" title={title(group)}>{title(group)}</strong>
-              <small className="truncate text-ui-xs text-muted-foreground">{subtitle(group)}</small>
-              <SourceBadges group={group} align="start" />
+        {groups.map((group) => {
+          const notes = [...new Set(group.rules.map((rule) => rule.notes).filter(Boolean))].join("\n");
+          return (
+            <div
+              key={group.key}
+              className={cn(
+                "grid items-center gap-x-4 gap-y-2 px-1 py-2.5",
+                bulk.active ? "grid-cols-[auto_minmax(10rem,15rem)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(10rem,15rem)_minmax(0,1fr)_auto]",
+                bulk.isSelected(group.key) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
+              )}
+            >
+              {bulk.active && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
+              <div className="grid min-w-0 gap-0.5">
+                <strong className="truncate text-ui-sm font-semibold" title={title(group)}>{title(group)}</strong>
+                <small className="truncate text-ui-xs text-muted-foreground">{subtitle(group)}</small>
+              </div>
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {group.rules.map((rule) => (
+                  <button
+                    key={rule.id}
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-control px-2 py-1 text-left transition-colors hover:border-primary/40 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`${t("pricingRuleEdit")}: ${labels.unitLabel(rule.billing_unit)}`}
+                    title={rule.time_prices?.length ? labels.schedule(rule) : t("pricingRuleEdit")}
+                    onClick={() => onEdit(rule)}
+                  >
+                    <span className="text-ui-xs text-muted-foreground">{labels.unitLabel(rule.billing_unit)}</span>
+                    <span className="text-ui-sm font-medium tabular-nums">{labels.amount(rule)}</span>
+                    {rule.time_prices?.length ? <Clock size={12} className="text-primary" aria-label={labels.schedule(rule)} /> : null}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <SourceBadges group={group} />
+                {notes ? (
+                  <span className="grid size-7 place-items-center text-muted-foreground" title={notes} aria-label={notes} role="img">
+                    <Info size={14} />
+                  </span>
+                ) : null}
+                {deleteGroupButton(group)}
+              </div>
             </div>
-            {/* 单位和金额别隔着半屏:宽屏下这一列不跟着拉满。 */}
-            <div className="grid min-w-0 max-w-[32rem] gap-1">
-              <PriceLines group={group} labels={labels} onEdit={onEdit} onDelete={onDelete} dense />
-              <Notes group={group} />
-            </div>
-            <div className="pt-1">{deleteGroupButton(group)}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
