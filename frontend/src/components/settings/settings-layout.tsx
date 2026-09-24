@@ -87,6 +87,7 @@ export function SettingsRow({
   controlClassName,
   label,
   description,
+  stacked = false,
   children,
 }: {
   id?: string;
@@ -94,13 +95,25 @@ export function SettingsRow({
   controlClassName?: string;
   label: string;
   description?: string;
+  /**
+   * 控件放到标题下面、占满整行。给**要写一段话**的控件(多行文本框)用。
+   *
+   * 默认布局把控件放在右边一格 `auto` 列里,那一格按控件自己的宽度收 —— 下拉、开关正合适,
+   * 一个文本框却会被挤成一条窄缝(自动放行的「补充说明」就是这样,写三行字要换十行)。调用方
+   * 想用 className 覆盖成单列也盖不住:宽屏下那条 `@min-[620px]` 的两列规则更具体。
+   */
+  stacked?: boolean;
   children?: React.ReactNode;
 }) {
   return (
     <div
       id={id}
       data-slot="settings-row"
-      className={cn("grid grid-cols-1 items-start gap-3 px-0.5 py-5 @min-[620px]/settings:grid-cols-[minmax(0,1fr)_auto] @min-[620px]/settings:items-center @min-[620px]/settings:gap-8", className)}
+      className={cn(
+        "grid grid-cols-1 items-start gap-3 px-0.5 py-5",
+        !stacked && "@min-[620px]/settings:grid-cols-[minmax(0,1fr)_auto] @min-[620px]/settings:items-center @min-[620px]/settings:gap-8",
+        className,
+      )}
     >
       <div className="grid min-w-0 gap-1">
         <span data-slot="settings-row-label" className="text-ui-md font-medium leading-relaxed">{label}</span>
@@ -110,7 +123,9 @@ export function SettingsRow({
           </small>
         )}
       </div>
-      {children && <div className={cn("flex min-w-0 flex-wrap items-center gap-2", controlClassName)}>{children}</div>}
+      {children && (
+        <div className={cn(stacked ? "grid min-w-0" : "flex min-w-0 flex-wrap items-center gap-2", controlClassName)}>{children}</div>
+      )}
     </div>
   );
 }

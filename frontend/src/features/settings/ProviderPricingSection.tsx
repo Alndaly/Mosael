@@ -8,7 +8,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -218,9 +218,15 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     },
   });
 
+  // 删一条也要确认:批量删有确认框,单条却一点就没,而且没有撤销。
+  const [deleting, setDeleting] = React.useState<PricingRule | null>(null);
   const remove = useMutation({
     mutationFn: (id: string) => api(`/api/settings/provider-pricing-rules/${id}`, { method: "DELETE" }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      setDeleting(null);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   /* 批量选择:「按目录预填」一次能生成几十条规则,发现填错了逐条删要点几十次。
@@ -248,14 +254,16 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
 
   /** 按目录预填:省掉几十上百个模型的手抄。只补缺失的,已填的一律不动(后端保证)。 */
   const [prefillOpen, setPrefillOpen] = React.useState(false);
-  const [prefillResult, setPrefillResult] = React.useState<PrefillResult | null>(null);
+  // 结果记着是哪一家的:几个供应商挨个点下来,一句不带名字的「没有新建规则」说不清在说谁。
+  const [prefillResult, setPrefillResult] = React.useState<{ profileId: string; result: PrefillResult } | null>(null);
   const prefill = useMutation({
     mutationFn: (profileId: string) =>
       api<PrefillResult>(`/api/settings/providers/${profileId}/pricing/prefill`, { method: "POST" }),
-    onSuccess: (result) => {
-      setPrefillResult(result);
+    onSuccess: (result, profileId) => {
+      setPrefillResult({ profileId, result });
       refresh();
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const profileLabel = (profileId: string | null | undefined, provider: string) => {
@@ -308,7 +316,10 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 variant="outline"
                 size="sm"
                 className="justify-start"
-                loading={prefill.isPending}
+                // **只转点的那一行。** 此前所有行共用一个 isPending,点一家,整列一起转圈变灰,
+                // 看起来像是全部在跑、又像是全坏了。其余行在请求期间只是按不动。
+                loading={prefill.isPending && prefill.variables === profile.id}
+                disabled={prefill.isPending && prefill.variables !== profile.id}
                 onClick={() => prefill.mutate(profile.id)}
               >
                 {profile.name}
@@ -317,10 +328,13 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
           </div>
           {prefillResult && (
             <p className="m-0 text-ui-xs leading-[1.5] text-foreground">
-              {(prefillResult.created > 0 ? t("pricingPrefillDone") : t("pricingPrefillNone"))
-                .replace("{created}", String(prefillResult.created))
-                .replace("{priced}", String(prefillResult.models_with_price))
-                .replace("{seen}", String(prefillResult.models_seen))}
+              <strong className="font-medium">
+                {t("pricingPrefillResultFor").replace("{name}", (profiles.data ?? []).find((p) => p.id === prefillResult.profileId)?.name ?? "")}
+              </strong>
+              {(prefillResult.result.created > 0 ? t("pricingPrefillDone") : t("pricingPrefillNone"))
+                .replace("{created}", String(prefillResult.result.created))
+                .replace("{priced}", String(prefillResult.result.models_with_price))
+                .replace("{seen}", String(prefillResult.result.models_seen))}
             </p>
           )}
         </div>
@@ -340,7 +354,9 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       >
         <form
           id={pricingFormId}
-          className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none"
+          // 字段一律用 DIALOG_FIELD:此前是整个 <label> 带 font-semibold,里面的下拉、输入框、备注
+          // 全都继承成粗体 —— 该加粗的只有字段标题那一行。
+          className="grid gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             if (!canSubmit) return;
@@ -348,7 +364,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             else create.mutate();
           }}
         >
-          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+          <label className={DIALOG_FIELD}>
             <span>{t("pricingCapability")}</span>
             <Select value={form.capability} onValueChange={(value) => setForm((current) => ({ ...current, capability: value }))}>
               <SelectTrigger>
@@ -363,7 +379,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </SelectContent>
             </Select>
           </label>
-          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+          <label className={DIALOG_FIELD}>
             <span>{t("pricingProviderProfile")}</span>
             <OptionPicker
               value={form.providerProfileId}
@@ -380,7 +396,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               ]}
             />
           </label>
-          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+          <label className={DIALOG_FIELD}>
             <span>{t("pricingModel")}</span>
             <Input
               value={form.model}
@@ -389,7 +405,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             />
           </label>
           <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_96px] gap-2">
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+            <label className={DIALOG_FIELD}>
               <span>{t("pricingBillingUnit")}</span>
               <Select value={form.billingUnit} onValueChange={(value) => setForm((current) => ({ ...current, billingUnit: value }))}>
                 <SelectTrigger>
@@ -404,7 +420,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 </SelectContent>
               </Select>
             </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+            <label className={DIALOG_FIELD}>
               <span>{t("pricingUnitAmount")}</span>
               <Input
                 type="number"
@@ -415,7 +431,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 onChange={(event) => setForm((current) => ({ ...current, unitAmount: event.target.value }))}
               />
             </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+            <label className={DIALOG_FIELD}>
               <span>{t("pricingCurrency")}</span>
               <Input
                 value={form.currency}
@@ -424,7 +440,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               />
             </label>
           </div>
-          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+          <label className={DIALOG_FIELD}>
             <span>{t("pricingNotes")}</span>
             <Textarea
               rows={3}
@@ -436,6 +452,15 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         </form>
       </ModalShell>
 
+      <ConfirmDialog
+        open={deleting !== null}
+        title={t("pricingRuleDeleteTitle")}
+        body={deleting ? `${capabilityLabel(deleting.capability)} · ${profileLabel(deleting.provider_profile_id, deleting.provider)} · ${deleting.model || t("pricingAnyModel")} · ${formatRuleAmount(deleting, unitLabel(deleting.billing_unit))}` : undefined}
+        confirmLabel={t("delete")}
+        onCancel={() => setDeleting(null)}
+        pending={remove.isPending}
+        onConfirm={() => deleting && remove.mutate(deleting.id)}
+      />
       <ConfirmDialog
         open={bulkDeleting}
         title={t("bulkDeleteConfirm").replace("{n}", String(bulk.count))}
@@ -490,7 +515,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 <Button variant="ghost" size="icon" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
                   <Pencil size={13} />
                 </Button>
-                <Button variant="ghost" size="icon" loading={remove.isPending && remove.variables === rule.id} onClick={() => remove.mutate(rule.id)} aria-label={t("delete")}>
+                <Button variant="ghost" size="icon" onClick={() => setDeleting(rule)} aria-label={t("delete")}>
                   <Trash2 size={13} />
                 </Button>
               </div>

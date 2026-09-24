@@ -112,13 +112,9 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
           </Select>
         </SettingsRow>
       ))}
-      <SettingsRow
-        label={t("autopilotNotes")}
-        description={t("autopilotNotesDesc")}
-        className="grid-cols-1 items-start gap-2"
-      >
+      <SettingsRow label={t("autopilotNotes")} description={t("autopilotNotesDesc")} stacked>
         <Textarea
-          className="min-h-[80px] text-xs"
+          className="min-h-24 text-ui-sm"
           readOnly={!canEdit}
           value={draft.notes}
           placeholder={t("autopilotNotesPlaceholder")}
