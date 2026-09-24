@@ -4,7 +4,6 @@ import {
   Copy,
   Download,
   FileText,
-  Link,
   Pencil,
   RotateCcw,
   Star,
@@ -31,7 +30,6 @@ export type NoteListAction =
   | "delete"
   | "rename"
   | "duplicate"
-  | "link"
   | "export";
 export function rangeSelection(
   ids: string[],
@@ -229,10 +227,6 @@ export function NoteList({
               <ContextMenuItem onSelect={() => void run("duplicate", targets)}>
                 <Copy />
                 {s.duplicate}
-              </ContextMenuItem>
-              <ContextMenuItem onSelect={() => void run("link", targets)}>
-                <Link />
-                {s.copyLink}
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>

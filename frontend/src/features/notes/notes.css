@@ -10,8 +10,13 @@
 @layer components {
 
 /* 正文栏的宽度是一个量:标题、正文和顶上那两条提示带都对着它排,不然提示读起来像掉在页面外面。 */
-.notes-layout { --note-column:740px; display:flex; height:100%; min-height:0; min-width:0; background:transparent; }
-.notes-index { flex:0 0 276px; min-width:0; display:flex; flex-direction:column; background:var(--workspace-subtle); padding:16px 12px; gap:14px; }
+.notes-layout { --note-column:740px; position:relative; display:flex; height:100%; min-height:0; min-width:0; background:transparent; }
+/* 列表宽度由拖边决定(lib/useResizableSidebar,内联 flex-basis);窄屏改成上下排,拖柄收起。 */
+.notes-index { flex:0 0 var(--notes-index-width,260px); min-width:0; display:flex; flex-direction:column; background:var(--workspace-subtle); padding:18px 14px; gap:16px; }
+.notes-resize { z-index:30; }
+/* 遮罩自己接住拖拽:不接的话事件穿到下面的正文,编辑器以为要往里插东西,画出一条放置横线。 */
+.notes-drop { position:absolute; inset:0; z-index:50; display:grid; place-items:center; background:color-mix(in oklab,var(--primary) 10%,var(--background)); }
+.notes-drop span { display:grid; justify-items:center; gap:8px; padding:16px 24px; border:2px dashed var(--primary); border-radius:10px; color:var(--primary); font-size:var(--text-ui-md); font-weight:600; }
 .notes-index header { display:flex; align-items:center; justify-content:space-between; padding:0 6px; }
 .notes-index h1 { font-size:17px; font-weight:650; }
 .notes-filter { display:flex; flex-wrap:wrap; gap:4px; }
@@ -23,8 +28,6 @@
 .note-list-row p { font-size:var(--text-ui-xs); color:var(--muted-foreground); margin-top:5px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
 .note-list-row time { display:block; color:var(--muted-foreground); font-size:var(--text-ui-2xs); margin-top:8px; }
 .note-document { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
-.note-document-header { min-height:52px; padding:10px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; color:var(--muted-foreground); font-size:var(--text-ui-xs); }
-.note-document-header .note-status { margin-right:auto; }
 .note-body { flex:1; min-height:0; overflow:auto; padding:0 clamp(20px,5vw,72px) 80px; scroll-padding-top:64px; }
 .note-paper { max-width:var(--note-column); margin:0 auto; container-type:inline-size; }
 .note-title { display:block; width:100%; resize:none; field-sizing:content; min-height:48px; background:transparent; border:0; outline:0; font:inherit; font-size:clamp(26px,2.3vw,32px); line-height:1.3; font-weight:650; overflow-wrap:anywhere; margin:0 0 28px; }
@@ -40,7 +43,6 @@
 .note-format button:hover,.note-icon:hover { background:color-mix(in srgb,var(--foreground) 5%,transparent); color:var(--foreground); }
 .note-format button[aria-pressed=true] { background:color-mix(in srgb,var(--primary) 10%,transparent); color:var(--primary); }
 .note-format button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
-.note-format .note-format-insert { width:auto; padding:0 7px; gap:5px; font-size:var(--text-ui-xs); }
 .note-format button:disabled { opacity:.3; }
 .note-paper > .note-title:first-child { margin-top:24px; }
 .note-prose > :first-child { margin-top:0; }
@@ -78,8 +80,8 @@
 .note-properties label { display:block; margin:20px 0 8px; color:var(--muted-foreground); }
 .note-source { padding:12px 0; overflow-wrap:anywhere; }.note-source blockquote { color:var(--muted-foreground); margin:8px 0; line-height:1.6; }
 .notes-layout button { transition:color 160ms,background-color 160ms; cursor:pointer; }.notes-layout button:disabled { opacity:.5; cursor:default; }
-@media(max-width:1000px) { .note-properties { width:220px; }.notes-index { flex-basis:235px; } }
-@media(max-width:740px) { .notes-layout { flex-direction:column; }.notes-index { flex-basis:auto; max-height:230px; }.note-properties { width:100%; max-height:250px; }.note-body { padding:0 20px 40px; scroll-padding-top:110px; }.note-document-header { padding:8px 12px; }.note-format { gap:6px; margin-bottom:24px; }.note-format-group + .note-format-group { padding-left:6px; }.note-format button { width:28px; height:30px; }.note-format .note-format-insert { width:auto; } }
+@media(max-width:1000px) { .note-properties { width:220px; } }
+@media(max-width:740px) { .notes-layout { flex-direction:column; }.notes-index { flex-basis:auto; max-height:230px; }.note-properties { width:100%; max-height:250px; }.note-body { padding:0 20px 40px; scroll-padding-top:110px; }.note-document-header { padding:8px 12px; }.note-format { gap:6px; margin-bottom:24px; }.note-format-group + .note-format-group { padding-left:6px; }.note-format button { width:28px; height:30px; }.note-format .note-format-menu { width:auto; }.notes-resize { display:none; } }
 @media(prefers-reduced-motion:reduce) { .notes-layout button,.note-format::before { transition:none; } }
 @media(max-width:740px) {
   .notes-show-list > .notes-index { flex:1; max-height:none; }
@@ -100,29 +102,11 @@
   .note-format .note-format-history { margin-left:0; }
 }
 
-/* One stable document toolbar: formatting sits between save state and view actions. */
-.note-document-header { flex-wrap:nowrap; gap:8px; padding:10px 16px; }
-.note-document-header .note-status { margin-right:0; white-space:nowrap; flex-shrink:0; }
-.note-header-format { flex:1; min-width:0; overflow-x:auto; scrollbar-width:thin; }
-.note-header-format .note-format { position:static; flex-wrap:nowrap; width:max-content; margin:0; padding:0 8px; gap:6px; }
-.note-header-format .note-format::before { display:none; }
-.note-header-format .note-format-history { margin-left:0; }
-.note-header-actions { display:flex; flex-shrink:0; align-items:center; gap:4px; white-space:nowrap; }
-.note-header-format:empty { overflow:visible; }
 .note-paper { padding-top:20px; }
-@media(max-width:1100px) { .note-document-header .note-status { display:none; } .note-header-format .note-format-insert span { display:none; } .note-document-header { gap:4px; padding-inline:10px; } }
 
 .notes-layout { --field-border:color-mix(in srgb,var(--border) 65%,transparent); --field:color-mix(in srgb,var(--foreground) 2%,transparent); }
-.notes-index { flex-basis:260px; padding:18px 14px; gap:16px; }
 .notes-index > header { padding:0 2px; }
 .notes-index > input { height:36px; font-size:var(--text-ui-xs); }
-.note-document-header { min-height:56px; padding:10px 20px; gap:12px; }
-.note-document-header .note-status { display:flex; align-items:center; gap:5px; font-size:var(--text-ui-2xs); }
-.note-header-format { margin-left:14px; }
-.note-header-actions { gap:3px; }
-.note-mode { height:30px; padding:0 9px; border-radius:7px; }
-.note-mode[aria-pressed=true] { background:color-mix(in srgb,var(--foreground) 6%,transparent); color:var(--foreground); }
-.note-mode:hover { color:var(--foreground); }
 .notes-layout { --note-column:760px; }
 .note-paper { padding-top:28px; }
 .note-title { margin-bottom:30px; }
@@ -130,23 +114,31 @@
 .note-prose { line-height:1.9; }
 .note-prose th { background:color-mix(in srgb,var(--foreground) 3%,transparent); }
 .note-properties header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.note-actions-menu { display:flex; flex-direction:column; gap:3px; padding:6px; width:210px; }
-.note-actions-menu button { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:7px; text-align:left; font-size:var(--text-ui-sm); transition:background-color 160ms,color 160ms; }
-.note-actions-menu button:hover { background:color-mix(in srgb,var(--foreground) 5%,transparent); }
-.note-actions-menu .note-trash-action { color:var(--muted-foreground); margin-top:4px; }
-.note-actions-menu .note-trash-action:hover { color:var(--destructive); }
-@media(max-width:1250px) { .note-document-header .note-status { display:none; } .note-header-format { margin-left:0; } .note-document-header { gap:6px; padding-inline:12px; } }
-@media(max-width:950px) { .notes-index { flex-basis:225px; } .note-header-format .note-format-insert span { display:none; } .note-properties { position:absolute; right:16px; top:70px; bottom:16px; z-index:20; width:280px; border-radius:12px; background:var(--modal-surface); backdrop-filter:blur(24px); box-shadow:var(--shadow-floating); } }
-@media(prefers-reduced-motion:reduce) { .note-actions-menu button { transition:none; } }
+@media(max-width:950px) { .note-header-format .note-format-insert span { display:none; } .note-properties { position:absolute; right:16px; top:70px; bottom:16px; z-index:20; width:280px; border-radius:12px; background:var(--modal-surface); backdrop-filter:blur(24px); box-shadow:var(--shadow-floating); } }
 
-/* Keep one quiet toolbar while making the current paragraph style explicit. */
-.note-format .note-block-style { width:auto; min-width:94px; max-width:150px; height:32px; padding:0 8px; gap:8px; border:0; background:var(--workspace-subtle); box-shadow:none; font-size:var(--text-ui-xs); }
+/* ── 文档顶栏 ──────────────────────────────────────────────────────────────
+   一行:收起列表 | 格式工具(占满,放不下时横向滚) | 保存状态 · 查看方式 · 收藏 · 更多。
+   按钮一律 30px 高;组内 2px、组间 6px + 一条分隔线 + 6px;右侧各项之间 6px。
+   此前同一批选择器在这个文件里被重写了三四遍,后写的零散覆盖先写的,间距因此一直对不齐。 */
+.note-document-header { min-height:56px; padding:10px 16px; display:flex; flex-wrap:nowrap; align-items:center; gap:8px; border-bottom:1px solid var(--divider); color:var(--muted-foreground); font-size:var(--text-ui-xs); }
+.note-header-format { flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; }
+.note-header-format:empty { overflow:visible; }
+.note-header-format .note-format { position:static; flex-wrap:nowrap; width:max-content; margin:0; padding:0; gap:0; }
+.note-header-format .note-format::before { display:none; }
+.note-header-format .note-format-history { margin-left:0; }
+.note-format-group + .note-format-group { margin-left:6px; padding-left:6px; border-left:1px solid var(--divider); }
+.note-format .note-format-menu { width:auto; height:30px; padding:0 8px; gap:4px; font-size:var(--text-ui-xs); }
+.note-format .note-block-style { margin-right:4px; }
+.note-header-actions { display:flex; flex-shrink:0; align-items:center; gap:6px; white-space:nowrap; }
+.note-document-header .note-status { display:flex; align-items:center; height:30px; gap:5px; margin-right:2px; font-size:var(--text-ui-2xs); }
+.note-modes { display:flex; align-items:center; height:30px; gap:2px; padding:2px; border-radius:8px; background:color-mix(in srgb,var(--foreground) 4%,transparent); }
+.note-mode { height:26px; padding:0 9px; border-radius:6px; }
+.note-mode[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
+.note-mode:hover { color:var(--foreground); }
+@media(max-width:1250px) { .note-document-header .note-status { font-size:0; gap:0; } .note-document-header { padding-inline:12px; } }
 .note-heading-option { display:inline-flex; align-items:center; gap:10px; }
 .note-heading-option > span { font:500 var(--text-ui-xs) var(--font-mono); color:var(--muted-foreground); }
-.note-format-group + .note-format-group { border-color:var(--divider); }
 .note-format button[aria-pressed=true],.notes-filter button[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
-.note-document-header { border-bottom:1px solid var(--divider); }
-.note-header-format { margin-left:4px; }
 .note-list-row { padding:12px; }
 .note-list-row p { line-height:1.65; }
 .note-prose h4 { font-size:1.05em; }.note-prose h5 { font-size:1em; }.note-prose h6 { font-size:.95em; color:var(--muted-foreground); }
@@ -207,7 +199,14 @@
 .note-selection-bar label { display:flex; align-items:center; gap:8px; padding-left:4px; }
 .note-selection-bar input { accent-color:var(--primary); }
 .note-rename-input { width:100%; min-width:0; margin-top:8px; border:0; border-radius:6px; background:var(--secondary); padding:10px 12px; font-size:var(--text-ui-sm); }
-.note-reference-notice { flex-shrink:0; padding:8px clamp(20px,5vw,72px); color:var(--muted-foreground); font-size:var(--text-ui-xs); background:var(--workspace-subtle); }
+/* 文档顶栏下面的提示条(引用了旧版本 / 在回收站 / 保存失败)是同一种东西:整条铺满、浅底,
+   里面那一行和正文同宽同轴。回收站那条此前是缩进的圆角卡片、横跨整个编辑区,和另两条不像一家。 */
+.note-reference-notice,.note-trash-notice { flex-shrink:0; padding:8px clamp(20px,5vw,72px); color:var(--muted-foreground); font-size:var(--text-ui-xs); background:var(--workspace-subtle); }
+.note-notice-actions { display:flex; align-items:center; gap:4px; margin-left:auto; }
+.note-trash-notice button { display:inline-flex; align-items:center; gap:5px; color:var(--primary); padding:3px 6px; border-radius:4px; }
+.note-trash-notice button:hover { background:var(--accent); }
+.note-trash-notice .note-notice-danger { color:var(--destructive); }
+.note-trash-notice .note-notice-danger:hover { background:color-mix(in srgb,var(--destructive) 10%,transparent); }
 .note-notice-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; max-width:var(--note-column); margin:0 auto; }
 .note-reference-notice button,.note-error-notice button { color:var(--primary); padding:3px 6px; border-radius:4px; }
 .note-reference-notice button:hover,.note-error-notice button:hover { background:var(--accent); }

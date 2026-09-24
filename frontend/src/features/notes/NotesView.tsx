@@ -13,6 +13,10 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MENU_ITEM, MENU_SEPARATOR } from "@/components/ui/floating";
+import { useFileDrop } from "@/lib/useFileDrop";
+import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { cn } from "@/lib/utils";
 import { NoteEditor, NoteReader } from "./NoteEditor";
 import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
@@ -23,6 +27,15 @@ type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteCont
 
 
 function locationNote() { return new URLSearchParams(window.location.hash.split("?")[1] || "").get("note"); }
+//: 每个工作区最后打开的那篇。打开哪篇只写在地址里(`#/notes?note=…`),切到别的页再回来地址就成了
+//: `#/notes`,于是又是一片空 —— 刚才正在看的东西没了。
+const lastNoteKey = (workspaceId: string) => `mosael.notes.last.${workspaceId}`;
+function rememberedNote(workspaceId: string) { try { return window.localStorage.getItem(lastNoteKey(workspaceId)); } catch { return null; } }
+function rememberNote(workspaceId: string, id: string | null) {
+  try { if (id) window.localStorage.setItem(lastNoteKey(workspaceId), id); else window.localStorage.removeItem(lastNoteKey(workspaceId)); } catch { /* 记不住只是少一个便利 */ }
+}
+const MARKDOWN_IMPORT_LIMIT = 500_000;
+const isMarkdownFile = (file: File) => /\.(md|markdown|txt)$/i.test(file.name);
 export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources">) {
   const sources = note.sources.map(source => `- ${source.label || source.kind}${source.kind === "url" ? `: ${source.url}` : source.kind === "note" ? `: ${noteHref(source.id, source.revision)}` : ` [${source.kind}:${source.id}${source.start != null ? ` @ ${source.start}–${source.end ?? ""}s` : ""}]`}`).join("\n");
   const blob = new Blob([`# ${note.title}\n\n${note.markdown}${sources ? `\n\n---\n\n${sources}\n` : ""}`], { type: "text/markdown;charset=utf-8" });
@@ -33,7 +46,11 @@ export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources"
 
 export function NotesView({ workspace }: { workspace: Workspace }) {
   const s = useNoteStrings(); const qc = useQueryClient();
-  const [id, setId] = React.useState(locationNote);
+  const [id, setId] = React.useState(() => locationNote() ?? rememberedNote(workspace.id));
+  // 从记住的那篇打开时把地址补上,和点开一篇的状态一样(刷新、返回都认它)。
+  React.useEffect(() => { if (id && !locationNote()) window.history.replaceState(null, "", noteHref(id)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => { if (id) rememberNote(workspace.id, id); }, [workspace.id, id]);
+  const sidebar = useResizableSidebar("notes", { min: 220, max: 480, fallback: 260 });
   const [selecting,setSelecting] = React.useState(false);
   const controller = React.useRef<NoteController | null>(null);
 
@@ -46,15 +63,18 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   const rows = notes.data?.pages.flat() || [];
   const topics = [...new Set(rows.flatMap(n => n.topics))];
   const shown = rows.filter(n => (filter !== "favorite" || n.favorite) && (!topic || n.topics.includes(topic)));
-  const selected = useQuery({ queryKey: ["note", workspace.id, id], queryFn: () => getNote(workspace.id, id!), enabled: !!id });
+  // 打开一篇就重新取一次(staleTime 0):缓存里的那份可能是移进回收站、收藏之前的,打开后看到的
+  // 就是错的状态 —— 回收站里的笔记没有提示条、还能编辑。
+  const selected = useQuery({ queryKey: ["note", workspace.id, id], queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0 });
+  // 记住的那篇已经删了:不再自动打开它。
+  React.useEffect(() => { if (selected.isError && id === rememberedNote(workspace.id)) rememberNote(workspace.id, null); }, [selected.isError, id, workspace.id]);
   async function listAction(action:NoteListAction, targets:Note[], value?:string) {
     const done:string[]=[];let failed=0;
     for(const target of targets) {
       try {
         const active=controller.current?.id===target.id?controller.current:null;
         const current=active?active.read():await getNote(workspace.id,target.id);
-        if(action==="link") {await navigator.clipboard.writeText(noteHref(current.id));toast.success(s.copiedLink);}
-        else if(action==="export") exportMarkdown(current);
+        if(action==="export") exportMarkdown(current);
         else if(action==="duplicate") await createNote(workspace.id,{markdown:current.markdown,project_id:current.project_id,tags:current.tags,topics:current.topics,sources:current.sources,title:`${current.title||s.untitled} · ${s.copySuffix}`,trashed:false});
         else if(action==="delete") {
           if(!current.trashed)throw new Error("Move to trash first");
@@ -71,21 +91,42 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
       }catch(e){failed++;toast.error(errorText(e));}
     }
     await qc.invalidateQueries({queryKey:["notes",workspace.id]});
-    if(["trash","restore","delete"].includes(action)&&id&&done.includes(id))window.location.hash="#/notes";
+    if(["trash","restore","delete"].includes(action)&&id&&done.includes(id)){rememberNote(workspace.id,null);window.location.hash="#/notes";}
     if(failed)toast.error(s.partialFailure(failed));
     return done;
   }
   async function add(markdown = "", title = "") { try { setFilter("all"); setQ(""); setTopic(""); const n = await createNote(workspace.id, { title, markdown }); void qc.invalidateQueries({ queryKey: ["notes", workspace.id] }); openNote(n.id); if (window.matchMedia("(max-width: 740px)").matches) setFocus(true); } catch (e) { toast.error(errorText(e)); } }
-  return <div className={`notes-layout ${!focus ? "notes-show-list" : ""}`}>
-    {!focus && <aside className="notes-index"><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><button className="note-icon" aria-label={s.import} title={s.import} onClick={() => input.current?.click()}><Upload size={16} /></button><button className="note-icon" title={s.selectNotes} aria-label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></button><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={16} /></button></div></header>
+  //: 导入一批 Markdown:按钮多选和拖进来是同一条路。逐篇建,一篇失败不拦后面的;建完打开最后一篇。
+  async function importFiles(files: File[]) {
+    const accepted = files.filter(isMarkdownFile);
+    if (!accepted.length) { toast.error(s.importUnsupported); return; }
+    setFilter("all"); setQ(""); setTopic("");
+    let last: Note | null = null; const failed: string[] = [];
+    for (const file of accepted) {
+      if (file.size > MARKDOWN_IMPORT_LIMIT) { failed.push(file.name); continue; }
+      try { last = await createNote(workspace.id, { title: file.name.replace(/\.[^.]+$/, ""), markdown: await file.text() }); }
+      catch { failed.push(file.name); }
+    }
+    void qc.invalidateQueries({ queryKey: ["notes", workspace.id] });
+    if (last) openNote(last.id);
+    const imported = accepted.length - failed.length;
+    if (failed.length) toast.error(s.importPartial(imported, failed));
+    else if (imported > 1) toast.success(s.imported(imported));
+  }
+  // 只拖图片/音视频时不接:那是往正文里插图(编辑器自己处理),不是导入笔记。
+  const drop = useFileDrop(files => void importFiles(files), isMarkdownFile, types => types.some(type => !/^(image|video|audio)\//.test(type)));
+  return <div className={`notes-layout ${!focus ? "notes-show-list" : ""}`} {...drop.handlers}>
+    {drop.active && <div className="notes-drop" aria-hidden="true"><span><Upload size={20} />{s.dropHint}</span></div>}
+    {!focus && <aside className="notes-index" style={{ "--notes-index-width": `${sidebar.width}px` } as React.CSSProperties}><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><button className="note-icon" aria-label={s.import} title={s.import} onClick={() => input.current?.click()}><Upload size={16} /></button><button className="note-icon" title={s.selectNotes} aria-label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></button><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={16} /></button></div></header>
       <Input aria-label={s.search} placeholder={s.search} value={q} onChange={e => setQ(e.target.value)} />
       <nav className="notes-filter">{[["all", s.all], ["favorite", s.favorite], ["trash", s.trash]].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => { setFilter(key); setTopic(""); window.location.hash = "#/notes"; }}>{label}</button>)}</nav>
       {!!topics.length && <SearchableSelect value={topic} onValueChange={setTopic} options={[{value: "", label: s.topics}, ...topics.map(t => ({value:t,label:t}))]} placeholder={s.topics} />}
       <NoteList key={`${workspace.id}:${search}:${filter}:${topic}`} notes={shown} currentId={id} selecting={selecting} onSelecting={setSelecting}
         onOpen={noteId=>{openNote(noteId);if(window.matchMedia("(max-width: 740px)").matches)setFocus(true);}}
         onAction={listAction} empty={notes.isError?<PageLoadError size="compact" icon={<BookOpen size={15} />} error={notes.error} onRetry={() => void notes.refetch()} />:notes.isPending?<p className="p-3 text-xs text-muted-foreground">{s.loading}</p>:<div className="note-empty-state"><span className="note-empty-icon">{search || topic ? <SearchX size={24} strokeWidth={1.5} /> : filter === "trash" ? <Trash2 size={24} strokeWidth={1.5} /> : filter === "favorite" ? <Star size={24} strokeWidth={1.5} /> : <BookOpen size={24} strokeWidth={1.5} />}</span><strong>{search || topic ? s.noResults : filter === "trash" ? s.trashEmpty : filter === "favorite" ? s.favoriteEmpty : s.listEmpty}</strong><p>{search || topic ? s.searchHint : filter === "trash" ? s.trashHint : filter === "favorite" ? s.favoriteHint : s.listEmptyHint}</p>{search || topic ? <Button variant="ghost" size="sm" onClick={() => { setQ(""); setTopic(""); }}>{s.clearSearch}</Button> : filter === "all" ? <Button variant="ghost" size="sm" onClick={() => void add()}><Plus size={14} />{s.new}</Button> : null}</div>} more={notes.hasNextPage&&<Button variant="ghost" onClick={()=>void notes.fetchNextPage()}>{s.more}</Button>} />
-      <input hidden ref={input} type="file" accept=".md,.markdown,.txt" onChange={e => { const file = e.target.files?.[0]; if (file) { if (file.size > 500000) toast.error("Maximum 500 KB"); else void file.text().then(text => add(text, file.name.replace(/\.[^.]+$/, ""))); } e.target.value = ""; }} />
+      <input hidden ref={input} type="file" multiple accept=".md,.markdown,.txt" onChange={e => { const files = Array.from(e.target.files || []); e.target.value = ""; if (files.length) void importFiles(files); }} />
     </aside>}
+    {!focus && <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "notes-resize")} />}
     {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} controller={controller} focus={focus} onFocus={() => setFocus(!focus)} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
   </div>;
 }
@@ -160,6 +201,13 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
   React.useEffect(() => {
     if (busy.current) return;
     const known = JSON.parse(saved.current) as Note;
+    // 服务端有了更新的一版、而这里没有没存的改动:整份跟上。此前只认「追加」这一种,于是别处
+    // 把它移进回收站、改了收藏,这里永远看不到,下一次自动保存还会拿旧修订号撞冲突。
+    if (note.revision > known.revision && JSON.stringify(latest.current) === saved.current) {
+      saved.current = JSON.stringify(note); latest.current = note; setDraft(note); setError(""); setStatus("saved");
+      localStorage.removeItem(storageKey);
+      return;
+    }
     const merged = mergeAppendedNote(known, note, latest.current);
     if (!merged) return;
     // 服务端那一版就是新的比较基准:下一次自动保存据此判断"还有没有没存的改动"。
@@ -197,17 +245,22 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
     } catch (e) { toast.error(errorText(e)); setDeleting(false); }
   }
   const [toolbarTarget, setToolbarTarget] = React.useState<HTMLDivElement | null>(null);
-  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><NoteStatusBadge status={status} label={s[status]} />
+  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
       <div className="note-header-format" ref={setToolbarTarget} />
-      <div className="note-header-actions">{(["edit", "read", "raw"] as const).map((m, i) => <button key={m} className="note-mode" aria-pressed={mode === m} onClick={() => setMode(m)}>{[s.write, s.preview, s.raw][i]}</button>)}
+      {/* 右边一组:保存状态 → 看的方式 → 收藏 → 更多。保存状态说的是「这篇文档」,和格式工具不是一类,
+          夹在收起按钮和格式工具之间时像是格式工具的一部分。 */}
+      <div className="note-header-actions"><NoteStatusBadge status={status} label={s[status]} />
+      <div className="note-modes" role="group" aria-label={s.viewMode}>{(["edit", "read", "raw"] as const).map((m, i) => <button key={m} className="note-mode" aria-pressed={mode === m} onClick={() => setMode(m)}>{[s.write, s.preview, s.raw][i]}</button>)}</div>
       <button className="note-icon" aria-label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={15} fill={draft.favorite ? "currentColor" : "none"} /></button>
-      <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><button className="note-icon" aria-label={s.actions} title={s.actions}><MoreHorizontal size={18}/></button></PopoverTrigger><PopoverContent className="note-actions-menu" align="end">
-        <button onClick={() => { setMoreOpen(false); exportMarkdown(draft); }}><Download size={16}/>{s.export}</button>
-        <button onClick={() => { setMoreOpen(false); setHistory(true); }}><History size={16}/>{s.history}</button>
-        <button onClick={() => { setMoreOpen(false); setProperties(!properties); }}><Info size={16}/>{s.source}</button>
-        <button onClick={() => { setMoreOpen(false); change({trashed: !draft.trashed}); }} className="note-trash-action">{draft.trashed ? <RotateCcw size={16}/> : <Trash2 size={16}/>} {draft.trashed ? s.restoreTrash : s.moveTrash}</button>
+      <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><button className="note-icon" aria-label={s.actions} title={s.actions}><MoreHorizontal size={18}/></button></PopoverTrigger>{/* 和笔记列表的右键菜单同一套尺寸与条目样式(components/ui/floating 的 MENU_ITEM)。 */}
+      <PopoverContent className="grid w-auto min-w-48 gap-0.5 p-1.5" align="end">
+        <button type="button" className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { setMoreOpen(false); exportMarkdown(draft); }}><Download />{s.export}</button>
+        <button type="button" className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { setMoreOpen(false); setHistory(true); }}><History />{s.history}</button>
+        <button type="button" className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { setMoreOpen(false); setProperties(!properties); }}><Info />{s.source}</button>
+        <div className={MENU_SEPARATOR} role="separator" />
+        <button type="button" className={cn(MENU_ITEM, "w-full text-left", !draft.trashed && "hover:text-destructive focus:text-destructive")} onClick={() => { setMoreOpen(false); change({trashed: !draft.trashed}); }}>{draft.trashed ? <RotateCcw /> : <Trash2 />}{draft.trashed ? s.restoreTrash : s.moveTrash}</button>
       </PopoverContent></Popover>
-    </div></header>{draft.trashed && <div className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-ui-xs text-muted-foreground"><span>{s.inTrash}</span><Button variant="ghost" size="sm" className="text-destructive" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={14} />{s.deleteForever}</Button></div>}{error && <div className="note-error-notice" role="alert"><div className="note-notice-row"><span><AlertCircle size={13} aria-hidden="true"/>{error}</span><button onClick={() => void persist()}>{s.retry}</button><button onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }).catch(e => toast.error(errorText(e))); }}>{s.reload}</button></div></div>}
+    </div></header>{draft.trashed && <div className="note-trash-notice" role="status"><div className="note-notice-row"><span>{s.inTrash}</span><span className="note-notice-actions"><button onClick={() => change({trashed: false})}><RotateCcw size={13} aria-hidden="true" />{s.restoreTrash}</button><button className="note-notice-danger" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={13} aria-hidden="true" />{s.deleteForever}</button></span></div></div>}{error && <div className="note-error-notice" role="alert"><div className="note-notice-row"><span><AlertCircle size={13} aria-hidden="true"/>{error}</span><button onClick={() => void persist()}>{s.retry}</button><button onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }).catch(e => toast.error(errorText(e))); }}>{s.reload}</button></div></div>}
     {referenceRevision&&<div className="note-reference-notice"><div className="note-notice-row"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistory(true);void loadVersion(referenceRevision);}}>{s.viewReference}</button></div></div>}
     <div className="note-body"><article className="note-paper">
       {mode === "raw" ? <><textarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onChange={e => change({title: e.target.value})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor key={mode} toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={mode === "edit" && !draft.trashed} workspaceId={note.workspace_id} noteId={note.id}

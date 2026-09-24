@@ -31,7 +31,21 @@ function carriesFiles(event: React.DragEvent): boolean {
   return types ? Array.from(types).includes("Files") : false;
 }
 
-export function useFileDrop(onFiles: (files: File[]) => void, accept?: (file: File) => boolean): FileDrop {
+/** 拖拽里各个文件的 MIME 类型。悬停时还拿不到文件名,只拿得到类型(`.md` 常常是空串)。 */
+function fileTypes(event: React.DragEvent): string[] {
+  return Array.from(event.dataTransfer?.items ?? []).filter((item) => item.kind === "file").map((item) => item.type);
+}
+
+/**
+ * @param accept 松手时留下哪些文件。
+ * @param wants  悬停时这一拖**归不归这块区域**。不归的话不亮提示,事件照常落到下面 —— 笔记页里只拖
+ *               图片时,是正文要把它插成图片,不是整页要把它导入成笔记。不传就是凡带文件都归它。
+ */
+export function useFileDrop(
+  onFiles: (files: File[]) => void,
+  accept?: (file: File) => boolean,
+  wants?: (types: string[]) => boolean,
+): FileDrop {
   const [active, setActive] = React.useState(false);
 
   return {
@@ -45,6 +59,7 @@ export function useFileDrop(onFiles: (files: File[]) => void, accept?: (file: Fi
       },
       onDragEnter: (event) => {
         if (!carriesFiles(event)) return;
+        if (wants && !wants(fileTypes(event))) return;
         event.preventDefault();
         setActive(true);
       },

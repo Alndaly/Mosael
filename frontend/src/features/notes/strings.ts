@@ -1,7 +1,7 @@
 import { usePreferences } from "@/app/preferences";
 const zh = {
   noteList: "笔记列表", selectNotes: "多选笔记", selectNote: "选择笔记", cancelSelection: "取消多选", selectVisible: "全选当前列表", selectedCount: (count:number)=>`已选 ${count} 篇`, batchActions: "批量操作",
-  openNote: "打开笔记", rename: "重命名", duplicate: "创建副本", copyLink: "复制笔记链接", unfavorite: "取消收藏", copiedLink: "已复制笔记链接", copySuffix: "副本", partialFailure: (count:number)=>`${count} 篇笔记操作失败，请重试。`,
+  openNote: "打开笔记", rename: "重命名", duplicate: "创建副本", unfavorite: "取消收藏", copySuffix: "副本", partialFailure: (count:number)=>`${count} 篇笔记操作失败，请重试。`,
   referenceVersion: (version:number)=>`引用自版本 ${version}，当前显示最新正文`, viewReference: "查看引用版本",
 
   actions: "笔记操作", close: "关闭属性",
@@ -16,7 +16,7 @@ const zh = {
   saved: "已保存", saving: "保存中…", draft: "草稿待保存", error: "保存失败，草稿已留在本机", retry: "重试保存",
   conflict: "笔记已有新版本。本机草稿已保留，请先导出草稿再载入最新版本。", reload: "载入最新版本",
   source: "来源与属性", history: "版本记录", restore: "恢复此版本", restoreTrash: "移出回收站", moveTrash: "移入回收站",
-  import: "导入 Markdown", export: "导出 Markdown", write: "编辑", preview: "阅读", raw: "Markdown",
+  import: "导入 Markdown", dropHint: "松开导入为笔记(.md / .markdown / .txt)", importUnsupported: "只能导入 .md、.markdown 或 .txt 文件", imported: (n:number)=>`已导入 ${n} 篇笔记`, importPartial: (n:number, failed:string[])=>`已导入 ${n} 篇,${failed.length} 个没导入(超过 500 KB 或读取失败):${failed.slice(0,3).join("、")}${failed.length>3?"…":""}`, viewMode: "查看方式", export: "导出 Markdown", write: "编辑", preview: "阅读", raw: "Markdown",
   content: "笔记正文", placeholder: "开始写作，或输入 @ 引用另一篇笔记…", addReference: "引用笔记",
   topicHint: "专题，用逗号分隔", tagHint: "标签，用逗号分隔", sourcesEmpty: "从素材或对话保存摘录后，可在这里回到来源。",
   saveTo: "保存到笔记", append: "追加到已有笔记", choose: "选择笔记", excerpt: "摘录", done: "已保存到笔记",
@@ -30,7 +30,7 @@ const zh = {
 type Strings = typeof zh;
 const en: Strings = {
   noteList: "Note list", selectNotes: "Select notes", selectNote: "Select note", cancelSelection: "Cancel selection", selectVisible: "Select current list", selectedCount: (count:number)=>`${count} selected`, batchActions: "Batch actions",
-  openNote: "Open note", rename: "Rename", duplicate: "Duplicate", copyLink: "Copy note link", unfavorite: "Remove favorite", copiedLink: "Note link copied", copySuffix: "Copy", partialFailure: (count:number)=>`${count} notes could not be updated. Please retry.`,
+  openNote: "Open note", rename: "Rename", duplicate: "Duplicate", unfavorite: "Remove favorite", copySuffix: "Copy", partialFailure: (count:number)=>`${count} notes could not be updated. Please retry.`,
   referenceVersion: (version:number)=>`Referenced version ${version} · Showing the latest note`, viewReference: "View referenced version",
 
   actions: "Note actions", close: "Close properties",
@@ -45,7 +45,7 @@ const en: Strings = {
   saved: "Saved", saving: "Saving…", draft: "Unsaved draft", error: "Save failed. Your draft is kept on this device.", retry: "Retry save",
   conflict: "A newer version exists. Export your local draft before loading the latest version.", reload: "Load latest",
   source: "Sources & properties", history: "Version history", restore: "Restore version", restoreTrash: "Restore from trash", moveTrash: "Move to trash",
-  import: "Import Markdown", export: "Export Markdown", write: "Edit", preview: "Read", raw: "Markdown",
+  import: "Import Markdown", dropHint: "Drop to import as notes (.md / .markdown / .txt)", importUnsupported: "Only .md, .markdown or .txt files can be imported", imported: (n:number)=>`Imported ${n} notes`, importPartial: (n:number, failed:string[])=>`Imported ${n}; ${failed.length} not imported (over 500 KB or unreadable): ${failed.slice(0,3).join(", ")}${failed.length>3?"…":""}`, viewMode: "View mode", export: "Export Markdown", write: "Edit", preview: "Read", raw: "Markdown",
   content: "Note content", placeholder: "Start writing, or type @ to reference a note…", addReference: "Reference a note",
   topicHint: "Topics, separated by commas", tagHint: "Tags, separated by commas", sourcesEmpty: "Excerpts saved from media or conversations link back to their sources here.",
   saveTo: "Save to notes", append: "Append to a note", choose: "Choose a note", excerpt: "Excerpt", done: "Saved to notes",
