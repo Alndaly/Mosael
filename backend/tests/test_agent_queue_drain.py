@@ -167,3 +167,24 @@ def test_排队的消息最终会跑起来(monkeypatch) -> None:
         time.sleep(0.2)
     assert len(prompts) == 12, f"跑起来的轮数不对(应为 12):{len(prompts)}"
     assert _queued_left() == 0, "还有消息压在队列里"
+
+
+def test_a_drain_with_nothing_queued_never_marks_the_session_running() -> None:
+    """**队列是空的,drain 就不许碰会话状态。**
+
+    此前 drain 先抢(置 running 并提交)、再看队列、空的再放回 idle:每一轮结束后都有一小段
+    「没有任何一轮在跑,会话却显示 running」—— 界面闪一下「思考中」,CI 里
+    test_turn_error_becomes_assistant_error_message 时不时正好读到这一刻。现在「空闲」和
+    「有排队的」写在同一条条件更新里:空队列根本抢不到。
+    """
+    client = fresh_client()
+    session_id = _session(client)
+    with SessionLocal() as db:
+        assert host._claim_idle_session(db, session_id, only_if_queued=True) is False
+        db.rollback()
+    assert _status(session_id) == "idle"
+
+    _queue_one(session_id)
+    with SessionLocal() as db:
+        assert host._claim_idle_session(db, session_id, only_if_queued=True) is True
+        db.rollback()

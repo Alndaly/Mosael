@@ -6,7 +6,7 @@ import math
 import threading
 import time
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, update
 from sqlalchemy.orm import Session
 
 from app.ai.sidecar.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
@@ -316,20 +316,29 @@ def unseen_since_last_success(db: Session, session: AgentSession) -> str:
 
 
 
-def _claim_idle_session(db: Session, session_id: str) -> bool:
+def _claim_idle_session(db: Session, session_id: str, *, only_if_queued: bool = False) -> bool:
     """Atomically reserve the session for exactly one direct sender or queue drain.
 
     Reading ``session.status`` and assigning it later is not a claim: another request can start a
     turn in that gap. Keep the conditional update in one shared primitive so the direct-message
     and drain paths cannot drift back to different locking rules.
+
+    ``only_if_queued``(队列 drain 用):**有排队的消息才抢**,和「是不是空闲」写在同一条条件
+    更新里。此前 drain 是先抢(置 running 并提交)、再看队列、空的再放回 idle —— 每一轮结束后
+    都有一小段「没有任何一轮在跑,会话却显示 running」:界面上闪一下「思考中」,CI 里
+    test_turn_error_becomes_assistant_error_message 时不时正好读到这一刻。先看队列再抢也不行,
+    那正是两个 drain 抢同一条消息的缝;两个条件交给数据库一步裁决,缝就没了。
     """
-    return bool(
-        db.execute(
-            update(AgentSession)
-            .where(AgentSession.id == session_id, AgentSession.status != "running")
-            .values(status="running")
-        ).rowcount
-    )
+    claim = update(AgentSession).where(AgentSession.id == session_id, AgentSession.status != "running")
+    if only_if_queued:
+        claim = claim.where(
+            exists().where(
+                AgentMessage.session_id == session_id,
+                AgentMessage.role == "user",
+                AgentMessage.payload["queued"].as_boolean().is_(True),
+            )
+        )
+    return bool(db.execute(claim.values(status="running")).rowcount)
 
 
 def post_user_message(
@@ -731,15 +740,16 @@ def _drain_queue_locked(session_id: str) -> None:
         # **先抢占,再看队列。** 「读到 idle」和「置成 running」如果不是一步,两个 drain 会同时
         # 通过检查、同时取走同一条消息、同时起一轮 —— 用户看到那条消息被回答了两遍。
         # 条件更新让数据库来裁决:rowcount 是 0 就是别人抢到了,直接让位。
-        claimed = _claim_idle_session(db, session_id)
+        claimed = _claim_idle_session(db, session_id, only_if_queued=True)
         db.commit()
         if not claimed:
             return
         db.refresh(session)
         pending = _queued_messages(db, session)
         if not pending:
-            # 抢到了却没活干:必须把 status 放回去,否则这个会话永远停在 running,
-            # 之后每一条消息都会被当成"正忙"排进一个再也不会被 drain 的队列。
+            # 抢的时候队列里还有,读的时候没了(那条刚被取消 / 被引导进了别的轮)。必须把 status
+            # 放回去,否则这个会话永远停在 running,之后每一条消息都会被当成"正忙"排进一个再也
+            # 不会被 drain 的队列。
             session.status = "idle"
             db.commit()
             return

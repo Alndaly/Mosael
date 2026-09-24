@@ -53,11 +53,24 @@ def fresh_client(username: str = "tester") -> TestClient:
     # 会写进正在重建的库,表现为:turn 内部 FOREIGN KEY 失败、迁移时 duplicate column
     # (inspect 读到的 schema 与实际不符)、或别的测试的消息串进本测试的断言里。
     # 这三种症状都是概率性的,取决于测试顺序与机器速度——正是最难查的那类失败。
-    wait_for_idle_turns()
+    #
     # 自动放行的执行线程同理:它在请求返回之后才批准并执行,底下就要 drop_all 了。
-    wait_for_idle_autopilot()
     # in-process 的 job 线程是第三类:转写/配音/导出/生成都是请求先返回、活在后面干。
-    wait_for_idle_jobs()
+    #
+    # **等不完就报错,不是默默往下走。** 三个 wait 都只等 5 秒、返回 False 表示没等完,而这里
+    # 此前不看返回值:CI 里有 Docker,沙箱执行真的在跑、也真的慢,上一个测试的线程活过 5 秒,
+    # 这边照样 drop_all —— 于是随机某个**别的**测试挂在 duplicate column / 外键上,查的人
+    # 只能从那个无辜的测试往回猜。等得久一点(60 秒),真等不完就点名是哪一类线程还活着。
+    for kind, settled in (
+        ("agent turn", lambda: wait_for_idle_turns(timeout=60)),
+        ("autopilot", lambda: wait_for_idle_autopilot(timeout=60)),
+        ("in-process job", lambda: wait_for_idle_jobs(timeout=60)),
+    ):
+        if not settled():
+            raise RuntimeError(
+                f"fresh_client: an {kind} thread from an earlier test is still running after 60s; "
+                "rebuilding the schema under it would corrupt this test's database"
+            )
     Base.metadata.drop_all(bind=engine)
     init_db()
     issue_worker_key()
