@@ -18636,10 +18636,12 @@
             "type": "array",
             "title": "Spend By User"
           },
-          "currency": {
-            "type": "string",
-            "title": "Currency",
-            "default": "USD"
+          "costs": {
+            "items": {
+              "$ref": "#/components/schemas/CostAmountOut"
+            },
+            "type": "array",
+            "title": "Costs"
           },
           "window_days": {
             "type": "integer",
@@ -22056,6 +22058,25 @@
         ],
         "title": "ConfirmationOut"
       },
+      "CostAmountOut": {
+        "properties": {
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "micros": {
+            "type": "integer",
+            "title": "Micros"
+          }
+        },
+        "type": "object",
+        "required": [
+          "currency",
+          "micros"
+        ],
+        "title": "CostAmountOut",
+        "description": "一个币种下的一笔钱(domain/usage.CostAmount)。\n\n金额的汇总**一律是这种东西的列表**,每个币种一笔:人民币和美元不相加,也不按汇率换算。\n列表顺序固定为计过价次数多的币种在前 —— 第一笔就是「主要用的那种钱」。"
+      },
       "CutClipRangeRequest": {
         "properties": {
           "src_start": {
@@ -22173,9 +22194,12 @@
             "type": "string",
             "title": "Date"
           },
-          "cost_micros": {
-            "type": "integer",
-            "title": "Cost Micros"
+          "costs": {
+            "items": {
+              "$ref": "#/components/schemas/CostAmountOut"
+            },
+            "type": "array",
+            "title": "Costs"
           },
           "events": {
             "type": "integer",
@@ -22189,12 +22213,11 @@
         "type": "object",
         "required": [
           "date",
-          "cost_micros",
           "events",
           "unknown"
         ],
         "title": "DailyUsageOut",
-        "description": "一天的供应商费用/用量。cost_micros 是已知估算费用,unknown 是未定价事件数。"
+        "description": "一天的供应商费用/用量。costs 是已知估算费用(每币种一笔),unknown 是未定价事件数。"
       },
       "DailyUsageTokensOut": {
         "properties": {
@@ -23058,27 +23081,13 @@
             "format": "date-time",
             "title": "Updated At"
           },
-          "cost_micros": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cost Micros"
-          },
-          "currency": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Currency"
+          "costs": {
+            "items": {
+              "$ref": "#/components/schemas/CostAmountOut"
+            },
+            "type": "array",
+            "title": "Costs",
+            "default": []
           },
           "cost_confidence": {
             "anyOf": [
@@ -27267,6 +27276,17 @@
             "type": "string",
             "title": "Cost Confidence"
           },
+          "unpriced_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpriced Reason"
+          },
           "pricing_rule_id": {
             "anyOf": [
               {
@@ -30491,6 +30511,40 @@
         "title": "TtsVoiceOut",
         "description": "One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the\nvoice's family, and only the listing knows it — inferring it from the id is guesswork that\nfails with an opaque 55000000."
       },
+      "UnpricedUsageOut": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "capability": {
+            "type": "string",
+            "title": "Capability"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "model",
+          "capability",
+          "events"
+        ],
+        "title": "UnpricedUsageOut",
+        "description": "一组没能定价的用量:哪家、哪个模型、哪种能力,为什么,多少次。"
+      },
       "UrlImportItem": {
         "properties": {
           "url": {
@@ -30740,10 +30794,12 @@
             "title": "Username",
             "default": ""
           },
-          "cost_micros": {
-            "type": "integer",
-            "title": "Cost Micros",
-            "default": 0
+          "costs": {
+            "items": {
+              "$ref": "#/components/schemas/CostAmountOut"
+            },
+            "type": "array",
+            "title": "Costs"
           },
           "calls": {
             "type": "integer",
@@ -31661,15 +31717,12 @@
             "type": "object",
             "title": "Publish Platforms"
           },
-          "usage_cost_micros": {
-            "type": "integer",
-            "title": "Usage Cost Micros",
-            "default": 0
-          },
-          "usage_currency": {
-            "type": "string",
-            "title": "Usage Currency",
-            "default": "USD"
+          "usage_costs": {
+            "items": {
+              "$ref": "#/components/schemas/CostAmountOut"
+            },
+            "type": "array",
+            "title": "Usage Costs"
           },
           "usage_event_count": {
             "type": "integer",
@@ -31683,8 +31736,7 @@
           },
           "usage_unpriced": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/UnpricedUsageOut"
             },
             "type": "array",
             "title": "Usage Unpriced"
@@ -31708,16 +31760,12 @@
             "type": "array",
             "title": "Usage Token Daily"
           },
-          "usage_by_capability": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Usage By Capability"
-          },
           "usage_by_provider": {
             "additionalProperties": {
-              "type": "integer"
+              "items": {
+                "$ref": "#/components/schemas/CostAmountOut"
+              },
+              "type": "array"
             },
             "type": "object",
             "title": "Usage By Provider"
@@ -31739,7 +31787,7 @@
           "publish_platforms"
         ],
         "title": "WorkspaceSummaryOut",
-        "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。\n\n**这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是\n界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的\n聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。\n\n两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,\n配套的 `usage_currency` 反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的\n连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。"
+        "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。\n\n**这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是\n界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的\n聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。\n\n两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,\n配套的币种反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的\n连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。"
       },
       "app__api__routes__browser_worker__ClaimRequest": {
         "properties": {

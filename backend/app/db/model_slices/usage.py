@@ -76,6 +76,10 @@ class ProviderUsageEvent(Base):
     cost_micros: Mapped[int | None] = mapped_column(Integer, nullable=True)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
     cost_confidence: Mapped[str] = mapped_column(String(24), nullable=False, default="unknown")
+    #: 没能定价时**为什么**。目前只有一种:`mixed_currency` —— 这次调用对上的几条规则币种不一样
+    #: (输入按人民币、输出按美元),而不同币种的钱不能相加,只好整条记成未定价。
+    #: 空 = 没有说法(定价成功,或者压根没有规则对上)。
+    unpriced_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
     pricing_rule_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("provider_pricing_rules.id", ondelete="SET NULL"), nullable=True
     )

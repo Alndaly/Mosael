@@ -283,9 +283,9 @@ def test_generation_jobs_surface_cost(tmp_path: Path) -> None:
         ids = (g1.id, g2.id, g3.id)
 
     jobs = {j["id"]: j for j in client.get(f"/api/generation/jobs?workspace_id={ws['id']}").json()}
-    assert jobs[ids[0]]["cost_micros"] == 12345 and jobs[ids[0]]["currency"] == "CNY" and jobs[ids[0]]["cost_confidence"] == "estimated"
-    assert jobs[ids[1]]["cost_micros"] is None and jobs[ids[1]]["cost_confidence"] == "unknown"
-    assert jobs[ids[2]]["cost_micros"] is None and jobs[ids[2]]["cost_confidence"] is None
+    assert jobs[ids[0]]["costs"] == [{"currency": "CNY", "micros": 12345}] and jobs[ids[0]]["cost_confidence"] == "estimated"
+    assert jobs[ids[1]]["costs"] == [] and jobs[ids[1]]["cost_confidence"] == "unknown"
+    assert jobs[ids[2]]["costs"] == [] and jobs[ids[2]]["cost_confidence"] is None
 
 
 

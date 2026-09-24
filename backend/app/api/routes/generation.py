@@ -21,7 +21,7 @@ from app.api.schemas import (
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderUsageEvent
-from app.domain import session_groups, sharing
+from app.domain import session_groups, sharing, usage
 from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
@@ -338,29 +338,29 @@ def _attach_generation_assets(db: DbSession, generations: list[GenerationJob]) -
 
 def _attach_generation_costs(db: DbSession, generations: list[GenerationJob]) -> None:
     """把各生成记录的计费(用量事件 source_type=generation_job)贴到瞬态属性上,供 GenerationJobOut 读。
-    一条生成可能有多个事件(started/succeeded…):已知费用求和;有事件但都无价则计 unknown。"""
+
+    一条生成可能有多个事件(started/succeeded…):已知费用按币种各自求和(usage.costs_by_currency,
+    人民币和美元不相加);有事件但都无价则计 unknown。
+    """
     ids = [g.id for g in generations]
     if not ids:
         return
-    events = db.scalars(
-        select(ProviderUsageEvent).where(
-            ProviderUsageEvent.source_type == "generation_job", ProviderUsageEvent.source_id.in_(ids)
+    scope = (ProviderUsageEvent.source_type == "generation_job", ProviderUsageEvent.source_id.in_(ids))
+    costs = usage.costs_by_currency(db, *scope, group_by=(ProviderUsageEvent.source_id,))
+    # 置信度取计过价的那几条的(它们同出一处估算);一条都没计上价的就是 unknown。
+    confidence: dict[str, str] = {}
+    for source_id, cost_micros, cost_confidence in db.execute(
+        select(ProviderUsageEvent.source_id, ProviderUsageEvent.cost_micros, ProviderUsageEvent.cost_confidence).where(
+            *scope
         )
-    ).all()
-    by_gen: dict[str, list[ProviderUsageEvent]] = {}
-    for ev in events:
-        by_gen.setdefault(ev.source_id, []).append(ev)
+    ).all():
+        if cost_micros is not None:
+            confidence[source_id] = cost_confidence
+        else:
+            confidence.setdefault(source_id, "unknown")
     for gen in generations:
-        evs = by_gen.get(gen.id, [])
-        known = [e for e in evs if e.cost_micros is not None]
-        if known:
-            gen.cost_micros = sum(int(e.cost_micros) for e in known)  # type: ignore[attr-defined]
-            gen.currency = known[0].currency  # type: ignore[attr-defined]
-            gen.cost_confidence = known[0].cost_confidence  # type: ignore[attr-defined]
-        elif evs:
-            gen.cost_micros = None  # type: ignore[attr-defined]
-            gen.currency = evs[0].currency  # type: ignore[attr-defined]
-            gen.cost_confidence = "unknown"  # type: ignore[attr-defined]
+        gen.costs = costs.get((gen.id,), [])  # type: ignore[attr-defined]
+        gen.cost_confidence = confidence.get(gen.id)  # type: ignore[attr-defined]
 
 
 def _require_generation_session(db: DbSession, user: CurrentUser, session_id: str, *, perm: str | None = None) -> GenerationSession:

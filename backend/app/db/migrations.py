@@ -2569,6 +2569,17 @@ def _migrate_browser_profile_start_url() -> None:
             conn.execute(text("ALTER TABLE browser_profiles ADD COLUMN start_url VARCHAR(2000)"))
 
 
+def _migrate_usage_unpriced_reason() -> None:
+    """用量事件记下「为什么没能定价」(见 ProviderUsageEvent.unpriced_reason)。
+
+    老事件留空 —— 它们当时没问过这个问题,也补不出来。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_usage_events)"))}
+        if columns and "unpriced_reason" not in columns:
+            conn.execute(text("ALTER TABLE provider_usage_events ADD COLUMN unpriced_reason VARCHAR(40)"))
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -2670,6 +2681,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_clip_offline_asset,
                 _migrate_model_structured_output,
                 _migrate_browser_profile_start_url,
+                _migrate_usage_unpriced_reason,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
             ),

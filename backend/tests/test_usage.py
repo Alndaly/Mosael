@@ -155,7 +155,7 @@ def test_workspace_summary_includes_usage_rollup() -> None:
         db.commit()
 
     summary = client.get(f"/api/workspaces/{ws}/summary").json()
-    assert summary["usage_cost_micros"] == 120_000
+    assert summary["usage_costs"] == [{"currency": "USD", "micros": 120_000}]
     assert summary["usage_event_count"] == 2
     assert summary["usage_unknown_cost_events"] == 1
     # 总时长与总 token 曾经也在这个回包里 —— 界面一次都没读过,已随另外三个一起删
@@ -169,8 +169,9 @@ def test_workspace_summary_includes_usage_rollup() -> None:
         "cache_write_tokens": 0,
         "total_tokens": 205,
     }
-    assert summary["usage_by_capability"] == {"image": 120_000, "video": 0}
-    assert summary["usage_by_provider"] == {"bytedance": 0, "openai-compatible": 120_000}
+    assert summary["usage_daily"][-1]["costs"] == [{"currency": "USD", "micros": 120_000}]
+    # 只列计过价的供应商:bytedance 那条没价,它不是"花了 0",是不知道花了多少。
+    assert summary["usage_by_provider"] == {"openai-compatible": [{"currency": "USD", "micros": 120_000}]}
 
 
 def test_summarize_usage_scopes_to_workspace() -> None:
@@ -193,7 +194,7 @@ def test_summarize_usage_scopes_to_workspace() -> None:
         db.commit()
         summary = summarize_usage(db, workspace_id=ws)
 
-    assert summary.total_cost_micros == 0
+    assert summary.costs == []
     assert summary.event_count == 0
 
 

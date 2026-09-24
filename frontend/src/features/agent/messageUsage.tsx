@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { SpeakButton } from "@/features/agent/SpeakButton";
 import { usePreferences } from "@/app/preferences";
+import { formatCosts, sumByCurrency, type CostAmount } from "@/lib/money";
 import { formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,8 @@ export type AgentUsageEvent = {
   cost_micros: number | null;
   currency: string;
   cost_confidence: string;
+  /** 没能定价的原因:`mixed_currency` = 对上的几条规则币种不一致(后端不把两种钱相加)。 */
+  unpriced_reason?: string | null;
 };
 
 function numberUnit(value: unknown): number | null {
@@ -63,7 +66,8 @@ export function summarizeMessageUsage(events: AgentUsageEvent[]) {
   let durationSeconds = 0;
   let hasDuration = false;
   let unknownCostEvents = 0;
-  const costByCurrency = new Map<string, number>();
+  let mixedCurrencyEvents = 0;
+  const priced: CostAmount[] = [];
 
   for (const event of events) {
     const units = event.units ?? {};
@@ -78,10 +82,10 @@ export function summarizeMessageUsage(events: AgentUsageEvent[]) {
       hasDuration = true;
     }
     if (typeof event.cost_micros === "number") {
-      const currency = event.currency || "USD";
-      costByCurrency.set(currency, (costByCurrency.get(currency) ?? 0) + event.cost_micros);
+      priced.push({ currency: event.currency || "USD", micros: event.cost_micros });
     } else {
       unknownCostEvents += 1;
+      if (event.unpriced_reason === "mixed_currency") mixedCurrencyEvents += 1;
     }
   }
 
@@ -90,8 +94,10 @@ export function summarizeMessageUsage(events: AgentUsageEvent[]) {
     outputTokens: Math.round(outputTokens),
     totalTokens: Math.round(totalTokens),
     durationSeconds: hasDuration ? durationSeconds : null,
-    costByCurrency,
+    /** 每个币种一笔,不相加(见 lib/money)。 */
+    costs: sumByCurrency(priced),
     unknownCostEvents,
+    mixedCurrencyEvents,
   };
 }
 
@@ -99,25 +105,14 @@ function formatTokenCount(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
 }
 
-export function formatCostMicros(currency: string, micros: number): string {
-  const amount = micros / 1_000_000;
-  const symbol = currency === "USD" ? "$" : currency === "CNY" ? "¥" : "";
-  const precision = amount > 0 && amount < 0.01 ? 6 : 4;
-  const value = new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: amount === 0 ? 0 : 2,
-    maximumFractionDigits: precision,
-  }).format(amount);
-  return symbol ? `${symbol}${value}` : `${value} ${currency}`;
-}
-
-function formatUsageCost(events: ReturnType<typeof summarizeMessageUsage>, t: ReturnType<typeof useI18n>): string | null {
-  const known = [...events.costByCurrency.entries()].filter(([, value]) => value >= 0);
-  if (known.length > 0) {
-    return t("usageCost").replace(
-      "{cost}",
-      known.map(([currency, micros]) => formatCostMicros(currency, micros)).join(" + "),
-    );
-  }
+function formatUsageCost(
+  events: ReturnType<typeof summarizeMessageUsage>,
+  t: ReturnType<typeof useI18n>,
+  locale: string,
+): string | null {
+  if (events.costs.length > 0) return t("usageCost").replace("{cost}", formatCosts(events.costs, locale));
+  // 规则配了、只是币种不一致 —— 说「未定价」会让人以为没配,说清是哪一种没定上。
+  if (events.mixedCurrencyEvents > 0) return t("usageCostMixedCurrency");
   return events.unknownCostEvents > 0 ? t("usageCostUnknown") : null;
 }
 
@@ -207,6 +202,7 @@ export function MessageUsageFooter({
   className?: string;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const usage = summarizeMessageUsage(usageEvents);
   const duration = durationOverride ?? usage.durationSeconds;
   const tokenLabel = usage.totalTokens > 0 ? t("usageTokens").replace("{n}", formatTokenCount(usage.totalTokens)) : null;
@@ -214,7 +210,7 @@ export function MessageUsageFooter({
     usage.inputTokens > 0 || usage.outputTokens > 0
       ? `${t("homeLegendInputTokens")} ${formatTokenCount(usage.inputTokens)} · ${t("homeLegendOutputTokens")} ${formatTokenCount(usage.outputTokens)}`
       : undefined;
-  const costLabel = formatUsageCost(usage, t);
+  const costLabel = formatUsageCost(usage, t, locale);
 
   return (
     <MessageFooter content={content} className={className}>

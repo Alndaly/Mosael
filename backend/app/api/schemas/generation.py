@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel
 from app.api.schemas.jobs import JobOut
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 
@@ -92,10 +92,10 @@ class GenerationJobOut(OrmModel):
     result_asset_ids: list[str] = []
     created_at: datetime
     updated_at: datetime
-    # 计费:取自本次生成记录的用量事件(source_type=generation_job)。cost_micros 为已知估算费用;
-    # 有事件但无定价规则时 cost_confidence=unknown、cost_micros 为空(前端显示「未定价」)。
-    cost_micros: int | None = None
-    currency: str | None = None
+    # 计费:取自本次生成记录的用量事件(source_type=generation_job)。costs 为已知估算费用,
+    # 每个币种一笔(人民币和美元不相加);有事件但无定价规则时 cost_confidence=unknown、costs 为空
+    # (前端显示「未定价」);没有事件时两者都空。
+    costs: list[CostAmountOut] = []
     cost_confidence: str | None = None
 
 

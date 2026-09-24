@@ -15,7 +15,7 @@ from app.api.schemas import (
     UserSpendPoint,
 )
 from app.domain.permissions import ensure_deployment_admin
-from app.domain import deployment, members
+from app.domain import deployment, members, usage
 from app.db.models import (
     Asset,
     AuthSession,
@@ -138,38 +138,45 @@ def overview(db: DbSession, user: CurrentUser) -> AdminOverviewOut:
         ).all()
     ]
     # 用量事件记的是"哪次调用花了多少",归属在 job 上 —— 顺着 job.created_by 就知道是谁花的。
-    spend = [
-        UserSpendPoint(
-            user_id=str(user_id or ""),
-            username=str(username or ""),
-            cost_micros=int(cost or 0),
-            calls=int(calls or 0),
-        )
-        for user_id, username, cost, calls in db.execute(
-            select(
-                Job.created_by,
-                User.username,
-                func.sum(ProviderUsageEvent.cost_micros),
-                func.count(),
-            )
+    in_window = ProviderUsageEvent.created_at >= since
+    through_job = ((Job, Job.id == ProviderUsageEvent.job_id),)
+    calls = {
+        user_id: (str(username or ""), int(count_ or 0))
+        for user_id, username, count_ in db.execute(
+            select(Job.created_by, User.username, func.count())
             .select_from(ProviderUsageEvent)
             .join(Job, Job.id == ProviderUsageEvent.job_id)
             .join(User, User.id == Job.created_by, isouter=True)
-            .where(ProviderUsageEvent.created_at >= since)
+            .where(in_window)
             .group_by(Job.created_by, User.username)
-            .order_by(func.sum(ProviderUsageEvent.cost_micros).desc())
-            .limit(20)
         ).all()
-    ]
-    # 币种取这段窗口里最近一条**计过价**的事件 —— 和工作区概览同一判据(domain/usage)。
-    currency = db.scalar(
-        select(ProviderUsageEvent.currency)
-        .where(ProviderUsageEvent.created_at >= since, ProviderUsageEvent.cost_micros.is_not(None))
-        .order_by(ProviderUsageEvent.created_at.desc())
-        .limit(1)
+    }
+    spent = usage.costs_by_currency(db, in_window, group_by=(Job.created_by,), join=through_job)
+    totals = usage.costs_by_currency(db, in_window).get((), [])
+    # **排序不把各币种加起来比。**按这台部署的主要币种(计过价次数最多的那种)上的金额排,
+    # 再按调用次数 —— 单币种部署(绝大多数)里这就是"谁花得最多";混着两种钱时,另一种钱花得多
+    # 的人排在后面,但他的那笔照样原样列出来,不会被换算或吞掉。
+    primary = totals[0].currency if totals else ""
+
+    def primary_micros(costs: list[usage.CostAmount]) -> int:
+        return next((amount.micros for amount in costs if amount.currency == primary), 0)
+
+    ranked = sorted(
+        calls.items(),
+        key=lambda item: (primary_micros(spent.get((item[0],), [])), item[1][1]),
+        reverse=True,
     )
+    spend = [
+        UserSpendPoint(
+            user_id=str(user_id or ""),
+            username=username,
+            costs=spent.get((user_id,), []),
+            calls=count_,
+        )
+        for user_id, (username, count_) in ranked[:20]
+    ]
     return AdminOverviewOut(
-        currency=currency or "USD",
+        costs=totals,
         users=db.scalar(select(func.count()).select_from(User)) or 0,
         active_users_7d=int(active or 0),
         workspaces=db.scalar(select(func.count()).select_from(Workspace)) or 0,

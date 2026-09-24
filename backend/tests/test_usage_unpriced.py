@@ -71,4 +71,4 @@ def test_a_model_without_a_name_still_gets_reported() -> None:
         db.commit()
         summary = summarize_usage(db, workspace_id=workspace_id, days=14)
 
-    assert summary.unpriced == [{"provider": "edge", "model": "", "capability": "tts", "events": 1}]
+    assert summary.unpriced == [{"provider": "edge", "model": "", "capability": "tts", "reason": "", "events": 1}]

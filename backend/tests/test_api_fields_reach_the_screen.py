@@ -124,7 +124,7 @@ def test_扫描面站得住() -> None:
     """前端源码读空了的话,下面那条断言天然成立。"""
     source = _frontend_source()
     assert len(source) > 500_000, f"只读到 {len(source)} 字节前端源码 —— 目录结构变了?"
-    assert "usage_cost_micros" in source, "连首页那个字段都搜不到,扫描面坏了"
+    assert "usage_costs" in source, "连首页那个字段都搜不到,扫描面坏了"
 
 
 def test_交出去的每个字段都有人读() -> None:

@@ -9,12 +9,12 @@ schema 按领域切在这个包下的各个文件里,这里只把它们收到一
 
 from __future__ import annotations
 
-from app.api.schemas.base import ApiModel, OrmModel  # noqa: F401
+from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel  # noqa: F401
 from app.api.schemas.agent import AgentCompactOut, AgentContextOut, AgentContextPart, AgentManifestOut, AgentMemoryCreate, AgentMemoryOut, AgentMemoryUpdate, AgentMessageCreate, AgentMessageOut, AgentPendingView, AgentPlanUpdate, AgentQuestionAnswer, AgentQuestionCreate, AgentQuestionItem, AgentQuestionOption, AgentQuestionOut, AgentReferenceIn, AgentSessionCreate, AgentSessionOut, AgentSessionUpdate, AgentSkillOut, AgentStreamEvent, ConfirmationCreate, ConfirmationOut, SessionGroupCreate, SessionGroupOut, SessionGroupUpdate  # noqa: F401
 from app.api.schemas.boards import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite  # noqa: F401
 from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOpened, BrowserProfileOut, BrowserProfileUpdate  # noqa: F401
 from app.api.schemas.collaboration import ActivityOut, ActorOut, CanvasCommentAnchor, CommentAnchorUpdate, CommentContentUpdate, CommentCreate, CommentOut  # noqa: F401
-from app.api.schemas.dashboard import AdminOverviewOut, DailyActivityOut, DailyPublishOut, DailyUsageOut, DailyUsageTokensOut, DaySeriesPoint, UserSpendPoint, WorkspaceSummaryOut  # noqa: F401
+from app.api.schemas.dashboard import AdminOverviewOut, DailyActivityOut, DailyPublishOut, DailyUsageOut, DailyUsageTokensOut, DaySeriesPoint, UnpricedUsageOut, UserSpendPoint, WorkspaceSummaryOut  # noqa: F401
 from app.api.schemas.feishu import FeishuBindCodeOut, FeishuBindingOut, FeishuBotCreate, FeishuBotOut, FeishuBotUpdate, FeishuOnboardingOut  # noqa: F401
 from app.api.schemas.generation import GenerationCreate, GenerationCreateResponse, GenerationJobOut, GenerationModelOut, GenerationOptionOut, GenerationSessionCreate, GenerationSessionOut, GenerationSessionUpdate, PromptOptimizeRequest, PromptOptimizeResponse, SourceAssetRef  # noqa: F401
 from app.api.schemas.identity import AdminUserOut, AuthCredentials, AuthOut, BootstrapOut, DeploymentAdminUpdate, InvitationListOut, InvitationOut, InviteCreate, InviteMemberRequest, MembersOut, PasswordUpdate, RegisterCredentials, RenameRequest, SetRoleRequest, UserOut, UserProfileUpdate, WorkspaceCreate, WorkspaceMemberOut, WorkspaceOut  # noqa: F401

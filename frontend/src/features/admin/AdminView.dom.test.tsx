@@ -17,16 +17,17 @@ import { expect, it, vi } from "vitest";
  */
 
 const t = (key: string) => key;
-vi.mock("@/app/preferences", () => ({ useI18n: () => t }));
+vi.mock("@/app/preferences", () => ({ useI18n: () => t, usePreferences: () => ({ locale: "en-US" }) }));
 vi.mock("./AdminActivityChart", () => ({ AdminActivityChart: () => null }));
 vi.mock("./RegistrationSection", () => ({ RegistrationSection: () => null }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 const rows: Array<Record<string, unknown>> = [];
+let overview: Record<string, unknown> = { spend_by_user: [], activity: [] };
 vi.mock("@/api/client", () => ({
   api: (path: string) => {
     if (path === "/api/admin/users") return Promise.resolve(rows);
-    return Promise.resolve({ spend_by_user: [], activity: [] });
+    return Promise.resolve(overview);
   },
 }));
 
@@ -70,4 +71,28 @@ it("老客户端报不上来时说「未知」,不编一个号", async () => {
   show([{ ...base, client_surface: "", client_version: "" }]);
 
   expect(await screen.findByText("adminUnknownVersion")).toBeInTheDocument();
+});
+
+
+// 人民币和美元**不相加**:每个人各币种各写一笔;条形按主要币种(costs 第一笔)量。
+it("按人分的花费每个币种各写一笔,条形只按主要币种量", async () => {
+  overview = {
+    costs: [{ currency: "CNY", micros: 32_000_000 }, { currency: "USD", micros: 4_500_000 }],
+    spend_by_user: [
+      { user_id: "u2", username: "mate", calls: 1, costs: [{ currency: "CNY", micros: 20_000_000 }] },
+      {
+        user_id: "u1",
+        username: "demo",
+        calls: 2,
+        costs: [{ currency: "CNY", micros: 12_000_000 }, { currency: "USD", micros: 4_500_000 }],
+      },
+    ],
+  };
+  show([]);
+  expect(await screen.findByText("CN¥12.00 + $4.50 · 2")).toBeInTheDocument();
+  expect(screen.getByText("CN¥20.00 · 1")).toBeInTheDocument();
+  expect(screen.queryByText(/16\.5/)).not.toBeInTheDocument();
+  // 混着两种钱时,说清条形按哪种量、合计是多少(各币种一笔)。
+  expect(screen.getByText("adminSpendCurrencyHint")).toBeInTheDocument();
+  overview = { spend_by_user: [], activity: [] };
 });

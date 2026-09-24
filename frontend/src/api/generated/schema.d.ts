@@ -6242,11 +6242,8 @@ export interface components {
             jobs_by_day?: components["schemas"]["DaySeriesPoint"][];
             /** Spend By User */
             spend_by_user?: components["schemas"]["UserSpendPoint"][];
-            /**
-             * Currency
-             * @default USD
-             */
-            currency: string;
+            /** Costs */
+            costs?: components["schemas"]["CostAmountOut"][];
             /**
              * Window Days
              * @default 30
@@ -7756,6 +7753,19 @@ export interface components {
             /** Resolved At */
             resolved_at: string | null;
         };
+        /**
+         * CostAmountOut
+         * @description 一个币种下的一笔钱(domain/usage.CostAmount)。
+         *
+         *     金额的汇总**一律是这种东西的列表**,每个币种一笔:人民币和美元不相加,也不按汇率换算。
+         *     列表顺序固定为计过价次数多的币种在前 —— 第一笔就是「主要用的那种钱」。
+         */
+        CostAmountOut: {
+            /** Currency */
+            currency: string;
+            /** Micros */
+            micros: number;
+        };
         /** CutClipRangeRequest */
         CutClipRangeRequest: {
             /** Src Start */
@@ -7806,13 +7816,13 @@ export interface components {
         };
         /**
          * DailyUsageOut
-         * @description 一天的供应商费用/用量。cost_micros 是已知估算费用,unknown 是未定价事件数。
+         * @description 一天的供应商费用/用量。costs 是已知估算费用(每币种一笔),unknown 是未定价事件数。
          */
         DailyUsageOut: {
             /** Date */
             date: string;
-            /** Cost Micros */
-            cost_micros: number;
+            /** Costs */
+            costs?: components["schemas"]["CostAmountOut"][];
             /** Events */
             events: number;
             /** Unknown */
@@ -8205,10 +8215,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-            /** Cost Micros */
-            cost_micros?: number | null;
-            /** Currency */
-            currency?: string | null;
+            /**
+             * Costs
+             * @default []
+             */
+            costs: components["schemas"]["CostAmountOut"][];
             /** Cost Confidence */
             cost_confidence?: string | null;
         };
@@ -10082,6 +10093,8 @@ export interface components {
             currency: string;
             /** Cost Confidence */
             cost_confidence: string;
+            /** Unpriced Reason */
+            unpriced_reason?: string | null;
             /** Pricing Rule Id */
             pricing_rule_id?: string | null;
             /**
@@ -11617,6 +11630,25 @@ export interface components {
              */
             resource_id: string;
         };
+        /**
+         * UnpricedUsageOut
+         * @description 一组没能定价的用量:哪家、哪个模型、哪种能力,为什么,多少次。
+         */
+        UnpricedUsageOut: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Capability */
+            capability: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Events */
+            events: number;
+        };
         /** UrlImportItem */
         UrlImportItem: {
             /** Url */
@@ -11739,11 +11771,8 @@ export interface components {
              * @default
              */
             username: string;
-            /**
-             * Cost Micros
-             * @default 0
-             */
-            cost_micros: number;
+            /** Costs */
+            costs?: components["schemas"]["CostAmountOut"][];
             /**
              * Calls
              * @default 0
@@ -12158,7 +12187,7 @@ export interface components {
          *     聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。
          *
          *     两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,
-         *     配套的 `usage_currency` 反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的
+         *     配套的币种反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的
          *     连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。
          */
         WorkspaceSummaryOut: {
@@ -12190,16 +12219,8 @@ export interface components {
             publish_platforms: {
                 [key: string]: number;
             };
-            /**
-             * Usage Cost Micros
-             * @default 0
-             */
-            usage_cost_micros: number;
-            /**
-             * Usage Currency
-             * @default USD
-             */
-            usage_currency: string;
+            /** Usage Costs */
+            usage_costs?: components["schemas"]["CostAmountOut"][];
             /**
              * Usage Event Count
              * @default 0
@@ -12211,9 +12232,7 @@ export interface components {
              */
             usage_unknown_cost_events: number;
             /** Usage Unpriced */
-            usage_unpriced?: {
-                [key: string]: unknown;
-            }[];
+            usage_unpriced?: components["schemas"]["UnpricedUsageOut"][];
             /**
              * Usage Cache Hit Ratio
              * @default 0
@@ -12223,13 +12242,9 @@ export interface components {
             usage_daily?: components["schemas"]["DailyUsageOut"][];
             /** Usage Token Daily */
             usage_token_daily?: components["schemas"]["DailyUsageTokensOut"][];
-            /** Usage By Capability */
-            usage_by_capability?: {
-                [key: string]: number;
-            };
             /** Usage By Provider */
             usage_by_provider?: {
-                [key: string]: number;
+                [key: string]: components["schemas"]["CostAmountOut"][];
             };
         };
         /** ClaimRequest */

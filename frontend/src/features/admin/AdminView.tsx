@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/app/modals";
@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { AdminActivityChart } from "./AdminActivityChart";
 import { RegistrationSection } from "./RegistrationSection";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { formatMicros } from "@/lib/money";
+import { formatCosts, microsIn } from "@/lib/money";
 import { SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { relativeTime } from "@/lib/time";
 
@@ -42,6 +42,7 @@ const SURFACE_LABEL = { "browser-extension": "adminSurfaceExtension" } as const;
 
 export function AdminView() {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
   const overview = useQuery({ queryKey: ["admin-overview"], queryFn: () => api<Overview>("/api/admin/overview") });
   const users = useQuery({ queryKey: ["admin-users"], queryFn: () => api<AdminUser[]>("/api/admin/users") });
@@ -70,7 +71,11 @@ export function AdminView() {
 
   const stats = overview.data;
   const admins = (users.data ?? []).filter((row) => row.is_deployment_admin).length;
-  const spend = (stats?.spend_by_user ?? []).filter((row) => row.cost_micros > 0);
+  const spend = (stats?.spend_by_user ?? []).filter((row) => (row.costs ?? []).some((cost) => cost.micros > 0));
+  // 条形只能按一种钱量:取这台部署的主要币种(后端把它排在 costs 第一笔,也按它给人排序)。
+  // 其他币种的钱照原样写在旁边 —— 不换算、不相加。
+  const primaryCurrency = stats?.costs?.[0]?.currency ?? "";
+  const primaryMax = Math.max(0, ...spend.map((row) => microsIn(row.costs, primaryCurrency)));
 
   return (
     <div className="grid h-full min-h-0 content-start gap-7 overflow-y-auto px-6 py-7 xl:px-9 xl:py-8 [&_[data-slot=settings-group-title]]:text-ui-md [&_[data-slot=settings-group-description]]:text-ui-sm">
@@ -112,16 +117,23 @@ export function AdminView() {
                 {/* 金额**不设固定宽、不换行**:此前 w-24 装不下「0.0007 USD · 6」,
                     调用次数被挤到第二行(真机截图)。 */}
                 <span className="whitespace-nowrap text-right text-ui-xs tabular-nums text-muted-foreground">
-                  {formatMicros(row.cost_micros, stats?.currency ?? "USD")} · {row.calls}
+                  {formatCosts(row.costs, locale)} · {row.calls}
                 </span>
                 <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-secondary">
                   <span
                     className="block h-full rounded-full bg-primary"
-                    style={{ width: `${Math.max(2, (row.cost_micros / (spend[0]?.cost_micros || 1)) * 100)}%` }}
+                    style={{ width: `${Math.max(2, (microsIn(row.costs, primaryCurrency) / (primaryMax || 1)) * 100)}%` }}
                   />
                 </span>
               </li>
             ))}
+            {(stats?.costs ?? []).length > 1 && (
+              <li className="text-ui-xs text-muted-foreground">
+                {t("adminSpendCurrencyHint")
+                  .replace("{currency}", primaryCurrency)
+                  .replace("{total}", formatCosts(stats?.costs, locale))}
+              </li>
+            )}
           </ul>
         )}
       </SettingsGroup>

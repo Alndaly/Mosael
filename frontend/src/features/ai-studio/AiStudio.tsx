@@ -53,7 +53,8 @@ import { generationSessionSelectionKey } from "@/features/agent/sessionSelection
 import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/features/ai-studio/parameterPanel";
 import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
-import { MessageFooter, MessageTime, formatCostMicros } from "@/features/agent/messageUsage";
+import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
+import { formatCosts } from "@/lib/money";
 import {
   aspectRatioOptions,
   booleanParameterKeys,
@@ -1231,6 +1232,7 @@ function GenerationTurn({
   gallery?: Array<{ src: string; title?: string }>;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const { openImagePreview } = useImagePreview();
   // job 行可能已被任务中心「清空已完成」删掉(记录长存、job_id 置空):
   // 有产物即成功、无产物即失败;仅当 job_id 还在而列表未拉到时才视作排队中。
@@ -1258,10 +1260,11 @@ function GenerationTurn({
     typeof durationSeconds === "number"
       ? t(isRunning ? "usageRunning" : "usageDuration").replace("{t}", formatElapsedSeconds(durationSeconds))
       : "";
-  // 计费:与对话页同一套格式化(见 messageUsage)。有已知费用显示金额;有事件但无定价显示「未定价」。
+  // 计费:与对话页同一套格式化(lib/money)。有已知费用显示金额 —— 每个币种一笔,不相加;
+  // 有事件但无定价显示「未定价」。
   const costLabel =
-    typeof generation.cost_micros === "number" && generation.currency
-      ? t("usageCost").replace("{cost}", formatCostMicros(generation.currency, generation.cost_micros))
+    (generation.costs ?? []).length > 0
+      ? t("usageCost").replace("{cost}", formatCosts(generation.costs, locale))
       : generation.cost_confidence === "unknown"
         ? t("usageCostUnknown")
         : "";

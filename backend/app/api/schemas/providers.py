@@ -405,6 +405,8 @@ class ProviderUsageEventOut(OrmModel):
     cost_micros: int | None = None
     currency: str
     cost_confidence: str
+    #: 没能定价的原因(目前只有 `mixed_currency`:对上的规则币种不一致)。见 ProviderUsageEvent。
+    unpriced_reason: str | None = None
     pricing_rule_id: str | None = None
     created_at: datetime
 

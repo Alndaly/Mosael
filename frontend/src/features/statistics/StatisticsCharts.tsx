@@ -4,9 +4,11 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis } from "rechar
 
 import type { WorkspaceSummary } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { formatMicros } from "@/lib/money";
+import { formatMoney, microsIn, type CostAmount } from "@/lib/money";
+import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import type { MessageKey } from "@/app/messages";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import {
   ChartContainer,
   ChartLegend,
@@ -86,6 +88,71 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
   );
 }
 
+/**
+ * 费用这一格:标题行(多币种时带一个币种切换)+ 逐日费用图 + 按供应商分摊。
+ *
+ * **一张图只画一种钱。**人民币和美元不能叠在同一根柱子上,也不能共用一条纵轴 —— ¥7 和 $1
+ * 画成一样高是错的,画成七倍高也是错的。所以多币种时一次看一种,标题行上切换;默认是
+ * 主要币种(后端把计过价次数最多的那种排在 costs 第一笔)。图和下面的供应商分摊跟着同一个
+ * 选择走,不然柱子是美元、分摊是人民币,两块对不上。
+ */
+export function UsageCostPanel({
+  title,
+  daily,
+  costs,
+  unknown,
+  unpriced,
+  byProvider,
+}: {
+  title: string;
+  daily: WorkspaceSummary["usage_daily"];
+  /** 整段时间的花费,每币种一笔,主要币种在前。 */
+  costs: readonly CostAmount[];
+  unknown: number;
+  unpriced?: WorkspaceSummary["usage_unpriced"];
+  byProvider: WorkspaceSummary["usage_by_provider"];
+}) {
+  const t = useI18n();
+  const currencies = costs.map((cost) => cost.currency);
+  const [picked, setPicked] = React.useState<string | null>(null);
+  // 每 5 秒刷新一次:选中的币种在新回包里没了(不会常见),就回到主要币种。
+  const currency = picked && currencies.includes(picked) ? picked : (currencies[0] ?? "");
+
+  return (
+    <>
+      <h2 className="m-0 flex items-center justify-between gap-2 text-ui-sm font-semibold text-foreground">
+        {title}
+        {currencies.length > 1 && (
+          <span
+            className={cn(SEGMENTED_LIST, "min-h-0 p-0.5")}
+            role="radiogroup"
+            aria-label={t("homeChartUsageCurrency")}
+            title={t("homeChartUsageCurrencyHint")}
+          >
+            {currencies.map((code) => (
+              <button
+                key={code}
+                type="button"
+                role="radio"
+                aria-checked={code === currency}
+                className={cn(segmentedTriggerClass(code === currency), "min-h-6 px-2 text-ui-xs")}
+                onClick={() => setPicked(code)}
+              >
+                {code}
+              </button>
+            ))}
+          </span>
+        )}
+      </h2>
+      <UsageCostChart daily={daily} currency={currency} unknown={unknown} unpriced={unpriced} />
+      {/* 看完总额之后的下一个问题就是"钱花在谁身上" —— 这份分摊后端一直在算,
+          只是没人读(见前端审计 2.2)。 */}
+      <UsageByProvider byProvider={byProvider} currency={currency} />
+      {currencies.length > 1 && <p className="m-0 text-ui-2xs text-muted-foreground">{t("homeChartUsageCurrencyHint")}</p>}
+    </>
+  );
+}
+
 export function UsageCostChart({
   daily,
   currency,
@@ -93,22 +160,28 @@ export function UsageCostChart({
   unpriced,
 }: {
   daily: WorkspaceSummary["usage_daily"];
+  /** 画哪一种钱。空串 = 这段时间一笔都没计上价。 */
   currency: string;
   unknown: number;
   /** 没能定价的「供应商 + 模型」及次数,由后端聚合(见 domain/usage.summarize_usage)。 */
   unpriced?: WorkspaceSummary["usage_unpriced"];
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const rows = daily ?? [];
   const totalEvents = rows.reduce((sum, day) => sum + day.events, 0);
-  const maxCost = Math.max(0, ...rows.map((day) => day.cost_micros));
+  const maxCost = Math.max(0, ...rows.map((day) => microsIn(day.costs, currency)));
   if (totalEvents === 0) {
     return <EmptyState size="compact" icon={<Coins size={15} />} title={t("homeChartEmptyUsage")} />;
   }
   if (maxCost === 0 && unknown > 0) {
     // **说清缺的是哪个模型的价**,而不是笼统一句「暂无价格规则」——用户配了九条规则却被这么告知,
     // 只会以为功能坏了。真相通常是"这个模型没配":规则挂在别的档案 / 别的模型上。
-    const missing = (unpriced ?? []).slice(0, 3).map((row) => row.model || row.provider || "?");
+    // 规则配了、只是币种不一致的那几个,单独注明 —— 对它们说「缺价」同样是错的。
+    const missing = (unpriced ?? []).slice(0, 3).map((row) => {
+      const name = row.model || row.provider || "?";
+      return row.reason === "mixed_currency" ? t("homeChartUsageMixedCurrency").replace("{model}", name) : name;
+    });
     return (
       <EmptyState
         size="compact"
@@ -139,11 +212,9 @@ export function UsageCostChart({
   const config: ChartConfig = {
     cost: { ...usageConfigBase.cost, label: t("homeLegendCost") },
   };
-  const data = rows.map((day) => ({ ...day, day: day.date.slice(5), cost: day.cost_micros }));
-  const maxLabel =
-    unknown > 0
-      ? `${formatMicros(maxCost, currency)} · ${t("homeLegendUnpriced")} ${unknown}`
-      : formatMicros(maxCost, currency);
+  const data = rows.map((day) => ({ ...day, day: day.date.slice(5), cost: microsIn(day.costs, currency) }));
+  const money = (micros: number) => formatMoney(micros, currency, locale);
+  const maxLabel = unknown > 0 ? `${money(maxCost)} · ${t("homeLegendUnpriced")} ${unknown}` : money(maxCost);
 
   return (
     <ChartContainer config={config} className="h-[150px]">
@@ -159,7 +230,7 @@ export function UsageCostChart({
         />
         <ChartTooltip
           cursor={{ fillOpacity: 0.06 }}
-          content={<ChartTooltipContent valueFormatter={(value) => formatMicros(Number(value), currency)} />}
+          content={<ChartTooltipContent valueFormatter={(value) => money(Number(value))} />}
         />
         <Bar dataKey="cost" fill="var(--color-cost)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {maxLabel}</span>} />} />
@@ -425,12 +496,13 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
 /**
  * 近 14 天的花费**按供应商拆开** —— 一行横条,不另占一整块。
  *
- * `usage_by_provider` 和 `usage_by_capability` 一直躺在首页那个回包里没人读:后端每次打开
- * 首页都把近 14 天的用量事件 join 一遍价格规则算出来,然后扔掉。而"这个月的钱花在谁身上"
- * 恰恰是看完总额之后的下一个问题 —— 此前只能去 AI 页一家家点开看。
+ * `usage_by_provider` 一直躺在首页那个回包里没人读:后端每次打开首页都把近 14 天的用量事件
+ * 算一遍,然后扔掉。而"这个月的钱花在谁身上"恰恰是看完总额之后的下一个问题 —— 此前只能去
+ * AI 页一家家点开看。
  *
- * 名字**按 micros 排**而不是按次数:一次视频生成抵得上几百次对话,按次数排会把最贵的那家
- * 排到最后。值也是钱,不是次数(字段名里的 `by_provider` 没说这件事,它存的是 cost micros)。
+ * 名字**按金额排**而不是按次数:一次视频生成抵得上几百次对话,按次数排会把最贵的那家
+ * 排到最后。只看**当前选中的那种钱**(和上面的图同一个选择):横条是一个整体的各份占比,
+ * 人民币和美元拼不成一个整体。
  */
 export function UsageByProvider({
   byProvider,
@@ -440,7 +512,9 @@ export function UsageByProvider({
   currency: string;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const entries = Object.entries(byProvider ?? {})
+    .map(([provider, costs]) => [provider, microsIn(costs, currency)] as const)
     .filter(([, micros]) => micros > 0)
     .sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((sum, [, micros]) => sum + micros, 0);
@@ -466,7 +540,7 @@ export function UsageByProvider({
               style={{ background: PLATFORM_COLORS[index % PLATFORM_COLORS.length] }}
             />
             <span className="truncate">{provider}</span>
-            <span className="ml-auto shrink-0 tabular-nums text-foreground">{formatMicros(micros, currency)}</span>
+            <span className="ml-auto shrink-0 tabular-nums text-foreground">{formatMoney(micros, currency, locale)}</span>
           </li>
         ))}
       </ul>

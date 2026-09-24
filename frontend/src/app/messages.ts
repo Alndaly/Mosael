@@ -615,6 +615,7 @@ export const messages = {
     adminJobsLoadError: "任务活动暂时无法读取",
     adminSpendTitle: "谁在花钱",
     adminSpendDesc: "按人分,而不是只给一个总数 —— 总数说明不了任何该做的决定。金额是这段窗口内的供应商用量。",
+    adminSpendCurrencyHint: "合计 {total}。条形按 {currency} 计;其他币种照原样列出,不相加,也不换算。",
     adminNoSpend: "这段时间还没有可计价的供应商用量。任务跑了却是空的?多半是用量没有匹配到价格规则 —— 去 设置 → 成本规则 补上。",
     adminNoOwner: "(无归属)",
     adminDeleteUser: "删除账号",
@@ -706,6 +707,9 @@ export const messages = {
     homeChartPublishPlatforms: "发布平台构成",
     homeChartUsage: "近 14 天 AI 费用",
     homeChartUsageByProvider: "近 14 天按供应商分摊",
+    homeChartUsageCurrency: "币种",
+    homeChartUsageCurrencyHint: "不同币种分开算:图上一次看一种,不相加,也不按汇率换算。",
+    homeChartUsageMixedCurrency: "{model}(规则币种不一致)",
     homeChartTokens: "近 14 天 Token",
     homeChartEmptyActivity: "近 14 天还没有任务活动",
     homeChartEmptyAssets: "还没有素材",
@@ -1105,6 +1109,7 @@ export const messages = {
     usageTokens: "{n} Token",
     usageCost: "费用 {cost}",
     usageCostUnknown: "未定价",
+    usageCostMixedCurrency: "未定价(规则币种不一致)",
 
     // Publish
 
@@ -3659,6 +3664,7 @@ export const messages = {
     adminJobsLoadError: "Job activity could not be loaded",
     adminSpendTitle: "Who is spending",
     adminSpendDesc: "Broken down per person rather than one total — a total supports no decision. Amounts are provider usage inside the window.",
+    adminSpendCurrencyHint: "Total {total}. Bars measure {currency}; other currencies are listed as-is, never added or converted.",
     adminNoSpend: "No priceable provider usage in this window. Jobs ran but nothing shows? Usage likely matched no pricing rule — add one under Settings → Cost rules.",
     adminNoOwner: "(unattributed)",
     adminDeleteUser: "Delete account",
@@ -3750,6 +3756,9 @@ export const messages = {
     homeChartPublishPlatforms: "Publish platform mix",
     homeChartUsage: "AI spend · last 14 days",
     homeChartUsageByProvider: "By provider, last 14 days",
+    homeChartUsageCurrency: "Currency",
+    homeChartUsageCurrencyHint: "Currencies are kept apart: the chart shows one at a time, never added together or converted.",
+    homeChartUsageMixedCurrency: "{model} (rules mix currencies)",
     homeChartTokens: "Tokens · last 14 days",
     homeChartEmptyActivity: "No job activity in the last 14 days",
     homeChartEmptyAssets: "No assets yet",
@@ -4132,6 +4141,7 @@ export const messages = {
     usageTokens: "{n} tokens",
     usageCost: "Cost {cost}",
     usageCostUnknown: "Unpriced",
+    usageCostMixedCurrency: "Unpriced (rules mix currencies)",
 
     // Publish
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -10,7 +10,7 @@ from uuid import uuid4
 import time
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.usage_scope import current_workspace
@@ -29,9 +29,65 @@ price them. The small Interface is intentional: callers should not learn pricing
 
 
 @dataclass(frozen=True)
-class UsageSummary:
-    total_cost_micros: int
+class CostAmount:
+    """一个币种下的一笔钱。
+
+    **不同币种的钱永远不相加。**计价规则带币种 —— 国内厂商按人民币、海外厂商按美元(内置价目表
+    domain/price_reference 保留厂商原币种)—— 而此前每一处汇总都是把 `cost_micros` 直接加起来,
+    再贴上「最近一条计过价的事件」的币种:¥12 + $4.5 显示成 16.5 USD。那个数既不是人民币也不是
+    美元,而且换一条最近事件,单位就跟着变。
+
+    所以金额的汇总形状是 `list[CostAmount]`:每个币种一笔,各算各的。也**不做汇率换算** ——
+    汇率随日子变,换算出来的数没人能对账;厂商的账单本来就是按原币种开的。
+    """
+
     currency: str
+    micros: int
+
+
+def costs_by_currency(
+    db: Session,
+    *where: Any,
+    group_by: Iterable[Any] = (),
+    join: Iterable[tuple[Any, Any]] = (),
+) -> dict[tuple[Any, ...], list[CostAmount]]:
+    """按币种汇总计过价的用量事件 —— **全仓唯一一处把 cost_micros 加起来的地方。**
+
+    `where` 是筛选条件,`group_by` 是除币种之外还要分的组(哪一天、哪家供应商、哪个人),
+    `join` 是 `(表, on 条件)`,给那些要顺着别的表才分得了组的汇总(按人要经过 jobs)。
+    返回 `{分组键: [CostAmount, …]}`;不分组时键是 `()`。
+
+    SQL 里 `GROUP BY 币种`:加法只发生在同一个币种之内,调用方想加错都没有机会。
+
+    每组里的顺序固定为**计过价的次数多的币种在前**,次数相同按币种代码 —— 「主要用哪种钱」
+    排第一,界面的默认币种、管理页的排序都以它为准。不按金额排:¥7 和 $1 的 micros 谁大
+    说明不了任何事。
+    """
+    keys = list(group_by)
+    stmt = select(
+        *keys,
+        ProviderUsageEvent.currency,
+        func.sum(ProviderUsageEvent.cost_micros),
+        func.count(),
+    ).select_from(ProviderUsageEvent)
+    for target, onclause in join:
+        stmt = stmt.join(target, onclause)
+    stmt = stmt.where(ProviderUsageEvent.cost_micros.is_not(None), *where).group_by(*keys, ProviderUsageEvent.currency)
+    counted: dict[tuple[Any, ...], list[tuple[int, CostAmount]]] = {}
+    for row in db.execute(stmt).all():
+        key = tuple(row[: len(keys)])
+        currency, micros, events = row[len(keys) :]
+        counted.setdefault(key, []).append((int(events or 0), CostAmount(str(currency or "USD"), int(micros or 0))))
+    return {
+        key: [amount for _, amount in sorted(items, key=lambda item: (-item[0], item[1].currency))]
+        for key, items in counted.items()
+    }
+
+
+@dataclass(frozen=True)
+class UsageSummary:
+    #: 这段时间的花费,每个币种一笔(见 CostAmount)。
+    costs: list[CostAmount]
     event_count: int
     unknown_cost_events: int
     #: 缓存命中率(cacheRead / 提示词总量)。
@@ -41,10 +97,14 @@ class UsageSummary:
     #: 那是"没人要的东西留在原地"低一层的样子,一起清掉。逐日那两串(daily / token_daily)
     #: 还在,图表读的就是它们;命中率留着,因为它是**算出来的结论**,不是又一个可以自己加总的数。
     cache_hit_ratio: float
+    #: 逐日:每天的 `costs`(每币种一笔)、事件数、未定价数。
     daily: list[dict[str, Any]]
     token_daily: list[dict[str, Any]]
-    by_capability: dict[str, int]
-    by_provider: dict[str, int]
+    #: 供应商 → 这家的花费(每币种一笔)。只列计过价的供应商。
+    #:
+    #: 按能力分的那一份(by_capability)随这次改形状删了:它从来没有界面读过(前端只在一句
+    #: 注释里提到它的名字),改成多币种形状只是给一个没人要的东西换件衣服。
+    by_provider: dict[str, list[CostAmount]]
     #: 哪几个「供应商 + 模型 + 能力」的用量没能定价,各多少次。
     #: **有它才说得出人话**:此前界面只知道"有 N 次没价",于是写成「暂无价格规则」——
     #: 而用户明明配了九条,只是没有一条对上他实际在用的那个模型。笼统的否定让人以为功能坏了。
@@ -165,7 +225,8 @@ def prefill_model_pricing(
     报表里变成确定的零成本,比留空更误导 —— 留空至少还能看出「没配」。
 
     **不和已有规则混币种。**同一个模型、同一个能力下已经有一条人民币规则时,不再补一条美元的:
-    `record_usage` 遇到币种不一致的规则会跳过它,补上去的那条永远不生效,还让人以为已经配齐了。
+    `record_usage` 遇到币种不一致的规则会把整条调用记成未定价(不同币种的钱不能相加),补一条
+    反而把原本算得出的账弄没了。
 
     **规则始终是唯一的计费来源。**pi 自己也会算 cost,但那份不进账:一处算钱,才能解释每一笔。
     """
@@ -248,6 +309,7 @@ def record_usage(
 
     normalized_units = dict(units or {})
     applied_rules: list[ProviderPricingRule] = []
+    unpriced_reason: str | None = None
     if cost_micros is None:
         rules = _best_price_rules(
             db,
@@ -257,20 +319,24 @@ def record_usage(
             capability=capability,
             model=model,
         )
-        estimated_cost = 0
-        estimated_currency: str | None = None
-        for rule in rules:
-            quantity = _quantity_for_unit(normalized_units, rule.billing_unit)
-            if quantity is not None:
-                if estimated_currency is None:
-                    estimated_currency = rule.currency
-                if rule.currency != estimated_currency:
-                    continue
-                estimated_cost += round(quantity * rule.unit_amount_micros)
-                applied_rules.append(rule)
-        if applied_rules:
-            cost_micros = estimated_cost
-            currency = estimated_currency or currency
+        metered = [
+            (rule, quantity)
+            for rule in rules
+            if (quantity := _quantity_for_unit(normalized_units, rule.billing_unit)) is not None
+        ]
+        if len({rule.currency for rule, _ in metered}) > 1:
+            # **币种不一致就不定价,不挑一种算一半。**此前这里取第一条规则的币种、把其余币种的
+            # 规则静默跳过 —— 输入按人民币、输出按美元的话,账上只剩输入那一半,而且哪一半
+            # 留下取决于查询返回的顺序。少算的钱看不出是少算的,比「未定价」更坏。
+            #
+            # 也**不**退一步去找另一币种里不那么具体的规则凑成一种:规则的具体程度是用户的
+            # 意图(给这条连接单配的价压过通用价),为了凑币种悄悄换掉它等于替用户改账。
+            # 记成未定价、写明原因,界面据此告诉他去把规则改成同一种币。
+            unpriced_reason = "mixed_currency"
+        elif metered:
+            applied_rules = [rule for rule, _ in metered]
+            cost_micros = sum(round(quantity * rule.unit_amount_micros) for rule, quantity in metered)
+            currency = applied_rules[0].currency
             cost_confidence = "estimated"
 
     event = ProviderUsageEvent(
@@ -291,6 +357,7 @@ def record_usage(
         cost_micros=cost_micros,
         currency=currency,
         cost_confidence=cost_confidence,
+        unpriced_reason=unpriced_reason,
         pricing_rule_id=applied_rules[0].id if len(applied_rules) == 1 and cost_confidence == "estimated" else None,
         idempotency_key=idempotency_key,
     )
@@ -345,17 +412,12 @@ def _normalize_pricing_fields(fields: dict[str, Any], *, partial: bool = False) 
 def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageSummary:
     start_date = (now() - timedelta(days=days - 1)).date()
     start_dt = datetime.combine(start_date, datetime.min.time())
-    rows = list(
-        db.scalars(
-            select(ProviderUsageEvent)
-            .where(ProviderUsageEvent.workspace_id == workspace_id, ProviderUsageEvent.created_at >= start_dt)
-            .order_by(ProviderUsageEvent.created_at.asc())
-        )
-    )
+    window = (ProviderUsageEvent.workspace_id == workspace_id, ProviderUsageEvent.created_at >= start_dt)
+    rows = list(db.scalars(select(ProviderUsageEvent).where(*window).order_by(ProviderUsageEvent.created_at.asc())))
     daily_index = {
         str(start_date + timedelta(days=offset)): {
             "date": str(start_date + timedelta(days=offset)),
-            "cost_micros": 0,
+            "costs": [],
             "events": 0,
             "unknown": 0,
             "input_tokens": 0,
@@ -366,10 +428,7 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
         }
         for offset in range(days)
     }
-    by_capability: dict[str, int] = {}
-    by_provider: dict[str, int] = {}
-    unpriced_index: dict[tuple[str, str, str], int] = {}
-    total_cost = 0
+    unpriced_index: dict[tuple[str, str, str, str], int] = {}
     unknown = 0
     #: 命中率的**分子**。另外三个累加器(总时长、总 token、缓存写入总量)随它们在
     #: `UsageSummary` 上的字段一起删了 —— 那些字段没人读之后,这里每条用量事件都要加一遍的
@@ -378,22 +437,16 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     #: 命中率的分母是**提示词总量** = input + cacheRead + cacheWrite(三者不相交),
     #: 不是 total_tokens —— 把补全 token 算进去会让这个比例随回答长短漂移。
     prompt_total = 0
-    currency = "USD"
     for event in rows:
-        amount = int(event.cost_micros or 0)
         tokens = _token_usage(event.units or {})
         cache_read_total += tokens["cache_read_tokens"]
         prompt_total += tokens["input_tokens"] + tokens["cache_read_tokens"] + tokens["cache_write_tokens"]
-        if event.cost_micros is not None:
-            total_cost += amount
-            currency = event.currency or currency
-        else:
+        if event.cost_micros is None:
             unknown += 1
-            key = (event.provider or "", event.model or "", event.capability or "")
+            key = (event.provider or "", event.model or "", event.capability or "", event.unpriced_reason or "")
             unpriced_index[key] = unpriced_index.get(key, 0) + 1
         day = str(event.created_at.date())
         if day in daily_index:
-            daily_index[day]["cost_micros"] += amount
             daily_index[day]["events"] += 1
             if event.cost_micros is None:
                 daily_index[day]["unknown"] += 1
@@ -402,13 +455,21 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
             daily_index[day]["cache_read_tokens"] += tokens["cache_read_tokens"]
             daily_index[day]["cache_write_tokens"] += tokens["cache_write_tokens"]
             daily_index[day]["total_tokens"] += tokens["total_tokens"]
-        by_capability[event.capability] = by_capability.get(event.capability, 0) + amount
-        provider_key = event.provider or "unknown"
-        by_provider[provider_key] = by_provider.get(provider_key, 0) + amount
+    # 钱一律走 costs_by_currency:上面那趟逐条循环只数 token 和次数,**不碰金额** ——
+    # 此前金额也在那里一条条加,于是加法落在币种之外。
+    for (day,), costs in costs_by_currency(
+        db, *window, group_by=(func.date(ProviderUsageEvent.created_at),)
+    ).items():
+        if str(day) in daily_index:
+            daily_index[str(day)]["costs"] = costs
+    provider_key = func.coalesce(func.nullif(ProviderUsageEvent.provider, ""), "unknown")
+    by_provider = {
+        str(provider): costs
+        for (provider,), costs in costs_by_currency(db, *window, group_by=(provider_key,)).items()
+    }
     daily = list(daily_index.values())
     return UsageSummary(
-        total_cost_micros=total_cost,
-        currency=currency,
+        costs=costs_by_currency(db, *window).get((), []),
         event_count=len(rows),
         unknown_cost_events=unknown,
         cache_hit_ratio=round(cache_read_total / prompt_total, 4) if prompt_total > 0 else 0.0,
@@ -424,12 +485,12 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
             }
             for day in daily
         ],
-        by_capability=by_capability,
         by_provider=by_provider,
-        # 次数多的排前面:要补价的话,先补这几个最划算。
+        # 次数多的排前面:要补价的话,先补这几个最划算。`reason` 说得出为什么没价的时候
+        # (规则币种不一致),界面就不再只说「缺价」—— 那种情况下规则明明是配了的。
         unpriced=[
-            {"provider": provider, "model": model, "capability": capability, "events": count}
-            for (provider, model, capability), count in sorted(
+            {"provider": provider, "model": model, "capability": capability, "reason": reason, "events": count}
+            for (provider, model, capability, reason), count in sorted(
                 unpriced_index.items(), key=lambda item: item[1], reverse=True
             )
         ],

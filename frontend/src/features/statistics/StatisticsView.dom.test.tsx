@@ -21,8 +21,7 @@ vi.mock("@/lib/deepLink", () => ({ gotoSection: mocks.section, gotoSettings: moc
 vi.mock("./StatisticsCharts", () => ({
   ActivityChart: () => <div>Activity chart</div>, AssetKindsChart: () => <div>Asset chart</div>,
   PublishActivityChart: () => <div>Publishing chart</div>, PublishPlatformsChart: () => <div>Platforms chart</div>,
-  UsageCostChart: () => <div>Cost chart</div>, UsageTokensChart: () => <div>Tokens chart</div>,
-  UsageByProvider: () => <div>Provider chart</div>,
+  UsageCostPanel: () => <><div>Cost chart</div><div>Provider chart</div></>, UsageTokensChart: () => <div>Tokens chart</div>,
 }));
 const workspace = { id: "studio-a", name: "Studio A" } as Workspace;
 function provider(children: React.ReactNode) {
@@ -30,7 +29,7 @@ function provider(children: React.ReactNode) {
 }
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); mocks.assets = []; });
 
-const SUMMARY = { project_count: 2, asset_count: 3, sequence_count: 1, workflow_count: 4, running_jobs: 5, usage_event_count: 6, usage_cost_micros: 12_340_000, usage_currency: "USD", week_jobs_succeeded: 7, week_published: 8, usage_unknown_cost_events: 0, week_jobs_failed: 0, usage_cache_hit_ratio: 0 };
+const SUMMARY = { project_count: 2, asset_count: 3, sequence_count: 1, workflow_count: 4, running_jobs: 5, usage_event_count: 6, usage_costs: [{ currency: "USD", micros: 12_340_000 }], week_jobs_succeeded: 7, week_published: 8, usage_unknown_cost_events: 0, week_jobs_failed: 0, usage_cache_hit_ratio: 0 };
 
 it("keeps the full statistics overview scoped to the workspace", async () => {
   mocks.summary.mockResolvedValue(SUMMARY);
@@ -39,12 +38,25 @@ it("keeps the full statistics overview scoped to the workspace", async () => {
   expect(mocks.summary).toHaveBeenCalledWith("studio-a");
   expect(screen.getAllByText(/chart$/)).toHaveLength(7);
   // **AI 用量那块磁贴显示的是钱,不是次数。** 它此前显示 usage_event_count(6),而同一个
-  // 回包里就躺着 usage_cost_micros —— 而"这个月花了多少"才是打开首页想知道的那个数。
+  // 回包里就躺着金额 —— 而"这个月花了多少"才是打开首页想知道的那个数。
   const usage = screen.getByText("homeStatAiUsage").closest("[data-stat]")!;
-  expect(usage).toHaveTextContent("12.34 USD");
+  expect(usage).toHaveTextContent("$12.34");
   expect(usage).not.toHaveTextContent(/\b6\b/);
   view.rerender(provider(<StatisticsView workspace={{ ...workspace, id: "studio-b" }} />));
   await waitFor(() => expect(mocks.summary).toHaveBeenCalledWith("studio-b"));
+});
+
+// 人民币和美元**不相加**:磁贴上各写一笔。此前是 16.8 USD —— 一个既不是人民币也不是美元的数。
+it("writes one amount per currency on the usage tile instead of a mixed sum", async () => {
+  mocks.summary.mockResolvedValue({
+    ...SUMMARY,
+    usage_costs: [{ currency: "CNY", micros: 12_300_000 }, { currency: "USD", micros: 4_500_000 }],
+  });
+  render(provider(<StatisticsView workspace={workspace} />));
+  await screen.findByRole("button", { name: /homeStatProjects/ });
+  const usage = screen.getByText("homeStatAiUsage").closest("[data-stat]")!;
+  expect(usage).toHaveTextContent("CN¥12.30 + $4.50");
+  expect(usage).not.toHaveTextContent("16.8");
 });
 
 // 每格去哪儿、哪几格不去(理由见 StatisticsView 里 StatTile 的说明)。都走「从页面起点进来」:
