@@ -5,8 +5,11 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
 
-import { API_BASE, api, getAuthToken, getJob, transcribeAsset, type Job, type Sequence } from "@/api/client";
-import { pendingTranscribeIds } from "@/features/editor/transcribeQueue";
+import { API_BASE, api, getAuthToken, getJob, listAsrModels, transcribeAsset, type Job, type Sequence } from "@/api/client";
+import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
+import { Button } from "@/components/ui/button";
+import { ConfigNotice } from "@/components/layout/ConfigNotice";
+import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { tokenTimelineRange } from "@/domain/timeline/karaoke";
 import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } from "@/features/editor/transcriptSpeakers";
 import type { components } from "@/api/generated/schema";
@@ -164,6 +167,19 @@ export function TranscriptPanel({
     (assetId: string) => (segmentsByAsset.get(assetId)?.length ?? 0) > 0,
     [segmentsByAsset],
   );
+  // 还没转过的那几段。**已有逐字稿的不再转**(见 pendingTranscribeIds),同一素材用两次只算一段。
+  const pendingIds = React.useMemo(() => pendingTranscribeIds(assetIds, hasTranscript), [assetIds, hasTranscript]);
+  // 逐字稿还在读的时候不知道哪些已经转过 —— 这时点下去会把转过的再转一遍(真实的耗时调用)。
+  const transcriptsLoading = transcriptQueries.some((query) => query.isLoading);
+  // 有要转的才去问引擎在不在:问一次要在后端起子进程探 torch,没有要转的就不必惊动它。
+  // 和设置页「转写」同一个缓存键 —— 在那边装好,回到这里就跟着变。
+  const asrModels = useQuery({
+    queryKey: ["asr-models"],
+    queryFn: listAsrModels,
+    enabled: pendingIds.length > 0,
+    refetchInterval: (query) => pollWhileUnsettled(query.state.data),
+  });
+  const noAsrEngine = asrEngineMissing(asrModels.data);
 
   const startAsr = useMutation({
     mutationFn: (assetId: string) => transcribeAsset(assetId, asrLanguage),
@@ -186,7 +202,7 @@ export function TranscriptPanel({
   }, [queue, asrJobId, startAsr.isPending]);
 
   const startAll = React.useCallback(() => {
-    const pending = pendingTranscribeIds(assetIds, hasTranscript);
+    const pending = pendingIds;
     setFailures([]);
     setAsrError(null);
     // 全都转过了 → 点下去什么都不会发生。**说一声** —— 一个没有反应的按钮比一句话更让人困惑,
@@ -197,7 +213,7 @@ export function TranscriptPanel({
     }
     setQueueTotal(pending.length);
     setQueue(pending);
-  }, [assetIds, hasTranscript, t]);
+  }, [pendingIds, t]);
   // **换个页面再回来,进度还在。**
   //
   // 队列活在组件的 state 里,一卸载就没了 —— 而任务在后端还跑着。此前回来看到的是一个安静的
@@ -295,7 +311,9 @@ export function TranscriptPanel({
     <button
       type="button"
       className={PILL}
-      disabled={asrRunning}
+      disabled={asrRunning || noAsrEngine || transcriptsLoading}
+      // 已经有逐字稿之后,这颗按钮转的是**后来加上来的**那几段 —— 数字让人知道点下去会转什么。
+      title={pendingIds.length > 0 ? t("transcribePendingHint").replace("{n}", String(pendingIds.length)) : undefined}
       onClick={startAll}
     >
       {/* 按钮只放**短**的:一个动词 + 进度。后端那句状态("funasr 转写中(首次会自动下载模型)")
@@ -305,7 +323,17 @@ export function TranscriptPanel({
       <span className="whitespace-nowrap">
         {asrRunning ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}` : t("aiTranscribe")}
       </span>
+      {!asrRunning && projected.length > 0 && pendingIds.length > 0 && <em>{pendingIds.length}</em>}
     </button>
+  );
+  // 引擎没装:说清楚,并给一条直达设置「转写」的路。按钮同时禁用 —— 点下去只会排一个注定失败的任务。
+  const engineNotice = noAsrEngine && pendingIds.length > 0 && (
+    <ConfigNotice
+      message={t("transcribeNoEngine")}
+      actionLabel={t("wfGoConfigure")}
+      section="transcribe"
+      className="text-left"
+    />
   );
 
   const toggleToken = (key: string, clipId: string, srcStart: number, srcEnd: number) => {
@@ -498,10 +526,22 @@ export function TranscriptPanel({
       <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 text-ui-sm [&_p]:leading-[1.55] [&>button]:mt-1">
         {busy ? <Loader2 size={18} className="animate-mosael-spin" /> : <MessageSquareText size={18} />}
         <p className="text-ui-sm">{busy ? t("transcribing") : t("transcriptEmpty")}</p>
+        {/* 空状态**给出动作,不只描述流程**:此前这里是一段"外部智能体可以通过 API 附加逐字稿"
+            加一行流程说明,时间线上只有图片时连按钮都没有 —— 用户读完不知道下一步点哪。 */}
         {!busy && (
-          <p className="max-w-[220px] text-ui-xs leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
+          <p className="max-w-[240px] text-ui-xs leading-[1.6] text-muted-foreground">
+            {assetIds.length === 0
+              ? t("transcriptNoAudioClips")
+              : t("transcriptFlowHint").replace("{n}", String(pendingIds.length || assetIds.length))}
+          </p>
         )}
-        {transcribeButton}
+        {busy && asrProgress && <p className="text-ui-xs tabular-nums">{asrProgress}</p>}
+        {!busy && assetIds.length > 0 && (
+          <Button size="sm" disabled={noAsrEngine || transcriptsLoading} onClick={startAll}>
+            <Mic size={13} /> {t("transcribeTimeline")}
+          </Button>
+        )}
+        {!busy && engineNotice}
         {/* 后端那句状态单独一行:它会长(下模型、装环境、第几段),而且**会变** —— 放在按钮里
             意味着控件的宽度跟着它跳。 */}
         {busy && busyMessage && (
@@ -580,6 +620,14 @@ export function TranscriptPanel({
         </span>
       </div>
 
+      {/* 在已有逐字稿上再转(后来加上来的片段):状态和失败也要说出来。此前这两行只在空状态里渲染,
+          于是在这里点「AI 转写」失败了、或者全都转过了,界面上什么都不发生。 */}
+      {(engineNotice || asrError) && (
+        <div className="grid gap-1.5 px-3 pt-2">
+          {engineNotice}
+          {asrError && <p className="m-0 whitespace-pre-line text-xs text-destructive">{asrError}</p>}
+        </div>
+      )}
       <p className="m-0 px-3 pb-0.5 pt-2 text-ui-xs leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
       <div
         className="flex min-h-0 flex-1 select-none flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2"

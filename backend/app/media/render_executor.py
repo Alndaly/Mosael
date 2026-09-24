@@ -12,6 +12,7 @@ from app.core.i18n import LocalizedError
 from app.core.child_process import ChildProcess, popen_text, run_logged
 
 from app.core.config import settings
+from app.core.text import blame_line
 from app.media.probe import guess_kind, probe_has_audio_many
 from app.media.render_plan import (
     DEFAULT_APPEARANCE,
@@ -646,6 +647,8 @@ def _seek_and_trim(src_in: float, src_out: float) -> tuple[list[str], float, flo
 
 
 _IMAGE_LOOP_PAD = 0.2  # -t 相对 trim 末尾留的小余量,保证末帧不缺
+#: ffmpeg 用 image2 解复用器打开的静态图后缀 —— 只有它们认 `-loop`(见 _image_loop_args)。
+_IMAGE2_STILL_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".jfif", ".bmp", ".tif", ".tiff", ".webp"})
 
 
 def _image_loop_args(path: Path, trim_end: float) -> list[str]:
@@ -658,10 +661,20 @@ def _image_loop_args(path: Path, trim_end: float) -> list[str]:
     这三类都真实发生过。曾经用一个 needs_time 开关只在"看起来需要时间轴"时才 loop,但需求方
     (自身动画 / 上层 / 下层)分散在各处,每个调用点都得记得算对——两处算漏就是两个 bug。
     索性去掉开关:图片一律逐帧,正确性由构造保证,代价只是极小的解码开销。
-    -t 必须给(无限流会让 concat 永远卡在这一段),取 trim 末尾加点余量保住末帧。"""
-    if guess_kind(path) == "image":
-        return ["-loop", "1", "-t", f"{max(trim_end, 0.04) + _IMAGE_LOOP_PAD:.6f}"]
-    return []
+    -t 必须给(无限流会让 concat 永远卡在这一段),取 trim 末尾加点余量保住末帧。
+
+    **`-loop` 不是 ffmpeg 的通用选项,是 image2 解复用器私有的。** GIF 走 gif 解复用器、
+    AVIF/HEIC 走 mov 解复用器,它们都不认 `-loop`,ffmpeg 连输入都打不开
+    (「Option loop not found」)—— 时间线上只要有一段 GIF,取帧和导出就**整条**失败。
+    所以只有 image2 认的那几种静态图用 `-loop 1`;其余图片用通用的 `-stream_loop -1`
+    (任何解复用器都认,GIF 也因此按预览里 <img> 那样循环播放,而不是播一遍就断流)。
+    不全用 `-stream_loop`:它对 image2 每一轮都要重新 seek 打开文件,大图上慢一个数量级。"""
+    if guess_kind(path) != "image":
+        return []
+    duration = ["-t", f"{max(trim_end, 0.04) + _IMAGE_LOOP_PAD:.6f}"]
+    if path.suffix.lower() in _IMAGE2_STILL_SUFFIXES:
+        return ["-loop", "1", *duration]
+    return ["-stream_loop", "-1", *duration]
 
 
 def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str) -> str:
@@ -1101,6 +1114,9 @@ def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
         return None
 
 
+_STILL_TIMEOUT = 180  # 秒;一帧通常几百毫秒到两三秒
+
+
 def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path, at: float) -> Path:
     """把时间线在 `at` 处的**合成画面**渲成一张图。
 
@@ -1114,9 +1130,17 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
     text_pngs = _rasterize_text(plan, output_path.parent)
     command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at)
     try:
-        run_logged(command, check=True, capture_output=True, timeout=180, what="取当前帧")
-    except subprocess.SubprocessError as exc:
-        raise RenderExecutionError("renderErr_frameFailed") from exc
+        result = run_logged(command, capture_output=True, text=True, timeout=_STILL_TIMEOUT, what="取当前帧")
+    except subprocess.TimeoutExpired as exc:
+        raise RenderExecutionError("renderErr_frameTimeout", seconds=_STILL_TIMEOUT) from exc
+    if result.returncode != 0:
+        #: 带上 ffmpeg 自己说的那句 —— 只说「取当前帧失败」的话,用户和排查的人都只能干瞪眼
+        #: (GIF 不认 `-loop` 那次就是这样:界面上一句话,原因只在后端日志里)。
+        raise RenderExecutionError(
+            "renderErr_frameFailed",
+            detail=blame_line(result.stderr) or LocalizedError("audioErr_ffmpegNoReason"),
+            stderr_tail=(result.stderr or "")[-2000:],
+        )
     if not output_path.is_file() or output_path.stat().st_size == 0:
         #: 时间点落在片尾之后:ffmpeg 成功退出但什么都不写。空文件比报错更难查。
         raise RenderExecutionError("stillErr_noFrame")

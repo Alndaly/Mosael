@@ -60,6 +60,7 @@ def test_取帧之前要先把文字渲成_PNG() -> None:
 
     这条断言的是**接线**:render_still 调没调那一步,而不是那一步算得对不对。
     """
+    import subprocess
     import tempfile
     from pathlib import Path as _Path
     from unittest.mock import patch as mock_patch
@@ -81,12 +82,16 @@ def test_取帧之前要先把文字渲成_PNG() -> None:
         seen["text_pngs"] = kwargs.get("text_pngs")
         return ["true"]
 
+    def fake_run(*_args, **_kwargs):
+        target.write_bytes(b"x")
+        return subprocess.CompletedProcess(args=["true"], returncode=0, stdout="", stderr="")
+
     with tempfile.TemporaryDirectory() as tmp:
         target = _Path(tmp) / "frame.jpg"
         with (
             mock_patch.object(render_executor, "_rasterize_text", side_effect=fake_rasterize),
             mock_patch.object(render_executor, "build_ffmpeg_command", side_effect=fake_build),
-            mock_patch.object(render_executor, "run_logged", side_effect=lambda *a, **k: target.write_bytes(b"x")),
+            mock_patch.object(render_executor, "run_logged", side_effect=fake_run),
         ):
             render_executor.render_still(plan, lambda key: _Path(key), target, 1.0)
 

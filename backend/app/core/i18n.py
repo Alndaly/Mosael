@@ -1470,8 +1470,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Converting the video to GIF produced no usable file.",
     },
     "renderErr_frameFailed": {
-        "zh": "取当前帧失败",
-        "en": "Couldn't grab the current frame.",
+        "zh": "取当前帧失败:{detail}",
+        "en": "Couldn't grab the current frame: {detail}",
+    },
+    "renderErr_frameTimeout": {
+        "zh": "取当前帧超时({seconds} 秒内没画完)",
+        "en": "Grabbing the current frame timed out (not done within {seconds} s).",
     },
     "renderErr_ffmpegExit": {
         "zh": "FFmpeg 异常退出,退出码 {code}",

@@ -13,3 +13,21 @@
 export function pendingTranscribeIds(assetIds: string[], hasTranscript: (assetId: string) => boolean): string[] {
   return assetIds.filter((assetId) => !hasTranscript(assetId));
 }
+
+/**
+ * 这台机器上**确定**没有能跑的转写引擎吗。
+ *
+ * 模型权重首次转写时会自己下,真正拦路的是运行环境(装了 funasr/whisperx 的解释器)——
+ * 那个要在设置页装一次,转写不会替你拉几个 GB 的依赖。所以只看 `runtime_ready`。
+ *
+ * **只有测过了、全都跑不起来才算"没有"。** 探测要起子进程 import torch,刚打开时可能还没有答案;
+ * 拿"还没测"当"没有"去拦按钮,就是拿一个未知冒充结论。列表拿不到(空、还在读)同理,不拦 ——
+ * 真转不了,任务自己会说为什么。
+ */
+export function asrEngineMissing(
+  models: readonly { runtime_ready?: boolean; runtime_checked?: boolean }[] | undefined,
+): boolean {
+  if (!models || models.length === 0) return false;
+  if (models.some((model) => model.runtime_ready)) return false;
+  return models.every((model) => model.runtime_checked);
+}
