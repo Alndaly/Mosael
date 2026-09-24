@@ -146,8 +146,19 @@ def discover_tools(manifest: dict[str, Any], env: dict[str, str] | None = None) 
     return _sync(manifest, env or {}, _list)
 
 
-def call_tool(manifest: dict[str, Any], tool_name: str, payload: dict[str, Any], env: dict[str, str]) -> dict[str, Any]:
-    """调一次工具。返回值统一成 dict —— 插件调用记录那张表存的是 JSON 对象。"""
+def call_tool(
+    manifest: dict[str, Any],
+    tool_name: str,
+    payload: dict[str, Any],
+    env: dict[str, str],
+    timeout: float = MCP_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """调一次工具。返回值统一成 dict —— 插件调用记录那张表存的是 JSON 对象。
+
+    `timeout` 是这一次调用的预算,由调用方给(比如 Blender 取回整个场景要等得更久)。此前这里
+    不收这个参数,而 `plugins.tools.invoke` 会把它传下来 —— 于是每一次带预算的 MCP 调用都在
+    发请求之前就报 `unexpected keyword argument 'timeout'`,Blender「取回当前场景」一次也跑不通。
+    """
 
     async def _call(session: ClientSession) -> dict[str, Any]:
         result = await session.call_tool(tool_name, payload)
@@ -168,7 +179,7 @@ def call_tool(manifest: dict[str, Any], tool_name: str, payload: dict[str, Any],
             return {"text": text}
         return parsed if isinstance(parsed, dict) else {"text": text}
 
-    return _sync(manifest, env, _call)
+    return _sync(manifest, env, _call, timeout=timeout)
 
 
 def _text(result: Any) -> str:
