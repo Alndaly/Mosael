@@ -290,6 +290,38 @@ export function removeShot(content: SceneContent, shotId: string): SceneContent 
     objects: shared ? content.objects : content.objects.filter((o) => o.id !== shot.camera_id),
   };
 }
+/**
+ * 实际看不见的那些物体:**自己藏了,或者任一上级藏了**。
+ *
+ * `hidden` 只记物体自己那一位 —— 藏一个组不去改孩子们的标记,再显示这个组时,孩子们原先
+ * 各自藏没藏都还在(和 Blender 一样)。所以"看不看得见"要沿着父链算,不能只看自己。
+ * 视口不需要它(three 的子节点本来就随父节点隐藏),要它的是**不经过 three 的那几条路**:
+ * 物体列表的淡显、交给生成模型的物体清单。后端同一条规则见 scene_render `_visible`。
+ *
+ * 父级不存在的孤儿按顶层算,父链上的环走到重复就停 —— 和 {@link objectTree} 同一个宽容度。
+ */
+export function hiddenObjectIds(
+  objects: readonly Pick<SceneObject, "id" | "parent_id" | "hidden">[],
+): Set<string> {
+  const byId = new Map(objects.map((o) => [o.id, o]));
+  const hidden = new Set<string>();
+  for (const object of objects) {
+    const seen = new Set<string>();
+    for (
+      let current: typeof object | undefined = object;
+      current && !seen.has(current.id);
+      current = current.parent_id ? byId.get(current.parent_id) : undefined
+    ) {
+      seen.add(current.id);
+      if (current.hidden) {
+        hidden.add(object.id);
+        break;
+      }
+    }
+  }
+  return hidden;
+}
+
 /** 一个物体和它所有后代的 id。删除、复制、移动都要它 —— 三处此前各写了一遍同一个循环。 */
 export function withDescendants(content: SceneContent, id: string): Set<string> {
   const family = new Set([id]);

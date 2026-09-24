@@ -11,13 +11,13 @@ const zh = (key: MessageKey) => messages["zh-CN"][key];
 import { blockoutPrompt, sceneInventory } from "./blockoutPrompt";
 
 const OBJECTS = [
-  { name: "列柱", kind: "cylinder", hidden: false },
-  { name: "列柱", kind: "cylinder", hidden: false },
-  { name: "神像", kind: "model", hidden: false },
-  { name: "Box 3", kind: "box", hidden: false },
-  { name: "主机位", kind: "camera", hidden: false },
-  { name: "顶光", kind: "light", hidden: false },
-  { name: "藏起来的道具", kind: "box", hidden: true },
+  { id: "a", parent_id: null, name: "列柱", kind: "cylinder", hidden: false },
+  { id: "b", parent_id: null, name: "列柱", kind: "cylinder", hidden: false },
+  { id: "c", parent_id: null, name: "神像", kind: "model", hidden: false },
+  { id: "d", parent_id: null, name: "Box 3", kind: "box", hidden: false },
+  { id: "e", parent_id: null, name: "主机位", kind: "camera", hidden: false },
+  { id: "f", parent_id: null, name: "顶光", kind: "light", hidden: false },
+  { id: "g", parent_id: null, name: "藏起来的道具", kind: "box", hidden: true },
 ] as const;
 
 describe("白模 → 生成的提示词", () => {
@@ -43,6 +43,15 @@ describe("白模 → 生成的提示词", () => {
 
   it("清单不列相机、灯、藏起来的和默认名", () => {
     expect(sceneInventory(OBJECTS, zh)).toBe("列柱 ×2、神像");
-    expect(sceneInventory([{ name: "Object", kind: "box", hidden: false }], zh)).toBe("");
+    expect(sceneInventory([{ id: "o", parent_id: null, name: "Object", kind: "box", hidden: false }], zh)).toBe("");
+  });
+
+  it("藏起来的组里的东西也不列 —— 它们自己那一位没藏,但画面里同样没有", () => {
+    const objects = [
+      { id: "g", parent_id: null, name: "后排", kind: "group", hidden: true },
+      { id: "p", parent_id: "g", name: "石像", kind: "box", hidden: false },
+      { id: "q", parent_id: null, name: "祭台", kind: "box", hidden: false },
+    ] as const;
+    expect(sceneInventory(objects, zh)).toBe("祭台");
   });
 });

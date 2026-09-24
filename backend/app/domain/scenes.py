@@ -68,10 +68,24 @@ def scene_preview(content: dict) -> dict:
     所以相机只带位置点,别的物体的轨整条不带(静物的缩略图本来就画它的静止姿态)。
     """
     objects: list[dict] = []
-    for raw in content.get("objects", []):
+    raws = content.get("objects", [])
+    by_id = {raw.get("id"): raw for raw in raws}
+
+    def hidden(raw: dict | None) -> bool:
+        """自己或任一上级藏了 —— 和出片(scene_render `_visible`)同一条规则。只看自己的话,
+        藏起来的分组里的东西照样画在缩略图上。父链上的环、缺失的父级都按"没藏"走到头。"""
+        seen: set = set()
+        while raw is not None and raw.get("id") not in seen:
+            if raw.get("hidden"):
+                return True
+            seen.add(raw.get("id"))
+            raw = by_id.get(raw.get("parent_id")) if raw.get("parent_id") else None
+        return False
+
+    for raw in raws:
         if len(objects) >= PREVIEW_OBJECT_LIMIT:
             break
-        if raw.get("hidden"):
+        if hidden(raw):
             continue
         parameters = raw.get("parameters") or {}
         item = {

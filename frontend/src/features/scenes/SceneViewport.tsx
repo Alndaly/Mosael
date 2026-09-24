@@ -9,7 +9,7 @@ import {
   type SceneNavigationMode,
 } from "./sceneNavigation";
 import { encodeShotVideo } from "./encodeVideo";
-import { cloneSceneForExport } from "./sceneExport";
+import { cloneSceneForExport, visibleBounds } from "./sceneExport";
 import React from "react";
 import * as THREE from "three";
 
@@ -98,6 +98,15 @@ function applyTransform(target: THREE.Object3D, o: SceneObject) {
   target.visible = !o.hidden;
   target.name = o.name;
   target.userData.sceneObjectId = o.id;
+  // 可见性记一份在数据上:相机道具的 `visible` 每帧按视图重设(见渲染循环),读它分不出
+  // "藏了"和"这一刻不画",而选中框、操纵器要的是前者。
+  target.userData.hidden = o.hidden;
+}
+/** 它自己和所有上级都没藏。**藏一个组 = 组里的东西都看不见**,孩子们自己的标记不动。 */
+function shownInTree(node: THREE.Object3D, root: THREE.Object3D) {
+  for (let n: THREE.Object3D | null = node; n && n !== root; n = n.parent)
+    if (n.userData.hidden) return false;
+  return true;
 }
 /** 某一刻的机位姿态。**不是关键帧** —— 关键帧可以只写一部分字段,这个是解算完的结果。 */
 export type CameraPose = { position: Vec3; target: Vec3; fov: number };
@@ -220,7 +229,11 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       const SHADOW_CASTING_LIGHTS = 4;
       const capLightShadows = () => {
         let remaining = SHADOW_CASTING_LIGHTS;
+        // 藏起来的灯不照明(渲染器跳过不可见节点),也就不该占掉一个投影名额。
         root.traverse((node) => {
+          if (node instanceof THREE.PointLight) node.castShadow = false;
+        });
+        root.traverseVisible((node) => {
           if (node instanceof THREE.PointLight) node.castShadow = remaining-- > 0;
         });
       };
@@ -230,7 +243,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       const fitShadow = () => {
         const light = latest.current.content.lighting;
         if (light) SUN_DIRECTION = new THREE.Vector3(...sunDirection(light.azimuth, light.elevation));
-        const bounds = new THREE.Box3().setFromObject(root);
+        const bounds = visibleBounds(root);
         if (bounds.isEmpty()) return;
         const sphere = bounds.getBoundingSphere(new THREE.Sphere());
         const radius = Math.max(sphere.radius, 1);
@@ -296,6 +309,9 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       scene.add(selection);
       selection.visible = false;
       let path: THREE.Line | null = null,
+        /** 选中的那个此刻该不该画选中框、挂操纵器 —— 藏起来的(或在藏起来的组里的)不挂:
+         *  框住一片空气、拖一个看不见的东西,都比"选中了但没反应"更让人糊涂。 */
+        selectionShown = false,
         alive = true,
         frameId = 0,
         generation = 0,
@@ -337,13 +353,14 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       function select() {
         const p = latest.current,
           o = p.selected ? objects.get(p.selected) : null;
-        if (o && !p.preview && !p.observing) transform.attach(o);
+        selectionShown = !!o && shownInTree(o, root);
+        if (o && selectionShown && !p.preview && !p.observing) transform.attach(o);
         else transform.detach();
         transform.setMode(p.mode);
         transform.setTranslationSnap(p.snap ? 0.25 : null);
         transform.setRotationSnap(p.snap ? Math.PI / 12 : null);
         transform.setScaleSnap(p.snap ? 0.1 : null);
-        selection.visible = !!o && !p.preview && !p.observing;
+        selection.visible = selectionShown && !p.preview && !p.observing;
         if (o) selection.setFromObject(o);
       }
       function sync() {
@@ -523,7 +540,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       function frameOverview(
         direction: "perspective" | "front" | "top" = "perspective",
       ) {
-        const bounds = new THREE.Box3().setFromObject(root);
+        const bounds = visibleBounds(root);
         const framingRig = cameraOfShot(latest.current.content, latest.current.shot);
         for (const point of framingRig
           ? shotPathPoints(framingRig, latest.current.shot)
@@ -608,8 +625,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         if (path) path.visible = !!p.observing;
         observer.group.visible = !!p.observing;
         transform.enabled = !p.preview && !p.observing;
-        transform.getHelper().visible = transform.enabled && !!p.selected;
-        selection.visible = !!p.selected && !p.preview && !p.observing;
+        transform.getHelper().visible = transform.enabled && !!transform.object;
+        selection.visible = selectionShown && !p.preview && !p.observing;
         const w = element.clientWidth,
           h = element.clientHeight;
         if (!w || !h) return;
@@ -622,8 +639,12 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         //
         // 这里**不再**为「俯瞰全场」额外藏掉当前那台:取景器已经不画视锥了(见
         // sceneObservation),它只补一条视线和目标点。一台相机在画面上只有一份表示。
-        for (const node of root.children)
-          if (node.userData.editorOnly) node.visible = !p.preview;
+        //
+        // **藏起来的相机在编辑视角里也不画**,但它照样能当机位:镜头看的是相机物体的数据
+        // (`frameAt`),不是这个道具。此前这里只按视图切,一台藏起来的相机每帧又被设回可见 ——
+        // 看得见、也点得中。而且只扫了顶层,组里的相机在镜头画面里一直露着。
+        for (const node of objects.values())
+          if (node.userData.editorOnly) node.visible = !p.preview && !node.userData.hidden;
         // **编辑视角透明,镜头画面用场景底色。** 后者是**成片的一部分**(导出用的是同一个
         // 值),取景时必须看到真实底色;而编辑视角是工作台,它该跟应用其余页面一样透出背景。
         // 这也让 `p.preview` 分支里那句 setClearColor(…, 0) 真正生效 —— 此前 scene.background
@@ -776,7 +797,9 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             ? objects.get(latest.current.selected)
             : root;
           if (!target) return;
-          const b = new THREE.Box3().setFromObject(target);
+          // 聚焦全部只框看得见的;聚焦某一个时照它自己框 —— 选中一个藏起来的物体再按 F,
+          // 用户要的是"它在哪",而不是"什么都不做"。
+          const b = target === root ? visibleBounds(root) : new THREE.Box3().setFromObject(target);
           if (b.isEmpty()) return;
           const c = b.getCenter(new THREE.Vector3());
           const radius = Math.max(

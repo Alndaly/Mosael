@@ -340,3 +340,43 @@ def test_场景缩略图的物体数有上限():
 
     many = {'objects': [{'id': f'o{i}', 'kind': 'box'} for i in range(PREVIEW_OBJECT_LIMIT + 25)]}
     assert len(scene_preview(many)['objects']) == PREVIEW_OBJECT_LIMIT
+
+
+def test_物体的隐藏标记跟着场景存取_没带这个键的老内容照样校验():
+    """「场景中的物体」每一行能藏 / 显示,藏没藏是**场景数据**:存进去、读出来都还在。
+
+    `hidden` 是一个带默认值的字段,所以不需要迁移 —— 存量场景里没有这个键,读的时候按"没藏"补上。
+    """
+    from app.domain.scene_types import SceneContent
+
+    c, ws, scene = setup_scene()
+    camera = next(o for o in scene['content']['objects'] if o['kind'] == 'camera')
+    content = {**scene['content'], 'objects': [
+        camera,
+        {'id': 'g', 'kind': 'group', 'hidden': True},
+        {'id': 'b', 'kind': 'box', 'parent_id': 'g'},
+    ]}
+    saved = c.patch(f"/api/scenes/{scene['id']}",
+                    json={'workspace_id': ws, 'name': 'Studio', 'content': content, 'base_revision': scene['revision']})
+    assert saved.status_code == 200, saved.text
+    objects = {o['id']: o for o in c.get(f"/api/scenes/{scene['id']}", params={'workspace_id': ws}).json()['content']['objects']}
+    assert objects['g']['hidden'] is True
+    # 藏组只记在组上,孩子自己那一位原样 —— 再显示这个组时孩子才回得来。
+    assert objects['b']['hidden'] is False
+
+    legacy = {'objects': [{'id': 'cam', 'kind': 'camera', 'position': [8, 5, 8]}, {'id': 'box', 'kind': 'box'}],
+              'shots': [{'id': 's', 'camera_id': 'cam'}]}
+    assert all(o.hidden is False for o in SceneContent.model_validate(legacy).objects)
+
+
+def test_缩略图不画藏起来的组里的东西():
+    """只看自己那一位的话,藏起来的分组里的东西照样画在卡片上 —— 和出片不一致。"""
+    from app.domain.scenes import scene_preview
+
+    preview = scene_preview({'objects': [
+        {'id': 'g', 'kind': 'group', 'hidden': True},
+        {'id': 'inner', 'kind': 'group', 'parent_id': 'g'},
+        {'id': 'deep', 'kind': 'box', 'parent_id': 'inner'},
+        {'id': 'keep', 'kind': 'sphere'},
+    ]})
+    assert [o['kind'] for o in preview['objects']] == ['sphere']

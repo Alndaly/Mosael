@@ -1046,7 +1046,7 @@
 
 .scene-object-row {
   display: grid;
-  grid-template-columns: var(--row-twist) minmax(0, 1fr) var(--row-height);
+  grid-template-columns: var(--row-twist) minmax(0, 1fr) var(--row-height) var(--row-height);
   align-items: center;
   border-radius: 7px;
   /* 缩进加在**行的内距**上:高亮从行首起,缩进落在高亮里面。加在子元素的 margin 上的话,
@@ -1081,6 +1081,29 @@
 .scene-object-row .scene-object-delete:hover {
   color: var(--destructive);
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+/* 显示/隐藏和删除键同一个样子、同一格宽 —— 两颗并排的钮尺寸不同是看得出来的。
+   悬停不变红:藏起来是可逆的,不该和删除用同一种警示色。 */
+.scene-object-row .scene-object-visibility {
+  width: var(--row-height);
+  height: var(--row-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--muted-foreground);
+}
+.scene-object-row .scene-object-visibility:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+/* 看不见的行淡下去:自己藏的(`self`)另加斜体,在藏起来的组里的(`inherited`)只淡显 ——
+   后者的眼睛仍是睁着的,它自己那一位没藏。只淡名字那一格,两颗钮保持原样好点。 */
+.scene-object-row[data-hidden] .scene-object-name {
+  opacity: 0.5;
+}
+.scene-object-row[data-hidden="self"] .scene-object-name > span {
+  font-style: italic;
 }
 @media (max-width: 780px) {
   .scene-side {

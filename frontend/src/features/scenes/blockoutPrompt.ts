@@ -20,6 +20,10 @@
  */
 import type { MessageKey } from "@/app/messages";
 import type { SceneObject } from "@/api/domains/scenes";
+import { hiddenObjectIds } from "./sceneGraph";
+
+/** 清单要看的那几个字段。带上 id/parent_id 是为了算"上级藏没藏"(见下)。 */
+type InventoryObject = Pick<SceneObject, "id" | "parent_id" | "name" | "kind" | "hidden">;
 
 /** 不出现在画面里的物体:相机、灯、分组本身。 */
 const OFFSCREEN = new Set(["camera", "light", "group"]);
@@ -27,15 +31,19 @@ const OFFSCREEN = new Set(["camera", "light", "group"]);
 const DEFAULT_NAME = /^(object|box|sphere|cylinder|plane|room|stairs|group|model|light|figure|table|camera)(\s*\d+)?$/i;
 const MAX_LISTED = 12;
 
-/** 画面里有什么:「列柱 ×12、神像、石阶」。同名的合并计数,按出现次数多的在前。 */
+/** 画面里有什么:「列柱 ×12、神像、石阶」。同名的合并计数,按出现次数多的在前。
+ *
+ *  **藏起来的不列,连同藏起来的组里的东西** —— 参考帧和视频里画不出它们,清单再说"画面里有",
+ *  模型就会凭空补一个出来。此前只看物体自己那一位,藏一个组时组里的东西照样上了清单。 */
 export function sceneInventory(
-  objects: readonly Pick<SceneObject, "name" | "kind" | "hidden">[],
+  objects: readonly InventoryObject[],
   t: (key: MessageKey) => string,
 ): string {
   const counts = new Map<string, number>();
+  const hidden = hiddenObjectIds(objects);
   for (const object of objects) {
     const name = object.name.trim();
-    if (object.hidden || OFFSCREEN.has(object.kind) || !name || DEFAULT_NAME.test(name)) continue;
+    if (hidden.has(object.id) || OFFSCREEN.has(object.kind) || !name || DEFAULT_NAME.test(name)) continue;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts.entries()]
@@ -56,7 +64,7 @@ export function blockoutPrompt({
 }: {
   kind: "image" | "video";
   sceneName: string;
-  objects: readonly Pick<SceneObject, "name" | "kind" | "hidden">[];
+  objects: readonly InventoryObject[];
   /** 打光预设那段话(lightingPrompt 的结果),不带句号。 */
   lighting: string;
   /** 出图时是否另附了一张灰模渲染(只用来读光影与体积)。视频路径没有这张。 */

@@ -175,8 +175,13 @@ describe("一行的左右位置只有一处说了算", () => {
     }
   });
 
-  it("一行里三个控件同高 —— 不同高是看得出来的", () => {
-    for (const selector of [".scene-object-twist", ".scene-object-name", ".scene-object-row .scene-object-delete"])
+  it("一行里四个控件同高 —— 不同高是看得出来的", () => {
+    for (const selector of [
+      ".scene-object-twist",
+      ".scene-object-name",
+      ".scene-object-row .scene-object-visibility",
+      ".scene-object-row .scene-object-delete",
+    ])
       expect(rule(selector)).toContain("height: var(--row-height)");
   });
 });

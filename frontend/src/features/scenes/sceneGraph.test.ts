@@ -8,6 +8,7 @@ import {
   cameraPreset,
   hasObjectMotion,
   duplicateObject,
+  hiddenObjectIds,
   initialScene,
   makeObject,
   makeShot,
@@ -166,5 +167,46 @@ describe("editable scene graph", () => {
     expect(orbit.at(-1)!.position[0]).toBeCloseTo(camera.position[0]);
     expect(orbit.at(-1)!.time).toBe(shot.duration);
     expect(cameraPreset(camera, shot, "push")[1].target).toEqual(camera.target);
+  });
+});
+
+describe("看不看得见沿父链算", () => {
+  /** 外组 → 内组 → 盒子;另有一个自己藏着的球挂在外组下。 */
+  function nested() {
+    const outer = makeObject("group", { name: "外组" });
+    const inner = makeObject("group", { name: "内组", parent_id: outer.id });
+    const box = makeObject("box", { parent_id: inner.id });
+    const ball = makeObject("sphere", { parent_id: outer.id, hidden: true });
+    const floor = makeObject("plane");
+    return { objects: [box, floor, inner, ball, outer], outer, inner, box, ball, floor };
+  }
+
+  it("自己藏了的算看不见,别的都看得见", () => {
+    const { objects, ball } = nested();
+    expect([...hiddenObjectIds(objects)]).toEqual([ball.id]);
+  });
+
+  it("藏一个组,它所有后代都看不见 —— 不管隔几层", () => {
+    const { objects, outer, inner, box, ball, floor } = nested();
+    const hidden = hiddenObjectIds(objects.map((o) => (o.id === outer.id ? { ...o, hidden: true } : o)));
+    expect(hidden).toEqual(new Set([outer.id, inner.id, box.id, ball.id]));
+    expect(hidden.has(floor.id)).toBe(false);
+  });
+
+  it("再显示那个组,原先自己藏着的孩子仍然藏着 —— 孩子的标记没被改过", () => {
+    const { objects, outer, ball } = nested();
+    const hiddenGroup = objects.map((o) => (o.id === outer.id ? { ...o, hidden: true } : o));
+    // 藏组只改组自己那一位;孩子们的数据原样。
+    expect(hiddenGroup.find((o) => o.id === ball.id)!.hidden).toBe(true);
+    expect(hiddenGroup.filter((o) => o.hidden).map((o) => o.id).sort()).toEqual([outer.id, ball.id].sort());
+    const shownAgain = hiddenGroup.map((o) => (o.id === outer.id ? { ...o, hidden: false } : o));
+    expect([...hiddenObjectIds(shownAgain)]).toEqual([ball.id]);
+  });
+
+  it("父级不存在的孤儿、父链上的环都不挂 —— 按看得见算", () => {
+    const orphan = makeObject("box", { parent_id: "gone" });
+    const a = makeObject("group", { id: "a", parent_id: "b" });
+    const b = makeObject("group", { id: "b", parent_id: "a" });
+    expect(hiddenObjectIds([orphan, a, b]).size).toBe(0);
   });
 });

@@ -41,6 +41,8 @@ import {
   ChevronsUpDown,
   CircleAlert,
   Download,
+  Eye,
+  EyeOff,
   Focus,
   Folder,
   HelpCircle,
@@ -107,6 +109,7 @@ import {
   sampleCamera,
   sampleObject,
   duplicateObject,
+  hiddenObjectIds,
   initialScene,
   makeObject,
   makeShot,
@@ -492,6 +495,19 @@ function SceneEditor({
     if (gone.length) toast.info(t("sceneShotsRemovedWithCamera").replace("{names}", gone.map((s) => s.name).join(t("listSeparator"))));
     if (!content.objects.some(object => object.id === selected)) setSelected(null);
   }
+  /** 藏 / 显示一个物体。**只改它自己那一位**:藏一个组时孩子们各自的标记原样留着,
+   *  再显示这个组,原先就藏着的孩子仍然藏着(和 Blender 一样)。走 objectPatch → update,
+   *  所以能撤销,也跟着自动保存进场景。 */
+  function toggleHidden(id: string) {
+    const target = current.current.content.objects.find((o) => o.id === id);
+    if (target) objectPatch(id, { hidden: !target.hidden });
+  }
+  /** ⌥H:全部显示。一步 update,撤销时一次全回来。 */
+  function revealAll() {
+    const content = current.current.content;
+    if (!content.objects.some((o) => o.hidden)) return;
+    update({ ...content, objects: content.objects.map((o) => (o.hidden ? { ...o, hidden: false } : o)) });
+  }
   function undo() {
     if (!history.length) return;
     const next = history[history.length - 1];
@@ -548,6 +564,8 @@ function SceneEditor({
     object = draft.content.objects.find((o) => o.id === selected);
   /** 拍当前镜头的那台机位。**运镜长在它身上** —— 见 docs/design/scene-time-and-cameras.md。 */
   const rig = cameraOfShot(draft.content, shot);
+  /** 实际看不见的物体(自己藏了或在藏起来的组里)。列表按它淡显。 */
+  const hiddenIds = hiddenObjectIds(draft.content.objects);
   function rigPatch(patch: Partial<SceneObject>) {
     if (rig) objectPatch(rig.id, patch);
   }
@@ -584,6 +602,7 @@ function SceneEditor({
    *   空格      播放暂停                          ⇧D         复制一份
    *   ← →      逐帧                              X / ⌫      删除
    *   ↑ ↓      跳到上/下一个关键帧                F          聚焦选中
+   *   H / ⌥H   藏 / 显示选中,全部显示
    *
    * 单键的那些一律要求"没有按任何修饰键" —— 否则 ⌘S(保存)会顺手把工具切成缩放,
    * 而用户完全不知道自己刚才改了什么。
@@ -606,6 +625,13 @@ function SceneEditor({
       if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyI") {
         e.preventDefault();
         clearKeyframe();
+        return;
+      }
+      // ⌥H 同理:它是 H 的一对。Blender 里 H 只藏不显,但这里藏起来的物体仍可以从列表里
+      // 选中,所以 H 做成开关 —— 选中一个藏着的再按一次就回来了。
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyH") {
+        e.preventDefault();
+        revealAll();
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -658,6 +684,11 @@ function SceneEditor({
           return;
         case "KeyF":
           view.current?.focus();
+          return;
+        case "KeyH":
+          if (!selected) return;
+          e.preventDefault();
+          toggleHidden(selected);
           return;
         case "KeyX":
         case "Delete":
@@ -1362,6 +1393,7 @@ function SceneEditor({
                     <dt>↑ ↓</dt><dd>{t("sceneKeyJump")}</dd>
                     <dt>⇧D</dt><dd>{t("sceneKeyDuplicate")}</dd>
                     <dt>X</dt><dd>{t("sceneKeyDelete")}</dd>
+                    <dt>H / ⌥H</dt><dd>{t("sceneKeyHide")}</dd>
                     <dt>F</dt><dd>{t("sceneKeyFocus")}</dd>
                     <dt>⌘Z / ⇧⌘Z</dt><dd>{t("sceneKeyUndo")}</dd>
                   </dl>
@@ -1584,6 +1616,10 @@ function SceneEditor({
                       <div
                         className="scene-object-row"
                         key={o.id}
+                        // 淡显的是"实际看不见"的行,不只是自己藏了的:藏一个组,组里那些行也要
+                        // 看得出它们此刻不在画面里。`self` 与 `inherited` 分开,前者另加斜体 ——
+                        // 眼睛图标只说自己那一位,斜体说的是"是我自己藏的"。
+                        data-hidden={o.hidden ? "self" : hiddenIds.has(o.id) ? "inherited" : undefined}
                         role="treeitem"
                         aria-level={depth + 1}
                         aria-expanded={children ? !collapsed.has(o.id) : undefined}
@@ -1627,7 +1663,17 @@ function SceneEditor({
                           <ObjectKindIcon kind={o.kind} />
                           <span>{o.name}</span>
                           {children > 0 && collapsed.has(o.id) && <small>{t("sceneChildCount").replace("{n}", String(children))}</small>}
-                          {o.hidden && <small>{t("sceneHiddenBadge")}</small>}
+                        </button>
+                        {/* 显示/隐藏和删除并排,同尺寸、同一种安静的样子 —— 此前藏一个物体要先选中它,
+                            再到下面的「调整对象」里找那颗眼睛;列表里只有一个「隐藏」字样的标记。 */}
+                        <button
+                          className="scene-object-visibility"
+                          aria-label={t(o.hidden ? "sceneShowObjectNamed" : "sceneHideObjectNamed").replace("{name}", o.name)}
+                          title={t(o.hidden ? "sceneShowObjectNamed" : "sceneHideObjectNamed").replace("{name}", o.name)}
+                          disabled={!!busy}
+                          onClick={() => toggleHidden(o.id)}
+                        >
+                          {o.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
                         <button
                           className="scene-object-delete"
