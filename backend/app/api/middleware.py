@@ -10,10 +10,11 @@
 from __future__ import annotations
 
 from starlette.datastructures import Headers
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.asgi import adding_headers
-from app.core.i18n import normalize_locale, set_current_locale
+from app.core.i18n import normalize_locale, set_current_locale, tr
 from app.domain.jobs import stop_watching_new_jobs, watch_new_jobs
 
 #: 「这次请求建了几个任务」的响应头。前端的 api/transport 认这个名字。
@@ -61,5 +62,43 @@ class AnnounceNewJobs:
             stop_watching_new_jobs(token)
 
 
-__all__ = ["AnnounceNewJobs", "CarryLocale", "NEW_JOBS_HEADER"]
+class AnswerCrashes:
+    """未处理的异常就地答成一个 JSON 500,**在 CORS 那层里面**。
+
+    不这么做的话,异常一路冒到 Starlette 最外层的 ServerErrorMiddleware —— 它在 CORS 外面,
+    回的 500 不带 Access-Control-Allow-Origin。浏览器于是连状态码都不给页面看,fetch 直接
+    失败,前端只能说「127.0.0.1:8800 连不上」:一个后端 bug 被说成了网络问题(线上:Blender
+    「发送当前场景」因为一个 AttributeError 连着报了好几次「连不上」,而后端一直好好的)。
+
+    必须是**最里层**的中间件(最先 add_middleware),这样它的回复还会经过 CORS 和语言那两层。
+
+    答完**照样把异常往外抛**:外层的 ServerErrorMiddleware 看到响应已经发出,只记日志(uvicorn
+    控制台里还是那份完整堆栈),不会再回第二次;测试客户端也照样拿得到原异常。响应已经开始发了
+    就不答,直接放手 —— 那时候没法再换状态码。
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = False
+
+        async def tracking(message: Message) -> None:
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracking)
+        except Exception:
+            if not started:
+                await JSONResponse(status_code=500, content={"detail": tr("routeErr_internal")})(scope, receive, send)
+            raise
+
+
+__all__ = ["AnnounceNewJobs", "AnswerCrashes", "CarryLocale", "NEW_JOBS_HEADER"]
 

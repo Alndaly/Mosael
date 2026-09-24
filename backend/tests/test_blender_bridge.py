@@ -235,3 +235,32 @@ def test_pull_without_usable_cameras_keeps_the_default_shot(monkeypatch, tmp_pat
         default=SceneContent().model_dump(mode='json')
         assert scene.content['shots']==default['shots'] and scene.content['lighting']==default['lighting']
         assert result['warnings']==[]
+
+
+def test_send_carries_workspace_models_along(monkeypatch, tmp_path):
+    """场景里摆着导入的模型时照样发得出去,模型文件交给 Blender 那边挂上。
+
+    线上:模型早就从「属于场景」迁成了「属于工作区」,这里还在读 `model.scene_id` —— 场景里
+    只要有一件导入的道具,发送就抛 AttributeError,界面上看到的是「127.0.0.1:8800 连不上」。
+    """
+    c, ws, initial = setup_scene()
+    monkeypatch.setattr(settings, 'data_dir', tmp_path)
+    doc = {'asset': {'version': '2.0'}, 'scenes': [{'nodes': []}], 'scene': 0}
+    mid = c.post('/api/scene-models', data={'workspace_id': ws},
+                 files={'file': ('prop.gltf', json.dumps(doc).encode(), 'model/gltf+json')}).json()['id']
+    content = initial['content']
+    content['objects'].append({'id': 'prop', 'kind': 'model', 'model_id': mid, 'name': 'Prop'})
+    r = c.patch('/api/scenes/' + initial['id'], json={'workspace_id': ws, 'name': 'Studio', 'base_revision': 1, 'content': content})
+    assert r.status_code == 200, r.text
+    monkeypatch.setattr(bridge, 'resolve', lambda *args, **kw: SimpleNamespace(id='local'))
+    seen = {}
+    def execute(db, instance, operation, payload, workspace_id):
+        seen['models'] = payload['models']
+        return {'scene_name': 'Test'}
+    monkeypatch.setattr(bridge, 'execute', execute)
+    with SessionLocal() as db:
+        user = db.scalar(select(User))
+        scene = db.get(Scene3D, initial['id'])
+        bridge.send(db, user, scene, 'local', scene.revision, scene.content['shots'][0]['id'])
+    assert [m['object_id'] for m in seen['models']] == ['prop']
+    assert all(Path(m['path']).is_file() for m in seen['models'])

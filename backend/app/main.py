@@ -56,7 +56,7 @@ from app.api.routes.notes import router as notes_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.core.config import settings
-from app.api.middleware import NEW_JOBS_HEADER, AnnounceNewJobs, CarryLocale
+from app.api.middleware import NEW_JOBS_HEADER, AnnounceNewJobs, AnswerCrashes, CarryLocale
 from app.api.deps import require_worker_key
 from app.core.logging import configure_logging
 from app.core.rate_limit import install_rate_limiting
@@ -272,6 +272,8 @@ def create_app() -> FastAPI:
     install_rate_limiting(app, settings)
     # 这几层都是纯 ASGI(见 api/middleware 的说明:包在大文件响应外面的 BaseHTTPMiddleware
     # 会让拖视频进度条慢好几倍)。
+    # 最先加 = 最里层:它答出来的 500 还要经过 CORS(和语言),见 AnswerCrashes 的说明。
+    app.add_middleware(AnswerCrashes)
     app.add_middleware(CarryLocale)
     app.add_middleware(AnnounceNewJobs)
     # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend

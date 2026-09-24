@@ -475,7 +475,10 @@ def send(db, user, scene, instance_id, revision, shot_id):
         models = []
         for entry in written['models']:
             model = db.get(Scene3DModel, entry['model_id'])
-            if model is None or model.scene_id != scene.id:
+            # 模型属于工作区的模型库(见 migrations._migrate_scene_models_to_workspace),不属于某个场景。
+            # 这里此前还在读已经不存在的 scene_id —— 场景里只要摆了导入的模型,发送就抛
+            # AttributeError,界面上看到的是一句「127.0.0.1:8800 连不上」。
+            if model is None or model.workspace_id != scene.workspace_id:
                 continue
             path = model_file(model)
             if path.is_file():

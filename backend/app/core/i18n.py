@@ -330,6 +330,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Plugin state is too long (limit {limit} characters): {keys}",
     },
     # ---- B1 · 02_routes ----
+    "routeErr_internal": {
+        "zh": "后端出错了,这次操作没有完成。错误已记进后端日志;重试一次,还不行就把日志发给开发者。",
+        "en": "The backend hit an error and this action didn't complete. It's in the backend log — try again, and if it keeps failing, send the log to the developers.",
+    },
     "routeErr_accountNotFound": {
         "zh": "账号不存在",
         "en": "Account not found.",
