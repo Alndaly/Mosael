@@ -125,7 +125,7 @@ it("全部预填挨个跑:一次只转一行,每家的结果各记一条,一家�
 it("删一条规则先确认,确认了才发 DELETE", async () => {
   const calls = mount();
   await screen.findByText(/deepseek-v4-pro/);
-  fireEvent.click(screen.getByRole("button", { name: "delete" }));
+  fireEvent.click(screen.getByRole("button", { name: /^delete: / }));
   expect(await screen.findByText("pricingRuleDeleteTitle")).toBeTruthy();
   expect(calls.some((c) => c.startsWith("DELETE"))).toBe(false);
   const dialog = screen.getByRole("alertdialog");
@@ -136,7 +136,7 @@ it("删一条规则先确认,确认了才发 DELETE", async () => {
 it("编辑表单里只有字段标题加粗,控件本身不继承粗体", async () => {
   mount();
   await screen.findByText(/deepseek-v4-pro/);
-  fireEvent.click(screen.getByRole("button", { name: "pricingRuleEdit" }));
+  fireEvent.click(screen.getAllByRole("button", { name: /^pricingRuleEdit: / })[0]);
   const model = await screen.findByDisplayValue("deepseek-v4-pro");
   const field = model.closest("label")!;
   expect(field.className).not.toMatch(/font-semibold|font-bold/);
@@ -153,14 +153,14 @@ function removeAllWindows() {
 
 it("列表行把分时段价格压成一句:同星期同价的时段并在一起,时区说人话", async () => {
   mount(undefined, [TIMED_RULE]);
-  const row = await screen.findByText(/deepseek-flash/);
-  expect(row.textContent).toContain("pricingWorkdays 09:00–12:00, 14:00–18:00 0.87 (pricingZoneBeijing)");
+  await screen.findByText(/deepseek-flash/);
+  expect(screen.getByText(/pricingWorkdays/).textContent).toContain("pricingWorkdays 09:00–12:00, 14:00–18:00 0.87 (pricingZoneBeijing)");
 });
 
 it("编辑:删光时段再加一段,时区预选这家已有规则的时区;点掉周末,提交的就是工作日", async () => {
   mount(undefined, [TIMED_RULE]);
   await screen.findByText(/deepseek-flash/);
-  fireEvent.click(screen.getByRole("button", { name: "pricingRuleEdit" }));
+  fireEvent.click(screen.getAllByRole("button", { name: /^pricingRuleEdit: / })[0]);
   await waitFor(() => expect(screen.getAllByTestId("pricing-time-window")).toHaveLength(2));
   expect(screen.getAllByRole("button", { name: "pricingTimeWindowStart" }).map((b) => b.textContent)).toEqual(["09:00", "14:00"]);
 
@@ -216,4 +216,62 @@ it("预填结果里单独说一句有几条带分时段价格", async () => {
   await waitFor(() => expect(deepseek).toHaveAttribute("aria-busy", "true"));
   finish(json(outcome({ created: 6, created_from_reference: 6, created_with_time_prices: 6, models_seen: 2, models_with_price: 2 })));
   expect(await screen.findByText("pricingPrefillTimed")).toBeTruthy();
+});
+
+// —— 浏览:按模型成组、筛选搜索、卡片 / 列表 ——
+const INPUT = { ...RULE, id: "g1", model: "qwen-flash", provider_profile_id: "p2", provider: "dashscope", billing_unit: "million_input_token", unit_amount_micros: 150000, currency: "CNY", source: "reference", notes: "官方价目(中国内地)" };
+const OUTPUT = { ...INPUT, id: "g2", billing_unit: "million_output_token", unit_amount_micros: 1500000 };
+const OTHER = { ...RULE, id: "g3", model: "deepseek-v4-pro", billing_unit: "million_input_token", source: "manual" };
+
+it("同一连接、同一模型的几条价格收成一张卡片,各条仍能单独改删", async () => {
+  mount(undefined, [INPUT, OUTPUT, OTHER]);
+  const title = await screen.findByText("qwen-flash");
+  const card = title.closest("article")!;
+  expect(within(card).getByText("0.15 CNY")).toBeTruthy();
+  expect(within(card).getByText("1.5 CNY")).toBeTruthy();
+  expect(within(card).getAllByRole("button", { name: /^pricingRuleEdit: / })).toHaveLength(2);
+  expect(within(card).getByText("pricingSource_reference")).toBeTruthy();
+  expect(screen.getAllByRole("article")).toHaveLength(2); // 三条规则,两个模型
+  expect(screen.getByText(/pricingCount/)).toBeTruthy();
+});
+
+it("搜索和按来源筛选;筛完没有东西时说清楚,并能一键清掉", async () => {
+  mount(undefined, [INPUT, OUTPUT, OTHER]);
+  await screen.findByText("qwen-flash");
+  fireEvent.change(screen.getByRole("textbox", { name: "pricingSearch" }), { target: { value: "deepseek" } });
+  expect(screen.queryByText("qwen-flash")).toBeNull();
+  expect(screen.getByText("deepseek-v4-pro")).toBeTruthy();
+
+  fireEvent.change(screen.getByRole("textbox", { name: "pricingSearch" }), { target: { value: "没有这个模型" } });
+  expect(screen.getByText("pricingNoMatch")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "pricingClearFilters" }));
+  expect(screen.getAllByRole("article")).toHaveLength(2);
+});
+
+it("卡片 / 列表可以切,选择记住到下次", async () => {
+  localStorage.clear();
+  mount(undefined, [INPUT, OUTPUT, OTHER]);
+  await screen.findByText("qwen-flash");
+  expect(screen.getAllByRole("article")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "studioListView" }));
+  expect(screen.queryAllByRole("article")).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "studioListView" })).toHaveAttribute("aria-pressed", "true");
+  cleanup();
+  mount(undefined, [INPUT, OUTPUT, OTHER]);
+  await screen.findByText("qwen-flash");
+  expect(screen.queryAllByRole("article")).toHaveLength(0);
+  localStorage.clear();
+});
+
+it("删一个模型的全部价格:确认后逐条删掉这一组", async () => {
+  const calls = mount(undefined, [INPUT, OUTPUT, OTHER]);
+  await screen.findByText("qwen-flash");
+  fireEvent.click(screen.getByRole("button", { name: "pricingDeleteGroup: qwen-flash" }));
+  const dialog = await screen.findByRole("alertdialog");
+  expect(within(dialog).getByText("pricingDeleteGroupTitle")).toBeTruthy();
+  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "delete")!);
+  await waitFor(() => {
+    const deletes = calls.filter((c) => c.startsWith("DELETE"));
+    expect(deletes.map((c) => c.split("/").pop()).sort()).toEqual(["g1", "g2"]);
+  });
 });

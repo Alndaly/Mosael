@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, ReceiptText, Sparkles, Trash2 } from "lucide-react";
+import { Plus, ReceiptText, SearchX, Sparkles, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -9,12 +9,12 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
-import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsEmpty, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
-import { cn } from "@/lib/utils";
+import { SettingsEmpty, SettingsGroup, SettingsListBlock } from "@/components/settings/settings-layout";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 import { toast } from "sonner";
 
 import {
@@ -27,6 +27,15 @@ import {
   useScheduleSummary,
   type WindowDraft,
 } from "./PricingTimePrices";
+import {
+  EMPTY_FILTERS,
+  PricingRuleFilters,
+  PricingRuleGroups,
+  filterGroups,
+  groupRules,
+  type RuleFilters,
+  type RuleGroup,
+} from "./PricingRuleBrowser";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type PricingRule = components["schemas"]["ProviderPricingRuleOut"];
@@ -273,8 +282,21 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
 
   /* 批量选择:「按目录预填」一次能生成几十条规则,发现填错了逐条删要点几十次。
      用户的动作本来就是"把这一批去掉",界面得给得出这个动作。 */
+  const profileLabel = (profileId: string | null | undefined, provider: string) => {
+    const profile = (profiles.data ?? []).find((item) => item.id === profileId);
+    if (profile) return profile.name;
+    return provider || t("pricingAnyProvider");
+  };
   const ruleList = rules.data ?? [];
-  const bulk = useBulkSelection(ruleList, (rule) => rule.id);
+  // 按模型成组来看、来选(见 PricingRuleBrowser):批量选的是「这个模型的全部价格」,删的时候展开成各条规则。
+  const [display, setDisplay] = usePersistentTab<"grid" | "list">("pricing-display", "grid", ["grid", "list"]);
+  const [filters, setFilters] = React.useState<RuleFilters>(EMPTY_FILTERS);
+  const allGroups = React.useMemo(() => groupRules(ruleList, BILLING_UNITS), [ruleList]);
+  const groupProfileName = (group: RuleGroup) => profileLabel(group.profileId, group.provider);
+  const groups = filterGroups(allGroups, filters, groupProfileName);
+  const bulk = useBulkSelection(groups, (group) => group.key);
+  const selectedRuleIds = () => groups.filter((group) => bulk.isSelected(group.key)).flatMap((group) => group.rules.map((rule) => rule.id));
+  const [deletingGroup, setDeletingGroup] = React.useState<RuleGroup | null>(null);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
   const removeMany = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -288,6 +310,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     onSuccess: ({ ok, failed }) => {
       bulk.clear();
       setBulkDeleting(false);
+      setDeletingGroup(null);
       refresh();
       if (failed) toast.error(t("bulkPartialFailed").replace("{ok}", String(ok)).replace("{failed}", String(failed)));
       else toast.success(t("bulkDeleteDone").replace("{n}", String(ok)));
@@ -328,11 +351,6 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   };
   const prefillBusy = prefill.isPending || prefillingAll;
 
-  const profileLabel = (profileId: string | null | undefined, provider: string) => {
-    const profile = (profiles.data ?? []).find((item) => item.id === profileId);
-    if (profile) return profile.name;
-    return provider || t("pricingAnyProvider");
-  };
   const scheduleSummary = useScheduleSummary();
   /** 加第一个时段时预选的时区:这家已有规则里用的那个(预填的 DeepSeek 规则是北京时间),否则本机时区。
    *  不在前端再抄一份「哪家用哪个时区」—— 价目表在后端,规则里已经带着。 */
@@ -343,6 +361,13 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   }, [ruleList, selectedProfile?.vendor]);
   const capabilityLabel = (capability: string) => t(CAPABILITY_LABELS[capability] ?? "capChat");
   const unitLabel = (unit: string) => t(UNIT_LABELS[unit] ?? "pricingUnit_request");
+  const browserLabels = {
+    profileName: groupProfileName,
+    capabilityLabel,
+    unitLabel,
+    amount: (rule: PricingRule) => `${microsToAmount(rule.unit_amount_micros)} ${rule.currency}`,
+    schedule: (rule: PricingRule) => scheduleSummary(rule.time_prices ?? [], rule.time_zone ?? ""),
+  };
   const canSubmit = amountToMicros(form.unitAmount) >= 0 && form.capability && form.billingUnit && form.currency.trim();
 
   return (
@@ -559,10 +584,21 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       <ConfirmDialog
         open={bulkDeleting}
         title={t("bulkDeleteConfirm").replace("{n}", String(bulk.count))}
-        body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
+        body={t("pricingBulkDeleteBody").replace("{n}", String(bulk.count)).replace("{rules}", String(selectedRuleIds().length))}
         onCancel={() => setBulkDeleting(false)}
         pending={removeMany.isPending}
-        onConfirm={() => removeMany.mutate(bulk.selectedIds)}
+        onConfirm={() => removeMany.mutate(selectedRuleIds())}
+      />
+      <ConfirmDialog
+        open={deletingGroup !== null}
+        title={t("pricingDeleteGroupTitle")
+          .replace("{model}", deletingGroup?.model || t("pricingAnyModel"))
+          .replace("{n}", String(deletingGroup?.rules.length ?? 0))}
+        body={deletingGroup ? `${capabilityLabel(deletingGroup.capability)} · ${groupProfileName(deletingGroup)}` : undefined}
+        confirmLabel={t("delete")}
+        onCancel={() => setDeletingGroup(null)}
+        pending={removeMany.isPending}
+        onConfirm={() => deletingGroup && removeMany.mutate(deletingGroup.rules.map((rule) => rule.id))}
       />
 
       {rules.data && ruleList.length === 0 ? (
@@ -577,46 +613,30 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             </BulkActionBar>
           ) : undefined}
         >
-          {ruleList.map((rule) => (
-            <SettingsListItem
-              className={cn(
-                "grid items-center gap-2",
-                bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
-                bulk.isSelected(rule.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
-              )}
-              key={rule.id}
-            >
-              {bulk.active && (
-                <BulkCheckbox
-                  checked={bulk.isSelected(rule.id)}
-                  onToggle={(event) => bulk.toggle(rule.id, event)}
-                  label={t("bulkSelectRow")}
-                />
-              )}
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
-                <ReceiptText size={13} />
-              </span>
-              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
-                <strong>
-                  {capabilityLabel(rule.capability)} · {profileLabel(rule.provider_profile_id, rule.provider)}
-                </strong>
-                <small>
-                  {rule.model || t("pricingAnyModel")} · {formatRuleAmount(rule, unitLabel(rule.billing_unit))}
-                  {rule.time_prices?.length ? ` · ${scheduleSummary(rule.time_prices, rule.time_zone ?? "")}` : ""}
-                  {rule.notes ? ` · ${rule.notes}` : ""}
-                </small>
-              </div>
-              <span className="whitespace-nowrap text-xs text-muted-foreground">{formatRuleAmount(rule, unitLabel(rule.billing_unit))}</span>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
-                  <Pencil size={13} />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => setDeleting(rule)} aria-label={t("delete")}>
-                  <Trash2 size={13} />
-                </Button>
-              </div>
-            </SettingsListItem>
-          ))}
+          <div className="grid gap-4 py-2">
+            <PricingRuleFilters
+              groups={allGroups}
+              filters={filters}
+              onChange={setFilters}
+              display={display}
+              onDisplay={setDisplay}
+              shown={groups.length}
+              labels={browserLabels}
+            />
+            {groups.length === 0 ? (
+              <SettingsEmpty icon={<SearchX size={20} />} title={t("pricingNoMatch")} />
+            ) : (
+              <PricingRuleGroups
+                groups={groups}
+                display={display}
+                bulk={bulk}
+                labels={browserLabels}
+                onEdit={openEdit}
+                onDelete={setDeleting}
+                onDeleteGroup={setDeletingGroup}
+              />
+            )}
+          </div>
         </SettingsListBlock>
       )}
     </SettingsGroup>
