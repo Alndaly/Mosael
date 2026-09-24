@@ -39,7 +39,13 @@ def guess_kind(path: Path, content_type: str | None = None) -> str:
     return "video"
 
 
-def probe_media(path: Path) -> dict[str, Any]:
+def probe_media(path: Path, *, measure_missing_duration: bool = True) -> dict[str, Any]:
+    """探出时长、画幅、帧率。
+
+    时长先读容器头;头里没写(MediaRecorder 直录的 webm 就是这样),默认逐包量一遍
+    (见 measure_duration)—— 「量不到」绝不能被调用处的 `or 0.0` 读成「0 秒」。
+    `measure_missing_duration=False` 只给想知道「头里有没有」的人用(导入要据此决定补不补头)。
+    """
     try:
         proc = run_logged(
             [
@@ -69,6 +75,8 @@ def probe_media(path: Path) -> dict[str, Any]:
             info["duration"] = float(fmt["duration"])
         except (TypeError, ValueError):
             pass
+    if "duration" not in info and measure_missing_duration and raw.get("streams"):
+        info["duration"] = measure_duration(path)
     for stream in raw.get("streams") or []:
         if stream.get("codec_type") == "video":
             info["width"] = stream.get("width")
@@ -76,6 +84,45 @@ def probe_media(path: Path) -> dict[str, Any]:
             info["fps"] = _frame_rate(path, stream, info.get("duration"))
             break
     return {k: v for k, v in info.items() if v is not None}
+
+
+def measure_duration(path: Path) -> float | None:
+    """容器头里没写时长时,把包逐个读一遍(只解封装、不解码),取最后一包的结束时刻。
+
+    MediaRecorder 的 webm 是流式写出的,Chromium 不回填 Duration 头 —— 用户录了好几秒的
+    参考音频,克隆那边量出来是「0.0 秒」。只读包头,几秒的录音是毫秒级,长片也只是读一遍文件。
+
+    只有一包的不算一段:静态图片的头里同样没有时长,它那一包的「时长」是解封装器按 25fps
+    给的默认值,不是它的长度。
+    """
+    try:
+        proc = run_logged(
+            [settings.ffprobe, "-v", "error", "-show_entries", "packet=pts_time,duration_time",
+             "-of", "csv=p=0", str(path)],
+            check=True, capture_output=True, text=True, timeout=120, what="媒体探测", level=logging.DEBUG,
+        )
+    except Exception:
+        return None
+    start: float | None = None
+    end = 0.0
+    packets = 0
+    for line in proc.stdout.splitlines():
+        # 带 side data 的包行尾会多一个逗号,只看前两列。
+        fields = line.split(",")
+        try:
+            pts = float(fields[0])
+        except ValueError:
+            continue  # pts 为 N/A 的包定不了位置
+        try:
+            length = float(fields[1]) if len(fields) > 1 else 0.0
+        except ValueError:
+            length = 0.0
+        start = pts if start is None else min(start, pts)
+        end = max(end, pts + length)
+        packets += 1
+    if packets < 2 or start is None or end <= start:
+        return None
+    return round(end - start, 3)
 
 
 #: 超过它的「帧率」不是帧率,是容器的时间单位。浏览器 MediaRecorder 录的 webm 以毫秒计时,

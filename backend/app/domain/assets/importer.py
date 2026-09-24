@@ -19,9 +19,13 @@ from app.media.waveform import generate_waveform, waveform_path
 
 def _probe_with_duration_repair(target: Path, kind: str) -> dict:
     """探测媒体信息;时长缺失的音视频(MediaRecorder 直录 webm 的已知形态)
-    先无损 remux 补容器头再重探,后续缩略图/波形/剪辑都依赖时长。"""
-    media_info = probe_media(target)
-    if kind != "image" and media_info.get("duration") is None and remux_in_place(target):
+    先无损 remux 补容器头再重探,后续缩略图/波形/剪辑都依赖时长。
+
+    这里先只看**头里**有没有:probe_media 量得出没写在头里的时长,可浏览器不会 ——
+    头不补,播放器里照样拖不动。补头失败时,重探仍会逐包量出真实时长。"""
+    media_info = probe_media(target, measure_missing_duration=False)
+    if kind != "image" and media_info.get("duration") is None:
+        remux_in_place(target)
         media_info = probe_media(target)
     return media_info
 
@@ -38,8 +42,8 @@ def reconcile_broken_media_info(db: Session) -> int:
         source = resolve_key(asset.file_key)
         if not source.is_file():
             continue
-        if not remux_in_place(source):
-            continue
+        # 补头是尽力而为;补不上,probe_media 照样逐包量出时长,素材不该因此一直缺时长。
+        remux_in_place(source)
         probed = probe_media(source)
         if probed.get("duration") is None:
             continue

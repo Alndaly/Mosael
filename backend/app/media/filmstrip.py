@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.child_process import run_logged
+from app.media.probe import probe_media
 
 """
 剪辑用的帧条:沿时间轴均匀取几帧,拼成**一张横向长图**,存在素材目录里(和缩略图、波形同一处)。
@@ -49,11 +50,5 @@ def generate_filmstrip(source: Path, kind: str, asset_directory: Path) -> Path |
 
 
 def _duration(source: Path) -> float:
-    try:
-        probe = run_logged(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(source)],
-            check=True, capture_output=True, text=True, timeout=20, what="帧条探测",
-        )
-        return float(probe.stdout.strip() or 0)
-    except Exception:
-        return 0.0
+    # 走共用的探测:头里没写时长的录像(MediaRecorder 直录)这里曾读到 "N/A",帧条就没了。
+    return float(probe_media(source).get("duration") or 0.0)

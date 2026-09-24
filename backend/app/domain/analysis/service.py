@@ -26,7 +26,7 @@ from app.domain.providers import find_enabled_connection, list_enabled_connectio
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 from app.core.child_process import run_logged
-import logging
+from app.media.probe import probe_media
 
 """Existing-asset visual analysis.
 
@@ -125,10 +125,8 @@ def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
     with tempfile.TemporaryDirectory(prefix="mosael-frames-") as tmp:
         pattern = Path(tmp) / "frame-%02d.jpg"
         try:
-            probe = run_logged(
-                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
-                check=True, capture_output=True, text=True, timeout=20, what="抽帧探测", level=logging.DEBUG)
-            duration = max(float(probe.stdout.strip() or 1.0), 0.2)
+            # 时长走共用的探测:头里没写时长的录像,这里曾把 "N/A" 交给 float() 直接抛出去。
+            duration = max(float(probe_media(path).get("duration") or 1.0), 0.2)
             frame_count = count if count is not None else adaptive_frame_count(duration)
             run_logged(
                 [
