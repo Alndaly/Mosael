@@ -102,7 +102,7 @@ function Column({
     item?.scrollIntoView?.({ block: "center" });
   }, [selected]);
   return (
-    <div className="grid w-16 grid-rows-[auto_minmax(0,1fr)] gap-1">
+    <div className="grid w-16 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-1">
       <span className="px-2 pt-1 text-center text-ui-2xs font-medium text-muted-foreground">{label}</span>
       <div
         ref={list}
