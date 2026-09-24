@@ -2431,6 +2431,40 @@ def _migrate_line_fields_are_lists() -> None:
                 )
 
 
+def _disable_tasks_bound_to_deleted_workflows() -> None:
+    """绑着一张**已经删掉**的工作流、却还是「启用」的定时任务,停用。
+
+    删工作流此前不管定时任务:任务仍是启用的,排程的到点照样触发、手动的照样能点「立即运行」,
+    每一次都落一条「工作流不存在」的失败。删除路径现在会当场把它们停掉(scheduler.stop_tasks_bound_to_workflow),
+    启用、触发也都先问一句跑不跑得起来 —— 库里已经留下的那些在这里一次停掉。
+
+    只动开关和下次触发时刻,任务和它的运行记录都留着:删不删由人决定。别的工作区的同 id
+    工作流不算「在」—— 执行体也不会去跑它。
+    """
+    present = set(inspect(engine).get_table_names())
+    if not {"scheduled_tasks", "workflows"} <= present:
+        return
+    with engine.begin() as conn:
+        existing = {(row[0], row[1]) for row in conn.execute(text("SELECT id, workspace_id FROM workflows"))}
+        rows = conn.execute(
+            text("SELECT id, workspace_id, payload FROM scheduled_tasks WHERE kind = 'workflow' AND enabled = 1")
+        ).mappings().all()
+        for row in rows:
+            raw = row["payload"]
+            try:
+                payload = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                payload = None
+            workflow_id = str(payload.get("workflow_id") or "") if isinstance(payload, dict) else ""
+            if (workflow_id, row["workspace_id"]) in existing:
+                continue
+            conn.execute(
+                text("UPDATE scheduled_tasks SET enabled = 0, next_run_at = NULL WHERE id = :id"),
+                {"id": row["id"]},
+            )
+            logger.info("定时任务 %s 绑的工作流已不在,停用", row["id"])
+
+
 def _migrate_job_keys_are_keys() -> None:
     """jobs 的 message_key / error_key 里只能是**文案 key**(或空)。
 
@@ -2672,6 +2706,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_called_workflows_declare_their_output,
                 _migrate_line_fields_are_lists,
                 _migrate_workflow_revisions,
+                _disable_tasks_bound_to_deleted_workflows,
                 # Projection comes last so rows synthesized by earlier migrations are visible
                 # immediately, rather than waiting for the next application startup.
                 _backfill_activity_events,

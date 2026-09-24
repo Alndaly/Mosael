@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import ScheduledTask, now
 from app.domain.jobs import expire_worker_leases, prune_task_events
-from app.domain.scheduler import SchedulerBusy, trigger_scheduled_task
+from app.domain.scheduler import SchedulerBusy, SchedulerDomainError, trigger_scheduled_task
 from app.domain.scheduler.executors import sync_run_states
 from app.domain.scheduler.operations import compute_next_run_at
 
@@ -80,6 +80,15 @@ def tick(db: Session) -> list[str]:
         except SchedulerBusy:
             # No reentry: push the schedule forward and skip.
             task.next_run_at = compute_next_run_at(task.trigger_type, task.schedule, timezone=task.timezone)
+            db.commit()
+            continue
+        except SchedulerDomainError as exc:
+            # 跑不起来的任务(绑的工作流没了)不该是启用的 —— 删除时就停掉了。万一漏到这里,
+            # 停掉它,别让这一个任务的异常把这一轮后面所有到点的任务一起带走。
+            logger.warning("定时任务 %s 跑不起来,已停用:%s", task.id, exc)
+            db.rollback()
+            task.enabled = False
+            task.next_run_at = None
             db.commit()
             continue
         created.append(run.id)

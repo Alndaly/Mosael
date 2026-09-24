@@ -9,7 +9,7 @@ import { OPEN_WORKFLOW_TEMPLATE, useOpenRequest, useSectionEntry } from "@/lib/d
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import {
   Background,
@@ -398,7 +398,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     mutationFn: (id: string) => deleteWorkflow(id),
     onSuccess: () => {
       setMenuDeleting(null);
-      void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
+      refreshAfterWorkflowDelete(qc, workspace.id);
     },
   });
   // 导出:取后端信封(格式/版本权威在后端)→ 落成 .mosael-workflow.json 文件。
@@ -475,7 +475,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       setBatchDeleting(false);
       clear();
       if (failures.length > 0) toast.error(failures.join("\n"));
-      void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
+      refreshAfterWorkflowDelete(qc, workspace.id);
     },
   });
 
@@ -1523,7 +1523,7 @@ function WorkflowEditor({
   });
   const remove = useMutation({
     mutationFn: () => deleteWorkflow(workflow.id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] }),
+    onSuccess: () => refreshAfterWorkflowDelete(qc, workspaceId),
   });
   /** 自己在这一页点「运行」起的那次。运行完不清,方便回看这次跑成什么样;再次运行或切换工作流
    *  时被顶掉。 */
@@ -4043,4 +4043,11 @@ export function NodeInspector({
     </NodeToolbar>
     </>
   );
+}
+
+/** 删了工作流:列表要刷新;绑着它的定时任务也被后端当场停用了(见后端 scheduler.stop_tasks_bound_to_workflow),
+ *  定时任务页的开关不刷新就还亮着。 */
+function refreshAfterWorkflowDelete(qc: QueryClient, workspaceId: string) {
+  void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] });
+  void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
 }

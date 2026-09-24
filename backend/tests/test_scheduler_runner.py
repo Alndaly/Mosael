@@ -199,8 +199,11 @@ class Test三个触发入口是同一个:
             task = db.get(ScheduledTask, task_id)
             task.payload = {"workflow_id": foreign}
             db.commit()
-        job = client.post(f"/api/scheduled-tasks/{task_id}/run").json()["job"]
-        assert job["status"] == "failed" and "不存在" in job["error"]
+        # 事前就拦下:不开运行记录,不留一条 0.0 秒的失败(见 test_orphaned_workflow_tasks)。
+        response = client.post(f"/api/scheduled-tasks/{task_id}/run")
+        assert response.status_code == 422 and "已删除" in response.text
+        with SessionLocal() as db:
+            assert db.query(ScheduledTaskRun).filter_by(scheduled_task_id=task_id).count() == 0
 
     def test_只有领域在决定定时任务做什么(self) -> None:
         """棘轮:路由和轮询循环不再自己派发。"""

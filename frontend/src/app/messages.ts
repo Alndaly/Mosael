@@ -2800,7 +2800,8 @@ export const messages = {
     taskOpenWorkflow: "打开工作流页面",
     taskNoWorkflow: "未绑定",
     taskWorkflowGone: "绑定的工作流已删除",
-    taskWorkflowGoneDesc: "这个任务触发时会失败 —— 它绑的工作流已经不在了。请改绑一个,或删掉这个任务。",
+    taskWorkflowGoneDesc: "它绑的工作流已经被删了,所以这个任务已停用,也不能再启用或运行。删掉它,或新建一个任务绑到现有的工作流上。",
+    taskBlockedWorkflowGone: "绑定的工作流已删除,这个任务不能启用或运行",
     taskWorkflowLoading: "读取中…",
 
     // Plugins
@@ -5787,7 +5788,8 @@ export const messages = {
     taskOpenWorkflow: "Open workflows page",
     taskNoWorkflow: "Not bound",
     taskWorkflowGone: "Bound workflow was deleted",
-    taskWorkflowGoneDesc: "This task will fail when it fires — the workflow it points at no longer exists. Bind another one, or delete the task.",
+    taskWorkflowGoneDesc: "The workflow it points at was deleted, so this task has been turned off and can't be enabled or run. Delete it, or create a new task bound to an existing workflow.",
+    taskBlockedWorkflowGone: "The bound workflow was deleted — this task can't be enabled or run",
     taskWorkflowLoading: "Loading…",
 
     // Plugins

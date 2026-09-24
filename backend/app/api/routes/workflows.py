@@ -27,6 +27,7 @@ from app.api.schemas import (
     WorkflowUpdate,
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.scheduler import stop_tasks_bound_to_workflow
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.workflows import (
     available_node_types,
@@ -363,6 +364,10 @@ def restore_revision(workflow_id: str, revision: int, db: DbSession, user: Curre
 def delete(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
     workflow = _get(db, workflow_id)
     ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    # 绑着它的定时任务**同一个事务里停用** —— 此前删工作流不管它们:任务仍是启用的,到点照样
+    # 触发、照样失败,手动的也照样能点「立即运行」。这一步排在路由这层(和 sharing.forget 一样),
+    # 因为定时任务依赖工作流、工作流不能反过来认识定时任务(见 tests/test_import_layering.py)。
+    stop_tasks_bound_to_workflow(db, workflow)
     db.delete(workflow)
     db.commit()
     return Response(status_code=204)

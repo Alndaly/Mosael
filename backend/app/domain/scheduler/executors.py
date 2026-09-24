@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
+from app.db.models import Job, ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import TERMINAL_STATUSES, blame, finish_job, reset_parent_job, say, set_parent_job
 
 logger = logging.getLogger(__name__)
@@ -36,13 +36,21 @@ ACTIVE_RUN_STATUSES = ("queued", "running")
 Executor = Callable[[Session, ScheduledTask, ScheduledTaskRun, Job], None]
 
 
+def bound_workflow(db: Session, *, workspace_id: str, payload: dict[str, Any] | None) -> Workflow | None:
+    """工作流任务指着的那张图。不在了(删了,或者是别的工作区的)就是 None。"""
+    workflow = db.get(Workflow, str((payload or {}).get("workflow_id", "")))
+    if workflow is None or workflow.workspace_id != workspace_id:
+        return None
+    return workflow
+
+
 def _run_workflow(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
-    from app.db.models import Workflow
     from app.domain.workflows.engine import start_workflow_job
 
     payload: dict[str, Any] = task.payload or {}
-    workflow = db.get(Workflow, str(payload.get("workflow_id", "")))
-    if workflow is None or workflow.workspace_id != task.workspace_id:
+    workflow = bound_workflow(db, workspace_id=task.workspace_id, payload=payload)
+    if workflow is None:
+        # 启用、触发之前都拦过(见 SCHEDULED_READINESS);走到这里是派发的这一瞬间图被删了。
         raise ScheduledRunError("schedErr_workflowMissing")
     # 复用包装任务作为工作流任务:引擎直接在它上面推进度和终态。
     job.payload = {**job.payload, "workflow_id": workflow.id}
@@ -102,6 +110,24 @@ SCHEDULED_EXECUTORS: dict[str, Executor] = {
     "workflow": _run_workflow,
     "ai_generation": _run_generation,
     "render": _run_export,
+}
+
+
+#: 一种任务**现在跑得起来吗**:跑不起来时给出文案 key,跑得起来给 None。
+#:
+#: 它和执行体是两件事:执行体在派发的那一刻才发现问题,那时运行记录和任务都已经建好了,只能
+#: 记一条失败。而「绑的工作流被删了」是一个**事前就知道**的状态 —— 此前它照样能启用、能点
+#: 「立即运行」,每点一次就多一条 0.0 秒的失败记录。启用、建任务、三个触发入口都先问这里
+#: (operations.ensure_runnable)。没登记的种类没有事前条件。
+Readiness = Callable[[Session, str, dict[str, Any]], str | None]
+
+
+def _workflow_ready(db: Session, workspace_id: str, payload: dict[str, Any]) -> str | None:
+    return None if bound_workflow(db, workspace_id=workspace_id, payload=payload) else "schedErr_workflowGone"
+
+
+SCHEDULED_READINESS: dict[str, Readiness] = {
+    "workflow": _workflow_ready,
 }
 
 

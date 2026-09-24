@@ -6,10 +6,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.db.models import ScheduledTask, ScheduledTaskRun, now
+from app.db.models import ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ def create_scheduled_task(
     if kind not in SCHEDULED_EXECUTORS:
         # 此前什么都收:认不出的种类建得出来,到点排一个任务,然后永远停在"排队中"。
         raise SchedulerDomainError("schedErr_badKind", kinds=" / ".join(SCHEDULED_EXECUTORS))
+    if enabled:
+        ensure_runnable(db, kind=kind, workspace_id=workspace_id, payload=payload)
     if trigger_type == "webhook" and not payload.get("webhook_secret"):
         # 外部触发路由不走登录态,按任务级密钥鉴权。
         payload = {**payload, "webhook_secret": secrets.token_urlsafe(24)}
@@ -63,6 +66,12 @@ def create_scheduled_task(
 
 
 def update_scheduled_task(db: Session, task: ScheduledTask, changes: dict[str, Any]) -> ScheduledTask:
+    # 按**改完之后**的样子判:同一次既改绑到一张在的图、又打开开关,是可以的。停用永远放行 ——
+    # 一个跑不起来的任务至少要关得掉。
+    enabled = task.enabled if changes.get("enabled") is None else changes["enabled"]
+    payload = task.payload if changes.get("payload") is None else changes["payload"]
+    if enabled:
+        ensure_runnable(db, kind=task.kind, workspace_id=task.workspace_id, payload=payload)
     for key, value in changes.items():
         if value is not None:
             setattr(task, key, value)
@@ -80,6 +89,9 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
     """
     from app.domain.scheduler.executors import dispatch_scheduled_job, has_active_run
 
+    # 事前就知道跑不起来的,不开运行记录 —— 此前绑的工作流被删了照样能点「立即运行」,
+    # 每点一次多一条 0.0 秒的失败。
+    ensure_runnable(db, kind=task.kind, workspace_id=task.workspace_id, payload=task.payload)
     if has_active_run(db, task.id):
         raise SchedulerBusy("schedErr_busy")
     run, job = _open_run(db, task)
@@ -92,6 +104,41 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
     db.refresh(run)
     db.refresh(job)
     return run, job
+
+
+def ensure_runnable(db: Session, *, kind: str, workspace_id: str, payload: dict[str, Any] | None) -> None:
+    """这种任务、带着这份 payload,现在跑得起来吗?跑不起来就说为什么(见 SCHEDULED_READINESS)。
+
+    **不变式:启用着的任务一定跑得起来。** 建任务、打开开关、三个触发入口都经这里;
+    而让它跑不起来的那件事(删工作流)在发生的那一刻就把任务停掉(stop_tasks_bound_to_workflow)。
+    """
+    from app.domain.scheduler.executors import SCHEDULED_READINESS
+
+    check = SCHEDULED_READINESS.get(kind)
+    problem = check(db, workspace_id, payload or {}) if check else None
+    if problem:
+        raise SchedulerDomainError(problem)
+
+
+def stop_tasks_bound_to_workflow(db: Session, workflow: Workflow) -> list[ScheduledTask]:
+    """一张工作流要被删了:绑着它的定时任务**当场停用**。不提交,由删除的那一方一起提交。
+
+    此前删工作流什么都不管,任务仍是「启用」、仍按排程触发,每一次都落一条「工作流不存在」的
+    失败;手动任务则照样能点「立即运行」。任务本身留着(连同它的运行记录和那条「绑定的工作流
+    已删除」),删不删由人决定 —— 但它不能再自己跑。
+    """
+    tasks = db.scalars(
+        select(ScheduledTask).where(
+            ScheduledTask.workspace_id == workflow.workspace_id,
+            ScheduledTask.kind == "workflow",
+            ScheduledTask.enabled.is_(True),
+        )
+    ).all()
+    stopped = [task for task in tasks if str((task.payload or {}).get("workflow_id", "")) == workflow.id]
+    for task in stopped:
+        task.enabled = False
+        task.next_run_at = None
+    return stopped
 
 
 def _open_run(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskRun, Any]:

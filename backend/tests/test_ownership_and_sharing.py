@@ -45,6 +45,15 @@ def _user_id(username: str) -> str:
         return db.query(User).filter(User.username == username).one().id
 
 
+def _nightly_task(client: TestClient, workspace_id: str) -> dict:
+    """一条绑着真实工作流的定时任务 —— 启用着的任务必须跑得起来(见 scheduler.ensure_runnable)。"""
+    workflow = client.post("/api/workflows", json={"workspace_id": workspace_id, "name": "发布流"}).json()
+    return {
+        "workspace_id": workspace_id, "name": "每晚发布", "kind": "workflow", "trigger_type": "manual",
+        "payload": {"workflow_id": workflow["id"]},
+    }
+
+
 def _seed_publish_account(workspace_id: str, owner_username: str) -> str:
     with SessionLocal() as db:
         account = PublishAccount(
@@ -101,10 +110,7 @@ def test_a_scheduled_task_is_shared_by_default() -> None:
     判断:「这一类默认给谁看」正是最容易在第二个调用点被写反的东西。
     """
     owner, workspace, mate = _team()
-    task = owner.post(
-        "/api/scheduled-tasks",
-        json={"workspace_id": workspace["id"], "name": "每晚发布", "kind": "workflow", "trigger_type": "manual"},
-    )
+    task = owner.post("/api/scheduled-tasks", json=_nightly_task(owner, workspace["id"]))
     assert task.status_code == 200, task.text
 
     listed = mate.get(f"/api/scheduled-tasks?workspace_id={workspace['id']}").json()
@@ -350,10 +356,7 @@ def test_a_session_can_be_shared_and_withdrawn() -> None:
 def test_a_scheduled_task_carries_its_owner() -> None:
     """定时任务默认共享,但仍然有主人 —— 定时执行没有"当时的操作人",事后要能查出是谁挂的。"""
     owner, workspace, mate = _team()
-    task = owner.post(
-        "/api/scheduled-tasks",
-        json={"workspace_id": workspace["id"], "name": "每晚发布", "kind": "workflow", "trigger_type": "manual"},
-    ).json()
+    task = owner.post("/api/scheduled-tasks", json=_nightly_task(owner, workspace["id"])).json()
 
     seen = mate.get(f"/api/scheduled-tasks?workspace_id={workspace['id']}").json()[0]
     assert seen["id"] == task["id"]

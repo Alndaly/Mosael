@@ -1245,6 +1245,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "任务绑定的工作流不存在",
         "en": "The workflow bound to this task doesn't exist.",
     },
+    "schedErr_workflowGone": {
+        "zh": "绑定的工作流已删除,这个任务不能启用或运行。删掉它,或新建一个绑到现有工作流上的任务",
+        "en": "The workflow bound to this task was deleted, so it can't be enabled or run. Delete it, or create a new task bound to an existing workflow.",
+    },
     "schedErr_unsupportedKind": {
         "zh": "定时任务不支持这种任务:{kind}",
         "en": "Scheduled tasks don't support this kind of task: {kind}",

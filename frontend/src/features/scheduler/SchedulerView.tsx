@@ -9,12 +9,12 @@ import {
   API_BASE,
   createScheduledTask,
   deleteScheduledTask,
-  listJobs,
   listScheduledTaskRuns,
   listScheduledTasks,
   listWorkflows,
   runScheduledTask,
   setResourceShared,
+  topLevelJobsQuery,
   updateScheduledTask,
   type Job,
   type Project,
@@ -31,16 +31,31 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { TimePicker } from "@/components/ui/time-picker";
-import { Switch } from "@/components/ui/switch";
 import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BoundWorkflowRow as BoundWorkflowRowView } from "./boundWorkflowRow";
+import { BoundWorkflowRow as BoundWorkflowRowView, isBoundWorkflowGone } from "./boundWorkflowRow";
+import { TaskRunControls } from "./taskRunControls";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+
+function useWorkflows(workspaceId: string) {
+  return useQuery({ queryKey: ["workflows", workspaceId], queryFn: () => listWorkflows(workspaceId) });
+}
+
+function boundWorkflowId(task: ScheduledTask): string {
+  return String((task.payload as { workflow_id?: string })?.workflow_id ?? "");
+}
+
+/** 这个任务跑不起来:它绑的工作流已经删了(后端同一条规则见 scheduler.ensure_runnable)。 */
+function useIsBlocked(workspaceId: string) {
+  const workflows = useWorkflows(workspaceId);
+  return (task: ScheduledTask) =>
+    task.kind === "workflow" && isBoundWorkflowGone(boundWorkflowId(task), workflows.data ?? [], workflows.isPending);
+}
 
 /**
  * 定时任务页 = 主从布局(与插件页同一设计语言):左列任务列表,
@@ -57,6 +72,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
     queryKey: ["scheduled-tasks", workspace.id],
     queryFn: () => listScheduledTasks(workspace.id),
   });
+  const isBlocked = useIsBlocked(workspace.id);
   const refreshTasks = () => void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
   // 定时任务默认共享(团队基建),但主人可以把它收成自己的 —— 归属决定的是谁能改、事后谁负责。
   const menuShare = useMutation({
@@ -163,10 +179,13 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem disabled={!task.enabled} onSelect={() => menuRun.mutate(task.id)}>
+                  <ContextMenuItem disabled={!task.enabled || isBlocked(task)} onSelect={() => menuRun.mutate(task.id)}>
                     <Play /> {t("runNow")}
                   </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => menuToggle.mutate({ id: task.id, enabled: !task.enabled })}>
+                  <ContextMenuItem
+                    disabled={!task.enabled && isBlocked(task)}
+                    onSelect={() => menuToggle.mutate({ id: task.id, enabled: !task.enabled })}
+                  >
                     <Power /> {task.enabled ? t("pluginOff") : t("pluginOn")}
                   </ContextMenuItem>
                   {task.is_mine && (
@@ -230,13 +249,10 @@ function WebhookUrlRow({ task }: { task: ScheduledTask }) {
 
 /** 任务详情里的"这个任务做什么":显示绑定的工作流。取数在这里,怎么画在 boundWorkflowRow。 */
 function BoundWorkflowRow({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
-  const workflows = useQuery({
-    queryKey: ["workflows", workspaceId],
-    queryFn: () => listWorkflows(workspaceId),
-  });
+  const workflows = useWorkflows(workspaceId);
   return (
     <BoundWorkflowRowView
-      workflowId={String((task.payload as { workflow_id?: string })?.workflow_id ?? "")}
+      workflowId={boundWorkflowId(task)}
       workflows={workflows.data ?? []}
       isPending={workflows.isPending}
     />
@@ -380,10 +396,11 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       (query.state.data ?? []).some((run) => run.status === "queued" || run.status === "running") ? 2000 : false,
     refetchOnWindowFocus: true,
   });
-  const jobs = useQuery({
-    queryKey: ["jobs", workspaceId, "all"],
-    queryFn: () => listJobs(workspaceId),
-  });
+  // 和任务中心读**同一份**(同一个键、同一种取法)。运行记录的 job 是包装任务,本来就是顶层的。
+  const jobsQuery = topLevelJobsQuery(workspaceId);
+  const jobs = useQuery(jobsQuery);
+  const isBlocked = useIsBlocked(workspaceId);
+  const blocked = isBlocked(task);
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
@@ -397,7 +414,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
     mutationFn: () => runScheduledTask(task.id),
     onSuccess: () => {
       refresh();
-      void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] });
+      void qc.invalidateQueries({ queryKey: jobsQuery.queryKey });
     },
   });
   const { locale } = usePreferences();
@@ -438,15 +455,13 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       <header className="grid gap-5 border-b border-divider pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-xl font-semibold text-foreground">{task.name}</h2>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="outline" disabled={!task.enabled} loading={runTask.isPending} onClick={() => runTask.mutate()}>
-              <Play size={13} /> {t("runNow")}
-            </Button>
-            <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
-              <span>{task.enabled ? t("pluginOn") : t("pluginOff")}</span>
-              <Switch checked={task.enabled} onCheckedChange={(checked) => toggleTask.mutate(checked)} />
-            </label>
-          </div>
+          <TaskRunControls
+            enabled={task.enabled}
+            blocked={blocked}
+            running={runTask.isPending}
+            onRun={() => runTask.mutate()}
+            onToggle={(checked) => toggleTask.mutate(checked)}
+          />
         </div>
         {/* 计划 / 下次 / 上次是**三个短事实**,不是三件要操作的事 —— 它们此前各占一整行,
             每行还配一句说明,读三个时间戳要扫过六行字。摆成一排。 */}

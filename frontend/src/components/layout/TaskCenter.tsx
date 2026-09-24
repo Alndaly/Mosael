@@ -4,7 +4,7 @@ import { Activity, CheckCircle2, CircleAlert, ListChecks, Loader2, Trash2, X } f
 
 import { toast } from "sonner";
 
-import { api, getJob, type Job } from "@/api/client";
+import { api, getJob, topLevelJobsQuery, type Job } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/layout/JobDetailDialog";
@@ -44,22 +44,22 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     return () => window.removeEventListener("mosael:open-tasks", onOpen);
   }, []);
 
+  const jobsQuery = topLevelJobsQuery(workspaceId);
   const jobs = useQuery({
-    queryKey: ["jobs", workspaceId, "all"],
-    // top_level=true:工作流派生的子任务(发布/导出/转写/生成/配音)收纳到父工作流下,
+    // 顶层:工作流派生的子任务(发布/导出/转写/生成/配音)收纳到父工作流下,
     // 不再与父工作流平铺成两行;子任务在工作流任务详情里查看。
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspaceId}&top_level=true`),
+    ...jobsQuery,
     refetchInterval: (query) =>
       (query.state.data ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
     refetchOnWindowFocus: true,
   });
   const clearFinished = useMutation({
     mutationFn: () => api(`/api/jobs/finished?workspace_id=${workspaceId}`, { method: "DELETE" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: jobsQuery.queryKey }),
   });
   const cancelJob = useMutation({
     mutationFn: (jobId: string) => api(`/api/jobs/${jobId}/cancel`, { method: "POST" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: jobsQuery.queryKey }),
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -109,6 +109,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
   // 首次加载时只记录基线,避免刷新后把历史任务全部弹一遍。
   const prevStatuses = React.useRef<Map<string, string> | null>(null);
+  // 说过「做完了」的任务。**一个任务最多说一次** —— 不管它之后在列表里消失又出现、还是被
+  // 重新排队又做完一次。
+  const announced = React.useRef<Set<string>>(new Set());
   // Reset the baseline when the workspace changes. Neither TaskCenter nor Studio is keyed, so
   // this ref survived the switch; the new workspace's jobs then all hit `prev === undefined`
   // and the "first seen already terminal" branch below toasted every one of them — a wall of
@@ -116,6 +119,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   // to prevent.
   React.useEffect(() => {
     prevStatuses.current = null;
+    announced.current = new Set();
   }, [workspaceId]);
   React.useEffect(() => {
     // 目录没到之前不记基线:不知道一种任务该不该说,就等它到了再开始看。
@@ -125,6 +129,10 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       return;
     }
     for (const job of jobs.data) {
+      // 子任务由父任务替它说(ADR-0018),也不该出现在这份顶层列表里。它要是出现了,说明
+      // 缓存被别的取法写过 —— 那正是此前一打开定时任务页,历史上每个工作流派生的转写、导出
+      // 都被当成「刚做完」弹一遍的原因(见 api/domains/jobs 的 topLevelJobsQuery)。
+      if (job.parent_job_id) continue;
       const prev = prevStatuses.current.get(job.id);
       const terminal = job.status === "succeeded" || job.status === "failed";
       prevStatuses.current.set(job.id, job.status);
@@ -141,7 +149,8 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       }
       // **只有这里说"做完了"**(ADR-0018)。发起任务的组件只说"排上了";子任务不在这个列表里,
       // 由父任务替它说。
-      if (!shouldAnnounce(meta, job.status)) continue;
+      if (!shouldAnnounce(meta, job.status) || announced.current.has(job.id)) continue;
+      announced.current.add(job.id);
       const outcome = job.status === "succeeded" ? t("jobDone") : t("jobFailed");
       const detail = (job.status === "failed" ? job.error : job.message) ?? undefined;
       if (job.status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });

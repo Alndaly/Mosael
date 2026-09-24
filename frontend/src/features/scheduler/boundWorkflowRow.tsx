@@ -11,11 +11,25 @@ import { AlertTriangle, GitBranch } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { SettingsRow } from "@/components/settings/settings-layout";
+import { gotoRecord } from "@/lib/deepLink";
 
 interface WorkflowLike {
   id: string;
   name: string;
   description?: string | null;
+}
+
+/**
+ * 绑了一个 id、却在列表里找不到它 —— 说明那个工作流**已经被删了**,而任务还指着它。
+ *
+ * 「还没读到」和「读过了,不在」必须分开:前者是暂时的,后者才是结论。混成一个的话,
+ * 列表还在路上时每个任务都会先诬告自己一遍「工作流已删除」。
+ *
+ * 这一行画成什么样、任务的开关和「立即运行」能不能点,都按这一个判断走(后端的规则见
+ * scheduler.ensure_runnable:绑的工作流不在了,任务不能启用、不能运行)。
+ */
+export function isBoundWorkflowGone(workflowId: string, workflows: WorkflowLike[], isPending: boolean): boolean {
+  return Boolean(workflowId) && !isPending && !workflows.some((item) => item.id === workflowId);
 }
 
 export function BoundWorkflowRow({
@@ -30,15 +44,10 @@ export function BoundWorkflowRow({
   const t = useI18n();
   const workflow = workflows.find((item) => item.id === workflowId) ?? null;
   /**
-   * 绑了一个 id、却在列表里找不到它 —— 说明那个工作流**已经被删了**,而任务还指着它:
-   * 这个任务一旦触发就会失败。此前这种情况下按钮里显示的是**那串裸 UUID**,既看不出是哪个
-   * 工作流(它已经没有名字了),也看不出这是个故障 —— 一个 32 位十六进制串是给人看的东西里
-   * 最无用的那种。
-   *
-   * 「还没读到」和「读过了,不在」必须分开:前者是暂时的,后者才是结论。混成一个的话,
-   * 列表还在路上时每个任务都会先诬告自己一遍「工作流已删除」。
+   * 此前这种情况下按钮里显示的是**那串裸 UUID**,既看不出是哪个工作流(它已经没有名字了),
+   * 也看不出这是个故障 —— 一个 32 位十六进制串是给人看的东西里最无用的那种。
    */
-  const missing = Boolean(workflowId) && !isPending && !workflow;
+  const missing = isBoundWorkflowGone(workflowId, workflows, isPending);
   const label = !workflowId
     ? t("taskNoWorkflow")
     : workflow
@@ -72,7 +81,9 @@ export function BoundWorkflowRow({
           variant="outline"
           className="max-w-full"
           title={t("taskOpenWorkflow")}
-          onClick={() => (window.location.hash = "#/workflows")}
+          // 打开**它绑的那一张**。此前只换到工作流页,页面停在上次看的那张 —— 点「每日剪辑」
+          // 却看到另一张图。没绑的时候没有要打开的那一条,只去列表挑一个。
+          onClick={() => gotoRecord("/workflows", "mosael:open-workflow", workflow?.id)}
         >
           <GitBranch size={13} />
           <span className="truncate">{label}</span>

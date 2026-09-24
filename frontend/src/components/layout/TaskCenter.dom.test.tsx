@@ -38,6 +38,10 @@ vi.mock("@/api/client", () => ({
   api: h.apiMock,
   fetchJobKinds: async () => CATALOG,
   getJob: vi.fn(),
+  topLevelJobsQuery: (workspaceId: string) => ({
+    queryKey: ["jobs", workspaceId, "top-level"],
+    queryFn: () => h.apiMock(`/api/jobs?workspace_id=${workspaceId}&top_level=true`),
+  }),
 }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -61,7 +65,7 @@ function mount(initial: any[]) {
       </TooltipProvider>
     </QueryClientProvider>,
   );
-  return invalidated;
+  return Object.assign(invalidated, { client });
 }
 
 beforeEach(() => {
@@ -151,5 +155,64 @@ describe("只有任务中心报完成,而且按目录决定报不报", () => {
     await finish("mystery", "succeeded");
     await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
     expect(h.toast.success.mock.calls[0][0]).toBe("任务 · jobDone");
+  });
+});
+
+describe("每个任务最多说一次,历史任务不说", () => {
+  const job = (id: string, kind: string, status: string, extra: Record<string, unknown> = {}) =>
+    ({ id, kind, status, progress: status === "running" ? 0.5 : 1, message: null, error: null, payload: {}, ...extra });
+  const spinning = () =>
+    waitFor(() => expect(document.querySelector(".animate-mosael-spin")).not.toBeNull(), { timeout: 4000 });
+  /** 让组件把当前缓存看一遍:效果跑在渲染之后,等一小会儿就够了。 */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+  it("打开时已经做完的任务只记作基线,不弹", async () => {
+    mount([job("old", "subtitle_dub", "succeeded"), job("live", "subtitle_dub", "running")]);
+    await spinning();
+    await settle();
+    expect(h.toast.success).not.toHaveBeenCalled();
+  });
+
+  it("同一份缓存被另一种取法写成「含子任务」时,历史子任务不被当成刚做完", async () => {
+    // 真机:定时任务页用同一个键拉了**全部**任务(含工作流派生的子任务),任务中心看见一批
+    // 「新出现、已完成」的转写、导出,挨个弹「已完成」—— 右下角一直在冒。
+    const top = job("wf", "subtitle_dub", "running");
+    const { client } = mount([top]);
+    await spinning();
+    client.setQueryData(["jobs", "w1", "top-level"], [
+      top,
+      job("child-1", "subtitle_dub", "succeeded", { parent_job_id: "wf" }),
+      job("child-2", "url_import", "succeeded", { parent_job_id: "wf" }),
+    ]);
+    await settle();
+    expect(h.toast.success).not.toHaveBeenCalled();
+  });
+
+  it("做完说一次;之后消失又出现、再跑一遍,都不再说", async () => {
+    const { client } = mount([job("j1", "subtitle_dub", "running")]);
+    await finish("subtitle_dub", "succeeded");
+    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
+
+    const key = ["jobs", "w1", "top-level"];
+    client.setQueryData(key, []);
+    await settle();
+    client.setQueryData(key, [job("j1", "subtitle_dub", "succeeded")]);
+    await settle();
+    client.setQueryData(key, [job("j1", "subtitle_dub", "running")]);
+    await settle();
+    client.setQueryData(key, [job("j1", "subtitle_dub", "succeeded")]);
+    await settle();
+    expect(h.toast.success).toHaveBeenCalledTimes(1);
+  });
+
+  it("两次轮询之间建出来又做完的新任务,照样说", async () => {
+    const { client } = mount([job("j1", "subtitle_dub", "running")]);
+    await spinning();
+    client.setQueryData(["jobs", "w1", "top-level"], [
+      job("fast", "url_import", "succeeded"),
+      job("j1", "subtitle_dub", "running"),
+    ]);
+    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    expect(h.toast.success.mock.calls[0][0]).toBe("链接导入 · jobDone");
   });
 });

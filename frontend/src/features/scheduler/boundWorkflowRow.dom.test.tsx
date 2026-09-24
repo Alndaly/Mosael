@@ -11,7 +11,7 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({
@@ -27,6 +27,9 @@ vi.mock("@/app/preferences", () => ({
     })[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
 }));
+
+const gotoRecord = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/deepLink", () => ({ gotoRecord }));
 
 import { BoundWorkflowRow } from "./boundWorkflowRow";
 
@@ -65,5 +68,21 @@ describe("任务绑定的工作流", () => {
   it("压根没绑过:仍然可以点去挑一个", () => {
     mount("", []);
     expect(screen.getByRole("button").textContent).toContain("未绑定工作流");
+  });
+});
+
+describe("点绑定的工作流", () => {
+  it("打开的是它绑的那一张,不是上次看的那张", () => {
+    gotoRecord.mockReset();
+    mount("wf-1", [{ id: "wf-0", name: "上次看的" }, WORKFLOW]);
+    fireEvent.click(screen.getByRole("button"));
+    expect(gotoRecord).toHaveBeenCalledWith("/workflows", "mosael:open-workflow", "wf-1");
+  });
+
+  it("没绑的:只去工作流列表,不点名打开哪一张", () => {
+    gotoRecord.mockReset();
+    mount("", []);
+    fireEvent.click(screen.getByRole("button"));
+    expect(gotoRecord).toHaveBeenCalledWith("/workflows", "mosael:open-workflow", undefined);
   });
 });
