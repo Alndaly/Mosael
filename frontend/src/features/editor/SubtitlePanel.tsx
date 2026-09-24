@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { AudioLines, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { AudioLines, Bold, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -409,200 +409,266 @@ function SubtitleStyleControls({
 
   return (
     <div className="border-b border-border">
-      <button type="button" className="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-2.5 py-[7px] text-xs font-semibold text-muted-foreground" onClick={() => setOpen((v) => !v)}>
+      <button type="button" aria-expanded={open} className="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-2.5 py-[7px] text-xs font-semibold text-muted-foreground" onClick={() => setOpen((v) => !v)}>
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {t("subtitleStyle")}
       </button>
       {open && (
         // 样式是**设一次**的东西,列表才是天天碰的 —— 它不该占掉大半个面板。
-        // 此前 8 行、每行一个吃满宽度的大控件(3 个选项的「位置」也占满一行,「上传字体」
-        // 独占一行还带一格空缩进);收成 5 行紧凑排布,相关的项并到同一行。
-        <div className="grid gap-1.5 px-2.5 pb-2.5 pt-0.5">
-          <StyleGroup label={t("subGroupText")} first />
-          <StyleRow label={t("subFont")}>
-            {/* 每一项按自己的字体渲染 —— 字体是用**样子**挑的,名字帮不上忙。装了几十个字体
-                之后名字就帮得上了,所以超过阈值 OptionPicker 会换成可搜索的那一版。 */}
-            <OptionPicker
-              value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
-              onChange={(v) => {
-                if (!v.startsWith(UPLOAD_PREFIX)) {
-                  patch({ font_family: v, font_id: "" });
-                  return;
-                }
-                const id = v.slice(UPLOAD_PREFIX.length);
-                const picked = fonts.find((font) => font.id === id);
-                if (picked) patch({ font_id: id, font_family: uploadedFontStack(picked.family) });
-              }}
-              options={[
-                ...SUBTITLE_FONTS.map((font) => ({
-                  value: font.value,
-                  label: t(font.labelKey as Parameters<typeof t>[0]),
-                  style: { fontFamily: font.value },
-                })),
-                ...fonts.map((font) => ({
-                  value: `${UPLOAD_PREFIX}${font.id}`,
-                  label: font.family,
-                  style: { fontFamily: uploadedFontStack(font.family) },
-                })),
-              ]}
-              className="h-7 min-w-0 flex-1 text-xs"
-            />
-            {/* 上传/移除跟在字体选择器旁边,而不是独占一行 —— 它们就是对这个选择器的操作。 */}
-            {onUploadFont && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-                disabled={uploadingFont}
-                aria-label={t("subFontUpload")}
-                title={t("subFontUpload")}
-                onClick={() => fileRef.current?.click()}
-              >
-                {uploadingFont ? <Loader2 size={12} className="animate-mosael-spin" /> : <Upload size={12} />}
-              </Button>
-            )}
-            {s.font_id && onDeleteFont && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="shrink-0 text-muted-foreground hover:text-destructive"
-                aria-label={t("subFontRemove")}
-                title={t("subFontRemove")}
-                onClick={() => {
-                  // Point the style back at a built-in BEFORE the font goes away, so the
-                  // sequence never references a font id that no longer resolves.
-                  const removing = s.font_id;
-                  patch({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
-                  onDeleteFont(removing);
-                }}
-              >
-                <Trash2 size={12} />
-              </Button>
-            )}
-            {onUploadFont && (
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".ttf,.otf,.ttc,.otc"
-                hidden
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) onUploadFont(file);
-                  event.target.value = ""; // re-selecting the same file must fire change again
-                }}
-              />
-            )}
-          </StyleRow>
-          <StyleRow label={t("subFontSize")}>
-            <Slider
+        // 每一行都是同一副骨架(见 StyleRow):标签列、控件列、读数列三列定宽,
+        // 于是所有控件的左缘、右缘都落在同一条竖线上 —— 此前下拉、滑杆、色块各自决定
+        // 自己在哪儿结束,一栏里有三条参差的右边线。
+        <div className="grid gap-3 px-2.5 pb-3 pt-0.5">
+          <StyleGroup label={t("subGroupText")}>
+            <StyleRow label={t("subFont")}>
+              <span className="col-span-2 flex min-w-0 items-center gap-1">
+                {/* 每一项按自己的字体渲染 —— 字体是用**样子**挑的,名字帮不上忙。装了几十个字体
+                    之后名字就帮得上了,所以超过阈值 OptionPicker 会换成可搜索的那一版。 */}
+                <OptionPicker
+                  ariaLabel={t("subFont")}
+                  value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
+                  onChange={(v) => {
+                    if (!v.startsWith(UPLOAD_PREFIX)) {
+                      patch({ font_family: v, font_id: "" });
+                      return;
+                    }
+                    const id = v.slice(UPLOAD_PREFIX.length);
+                    const picked = fonts.find((font) => font.id === id);
+                    if (picked) patch({ font_id: id, font_family: uploadedFontStack(picked.family) });
+                  }}
+                  options={[
+                    ...SUBTITLE_FONTS.map((font) => ({
+                      value: font.value,
+                      label: t(font.labelKey as Parameters<typeof t>[0]),
+                      style: { fontFamily: font.value },
+                    })),
+                    ...fonts.map((font) => ({
+                      value: `${UPLOAD_PREFIX}${font.id}`,
+                      label: font.family,
+                      style: { fontFamily: uploadedFontStack(font.family) },
+                    })),
+                  ]}
+                  className={STYLE_FIELD}
+                />
+                {/* 上传/移除跟在字体选择器旁边,而不是独占一行 —— 它们就是对这个选择器的操作。 */}
+                {onUploadFont && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    disabled={uploadingFont}
+                    aria-label={t("subFontUpload")}
+                    title={t("subFontUpload")}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {uploadingFont ? <Loader2 size={12} className="animate-mosael-spin" /> : <Upload size={12} />}
+                  </Button>
+                )}
+                {s.font_id && onDeleteFont && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label={t("subFontRemove")}
+                    title={t("subFontRemove")}
+                    onClick={() => {
+                      // Point the style back at a built-in BEFORE the font goes away, so the
+                      // sequence never references a font id that no longer resolves.
+                      const removing = s.font_id;
+                      patch({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
+                      onDeleteFont(removing);
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                )}
+                {onUploadFont && (
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".ttf,.otf,.ttc,.otc"
+                    hidden
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) onUploadFont(file);
+                      event.target.value = ""; // re-selecting the same file must fire change again
+                    }}
+                  />
+                )}
+              </span>
+            </StyleRow>
+            <StyleSlider
+              label={t("subFontSize")}
               min={10}
               max={120}
               step={1}
-              value={[s.font_size]}
-              onValueChange={([v]) => preview({ font_size: v })}
-              onValueCommit={([v]) => patch({ font_size: v })}
+              value={s.font_size}
+              format={(v) => String(Math.round(v))}
+              onPreview={(v) => preview({ font_size: v })}
+              onCommit={(v) => patch({ font_size: v })}
             />
-            <StyleValue>{Math.round(s.font_size)}</StyleValue>
-          </StyleRow>
-          <StyleRow label={t("subColor")}>
-            {/* 色块铺满这一行剩下的宽度 —— 一个 36px 的小方块漂在一整行空白里,读起来
-                像是这行没做完。加粗留在右端:它是另一个开关,不是这块颜色的一部分。 */}
-            <ColorSwatch value={s.color} onChange={(v) => patch({ color: v })} grow />
-            <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t("subBold")}</span>
-            <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
-          </StyleRow>
+            <StyleRow label={t("subColor")}>
+              <StyleColor label={t("subColor")} value={s.color} onChange={(v) => patch({ color: v })} />
+            </StyleRow>
+            {/* 加粗自成一行,用和花字面板同一种「按下 / 抬起」的切换键 —— 此前它是一个开关,
+                挤在颜色那一行的右端,读起来像是这块颜色的附属选项。 */}
+            <StyleRow label={t("subFontWeight")}>
+              <span className="col-span-2 flex items-center">
+                <button
+                  type="button"
+                  aria-pressed={s.bold}
+                  className={cn(
+                    "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-control px-2.5 text-ui-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground",
+                    s.bold && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground",
+                  )}
+                  onClick={() => patch({ bold: !s.bold })}
+                >
+                  <Bold size={13} /> {t("subBold")}
+                </button>
+              </span>
+            </StyleRow>
+          </StyleGroup>
 
-          {/* 衬底自成一组。**此前它和前景色挤在「颜色」那一行**,而那一行末尾还挂着一个
-              没有名字的滑杆 —— 光看界面猜不出它调的是什么(是背景的不透明度)。
-              一个控件如果需要用户猜它管什么,那它就还没做完。 */}
-          <StyleGroup label={t("subGroupBackplate")} />
-          <StyleRow label={t("subBg")}>
-            <ColorSwatch value={s.bg_color} onChange={(v) => patch({ bg_color: v })} grow />
-            {/* 不透明度归零就是「没有衬底」—— 说出来,免得用户以为自己把颜色调错了。 */}
-            <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-              {s.bg_opacity <= 0.001 ? t("subBgNone") : ""}
-            </span>
-          </StyleRow>
-          <StyleRow label={t("subBgOpacity")}>
-            <Slider
+          {/* 衬底自成一组:底色和它的不透明度是同一件东西的两个量,放在一起读。 */}
+          <StyleGroup label={t("subGroupBackplate")}>
+            <StyleRow label={t("subBg")}>
+              <StyleColor
+                label={t("subBg")}
+                value={s.bg_color}
+                onChange={(v) => patch({ bg_color: v })}
+                // 不透明度归零就是「没有衬底」—— 说出来,免得用户以为自己把颜色调错了。
+                note={s.bg_opacity <= 0.001 ? t("subBgNone") : undefined}
+              />
+            </StyleRow>
+            <StyleSlider
+              label={t("subBgOpacity")}
               min={0}
               max={1}
               step={0.05}
-              value={[s.bg_opacity]}
-              onValueChange={([v]) => preview({ bg_opacity: v })}
-              onValueCommit={([v]) => patch({ bg_opacity: v })}
+              value={s.bg_opacity}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onPreview={(v) => preview({ bg_opacity: v })}
+              onCommit={(v) => patch({ bg_opacity: v })}
             />
-            <StyleValue>{Math.round(s.bg_opacity * 100)}%</StyleValue>
-          </StyleRow>
+          </StyleGroup>
 
-          {/* 位置和边距是**同一件事的两半**(摆在哪儿、离边多远),此前边距孤零零挂在最后一行,
-              而位置那行却和「加粗」并排 —— 加粗是字的形态,和摆位不是一类事。 */}
-          <StyleGroup label={t("subGroupPlacement")} />
-          <StyleRow label={t("subPosition")}>
-            <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
-              <SelectTrigger className="h-7 w-full text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bottom">{t("subPosBottom")}</SelectItem>
-                <SelectItem value="center">{t("subPosCenter")}</SelectItem>
-                <SelectItem value="top">{t("subPosTop")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </StyleRow>
-          <StyleRow label={t("subOffset")}>
-            <Slider
+          {/* 位置和边距是**同一件事的两半**(摆在哪儿、离边多远)。组名叫「布局」,不再叫「位置」——
+              此前组名和它底下的第一行同名,读出来是「位置 / 位置」。 */}
+          <StyleGroup label={t("subGroupPlacement")}>
+            <StyleRow label={t("subPosition")}>
+              <span className="col-span-2 flex min-w-0">
+                <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
+                  <SelectTrigger aria-label={t("subPosition")} className={STYLE_FIELD}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bottom">{t("subPosBottom")}</SelectItem>
+                    <SelectItem value="center">{t("subPosCenter")}</SelectItem>
+                    <SelectItem value="top">{t("subPosTop")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </span>
+            </StyleRow>
+            <StyleSlider
+              label={t("subOffset")}
               min={0}
               max={45}
               step={1}
-              value={[s.offset]}
-              onValueChange={([v]) => preview({ offset: v })}
-              onValueCommit={([v]) => patch({ offset: v })}
+              value={s.offset}
+              format={(v) => `${Math.round(v)}%`}
+              onPreview={(v) => preview({ offset: v })}
+              onCommit={(v) => patch({ offset: v })}
             />
-            <StyleValue>{Math.round(s.offset)}%</StyleValue>
-          </StyleRow>
+          </StyleGroup>
         </div>
       )}
     </div>
   );
 }
 
-/** 一组的小标题。**分组不是装饰** —— 此前七个控件平铺,而它们其实分属三件事(字长什么样、
-    衬底、摆在哪儿);混在一起时,用户读到「颜色」和「边距」之间没有任何提示说这是两码事。 */
-function StyleGroup({ label, first }: { label: string; first?: boolean }) {
+//: 样式面板里下拉 / 字体选择器的尺寸:和同一栏的图标键、色块、切换键一样是 28px(工具栏那一档),
+//: 字号跟着高度降到 ui-xs。写一处,两个触发器不会一个 h-7 一个 h-8。
+const STYLE_FIELD = "h-7 min-w-0 flex-1 px-2.5 text-ui-xs";
+
+/** 一组的小标题 + 这一组的行。**分组不是装饰** —— 七个控件分属三件事(字长什么样、衬底、摆在
+    哪儿);混在一起时,用户读到「颜色」和「边距」之间没有任何提示说这是两码事。 */
+function StyleGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  const id = React.useId();
   return (
-    <span className={cn("text-ui-2xs font-medium text-muted-foreground/70", first ? "pb-0.5" : "pt-1.5")}>
-      {label}
-    </span>
+    <div role="group" aria-labelledby={id} className="grid gap-1.5">
+      <span id={id} className="text-ui-2xs font-medium text-muted-foreground/70">{label}</span>
+      {children}
+    </div>
   );
 }
 
-/** 样式面板的一行:左边 42px 标签列,右边内容横排。此前这段布局类(连同色块、数值的样式)
-    在每一行上原样抄了七遍 —— 一坨 400 字符的 className,改一处漏六处。 */
+/**
+ * 样式面板的一行,**三列定宽**:56px 标签 | 控件 | 36px 读数。
+ *
+ * 滑杆占中间一列、读数落在第三列;下拉、色块、切换键跨过后两列(`col-span-2`)。于是不论这一行
+ * 放的是什么,控件的左缘都对齐在标签列之后,右缘都对齐在整栏的右边线上。行高下限 28px ——
+ * 滑杆本身只有 16px 高,不垫这一下的话滑杆行比下拉行矮一截,整栏的行距忽松忽紧。
+ */
 function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    //: 标签列 56px:42px 装不下三个字的标签(「不透明度」会折成两行,把整行撑高)。
-    <label className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-2 text-xs text-foreground">
-      <span className="truncate text-muted-foreground">{label}</span>
-      <span className="flex min-w-0 items-center gap-1.5">{children}</span>
-    </label>
+    <div className="grid min-h-7 grid-cols-[56px_minmax(0,1fr)_36px] items-center gap-x-2" data-style-row="">
+      <span className="truncate text-ui-xs text-muted-foreground">{label}</span>
+      {children}
+    </div>
   );
 }
 
-/** 滑杆右侧的数值读出:定宽 + 等宽数字,拖动时数字变长不挤动滑杆。 */
-function StyleValue({ children }: { children: React.ReactNode }) {
-  return <em className="min-w-[30px] shrink-0 text-right text-xs not-italic tabular-nums text-muted-foreground">{children}</em>;
+/** 滑杆行:拖动只预览,松手才写入。读数定宽 + 等宽数字(timecode),数字变长不挤动滑杆。 */
+function StyleSlider({
+  label,
+  min,
+  max,
+  step,
+  value,
+  format,
+  onPreview,
+  onCommit,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  format: (value: number) => string;
+  onPreview: (value: number) => void;
+  onCommit: (value: number) => void;
+}) {
+  return (
+    <StyleRow label={label}>
+      <Slider
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={[value]}
+        onValueChange={([v]) => onPreview(v)}
+        onValueCommit={([v]) => onCommit(v)}
+      />
+      <output className="timecode text-right text-ui-xs text-muted-foreground">{format(value)}</output>
+    </StyleRow>
+  );
 }
 
-function ColorSwatch({ value, onChange, grow }: { value: string; onChange: (v: string) => void; grow?: boolean }) {
+/**
+ * 颜色:一枚紧凑色块 + 十六进制读数,和花字面板(Inspector 的 TextStylePanel)同一种色块。
+ * 此前色块铺满整行 —— 一条白色 / 黑色的长条,看着像一个进度条或者一块没加载出来的图。
+ */
+function StyleColor({ label, value, onChange, note }: { label: string; value: string; onChange: (v: string) => void; note?: string }) {
   return (
-    <input
-      type="color"
-      className={cn(
-        "h-7 cursor-pointer rounded-lg border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0",
-        grow ? "min-w-0 flex-1" : "w-9 shrink-0",
-      )}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
+    <span className="col-span-2 flex min-w-0 items-center gap-2">
+      <input
+        type="color"
+        aria-label={label}
+        className="h-7 w-9 shrink-0 cursor-pointer rounded-md border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <span className="timecode text-ui-xs uppercase text-muted-foreground">{value}</span>
+      {note && <span className="ml-auto truncate text-ui-xs text-muted-foreground">{note}</span>}
+    </span>
   );
 }

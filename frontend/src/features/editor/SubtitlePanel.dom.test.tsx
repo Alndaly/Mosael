@@ -18,6 +18,13 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
+// radix 的滑杆量自己的尺寸,jsdom 没有 ResizeObserver。
+vi.stubGlobal("ResizeObserver", class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+});
+
 import { SubtitlePanel } from "@/features/editor/SubtitlePanel";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -97,5 +104,79 @@ describe("去配音页的入口", () => {
     await userEvent.click(screen.getByRole("button", { name: "subtitleDub" }));
     expect(onDub).toHaveBeenCalledOnce();
     expect(screen.queryByText("subtitleDubLine")).toBeNull();
+  });
+});
+
+describe("字幕样式表单", () => {
+  function renderStyle(style: Record<string, unknown> = {}) {
+    const onSetStyle = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <SubtitlePanel
+          sequence={sequenceWith(["一条"])}
+          onSetText={vi.fn()}
+          onAddSubtitle={vi.fn()}
+          onDeleteClip={vi.fn()}
+          style={style}
+          onSetStyle={onSetStyle}
+          onUploadFont={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    return { ...view, onSetStyle };
+  }
+
+  it("三组各有名字,组名不和组里任何一行重名(此前是「位置 / 位置」)", async () => {
+    const { container } = renderStyle();
+    await userEvent.click(screen.getByRole("button", { name: /subtitleStyle/ }));
+    const groups = screen.getAllByRole("group");
+    expect(groups.map((group) => group.getAttribute("aria-labelledby") && container.querySelector(`[id="${group.getAttribute("aria-labelledby")}"]`)?.textContent))
+      .toEqual(["subGroupText", "subGroupBackplate", "subGroupPlacement"]);
+    for (const group of groups) {
+      const name = container.querySelector(`[id="${group.getAttribute("aria-labelledby")}"]`)?.textContent;
+      const rowLabels = [...group.querySelectorAll("[data-style-row] > span:first-child")].map((span) => span.textContent);
+      expect(rowLabels).not.toContain(name);
+    }
+    // 组名本身的文案也不能撞上行名 —— 同一套键在中文里曾经都叫「位置」。
+    const messages = (await import("@/app/messages")).messages;
+    for (const locale of Object.values(messages) as Record<string, string>[]) {
+      expect(locale.subGroupPlacement).not.toBe(locale.subPosition);
+      expect(locale.subGroupBackplate).not.toBe(locale.subBg);
+    }
+  });
+
+  it("每一行是同一副三列骨架:标签列、控件列、读数列定宽,控件的左右缘对齐", async () => {
+    const { container } = renderStyle();
+    await userEvent.click(screen.getByRole("button", { name: /subtitleStyle/ }));
+    const rows = [...container.querySelectorAll("[data-style-row]")];
+    expect(rows).toHaveLength(8);
+    for (const row of rows) expect(row.className).toContain("grid-cols-[56px_minmax(0,1fr)_36px]");
+    // 滑杆的读数落在第三列,等宽数字。
+    const readouts = [...container.querySelectorAll("[data-style-row] output")];
+    expect(readouts.map((one) => one.textContent)).toEqual(["32", "50%", "8%"]);
+    for (const one of readouts) expect(one.className).toContain("timecode");
+  });
+
+  it("颜色是紧凑色块 + 十六进制读数,不再是铺满整行的长条", async () => {
+    renderStyle({ color: "#ffcc00" });
+    await userEvent.click(screen.getByRole("button", { name: /subtitleStyle/ }));
+    const swatch = screen.getByLabelText("subColor");
+    expect(swatch).toHaveAttribute("type", "color");
+    expect(swatch.className).toContain("w-9");
+    expect(swatch.className).not.toContain("flex-1");
+    expect(swatch.parentElement).toHaveTextContent("#ffcc00");
+    expect(screen.getByLabelText("subBg").className).toContain("w-9");
+  });
+
+  it("加粗自成一行,是一个按下 / 抬起的切换键,写回的字段不变", async () => {
+    const { onSetStyle } = renderStyle({ bold: true });
+    await userEvent.click(screen.getByRole("button", { name: /subtitleStyle/ }));
+    const bold = screen.getByRole("button", { name: "subBold" });
+    expect(bold).toHaveAttribute("aria-pressed", "true");
+    // 和颜色不在同一行。
+    expect(bold.closest("[data-style-row]")).not.toBe(screen.getByLabelText("subColor").closest("[data-style-row]"));
+    await userEvent.click(bold);
+    expect(onSetStyle).toHaveBeenLastCalledWith(expect.objectContaining({ bold: false, color: "#ffffff", position: "bottom" }));
   });
 });
