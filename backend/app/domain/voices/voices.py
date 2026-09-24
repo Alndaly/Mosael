@@ -18,13 +18,14 @@ from app.domain.usage import billable, once
 from app.ai.runtime import tts_daemon, tts_models
 from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
 from app.core.db import SessionLocal
-from app.domain.jobs import TTS_SLOTS, run_job_guarded, say
+from app.domain.jobs import TTS_SLOTS, blame, run_job_guarded, say
 from app.db.models import Asset, Job, Voice
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 from app.media.probe import probe_media
 from app.core.child_process import run_logged
+from app.core.i18n import LocalizedError
 from app.core.text import blame_line, strip_ansi
 
 logger = logging.getLogger(__name__)
@@ -35,12 +36,6 @@ REFERENCE_MAX_SECONDS = 15
 #: 这个下限本来就写在界面提示里(「5–15 秒」),只是从来没有人执行它。
 REFERENCE_MIN_SECONDS = 5.0
 
-REFERENCE_TOO_SHORT_HINT = (
-    f"参考音频太短(只有 {{actual:.1f}} 秒)。零样本克隆要听够才能学到音色,"
-    f"请给 {REFERENCE_MIN_SECONDS:.0f}–{REFERENCE_MAX_SECONDS} 秒连续清晰的人声 —— "
-    "太短的话合成出来会是一段听不懂的声音。"
-)
-
 
 def engines_needing_reference_text() -> set[str]:
     """哪些引擎必须有参考文本 —— **从引擎目录读**,不在这里另存一份。
@@ -50,36 +45,32 @@ def engines_needing_reference_text() -> set[str]:
     """
     return {engine.id for engine in tts_models.CATALOG if engine.needs_reference_text}
 
-REFERENCE_TEXT_REQUIRED_HINT = (
-    "这个音色没有填参考文本,而 {label} 不会自己识别 —— 它需要知道那段参考音频说的是什么,"
-    "才能学到音色;没有的话合成出来会是一段听不懂的声音。"
-    "在音色库里重建这个音色时把参考文本填上,或者改用 F5-TTS(它会自己转写参考音频)。"
-)
-
 
 def check_reference_duration(seconds: float) -> None:
     """够不够长。**在建音色之前问** —— 一条注定合成不出东西的音色会出现在音色库里,
-    像个能用的选项;而它的代价要等到一次十分钟的合成之后才显现。"""
+    像个能用的选项;而它的代价要等到一次十分钟的合成之后才显现。
+
+    拒绝要**能行动**:说清楚他给了多长、要多长,而不是只说"太短"。"""
     if seconds < REFERENCE_MIN_SECONDS:
-        raise VoiceError(REFERENCE_TOO_SHORT_HINT.format(actual=seconds))
+        raise VoiceError(
+            "voiceErr_referenceTooShort",
+            actual=f"{seconds:.1f}",
+            min=f"{REFERENCE_MIN_SECONDS:.0f}",
+            max=str(REFERENCE_MAX_SECONDS),
+        )
 TTS_TIMEOUT_SECONDS = 1200
 
 
-class VoiceError(RuntimeError):
-    pass
+class VoiceError(LocalizedError, RuntimeError):
+    """配音/声音克隆的领域错误。带文案 key(`voiceErr_*`),按读的人的语言翻(见 core/i18n)。
+
+    这几句会原样显示在界面上 —— 文案里只写纯文本,不要 markdown。
+    """
 
 
-#: 纯文本,不要 markdown —— 这几句会原样显示在界面上。
-_NO_RUNTIME = (
-    "{label} 还没有运行环境:没有任何 Python 解释器装了它。"
-    "去设置的「声音克隆」那一页点「下载」,装一次就好;"
-    "想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。"
-)
-_NO_WEIGHTS = (
-    "{label} 的模型权重还没下好,现在合成不出声音。"
-    "去设置的「声音克隆」那一页点「下载」补上 —— "
-    "这里不会替你下:那是几个 GB 的事,该由你决定什么时候开始。"
-)
+def _ffmpeg_reason(stderr: str) -> object:
+    """ffmpeg 失败时那一句原因:原文不翻,说不出原因时给一句翻得动的话。"""
+    return blame_line(stderr) or LocalizedError("voiceErr_ffmpegNoReason")
 
 
 def resolve_clone_engine(requested: str = "") -> str:
@@ -92,47 +83,40 @@ def resolve_clone_engine(requested: str = "") -> str:
 
     engine = (requested or "").strip() or tts_config.get().engine
     if engine not in {item.id for item in tts_models.CATALOG}:
-        raise VoiceError(f"不认识的本地引擎:{engine}")
+        raise VoiceError("voiceErr_unknownEngine", engine=engine)
     return engine
 
 
 #: 长得像「异常那一行」的:`ModuleNotFoundError: ...`、`OSError: ...`、`RuntimeError: ...`。
 
 
-def explain_worker_failure(stderr: str) -> str:
-    """把 worker 的 traceback 变成界面上那**一句**话。
+def worker_failure(stderr: str) -> VoiceError:
+    """把 worker 的 traceback 变成界面上那**一句**话(一个带 key 的 VoiceError)。
 
     用户截图里那张卡片是四行文件路径 + 一排 `^^^^`(终端里指向出错列的记号,换到浏览器里
     只是噪声)+ 最后才是真正有用的 `ModuleNotFoundError: No module named 'natsort'`。
     traceback 的最后一行就是异常本身,前面那些是给读代码的人看的,不是给点了「生成配音」的人。
 
-    完整 traceback 仍然进日志 —— 排查要它,界面不要。
+    完整 traceback 仍然进日志 —— 排查要它,界面不要。异常那一行是上游原文,不翻,作为
+    `detail` 放进翻好的句子里。
     """
-    unknown = "合成失败,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
     text = strip_ansi(stderr or "").strip()
     if not text:
-        return unknown
+        return VoiceError("voiceErr_synthNoReason")
     # **最后一行不一定是异常**(torchcodec 会以 `[end of ... traceback].` 这样的分隔线收尾)。
     # 判据搬到了 core/text.blame_line —— 同一个毛病在下载权重、装依赖那两条路上又各犯过一次。
     last = blame_line(text)
     if not last:
-        return unknown  # 全是进度条 / 分隔线时,说不出原因就别硬编一个
+        return VoiceError("voiceErr_synthNoReason")  # 全是进度条 / 分隔线时,说不出原因就别硬编一个
     if "libtorchcodec" in text or "torchcodec" in last:
         # 这个错在 macOS 上有确定的成因:torchcodec 的 dylib 按 FFmpeg 大版本编译,而 0.16 起
         # 它们不带 rpath,dlopen 自己找不到 libavutil。应用会在启动 worker 时把可用的 FFmpeg
         # 库目录注进去(见 tts_models._ffmpeg_runtime_dir);走到这儿说明没找到能配对的那一份。
-        return (
-            "音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。"
-            "升级引擎依赖通常就能解决(设置 →「声音克隆」→ 下载);"
-            "若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。"
-        )
+        return VoiceError("voiceErr_synthTorchcodec")
     if "ModuleNotFoundError" in last or "ImportError" in last:
         # 缺依赖是**能行动**的:光扔一个模块名,用户只能去搜。
-        return (
-            f"{last[:200]} —— 引擎的运行环境不完整。"
-            "去设置的「声音克隆」那一页点「下载」,它会把缺的依赖补上。"
-        )
-    return last[:400]
+        return VoiceError("voiceErr_synthMissingModule", detail=last[:200])
+    return VoiceError("voiceErr_synthFailed", detail=last[:400])
 
 
 #: 音色 id 的语言前缀 —— 火山的内置音色叫 `zh_female_cancan_…`,语言就写在名字里。
@@ -156,7 +140,9 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     script = detect_script(text)
     if not script:
         return
-    label = {"ja": "日文", "ko": "韩文"}[script]
+    #: 「这段文本是日文」的语言名每种界面语言各说各的,所以按文种各一条文案,而不是把一个
+    #: 中文语言名当参数塞进英文句子里。detect_script 只认得出这两种。
+    keys = _SCRIPT_REFUSALS[script]
     if engine == "clone":
         if not clone_supports(script):
             from app.ai.runtime import f5_models
@@ -165,28 +151,34 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
             if missing is not None:
                 # **能下就说下什么** —— 这不是引擎的固有限制,是这台机器上还缺一份权重。
                 size = round(missing.expected_bytes / 1_000_000_000, 1)
-                raise VoiceError(
-                    f"这段文本是{label},而本地克隆现在装的权重念不了它。"
-                    f"去设置的「声音克隆」下载{label}模型(约 {size} GB)后就能用你自己的音色念;"
-                    f"不想等的话,改用 Edge TTS 的{label}音色或 OpenAI TTS。"
-                )
-            raise VoiceError(
-                f"这段文本是{label},而本地音色克隆没有能念它的模型 —— 它不会报错,只会念出一段"
-                f"听不懂的声音。改用 Edge TTS 的{label}音色,或 OpenAI TTS。"
-            )
+                raise VoiceError(keys["needs_weights"], size=str(size))
+            raise VoiceError(keys["clone_unsupported"])
         return
     if engine == "edge":
         voice_lang = edge_voice_language(engine_voice)
         if voice_lang and voice_lang != script:
-            raise VoiceError(f"这段文本是{label},而选中的 Edge 音色是 {voice_lang} 的 —— 请换一个 {script}- 开头的音色。")
+            raise VoiceError(keys["edge_mismatch"], voice_lang=voice_lang)
         return
     # 别的引擎按音色 id 的语言前缀判(火山:zh_female_…)。前缀不认识就放行。
     prefix = _VOICE_ID_LANG.match(engine_voice or "")
     if prefix and prefix.group(1) in _VOICE_ID_LANGS and prefix.group(1) != script:
-        raise VoiceError(
-            f"这段文本是{label},而选中的音色是 {prefix.group(1)} 的 —— 它念出来会是一段听不懂的声音,"
-            f"请换一个能念{label}的音色。"
-        )
+        raise VoiceError(keys["voice_mismatch"], voice_lang=prefix.group(1))
+
+
+_SCRIPT_REFUSALS = {
+    "ja": {
+        "needs_weights": "voiceErr_jaCloneNeedsWeights",
+        "clone_unsupported": "voiceErr_jaCloneUnsupported",
+        "edge_mismatch": "voiceErr_jaEdgeVoiceMismatch",
+        "voice_mismatch": "voiceErr_jaVoiceMismatch",
+    },
+    "ko": {
+        "needs_weights": "voiceErr_koCloneNeedsWeights",
+        "clone_unsupported": "voiceErr_koCloneUnsupported",
+        "edge_mismatch": "voiceErr_koEdgeVoiceMismatch",
+        "voice_mismatch": "voiceErr_koVoiceMismatch",
+    },
+}
 
 
 def _require_local_engine(engine: str) -> None:
@@ -198,9 +190,9 @@ def _require_local_engine(engine: str) -> None:
     """
     label = next((item.label for item in tts_models.CATALOG if item.id == engine), engine)
     if tts_models.resolve_engine_python(engine) is None:
-        raise VoiceError(_NO_RUNTIME.format(label=label))
+        raise VoiceError("voiceErr_noRuntime", label=label)
     if not tts_models.is_installed(engine):
-        raise VoiceError(_NO_WEIGHTS.format(label=label))
+        raise VoiceError("voiceErr_noWeights", label=label)
 
 
 def _transcode_reference(source: Path, target: Path) -> None:
@@ -210,7 +202,7 @@ def _transcode_reference(source: Path, target: Path) -> None:
          "-t", str(REFERENCE_MAX_SECONDS), str(target)],
         capture_output=True, text=True, timeout=300, what="参考音频转码")
     if result.returncode != 0 or not target.exists():
-        raise VoiceError(f"参考音频处理失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+        raise VoiceError("voiceErr_referenceTranscodeFailed", detail=_ffmpeg_reason(result.stderr))
 
 
 def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: str, reference_text: str) -> Voice:
@@ -247,12 +239,12 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
 
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workspace_id:
-        raise VoiceError("素材不存在")
+        raise VoiceError("voiceErr_assetNotFound")
     if not asset.file_key:
-        raise VoiceError("素材没有本地文件")
+        raise VoiceError("voiceErr_assetNoFile")
     transcript = db.scalar(select(Transcript).where(Transcript.asset_id == asset_id))
     if transcript is None:
-        raise VoiceError("该素材还没有逐字稿,请先转写")
+        raise VoiceError("voiceErr_noTranscript")
 
     segments = [
         seg
@@ -267,7 +259,7 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
         if total >= 8.0:
             break
     if not picked:
-        raise VoiceError("没有找到该说话人的可用片段")
+        raise VoiceError("voiceErr_noSpeakerSegments")
 
     reference_text = " ".join(seg.text.strip() for seg in picked if seg.text.strip())[:2000]
     voice_id = new_id()
@@ -281,7 +273,7 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
          "-af", f"aselect='{expr}',asetpts=N/SR/TB", "-ac", "1", "-ar", "24000", str(ref)],
         capture_output=True, text=True, timeout=300, what="说话人片段提取")
     if result.returncode != 0 or not ref.exists():
-        raise VoiceError(f"提取说话人音频失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+        raise VoiceError("voiceErr_speakerExtractFailed", detail=_ffmpeg_reason(result.stderr))
 
     voice = Voice(
         id=voice_id,
@@ -322,12 +314,12 @@ def recognize_reference_text(db: Session, voice: Voice) -> Voice:
 
     reference = reference_path(voice)
     if not reference.is_file():
-        raise VoiceError("这条音色的参考音频不在了,没法识别")
+        raise VoiceError("voiceErr_referenceGoneForRecognition")
     python_executable, engine_id = transcription.resolve_transcription_runtime()
     output = transcription.transcribe_with_engine(reference, python_executable, engine_id)
     text = "".join(str(segment.get("text") or "") for segment in (output.get("segments") or [])).strip()
     if not text:
-        raise VoiceError("没听出内容 —— 参考音频可能太轻或没有人声,换一段再试")
+        raise VoiceError("voiceErr_nothingHeard")
     voice.reference_text = text
     db.commit()
     db.refresh(voice)
@@ -344,7 +336,7 @@ def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text:
     if name is not None:
         cleaned = name.strip()
         if not cleaned:
-            raise VoiceError("音色名称不能为空")
+            raise VoiceError("voiceErr_nameEmpty")
         voice.name = cleaned
     if reference_text is not None:
         voice.reference_text = reference_text.strip()
@@ -391,7 +383,7 @@ def start_synthesis(
     voice id, and requiring a Voice there would mean inventing rows for voices we do not host.
     """
     if not text.strip():
-        raise VoiceError("合成文本不能为空")
+        raise VoiceError("voiceErr_textEmpty")
     # 语言对不上就现在拦 —— 建了任务再失败,用户已经等了几十秒;而它根本不会"失败",
     # 只会安静地交出一段念不对的音频。
     _refuse_if_unspeakable(text, engine, engine_voice, clone_engine)
@@ -399,7 +391,7 @@ def start_synthesis(
     if engine == "clone":
         voice = db.get(Voice, voice_id or "")
         if voice is None:
-            raise VoiceError("音色不存在")
+            raise VoiceError("voiceErr_voiceNotFound")
         # 参考音频够不够长,先查 —— 这是**用户自己的输入**,和这台机器装没装引擎无关,
         # 所以排在引擎检查前面。库里已经有的短音色(下限是后加的)也要挡在这儿,否则它会
         # 安安静静换来一次十分钟的合成和一段听不懂的声音。
@@ -412,7 +404,7 @@ def start_synthesis(
         # 「留空则自动识别」这句话只有 F5 兑现。Fish Speech 拿到空文本就是空文本 ——
         # 在建任务之前说,而不是等一次十分钟的合成之后交一段听不懂的东西。
         if clone_engine in engines_needing_reference_text() and not (voice.reference_text or "").strip():
-            raise VoiceError(REFERENCE_TEXT_REQUIRED_HINT.format(label=clone_engine))
+            raise VoiceError("voiceErr_referenceTextRequired", label=clone_engine)
         # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器、看一眼权重目录而已。
         # 不挡的话它会一路跑到 worker:导不进引擎就写一段正弦音(用户说的「根本克隆不了」),
         # 权重缺席就顺手下 2GB(用户说的「不该自动开启下载」)。
@@ -421,7 +413,7 @@ def start_synthesis(
         label = voice.name
     else:
         if not workspace_id:
-            raise VoiceError("需要指定工作区")
+            raise VoiceError("voiceErr_workspaceRequired")
         label = engine_voice or engine
     job = create_job(
         db,
@@ -549,7 +541,7 @@ def _run_synthesis_body(
         try:
             voice = db.get(Voice, voice_id) if engine == "clone" else None
             if engine == "clone" and voice is None:
-                raise VoiceError("音色不存在")
+                raise VoiceError("voiceErr_voiceNotFound")
             job.status = "running"
             job.progress = 0.2
             say(job, "jobMsg_ttsRunning", voice=voice.name if voice else (engine_voice or engine))
@@ -568,14 +560,14 @@ def _run_synthesis_body(
 
             ref = reference_path(voice)
             if not ref.is_file():
-                raise VoiceError("音色参考音频缺失")
+                raise VoiceError("voiceErr_referenceMissing")
             from app.ai.runtime import config as tts_config
 
             # 用**建任务时**定下的那个引擎:中途有人去设置页改了默认,这一单不该跟着漂。
             engine = clone_engine or tts_config.get().engine
             python = tts_models.resolve_engine_python(engine)
             if python is None:  # 建任务时还在,跑起来时被卸了
-                raise VoiceError(_NO_RUNTIME.format(label=engine))
+                raise VoiceError("voiceErr_noRuntime", label=engine)
             # env 也只有一份:此前这里手拼 `{**os.environ, "HF_ENDPOINT": …}`,漏了 fish-speech
             # 要的检出目录和权重目录 —— 于是装好了 fish 的机器也照样导不进引擎、照样出占位音。
             # 把**这次要跑的解释器**交出去:torchcodec 的 FFmpeg 库路径按那个 venv 里装的版本定,
@@ -609,9 +601,9 @@ def _run_synthesis_body(
                         engine, python, request, on_progress=report, timeout=TTS_TIMEOUT_SECONDS, env=worker_env,
                     )
                 except RuntimeError as exc:
-                    raise VoiceError(f"语音合成失败:{explain_worker_failure(str(exc))}") from exc
+                    raise worker_failure(str(exc)) from exc
                 if not out_wav.exists():
-                    raise VoiceError("语音合成失败:worker 报成功却没有产出音频")
+                    raise VoiceError("voiceErr_synthNoAudio")
                 used = result.get("engine", engine)
                 job = db.get(Job, job_id)
                 job.progress = 0.95
@@ -637,7 +629,9 @@ def _run_synthesis_body(
             if job is not None:
                 job.status = "failed"
                 say(job, "jobMsg_ttsFailed")
-                job.error = str(exc)[:600]
+                #: 失败原因存 key + 参数,接口按读的人的语言翻(见 jobs.blame)。
+                for field, value in blame(exc).items():
+                    setattr(job, field, value)
                 emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
             # 失败落进任务行是给用户看的;日志是给排查的人看的。此前只有前者,于是一次
@@ -817,9 +811,9 @@ def start_podcast(
 
     actions = {"summarize": PodcastAction.SUMMARIZE, "read": PodcastAction.READ, "research": PodcastAction.RESEARCH}
     if mode not in actions:
-        raise VoiceError(f"未知的播客模式:{mode}")
+        raise VoiceError("voiceErr_unknownPodcastMode", mode=mode)
     if not workspace_id:
-        raise VoiceError("播客需要指定工作区")
+        raise VoiceError("voiceErr_podcastWorkspaceRequired")
 
     job = create_job(
         db,

@@ -13,6 +13,7 @@ from copy import deepcopy
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.model_base import now
 from app.db.models import Workflow, WorkflowRevision
 
@@ -25,8 +26,8 @@ from app.db.models import Workflow, WorkflowRevision
 WORKFLOW_REVISION_HISTORY_LIMIT = 100
 
 
-class WorkflowRevisionError(RuntimeError):
-    pass
+class WorkflowRevisionError(LocalizedError, RuntimeError):
+    """修订快照对不上或者不存在。带文案 key(`wfErr_revision*`),按请求方的语言翻。"""
 
 
 def graph_digest(graph: dict) -> str:
@@ -203,7 +204,7 @@ def commit_graph_revision(
         db.refresh(workflow)
         return revision
 
-    raise WorkflowRevisionError("工作流在保存期间被连续修改，请重试")
+    raise WorkflowRevisionError("wfErr_revisionConcurrent")
 
 
 def list_workflow_revisions(
@@ -240,11 +241,11 @@ def get_workflow_revision(db: Session, workflow_id: str, revision: int) -> Workf
 def current_workflow_revision(db: Session, workflow: Workflow) -> WorkflowRevision:
     revision = get_workflow_revision(db, workflow.id, workflow.revision)
     if revision is None:
-        raise WorkflowRevisionError(f"工作流 v{workflow.revision} 的修订快照不存在")
+        raise WorkflowRevisionError("wfErr_revisionSnapshotMissing", revision=workflow.revision)
     if graph_digest(revision.graph) != revision.graph_hash or graph_digest(workflow.graph) != workflow.graph_hash:
-        raise WorkflowRevisionError(f"工作流 v{workflow.revision} 的图摘要校验失败")
+        raise WorkflowRevisionError("wfErr_revisionDigestMismatch", revision=workflow.revision)
     if revision_digest(revision.graph) != revision_digest(workflow.graph):
-        raise WorkflowRevisionError(f"工作流 v{workflow.revision} 的当前投影与修订快照不一致")
+        raise WorkflowRevisionError("wfErr_revisionProjectionMismatch", revision=workflow.revision)
     return revision
 
 
@@ -257,7 +258,7 @@ def restore_workflow_revision(
 ) -> WorkflowRevision | None:
     target = get_workflow_revision(db, workflow.id, target_revision)
     if target is None:
-        raise WorkflowRevisionError(f"工作流修订 v{target_revision} 不存在")
+        raise WorkflowRevisionError("wfErr_revisionNotFound", revision=target_revision)
     restored = commit_graph_revision(
         db,
         workflow,

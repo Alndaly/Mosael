@@ -270,10 +270,11 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     engine = (engine or "").strip() or CLONE_ENGINE
     voice = (voice or "").strip()
     if not voice:
-        raise VoiceError("没有选音色")
+        raise VoiceError("voiceErr_noVoiceSelected")
     unknown = set(options) - set(_CLONE_OPTIONS) - set(_ENGINE_OPTIONS)
     if unknown:
-        raise TypeError(f"synthesis_params 不认识:{sorted(unknown)}")
+        # 调用方的编程错误,不会到界面上。
+        raise TypeError(f"synthesis_params got unknown options: {sorted(unknown)}")
     params: dict[str, object] = {"engine": engine, "speed": float(speed or 1.0)}
     clone = engine == CLONE_ENGINE
     for key in _CLONE_OPTIONS if clone else _ENGINE_OPTIONS:
@@ -285,7 +286,7 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
 
         row = db.get(Voice, voice)
         if row is None or row.workspace_id != workspace_id:
-            raise VoiceError("这个工作区的配音库里没有这个音色")
+            raise VoiceError("voiceErr_voiceNotInWorkspace")
         params["voice_id"] = voice
     else:
         params["engine_voice"] = voice

@@ -35,7 +35,7 @@ ModuleNotFoundError: No module named 'natsort'
 
 
 def test_only_the_last_line_reaches_the_card() -> None:
-    message = voices.explain_worker_failure(RAW)
+    message = str(voices.worker_failure(RAW))
 
     assert "natsort" in message
     assert "^^^" not in message, f"插入符进了界面:{message}"
@@ -45,19 +45,19 @@ def test_only_the_last_line_reaches_the_card() -> None:
 
 def test_a_missing_module_says_what_to_do() -> None:
     """缺依赖是**能行动**的:去哪补。光扔一个模块名,用户只能去搜。"""
-    message = voices.explain_worker_failure(RAW)
+    message = str(voices.worker_failure(RAW))
 
     assert "下载" in message or "运行环境" in message, message
 
 
 def test_an_ordinary_failure_is_passed_through() -> None:
-    message = voices.explain_worker_failure("RuntimeError: CUDA out of memory\n")
+    message = str(voices.worker_failure("RuntimeError: CUDA out of memory\n"))
 
     assert "CUDA out of memory" in message
 
 
 def test_empty_stderr_does_not_produce_an_empty_card() -> None:
-    assert voices.explain_worker_failure("   \n  ").strip() != ""
+    assert str(voices.worker_failure("   \n  ")).strip() != ""
 
 
 def test_the_failure_path_itself_does_not_crash() -> None:

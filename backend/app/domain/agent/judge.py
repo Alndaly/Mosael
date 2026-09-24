@@ -5,6 +5,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.i18n import LocalizedError
+
 """隔离判断者:auto 档下,规则没覆盖到的 `external` 调用要不要放行。
 
 **它看不到对话。** 决定放行的那个模型,和提出这次调用的那个模型,必须不是同一次上下文 ——
@@ -26,6 +28,14 @@ logger = logging.getLogger(__name__)
 #: 一次判断的超时。它挡在用户和一次不可撤销的操作之间,慢一点没关系,但不能让 turn 干等 ——
 #: 超时按拒绝处理,卡回到用户面前(fail closed)。
 JUDGE_TIMEOUT_SECONDS = 20.0
+
+
+class JudgeUnavailable(LocalizedError, RuntimeError):
+    """没有模型可以问。"""
+
+
+class BadVerdict(LocalizedError, ValueError):
+    """判断者回了读不懂的东西 —— 读不懂就是拒绝。"""
 
 _SYSTEM = """你是一道授权闸。用户把某些不可撤销的操作交给智能体去做,你来判断这一次是否符合他
 预先写下的准则。
@@ -115,7 +125,7 @@ def ask(
     with SessionLocal() as db:
         profile = _pick_profile(db, user_id)
         if profile is None:
-            raise RuntimeError("没有可用于判断的对话模型")
+            raise JudgeUnavailable("agentErr_judgeNoModel")
         target = target_for(db, profile)
     from app.core.db import SessionLocal as _Session
     from app.domain.usage import billable, once
@@ -154,7 +164,7 @@ def _parse(raw: str, *, model: str) -> Verdict:
     try:
         data = json.loads(raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"判断者的回答不是 JSON:{str(raw)[:200]}") from exc
+        raise BadVerdict("agentErr_judgeNotJson", raw=str(raw)[:200]) from exc
     if not isinstance(data, dict) or not isinstance(data.get("allow"), bool):
-        raise ValueError(f"判断者的回答里没有 allow 布尔值:{str(raw)[:200]}")
+        raise BadVerdict("agentErr_judgeNoAllow", raw=str(raw)[:200])
     return Verdict(allow=bool(data["allow"]), reason=str(data.get("reason") or "")[:300], model=model)

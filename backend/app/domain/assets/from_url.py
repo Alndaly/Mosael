@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError
 from app.db.models import Job
 from app.domain.assets import register_file_asset
 from app.domain.assets.source_url import remember_asset_source
@@ -33,8 +34,8 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS = 50
 
 
-class UrlImportError(RuntimeError):
-    pass
+class UrlImportError(LocalizedError, RuntimeError):
+    """从链接导入被拒。带文案 key(`urlImportErr_*`),按请求方的语言翻。"""
 
 
 def start_url_import(
@@ -52,11 +53,11 @@ def start_url_import(
     (来自探测),任务消息和入库后的素材名都用它。"""
     chosen = [item for item in items if str(item.get("url") or "").strip()]
     if not chosen:
-        raise UrlImportError("没有选中任何条目")
+        raise UrlImportError("urlImportErr_noneSelected")
     if len(chosen) > MAX_ITEMS:
-        raise UrlImportError(f"一次最多下载 {MAX_ITEMS} 条,先分几次来")
+        raise UrlImportError("urlImportErr_tooMany", max=MAX_ITEMS)
     if kind not in ("video", "audio"):
-        raise UrlImportError("只能下载视频或音频")
+        raise UrlImportError("urlImportErr_badKind")
 
     job = create_job(
         db,

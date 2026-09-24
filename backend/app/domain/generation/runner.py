@@ -24,9 +24,10 @@ from app.ai.providers.contracts.generation import direct_media_url, sanitize_ada
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain import provider_models
-from app.domain.jobs import dispatch_job, emit_job_event, finish_job, register_resumer, say
+from app.domain.jobs import blame, dispatch_job, emit_job_event, finish_job, register_resumer, say
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.domain.usage import billable
@@ -37,6 +38,11 @@ as assets + generated_assets rows (plan §18.4) — never as loose temp files.
 """
 
 logger = logging.getLogger(__name__)
+
+
+class GenerationRunError(GenerationAdapterError, LocalizedError):
+    """执行时发现做不了(素材没了、密钥没配……)。带文案 key(`genErr_*`),失败原因经
+    `jobs.blame` 记 key + 参数,任务中心按读的人的语言翻。"""
 
 
 def start_generation_thread(generation_id: str) -> None:
@@ -107,7 +113,9 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
 
         adapter = get_generation_adapter(generation.provider, generation.kind)
         if adapter is None:
-            _fail(db, job, f"No adapter for provider {generation.provider}/{generation.kind}")
+            _fail(db, job, GenerationRunError(
+                "genErr_adapterUnavailable", provider=generation.provider, kind=generation.kind
+            ))
             return
 
         from app.domain.providers import resolve_connection
@@ -115,7 +123,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
         # 这次生成替谁干:job 上记着(见 Job.created_by)—— 用他的钥匙、花他的额度。
         profile = resolve_connection(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
         if adapter.requires_credentials() and (profile is None or not profile.api_key):
-            _fail(db, job, f"供应商 {generation.provider} 还没有配置你的密钥,请先在设置里填写")
+            _fail(db, job, GenerationRunError("genErr_noApiKey", provider=generation.provider))
             return
         context = GenerationAdapterContext(
             connection_id=profile.id if profile is not None else None,
@@ -223,7 +231,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             # 用户取消时 cancel_job 已落终态并写好「已取消」;再 _fail 会把它改写成
             # 泛化的 Generation failed,取消看起来就像出了错。
             if job.status in ("queued", "running"):
-                _fail(db, job, str(exc))
+                _fail(db, job, exc)
             else:
                 db.commit()
         except Exception as exc:  # defensive: worker threads must never die silently
@@ -269,15 +277,17 @@ def _remote_task_watch(db, job: Job) -> RemoteTaskWatch:
     return RemoteTaskWatch(remember=remember, is_cancelled=is_cancelled)
 
 
-def _fail(db, job: Job, message: str) -> None:
-    if not finish_job(db, job, status="failed", error=message[:500]):
+def _fail(db, job: Job, reason: Exception | str) -> None:
+    """任务失败。给的是异常就经 `blame` 记(带 key 的按读的人的语言翻);给的是一句话就是
+    第三方的原话(已脱敏),原样记。"""
+    fields = blame(reason) if isinstance(reason, Exception) else {"error": reason[:500]}
+    if not finish_job(db, job, status="failed", **fields):
         db.commit()
         return
     say(job, "jobMsg_generationFailed")
-    job.error = message[:500]
     emit_job_event(db, job.id, "job.failed", {})
     db.commit()
-    logger.warning("generation job %s failed: %s", job.id, message)
+    logger.warning("generation job %s failed: %s", job.id, fields["error"])
 
 
 #: 每种角色收什么素材。参考视频收视频,其余收图片 —— 这一条是**校验**,不是描述:
@@ -290,12 +300,12 @@ ROLE_ASSET_KIND = {
 }
 
 #: 报错里那个词。写死「首帧」的话,尾帧缺文件时用户看到的是「首帧素材文件不存在」。
-ROLE_LABEL = {
-    FIRST_FRAME: "首帧",
-    LAST_FRAME: "尾帧",
-    REFERENCE_IMAGE: "参考图",
-    REFERENCE_VIDEO: "参考视频",
-}
+#: 名字是文案 `genRole_<role>`(和提交前校验用的同一份,见 operations._label)。
+#: 这里跑在后台线程里,名字按缺省语言渲染 —— 它是参数,不是 key,落库后不再随读者变。
+def _role_label(role: str) -> str:
+    key = f"genRole_{role}"
+    label = tr(key)
+    return role if label == key else label
 
 
 def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset, ...]:
@@ -303,18 +313,20 @@ def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset,
     sources: list[SourceAsset] = []
     for entry in generation.request.get("source_assets") or []:
         role = str(entry.get("role") or FIRST_FRAME)
-        label = ROLE_LABEL.get(role, role)
+        label = _role_label(role)
         asset = db.get(Asset, str(entry.get("asset_id") or ""))
         if asset is None or asset.workspace_id != generation.workspace_id:
-            raise GenerationAdapterError(f"{label}素材不存在或不属于当前工作区")
+            raise GenerationRunError("genErr_sourceMissing", label=label)
         expected = ROLE_ASSET_KIND.get(role, "image")
         if asset.kind != expected:
-            raise GenerationAdapterError(f"{label}素材必须是{'视频' if expected == 'video' else '图片'}")
+            raise GenerationRunError(
+                "genErr_sourceMustBeVideo" if expected == "video" else "genErr_sourceMustBeImage", label=label
+            )
         if not asset.file_key:
-            raise GenerationAdapterError(f"{label}素材缺少本地文件")
+            raise GenerationRunError("genErr_sourceNoLocalFile", label=label)
         path = resolve_key(asset.file_key)
         if not path.is_file():
-            raise GenerationAdapterError(f"{label}素材文件不存在")
+            raise GenerationRunError("genErr_sourceFileMissing", label=label)
         # 这份素材在公网上的直链(只有"从链接导入的"素材才有)。有直链时,视频/音频角色
         # 优先走直链发出去 —— 见 contracts.generation.SourceAsset:方舟的参考视频只收链接。
         sources.append(

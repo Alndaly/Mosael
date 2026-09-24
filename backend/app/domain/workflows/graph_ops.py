@@ -28,7 +28,7 @@ GRAPH_OP_KINDS = (
 def _require_node(by_id: dict[str, dict], node_id: str) -> dict:
     node = by_id.get(node_id)
     if node is None:
-        raise WorkflowDomainError("wfErr_nodeMissing", params={"id": node_id or "(空)"})
+        raise WorkflowDomainError("wfErr_nodeMissing", params={"id": node_id or '""'})
     return node
 
 
@@ -59,7 +59,7 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
         if kind == "add_node":
             node_type = str(op.get("type", ""))
             if node_type not in NODE_TYPES:
-                raise WorkflowDomainError("wfErr_unknownNodeType", params={"type": node_type or "(空)"})
+                raise WorkflowDomainError("wfErr_unknownNodeType", params={"type": node_type or '""'})
             if node_type == "start" and any(str(node.get("type")) == "start" for node in nodes):
                 raise WorkflowDomainError("wfErr_startExists")
             node_id = str(op.get("node_id") or "").strip() or ("start" if node_type == "start" and "start" not in by_id else gen_node_id(node_type))
@@ -137,6 +137,6 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
             edge_id = str(op.get("edge_id", ""))
             edges[:] = [e for e in edges if str(e.get("id")) != edge_id]
         else:
-            raise WorkflowDomainError("wfErr_unknownGraphOp", params={"kind": kind or "(空)"})
+            raise WorkflowDomainError("wfErr_unknownGraphOp", params={"kind": kind or '""'})
 
     return g

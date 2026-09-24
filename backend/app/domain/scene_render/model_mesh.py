@@ -38,6 +38,7 @@ from pathlib import Path
 
 import numpy as np
 
+from app.core.i18n import LocalizedError
 from app.domain.scene_render.meshes import Mesh
 
 #: 单份模型的面数上限。见模块开头那段:这是渲染时间的闸,不是格式限制。
@@ -54,8 +55,10 @@ _JSON_CHUNK = 0x4E4F534A
 _BIN_CHUNK = 0x004E4942
 
 
-class UnsupportedModel(ValueError):
-    """这份模型读不了。消息是**给人看的**:说清楚是哪一种读不了,以及能怎么办。"""
+class UnsupportedModel(LocalizedError, ValueError):
+    """这份模型读不了。消息是**给人看的**:说清楚是哪一种读不了,以及能怎么办。
+
+    带文案 key(`modelMeshErr_*`),按读的人的语言翻。"""
 
 
 @dataclass(frozen=True)
@@ -87,7 +90,7 @@ def library_for(files: dict[str, Path]) -> ModelLibrary:
         except UnsupportedModel as exc:
             failures[model_id] = str(exc)
         except (OSError, ValueError, KeyError, IndexError, struct.error) as exc:
-            failures[model_id] = f"模型文件读不了:{exc}"
+            failures[model_id] = str(UnsupportedModel("modelMeshErr_unreadable", detail=str(exc)))
     return ModelLibrary(meshes=meshes, failures=failures)
 
 
@@ -106,15 +109,12 @@ def read_model(path: Path) -> list[Mesh]:
             # 顶点搬进内存就已经是伤害了,不该等读完了才说"太大"。
             total += _face_count(document, primitive)
             if total > TRIANGLE_BUDGET:
-                raise UnsupportedModel(
-                    f"模型超过 {TRIANGLE_BUDGET:,} 个三角形,白模参考帧渲不动 —— "
-                    "请先在 Blender 里用精简(Decimate)修改器减面再导入。"
-                )
+                raise UnsupportedModel("modelMeshErr_tooManyTriangles", limit=f"{TRIANGLE_BUDGET:,}")
             part = _primitive(document, buffers, primitive, matrix)
             if part is not None:
                 parts.append(part)
     if not parts:
-        raise UnsupportedModel("模型里没有可以渲染的三角形网格。")
+        raise UnsupportedModel("modelMeshErr_noMesh")
     return parts
 
 
@@ -125,7 +125,7 @@ def _open(path: Path) -> tuple[dict, bytes | None]:
         return json.loads(raw.decode("utf-8")), None
     _, version, _ = struct.unpack_from("<4sII", raw, 0)
     if version != 2:
-        raise UnsupportedModel(f"只支持 glTF 2.0,这份是 {version}。")
+        raise UnsupportedModel("modelMeshErr_gltfVersion", version=version)
     document: dict | None = None
     blob: bytes | None = None
     offset = 12
@@ -138,7 +138,7 @@ def _open(path: Path) -> tuple[dict, bytes | None]:
             blob = body
         offset += 8 + length
     if document is None:
-        raise UnsupportedModel("GLB 里没有 JSON 块。")
+        raise UnsupportedModel("modelMeshErr_glbNoJson")
     return document, blob
 
 
@@ -146,9 +146,9 @@ def _refuse_compressed(document: dict) -> None:
     """压缩网格不解 —— 说清楚是哪一种,以及回 Blender 怎么改。"""
     required = set(document.get("extensionsRequired") or [])
     if "KHR_draco_mesh_compression" in required:
-        raise UnsupportedModel("模型用了 Draco 压缩网格,白模渲染器解不开 —— 导出 GLB 时关掉压缩即可。")
+        raise UnsupportedModel("modelMeshErr_draco")
     if "EXT_meshopt_compression" in required:
-        raise UnsupportedModel("模型用了 meshopt 压缩网格,白模渲染器解不开 —— 导出 GLB 时关掉压缩即可。")
+        raise UnsupportedModel("modelMeshErr_meshopt")
 
 
 def _buffers(document: dict, blob: bytes | None) -> list[bytes]:
@@ -158,14 +158,12 @@ def _buffers(document: dict, blob: bytes | None) -> list[bytes]:
         uri = buffer.get("uri")
         if uri is None:
             if blob is None:
-                raise UnsupportedModel("模型声明了内置二进制块,文件里却没有。")
+                raise UnsupportedModel("modelMeshErr_missingBinChunk")
             out.append(blob)
         elif uri.startswith("data:"):
             out.append(base64.b64decode(uri.split(",", 1)[1]))
         else:
-            raise UnsupportedModel(
-                f"模型的数据在另一个文件里({uri}),导入时只收到了这一份 —— 请导出为自包含的 .glb。"
-            )
+            raise UnsupportedModel("modelMeshErr_externalBuffer", uri=uri)
     return out
 
 
@@ -173,7 +171,7 @@ def _accessor(document: dict, buffers: list[bytes], index: int) -> np.ndarray:
     """一个访问器读成 (count, components) 的数组。"""
     accessor = (document.get("accessors") or [])[index]
     if "sparse" in accessor:
-        raise UnsupportedModel("模型用了稀疏访问器(sparse accessor),白模渲染器读不了。")
+        raise UnsupportedModel("modelMeshErr_sparseAccessor")
     components = _COUNTS[accessor["type"]]
     dtype = np.dtype(_COMPONENTS[accessor["componentType"]])
     count = int(accessor["count"])

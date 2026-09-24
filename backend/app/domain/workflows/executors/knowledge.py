@@ -48,7 +48,7 @@ def note_read(db: Session, workflow: Workflow, config: dict) -> dict:
         ref = read_reference(db, workflow.workspace_id, str(config.get("note_id") or ""), revision)
     except NoteDomainError as exc:
         # 领域到领域的翻译:笔记读不到,对工作流来说是这个节点失败。
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     return {**ref, "text": ref["markdown"]}
 
 
@@ -64,4 +64,4 @@ def note_create(db: Session, workflow: Workflow, config: dict) -> dict:
         ref = read_reference(db, workflow.workspace_id, note.id)
         return {"note_id": ref["note_id"], "title": ref["title"], "revision": ref["revision"], "citation_url": ref["citation_url"]}
     except (NoteDomainError, ValidationError) as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc

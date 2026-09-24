@@ -1789,7 +1789,8 @@ def test_没被强制过的Schema_报错时要说出来(monkeypatch) -> None:
                 },
             )
 
-    reason = str((raised.value.params or {}).get("reason", ""))
+    assert raised.value.key == "wfErr_jsonSchemaMismatchUnenforced"
+    reason = str(raised.value)
     assert "无法把 Schema 当成硬约束" in reason, f"报错没说清图纸从没被强制过:{reason}"
     details = raised.value.details or {}
     assert details.get("schema_enforced") is False

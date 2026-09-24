@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.i18n import LocalizedError
+
 #: 一步的三种状态。没有 "failed" —— 失败是模型该在回复里讲清楚的事,塞进状态机只会让
 #: 界面多一种颜色而信息量不变。
 STATUSES = ("pending", "in_progress", "done")
@@ -31,6 +33,10 @@ MAX_STEPS = 20
 MAX_STEP_CHARS = 160
 
 
+class PlanError(LocalizedError, ValueError):
+    """模型给的计划收不下。带文案 key,按请求方的语言翻 —— 模型读哪种都行。"""
+
+
 def normalize(steps: Any) -> list[dict[str, str]]:
     """把模型给的任意形状收敛成 `[{"step", "status"}]`。
 
@@ -38,7 +44,7 @@ def normalize(steps: Any) -> list[dict[str, str]]:
     的输入,只会让它多试几轮,而每一轮都是一次真实的模型调用。
     """
     if not isinstance(steps, list):
-        raise ValueError("steps 必须是数组")
+        raise PlanError("agentErr_planStepsNotArray")
     out: list[dict[str, str]] = []
     for item in steps[:MAX_STEPS]:
         if isinstance(item, str):
@@ -55,7 +61,7 @@ def normalize(steps: Any) -> list[dict[str, str]]:
             status = "pending"
         out.append({"step": text[:MAX_STEP_CHARS], "status": status})
     if not out:
-        raise ValueError("计划至少要有一步")
+        raise PlanError("agentErr_planEmpty")
     # 同时最多一步在做:多于一步时"现在在做什么"就没有答案了,而这正是这份列表的用处。
     seen_running = False
     for step in out:

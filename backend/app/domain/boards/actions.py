@@ -142,7 +142,7 @@ def speak_on_board(
     ensure_revision(get_board(db, workspace_id, slot.board_id), slot.base_revision)
     text = text.strip()
     if not text:
-        raise BoardInputError("没有可念的文字")
+        raise BoardInputError("boardErr_nothingToSpeak")
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
         job = start_synthesis(db, text=text, project_id=None, created_by=actor_id, **synthesis)
@@ -170,7 +170,7 @@ def trim_on_board(
     ensure_revision(get_board(db, workspace_id, slot.board_id), slot.base_revision)
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workspace_id:
-        raise BoardInputError("这个工作区里没有这份素材")
+        raise BoardInputError("boardErr_assetNotInWorkspace")
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
         job = start_trim(db, asset=asset, start=start, end=end, mute=mute, created_by=actor_id)
@@ -206,7 +206,7 @@ def write_on_board(
 
     prompt = prompt.strip()
     if not prompt:
-        raise BoardInputError("先写点要求,再让它写")
+        raise BoardInputError("boardErr_writeNeedsPrompt")
 
     #: 这张便签上已经有的字。**从画布上读,不让前端拼进提示词** —— 拼在前端意味着「现在写的是
     #: 什么」和「要求是什么」揉成了一段。有字就是**改写**,没字才是从头写。

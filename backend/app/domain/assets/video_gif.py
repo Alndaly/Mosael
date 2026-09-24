@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
@@ -18,8 +19,8 @@ from app.media.video_gif import encode_video_gif
 logger = logging.getLogger(__name__)
 
 
-class VideoGifError(ValueError):
-    pass
+class VideoGifError(LocalizedError, ValueError):
+    """视频转 GIF 被拒。带文案 key(`gifErr_*`),按请求方的语言翻。"""
 
 
 def start_video_to_gif(
@@ -33,11 +34,11 @@ def start_video_to_gif(
     duration: float | None = None,
 ) -> Job:
     if asset.kind != "video":
-        raise VideoGifError("只有视频素材可以转换为 GIF")
+        raise VideoGifError("gifErr_notVideo")
     if not asset.file_key:
-        raise VideoGifError("视频素材没有本地文件")
+        raise VideoGifError("gifErr_noLocalFile")
     if fps < 1 or fps > 30 or width < 64 or width > 1920 or start < 0 or (duration is not None and duration <= 0):
-        raise VideoGifError("GIF 参数超出允许范围")
+        raise VideoGifError("gifErr_badParams")
 
     job = create_job(
         db,
@@ -85,7 +86,7 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
 
         source = resolve_key(asset.file_key)
         if not source.is_file():
-            raise VideoGifError("视频素材文件不存在")
+            raise VideoGifError("gifErr_fileMissing")
         with tempfile.TemporaryDirectory(prefix="mosael-gif-") as tmp:
             target = Path(tmp) / f"{source.stem}.gif"
             encode_video_gif(source, target, fps=fps, width=width, start=start, duration=duration)

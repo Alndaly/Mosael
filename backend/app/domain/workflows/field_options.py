@@ -16,11 +16,11 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import t
+from app.core.i18n import LocalizedError, t
 
 
-class FieldOptionsError(ValueError):
-    pass
+class FieldOptionsError(LocalizedError, ValueError):
+    """不认识的选项来源。带文案 key,按请求方的语言翻。"""
 
 
 @dataclass(frozen=True)
@@ -207,5 +207,5 @@ SOURCES: dict[str, Source] = {
 def field_options(db: Session, source: str, ctx: OptionContext) -> list[Option]:
     handler = SOURCES.get(source)
     if handler is None:
-        raise FieldOptionsError(f"未知的选项来源:{source}")
+        raise FieldOptionsError("wfErr_unknownOptionSource", source=source)
     return handler(db, ctx)

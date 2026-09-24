@@ -279,10 +279,14 @@ class _BadJson(Exception):
     `feedback` 是原样发回给模型的那句话 —— 它必须说清楚哪一格错了,否则模型只能瞎改。
     """
 
-    def __init__(self, key: str, reason: str, feedback: str, details: dict[str, Any]) -> None:
+    def __init__(
+        self, key: str, reason: str, feedback: str, details: dict[str, Any], params: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(reason)
         self.key = key
         self.reason = reason
+        #: 给人看的那句话的参数(见 `key`);缺省只有原因本身。
+        self.params = params if params is not None else {"reason": reason}
         self.feedback = feedback
         self.details = details
 
@@ -332,18 +336,18 @@ def _json_result(
         except ValidationError as exc:
             reason, feedback = _schema_failure(exc)
             enforced = _enforced_locally(config, used_tier)
-            if not enforced:
-                # **这一句是给人看的**:用户节点上写着 json_schema + strict,答歪了会以为
-                # 是模型笨。而真相是那份图纸从来没被这个端点强制执行过 —— 它只在提示词里
-                # 露过一面。能动手的方向完全不同(换个端点 / 简化 Schema),所以要说出来。
-                reason = f"{reason}(这一档实际跑在 {used_tier}:该端点无法把 Schema 当成硬约束)"
+            # **没有硬约束时换一句话**:用户节点上写着 json_schema + strict,答歪了会以为
+            # 是模型笨。而真相是那份图纸从来没被这个端点强制执行过 —— 它只在提示词里
+            # 露过一面。能动手的方向完全不同(换个端点 / 简化 Schema),所以要说出来。
+            # 是另一个 key 而不是往 reason 后面拼一截:拼进去的那半句就只有一种语言了。
             raise _BadJson(
-                "wfErr_jsonSchemaMismatch",
+                "wfErr_jsonSchemaMismatch" if enforced else "wfErr_jsonSchemaMismatchUnenforced",
                 reason,
                 f"你上一次的回答不符合 JSON Schema:{feedback}。请只改这一处,其余内容原样保留,"
                 "重新输出完整对象。",
                 {**base, "response_format": "json_schema", "schema_error": reason,
                  "response_format_used": used_tier, "schema_enforced": enforced},
+                {"reason": reason} if enforced else {"reason": reason, "tier": used_tier},
             ) from exc
     return value
 
@@ -444,9 +448,9 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             if downgrades:
                 call.annotate(response_format_downgrades=downgrades)
     except AiChatError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     if bad is not None:
-        raise WorkflowDomainError(bad.key, params={"reason": bad.reason}, details=bad.details)
+        raise WorkflowDomainError(bad.key, params=bad.params, details=bad.details)
     result: dict[str, Any] = {"text": text}
     if wants_json:
         result["json"] = parsed

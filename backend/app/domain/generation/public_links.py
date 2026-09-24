@@ -50,6 +50,8 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from app.core.i18n import LocalizedError, tr
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
@@ -63,8 +65,8 @@ LINK_TTL_SECONDS = 6 * 3600
 REUSE_MARGIN = timedelta(hours=1)
 
 
-class NoUploader(RuntimeError):
-    """没有可用的上传插件。消息是给用户看的,要说清下一步做什么。"""
+class NoUploader(LocalizedError, RuntimeError):
+    """没有可用的上传插件。消息是给用户看的,要说清下一步做什么。带文案 key(`genErr_*`)。"""
 
 
 def _missing(db: "Session", instance) -> list[str]:
@@ -133,11 +135,7 @@ def choose_uploader(db: "Session", owner_user_id: str | None, asset_name: str):
     """挑出这一次用哪一家存储,挑不出来时抛 `NoUploader`(消息给用户看)。"""
     candidates = uploaders(db, owner_user_id)
     if not candidates:
-        raise NoUploader(
-            f"「{asset_name}」是本地素材,而这个模型的这一项只收公网链接。"
-            "装一个对象存储插件(火山引擎 TOS / 阿里云 OSS / 腾讯云 COS / Amazon S3)之后它会自动传上去 ——"
-            "在「插件」页里装并填上桶和密钥;或者直接粘一条你已有的公网直链。"
-        )
+        raise NoUploader("genErr_noUploader", asset=asset_name)
     chosen_id = default_uploader_id(db, owner_user_id or "")
     chosen = next((pair for pair in candidates if pair[0].id == chosen_id), None)
     if chosen is None:
@@ -147,25 +145,22 @@ def choose_uploader(db: "Session", owner_user_id: str | None, asset_name: str):
         elif not ready:
             first = candidates[0][0]
             raise NoUploader(
-                f"「{first.name}」还没配好({'、'.join(_missing(db, first))}),所以「{asset_name}」传不上去。"
-                "去插件页把它补齐,或者直接粘一条公网直链。"
+                "genErr_uploaderIncomplete", plugin=first.name,
+                missing=tr("punct_listSep").join(_missing(db, first)), asset=asset_name,
             )
         else:
-            names = "、".join(f"「{pair[0].name}」" for pair in ready)
-            raise NoUploader(
-                f"你配好了几家对象存储({names}),「{asset_name}」要传去哪一家还没定。"
-                "去「设置 → 素材外链」里选一家,再生成一次。"
-            )
+            names = tr("punct_listSep").join(pair[0].name for pair in ready)
+            raise NoUploader("genErr_uploaderAmbiguous", names=names, asset=asset_name)
     instance, manifest = chosen
     missing = _missing(db, instance)
     if missing:
         raise NoUploader(
-            f"「{instance.name}」还没配好({'、'.join(missing)}),所以「{asset_name}」传不上去。"
-            "去插件页把它补齐,或者直接粘一条公网直链。"
+            "genErr_uploaderIncomplete", plugin=instance.name,
+            missing=tr("punct_listSep").join(missing), asset=asset_name,
         )
     tool = manifest.tool_providing(PUBLIC_URL)
     if not tool:
-        raise NoUploader(f"「{instance.name}」的插件版本太旧 —— 去「插件」页的市场里把它更新到最新,再生成一次。")
+        raise NoUploader("genErr_uploaderOutdated", plugin=instance.name)
     return instance, tool
 
 
@@ -189,15 +184,15 @@ def public_url_for(
             workspace_id=workspace_id,
         )
     except PluginDomainError as exc:
-        raise NoUploader(f"用「{instance.name}」上传「{asset_name}」失败:{exc}") from exc
+        raise NoUploader("genErr_uploadFailed", plugin=instance.name, asset=asset_name, detail=str(exc)) from exc
 
     output = invocation.output or {}
     if invocation.status != "succeeded":
-        detail = str(output.get("error") or invocation.error or "插件没说原因")
-        raise NoUploader(f"用「{instance.name}」上传「{asset_name}」失败:{detail}")
+        detail = str(output.get("error") or invocation.error or tr("genErr_pluginNoReason"))
+        raise NoUploader("genErr_uploadFailed", plugin=instance.name, asset=asset_name, detail=detail)
     url = str(output.get("url") or output.get("public_url") or "").strip()
     if not url:
-        raise NoUploader(f"「{instance.name}」传完了却没给出地址 —— 这是插件自己的 bug")
+        raise NoUploader("genErr_uploadNoUrl", plugin=instance.name)
 
     expires_at = now() + timedelta(seconds=LINK_TTL_SECONDS)
     if cached is None:

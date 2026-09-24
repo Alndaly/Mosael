@@ -35,6 +35,7 @@ from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context
 from app.domain.model_limits import fallback_context_window
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError, get_current_locale, set_current_locale, tr
 from app.core.security import mint_service_session, revoke_session
 from app.db.models import AgentMessage, AgentSession, ToolConfirmation, User, now
 from app.core.token_estimate import estimate_text_tokens
@@ -103,9 +104,7 @@ def resolve_chat_provider(
         # **不再回退到"第一个启用的连接"。** 那个兜底的失败方式跑出来过:界面显示 DeepSeek、
         # 回答却是「我是 Kimi」—— 碰巧第一个是订阅计划连接,而订阅走它自己的 provider 定义
         # (自带身份、自带思考)。没有默认就说没有,这句话用户看得懂;悄悄换一个他看不懂。
-        raise AdapterError(
-            "还没有选好对话模型:在输入框旁边选一个,或到设置里把它设成你的默认模型。"
-        )
+        raise AdapterError(tr("agentErr_noChatModelChosen"))
     if not (model or "").strip():
         # 没指定模型时用这条连接下第一个能对话的模型。default_model 那个字段正在退场 ——
         # 它是"一档案一模型"时代的写法,同一条连接有多个对话模型时它给不出答案。
@@ -117,10 +116,7 @@ def resolve_chat_provider(
     # A profile with no usable model would otherwise reach the sidecar as model=""
     # and come back as a silent empty turn.
     if not agent_model:
-        raise AdapterError(
-            f"供应商「{profile.name}」没有可用的模型:请在设置里为它填写默认模型,"
-            "或在对话框的模型选择器里选一个。"
-        )
+        raise AdapterError(tr("agentErr_connectionNoModel", name=profile.name))
     provider_dict = sidecar_provider(db, profile, agent_model)
     return provider_dict, agent_model, profile
 
@@ -242,8 +238,8 @@ def get_or_create_external_session(db: Session, *, workspace_id: str, external_k
     )
 
 
-class HostError(RuntimeError):
-    pass
+class HostError(LocalizedError, RuntimeError):
+    """排队消息之类的请求做不了。带文案 key(`agentErr_*`),按请求方的语言翻。"""
 
 
 def unseen_since_last_success(db: Session, session: AgentSession) -> str:
@@ -481,11 +477,19 @@ def _start_turn(session_id: str, prompt: str, token: str) -> None:
     直到回合结束才一次性补上)。窗口很窄,所以它表现为「偶尔整轮没有轨迹」。
 
     备好流是纯内存操作,放在调用方这一侧,POST 返回时它已经在了。
+
+    **语言跟着发消息的人走。** 工作线程不继承请求的 ContextVar,不带过去的话,这一轮失败时
+    写进对话里的那句话(「没有选好对话模型」「执行失败」)永远是缺省语言 —— 英文界面的
+    对话里冒出一句中文。对话记录本来就是写下那一刻的文字,和模型的回答一样不再重翻。
     """
     _stream_reset(session_id)
-    threading.Thread(
-        target=_run_turn_thread, args=(session_id, prompt, token), daemon=True, name=TURN_THREAD_NAME
-    ).start()
+    locale = get_current_locale()
+
+    def run() -> None:
+        set_current_locale(locale)
+        _run_turn_thread(session_id, prompt, token)
+
+    threading.Thread(target=run, daemon=True, name=TURN_THREAD_NAME).start()
 
 
 def _failed_turn_timeline(session_id: str) -> dict:
@@ -556,10 +560,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
             # provider misconfiguration look like "nothing happened".
             if not final_text.strip() and not timeline:
-                raise AdapterError(
-                    "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否完整"
-                    "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
-                )
+                raise AdapterError(tr("agentErr_emptyReply"))
             usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
             usage["metering"] = _turn_metering(prompt, final_text, result.usage)
             prompt_snapshot = _prompt_snapshot(db, session.id, system_prompt)
@@ -624,7 +625,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 session_id=session.id,
                 role="assistant",
                 # 说得出原因就说原因 —— 「请稍后重试」对一次超时是错的建议。
-                content=getattr(exc, "human", "") or "智能体执行失败，请稍后重试。",
+                content=getattr(exc, "human", "") or tr("agentErr_turnFailed"),
                 error=str(exc)[:800],
                 payload={
                     "usage": usage,
@@ -662,7 +663,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             assistant_message = AgentMessage(
                 session_id=session.id,
                 role="assistant",
-                content="智能体执行异常。",
+                content=tr("agentErr_turnCrashed"),
                 error=str(exc)[:800],
                 payload={"usage": usage, **_failed_turn_timeline(session_id)},
             )
@@ -847,7 +848,7 @@ def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -
     """Drop a message that has not run yet."""
     message = db.get(AgentMessage, message_id)
     if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
-        raise HostError("这条消息已经开始处理,无法撤回")
+        raise HostError("agentErr_messageAlreadyRunning")
     db.delete(message)
     db.commit()
     return [item.content for item in _queued_messages(db, session)]
@@ -895,7 +896,7 @@ def steer_queued_message(db: Session, session: AgentSession, message_id: str, us
     """
     message = db.get(AgentMessage, message_id)
     if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
-        raise HostError("找不到这条排队消息")
+        raise HostError("agentErr_queuedMessageMissing")
     if not steer_turn(session.id, _prompt_with_context(message.content, (message.payload or {}).get("context"))):
         return False
     _unqueue(db, message)

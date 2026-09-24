@@ -7,6 +7,8 @@ operations 模块。抛错是它们唯一的共同需求,而依赖的粗细决�
 
 from __future__ import annotations
 
+from app.core.i18n import LocalizedError
 
-class SequenceDomainError(ValueError):
-    pass
+
+class SequenceDomainError(LocalizedError, ValueError):
+    """时间线说不行。带文案 key(`seqErr_*`),按请求方的语言翻;认不出的 key 原样显示。"""

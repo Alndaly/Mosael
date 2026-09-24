@@ -86,10 +86,38 @@ class WorkflowDomainError(RuntimeError):
         #: **只有认得出的才是 key。** 此前无条件记成 key,于是十几处 `WorkflowDomainError(str(exc))`
         #: 把第三方报错原文当 key 落了库(见 core/i18n.is_message_key)。
         self.key = message if is_message_key(message) else ""
+        self.message = message
         self.params = {k: str(v) for k, v in (params or {}).items()}
-        #: str(exc) 给的是**缺省语言**那一句:日志、拼进别的错误里、直接读库的脚本都读它。
+        #: args 里放的是**缺省语言**那一句:pickle、repr 之类不经过 __str__ 的地方读它。
         super().__init__(render_message(message, DEFAULT_LOCALE, self.params))
         self.details = details or {}
+
+    def __str__(self) -> str:
+        """按**当时**的语言说 —— 和 LocalizedError 一样取 ContextVar。
+
+        执行线程里没有请求语言,取到的就是缺省语言(日志、落库的 `error` 都读它,和此前一样);
+        而编辑器里同步报的那些(图操作、导入文件)是在请求里抛的,路由拿 str(exc)
+        当 detail,此前永远给缺省语言 —— 英文界面里弹出一句中文。
+        """
+        from app.core.i18n import get_current_locale, render_message
+
+        return render_message(self.message, get_current_locale(), self.params)
+
+    @classmethod
+    def from_error(cls, exc: BaseException, *, details: dict[str, Any] | None = None) -> WorkflowDomainError:
+        """把别的领域的错误转述成工作流错误,**带着它的 key 和参数**。
+
+        此前各执行器写的是 `WorkflowDomainError(str(exc))`:那一刻就把话翻成了字,key 丢了,
+        落库的失败原因从此只有写下它那一刻的语言(执行线程里就是缺省语言)。别的领域的错误
+        改成 LocalizedError 之后,这条路是它们的 key 走进任务失败原因的唯一通道。
+        认不出 key 的(第三方库的原话)照旧当字面量。
+        """
+        from app.core.i18n import is_message_key
+
+        key = str(getattr(exc, "key", "") or "")
+        if is_message_key(key):
+            return cls(key, params=dict(getattr(exc, "params", None) or {}), details=details)
+        return cls(str(exc), details=details)
 
 
 # 节点类型注册表:同时驱动后端校验、前端节点面板和智能体的图编辑提示。

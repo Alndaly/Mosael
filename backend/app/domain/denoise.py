@@ -21,7 +21,7 @@ from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, DenoiseAdapter,
 from app.ai.providers.registry import DENOISE_ADAPTERS, get_denoise_adapter
 from app.ai.runtime import denoise_models
 from app.core.db import SessionLocal
-from app.core.i18n import t
+from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
@@ -32,6 +32,13 @@ logger = logging.getLogger(__name__)
 DENOISABLE_KINDS = frozenset({"audio", "video"})
 
 
+class DenoiseDomainError(LocalizedError, DenoiseError):
+    """这一层说的「降不了」:带文案 key(`denoiseErr_*`),按读的人的语言翻。
+
+    仍是 DenoiseError —— 上面那些 `except DenoiseError` 照样接得住。
+    """
+
+
 def ready_adapter(engine: str = "") -> DenoiseAdapter:
     """这次用哪个引擎;没有、或者没准备好,就抛一句说得清下一步的话。
 
@@ -39,9 +46,14 @@ def ready_adapter(engine: str = "") -> DenoiseAdapter:
     """
     adapter = get_denoise_adapter(engine)
     if adapter is None:
-        raise DenoiseError(f"没有这个降噪引擎:{engine}" if engine not in ("", "auto") else "没有可用的降噪引擎")
+        if engine not in ("", "auto"):
+            raise DenoiseDomainError("denoiseErr_unknownEngine", engine=engine)
+        raise DenoiseDomainError("denoiseErr_noEngine")
     if not adapter.runtime_ready():
-        raise DenoiseError(t(adapter.setup_hint_key) if adapter.setup_hint_key else f"降噪引擎 {adapter.engine_id} 还没准备好")
+        # 引擎自带的安装提示本身就是文案 key,留着 key 走,出口再翻。
+        if adapter.setup_hint_key:
+            raise DenoiseDomainError(adapter.setup_hint_key)
+        raise DenoiseDomainError("denoiseErr_engineNotReady", engine=adapter.engine_id)
     return adapter
 
 
@@ -90,14 +102,14 @@ def denoise_asset(
 ) -> tuple[Asset, str]:
     """降噪,返回 (新素材, 实际用的引擎 id)。"""
     if asset.kind not in DENOISABLE_KINDS:
-        raise DenoiseError("只有音频或视频素材可以降噪")
+        raise DenoiseDomainError("denoiseErr_notMedia")
     adapter = ready_adapter(engine)
     # 没有档位的引擎不看这个值 —— 但它照样要是一个认得出的档位。
     request_strength = checked_strength(strength)
 
     source = _source_path(asset)
     if source is None or not source.is_file():
-        raise DenoiseError("这份素材的文件找不到了")
+        raise DenoiseDomainError("denoiseErr_fileMissing")
 
     with tempfile.TemporaryDirectory(prefix="mosael-denoise-") as tmp:
         work = Path(tmp)
@@ -157,9 +169,9 @@ def start_denoise_job(
     只是把同一句话推迟几秒说。
     """
     if asset.kind not in DENOISABLE_KINDS:
-        raise DenoiseError("只有音频或视频素材可以降噪")
+        raise DenoiseDomainError("denoiseErr_notMedia")
     if not asset.file_key:
-        raise DenoiseError("这份素材没有本地文件")
+        raise DenoiseDomainError("denoiseErr_noLocalFile")
     strength = checked_strength(strength)
     ready_adapter(engine)
 

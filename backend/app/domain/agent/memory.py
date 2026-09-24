@@ -18,10 +18,15 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import AgentMemory
 
 #: 单条记忆的字数上限。记忆是**约定**不是**资料** —— 每一轮都要为它付 token,所以它必须短。
 MAX_CONTENT_CHARS = 500
+
+
+class MemoryInputError(LocalizedError, ValueError):
+    """这条记忆收不下(空的、太长、满了)。带文案 key,按请求方的语言翻。"""
 
 #: 注入系统提示的总字数上限。超出后丢最旧的(用户手写的优先保留,见 list_memories 的排序)。
 MAX_PROMPT_CHARS = 4000
@@ -64,14 +69,14 @@ def remember(
     """
     text = (content or "").strip()
     if not text:
-        raise ValueError("记忆内容不能为空")
+        raise MemoryInputError("agentErr_memoryEmpty")
     if len(text) > MAX_CONTENT_CHARS:
-        raise ValueError(f"单条记忆最多 {MAX_CONTENT_CHARS} 字 —— 它每一轮都要重发一遍,写不下的说明那不是一条约定")
+        raise MemoryInputError("agentErr_memoryTooLong", max=MAX_CONTENT_CHARS)
     existing = [row for row in list_memories(db, workspace_id, project_id) if row.content == text]
     if existing:
         return existing[0]
     if len(list_memories(db, workspace_id, project_id)) >= MAX_ENTRIES:
-        raise ValueError(f"记忆已达 {MAX_ENTRIES} 条上限,请先删掉不再需要的")
+        raise MemoryInputError("agentErr_memoryFull", max=MAX_ENTRIES)
     row = AgentMemory(
         workspace_id=workspace_id,
         project_id=project_id or None,
@@ -86,9 +91,9 @@ def remember(
 def update(db: Session, memory: AgentMemory, content: str) -> AgentMemory:
     text = (content or "").strip()
     if not text:
-        raise ValueError("记忆内容不能为空")
+        raise MemoryInputError("agentErr_memoryEmpty")
     if len(text) > MAX_CONTENT_CHARS:
-        raise ValueError(f"单条记忆最多 {MAX_CONTENT_CHARS} 字 —— 它每一轮都要重发一遍,写不下的说明那不是一条约定")
+        raise MemoryInputError("agentErr_memoryTooLong", max=MAX_CONTENT_CHARS)
     memory.content = text
     db.flush()
     return memory

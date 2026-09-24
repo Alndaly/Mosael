@@ -167,5 +167,5 @@ def test_generation_rejects_a_foreign_connection_before_queuing() -> None:
 
     with SessionLocal() as db:
         mate_id = db.query(User).filter(User.username == "mate").one().id
-        with pytest.raises(GenerationDomainError, match="not available"):
+        with pytest.raises(GenerationDomainError, match="生成连接不可用"):
             _resolve_provider_profile(db, theirs, owner_user_id=mate_id)

@@ -15,7 +15,7 @@ def require_clip_row(db: Session, clip_id: str) -> Clip:
     clip = db.get(Clip, clip_id)
     if clip is None:
         # 这句话会原样出现在用户的提示条里(EditorView 的 undo/redo 接了 onError),所以说人话。
-        raise SequenceDomainError("这一步引用的片段已经不在了,撤销不了")
+        raise SequenceDomainError("seqErr_undoClipGone")
     return clip
 
 

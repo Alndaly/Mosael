@@ -28,7 +28,7 @@ def register(node_type: str) -> Callable[[Handler], Handler]:
 
     def _decorator(handler: Handler) -> Handler:
         if node_type in _REGISTRY:
-            raise RuntimeError(f"节点类型 {node_type} 的执行器重复注册")
+            raise RuntimeError(f"executor for node type {node_type!r} registered twice")
         _REGISTRY[node_type] = handler
         return handler
 
@@ -49,7 +49,7 @@ _PREFIX_REGISTRY: dict[str, PrefixFactory] = {}
 def register_prefix(prefix: str) -> Callable[[PrefixFactory], PrefixFactory]:
     def _decorator(factory: PrefixFactory) -> PrefixFactory:
         if prefix in _PREFIX_REGISTRY:
-            raise RuntimeError(f"节点前缀 {prefix} 的执行器重复注册")
+            raise RuntimeError(f"executor for node prefix {prefix!r} registered twice")
         _PREFIX_REGISTRY[prefix] = factory
         return factory
 

@@ -13,8 +13,13 @@ from __future__ import annotations
 import pytest
 
 from app.ai.runtime.tts_models import _explain_failure
-from app.domain.voices.voices import explain_worker_failure
+from app.domain.voices.voices import worker_failure
 from app.core.text import blame_line
+
+
+def explain_worker_failure(text: str) -> str:
+    """合成失败那条路给界面的那句话(worker_failure 返回的是带 key 的错误,这里渲染成字)。"""
+    return str(worker_failure(text))
 
 #: 真机上那一次(0.18.1,Windows):卡片上的红字就是这根进度条。
 PROGRESS_ONLY = (

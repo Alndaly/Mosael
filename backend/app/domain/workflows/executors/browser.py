@@ -78,7 +78,7 @@ def _run(session_id: str, action: str, args: dict[str, Any], *, timeout: float |
             return browser.run_action(session_id, action, args)
         return browser.run_action(session_id, action, args, timeout=timeout)
     except browser.BrowserDomainError as exc:
-        raise WorkflowDomainError(str(exc), details=_failure_scene(session_id, action, args)) from exc
+        raise WorkflowDomainError.from_error(exc, details=_failure_scene(session_id, action, args)) from exc
 
 
 @register("browser_open")
@@ -102,7 +102,7 @@ def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
                 owner_id=workflow.id,
             )
     except browser.BrowserDomainError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     url = str(config.get("url") or "").strip()
     if url:
         _run(session.id, "navigate", {"url": url})

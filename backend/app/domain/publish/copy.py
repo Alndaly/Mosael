@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Asset, Transcript
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.usage import BillableCall, billable, once
@@ -19,6 +20,17 @@ from app.domain.providers import require_connection
 from app.domain.publish import PublishDomainError
 
 TIMEOUT_SECONDS = 90
+
+
+class CopyParseError(LocalizedError, ValueError):
+    """模型的输出解析不出文案。它的话会回给模型重试,也会进最终报错的 detail。"""
+
+
+def _from_chat(exc: AiChatError) -> PublishDomainError:
+    """对话那一层的报错:带 key 就接着传 key,不带就是它自己的一句话,原样透传。"""
+    if isinstance(exc, LocalizedError):
+        return PublishDomainError(exc.key, **exc.params)
+    return PublishDomainError(str(exc))
 TRANSCRIPT_EXCERPT_CHARS = 1500
 
 _SYSTEM = """你是短视频发布运营。根据素材信息写发布文案,只输出一个 JSON 对象,不要解释、不要代码围栏:
@@ -41,7 +53,7 @@ def generate_copy(
     if asset_id:
         asset = db.get(Asset, asset_id)
         if asset is None or asset.workspace_id != workspace_id:
-            raise PublishDomainError("素材不存在")
+            raise PublishDomainError("publishErr_assetNotFound")
         parts.append(f"素材名称:{asset.name}")
         transcript = db.scalars(
             select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.id.desc())
@@ -51,12 +63,12 @@ def generate_copy(
             if text.strip():
                 parts.append(f"视频口播内容(节选):\n{text}")
     if not parts:
-        raise PublishDomainError("需要提供 brief 或素材")
+        raise PublishDomainError("publishErr_copyNeedsInput")
     user = "\n\n".join(parts)
     try:
         target = target_for(db, profile)
     except AiChatError as exc:
-        raise PublishDomainError(str(exc)) from exc
+        raise _from_chat(exc) from exc
 
     with billable(
         db,
@@ -80,7 +92,7 @@ def generate_copy(
                 }
             except ValueError as exc:
                 last_error = str(exc)
-        raise PublishDomainError(f"AI 未能产出合法文案: {last_error}")
+        raise PublishDomainError("publishErr_copyInvalid", detail=last_error)
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
@@ -88,7 +100,7 @@ def _parse_json(raw: str) -> dict[str, Any]:
     start = text.find("{")
     end = text.rfind("}")
     if start < 0 or end <= start:
-        raise ValueError("输出中没有 JSON 对象")
+        raise CopyParseError("publishErr_copyNoJson")
     return json.loads(text[start : end + 1])
 
 
@@ -103,5 +115,5 @@ def _chat(target: ChatTarget, user: str, call: BillableCall) -> str:
             label="AI 文案生成",
         )
     except AiChatError as exc:
-        raise PublishDomainError(str(exc)) from exc
+        raise _from_chat(exc) from exc
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from app.domain.boards.canvas import ITEM_KINDS, NOTE_COLORS, BoardDomainError, BoardNotFound, finite_number
+from app.domain.boards.canvas import ITEM_KINDS, NOTE_COLORS, BoardDomainError, finite_number, item_not_found
 
 BOARD_OP_KINDS = (
     "add_item",
@@ -42,7 +42,7 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
 def _require(by_id: dict[str, dict], item_id: str) -> dict:
     item = by_id.get(item_id)
     if item is None:
-        raise BoardNotFound(f"画板项不存在:{item_id or '(空)'}")
+        raise item_not_found(item_id)
     return item
 
 
@@ -70,16 +70,16 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
 
     for op in operations:
         if not isinstance(op, dict):
-            raise BoardDomainError("算子必须是对象")
+            raise BoardDomainError("boardErr_opNotObject")
         kind = str(op.get("kind", ""))
 
         if kind == "add_item":
             item_kind = str(op.get("type", ""))
             if item_kind not in ITEM_KINDS:
-                raise BoardDomainError(f"未知的画板项类型:{item_kind};可用的是 {'、'.join(ITEM_KINDS)}")
+                raise BoardDomainError("boardErr_unknownItemKind", kind=item_kind, kinds=", ".join(ITEM_KINDS))
             item_id = str(op.get("item_id") or "").strip() or gen_id(item_kind)
             if item_id in by_id:
-                raise BoardDomainError(f"画板项 id 重复:{item_id}")
+                raise BoardDomainError("boardErr_duplicateItemId", item_id=item_id)
             width, height = DEFAULT_SIZE[item_kind]
             default_x, default_y = next_position()
             item: dict[str, Any] = {
@@ -110,7 +110,7 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
         elif kind == "set_color":
             color = str(op.get("color", ""))
             if color not in NOTE_COLORS:
-                raise BoardDomainError(f"未知的颜色:{color};可用的是 {'、'.join(NOTE_COLORS)}")
+                raise BoardDomainError("boardErr_unknownColor", color=color, colors=", ".join(NOTE_COLORS))
             _require(by_id, str(op.get("item_id", "")))["color"] = color
 
         elif kind == "move_item":
@@ -124,7 +124,7 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 if op.get(field) is not None:
                     size = finite_number(op[field], field)
                     if size <= 0:
-                        raise BoardDomainError(f"{field} 必须大于 0")
+                        raise BoardDomainError("boardErr_sizeNotPositive", field=field)
                     item[field] = size
 
         elif kind == "remove_item":
@@ -146,7 +146,7 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
             _require(by_id, source)
             _require(by_id, target)
             if source == target:
-                raise BoardDomainError("不能把一项连到它自己")
+                raise BoardDomainError("boardErr_selfEdge")
             edge_id = str(op.get("edge_id") or "").strip() or f"e-{source}-{target}"
             if any(str(edge.get("id")) == edge_id for edge in edges):
                 continue  # 已经连过了,重复一次不是错
@@ -155,10 +155,14 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
         elif kind == "remove_edge":
             edge_id = str(op.get("edge_id", ""))
             if not any(str(edge.get("id")) == edge_id for edge in edges):
-                raise BoardDomainError(f"连线不存在:{edge_id or '(空)'}")
+                if not edge_id:
+                    raise BoardDomainError("boardErr_edgeIdMissing")
+                raise BoardDomainError("boardErr_edgeNotFound", edge_id=edge_id)
             edges[:] = [edge for edge in edges if str(edge.get("id")) != edge_id]
 
         else:
-            raise BoardDomainError(f"不支持的画板算子:{kind or '(空)'}")
+            if not kind:
+                raise BoardDomainError("boardErr_opKindMissing")
+            raise BoardDomainError("boardErr_unknownOp", kind=kind)
 
     return board

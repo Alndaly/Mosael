@@ -58,12 +58,12 @@ def undoable(kind: str) -> Callable[[type], type]:
 
     def _decorator(pair: type) -> type:
         if kind in _REGISTRY:
-            raise RuntimeError(f"操作 {kind} 的逆操作重复注册")
+            raise RuntimeError(f"undo pair for {kind!r} registered twice")
         if kind in NOT_UNDOABLE:
-            raise RuntimeError(f"操作 {kind} 既登记了逆操作又列在 NOT_UNDOABLE 里")
+            raise RuntimeError(f"{kind!r} has an undo pair but is also listed in NOT_UNDOABLE")
         missing = [name for name in ("inverse", "forward") if not callable(getattr(pair, name, None))]
         if missing:
-            raise RuntimeError(f"操作 {kind} 缺少 {'/'.join(missing)} —— 两个方向必须成对")
+            raise RuntimeError(f"{kind!r} is missing {'/'.join(missing)}: both directions must be registered together")
         _REGISTRY[kind] = UndoPair(inverse=pair.inverse, forward=pair.forward)
         return pair
 
@@ -91,7 +91,7 @@ def _pair(kind: str) -> UndoPair:
     pair = _REGISTRY.get(kind)
     if pair is None:
         # 明确报错,而不是往回跳过这一条去撤销更早的编辑 —— 那会让用户丢掉一件他没打算撤销的事。
-        raise SequenceDomainError(f"「{kind}」这种操作不支持撤销")
+        raise SequenceDomainError("seqErr_notUndoable", kind=kind)
     return pair
 
 

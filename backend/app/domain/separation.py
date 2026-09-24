@@ -29,12 +29,24 @@ from app.ai.providers.contracts.separation import (
 )
 from app.ai.providers.registry import get_separation_adapter
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.media.audio_io import AudioIOError, as_audio
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
 
 logger = logging.getLogger(__name__)
+
+
+class SeparationDomainError(LocalizedError, SeparationError):
+    """这一层说的「分不出来」:带文案 key(`separationErr_*`),按读的人的语言翻。
+
+    仍是 SeparationError —— 上面那些 `except SeparationError` 照样接得住。
+    """
+
+
+#: 分离结果里缺哪一份,各一句文案(而不是把中文的「人声」当参数塞进英文句子)。
+_MISSING_STEM = {VOCALS: "separationErr_missingVocals", BACKGROUND: "separationErr_missingBackground"}
 
 #: 拆出来的两份素材,名字后面缀什么。取名要让人在素材库里一眼认出它是从哪儿来的。
 #: 「背景音」而不是「伴奏」:对视频来说人声之外是音乐 + 环境声 + 音效,「伴奏」是个音乐术语,说窄了。
@@ -71,7 +83,7 @@ def separate_asset(
     """
     adapter = get_separation_adapter(engine)
     if adapter is None:
-        raise SeparationError("没有可用的音频分离引擎")
+        raise SeparationDomainError("separationErr_noEngine")
     if not adapter.runtime_ready():
         # 装是显式的一步:第一次要建 venv、装 torch、拉权重,那是几分钟到几十分钟的事,
         # 不该藏在"点一下分离"后面一声不响地发生。
@@ -88,7 +100,7 @@ def separate_asset(
 
     source = _source_path(asset)
     if source is None or not source.is_file():
-        raise SeparationError("这份素材的文件找不到了")
+        raise SeparationDomainError("separationErr_fileMissing")
 
     with tempfile.TemporaryDirectory(prefix="mosael-separate-") as tmp:
         work = Path(tmp)
@@ -101,7 +113,7 @@ def separate_asset(
         for stem in (VOCALS, BACKGROUND):
             path = stems.get(stem)
             if path is None or not path.is_file():
-                raise SeparationError(f"分离结果里缺少:{_SUFFIX[stem]}")
+                raise SeparationDomainError(_MISSING_STEM[stem])
             made[stem] = register_file_asset(
                 db,
                 workspace_id=asset.workspace_id,
@@ -137,12 +149,12 @@ def start_separation_job(db: Session, *, asset: Asset, created_by: str | None, e
     占 RENDER_SLOTS:它和导出、转 GIF 一样是"这台机器要忙很久"的活,不该几个一起抢 CPU。
     """
     if asset.kind not in {"audio", "video"}:
-        raise SeparationError("只有音频或视频素材可以分离")
+        raise SeparationDomainError("separationErr_notMedia")
     if not asset.file_key:
-        raise SeparationError("这份素材没有本地文件")
+        raise SeparationDomainError("separationErr_noLocalFile")
     if not available(engine):
         #: **排队之前就问**:没有引擎时排一个注定失败的任务,只是把同一句话推迟十秒说。
-        raise SeparationError("没有可用的音频分离引擎 —— 先在设置里装一个")
+        raise SeparationDomainError("separationErr_noEngineInstall")
 
     job = create_job(
         db,

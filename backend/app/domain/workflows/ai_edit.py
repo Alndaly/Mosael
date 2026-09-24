@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.usage import BillableCall, billable, once
 from app.domain.providers import require_connection
-from app.core.i18n import get_current_locale, t
+from app.core.i18n import LocalizedError, get_current_locale, t, tr
 from app.domain.workflows import (
     NODE_TYPES,
     WorkflowDomainError,
@@ -56,7 +56,7 @@ def ai_edit_graph(
     try:
         target = target_for(db, profile, surface="automation")
     except AiChatError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     # **给模型的是人话,不是 i18n key。** `NODE_TYPES` 里的 label/description 存的是 key
     # (`wfNode_scene_render_desc` 这种,由 test_backend_i18n 那道棘轮强制),接口那条路在出口
     # `t(...)` 翻一次 —— 而这条路原先原样发了出去,模型收到的系统提示里每个节点的说明就是
@@ -105,7 +105,8 @@ def ai_edit_graph(
                 payload = _parse_json(raw)
                 new_graph = payload["graph"]
             except (KeyError, ValueError) as exc:
-                last_error = f"JSON 解析失败: {exc}"
+                # 这句话两头都读:发回给模型让它改,也在两次都失败时作为原因给人看。
+                last_error = tr("wfErr_aiEditBadJson", detail=exc)
                 continue
             errors = validate_graph(new_graph, require_config=False, extra_types=extra_types)
             if errors:
@@ -113,6 +114,10 @@ def ai_edit_graph(
                 continue
             return new_graph, str(payload.get("summary", ""))
         raise WorkflowDomainError("wfErr_aiEditInvalidGraph", params={"reason": last_error})
+
+
+class _NoJsonObject(LocalizedError, ValueError):
+    """模型的输出里找不到 JSON 对象。"""
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
@@ -124,7 +129,7 @@ def _parse_json(raw: str) -> dict[str, Any]:
     start = text.find("{")
     end = text.rfind("}")
     if start < 0 or end <= start:
-        raise ValueError("输出中没有 JSON 对象")
+        raise _NoJsonObject("wfErr_aiEditNoJsonObject")
     return json.loads(text[start : end + 1])
 
 
@@ -139,4 +144,4 @@ def _chat(target: ChatTarget, system: str, user: str, call: BillableCall | None 
             label="AI 编排",
         )
     except AiChatError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc

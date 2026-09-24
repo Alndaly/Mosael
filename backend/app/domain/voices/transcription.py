@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 
 from app.ai.runtime import asr_daemon, asr_models
 from app.core.config import settings
+from app.core.i18n import LocalizedError
 from app.core.text import blame_line
 from app.core.db import SessionLocal
-from app.domain.jobs import ASR_SLOTS, run_job_guarded, say
+from app.domain.jobs import ASR_SLOTS, blame, run_job_guarded, say
 from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
@@ -30,8 +31,8 @@ logger = logging.getLogger(__name__)
 ASR_TIMEOUT_SECONDS = 3600
 
 
-class ASRError(RuntimeError):
-    pass
+class ASRError(LocalizedError, RuntimeError):
+    """转写的领域错误。带文案 key(`asrErr_*`),按读的人的语言翻(见 core/i18n)。"""
 
 
 def resolve_transcription_runtime(
@@ -57,7 +58,7 @@ def resolve_transcription_runtime(
 
     requested = engine.strip().lower()
     if requested not in ("", "auto", "funasr", "whisperx"):
-        raise ASRError(f"不支持的 ASR 引擎:{engine}")
+        raise ASRError("asrErr_unsupportedEngine", engine=engine)
     # 单次任务的显式选择优先；auto/留空才跟随设置页。这样工作流是可复现的，同时旧节点
     # 仍保持原来的全局偏好语义。
     preferred = (
@@ -71,13 +72,9 @@ def resolve_transcription_runtime(
         if python_executable:
             return python_executable, engine
     if requested not in ("", "auto"):
-        raise ASRError(f"所选 ASR 引擎 {requested} 的运行环境不可用,请先到设置的「转写模型」安装。")
-    raise ASRError(
-        # 纯文本,不要 markdown —— 这句话会原样显示在界面上,星号只会以星号的样子出现。
-        "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,"
-        "但还没有任何 Python 解释器装了 funasr 或 whisperx。"
-        "去设置的「转写模型」那一页点「安装运行环境」,装一次就好。"
-    )
+        raise ASRError("asrErr_engineRuntimeMissing", engine=requested)
+    # 纯文本,不要 markdown —— 这句话会原样显示在界面上,星号只会以星号的样子出现。
+    raise ASRError("asrErr_noRuntime")
 
 
 def _extract_audio(source: Path, target: Path) -> None:
@@ -88,7 +85,9 @@ def _extract_audio(source: Path, target: Path) -> None:
         text=True,
         timeout=600, what="音频提取")
     if result.returncode != 0:
-        raise ASRError(f"音频提取失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+        # ffmpeg 的原文不翻;说不出原因时给一句翻得动的话。
+        reason = blame_line(result.stderr) or LocalizedError("voiceErr_ffmpegNoReason")
+        raise ASRError("asrErr_audioExtractFailed", detail=reason)
 
 
 #: 一段听写最长多久。语音输入是"说一句话",不是"传一段素材" —— 上限存在的意义是让越界
@@ -112,8 +111,7 @@ def transcribe_clip(source: Path, *, language: str = "", engine: str = "") -> st
     duration = float(probe_media(source).get("duration") or 0.0)
     if duration > DICTATION_MAX_SECONDS:
         raise DictationTooLong(
-            f"这段录音 {duration:.0f} 秒,超过了听写的 {DICTATION_MAX_SECONDS:.0f} 秒上限 —— "
-            "长内容请作为素材导入再转写。"
+            "asrErr_dictationTooLong", seconds=f"{duration:.0f}", limit=f"{DICTATION_MAX_SECONDS:.0f}"
         )
     python_executable, engine_id = resolve_transcription_runtime(language, engine=engine)
     with tempfile.TemporaryDirectory(prefix="mosael-dictate-") as tmp:
@@ -176,7 +174,7 @@ def _invoke_asr_worker(audio_path: Path, python_executable: str, request: dict[s
     except RuntimeError as exc:
         # 常驻进程把失败**报回来**而不是退出,所以这里拿到的就是它自己的那句话;进程真死了
         # (加载时被 OOM 杀掉之类)由池子转成一句明确的错误,不会变成"一直没有回音"。
-        raise ASRError(f"转写失败({engine_id}):{exc}") from exc
+        raise ASRError("asrErr_engineFailed", engine=engine_id, detail=str(exc)) from exc
     return {"language": event.get("language", ""), "segments": event.get("segments") or []}
 
 
@@ -239,11 +237,11 @@ def start_transcription(
 ) -> Job:
     asset = db.get(Asset, asset_id)
     if asset is None:
-        raise ASRError("Asset not found")
+        raise ASRError("asrErr_assetNotFound")
     if asset.kind not in ("video", "audio"):
-        raise ASRError("只有视频或音频素材可以转写")
+        raise ASRError("asrErr_notMedia")
     if not asset.file_key:
-        raise ASRError("素材没有本地文件")
+        raise ASRError("asrErr_assetNoFile")
     # **没有音轨就当场说** —— 屏幕录制、无声的生成视频本来就没有音频,这是正常输入不是异常。
     # 不挡的话它会一路走到 ffmpeg:提取命令带 `-vn`,源里又没有音频,于是输出一条流都没有,
     # 用户看到的是「Output file does not contain any stream … Invalid argument」。
@@ -252,7 +250,7 @@ def start_transcription(
     # 挡在**建任务之前**:起一个注定失败的任务,等于把这句话藏进任务列表里让他自己去翻。
     source = resolve_key(asset.file_key)
     if source.exists() and not probe_has_audio(source):
-        raise ASRError(f"「{asset.name}」没有音轨,没有可以转写的声音。")
+        raise ASRError("asrErr_noAudioTrack", name=asset.name)
     job = create_job(
         db,
         workspace_id=asset.workspace_id,
@@ -309,7 +307,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
 
             segments = parse_transcript_segments(output.get("segments") or [])
             if not segments:
-                raise ASRError("转写结果为空")
+                raise ASRError("asrErr_emptyResult")
             transcript = attach_transcript(
                 db,
                 asset_id=asset_id,
@@ -331,7 +329,9 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             if job is not None:
                 job.status = "failed"
                 say(job, "jobMsg_asrFailed")
-                job.error = str(exc)[:800]
+                #: 失败原因存 key + 参数,接口按读的人的语言翻(见 jobs.blame)。
+                for field, value in blame(exc).items():
+                    setattr(job, field, value)
                 emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
             logger.warning("transcription job %s failed: %s", job_id, exc)

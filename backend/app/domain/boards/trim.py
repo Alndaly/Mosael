@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.child_process import run_logged
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
@@ -29,7 +30,7 @@ from app.media.paths import resolve_key
 logger = logging.getLogger(__name__)
 
 
-class TrimError(ValueError):
+class TrimError(LocalizedError, ValueError):
     pass
 
 
@@ -45,13 +46,13 @@ def start_trim(
     """起一个截取任务。范围在这里就校验 —— 让 ffmpeg 去发现「end 比 start 小」的话,
     用户拿到的是一句英文报错。"""
     if asset.kind not in ("video", "audio"):
-        raise TrimError("只能截取视频或音频")
+        raise TrimError("trimErr_unsupportedKind")
     if not asset.file_key:
-        raise TrimError("素材没有本地文件")
+        raise TrimError("trimErr_noLocalFile")
     if end <= start:
-        raise TrimError("结束时间要晚于开始时间")
+        raise TrimError("trimErr_endBeforeStart")
     if start < 0:
-        raise TrimError("开始时间不能是负数")
+        raise TrimError("trimErr_negativeStart")
 
     job = create_job(
         db,
@@ -89,7 +90,7 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
 
         source = resolve_key(asset.file_key)
         if not source.is_file():
-            raise TrimError("素材文件缺失")
+            raise TrimError("trimErr_fileMissing")
 
         suffix = source.suffix or (".mp4" if asset.kind == "video" else ".m4a")
         with tempfile.TemporaryDirectory(prefix="mosael-trim-") as tmp:
@@ -103,9 +104,9 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
             try:
                 run_logged(args, check=True, capture_output=True, timeout=600, what="素材截取")
             except subprocess.SubprocessError as exc:
-                raise TrimError("截取失败") from exc
+                raise TrimError("trimErr_failed") from exc
             if not target.is_file() or target.stat().st_size == 0:
-                raise TrimError("截取出来是空的 —— 这段范围里没有内容")
+                raise TrimError("trimErr_empty")
 
             made = register_file_asset(
                 db,

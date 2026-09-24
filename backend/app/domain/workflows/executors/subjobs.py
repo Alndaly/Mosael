@@ -138,7 +138,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
             ),
         )
     except GenerationDomainError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     db.commit()
     start_generation_thread(generation.id)
     wait_for_job(child.id, release=db)
@@ -172,7 +172,7 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
             duration=float(config["duration"]) if config.get("duration") not in (None, "") else None,
         )
     except VideoGifError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     final = wait_for_job(child.id, release=db)
     return {
         "asset_id": str((final.result or {}).get("asset_id") or ""),
@@ -180,8 +180,11 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
     }
 
 
-def _speech_params(db: Session, workflow: Workflow, config: dict[str, Any], *, what: str) -> dict[str, Any]:
-    """「引擎 + 音色」两格 → 合成要的那组参数(见 voices.engine_catalog.synthesis_params)。"""
+def _speech_params(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """「引擎 + 音色」两格 → 合成要的那组参数(见 voices.engine_catalog.synthesis_params)。
+
+    音色的报错原样转述(带着它的 key):此前在前面拼一截「语音合成」/「字幕配音」,那截是
+    写死的中文,而原因在落库那一刻就被翻成了字 —— 英文界面里读到的是两段中文。"""
     from app.domain.voices.engine_catalog import synthesis_params
     from app.domain.voices.voices import VoiceError
 
@@ -195,7 +198,7 @@ def _speech_params(db: Session, workflow: Workflow, config: dict[str, Any], *, w
             workspace_id=workflow.workspace_id,
         )
     except VoiceError as exc:
-        raise WorkflowDomainError("wfErr_speechParams", params={"what": what, "reason": exc}) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
 
 
 @register("synthesize_speech")
@@ -208,7 +211,7 @@ def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -
         text=str(config.get("text", "")),
         project_id=None,
         created_by=current_actor(db),
-        **_speech_params(db, workflow, config, what="语音合成"),
+        **_speech_params(db, workflow, config),
     )
     final = wait_for_job(child.id, release=db)
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
@@ -274,7 +277,7 @@ def edit_timeline(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     try:
         applied = apply_edit_operations(db, sequence_id, operations)
     except SequenceDomainError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     db.commit()
     sequence = db.get(Sequence, sequence_id)
     return {"applied": applied, "sequence_id": sequence_id, "revision": sequence.revision if sequence else 0}
@@ -571,7 +574,7 @@ def timeline_cut_ranges(db: Session, workflow: Workflow, config: dict[str, Any])
     try:
         cut_clip_ranges(db, sequence.id, CutClipRanges(clip_id=clip_id, ranges=tuple(ranges)))
     except SequenceDomainError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     db.refresh(sequence)
     return {
         "removed": len(ranges),
@@ -732,7 +735,7 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
     try:
         generate(db, sequence.id, GenerateSubtitles(track_id=track_id, cues=tuple(cues)))
     except SequenceDomainError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     db.refresh(sequence)
     # 新插进去的那些。按落点排序 —— 下游要按时间顺序配音,而库里的返回顺序没有这个保证。
     created = sorted(
@@ -765,7 +768,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     if not clip_ids:
         raise WorkflowDomainError("wfErr_noCuesToDub")
 
-    synthesis = _speech_params(db, workflow, config, what="字幕配音")
+    synthesis = _speech_params(db, workflow, config)
     try:
         job = start_subtitle_dub(
             db,
@@ -778,7 +781,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
             original_audio=str(config.get("original_audio") or DEFAULT_ORIGINAL_AUDIO).strip().lower(),
         )
     except DubError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     final = wait_for_job(job.id, release=db)
     result = final.result or {}
     #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。历史任务可能留有
@@ -809,7 +812,7 @@ def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any])
     try:
         made = separate_asset(db, asset, engine=str(config.get("engine") or ""))
     except SeparationError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     return {
         "vocals_asset_id": made.vocals.id,
         "background_asset_id": made.background.id,
@@ -833,7 +836,7 @@ def denoise_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) 
             strength=str(config.get("strength") or ""),
         )
     except DenoiseError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     return {"asset_id": made.id, "engine": engine}
 
 

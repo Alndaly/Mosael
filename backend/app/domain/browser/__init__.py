@@ -21,6 +21,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError, is_message_key
 from app.domain import sharing
 from app.db.models import BrowserAction, BrowserProfile, BrowserSession, PublishAccount, User, now
 
@@ -46,8 +47,13 @@ KNOWN_ACTIONS = (
 )
 
 
-class BrowserDomainError(Exception):
-    """浏览器自动化领域错误(会话不存在/动作失败/超时等)。"""
+class BrowserDomainError(LocalizedError):
+    """浏览器自动化领域错误(会话不存在/动作失败/超时等)。带文案 key(`browserErr_*`),按请求方的
+    语言翻 —— 它也经智能体工具回给模型、显示在工具卡上。"""
+
+
+class BrowserReportError(BrowserDomainError, ValueError):
+    """执行器回报被拒(状态不对、动作不存在、租约不归你)。继承 ValueError:回报接口按它回 422。"""
 
 
 def _safe_name(name: str) -> str:
@@ -87,7 +93,7 @@ def create_profile(
 def get_profile(db: Session, workspace_id: str, profile_id: str) -> BrowserProfile:
     prof = db.get(BrowserProfile, profile_id)
     if prof is None or prof.workspace_id != workspace_id:
-        raise BrowserDomainError("浏览器档案不存在")
+        raise BrowserDomainError("browserErr_profileNotFound")
     return prof
 
 
@@ -128,9 +134,9 @@ def delete_profile(db: Session, workspace_id: str, profile_id: str) -> None:
     if db.scalar(
         select(BrowserSession).where(BrowserSession.profile_id == profile_id, BrowserSession.status == "open")
     ):
-        raise BrowserDomainError("该档案有正在进行的会话,先结束再删")
+        raise BrowserDomainError("browserErr_profileHasSession")
     if db.scalar(select(PublishAccount).where(PublishAccount.profile_id == profile_id)):
-        raise BrowserDomainError("该档案绑定了发布账号,请先在发布页解绑或删除账号")
+        raise BrowserDomainError("browserErr_profileLinkedToAccount")
     sharing.forget(db, "browser_profile", prof.id)
     db.delete(prof)
     db.commit()
@@ -155,7 +161,7 @@ def open_session(
     if kind == "named":
         safe = _safe_name(name)
         if not safe:
-            raise BrowserDomainError("具名会话需要合法名称(字母/数字/-/_)")
+            raise BrowserDomainError("browserErr_invalidSessionName")
         existing = db.scalar(
             select(BrowserSession).where(
                 BrowserSession.workspace_id == workspace_id,
@@ -188,7 +194,7 @@ def _open_profile_session(
 ) -> BrowserSession:
     prof = get_profile(db, workspace_id, profile_id)
     if not prof.enabled:
-        raise BrowserDomainError("该浏览器档案已停用")
+        raise BrowserDomainError("browserErr_profileDisabled")
     # 租约:一个档案同一时刻只允许一个活动会话。
     existing = db.scalar(
         select(BrowserSession).where(BrowserSession.profile_id == profile_id, BrowserSession.status == "open")
@@ -196,7 +202,7 @@ def _open_profile_session(
     if existing is not None:
         if existing.owner_kind == owner_kind and (existing.owner_id or "") == (owner_id or ""):
             return existing  # 同一 owner 复用
-        raise BrowserDomainError("该档案正被占用(同一时刻只允许一个会话),请稍后再试")
+        raise BrowserDomainError("browserErr_profileBusy")
     session = BrowserSession(
         workspace_id=workspace_id,
         kind="profile",
@@ -242,7 +248,7 @@ def run_action(
     with SessionLocal() as db:
         session = db.get(BrowserSession, session_id)
         if session is None or session.status != "open":
-            raise BrowserDomainError("浏览器会话不存在或已关闭")
+            raise BrowserDomainError("browserErr_sessionClosed")
         act = BrowserAction(
             session_id=session_id,
             workspace_id=session.workspace_id,
@@ -260,20 +266,26 @@ def run_action(
         with SessionLocal() as db:
             act = db.get(BrowserAction, action_id)
             if act is None:
-                raise BrowserDomainError("浏览器动作丢失")
+                raise BrowserDomainError("browserErr_actionLost")
             if act.status == "done":
                 return dict(act.result or {})
             if act.status == "failed":
-                raise BrowserDomainError(act.error or "浏览器动作失败")
+                #: `error` 是「key 或一句话」(同 jobs.say):后端自己记的原因(租约到期、重启、超时)
+                #: 存 key,按读的人的语言翻;执行器给的原话(页面找不到元素之类)不翻,放进翻好的句子里。
+                if is_message_key(act.error or ""):
+                    raise BrowserDomainError(act.error)
+                if act.error:
+                    raise BrowserDomainError("browserErr_actionFailedDetail", detail=act.error)
+                raise BrowserDomainError("browserErr_actionFailed")
 
     # 超时:把动作落 failed(未被 worker 认领/执行器无响应),再抛。
     with SessionLocal() as db:
         act = db.get(BrowserAction, action_id)
         if act is not None and act.status in ("queued", "running"):
             act.status = "failed"
-            act.error = "浏览器动作超时(执行器未响应)"
+            act.error = "browserErr_actionTimeout"
             db.commit()
-    raise BrowserDomainError("浏览器动作超时(执行器未响应)")
+    raise BrowserDomainError("browserErr_actionTimeout")
 
 
 # ---------- worker 侧:claim / report ----------
@@ -295,7 +307,7 @@ def expire_action_leases(db: Session) -> int:
     ).all()
     for act in stale:
         act.status = "failed"
-        act.error = "执行器失联(租约到期)"
+        act.error = "browserErr_executorLost"
     if stale:
         db.commit()
     return len(stale)
@@ -383,14 +395,14 @@ def report_action(
     执行器会把结果写在**新执行器正在干的那一份**上,而两边都不报错。
     """
     if status not in ("running", "done", "failed"):
-        raise ValueError("非法动作状态")
+        raise BrowserReportError("browserErr_invalidActionStatus")
     act = db.get(BrowserAction, action_id)
     if act is None:
-        raise ValueError("动作不存在")
+        raise BrowserReportError("browserErr_actionNotFound")
     if act.status in ("done", "failed"):
         return act
     if act.lease_token and lease_token != act.lease_token:
-        raise ValueError("租约令牌不匹配:这条动作已经不归你了")
+        raise BrowserReportError("browserErr_leaseMismatch")
     act.status = status
     if status == "running":
         # 回报本身也算一次心跳 —— 正在干活的证据比一个单独的心跳帧更硬。
@@ -416,7 +428,7 @@ def reconcile_browser_state() -> int:
         stale = db.scalars(select(BrowserAction).where(BrowserAction.status.in_(("queued", "running")))).all()
         for act in stale:
             act.status = "failed"
-            act.error = "后端重启导致中断"
+            act.error = "browserErr_backendRestarted"
             cleaned += 1
         for session in db.scalars(select(BrowserSession).where(BrowserSession.status == "open")).all():
             session.status = "closed"

@@ -9,6 +9,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line
 from app.core.child_process import ProcessOutputLimitExceeded, run_bounded
 
@@ -32,8 +33,8 @@ OUTPUT_CAP = 256 * 1024
 MEMORY_MB = 256
 
 
-class SandboxError(RuntimeError):
-    """代码本身出错、超时、或输出超限。"""
+class SandboxError(LocalizedError, RuntimeError):
+    """代码本身出错、超时、或输出超限。带文案 key(`sandboxErr_*`),按读的人的语言翻。"""
 
 
 class SandboxUnavailable(SandboxError):
@@ -70,9 +71,9 @@ def _spawn(argv: list[str], payload: bytes, timeout: float) -> Attempt:
         completed = run_bounded(argv, input=payload, timeout=timeout, max_output_bytes=OUTPUT_CAP,
                                 env=_docker_env(), what="沙箱执行")
     except subprocess.TimeoutExpired as exc:
-        raise SandboxError(f"代码执行超时({timeout:g}s)") from exc
+        raise SandboxError("sandboxErr_timeout", seconds=f"{timeout:g}") from exc
     except ProcessOutputLimitExceeded as exc:
-        raise SandboxError(f"代码输出超过上限({OUTPUT_CAP // 1024} KiB, stdout + stderr)") from exc
+        raise SandboxError("sandboxErr_outputTooLarge", kib=OUTPUT_CAP // 1024) from exc
     return Attempt(completed.returncode, completed.stdout, completed.stderr)
 
 
@@ -100,7 +101,7 @@ class _DockerSandbox:
     def run(self, payload: bytes, timeout: float) -> Attempt:
         docker = getattr(self, "executable", None) or shutil.which("docker")
         if not docker:
-            raise SandboxUnavailable("需要安装并启动 Docker 才能执行代码")
+            raise SandboxUnavailable("sandboxErr_dockerMissing")
         name = "mosael-sandbox-" + uuid.uuid4().hex
         try:
             created = _spawn([
@@ -117,8 +118,8 @@ class _DockerSandbox:
                 self.image, "python", "-I", "-c", _WRAPPER,
             ], b"", 10)
             if created.returncode != 0:
-                detail = blame_line(created.stderr.decode(errors="replace"), fallback="创建容器失败")
-                raise SandboxUnavailable(f"代码隔离环境未就绪: {detail}。请先运行 docker pull {self.image}")
+                detail = blame_line(created.stderr.decode(errors="replace"), fallback="") or tr("sandboxErr_containerCreateFailed")
+                raise SandboxUnavailable("sandboxErr_notReady", detail=detail, image=self.image)
             return _spawn([docker, "start", "--attach", "--interactive", name], payload, timeout)
         finally:
             # The Docker client is only transport; terminating it does not stop the workload.
@@ -126,9 +127,9 @@ class _DockerSandbox:
             try:
                 cleaned = _spawn([docker, "rm", "--force", name], b"", 10)
                 if cleaned.returncode and b"No such container" not in cleaned.stderr:
-                    raise SandboxError("沙箱容器清理失败,请检查 Docker 状态")
+                    raise SandboxError("sandboxErr_cleanupFailed")
             except (OSError, SandboxError) as exc:
-                raise SandboxError(f"沙箱容器清理失败: {exc}") from exc
+                raise SandboxError("sandboxErr_cleanupFailedDetail", detail=str(exc)) from exc
 
 
 #: 按优先级试。测试里会替换它来验证「没有后端就不跑」。
@@ -155,19 +156,16 @@ def run_code(code: str, inputs: dict[str, Any], *, timeout: float = TIMEOUT_SECO
     """
     backend = active_backend()
     if backend is None:
-        raise SandboxUnavailable(
-            "这台机器上没有可用的代码隔离环境,因此不执行代码。"
-            "请在部署机上安装并启动 Docker(服务端会用一个无网络、只读、非 root 的容器来跑)。"
-        )
+        raise SandboxUnavailable("sandboxErr_unavailable")
     attempt = backend.run(json.dumps({"code": code, "inputs": inputs}).encode(), timeout)
     if len(attempt.stdout) + len(attempt.stderr) > OUTPUT_CAP:
-        raise SandboxError(f"代码输出超过上限({OUTPUT_CAP // 1024} KiB)")
+        raise SandboxError("sandboxErr_outputTooLarge", kib=OUTPUT_CAP // 1024)
     if attempt.returncode != 0:
         # 挑出说明原因的那一行,而不是恰好排在最后的那一行 —— 用户跑的代码里打个进度条、
         # 或者 traceback 后面还有输出,取尾巴就报了个和错误无关的东西(见 core/text.blame_line)。
-        why = blame_line(attempt.stderr.decode(errors="replace"), fallback="子进程没有留下原因")
-        raise SandboxError(f"代码执行出错:{why}")
+        why = blame_line(attempt.stderr.decode(errors="replace"), fallback="") or tr("sandboxErr_noReason")
+        raise SandboxError("sandboxErr_codeFailed", why=why)
     try:
         return {"output": json.loads(attempt.stdout.decode())["output"]}
     except (ValueError, KeyError) as exc:
-        raise SandboxError("代码输出无法解析(请把结果赋给 output 变量)") from exc
+        raise SandboxError("sandboxErr_outputUnparsable") from exc

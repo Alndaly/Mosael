@@ -847,9 +847,9 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
     track = db.get(Track, clip.track_id)
     replacing = bool(op.audio_asset_id)
     if track is None or track.kind not in (("video", "audio") if replacing else ("video",)):
-        raise SequenceDomainError("只能从视频片段分离音频")
+        raise SequenceDomainError("seqErr_detachAudioVideoOnly")
     if not clip.asset_id:
-        raise SequenceDomainError("该片段没有音频源")
+        raise SequenceDomainError("seqErr_clipNoAudioSource")
     audio_asset_id = op.audio_asset_id or clip.asset_id
     if replacing:
         audio_asset = db.get(Asset, audio_asset_id)
@@ -971,7 +971,7 @@ def clean_transform(raw: dict[str, Any]) -> dict[str, Any]:
         try:
             value = float(raw.get(key, default))
         except (TypeError, ValueError) as exc:
-            raise SequenceDomainError(f"transform.{key} 必须是数字") from exc
+            raise SequenceDomainError("seqErr_transformNotNumber", key=key) from exc
         lo, hi = TRANSFORM_BOUNDS[key]
         out[key] = max(lo, min(hi, value))
     keyframes = _clean_keyframes(raw.get("keyframes"))
@@ -1019,7 +1019,7 @@ def set_sequence_reframe(db: Session, sequence_id: str, op: SetSequenceReframe) 
     """改画幅(横转竖等):改序列输出宽高 + 填充模式。"""
     sequence = _require_sequence(db, sequence_id)
     if not (16 <= op.width <= 8192 and 16 <= op.height <= 8192):
-        raise SequenceDomainError("画幅尺寸需在 16–8192 之间")
+        raise SequenceDomainError("seqErr_canvasSizeRange")
     fill_mode = op.fill_mode if op.fill_mode in _FILL_MODES else "cover"
     previous = {"width": sequence.width, "height": sequence.height, "reframe": dict(sequence.reframe or {})}
     sequence.width = int(op.width)
@@ -1746,7 +1746,7 @@ def _record_operation(
         update(Sequence).where(Sequence.id == sequence.id, Sequence.revision == before).values(revision=after)
     ).rowcount
     if claimed == 0:
-        raise SequenceDomainError("这个序列刚被改过,请刷新后重试")
+        raise SequenceDomainError("seqErr_revisionConflict")
     operation = SequenceOperation(
             workspace_id=sequence.workspace_id,
             sequence_id=sequence.id,
@@ -1837,7 +1837,7 @@ def apply_edit_operations(db: Session, sequence_id: str, operations: list[dict[s
         kind = operation["kind"]
         spec = _EDIT_OPS.get(kind)
         if spec is None:
-            raise SequenceDomainError(f"不认识的时间线操作: {kind}")
+            raise SequenceDomainError("seqErr_unknownOp", kind=kind)
         request, handler = spec
         args = {key: value for key, value in operation.items() if key != "kind"}
         #: `add_track` 的轨道类型走 `track_kind`:操作自己的名字已经占了 `kind`。

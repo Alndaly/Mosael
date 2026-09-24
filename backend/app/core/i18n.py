@@ -1263,6 +1263,799 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Could not reach Google's free translate endpoint: {reason}. It is unreachable on some networks \u2014 configure an outbound proxy, or switch the translate node's engine to \u300cAI\u300d.",
     },
     # ---- i18n 分区 B3(画板、智能体、生成、配音等领域):这一批新加的 key 放在这行下面 ----
+    # -- B3·画板与标记 --
+    "boardErr_revisionConflict": {"zh": "画板已被其他操作更新（本地 v{base}，当前 v{current}）", "en": "This board was changed somewhere else (yours is v{base}, the latest is v{current}). Reload it and try again."},
+    "boardErr_notFound": {"zh": "画板不存在", "en": "This board doesn't exist."},
+    "boardErr_nameEmpty": {"zh": "画板名不能为空", "en": "Give the board a name."},
+    "boardErr_itemNotFound": {"zh": "画板项不存在:{item_id}", "en": "There's no item {item_id} on this board."},
+    "boardErr_itemIdMissing": {"zh": "画板项不存在:(空)", "en": "No board item was given — pass an item id."},
+    "boardErr_fieldNotNumber": {"zh": "{field} 必须是数字,收到 {value}", "en": "{field} must be a number, but got {value}."},
+    "boardErr_fieldNotFinite": {"zh": "{field} 必须是有限的数字,收到 {value}", "en": "{field} must be a finite number, but got {value}."},
+    "boardErr_itemFieldNotNumber": {"zh": "画板项 {item_id} 的 {field} 必须是数字,收到 {value}", "en": "Board item {item_id}: {field} must be a number, but got {value}."},
+    "boardErr_itemFieldNotFinite": {"zh": "画板项 {item_id} 的 {field} 必须是有限的数字,收到 {value}", "en": "Board item {item_id}: {field} must be a finite number, but got {value}."},
+    "boardErr_itemFieldNotObject": {"zh": "画板项 {item_id} 的 {field} 必须是对象", "en": "Board item {item_id}: {field} must be an object."},
+    "boardErr_itemFieldNotString": {"zh": "画板项 {item_id} 的 {field} 必须是字符串", "en": "Board item {item_id}: {field} must be a string."},
+    "boardErr_itemFieldNotArray": {"zh": "画板项 {item_id} 的 {field} 必须是数组", "en": "Board item {item_id}: {field} must be an array."},
+    "boardErr_itemFieldNotBool": {"zh": "画板项 {item_id} 的 {field} 必须是布尔值", "en": "Board item {item_id}: {field} must be true or false."},
+    "boardErr_itemFieldInvalid": {"zh": "画板项 {item_id} 的 {field} 不合法", "en": "Board item {item_id} has an invalid {field}."},
+    "boardErr_itemSizeNotPositive": {"zh": "画板项 {item_id} 的 {field} 必须大于 0", "en": "Board item {item_id}: {field} must be greater than 0."},
+    "boardErr_sizeNotPositive": {"zh": "{field} 必须大于 0", "en": "{field} must be greater than 0."},
+    "boardErr_promptTooLong": {"zh": "画板项 {item_id} 的提示词超过 {limit} 字", "en": "The prompt on board item {item_id} is longer than {limit} characters. Shorten it."},
+    "boardErr_textTooLong": {"zh": "画板项 {item_id} 的文字超过 {limit} 字", "en": "The text on board item {item_id} is longer than {limit} characters. Shorten it."},
+    "boardErr_sourceAssetsNotObjects": {"zh": "画板项 {item_id} 的 form.source_assets 必须是对象数组", "en": "Board item {item_id}: form.source_assets must be an array of objects."},
+    "boardErr_promptDocumentNotDoc": {"zh": "画板项 {item_id} 的 form.prompt_document 必须是 TipTap doc 对象", "en": "Board item {item_id}: form.prompt_document must be a TipTap doc object."},
+    "boardErr_promptDocumentTooLarge": {"zh": "画板项 {item_id} 的 form.prompt_document 过大", "en": "Board item {item_id}: form.prompt_document is too large. Shorten the prompt."},
+    "boardErr_runStatusInvalid": {"zh": "画板项 {item_id} 的 run.status 不合法:{status}", "en": "Board item {item_id} has an invalid run.status: {status}"},
+    "boardErr_finishedRunHasJob": {"zh": "画板项 {item_id} 已结束却仍带有 job_id", "en": "Board item {item_id} has finished running but still carries a job_id. Drop the job_id."},
+    "boardErr_canvasNotObject": {"zh": "画布必须是一个对象", "en": "The canvas must be an object."},
+    "boardErr_canvasFieldNotArray": {"zh": "画布的 {field} 必须是数组", "en": "The canvas {field} must be an array."},
+    "boardErr_tooManyItems": {"zh": "一张画板最多 {limit} 项,收到 {count} 项", "en": "A board can hold at most {limit} items; this one has {count}. Remove some first."},
+    "boardErr_itemNotObject": {"zh": "画板项必须是对象", "en": "Each board item must be an object."},
+    "boardErr_itemMissingField": {"zh": "画板项缺少 {field}", "en": "A board item is missing {field}."},
+    "boardErr_itemIdEmpty": {"zh": "画板项的 id 不能为空", "en": "A board item's id can't be empty."},
+    "boardErr_duplicateItemId": {"zh": "画板项 id 重复:{item_id}", "en": "Two board items share the id {item_id}. Give each one its own id."},
+    "boardErr_unknownItemKind": {"zh": "未知的画板项类型:{kind};可用的是 {kinds}", "en": "Unknown board item type: {kind}. Use one of: {kinds}."},
+    "boardErr_legacyRunFields": {"zh": "画板项 {item_id} 使用了已停用的顶层运行态；请改用 run.status/run.job_id/run.error", "en": "Board item {item_id} uses the retired top-level run fields. Use run.status / run.job_id / run.error instead."},
+    "boardErr_unknownColor": {"zh": "未知的颜色:{color};可用的是 {colors}", "en": "Unknown color: {color}. Use one of: {colors}."},
+    "boardErr_documentNeedsNote": {"zh": "文档节点需要有效的笔记 ID", "en": "A document item needs a valid note ID."},
+    "boardErr_documentNeedsRevision": {"zh": "文档节点需要有效的引用版本", "en": "A document item needs a valid note revision to reference."},
+    "boardErr_sceneNeedsId": {"zh": "3D 场景节点需要 scene_id", "en": "A 3D scene item needs a scene_id."},
+    "boardErr_sceneNotInWorkspace": {"zh": "3D 场景不属于当前工作区", "en": "That 3D scene isn't in this workspace."},
+    "boardErr_moveChildrenFrameOnly": {"zh": "只有分组框有 move_children,{kind} 没有", "en": "Only frames have move_children; a {kind} item doesn't."},
+    "boardErr_edgeNotObject": {"zh": "连线必须是对象", "en": "Each connection must be an object."},
+    "boardErr_edgeDangling": {"zh": "连线两端必须都是画板上的项:{source} → {target}", "en": "Both ends of a connection must be items on the board: {source} → {target}"},
+    "boardErr_edgeLabelNotString": {"zh": "连线的 label 必须是字符串", "en": "A connection's label must be a string."},
+    "boardErr_edgeNotFound": {"zh": "连线不存在:{edge_id}", "en": "There's no connection {edge_id} on this board."},
+    "boardErr_edgeIdMissing": {"zh": "连线不存在:(空)", "en": "No connection was given — pass an edge id."},
+    "boardErr_textRunStatusInvalid": {"zh": "便签写作状态不合法:{status}", "en": "Invalid note-writing status: {status}"},
+    "boardErr_opNotObject": {"zh": "算子必须是对象", "en": "Each board operation must be an object."},
+    "boardErr_selfEdge": {"zh": "不能把一项连到它自己", "en": "An item can't be connected to itself."},
+    "boardErr_unknownOp": {"zh": "不支持的画板算子:{kind}", "en": "Unsupported board operation: {kind}"},
+    "boardErr_opKindMissing": {"zh": "不支持的画板算子:(空)", "en": "A board operation is missing its kind."},
+    "boardErr_nothingToSpeak": {"zh": "没有可念的文字", "en": "There's no text to read aloud."},
+    "boardErr_assetNotInWorkspace": {"zh": "这个工作区里没有这份素材", "en": "This asset isn't in this workspace."},
+    "boardErr_writeNeedsPrompt": {"zh": "先写点要求,再让它写", "en": "Write what you want first, then ask it to write."},
+    "trimErr_unsupportedKind": {"zh": "只能截取视频或音频", "en": "Only video or audio can be trimmed."},
+    "trimErr_noLocalFile": {"zh": "素材没有本地文件", "en": "This asset has no local file."},
+    "trimErr_endBeforeStart": {"zh": "结束时间要晚于开始时间", "en": "The end time must be after the start time."},
+    "trimErr_negativeStart": {"zh": "开始时间不能是负数", "en": "The start time can't be negative."},
+    "trimErr_fileMissing": {"zh": "素材文件缺失", "en": "The asset's file is missing."},
+    "trimErr_failed": {"zh": "截取失败", "en": "Trimming failed."},
+    "trimErr_empty": {"zh": "截取出来是空的 —— 这段范围里没有内容", "en": "The trimmed clip came out empty — there's nothing in that range. Pick a different range."},
+    "markerErr_keyNotAllowed": {"zh": "快捷键里不能用 {value} 这个键", "en": "The key {value} can't be used in a shortcut."},
+    "markerErr_shortcutNotString": {"zh": "标记的 shortcut 必须是字符串", "en": "A marker's shortcut must be a string."},
+    "markerErr_shortcutEmpty": {"zh": "标记的 shortcut 不能为空", "en": "A marker's shortcut can't be empty."},
+    "markerErr_unknownModifier": {"zh": "快捷键里不认识的修饰键:{modifier}", "en": "Unknown modifier key in the shortcut: {modifier}"},
+    "markerErr_duplicateModifier": {"zh": "快捷键里重复的修饰键:{modifier}", "en": "The shortcut repeats the modifier key {modifier}."},
+    "markerErr_fieldNotNumber": {"zh": "标记 {marker_id} 的 {field} 必须是数字,收到 {value}", "en": "Marker {marker_id}: {field} must be a number, but got {value}."},
+    "markerErr_fieldNotFinite": {"zh": "标记 {marker_id} 的 {field} 不是有限数", "en": "Marker {marker_id}: {field} isn't a finite number."},
+    "markerErr_notArray": {"zh": "markers 必须是数组", "en": "markers must be an array."},
+    "markerErr_tooMany": {"zh": "一份文档最多 {limit} 个标记,收到 {count} 个", "en": "A document can have at most {limit} markers; this one has {count}. Remove some first."},
+    "markerErr_notObject": {"zh": "标记必须是对象", "en": "Each marker must be an object."},
+    "markerErr_idEmpty": {"zh": "标记的 id 不能为空", "en": "A marker's id can't be empty."},
+    "markerErr_idTooLong": {"zh": "标记的 id 过长:{id_prefix}…", "en": "A marker's id is too long: {id_prefix}…"},
+    "markerErr_duplicateId": {"zh": "标记 id 重复:{marker_id}", "en": "Two markers share the id {marker_id}. Give each one its own id."},
+    "markerErr_nameNotString": {"zh": "标记 {marker_id} 的 name 必须是字符串", "en": "Marker {marker_id}: name must be a string."},
+    "markerErr_shortcutTaken": {"zh": "快捷键 {combo} 已经绑给了标记「{marker}」", "en": "The shortcut {combo} is already bound to the marker “{marker}”. Pick another key."},
+    # -- B3·配音、转写、降噪、分离、分析 --
+    # 配音 / 声音克隆(domain/voices/voices.py、engine_catalog.py、agent_voice.py)
+    "voiceErr_ffmpegNoReason": {"zh": "ffmpeg 没有说明原因", "en": "ffmpeg gave no reason"},
+    "voiceErr_referenceTooShort": {
+        "zh": "参考音频太短(只有 {actual} 秒)。零样本克隆要听够才能学到音色,请给 {min}–{max} 秒连续清晰的人声 —— 太短的话合成出来会是一段听不懂的声音。",
+        "en": "The reference audio is too short (only {actual} s). Zero-shot cloning needs enough speech to learn the voice — give it {min}–{max} seconds of continuous, clear speech, or the result will be unintelligible.",
+    },
+    "voiceErr_referenceTextRequired": {
+        "zh": "这个音色没有填参考文本,而 {label} 不会自己识别 —— 它需要知道那段参考音频说的是什么,才能学到音色;没有的话合成出来会是一段听不懂的声音。在音色库里重建这个音色时把参考文本填上,或者改用 F5-TTS(它会自己转写参考音频)。",
+        "en": "This voice has no reference text, and {label} can't work it out on its own — it needs to know what the reference audio says to learn the voice, or the result will be unintelligible. Add the reference text to this voice in the voice library, or switch to F5-TTS (it transcribes the reference audio itself).",
+    },
+    "voiceErr_noRuntime": {
+        "zh": "{label} 还没有运行环境:没有任何 Python 解释器装了它。去设置的「声音克隆」那一页点「下载」,装一次就好;想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。",
+        "en": "{label} has no runtime yet: no Python interpreter has it installed. Go to Settings → Voice cloning and click Download — it only needs installing once. To get audio right away, pick the free Edge online engine above; it needs no install.",
+    },
+    "voiceErr_noWeights": {
+        "zh": "{label} 的模型权重还没下好,现在合成不出声音。去设置的「声音克隆」那一页点「下载」补上 —— 这里不会替你下:那是几个 GB 的事,该由你决定什么时候开始。",
+        "en": "{label}'s model weights aren't downloaded yet, so it can't synthesise anything. Go to Settings → Voice cloning and click Download — it won't start on its own here, since it's several GB and you decide when.",
+    },
+    "voiceErr_unknownEngine": {"zh": "不认识的本地引擎:{engine}", "en": "Unknown local engine: {engine}"},
+    "voiceErr_synthNoReason": {
+        "zh": "语音合成失败,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。",
+        "en": "Speech synthesis failed and the worker process left no reason. Try once more; if it keeps happening, please report it.",
+    },
+    "voiceErr_synthTorchcodec": {
+        "zh": "语音合成失败:音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。升级引擎依赖通常就能解决(设置 →「声音克隆」→ 下载);若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。",
+        "en": "Speech synthesis failed: the audio decoding library (torchcodec) couldn't load — it needs a matching FFmpeg version. Upgrading the engine's dependencies usually fixes it (Settings → Voice cloning → Download); if not, install ffmpeg from Homebrew — the system copy is left untouched.",
+    },
+    "voiceErr_synthMissingModule": {
+        "zh": "语音合成失败:{detail} —— 引擎的运行环境不完整。去设置的「声音克隆」那一页点「下载」,它会把缺的依赖补上。",
+        "en": "Speech synthesis failed: {detail} — the engine's runtime is incomplete. Go to Settings → Voice cloning and click Download to add the missing dependencies.",
+    },
+    "voiceErr_synthFailed": {"zh": "语音合成失败:{detail}", "en": "Speech synthesis failed: {detail}"},
+    "voiceErr_synthNoAudio": {
+        "zh": "语音合成失败:worker 报成功却没有产出音频",
+        "en": "Speech synthesis failed: the worker reported success but produced no audio.",
+    },
+    "voiceErr_jaCloneNeedsWeights": {
+        "zh": "这段文本是日文,而本地克隆现在装的权重念不了它。去设置的「声音克隆」下载日文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的日文音色或 OpenAI TTS。",
+        "en": "This text is Japanese, and the local cloning weights installed now can't read it. Download the Japanese model (about {size} GB) under Settings → Voice cloning to read it in your own voice — or, to skip the wait, use a Japanese Edge TTS voice or OpenAI TTS.",
+    },
+    "voiceErr_koCloneNeedsWeights": {
+        "zh": "这段文本是韩文,而本地克隆现在装的权重念不了它。去设置的「声音克隆」下载韩文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的韩文音色或 OpenAI TTS。",
+        "en": "This text is Korean, and the local cloning weights installed now can't read it. Download the Korean model (about {size} GB) under Settings → Voice cloning to read it in your own voice — or, to skip the wait, use a Korean Edge TTS voice or OpenAI TTS.",
+    },
+    "voiceErr_jaCloneUnsupported": {
+        "zh": "这段文本是日文,而本地音色克隆没有能念它的模型 —— 它不会报错,只会念出一段听不懂的声音。改用 Edge TTS 的日文音色,或 OpenAI TTS。",
+        "en": "This text is Japanese, and local voice cloning has no model that can read it — it wouldn't fail, it would just produce unintelligible audio. Use a Japanese Edge TTS voice or OpenAI TTS instead.",
+    },
+    "voiceErr_koCloneUnsupported": {
+        "zh": "这段文本是韩文,而本地音色克隆没有能念它的模型 —— 它不会报错,只会念出一段听不懂的声音。改用 Edge TTS 的韩文音色,或 OpenAI TTS。",
+        "en": "This text is Korean, and local voice cloning has no model that can read it — it wouldn't fail, it would just produce unintelligible audio. Use a Korean Edge TTS voice or OpenAI TTS instead.",
+    },
+    "voiceErr_jaEdgeVoiceMismatch": {
+        "zh": "这段文本是日文,而选中的 Edge 音色是 {voice_lang} 的 —— 请换一个 ja- 开头的音色。",
+        "en": "This text is Japanese, but the selected Edge voice is {voice_lang}. Pick a voice that starts with ja-.",
+    },
+    "voiceErr_koEdgeVoiceMismatch": {
+        "zh": "这段文本是韩文,而选中的 Edge 音色是 {voice_lang} 的 —— 请换一个 ko- 开头的音色。",
+        "en": "This text is Korean, but the selected Edge voice is {voice_lang}. Pick a voice that starts with ko-.",
+    },
+    "voiceErr_jaVoiceMismatch": {
+        "zh": "这段文本是日文,而选中的音色是 {voice_lang} 的 —— 它念出来会是一段听不懂的声音,请换一个能念日文的音色。",
+        "en": "This text is Japanese, but the selected voice is {voice_lang} — it would come out unintelligible. Pick a voice that can read Japanese.",
+    },
+    "voiceErr_koVoiceMismatch": {
+        "zh": "这段文本是韩文,而选中的音色是 {voice_lang} 的 —— 它念出来会是一段听不懂的声音,请换一个能念韩文的音色。",
+        "en": "This text is Korean, but the selected voice is {voice_lang} — it would come out unintelligible. Pick a voice that can read Korean.",
+    },
+    "voiceErr_referenceTranscodeFailed": {"zh": "参考音频处理失败:{detail}", "en": "Couldn't process the reference audio: {detail}"},
+    "voiceErr_assetNotFound": {"zh": "素材不存在", "en": "This asset doesn't exist."},
+    "voiceErr_assetNoFile": {"zh": "素材没有本地文件", "en": "This asset has no local file."},
+    "voiceErr_noTranscript": {"zh": "该素材还没有逐字稿,请先转写", "en": "This asset has no transcript yet — transcribe it first."},
+    "voiceErr_noSpeakerSegments": {"zh": "没有找到该说话人的可用片段", "en": "No usable segments were found for this speaker."},
+    "voiceErr_speakerExtractFailed": {"zh": "提取说话人音频失败:{detail}", "en": "Couldn't extract the speaker's audio: {detail}"},
+    "voiceErr_referenceGoneForRecognition": {
+        "zh": "这条音色的参考音频不在了,没法识别",
+        "en": "This voice's reference audio is gone, so there's nothing to recognise.",
+    },
+    "voiceErr_nothingHeard": {
+        "zh": "没听出内容 —— 参考音频可能太轻或没有人声,换一段再试",
+        "en": "No speech was recognised — the reference audio may be too quiet or have no voice in it. Try a different clip.",
+    },
+    "voiceErr_nameEmpty": {"zh": "音色名称不能为空", "en": "Give the voice a name."},
+    "voiceErr_textEmpty": {"zh": "合成文本不能为空", "en": "Enter some text to synthesise."},
+    "voiceErr_voiceNotFound": {"zh": "音色不存在", "en": "This voice doesn't exist."},
+    "voiceErr_workspaceRequired": {"zh": "需要指定工作区", "en": "A workspace is required."},
+    "voiceErr_referenceMissing": {"zh": "音色参考音频缺失", "en": "This voice's reference audio is missing."},
+    "voiceErr_unknownPodcastMode": {"zh": "未知的播客模式:{mode}", "en": "Unknown podcast mode: {mode}"},
+    "voiceErr_podcastWorkspaceRequired": {"zh": "播客需要指定工作区", "en": "A podcast needs a workspace."},
+    "voiceErr_noVoiceSelected": {"zh": "没有选音色", "en": "No voice was selected."},
+    "voiceErr_voiceNotInWorkspace": {
+        "zh": "这个工作区的配音库里没有这个音色",
+        "en": "This voice isn't in this workspace's voice library.",
+    },
+    "voiceErr_agentVoiceNotConfigured": {
+        "zh": "还没有选语音对话的音色 —— 到设置的「语音对话」里选一个。它和配音的默认音色是分开的:配音要质量,对话要快。",
+        "en": "No voice is chosen for voice chat yet — pick one under Settings → Voice chat. It's separate from the default voiceover voice: voiceovers want quality, chat wants speed.",
+    },
+    # 字幕配音与原声处理(domain/voices/subtitle_dub.py、original_audio.py)
+    "dubErr_originalAudioMode": {"zh": "原声处理方式只能是 {modes}", "en": "The original-audio mode must be one of {modes}."},
+    "dubErr_separationUnavailableForMode": {
+        "zh": "选择了「只去掉人声」，但音频分离引擎尚不可用；请先到设置中安装分离引擎，或明确改选「静音」",
+        "en": "You chose \"Remove voice only\", but no audio separation engine is available yet. Install one in Settings first, or choose \"Mute\" instead.",
+    },
+    "dubErr_separationUnavailable": {
+        "zh": "音频分离引擎尚不可用；请先到设置中安装",
+        "en": "No audio separation engine is available yet — install one in Settings first.",
+    },
+    "dubErr_sequenceNotFound": {"zh": "时间线不存在", "en": "This timeline doesn't exist."},
+    "dubErr_removeVoiceFailed": {"zh": "只去掉人声失败：{detail}", "en": "Couldn't remove the voice: {detail}"},
+    "dubErr_subtitleTrackNotFound": {"zh": "这条时间线上没有那条字幕轨", "en": "That subtitle track isn't on this timeline."},
+    "dubErr_noSubtitleTrack": {"zh": "这条时间线上没有字幕轨", "en": "This timeline has no subtitle track."},
+    "dubErr_multipleSubtitleTracks": {
+        "zh": "这条时间线上有多条字幕轨,请指明配哪一条",
+        "en": "This timeline has more than one subtitle track — say which one to dub.",
+    },
+    "dubErr_nothingToDub": {"zh": "选中的字幕里没有可配音的文本", "en": "The selected subtitles have no text to dub."},
+    "dubErr_childMissing": {"zh": "合成任务不见了", "en": "The synthesis job has disappeared."},
+    "dubErr_childNoAudio": {"zh": "合成任务报成功却没有产出音频", "en": "The synthesis job reported success but produced no audio."},
+    "dubErr_childFailed": {"zh": "合成失败", "en": "Synthesis failed."},
+    "dubErr_childTimeout": {"zh": "合成任务超时", "en": "The synthesis job timed out."},
+    # 转写(domain/voices/transcription.py)
+    "asrErr_unsupportedEngine": {"zh": "不支持的 ASR 引擎:{engine}", "en": "Unsupported ASR engine: {engine}"},
+    "asrErr_engineRuntimeMissing": {
+        "zh": "所选 ASR 引擎 {engine} 的运行环境不可用,请先到设置的「转写模型」安装。",
+        "en": "The runtime for the selected ASR engine {engine} isn't available. Install it under Settings → Transcription models first.",
+    },
+    "asrErr_noRuntime": {
+        "zh": "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,但还没有任何 Python 解释器装了 funasr 或 whisperx。去设置的「转写模型」那一页点「安装运行环境」,装一次就好。",
+        "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has funasr or whisperx installed. Go to Settings → Transcription models and click Install runtime — it only needs doing once.",
+    },
+    "asrErr_audioExtractFailed": {"zh": "音频提取失败:{detail}", "en": "Couldn't extract the audio: {detail}"},
+    "asrErr_dictationTooLong": {
+        "zh": "这段录音 {seconds} 秒,超过了听写的 {limit} 秒上限 —— 长内容请作为素材导入再转写。",
+        "en": "This recording is {seconds} s, over the {limit} s dictation limit. For longer content, import it as an asset and transcribe that.",
+    },
+    "asrErr_engineFailed": {"zh": "转写失败({engine}):{detail}", "en": "Transcription failed ({engine}): {detail}"},
+    "asrErr_assetNotFound": {"zh": "素材不存在", "en": "This asset doesn't exist."},
+    "asrErr_notMedia": {"zh": "只有视频或音频素材可以转写", "en": "Only video or audio assets can be transcribed."},
+    "asrErr_assetNoFile": {"zh": "素材没有本地文件", "en": "This asset has no local file."},
+    "asrErr_noAudioTrack": {
+        "zh": "「{name}」没有音轨,没有可以转写的声音。",
+        "en": "\"{name}\" has no audio track, so there's nothing to transcribe.",
+    },
+    "asrErr_emptyResult": {"zh": "转写结果为空", "en": "The transcription came back empty."},
+    # 降噪(domain/denoise.py)
+    "denoiseErr_unknownEngine": {"zh": "没有这个降噪引擎:{engine}", "en": "There's no noise-reduction engine called {engine}."},
+    "denoiseErr_noEngine": {"zh": "没有可用的降噪引擎", "en": "No noise-reduction engine is available."},
+    "denoiseErr_engineNotReady": {"zh": "降噪引擎 {engine} 还没准备好", "en": "The noise-reduction engine {engine} isn't ready yet."},
+    "denoiseErr_notMedia": {"zh": "只有音频或视频素材可以降噪", "en": "Only audio or video assets can be denoised."},
+    "denoiseErr_fileMissing": {"zh": "这份素材的文件找不到了", "en": "This asset's file can't be found."},
+    "denoiseErr_noLocalFile": {"zh": "这份素材没有本地文件", "en": "This asset has no local file."},
+    # 人声与背景音分离(domain/separation.py)
+    "separationErr_noEngine": {"zh": "没有可用的音频分离引擎", "en": "No audio separation engine is available."},
+    "separationErr_noEngineInstall": {
+        "zh": "没有可用的音频分离引擎 —— 先在设置里装一个",
+        "en": "No audio separation engine is available — install one in Settings first.",
+    },
+    "separationErr_fileMissing": {"zh": "这份素材的文件找不到了", "en": "This asset's file can't be found."},
+    "separationErr_missingVocals": {"zh": "分离结果里缺少:人声", "en": "The separation result is missing the vocals."},
+    "separationErr_missingBackground": {"zh": "分离结果里缺少:背景音", "en": "The separation result is missing the background."},
+    "separationErr_notMedia": {"zh": "只有音频或视频素材可以分离", "en": "Only audio or video assets can be separated."},
+    "separationErr_noLocalFile": {"zh": "这份素材没有本地文件", "en": "This asset has no local file."},
+    # 素材分析(domain/analysis/service.py)
+    "analysisErr_profileNotFound": {
+        "zh": "指定的供应商配置不存在或已停用",
+        "en": "The selected provider connection doesn't exist or is disabled.",
+    },
+    "analysisErr_noVisionProvider": {
+        "zh": "没有可用的多模态供应商，请在设置中添加（如 Kimi 或 MiniMax）",
+        "en": "No multimodal provider is available. Add one in Settings (for example Kimi or MiniMax).",
+    },
+    "analysisErr_noCredential": {
+        "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
+        "en": "Provider \"{name}\" doesn't have your key yet. Add it in Settings first.",
+    },
+    "analysisErr_frameExtractFailed": {"zh": "视频抽帧失败", "en": "Couldn't extract frames from the video."},
+    "analysisErr_noFrames": {"zh": "视频中没有可用画面", "en": "The video has no usable frames."},
+    "analysisErr_videoTooLarge": {
+        "zh": "视频超过 {mb}MB,原生直传过大,请改用抽帧模式",
+        "en": "The video is over {mb} MB — too large to send natively. Switch to frame sampling.",
+    },
+    "analysisErr_noChatModel": {
+        "zh": "供应商「{name}」没有可用的对话模型",
+        "en": "Provider \"{name}\" has no usable chat model.",
+    },
+    "analysisErr_geminiFailed": {"zh": "Gemini 视频分析失败: {detail}", "en": "Gemini video analysis failed: {detail}"},
+    "analysisErr_unsupportedKind": {"zh": "只支持分析图片或视频素材", "en": "Only image or video assets can be analysed."},
+    "analysisErr_noLocalFile": {"zh": "素材没有本地文件", "en": "This asset has no local file."},
+    "analysisErr_unknownMode": {"zh": "未知分析方式: {mode}", "en": "Unknown analysis mode: {mode}"},
+    "analysisErr_fileMissing": {"zh": "素材文件缺失", "en": "This asset's file is missing."},
+    "analysisErr_imageUnconvertible": {
+        "zh": "图片无法转换成视觉模型支持的格式",
+        "en": "The image couldn't be converted to a format the vision model supports.",
+    },
+    "analysisErr_oauthNoNativeVideo": {
+        "zh": "当前 OAuth 模型的自动化 Gateway 不支持原生视频，请改用抽帧模式",
+        "en": "This OAuth model's automation gateway doesn't support native video. Switch to frame sampling.",
+    },
+    "analysisErr_noNativeVideoProvider": {
+        "zh": "没有支持原生视频理解的供应商(需 Gemini / 通义千问 Qwen-VL / Kimi),或改用抽帧模式",
+        "en": "No provider supports native video understanding (it needs Gemini, Qwen-VL or Kimi). Add one, or switch to frame sampling.",
+    },
+    # -- B3·生成、发布、浏览器、素材 --
+    # 生成:素材角色的名字(zh 与 domain/generation/catalog.SOURCE_ROLE_LABELS 一致,有测试钉着)
+    "genRole_first_frame": {"zh": "首帧", "en": "first frame"},
+    "genRole_last_frame": {"zh": "尾帧", "en": "last frame"},
+    "genRole_reference_image": {"zh": "参考图", "en": "reference image"},
+    "genRole_reference_video": {"zh": "参考视频", "en": "reference video"},
+    "genRole_reference_audio": {"zh": "参考音频", "en": "reference audio"},
+    "genRole_source_video": {"zh": "待编辑的视频", "en": "video to edit"},
+    "genRole_first_clip": {"zh": "待续写的片段", "en": "clip to extend"},
+    "genRole_driving_audio": {"zh": "驱动音频", "en": "driving audio"},
+    "genErr_orSep": {"zh": "或", "en": " or "},
+    "genErr_andSep": {"zh": " 和 ", "en": " and "},
+    "genErr_none": {"zh": "无", "en": "none"},
+    # 生成:提交前的校验(domain/generation/operations)
+    "genErr_noDefaultModel": {
+        "zh": "还没有可用的生成模型,先去设置里配一个",
+        "en": "No generation model is available yet. Set one up in Settings first.",
+    },
+    "genErr_sourceGone": {
+        "zh": "{label}素材（{id}…）已删除或不在当前工作区，请重新连接或选择",
+        "en": "The {label} asset ({id}…) was deleted or isn't in this workspace. Reconnect it or choose another.",
+    },
+    "genErr_sourceGoneNoId": {
+        "zh": "{label}素材已删除或不在当前工作区，请重新连接或选择",
+        "en": "The {label} asset was deleted or isn't in this workspace. Reconnect it or choose another.",
+    },
+    "genErr_connectionUnavailable": {
+        "zh": "这条生成连接不可用",
+        "en": "This generation connection isn't available.",
+    },
+    "genErr_adapterUnavailable": {
+        "zh": "{provider}/{kind} 没有可用的生成适配器",
+        "en": "No generation adapter is available for {provider}/{kind}.",
+    },
+    "genErr_sourceGroup": {"zh": "素材分组只能是 {groups}", "en": "The asset group must be one of: {groups}"},
+    "genErr_unknownRole": {"zh": "未知的素材角色:{role}", "en": "Unknown asset role: {role}"},
+    "genErr_notInteger": {
+        "zh": "{provider}/{model} 的 {name} 必须是整数",
+        "en": "{name} for {provider}/{model} must be a whole number.",
+    },
+    "genErr_unknownParams": {
+        "zh": "{provider}/{model} 不支持这些参数:{unknown};可用的是:{allowed}",
+        "en": "{provider}/{model} doesn't support these parameters: {unknown}. Supported: {allowed}",
+    },
+    "genErr_notBoolean": {
+        "zh": "{provider}/{model} 的 {name} 必须是布尔值 true/false",
+        "en": "{name} for {provider}/{model} must be true or false.",
+    },
+    "genErr_choiceOnly": {
+        "zh": "{provider}/{model} 的 {name} 只能是:{choices}",
+        "en": "{name} for {provider}/{model} must be one of: {choices}",
+    },
+    "genErr_durationChoices": {
+        "zh": "{provider}/{model} 的时长只能是:{choices} 秒",
+        "en": "Duration for {provider}/{model} must be one of: {choices} seconds",
+    },
+    "genErr_durationRange": {
+        "zh": "{provider}/{model} 的时长要在 {low}–{high} 秒之间",
+        "en": "Duration for {provider}/{model} must be between {low} and {high} seconds.",
+    },
+    "genErr_durationRangeOrAuto": {
+        "zh": "{provider}/{model} 的时长要在 {low}–{high} 秒之间，或 {special}（自动）",
+        "en": "Duration for {provider}/{model} must be between {low} and {high} seconds, or {special} (auto).",
+    },
+    "genErr_durationForResolution": {
+        "zh": "{provider}/{model} 的 {resolution} 分辨率只支持 {choices} 秒",
+        "en": "At {resolution}, {provider}/{model} only supports {choices} seconds.",
+    },
+    "genErr_roleUnsupported": {
+        "zh": "{provider}/{model} 不支持「{role}」这种素材;它支持的是:{supported}",
+        "en": "{provider}/{model} doesn't accept “{role}” assets. It accepts: {supported}",
+    },
+    "genErr_durationCapWithRole": {
+        "zh": "{provider}/{model} 挂了{label}时,时长最多 {cap} 秒(不挂能到 {max} 秒)",
+        "en": "With a {label} attached, {provider}/{model} allows at most {cap} seconds ({max} seconds without it).",
+    },
+    "genErr_tooManySources": {
+        "zh": "{provider}/{model} 最多收 {cap} 份{label},这次给了 {count} 份",
+        "en": "{provider}/{model} accepts at most {cap} {label} input(s); this request has {count}.",
+    },
+    "genErr_tooFewReferences": {
+        "zh": "{provider}/{model} 的多图参考至少要 {floor} 张参考图(第一张是正面图,其余是其他角度),这次只给了 {given} 张",
+        "en": "Multi-image reference for {provider}/{model} needs at least {floor} reference images (the first is the front view, the rest are other angles); only {given} given.",
+    },
+    "genErr_exclusiveSources": {
+        "zh": "{provider}/{model} 的{names}不能一起用:它们对应不同的生成模式,一次只能选择一组。",
+        "en": "For {provider}/{model}, {names} can't be used together: they belong to different generation modes, so choose one set at a time.",
+    },
+    "genErr_sourceRequired": {
+        "zh": "{provider}/{model} 必须给一份{options}",
+        "en": "{provider}/{model} needs a {options}.",
+    },
+    "genErr_companionRequired": {
+        "zh": "{provider}/{model} 的{label}不能单独使用,要搭配{companions}一起给",
+        "en": "For {provider}/{model}, the {label} can't be used alone; add a {companions} as well.",
+    },
+    # 生成:任务执行时(domain/generation/runner)
+    "genErr_noApiKey": {
+        "zh": "供应商 {provider} 还没有配置你的密钥,请先在设置里填写",
+        "en": "Provider {provider} doesn't have your API key yet. Add it in Settings first.",
+    },
+    "genErr_sourceMissing": {
+        "zh": "{label}素材不存在或不属于当前工作区",
+        "en": "The {label} asset doesn't exist or isn't in this workspace.",
+    },
+    "genErr_sourceMustBeVideo": {"zh": "{label}素材必须是视频", "en": "The {label} asset must be a video."},
+    "genErr_sourceMustBeImage": {"zh": "{label}素材必须是图片", "en": "The {label} asset must be an image."},
+    "genErr_sourceNoLocalFile": {"zh": "{label}素材缺少本地文件", "en": "The {label} asset has no local file."},
+    "genErr_sourceFileMissing": {"zh": "{label}素材文件不存在", "en": "The {label} asset's file is missing."},
+    # 生成:提示词优化
+    "genErr_optimizeNotJson": {
+        "zh": "提示词优化返回的不是合法 JSON",
+        "en": "Prompt optimization didn't return valid JSON.",
+    },
+    "genErr_optimizeNotObject": {
+        "zh": "提示词优化返回的 JSON 不是对象",
+        "en": "Prompt optimization returned JSON that isn't an object.",
+    },
+    "genErr_optimizeEmptyPrompt": {"zh": "提示词为空,无法优化", "en": "The prompt is empty, so there's nothing to optimize."},
+    "genErr_optimizeNoChatModel": {
+        "zh": "未配置对话模型,请在设置里为「对话」选择供应商与模型",
+        "en": "No chat model is set up. In Settings, choose a provider and model for Chat.",
+    },
+    "genErr_optimizeEmptyResult": {"zh": "优化结果为空", "en": "Optimization came back empty."},
+    # 生成:本地素材换公网直链(domain/generation/public_links)
+    "genErr_noUploader": {
+        "zh": (
+            "「{asset}」是本地素材,而这个模型的这一项只收公网链接。"
+            "装一个对象存储插件(火山引擎 TOS / 阿里云 OSS / 腾讯云 COS / Amazon S3)之后它会自动传上去 ——"
+            "在「插件」页里装并填上桶和密钥;或者直接粘一条你已有的公网直链。"
+        ),
+        "en": (
+            "“{asset}” is a local asset, but this model only accepts a public link here. "
+            "Install an object storage plugin (Volcengine TOS / Alibaba Cloud OSS / Tencent Cloud COS / Amazon S3) "
+            "and it will be uploaded automatically — install it on the Plugins page and fill in the bucket and keys. "
+            "Or paste a public direct link you already have."
+        ),
+    },
+    "genErr_uploaderIncomplete": {
+        "zh": "「{plugin}」还没配好({missing}),所以「{asset}」传不上去。去插件页把它补齐,或者直接粘一条公网直链。",
+        "en": "“{plugin}” isn't fully set up (missing: {missing}), so “{asset}” can't be uploaded. Complete it on the Plugins page, or paste a public direct link.",
+    },
+    "genErr_uploaderAmbiguous": {
+        "zh": "你配好了几家对象存储({names}),「{asset}」要传去哪一家还没定。去「设置 → 素材外链」里选一家,再生成一次。",
+        "en": "You've set up several object storage services ({names}) and haven't chosen where “{asset}” goes. Pick one under Settings → Asset links, then generate again.",
+    },
+    "genErr_uploaderOutdated": {
+        "zh": "「{plugin}」的插件版本太旧 —— 去「插件」页的市场里把它更新到最新,再生成一次。",
+        "en": "“{plugin}” is out of date — update it from the marketplace on the Plugins page, then generate again.",
+    },
+    "genErr_uploadFailed": {
+        "zh": "用「{plugin}」上传「{asset}」失败:{detail}",
+        "en": "Uploading “{asset}” with “{plugin}” failed: {detail}",
+    },
+    "genErr_pluginNoReason": {"zh": "插件没说原因", "en": "the plugin gave no reason"},
+    "genErr_uploadNoUrl": {
+        "zh": "「{plugin}」传完了却没给出地址 —— 这是插件自己的 bug",
+        "en": "“{plugin}” finished uploading but returned no address — that's a bug in the plugin.",
+    },
+    # 生成:模型解析与参数契约(domain/generation/resolution)
+    "genErr_unknownKind": {"zh": "未知的生成类型:{kind}", "en": "Unknown generation type: {kind}"},
+    "genErr_templateMismatch": {
+        "zh": "参数模板不属于这条连接或生成类型不匹配",
+        "en": "This parameter template belongs to another connection or a different generation type.",
+    },
+    "genErr_contractMissing": {"zh": "参数契约不存在", "en": "This parameter contract doesn't exist."},
+    "genErr_connectionMissing": {"zh": "生成连接不存在", "en": "The generation connection doesn't exist."},
+    "genErr_modelNotEnabled": {
+        "zh": "生成模型未启用或不存在",
+        "en": "The generation model isn't enabled or doesn't exist.",
+    },
+    "genErr_modelAmbiguous": {
+        "zh": "同一模型存在于多条连接，请明确选择连接",
+        "en": "This model exists on more than one connection. Choose which connection to use.",
+    },
+    # 生成:自定义参数组(domain/generation/custom_profiles)
+    "genErr_profileStrList": {"zh": "{field} 要是一串非空文字", "en": "{field} must be a list of non-empty strings."},
+    "genErr_profilePositiveInt": {"zh": "{field} 要是一个正整数", "en": "{field} must be a positive whole number."},
+    "genErr_profileIntList": {"zh": "{field} 要是一串整数", "en": "{field} must be a list of whole numbers."},
+    "genErr_profileStr": {"zh": "{field} 要是一段非空文字", "en": "{field} must be non-empty text."},
+    "genErr_profileInt": {"zh": "{field} 要是一个整数", "en": "{field} must be a whole number."},
+    "genErr_profileBool": {"zh": "{field} 要是 true 或 false", "en": "{field} must be true or false."},
+    "genErr_profileStrToInt": {"zh": "{field} 要是一组「名字 → 正整数」", "en": "{field} must map names to positive whole numbers."},
+    "genErr_profileStrToStrList": {"zh": "{field} 要是一组「名字 → 可选值」", "en": "{field} must map names to lists of allowed values."},
+    "genErr_profileStrToIntList": {"zh": "{field} 要是一组「名字 → 一串整数」", "en": "{field} must map names to lists of whole numbers."},
+    "genErr_profileGroups": {"zh": "{field} 要是若干组名字", "en": "{field} must be a list of name groups."},
+    "genErr_profileUnknownShape": {"zh": "{field} 的形状没人认得", "en": "The shape of {field} isn't recognized."},
+    "genErr_profileKind": {"zh": "参数组只能是 {kinds}", "en": "A parameter set must be for {kinds}."},
+    "genErr_profileNotObject": {"zh": "参数组的内容要是一组键值", "en": "A parameter set must be an object of key-value pairs."},
+    "genErr_profileUnknownFields": {"zh": "这几个字段我们不认得:{fields}", "en": "These fields aren't recognized: {fields}"},
+    "genErr_profileUnsentParams": {
+        "zh": "这些参数当前没有生成适配器会发送，不能只在界面里声明:{params}",
+        "en": "No generation adapter sends these parameters yet, so they can't just be declared here: {params}",
+    },
+    "genErr_profileNoParams": {
+        "zh": "至少要声明一个参数(parameter_keys),否则指向它和不指是一样的",
+        "en": "Declare at least one parameter (parameter_keys); otherwise pointing to this set is the same as not pointing to one.",
+    },
+    "genErr_profileDefaultNotListed": {
+        "zh": "{default_key} 的值不在 {list_key} 里面",
+        "en": "The value of {default_key} isn't in {list_key}.",
+    },
+    # 发布
+    "publishErr_unknownOption": {
+        "zh": "{platform} 不支持发布选项 {option}(支持:{supported})",
+        "en": "{platform} doesn't support the publish option {option} (supported: {supported})",
+    },
+    "publishErr_optionNeedsBool": {
+        "zh": "发布选项 {option} 需要 true/false(收到 {value})",
+        "en": "Publish option {option} must be true or false (got {value})",
+    },
+    "publishErr_optionChoices": {
+        "zh": "发布选项 {option} 只能是 {choices}(收到 {value})",
+        "en": "Publish option {option} must be one of {choices} (got {value})",
+    },
+    "publishErr_unknownPlatform": {
+        "zh": "未知平台: {platform}(支持 {supported})",
+        "en": "Unknown platform: {platform} (supported: {supported})",
+    },
+    "publishErr_missingConfig": {
+        "zh": "平台 {platform} 缺少必填配置 {key}",
+        "en": "Platform {platform} is missing the required setting {key}.",
+    },
+    "publishErr_accountDisabled": {"zh": "发布账号已停用", "en": "This publishing account is disabled."},
+    "publishErr_assetNoFile": {"zh": "素材没有本地文件,无法发布", "en": "The asset has no local file, so it can't be published."},
+    "publishErr_titleTooLong": {
+        "zh": "{platform} 标题最多 {max} 字(当前 {count} 字)",
+        "en": "{platform} titles can be at most {max} characters (this one has {count}).",
+    },
+    "publishErr_assetNotFound": {"zh": "素材不存在", "en": "Asset not found."},
+    "publishErr_copyNeedsInput": {"zh": "需要提供 brief 或素材", "en": "Provide a brief or an asset."},
+    "publishErr_copyNoJson": {"zh": "输出中没有 JSON 对象", "en": "The output contains no JSON object."},
+    "publishErr_copyInvalid": {"zh": "AI 未能产出合法文案: {detail}", "en": "The AI couldn't produce valid copy: {detail}"},
+    "publishErr_unknownTaskStatus": {"zh": "未知任务状态: {status}", "en": "Unknown task status: {status}"},
+    "publishErr_taskNotFound": {"zh": "任务不存在", "en": "Task not found."},
+    "publishErr_accountNotFound": {"zh": "账号不存在", "en": "Account not found."},
+    "publishErr_unknownBindingStatus": {"zh": "未知登录态: {status}", "en": "Unknown sign-in status: {status}"},
+    # 浏览器自动化
+    "browserErr_profileNotFound": {"zh": "浏览器档案不存在", "en": "Browser profile not found."},
+    "browserErr_profileHasSession": {
+        "zh": "该档案有正在进行的会话,先结束再删",
+        "en": "This profile has an active session. End it before deleting.",
+    },
+    "browserErr_profileLinkedToAccount": {
+        "zh": "该档案绑定了发布账号,请先在发布页解绑或删除账号",
+        "en": "This profile is linked to a publishing account. Unlink or delete that account on the Publish page first.",
+    },
+    "browserErr_invalidSessionName": {
+        "zh": "具名会话需要合法名称(字母/数字/-/_)",
+        "en": "A named session needs a valid name (letters, digits, - or _).",
+    },
+    "browserErr_profileDisabled": {"zh": "该浏览器档案已停用", "en": "This browser profile is disabled."},
+    "browserErr_profileBusy": {
+        "zh": "该档案正被占用(同一时刻只允许一个会话),请稍后再试",
+        "en": "This profile is in use (only one session at a time). Try again later.",
+    },
+    "browserErr_sessionClosed": {
+        "zh": "浏览器会话不存在或已关闭",
+        "en": "The browser session doesn't exist or has been closed.",
+    },
+    "browserErr_actionLost": {"zh": "浏览器动作丢失", "en": "The browser action was lost."},
+    "browserErr_actionFailed": {"zh": "浏览器动作失败", "en": "The browser action failed."},
+    "browserErr_actionFailedDetail": {"zh": "浏览器动作失败:{detail}", "en": "The browser action failed: {detail}"},
+    "browserErr_actionTimeout": {
+        "zh": "浏览器动作超时(执行器未响应)",
+        "en": "The browser action timed out (the executor didn't respond).",
+    },
+    "browserErr_invalidActionStatus": {"zh": "非法动作状态", "en": "Invalid action status."},
+    "browserErr_actionNotFound": {"zh": "动作不存在", "en": "Action not found."},
+    "browserErr_leaseMismatch": {
+        "zh": "租约令牌不匹配:这条动作已经不归你了",
+        "en": "Lease token mismatch: this action no longer belongs to you.",
+    },
+    "browserErr_executorLost": {
+        "zh": "执行器失联(租约到期)",
+        "en": "Lost contact with the executor (its lease expired).",
+    },
+    "browserErr_backendRestarted": {
+        "zh": "后端重启导致中断",
+        "en": "Interrupted because the backend restarted.",
+    },
+    # 素材:从链接导入、插件取素材、视频转 GIF
+    "urlImportErr_noneSelected": {"zh": "没有选中任何条目", "en": "No items are selected."},
+    "urlImportErr_tooMany": {
+        "zh": "一次最多下载 {max} 条,先分几次来",
+        "en": "You can download at most {max} items at a time. Split them into several batches.",
+    },
+    "urlImportErr_badKind": {"zh": "只能下载视频或音频", "en": "Only video or audio can be downloaded."},
+    "assetErr_notFoundRef": {"zh": "素材不存在: {ref}", "en": "Asset not found: {ref}"},
+    "assetErr_otherWorkspace": {"zh": "这份素材不属于当前工作区", "en": "This asset doesn't belong to the current workspace."},
+    "assetErr_noFileYet": {
+        "zh": "素材 {name} 还没有文件(可能仍在生成中)",
+        "en": "Asset {name} has no file yet (it may still be generating).",
+    },
+    "assetErr_fileLost": {"zh": "素材 {name} 的文件已丢失", "en": "The file for asset {name} is missing."},
+    "gifErr_notVideo": {"zh": "只有视频素材可以转换为 GIF", "en": "Only video assets can be converted to GIF."},
+    "gifErr_noLocalFile": {"zh": "视频素材没有本地文件", "en": "The video asset has no local file."},
+    "gifErr_badParams": {"zh": "GIF 参数超出允许范围", "en": "The GIF settings are out of the allowed range."},
+    "gifErr_fileMissing": {"zh": "视频素材文件不存在", "en": "The video file is missing."},
+    # -- B3·智能体、时间线、工作流、沙箱、场景渲染 --
+    # 智能体:对话回合、排队消息、放行判断者、订阅登录、记忆、计划
+    "agentErr_noChatModelChosen": {
+        "zh": "还没有选好对话模型:在输入框旁边选一个,或到设置里把它设成你的默认模型。",
+        "en": "No chat model is selected yet. Pick one next to the message box, or set a default model in Settings.",
+    },
+    "agentErr_connectionNoModel": {
+        "zh": "供应商「{name}」没有可用的模型:请在设置里为它填写默认模型,或在对话框的模型选择器里选一个。",
+        "en": "Provider \"{name}\" has no usable model. Set a default model for it in Settings, or pick one in the chat's model picker.",
+    },
+    "agentErr_emptyReply": {
+        "zh": (
+            "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否完整"
+            "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
+        ),
+        "en": (
+            "The model returned nothing. Check the AI provider settings: the base_url must be complete "
+            "(including the port and /v1, e.g. http://localhost:11434/v1), the model name must exist, and the service must be reachable."
+        ),
+    },
+    "agentErr_turnFailed": {"zh": "智能体执行失败，请稍后重试。", "en": "The agent run failed. Try again later."},
+    "agentErr_turnCrashed": {"zh": "智能体执行异常。", "en": "The agent run hit an unexpected error."},
+    "agentErr_messageAlreadyRunning": {
+        "zh": "这条消息已经开始处理,无法撤回",
+        "en": "This message is already being processed and can't be withdrawn.",
+    },
+    "agentErr_queuedMessageMissing": {"zh": "找不到这条排队消息", "en": "That queued message no longer exists."},
+    "agentErr_judgeNoModel": {"zh": "没有可用于判断的对话模型", "en": "No chat model is available for the judge."},
+    "agentErr_judgeNotJson": {"zh": "判断者的回答不是 JSON:{raw}", "en": "The judge's answer is not JSON: {raw}"},
+    "agentErr_judgeNoAllow": {
+        "zh": "判断者的回答里没有 allow 布尔值:{raw}",
+        "en": "The judge's answer has no boolean \"allow\": {raw}",
+    },
+    "agentErr_loginSidecarMissing": {
+        "zh": "pi sidecar 未构建:{path}(在 agent-sidecar 目录执行 pnpm build)",
+        "en": "The pi sidecar is not built: {path} (run pnpm build in the agent-sidecar directory).",
+    },
+    "agentErr_loginStartFailed": {"zh": "登录进程启动失败", "en": "Could not start the sign-in process."},
+    "agentErr_loginExited": {"zh": "登录进程意外结束", "en": "The sign-in process ended unexpectedly."},
+    "agentErr_loginTimeout": {"zh": "授权超时,请重新发起登录", "en": "Authorization timed out. Start the sign-in again."},
+    "agentErr_memoryEmpty": {"zh": "记忆内容不能为空", "en": "A memory can't be empty."},
+    "agentErr_memoryTooLong": {
+        "zh": "单条记忆最多 {max} 字 —— 它每一轮都要重发一遍,写不下的说明那不是一条约定",
+        "en": "A memory can be at most {max} characters — it is resent on every turn, so anything that doesn't fit isn't a convention.",
+    },
+    "agentErr_memoryFull": {
+        "zh": "记忆已达 {max} 条上限,请先删掉不再需要的",
+        "en": "You've reached the limit of {max} memories. Delete the ones you no longer need first.",
+    },
+    "agentErr_planStepsNotArray": {"zh": "steps 必须是数组", "en": "steps must be an array."},
+    "agentErr_planEmpty": {"zh": "计划至少要有一步", "en": "A plan needs at least one step."},
+    # 智能体问用户的选择题(报错面向模型:要说清怎么改)
+    "questionErr_listEmpty": {"zh": "questions 必须是非空数组", "en": "questions must be a non-empty array."},
+    "questionErr_tooMany": {
+        "zh": "一次最多问 {max} 个问题 —— 再多就该分两轮问",
+        "en": "Ask at most {max} questions at a time — split anything more across two rounds.",
+    },
+    "questionErr_notObject": {"zh": "每个问题都得是对象", "en": "Each question must be an object."},
+    "questionErr_questionEmpty": {"zh": "question 不能为空", "en": "question can't be empty."},
+    "questionErr_duplicate": {
+        "zh": "问题重复了:{question} —— 答案按问题正文归位,重复就对不回去",
+        "en": "Duplicate question: {question} — answers are matched by question text, so duplicates can't be told apart.",
+    },
+    "questionErr_tooFewOptions": {
+        "zh": "「{question}」至少要给 2 个选项 —— 只有一个的话不必问",
+        "en": "\"{question}\" needs at least 2 options — with only one there is nothing to ask.",
+    },
+    "questionErr_tooManyOptions": {
+        "zh": "「{question}」最多 {max} 个选项",
+        "en": "\"{question}\" can have at most {max} options.",
+    },
+    "questionErr_optionNotObject": {"zh": "每个选项都得是对象", "en": "Each option must be an object."},
+    "questionErr_optionLabelEmpty": {
+        "zh": "选项的 label 不能为空 —— 空的会渲染成一个点不动的按钮",
+        "en": "An option's label can't be empty — an empty one renders as a button that does nothing.",
+    },
+    "questionErr_optionDuplicate": {
+        "zh": "「{question}」里选项重名:{label}",
+        "en": "\"{question}\" has a duplicate option: {label}",
+    },
+    "questionErr_alreadyAnswered": {"zh": "这个问题已经回答过了", "en": "This question has already been answered."},
+    "questionErr_notAsked": {"zh": "没有问过这个问题:{question}", "en": "This question was never asked: {question}"},
+    "questionErr_nothingPicked": {"zh": "「{question}」没有选任何一项", "en": "Nothing was chosen for \"{question}\"."},
+    "questionErr_freeTextOnlyOne": {
+        "zh": "「{question}」的自由文本只能有一条",
+        "en": "\"{question}\" accepts only one free-text answer.",
+    },
+    "questionErr_freeTextTooLong": {
+        "zh": "「{question}」的自由文本太长(上限 {max} 字)",
+        "en": "The free-text answer to \"{question}\" is too long (limit {max} characters).",
+    },
+    # 时间线(序列)
+    "seqErr_nothingToUndo": {"zh": "没有可撤销的操作", "en": "Nothing to undo."},
+    "seqErr_nothingToRedo": {"zh": "没有可重做的操作", "en": "Nothing to redo."},
+    "seqErr_undoTrackHasClips": {
+        "zh": "轨道上还有片段,撤销不了「新建轨道」",
+        "en": "The track still has clips, so \"Add track\" can't be undone.",
+    },
+    "seqErr_notUndoable": {"zh": "「{kind}」这种操作不支持撤销", "en": "\"{kind}\" can't be undone."},
+    "seqErr_undoClipGone": {
+        "zh": "这一步引用的片段已经不在了,撤销不了",
+        "en": "The clip this step refers to no longer exists, so it can't be undone.",
+    },
+    "seqErr_detachAudioVideoOnly": {"zh": "只能从视频片段分离音频", "en": "Audio can only be detached from a video clip."},
+    "seqErr_clipNoAudioSource": {"zh": "该片段没有音频源", "en": "This clip has no audio source."},
+    "seqErr_transformNotNumber": {"zh": "transform.{key} 必须是数字", "en": "transform.{key} must be a number."},
+    "seqErr_canvasSizeRange": {"zh": "画幅尺寸需在 16–8192 之间", "en": "The frame size must be between 16 and 8192."},
+    "seqErr_revisionConflict": {
+        "zh": "这个序列刚被改过,请刷新后重试",
+        "en": "This sequence was just changed. Refresh and try again.",
+    },
+    "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
+    # 工作流:选项来源、修订、AI 编排、JSON 校验
+    "wfErr_unknownOptionSource": {"zh": "未知的选项来源:{source}", "en": "Unknown option source: {source}"},
+    "wfErr_revisionConcurrent": {
+        "zh": "工作流在保存期间被连续修改，请重试",
+        "en": "The workflow kept changing while it was being saved. Try again.",
+    },
+    "wfErr_revisionSnapshotMissing": {
+        "zh": "工作流 v{revision} 的修订快照不存在",
+        "en": "The revision snapshot for workflow v{revision} does not exist.",
+    },
+    "wfErr_revisionDigestMismatch": {
+        "zh": "工作流 v{revision} 的图摘要校验失败",
+        "en": "The graph digest check failed for workflow v{revision}.",
+    },
+    "wfErr_revisionProjectionMismatch": {
+        "zh": "工作流 v{revision} 的当前投影与修订快照不一致",
+        "en": "Workflow v{revision}'s current graph does not match its revision snapshot.",
+    },
+    "wfErr_revisionNotFound": {"zh": "工作流修订 v{revision} 不存在", "en": "Workflow revision v{revision} does not exist."},
+    "wfErr_aiEditBadJson": {"zh": "JSON 解析失败: {detail}", "en": "Could not parse the JSON: {detail}"},
+    "wfErr_aiEditNoJsonObject": {"zh": "输出中没有 JSON 对象", "en": "The output contains no JSON object."},
+    "wfErr_jsonSchemaMismatchUnenforced": {
+        "zh": "模型返回的 JSON 不符合 Schema:{reason}(这一档实际跑在 {tier}:该端点无法把 Schema 当成硬约束)",
+        "en": "The model's JSON does not match the schema: {reason} (this call actually ran as {tier}: the endpoint can't enforce the schema as a hard constraint)",
+    },
+    # 代码沙箱
+    "sandboxErr_timeout": {"zh": "代码执行超时({seconds}s)", "en": "The code timed out ({seconds}s)."},
+    "sandboxErr_outputTooLarge": {
+        "zh": "代码输出超过上限({kib} KiB, stdout + stderr)",
+        "en": "The code's output exceeded the limit ({kib} KiB, stdout + stderr).",
+    },
+    "sandboxErr_dockerMissing": {"zh": "需要安装并启动 Docker 才能执行代码", "en": "Install and start Docker to run code."},
+    "sandboxErr_containerCreateFailed": {"zh": "创建容器失败", "en": "could not create the container"},
+    "sandboxErr_notReady": {
+        "zh": "代码隔离环境未就绪: {detail}。请先运行 docker pull {image}",
+        "en": "The code sandbox isn't ready: {detail}. Run docker pull {image} first.",
+    },
+    "sandboxErr_cleanupFailed": {
+        "zh": "沙箱容器清理失败,请检查 Docker 状态",
+        "en": "Could not clean up the sandbox container. Check that Docker is healthy.",
+    },
+    "sandboxErr_cleanupFailedDetail": {
+        "zh": "沙箱容器清理失败: {detail}",
+        "en": "Could not clean up the sandbox container: {detail}",
+    },
+    "sandboxErr_unavailable": {
+        "zh": (
+            "这台机器上没有可用的代码隔离环境,因此不执行代码。"
+            "请在部署机上安装并启动 Docker(服务端会用一个无网络、只读、非 root 的容器来跑)。"
+        ),
+        "en": (
+            "No code sandbox is available on this machine, so the code was not run. "
+            "Install and start Docker on the server (code runs in a container with no network, a read-only filesystem and a non-root user)."
+        ),
+    },
+    "sandboxErr_noReason": {"zh": "子进程没有留下原因", "en": "the process left no reason"},
+    "sandboxErr_codeFailed": {"zh": "代码执行出错:{why}", "en": "The code failed: {why}"},
+    "sandboxErr_outputUnparsable": {
+        "zh": "代码输出无法解析(请把结果赋给 output 变量)",
+        "en": "Could not read the code's output (assign the result to the output variable).",
+    },
+    # 白模渲染与导入模型
+    "sceneRenderErr_shotNoCamera": {"zh": "镜头「{shot}」没有可用的机位", "en": "Shot \"{shot}\" has no usable camera."},
+    "sceneRenderErr_shotMissing": {"zh": "场景里没有镜头 {shot_id}", "en": "The scene has no shot {shot_id}."},
+    "sceneRenderErr_unknownView": {
+        "zh": "不认识的视角 {view},可选:{options}",
+        "en": "Unknown view {view}. Options: {options}",
+    },
+    "sceneRenderErr_ffmpegNoReason": {"zh": "ffmpeg 没有说原因", "en": "ffmpeg gave no reason"},
+    "sceneRenderErr_videoEncodeFailed": {
+        "zh": "白模运镜视频编码失败:{detail}",
+        "en": "Encoding the graybox camera-move video failed: {detail}",
+    },
+    "modelMeshErr_tooManyTriangles": {
+        "zh": "模型超过 {limit} 个三角形,白模参考帧渲不动 —— 请先在 Blender 里用精简(Decimate)修改器减面再导入。",
+        "en": "The model has more than {limit} triangles, too many for graybox reference frames. Reduce it with Blender's Decimate modifier before importing.",
+    },
+    "modelMeshErr_noMesh": {"zh": "模型里没有可以渲染的三角形网格。", "en": "The model has no triangle mesh to render."},
+    "modelMeshErr_gltfVersion": {
+        "zh": "只支持 glTF 2.0,这份是 {version}。",
+        "en": "Only glTF 2.0 is supported; this file is version {version}.",
+    },
+    "modelMeshErr_glbNoJson": {"zh": "GLB 里没有 JSON 块。", "en": "The GLB file has no JSON chunk."},
+    "modelMeshErr_draco": {
+        "zh": "模型用了 Draco 压缩网格,白模渲染器解不开 —— 导出 GLB 时关掉压缩即可。",
+        "en": "The model uses Draco mesh compression, which the graybox renderer can't decode. Export the GLB with compression turned off.",
+    },
+    "modelMeshErr_meshopt": {
+        "zh": "模型用了 meshopt 压缩网格,白模渲染器解不开 —— 导出 GLB 时关掉压缩即可。",
+        "en": "The model uses meshopt compression, which the graybox renderer can't decode. Export the GLB with compression turned off.",
+    },
+    "modelMeshErr_missingBinChunk": {
+        "zh": "模型声明了内置二进制块,文件里却没有。",
+        "en": "The model declares an embedded binary chunk, but the file doesn't contain one.",
+    },
+    "modelMeshErr_externalBuffer": {
+        "zh": "模型的数据在另一个文件里({uri}),导入时只收到了这一份 —— 请导出为自包含的 .glb。",
+        "en": "The model's data is in a separate file ({uri}), and only this file was imported. Export a self-contained .glb.",
+    },
+    "modelMeshErr_sparseAccessor": {
+        "zh": "模型用了稀疏访问器(sparse accessor),白模渲染器读不了。",
+        "en": "The model uses a sparse accessor, which the graybox renderer can't read.",
+    },
+    "modelMeshErr_unreadable": {"zh": "模型文件读不了:{detail}", "en": "Couldn't read the model file: {detail}"},
 }
 
 

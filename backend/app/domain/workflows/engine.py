@@ -62,7 +62,7 @@ def start_workflow_job(
     try:
         revision = current_workflow_revision(db, workflow)
     except WorkflowRevisionError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     errors = validate_graph(revision.graph, extra_types=plugin_node_types(db))
     if errors:
         raise WorkflowDomainError("；".join(errors))

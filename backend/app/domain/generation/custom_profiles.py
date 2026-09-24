@@ -15,11 +15,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError, tr
 from app.db.models import GenerationCapabilityProfile
 
 
-class CapabilityProfileError(ValueError):
-    """保存被拒。message 已经是可以直接给用户看的话。"""
+class CapabilityProfileError(LocalizedError, ValueError):
+    """保存被拒。带文案 key(`genErr_profile*`),按请求方的语言翻。"""
 
 
 #: 描述符里认得的键。**白名单而不是黑名单**:写错一个键名(`sizes` 写成 `size`)不会报错,
@@ -182,84 +183,81 @@ def profile_form_schema(kind: str) -> dict[str, Any]:
     }
 
 
-def _fail(message: str) -> None:
-    raise CapabilityProfileError(message)
+def _fail(key: str, **params: object) -> None:
+    raise CapabilityProfileError(key, **params)
 
 
 def _check(key: str, shape: str, value: Any) -> Any:
     def strs(v: Any, where: str) -> list[str]:
         if not isinstance(v, list) or not all(isinstance(x, str) and x.strip() for x in v):
-            _fail(f"{where} 要是一串非空文字")
+            _fail("genErr_profileStrList", field=where)
         return [x.strip() for x in v]
 
     def positive(v: Any, where: str) -> int:
         if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
-            _fail(f"{where} 要是一个正整数")
+            _fail("genErr_profilePositiveInt", field=where)
         return v
 
     if shape == "str_list":
         return strs(value, key)
     if shape == "int_list":
         if not isinstance(value, list) or not all(isinstance(x, int) and not isinstance(x, bool) for x in value):
-            _fail(f"{key} 要是一串整数")
+            _fail("genErr_profileIntList", field=key)
         return list(value)
     if shape == "str":
         if not isinstance(value, str) or not value.strip():
-            _fail(f"{key} 要是一段非空文字")
+            _fail("genErr_profileStr", field=key)
         return value.strip()
     if shape == "int":
         if isinstance(value, bool) or not isinstance(value, int):
-            _fail(f"{key} 要是一个整数")
+            _fail("genErr_profileInt", field=key)
         return value
     if shape == "positive_int":
         return positive(value, key)
     if shape == "bool":
         if not isinstance(value, bool):
-            _fail(f"{key} 要是 true 或 false")
+            _fail("genErr_profileBool", field=key)
         return value
     if shape == "str_to_int":
         if not isinstance(value, dict):
-            _fail(f"{key} 要是一组「名字 → 正整数」")
+            _fail("genErr_profileStrToInt", field=key)
         return {str(k): positive(v, f"{key}.{k}") for k, v in value.items()}
     if shape == "str_to_str_list":
         if not isinstance(value, dict):
-            _fail(f"{key} 要是一组「名字 → 可选值」")
+            _fail("genErr_profileStrToStrList", field=key)
         return {str(k): strs(v, f"{key}.{k}") for k, v in value.items()}
     if shape == "str_to_int_list":
         if not isinstance(value, dict):
-            _fail(f"{key} 要是一组「名字 → 一串整数」")
+            _fail("genErr_profileStrToIntList", field=key)
         for k, v in value.items():
             if not isinstance(v, list) or not all(isinstance(x, int) and not isinstance(x, bool) for x in v):
-                _fail(f"{key}.{k} 要是一串整数")
+                _fail("genErr_profileIntList", field=f"{key}.{k}")
         return {str(k): list(v) for k, v in value.items()}
     if shape == "str_list_list":
         if not isinstance(value, list):
-            _fail(f"{key} 要是若干组名字")
+            _fail("genErr_profileGroups", field=key)
         return [strs(group, key) for group in value]
-    _fail(f"{key} 的形状没人认得")
+    _fail("genErr_profileUnknownShape", field=key)
     return None
 
 
 def validate_capabilities(raw: Any, kind: str) -> dict[str, Any]:
     """把用户填的东西校成一份描述符。拦不住的只有"这个端点真的支持吗"。"""
     if kind not in _KINDS:
-        _fail(f"参数组只能是 {' 或 '.join(_KINDS)}")
+        _fail("genErr_profileKind", kinds=" / ".join(_KINDS))
     if not isinstance(raw, dict):
-        _fail("参数组的内容要是一组键值")
+        _fail("genErr_profileNotObject")
     unknown = [k for k in raw if k not in _KNOWN_KEYS]
     if unknown:
         #: 点名说是哪个键。"格式不对"这种话对着三十几个键的表单毫无用处。
-        _fail("这几个字段我们不认得:" + "、".join(sorted(unknown)))
+        _fail("genErr_profileUnknownFields", fields=tr("punct_listSep").join(sorted(unknown)))
     clean = {key: _check(key, _KNOWN_KEYS[key], value) for key, value in raw.items() if value is not None}
     unknown_parameters = sorted(set(clean.get("parameter_keys") or []) - set(canonical_parameters(kind)))
     if unknown_parameters:
-        _fail(
-            "这些参数当前没有生成适配器会发送，不能只在界面里声明:"
-            + "、".join(unknown_parameters)
-        )
+        _fail("genErr_profileUnsentParams", params=tr("punct_listSep").join(unknown_parameters))
     #: 一份什么参数都不声明的档案 = 兜底,指它和不指是一回事 —— 让人以为设过了,其实没有。
     if not clean.get("parameter_keys"):
-        _fail("至少要声明一个参数(parameter_keys),否则指向它和不指是一样的")
+        _fail("genErr_profileNoParams")
     #: 默认值必须在自己那份清单里 —— 界面会拿它当初值,不在清单里就是一个选不回来的值。
     for default_key, list_key in (
         ("default_size", "sizes"),
@@ -268,7 +266,7 @@ def validate_capabilities(raw: Any, kind: str) -> dict[str, Any]:
     ):
         default = clean.get(default_key)
         if default is not None and default not in (clean.get(list_key) or []):
-            _fail(f"{default_key} 的值不在 {list_key} 里面")
+            _fail("genErr_profileDefaultNotListed", default_key=default_key, list_key=list_key)
     return clean
 
 

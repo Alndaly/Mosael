@@ -54,7 +54,9 @@ def test_a_two_second_clip_is_refused() -> None:
 
 def test_the_message_says_how_long_it_should_be() -> None:
     """拒绝要**能行动**:说清楚要多长,而不是只说"太短"。"""
-    assert "5" in voices.REFERENCE_TOO_SHORT_HINT
+    with pytest.raises(voices.VoiceError) as caught:
+        voices.check_reference_duration(2.6)
+    assert "5" in str(caught.value) and "15" in str(caught.value), str(caught.value)
 
 
 def test_a_long_enough_clip_goes_through() -> None:

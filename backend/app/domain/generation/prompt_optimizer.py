@@ -24,12 +24,22 @@ from sqlalchemy.orm import Session
 
 from app.domain import provider_models
 from app.domain.providers import require_connection
+from app.core.i18n import LocalizedError
 
 _LLM_TIMEOUT_SECONDS = 60.0
 
 
-class PromptOptimizeError(RuntimeError):
-    """提示词优化失败(供应商缺失、LLM 调用失败、返回非法 JSON 等)。"""
+class PromptOptimizeError(LocalizedError, RuntimeError):
+    """提示词优化失败(供应商缺失、LLM 调用失败、返回非法 JSON 等)。带文案 key(`genErr_optimize*`)。
+
+    对话那一层的报错(AiChatError)带 key 就接着传 key,不带就是它自己的一句话,原样透传。
+    """
+
+    @classmethod
+    def from_chat(cls, exc: Exception) -> "PromptOptimizeError":
+        if isinstance(exc, LocalizedError):
+            return cls(exc.key, **exc.params)
+        return cls(str(exc))
 
 
 @dataclass(frozen=True)
@@ -155,13 +165,13 @@ def _chat_json(target: ChatTarget, system: str, user: str, call: BillableCall | 
             label="提示词优化",
         ).strip()
     except AiChatError as exc:
-        raise PromptOptimizeError(str(exc)) from exc
+        raise PromptOptimizeError.from_chat(exc) from exc
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PromptOptimizeError("提示词优化返回的不是合法 JSON") from exc
+        raise PromptOptimizeError("genErr_optimizeNotJson") from exc
     if not isinstance(data, dict):
-        raise PromptOptimizeError("提示词优化返回的 JSON 不是对象")
+        raise PromptOptimizeError("genErr_optimizeNotObject")
     return data
 
 
@@ -181,7 +191,7 @@ def optimize_image_prompt(
     provider/model 只用来选平台指南。profile_id 可指定 LLM 供应商配置,缺省用默认启用的。
     """
     if not raw_prompt.strip():
-        raise PromptOptimizeError("提示词为空,无法优化")
+        raise PromptOptimizeError("genErr_optimizeEmptyPrompt")
     guide = guide_for(provider, model)
     # 用「对话」默认 LLM 重写(与助手同一个),不是图像模型本身:图像 provider 的 default_model 是
     # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
@@ -198,18 +208,18 @@ def optimize_image_prompt(
     if not chat_model:
         chat_model = provider_models.model_id_for(db, chat_profile, "chat")
     if not chat_model:
-        raise PromptOptimizeError("未配置对话模型,请在设置里为「对话」选择供应商与模型")
+        raise PromptOptimizeError("genErr_optimizeNoChatModel")
     try:
         target = target_for(db, chat_profile, model=chat_model)
     except AiChatError as exc:
-        raise PromptOptimizeError(str(exc)) from exc
+        raise PromptOptimizeError.from_chat(exc) from exc
     # 归属走环境上下文:路由已经过了 ensure_workspace_perm,那里把工作区绑好了。
     with billable(db, capability="chat", operation="optimize_prompt",
                   idempotency_key=once("optimize_prompt")) as call:
         data = _chat_json(target, _build_system_prompt(guide, ui_language), raw_prompt.strip(), call)
     prompt = str(data.get("prompt") or "").strip()
     if not prompt:
-        raise PromptOptimizeError("优化结果为空")
+        raise PromptOptimizeError("genErr_optimizeEmptyResult")
     negative = str(data.get("negative_prompt") or "").strip() if guide.wants_negative else ""
     return {
         "prompt": prompt,

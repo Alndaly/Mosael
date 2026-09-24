@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 
 from app.ai.sidecar.adapters import proxy_env, pi_sidecar_command
 from app.core.child_process import popen_text
+from app.core.i18n import LocalizedError, get_current_locale, t
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,11 @@ class LoginSession:
     events: list[dict] = field(default_factory=list)
     #: 当前待用户作答的提问;没有则 None。
     prompt: dict | None = None
-    error: str = ""
+    #: 失败原因:文案 key 加参数,**读的时候**才翻。登录在后台线程里失败(看门狗、读事件流),
+    #: 那里没有请求语言;当场翻成字就只能是缺省语言,英文界面轮询到的是一句中文。
+    #: sidecar 回的原话不是 key,`t` 认不出就原样给。
+    error_key: str = ""
+    error_params: dict = field(default_factory=dict)
     #: 登录成功后该账号实际可用的模型目录。
     models: list[dict] = field(default_factory=list)
     started_at: float = field(default_factory=time.monotonic)
@@ -49,13 +54,18 @@ class LoginSession:
     process: subprocess.Popen | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
 
+    @property
+    def error(self) -> str:
+        """按**当前请求**的语言说失败原因;没失败是空串。"""
+        return t(self.error_key, get_current_locale(), **self.error_params) if self.error_key else ""
+
 
 _sessions: dict[str, LoginSession] = {}
 _sessions_lock = threading.Lock()
 
 
-class LoginError(RuntimeError):
-    pass
+class LoginError(LocalizedError, RuntimeError):
+    """起不了登录。带文案 key(`agentErr_login*`),按请求方的语言翻。"""
 
 
 def _prune() -> None:
@@ -82,12 +92,14 @@ def session_for_profile(profile_id: str) -> LoginSession | None:
     return None
 
 
-def _finish(session: LoginSession, status: str, error: str = "") -> None:
+def _finish(session: LoginSession, status: str, error: str = "", **params: object) -> None:
+    """`error` 是文案 key,或者 sidecar 回的一句原话(认不出的 key 原样显示)。"""
     with session.lock:
         if session.status != "running":
             return
         session.status = status
-        session.error = error
+        session.error_key = error
+        session.error_params = params
         session.prompt = None
         session.finished_at = time.monotonic()
 
@@ -132,7 +144,7 @@ def _reader(session: LoginSession) -> None:
     finally:
         # 进程还活着就意味着流程没走完(例如 sidecar 卡在等待作答),收掉它。
         _terminate(session)
-        _finish(session, "error", session.error or "登录进程意外结束")
+        _finish(session, "error", "agentErr_loginExited")
 
 
 def _watchdog(session: LoginSession) -> None:
@@ -143,7 +155,7 @@ def _watchdog(session: LoginSession) -> None:
                 return
         time.sleep(1.0)
     _terminate(session)
-    _finish(session, "error", "授权超时,请重新发起登录")
+    _finish(session, "error", "agentErr_loginTimeout")
 
 
 def _terminate(session: LoginSession) -> None:
@@ -184,7 +196,7 @@ def start_login(
 
     node, sidecar = pi_sidecar_command()
     if not os.path.exists(sidecar):
-        raise LoginError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+        raise LoginError("agentErr_loginSidecarMissing", path=sidecar)
 
     env = {**os.environ}
     if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
@@ -215,8 +227,8 @@ def start_login(
             "credential": credential,
         },
     ):
-        _finish(session, "error", "登录进程启动失败")
-        raise LoginError("登录进程启动失败")
+        _finish(session, "error", "agentErr_loginStartFailed")
+        raise LoginError("agentErr_loginStartFailed")
 
     threading.Thread(target=_reader, args=(session,), daemon=True).start()
     threading.Thread(target=_watchdog, args=(session,), daemon=True).start()

@@ -170,10 +170,10 @@ def report_task(
 ) -> PublishTask:
     """执行器回报一次状态。`post` 是发成功时读到的那条作品(见 domain/publish/post.py)。"""
     if status not in TASK_STATUSES:
-        raise PublishDomainError(f"未知任务状态: {status}")
+        raise PublishDomainError("publishErr_unknownTaskStatus", status=status)
     task = db.get(PublishTask, task_id)
     if task is None:
-        raise PublishDomainError("任务不存在")
+        raise PublishDomainError("publishErr_taskNotFound")
     if task.status == "cancelled":
         # 已取消的任务不给后到的 worker 回报复活(老版规则)。
         return task
@@ -311,10 +311,10 @@ def patch_account(
 ) -> PublishAccount:
     account = db.get(PublishAccount, account_id)
     if account is None:
-        raise PublishDomainError("账号不存在")
+        raise PublishDomainError("publishErr_accountNotFound")
     if binding_status is not None:
         if binding_status not in BINDING_STATUSES:
-            raise PublishDomainError(f"未知登录态: {binding_status}")
+            raise PublishDomainError("publishErr_unknownBindingStatus", status=binding_status)
         account.binding_status = binding_status
         account.last_checked_at = now()
     account.last_error = last_error

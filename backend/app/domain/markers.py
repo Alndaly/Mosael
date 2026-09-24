@@ -29,6 +29,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from app.core.i18n import LocalizedError
+
 #: 一份文档里最多几个标记。上限存在的理由不是性能,是**键不够用** —— 能绑的组合就那么多,
 #: 几十个之后标记本身就变成了另一件要找的东西。
 MAX_MARKERS = 64
@@ -50,8 +52,9 @@ NAMED_KEYS = (
 MODIFIERS = ("Mod", "Alt", "Shift")
 
 
-class MarkerError(ValueError):
-    """标记本身不合法。调用方(画板 / 工作流)负责翻译成自己那一侧的错误。"""
+class MarkerError(LocalizedError, ValueError):
+    """标记本身不合法。调用方(画板 / 工作流)负责翻译成自己那一侧的错误 —— 转手时带上 key/params,
+    不要 `str(exc)`:那会把句子冻成转手那一刻的语言。"""
 
 
 def _normalize_key(raw: str) -> str:
@@ -61,7 +64,7 @@ def _normalize_key(raw: str) -> str:
         # 字母统一大写:`a` 和 `A` 按下去是同一个键(Shift 单独占一个修饰位),
         # 分开存的话「已经绑了 A」这条判断会漏掉一半。
         return raw.upper()
-    raise MarkerError(f"快捷键里不能用 {raw!r} 这个键")
+    raise MarkerError("markerErr_keyNotAllowed", value=repr(raw))
 
 
 def normalize_shortcut(raw: Any) -> str:
@@ -70,30 +73,30 @@ def normalize_shortcut(raw: Any) -> str:
     归一而不是原样收下:`Shift+Mod+k` 和 `Mod+Shift+K` 是同一个绑定,不归一的话查重查不出来。
     """
     if not isinstance(raw, str):
-        raise MarkerError("标记的 shortcut 必须是字符串")
+        raise MarkerError("markerErr_shortcutNotString")
     parts = [part.strip() for part in raw.split("+") if part.strip()]
     if not parts:
-        raise MarkerError("标记的 shortcut 不能为空")
+        raise MarkerError("markerErr_shortcutEmpty")
     key = _normalize_key(parts[-1])
     seen: set[str] = set()
     for part in parts[:-1]:
         canonical = {"mod": "Mod", "cmd": "Mod", "meta": "Mod", "ctrl": "Mod", "control": "Mod",
                      "alt": "Alt", "option": "Alt", "shift": "Shift"}.get(part.lower())
         if canonical is None:
-            raise MarkerError(f"快捷键里不认识的修饰键:{part}")
+            raise MarkerError("markerErr_unknownModifier", modifier=part)
         if canonical in seen:
-            raise MarkerError(f"快捷键里重复的修饰键:{canonical}")
+            raise MarkerError("markerErr_duplicateModifier", modifier=canonical)
         seen.add(canonical)
     return "+".join([m for m in MODIFIERS if m in seen] + [key])
 
 
 def _finite(value: Any, field: str, marker_id: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise MarkerError(f"标记 {marker_id} 的 {field} 必须是数字,收到 {value!r}")
+        raise MarkerError("markerErr_fieldNotNumber", marker_id=marker_id, field=field, value=repr(value))
     number = float(value)
     # NaN / Infinity 存得进去,但 `JSON.parse` 读不回来 —— 存进一个就是整份画布再也打不开。
     if not math.isfinite(number):
-        raise MarkerError(f"标记 {marker_id} 的 {field} 不是有限数")
+        raise MarkerError("markerErr_fieldNotFinite", marker_id=marker_id, field=field)
     return number
 
 
@@ -102,28 +105,28 @@ def normalize_markers(raw: Any) -> list[dict[str, Any]]:
     if raw is None:
         return []
     if not isinstance(raw, list):
-        raise MarkerError("markers 必须是数组")
+        raise MarkerError("markerErr_notArray")
     if len(raw) > MAX_MARKERS:
-        raise MarkerError(f"一份文档最多 {MAX_MARKERS} 个标记,收到 {len(raw)} 个")
+        raise MarkerError("markerErr_tooMany", limit=MAX_MARKERS, count=len(raw))
 
     markers: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     bound: dict[str, str] = {}
     for entry in raw:
         if not isinstance(entry, dict):
-            raise MarkerError("标记必须是对象")
+            raise MarkerError("markerErr_notObject")
         marker_id = str(entry.get("id") or "").strip()
         if not marker_id:
-            raise MarkerError("标记的 id 不能为空")
+            raise MarkerError("markerErr_idEmpty")
         if len(marker_id) > 64:
-            raise MarkerError(f"标记的 id 过长:{marker_id[:16]}…")
+            raise MarkerError("markerErr_idTooLong", id_prefix=marker_id[:16])
         if marker_id in seen_ids:
-            raise MarkerError(f"标记 id 重复:{marker_id}")
+            raise MarkerError("markerErr_duplicateId", marker_id=marker_id)
         seen_ids.add(marker_id)
 
         name = entry.get("name")
         if name is not None and not isinstance(name, str):
-            raise MarkerError(f"标记 {marker_id} 的 name 必须是字符串")
+            raise MarkerError("markerErr_nameNotString", marker_id=marker_id)
         marker: dict[str, Any] = {
             "id": marker_id,
             "name": (name or "").strip()[:MAX_NAME_CHARS],
@@ -137,7 +140,7 @@ def normalize_markers(raw: Any) -> list[dict[str, Any]]:
             # 同一份文档里两个标记绑同一个键 —— 存得下,但按下去只会跳到其中一个,
             # 另一个从此再也跳不到。这不是界面的偏好,是这份数据的不变量。
             if combo in bound:
-                raise MarkerError(f"快捷键 {combo} 已经绑给了标记「{bound[combo]}」")
+                raise MarkerError("markerErr_shortcutTaken", combo=combo, marker=bound[combo])
             bound[combo] = marker["name"] or marker_id
             marker["shortcut"] = combo
 

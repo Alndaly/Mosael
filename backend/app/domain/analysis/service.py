@@ -18,6 +18,7 @@ from app.domain.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.generation import sanitize_adapter_error
+from app.core.i18n import LocalizedError
 from app.db.models import Asset, ProviderProfile
 from app.domain import provider_credentials
 from app.domain.provider_credentials import ResolvedConnection
@@ -68,8 +69,8 @@ def adaptive_frame_count(duration_seconds: float) -> int:
     return max(MIN_VIDEO_FRAMES, min(MAX_VIDEO_FRAMES, target))
 
 
-class AnalysisError(RuntimeError):
-    pass
+class AnalysisError(LocalizedError, RuntimeError):
+    """素材分析的领域错误。带文案 key(`analysisErr_*`),按读的人的语言翻(见 core/i18n)。"""
 
 
 def select_analysis_connection(db: Session, profile_id: str | None, user_id: str | None) -> ResolvedConnection:
@@ -81,20 +82,20 @@ def select_analysis_connection(db: Session, profile_id: str | None, user_id: str
     if profile_id:
         profile = find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
         if profile is None:
-            raise AnalysisError("指定的供应商配置不存在或已停用")
+            raise AnalysisError("analysisErr_profileNotFound")
         return _resolve_connection_credentials(db, profile, user_id)
     profiles = list_enabled_connections(db, owner_user_id=user_id, auth_type="api_key")
     by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
     for vendor in ANALYSIS_VENDOR_ORDER:
         if vendor in by_vendor:
             return _resolve_connection_credentials(db, by_vendor[vendor], user_id)
-    raise AnalysisError("没有可用的多模态供应商，请在设置中添加（如 Kimi 或 MiniMax）")
+    raise AnalysisError("analysisErr_noVisionProvider")
 
 
 def _resolve_connection_credentials(db: Session, profile: ProviderProfile, user_id: str | None) -> ResolvedConnection:
     resolved = provider_credentials.resolve_connection(db, profile, user_id)
     if resolved is None:
-        raise AnalysisError(f"供应商「{profile.name}」还没有配置你的密钥,请先在设置里填写")
+        raise AnalysisError("analysisErr_noCredential", name=profile.name)
     return resolved
 
 
@@ -137,10 +138,10 @@ def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
                 ],
                 check=True, capture_output=True, timeout=120, what="视频抽帧")
         except subprocess.SubprocessError as exc:
-            raise AnalysisError("视频抽帧失败") from exc
+            raise AnalysisError("analysisErr_frameExtractFailed") from exc
         frames = sorted(Path(tmp).glob("frame-*.jpg"))
         if not frames:
-            raise AnalysisError("视频中没有可用画面")
+            raise AnalysisError("analysisErr_noFrames")
         return [frame.read_bytes() for frame in frames]
 
 
@@ -232,7 +233,7 @@ def _prompt_text(asset: Asset, question: str, transcript: str | None) -> str:
 def _read_native_video(path: Path) -> tuple[bytes, str]:
     data = path.read_bytes()
     if len(data) > MAX_NATIVE_VIDEO_MB * 1024 * 1024:
-        raise AnalysisError(f"视频超过 {MAX_NATIVE_VIDEO_MB}MB,原生直传过大,请改用抽帧模式")
+        raise AnalysisError("analysisErr_videoTooLarge", mb=MAX_NATIVE_VIDEO_MB)
     mime = mimetypes.guess_type(path.name)[0] or "video/mp4"
     return data, mime
 
@@ -253,7 +254,7 @@ def _call_gemini_video(
     if not model:
         # 与 OpenAI-compatible 分支的 target_for 保持同一条不变量：连接下没有显式可用的
         # chat 模型就当场失败，不能因为这个 Adapter 绕开 target_for 而暗换成某个固定 Gemini。
-        raise AnalysisError(f"供应商「{profile.name}」没有可用的对话模型")
+        raise AnalysisError("analysisErr_noChatModel", name=profile.name)
     body = {
         "contents": [
             {
@@ -286,7 +287,7 @@ def _call_gemini_video(
             )
         return str(payload["candidates"][0]["content"]["parts"][0]["text"]).strip()
     except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-        raise AnalysisError(sanitize_adapter_error(f"Gemini 视频分析失败: {exc}", profile.api_key)) from exc
+        raise AnalysisError("analysisErr_geminiFailed", detail=sanitize_adapter_error(str(exc), profile.api_key)) from exc
 
 
 def _analyze_video_native(
@@ -331,14 +332,14 @@ def analyze_asset(
     surface: Literal["direct", "automation"] = "direct",
 ) -> dict[str, Any]:
     if asset.kind not in ("image", "video"):
-        raise AnalysisError("只支持分析图片或视频素材")
+        raise AnalysisError("analysisErr_unsupportedKind")
     if not asset.file_key:
-        raise AnalysisError("素材没有本地文件")
+        raise AnalysisError("analysisErr_noLocalFile")
     if mode not in VIDEO_ANALYSIS_MODES:
-        raise AnalysisError(f"未知分析方式: {mode}")
+        raise AnalysisError("analysisErr_unknownMode", mode=mode)
     path = resolve_key(asset.file_key)
     if not path.is_file():
-        raise AnalysisError("素材文件缺失")
+        raise AnalysisError("analysisErr_fileMissing")
 
     prompt = question.strip() or "请描述这个素材的内容。"
 
@@ -346,7 +347,7 @@ def analyze_asset(
     if asset.kind == "image":
         compatible = browser_compatible_image(path, path.parent)
         if compatible is None:
-            raise AnalysisError("图片无法转换成视觉模型支持的格式")
+            raise AnalysisError("analysisErr_imageUnconvertible")
         image_path, image_mime = compatible
         profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
         with billable(
@@ -366,7 +367,7 @@ def analyze_asset(
     transcript_text = asset_transcript_text(db, asset.id)  # 转写两条路都喂
     oauth_gateway = resolved_connection is not None and surface == "automation" and resolved_connection.auth_type == "oauth"
     if mode == "native" and oauth_gateway:
-        raise AnalysisError("当前 OAuth 模型的自动化 Gateway 不支持原生视频，请改用抽帧模式")
+        raise AnalysisError("analysisErr_oauthNoNativeVideo")
     if mode == "frames" or oauth_gateway:
         native_profile = None
     elif resolved_connection is not None:
@@ -376,7 +377,7 @@ def analyze_asset(
 
     # 原生视频理解:显式 native 必须有原生档案;auto 有就走、没有回落抽帧。
     if mode == "native" and native_profile is None:
-        raise AnalysisError("没有支持原生视频理解的供应商(需 Gemini / 通义千问 Qwen-VL / Kimi),或改用抽帧模式")
+        raise AnalysisError("analysisErr_noNativeVideoProvider")
     if native_profile is not None and mode in ("native", "auto"):
         # 原生视频理解是这套里最贵的调用之一,以前完全不在账上。
         with billable(

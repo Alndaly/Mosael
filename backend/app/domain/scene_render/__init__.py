@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from app.core.i18n import LocalizedError, tr
 from app.domain.scene_render.meshes import FROM_FILE, meshes_for
 from app.domain.scene_render.model_mesh import ModelLibrary
 from app.domain.scene_render.raster import (
@@ -48,8 +49,8 @@ VIDEO_RENDER_FPS = 12
 VIDEO_OUTPUT_FPS = 24
 
 
-class SceneRenderError(ValueError):
-    """这个场景/镜头渲不了(镜头不存在、没有机位)。"""
+class SceneRenderError(LocalizedError, ValueError):
+    """这个场景/镜头渲不了(镜头不存在、没有机位)。带文案 key(`sceneRenderErr_*`),按读的人的语言翻。"""
 
 
 @dataclass(frozen=True)
@@ -113,7 +114,7 @@ def _camera(content: SceneContent, shot: SceneShot, time: float) -> CameraPose:
     独立的相机,直接按采样出来的 position / target 摆(SceneViewport 的 `pose()`),这里照同一个约定。"""
     camera = next((obj for obj in content.objects if obj.id == shot.camera_id), None)
     if camera is None or camera.kind != "camera":
-        raise SceneRenderError(f"镜头「{shot.name}」没有可用的机位")
+        raise SceneRenderError("sceneRenderErr_shotNoCamera", shot=shot.name)
     return sample_camera(camera, shot, time)
 
 
@@ -169,7 +170,7 @@ def _lighting(content: SceneContent, world: dict[str, np.ndarray]) -> Lighting:
 def find_shot(content: SceneContent, shot_id: str) -> SceneShot:
     shot = next((one for one in content.shots if one.id == shot_id), None)
     if shot is None:
-        raise SceneRenderError(f"场景里没有镜头 {shot_id}")
+        raise SceneRenderError("sceneRenderErr_shotMissing", shot_id=shot_id)
     return shot
 
 
@@ -194,7 +195,7 @@ def free_view_camera(content: SceneContent, view: str, shot: SceneShot, time: fl
     模型库要一起传:取景按包围盒算,而导入的模型往往是场景里最大的那件东西 ——
     不算它的话,自由视角会把它切掉一半。"""
     if view not in FREE_VIEWS:
-        raise SceneRenderError(f"不认识的视角 {view},可选:{', '.join(FREE_VIEWS)}")
+        raise SceneRenderError("sceneRenderErr_unknownView", view=view, options=", ".join(FREE_VIEWS))
     tris, _ = _triangles(content, _world_matrices(content, shot, time), models)
     if len(tris.corners):
         points = tris.corners.reshape(-1, 3)
@@ -266,7 +267,8 @@ def render_shot_video(content: SceneContent, shot_id: str, target: Path,
         )
     if completed.returncode != 0 or not target.is_file():
         # 挑**说明原因的那一行**,不按位置裁(见 core/text.blame_line)。
-        raise SceneRenderError(f"白模运镜视频编码失败:{blame_line(completed.stderr or '', fallback='ffmpeg 没有说原因')}")
+        detail = blame_line(completed.stderr or "", fallback="") or tr("sceneRenderErr_ffmpegNoReason")
+        raise SceneRenderError("sceneRenderErr_videoEncodeFailed", detail=detail)
     return target
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Asset, Sequence, Track
 
 #: 界面、智能体、工作流共用的那几档。
@@ -16,22 +17,19 @@ ORIGINAL_AUDIO_MODES = ("duck", "mute", "keep", "separate")
 DEFAULT_ORIGINAL_AUDIO = "duck"
 
 
-class OriginalAudioError(RuntimeError):
-    """用户要求的原声处理方式无法如实执行。"""
+class OriginalAudioError(LocalizedError, RuntimeError):
+    """用户要求的原声处理方式无法如实执行。带文案 key(`dubErr_*`),按读的人的语言翻。"""
 
 
 def ensure_original_audio_mode(mode: str) -> None:
     """在排配音任务前验证选择，避免做完配音才发现分离能力不存在。"""
     if mode not in ORIGINAL_AUDIO_MODES:
-        raise OriginalAudioError(f"原声处理方式只能是 {' / '.join(ORIGINAL_AUDIO_MODES)}")
+        raise OriginalAudioError("dubErr_originalAudioMode", modes=" / ".join(ORIGINAL_AUDIO_MODES))
     if mode == "separate":
         from app.domain.separation import available
 
         if not available():
-            raise OriginalAudioError(
-                "选择了「只去掉人声」，但音频分离引擎尚不可用；请先到设置中安装分离引擎，"
-                "或明确改选「静音」"
-            )
+            raise OriginalAudioError("dubErr_separationUnavailableForMode")
 
 
 def _carries_audio(track: Track) -> bool:
@@ -116,10 +114,10 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
     from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
 
     if not available():
-        raise OriginalAudioError("音频分离引擎尚不可用；请先到设置中安装")
+        raise OriginalAudioError("dubErr_separationUnavailable")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
-        raise OriginalAudioError("时间线不存在")
+        raise OriginalAudioError("dubErr_sequenceNotFound")
     sources = [
         clip
         for track in sequence.tracks or []
@@ -135,7 +133,8 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
         try:
             backgrounds[asset_id] = separate_asset(db, asset, engine="").background.id
         except SeparationError as exc:
-            raise OriginalAudioError(f"只去掉人声失败：{exc}") from exc
+            # 分离那边的原因原样作参数(它若带 key,渲染时按读的人的语言翻)。
+            raise OriginalAudioError("dubErr_removeVoiceFailed", detail=exc) from exc
     #: 先取出 id:每次操作都会 commit,之后 ORM 对象全部过期。
     plan = [(clip.id, backgrounds[clip.asset_id]) for clip in sources if clip.asset_id in backgrounds]
     for clip_id, background_id in plan:

@@ -30,7 +30,7 @@ def undo(db: Session, sequence_id: str) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     operation = _latest_undoable(db, sequence_id)
     if operation is None:
-        raise SequenceDomainError("没有可撤销的操作")
+        raise SequenceDomainError("seqErr_nothingToUndo")
     # kind 不在注册表里就直接报错。往回跳过这一条去撤更早的,等于替用户丢掉一件他没要求撤销的事。
     undo_registry.apply_inverse(db, sequence, operation.kind, operation.payload)
     operation.reverted = True
@@ -51,10 +51,10 @@ def redo(db: Session, sequence_id: str) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     undo_operation = _latest_active_undo(db, sequence_id)
     if undo_operation is None or _has_edit_after(db, sequence_id, undo_operation.revision_after):
-        raise SequenceDomainError("没有可重做的操作")
+        raise SequenceDomainError("seqErr_nothingToRedo")
     original = db.get(SequenceOperation, undo_operation.undo_of or "")
     if original is None:
-        raise SequenceDomainError("没有可重做的操作")
+        raise SequenceDomainError("seqErr_nothingToRedo")
     undo_registry.apply_forward(db, sequence, original.kind, original.payload)
     original.reverted = False
     undo_operation.reverted = True

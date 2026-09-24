@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import PARTITION_PREFIX
+from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, Job, PublishAccount, PublishTask, User
 from app.domain import sharing
 from app.domain.jobs import create_job, register_external_kind
@@ -22,8 +23,8 @@ from app.domain.jobs import create_job, register_external_kind
 register_external_kind("publish")
 
 
-class PublishDomainError(ValueError):
-    pass
+class PublishDomainError(LocalizedError, ValueError):
+    """发布被拒。带文案 key(`publishErr_*`,见 core/i18n),按请求方的语言翻。"""
 
 
 # 平台注册表:config 字段描述驱动 UI 表单与校验。
@@ -135,19 +136,20 @@ def normalize_options(platform: str, raw: dict[str, Any] | None) -> dict[str, An
     for key in (raw or {}):
         if key not in allowed:
             raise PublishDomainError(
-                f"{platform} 不支持发布选项 {key!r}(支持:{', '.join(allowed) or '无'})"
+                "publishErr_unknownOption", platform=platform, option=repr(key),
+                supported=", ".join(allowed) or tr("genErr_none"),
             )
     out: dict[str, Any] = {}
     for key, spec in allowed.items():
         value = (raw or {}).get(key, spec["default"])
         if spec["type"] == "bool":
             if not isinstance(value, bool):
-                raise PublishDomainError(f"发布选项 {key!r} 需要 true/false(收到 {value!r})")
+                raise PublishDomainError("publishErr_optionNeedsBool", option=repr(key), value=repr(value))
         elif spec["type"] == "enum":
             values = [choice["value"] for choice in spec["choices"]]
             if value not in values:
                 raise PublishDomainError(
-                    f"发布选项 {key!r} 只能是 {', '.join(values)}(收到 {value!r})"
+                    "publishErr_optionChoices", option=repr(key), choices=", ".join(values), value=repr(value)
                 )
         out[key] = value
     return out
@@ -254,7 +256,9 @@ def normalize_platform(platform: str) -> str:
     lowered = raw.lower()
     canonical = PLATFORM_ALIASES.get(raw, PLATFORM_ALIASES.get(lowered, lowered))
     if canonical not in PUBLISH_PLATFORMS:
-        raise PublishDomainError(f"未知平台: {platform!r}(支持 {', '.join(PUBLISH_PLATFORMS)})")
+        raise PublishDomainError(
+            "publishErr_unknownPlatform", platform=repr(platform), supported=", ".join(PUBLISH_PLATFORMS)
+        )
     return canonical
 
 
@@ -266,7 +270,7 @@ def create_account(
     meta = PUBLISH_PLATFORMS[platform]
     for key, spec in meta["config"].items():
         if isinstance(spec, dict) and spec.get("required") and not str(config.get(key, "")).strip():
-            raise PublishDomainError(f"平台 {platform} 缺少必填配置 {key}")
+            raise PublishDomainError("publishErr_missingConfig", platform=platform, key=key)
     account = PublishAccount(
         workspace_id=workspace_id, platform=platform, name=name, config=config, proxy=(proxy or "").strip() or None
     )
@@ -303,13 +307,13 @@ def start_publish(
     options: dict[str, Any] | None = None,
 ) -> PublishTask:
     if not account.enabled:
-        raise PublishDomainError("发布账号已停用")
+        raise PublishDomainError("publishErr_accountDisabled")
     if not asset.file_key:
-        raise PublishDomainError("素材没有本地文件,无法发布")
+        raise PublishDomainError("publishErr_assetNoFile")
     meta = PUBLISH_PLATFORMS[account.platform]
     title_max = int(meta.get("title_max", 300))
     if title and len(title) > title_max:
-        raise PublishDomainError(f"{meta['label']} 标题最多 {title_max} 字(当前 {len(title)} 字)")
+        raise PublishDomainError("publishErr_titleTooLong", platform=meta["label"], max=title_max, count=len(title))
 
     job = create_job(
         db,

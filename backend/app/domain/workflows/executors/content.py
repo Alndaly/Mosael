@@ -31,7 +31,7 @@ def _run_plugin_tool(
         # 不带的话,一个从网盘拉文件的节点在工作流里跑不通 —— 它没地方放拿到的东西。
         invocation = invoke(db, instance_id, tool_name, payload, workspace_id=workspace_id)
     except PluginDomainError as exc:  # 停用 / 撤权 / 删掉 —— 是这次运行的失败,不是服务端故障
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     if invocation.status != "succeeded":
         raise WorkflowDomainError("wfErr_pluginToolFailed", params={"reason": invocation.error or invocation.status})
     return invocation.output

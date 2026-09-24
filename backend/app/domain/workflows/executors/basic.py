@@ -136,9 +136,9 @@ def run_python(code_text: str, inputs: dict[str, Any]) -> dict[str, Any]:
     try:
         return sandbox.run_code(code_text, inputs, timeout=CODE_TIMEOUT_SECONDS)
     except sandbox.SandboxUnavailable as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
     except sandbox.SandboxError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError.from_error(exc) from exc
 
 
 @register("code")

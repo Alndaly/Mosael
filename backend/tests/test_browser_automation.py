@@ -12,6 +12,7 @@ import time
 from sqlalchemy import select
 
 from app.core.db import PARTITION_PREFIX, SessionLocal
+from app.core.i18n import t
 from app.db.models import BrowserAction, BrowserSession
 from app.domain import browser
 from tests.util import fresh_client, worker_client
@@ -242,4 +243,6 @@ def test_租约到点的动作判失败_可重试() -> None:
         assert browser.expire_action_leases(db) == 1
         row = db.get(BrowserAction, action["id"])
         assert row.status == "failed"
-        assert "租约" in (row.error or "")
+        #: 后端自己记的原因存文案 key(「key 或一句话」,同 jobs.say),等它的那一方按读者语言翻。
+        assert row.error == "browserErr_executorLost"
+        assert "租约" in t(row.error, "zh")

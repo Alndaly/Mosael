@@ -21,9 +21,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, say
+from app.domain.jobs import blame, create_job, dispatch_job, emit_job_event, say
 from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
 from app.domain.voices.original_audio import (
     DEFAULT_ORIGINAL_AUDIO,
@@ -45,8 +45,8 @@ _MIN_SPEED = 0.25
 _MAX_SPEED = 4.0
 
 
-class DubError(RuntimeError):
-    pass
+class DubError(LocalizedError, RuntimeError):
+    """字幕配音的领域错误。带文案 key(`dubErr_*`),按读的人的语言翻(见 core/i18n)。"""
 
 
 def dub_text(text: str, line: str = "all") -> str:
@@ -95,12 +95,12 @@ def subtitle_clip_ids(db: Session, sequence_id: str, track_id: str = "") -> list
         if track.kind == "subtitle" and (not track_id or track.id == track_id)
     ]
     if track_id and not tracks:
-        raise DubError("这条时间线上没有那条字幕轨")
+        raise DubError("dubErr_subtitleTrackNotFound")
     if not tracks:
-        raise DubError("这条时间线上没有字幕轨")
+        raise DubError("dubErr_noSubtitleTrack")
     if not track_id and len(tracks) > 1:
         # 多条字幕轨时不替用户挑:双语视频常见的形态就是原文一条、译文一条,挑错了配出来的是另一种语言。
-        raise DubError("这条时间线上有多条字幕轨,请指明配哪一条")
+        raise DubError("dubErr_multipleSubtitleTracks")
     clips = [clip for clip in db.scalars(select(Clip).where(Clip.track_id == tracks[0].id))]
     return [clip.id for clip in sorted(clips, key=lambda clip: clip.timeline_start)]
 
@@ -121,13 +121,14 @@ def start_subtitle_dub(
     try:
         ensure_original_audio_mode(original_audio)
     except OriginalAudioError as exc:
-        raise DubError(str(exc)) from exc
+        # 传 key 和参数而不是 str(exc):后者会把句子冻成此刻的语言。
+        raise DubError(exc.key, **exc.params) from exc
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
-        raise DubError("时间线不存在")
+        raise DubError("dubErr_sequenceNotFound")
     clips = _subtitle_clips(db, sequence_id, clip_ids, line)
     if not clips:
-        raise DubError("选中的字幕里没有可配音的文本")
+        raise DubError("dubErr_nothingToDub")
 
     job = create_job(
         db,
@@ -162,16 +163,19 @@ def _await_child(job_id: str) -> str:
         with SessionLocal() as db:
             child = db.get(Job, job_id)
             if child is None:
-                raise DubError("合成任务不见了")
+                raise DubError("dubErr_childMissing")
             if child.status == "succeeded":
                 asset_id = (child.result or {}).get("asset_id")
                 if not asset_id:
-                    raise DubError("合成任务报成功却没有产出音频")
+                    raise DubError("dubErr_childNoAudio")
                 return str(asset_id)
             if child.status == "failed":
-                raise DubError(child.error or "合成失败")
+                # 子任务的失败原因带 key 就接着带 key 走;不带 key 的是一句现成的话(第三方原文)。
+                if child.error_key:
+                    raise DubError(child.error_key, **(child.error_params or {}))
+                raise DubError(child.error or "dubErr_childFailed")
         time.sleep(_POLL_SECONDS)
-    raise DubError("合成任务超时")
+    raise DubError("dubErr_childTimeout")
 
 
 def _speed_for(audio_seconds: float, slot_seconds: float) -> float | None:
@@ -311,7 +315,8 @@ def _run_dub(job_id: str) -> None:
             if job is not None:
                 job.status = "failed"
                 say(job, "jobMsg_dubFailed")
-                job.error = str(exc)[:600]
+                for field, value in blame(exc).items():
+                    setattr(job, field, value)
                 emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
 

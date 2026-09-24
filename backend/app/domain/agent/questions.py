@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import AgentQuestion, AgentSession, User, now
 
 MAX_QUESTIONS = 4
@@ -26,8 +27,10 @@ MAX_HEADER_CHARS = 12
 MAX_FREE_TEXT_CHARS = 2000
 
 
-class QuestionError(ValueError):
-    """面向模型的错误。消息要说清怎么改 —— 它下一步就是改了重发。"""
+class QuestionError(LocalizedError, ValueError):
+    """面向模型的错误。消息要说清怎么改 —— 它下一步就是改了重发。
+
+    带文案 key(`questionErr_*`),按请求方的语言翻:模型读哪种都行,而界面上的提示条是给人看的。"""
 
 
 def normalize(raw: Any) -> list[dict[str, Any]]:
@@ -38,36 +41,36 @@ def normalize(raw: Any) -> list[dict[str, Any]]:
     而它们的表现都不是报错,是界面坏掉。
     """
     if not isinstance(raw, list) or not raw:
-        raise QuestionError("questions 必须是非空数组")
+        raise QuestionError("questionErr_listEmpty")
     if len(raw) > MAX_QUESTIONS:
-        raise QuestionError(f"一次最多问 {MAX_QUESTIONS} 个问题 —— 再多就该分两轮问")
+        raise QuestionError("questionErr_tooMany", max=MAX_QUESTIONS)
     out: list[dict[str, Any]] = []
     seen_questions: set[str] = set()
     for item in raw:
         if not isinstance(item, dict):
-            raise QuestionError("每个问题都得是对象")
+            raise QuestionError("questionErr_notObject")
         question = str(item.get("question") or "").strip()
         if not question:
-            raise QuestionError("question 不能为空")
+            raise QuestionError("questionErr_questionEmpty")
         if question in seen_questions:
-            raise QuestionError(f"问题重复了:{question} —— 答案按问题正文归位,重复就对不回去")
+            raise QuestionError("questionErr_duplicate", question=question)
         seen_questions.add(question)
 
         options = item.get("options")
         if not isinstance(options, list) or len(options) < 2:
-            raise QuestionError(f"「{question}」至少要给 2 个选项 —— 只有一个的话不必问")
+            raise QuestionError("questionErr_tooFewOptions", question=question)
         if len(options) > MAX_OPTIONS:
-            raise QuestionError(f"「{question}」最多 {MAX_OPTIONS} 个选项")
+            raise QuestionError("questionErr_tooManyOptions", question=question, max=MAX_OPTIONS)
         cleaned: list[dict[str, str]] = []
         seen_labels: set[str] = set()
         for option in options:
             if not isinstance(option, dict):
-                raise QuestionError("每个选项都得是对象")
+                raise QuestionError("questionErr_optionNotObject")
             label = str(option.get("label") or "").strip()
             if not label:
-                raise QuestionError("选项的 label 不能为空 —— 空的会渲染成一个点不动的按钮")
+                raise QuestionError("questionErr_optionLabelEmpty")
             if label in seen_labels:
-                raise QuestionError(f"「{question}」里选项重名:{label}")
+                raise QuestionError("questionErr_optionDuplicate", question=question, label=label)
             seen_labels.add(label)
             cleaned.append({"label": label, "description": str(option.get("description") or "").strip()})
 
@@ -106,28 +109,26 @@ def answer(db: Session, row: AgentQuestion, answers: dict[str, Any]) -> AgentQue
     **有长度上限**。它会经 `_as_user_words` 原样变成对话里的一条用户消息喂给模型。
     """
     if row.status != "pending":
-        raise QuestionError("这个问题已经回答过了")
+        raise QuestionError("questionErr_alreadyAnswered")
     allowed = {q["question"]: {o["label"] for o in q["options"]} for q in row.questions}
     cleaned: dict[str, list[str]] = {}
     for question, picked in (answers or {}).items():
         labels = allowed.get(str(question))
         if labels is None:
-            raise QuestionError(f"没有问过这个问题:{question}")
+            raise QuestionError("questionErr_notAsked", question=question)
         chosen = picked if isinstance(picked, list) else [picked]
         # 「其它」走自由文本:不在选项里的值原样收下。
         values = [str(one).strip() for one in chosen if str(one).strip()]
         if not values:
-            raise QuestionError(f"「{question}」没有选任何一项")
+            raise QuestionError("questionErr_nothingPicked", question=question)
         # **把注释里那两条写成代码。** 它们此前只是注释,而注释拦不住任何东西 ——
         # 这段文本会原样变成对话里的一条用户消息喂给模型。
         free_text = [one for one in values if one not in labels]
         if free_text and len(values) > 1:
-            raise QuestionError(f"「{question}」的自由文本只能有一条")
+            raise QuestionError("questionErr_freeTextOnlyOne", question=question)
         for one in free_text:
             if len(one) > MAX_FREE_TEXT_CHARS:
-                raise QuestionError(
-                    f"「{question}」的自由文本太长(上限 {MAX_FREE_TEXT_CHARS} 字)"
-                )
+                raise QuestionError("questionErr_freeTextTooLong", question=question, max=MAX_FREE_TEXT_CHARS)
         cleaned[str(question)] = values
     row.answers = cleaned
     row.status = "answered"

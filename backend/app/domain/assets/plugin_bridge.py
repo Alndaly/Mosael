@@ -16,10 +16,15 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Asset
 from app.domain.plugins import media_bridge
 from app.domain.plugins.errors import PluginDomainError
 from app.media.paths import resolve_key
+
+
+class AssetBridgeError(PluginDomainError, LocalizedError):
+    """素材交不给插件。仍是 PluginDomainError(插件那一侧照旧按它回 4xx),带文案 key(`assetErr_*`)。"""
 
 
 def _take(
@@ -47,16 +52,16 @@ def _give(db: Session, ref: str, *, into: Path, workspace_id: str) -> Path:
     """
     asset = db.get(Asset, ref)
     if asset is None:
-        raise PluginDomainError(f"素材不存在: {ref}")
+        raise AssetBridgeError("assetErr_notFoundRef", ref=ref)
     # **跨工作区不给。** 插件的调用方可能是智能体,而它拿到的 id 可能来自任何地方 ——
     # 这一条挡的是"用 A 工作区的连接把 B 工作区的素材传出去"。
     if asset.workspace_id != workspace_id:
-        raise PluginDomainError("这份素材不属于当前工作区")
+        raise AssetBridgeError("assetErr_otherWorkspace")
     if not asset.file_key:
-        raise PluginDomainError(f"素材 {asset.name} 还没有文件(可能仍在生成中)")
+        raise AssetBridgeError("assetErr_noFileYet", name=asset.name)
     origin = resolve_key(asset.file_key)
     if not origin.is_file():
-        raise PluginDomainError(f"素材 {asset.name} 的文件已丢失")
+        raise AssetBridgeError("assetErr_fileLost", name=asset.name)
     target = into / (asset.original_filename or asset.name or origin.name)
     shutil.copy2(origin, target)
     return target

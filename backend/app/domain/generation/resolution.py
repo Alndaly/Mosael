@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import get_generation_adapter
+from app.core.i18n import LocalizedError
 from app.db.models import (
     GenerationCapabilityDeclaration,
     GenerationCapabilityProfile,
@@ -29,8 +30,8 @@ from app.domain.generation.custom_profiles import custom_capabilities_map
 KINDS = ("image", "video")
 
 
-class GenerationResolutionError(ValueError):
-    pass
+class GenerationResolutionError(LocalizedError, ValueError):
+    """解析不出要用的生成模型 / 参数契约。带文案 key(`genErr_*`),按请求方的语言翻。"""
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ def set_declaration_refs(db: Session, model: ProviderModel, refs: dict[str, str 
     existing = declarations_for_model(db, model.id)
     for kind, raw_ref in refs.items():
         if kind not in KINDS:
-            raise GenerationResolutionError(f"未知的生成类型:{kind}")
+            raise GenerationResolutionError("genErr_unknownKind", kind=kind)
         current = existing.get(kind)
         ref = (raw_ref or "").strip()
         if not ref:
@@ -91,16 +92,16 @@ def set_declaration_refs(db: Session, model: ProviderModel, refs: dict[str, str 
             template = db.get(GenerationCapabilityProfile, candidate)
             if template is not None:
                 if template.provider_profile_id != model.provider_profile_id or template.kind != kind:
-                    raise GenerationResolutionError("参数模板不属于这条连接或生成类型不匹配")
+                    raise GenerationResolutionError("genErr_templateMismatch")
                 template_id = template.id
             elif resolve_capability_ref(ref, kind) is not None:
                 catalog_ref = ref
             else:
-                raise GenerationResolutionError("参数契约不存在")
+                raise GenerationResolutionError("genErr_contractMissing")
         elif resolve_capability_ref(ref, kind) is not None:
             catalog_ref = ref
         else:
-            raise GenerationResolutionError("参数契约不存在")
+            raise GenerationResolutionError("genErr_contractMissing")
 
         declaration = current or GenerationCapabilityDeclaration(
             provider_model_id=model.id, kind=kind
@@ -129,7 +130,7 @@ def _resolved_ref(db: Session, model: ProviderModel, kind: str) -> tuple[str | N
 def resolve_row(db: Session, model: ProviderModel, kind: str) -> ResolvedGenerationModel:
     profile = model.profile
     if profile is None:
-        raise GenerationResolutionError("生成连接不存在")
+        raise GenerationResolutionError("genErr_connectionMissing")
     ref, custom = _resolved_ref(db, model, kind)
     return ResolvedGenerationModel(
         row=model,
@@ -166,9 +167,9 @@ def resolve_generation_model(
         and (provider_profile_id is None or row.provider_profile_id == provider_profile_id)
     ]
     if not matches:
-        raise GenerationResolutionError("Generation model is not enabled or does not exist")
+        raise GenerationResolutionError("genErr_modelNotEnabled")
     if len(matches) > 1:
-        raise GenerationResolutionError("同一模型存在于多条连接，请明确选择连接")
+        raise GenerationResolutionError("genErr_modelAmbiguous")
     return resolve_row(db, matches[0], kind)
 
 

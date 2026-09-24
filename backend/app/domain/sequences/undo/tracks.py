@@ -18,7 +18,7 @@ class AddTrack:
         track = db.get(Track, payload["track_id"])
         if track is not None:
             if track.clips:
-                raise SequenceDomainError("轨道上还有片段,撤销不了「新建轨道」")
+                raise SequenceDomainError("seqErr_undoTrackHasClips")
             db.delete(track)
 
     def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:

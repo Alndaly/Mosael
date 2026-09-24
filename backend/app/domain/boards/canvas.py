@@ -25,13 +25,14 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Board, now
 
 
 logger = logging.getLogger(__name__)
 
 
-class BoardDomainError(ValueError):
+class BoardDomainError(LocalizedError, ValueError):
     pass
 
 
@@ -45,7 +46,19 @@ class BoardRevisionConflict(BoardDomainError):
     def __init__(self, base_revision: int, current_revision: int):
         self.base_revision = base_revision
         self.current_revision = current_revision
-        super().__init__(f"画板已被其他操作更新（本地 v{base_revision}，当前 v{current_revision}）")
+        super().__init__("boardErr_revisionConflict", base=base_revision, current=current_revision)
+
+
+def item_not_found(item_id: str) -> BoardNotFound:
+    """「画板项不存在」。没给 id 是另一句话 —— 把「(空)」当成 id 填进去就翻不动了。"""
+    return BoardNotFound("boardErr_itemNotFound", item_id=item_id) if item_id else BoardNotFound("boardErr_itemIdMissing")
+
+
+def _field_error(item_key: str, bare_key: str, field: str, item_id: str, **params: object) -> BoardDomainError:
+    """坐标 / 尺寸不合法。带不带「画板项 xx 的」是两句话,不是往前面拼一截。"""
+    if item_id:
+        return BoardDomainError(item_key, item_id=item_id, field=field, **params)
+    return BoardDomainError(bare_key, field=field, **params)
 
 
 #: 画板上能放什么。
@@ -75,9 +88,8 @@ RUN_STATUSES = ("idle", "queued", "running", "succeeded", "failed", "cancelled")
 def finite_number(value: Any, field: str, item_id: str = "") -> float:
     """画布上的一个坐标或尺寸。**算子那一侧共用这一个** —— 两份各写各的必然漂,而漂的那
     一半就是没挡住的那条路。"""
-    where = f"画板项 {item_id} 的 " if item_id else ""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise BoardDomainError(f"{where}{field} 必须是数字,收到 {value!r}")
+        raise _field_error("boardErr_itemFieldNotNumber", "boardErr_fieldNotNumber", field, item_id, value=repr(value))
     # NaN / Infinity 是合法的 Python float,`json.dumps` 也照写不误 —— 而写出来的
     # `{"x": NaN}` **不是合法 JSON**,浏览器 `JSON.parse` 直接抛。一张画板只要混进一个,
     # 它就再也打不开了:用户看到的是"画板坏了",而库里那份数据其实完好。
@@ -86,7 +98,7 @@ def finite_number(value: Any, field: str, item_id: str = "") -> float:
     # 而它会一路存进去、不报错。一个瞬时的计算失误换一张永久打不开的画板,不成比例。
     number = float(value)
     if number != number or number in (float("inf"), float("-inf")):
-        raise BoardDomainError(f"{where}{field} 必须是有限的数字,收到 {value!r}")
+        raise _field_error("boardErr_itemFieldNotFinite", "boardErr_fieldNotFinite", field, item_id, value=repr(value))
     return number
 
 
@@ -100,23 +112,23 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
     if value is None:
         return None
     if not isinstance(value, dict):
-        raise BoardDomainError(f"画板项 {item_id} 的 form 必须是对象")
+        raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field="form")
     form = dict(value)
     prompt = form.get("prompt")
     if prompt is not None:
         if not isinstance(prompt, str):
-            raise BoardDomainError(f"画板项 {item_id} 的 form.prompt 必须是字符串")
+            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="form.prompt")
         if len(prompt) > MAX_TEXT_CHARS:
-            raise BoardDomainError(f"画板项 {item_id} 的提示词超过 {MAX_TEXT_CHARS} 字")
+            raise BoardDomainError("boardErr_promptTooLong", item_id=item_id, limit=MAX_TEXT_CHARS)
     for field in ("provider", "provider_profile_id", "model", "mode", "voice_id"):
         if form.get(field) is not None and not isinstance(form[field], str):
-            raise BoardDomainError(f"画板项 {item_id} 的 form.{field} 必须是字符串")
+            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field=f"form.{field}")
     if form.get("parameters") is not None and not isinstance(form["parameters"], dict):
-        raise BoardDomainError(f"画板项 {item_id} 的 form.parameters 必须是对象")
+        raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field="form.parameters")
     sources = form.get("source_assets")
     if sources is not None:
         if not isinstance(sources, list) or any(not isinstance(one, dict) for one in sources):
-            raise BoardDomainError(f"画板项 {item_id} 的 form.source_assets 必须是对象数组")
+            raise BoardDomainError("boardErr_sourceAssetsNotObjects", item_id=item_id)
         form["source_assets"] = [
             {"asset_id": str(one.get("asset_id") or "").strip(), "role": str(one.get("role") or "").strip()}
             for one in sources
@@ -125,14 +137,14 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
     mentioned = form.get("mentioned_asset_ids")
     if mentioned is not None:
         if not isinstance(mentioned, list):
-            raise BoardDomainError(f"画板项 {item_id} 的 form.mentioned_asset_ids 必须是数组")
+            raise BoardDomainError("boardErr_itemFieldNotArray", item_id=item_id, field="form.mentioned_asset_ids")
         form["mentioned_asset_ids"] = [str(one).strip() for one in mentioned if str(one).strip()]
     prompt_document = form.get("prompt_document")
     if prompt_document is not None:
         if not isinstance(prompt_document, dict) or prompt_document.get("type") != "doc":
-            raise BoardDomainError(f"画板项 {item_id} 的 form.prompt_document 必须是 TipTap doc 对象")
+            raise BoardDomainError("boardErr_promptDocumentNotDoc", item_id=item_id)
         if len(json.dumps(prompt_document, ensure_ascii=False)) > MAX_TEXT_CHARS * 8:
-            raise BoardDomainError(f"画板项 {item_id} 的 form.prompt_document 过大")
+            raise BoardDomainError("boardErr_promptDocumentTooLarge", item_id=item_id)
     return form
 
 
@@ -141,22 +153,22 @@ def _normalize_run(value: Any, item_id: str) -> dict[str, Any] | None:
     if value is None:
         return None
     if not isinstance(value, dict):
-        raise BoardDomainError(f"画板项 {item_id} 的 run 必须是对象")
+        raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field="run")
     status = str(value.get("status") or "idle").strip()
     if status not in RUN_STATUSES:
-        raise BoardDomainError(f"画板项 {item_id} 的 run.status 不合法:{status}")
+        raise BoardDomainError("boardErr_runStatusInvalid", item_id=item_id, status=status)
     run: dict[str, Any] = {"status": status}
     job_id = value.get("job_id")
     if job_id is not None:
         if status not in ("queued", "running"):
-            raise BoardDomainError(f"画板项 {item_id} 已结束却仍带有 job_id")
+            raise BoardDomainError("boardErr_finishedRunHasJob", item_id=item_id)
         if not isinstance(job_id, str) or not job_id.strip():
-            raise BoardDomainError(f"画板项 {item_id} 的 run.job_id 不合法")
+            raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="run.job_id")
         run["job_id"] = job_id.strip()
     error = value.get("error")
     if error is not None:
         if not isinstance(error, str):
-            raise BoardDomainError(f"画板项 {item_id} 的 run.error 必须是字符串")
+            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error")
         if error.strip():
             run["error"] = error.strip()[:300]
     return run
@@ -171,35 +183,35 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
     if raw is None:
         return {"items": [], "edges": [], "markers": []}
     if not isinstance(raw, dict):
-        raise BoardDomainError("画布必须是一个对象")
+        raise BoardDomainError("boardErr_canvasNotObject")
 
     raw_items = raw.get("items") or []
     if not isinstance(raw_items, list):
-        raise BoardDomainError("画布的 items 必须是数组")
+        raise BoardDomainError("boardErr_canvasFieldNotArray", field="items")
     if len(raw_items) > MAX_ITEMS:
-        raise BoardDomainError(f"一张画板最多 {MAX_ITEMS} 项,收到 {len(raw_items)} 项")
+        raise BoardDomainError("boardErr_tooManyItems", limit=MAX_ITEMS, count=len(raw_items))
 
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
     for entry in raw_items:
         if not isinstance(entry, dict):
-            raise BoardDomainError("画板项必须是对象")
+            raise BoardDomainError("boardErr_itemNotObject")
         for field in _REQUIRED:
             if field not in entry:
-                raise BoardDomainError(f"画板项缺少 {field}")
+                raise BoardDomainError("boardErr_itemMissingField", field=field)
         item_id = str(entry["id"]).strip()
         if not item_id:
-            raise BoardDomainError("画板项的 id 不能为空")
+            raise BoardDomainError("boardErr_itemIdEmpty")
         # id 重了的话前端按 id 索引会**默默丢掉一个** —— 用户看到的是"我刚加的东西没了"。
         if item_id in seen:
-            raise BoardDomainError(f"画板项 id 重复:{item_id}")
+            raise BoardDomainError("boardErr_duplicateItemId", item_id=item_id)
         seen.add(item_id)
 
         kind = str(entry["kind"]).strip()
         if kind not in ITEM_KINDS:
-            raise BoardDomainError(f"未知的画板项类型:{kind};可用的是 {'、'.join(ITEM_KINDS)}")
+            raise BoardDomainError("boardErr_unknownItemKind", kind=kind, kinds=", ".join(ITEM_KINDS))
         if "job_id" in entry or "error" in entry:
-            raise BoardDomainError(f"画板项 {item_id} 使用了已停用的顶层运行态；请改用 run.status/run.job_id/run.error")
+            raise BoardDomainError("boardErr_legacyRunFields", item_id=item_id)
 
         item: dict[str, Any] = {
             "id": item_id,
@@ -211,15 +223,15 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
             if entry.get(field) is not None:
                 size = finite_number(entry[field], field, item_id)
                 if size <= 0:
-                    raise BoardDomainError(f"画板项 {item_id} 的 {field} 必须大于 0")
+                    raise BoardDomainError("boardErr_itemSizeNotPositive", item_id=item_id, field=field)
                 item[field] = size
 
         text = entry.get("text")
         if text is not None:
             if not isinstance(text, str):
-                raise BoardDomainError(f"画板项 {item_id} 的 text 必须是字符串")
+                raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="text")
             if len(text) > MAX_TEXT_CHARS:
-                raise BoardDomainError(f"画板项 {item_id} 的文字超过 {MAX_TEXT_CHARS} 字")
+                raise BoardDomainError("boardErr_textTooLong", item_id=item_id, limit=MAX_TEXT_CHARS)
             item["text"] = text
 
         form = _normalize_form(entry.get("form"), item_id)
@@ -229,28 +241,28 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         color = entry.get("color")
         if color is not None:
             if color not in NOTE_COLORS:
-                raise BoardDomainError(f"未知的颜色:{color};可用的是 {'、'.join(NOTE_COLORS)}")
+                raise BoardDomainError("boardErr_unknownColor", color=color, colors=", ".join(NOTE_COLORS))
             item["color"] = color
 
         if kind == "document":
             note_id, revision = entry.get("note_id"), entry.get("note_revision")
             if note_id is not None or revision is not None:
                 if not isinstance(note_id, str) or not note_id.strip() or len(note_id) > 64:
-                    raise BoardDomainError("文档节点需要有效的笔记 ID")
+                    raise BoardDomainError("boardErr_documentNeedsNote")
                 if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
-                    raise BoardDomainError("文档节点需要有效的引用版本")
+                    raise BoardDomainError("boardErr_documentNeedsRevision")
                 item["note_id"], item["note_revision"] = note_id.strip(), revision
 
         if kind == "scene":
             scene_id = entry.get("scene_id")
             if not isinstance(scene_id, str) or not scene_id.strip():
-                raise BoardDomainError("3D 场景节点需要 scene_id")
+                raise BoardDomainError("boardErr_sceneNeedsId")
             item["scene_id"] = scene_id.strip()
 
         asset_id = entry.get("asset_id")
         if asset_id is not None:
             if not isinstance(asset_id, str) or not asset_id.strip():
-                raise BoardDomainError(f"画板项 {item_id} 的 asset_id 不合法")
+                raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="asset_id")
             item["asset_id"] = asset_id.strip()
 
         # 分组框「联动拖动」:开着的时候,拖动这个框会把框里的东西一起带走。
@@ -260,9 +272,9 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         move_children = entry.get("move_children")
         if move_children is not None:
             if not isinstance(move_children, bool):
-                raise BoardDomainError(f"画板项 {item_id} 的 move_children 必须是布尔值")
+                raise BoardDomainError("boardErr_itemFieldNotBool", item_id=item_id, field="move_children")
             if kind != "frame":
-                raise BoardDomainError(f"只有分组框有 move_children,{kind} 没有")
+                raise BoardDomainError("boardErr_moveChildrenFrameOnly", kind=kind)
             item["move_children"] = move_children
 
         # 正在生成的那一项:还没有素材,但有一个任务在跑。任务落终态时由回执把 asset_id
@@ -283,21 +295,21 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
 
     raw_edges = raw.get("edges") or []
     if not isinstance(raw_edges, list):
-        raise BoardDomainError("画布的 edges 必须是数组")
+        raise BoardDomainError("boardErr_canvasFieldNotArray", field="edges")
     edges: list[dict[str, Any]] = []
     for entry in raw_edges:
         if not isinstance(entry, dict):
-            raise BoardDomainError("连线必须是对象")
+            raise BoardDomainError("boardErr_edgeNotObject")
         source = str(entry.get("source") or "").strip()
         target = str(entry.get("target") or "").strip()
         # 连到不存在的项上,渲染时是一根悬空的线。存之前就把它挡住。
         if source not in seen or target not in seen:
-            raise BoardDomainError(f"连线两端必须都是画板上的项:{source} → {target}")
+            raise BoardDomainError("boardErr_edgeDangling", source=source, target=target)
         edge: dict[str, Any] = {"id": str(entry.get("id") or f"{source}->{target}"), "source": source, "target": target}
         label = entry.get("label")
         if label is not None:
             if not isinstance(label, str):
-                raise BoardDomainError("连线的 label 必须是字符串")
+                raise BoardDomainError("boardErr_edgeLabelNotString")
             edge["label"] = label[:200]
         edges.append(edge)
 
@@ -308,7 +320,8 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
     try:
         markers = normalize_markers(raw.get("markers"))
     except MarkerError as exc:
-        raise BoardDomainError(str(exc)) from exc
+        # 带着 key/params 转手,不 str(exc):那会把句子冻成转手这一刻的语言。
+        raise BoardDomainError(exc.key, **exc.params) from exc
 
     return {"items": items, "edges": edges, "markers": markers}
 
@@ -325,7 +338,7 @@ def get_board(db: Session, workspace_id: str, board_id: str) -> Board:
     board = db.get(Board, board_id)
     # 按工作区再验一次:拿到别的工作区的 id 也不该读得出来。
     if board is None or board.workspace_id != workspace_id:
-        raise BoardNotFound("画板不存在")
+        raise BoardNotFound("boardErr_notFound")
     return board
 
 
@@ -342,7 +355,7 @@ def _validate_scene_references(db: Session, workspace_id: str, canvas: dict, exi
     if ids:
         owned = set(db.scalars(select(Scene3D.id).where(Scene3D.workspace_id == workspace_id, Scene3D.id.in_(ids))))
         if owned != ids:
-            raise BoardDomainError('3D 场景不属于当前工作区')
+            raise BoardDomainError("boardErr_sceneNotInWorkspace")
 
     from app.domain.notes import NoteDomainError, read_reference
     # Existing broken references remain movable/removable after a source is deleted.
@@ -418,7 +431,7 @@ def update_board(
     if name is not None:
         cleaned = name.strip()
         if not cleaned:
-            raise BoardDomainError("画板名不能为空")
+            raise BoardDomainError("boardErr_nameEmpty")
         next_name = cleaned
     if canvas is not None:
         normalized = normalize_canvas(canvas)
@@ -599,13 +612,13 @@ def set_text_write_run(
 ) -> Board:
     """同步便签写作的运行态也落在节点内；失败时不碰表单，用户可以原样重试。"""
     if status not in ("running", "failed"):
-        raise BoardDomainError(f"便签写作状态不合法:{status}")
+        raise BoardDomainError("boardErr_textRunStatusInvalid", status=status)
     board = get_board(db, workspace_id, board_id)
     canvas = dict(board.canvas or {"items": [], "edges": []})
     items = [dict(one) for one in (canvas.get("items") or [])]
     index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
     if index is None:
-        raise BoardNotFound(f"画板项不存在:{item_id or '(空)'}")
+        raise item_not_found(item_id)
     run = {"status": status}
     if error.strip():
         run["error"] = error.strip()[:300]
@@ -643,7 +656,7 @@ def write_text(
     items = [dict(one) for one in (canvas.get("items") or [])]
     index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
     if index is None:
-        raise BoardNotFound(f"画板项不存在:{item_id or '(空)'}")
+        raise item_not_found(item_id)
     updated = {**items[index], "text": text}
     if reset_form:
         form = dict(completed_form if completed_form is not None else updated.get("form") or {})

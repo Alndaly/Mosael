@@ -11,10 +11,11 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import AgentVoicePref
 
 
-class AgentVoiceNotConfigured(RuntimeError):
+class AgentVoiceNotConfigured(LocalizedError, RuntimeError):
     """还没选过对话音色。**这不是故障** —— 界面据此提示去设置里选一个,而不是报错。"""
 
 
@@ -59,8 +60,5 @@ def require(db: Session, user_id: str) -> AgentVoicePref:
     """拿这个人的对话音色,没设过就说没设 —— 不替他挑一个。"""
     row = get_row(db, user_id)
     if row is None or not row.enabled or not row.engine:
-        raise AgentVoiceNotConfigured(
-            "还没有选语音对话的音色 —— 到设置的「语音对话」里选一个。"
-            "它和配音的默认音色是分开的:配音要质量,对话要快。"
-        )
+        raise AgentVoiceNotConfigured("voiceErr_agentVoiceNotConfigured")
     return row

@@ -25,14 +25,15 @@ from app.domain.generation.catalog import (
     known_capabilities_for,
 )
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
+from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
 
 
-class GenerationDomainError(ValueError):
-    pass
+class GenerationDomainError(LocalizedError, ValueError):
+    """生成提交被拒。带文案 key(`genErr_*`,见 core/i18n),按请求方的语言翻。"""
 
 
 def requested_negative_prompt(negative_prompt: str, parameters: dict[str, Any]) -> str:
@@ -75,11 +76,11 @@ def create_generation_job(
             provider_profile_id=provider_profile_id,
         )
     except GenerationResolutionError as exc:
-        raise GenerationDomainError(str(exc)) from exc
+        raise GenerationDomainError(exc.key, **exc.params) from exc
     provider_profile = resolved.row.profile
     provider = resolved.provider
     if get_generation_adapter(provider, kind) is None:
-        raise GenerationDomainError(f"Generation adapter is not available for {provider}/{kind}")
+        raise GenerationDomainError("genErr_adapterUnavailable", provider=provider, kind=kind)
 
     validate_against_capabilities(
         provider,
@@ -155,7 +156,7 @@ def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, st
 
     default = provider_models.resolve_default(db, kind, user_id)
     if default is None or default.profile is None:
-        raise GenerationDomainError("还没有可用的生成模型,先去设置里配一个")
+        raise GenerationDomainError("genErr_noDefaultModel")
     return default.profile.vendor, default.model_id, default.provider_profile_id
 
 
@@ -187,10 +188,11 @@ def _validate_source_assets(
         asset_id = str(entry.get("asset_id") or "").strip()
         role = str(entry.get("role") or FIRST_FRAME)
         asset = db.get(Asset, asset_id)
-        label = SOURCE_ROLE_LABELS.get(role, role)
+        label = _label(role)
         if asset is None or asset.workspace_id != workspace_id:
-            short = f"（{asset_id[:12]}…）" if asset_id else ""
-            raise GenerationDomainError(f"{label}素材{short}已删除或不在当前工作区，请重新连接或选择")
+            if asset_id:
+                raise GenerationDomainError("genErr_sourceGone", label=label, id=asset_id[:12])
+            raise GenerationDomainError("genErr_sourceGoneNoId", label=label)
 
         if role in url_only and not direct_media_url((asset.media_info or {}).get("source_url")):
             # **多走一步,而不是把问题退回给用户。** 这一项只收链接,而素材是本地的 ——
@@ -208,7 +210,7 @@ def _validate_source_assets(
                     asset_id=asset.id, asset_name=asset.name,
                 )
             except NoUploader as exc:
-                raise GenerationDomainError(str(exc)) from exc
+                raise GenerationDomainError(exc.key, **exc.params) from exc
             uploaded[role] = url
             logger.info("%s:「%s」经「%s」换到公网直链", label, asset.name, via)
     return uploaded
@@ -224,7 +226,7 @@ def _resolve_provider_profile(
         return None
     profile = db.get(ProviderProfile, provider_profile_id)
     if profile is None or not profile.enabled or (owner_user_id is not None and profile.owner_user_id != owner_user_id):
-        raise GenerationDomainError("Generation provider profile is not available")
+        raise GenerationDomainError("genErr_connectionUnavailable")
     return profile
 
 
@@ -279,7 +281,7 @@ DEFAULT_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE}
 def keep_source_group(sources: list[dict[str, str]], group: str) -> list[dict[str, str]]:
     """只留这一组(以及两组之外的角色,例如待编辑的视频);`all` 原样返回。分组见 catalog.SOURCE_GROUPS。"""
     if group not in SOURCE_GROUPS:
-        raise GenerationDomainError(f"素材分组只能是 {' / '.join(SOURCE_GROUPS)}")
+        raise GenerationDomainError("genErr_sourceGroup", groups=" / ".join(SOURCE_GROUPS))
     dropped = set(SOURCE_GROUP_DROPS.get(group, ()))
     return [source for source in sources if source["role"] not in dropped]
 
@@ -335,7 +337,7 @@ def parse_source_assets(value: Any, *, kind: str) -> list[dict[str, str]]:
         if not asset_id:
             continue
         if role not in SOURCE_ROLES:
-            raise GenerationDomainError(f"未知的素材角色:{role}")
+            raise GenerationDomainError("genErr_unknownRole", role=role)
         out.append({"asset_id": asset_id, "role": role})
     return out
 
@@ -377,16 +379,16 @@ def _integer_parameter(provider: str, model: str, name: str, value: Any) -> int:
     numbers must not be truncated by ``int()`` (``5.9`` silently becoming five seconds).
     """
     if isinstance(value, bool):
-        raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是整数")
+        raise GenerationDomainError("genErr_notInteger", provider=provider, model=model, name=name)
     if isinstance(value, int):
         return value
     if isinstance(value, float):
         if value.is_integer():
             return int(value)
-        raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是整数")
+        raise GenerationDomainError("genErr_notInteger", provider=provider, model=model, name=name)
     text = str(value).strip()
     if not re.fullmatch(r"-?\d+", text):
-        raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是整数")
+        raise GenerationDomainError("genErr_notInteger", provider=provider, model=model, name=name)
     return int(text)
 
 
@@ -420,20 +422,25 @@ def validate_against_capabilities(
     unknown = sorted(set(parameters) - allowed)
     if unknown:
         raise GenerationDomainError(
-            f"{provider}/{model} 不支持这些参数:{'、'.join(unknown)};可用的是:{'、'.join(sorted(keys))}"
+            "genErr_unknownParams", provider=provider, model=model,
+            unknown=_join(unknown), allowed=_join(sorted(keys)),
         )
     for name in capabilities.get("boolean_parameters") or ():
         if name in parameters and not isinstance(parameters[name], bool):
-            raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是布尔值 true/false")
+            raise GenerationDomainError("genErr_notBoolean", provider=provider, model=model, name=name)
     for name, choices_key in (("size", "sizes"), ("resolution", "resolutions"), ("aspect_ratio", "aspect_ratios")):
         choices = capabilities.get(choices_key)
         value = parameters.get(name)
         if choices and value and str(value) not in [str(one) for one in choices]:
-            raise GenerationDomainError(f"{provider}/{model} 的 {name} 只能是:{'、'.join(str(c) for c in choices)}")
+            raise GenerationDomainError(
+                "genErr_choiceOnly", provider=provider, model=model, name=name, choices=_join(choices)
+            )
     for name, choices in (capabilities.get("parameter_choices") or {}).items():
         value = parameters.get(name)
         if choices and value is not None and str(value) not in [str(one) for one in choices]:
-            raise GenerationDomainError(f"{provider}/{model} 的 {name} 只能是:{'、'.join(str(c) for c in choices)}")
+            raise GenerationDomainError(
+                "genErr_choiceOnly", provider=provider, model=model, name=name, choices=_join(choices)
+            )
     # 时长有两种形状:**枚举**(只收这几个档)或**区间**(min..max 内的任意整数)。
     # 只校验枚举的话,区间型的模型这里全放行,越界的值要等供应商拒了才知道 —— 而那时
     # 任务已经建好、扣了一次配额,报的还是一句英文的 InvalidParameter。
@@ -447,7 +454,7 @@ def validate_against_capabilities(
         elif durations:
             if numeric_duration not in [int(one) for one in durations]:
                 raise GenerationDomainError(
-                    f"{provider}/{model} 的时长只能是:{'、'.join(str(one) for one in durations)} 秒"
+                    "genErr_durationChoices", provider=provider, model=model, choices=_join(durations)
                 )
         else:
             low = capabilities.get("min_duration_seconds")
@@ -456,25 +463,30 @@ def validate_against_capabilities(
             outside_range = outside_range or (low is not None and numeric_duration < int(low))
             outside_range = outside_range or (high is not None and numeric_duration > int(high))
             if outside_range:
-                special = f"，或 {'、'.join(str(one) for one in special_durations)}（自动）" if special_durations else ""
+                if special_durations:
+                    raise GenerationDomainError(
+                        "genErr_durationRangeOrAuto", provider=provider, model=model,
+                        low=low or 1, high=high, special=_join(special_durations),
+                    )
                 raise GenerationDomainError(
-                    f"{provider}/{model} 的时长要在 {low or 1}–{high} 秒之间{special}"
+                    "genErr_durationRange", provider=provider, model=model, low=low or 1, high=high
                 )
         resolution = str(parameters.get("resolution") or "")
         duration_by_resolution = capabilities.get("duration_by_resolution") or {}
         resolution_durations = duration_by_resolution.get(resolution)
         if resolution_durations and numeric_duration not in [int(one) for one in resolution_durations]:
             raise GenerationDomainError(
-                f"{provider}/{model} 的 {resolution} 分辨率只支持 "
-                f"{'、'.join(str(one) for one in resolution_durations)} 秒"
+                "genErr_durationForResolution", provider=provider, model=model,
+                resolution=resolution, choices=_join(resolution_durations),
             )
     counts: Counter[str] = Counter()
     for entry in source_assets:
         role = entry.get("role") or ""
         if role not in allowed:
+            supported = [one for one in keys if one in SOURCE_ROLES]
             raise GenerationDomainError(
-                f"{provider}/{model} 不支持「{role}」这种素材;它支持的是:"
-                f"{'、'.join(one for one in keys if one in SOURCE_ROLES) or '无'}"
+                "genErr_roleUnsupported", provider=provider, model=model, role=role,
+                supported=_join(supported) if supported else tr("genErr_none"),
             )
         counts[role] += 1
     # 外链与素材库同权:`<role>_url` 供的角色也计入 —— 只数 source_assets 的话,
@@ -502,18 +514,27 @@ def _check_conditional_duration(
     for role, cap in (capabilities.get("conditional_max_duration_seconds") or {}).items():
         if counts.get(role) and int(duration) > int(cap):
             raise GenerationDomainError(
-                f"{provider}/{model} 挂了{_label(role)}时,时长最多 {cap} 秒(不挂能到 "
-                f"{capabilities.get('max_duration_seconds')} 秒)"
+                "genErr_durationCapWithRole", provider=provider, model=model, label=_label(role),
+                cap=cap, max=capabilities.get("max_duration_seconds"),
             )
 
 
 #: 角色的中文名住在描述符那一层(catalog.SOURCE_ROLE_LABELS),这里只是读它 —— 报错要说人话:
 #: 用户在界面上看到的是「参考图」,不是 reference_image。此前这张表在这里另存了一份,
 #: 而三份表里漏掉哪一份都不会报错。
+#:
+#: 报错按请求方的语言说,所以名字取的是文案 `genRole_<role>`(zh 与 SOURCE_ROLE_LABELS 一致,
+#: 有测试钉着)。**在抛出的那一刻按当前语言渲染**:这些校验都在提交那一次请求里同步发生,
+#: 读的人就是发请求的人。认不出的角色原样返回,不猜。
 
 
 def _label(role: str) -> str:
-    return SOURCE_ROLE_LABELS.get(role, role)
+    return tr(f"genRole_{role}") if role in SOURCE_ROLE_LABELS else role
+
+
+def _join(items: Any, sep_key: str = "punct_listSep") -> str:
+    """把一串值按当前语言的连接号连起来(中文顿号、英文逗号;`genErr_orSep` 是「或」)。"""
+    return tr(sep_key).join(str(one) for one in items)
 
 
 def _check_source_counts(
@@ -534,7 +555,7 @@ def _check_source_counts(
         cap = limits.get(role)
         if cap is not None and count > int(cap):
             raise GenerationDomainError(
-                f"{provider}/{model} 最多收 {cap} 份{_label(role)},这次给了 {count} 份"
+                "genErr_tooManySources", provider=provider, model=model, cap=cap, label=_label(role), count=count
             )
 
     # 参考图还有个**下限**,而且只有可灵有:它的多图参考是先拿几张图建一个主体,
@@ -544,18 +565,16 @@ def _check_source_counts(
     given = counts.get("reference_image", 0)
     if floor and given and given < int(floor):
         raise GenerationDomainError(
-            f"{provider}/{model} 的多图参考至少要 {floor} 张参考图"
-            f"(第一张是正面图,其余是其他角度),这次只给了 {given} 张"
+            "genErr_tooFewReferences", provider=provider, model=model, floor=floor, given=given
         )
 
     used = {role for role, count in counts.items() if count}
     groups = [set(group) for group in capabilities.get("exclusive_source_groups") or []]
     touched = [group for group in groups if group & used]
     if len(touched) > 1:
-        names = ["、".join(_label(r) for r in sorted(group & used)) for group in touched]
+        names = [_join(_label(r) for r in sorted(group & used)) for group in touched]
         raise GenerationDomainError(
-            f"{provider}/{model} 的{' 和 '.join(names)}不能一起用:"
-            "它们对应不同的生成模式,一次只能选择一组。"
+            "genErr_exclusiveSources", provider=provider, model=model, names=_join(names, "genErr_andSep")
         )
 
     # 每一条是「这几种里至少给一份」。写成嵌套而不是平铺的一串,是因为两种要求都真实存在:
@@ -563,12 +582,13 @@ def _check_source_counts(
     for options in capabilities.get("requires_source") or []:
         if not (set(options) & used):
             raise GenerationDomainError(
-                f"{provider}/{model} 必须给一份{'或'.join(_label(one) for one in options)}"
+                "genErr_sourceRequired", provider=provider, model=model,
+                options=_join((_label(one) for one in options), "genErr_orSep"),
             )
 
     for role, companions in (capabilities.get("requires_companion") or {}).items():
         if role in used and not (set(companions) & used):
             raise GenerationDomainError(
-                f"{provider}/{model} 的{_label(role)}不能单独使用,"
-                f"要搭配{'或'.join(_label(one) for one in companions)}一起给"
+                "genErr_companionRequired", provider=provider, model=model, label=_label(role),
+                companions=_join((_label(one) for one in companions), "genErr_orSep"),
             )
