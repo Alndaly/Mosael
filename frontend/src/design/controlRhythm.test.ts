@@ -182,8 +182,15 @@ const classOf = (attrs: string) => {
   const m = attrs.match(/className=(?:"([^"]*)"|\{`([^`]*)`|\{cn\(([\s\S]*?)\)\s*\}|\{"([^"]*)")/);
   return m ? (m[1] ?? m[2] ?? m[3] ?? m[4] ?? "") : "";
 };
+/**
+ * 这几个组件的高度是**写在自己身上的工具类**(`h-10` / `size-7` …),在 `@layer utilities` 里。
+ * 功能页样式表都包在 `@layer components` 里(见 unlayeredGlobals.test.ts),分层 CSS 永远压不过
+ * 工具类 —— 所以 `.scene-blender-connection [role="combobox"] { height: 32px }` 这种写法在浏览器里
+ * 不算数,而这条棘轮此前把它当真了:测试说 32/32,屏幕上是 40/32。对它们只认调用点的 class 和尺寸档。
+ */
+const SIZED_BY_UTILITY = new Set(["Button", "Input", "SelectTrigger", "Pick"]);
 function measure(tag: string, attrs: string, parentClass: string | undefined): number | null {
-  for (const name of (parentClass ?? "").split(/\s+/).filter(Boolean)) {
+  for (const name of SIZED_BY_UTILITY.has(tag) ? [] : (parentClass ?? "").split(/\s+/).filter(Boolean)) {
     const scoped = height(`${name} ${tag}`)
       ?? (tag === "Pick" || tag === "SelectTrigger" ? height(`${name} [role="combobox"]`) : null);
     if (scoped != null) return scoped;
@@ -216,16 +223,21 @@ const TAG = /<(\/?)([A-Za-z][\w.]*)((?:"[^"]*"|'[^']*'|\{(?:[^{}]|\{(?:[^{}]|\{[
 /** 一行里最高与最矮相差这么多才算参差 —— 1-2px 的差是字体度量,不是刻度选错。 */
 const TOLERANCE = 3;
 
-type Frame = { tag: string; cls: string; row: ReturnType<typeof rowOf>; kids: number[]; self: number | null; pad: number };
+/** `utility`:其中由组件自带工具类定高的那些(见 SIZED_BY_UTILITY)—— 行被分层 CSS「钉住」时它们照样要比。 */
+type Frame = { tag: string; cls: string; row: ReturnType<typeof rowOf>; kids: number[]; utility: number[]; self: number | null; pad: number };
 
 function scan(file: string) {
   const src = readFileSync(file, "utf8");
   const found: { heights: number[] }[] = [];
   const stack: Frame[] = [];
   const close = (frame: Frame): number | null => {
-    if (frame.row && !(frame.cls && [...frame.cls.split(/\s+/)].some((n) => pinned.has(n)))) {
-      const spread = frame.kids.length > 1 ? Math.max(...frame.kids) - Math.min(...frame.kids) : 0;
-      if (spread >= TOLERANCE) found.push({ heights: [...new Set(frame.kids)].sort((a, b) => a - b) });
+    if (frame.row) {
+      // 被 `.row > * { height }` 钉住的行,CSS 管得住的只有普通元素;按钮/输入框/下拉框的高度是
+      // 它们自己的工具类,分层 CSS 压不过(线上:Blender 互通浮层里 40px 的下拉配 32px 的按钮)。
+      const isPinned = frame.cls && [...frame.cls.split(/\s+/)].some((n) => pinned.has(n));
+      const kids = isPinned ? frame.utility : frame.kids;
+      const spread = kids.length > 1 ? Math.max(...kids) - Math.min(...kids) : 0;
+      if (spread >= TOLERANCE) found.push({ heights: [...new Set(kids)].sort((a, b) => a - b) });
     }
     if (frame.self != null) return frame.self;
     return frame.kids.length ? Math.max(...frame.kids) + frame.pad : null;
@@ -239,19 +251,25 @@ function scan(file: string) {
       if (!frame) continue;
       const outer = close(frame);
       const up = stack[stack.length - 1];
-      if (up?.row && outer != null && !TEXT.has(frame.tag) && !PORTALED.has(frame.tag)) up.kids.push(outer);
+      if (up?.row && outer != null && !TEXT.has(frame.tag) && !PORTALED.has(frame.tag)) {
+        up.kids.push(outer);
+        if (SIZED_BY_UTILITY.has(frame.tag)) up.utility.push(outer);
+      }
       continue;
     }
     const parent = stack[stack.length - 1];
     const own = measure(tag, attrs, parent?.cls);
     if (self) {
-      if (parent?.row && own != null && !TEXT.has(tag) && !PORTALED.has(tag)) parent.kids.push(own);
+      if (parent?.row && own != null && !TEXT.has(tag) && !PORTALED.has(tag)) {
+        parent.kids.push(own);
+        if (SIZED_BY_UTILITY.has(tag)) parent.utility.push(own);
+      }
       continue;
     }
     const cls = classOf(attrs);
     const at = decls.get(cls.split(/\s+/).find((n) => decls.has(n)) ?? "");
     const padding = at ? blockPadding(at) : null;
-    stack.push({ tag, cls, row: rowOf(attrs, tag), kids: [], self: own, pad: padding ? padding[0] + padding[1] : 0 });
+    stack.push({ tag, cls, row: rowOf(attrs, tag), kids: [], utility: [], self: own, pad: padding ? padding[0] + padding[1] : 0 });
   }
   while (stack.length) {
     const frame = stack.pop()!;
