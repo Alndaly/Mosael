@@ -39,6 +39,8 @@ from app.core.config import settings
 from app.core.text import blame_line
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
+from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure, with_log
+from app.core.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +465,7 @@ def _resolve_python(engine: str) -> str:
         probe = run_logged([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120, what="转写引擎探测", level=logging.DEBUG)
         if probe.returncode == 0:
             return str(python)
-    raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 MOSAEL_ASR_PYTHON")
+    raise RuntimeSetupError("runtimeErr_asrPythonMissing", engine=engine)
 
 
 def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> None:
@@ -487,7 +489,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     key = progress_key or engine
     requirements = ENGINE_REQUIREMENTS.get(engine)
     if not requirements:
-        raise RuntimeError(f"不认识的转写引擎:{engine}")
+        raise RuntimeSetupError("runtimeErr_unknownAsrEngine", engine=engine)
 
     # **装,一律进这个引擎自己的目录。** 共用的那个只在探测里读(见 candidate_pythons)。
     venv_dir = managed_venv_dir(engine)
@@ -499,12 +501,12 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
         # 然后把 uvicorn "端口已占用" 的日志当成"创建失败的原因"端给用户。
         base = interpreter.base_python()
         if not base:
-            raise RuntimeError("找不到可用于创建运行环境的 Python 解释器")
+            raise RuntimeSetupError("runtimeErr_noBasePython")
         created = run_logged(
             [base, "-m", "venv", str(venv_dir)],
             capture_output=True, text=True, timeout=600, what="创建转写运行环境")
         if created.returncode != 0 or not venv_python.is_file():
-            raise RuntimeError(f"创建运行环境失败:{blame_line(created.stderr or created.stdout, fallback='没有留下原因')}")
+            raise venv_failure(created.stderr or created.stdout)
 
     _store.set(key, DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": engine}))
     # **和克隆走同一个安装器**,包括设置页那个 pip 镜像 —— 此前这里没带,于是同一台机器上
@@ -523,7 +525,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
             index_url=tts_config.get().pip_index_url,
         )
     except pip_install.PipInstallError as exc:
-        raise RuntimeError(f"安装 {engine} 运行依赖失败:{exc}") from exc
+        raise RuntimeSetupError("runtimeErr_depsFailed", engine=engine, detail=str(exc)) from exc
     clear_runtime_probes()
 
 
@@ -542,7 +544,7 @@ def start_download(model_id: str) -> dict[str, Any]:
     # 一次性子进程里,同时装不会互相弄坏。只拒绝"这一个已经在下了"。
     live = _store.get(model_id)
     if live is not None and live.status == "downloading":
-        raise RuntimeError(f"{entry.label} 已经在下载中")
+        raise RuntimeSetupError("runtimeErr_alreadyDownloading", name=tr(entry.label))
     # 分母先留空:接下来可能是"装运行环境"(pip,量纲完全不同),真正开始拉模型时再填上。
     _store.set(model_id, DownloadProgress(status="downloading", message="dlMsg_preparingShort"))
     threading.Thread(target=_run_download, args=(model_id,), daemon=True).start()
@@ -569,7 +571,8 @@ def _run_download(model_id: str) -> None:
         _download_body(model_id)
     except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
         logger.exception("model download failed")
-        _store.set(model_id, DownloadProgress(status="failed", message=str(exc)[:400]))
+        message, params = failure_message(exc)
+        _store.set(model_id, DownloadProgress(status="failed", message=message, params=params))
 
 
 def _download_body(model_id: str) -> None:
@@ -582,7 +585,8 @@ def _download_body(model_id: str) -> None:
         ensure_engine_runtime(entry.engine, progress_key=model_id)
         python = _resolve_python(entry.engine)
     except Exception as exc:  # noqa: BLE001
-        _store.set(model_id, DownloadProgress(status="failed", message=str(exc)[:400]))
+        message, params = failure_message(exc)
+        _store.set(model_id, DownloadProgress(status="failed", message=message, params=params))
         return
 
     started = time.monotonic()
@@ -638,11 +642,11 @@ def _download_body(model_id: str) -> None:
             f"模型 {model_id} · 引擎 {entry.engine}\n退出码 {proc.returncode}\n\n{stderr or '(子进程什么都没说)'}\n",
             kind="worker", what=f"asr-{model_id}",
         )
-        reason = blame_line(stderr or "") or "dlMsg_processDied"
-        if path is not None and reason != "dlMsg_processDied":
-            reason = f"{reason[:400]}\n完整日志:{path}"
+        blamed = blame_line(stderr or "")
+        # 「完整日志:…」那半句不拼进原因里(拼进去就只剩一种语言),见 errors.with_log。
+        message, params = with_log(blamed[:400], {}, path) if blamed else ("dlMsg_processDied", {})
         logger.warning("下载 %s 失败(完整输出见 %s)", model_id, path)
-        _store.set(model_id, DownloadProgress(status="failed", message=reason))
+        _store.set(model_id, DownloadProgress(status="failed", message=message, params=params))
     try:
         output_path.unlink(missing_ok=True)
     except OSError:

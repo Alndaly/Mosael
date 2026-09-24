@@ -170,7 +170,7 @@ class Test引擎的挑法:
         from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
         from app.ai.providers.registry import _index_denoise_adapters
 
-        with pytest.raises(RuntimeError, match="重复"):
+        with pytest.raises(RuntimeError, match="duplicate"):
             _index_denoise_adapters((FfmpegDenoiseAdapter(), FfmpegDenoiseAdapter()))
 
     def test_节点上的选项就是注册表里那几个(self) -> None:

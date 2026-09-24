@@ -23,6 +23,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core.i18n import LocalizedError
 from app.ai.providers.adapters.bytedance.volcano.podcast_protocol import EventType, PodcastProtocolMessage, MessageType, MessageFlags, parse_message
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,10 @@ MAX_ROUNDS = 60
 MAX_ROUND_CHARS = 280
 
 
-class PodcastSynthesisError(RuntimeError):
-    """Raised when the podcast cannot be produced, carrying 火山's message where there is one."""
+class PodcastSynthesisError(LocalizedError, RuntimeError):
+    """Raised when the podcast cannot be produced, carrying 火山's message where there is one.
+
+    带文案 key(`providerErr_podcast*`,见 core/i18n),按读的人的语言翻;火山回的原话放进 `detail`。"""
 
 
 class PodcastAction:
@@ -150,14 +153,18 @@ async def _run(
         await socket.send(_control(EventType.StartConnection, b"{}"))
         started = parse_message(await asyncio.wait_for(socket.recv(), HANDSHAKE_TIMEOUT))
         if started.event != EventType.ConnectionStarted:
-            raise PodcastSynthesisError(f"播客连接被拒绝:{started.payload.decode('utf-8', 'replace')[:200]}")
+            raise PodcastSynthesisError(
+                "providerErr_podcastConnectRejected", detail=started.payload.decode('utf-8', 'replace')[:200]
+            )
 
         await socket.send(
             _control(EventType.StartSession, json.dumps(payload).encode("utf-8"), session_id)
         )
         session = parse_message(await asyncio.wait_for(socket.recv(), HANDSHAKE_TIMEOUT))
         if session.event != EventType.SessionStarted:
-            raise PodcastSynthesisError(f"播客会话启动失败:{session.payload.decode('utf-8', 'replace')[:200]}")
+            raise PodcastSynthesisError(
+                "providerErr_podcastSessionStartFailed", detail=session.payload.decode('utf-8', 'replace')[:200]
+            )
 
         await socket.send(_control(EventType.FinishSession, b"{}", session_id))
 
@@ -165,8 +172,9 @@ async def _run(
             frame = parse_message(await asyncio.wait_for(socket.recv(), FRAME_TIMEOUT))
             if frame.type == MessageType.Error:
                 raise PodcastSynthesisError(
-                    f"播客生成失败(code={frame.error_code}):"
-                    f"{frame.payload.decode('utf-8', 'replace')[:200]}"
+                    "providerErr_podcastFailed",
+                    code=frame.error_code,
+                    detail=frame.payload.decode("utf-8", "replace")[:200],
                 )
             if frame.type == MessageType.AudioOnlyServer:
                 result.audio += frame.payload
@@ -181,7 +189,9 @@ async def _run(
             if frame.event in (EventType.PodcastEnd, EventType.SessionFinished):
                 break
             if frame.event == EventType.SessionFailed:
-                raise PodcastSynthesisError(f"播客会话失败:{frame.payload.decode('utf-8', 'replace')[:200]}")
+                raise PodcastSynthesisError(
+                    "providerErr_podcastSessionFailed", detail=frame.payload.decode('utf-8', 'replace')[:200]
+                )
 
         try:
             await socket.send(_control(EventType.FinishConnection, b"{}"))
@@ -191,7 +201,7 @@ async def _run(
             logger.debug("podcast FinishConnection not delivered", exc_info=True)
 
     if not result.audio:
-        raise PodcastSynthesisError("播客返回了空音频")
+        raise PodcastSynthesisError("providerErr_podcastEmptyAudio")
     return result
 
 
@@ -214,22 +224,22 @@ def synthesize_volcano_podcast(
     would mean each of them running its own event loop anyway.
     """
     if not appid or not token:
-        raise PodcastSynthesisError("火山播客需要 App ID 和 Access Token(不是语音合成的 API Key)")
+        raise PodcastSynthesisError("providerErr_podcastCredentialsMissing")
     chosen = [voice for voice in (speakers or []) if voice]
     if action in (PodcastAction.SUMMARIZE, PodcastAction.RESEARCH) and len(chosen) != 2:
-        raise PodcastSynthesisError("AI 生成对话需要正好两个发音人")
+        raise PodcastSynthesisError("providerErr_podcastNeedsTwoSpeakers")
     if action == PodcastAction.SUMMARIZE and not input_text.strip():
-        raise PodcastSynthesisError("请提供要改写成对话的文本")
+        raise PodcastSynthesisError("providerErr_podcastNeedsInputText")
     if action == PodcastAction.RESEARCH and not prompt_text.strip():
-        raise PodcastSynthesisError("请提供要检索并讨论的主题")
+        raise PodcastSynthesisError("providerErr_podcastNeedsTopic")
 
     nlp_texts = None
     if action == PodcastAction.READ:
         if not chosen:
-            raise PodcastSynthesisError("朗读模式需要至少一个发音人")
+            raise PodcastSynthesisError("providerErr_podcastReadNeedsSpeaker")
         rounds = split_to_rounds(input_text, dual=len(chosen) > 1)
         if not rounds:
-            raise PodcastSynthesisError("请提供要朗读的文本")
+            raise PodcastSynthesisError("providerErr_podcastReadNeedsText")
         # Speakers alternate round by round, which is what makes a two-voice read sound like
         # a conversation rather than one voice with interruptions.
         nlp_texts = [

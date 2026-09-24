@@ -127,10 +127,10 @@ def extract_result_urls(task_payload: dict[str, Any]) -> list[str] | None:
     if status == "SUCCEEDED":
         urls = [str(one["url"]) for one in (output.get("results") or []) if isinstance(one, dict) and one.get("url")]
         if not urls:
-            raise GenerationAdapterError("Provider returned success without a result URL")
+            raise GenerationAdapterError("providerErr_noResultUrl", vendor="DashScope")
         return urls
     if status in ("FAILED", "CANCELED"):
-        raise GenerationAdapterError(f"Generation failed with status {status}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="DashScope", detail=status)
     return None
 
 
@@ -157,7 +157,7 @@ class QwenImageAdapter(GenerationAdapter):
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise GenerationAdapterError("DashScope API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="DashScope")
         try:
             # URL 与本地素材同属 reference_image。只看 sources_for 会让 URL-only 请求
             # 静默走到文生图端点，参考图完全没被使用。
@@ -168,7 +168,7 @@ class QwenImageAdapter(GenerationAdapter):
                     submit.raise_for_status()
                     urls = extract_result_urls(submit.json())
                     if not urls:
-                        raise GenerationAdapterError("Provider returned success without a result URL")
+                        raise GenerationAdapterError("providerErr_noResultUrl", vendor="DashScope")
                     targets = _download_all(urls, output_dir)
                     return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=submit.json())
 
@@ -177,17 +177,17 @@ class QwenImageAdapter(GenerationAdapter):
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
                 if not task_id:
-                    raise GenerationAdapterError("Provider did not return a task id")
+                    raise GenerationAdapterError("providerErr_noTaskId", vendor="DashScope")
                 return self._collect(client, f"/api/v1/tasks/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("DashScope", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._async_client(context) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("DashScope", exc, context.api_key) from exc
 
     def _async_client(self, context: GenerationAdapterContext) -> RetryingClient:
         headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}

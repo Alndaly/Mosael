@@ -24,7 +24,7 @@ class OpenAISpeechAdapter:
 
     def __init__(self, api_key: str, model: str = "gpt-4o-mini-tts", base_url: str = "") -> None:
         if not api_key:
-            raise SpeechSynthesisError("OpenAI 语音合成需要 API Key,请在设置里配置")
+            raise SpeechSynthesisError("providerErr_ttsKeyMissing", engine="OpenAI")
         self._key = api_key
         self._model = model
         self._base = (base_url or "https://api.openai.com/v1").rstrip("/")
@@ -49,7 +49,7 @@ class OpenAISpeechAdapter:
                 )
                 response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise SpeechSynthesisError(f"OpenAI 语音合成失败: {exc}") from exc
+            raise SpeechSynthesisError("providerErr_ttsFailed", engine="OpenAI", detail=str(exc)) from exc
         out_path.write_bytes(response.content)
 
 

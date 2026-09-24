@@ -86,7 +86,7 @@ def test_registry拒绝静默覆盖重复adapter() -> None:
     class SpeechAdapter:
         engine_id = "same"
 
-    with pytest.raises(RuntimeError, match="重复的生成 Adapter"):
+    with pytest.raises(RuntimeError, match="duplicate generation adapter"):
         _index_generation_adapters((GenerationAdapter(), GenerationAdapter()))  # type: ignore[arg-type]
-    with pytest.raises(RuntimeError, match="重复的语音 Adapter"):
+    with pytest.raises(RuntimeError, match="duplicate speech adapter"):
         _index_speech_adapters((SpeechAdapter, SpeechAdapter))  # type: ignore[arg-type]

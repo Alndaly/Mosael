@@ -175,10 +175,10 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
                 return str(result["video_url"])
             if isinstance(result, dict) and result.get("url"):
                 return str(result["url"])
-        raise GenerationAdapterError("Provider returned success without a result URL")
+        raise GenerationAdapterError("providerErr_noResultUrl", vendor="DashScope")
     if status in _TERMINAL_FAILURES:
         message = str(output.get("message") or task_payload.get("message") or "").strip()
-        raise GenerationAdapterError(f"Generation failed with status {status}" + (f": {message}" if message else ""))
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="DashScope", detail=f"{status}: {message}" if message else status)
     return None
 
 
@@ -195,21 +195,21 @@ class WanVideoAdapter(GenerationAdapter):
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
                 if not task_id:
-                    raise GenerationAdapterError("Provider did not return a task id")
+                    raise GenerationAdapterError("providerErr_noTaskId", vendor="DashScope")
                 return self._collect(client, f"/api/v1/tasks/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("DashScope", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(context) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("DashScope", exc, context.api_key) from exc
 
     def _client(self, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
-            raise GenerationAdapterError("DashScope API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="DashScope")
         headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
         return RetryingClient(base_url=resolve_dashscope_base(context), timeout=60, headers=headers)
 

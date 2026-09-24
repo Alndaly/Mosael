@@ -88,6 +88,10 @@ def test_the_failure_message_carries_the_real_error(monkeypatch) -> None:
     tts_models._run_download("f5-tts")
 
     live = tts_models._store.get("f5-tts")
-    captured["message"] = live.message
+    # 卡片上存的是文案 key + 参数(出口按读的人的语言翻),所以按渲染出来的那句断言。
+    from app.core.i18n import render_message
+
+    shown = render_message(live.message, "zh", live.params)
+    captured["message"] = shown
     assert live.status == "failed"
-    assert "hf-mirror" in live.message, f"把子进程说的话丢了,只剩猜测:{live.message}"
+    assert "hf-mirror" in shown, f"把子进程说的话丢了,只剩猜测:{shown}"

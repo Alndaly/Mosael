@@ -68,7 +68,7 @@ def v3_endpoint(request: GenerationRequest, *, has_elements: bool = False) -> st
     else:
         model = "kling-3.0"
     if has_elements and "omni" not in name:
-        raise GenerationAdapterError("Kling reference elements require the Kling 3.0 Omni model")
+        raise GenerationAdapterError("providerErr_klingElementsNeedOmni")
     if "omni" in name or has_elements:
         mode = "omni-video"
     elif first_frame_value(request):
@@ -156,7 +156,7 @@ def endpoint_for(request: GenerationRequest) -> str:
 def extract_video_url(task_payload: dict[str, Any]) -> str | None:
     code = task_payload.get("code")
     if code not in (None, 0):
-        raise GenerationAdapterError(f"Generation failed: {task_payload.get('message') or code}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="Kling", detail=task_payload.get("message") or code)
 
     data = task_payload.get("data") if isinstance(task_payload.get("data"), dict) else task_payload
     status = str(data.get("task_status", "")).lower()
@@ -164,7 +164,7 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
         return None
     if status in ("failed", "fail", "canceled", "cancelled"):
         message = data.get("task_status_msg") or data.get("message") or status
-        raise GenerationAdapterError(f"Generation failed: {message}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="Kling", detail=message)
     if status != "succeed":
         return None
 
@@ -181,7 +181,7 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
     for candidate in candidates:
         if candidate:
             return str(candidate)
-    raise GenerationAdapterError("Provider returned success without a video URL")
+    raise GenerationAdapterError("providerErr_noResultUrl", vendor="Kling")
 
 
 def extract_video_url_v3(task_payload: dict[str, Any]) -> str | None:
@@ -192,7 +192,7 @@ def extract_video_url_v3(task_payload: dict[str, Any]) -> str | None:
     """
     code = task_payload.get("code")
     if code not in (None, 0):
-        raise GenerationAdapterError(f"Generation failed: {task_payload.get('message') or code}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="Kling", detail=task_payload.get("message") or code)
     rows = task_payload.get("data")
     if isinstance(rows, dict):
         rows = rows.get("result") if isinstance(rows.get("result"), list) else [rows]
@@ -201,13 +201,13 @@ def extract_video_url_v3(task_payload: dict[str, Any]) -> str | None:
     task = rows[0]
     status = str(task.get("status") or "").lower()
     if status in ("failed", "fail", "canceled", "cancelled"):
-        raise GenerationAdapterError(f"Generation failed: {task.get('message') or status}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="Kling", detail=task.get("message") or status)
     if status != "succeeded":
         return None
     for output in task.get("outputs") or []:
         if output.get("type") == "video" and output.get("url"):
             return str(output["url"])
-    raise GenerationAdapterError("Provider returned success without a video URL")
+    raise GenerationAdapterError("providerErr_noResultUrl", vendor="Kling")
 
 
 class KlingVideoAdapter(GenerationAdapter):
@@ -241,24 +241,24 @@ class KlingVideoAdapter(GenerationAdapter):
                 data = submit.json().get("data") or {}
                 task_id = data.get("id") or data.get("task_id") or submit.json().get("task_id") or ""
                 if not task_id:
-                    raise GenerationAdapterError("Provider did not return a task id")
+                    raise GenerationAdapterError("providerErr_noTaskId", vendor="Kling")
 
                 # v3 查任务走统一端点；旧协议仍在生成资源路径下查询。
                 poll_path = f"/tasks?task_ids={task_id}" if v3 else f"{endpoint}/{task_id}"
                 return self._collect(client, poll_path, request, context, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("Kling request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("Kling", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(context) as client:
                 return self._collect(client, poll_path, request, context, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("Kling request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("Kling", exc, context.api_key) from exc
 
     def _client(self, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
-            raise GenerationAdapterError("Kling Access Key/API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("providerErr_klingKeyMissing")
         #: 鉴权头每次现签(JWT 带过期时间)—— 取回时隔了一次重启,旧的那张早过期了。
         headers = {"Authorization": auth_header(context), "Content-Type": "application/json"}
         return RetryingClient(base_url=(context.base_url or KLING_BASE).rstrip("/"), timeout=60, headers=headers, follow_redirects=True)

@@ -33,6 +33,7 @@ from app.ai.runtime import remote_size
 from app.core.rate import DownloadRate
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore
+from app.ai.runtime.errors import RuntimeSetupError
 
 logger = logging.getLogger(__name__)
 
@@ -329,7 +330,7 @@ def start_download(model_id: str) -> dict[str, Any]:
     # 界面上两个都写着"下载中"而实际一个一个来,比老老实实说"等它下完"更误导。
     busy = downloading()
     if busy:
-        raise RuntimeError(f"已有语言包正在下载({busy}),请等它完成")
+        raise RuntimeSetupError("runtimeErr_f5LanguageBusy", busy=busy)
     set_live(model.id, status="downloading", progress=0.0, message="dlMsg_preparing", error="")
     threading.Thread(target=_run_download, args=(model.id,), daemon=True).start()
     return status(model)
@@ -399,7 +400,7 @@ def _run_download(model_id: str) -> None:
         # 后端解释器里没有它,而为了下个模型去后端装一份 HF 客户端是另一条会漂移的路。
         python = tts_models.resolve_engine_python("f5-tts")
         if python is None:
-            raise RuntimeError("请先在设置的「声音克隆」里安装 F5-TTS 运行环境")
+            raise RuntimeSetupError("runtimeErr_f5RuntimeMissing")
         request = {
             "action": "fetch_model",
             "engine": "f5-tts",
@@ -433,7 +434,7 @@ def _run_download(model_id: str) -> None:
         finally:
             watcher.stop()
         if not installed(model):
-            raise RuntimeError("下载报成功,但检查点不在盘上")
+            raise RuntimeSetupError("runtimeErr_f5CheckpointMissing")
         clear_live(model_id)
     except Exception as exc:  # noqa: BLE001 — 失败要落在状态上,否则界面永远停在"下载中"
         set_live(model_id, status="failed", error=str(exc)[:400], message="")

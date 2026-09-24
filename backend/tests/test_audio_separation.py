@@ -87,7 +87,7 @@ class Test能力可用性是问出来的:
         """和生成、语音那两张表同一条:后一次导入静默覆盖前一次,是查不出来的那种错。"""
         from app.ai.providers.registry import _index_separation_adapters
 
-        with pytest.raises(RuntimeError, match="重复"):
+        with pytest.raises(RuntimeError, match="duplicate"):
             _index_separation_adapters((_FakeAdapter(), _FakeAdapter()))
 
 

@@ -130,7 +130,7 @@ def extract_result_urls(payload: dict[str, Any]) -> list[str] | None:
             detail = error.get("message") or error.get("code") or status
         else:
             detail = error or status
-        raise GenerationAdapterError(f"Evolink 生成失败: {detail}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="Evolink", detail=detail)
 
     urls = [str(url) for url in (task.get("results") or []) if url]
     for item in task.get("result_data") or []:
@@ -144,7 +144,7 @@ def extract_result_urls(payload: dict[str, Any]) -> list[str] | None:
     if urls:
         return urls
     if status == "completed":
-        raise GenerationAdapterError("Evolink 返回完成状态但没有产物地址")
+        raise GenerationAdapterError("providerErr_noResultUrl", vendor="Evolink")
     return None
 
 
@@ -159,7 +159,7 @@ def _upload(path: Path, context: GenerationAdapterContext, *, image: bool = True
     if image:
         compatible = browser_compatible_image(path, path.parent)
         if compatible is None:
-            raise GenerationAdapterError(f"Evolink 无法读取输入图片: {path.name}")
+            raise GenerationAdapterError("providerErr_unreadableInputImage", vendor="Evolink", name=path.name)
         upload_path, mime = compatible
     if mime is None:
         # 参考视频/音频原样上传 —— 网关收 .mp4/.mov/.wav/.mp3,图像归一化对它们既不适用也会失败。
@@ -173,11 +173,13 @@ def _upload(path: Path, context: GenerationAdapterContext, *, image: bool = True
         response.raise_for_status()
         payload = response.json()
     if payload.get("success") is False:
-        raise GenerationAdapterError(f"Evolink 素材上传失败: {payload.get('msg') or payload.get('code') or 'unknown error'}")
+        raise GenerationAdapterError(
+            "providerErr_uploadFailed", vendor="Evolink", detail=payload.get("msg") or payload.get("code") or "unknown error"
+        )
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     url = data.get("file_url") or data.get("download_url")
     if not url:
-        raise GenerationAdapterError("Evolink 素材上传成功但没有返回文件地址")
+        raise GenerationAdapterError("providerErr_uploadNoUrl", vendor="Evolink")
     return str(url)
 
 
@@ -188,7 +190,7 @@ def _collect_role_urls(
     *,
     image: bool,
     limit: int,
-    label: str,
+    too_many_key: str,
 ) -> list[str]:
     """一类媒体的外链 + 本地上传,按角色顺序排好。上限是**协议天花板**(图 30 / 视频 10 /
     音频 10);每个模型各自的更严上限由描述符的 source_limits 在提交前就拦掉了。"""
@@ -197,7 +199,7 @@ def _collect_role_urls(
         urls.extend(source_url_values(request.parameters, role, request.kind))
         urls.extend(_upload(path, context, image=image) for path in request.sources_for(role))
     if len(urls) > limit:
-        raise GenerationAdapterError(f"Evolink {request.kind} 最多接收 {limit} 份{label}")
+        raise GenerationAdapterError(too_many_key, vendor="Evolink", limit=limit)
     return urls
 
 
@@ -209,12 +211,12 @@ def collect_media_urls(request: GenerationRequest, context: GenerationAdapterCon
     """
     if request.kind == "image":
         return {
-            "image_urls": _collect_role_urls(request, context, (REFERENCE_IMAGE,), image=True, limit=14, label="图片")
+            "image_urls": _collect_role_urls(request, context, (REFERENCE_IMAGE,), image=True, limit=14, too_many_key="providerErr_tooManyImages")
         }
     return {
-        "image_urls": _collect_role_urls(request, context, _VIDEO_IMAGE_ROLES, image=True, limit=30, label="图片"),
-        "video_urls": _collect_role_urls(request, context, _VIDEO_VIDEO_ROLES, image=False, limit=10, label="视频"),
-        "audio_urls": _collect_role_urls(request, context, _VIDEO_AUDIO_ROLES, image=False, limit=10, label="音频"),
+        "image_urls": _collect_role_urls(request, context, _VIDEO_IMAGE_ROLES, image=True, limit=30, too_many_key="providerErr_tooManyImages"),
+        "video_urls": _collect_role_urls(request, context, _VIDEO_VIDEO_ROLES, image=False, limit=10, too_many_key="providerErr_tooManyVideos"),
+        "audio_urls": _collect_role_urls(request, context, _VIDEO_AUDIO_ROLES, image=False, limit=10, too_many_key="providerErr_tooManyAudios"),
     }
 
 
@@ -265,22 +267,22 @@ class EvolinkGenerationAdapter(GenerationAdapter):
         # Evolink 网关的协议范围:视频 3–30 秒(Seedance 2.5 已放到 4–30,2026-09-01 文档)、
         # 最高 4K。每个模型自己的更严限制由描述符在提交前拦,这里只是兜底。
         if not request.prompt.strip():
-            raise GenerationAdapterError("Prompt must not be empty")
+            raise GenerationAdapterError("providerErr_promptEmpty")
         if request.kind == "image":
             count = int(request.parameters.get("num_images", 1))
             if not 1 <= count <= 4:
-                raise GenerationAdapterError("num_images must be between 1 and 4")
+                raise GenerationAdapterError("providerErr_numImagesRange", max=4)
         else:
             duration = int(request.parameters.get("duration_seconds", 5))
             if duration != -1 and not 3 <= duration <= 30:
-                raise GenerationAdapterError("duration_seconds must be -1 (auto) or between 3 and 30")
+                raise GenerationAdapterError("providerErr_durationRange", min=3, max=30)
             quality = str(request.parameters.get("resolution", "720p"))
             if quality not in {"480p", "720p", "1080p", "4k"}:
-                raise GenerationAdapterError("resolution must be one of 480p, 720p, 1080p, 4k")
+                raise GenerationAdapterError("providerErr_resolutionChoices", choices="480p, 720p, 1080p, 4k")
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise GenerationAdapterError("Evolink 生成需要 API Key，请在设置 → AI 服务中配置")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="Evolink")
         if request.kind != self.media_kind:
             raise GenerationAdapterError(f"Evolink {self.media_kind} adapter received a {request.kind} request")
         try:
@@ -298,21 +300,21 @@ class EvolinkGenerationAdapter(GenerationAdapter):
                 response.raise_for_status()
                 task_id = _task_id(response.json())
                 if not task_id:
-                    raise GenerationAdapterError(f"Evolink 没有返回任务 id: {str(response.json())[:200]}")
+                    raise GenerationAdapterError("providerErr_noTaskIdDetail", vendor="Evolink", detail=str(response.json())[:200])
                 return self._collect(client, f"/tasks/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("Evolink 请求失败", exc, context.api_key)) from exc
+            raise adapter_http_error("Evolink", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(context) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("Evolink 请求失败", exc, context.api_key)) from exc
+            raise adapter_http_error("Evolink", exc, context.api_key) from exc
 
     def _client(self, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
-            raise GenerationAdapterError("Evolink 生成需要 API Key，请在设置 → AI 服务中配置")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="Evolink")
         headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
         return RetryingClient(base_url=resolve_base_url(context), headers=headers, timeout=60)
 
@@ -321,7 +323,7 @@ class EvolinkGenerationAdapter(GenerationAdapter):
         urls, terminal = poll_until_ready(
             client, poll_path, extract_result_urls,
             interval=POLL_INTERVAL_SECONDS,
-            timed_out_message="Evolink 生成超时",
+            vendor="Evolink",
         )
         return GenerationResult(
             output_paths=download_results(urls, output_dir, self.media_kind),

@@ -68,7 +68,7 @@ def test_失败由extract自己抛_因为只有它知道原因在哪个字段() 
 def test_超时要抛_而不是静静返回空() -> None:
     """一直回"还在跑"的任务:到点必须抛。静静返回的话,调用方会拿一个空地址去下载。"""
     client = _FakeClient([{"status": "running"}] * 50)
-    with pytest.raises(GenerationAdapterError, match="timed out"):
+    with pytest.raises(GenerationAdapterError, match="超时"):
         poll_until_ready(client, "/tasks/1", _extract, interval=0, timeout=0.05)
 
 

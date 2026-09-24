@@ -58,7 +58,7 @@ def _index_generation_adapters(
     for adapter in adapters:
         key = (adapter.vendor_id, adapter.media_kind)
         if key in indexed:
-            raise RuntimeError(f"重复的生成 Adapter:{key[0]}/{key[1]}")
+            raise RuntimeError(f"duplicate generation adapter: {key[0]}/{key[1]}")
         indexed[key] = adapter
     return indexed
 
@@ -81,7 +81,7 @@ def _index_speech_adapters(adapters: Iterable[type[SpeechAdapter]]) -> dict[str,
     indexed: dict[str, type[SpeechAdapter]] = {}
     for adapter in adapters:
         if adapter.engine_id in indexed:
-            raise RuntimeError(f"重复的语音 Adapter:{adapter.engine_id}")
+            raise RuntimeError(f"duplicate speech adapter: {adapter.engine_id}")
         indexed[adapter.engine_id] = adapter
     return indexed
 
@@ -109,7 +109,7 @@ def _index_separation_adapters(adapters: Iterable[SeparationAdapter]) -> dict[st
     indexed: dict[str, SeparationAdapter] = {}
     for adapter in adapters:
         if adapter.engine_id in indexed:
-            raise RuntimeError(f"重复的音频分离 Adapter:{adapter.engine_id}")
+            raise RuntimeError(f"duplicate separation adapter: {adapter.engine_id}")
         indexed[adapter.engine_id] = adapter
     return indexed
 
@@ -139,7 +139,7 @@ def _index_denoise_adapters(adapters: Iterable[DenoiseAdapter]) -> dict[str, Den
     indexed: dict[str, DenoiseAdapter] = {}
     for adapter in adapters:
         if adapter.engine_id in indexed:
-            raise RuntimeError(f"重复的降噪 Adapter:{adapter.engine_id}")
+            raise RuntimeError(f"duplicate denoise adapter: {adapter.engine_id}")
         indexed[adapter.engine_id] = adapter
     return indexed
 
@@ -192,7 +192,7 @@ def build_speech_adapter(
     """构造远程语音 Adapter；未知引擎返回用户可处理的错误。"""
     adapter = REMOTE_SPEECH_ADAPTERS.get(engine)
     if adapter is None:
-        raise SpeechSynthesisError(f"未知的语音引擎:{engine}")
+        raise SpeechSynthesisError("providerErr_unknownSpeechEngine", engine=engine)
     if adapter is EdgeSpeechAdapter:
         return adapter(voice=voice)
     if adapter is OpenAISpeechAdapter:

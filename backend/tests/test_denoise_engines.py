@@ -118,8 +118,13 @@ class TestDeepFilterNet安装:
         monkeypatch.setattr(media_transfer, "download_to_path", _fake_download(b"tampered"))
         runtime._run_install(runtime.DEEPFILTER)
         status = runtime.install_status(runtime.DEEPFILTER)
-        assert status["status"] == "failed" and "校验不符" in status["message"]
         runtime._store.clear(runtime.DEEPFILTER)
+        # 状态里存的是文案 key + 参数,出口(路由的 translate_fields)按读的人的语言翻。
+        from app.core.i18n import translate_fields
+
+        assert status["status"] == "failed"
+        assert "校验不符" in translate_fields(status, ("message",), "zh")["message"]
+        assert "checksum" in translate_fields(status, ("message",), "en")["message"]
 
     def test_没有发布文件的平台直说(self, monkeypatch, runtime) -> None:
         monkeypatch.setattr(runtime, "deepfilter_binary_spec", lambda: None)

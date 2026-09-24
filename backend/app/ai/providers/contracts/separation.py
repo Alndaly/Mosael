@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from app.core.i18n import LocalizedError
+
 #: 一次分离最长等多久。分离是按音频长度线性增长的重活(本地模型在 CPU 上尤其慢),
 #: 而一段一小时的访谈是正常输入 —— 所以这个数比合成/识别那两条都大得多。
 SEPARATION_TIMEOUT_SECONDS = 3600
@@ -26,8 +28,8 @@ BACKGROUND = "background"
 STEMS = (VOCALS, BACKGROUND)
 
 
-class SeparationError(RuntimeError):
-    """分不出来。message 已经是可以直接给用户看的话。"""
+class SeparationError(LocalizedError, RuntimeError):
+    """分不出来。带文案 key(`providerErr_separation*`,见 core/i18n),`str(exc)` 按读的人的语言翻。"""
 
 
 @dataclass(frozen=True)

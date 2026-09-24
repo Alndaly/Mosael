@@ -70,16 +70,21 @@ def test_registry_resolves_providers() -> None:
 
 
 def test_guardrails_reject_out_of_bounds() -> None:
+    # 按「是哪一种」断言(文案 key),不按措辞:措辞随界面语言变。
     provider = get_generation_adapter("alibaba", "image")
-    with pytest.raises(GenerationAdapterError, match="num_images"):
+    with pytest.raises(GenerationAdapterError) as err:
         provider.validate_request(make_request("image", num_images=9))
+    assert err.value.key == "providerErr_numImagesRange"
     video = get_generation_adapter("bytedance", "video")
-    with pytest.raises(GenerationAdapterError, match="duration_seconds"):
+    with pytest.raises(GenerationAdapterError) as err:
         video.validate_request(make_request("video", duration_seconds=0))
-    with pytest.raises(GenerationAdapterError, match="resolution"):
+    assert err.value.key == "providerErr_durationInvalid"
+    with pytest.raises(GenerationAdapterError) as err:
         video.validate_request(make_request("video", resolution=""))
-    with pytest.raises(GenerationAdapterError, match="Prompt"):
+    assert err.value.key == "providerErr_resolutionEmpty"
+    with pytest.raises(GenerationAdapterError) as err:
         video.validate_request(GenerationRequest(kind="video", model="m", prompt="  "))
+    assert err.value.key == "providerErr_promptEmpty"
 
 
 def test_openai_image_advanced_parameters_are_sent_by_generation_and_edit() -> None:
@@ -120,8 +125,9 @@ def test_evolink_uses_gateway_parameter_names_and_wider_video_limits() -> None:
     }
     provider = get_generation_adapter("evolink", "video")
     provider.validate_request(make_request("video", duration_seconds=30, resolution="4k"))
-    with pytest.raises(GenerationAdapterError, match="3 and 30"):
+    with pytest.raises(GenerationAdapterError) as err:
         provider.validate_request(make_request("video", duration_seconds=31))
+    assert err.value.key == "providerErr_durationRange" and err.value.params == {"min": 3, "max": 30}
 
 
 def test_evolink_image_payload_preserves_all_reference_urls() -> None:
@@ -871,7 +877,7 @@ def test_provider_http_error_includes_safe_response_body() -> None:
     request = httpx.Request("POST", "https://example.test")
     response = httpx.Response(400, request=request, text='{"error":"model sk-abc123 unsupported"}')
     exc = httpx.HTTPStatusError("bad", request=request, response=response)
-    message = adapter_http_error("Provider failed", exc, "sk-abc123")
+    message = str(adapter_http_error("Provider", exc, "sk-abc123"))
     assert "body:" in message
     assert "unsupported" in message
     assert "sk-abc123" not in message

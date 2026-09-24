@@ -48,7 +48,9 @@ class InstallStore:
         with self._lock:
             live = self._live.get(engine)
             if live is not None and live.status == INSTALLING:
-                raise RuntimeError("这个引擎已经在安装中")
+                from app.ai.runtime.errors import RuntimeSetupError
+
+                raise RuntimeSetupError("runtimeErr_alreadyInstalling")
             self._live[engine] = InstallProgress(INSTALLING, message, dict(params))
 
     def status_fields(self, engine: str, *, ready: bool) -> dict[str, Any]:

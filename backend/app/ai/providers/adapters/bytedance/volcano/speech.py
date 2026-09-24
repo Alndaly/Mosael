@@ -34,7 +34,7 @@ class VolcanoSpeechAdapter:
 
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:
-            raise SpeechSynthesisError("火山引擎语音合成需要新版控制台的 API Key")
+            raise SpeechSynthesisError("providerErr_volcanoTtsKeyMissing")
         self._key = api_key
         self._model = model
         self._base = (base_url or "https://openspeech.bytedance.com").rstrip("/")
@@ -53,7 +53,7 @@ class VolcanoSpeechAdapter:
     def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None:
         voice = request.voice or self._default_voice
         if not voice:
-            raise SpeechSynthesisError("火山引擎语音合成需要音色 id(如 zh_male_..._bigtts)")
+            raise SpeechSynthesisError("providerErr_volcanoTtsVoiceMissing", example="zh_male_..._bigtts")
         speed = max(0.2, min(3.0, request.speed))
         payload = {
             "req_params": {
@@ -92,15 +92,16 @@ class VolcanoSpeechAdapter:
                             break
                         if code != 0:
                             raise SpeechSynthesisError(
-                                f"火山 TTS 失败: code={code} {frame.get('message') or ''}".strip()
+                                "providerErr_volcanoTtsFailed",
+                                detail=f"code={code} {frame.get('message') or ''}".strip(),
                             )
                         data = frame.get("data")
                         if data:
                             chunks.append(base64.b64decode(data))
         except httpx.HTTPError as exc:
-            raise SpeechSynthesisError(f"火山 TTS 请求失败: {exc}") from exc
+            raise SpeechSynthesisError("providerErr_volcanoTtsRequestFailed", detail=str(exc)) from exc
         if not chunks:
-            raise SpeechSynthesisError("火山 TTS 返回空音频")
+            raise SpeechSynthesisError("providerErr_volcanoTtsEmptyAudio")
         out_path.write_bytes(b"".join(chunks))
 
 

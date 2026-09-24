@@ -100,7 +100,7 @@ def extract_video_url(payload: dict[str, Any]) -> str | None:
     status = str(task.get("status") or "").lower()
     if status in TERMINAL_FAILURES:
         detail = task.get("error") or payload.get("base_resp") or status
-        raise GenerationAdapterError(f"MiniMax 视频生成失败:{detail}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="MiniMax", detail=detail)
     content = task.get("content")
     if isinstance(content, dict) and content.get("url"):
         return str(content["url"])
@@ -121,21 +121,21 @@ class MiniMaxVideoAdapter(GenerationAdapter):
                 submitted = submit.json()
                 task_id = submitted.get("task_id") or (submitted.get("task") or {}).get("id") or ""
                 if not task_id:
-                    raise GenerationAdapterError(f"MiniMax 没有返回任务 id:{str(submitted)[:200]}")
+                    raise GenerationAdapterError("providerErr_noTaskIdDetail", vendor="MiniMax", detail=str(submitted)[:200])
                 return self._collect(client, f"{QUERY_PATH}/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("MiniMax 请求失败", exc, context.api_key)) from exc
+            raise adapter_http_error("MiniMax", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(context) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("MiniMax 请求失败", exc, context.api_key)) from exc
+            raise adapter_http_error("MiniMax", exc, context.api_key) from exc
 
     def _client(self, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
-            raise GenerationAdapterError("MiniMax 视频生成需要 API Key,请在设置 → AI 视频里配置")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="MiniMax")
         base_url = (context.base_url or BASE_URL).rstrip("/")
         # 档案里填的常是对话用的 `.../v1`,而视频在 `/v2` 下。截掉版本段按官方路径重新拼,
         # 免得用户为了视频再建一个只有 base_url 不同的档案。
@@ -149,7 +149,7 @@ class MiniMaxVideoAdapter(GenerationAdapter):
         """提交之后的那一半。`generate` 和 `resume` 共用。"""
         url, poll_payload = poll_until_ready(
             client, poll_path, extract_video_url,
-            timed_out_message="MiniMax 视频生成超时",
+            vendor="MiniMax",
         )
         output_dir.mkdir(parents=True, exist_ok=True)
         target = output_dir / "generated.mp4"

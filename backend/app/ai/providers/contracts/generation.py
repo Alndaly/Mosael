@@ -23,13 +23,18 @@ from typing import Any, TypeVar
 
 import httpx
 
+from app.core.i18n import LocalizedError
 from app.core.token_estimate import estimate_text_tokens
 
 MAX_NUM_IMAGES = 4
 
 
-class GenerationAdapterError(RuntimeError):
-    """Raised for Adapter failures; message must already be safe to surface."""
+class GenerationAdapterError(LocalizedError, RuntimeError):
+    """Adapter 做不成。带文案 key(`providerErr_*`,见 core/i18n),`str(exc)` 按读的人的语言翻。
+
+    上游(供应商)回的原话作为参数(通常叫 `detail`)放进翻好的句子里 —— 我们不翻、也不猜它;
+    必须已经脱敏(见 `sanitize_adapter_error`)。仍然是 RuntimeError:调用方原本就这么接。
+    """
 
 
 #: 一份输入素材**拿来干什么**。
@@ -218,17 +223,17 @@ class GenerationAdapter(ABC):
         so direct/legacy callers cannot submit nonsense.
         """
         if not request.prompt.strip():
-            raise GenerationAdapterError("Prompt must not be empty")
+            raise GenerationAdapterError("providerErr_promptEmpty")
         if request.kind == "image":
             num_images = int(request.parameters.get("num_images", 1))
             if not 1 <= num_images <= MAX_NUM_IMAGES:
-                raise GenerationAdapterError(f"num_images must be between 1 and {MAX_NUM_IMAGES}")
+                raise GenerationAdapterError("providerErr_numImagesRange", max=MAX_NUM_IMAGES)
         if request.kind == "video":
             duration = float(request.parameters.get("duration_seconds", 5))
             if not math.isfinite(duration) or (duration != -1 and duration <= 0):
-                raise GenerationAdapterError("duration_seconds must be positive or -1 (auto)")
+                raise GenerationAdapterError("providerErr_durationInvalid")
             if "resolution" in request.parameters and not str(request.parameters["resolution"]).strip():
-                raise GenerationAdapterError("resolution must not be empty")
+                raise GenerationAdapterError("providerErr_resolutionEmpty")
 
     #: 能不能接着取回一个**已经提交过**的远端任务(见 `resume`)。走异步任务的那几家都是。
     supports_resume: bool = False
@@ -253,7 +258,7 @@ class GenerationAdapter(ABC):
         `poll_path` 是那一家自己的轮询路径(由 `poll_until_ready` 在开始等的那一刻报给运行器
         落库,见 `watching_remote_tasks`)。
         """
-        raise GenerationAdapterError(f"{self.vendor_id} 不支持取回已提交的任务")
+        raise GenerationAdapterError("providerErr_resumeUnsupported", vendor=self.vendor_id)
 
 
 def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
@@ -298,13 +303,21 @@ def sanitize_adapter_error(message: str, credential: str | None) -> str:
     return text[:500]
 
 
-def adapter_http_error(label: str, exc: httpx.HTTPError, credential: str | None) -> str:
+def adapter_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None) -> GenerationAdapterError:
     """Surface provider HTTP failures with the response body when available.
 
     httpx's default message links to MDN but omits the provider's JSON error, which is the
     part users need to fix a model name, unsupported size, or missing capability.
+
+    返回的是**一条带 key 的错误**,不是一句拼好的话:「{vendor} 请求失败:…」这半句要跟着读的人
+    的语言走,后面那段上游原文(已脱敏)原样放进 `detail`。
     """
-    message = f"{label}: {exc}"
+    return GenerationAdapterError("providerErr_requestFailed", vendor=vendor, detail=http_error_detail(exc, credential))
+
+
+def http_error_detail(exc: httpx.HTTPError, credential: str | None) -> str:
+    """上游 HTTP 失败的原文:httpx 那句 + 回包正文(截断、脱敏)。"""
+    message = str(exc)
     response = getattr(exc, "response", None)
     if response is not None:
         try:
@@ -380,7 +393,7 @@ def poll_until_ready(
     *,
     interval: float = POLL_INTERVAL_SECONDS,
     timeout: float = POLL_TIMEOUT_SECONDS,
-    timed_out_message: str = "Generation timed out",
+    vendor: str = "",
 ) -> tuple[_Ready, dict[str, Any]]:
     """轮询一个异步任务到终态,返回 (产物地址, 终态回包)。
 
@@ -403,7 +416,7 @@ def poll_until_ready(
     payload: dict[str, Any] = {}
     while time.monotonic() < deadline:
         if watch is not None and watch.is_cancelled():
-            raise GenerationAdapterError("已取消")
+            raise GenerationAdapterError("providerErr_cancelled")
         response = client.get(poll_path)
         response.raise_for_status()
         payload = response.json()
@@ -411,10 +424,13 @@ def poll_until_ready(
         if ready:
             return ready, payload
         time.sleep(interval)
-    # 超时文案让调用方给:有几家写的是自己的措辞(「MiniMax 视频生成超时」),那句话会一路
-    # 显示到用户眼前,收成一份通用句子等于把"是哪一家超时了"这个信息删掉。
+    # 是哪一家超时了由调用方给(`vendor`):那句话会一路显示到用户眼前,收成一份不带名字的
+    # 通用句子等于把"是哪一家超时了"这个信息删掉。
     # 远端任务号一起说出来:走到这里它多半仍在花钱,那是唯一能让人去供应商后台找回它的线索。
-    raise GenerationAdapterError(f"{timed_out_message}(远端任务 {poll_path} 在 {timeout / 3600:g} 小时内没有结束)")
+    hours = f"{timeout / 3600:g}"
+    if vendor:
+        raise GenerationAdapterError("providerErr_vendorPollTimeout", vendor=vendor, task=poll_path, hours=hours)
+    raise GenerationAdapterError("providerErr_pollTimeout", task=poll_path, hours=hours)
 
 
 #: 每个角色对应的「直接给个 url」参数名。界面既可以选素材库里的图,也可以粘一个外链;

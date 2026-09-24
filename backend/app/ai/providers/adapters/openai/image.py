@@ -72,10 +72,10 @@ def extract_image_bytes(payload: dict[str, Any]) -> list[bytes]:
     data = payload.get("data") or []
     entries = [one for one in data if isinstance(one, dict)]
     if not entries:
-        raise GenerationAdapterError("Provider returned no image data")
+        raise GenerationAdapterError("providerErr_noImageData", vendor="OpenAI")
     images = [base64.b64decode(str(one["b64_json"])) for one in entries if one.get("b64_json")]
     if not images:
-        raise GenerationAdapterError("Provider returned a URL result where inline image data was expected")
+        raise GenerationAdapterError("providerErr_unexpectedUrlResult", vendor="OpenAI")
     return images
 
 
@@ -93,7 +93,7 @@ class OpenAIImageAdapter(GenerationAdapter):
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise GenerationAdapterError("OpenAI API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="OpenAI")
         base_url = (context.base_url or OPENAI_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
@@ -137,7 +137,7 @@ class OpenAIImageAdapter(GenerationAdapter):
                         # reuse the API client carrying the OpenAI bearer token.
                         images.append(fetch_bytes(str(one["url"])).data)
                 if not images:
-                    raise GenerationAdapterError("Provider returned no image data")
+                    raise GenerationAdapterError("providerErr_noImageData", vendor="OpenAI")
                 output_dir.mkdir(parents=True, exist_ok=True)
                 suffix = str(request.parameters.get("output_format") or "png").lower().lstrip(".")
                 if suffix not in {"png", "jpg", "jpeg", "webp"}:
@@ -148,4 +148,4 @@ class OpenAIImageAdapter(GenerationAdapter):
                     target.write_bytes(blob)
                 return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=content)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("OpenAI image request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("OpenAI", exc, context.api_key) from exc

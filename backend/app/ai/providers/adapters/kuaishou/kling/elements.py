@@ -65,8 +65,8 @@ def build_create_payload(images: list[str], *, description: str = "") -> dict[st
     """
     if not MIN_REFERENCE_IMAGES <= len(images) <= MAX_REFERENCE_IMAGES:
         raise GenerationAdapterError(
-            f"可灵的多图参考要 {MIN_REFERENCE_IMAGES}～{MAX_REFERENCE_IMAGES} 张图"
-            f"(第一张是正面图,其余是其他角度),这次给了 {len(images)} 张"
+            "providerErr_klingElementImageCount",
+            min=MIN_REFERENCE_IMAGES, max=MAX_REFERENCE_IMAGES, given=len(images),
         )
     frontal, *others = images
     return {
@@ -89,17 +89,17 @@ def extract_element_id(task_payload: dict[str, Any]) -> str | None:
     """
     code = task_payload.get("code")
     if code not in (None, 0):
-        raise GenerationAdapterError(f"可灵建主体失败:{task_payload.get('message') or code}")
+        raise GenerationAdapterError("providerErr_klingElementFailed", detail=task_payload.get("message") or code)
     data = task_payload.get("data") if isinstance(task_payload.get("data"), dict) else task_payload
     status = str(data.get("task_status") or "").lower()
     if status in _TERMINAL_BAD:
-        raise GenerationAdapterError(f"可灵建主体失败:{data.get('task_status_msg') or status}")
+        raise GenerationAdapterError("providerErr_klingElementFailed", detail=data.get("task_status_msg") or status)
     if status not in _TERMINAL_OK:
         return None
     for element in (data.get("task_result") or {}).get("elements") or []:
         if element.get("element_id") not in (None, ""):
             return str(element["element_id"])
-    raise GenerationAdapterError("可灵建主体成功却没有返回 element_id")
+    raise GenerationAdapterError("providerErr_klingElementNoId")
 
 
 def find_element_id(listing: dict[str, Any], name: str) -> str | None:
@@ -141,7 +141,7 @@ def ensure_element(
     created.raise_for_status()
     task_id = ((created.json().get("data") or {}).get("task_id")) or ""
     if not task_id:
-        raise GenerationAdapterError("可灵建主体没有返回任务 id")
+        raise GenerationAdapterError("providerErr_klingElementNoTaskId")
 
     deadline = time.time() + poll_timeout
     while time.time() < deadline:
@@ -151,7 +151,7 @@ def ensure_element(
         if element_id:
             return element_id
         time.sleep(poll_interval)
-    raise GenerationAdapterError("可灵建主体超时")
+    raise GenerationAdapterError("providerErr_klingElementTimeout")
 
 
 def build_element_contents(element_ids: list[str]) -> list[dict[str, Any]]:
@@ -160,7 +160,7 @@ def build_element_contents(element_ids: list[str]) -> list[dict[str, Any]]:
     `id` 是**任务内的索引名**,提示词里用 `@名字` 点它;文档要求同一任务里不能重复。
     """
     if len(element_ids) > MAX_ELEMENTS_PER_TASK:
-        raise GenerationAdapterError(f"可灵一次最多引用 {MAX_ELEMENTS_PER_TASK} 个主体,这次给了 {len(element_ids)} 个")
+        raise GenerationAdapterError("providerErr_klingTooManyElements", max=MAX_ELEMENTS_PER_TASK, given=len(element_ids))
     return [
         {"type": "element", "element_id": str(one), "id": f"element_{index + 1}"}
         for index, one in enumerate(element_ids)

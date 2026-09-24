@@ -19,6 +19,7 @@ import subprocess
 from pathlib import Path
 
 from app.ai.providers.contracts.denoise import (
+    subprocess_failure,
     DENOISE_TIMEOUT_SECONDS,
     LIGHT,
     MEDIUM,
@@ -29,7 +30,6 @@ from app.ai.providers.contracts.denoise import (
 )
 from app.core.child_process import run_logged
 from app.core.config import settings
-from app.core.text import blame_line
 
 #: 档位 → (噪声底往上抬几 dB 作为 nf, 最多削多少 dB)。
 #: 数值来自实测(间断正弦当"说话",叠粉噪):停顿里的噪声分别压低约 6 / 12 / 20 dB
@@ -73,7 +73,7 @@ def measure_levels(audio: Path) -> tuple[float, float] | None:
         what="测量噪声底",
     )
     if result.returncode != 0:
-        raise DenoiseError(f"量不出这段音频的噪声:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+        raise subprocess_failure("providerErr_denoiseMeasureFailed", result.stderr, tool="ffmpeg")
     # 数字静音的切片报的是 -inf,正则不收它 —— 它不是噪声,是没有声音。
     levels = sorted(float(value) for value in _RMS.findall(result.stdout))
     if not levels:
@@ -118,7 +118,7 @@ class FfmpegDenoiseAdapter:
                 what="降噪",
             )
         except subprocess.TimeoutExpired as exc:
-            raise DenoiseError("降噪超时") from exc
+            raise DenoiseError("providerErr_denoiseTimeout") from exc
         if result.returncode != 0 or not out_path.is_file():
-            raise DenoiseError(f"降噪失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+            raise subprocess_failure("providerErr_denoiseFailed", result.stderr, tool="ffmpeg")
         return out_path

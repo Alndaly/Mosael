@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from app.core.i18n import LocalizedError
+
 #: 一次降噪最长等多久。滤波器类引擎比实时快得多,模型类引擎在 CPU 上可能慢于实时;
 #: 一小时的访谈是正常输入。
 DENOISE_TIMEOUT_SECONDS = 3600
@@ -24,8 +26,21 @@ STRENGTHS = (LIGHT, MEDIUM, STRONG)
 DEFAULT_STRENGTH = MEDIUM
 
 
-class DenoiseError(RuntimeError):
-    """降不了。message 已经是可以直接给用户看的话。"""
+class DenoiseError(LocalizedError, RuntimeError):
+    """降不了。带文案 key(`providerErr_denoise*`,见 core/i18n),`str(exc)` 按读的人的语言翻。"""
+
+
+def subprocess_failure(key: str, output: str, *, tool: str) -> DenoiseError:
+    """外部命令没做成 → 一条带 key 的错误。
+
+    挑得出原因(core/text.blame_line)就放进 `detail`;挑不出就换成同名的 `…Silent` 那一句
+    (「{tool} 没有说明原因」)—— 编一个原因比说不知道更糟,而"原因"这半句也要跟着语言走,
+    不能是一个写死的中文兜底串。
+    """
+    from app.core.text import blame_line
+
+    detail = blame_line(output)
+    return DenoiseError(key, detail=detail) if detail else DenoiseError(f"{key}Silent", tool=tool)
 
 
 def checked_strength(value: str | None) -> str:
@@ -33,7 +48,7 @@ def checked_strength(value: str | None) -> str:
     对不上,而用户只会觉得"强档也没什么用"。"""
     strength = value or DEFAULT_STRENGTH
     if strength not in STRENGTHS:
-        raise DenoiseError(f"不认识的降噪档位:{strength}(可选:{'、'.join(STRENGTHS)})")
+        raise DenoiseError("providerErr_denoiseUnknownStrength", strength=strength, choices=" / ".join(STRENGTHS))
     return strength
 
 

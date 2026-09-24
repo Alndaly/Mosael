@@ -41,6 +41,7 @@ class WorkerPool(_Pool):
             worker_path=worker_path,
             decode=decode_event_line,
             noun="识别",
+            kind="asr",
             idle_seconds=idle_seconds,
         )
 

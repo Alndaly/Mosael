@@ -73,7 +73,7 @@ def extract_image_url(response_payload: dict[str, Any]) -> str:
     for item in data:
         if isinstance(item, dict) and item.get("url"):
             return str(item["url"])
-    raise GenerationAdapterError("Provider returned success without an image URL")
+    raise GenerationAdapterError("providerErr_noResultUrl", vendor="ARK")
 
 
 class SeedreamAdapter(GenerationAdapter):
@@ -84,7 +84,7 @@ class SeedreamAdapter(GenerationAdapter):
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise GenerationAdapterError("ARK API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="ARK")
         base_url = (context.base_url or ARK_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
@@ -99,4 +99,4 @@ class SeedreamAdapter(GenerationAdapter):
                 download_to_path(url, target, timeout=120)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=payload)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("ARK image request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("ARK", exc, context.api_key) from exc

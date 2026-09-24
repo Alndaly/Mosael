@@ -13,11 +13,11 @@ from __future__ import annotations
 from typing import Any
 
 if __package__:
-    from .line_protocol import LineProtocol, WorkerProtocolError, text_field
+    from .line_protocol import KeyedWorkerError, LineProtocol, WorkerProtocolError, error_event, text_field
 else:
     # Executed directly by the engine's isolated interpreter; its sys.path only
     # contains this directory, not the application package.
-    from line_protocol import LineProtocol, WorkerProtocolError, text_field
+    from line_protocol import KeyedWorkerError, LineProtocol, WorkerProtocolError, error_event, text_field
 
 _WHAT = "TTS worker"
 
@@ -38,8 +38,10 @@ decode_event_line = _PROTOCOL.decode
 __all__ = [
     "EVENT_KINDS",
     "EVENT_PREFIX",
+    "KeyedWorkerError",
     "WorkerProtocolError",
     "decode_event_line",
     "encode_event_line",
+    "error_event",
     "validate_event",
 ]

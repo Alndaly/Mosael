@@ -18,6 +18,7 @@ flow through the confirmation cards.
 """
 
 from app.core.child_process import ChildProcess, popen_text
+from app.core.i18n import LocalizedError, tr
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,11 @@ TURN_TIMEOUT_SECONDS = 600
 
 
 
-_PROVIDER_HINT = (
-    "请检查 AI 供应商配置:base_url 是否为完整的 OpenAI 兼容端点"
-    "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
-)
-
-
-class AdapterError(RuntimeError):
+class AdapterError(LocalizedError, RuntimeError):
     """一次调用失败。
+
+    带文案 key(`aiErr_*`,见 core/i18n),`str(exc)` 按读的人的语言翻;sidecar / 供应商回的原话
+    作为参数(`detail`)放进翻好的句子里,或者原样当 message(不在文案表里的就原样显示)。
 
     `adapter_state` 是**失败时 sidecar 已经产出的那份记忆**。pi 的一轮跑完了才带 errorMessage
     (它不抛异常,把失败记在最后一条 assistant 消息上),所以失败点之前的工具调用是真的发生过、
@@ -58,8 +56,9 @@ class AdapterError(RuntimeError):
         usage: dict | None = None,
         context: dict | None = None,
         code: str = "",
+        **params: object,
     ) -> None:
-        super().__init__(message)
+        super().__init__(message, **params)
         self.adapter_state = adapter_state
         self.human = human
         self.usage = usage
@@ -101,7 +100,7 @@ def gateway_complete(
     """Run one stateless, tool-free completion through pi's provider/OAuth machinery."""
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "gateway_complete",
         "turnId": "gateway",
@@ -155,11 +154,11 @@ def gateway_complete(
             )
         if event.get("type") == "error":
             child.finish()
-            raise AdapterError(_tail(str(event.get("message", "Gateway 调用失败"))))
+            raise _reported(event, "aiErr_gatewayFailed")
     stderr = _tail(child.finish())
     if child.timed_out:
-        raise AdapterError(f"Gateway 调用超过 {timeout:g} 秒未返回")
-    raise AdapterError(stderr or "Gateway 没有返回结果")
+        raise AdapterError("aiErr_gatewayTimeout", seconds=f"{timeout:g}")
+    raise AdapterError(stderr or "aiErr_gatewayNoResult")
 
 def run_turn(
     adapter: str,
@@ -372,10 +371,10 @@ def _run_pi(
     service token; mutations still flow through confirmation cards. adapter_state
     carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
-        raise AdapterError("未配置可用的 AI 供应商;请在设置里添加并启用一个供应商。")
+        raise AdapterError("aiErr_noProvider")
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
 
     frame = {
         "type": "run_turn",
@@ -499,7 +498,7 @@ def _run_pi(
                 if error_code == "output_limit":
                     raise AdapterError(detail, failed_state, human=detail, **error_kwargs)
                 if not saw_tool:
-                    raise AdapterError(f"{detail}\n{_PROVIDER_HINT}", failed_state, **error_kwargs)
+                    raise AdapterError("aiErr_turnFailedCheckProvider", failed_state, detail=detail, **error_kwargs)
                 raise AdapterError(detail, failed_state, **error_kwargs)
             elif kind == "aborted":
                 aborted = True
@@ -514,12 +513,15 @@ def _run_pi(
                     del _LIVE[session_id]
         stderr_tail = _tail(child.finish())
     if child.timed_out:
-        timed_out = f"智能体运行超过 {TURN_TIMEOUT_SECONDS} 秒未返回,已终止。"
-        raise AdapterError(
-            timed_out + (f"\n{stderr_tail}" if stderr_tail else ""), human=timed_out
-        )
+        # `human` 是落进对话气泡的那一句(见 domain/agent/host),按**此刻**的语言渲染。
+        human = tr("aiErr_turnTimeout", seconds=TURN_TIMEOUT_SECONDS)
+        if stderr_tail:
+            raise AdapterError("aiErr_turnTimeoutDetail", seconds=TURN_TIMEOUT_SECONDS, detail=stderr_tail, human=human)
+        raise AdapterError("aiErr_turnTimeout", seconds=TURN_TIMEOUT_SECONDS, human=human)
     if result_text is None:
-        raise AdapterError(stderr_tail or f"pi sidecar exited with code {process.returncode}")
+        if stderr_tail:
+            raise AdapterError(stderr_tail)
+        raise AdapterError("aiErr_sidecarExited", exit_code=process.returncode)
     if aborted:
         # A stopped turn is a normal outcome, not a failure: the user asked for it, and the
         # partial text is real output they watched arrive.
@@ -528,8 +530,9 @@ def _run_pi(
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
         # surface as an empty chat bubble — the user has to be told why nothing came back.
-        nothing_back = f"模型没有返回任何内容。{_PROVIDER_HINT}"
-        raise AdapterError(stderr_tail or nothing_back, human="" if stderr_tail else nothing_back)
+        if stderr_tail:
+            raise AdapterError(stderr_tail)
+        raise AdapterError("aiErr_emptyReply", human=tr("aiErr_emptyReply"))
     return TurnResult(
         text=result_text.strip(),
         adapter_state=result_state,
@@ -539,6 +542,13 @@ def _run_pi(
     )
 def _tail(text: str, limit: int = 500) -> str:
     return text.strip()[-limit:]
+
+
+def _reported(event: dict, fallback_key: str) -> AdapterError:
+    """sidecar 回了一条 `error` 事件:它说了原因就原样交出(那是它/供应商的话,我们不翻);
+    没说就用 `fallback_key` 那一句。"""
+    message = _tail(str(event.get("message") or ""))
+    return AdapterError(message or fallback_key)
 
 
 @dataclass
@@ -564,10 +574,10 @@ def compact_session(
     再问一句话才生效,和这个动作的语义对不上。摘要仍然会花一次模型调用,所以它是手动的。
     """
     if not provider or not model:
-        raise AdapterError("未配置可用的 AI 供应商;请在设置里添加并启用一个供应商。")
+        raise AdapterError("aiErr_noProvider")
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "compact",
         "turnId": "compact",
@@ -614,8 +624,8 @@ def compact_session(
             )
         if event.get("type") == "error":
             child.finish()
-            raise AdapterError(_tail(str(event.get("message", "压缩失败"))))
-    raise AdapterError(_tail(child.finish()) or "压缩没有返回结果")
+            raise _reported(event, "aiErr_compactFailed")
+    raise AdapterError(_tail(child.finish()) or "aiErr_compactNoResult")
 
 
 def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, profile_id: str, credential: dict | None) -> bool:
@@ -627,7 +637,7 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
     """
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "refresh_credential",
         "turnId": "refresh",
@@ -660,5 +670,5 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
             return bool(event.get("refreshed"))
         if event.get("type") == "error":
             child.finish()
-            raise AdapterError(_tail(str(event.get("message", "刷新凭据失败"))))
-    raise AdapterError(_tail(child.finish()) or "刷新凭据没有返回结果")
+            raise _reported(event, "aiErr_refreshFailed")
+    raise AdapterError(_tail(child.finish()) or "aiErr_refreshNoResult")

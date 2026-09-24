@@ -54,6 +54,7 @@ class WorkerPool(_Pool):
             worker_path=worker_path,
             decode=decode_event_line,
             noun="合成",
+            kind="tts",
             idle_seconds=idle_seconds,
         )
 

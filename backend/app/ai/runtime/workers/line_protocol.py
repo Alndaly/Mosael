@@ -29,6 +29,29 @@ class WorkerProtocolError(RuntimeError):
     pass
 
 
+class KeyedWorkerError(RuntimeError):
+    """worker 里说不行的那一句,带**文案 key**(见宿主的 core/i18n)。
+
+    worker 跑在引擎自己的隔离解释器里,import 不了文案表,所以它不拼给人看的句子:只报 key 和
+    参数,由宿主(ai/runtime/worker_pool)按读的人的语言翻。`text` 是一句英文原话,给日志和
+    一次性模式(那里只有 stderr 上的 traceback)用。
+    """
+
+    def __init__(self, key: str, text: str, **params: object) -> None:
+        super().__init__(text)
+        self.key = key
+        self.params = {name: str(value) for name, value in params.items()}
+
+
+def error_event(exc: BaseException) -> dict[str, Any]:
+    """一个异常 → 报回宿主的那条 `error` 事件。带 key 的一并带上 key 和参数。"""
+    event: dict[str, Any] = {"event": "error", "message": f"{type(exc).__name__}: {exc}"}
+    if isinstance(exc, KeyedWorkerError):
+        event["key"] = exc.key
+        event["params"] = dict(exc.params)
+    return event
+
+
 def text_field(event: Mapping[str, Any], key: str, *, what: str, allow_empty: bool = False) -> str:
     """取一个字符串字段,顺便把"它该是什么"说清楚 —— 这条报错是给改协议的人看的。"""
     value = event.get(key)

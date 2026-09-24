@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from app.ai.runtime.download_state import ProbeCache
+from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure
 from app.ai.runtime.install_state import FAILED, INSTALLING, InstallProgress, InstallStore
 from app.core import interpreter, pip_install
 from app.core.child_process import run_logged
@@ -121,7 +122,7 @@ def probe_runtime(engine: str) -> tuple[bool, str]:
     """
     spec = ENGINES.get(engine)
     if spec is None:
-        return False, f"不认识的分离引擎:{engine}"
+        return False, f"unknown separation engine: {engine}"
     python = managed_venv_python(engine)
     if not python.is_file():
         return False, ""
@@ -195,7 +196,7 @@ def ensure_runtime(engine: str) -> None:
     """
     spec = ENGINES.get(engine)
     if spec is None:
-        raise RuntimeError(f"不认识的分离引擎:{engine}")
+        raise RuntimeSetupError("runtimeErr_unknownSeparationEngine", engine=engine)
     if runtime_ready(engine):
         return
 
@@ -206,7 +207,7 @@ def ensure_runtime(engine: str) -> None:
         # (asr_models 里记着这笔账:然后把 uvicorn「端口已占用」当成创建失败的原因端给用户)。
         base = interpreter.base_python()
         if not base:
-            raise RuntimeError("找不到可用于创建运行环境的 Python 解释器")
+            raise RuntimeSetupError("runtimeErr_noBasePython")
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         created = run_logged(
             [base, "-m", "venv", str(venv_dir)],
@@ -216,9 +217,7 @@ def ensure_runtime(engine: str) -> None:
             what="创建音频分离运行环境",
         )
         if created.returncode != 0 or not venv_python.is_file():
-            raise RuntimeError(
-                f"创建运行环境失败:{blame_line(created.stderr or created.stdout, fallback='没有留下原因')}"
-            )
+            raise venv_failure(created.stderr or created.stdout)
 
     # 和转写、克隆走同一个安装器,包括设置页那个 pip 镜像 —— 同一台机器上不该"一个走镜像、
     # 一个直连 PyPI",而那个设置项写的就是「装引擎依赖时用的 pip 索引」。
@@ -232,14 +231,16 @@ def ensure_runtime(engine: str) -> None:
             index_url=runtime_config.get().pip_index_url,
         )
     except pip_install.PipInstallError as exc:
-        raise RuntimeError(f"安装 {engine} 运行依赖失败:{exc}") from exc
+        raise RuntimeSetupError("runtimeErr_depsFailed", engine=engine, detail=str(exc)) from exc
 
     # **装完要再探一次**,而且要认这次的答案:pip 退 0 不等于 import 得进来(装错轮子、
     # 平台不匹配、依赖被别的包降级),而那正是这次要修的那种故障。
     clear_runtime_probes()
     if not refresh_runtime_status(engine):
-        reason = runtime_blame(engine) or "没有留下原因"
-        raise RuntimeError(f"装完 {engine} 之后它仍然跑不起来:{reason}")
+        reason = runtime_blame(engine)
+        if reason:
+            raise RuntimeSetupError("runtimeErr_stillBroken", engine=engine, detail=reason)
+        raise RuntimeSetupError("runtimeErr_stillBrokenSilent", engine=engine)
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +295,6 @@ def _run_install(engine: str) -> None:
     except Exception as exc:  # noqa: BLE001 — 失败要留在状态里给用户看,不是吞掉
         logger.warning("安装分离引擎 %s 失败:%s", engine, exc)
         #: 原因**原样带出来**:pip 说不清时用户至少能把那句话搜一下。
-        _store.set(engine, InstallProgress(FAILED, str(exc)))
+        _store.set(engine, InstallProgress(FAILED, *failure_message(exc)))
         return
     _store.clear(engine)

@@ -20,6 +20,7 @@ from app.ai.providers.contracts.generation import (
     image_file_to_base64,
     metering_from_request,
     adapter_http_error,
+    http_error_detail,
 )
 from app.ai.media_transfer import download_to_path, fetch_bytes
 
@@ -65,7 +66,7 @@ def extract_video_uri(operation_payload: dict[str, Any]) -> str | None:
     if operation_payload.get("error"):
         error = operation_payload["error"]
         message = error.get("message") if isinstance(error, dict) else str(error)
-        raise GenerationAdapterError(f"Generation failed: {message}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="Google Veo", detail=message)
     if not operation_payload.get("done"):
         return None
 
@@ -78,7 +79,7 @@ def extract_video_uri(operation_payload: dict[str, Any]) -> str | None:
         video = sample.get("video") or {}
         if isinstance(video, dict) and video.get("uri"):
             return str(video["uri"])
-    raise GenerationAdapterError("Provider returned success without a video URI")
+    raise GenerationAdapterError("providerErr_noResultUrl", vendor="Google Veo")
 
 
 class VeoAdapter(GenerationAdapter):
@@ -96,21 +97,21 @@ class VeoAdapter(GenerationAdapter):
                 submit.raise_for_status()
                 operation_name = submit.json().get("name") or ""
                 if not operation_name:
-                    raise GenerationAdapterError("Provider did not return an operation name")
+                    raise GenerationAdapterError("providerErr_noTaskId", vendor="Google Veo")
                 return self._collect(client, f"/{operation_name.lstrip('/')}", request, context, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("Google Veo request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("Google Veo", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(context) as client:
                 return self._collect(client, poll_path, request, context, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("Google Veo request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("Google Veo", exc, context.api_key) from exc
 
     def _client(self, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
-            raise GenerationAdapterError("Google API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="Google")
         return RetryingClient(
             base_url=_base_url(context), timeout=60, headers={"x-goog-api-key": context.api_key}, follow_redirects=True,
         )
@@ -175,4 +176,4 @@ def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> Genera
             sources=request.sources,
         )
     except httpx.HTTPError as exc:
-        raise GenerationAdapterError(adapter_http_error("Failed to fetch Veo first frame", exc, api_key)) from exc
+        raise GenerationAdapterError("providerErr_firstFrameFetchFailed", vendor="Google Veo", detail=http_error_detail(exc, api_key)) from exc

@@ -25,6 +25,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app.ai.runtime.errors import RuntimeSetupError, failure_message
 from app.ai.runtime.install_state import FAILED, InstallProgress, InstallStore
 from app.core.config import settings
 
@@ -122,7 +123,7 @@ def start_install(engine: str) -> dict[str, Any]:
     if engine not in INSTALLABLE:
         raise KeyError(engine)
     if deepfilter_binary_spec() is None:
-        raise RuntimeError("这个平台没有 DeepFilterNet 的发布文件")
+        raise RuntimeSetupError("runtimeErr_deepfilterUnsupportedPlatform")
     if runtime_ready(engine):
         return install_status(engine)
     _store.begin(engine, "dlMsg_downloading")
@@ -135,7 +136,7 @@ def _run_install(engine: str) -> None:
         _install_deepfilter()
     except Exception as exc:  # noqa: BLE001 — 失败要留在状态里给用户看,不是吞掉
         logger.warning("安装降噪引擎 %s 失败:%s", engine, exc)
-        _store.set(engine, InstallProgress(FAILED, str(exc)))
+        _store.set(engine, InstallProgress(FAILED, *failure_message(exc)))
         return
     _store.clear(engine)
 
@@ -145,7 +146,7 @@ def _install_deepfilter() -> Path:
 
     spec = deepfilter_binary_spec()
     if spec is None:
-        raise RuntimeError("这个平台没有 DeepFilterNet 的发布文件")
+        raise RuntimeSetupError("runtimeErr_deepfilterUnsupportedPlatform")
     target = deepfilter_path()
     staging = target.with_name(f"{target.name}.download")
     url = _RELEASE_URL.format(version=DEEPFILTER_VERSION, asset=spec.asset)
@@ -154,7 +155,7 @@ def _install_deepfilter() -> Path:
         digest = _sha256(staging)
         if digest != spec.sha256:
             # 不说"下载失败"—— 下载是成功的,只是下来的东西不是我们核对过的那一个。
-            raise RuntimeError(f"下载到的文件校验不符(SHA-256 {digest[:12]}…),已丢弃,没有安装")
+            raise RuntimeSetupError("runtimeErr_checksumMismatch", digest=digest[:12])
         if os.name != "nt":
             staging.chmod(0o755)
         # 校验通过才挪到正式位置:deepfilter_ready 只看这个路径,半截或被换过的文件永远到不了这里。

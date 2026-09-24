@@ -32,7 +32,7 @@ class EdgeSpeechAdapter:
         try:
             import edge_tts
         except ModuleNotFoundError as exc:  # pragma: no cover — packaged installs ship it
-            raise SpeechSynthesisError("edge-tts 依赖未安装,请更新后端环境") from exc
+            raise SpeechSynthesisError("providerErr_edgeTtsMissing") from exc
 
         voice = request.voice or self._default_voice or "zh-CN-XiaoxiaoNeural"
         speed = max(0.5, min(2.0, request.speed))
@@ -43,9 +43,9 @@ class EdgeSpeechAdapter:
         except SpeechSynthesisError:
             raise
         except Exception as exc:  # noqa: BLE001 — edge_tts raises its own exception family
-            raise SpeechSynthesisError(f"Edge 语音合成失败: {exc}") from exc
+            raise SpeechSynthesisError("providerErr_ttsFailed", engine="Edge", detail=str(exc)) from exc
         if not out_path.is_file() or out_path.stat().st_size == 0:
-            raise SpeechSynthesisError("Edge 语音合成返回空音频")
+            raise SpeechSynthesisError("providerErr_ttsEmptyAudio", engine="Edge")
 
 
 #: Curated Edge voices. The service lists hundreds; offering them all makes the dropdown

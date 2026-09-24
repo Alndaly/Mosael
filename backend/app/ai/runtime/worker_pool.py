@@ -18,7 +18,9 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from app.ai.runtime.errors import RuntimeSetupError
 from app.core.child_process import popen_text
+from app.core.i18n import is_message_key
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +53,16 @@ class ResidentWorker:
         *,
         decode: Decode,
         noun: str,
+        kind: str,
     ) -> None:
         #: 怎么从一行里认出事件。**每种 worker 的 done 形状不同**(合成给的是文件路径,
         #: 识别给的是语言与分段),所以解码交给绑定层,进程管理这一层不认识任何一种。
         self._decode = decode
-        #: 报错时怎么称呼这件事(「合成」/「识别」)。用户读到的是这个词。
+        #: 日志里怎么称呼这件事(「合成」/「识别」)。
         self._noun = noun
+        #: 报错用哪一组文案(`runtimeErr_{kind}Worker*`)。用户读到的那句话按语言翻,称呼跟着它走 ——
+        #: 所以这里不能把 `noun` 拼进句子。
+        self._kind = kind
         #: 一次只让一个请求进 stdin/stdout。**不是** TTS_SLOTS 那种"限制并发合成数"的名额,
         #: 这条只保护这一个进程的管道不被两个请求同时用。
         self._pipe_lock = threading.Lock()
@@ -119,7 +125,7 @@ class ResidentWorker:
         # 同一个 worker 一次只能跑一个请求,第二个调用方原先会在这里挂到天荒地老,期间不检查
         # 取消 —— 用户那一侧的表现是"点了没反应"。
         if not self._pipe_lock.acquire(timeout=timeout):
-            raise RuntimeError(f"{self.engine} 的{self._noun}正忙,等待超过 {timeout:.0f} 秒")
+            raise RuntimeSetupError(f"runtimeErr_{self._kind}WorkerBusy", engine=self.engine, seconds=f"{timeout:.0f}")
         try:
             return self._request_locked(payload, on_progress=on_progress, timeout=timeout)
         finally:
@@ -186,7 +192,7 @@ class ResidentWorker:
                     on_progress(event)
                 continue
             if kind == "error":
-                raise RuntimeError(event.get("message") or f"{self._noun}失败")
+                raise self._failure(event)
             if kind == "done":
                 self.last_used = time.monotonic()
                 return event
@@ -195,8 +201,18 @@ class ResidentWorker:
         # 那看起来和"还在跑"一模一样,所以必须变成一个明确的错误。
         self.kill()
         if self.timed_out:
-            raise RuntimeError(f"{self._noun}超时,没有回音 —— 进程已被终止")
-        raise RuntimeError(f"{self._noun}进程中途退出,没有给出结果")
+            raise RuntimeSetupError(f"runtimeErr_{self._kind}WorkerTimedOut")
+        raise RuntimeSetupError(f"runtimeErr_{self._kind}WorkerDied")
+
+    def _failure(self, event: dict) -> RuntimeSetupError:
+        """worker 报回来的失败。带 key 的(见 workers/line_protocol.KeyedWorkerError)按读的人的
+        语言翻;不带的是引擎/第三方库自己的那句话,原样交出去 —— 那是它的文本,我们翻不了。"""
+        key = str(event.get("key") or "")
+        if is_message_key(key):
+            params = event.get("params") if isinstance(event.get("params"), dict) else {}
+            return RuntimeSetupError(key, **{str(name): str(value) for name, value in params.items()})
+        message = str(event.get("message") or "")
+        return RuntimeSetupError(message) if message else RuntimeSetupError(f"runtimeErr_{self._kind}WorkerFailed")
 
     def kill(self) -> None:
         try:
@@ -214,11 +230,13 @@ class WorkerPool:
         worker_path: str | Path,
         decode: Decode,
         noun: str,
+        kind: str,
         idle_seconds: float = DEFAULT_IDLE_SECONDS,
     ) -> None:
         self._worker_path = str(worker_path)
         self._decode = decode
         self._noun = noun
+        self._kind = kind
         self._idle_seconds = idle_seconds
         self._workers: dict[tuple[str, str], ResidentWorker] = {}
         self._lock = threading.Lock()
@@ -288,7 +306,9 @@ class WorkerPool:
                 logger.info("%s 的%s进程已经不在了,重新起一个", engine, self._noun)
             # env 在**起进程时**定下:fish 靠 MOSAEL_FISH_* 找检出和权重。配置改了之后
             # 常驻进程会抱着旧 env 不放,所以设置页保存时调 shutdown() 让它重起(见 routes/voices)。
-            worker = ResidentWorker(engine, python, self._worker_path, env, decode=self._decode, noun=self._noun)
+            worker = ResidentWorker(
+                engine, python, self._worker_path, env, decode=self._decode, noun=self._noun, kind=self._kind
+            )
             self._workers[(engine, python)] = worker
             return worker
 

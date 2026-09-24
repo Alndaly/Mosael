@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 
 from app.core.child_process import run_logged
+from app.core.i18n import is_message_key
 
 from app.ai.providers.contracts.separation import (
     SEPARATION_TIMEOUT_SECONDS,
@@ -48,11 +49,9 @@ class DemucsSeparationAdapter:
         # 一句用户无从下手的话。跑不起来就在这儿说清楚,并把子进程自己说的那句带上。
         if not separation_models.runtime_ready(self.engine_id):
             blame = separation_models.runtime_blame(self.engine_id)
-            raise SeparationError(
-                f"音频分离的运行环境还没装好(去设置里装一次):{blame}"
-                if blame
-                else "音频分离的运行环境还没准备好,去设置里装一次"
-            )
+            if blame:
+                raise SeparationError("providerErr_separationRuntimeBroken", detail=blame)
+            raise SeparationError("providerErr_separationRuntimeMissing")
         out_dir.mkdir(parents=True, exist_ok=True)
         payload = {
             "audio_path": str(request.audio_path),
@@ -80,14 +79,13 @@ class DemucsSeparationAdapter:
                 env=env,
             )
             if completed.returncode != 0:
-                tail = (completed.stderr or completed.stdout or "").strip().splitlines()
-                raise SeparationError(tail[-1] if tail else f"分离失败(退出码 {completed.returncode})")
+                raise _worker_failure(result_path, completed)
             try:
                 produced = json.loads(result_path.read_text(encoding="utf-8")).get("stems") or {}
             except (OSError, ValueError) as exc:
-                raise SeparationError(f"分离结果读不出来:{exc}") from exc
+                raise SeparationError("providerErr_separationUnreadable", detail=str(exc)) from exc
         except subprocess.TimeoutExpired as exc:
-            raise SeparationError("分离超时") from exc
+            raise SeparationError("providerErr_separationTimeout") from exc
         finally:
             result_path.unlink(missing_ok=True)
 
@@ -95,5 +93,26 @@ class DemucsSeparationAdapter:
         missing = [name for name in request.stems if name not in stems or not stems[name].is_file()]
         if missing:
             # **少给一条就报错,不静默返回半份** —— 少的那条会一路空到成片里。
-            raise SeparationError(f"分离结果里缺少:{'、'.join(missing)}")
+            raise SeparationError("providerErr_separationMissingStems", stems=", ".join(missing))
         return stems
+
+
+def _worker_failure(result_path: Path, completed: subprocess.CompletedProcess) -> SeparationError:
+    """子进程没做成 → 一条带 key 的错误。
+
+    worker 说得出是哪一种(写在结果文件的 `error` 里,见 workers/separation._fail)就用它:
+    worker 跑在引擎自己的隔离解释器里,import 不了文案表,所以它只报 key 和参数,由这边按
+    读的人的语言翻。说不出(崩在 import 之前、被系统杀掉)才退回 stderr 的最后一行,原样
+    放进 `detail`。
+    """
+    try:
+        reported = json.loads(result_path.read_text(encoding="utf-8") or "{}").get("error")
+    except (OSError, ValueError, AttributeError):
+        reported = None
+    if isinstance(reported, dict) and is_message_key(str(reported.get("key") or "")):
+        params = reported.get("params") if isinstance(reported.get("params"), dict) else {}
+        return SeparationError(str(reported["key"]), **{str(k): str(v) for k, v in params.items()})
+    tail = (completed.stderr or completed.stdout or "").strip().splitlines()
+    if tail:
+        return SeparationError("providerErr_separationFailed", detail=tail[-1])
+    return SeparationError("providerErr_separationExitCode", code=completed.returncode)

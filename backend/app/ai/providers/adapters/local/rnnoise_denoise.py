@@ -18,6 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.ai.providers.contracts.denoise import (
+    subprocess_failure,
     DENOISE_TIMEOUT_SECONDS,
     LIGHT,
     MEDIUM,
@@ -28,7 +29,6 @@ from app.ai.providers.contracts.denoise import (
 )
 from app.core.child_process import run_logged
 from app.core.config import settings
-from app.core.text import blame_line
 
 MODEL_DIR = Path(__file__).resolve().parents[3] / "runtime" / "models" / "rnnoise"
 MODEL_FILE = "somnolent-hogwash.rnnn"
@@ -80,7 +80,7 @@ class RnnoiseDenoiseAdapter:
                 what="RNNoise 降噪",
             )
         except subprocess.TimeoutExpired as exc:
-            raise DenoiseError("降噪超时") from exc
+            raise DenoiseError("providerErr_denoiseTimeout") from exc
         if result.returncode != 0 or not out_path.is_file():
-            raise DenoiseError(f"降噪失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+            raise subprocess_failure("providerErr_denoiseFailed", result.stderr, tool="ffmpeg")
         return out_path

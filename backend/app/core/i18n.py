@@ -2034,6 +2034,378 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Some models (such as Seedance) cannot combine first/last frames with reference media. With both connected, choose which group this run uses and the other is ignored; All passes everything to the model",
     },
     # ---- i18n 分区 B2(ai/ 下的供应商与运行时):这一批新加的 key 放在这行下面 ----
+    # ---- 生成供应商(ai/providers):上游原话放在 {detail} 里,不翻 ----
+    # 文案里**不写字面花括号**:任务失败原因那条路(render_message)总会 format 一遍,字面的 { } 会被吃掉;
+    # 要显示花括号就走参数(见 providerErr_comfyTemplateEmpty 的 {shape})。
+    "providerErr_apiKeyMissing": {
+        "zh": "{vendor} 的 API Key 还没配置,请在设置 → 供应商配置里填写",
+        "en": "{vendor} API key is not configured. Add it in Settings → Provider config.",
+    },
+    "providerErr_klingKeyMissing": {
+        "zh": "可灵的 Access Key / API Key 还没配置,请在设置 → 供应商配置里填写",
+        "en": "Kling Access Key / API key is not configured. Add it in Settings → Provider config.",
+    },
+    "providerErr_requestFailed": {"zh": "{vendor} 请求失败:{detail}", "en": "{vendor} request failed: {detail}"},
+    "providerErr_firstFrameFetchFailed": {
+        "zh": "{vendor} 取首帧图片失败:{detail}",
+        "en": "{vendor} could not fetch the first-frame image: {detail}",
+    },
+    "providerErr_generationFailed": {"zh": "{vendor} 生成失败:{detail}", "en": "{vendor} generation failed: {detail}"},
+    "providerErr_noTaskId": {"zh": "{vendor} 没有返回任务 id", "en": "{vendor} did not return a task ID"},
+    "providerErr_noTaskIdDetail": {"zh": "{vendor} 没有返回任务 id:{detail}", "en": "{vendor} did not return a task ID: {detail}"},
+    "providerErr_noResultUrl": {
+        "zh": "{vendor} 报告生成成功,但没有给出产物地址",
+        "en": "{vendor} reported success but returned no result URL",
+    },
+    "providerErr_noImageData": {"zh": "{vendor} 没有返回图片数据", "en": "{vendor} returned no image data"},
+    "providerErr_unexpectedUrlResult": {
+        "zh": "{vendor} 返回的是图片地址,而这里要的是内联的图片数据",
+        "en": "{vendor} returned an image URL where inline image data was expected",
+    },
+    "providerErr_cancelled": {"zh": "已取消", "en": "Cancelled"},
+    "providerErr_pollTimeout": {
+        "zh": "生成超时(远端任务 {task} 在 {hours} 小时内没有结束)",
+        "en": "Generation timed out (remote task {task} did not finish within {hours} h)",
+    },
+    "providerErr_vendorPollTimeout": {
+        "zh": "{vendor} 生成超时(远端任务 {task} 在 {hours} 小时内没有结束)",
+        "en": "{vendor} generation timed out (remote task {task} did not finish within {hours} h)",
+    },
+    "providerErr_resumeUnsupported": {
+        "zh": "{vendor} 不支持取回已提交的任务",
+        "en": "{vendor} cannot resume a task that was already submitted",
+    },
+    "providerErr_promptEmpty": {"zh": "提示词不能为空", "en": "The prompt cannot be empty"},
+    "providerErr_numImagesRange": {"zh": "图片张数要在 1 到 {max} 之间", "en": "The number of images must be between 1 and {max}"},
+    "providerErr_durationInvalid": {
+        "zh": "时长必须是正数,或 -1(自动)",
+        "en": "Duration must be a positive number, or -1 (auto)",
+    },
+    "providerErr_durationRange": {
+        "zh": "时长必须是 -1(自动),或在 {min} 到 {max} 秒之间",
+        "en": "Duration must be -1 (auto) or between {min} and {max} seconds",
+    },
+    "providerErr_resolutionEmpty": {"zh": "分辨率不能为空", "en": "Resolution cannot be empty"},
+    "providerErr_resolutionChoices": {"zh": "分辨率只能是 {choices} 之一", "en": "Resolution must be one of {choices}"},
+    "providerErr_unreadableInputImage": {"zh": "{vendor} 无法读取输入图片:{name}", "en": "{vendor} could not read the input image: {name}"},
+    "providerErr_uploadFailed": {"zh": "{vendor} 素材上传失败:{detail}", "en": "{vendor} media upload failed: {detail}"},
+    "providerErr_uploadNoUrl": {
+        "zh": "{vendor} 素材上传成功,但没有返回文件地址",
+        "en": "{vendor} accepted the upload but returned no file URL",
+    },
+    "providerErr_tooManyImages": {"zh": "{vendor} 一次最多接收 {limit} 张图片", "en": "{vendor} accepts at most {limit} images per request"},
+    "providerErr_tooManyVideos": {"zh": "{vendor} 一次最多接收 {limit} 段视频", "en": "{vendor} accepts at most {limit} videos per request"},
+    "providerErr_tooManyAudios": {"zh": "{vendor} 一次最多接收 {limit} 段音频", "en": "{vendor} accepts at most {limit} audio clips per request"},
+    "providerErr_klingElementsNeedOmni": {
+        "zh": "可灵的多图参考主体只能用 Kling 3.0 Omni 模型",
+        "en": "Kling reference elements require the Kling 3.0 Omni model",
+    },
+    "providerErr_klingElementImageCount": {
+        "zh": "可灵的多图参考要 {min}～{max} 张图(第一张是正面图,其余是其他角度),这次给了 {given} 张",
+        "en": "Kling multi-image reference needs {min}–{max} images (the first is the front view, the rest other angles); got {given}",
+    },
+    "providerErr_klingElementFailed": {"zh": "可灵建主体失败:{detail}", "en": "Kling could not create the reference element: {detail}"},
+    "providerErr_klingElementNoId": {
+        "zh": "可灵建主体成功却没有返回 element_id",
+        "en": "Kling created the reference element but returned no element_id",
+    },
+    "providerErr_klingElementNoTaskId": {
+        "zh": "可灵建主体没有返回任务 id",
+        "en": "Kling did not return a task ID for the reference element",
+    },
+    "providerErr_klingElementTimeout": {"zh": "可灵建主体超时", "en": "Kling timed out creating the reference element"},
+    "providerErr_klingTooManyElements": {
+        "zh": "可灵一次最多引用 {max} 个主体,这次给了 {given} 个",
+        "en": "Kling can reference at most {max} elements per request; got {given}",
+    },
+    "providerErr_comfyNoOutput": {
+        "zh": "ComfyUI 完成了执行但没有产出文件——工作流模板里需要 SaveImage(图)或视频合成输出节点(视频)",
+        "en": "ComfyUI finished but produced no files. The workflow template needs a SaveImage node (images) or a video-combine output node (video).",
+    },
+    "providerErr_comfyConnectFailed": {
+        "zh": "连接 ComfyUI 失败({base}):{detail}。请确认 ComfyUI 正在运行,地址在设置 → AI 绘图 → ComfyUI 里可改。",
+        "en": "Could not connect to ComfyUI ({base}): {detail}. Make sure ComfyUI is running; you can change its address in Settings → AI image → ComfyUI.",
+    },
+    "providerErr_comfyWorkflowFailed": {
+        "zh": "拉取或转换 ComfyUI 工作流「{workflow}」失败:{detail}。可在生成时改选其它工作流、内置文生图,或在档案里粘贴自定义 API 模板。",
+        "en": "Could not fetch or convert the ComfyUI workflow “{workflow}”: {detail}. Pick another workflow or the built-in text-to-image when generating, or paste a custom API template into the profile.",
+    },
+    "providerErr_comfyTemplateNotJson": {
+        "zh": "ComfyUI 工作流模板不是合法 JSON——请从 ComfyUI 用「导出 (API)」格式导出后粘贴",
+        "en": "The ComfyUI workflow template is not valid JSON. Export it from ComfyUI with “Export (API)” and paste that.",
+    },
+    "providerErr_comfyTemplateEmpty": {
+        "zh": "ComfyUI 工作流模板为空——需要 API 格式(节点 id → {shape})",
+        "en": "The ComfyUI workflow template is empty. It must be in API format (node id → {shape}).",
+    },
+    "providerErr_comfyVideoNeedsTemplate": {
+        "zh": "ComfyUI 视频生成需要工作流模板:在 ComfyUI 里搭好视频工作流(如 AnimateDiff / WAN),「导出 (API)」后粘贴到该档案的模板字段,提示词位置写 {placeholder}",
+        "en": "ComfyUI video generation needs a workflow template: build a video workflow in ComfyUI (e.g. AnimateDiff / WAN), use “Export (API)”, paste it into this profile's template field, and put {placeholder} where the prompt goes.",
+    },
+    "providerErr_comfyNoCheckpoint": {
+        "zh": "ComfyUI 里没有任何 checkpoint 模型——请先在 ComfyUI 安装一个模型,或在档案里粘贴自定义工作流模板",
+        "en": "ComfyUI has no checkpoint models. Install one in ComfyUI first, or paste a custom workflow template into the profile.",
+    },
+    "providerErr_comfyRejected": {"zh": "ComfyUI 拒绝了工作流:{detail}", "en": "ComfyUI rejected the workflow: {detail}"},
+    "providerErr_comfyExecutionFailed": {"zh": "ComfyUI 执行失败:{detail}", "en": "ComfyUI execution failed: {detail}"},
+    "providerErr_comfyExecutionFailedNoDetail": {
+        "zh": "ComfyUI 执行失败:未知错误(详见 ComfyUI 日志)",
+        "en": "ComfyUI execution failed with an unknown error (see the ComfyUI log)",
+    },
+    "providerErr_comfyTimeout": {
+        "zh": "ComfyUI 生成超时({seconds}s)——工作流可能仍在排队,可在 ComfyUI 界面查看",
+        "en": "ComfyUI generation timed out ({seconds}s). The workflow may still be queued; check the ComfyUI interface.",
+    },
+    # ---- 语音合成 / 播客 ----
+    "providerErr_unknownSpeechEngine": {"zh": "未知的语音引擎:{engine}", "en": "Unknown speech engine: {engine}"},
+    "providerErr_ttsKeyMissing": {
+        "zh": "{engine} 语音合成需要 API Key,请在设置里配置",
+        "en": "{engine} speech synthesis needs an API key. Add it in Settings.",
+    },
+    "providerErr_ttsFailed": {"zh": "{engine} 语音合成失败:{detail}", "en": "{engine} speech synthesis failed: {detail}"},
+    "providerErr_ttsEmptyAudio": {"zh": "{engine} 语音合成返回空音频", "en": "{engine} speech synthesis returned empty audio"},
+    "providerErr_edgeTtsMissing": {
+        "zh": "edge-tts 依赖未安装,请更新后端环境",
+        "en": "The edge-tts dependency is not installed. Update the backend environment.",
+    },
+    "providerErr_bailianTtsKeyMissing": {
+        "zh": "百炼语音合成需要 DashScope API Key,请在设置里配置",
+        "en": "Alibaba Cloud Bailian speech synthesis needs a DashScope API key. Add it in Settings.",
+    },
+    "providerErr_bailianTtsNoAudioUrl": {
+        "zh": "百炼语音合成没有返回音频地址",
+        "en": "Alibaba Cloud Bailian speech synthesis returned no audio URL",
+    },
+    "providerErr_bailianTtsFailed": {
+        "zh": "百炼语音合成失败:{detail}",
+        "en": "Alibaba Cloud Bailian speech synthesis failed: {detail}",
+    },
+    "providerErr_volcanoTtsKeyMissing": {
+        "zh": "火山引擎语音合成需要新版控制台的 API Key",
+        "en": "Volcano Engine speech synthesis needs an API key from the new console",
+    },
+    "providerErr_volcanoTtsVoiceMissing": {
+        "zh": "火山引擎语音合成需要音色 id(如 {example})",
+        "en": "Volcano Engine speech synthesis needs a voice ID (e.g. {example})",
+    },
+    "providerErr_volcanoTtsFailed": {"zh": "火山 TTS 失败:{detail}", "en": "Volcano Engine TTS failed: {detail}"},
+    "providerErr_volcanoTtsRequestFailed": {"zh": "火山 TTS 请求失败:{detail}", "en": "Volcano Engine TTS request failed: {detail}"},
+    "providerErr_volcanoTtsEmptyAudio": {"zh": "火山 TTS 返回空音频", "en": "Volcano Engine TTS returned empty audio"},
+    "providerErr_podcastConnectRejected": {"zh": "播客连接被拒绝:{detail}", "en": "The podcast connection was rejected: {detail}"},
+    "providerErr_podcastSessionStartFailed": {"zh": "播客会话启动失败:{detail}", "en": "The podcast session failed to start: {detail}"},
+    "providerErr_podcastFailed": {"zh": "播客生成失败(code={code}):{detail}", "en": "Podcast generation failed (code={code}): {detail}"},
+    "providerErr_podcastSessionFailed": {"zh": "播客会话失败:{detail}", "en": "The podcast session failed: {detail}"},
+    "providerErr_podcastEmptyAudio": {"zh": "播客返回了空音频", "en": "The podcast came back with empty audio"},
+    "providerErr_podcastCredentialsMissing": {
+        "zh": "火山播客需要 App ID 和 Access Token(不是语音合成的 API Key)",
+        "en": "Volcano Engine podcasts need an App ID and Access Token (not the speech-synthesis API key)",
+    },
+    "providerErr_podcastNeedsTwoSpeakers": {
+        "zh": "AI 生成对话需要正好两个发音人",
+        "en": "An AI-generated dialogue needs exactly two speakers",
+    },
+    "providerErr_podcastNeedsInputText": {"zh": "请提供要改写成对话的文本", "en": "Provide the text to turn into a dialogue"},
+    "providerErr_podcastNeedsTopic": {"zh": "请提供要检索并讨论的主题", "en": "Provide a topic to research and discuss"},
+    "providerErr_podcastReadNeedsSpeaker": {"zh": "朗读模式需要至少一个发音人", "en": "Read-aloud mode needs at least one speaker"},
+    "providerErr_podcastReadNeedsText": {"zh": "请提供要朗读的文本", "en": "Provide the text to read aloud"},
+    # ---- 降噪 / 人声分离(本机引擎) ----
+    "providerErr_denoiseUnknownStrength": {
+        "zh": "不认识的降噪档位:{strength}(可选:{choices})",
+        "en": "Unknown denoise strength: {strength} (choose from {choices})",
+    },
+    "providerErr_denoiseDeepfilterMissing": {"zh": "DeepFilterNet 还没装好", "en": "DeepFilterNet is not installed yet"},
+    "providerErr_denoiseTimeout": {"zh": "降噪超时", "en": "Noise reduction timed out"},
+    "providerErr_denoiseFailed": {"zh": "降噪失败:{detail}", "en": "Noise reduction failed: {detail}"},
+    "providerErr_denoiseFailedSilent": {
+        "zh": "降噪失败:{tool} 没有说明原因",
+        "en": "Noise reduction failed: {tool} gave no reason",
+    },
+    "providerErr_denoiseConvertFailed": {
+        "zh": "降噪前转换失败:{detail}",
+        "en": "Could not convert the audio before noise reduction: {detail}",
+    },
+    "providerErr_denoiseConvertFailedSilent": {
+        "zh": "降噪前转换失败:{tool} 没有说明原因",
+        "en": "Could not convert the audio before noise reduction: {tool} gave no reason",
+    },
+    "providerErr_denoiseMeasureFailed": {
+        "zh": "量不出这段音频的噪声:{detail}",
+        "en": "Could not measure the noise in this audio: {detail}",
+    },
+    "providerErr_denoiseMeasureFailedSilent": {
+        "zh": "量不出这段音频的噪声:{tool} 没有说明原因",
+        "en": "Could not measure the noise in this audio: {tool} gave no reason",
+    },
+    "providerErr_separationRuntimeBroken": {
+        "zh": "音频分离的运行环境还没装好(去设置里装一次):{detail}",
+        "en": "The audio separation runtime is not set up (install it once in Settings): {detail}",
+    },
+    "providerErr_separationRuntimeMissing": {
+        "zh": "音频分离的运行环境还没准备好,去设置里装一次",
+        "en": "The audio separation runtime is not ready. Install it once in Settings.",
+    },
+    "providerErr_separationFailed": {"zh": "分离失败:{detail}", "en": "Separation failed: {detail}"},
+    "providerErr_separationExitCode": {"zh": "分离失败(退出码 {code})", "en": "Separation failed (exit code {code})"},
+    "providerErr_separationUnreadable": {"zh": "分离结果读不出来:{detail}", "en": "Could not read the separation result: {detail}"},
+    "providerErr_separationTimeout": {"zh": "分离超时", "en": "Separation timed out"},
+    "providerErr_separationMissingStems": {"zh": "分离结果里缺少:{stems}", "en": "The separation result is missing: {stems}"},
+    "providerErr_separationAudioMissing": {"zh": "找不到要分离的音频:{path}", "en": "Could not find the audio to separate: {path}"},
+    "providerErr_separationNoDemucs": {
+        "zh": "这个运行环境里没有 demucs:{detail}",
+        "en": "demucs is not available in this runtime: {detail}",
+    },
+    "providerErr_separationNoVocals": {
+        "zh": "{model} 没有给出人声轨,只有:{stems}",
+        "en": "{model} produced no vocal track, only: {stems}",
+    },
+    "providerErr_separationOnlyVocals": {
+        "zh": "{model} 只给了人声一条,没有可以合成背景音的部分",
+        "en": "{model} produced only the vocal track, with nothing to build the background from",
+    },
+    "providerErr_separationWriteFailed": {"zh": "没能写出 {name}", "en": "Could not write {name}"},
+    # ---- 本机运行环境(ai/runtime):装依赖、下权重、常驻 worker ----
+    "runtimeErr_noBasePython": {
+        "zh": "找不到可用于创建运行环境的 Python 解释器",
+        "en": "No Python interpreter is available to create the runtime",
+    },
+    "runtimeErr_noBasePythonTts": {
+        "zh": "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。",
+        "en": "No Python is available to create the runtime. Reinstall the app, or set a TTS interpreter manually in Settings.",
+    },
+    "runtimeErr_venvFailed": {"zh": "创建运行环境失败:{detail}", "en": "Could not create the runtime: {detail}"},
+    "runtimeErr_venvFailedSilent": {"zh": "创建运行环境失败:没有留下原因", "en": "Could not create the runtime, and no reason was given"},
+    "runtimeErr_depsFailed": {
+        "zh": "安装 {engine} 运行依赖失败:{detail}",
+        "en": "Could not install the {engine} runtime dependencies: {detail}",
+    },
+    "runtimeErr_stillBroken": {
+        "zh": "装完 {engine} 之后它仍然跑不起来:{detail}",
+        "en": "{engine} still won't run after installing: {detail}",
+    },
+    "runtimeErr_stillBrokenSilent": {
+        "zh": "装完 {engine} 之后它仍然跑不起来:没有留下原因",
+        "en": "{engine} still won't run after installing, and no reason was given",
+    },
+    "runtimeErr_asrPythonMissing": {
+        "zh": "未找到安装了 {engine} 的 Python 解释器,请设置 MOSAEL_ASR_PYTHON",
+        "en": "No Python interpreter with {engine} installed was found. Set MOSAEL_ASR_PYTHON.",
+    },
+    "runtimeErr_unknownAsrEngine": {"zh": "不认识的转写引擎:{engine}", "en": "Unknown transcription engine: {engine}"},
+    "runtimeErr_unknownSeparationEngine": {"zh": "不认识的分离引擎:{engine}", "en": "Unknown separation engine: {engine}"},
+    "runtimeErr_alreadyDownloading": {"zh": "{name} 已经在下载中", "en": "{name} is already downloading"},
+    "runtimeErr_alreadyInstalling": {"zh": "这个引擎已经在安装中", "en": "This engine is already being installed"},
+    "runtimeErr_deepfilterUnsupportedPlatform": {
+        "zh": "这个平台没有 DeepFilterNet 的发布文件",
+        "en": "DeepFilterNet has no release build for this platform",
+    },
+    "runtimeErr_checksumMismatch": {
+        "zh": "下载到的文件校验不符(SHA-256 {digest}…),已丢弃,没有安装",
+        "en": "The downloaded file failed its checksum (SHA-256 {digest}…); it was discarded and nothing was installed",
+    },
+    "runtimeErr_f5LanguageBusy": {
+        "zh": "已有语言包正在下载({busy}),请等它完成",
+        "en": "A language pack is already downloading ({busy}). Wait for it to finish.",
+    },
+    "runtimeErr_f5RuntimeMissing": {
+        "zh": "请先在设置的「声音克隆」里安装 F5-TTS 运行环境",
+        "en": "Install the F5-TTS runtime first under Settings → Voice cloning",
+    },
+    "runtimeErr_f5CheckpointMissing": {
+        "zh": "下载报成功,但检查点不在盘上",
+        "en": "The download reported success, but the checkpoint is not on disk",
+    },
+    "runtimeErr_f5NoTarget": {"zh": "没有指定权重目录", "en": "No weights directory was given"},
+    "runtimeErr_gitMissing": {"zh": "未找到 git,无法拉取 Fish Speech 源码", "en": "git was not found, so the Fish Speech source cannot be fetched"},
+    "runtimeErr_fishCloneFailed": {"zh": "拉取 Fish Speech 源码失败:{detail}", "en": "Could not fetch the Fish Speech source: {detail}"},
+    "runtimeErr_fishCloneFailedSilent": {
+        "zh": "拉取 Fish Speech 源码失败:git 没有说明原因",
+        "en": "Could not fetch the Fish Speech source: git gave no reason",
+    },
+    "runtimeErr_fishRepoMissing": {
+        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。在设置→声音克隆填『源码目录』『模型目录』,或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(源码目录未找到)",
+        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. Fill in “Source directory” and “Model directory” under Settings → Voice cloning, or set MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (Source directory not found.)",
+    },
+    "runtimeErr_fishModelMissing": {
+        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。在设置→声音克隆填『源码目录』『模型目录』,或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(模型目录缺少 codec.pth)",
+        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. Fill in “Source directory” and “Model directory” under Settings → Voice cloning, or set MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (codec.pth is missing from the model directory.)",
+    },
+    "runtimeErr_fishNeedsReference": {"zh": "Fish Speech 需要参考音频", "en": "Fish Speech needs reference audio"},
+    "runtimeErr_downloadNoReason": {
+        "zh": "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。",
+        "en": "The download did not finish and the process left no reason. Try once more; if it keeps happening, please report it.",
+    },
+    "runtimeErr_downloadNoReasonLog": {
+        "zh": "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。\n完整日志:{log}",
+        "en": "The download did not finish and the process left no reason. Try once more; if it keeps happening, please report it.\nFull log: {log}",
+    },
+    "runtimeErr_hubUnreachable": {
+        "zh": "连不上模型下载源({endpoint}):{detail} —— 在上面的「模型下载源」换一个(镜像下不动时,官方直连往往反而是通的)再重试。",
+        "en": "Could not reach the model download source ({endpoint}): {detail}. Switch “Model download source” above and try again (when a mirror stalls, the official source often works).",
+    },
+    "runtimeErr_hubUnreachableLog": {
+        "zh": "连不上模型下载源({endpoint}):{detail} —— 在上面的「模型下载源」换一个(镜像下不动时,官方直连往往反而是通的)再重试。\n完整日志:{log}",
+        "en": "Could not reach the model download source ({endpoint}): {detail}. Switch “Model download source” above and try again (when a mirror stalls, the official source often works).\nFull log: {log}",
+    },
+    "runtimeErr_failedWithLog": {"zh": "{detail}\n完整日志:{log}", "en": "{detail}\nFull log: {log}"},
+    "runtimeErr_ttsWorkerBusy": {
+        "zh": "{engine} 的合成正忙,等待超过 {seconds} 秒",
+        "en": "{engine} is busy synthesizing; waited more than {seconds} seconds",
+    },
+    "runtimeErr_ttsWorkerFailed": {"zh": "合成失败", "en": "Synthesis failed"},
+    "runtimeErr_ttsWorkerTimedOut": {
+        "zh": "合成超时,没有回音 —— 进程已被终止",
+        "en": "Synthesis timed out with no response; the process was stopped",
+    },
+    "runtimeErr_ttsWorkerDied": {
+        "zh": "合成进程中途退出,没有给出结果",
+        "en": "The synthesis process exited early without a result",
+    },
+    "runtimeErr_asrWorkerBusy": {
+        "zh": "{engine} 的识别正忙,等待超过 {seconds} 秒",
+        "en": "{engine} is busy transcribing; waited more than {seconds} seconds",
+    },
+    "runtimeErr_asrWorkerFailed": {"zh": "识别失败", "en": "Transcription failed"},
+    "runtimeErr_asrWorkerTimedOut": {
+        "zh": "识别超时,没有回音 —— 进程已被终止",
+        "en": "Transcription timed out with no response; the process was stopped",
+    },
+    "runtimeErr_asrWorkerDied": {
+        "zh": "识别进程中途退出,没有给出结果",
+        "en": "The transcription process exited early without a result",
+    },
+    # ---- 智能体 sidecar(ai/sidecar) ----
+    "aiErr_sidecarNotBuilt": {
+        "zh": "pi sidecar 未构建:{path}(在 agent-sidecar 目录执行 pnpm build)",
+        "en": "The pi sidecar is not built: {path} (run pnpm build in the agent-sidecar directory)",
+    },
+    "aiErr_noProvider": {
+        "zh": "未配置可用的 AI 供应商;请在设置里添加并启用一个供应商。",
+        "en": "No AI provider is available. Add and enable one in Settings.",
+    },
+    "aiErr_gatewayFailed": {"zh": "Gateway 调用失败", "en": "The gateway call failed"},
+    "aiErr_gatewayTimeout": {"zh": "Gateway 调用超过 {seconds} 秒未返回", "en": "The gateway call did not return within {seconds} seconds"},
+    "aiErr_gatewayNoResult": {"zh": "Gateway 没有返回结果", "en": "The gateway returned no result"},
+    "aiErr_turnFailedCheckProvider": {
+        "zh": "{detail}\n请检查 AI 供应商配置:base_url 是否为完整的 OpenAI 兼容端点(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。",
+        "en": "{detail}\nCheck the AI provider settings: the base_url must be a complete OpenAI-compatible endpoint (with port and /v1, e.g. http://localhost:11434/v1), the model name must exist, and the service must be reachable.",
+    },
+    "aiErr_emptyReply": {
+        "zh": "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否为完整的 OpenAI 兼容端点(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。",
+        "en": "The model returned nothing. Check the AI provider settings: the base_url must be a complete OpenAI-compatible endpoint (with port and /v1, e.g. http://localhost:11434/v1), the model name must exist, and the service must be reachable.",
+    },
+    "aiErr_turnTimeout": {
+        "zh": "智能体运行超过 {seconds} 秒未返回,已终止。",
+        "en": "The agent ran for more than {seconds} seconds without returning and was stopped.",
+    },
+    "aiErr_turnTimeoutDetail": {
+        "zh": "智能体运行超过 {seconds} 秒未返回,已终止。\n{detail}",
+        "en": "The agent ran for more than {seconds} seconds without returning and was stopped.\n{detail}",
+    },
+    "aiErr_sidecarExited": {"zh": "pi sidecar 异常退出(退出码 {exit_code})", "en": "The pi sidecar exited with code {exit_code}"},
+    "aiErr_compactFailed": {"zh": "压缩失败", "en": "Compaction failed"},
+    "aiErr_compactNoResult": {"zh": "压缩没有返回结果", "en": "Compaction returned no result"},
+    "aiErr_refreshFailed": {"zh": "刷新凭据失败", "en": "Could not refresh the credentials"},
+    "aiErr_refreshNoResult": {"zh": "刷新凭据没有返回结果", "en": "Refreshing the credentials returned no result"},
     "wfNode_ai_generate_source_assets": {"zh": "每行一条 `素材id` 或 `素材id:角色`。角色:{roles_zh};不写角色时图生视频按首帧、图生图按参考图。", "en": "One `asset_id` or `asset_id:role` per line. Roles: {roles}. With no role, image-to-video treats it as the first frame and image-to-image as a reference image."},
     "wfNode_publish": {"zh": "发布", "en": "Publish"},
     "wfNode_publish_desc": {"zh": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。", "en": "Publish to Douyin / Xiaohongshu / Weixin Channels / Bilibili using an already signed-in account (carried out by the desktop app's embedded browser)."},

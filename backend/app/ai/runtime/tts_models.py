@@ -32,6 +32,8 @@ from app.core.text import blame_line, strip_ansi
 from app.ai.runtime import remote_size
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
+from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure, with_log
+from app.core.i18n import get_current_locale, t
 
 logger = logging.getLogger(__name__)
 
@@ -750,7 +752,13 @@ _HUB_UNREACHABLE = ("LocalEntryNotFoundError", "ConnectionError", "ReadTimeout",
 
 
 def _explain_failure(stderr: str) -> str:
-    """把子进程的最后一句话变成卡片上那句话。
+    """`_failure_reason` 按当前语言渲染出来的那一句(给日志和测试看;卡片上存的是 key 和参数)。"""
+    message, params = _failure_reason(stderr)
+    return t(message, get_current_locale(), **params)
+
+
+def _failure_reason(stderr: str) -> tuple[str, dict[str, str]]:
+    """把子进程的最后一句话变成卡片上那句话:`(key 或原话, 参数)`,出口再按读的人的语言翻。
 
     此前这里是 `stderr or "下载未完成,可能引擎未安装"` —— 而 worker 把异常吞了、退出码 0、
     stderr 空,于是永远走后半句。那是一句**猜测**,还猜错了方向:用户会去重装引擎,
@@ -758,7 +766,7 @@ def _explain_failure(stderr: str) -> str:
     """
     # 先去掉终端颜色码:子进程以为自己在终端里,而这句话的去处是浏览器。
     text = strip_ansi(stderr or "").strip()
-    unknown = "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
+    unknown: tuple[str, dict[str, str]] = ("runtimeErr_downloadNoReason", {})
     if not text:
         return unknown
     # **不取最后一行。** huggingface_hub 的 tqdm 进度条写在 stderr 上,下完就停在那儿,
@@ -774,11 +782,8 @@ def _explain_failure(stderr: str) -> str:
 
         endpoint = tts_config.get().hf_endpoint
         # 截断只截**错误本身**,不截后面那半句 —— 那是整条消息里唯一能行动的部分。
-        return (
-            f"连不上模型下载源({endpoint}):{_clip(last, 220)}"
-            " —— 在上面的「模型下载源」换一个(镜像下不动时,官方直连往往反而是通的)再重试。"
-        )
-    return _clip(last, 400)
+        return "runtimeErr_hubUnreachable", {"endpoint": str(endpoint), "detail": _clip(last, 220)}
+    return _clip(last, 400), {}
 
 
 def _clip(text: str, limit: int) -> str:
@@ -817,7 +822,7 @@ def start_download(engine_id: str) -> dict[str, Any]:
     # 拆开了,那个理由就没了,而限制留了下来。
     live = _store.get(engine.id)
     if live is not None and live.status == "downloading":
-        raise RuntimeError(f"{engine.label} 已经在下载中")
+        raise RuntimeSetupError("runtimeErr_alreadyDownloading", name=engine.label)
     _store.set(engine.id, DownloadProgress(status="downloading", message="dlMsg_preparing"))
     threading.Thread(target=_run_download, args=(engine.id,), daemon=True).start()
     return _status_dict(engine)
@@ -851,16 +856,14 @@ def ensure_engine_runtime(engine_id: str) -> None:
     if not venv_python.is_file():
         base = interpreter.base_python()
         if not base:
-            raise RuntimeError(
-                "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。"
-            )
+            raise RuntimeSetupError("runtimeErr_noBasePythonTts")
         _store.set(engine_id, DownloadProgress(status="downloading", message="dlMsg_creatingRuntime"))
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         result = run_logged(
             [base, "-m", "venv", str(venv_dir)],
             capture_output=True, text=True, timeout=600, what="创建克隆运行环境")
         if result.returncode != 0 or not venv_python.is_file():
-            raise RuntimeError(f"创建运行环境失败:{blame_line(result.stderr or result.stdout, fallback='没有留下原因')}")
+            raise venv_failure(result.stderr or result.stdout)
 
     _store.set(
         engine_id,
@@ -881,7 +884,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
             env=_worker_env(),
         )
     except pip_install.PipInstallError as exc:
-        raise RuntimeError(f"安装 {engine.label} 运行依赖失败:{exc}") from exc
+        raise RuntimeSetupError("runtimeErr_depsFailed", engine=engine.label, detail=str(exc)) from exc
 
 
 def _ensure_fish_source() -> None:
@@ -906,11 +909,14 @@ def _ensure_fish_source() -> None:
             ["git", "clone", "--depth", "1", _FISH_SOURCE_URL, str(repo)],
             capture_output=True, text=True, timeout=600, what="拉取 Fish Speech 源码")
     except FileNotFoundError as exc:
-        raise RuntimeError("未找到 git,无法拉取 Fish Speech 源码") from exc
+        raise RuntimeSetupError("runtimeErr_gitMissing") from exc
     except subprocess.SubprocessError as exc:
-        raise RuntimeError(f"拉取 Fish Speech 源码失败:{exc}") from exc
+        raise RuntimeSetupError("runtimeErr_fishCloneFailed", detail=str(exc)) from exc
     if result.returncode != 0 or not (repo / tts_config.FISH_REPO_MARKER).is_file():
-        raise RuntimeError(f"拉取 Fish Speech 源码失败:{blame_line(result.stderr, fallback='git 没有说明原因')}")
+        detail = blame_line(result.stderr)
+        if detail:
+            raise RuntimeSetupError("runtimeErr_fishCloneFailed", detail=detail)
+        raise RuntimeSetupError("runtimeErr_fishCloneFailedSilent")
 
 
 def _download_python(engine_id: str) -> str:
@@ -935,7 +941,8 @@ def _run_download(engine_id: str) -> None:
         _download_body(engine_id)
     except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
         logger.exception("model download failed")
-        _store.set(engine_id, DownloadProgress(status="failed", message=str(exc)[:400]))
+        message, params = failure_message(exc)
+        _store.set(engine_id, DownloadProgress(status="failed", message=message, params=params))
 
 
 def _download_body(engine_id: str) -> None:
@@ -955,7 +962,8 @@ def _download_body(engine_id: str) -> None:
             _ensure_fish_source()
         except RuntimeError as exc:
             logger.warning("拉取 %s 源码失败:%s", engine.id, exc)
-            _store.set(engine.id, DownloadProgress(status="failed", message=str(exc)[:400]))
+            message, params = failure_message(exc)
+            _store.set(engine.id, DownloadProgress(status="failed", message=message, params=params))
             return
         # Snapshot weights into the managed model dir (flat: codec.pth at root) and measure it
         # for live progress — resolved_fish_model won't resolve until codec.pth lands.
@@ -1028,11 +1036,10 @@ def _download_body(engine_id: str) -> None:
             f"{_install_verdict(engine)}\n\n{stderr or '(子进程什么都没说)'}\n",
             kind="worker", what=f"download-{engine.id}",
         )
-        reason = _explain_failure(stderr)
-        if path is not None:
-            reason = f"{reason}\n完整日志:{path}"
+        # 「完整日志:…」那半句不拼进原因里(拼进去就只剩一种语言),见 errors.with_log。
+        message, params = with_log(*_failure_reason(stderr), path)
         logger.warning("下载 %s 失败(完整输出见 %s):%s", engine.id, path, (stderr or "(空)")[-800:])
-        _store.set(engine.id, DownloadProgress(status="failed", message=reason))
+        _store.set(engine.id, DownloadProgress(status="failed", message=message, params=params))
     for path in (output_path, Path(str(output_path) + ".json")):
         try:
             path.unlink(missing_ok=True)

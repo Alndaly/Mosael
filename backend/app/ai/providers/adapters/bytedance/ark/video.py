@@ -124,10 +124,10 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
             or (task_payload.get("content") or {}).get("video_url")
         )
         if not url:
-            raise GenerationAdapterError("Provider returned success without a video URL")
+            raise GenerationAdapterError("providerErr_noResultUrl", vendor="ARK")
         return str(url)
     if status in ("failed", "cancelled", "canceled", "expired"):
-        raise GenerationAdapterError(f"Generation failed with status {status}")
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="ARK", detail=status)
     return None
 
 
@@ -144,21 +144,21 @@ class SeedanceAdapter(GenerationAdapter):
                 submit.raise_for_status()
                 task_id = submit.json().get("id") or ""
                 if not task_id:
-                    raise GenerationAdapterError("Provider did not return a task id")
+                    raise GenerationAdapterError("providerErr_noTaskId", vendor="ARK")
                 return self._collect(client, f"{TASKS_PATH}/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("ARK request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("ARK", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(request, context) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
-            raise GenerationAdapterError(adapter_http_error("ARK request failed", exc, context.api_key)) from exc
+            raise adapter_http_error("ARK", exc, context.api_key) from exc
 
     def _client(self, request: GenerationRequest, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
-            raise GenerationAdapterError("ARK API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="ARK")
         base_url = resolve_seedance_base(resolve_seedance_model(request, context), context)
         return RetryingClient(base_url=base_url, timeout=30, headers={"Authorization": f"Bearer {context.api_key}"})
 

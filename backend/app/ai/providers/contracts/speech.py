@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from app.core.i18n import LocalizedError
+
 logger = logging.getLogger(__name__)
 
 SPEECH_REQUEST_TIMEOUT_SECONDS = 120
@@ -20,8 +22,11 @@ SPEECH_REQUEST_TIMEOUT_SECONDS = 120
 MAX_PARALLEL_SPEECH_REQUESTS = 6
 
 
-class SpeechSynthesisError(RuntimeError):
-    """Raised when synthesis cannot produce audio."""
+class SpeechSynthesisError(LocalizedError, RuntimeError):
+    """Raised when synthesis cannot produce audio.
+
+    带文案 key(`providerErr_*`,见 core/i18n),`str(exc)` 按读的人的语言翻;引擎回的原话放进
+    `detail`。传一句现成的话也行 —— 不在文案表里的就原样显示。"""
 
 
 @dataclass(frozen=True)

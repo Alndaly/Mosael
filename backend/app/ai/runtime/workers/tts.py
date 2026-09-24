@@ -32,11 +32,11 @@ from pathlib import Path
 from typing import Any
 
 if __package__:
-    from .tts_protocol import encode_event_line
+    from .tts_protocol import KeyedWorkerError, encode_event_line, error_event
 else:
     # Executed directly by the engine's isolated interpreter; its sys.path only
     # contains this directory, not the application package.
-    from tts_protocol import encode_event_line
+    from tts_protocol import KeyedWorkerError, encode_event_line, error_event
 
 
 # ---------------------------------------------------------------------------
@@ -124,9 +124,11 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
     return "f5-tts"
 
 
+#: 给人看的那句(「Fish Speech S2 不可用:……在设置→声音克隆填源码目录、模型目录」)在宿主的
+#: 文案表里(`runtimeErr_fish*`);这里只有给日志的英文原话。
 _FISH_HINT = (
-    "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。"
-    "在设置→声音克隆填『源码目录』『模型目录』,或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。"
+    "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech "
+    "source checkout (Settings → Voice cloning, or MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR)"
 )
 
 
@@ -151,7 +153,7 @@ def _fish_repo_dir() -> Path:
     configured = os.environ.get("MOSAEL_FISH_REPO_DIR", "").strip()
     if configured and Path(configured).expanduser().is_dir():
         return Path(configured).expanduser()
-    raise RuntimeError(_FISH_HINT + "(源码目录未找到)")
+    raise KeyedWorkerError("runtimeErr_fishRepoMissing", _FISH_HINT + " (source directory not found)")
 
 
 def _fish_model_dir() -> Path:
@@ -161,7 +163,7 @@ def _fish_model_dir() -> Path:
         path = Path(configured).expanduser()
         if (path / "codec.pth").is_file():
             return path
-    raise RuntimeError(_FISH_HINT + "(模型目录缺少 codec.pth)")
+    raise KeyedWorkerError("runtimeErr_fishModelMissing", _FISH_HINT + " (codec.pth missing from the model directory)")
 
 
 def run_fish(request: dict[str, Any], output_path: str) -> str:
@@ -195,7 +197,7 @@ def run_fish(request: dict[str, Any], output_path: str) -> str:
 
     reference_wav = request.get("reference_wav")
     if not reference_wav:
-        raise RuntimeError("Fish Speech 需要参考音频")
+        raise KeyedWorkerError("runtimeErr_fishNeedsReference", "Fish Speech needs reference audio")
     references = [
         ServeReferenceAudio(
             audio=Path(reference_wav).read_bytes(),
@@ -327,7 +329,7 @@ def fetch_named_model(request: dict[str, Any]) -> str:
     """
     target = request.get("target") or os.environ.get("MOSAEL_F5_MODEL_DIR", "").strip()
     if not target:
-        raise RuntimeError("没有指定权重目录")
+        raise KeyedWorkerError("runtimeErr_f5NoTarget", "no weights directory was given")
     # 每个模型落进自己的子目录:这些社区权重的 vocab **全叫 vocab.txt**,共用一个目录会互相覆盖。
     subdir = (request.get("subdir") or "").strip()
     if subdir:
@@ -448,7 +450,7 @@ def serve() -> None:
             _emit({"event": "done", "engine": engine_used, "output": output_path})
         except Exception as exc:  # noqa: BLE001 — 常驻进程要**活下去**,把失败报回去就行
             traceback.print_exc(file=sys.stderr)
-            _emit({"event": "error", "message": f"{type(exc).__name__}: {exc}"})
+            _emit(error_event(exc))
 
 
 def main() -> None:

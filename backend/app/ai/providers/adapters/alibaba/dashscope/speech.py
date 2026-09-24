@@ -95,7 +95,7 @@ class BailianSpeechAdapter:
     # `cls(api_key=…, voice=…, model=…, base_url=…)`,少一个参数就是 TypeError。
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:
-            raise SpeechSynthesisError("百炼语音合成需要 DashScope API Key,请在设置里配置")
+            raise SpeechSynthesisError("providerErr_bailianTtsKeyMissing")
         self._key = api_key
         self._model = model or "qwen-tts"
         self._base = resolve_dashscope_native_base(base_url)
@@ -135,14 +135,14 @@ class BailianSpeechAdapter:
                 response.raise_for_status()
             url = extract_bailian_audio_url(response.json())
             if not url:
-                raise SpeechSynthesisError("百炼语音合成没有返回音频地址")
+                raise SpeechSynthesisError("providerErr_bailianTtsNoAudioUrl")
             # 结果是一个预签名 OSS 地址。**另起一个干净的 client** —— 带上 Authorization 会让
             # OSS 的签名校验走另一条分支(与 image/qwen.py 里那条注释同一个坑)。
             with RetryingClient(timeout=SPEECH_REQUEST_TIMEOUT_SECONDS) as fetcher:
                 audio = fetcher.get(url)
                 audio.raise_for_status()
         except httpx.HTTPError as exc:
-            raise SpeechSynthesisError(f"百炼语音合成失败: {exc}") from exc
+            raise SpeechSynthesisError("providerErr_bailianTtsFailed", detail=str(exc)) from exc
         out_path.write_bytes(audio.content)
 
 

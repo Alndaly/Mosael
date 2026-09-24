@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 
 from app.ai.providers.contracts.denoise import (
+    subprocess_failure,
     DENOISE_TIMEOUT_SECONDS,
     LIGHT,
     MEDIUM,
@@ -29,7 +30,6 @@ from app.ai.providers.contracts.denoise import (
 from app.ai.runtime import denoise_models
 from app.core.child_process import run_logged
 from app.core.config import settings
-from app.core.text import blame_line
 
 #: 100 = 不设上限(二进制自己的默认值)。
 _ATTEN_LIMIT_DB = {LIGHT: 12, MEDIUM: 24, STRONG: 100}
@@ -51,7 +51,7 @@ class DeepFilterDenoiseAdapter:
     def denoise(self, request: DenoiseRequest, out_path: Path) -> Path:
         binary = denoise_models.deepfilter_path()
         if not binary.is_file():
-            raise DenoiseError("DeepFilterNet 还没装好")
+            raise DenoiseError("providerErr_denoiseDeepfilterMissing")
         work = out_path.parent / f"{out_path.stem}-deepfilter"
         (work / "out").mkdir(parents=True, exist_ok=True)
         # 二进制按**输入文件名**写输出,所以输入放进自己的目录、起一个固定的名字。
@@ -63,7 +63,7 @@ class DeepFilterDenoiseAdapter:
                 capture_output=True, text=True, timeout=DENOISE_TIMEOUT_SECONDS, what="降噪前转采样率",
             )
             if converted.returncode != 0:
-                raise DenoiseError(f"降噪前转换失败:{blame_line(converted.stderr, fallback='ffmpeg 没有说明原因')}")
+                raise subprocess_failure("providerErr_denoiseConvertFailed", converted.stderr, tool="ffmpeg")
             result = run_logged(
                 [
                     str(binary),
@@ -79,11 +79,11 @@ class DeepFilterDenoiseAdapter:
                 what="DeepFilterNet 降噪",
             )
         except subprocess.TimeoutExpired as exc:
-            raise DenoiseError("降噪超时") from exc
+            raise DenoiseError("providerErr_denoiseTimeout") from exc
         produced = work / "out" / prepared.name
         if result.returncode != 0 or not produced.is_file():
             shutil.rmtree(work, ignore_errors=True)
-            raise DenoiseError(f"降噪失败:{blame_line(result.stderr or result.stdout, fallback='DeepFilterNet 没有说明原因')}")
+            raise subprocess_failure("providerErr_denoiseFailed", result.stderr or result.stdout, tool="DeepFilterNet")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(produced), out_path)
         shutil.rmtree(work, ignore_errors=True)
