@@ -1139,7 +1139,6 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
         raise RenderExecutionError(
             "renderErr_frameFailed",
             detail=blame_line(result.stderr) or LocalizedError("audioErr_ffmpegNoReason"),
-            stderr_tail=(result.stderr or "")[-2000:],
         )
     if not output_path.is_file() or output_path.stat().st_size == 0:
         #: 时间点落在片尾之后:ffmpeg 成功退出但什么都不写。空文件比报错更难查。

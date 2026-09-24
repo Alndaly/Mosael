@@ -525,7 +525,10 @@ export function TranscriptPanel({
     return (
       <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 text-ui-sm [&_p]:leading-[1.55] [&>button]:mt-1">
         {busy ? <Loader2 size={18} className="animate-mosael-spin" /> : <MessageSquareText size={18} />}
-        <p className="text-ui-sm">{busy ? t("transcribing") : t("transcriptEmpty")}</p>
+        {/* **转写中只说一次。** 后端有具体状态("funasr 转写中(首次会自动下载模型)")就拿它当这一行,
+            没有才说通用的「转写中…」。此前是一行「转写中…」、底下再一行后端的「……转写中……」,
+            (更早还夹着一颗同样写着「转写中…」的禁用按钮)—— 同一件事说三遍。 */}
+        <p className="text-ui-sm">{busy ? busyMessage || t("transcribing") : t("transcriptEmpty")}</p>
         {/* 空状态**给出动作,不只描述流程**:此前这里是一段"外部智能体可以通过 API 附加逐字稿"
             加一行流程说明,时间线上只有图片时连按钮都没有 —— 用户读完不知道下一步点哪。 */}
         {!busy && (
@@ -542,11 +545,6 @@ export function TranscriptPanel({
           </Button>
         )}
         {!busy && engineNotice}
-        {/* 后端那句状态单独一行:它会长(下模型、装环境、第几段),而且**会变** —— 放在按钮里
-            意味着控件的宽度跟着它跳。 */}
-        {busy && busyMessage && (
-          <p className="m-0 max-w-[240px] text-ui-xs leading-[1.5] text-muted-foreground">{busyMessage}</p>
-        )}
         {asrError && <p className="m-0 max-w-[240px] whitespace-pre-line text-xs text-destructive">{asrError}</p>}
       </div>
     );

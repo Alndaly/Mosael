@@ -26,7 +26,8 @@ describe("逐字稿面板的进行中状态", () => {
   });
 
   it("**进行中不渲染空状态文案**", () => {
-    expect(source).toMatch(/busy \? t\("transcribing"\) : t\("transcriptEmpty"\)/);
+    // 转写中只说一次:后端有状态就用它,没有才用通用的「转写中…」—— 但无论哪样都不是空状态文案。
+    expect(source).toMatch(/busy \? busyMessage \|\| t\("transcribing"\) : t\("transcriptEmpty"\)/);
   });
 
   it("跑完自己重取逐字稿 —— 否则仍要用户刷新", () => {

@@ -157,14 +157,14 @@ describe("逐字稿页的转写入口", () => {
     expect(screen.queryByText("transcribeNoEngine")).toBeNull();
   });
 
-  it("别处发起的转写正跑着:显示转写中和后端那句状态,不显示「还没有逐字稿」", async () => {
+  it("别处发起的转写正跑着:只说一次 —— 用后端那句状态,不再叠一行「转写中…」,也不显示「还没有逐字稿」", async () => {
     serve({
       jobs: [{ id: "j9", kind: "transcribe", status: "running", message: "funasr 转写中", payload: { asset_id: "vid" } }],
     });
     renderPanel(sequence([clip("c1", "vid", "video", 0)]));
 
     expect(await screen.findByText("funasr 转写中")).toBeInTheDocument();
-    expect(screen.getAllByText(/transcribing/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("transcribing")).toBeNull();
     expect(screen.queryByText("transcriptEmpty")).toBeNull();
     expect(screen.queryByRole("button", { name: /transcribeTimeline/ })).toBeNull();
   });

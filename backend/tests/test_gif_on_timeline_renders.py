@@ -88,4 +88,3 @@ def test_ffmpeg_失败时_错误里带上它说的原因(tmp_path: Path) -> None
 
     assert caught.value.key == "renderErr_frameFailed"
     assert "Option not found" in str(caught.value), f"原因没带出来:{caught.value}"
-    assert "Option not found" in caught.value.stderr_tail
