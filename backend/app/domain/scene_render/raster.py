@@ -57,6 +57,13 @@ def hex_to_linear(value: str) -> np.ndarray:
     return srgb_to_linear(np.array([int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]))
 
 
+def linear_to_hex(rgb) -> str:
+    """`hex_to_linear` 的反向:线性色(0–1,超出的截断)→ sRGB 的 #rrggbb。"""
+    value = np.clip(np.asarray(rgb, dtype=float)[:3], 0, 1)
+    srgb = np.where(value <= 0.0031308, value * 12.92, 1.055 * value ** (1 / 2.4) - 0.055)
+    return "#" + "".join("%02x" % int(round(float(v) * 255)) for v in np.clip(srgb, 0, 1))
+
+
 def kelvin_rgb(kelvin: float) -> np.ndarray:
     """对照前端 lighting.kelvinRgb(Tanner Helland 的近似);两侧的值由 `contracts/scene-3d-cases.json` 钉住。
 

@@ -7,6 +7,7 @@
 **上游**的问题,不是调用方请求有错 —— 用 4xx 会让人去改自己的请求,而该做的是去看 Add-on。
 """
 import json
+import math
 import shutil
 import threading
 import time
@@ -19,7 +20,9 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError, t
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
-from app.domain.scene_types import SceneContent
+from app.domain.scene_render.gltf import LIGHT_UNIT
+from app.domain.scene_render.raster import kelvin_rgb, linear_to_hex
+from app.domain.scene_types import SceneContent, SceneLighting, SceneObject, SceneShot
 from app.domain.scenes import create_scene, import_model, validate_model_file
 from .scripts import command
 
@@ -288,6 +291,154 @@ def apply_shot_frames(content, flat):
     return content
 
 
+def _limit(field_name):
+    """SceneContent 上某个列表字段的长度上限 —— 取回时按它截,不在这里再写一遍数。"""
+    field = SceneContent.model_fields[field_name]
+    return next(m.max_length for m in field.metadata if getattr(m, 'max_length', None))
+
+
+def native_cameras(cameras):
+    """worker.pulled_cameras 取回的原生相机 → (机位物体, 镜头, 警告)。镜头和机位都用 Blender 相机的名字。
+
+    关键帧的形状和 receive 回传的一样,所以写回机位走同一个 `apply_shot_frames`:只有一帧就是
+    固定机位,多帧是按帧烘焙的运镜(linear,和 receive 一致)。逐台校验 —— 一台超出范围不该
+    连累其余几台和整个场景。
+    """
+    objects, shots, warnings = [], [], []
+    for entry in cameras:
+        name = (entry.get('name') or 'Camera')[:160]
+        if len(shots) >= _limit('shots'):
+            warnings.append('相机「%s」没有取回：一个场景最多 %d 个镜头。' % (name, _limit('shots')))
+            continue
+        index = len(shots) + 1
+        camera = {'id': 'blender-camera-%d' % index, 'kind': 'camera', 'name': name}
+        shot = {'id': 'blender-shot-%d' % index, 'name': name, 'camera_id': camera['id'], 'aspect': entry['aspect']}
+        frames = entry['frames']
+        if len(frames) > 1:
+            shot['duration'] = max(entry['duration'], .1)
+        apply_shot_frames({'objects': [camera], 'shots': [shot]},
+                          [{**shot, 'frames': frames, **({'easing': 'linear'} if len(frames) > 1 else {})}])
+        try:
+            SceneObject.model_validate(camera)
+            SceneShot.model_validate(shot)
+        except ValidationError:
+            warnings.append('相机「%s」没有取回：位置或视角超出 Mosael 支持的范围。' % name)
+            continue
+        objects.append(camera)
+        shots.append(shot)
+    return objects, shots, warnings
+
+
+#: Blender 的 glTF 插件在默认的「标准」照明模式下用的光视效能:1 W = 683 lm
+#: (io_scene_gltf2/blender/com/conversion.py 的 PBR_WATTS_TO_LUMENS)。
+WATTS_TO_LUMENS = 683
+
+
+def point_intensity(watts):
+    """Blender 点光的功率(W)→ Mosael 灯光强度。
+
+    **正好是发送那条路的反向**:gltf.py 写 `强度 × LIGHT_UNIT` 坎德拉,Blender 的 glTF 导入器
+    按 W = cd × 4π / 683 折成瓦。这里走 Blender 自己的导出器那一步(cd = W / 4π × 683)再除回
+    LIGHT_UNIT,所以发过去再取回,强度不变。聚光在 Blender 里"按点光来标定"(导出器同样这么折),
+    面光按同样的总功率摊成点光。
+    """
+    return watts/(4*math.pi)*WATTS_TO_LUMENS/LIGHT_UNIT
+
+
+def sun_intensity(irradiance):
+    """Blender 太阳的强度(W/m²)→ Mosael 主光强度。
+
+    Blender 的 glTF 导出器把它折成 lux(× 683),再用和点光同一个 LIGHT_UNIT 缩回 Mosael 的单位
+    —— 两种灯用同一把尺子。落到数上:Blender 里常用的日光强度 3–5 对应 Mosael 的 2–3.4,正好是
+    主光预设(默认 2.5、正午 4.5)的那一段。
+    """
+    return irradiance*WATTS_TO_LUMENS/LIGHT_UNIT
+
+
+def nearest_temperature(color):
+    """一个线性颜色最接近的色温(K)和偏差。Mosael 的主光只有色温,没有任意颜色。
+
+    比的是**色相**:两边都按最大分量归一,强弱另算(见 native_lights)。偏差是逐通道最大差。
+    色温曲线用渲染器那一份 `kelvin_rgb`,和工作台、白模渲染是同一条。
+    """
+    peak = max(max(color), 1e-9)
+    hue = [c/peak for c in color]
+    candidates = range(1500, 12001, 50)
+
+    def distance(kelvin):
+        rgb = kelvin_rgb(kelvin)
+        return max(abs(a - b/max(rgb)) for a, b in zip(hue, rgb))
+
+    best = min(candidates, key=distance)
+    return best, distance(best)
+
+
+def native_lights(lights, room):
+    """worker.pulled_lights 取回的灯光 → (灯光物体, 主光或 None, 提示)。
+
+    Mosael 有两种光:场景里的**点光**物体,和场景级的一盏平行**主光**(方位角 + 仰角 + 色温)。
+
+        POINT        点光,原样
+        SPOT / AREA  点光(Mosael 没有聚光和面光),说一句光锥 / 面积没有带过来
+        SUN          主光。有几个太阳就取最亮的那个,其余说明没取
+
+    `room` 是还能放几个物体(SceneContent.objects 有上限)。
+    """
+    objects, notes, suns = [], [], []
+    for entry in lights:
+        name, kind = (entry.get('name') or 'Light')[:160], entry.get('type')
+        if kind == 'SUN':
+            suns.append(entry)
+            continue
+        if kind not in ('POINT', 'SPOT', 'AREA'):
+            notes.append('灯光「%s」没有取回：Mosael 不认识 %s 类型的灯。' % (name, kind))
+            continue
+        if len(objects) >= room:
+            notes.append('灯光「%s」没有取回：一个场景最多 %d 个物体。' % (name, _limit('objects')))
+            continue
+        light = {'id': 'blender-light-%d' % (len(objects) + 1), 'kind': 'light', 'name': name,
+                 'position': entry['position'], 'color': linear_to_hex(entry['color']),
+                 'intensity': round(point_intensity(entry['power']), 4), 'hidden': bool(entry.get('hidden'))}
+        try:
+            SceneObject.model_validate(light)
+        except ValidationError:
+            notes.append('灯光「%s」没有取回：位置或亮度超出 Mosael 支持的范围。' % name)
+            continue
+        objects.append(light)
+        if kind == 'SPOT':
+            notes.append('聚光灯「%s」按点光取回：Mosael 没有聚光，%d° 的光锥没有带过来。' % (name, round(entry.get('spot_size', 0))))
+        elif kind == 'AREA':
+            notes.append('面光「%s」按点光取回：Mosael 没有面光，面积和朝向没有带过来。' % name)
+    lighting = None
+    if suns:
+        # 看得见的优先,再比实际亮度(强度 × 颜色最亮的那个分量)。
+        sun = max(suns, key=lambda s: (not s.get('hidden'), s['power']*max(s['color'])))
+        name = (sun.get('name') or 'Sun')[:160]
+        for other in suns:
+            if other is not sun:
+                notes.append('太阳「%s」没有取回：Mosael 只有一盏主光，已用「%s」。' % ((other.get('name') or 'Sun')[:160], name))
+        # 主光的方向是**指向光源**的(raster.sun_direction),太阳的光线方向反过来就是。
+        toward = [-v for v in sun['direction']]
+        elevation = math.degrees(math.asin(max(-1.0, min(1.0, toward[1]))))
+        azimuth = math.degrees(math.atan2(toward[0], toward[2])) % 360
+        kelvin, deviation = nearest_temperature(sun['color'])
+        intensity = sun_intensity(sun['power'])*max(sun['color'])
+        ceiling = next(m.le for m in SceneLighting.model_fields['intensity'].metadata if getattr(m, 'le', None) is not None)
+        clauses = []
+        if elevation < 0:
+            clauses.append('光从地平线以下射来，已按贴地（仰角 0°）处理')
+        if intensity > ceiling:
+            clauses.append('强度超出 Mosael 的上限，已按 %g 处理' % ceiling)
+        if deviation > .1:
+            clauses.append('颜色不是色温能表示的，已按最接近的 %d K 处理' % kelvin)
+        if clauses:
+            notes.append('太阳「%s」已作为场景主光；%s。' % (name, '；'.join(clauses)))
+        # 软硬保留默认:Mosael 的 softness 是阴影贴图的模糊半径,不是太阳的角直径,两者之间没有能讲清的换算。
+        lighting = SceneLighting(preset='custom', azimuth=round(azimuth, 3) % 360, elevation=round(max(0.0, elevation), 3),
+                                 intensity=round(min(intensity, ceiling), 4), temperature=kelvin)
+    return objects, lighting, notes
+
+
 def send(db, user, scene, instance_id, revision, shot_id):
     """把这个场景发进 Blender。**GLB 由后端自己生成**(domain/scene_render/gltf)。
 
@@ -411,9 +562,9 @@ def pull(db, user, workspace_id, instance_id):
     **不要求先发送过。** send/receive 是一趟往返:receive 靠发送时写在 Scene 上的
     `mosael_transfer_id` 找回那一份。而人手上常常先有一个 Blender 工程,这条是给它的入口。
 
-    只取几何体。相机取不回来:Mosael 的镜头要知道"看向哪里",发送时那是我们自己写在相机上的
-    `mosael_target_distance`;换成任意一个 Blender 相机,这个距离无从得知,猜一个只会让构图
-    默默错掉。有相机就明说一句,而不是悄悄丢掉。
+    几何体成一个模型;相机成机位 + 镜头(native_cameras),灯光成点光 / 主光(native_lights)。
+    取不回的那几台、那几盏逐个说明原因,而不是悄悄丢掉。一台相机都没取回时留着默认机位 ——
+    镜头没有机位是非法的。
 
     落盘的只有一份临时 GLB:它的字节随后进了模型表,文件本身没有第二个读者,所以用完即删 ——
     留下来就是一个没有任何入口能清理的目录(传输记录那套是按场景归档的,这里还没有场景)。
@@ -432,21 +583,24 @@ def pull(db, user, workspace_id, instance_id):
             with exported.open('rb') as stream:
                 model_id = import_model(db, workspace_id, 'Blender model', stream,
                                         declared_size=exported.stat().st_size).id
-            # 从默认内容长出来:它自带一台机位和一个指着它的镜头,而镜头没有机位是非法的。
-            # 直接给一份只有模型的 objects,等于交出一个引用了不存在机位的场景。
+            warnings = list(result.get('warnings') or [])
+            cameras, shots, notes = native_cameras(result.get('cameras') or [])
+            warnings += notes
+            # 从默认内容长出来:没取回任何相机时,它自带的那台机位和指着它的镜头就是兜底。
             blank = SceneContent().model_dump(mode='json')
-            content = SceneContent.model_validate({**blank, 'objects': [
-                *blank['objects'],
-                {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
+            if shots:
+                blank.update(objects=cameras, shots=shots)
+            model = {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}
+            lights, lighting, notes = native_lights(result.get('lights') or [],
+                                                    _limit('objects') - len(blank['objects']) - 1)
+            warnings += notes
+            if lighting is not None:
+                blank['lighting'] = lighting.model_dump(mode='json')
+            content = SceneContent.model_validate({**blank, 'objects': [*blank['objects'], model, *lights]})
             scene = create_scene(db, workspace_id, result.get('scene_name') or 'Blender 场景', content)
         finally:
             #: 临时目录用完即删 —— 字节已经拷进场景的模型目录,这里没有第二个读者。
             shutil.rmtree(folder, ignore_errors=True)
-        warnings = list(result.get('warnings') or [])
-        if result.get('camera_count'):
-            warnings.append('Blender 里的 %d 个相机没有一起取回 —— 镜头需要「看向哪里」，'
-                            '而这个距离只有从 Mosael 发送过去的相机才带着。请在这里重新设计镜头。'
-                            % result['camera_count'])
         return {'scene_id': scene.id, 'name': scene.name, 'warnings': warnings}
 
 

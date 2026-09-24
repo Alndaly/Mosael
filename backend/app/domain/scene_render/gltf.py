@@ -33,6 +33,12 @@ STRUCTURAL = {"group", "model", "light"}
 EXTRA_ID = "mosael_object_id"
 EXTRA_MODEL = "mosael_model_id"
 
+#: 一个 Mosael 灯光强度单位折成多少 glTF 光度单位(点光是坎德拉)。Blender 的 glTF 导入器按
+#: 1 W = 683 lm 把坎德拉折成瓦(点光 W = cd × 4π / 683),于是 Mosael 默认的 30 到了那边约 550 W ——
+#: 和 Blender 默认那盏 1000 W 的点光同一个量级。从 Blender 取回灯光时按同一个数反算
+#: (blender/bridge.native_lights),发过去再取回的灯亮度不变。
+LIGHT_UNIT = 1000
+
 
 def _pose_matrix(obj: SceneObject, shot: SceneShot, time: float) -> np.ndarray:
     from app.domain.scene_render import _local_matrix
@@ -114,7 +120,7 @@ def scene_document(content: SceneContent, shot: SceneShot, time: float = 0.0) ->
         elif obj.kind == "light":
             color = hex_to_linear(obj.color)
             lights.append({"type": "point", "color": [float(color[0]), float(color[1]), float(color[2])],
-                           "intensity": float(obj.intensity) * 1000})
+                           "intensity": float(obj.intensity) * LIGHT_UNIT})
             node["extensions"] = {"KHR_lights_punctual": {"light": len(lights) - 1}}
         elif obj.kind == "model":
             # 模型文件由 Blender 那边导入并挂到这个空节点下 —— 这里只占个位置和姿态。

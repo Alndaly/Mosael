@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.db.models import User, PluginPackage, PluginInstance, Scene3D, Scene3DModel
 from app.domain.blender import bridge
 from app.domain.plugins.manifest import parse
+from app.domain.scene_types import SceneContent
 from tests.test_scenes import setup_scene
 
 MANIFEST = Path(__file__).resolve().parents[2] / 'plugins/examples/blender/mosael.plugin.json'
@@ -187,16 +188,21 @@ def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypat
 def test_pull_takes_the_open_blender_scene_without_a_prior_send(monkeypatch, tmp_path):
     """没发送过也能取:pull 走的是「当前打开的那个 Blender 场景」,不认 transfer_id。
 
-    另外钉两件事:相机不会被悄悄丢掉(有相机就出一条说明),以及那个临时目录**用完即删** ——
-    它的字节已经进了模型表,留着就是一个没有入口能清理的目录。
+    另外钉三件事:原生相机成了机位 + 镜头(取不回的那台有一条带原因的说明)、灯光成了 Mosael 的灯,
+    以及那个临时目录**用完即删** —— 它的字节已经进了模型表,留着就是一个没有入口能清理的目录。
     """
     c, ws, initial = setup_scene()
     monkeypatch.setattr(settings,'data_dir',tmp_path)
     monkeypatch.setattr(bridge,'connection',lambda *args: SimpleNamespace(id='local'))
+    camera = {'name': 'Camera', 'aspect': '16:9',
+              'frames': [{'time': 0, 'position': [7.4, 5, 6.9], 'target': [0, 0, 0], 'fov': 22.9}]}
+    light = {'name': 'Light', 'type': 'POINT', 'position': [4.1, 5.9, -1], 'direction': [0, -1, 0],
+             'color': [1, 1, 1], 'power': 1000, 'hidden': False}
     def fake_execute(db, instance, operation, payload, workspace_id):
         assert operation=='pull'
         Path(payload['output_path']).write_bytes(glb())
-        return {'scene_name':'客厅','object_count':7,'camera_count':2}
+        return {'scene_name':'客厅','object_count':7,'cameras':[camera],'lights':[light],
+                'warnings':['相机「Top」没有取回：画面有滚转或正对上下方，Mosael 的镜头始终保持水平。']}
     monkeypatch.setattr(bridge,'execute',fake_execute)
     with SessionLocal() as db:
         user=db.scalar(select(User))
@@ -208,6 +214,24 @@ def test_pull_takes_the_open_blender_scene_without_a_prior_send(monkeypatch, tmp
         assert scene.name=='客厅' and scene.workspace_id==ws
         model=db.get(Scene3DModel,_model_object(scene.content)['model_id'])
         assert model.workspace_id==scene.workspace_id and model_file(model).read_bytes()==glb()
-        assert len(scene.content['shots'])==1            # 默认镜头,由用户重新设计
-        assert any('相机' in w for w in result['warnings'])
+        assert [(s['name'], s['camera_id']) for s in scene.content['shots']]==[('Camera', 'blender-camera-1')]
+        assert [o['kind'] for o in scene.content['objects']]==['camera', 'model', 'light']
+        assert result['warnings']==['相机「Top」没有取回：画面有滚转或正对上下方，Mosael 的镜头始终保持水平。']
         assert not list((tmp_path/'blender-bridge'/ws/'_pull').glob('*'))
+
+
+def test_pull_without_usable_cameras_keeps_the_default_shot(monkeypatch, tmp_path):
+    """一台相机都没取回时,默认机位和指着它的镜头留着 —— 镜头没有机位是非法的。"""
+    c, ws, initial = setup_scene()
+    monkeypatch.setattr(settings,'data_dir',tmp_path)
+    monkeypatch.setattr(bridge,'connection',lambda *args: SimpleNamespace(id='local'))
+    def fake_execute(db, instance, operation, payload, workspace_id):
+        Path(payload['output_path']).write_bytes(glb())
+        return {'scene_name':'空镜','cameras':[],'lights':[],'warnings':[]}
+    monkeypatch.setattr(bridge,'execute',fake_execute)
+    with SessionLocal() as db:
+        result=bridge.pull(db,db.scalar(select(User)),ws,'local')
+        scene=db.get(Scene3D,result['scene_id'])
+        default=SceneContent().model_dump(mode='json')
+        assert scene.content['shots']==default['shots'] and scene.content['lighting']==default['lighting']
+        assert result['warnings']==[]

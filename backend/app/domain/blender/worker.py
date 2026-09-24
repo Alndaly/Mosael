@@ -204,25 +204,282 @@ def receive(payload):
         bpy.context.window.scene = previous
 
 
+# ---------------------------------------------------------------------------------------------
+# 原生相机 → Mosael 机位。
+#
+# Mosael 的机位是 position + target + 垂直 fov,上方向永远是世界上方。一台 Blender 相机的
+# **画面**只由位置、朝向和视角决定 —— target 离相机多远并不改变这一帧拍到什么,它只决定两件事:
+# 编辑器里绕着转的那个支点,以及两个关键帧之间视线怎么插值。所以"距离从哪来"不是能不能取回
+# 的问题,而是取一个讲得通的支点:按下面 `look_candidates` 的顺序,第一个站得住的就用。
+#
+# 下面几个纯函数不碰 bpy,单测直接喂数(tests/test_blender_worker_export.py)。
+# ---------------------------------------------------------------------------------------------
+
+#: 支点离相机至少这么远:再近,轨道控制一拖就翻到相机背后去。
+LOOK_MIN = 0.1
+#: 支点最远:射线打到一块几公里外的天空球时,支点跟过去没有意义(坐标也会超出场景范围)。
+LOOK_MAX = 1000.0
+#: 什么都推不出来时(看向空处、场景在身后):和 receive 缺属性时的默认值一样。
+LOOK_DEFAULT = 5.0
+#: 机位的滚转容差。receive 的判据是四元数点积 ≥ .99999,折成角度约 0.5°,这里取同一个量级。
+ROLL_TOLERANCE_DEGREES = 0.5
+#: 视线和竖直方向的夹角余弦超过它就算"正对上下方" —— 与白模渲染器 raster.look_at 换参考轴的阈值一致:
+#: 那一段里 Mosael 的上方向本身就不再是世界上方,转过去的画面会绕视线转一个任意角度。
+VERTICAL_LIMIT = .999
+#: Mosael 的画幅(宽/高)。
+ASPECTS = {'16:9': 16/9, '9:16': 9/16, '1:1': 1.0}
+#: 一个镜头最多多少个关键帧、多长 —— 与 SceneObject.track 和 SceneShot.duration 的上限一致。
+SAMPLE_LIMIT = 100
+SHOT_LIMIT_SECONDS = 120.0
+
+
+def _dot(a, b):
+    return sum(x*y for x, y in zip(a, b))
+
+
+def _cross(a, b):
+    return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
+
+
+def _unit(v):
+    length = math.sqrt(_dot(v, v))
+    return [x/length for x in v] if length > 1e-9 else None
+
+
+def nearest_aspect(ratio):
+    """Blender 输出尺寸(宽/高)最接近的 Mosael 画幅。按比值的对数比,9:16 和 16:9 才对称。"""
+    return min(ASPECTS, key=lambda name: abs(math.log(ASPECTS[name]/ratio)))
+
+
+def vertical_fov(lens, sensor_width, sensor_height, sensor_fit, aspect):
+    """Blender 相机在宽高比 `aspect` 的画面上的**垂直**视角(度)。Mosael 和 three.js 的 fov 都是垂直的。
+
+    传感器怎么贴到画面上,和 Blender 自己的规则一致(BKE_camera_sensor_fit):AUTO 把
+    sensor_width 贴在较长的那条边上,HORIZONTAL 贴在宽上,VERTICAL 用 sensor_height 贴在高上。
+    """
+    if sensor_fit == 'VERTICAL':
+        half = sensor_height/2/lens
+    elif sensor_fit == 'HORIZONTAL' or aspect >= 1:
+        half = sensor_width/2/lens/aspect
+    else:
+        half = sensor_width/2/lens
+    return math.degrees(2*math.atan(half))
+
+
+def camera_axes(matrix):
+    """世界矩阵(行优先 4x4,Blender 坐标)→ (位置, 视线方向, 画面上方向)。相机看向本地 -Z、上是 +Y。"""
+    position = [matrix[i][3] for i in range(3)]
+    return position, _unit([-matrix[i][2] for i in range(3)]), _unit([matrix[i][1] for i in range(3)])
+
+
+def upright(forward, up):
+    """这台相机能不能写成 Mosael 的 position + target:画面不滚转、也不正对上下方。"""
+    if forward is None or up is None or abs(forward[2]) > VERTICAL_LIMIT:
+        return False
+    right = _unit(_cross(forward, [0, 0, 1]))
+    return _dot(_cross(right, forward), up) >= math.cos(math.radians(ROLL_TOLERANCE_DEGREES))
+
+
+def look_distance(candidates):
+    """按优先级排好的候选距离(米,可以是 None)里**第一个**站得住的:有限、不比 LOOK_MIN 近。
+
+    `candidates` 可以是生成器 —— 前面的站住了,后面那些(射线求交)就不必算。
+    """
+    for value in candidates:
+        if value is not None and math.isfinite(value) and value >= LOOK_MIN:
+            return min(float(value), LOOK_MAX)
+    return LOOK_DEFAULT
+
+
+def camera_key(time, matrix, distance, fov):
+    """一个时刻的 Mosael 机位关键帧;画面有滚转或正对上下方时返回 None(Mosael 表示不了)。"""
+    position, forward, up = camera_axes(matrix)
+    if not upright(forward, up):
+        return None
+    target = [p + f*distance for p, f in zip(position, forward)]
+    return {'time': round(time, 5), 'position': _rounded(inverse_axis(position), 5),
+            'target': _rounded(inverse_axis(target), 5), 'fov': round(fov, 4)}
+
+
+def settle(keys):
+    """整段都没动就是一台固定机位,只留一帧 —— Mosael 里「有没有轨」正好等于「动不动」。"""
+    first = keys[0]
+    fields = lambda key: key['position'] + key['target'] + [key['fov']]  # noqa: E731
+    if all(max(abs(a-b) for a, b in zip(fields(key), fields(first))) < 1e-4 for key in keys[1:]):
+        return [{**first, 'time': 0}]
+    return keys
+
+
+def sample_times(frame_start, frame_end, fps):
+    """会动的原生相机在哪些时刻采样:(镜头时长, [(秒, 帧号)], 是否截短)。
+
+    与 send / receive 同一个约定:时长覆盖 frame_start..frame_end 的每一个输出帧,终点那一刻
+    (frame_end + 1)也采 —— 它不是多出来的一帧,而是最后一帧和它之间的插值要用到它。
+    超过 SAMPLE_LIMIT 个时刻就均匀取 SAMPLE_LIMIT 个;超过 SHOT_LIMIT_SECONDS 就只取前面那一段。
+    """
+    duration = (frame_end - frame_start + 1)/fps
+    truncated = duration > SHOT_LIMIT_SECONDS
+    duration = min(duration, SHOT_LIMIT_SECONDS)
+    count = max(2, min(SAMPLE_LIMIT, round(duration*fps) + 1))
+    return duration, [(duration*i/(count-1), frame_start + duration*i/(count-1)*fps) for i in range(count)], truncated
+
+
+def _may_move(obj):
+    """它(或它的某个父级)有没有可能随时间动:带动画、驱动器或约束。只是个"要不要逐帧采样"的门槛 ——
+    真没动的,采完由 settle 收成一帧。"""
+    while obj is not None:
+        if obj.animation_data or len(obj.constraints) or (obj.data is not None and getattr(obj.data, 'animation_data', None)):
+            return True
+        obj = obj.parent
+    return False
+
+
+def look_candidates(scene, depsgraph, camera, position, forward, center):
+    """一台原生相机"看向哪里"的候选距离,**越靠前越是用户自己表达过的意图**:
+
+      1. `mosael_target_distance` —— 从 Mosael 发过去的相机自己带着,往返原样;
+      2. Track To / Damped Track 约束的目标 —— 用户明说了"看着它";
+      3. 景深的对焦物体,再是开着景深时的对焦距离 —— 用户说了"焦点在那";
+      4. 沿视线打一条射线,画面正中第一个挡住视线的表面(从近裁剪面起算:比它近的东西本来就拍不到);
+      5. 场景包围盒中心在视线上的投影 —— 构图大致围着它转;
+    都站不住就由 look_distance 给默认值。给的是**沿视线的距离**:目标点不在视线上时取投影,
+    否则 target 会把镜头拧向别处。
+    """
+    along = lambda point: _dot([a-b for a, b in zip(point, position)], forward)  # noqa: E731
+    yield camera.get('mosael_target_distance')
+    for constraint in camera.constraints:
+        if constraint.type in ('TRACK_TO', 'DAMPED_TRACK') and not constraint.mute and constraint.target is not None:
+            yield along(constraint.target.evaluated_get(depsgraph).matrix_world.translation)
+    dof = camera.data.dof
+    if dof.focus_object is not None:
+        yield along(dof.focus_object.evaluated_get(depsgraph).matrix_world.translation)
+    if dof.use_dof:
+        yield dof.focus_distance
+    start = max(camera.data.clip_start, 0.0)
+    hit, location = scene.ray_cast(depsgraph, Vector(position) + Vector(forward)*start, Vector(forward),
+                                   distance=max(camera.data.clip_end - start, 0.001))[:2]
+    if hit:
+        yield along(location)
+    if center is not None:
+        yield along(center)
+
+
+def pulled_cameras(scene):
+    """当前场景里的相机 → Mosael 机位。返回 ([{name, aspect, frames, duration?}], warnings)。
+
+    活动相机排第一(它成为打开场景时的那个镜头),其余按名字。采样会切帧,完了切回原处。
+    """
+    cameras = sorted((o for o in scene.objects if o.type == 'CAMERA'), key=lambda o: (o != scene.camera, o.name))
+    if not cameras:
+        return [], []
+    render = scene.render
+    aspect = nearest_aspect(render.resolution_x*render.pixel_aspect_x/(render.resolution_y*render.pixel_aspect_y))
+    moving = any(_may_move(camera) for camera in cameras)
+    if moving:
+        duration, samples, truncated = sample_times(scene.frame_start, scene.frame_end, render.fps/render.fps_base)
+    else:
+        duration, samples, truncated = None, [(0.0, None)], False
+    try:
+        center = _bounds(scene, [])[0]
+    except ValueError:
+        center = None
+    keys, rejected, warnings = {c.name: [] for c in cameras}, set(), []
+    current = (scene.frame_current, scene.frame_subframe)
+    try:
+        for time, frame in samples:
+            if frame is not None:
+                scene.frame_set(math.floor(frame), subframe=frame - math.floor(frame))
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            for camera in cameras:
+                if camera.name in rejected:
+                    continue
+                evaluated = camera.evaluated_get(depsgraph)
+                data = evaluated.data
+                if data.type != 'PERSP':
+                    rejected.add(camera.name)
+                    warnings.append('相机「'+camera.name+'」没有取回：它是正交或全景相机，Mosael 只有透视镜头。')
+                    continue
+                matrix = [list(row) for row in evaluated.matrix_world]
+                position, forward, _ = camera_axes(matrix)
+                distance = look_distance(look_candidates(scene, depsgraph, evaluated, position, forward, center)) if forward else LOOK_DEFAULT
+                fov = vertical_fov(data.lens, data.sensor_width, data.sensor_height, data.sensor_fit, ASPECTS[aspect])
+                key = camera_key(time, matrix, distance, fov)
+                if key is None:
+                    rejected.add(camera.name)
+                    warnings.append('相机「'+camera.name+'」没有取回：画面有滚转或正对上下方，Mosael 的镜头始终保持水平。')
+                    continue
+                keys[camera.name].append(key)
+    finally:
+        if moving:
+            scene.frame_set(current[0], subframe=current[1])
+    pulled = []
+    for camera in cameras:
+        if camera.name in rejected:
+            continue
+        frames = settle(keys[camera.name])
+        entry = {'name': camera.name, 'aspect': aspect, 'frames': frames}
+        if len(frames) > 1:
+            entry['duration'] = round(duration, 5)
+            if len(frames) == SAMPLE_LIMIT:
+                warnings.append('镜头「'+camera.name+'」已采样为 100 个关键帧，请检查运动。')
+            if truncated:
+                warnings.append('镜头「'+camera.name+'」只取了 Blender 时间线的前 120 秒。')
+        pulled.append(entry)
+    return pulled, warnings
+
+
+def pulled_lights(scene):
+    """当前场景里的灯光,**原样的物理量**:类型、世界位置、光线方向、线性颜色、功率。
+
+    换算成 Mosael 的灯(单位、色温、朝向 → 方位角)在宿主那边做(bridge.native_lights):那边有
+    和渲染器同一份的色温曲线,不必在这里再抄一份。这里只做两件和 Blender 自己的 glTF 导出器
+    (io_scene_gltf2/blender/exp/lights.py)一致的折算:颜色乘上色温开关给的颜色,功率乘上 2^曝光,
+    不归一化的面光再乘面积 —— 那样两边说的"一盏多亮、什么颜色的灯"是同一个东西。
+    """
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    lights = []
+    for obj in sorted((o for o in scene.objects if o.type == 'LIGHT'), key=lambda o: o.name):
+        evaluated = obj.evaluated_get(depsgraph)
+        data, matrix = evaluated.data, evaluated.matrix_world
+        color = list(data.color)[:3]
+        if getattr(data, 'use_temperature', False):
+            color = [c*t for c, t in zip(color, data.temperature_color)]
+        power = data.energy*2**getattr(data, 'exposure', 0.0)
+        if data.type == 'AREA' and not getattr(data, 'normalize', True):
+            power *= data.area(matrix_world=matrix)
+        entry = {'name': obj.name, 'type': data.type, 'position': _rounded(inverse_axis(matrix.translation), 5),
+                 'direction': _rounded(inverse_axis(-(matrix.to_3x3() @ Vector((0, 0, 1))).normalized()), 6),
+                 'color': _rounded(color, 6), 'power': float(power),
+                 'hidden': obj.hide_render or not obj.visible_get()}
+        if data.type == 'SPOT':
+            entry['spot_size'] = math.degrees(data.spot_size)
+        lights.append(entry)
+    return lights
+
+
 def pull(payload):
-    """把**当前正在编辑的那个 Blender 场景**整体导出来。
+    """把**当前正在编辑的那个 Blender 场景**整体取出来:几何体成一份 GLB,相机和灯光成 Mosael 的物体。
 
     和 receive 的区别是它不认 `mosael_transfer_id`:没发送过、纯在 Blender 里做出来的场景
-    也能取回。代价是相机取不回来 —— Mosael 的镜头要知道"看向哪里",而那是发送时由我们写在
-    相机上的 `mosael_target_distance`;换成任意一个 Blender 相机,这个距离无从得知,
-    猜一个只会让构图默默错掉。所以这里只取几何体,镜头留给 Mosael 这边重新设计。
+    也能取回。原生相机没有 Mosael 发送时写上的 `mosael_target_distance`,"看向哪里"的距离
+    由 look_candidates 按用户表达过的意图推出来 —— 它不改变画面,见上面那段说明。
+
+    灯光**不进 GLB**:它们成了 Mosael 自己的灯,再塞进模型文件,视口会从模型里再点一遍
+    (three.js 的 GLTFLoader 会照着 KHR_lights_punctual 建灯),同一盏灯亮两次。
 
     **不切换场景、不写 .blend**:用户此刻正开着这个工程,动他的当前场景是没必要的越界,
-    而工程文件就在他自己手上。
+    而工程文件就在他自己手上。采样运镜要逐帧切,切完回到原来那一帧。
+    用 `bpy.context.scene`:MCP Add-on 里它就是窗口里那个场景,无界面时也有(测试因此能真跑)。
     """
-    scene = bpy.context.window.scene
+    scene = bpy.context.scene
     if not any(o.type == 'MESH' for o in scene.objects):
         raise ValueError('当前 Blender 场景里没有网格物体，切换到要导入的场景后重试。')
+    lights = pulled_lights(scene)
     # 别人的工程里什么自定义属性都可能有,而我们从不读 GLB 里的 extras —— 不带它进来。
-    warnings = export_glb(payload['output_path'], export_extras=False)
-    return {'scene_name': scene.name, 'object_count': len(scene.objects),
-            'camera_count': sum(1 for o in scene.objects if o.type == 'CAMERA'),
-            'warnings': warnings, 'blender_version': bpy.app.version_string}
+    warnings = export_glb(payload['output_path'], export_extras=False, export_lights=False)
+    cameras, camera_warnings = pulled_cameras(scene)
+    return {'scene_name': scene.name, 'object_count': len(scene.objects), 'cameras': cameras, 'lights': lights,
+            'warnings': warnings + camera_warnings, 'blender_version': bpy.app.version_string}
 
 
 # ---------------------------------------------------------------------------------------------
