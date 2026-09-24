@@ -21,7 +21,6 @@ from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, DenoiseAdapter,
 from app.ai.providers.registry import DENOISE_ADAPTERS, get_denoise_adapter
 from app.ai.runtime import denoise_models
 from app.core.db import SessionLocal
-from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 DENOISABLE_KINDS = frozenset({"audio", "video"})
 
 
-class DenoiseDomainError(LocalizedError, DenoiseError):
+class DenoiseDomainError(DenoiseError):
     """这一层说的「降不了」:带文案 key(`denoiseErr_*`),按读的人的语言翻。
 
     仍是 DenoiseError —— 上面那些 `except DenoiseError` 照样接得住。

@@ -29,7 +29,6 @@ from app.ai.providers.contracts.separation import (
 )
 from app.ai.providers.registry import get_separation_adapter
 from app.core.db import SessionLocal
-from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.media.audio_io import AudioIOError, as_audio
@@ -38,7 +37,7 @@ from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_eve
 logger = logging.getLogger(__name__)
 
 
-class SeparationDomainError(LocalizedError, SeparationError):
+class SeparationDomainError(SeparationError):
     """这一层说的「分不出来」:带文案 key(`separationErr_*`),按读的人的语言翻。
 
     仍是 SeparationError —— 上面那些 `except SeparationError` 照样接得住。
