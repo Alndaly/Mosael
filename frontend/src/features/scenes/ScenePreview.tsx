@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { Box } from "lucide-react";
 
 import { bounds, cameraPaths, footprints, type ScenePreviewData } from "./sceneFootprint";
@@ -11,13 +12,13 @@ import { bounds, cameraPaths, footprints, type ScenePreviewData } from "./sceneF
  *
  * 外框(aspect/圆角/底色/边框)跟 CanvasPreview 对齐,两种卡片并排时是同一种东西。
  */
-export function ScenePreview({ data }: { data: ScenePreviewData | null | undefined }) {
+export function ScenePreview({ data, className }: { data: ScenePreviewData | null | undefined; className?: string }) {
   const marks = footprints(data);
   const paths = cameraPaths(data);
   const view = bounds(marks, paths);
 
   return (
-    <div className="grid aspect-[16/9] w-full place-items-center overflow-hidden rounded-lg border border-border bg-panel-subtle p-5">
+    <div className={cn("grid aspect-[16/9] w-full place-items-center overflow-hidden rounded-lg border border-border bg-panel-subtle p-5", className)}>
       {marks.length === 0 ? (
         <Box size={40} strokeWidth={1} className="text-muted-foreground" aria-hidden="true" />
       ) : (

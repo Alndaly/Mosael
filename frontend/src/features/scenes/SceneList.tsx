@@ -20,6 +20,7 @@ import {
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { ScenePreview } from "./ScenePreview";
 import { CARD_GRID } from "@/components/layout/StudioPage";
+import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { cn } from "@/lib/utils";
 
 export function SceneList({
@@ -203,6 +204,7 @@ export function SceneList({
                 <button
                   className={cn("scene-card-open", "grid w-full gap-3 rounded-lg text-left")}
                   aria-label={`打开场景 ${scene.name}`}
+                  aria-pressed={selecting ? selected.has(scene.id) : undefined}
                   disabled={busy}
                   onClick={(e) => {
                     if (selecting || e.metaKey || e.ctrlKey || e.shiftKey)
@@ -216,23 +218,22 @@ export function SceneList({
 
                       右下角那个大写的对象数角标也去掉了 —— 它和副行的「N 个对象」是同一个数,
                       预览图能看见内容之后更没有必要,而另外两页的卡片上也没有这种角标。 */}
-                  <ScenePreview data={scene.preview} />
+                  {/* 选中态和首页、素材页同一个样子:缩略图外一圈主色 + 右上角的勾选圈(SelectionCheck)。
+                      此前是整张卡片外面套一圈描边、再铺一层底色,把标题和对象数也圈进去,
+                      标题还贴着那圈边。 */}
+                  {/* 圈画在缩略图**里面**(主色边框 + 内侧 1px):画在外面的话,最左、最右两列会被
+                      滚动容器裁掉一截。 */}
+                  <span className="relative block">
+                    <ScenePreview data={scene.preview} className={selected.has(scene.id) ? "border-primary ring-1 ring-inset ring-primary" : undefined} />
+                    {selecting && <SelectionCheck selected={selected.has(scene.id)} />}
+                  </span>
                   <span className="truncate pr-8 text-ui-md font-semibold" title={scene.name}>{scene.name}</span>
                   <span className="text-ui-sm text-muted-foreground">
                     {scene.object_count} 个对象 · {scene.shot_count} 个镜头
                   </span>
                 </button>
-                {selecting && (
-                  <input
-                    className="scene-card-check"
-                    type="checkbox"
-                    aria-label={`选择场景 ${scene.name}`}
-                    checked={selected.has(scene.id)}
-                    disabled={busy}
-                    onChange={() => toggle(scene.id)}
-                  />
-                )}
-                <div className="scene-card-menu">
+                {/* 选择模式下单卡的操作菜单收起来(批量动作在上面的工具条上),右上角让给勾选圈。 */}
+                {!selecting && <div className="scene-card-menu">
                   <ActionMenu
                     label={`场景操作 ${scene.name}`}
                     actions={[
@@ -263,7 +264,7 @@ export function SceneList({
                       },
                     ]}
                   />
-                </div>
+                </div>}
               </article>
             ))}
           </div>

@@ -65,9 +65,8 @@ it("right-clicks the selected group and preserves failed deletions for retry", a
   fireEvent.click(screen.getByRole("button", { name: "confirm" }));
   await waitFor(() => expect(remove).toHaveBeenCalledWith(scenes.slice(0, 2)));
   await waitFor(() => expect(screen.getByText("已选 1 个场景")).toBeTruthy());
-  expect(
-    (screen.getByLabelText("选择场景 b") as HTMLInputElement).checked,
-  ).toBe(true);
+  // 删失败的那个仍然选着,好让人重试。选中态画在缩略图上(勾选圈 + 主色圈),按钮报「按下」。
+  expect(row("b")).toHaveAttribute("aria-pressed", "true");
 });
 it("right-click outside the selection only targets that scene and rename submits trimmed text", async () => {
   const { row, onRename } = mount();

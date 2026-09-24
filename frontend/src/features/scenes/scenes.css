@@ -1139,9 +1139,6 @@
 /* 焦点圈用 box-shadow 而不是带 offset 的 outline:outline-offset 要占外侧空间,为它留白就得给
    网格加 padding,而那 padding 会把整列卡片推下去。box-shadow 画在盒子外但不参与布局。 */
 .scene-card-open:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
-.scene-list-card[data-selected="true"] { outline: 2px solid var(--primary); outline-offset: 3px; background: var(--accent); }
-.scene-list-card[data-selected="true"] h2, .scene-list-card[data-selected="true"] p { padding-inline: 8px; }
-.scene-card-check { position: absolute; top: 12px; left: 12px; width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
 .scene-card-menu { position: absolute; top: 10px; right: 10px; }
 .scene-selection-bar { position: sticky; top: -32px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); }
 .scene-selection-bar label, .scene-selection-bar > div { display: flex; align-items: center; gap: 10px; }
