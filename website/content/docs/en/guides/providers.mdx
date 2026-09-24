@@ -137,7 +137,13 @@ Settings → **Network** sets the retry count (on the same page as the outbound 
 
 Under Settings → **Cost rules** you can price models (per token / per image / per second); Statistics and the task center accumulate AI spend accordingly. Unpriced usage is labeled "unpriced". On the Statistics page, the "N unpriced" count in the AI usage tile links straight here.
 
-When a vendor's catalog carries public pricing (OpenRouter, for one), **Prefill from catalog** generates rules in bulk — it only fills what's **missing** and never touches what you've already entered (your prices may include a discount or an enterprise agreement). Catalog entries priced at 0 produce no rule: that means "unpriced / included in the subscription", not "free".
+**Prefill prices** creates rules in bulk from two sources — per provider, or for all of them with **Prefill all**:
+
+- **The provider's own model catalog**, when it carries prices (OpenRouter, or the catalog a subscription sign-in brings back), takes precedence.
+- When the catalog has no prices (true of most OpenAI-compatible endpoints), the app's built-in **official price list** fills the gap: DeepSeek, Kimi, Alibaba Bailian (chat, Wan video, image, speech), Volcengine Ark (Seedance video, Seedream image), Volcengine speech, MiniMax (chat, Hailuo video), OpenAI (chat, GPT Image, TTS), Anthropic, xAI and Google Veo. Every entry was checked on the vendor's official pricing page; each rule's note cites the page and the check date. Currency follows the vendor's list (CNY for Chinese vendors, USD otherwise), and an international endpoint gets the international price. Tiered pricing (peak/off-peak, context length) records one tier and names the others in the note.
+- Relays (custom OpenAI-compatible addresses, Evolink and the like) borrow a vendor's list price only when the model id belongs to exactly one vendor, and the note warns that the relay may charge differently.
+
+Two rules stay the same: it only fills what's **missing** and never touches what you've already entered (your prices may include a discount or an enterprise agreement), and a price of 0 produces no rule — that means "unpriced / included in the subscription", not "free". After prefilling, each provider gets its own result line: how many rules came from the catalog and from the price list, and which models still need a price by hand.
 
 ## Bindings: missing config surfaces where it's needed
 
