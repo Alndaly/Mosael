@@ -92,7 +92,22 @@ export interface ProjectedSegment {
   clipped: boolean;
   /** Tokens fully visible through the clip window, in source time. */
   tokens: TokenLike[];
+  /**
+   * 这一行是**同一句话被切开后的后半截**时,指向前半截那一行(`clipId:segmentId`);否则为 null。
+   *
+   * 只认"原地切开"的那种:前一个片段是同一素材、源区间首尾相接、时间线上也首尾相接。
+   * 两半被拖开了就各是各的,按各自的时间排。
+   */
+  continues: string | null;
 }
+
+/** 逐字稿里一行的身份。面板的 React key、选区键、`continues` 都用它。 */
+export function projectedRowKey(row: Pick<ProjectedSegment, "clipId" | "segmentId">): string {
+  return `${row.clipId}:${row.segmentId}`;
+}
+
+/** 源区间 / 时间线上"首尾相接"的容差:切点是同一个浮点数,但时间线位置是算出来的。 */
+const ABUT_EPSILON = 1e-3;
 
 const SENTENCE_END = /[.!?。！？…]["'”’）)\]]*\s*$/u;
 const SOFT_PUNCTUATION = /[,，;；:：、]["'”’）)\]]*\s*$/u;
@@ -218,14 +233,33 @@ export function projectTranscript(
 ): ProjectedSegment[] {
   const projected: ProjectedSegment[] = [];
   const ordered = [...clips].sort((a, b) => a.timeline_start - b.timeline_start);
+  // 每个片段投出了哪些句子 —— 找"被切开的后半截"时要问前一个片段里有没有同一句。
+  const segmentIdsByClip = new Map<string, Set<string>>();
   for (const clip of ordered) {
     const segments = clip.asset_id
       ? transcriptSegmentsForEditing(segmentsByAsset.get(clip.asset_id) ?? [])
       : [];
+    // 原地切开的前一半:同一素材、源区间在这里接上、时间线上也在这里接上、同速。
+    // 只要一处对不上(被拖走、被修剪、变了速),两段就不再是"同一句切成两半"。
+    const before = ordered.find(
+      (other) =>
+        other !== clip &&
+        other.asset_id === clip.asset_id &&
+        (other.speed || 1) === (clip.speed || 1) &&
+        Math.abs(other.src_out - clip.src_in) < ABUT_EPSILON &&
+        Math.abs(srcToTimeline(other, other.src_out) - clip.timeline_start) < ABUT_EPSILON,
+    );
+    const seen = new Set<string>();
+    segmentIdsByClip.set(clip.id, seen);
     for (const segment of segments) {
       if (segment.end_time <= clip.src_in || segment.start_time >= clip.src_out) continue;
       const visibleStart = Math.max(segment.start_time, clip.src_in);
       const visibleEnd = Math.min(segment.end_time, clip.src_out);
+      seen.add(segment.id);
+      const continues =
+        before && segment.start_time < clip.src_in && segmentIdsByClip.get(before.id)?.has(segment.id)
+          ? projectedRowKey({ clipId: before.id, segmentId: segment.id })
+          : null;
       projected.push({
         segmentId: segment.id,
         clipId: clip.id,
@@ -246,10 +280,50 @@ export function projectTranscript(
             start_time: Math.max(token.start_time, clip.src_in),
             end_time: Math.min(token.end_time, clip.src_out),
           })),
+        continues,
       });
     }
   }
   return projected;
+}
+
+export type TranscriptDocItem =
+  | { kind: "sentence"; sentence: ProjectedSegment }
+  | { kind: "silence"; gap: SilenceGap };
+
+/**
+ * 逐字稿的阅读顺序:句子与静音按时间线交织,**被切开的一句,后半截紧跟在前半截后面**。
+ *
+ * 此前整篇只按每行"可见部分的起点"排。在一句话中间切一刀,后半截的起点就挪到了切点 ——
+ * 而同一时刻开始、比它晚结束的别的行(双语字幕的另一种语言、另一条轨上的同期声)起点更早,
+ * 于是插进两半中间:「如果 / If love that / 太年轻的爱注定要分开」。用户切的是一句,
+ * 看到的却是这一句被挪走了一半。
+ *
+ * 所以只有"开头"参与按时间排序,后半截挂在它的前半截上(可以连着切好几刀,顺着链走)。
+ */
+export function transcriptDocument(
+  projected: readonly ProjectedSegment[],
+  silences: readonly SilenceGap[],
+): TranscriptDocItem[] {
+  const tails = new Map<string, ProjectedSegment>();
+  for (const row of projected) if (row.continues) tails.set(row.continues, row);
+  const heads: TranscriptDocItem[] = [
+    ...projected.filter((row) => !row.continues).map((sentence) => ({ kind: "sentence" as const, sentence })),
+    ...silences.map((gap) => ({ kind: "silence" as const, gap })),
+  ].sort((a, b) => {
+    const ta = a.kind === "sentence" ? a.sentence.timelineStart : a.gap.timelineStart;
+    const tb = b.kind === "sentence" ? b.sentence.timelineStart : b.gap.timelineStart;
+    return ta - tb;
+  });
+  const items: TranscriptDocItem[] = [];
+  for (const head of heads) {
+    items.push(head);
+    if (head.kind !== "sentence") continue;
+    for (let tail = tails.get(projectedRowKey(head.sentence)); tail; tail = tails.get(projectedRowKey(tail))) {
+      items.push({ kind: "sentence", sentence: tail });
+    }
+  }
+  return items;
 }
 
 /* ---------- Silence & filler detection ---------- */

@@ -27,21 +27,34 @@ export function speakersAreMeaningful(speakers: readonly (string | null | undefi
   return false;
 }
 
+/**
+ * 引擎编号(`SPEAKER_00`)换成给人看的序号:**从 1 数,不补零**。
+ *
+ * 此前原样截出 `00` 摆在时间码 `00:00.4` 旁边 —— 读起来像时间码多出来的两位,
+ * 用户问"这个绿色的 00 是什么"。数人从 1 数起。不是引擎写法的(人名)返回 null。
+ */
+function speakerOrdinal(speaker: string): string | null {
+  const at = speaker.indexOf(ENGINE_PREFIX);
+  if (at < 0) return null;
+  const raw = speaker.slice(at + ENGINE_PREFIX.length).trim();
+  return /^\d+$/u.test(raw) ? String(Number(raw) + 1) : raw || null;
+}
+
 /** `SPEAKER_00` 是引擎的写法,不是给人看的。 */
 export function speakerLabel(speaker: string, t: (key: MessageKey) => string): string {
-  const at = speaker.indexOf(ENGINE_PREFIX);
-  if (at < 0) return speaker;
-  return speaker.slice(0, at) + t("transcriptSpeakerLabel").replace("{n}", speaker.slice(at + ENGINE_PREFIX.length));
+  const ordinal = speakerOrdinal(speaker);
+  if (ordinal === null) return speaker;
+  return speaker.slice(0, speaker.indexOf(ENGINE_PREFIX)) + t("transcriptSpeakerLabel").replace("{n}", ordinal);
 }
 
 /**
- * 时间码那一栏只有五十来像素,放不下「说话人 00」。
+ * 时间码那一栏只有几十像素,放不下「说话人 1」。
  *
- * 放得下的是编号本身:那一栏里上下排着的都是说话人,`00` / `01` 足够分辨,完整名字挂在 title 上。
+ * 放得下的是序号本身(前面配一个人形图标,见 TranscriptPanel):那一栏里上下排着的都是说话人,
+ * `1` / `2` 足够分辨,完整名字挂在 title 上。
  */
 export function speakerShort(speaker: string): string {
-  const short = speaker.replace("SPEAKER_", "").trim();
-  return short || speaker;
+  return speakerOrdinal(speaker) ?? speaker;
 }
 
 /**

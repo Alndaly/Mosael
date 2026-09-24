@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { detectSilences, isFillerToken, projectTranscript, transcriptSegmentsForEditing, type SegmentLike } from "./transcriptProjection";
+import {
+  detectSilences,
+  isFillerToken,
+  projectTranscript,
+  transcriptDocument,
+  transcriptSegmentsForEditing,
+  type SegmentLike,
+} from "./transcriptProjection";
 
 const seg = (id: string, start: number, end: number, text: string): SegmentLike => ({
   id,
@@ -274,5 +281,88 @@ describe("兜底切分(没有词级时间戳时)", () => {
       { id: "s1", start_time: 0, end_time: 30, text: chinese, tokens: [] },
     ]]]));
     expect(withTokens).toHaveLength(3);
+  });
+});
+
+/**
+ * 用户撞到的:双语逐字稿里,中文「如果太年轻的爱注定要分开。」和英文「If love that」同在 0.4 秒开始。
+ * 在「如果」后面「在此切一刀」,后半截的起点挪到了切点 1.1 —— 整篇只按起点排,英文那行就插进了两半中间。
+ * 切的是一句,两半就该还挨着,待在原来那一行的位置上。
+ */
+describe("transcriptDocument —— 切开的一句两半挨着", () => {
+  const bilingual = new Map<string, SegmentLike[]>([["a1", [
+    {
+      id: "zh",
+      start_time: 0.4,
+      end_time: 5,
+      text: "如果太年轻的爱注定要分开。",
+      tokens: [
+        { start_time: 0.4, end_time: 0.7, text: "如" },
+        { start_time: 0.7, end_time: 1.1, text: "果" },
+        { start_time: 1.1, end_time: 1.4, text: "太" },
+        { start_time: 1.4, end_time: 5, text: "年轻的爱注定要分开" },
+      ],
+    },
+    { id: "en1", start_time: 0.4, end_time: 2.9, text: "If love that", tokens: [{ start_time: 0.4, end_time: 2.9, text: "If love that" }] },
+    { id: "en2", start_time: 2.9, end_time: 5, text: "is too young is destined to part.", tokens: [{ start_time: 2.9, end_time: 5, text: "is too young is destined to part." }] },
+  ]]]);
+  const texts = (items: ReturnType<typeof transcriptDocument>) =>
+    items.map((item) => (item.kind === "sentence" ? `${item.sentence.clipId}:${item.sentence.tokens.map((token) => token.text).join("")}` : "silence"));
+
+  it("切一刀之前:按起点排,同起点保持稿子里的先后", () => {
+    const doc = transcriptDocument(projectTranscript([clip("c1", "a1", 0, 0, 6)], bilingual), []);
+    expect(texts(doc)).toEqual(["c1:如果太年轻的爱注定要分开。", "c1:If love that", "c1:is too young is destined to part."]);
+  });
+
+  it("在「如果」后面切一刀(同一轨):两半挨着,英文那行的两半也各自挨着", () => {
+    const clips = [clip("left", "a1", 0, 0, 1.1), clip("right", "a1", 1.1, 1.1, 6)];
+    const projected = projectTranscript(clips, bilingual);
+    expect(projected.find((row) => row.clipId === "right" && row.segmentId === "zh")?.continues).toBe("left:zh");
+    expect(texts(transcriptDocument(projected, []))).toEqual([
+      "left:如果",
+      "right:太年轻的爱注定要分开。",
+      "left:If love that",
+      "right:If love that",
+      "right:is too young is destined to part.",
+    ]);
+  });
+
+  it("英文在另一条轨上、没被切到:中文两半仍挨着", () => {
+    const zhOnly = new Map<string, SegmentLike[]>([
+      ["zh", bilingual.get("a1")!.filter((segment) => segment.id === "zh")],
+      ["en", bilingual.get("a1")!.filter((segment) => segment.id !== "zh")],
+    ]);
+    const clips = [clip("left", "zh", 0, 0, 1.1), clip("right", "zh", 1.1, 1.1, 6), clip("eng", "en", 0, 0, 6)];
+    expect(texts(transcriptDocument(projectTranscript(clips, zhOnly), []))).toEqual([
+      "left:如果",
+      "right:太年轻的爱注定要分开。",
+      "eng:If love that",
+      "eng:is too young is destined to part.",
+    ]);
+  });
+
+  it("连切两刀:三段顺着链排在一起", () => {
+    const clips = [clip("a", "a1", 0, 0, 0.7), clip("b", "a1", 0.7, 0.7, 1.4), clip("c", "a1", 1.4, 1.4, 6)];
+    const zh = texts(transcriptDocument(projectTranscript(clips, bilingual), [])).filter((line) => /[\u4e00-\u9fff]/u.test(line));
+    expect(zh).toEqual(["a:如", "b:果太", "c:年轻的爱注定要分开。"]);
+    const doc = texts(transcriptDocument(projectTranscript(clips, bilingual), []));
+    expect(doc.slice(0, 3)).toEqual(zh);
+  });
+
+  it("后半截被拖到别处(时间线上不再接着):它就不是'同一句的两半',按自己的时间排", () => {
+    const clips = [clip("left", "a1", 0, 0, 1.1), clip("moved", "a1", 20, 1.1, 6)];
+    const projected = projectTranscript(clips, bilingual);
+    expect(projected.every((row) => row.continues === null)).toBe(true);
+    expect(texts(transcriptDocument(projected, [])).at(-1)).toBe("moved:is too young is destined to part.");
+    expect(texts(transcriptDocument(projected, []))[0]).toBe("left:如果");
+    expect(texts(transcriptDocument(projected, []))[1]).toBe("left:If love that");
+  });
+
+  it("静音照旧按时间交织", () => {
+    const clips = [clip("left", "a1", 0, 0, 1.1), clip("right", "a1", 1.1, 1.1, 6)];
+    const projected = projectTranscript(clips, bilingual);
+    const doc = transcriptDocument(projected, detectSilences(clips, bilingual, 0.3));
+    expect(texts(doc)[0]).toBe("silence");
+    expect(texts(doc).slice(1, 3)).toEqual(["left:如果", "right:太年轻的爱注定要分开。"]);
   });
 });

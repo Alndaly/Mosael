@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  useI18n: () => (key: string) => (key === "transcribePending" ? "转写其余 {n} 段" : key),
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
@@ -169,14 +169,15 @@ describe("逐字稿页的转写入口", () => {
     expect(screen.queryByRole("button", { name: /transcribeTimeline/ })).toBeNull();
   });
 
-  it("已有逐字稿后又加了一段:顶栏的「AI 转写」标出还差几段,点下去只转新的那段", async () => {
+  it("已有逐字稿后又加了一段:顶栏按钮把还差几段**写进动作里**,点下去只转新的那段", async () => {
     const { started } = serve({ transcripts: ["vid"] });
     renderPanel(sequence([clip("c1", "vid", "video", 0)], [clip("c2", "voice", "audio", 0)]));
 
     await screen.findByText("vid 说的话");
-    const header = screen.getByRole("button", { name: /aiTranscribe/ });
+    // 此前是「AI 转写」后面挂一个光秃秃的数字 —— 用户问"这个数字有什么意义"。
+    const header = screen.getByRole("button", { name: "转写其余 1 段" });
     expect(header).toHaveAttribute("title", "transcribePendingHint");
-    expect(header.querySelector("em")?.textContent).toBe("1");
+    expect(header.querySelector("em")).toBeNull();
 
     fireEvent.click(header);
     await waitFor(() => expect(started).toEqual(["voice"]));

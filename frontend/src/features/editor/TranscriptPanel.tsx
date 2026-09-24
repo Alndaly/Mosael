@@ -3,7 +3,7 @@ import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
+import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
 import { API_BASE, api, getAuthToken, getJob, listAsrModels, transcribeAsset, type Job, type Sequence } from "@/api/client";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
@@ -19,6 +19,8 @@ import {
   detectSilences,
   isFillerToken,
   projectTranscript,
+  projectedRowKey,
+  transcriptDocument,
   transcriptSegmentsFromApi,
   type SegmentLike,
 } from "@/domain/timeline/transcriptProjection";
@@ -46,10 +48,11 @@ type TokenSelection = Map<string, { clipId: string; srcStart: number; srcEnd: nu
 const GUTTER = "grid-cols-[58px_minmax(0,1fr)]";
 
 /**
- * 多说话人的元数据栏只比纯时间码多留一个紧凑编号的宽度。时间码和说话人同组、
+ * 多说话人的元数据栏只比纯时间码多留一枚说话人标签(人形图标 + 序号)的宽度。时间码和说话人同组、
  * 同顶线,正文列仍保持 `minmax(0, 1fr)`,内容过长时自然换行而不截断。
+ * 按最长时间码 58px + 间距 + 标签约 30px 定,不按 `00:06.6` 那种短的定。
  */
-const SPEAKER_GUTTER = "grid-cols-[80px_minmax(0,1fr)]";
+const SPEAKER_GUTTER = "grid-cols-[92px_minmax(0,1fr)]";
 
 export function TranscriptPanel({
   sequence,
@@ -320,10 +323,16 @@ export function TranscriptPanel({
           可以很长,塞进这个为四个字做的胶囊里会折成两行、把图标挤到一边 —— 它属于下面那行状态,
           不属于控件本身。 */}
       {asrRunning ? <Loader2 size={12} className="shrink-0 animate-mosael-spin" /> : <Mic size={12} className="shrink-0" />}
+      {/* 已有逐字稿、又有没转过的素材时,**把数字写进动作里**:「转写其余 12 段」。
+          此前是「AI 转写」后面挂一个光秃秃的 12 —— 同一排「静音」「口癖」后面的数字是"点下去会选中几处",
+          它却是"还有几个素材没转写",没有悬停就读不出来,用户只能问这个数字是什么意思。 */}
       <span className="whitespace-nowrap">
-        {asrRunning ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}` : t("aiTranscribe")}
+        {asrRunning
+          ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}`
+          : projected.length > 0 && pendingIds.length > 0
+            ? t("transcribePending").replace("{n}", String(pendingIds.length))
+            : t("aiTranscribe")}
       </span>
-      {!asrRunning && projected.length > 0 && pendingIds.length > 0 && <em>{pendingIds.length}</em>}
     </button>
   );
   // 引擎没装:说清楚,并给一条直达设置「转写」的路。按钮同时禁用 —— 点下去只会排一个注定失败的任务。
@@ -392,21 +401,11 @@ export function TranscriptPanel({
     });
   };
 
-  // 文档视图:句子与静音间隙按时间线顺序交织成一篇连续文本。
-  const docItems = React.useMemo(() => {
-    const items: Array<
-      | { kind: "sentence"; sentence: (typeof projected)[number] }
-      | { kind: "silence"; gap: (typeof silences)[number] }
-    > = projected.map((sentence) => ({ kind: "sentence" as const, sentence }));
-    if (showSilences) {
-      for (const gap of silences) items.push({ kind: "silence", gap });
-    }
-    return items.sort((a, b) => {
-      const ta = a.kind === "sentence" ? a.sentence.timelineStart : a.gap.timelineStart;
-      const tb = b.kind === "sentence" ? b.sentence.timelineStart : b.gap.timelineStart;
-      return ta - tb;
-    });
-  }, [projected, silences, showSilences]);
+  // 文档视图:句子与静音间隙按时间线顺序交织成一篇连续文本;切开的一句两半挨着(见 transcriptDocument)。
+  const docItems = React.useMemo(
+    () => transcriptDocument(projected, showSilences ? silences : []),
+    [projected, silences, showSilences],
+  );
 
   // 卡拉OK定位:播放头映射回当前片段的源时间,命中的词高亮。
   const clipById = React.useMemo(() => new Map(videoClips.map((clip) => [clip.id, clip])), [videoClips]);
@@ -423,7 +422,7 @@ export function TranscriptPanel({
   const activeSentenceRef = React.useRef<HTMLDivElement | null>(null);
   const activeSentenceKey = React.useMemo(() => {
     const hit = projected.find((item) => playhead >= item.timelineStart && playhead < item.timelineEnd);
-    return hit ? `${hit.clipId}:${hit.segmentId}` : null;
+    return hit ? projectedRowKey(hit) : null;
   }, [projected, playhead]);
   React.useEffect(() => {
     activeSentenceRef.current?.scrollIntoView({ block: "nearest" });
@@ -665,7 +664,7 @@ export function TranscriptPanel({
             );
           }
           const sentence = item.sentence;
-          const key = `${sentence.clipId}:${sentence.segmentId}`;
+          const key = projectedRowKey(sentence);
           const active = key === activeSentenceKey;
           return (
             <div
@@ -697,11 +696,14 @@ export function TranscriptPanel({
                 </button>
                 {/* 说话人与时间码在正文首行的同一个元数据组里,不再垂直居中到多行正文中间。 */}
                 {showSpeakers && sentence.speaker && (
+                  // 人形图标 + 从 1 数的序号:光一个 `00` 挨着时间码 `00:00.4`,读起来像时间码的一部分。
                   <span
-                    className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
+                    className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center gap-0.5 rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
                     style={speakerChipStyle(sentence.speaker)}
                     title={speakerLabel(sentence.speaker, t)}
+                    aria-label={speakerLabel(sentence.speaker, t)}
                   >
+                    <UserRound size={9} aria-hidden className="shrink-0" />
                     {speakerShort(sentence.speaker)}
                   </span>
                 )}

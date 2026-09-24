@@ -88,7 +88,7 @@ describe("逐字稿列表", () => {
     renderPanel();
 
     await screen.findByText("第0句");
-    expect(screen.queryByTitle("说话人 00")).toBeNull();
+    expect(screen.queryByTitle("说话人 1")).toBeNull();
   });
 
   it("分得出两个人时才挂,而且时间码、说话人、正文在同一横向栅格里", async () => {
@@ -96,14 +96,17 @@ describe("逐字稿列表", () => {
     const { container } = renderPanel();
 
     const sentenceText = await screen.findByText("第0句");
-    await waitFor(() => expect(screen.getByTitle("说话人 00")).toBeInTheDocument());
-    const speaker = screen.getByTitle("说话人 00");
-    expect(screen.getByTitle("说话人 01")).toBeInTheDocument();
-    // 栏里放得下的是编号本身,完整名字在 title 上。
-    expect(speaker.textContent).toBe("00");
+    await waitFor(() => expect(screen.getByTitle("说话人 1")).toBeInTheDocument());
+    const speaker = screen.getByTitle("说话人 1");
+    expect(screen.getByTitle("说话人 2")).toBeInTheDocument();
+    // 栏里放得下的是人形图标 + 序号,完整名字在 title / aria-label 上。
+    // 此前是一个光秃秃的 `00` 挨着时间码 `00:00.0` —— 用户问"这个绿色的 00 是什么"。
+    expect(speaker.textContent).toBe("1");
+    expect(speaker.querySelector("svg")).not.toBeNull();
+    expect(speaker).toHaveAttribute("aria-label", "说话人 1");
 
     const row = container.querySelector(".group\\/sentence");
-    expect(row?.className).toContain("grid-cols-[80px_minmax(0,1fr)]");
+    expect(row?.className).toContain("grid-cols-[92px_minmax(0,1fr)]");
     // 时间码和说话人同在顶部元数据组里；正文是相邻的栅格列。
     expect(speaker.parentElement?.className).toContain("h-6");
     expect(speaker.parentElement?.className).toContain("items-center");
@@ -146,5 +149,60 @@ describe("逐字稿列表", () => {
     expect(actionRail?.className).toContain("absolute");
     expect(actionRail?.className).toContain("opacity-0");
     expect(actionRail?.className).not.toContain("group-focus-within/sentence:opacity-100");
+  });
+});
+
+describe("在此切一刀之后的行序", () => {
+  // 用户撞到的:双语稿里中文和英文同在 0.4 秒开始,在「如果」后面切一刀,
+  // 后半截「太年轻的爱注定要分开。」掉到了英文那行下面。切的是一句,两半就该挨着。
+  it("被切开的一句,后半截紧跟在前半截后面", async () => {
+    const transcript = {
+      id: "tr1",
+      language: "zh",
+      segments: [
+        {
+          id: "zh",
+          start_time: 0.4,
+          end_time: 5,
+          text: "如果太年轻的爱注定要分开。",
+          speaker: null,
+          tokens: [
+            { start_time: 0.4, end_time: 1.1, text: "如果" },
+            { start_time: 1.1, end_time: 5, text: "太年轻的爱注定要分开。" },
+          ],
+        },
+        { id: "en", start_time: 0.4, end_time: 2.9, text: "Iflovethat", speaker: null, tokens: [] },
+      ],
+    };
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const body = String(input).includes("/transcript") ? transcript : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as never;
+    const split = {
+      id: "s1",
+      workspace_id: "w1",
+      revision: 2,
+      tracks: [
+        {
+          id: "t1",
+          kind: "video",
+          clips: [
+            { id: "left", asset_id: "a1", asset_kind: "video", timeline_start: 0, src_in: 0, src_out: 1.1 },
+            { id: "right", asset_id: "a1", asset_kind: "video", timeline_start: 1.1, src_in: 1.1, src_out: 6 },
+          ],
+        },
+      ],
+    } as never;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <TranscriptPanel sequence={split} onCutSegment={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("如果");
+    const rows = [...container.querySelectorAll(".group\\/sentence > p")].map((row) => row.textContent);
+    expect(rows.slice(0, 2)).toEqual(["如果", "太年轻的爱注定要分开。"]);
+    expect(rows.indexOf("Iflovethat")).toBeGreaterThan(1);
   });
 });
