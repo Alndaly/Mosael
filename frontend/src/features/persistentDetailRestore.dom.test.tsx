@@ -17,12 +17,13 @@ vi.mock("@/api/client", async (importOriginal) => ({
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
-  usePreferences: () => ({ locale: "zh-CN" }),
+  usePreferences: () => ({ locale: "zh-CN", t: (key: string) => key }),
 }));
 
 import type { Workspace } from "@/api/client";
 import { BoardsView } from "@/features/boards/BoardsView";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
+import { gotoSection } from "@/lib/deepLink";
 
 const workspace = { id: "w1", name: "测试工作区" } as Workspace;
 
@@ -79,5 +80,35 @@ describe("刷新详情页时恢复持久化选择", () => {
     await waitFor(() => expect(apiMocks.listWorkflows).toHaveBeenCalled());
     expect(screen.getByTestId("workflows-detail-restoring")).toBeInTheDocument();
     expect(screen.queryByText("navWorkflows")).toBeNull();
+  });
+});
+
+describe("从页面起点进来(统计页的数字)时不恢复上次的详情", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    window.location.hash = "#/statistics";
+    apiMocks.listWorkflows.mockReset().mockResolvedValue([
+      { id: "workflow-1", workspace_id: "w1", name: "上次开着的那条", description: "", graph: { nodes: [], edges: [] }, created_at: "2026-09-20T00:00:00", updated_at: "2026-09-20T00:00:00" },
+    ]);
+    apiMocks.fetchWorkflowNodeTypes.mockReset().mockReturnValue(pending());
+  });
+
+  it("工作流页落在列表 —— 首帧就是,不先闪一下详情;之后从侧栏回来也还是列表", async () => {
+    // 用户上次停在某条工作流的详情里。侧栏点回来恢复它是对的(上面几条);从数字点进来不是。
+    localStorage.setItem("mosael:selected:workflows", "workflow-1");
+    gotoSection("workflows");
+    expect(window.location.hash).toBe("#/workflows");
+
+    const first = renderWithQuery(<WorkflowsView workspace={workspace} />);
+    expect(screen.queryByTestId("workflows-detail-restoring")).toBeNull();
+    expect(await screen.findByText("上次开着的那条")).toBeInTheDocument();
+    expect(screen.queryByTestId("workflows-detail-restoring")).toBeNull();
+    // 看到的是列表,记住的也得是列表:否则下次从侧栏进来,又跳回那条旧详情。
+    await waitFor(() => expect(localStorage.getItem("mosael:selected:workflows")).toBeNull());
+    first.unmount();
+
+    renderWithQuery(<WorkflowsView workspace={workspace} />);
+    expect(await screen.findByText("上次开着的那条")).toBeInTheDocument();
+    expect(screen.queryByTestId("workflows-detail-restoring")).toBeNull();
   });
 });

@@ -17,6 +17,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "en-US" }),
 }));
 
+import { gotoSection } from "@/lib/deepLink";
 import { PublishView } from "./PublishView";
 
 it("selects only visible publish records and drops selections hidden by a status filter", async () => {
@@ -30,5 +31,15 @@ it("selects only visible publish records and drops selections hidden by a status
   fireEvent.click(screen.getByRole("button", { name: "batchStatus_succeeded" }));
   await waitFor(() => expect(screen.getByText("Selected 0")).toBeInTheDocument());
   expect(screen.getByRole("button", { name: "delete" })).toBeDisabled();
+  client.clear();
+});
+
+// 统计页「近 7 天发布」点进来:发布记录筛到已成功 —— 那个数数的就是成功的发布。
+it("enters at the succeeded records when the statistics tile sends it there", async () => {
+  gotoSection("publish", "succeeded");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
+  await screen.findByRole("button", { name: /Published film/ });
+  await waitFor(() => expect(screen.queryByRole("button", { name: /Needs a retry/ })).toBeNull());
   client.clear();
 });

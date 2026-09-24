@@ -54,6 +54,36 @@ export function gotoRecord(route: string, event?: string, id?: unknown): void {
   if (event && typeof id === "string" && id) emitOpenEvent(event, id);
 }
 
+/**
+ * 「进入某个页面的**起点**」—— 列表页,而不是它上次停在的那条详情。
+ *
+ * 侧栏点进一个页面,页面会恢复上次的样子(工作流详情、素材库的筛选都是有意记住的,用户要过)。
+ * 但从一个**数字**点过去不是那个意思:统计页上「工作流 12」点进去,要看的是那 12 个工作流,
+ * 而不是半小时前开着的某一个 —— 此前它就是这么落进某条工作流详情里的。
+ *
+ * 所以这是另一种导航,不是 `gotoRecord` 少传一个 id:起点长什么样只有页面自己知道(清掉选中、
+ * 清掉筛选),导航层只负责把"从起点进来"这句话送到。`entry` 默认 `"root"`;页面若认得别的
+ * 入口(发布页的 `"succeeded"` 这类筛选),就按它来,不认得的一律当起点。
+ * 送信走信箱(见上面的 `emitOpenEvent`):目标页此刻多半还没挂载,挂载时自己来取。
+ */
+const SECTION_ROOT = "root";
+const sectionEvent = (view: string) => `mosael:open-section:${view}`;
+
+export function gotoSection(view: string, entry: string = SECTION_ROOT): void {
+  gotoRecord(`/${view}`, sectionEvent(view), entry);
+}
+
+/**
+ * 页面这一侧:收「从起点进来」的请求。返回**此刻还在信箱里等着的**入口 —— 渲染期只读、不取走,
+ * 让页面第一帧就能按起点画:工作流页若先按记住的那条渲染一帧详情再跳回列表,人会看到一闪,
+ * 整张画布也白挂载一次。真正的处理(清选中、改筛选)在 `onEnter` 里,由 effect 投递。
+ */
+export function useSectionEntry(view: string, onEnter: (entry: string) => void): string | null {
+  const event = sectionEvent(view);
+  useOpenRequest(event, onEnter);
+  return mailbox.get(event) ?? null;
+}
+
 /** 通知类型 → 打开单条记录的事件名 + payload 里的记录 id 字段。 */
 export const NOTIFICATION_DEEP_LINKS: Record<string, { event: string; payloadKey: string }> = {
   publish: { event: "mosael:open-publish-task", payloadKey: "task_id" },

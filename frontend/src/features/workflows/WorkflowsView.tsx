@@ -5,7 +5,7 @@ import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
-import { OPEN_WORKFLOW_TEMPLATE, useOpenRequest } from "@/lib/deepLink";
+import { OPEN_WORKFLOW_TEMPLATE, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
@@ -450,7 +450,10 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     "workflows",
     workflows.data?.map((workflow) => workflow.id),
   );
-  const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
+  // 「从起点进来」(统计页的工作流数字等):回到列表,不恢复上次开着的那条。等着投递的那一帧
+  // 就按列表画 —— 否则会先把整张画布挂上再卸掉(见 lib/deepLink 的 useSectionEntry)。
+  const enteringRoot = useSectionEntry("workflows", () => setSelectedId(null)) !== null;
+  const selected = enteringRoot ? null : (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
   const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
     useMultiSelect(workflows.data ?? [], (workflow) => workflow.id);
@@ -477,7 +480,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   });
 
   const restoringSelectedWorkflow =
-    (selectedWorkflowState.restoring && workflows.isPending) ||
+    (!enteringRoot && selectedWorkflowState.restoring && workflows.isPending) ||
     (selected !== null && nodeTypes.isPending);
 
   if (restoringSelectedWorkflow) {

@@ -5,7 +5,7 @@ import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import React from "react";
-import { useOpenRequest } from "@/lib/deepLink";
+import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
@@ -217,6 +217,13 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     assets.data === undefined ? undefined : allTags,
   );
   const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("media-tag-match", "all", ["all", "any"]);
+  // 「从起点进来」(统计页的素材总数):看的是**全部**素材 —— 记住的类型、标签筛选这回不作数,
+  // 否则点「素材 128」进来只看到其中 12 条。排序、网格/列表是怎么看,不是看哪些,照旧。
+  useSectionEntry("media", () => {
+    setPreviewing(null);
+    setKindFilter("all");
+    setTagFilter([]);
+  });
 
   const visible = React.useMemo(() => {
     const query = search.trim().toLowerCase();

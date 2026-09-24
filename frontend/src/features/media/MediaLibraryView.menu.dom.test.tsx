@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { separateAssetAudio, type Asset, type Workspace } from "@/api/client";
+import { gotoSection } from "@/lib/deepLink";
 import { MediaLibraryView } from "./MediaLibraryView";
 
 vi.mock("@/api/client", async (original) => ({
@@ -69,4 +70,21 @@ it("有声音的素材能降噪:点了打开降噪对话框", async () => {
   await user.click(screen.getByRole("button", { name: "studioActions: clip" }));
   await user.click(await screen.findByRole("button", { name: "denoiseAction" }));
   expect(await screen.findByRole("dialog", { name: "denoiseTitle" })).toBeInTheDocument();
+});
+
+// 统计页「素材 N」点进来:看的是全部 N 个 —— 记住的类型 / 标签筛选这回不作数(也不再记着)。
+it("从起点进来时清掉记住的类型和标签筛选", async () => {
+  localStorage.clear();
+  localStorage.setItem("mosael:tab:media-kind", "video");
+  localStorage.setItem("mosael:selected-set:media-tags", JSON.stringify(["b-roll"]));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const asset = (id: string, kind: Asset["kind"], tags: string[]) =>
+    ({ id, name: id, workspace_id: "ws", project_id: null, original_filename: id, file_key: id, kind, source: "imported", tags, media_info: {}, proxy_expected: false }) as Asset;
+  client.setQueryData(["assets", "ws"], [asset("clip", "video", ["b-roll"]), asset("still", "image", [])]);
+  gotoSection("media");
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  expect(await screen.findByRole("button", { name: "still" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "clip" })).toBeInTheDocument();
+  expect(localStorage.getItem("mosael:tab:media-kind")).toBe("all");
+  expect(localStorage.getItem("mosael:selected-set:media-tags")).toBeNull();
 });

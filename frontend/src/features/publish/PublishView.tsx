@@ -33,13 +33,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { useMultiSelect } from "@/lib/useMultiSelect";
-import { gotoRecord, useOpenRequest } from "@/lib/deepLink";
+import { gotoRecord, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
 // 受阻但可恢复(老版 BLOCKED_STATUSES):人工处理后可重试。
 const BLOCKED = new Set(["login_required", "waiting_manual", "permission_required", "blocked"]);
+// 记录列表的状态筛选。「从起点进来」可以指定其中一个(统计页「近 7 天发布」→ 已成功)。
+const STATUS_FILTERS: readonly string[] = ["all", "active", "succeeded", "attention"];
 
 /** 发布页(计划 §6.9 / Phase 13):成片 + 文案 → 发布目标,状态走任务总线。
  *  账号矩阵是一等页签:多平台账号的登录态、启停、复检都在这里管,登录会话
@@ -116,6 +118,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const opened = (tasks.data ?? []).find((task) => task.id === openId) ?? null;
   // 按天分栏。时间是无时区标记的 UTC 串,分组必须按本地日历天算(见 lib/dayGroups)。
   const [statusFilter, setStatusFilter] = React.useState("all");
+  useSectionEntry("publish", (entry) => {
+    setOpenId(null);
+    setStatusFilter(STATUS_FILTERS.includes(entry) ? entry : "all");
+  });
   const filteredTasks = React.useMemo(() => (tasks.data ?? []).filter(task => statusFilter === "all" || (statusFilter === "active" ? ACTIVE.has(task.status) : statusFilter === "succeeded" ? ["succeeded", "success"].includes(task.status) : !ACTIVE.has(task.status) && !["succeeded", "success"].includes(task.status))), [tasks.data, statusFilter]);
   const groups = React.useMemo(
     () => groupByLocalDay(filteredTasks, (task) => task.created_at),

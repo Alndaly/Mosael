@@ -52,7 +52,7 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
       onOpenProject={ctx.openProject}
     />
   ),
-  statistics: (ctx) => <StatisticsView workspace={ctx.workspace} projects={ctx.projects} onOpenProject={ctx.openProject} />,
+  statistics: (ctx) => <StatisticsView workspace={ctx.workspace} />,
   media: (ctx) => <MediaLibraryView workspace={ctx.workspace} />,
   notes: (ctx) => <NotesView key={ctx.workspace.id} workspace={ctx.workspace} />,
   scenes: (ctx) => <SceneStudio key={ctx.workspace.id} workspace={ctx.workspace} />,
