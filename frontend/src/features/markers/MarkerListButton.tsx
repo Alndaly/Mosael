@@ -3,6 +3,7 @@ import { Flag, List } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { CanvasMarker } from "@/features/markers/markers";
@@ -60,9 +61,7 @@ export function MarkerListButton({
                 <Flag size={12} className="shrink-0 text-action" />
                 <span className="min-w-0 flex-1 truncate">{marker.name || t("markerUnnamed")}</span>
                 {marker.shortcut ? (
-                  <kbd className="shrink-0 rounded border border-border bg-secondary px-1 font-mono text-ui-2xs leading-4 text-muted-foreground">
-                    {formatCombo(marker.shortcut)}
-                  </kbd>
+                  <Kbd>{formatCombo(marker.shortcut)}</Kbd>
                 ) : null}
               </button>
             ))}

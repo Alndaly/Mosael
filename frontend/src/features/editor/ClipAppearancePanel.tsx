@@ -9,6 +9,7 @@ import {
   type ClipAppearance,
   type MaskShape,
 } from "@/features/editor/clipAppearance";
+import { InspectorSection } from "@/features/editor/InspectorSection";
 import { cn } from "@/lib/utils";
 
 export function ClipAppearancePanel({
@@ -30,8 +31,7 @@ export function ClipAppearancePanel({
   };
 
   return (
-    <div className="grid gap-2 border-t border-border pt-2.5">
-      <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAppearance")}</span>
+    <InspectorSection className="gap-2" title={t("clipAppearance")}>
       <div className="grid grid-cols-[52px_1fr] items-center gap-2">
         <span className="text-ui-xs text-muted-foreground">{t("clipMask")}</span>
         <div className="grid grid-cols-3 gap-1">
@@ -92,7 +92,7 @@ export function ClipAppearancePanel({
           <AppearanceSlider label={t("shadowOffsetY")} value={appearance.shadow.offsetY} min={-120} max={120} step={1} format={(value) => `${Math.round(value)}px`} onCommit={(offsetY) => commit({ ...appearance, shadow: { ...appearance.shadow, offsetY } })} />
         </div>
       )}
-    </div>
+    </InspectorSection>
   );
 }
 

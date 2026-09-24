@@ -84,6 +84,7 @@ import {
   type SceneShot,
 } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
+import { KbdGroup } from "@/components/ui/kbd";
 import {
   Popover,
   PopoverContent,
@@ -1386,16 +1387,16 @@ function SceneEditor({
                       的手势,用惯了的人会去试,没用过的人得有一处能看见。 */}
                   <strong>{t("sceneShortcuts")}</strong>
                   <dl className="scene-keymap">
-                    <dt>G / R / S</dt><dd>{t("sceneKeyTransform")}</dd>
-                    <dt>I / ⌥I</dt><dd>{t("sceneKeyInsert")}</dd>
-                    <dt>{t("sceneKeySpace")}</dt><dd>{t("sceneKeyPlay")}</dd>
-                    <dt>← →</dt><dd>{t("sceneKeyStep")}</dd>
-                    <dt>↑ ↓</dt><dd>{t("sceneKeyJump")}</dd>
-                    <dt>⇧D</dt><dd>{t("sceneKeyDuplicate")}</dd>
-                    <dt>X</dt><dd>{t("sceneKeyDelete")}</dd>
-                    <dt>H / ⌥H</dt><dd>{t("sceneKeyHide")}</dd>
-                    <dt>F</dt><dd>{t("sceneKeyFocus")}</dd>
-                    <dt>⌘Z / ⇧⌘Z</dt><dd>{t("sceneKeyUndo")}</dd>
+                    <dt><KbdGroup keys={["G", "R", "S"]} /></dt><dd>{t("sceneKeyTransform")}</dd>
+                    <dt><KbdGroup keys={["I", "⌥I"]} /></dt><dd>{t("sceneKeyInsert")}</dd>
+                    <dt><KbdGroup keys={[t("sceneKeySpace")]} /></dt><dd>{t("sceneKeyPlay")}</dd>
+                    <dt><KbdGroup keys={["←", "→"]} /></dt><dd>{t("sceneKeyStep")}</dd>
+                    <dt><KbdGroup keys={["↑", "↓"]} /></dt><dd>{t("sceneKeyJump")}</dd>
+                    <dt><KbdGroup keys={["⇧D"]} /></dt><dd>{t("sceneKeyDuplicate")}</dd>
+                    <dt><KbdGroup keys={["X"]} /></dt><dd>{t("sceneKeyDelete")}</dd>
+                    <dt><KbdGroup keys={["H", "⌥H"]} /></dt><dd>{t("sceneKeyHide")}</dd>
+                    <dt><KbdGroup keys={["F"]} /></dt><dd>{t("sceneKeyFocus")}</dd>
+                    <dt><KbdGroup keys={["⌘Z", "⇧⌘Z"]} /></dt><dd>{t("sceneKeyUndo")}</dd>
                   </dl>
                 </PopoverContent>
               </Popover>

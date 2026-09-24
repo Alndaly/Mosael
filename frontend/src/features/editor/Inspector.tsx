@@ -18,6 +18,7 @@ import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
 import { ClipAppearancePanel } from "@/features/editor/ClipAppearancePanel";
+import { InspectorSection } from "@/features/editor/InspectorSection";
 import { LutPicker } from "@/features/editor/LutPicker";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -247,8 +248,7 @@ export function Inspector({
               </p>
             )}
             {isTextClip && onSetText && (
-              <div className="grid gap-3 border-t border-border pt-4">
-                <span className="text-ui-sm font-semibold text-muted-foreground">{isTitleText ? t("titleText") : t("subtitleText")}</span>
+              <InspectorSection title={isTitleText ? t("titleText") : t("subtitleText")}>
                 <Textarea
                   key={`text-${selectedClip.id}`}
                   className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-ui-sm leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
@@ -259,7 +259,7 @@ export function Inspector({
                     if (value && value !== selectedClip.text_override) onSetText(selectedClip.id, value);
                   }}
                 />
-              </div>
+              </InspectorSection>
             )}
             {isTitleText && (
               <TextStylePanel
@@ -272,8 +272,7 @@ export function Inspector({
               />
             )}
             {!isTextClip && onSetSpeed && (
-              <div className="grid gap-3 border-t border-border pt-4">
-                <span className="text-ui-sm font-semibold text-muted-foreground">{t("speed")}</span>
+              <InspectorSection title={t("speed")}>
                 <div className="flex flex-wrap gap-1">
                   {SPEED_OPTIONS.map((option) => (
                     <button
@@ -286,7 +285,7 @@ export function Inspector({
                     </button>
                   ))}
                 </div>
-              </div>
+              </InspectorSection>
             )}
             {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. 音量可打关键帧。 */}
             {!isTextClip && onSetGain &&
@@ -298,9 +297,9 @@ export function Inspector({
                 const shownGain = gainKeyed ? sampleGain(gainKfs, selectedClip.gain, progress) : selectedClip.gain;
                 const onGainKf = gainKeyed && gainKeyTimes(gainKfs).some((tt) => Math.abs(tt - progress) < 0.02);
                 return (
-                  <div className="grid gap-3 border-t border-border pt-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-ui-sm font-semibold text-muted-foreground">{t("clipAudio")}</span>
+                  <InspectorSection
+                    title={t("clipAudio")}
+                    action={
                       <button
                         type="button"
                         className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
@@ -308,7 +307,8 @@ export function Inspector({
                       >
                         {selectedClip.muted ? t("clipMuted") : t("clipMute")}
                       </button>
-                    </div>
+                    }
+                  >
                     <div className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
                       <span className="text-ui-xs text-muted-foreground">{t("gain")}</span>
                       <Slider
@@ -335,11 +335,11 @@ export function Inspector({
                         <Diamond size={11} fill={onGainKf ? "currentColor" : "none"} />
                       </button>
                     </div>
-                  </div>
+                  </InspectorSection>
                 );
               })()}
             {!isTextClip && (
-              <div className="grid gap-3 border-t border-border pt-4">
+              <InspectorSection>
                 {(
                   [
                     { title: t("videoFade"), inKey: "video_fade_in", outKey: "video_fade_out", inV: effects.video_fade_in, outV: effects.video_fade_out },
@@ -375,16 +375,19 @@ export function Inspector({
                     </div>
                   </div>
                 ))}
-              </div>
+              </InspectorSection>
             )}
             {isVisualClip && <ClipAppearancePanel clip={selectedClip} onSetEffects={onSetEffects} />}
             {(!isTextClip || isTitleText) && onSetTransform && (
-              <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 text-ui-sm font-semibold text-muted-foreground">
+              <InspectorSection
+                className="gap-1.5"
+                title={
+                  <>
                     {t("transformTitle")}
                     {animated && <Diamond size={10} className="text-primary" fill="currentColor" />}
-                  </span>
+                  </>
+                }
+                action={
                   <div className="flex items-center gap-2">
                     {anyKeyframes && (
                       <button type="button" className="cursor-pointer border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive" onClick={clearKeyframes}>
@@ -401,7 +404,8 @@ export function Inspector({
                       </button>
                     )}
                   </div>
-                </div>
+                }
+              >
                 {(
                   [
                     { key: "scale", label: t("transformScale"), min: 0.1, max: 4, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
@@ -463,7 +467,7 @@ export function Inspector({
                   </div>
                 )}
                 <span className="text-ui-2xs leading-[1.4] text-muted-foreground">{anyKeyframes ? t("kfHintActive") : t("kfHintEmpty")}</span>
-              </div>
+              </InspectorSection>
             )}
           </div>
         )
@@ -480,8 +484,7 @@ export function Inspector({
             </dd>
           </dl>
           {onReframe && (
-            <div className="grid gap-3 border-t border-border pt-4">
-              <span className="text-ui-sm font-semibold text-muted-foreground">{t("reframeTitle")}</span>
+            <InspectorSection title={t("reframeTitle")}>
               <div className="flex flex-wrap gap-1">
                 {(
                   [
@@ -526,9 +529,11 @@ export function Inspector({
                   );
                 })}
               </div>
-            </div>
+            </InspectorSection>
           )}
-          <p className="m-0 border-t border-border pt-2.5 text-xs text-muted-foreground">{t("noSelection")}</p>
+          <InspectorSection>
+            <p className="m-0 text-xs text-muted-foreground">{t("noSelection")}</p>
+          </InspectorSection>
         </div>
       )}
     </section>
@@ -604,7 +609,7 @@ function ColorGradePanel({
 
   return (
     <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4">
-      <div className="flex items-center gap-1.5 border-b border-border pb-0.5 text-xs text-muted-foreground [&_strong]:min-w-0 [&_strong]:flex-1 [&_strong]:truncate [&_strong]:font-semibold [&_strong]:text-foreground">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground [&_strong]:min-w-0 [&_strong]:flex-1 [&_strong]:truncate [&_strong]:font-semibold [&_strong]:text-foreground">
         <span>{t("colorTarget")}</span>
         <strong title={targetName}>{targetName}</strong>
         <div className="inline-flex items-center gap-1">
@@ -615,8 +620,7 @@ function ColorGradePanel({
           )}
         </div>
       </div>
-      <div className="grid gap-3 border-t border-border pt-4">
-        <span className="text-ui-sm font-semibold text-muted-foreground">{t("stylePresets")}</span>
+      <InspectorSection title={t("stylePresets")}>
         <div className="flex flex-wrap gap-1">
           <button
             type="button"
@@ -638,10 +642,9 @@ function ColorGradePanel({
             </button>
           ))}
         </div>
-      </div>
+      </InspectorSection>
       {GRADE_GROUPS.map((group) => (
-        <div className="grid gap-3 border-t border-border pt-4" key={group.label}>
-          <span className="text-ui-sm font-semibold text-muted-foreground">{t(group.label as never)}</span>
+        <InspectorSection title={t(group.label as never)} key={group.label}>
           {group.keys.map((key) => (
             <div className="grid grid-cols-[44px_minmax(0,1fr)_30px] items-center gap-1.5 text-ui-xs text-muted-foreground [&_em]:text-right [&_em]:text-ui-2xs [&_em]:not-italic" key={`${key}-${clip.id}`}>
               <span>{t(`grade_${key}` as never)}</span>
@@ -658,10 +661,9 @@ function ColorGradePanel({
               <em className="timecode">{Math.round((grade[key] ?? 0) * 100)}</em>
             </div>
           ))}
-        </div>
+        </InspectorSection>
       ))}
-      <div className="grid gap-3 border-t border-border pt-4">
-        <span className="text-ui-sm font-semibold text-muted-foreground">{t("gradeGroupCurves")}</span>
+      <InspectorSection title={t("gradeGroupCurves")}>
         <CurveEditor
           key={clip.id}
           curves={curColor.curves as ColorCurves | undefined}
@@ -669,11 +671,10 @@ function ColorGradePanel({
             onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, curves: next } })
           }
         />
-      </div>
-      <div className="grid gap-3 border-t border-border pt-4">
-        <span className="text-ui-sm font-semibold text-muted-foreground">{t("gradeGroupLut")}</span>
+      </InspectorSection>
+      <InspectorSection title={t("gradeGroupLut")}>
         <LutPicker workspaceId={workspaceId} value={curColor.lut as string | undefined} onChange={setLut} />
-      </div>
+      </InspectorSection>
       <p className="mb-0 mt-1 text-ui-xs leading-normal text-muted-foreground">{t("colorScopeHint")}</p>
     </div>
   );
@@ -719,8 +720,7 @@ function TextStylePanel({
     { key: "shadow", label: t("textShadow") },
   ];
   return (
-    <div className="grid gap-2 border-t border-border pt-2.5">
-      <span className="text-ui-sm font-semibold text-muted-foreground">{t("textStyleTitle")}</span>
+    <InspectorSection className="gap-2" title={t("textStyleTitle")}>
       <div className="flex flex-wrap gap-1">
         {TEXT_PRESETS.map((preset) => (
           <button key={preset.key} type="button" className={iconBtn(false)} onClick={() => set(preset.style)}>
@@ -838,6 +838,6 @@ function TextStylePanel({
           </button>
         ))}
       </div>
-    </div>
+    </InspectorSection>
   );
 }

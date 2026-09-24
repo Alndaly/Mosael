@@ -153,7 +153,16 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     def media_clips(track: Track) -> list:
         return [clip for clip in track.clips if is_visual_clip({"asset_id": clip.asset_id}, kind_by_asset)]
 
-    base_clips = [clip_dict(clip) for clip in (media_clips(base_track) if base_track else [])]
+    def carries_sound(clip) -> bool:
+        """视频素材带声音,图片不带。和预览(playback/audioMix)用同一条判据 —— 这里不探文件:
+        无声视频两边都当有声处理,好过两边各猜各的。"""
+        return (kind_by_asset.get(str(clip.asset_id)) or {}).get("kind") == "video"
+
+    # has_audio:基底轨的这一段算不算「别的声音」—— 闪避轨要给它让路(见 build_render_plan)。
+    base_clips = [
+        {**clip_dict(clip), "has_audio": carries_sound(clip)}
+        for clip in (media_clips(base_track) if base_track else [])
+    ]
     # overlay_views 已是 bottom→top(绘制序),直接展开即可——不要再 reversed 一次。
     # **静音轨的画面保留**:轨道头静音是喇叭图标,只关音频;把画面一并去掉会让「给画中画轨静音」
     # 变成「这层画面从成片里消失」,而预览里它还好好地显示着。音频侧的排除在下面 audible。
@@ -182,9 +191,12 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         for track in audio_tracks
         for clip in track.clips
     ] + [
+        # 只有视频片段有声音可混。图片片段此前也进了这张表:执行时探不到音轨会跳过它,但在那之前
+        # 它已经被算成闪避的触发源 —— 成片里音乐在一张静图底下被压低,预览里却没有。
         {**clip_dict(clip), "solo": track.solo, "duck": track.duck, "optional": True}
         for track in audible_overlay_tracks
         for clip in media_clips(track)
+        if carries_sound(clip)
     ]
     subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]
 

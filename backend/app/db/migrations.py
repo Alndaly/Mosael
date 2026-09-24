@@ -446,6 +446,23 @@ def _migrate_track_role() -> None:
     backfill_dub_tracks()
 
 
+def _migrate_subtitle_tracks_carry_no_sound() -> None:
+    """字幕轨上的独奏 / 闪避标记清掉 —— 字幕轨没有声音,这两个开关在它身上不再存在。
+
+    此前轨道头给字幕轨也摆了独奏按钮。按下去的后果是反的:「有轨在独奏」成立,而字幕轨没有声音,
+    于是预览和成片里**所有**声音都被关掉。现在 set_track_state 拒绝给字幕轨设这两个标记,老库里
+    已经按下去的那些在这里放回去 —— 结果就是用户本来想要的「什么都没独奏」。
+    """
+    inspector = inspect(engine)
+    if "tracks" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("tracks")}
+    if not {"solo", "duck"} <= columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE tracks SET solo = 0, duck = 0 WHERE kind = 'subtitle' AND (solo = 1 OR duck = 1)"))
+
+
 def _migrate_generation_capability_profiles() -> None:
     """建生成参数模板与逐模型、逐 kind 的声明表。
 
@@ -2724,6 +2741,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_message_i18n,
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
+                _migrate_subtitle_tracks_carry_no_sound,
                 _migrate_provider_model_capability_ref,
                 _migrate_generation_capability_profiles,
                 _migrate_browser_boolean_options,

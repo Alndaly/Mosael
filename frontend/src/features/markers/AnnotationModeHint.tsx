@@ -1,6 +1,7 @@
 import React from "react";
 import { X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
+import { Kbd } from "@/components/ui/kbd";
 
 /** Shared hint and Escape behavior for both annotation modes and canvases. */
 export function AnnotationModeHint({ kind, onExit }: { kind: "comment" | "marker"; onExit?: () => void }) {
@@ -19,7 +20,7 @@ export function AnnotationModeHint({ kind, onExit }: { kind: "comment" | "marker
     <span className="shrink-0 font-semibold text-primary">{t(kind === "comment" ? "boardCommentMode" : "markerMode")}</span>
     <span className="mx-1.5 text-muted-foreground">·</span>
     <span className="truncate text-muted-foreground">{t(kind === "comment" ? "boardCommentModeHint" : "markerModeHint")}</span>
-    <kbd className="ml-2 text-ui-2xs text-muted-foreground">Esc</kbd>
+    <Kbd className="ml-2">Esc</Kbd>
     <button type="button" className="ml-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground" title={exitLabel} aria-label={exitLabel} onClick={onExit}><X size={14} /></button>
   </div>;
 }

@@ -1179,6 +1179,10 @@ def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequenc
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
         raise SequenceDomainError("Track not found")
+    # 独奏 / 闪避是**声音**的开关,字幕轨没有声音。独奏一条字幕轨的结果是反的:「有轨在独奏」
+    # 成立,别的轨一律闭嘴 —— 预览和成片里所有声音都没了。
+    if track.kind == "subtitle" and (op.solo or op.duck):
+        raise SequenceDomainError("seqErr_subtitleTrackHasNoSound")
     previous = {"muted": track.muted, "locked": track.locked, "solo": track.solo, "duck": track.duck}
     if op.muted is not None:
         track.muted = op.muted

@@ -3772,6 +3772,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这一步引用的片段已经不在了,撤销不了",
         "en": "The clip this step refers to no longer exists, so it can't be undone.",
     },
+    "seqErr_subtitleTrackHasNoSound": {
+        "zh": "字幕轨没有声音,不能独奏或闪避",
+        "en": "A subtitle track has no sound, so it can't be soloed or ducked.",
+    },
     "seqErr_detachAudioVideoOnly": {"zh": "只能从视频片段分离音频", "en": "Audio can only be detached from a video clip."},
     "seqErr_clipNoAudioSource": {"zh": "该片段没有音频源", "en": "This clip has no audio source."},
     "seqErr_transformNotNumber": {"zh": "transform.{key} 必须是数字", "en": "transform.{key} must be a number."},

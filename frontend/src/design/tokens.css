@@ -48,6 +48,11 @@
   --text-ui-md: 16px;
   --text-ui-lg: 18px;
   --text-ui-title: 32px;
+  /* 键帽(components/ui/kbd)专用:系统界面字体打头。打包的 Inter / JetBrains Mono 子集里
+     没有 ⌘ ⇧ ⌥ ← → ↕(只有 ↑ ↓),这些字符各自回落 —— 等宽栈落到 Apple Symbols,比字母大一圈;
+     同一张键位表里 ↑ 用 Inter、← 用系统字体,连箭头都一大一小。系统界面字体把这些符号当键帽
+     画,字母和符号同字号下一样大。不跟外观偏好里的界面字体走:键帽印的是键盘上的字。 */
+  --font-kbd: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --color-destructive-foreground: var(--destructive-foreground);
 
   --radius-sm: calc(var(--radius) - 2px);

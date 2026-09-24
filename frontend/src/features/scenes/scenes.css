@@ -360,14 +360,6 @@
   padding: 6px 10px;
   border-radius: 6px;
 }
-/* 按钮里跟着的那一小块键位。**淡、小、等宽** —— 它是给已经知道有快捷键的人一个提醒,
-   不是这颗按钮的第二个标题;比文字重的话,读到的先是键而不是这颗按钮做什么。 */
-.scene-side kbd {
-  font-family: var(--font-mono);
-  font-size: var(--text-ui-2xs);
-  color: var(--muted-foreground);
-  opacity: 0.75;
-}
 .scene-frame-fields {
   display: flex;
   flex-direction: column;
@@ -750,9 +742,8 @@
   font-size: var(--text-ui-2xs);
   line-height: 1.7;
 }
+/* 键位本身由共用的键帽(components/ui/kbd)画;这里只管它在表里的位置。 */
 .scene-keymap dt {
-  font-family: var(--font-mono);
-  color: var(--foreground);
   white-space: nowrap;
 }
 .scene-keymap dd {

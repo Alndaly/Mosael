@@ -21,6 +21,8 @@ const twMerge = extendTailwindMerge({
       // 与 design/tokens.css 的 --text-ui-* 一一对应。加新字号要同时加到这里,
       // 否则它在 cn() 里就是不生效 —— 而这件事在页面上看不出是 bug,只看得出"有点怪"。
       "font-size": [{ text: ["ui-2xs", "ui-xs", "ui-sm", "ui-md"] }],
+      // --font-kbd(键帽字体)。不登记的话 `font-kbd` 会被当成字重,和 font-medium 之类互相吃掉。
+      "font-family": [{ font: ["kbd"] }],
     },
   },
 });

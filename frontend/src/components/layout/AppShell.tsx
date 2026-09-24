@@ -23,6 +23,7 @@ import { createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type 
 import { useAuth, useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -175,12 +176,12 @@ export function AppShell({
           <button
             type="button"
             aria-label={t("cmdkTitle")}
-            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-ui-2xs [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_span]:hidden"
             onClick={() => window.dispatchEvent(new CustomEvent("mosael:open-cmdk"))}
           >
             <Search size={15} />
             <span>{t("cmdkTitle")}</span>
-            <kbd>⌘K</kbd>
+            <Kbd className="max-[760px]:hidden">⌘K</Kbd>
           </button>
           {workspaceId && <TaskCenter workspaceId={workspaceId} />}
           {workspaceId && <NotificationCenter workspaceId={workspaceId} />}

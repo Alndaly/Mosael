@@ -5,6 +5,7 @@ import { AudioLines, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, Cir
 import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { KbdGroup } from "@/components/ui/kbd";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -808,22 +809,24 @@ export function Timeline({
             </PopoverTrigger>
             <PopoverContent className="grid w-[300px] gap-1.5 px-3 py-2.5 [&_strong]:mb-0.5 [&_strong]:text-xs" aria-label={t("shortcutsHelp")}>
               <strong>{t("shortcutsHelp")}</strong>
-              {[
-                ["Space", t("hintPlayPause")],
-                ["A / B", t("hintTools")],
-                ["S", t("hintSplit")],
-                ["⌘D", t("hintDuplicate")],
-                ["Delete", t("hintDelete")],
-                ["⇧Delete", t("hintRipple")],
-                ["⌘Z / ⇧⌘Z", t("hintUndoRedo")],
-                ["← / →", t("hintFrameStep")],
-                [t("hintShiftClickKey"), t("hintMultiSelect")],
-                [t("hintDragLabel"), t("hintDragBody")],
-                ["↕", t("hintVerticalDrag")],
-              ].map(([key, body]) => (
-                <div className="grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-1.5 text-xs [&_kbd]:justify-self-start [&_kbd]:whitespace-nowrap [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-b-2 [&_kbd]:border-border [&_kbd]:bg-secondary [&_kbd]:px-1.5 [&_kbd]:py-px [&_kbd]:font-mono [&_kbd]:text-ui-2xs [&_span]:text-muted-foreground" key={key}>
-                  <kbd>{key}</kbd>
-                  <span>{body}</span>
+              {(
+                [
+                  [["Space"], t("hintPlayPause")],
+                  [["A", "B"], t("hintTools")],
+                  [["S"], t("hintSplit")],
+                  [["⌘D"], t("hintDuplicate")],
+                  [["Delete"], t("hintDelete")],
+                  [["⇧Delete"], t("hintRipple")],
+                  [["⌘Z", "⇧⌘Z"], t("hintUndoRedo")],
+                  [["←", "→"], t("hintFrameStep")],
+                  [[t("hintShiftClickKey")], t("hintMultiSelect")],
+                  [[t("hintDragLabel")], t("hintDragBody")],
+                  [["↕"], t("hintVerticalDrag")],
+                ] as const
+              ).map(([keys, body]) => (
+                <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-1.5 text-xs" key={keys.join("/")}>
+                  <KbdGroup className="justify-self-start" keys={keys} />
+                  <span className="leading-[17px] text-muted-foreground">{body}</span>
                 </div>
               ))}
             </PopoverContent>
@@ -868,40 +871,46 @@ export function Timeline({
               <div className="flex items-center gap-0.5">
               {onSetTrackState && (
                 <span className="inline-flex gap-0.5">
-                  <button
-                    type="button"
-                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.muted && "text-destructive opacity-100 enabled:hover:text-destructive")}
-                    aria-label={track.muted ? t("trackUnmute") : t("trackMute")}
-                    onClick={() => onSetTrackState(track.id, { muted: !track.muted })}
+                  <TrackToggle
+                    active={Boolean(track.muted)}
+                    activeClassName="text-destructive enabled:hover:text-destructive"
+                    label={track.muted ? t("trackUnmute") : t("trackMute")}
+                    onToggle={() => onSetTrackState(track.id, { muted: !track.muted })}
                   >
                     {track.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
-                  </button>
-                  <button
-                    type="button"
-                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.solo && "text-destructive opacity-100 enabled:hover:text-destructive")}
-                    aria-label={track.solo ? t("trackUnsolo") : t("trackSolo")}
-                    onClick={() => onSetTrackState(track.id, { solo: !track.solo })}
-                  >
-                    <span className="text-[9px] font-bold leading-none">S</span>
-                  </button>
-                  {track.kind === "audio" && (
-                    <button
-                      type="button"
-                      className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.duck && "text-destructive opacity-100 enabled:hover:text-destructive")}
-                      aria-label={track.duck ? t("trackUnduck") : t("trackDuck")}
-                      onClick={() => onSetTrackState(track.id, { duck: !track.duck })}
-                    >
-                      <span className="text-[9px] font-bold leading-none">D</span>
-                    </button>
+                  </TrackToggle>
+                  {/* 独奏 / 闪避只管声音。字幕轨没有声音:在它上面按独奏,「有轨在独奏」成立而它
+                      自己不出声,结果是整片静音 —— 所以字幕轨头上不摆这两个。 */}
+                  {track.kind !== "subtitle" && (
+                    <>
+                      <TrackToggle
+                        active={Boolean(track.solo)}
+                        activeClassName="bg-warning/15 text-warning enabled:hover:text-warning"
+                        label={track.solo ? t("trackUnsolo") : t("trackSolo")}
+                        hint={t("trackSoloHint")}
+                        onToggle={() => onSetTrackState(track.id, { solo: !track.solo })}
+                      >
+                        <span className="text-[9px] font-bold leading-none">S</span>
+                      </TrackToggle>
+                      <TrackToggle
+                        active={Boolean(track.duck)}
+                        activeClassName="bg-primary/15 text-primary enabled:hover:text-primary"
+                        label={track.duck ? t("trackUnduck") : t("trackDuck")}
+                        hint={t("trackDuckHint")}
+                        onToggle={() => onSetTrackState(track.id, { duck: !track.duck })}
+                      >
+                        <span className="text-[9px] font-bold leading-none">D</span>
+                      </TrackToggle>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.locked && "text-destructive opacity-100 enabled:hover:text-destructive")}
-                    aria-label={track.locked ? t("trackUnlock") : t("trackLock")}
-                    onClick={() => onSetTrackState(track.id, { locked: !track.locked })}
+                  <TrackToggle
+                    active={Boolean(track.locked)}
+                    activeClassName="text-destructive enabled:hover:text-destructive"
+                    label={track.locked ? t("trackUnlock") : t("trackLock")}
+                    onToggle={() => onSetTrackState(track.id, { locked: !track.locked })}
                   >
                     {track.locked ? <Lock size={11} /> : <LockOpen size={11} />}
-                  </button>
+                  </TrackToggle>
                 </span>
               )}
               {onRemoveTrack && (
@@ -1172,6 +1181,47 @@ export function Timeline({
           </span>
       </div>
     </div>
+  );
+}
+
+/**
+ * 轨道头上的一个开关(静音 / 独奏 / 闪避 / 锁定)。平时藏着,鼠标移到这一行才露出来;**按下去的
+ * 一直亮着** —— 不然一条被独奏的轨和一条普通的轨看起来一模一样,「点了没反应」就是这么来的。
+ * 悬停给出这个开关是什么、按下去预览和导出会怎样:S、D 两个字母自己说明不了自己。
+ */
+function TrackToggle({
+  active,
+  activeClassName,
+  label,
+  hint,
+  onToggle,
+  children,
+}: {
+  active: boolean;
+  activeClassName: string;
+  label: string;
+  hint?: string;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100 focus-visible:opacity-100", active && cn("opacity-100", activeClassName))}
+          aria-label={label}
+          aria-pressed={active}
+          onClick={onToggle}
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[240px]">
+        <div className="font-medium">{label}</div>
+        {hint && <div className="mt-0.5 text-muted-foreground">{hint}</div>}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

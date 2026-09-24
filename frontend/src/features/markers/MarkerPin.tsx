@@ -5,6 +5,7 @@ import type { NodeProps } from "@xyflow/react";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { ShortcutRecorder } from "@/features/markers/ShortcutRecorder";
@@ -56,9 +57,7 @@ export function MarkerPin({ data, selected }: NodeProps) {
           <span className="truncate">{marker.name || t("markerUnnamed")}</span>
           {marker.shortcut ? (
             // 键位就印在旗子上 —— 不然「绑过了没有」只能靠回忆。
-            <kbd className="ml-0.5 shrink-0 rounded border border-border bg-secondary px-1 font-mono text-ui-2xs leading-4 text-muted-foreground">
-              {formatCombo(marker.shortcut)}
-            </kbd>
+            <Kbd className="ml-0.5">{formatCombo(marker.shortcut)}</Kbd>
           ) : null}
         </button>
       </PopoverTrigger>

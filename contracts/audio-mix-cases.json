@@ -1,5 +1,6 @@
 {
-  "contract": "audio-mix", "version": 1,
+  "contract": "audio-mix", "version": 2,
+  "_base": "可选的 base 是基底视频轨上 0 秒起的一段带声视频(id 固定为 base);它的 duck/solo 是轨道上的开关,muted 是片段静音。",
   "cases": [
     {"name":"amplification and speed-aware fades", "clips":[{"id":"music","src_out":8,"speed":2,"gain":2,"effects":{"fade_in":1,"fade_out":1}}], "samples":[{"t":0.5,"gains":{"music":1}},{"t":1.5,"gains":{"music":2}},{"t":3.5,"gains":{"music":1}}]},
     {"name":"overlapping fades are scaled to fit", "clips":[{"id":"music","src_out":4,"gain":2,"effects":{"fade_in":3,"fade_out":3}}], "samples":[{"t":0.5,"gains":{"music":0.5}},{"t":2,"gains":{"music":2}},{"t":3.5,"gains":{"music":0.5}}]},
@@ -7,6 +8,10 @@
     {"name":"solo excludes non-solo tracks", "solo_active":true, "clips":[{"id":"music","src_out":4,"gain":2},{"id":"voice","src_out":4,"gain":0.5,"solo":true}], "samples":[{"t":1,"gains":{"music":0,"voice":0.5}}]},
     {"name":"muted voice does not duck music", "clips":[{"id":"music","src_out":4,"gain":2,"duck":true},{"id":"voice","src_out":4,"muted":true}], "samples":[{"t":1,"gains":{"music":2,"voice":0}}]},
     {"name":"gain automation reaches four", "clips":[{"id":"music","src_out":4,"effects":{"gain_keyframes":[{"t":0,"gain":0},{"t":1,"gain":4}]}}], "samples":[{"t":1,"gains":{"music":1}},{"t":3,"gains":{"music":3}}]},
-    {"name":"one keyframe keeps static gain", "clips":[{"id":"music","src_out":4,"gain":2,"effects":{"gain_keyframes":[{"t":0,"gain":0}]}}], "samples":[{"t":1,"gains":{"music":2}}]}
+    {"name":"one keyframe keeps static gain", "clips":[{"id":"music","src_out":4,"gain":2,"effects":{"gain_keyframes":[{"t":0,"gain":0}]}}], "samples":[{"t":1,"gains":{"music":2}}]},
+    {"name":"ducked music yields to the base video's own sound", "base":{"src_out":4}, "clips":[{"id":"music","src_out":4,"duck":true}], "samples":[{"t":1,"gains":{"base":1,"music":0.3}}]},
+    {"name":"a muted base clip does not duck music", "base":{"src_out":4,"muted":true}, "clips":[{"id":"music","src_out":4,"duck":true}], "samples":[{"t":1,"gains":{"base":0,"music":1}}]},
+    {"name":"a soloed music track silences the base and is not ducked by it", "solo_active":true, "base":{"src_out":4}, "clips":[{"id":"music","src_out":4,"duck":true,"solo":true}], "samples":[{"t":1,"gains":{"base":0,"music":1}}]},
+    {"name":"a ducked base yields to a voice track", "base":{"src_out":4,"duck":true}, "clips":[{"id":"voice","timeline_start":1,"src_out":2}], "samples":[{"t":0.5,"gains":{"base":1,"voice":0}},{"t":2,"gains":{"base":0.3,"voice":1}},{"t":3.5,"gains":{"base":1,"voice":0}}]}
   ]
 }

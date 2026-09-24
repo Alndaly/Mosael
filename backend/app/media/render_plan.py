@@ -374,7 +374,8 @@ def build_render_plan(
     encode_preset: str = "veryfast",
 ) -> RenderPlan:
     """
-    clips: [{id, asset_id, timeline_start, src_in, src_out}] from the base video track.
+    clips: [{id, asset_id, timeline_start, src_in, src_out, has_audio}] from the base video track.
+        has_audio marks a clip whose sound ducked tracks must yield to (a video, not an image).
     overlay_clips: clips from upper video tracks (may carry effects.pip {x,y,scale}).
     audio_clips: clips from audio tracks ({..., gain, muted}).
     assets: {asset_id: {file_key}}.
@@ -382,6 +383,8 @@ def build_render_plan(
     """
     ordered = sorted(clips, key=lambda c: float(c["timeline_start"]))
     segments: list[Segment] = []
+    #: 基底轨上有声音的那几段(时间线时间)。闪避轨要给它们让路,见下面的 key_spans。
+    base_sound_spans: list[tuple[float, float]] = []
     cursor = 0.0
     for clip in ordered:
         start = float(clip["timeline_start"])
@@ -416,6 +419,8 @@ def build_render_plan(
                 appearance=_read_appearance(effects),
             )
         )
+        if clip.get("has_audio") and not clip.get("muted"):
+            base_sound_spans.append((start, start + duration))
         cursor = start + duration
 
     if not segments:
@@ -452,6 +457,11 @@ def build_render_plan(
         audible.append((clip, source, float(clip["timeline_start"]), clip_duration))
 
     key_spans = [(start, start + dur) for clip, _, start, dur in audible if not clip.get("duck")]
+    # **基底轨的声音也是「别的声音」。** 最常见的闪避就是这个形状:人声在基底视频里,音乐在音频轨上
+    # 标了闪避。此前触发源只认音频轨 / 上层视频轨,于是这种片子里按下闪避什么都不发生。
+    # 基底轨被静音、被独奏关掉、或者自己也标了闪避(它自己在让路)时不算。
+    if not mute_base_audio and not duck_base_audio:
+        key_spans += base_sound_spans
     audio_overlays: list[AudioItem] = []
     for clip, source, start, clip_duration in audible:
         fade_in, fade_out = _clip_fades(clip, clip_duration)

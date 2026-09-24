@@ -2,7 +2,7 @@ import "./editor.css";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
+import { Bot, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 import { useRecorder } from "@/features/media/RecordingProvider";
@@ -53,6 +53,7 @@ import {
   type Sequence,
   type Workspace,
 } from "@/api/client";
+import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -835,7 +836,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       onDragCancel={onAssetDragStop}
     >
     <div ref={measureWorkbench} className="editor-workbench flex h-full min-h-0 flex-col overflow-hidden bg-workspace">
-      <div role="toolbar" aria-label={t("editTools")} className="editor-commandbar flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider px-4 py-1.5">
+      {/* 四周同一个内边距:32px 的控件 + 上下各 8px 正好是 48px 的条高,左右也是 8px ——
+          此前左右 16px(右边导出按钮再自带 8px 外边距)、上下 8px,两端看着比上下空一截。 */}
+      <div role="toolbar" aria-label={t("editTools")} className="editor-commandbar flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider p-2">
         <LeftTabs tab={panels.tab} onChange={panels.setTab} />
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" size="sm" aria-label={t("wfAgentTitle")} aria-pressed={agentOpen === "on"} onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")} className={cn(agentOpen === "on" && "bg-accent text-accent-foreground")}><Bot />{t("wfAgentTitle")}</Button>
@@ -852,7 +855,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <Undo2 size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t("undo")} (⌘Z)</TooltipContent>
+            <TooltipContent className="flex items-center gap-2">{t("undo")}<Kbd>⌘Z</Kbd></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -866,7 +869,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <Redo2 size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t("redoAction")} (⇧⌘Z)</TooltipContent>
+            <TooltipContent className="flex items-center gap-2">{t("redoAction")}<Kbd>⇧⌘Z</Kbd></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -896,7 +899,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             </TooltipTrigger>
             <TooltipContent>{t("addTextAtPlayhead")}</TooltipContent>
           </Tooltip>
-          <ExportControl workspaceId={workspace.id} projectId={project.id} sequence={sequence} />
+          <ExportControl sequence={sequence} />
 
         </div>
       </div>
@@ -1159,15 +1162,12 @@ function LeftTabs({
 
 const EXPORT_PARAMS_KEY = "mosael.export.params";
 
-function ExportControl({
-  workspaceId,
-  projectId,
-  sequence,
-}: {
-  workspaceId: string;
-  projectId: string;
-  sequence: Sequence;
-}) {
+/**
+ * 导出按钮 + 进行中的进度。**做完了不在这里说**(ADR-0018):导出完成 / 失败由任务中心统一
+ * 弹提示、发系统通知、刷新素材 —— 这里再挂一个「✓ 导出完成」就是同一件事说两遍,而且它会
+ * 一直钉在按钮旁边,直到换页。
+ */
+function ExportControl({ sequence }: { sequence: Sequence }) {
   const t = useI18n();
   const qc = useQueryClient();
   const sequenceId = sequence.id;
@@ -1199,6 +1199,8 @@ function ExportControl({
     onSuccess: (job) => {
       setJobId(job.id);
       setConfigOpen(false);
+      // 让任务中心马上看见这条任务,而不是等它下一轮轮询。
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
     },
   });
   const job = useQuery({
@@ -1213,30 +1215,15 @@ function ExportControl({
   });
 
   const status = jobId ? (job.data?.status ?? "queued") : null;
-  React.useEffect(() => {
-    if (status === "succeeded") {
-      void qc.invalidateQueries({ queryKey: assetKeys.all(workspaceId) });
-    }
-  }, [status, qc, workspaceId, projectId]);
 
   const busy = startExport.isPending || status === "queued" || status === "running";
 
   return (
-    <span className="mr-2 inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1.5">
       {status === "running" && (
         <span className="inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground" title={job.data?.message ?? undefined}>
           {job.data?.message && <span className="max-w-[190px] truncate">{job.data.message}</span>}
           <span className="timecode tabular-nums">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
-        </span>
-      )}
-      {status === "succeeded" && (
-        <span className="inline-flex items-center gap-1 text-ui-xs text-[var(--track-audio-text)]">
-          <CircleCheck size={13} /> {t("exportDone")}
-        </span>
-      )}
-      {status === "failed" && (
-        <span className="inline-flex items-center gap-1 text-ui-xs text-destructive" title={job.data?.error ?? undefined}>
-          <CircleAlert size={13} /> {t("exportFailed")}
         </span>
       )}
       <Button size="sm" disabled={busy} onClick={() => setConfigOpen(true)}>
