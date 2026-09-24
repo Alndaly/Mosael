@@ -53,7 +53,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `workflows/` | DAG 工作流:节点注册表(元数据)+ `executors/` 执行器注册表(行为)+ 统一并行调度引擎(`execute_graph`);新增节点 = 元数据 + 一个执行器文件,引擎不动。**嵌套**:`subgraph`(内嵌可复用子图)、`call_workflow`(调另一工作流当子流程,子 job 收纳 + 级联取消 + 防递归/过深)、`output`(声明工作流输出契约);子图与循环体都跑在同一套引擎上(并行/条件一致)。**引用即依赖**(`reference_dependencies`):节点 `{{…}}` 引用了谁就等谁落定,拓扑排序、环路校验、调度共用这一份 —— 此前只有被规范化成数据边的引用(顶层字段、两段路径)才排先后,`{{分镜.json.shots}}` 或循环 `inputs` 里的引用可能在上游跑完前被读成空值 |
 | `publish/` | 发布:平台注册表(**只有需要登录态的真平台**)、任务队列、worker 协议;账号即挂平台的浏览器档案(`profile_id`) |
 | `browser/` | 浏览器池 / 持久登录:`BrowserProfile`(可复用登录身份 = 持久分区 + 代理 + 元数据)统一发布账号与通用档案;会话受**租约**(一档案一时刻一会话)。RPA 节点 / 智能体 / 手动会话都经「入队动作 + 执行器回报」桥驱动 Electron 里的浏览器 |
-| `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
+| `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。webhook 凭任务级密钥触发,同一把密钥还能查那次运行的进度、取消它(`api/routes/hooks`),密钥由服务端独管、可重置。启用着的任务一定跑得起来(`ensure_runnable`):绑的工作流删了,任务随即停用。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
 | `agent/` | 智能体会话:pi Agent Adapter + sidecar 流式协议 + 会话/记忆 + 工具循环 + 子智能体 |
 | `audio/`(在 `app/` 下,与 `domain/` 平级) | 语音:ASR 引擎目录与 worker、TTS 引擎与守护进程、音色克隆、字幕配音(`subtitle_dub.py`)。**语言能力挂在权重上而不是引擎上**(`f5_models.py` 是那张表,`tts_language.py` 是合成前的那道判断) |
 | `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(五条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。描述符只按精确 `(vendor, model, kind)` 匹配，**查不到时不猜这个模型**(同系列不同型号的时长、角色、枚举经常不同)。但「不猜模型」不等于「什么都不知道」:请求是我们自己构造的,Adapter 说得出自己发哪几项标量参数(`parameter_surface`),那个面与模型名无关时兜底就用它 —— **只给键、不声称取值范围**;面依赖模型时才是空参数表。用户还可以给自己那条连接写一份参数组,在模型行上按 kind 指过去(见 [ADR-0015](adr/0015-generation-parameters-come-from-the-adapter.md))。布尔、枚举、特殊时长和分辨率-时长组合也属于这份契约。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** |
@@ -529,6 +529,12 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 `core/asgi.adding_headers`),不用 `@app.middleware("http")`。后者把响应体放进一条内存管道、在另一个
 任务里转发;拖视频进度条时浏览器每次跳转都中止上一个按范围读取的请求,而管道那头还在往下推。实测一条
 370MB 录屏在 Chromium 里单次跳转,三层这样的中间件是 0.17–14.5 秒,纯 ASGI 是 0.03–3.7 秒。
+
+**没接住的异常也要是一个读得到的 500。** Starlette 最外层的 ServerErrorMiddleware 在 CORS 外面,
+它回的 500 不带 `Access-Control-Allow-Origin`,浏览器连状态码都不交给页面 —— fetch 直接失败,前端
+只能说「连不上后端」,一个后端 bug 被说成网络问题(Blender「发送当前场景」连报过几次)。所以最里层
+装着 `AnswerCrashes`:就地答一个带 CORS 的 JSON 500(按请求语言说「后端出错了」,不外泄异常原文),
+再把异常原样抛出去,日志和测试照旧拿得到堆栈。它必须**最先** `add_middleware`,回复才会经过 CORS。
 
 ### 分层:底下那几层不认识功能模块
 

@@ -2,8 +2,8 @@
 title: Browser profiles
 description: Manage sign-ins, proxies and identity permissions for publishing, imports and automation.
 order: 13
-updated: 2026-09-09
-version: 1.5.1
+updated: 2026-09-24
+version: 1.5.2
 ---
 
 Browser Pool stores platform accounts and general browser profiles for publishing, workflow automation, URL imports and agents. Each profile has its own sign-in state, site storage and proxy configuration. Profile permissions control which identity can be used.
@@ -20,15 +20,47 @@ Both are created the same way: **New profile**, then sign in inside the embedded
 exactly as you would in Chrome. Mosael never sees or stores your password — what it keeps is
 the session the site handed back.
 
+## General profiles: a browser that keeps its state
+
+A general profile card's main button is **Open**, and it takes you back to where you left off: if
+the embedded view is still alive it is shown as it is; after a restart, when the view is gone, it
+opens the address recorded when the view was last closed. Only the very first open asks which site
+to go to. To go somewhere else, use **Open another site** (the pencil icon) — the only entry that
+navigates the page away.
+
+Sites you sign into here stay signed in the next time you open the profile, and when workflows or
+the agent use it. Opening it by hand also updates the card's "Used …" line, with the host of the
+site you were last on.
+
+General profile cards carry **no sign-in badge**: a profile can hold any site, and Mosael cannot
+tell whether you are signed into an arbitrary one, so it does not guess.
+
 ## Signing in, and staying signed in
 
-Cards show a status badge — **signed in**, **login needed**, or **checking**. The **recheck** button
+Publishing account cards show a status badge — **signed in**, **login needed**, or **checking**. The **recheck** button
 loads the site and looks for evidence you are still authenticated; the result and its timestamp go on
 the card. When a session dies, the card says so rather than letting the next publish fail.
 
 Rechecking is deliberately evidence-based: it looks for something only a signed-in visitor sees.
 Treating "the page loaded" as proof is how an account pool ends up insisting you are signed in while
-every upload fails.
+every upload fails. The same rule applies while you sign in: nothing on a login page counts as
+evidence. The 微信快捷登录 (WeChat quick login) card on the WeChat Channels login page is not mistaken for a signed-in session; and when
+TikTok leaves you on the For You feed with an invisible login dialog still in the page, you are
+still recognised as signed in and the embedded browser closes itself.
+
+### Signing out and signing in again
+
+- **Sign out** (publishing accounts) / **Clear login data** (general profiles) sit in the card's ⋯
+  menu and its context menu. They clear the cookies, local storage and cache in that profile's
+  partition: a publishing account goes back to **login needed**; a general profile is signed out of
+  every site in it, and the profile itself stays. Signing out on the website itself is not
+  reliable — some platforms only invalidate the session of the current page while other cookies in
+  the partition survive, so the next open is signed in again. Clearing the partition is the one
+  certain way.
+- **Sign out and log in again** (the key icon, shown while a publishing account is signed in) does
+  the above first, then opens the login page. Opening the login page alone is not enough: a site
+  that sees a valid session in the partition usually bounces you straight back to its home page, and
+  switching accounts never happens.
 
 Each profile can also carry its own **proxy**, set from the card's context menu. Sessions and exit
 addresses stay paired, which is what most platforms expect.

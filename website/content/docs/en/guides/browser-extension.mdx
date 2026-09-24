@@ -2,8 +2,8 @@
 title: Chrome video companion
 description: Read transcripts, seek through a video and import media or the current frame from Chrome.
 order: 9
-updated: 2026-09-09
-version: 1.5.1
+updated: 2026-09-24
+version: 1.5.2
 ---
 
 The Chrome extension opens Mosael's video companion in the native **Side Panel** and follows the active video tab. It accepts video URLs recognized by the installed yt-dlp build. YouTube and Bilibili use native captions when available; other supported sites can use Mosael transcription. Playback control and frame capture require an accessible HTML5 video player.
@@ -28,7 +28,7 @@ them into a timed transcript:
 - Playback highlights the current cue and keeps it in view.
 - Search matches both source text and translations.
 - Moving to another video tab refreshes the panel for that page.
-- The UI follows Chrome by default, or can be pinned to Simplified Chinese or English in connection settings.
+- The UI follows Chrome by default, or can be pinned to Simplified Chinese or English in connection settings; errors from reading the page or the subtitle service are shown in that language too.
 
 Selecting a target language keeps the source line and adds a second line. The extension prefers a
 site-provided caption or YouTube translation track and only uses Mosael translation when no

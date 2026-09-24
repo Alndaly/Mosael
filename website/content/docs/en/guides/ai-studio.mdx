@@ -2,8 +2,8 @@
 title: AI Studio & agents
 description: Discuss projects with an agent, use creative tools and review actions and results.
 order: 3
-updated: 2026-09-17
-version: 1.5.1
+updated: 2026-09-24
+version: 1.5.2
 ---
 
 **AI Studio** switches between **Chat**, **Generate** and **Audio** in the top toolbar. The conversation toolbar also has **Conversation / Trace** and a toggle for the agent environment panel.
@@ -43,7 +43,8 @@ The composer row carries just the things you touch on every message: attachments
 settings** — the set-once-and-forget things:
 
 - **Thinking**: off / low / medium / high. When on, the model's reasoning streams into a collapsible
-  block you can expand, and it auto-collapses when done. "Off" only means we don't *ask* for it:
+  block you can expand, and it auto-collapses when done; the collapsed **Thought** row then shows how
+  long the thinking took, formatted like a tool card's duration. "Off" only means we don't *ask* for it:
   models that reason regardless (k3, DeepSeek reasoner) still have their thinking shown.
 - **Video analysis mode**:
   - **Auto**: an API-key model uses native whole-video input when its Adapter supports it;

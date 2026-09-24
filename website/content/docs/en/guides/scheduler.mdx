@@ -2,8 +2,8 @@
 title: Scheduled tasks
 description: Set workflow triggers, review run history and manage active schedules.
 order: 16
-updated: 2026-09-09
-version: 1.5.1
+updated: 2026-09-24
+version: 1.5.2
 ---
 
 **Scheduled tasks** in the sidebar manages execution plans separately from the workflow canvas. Select a task on the left; the detail area shows its trigger, next and previous runs, bound workflow and recent history.
@@ -12,12 +12,44 @@ version: 1.5.1
 
 ## Create a task
 
-Choose **New task**, enter a name, select a workflow and choose a manual, scheduled or webhook trigger. Configure model connections, media inputs and required fields in the workflow before enabling the plan. Manual tasks do not run on a schedule.
+Choose **New task**, enter a name, select a workflow and choose a manual, scheduled or webhook trigger. **Daily (pick time)** uses a time picker with an hour column and a minute column; picking the minute closes it, and the arrow keys move within a column. Configure model connections, media inputs and required fields in the workflow before enabling the plan. Manual tasks do not run on a schedule.
+
+Clicking the bound workflow row in the detail area opens that task's workflow, not whichever workflow the Workflows page last had open.
 
 <Recording src="/media/videos/en/scheduler.mp4" poster="/media/screens/en/scheduler.png" caption="Live capture: inspect a task and open the new-task form" />
 
 ## Run and disable
 
-Run a task immediately or toggle its enabled state in the detail area. Disabling prevents future automatic triggers; inspect history for work already running. Records show time, duration and result. Read failures and fix the workflow before retrying.
+Run a task immediately or toggle its enabled state in the detail area. Disabling prevents future automatic triggers; inspect history for work already running. Records show time, duration and result. Read failures and fix the workflow before retrying. The run history refreshes on its own: runs started outside this page — a webhook, a scheduled trigger, a teammate's **Run now** — appear too, and the **Last run** field updates with them, without reloading the page.
 
 Scheduling runs on the connected backend. In local mode it runs with the app, so fully quitting stops scheduled execution. With a remote backend, that server must stay running. Closing a window and quitting the application are different actions. See [Workflows](/docs/guides/workflows) for triggers and variables.
+
+### When the bound workflow is deleted
+
+Deleting a workflow disables the scheduled tasks bound to it on the spot, so they stop firing on schedule. The tasks and their run history are kept; deleting them is your decision. Such a task's toggle cannot be switched on and **Run now** is unavailable (hovering explains why), and webhook triggers are refused — instead of leaving a run that fails after 0 seconds every time. Tasks that were already enabled while bound to a deleted workflow are disabled automatically on upgrade. To keep going, create a new task bound to an existing workflow.
+
+## Webhook triggers and follow-up
+
+A webhook task's detail area shows its **Trigger URL**. An external system (CI, n8n, a script) POSTs to it to fire one run, without signing in: the `secret` in the URL is the credential. The same secret also lets it check how that run is going and cancel it, so the caller does not have to trigger and wait blindly.
+
+Expand **How to call it** under the trigger URL for three copyable commands that already carry this task's address and secret:
+
+```bash
+# Fire one run; returns run_id
+curl -X POST 'http://127.0.0.1:8800/api/hooks/scheduled-tasks/<task_id>?secret=<secret>'
+
+# Check that run's status and progress
+curl 'http://127.0.0.1:8800/api/hooks/scheduled-tasks/<task_id>/runs/<run_id>?secret=<secret>'
+
+# Cancel that run
+curl -X POST 'http://127.0.0.1:8800/api/hooks/scheduled-tasks/<task_id>/runs/<run_id>/cancel?secret=<secret>'
+```
+
+The example uses the default local backend address; commands copied from **How to call it** use the backend you are actually connected to.
+
+- Triggering returns a `run_id`. If the previous run has not finished, or the bound workflow was deleted, the trigger is refused (HTTP 409) and no run is opened.
+- The status call returns `status` (`queued` / `running` / `succeeded` / `failed` / `cancelled`), `progress` (0–1), and `message` / `error` text in the language of the request's `Accept-Language` header. A cancelled run is reported as `cancelled`, separate from a failure: one is something you stopped, the other may need an alert or a retry.
+- Cancelling works at node granularity: the step currently executing finishes, then the run stops, and any child jobs it spawned are cancelled too.
+- A secret reaches **only this task's own runs**. A `run_id` belonging to another task is treated as not found.
+
+If the secret leaks, choose **Reset secret** next to the trigger URL. The old URL stops working immediately, and so do status checks and cancels made with the old secret; update the external system to the new URL. A run that is already going is not affected.

@@ -2,8 +2,8 @@
 title: Notes & documents
 description: Collect research, edit documents and reference saved versions in boards and workflows.
 order: 8
-updated: 2026-09-09
-version: 1.5.1
+updated: 2026-09-24
+version: 1.5.2
 ---
 
 Use **Notes** for scripts, research, transcripts and conversation excerpts. Workspace documents support rich text, Markdown, source references and revision history. Saved content can be referenced by boards, workflows and agents.
@@ -46,9 +46,9 @@ A few things worth calling out:
   a copy button. They stay valid Markdown and participate in undo.
 - **Type `@`** to reference another note. The reference **pins the revision it was made against**,
   but opens the latest content by default; use **View referenced version** to see the pinned one.
-- Three modes sit at the top right: **Write / Read / Markdown**. The last one shows the source.
+- Three modes sit at the top right: **Edit / Read / Markdown**. The last one shows the source.
 
-The status beside the title says where you stand: `Saved` / `Saving…` / `Draft pending`. **Closing
+The status at the top right, next to the modes, says where you stand: `Saved` / `Saving…` / `Draft pending`. **Closing
 the page loses nothing** — an unsaved draft stays on this device and comes back the next time you
 open the note.
 
@@ -67,13 +67,14 @@ So the worst case leaves you with an extra .md file, not with lost words.
 
 The list on the left supports search (titles, body, tags) plus **Favorites**, **Trash** and
 **Topic** filters. Drag its right edge to resize it; the width is remembered. Leaving the page and
-coming back reopens the note you had open.
+coming back reopens the note you last had open in that workspace, and the **All notes** /
+**Favorites** / **Trash** tab stays where you left it.
 
 **Select notes** turns on multi-select: hold <kbd>Shift</kbd> for a range, select the whole current
 list, then favorite, export Markdown, move to trash, restore or delete permanently in bulk.
 Right-clicking one note offers open, rename and duplicate.
 
-**Import Markdown** sits in the list header and accepts `.md` / `.markdown` / `.txt`, up to 500 KB
+**Import Markdown** (the import icon, an arrow pointing into a tray) sits in the list header and accepts `.md` / `.markdown` / `.txt`, up to 500 KB
 per file. Pick several at once, or drag files onto the Notes page: each file becomes a note and the last
 one opens. Dragging only images into the body still inserts them as images.
 

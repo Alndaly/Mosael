@@ -2,6 +2,8 @@
 
 Documentation targets **1.2.0**. Changed 3D, note and annotation views are freshly captured from the running app; unchanged views retain their earlier captures, not reconstructed UI or generated mockups. The canonical files live in [`website/public/media`](../../website/public/media). Historical design-review attachments elsewhere in `docs` are not current product documentation.
 
+Which interface views have changed since they were captured, release by release, is tracked in [RECAPTURE.md](RECAPTURE.md) — the list to work through at the next recapture.
+
 ## Source and credit
 
 Sample footage and extracted frames: **Big Buck Bunny**, © 2008 Blender Foundation / www.bigbuckbunny.org, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). [Film and license](https://peach.blender.org/about/); [source trailer](https://media.w3.org/2010/05/bunny/trailer.mp4). Excerpts are trimmed, resized and rearranged in the demo timeline. Narration was synthesized with the macOS Samantha voice; subtitle cues are manually prepared editing exercises.
