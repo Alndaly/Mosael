@@ -15,6 +15,8 @@ import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/sce
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
 import { duplicateObject, groupPath, groupTargets, makeObject, moveToGroup } from "./sceneGraph";
+import type { MessageKey } from "@/app/messages";
+import { useI18n } from "@/app/preferences";
 export function SceneInspector({
   content,
   object,
@@ -30,6 +32,7 @@ export function SceneInspector({
   onRemove: (ids: string[]) => void;
   setSelected: (id: string | null) => void;
 }) {
+  const t = useI18n();
   //: 外壳、标题、左右内距和竖向节奏全归 ScenePanel(见 .scene-panel-body) —— 这里只出内容,
   //: 连一层 div 都不包。此前这里还套着 `.scene-inspector > section`,而那一层唯一的作用就是
   //: 再写一套自己的 padding 和 gap:右栏于是有三处各自定义的左边距,三节内容的左边缘对不齐。
@@ -38,7 +41,7 @@ export function SceneInspector({
       {object ? (
           <>
             <Input
-              aria-label="对象名称"
+              aria-label={t("sceneObjectName")}
               value={object.name}
               maxLength={160}
               onChange={(e) => objectPatch(object.id, { name: e.target.value })}
@@ -48,18 +51,18 @@ export function SceneInspector({
                 选择器而不是拖拽:长列表 + 触控板上拖拽很难瞄准,而且选择器天生可键盘操作。 */}
             {!!groupTargets(content, object.id).length && (
               <label className="scene-number">
-                <span>所属组</span>
+                <span>{t("sceneObjectGroup")}</span>
                 <Select
                   value={object.parent_id ?? TOP_LEVEL}
                   onValueChange={(value) =>
                     update(moveToGroup(content, object.id, value === TOP_LEVEL ? null : value))
                   }
                 >
-                  <SelectTrigger aria-label="所属组">
+                  <SelectTrigger aria-label={t("sceneObjectGroup")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={TOP_LEVEL}>不在组里</SelectItem>
+                    <SelectItem value={TOP_LEVEL}>{t("sceneObjectNoGroup")}</SelectItem>
                     {/* 带上上级:「添加 → 组」建出来的都叫「组」,嵌套之后一列全是「组」,
                         选哪个全靠猜。 */}
                     {groupTargets(content, object.id).map((group) => (
@@ -73,16 +76,16 @@ export function SceneInspector({
             )}
             <div className="scene-actions">
               <Tool
-                label="复制对象"
-                onClick={() => update(duplicateObject(content, object.id))}
+                label={t("sceneObjectDuplicate")}
+                onClick={() => update(duplicateObject(content, object.id, t))}
               >
                 <Copy size={15} />
               </Tool>
               <Tool
-                label="编组对象"
+                label={t("sceneObjectGroupUp")}
                 onClick={() => {
                   const group = makeObject("group", {
-                    name: `${object.name} 组`,
+                    name: t("sceneGroupOf").replace("{name}", object.name),
                     parent_id: object.parent_id,
                   });
                   update({
@@ -100,7 +103,7 @@ export function SceneInspector({
                 <Group size={15} />
               </Tool>
               <Tool
-                label="删除对象"
+                label={t("sceneObjectDelete")}
                 onClick={() => onRemove([object.id])}
               >
                 <Trash2 size={15} />
@@ -108,7 +111,7 @@ export function SceneInspector({
               {/* 一行里四个动作,四个都是图标钮。此前最后这个是文字钮,于是同一行里
                   三个方块加一段文字,行高和重心都对不齐 —— 而它和另外三个是同一类操作。 */}
               <Tool
-                label={object.hidden ? "显示对象" : "隐藏对象"}
+                label={object.hidden ? t("sceneObjectShow") : t("sceneObjectHide")}
                 active={object.hidden}
                 onClick={() =>
                   objectPatch(object.id, { hidden: !object.hidden })
@@ -121,8 +124,8 @@ export function SceneInspector({
                 「宽度/高度/深度/粗糙度/金属度」,那些字段对它一个都不成立。 */}
             {object.kind === "camera" && (
               <Num
-                label="视角（越小越长焦）"
-                caption="视角°"
+                label={t("sceneObjectFov")}
+                caption={t("sceneObjectFovCaption")}
                 value={object.fov}
                 min={10}
                 max={120}
@@ -160,16 +163,7 @@ export function SceneInspector({
                       label={
                         // 人物那三个数叫"宽度/高度/深度"是对的但没用 —— 调的人想的是身高和
                         // 肩宽。名字贴着它实际是什么,省掉一次心里的换算。
-                        PARAMETER_LABELS[object.kind]?.[k] ??
-                        {
-                          width: "宽度",
-                          height: "高度",
-                          depth: "深度",
-                          radius: "半径",
-                          steps: "阶数",
-                          door_width: "门宽",
-                          door_height: "门高",
-                        }[k]
+                        t(PARAMETER_LABELS[object.kind]?.[k] ?? DEFAULT_PARAMETER_LABELS[k])
                       }
                       value={object.parameters[k]}
                       min={k === "steps" ? 1 : 0.1}
@@ -190,9 +184,9 @@ export function SceneInspector({
             {!["group", "model", "camera"].includes(object.kind) && (
               <>
                 <label className="scene-color">
-                  颜色
+                  {t("sceneObjectColor")}
                   <input
-                    aria-label="对象颜色"
+                    aria-label={t("sceneObjectColorLabel")}
                     type="color"
                     value={object.color}
                     onChange={(e) =>
@@ -202,7 +196,7 @@ export function SceneInspector({
                 </label>
                 {object.kind === "light" ? (
                   <Num
-                    label="光照强度"
+                    label={t("sceneLightIntensity")}
                     value={object.intensity}
                     min={0}
                     max={10000}
@@ -213,7 +207,7 @@ export function SceneInspector({
                 ) : (
                   <div className="scene-shape">
                     <Num
-                      label="粗糙度"
+                      label={t("sceneObjectRoughness")}
                       value={object.roughness}
                       min={0}
                       max={1}
@@ -222,7 +216,7 @@ export function SceneInspector({
                       }
                     />
                     <Num
-                      label="金属度"
+                      label={t("sceneObjectMetalness")}
                       value={object.metalness}
                       min={0}
                       max={1}
@@ -234,35 +228,35 @@ export function SceneInspector({
                 )}
               </>
             )}
-            <SceneSubsection expanded title="精确位置与旋转">
+            <SceneSubsection expanded title={t("sceneObjectTransform")}>
                 {" "}
                 <Vector
-                  label="位置"
+                  label={t("sceneObjectPosition")}
                   value={object.position}
                   onChange={(position) => objectPatch(object.id, { position })}
                 />
                 <Vector
-                  label="旋转"
+                  label={t("sceneObjectRotation")}
                   value={object.rotation}
                   onChange={(rotation) => objectPatch(object.id, { rotation })}
                 />
                 <Vector
-                  label="缩放"
+                  label={t("sceneObjectScale")}
                   value={object.scale}
                   min={0.001}
                   max={1000}
                   onChange={(scale) => objectPatch(object.id, { scale })}
                 />
-                <p>位置与尺寸单位为米，旋转单位为度。</p>
+                <p>{t("sceneObjectUnits")}</p>
               </SceneSubsection>
           </>
         ) : (
           <>
-            <p>点击画面中的物体，或从上方列表选择，即可调整大小和颜色。</p>
+            <p>{t("sceneInspectorEmpty")}</p>
             <label className="scene-color">
-              环境背景
+              {t("sceneBackground")}
               <input
-                aria-label="环境背景"
+                aria-label={t("sceneBackground")}
                 type="color"
                 value={content.background}
                 onChange={(e) =>
@@ -271,7 +265,7 @@ export function SceneInspector({
               />
             </label>
             <Num
-              label="环境光"
+              label={t("sceneAmbient")}
               value={content.ambient}
               min={0}
               max={10}
@@ -302,10 +296,20 @@ export function SceneInspector({
 const TOP_LEVEL = "__top__";
 
 const PARAMETER_LABELS: Partial<
-  Record<SceneObject["kind"], Partial<Record<keyof SceneObject["parameters"], string>>>
+  Record<SceneObject["kind"], Partial<Record<keyof SceneObject["parameters"], MessageKey>>>
 > = {
-  figure: { width: "肩宽", height: "身高", depth: "厚度" },
-  table: { width: "台面宽", height: "桌高", depth: "台面深" },
+  figure: { width: "sceneParamShoulderWidth", height: "sceneParamBodyHeight", depth: "sceneParamThickness" },
+  table: { width: "sceneParamTopWidth", height: "sceneParamTableHeight", depth: "sceneParamTopDepth" },
+};
+
+const DEFAULT_PARAMETER_LABELS: Record<keyof SceneObject["parameters"], MessageKey> = {
+  width: "sceneParamWidth",
+  height: "sceneParamHeight",
+  depth: "sceneParamDepth",
+  radius: "sceneParamRadius",
+  steps: "sceneParamSteps",
+  door_width: "sceneParamDoorWidth",
+  door_height: "sceneParamDoorHeight",
 };
 
 function LightingSection({
@@ -315,14 +319,15 @@ function LightingSection({
   lighting: SceneLighting;
   onChange: (lighting: SceneLighting) => void;
 }) {
+  const t = useI18n();
   const tune = (patch: Partial<SceneLighting>) =>
     onChange({ ...lighting, ...patch, preset: CUSTOM_PRESET });
   const current = presetById(lighting.preset);
   return (
-    <SceneSubsection expanded title="主光"
+    <SceneSubsection expanded title={t("sceneKeyLight")}
         defaultOpen>
         <label className="scene-number">
-          <span>打光方式</span>
+          <span>{t("sceneLightingPreset")}</span>
           <Select
             value={lighting.preset}
             onValueChange={(id) => {
@@ -330,16 +335,16 @@ function LightingSection({
               if (picked) onChange({ preset: picked.id, ...picked.values });
             }}
           >
-            <SelectTrigger aria-label="打光方式">
-              <SelectValue placeholder="自定义" />
+            <SelectTrigger aria-label={t("sceneLightingPreset")}>
+              <SelectValue placeholder={t("sceneLightingCustom")} />
             </SelectTrigger>
             <SelectContent>
               {presetGroups().map(([group, presets]) => (
                 <SelectGroup key={group}>
-                  <SelectLabel>{group}</SelectLabel>
+                  <SelectLabel>{t(group)}</SelectLabel>
                   {presets.map((preset) => (
                     <SelectItem key={preset.id} value={preset.id}>
-                      {preset.label}
+                      {t(preset.label)}
                     </SelectItem>
                   ))}
                 </SelectGroup>
@@ -347,11 +352,11 @@ function LightingSection({
             </SelectContent>
           </Select>
         </label>
-        <p>{current ? current.hint : "已手动调整。选一档预设可以回到成套的参数。"}</p>
+        <p>{current ? t(current.hint) : t("sceneLightingCustomHint")}</p>
         <div className="scene-shape">
           <Num
-            label="方位角"
-            caption="方位角°"
+            label={t("sceneLightAzimuth")}
+            caption={t("sceneLightAzimuthCaption")}
             value={lighting.azimuth}
             min={0}
             max={359}
@@ -359,8 +364,8 @@ function LightingSection({
             onChange={(azimuth) => tune({ azimuth })}
           />
           <Num
-            label="高度角"
-            caption="高度角°"
+            label={t("sceneLightElevation")}
+            caption={t("sceneLightElevationCaption")}
             value={lighting.elevation}
             min={0}
             max={90}
@@ -368,8 +373,8 @@ function LightingSection({
             onChange={(elevation) => tune({ elevation })}
           />
           <Num
-            label="强度"
-            caption="强度"
+            label={t("sceneLightStrength")}
+            caption={t("sceneLightStrength")}
             value={lighting.intensity}
             min={0}
             max={20}
@@ -377,8 +382,8 @@ function LightingSection({
             onChange={(intensity) => tune({ intensity })}
           />
           <Num
-            label="色温"
-            caption="色温 K"
+            label={t("sceneLightTemperature")}
+            caption={t("sceneLightTemperatureCaption")}
             value={lighting.temperature}
             min={1500}
             max={12000}
@@ -387,15 +392,15 @@ function LightingSection({
           />
         </div>
         <Num
-          label="影子软硬"
-          caption="影子软硬（0 硬 · 1 柔）"
+          label={t("sceneLightSoftness")}
+          caption={t("sceneLightSoftnessCaption")}
           value={lighting.softness}
           min={0}
           max={1}
           step={0.05}
           onChange={(softness) => tune({ softness })}
         />
-        <p>方位角 0 是正面来光，90 在右侧，180 是逆光；高度角 0 贴地、90 是顶光。</p>
+        <p>{t("sceneLightAnglesHint")}</p>
     </SceneSubsection>
   );
 }

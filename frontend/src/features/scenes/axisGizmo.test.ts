@@ -9,7 +9,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import { messages, type MessageKey } from "@/app/messages";
+
 import { axisLabel, axisVector, gizmoHandles, type Orientation } from "./axisGizmo";
+
+const zh = (key: MessageKey) => messages["zh-CN"][key];
 
 /** 没转过的相机:看向 -Z,+X 在右,+Y 在上。 */
 const IDENTITY: Orientation = [0, 0, 0, 1];
@@ -75,9 +79,9 @@ describe("坐标轴控件", () => {
   });
 
   it("读屏软件听到的是「从上方看」,不是「y 加」", () => {
-    expect(axisLabel("y", 1)).toBe("从上方看");
-    expect(axisLabel("y", -1)).toBe("从下方看");
-    expect(axisLabel("z", 1)).toBe("从正面看");
-    expect(axisLabel("x", -1)).toBe("从左侧看");
+    expect(zh(axisLabel("y", 1))).toBe("从上方看");
+    expect(zh(axisLabel("y", -1))).toBe("从下方看");
+    expect(zh(axisLabel("z", 1))).toBe("从正面看");
+    expect(zh(axisLabel("x", -1))).toBe("从左侧看");
   });
 });

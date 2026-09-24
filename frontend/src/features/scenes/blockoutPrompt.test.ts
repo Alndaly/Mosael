@@ -4,6 +4,10 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { messages, type MessageKey } from "@/app/messages";
+
+const zh = (key: MessageKey) => messages["zh-CN"][key];
+
 import { blockoutPrompt, sceneInventory } from "./blockoutPrompt";
 
 const OBJECTS = [
@@ -18,7 +22,7 @@ const OBJECTS = [
 
 describe("白模 → 生成的提示词", () => {
   it("视频:说清白模只是占位,只取运镜与位置,成片要写实", () => {
-    const prompt = blockoutPrompt({ kind: "video", sceneName: "巨型神殿 · 列柱大厅", objects: OBJECTS, lighting: "正午日光", clay: true });
+    const prompt = blockoutPrompt({ kind: "video", sceneName: "巨型神殿 · 列柱大厅", objects: OBJECTS, lighting: "正午日光", clay: true, t: zh });
     expect(prompt).toContain("白模预演");
     expect(prompt).toContain("只沿用它的运镜");
     expect(prompt).toContain("不要出现灰模");
@@ -28,17 +32,17 @@ describe("白模 → 生成的提示词", () => {
   });
 
   it("画面里有什么要说出来:白模里的形状各是什么", () => {
-    const prompt = blockoutPrompt({ kind: "video", sceneName: "S", objects: OBJECTS, lighting: "x", clay: false });
+    const prompt = blockoutPrompt({ kind: "video", sceneName: "S", objects: OBJECTS, lighting: "x", clay: false, t: zh });
     expect(prompt).toContain("画面里有：列柱 ×2、神像");
   });
 
   it("出图附了灰模渲染时,才提那张灰模参考图", () => {
-    expect(blockoutPrompt({ kind: "image", sceneName: "S", objects: [], lighting: "x", clay: true })).toContain("另一张灰模参考图");
-    expect(blockoutPrompt({ kind: "image", sceneName: "S", objects: [], lighting: "x", clay: false })).not.toContain("另一张灰模参考图");
+    expect(blockoutPrompt({ kind: "image", sceneName: "S", objects: [], lighting: "x", clay: true, t: zh })).toContain("另一张灰模参考图");
+    expect(blockoutPrompt({ kind: "image", sceneName: "S", objects: [], lighting: "x", clay: false, t: zh })).not.toContain("另一张灰模参考图");
   });
 
   it("清单不列相机、灯、藏起来的和默认名", () => {
-    expect(sceneInventory(OBJECTS)).toBe("列柱 ×2、神像");
-    expect(sceneInventory([{ name: "Object", kind: "box", hidden: false }])).toBe("");
+    expect(sceneInventory(OBJECTS, zh)).toBe("列柱 ×2、神像");
+    expect(sceneInventory([{ name: "Object", kind: "box", hidden: false }], zh)).toBe("");
   });
 });

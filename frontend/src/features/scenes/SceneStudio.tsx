@@ -1,6 +1,7 @@
 import { RenameDialog } from "@/components/app/modals";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
 import { HANDLE_COLUMN, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { SceneList } from "./SceneList";
@@ -130,26 +131,26 @@ function download(blob: Blob, name: string) {
  */
 const ADD_OPTIONS: {
   value: string;
-  label: string;
-  description?: string;
-  group: string;
+  label: MessageKey;
+  description?: MessageKey;
+  group: MessageKey;
   keywords: string[];
 }[] = [
-  { value: "camera", label: objectLabels.camera, group: "镜头", keywords: ["camera", "jiwei", "机位", "摄像机"],
-    description: "多一台机位就多一个可切换的视角" },
-  { value: "figure", label: objectLabels.figure, group: "参照与舞台", keywords: ["figure", "person", "renwu"],
-    description: "1.7 米的人形,用来判断构图和比例" },
-  { value: "table", label: objectLabels.table, group: "参照与舞台", keywords: ["table", "zhuozi", "desk"] },
-  { value: "plane", label: objectLabels.plane, group: "参照与舞台", keywords: ["plane", "floor", "dimian", "地板"] },
-  { value: "room", label: objectLabels.room, group: "参照与舞台", keywords: ["room", "fangjian", "wall", "墙"] },
-  { value: "stairs", label: objectLabels.stairs, group: "参照与舞台", keywords: ["stairs", "louti", "step"] },
-  { value: "box", label: objectLabels.box, group: "基本体", keywords: ["box", "cube", "lifangti"] },
-  { value: "sphere", label: objectLabels.sphere, group: "基本体", keywords: ["sphere", "ball", "qiuti"] },
-  { value: "cylinder", label: objectLabels.cylinder, group: "基本体", keywords: ["cylinder", "yuanzhu", "tube"] },
-  { value: "group", label: objectLabels.group, group: "其它", keywords: ["group", "zu", "folder"] },
-  { value: "light", label: objectLabels.light, group: "其它", keywords: ["light", "lamp", "dengguang", "点光源"] },
-  { value: "__import__", label: "导入 GLB / glTF", group: "其它", keywords: ["import", "glb", "gltf", "daoru", "model"],
-    description: "从文件导入已有模型" },
+  { value: "camera", label: objectLabels.camera, group: "sceneAddGroupCamera", keywords: ["camera", "jiwei", "机位", "摄像机"],
+    description: "sceneAddCameraHint" },
+  { value: "figure", label: objectLabels.figure, group: "sceneAddGroupStage", keywords: ["figure", "person", "renwu"],
+    description: "sceneAddFigureHint" },
+  { value: "table", label: objectLabels.table, group: "sceneAddGroupStage", keywords: ["table", "zhuozi", "desk"] },
+  { value: "plane", label: objectLabels.plane, group: "sceneAddGroupStage", keywords: ["plane", "floor", "dimian", "地板"] },
+  { value: "room", label: objectLabels.room, group: "sceneAddGroupStage", keywords: ["room", "fangjian", "wall", "墙"] },
+  { value: "stairs", label: objectLabels.stairs, group: "sceneAddGroupStage", keywords: ["stairs", "louti", "step"] },
+  { value: "box", label: objectLabels.box, group: "sceneAddGroupPrimitives", keywords: ["box", "cube", "lifangti"] },
+  { value: "sphere", label: objectLabels.sphere, group: "sceneAddGroupPrimitives", keywords: ["sphere", "ball", "qiuti"] },
+  { value: "cylinder", label: objectLabels.cylinder, group: "sceneAddGroupPrimitives", keywords: ["cylinder", "yuanzhu", "tube"] },
+  { value: "group", label: objectLabels.group, group: "sceneAddGroupOther", keywords: ["group", "zu", "folder"] },
+  { value: "light", label: objectLabels.light, group: "sceneAddGroupOther", keywords: ["light", "lamp", "dengguang", "点光源"] },
+  { value: "__import__", label: "sceneAddImport", group: "sceneAddGroupOther", keywords: ["import", "glb", "gltf", "daoru", "model"],
+    description: "sceneAddImportHint" },
 ];
 
 /** 一个模型在「添加」菜单里占的那一项。前缀把它和内置形状分开 —— 模型的 id 是十六进制串,
@@ -192,8 +193,8 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
     try {
       const s = await createScene(
         workspace.id,
-        demo ? "三间展厅 · 运镜练习" : "未命名场景",
-        initialScene(demo),
+        demo ? t("sceneDemoName") : t("sceneUntitled"),
+        initialScene(t, demo),
       );
       qc.setQueryData(["scene", workspace.id, s.id], s);
       await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
@@ -207,17 +208,17 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
   if (id) {
     if (scene.isPending)
       return (
-        <LoadingState label="正在打开场景…" />
+        <LoadingState label={t("sceneOpening")} />
       );
     if (scene.error)
       return (
         <div className="flex h-full min-h-0 flex-col overflow-auto">
-          <EmptyState icon={<Box />} title="暂时无法打开场景" body={scene.error.message} action={<Button
+          <EmptyState icon={<Box />} title={t("sceneOpenFailed")} body={scene.error.message} action={<Button
             onClick={() => {
               location.hash = "#/scenes";
             }}
           >
-            返回场景列表
+            {t("sceneBackToList")}
           </Button>} />
         </div>
       );
@@ -272,11 +273,11 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         <LoadingState className="h-auto flex-1" label={t("scenesLoading")} />
       ) : list.error ? (
         <div className="flex min-h-0 flex-1 flex-col" role="alert">
-          <EmptyState icon={<Box />} title="暂时无法加载场景" body={list.error.message} action={<Button variant="secondary" onClick={() => void list.refetch()}>重试</Button>} />
+          <EmptyState icon={<Box />} title={t("sceneLoadFailed")} body={list.error.message} action={<Button variant="secondary" onClick={() => void list.refetch()}>{t("retry")}</Button>} />
         </div>
       ) : !list.data?.length ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <EmptyState icon={<Box />} title="从一个空间开始" body="添加几何体、导入模型，或从三间相连的展厅开始设计运镜。" action={<Button disabled={creating} onClick={() => void create(true)}>体验示例场景</Button>} />
+          <EmptyState icon={<Box />} title={t("sceneEmptyTitle")} body={t("sceneEmptyBody")} action={<Button disabled={creating} onClick={() => void create(true)}>{t("sceneTrySample")}</Button>} />
         </div>
       ) : (
         <SceneList
@@ -289,7 +290,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
               const scene = await getScene(workspace.id, summary.id);
               await saveScene({ ...scene, name });
               await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
-              toast.success("场景已重命名");
+              toast.success(t("sceneRenamed"));
               return true;
             } catch (e) { toast.error(errorText(e)); return false; }
           }}
@@ -301,9 +302,9 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
               localStorage.removeItem(`mosael.scene-draft:${workspace.id}:${sceneId}`);
             }
             await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
-            if (done.length) toast.success(`已删除 ${done.length} 个场景`);
+            if (done.length) toast.success(t("sceneDeletedCount").replace("{n}", String(done.length)));
             const failure = results.find(r => r.status === "rejected");
-            if (failure?.status === "rejected") toast.error(`部分场景未能删除：${String(failure.reason)}`);
+            if (failure?.status === "rejected") toast.error(t("sceneDeletePartialFailed").replace("{reason}", String(failure.reason)));
             return done;
           }}
         />
@@ -318,6 +319,7 @@ function SceneEditor({
   initial: Scene;
   onBack: () => void;
 }) {
+  const t = useI18n();
   const [navigation] = useCanvasInputMode();
   const [renaming, setRenaming] = React.useState(false);
   /** 收起来的那些组。**不持久化** —— 它是"我这会儿在看哪一块",不是设置。 */
@@ -330,16 +332,21 @@ function SceneEditor({
   });
   const addOptions = React.useMemo(
     () => [
-      ...ADD_OPTIONS,
+      ...ADD_OPTIONS.map((option) => ({
+        ...option,
+        label: t(option.label),
+        group: t(option.group),
+        description: option.description && t(option.description),
+      })),
       ...(sceneModels.data ?? []).map((m) => ({
         value: MODEL_PREFIX + m.id,
         label: m.name,
-        group: "模型库",
+        group: t("sceneAddGroupModels"),
         keywords: ["model", "glb", "moxing", m.name],
         description: `${(m.size / 1024 / 1024).toFixed(1)} MB · ${m.format.toUpperCase()}`,
       })),
     ],
-    [sceneModels.data],
+    [sceneModels.data, t],
   );
   const studioRoot = React.useRef<HTMLDivElement>(null);
   const fullscreen = useSceneFullscreen(studioRoot);
@@ -454,7 +461,7 @@ function SceneEditor({
     try {
       localStorage.setItem(cacheKey, JSON.stringify(next));
     } catch {
-      toast.error("本地草稿空间不足，请及时保存或导出场景。");
+      toast.error(t("sceneDraftStorageFull"));
     }
   }
   function update(content: SceneContent) {
@@ -471,7 +478,7 @@ function SceneEditor({
   function removeSceneObjects(ids: string[]) {
     const content = removeObjects(current.current.content, ids);
     if (content === current.current.content) {
-      toast.error("该物体包含镜头正在使用的机位，无法删除。请保留拍摄机位。");
+      toast.error(t("sceneCantDeleteShotCamera"));
       return;
     }
     update(content);
@@ -616,7 +623,7 @@ function SceneEditor({
         // ⇧D 复制一份。别的带 Shift 的单键这一页没有,所以到此为止。
         if (e.code === "KeyD" && selected) {
           e.preventDefault();
-          update(duplicateObject(current.current.content, selected));
+          update(duplicateObject(current.current.content, selected, t));
         }
         return;
       }
@@ -658,10 +665,10 @@ function SceneEditor({
   });
   function add(kind: SceneObject["kind"]) {
     if (draft.content.objects.length >= 500) {
-      toast.error("单个场景最多 500 个对象");
+      toast.error(t("sceneObjectLimit").replace("{n}", "500"));
       return;
     }
-    const o = makeObject(kind);
+    const o = makeObject(kind, { name: t(objectLabels[kind]) });
     const halfWidth = ["sphere", "cylinder"].includes(kind)
       ? o.parameters.radius
       : o.parameters.width / 2;
@@ -695,19 +702,19 @@ function SceneEditor({
     setSelected(o.id);
   }
   async function importModel(f: File) {
-    await work("导入模型", async () => {
+    await work(t("sceneBusyImportModel"), async () => {
       const m = await uploadSceneModel(initial.workspace_id, f);
       // 传完就进了工作区的模型库,别的场景也摆得上了 —— 让那份列表立刻看得到。
       void qc.invalidateQueries({ queryKey: ["scene-models", initial.workspace_id] });
       placeModel(m.name, m.id);
     });
   }
-  async function assetFrame(t: number, options?: { clay?: boolean }) {
-    const blob = await view.current!.frame(shot, t, options);
-    const suffix = options?.clay ? "-灰模" : "";
+  async function assetFrame(at: number, options?: { clay?: boolean }) {
+    const blob = await view.current!.frame(shot, at, options);
+    const suffix = options?.clay ? `-${t("sceneClaySuffix")}` : "";
     return importAsset({
       workspaceId: initial.workspace_id,
-      file: new File([blob], `${draft.name}-${shot.name}-${t.toFixed(2)}${suffix}.png`, {
+      file: new File([blob], `${draft.name}-${shot.name}-${at.toFixed(2)}${suffix}.png`, {
         type: "image/png",
       }),
     });
@@ -734,7 +741,7 @@ function SceneEditor({
     return asset;
   }
   async function bridge(kind: "image" | "frames" | "video") {
-    await work("准备生成素材", async () => {
+    await work(t("sceneBusyPrepareGenerate"), async () => {
       const sources: NonNullable<
         NonNullable<BoardItem["form"]>["source_assets"]
       > = [];
@@ -747,8 +754,8 @@ function SceneEditor({
           sources.push({ asset_id: gray.id, role: "reference_image" });
         }
       } else if (kind === "frames") {
-        for (const [i, t] of [0, shot.duration].entries()) {
-          const a = await assetFrame(t);
+        for (const [i, at] of [0, shot.duration].entries()) {
+          const a = await assetFrame(at);
           sources.push({
             asset_id: a.id,
             role: i ? "last_frame" : "first_frame",
@@ -800,8 +807,9 @@ function SceneEditor({
             kind: kind === "image" ? "image" : "video",
             sceneName: draft.name,
             objects: draft.content.objects,
-            lighting: lightingPrompt(draft.content.lighting),
+            lighting: lightingPrompt(draft.content.lighting, t),
             clay: kind === "image" && clay,
+            t,
           }),
           source_assets: sources,
           mode: kind === "frames" ? "first_frame" : undefined,
@@ -820,7 +828,7 @@ function SceneEditor({
         queryKey: ["boards", initial.workspace_id],
       });
       location.hash = `#/boards?board=${board.id}`;
-      toast.success(kind === "image" ? "场景画面已作为参考图，选择支持参考图的图片模型即可生成。" : "选择视频节点后，可自行选择模型和参数。");
+      toast.success(kind === "image" ? t("sceneBridgeImageDone") : t("sceneBridgeVideoDone"));
     });
   }
   function applyCameraPose(patch: Partial<Pick<SceneObject, "position" | "target" | "fov">>) {
@@ -843,7 +851,7 @@ function SceneEditor({
     const frame = frameForObject(target, shot, at, posing === target.id);
     const track = upsertKey(target.track, frame);
     if (!track) {
-      toast.error(`一个物体最多 ${MAX_KEYS} 个关键帧，请先移除一个。`);
+      toast.error(t("sceneKeyLimit").replace("{n}", String(MAX_KEYS)));
       return;
     }
     objectPatch(target.id, { track });
@@ -866,7 +874,7 @@ function SceneEditor({
     const content = current.current.content;
     const end = Math.max(shot.duration, ...content.objects.flatMap(o => o.track.map(f => f.time)));
     const next = moveSceneKeys(content, keys, delta, end);
-    if (!next) { toast.error("目标时刻已有关键帧，或超出时间范围"); return false; }
+    if (!next) { toast.error(t("sceneKeyMoveBlocked")); return false; }
     update(next); setPosing(null); setPlaying(false);
     return true;
   }
@@ -875,12 +883,14 @@ function SceneEditor({
     if (!keyTarget) return;
     const track = removeKeyAt(keyTarget.track, time);
     if (!track) {
-      toast.error("这一刻没有关键帧");
+      toast.error(t("sceneNoKeyHere"));
       return;
     }
     objectPatch(keyTarget.id, { track });
     toast.success(
-      track.length ? `已移除 ${time.toFixed(1)} 秒那一档` : `「${keyTarget.name}」不再随时间移动`,
+      track.length
+        ? t("sceneKeyRemoved").replace("{time}", time.toFixed(1))
+        : t("sceneObjectNoLongerAnimated").replace("{name}", keyTarget.name),
     );
   }
   return (
@@ -889,38 +899,38 @@ function SceneEditor({
       className="scene-studio"
       data-screen-mode={fullscreen.active ? "editor" : undefined}
     >
-      <RenameDialog open={renaming} title="重命名场景" initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
+      <RenameDialog open={renaming} title={t("sceneRenameTitle")} initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
       <header className="scene-header">
-        <Tool label="返回场景列表" onClick={onBack}>
+        <Tool label={t("sceneBackToList")} onClick={onBack}>
           <ArrowLeft size={17} />
         </Tool>
         <div className="scene-heading">
-          <button className="scene-name truncate text-left" title="重命名场景" aria-label="重命名场景" onClick={() => setRenaming(true)}>{draft.name}</button>
+          <button className="scene-name truncate text-left" title={t("sceneRenameTitle")} aria-label={t("sceneRenameTitle")} onClick={() => setRenaming(true)}>{draft.name}</button>
           <span className="scene-save" role="status">
             {error ? (
-              "未保存"
+              t("sceneUnsaved")
             ) : autosave.pending ? (
-              "保存中…"
+              t("sceneSaving")
             ) : (
               <>
                 <Check size={13} />
-                已保存
+                {t("sceneSaved")}
               </>
             )}
           </span>
         </div>
         <div className="scene-actions">
           <Tool
-            label="撤销"
+            label={t("undo")}
             onClick={undo}
             disabled={!history.length || !!busy}
           >
             <RotateCcw size={16} />
           </Tool>
-          <Tool label="重做" onClick={redo} disabled={!future.length || !!busy}>
+          <Tool label={t("redo")} onClick={redo} disabled={!future.length || !!busy}>
             <RotateCw size={16} />
           </Tool>
-          <Tool label="版本记录" onClick={() => setRevisions(true)}>
+          <Tool label={t("sceneHistory")} onClick={() => setRevisions(true)}>
             <History size={16} />
           </Tool>
           <span className="scene-tool-divider" aria-hidden="true" />
@@ -930,7 +940,7 @@ function SceneEditor({
             onClick={() => setAgent(agent ? null : "docked")}
           >
             <Sparkles size={15} />
-            建模助手
+            {t("sceneAssistant")}
           </Button>
           <SceneBlender scene={initial} pending={autosave.pending || !!error} busy={!!busy} work={work}
             //: 和「恢复历史版本」走同一条路(update → change):进撤销栈、由自动保存落库。
@@ -939,7 +949,7 @@ function SceneEditor({
             //: 只交出「发哪一版」—— GLB 由后端按这个修订生成(domain/scene_render/gltf),
             //: 所以草稿必须先落库:发的是库里那一份,不是屏幕上这一份。
             prepare={async () => {
-            if (JSON.stringify(current.current) !== saved.current) throw new Error("请等待场景保存完成后重试。");
+            if (JSON.stringify(current.current) !== saved.current) throw new Error(t("sceneWaitForSave"));
             return { revision: revision.current, shotId };
           }} />
           {/* **「生成素材」从一个步骤变成一个入口。**
@@ -949,17 +959,17 @@ function SceneEditor({
             <PopoverTrigger asChild>
               <Button variant="ghost" size="sm" disabled={!!busy}>
                 <Sparkles size={15} />
-                生成素材
+                {t("sceneGenerate")}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="scene-generate">
               <div className="scene-output-panel">
-                <h2>基于场景生成图片或视频</h2>
-                <p>用当前画面生成图片，或将构图与运镜交给视频模型。</p>
+                <h2>{t("sceneGenerateTitle")}</h2>
+                <p>{t("sceneGenerateBody")}</p>
                 <div className="scene-output-summary">
                   <span>{shot.name}</span>
                   <small>
-                    {shot.duration} 秒 · {shot.aspect}
+                    {t("sceneSeconds").replace("{n}", String(shot.duration))} · {shot.aspect}
                   </small>
                 </div>
                 <button
@@ -969,9 +979,9 @@ function SceneEditor({
                 >
                   <ImageIcon size={20} />
                   <span>
-                    <strong>使用当前画面生成图片</strong>
+                    <strong>{t("sceneGenerateFromFrame")}</strong>
                     <small>
-                      将当前镜头 {time.toFixed(1)} 秒的画面作为参考图
+                      {t("sceneGenerateFromFrameHint").replace("{time}", time.toFixed(1))}
                     </small>
                   </span>
                   <ChevronRight size={16} />
@@ -983,8 +993,8 @@ function SceneEditor({
                 >
                   <Camera size={20} />
                   <span>
-                    <strong>使用首尾帧生成</strong>
-                    <small>用开场和结束画面控制构图</small>
+                    <strong>{t("sceneGenerateFromFrames")}</strong>
+                    <small>{t("sceneGenerateFromFramesHint")}</small>
                   </span>
                   <ChevronRight size={16} />
                 </button>
@@ -995,8 +1005,8 @@ function SceneEditor({
                 >
                   <Play size={20} />
                   <span>
-                    <strong>使用运镜视频生成</strong>
-                    <small>提供完整镜头作为动作参考</small>
+                    <strong>{t("sceneGenerateFromVideo")}</strong>
+                    <small>{t("sceneGenerateFromVideoHint")}</small>
                   </span>
                   <ChevronRight size={16} />
                 </button>
@@ -1010,43 +1020,43 @@ function SceneEditor({
                     onChange={() => setClay((on) => writeClayReference(!on))}
                   />
                   <span>
-                    <strong>同时送一张灰模参考图</strong>
-                    <small>统一材质、只留光影，帮模型读准打光</small>
+                    <strong>{t("sceneClayToggle")}</strong>
+                    <small>{t("sceneClayToggleHint")}</small>
                   </span>
                 </label>
                 <p>
-                  当前打光「{presetById(draft.content.lighting.preset)?.label ?? "自定义"}」会一并写进提示词。
-                  下一步会打开创意画板，由你选择图片或视频模型、描述画面风格并开始生成。
+                  {t("sceneGenerateLightingNote").replace("{lighting}", t(presetById(draft.content.lighting.preset)?.label ?? "sceneLightingCustom"))}{" "}
+                  {t("sceneGenerateNextStep")}
                 </p>
-                <SceneSubsection title="只保存预览素材">
+                <SceneSubsection title={t("sceneSavePreviewOnly")}>
                   <div className="scene-preview-actions">
                     <Button
                       variant="outline"
                       disabled={!!busy}
-                      loading={busy === "保存画面"}
+                      loading={busy === t("sceneBusySaveFrame")}
                       onClick={() =>
-                        void work("保存画面", async () => {
+                        void work(t("sceneBusySaveFrame"), async () => {
                           await assetFrame(time);
-                          toast.success("画面已保存到素材库");
+                          toast.success(t("sceneFrameSaved"));
                         })
                       }
                     >
                       <Camera size={16} />
-                      保存当前画面
+                      {t("sceneSaveFrame")}
                     </Button>
                     <Button
                       variant="outline"
                       disabled={!!busy}
-                      loading={busy === "导出镜头预览"}
+                      loading={busy === t("sceneBusyExportPreview")}
                       onClick={() =>
-                        void work("导出镜头预览", async () => {
+                        void work(t("sceneBusyExportPreview"), async () => {
                           await exportVideo();
-                          toast.success("镜头预览已保存到素材库");
+                          toast.success(t("scenePreviewSaved"));
                         })
                       }
                     >
                       <Download size={16} />
-                      保存镜头预览视频
+                      {t("sceneSavePreviewVideo")}
                     </Button>
                   </div>
                 </SceneSubsection>
@@ -1057,18 +1067,18 @@ function SceneEditor({
             <PopoverTrigger asChild>
               <Button variant="ghost" size="sm" disabled={!!busy}>
                 <Download size={15} />
-                导出文件
+                {t("sceneExportFiles")}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="scene-export">
               <button
                 onClick={() =>
-                  void work("导出模型", async () =>
+                  void work(t("sceneBusyExportModel"), async () =>
                     download(await view.current!.glb(), `${draft.name}.glb`),
                   )
                 }
               >
-                导出 3D 模型 · GLB
+                {t("sceneExportGlb")}
               </button>
               <button
                 onClick={() =>
@@ -1080,52 +1090,52 @@ function SceneEditor({
                   )
                 }
               >
-                导出场景描述 · JSON
+                {t("sceneExportJson")}
               </button>
               <button
                 onClick={() =>
-                  void work("保存镜头画面", async () => {
+                  void work(t("sceneBusySaveShotFrame"), async () => {
                     await assetFrame(time);
-                    toast.success("画面已保存到素材库");
+                    toast.success(t("sceneFrameSaved"));
                   })
                 }
               >
-                当前镜头画面 → 素材库
+                {t("sceneExportFrameToLibrary")}
               </button>
               <button
                 onClick={() =>
-                  void work("导出镜头预览", async () => {
+                  void work(t("sceneBusyExportPreview"), async () => {
                     await exportVideo();
-                    toast.success("镜头预览已保存到素材库");
+                    toast.success(t("scenePreviewSaved"));
                   })
                 }
               >
-                镜头预览视频 → 素材库
+                {t("sceneExportPreviewToLibrary")}
               </button>
               <hr />
               <button onClick={() => void bridge("image")}>
-                当前画面 → 图片生成
+                {t("sceneExportToImage")}
               </button>
               <button onClick={() => void bridge("frames")}>
-                首尾帧 → 视频生成
+                {t("sceneExportFramesToVideo")}
               </button>
               <button onClick={() => void bridge("video")}>
-                参考视频 → 视频生成
+                {t("sceneExportVideoToVideo")}
               </button>
-              <p>进入画布后选择模型。生成模型不一定严格复现 3D 轨迹。</p>
+              <p>{t("sceneExportNote")}</p>
             </PopoverContent>
           </Popover>
         </div>
       </header>
       {error && (
         <div className="scene-notice" role="alert">
-          保存失败，草稿已保留：{error}
+          {t("sceneSaveFailed").replace("{error}", error)}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setDraft({ ...current.current })}
           >
-            重试
+            {t("retry")}
           </Button>
           <Button
             variant="ghost"
@@ -1135,17 +1145,17 @@ function SceneEditor({
                 new Blob([JSON.stringify(draft, null, 2)], {
                   type: "application/json",
                 }),
-                `${draft.name}-草稿.json`,
+                `${draft.name}-${t("sceneDraftFileSuffix")}.json`,
               )
             }
           >
-            导出草稿
+            {t("sceneExportDraft")}
           </Button>
         </div>
       )}
       {recovery && (
         <div className="scene-notice">
-          发现未保存的本地草稿。
+          {t("sceneDraftFound")}
           <Button
             size="sm"
             variant="ghost"
@@ -1154,7 +1164,7 @@ function SceneEditor({
               setRecovery(null);
             }}
           >
-            恢复草稿
+            {t("sceneRestoreDraft")}
           </Button>
           <Button
             size="sm"
@@ -1164,7 +1174,7 @@ function SceneEditor({
               localStorage.removeItem(cacheKey);
             }}
           >
-            使用已保存版本
+            {t("sceneUseSaved")}
           </Button>
         </div>
       )}
@@ -1199,21 +1209,21 @@ function SceneEditor({
                 「自由视角」是你自己在场景里飞,「机位视角」是从当前机位看出去(所见即成片),
                 「俯瞰全场」是拉开看机位和走位的轨迹。此前叫「编辑/镜头画面/全局动线」,
                 前两个像是两种编辑模式,而实际差别是**从谁的眼睛看**。 */}
-            <div className="scene-segment" role="group" aria-label="从哪儿看">
+            <div className="scene-segment" role="group" aria-label={t("sceneViewFrom")}>
               {(
                 [
-                  ["edit", "自由视角", "自己在场景里飞"],
-                  ["camera", "机位视角", "从当前机位看出去,所见即成片"],
-                  ["observe", "俯瞰全场", "拉开看机位和走位的轨迹"],
+                  ["edit", "sceneViewFree", "sceneViewFreeHint"],
+                  ["camera", "sceneViewCamera", "sceneViewCameraHint"],
+                  ["observe", "sceneViewOverview", "sceneViewOverviewHint"],
                 ] as const
               ).map(([value, label, hint]) => (
                 <button
                   key={value}
-                  title={hint}
+                  title={t(hint)}
                   aria-pressed={viewMode === value}
                   onClick={() => setViewMode(value)}
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
@@ -1222,9 +1232,9 @@ function SceneEditor({
                 <>
                   {(
                     [
-                      ["translate", "移动", Move],
-                      ["rotate", "旋转", RotateCw],
-                      ["scale", "缩放", Scaling],
+                      ["translate", "sceneToolMove", Move],
+                      ["rotate", "sceneToolRotate", RotateCw],
+                      ["scale", "sceneToolScale", Scaling],
                     ] as const
                   ).map(([key, label, Icon]) => (
                     <button
@@ -1235,7 +1245,7 @@ function SceneEditor({
                       onClick={() => setMode(key)}
                     >
                       <Icon size={15} />
-                      {label}
+                      {t(label)}
                     </button>
                   ))}
                   {/* 吸附跟着这三个工具走:它改的正是它们的步长(位移 0.25 米、旋转 15°、
@@ -1245,11 +1255,11 @@ function SceneEditor({
                   <button
                     className="scene-labeled-tool"
                     aria-pressed={snap}
-                    title="吸附：位移 0.25 米 · 旋转 15° · 缩放 0.1"
+                    title={t("sceneSnapHint")}
                     onClick={() => setSnap((on) => writeSceneSnap(!on))}
                   >
                     <Magnet size={15} />
-                    吸附
+                    {t("sceneSnap")}
                   </button>
                 </>
               )}
@@ -1259,23 +1269,23 @@ function SceneEditor({
                   <PopoverTrigger asChild>
                     <button className="scene-labeled-tool">
                       <Focus size={15} />
-                      视角
+                      {t("sceneViewAngle")}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="scene-add" align="end">
                     {(
                       [
-                        ["perspective", "整体视角"],
-                        ["front", "正面"],
-                        ["top", "俯视"],
+                        ["perspective", "sceneViewPerspective"],
+                        ["front", "sceneViewFront"],
+                        ["top", "sceneViewTop"],
                       ] as const
                     ).map(([key, label]) => (
                       <button key={key} onClick={() => view.current?.view(key)}>
-                        {label}
+                        {t(label)}
                       </button>
                     ))}
                     <button onClick={() => view.current?.focus()}>
-                      {observing ? "完整动线 · F" : "聚焦选中物体 · F"}
+                      {observing ? t("sceneFrameAllPaths") : t("sceneFocusSelected")}
                     </button>
                   </PopoverContent>
                 </Popover>
@@ -1285,8 +1295,8 @@ function SceneEditor({
                 className="scene-labeled-tool"
                 /* 它全屏的是**这个视口**,不是整个编辑器 —— 按钮本来就长在视口自己那条
                    工具栏上,而人按它是想把画面看大。 */
-                aria-label={fullscreen.active ? "退出全屏" : "只看 3D 画面(全屏)"}
-                title={fullscreen.active ? "退出全屏(Esc)" : "只看 3D 画面:隐藏页头、时间线和右侧栏"}
+                aria-label={fullscreen.active ? t("sceneExitFullscreen") : t("sceneFullscreenLabel")}
+                title={fullscreen.active ? t("sceneExitFullscreenTitle") : t("sceneFullscreenTitle")}
                 aria-pressed={fullscreen.active}
                 onClick={() => void fullscreen.toggle()}
               >
@@ -1295,53 +1305,53 @@ function SceneEditor({
                 ) : (
                   <Maximize size={15} />
                 )}
-                {fullscreen.active ? "退出全屏" : "全屏"}
+                {fullscreen.active ? t("sceneExitFullscreen") : t("sceneFullscreen")}
               </button>
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="scene-tool" aria-label="操作说明">
+                  <button className="scene-tool" aria-label={t("sceneHelp")}>
                     <HelpCircle size={16} />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="scene-help" align="end">
-                  <strong>如何操作画面</strong>
+                  <strong>{t("sceneHelpTitle")}</strong>
                   <p>
                     {navigation === "trackpad" ? (
                       <>
-                        双指滑动：平移画面
+                        {t("sceneHelpTrackpadPan")}
                         <br />
-                        双指捏合：拉近或拉远
+                        {t("sceneHelpTrackpadZoom")}
                         <br />
-                        Shift + 双指滑动：环绕观察
+                        {t("sceneHelpTrackpadOrbit")}
                         <br />
-                        按住触控板拖动：环绕观察
+                        {t("sceneHelpTrackpadDrag")}
                       </>
                     ) : (
                       <>
-                        左键拖动：环绕观察
+                        {t("sceneHelpMouseOrbit")}
                         <br />
-                        右键拖动：平移
+                        {t("sceneHelpMousePan")}
                         <br />
-                        滚轮：拉近或拉远
+                        {t("sceneHelpMouseZoom")}
                       </>
                     )}
                   </p>
                   <p>
-                    编辑视角用于调整构图；镜头画面展示最终取景；全局动线可在播放时观察摄像机位置与朝向。
+                    {t("sceneHelpModes")}
                   </p>
                   {/* **键位表就放在这里。** 快捷键不写出来等于没有 —— 而这一页照的是 Blender
                       的手势,用惯了的人会去试,没用过的人得有一处能看见。 */}
-                  <strong>快捷键</strong>
+                  <strong>{t("sceneShortcuts")}</strong>
                   <dl className="scene-keymap">
-                    <dt>G / R / S</dt><dd>移动 / 旋转 / 缩放</dd>
-                    <dt>I / ⌥I</dt><dd>在此刻记一档 / 移除这一档</dd>
-                    <dt>空格</dt><dd>播放、暂停</dd>
-                    <dt>← →</dt><dd>逐帧（按住 ⇧ 走十帧）</dd>
-                    <dt>↑ ↓</dt><dd>跳到上 / 下一个关键帧</dd>
-                    <dt>⇧D</dt><dd>复制一份</dd>
-                    <dt>X</dt><dd>删除选中</dd>
-                    <dt>F</dt><dd>聚焦选中</dd>
-                    <dt>⌘Z / ⇧⌘Z</dt><dd>撤销 / 重做</dd>
+                    <dt>G / R / S</dt><dd>{t("sceneKeyTransform")}</dd>
+                    <dt>I / ⌥I</dt><dd>{t("sceneKeyInsert")}</dd>
+                    <dt>{t("sceneKeySpace")}</dt><dd>{t("sceneKeyPlay")}</dd>
+                    <dt>← →</dt><dd>{t("sceneKeyStep")}</dd>
+                    <dt>↑ ↓</dt><dd>{t("sceneKeyJump")}</dd>
+                    <dt>⇧D</dt><dd>{t("sceneKeyDuplicate")}</dd>
+                    <dt>X</dt><dd>{t("sceneKeyDelete")}</dd>
+                    <dt>F</dt><dd>{t("sceneKeyFocus")}</dd>
+                    <dt>⌘Z / ⇧⌘Z</dt><dd>{t("sceneKeyUndo")}</dd>
                   </dl>
                 </PopoverContent>
               </Popover>
@@ -1386,14 +1396,14 @@ function SceneEditor({
                   size="sm"
                   onClick={() => recordAbort.current?.abort()}
                 >
-                  取消
+                  {t("cancel")}
                 </Button>
               )}
             </div>
           )}
           {/* **时间条常驻。** 运镜和走位在同一条时间轴上,而"物体在第几秒在哪儿"这件事
               没有时间条就无从表达 —— 它不该藏在某个步骤后面。 */}
-          <section className="scene-timeline" aria-label="镜头播放控制">
+          <section className="scene-timeline" aria-label={t("scenePlaybackControls")}>
               {/* **关键帧视图:按物体分行,位置即时间。** 此前这里只画当前机位的那一条轨 ——
                   而场景里的物体和运镜共用同一条时间轴,只画相机的话,"第 3 秒人走到门口、
                   同一刻镜头推进"这件事在界面上没有位置可以表达。时间滑块收进它的标尺行,
@@ -1402,7 +1412,7 @@ function SceneEditor({
                 controls={<div className="scene-shot-row">
                 <Camera size={16} />
                 <Pick
-                  label="当前镜头"
+                  label={t("sceneCurrentShot")}
                   value={shot.id}
                   options={draft.content.shots.map((s) => [s.id, s.name])}
                   onChange={(id) => {
@@ -1412,14 +1422,14 @@ function SceneEditor({
                   }}
                 />
                 <Tool
-                  label="新建镜头"
+                  label={t("sceneNewShot")}
                   disabled={draft.content.shots.length >= 32}
                   onClick={() => {
                     // 新建镜头 = 新建一台机位 + 一个用它的镜头。**它们成对出现** ——
                     // 镜头必须指向一台真实存在的相机。机位停在你当前看的那个视角上。
                     const here = view.current!.camera();
                     const { camera, shot: s } = makeShot(
-                      `镜头 ${draft.content.shots.length + 1}`,
+                      t("sceneShotName").replace("{n}", String(draft.content.shots.length + 1)),
                     );
                     camera.position = here.position;
                     camera.target = here.target;
@@ -1436,15 +1446,15 @@ function SceneEditor({
                   <Plus size={16} />
                 </Tool>
                 <span className="scene-tool-divider" aria-hidden="true" />
-                <Tool label="回到起点" onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst size={16} /></Tool>
+                <Tool label={t("sceneGoToStart")} onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst size={16} /></Tool>
                 <Tool
-                  label={playing ? "暂停" : "播放镜头"}
+                  label={playing ? t("scenePause") : t("scenePlayShot")}
                   disabled={!!busy}
                   onClick={togglePlayback}
                 >
                   {playing ? <Pause size={17} /> : <Play size={17} />}
                 </Tool>
-                <Tool label="跳到结尾" onClick={() => { setTime(shot.duration); setPlaying(false); }}><ChevronLast size={16} /></Tool>
+                <Tool label={t("sceneGoToEnd")} onClick={() => { setTime(shot.duration); setPlaying(false); }}><ChevronLast size={16} /></Tool>
                 <span className="scene-time">
                   {time.toFixed(1)} / {shot.duration.toFixed(1)} s
                 </span>
@@ -1474,7 +1484,7 @@ function SceneEditor({
             <>
                 <ScenePanel
                   id="objects"
-                  title="场景中的物体"
+                  title={t("sceneObjects")}
                   count={draft.content.objects.length}
                   actions={
                     <>
@@ -1486,8 +1496,8 @@ function SceneEditor({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        title={allCollapsed ? "展开全部分组" : "收起全部分组"}
-                        aria-label={allCollapsed ? "展开全部分组" : "收起全部分组"}
+                        title={allCollapsed ? t("sceneExpandAllGroups") : t("sceneCollapseAllGroups")}
+                        aria-label={allCollapsed ? t("sceneExpandAllGroups") : t("sceneCollapseAllGroups")}
                         onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groupIds))}
                       >
                         {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
@@ -1506,11 +1516,11 @@ function SceneEditor({
                           if (m) placeModel(m.name, m.id);
                         } else add(kind as SceneObject["kind"]);
                       }}
-                      searchPlaceholder="搜索物体类型"
-                      emptyText="没有匹配的类型"
+                      searchPlaceholder={t("sceneSearchKinds")}
+                      emptyText={t("sceneNoKindMatches")}
                       options={addOptions}
                       trigger={
-                        <Button variant="ghost" size="icon-sm" title="添加物体" aria-label="添加物体">
+                        <Button variant="ghost" size="icon-sm" title={t("sceneAddObject")} aria-label={t("sceneAddObject")}>
                           <Plus size={16} />
                         </Button>
                       }
@@ -1521,14 +1531,14 @@ function SceneEditor({
                   {!draft.content.objects.length && (
                     <div className="scene-start">
                       <Box size={28} strokeWidth={1.4} />
-                      <strong>先放入一个物体</strong>
-                      <p>点击「添加」选择形状，也可以导入已有的 3D 模型。</p>
+                      <strong>{t("sceneStartTitle")}</strong>
+                      <p>{t("sceneStartBody")}</p>
                     </div>
                   )}
                   {/* **按树的顺序画,缩进按层数来。** 此前是数组原样铺开、缩进写成
                       `o.parent_id ? 24 : 10` —— 只有两级,组里再放组和它的兄弟一样平;
                       而把一个物体移进组之后那一行也不会挪到组下面,看上去像没生效。 */}
-                  <div className="scene-object-list" role="tree" aria-label="场景中的物体">
+                  <div className="scene-object-list" role="tree" aria-label={t("sceneObjects")}>
                     {objectTree(draft.content, collapsed).map(({ object: o, depth, children }) => (
                       <div
                         className="scene-object-row"
@@ -1544,7 +1554,7 @@ function SceneEditor({
                         {children ? (
                           <button
                             className="scene-object-twist"
-                            aria-label={`${collapsed.has(o.id) ? "展开" : "收起"} ${o.name}`}
+                            aria-label={t(collapsed.has(o.id) ? "sceneExpandNamed" : "sceneCollapseNamed").replace("{name}", o.name)}
                             onClick={() =>
                               setCollapsed((was) => {
                                 const next = new Set(was);
@@ -1575,13 +1585,13 @@ function SceneEditor({
                         >
                           <ObjectKindIcon kind={o.kind} />
                           <span>{o.name}</span>
-                          {children > 0 && collapsed.has(o.id) && <small>{children} 项</small>}
-                          {o.hidden && <small>隐藏</small>}
+                          {children > 0 && collapsed.has(o.id) && <small>{t("sceneChildCount").replace("{n}", String(children))}</small>}
+                          {o.hidden && <small>{t("sceneHiddenBadge")}</small>}
                         </button>
                         <button
                           className="scene-object-delete"
-                          aria-label={`删除物体：${o.name}`}
-                          title={`删除 ${o.name}`}
+                          aria-label={t("sceneDeleteObjectNamed").replace("{name}", o.name)}
+                          title={t("sceneDeleteNamed").replace("{name}", o.name)}
                           disabled={!!busy}
                           onClick={() => removeSceneObjects([o.id])}
                         >
@@ -1603,7 +1613,7 @@ function SceneEditor({
                   />
                 </ScenePanel>
 
-                <ScenePanel id="inspector" title={object ? "调整物体" : "场景外观"}>
+                <ScenePanel id="inspector" title={object ? t("sceneAdjustObject") : t("sceneAppearance")}>
                   <SceneInspector
                     content={draft.content}
                     object={object && posing !== object.id ? {...object, ...samplePose(object)} : object}
@@ -1624,7 +1634,7 @@ function SceneEditor({
             {/* **镜头设置跟着「选中了哪台机位」走。** 相机现在是场景里的物体,它的运镜、
                 时长、比例本来就该在选中它时出现 —— 而不是藏在一个叫「设计镜头」的步骤后面。 */}
             {object?.kind === "camera" && rig && object.id === rig.id && (
-              <ScenePanel id="camera" title="镜头设置">
+              <ScenePanel id="camera" title={t("sceneShotSettings")}>
               <SceneCameraPanel
                 shot={shot}
                 rig={rig!}
@@ -1664,9 +1674,9 @@ function SceneEditor({
               onModeChange={setAgent}
               onClose={() => setAgent(null)}
               rectKey="scene-studio-agent"
-              contextLine={`当前 3D 场景 scene_id=${initial.id}，workspace_id=${initial.workspace_id}。先用 get_scene 读取最新场景，再用 edit_scene 修改对象、材质、灯光或镜头，每改一步用 view_scene 看一眼结果再继续。基本体拼不出来的造型可以在用户的 Blender 里建（blender_execute + blender_look），再用 blender_import_to_scene 收进本场景。单位米，旋转角度。`}
-              emptyHint="描述空间、物体或镜头，让助手协助搭建。"
-              placeholder="例如：给展厅加一组台阶，然后设计推进镜头…"
+              contextLine={t("sceneAgentContext").replace("{sceneId}", initial.id).replace("{workspaceId}", initial.workspace_id)}
+              emptyHint={t("sceneAssistantEmpty")}
+              placeholder={t("sceneAssistantPlaceholder")}
             />
           </div>
         )}

@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useI18n } from "@/app/preferences";
 
 export function SceneHistory({
   scene,
@@ -23,6 +24,7 @@ export function SceneHistory({
   onClose: () => void;
   onRestore: (value: { name: string; content: SceneContent }) => void;
 }) {
+  const t = useI18n();
   const list = useQuery({
     queryKey: ["scene-revisions", scene.id, open],
     queryFn: () =>
@@ -40,17 +42,17 @@ export function SceneHistory({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>场景版本记录</DialogTitle>
+          <DialogTitle>{t("sceneHistoryTitle")}</DialogTitle>
         </DialogHeader>
         <p className="text-ui-sm text-muted-foreground">
-          恢复会保存为新版本，已有历史仍然保留。
+          {t("sceneHistoryHint")}
         </p>
         <div className="scene-history">
           {list.error && <p role="alert">{list.error.message}</p>}
           {list.data?.map((r) => (
             <div key={r.revision}>
               <span>
-                版本 {r.revision} · {r.name}
+                {t("sceneHistoryRevision").replace("{n}", String(r.revision))} · {r.name}
                 <small>{new Date(r.created_at).toLocaleString()}</small>
               </span>
               <Button
@@ -64,7 +66,7 @@ export function SceneHistory({
                     .catch((e) => toast.error(errorText(e)))
                 }
               >
-                恢复
+                {t("sceneHistoryRestore")}
               </Button>
             </div>
           ))}

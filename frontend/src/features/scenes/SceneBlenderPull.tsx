@@ -30,7 +30,7 @@ export function SceneBlenderPull({
   disabled?: boolean;
   onCreated: (sceneId: string) => void;
 }) {
-  const { locale } = usePreferences();
+  const { locale, t } = usePreferences();
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const connections = useQuery({
@@ -52,7 +52,7 @@ export function SceneBlenderPull({
         { method: "POST" },
       );
       setOpen(false);
-      toast.success(`已取回「${result.name}」`);
+      toast.success(t("sceneBlenderPulled").replace("{name}", result.name));
       // 相机取不回来是常态,不是错 —— 单独说一句,别混在成功提示里一闪而过。
       for (const warning of result.warnings) toast.warning(warning, { duration: 8000 });
       onCreated(result.scene_id);
@@ -68,32 +68,32 @@ export function SceneBlenderPull({
       <PopoverTrigger asChild>
         <Button variant="outline" disabled={disabled}>
           <Box size={16} />
-          从 Blender 获取
+          {t("sceneBlenderPullButton")}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="scene-blender">
         <div className="scene-blender-heading">
           <div>
-            <strong>取回 Blender 当前场景</strong>
-            <p>几何体整体导入 · 镜头在这里重新设计</p>
+            <strong>{t("sceneBlenderPullTitle")}</strong>
+            <p>{t("sceneBlenderPullSubtitle")}</p>
           </div>
         </div>
         {connections.isPending ? (
           <EmptyState
             size="compact"
             icon={<Loader2 size={16} className="animate-mosael-spin" />}
-            title="正在读取连接"
-            body="在找这台电脑上可用的 Blender。"
+            title={t("sceneBlenderLoadingTitle")}
+            body={t("sceneBlenderLoadingBody")}
           />
         ) : connections.error ? (
           <EmptyState
             size="compact"
             icon={<Plug size={16} />}
-            title="读不到连接列表"
+            title={t("sceneBlenderErrorTitle")}
             body={String(connections.error)}
             action={
               <Button variant="secondary" size="sm" onClick={() => void connections.refetch()}>
-                重试
+                {t("retry")}
               </Button>
             }
           />
@@ -101,11 +101,11 @@ export function SceneBlenderPull({
           <EmptyState
             size="compact"
             icon={<MonitorSmartphone size={16} />}
-            title="需要桌面版 Mosael"
-            body="取回要读你这台电脑上的 Blender。当前后端不在你的电脑上，够不到它。"
+            title={t("sceneBlenderDesktopTitle")}
+            body={t("sceneBlenderPullDesktopBody")}
             action={
               <a className="scene-blender-link" href={docsUrl("start/download", locale)} target="_blank" rel="noreferrer">
-                下载桌面版 <ArrowUpRight size={14} />
+                {t("sceneBlenderDownloadDesktop")} <ArrowUpRight size={14} />
               </a>
             }
           />
@@ -113,12 +113,12 @@ export function SceneBlenderPull({
           <EmptyState
             size="compact"
             icon={<Plug size={16} />}
-            title="还没接上 Blender"
-            body="装好 Blender MCP 插件和配套 Add-on，在 Blender 里开启连接，这里就能选到它。"
+            title={t("sceneBlenderNotConnectedTitle")}
+            body={t("sceneBlenderNotConnectedBody")}
             action={
               <div className="scene-blender-setup">
                 <a href="#/plugins" onClick={() => setOpen(false)}>
-                  前往插件设置 <ArrowUpRight size={14} />
+                  {t("sceneBlenderPluginSettings")} <ArrowUpRight size={14} />
                 </a>
               </div>
             }
@@ -139,7 +139,7 @@ export function SceneBlenderPull({
                 )}
                 <span>
                   <strong>{connection.name}</strong>
-                  <small>取回它当前打开的那个场景</small>
+                  <small>{t("sceneBlenderPullHint")}</small>
                 </span>
               </button>
             ))}

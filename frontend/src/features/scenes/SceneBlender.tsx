@@ -56,7 +56,7 @@ export function SceneBlender({
   apply: (content: SceneContent) => void;
   work: (label: string, fn: () => Promise<void>) => Promise<void>;
 }) {
-  const { locale } = usePreferences();
+  const { locale, t } = usePreferences();
   const [open, setOpen] = React.useState(false),
     [chosen, setChosen] = React.useState(""),
     [selectedTransfer, setSelectedTransfer] = React.useState("");
@@ -86,10 +86,10 @@ export function SceneBlender({
     : (available[0]?.id ?? "");
   const readyTransfers =
     transfers.data?.filter(
-      (t) => t.instance_id === instance && t.status === "ready",
+      (one) => one.instance_id === instance && one.status === "ready",
     ) ?? [];
   const latest =
-    readyTransfers.find((t) => t.id === selectedTransfer) ?? readyTransfers[0];
+    readyTransfers.find((one) => one.id === selectedTransfer) ?? readyTransfers[0];
   React.useEffect(() => {
     setChecked(false);
     setMessage("");
@@ -121,13 +121,13 @@ export function SceneBlender({
       <PopoverContent align="end" className="scene-blender">
         <div className="scene-blender-heading">
           <div>
-            <strong>与 Blender 互通</strong>
-            <p>搭好场景，再去打磨细节</p>
+            <strong>{t("sceneBlenderTitle")}</strong>
+            <p>{t("sceneBlenderSubtitle")}</p>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            aria-label="刷新 Blender 连接"
+            aria-label={t("sceneBlenderRefresh")}
             disabled={busy}
             onClick={() => {
               void connections.refetch();
@@ -144,19 +144,19 @@ export function SceneBlender({
           <EmptyState
             size="compact"
             icon={<Loader2 size={16} className="animate-mosael-spin" />}
-            title="正在读取连接"
-            body="在找这台电脑上可用的 Blender。"
+            title={t("sceneBlenderLoadingTitle")}
+            body={t("sceneBlenderLoadingBody")}
           />
         ) : connections.error ? (
           <EmptyState
             size="compact"
             icon={<AlertTriangle size={16} />}
-            title="读不到连接列表"
+            title={t("sceneBlenderErrorTitle")}
             body={String(connections.error)}
             action={
               <Button variant="secondary" size="sm" onClick={() => void connections.refetch()}>
                 <RefreshCw size={14} />
-                重试
+                {t("retry")}
               </Button>
             }
           />
@@ -167,8 +167,8 @@ export function SceneBlender({
           <EmptyState
             size="compact"
             icon={<MonitorSmartphone size={16} />}
-            title="需要桌面版 Mosael"
-            body="互通要把场景写到你这台电脑上、再交给同机的 Blender 打开。当前后端不在你的电脑上，够不到它。"
+            title={t("sceneBlenderDesktopTitle")}
+            body={t("sceneBlenderDesktopBody")}
             action={
               <a
                 className="scene-blender-link"
@@ -176,7 +176,7 @@ export function SceneBlender({
                 target="_blank"
                 rel="noreferrer"
               >
-                下载桌面版 <ArrowUpRight size={14} />
+                {t("sceneBlenderDownloadDesktop")} <ArrowUpRight size={14} />
               </a>
             }
           />
@@ -184,17 +184,17 @@ export function SceneBlender({
           <EmptyState
             size="compact"
             icon={<Plug size={16} />}
-            title="还没接上 Blender"
-            body="装好 Blender MCP 插件和配套 Add-on，在 Blender 里开启连接，这里就能选到它。"
+            title={t("sceneBlenderNotConnectedTitle")}
+            body={t("sceneBlenderNotConnectedBody")}
             action={
               <div className="scene-blender-setup">
                 <a href="#/plugins" onClick={() => setOpen(false)}>
-                  前往插件设置 <ArrowUpRight size={14} />
+                  {t("sceneBlenderPluginSettings")} <ArrowUpRight size={14} />
                 </a>
                 {/* 曾经指向 `tree/codex/scene-studio/...` —— 那是一条**开发分支**,远端只有 main,
                     所有人点进去都是 404。指南本来就有这一节,而且跟着界面语言走。 */}
                 <a href={docsUrl("guides/scenes", locale)} target="_blank" rel="noreferrer">
-                  查看安装步骤 <ArrowUpRight size={14} />
+                  {t("sceneBlenderInstallSteps")} <ArrowUpRight size={14} />
                 </a>
               </div>
             }
@@ -203,7 +203,7 @@ export function SceneBlender({
           <>
             <div className="scene-blender-connection">
               <Pick
-                label="Blender 连接"
+                label={t("sceneBlenderConnection")}
                 value={instance}
                 options={available.map((c) => [c.id, c.name])}
                 onChange={setChosen}
@@ -213,24 +213,24 @@ export function SceneBlender({
                 variant="secondary"
                 disabled={unavailable}
                 onClick={() =>
-                  void run("检查 Blender", async () => {
+                  void run(t("sceneBlenderChecking"), async () => {
                     const result = await api<{ name: string }>(
                       `/api/scenes/blender/connections/${instance}/check`,
                       { method: "POST" },
                     );
                     setChecked(true);
-                    setMessage(`已连接 · ${result.name}`);
+                    setMessage(t("sceneBlenderConnected").replace("{name}", result.name));
                   })
                 }
               >
-                {checked ? <Check size={14} /> : <RefreshCw size={14} />}检测
+                {checked ? <Check size={14} /> : <RefreshCw size={14} />}{t("sceneBlenderCheck")}
               </Button>
             </div>
             <button
               className="scene-blender-action"
               disabled={unavailable || pending}
               onClick={() =>
-                void run("发送到 Blender", async () => {
+                void run(t("sceneBlenderSending"), async () => {
                   const ready = await prepare();
                   const result = await api<Transfer>(base, {
                     method: "POST",
@@ -242,17 +242,17 @@ export function SceneBlender({
                     }),
                   });
                   setSelectedTransfer(result.id);
-                  setMessage(`已发送 · ${result.scene_name}`);
+                  setMessage(t("sceneBlenderSent").replace("{name}", result.scene_name ?? ""));
                 })
               }
             >
               <ArrowUpRight size={19} />
               <span>
-                <strong>发送当前场景</strong>
+                <strong>{t("sceneBlenderSend")}</strong>
                 <small>
                   {pending
-                    ? "等待场景保存完成…"
-                    : "模型与镜头 · 在 Blender 中独立打开"}
+                    ? t("sceneBlenderWaitSave")
+                    : t("sceneBlenderSendHint")}
                 </small>
               </span>
             </button>
@@ -264,33 +264,33 @@ export function SceneBlender({
               className="scene-blender-action"
               disabled={unavailable || !latest}
               onClick={() =>
-                void run("接收 Blender 修改", async () => {
+                void run(t("sceneBlenderReceive"), async () => {
                   const result = await api<Transfer & { content: SceneContent }>(
                     `${base}/${latest!.id}/receive?${query}&into_current=true`,
                     { method: "POST" },
                   );
                   apply(result.content);
-                  setMessage("已接收，当前场景已更新（⌘Z 可撤销）。");
+                  setMessage(t("sceneBlenderReceivedCurrent"));
                 })
               }
             >
               <ArrowDownToLine size={19} />
               <span>
-                <strong>接收 Blender 修改</strong>
+                <strong>{t("sceneBlenderReceive")}</strong>
                 <small>
                   {latest
-                    ? `用「${latest.scene_name}」更新当前场景 · 可撤销`
-                    : "发送场景后即可接收加工结果"}
+                    ? t("sceneBlenderReceiveHint").replace("{name}", latest.scene_name ?? "")
+                    : t("sceneBlenderReceiveEmpty")}
                 </small>
               </span>
             </button>
             {readyTransfers.length > 1 && (
               <Pick
-                label="发送记录"
+                label={t("sceneBlenderTransfers")}
                 value={latest!.id}
-                options={readyTransfers.map((t) => [
-                  t.id,
-                  `${new Date(t.created_at).toLocaleString()} · 版本 ${t.source_revision}`,
+                options={readyTransfers.map((one) => [
+                  one.id,
+                  `${new Date(one.created_at).toLocaleString()} · ${t("sceneHistoryRevision").replace("{n}", String(one.source_revision))}`,
                 ])}
                 onChange={setSelectedTransfer}
               />
@@ -298,10 +298,11 @@ export function SceneBlender({
             {latest && (
               <div className="scene-blender-result">
                 <span>
-                  发送于 {new Date(latest.created_at).toLocaleString()} · 版本{" "}
-                  {latest.source_revision}
+                  {t("sceneBlenderSentAt")
+                    .replace("{time}", new Date(latest.created_at).toLocaleString())
+                    .replace("{n}", String(latest.source_revision))}
                 </span>
-                <small>几何体作为整体模型接收；镜头保留为可编辑关键帧。</small>
+                <small>{t("sceneBlenderReceiveNote")}</small>
                 {latest.warnings?.map((warning, index) => (
                   <small key={index}>{warning}</small>
                 ))}
@@ -311,20 +312,20 @@ export function SceneBlender({
                     variant="outline"
                     disabled={unavailable}
                     onClick={() =>
-                      void run("接收为新场景", async () => {
+                      void run(t("sceneBlenderReceiveAsNew"), async () => {
                         const result = await api<Transfer>(
                           `${base}/${latest.id}/receive?${query}`,
                           { method: "POST" },
                         );
                         setMessage(
                           result.received_scene_id
-                            ? "已接收，生成了独立的新场景。"
-                            : "已接收。",
+                            ? t("sceneBlenderReceivedNew")
+                            : t("sceneBlenderReceived"),
                         );
                       })
                     }
                   >
-                    另存为新场景
+                    {t("sceneBlenderSaveAsNew")}
                   </Button>
                   {latest.received_scene_id && (
                     <Button
@@ -336,7 +337,7 @@ export function SceneBlender({
                         setOpen(false);
                       }}
                     >
-                      打开接收的场景 <ArrowUpRight size={14} />
+                      {t("sceneBlenderOpenReceived")} <ArrowUpRight size={14} />
                     </Button>
                   )}
                   <Button
@@ -344,7 +345,7 @@ export function SceneBlender({
                     variant="outline"
                     disabled={busy}
                     onClick={() =>
-                      void run("下载 Blender 工程", async () => {
+                      void run(t("sceneBlenderDownloading"), async () => {
                         const res = await fetch(
                           `${API_BASE}${base}/${latest.id}/project?${query}`,
                           {
@@ -354,7 +355,7 @@ export function SceneBlender({
                           },
                         );
                         if (!res.ok)
-                          throw new Error("工程下载失败，请重新接收后再试。");
+                          throw new Error(t("sceneBlenderDownloadFailed"));
                         const url = URL.createObjectURL(await res.blob()),
                           a = document.createElement("a");
                         a.href = url;
@@ -375,7 +376,7 @@ export function SceneBlender({
         {busy && (
           <p role="status" className="scene-blender-status">
             <Loader2 size={14} className="animate-spin" />
-            正在与 Blender 通信…
+            {t("sceneBlenderBusy")}
           </p>
         )}
         {message && (
@@ -388,7 +389,7 @@ export function SceneBlender({
             {failure}
           </p>
         )}
-        {transfers.error && <p role="alert">同步记录读取失败，请刷新重试。</p>}
+        {transfers.error && <p role="alert">{t("sceneBlenderTransfersFailed")}</p>}
       </PopoverContent>
     </Popover>
   );

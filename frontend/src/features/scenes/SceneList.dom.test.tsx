@@ -8,8 +8,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { messages, type MessageKey } from "@/app/messages";
 import { SceneList } from "./SceneList";
-vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+vi.mock("@/app/preferences", () => ({ useI18n: () => (key: MessageKey) => messages["zh-CN"][key] }));
 afterEach(cleanup);
 const scenes = ["a", "b", "c"].map((id) => ({
   id,
@@ -62,7 +63,7 @@ it("right-clicks the selected group and preserves failed deletions for retry", a
   fireEvent.contextMenu(row("a"), { clientX: 10, clientY: 10 });
   fireEvent.click(screen.getByRole("menuitem", { name: "删除 2 个场景" }));
   expect(remove).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "confirm" }));
+  fireEvent.click(screen.getByRole("button", { name: messages["zh-CN"].confirm }));
   await waitFor(() => expect(remove).toHaveBeenCalledWith(scenes.slice(0, 2)));
   await waitFor(() => expect(screen.getByText("已选 1 个场景")).toBeTruthy());
   // 删失败的那个仍然选着,好让人重试。选中态画在缩略图上(勾选圈 + 主色圈),按钮报「按下」。

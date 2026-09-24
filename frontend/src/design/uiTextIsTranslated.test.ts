@@ -92,20 +92,7 @@ const LEFT = new Map<string, number>([
   ["electron/publish/platforms.ts", 7],
   //: 剩下 1 行是剥掉报错前缀「失败 ·」的解析正则,不是界面文字。
   ["frontend/src/features/ai-studio/AiStudio.tsx", 1],
-  ["frontend/src/features/scenes/SceneAxisGizmo.tsx", 1],
-  ["frontend/src/features/scenes/SceneBlender.tsx", 41],
-  ["frontend/src/features/scenes/SceneBlenderPull.tsx", 15],
-  ["frontend/src/features/scenes/SceneCameraPanel.tsx", 29],
-  ["frontend/src/features/scenes/SceneHistory.tsx", 4],
-  ["frontend/src/features/scenes/SceneInspector.tsx", 50],
-  ["frontend/src/features/scenes/SceneList.tsx", 26],
-  ["frontend/src/features/scenes/SceneStudio.tsx", 155],
-  ["frontend/src/features/scenes/SceneViewport.tsx", 14],
-  ["frontend/src/features/scenes/axisGizmo.ts", 3],
-  ["frontend/src/features/scenes/blockoutPrompt.ts", 7],
-  ["frontend/src/features/scenes/encodeVideo.ts", 3],
-  ["frontend/src/features/scenes/lighting.ts", 55],
-  ["frontend/src/features/scenes/sceneGraph.ts", 19],
+  ["frontend/src/features/scenes/SceneStudio.tsx", 4],
 ]);
 
 it("没有新的写死中文的界面文字", () => {

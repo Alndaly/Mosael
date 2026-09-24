@@ -10,6 +10,10 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { messages, type MessageKey } from "@/app/messages";
+
+const zh = (key: MessageKey) => messages["zh-CN"][key];
+
 import { groupTargets, initialScene, makeObject, moveToGroup } from "./sceneGraph";
 import type { SceneContent } from "@/api/domains/scenes";
 
@@ -18,7 +22,7 @@ function nested(): { content: SceneContent; outer: string; inner: string; box: s
   const outer = makeObject("group", { name: "外组" });
   const inner = makeObject("group", { name: "内组", parent_id: outer.id });
   const box = makeObject("box", { name: "盒子", parent_id: inner.id });
-  const content = { ...initialScene(), objects: [outer, inner, box] };
+  const content = { ...initialScene(zh), objects: [outer, inner, box] };
   return { content, outer: outer.id, inner: inner.id, box: box.id };
 }
 

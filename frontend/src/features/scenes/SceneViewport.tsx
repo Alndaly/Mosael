@@ -33,6 +33,8 @@ import {
 } from "@/api/domains/scenes";
 import { cameraOfShot, sampleCamera, sampleObject } from "./sceneGraph";
 import { errorText } from "@/api/errorMessage";
+import type { MessageKey } from "@/app/messages";
+import { useI18n } from "@/app/preferences";
 
 /**
  * 某个 props 快照在某一刻的机位姿态。
@@ -131,12 +133,16 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
     const host = React.useRef<HTMLDivElement>(null),
       latest = React.useRef(props);
     latest.current = props;
+    const t = useI18n();
+    /** 渲染循环那个 effect 只跑一次,里面抛的错要用**当前**语言 —— 所以走 ref。 */
+    const translate = React.useRef(t);
+    translate.current = t;
     const runtime = React.useRef<{
       sync: () => void;
       selected: () => void;
       handle: ViewportHandle;
     } | null>(null);
-    const [fatal, setFatal] = React.useState("");
+    const [fatal, setFatal] = React.useState<MessageKey | null>(null);
     /** 角上那个坐标轴控件和渲染循环之间的两根线。**用 ref 不用 state** —— 朝向每帧都在变,
      *  而这两个东西本身从头到尾是同一个。 */
     const orientationListener = React.useRef<((o: Orientation) => void) | null>(null);
@@ -180,7 +186,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       try {
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       } catch {
-        setFatal("无法启动 3D 视窗，请检查图形加速设置。");
+        setFatal("sceneViewportWebglFailed");
         return;
       }
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -667,13 +673,13 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         }
       }
       function output(shot: SceneShot, clay = false) {
-        if (modelsPending) throw new Error("模型仍在加载，请稍后导出。");
+        if (modelsPending) throw new Error(translate.current("sceneModelsLoadingExport"));
         if (
           latest.current.content.objects.some(
             (o) => o.model_id && failedModels.has(o.model_id),
           )
         )
-          throw new Error("有模型加载失败，请重新打开场景后再导出。");
+          throw new Error(translate.current("sceneModelsFailedExport"));
         const r = new THREE.WebGLRenderer({
           antialias: true,
           preserveDrawingBuffer: true,
@@ -825,7 +831,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             draw(time);
             return await new Promise<Blob>((resolve, reject) =>
               r.domElement.toBlob(
-                (b) => (b ? resolve(b) : reject(new Error("无法导出图片"))),
+                (b) => (b ? resolve(b) : reject(new Error(translate.current("sceneExportImageFailed")))),
                 "image/png",
               ),
             );
@@ -834,17 +840,17 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           }
         },
         glb: async () => {
-          if (modelsPending) throw new Error("模型仍在加载");
+          if (modelsPending) throw new Error(translate.current("sceneModelsLoading"));
           if (
             latest.current.content.objects.some(
               (o) => o.model_id && failedModels.has(o.model_id),
             )
           )
-            throw new Error("有模型加载失败，请重新打开场景后再导出。");
+            throw new Error(translate.current("sceneModelsFailedExport"));
           const data = await new GLTFExporter().parseAsync(cloneSceneForExport(root), {
             binary: true,
           });
-          if (!(data instanceof ArrayBuffer)) throw new Error("无法导出 GLB");
+          if (!(data instanceof ArrayBuffer)) throw new Error(translate.current("sceneExportGlbFailed"));
           return new Blob([data], { type: "model/gltf-binary" });
         },
         record: async (shot, signal, progress) => {
@@ -856,6 +862,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
               outputFrame.draw,
               signal,
               progress,
+              translate.current,
             );
             if (encoded) return encoded;
           } finally {
@@ -870,7 +877,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
               typeof MediaRecorder !== "undefined" &&
               MediaRecorder.isTypeSupported(t),
           );
-          if (!type) throw new Error("当前浏览器不支持视频预览导出");
+          if (!type) throw new Error(translate.current("sceneVideoExportUnsupported"));
           const { r, draw } = output(shot);
           draw(0);
           const stream = r.domElement.captureStream(30);
@@ -887,7 +894,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
                 failed = true;
                 cancelAnimationFrame(raf);
                 if (recorder.state !== "inactive") recorder.stop();
-                reject(new Error("已取消导出"));
+                reject(new Error(translate.current("sceneExportCancelled")));
               };
               signal.addEventListener("abort", cancel, { once: true });
               recorder.ondataavailable = (e) => {
@@ -898,7 +905,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
                 cancelAnimationFrame(raf);
                 signal.removeEventListener("abort", cancel);
                 if (recorder.state !== "inactive") recorder.stop();
-                reject(new Error("视频录制失败"));
+                reject(new Error(translate.current("sceneVideoRecordFailed")));
               };
               recorder.onstop = () => {
                 cancelAnimationFrame(raf);
@@ -993,7 +1000,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         );
     }, [props.shot.aspect]);
     return (
-      <div className="scene-viewport" ref={host} aria-label="3D 场景视窗">
+      <div className="scene-viewport" ref={host} aria-label={t("sceneViewport")}>
         {/* 出片预览时不显示:那一格画的是成片,控件属于编辑器。 */}
         {!props.preview && !fatal && (
           <SceneAxisGizmo subscribe={subscribeOrientation} onPick={pickAxis} />
@@ -1002,23 +1009,23 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           <>
             <div className="scene-motion-legend">
               <span />
-              摄像机动线<small>蓝色为当前摄像机，虚线指向取景中心</small>
+              {t("sceneMotionLegend")}<small>{t("sceneMotionLegendHint")}</small>
             </div>
             <button
               className="scene-camera-inset"
               style={inset}
-              aria-label="放大镜头画面"
+              aria-label={t("sceneCameraInsetEnlarge")}
               onClick={props.onCameraView}
             >
               <span>
-                镜头画面 <small>{props.time.toFixed(1)} s ↗</small>
+                {t("sceneCameraInset")} <small>{props.time.toFixed(1)} s ↗</small>
               </span>
             </button>
           </>
         )}
         {fatal && (
           <div className="scene-empty" role="alert">
-            {fatal}
+            {t(fatal)}
           </div>
         )}
       </div>

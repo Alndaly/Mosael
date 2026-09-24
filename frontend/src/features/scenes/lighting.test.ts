@@ -6,6 +6,10 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { messages, type MessageKey } from "@/app/messages";
+
+const zh = (key: MessageKey) => messages["zh-CN"][key];
+
 import {
   CUSTOM_PRESET,
   LIGHTING_PRESETS,
@@ -18,8 +22,10 @@ import {
 describe("预设表", () => {
   it("每一档都配了提示词 —— 少一句就等于那一档只有一半", () => {
     for (const preset of LIGHTING_PRESETS) {
-      expect(preset.prompt.trim(), preset.id).not.toBe("");
-      expect(preset.hint.trim(), preset.id).not.toBe("");
+      for (const table of Object.values(messages)) {
+        expect(table[preset.prompt].trim(), preset.id).not.toBe("");
+        expect(table[preset.hint].trim(), preset.id).not.toBe("");
+      }
     }
   });
 
@@ -44,7 +50,7 @@ describe("预设表", () => {
 describe("交给模型的那段话", () => {
   it("选了预设就用它写好的那句", () => {
     const preset = presetById("golden-hour")!;
-    expect(lightingPrompt({ preset: "golden-hour", ...preset.values })).toBe(preset.prompt);
+    expect(lightingPrompt({ preset: "golden-hour", ...preset.values }, zh)).toBe(zh(preset.prompt));
   });
 
   it("手动调过之后按当时的数现生成 —— 不能什么都不说", () => {
@@ -56,7 +62,7 @@ describe("交给模型的那段话", () => {
       intensity: 6,
       temperature: 2800,
       softness: 0.05,
-    });
+    }, zh);
     expect(text).toContain("后方");
     expect(text).toContain("低角度");
     expect(text).toContain("暖色调");
@@ -66,7 +72,7 @@ describe("交给模型的那段话", () => {
   it("认不出的预设 id 也要给出一句话", () => {
     // 老场景存着一个后来删掉的预设 id 时,不能退化成空字符串。
     expect(lightingPrompt({ preset: "removed-preset", azimuth: 35, elevation: 55,
-                            intensity: 2.5, temperature: 5500, softness: 0.35 })).not.toBe("");
+                            intensity: 2.5, temperature: 5500, softness: 0.35 }, zh)).not.toBe("");
   });
 });
 

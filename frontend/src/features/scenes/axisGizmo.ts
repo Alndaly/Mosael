@@ -9,6 +9,8 @@
  * 含义和它不一样 —— 这里 Y 是天,不是深度。颜色仍按通行的 X 红 / Y 绿 / Z 蓝。
  */
 
+import type { MessageKey } from "@/app/messages";
+
 export type AxisName = "x" | "y" | "z";
 
 /** 相机的朝向,四元数 `[x, y, z, w]`。**不收 three 的类型** —— 那会把 WebGL 拖进单元测试。 */
@@ -102,9 +104,9 @@ export function axisVector(axis: AxisName, sign: 1 | -1): [number, number, numbe
   return [base[0] * sign + 0, base[1] * sign + 0, base[2] * sign + 0];
 }
 
-/** 轴柄的无障碍名字。屏幕阅读器听到的是「从上方看」,不是「y 加」。 */
-export function axisLabel(axis: AxisName, sign: 1 | -1): string {
-  if (axis === "y") return sign > 0 ? "从上方看" : "从下方看";
-  if (axis === "z") return sign > 0 ? "从正面看" : "从背面看";
-  return sign > 0 ? "从右侧看" : "从左侧看";
+/** 轴柄的无障碍名字(文案表的 key)。屏幕阅读器听到的是「从上方看」,不是「y 加」。 */
+export function axisLabel(axis: AxisName, sign: 1 | -1): MessageKey {
+  if (axis === "y") return sign > 0 ? "sceneAxisTop" : "sceneAxisBottom";
+  if (axis === "z") return sign > 0 ? "sceneAxisFront" : "sceneAxisBack";
+  return sign > 0 ? "sceneAxisRight" : "sceneAxisLeft";
 }

@@ -1,4 +1,5 @@
 import { presetById } from "./lighting";
+import type { MessageKey } from "@/app/messages";
 import type {
   Keyframe,
   SceneContent,
@@ -6,19 +7,20 @@ import type {
   SceneShot,
   Vec3,
 } from "@/api/domains/scenes";
-export const objectLabels: Record<SceneObject["kind"], string> = {
-  box: "立方体",
-  sphere: "球体",
-  cylinder: "圆柱",
-  plane: "地面",
-  room: "房间",
-  stairs: "楼梯",
-  group: "组",
-  model: "模型",
-  light: "灯光",
-  camera: "机位",
-  figure: "人物",
-  table: "桌子",
+/** 每一类的展示名 —— 文案表的 key,由界面按当前语言翻。 */
+export const objectLabels: Record<SceneObject["kind"], MessageKey> = {
+  box: "sceneKindBox",
+  sphere: "sceneKindSphere",
+  cylinder: "sceneKindCylinder",
+  plane: "sceneKindPlane",
+  room: "sceneKindRoom",
+  stairs: "sceneKindStairs",
+  group: "sceneKindGroup",
+  model: "sceneKindModel",
+  light: "sceneKindLight",
+  camera: "sceneKindCamera",
+  figure: "sceneKindFigure",
+  table: "sceneKindTable",
 };
 
 /** 每一类新建时的尺寸。**只写和默认值不同的那几个** —— 其余走 makeObject 里那份。
@@ -31,13 +33,15 @@ const KIND_PARAMETERS: Partial<Record<SceneObject["kind"], Partial<SceneObject["
   table: { width: 1.4, height: 0.75, depth: 0.8 },
 };
 export const uid = () => crypto.randomUUID();
+/** 名字**由调用方给**(界面按当前语言传 `t(objectLabels[kind])`);不给时退到 kind 本身 ——
+ *  这里够不着语言,而新建出来的名字是要存进场景里的数据。 */
 export function makeObject(
   kind: SceneObject["kind"],
   patch: Partial<SceneObject> = {},
 ): SceneObject {
   return {
     id: uid(),
-    name: objectLabels[kind],
+    name: kind,
     kind,
     parent_id: null,
     position: [0, kind === "light" ? 4 : 0, 0],
@@ -69,7 +73,7 @@ export function makeObject(
  * 一台机位 + 一个用它的镜头。**它们成对出现** —— 镜头必须指向一台真实存在的相机
  * (后端会拒),所以"新建一个镜头"从来不是只建一个对象。
  */
-export function makeShot(name = "镜头 1"): { camera: SceneObject; shot: SceneShot } {
+export function makeShot(name: string): { camera: SceneObject; shot: SceneShot } {
   const camera = makeObject("camera", { name, position: [8, 5, 8], target: [0, 1, 0], fov: 45 });
   return {
     camera,
@@ -85,15 +89,16 @@ export function cameraOfShot(content: SceneContent, shot: SceneShot): SceneObjec
  *  话,新建出来的场景和"重置为默认"会落在不同的光下,而没有任何地方会报错。 */
 const DEFAULT_LIGHTING = { preset: "studio-soft", ...presetById("studio-soft")!.values };
 
-export function initialScene(demo = false): SceneContent {
-  const { camera, shot } = makeShot();
+/** 新场景里各样东西的名字是**存进场景的数据**,按创建时的界面语言起名。 */
+export function initialScene(t: (key: MessageKey) => string, demo = false): SceneContent {
+  const { camera, shot } = makeShot(t("sceneShotName").replace("{n}", "1"));
   if (!demo)
     return {
       version: 1,
       lighting: DEFAULT_LIGHTING,
       objects: [
         makeObject("plane", {
-          name: "地面",
+          name: t("sceneKindPlane"),
           parameters: {
             ...makeObject("plane").parameters,
             width: 20,
@@ -109,7 +114,7 @@ export function initialScene(demo = false): SceneContent {
     };
   const rooms = [0, 1, 2].map((i) =>
     makeObject("room", {
-      name: `展厅 ${i + 1}`,
+      name: t("sceneDemoHall").replace("{n}", String(i + 1)),
       position: [0, 0, -i * 6.15],
       parameters: {
         ...makeObject("room").parameters,
@@ -120,7 +125,7 @@ export function initialScene(demo = false): SceneContent {
       color: ["#c5b6a1", "#aebdc0", "#beb1c6"][i],
     }),
   );
-  shot.name = "穿过三间展厅";
+  shot.name = t("sceneDemoShot");
   shot.duration = 10;
   camera.name = shot.name;
   // 静止姿态 = 第一帧。轨为空时按它渲,所以两者要一致 —— 否则镜头刚开始播就会跳一下。
@@ -140,13 +145,13 @@ export function initialScene(demo = false): SceneContent {
     objects: [
       ...rooms,
       makeObject("cylinder", {
-        name: "展台",
+        name: t("sceneDemoPlinth"),
         position: [0, 0, -12],
         parameters: { ...makeObject("cylinder").parameters, height: 0.6 },
         color: "#565e67",
       }),
       makeObject("sphere", {
-        name: "产品占位球",
+        name: t("sceneDemoProduct"),
         position: [0, 0.6, -12],
         parameters: { ...makeObject("sphere").parameters, radius: 0.6 },
         color: "#d6a55b",
@@ -321,6 +326,7 @@ export function groupTargets(content: SceneContent, id: string) {
 export function duplicateObject(
   content: SceneContent,
   id: string,
+  t: (key: MessageKey) => string,
 ): SceneContent {
   const root = content.objects.find((o) => o.id === id);
   if (!root) return content;
@@ -332,7 +338,7 @@ export function duplicateObject(
       ...structuredClone(o),
       id: map.get(o.id)!,
       parent_id: o.parent_id ? (map.get(o.parent_id) ?? o.parent_id) : null,
-      name: o.id === id ? `${o.name} 副本` : o.name,
+      name: o.id === id ? t("sceneObjectCopy").replace("{name}", o.name) : o.name,
       position:
         o.id === id
           ? ([o.position[0] + 1, ...o.position.slice(1)] as Vec3)

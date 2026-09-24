@@ -13,7 +13,7 @@ it("瞄准提示画的是「看着哪个点」,而不是再画一台相机", () 
   // 取景器此前还画一份视锥和机身 —— 和机位模型完全重复。**而且朝向相反**:机位模型是个
   // 普通 Object3D,`lookAt` 对它是 +Z 朝向目标,而视锥按 -Z 画 —— 正好差 180°,画面上就是
   // 两台方向相反的摄像机。视锥归机位模型画,这里只留机位模型给不出的那件事:它看着哪儿。
-  const { camera, shot } = makeShot();
+  const { camera, shot } = makeShot("镜头 1");
   camera.track = [
     { time: 0, position: [0, 2, 8], target: [0, 1, 0], fov: 40 },
     { time: 5, position: [8, 4, 0], target: [1, 1, 0], fov: 70 },

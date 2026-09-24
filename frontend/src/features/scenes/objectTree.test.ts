@@ -15,11 +15,15 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { messages, type MessageKey } from "@/app/messages";
+
+const zh = (key: MessageKey) => messages["zh-CN"][key];
+
 import { groupPath, initialScene, makeObject, objectTree } from "./sceneGraph";
 import type { SceneContent, SceneObject } from "@/api/domains/scenes";
 
 function scene(objects: SceneObject[]): SceneContent {
-  return { ...initialScene(), objects };
+  return { ...initialScene(zh), objects };
 }
 
 /** 外组 →(内组 → 盒子)+ 球;另有一个顶层的地面。**故意打乱数组顺序**。 */

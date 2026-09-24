@@ -52,7 +52,7 @@ describe("3D 页全屏", () => {
 
   it("视口自己那条工具栏留着 —— 退出的按钮在上面", () => {
     expect(block).not.toContain(".scene-stage-bar");
-    expect(studio).toContain("退出全屏");
+    expect(studio).toContain('t("sceneExitFullscreen")');
   });
 });
 

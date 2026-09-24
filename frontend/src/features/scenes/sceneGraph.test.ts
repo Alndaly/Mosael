@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+
+import { messages, type MessageKey } from "@/app/messages";
+
+const zh = (key: MessageKey) => messages["zh-CN"][key];
 import {
   cameraOfShot,
   cameraPreset,
@@ -13,7 +17,7 @@ import {
 } from "./sceneGraph";
 describe("editable scene graph", () => {
   it("does not remove a shot camera, including through its containing group", () => {
-    const content = initialScene();
+    const content = initialScene(zh);
     const camera = cameraOfShot(content, content.shots[0])!;
     expect(removeObjects(content, [camera.id])).toBe(content);
     const group = makeObject("group");
@@ -25,7 +29,7 @@ describe("editable scene graph", () => {
     expect(removeObjects(content, [spare.id]).objects).not.toContain(spare);
   });
   it("samples every camera key exactly and holds at the bounds", () => {
-    const content = initialScene(true);
+    const content = initialScene(zh, true);
     const shot = content.shots[0];
     const rig = cameraOfShot(content, shot)!;
     for (const f of rig.track)
@@ -36,7 +40,7 @@ describe("editable scene graph", () => {
 
   it("a camera with no track just stays where it is", () => {
     // **空轨就是静止。** "有没有轨"正好等于"动不动" —— 一台不动的相机不该带一条只有一帧的轨。
-    const { camera, shot } = makeShot();
+    const { camera, shot } = makeShot("镜头 1");
     expect(camera.track).toEqual([]);
     for (const t of [0, 2.5, shot.duration])
       expect(sampleCamera(camera, shot, t)).toEqual({
@@ -48,7 +52,7 @@ describe("editable scene graph", () => {
   });
 
   it("interpolates camera position, target and field of view without changing the source track", () => {
-    const { camera, shot } = makeShot();
+    const { camera, shot } = makeShot("镜头 1");
     shot.easing = "linear";
     camera.track = [
       { time: 0, position: [0, 2, 10], target: [0, 1, 0], fov: 40 },
@@ -67,7 +71,7 @@ describe("editable scene graph", () => {
     // 视口此前把相机排除在每帧重摆之外,于是机位模型一直停在静止姿态,而「俯瞰全场」里的
     // 取景器是按当前时刻算的 —— 同一台相机在画面上出现两个位置,看起来就是"机位错配"。
     // 这条钉的是"两个时刻确实不同",视口那边照着它摆。
-    const content = initialScene(true);
+    const content = initialScene(zh, true);
     const shot = content.shots[0];
     const rig = cameraOfShot(content, shot)!;
     expect(rig.track.length).toBeGreaterThan(1);
@@ -80,7 +84,7 @@ describe("editable scene graph", () => {
   });
 
   it("an object with no track just stays where it is", () => {
-    const { shot } = makeShot();
+    const { shot } = makeShot("镜头 1");
     const box = makeObject("box", { position: [1, 2, 3], rotation: [0, 45, 0], scale: [2, 2, 2] });
     expect(box.track).toEqual([]);
     expect(sampleObject(box, shot, 2.5)).toEqual({
@@ -93,7 +97,7 @@ describe("editable scene graph", () => {
   it("walks an object between its keys, and keeps the fields a key does not mention", () => {
     // 关键帧只写一部分字段是常态:"只想让它平移"不该被迫把旋转和缩放也抄一遍。
     // 没写的沿用物体的静止值 —— 悄悄把它们归零的话,人会一边走一边缩成一个点。
-    const { shot } = makeShot();
+    const { shot } = makeShot("镜头 1");
     shot.easing = "linear";
     const walker = makeObject("figure", { rotation: [0, 90, 0], scale: [1, 1, 1] });
     walker.track = [
@@ -110,7 +114,7 @@ describe("editable scene graph", () => {
 
   it("knows whether anything but the camera is moving", () => {
     // 视口据此决定要不要每帧重摆一次物体 —— 静态场景一帧也不该多算。
-    const content = initialScene(true);
+    const content = initialScene(zh, true);
     expect(hasObjectMotion(content)).toBe(false);   // 示例场景只有相机在动
     const walker = makeObject("figure");
     walker.track = [{ time: 0, position: [0, 0, 0] }, { time: 3, position: [2, 0, 0] }];
@@ -118,11 +122,11 @@ describe("editable scene graph", () => {
   });
 
   it("duplicates nested groups with new identities and retains local transforms", () => {
-    const c = initialScene();
+    const c = initialScene(zh);
     const group = makeObject("group"),
       child = makeObject("box", { parent_id: group.id, position: [2, 3, 4] });
     c.objects = [group, child];
-    const d = duplicateObject(c, group.id);
+    const d = duplicateObject(c, group.id, zh);
     expect(d.objects).toHaveLength(4);
     expect(d.objects[3].parent_id).toBe(d.objects[2].id);
     expect(d.objects[3].position).toEqual([2, 3, 4]);
@@ -133,7 +137,7 @@ describe("editable scene graph", () => {
   });
   it("orbit returns to the starting view and push maintains the target", () => {
     // 运镜现在长在相机上,所以 cameraPreset 返回的是**一条轨**,不是一个镜头。
-    const { camera, shot } = makeShot();
+    const { camera, shot } = makeShot("镜头 1");
     const orbit = cameraPreset(camera, shot, "orbit");
     expect(orbit).toHaveLength(9);
     expect(orbit.at(-1)!.position[0]).toBeCloseTo(camera.position[0]);

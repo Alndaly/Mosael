@@ -22,6 +22,7 @@ import { ScenePreview } from "./ScenePreview";
 import { CARD_GRID } from "@/components/layout/StudioPage";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/app/preferences";
 
 export function SceneList({
   scenes,
@@ -38,6 +39,7 @@ export function SceneList({
   onRename: (scene: SceneSummary, name: string) => Promise<boolean>;
   onDelete: (scenes: SceneSummary[]) => Promise<string[]>;
 }) {
+  const t = useI18n();
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const anchor = React.useRef<string | null>(null);
   const [context, setContext] = React.useState<string[]>([]);
@@ -142,19 +144,19 @@ export function SceneList({
         <div
           className="scene-selection-bar"
           role="group"
-          aria-label="场景批量操作"
+          aria-label={t("sceneListBulkBar")}
         >
           <label>
             <input
               type="checkbox"
-              aria-label="全选场景"
+              aria-label={t("sceneListSelectAll")}
               checked={scenes.length > 0 && chosen.length === scenes.length}
               disabled={busy}
               onChange={(e) =>
                 e.target.checked ? all() : setSelected(new Set())
               }
             />
-            已选 {chosen.length} 个场景
+            {t("sceneListSelectedCount").replace("{n}", String(chosen.length))}
           </label>
           <div>
             <Button
@@ -164,12 +166,12 @@ export function SceneList({
               onClick={() => setRemove(chosen)}
             >
               <Trash2 />
-              删除所选
+              {t("sceneListDeleteSelected")}
             </Button>
             <Button
               variant="outline"
               size="icon-sm"
-              aria-label="取消选择"
+              aria-label={t("sceneListClearSelection")}
               disabled={busy}
               onClick={clear}
             >
@@ -183,7 +185,7 @@ export function SceneList({
           <div
             className={cn("scene-cards", CARD_GRID)}
             role="group"
-            aria-label="场景列表"
+            aria-label={t("sceneListLabel")}
             tabIndex={0}
             onContextMenuCapture={(e) => {
               const id = (e.target as HTMLElement).closest<HTMLElement>(
@@ -203,7 +205,7 @@ export function SceneList({
               >
                 <button
                   className={cn("scene-card-open", "grid w-full gap-3 rounded-lg text-left")}
-                  aria-label={`打开场景 ${scene.name}`}
+                  aria-label={t("sceneListOpenNamed").replace("{name}", scene.name)}
                   aria-pressed={selecting ? selected.has(scene.id) : undefined}
                   disabled={busy}
                   onClick={(e) => {
@@ -229,34 +231,34 @@ export function SceneList({
                   </span>
                   <span className="truncate pr-8 text-ui-md font-semibold" title={scene.name}>{scene.name}</span>
                   <span className="text-ui-sm text-muted-foreground">
-                    {scene.object_count} 个对象 · {scene.shot_count} 个镜头
+                    {t("sceneListCounts").replace("{objects}", String(scene.object_count)).replace("{shots}", String(scene.shot_count))}
                   </span>
                 </button>
                 {/* 选择模式下单卡的操作菜单收起来(批量动作在上面的工具条上),右上角让给勾选圈。 */}
                 {!selecting && <div className="scene-card-menu">
                   <ActionMenu
-                    label={`场景操作 ${scene.name}`}
+                    label={t("sceneListActionsNamed").replace("{name}", scene.name)}
                     actions={[
                       {
-                        label: "打开场景",
+                        label: t("sceneListOpen"),
                         icon: <ArrowUpRight />,
                         onSelect: () => onOpen(scene.id),
                         disabled: busy,
                       },
                       {
-                        label: "重命名",
+                        label: t("rename"),
                         icon: <Pencil />,
                         onSelect: () => edit(scene),
                         disabled: busy,
                       },
                       {
-                        label: selected.has(scene.id) ? "取消选中" : "选择场景",
+                        label: selected.has(scene.id) ? t("sceneListDeselect") : t("sceneListSelect"),
                         icon: <CheckSquare />,
                         onSelect: () => toggle(scene.id),
                         disabled: busy,
                       },
                       {
-                        label: "删除场景",
+                        label: t("sceneListDelete"),
                         icon: <Trash2 />,
                         onSelect: () => setRemove([scene]),
                         destructive: true,
@@ -274,11 +276,11 @@ export function SceneList({
             <>
               <ContextMenuItem onSelect={() => onOpen(targets[0].id)}>
                 <ArrowUpRight />
-                打开场景
+                {t("sceneListOpen")}
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => edit(targets[0])}>
                 <Pencil />
-                重命名
+                {t("rename")}
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
@@ -286,17 +288,17 @@ export function SceneList({
           {targets.length === 1 && (
             <ContextMenuItem onSelect={() => toggle(targets[0].id)}>
               <CheckSquare />
-              {selected.has(targets[0].id) ? "取消选中" : "选择场景"}
+              {selected.has(targets[0].id) ? t("sceneListDeselect") : t("sceneListSelect")}
             </ContextMenuItem>
           )}
           <ContextMenuItem onSelect={all}>
             <CheckSquare />
-            全选场景
+            {t("sceneListSelectAll")}
           </ContextMenuItem>
           {selecting && (
             <ContextMenuItem onSelect={clear}>
               <X />
-              取消选择
+              {t("sceneListClearSelection")}
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -306,13 +308,13 @@ export function SceneList({
             onSelect={() => setRemove(targets)}
           >
             <Trash2 />
-            {targets.length > 1 ? `删除 ${targets.length} 个场景` : "删除场景"}
+            {targets.length > 1 ? t("sceneListDeleteCount").replace("{n}", String(targets.length)) : t("sceneListDelete")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
       <ModalShell
         open={!!rename}
-        title="重命名场景"
+        title={t("sceneRenameTitle")}
         onOpenChange={(open) => {
           if (!open && !busy) setRename(null);
         }}
@@ -323,7 +325,7 @@ export function SceneList({
               disabled={busy}
               onClick={() => setRename(null)}
             >
-              取消
+              {t("cancel")}
             </Button>
             <Button
               type="submit"
@@ -331,7 +333,7 @@ export function SceneList({
               loading={busy}
               disabled={!name.trim()}
             >
-              保存
+              {t("save")}
             </Button>
           </>
         }
@@ -350,7 +352,7 @@ export function SceneList({
           }}
         >
           <Input
-            aria-label="场景名称"
+            aria-label={t("sceneNameLabel")}
             value={name}
             maxLength={160}
             onChange={(e) => setName(e.target.value)}
@@ -362,10 +364,10 @@ export function SceneList({
         open={!!remove.length}
         title={
           remove.length === 1
-            ? `删除「${remove[0].name}」？`
-            : `删除 ${remove.length} 个场景？`
+            ? t("sceneListDeleteOneTitle").replace("{name}", remove[0].name)
+            : t("sceneListDeleteManyTitle").replace("{n}", String(remove.length))
         }
-        body="场景、导入的模型和版本记录将永久删除，画布中的场景引用将不可用。已生成并保存到素材库的图片和视频会保留。"
+        body={t("sceneListDeleteBody")}
         onCancel={() => {
           if (!busy) setRemove([]);
         }}

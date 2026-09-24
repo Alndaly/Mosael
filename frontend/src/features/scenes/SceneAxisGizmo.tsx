@@ -10,6 +10,7 @@
 
 import React from "react";
 
+import { useI18n } from "@/app/preferences";
 import {
   axisLabel,
   gizmoHandles,
@@ -30,6 +31,7 @@ export function SceneAxisGizmo({
   subscribe: (listener: (orientation: Orientation) => void) => () => void;
   onPick: (axis: AxisName, sign: 1 | -1) => void;
 }) {
+  const t = useI18n();
   const [orientation, setOrientation] = React.useState<Orientation>([0, 0, 0, 1]);
   React.useEffect(() => subscribe(setOrientation), [subscribe]);
   const handles = React.useMemo(() => gizmoHandles(orientation), [orientation]);
@@ -40,7 +42,7 @@ export function SceneAxisGizmo({
       className="scene-axis-gizmo"
       style={{ width: size, height: size }}
       role="group"
-      aria-label="坐标轴方向"
+      aria-label={t("sceneAxisGizmo")}
     >
       <svg width={size} height={size} aria-hidden="true">
         {/* 只给正向画杆。六根杆会在正对某个轴时叠成一团,而负向本来就只是个落点。 */}
@@ -77,14 +79,15 @@ function GizmoBall({
   center: number;
   onPick: (axis: AxisName, sign: 1 | -1) => void;
 }) {
+  const t = useI18n();
   const front = handle.depth >= 0;
   return (
     <button
       type="button"
       className="scene-axis-ball"
       data-front={front || undefined}
-      title={axisLabel(handle.axis, handle.sign)}
-      aria-label={axisLabel(handle.axis, handle.sign)}
+      title={t(axisLabel(handle.axis, handle.sign))}
+      aria-label={t(axisLabel(handle.axis, handle.sign))}
       style={{
         left: center + handle.x * RADIUS - BALL,
         top: center + handle.y * RADIUS - BALL,

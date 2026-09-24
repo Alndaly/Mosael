@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import type { SceneObject, SceneShot, Vec3 } from "@/api/domains/scenes";
 import { Num, Pick, Vector } from "./SceneControls";
 import { cameraPreset, sampleCamera } from "./sceneGraph";
+import { useI18n } from "@/app/preferences";
 
 export function SceneCameraPanel({
   shot,
@@ -39,6 +40,7 @@ export function SceneCameraPanel({
   observe: () => void;
   camera: () => { position: Vec3; target: Vec3; fov: number };
 }) {
+  const t = useI18n();
   const current = pose ?? sampleCamera(rig, shot, time);
   function preset(kind: "orbit" | "push" | "still") {
     const from = preview ? current : camera();
@@ -57,37 +59,37 @@ export function SceneCameraPanel({
   //: 此前它自己写了一套 `padding: 16px`,于是它的左边缘和上面那节物体列表对不齐。
   return (
     <>
-      <p className="scene-camera-hint">先在画面中找到喜欢的角度，再选择运镜方式。</p>
+      <p className="scene-camera-hint">{t("sceneCameraHint")}</p>
       {/* **三档运镜不再各自装一个框。** 它们是一组同类选项,不是三张卡片 —— 三个边框
           在一栏里就是三个方块,而框本身没有携带任何信息(哪个能点?三个都能)。
           现在只有 hover 时才有底,和右栏别处的列表行同一套反应。 */}
-      <section className="scene-preset-list" aria-label="运镜方式">
+      <section className="scene-preset-list" aria-label={t("sceneCameraMoves")}>
         <button onClick={() => preset("orbit")}>
           <RotateCw size={17} />
           <span>
-            <strong>围绕主体</strong>
-            <small>以当前观察中心环绕一周</small>
+            <strong>{t("sceneCameraOrbit")}</strong>
+            <small>{t("sceneCameraOrbitHint")}</small>
           </span>
         </button>
         <button onClick={() => preset("push")}>
           <MoveRight size={17} />
           <span>
-            <strong>缓缓推进</strong>
-            <small>从当前视角靠近主体</small>
+            <strong>{t("sceneCameraPush")}</strong>
+            <small>{t("sceneCameraPushHint")}</small>
           </span>
         </button>
         <button onClick={() => preset("still")}>
           <Video size={17} />
           <span>
-            <strong>固定镜头</strong>
-            <small>保持当前构图不移动</small>
+            <strong>{t("sceneCameraStill")}</strong>
+            <small>{t("sceneCameraStillHint")}</small>
           </span>
         </button>
-        <p>选择后会替换当前镜头的运镜，可撤销。</p>
+        <p>{t("sceneCameraMovesNote")}</p>
       </section>
       <div className="scene-shape">
         <Num
-          label="时长（秒）"
+          label={t("sceneShotDuration")}
           value={shot.duration}
           min={0.1}
           max={120}
@@ -106,14 +108,14 @@ export function SceneCameraPanel({
           }}
         />
         <label className="scene-number">
-          <span>画面比例</span>
+          <span>{t("sceneShotAspect")}</span>
           <Pick
-            label="画面比例"
+            label={t("sceneShotAspect")}
             value={shot.aspect}
             options={[
-              ["16:9", "横屏 16:9"],
-              ["9:16", "竖屏 9:16"],
-              ["1:1", "方形 1:1"],
+              ["16:9", t("sceneAspectLandscape")],
+              ["9:16", t("sceneAspectPortrait")],
+              ["1:1", t("sceneAspectSquare")],
             ]}
             onChange={(aspect) =>
               onPatch({ aspect: aspect as SceneShot["aspect"] })
@@ -121,25 +123,25 @@ export function SceneCameraPanel({
           />
         </label>
       </div>
-      <SceneSubsection expanded title="机位构图">
+      <SceneSubsection expanded title={t("sceneCameraFraming")}>
         <Button variant="outline" disabled={preview} onClick={applyView}>
-          <Camera size={15} />将当前视角应用到机位
+          <Camera size={15} />{t("sceneCameraApplyView")}
         </Button>
-        {preview && <Button variant="outline" onClick={observe}><Camera size={15} />从当前镜头继续调整</Button>}
-        <p>先在时间线上选择时刻，再调整机位，按 I 插入关键帧。切换时刻前请记录需要保留的姿态。</p>
+        {preview && <Button variant="outline" onClick={observe}><Camera size={15} />{t("sceneCameraContinue")}</Button>}
+        <p>{t("sceneCameraFramingHint")}</p>
       </SceneSubsection>
-      <SceneSubsection expanded title="镜头高级设置">
+      <SceneSubsection expanded title={t("sceneCameraAdvanced")}>
         <label className="scene-number">
-          <span>镜头名称</span>
+          <span>{t("sceneShotNameLabel")}</span>
           <Input
-            aria-label="镜头名称"
+            aria-label={t("sceneShotNameLabel")}
             value={shot.name}
             maxLength={160}
             onChange={(e) => onPatch({ name: e.target.value })}
           />
         </label>
         <Num
-          label="视角（广角 / 长焦）"
+          label={t("sceneCameraFov")}
           value={current.fov}
           min={10}
           max={120}
@@ -147,22 +149,22 @@ export function SceneCameraPanel({
           onChange={(fov) => onPose({ fov })}
         />
         <Pick
-          label="镜头速度变化"
+          label={t("sceneShotEasing")}
           value={shot.easing}
           options={[
-            ["smooth", "开始和结束时缓慢"],
-            ["linear", "全程保持匀速"],
+            ["smooth", t("sceneEasingSmooth")],
+            ["linear", t("sceneEasingLinear")],
           ]}
           onChange={(easing) => onPatch({ easing: easing as SceneShot["easing"] })}
         />
-        <p>当前时刻 {time.toFixed(1)} 秒。修改后按 I 插入关键帧。</p>
+        <p>{t("sceneCameraTimeHint").replace("{time}", time.toFixed(1))}</p>
         <Vector
-          label="相机位置"
+          label={t("sceneCameraPosition")}
           value={current.position}
           onChange={(position) => onPose({ position })}
         />
         <Vector
-          label="注视位置"
+          label={t("sceneCameraTarget")}
           value={current.target}
           onChange={(target) => onPose({ target })}
         />

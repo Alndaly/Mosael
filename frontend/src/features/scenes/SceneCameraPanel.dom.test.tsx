@@ -2,10 +2,12 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { messages, type MessageKey } from "@/app/messages";
 import { SceneCameraPanel } from "./SceneCameraPanel";
 import { Num } from "./SceneControls";
 import { makeShot } from "./sceneGraph";
 
+vi.mock("@/app/preferences", () => ({ useI18n: () => (key: MessageKey) => messages["zh-CN"][key] }));
 afterEach(cleanup);
 const live = {
   position: [8, 3, 6] as [number, number, number],
@@ -13,7 +15,7 @@ const live = {
   fov: 45,
 };
 function setup(preview = false) {
-  const { camera, shot } = makeShot();
+  const { camera, shot } = makeShot("镜头 1");
   const props = {
     shot,
     rig: camera,

@@ -1,5 +1,7 @@
 import { createFile } from "mp4box";
 
+import type { MessageKey } from "@/app/messages";
+
 /**
  * 这一页的帧率。**导出和界面上的「逐帧」用的是同一个数** —— 不然按一下 → 走的那一"帧"
  * 在成片里不是一帧,而关键帧对齐到哪一帧本来就是这条快捷键唯一的用处。
@@ -13,6 +15,7 @@ export async function encodeShotVideo(
   draw: (time: number) => void,
   signal: AbortSignal,
   progress: (fraction: number) => void,
+  t: (key: MessageKey) => string,
 ): Promise<Blob | null> {
   if (typeof VideoEncoder === "undefined") return null;
   const config: VideoEncoderConfig = {
@@ -39,7 +42,7 @@ export async function encodeShotVideo(
       if (!track) {
         const description = metadata?.decoderConfig?.description;
         if (!description) {
-          failure = new Error("编码器未返回视频格式信息");
+          failure = new Error(t("sceneEncoderNoFormat"));
           return;
         }
         const bytes = ArrayBuffer.isView(description)
@@ -72,7 +75,7 @@ export async function encodeShotVideo(
   try {
     encoder.configure(config);
     for (let i = 0; i < count; i++) {
-      if (signal.aborted) throw new Error("已取消导出");
+      if (signal.aborted) throw new Error(t("sceneExportCancelled"));
       if (failure) throw failure;
       draw(count === 1 ? 0 : (i / (count - 1)) * duration);
       const timestamp = Math.round((i / count) * end),
@@ -94,7 +97,7 @@ export async function encodeShotVideo(
     }
     await encoder.flush();
     if (failure) throw failure;
-    if (signal.aborted) throw new Error("已取消导出");
+    if (signal.aborted) throw new Error(t("sceneExportCancelled"));
     progress(1);
     return new Blob([file.getBuffer().buffer], { type: "video/mp4" });
   } finally {

@@ -18,6 +18,7 @@
  * 此前视频那条路上还挂着一句「另一张灰模参考图只用于读取光影与体积」—— 而视频路径根本没有
  * 第二张参考图,那句话指着一个不存在的输入。
  */
+import type { MessageKey } from "@/app/messages";
 import type { SceneObject } from "@/api/domains/scenes";
 
 /** 不出现在画面里的物体:相机、灯、分组本身。 */
@@ -27,7 +28,10 @@ const DEFAULT_NAME = /^(object|box|sphere|cylinder|plane|room|stairs|group|model
 const MAX_LISTED = 12;
 
 /** 画面里有什么:「列柱 ×12、神像、石阶」。同名的合并计数,按出现次数多的在前。 */
-export function sceneInventory(objects: readonly Pick<SceneObject, "name" | "kind" | "hidden">[]): string {
+export function sceneInventory(
+  objects: readonly Pick<SceneObject, "name" | "kind" | "hidden">[],
+  t: (key: MessageKey) => string,
+): string {
   const counts = new Map<string, number>();
   for (const object of objects) {
     const name = object.name.trim();
@@ -38,15 +42,17 @@ export function sceneInventory(objects: readonly Pick<SceneObject, "name" | "kin
     .sort((a, b) => b[1] - a[1])
     .slice(0, MAX_LISTED)
     .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name))
-    .join("、");
+    .join(t("sceneListSeparator"));
 }
 
+/** 按界面语言写 —— 它会落进画板生成节点的提示词框,人要看、要改。 */
 export function blockoutPrompt({
   kind,
   sceneName,
   objects,
   lighting,
   clay,
+  t,
 }: {
   kind: "image" | "video";
   sceneName: string;
@@ -55,20 +61,18 @@ export function blockoutPrompt({
   lighting: string;
   /** 出图时是否另附了一张灰模渲染(只用来读光影与体积)。视频路径没有这张。 */
   clay: boolean;
+  t: (key: MessageKey) => string;
 }): string {
-  const inventory = sceneInventory(objects);
+  const inventory = sceneInventory(objects, t);
   const lines =
     kind === "video"
-      ? [
-          `参考视频是 3D 场景「${sceneName}」的白模预演：只沿用它的运镜、机位节奏、构图和各物体的空间位置。`,
-          "白模里灰白、没有材质的外观只是占位 —— 成片要是完整写实的画面，每样东西都换成真实的材质、纹理与细节，不要出现灰模、线框或未上材质的表面。",
-        ]
+      ? [t("sceneBlockoutVideoReference").replace("{name}", sceneName), t("sceneBlockoutVideoRealism")]
       : [
-          `参考图是 3D 场景「${sceneName}」的白模渲染：只沿用它的构图、空间布局与摄像机视角。`,
-          "白模的纯色、无材质外观只是占位 —— 生成一张完整写实的精细图片，每样东西都换成真实的材质、纹理与细节。",
-          clay ? "另一张灰模参考图只用于读取光影与体积，不要照搬它的灰色材质。" : "",
+          t("sceneBlockoutImageReference").replace("{name}", sceneName),
+          t("sceneBlockoutImageRealism"),
+          clay ? t("sceneBlockoutClayNote") : "",
         ];
-  if (inventory) lines.push(`画面里有：${inventory}（按参考里的位置与大小摆放）。`);
-  lines.push(`打光：${lighting}。`);
-  return lines.filter(Boolean).join("");
+  if (inventory) lines.push(t("sceneBlockoutInventory").replace("{items}", inventory));
+  lines.push(t("sceneBlockoutLighting").replace("{lighting}", lighting));
+  return lines.filter(Boolean).join(t("sceneSentenceGap"));
 }
