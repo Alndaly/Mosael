@@ -103,6 +103,37 @@ def test_no_cell_is_written_twice() -> None:
         seen[key] = entry
 
 
+def test_time_of_day_prices_are_well_formed() -> None:
+    """分时段价(约定 4):时段过得了规则自己的校验、有时区、时段价同样为正且换算无零头;
+    没有时段的条目不许带时区 —— 那是写到一半的条目。"""
+    from app.domain.price_schedule import normalize_schedule
+
+    for entry in LIST_PRICES:
+        if not entry.time_prices:
+            assert entry.time_zone == "", f"{_label(entry)} 没有时段却写了时区"
+            continue
+        assert entry.time_zone, f"{_label(entry)} 有时段却没写时区"
+        windows, zone = normalize_schedule(list(entry.time_prices_micros), entry.time_zone)
+        assert zone == entry.time_zone and len(windows) == len(entry.time_prices)
+        for window in entry.time_prices:
+            micros = Decimal(window.amount) * 1_000_000 / entry.per
+            assert micros > 0 and micros == micros.to_integral_value(), f"{_label(entry)} 的时段价 {window.amount}"
+        assert all(entry.remark), f"{_label(entry)} 分时段计价要在备注里说清基础价是哪一档"
+
+
+def test_deepseek_is_priced_by_its_official_peak_hours() -> None:
+    """官方原话:北京时间工作日 9:00–12:00、14:00–18:00 为高峰,其余为空闲,空闲是高峰的一半。"""
+    entries = [entry for entry in LIST_PRICES if entry.vendor == "deepseek"]
+    assert entries
+    for entry in entries:
+        assert entry.time_zone == "Asia/Shanghai"
+        assert [(w.start, w.end, w.weekdays) for w in entry.time_prices] == [
+            ("09:00", "12:00", (1, 2, 3, 4, 5)),
+            ("14:00", "18:00", (1, 2, 3, 4, 5)),
+        ], _label(entry)
+        assert all(Decimal(w.amount) == Decimal(entry.amount) * 2 for w in entry.time_prices), _label(entry)
+
+
 # ---------- 查表 ----------
 
 

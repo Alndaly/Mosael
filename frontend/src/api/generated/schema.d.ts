@@ -9496,12 +9496,31 @@ export interface components {
             created_from_catalog: number;
             /** Created From Reference */
             created_from_reference: number;
+            /** Created With Time Prices */
+            created_with_time_prices: number;
             /** Models Seen */
             models_seen: number;
             /** Models With Price */
             models_with_price: number;
             /** Unpriced Models */
             unpriced_models: string[];
+        };
+        /**
+         * PricingTimeWindow
+         * @description 分时段价格里的一个时段(见 domain/price_schedule)。
+         *
+         *     这里只管形状;钟点格式、是否重叠、时区对不对由领域层校验 —— 那边的报错带界面语言,
+         *     这里用 pattern 拦下来只会得到一句英文的 Pydantic 报错。
+         */
+        PricingTimeWindow: {
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+            /** Weekdays */
+            weekdays?: number[];
+            /** Unit Amount Micros */
+            unit_amount_micros: number;
         };
         /** ProjectCreate */
         ProjectCreate: {
@@ -9822,6 +9841,13 @@ export interface components {
             billing_unit: string;
             /** Unit Amount Micros */
             unit_amount_micros: number;
+            /** Time Prices */
+            time_prices?: components["schemas"]["PricingTimeWindow"][];
+            /**
+             * Time Zone
+             * @default
+             */
+            time_zone: string;
             /**
              * Currency
              * @default USD
@@ -9860,6 +9886,13 @@ export interface components {
             billing_unit: string;
             /** Unit Amount Micros */
             unit_amount_micros: number;
+            /** Time Prices */
+            time_prices?: components["schemas"]["PricingTimeWindow"][];
+            /**
+             * Time Zone
+             * @default
+             */
+            time_zone: string;
             /** Currency */
             currency: string;
             /** Source */
@@ -9897,6 +9930,10 @@ export interface components {
             billing_unit?: string | null;
             /** Unit Amount Micros */
             unit_amount_micros?: number | null;
+            /** Time Prices */
+            time_prices?: components["schemas"]["PricingTimeWindow"][] | null;
+            /** Time Zone */
+            time_zone?: string | null;
             /** Currency */
             currency?: string | null;
             /** Source */

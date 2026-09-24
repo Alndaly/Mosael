@@ -25709,6 +25709,10 @@
             "type": "integer",
             "title": "Created From Reference"
           },
+          "created_with_time_prices": {
+            "type": "integer",
+            "title": "Created With Time Prices"
+          },
           "models_seen": {
             "type": "integer",
             "title": "Models Seen"
@@ -25730,12 +25734,48 @@
           "created",
           "created_from_catalog",
           "created_from_reference",
+          "created_with_time_prices",
           "models_seen",
           "models_with_price",
           "unpriced_models"
         ],
         "title": "PricingPrefillOut",
         "description": "一键预填计价规则的结果。几个数分开报,是为了让「建了几条、还差什么」可解释:\n是端点目录报的价还是官方价目表补的,是本来就配齐了还是确实查不到价。"
+      },
+      "PricingTimeWindow": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "maxLength": 5,
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "maxLength": 5,
+            "title": "End"
+          },
+          "weekdays": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "title": "Weekdays"
+          },
+          "unit_amount_micros": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unit Amount Micros"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "unit_amount_micros"
+        ],
+        "title": "PricingTimeWindow",
+        "description": "分时段价格里的一个时段(见 domain/price_schedule)。\n\n这里只管形状;钟点格式、是否重叠、时区对不对由领域层校验 —— 那边的报错带界面语言,\n这里用 pattern 拦下来只会得到一句英文的 Pydantic 报错。"
       },
       "ProjectCreate": {
         "properties": {
@@ -26512,6 +26552,20 @@
             "minimum": 0.0,
             "title": "Unit Amount Micros"
           },
+          "time_prices": {
+            "items": {
+              "$ref": "#/components/schemas/PricingTimeWindow"
+            },
+            "type": "array",
+            "maxItems": 24,
+            "title": "Time Prices"
+          },
+          "time_zone": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Time Zone",
+            "default": ""
+          },
           "currency": {
             "type": "string",
             "maxLength": 8,
@@ -26611,6 +26665,18 @@
           "unit_amount_micros": {
             "type": "integer",
             "title": "Unit Amount Micros"
+          },
+          "time_prices": {
+            "items": {
+              "$ref": "#/components/schemas/PricingTimeWindow"
+            },
+            "type": "array",
+            "title": "Time Prices"
+          },
+          "time_zone": {
+            "type": "string",
+            "title": "Time Zone",
+            "default": ""
           },
           "currency": {
             "type": "string",
@@ -26760,6 +26826,33 @@
               }
             ],
             "title": "Unit Amount Micros"
+          },
+          "time_prices": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PricingTimeWindow"
+                },
+                "type": "array",
+                "maxItems": 24
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Prices"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
           },
           "currency": {
             "anyOf": [

@@ -69,6 +69,7 @@ def test_prefill_creates_rules_from_the_catalog(monkeypatch, client_fixture) -> 
         "created": 3,
         "created_from_catalog": 3,
         "created_from_reference": 0,
+        "created_with_time_prices": 0,
         "models_with_price": 1,
         "models_seen": 1,
         "unpriced_models": [],
@@ -142,6 +143,7 @@ def test_an_endpoint_without_pricing_reports_why_nothing_happened(monkeypatch, c
         "created": 0,
         "created_from_catalog": 0,
         "created_from_reference": 0,
+        "created_with_time_prices": 0,
         "models_with_price": 0,
         "models_seen": 2,
         # 剩下要手填的是哪几个,点名说出来 —— 那才是用户接下来要做的事。
@@ -234,15 +236,51 @@ def test_an_official_endpoint_without_catalog_prices_is_filled_from_the_price_li
 
     body = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
     assert (body["created"], body["created_from_catalog"], body["created_from_reference"]) == (3, 0, 3)
+    assert body["created_with_time_prices"] == 3, "DeepSeek 分高峰 / 空闲,三条都带时段价"
     assert body["models_with_price"] == 1
     assert body["unpriced_models"] == ["deepseek-chat"], "价目页不再列的旧名要点出来让人手填,而不是瞎补"
 
     rules = _rules(client)
     input_rule = rules[("deepseek-v4-pro", "chat", "million_input_token")]
-    assert (input_rule["unit_amount_micros"], input_rule["currency"], input_rule["source"]) == (9_000_000, "CNY", "reference")
+    # 基础价是空闲价(官方列出钟点的是高峰,其余全是空闲),高峰是**同一条规则**上的两个工作日时段。
+    assert (input_rule["unit_amount_micros"], input_rule["currency"], input_rule["source"]) == (4_500_000, "CNY", "reference")
+    assert input_rule["time_zone"] == "Asia/Shanghai"
+    assert input_rule["time_prices"] == [
+        {"start": "09:00", "end": "12:00", "weekdays": [1, 2, 3, 4, 5], "unit_amount_micros": 9_000_000},
+        {"start": "14:00", "end": "18:00", "weekdays": [1, 2, 3, 4, 5], "unit_amount_micros": 9_000_000},
+    ]
     assert "api-docs.deepseek.com" in input_rule["notes"] and "2026-09" in input_rule["notes"], "备注要能让人回去核对"
-    assert "高峰" in input_rule["notes"], "分时段计价要在备注里说清记的是哪一档"
-    assert rules[("deepseek-v4-pro", "chat", "million_cache_read_token")]["unit_amount_micros"] == 300_000
+    assert "高峰" in input_rule["notes"], "分时段计价要在备注里说清基础价是哪一档"
+    cache_rule = rules[("deepseek-v4-pro", "chat", "million_cache_read_token")]
+    assert cache_rule["unit_amount_micros"] == 150_000
+    assert {w["unit_amount_micros"] for w in cache_rule["time_prices"]} == {300_000}
+    assert sum(1 for (model, _, _) in rules if model == "deepseek-v4-pro") == 3, "高峰价不是另一条规则"
+
+
+def test_prefill_does_not_add_a_second_rule_for_the_other_time_tier(monkeypatch, client_fixture) -> None:
+    """「缺」是按规则算的:用户自己配过一条全天一个价的 DeepSeek 输入价,预填不会再为高峰 /
+    空闲另建一条 —— 那条规则只是还没有时段价,它就是这个单位的那一条。"""
+    client = client_fixture
+    _stub_models(monkeypatch, {"data": [{"id": "deepseek-flash"}]})
+    profile_id = _profile(client, "deepseek", {"api_key": "k"})
+    mine = client.post(
+        "/api/settings/provider-pricing-rules",
+        json={
+            "provider_profile_id": profile_id,
+            "capability": "chat",
+            "model": "deepseek-flash",
+            "billing_unit": "million_input_token",
+            "unit_amount_micros": 2_000_000,
+            "currency": "CNY",
+        },
+    ).json()
+
+    first = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
+    again = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
+    assert (first["created"], first["created_with_time_prices"]) == (2, 2), "只补输出与缓存两条"
+    assert again["created"] == 0
+    input_rules = [r for r in client.get("/api/settings/provider-pricing-rules").json() if r["billing_unit"] == "million_input_token"]
+    assert [(r["id"], r["time_prices"]) for r in input_rules] == [(mine["id"], [])], "已有规则一个字都不动"
 
 
 def test_catalog_price_beats_the_price_list_for_the_whole_model(monkeypatch, client_fixture) -> None:

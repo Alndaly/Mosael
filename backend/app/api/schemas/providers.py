@@ -197,6 +197,9 @@ class PricingPrefillOut(ApiModel):
     created_from_catalog: int
     #: 其中按官方价目表(domain/price_reference)建的。
     created_from_reference: int
+    #: 新建的规则里带分时段价格的条数(如 DeepSeek 的高峰 / 空闲价)—— 界面单独说一句,
+    #: 免得用户以为记的只是一个固定价。
+    created_with_time_prices: int
     #: 这条连接上的模型总数(目录 ∪ 已配置的模型行)。
     models_seen: int
     #: 其中找得到价的模型数(目录报了,或价目表里有)。
@@ -338,6 +341,22 @@ class ProviderDefaultUpdate(ApiModel):
     model: str = Field(default="", max_length=120)
 
 
+class PricingTimeWindow(ApiModel):
+    """分时段价格里的一个时段(见 domain/price_schedule)。
+
+    这里只管形状;钟点格式、是否重叠、时区对不对由领域层校验 —— 那边的报错带界面语言,
+    这里用 pattern 拦下来只会得到一句英文的 Pydantic 报错。
+    """
+
+    #: 规则时区里的钟点,`HH:MM`,左闭右开;`end` 早于 `start` 即跨午夜。
+    start: str = Field(max_length=5)
+    end: str = Field(max_length=5)
+    #: ISO 星期(1 = 周一 … 7 = 周日),按时段开始的那天算;空 = 每天。
+    weekdays: list[int] = Field(default_factory=list, max_length=7)
+    #: 这个时段里的单价,币种与计价单位同规则。
+    unit_amount_micros: int = Field(ge=0)
+
+
 class ProviderPricingRuleCreate(ApiModel):
     workspace_id: str | None = None
     provider_profile_id: str | None = None
@@ -346,6 +365,8 @@ class ProviderPricingRuleCreate(ApiModel):
     model: str = Field(default="", max_length=120)
     billing_unit: str = Field(min_length=1, max_length=40)
     unit_amount_micros: int = Field(ge=0)
+    time_prices: list[PricingTimeWindow] = Field(default_factory=list, max_length=24)
+    time_zone: str = Field(default="", max_length=64)
     currency: str = Field(default="USD", min_length=1, max_length=8)
     source: str = Field(default="manual", max_length=40)
     notes: str = Field(default="", max_length=2000)
@@ -361,6 +382,8 @@ class ProviderPricingRuleUpdate(ApiModel):
     model: str | None = Field(default=None, max_length=120)
     billing_unit: str | None = Field(default=None, min_length=1, max_length=40)
     unit_amount_micros: int | None = Field(default=None, ge=0)
+    time_prices: list[PricingTimeWindow] | None = Field(default=None, max_length=24)
+    time_zone: str | None = Field(default=None, max_length=64)
     currency: str | None = Field(default=None, min_length=1, max_length=8)
     source: str | None = Field(default=None, max_length=40)
     notes: str | None = Field(default=None, max_length=2000)
@@ -376,7 +399,10 @@ class ProviderPricingRuleOut(OrmModel):
     capability: str
     model: str
     billing_unit: str
+    #: 基础价:不落在任何时段里的时刻按它计。
     unit_amount_micros: int
+    time_prices: list[PricingTimeWindow] = Field(default_factory=list)
+    time_zone: str = ""
     currency: str
     source: str
     notes: str

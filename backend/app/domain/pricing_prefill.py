@@ -39,6 +39,8 @@ CATALOG_CURRENCY = "USD"
 class PrefillOutcome:
     created_from_catalog: int = 0
     created_from_reference: int = 0
+    #: 新建的规则里带分时段价格的条数(它们同时计在上面两项里)。
+    created_with_time_prices: int = 0
     #: 这条连接上的模型总数(目录 ∪ 已配置的模型行)。
     models_seen: int = 0
     #: 其中找得到价(目录报了,或价目表里有)的模型数。
@@ -73,7 +75,7 @@ def prefill_profile_pricing(
     region = price_reference.region_for(profile.vendor, base_url)
     vendor_capabilities = capability_ids_for_vendor(profile.vendor)
 
-    from_catalog = from_reference = priced = 0
+    from_catalog = from_reference = timed = priced = 0
     for model_id in model_ids:
         quotes = _catalog_quotes(catalog_rates.get(model_id) or {})
         if not quotes:
@@ -100,10 +102,13 @@ def prefill_profile_pricing(
                 from_catalog += 1
             else:
                 from_reference += 1
+            if quote.time_prices:
+                timed += 1
 
     return PrefillOutcome(
         created_from_catalog=from_catalog,
         created_from_reference=from_reference,
+        created_with_time_prices=timed,
         models_seen=len(model_ids),
         models_with_price=priced,
         unpriced_models=[model_id for model_id in model_ids if not _has_rule(db, profile, model_id)],
@@ -149,6 +154,8 @@ def _reference_quote(entry: ListPrice, *, relay: bool) -> PriceQuote:
         currency=entry.currency,
         source="reference",
         notes=notes,
+        time_prices=entry.time_prices_micros,
+        time_zone=entry.time_zone,
     )
 
 

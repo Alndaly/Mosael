@@ -31,7 +31,13 @@ class ProviderPricingRule(Base):
     capability: Mapped[str] = mapped_column(String(40), nullable=False)
     model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     billing_unit: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: 基础价:不落在任何时段里的时刻都按它计。
     unit_amount_micros: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: 分时段价格(见 domain/price_schedule):`[{start, end, weekdays, unit_amount_micros}]`,
+    #: 空 = 全天一个价。币种与计价单位跟着规则走,时段只改金额。
+    time_prices: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    #: 上面那些钟点是哪个时区的(IANA 名,如 Asia/Shanghai)。没有时段时为空。
+    time_zone: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")

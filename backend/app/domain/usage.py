@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.usage_scope import current_workspace
 from app.db.models import ProviderPricingRule, ProviderUsageEvent, now
 from app.domain.jobs import emit_job_event
+from app.domain.price_schedule import normalize_schedule, price_at
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,8 @@ def create_pricing_rule(
     model: str = "",
     billing_unit: str,
     unit_amount_micros: int,
+    time_prices: list[dict[str, Any]] | None = None,
+    time_zone: str = "",
     currency: str = "USD",
     source: str = "manual",
     notes: str = "",
@@ -168,6 +171,8 @@ def create_pricing_rule(
             "model": model,
             "billing_unit": billing_unit,
             "unit_amount_micros": unit_amount_micros,
+            "time_prices": time_prices or [],
+            "time_zone": time_zone,
             "currency": currency,
             "source": source,
             "notes": notes,
@@ -196,6 +201,9 @@ class PriceQuote:
 
     `source` 是 `catalog`(端点自己的目录报的)或 `reference`(官方价目表,见
     domain/price_reference)—— 写进规则的 source 列,界面和用户都分得清哪条是哪来的。
+
+    `time_prices` / `time_zone` 是这一个价的分时段价目(见 domain/price_schedule):它是**同一条
+    规则**的一部分,不是另一条规则 —— DeepSeek 的高峰价和空闲价落在同一行上。
     """
 
     capability: str
@@ -204,6 +212,8 @@ class PriceQuote:
     currency: str
     source: str
     notes: str
+    time_prices: tuple[dict[str, Any], ...] = ()
+    time_zone: str = ""
 
 
 def prefill_model_pricing(
@@ -255,6 +265,8 @@ def prefill_model_pricing(
             model=model,
             billing_unit=quote.billing_unit,
             unit_amount_micros=quote.unit_amount_micros,
+            time_prices=[dict(window) for window in quote.time_prices],
+            time_zone=quote.time_zone,
             currency=quote.currency,
             source=quote.source,
             notes=quote.notes,
@@ -264,6 +276,10 @@ def prefill_model_pricing(
 
 
 def update_pricing_rule(db: Session, rule: ProviderPricingRule, **patch: Any) -> ProviderPricingRule:
+    # 时段和时区要**合在一起**校验:只改了时区,也得拿它去读原来那几个时段。
+    if "time_prices" in patch or "time_zone" in patch:
+        patch.setdefault("time_prices", rule.time_prices)
+        patch.setdefault("time_zone", rule.time_zone)
     fields = _normalize_pricing_fields(patch, partial=True)
     for key, value in fields.items():
         setattr(rule, key, value)
@@ -297,12 +313,18 @@ def record_usage(
     cost_micros: int | None = None,
     currency: str = "USD",
     cost_confidence: str = "unknown",
+    occurred_at: datetime | None = None,
 ) -> ProviderUsageEvent:
     """Record one billable interaction.
 
     The idempotency key is part of the Interface: source modules can safely call this after a
     retry or crash recovery without double-booking the same provider interaction.
+
+    `occurred_at`(UTC,缺省为现在)是这次调用**发生的时刻**:挑哪条规则(生效期)、按哪一档
+    时段价计,都按它;它也就是这条账的 `created_at` —— 账上记的时间和算价用的时间是同一个,
+    事后对着时段价目核一笔账才对得上。
     """
+    moment = occurred_at or now()
     existing = db.scalar(select(ProviderUsageEvent).where(ProviderUsageEvent.idempotency_key == idempotency_key))
     if existing is not None:
         return existing
@@ -318,6 +340,7 @@ def record_usage(
             provider=provider,
             capability=capability,
             model=model,
+            moment=moment,
         )
         metered = [
             (rule, quantity)
@@ -335,7 +358,7 @@ def record_usage(
             unpriced_reason = "mixed_currency"
         elif metered:
             applied_rules = [rule for rule, _ in metered]
-            cost_micros = sum(round(quantity * rule.unit_amount_micros) for rule, quantity in metered)
+            cost_micros = sum(round(quantity * price_at(rule, moment)) for rule, quantity in metered)
             currency = applied_rules[0].currency
             cost_confidence = "estimated"
 
@@ -360,6 +383,7 @@ def record_usage(
         unpriced_reason=unpriced_reason,
         pricing_rule_id=applied_rules[0].id if len(applied_rules) == 1 and cost_confidence == "estimated" else None,
         idempotency_key=idempotency_key,
+        created_at=moment,
     )
     db.add(event)
     db.flush()
@@ -402,6 +426,10 @@ def _normalize_pricing_fields(fields: dict[str, Any], *, partial: bool = False) 
         if amount < 0:
             raise ValueError("unit amount must be non-negative")
         normalized["unit_amount_micros"] = amount
+    if "time_prices" in normalized or "time_zone" in normalized:
+        normalized["time_prices"], normalized["time_zone"] = normalize_schedule(
+            normalized.get("time_prices"), normalized.get("time_zone")
+        )
     if "currency" in normalized:
         normalized["currency"] = (normalized.get("currency") or "USD").upper()[:8]
     if "source" in normalized:
@@ -505,6 +533,7 @@ def _best_price_rule(
     provider: str,
     capability: str,
     model: str,
+    moment: datetime | None = None,
 ) -> ProviderPricingRule | None:
     rules = _best_price_rules(
         db,
@@ -513,6 +542,7 @@ def _best_price_rule(
         provider=provider,
         capability=capability,
         model=model,
+        moment=moment,
     )
     return rules[0] if rules else None
 
@@ -525,8 +555,14 @@ def _best_price_rules(
     provider: str,
     capability: str,
     model: str,
+    moment: datetime | None = None,
 ) -> list[ProviderPricingRule]:
-    moment = now()
+    """每个计价单位挑一条规则:作用域最具体的那条(连接 > 工作区 > 供应商 > 模型),同分取生效最晚的。
+
+    **时间只用来判生效期,不参与挑选。**分时段价格是挑出来那条规则**自己**的价目,由
+    `price_schedule.price_at` 在算钱时取档 —— 挑规则和取单价是两件事(见 domain/price_schedule)。
+    """
+    moment = moment or now()
     candidates = list(
         db.scalars(
             select(ProviderPricingRule).where(

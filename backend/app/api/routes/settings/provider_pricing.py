@@ -84,6 +84,7 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
         created=outcome.created,
         created_from_catalog=outcome.created_from_catalog,
         created_from_reference=outcome.created_from_reference,
+        created_with_time_prices=outcome.created_with_time_prices,
         models_seen=outcome.models_seen,
         models_with_price=outcome.models_with_price,
         unpriced_models=outcome.unpriced_models,

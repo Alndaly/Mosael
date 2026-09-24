@@ -2580,6 +2580,21 @@ def _migrate_usage_unpriced_reason() -> None:
             conn.execute(text("ALTER TABLE provider_usage_events ADD COLUMN unpriced_reason VARCHAR(40)"))
 
 
+def _migrate_pricing_time_prices() -> None:
+    """计价规则带上分时段价格(见 domain/price_schedule)。
+
+    老规则一律是「全天一个价」:时段为空列表、时区为空 —— 这正是它们一直以来的含义,不必猜。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_pricing_rules)"))}
+        if not columns:
+            return
+        if "time_prices" not in columns:
+            conn.execute(text("ALTER TABLE provider_pricing_rules ADD COLUMN time_prices JSON NOT NULL DEFAULT '[]'"))
+        if "time_zone" not in columns:
+            conn.execute(text("ALTER TABLE provider_pricing_rules ADD COLUMN time_zone VARCHAR(64) NOT NULL DEFAULT ''"))
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -2682,6 +2697,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_model_structured_output,
                 _migrate_browser_profile_start_url,
                 _migrate_usage_unpriced_reason,
+                _migrate_pricing_time_prices,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
             ),

@@ -9,7 +9,7 @@
 
 这张表补的就是这一块。它和 `domain/model_limits` 是同一性质:**查证过的事实**,不是猜。
 
-## 四条约定
+## 五条约定
 
 1. **只写查证过的。**每一条都要能在它记的那一页上找到原数;查不到、页面打不开、写得有歧义的
    一律不收(列在下面的「未收录」里)。不从同门型号外推,不用第三方汇总站当来源。
@@ -19,7 +19,11 @@
    分「含不含视频输入」:计价规则没有按档位匹配的能力,所以记最常用的那一档(输入最短 / 应用
    默认的 720P / 不含视频输入),备注里把其余档位写出来,用户用的是别的档一眼就知道要改。
    拿不准哪档算"基础"的,宁可不收。
-4. **中转站只按 id 精确匹配,而且只在 id 唯一属于某一家时。**中转(OpenAI 兼容端点、Evolink、
+4. **分时段的价按厂商的时段原样记。**高峰 / 空闲这种按钟点变的价是**同一条规则**的价目
+   (见 `domain/price_schedule`):条目的 `amount` 是厂商说的「其余时段」那个价,`time_prices`
+   是它明确列出钟点的时段,`time_zone` 是它公布时段用的时区 —— 不替厂商换算成 UTC。
+   厂商只说了「其余时段」的,「其余」就是基础价(DeepSeek:列出的是高峰,其余全是空闲)。
+5. **中转站只按 id 精确匹配,而且只在 id 唯一属于某一家时。**中转(OpenAI 兼容端点、Evolink、
    OpenRouter)后面挂的可能是任何一家,它们自己的收费也可能和原厂不同 —— 所以只在「这个 id
    只有一家在卖」时才借用原厂价,并在规则备注里说明那是原厂价。
 
@@ -46,6 +50,18 @@
 - **可灵(Kling)**:按「单位 / 积分」计价,国内 1 积分 = 1 元、国际 1 单位 = $0.14,一家两币;而应用
   判断不出这条连接开的是哪边的账户,又分有声 / 无声、带不带视频输入 —— 不收。
 - **中转站自己的价**(Evolink、147ai 等):不是原厂价目,不在这张表的范围里;中转的目录报了价就用目录的。
+
+## 分时段计价(2026-09 查证)
+
+- **DeepSeek**(api-docs.deepseek.com):北京时间周一至周五(不含法定节假日)9:00–12:00、
+  14:00–18:00 为高峰,其余(含周末、节假日全天)为空闲,空闲价是高峰价的一半 —— 已按时段收录。
+  规则分不出法定节假日,节假日的工作日白天会按高峰价估(偏高,不会少算)。
+- **火山方舟**:deepseek-v4.1-flash 同样分高峰 / 空闲(北京时间工作日 09:00–12:00、14:00–18:00);
+  应用里的方舟连接只做生图/生视频,对话模型本来就不收。
+- **百炼国际站**:DeepSeek 系列分忙 / 闲时(UTC+8 22:00–08:00 为闲时),部分千问模型在香港、
+  法兰克福、弗吉尼亚、东京地域有夜间价;表里记的是新加坡地域的千问,那里不分时段 —— 不收。
+- **没有分时段价的**:百炼国内、Kimi(国内 / 国际)、MiniMax(国内 / 国际)、OpenAI、Anthropic。
+  OpenAI 的 Batch / Flex、Anthropic 的 Batch 是**调用方式**的折扣,不是时段,不按时段建模。
 """
 
 from __future__ import annotations
@@ -60,7 +76,18 @@ CHECKED = "2026-09"
 #: 价格适用的地区。中国内地和国际站对同一个模型常常是两个价、两种币。
 REGIONS = ("cn", "intl", "global")
 
-#: 这几家的"官方端点"本身就是中转:后面挂的是任意厂商的模型,只能按 id 借原厂价(见约定 4)。
+
+@dataclass(frozen=True)
+class TimePrice:
+    """一个时段的挂牌价。钟点是条目 `time_zone` 里的,`weekdays` 为 ISO 星期、空 = 每天
+    (语义与 domain/price_schedule 相同);`amount` 与条目的 `amount` 同单位、同 `per`。"""
+
+    start: str
+    end: str
+    amount: str
+    weekdays: tuple[int, ...] = ()
+
+#: 这几家的"官方端点"本身就是中转:后面挂的是任意厂商的模型,只能按 id 借原厂价(见约定 5)。
 RELAY_VENDORS = frozenset({"openai-compatible", "evolink", "openrouter"})
 
 #: 国际站的域名。连接的 Endpoint 落在这里 → 只认 `intl` / `global` 的条目。
@@ -102,11 +129,28 @@ class ListPrice:
     #: True = 按前缀匹配(如带日期后缀的一族);默认精确匹配。
     prefix: bool = False
     checked: str = CHECKED
+    #: 分时段价(约定 4)。`amount` 是其余时段的价;这里是厂商列出钟点的那几段。
+    time_prices: tuple[TimePrice, ...] = ()
+    #: 上面那些钟点的时区(IANA 名)。有时段就必须有(测试盯着)。
+    time_zone: str = ""
 
     @property
     def unit_amount_micros(self) -> int:
         """换算成规则里存的「每个计价单位多少 micros」。表里的数保证能整除(测试盯着)。"""
         return int(Decimal(self.amount) * 1_000_000 / self.per)
+
+    @property
+    def time_prices_micros(self) -> tuple[dict[str, object], ...]:
+        """换算成规则上存的时段形状(见 domain/price_schedule)。"""
+        return tuple(
+            {
+                "start": window.start,
+                "end": window.end,
+                "weekdays": list(window.weekdays),
+                "unit_amount_micros": int(Decimal(window.amount) * 1_000_000 / self.per),
+            }
+            for window in self.time_prices
+        )
 
     def remark_for(self, locale: str) -> str:
         zh, en = self.remark
@@ -161,15 +205,39 @@ def _chat(
 # —— DeepSeek ——
 # 只有 deepseek-flash 与 deepseek-v4-pro 两个在售;deepseek-chat / deepseek-reasoner 两页都已不列,
 # deepseek-v4-flash 等旧名页脚写着「对应模型已下线」—— 都不收。
-# 分高峰 / 空闲两个时段,空闲半价;页面没说哪个是"标准价",记的是全价(高峰时段)。
+# 分时段计价(2026-09 查证):「北京时间周一至周五(不含中国法定节假日)9:00 - 12:00、14:00 - 18:00
+# 为高峰时段;其余时段,包括周末及中国法定节假日全天均为空闲时段」,空闲价是高峰价的一半。
+# 页面列出钟点的是高峰,空闲是「其余」—— 所以基础价记空闲价,高峰作为工作日的两个时段(约定 4)。
 _DEEPSEEK = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing"
 _DEEPSEEK_REMARK = (
-    "高峰时段价(北京时间工作日 9:00-12:00、14:00-18:00);其余空闲时段半价",
-    "Peak-hour price (weekdays 9:00-12:00 and 14:00-18:00 Beijing time); off-peak is half price",
+    "基础价为空闲时段价;北京时间工作日 9:00–12:00、14:00–18:00 按高峰价(两倍)计。法定节假日官方按空闲价,"
+    "规则分不出节假日,会按高峰价估",
+    "Base price is the off-peak rate; weekdays 9:00–12:00 and 14:00–18:00 Beijing time use the peak rate (double). "
+    "Public holidays are off-peak officially, but rules can't tell holidays apart and estimate them at peak",
 )
+_BEIJING = "Asia/Shanghai"
+_WORKDAYS = (1, 2, 3, 4, 5)
+
+
+def _deepseek(model: str, **units: tuple[str, str]) -> list[ListPrice]:
+    """DeepSeek 的一个模型:每个计价单位给 (空闲价, 高峰价)。高峰是工作日的两段,其余是空闲。"""
+    names = {"input": "million_input_token", "output": "million_output_token", "cache_read": "million_cache_read_token"}
+    return [
+        _p(
+            "deepseek", model, "chat", names[unit], off_peak, "CNY", _DEEPSEEK,
+            region="cn", remark=_DEEPSEEK_REMARK, time_zone=_BEIJING,
+            time_prices=(
+                TimePrice("09:00", "12:00", peak, _WORKDAYS),
+                TimePrice("14:00", "18:00", peak, _WORKDAYS),
+            ),
+        )
+        for unit, (off_peak, peak) in units.items()
+    ]
+
+
 _DEEPSEEK_PRICES = [
-    *_chat("deepseek", "deepseek-flash", "CNY", _DEEPSEEK, input="2", output="8", cache_read="0.04", region="cn", remark=_DEEPSEEK_REMARK),
-    *_chat("deepseek", "deepseek-v4-pro", "CNY", _DEEPSEEK, input="9", output="27", cache_read="0.3", region="cn", remark=_DEEPSEEK_REMARK),
+    *_deepseek("deepseek-flash", input=("1", "2"), output=("4", "8"), cache_read=("0.02", "0.04")),
+    *_deepseek("deepseek-v4-pro", input=("4.5", "9"), output=("13.5", "27"), cache_read=("0.15", "0.3")),
 ]
 
 # —— Kimi / Moonshot ——(platform.moonshot.cn / .ai 已分别跳到 platform.kimi.com / .ai)

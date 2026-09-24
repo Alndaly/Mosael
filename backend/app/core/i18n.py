@@ -636,6 +636,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "(国际站)",
         "en": " (international)",
     },
+    # 分时段价格的校验(domain/price_schedule)。时段按界面上的顺序从 1 数。
+    "pricingErr_timeZoneRequired": {
+        "zh": "分时段价格需要选一个时区",
+        "en": "Time-of-day prices need a time zone.",
+    },
+    "pricingErr_timeZone": {
+        "zh": "不认识的时区:{zone}",
+        "en": "Unknown time zone: {zone}",
+    },
+    "pricingErr_windowClock": {
+        "zh": "第 {index} 个时段的时间要写成「时:分」,如 09:30",
+        "en": "Time slot {index} needs times written as HH:MM, e.g. 09:30.",
+    },
+    "pricingErr_windowEmpty": {
+        "zh": "第 {index} 个时段的开始和结束是同一时刻",
+        "en": "Time slot {index} starts and ends at the same time.",
+    },
+    "pricingErr_windowWeekdays": {
+        "zh": "第 {index} 个时段的星期写得不对",
+        "en": "Time slot {index} has invalid weekdays.",
+    },
+    "pricingErr_windowAmount": {
+        "zh": "第 {index} 个时段的单价不能为负",
+        "en": "Time slot {index} needs a non-negative price.",
+    },
+    "pricingErr_windowOverlap": {
+        "zh": "第 {first} 个和第 {second} 个时段有重叠 —— 同一时刻只能有一个价",
+        "en": "Time slots {first} and {second} overlap; a moment can only have one price.",
+    },
     "routeErr_providerLacksCapability": {
         "zh": "该供应商不支持 {capability} 能力",
         "en": "This provider doesn't support the {capability} capability.",

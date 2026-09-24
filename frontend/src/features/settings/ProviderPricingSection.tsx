@@ -17,6 +17,17 @@ import { SettingsEmpty, SettingsGroup, SettingsListBlock, SettingsListItem } fro
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+import {
+  TimePricesEditor,
+  amountToMicros,
+  draftsFromApi,
+  draftsToApi,
+  localTimeZone,
+  microsToAmount,
+  useScheduleSummary,
+  type WindowDraft,
+} from "./PricingTimePrices";
+
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type PricingRule = components["schemas"]["ProviderPricingRuleOut"];
 type PrefillResult = components["schemas"]["PricingPrefillOut"];
@@ -33,6 +44,9 @@ type PricingForm = {
   unitAmount: string;
   currency: string;
   notes: string;
+  /** 分时段价格(空 = 全天按单价计)。 */
+  timeWindows: WindowDraft[];
+  timeZone: string;
 };
 
 const ANY_PROFILE = "__any_profile__";
@@ -44,6 +58,8 @@ const DEFAULT_FORM: PricingForm = {
   unitAmount: "",
   currency: "USD",
   notes: "",
+  timeWindows: [],
+  timeZone: "",
 };
 
 /** 能力清单**从后端预设取并集**,不在这里手抄第六遍。手抄的代价刚兑现过:模型设置弹窗里那份
@@ -109,17 +125,6 @@ const UNIT_LABELS: Record<string, MessageKey> = {
   million_cache_write_token: "pricingUnit_million_cache_write_token",
 };
 
-function microsToAmount(value: number): string {
-  const amount = value / 1_000_000;
-  return Number.isInteger(amount) ? String(amount) : String(Number(amount.toFixed(6)));
-}
-
-function amountToMicros(value: string): number {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0) return 0;
-  return Math.round(amount * 1_000_000);
-}
-
 function formatRuleAmount(rule: PricingRule, unitLabel: string): string {
   return `${microsToAmount(rule.unit_amount_micros)} ${rule.currency} / ${unitLabel}`;
 }
@@ -133,6 +138,8 @@ function formFromRule(rule: PricingRule): PricingForm {
     unitAmount: microsToAmount(rule.unit_amount_micros),
     currency: rule.currency || "USD",
     notes: rule.notes || "",
+    timeWindows: draftsFromApi(rule.time_prices),
+    timeZone: rule.time_zone || "",
   };
 }
 
@@ -149,6 +156,9 @@ function PrefillSummary({ result }: { result: PrefillResult }) {
         .replace("{reference}", String(result.created_from_reference))
         .replace("{priced}", String(result.models_with_price))
         .replace("{seen}", String(result.models_seen))}
+      {result.created_with_time_prices > 0 && (
+        <span className="block">{t("pricingPrefillTimed").replace("{n}", String(result.created_with_time_prices))}</span>
+      )}
       {unpriced.length > 0 ? (
         <span className="block text-muted-foreground">
           {t("pricingPrefillUnpriced").replace("{count}", String(unpriced.length)).replace("{models}", shown)}
@@ -222,6 +232,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     currency: form.currency.trim().toUpperCase() || "USD",
     source: "manual",
     notes: form.notes.trim(),
+    time_prices: draftsToApi(form.timeWindows),
+    time_zone: form.timeWindows.length > 0 ? form.timeZone : "",
   });
 
   const create = useMutation({
@@ -321,6 +333,14 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     if (profile) return profile.name;
     return provider || t("pricingAnyProvider");
   };
+  const scheduleSummary = useScheduleSummary();
+  /** 加第一个时段时预选的时区:这家已有规则里用的那个(预填的 DeepSeek 规则是北京时间),否则本机时区。
+   *  不在前端再抄一份「哪家用哪个时区」—— 价目表在后端,规则里已经带着。 */
+  const vendorTimeZone = React.useMemo(() => {
+    const vendor = selectedProfile?.vendor;
+    const known = vendor ? ruleList.find((rule) => rule.provider === vendor && rule.time_zone) : undefined;
+    return known?.time_zone || localTimeZone();
+  }, [ruleList, selectedProfile?.vendor]);
   const capabilityLabel = (capability: string) => t(CAPABILITY_LABELS[capability] ?? "capChat");
   const unitLabel = (unit: string) => t(UNIT_LABELS[unit] ?? "pricingUnit_request");
   const canSubmit = amountToMicros(form.unitAmount) >= 0 && form.capability && form.billingUnit && form.currency.trim();
@@ -508,6 +528,13 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               />
             </label>
           </div>
+          <TimePricesEditor
+            windows={form.timeWindows}
+            timeZone={form.timeZone}
+            defaultTimeZone={vendorTimeZone}
+            baseAmount={form.unitAmount}
+            onChange={({ windows, timeZone }) => setForm((current) => ({ ...current, timeWindows: windows, timeZone }))}
+          />
           <label className={DIALOG_FIELD}>
             <span>{t("pricingNotes")}</span>
             <Textarea
@@ -575,6 +602,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 </strong>
                 <small>
                   {rule.model || t("pricingAnyModel")} · {formatRuleAmount(rule, unitLabel(rule.billing_unit))}
+                  {rule.time_prices?.length ? ` · ${scheduleSummary(rule.time_prices, rule.time_zone ?? "")}` : ""}
                   {rule.notes ? ` · ${rule.notes}` : ""}
                 </small>
               </div>
