@@ -12,7 +12,7 @@
  * 打进去,和 main.cjs 这份不是同一个实例 —— 所以语言变化由 main.cjs 的 applyLocale 逐个转告
  * (它们各自导出 setLocale)。
  *
- * 占位符是 `{name}`;两种语言的占位符必须一致、每个 key 两种语言都得有(见 i18n.test.ts)。
+ * 占位符是 `{name}`;同一个 key 的中英两份要用同样的占位符、两种语言都得有(本文件内的事,由 i18n.test.ts 查)。
  */
 
 /** 支持的语言。第一个是缺省 —— 与后端 core/i18n 的 DEFAULT_LOCALE 一致。 */
