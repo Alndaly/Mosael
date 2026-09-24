@@ -29,6 +29,9 @@ The project dropdown in the title bar switches timelines. Long names ellipsize; 
 Run ASR on an audio/video asset to get a **word-level transcript**:
 
 - Deleting sentences / words cuts the corresponding segments from the source; silences and filler words ("uh", "you know") can be detected and batch-removed in one click.
+- Splitting a sentence with **Split here** keeps both halves together, even when a line in another language or on another track starts at the same moment.
+- Speakers show as a person icon with a number counted from 1 ("Speaker 1"), only when at least two speakers were detected.
+- When a transcript exists but some timeline media is still untranscribed, the button reads "Transcribe N more".
 - Each sentence keeps its timestamp, speaker and first text line aligned. Long text wraps in full;
   it is never ellipsized, and row actions do not reserve empty space while hidden.
 - Transcription runs in an external interpreter; models download on first use (see [Download & install](/docs/start/download)).
