@@ -13,12 +13,12 @@ import { app, type BaseWindow } from "electron";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-import { tr } from "./i18n";
+import { t as tr } from "../i18n.cjs";
 import { createSharedViews, destroySharedViews, type AccountViewManager, type PanelCard } from "./accountViews";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
-import { resolvePlatform } from "./platforms";
+import { platformName, resolvePlatform } from "./platforms";
 import { findPost, postEndpoint } from "./publishedPost";
 import type { PageDriver } from "./pageDriver";
 import type { LiveViewFrame, PublishTask, ViewState } from "./types";
@@ -138,7 +138,7 @@ class LiveMirror {
       this.captureMisses = dataUrl ? 0 : this.captureMisses + 1;
       if (!dataUrl && this.captureMisses >= CAPTURE_ATTEMPTS) {
         this.captureBroken = true;
-        plog("live mirror: 放弃取像(视图不产生像素),后续只推步骤文案", this.accountId);
+        plog("live mirror: giving up on capture (the view produces no pixels); pushing step labels only", this.accountId);
       }
     } catch {
       /* 镜像是观测手段,不是发布的一部分:取不到就只推文字,绝不连累任务 */
@@ -245,8 +245,8 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
   const t = toAdapterTask(bt);
   const taskViews = views;
   const driver = taskViews.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
-  const platformLabel = resolvePlatform(t.platform).label;
-  const mirror = new LiveMirror(t.accountId, driver, `${platformLabel} · ${tr("准备中")}`);
+  const platformLabel = platformName(t.platform);
+  const mirror = new LiveMirror(t.accountId, driver, `${platformLabel} · ${tr("publishStep_preparing")}`);
   // 每一步同时进日志和实时窗口。这段之前完全不留痕:一次「表单填好了却没投出去」的故障,日志里
   // 只表现为 checkLogin 之后静默五分钟,画面上也什么都看不到,无从判断卡在上传、填表还是提交。
   const controller = new AbortController();
@@ -292,35 +292,35 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     mirror.start();
     await taskViews.configureAccount(t.accountId, bt.proxy);
     const adapter = createAdapter(t.platform, driver, t);
-    await step(tr("打开创作页"));
+    await step(tr("publishStep_openCreator"));
     await adapter.openCreatorPage();
     plog("runTask creator page opened:", bt.id, driver.url());
     await delay(stepDelay());
 
-    await step(tr("检查登录态"));
+    await step(tr("publishStep_checkLogin"));
     const loggedIn = await adapter.checkLogin();
     plog("runTask checkLogin:", bt.id, loggedIn);
     if (!loggedIn) {
       await backend.patchAccount(t.accountId, {
         binding_status: "login_required",
-        last_error: tr("未登录"),
+        last_error: tr("publishErr_notLoggedIn"),
       });
       await backend.reportTask(t.id, {
         status: "login_required",
-        error_message: tr("账号未登录。在发布控制台点该账号「登录」完成扫码后重试。"),
+        error_message: tr("publishErr_notLoggedInTask"),
       });
       settle(t, "login_required");
       return;
     }
     await backend.patchAccount(t.accountId, { binding_status: "bound", last_error: null });
 
-    await step(tr("上传视频"));
+    await step(tr("publishStep_upload"));
     await adapter.uploadVideo(t.videoPath);
     await delay(stepDelay());
-    await step(tr("填写标题"));
+    await step(tr("publishStep_fillTitle"));
     await adapter.fillTitle(t.title);
     await delay(stepDelay());
-    await step(tr("填写标签与简介"));
+    await step(tr("publishStep_fillTags"));
     await adapter.fillTags(t.tags);
     await delay(stepDelay());
 
@@ -328,16 +328,16 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     const endpoint = postEndpoint(resolvePlatform(t.platform).id);
     const listening = endpoint ? driver.captureResponses(endpoint) : null;
     capture = listening;
-    await step(tr("提交投稿"));
+    await step(tr("publishStep_submit"));
     await adapter.submit();
     await delay(stepDelay());
-    await step(tr("等待平台确认"));
+    await step(tr("publishStep_waitConfirm"));
     await adapter.waitResult();
     const responses = listening ? await listening.stop() : [];
     capture = null;
     const post = findPost(resolvePlatform(t.platform).id, responses, adapter.knownPostId?.() ?? null);
     plog("runTask post:", t.id, { responses: responses.map((r) => r.url), post });
-    await step(tr("发布成功"), true);
+    await step(tr("publishStep_done"), true);
     await backend.reportTask(t.id, { status: "success", post });
     plog("runTask success:", t.id);
     settle(t, "success");
@@ -349,7 +349,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     plog("runTask error:", t.id, error instanceof Error ? error : message);
     // 让实时窗口停在失败那一刻的画面与步骤上,而不是无声消失。
-    mirror.step(`${platformLabel} · ${tr("失败")}`, true);
+    mirror.step(`${platformLabel} · ${tr("publishStep_failed")}`, true);
     // 回报失败是这一段里**唯一不能被跳过**的事:它没送到,后端就永远停在 running,前台看到的是
     // 「一直在跑」。所以它前面的每一步都必须既有界又不抛 —— 线上就出过 captureFailure 里
     // capturePage 挂死、把回报一起拖没的情况(见 PageDriver.screenshot 的注释)。
@@ -367,7 +367,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
       await backend
         .patchAccount(t.accountId, { binding_status: bindingStatus, last_error: message })
         .catch((patchError: unknown) =>
-          plog("runTask patchAccount failed (报告继续):", t.id, String(patchError).slice(0, 120)),
+          plog("runTask patchAccount failed (still reporting):", t.id, String(patchError).slice(0, 120)),
         );
     }
     await backend.reportTask(t.id, {
@@ -444,7 +444,7 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     plog("recheck result:", acc.account_id, loggedIn ? "bound" : "login_required");
     await backend.patchAccount(acc.account_id, {
       binding_status: loggedIn ? "bound" : "login_required",
-      last_error: loggedIn ? null : tr("登录已失效,请重新登录"),
+      last_error: loggedIn ? null : tr("publishErr_sessionExpired"),
     });
     // 从「已登录」变「失效」才通知:后台静默复检没有前台现场,用户不主动看发布台就不知道掉线——
     // 补一条系统通知 + dock 角标。对本就 login_required 的账号不重复弹(只认 bound→失效这一次跳变)。
@@ -591,9 +591,9 @@ export async function openPoolLogin(opts: {
   name?: string;
   proxy?: string | null;
 }): Promise<void> {
-  if (!views) throw new Error(tr("发布器未就绪"));
+  if (!views) throw new Error(tr("publishErr_notReady"));
   if (views.visibleAccountId && views.visibleAccountId !== opts.partition)
-    throw new Error(tr("有账号正在前台操作，请先处理完再登录"));
+    throw new Error(tr("publishErr_foregroundBusy"));
   await views.openView({
     viewId: opts.partition,
     partition: opts.partition,
@@ -618,10 +618,10 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
   if (!views) return;
   // 该账号正有「真发布任务」在后台跑:登录会切它的视图/抢焦点,拒绝,等任务完成。
   // 注意:后台复检(rechecking)不在此列——复检恰恰是为确认登录态,用户手动登录优先级更高,可抢占。
-  if (running.has(accountId)) throw new Error(tr("该账号有发布任务正在进行，请等它完成后再登录"));
+  if (running.has(accountId)) throw new Error(tr("publishErr_accountBusy"));
   // 前台已被别的账号占(另一个登录 / 待确认现场):拒绝,让用户先处理完前台那个。
   if (views.visibleAccountId && views.visibleAccountId !== accountId)
-    throw new Error(tr("有账号正在前台操作，请先处理完再登录"));
+    throw new Error(tr("publishErr_foregroundBusy"));
   // 登录接管:标记后,在飞的复检(若有)遇到它会放弃回写;并中止该视图在飞的 goto/evaluate,
   // 避免复检的旧 goto 与登录的新 goto 互相 abort 把页面留成空白。
   loginAccounts.add(accountId);

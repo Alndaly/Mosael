@@ -73,7 +73,7 @@ try {
   } catch {
     /* ignore */
   }
-  console.log("[brand-dev] Electron.app 已设置为独立且签名有效的 Mosael(dev)");
+  console.log("[brand-dev] Electron.app is now a standalone, validly signed Mosael (dev)");
 } catch (error) {
-  console.warn("[brand-dev] 跳过:", error.message);
+  console.warn("[brand-dev] skipped:", error.message);
 }

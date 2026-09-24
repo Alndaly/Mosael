@@ -40,6 +40,7 @@ vi.mock("node:fs", () => ({
 }));
 
 const { customCss, customCssPath, ensureCustomCss, readCustomCss } = await import("./customCss");
+const i18n = await import("../i18n.cjs");
 
 beforeEach(() => {
   for (const fn of [h.watch, h.existsSync, h.readFileSync, h.writeFileSync, h.mkdirSync, h.send]) fn.mockReset();
@@ -71,6 +72,20 @@ describe("自定义 CSS 的文件位置", () => {
     ensureCustomCss();
     expect(h.writeFileSync).toHaveBeenCalledOnce();
     expect(String(h.writeFileSync.mock.calls[0][1])).toContain("--primary");
+  });
+
+  it("模板的说明按建文件那一刻的界面语言写", () => {
+    h.existsSync.mockReturnValue(false);
+    try {
+      i18n.setLocale("en-US");
+      ensureCustomCss();
+      expect(String(h.writeFileSync.mock.lastCall?.[1])).toContain("Mosael — custom CSS");
+      i18n.setLocale("zh-CN");
+      ensureCustomCss();
+      expect(String(h.writeFileSync.mock.lastCall?.[1])).toContain("自定义 CSS");
+    } finally {
+      i18n.setLocale(i18n.DEFAULT_LOCALE);
+    }
   });
 });
 

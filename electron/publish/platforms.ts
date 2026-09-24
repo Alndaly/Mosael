@@ -1,3 +1,5 @@
+import { t } from "../i18n.cjs";
+
 export type SupportedPlatform =
   | "mock"
   | "douyin"
@@ -9,7 +11,9 @@ export type SupportedPlatform =
 
 export interface PlatformDefinition {
   id: SupportedPlatform;
-  label: string;
+  /** 平台名的文案 key(见 electron/i18n.cjs 的 platform_*)。给人看的名字按界面语言翻,用 platformName()。 */
+  nameKey: string;
+  /** 认得出的叫法(后端 / 智能体 / 用户输入里可能出现的写法),含中文俗称 —— 是匹配用的,不是显示用的。 */
   aliases: string[];
   loginUrl: string;
   dashboardUrl: string;
@@ -54,7 +58,7 @@ export interface PlatformDefinition {
 export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
   {
     id: "mock",
-    label: "Mock",
+    nameKey: "platform_mock",
     aliases: ["mock"],
     loginUrl: "about:blank",
     dashboardUrl: "about:blank",
@@ -66,7 +70,7 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
   },
   {
     id: "douyin",
-    label: "抖音", // i18n-ok 平台页面的匹配文案/选择器/注入脚本,非产品文案
+    nameKey: "platform_douyin",
     aliases: ["douyin", "抖音"], // i18n-ok
     loginUrl: "https://creator.douyin.com/",
     dashboardUrl: "https://creator.douyin.com/creator-micro/home",
@@ -79,7 +83,7 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
   },
   {
     id: "xiaohongshu",
-    label: "小红书", // i18n-ok
+    nameKey: "platform_xiaohongshu",
     aliases: ["xiaohongshu", "xhs", "rednote", "小红书"], // i18n-ok
     loginUrl: "https://creator.xiaohongshu.com/",
     dashboardUrl: "https://creator.xiaohongshu.com/new/home",
@@ -92,7 +96,7 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
   },
   {
     id: "weixin-channels",
-    label: "微信视频号", // i18n-ok
+    nameKey: "platform_weixinChannels",
     aliases: [
       "weixin-channels",
       "weixin",
@@ -113,7 +117,7 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
   },
   {
     id: "bilibili",
-    label: "Bilibili",
+    nameKey: "platform_bilibili",
     aliases: ["bilibili", "bili", "b站", "哔哩哔哩"], // i18n-ok
     loginUrl: "https://passport.bilibili.com/login",
     dashboardUrl: "https://member.bilibili.com/platform/home",
@@ -126,7 +130,7 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
   },
   {
     id: "tiktok",
-    label: "TikTok",
+    nameKey: "platform_tiktok",
     // **别把 tiktok 和 douyin 混成一个** —— 两个平台、两套账号,后端的别名表里曾经把
     // "tiktok" 指向抖音,说"发到 tiktok"会静默发进抖音。
     aliases: ["tiktok", "tk", "抖音国际版"], // i18n-ok
@@ -148,7 +152,7 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
   },
   {
     id: "youtube",
-    label: "YouTube",
+    nameKey: "platform_youtube",
     aliases: ["youtube", "yt", "油管"], // i18n-ok
     // 未登录时 studio.youtube.com 会跳到 accounts.google.com —— checkLogin 据此判定。
     loginUrl: "https://accounts.google.com/ServiceLogin?service=youtube",
@@ -179,6 +183,9 @@ const PLATFORM_BY_ALIAS = new Map(
 export const resolvePlatform = (platform: string): PlatformDefinition => {
   return PLATFORM_BY_ALIAS.get(platform.trim().toLowerCase()) ?? PLATFORM_DEFINITIONS[0];
 };
+
+/** 平台给人看的名字,按当前界面语言。 */
+export const platformName = (platform: string): string => t(resolvePlatform(platform).nameKey);
 
 export const normalizePlatformId = (platform: string): SupportedPlatform => {
   return resolvePlatform(platform).id;

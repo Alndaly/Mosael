@@ -31,7 +31,7 @@ function* files(dir: string): Generator<string> {
   }
 }
 
-function count(): Map<string, number> {
+export function count(): Map<string, number> {
   const found = new Map<string, number>();
   for (const root of ROOTS) {
     for (const path of files(join(REPO, root))) {
@@ -67,6 +67,8 @@ function count(): Map<string, number> {
 
 /** 本来就该是中文的文件。每条写清理由。 */
 const EXEMPT = new Map<string, string>([
+  ["electron/i18n.cjs", "桌面壳(主进程)的文案表本身:每个 key 的 zh 那一半就是中文,en 成对写在旁边(electron/i18n.test.ts 查齐)"],
+  ["electron/publish/selectors.ts", "发布适配器拿去匹配抖音/小红书/视频号/B 站真实页面上中文按钮与提示的文字,翻译了就点不中"],
   ["browser-extension/src/i18n.ts", "扩展自己的中英文案表(侧栏按浏览器语言或用户选择取一份)"],
   ["browser-extension/src/platforms/labels.ts", "剥掉 B 站页面标题里「哔哩哔哩」后缀的解析正则"],
   ["frontend/src/domain/timeline/transcriptProjection.ts", "识别中文口语语气词(呃、嗯、那个……)的词表"],
@@ -82,28 +84,12 @@ const EXEMPT = new Map<string, string>([
 const LEFT = new Map<string, number>([
   //: 剩下 2 行是第二语言下拉里语言的自称(中文、日本語),各用各的文字写。
   ["browser-extension/src/sidepanel.tsx", 2],
-  ["electron/brand-dev.cjs", 2],
-  ["electron/main.cjs", 46],
-  ["electron/publish/adapters/bilibili.ts", 20],
-  ["electron/publish/adapters/douyin.ts", 5],
-  ["electron/publish/adapters/shared.ts", 4],
-  ["electron/publish/adapters/tiktok.ts", 8],
-  ["electron/publish/adapters/weixinChannels.ts", 6],
-  ["electron/publish/adapters/xiaohongshu.ts", 12],
-  ["electron/publish/adapters/youtube.ts", 7],
-  ["electron/publish/browserActions.ts", 9],
-  ["electron/publish/clickChain.ts", 3],
-  ["electron/publish/pageDriver.ts", 1],
-  ["electron/publish/platforms.ts", 10],
-  ["electron/publish/publishWorker.ts", 19],
-  ["electron/publish/selectors.ts", 48],
-  ["electron/system/customCss.ts", 3],
-  ["electron/system/index.ts", 2],
-  ["electron/system/power.ts", 2],
-  ["electron/system/protocol.ts", 1],
-  ["electron/system/shortcuts.ts", 2],
-  ["electron/system/tray.ts", 6],
-  ["electron/webauthn.cjs", 7],
+  ["electron/publish/adapters/bilibili.ts", 9],
+  ["electron/publish/adapters/shared.ts", 2],
+  ["electron/publish/adapters/weixinChannels.ts", 1],
+  ["electron/publish/adapters/xiaohongshu.ts", 4],
+  ["electron/publish/clickChain.ts", 1],
+  ["electron/publish/platforms.ts", 7],
   //: 剩下 1 行是剥掉报错前缀「失败 ·」的解析正则,不是界面文字。
   ["frontend/src/features/ai-studio/AiStudio.tsx", 1],
   ["frontend/src/features/scenes/SceneAxisGizmo.tsx", 1],

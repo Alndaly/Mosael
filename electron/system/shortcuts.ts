@@ -26,10 +26,10 @@ export const shortcuts: Capability = {
         else ctx.showWindow();
       });
     } catch (err) {
-      console.warn("[system] 全局快捷键注册异常:", err);
+      console.warn("[system] global shortcut registration threw:", err);
     }
     if (!registered) {
-      console.info(`[system] 全局快捷键 ${TOGGLE_ACCELERATOR} 已被占用,跳过(不抢占)`);
+      console.info(`[system] global shortcut ${TOGGLE_ACCELERATOR} is taken; skipping (not stealing it)`);
     }
 
     return {

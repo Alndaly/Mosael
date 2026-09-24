@@ -1,4 +1,5 @@
 import type { PageDriver } from "./pageDriver";
+import { t } from "../i18n.cjs";
 
 export interface ActionOutcome {
   value?: unknown; // extract/evaluate 的返回值;回给后端时包成 { value }
@@ -27,7 +28,7 @@ export async function executeBrowserAction(
     case "click": {
       if (args.selector) await driver.clickCss(s(args.selector));
       else if (args.text) await driver.clickByText(s(args.text), { exact: Boolean(args.exact) });
-      else throw new Error("click 需要 selector 或 text");
+      else throw new Error(t("browserErr_clickNeedsTarget"));
       return { lastUrl: driver.url() };
     }
     case "input": {
@@ -36,12 +37,12 @@ export async function executeBrowserAction(
     }
     case "upload": {
       const path = s(args.path);
-      if (!path) throw new Error("upload 需要文件路径");
+      if (!path) throw new Error(t("browserErr_uploadNeedsPath"));
       const selector = s(args.selector) || 'input[type="file"]';
       const timeout = Number(args.timeout_ms) || 15_000;
       // 文件输入框常在点了「上传」后才挂载:先等它出现,再经 CDP setFileInputFiles 塞文件(不弹系统框)。
       const ok = await driver.fileInputAttached(selector, timeout);
-      if (!ok) throw new Error(`upload: 文件输入框未出现: ${selector}`);
+      if (!ok) throw new Error(t("browserErr_fileInputMissing", { selector }));
       await driver.setFiles(selector, path);
       return { lastUrl: driver.url() };
     }
@@ -76,7 +77,7 @@ export async function executeBrowserAction(
       } else if (args.text) {
         ok = await driver.waitForFunction(`(document.body?.innerText||'').includes(${JSON.stringify(s(args.text))})`, timeout, 300);
       } else {
-        throw new Error("wait 需要 selector / url_contains / text 之一");
+        throw new Error(t("browserErr_waitNeedsTarget"));
       }
       if (!ok) {
         // 「等待超时」四个字是**站点改版之后最常撞见的那条错误**,而它当时什么都不说:等的哪个
@@ -84,11 +85,11 @@ export async function executeBrowserAction(
         // 再猜一遍。带上之后一眼能分出「选择器写错了」和「页面根本没跳过去」。
         const waited = (timeout / 1000).toFixed(1);
         const what = args.selector
-          ? `${args.gone ? "元素始终没有消失" : "元素一直没出现"}:${brief(s(args.selector))}`
+          ? t(args.gone ? "browserErr_waitGone" : "browserErr_waitVisible", { target: brief(s(args.selector)) })
           : args.url_contains
-            ? `网址里一直没有出现:${brief(s(args.url_contains))}`
-            : `页面上一直没有出现文字:${brief(s(args.text))}`;
-        throw new Error(`等待超时(${waited}s):${what};当前停在 ${brief(driver.url(), 120)}`);
+            ? t("browserErr_waitUrl", { target: brief(s(args.url_contains)) })
+            : t("browserErr_waitText", { target: brief(s(args.text)) });
+        throw new Error(t("browserErr_waitTimeout", { seconds: waited, what, url: brief(driver.url(), 120) }));
       }
       return { lastUrl: driver.url() };
     }
@@ -109,6 +110,6 @@ export async function executeBrowserAction(
       return { value: dataUrl, lastUrl: driver.url() };
     }
     default:
-      throw new Error(`未知浏览器动作: ${action}`);
+      throw new Error(t("browserErr_unknownAction", { action }));
   }
 }

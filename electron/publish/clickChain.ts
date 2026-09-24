@@ -129,7 +129,7 @@ async function acceptancePreflight(
   const alreadyTrue = await accepted().catch(() => false);
   if (alreadyTrue) {
     plog(
-      `${what}: 受理判定在点击前就为真 —— 它无法区分成功与失败,本次只点一次,结果交给 waitResult`,
+      `${what}: the acceptance check was already true before clicking — it cannot tell success from failure, so click once and leave the verdict to waitResult`,
     );
   }
   return alreadyTrue;
@@ -173,7 +173,7 @@ export async function commitClick(opts: {
     plog(`${opts.what}: clicked`, attempt.label, `(${attempt.kind})`);
     if (acceptanceBlind) {
       // 判定不可信:点一次就收,别拿坏判定去重复投稿。成功与否交给 waitResult 判。
-      plog(`${opts.what}: 判定不可信,点击已送达,后续交给结果等待`, attempt.label);
+      plog(`${opts.what}: check is unreliable; click delivered, leaving it to the result wait`, attempt.label);
       return attempt.label;
     }
     if (await opts.accepted()) {

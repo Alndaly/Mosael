@@ -21,6 +21,7 @@ const contract = require("./ipc-contract.cjs") as {
   parsePanelLayout: (value: unknown) => Record<string, number>;
   parseAuthToken: (value: unknown, channel: string) => { token: string };
   parseRestoreStage: (value: unknown) => { stageId: string };
+  parseLocale: (value: unknown) => { locale: string };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -92,5 +93,13 @@ describe("Electron IPC contract", () => {
   it("accepts only opaque restore stage identifiers", () => {
     expect(contract.parseRestoreStage({ stageId: "a".repeat(32) })).toEqual({ stageId: "a".repeat(32) });
     expect(() => contract.parseRestoreStage({ stageId: "../live" })).toThrow(/stageId/);
+  });
+
+  it("accepts only a language tag as the interface locale", () => {
+    expect(contract.parseLocale({ locale: " en-US " })).toEqual({ locale: "en-US" });
+    expect(contract.parseLocale({ locale: "zh-Hant-TW" })).toEqual({ locale: "zh-Hant-TW" });
+    expect(() => contract.parseLocale({ locale: "" })).toThrow(/locale/);
+    expect(() => contract.parseLocale({ locale: "en US; rm -rf" })).toThrow(/locale/);
+    expect(() => contract.parseLocale("en")).toThrow(/mosael:locale/);
   });
 });

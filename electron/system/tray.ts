@@ -1,5 +1,6 @@
 import { app, Menu, nativeImage, nativeTheme, Tray } from "electron";
 
+import { t } from "../i18n.cjs";
 import { getOpenAtLogin, setOpenAtLogin } from "./loginItem";
 import type { Capability, SystemContext, SystemStatus } from "./types";
 
@@ -63,7 +64,7 @@ export const tray: Capability = {
     if (icon.isEmpty()) {
       // 图标缺失就不要建托盘:一个空图标的托盘项在 Windows 上是一块看不见的占位,
       // 用户既看不到它、也点不到它,比没有更糟。
-      console.warn("[system] 托盘图标读取失败,跳过托盘:", ctx.iconPath);
+      console.warn("[system] tray icon unreadable, skipping the tray:", ctx.iconPath);
       return;
     }
 
@@ -79,17 +80,18 @@ export const tray: Capability = {
 
     const rebuild = () => {
       const busy = status.runningJobs > 0;
-      trayIcon.setToolTip(busy ? `Mosael · ${status.runningJobs} 个任务运行中` : "Mosael");
+      const running = t("tray_running", { count: status.runningJobs });
+      trayIcon.setToolTip(busy ? `Mosael · ${running}` : "Mosael");
       trayIcon.setContextMenu(
         Menu.buildFromTemplate([
-          { label: busy ? `${status.runningJobs} 个任务运行中` : "空闲", enabled: false },
+          { label: busy ? running : t("tray_idle"), enabled: false },
           { type: "separator" },
-          { label: "打开 Mosael", click: () => ctx.showWindow() },
+          { label: t("tray_open"), click: () => ctx.showWindow() },
           ...(ctx.isDev
             ? []
             : [
                 {
-                  label: "开机时启动",
+                  label: t("tray_openAtLogin"),
                   type: "checkbox" as const,
                   // 待批准也勾上:系统里已经登记了,只差用户去「系统设置 → 登录项」点允许。
                   // 显示成没勾就是把一件待办说成一次失败(见 loginItem.LoginItemState)。
@@ -101,7 +103,7 @@ export const tray: Capability = {
                 },
               ]),
           { type: "separator" },
-          { label: "退出 Mosael", click: () => app.quit() },
+          { label: t("menu_quitApp"), click: () => app.quit() },
         ]),
       );
     };
@@ -117,6 +119,7 @@ export const tray: Capability = {
         status = next;
         rebuild();
       },
+      onLocale: rebuild,
       dispose: () => {
         if (process.platform === "win32") nativeTheme.off("updated", syncWindowsTheme);
         trayIcon.destroy();

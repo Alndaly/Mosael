@@ -28,6 +28,7 @@ const {
   IPC,
   parseAuthToken,
   parseBrowserLogin,
+  parseLocale,
   parsePanelId,
   parsePanelLayout,
   parsePublishTarget,
@@ -37,6 +38,8 @@ const {
   parseTitleOverlay,
   parseUrlRequest,
 } = require("./ipc-contract.cjs");
+const i18n = require("./i18n.cjs");
+const { t } = i18n;
 
 // 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron"。
 // macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
@@ -139,7 +142,7 @@ function reportSmoke(result) {
       "utf8",
     );
   } catch (error) {
-    console.error("[smoke] 写结果失败:", error);
+    console.error("[smoke] failed to write the result:", error);
   }
 }
 
@@ -162,7 +165,7 @@ try {
   publish = require("./publish.bundle.cjs");
 } catch (e) {
   publishLoadError = e;
-  console.warn("[publish] 执行器加载失败(electron/publish.bundle.cjs 是否已构建?):", e.message);
+  console.warn("[publish] failed to load the publisher (is electron/publish.bundle.cjs built?):", e.message);
 }
 
 // 系统能力层(托盘 / 常驻 / 开机自启 / 防睡眠):同样是 esbuild 单文件 bundle,同样不挡启动
@@ -172,7 +175,7 @@ let systemHandle = null;
 try {
   system = require("./system.bundle.cjs");
 } catch (e) {
-  console.warn("[system] 系统能力加载失败(electron/system.bundle.cjs 是否已构建?):", e.message);
+  console.warn("[system] failed to load system capabilities (is electron/system.bundle.cjs built?):", e.message);
 }
 
 // 单实例:第二次启动不再开一个新应用,而是把参数交给已经在跑的这个并把它唤到前台。
@@ -187,7 +190,7 @@ if (!app.requestSingleInstanceLock()) {
   // 说清楚为什么退出。开发时最容易撞上:上一个实例还开着(或没退干净)就跑 pnpm dev,
   // 新进程拿不到锁直接 quit,concurrently 只看到「electron exited」就把整套 dev 栈 SIGTERM 掉,
   // 现象是「刚起来就全挂了」而没有任何解释。打包版撞上则是双击图标没反应 —— 同样需要说明。
-  console.warn("[mosael] 已有一个实例在运行,本次启动退出(窗口会被唤到前台)。");
+  console.warn("[mosael] another instance is already running; exiting (its window will be brought to the front).");
   app.quit();
 } else {
   app.on("second-instance", (_event, argv) => {
@@ -315,7 +318,7 @@ async function ensureBackend() {
     if (backend === spawnedBackend) backend = null;
     if (!quitting && code !== 0 && code !== null) {
       appendMainLog("backend-exit", `code=${code}`);
-      dialog.showErrorBox("Mosael backend stopped", `The local backend exited unexpectedly (code ${code}). Please restart Mosael.`);
+      dialog.showErrorBox(t("backend_stoppedTitle"), t("backend_stoppedBody", { code }));
     }
   });
   return waitForBackend(30000);
@@ -331,12 +334,12 @@ function stopBackend() {
 async function stopManagedBackendForRestore() {
   const child = backend;
   if (!child || child.exitCode !== null) {
-    throw new Error("Restore requires the backend managed by this desktop app");
+    throw new Error(t("restore_needsManagedBackend"));
   }
   await new Promise((resolve, reject) => {
     let forceTimer;
     const hardTimer = setTimeout(() => {
-      reject(new Error("The backend did not stop in time"));
+      reject(new Error(t("restore_backendStopTimeout")));
     }, 15_000);
     child.once("exit", () => {
       clearTimeout(forceTimer);
@@ -375,7 +378,7 @@ async function checkForUpdates() {
   // 解析不出版本号就报错,不要静默当成「已是最新」。原来是 `Boolean(latest) && ...`,
   // 于是响应形状一变(字段缺失、返回了别的 JSON),用户看到的是一句让人安心的
   // 「已是最新版本」——而实际上这次检查根本没成功。宁可说失败,也不要给假的安心。
-  if (!latest) throw new Error("GitHub 返回里没有 tag_name");
+  if (!latest) throw new Error(t("update_noTag"));
   const current = app.getVersion();
   return {
     current,
@@ -385,19 +388,33 @@ async function checkForUpdates() {
   };
 }
 
-/** 应用菜单(中文标签 + 标准 role 行为/快捷键)。mac 是全局顶部菜单栏;
- *  Win/Linux 菜单栏默认隐藏(无边框自绘标题),Alt 唤起,快捷键始终生效。 */
+/**
+ * 界面语言:主进程(菜单、托盘、对话框、通知)和两个 bundle(发布器的失败原因、托盘)一起切。
+ *
+ * 语言由渲染层报上来(preload 盯着 `<html lang>`,见 preload.cjs);报上来之前用系统语言垫着。
+ * bundle 各自打包了一份 i18n.cjs,状态不和这里共享,所以要逐个转告(见 i18n.cjs 开头)。
+ */
+function applyLocale(raw) {
+  const locale = i18n.setLocale(raw);
+  publish?.setLocale?.(locale);
+  system?.setLocale?.(locale);
+  return locale;
+}
+
+/** 应用菜单(按界面语言出标签 + 标准 role 行为/快捷键)。mac 是全局顶部菜单栏;
+ *  Win/Linux 菜单栏默认隐藏(无边框自绘标题),Alt 唤起,快捷键始终生效。
+ *  界面语言变了会整个重建一遍(见 applyLocale)。 */
 function buildAppMenu() {
   const isMac = process.platform === "darwin";
   const about = {
-    label: "关于 Mosael",
+    label: t("menu_about"),
     click: () =>
       dialog.showMessageBox({
         type: "info",
         title: "Mosael",
         message: "Mosael",
-        detail: `版本 ${app.getVersion()}`,
-        buttons: ["好"],
+        detail: t("menu_aboutVersion", { version: app.getVersion() }),
+        buttons: [t("common_ok")],
       }),
   };
   const template = [
@@ -408,41 +425,41 @@ function buildAppMenu() {
             submenu: [
               about,
               { type: "separator" },
-              { role: "services", label: "服务" },
+              { role: "services", label: t("menu_services") },
               { type: "separator" },
-              { role: "hide", label: "隐藏 Mosael" },
-              { role: "hideOthers", label: "隐藏其他" },
-              { role: "unhide", label: "全部显示" },
+              { role: "hide", label: t("menu_hide") },
+              { role: "hideOthers", label: t("menu_hideOthers") },
+              { role: "unhide", label: t("menu_unhide") },
               { type: "separator" },
-              { role: "quit", label: "退出 Mosael" },
+              { role: "quit", label: t("menu_quitApp") },
             ],
           },
         ]
       : []),
     {
-      label: "文件",
-      submenu: [isMac ? { role: "close", label: "关闭窗口" } : { role: "quit", label: "退出" }],
+      label: t("menu_file"),
+      submenu: [isMac ? { role: "close", label: t("menu_closeWindow") } : { role: "quit", label: t("menu_quit") }],
     },
     {
-      label: "编辑",
+      label: t("menu_edit"),
       submenu: [
-        { role: "undo", label: "撤销" },
-        { role: "redo", label: "重做" },
+        { role: "undo", label: t("menu_undo") },
+        { role: "redo", label: t("menu_redo") },
         { type: "separator" },
-        { role: "cut", label: "剪切" },
-        { role: "copy", label: "复制" },
-        { role: "paste", label: "粘贴" },
-        { role: "selectAll", label: "全选" },
+        { role: "cut", label: t("menu_cut") },
+        { role: "copy", label: t("menu_copy") },
+        { role: "paste", label: t("menu_paste") },
+        { role: "selectAll", label: t("menu_selectAll") },
       ],
     },
     {
-      label: "视图",
+      label: t("menu_view"),
       submenu: [
         // **⌘R 刷的是「你正在看的那一页」。** role:"reload" 永远刷主窗口,而内嵌浏览器占着前台时
         // 用户看到的是平台页面 —— 刷掉主窗口既不符合预期,还会把渲染层重置成"没有内嵌视图"的
         // 初始状态(顶部工具条随之消失,而原生视图还盖在窗口上)。
         {
-          label: "重新加载",
+          label: t("menu_reload"),
           accelerator: "CmdOrCtrl+R",
           click: () => {
             if (publish?.embeddedViewVisible?.()) publish.viewReload();
@@ -450,32 +467,32 @@ function buildAppMenu() {
           },
         },
         {
-          label: "强制重新加载",
+          label: t("menu_forceReload"),
           accelerator: "Shift+CmdOrCtrl+R",
           click: () => {
             if (publish?.embeddedViewVisible?.()) publish.viewReload();
             else BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache();
           },
         },
-        { role: "toggleDevTools", label: "开发者工具" },
+        { role: "toggleDevTools", label: t("menu_devTools") },
         { type: "separator" },
-        { role: "resetZoom", label: "实际大小" },
-        { role: "zoomIn", label: "放大" },
-        { role: "zoomOut", label: "缩小" },
+        { role: "resetZoom", label: t("menu_resetZoom") },
+        { role: "zoomIn", label: t("menu_zoomIn") },
+        { role: "zoomOut", label: t("menu_zoomOut") },
         { type: "separator" },
-        { role: "togglefullscreen", label: "全屏" },
+        { role: "togglefullscreen", label: t("menu_fullscreen") },
       ],
     },
     {
-      label: "窗口",
+      label: t("menu_window"),
       submenu: [
-        { role: "minimize", label: "最小化" },
+        { role: "minimize", label: t("menu_minimize") },
         ...(isMac
-          ? [{ role: "zoom", label: "缩放" }, { type: "separator" }, { role: "front", label: "前置全部窗口" }]
-          : [{ role: "close", label: "关闭" }]),
+          ? [{ role: "zoom", label: t("menu_zoom") }, { type: "separator" }, { role: "front", label: t("menu_front") }]
+          : [{ role: "close", label: t("menu_close") }]),
       ],
     },
-    ...(isMac ? [] : [{ label: "帮助", submenu: [about] }]),
+    ...(isMac ? [] : [{ label: t("menu_help"), submenu: [about] }]),
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -616,17 +633,17 @@ function createWindow() {
         // 反过来,login_required / waiting_manual 这类「需要人介入」的中间态,job 还是 running,
         // TaskCenter 永远看不到,只有这里能报。按这条线切开,两边就没有重叠了。
         onTaskSettled: (info) => {
-          const titles = {
-            login_required: "账号需要登录",
-            waiting_manual: "发布需要人工处理",
-            permission_required: "账号权限不足",
-            blocked: "发布被拦截",
+          const titleKeys = {
+            login_required: "notice_loginRequired",
+            waiting_manual: "notice_waitingManual",
+            permission_required: "notice_permissionRequired",
+            blocked: "notice_blocked",
           };
           // success / failed / cancelled 交给 TaskCenter(它按 job 终态发,标签和其它任务一致)。
-          if (!titles[info.status]) return;
+          if (!titleKeys[info.status]) return;
           const notice = {
-            title: titles[info.status],
-            body: `${info.accountName} · ${info.title || "未命名"}`,
+            title: t(titleKeys[info.status]),
+            body: `${info.accountName} · ${info.title || t("common_untitled")}`,
           };
           // 走系统能力层的统一入口:那里带「窗口有焦点就不发」的规则。发布任务在渲染层的
           // TaskCenter 里也会弹应用内 toast,两边都无条件弹的话,你正看着界面时同一件事会
@@ -639,7 +656,7 @@ function createWindow() {
         },
       });
     } catch (e) {
-      console.warn("[publish] 启动执行器失败:", e.message);
+      console.warn("[publish] failed to start the publisher:", e.message);
     }
   }
 
@@ -651,7 +668,7 @@ function createWindow() {
       publish.stopBrowserWorker();
       publish.startBrowserWorker();
     } catch (e) {
-      console.warn("[browser] 启动执行器失败:", e.message);
+      console.warn("[browser] failed to start the browser worker:", e.message);
     }
   }
 
@@ -666,6 +683,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // 最先定语言:下面 ensureBackend 失败时弹的错误框就要用到它。getLocale 要等 ready。
+  applyLocale(app.getLocale());
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
   const platformAuthenticatorConfigured = require("./webauthn.cjs").configurePlatformAuthenticator();
   reportSmoke({ platformAuthenticatorConfigured });
@@ -676,11 +695,7 @@ app.whenReady().then(async () => {
       app.exit(1);
       return;
     }
-    dialog.showErrorBox(
-      "Mosael backend failed to start",
-      `The local backend did not become healthy on port ${BACKEND_PORT}. ` +
-        "Check that the port is free and see logs in ~/.mosael/logs if available.",
-    );
+    dialog.showErrorBox(t("backend_startFailedTitle"), t("backend_startFailedBody", { port: BACKEND_PORT }));
     app.quit();
     return;
   }
@@ -694,8 +709,8 @@ app.whenReady().then(async () => {
     if (publish) return publish;
     throw new Error(
       publishLoadError
-        ? `发布执行器加载失败:${publishLoadError.message}`
-        : "发布执行器不可用:electron/publish.bundle.cjs 缺失(先跑 pnpm build:publisher)",
+        ? t("publisher_loadFailed", { detail: publishLoadError.message })
+        : t("publisher_missing"),
     );
   };
   ipcMain.handle(IPC.invoke.publishLogin, (_e, payload) => {
@@ -752,9 +767,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.dataExportDiagnostics, async () => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const picked = await dialog.showSaveDialog({
-      title: "导出 Mosael 诊断包",
+      title: t("dialog_exportDiagnostics"),
       defaultPath: path.join(app.getPath("downloads"), `Mosael-diagnostics-${stamp}.zip`),
-      filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+      filters: [{ name: t("dialog_zipArchive"), extensions: ["zip"] }],
     });
     if (picked.canceled || !picked.filePath) return { status: "cancelled" };
     const secretValues = Object.entries(process.env)
@@ -782,9 +797,9 @@ app.whenReady().then(async () => {
     const { token } = parseAuthToken(payload, IPC.invoke.dataCreateBackup);
     const stamp = new Date().toISOString().slice(0, 10);
     const picked = await dialog.showSaveDialog({
-      title: "创建 Mosael 数据备份",
+      title: t("dialog_createBackup"),
       defaultPath: path.join(app.getPath("downloads"), `Mosael-${stamp}.mosael-backup`),
-      filters: [{ name: "Mosael backup", extensions: ["mosael-backup"] }],
+      filters: [{ name: t("dialog_backupFile"), extensions: ["mosael-backup"] }],
     });
     if (picked.canceled || !picked.filePath) return { status: "cancelled" };
 
@@ -796,7 +811,7 @@ app.whenReady().then(async () => {
         signal: AbortSignal.timeout(30 * 60 * 1000),
       });
       if (!response.ok || !response.body) {
-        throw new Error(`Backup request failed (${response.status})`);
+        throw new Error(t("backup_requestFailed", { status: response.status }));
       }
       await pipeline(
         Readable.fromWeb(response.body),
@@ -840,6 +855,11 @@ app.whenReady().then(async () => {
   }
 
   buildAppMenu();
+  // 渲染层的界面语言(首次加载、以及每次在设置里切换)。变了才重建菜单;托盘由系统能力层自己重建。
+  ipcMain.on(IPC.send.locale, (_event, payload) => {
+    const before = i18n.getLocale();
+    if (applyLocale(parseLocale(payload).locale) !== before) buildAppMenu();
+  });
   // 关于面板信息(mac 标准关于弹窗)。
   app.setAboutPanelOptions({ applicationName: "Mosael", applicationVersion: app.getVersion() });
   // Dock 图标:打包版走 .icns;开发态未打包时 Dock 用的是 Electron 默认图标,这里用打进仓库的

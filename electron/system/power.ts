@@ -32,10 +32,10 @@ export const power: Capability = {
     };
 
     const onSuspend = () => {
-      console.warn("[system] 系统进入睡眠;运行中的任务可能被挂起");
+      console.warn("[system] system is going to sleep; running tasks may be suspended");
     };
     const onResume = () => {
-      console.info("[system] 系统已唤醒");
+      console.info("[system] system resumed");
     };
     powerMonitor.on("suspend", onSuspend);
     powerMonitor.on("resume", onResume);

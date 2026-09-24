@@ -63,7 +63,7 @@ export const protocol: Capability = {
       try {
         app.setAsDefaultProtocolClient(PROTOCOL);
       } catch (err) {
-        console.warn("[system] 协议注册失败:", err);
+        console.warn("[system] protocol registration failed:", err);
       }
     }
 

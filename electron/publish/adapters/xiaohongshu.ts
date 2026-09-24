@@ -1,7 +1,7 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOption, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, stringOption, typeOrFill, wait } from "./shared";
+import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOption, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
@@ -41,7 +41,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     // Editor fields render once the upload is accepted; wait for the title.
     const ready = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
     if (!ready) {
-      throw new Error("小红书上传后编辑器未出现(找不到标题输入框)。");
+      throw publishError("xiaohongshu", "publishErr_editorMissing");
     }
     const publishReady =
       (await this.driver.waitCssEnabled(this.s.submitButton, UPLOAD_TIMEOUT)) ||
@@ -49,9 +49,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         hostSelector: this.s.submitHost,
       }));
     if (!publishReady) {
-      throw new Error(
-        "Xiaohongshu upload did not finish in time (publish button stayed disabled).",
-      );
+      throw publishError("xiaohongshu", "publishErr_uploadTimeout");
     }
   }
 
@@ -71,7 +69,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     );
     const current = await this.driver.cssValue(this.s.titleInput);
     if (!accepted || current !== value) {
-      throw new Error("小红书标题输入框没有接受填入的内容。");
+      throw publishError("xiaohongshu", "publishErr_titleRejected");
     }
   }
 
@@ -92,7 +90,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         200,
       );
       if (!accepted) {
-        throw new Error("小红书正文编辑器没有接受填入的描述。");
+        throw publishError("xiaohongshu", "publishErr_descriptionRejected");
       }
     }
     if (!tags.length) {
@@ -144,7 +142,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         300,
       );
       if (!selected && !(await this.hasTopicChip(normalizedTag))) {
-        throw new Error(`Xiaohongshu topic was not selected: #${normalizedTag}`);
+        throw publishError("xiaohongshu", "publishErr_tagRejected", { tag: normalizedTag });
       }
       await this.driver.insertText(this.s.contentEditor, " ");
     }
@@ -165,7 +163,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     if (current === null) {
       if (!wanted) return; // 页面上没有这一项,而用户也没要求勾 —— 不必大惊小怪
       await plogPageState("Xiaohongshu original switch missing:", this.driver);
-      throw new Error("小红书「原创声明」控件未找到。");
+      throw publishError("xiaohongshu", "publishErr_originalMissing");
     }
     if (current !== wanted) {
       await this.driver.clickCss(this.s.originalSwitch).catch(() => undefined);
@@ -176,9 +174,9 @@ export class XiaohongshuAdapter implements PublishAdapter {
       .catch(() => null);
     if (after !== wanted) {
       await plogPageState("Xiaohongshu original not applied:", this.driver);
-      throw new Error(`Xiaohongshu 原创声明 stayed ${after}, wanted ${wanted}.`);
+      throw publishError("xiaohongshu", "publishErr_originalStuck", { after, wanted });
     }
-    plog("xiaohongshu 原创声明:", wanted);
+    plog("xiaohongshu original-content declaration:", wanted);
   }
 
   /**
@@ -214,11 +212,10 @@ export class XiaohongshuAdapter implements PublishAdapter {
     const shown = ((await this.driver.cssValue(this.s.visibilityValue)) ?? "").replace(/\s+/g, " ");
     if (!wanted.some((text) => shown.includes(text))) {
       await plogPageState("Xiaohongshu visibility not applied:", this.driver);
-      throw new Error(
-        `Xiaohongshu visibility is still ${JSON.stringify(shown.slice(0, 40))}, wanted ${visibility}; refusing to post.`,
-      );
+      plog("xiaohongshu visibility still shows:", shown.slice(0, 40));
+      throw publishError("xiaohongshu", "publishErr_visibilityNotApplied", { visibility });
     }
-    plog("xiaohongshu 可见性:", visibility);
+    plog("xiaohongshu visibility:", visibility);
   }
 
   async submit(): Promise<void> {
@@ -230,7 +227,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         hostSelector: this.s.submitHost,
       }));
     if (!ready) {
-      throw new Error("小红书发布按钮不可点击。");
+      throw publishError("xiaohongshu", "publishErr_submitDisabled");
     }
 
     // 四条降级路径互为兜底:发布按钮是 shadow DOM 里的自定义元素,外面 querySelector 不到,
@@ -414,9 +411,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     );
     if (!ok) {
       await plogPageState("waitResult failed (xiaohongshu):", this.driver);
-      throw new Error(
-        "Xiaohongshu did not confirm publish (no success text and still on/near the publish editor).",
-      );
+      throw publishError("xiaohongshu", "publishErr_notConfirmed");
     }
   }
 }

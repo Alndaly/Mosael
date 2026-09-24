@@ -42,6 +42,25 @@ ipcRenderer.on(IPC.event.openFiles, (_event, paths) => {
   window.dispatchEvent(new CustomEvent("mosael:open-files", { detail: paths }));
 });
 
+// 界面语言 → 主进程。菜单、托盘、原生对话框、发布器回报的失败原因都是主进程自己说的话,
+// 它得知道该说哪一种(见 i18n.cjs)。
+//
+// 契约是 **`<html lang>`**:渲染层本来就把界面语言写在那儿(见 frontend app/preferences),
+// 那是网页声明「我是什么语言」的标准位置。盯着它,渲染层就不必为桌面壳多记一个调用 ——
+// 漏记一处的话,那一处切了语言菜单还是旧的,而且不会报错。
+//
+// 只报**脚本写上去的**值:解析器带出来的 index.html 静态 lang 不产生 attributes 记录,
+// 所以启动时不会先报一次静态的 zh-CN 再翻成真实语言,菜单不闪。偏好每次保存都会重写一遍
+// lang(值不变也写),这里去重。观察 document 而不是 documentElement:preload 跑的时候
+// <html> 可能还没解析出来。
+let reportedLang = "";
+new MutationObserver(() => {
+  const lang = document.documentElement?.lang || "";
+  if (!lang || lang === reportedLang) return;
+  reportedLang = lang;
+  ipcRenderer.send(IPC.send.locale, { locale: lang });
+}).observe(document, { subtree: true, attributes: true, attributeFilter: ["lang"] });
+
 // 桌面环境标识:前端据此加 is-desktop / is-mac 类,适配无边框窗(红绿灯占位、拖拽区)。
 // setTitleOverlay:Win/Linux 的标题栏三键叠层颜色随主题切换(mac 无此叠层,调用为 no-op)。
 /** @type {import("./preload-api").MosaelDesktopBridge} */

@@ -1,8 +1,9 @@
 import type { PublishTask } from "../types";
 import type { SupportedPlatform } from "../platforms";
-import { resolvePlatform } from "../platforms";
+import { platformName, resolvePlatform } from "../platforms";
 import type { PageDriver } from "../pageDriver";
 import { plog } from "../log";
+import { t } from "../../i18n.cjs";
 
 export interface PublishAdapter {
   openCreatorPage(): Promise<void>;
@@ -15,6 +16,16 @@ export interface PublishAdapter {
   /** 适配器在页面上已经确认过的作品 ID(有的平台详情页会直接显示)。接口没读到时补上。 */
   knownPostId?(): string | null;
 }
+
+/**
+ * 适配器报给用户的失败原因。它会被回报给后端、出现在任务行里,所以按界面语言翻(见 electron/i18n.cjs
+ * 的 publishErr_*),主语是平台名。从平台页面上抄来的原文(比如被拒的理由)作为参数放进句子,不拼接。
+ */
+export const publishError = (
+  platform: SupportedPlatform,
+  key: string,
+  params: Record<string, unknown> = {},
+): Error => new Error(t(key, { platform: platformName(platform), ...params }));
 
 export const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -64,7 +75,7 @@ export async function typeOrFill(
     await driver.typeInto(selector, text);
     plog(`${what}: typed (trusted)`);
   } catch (error) {
-    plog(`${what}: 真实按键未落稳,降级到 DOM 事件 —`, String(error).replace(/^Error: /, "").slice(0, 130));
+    plog(`${what}: trusted typing did not stick, falling back to DOM events —`, String(error).replace(/^Error: /, "").slice(0, 130));
     await fallback();
   }
 }
@@ -106,7 +117,7 @@ export async function hasStoredSession(driver: PageDriver, platform: SupportedPl
   // 那一刻判成已登录不只是显示错 —— 登录成功会自动收起内嵌浏览器,人还在登录,窗口就没了。
   if (!onPlatformSite(driver.url(), session.hosts)) return false;
   const ok = await driver.hasCookie(session.url, session.cookies);
-  if (ok) plog(`${platform} checkLogin: 会话 cookie 命中(与当前页面无关)`);
+  if (ok) plog(`${platform} checkLogin: session cookie present (independent of the current page)`);
   return ok;
 }
 

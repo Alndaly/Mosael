@@ -1,7 +1,7 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, boolOption, enumOption, hasStoredSession, plogPageState, stringOption, wait } from "./shared";
+import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, boolOption, enumOption, hasStoredSession, plogPageState, publishError, stringOption, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { plog } from "../log";
 import { resolvePlatform } from "../platforms";
@@ -48,14 +48,14 @@ export class YoutubeAdapter implements PublishAdapter {
 
   async uploadVideo(videoPath: string): Promise<void> {
     if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
-      throw new Error("YouTube 未找到上传入口。");
+      throw publishError("youtube", "publishErr_noUploadEntry");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
 
     // 标题框出现 = 详情表单渲染了,视频仍在后台上传/处理。YouTube 会一直在页面上写
     // 「Uploading x%」/「Processing」,完成后变成「Upload complete」「Checks complete」之类。
     if (!(await this.driver.cssVisible(this.s.titleBox, UPLOAD_TIMEOUT))) {
-      throw new Error("YouTube 上传后详情表单未出现(找不到标题输入框)。");
+      throw publishError("youtube", "publishErr_editorMissing");
     }
     // **不能拿「下一步可点」当上传完成。** YouTube 用文件名预填标题,详情页一开始就是合法的,
     // 于是「下一步」几乎立刻可点,而视频还在传。那样走完流程去点「完成」,YouTube 给的是
@@ -92,7 +92,7 @@ export class YoutubeAdapter implements PublishAdapter {
       const state = await this.driver.evaluate<string>(stateExpr).catch(() => "unknown");
       if (state === "failed") {
         await plogPageState("YouTube upload failed:", this.driver);
-        throw new Error("YouTube 报告上传失败。");
+        throw publishError("youtube", "publishErr_uploadFailed");
       }
       if (state === "done-text") {
         settleReason = state;
@@ -107,7 +107,7 @@ export class YoutubeAdapter implements PublishAdapter {
     }
     if (!settleReason) {
       await plogPageState("YouTube upload did not settle:", this.driver);
-      throw new Error("YouTube 上传超时,未在时限内完成。");
+      throw publishError("youtube", "publishErr_uploadTimeout");
     }
     plog("youtube uploadVideo settled:", { reason: settleReason });
     // 详情页会给出这条稿件的 youtu.be 链接 —— 抓下来,收尾判定要靠它区分「我这支发出去了」和
@@ -132,9 +132,10 @@ export class YoutubeAdapter implements PublishAdapter {
     const actual = ((await this.driver.cssValue(this.s.titleBox)) ?? "").trim();
     if (actual !== value) {
       await plogPageState("YouTube title mismatch:", this.driver);
-      throw new Error(
-        `YouTube title box did not accept the title (expected ${JSON.stringify(value)}, got ${JSON.stringify(actual.slice(0, 80))}).`,
-      );
+      throw publishError("youtube", "publishErr_titleMismatch", {
+        expected: JSON.stringify(value),
+        actual: JSON.stringify(actual.slice(0, 80)),
+      });
     }
     const description = stringOption(this.task, "description");
     if (description && (await this.driver.cssVisible(this.s.descBox, 5_000))) {
@@ -182,7 +183,7 @@ export class YoutubeAdapter implements PublishAdapter {
     const radio = this.s.visibilityRadio[visibility];
     if (!(await this.driver.cssVisible(radio, ACTION_TIMEOUT))) {
       await plogPageState("YouTube visibility step not reached:", this.driver);
-      throw new Error(`YouTube visibility step was not reached (${visibility} option missing).`);
+      throw publishError("youtube", "publishErr_visibilityNotApplied", { visibility });
     }
     await this.driver.clickCss(radio);
     await wait(400);
@@ -193,12 +194,12 @@ export class YoutubeAdapter implements PublishAdapter {
       .catch(() => false);
     if (!chosen) {
       await plogPageState("YouTube visibility not applied:", this.driver);
-      throw new Error(`YouTube visibility ${visibility} was not applied.`);
+      throw publishError("youtube", "publishErr_visibilityNotApplied", { visibility });
     }
-    plog("youtube 可见性:", visibility, "面向儿童:", forKids);
+    plog("youtube visibility:", visibility, "made for kids:", forKids);
     if (!(await this.driver.waitCssEnabled(this.s.doneButton, ACTION_TIMEOUT).catch(() => false))) {
       await plogPageState("YouTube done button unavailable:", this.driver);
-      throw new Error("YouTube 完成按钮始终不可点击。");
+      throw publishError("youtube", "publishErr_submitDisabled");
     }
     await this.driver.clickCss(this.s.doneButton);
   }
@@ -234,7 +235,7 @@ export class YoutubeAdapter implements PublishAdapter {
     plog("youtube waitResult:", { settled, id: this.uploadedId, ...(state ?? {}) });
     if (!settled) {
       await plogPageState("waitResult failed (youtube):", this.driver);
-      throw new Error("YouTube 未确认上传(列表里没有该视频,也没有成功提示)。");
+      throw publishError("youtube", "publishErr_notConfirmed");
     }
   }
 }

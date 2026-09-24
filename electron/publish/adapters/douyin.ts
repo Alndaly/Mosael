@@ -1,7 +1,7 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_PUBLISH_VIDEO, UPLOAD_TIMEOUT, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, stringOption, typeOrFill, wait } from "./shared";
+import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_PUBLISH_VIDEO, UPLOAD_TIMEOUT, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
@@ -50,10 +50,10 @@ export class DouyinAdapter implements PublishAdapter {
       1_500,
     );
     if (!settled) {
-      throw new Error("抖音上传超时,未在时限内完成。");
+      throw publishError("douyin", "publishErr_uploadTimeout");
     }
     if (await this.driver.hasText(this.s.uploadFailedText)) {
-      throw new Error("抖音报告视频上传失败(页面出现「上传失败」)。");
+      throw publishError("douyin", "publishErr_uploadFailed");
     }
   }
 
@@ -143,9 +143,9 @@ export class DouyinAdapter implements PublishAdapter {
       .catch(() => false);
     if (!ok) {
       await plogPageState("Douyin visibility not applied:", this.driver);
-      throw new Error(`Douyin visibility ${visibility} was not applied; refusing to post.`);
+      throw publishError("douyin", "publishErr_visibilityNotApplied", { visibility });
     }
-    plog("douyin 可见性:", visibility);
+    plog("douyin visibility:", visibility);
   }
 
   async submit(): Promise<void> {
@@ -198,7 +198,7 @@ export class DouyinAdapter implements PublishAdapter {
       plog("douyin onboarding: dismissed by trusted click");
       return;
     }
-    plog("douyin onboarding: 可信手段关不掉,退回删除节点");
+    plog("douyin onboarding: trusted dismissal failed, removing the node instead");
     await this.driver.removeElements(this.s.overlays);
   }
 
@@ -206,7 +206,7 @@ export class DouyinAdapter implements PublishAdapter {
     const ok = await this.driver.waitForUrl(this.s.isManageUrl, RESULT_TIMEOUT);
     if (!ok) {
       await plogPageState("waitResult failed (douyin):", this.driver);
-      throw new Error("抖音未确认发布(没有跳转到内容管理页)。");
+      throw publishError("douyin", "publishErr_notConfirmed");
     }
   }
 }

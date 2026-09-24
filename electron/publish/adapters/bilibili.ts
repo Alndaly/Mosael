@@ -1,7 +1,7 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, stringOption, typeOrFill, wait } from "./shared";
+import { ACTION_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
@@ -49,13 +49,13 @@ export class BilibiliAdapter implements PublishAdapter {
   async uploadVideo(videoPath: string): Promise<void> {
     const attached = await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT);
     if (!attached) {
-      throw new Error("B站未找到上传入口。");
+      throw publishError("bilibili", "publishErr_noUploadEntry");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
 
     const editorReady = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
     if (!editorReady) {
-      throw new Error("B站上传后编辑器未出现(找不到标题输入框)。");
+      throw publishError("bilibili", "publishErr_editorMissing");
     }
 
     const donePattern = this.s.uploadDoneTexts.join("|");
@@ -106,7 +106,7 @@ export class BilibiliAdapter implements PublishAdapter {
         .evaluate<string>(`(document.body?.innerText || '').slice(0, 400)`)
         .catch(() => "");
       plog("uploadVideo not settled, page text:", JSON.stringify(seen));
-      throw new Error("B站上传超时,未在时限内完成。");
+      throw publishError("bilibili", "publishErr_uploadTimeout");
     }
     plog("uploadVideo settled:", { started, reason: settleReason });
     if (
@@ -116,7 +116,7 @@ export class BilibiliAdapter implements PublishAdapter {
         100,
       )
     ) {
-      throw new Error("B站报告视频上传失败。");
+      throw publishError("bilibili", "publishErr_uploadFailed");
     }
   }
 
@@ -128,7 +128,7 @@ export class BilibiliAdapter implements PublishAdapter {
     );
     const current = await this.driver.cssValue(this.s.titleInput);
     if (!current?.includes(value)) {
-      throw new Error("B站标题输入框没有接受填入的内容。");
+      throw publishError("bilibili", "publishErr_titleRejected");
     }
   }
 
@@ -166,7 +166,7 @@ export class BilibiliAdapter implements PublishAdapter {
           .catch(() => false)) ||
         (await this.clickAnyRecommendedTag());
       if (!inserted) {
-        throw new Error(`Bilibili tag was not accepted: #${normalizedTag}`);
+        throw publishError("bilibili", "publishErr_tagRejected", { tag: normalizedTag });
       }
       await wait(200);
     }
@@ -325,8 +325,8 @@ export class BilibiliAdapter implements PublishAdapter {
     }>(probe);
     plog("waitResult:", { settled, ...state });
     if (state.ok) return;
-    if (state.fail) throw new Error(`B 站投稿被拒:${state.fail}`);
-    throw new Error("B站未确认投稿(没有出现成功页,也没有跳转到稿件管理)。");
+    if (state.fail) throw publishError("bilibili", "publishErr_rejected", { reason: state.fail });
+    throw publishError("bilibili", "publishErr_notConfirmed");
   }
 
   private async inputTag(tag: string): Promise<boolean> {
@@ -398,7 +398,7 @@ export class BilibiliAdapter implements PublishAdapter {
       250,
     );
     if (!accepted) {
-      throw new Error("B站创作声明未能选中。");
+      throw publishError("bilibili", "publishErr_declarationNotSelected");
     }
   }
 
@@ -539,13 +539,13 @@ export class BilibiliAdapter implements PublishAdapter {
     })()`);
 
     if (!clicked) {
-      plog("selectRecommendedCover: 没有可点的候选封面,跳过");
+      plog("selectRecommendedCover: no clickable candidate cover, skipping");
       return;
     }
 
     const selected = await this.driver.cssVisible(this.s.coverSelected, 5_000);
     if (!selected) {
-      throw new Error("B站推荐封面未能选中。");
+      throw publishError("bilibili", "publishErr_coverNotSelected");
     }
     // 选中 ≠ 处理完:B 站选完封面还要上传/裁切一下,期间点投稿同样静默无反应。等它安静下来。
     const quiet = await this.driver.waitForFunction(
@@ -553,7 +553,7 @@ export class BilibiliAdapter implements PublishAdapter {
       15_000,
       500,
     );
-    plog("selectRecommendedCover: 已选中", { coverQuiet: quiet });
+    plog("selectRecommendedCover: selected", { coverQuiet: quiet });
   }
 
   private async waitForTagChip(tag: string): Promise<boolean> {

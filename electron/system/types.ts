@@ -42,5 +42,7 @@ export interface Capability {
 export interface CapabilityHandle {
   /** 状态变化时被调用(所有能力都收到同一份快照)。 */
   onStatus?: (status: SystemStatus) => void;
+  /** 界面语言变了(见 index.setLocale):自己画出来的字(托盘菜单)要重画。 */
+  onLocale?: () => void;
   dispose?: () => void;
 }

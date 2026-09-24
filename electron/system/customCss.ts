@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { app, shell } from "electron";
 
+import { t } from "../i18n.cjs";
 import { IPC } from "../ipc-contract.cjs";
 import type { Capability, SystemContext } from "./types";
 
@@ -21,32 +22,6 @@ import type { Capability, SystemContext } from "./types";
  */
 
 const FILE_NAME = "custom.css";
-
-/** 新建时写进去的模板。空文件对着一片空白无从下手,给几个真的能改的东西。 */
-const TEMPLATE = `/* Mosael —— 自定义 CSS
- *
- * 这个文件里的样式**压过应用自带的所有样式**(它是无层级的,而且注入在最后),
- * 所以多数时候不需要 !important。存盘即生效,不用重启。
- *
- * 改主题色、圆角这类整体观感,最省事的是覆盖设计令牌:
- */
-
-/*
-:root {
-  --primary: #7c3aed;
-  --radius: 6px;
-}
-*/
-
-/* 深色主题单独调: */
-/*
-.dark {
-  --primary: #a78bfa;
-}
-*/
-
-/* 也可以直接改某个元素。用开发者工具(Cmd/Ctrl+Option+I)选中它看类名。 */
-`;
 
 export function customCssPath(): string {
   return path.join(app.getPath("userData"), FILE_NAME);
@@ -67,10 +42,12 @@ export function ensureCustomCss(): string {
   try {
     if (!fs.existsSync(file)) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, TEMPLATE, "utf8");
+      // 模板按建文件那一刻的界面语言写(见 i18n.cjs 的 customCss_template):空文件对着一片空白
+      // 无从下手,给几个真的能改的东西 —— 而说明得是用户读得懂的那种语言。
+      fs.writeFileSync(file, t("customCss_template"), "utf8");
     }
   } catch (error) {
-    console.warn("[custom-css] 建文件失败:", (error as Error).message);
+    console.warn("[custom-css] failed to create the file:", (error as Error).message);
   }
   return file;
 }
@@ -112,7 +89,7 @@ export const customCss: Capability = {
       });
     } catch (error) {
       // 监听不上不是致命的:设置页里还能手动重新加载,只是没有存盘即生效。
-      console.warn("[custom-css] 监听 userData 目录失败:", (error as Error).message);
+      console.warn("[custom-css] failed to watch the userData directory:", (error as Error).message);
     }
 
     return {

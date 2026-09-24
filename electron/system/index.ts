@@ -15,6 +15,7 @@ import { adoptSecondInstance, protocol } from "./protocol";
 import { shortcuts } from "./shortcuts";
 import { isQuitting, markQuitting, residency } from "./residency";
 import { tray } from "./tray";
+import { setLocale as setMessagesLocale } from "../i18n.cjs";
 import { EMPTY_STATUS, type Capability, type CapabilityHandle, type SystemContext, type SystemStatus } from "./types";
 
 /**
@@ -31,6 +32,24 @@ import { EMPTY_STATUS, type Capability, type CapabilityHandle, type SystemContex
 
 const CAPABILITIES: Capability[] = [residency, power, tray, badge, notify, protocol, shortcuts, customCss];
 
+/** 已注册、还没 dispose 的能力。语言变化要挨个告诉它们(托盘菜单是它自己画的字)。 */
+const live = new Set<CapabilityHandle>();
+
+/**
+ * 界面语言变了。本 bundle 打包了自己那份 i18n.cjs(状态不和 main.cjs 共享),所以由主进程
+ * 转告;注册之前调也行 —— 那时只是把语言定下来,托盘一建出来就是对的语言。
+ */
+export function setLocale(locale: string): void {
+  setMessagesLocale(locale);
+  for (const handle of live) {
+    try {
+      handle.onLocale?.();
+    } catch (err) {
+      console.warn("[system] locale update failed:", err);
+    }
+  }
+}
+
 export interface SystemHandle {
   pushStatus: (status: SystemStatus) => void;
   dispose: () => void;
@@ -41,10 +60,13 @@ export function registerSystemCapabilities(ctx: SystemContext): SystemHandle {
   for (const capability of CAPABILITIES) {
     try {
       const handle = capability.register(ctx);
-      if (handle) handles.push(handle);
+      if (handle) {
+        handles.push(handle);
+        live.add(handle);
+      }
     } catch (err) {
       // 一个能力挂掉不该带走其他能力,更不该拦住应用启动:托盘建不出来,应用照常能用。
-      console.warn(`[system] 能力 ${capability.name} 注册失败:`, err);
+      console.warn(`[system] capability ${capability.name} failed to register:`, err);
     }
   }
 
@@ -56,12 +78,13 @@ export function registerSystemCapabilities(ctx: SystemContext): SystemHandle {
         try {
           handle.onStatus?.(last);
         } catch (err) {
-          console.warn("[system] 状态分发失败:", err);
+          console.warn("[system] status dispatch failed:", err);
         }
       }
     },
     dispose() {
       for (const handle of handles) {
+        live.delete(handle);
         try {
           handle.dispose?.();
         } catch {

@@ -25,6 +25,7 @@
 // Mosael 里新注册一把**,之后在这个档案里就能用 Touch ID 登录。
 const { app, dialog, session } = require("electron");
 
+const { t } = require("./i18n.cjs");
 const { readWebAuthnKeychainGroup } = require("./mac-signature.cjs");
 
 /** 与 package.json 的 `build.appId` 必须一致 —— keychain group 是拿它拼的,对不上就静默失效。
@@ -45,7 +46,7 @@ function touchIdPossible() {
 function configurePlatformAuthenticator() {
   const group = touchIdPossible();
   if (!group) {
-    log("平台认证器未启用:需要 macOS 签名安装包及匹配的钥匙串权限");
+    log("platform authenticator disabled: needs a signed macOS build with a matching keychain entitlement");
     return false;
   }
   try {
@@ -55,11 +56,11 @@ function configurePlatformAuthenticator() {
         promptReason: "verify your identity on $1",
       },
     });
-    log("平台认证器配置完成:", group);
+    log("platform authenticator configured:", group);
     return true;
   } catch (error) {
     // Electron 初始化失败不应阻断其他浏览器功能。
-    log("平台认证器启用失败:", String(error).slice(0, 200));
+    log("platform authenticator failed to enable:", String(error).slice(0, 200));
     return false;
   }
 }
@@ -88,15 +89,15 @@ function handleAccountSelection(partition) {
       const labels = accounts.map((a) => a.name || a.displayName || a.credentialId.slice(0, 12));
       const picked = dialog.showMessageBoxSync({
         type: "question",
-        title: "选择账号",
-        message: `${details.relyingPartyId} 上有多个可用账号`,
-        buttons: [...labels, "取消"],
+        title: t("webauthn_pickAccountTitle"),
+        message: t("webauthn_pickAccountMessage", { site: details.relyingPartyId }),
+        buttons: [...labels, t("common_cancel")],
         cancelId: labels.length,
         defaultId: 0,
       });
       callback(picked < labels.length ? accounts[picked].credentialId : undefined);
     } catch (error) {
-      log("选择失败:", String(error).slice(0, 200));
+      log("account selection failed:", String(error).slice(0, 200));
       // **一定要回调一次。** 不回调请求就永远挂着 —— 正是我们要消灭的那种状态。
       callback(undefined);
     }

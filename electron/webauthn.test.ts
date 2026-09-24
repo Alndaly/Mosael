@@ -35,7 +35,9 @@ function loadWebAuthn(platform = "darwin", isPackaged = true, signedGroup = grou
     process: { platform, execPath: "/Applications/Mosael.app/Contents/MacOS/Mosael", env: {} },
     require: (name: string) => name === "electron"
       ? { app, dialog, session: { fromPartition: () => target } }
-      : { readWebAuthnKeychainGroup: readGroup },
+      : name === "./i18n.cjs"
+        ? createRequire(import.meta.url)("./i18n.cjs")
+        : { readWebAuthnKeychainGroup: readGroup },
   };
   vm.runInNewContext(SOURCE, context);
   return { ...context.module.exports, app, readGroup, target, dialog };
@@ -130,5 +132,27 @@ describe("discoverable account selection", () => {
     handler({}, { accounts }, callback);
     expect(callback).toHaveBeenLastCalledWith(undefined);
     expect(callback).toHaveBeenCalledTimes(4);
+  });
+
+  it("asks in the interface language", () => {
+    const i18n = createRequire(import.meta.url)("./i18n.cjs");
+    const api = loadWebAuthn();
+    api.handleAccountSelection("persist:account");
+    const handler = api.target.on.mock.calls[0][1];
+    const accounts = [{ name: "Alice", credentialId: "one" }, { name: "Bob", credentialId: "two" }];
+    try {
+      i18n.setLocale("en-US");
+      handler({}, { accounts, relyingPartyId: "example.com" }, vi.fn());
+      expect(api.dialog.showMessageBoxSync.mock.lastCall[0]).toMatchObject({
+        title: "Choose an account",
+        message: "Several accounts are available on example.com",
+        buttons: ["Alice", "Bob", "Cancel"],
+      });
+      i18n.setLocale("zh-CN");
+      handler({}, { accounts, relyingPartyId: "example.com" }, vi.fn());
+      expect(api.dialog.showMessageBoxSync.mock.lastCall[0].buttons).toEqual(["Alice", "Bob", "取消"]);
+    } finally {
+      i18n.setLocale(i18n.DEFAULT_LOCALE);
+    }
   });
 });

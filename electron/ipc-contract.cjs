@@ -37,6 +37,7 @@ const IPC = Object.freeze({
     titleOverlay: "mosael:title-overlay",
     systemStatus: "system:status",
     systemNotify: "system:notify",
+    locale: "mosael:locale",
   }),
   event: Object.freeze({
     fullscreen: "mosael:fullscreen",
@@ -161,11 +162,26 @@ function parseTaskNotice(value) {
   };
 }
 
+/**
+ * 渲染层的界面语言(`<html lang>` 上那个值,如 `en-US`)。主进程只认 zh / en,归一在
+ * i18n.cjs 里做;这里只保证它是一个像样的语言标签,不是任意长的字符串。
+ */
+function parseLocale(value) {
+  const channel = IPC.send.locale;
+  const payload = record(value, channel);
+  const locale = requiredString(payload, "locale", channel);
+  if (!/^[A-Za-z]{2,8}([-_][A-Za-z0-9]{1,8})*$/.test(locale)) {
+    throw new TypeError(`${channel}: locale must be a language tag`);
+  }
+  return { locale };
+}
+
 module.exports = {
   IPC,
   parseAuthToken,
   parseRestoreStage,
   parseBrowserLogin,
+  parseLocale,
   parsePanelId,
   parsePanelLayout,
   parsePublishTarget,

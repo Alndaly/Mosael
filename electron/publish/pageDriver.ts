@@ -990,7 +990,7 @@ export class PageDriver {
   async waitButtonEnabled(text: string, timeout = 30_000): Promise<boolean> {
     if (/^[#.[]/.test(text.trim())) {
       throw new Error(
-        `waitButtonEnabled 收的是按钮文案,不是选择器(收到 ${JSON.stringify(text.slice(0, 40))});选择器请用 waitCssEnabled`,
+        `waitButtonEnabled takes button text, not a selector (got ${JSON.stringify(text.slice(0, 40))}); use waitCssEnabled for selectors`,
       );
     }
     const t = JSON.stringify(text);

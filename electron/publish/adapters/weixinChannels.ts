@@ -1,7 +1,7 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, HUMAN_INTERVENTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, plogPageState, stringOption, typeOrFill, wait } from "./shared";
+import { ACTION_TIMEOUT, HUMAN_INTERVENTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { AutomationBlockedError } from "../errors";
@@ -42,7 +42,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
       attached = await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT);
     }
     if (!attached) {
-      throw new Error("微信视频号未找到上传入口。");
+      throw publishError("weixin-channels", "publishErr_noUploadEntry");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
     await this.waitForHumanGateIfNeeded();
@@ -52,9 +52,9 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     const ok = await this.driver.waitButtonEnabled(this.s.submitText, UPLOAD_TIMEOUT);
     if (!ok) {
       if (await this.driver.cssVisible(this.s.uploadFailed, 500)) {
-        throw new Error("微信视频号报告上传出错(status-msg.error)。");
+        throw publishError("weixin-channels", "publishErr_uploadFailed");
       }
-      throw new Error("微信视频号上传超时,未在时限内完成。");
+      throw publishError("weixin-channels", "publishErr_uploadTimeout");
     }
   }
 
@@ -99,7 +99,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     await this.assertCanPublish();
     const ready = await this.driver.waitButtonEnabled(this.s.submitText, ACTION_TIMEOUT);
     if (!ready) {
-      throw new Error("微信视频号发表按钮不可点击。");
+      throw publishError("weixin-channels", "publishErr_submitDisabled");
     }
     await commitClick({
       what: "weixin-channels submit",
@@ -144,7 +144,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
       ));
     if (!ok) {
       await plogPageState("waitResult failed (weixin-channels):", this.driver);
-      throw new Error("微信视频号未确认发布(没有跳转到动态列表)。");
+      throw publishError("weixin-channels", "publishErr_notConfirmed");
     }
   }
 
@@ -158,7 +158,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
       if (!cleared) {
         throw new AutomationBlockedError(
           "manual_required",
-          "WeChat Channels requires admin verification. Complete the QR verification in the embedded view, then retry.",
+          publishError("weixin-channels", "publishErr_adminVerify").message,
         );
       }
     }
@@ -168,7 +168,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     if (await this.driver.hasTextDeep(this.s.noPermissionText)) {
       throw new AutomationBlockedError(
         "permission_required",
-        "WeChat Channels says this WeChat account is not an admin/operator for the selected channel.",
+        publishError("weixin-channels", "publishErr_notOperator").message,
       );
     }
   }

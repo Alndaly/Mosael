@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { executeBrowserAction } from "./browserActions";
+import { DEFAULT_LOCALE, setLocale } from "../i18n.cjs";
 import type { PageDriver } from "./pageDriver";
 
 /** 只实现这几个动作用得到的那几项;其余留空,用到就会立刻炸出来。 */
@@ -15,18 +16,34 @@ function fakeDriver(url: string, overrides: Partial<PageDriver> = {}): PageDrive
   } as unknown as PageDriver;
 }
 
+afterEach(() => {
+  setLocale(DEFAULT_LOCALE);
+});
+
 describe("等待超时要说清等的是什么", () => {
   it("选择器等不到时,把选择器、等了多久、当时停在哪一页都写进错误", async () => {
     // 「等待超时」四个字是站点改版之后最常撞见的那条错误,而它当时什么都不说 ——
     // 得让人回去翻节点配置再猜一遍「是选择器写错了,还是页面根本没跳过去」。
     const driver = fakeDriver("https://example.com/login?next=/inbox");
+    setLocale("zh-CN");
     await expect(
       executeBrowserAction(driver, "wait", { selector: "#nope", timeout_ms: 4000 }),
     ).rejects.toThrow(/等待超时\(4\.0s\).*#nope.*https:\/\/example\.com\/login/s);
   });
 
+  it("报错跟着界面语言走:英文界面里是英文", async () => {
+    // 这条错误会出现在工作流 / 智能体的执行结果里,英文界面里冒出一句中文就是没翻。
+    const driver = fakeDriver("https://example.com/login?next=/inbox");
+    setLocale("en-US");
+    await expect(
+      executeBrowserAction(driver, "wait", { selector: "#nope", timeout_ms: 4000 }),
+    ).rejects.toThrow(/^Timed out after 4\.0s: the element never appeared: #nope; the page is at https:\/\/example\.com\/login/);
+    await expect(executeBrowserAction(driver, "fly", {})).rejects.toThrow("Unknown browser action: fly");
+  });
+
   it("等「消失」和等「出现」说的不是同一件事", async () => {
     const driver = fakeDriver("https://example.com/");
+    setLocale("zh-CN");
     await expect(
       executeBrowserAction(driver, "wait", { selector: ".spinner", gone: true, timeout_ms: 1000 }),
     ).rejects.toThrow(/元素始终没有消失.*\.spinner/s);
@@ -34,6 +51,7 @@ describe("等待超时要说清等的是什么", () => {
 
   it("等网址和等文字也各自说清等的是哪一个", async () => {
     const driver = fakeDriver("https://example.com/still-here");
+    setLocale("zh-CN");
     await expect(
       executeBrowserAction(driver, "wait", { url_contains: "/done", timeout_ms: 2000 }),
     ).rejects.toThrow(/网址里一直没有出现.*\/done/s);

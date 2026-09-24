@@ -1,7 +1,7 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, enumOption, hasStoredSession, plogPageState, wait } from "./shared";
+import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, enumOption, hasStoredSession, plogPageState, publishError, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { plog } from "../log";
 
@@ -54,14 +54,14 @@ export class TiktokAdapter implements PublishAdapter {
 
   async uploadVideo(videoPath: string): Promise<void> {
     if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
-      throw new Error("TikTok 未找到上传入口。");
+      throw publishError("tiktok", "publishErr_noUploadEntry");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
 
     // 文案编辑器出现 = 表单渲染了,**不等于视频传完**(同 B 站那一课)。真正的完成信号是
     // 「发布按钮可用」:TikTok 在转码完成前一直禁用它。
     if (!(await this.driver.cssVisible(this.s.captionEditor, UPLOAD_TIMEOUT))) {
-      throw new Error("TikTok 上传后编辑器未出现(找不到描述输入框)。");
+      throw publishError("tiktok", "publishErr_editorMissing");
     }
     const failedPattern = this.s.uploadFailedTexts.join("|");
     const deadline = Date.now() + UPLOAD_TIMEOUT;
@@ -71,7 +71,7 @@ export class TiktokAdapter implements PublishAdapter {
         .catch(() => false);
       if (failed) {
         await plogPageState("TikTok upload failed:", this.driver);
-        throw new Error("TikTok 报告上传失败。");
+        throw publishError("tiktok", "publishErr_uploadFailed");
       }
       if (await this.driver.waitCssEnabled(this.s.postButton, 2_000).catch(() => false)) {
         return;
@@ -79,7 +79,7 @@ export class TiktokAdapter implements PublishAdapter {
       await wait(1_000);
     }
     await plogPageState("TikTok upload did not settle:", this.driver);
-    throw new Error("TikTok 上传超时(发布按钮一直不可用)。");
+    throw publishError("tiktok", "publishErr_uploadTimeout");
   }
 
   async fillTitle(title: string): Promise<void> {
@@ -92,9 +92,10 @@ export class TiktokAdapter implements PublishAdapter {
     const actual = ((await this.driver.cssValue(this.s.captionEditor)) ?? "").trim();
     if (!actual.includes(title.trim())) {
       await plogPageState("TikTok caption mismatch:", this.driver);
-      throw new Error(
-        `TikTok caption did not accept the text (expected ${JSON.stringify(title.slice(0, 40))}, got ${JSON.stringify(actual.slice(0, 80))}).`,
-      );
+      throw publishError("tiktok", "publishErr_titleMismatch", {
+        expected: JSON.stringify(title.slice(0, 40)),
+        actual: JSON.stringify(actual.slice(0, 80)),
+      });
     }
   }
 
@@ -131,7 +132,7 @@ export class TiktokAdapter implements PublishAdapter {
     }
     if (!(await this.driver.cssVisible(this.s.visibilityTrigger, ACTION_TIMEOUT))) {
       await plogPageState("TikTok visibility control missing:", this.driver);
-      throw new Error("TikTok 可见范围控件未找到,为避免误公开发布已中止。");
+      throw publishError("tiktok", "publishErr_visibilityMissing");
     }
     // 打开下拉:先真实鼠标事件,再完整指针序列,最后 el.click()。
     //
@@ -162,11 +163,10 @@ export class TiktokAdapter implements PublishAdapter {
     const shown = ((await this.driver.cssValue(this.s.visibilityValue)) ?? "").replace(/\s+/g, " ");
     if (!wanted.some((text) => shown.includes(text))) {
       await plogPageState("TikTok visibility not applied:", this.driver);
-      throw new Error(
-        `TikTok visibility is still ${JSON.stringify(shown.slice(0, 60))}, wanted ${visibility}; refusing to post.`,
-      );
+      plog("tiktok visibility still shows:", shown.slice(0, 60));
+      throw publishError("tiktok", "publishErr_visibilityNotApplied", { visibility });
     }
-    plog("tiktok 可见性:", visibility);
+    plog("tiktok visibility:", visibility);
   }
 
   async submit(): Promise<void> {
@@ -182,7 +182,7 @@ export class TiktokAdapter implements PublishAdapter {
         }
       }
       await plogPageState("TikTok submit button unavailable:", this.driver);
-      throw new Error("TikTok 发布按钮始终不可点击。");
+      throw publishError("tiktok", "publishErr_submitDisabled");
     }
     await this.driver.clickCss(this.s.postButton);
   }
@@ -204,7 +204,7 @@ export class TiktokAdapter implements PublishAdapter {
     plog("tiktok waitResult:", { settled, ...(state ?? {}) });
     if (!settled) {
       await plogPageState("waitResult failed (tiktok):", this.driver);
-      throw new Error("TikTok 未确认发布(没有成功提示,也没有跳转到内容列表)。");
+      throw publishError("tiktok", "publishErr_notConfirmed");
     }
   }
 }
