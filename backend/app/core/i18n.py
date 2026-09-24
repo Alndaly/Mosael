@@ -23,6 +23,7 @@ DEFAULT_LOCALE = LOCALES[0]
 
 #: key → {语言: 文案}。**每个 key 两种语言都必须有**(见 tests/test_backend_i18n.py 的棘轮)。
 MESSAGES: dict[str, dict[str, str]] = {
+    # ---- i18n 分区 B1(路由、插件、供应商设置等):这一批新加的 key 放在这行下面 ----
     # ---- 发布平台 ----
     "platformDesc_douyin": {
         "zh": "由桌面端发布器用你已登录的抖音创作者账号自动上传;首次使用需在弹出的窗口里登录。",
@@ -631,6 +632,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "有的模型(如 Seedance)首尾帧和参考素材不能同时用。两组都接上时,在这里选这一次用哪一组,另一组会被忽略;「全部」表示原样全部交给模型",
         "en": "Some models (such as Seedance) cannot combine first/last frames with reference media. With both connected, choose which group this run uses and the other is ignored; All passes everything to the model",
     },
+    # ---- i18n 分区 B2(ai/ 下的供应商与运行时):这一批新加的 key 放在这行下面 ----
     "wfNode_ai_generate_source_assets": {"zh": "每行一条 `素材id` 或 `素材id:角色`。角色:{roles_zh};不写角色时图生视频按首帧、图生图按参考图。", "en": "One `asset_id` or `asset_id:role` per line. Roles: {roles}. With no role, image-to-video treats it as the first frame and image-to-image as a reference image."},
     "wfNode_publish": {"zh": "发布", "en": "Publish"},
     "wfNode_publish_desc": {"zh": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。", "en": "Publish to Douyin / Xiaohongshu / Weixin Channels / Bilibili using an already signed-in account (carried out by the desktop app's embedded browser)."},
@@ -1237,6 +1239,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "连不上 Google 免费翻译接口:{reason}。它在部分网络下不可达 —— 可以配置出站代理,或者把翻译节点的引擎换成「AI 翻译」。",
         "en": "Could not reach Google's free translate endpoint: {reason}. It is unreachable on some networks \u2014 configure an outbound proxy, or switch the translate node's engine to \u300cAI\u300d.",
     },
+    # ---- i18n 分区 B3(画板、智能体、生成、配音等领域):这一批新加的 key 放在这行下面 ----
 }
 
 

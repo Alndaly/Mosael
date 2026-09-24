@@ -1,5 +1,6 @@
 export const messages = {
   "zh-CN": {
+    // ---- i18n 分区 F1(3D 场景):这一批新加的 key 放在这行下面 ----
     sceneAnimTimeline: "动画时间轴",
     sceneAnimResize: "调整时间轴高度",
     sceneAnimSearch: "搜索物体",
@@ -1256,6 +1257,7 @@ export const messages = {
     feishuBindMembers: "已绑定的飞书用户",
     feishuBindNobody: "还没有人绑定",
     feishuRemove: "删除",
+    // ---- i18n 分区 F2(其余界面与浏览器扩展):这一批新加的 key 放在这行下面 ----
     feishuNoBots: "还没有绑定飞书机器人。",
 
     // Editor
@@ -2514,8 +2516,10 @@ export const messages = {
     shortcutOwnerKeyframeClear: "移除关键帧",
     shortcutOwnerDelete: "删除",
     shortcutOwnerBrowser: "浏览器自己",
+    // ---- i18n 分区 F3(Electron 桌面壳):这一批新加的 key 放在这行下面 ----
   },
   "en-US": {
+    // ---- i18n 分区 F1(3D 场景):这一批新加的 key 放在这行下面 ----
     sceneAnimTimeline: "Animation timeline",
     sceneAnimResize: "Resize timeline",
     sceneAnimSearch: "Search objects",
@@ -3753,6 +3757,7 @@ export const messages = {
     record: "Record",
     recordTitle: "Record media",
     recordStart: "Start recording",
+    // ---- i18n 分区 F2(其余界面与浏览器扩展):这一批新加的 key 放在这行下面 ----
     recordStop: "Stop",
     recordDenied: "Can't access that recording source (denied or unavailable)",
     recordFailed: "Recording failed — check the devices and try again",
@@ -4992,6 +4997,7 @@ export const messages = {
     shortcutOwnerKeyframeClear: "Clear keyframe",
     shortcutOwnerDelete: "Delete",
     shortcutOwnerBrowser: "the browser",
+    // ---- i18n 分区 F3(Electron 桌面壳):这一批新加的 key 放在这行下面 ----
   },
 } as const;
 
