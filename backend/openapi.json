@@ -787,6 +787,128 @@
         }
       }
     },
+    "/api/hooks/scheduled-tasks/{task_id}/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "hooks"
+        ],
+        "summary": "Get Hook Run",
+        "description": "这次运行到哪了。外部系统拿触发时返回的 run_id 轮询,直到 status 落到终态。",
+        "operationId": "get_hook_run_api_hooks_scheduled_tasks__task_id__runs__run_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hooks/scheduled-tasks/{task_id}/runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "hooks"
+        ],
+        "summary": "Cancel Hook Run",
+        "description": "取消这次运行。节点粒度:正在执行的那一步跑完就停,派生的子任务一并取消(见 jobs.cancel_job)。",
+        "operationId": "cancel_hook_run_api_hooks_scheduled_tasks__task_id__runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/publish/worker/claim": {
       "post": {
         "tags": [
@@ -9846,6 +9968,49 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scheduled-tasks/{task_id}/webhook-secret": {
+      "post": {
+        "tags": [
+          "scheduler"
+        ],
+        "summary": "Reset Webhook Secret",
+        "description": "重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。",
+        "operationId": "reset_webhook_secret_api_scheduled_tasks__task_id__webhook_secret_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledTaskOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -23231,6 +23396,87 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HookRunOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result",
+            "default": {}
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "HookRunOut",
+        "description": "外部系统看到的一次运行。进度与说明取自背后那个任务(按请求的 Accept-Language 说)。"
       },
       "InsertClipRequest": {
         "properties": {

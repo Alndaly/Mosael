@@ -220,6 +220,7 @@ export function ConfirmDialog({
   title,
   body,
   pending,
+  confirmLabel,
   onCancel,
   onConfirm,
 }: {
@@ -227,6 +228,8 @@ export function ConfirmDialog({
   title: string;
   body?: string;
   pending: boolean;
+  /** 确认键上写什么;不给就是「确认」。写成动作本身(「重置密钥」)比一个泛泛的确认更不容易点错。 */
+  confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -249,7 +252,7 @@ export function ConfirmDialog({
             loading={pending}
             onClick={onConfirm}
           >
-            {t("confirm")}
+            {confirmLabel ?? t("confirm")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

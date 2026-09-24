@@ -2,7 +2,7 @@ import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DE
 import React from "react";
 import { PageHeading } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, CircleAlert, Copy, Loader2, Play, Plus, Power, RotateCcw, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -10,6 +10,7 @@ import {
   createScheduledTask,
   deleteScheduledTask,
   listScheduledTaskRuns,
+  resetWebhookSecret,
   listScheduledTasks,
   listWorkflows,
   runScheduledTask,
@@ -220,30 +221,95 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   );
 }
 
-/** Webhook 任务的触发地址:POST 该 URL 即触发一次运行,密钥即凭证。 */
-function WebhookUrlRow({ task }: { task: ScheduledTask }) {
+/**
+ * Webhook 任务的触发地址:POST 该 URL 即触发一次运行,密钥即凭证。
+ *
+ * 同一把密钥还管着「查这次运行到哪了」和「取消它」(后端 api/routes/hooks)—— 此前外部系统
+ * 触发完就只能干等。三条调用写在折叠的说明里,各自能复制。密钥泄漏了就重置:旧地址连同
+ * 查进度、取消一起失效。
+ */
+function WebhookUrlRow({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
   const t = useI18n();
+  const qc = useQueryClient();
+  const [confirming, setConfirming] = React.useState(false);
+  const [showApi, setShowApi] = React.useState(false);
   const secret = String((task.payload as { webhook_secret?: string })?.webhook_secret ?? "");
-  const url = `${API_BASE}/api/hooks/scheduled-tasks/${task.id}?secret=${secret}`;
+  const base = `${API_BASE}/api/hooks/scheduled-tasks/${task.id}`;
+  const url = `${base}?secret=${secret}`;
+  const reset = useMutation({
+    mutationFn: () => resetWebhookSecret(task.id),
+    onSuccess: () => {
+      setConfirming(false);
+      toast.success(t("webhookResetDone"));
+      void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const calls: [string, string][] = [
+    [t("webhookApiTrigger"), `curl -X POST '${url}'`],
+    [t("webhookApiStatus"), `curl '${base}/runs/<run_id>?secret=${secret}'`],
+    [t("webhookApiCancel"), `curl -X POST '${base}/runs/<run_id>/cancel?secret=${secret}'`],
+  ];
+  const copy = (text: string, done: string) => {
+    void navigator.clipboard.writeText(text);
+    toast.success(done);
+  };
   return (
-    <SettingsRow label={t("webhookUrlLabel")} description={t("webhookUrlDesc")}>
-      <div className="flex min-w-0 max-w-[420px] items-center gap-1">
-        <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground" title={url}>
-          {url}
-        </code>
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={t("copy")}
-          onClick={() => {
-            void navigator.clipboard.writeText(url);
-            toast.success(t("webhookCopied"));
-          }}
+    <div className="grid">
+      <SettingsRow label={t("webhookUrlLabel")} description={t("webhookUrlDesc")}>
+        <div className="flex min-w-0 max-w-[460px] items-center gap-1">
+          <code className="timecode max-w-[300px] truncate text-xs text-muted-foreground" title={url}>
+            {url}
+          </code>
+          <Button size="icon-sm" variant="ghost" title={t("copy")} aria-label={t("copy")} onClick={() => copy(url, t("webhookCopied"))}>
+            <Copy />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            title={t("webhookReset")}
+            aria-label={t("webhookReset")}
+            onClick={() => setConfirming(true)}
+          >
+            <RotateCcw />
+          </Button>
+        </div>
+      </SettingsRow>
+      <div className="grid gap-2 pb-4">
+        <button
+          type="button"
+          className="inline-flex w-fit items-center gap-1 text-ui-xs text-muted-foreground hover:text-foreground"
+          aria-expanded={showApi}
+          onClick={() => setShowApi(!showApi)}
         >
-          <Copy size={13} />
-        </Button>
+          <ChevronRight size={13} className={cn("transition-transform", showApi && "rotate-90")} aria-hidden="true" />
+          {t("webhookApiToggle")}
+        </button>
+        {showApi && (
+          <div className="grid gap-2 rounded-md bg-muted/50 p-3">
+            {calls.map(([label, command]) => (
+              <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5">
+                <span className="col-span-2 text-ui-xs text-muted-foreground">{label}</span>
+                <code className="timecode truncate text-xs text-foreground" title={command}>{command}</code>
+                <Button size="icon-xs" variant="ghost" title={t("copy")} aria-label={`${t("copy")}: ${label}`} onClick={() => copy(command, t("webhookApiCopied"))}>
+                  <Copy />
+                </Button>
+              </div>
+            ))}
+            <small className="text-ui-xs text-muted-foreground">{t("webhookApiStatuses")}</small>
+          </div>
+        )}
       </div>
-    </SettingsRow>
+      <ConfirmDialog
+        open={confirming}
+        title={t("webhookResetTitle")}
+        body={t("webhookResetBody")}
+        confirmLabel={t("webhookReset")}
+        onCancel={() => setConfirming(false)}
+        pending={reset.isPending}
+        onConfirm={() => reset.mutate()}
+      />
+    </div>
   );
 }
 
@@ -392,10 +458,19 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
   const runs = useQuery({
     queryKey: ["task-runs", task.id],
     queryFn: () => listScheduledTaskRuns(task.id),
+    // **空闲时也要问。** 此前只在「已经知道有一条在跑」时才轮询,而外部触发(webhook)、到点的
+    // 排程、别的同事点的「立即运行」都不经过这个页面 —— 那一条前端根本不知道,于是永远等不到,
+    // 非得刷新页面。有在跑的 2 秒一问,空闲 5 秒一问;页面在后台时 react-query 自己会停。
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((run) => run.status === "queued" || run.status === "running") ? 2000 : false,
+      (query.state.data ?? []).some((run) => run.status === "queued" || run.status === "running") ? 2000 : 5000,
     refetchOnWindowFocus: true,
   });
+  // 冒出一条新运行(或最新那条变了状态)时,顶上的「上次运行 / 下次运行」也要跟着换。
+  const newest = runs.data?.[0];
+  const newestKey = newest ? `${newest.id}:${newest.status}` : "";
+  React.useEffect(() => {
+    if (newestKey) void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
+  }, [newestKey, qc, workspaceId]);
   // 和任务中心读**同一份**(同一个键、同一种取法)。运行记录的 job 是包装任务,本来就是顶层的。
   const jobsQuery = topLevelJobsQuery(workspaceId);
   const jobs = useQuery(jobsQuery);
@@ -486,7 +561,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       {(task.kind === "workflow" || task.trigger_type === "webhook") && (
         <div className="grid divide-y divide-divider">
           {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
-          {task.trigger_type === "webhook" && <WebhookUrlRow task={task} />}
+          {task.trigger_type === "webhook" && <WebhookUrlRow task={task} workspaceId={workspaceId} />}
         </div>
       )}
 

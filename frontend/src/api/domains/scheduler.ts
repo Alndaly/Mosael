@@ -34,6 +34,11 @@ export function runScheduledTask(taskId: string): Promise<RunScheduledTaskRespon
   return api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${taskId}/run`, { method: "POST" });
 }
 
+/** 重置触发密钥:旧的触发地址(连同查进度、取消)立刻失效。 */
+export function resetWebhookSecret(taskId: string): Promise<ScheduledTask> {
+  return api<ScheduledTask>(`/api/scheduled-tasks/${taskId}/webhook-secret`, { method: "POST" });
+}
+
 export function listScheduledTaskRuns(taskId: string): Promise<ScheduledTaskRun[]> {
   return api<ScheduledTaskRun[]>(`/api/scheduled-tasks/${taskId}/runs`);
 }

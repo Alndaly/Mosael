@@ -18,6 +18,7 @@ from app.domain.scheduler import (
     SchedulerBusy,
     SchedulerDomainError,
     create_scheduled_task,
+    rotate_webhook_secret,
     trigger_scheduled_task,
     update_scheduled_task,
 )
@@ -70,6 +71,18 @@ def delete_task(task_id: str, db: DbSession, user: CurrentUser) -> Response:
     db.delete(task)
     db.commit()
     return Response(status_code=204)
+
+
+@router.post("/scheduled-tasks/{task_id}/webhook-secret", response_model=ScheduledTaskOut)
+def reset_webhook_secret(task_id: str, db: DbSession, user: CurrentUser) -> ScheduledTask:
+    """重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。"""
+    task = _get_task(db, task_id)
+    ensure_workspace_perm(db, user, task.workspace_id, "schedule")
+    try:
+        task = rotate_webhook_secret(db, task)
+    except SchedulerDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return sharing.annotate(db, "scheduled_task", [task], user, task.workspace_id)[0]
 
 
 @router.get("/scheduled-tasks/{task_id}/runs", response_model=list[ScheduledTaskRunOut])

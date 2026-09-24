@@ -1249,6 +1249,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "绑定的工作流已删除,这个任务不能启用或运行。删掉它,或新建一个绑到现有工作流上的任务",
         "en": "The workflow bound to this task was deleted, so it can't be enabled or run. Delete it, or create a new task bound to an existing workflow.",
     },
+    "schedErr_notWebhook": {
+        "zh": "只有 Webhook 触发的任务才有触发密钥",
+        "en": "Only webhook-triggered tasks have a trigger secret.",
+    },
+    "hookErr_taskNotFound": {
+        "zh": "任务不存在",
+        "en": "Task not found.",
+    },
+    "hookErr_badSecret": {
+        "zh": "触发密钥不对(可能已经重置过)",
+        "en": "Invalid trigger secret (it may have been reset).",
+    },
+    "hookErr_runNotFound": {
+        "zh": "这个任务没有这次运行",
+        "en": "This task has no such run.",
+    },
     "schedErr_unsupportedKind": {
         "zh": "定时任务不支持这种任务:{kind}",
         "en": "Scheduled tasks don't support this kind of task: {kind}",

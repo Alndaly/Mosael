@@ -343,6 +343,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hooks/scheduled-tasks/{task_id}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hook Run
+         * @description 这次运行到哪了。外部系统拿触发时返回的 run_id 轮询,直到 status 落到终态。
+         */
+        get: operations["get_hook_run_api_hooks_scheduled_tasks__task_id__runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hooks/scheduled-tasks/{task_id}/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Hook Run
+         * @description 取消这次运行。节点粒度:正在执行的那一步跑完就停,派生的子任务一并取消(见 jobs.cancel_job)。
+         */
+        post: operations["cancel_hook_run_api_hooks_scheduled_tasks__task_id__runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/worker/claim": {
         parameters: {
             query?: never;
@@ -3379,6 +3419,26 @@ export interface paths {
         head?: never;
         /** Update Task */
         patch: operations["update_task_api_scheduled_tasks__task_id__patch"];
+        trace?: never;
+    };
+    "/api/scheduled-tasks/{task_id}/webhook-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Webhook Secret
+         * @description 重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。
+         */
+        post: operations["reset_webhook_secret_api_scheduled_tasks__task_id__webhook_secret_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/scheduled-tasks/{task_id}/runs": {
@@ -8262,6 +8322,41 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HookRunOut
+         * @description 外部系统看到的一次运行。进度与说明取自背后那个任务(按请求的 Accept-Language 说)。
+         */
+        HookRunOut: {
+            /** Run Id */
+            run_id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Progress
+             * @default 0
+             */
+            progress: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Error */
+            error?: string | null;
+            /**
+             * Result
+             * @default {}
+             */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+        };
         /** InsertClipRequest */
         InsertClipRequest: {
             /** Track Id */
@@ -12876,6 +12971,74 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hook_run_api_hooks_scheduled_tasks__task_id__runs__run_id__get: {
+        parameters: {
+            query: {
+                secret: string;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_hook_run_api_hooks_scheduled_tasks__task_id__runs__run_id__cancel_post: {
+        parameters: {
+            query: {
+                secret: string;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookRunOut"];
                 };
             };
             /** @description Validation Error */
@@ -19112,6 +19275,37 @@ export interface operations {
                 "application/json": components["schemas"]["ScheduledTaskUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_webhook_secret_api_scheduled_tasks__task_id__webhook_secret_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
