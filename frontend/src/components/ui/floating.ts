@@ -26,6 +26,12 @@ export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:
 export const MODAL_TITLE = "m-0 text-ui-lg font-semibold leading-snug tracking-tight break-words";
 export const MODAL_DESCRIPTION = "text-ui-sm leading-relaxed text-muted-foreground break-words";
 export const MENU_ITEM = "relative flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-ui-sm leading-5 outline-none transition-colors hover:bg-secondary focus:bg-secondary data-[highlighted]:bg-secondary disabled:pointer-events-none disabled:opacity-40 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:size-4 [&_svg]:shrink-0";
+/**
+ * 菜单里的破坏性条目(删除、移除…):叠在 MENU_ITEM 上,只换字色 —— 行高、内边距、悬停底色
+ * 都和别的条目一样,**不加描边、不换底色**。和右键菜单里 `text-destructive focus:text-destructive`
+ * 那一种是同一句话;悬停 / 键盘高亮时也保持红字,不被 hover 的前景色盖回去。
+ */
+export const MENU_ITEM_DESTRUCTIVE = "text-destructive hover:text-destructive focus:text-destructive data-[highlighted]:text-destructive";
 /** 菜单里分组之间那条线。颜色走 `--divider` —— 浮层自己会把它改成贴合这层表面的值(见 tokens.css 的 `.floating-surface`)。 */
 export const MENU_SEPARATOR = "mx-2 my-1.5 h-px bg-divider";
 

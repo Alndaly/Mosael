@@ -38,8 +38,8 @@ describe("studio browsing controls", () => {
     const rename = vi.fn();
     render(<ActionMenu label="Project actions" actions={[{label:"Rename", onSelect:rename}]} />);
     fireEvent.click(screen.getByRole("button", {name:"Project actions"}));
-    fireEvent.click(screen.getByRole("button", {name:"Rename"}));
+    fireEvent.click(screen.getByRole("menuitem", {name:"Rename"}));
     expect(rename).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("button", {name:"Rename"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", {name:"Rename"})).not.toBeInTheDocument();
   });
 });

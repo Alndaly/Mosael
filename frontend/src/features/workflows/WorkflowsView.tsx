@@ -1944,10 +1944,18 @@ function WorkflowEditor({
               <CanvasToolbarGroup label={t("more")}>
                 <ActionMenu
                   label={t("more")}
+                  // 和列表页卡片上的 ⋯ 同一组条目(运行在工具栏上已经有了,不重复):
+                  // 重命名本来只能点标题,没人知道标题能点。删除由 ActionMenu 自动隔开成单独一组。
                   actions={[
                     {
-                      label: `${t("wfRevisionHistory")} · v${workflow.revision}`,
-                      icon: <GitCommitVertical size={14} />,
+                      label: t("rename"),
+                      icon: <Pencil />,
+                      onSelect: () => setRenaming(true),
+                    },
+                    {
+                      label: t("wfRevisionHistory"),
+                      hint: `v${workflow.revision}`,
+                      icon: <GitCommitVertical />,
                       disabled: save.isPending,
                       onSelect: () => {
                         void openRevisions();
@@ -1955,15 +1963,14 @@ function WorkflowEditor({
                     },
                     {
                       label: t("wfExport"),
-                      icon: <Download size={14} />,
+                      icon: <Download />,
                       disabled: exportFile.isPending,
                       onSelect: () => exportFile.mutate(),
                     },
                     {
                       label: t("delete"),
-                      icon: <Trash2 size={14} />,
+                      icon: <Trash2 />,
                       destructive: true,
-                      separatorBefore: true,
                       onSelect: () => setDeleting(true),
                     },
                   ]}
