@@ -188,15 +188,21 @@ class ProviderQuotaOut(ApiModel):
 
 
 class PricingPrefillOut(ApiModel):
-    """按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:
-    是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。"""
+    """一键预填计价规则的结果。几个数分开报,是为了让「建了几条、还差什么」可解释:
+    是端点目录报的价还是官方价目表补的,是本来就配齐了还是确实查不到价。"""
 
-    #: 本次新建的规则条数。
+    #: 本次新建的规则条数 = 下面两项之和。
     created: int
-    #: 目录里带报价的模型数。
-    models_with_price: int
-    #: 目录里的模型总数。
+    #: 其中按端点模型目录的报价建的。
+    created_from_catalog: int
+    #: 其中按官方价目表(domain/price_reference)建的。
+    created_from_reference: int
+    #: 这条连接上的模型总数(目录 ∪ 已配置的模型行)。
     models_seen: int
+    #: 其中找得到价的模型数(目录报了,或价目表里有)。
+    models_with_price: int
+    #: 预填之后仍没有任何规则能计价的模型 —— 剩下要手填的就是这几个。
+    unpriced_models: list[str]
 
 
 class OAuthAnswerIn(ApiModel):

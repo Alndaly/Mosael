@@ -20,6 +20,10 @@ import { toast } from "sonner";
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type PricingRule = components["schemas"]["ProviderPricingRuleOut"];
 type PrefillResult = components["schemas"]["PricingPrefillOut"];
+type PrefillOutcome = { profileId: string; result: PrefillResult; error?: undefined } | { profileId: string; error: string; result?: undefined };
+
+/** 仍未定价的模型最多列这么多个,其余折成「等 N 个」—— 一个中转挂几百个模型时,整串列出来没法读。 */
+const UNPRICED_PREVIEW = 8;
 
 type PricingForm = {
   providerProfileId: string;
@@ -61,6 +65,7 @@ function useAllCapabilities(): string[] {
 const BILLING_UNITS = [
   "request",
   "image",
+  "video",
   "video_second",
   "audio_second",
   "character",
@@ -88,6 +93,7 @@ const CAPABILITY_LABELS: Record<string, MessageKey> = {
 const UNIT_LABELS: Record<string, MessageKey> = {
   request: "pricingUnit_request",
   image: "pricingUnit_image",
+  video: "pricingUnit_video",
   video_second: "pricingUnit_video_second",
   audio_second: "pricingUnit_audio_second",
   character: "pricingUnit_character",
@@ -128,6 +134,30 @@ function formFromRule(rule: PricingRule): PricingForm {
     currency: rule.currency || "USD",
     notes: rule.notes || "",
   };
+}
+
+/** 一家的预填结果:建了几条、各从哪来,以及**还剩哪些模型没价** —— 那才是用户接下来要做的事。 */
+function PrefillSummary({ result }: { result: PrefillResult }) {
+  const t = useI18n();
+  const unpriced = result.unpriced_models;
+  const shown = unpriced.slice(0, UNPRICED_PREVIEW).join(", ") + (unpriced.length > UNPRICED_PREVIEW ? " …" : "");
+  return (
+    <>
+      {(result.created > 0 ? t("pricingPrefillDone") : t("pricingPrefillNone"))
+        .replace("{created}", String(result.created))
+        .replace("{catalog}", String(result.created_from_catalog))
+        .replace("{reference}", String(result.created_from_reference))
+        .replace("{priced}", String(result.models_with_price))
+        .replace("{seen}", String(result.models_seen))}
+      {unpriced.length > 0 ? (
+        <span className="block text-muted-foreground">
+          {t("pricingPrefillUnpriced").replace("{count}", String(unpriced.length)).replace("{models}", shown)}
+        </span>
+      ) : result.models_seen > 0 ? (
+        <span className="block text-muted-foreground">{t("pricingPrefillAllPriced")}</span>
+      ) : null}
+    </>
+  );
 }
 
 export function ProviderPricingSection({ workspace }: { workspace: Workspace }) {
@@ -252,19 +282,39 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     },
   });
 
-  /** 按目录预填:省掉几十上百个模型的手抄。只补缺失的,已填的一律不动(后端保证)。 */
+  /** 预填价格:省掉几十上百个模型的手抄。目录报价优先,官方价目表补缺;只补缺失的,已填的一律不动(后端保证)。 */
   const [prefillOpen, setPrefillOpen] = React.useState(false);
-  // 结果记着是哪一家的:几个供应商挨个点下来,一句不带名字的「没有新建规则」说不清在说谁。
-  const [prefillResult, setPrefillResult] = React.useState<{ profileId: string; result: PrefillResult } | null>(null);
+  // 结果按连接各记一份、按跑的先后排:几个供应商挨个点下来(或「全部预填」一口气跑完),
+  // 一句不带名字的「没有新建规则」说不清在说谁,后一家的结果也不该把前一家的冲掉。
+  const [prefillResults, setPrefillResults] = React.useState<PrefillOutcome[]>([]);
+  const [prefillingAll, setPrefillingAll] = React.useState(false);
+  const recordPrefill = (outcome: PrefillOutcome) =>
+    setPrefillResults((current) => [...current.filter((item) => item.profileId !== outcome.profileId), outcome]);
   const prefill = useMutation({
     mutationFn: (profileId: string) =>
       api<PrefillResult>(`/api/settings/providers/${profileId}/pricing/prefill`, { method: "POST" }),
     onSuccess: (result, profileId) => {
-      setPrefillResult({ profileId, result });
+      recordPrefill({ profileId, result });
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message),
+    // 失败也记在那一家名下,不弹 toast:「全部预填」时一家没配密钥不该打断其余几家,
+    // 也不该连弹一串提示。
+    onError: (e: Error, profileId) => recordPrefill({ profileId, error: e.message }),
   });
+  /** 一键全部:**挨个跑**,不并发 —— 每家都要现取一次目录,并发只会让慢的那家拖住所有人的超时;
+   *  挨个跑还能让「正在跑哪一家」始终只有一行在转。 */
+  const prefillAll = async () => {
+    setPrefillingAll(true);
+    setPrefillResults([]);
+    try {
+      for (const profile of profiles.data ?? []) {
+        await prefill.mutateAsync(profile.id).catch(() => undefined);
+      }
+    } finally {
+      setPrefillingAll(false);
+    }
+  };
+  const prefillBusy = prefill.isPending || prefillingAll;
 
   const profileLabel = (profileId: string | null | undefined, provider: string) => {
     const profile = (profiles.data ?? []).find((item) => item.id === profileId);
@@ -287,7 +337,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             variant="outline"
             size="sm"
             onClick={() => {
-              setPrefillResult(null);
+              setPrefillResults([]);
               setPrefillOpen(true);
             }}
             title={t("pricingPrefillHint")}
@@ -304,7 +354,20 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         open={prefillOpen}
         onOpenChange={setPrefillOpen}
         title={t("pricingPrefill")}
-        footer={<Button type="button" variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>{t("close")}</Button>}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>{t("close")}</Button>
+            <Button
+              type="button"
+              size="sm"
+              loading={prefillingAll}
+              disabled={prefillBusy || (profiles.data ?? []).length === 0}
+              onClick={() => void prefillAll()}
+            >
+              <Sparkles size={13} /> {t("pricingPrefillAll")}
+            </Button>
+          </>
+        }
       >
         <div className="grid gap-2.5">
           <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("pricingPrefillHint")}</p>
@@ -319,23 +382,28 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 // **只转点的那一行。** 此前所有行共用一个 isPending,点一家,整列一起转圈变灰,
                 // 看起来像是全部在跑、又像是全坏了。其余行在请求期间只是按不动。
                 loading={prefill.isPending && prefill.variables === profile.id}
-                disabled={prefill.isPending && prefill.variables !== profile.id}
+                disabled={prefillBusy && prefill.variables !== profile.id}
                 onClick={() => prefill.mutate(profile.id)}
               >
                 {profile.name}
               </Button>
             ))}
           </div>
-          {prefillResult && (
-            <p className="m-0 text-ui-xs leading-[1.5] text-foreground">
-              <strong className="font-medium">
-                {t("pricingPrefillResultFor").replace("{name}", (profiles.data ?? []).find((p) => p.id === prefillResult.profileId)?.name ?? "")}
-              </strong>
-              {(prefillResult.result.created > 0 ? t("pricingPrefillDone") : t("pricingPrefillNone"))
-                .replace("{created}", String(prefillResult.result.created))
-                .replace("{priced}", String(prefillResult.result.models_with_price))
-                .replace("{seen}", String(prefillResult.result.models_seen))}
-            </p>
+          {prefillResults.length > 0 && (
+            <ul className="m-0 grid list-none gap-1.5 p-0">
+              {prefillResults.map((outcome) => (
+                <li key={outcome.profileId} className="text-ui-xs leading-[1.5] text-foreground">
+                  <strong className="font-medium">
+                    {t("pricingPrefillResultFor").replace("{name}", (profiles.data ?? []).find((p) => p.id === outcome.profileId)?.name ?? "")}
+                  </strong>
+                  {outcome.error !== undefined ? (
+                    <span className="text-destructive">{outcome.error}</span>
+                  ) : (
+                    <PrefillSummary result={outcome.result} />
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </ModalShell>

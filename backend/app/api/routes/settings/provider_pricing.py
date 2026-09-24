@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.core.i18n import tr
 from app.ai.model_catalog import fetch_models
@@ -17,7 +17,8 @@ from app.domain import provider_credentials
 from app.domain.permissions import ensure_deployment_admin, ensure_workspace_access
 from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import supports_capability
-from app.domain.usage import create_pricing_rule, delete_pricing_rule, prefill_model_pricing, update_pricing_rule
+from app.domain.pricing_prefill import prefill_profile_pricing
+from app.domain.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
 
 from app.domain.permissions import require_own_profile
 
@@ -65,32 +66,28 @@ def _catalog_rates(profile: ResolvedConnection) -> list[tuple[str, dict[str, flo
 
 @router.post("/settings/providers/{profile_id}/pricing/prefill", response_model=PricingPrefillOut)
 def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) -> PricingPrefillOut:
-    """按该供应商的模型目录补齐缺失的计价规则。
+    """给这条连接的模型补齐缺失的计价规则:端点目录的报价优先,官方价目表补缺。
 
-    **只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。
-    目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
+    **只补不改**:已有规则一概不动 —— 目录和价目表都是厂商挂牌价,用户填过的才是他核对过的账。
+    为 0 的报价也不写(那是「未标价 / 订阅内含」,不是「免费」)。见 domain/pricing_prefill。
     """
     ensure_deployment_admin(db, user)
     profile = require_own_profile(db, user, profile_id)
     resolved = provider_credentials.resolve_connection(db, profile, user.id)
     if resolved is None:
         raise HTTPException(status_code=422, detail=tr("routeErr_pricingNeedsKey"))
-    rates = _catalog_rates(resolved)
-    created = 0
-    priced = 0
-    for model_id, model_rates in rates:
-        if any(value for value in model_rates.values()):
-            priced += 1
-        created += prefill_model_pricing(
-            db,
-            provider_profile_id=profile.id,
-            provider=profile.vendor,
-            model=model_id,
-            rates=model_rates,
-        )
+    outcome = prefill_profile_pricing(
+        db, profile, base_url=resolved.base_url or "", catalog=_catalog_rates(resolved)
+    )
     db.commit()
-    return PricingPrefillOut(created=created, models_with_price=priced, models_seen=len(rates))
-
+    return PricingPrefillOut(
+        created=outcome.created,
+        created_from_catalog=outcome.created_from_catalog,
+        created_from_reference=outcome.created_from_reference,
+        models_seen=outcome.models_seen,
+        models_with_price=outcome.models_with_price,
+        unpriced_models=outcome.unpriced_models,
+    )
 
 
 def _pricing_payload_with_profile_defaults(
@@ -134,7 +131,12 @@ def list_provider_pricing_rules(
         ProviderPricingRule.created_at.asc(),
     )
     if workspace_id:
-        stmt = stmt.where(ProviderPricingRule.workspace_id == workspace_id)
+        # 不属于任何工作区的规则(预填出来的都是这种,挂在连接上)对**每个**工作区都生效
+        # (见 usage._best_price_rules),所以它们也得出现在这个工作区的列表里。此前这里只取
+        # `workspace_id == 当前工作区`,于是预填报了「新建 12 条」,列表里却一条都看不见。
+        stmt = stmt.where(
+            or_(ProviderPricingRule.workspace_id == workspace_id, ProviderPricingRule.workspace_id.is_(None))
+        )
     rules = db.scalars(stmt).all()
     return [ProviderPricingRuleOut.model_validate(rule) for rule in rules]
 

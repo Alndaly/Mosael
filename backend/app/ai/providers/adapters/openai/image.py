@@ -31,6 +31,25 @@ POST /images/generations → b64_json/url → local image file.
 OPENAI_BASE = "https://api.openai.com/v1"
 
 
+def image_metering(request: GenerationRequest, content: dict[str, Any]) -> dict[str, Any]:
+    """计量:请求侧的那份,再叠上回包 `usage` 里**实际计费的图像输出 token**。
+
+    GPT Image 按 token 计价(输出图像 token 的单价是文本输入的好几倍),张数和尺寸只决定
+    token 数。回包带 `usage.output_tokens` 时记成 output_tokens —— 按 token 的计价规则
+    才对得上;不带的(不少兼容端点)就只有请求侧那份,规则对不上,账上照实显示未定价。
+    """
+    units = metering_from_request(request)
+    usage = content.get("usage") if isinstance(content, dict) else None
+    if isinstance(usage, dict):
+        output = usage.get("output_tokens")
+        if isinstance(output, int) and not isinstance(output, bool) and output > 0:
+            units["output_tokens"] = output
+            total = usage.get("total_tokens")
+            if isinstance(total, int) and not isinstance(total, bool) and total >= output:
+                units["total_tokens"] = total
+    return units
+
+
 def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": request.model,
@@ -146,6 +165,6 @@ class OpenAIImageAdapter(GenerationAdapter):
                 targets = [output_dir / f"generated-{index + 1}.{suffix}" for index in range(len(images))]
                 for target, blob in zip(targets, images):
                     target.write_bytes(blob)
-                return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=content)
+                return GenerationResult(output_paths=targets, usage=image_metering(request, content), raw_usage=content)
         except httpx.HTTPError as exc:
             raise adapter_http_error("OpenAI", exc, context.api_key) from exc

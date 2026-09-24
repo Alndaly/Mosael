@@ -4587,10 +4587,10 @@ export interface paths {
         put?: never;
         /**
          * Prefill Provider Pricing
-         * @description 按该供应商的模型目录补齐缺失的计价规则。
+         * @description 给这条连接的模型补齐缺失的计价规则:端点目录的报价优先,官方价目表补缺。
          *
-         *     **只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。
-         *     目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
+         *     **只补不改**:已有规则一概不动 —— 目录和价目表都是厂商挂牌价,用户填过的才是他核对过的账。
+         *     为 0 的报价也不写(那是「未标价 / 订阅内含」,不是「免费」)。见 domain/pricing_prefill。
          */
         post: operations["prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post"];
         delete?: never;
@@ -9475,16 +9475,22 @@ export interface components {
         };
         /**
          * PricingPrefillOut
-         * @description 按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:
-         *     是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。
+         * @description 一键预填计价规则的结果。几个数分开报,是为了让「建了几条、还差什么」可解释:
+         *     是端点目录报的价还是官方价目表补的,是本来就配齐了还是确实查不到价。
          */
         PricingPrefillOut: {
             /** Created */
             created: number;
-            /** Models With Price */
-            models_with_price: number;
+            /** Created From Catalog */
+            created_from_catalog: number;
+            /** Created From Reference */
+            created_from_reference: number;
             /** Models Seen */
             models_seen: number;
+            /** Models With Price */
+            models_with_price: number;
+            /** Unpriced Models */
+            unpriced_models: string[];
         };
         /** ProjectCreate */
         ProjectCreate: {

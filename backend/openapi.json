@@ -13740,7 +13740,7 @@
           "settings"
         ],
         "summary": "Prefill Provider Pricing",
-        "description": "按该供应商的模型目录补齐缺失的计价规则。\n\n**只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。\n目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。",
+        "description": "给这条连接的模型补齐缺失的计价规则:端点目录的报价优先,官方价目表补缺。\n\n**只补不改**:已有规则一概不动 —— 目录和价目表都是厂商挂牌价,用户填过的才是他核对过的账。\n为 0 的报价也不写(那是「未标价 / 订阅内含」,不是「免费」)。见 domain/pricing_prefill。",
         "operationId": "prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post",
         "parameters": [
           {
@@ -25692,23 +25692,41 @@
             "type": "integer",
             "title": "Created"
           },
-          "models_with_price": {
+          "created_from_catalog": {
             "type": "integer",
-            "title": "Models With Price"
+            "title": "Created From Catalog"
+          },
+          "created_from_reference": {
+            "type": "integer",
+            "title": "Created From Reference"
           },
           "models_seen": {
             "type": "integer",
             "title": "Models Seen"
+          },
+          "models_with_price": {
+            "type": "integer",
+            "title": "Models With Price"
+          },
+          "unpriced_models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unpriced Models"
           }
         },
         "type": "object",
         "required": [
           "created",
+          "created_from_catalog",
+          "created_from_reference",
+          "models_seen",
           "models_with_price",
-          "models_seen"
+          "unpriced_models"
         ],
         "title": "PricingPrefillOut",
-        "description": "按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:\n是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。"
+        "description": "一键预填计价规则的结果。几个数分开报,是为了让「建了几条、还差什么」可解释:\n是端点目录报的价还是官方价目表补的,是本来就配齐了还是确实查不到价。"
       },
       "ProjectCreate": {
         "properties": {

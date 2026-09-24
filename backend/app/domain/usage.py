@@ -61,6 +61,9 @@ PRICING_BILLING_UNITS = frozenset(
     {
         "request",
         "image",
+        #: 按条计的视频(海螺一类按「每条 6 秒 768P」报价)。和 video_second 并存:
+        #: 两种报价方式各家都有,硬折成秒会把「按条」的价摊错。
+        "video",
         "video_second",
         "audio_second",
         "character",
@@ -127,54 +130,75 @@ CATALOG_PRICE_UNITS = {
 }
 
 
+@dataclass(frozen=True)
+class PriceQuote:
+    """一条待预填的单价:哪个能力、按什么单位、多少钱、从哪来。
+
+    `source` 是 `catalog`(端点自己的目录报的)或 `reference`(官方价目表,见
+    domain/price_reference)—— 写进规则的 source 列,界面和用户都分得清哪条是哪来的。
+    """
+
+    capability: str
+    billing_unit: str
+    unit_amount_micros: int
+    currency: str
+    source: str
+    notes: str
+
+
 def prefill_model_pricing(
     db: Session,
     *,
     provider_profile_id: str,
     provider: str,
     model: str,
-    rates: dict[str, float | None],
-    capability: str = "chat",
-) -> int:
-    """按供应商目录的报价补齐这个模型缺失的计价规则,返回新建条数。
+    quotes: list[PriceQuote],
+) -> list[PriceQuote]:
+    """把这个模型缺的计价规则按报价补上,返回真正新建的那几条。
 
-    三条刻意的取舍:
+    四条刻意的取舍:
 
-    **只补不改。**已有规则一律不动 —— 用户填过的数字是他自己核对过的账,目录报价只是厂商官网
-    的挂牌价(还可能因折扣、企业协议、订阅额度而不同)。自动覆盖等于悄悄改账。
+    **只补不改。**已有规则一律不动 —— 用户填过的数字是他自己核对过的账,目录和价目表都只是
+    厂商的挂牌价(还可能因折扣、企业协议、订阅额度而不同)。自动覆盖等于悄悄改账。
 
     **0 不写。**目录里的 0 意思是「未标价」或「订阅内含」,不是「免费」。写成 0 会让这一项在
     报表里变成确定的零成本,比留空更误导 —— 留空至少还能看出「没配」。
 
+    **不和已有规则混币种。**同一个模型、同一个能力下已经有一条人民币规则时,不再补一条美元的:
+    `record_usage` 遇到币种不一致的规则会跳过它,补上去的那条永远不生效,还让人以为已经配齐了。
+
     **规则始终是唯一的计费来源。**pi 自己也会算 cost,但那份不进账:一处算钱,才能解释每一笔。
     """
-    created = 0
-    for key, unit in CATALOG_PRICE_UNITS.items():
-        amount = rates.get(key)
-        if not amount or amount <= 0:
+    created: list[PriceQuote] = []
+    for quote in quotes:
+        if quote.unit_amount_micros <= 0:
             continue
-        exists = db.scalar(
-            select(ProviderPricingRule).where(
-                ProviderPricingRule.provider_profile_id == provider_profile_id,
-                ProviderPricingRule.model == model,
-                ProviderPricingRule.capability == capability,
-                ProviderPricingRule.billing_unit == unit,
+        existing = list(
+            db.scalars(
+                select(ProviderPricingRule).where(
+                    ProviderPricingRule.provider_profile_id == provider_profile_id,
+                    ProviderPricingRule.model == model,
+                    ProviderPricingRule.capability == quote.capability,
+                )
             )
         )
-        if exists is not None:
+        if any(rule.billing_unit == quote.billing_unit for rule in existing):
+            continue
+        if any(rule.currency != quote.currency for rule in existing):
             continue
         create_pricing_rule(
             db,
             provider_profile_id=provider_profile_id,
             provider=provider,
-            capability=capability,
+            capability=quote.capability,
             model=model,
-            billing_unit=unit,
-            unit_amount_micros=int(round(amount * 1_000_000)),
-            source="catalog",
-            notes="按供应商模型目录的报价预填,可直接改",
+            billing_unit=quote.billing_unit,
+            unit_amount_micros=quote.unit_amount_micros,
+            currency=quote.currency,
+            source=quote.source,
+            notes=quote.notes,
         )
-        created += 1
+        created.append(quote)
     return created
 
 
@@ -486,6 +510,7 @@ def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None
     aliases = {
         "request": ("request", "requests", "request_count"),
         "image": ("image", "images", "image_count", "num_images"),
+        "video": ("video", "videos", "video_count"),
         "video_second": ("video_second", "video_seconds", "duration_seconds"),
         "audio_second": ("audio_second", "audio_seconds", "duration_seconds"),
         "character": ("character", "characters", "input_characters"),

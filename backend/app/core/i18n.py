@@ -614,6 +614,28 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这条连接还没有你的密钥,先填一把再来取目录报价",
         "en": "This connection doesn't have your key yet. Add one before fetching catalog prices.",
     },
+    # 预填出来的规则备注。存进库里的是翻好的句子(备注本来就是给人看、可直接改的自由文本),
+    # 按点「预填」那一刻的界面语言。
+    "pricingNote_catalog": {
+        "zh": "按供应商模型目录的报价预填,可直接改",
+        "en": "Prefilled from the provider's model catalog. Edit freely.",
+    },
+    "pricingNote_reference": {
+        "zh": "官方价目{region}{remark} · {source} · 查证于 {checked}",
+        "en": "Official list price{region}{remark} · {source} · checked {checked}",
+    },
+    "pricingNote_referenceRelay": {
+        "zh": "原厂({vendor})官方价目,中转站实际收费可能不同{region}{remark} · {source} · 查证于 {checked}",
+        "en": "Original vendor ({vendor}) list price; the relay may charge differently{region}{remark} · {source} · checked {checked}",
+    },
+    "pricingRegion_cn": {
+        "zh": "(中国内地)",
+        "en": " (mainland China)",
+    },
+    "pricingRegion_intl": {
+        "zh": "(国际站)",
+        "en": " (international)",
+    },
     "routeErr_providerLacksCapability": {
         "zh": "该供应商不支持 {capability} 能力",
         "en": "This provider doesn't support the {capability} capability.",

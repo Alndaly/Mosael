@@ -27,6 +27,16 @@ const RULE = {
   billing_unit: "input_1m_tokens", unit_amount_micros: 435000, currency: "USD", source: "manual", notes: "",
 };
 
+const outcome = (patch: Record<string, unknown>) => ({
+  created: 0,
+  created_from_catalog: 0,
+  created_from_reference: 0,
+  models_seen: 0,
+  models_with_price: 0,
+  unpriced_models: [],
+  ...patch,
+});
+
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   cleanup();
@@ -63,9 +73,37 @@ it("按目录预填只转点的那一行,其余只是按不动;结果带上是�
   expect(qwen).not.toHaveAttribute("aria-busy", "true");
   expect(qwen).toBeDisabled();
 
-  finish(json({ created: 0, models_seen: 4, models_with_price: 3 }));
+  finish(json(outcome({ models_seen: 4, models_with_price: 3, unpriced_models: ["deepseek-chat"] })));
   await screen.findByText("pricingPrefillResultFor");
   expect(qwen).not.toBeDisabled();
+  // 还剩哪些要手填,点名说出来 —— 那才是用户接下来要做的事。
+  expect(screen.getByText("pricingPrefillUnpriced")).toBeTruthy();
+});
+
+it("全部预填挨个跑:一次只转一行,每家的结果各记一条,一家失败不打断其余几家", async () => {
+  const pending: Array<{ url: string; resolve: (r: Response) => void }> = [];
+  const calls = mount((resolve) => pending.push({ url: "", resolve }));
+  fireEvent.click(await screen.findByRole("button", { name: /pricingPrefill$/ }));
+  const deepseek = await screen.findByRole("button", { name: "DeepSeek" });
+  const qwen = screen.getByRole("button", { name: "百炼qwen" });
+  fireEvent.click(screen.getByRole("button", { name: /pricingPrefillAll/ }));
+
+  await waitFor(() => expect(deepseek).toHaveAttribute("aria-busy", "true"));
+  expect(qwen).not.toHaveAttribute("aria-busy", "true");
+  expect(calls.filter((c) => c.includes("/pricing/prefill"))).toHaveLength(1);
+
+  pending[0].resolve(new Response(JSON.stringify({ detail: "no key" }), { status: 422, headers: { "content-type": "application/json" } }));
+  await waitFor(() => expect(qwen).toHaveAttribute("aria-busy", "true"));
+  const prefillCalls = calls.filter((c) => c.includes("/pricing/prefill"));
+  expect(prefillCalls).toHaveLength(2);
+  expect(prefillCalls[0]).toMatch(/^POST .*\/providers\/p1\/pricing\/prefill$/);
+  expect(prefillCalls[1]).toMatch(/^POST .*\/providers\/p2\/pricing\/prefill$/);
+
+  pending[1].resolve(json(outcome({ created: 3, created_from_reference: 3, models_seen: 3, models_with_price: 3 })));
+  await waitFor(() => expect(screen.getAllByText("pricingPrefillResultFor")).toHaveLength(2));
+  expect(screen.getByText("no key")).toBeTruthy();
+  expect(screen.getByText("pricingPrefillDone")).toBeTruthy();
+  expect(screen.getByText("pricingPrefillAllPriced")).toBeTruthy();
 });
 
 it("删一条规则先确认,确认了才发 DELETE", async () => {
