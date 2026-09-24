@@ -30,6 +30,7 @@ import { relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Switch } from "@/components/ui/switch";
 import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
@@ -340,7 +341,7 @@ function CreateTaskDialog({
         {trigger === "scheduled" && (
           <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("taskSchedFreq")}</span>
-            <div className="flex gap-1.5 [&>button]:min-w-0 [&>button]:flex-1 [&_input[type=time]]:w-[120px] [&_input[type=time]]:flex-none">
+            <div className="flex gap-1.5 [&>button]:min-w-0 [&>button]:flex-1">
               <Select value={schedKind} onValueChange={(value) => setSchedKind(value as typeof schedKind)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -351,13 +352,12 @@ function CreateTaskDialog({
                 </SelectContent>
               </Select>
               {schedKind === "daily" && (
-                // 原生 time 控件不吃继承字号、拨盘图标也不跟主题:字号/等宽数字压回
-                // 表单刻度,color-scheme 随昼夜让时钟图标同色,图标半透明 hover 提亮。
-                <Input
-                  type="time"
-                  className="tabular-nums [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-datetime-edit]:text-ui-sm"
+                // 和左边的下拉同一种触发器(见 TimePicker):原生 time 控件的框和拨盘都不吃表单样式。
+                <TimePicker
+                  className="w-[128px] flex-none"
+                  ariaLabel={t("triggerDailyAt")}
                   value={dailyTime}
-                  onChange={(event) => setDailyTime(event.target.value || "09:00")}
+                  onChange={setDailyTime}
                 />
               )}
             </div>
