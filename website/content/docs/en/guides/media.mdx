@@ -36,7 +36,9 @@ Mosael does not access the camera or microphone merely because the recorder was 
 that needs those devices, choose **Allow access** to trigger the operating-system prompts. Once access is granted,
 selecting a mode with the camera opens it right away with a live preview (mirroring applies to the preview too), and
 recording takes over that same stream — so the dark first moments while a freshly opened camera settles its exposure
-are not recorded. Switching to a mode without the camera, or closing the recorder, releases it. A denied permission
+are not recorded. Switching to a mode without the camera, or closing the recorder, releases it. Modes that record the microphone
+(camera, screen + camera, microphone) likewise open it once access is granted and show a live input level, so you can
+confirm there is sound before recording; the level stays in the floating controller while recording. A denied permission
 stays visible as an actionable state with links to the relevant system settings and a retry action. Screen and
 system-audio consent is requested by the operating system's sharing picker, as required by macOS.
 
