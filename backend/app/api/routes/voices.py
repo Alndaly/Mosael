@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
 from app.domain.voices.transcription import ASRError
-from app.core.i18n import normalize_locale, translate_fields
+from app.core.i18n import normalize_locale, tr, translate_fields
 from app.db.models import Job, Voice
 from app.api.schemas import (
     EngineSynthesizeRequest,
@@ -83,7 +83,7 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
 
     asset = db.get(Asset, body.asset_id)
     if asset is None:
-        raise HTTPException(status_code=404, detail="素材不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_assetNotFound"))
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
         voice = voices.create_from_speaker(
@@ -98,7 +98,7 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
 def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentUser) -> Voice:
     voice = voices.get_voice(db, voice_id)
     if voice is None:
-        raise HTTPException(status_code=404, detail="音色不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
         return voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text)
@@ -111,7 +111,7 @@ def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voic
     """用本机的转写引擎听一遍参考音频,把参考文本填上。"""
     voice = voices.get_voice(db, voice_id)
     if voice is None:
-        raise HTTPException(status_code=404, detail="音色不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
         return voices.recognize_reference_text(db, voice)
@@ -123,7 +123,7 @@ def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voic
 def delete_voice(voice_id: str, db: DbSession, user: CurrentUser) -> Response:
     voice = voices.get_voice(db, voice_id)
     if voice is None:
-        raise HTTPException(status_code=404, detail="音色不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     voices.delete_voice(db, voice)
     return Response(status_code=204)
@@ -133,11 +133,11 @@ def delete_voice(voice_id: str, db: DbSession, user: CurrentUser) -> Response:
 def voice_sample(voice_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     voice = voices.get_voice(db, voice_id)
     if voice is None:
-        raise HTTPException(status_code=404, detail="音色不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
     ensure_workspace_access(db, user, voice.workspace_id)
     path = voices.reference_path(voice)
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="参考音频缺失")
+        raise HTTPException(status_code=404, detail=tr("routeErr_referenceAudioMissing"))
     return FileResponse(path, media_type="audio/wav")
 
 
@@ -145,7 +145,7 @@ def voice_sample(voice_id: str, db: DbSession, user: CurrentUser) -> FileRespons
 def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: CurrentUser):
     voice = voices.get_voice(db, voice_id)
     if voice is None:
-        raise HTTPException(status_code=404, detail="音色不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
         return voices.start_synthesis(
@@ -179,7 +179,7 @@ def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
     try:
         return f5_models.start_download(model_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="没有这个模型") from exc
+        raise HTTPException(status_code=404, detail=tr("routeErr_noSuchModel")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -281,11 +281,11 @@ def _refuse_to_report_a_save_that_did_not_take(wanted: dict[str, str]) -> None:
     }
     if not drifted:
         return
-    detail = "、".join(f"{name} 存的是 {want!r},回读却是 {got!r}" for name, (want, got) in drifted.items())
+    detail = "; ".join(f"{name}: {want!r} → {got!r}" for name, (want, got) in drifted.items())
     logger.error("TTS 设置写进去了,回读却不是同一份:%s", detail)
     raise HTTPException(
         status_code=500,
-        detail=f"TTS 设置没有生效({detail})。改动已写入数据库,但这个进程读到的仍是旧值 —— 请检查后端日志。",
+        detail=tr("routeErr_ttsSettingsNotApplied", detail=detail),
     )
 
 
@@ -343,6 +343,6 @@ def download_tts_model(engine_id: str, db: DbSession, user: CurrentUser) -> dict
     try:
         return tts_models.start_download(engine_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="未知引擎") from exc
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownEngine")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

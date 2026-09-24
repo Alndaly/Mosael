@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import BrowserSession
@@ -34,7 +35,7 @@ class CloseRequest(BaseModel):
 def _verify(db, user, workspace_id: str, session_id: str, *, perm: str | None = None) -> BrowserSession:
     session = db.get(BrowserSession, session_id)
     if session is None or session.workspace_id != workspace_id:
-        raise HTTPException(status_code=404, detail="浏览器会话不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_browserSessionNotFound"))
     if perm is None:
         ensure_workspace_access(db, user, session.workspace_id)
     else:

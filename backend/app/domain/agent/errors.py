@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from app.core.i18n import LocalizedError
 
-class ConfirmationError(ValueError):
-    pass
+
+class ConfirmationError(LocalizedError, ValueError):
+    """开卡校验或执行没过。带文案 key(`confirmErr_*`),`str(exc)` 按当时的语言翻;
+    认不出的 key 当一句现成的话原样显示(上游原文就这么传)。"""

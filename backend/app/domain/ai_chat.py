@@ -36,7 +36,7 @@ from typing import Any, Literal
 import httpx
 from sqlalchemy.orm import Session
 
-from app.core.i18n import get_current_locale, t
+from app.core.i18n import LocalizedError, get_current_locale, t, tr
 from app.domain.provider_credentials import ResolvedConnection
 from app.core import http_retry as ai_retry
 from app.domain import provider_models
@@ -70,8 +70,19 @@ def _report_downgrade(
         logger.warning("降级回调抛了异常,已忽略", exc_info=True)
 
 
-class AiChatError(RuntimeError):
-    """一次对话补全失败。消息已脱敏,可以直接展示给用户或写进任务日志。"""
+class AiChatError(LocalizedError, RuntimeError):
+    """一次对话补全失败。消息已脱敏,可以直接展示给用户或写进任务日志。
+
+    带文案 key(`aiChatErr_*` / `aiChat_*`)。`label` 参数说的是「哪一次调用」:可以是文案 key,
+    也可以是调用方给的一句现成的话 —— 渲染时按当时的语言翻,认不出的原样用。
+    """
+
+    def __str__(self) -> str:
+        locale = get_current_locale()
+        params = dict(self.params)
+        if "label" in params:
+            params["label"] = t(str(params["label"]), locale)
+        return t(self.key, locale, **params)
 
 
 @dataclass(frozen=True)
@@ -115,10 +126,10 @@ def target_for(
     """
     resolved = model or provider_models.model_id_for(db, profile, "chat")
     if not resolved:
-        raise AiChatError(t("aiChat_noChatModel", get_current_locale(), name=profile.name))
+        raise AiChatError("aiChat_noChatModel", name=profile.name)
     if profile.auth_type == "oauth" and surface == "automation":
         if not profile.oauth_credential or not profile.owner_user_id:
-            raise AiChatError(t("aiChat_oauthRequired", get_current_locale(), name=profile.name))
+            raise AiChatError("aiChat_oauthRequired", name=profile.name)
         from app.core.config import settings
         from app.core.security import mint_service_session
         from app.domain.provider_runtime import sidecar_provider
@@ -146,8 +157,8 @@ def target_for(
         # Provider 定义里,后端只递身份(host.resolve_chat_provider)。指人去设置里填地址是把他
         # 引向一条走不通的修复路径:填了 base_url 也没有 api_key,依然调不通。
         if profile.auth_type == "oauth":
-            raise AiChatError(t("aiChat_agentOnly", get_current_locale(), name=profile.name))
-        raise AiChatError(t("aiChat_noBaseUrl", get_current_locale(), name=profile.name))
+            raise AiChatError("aiChat_agentOnly", name=profile.name)
+        raise AiChatError("aiChat_noBaseUrl", name=profile.name)
     return ChatTarget(
         base_url=profile.base_url,
         api_key=profile.api_key or "",
@@ -209,7 +220,7 @@ def chat(
     max_retries: int | None = None,
     client: httpx.Client | None = None,
     call: BillableCall | None = None,
-    label: str = "AI 调用",
+    label: str = "aiChat_labelDefault",
     allow_response_format_fallback: bool = False,
     on_downgrade: DowngradeReporter | None = None,
 ) -> str:
@@ -280,7 +291,7 @@ def chat(
                 )
                 if fallback is None:
                     raise
-                _report_downgrade(on_downgrade, payload, fallback, "供应商明确拒绝了这一档")
+                _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_rejected"))
                 payload = fallback
                 continue
             body = response.json()
@@ -293,20 +304,25 @@ def chat(
             if allow_response_format_fallback and not content.strip():
                 fallback = _downgrade_response_format_payload(payload)
                 if fallback is not None:
-                    _report_downgrade(on_downgrade, payload, fallback, "这一档下返回了空正文")
+                    _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_empty"))
                     payload = fallback
                     continue
             break
     except httpx.HTTPStatusError as exc:
-        raise AiChatError(_sanitize(f"{label}失败:{_provider_detail(exc.response, target.model)}", target.api_key)) from exc
+        status, detail = _provider_detail(exc.response)
+        raise AiChatError(
+            "aiChatErr_http", label=label, status=status, detail=_sanitize(detail, target.api_key), model=target.model
+        ) from exc
     except httpx.RequestError as exc:
         # 带上「已重试 N 次」:同样是连不上,试过四次和只试了一次对用户是两件事 ——
         # 前者该去查网络或供应商,后者可能只是手滑填错了地址。
         tried = max_retries if max_retries is not None else ai_retry.current_max_retries()
-        suffix = f",已重试 {tried} 次仍失败" if client is None and tried > 0 else ""
-        raise AiChatError(_sanitize(f"{label}失败(网络/连接{suffix}):{exc}", target.api_key)) from exc
+        detail = _sanitize(str(exc), target.api_key)
+        if client is None and tried > 0:
+            raise AiChatError("aiChatErr_networkRetried", label=label, tries=tried, detail=detail) from exc
+        raise AiChatError("aiChatErr_network", label=label, detail=detail) from exc
     except (KeyError, IndexError, TypeError, ValueError) as exc:
-        raise AiChatError(_sanitize(f"{label}失败:供应商返回的结构不认识({exc})", target.api_key)) from exc
+        raise AiChatError("aiChatErr_badShape", label=label, detail=_sanitize(str(exc), target.api_key)) from exc
 
     return content
 
@@ -375,7 +391,7 @@ def _chat_gateway(
     静默忽略一个「我已经允许你降级」的承诺,是最坏的一种处理。
     """
     if client is not None:
-        raise AiChatError(f"{label}失败:OAuth Gateway 不支持复用调用方 HTTP 连接")
+        raise AiChatError("aiChatErr_gatewayNoClient", label=label)
     from app.ai.sidecar.adapters import AdapterError, gateway_complete
 
     # **在发请求之前说清这条账是谁的**,和直连那条对齐。原先放在成功之后,于是调用失败时
@@ -422,14 +438,14 @@ def _chat_gateway(
                     else None
                 )
                 if fallback is None:
-                    raise AiChatError(_sanitize(f"{label}失败:{exc}", target.gateway_token)) from exc
-                _report_downgrade(on_downgrade, payload, fallback, "供应商明确拒绝了这一档")
+                    raise AiChatError("aiChatErr_failed", label=label, detail=_sanitize(str(exc), target.gateway_token)) from exc
+                _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_rejected"))
                 payload = fallback
                 continue
             if allow_response_format_fallback and not (result.text or "").strip():
                 fallback = _downgrade_response_format_payload(payload)
                 if fallback is not None:
-                    _report_downgrade(on_downgrade, payload, fallback, "这一档下返回了空正文")
+                    _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_empty"))
                     payload = fallback
                     continue
             break
@@ -573,7 +589,7 @@ def _sanitize(message: str, credential: str | None) -> str:
     return text[:500]
 
 
-def _provider_detail(response: httpx.Response, model: str) -> str:
+def _provider_detail(response: httpx.Response) -> tuple[int, str]:
     """把供应商的 4xx/5xx 响应体提炼成人看得懂的一行 —— 否则只剩个裸状态码,查不出根因。"""
     detail = response.text.strip()
     try:
@@ -586,4 +602,4 @@ def _provider_detail(response: httpx.Response, model: str) -> str:
             detail = str(err["message"])
         elif isinstance(err, str) and err:
             detail = err
-    return f"{response.status_code} {detail[:300]}（模型 {model}）"
+    return response.status_code, detail[:300]

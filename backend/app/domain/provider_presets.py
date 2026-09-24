@@ -38,9 +38,9 @@ class ProviderField:
         label = str(value.get("label") or "").strip()
         storage = str(value.get("storage") or "extra").strip()
         if not key or not label:
-            raise ValueError(f"Provider {vendor!r} 的字段必须同时声明 key 和 label")
+            raise ValueError(f"Provider {vendor!r}: every field needs both key and label")
         if storage not in KNOWN_FIELD_STORAGES:
-            raise ValueError(f"Provider {vendor!r} 字段 {key!r} 使用未知存储位置 {storage!r}")
+            raise ValueError(f"Provider {vendor!r}: field {key!r} uses unknown storage {storage!r}")
         return cls(
             key=key,
             label=label,
@@ -78,34 +78,34 @@ class ProviderDefinition:
     def from_mapping(cls, vendor: str, value: Mapping[str, object]) -> ProviderDefinition:
         vendor = vendor.strip()
         if not vendor:
-            raise ValueError("Provider vendor 不能为空")
+            raise ValueError("Provider vendor must not be empty")
         capability_ids = tuple(str(item) for item in value.get("capability_ids", ()))
         unknown_capabilities = set(capability_ids) - set(KNOWN_CAPABILITY_IDS)
         if unknown_capabilities:
-            raise ValueError(f"Provider {vendor!r} 声明了未知能力 {sorted(unknown_capabilities)!r}")
+            raise ValueError(f"Provider {vendor!r} declares unknown capabilities {sorted(unknown_capabilities)!r}")
         auth_types = tuple(str(item) for item in value.get("auth", ())) or ("api_key",)
         unknown_auth = set(auth_types) - set(KNOWN_AUTH_TYPES)
         if unknown_auth:
-            raise ValueError(f"Provider {vendor!r} 声明了未知鉴权方式 {sorted(unknown_auth)!r}")
+            raise ValueError(f"Provider {vendor!r} declares unknown auth types {sorted(unknown_auth)!r}")
 
         raw_fields = value.get("fields", ())
         if not isinstance(raw_fields, (list, tuple)):
-            raise ValueError(f"Provider {vendor!r} 的 fields 必须是列表")
+            raise ValueError(f"Provider {vendor!r}: fields must be a list")
         fields = tuple(
             ProviderField.from_mapping(vendor, field)
             for field in raw_fields
             if isinstance(field, Mapping)
         )
         if len(fields) != len(raw_fields):
-            raise ValueError(f"Provider {vendor!r} 的 fields 包含无效字段")
+            raise ValueError(f"Provider {vendor!r}: fields contains an invalid entry")
         field_keys = [field.key for field in fields]
         duplicates = sorted({key for key in field_keys if field_keys.count(key) > 1})
         if duplicates:
-            raise ValueError(f"Provider {vendor!r} 存在重复字段 {duplicates!r}")
+            raise ValueError(f"Provider {vendor!r} has duplicate fields {duplicates!r}")
 
         health_path = str(value.get("health_path") or "")
         if health_path and not health_path.startswith("/"):
-            raise ValueError(f"Provider {vendor!r} 的 health_path 必须以 / 开头")
+            raise ValueError(f"Provider {vendor!r}: health_path must start with /")
         return cls(
             vendor=vendor,
             label=str(value.get("label") or vendor),

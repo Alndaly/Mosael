@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from app.core.i18n import tr
 from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import OAuthAnswerIn, OAuthLoginOut, OAuthPromptOut, ProviderModelOut, ProviderProfileOut, ProviderQuotaOut
@@ -29,7 +30,7 @@ router = APIRouter(tags=["settings"])
 def _oauth_profile(db: DbSession, profile_id: str, user: CurrentUser) -> ProviderProfile:
     profile = require_own_profile(db, user, profile_id)
     if profile.auth_type != "oauth" or not pi_provider_id(profile.vendor):
-        raise HTTPException(status_code=400, detail="该供应商不是订阅计划,不需要授权登录")
+        raise HTTPException(status_code=400, detail=tr("routeErr_notSubscriptionPlan"))
     return profile
 
 
@@ -99,7 +100,7 @@ def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: Curren
     profile = _oauth_profile(db, profile_id, user)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
-        raise HTTPException(status_code=404, detail="登录会话已结束")
+        raise HTTPException(status_code=404, detail=tr("routeErr_loginSessionEnded"))
     _store_login_catalog(db, profile, session, user)
     return _login_out(session)
 
@@ -111,9 +112,9 @@ def answer_oauth_login(
     _oauth_profile(db, profile_id, user)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
-        raise HTTPException(status_code=404, detail="登录会话已结束")
+        raise HTTPException(status_code=404, detail=tr("routeErr_loginSessionEnded"))
     if not answer_login(login_id, body.prompt_id, body.answer):
-        raise HTTPException(status_code=409, detail="这一步已经不在等待作答了")
+        raise HTTPException(status_code=409, detail=tr("routeErr_loginStepNotWaiting"))
     return _login_out(session)
 
 
@@ -156,7 +157,7 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
             db.refresh(mine) if mine is not None else None
             credential = read_credential(provider_credentials.get(db, profile.id, user.id))
         except AdapterError as exc:
-            return ProviderQuotaOut(supported=True, error=f"令牌刷新失败:{exc}")
+            return ProviderQuotaOut(supported=True, error=tr("routeErr_tokenRefreshFailed", detail=str(exc)))
     try:
         snapshot = fetch_quota(pi_provider, credential)
     except QuotaUnavailable as exc:

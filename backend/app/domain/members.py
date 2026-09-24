@@ -12,14 +12,15 @@ import threading
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError, tr
 from app.db.models import User, Workspace, WorkspaceInvitation, WorkspaceMember
 from app.domain import notifications as notifications_svc
 
 _lock = threading.RLock()
 
 
-class MemberError(Exception):
-    """Domain error → mapped to HTTP 400/409 by the route."""
+class MemberError(LocalizedError):
+    """Domain error → mapped to HTTP 400/409 by the route. 带文案 key(`memberErr_*`)。"""
 
 
 def owners_count(db: Session, workspace_id: str) -> int:
@@ -52,11 +53,11 @@ def invite_member(db: Session, workspace_id: str, inviter: User, username: str, 
     with _lock:
         invitee = db.scalar(select(User).where(User.username == username))
         if invitee is None:
-            raise MemberError("该用户名不存在;请对方先在登录页注册账号")
+            raise MemberError("memberErr_userNotFound")
         if invitee.id == inviter.id:
-            raise MemberError("不能邀请自己")
+            raise MemberError("memberErr_inviteSelf")
         if db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": invitee.id}) is not None:
-            raise MemberError("对方已是本工作区成员")
+            raise MemberError("memberErr_alreadyMember")
         pending = db.scalar(
             select(WorkspaceInvitation).where(
                 WorkspaceInvitation.workspace_id == workspace_id,
@@ -65,7 +66,7 @@ def invite_member(db: Session, workspace_id: str, inviter: User, username: str, 
             )
         )
         if pending is not None:
-            raise MemberError("已有待处理的邀请")
+            raise MemberError("memberErr_invitePending")
         invitation = WorkspaceInvitation(
             workspace_id=workspace_id, inviter_id=inviter.id, invitee_id=invitee.id, role=role
         )
@@ -106,9 +107,9 @@ def respond_invitation(db: Session, invitation_id: str, user: User, accept: bool
     with _lock:
         invitation = db.get(WorkspaceInvitation, invitation_id)
         if invitation is None or invitation.invitee_id != user.id:
-            raise MemberError("邀请不存在")
+            raise MemberError("memberErr_inviteNotFound")
         if invitation.status != "pending":
-            raise MemberError("邀请已处理过")
+            raise MemberError("memberErr_inviteHandled")
         invitation.status = "accepted" if accept else "declined"
         invitation.responded_at = _now()
         if accept and db.get(WorkspaceMember, {"workspace_id": invitation.workspace_id, "user_id": user.id}) is None:
@@ -133,9 +134,9 @@ def set_role(db: Session, workspace_id: str, user_id: str, role: str) -> Workspa
     with _lock:
         member = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
         if member is None:
-            raise MemberError("Not a member")
+            raise MemberError("memberErr_notMember")
         if member.role == "owner" and role != "owner" and owners_count(db, workspace_id) <= 1:
-            raise MemberError("Cannot demote the last owner")
+            raise MemberError("memberErr_lastOwnerDemote")
         member.role = role
         db.commit()
         db.refresh(member)
@@ -146,9 +147,9 @@ def remove_member(db: Session, workspace_id: str, user_id: str) -> None:
     with _lock:
         member = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
         if member is None:
-            raise MemberError("Not a member")
+            raise MemberError("memberErr_notMember")
         if member.role == "owner" and owners_count(db, workspace_id) <= 1:
-            raise MemberError("Cannot remove the last owner")
+            raise MemberError("memberErr_lastOwnerRemove")
         db.delete(member)
         db.commit()
 
@@ -215,11 +216,11 @@ def delete_account(db: Session, user: User) -> None:
                 select(func.count()).select_from(User).where(User.is_deployment_admin.is_(True), User.id != user.id)
             )
             if not others:
-                raise MemberError("这是最后一个部署管理员 —— 先把管理员给别人,再删这个账号。")
+                raise MemberError("memberErr_lastDeploymentAdmin")
         blocked = shared_workspaces(db, user.id)
         if blocked:
-            names = "、".join(w.name for w in blocked)
-            raise MemberError(f"这些工作区里还有别人,不能跟着账号一起删:{names}。先转让或把他移出去。")
+            names = tr("punct_listSep").join(w.name for w in blocked)
+            raise MemberError("memberErr_sharedWorkspaces", names=names)
 
         for workspace in solo_workspaces(db, user.id):
             db.delete(workspace)  # 内容靠 FK CASCADE 跟着走

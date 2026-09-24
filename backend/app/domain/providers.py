@@ -9,6 +9,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError, tr
 from app.db.models import ProviderProfile
 from app.domain import provider_credentials
 from app.domain.provider_presets import (
@@ -141,6 +142,16 @@ def first_enabled_connection(
     return db.scalars(stmt.order_by(ProviderProfile.created_at).limit(1)).first()
 
 
+def _connection_error(error: type[Exception], key: str, **params: object) -> Exception:
+    """用调用方给的错误类型说「连接不可用」。
+
+    带文案 key 的错误(LocalizedError)收 key,到展示的时候才按读的人的语言翻;别的错误类型只收
+    一句话,就按**现在**的语言翻好了给它。"""
+    if issubclass(error, LocalizedError):
+        return error(key, **params)
+    return error(tr(key, **params))
+
+
 def require_connection(
     db: Session, profile_id: str | None = None, *, user_id: str | None, error: type[Exception] = RuntimeError
 ) -> ResolvedConnection:
@@ -152,14 +163,14 @@ def require_connection(
     if profile_id:
         profile = db.get(ProviderProfile, str(profile_id))
         if profile is None or not profile.enabled or (user_id is not None and profile.owner_user_id != user_id):
-            raise error("指定的供应商配置不存在或已停用")
+            raise _connection_error(error, "providerErr_connectionMissing")
     else:
         profile = first_enabled_connection(db, owner_user_id=user_id)
         if profile is None:
-            raise error("没有可用的 AI 供应商连接,请先在设置里添加并配置")
+            raise _connection_error(error, "providerErr_noConnection")
     resolved = provider_credentials.resolve_connection(db, profile, user_id)
     if resolved is None:
         # 没有可用的钥匙时报出来,而不是找一把能用的顶上 —— 「我以为花的是自己的额度,
         # 其实花的是别人的钱」是这里最坏的失败方式。
-        raise error(f"供应商「{profile.name}」还没有配置你的密钥,请先在设置里填写")
+        raise _connection_error(error, "providerErr_noKey", name=profile.name)
     return resolved

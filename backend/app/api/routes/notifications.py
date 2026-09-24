@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import NotificationListOut, NotificationOut, NotifyRequest
 from app.domain.permissions import ensure_workspace_access
@@ -23,7 +24,7 @@ def create_notification(body: NotifyRequest, db: DbSession, user: CurrentUser) -
     rows = notify(db, body.workspace_id, type="agent", title=body.title, body=body.body)
     db.commit()
     if not rows:
-        raise HTTPException(status_code=422, detail="该工作区没有可通知的成员")
+        raise HTTPException(status_code=422, detail=tr("routeErr_noNotifiableMembers"))
     db.refresh(rows[0])
     return rows[0]
 

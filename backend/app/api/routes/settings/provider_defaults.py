@@ -4,6 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
 from app.db.models import ProviderModel
@@ -53,7 +54,7 @@ def list_capability_models(
     先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
     """
     if capability not in DEFAULTABLE_CAPABILITIES:
-        raise HTTPException(status_code=404, detail="未知能力")
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownCapability"))
     return [
         CapabilityModelOut(
             provider_profile_id=model.provider_profile_id,
@@ -85,7 +86,7 @@ def set_provider_default(
     删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。
     """
     if capability not in DEFAULTABLE_CAPABILITIES:
-        raise HTTPException(status_code=404, detail="未知能力")
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownCapability"))
     model = None
     model_id = body.model.strip()
     if body.provider_profile_id and model_id:
@@ -99,7 +100,7 @@ def set_provider_default(
             else capability_ids_for_vendor(profile.vendor)
         )
         if capability not in capabilities:
-            raise HTTPException(status_code=422, detail=f"该模型不提供 {capability} 能力")
+            raise HTTPException(status_code=422, detail=tr("routeErr_modelLacksCapability", capability=capability))
         if model is None:
             # 设默认时顺手把这一行加上 —— 用户知道模型名但还没加过它是个正常流程,
             # 逼他先去列表里加一遍纯属多一步。

@@ -69,9 +69,9 @@ def materialize(
     if not fields:
         return payload
     if scratch is None:
-        raise PluginDomainError("这个工具要收一份素材,但 MCP 形态没有交接文件的通道")
+        raise PluginDomainError("pluginErr_mcpNoAssetChannel")
     if workspace_id is None:
-        raise PluginDomainError("这个工具要收一份素材,但这次调用没有归属工作区")
+        raise PluginDomainError("pluginErr_assetNeedsWorkspace")
 
     resolved = dict(payload)
     for key in fields:

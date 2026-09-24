@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Response
 
+from app.core.i18n import tr
 from app.ai.model_catalog import fetch_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
@@ -242,7 +243,7 @@ def add_provider_model(
     profile = require_own_profile(db, user, profile_id)
     model_id = (body.model_id or "").strip()
     if not model_id:
-        raise HTTPException(status_code=422, detail="模型 id 不能为空")
+        raise HTTPException(status_code=422, detail=tr("routeErr_modelIdRequired"))
     catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     fields = body.model_dump(
         exclude_unset=True,
@@ -280,7 +281,7 @@ def update_provider_model(
     profile = require_own_profile(db, user, profile_id)
     model = provider_models.get_model(db, profile_id, model_id)
     if model is None:
-        raise HTTPException(status_code=404, detail="该连接下没有这个模型")
+        raise HTTPException(status_code=404, detail=tr("routeErr_modelNotInConnection"))
     patch = body.model_dump(exclude_unset=True)
     for field in provider_models.RUNTIME_FIELDS:
         if field in patch:

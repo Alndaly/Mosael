@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import get_current_locale
+from app.core.i18n import get_current_locale, tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
@@ -124,11 +124,11 @@ def refresh_tools(db: Session, instance: PluginInstance) -> PluginInstance:
         return instance
     for absent in (inst.missing_config(db, instance), inst.missing_credentials(db, instance)):
         if absent:
-            raise PluginDomainError(f"请先填写: {'、'.join(absent)}")
+            raise PluginDomainError("pluginErr_fillFirst", names=tr("punct_listSep").join(absent))
     try:
         discovered = discover_tools(_runtime_manifest(manifest), inst.secrets_for(db, instance))
     except McpBridgeError as exc:
-        raise PluginDomainError(str(exc)) from exc
+        raise PluginDomainError(exc.key, **exc.params) from exc
     instance.discovered_tools = discovered
     db.commit()
     db.refresh(instance)
@@ -211,13 +211,13 @@ def invoke(
     """
     instance = db.get(PluginInstance, instance_id)
     if instance is None:
-        raise PluginDomainError("Plugin instance not found")
+        raise PluginDomainError("pluginErr_instanceNotFound")
     blocked = inst.blocked_reason(db, instance)
     if blocked:
-        raise PluginDomainError(f"「{instance.name}」不可用:{blocked}")
+        raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
     tool = find(db, instance_id, tool_name)
     if tool is None:
-        raise PluginDomainError(f"「{instance.name}」没有工具 {tool_name}")
+        raise PluginDomainError("pluginErr_noSuchTool", name=instance.name, tool=tool_name)
     if timeout is None:
         timeout = tool.get("timeout_seconds")
 
@@ -269,7 +269,7 @@ def invoke(
     except (PluginRuntimeError, McpBridgeError, ArtifactError, PluginDomainError) as exc:
         invocation.status, invocation.error = "failed", str(exc)
     except Exception as exc:  # noqa: BLE001 — runtime must never bubble
-        invocation.status, invocation.error = "failed", f"插件运行时异常: {exc}"
+        invocation.status, invocation.error = "failed", tr("pluginErr_runtimeCrashed", detail=str(exc))
     finally:
         cleanup_scratch_dir(scratch)
     db.commit()
@@ -298,7 +298,7 @@ def _collect_artifact(
     if not isinstance(spec, dict):
         return output
     if workspace_id is None or scratch is None:
-        raise ArtifactError("这个工具产出了文件,但这次调用没有归属工作区,收不下")
+        raise ArtifactError("pluginErr_artifactNeedsWorkspace")
     ref, name = artifacts.register(
         db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
     )

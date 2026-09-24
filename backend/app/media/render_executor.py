@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
+from app.core.i18n import LocalizedError
 from app.core.child_process import ChildProcess, popen_text, run_logged
 
 from app.core.config import settings
@@ -45,9 +46,11 @@ def _duck_volume(windows: tuple[tuple[float, float], ...]) -> str:
     return f",volume=enable='{enable}':volume={DUCK_GAIN}"
 
 
-class RenderExecutionError(RuntimeError):
-    def __init__(self, message: str, *, stderr_tail: str = "") -> None:
-        super().__init__(message)
+class RenderExecutionError(LocalizedError, RuntimeError):
+    """渲染没跑成。带文案 key(`renderErr_*`);`stderr_tail` 是 ffmpeg 的原话,给诊断用。"""
+
+    def __init__(self, key: str, *, stderr_tail: str = "", **params: object) -> None:
+        super().__init__(key, **params)
         self.stderr_tail = stderr_tail
 
 
@@ -1113,10 +1116,10 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
     try:
         run_logged(command, check=True, capture_output=True, timeout=180, what="取当前帧")
     except subprocess.SubprocessError as exc:
-        raise RenderExecutionError("取当前帧失败") from exc
+        raise RenderExecutionError("renderErr_frameFailed") from exc
     if not output_path.is_file() or output_path.stat().st_size == 0:
         #: 时间点落在片尾之后:ffmpeg 成功退出但什么都不写。空文件比报错更难查。
-        raise RenderExecutionError("这个时间点上没有画面 —— 是不是超过片长了?")
+        raise RenderExecutionError("stillErr_noFrame")
     return output_path
 
 
@@ -1208,7 +1211,4 @@ def execute_render(
         returncode, stderr_tail, killed = run_once(force_software=True)
     if returncode != 0:
         logger.error("render: ffmpeg failed (rc=%s):\n%s", returncode, stderr_tail)
-        raise RenderExecutionError(
-            f"FFmpeg exited with code {returncode}",
-            stderr_tail=stderr_tail,
-        )
+        raise RenderExecutionError("renderErr_ffmpegExit", code=returncode, stderr_tail=stderr_tail)

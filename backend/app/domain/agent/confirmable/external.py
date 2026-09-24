@@ -31,9 +31,9 @@ def _execute_publish_asset(db: Session, confirmation: Any, actor: str | None) ->
     account = db.get(PublishAccount, str(payload["account_id"]))
     asset = db.get(AssetModel, str(payload["asset_id"]))
     if account is None or account.workspace_id != confirmation.workspace_id:
-        raise ValueError("发布账号不存在")
+        raise ConfirmationError("confirmErr_publishAccountNotFound")
     if asset is None or asset.workspace_id != confirmation.workspace_id:
-        raise ValueError("素材不存在")
+        raise ConfirmationError("confirmErr_assetNotFound")
     task = start_publish(
         db,
         workspace_id=confirmation.workspace_id,
@@ -51,7 +51,7 @@ def _validate_http_request(db: Session, workspace_id: str, payload: dict[str, An
     if not (url.startswith("http://") or url.startswith("https://")):
         # file:// 会把本机文件读成「请求结果」交回给模型。只认 http(s),而且在**开卡时**就认 ——
         # 一张说不清要请求什么的卡,没有让用户去点批准的道理。
-        raise ConfirmationError("只能请求 http(s) 网址")
+        raise ConfirmationError("confirmErr_httpOnly")
 
 def _summarize_http_request(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_httpRequest", {
@@ -114,12 +114,12 @@ def _execute_run_host_code(db: Session, confirmation: Any, actor: str | None) ->
     try:
         return host_code.run(str(payload.get("code") or ""), dict(payload.get("inputs") or {}))
     except host_code.HostCodeError as exc:
-        raise ValueError(str(exc)) from exc
+        raise ConfirmationError(exc.key, **exc.params) from exc
 
 def _validate_browser_open(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     url = str(payload.get("url") or "").strip()
     if url and not (url.startswith("http://") or url.startswith("https://")):
-        raise ConfirmationError("浏览器只能打开 http(s) 网址")
+        raise ConfirmationError("confirmErr_browserHttpOnly")
 
 def _summarize_browser_open(db: Session, payload: dict[str, Any]) -> Summary:
     url = str(payload.get("url") or "").strip()
@@ -150,7 +150,7 @@ def _validate_browser_pool_open(db: Session, workspace_id: str, payload: dict[st
 
     url = str(payload.get("url") or "").strip()
     if url and not (url.startswith("http://") or url.startswith("https://")):
-        raise ConfirmationError("浏览器只能打开 http(s) 网址")
+        raise ConfirmationError("confirmErr_browserHttpOnly")
     try:
         profile = browser_domain.get_profile(db, workspace_id, str(payload.get("profile_id") or ""))
     except browser_domain.BrowserDomainError as exc:

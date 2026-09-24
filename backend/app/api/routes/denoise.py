@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import DenoiseEngineOut
-from app.core.i18n import normalize_locale, translate_fields
+from app.core.i18n import normalize_locale, tr, translate_fields
 from app.domain.denoise import install_engine, list_engines
 from app.domain.permissions import ensure_deployment_admin
 
@@ -31,7 +31,7 @@ def install_denoise_engine(engine: str, request: Request, db: DbSession, user: C
     try:
         row = install_engine(engine)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="这个降噪引擎不需要安装,或者不存在") from exc
+        raise HTTPException(status_code=404, detail=tr("routeErr_denoiseEngineNotInstallable")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return translate_fields(row, _TRANSLATED, normalize_locale(request.headers.get("accept-language")))

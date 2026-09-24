@@ -47,10 +47,10 @@ def persist(db: Session, instance: PluginInstance, state: dict[str, Any]) -> Non
 
     unknown = sorted(set(state) - credential_keys - config_keys)
     if unknown:
-        raise PluginDomainError(f"插件想记住未声明的键: {', '.join(unknown)}")
+        raise PluginDomainError("pluginErr_stateUnknownKeys", keys=", ".join(unknown))
     too_long = sorted(key for key, value in state.items() if len(str(value)) > MAX_VALUE_CHARS)
     if too_long:
-        raise PluginDomainError(f"插件状态过长(上限 {MAX_VALUE_CHARS} 字符): {', '.join(too_long)}")
+        raise PluginDomainError("pluginErr_stateTooLong", limit=MAX_VALUE_CHARS, keys=", ".join(too_long))
 
     credentials = {key: str(value) for key, value in state.items() if key in credential_keys}
     config = {key: value for key, value in state.items() if key in config_keys and key not in credential_keys}

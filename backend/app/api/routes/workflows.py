@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.i18n import MESSAGES, get_current_locale, t
+from app.core.i18n import MESSAGES, get_current_locale, render_message, t, tr
 from typing import Any, TYPE_CHECKING
 
 from app.api.schemas import (
@@ -209,6 +209,12 @@ def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Workfl
     return list_workflows(db, workspace_id)
 
 
+def _localized(exc: WorkflowDomainError) -> str:
+    """按**这次请求**的语言说出工作流的报错。`str(exc)` 是缺省语言那一句(给日志、落库),
+    认得出 key 的就按读的人的语言重翻;认不出的是一句现成的话,原样给。"""
+    return render_message(exc.key, get_current_locale(), exc.params) if exc.key else str(exc)
+
+
 @router.post("/workflows", response_model=WorkflowOut)
 def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
@@ -216,7 +222,7 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
         graph = body.graph
         if body.template_id:
             if graph is not None:
-                raise WorkflowDomainError("创建工作流时不能同时提交模板和自定义图")
+                raise WorkflowDomainError("routeErr_workflowTemplateAndGraph")
             #: 节点名在造图这一刻定语言 —— 图落库之后就是用户的数据(见 templates.built_in_template_graph)。
             graph = built_in_template_graph(
                 db, body.template_id, user_id=user.id, workspace_id=body.workspace_id,
@@ -233,7 +239,7 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
             revision_note=f"template:{body.template_id}" if body.template_id else "",
         )
     except WorkflowDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 
 
 # ---------------- 文件导出/导入 ----------------
@@ -275,13 +281,13 @@ def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) ->
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     data = body.data
     if data.get("format") != WORKFLOW_FILE_FORMAT or not isinstance(data.get("graph"), dict):
-        raise HTTPException(status_code=422, detail="不是有效的 Mosael 工作流文件")
+        raise HTTPException(status_code=422, detail=tr("routeErr_notWorkflowFile"))
     try:
         version = int(data.get("version", 0))
     except (TypeError, ValueError):
         version = 0
     if version > WORKFLOW_FILE_VERSION:
-        raise HTTPException(status_code=422, detail=f"文件版本({version})比当前应用支持的更新,请升级应用后再导入")
+        raise HTTPException(status_code=422, detail=tr("routeErr_workflowFileTooNew", version=version))
     # 导入是最容易被当成「只是拖个文件进来」的入口,但文件里的 graph 原样落库——含 code 节点的
     # 工作流文件就是一份可执行载荷,门禁和手写一张图完全同级。
     name = str(data.get("name") or "").strip()[:180] or "导入的工作流"
@@ -304,7 +310,7 @@ def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) ->
         )
     except WorkflowDomainError as exc:
         # 未知节点类型(更新版本导出的文件)/结构非法都会在这里给出具体原因
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowOut)
@@ -322,7 +328,7 @@ def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentU
     try:
         return update_workflow(db, workflow, changes, source="edit", created_by=user.id)
     except WorkflowDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 
 
 @router.get("/workflows/{workflow_id}/revisions", response_model=list[WorkflowRevisionOut])
@@ -338,7 +344,7 @@ def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUs
     ensure_workspace_access(db, user, workflow.workspace_id)
     item = get_workflow_revision(db, workflow.id, revision)
     if item is None:
-        raise HTTPException(status_code=404, detail="工作流修订不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_workflowRevisionNotFound"))
     return item
 
 
@@ -369,7 +375,7 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: DbSession, user: Current
     try:
         return start_workflow_job(db, workflow, created_by=user.id, params=body.params)
     except WorkflowDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 
 
 @router.get("/workflows/{workflow_id}/runs", response_model=list[JobOut])
@@ -410,7 +416,7 @@ def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: 
             user_id=user.id,
         )
     except WorkflowDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
     return {"graph": graph, "summary": summary}
 
 

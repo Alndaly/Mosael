@@ -29,7 +29,7 @@ def test_过期的修订号是_409() -> None:
     scene = c.post("/api/scenes", json={"workspace_id": ws, "name": "demo"}).json()
     stale = c.patch(f"/api/scenes/{scene['id']}", json={
         "workspace_id": ws, "base_revision": scene["revision"] + 90,
-        "name": "x", "content": scene["content"]})
+        "name": "x", "content": scene["content"]}, headers={"Accept-Language": "en"})
     assert stale.status_code == 409, stale.text
     # 而且要说清是被别人改过了,不是"请求格式不对"。
     assert "elsewhere" in stale.json()["detail"]

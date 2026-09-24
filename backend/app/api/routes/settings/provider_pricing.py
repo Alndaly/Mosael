@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
+from app.core.i18n import tr
 from app.ai.model_catalog import fetch_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -73,7 +74,7 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
     profile = require_own_profile(db, user, profile_id)
     resolved = provider_credentials.resolve_connection(db, profile, user.id)
     if resolved is None:
-        raise HTTPException(status_code=422, detail="这条连接还没有你的密钥,先填一把再来取目录报价")
+        raise HTTPException(status_code=422, detail=tr("routeErr_pricingNeedsKey"))
     rates = _catalog_rates(resolved)
     created = 0
     priced = 0
@@ -106,7 +107,7 @@ def _pricing_payload_with_profile_defaults(
     if profile_id:
         profile = require_own_profile(db, user, profile_id)
         if capability and not supports_capability(profile.vendor, capability):
-            raise HTTPException(status_code=422, detail=f"该供应商不支持 {capability} 能力")
+            raise HTTPException(status_code=422, detail=tr("routeErr_providerLacksCapability", capability=capability))
         if not payload.get("provider"):
             payload["provider"] = profile.vendor
     return payload

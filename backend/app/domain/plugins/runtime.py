@@ -37,7 +37,7 @@ from typing import Any
 from app.core.interpreter import base_python
 from app.core.child_process import run_logged
 from app.core.text import blame_line
-from app.core.i18n import get_current_locale
+from app.core.i18n import LocalizedError, get_current_locale
 from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
 from app.domain.plugins.manifest import LOCALE_ENV
 
@@ -91,8 +91,8 @@ def data_dir_for(package_id: str) -> Path:
 MAX_OUTPUT_BYTES = 1_000_000
 
 
-class PluginRuntimeError(RuntimeError):
-    pass
+class PluginRuntimeError(LocalizedError, RuntimeError):
+    """插件进程没跑成。带文案 key(`pluginErr_*`);插件自己报的原因走 `pluginErr_upstream`。"""
 
 
 class PluginTimeout(PluginRuntimeError):
@@ -124,14 +124,14 @@ def resolve_entry(plugin_dir: Path, entry: str) -> Path:
     `{"_path", "entry"}` 的假清单粘着。粘住的两边一旦分开走,插件就装得上、跑不动。
     """
     if not entry:
-        raise PluginRuntimeError("插件未声明 entry 脚本,无法执行(runtime.entry)")
+        raise PluginRuntimeError("pluginErr_noEntry")
     if not plugin_dir.is_dir():
-        raise PluginRuntimeError("插件目录不存在,请重新扫描")
+        raise PluginRuntimeError("pluginErr_dirMissing")
     entry_path = (plugin_dir / entry).resolve()
     if not str(entry_path).startswith(str(plugin_dir.resolve()) + os.sep):
-        raise PluginRuntimeError("entry 脚本必须位于插件目录内")
+        raise PluginRuntimeError("pluginErr_entryOutside")
     if not entry_path.is_file():
-        raise PluginRuntimeError(f"entry 脚本不存在: {entry}")
+        raise PluginRuntimeError("pluginErr_entryMissing", entry=entry)
     return entry_path
 
 
@@ -142,7 +142,7 @@ def check_required_input(tool: dict[str, Any], input_payload: dict[str, Any]) ->
         return
     missing = [key for key in required if isinstance(key, str) and key not in input_payload]
     if missing:
-        raise PluginRuntimeError(f"缺少必填输入: {', '.join(missing)}")
+        raise PluginRuntimeError("pluginErr_missingInput", keys=", ".join(missing))
 
 
 def execute_tool(
@@ -183,7 +183,7 @@ def execute_tool(
         # 打包版里 sys.executable 是应用自己 —— 拿它跑插件等于再起一个后端(见 core/interpreter)。
         python = base_python()
         if not python:
-            raise PluginRuntimeError("找不到可用于运行插件的 Python 解释器")
+            raise PluginRuntimeError("pluginErr_noPython")
         result = run_logged(
             [python, str(entry_path)],
             input=request,
@@ -193,31 +193,36 @@ def execute_tool(
             cwd=entry_path.parent,
             env=env, what="插件命令")
     except subprocess.TimeoutExpired as exc:
-        raise PluginTimeout(f"插件执行超时({timeout:g}s)") from exc
+        raise PluginTimeout("pluginErr_timeout", seconds=f"{timeout:g}") from exc
     duration_ms = int((time.monotonic() - started) * 1000)
 
     if result.returncode != 0:
         # 取尾巴会撞上进度条 / 收尾提示 —— 判据收在 core/text.blame_line 一处(那里记着它踩过几次)。
-        why = blame_line(result.stderr or result.stdout, fallback="插件没有留下原因")
-        raise PluginRuntimeError(f"插件进程退出码 {result.returncode}:{why}")
+        why = blame_line(result.stderr or result.stdout, fallback="")
+        if not why:
+            raise PluginRuntimeError("pluginErr_processExitNoReason", code=result.returncode)
+        raise PluginRuntimeError("pluginErr_processExit", code=result.returncode, detail=why)
     stdout = result.stdout.strip()
     if len(stdout) > MAX_OUTPUT_BYTES:
-        raise PluginRuntimeError("插件输出超过大小限制 (1MB)")
+        raise PluginRuntimeError("pluginErr_outputTooLarge")
     try:
         response = json.loads(stdout)
     except json.JSONDecodeError as exc:
-        raise PluginRuntimeError(f"插件输出不是合法 JSON: {stdout[-300:]}") from exc
+        raise PluginRuntimeError("pluginErr_outputNotJson", tail=stdout[-300:]) from exc
     if not isinstance(response, dict):
-        raise PluginRuntimeError("插件输出必须是 JSON 对象")
+        raise PluginRuntimeError("pluginErr_outputNotObject")
     if not response.get("ok"):
-        raise PluginRuntimeError(str(response.get("error") or "插件返回失败但未说明原因"))
+        said = str(response.get("error") or "")
+        if said:
+            raise PluginRuntimeError("pluginErr_upstream", detail=said)
+        raise PluginRuntimeError("pluginErr_failedNoReason")
     output = response.get("output")
     if not isinstance(output, dict):
-        raise PluginRuntimeError("插件成功响应必须包含 output 对象")
+        raise PluginRuntimeError("pluginErr_outputNoOutput")
     output["_duration_ms"] = duration_ms
     state = response.get("state")
     if state is not None and not isinstance(state, dict):
-        raise PluginRuntimeError("插件返回的 state 必须是对象")
+        raise PluginRuntimeError("pluginErr_stateNotObject")
     return ToolResult(output=output, state=dict(state or {}))
 
 

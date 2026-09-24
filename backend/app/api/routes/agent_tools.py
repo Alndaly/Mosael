@@ -30,6 +30,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
@@ -110,7 +111,7 @@ def _invoke_plugin_tool(
     if match is None:
         # 连接被停用/撤权/凭据被清空、或者这个工具被取消暴露之后,模型手里还攥着上一轮的
         # 工具表。说清楚是哪一类问题,而不是一句"找不到"。
-        raise HTTPException(status_code=404, detail=f"插件工具 {name} 不可用(连接未启用、未授权、缺凭据,或该工具未开启)")
+        raise HTTPException(status_code=404, detail=tr("routeErr_pluginToolUnavailable", name=name))
     try:
         # 带上工作区:插件交出的**文件**产出要收进它的素材库,输出里换成 asset_id。
         # 这个 workspace_id 上面已经过了 ensure_workspace_member,不是模型给的。
@@ -118,7 +119,7 @@ def _invoke_plugin_tool(
     except PluginDomainError as exc:
         return {"error": str(exc)[:500]}
     if invocation.status != "succeeded":
-        return {"error": (invocation.error or "插件调用失败")[:500]}
+        return {"error": (invocation.error or tr("routeErr_pluginCallFailed"))[:500]}
     return {"result": invocation.output}
 
 
@@ -166,8 +167,8 @@ def invoke_agent_tool(
         try:
             result = fn(**arguments)
         except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
-            accepted = ", ".join(_accepted_names(fn)) or "(无)"
-            raise HTTPException(status_code=422, detail=f"{exc};该工具接受的参数:{accepted}") from exc
+            accepted = ", ".join(_accepted_names(fn)) or tr("routeErr_toolArgsNone")
+            raise HTTPException(status_code=422, detail=tr("routeErr_toolBadArgs", detail=str(exc), accepted=accepted)) from exc
         except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
             logger.warning("tool %s failed: %s", name, exc)
             return {"error": str(exc)[:500]}

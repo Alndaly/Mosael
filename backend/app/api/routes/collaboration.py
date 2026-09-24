@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.collaboration import (
     ActivityOut,
@@ -88,7 +89,7 @@ def update_comment_anchor(comment_id: str, body: CommentAnchorUpdate, db: DbSess
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     comment = db.get(Comment, comment_id)
     if comment is None or comment.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail="评论不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_commentNotFound"))
     try:
         move_comment(
             db,
@@ -115,7 +116,7 @@ def update_comment_content(comment_id: str, body: CommentContentUpdate, db: DbSe
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     comment = db.get(Comment, comment_id)
     if comment is None or comment.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail="评论不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_commentNotFound"))
     try:
         edit_comment(db, comment, actor_id=user.id, body=body.body,
                      body_document=body.body_document, mentioned_user_ids=body.mentioned_user_ids)
@@ -135,7 +136,7 @@ def remove_comment(comment_id: str, workspace_id: str, db: DbSession, user: Curr
     ensure_workspace_perm(db, user, workspace_id, "edit")
     comment = db.get(Comment, comment_id)
     if comment is None or comment.workspace_id != workspace_id:
-        raise HTTPException(status_code=404, detail="评论不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_commentNotFound"))
     try:
         delete_comment(db, comment, actor_id=user.id)
         db.commit()

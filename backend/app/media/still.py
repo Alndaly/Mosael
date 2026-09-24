@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from app.core.i18n import LocalizedError
 from app.core.child_process import run_logged
 
 """
@@ -14,14 +15,14 @@ from app.core.child_process import run_logged
 """
 
 
-class StillError(RuntimeError):
-    pass
+class StillError(LocalizedError, RuntimeError):
+    """取帧失败。带文案 key(`stillErr_*`)。"""
 
 
 def grab_frame(source: Path, at_seconds: float, target: Path) -> Path:
     """把 `source` 在 `at_seconds` 处的那一帧写到 `target`。"""
     if at_seconds < 0:
-        raise StillError("时间不能是负数")
+        raise StillError("stillErr_negativeTime")
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         run_logged(
@@ -37,8 +38,8 @@ def grab_frame(source: Path, at_seconds: float, target: Path) -> Path:
             check=True, capture_output=True, timeout=120, what="取帧",
         )
     except subprocess.SubprocessError as exc:
-        raise StillError("取帧失败") from exc
+        raise StillError("stillErr_failed") from exc
     if not target.is_file() or target.stat().st_size == 0:
         #: 时间点落在片尾之后时 ffmpeg 会成功退出但什么都不写 —— 空文件比报错更难查。
-        raise StillError("这个时间点上没有画面 —— 是不是超过片长了?")
+        raise StillError("stillErr_noFrame")
     return target

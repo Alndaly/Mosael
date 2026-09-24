@@ -101,7 +101,7 @@ def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -
             engine = default.profile.vendor
             model = model or default.model_id
     if not engine:
-        raise RuntimeError("没有配置可用于语音生成的真实供应商")
+        raise ConfirmationError("confirmErr_noTtsProvider")
     job = start_synthesis(
         db,
         text=str(payload.get("text") or payload.get("prompt") or ""),

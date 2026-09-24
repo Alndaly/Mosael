@@ -21,10 +21,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
-from app.domain.jobs import TERMINAL_STATUSES, finish_job, reset_parent_job, say, set_parent_job
+from app.domain.jobs import TERMINAL_STATUSES, blame, finish_job, reset_parent_job, say, set_parent_job
 
 logger = logging.getLogger(__name__)
+
+
+class ScheduledRunError(LocalizedError, RuntimeError):
+    """这一次定时运行派不出去。带文案 key(`schedErr_*`),经 `jobs.blame` 连 key 一起落进任务的失败原因。"""
 
 ACTIVE_RUN_STATUSES = ("queued", "running")
 
@@ -38,7 +43,7 @@ def _run_workflow(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: 
     payload: dict[str, Any] = task.payload or {}
     workflow = db.get(Workflow, str(payload.get("workflow_id", "")))
     if workflow is None or workflow.workspace_id != task.workspace_id:
-        raise RuntimeError("任务绑定的工作流不存在")
+        raise ScheduledRunError("schedErr_workflowMissing")
     # 复用包装任务作为工作流任务:引擎直接在它上面推进度和终态。
     job.payload = {**job.payload, "workflow_id": workflow.id}
     run.status = "running"
@@ -107,11 +112,11 @@ def dispatch_scheduled_job(db: Session, task: ScheduledTask, run: ScheduledTaskR
     try:
         if executor is None:
             # 建任务时已经拦过;走到这里说明种类是老数据里的。
-            raise RuntimeError(f"定时任务不支持这种任务:{task.kind}")
+            raise ScheduledRunError("schedErr_unsupportedKind", kind=task.kind)
         executor(db, task, run, job)
     except Exception as exc:  # noqa: BLE001 — 任何失败都要落进运行记录,否则它永远是"进行中"
         logger.warning("定时任务 %s 派发失败:%s", task.id, exc)
-        if not finish_job(db, job, status="failed", error=str(exc)[:500]):
+        if not finish_job(db, job, status="failed", **blame(exc)):
             db.commit()
             return
         run.status = "failed"

@@ -12,6 +12,8 @@ this module exists; everything else here is a thin wrapper around one Action.
 
 from __future__ import annotations
 
+from app.core.i18n import LocalizedError
+
 import datetime as dt
 import hashlib
 import hmac
@@ -30,8 +32,8 @@ TIMEOUT_SECONDS = 15
 RESOURCE_FAMILIES = ("seed-tts-2.0", "seed-tts-1.0", "seed-icl-2.0")
 
 
-class VolcOpenAPIError(RuntimeError):
-    """Raised when the OpenAPI refuses the request, carrying 火山's own message."""
+class VolcOpenAPIError(LocalizedError, RuntimeError):
+    """Raised when the OpenAPI refuses the request, carrying 火山's own message (as `detail`, key `volcErr_*`)."""
 
 
 def _sign(key: bytes, message: str) -> bytes:
@@ -88,7 +90,12 @@ def _error_message(payload: dict) -> str:
     error = (payload.get("ResponseMetadata") or {}).get("Error") or {}
     code = error.get("Code") or ""
     message = error.get("Message") or ""
-    return f"{code} {message}".strip() or "火山 OpenAPI 返回了未知错误"
+    return f"{code} {message}".strip()
+
+
+def _upstream_error(payload: dict) -> VolcOpenAPIError:
+    said = _error_message(payload)
+    return VolcOpenAPIError("volcErr_upstream", detail=said) if said else VolcOpenAPIError("volcErr_unknown")
 
 
 def list_speakers(ak: str, sk: str, resource_id: str, *, page_limit: int = 100, max_pages: int = 20) -> list[dict]:
@@ -98,7 +105,7 @@ def list_speakers(ak: str, sk: str, resource_id: str, *, page_limit: int = 100, 
     return only the first page, which looks like "these are all my voices".
     """
     if not ak or not sk:
-        raise VolcOpenAPIError("需要账号的 AK / SK 才能拉取音色列表")
+        raise VolcOpenAPIError("volcErr_needsAkSk")
 
     import json
 
@@ -113,11 +120,11 @@ def list_speakers(ak: str, sk: str, resource_id: str, *, page_limit: int = 100, 
             try:
                 payload = response.json()
             except ValueError as exc:
-                raise VolcOpenAPIError(f"火山 OpenAPI 返回了非 JSON 响应({response.status_code})") from exc
+                raise VolcOpenAPIError("volcErr_notJson", status=response.status_code) from exc
             # Errors arrive inside a 4xx body rather than as a bare status, so the body is
             # the thing to read either way.
             if response.status_code >= 400 or (payload.get("ResponseMetadata") or {}).get("Error"):
-                raise VolcOpenAPIError(_error_message(payload))
+                raise _upstream_error(payload)
             batch = ((payload.get("Result") or {}).get("Speakers")) or []
             speakers.extend(batch)
             if len(batch) < page_limit:

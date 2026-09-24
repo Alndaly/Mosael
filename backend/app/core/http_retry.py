@@ -100,7 +100,7 @@ class RetryingClient(httpx.Client):
                 # 不读完就丢会占着连接,而这条响应我们只关心状态码。
                 response.close()
             time.sleep(backoff_seconds(attempt))
-        raise AssertionError("unreachable: 末次必定返回或抛出")  # 仅为类型收敛
+        raise AssertionError("unreachable: the last attempt always returns or raises")  # 仅为类型收敛
 
 
 def post(url: str, *, max_retries: int | None = None, **kwargs) -> httpx.Response:

@@ -7,6 +7,7 @@ import time
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
+from app.core.i18n import tr
 from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -243,7 +244,7 @@ def _apply_profile_config(
         if spec.required and not spec.secret and not _submitted(spec).strip()
     ]
     if missing:
-        raise HTTPException(status_code=422, detail=f"缺少必要配置: {', '.join(missing)}")
+        raise HTTPException(status_code=422, detail=tr("routeErr_missingRequiredConfig", fields=", ".join(missing)))
 
 
 @router.get("/settings/provider-vendors", response_model=list[VendorPresetOut])

@@ -6,9 +6,15 @@
 
 from __future__ import annotations
 
+from app.core.i18n import LocalizedError
 
-class PluginDomainError(ValueError):
-    """插件不可用 / 声明不合法 / 操作不被允许。调用方把它翻成 4xx,不是服务端故障。"""
+
+class PluginDomainError(LocalizedError, ValueError):
+    """插件不可用 / 声明不合法 / 操作不被允许。调用方把它翻成 4xx,不是服务端故障。
+
+    带文案 key(`pluginErr_*`,见 core/i18n),`str(exc)` 按当时的语言翻。上游原文(MCP 服务、
+    插件进程自己说的话)走 `pluginErr_upstream`,原样放进 `detail`,不翻也不猜。
+    """
 
 
 __all__ = ["PluginDomainError"]

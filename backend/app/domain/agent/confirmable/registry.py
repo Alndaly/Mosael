@@ -59,9 +59,9 @@ class ConfirmableTool:
 
     def __post_init__(self) -> None:
         if self.permission not in PERMISSIONS or self.cost not in COSTS:
-            raise ValueError(f"{self.name}:权限/开销档次不认识")
+            raise ValueError(f"{self.name}: unknown permission/cost tier")
         if bool(self.gate) != bool(self.gate_label):
-            raise ValueError(f"{self.name}:声明了放行档就要给它一个名字(反之亦然)")
+            raise ValueError(f"{self.name}: a gate needs a gate_label (and vice versa)")
 
 
 _TOOLS: dict[str, ConfirmableTool] = {}
@@ -69,7 +69,7 @@ _TOOLS: dict[str, ConfirmableTool] = {}
 
 def confirmable_tool(tool: ConfirmableTool) -> ConfirmableTool:
     if tool.name in _TOOLS:
-        raise ValueError(f"重复登记的确认卡工具:{tool.name}")
+        raise ValueError(f"confirmable tool registered twice: {tool.name}")
     _TOOLS[tool.name] = tool
     return tool
 

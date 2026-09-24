@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.ai.runtime import separation_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import SeparationEngineOut
-from app.core.i18n import normalize_locale, translate_fields
+from app.core.i18n import normalize_locale, tr, translate_fields
 from app.domain.permissions import ensure_deployment_admin
 
 router = APIRouter(tags=["separation"])
@@ -29,6 +29,6 @@ def install_separation_engine(engine: str, db: DbSession, user: CurrentUser) -> 
     try:
         return separation_models.start_install(engine)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="未知的分离引擎") from exc
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownSeparationEngine")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

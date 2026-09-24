@@ -8,14 +8,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import ScheduledTask, ScheduledTaskRun, now
 from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
 
 
-class SchedulerDomainError(ValueError):
-    pass
+class SchedulerDomainError(LocalizedError, ValueError):
+    """定时任务说不行。带文案 key(`schedErr_*`)。"""
 
 
 class SchedulerBusy(SchedulerDomainError):
@@ -39,7 +40,7 @@ def create_scheduled_task(
 
     if kind not in SCHEDULED_EXECUTORS:
         # 此前什么都收:认不出的种类建得出来,到点排一个任务,然后永远停在"排队中"。
-        raise SchedulerDomainError(f"定时任务只能是:{' / '.join(SCHEDULED_EXECUTORS)}")
+        raise SchedulerDomainError("schedErr_badKind", kinds=" / ".join(SCHEDULED_EXECUTORS))
     if trigger_type == "webhook" and not payload.get("webhook_secret"):
         # 外部触发路由不走登录态,按任务级密钥鉴权。
         payload = {**payload, "webhook_secret": secrets.token_urlsafe(24)}
@@ -80,7 +81,7 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
     from app.domain.scheduler.executors import dispatch_scheduled_job, has_active_run
 
     if has_active_run(db, task.id):
-        raise SchedulerBusy("这个任务上一次还没跑完")
+        raise SchedulerBusy("schedErr_busy")
     run, job = _open_run(db, task)
     dispatch_scheduled_job(db, task, run, job)
     if task.trigger_type == "once":
@@ -95,7 +96,7 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
 
 def _open_run(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskRun, Any]:
     if not task.enabled:
-        raise SchedulerDomainError("Scheduled task is disabled")
+        raise SchedulerDomainError("schedErr_disabled")
 
     run = ScheduledTaskRun(scheduled_task_id=task.id, status="queued", started_at=now())
     db.add(run)
@@ -146,12 +147,12 @@ def compute_next_run_at(
     if trigger_type == "once":
         value = schedule.get("run_at")
         if not isinstance(value, str):
-            raise SchedulerDomainError("once schedule requires run_at")
+            raise SchedulerDomainError("schedErr_onceNeedsRunAt")
         return _parse_datetime(value)
     if trigger_type == "interval":
         value = schedule.get("seconds")
         if not isinstance(value, int | float) or value <= 0:
-            raise SchedulerDomainError("interval schedule requires positive seconds")
+            raise SchedulerDomainError("schedErr_intervalNeedsSeconds")
         return current + timedelta(seconds=float(value))
     if trigger_type == "daily":
         hour, minute = _parse_time(schedule)
@@ -163,7 +164,7 @@ def compute_next_run_at(
     if trigger_type == "weekly":
         weekday = schedule.get("weekday")
         if not isinstance(weekday, int) or not 0 <= weekday <= 6:
-            raise SchedulerDomainError("weekly schedule requires weekday 0-6 (Monday=0)")
+            raise SchedulerDomainError("schedErr_weeklyNeedsWeekday")
         hour, minute = _parse_time(schedule)
         local = current.replace(tzinfo=UTC).astimezone(zone)
         candidate = local.replace(hour=hour, minute=minute, second=0, microsecond=0)
@@ -172,7 +173,7 @@ def compute_next_run_at(
         if candidate <= local:
             candidate += timedelta(days=7)
         return candidate.astimezone(UTC).replace(tzinfo=None)
-    raise SchedulerDomainError(f"Unsupported trigger type: {trigger_type}")
+    raise SchedulerDomainError("schedErr_unsupportedTrigger", trigger=trigger_type)
 
 
 def _zone(name: str) -> ZoneInfo:
@@ -190,9 +191,9 @@ def _parse_time(schedule: dict[str, Any]) -> tuple[int, int]:
         hour_text, minute_text = str(value).split(":", 1)
         hour, minute = int(hour_text), int(minute_text)
     except ValueError as exc:
-        raise SchedulerDomainError("time must be HH:MM") from exc
+        raise SchedulerDomainError("schedErr_badTime") from exc
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        raise SchedulerDomainError("time must be HH:MM")
+        raise SchedulerDomainError("schedErr_badTime")
     return hour, minute
 
 
@@ -201,4 +202,4 @@ def _parse_datetime(value: str) -> datetime:
     try:
         return datetime.fromisoformat(normalized)
     except ValueError as exc:
-        raise SchedulerDomainError("run_at must be an ISO datetime") from exc
+        raise SchedulerDomainError("schedErr_badRunAt") from exc

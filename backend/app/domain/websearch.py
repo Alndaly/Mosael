@@ -7,6 +7,8 @@ pi agent can look things up on the web.
 
 from __future__ import annotations
 
+from app.core.i18n import LocalizedError
+
 import ipaddress
 import socket
 from urllib.parse import urlparse
@@ -19,22 +21,22 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML
 _DDG = "https://html.duckduckgo.com/html/"
 
 
-class WebSearchError(RuntimeError):
-    pass
+class WebSearchError(LocalizedError, RuntimeError):
+    """搜索 / 抓取失败。带文案 key(`webErr_*`)。"""
 
 
 def search(query: str, count: int = 5) -> list[dict[str, str]]:
     """Return up to `count` web results as {title, url, snippet} via DuckDuckGo."""
     query = (query or "").strip()
     if not query:
-        raise WebSearchError("query 不能为空")
+        raise WebSearchError("webErr_emptyQuery")
     count = max(1, min(count, 10))
     try:
         with httpx.Client(timeout=15, headers={"User-Agent": _UA}, follow_redirects=True) as client:
             response = client.post(_DDG, data={"q": query})
             response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise WebSearchError(f"搜索请求失败: {exc}") from exc
+        raise WebSearchError("webErr_searchFailed", detail=str(exc)) from exc
 
     soup = BeautifulSoup(response.text, "html.parser")
     results: list[dict[str, str]] = []
@@ -79,7 +81,7 @@ def fetch(url: str, max_chars: int = 6000) -> dict[str, str]:
     """Fetch a page and return {title, text} — readable text, scripts/styles stripped."""
     url = (url or "").strip()
     if not _is_public_http_url(url):
-        raise WebSearchError("只能抓取公网 http/https 页面(已拦截内网/本机地址)")
+        raise WebSearchError("webErr_publicOnly")
     # Follow redirects by hand, re-checking every hop. _is_public_http_url only ever saw the
     # URL the caller supplied, so a public page answering 302 http://127.0.0.1:8800/... — or a
     # cloud metadata address — walked straight through the guard that exists to stop exactly
@@ -93,13 +95,13 @@ def fetch(url: str, max_chars: int = 6000) -> dict[str, str]:
                     break
                 target = str(response.next_request.url) if response.next_request else ""
                 if not _is_public_http_url(target):
-                    raise WebSearchError("该页面跳转到了内网/本机地址,已拦截")
+                    raise WebSearchError("webErr_redirectPrivate")
                 current = target
             else:
-                raise WebSearchError("跳转次数过多")
+                raise WebSearchError("webErr_tooManyRedirects")
             response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise WebSearchError(f"抓取失败: {exc}") from exc
+        raise WebSearchError("webErr_fetchFailed", detail=str(exc)) from exc
 
     soup = BeautifulSoup(response.text, "html.parser")
     for tag in soup(["script", "style", "noscript", "nav", "footer", "header", "svg"]):

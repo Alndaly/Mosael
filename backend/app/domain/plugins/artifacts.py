@@ -31,6 +31,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.http_retry import RetryingClient
+from app.core.i18n import LocalizedError
 from app.domain.plugins import media_bridge
 
 logger = logging.getLogger(__name__)
@@ -45,8 +46,8 @@ MAX_ARTIFACT_BYTES = 8 * 1024 * 1024 * 1024
 DOWNLOAD_TIMEOUT_SECONDS = 300.0
 
 
-class ArtifactError(RuntimeError):
-    """产出交接失败。消息面向用户,可以直接显示。"""
+class ArtifactError(LocalizedError, RuntimeError):
+    """产出交接失败。带文案 key(`pluginErr_artifact*`),`str(exc)` 按当时的语言翻,可以直接显示。"""
 
 
 def make_scratch_dir() -> Path:
@@ -61,7 +62,7 @@ def cleanup_scratch_dir(path: Path | None) -> None:
 def _resolve_local(spec: dict[str, Any], scratch: Path) -> Path:
     raw = str(spec.get("path") or "").strip()
     if not raw:
-        raise ArtifactError("插件产出缺少 path")
+        raise ArtifactError("pluginErr_artifactNoPath")
     path = Path(raw)
     if not path.is_absolute():
         path = scratch / path
@@ -70,20 +71,20 @@ def _resolve_local(spec: dict[str, Any], scratch: Path) -> Path:
     # 所以这不挡提权;它挡的是「随手交出一个别处的文件」—— 比如把 ~/.ssh/id_rsa 收进素材库,
     # 而素材库里的东西是能被发布出去的。限定目录还让清理变成一件确定的事。
     if not str(path).startswith(str(scratch.resolve()) + "/"):
-        raise ArtifactError(f"插件产出必须写在 {SCRATCH_ENV} 指定的目录里")
+        raise ArtifactError("pluginErr_artifactOutsideScratch", env=SCRATCH_ENV)
     if not path.is_file():
-        raise ArtifactError("插件产出文件不存在")
+        raise ArtifactError("pluginErr_artifactMissing")
     if path.stat().st_size > MAX_ARTIFACT_BYTES:
-        raise ArtifactError("插件产出超过大小上限")
+        raise ArtifactError("pluginErr_artifactTooLarge")
     return path
 
 
 def _download(spec: dict[str, Any], scratch: Path) -> Path:
     url = str(spec.get("url") or "").strip()
     if not url:
-        raise ArtifactError("插件产出缺少 url")
+        raise ArtifactError("pluginErr_artifactNoUrl")
     if not url.startswith(("http://", "https://")):
-        raise ArtifactError("插件产出的 url 只能是 http/https")
+        raise ArtifactError("pluginErr_artifactBadScheme")
     headers = {str(k): str(v) for k, v in (spec.get("headers") or {}).items()}
     name = str(spec.get("filename") or "").strip() or "download"
     target = scratch / Path(name).name
@@ -96,10 +97,10 @@ def _download(spec: dict[str, Any], scratch: Path) -> Path:
                     for chunk in response.iter_bytes():
                         written += len(chunk)
                         if written > MAX_ARTIFACT_BYTES:
-                            raise ArtifactError("插件产出超过大小上限")
+                            raise ArtifactError("pluginErr_artifactTooLarge")
                         handle.write(chunk)
     except httpx.HTTPError as exc:
-        raise ArtifactError(f"下载插件产出失败:{exc}") from exc
+        raise ArtifactError("pluginErr_artifactDownloadFailed", detail=str(exc)) from exc
     return target
 
 

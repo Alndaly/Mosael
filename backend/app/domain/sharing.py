@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import (
     AgentSession,
     BrowserProfile,
@@ -44,13 +45,13 @@ KINDS: dict[str, tuple[type, bool]] = {
 }
 
 
-class SharingError(ValueError):
-    pass
+class SharingError(LocalizedError, ValueError):
+    """共享说不行。带文案 key(`shareErr_*`)。"""
 
 
 def model_for(kind: str) -> type:
     if kind not in KINDS:
-        raise SharingError(f"未知的资源类型:{kind}")
+        raise SharingError("shareErr_unknownKind", kind=kind)
     return KINDS[kind][0]
 
 

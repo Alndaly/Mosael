@@ -32,12 +32,17 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError, tr
 from app.api.deps import DbSession
 from app.core.config import settings
 from app.core.security import hash_password, mint_login_session
 from app.db.models import OAuthIdentity, User
 
 router = APIRouter(tags=["oauth"])
+
+
+class OAuthLoginError(LocalizedError):
+    """第三方登录没走通。带文案 key(`oauthLogin_*`);原因经轮询带回前端,按回调那次请求的语言翻。"""
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -82,7 +87,7 @@ def list_providers() -> dict[str, Any]:
 @router.post("/auth/oauth/{provider}/start", response_model=StartOut)
 def start(provider: str) -> StartOut:
     if provider not in _providers():
-        raise HTTPException(status_code=404, detail="该登录方式未配置")
+        raise HTTPException(status_code=404, detail=tr("routeErr_loginMethodNotConfigured"))
     pending_id = secrets.token_urlsafe(24)
     state = secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48)
@@ -148,14 +153,14 @@ def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTML
     with _pending_lock:
         entry = _pending.get(pending_id)
     if entry is None or entry["provider"] != provider or not secrets.compare_digest(entry["state"], state):
-        return _result_page("登录请求已过期或不匹配,请回到 Mosael 重试。", ok=False)
+        return _result_page(tr("oauthLogin_expired"), ok=False)
     if params.get("error"):
-        _finish(pending_id, error=f"授权被拒绝:{params['error']}")
-        return _result_page("授权被拒绝,可以关闭本页。", ok=False)
+        _finish(pending_id, error=tr("oauthLogin_denied", detail=params["error"]))
+        return _result_page(tr("oauthLogin_deniedPage"), ok=False)
     code = params.get("code") or ""
     if not code:
-        _finish(pending_id, error="提供方未返回授权码")
-        return _result_page("提供方未返回授权码,请回到 Mosael 重试。", ok=False)
+        _finish(pending_id, error=tr("oauthLogin_noCode"))
+        return _result_page(tr("oauthLogin_noCodePage"), ok=False)
     try:
         claims = _exchange_code(provider, code, entry["verifier"])
         user = _find_or_create_user(
@@ -169,8 +174,8 @@ def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTML
         _finish(pending_id, token=token, user={"id": user.id, "username": user.username, "display_name": user.display_name})
     except Exception as exc:  # 把原因带回前端轮询,而不是让用户对着浏览器空页猜
         _finish(pending_id, error=str(exc)[:300])
-        return _result_page("登录失败,请回到 Mosael 查看原因。", ok=False)
-    return _result_page("登录成功,回到 Mosael 即可,本页可以关闭。", ok=True)
+        return _result_page(tr("oauthLogin_failedPage"), ok=False)
+    return _result_page(tr("oauthLogin_okPage"), ok=True)
 
 
 def _finish(pending_id: str, *, token: str | None = None, user: dict | None = None, error: str | None = None) -> None:
@@ -208,7 +213,10 @@ def _exchange_code(provider: str, code: str, verifier: str) -> dict[str, Any]:
     response = httpx.post(token_url, data=body, timeout=15.0)
     data = response.json() if response.content else {}
     if response.status_code != 200 or "id_token" not in data:
-        raise RuntimeError(f"换取令牌失败:{data.get('error_description') or data.get('error') or response.status_code}")
+        raise OAuthLoginError(
+            "oauthLogin_tokenExchangeFailed",
+            detail=data.get("error_description") or data.get("error") or response.status_code,
+        )
     return _decode_jwt_payload(str(data["id_token"]))
 
 
@@ -218,12 +226,12 @@ def _decode_jwt_payload(id_token: str) -> dict[str, Any]:
         padded = payload + "=" * (-len(payload) % 4)
         return json.loads(base64.urlsafe_b64decode(padded))
     except Exception as exc:
-        raise RuntimeError("id_token 无法解析") from exc
+        raise OAuthLoginError("oauthLogin_badIdToken") from exc
 
 
 def _find_or_create_user(db: Session, *, provider: str, subject: str, email: str, display_name: str) -> User:
     if not subject:
-        raise RuntimeError("提供方未返回用户标识(sub)")
+        raise OAuthLoginError("oauthLogin_noSubject")
     identity = db.get(OAuthIdentity, {"provider": provider, "subject": subject})
     if identity is not None:
         user = db.get(User, identity.user_id)

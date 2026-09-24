@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     PluginOAuthCode,
@@ -164,7 +165,7 @@ def my_instance(db: DbSession, instance_id: str, user: CurrentUser) -> PluginIns
     """
     instance = db.get(PluginInstance, instance_id)
     if instance is None or instance.owner_user_id != user.id:
-        raise HTTPException(status_code=404, detail="插件接入不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_pluginConnectionNotFound"))
     return instance
 
 
@@ -474,7 +475,7 @@ def plugin_oauth_complete(
     except plugin_oauth.PluginOAuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 — 换令牌失败是结果,不是服务端故障
-        raise HTTPException(status_code=422, detail=f"换令牌失败:{str(exc)[:200]}") from exc
+        raise HTTPException(status_code=422, detail=tr("routeErr_pluginTokenExchangeFailed", detail=str(exc)[:200])) from exc
     inst.set_credentials(db, instance, values)
     try:
         tools_domain.refresh_tools(db, instance)

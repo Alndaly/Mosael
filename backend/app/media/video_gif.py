@@ -5,12 +5,13 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from app.core.i18n import LocalizedError
 from app.core.child_process import run_logged
 from app.core.config import settings
 
 
-class GifEncodeError(RuntimeError):
-    pass
+class GifEncodeError(LocalizedError, RuntimeError):
+    """视频转 GIF 失败。带文案 key(`gifErr_*`)。"""
 
 
 def encode_video_gif(
@@ -24,11 +25,11 @@ def encode_video_gif(
 ) -> None:
     """Encode a looping, palette-optimised GIF while preserving aspect ratio."""
     if fps < 1 or fps > 30:
-        raise GifEncodeError("GIF 帧率要在 1–30 fps 之间")
+        raise GifEncodeError("gifErr_fps")
     if width < 64 or width > 1920:
-        raise GifEncodeError("GIF 宽度要在 64–1920 像素之间")
+        raise GifEncodeError("gifErr_width")
     if start < 0 or (duration is not None and duration <= 0):
-        raise GifEncodeError("GIF 起点不能为负数，时长必须大于 0")
+        raise GifEncodeError("gifErr_range")
 
     # 同一次 filter graph 生成并使用调色板，比直接 `-f gif` 体积更小、渐变色带更少。
     filters = (
@@ -47,9 +48,9 @@ def encode_video_gif(
         run_logged(args, check=True, capture_output=True, timeout=1800, what="视频转 GIF")
     except (OSError, subprocess.SubprocessError) as exc:
         target.unlink(missing_ok=True)
-        raise GifEncodeError("视频转 GIF 失败") from exc
+        raise GifEncodeError("gifErr_failed") from exc
     if not target.is_file() or target.stat().st_size == 0:
-        raise GifEncodeError("视频转 GIF 没有产生有效文件")
+        raise GifEncodeError("gifErr_noOutput")
 
 
 __all__ = ["GifEncodeError", "encode_video_gif"]

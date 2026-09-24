@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import (
     ActivityEvent,
     Asset,
@@ -26,8 +27,8 @@ from app.db.models import (
 from app.domain.notifications import notify
 
 
-class CollaborationError(ValueError):
-    pass
+class CollaborationError(LocalizedError, ValueError):
+    """协作(评论)说不行。带文案 key(`collabErr_*`)。"""
 
 
 class CommentOwnershipError(CollaborationError):
@@ -47,10 +48,10 @@ _MENTION = re.compile(r"(?<![\w@])@([\w.\-]{2,80})", re.UNICODE)
 def ensure_subject(db: Session, workspace_id: str, subject_type: str, subject_id: str) -> Any:
     model = SUBJECT_MODELS.get(subject_type)
     if model is None:
-        raise CollaborationError(f"不支持的协作对象类型:{subject_type}")
+        raise CollaborationError("collabErr_unknownSubjectType", kind=subject_type)
     subject = db.get(model, subject_id)
     if subject is None or subject.workspace_id != workspace_id:
-        raise CollaborationError("协作对象不存在")
+        raise CollaborationError("collabErr_subjectNotFound")
     return subject
 
 
@@ -158,9 +159,9 @@ def create_comment(
     ensure_subject(db, workspace_id, subject_type, subject_id)
     cleaned = body.strip()
     if not cleaned:
-        raise CollaborationError("评论不能为空")
+        raise CollaborationError("collabErr_commentEmpty")
     if len(cleaned) > 5000:
-        raise CollaborationError("评论最多 5000 字")
+        raise CollaborationError("collabErr_commentTooLong")
     comment = Comment(
         workspace_id=workspace_id,
         subject_type=subject_type,
@@ -253,9 +254,9 @@ def move_comment(
     cannot rearrange somebody else's canvas annotations.
     """
     if comment.author_id != actor_id:
-        raise CommentOwnershipError("只能移动自己发布的评论")
+        raise CommentOwnershipError("collabErr_moveOwnOnly")
     if comment.subject_type != "board":
-        raise CollaborationError("只有画布评论支持移动")
+        raise CollaborationError("collabErr_moveCanvasOnly")
     comment.anchor = anchor
     record_activity(
         db,
@@ -276,12 +277,12 @@ def edit_comment(
     body_document: dict[str, Any], mentioned_user_ids: list[str],
 ) -> Comment:
     if comment.author_id != actor_id:
-        raise CommentOwnershipError("只能编辑自己发布的评论")
+        raise CommentOwnershipError("collabErr_editOwnOnly")
     cleaned = body.strip()
     if not cleaned or len(cleaned) > 5000:
-        raise CollaborationError("评论需要包含 1 至 5000 字")
+        raise CollaborationError("collabErr_commentLength")
     if body_document and (body_document.get("type") != "doc" or not isinstance(body_document.get("content"), list)):
-        raise CollaborationError("评论格式不合法")
+        raise CollaborationError("collabErr_commentMalformed")
     previous = list(db.scalars(select(CommentMention).where(CommentMention.comment_id == comment.id)))
     previous_ids = {mention.user_id for mention in previous}
     mentioned = _mentioned_members(db, comment.workspace_id, cleaned, mentioned_user_ids)
@@ -309,7 +310,7 @@ def edit_comment(
 def delete_comment(db: Session, comment: Comment, *, actor_id: str) -> None:
     """Delete an author's own comment while retaining an immutable audit event."""
     if comment.author_id != actor_id:
-        raise CommentOwnershipError("只能删除自己发布的评论")
+        raise CommentOwnershipError("collabErr_deleteOwnOnly")
     for mention in db.scalars(
         select(CommentMention).where(CommentMention.comment_id == comment.id)
     ):

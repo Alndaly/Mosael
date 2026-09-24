@@ -42,7 +42,7 @@ def notify(
     各自维护已读状态。
     """
     if type not in NOTIFICATION_TYPES:
-        raise ValueError(f"未知的通知类型 {type!r};合法值:{NOTIFICATION_TYPES}")
+        raise ValueError(f"unknown notification type {type!r}; valid: {NOTIFICATION_TYPES}")
     if user_id is not None:
         recipients = [user_id]
     else:

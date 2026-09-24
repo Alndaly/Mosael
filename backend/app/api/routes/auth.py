@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AuthCredentials,
@@ -48,7 +49,7 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     if not deployment.open_registration(db) and invite is None and db.scalar(select(User).limit(1)) is not None:
         raise HTTPException(
             status_code=403,
-            detail="这个部署不开放自助注册,请向管理员要一个邀请码",
+            detail=tr("routeErr_signupClosed"),
         )
     username = _normalize_username(body.username)
     existing = db.scalar(select(User).where(User.username == username))
@@ -155,7 +156,7 @@ def set_deployment_admin(user_id: str, body: DeploymentAdminUpdate, db: DbSessio
             .where(User.is_deployment_admin.is_(True), User.id != target.id)
         )
         if not others:
-            raise HTTPException(status_code=409, detail="这是最后一个部署管理员,收回之后没人能管这个部署了")
+            raise HTTPException(status_code=409, detail=tr("routeErr_lastDeploymentAdmin"))
     target.is_deployment_admin = bool(body.granted)
     db.commit()
     return {"user_id": target.id, "is_deployment_admin": target.is_deployment_admin}
@@ -200,12 +201,12 @@ async def upload_avatar(db: DbSession, user: CurrentUser, file: UploadFile = Fil
     """上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。"""
     ext = _AVATAR_TYPES.get((file.content_type or "").lower())
     if ext is None:
-        raise HTTPException(status_code=415, detail="仅支持 PNG / JPEG / WebP 图片")
+        raise HTTPException(status_code=415, detail=tr("routeErr_avatarType"))
     data = await file.read()
     if not data:
-        raise HTTPException(status_code=422, detail="空文件")
+        raise HTTPException(status_code=422, detail=tr("routeErr_emptyFile"))
     if len(data) > _AVATAR_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="头像不能超过 4MB")
+        raise HTTPException(status_code=413, detail=tr("routeErr_avatarTooLarge"))
     avatars_dir = settings.data_dir / "avatars"
     avatars_dir.mkdir(parents=True, exist_ok=True)
     key = f"avatars/{user.id}-{int(time.time())}.{ext}"

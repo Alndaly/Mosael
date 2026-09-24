@@ -11,13 +11,14 @@
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.domain.note_types import NoteContent
 from app.db.models import Asset, AgentMessage, AgentSession, Board, Note, NoteRevision, Project
 from app.db.model_base import now
 
 
-class NoteDomainError(ValueError):
-    """笔记领域说不行。`status` 由子类给,边界照着翻(见 main.py)。"""
+class NoteDomainError(LocalizedError, ValueError):
+    """笔记领域说不行。带文案 key(`noteErr_*`);`status` 由子类给,边界照着翻(见 main.py)。"""
 
     status = 422
 
@@ -41,7 +42,7 @@ FIELDS = tuple(NoteContent.model_fields)
 def get_note(db: Session, workspace_id: str, note_id: str) -> Note:
     note = db.scalar(select(Note).where(Note.id == note_id, Note.workspace_id == workspace_id))
     if note is None:
-        raise NoteNotFound("笔记不存在")
+        raise NoteNotFound("noteErr_notFound")
     return note
 
 
@@ -55,11 +56,11 @@ def validate_content(db: Session, workspace_id: str, content: NoteContent, exist
     for key in ("tags", "topics"):
         data[key] = list(dict.fromkeys(s.strip() for s in data[key] if s.strip()))
         if any(len(s) > 80 for s in data[key]):
-            raise NoteDomainError("标签或专题名称不能超过 80 字")
+            raise NoteDomainError("noteErr_tagTooLong")
     if data["project_id"]:
         project = db.get(Project, data["project_id"])
         if project is None or project.workspace_id != workspace_id:
-            raise NoteNotFound("项目不存在")
+            raise NoteNotFound("noteErr_projectNotFound")
     for source in data["sources"]:
         # Keep previously validated provenance even when its original is later removed.
         # Only exact stored references qualify; new/edited sources still require access.
@@ -74,13 +75,13 @@ def validate_content(db: Session, workspace_id: str, content: NoteContent, exist
         else:
             obj = db.get({"asset": Asset, "board": Board, "note": Note}[kind], key)
         if obj is None or obj.workspace_id != workspace_id:
-            raise NoteNotFound("引用来源不存在于当前工作区")
+            raise NoteNotFound("noteErr_sourceNotInWorkspace")
         if kind == "note":
             if obj.trashed:
-                raise NoteConflict("引用的笔记已在回收站")
+                raise NoteConflict("noteErr_referencedTrashed")
             source["revision"] = source["revision"] or obj.revision
             if db.get(NoteRevision, (key, source["revision"])) is None:
-                raise NoteNotFound("引用版本不存在")
+                raise NoteNotFound("noteErr_versionNotFound")
     return data
 
 
@@ -98,7 +99,7 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, 
               restored_sources: list[dict] | None = None) -> Note:
     note = get_note(db, workspace_id, note_id)
     if note.revision != base_revision:
-        raise NoteConflict("笔记已被其他操作更新，请保留草稿并重新载入")
+        raise NoteConflict("noteErr_changedElsewhere")
     data = validate_content(db, workspace_id, content, note.sources + (restored_sources or []))
     if data == snapshot(note):
         return note
@@ -108,7 +109,7 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, 
     ), execution_options={"synchronize_session": False})
     if result.rowcount != 1:
         db.rollback()
-        raise NoteConflict("笔记已被其他操作更新，请保留草稿并重新载入")
+        raise NoteConflict("noteErr_changedElsewhere")
     db.add(NoteRevision(note_id=note_id, revision=base_revision + 1, snapshot=data))
     db.commit()
     db.refresh(note)
@@ -138,7 +139,7 @@ def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
     for attempt in range(APPEND_RETRIES):
         note = get_note(db, workspace_id, note_id)
         if note.trashed:
-            raise NoteConflict("请先从回收站恢复笔记")
+            raise NoteConflict("noteErr_restoreFirst")
         data = snapshot(note)
         data["markdown"] = APPEND_SEPARATOR.join(filter(None, [note.markdown, markdown]))
         data["sources"] = note.sources + sources
@@ -172,11 +173,11 @@ def read_reference(db: Session, workspace_id: str, note_id: str, revision: int |
     from urllib.parse import quote
     note = get_note(db, workspace_id, note_id)
     if note.trashed:
-        raise NoteConflict("引用的笔记已在回收站，请先恢复笔记")
+        raise NoteConflict("noteErr_referencedTrashedRestore")
     version = note.revision if revision is None else revision
     row = db.get(NoteRevision, (note.id, version))
     if row is None:
-        raise NoteNotFound("引用版本不存在")
+        raise NoteNotFound("noteErr_versionNotFound")
     return {"note_id": note.id, "revision": version, "title": row.snapshot["title"],
             "markdown": row.snapshot["markdown"], "tags": row.snapshot["tags"],
             "citation_url": f"#/notes?note={quote(note.id)}&revision={version}"}

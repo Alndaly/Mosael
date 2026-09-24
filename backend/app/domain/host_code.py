@@ -22,6 +22,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from app.core.i18n import LocalizedError, tr
 from app.core.child_process import ProcessOutputLimitExceeded, run_bounded
 from app.core.config import settings
 from app.core.interpreter import base_python
@@ -45,17 +46,22 @@ sys.stdout.write(json.dumps({"output": scope.get("output"), "printed": printed.g
 _SECRET_NAME = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIAL)", re.I)
 
 
-class HostCodeError(RuntimeError):
-    """代码出错、超时、输出超限,或者这里根本不是用户自己的电脑。"""
+class HostCodeError(LocalizedError, RuntimeError):
+    """代码出错、超时、输出超限,或者这里根本不是用户自己的电脑。带文案 key(`hostCodeErr_*`)。"""
+
+
+def _unavailable_key() -> str | None:
+    if not settings.local_desktop:
+        return "hostCodeErr_localOnly"
+    if not base_python():
+        return "hostCodeErr_noPython"
+    return None
 
 
 def available() -> str | None:
-    """能跑就返回 None,不能跑返回一句说给人听的原因。开卡前就问,别让人批准一张注定失败的卡。"""
-    if not settings.local_desktop:
-        return "不隔离执行只在本机桌面版可用 —— 远程部署上「这台电脑」是服务器,不是你的电脑。"
-    if not base_python():
-        return "找不到可用的 Python 解释器。"
-    return None
+    """能跑就返回 None,不能跑返回一句说给人听的原因(按当时的语言)。开卡前就问,别让人批准一张注定失败的卡。"""
+    key = _unavailable_key()
+    return tr(key) if key else None
 
 
 def child_env() -> dict[str, str]:
@@ -64,7 +70,7 @@ def child_env() -> dict[str, str]:
 
 
 def run(code: str, inputs: dict[str, Any], *, timeout: float = TIMEOUT_SECONDS) -> dict[str, Any]:
-    reason = available()
+    reason = _unavailable_key()
     if reason:
         raise HostCodeError(reason)
     payload = json.dumps({"code": code, "inputs": inputs}, ensure_ascii=False).encode()
@@ -73,14 +79,16 @@ def run(code: str, inputs: dict[str, Any], *, timeout: float = TIMEOUT_SECONDS) 
                                 max_output_bytes=OUTPUT_CAP, env=child_env(), what="本机执行代码",
                                 cwd=str(Path.home()))
     except subprocess.TimeoutExpired as exc:
-        raise HostCodeError(f"代码执行超时({timeout:g}s)") from exc
+        raise HostCodeError("hostCodeErr_timeout", seconds=f"{timeout:g}") from exc
     except ProcessOutputLimitExceeded as exc:
-        raise HostCodeError(f"代码输出超过上限({OUTPUT_CAP // 1024} KiB)") from exc
+        raise HostCodeError("hostCodeErr_outputTooLarge", limit=OUTPUT_CAP // 1024) from exc
     if completed.returncode != 0:
-        why = blame_line(completed.stderr.decode(errors="replace"), fallback="子进程没有留下原因")
-        raise HostCodeError(f"代码执行出错:{why}")
+        why = blame_line(completed.stderr.decode(errors="replace"), fallback="")
+        if not why:
+            raise HostCodeError("hostCodeErr_failedNoReason")
+        raise HostCodeError("hostCodeErr_failed", detail=why)
     try:
         result = json.loads(completed.stdout.decode())
     except ValueError as exc:
-        raise HostCodeError("代码输出无法解析(请把结果赋给 output 变量)") from exc
+        raise HostCodeError("hostCodeErr_badOutput") from exc
     return {"output": result.get("output"), "printed": result.get("printed") or ""}

@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.domain.permissions import ensure_workspace_access
 from app.domain import sharing
@@ -31,7 +32,7 @@ def _owned(db: DbSession, user: CurrentUser, kind: str, resource_id: str, worksp
     if resource is None:
         raise HTTPException(status_code=404, detail="Not found")
     if resource.owner_user_id != user.id:
-        raise HTTPException(status_code=403, detail="只有它的主人可以共享或收回")
+        raise HTTPException(status_code=403, detail=tr("routeErr_onlyOwnerCanShare"))
     return resource
 
 

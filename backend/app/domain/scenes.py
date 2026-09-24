@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
+from app.core.i18n import LocalizedError, tr
 from app.db.models import Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.domain.scene_types import SceneContent
@@ -25,8 +26,8 @@ if TYPE_CHECKING:  # 渲染器带着 numpy,按这个文件一贯的做法留到�
     from app.domain.scene_render.model_mesh import ModelLibrary
 
 
-class SceneDomainError(ValueError):
-    """场景领域说不行。`status` 由子类给,边界照着翻(见 main.py)。"""
+class SceneDomainError(LocalizedError, ValueError):
+    """场景领域说不行。带文案 key(`sceneErr_*`);`status` 由子类给,边界照着翻(见 main.py)。"""
 
     status = 422
 
@@ -90,7 +91,7 @@ def scene_preview(content: dict) -> dict:
 def get_scene(db: Session, workspace_id: str, scene_id: str) -> Scene3D:
     scene = db.scalar(select(Scene3D).where(Scene3D.id == scene_id, Scene3D.workspace_id == workspace_id))
     if scene is None:
-        raise SceneNotFound("3D scene not found")
+        raise SceneNotFound("sceneErr_sceneNotFound")
     return scene
 
 
@@ -106,7 +107,7 @@ def check_models(db: Session, workspace_id: str, content: SceneContent):
         owned = set(db.scalars(select(Scene3DModel.id).where(
             Scene3DModel.workspace_id == workspace_id, Scene3DModel.id.in_(ids))))
         if owned != ids:
-            raise SceneDomainError("Imported model does not belong to this workspace")
+            raise SceneDomainError("sceneErr_modelNotInWorkspace")
 
 
 def create_scene(db: Session, workspace_id: str, name: str, content: SceneContent) -> Scene3D:
@@ -124,7 +125,7 @@ def create_scene(db: Session, workspace_id: str, name: str, content: SceneConten
 
 def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, content: SceneContent) -> Scene3D:
     if scene.revision != base_revision:
-        raise SceneConflict("Scene changed elsewhere. Keep your draft and reload before saving.")
+        raise SceneConflict("sceneErr_changedKeepDraft")
     check_models(db, scene.workspace_id, content)
     data = content.model_dump(mode="json")
     if data == scene.content and name == scene.name:
@@ -133,7 +134,7 @@ def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, conte
         name=name, content=data, revision=base_revision+1, updated_at=now()), execution_options={"synchronize_session": False})
     if result.rowcount != 1:
         db.rollback()
-        raise SceneConflict("Scene changed elsewhere")
+        raise SceneConflict("sceneErr_changed")
     db.add(Scene3DRevision(scene_id=scene.id, revision=base_revision+1, snapshot={"name": name, "content": data}))
     db.commit()
     db.refresh(scene)
@@ -168,31 +169,25 @@ def _refuse_too_large(measured: int, fmt: str) -> None:
     actual = f"{measured/1024/1024:.1f}"
     # 真实大小只在**它能多说一句**的时候才报:四舍五入之后恰好等于上限时,写出来就成了
     # "100.0 MB 超出上限 100 MB",读起来像 bug。
-    excess = f"（这份 {actual} MB）" if actual != f"{limit}.0" else ""
-    advice = (
-        "把贴图换成 KTX2、几何用 Draco 压一下(Mosael 都能解),"
-        if fmt == "glb"
-        else "改导出 GLB —— 内嵌 glTF 要整份解析，所以它的上限低得多。GLB 可以到 "
-             f"{MODEL_LIMIT_BYTES // 1024 // 1024} MB。也可以"
-    )
-    raise SceneTooLarge(
-        f"模型超出上限 {limit} MB{excess}。{advice}"
-        "或者在 Blender 里隐藏用不到的物体、把贴图降到 2K。")
+    key = "sceneErr_tooLargeGlb" if fmt == "glb" else "sceneErr_tooLargeGltf"
+    if actual != f"{limit}.0":
+        key += "Sized"
+    raise SceneTooLarge(key, limit=limit, actual=actual, glbLimit=MODEL_LIMIT_BYTES // 1024 // 1024)
 
 
 def _validate_document(doc: object) -> None:
     """校验 glTF 文档本身。**只看结构,不看字节** —— 所以 GLB 只要前面那段 JSON 就够。"""
     if not isinstance(doc, dict) or doc.get("asset", {}).get("version") != "2.0":
-        raise ValueError("需要 glTF 2.0 格式的模型。")
+        raise SceneDomainError("sceneErr_needsGltf2")
 
     # 导入的模型永远不许去取网址或本地文件。
     def inspect(value, depth=0):
         if depth > 48:
-            raise ValueError("模型的结构嵌套太深，无法导入。")
+            raise SceneDomainError("sceneErr_tooDeep")
         if isinstance(value, dict):
             for key, child in value.items():
                 if key == "uri" and (not isinstance(child, str) or not child.startswith("data:")):
-                    raise ValueError("请导出自包含的 GLB（或把资源内嵌进 glTF）—— 模型里引用的外部文件和网址不会被读取。")
+                    raise SceneDomainError("sceneErr_externalRefs")
                 inspect(child, depth+1)
         elif isinstance(value, list):
             for child in value:
@@ -200,8 +195,7 @@ def _validate_document(doc: object) -> None:
 
     inspect(doc)
     if len(doc.get("nodes", [])) > 5000 or len(doc.get("meshes", [])) > 2000:
-        raise ValueError(f"模型有 {len(doc.get('nodes', []))} 个节点、{len(doc.get('meshes', []))} 个网格，"
-                         "超出实时编辑的上限（5000 / 2000）。请在 Blender 里合并物体或减少细分后重试。")
+        raise SceneDomainError("sceneErr_tooComplex", nodes=len(doc.get("nodes", [])), meshes=len(doc.get("meshes", [])))
 
 
 def validate_model_file(path: Path) -> str:
@@ -221,7 +215,7 @@ def validate_model_file(path: Path) -> str:
                 _, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", head)
                 _refuse_too_large(size, "glb")
                 if version != 2 or length != size or chunk_type != 0x4E4F534A or chunk_size > size - 20:
-                    raise ValueError("这不是一个有效的 GLB 文件（文件头读不通）。")
+                    raise SceneDomainError("sceneErr_badGlb")
                 doc = json.loads(stream.read(chunk_size))
                 fmt = "glb"
             else:
@@ -230,10 +224,10 @@ def validate_model_file(path: Path) -> str:
                 doc = json.loads(stream.read())
                 fmt = "gltf"
         _validate_document(doc)
-    except SceneTooLarge:
+    except SceneDomainError:
         raise
     except (ValueError, TypeError, AttributeError, struct.error, RecursionError, OSError) as exc:
-        raise SceneDomainError(str(exc)) from exc
+        raise SceneDomainError("sceneErr_unreadableModel", detail=str(exc)) from exc
     return fmt
 
 
@@ -245,13 +239,15 @@ def validate_model(data: bytes, *, size: int | None = None) -> str:
         if fmt == "glb":
             _, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", data[:20])
             if version != 2 or length != len(data) or chunk_type != 0x4E4F534A or chunk_size > len(data)-20:
-                raise ValueError("这不是一个有效的 GLB 文件（文件头读不通）。")
+                raise SceneDomainError("sceneErr_badGlb")
             doc = json.loads(data[20:20+chunk_size])
         else:
             doc = json.loads(data)
         _validate_document(doc)
+    except SceneDomainError:
+        raise
     except (ValueError, TypeError, AttributeError, struct.error, RecursionError) as exc:
-        raise SceneDomainError(str(exc)) from exc
+        raise SceneDomainError("sceneErr_unreadableModel", detail=str(exc)) from exc
     return fmt
 
 
@@ -377,9 +373,7 @@ def delete_scene(db: Session, workspace_id: str, scene_id: str) -> None:
     scene = get_scene(db, workspace_id, scene_id)
     using = boards_using_scene(db, workspace_id, scene_id)
     if using:
-        raise SceneDomainError(
-            "还有画板在用这个场景:" + "、".join(using[:5]) + "。先把它们里面的这个 3D 节点删掉。"
-        )
+        raise SceneDomainError("sceneErr_usedByBoards", names=tr("punct_listSep").join(using[:5]))
     db.delete(scene)
     db.commit()
 
@@ -393,10 +387,10 @@ def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
     """
     model = db.get(Scene3DModel, model_id)
     if model is None or model.workspace_id != workspace_id:
-        raise SceneNotFound("Model not found")
+        raise SceneNotFound("sceneErr_modelNotFound")
     using = scenes_using_model(db, workspace_id, model_id)
     if using:
-        raise SceneDomainError("还有场景在用这份模型:" + "、".join(using[:5]) + "。先把它们里面的这件物体删掉。")
+        raise SceneDomainError("sceneErr_usedByScenes", names=tr("punct_listSep").join(using[:5]))
     path = model_file(model)
     db.delete(model)
     db.commit()
@@ -422,7 +416,7 @@ def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, obje
     by_id = {o['id']: o for o in content['objects'] if o['id'] not in removed}
     for patch in objects:
         if not isinstance(patch.get('id'), str):
-            raise SceneDomainError('Every object operation needs an id')
+            raise SceneDomainError("sceneErr_objectOpNeedsId")
         obj = {**by_id.get(patch['id'], {}), **patch}
         if 'parameters' in patch and isinstance(patch['parameters'], dict):
             obj['parameters'] = {**by_id.get(patch['id'], {}).get('parameters', {}), **patch['parameters']}
@@ -495,7 +489,7 @@ def view_scene(db: Session, scene: Scene3D, *, views: list[str], shot_id: str = 
     wanted = list(dict.fromkeys(views or ["shot", "overview"]))[:VIEW_LIMIT]
     unknown = [one for one in wanted if one != "shot" and one not in FREE_VIEWS]
     if unknown:
-        raise SceneDomainError(f"不认识的视角 {', '.join(unknown)};可选 shot、{'、'.join(FREE_VIEWS)}")
+        raise SceneDomainError("sceneErr_unknownViews", views=", ".join(unknown), choices=", ".join(FREE_VIEWS))
     content = SceneContent.model_validate(scene.content)
     library = model_library(db, scene, content)
     images, skipped = [], 0
@@ -530,7 +524,7 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
     from app.domain.scene_render import SceneRenderError, describe_camera_move, find_shot, render_frame, render_shot_video
 
     if render not in REFERENCE_RENDERS:
-        raise SceneDomainError(f"render must be one of {', '.join(REFERENCE_RENDERS)}")
+        raise SceneDomainError("sceneErr_badRender", choices=", ".join(REFERENCE_RENDERS))
     content = SceneContent.model_validate(scene.content)
     library = model_library(db, scene, content)
     try:

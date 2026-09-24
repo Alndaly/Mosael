@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import ProviderCredential, ProviderProfile
 from app.domain import provider_credentials
 
@@ -39,7 +40,7 @@ AUTH_TYPES = ("api_key", "oauth")
 logger = logging.getLogger(__name__)
 
 
-class CredentialLeaseError(RuntimeError):
+class CredentialLeaseError(LocalizedError, RuntimeError):
     """租约不可用。
 
     `code` 是给**另一个运行时**看的:sidecar 收到 409 时必须分得清这两件事,
@@ -47,8 +48,8 @@ class CredentialLeaseError(RuntimeError):
     消息文本给人看,`code` 给机器看 —— 和 `error` 事件上已有的 `code: "output_limit"` 同一个做法。
     """
 
-    def __init__(self, message: str, code: str = "lease_unavailable") -> None:
-        super().__init__(message)
+    def __init__(self, key: str, code: str = "lease_unavailable", **params: object) -> None:
+        super().__init__(key, **params)
         self.code = code
 
 
@@ -87,7 +88,7 @@ def acquire_lease(profile_id: str, user_id: str, *, timeout: float = ACQUIRE_TIM
                 _leases[key] = _Lease(token=token, expires_at=_now() + LEASE_TTL_SECONDS)
                 return token
         if _now() >= deadline:
-            raise CredentialLeaseError("凭据正被另一次刷新占用,请重试", code="busy")
+            raise CredentialLeaseError("credLeaseErr_busy", code="busy")
         time.sleep(_POLL_SECONDS)
 
 
@@ -121,10 +122,10 @@ def _check_lease(key: str, token: str) -> None:
         held = _leases.get(key)
     if held is not None and held.token != token:
         # 有**别人**正拿着它 —— 他刷出来的才是新的,我这份该丢。
-        raise CredentialLeaseError("租约已被顶替,本次刷新结果不予写入", code="superseded")
+        raise CredentialLeaseError("credLeaseErr_superseded", code="superseded")
     if held is None or held.expires_at <= _now():
         # 没有别人,只是我自己慢了。这两件事长得像,处置正好相反。
-        raise CredentialLeaseError("租约已超时,本次刷新结果不予写入", code="expired")
+        raise CredentialLeaseError("credLeaseErr_expired", code="expired")
 
 
 def read_credential(credential: ProviderCredential | None) -> dict | None:
@@ -176,11 +177,11 @@ def commit_credential(
     profile = db.get(ProviderProfile, profile_id)
     if profile is None or profile.owner_user_id != user_id:
         release_lease(profile_id, user_id, lease_token)
-        raise CredentialLeaseError("供应商不存在")
+        raise CredentialLeaseError("credLeaseErr_providerNotFound")
     if credential is not None:
         if not isinstance(credential, dict) or credential.get("type") not in AUTH_TYPES:
             release_lease(profile_id, user_id, lease_token)
-            raise CredentialLeaseError("凭据格式无法识别(缺少 type)")
+            raise CredentialLeaseError("credLeaseErr_badCredential")
     row = provider_credentials.upsert(db, profile_id, user_id)
     row.oauth_credential = credential
     row.credential_version = (row.credential_version or 0) + 1

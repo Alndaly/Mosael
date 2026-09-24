@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     GenerationCapabilityProfileCreate,
@@ -41,7 +42,7 @@ def _row(db, profile_id: str, ref_id: str) -> GenerationCapabilityProfile:
     row = db.get(GenerationCapabilityProfile, ref_id)
     #: 跨连接取不到 —— 一份参数组只在它所属的那条连接里有意义。
     if row is None or row.provider_profile_id != profile_id:
-        raise HTTPException(status_code=404, detail="这条连接下没有这个参数组")
+        raise HTTPException(status_code=404, detail=tr("routeErr_paramGroupNotFound"))
     return row
 
 
@@ -66,9 +67,9 @@ def create_profile(profile_id: str, body: GenerationCapabilityProfileCreate, db:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     name = body.name.strip()
     if not name:
-        raise HTTPException(status_code=422, detail="给这份参数组起个名字")
+        raise HTTPException(status_code=422, detail=tr("routeErr_paramGroupNameRequired"))
     if any(row.name == name for row in custom_profiles_for(db, profile_id, body.kind)):
-        raise HTTPException(status_code=409, detail="这条连接下已经有同名的参数组了")
+        raise HTTPException(status_code=409, detail=tr("routeErr_paramGroupNameTaken"))
     row = GenerationCapabilityProfile(
         provider_profile_id=profile_id, name=name, kind=body.kind, capabilities=capabilities
     )
@@ -90,9 +91,9 @@ def update_profile(
     if body.name is not None:
         name = body.name.strip()
         if not name:
-            raise HTTPException(status_code=422, detail="给这份参数组起个名字")
+            raise HTTPException(status_code=422, detail=tr("routeErr_paramGroupNameRequired"))
         if any(other.name == name and other.id != row.id for other in custom_profiles_for(db, profile_id, row.kind)):
-            raise HTTPException(status_code=409, detail="这条连接下已经有同名的参数组了")
+            raise HTTPException(status_code=409, detail=tr("routeErr_paramGroupNameTaken"))
         row.name = name
     if body.capabilities is not None:
         try:
@@ -120,7 +121,7 @@ def delete_profile(profile_id: str, ref_id: str, db: DbSession, user: CurrentUse
 
     count = template_reference_count(db, row.id)
     if count:
-        raise HTTPException(status_code=409, detail=f"还有 {count} 个模型在使用这份参数模板，请先改回跟随目录")
+        raise HTTPException(status_code=409, detail=tr("routeErr_paramGroupInUse", count=count))
     db.delete(row)
     db.commit()
     return Response(status_code=204)

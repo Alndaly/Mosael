@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import select, delete
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.db.models import AgentMessage, AgentSession, Note, NoteRevision
@@ -16,7 +17,7 @@ def source_message(message_id: str, workspace_id: str, db: DbSession, user: Curr
     message = db.get(AgentMessage, message_id)
     session = db.get(AgentSession, message.session_id) if message else None
     if session is None or session.workspace_id != workspace_id:
-        raise HTTPException(404, "来源不存在")
+        raise HTTPException(404, tr("routeErr_noteSourceNotFound"))
     return {"content": message.content, "session_id": session.id, "created_at": message.created_at}
 
 
@@ -64,12 +65,12 @@ def permanently_delete(note_id: str, workspace_id: str, db: DbSession, user: Cur
     ensure_workspace_perm(db, user, workspace_id, "edit")
     note = get_note(db, workspace_id, note_id)
     if not note.trashed:
-        raise HTTPException(409, "请先将笔记移入回收站")
+        raise HTTPException(409, tr("routeErr_noteTrashFirst"))
     result = db.execute(delete(Note).where(Note.id == note_id, Note.workspace_id == workspace_id,
                                          Note.trashed.is_(True), Note.revision == base_revision))
     if result.rowcount != 1:
         db.rollback()
-        raise HTTPException(409, "笔记状态已变化，请重新载入后再删除")
+        raise HTTPException(409, tr("routeErr_noteChangedBeforeDelete"))
     db.commit()
     return Response(status_code=204)
 
@@ -95,7 +96,7 @@ def revision_content(note_id: str, revision: int, workspace_id: str, db: DbSessi
     get_note(db, workspace_id, note_id)
     row = db.get(NoteRevision, (note_id, revision))
     if row is None:
-        raise HTTPException(404, "版本不存在")
+        raise HTTPException(404, tr("routeErr_noteVersionNotFound"))
     return {"note_id": note_id, "revision": row.revision, "created_at": row.created_at, **row.snapshot}
 
 
@@ -105,6 +106,6 @@ def restore(note_id: str, body: NoteRestore, db: DbSession, user: CurrentUser):
     get_note(db, body.workspace_id, note_id)
     row = db.get(NoteRevision, (note_id, body.revision))
     if row is None:
-        raise HTTPException(404, "版本不存在")
+        raise HTTPException(404, tr("routeErr_noteVersionNotFound"))
     return save_note(db, body.workspace_id, note_id, body.base_revision, NoteContent.model_validate(row.snapshot),
                      restored_sources=row.snapshot["sources"])

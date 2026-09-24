@@ -10,7 +10,7 @@ from app.api.schemas import AsrModelOut
 from app.domain.permissions import ensure_deployment_admin
 from app.domain.voices import transcription
 from app.ai.runtime import asr_models
-from app.core.i18n import normalize_locale, translate_fields
+from app.core.i18n import normalize_locale, tr, translate_fields
 
 router = APIRouter(tags=["asr"])
 
@@ -31,7 +31,7 @@ def download_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
     try:
         return asr_models.start_download(model_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="未知模型") from exc
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownModel")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -63,10 +63,10 @@ async def dictate(
                 size += len(chunk)
                 if size > DICTATION_MAX_BYTES:
                     # 边读边判:读完再判的话,上限拦住的只是"用不用",不是"收不收"。
-                    raise HTTPException(status_code=413, detail="录音太大了,听写请说短一点。")
+                    raise HTTPException(status_code=413, detail=tr("routeErr_dictationTooLarge"))
                 out.write(chunk)
         if size == 0:
-            raise HTTPException(status_code=422, detail="没有收到音频")
+            raise HTTPException(status_code=422, detail=tr("routeErr_noAudio"))
         try:
             return {"text": transcription.transcribe_clip(raw, language=language, engine=engine)}
         except transcription.DictationTooLong as exc:

@@ -208,14 +208,14 @@ def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]
 
     board = db.get(Board, str(payload.get("board_id", "")))
     if board is None or board.workspace_id != workspace_id:
-        raise ConfirmationError("这个工作区里没有这张画板")
+        raise ConfirmationError("confirmErr_boardNotInWorkspace")
     operations = payload.get("operations")
     if not isinstance(operations, list) or not operations:
-        raise ConfirmationError("edit_board 需要一个非空的 operations 列表")
+        raise ConfirmationError("confirmErr_editBoardNeedsOps")
     for operation in operations:
         kind = operation.get("kind") if isinstance(operation, dict) else None
         if kind not in BOARD_OP_KINDS:
-            raise ConfirmationError(f"不支持的画板算子:{kind}")
+            raise ConfirmationError("confirmErr_unknownBoardOp", kind=kind)
     # 先干跑一遍:写坏的算子要在**批准之前**就失败,而不是让用户点了同意才看到报错。
     try:
         normalize_canvas(apply_board_ops(board.canvas or {}, operations))

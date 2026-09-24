@@ -28,12 +28,12 @@ MAX_PER_CARD = 20
 def _ids(payload: dict[str, Any], key: str) -> list[str]:
     raw = payload.get(key) or []
     if not isinstance(raw, list):
-        raise ConfirmationError(f"{key} 要是一个列表")
+        raise ConfirmationError("confirmErr_notAList", key=key)
     ids = [str(one).strip() for one in raw if str(one).strip()]
     if not ids:
-        raise ConfirmationError(f"{key} 是空的:没有要删的东西")
+        raise ConfirmationError("confirmErr_nothingToDelete", key=key)
     if len(ids) > MAX_PER_CARD:
-        raise ConfirmationError(f"一次最多删 {MAX_PER_CARD} 个,分几次来 —— 卡上列不下的话,批准的人并不知道自己批了什么")
+        raise ConfirmationError("confirmErr_tooManyToDelete", limit=MAX_PER_CARD)
     # 去重且保序:同一个 id 写两遍,第二次执行时它已经不在了,会平白报一次"找不到"。
     seen: dict[str, None] = {}
     for one in ids:
@@ -41,7 +41,7 @@ def _ids(payload: dict[str, Any], key: str) -> list[str]:
     return list(seen)
 
 
-def _rows(db: Session, model: Any, workspace_id: str, ids: list[str], what: str) -> list[Any]:
+def _rows(db: Session, model: Any, workspace_id: str, ids: list[str], missing_key: str) -> list[Any]:
     """这些 id 对应的行,**全都要在这个工作区里**。
 
     少一个就整张卡不开:删除按"这一批"给用户看,执行时却只删掉其中几个,那张卡说的话就不是
@@ -51,7 +51,7 @@ def _rows(db: Session, model: Any, workspace_id: str, ids: list[str], what: str)
     found = {row.id for row in rows}
     missing = [one for one in ids if one not in found]
     if missing:
-        raise ConfirmationError(f"这个工作区里找不到这些{what}:{', '.join(missing[:5])}")
+        raise ConfirmationError(missing_key, ids=", ".join(missing[:5]))
     # 按传入顺序排,卡上的次序就是模型说的次序 —— 用户对得上。
     order = {one: index for index, one in enumerate(ids)}
     return sorted(rows, key=lambda row: order[row.id])
@@ -72,7 +72,7 @@ def _names(rows: list[Any], limit: int = 4) -> str:
 
 
 def _validate_delete_assets(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
-    rows = _rows(db, Asset, workspace_id, _ids(payload, "asset_ids"), "素材")
+    rows = _rows(db, Asset, workspace_id, _ids(payload, "asset_ids"), "confirmErr_missingAssets")
     # 卡上要说清连带后果,所以在这里就数出来 —— 摘要不该自己再查一遍库。
     payload["_names"] = _names(rows)
     payload["_count"] = len(rows)
@@ -109,7 +109,7 @@ def _execute_delete_assets(db: Session, confirmation: Any, actor: str | None) ->
 
 
 def _validate_delete_projects(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
-    rows = _rows(db, Project, workspace_id, _ids(payload, "project_ids"), "项目")
+    rows = _rows(db, Project, workspace_id, _ids(payload, "project_ids"), "confirmErr_missingProjects")
     payload["_names"] = _names(rows)
     payload["_count"] = len(rows)
     payload["_assets"] = _count(db, Asset, Asset.project_id, [row.id for row in rows])

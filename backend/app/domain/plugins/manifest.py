@@ -18,7 +18,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 #: i18n 是纯叶子(只依赖标准库),运行时 import 它不会把这个模块拖出叶子位置。
-from app.core.i18n import pick_text
+from app.core.i18n import LocalizedError, pick_text
 
 if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块是叶子
     from app.db.models import PluginPackage
@@ -199,8 +199,8 @@ class Manifest:
         return None
 
 
-class ManifestError(ValueError):
-    pass
+class ManifestError(LocalizedError, ValueError):
+    """清单不合法。带文案 key(`pluginErr_manifest*`)。"""
 
 
 def _humanized(entry: dict[str, Any], *keys: str, pick: Callable[[Any], str] = text_of) -> dict[str, Any]:
@@ -351,7 +351,7 @@ def web_url(raw: Any) -> str:
 def parse(raw: dict[str, Any], path: str) -> Manifest:
     for key in ("id", "version"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
-            raise ManifestError(f"插件清单 {path} 缺少必填字段: {key}")
+            raise ManifestError("pluginErr_manifestMissingField", path=path, field=key)
     author_locale = str(raw.get("default_locale") or "").strip()
 
     def pick(value: Any) -> str:
@@ -360,7 +360,7 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
     #: 名字是给人看的,可以按语言写;但空的仍然是缺字段。
     name = pick(raw.get("name")).strip()
     if not name:
-        raise ManifestError(f"插件清单 {path} 缺少必填字段: name")
+        raise ManifestError("pluginErr_manifestMissingField", path=path, field="name")
     instance = raw.get("instance") if isinstance(raw.get("instance"), dict) else {}
     expose, recommended, overrides, declared = _tools_policy(raw, pick)
     # 工具上声明的能力必须是包声明过的 —— 包上没说「我能换公网地址」,某个工具却自称负责它,
@@ -369,7 +369,9 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
     for tool in declared:
         extra = set(tool.get("provides") or []) - package_provides if isinstance(tool.get("provides"), list) else set()
         if extra:
-            raise ManifestError(f"插件清单 {path} 的工具 {tool.get('name')} 声明了包上没有的能力: {', '.join(sorted(extra))}")
+            raise ManifestError(
+                "pluginErr_manifestToolExtraCapability", path=path, tool=tool.get("name"), capabilities=", ".join(sorted(extra))
+            )
     return Manifest(
         id=raw["id"].strip(),
         name=name,

@@ -21,6 +21,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.db.models import ProviderProfile
 from app.domain import provider_credentials
@@ -60,7 +61,7 @@ class CommitOut(BaseModel):
 def _require_owned_profile(db: DbSession, profile_id: str, user_id: str) -> ProviderProfile:
     profile = db.get(ProviderProfile, profile_id)
     if profile is None or profile.owner_user_id != user_id:
-        raise HTTPException(status_code=404, detail="供应商不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_providerNotFound"))
     return profile
 
 
@@ -102,7 +103,7 @@ def renew_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user:
     _require_owned_profile(db, profile_id, user.id)
     if not renew_lease(profile_id, user.id, body.lease):
         raise HTTPException(
-            status_code=409, detail={"message": "租约已被顶替,续租失败", "code": "superseded"}
+            status_code=409, detail={"message": tr("routeErr_leaseSuperseded"), "code": "superseded"}
         )
 
 

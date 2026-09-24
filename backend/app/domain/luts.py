@@ -12,14 +12,15 @@ from pathlib import Path
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Lut, new_id
 from app.media.paths import lut_dir, lut_key
 
 MAX_LUT_BYTES = 32 * 1024 * 1024  # generous: a 64³ cube is ~5 MB
 
 
-class LutError(ValueError):
-    """Raised when an uploaded file is not a usable .cube LUT."""
+class LutError(LocalizedError, ValueError):
+    """Raised when an uploaded file is not a usable .cube LUT. 带文案 key(`lutErr_*`)。"""
 
 
 def parse_cube_size(text: str) -> int:
@@ -34,11 +35,11 @@ def parse_cube_size(text: str) -> int:
             continue
         upper = line.upper()
         if upper.startswith("LUT_1D_SIZE"):
-            raise LutError("这是 1D LUT,导出仅支持 3D LUT(.cube)")
+            raise LutError("lutErr_oneD")
         if upper.startswith("LUT_3D_SIZE"):
             parts = line.split()
             if len(parts) < 2 or not parts[1].isdigit():
-                raise LutError(".cube 的 LUT_3D_SIZE 无效")
+                raise LutError("lutErr_badSize")
             size = int(parts[1])
             continue
         # A data row is three numbers; keywords (TITLE/DOMAIN_*) are skipped.
@@ -46,11 +47,11 @@ def parse_cube_size(text: str) -> int:
         if first[0].isdigit() or first[0] in "+-.":
             data_rows += 1
     if size is None:
-        raise LutError("不是有效的 .cube 文件(缺少 LUT_3D_SIZE)")
+        raise LutError("lutErr_noSize")
     if not (2 <= size <= 256):
-        raise LutError(f"LUT_3D_SIZE={size} 超出支持范围 [2, 256]")
+        raise LutError("lutErr_sizeOutOfRange", size=size)
     if data_rows < size ** 3:
-        raise LutError(f"数据行不足:期望 {size ** 3} 行,实际 {data_rows} 行")
+        raise LutError("lutErr_tooFewRows", expected=size ** 3, actual=data_rows)
     return size
 
 
@@ -63,17 +64,17 @@ def import_uploaded_lut(
 ) -> Lut:
     original = Path(upload.filename or "lut.cube").name
     if not original.lower().endswith(".cube"):
-        raise LutError("只支持 .cube 3D LUT 文件")
+        raise LutError("lutErr_badType")
     # Bounded read: reading the whole body and THEN checking the cap means an oversized
     # upload exhausts memory before the limit meant to prevent that ever runs. One byte
     # over is enough to know it is over.
     raw = upload.file.read(MAX_LUT_BYTES + 1)
     if len(raw) > MAX_LUT_BYTES:
-        raise LutError("LUT 文件过大(上限 32MB)")
+        raise LutError("lutErr_tooLarge")
     try:
         text = raw.decode("utf-8", errors="strict")
     except UnicodeDecodeError as exc:
-        raise LutError(".cube 必须是 UTF-8 文本") from exc
+        raise LutError("lutErr_notUtf8") from exc
     parse_cube_size(text)  # validates or raises
 
     lut_id = new_id()

@@ -28,9 +28,9 @@ def set_default(db: Session, owner_user_id: str, capability: str, instance_id: s
         return
     instance = db.get(PluginInstance, instance_id)
     if instance is None or instance.owner_user_id != owner_user_id:
-        raise PluginDomainError("没有这个连接")
+        raise PluginDomainError("pluginErr_connectionNotFound")
     if capability not in inst.manifest_for(db, instance).provides:
-        raise PluginDomainError(f"「{instance.name}」没有声明「{capability}」这项能力")
+        raise PluginDomainError("pluginErr_capabilityNotDeclared", name=instance.name, capability=capability)
     if row is None:
         db.add(PluginCapabilityDefault(owner_user_id=owner_user_id, capability=capability, instance_id=instance.id))
     else:

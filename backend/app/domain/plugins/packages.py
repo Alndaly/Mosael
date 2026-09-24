@@ -71,7 +71,7 @@ def uninstall(db: Session, package_id: str, plugins_dir: Path) -> None:
     """
     package = db.get(PluginPackage, package_id)
     if package is None:
-        raise PluginDomainError("Plugin not found")
+        raise PluginDomainError("pluginErr_notFound")
     raw = (package.manifest or {}).get(PATH_KEY)
     if raw:
         path = Path(str(raw)).resolve()
@@ -128,9 +128,9 @@ def _load(path: Path) -> dict[str, Any]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise PluginDomainError(f"插件清单不是合法 JSON: {path}") from exc
+        raise PluginDomainError("pluginErr_manifestNotJson", path=str(path)) from exc
     if not isinstance(raw, dict):
-        raise PluginDomainError(f"插件清单必须是一个对象: {path}")
+        raise PluginDomainError("pluginErr_manifestNotObject", path=str(path))
     return raw
 
 

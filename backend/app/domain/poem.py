@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.core.i18n import LocalizedError
 from app.core.http_retry import RetryingClient
 
 TOKEN_URL = "https://v2.jinrishici.com/token"
@@ -29,8 +30,8 @@ _token_lock = threading.Lock()
 _token: str | None = None
 
 
-class PoemUnavailable(RuntimeError):
-    pass
+class PoemUnavailable(LocalizedError, RuntimeError):
+    """今日诗词取不到。带文案 key(`poemErr_*`)。"""
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ def _fetch_token(client: httpx.Client) -> str:
     response.raise_for_status()
     token = str((response.json() or {}).get("data") or "").strip()
     if not token:
-        raise PoemUnavailable("今日诗词没有返回 token")
+        raise PoemUnavailable("poemErr_noToken")
     return token
 
 
@@ -72,14 +73,14 @@ def fetch_poem() -> Poem:
             except httpx.HTTPError as exc:
                 # 第一次失败先当作 token 过期重来一次;第二次还失败就是真不通了。
                 if attempt == 1:
-                    raise PoemUnavailable(str(exc)) from exc
+                    raise PoemUnavailable("poemErr_requestFailed", detail=str(exc)) from exc
                 token = None
                 continue
             data = payload.get("data") or {}
             content = str(data.get("content") or "").strip()
             if not content:
                 if attempt == 1:
-                    raise PoemUnavailable("今日诗词返回了空句子")
+                    raise PoemUnavailable("poemErr_empty")
                 token = None
                 continue
             with _token_lock:
@@ -91,4 +92,4 @@ def fetch_poem() -> Poem:
                 source=str(origin.get("title") or "").strip(),
                 dynasty=str(origin.get("dynasty") or "").strip(),
             )
-    raise PoemUnavailable("今日诗词不可达")
+    raise PoemUnavailable("poemErr_unreachable")

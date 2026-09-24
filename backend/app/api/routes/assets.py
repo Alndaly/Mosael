@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Response, Uploa
 from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError, start_transcription
@@ -163,9 +164,9 @@ def import_local_asset(
 
     path = Path(body.path).expanduser()
     if not path.is_absolute() or not path.is_file():
-        raise HTTPException(status_code=422, detail="路径不存在或不是文件")
+        raise HTTPException(status_code=422, detail=tr("routeErr_pathNotFile"))
     if path.suffix.lower() not in _LOCAL_IMPORT_SUFFIXES:
-        raise HTTPException(status_code=422, detail=f"不支持的文件类型:{path.suffix}")
+        raise HTTPException(status_code=422, detail=tr("routeErr_unsupportedFileType", suffix=path.suffix))
     # 复用「登记一个已存在的本机文件」这条既有路径 —— 渲染成片、配音产出、AI 生成结果
     # 走的都是它。拖进来的文件只是 source 标签不同。
     return register_file_asset(
@@ -238,7 +239,7 @@ def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentU
             project = db.get(Project, target)
             # 跨工作区归档会让素材从原工作区消失 —— 拒绝而不是静默照做。
             if project is None or project.workspace_id != asset.workspace_id:
-                raise HTTPException(status_code=422, detail="项目不存在或不属于该工作区")
+                raise HTTPException(status_code=422, detail=tr("routeErr_projectNotInWorkspace"))
             asset.project_id = project.id
         else:
             asset.project_id = None  # 空串 = 移出项目
@@ -289,7 +290,7 @@ def analyze_asset_route(
     if auth is not None and auth.agent_session_id:
         session = db.get(AgentSession, auth.agent_session_id)
         if session is None or session.workspace_id != asset.workspace_id:
-            raise HTTPException(status_code=422, detail="素材不属于当前智能体会话的工作区")
+            raise HTTPException(status_code=422, detail=tr("routeErr_assetNotInAgentWorkspace"))
         from app.ai.sidecar.adapters import AdapterError
         from app.domain.agent.host import resolve_chat_provider
 
@@ -493,7 +494,7 @@ def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: DbSession, user
     asset = _require_file_backed_asset(db, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "edit")
     if asset.kind != "video":
-        raise HTTPException(status_code=400, detail="只能从视频里取帧")
+        raise HTTPException(status_code=400, detail=tr("routeErr_framesOnlyFromVideo"))
 
     source = resolve_key(asset.file_key)
     with tempfile.TemporaryDirectory(prefix="mosael-still-") as tmp:
@@ -557,7 +558,7 @@ def regenerate_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser):
     asset = require_asset(db, user, asset_id, perm="edit")
     job = start_proxy_job(db, asset, created_by=user.id, force=True)
     if job is None:
-        raise HTTPException(status_code=422, detail="该素材不支持生成预览代理")
+        raise HTTPException(status_code=422, detail=tr("routeErr_noProxyForAsset"))
     return job
 
 

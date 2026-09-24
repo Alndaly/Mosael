@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.scenes import (SceneCreate, SceneOperations, SceneOut, SceneReferenceOut,
                                     SceneReferenceRequest, SceneUpdate)
@@ -97,7 +98,7 @@ def model_data(model_id: str, workspace_id: str, db: DbSession, user: CurrentUse
     # 每个并发下载各占一份内存。FileResponse 走 sendfile,顺带自带 Range 支持。
     path = model_file(model)
     if not path.is_file():
-        raise HTTPException(404, "模型文件已不在,请重新导入。")
+        raise HTTPException(404, tr("routeErr_modelFileGone"))
     return FileResponse(path, media_type="model/gltf-binary" if model.format == "glb" else "model/gltf+json",
                         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 

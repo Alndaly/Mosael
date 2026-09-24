@@ -106,14 +106,14 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
     _sequence_in(db, workspace_id, payload)
 
     if str(payload.get("line") or "all") not in {"all", "first", "last"}:
-        raise ConfirmationError("line 只能是 all / first / last")
+        raise ConfirmationError("confirmErr_badLine")
     clip_ids = payload.get("clip_ids")
     if clip_ids is not None and not isinstance(clip_ids, list):
-        raise ConfirmationError("clip_ids 要是一个数组(留空表示整条字幕轨)")
+        raise ConfirmationError("confirmErr_clipIdsNotArray")
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, ORIGINAL_AUDIO_MODES
 
     if str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO) not in ORIGINAL_AUDIO_MODES:
-        raise ConfirmationError(f"original_audio 只能是 {' / '.join(ORIGINAL_AUDIO_MODES)}")
+        raise ConfirmationError("confirmErr_badOriginalAudio", modes=" / ".join(ORIGINAL_AUDIO_MODES))
 
 
 def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
@@ -172,9 +172,9 @@ def _validate_separate_audio(db: Session, workspace_id: str, payload: dict[str, 
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
-        raise ConfirmationError("这个工作区里没有这份素材")
+        raise ConfirmationError("confirmErr_assetNotInWorkspace")
     if asset.kind not in {"audio", "video"}:
-        raise ConfirmationError("只有音频或视频素材可以分离")
+        raise ConfirmationError("confirmErr_separateNeedsAudio")
 
 
 def _summarize_separate_audio(db: Session, payload: dict[str, Any]) -> Summary:
@@ -188,7 +188,7 @@ def _execute_separate_audio(db: Session, confirmation: Any, actor: str | None) -
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
-        raise ValueError("素材不存在")
+        raise ConfirmationError("confirmErr_assetNotFound")
     # **起任务,不在这里同步跑完** —— 批准确认卡的那个请求不该挂十几分钟
     # (和 convert_video_to_gif 同款:返回 job_id,智能体按它问进度)。
     job = start_separation_job(db, asset=asset, created_by=actor, engine=str(payload.get("engine") or ""))
@@ -203,9 +203,9 @@ def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, A
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
-        raise ConfirmationError("这个工作区里没有这份素材")
+        raise ConfirmationError("confirmErr_assetNotInWorkspace")
     if asset.kind not in DENOISABLE_KINDS:
-        raise ConfirmationError("只有音频或视频素材可以降噪")
+        raise ConfirmationError("confirmErr_denoiseNeedsAudio")
     # 引擎和档位在**开卡之前**就判:批准一张注定失败的卡,只是把同一句话推迟到点完之后。
     try:
         payload["strength"] = checked_strength(str(payload.get("strength") or ""))
@@ -246,7 +246,7 @@ def _execute_denoise_audio(db: Session, confirmation: Any, actor: str | None) ->
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
-        raise ValueError("素材不存在")
+        raise ConfirmationError("confirmErr_assetNotFound")
     job = start_denoise_job(
         db,
         asset=asset,
@@ -262,9 +262,9 @@ def _validate_convert_video_to_gif(db: Session, workspace_id: str, payload: dict
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
-        raise ConfirmationError("这个工作区里没有这份视频素材")
+        raise ConfirmationError("confirmErr_videoNotInWorkspace")
     if asset.kind != "video":
-        raise ConfirmationError("只有视频素材可以转换为 GIF")
+        raise ConfirmationError("confirmErr_gifNeedsVideo")
     try:
         fps = int(payload.get("fps") or 12)
         width = int(payload.get("width") or 720)
@@ -272,9 +272,9 @@ def _validate_convert_video_to_gif(db: Session, workspace_id: str, payload: dict
         duration = payload.get("duration")
         duration = float(duration) if duration not in (None, "") else None
     except (TypeError, ValueError) as exc:
-        raise ConfirmationError("GIF 参数格式不正确") from exc
+        raise ConfirmationError("confirmErr_gifBadParams") from exc
     if fps < 1 or fps > 30 or width < 64 or width > 1920 or start < 0 or (duration is not None and duration <= 0):
-        raise ConfirmationError("GIF 参数超出允许范围")
+        raise ConfirmationError("confirmErr_gifParamsOutOfRange")
 
 
 def _summarize_convert_video_to_gif(db: Session, payload: dict[str, Any]) -> Summary:
@@ -293,7 +293,7 @@ def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | N
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
-        raise ValueError("素材不存在")
+        raise ConfirmationError("confirmErr_assetNotFound")
     duration = payload.get("duration")
     job = start_video_to_gif(
         db,

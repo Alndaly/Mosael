@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import delete, select, update
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     CapabilityProfileSchemaOut,
@@ -82,7 +83,7 @@ def update_generation_session(
         if body.group_id and not session_groups.resolve_member_group(
             db, body.group_id, workspace_id=session.workspace_id, kind="generation"
         ):
-            raise HTTPException(status_code=404, detail="分组不存在")
+            raise HTTPException(status_code=404, detail=tr("routeErr_groupNotFound"))
         session.group_id = body.group_id or None
     if "provider_profile_id" in fields:
         session.provider_profile_id = body.provider_profile_id
@@ -132,7 +133,7 @@ def get_capability_profile_schema(kind: str = "image") -> CapabilityProfileSchem
     from app.domain.generation.custom_profiles import profile_form_schema
 
     if kind not in ("image", "video"):
-        raise HTTPException(status_code=422, detail="kind 只能是 image 或 video")
+        raise HTTPException(status_code=422, detail=tr("routeErr_badGenerationKind"))
     return CapabilityProfileSchemaOut(**profile_form_schema(kind))
 
 
@@ -239,7 +240,7 @@ def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | N
     try:
         workflows = ComfyUIClient(base).list_workflows()
     except Exception as exc:  # noqa: BLE001 — 网络/解析失败都回可读 502
-        raise HTTPException(status_code=502, detail=f"连接 ComfyUI 失败({base}):{exc}") from exc
+        raise HTTPException(status_code=502, detail=tr("routeErr_comfyConnectFailed", base=base, detail=str(exc))) from exc
     if profile is None:
         return workflows
     # 设置页里加入并启用过工作流,就只给这些 —— 否则设置页那份清单只是装饰:用户在那里
@@ -267,7 +268,7 @@ def get_comfyui_workflow_params(
     try:
         return ComfyUIClient(base).fetch_workflow_params(workflow)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"读取 ComfyUI 工作流参数失败({base}):{exc}") from exc
+        raise HTTPException(status_code=502, detail=tr("routeErr_comfyWorkflowParamsFailed", base=base, detail=str(exc))) from exc
 
 
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)

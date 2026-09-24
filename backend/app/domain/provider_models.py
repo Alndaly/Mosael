@@ -19,6 +19,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr
 from app.db.models import ProviderModel, ProviderProfile
 from app.domain import thinking
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
@@ -212,7 +213,7 @@ def upsert(
     """新增或更新一行。这是**唯一**建 ProviderModel 的地方(数据归属棘轮会盯着)。"""
     model_id = (model_id or "").strip()
     if not model_id:
-        raise ValueError("模型 id 不能为空")
+        raise ValueError(tr("providerErr_modelIdRequired"))
     model = get_model(db, profile.id, model_id)
     if model is None:
         model = ProviderModel(

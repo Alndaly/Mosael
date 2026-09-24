@@ -19,6 +19,8 @@ pi 在这块不提供任何能力(六家 Provider 里没有配额查询,也不�
 
 from __future__ import annotations
 
+from app.core.i18n import LocalizedError
+
 import time
 from typing import Any, Callable
 
@@ -32,8 +34,8 @@ TIMEOUT_SECONDS = 12.0
 _CLAUDE_UA = "claude-code/1.0 (Mosael)"
 
 
-class QuotaUnavailable(RuntimeError):
-    """这家供应商没有可查的额度接口,或本次查询失败。"""
+class QuotaUnavailable(LocalizedError, RuntimeError):
+    """这家供应商没有可查的额度接口,或本次查询失败。带文案 key(`quotaErr_*`)。"""
 
 
 class CredentialExpired(QuotaUnavailable):
@@ -93,7 +95,7 @@ def parse_anthropic(payload: dict[str, Any]) -> dict[str, Any]:
             _percent_metric(key, used, window_seconds=seconds, resets_at=str(resets) if resets else None)
         )
     if not metrics:
-        raise QuotaUnavailable("响应里没有可识别的用量窗口")
+        raise QuotaUnavailable("quotaErr_noUsageWindow")
     plan = payload.get("plan") or payload.get("subscription_type")
     return {"plan": str(plan) if plan else None, "metrics": metrics}
 
@@ -141,7 +143,7 @@ def parse_codex(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
     if not metrics:
-        raise QuotaUnavailable("响应里没有可识别的额度窗口")
+        raise QuotaUnavailable("quotaErr_noQuotaWindow")
     plan = payload.get("plan_type")
     return {"plan": str(plan) if plan else None, "metrics": metrics}
 
@@ -154,11 +156,11 @@ def parse_openrouter(payload: dict[str, Any]) -> dict[str, Any]:
     """
     data = payload.get("data")
     if not isinstance(data, dict):
-        raise QuotaUnavailable("响应缺少 data")
+        raise QuotaUnavailable("quotaErr_missingField", field="data")
     limit = _number(data.get("limit"))
     used = _number(data.get("usage"))
     if used is None and limit is None:
-        raise QuotaUnavailable("响应里没有可识别的额度")
+        raise QuotaUnavailable("quotaErr_noQuota")
     metrics = [
         {
             "key": "credits",
@@ -245,7 +247,7 @@ def parse_kimi(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
     if not metrics:
-        raise QuotaUnavailable("响应里没有可识别的额度")
+        raise QuotaUnavailable("quotaErr_noQuota")
     user = payload.get("user")
     membership = user.get("membership") if isinstance(user, dict) else None
     plan = membership.get("level") if isinstance(membership, dict) else None
@@ -280,11 +282,11 @@ def parse_xai(payload: dict[str, Any]) -> dict[str, Any]:
     """
     config = payload.get("config")
     if not isinstance(config, dict):
-        raise QuotaUnavailable("响应缺少 config")
+        raise QuotaUnavailable("quotaErr_missingField", field="config")
     used = _number(config.get("used"))
     limit = _number(config.get("monthlyLimit"))
     if used is None and limit is None:
-        raise QuotaUnavailable("响应里没有可识别的额度")
+        raise QuotaUnavailable("quotaErr_noQuota")
     metrics = [
         {
             "key": "monthly",
@@ -347,7 +349,7 @@ def parse_copilot(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             )
     if not metrics:
-        raise QuotaUnavailable("响应里没有可识别的额度")
+        raise QuotaUnavailable("quotaErr_noQuota")
     return {"plan": None, "metrics": metrics}
 
 
@@ -401,17 +403,17 @@ def _get_json(url: str, headers: dict[str, str], *, proxies_from_env: bool = Tru
     with httpx.Client(timeout=TIMEOUT_SECONDS, trust_env=proxies_from_env) as client:
         response = client.get(url, headers=headers)
         if response.status_code == 401:
-            raise CredentialExpired("凭据已过期。在对话里发一条消息会自动刷新;仍失败请重新授权登录。")
+            raise CredentialExpired("quotaErr_credentialExpired")
         if response.status_code == 403:
             # 403 基本是"这个端点不给这个账号用"(计划不含、或该供应商换了接口),
             # 和过期是两回事。混成一句会让用户反复去重新授权,而问题根本不在授权上。
-            raise QuotaUnavailable("该账号没有访问这个额度接口的权限")
+            raise QuotaUnavailable("quotaErr_forbidden")
         if response.status_code == 429:
-            raise QuotaUnavailable("对方限流,稍后再试")
+            raise QuotaUnavailable("quotaErr_rateLimited")
         response.raise_for_status()
         payload = response.json()
     if not isinstance(payload, dict):
-        raise QuotaUnavailable("响应不是对象")
+        raise QuotaUnavailable("quotaErr_notObject")
     return payload
 
 
@@ -494,21 +496,21 @@ def fetch_quota(pi_provider: str | None, credential: dict[str, Any] | None) -> d
     """查一次额度。返回归一化快照;查不到一律抛 QuotaUnavailable。"""
     fetcher = FETCHERS.get(pi_provider or "")
     if fetcher is None:
-        raise QuotaUnavailable("该供应商不提供额度查询")
+        raise QuotaUnavailable("quotaErr_unsupported")
     token = access_token(credential)
     if not token:
-        raise QuotaUnavailable("尚未授权登录")
+        raise QuotaUnavailable("quotaErr_notSignedIn")
     if is_expired(credential):
         # 先判再发:过期的令牌发出去只会换回 401,还白等一个网络往返。
-        raise CredentialExpired("凭据已过期。在对话里发一条消息会自动刷新;仍失败请重新授权登录。")
+        raise CredentialExpired("quotaErr_credentialExpired")
     try:
         snapshot = fetcher(token)
     except QuotaUnavailable:
         raise
     except httpx.HTTPError as exc:
-        raise QuotaUnavailable(f"查询失败:{exc}") from exc
+        raise QuotaUnavailable("quotaErr_requestFailed", detail=str(exc)) from exc
     except (ValueError, KeyError, TypeError) as exc:
         # 对方改了响应形状。报出来,别把它当成"额度为零"。
-        raise QuotaUnavailable(f"响应无法解析:{exc}") from exc
+        raise QuotaUnavailable("quotaErr_unparseable", detail=str(exc)) from exc
     snapshot["fetched_at"] = time.time()
     return snapshot

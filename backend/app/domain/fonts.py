@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Font, new_id
 from app.media.paths import font_dir, font_key
 
@@ -26,8 +27,8 @@ MAX_FONT_BYTES = 32 * 1024 * 1024
 ALLOWED_FONT_SUFFIXES = (".ttf", ".otf", ".ttc", ".otc")
 
 
-class FontError(ValueError):
-    """Raised when an uploaded file is not a usable font."""
+class FontError(LocalizedError, ValueError):
+    """Raised when an uploaded file is not a usable font. 带文案 key(`fontErr_*`)。"""
 
 
 def read_font_family(path: Path, fallback: str) -> str:
@@ -62,15 +63,15 @@ def read_font_family(path: Path, fallback: str) -> str:
 def import_uploaded_font(db: Session, *, workspace_id: str, upload: UploadFile) -> Font:
     original = Path(upload.filename or "font.ttf").name
     if not original.lower().endswith(ALLOWED_FONT_SUFFIXES):
-        raise FontError("只支持 .ttf / .otf / .ttc 字体文件(woff 无法用于导出)")
+        raise FontError("fontErr_badType")
     # Bounded read: reading the whole body and THEN checking the cap means an oversized
     # upload exhausts memory before the limit meant to prevent that ever runs. One byte
     # over is enough to know it is over.
     raw = upload.file.read(MAX_FONT_BYTES + 1)
     if len(raw) > MAX_FONT_BYTES:
-        raise FontError("字体文件过大(上限 32MB)")
+        raise FontError("fontErr_tooLarge")
     if not raw:
-        raise FontError("字体文件为空")
+        raise FontError("fontErr_empty")
 
     font_id = new_id()
     target_dir = font_dir(workspace_id, font_id)
@@ -81,7 +82,7 @@ def import_uploaded_font(db: Session, *, workspace_id: str, upload: UploadFile) 
     family = read_font_family(target, original)
     if not _is_readable_font(target):
         shutil.rmtree(target_dir, ignore_errors=True)
-        raise FontError("无法解析该字体文件,请确认它没有损坏")
+        raise FontError("fontErr_unreadable")
 
     font = Font(
         id=font_id,

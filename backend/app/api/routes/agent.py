@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
 
+from app.core.i18n import tr
 from app.domain.agent import host
 from app.domain.agent import stream as agent_stream
 from app.domain import sharing
@@ -63,7 +64,7 @@ def _checked_profile_id(db: DbSession, user: CurrentUser, profile_id: str | None
     profile = db.get(ProviderProfile, wanted)
     # 连接归人。别人的和不存在的对他是同一件事 —— 分开说等于确认了这个 id 有效。
     if profile is None or (profile.owner_user_id is not None and profile.owner_user_id != user.id):
-        raise HTTPException(status_code=422, detail="这条 AI 供应商连接不存在")
+        raise HTTPException(status_code=422, detail=tr("routeErr_aiConnectionNotFound"))
     return profile.id
 
 
@@ -225,11 +226,11 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         session.model = body.model or None
     if body.analysis_video_mode is not None:
         if body.analysis_video_mode not in ("auto", "native", "frames"):
-            raise HTTPException(status_code=422, detail="analysis_video_mode 只能是 auto/native/frames")
+            raise HTTPException(status_code=422, detail=tr("routeErr_badAnalysisVideoMode"))
         session.analysis_video_mode = body.analysis_video_mode
     if body.thinking_level is not None:
         if body.thinking_level not in ("off", "low", "medium", "high"):
-            raise HTTPException(status_code=422, detail="thinking_level 只能是 off/low/medium/high")
+            raise HTTPException(status_code=422, detail=tr("routeErr_badThinkingLevel"))
         session.thinking_level = body.thinking_level
     if body.permission_mode is not None:
         _set_permission_mode(db, user, session, body.permission_mode)
@@ -239,7 +240,7 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         if body.group_id and not session_groups.resolve_member_group(
             db, body.group_id, workspace_id=session.workspace_id, kind="agent"
         ):
-            raise HTTPException(status_code=404, detail="分组不存在")
+            raise HTTPException(status_code=404, detail=tr("routeErr_groupNotFound"))
         session.group_id = body.group_id or None
     if body.auto_allow_tools is not None:
         # 记下是谁定的:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 domain/agent/autopilot)。
@@ -272,11 +273,11 @@ def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession
     - 记下**是谁开的**:授权只对做出授权的那个人生效(见 domain/agent/autopilot.decide)。
     """
     if mode not in PERMISSION_MODES:
-        raise HTTPException(status_code=422, detail=f"permission_mode 只能是 {'/'.join(PERMISSION_MODES)}")
+        raise HTTPException(status_code=422, detail=tr("routeErr_badPermissionMode", modes="/".join(PERMISSION_MODES)))
     ensure_workspace_perm(db, user, session.workspace_id, "ai")
     if mode == "bypass":
         if session.origin != "ui":
-            raise HTTPException(status_code=403, detail="共享会话(如飞书)不能开 bypass —— 它不该由一个人替一群人开")
+            raise HTTPException(status_code=403, detail=tr("routeErr_sharedSessionNoBypass"))
         ensure_workspace_role(db, user, session.workspace_id, "admin")
     session.permission_mode = mode
     session.mode_set_by = user.id
@@ -429,7 +430,7 @@ def dismiss_question(question_id: str, db: DbSession, user: CurrentUser) -> Agen
 def _require_question(db: DbSession, user: CurrentUser, question_id: str) -> AgentQuestion:
     row = db.get(AgentQuestion, question_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="问题不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_questionNotFound"))
     ensure_workspace_access(db, user, row.workspace_id)
     return row
 
@@ -518,7 +519,7 @@ def speak(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Respons
 
     text = body.text.strip()
     if not text:
-        raise HTTPException(status_code=422, detail="没有要念的内容")
+        raise HTTPException(status_code=422, detail=tr("routeErr_nothingToRead"))
     # 念一句是**花钱的**(各家 TTS 按字符计费),所以要 ai 权限,和对话、生成同一档。
     # 记账挂在这个工作区上,那它就得先证明自己在这个工作区里能花钱。
     ensure_workspace_perm(db, user, body.workspace_id, "ai")

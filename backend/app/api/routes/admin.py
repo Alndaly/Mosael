@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AdminOverviewOut,
@@ -88,7 +89,7 @@ def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
     ensure_deployment_admin(db, user)
     target = db.get(User, user_id)
     if target is None:
-        raise HTTPException(status_code=404, detail="账号不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_accountNotFound"))
     try:
         members.delete_account(db, target)
     except members.MemberError as exc:

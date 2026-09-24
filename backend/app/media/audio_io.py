@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.core.i18n import LocalizedError, tr
 from app.core.child_process import run_logged
 from app.core.config import settings
 from app.core.text import blame_line
@@ -17,8 +18,8 @@ from app.core.text import blame_line
 AUDIO_SUFFIXES = frozenset({".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus"})
 
 
-class AudioIOError(RuntimeError):
-    """取不出 / 放不回。message 可以直接给用户看。"""
+class AudioIOError(LocalizedError, RuntimeError):
+    """取不出 / 放不回。带文案 key(`audioErr_*`),可以直接给用户看。"""
 
 
 def extract_audio(source: Path, target: Path) -> Path:
@@ -31,7 +32,7 @@ def extract_audio(source: Path, target: Path) -> Path:
         what="抽取音轨",
     )
     if result.returncode != 0 or not target.is_file():
-        raise AudioIOError(f"取不出这份素材的声音:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+        raise AudioIOError("audioErr_extract", detail=blame_line(result.stderr, fallback="") or tr("audioErr_ffmpegNoReason"))
     return target
 
 
@@ -63,5 +64,5 @@ def replace_audio(video: Path, audio: Path, target: Path) -> Path:
         what="替换音轨",
     )
     if result.returncode != 0 or not target.is_file():
-        raise AudioIOError(f"没能把处理后的声音放回视频:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+        raise AudioIOError("audioErr_replace", detail=blame_line(result.stderr, fallback="") or tr("audioErr_ffmpegNoReason"))
     return target

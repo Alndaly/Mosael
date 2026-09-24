@@ -101,5 +101,5 @@ def test_未知的通知类型当场报错() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     with SessionLocal() as db:
-        with pytest.raises(ValueError, match="未知的通知类型"):
+        with pytest.raises(ValueError, match="unknown notification type"):
             notify(db, ws["id"], type="还没定义的类型", title="x")

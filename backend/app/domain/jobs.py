@@ -14,7 +14,7 @@ from sqlalchemy import delete, event, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Job, TaskEvent
 from app.db.models import now as models_now
 
@@ -168,6 +168,10 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
                     db.commit()
         except Exception:  # noqa: BLE001 — the DB is what failed; nothing left to try
             logger.exception("could not record the failure of %s %s", what, job_id)
+
+
+class JobError(LocalizedError, ValueError):
+    """任务这一层说不行(已结束、租约不对)。带文案 key(`jobErr_*`);是 ValueError,调用方照旧翻成 409。"""
 
 
 def say(job: Job, key: str, **params: object) -> None:
@@ -466,7 +470,7 @@ def create_job(
     if parent and strict:
         parent_job = db.get(Job, parent)
         if parent_job is not None and not lock_active_job(db, parent_job):
-            raise ValueError("父任务已结束,不能再派生任务")
+            raise JobError("jobErr_parentFinished")
     receipt = _current_receipt.get()
     if receipt is not None and "receipt" not in payload:
         payload = {**payload, "receipt": receipt}
@@ -625,10 +629,10 @@ def cancel_job(db: Session, job: Job) -> Job:
     配音):否则父流取消了,发布子任务还在桌面发布器里跑(见 parent_job_id 链)。
     """
     if job.status not in ("queued", "running"):
-        raise ValueError("任务已结束,无法取消")
+        raise JobError("jobErr_alreadyFinished")
     if not _cancel_job_row(db, job):
         db.rollback()
-        raise ValueError("任务已结束,无法取消")
+        raise JobError("jobErr_alreadyFinished")
     # 广度遍历后代,连嵌套子工作流一并取消。
     seen = _cancel_descendants(db, job.id)
     db.commit()
@@ -756,7 +760,7 @@ def report_job(
     worker 是在为一个已经不存在的意图干活,结果只能丢弃。
     """
     if status not in ("running", "succeeded", "failed"):
-        raise ValueError(f"未知回报状态: {status}")
+        raise JobError("jobErr_badReportStatus", status=status)
     expire_worker_leases(db)
     if not lock_active_job(db, job):
         db.commit()
@@ -764,7 +768,7 @@ def report_job(
     db.refresh(job, ["status", "lease_token", "lease_expires_at", "lease_worker"])
     if not job.lease_token or not secrets.compare_digest(job.lease_token, lease_token or ""):
         db.rollback()
-        raise ValueError("执行器租约无效,请使用认领返回的 lease_token")
+        raise JobError("jobErr_badLease")
     if job.lease_expires_at is None or job.lease_expires_at <= models_now():
         db.rollback()
         expire_worker_leases(db)

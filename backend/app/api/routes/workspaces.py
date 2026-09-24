@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     InviteMemberRequest,
@@ -82,7 +83,7 @@ def set_autopilot_rules(
         except PermissionDenied as exc:
             raise HTTPException(
                 status_code=403,
-                detail="把「本机执行代码」交给判断者需要这台机器的管理员权限 —— 它和工作流里的代码节点是同一个能力",
+                detail=tr("routeErr_judgeHostCodeNeedsAdmin"),
             ) from exc
     workspace.autopilot_rules = incoming
     db.commit()
@@ -121,7 +122,7 @@ def get_home_poem(user: CurrentUser) -> PoemOut:
     try:
         poem = fetch_poem()
     except (PoemUnavailable, Exception) as exc:  # noqa: BLE001 — 取不到是正常结果,前端有本地兜底
-        raise HTTPException(status_code=502, detail=f"今日诗词暂时不可达:{exc}") from exc
+        raise HTTPException(status_code=502, detail=tr("routeErr_poemUnreachable", detail=str(exc))) from exc
     return PoemOut(text=poem.text, author=poem.author, source=poem.source, dynasty=poem.dynasty)
 
 

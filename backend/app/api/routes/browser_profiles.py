@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
+from app.core.i18n import tr
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
@@ -67,7 +68,7 @@ def update_profile(
 ) -> BrowserProfileOut:
     prof = db.get(BrowserProfile, profile_id)
     if prof is None:
-        raise HTTPException(status_code=404, detail="浏览器档案不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
     ensure_workspace_perm(db, user, prof.workspace_id, "edit")
     fields = body.model_fields_set
     try:
@@ -88,7 +89,7 @@ def update_profile(
 def delete_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
     prof = db.get(BrowserProfile, profile_id)
     if prof is None:
-        raise HTTPException(status_code=404, detail="浏览器档案不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
     ensure_workspace_perm(db, user, prof.workspace_id, "edit")
     try:
         browser.delete_profile(db, prof.workspace_id, profile_id)

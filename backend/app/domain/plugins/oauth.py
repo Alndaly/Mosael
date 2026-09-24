@@ -21,16 +21,17 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlencode
 
+from app.core.i18n import LocalizedError
 from app.domain.plugins.manifest import Manifest, OAuthSpec
 
 
-class PluginOAuthError(RuntimeError):
-    """面向用户的错误。消息要说清楚下一步做什么。"""
+class PluginOAuthError(LocalizedError, RuntimeError):
+    """面向用户的错误。消息要说清楚下一步做什么。带文案 key(`pluginErr_oauth*`)。"""
 
 
 def spec_of(manifest: Manifest) -> OAuthSpec:
     if manifest.oauth is None:
-        raise PluginOAuthError("这个插件没有声明 OAuth,凭据只能手动填。")
+        raise PluginOAuthError("pluginErr_oauthNotDeclared")
     return manifest.oauth
 
 
@@ -40,7 +41,7 @@ def authorize_url(spec: OAuthSpec, credentials: dict[str, str]) -> str:
     if not client_id:
         # 先填 AppKey 再授权。反过来的话,用户会点进一个 invalid_client 的页面,
         # 而那句报错不会告诉他缺的是这一格。
-        raise PluginOAuthError(f"先填好「{spec.client_id_field}」再来授权 —— 授权链接要用它。")
+        raise PluginOAuthError("pluginErr_oauthNeedsClientId", field=spec.client_id_field)
     query = {
         "response_type": "code",
         "client_id": client_id,
@@ -56,7 +57,7 @@ def token_request(spec: OAuthSpec, credentials: dict[str, str], code: str) -> di
     """换令牌要发出去的参数。**纯函数**,同上。"""
     code = code.strip()
     if not code:
-        raise PluginOAuthError("没有拿到授权码。")
+        raise PluginOAuthError("pluginErr_oauthNoCode")
     payload = {
         "grant_type": "authorization_code",
         "code": code,
@@ -75,16 +76,16 @@ def credentials_from_token(spec: OAuthSpec, response: dict[str, Any]) -> dict[st
     已有的 refresh_token 抹掉 —— 而那一份丢了就得重新走一遍授权。
     """
     if not isinstance(response, dict):
-        raise PluginOAuthError("令牌接口回的不是一个对象。")
+        raise PluginOAuthError("pluginErr_oauthTokenNotObject")
     # 对方用自己的字段名报错(error / error_description),原样转出去 —— 它比"授权失败"有用。
     if response.get("error"):
         detail = response.get("error_description") or response.get("error")
-        raise PluginOAuthError(f"授权失败:{detail}")
+        raise PluginOAuthError("pluginErr_oauthFailed", detail=detail)
     out: dict[str, str] = {}
     for field_name, credential_key in spec.stores.items():
         value = response.get(field_name)
         if isinstance(value, (str, int)) and str(value).strip():
             out[credential_key] = str(value).strip()
     if not out:
-        raise PluginOAuthError("令牌接口没有回任何一个声明过的字段 —— 对照插件清单的 stores 看看。")
+        raise PluginOAuthError("pluginErr_oauthNoFields")
     return out

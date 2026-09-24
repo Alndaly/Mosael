@@ -24,6 +24,1384 @@ DEFAULT_LOCALE = LOCALES[0]
 #: key → {语言: 文案}。**每个 key 两种语言都必须有**(见 tests/test_backend_i18n.py 的棘轮)。
 MESSAGES: dict[str, dict[str, str]] = {
     # ---- i18n 分区 B1(路由、插件、供应商设置等):这一批新加的 key 放在这行下面 ----
+    # ---- B1 · 01_plugins ----
+    "pluginErr_upstream": {
+        "zh": "{detail}",
+        "en": "{detail}",
+    },
+    "pluginErr_notFound": {
+        "zh": "插件不存在",
+        "en": "Plugin not found.",
+    },
+    "pluginErr_instanceNotFound": {
+        "zh": "插件连接不存在",
+        "en": "Plugin connection not found.",
+    },
+    "pluginErr_packageNotFound": {
+        "zh": "插件包不存在",
+        "en": "Plugin package not found.",
+    },
+    "pluginErr_connectionNotFound": {
+        "zh": "没有这个连接",
+        "en": "Connection not found.",
+    },
+    "pluginErr_capabilityNotDeclared": {
+        "zh": "「{name}」没有声明「{capability}」这项能力",
+        "en": "\"{name}\" does not declare the \"{capability}\" capability.",
+    },
+    "pluginErr_mcpNoAssetChannel": {
+        "zh": "这个工具要收一份素材,但 MCP 形态没有交接文件的通道",
+        "en": "This tool takes an asset, but MCP plugins have no channel for handing over files.",
+    },
+    "pluginErr_assetNeedsWorkspace": {
+        "zh": "这个工具要收一份素材,但这次调用没有归属工作区",
+        "en": "This tool takes an asset, but this call doesn't belong to a workspace.",
+    },
+    "pluginErr_singleConnection": {
+        "zh": "「{name}」只能有一个连接",
+        "en": "\"{name}\" can have only one connection.",
+    },
+    "pluginErr_unknownConfig": {
+        "zh": "插件未声明这些配置项: {keys}",
+        "en": "The plugin doesn't declare these settings: {keys}",
+    },
+    "pluginErr_unknownCredentials": {
+        "zh": "插件未声明这些凭据项: {keys}",
+        "en": "The plugin doesn't declare these credentials: {keys}",
+    },
+    "pluginErr_unknownPermissions": {
+        "zh": "插件未声明这些权限: {keys}",
+        "en": "The plugin doesn't declare these permissions: {keys}",
+    },
+    "pluginBlocked_disabled": {
+        "zh": "未启用",
+        "en": "Disabled",
+    },
+    "pluginBlocked_missingConfig": {
+        "zh": "缺少配置: {names}",
+        "en": "Missing settings: {names}",
+    },
+    "pluginBlocked_missingCredentials": {
+        "zh": "缺少凭据: {names}",
+        "en": "Missing credentials: {names}",
+    },
+    "pluginBlocked_permissionsPending": {
+        "zh": "权限未授予",
+        "en": "Permissions not granted",
+    },
+    "pluginErr_fillFirst": {
+        "zh": "请先填写: {names}",
+        "en": "Fill in first: {names}",
+    },
+    "pluginErr_unavailable": {
+        "zh": "「{name}」不可用:{reason}",
+        "en": "\"{name}\" is unavailable: {reason}",
+    },
+    "pluginErr_noSuchTool": {
+        "zh": "「{name}」没有工具 {tool}",
+        "en": "\"{name}\" has no tool named {tool}.",
+    },
+    "pluginErr_artifactNeedsWorkspace": {
+        "zh": "这个工具产出了文件,但这次调用没有归属工作区,收不下",
+        "en": "This tool produced a file, but this call doesn't belong to a workspace, so it can't be saved.",
+    },
+    "pluginErr_runtimeCrashed": {
+        "zh": "插件运行时异常: {detail}",
+        "en": "Plugin runtime error: {detail}",
+    },
+    "pluginErr_artifactNoPath": {
+        "zh": "插件产出缺少 path",
+        "en": "The plugin output is missing \"path\".",
+    },
+    "pluginErr_artifactOutsideScratch": {
+        "zh": "插件产出必须写在 {env} 指定的目录里",
+        "en": "Plugin output must be written inside the directory given by {env}.",
+    },
+    "pluginErr_artifactMissing": {
+        "zh": "插件产出文件不存在",
+        "en": "The plugin's output file does not exist.",
+    },
+    "pluginErr_artifactTooLarge": {
+        "zh": "插件产出超过大小上限",
+        "en": "The plugin's output exceeds the size limit.",
+    },
+    "pluginErr_artifactNoUrl": {
+        "zh": "插件产出缺少 url",
+        "en": "The plugin output is missing \"url\".",
+    },
+    "pluginErr_artifactBadScheme": {
+        "zh": "插件产出的 url 只能是 http/https",
+        "en": "The plugin output URL must be http or https.",
+    },
+    "pluginErr_artifactDownloadFailed": {
+        "zh": "下载插件产出失败:{detail}",
+        "en": "Could not download the plugin output: {detail}",
+    },
+    "pluginErr_manifestMissingField": {
+        "zh": "插件清单 {path} 缺少必填字段: {field}",
+        "en": "Plugin manifest {path} is missing a required field: {field}",
+    },
+    "pluginErr_manifestToolExtraCapability": {
+        "zh": "插件清单 {path} 的工具 {tool} 声明了包上没有的能力: {capabilities}",
+        "en": "In plugin manifest {path}, tool {tool} declares capabilities the package doesn't: {capabilities}",
+    },
+    "pluginErr_manifestNotJson": {
+        "zh": "插件清单不是合法 JSON: {path}",
+        "en": "The plugin manifest is not valid JSON: {path}",
+    },
+    "pluginErr_manifestNotObject": {
+        "zh": "插件清单必须是一个对象: {path}",
+        "en": "The plugin manifest must be a JSON object: {path}",
+    },
+    "pluginErr_mcpNoBlock": {
+        "zh": "MCP 插件必须声明 mcp 配置块(manifest.mcp)",
+        "en": "An MCP plugin must declare an \"mcp\" block (manifest.mcp).",
+    },
+    "pluginErr_mcpStdioNoCommand": {
+        "zh": "stdio 传输必须声明 command",
+        "en": "The stdio transport must declare a \"command\".",
+    },
+    "pluginErr_mcpHttpNoUrl": {
+        "zh": "http 传输必须声明 url",
+        "en": "The http transport must declare a \"url\".",
+    },
+    "pluginErr_mcpBadTransport": {
+        "zh": "不支持的 MCP 传输方式: {transport}(支持 stdio / http)",
+        "en": "Unsupported MCP transport: {transport} (use stdio or http).",
+    },
+    "pluginErr_mcpTimeout": {
+        "zh": "MCP 插件响应超时({seconds}s)",
+        "en": "The MCP plugin didn't respond within {seconds}s.",
+    },
+    "pluginErr_mcpConnectFailed": {
+        "zh": "连接 MCP 插件失败: {detail}",
+        "en": "Could not connect to the MCP plugin: {detail}",
+    },
+    "pluginErr_mcpToolFailed": {
+        "zh": "MCP 工具 {tool} 返回错误",
+        "en": "MCP tool {tool} returned an error.",
+    },
+    "pluginErr_oauthNotDeclared": {
+        "zh": "这个插件没有声明 OAuth,凭据只能手动填。",
+        "en": "This plugin doesn't declare OAuth; enter its credentials by hand.",
+    },
+    "pluginErr_oauthNeedsClientId": {
+        "zh": "先填好「{field}」再来授权 —— 授权链接要用它。",
+        "en": "Fill in \"{field}\" before authorizing — the authorization link needs it.",
+    },
+    "pluginErr_oauthNoCode": {
+        "zh": "没有拿到授权码。",
+        "en": "No authorization code was received.",
+    },
+    "pluginErr_oauthTokenNotObject": {
+        "zh": "令牌接口回的不是一个对象。",
+        "en": "The token endpoint didn't return a JSON object.",
+    },
+    "pluginErr_oauthFailed": {
+        "zh": "授权失败:{detail}",
+        "en": "Authorization failed: {detail}",
+    },
+    "pluginErr_oauthNoFields": {
+        "zh": "令牌接口没有回任何一个声明过的字段 —— 对照插件清单的 stores 看看。",
+        "en": "The token endpoint returned none of the declared fields — check \"stores\" in the plugin manifest.",
+    },
+    "pluginErr_marketBadScheme": {
+        "zh": "插件市场地址只能是 http/https",
+        "en": "The plugin marketplace URL must be http or https.",
+    },
+    "pluginErr_marketUnreachable": {
+        "zh": "打不开插件市场:{detail}",
+        "en": "Could not open the plugin marketplace: {detail}",
+    },
+    "pluginErr_marketNotJson": {
+        "zh": "插件市场返回的不是合法 JSON",
+        "en": "The plugin marketplace did not return valid JSON.",
+    },
+    "pluginErr_marketBadShape": {
+        "zh": "插件市场格式不对:应当是 {example}",
+        "en": "The plugin marketplace has the wrong format; expected {example}",
+    },
+    "pluginErr_downloadBadScheme": {
+        "zh": "插件下载地址只能是 http/https",
+        "en": "The plugin download URL must be http or https.",
+    },
+    "pluginErr_archiveTooLarge": {
+        "zh": "插件包超过大小上限",
+        "en": "The plugin package exceeds the size limit.",
+    },
+    "pluginErr_downloadFailed": {
+        "zh": "下载插件失败:{detail}",
+        "en": "Could not download the plugin: {detail}",
+    },
+    "pluginErr_archiveSymlink": {
+        "zh": "插件包里有符号链接,拒绝安装:{name}",
+        "en": "The plugin package contains a symbolic link, so it was not installed: {name}",
+    },
+    "pluginErr_archivePathEscape": {
+        "zh": "插件包里有越界路径,拒绝安装:{name}",
+        "en": "The plugin package contains a path outside its folder, so it was not installed: {name}",
+    },
+    "pluginErr_archiveUnpackedTooLarge": {
+        "zh": "插件包解压后超过大小上限",
+        "en": "The unpacked plugin package exceeds the size limit.",
+    },
+    "pluginErr_archiveNoManifest": {
+        "zh": "这个包里没有 {manifest},不是一个插件",
+        "en": "This package has no {manifest}, so it isn't a plugin.",
+    },
+    "pluginErr_archiveNotZip": {
+        "zh": "这不是一个合法的 zip 包",
+        "en": "This is not a valid zip file.",
+    },
+    "pluginErr_manifestInvalid": {
+        "zh": "插件清单不合法:{detail}",
+        "en": "Invalid plugin manifest: {detail}",
+    },
+    "pluginErr_alreadyInstalled": {
+        "zh": "「{name}」已经装过了 —— 要装新版本请选「更新」",
+        "en": "\"{name}\" is already installed — choose \"Update\" to install a new version.",
+    },
+    "pluginErr_noEntry": {
+        "zh": "插件未声明 entry 脚本,无法执行(runtime.entry)",
+        "en": "The plugin declares no entry script (runtime.entry), so it can't run.",
+    },
+    "pluginErr_dirMissing": {
+        "zh": "插件目录不存在,请重新扫描",
+        "en": "The plugin folder is missing. Rescan plugins.",
+    },
+    "pluginErr_entryOutside": {
+        "zh": "entry 脚本必须位于插件目录内",
+        "en": "The entry script must be inside the plugin folder.",
+    },
+    "pluginErr_entryMissing": {
+        "zh": "entry 脚本不存在: {entry}",
+        "en": "Entry script not found: {entry}",
+    },
+    "pluginErr_missingInput": {
+        "zh": "缺少必填输入: {keys}",
+        "en": "Missing required input: {keys}",
+    },
+    "pluginErr_noPython": {
+        "zh": "找不到可用于运行插件的 Python 解释器",
+        "en": "No Python interpreter is available to run the plugin.",
+    },
+    "pluginErr_timeout": {
+        "zh": "插件执行超时({seconds}s)",
+        "en": "The plugin timed out after {seconds}s.",
+    },
+    "pluginErr_processExit": {
+        "zh": "插件进程退出码 {code}:{detail}",
+        "en": "The plugin process exited with code {code}: {detail}",
+    },
+    "pluginErr_processExitNoReason": {
+        "zh": "插件进程退出码 {code}:插件没有留下原因",
+        "en": "The plugin process exited with code {code} without giving a reason.",
+    },
+    "pluginErr_outputTooLarge": {
+        "zh": "插件输出超过大小限制 (1MB)",
+        "en": "The plugin output exceeds the size limit (1 MB).",
+    },
+    "pluginErr_outputNotJson": {
+        "zh": "插件输出不是合法 JSON: {tail}",
+        "en": "The plugin output is not valid JSON: {tail}",
+    },
+    "pluginErr_outputNotObject": {
+        "zh": "插件输出必须是 JSON 对象",
+        "en": "The plugin output must be a JSON object.",
+    },
+    "pluginErr_failedNoReason": {
+        "zh": "插件返回失败但未说明原因",
+        "en": "The plugin reported a failure without giving a reason.",
+    },
+    "pluginErr_outputNoOutput": {
+        "zh": "插件成功响应必须包含 output 对象",
+        "en": "A successful plugin response must include an \"output\" object.",
+    },
+    "pluginErr_stateNotObject": {
+        "zh": "插件返回的 state 必须是对象",
+        "en": "The \"state\" returned by the plugin must be an object.",
+    },
+    "pluginErr_stateUnknownKeys": {
+        "zh": "插件想记住未声明的键: {keys}",
+        "en": "The plugin tried to store undeclared keys: {keys}",
+    },
+    "pluginErr_stateTooLong": {
+        "zh": "插件状态过长(上限 {limit} 字符): {keys}",
+        "en": "Plugin state is too long (limit {limit} characters): {keys}",
+    },
+    # ---- B1 · 02_routes ----
+    "routeErr_accountNotFound": {
+        "zh": "账号不存在",
+        "en": "Account not found.",
+    },
+    "routeErr_aiConnectionNotFound": {
+        "zh": "这条 AI 供应商连接不存在",
+        "en": "This AI provider connection doesn't exist.",
+    },
+    "routeErr_badAnalysisVideoMode": {
+        "zh": "analysis_video_mode 只能是 auto/native/frames",
+        "en": "analysis_video_mode must be auto, native, or frames.",
+    },
+    "routeErr_badThinkingLevel": {
+        "zh": "thinking_level 只能是 off/low/medium/high",
+        "en": "thinking_level must be off, low, medium, or high.",
+    },
+    "routeErr_groupNotFound": {
+        "zh": "分组不存在",
+        "en": "Group not found.",
+    },
+    "routeErr_badPermissionMode": {
+        "zh": "permission_mode 只能是 {modes}",
+        "en": "permission_mode must be one of {modes}.",
+    },
+    "routeErr_sharedSessionNoBypass": {
+        "zh": "共享会话(如飞书)不能开 bypass —— 它不该由一个人替一群人开",
+        "en": "Shared sessions (such as Feishu) can't use bypass — one person shouldn't turn it on for a whole group.",
+    },
+    "routeErr_questionNotFound": {
+        "zh": "问题不存在",
+        "en": "Question not found.",
+    },
+    "routeErr_nothingToRead": {
+        "zh": "没有要念的内容",
+        "en": "There is nothing to read aloud.",
+    },
+    "routeErr_browserSessionNotFound": {
+        "zh": "浏览器会话不存在",
+        "en": "Browser session not found.",
+    },
+    "routeErr_providerNotFound": {
+        "zh": "供应商不存在",
+        "en": "Provider not found.",
+    },
+    "routeErr_leaseSuperseded": {
+        "zh": "租约已被顶替,续租失败",
+        "en": "The lease was taken over by someone else, so it couldn't be renewed.",
+    },
+    "routeErr_pluginToolUnavailable": {
+        "zh": "插件工具 {name} 不可用(连接未启用、未授权、缺凭据,或该工具未开启)",
+        "en": "Plugin tool {name} is unavailable (the connection is disabled, unauthorized, missing credentials, or the tool is turned off).",
+    },
+    "routeErr_pluginCallFailed": {
+        "zh": "插件调用失败",
+        "en": "The plugin call failed.",
+    },
+    "routeErr_toolArgsNone": {
+        "zh": "(无)",
+        "en": "(none)",
+    },
+    "routeErr_toolBadArgs": {
+        "zh": "{detail};该工具接受的参数:{accepted}",
+        "en": "{detail}; this tool accepts: {accepted}",
+    },
+    "routeErr_unknownModel": {
+        "zh": "未知模型",
+        "en": "Unknown model.",
+    },
+    "routeErr_dictationTooLarge": {
+        "zh": "录音太大了,听写请说短一点。",
+        "en": "The recording is too large. Keep dictation shorter.",
+    },
+    "routeErr_noAudio": {
+        "zh": "没有收到音频",
+        "en": "No audio was received.",
+    },
+    "routeErr_pathNotFile": {
+        "zh": "路径不存在或不是文件",
+        "en": "The path doesn't exist or isn't a file.",
+    },
+    "routeErr_unsupportedFileType": {
+        "zh": "不支持的文件类型:{suffix}",
+        "en": "Unsupported file type: {suffix}",
+    },
+    "routeErr_projectNotInWorkspace": {
+        "zh": "项目不存在或不属于该工作区",
+        "en": "The project doesn't exist or isn't in this workspace.",
+    },
+    "routeErr_assetNotInAgentWorkspace": {
+        "zh": "素材不属于当前智能体会话的工作区",
+        "en": "The asset isn't in this agent session's workspace.",
+    },
+    "routeErr_framesOnlyFromVideo": {
+        "zh": "只能从视频里取帧",
+        "en": "Frames can only be taken from a video.",
+    },
+    "routeErr_noProxyForAsset": {
+        "zh": "该素材不支持生成预览代理",
+        "en": "This asset doesn't support a preview proxy.",
+    },
+    "routeErr_signupClosed": {
+        "zh": "这个部署不开放自助注册,请向管理员要一个邀请码",
+        "en": "This deployment doesn't allow self sign-up. Ask an administrator for an invite code.",
+    },
+    "routeErr_lastDeploymentAdmin": {
+        "zh": "这是最后一个部署管理员,收回之后没人能管这个部署了",
+        "en": "This is the last deployment administrator; revoking it would leave nobody able to manage this deployment.",
+    },
+    "routeErr_avatarType": {
+        "zh": "仅支持 PNG / JPEG / WebP 图片",
+        "en": "Only PNG, JPEG, or WebP images are supported.",
+    },
+    "routeErr_emptyFile": {
+        "zh": "空文件",
+        "en": "The file is empty.",
+    },
+    "routeErr_avatarTooLarge": {
+        "zh": "头像不能超过 4MB",
+        "en": "The avatar must be 4 MB or smaller.",
+    },
+    "routeErr_browserProfileNotFound": {
+        "zh": "浏览器档案不存在",
+        "en": "Browser profile not found.",
+    },
+    "routeErr_commentNotFound": {
+        "zh": "评论不存在",
+        "en": "Comment not found.",
+    },
+    "routeErr_denoiseEngineNotInstallable": {
+        "zh": "这个降噪引擎不需要安装,或者不存在",
+        "en": "This noise-reduction engine doesn't need installing, or doesn't exist.",
+    },
+    "routeErr_badGenerationKind": {
+        "zh": "kind 只能是 image 或 video",
+        "en": "kind must be image or video.",
+    },
+    "routeErr_comfyConnectFailed": {
+        "zh": "连接 ComfyUI 失败({base}):{detail}",
+        "en": "Could not connect to ComfyUI ({base}): {detail}",
+    },
+    "routeErr_comfyWorkflowParamsFailed": {
+        "zh": "读取 ComfyUI 工作流参数失败({base}):{detail}",
+        "en": "Could not read the ComfyUI workflow parameters ({base}): {detail}",
+    },
+    "routeErr_jobNotFound": {
+        "zh": "job 不存在",
+        "en": "Job not found.",
+    },
+    "routeErr_noteSourceNotFound": {
+        "zh": "来源不存在",
+        "en": "Source not found.",
+    },
+    "routeErr_noteTrashFirst": {
+        "zh": "请先将笔记移入回收站",
+        "en": "Move the note to the trash first.",
+    },
+    "routeErr_noteChangedBeforeDelete": {
+        "zh": "笔记状态已变化，请重新载入后再删除",
+        "en": "The note has changed. Reload it before deleting.",
+    },
+    "routeErr_noteVersionNotFound": {
+        "zh": "版本不存在",
+        "en": "Version not found.",
+    },
+    "routeErr_noNotifiableMembers": {
+        "zh": "该工作区没有可通知的成员",
+        "en": "This workspace has no members to notify.",
+    },
+    "routeErr_loginMethodNotConfigured": {
+        "zh": "该登录方式未配置",
+        "en": "This sign-in method isn't configured.",
+    },
+    "oauthLogin_expired": {
+        "zh": "登录请求已过期或不匹配,请回到 Mosael 重试。",
+        "en": "The sign-in request expired or doesn't match. Go back to Mosael and try again.",
+    },
+    "oauthLogin_deniedPage": {
+        "zh": "授权被拒绝,可以关闭本页。",
+        "en": "Authorization was denied. You can close this page.",
+    },
+    "oauthLogin_denied": {
+        "zh": "授权被拒绝:{detail}",
+        "en": "Authorization was denied: {detail}",
+    },
+    "oauthLogin_noCode": {
+        "zh": "提供方未返回授权码",
+        "en": "The provider didn't return an authorization code.",
+    },
+    "oauthLogin_noCodePage": {
+        "zh": "提供方未返回授权码,请回到 Mosael 重试。",
+        "en": "The provider didn't return an authorization code. Go back to Mosael and try again.",
+    },
+    "oauthLogin_failedPage": {
+        "zh": "登录失败,请回到 Mosael 查看原因。",
+        "en": "Sign-in failed. Go back to Mosael to see why.",
+    },
+    "oauthLogin_okPage": {
+        "zh": "登录成功,回到 Mosael 即可,本页可以关闭。",
+        "en": "Signed in. Go back to Mosael; you can close this page.",
+    },
+    "oauthLogin_tokenExchangeFailed": {
+        "zh": "换取令牌失败:{detail}",
+        "en": "Could not exchange the token: {detail}",
+    },
+    "oauthLogin_badIdToken": {
+        "zh": "id_token 无法解析",
+        "en": "The id_token couldn't be parsed.",
+    },
+    "oauthLogin_noSubject": {
+        "zh": "提供方未返回用户标识(sub)",
+        "en": "The provider didn't return a user identifier (sub).",
+    },
+    "routeErr_pluginConnectionNotFound": {
+        "zh": "插件接入不存在",
+        "en": "Plugin connection not found.",
+    },
+    "routeErr_pluginTokenExchangeFailed": {
+        "zh": "换令牌失败:{detail}",
+        "en": "Could not exchange the token: {detail}",
+    },
+    "routeErr_modelFileGone": {
+        "zh": "模型文件已不在,请重新导入。",
+        "en": "The model file is gone. Import it again.",
+    },
+    "routeErr_unknownSeparationEngine": {
+        "zh": "未知的分离引擎",
+        "en": "Unknown separation engine.",
+    },
+    "routeErr_paramGroupNotFound": {
+        "zh": "这条连接下没有这个参数组",
+        "en": "This connection has no such parameter group.",
+    },
+    "routeErr_paramGroupNameRequired": {
+        "zh": "给这份参数组起个名字",
+        "en": "Give this parameter group a name.",
+    },
+    "routeErr_paramGroupNameTaken": {
+        "zh": "这条连接下已经有同名的参数组了",
+        "en": "This connection already has a parameter group with that name.",
+    },
+    "routeErr_paramGroupInUse": {
+        "zh": "还有 {count} 个模型在使用这份参数模板，请先改回跟随目录",
+        "en": "{count} model(s) still use this parameter template. Switch them back to following the catalog first.",
+    },
+    "routeErr_unknownCapability": {
+        "zh": "未知能力",
+        "en": "Unknown capability.",
+    },
+    "routeErr_modelLacksCapability": {
+        "zh": "该模型不提供 {capability} 能力",
+        "en": "This model doesn't provide the {capability} capability.",
+    },
+    "routeErr_modelIdRequired": {
+        "zh": "模型 id 不能为空",
+        "en": "Model id can't be empty.",
+    },
+    "routeErr_modelNotInConnection": {
+        "zh": "该连接下没有这个模型",
+        "en": "This connection has no such model.",
+    },
+    "routeErr_notSubscriptionPlan": {
+        "zh": "该供应商不是订阅计划,不需要授权登录",
+        "en": "This provider isn't a subscription plan, so it doesn't need a sign-in.",
+    },
+    "routeErr_loginSessionEnded": {
+        "zh": "登录会话已结束",
+        "en": "The sign-in session has ended.",
+    },
+    "routeErr_loginStepNotWaiting": {
+        "zh": "这一步已经不在等待作答了",
+        "en": "This step is no longer waiting for an answer.",
+    },
+    "routeErr_tokenRefreshFailed": {
+        "zh": "令牌刷新失败:{detail}",
+        "en": "Token refresh failed: {detail}",
+    },
+    "routeErr_pricingNeedsKey": {
+        "zh": "这条连接还没有你的密钥,先填一把再来取目录报价",
+        "en": "This connection doesn't have your key yet. Add one before fetching catalog prices.",
+    },
+    "routeErr_providerLacksCapability": {
+        "zh": "该供应商不支持 {capability} 能力",
+        "en": "This provider doesn't support the {capability} capability.",
+    },
+    "routeErr_missingRequiredConfig": {
+        "zh": "缺少必要配置: {fields}",
+        "en": "Missing required settings: {fields}",
+    },
+    "routeErr_onlyOwnerCanShare": {
+        "zh": "只有它的主人可以共享或收回",
+        "en": "Only its owner can share it or stop sharing it.",
+    },
+    "routeErr_assetNotFound": {
+        "zh": "素材不存在",
+        "en": "Asset not found.",
+    },
+    "routeErr_voiceNotFound": {
+        "zh": "音色不存在",
+        "en": "Voice not found.",
+    },
+    "routeErr_referenceAudioMissing": {
+        "zh": "参考音频缺失",
+        "en": "The reference audio is missing.",
+    },
+    "routeErr_noSuchModel": {
+        "zh": "没有这个模型",
+        "en": "No such model.",
+    },
+    "routeErr_ttsSettingsNotApplied": {
+        "zh": "TTS 设置没有生效({detail})。改动已写入数据库,但这个进程读到的仍是旧值 —— 请检查后端日志。",
+        "en": "The TTS settings didn't take effect ({detail}). The change was saved to the database, but this process still reads the old values — check the backend logs.",
+    },
+    "routeErr_unknownEngine": {
+        "zh": "未知引擎",
+        "en": "Unknown engine.",
+    },
+    "routeErr_workflowTemplateAndGraph": {
+        "zh": "创建工作流时不能同时提交模板和自定义图",
+        "en": "When creating a workflow, send either a template or a custom graph, not both.",
+    },
+    "routeErr_notWorkflowFile": {
+        "zh": "不是有效的 Mosael 工作流文件",
+        "en": "This isn't a valid Mosael workflow file.",
+    },
+    "routeErr_workflowFileTooNew": {
+        "zh": "文件版本({version})比当前应用支持的更新,请升级应用后再导入",
+        "en": "The file version ({version}) is newer than this app supports. Update the app, then import it.",
+    },
+    "routeErr_workflowRevisionNotFound": {
+        "zh": "工作流修订不存在",
+        "en": "Workflow revision not found.",
+    },
+    "routeErr_judgeHostCodeNeedsAdmin": {
+        "zh": "把「本机执行代码」交给判断者需要这台机器的管理员权限 —— 它和工作流里的代码节点是同一个能力",
+        "en": "Letting the judge approve \"run code on this machine\" requires admin rights on this machine — it's the same capability as the code node in workflows.",
+    },
+    "routeErr_poemUnreachable": {
+        "zh": "今日诗词暂时不可达:{detail}",
+        "en": "The daily poem service is unreachable right now: {detail}",
+    },
+    # ---- B1 · 03_confirmable ----
+    "confirmErr_boardNotInWorkspace": {
+        "zh": "这个工作区里没有这张画板",
+        "en": "This workspace has no such board.",
+    },
+    "confirmErr_editBoardNeedsOps": {
+        "zh": "edit_board 需要一个非空的 operations 列表",
+        "en": "edit_board needs a non-empty operations list.",
+    },
+    "confirmErr_unknownBoardOp": {
+        "zh": "不支持的画板算子:{kind}",
+        "en": "Unsupported board operation: {kind}",
+    },
+    "confirmErr_blenderLocalOnly": {
+        "zh": "Blender 建模只在本机桌面版可用 —— Blender 要和 Mosael 跑在同一台电脑上。",
+        "en": "Blender modeling is only available in the local desktop app — Blender must run on the same computer as Mosael.",
+    },
+    "confirmErr_blenderNoCode": {
+        "zh": "没有要在 Blender 里执行的代码",
+        "en": "There is no code to run in Blender.",
+    },
+    "confirmErr_approverNotFound": {
+        "zh": "找不到批准这次操作的用户",
+        "en": "The user who approved this action can't be found.",
+    },
+    "confirmErr_blenderCodeFailed": {
+        "zh": "Blender 里的代码出错了:\n{detail}",
+        "en": "The code failed in Blender:\n{detail}",
+    },
+    "confirmErr_notAList": {
+        "zh": "{key} 要是一个列表",
+        "en": "{key} must be a list.",
+    },
+    "confirmErr_nothingToDelete": {
+        "zh": "{key} 是空的:没有要删的东西",
+        "en": "{key} is empty: there is nothing to delete.",
+    },
+    "confirmErr_tooManyToDelete": {
+        "zh": "一次最多删 {limit} 个,分几次来 —— 卡上列不下的话,批准的人并不知道自己批了什么",
+        "en": "Delete at most {limit} at a time; split it up — if the card can't list them all, the approver doesn't know what they're approving.",
+    },
+    "confirmErr_missingAssets": {
+        "zh": "这个工作区里找不到这些素材:{ids}",
+        "en": "These assets aren't in this workspace: {ids}",
+    },
+    "confirmErr_missingProjects": {
+        "zh": "这个工作区里找不到这些项目:{ids}",
+        "en": "These projects aren't in this workspace: {ids}",
+    },
+    "confirmErr_publishAccountNotFound": {
+        "zh": "发布账号不存在",
+        "en": "Publishing account not found.",
+    },
+    "confirmErr_assetNotFound": {
+        "zh": "素材不存在",
+        "en": "Asset not found.",
+    },
+    "confirmErr_httpOnly": {
+        "zh": "只能请求 http(s) 网址",
+        "en": "Only http(s) URLs can be requested.",
+    },
+    "confirmErr_browserHttpOnly": {
+        "zh": "浏览器只能打开 http(s) 网址",
+        "en": "The browser can only open http(s) URLs.",
+    },
+    "confirmErr_noTtsProvider": {
+        "zh": "没有配置可用于语音生成的真实供应商",
+        "en": "No provider is set up for speech generation.",
+    },
+    "confirmErr_badLine": {
+        "zh": "line 只能是 all / first / last",
+        "en": "line must be all, first, or last.",
+    },
+    "confirmErr_clipIdsNotArray": {
+        "zh": "clip_ids 要是一个数组(留空表示整条字幕轨)",
+        "en": "clip_ids must be an array (leave it empty for the whole subtitle track).",
+    },
+    "confirmErr_badOriginalAudio": {
+        "zh": "original_audio 只能是 {modes}",
+        "en": "original_audio must be one of {modes}.",
+    },
+    "confirmErr_assetNotInWorkspace": {
+        "zh": "这个工作区里没有这份素材",
+        "en": "This workspace has no such asset.",
+    },
+    "confirmErr_separateNeedsAudio": {
+        "zh": "只有音频或视频素材可以分离",
+        "en": "Only audio or video assets can be separated.",
+    },
+    "confirmErr_denoiseNeedsAudio": {
+        "zh": "只有音频或视频素材可以降噪",
+        "en": "Only audio or video assets can have noise reduced.",
+    },
+    "confirmErr_videoNotInWorkspace": {
+        "zh": "这个工作区里没有这份视频素材",
+        "en": "This workspace has no such video asset.",
+    },
+    "confirmErr_gifNeedsVideo": {
+        "zh": "只有视频素材可以转换为 GIF",
+        "en": "Only video assets can be converted to GIF.",
+    },
+    "confirmErr_gifBadParams": {
+        "zh": "GIF 参数格式不正确",
+        "en": "The GIF parameters are malformed.",
+    },
+    "confirmErr_gifParamsOutOfRange": {
+        "zh": "GIF 参数超出允许范围",
+        "en": "The GIF parameters are out of range.",
+    },
+    # ---- B1 · 04_aichat ----
+    "aiChat_labelDefault": {
+        "zh": "AI 调用",
+        "en": "AI call",
+    },
+    "aiChatErr_http": {
+        "zh": "{label}失败:{status} {detail}（模型 {model}）",
+        "en": "{label} failed: {status} {detail} (model {model})",
+    },
+    "aiChatErr_network": {
+        "zh": "{label}失败(网络/连接):{detail}",
+        "en": "{label} failed (network/connection): {detail}",
+    },
+    "aiChatErr_networkRetried": {
+        "zh": "{label}失败(网络/连接,已重试 {tries} 次仍失败):{detail}",
+        "en": "{label} failed (network/connection, still failing after {tries} retries): {detail}",
+    },
+    "aiChatErr_badShape": {
+        "zh": "{label}失败:供应商返回的结构不认识({detail})",
+        "en": "{label} failed: the provider returned a response in an unrecognized shape ({detail})",
+    },
+    "aiChatErr_gatewayNoClient": {
+        "zh": "{label}失败:OAuth Gateway 不支持复用调用方 HTTP 连接",
+        "en": "{label} failed: the OAuth gateway can't reuse the caller's HTTP connection.",
+    },
+    "aiChatErr_failed": {
+        "zh": "{label}失败:{detail}",
+        "en": "{label} failed: {detail}",
+    },
+    "aiChatDowngrade_rejected": {
+        "zh": "供应商明确拒绝了这一档",
+        "en": "The provider explicitly rejected this tier",
+    },
+    "aiChatDowngrade_empty": {
+        "zh": "这一档下返回了空正文",
+        "en": "This tier returned an empty body",
+    },
+    "providerErr_connectionMissing": {
+        "zh": "指定的供应商配置不存在或已停用",
+        "en": "The selected provider connection doesn't exist or is disabled.",
+    },
+    "providerErr_noConnection": {
+        "zh": "没有可用的 AI 供应商连接,请先在设置里添加并配置",
+        "en": "No AI provider connection is available. Add and configure one in Settings first.",
+    },
+    "providerErr_noKey": {
+        "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
+        "en": "Provider \"{name}\" doesn't have your key yet. Add it in Settings first.",
+    },
+    # ---- B1 · 05_domain ----
+    "collabErr_unknownSubjectType": {
+        "zh": "不支持的协作对象类型:{kind}",
+        "en": "Unsupported collaboration subject type: {kind}",
+    },
+    "collabErr_subjectNotFound": {
+        "zh": "协作对象不存在",
+        "en": "The item being discussed doesn't exist.",
+    },
+    "collabErr_commentEmpty": {
+        "zh": "评论不能为空",
+        "en": "The comment can't be empty.",
+    },
+    "collabErr_commentTooLong": {
+        "zh": "评论最多 5000 字",
+        "en": "A comment can be at most 5000 characters.",
+    },
+    "collabErr_moveOwnOnly": {
+        "zh": "只能移动自己发布的评论",
+        "en": "You can only move your own comments.",
+    },
+    "collabErr_moveCanvasOnly": {
+        "zh": "只有画布评论支持移动",
+        "en": "Only canvas comments can be moved.",
+    },
+    "collabErr_editOwnOnly": {
+        "zh": "只能编辑自己发布的评论",
+        "en": "You can only edit your own comments.",
+    },
+    "collabErr_commentLength": {
+        "zh": "评论需要包含 1 至 5000 字",
+        "en": "A comment must be 1 to 5000 characters.",
+    },
+    "collabErr_commentMalformed": {
+        "zh": "评论格式不合法",
+        "en": "The comment is malformed.",
+    },
+    "collabErr_deleteOwnOnly": {
+        "zh": "只能删除自己发布的评论",
+        "en": "You can only delete your own comments.",
+    },
+    "fontErr_badType": {
+        "zh": "只支持 .ttf / .otf / .ttc 字体文件(woff 无法用于导出)",
+        "en": "Only .ttf, .otf, or .ttc font files are supported (woff can't be used for export).",
+    },
+    "fontErr_tooLarge": {
+        "zh": "字体文件过大(上限 32MB)",
+        "en": "The font file is too large (limit 32 MB).",
+    },
+    "fontErr_empty": {
+        "zh": "字体文件为空",
+        "en": "The font file is empty.",
+    },
+    "fontErr_unreadable": {
+        "zh": "无法解析该字体文件,请确认它没有损坏",
+        "en": "The font file couldn't be read. Make sure it isn't corrupted.",
+    },
+    "hostCodeErr_localOnly": {
+        "zh": "不隔离执行只在本机桌面版可用 —— 远程部署上「这台电脑」是服务器,不是你的电脑。",
+        "en": "Running code without isolation is only available in the local desktop app — on a remote deployment, \"this computer\" is the server, not yours.",
+    },
+    "hostCodeErr_noPython": {
+        "zh": "找不到可用的 Python 解释器。",
+        "en": "No usable Python interpreter was found.",
+    },
+    "hostCodeErr_timeout": {
+        "zh": "代码执行超时({seconds}s)",
+        "en": "The code timed out after {seconds}s.",
+    },
+    "hostCodeErr_outputTooLarge": {
+        "zh": "代码输出超过上限({limit} KiB)",
+        "en": "The code output exceeds the limit ({limit} KiB).",
+    },
+    "hostCodeErr_failed": {
+        "zh": "代码执行出错:{detail}",
+        "en": "The code failed: {detail}",
+    },
+    "hostCodeErr_failedNoReason": {
+        "zh": "代码执行出错:子进程没有留下原因",
+        "en": "The code failed without giving a reason.",
+    },
+    "hostCodeErr_badOutput": {
+        "zh": "代码输出无法解析(请把结果赋给 output 变量)",
+        "en": "The code output couldn't be parsed (assign the result to the output variable).",
+    },
+    "jobErr_parentFinished": {
+        "zh": "父任务已结束,不能再派生任务",
+        "en": "The parent job has finished, so it can't start new jobs.",
+    },
+    "jobErr_alreadyFinished": {
+        "zh": "任务已结束,无法取消",
+        "en": "The job has already finished and can't be canceled.",
+    },
+    "jobErr_badReportStatus": {
+        "zh": "未知回报状态: {status}",
+        "en": "Unknown report status: {status}",
+    },
+    "jobErr_badLease": {
+        "zh": "执行器租约无效,请使用认领返回的 lease_token",
+        "en": "Invalid worker lease. Use the lease_token returned when the job was claimed.",
+    },
+    "lutErr_oneD": {
+        "zh": "这是 1D LUT,导出仅支持 3D LUT(.cube)",
+        "en": "This is a 1D LUT; export only supports 3D LUTs (.cube).",
+    },
+    "lutErr_badSize": {
+        "zh": ".cube 的 LUT_3D_SIZE 无效",
+        "en": "The .cube file has an invalid LUT_3D_SIZE.",
+    },
+    "lutErr_noSize": {
+        "zh": "不是有效的 .cube 文件(缺少 LUT_3D_SIZE)",
+        "en": "Not a valid .cube file (LUT_3D_SIZE is missing).",
+    },
+    "lutErr_sizeOutOfRange": {
+        "zh": "LUT_3D_SIZE={size} 超出支持范围 [2, 256]",
+        "en": "LUT_3D_SIZE={size} is outside the supported range [2, 256].",
+    },
+    "lutErr_tooFewRows": {
+        "zh": "数据行不足:期望 {expected} 行,实际 {actual} 行",
+        "en": "Not enough data rows: expected {expected}, found {actual}.",
+    },
+    "lutErr_badType": {
+        "zh": "只支持 .cube 3D LUT 文件",
+        "en": "Only .cube 3D LUT files are supported.",
+    },
+    "lutErr_tooLarge": {
+        "zh": "LUT 文件过大(上限 32MB)",
+        "en": "The LUT file is too large (limit 32 MB).",
+    },
+    "lutErr_notUtf8": {
+        "zh": ".cube 必须是 UTF-8 文本",
+        "en": "A .cube file must be UTF-8 text.",
+    },
+    "memberErr_userNotFound": {
+        "zh": "该用户名不存在;请对方先在登录页注册账号",
+        "en": "No such username. Ask them to sign up on the login page first.",
+    },
+    "memberErr_inviteSelf": {
+        "zh": "不能邀请自己",
+        "en": "You can't invite yourself.",
+    },
+    "memberErr_alreadyMember": {
+        "zh": "对方已是本工作区成员",
+        "en": "They're already a member of this workspace.",
+    },
+    "memberErr_invitePending": {
+        "zh": "已有待处理的邀请",
+        "en": "There's already a pending invitation.",
+    },
+    "memberErr_inviteNotFound": {
+        "zh": "邀请不存在",
+        "en": "Invitation not found.",
+    },
+    "memberErr_inviteHandled": {
+        "zh": "邀请已处理过",
+        "en": "This invitation has already been handled.",
+    },
+    "memberErr_notMember": {
+        "zh": "不是本工作区成员",
+        "en": "Not a member.",
+    },
+    "memberErr_lastOwnerDemote": {
+        "zh": "不能降级最后一个所有者",
+        "en": "Can't demote the last owner.",
+    },
+    "memberErr_lastOwnerRemove": {
+        "zh": "不能移除最后一个所有者",
+        "en": "Can't remove the last owner.",
+    },
+    "memberErr_lastDeploymentAdmin": {
+        "zh": "这是最后一个部署管理员 —— 先把管理员给别人,再删这个账号。",
+        "en": "This is the last deployment administrator — make someone else an administrator before deleting this account.",
+    },
+    "memberErr_sharedWorkspaces": {
+        "zh": "这些工作区里还有别人,不能跟着账号一起删:{names}。先转让或把他移出去。",
+        "en": "Other people are still in these workspaces, so they can't be deleted with the account: {names}. Transfer them or remove those people first.",
+    },
+    "noteErr_notFound": {
+        "zh": "笔记不存在",
+        "en": "Note not found.",
+    },
+    "noteErr_tagTooLong": {
+        "zh": "标签或专题名称不能超过 80 字",
+        "en": "Tag and topic names can be at most 80 characters.",
+    },
+    "noteErr_projectNotFound": {
+        "zh": "项目不存在",
+        "en": "Project not found.",
+    },
+    "noteErr_sourceNotInWorkspace": {
+        "zh": "引用来源不存在于当前工作区",
+        "en": "The referenced source isn't in this workspace.",
+    },
+    "noteErr_referencedTrashed": {
+        "zh": "引用的笔记已在回收站",
+        "en": "The referenced note is in the trash.",
+    },
+    "noteErr_versionNotFound": {
+        "zh": "引用版本不存在",
+        "en": "The referenced version doesn't exist.",
+    },
+    "noteErr_changedElsewhere": {
+        "zh": "笔记已被其他操作更新，请保留草稿并重新载入",
+        "en": "The note was changed elsewhere. Keep your draft and reload.",
+    },
+    "noteErr_restoreFirst": {
+        "zh": "请先从回收站恢复笔记",
+        "en": "Restore the note from the trash first.",
+    },
+    "noteErr_referencedTrashedRestore": {
+        "zh": "引用的笔记已在回收站，请先恢复笔记",
+        "en": "The referenced note is in the trash. Restore it first.",
+    },
+    "noteErr_rangeOrder": {
+        "zh": "结束时间必须晚于开始时间",
+        "en": "The end time must be after the start time.",
+    },
+    "noteErr_badUrl": {
+        "zh": "来源链接必须是有效网址",
+        "en": "The source link must be a valid URL.",
+    },
+    "noteErr_urlScheme": {
+        "zh": "来源链接必须是 http 或 https 地址",
+        "en": "The source link must be an http or https URL.",
+    },
+    "noteErr_sourceIdEmpty": {
+        "zh": "来源 ID 不能为空",
+        "en": "The source ID can't be empty.",
+    },
+    "permErr_deploymentAdminOnly": {
+        "zh": "这项设置属于整个部署,只有部署管理员能改",
+        "en": "This setting applies to the whole deployment; only a deployment administrator can change it.",
+    },
+    "permErr_providerNotFound": {
+        "zh": "供应商不存在",
+        "en": "Provider not found.",
+    },
+    "poemErr_noToken": {
+        "zh": "今日诗词没有返回 token",
+        "en": "The daily poem service returned no token.",
+    },
+    "poemErr_empty": {
+        "zh": "今日诗词返回了空句子",
+        "en": "The daily poem service returned an empty line.",
+    },
+    "poemErr_requestFailed": {
+        "zh": "请求失败:{detail}",
+        "en": "Request failed: {detail}",
+    },
+    "poemErr_unreachable": {
+        "zh": "今日诗词不可达",
+        "en": "The daily poem service is unreachable.",
+    },
+    "credLeaseErr_busy": {
+        "zh": "凭据正被另一次刷新占用,请重试",
+        "en": "The credential is being refreshed by another request. Try again.",
+    },
+    "credLeaseErr_superseded": {
+        "zh": "租约已被顶替,本次刷新结果不予写入",
+        "en": "The lease was taken over, so this refresh result wasn't saved.",
+    },
+    "credLeaseErr_expired": {
+        "zh": "租约已超时,本次刷新结果不予写入",
+        "en": "The lease expired, so this refresh result wasn't saved.",
+    },
+    "credLeaseErr_providerNotFound": {
+        "zh": "供应商不存在",
+        "en": "Provider not found.",
+    },
+    "credLeaseErr_badCredential": {
+        "zh": "凭据格式无法识别(缺少 type)",
+        "en": "Unrecognized credential format (missing \"type\").",
+    },
+    "providerHealth_credentialRejected": {
+        "zh": "凭据被拒",
+        "en": "Credentials rejected",
+    },
+    "providerErr_modelIdRequired": {
+        "zh": "模型 id 不能为空",
+        "en": "Model id can't be empty.",
+    },
+    "quotaErr_noUsageWindow": {
+        "zh": "响应里没有可识别的用量窗口",
+        "en": "The response has no recognizable usage window.",
+    },
+    "quotaErr_noQuotaWindow": {
+        "zh": "响应里没有可识别的额度窗口",
+        "en": "The response has no recognizable quota window.",
+    },
+    "quotaErr_missingField": {
+        "zh": "响应缺少 {field}",
+        "en": "The response is missing \"{field}\".",
+    },
+    "quotaErr_noQuota": {
+        "zh": "响应里没有可识别的额度",
+        "en": "The response has no recognizable quota.",
+    },
+    "quotaErr_credentialExpired": {
+        "zh": "凭据已过期。在对话里发一条消息会自动刷新;仍失败请重新授权登录。",
+        "en": "The credential has expired. Sending a chat message refreshes it automatically; if that still fails, sign in again.",
+    },
+    "quotaErr_forbidden": {
+        "zh": "该账号没有访问这个额度接口的权限",
+        "en": "This account isn't allowed to access this quota endpoint.",
+    },
+    "quotaErr_rateLimited": {
+        "zh": "对方限流,稍后再试",
+        "en": "Rate limited by the provider. Try again later.",
+    },
+    "quotaErr_notObject": {
+        "zh": "响应不是对象",
+        "en": "The response isn't a JSON object.",
+    },
+    "quotaErr_unsupported": {
+        "zh": "该供应商不提供额度查询",
+        "en": "This provider doesn't offer quota lookup.",
+    },
+    "quotaErr_notSignedIn": {
+        "zh": "尚未授权登录",
+        "en": "Not signed in yet.",
+    },
+    "quotaErr_requestFailed": {
+        "zh": "查询失败:{detail}",
+        "en": "Lookup failed: {detail}",
+    },
+    "quotaErr_unparseable": {
+        "zh": "响应无法解析:{detail}",
+        "en": "The response couldn't be parsed: {detail}",
+    },
+    "sceneErr_tooLargeGlb": {
+        "zh": "模型超出上限 {limit} MB。把贴图换成 KTX2、几何用 Draco 压一下(Mosael 都能解),或者在 Blender 里隐藏用不到的物体、把贴图降到 2K。",
+        "en": "The model exceeds the {limit} MB limit. Convert textures to KTX2 and compress geometry with Draco (Mosael can decode both), or hide unused objects in Blender and reduce textures to 2K.",
+    },
+    "sceneErr_tooLargeGlbSized": {
+        "zh": "模型超出上限 {limit} MB（这份 {actual} MB）。把贴图换成 KTX2、几何用 Draco 压一下(Mosael 都能解),或者在 Blender 里隐藏用不到的物体、把贴图降到 2K。",
+        "en": "The model exceeds the {limit} MB limit (this one is {actual} MB). Convert textures to KTX2 and compress geometry with Draco (Mosael can decode both), or hide unused objects in Blender and reduce textures to 2K.",
+    },
+    "sceneErr_tooLargeGltf": {
+        "zh": "模型超出上限 {limit} MB。改导出 GLB —— 内嵌 glTF 要整份解析，所以它的上限低得多。GLB 可以到 {glbLimit} MB。也可以在 Blender 里隐藏用不到的物体、把贴图降到 2K。",
+        "en": "The model exceeds the {limit} MB limit. Export GLB instead — embedded glTF has to be parsed whole, so its limit is much lower; GLB can go up to {glbLimit} MB. You can also hide unused objects in Blender and reduce textures to 2K.",
+    },
+    "sceneErr_tooLargeGltfSized": {
+        "zh": "模型超出上限 {limit} MB（这份 {actual} MB）。改导出 GLB —— 内嵌 glTF 要整份解析，所以它的上限低得多。GLB 可以到 {glbLimit} MB。也可以在 Blender 里隐藏用不到的物体、把贴图降到 2K。",
+        "en": "The model exceeds the {limit} MB limit (this one is {actual} MB). Export GLB instead — embedded glTF has to be parsed whole, so its limit is much lower; GLB can go up to {glbLimit} MB. You can also hide unused objects in Blender and reduce textures to 2K.",
+    },
+    "sceneErr_needsGltf2": {
+        "zh": "需要 glTF 2.0 格式的模型。",
+        "en": "The model must be in glTF 2.0 format.",
+    },
+    "sceneErr_tooDeep": {
+        "zh": "模型的结构嵌套太深，无法导入。",
+        "en": "The model is nested too deeply to import.",
+    },
+    "sceneErr_externalRefs": {
+        "zh": "请导出自包含的 GLB（或把资源内嵌进 glTF）—— 模型里引用的外部文件和网址不会被读取。",
+        "en": "Export a self-contained GLB (or embed resources in the glTF) — external files and URLs referenced by the model aren't read.",
+    },
+    "sceneErr_tooComplex": {
+        "zh": "模型有 {nodes} 个节点、{meshes} 个网格，超出实时编辑的上限（5000 / 2000）。请在 Blender 里合并物体或减少细分后重试。",
+        "en": "The model has {nodes} nodes and {meshes} meshes, over the real-time editing limit (5000 / 2000). Merge objects or reduce subdivision in Blender and try again.",
+    },
+    "sceneErr_badGlb": {
+        "zh": "这不是一个有效的 GLB 文件（文件头读不通）。",
+        "en": "This isn't a valid GLB file (its header can't be read).",
+    },
+    "sceneErr_unreadableModel": {
+        "zh": "无法读取这份模型:{detail}",
+        "en": "Couldn't read this model: {detail}",
+    },
+    "sceneErr_sceneNotFound": {
+        "zh": "3D 场景不存在",
+        "en": "3D scene not found.",
+    },
+    "sceneErr_modelNotInWorkspace": {
+        "zh": "导入的模型不属于这个工作区",
+        "en": "The imported model doesn't belong to this workspace.",
+    },
+    "sceneErr_changedKeepDraft": {
+        "zh": "场景已在别处被修改。请保留草稿并重新载入后再保存。",
+        "en": "Scene changed elsewhere. Keep your draft and reload before saving.",
+    },
+    "sceneErr_changed": {
+        "zh": "场景已在别处被修改",
+        "en": "Scene changed elsewhere.",
+    },
+    "sceneErr_usedByBoards": {
+        "zh": "还有画板在用这个场景:{names}。先把它们里面的这个 3D 节点删掉。",
+        "en": "Boards still use this scene: {names}. Delete the 3D node from them first.",
+    },
+    "sceneErr_modelNotFound": {
+        "zh": "模型不存在",
+        "en": "Model not found.",
+    },
+    "sceneErr_usedByScenes": {
+        "zh": "还有场景在用这份模型:{names}。先把它们里面的这件物体删掉。",
+        "en": "Scenes still use this model: {names}. Delete the object from them first.",
+    },
+    "sceneErr_objectOpNeedsId": {
+        "zh": "每个物体操作都需要一个 id",
+        "en": "Every object operation needs an id.",
+    },
+    "sceneErr_unknownViews": {
+        "zh": "不认识的视角 {views};可选 shot、{choices}",
+        "en": "Unknown view {views}; choose shot or one of {choices}",
+    },
+    "sceneErr_badRender": {
+        "zh": "render 只能是 {choices}",
+        "en": "render must be one of {choices}.",
+    },
+    "schedErr_workflowMissing": {
+        "zh": "任务绑定的工作流不存在",
+        "en": "The workflow bound to this task doesn't exist.",
+    },
+    "schedErr_unsupportedKind": {
+        "zh": "定时任务不支持这种任务:{kind}",
+        "en": "Scheduled tasks don't support this kind of task: {kind}",
+    },
+    "schedErr_badKind": {
+        "zh": "定时任务只能是:{kinds}",
+        "en": "A scheduled task must be one of: {kinds}",
+    },
+    "schedErr_busy": {
+        "zh": "这个任务上一次还没跑完",
+        "en": "The previous run of this task hasn't finished yet.",
+    },
+    "schedErr_disabled": {
+        "zh": "定时任务已停用",
+        "en": "The scheduled task is disabled.",
+    },
+    "schedErr_onceNeedsRunAt": {
+        "zh": "单次执行需要 run_at",
+        "en": "A one-time schedule needs run_at.",
+    },
+    "schedErr_intervalNeedsSeconds": {
+        "zh": "按间隔执行需要一个正的秒数",
+        "en": "An interval schedule needs a positive number of seconds.",
+    },
+    "schedErr_weeklyNeedsWeekday": {
+        "zh": "每周执行需要 weekday 0-6(周一为 0)",
+        "en": "A weekly schedule needs weekday 0-6 (Monday = 0).",
+    },
+    "schedErr_unsupportedTrigger": {
+        "zh": "不支持的触发方式:{trigger}",
+        "en": "Unsupported trigger type: {trigger}",
+    },
+    "schedErr_badTime": {
+        "zh": "time 必须是 HH:MM",
+        "en": "time must be HH:MM.",
+    },
+    "schedErr_badRunAt": {
+        "zh": "run_at 必须是 ISO 日期时间",
+        "en": "run_at must be an ISO datetime.",
+    },
+    "shareErr_unknownKind": {
+        "zh": "未知的资源类型:{kind}",
+        "en": "Unknown resource type: {kind}",
+    },
+    "webErr_emptyQuery": {
+        "zh": "query 不能为空",
+        "en": "query can't be empty.",
+    },
+    "webErr_searchFailed": {
+        "zh": "搜索请求失败: {detail}",
+        "en": "Search request failed: {detail}",
+    },
+    "webErr_publicOnly": {
+        "zh": "只能抓取公网 http/https 页面(已拦截内网/本机地址)",
+        "en": "Only public http/https pages can be fetched (private and local addresses are blocked).",
+    },
+    "webErr_redirectPrivate": {
+        "zh": "该页面跳转到了内网/本机地址,已拦截",
+        "en": "The page redirected to a private or local address, so it was blocked.",
+    },
+    "webErr_tooManyRedirects": {
+        "zh": "跳转次数过多",
+        "en": "Too many redirects.",
+    },
+    "webErr_fetchFailed": {
+        "zh": "抓取失败: {detail}",
+        "en": "Fetch failed: {detail}",
+    },
+    # ---- B1 · 06_integrations_media ----
+    "feishuErr_token": {
+        "zh": "获取 tenant_access_token 失败: {detail}",
+        "en": "Couldn't get a tenant_access_token: {detail}",
+    },
+    "feishuErr_sendText": {
+        "zh": "飞书发消息失败: {detail}",
+        "en": "Couldn't send the Feishu message: {detail}",
+    },
+    "feishuErr_download": {
+        "zh": "下载飞书资源失败({status})",
+        "en": "Couldn't download the Feishu resource ({status}).",
+    },
+    "feishuErr_qrUnsupported": {
+        "zh": "当前环境不支持扫码创建,请手动填写 App ID / App Secret。",
+        "en": "Creating the app by QR code isn't supported here. Enter the App ID and App Secret by hand.",
+    },
+    "feishuErr_noDeviceCode": {
+        "zh": "飞书未返回 device_code,扫码创建暂不可用,请手动创建应用。",
+        "en": "Feishu didn't return a device_code, so QR creation is unavailable for now. Create the app by hand.",
+    },
+    "feishuErr_sendCard": {
+        "zh": "飞书发卡片失败: {detail}",
+        "en": "Couldn't send the Feishu card: {detail}",
+    },
+    "volcErr_needsAkSk": {
+        "zh": "需要账号的 AK / SK 才能拉取音色列表",
+        "en": "The account's AK / SK are needed to fetch the voice list.",
+    },
+    "volcErr_notJson": {
+        "zh": "火山 OpenAPI 返回了非 JSON 响应({status})",
+        "en": "The Volcengine OpenAPI returned a non-JSON response ({status}).",
+    },
+    "volcErr_upstream": {
+        "zh": "{detail}",
+        "en": "{detail}",
+    },
+    "volcErr_unknown": {
+        "zh": "火山 OpenAPI 返回了未知错误",
+        "en": "The Volcengine OpenAPI returned an unknown error.",
+    },
+    "audioErr_extract": {
+        "zh": "取不出这份素材的声音:{detail}",
+        "en": "Couldn't extract the audio from this asset: {detail}",
+    },
+    "audioErr_replace": {
+        "zh": "没能把处理后的声音放回视频:{detail}",
+        "en": "Couldn't put the processed audio back into the video: {detail}",
+    },
+    "audioErr_ffmpegNoReason": {
+        "zh": "ffmpeg 没有说明原因",
+        "en": "ffmpeg gave no reason",
+    },
+    "stillErr_negativeTime": {
+        "zh": "时间不能是负数",
+        "en": "The time can't be negative.",
+    },
+    "stillErr_failed": {
+        "zh": "取帧失败",
+        "en": "Couldn't grab the frame.",
+    },
+    "stillErr_noFrame": {
+        "zh": "这个时间点上没有画面 —— 是不是超过片长了?",
+        "en": "There's no picture at this time — is it past the end?",
+    },
+    "gifErr_fps": {
+        "zh": "GIF 帧率要在 1–30 fps 之间",
+        "en": "The GIF frame rate must be between 1 and 30 fps.",
+    },
+    "gifErr_width": {
+        "zh": "GIF 宽度要在 64–1920 像素之间",
+        "en": "The GIF width must be between 64 and 1920 pixels.",
+    },
+    "gifErr_range": {
+        "zh": "GIF 起点不能为负数，时长必须大于 0",
+        "en": "The GIF start can't be negative, and its duration must be greater than 0.",
+    },
+    "gifErr_failed": {
+        "zh": "视频转 GIF 失败",
+        "en": "Couldn't convert the video to GIF.",
+    },
+    "gifErr_noOutput": {
+        "zh": "视频转 GIF 没有产生有效文件",
+        "en": "Converting the video to GIF produced no usable file.",
+    },
+    "renderErr_frameFailed": {
+        "zh": "取当前帧失败",
+        "en": "Couldn't grab the current frame.",
+    },
+    "renderErr_ffmpegExit": {
+        "zh": "FFmpeg 异常退出,退出码 {code}",
+        "en": "FFmpeg exited with code {code}",
+    },
     # ---- 发布平台 ----
     "platformDesc_douyin": {
         "zh": "由桌面端发布器用你已登录的抖音创作者账号自动上传;首次使用需在弹出的窗口里登录。",
@@ -2232,7 +3610,7 @@ def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any
 def tr(key: str, **params: object) -> str:
     """按**这次请求**的语言翻一个 key(语言由中间件放进 ContextVar,见 app/api/middleware)。
 
-    路由里直接写的报错(`HTTPException(detail=…)`)用它;领域错误用 LocalizedError。
+    路由里直接写的报错(HTTPException 的 detail)用它;领域错误用 LocalizedError。
     """
     return t(key, get_current_locale(), **params)
 

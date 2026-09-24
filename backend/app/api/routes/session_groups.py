@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 
+from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import SessionGroupCreate, SessionGroupOut, SessionGroupUpdate
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
@@ -56,6 +57,6 @@ def require_group(db: DbSession, user: CurrentUser, group_id: str) -> SessionGro
     """取一个当前用户看得见的分组。会话路由挪会话进组时也用它 —— 别处再写一遍就会漏鉴权。"""
     group = db.get(SessionGroup, group_id)
     if group is None:
-        raise HTTPException(status_code=404, detail="分组不存在")
+        raise HTTPException(status_code=404, detail=tr("routeErr_groupNotFound"))
     ensure_workspace_access(db, user, group.workspace_id)
     return group

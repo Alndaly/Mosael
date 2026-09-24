@@ -32,7 +32,7 @@ from typing import Any, Awaitable, Callable, TypeVar
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.core.i18n import get_current_locale
+from app.core.i18n import LocalizedError, get_current_locale
 from app.domain.plugins.manifest import LOCALE_ENV, expand
 
 #: 连接 + 握手 + 一次调用的**默认**总预算。和进程类插件的 60s 对齐。
@@ -42,8 +42,8 @@ MCP_TIMEOUT_SECONDS = 60
 T = TypeVar("T")
 
 
-class McpBridgeError(RuntimeError):
-    pass
+class McpBridgeError(LocalizedError, RuntimeError):
+    """MCP 这一侧没做成。带文案 key(`pluginErr_mcp*`);对面自己说的话走 `pluginErr_upstream`。"""
 
 
 class McpTimeout(McpBridgeError):
@@ -57,7 +57,7 @@ def is_mcp(manifest: dict[str, Any]) -> bool:
 def _spec(manifest: dict[str, Any]) -> dict[str, Any]:
     spec = manifest.get("mcp")
     if not isinstance(spec, dict):
-        raise McpBridgeError("MCP 插件必须声明 mcp 配置块(manifest.mcp)")
+        raise McpBridgeError("pluginErr_mcpNoBlock")
     return spec
 
 
@@ -68,7 +68,7 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
     if transport == "stdio":
         command = str(spec.get("command") or "").strip()
         if not command:
-            raise McpBridgeError("stdio 传输必须声明 command")
+            raise McpBridgeError("pluginErr_mcpStdioNoCommand")
         args = [str(a) for a in (spec.get("args") or []) if str(a).strip()]
         # 子进程环境:最小集 + 该插件自己的凭据。与进程类插件同一条规矩。
         child_env = {
@@ -94,7 +94,7 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
 
         url = expand(str(spec.get("url") or "").strip(), env)
         if not url:
-            raise McpBridgeError("http 传输必须声明 url")
+            raise McpBridgeError("pluginErr_mcpHttpNoUrl")
         headers = {str(k): expand(str(v), env) for k, v in (spec.get("headers") or {}).items()}
         #: 作者没自己指定的话,带上读的人用的语言 —— 这是 HTTP 里说这件事的标准方式。
         headers.setdefault("Accept-Language", get_current_locale())
@@ -104,7 +104,7 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
                     await session.initialize()
                     return await fn(session)
 
-    raise McpBridgeError(f"不支持的 MCP 传输方式: {transport}(支持 stdio / http)")
+    raise McpBridgeError("pluginErr_mcpBadTransport", transport=transport)
 
 
 def _sync(
@@ -120,9 +120,9 @@ def _sync(
     except McpBridgeError:
         raise
     except asyncio.TimeoutError as exc:
-        raise McpTimeout(f"MCP 插件响应超时({timeout:g}s)") from exc
+        raise McpTimeout("pluginErr_mcpTimeout", seconds=f"{timeout:g}") from exc
     except Exception as exc:  # noqa: BLE001 — 传输层的异常五花八门,统一成一句能看懂的
-        raise McpBridgeError(f"连接 MCP 插件失败: {type(exc).__name__}: {exc}"[:400]) from exc
+        raise McpBridgeError("pluginErr_mcpConnectFailed", detail=f"{type(exc).__name__}: {exc}"[:400]) from exc
 
 
 def discover_tools(manifest: dict[str, Any], env: dict[str, str] | None = None) -> list[dict[str, Any]]:
@@ -164,7 +164,10 @@ def call_tool(
         result = await session.call_tool(tool_name, payload)
         # mcp 2.0 起字段名统一为 snake_case(原 isError / structuredContent)。
         if getattr(result, "is_error", False):
-            raise McpBridgeError(_text(result) or f"MCP 工具 {tool_name} 返回错误")
+            said = _text(result)
+            if said:
+                raise McpBridgeError("pluginErr_upstream", detail=said)
+            raise McpBridgeError("pluginErr_mcpToolFailed", tool=tool_name)
         # structured_content 是 MCP 后来加的结构化返回;有就用它,没有就把文本块拼起来。
         structured = getattr(result, "structured_content", None)
         if isinstance(structured, dict):

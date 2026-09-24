@@ -16,6 +16,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.core import interpreter
 from app.ai.sidecar.adapters import AdapterError, run_turn
 from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE
@@ -56,8 +57,8 @@ ONBOARD_REGISTRATION_PATH = "/oauth/v1/app/registration"
 MENTION_RE = re.compile(r"^(@_user_\d+\s*)+")
 
 
-class FeishuError(RuntimeError):
-    pass
+class FeishuError(LocalizedError, RuntimeError):
+    """飞书这一侧没做成。带文案 key(`feishuErr_*`);飞书自己回的 msg / code 放进 `detail`。"""
 
 
 # --- tenant token cache (per bot, refreshed with safety margin) -------------
@@ -74,7 +75,7 @@ def get_tenant_access_token(bot: FeishuBot, force: bool = False) -> str:
     response = httpx.post(TOKEN_URL, json={"app_id": bot.app_id, "app_secret": bot.app_secret}, timeout=15.0)
     data = response.json()
     if data.get("code") != 0:
-        raise FeishuError(f"获取 tenant_access_token 失败: {data.get('msg') or data.get('code')}")
+        raise FeishuError("feishuErr_token", detail=data.get("msg") or data.get("code"))
     token = str(data["tenant_access_token"])
     with _token_lock:
         _token_cache[bot.id] = (token, time.time() + float(data.get("expire", 7200)))
@@ -102,7 +103,7 @@ def send_text(bot: FeishuBot, chat_id: str, text: str) -> None:
         {"receive_id": chat_id, "msg_type": "text", "content": json.dumps({"text": text})},
     )
     if data.get("code") != 0:
-        raise FeishuError(f"飞书发消息失败: {data.get('msg') or data.get('code')}")
+        raise FeishuError("feishuErr_sendText", detail=data.get("msg") or data.get("code"))
 
 
 # --- 反应(reaction)= 飞书的「对方正在输入」(前身项目同款) ----------------
@@ -177,7 +178,7 @@ def download_message_resource(bot: FeishuBot, message_id: str, file_key: str, ki
     if response.status_code == 401:  # token 半路过期
         response = _fetch(get_tenant_access_token(bot, force=True))
     if response.status_code != 200:
-        raise FeishuError(f"下载飞书资源失败({response.status_code})")
+        raise FeishuError("feishuErr_download", status=response.status_code)
     return response.content
 
 
@@ -602,14 +603,14 @@ def begin_onboarding(workspace_id: str, domain: str = "feishu") -> dict[str, Any
     base_url = ONBOARD_ACCOUNTS_URLS.get(domain, ONBOARD_ACCOUNTS_URLS["feishu"])
     init_res = _post_registration(base_url, {"action": "init"})
     if "client_secret" not in (init_res.get("supported_auth_methods") or []):
-        raise FeishuError("当前环境不支持扫码创建,请手动填写 App ID / App Secret。")
+        raise FeishuError("feishuErr_qrUnsupported")
     res = _post_registration(
         base_url,
         {"action": "begin", "archetype": "PersonalAgent", "auth_method": "client_secret", "request_user_info": "open_id"},
     )
     device_code = res.get("device_code")
     if not device_code:
-        raise FeishuError("飞书未返回 device_code,扫码创建暂不可用,请手动创建应用。")
+        raise FeishuError("feishuErr_noDeviceCode")
     state = {
         "phase": "waiting_scan",
         "qr_url": res.get("verification_uri_complete") or "",
@@ -692,7 +693,7 @@ def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any]) -> None:
         {"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
     )
     if data.get("code") != 0:
-        raise FeishuError(f"飞书发卡片失败: {data.get('msg') or data.get('code')}")
+        raise FeishuError("feishuErr_sendCard", detail=data.get("msg") or data.get("code"))
 
 
 def _feishu_origin(db: Session, session_id: str | None) -> tuple[FeishuBot, str] | None:

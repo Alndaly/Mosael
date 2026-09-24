@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Field, Manifest, manifest_of, render_name
+from app.core.i18n import tr
 
 #: 掩码回显。前端把它原样发回来时表示"这项没改"。
 MASK = "********"
@@ -26,14 +27,14 @@ MASK = "********"
 def get(db: Session, instance_id: str) -> PluginInstance:
     instance = db.get(PluginInstance, instance_id)
     if instance is None:
-        raise PluginDomainError("Plugin instance not found")
+        raise PluginDomainError("pluginErr_instanceNotFound")
     return instance
 
 
 def manifest_for(db: Session, instance: PluginInstance) -> Manifest:
     package = db.get(PluginPackage, instance.package_id)
     if package is None:
-        raise PluginDomainError("Plugin package not found")
+        raise PluginDomainError("pluginErr_packageNotFound")
     return manifest_of(package)
 
 
@@ -47,7 +48,7 @@ def create(
 ) -> PluginInstance:
     package = db.get(PluginPackage, package_id)
     if package is None:
-        raise PluginDomainError("Plugin not found")
+        raise PluginDomainError("pluginErr_notFound")
     manifest = manifest_of(package)
     # 「只能有一个」是**对这个人**而言的:接入归人(见 db.models.PluginInstance),
     # 别人接过不该挡住我接我自己的那一个。
@@ -57,7 +58,7 @@ def create(
         )
     ).all()
     if existing and not manifest.multiple:
-        raise PluginDomainError(f"「{manifest.name}」只能有一个连接")
+        raise PluginDomainError("pluginErr_singleConnection", name=manifest.name)
     merged = _fit_config(manifest, config or {})
     instance = PluginInstance(
         package_id=package_id,
@@ -152,7 +153,7 @@ def set_config(db: Session, instance: PluginInstance, values: dict[str, Any]) ->
     allowed = {spec.key for spec in manifest.config}
     unknown = sorted(set(values) - allowed)
     if unknown:
-        raise PluginDomainError(f"插件未声明这些配置项: {', '.join(unknown)}")
+        raise PluginDomainError("pluginErr_unknownConfig", keys=", ".join(unknown))
     previous_name = render_name(manifest, instance.config or {})
     instance.config = _fit_config(manifest, {**(instance.config or {}), **values})
     # 名字跟着配置走 —— 除非用户改过它。判据是"当前名字正是上一份配置生成的那个"。
@@ -201,7 +202,7 @@ def set_credentials(db: Session, instance: PluginInstance, values: dict[str, str
     allowed = {spec.key for spec in manifest.credentials}
     unknown = sorted(set(values) - allowed)
     if unknown:
-        raise PluginDomainError(f"插件未声明这些凭据项: {', '.join(unknown)}")
+        raise PluginDomainError("pluginErr_unknownCredentials", keys=", ".join(unknown))
     for key, value in values.items():
         if value == MASK:
             continue  # 掩码原样回传 = 这项没改;用户改别的字段时不会把 key 洗成一串星号
@@ -255,7 +256,7 @@ def set_permissions(db: Session, instance: PluginInstance, grants: dict[str, boo
     manifest = manifest_for(db, instance)
     unknown = sorted(set(grants) - set(manifest.permissions))
     if unknown:
-        raise PluginDomainError(f"插件未声明这些权限: {', '.join(unknown)}")
+        raise PluginDomainError("pluginErr_unknownPermissions", keys=", ".join(unknown))
     _sync_permissions(db, instance, manifest)
     for permission, granted in grants.items():
         row = db.get(PluginPermissionGrant, {"instance_id": instance.id, "permission": permission})
@@ -283,15 +284,15 @@ def blocked_reason(db: Session, instance: PluginInstance) -> str:
     在三处各写一句不一样的话。
     """
     if not instance.enabled:
-        return "未启用"
+        return tr("pluginBlocked_disabled")
     absent = missing_config(db, instance)
     if absent:
-        return f"缺少配置: {'、'.join(absent)}"
+        return tr("pluginBlocked_missingConfig", names=tr("punct_listSep").join(absent))
     absent = missing_credentials(db, instance)
     if absent:
-        return f"缺少凭据: {'、'.join(absent)}"
+        return tr("pluginBlocked_missingCredentials", names=tr("punct_listSep").join(absent))
     if not permissions_granted(db, instance):
-        return "权限未授予"
+        return tr("pluginBlocked_permissionsPending")
     return ""
 
 

@@ -22,16 +22,17 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.core.roles import role_at_least
 from app.core.usage_scope import bind_workspace
 from app.db.models import Asset, ProviderProfile, Sequence, User, WorkspaceMember
 
 
-class PermissionDenied(Exception):
+class PermissionDenied(LocalizedError):
     """是这个工作区的人,但角色不够。api 翻成 403。"""
 
 
-class NotVisible(Exception):
+class NotVisible(LocalizedError):
     """对他来说这个东西不存在(不是成员、或行本身没有)。api 翻成 **404 而不是 403** ——
     403 会告诉他"这个 id 是存在的",那正是要避免的泄漏。"""
 
@@ -145,7 +146,7 @@ def ensure_deployment_admin(db: Session, user: User) -> None:
     单机安装不受影响:那个人就是引导账号,库里第一个用户自动持有这一列。
     """
     if not user.is_deployment_admin:
-        raise PermissionDenied("这项设置属于整个部署,只有部署管理员能改")
+        raise PermissionDenied("permErr_deploymentAdminOnly")
 
 
 
@@ -199,5 +200,5 @@ def require_own_profile(db: Session, user: User, profile_id: str) -> ProviderPro
     """
     profile = db.get(ProviderProfile, profile_id)
     if profile is None or profile.owner_user_id != user.id:
-        raise NotVisible("供应商不存在")
+        raise NotVisible("permErr_providerNotFound")
     return profile

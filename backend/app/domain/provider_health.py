@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.core.i18n import tr
 from app.domain.provider_credentials import ResolvedConnection
 from app.core.http_retry import RetryingClient
 from app.domain.provider_presets import provider_definition
@@ -67,7 +68,7 @@ def probe(profile: ResolvedConnection) -> HealthResult:
         return HealthResult(supported=True, online=False, detail=_short(str(exc) or exc.__class__.__name__))
     # 401/403 说明**端点是通的**,只是凭据不对 —— 这与"服务没起"是两回事,得分开说。
     if response.status_code in (401, 403):
-        return HealthResult(supported=True, online=True, latency_ms=latency, detail="凭据被拒")
+        return HealthResult(supported=True, online=True, latency_ms=latency, detail=tr("providerHealth_credentialRejected"))
     if response.status_code >= 400:
         return HealthResult(
             supported=True, online=False, latency_ms=latency, detail=f"HTTP {response.status_code}"

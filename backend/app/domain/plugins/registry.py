@@ -60,7 +60,7 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
     还是某次成功之后留下的旧副本?
     """
     if not url.startswith(("http://", "https://")):
-        raise PluginDomainError("插件市场地址只能是 http/https")
+        raise PluginDomainError("pluginErr_marketBadScheme")
     try:
         # 市场列表是一段前台交互,不能继承 AI 供应商那套多次退避重试。远端挂掉时应在一次
         # 明确的超时后把错误交给界面,否则 15 秒会被放大数倍,用户只会一直看到骨架屏。
@@ -73,18 +73,18 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
             response.raise_for_status()
             payload = response.json()
     except httpx.HTTPError as exc:
-        raise PluginDomainError(f"打不开插件市场:{exc}") from exc
+        raise PluginDomainError("pluginErr_marketUnreachable", detail=str(exc)) from exc
     except ValueError as exc:
-        raise PluginDomainError("插件市场返回的不是合法 JSON") from exc
+        raise PluginDomainError("pluginErr_marketNotJson") from exc
     entries = payload.get("plugins") if isinstance(payload, dict) else payload
     if not isinstance(entries, list):
-        raise PluginDomainError("插件市场格式不对:应当是 {\"plugins\": [...]}")
+        raise PluginDomainError("pluginErr_marketBadShape", example='{"plugins": [...]}')
     return [entry for entry in entries if isinstance(entry, dict) and entry.get("id")]
 
 
 def _download(url: str) -> bytes:
     if not url.startswith(("http://", "https://")):
-        raise PluginDomainError("插件下载地址只能是 http/https")
+        raise PluginDomainError("pluginErr_downloadBadScheme")
     written = bytearray()
     try:
         with RetryingClient(timeout=DOWNLOAD_TIMEOUT_SECONDS, follow_redirects=True) as client:
@@ -93,9 +93,9 @@ def _download(url: str) -> bytes:
                 for chunk in response.iter_bytes():
                     written.extend(chunk)
                     if len(written) > MAX_ARCHIVE_BYTES:
-                        raise PluginDomainError("插件包超过大小上限")
+                        raise PluginDomainError("pluginErr_archiveTooLarge")
     except httpx.HTTPError as exc:
-        raise PluginDomainError(f"下载插件失败:{exc}") from exc
+        raise PluginDomainError("pluginErr_downloadFailed", detail=str(exc)) from exc
     return bytes(written)
 
 
@@ -111,13 +111,13 @@ def _safe_extract(archive: zipfile.ZipFile, target: Path) -> None:
     for info in archive.infolist():
         # 符号链接:高 16 位是 st_mode,0o120000 是 S_IFLNK。
         if (info.external_attr >> 16) & 0o170000 == 0o120000:
-            raise PluginDomainError(f"插件包里有符号链接,拒绝安装:{info.filename}")
+            raise PluginDomainError("pluginErr_archiveSymlink", name=info.filename)
         destination = (root / info.filename).resolve()
         if destination != root and not str(destination).startswith(str(root) + "/"):
-            raise PluginDomainError(f"插件包里有越界路径,拒绝安装:{info.filename}")
+            raise PluginDomainError("pluginErr_archivePathEscape", name=info.filename)
         total += info.file_size
         if total > MAX_UNPACKED_BYTES:
-            raise PluginDomainError("插件包解压后超过大小上限")
+            raise PluginDomainError("pluginErr_archiveUnpackedTooLarge")
     archive.extractall(target)
 
 
@@ -132,7 +132,7 @@ def _manifest_root(unpacked: Path) -> Path:
         return unpacked
     candidates = sorted(unpacked.rglob(MANIFEST_NAME), key=lambda p: len(p.parts))
     if not candidates:
-        raise PluginDomainError(f"这个包里没有 {MANIFEST_NAME},不是一个插件")
+        raise PluginDomainError("pluginErr_archiveNoManifest", manifest=MANIFEST_NAME)
     return candidates[0].parent
 
 
@@ -148,7 +148,7 @@ def inspect_archive(data: bytes) -> tuple[dict[str, Any], Path, Path]:
             _safe_extract(archive, workdir)
     except zipfile.BadZipFile as exc:
         shutil.rmtree(workdir, ignore_errors=True)
-        raise PluginDomainError("这不是一个合法的 zip 包") from exc
+        raise PluginDomainError("pluginErr_archiveNotZip") from exc
     except PluginDomainError:
         shutil.rmtree(workdir, ignore_errors=True)
         raise
@@ -158,7 +158,7 @@ def inspect_archive(data: bytes) -> tuple[dict[str, Any], Path, Path]:
         parse(raw, str(root))  # 只为校验:清单不合法的包直接挡在门外
     except (ManifestError, PluginDomainError, ValueError) as exc:
         shutil.rmtree(workdir, ignore_errors=True)
-        raise PluginDomainError(f"插件清单不合法:{exc}") from exc
+        raise PluginDomainError("pluginErr_manifestInvalid", detail=str(exc)) from exc
     return raw, root, workdir
 
 
@@ -173,7 +173,7 @@ def install_archive(data: bytes, plugins_dir: Path, *, overwrite: bool = False) 
         plugin_id = str(raw["id"])
         target = plugins_dir / plugin_id
         if target.exists() and not overwrite:
-            raise PluginDomainError(f"「{raw.get('name') or plugin_id}」已经装过了 —— 要装新版本请选「更新」")
+            raise PluginDomainError("pluginErr_alreadyInstalled", name=raw.get("name") or plugin_id)
         plugins_dir.mkdir(parents=True, exist_ok=True)
         if target.exists():
             shutil.rmtree(target)

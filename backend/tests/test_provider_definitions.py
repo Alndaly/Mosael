@@ -43,8 +43,8 @@ def test_registry_order_is_stable_and_vendor_ids_are_unique() -> None:
 @pytest.mark.parametrize(
     ("mapping", "message"),
     [
-        ({"label": "Broken", "capability_ids": ["telepathy"]}, "未知能力"),
-        ({"label": "Broken", "auth": ["password"]}, "未知鉴权方式"),
+        ({"label": "Broken", "capability_ids": ["telepathy"]}, "unknown capabilities"),
+        ({"label": "Broken", "auth": ["password"]}, "unknown auth types"),
         (
             {
                 "label": "Broken",
@@ -53,7 +53,7 @@ def test_registry_order_is_stable_and_vendor_ids_are_unique() -> None:
                     {"key": "token", "label": "Token again"},
                 ],
             },
-            "重复字段",
+            "duplicate fields",
         ),
     ],
 )

@@ -54,13 +54,13 @@ def use_source(source: Source) -> None:
 
 def sink() -> Sink:
     if _sink is None:
-        raise RuntimeError("插件产出的落点没有装配(见 app/main 的启动装配)")
+        raise RuntimeError("plugin artifact sink is not wired (see startup wiring in app/main)")
     return _sink
 
 
 def source() -> Source:
     if _source is None:
-        raise RuntimeError("插件输入的来源没有装配(见 app/main 的启动装配)")
+        raise RuntimeError("plugin input source is not wired (see startup wiring in app/main)")
     return _source
 
 
