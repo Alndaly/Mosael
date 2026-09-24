@@ -2,6 +2,20 @@
   .editor-workbench { --editor-control-height: 32px; }
   .editor-pane { border-inline-end: 1px solid var(--divider); }
   .editor-pane-header { min-height: 44px; }
+  /* 素材面板的列表:滚动条的位置**一直留着,而且两边各留一份**。
+   * 全局默认是滚动条平时宽 0、悬停才出来(见 design/tokens.css)—— 放在这儿,鼠标一移进
+   * 列表,右边就被滚动条吃掉一截,整列内容往左一跳,右边的留白也比左边窄。
+   * 这里改成始终是 thin 宽度、只把颜色藏起来,`both-edges` 在左边也留同样宽的一条,
+   * 左右留白于是始终对称;悬停/有焦点时再把滑块染出来。 */
+  .editor-pool-list {
+    scrollbar-gutter: stable both-edges;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .editor-pool-list:hover,
+  .editor-pool-list:focus-within {
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+  }
   .editor-mode-tab {
     display: inline-flex;
     align-items: center;

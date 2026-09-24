@@ -9,12 +9,15 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { TagsDialog } from "@/features/media/TagsDialog";
+import { ActiveTagChips, MediaTagFilter } from "@/features/media/MediaTagFilter";
+import { TagChips } from "@/features/media/TagChips";
+import { TAG_MATCHES, assetTags, matchesTags, tagCounts, type TagMatch } from "@/features/media/assetTags";
 import { useImagePreview } from "@/components/app/image-preview";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { cn } from "@/lib/utils";
 import { saveAssetToDisk } from "@/lib/download";
+import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { useDraggable } from "@dnd-kit/core";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
@@ -39,40 +42,32 @@ export function MediaPool({
   const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
-  const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
+  // 类型、标签筛选和素材库一个规矩:记住,切走再回来还在。键和素材库分开 —— 这里看的是
+  // 当前工程的素材,那边是整个工作区的,两处各筛各的。
+  const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("editor-pool-kind", "all", KIND_FILTERS);
   const [search, setSearch] = React.useState("");
-  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
-  // 当前(按类型过滤后的)素材里出现过的标签,去重排序 —— 只列真实存在的标签,避免筛出空结果。
-  const availableTags = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const asset of assets) {
-      if (kindFilter !== "all" && asset.kind !== kindFilter) continue;
-      for (const tag of asset.tags ?? []) if (tag) set.add(tag);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, "zh"));
-  }, [assets, kindFilter]);
-  // 选中的标签若因切换类型而不再存在,自动剔除,别留下永远筛不出东西的"幽灵标签"。
-  React.useEffect(() => {
-    setSelectedTags((current) => current.filter((tag) => availableTags.includes(tag)));
-  }, [availableTags]);
-  const toggleTag = (tag: string) =>
-    setSelectedTags((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]));
+  const tagCount = React.useMemo(() => tagCounts(assets), [assets]);
+  const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
+  // 存着一个已经没有素材带着的标签时当作没勾(usePersistentSet 自己验),面板不会空得莫名其妙。
+  const [tagFilter, setTagFilter] = usePersistentSet("editor-pool-tags", allTags);
+  const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("editor-pool-tag-match", "all", TAG_MATCHES);
   const visibleAssets = React.useMemo(() => {
     const query = search.trim().toLowerCase();
-    return assets.filter((asset) => {
-      const tags = asset.tags ?? [];
-      // 多选标签取交集(每个选中标签都得有),这样点得越多筛得越窄。
-      const matchesTags = selectedTags.length === 0 || selectedTags.every((tag) => tags.includes(tag));
-      return (
-        matchesTags &&
+    return assets.filter(
+      (asset) =>
+        matchesTags(asset, tagFilter, tagMatch) &&
         (kindFilter === "all" || asset.kind === kindFilter) &&
         (query === "" ||
           asset.name.toLowerCase().includes(query) ||
-          tags.some((tag) => tag.toLowerCase().includes(query)) ||
-          asset.kind.toLowerCase().includes(query))
-      );
-    });
-  }, [assets, kindFilter, search, selectedTags]);
+          assetTags(asset).some((tag) => tag.toLowerCase().includes(query)) ||
+          asset.kind.toLowerCase().includes(query)),
+    );
+  }, [assets, kindFilter, search, tagFilter, tagMatch]);
+  // 头上那个数要说清楚是什么:没筛就是「N 个素材」,筛了就是「剩几个 / 一共几个」。
+  const filtering = kindFilter !== "all" || tagFilter.length > 0 || search.trim() !== "";
+  const countLabel = filtering
+    ? t("mediaPoolCountFiltered").replace("{shown}", String(visibleAssets.length)).replace("{total}", String(assets.length))
+    : t("mediaPoolCount").replace("{count}", String(assets.length));
   const kindLabel: Record<KindFilter, string> = {
     all: t("kindAll"),
     video: t("kindVideo"),
@@ -103,10 +98,11 @@ export function MediaPool({
     onError: (error) => setDeleteError(String((error as Error).message)),
   });
   return (
-    // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
+    // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。头和筛选条左右都是 px-3;列表的左右留白
+    // 见 .editor-pool-list(滚动条的位置两边各留一份,左右才对称)。
     <section aria-label={t("media")} className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] editor-pane overflow-hidden bg-workspace-panel">
-      <div className="editor-pane-header flex items-center justify-between gap-2 px-4">
-        <span className="text-ui-xs tabular-nums text-muted-foreground">{assets.length}</span>
+      <div className="editor-pane-header flex items-center justify-between gap-2 px-3">
+        <span className="min-w-0 truncate text-ui-xs tabular-nums text-muted-foreground" data-pool-count>{countLabel}</span>
         <div className="ml-auto flex shrink-0 gap-1">
           {/* Keep import and recording reachable in every panel width. */}
           <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} title={t("import")} aria-label={t("import")}>
@@ -137,41 +133,25 @@ export function MediaPool({
           </Button>
         </div>
       </div>
-      <div className="grid gap-3 px-3 pb-3">
+      <div className="grid gap-2 px-3 pb-3">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input className="h-8 pl-8 text-ui-xs" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} aria-label={t("searchAssets")} />
           </div>
-          {availableTags.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={t("mediaTagFilter")} title={t("mediaTagFilter")} className={cn("relative shrink-0", selectedTags.length > 0 && "bg-accent text-accent-foreground")}>
-                  <Tag size={15} />
-                  {selectedTags.length > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1 text-ui-2xs text-primary-foreground">{selectedTags.length}</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-60 p-3">
-                <div className="flex max-h-60 flex-wrap gap-1.5 overflow-auto" role="group" aria-label={t("mediaTagFilter")}>
-                  {availableTags.map((tag) => (
-                    <button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => toggleTag(tag)} className={cn("rounded-md px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground", selectedTags.includes(tag) && "bg-accent text-accent-foreground")}>
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
+          {allTags.length > 0 && <MediaTagFilter compact counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
         </div>
+        <ActiveTagChips value={tagFilter} onChange={setTagFilter} match={tagMatch} />
+        {/* 四等分,字放不下就省略 —— 面板最窄 180px 时一格只有三十来像素,不能让字顶出格子。 */}
         <div className="grid grid-cols-4 gap-1" role="group" aria-label={t("mediaKindGroup")}>
           {KIND_FILTERS.map((kind) => (
-            <button key={kind} type="button" aria-pressed={kindFilter === kind} className={cn("flex h-8 min-w-0 cursor-pointer items-center justify-center rounded-md text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground", kindFilter === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")} onClick={() => setKindFilter(kind)}>
-              {kindLabel[kind]}
+            <button key={kind} type="button" aria-pressed={kindFilter === kind} title={kindLabel[kind]} className={cn("flex h-8 min-w-0 cursor-pointer items-center justify-center rounded-md px-1 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground", kindFilter === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")} onClick={() => setKindFilter(kind)}>
+              <span className="min-w-0 truncate">{kindLabel[kind]}</span>
             </button>
           ))}
         </div>
       </div>
-      <div className="grid content-start gap-1 overflow-auto px-2 pb-2 [&:has(>.empty-inline:only-child)]:content-stretch [&:has(>.empty-inline:only-child)]:h-full">
+      <div className="editor-pool-list grid content-start gap-1 overflow-y-auto px-1 pb-2 [&:has(>.empty-inline:only-child)]:content-stretch [&:has(>.empty-inline:only-child)]:h-full">
         {visibleAssets.map((asset) => (
           <ContextMenu key={asset.id}>
             <ContextMenuTrigger asChild>
@@ -246,6 +226,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      data-pool-item={asset.id}
       className="group/pool relative grid cursor-grab select-none grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-control active:cursor-grabbing"
       onDoubleClick={onAdd}
       title={`${asset.name} — ${t("addToTimeline")}`}
@@ -266,7 +247,12 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       </div>
       <div className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-medium">
         <strong>{asset.name}</strong>
-        <small className="timecode">{duration != null ? formatTimecode(duration) : t(asset.kind === "image" ? "kindImage" : asset.kind === "audio" ? "kindAudio" : "kindVideo")}</small>
+        {/* 标签和时长同一行,有没有标签行高都一样;挤不下的标签收成「+N」,面板拖到最窄时
+            标签先被截掉,不把行撑出面板。 */}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <small className="timecode shrink-0">{duration != null ? formatTimecode(duration) : t(asset.kind === "image" ? "kindImage" : asset.kind === "audio" ? "kindAudio" : "kindVideo")}</small>
+          <TagChips tags={assetTags(asset)} tone="surface" className="overflow-hidden" />
+        </span>
       </div>
       <button
         type="button"

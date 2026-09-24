@@ -27,7 +27,9 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/RecordingProvider";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
-import { MediaTagFilter, type TagMatch } from "./MediaTagFilter";
+import { MediaTagFilter } from "./MediaTagFilter";
+import { TAG_MATCHES, assetTags, matchesTags, tagCounts, type TagMatch } from "./assetTags";
+import { TagChips } from "./TagChips";
 import { TagsDialog } from "@/features/media/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -36,9 +38,6 @@ import { cn } from "@/lib/utils";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
-
-/** OpenAPI 里 tags 带默认值所以是可选字段;统一成数组再用。 */
-const assetTags = (asset: Asset): string[] => asset.tags ?? [];
 
 const SORT_KEYS = ["created", "updated", "name", "duration"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
@@ -204,11 +203,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     },
   });
 
-  const allTags = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const asset of assets.data ?? []) for (const tag of assetTags(asset)) set.add(tag);
-    return [...set].sort((a, b) => a.localeCompare(b, "zh-CN"));
-  }, [assets.data]);
+  const tagCount = React.useMemo(() => tagCounts(assets.data ?? []), [assets.data]);
+  const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
 
   // 标签筛选同理,而且可以同时勾几个。合法值是**动态的**(标签会被删),存着一个已经不存在的标签时
   // 当作没勾 —— 否则素材库会空得莫名其妙。
@@ -216,7 +212,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     "media-tags",
     assets.data === undefined ? undefined : allTags,
   );
-  const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("media-tag-match", "all", ["all", "any"]);
+  const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("media-tag-match", "all", TAG_MATCHES);
   // 「从起点进来」(统计页的素材总数):看的是**全部**素材 —— 记住的类型、标签筛选这回不作数,
   // 否则点「素材 128」进来只看到其中 12 条。排序、网格/列表是怎么看,不是看哪些,照旧。
   useSectionEntry("media", () => {
@@ -230,10 +226,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     const matched = (assets.data ?? []).filter(
       (asset) =>
         (kindFilter === "all" || asset.kind === kindFilter) &&
-        (tagFilter.length === 0 ||
-          (tagMatch === "all"
-            ? tagFilter.every((tag) => assetTags(asset).includes(tag))
-            : tagFilter.some((tag) => assetTags(asset).includes(tag)))) &&
+        matchesTags(asset, tagFilter, tagMatch) &&
         (query === "" ||
           asset.name.toLowerCase().includes(query) ||
           assetTags(asset).some((tag) => tag.toLowerCase().includes(query))),
@@ -335,7 +328,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   <SelectItem value="duration">{t("sortDuration")}</SelectItem>
                 </SelectContent>
               </Select>
-              {allTags.length > 0 && <MediaTagFilter tags={allTags} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
+              {allTags.length > 0 && <MediaTagFilter counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
             </div>
             {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
             <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
@@ -567,25 +560,7 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
           </span>
         )}
         {/* 标签叠在缩略图左下角(而非信息区),这样有无标签的卡片信息区一样高、栅格不错位。 */}
-        {assetTags(asset).length > 0 && (
-          <div className="absolute bottom-1.5 left-1.5 flex max-w-[70%] flex-wrap gap-1">
-            {assetTags(asset)
-              .slice(0, 2)
-              .map((tag) => (
-                <span
-                  className="max-w-full truncate rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-ui-2xs text-[#e8eaed]"
-                  key={tag}
-                >
-                  {tag}
-                </span>
-              ))}
-            {assetTags(asset).length > 2 && (
-              <span className="rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-ui-2xs text-[#e8eaed]">
-                +{assetTags(asset).length - 2}
-              </span>
-            )}
-          </div>
-        )}
+        <TagChips tags={assetTags(asset)} tone="overlay" className="absolute bottom-1.5 left-1.5 max-w-[70%] flex-wrap" />
       </div>
       <div className="grid min-w-0 flex-1 gap-1.5 px-0.5">
         <strong className="truncate text-ui-md font-semibold" title={asset.name}>
