@@ -291,6 +291,40 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "  ⚠️ 含{labels}节点(后果在本应用之外,撤不回)",
         "en": "  ⚠️ Includes {labels} nodes (their effects are outside this app and cannot be undone)",
     },
+    # ---- Blender 场景互通:领域报错(见 domain/blender,LocalizedError) ----
+    "blenderErr_notLocalDesktop": {"zh": "场景互通需要本机桌面后端与 Blender 运行在同一台电脑。", "en": "Scene sync needs the desktop backend and Blender running on the same computer."},
+    "blenderErr_connectionNotFound": {"zh": "找不到这个 Blender 连接。", "en": "This Blender connection wasn't found."},
+    "blenderErr_localOnly": {"zh": "场景互通仅支持本机 Blender。", "en": "Scene sync only works with Blender on this computer."},
+    "blenderErr_badPort": {"zh": "请将 Blender 连接端口设为 1–65535 的整数。", "en": "Set the Blender connection port to a whole number from 1 to 65535."},
+    "blenderErr_blocked": {"zh": "{reason}", "en": "{reason}"},
+    "blenderErr_noConnection": {"zh": "还没有连接 Blender:在插件页安装并启用「Blender MCP」,并在 Blender 里开启 MCP Add-on。", "en": "Blender isn't connected yet: install and enable “Blender MCP” on the Plugins page, then turn on the MCP add-on in Blender."},
+    "blenderErr_busy": {"zh": "正在与 Blender 同步,请稍后再试。", "en": "A sync with Blender is already running. Try again in a moment."},
+    "blenderErr_plugin": {"zh": "Blender 插件出错:{detail}", "en": "The Blender plugin failed: {detail}"},
+    "blenderErr_timeout": {"zh": "这一步等了 {seconds} 秒还没回来。Blender 那边很可能还在跑 —— 先切过去看一眼,不要立刻重试:重试会排在它后面,同样等不到。", "en": "This step didn't come back after {seconds} seconds. Blender is most likely still working — switch over and check before retrying; a retry would queue behind it and time out too."},
+    "blenderErr_unresponsive": {"zh": "Blender 没有响应,请检查 Add-on 连接。", "en": "Blender didn't respond. Check the add-on connection."},
+    "blenderErr_addonNotRunning": {"zh": "连不上 Blender。请先打开 Blender,并在 Blender MCP 附加组件里启动连接(3D 视图侧栏的 BlenderMCP 面板)。", "en": "Can't reach Blender. Open Blender and start the connection in the Blender MCP add-on (the BlenderMCP panel in the 3D viewport sidebar)."},
+    "blenderErr_syncFailed": {"zh": "Blender 未完成同步:{detail}", "en": "Blender didn't finish syncing: {detail}"},
+    "blenderErr_syncFailedNoDetail": {"zh": "Blender 未完成同步,请检查 Blender Add-on 后重试。", "en": "Blender didn't finish syncing. Check the Blender add-on and try again."},
+    "blenderErr_tooLarge": {"zh": "Blender 返回的数据过大。", "en": "Blender returned too much data."},
+    "blenderErr_unreadable": {"zh": "Blender 同步结果无法读取,请重试。", "en": "The sync result from Blender couldn't be read. Try again."},
+    "blenderErr_transferNotFound": {"zh": "找不到这次同步记录。", "en": "This sync record wasn't found."},
+    "blenderErr_shotNoCamera": {"zh": "镜头「{name}」找不到对应的机位。", "en": "Shot “{name}” has no matching camera."},
+    "blenderErr_sceneChanged": {"zh": "场景已变更,请等待保存完成后重新发送。", "en": "The scene has changed. Wait for it to save, then send again."},
+    "blenderErr_shotNotFound": {"zh": "找不到这个镜头。", "en": "This shot wasn't found."},
+    "blenderErr_sendFirst": {"zh": "请先成功发送一个场景。", "en": "Send a scene successfully first."},
+    "blenderErr_noModel": {"zh": "Blender 没有生成可接收的模型,请重试。", "en": "Blender didn't produce a model that can be received. Try again."},
+    "blenderErr_shotOutOfRange": {"zh": "Blender 镜头超出当前场景支持范围,未导入。", "en": "The Blender shot is outside what this scene supports and wasn't imported."},
+    "blenderErr_noExport": {"zh": "Blender 没有导出可用的模型,请重试。", "en": "Blender didn't export a usable model. Try again."},
+    "blenderErr_noRender": {"zh": "Blender 没有渲出画面,请检查 Add-on 连接后重试。", "en": "Blender didn't render an image. Check the add-on connection and try again."},
+    "blenderErr_unknownView": {"zh": "不认识的视角 {name};可选 {choices},或者写「方位角/仰角」如 120/25", "en": "Unknown view {name}; use one of {choices}, or “azimuth/elevation” such as 120/25"},
+    "blenderErr_elevationRange": {"zh": "仰角要在 -89 到 89 之间,给的是 {value}", "en": "Elevation must be between -89 and 89; got {value}"},
+    "blenderErr_shadingChoice": {"zh": "shading 只能是 {choices}", "en": "shading must be one of {choices}"},
+    "blenderErr_zoomRange": {"zh": "zoom 要在 {low} 到 {high} 之间,给的是 {value}", "en": "zoom must be between {low} and {high}; got {value}"},
+    "blenderErr_noCode": {"zh": "没有要执行的代码", "en": "There's no code to run"},
+    "blenderErr_cantReadScene": {"zh": "无法读取 Blender 场景,请在 Blender 中开启 MCP Add-on。", "en": "Couldn't read the Blender scene. Turn on the MCP add-on in Blender."},
+    "blenderErr_interruptedByRestart": {"zh": "后端重启,这次同步没有完成。", "en": "The backend restarted, so this sync didn't finish."},
+    "blenderErr_projectNotFound": {"zh": "找不到这次同步的 Blender 工程文件。", "en": "The Blender project file for this sync wasn't found."},
+    "blenderErr_staleRevision": {"zh": "场景已更新到修订 {revision},请先 get_scene 再导入。", "en": "The scene is now at revision {revision}; call get_scene before importing."},
     "confirm_blenderExecute": {
         "zh": "⚠️ 在你的 Blender 里执行建模代码({lines} 行){purpose} —— Blender 的 Python 不是沙箱,可读写本机文件;执行前已压撤销点,可在 Blender 里 ⌘Z",
         "en": "⚠️ Run modelling code in your Blender ({lines} lines){purpose} — Blender's Python is not a sandbox and can read and write local files; an undo point was pushed first, so ⌘Z works in Blender",
@@ -1374,6 +1408,34 @@ def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any
         return text.format(**(params or {}))
     except (KeyError, IndexError, ValueError):
         return _drop_placeholders(text)
+
+
+def tr(key: str, **params: object) -> str:
+    """按**这次请求**的语言翻一个 key(语言由中间件放进 ContextVar,见 app/api/middleware)。
+
+    路由里直接写的报错(`HTTPException(detail=…)`)用它;领域错误用 LocalizedError。
+    """
+    return t(key, get_current_locale(), **params)
+
+
+class LocalizedError(Exception):
+    """带文案 key 的错误:领域里只说「是哪一种」和参数,**不拼句子**;变成文字时按当时的语言翻。
+
+    `str(exc)` 取的是 ContextVar 里的语言 —— 在请求里就是请求方的语言,在后台线程里是缺省语言。
+    所以各领域那些「`{"detail": str(exc)}`」的出口不用改,换成它就自动跟着界面语言走。
+
+    此前 Blender、插件等领域的报错是写死的中文句子:英文界面里弹出来的是中文,中间还夹着上游
+    原样透传的英文(「Blender 未完成同步:Error executing code: Could not connect to Blender…」)。
+    上游给的原文作为参数(通常叫 `detail`)放进翻好的句子里,不在领域里拼接。
+    """
+
+    def __init__(self, key: str, **params: object) -> None:
+        super().__init__(key)
+        self.key = key
+        self.params = params
+
+    def __str__(self) -> str:
+        return t(self.key, get_current_locale(), **self.params)
 
 
 #: 状态字典里放模板参数的那一栏。翻完就摘掉 —— 它是给翻译用的,不该出现在 API 响应里。

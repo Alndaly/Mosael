@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from sqlalchemy import select
@@ -27,7 +27,7 @@ def check(instance_id: str, db: DbSession, user: CurrentUser):
         result = bridge.call(db, instance, 'get_scene_info', {'user_prompt': '检查 Blender 连接'})
     # An upstream socket error is sometimes returned as JSON rather than MCP isError.
     if 'objects' not in result or result.get('error'):
-        raise HTTPException(502, '无法读取 Blender 场景，请在 Blender 中开启 MCP Add-on。')
+        raise bridge.upstream_failure(result.get('error'), 'blenderErr_cantReadScene')
     return {'name': result.get('name', 'Blender'), 'object_count': result.get('object_count', len(result['objects']))}
 
 
@@ -78,7 +78,7 @@ def project(scene_id: str, transfer_id: str, workspace_id: str, db: DbSession, u
     folder, record = bridge.load(get_scene(db, workspace_id, scene_id), user, transfer_id)
     path = folder / record.get('latest_blend', 'scene.blend')
     if not path.is_file() or not path.resolve().is_relative_to(folder.resolve()):
-        raise HTTPException(404, 'Blender project not found')
+        raise bridge.BlenderNotFound('blenderErr_projectNotFound')
     return FileResponse(path, filename='Mosael.blend', media_type='application/octet-stream', headers={'Cache-Control': 'private, no-store'})
 
 

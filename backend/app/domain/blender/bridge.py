@@ -16,14 +16,16 @@ from pathlib import Path
 from uuid import UUID, uuid4
 from pydantic import ValidationError
 from app.core.config import settings
+from app.core.i18n import LocalizedError, t
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
 from app.domain.scene_types import SceneContent
 from app.domain.scenes import create_scene, import_model, validate_model_file
 from .scripts import command
 
-class BlenderDomainError(ValueError):
-    """Blender 互通说不行。`status` 由子类给,边界照着翻(见 main.py)。"""
+class BlenderDomainError(LocalizedError):
+    """Blender 互通说不行。带文案 key(`blenderErr_*`,见 core/i18n),按请求方的语言翻;
+    `status` 由子类给,边界照着翻(见 main.py)。"""
 
     status = 422
 
@@ -56,6 +58,24 @@ class BlenderUnavailable(BlenderDomainError):
     status = 502
 
 
+#: Blender MCP Add-on 没开、端口不对时,上游原样回的那句话。认出它就换成一句能照着做的话。
+_ADDON_NOT_RUNNING = "could not connect to blender"
+
+
+def upstream_failure(text: object, empty_key: str, framed: str = "blenderErr_syncFailed") -> BlenderUnavailable:
+    """Blender 那边没做成:把上游回的原文变成一条带 key 的错误。
+
+    最常见的「Add-on 没开」认出来,给一句照着做就行的话;别的原文放进翻好的句子里当 `detail`
+    (它是上游的话,我们不翻、也不猜);什么都没回就用 `empty_key`。
+    """
+    detail = str(text or "").strip()
+    if not detail:
+        return BlenderUnavailable(empty_key)
+    if _ADDON_NOT_RUNNING in detail.lower():
+        return BlenderUnavailable("blenderErr_addonNotRunning")
+    return BlenderUnavailable(framed, detail=detail[:600])
+
+
 PACKAGE = 'dev.mosael.blender'
 _locks: dict[str, threading.Lock] = {}
 _guard = threading.Lock()
@@ -63,20 +83,20 @@ _guard = threading.Lock()
 
 def connection(db, user, instance_id):
     if not settings.local_desktop:
-        raise BlenderConflict('场景互通需要本机桌面后端与 Blender 运行在同一台电脑。')
+        raise BlenderConflict('blenderErr_notLocalDesktop')
     instance = db.get(PluginInstance, instance_id)
     if not instance or instance.owner_user_id != user.id or instance.package_id != PACKAGE:
-        raise BlenderNotFound('Blender connection not found')
+        raise BlenderNotFound('blenderErr_connectionNotFound')
     if instance.config.get('BLENDER_HOST', '127.0.0.1') not in ('localhost', '127.0.0.1', '::1'):
-        raise BlenderDomainError('场景互通仅支持本机 Blender。')
+        raise BlenderDomainError('blenderErr_localOnly')
     try:
         if not 1 <= int(instance.config.get('BLENDER_PORT', '9876')) <= 65535:
             raise ValueError()
     except (TypeError, ValueError):
-        raise BlenderDomainError('请将 Blender 连接端口设为 1–65535 的整数。') from None
+        raise BlenderDomainError('blenderErr_badPort') from None
     blocked = instances.blocked_reason(db, instance)
     if blocked:
-        raise BlenderConflict(blocked)
+        raise BlenderConflict('blenderErr_blocked', reason=blocked)
     return instance
 
 
@@ -93,14 +113,14 @@ def resolve(db, user, instance_id=''):
         PluginInstance.owner_user_id == user.id, PluginInstance.package_id == PACKAGE,
         PluginInstance.enabled.is_(True))).all()
     if not rows:
-        raise BlenderNotFound('还没有连接 Blender:在插件页安装并启用「Blender MCP」,并在 Blender 里开启 MCP Add-on。')
-    reasons = []
+        raise BlenderNotFound('blenderErr_noConnection')
+    reasons: list[BlenderDomainError] = []
     for row in rows:
         try:
             return connection(db, user, row.id)
         except BlenderDomainError as exc:
-            reasons.append(str(exc))
-    raise BlenderConflict(reasons[0])
+            reasons.append(exc)
+    raise BlenderConflict(reasons[0].key, **reasons[0].params)
 
 
 @contextmanager
@@ -108,7 +128,7 @@ def exclusive(instance_id):
     with _guard:
         lock = _locks.setdefault(instance_id, threading.Lock())
     if not lock.acquire(blocking=False):
-        raise BlenderConflict('正在与 Blender 同步，请稍后再试。')
+        raise BlenderConflict('blenderErr_busy')
     try:
         yield
     finally:
@@ -141,16 +161,13 @@ def call(db, instance, tool, payload, workspace_id=None, timeout=BLENDER_SYNC_TI
         result = tools.invoke(db, instance.id, tool, payload,
                               workspace_id=workspace_id, timeout=timeout)
     except PluginDomainError as exc:
-        raise BlenderConflict(str(exc)) from exc
+        raise BlenderConflict('blenderErr_plugin', detail=str(exc)) from exc
     if result.status != 'succeeded':
         # **「我等得不够久」和「对面坏了」是两件事。** 判据用**实际等了多久**,不去嗅错误
         # 文本 —— 前者是事实,后者是措辞,而措辞会变。
         if time.monotonic() - started >= timeout - 1:
-            raise BlenderTimeout(
-                f'这一步等了 {int(timeout)} 秒还没回来。Blender 那边很可能**还在跑** —— '
-                '先切过去看一眼,不要立刻重试:重试会排在它后面,同样等不到。'
-            )
-        raise BlenderUnavailable(result.error or 'Blender 未响应，请检查 Add-on 连接。')
+            raise BlenderTimeout('blenderErr_timeout', seconds=int(timeout))
+        raise upstream_failure(result.error, 'blenderErr_unresponsive')
     output = result.output
     # FastMCP wraps string return values in structuredContent.result.
     if isinstance(output.get('result'), str):
@@ -181,7 +198,7 @@ def load(scene, user, transfer_id):
         if record['owner'] != user.id:
             raise ValueError()
     except (ValueError, OSError, KeyError):
-        raise BlenderNotFound('Transfer not found') from None
+        raise BlenderNotFound('blenderErr_transferNotFound') from None
     return folder, record
 
 
@@ -208,16 +225,16 @@ def execute(db, instance, operation, payload, workspace_id, timeout=BLENDER_SYNC
     result = Path(payload['result_path'])
     # Upstream may return errors as ordinary text. A unique completion file is mandatory.
     if not result.is_file():
-        raise BlenderUnavailable('Blender 未完成同步：'+str(output.get('text', '请检查 Blender Add-on，并重试。'))[:600])
+        raise upstream_failure(output.get('text'), 'blenderErr_syncFailedNoDetail', framed='blenderErr_syncFailed')
     if result.stat().st_size > 4*1024*1024:
-        raise BlenderUnavailable('Blender 返回的数据过大。')
+        raise BlenderUnavailable('blenderErr_tooLarge')
     try:
         value = json.loads(result.read_text(encoding='utf-8'))
         if not isinstance(value, dict):
             raise ValueError()
         return value
     except (OSError, ValueError) as exc:
-        raise BlenderUnavailable('Blender 同步结果无法读取，请重试。') from exc
+        raise BlenderUnavailable('blenderErr_unreadable') from exc
 
 
 def shots_with_frames(content):
@@ -235,7 +252,7 @@ def shots_with_frames(content):
     for shot in content.get('shots', []):
         camera = cameras.get(shot.get('camera_id'))
         if camera is None:
-            raise BlenderDomainError('镜头「%s」找不到对应的机位。' % shot.get('name', ''))
+            raise BlenderDomainError('blenderErr_shotNoCamera', name=shot.get('name', ''))
         track = camera.get('track') or [{
             'time': 0, 'position': camera.get('position', [8, 5, 8]),
             'target': camera.get('target', [0, 1, 0]), 'fov': camera.get('fov', 45),
@@ -289,9 +306,9 @@ def send(db, user, scene, instance_id, revision, shot_id):
 
     instance = resolve(db, user, instance_id)
     if revision != scene.revision:
-        raise BlenderConflict('场景已变更，请等待保存完成后重新发送。')
+        raise BlenderConflict('blenderErr_sceneChanged')
     if shot_id not in {s['id'] for s in scene.content['shots']}:
-        raise BlenderDomainError('Shot not found')
+        raise BlenderDomainError('blenderErr_shotNotFound')
     with exclusive(instance.id):
         transfer_id = str(uuid4())
         folder = root(scene) / transfer_id
@@ -347,7 +364,7 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
     folder, record = load(scene, user, transfer_id)
     instance = connection(db, user, record['instance_id'])
     if record['status'] != 'ready':
-        raise BlenderConflict('请先成功发送一个场景。')
+        raise BlenderConflict('blenderErr_sendFirst')
     with exclusive(instance.id):
         attempt = folder / str(uuid4())
         attempt.mkdir()
@@ -356,7 +373,7 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
             'blend_path': str(attempt / 'scene.blend'), 'result_path': str(attempt / 'result.json')}, scene.workspace_id)
         exported = attempt / 'model.glb'
         if not exported.is_file():
-            raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。')
+            raise BlenderUnavailable('blenderErr_noModel')
         validate_model_file(exported)
         # 模型先进库(建行归场景域,ADR-0003)。它归**工作区**,所以两条路(落到当前场景 /
         # 建一个新场景)都是同一步 —— 此前新建那条要等场景有了 id 才挂得上模型,于是多出
@@ -376,7 +393,7 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
                 'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id},
                             *received['objects']]})
         except (ValidationError, KeyError) as exc:
-            raise BlenderDomainError('Blender 镜头超出当前场景支持范围，未导入。') from exc
+            raise BlenderDomainError('blenderErr_shotOutOfRange') from exc
         if into_current:
             record.update(warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
             write_record(folder, record)
@@ -410,7 +427,7 @@ def pull(db, user, workspace_id, instance_id):
                 'result_path': str(folder / 'pulled.json')}, workspace_id)
             exported = folder / 'model.glb'
             if not exported.is_file():
-                raise BlenderUnavailable('Blender 没有导出可用的模型，请重试。')
+                raise BlenderUnavailable('blenderErr_noExport')
             validate_model_file(exported)
             with exported.open('rb') as stream:
                 model_id = import_model(db, workspace_id, 'Blender model', stream,
@@ -455,7 +472,7 @@ def reconcile_orphaned_transfers() -> int:
             continue
         if record.get('status') != 'sending':
             continue
-        record.update(status='failed', error='后端重启,这次同步没有完成')
+        record.update(status='failed', error=t('blenderErr_interruptedByRestart'))
         try:
             write_record(path.parent, record)
         except OSError:

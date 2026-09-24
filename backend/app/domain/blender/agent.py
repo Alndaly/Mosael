@@ -51,13 +51,11 @@ def _angles(name: str) -> tuple[float, float]:
         return LOOK_VIEWS[name] or (0.0, 0.0)
     matched = ANGLE_VIEW.match(name.strip())
     if matched is None:
-        raise BlenderDomainError(
-            f"不认识的视角 {name};可选 {'、'.join(LOOK_VIEWS)},或者写「方位角/仰角」如 120/25"
-        )
+        raise BlenderDomainError("blenderErr_unknownView", name=name, choices="、".join(LOOK_VIEWS))
     elevation = float(matched.group(2))
     if not -89 <= elevation <= 89:
         # ±90° 时相机的上方向退化(正对下方看时"哪边是上"没有定义),画面会莫名其妙地转。
-        raise BlenderDomainError(f"仰角要在 -89 到 89 之间,给的是 {elevation}")
+        raise BlenderDomainError("blenderErr_elevationRange", value=elevation)
     return float(matched.group(1)), elevation
 
 
@@ -94,10 +92,10 @@ def look(db, user, workspace_id: str, *, views: list[str], objects: list[str] | 
     wanted = list(dict.fromkeys(views or ['overview']))[:LOOK_LIMIT]
     angles = [_angles(name) for name in wanted]   # 不认识的在这里就报出来,不白跑一趟 Blender
     if shading not in LOOK_SHADINGS:
-        raise BlenderDomainError(f"shading 只能是 {' 或 '.join(LOOK_SHADINGS)}")
+        raise BlenderDomainError("blenderErr_shadingChoice", choices=" / ".join(LOOK_SHADINGS))
     low, high = ZOOM_RANGE
     if not low <= zoom <= high:
-        raise BlenderDomainError(f"zoom 要在 {low} 到 {high} 之间,给的是 {zoom}")
+        raise BlenderDomainError("blenderErr_zoomRange", low=low, high=high, value=zoom)
     instance = resolve(db, user, instance_id)
     with _workspace_folder(workspace_id) as folder:
         views = [{'name': name, 'azimuth': angle[0], 'elevation': angle[1]}
@@ -109,7 +107,7 @@ def look(db, user, workspace_id: str, *, views: list[str], objects: list[str] | 
             path = Path(one['path'])
             # 只读我们自己给的那个目录里的文件 —— 路径是 Blender 那边回传的,不能照单全收。
             if not path.resolve().is_relative_to(folder.resolve()) or not path.is_file():
-                raise BlenderUnavailable('Blender 没有渲出画面,请检查 Add-on 连接后重试。')
+                raise BlenderUnavailable('blenderErr_noRender')
             images.append({'view': one['view'], 'mime_type': 'image/jpeg',
                            'data': base64.b64encode(path.read_bytes()).decode()})
     return {'scene_name': result.get('scene_name'), 'shading': shading, 'warnings': result.get('warnings', []),
@@ -122,7 +120,7 @@ def execute(db, user, workspace_id: str, code: str, instance_id: str = '') -> di
     代码自己的错误(traceback)不算「Blender 出了问题」:照原样交回去,由模型改了再试。
     """
     if not code.strip():
-        raise BlenderDomainError('没有要执行的代码')
+        raise BlenderDomainError('blenderErr_noCode')
     instance = resolve(db, user, instance_id)
     with _workspace_folder(workspace_id) as folder:
         return _run(db, instance, 'execute', {'code': code}, workspace_id, folder)
@@ -139,14 +137,14 @@ def import_to_scene(db, user, scene, *, base_revision: int, name: str = '', obje
     from app.domain.scenes import apply_scene_operations, import_model
 
     if base_revision != scene.revision:
-        raise BlenderConflict(f'场景已更新到修订 {scene.revision},请先 get_scene 再导入。')
+        raise BlenderConflict('blenderErr_staleRevision', revision=scene.revision)
     instance = resolve(db, user, instance_id)
     with _workspace_folder(scene.workspace_id) as folder:
         output = folder / 'model.glb'
         result = _run(db, instance, 'export', {'objects': objects or [], 'output_path': str(output)},
                       scene.workspace_id, folder)
         if not output.is_file():
-            raise BlenderUnavailable('Blender 没有导出可用的模型,请重试。')
+            raise BlenderUnavailable('blenderErr_noExport')
         label = (name or result.get('scene_name') or 'Blender 模型').strip()[:160]
         with output.open('rb') as stream:
             model = import_model(db, scene.workspace_id, label, stream, declared_size=output.stat().st_size)
