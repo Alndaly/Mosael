@@ -96,6 +96,9 @@ class MigrationPlan:
         ledger = _Ledger()
         applied = ledger.applied()
         skipped = 0
+        # **进来先把连接池清空。** 库可能在进程外被动过(还原备份、测试里用 sqlite3 重建成老版本),
+        # 池里的连接还记着那之前的表结构。
+        _forget_pooled_connections()
         for step in self.steps:
             if step.once and step.name in applied:
                 skipped += 1
@@ -104,6 +107,12 @@ class MigrationPlan:
             logger.debug("running migration %s (%s)", step.name, step.phase.name.lower())
             try:
                 step.operation()
+                # **每一步之后也清。** 迁移用 inspect() 判断「这一列在不在」,而连接池里有好几条连接:
+                # 上一步用其中一条 ALTER 过的表,下一步拿到另一条时,它可能还记着 ALTER 之前的样子,
+                # 于是以为列不存在、再 ADD 一次 —— SQLite 回 duplicate column name,启动失败。
+                # macOS 上池子往往只复用一条连接,撞不到;Linux(CI、服务器部署)上会撞到 ——
+                # CI 里 migrate-permission-modes 时红时绿就是它。启动时只跑一次,清池的代价可以忽略。
+                _forget_pooled_connections()
             except Exception as error:
                 logger.exception("migration %s failed (%s)", step.name, step.phase.name.lower())
                 raise MigrationFailed(step) from error
@@ -113,6 +122,12 @@ class MigrationPlan:
             logger.debug("migration %s completed in %.3fs", step.name, perf_counter() - started)
         if skipped:
             logger.debug("skipped %d migration(s) already recorded as applied", skipped)
+
+
+def _forget_pooled_connections() -> None:
+    from app.core.db import engine
+
+    engine.dispose()
 
 
 class _Ledger:
