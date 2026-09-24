@@ -102,11 +102,11 @@ function contractionHasCycle(graph: Graph, selected: Set<string>, sgId: string):
   return visited !== nodes.size;
 }
 
-/** 纯变换:把 selected 收进一个 subgraph 节点。opts.id/name 便于测试固定。 */
+/** 纯变换:把 selected 收进一个 subgraph 节点。name 是新节点的显示名(调用方按界面语言给);opts.id 便于测试固定。 */
 export function collapseToSubgraph(
   graph: Graph,
   selected: string[],
-  opts?: { id?: string; name?: string },
+  opts: { name: string; id?: string },
 ): CollapseResult {
   const S = new Set(selected.filter((id) => graph.nodes.some((n) => n.id === id)));
   if (S.size === 0) return { ok: false, reason: "empty" };
@@ -115,7 +115,7 @@ export function collapseToSubgraph(
 
   const outerIds = new Set(graph.nodes.map((n) => n.id));
   const typeById = new Map(graph.nodes.map((n) => [n.id, n.type]));
-  const sgId = opts?.id ?? freshId(graph, "subgraph");
+  const sgId = opts.id ?? freshId(graph, "subgraph");
 
   // 1. 边分区
   const internalEdges: WEdge[] = [];
@@ -168,7 +168,7 @@ export function collapseToSubgraph(
   const sgNode: WNode = {
     id: sgId,
     type: "subgraph",
-    name: opts?.name ?? "子图",
+    name: opts.name,
     position: averagePosition(selNodes),
     config: { inputs, body: { nodes: bodyNodes, edges: internalEdges }, output: "" },
   };

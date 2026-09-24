@@ -1069,7 +1069,7 @@ function WorkflowEditor({
   // 框选 → 折叠为子图(ComfyUI 式):把选中节点收进一个 subgraph 节点,进出边界的引用/数据边自动重写。
   const handleCollapse = React.useCallback(
     (ids: string[]) => {
-      const res = collapseToSubgraph(graph, ids);
+      const res = collapseToSubgraph(graph, ids, { name: t("wfSubgraphBody") });
       if (!res.ok) {
         const description =
           res.reason === "start"

@@ -5,6 +5,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
 import { insideDialog } from "@/components/ui/insideDialog";
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
 type Option = {
@@ -62,6 +63,7 @@ export function SearchableSelect({
   /** 自定义触发器(替换默认按钮),用于像「添加节点」这类带图标/胶囊样式的触发器。 */
   trigger?: React.ReactNode;
 }) {
+  const t = useI18n();
   const [open, setOpen] = React.useState(false);
   /* 探针而不是触发器本身:自定义触发器(trigger)接不到这个 ref,而「在不在 Dialog 里」是**位置**
      问题 —— 同一个位置放一个 display:none 的 span,closest 走出来的祖先链一模一样。 */
@@ -126,11 +128,11 @@ export function SearchableSelect({
           align="start"
         >
           <Command>
-            <CommandInput placeholder={searchPlaceholder ?? "搜索…"} className="h-9" />
+            <CommandInput placeholder={searchPlaceholder ?? t("searchableSelectPlaceholder")} className="h-9" />
             {/* 列表限高 = min(300px, 可用高度 − 搜索框)。只写 300px 的话,矮窗口里浮层整块比可用
                 空间高,被推出窗口外、连搜索框一起看不见(真机:节点的素材下拉)。 */}
             <CommandList className="max-h-[min(300px,calc(var(--radix-popover-content-available-height,100vh)-2.75rem))]">
-              <CommandEmpty>{emptyText ?? "无匹配项"}</CommandEmpty>
+              <CommandEmpty>{emptyText ?? t("searchableSelectNoMatch")}</CommandEmpty>
               {groups.map(([heading, groupItems]) => {
                 const rows = groupItems.map((item) => (
                   <CommandItem

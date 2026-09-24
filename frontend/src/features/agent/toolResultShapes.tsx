@@ -8,6 +8,8 @@ import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { gotoJob, gotoRecord } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 import { AnsweredChoiceCard } from "@/features/agent/AnsweredChoice";
+import type { MessageKey } from "@/app/messages";
+import { useI18n } from "@/app/preferences";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -155,16 +157,18 @@ function AssetList({ rows }: { rows: Record<string, unknown>[] }) {
 }
 
 function EmptyResult() {
-  return <div className="text-xs text-muted-foreground">没有返回条目</div>;
+  const t = useI18n();
+  return <div className="text-xs text-muted-foreground">{t("agentResultEmpty")}</div>;
 }
 
 function ProjectList({ rows }: { rows: Record<string, unknown>[] }) {
+  const t = useI18n();
   return (
     <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row) => (
         <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id)}>
           <span className="min-w-0 flex-1 truncate text-foreground">{String(row.name ?? row.id)}</span>
-          {row.active_sequence_id ? <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">有活动序列</span> : null}
+          {row.active_sequence_id ? <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultActiveSequence")}</span> : null}
         </li>
       ))}
     </ul>
@@ -172,10 +176,11 @@ function ProjectList({ rows }: { rows: Record<string, unknown>[] }) {
 }
 
 function GenericRecordList({ rows }: { rows: Record<string, unknown>[] }) {
+  const t = useI18n();
   return (
     <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => {
-        const title = String(row.name ?? row.title ?? row.label ?? row.tool_name ?? row.id ?? `条目 ${index + 1}`);
+        const title = String(row.name ?? row.title ?? row.label ?? row.tool_name ?? row.id ?? t("agentResultItem").replace("{n}", String(index + 1)));
         const meta = String(row.kind ?? row.type ?? row.status ?? row.plugin_id ?? "");
         const snippet = String(row.description ?? row.snippet ?? row.summary ?? row.content ?? "");
         return (
@@ -195,6 +200,7 @@ function GenericRecordList({ rows }: { rows: Record<string, unknown>[] }) {
 }
 
 function SequenceTree({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const tracks = Array.isArray(value.tracks) ? (value.tracks as Record<string, unknown>[]) : [];
   return (
     <div className="grid gap-1.5 text-xs">
@@ -210,15 +216,15 @@ function SequenceTree({ value }: { value: Record<string, unknown> }) {
         return (
           <div className="flex min-w-0 items-center gap-2" key={String(track.id ?? track.name ?? index)}>
             <span className="w-[76px] shrink-0 grow-0 basis-[76px] truncate text-ui-xs text-muted-foreground">
-              {String(track.name ?? track.kind ?? `轨道 ${index + 1}`)}
+              {String(track.name ?? track.kind ?? t("agentResultTrack").replace("{n}", String(index + 1)))}
             </span>
             <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
               {clips.map((clip, clipIndex) => (
                 <span className="max-w-[140px] shrink-0 truncate rounded-md border border-border bg-muted px-[7px] py-0.5 text-ui-xs" key={String(clip.clip_id ?? clip.id ?? clipIndex)}>
-                  {String(clip.asset ?? clip.asset_id ?? "片段")}
+                  {String(clip.asset ?? clip.asset_id ?? t("agentResultClip"))}
                 </span>
               ))}
-              {clips.length === 0 && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">空</span>}
+              {clips.length === 0 && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultTrackEmpty")}</span>}
             </div>
           </div>
         );
@@ -228,12 +234,13 @@ function SequenceTree({ value }: { value: Record<string, unknown> }) {
 }
 
 function ConfirmationCard({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const status = String(value.status ?? "");
   return (
     <div className="flex items-center justify-between gap-2 text-xs" data-status={status}>
       <span className="min-w-0 flex-1 truncate text-foreground">{String(value.summary ?? value.permission ?? "")}</span>
       <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
-        {status === "pending" ? "等待你确认" : status}
+        {status === "pending" ? t("agentResultAwaitingConfirm") : status}
       </span>
     </div>
   );
@@ -281,6 +288,7 @@ function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
  * 「条目 N … image」,读不出任何东西。模型名才是这里的身份,供应商和档案是它的限定语。
  */
 function GenerationModelList({ rows }: { rows: Record<string, unknown>[] }) {
+  const t = useI18n();
   return (
     <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => (
@@ -297,7 +305,7 @@ function GenerationModelList({ rows }: { rows: Record<string, unknown>[] }) {
           {/* 配置了但连不上的要看得出来 —— 否则模型会挑一个用不了的引擎去生成。 */}
           {row.available === false && (
             <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] px-1.5 text-ui-2xs text-destructive">
-              不可用
+              {t("agentResultUnavailable")}
             </span>
           )}
           <span className="shrink-0 text-ui-2xs text-muted-foreground">{String(row.kind ?? "")}</span>
@@ -308,14 +316,15 @@ function GenerationModelList({ rows }: { rows: Record<string, unknown>[] }) {
 }
 
 function WorkflowCard({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const graph = value.graph as { nodes: Record<string, unknown>[]; edges: unknown[] };
   const nodes = graph.nodes ?? [];
   const chips = nodes.slice(0, 8).map((node, index) => String(node.name ?? node.type ?? index));
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? "工作流")}</span>
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? t("agentResultWorkflow"))}</span>
       <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
-        {nodes.length} 节点 · {(graph.edges ?? []).length} 连线
+        {t("agentResultWorkflowStats").replace("{nodes}", String(nodes.length)).replace("{edges}", String((graph.edges ?? []).length))}
       </span>
       {chips.length > 0 && (
         <span className="flex min-w-0 flex-wrap gap-1">
@@ -330,12 +339,13 @@ function WorkflowCard({ value }: { value: Record<string, unknown> }) {
 }
 
 function TaggedAsset({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const tags = (value.tags as unknown[]).map(String);
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.asset_id)}</span>
       <span className="flex min-w-0 flex-wrap gap-1">
-        {tags.length === 0 && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">已清空标签</span>}
+        {tags.length === 0 && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultTagsCleared")}</span>}
         {tags.map((tag) => (
           <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>{tag}</span>
         ))}
@@ -345,15 +355,16 @@ function TaggedAsset({ value }: { value: Record<string, unknown> }) {
 }
 
 function UpdatedList({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const rows = (value.updated as Record<string, unknown>[]).filter(isRecord);
   return (
     <div className="grid min-w-0 gap-1.5">
-      <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">已更新 {String(value.count ?? rows.length)} 项</span>
+      <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultUpdatedCount").replace("{n}", String(value.count ?? rows.length))}</span>
       <ul className="m-0 grid list-none gap-1 p-0">
         {rows.map((row, index) => (
           <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id ?? index)}>
             <span className="min-w-0 flex-1 truncate text-foreground" title={String(row.name ?? row.id ?? "")}>
-              {String(row.name ?? row.id ?? `条目 ${index + 1}`)}
+              {String(row.name ?? row.id ?? t("agentResultItem").replace("{n}", String(index + 1)))}
             </span>
             {Array.isArray(row.tags) && (
               <span className="flex min-w-0 flex-wrap gap-1">
@@ -363,7 +374,7 @@ function UpdatedList({ value }: { value: Record<string, unknown> }) {
               </span>
             )}
             {typeof row.project_id === "string" && row.project_id && (
-              <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">项目 {row.project_id.slice(0, 8)}</span>
+              <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultRefProject")} {row.project_id.slice(0, 8)}</span>
             )}
           </li>
         ))}
@@ -373,26 +384,28 @@ function UpdatedList({ value }: { value: Record<string, unknown> }) {
 }
 
 function AssetBundle({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const rows = Array.isArray(value.assets) ? (value.assets as Record<string, unknown>[]).filter(isRecord) : [];
   if (rows.length > 0 && rows.every((row) => "id" in row && "name" in row && "kind" in row)) {
     return <AssetList rows={rows} />;
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">素材集合</span>
-      <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{String(value.count ?? rows.length)} 项</span>
+      <span className="min-w-0 flex-1 truncate text-foreground">{t("agentResultAssetBundle")}</span>
+      <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultCount").replace("{n}", String(value.count ?? rows.length))}</span>
     </div>
   );
 }
 
 function AssetRef({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const id = String(value.asset_id ?? "");
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? "素材")}</span>
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? t("agentResultAsset"))}</span>
       {id && <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground">{id.slice(0, 12)}</span>}
       {typeof value.generation_id === "string" && value.generation_id.trim() && (
-        <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">生成任务 {value.generation_id.slice(0, 8)}</span>
+        <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultGenerationTask")} {value.generation_id.slice(0, 8)}</span>
       )}
     </div>
   );
@@ -411,16 +424,19 @@ const REF_TARGETS: Record<string, (id: string) => void> = {
 };
 
 function RefSummary({ value }: { value: Record<string, unknown> }) {
-  const refs = [
-    ["workflow_id", "工作流"],
-    ["project_id", "项目"],
-    ["sequence_id", "序列"],
-    ["job_id", "任务"],
-    ["generation_id", "生成"],
-  ].filter(([key]) => typeof value[key] === "string" && String(value[key]).trim());
+  const t = useI18n();
+  const refs = ([
+    ["workflow_id", "agentResultWorkflow"],
+    ["project_id", "agentResultRefProject"],
+    ["sequence_id", "agentResultRefSequence"],
+    ["job_id", "agentResultRefJob"],
+    ["generation_id", "agentResultRefGeneration"],
+  ] as const)
+    .filter(([key]) => typeof value[key] === "string" && String(value[key]).trim())
+    .map(([key, label]) => [key, t(label)] as const);
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? "已创建/已提交")}</span>
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? t("agentResultCreated"))}</span>
       {refs.map(([key, label]) => {
         const id = String(value[key]);
         const go = REF_TARGETS[key];
@@ -444,18 +460,19 @@ function RefSummary({ value }: { value: Record<string, unknown> }) {
           </button>
         );
       })}
-      {value.nodes != null && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{String(value.nodes)} 节点</span>}
+      {value.nodes != null && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{t("agentResultNodes").replace("{n}", String(value.nodes))}</span>}
     </div>
   );
 }
 
 function PluginOutput({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const output = value.output;
   const error = value.error;
   return (
     <div className="grid min-w-0 gap-1.5">
       <div className="flex items-center justify-between gap-2 text-xs" data-status={String(value.status ?? "")}>
-        <span className="min-w-0 flex-1 truncate text-foreground">插件工具</span>
+        <span className="min-w-0 flex-1 truncate text-foreground">{t("agentResultPluginTool")}</span>
         <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{String(value.status ?? "done")}</span>
       </div>
       {error ? <LongText text={errorText(error)} /> : <ToolResultCard value={output} />}
@@ -476,39 +493,42 @@ function LongText({ text }: { text: string }) {
   return <div className="max-h-[260px] overflow-y-auto whitespace-pre-wrap text-xs leading-[1.6] text-foreground">{text}</div>;
 }
 
-function valueLabel(value: unknown): string {
+function valueLabel(value: unknown, t: (key: MessageKey) => string): string {
   if (value == null) return "—";
-  if (typeof value === "boolean") return value ? "是" : "否";
+  if (typeof value === "boolean") return t(value ? "agentResultYes" : "agentResultNo");
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "—";
   if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.length === 0 ? "空列表" : `${value.length} 项`;
-  if (isRecord(value)) return Object.keys(value).length === 0 ? "空对象" : `${Object.keys(value).length} 个字段`;
+  if (Array.isArray(value)) return value.length === 0 ? t("agentResultEmptyList") : t("agentResultCount").replace("{n}", String(value.length));
+  if (isRecord(value)) return Object.keys(value).length === 0 ? t("agentResultEmptyObject") : t("agentResultFieldCount").replace("{n}", String(Object.keys(value).length));
   return String(value);
 }
 
-function keyLabel(key: string): string {
-  const map: Record<string, string> = {
-    answer: "分析结果",
-    asset_id: "素材",
-    count: "数量",
-    error: "错误",
-    frames: "帧数",
-    json: "JSON",
-    length: "长度",
-    message: "消息",
-    model: "模型",
-    output: "输出",
-    provider: "供应商",
-    result: "结果",
-    sent: "通知",
-    status: "状态",
-    text: "文本",
-    waited: "等待",
-  };
-  return map[key] ?? key.replaceAll("_", " ");
+const KEY_LABELS: Record<string, MessageKey> = {
+  answer: "agentResultFieldAnswer",
+  asset_id: "agentResultAsset",
+  count: "agentResultFieldCountLabel",
+  error: "agentResultFieldError",
+  frames: "agentResultFieldFrames",
+  length: "agentResultFieldLength",
+  message: "agentResultFieldMessage",
+  model: "agentResultFieldModel",
+  output: "agentResultFieldOutput",
+  provider: "agentResultFieldProvider",
+  result: "agentResultFieldResult",
+  sent: "agentResultFieldSent",
+  status: "agentResultFieldStatus",
+  text: "agentResultFieldText",
+  waited: "agentResultFieldWaited",
+};
+
+function keyLabel(key: string, t: (key: MessageKey) => string): string {
+  if (key === "json") return "JSON";
+  const label = KEY_LABELS[key];
+  return label ? t(label) : key.replaceAll("_", " ");
 }
 
 function SummaryCard({ value }: { value: Record<string, unknown> }) {
+  const t = useI18n();
   const entries = Object.entries(value)
     .filter(([, item]) => item != null && item !== "")
     .slice(0, 8);
@@ -517,8 +537,8 @@ function SummaryCard({ value }: { value: Record<string, unknown> }) {
     <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:truncate [&_dd]:text-foreground [&_dt]:text-muted-foreground">
       {entries.map(([key, item]) => (
         <React.Fragment key={key}>
-          <dt>{keyLabel(key)}</dt>
-          <dd title={typeof item === "string" ? item : undefined}>{valueLabel(item)}</dd>
+          <dt>{keyLabel(key, t)}</dt>
+          <dd title={typeof item === "string" ? item : undefined}>{valueLabel(item, t)}</dd>
         </React.Fragment>
       ))}
     </dl>

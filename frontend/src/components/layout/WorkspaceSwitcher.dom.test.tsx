@@ -56,7 +56,7 @@ function Gate({ onResolve }: { onResolve: (id: string) => void }) {
 
 function shell() {
   const client = new QueryClient({
-    mutationCache: createMutationCache(() => undefined),
+    mutationCache: createMutationCache(() => undefined, (key) => key),
     defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 } },
   });
   const resolved: string[] = [];

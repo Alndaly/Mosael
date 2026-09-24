@@ -17,6 +17,11 @@ vi.mock("@/features/agent/speechPlayback", () => ({
   stopSpeaking: mocks.stopSpeaking,
 }));
 vi.mock("sonner", () => ({ toast: { error: mocks.toastError, message: mocks.toastMessage } }));
+vi.mock("@/app/preferences", async () => {
+  const { messages } = await import("@/app/messages");
+  const t = (key: keyof (typeof messages)["zh-CN"]) => messages["zh-CN"][key];
+  return { useI18n: () => t };
+});
 
 class FakeAudioContext {
   close = vi.fn().mockResolvedValue(undefined);

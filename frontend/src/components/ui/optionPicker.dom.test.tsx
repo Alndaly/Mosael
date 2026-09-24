@@ -7,6 +7,8 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { OptionPicker, SEARCHABLE_THRESHOLD } from "./option-picker";
 import { insideDialog } from "./insideDialog";
 
+vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+
 const options = (count: number) =>
   Array.from({ length: count }, (_, index) => ({ value: `m${index}`, label: `模型 ${index}` }));
 

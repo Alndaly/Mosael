@@ -22,7 +22,7 @@ function linearGraph(): WorkflowGraph {
 
 describe("collapseToSubgraph", () => {
   it("把选区收进一个 subgraph 节点,并重写进出边界的引用", () => {
-    const res = collapseToSubgraph(linearGraph(), ["a", "b"], { id: "sg" });
+    const res = collapseToSubgraph(linearGraph(), ["a", "b"], { name: "Subgraph", id: "sg" });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const { graph } = res;
@@ -64,7 +64,7 @@ describe("collapseToSubgraph", () => {
         { id: "e2", source: "mid", target: "dst", kind: "data", source_output: "output", target_input: "template" },
       ],
     };
-    const res = collapseToSubgraph(g, ["mid"], { id: "sg" });
+    const res = collapseToSubgraph(g, ["mid"], { name: "Subgraph", id: "sg" });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const sg = res.graph.nodes.find((n) => n.id === "sg")!;
@@ -78,12 +78,12 @@ describe("collapseToSubgraph", () => {
   });
 
   it("拒绝含 start 的选区", () => {
-    const res = collapseToSubgraph(linearGraph(), ["start", "a"]);
+    const res = collapseToSubgraph(linearGraph(), ["start", "a"], { name: "Subgraph" });
     expect(res).toEqual({ ok: false, reason: "start" });
   });
 
   it("拒绝空选区", () => {
-    expect(collapseToSubgraph(linearGraph(), [])).toEqual({ ok: false, reason: "empty" });
+    expect(collapseToSubgraph(linearGraph(), [], { name: "Subgraph" })).toEqual({ ok: false, reason: "empty" });
   });
 
   it("拒绝非凸选区(中间隔着未选中的节点,收缩后成环)", () => {
@@ -99,7 +99,7 @@ describe("collapseToSubgraph", () => {
         { id: "e2", source: "b", target: "c" },
       ],
     };
-    expect(collapseToSubgraph(g, ["a", "c"])).toEqual({ ok: false, reason: "not-convex" });
+    expect(collapseToSubgraph(g, ["a", "c"], { name: "Subgraph" })).toEqual({ ok: false, reason: "not-convex" });
   });
 
   it("拒绝把条件节点的分支拉出边界(会丢 true/false 语义)", () => {
@@ -110,7 +110,7 @@ describe("collapseToSubgraph", () => {
       ],
       edges: [{ id: "e1", source: "cond", target: "yes", source_handle: "true" }],
     };
-    expect(collapseToSubgraph(g, ["cond"])).toEqual({ ok: false, reason: "condition-branch" });
+    expect(collapseToSubgraph(g, ["cond"], { name: "Subgraph" })).toEqual({ ok: false, reason: "condition-branch" });
   });
 
   it("入边界的条件分支保留 source_handle(条件路由不丢)", () => {
@@ -125,7 +125,7 @@ describe("collapseToSubgraph", () => {
         { id: "e2", source: "a", target: "b" },
       ],
     };
-    const res = collapseToSubgraph(g, ["a", "b"], { id: "sg" });
+    const res = collapseToSubgraph(g, ["a", "b"], { name: "Subgraph", id: "sg" });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const inEdge = res.graph.edges.find((e) => e.target === "sg")!;
@@ -134,7 +134,7 @@ describe("collapseToSubgraph", () => {
   });
 
   it("子图 id 与已有节点冲突时另取一个", () => {
-    const res = collapseToSubgraph(linearGraph(), ["a", "b"]); // 默认 base "subgraph"
+    const res = collapseToSubgraph(linearGraph(), ["a", "b"], { name: "Subgraph" }); // 默认 base "subgraph"
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.subgraphId).toBe("subgraph"); // 无冲突

@@ -1,3 +1,5 @@
+import { decodeLocalizedMessage } from "./shared/localized-error";
+
 export type UiLocale = "zh-CN" | "en";
 
 const zh = {
@@ -58,6 +60,35 @@ const zh = {
   noTranscriptToTranslate: "当前没有可翻译的逐字稿",
   noActiveTab: "没有活动标签页",
   pageUnresponsive: "页面没有响应",
+  captionTrack: "字幕",
+  documentTitle: "Mosael 视频助手",
+  videoPlayerMissing: "页面中没有找到视频播放器",
+  videoOffscreen: "视频当前不在可见区域，无法截帧",
+  videoFrameNotReady: "视频画面尚未就绪，请播放后重试",
+  captureCanvasUnavailable: "浏览器无法创建截帧画布",
+  frameEncodeFailed: "当前帧编码失败",
+  frameDataInvalid: "当前视频帧格式无效",
+  transcriptReadTimeout: "字幕读取超时，请刷新视频页面后重试",
+  transcriptReadFailed: "字幕读取失败",
+  unknownContentMessage: "不认识的消息:{type}",
+  captionServiceTimeout: "字幕服务响应超时，请稍后重试",
+  captionServiceHttpError: "字幕服务请求失败（{status}）",
+  captionServiceUnreachable: "字幕服务暂时无法连接，请检查网络后重试",
+  videoHasNoCaptions: "当前视频没有可用字幕",
+  captionsEmpty: "字幕内容为空",
+  bilibiliVideoUnrecognized: "无法识别当前 B 站视频",
+  bilibiliTrackListInvalid: "B 站返回了无法识别的字幕清单",
+  bilibiliTrackBodyInvalid: "B 站返回了无法识别的字幕内容",
+  youtubeCaptionBodyEmpty: "YouTube 没有返回字幕内容，请确认该视频已开启字幕后重试",
+  youtubeCaptionFormatInvalid: "YouTube 返回了无法识别的字幕格式，请刷新视频页面后重试",
+  youtubeCaptionsEmpty: "YouTube 字幕内容为空",
+  siteHasNoReadableCaptions: "当前站点没有可直接读取的字幕",
+  pageTranscriptUnsupported: "当前页面暂不支持逐字稿",
+  requestFailed: "Mosael 请求失败（{status}）",
+  jobFailed: "Mosael 任务未能完成",
+  transcriptJobTimeout: "Mosael 生成逐字稿超时，请在任务中心查看进度",
+  importedAssetMissing: "视频已下载，但 Mosael 没有返回素材编号",
+  generatedTranscriptEmpty: "Mosael 已完成识别，但逐字稿内容为空",
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -118,6 +149,35 @@ const en: Record<keyof typeof zh, string> = {
   noTranscriptToTranslate: "There is no transcript to translate",
   noActiveTab: "No active tab",
   pageUnresponsive: "The page did not respond",
+  captionTrack: "Captions",
+  documentTitle: "Mosael Video Assistant",
+  videoPlayerMissing: "No video player was found on this page",
+  videoOffscreen: "The video is not visible on screen, so no frame can be captured",
+  videoFrameNotReady: "The video frame isn't ready yet. Play the video and try again",
+  captureCanvasUnavailable: "The browser could not create a canvas for the frame capture",
+  frameEncodeFailed: "Could not encode the current frame",
+  frameDataInvalid: "The captured video frame is invalid",
+  transcriptReadTimeout: "Reading captions timed out. Refresh the video page and try again",
+  transcriptReadFailed: "Could not read the captions",
+  unknownContentMessage: "Unrecognized message: {type}",
+  captionServiceTimeout: "The caption service timed out. Try again later",
+  captionServiceHttpError: "Caption service request failed ({status})",
+  captionServiceUnreachable: "Can't reach the caption service. Check your network and try again",
+  videoHasNoCaptions: "This video has no captions",
+  captionsEmpty: "The captions are empty",
+  bilibiliVideoUnrecognized: "Could not identify this Bilibili video",
+  bilibiliTrackListInvalid: "Bilibili returned a caption list the extension can't read",
+  bilibiliTrackBodyInvalid: "Bilibili returned captions the extension can't read",
+  youtubeCaptionBodyEmpty: "YouTube returned no captions. Make sure captions are on for this video, then try again",
+  youtubeCaptionFormatInvalid: "YouTube returned captions in an unrecognized format. Refresh the video page and try again",
+  youtubeCaptionsEmpty: "The YouTube captions are empty",
+  siteHasNoReadableCaptions: "This site has no captions the extension can read directly",
+  pageTranscriptUnsupported: "Transcripts aren't supported on this page yet",
+  requestFailed: "Mosael request failed ({status})",
+  jobFailed: "The Mosael job didn't finish",
+  transcriptJobTimeout: "Generating the transcript timed out. Check its progress in Mosael's task center",
+  importedAssetMissing: "The video was downloaded, but Mosael didn't return an asset ID",
+  generatedTranscriptEmpty: "Mosael finished transcribing, but the transcript is empty",
 };
 
 export const messages = { "zh-CN": zh, en } as const;
@@ -132,4 +192,11 @@ export function translate(locale: UiLocale, key: MessageKey, params: Record<stri
     (value, [name, replacement]) => value.replaceAll(`{${name}}`, String(replacement)),
     messages[locale][key],
   );
+}
+
+/** 把 `localizedError` 编码过的报错翻成当前界面语言;别的字符串(后端给的 detail 等)原样返回。 */
+export function localizeMessage(locale: UiLocale, message: string): string {
+  const decoded = decodeLocalizedMessage(message);
+  if (!decoded || !Object.hasOwn(messages[locale], decoded.key)) return message;
+  return translate(locale, decoded.key as MessageKey, decoded.params);
 }

@@ -1,5 +1,6 @@
 import { MutationCache } from "@tanstack/react-query";
 import { errorText } from "@/api/errorMessage";
+import type { MessageKey } from "@/app/messages";
 
 /**
  * A failed mutation must never be silent.
@@ -17,12 +18,15 @@ import { errorText } from "@/api/errorMessage";
  *   - `meta: { silentError: true }` opts out entirely, for the rare failure that genuinely does
  *     not concern the user.
  */
-export function createMutationCache(report: (message: string) => void): MutationCache {
+export function createMutationCache(
+  report: (message: string) => void,
+  t: (key: MessageKey) => string,
+): MutationCache {
   return new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       if (mutation.options.onError || mutation.meta?.silentError) return;
       const message = errorText(error);
-      report(message.slice(0, 300) || "操作失败");
+      report(message.slice(0, 300) || t("mutationFailedFallback"));
     },
   });
 }

@@ -605,7 +605,7 @@ function GenerateWorkspace({
       if (!targetSessionId) {
         const payload: Record<string, string> = {
           workspace_id: workspace.id,
-          title: prompt.trim().slice(0, 40) || "新生成",
+          title: prompt.trim().slice(0, 40) || t("generationNewSession"),
         };
         if (modelId && selectedModel) {
           payload.provider_profile_id = selectedModel.provider_profile_id;

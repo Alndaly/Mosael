@@ -20,7 +20,7 @@ describe("normalizeYouTubeTranscript", () => {
   });
 
   it("reports an empty timed-text response instead of leaking JSON.parse errors", () => {
-    expect(() => parseYouTubeTranscriptBody("  ")).toThrow("YouTube 没有返回字幕内容");
+    expect(() => parseYouTubeTranscriptBody("  ")).toThrow("i18n:youtubeCaptionBodyEmpty");
   });
 
   it("fills missing cue durations so playback following always has an active interval", () => {

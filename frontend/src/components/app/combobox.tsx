@@ -5,6 +5,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
 import { insideDialog } from "@/components/ui/insideDialog";
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
 export type ComboboxOption = {
@@ -36,9 +37,9 @@ export function Combobox({
   options,
   placeholder,
   searchPlaceholder,
-  emptyText = "没有匹配项",
+  emptyText,
   allowCustomValue = false,
-  customValueLabel = (query) => `使用 “${query}”`,
+  customValueLabel,
   disabled,
   className,
   contentClassName,
@@ -56,6 +57,7 @@ export function Combobox({
   contentClassName?: string;
   onValueChange: (value: string) => void;
 }) {
+  const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const modal = useInsideDialog(triggerRef);
@@ -108,10 +110,10 @@ export function Combobox({
           <CommandList>
             {canUseCustom ? (
               <CommandItem value={`custom-${trimmedQuery}`} onSelect={() => choose(trimmedQuery)}>
-                <span className="truncate">{customValueLabel(trimmedQuery)}</span>
+                <span className="truncate">{customValueLabel ? customValueLabel(trimmedQuery) : t("comboboxUseCustomValue").replace("{q}", trimmedQuery)}</span>
               </CommandItem>
             ) : null}
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandEmpty>{emptyText ?? t("comboboxNoMatch")}</CommandEmpty>
             {options.map((option) => (
               // cmdk 按 item 的 value 过滤:value 若只是 id(uuid),按名称搜索会一无所获。
               // label 打头让搜索命中名称,拼上 id 保证唯一。

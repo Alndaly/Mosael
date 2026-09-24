@@ -817,7 +817,7 @@ export function Timeline({
                 ["⇧Delete", t("hintRipple")],
                 ["⌘Z / ⇧⌘Z", t("hintUndoRedo")],
                 ["← / →", t("hintFrameStep")],
-                ["⇧点击", t("hintMultiSelect")],
+                [t("hintShiftClickKey"), t("hintMultiSelect")],
                 [t("hintDragLabel"), t("hintDragBody")],
                 ["↕", t("hintVerticalDrag")],
               ].map(([key, body]) => (

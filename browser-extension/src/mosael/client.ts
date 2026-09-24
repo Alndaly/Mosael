@@ -1,4 +1,5 @@
 import { transcriptSegmentsToCues, type TranscriptSegmentInput } from "../transcript";
+import { localizedError } from "../shared/localized-error";
 
 export type Workspace = { id: string; name: string };
 export type Project = { id: string; name: string; workspace_id: string };
@@ -80,7 +81,7 @@ async function responseError(response: Response): Promise<Error> {
   } catch {
     detail = await response.text().catch(() => "");
   }
-  return new MosaelResponseError(response.status, detail || `Mosael 请求失败（${response.status}）`);
+  return new MosaelResponseError(response.status, detail || localizedError("requestFailed", { status: response.status }).message);
 }
 
 export class MosaelClient {
@@ -189,11 +190,11 @@ export class MosaelClient {
       onProgress?.(job);
       if (job.status === "succeeded") return job;
       if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error || "Mosael 任务未能完成");
+        throw job.error ? new Error(job.error) : localizedError("jobFailed");
       }
       await new Promise((resolve) => setTimeout(resolve, 1_200));
     }
-    throw new Error("Mosael 生成逐字稿超时，请在任务中心查看进度");
+    throw localizedError("transcriptJobTimeout");
   }
 
   async generateTranscriptFromVideo({
@@ -215,7 +216,7 @@ export class MosaelClient {
     const imported = await this.waitForJob(importJob.id, (job) => onProgress?.("import", job));
     const assetIds = imported.result?.asset_ids;
     const assetId = Array.isArray(assetIds) && typeof assetIds[0] === "string" ? assetIds[0] : "";
-    if (!assetId) throw new Error("视频已下载，但 Mosael 没有返回素材编号");
+    if (!assetId) throw localizedError("importedAssetMissing");
 
     const transcription = await this.request<ImportJob>(`/api/assets/${encodeURIComponent(assetId)}/transcribe`, {
       method: "POST",
@@ -226,7 +227,7 @@ export class MosaelClient {
       segments?: TranscriptSegmentInput[];
     }>(`/api/assets/${encodeURIComponent(assetId)}/transcript`);
     const cues = transcriptSegmentsToCues(transcript.segments || []);
-    if (cues.length === 0) throw new Error("Mosael 已完成识别，但逐字稿内容为空");
+    if (cues.length === 0) throw localizedError("generatedTranscriptEmpty");
     return { assetId, language: String(transcript.language || ""), cues };
   }
 

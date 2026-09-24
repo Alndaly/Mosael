@@ -1,21 +1,14 @@
 import { Mouse, Touchpad } from "lucide-react";
-import { usePreferences } from "@/app/preferences";
+import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { useCanvasInputMode } from "./canvasInputMode";
 
 /** One click switches navigation without opening a menu over the canvas. */
 export function CanvasInputModeSwitch() {
   const [mode, setMode] = useCanvasInputMode();
-  const { locale } = usePreferences();
+  const t = useI18n();
   const trackpad = mode === "trackpad";
-  const label =
-    locale === "en-US"
-      ? trackpad
-        ? "Trackpad mode · Switch to mouse"
-        : "Mouse mode · Switch to trackpad"
-      : trackpad
-        ? "触控板模式 · 点击切换为鼠标"
-        : "鼠标模式 · 点击切换为触控板";
+  const label = trackpad ? t("canvasInputTrackpadMode") : t("canvasInputMouseMode");
   const Icon = trackpad ? Touchpad : Mouse;
   return (
     <Button

@@ -52,7 +52,7 @@ export function AssetLinkStorageSection() {
         //: 没配好的不进下拉(选了也用不了),但要在这里说清缺什么 —— 否则用户不知道它为什么不在。
         description={
           unready.length
-            ? unready.map((option) => t("assetLinkMissing").replace("{name}", option.name).replace("{fields}", (option.missing ?? []).join("、"))).join(" ")
+            ? unready.map((option) => t("assetLinkMissing").replace("{name}", option.name).replace("{fields}", (option.missing ?? []).join(t("listSeparator")))).join(" ")
             : undefined
         }
         controlClassName="w-full min-w-0 shrink"

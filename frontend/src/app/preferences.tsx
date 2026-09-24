@@ -112,6 +112,14 @@ export function useI18n() {
   return usePreferences().t;
 }
 
+/**
+ * The hook-free `t`, for code that lives outside the React tree (the app-wide mutation cache is
+ * built before any provider mounts). Reads the saved locale at call time, so it follows a switch.
+ */
+export function translateNow(key: MessageKey): string {
+  return messages[readPreferences().locale][key];
+}
+
 function readPreferences(): { font: InterfaceFont; theme: Theme; locale: Locale; voiceDock: boolean } {
   if (typeof window === "undefined") return { font: "default", theme: "light", locale: "zh-CN", voiceDock: false };
   try {

@@ -654,7 +654,7 @@ export function TranscriptPanel({
                   <span
                     className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
                     style={speakerChipStyle(sentence.speaker)}
-                    title={speakerLabel(sentence.speaker)}
+                    title={speakerLabel(sentence.speaker, t)}
                   >
                     {speakerShort(sentence.speaker)}
                   </span>

@@ -1,4 +1,5 @@
 import type { TranscriptCue, TranscriptTrack } from "../shared/types";
+import { localizedError } from "../shared/localized-error";
 
 type YouTubeSegment = { utf8?: unknown };
 type YouTubeEvent = { tStartMs?: unknown; dDurationMs?: unknown; segs?: unknown };
@@ -27,7 +28,7 @@ export function listYouTubeTranscriptTracks(player: unknown): YouTubeTranscriptT
     return [{
       id: `youtube:source:${String(track.vssId || track.languageCode || index)}`,
       language: String(track.languageCode || ""),
-      languageLabel: label(track.name) || String(track.languageCode || "字幕"),
+      languageLabel: label(track.name) || String(track.languageCode || ""),
       kind: "source" as const,
       url,
     }];
@@ -82,14 +83,14 @@ export function normalizeYouTubeTranscript(payload: unknown): TranscriptCue[] {
 
 /** Parse json3 without exposing Chrome's low-level JSON error for an empty timed-text response. */
 export function parseYouTubeTranscriptBody(body: string): TranscriptCue[] {
-  if (!body.trim()) throw new Error("YouTube 没有返回字幕内容，请确认该视频已开启字幕后重试");
+  if (!body.trim()) throw localizedError("youtubeCaptionBodyEmpty");
   let payload: unknown;
   try {
     payload = JSON.parse(body);
   } catch {
-    throw new Error("YouTube 返回了无法识别的字幕格式，请刷新视频页面后重试");
+    throw localizedError("youtubeCaptionFormatInvalid");
   }
   const cues = normalizeYouTubeTranscript(payload);
-  if (cues.length === 0) throw new Error("YouTube 字幕内容为空");
+  if (cues.length === 0) throw localizedError("youtubeCaptionsEmpty");
   return cues;
 }

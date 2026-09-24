@@ -18,10 +18,11 @@ import {
   type PlatformResourceRequest,
 } from "./shared/protocol";
 import type { Transcript, VideoContext } from "./shared/types";
+import { localizedError } from "./shared/localized-error";
 
 function videoElement(): HTMLVideoElement {
   const video = selectPrimaryVideo(document.querySelectorAll("video"));
-  if (!(video instanceof HTMLVideoElement)) throw new Error("页面中没有找到视频播放器");
+  if (!(video instanceof HTMLVideoElement)) throw localizedError("videoPlayerMissing");
   return video;
 }
 
@@ -46,14 +47,14 @@ function readTranscript(trackId?: string): Promise<Transcript> {
   return new Promise((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       window.removeEventListener("message", receive);
-      reject(new Error("字幕读取超时，请刷新视频页面后重试"));
+      reject(localizedError("transcriptReadTimeout"));
     }, 15_000);
     const receive = (event: MessageEvent<PageResponse>) => {
       if (event.source !== window || event.data?.channel !== PAGE_RESPONSE_CHANNEL || event.data.id !== id) return;
       window.clearTimeout(timeout);
       window.removeEventListener("message", receive);
       if (event.data.ok && event.data.data) resolve(event.data.data);
-      else reject(new Error(event.data.error || "字幕读取失败"));
+      else reject(event.data.error ? new Error(event.data.error) : localizedError("transcriptReadFailed"));
     };
     window.addEventListener("message", receive);
     const request: PageRequest = { channel: PAGE_REQUEST_CHANNEL, id, type: "READ_TRANSCRIPT", trackId };
@@ -68,7 +69,7 @@ function captureGeometry(): CaptureGeometry {
   const top = Math.max(0, rect.top);
   const right = Math.min(innerWidth, rect.right);
   const bottom = Math.min(innerHeight, rect.bottom);
-  if (right <= left || bottom <= top) throw new Error("视频当前不在可见区域，无法截帧");
+  if (right <= left || bottom <= top) throw localizedError("videoOffscreen");
   return {
     left,
     top,
@@ -172,7 +173,7 @@ async function handle(message: ContentRequest): Promise<ContentResponse> {
         const unhandled: never = message;
         // 运行时也要有话说:侧边栏和内容脚本是**分别注入**的,浏览器可能让新侧边栏对着
         // 还没换的老内容脚本讲话 —— 那时编译期的保证不在现场。
-        return { ok: false, error: `不认识的消息:${(unhandled as ContentRequest).type}` };
+        return { ok: false, error: localizedError("unknownContentMessage", { type: (unhandled as ContentRequest).type }).message };
       }
     }
   } catch (cause) {

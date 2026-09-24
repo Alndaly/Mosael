@@ -1,5 +1,9 @@
 /** 逐字稿里的说话人:什么时候值得占一块地方,以及占的时候长什么样。 */
 
+import type { MessageKey } from "@/app/messages";
+
+const ENGINE_PREFIX = "SPEAKER_";
+
 /** 说话人配色:名字哈希到色相,同一个人永远同色。 */
 export function speakerHue(speaker: string): number {
   let hash = 0;
@@ -24,8 +28,10 @@ export function speakersAreMeaningful(speakers: readonly (string | null | undefi
 }
 
 /** `SPEAKER_00` 是引擎的写法,不是给人看的。 */
-export function speakerLabel(speaker: string): string {
-  return speaker.replace("SPEAKER_", "说话人 ");
+export function speakerLabel(speaker: string, t: (key: MessageKey) => string): string {
+  const at = speaker.indexOf(ENGINE_PREFIX);
+  if (at < 0) return speaker;
+  return speaker.slice(0, at) + t("transcriptSpeakerLabel").replace("{n}", speaker.slice(at + ENGINE_PREFIX.length));
 }
 
 /**

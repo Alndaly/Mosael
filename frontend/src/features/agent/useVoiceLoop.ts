@@ -18,6 +18,7 @@ import React from "react";
 import { toast } from "sonner";
 
 import { API_BASE, getAuthToken } from "@/api/client";
+import { useI18n } from "@/app/preferences";
 import { playSpeech, stopSpeaking } from "@/features/agent/speechPlayback";
 import { matchSpokenChoice } from "@/features/agent/spokenChoice";
 import { UtteranceDetector } from "@/features/agent/utteranceDetector";
@@ -53,6 +54,7 @@ export function useVoiceLoop({
   pendingConfirmations?: string[];
   failure?: string;
 }) {
+  const t = useI18n();
   const [state, setState] = React.useState<VoiceLoopState>("off");
   //: 当前音量,**以"开口阈值"为 1.0** 归一化。用 ref 不用 state:采样是 20 次/秒,
   //: 每次都 setState 会把整个浮标(以及它挂着的两个查询订阅)重渲染 20 次/秒,
@@ -90,15 +92,15 @@ export function useVoiceLoop({
         });
         if (!response.ok) {
           const detail = (await response.json().catch(() => null))?.detail;
-          toast[response.status === 409 ? "message" : "error"](detail || "这段没能念出来");
+          toast[response.status === 409 ? "message" : "error"](detail || t("agentVoiceSpeakFailed"));
           return;
         }
         await playSpeech(await response.blob());
       } catch {
-        toast.error("这段没能念出来");
+        toast.error(t("agentVoiceSpeakFailed"));
       }
     },
-    [workspaceId],
+    [workspaceId, t],
   );
   const sayRef = React.useRef(say);
   sayRef.current = say;
@@ -136,7 +138,7 @@ export function useVoiceLoop({
         if (!response.ok) {
           // **失败要出声(至少要看得见)。** 语音模式下用户多半没盯着屏幕,一次静默的失败
           // 会被理解成"它没听见",于是他再说一遍 —— 然后再失败一次。
-          toast.error(payload?.detail || "这句没听清");
+          toast.error(payload?.detail || t("agentVoiceNotHeard"));
           setState("listening");
           return;
         }
@@ -158,20 +160,20 @@ export function useVoiceLoop({
           // **拿不准就再问一次,不猜。** 猜错的代价是它顺着一条你没选的路做下去。
           await sayRef.current(
             match.kind === "ambiguous"
-              ? `这几个都像:${match.indexes.map((one) => asked.options[one]).join("、")}。说得再具体一点?`
-              : `没对上任何一个。可以说第几个,或者念出选项:${asked.options.join("、")}`,
+              ? t("agentVoiceChoiceAmbiguous").replace("{options}", match.indexes.map((one) => asked.options[one]).join(t("listSeparator")))
+              : t("agentVoiceChoiceNone").replace("{options}", asked.options.join(t("listSeparator"))),
           );
           setState("listening");
           return;
         }
         await onUtteranceRef.current(text);
       } catch {
-        toast.error("这句没能送出去");
+        toast.error(t("agentVoiceSendFailed"));
       } finally {
         setState((current) => (current === "thinking" ? "listening" : current));
       }
     },
-    [],
+    [t],
   );
 
   const start = React.useCallback(async () => {
@@ -179,7 +181,7 @@ export function useVoiceLoop({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      toast.error("用不了麦克风");
+      toast.error(t("agentVoiceMicUnavailable"));
       return;
     }
     streamRef.current = stream;
@@ -229,7 +231,7 @@ export function useVoiceLoop({
         recorder.stop();
       }
     }, SAMPLE_MS);
-  }, [submit]);
+  }, [submit, t]);
 
   const stop = React.useCallback(() => {
     teardown();
@@ -257,19 +259,23 @@ export function useVoiceLoop({
   // 只把"我要做什么"念出来,批准仍然要在屏幕上点。顺畅度让位给这一条。
   const announcedRef = React.useRef("");
   React.useEffect(() => {
-    const pending = (pendingConfirmations ?? []).join("、");
+    const pending = (pendingConfirmations ?? []).join(t("listSeparator"));
     if (state === "off" || !pending || pending === announcedRef.current) return;
     announcedRef.current = pending;
-    void sayRef.current(`我要${pending}。这一步会改东西,去屏幕上确认一下。`);
-  }, [pendingConfirmations, state]);
+    void sayRef.current(t("agentVoiceConfirmPending").replace("{pending}", pending));
+  }, [pendingConfirmations, state, t]);
 
   // 有待答的选择题 —— 念出来,然后等你说。
   const askedRef = React.useRef("");
   React.useEffect(() => {
     if (state === "off" || !question || question.question === askedRef.current) return;
     askedRef.current = question.question;
-    void sayRef.current(`${question.question} 可选:${question.options.join("、")}。`);
-  }, [question, state]);
+    void sayRef.current(
+      t("agentVoiceQuestionOptions")
+        .replace("{question}", question.question)
+        .replace("{options}", question.options.join(t("listSeparator"))),
+    );
+  }, [question, state, t]);
 
   // 这一轮失败了 —— **必须出声**。语音模式下一次静默的失败会被理解成"它没听见",
   // 于是你再说一遍,然后再失败一次。
@@ -277,8 +283,8 @@ export function useVoiceLoop({
   React.useEffect(() => {
     if (state === "off" || !failure || failure === toldRef.current) return;
     toldRef.current = failure;
-    void sayRef.current(`刚才那一步没成:${failure}`);
-  }, [failure, state]);
+    void sayRef.current(t("agentVoiceStepFailed").replace("{failure}", failure));
+  }, [failure, state, t]);
 
   return { state, start, stop, on: state !== "off", levelRef, heard };
 }

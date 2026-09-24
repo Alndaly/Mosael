@@ -1,3 +1,5 @@
+import { localizedError } from "./shared/localized-error";
+
 export type VideoFrameSource = {
   videoWidth: number;
   videoHeight: number;
@@ -19,12 +21,12 @@ export function captureVideoFrame(
 ): string {
   const width = Math.floor(video.videoWidth);
   const height = Math.floor(video.videoHeight);
-  if (width <= 0 || height <= 0) throw new Error("视频画面尚未就绪，请播放后重试");
+  if (width <= 0 || height <= 0) throw localizedError("videoFrameNotReady");
   const canvas = createCanvas();
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
-  if (!context) throw new Error("浏览器无法创建截帧画布");
+  if (!context) throw localizedError("captureCanvasUnavailable");
   context.drawImage(video, 0, 0, width, height);
   return canvas.toDataURL("image/png");
 }

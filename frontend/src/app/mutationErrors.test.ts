@@ -7,7 +7,7 @@ import { createMutationCache } from "./mutationErrors";
 async function runMutation(options: Record<string, unknown>): Promise<string[]> {
   const reported: string[] = [];
   const client = new QueryClient({
-    mutationCache: createMutationCache((message) => reported.push(message)),
+    mutationCache: createMutationCache((message) => reported.push(message), (key) => key),
     defaultOptions: { mutations: { retry: false } },
   });
   const observer = new MutationObserver(client, options as never);
@@ -56,7 +56,7 @@ describe("mutation error fallback", () => {
 
   it("falls back to a readable message when the error carries none", async () => {
     expect(await runMutation({ mutationFn: async () => Promise.reject(new Error("")) })).toEqual([
-      "操作失败",
+      "mutationFailedFallback",
     ]);
   });
 });

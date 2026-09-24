@@ -1,32 +1,8 @@
+import { noteStrings } from "./strings";
+
+/** 编辑器节点视图(图片、代码块)用的文案,和笔记其余文案同在 strings.ts 那张中英表里。 */
 export function nodeLabels(locale: string) {
-  return locale === "en-US"
-    ? {
-        imageLink: "Image address",
-        alt: "Alternative text",
-        apply: "Apply image changes",
-        cancel: "Cancel image changes",
-        invalid:
-          "Use an https:// image address or an existing media reference.",
-        unavailable: "Image unavailable",
-        language: "Code language",
-        plain: "Plain text",
-        copy: "Copy code",
-        copied: "Copied",
-        failed: "Could not copy. Select the code and copy it manually.",
-      }
-    : {
-        imageLink: "图片链接",
-        alt: "替代文字",
-        apply: "应用图片修改",
-        cancel: "取消图片修改",
-        invalid: "请输入 https:// 图片地址或已有的素材引用。",
-        unavailable: "图片无法显示",
-        language: "代码语言",
-        plain: "纯文本",
-        copy: "复制代码",
-        copied: "已复制",
-        failed: "复制失败，请选中代码手动复制。",
-      };
+  return noteStrings(locale).node;
 }
 export function nodeIcon(name: "copy" | "check" | "close" | "link") {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");

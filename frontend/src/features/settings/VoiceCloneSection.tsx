@@ -13,6 +13,7 @@ import {
   updateTtsConfig,
   type TtsEngine,
 } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -30,10 +31,10 @@ type ConfigForm = { engine: string; python_path: string; source: string; fish_re
 
 /** Settings → 声音克隆:选引擎、指定装了 f5-tts 的 Python 解释器、下载源,并下载
     引擎权重。装好并配好后合成即为真实音色;否则回退占位音。 */
-const SOURCE_LABELS: Record<string, string> = {
-  "hf-mirror": "HF 镜像 (hf-mirror.com)",
-  hf: "HuggingFace",
-  modelscope: "ModelScope",
+const SOURCE_LABELS: Record<string, MessageKey> = {
+  "hf-mirror": "settingsVoiceCloneSourceHfMirror",
+  hf: "settingsVoiceCloneSourceHf",
+  modelscope: "settingsVoiceCloneSourceModelscope",
 };
 
 /**
@@ -259,7 +260,7 @@ export function VoiceCloneSection() {
                       <SelectContent>
                         {sources.map((id) => (
                           <SelectItem key={id} value={id}>
-                            {SOURCE_LABELS[id] ?? id}
+                            {SOURCE_LABELS[id] ? t(SOURCE_LABELS[id]) : id}
                           </SelectItem>
                         ))}
                       </SelectContent>

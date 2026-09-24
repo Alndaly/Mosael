@@ -350,10 +350,10 @@ function BoardDetail({
       api?.replace(fresh.canvas);
       setCanvas(fresh.canvas);
       onSaved();
-      toast.error("画布已在别处更新", { description: "已载入服务器上的最新内容，请重新执行刚才的操作。" });
+      toast.error(t("boardsCanvasConflict"), { description: t("boardsCanvasConflictDetail") });
       return true;
     },
-    [api, board.id, workspaceId, onSaved],
+    [api, board.id, workspaceId, onSaved, t],
   );
 
   // 提示词面板要让人选模型 —— 两种能力各取一次再合并,和 AI 工作台看到的是同一份。

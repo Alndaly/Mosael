@@ -456,7 +456,7 @@ export function ProviderProfilesSection({
         title={t("providerDeleteConnection")}
         body={t("providerDeleteConnectionBody")
           .replace("{name}", removing?.name ?? "")
-          .replace("{caps}", (removing?.capability_ids ?? []).map((id) => t(`capability_${id}` as never)).join("、") || "—")}
+          .replace("{caps}", (removing?.capability_ids ?? []).map((id) => t(`capability_${id}` as never)).join(t("listSeparator")) || "—")}
         onCancel={() => setRemoving(null)}
         pending={remove.isPending}
         onConfirm={() => {

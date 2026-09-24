@@ -205,12 +205,12 @@ export function AppShell({
                 variant="ghost"
                 size="icon"
                 onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
-                aria-label={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
+                aria-label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
               >
                 <Languages size={15} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{locale === "zh-CN" ? "English" : "中文"}</TooltipContent>
+            <TooltipContent>{locale === "zh-CN" ? t("languageEn") : t("languageZh")}</TooltipContent>
           </Tooltip>
         </div>
       </header>

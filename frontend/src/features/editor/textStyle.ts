@@ -1,5 +1,6 @@
 import type React from "react";
 
+import type { MessageKey } from "@/app/messages";
 import type { Transform } from "@/features/editor/TransformOverlay";
 
 /**
@@ -34,12 +35,12 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
 };
 
 /** 一键花字预设:只覆盖外观字段(颜色/描边/阴影/粗细),不动字体与字号,方便在任意字体上套风格。 */
-export const TEXT_PRESETS: Array<{ key: string; label: string; style: Partial<TextStyle> }> = [
-  { key: "plain", label: "简白", style: { color: "#ffffff", stroke_width: 0, shadow: 0, bold: true } },
-  { key: "outline", label: "描边", style: { color: "#ffffff", stroke_color: "#000000", stroke_width: 4, shadow: 0, bold: true } },
-  { key: "variety", label: "综艺", style: { color: "#ffe14d", stroke_color: "#3a2a00", stroke_width: 6, shadow: 3, bold: true } },
-  { key: "shadow", label: "投影", style: { color: "#ffffff", stroke_color: "#000000", stroke_width: 0, shadow: 6, bold: true } },
-  { key: "candy", label: "糖果", style: { color: "#ff6fa5", stroke_color: "#ffffff", stroke_width: 4, shadow: 2, bold: true } },
+export const TEXT_PRESETS: Array<{ key: string; labelKey: MessageKey; style: Partial<TextStyle> }> = [
+  { key: "plain", labelKey: "textPresetPlain", style: { color: "#ffffff", stroke_width: 0, shadow: 0, bold: true } },
+  { key: "outline", labelKey: "textPresetOutline", style: { color: "#ffffff", stroke_color: "#000000", stroke_width: 4, shadow: 0, bold: true } },
+  { key: "variety", labelKey: "textPresetVariety", style: { color: "#ffe14d", stroke_color: "#3a2a00", stroke_width: 6, shadow: 3, bold: true } },
+  { key: "shadow", labelKey: "textPresetShadow", style: { color: "#ffffff", stroke_color: "#000000", stroke_width: 0, shadow: 6, bold: true } },
+  { key: "candy", labelKey: "textPresetCandy", style: { color: "#ff6fa5", stroke_color: "#ffffff", stroke_width: 4, shadow: 2, bold: true } },
 ];
 
 const HEX = /^#[0-9a-fA-F]{6}$/;

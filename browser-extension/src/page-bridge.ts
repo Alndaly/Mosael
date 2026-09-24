@@ -12,6 +12,7 @@ import {
   type PageResponse,
 } from "./shared/protocol";
 import type { Transcript } from "./shared/types";
+import { localizedError } from "./shared/localized-error";
 
 type LooseRecord = Record<string, any>;
 
@@ -27,15 +28,15 @@ function fetchPlatformText(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       window.removeEventListener("message", receive);
-      reject(new Error("字幕服务响应超时，请稍后重试"));
+      reject(localizedError("captionServiceTimeout"));
     }, 15_000);
     const receive = (event: MessageEvent<PageResourceResponse>) => {
       if (event.source !== window || event.data?.channel !== PAGE_RESOURCE_RESPONSE_CHANNEL || event.data.id !== id) return;
       window.clearTimeout(timeout);
       window.removeEventListener("message", receive);
       if (event.data.ok) resolve(event.data.body);
-      else if (event.data.error === "http_error") reject(new Error(`字幕服务请求失败（${event.data.status || 0}）`));
-      else reject(new Error("字幕服务暂时无法连接，请检查网络后重试"));
+      else if (event.data.error === "http_error") reject(localizedError("captionServiceHttpError", { status: event.data.status || 0 }));
+      else reject(localizedError("captionServiceUnreachable"));
     };
     window.addEventListener("message", receive);
     const request: PageResourceRequest = {
@@ -54,7 +55,7 @@ async function readYouTubeTranscript(trackId?: string): Promise<Transcript> {
   const player = (document.querySelector("ytd-watch-flexy") as any)?.playerData || window.ytInitialPlayerResponse;
   const candidates = listYouTubeTranscriptTracks(player || {});
   if (candidates.length === 0) {
-    throw new Error("当前视频没有可用字幕");
+    throw localizedError("videoHasNoCaptions");
   }
   const track = candidates.find((item) => item.id === trackId)
     || candidates.find((item) => item.kind === "source")
@@ -76,7 +77,7 @@ function bilibiliIdentity(): { bvid: string; cid: string } {
   const video = state.videoData || state.epInfo || {};
   const bvid = String(video.bvid || state.bvid || "");
   const cid = String(video.cid || state.cid || "");
-  if (!bvid || !cid) throw new Error("无法识别当前 B 站视频");
+  if (!bvid || !cid) throw localizedError("bilibiliVideoUnrecognized");
   return { bvid, cid };
 }
 
@@ -89,8 +90,8 @@ async function readTranscript(trackId?: string): Promise<Transcript> {
   const platform = detectVideoPlatform(location.href);
   if (platform === "youtube") return readYouTubeTranscript(trackId);
   if (platform === "bilibili") return readBilibiliTranscript(trackId);
-  if (platform === "pornhub" || platform === "generic") throw new Error("当前站点没有可直接读取的字幕");
-  throw new Error("当前页面暂不支持逐字稿");
+  if (platform === "pornhub" || platform === "generic") throw localizedError("siteHasNoReadableCaptions");
+  throw localizedError("pageTranscriptUnsupported");
 }
 
 window.addEventListener("message", (event: MessageEvent<PageRequest>) => {

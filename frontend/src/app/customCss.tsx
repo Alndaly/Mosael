@@ -128,6 +128,6 @@ export function CustomCssProvider({ children }: { children: React.ReactNode }): 
 
 export function useCustomCss(): CustomCssState {
   const value = React.useContext(CustomCssContext);
-  if (!value) throw new Error("useCustomCss 必须在 CustomCssProvider 内使用");
+  if (!value) throw new Error("useCustomCss must be used inside CustomCssProvider");
   return value;
 }

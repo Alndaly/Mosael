@@ -70,8 +70,8 @@ export function PreviewUnavailable({
         <span className="text-ui-sm leading-relaxed text-[rgb(255_255_255/0.5)]">{copy.hint}</span>
         {/* 点名是哪个素材:一条时间线上几十个片段,不说名字用户无从下手。 */}
         {assets.length > 0 && (
-          <span className="max-w-full truncate text-ui-xs text-[rgb(255_255_255/0.38)]" title={assets.map((a) => a.name).join("、")}>
-            {assets.map((asset) => asset.name).join("、")}
+          <span className="max-w-full truncate text-ui-xs text-[rgb(255_255_255/0.38)]" title={assets.map((a) => a.name).join(t("listSeparator"))}>
+            {assets.map((asset) => asset.name).join(t("listSeparator"))}
           </span>
         )}
         {canRetry && (

@@ -26,7 +26,7 @@ import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Separator } from "./components/ui/separator";
 import { cropScreenshot, frameDataUrlToBlob } from "./capture";
-import { localeFromLanguage, translate, type MessageKey, type UiLocale } from "./i18n";
+import { localeFromLanguage, localizeMessage, translate, type MessageKey, type UiLocale } from "./i18n";
 import { cn } from "./lib/utils";
 import { MosaelClient, type BrowserProfile, type Job, type Project, type Workspace } from "./mosael/client";
 import { mergePolledVideoContext } from "./platforms/detect";
@@ -35,6 +35,7 @@ import type { CapturedVideoFrame, CaptureGeometry, ContentRequest, ContentRespon
 import type { Transcript, TranscriptCue, VideoContext } from "./shared/types";
 import { alignSecondaryCues, languageMatches, transcriptTokensNeedSpace } from "./transcript";
 import { resolveTranscriptSource } from "./transcript-source";
+import { decodeLocalizedMessage } from "./shared/localized-error";
 
 type Connection = {
   baseUrl: string;
@@ -131,12 +132,20 @@ function Highlight({ value, query }: { value: string; query: string }): React.Re
   );
 }
 
-function localizePageError(message: string, t: (key: MessageKey) => string): string {
-  if (/Failed to fetch|NetworkError|Load failed|fetch failed|字幕服务暂时无法连接|字幕服务响应超时|字幕服务请求失败/i.test(message)) {
-    return t("transcriptFetchFailed");
+const CAPTION_SERVICE_FAILURES = new Set<string>(["captionServiceTimeout", "captionServiceHttpError", "captionServiceUnreachable"]);
+const NO_CAPTIONS = new Set<string>(["videoHasNoCaptions", "youtubeCaptionBodyEmpty", "captionsEmpty", "youtubeCaptionsEmpty"]);
+
+function localizePageError(message: string, locale: UiLocale): string {
+  const key = decodeLocalizedMessage(message)?.key ?? "";
+  if (CAPTION_SERVICE_FAILURES.has(key) || /Failed to fetch|NetworkError|Load failed|fetch failed/i.test(message)) {
+    return translate(locale, "transcriptFetchFailed");
   }
-  if (/没有可用字幕|没有返回字幕|字幕内容为空|Unexpected end of JSON/i.test(message)) return t("noCaptions");
-  return message;
+  if (NO_CAPTIONS.has(key) || /Unexpected end of JSON/i.test(message)) return translate(locale, "noCaptions");
+  return localizeMessage(locale, message);
+}
+
+function errorText(cause: unknown, locale: UiLocale): string {
+  return localizeMessage(locale, cause instanceof Error ? cause.message : String(cause));
 }
 
 function App(): React.ReactElement {
@@ -273,15 +282,15 @@ function App(): React.ReactElement {
     } catch (cause) {
       if (version !== refreshVersion.current) return;
       const raw = cause instanceof Error ? cause.message : String(cause);
-      setTranscriptNotice({ message: localizePageError(raw, t), kind: "error" });
+      setTranscriptNotice({ message: localizePageError(raw, locale), kind: "error" });
       setCanGenerate(Boolean(nextContext?.supported));
     }
-  }, [apiFor, connection, t]);
+  }, [apiFor, connection, locale, t]);
 
   React.useEffect(() => {
     document.documentElement.lang = locale;
-    document.title = locale === "zh-CN" ? "Mosael 视频助手" : "Mosael Video Assistant";
-  }, [locale]);
+    document.title = t("documentTitle");
+  }, [locale, t]);
 
   React.useEffect(() => {
     void (async () => {
@@ -293,7 +302,7 @@ function App(): React.ReactElement {
         try {
           await loadDestinations(savedConnection);
         } catch (cause) {
-          setSettingsNotice({ message: cause instanceof Error ? cause.message : String(cause), error: true });
+          setSettingsNotice({ message: errorText(cause, locale), error: true });
           setSettingsOpen(true);
         }
       }
@@ -365,7 +374,7 @@ function App(): React.ReactElement {
       await loadDestinations(next, available);
       setSettingsNotice({ message: t("connectionSuccess"), error: false });
     } catch (cause) {
-      setSettingsNotice({ message: cause instanceof Error ? cause.message : String(cause), error: true });
+      setSettingsNotice({ message: errorText(cause, locale), error: true });
     } finally {
       setConnecting(false);
     }
@@ -529,7 +538,7 @@ function App(): React.ReactElement {
   };
 
   const run = (operation: () => Promise<void>) => void operation().catch((cause) => {
-    showToast(cause instanceof Error ? cause.message : String(cause));
+    showToast(errorText(cause, locale));
   });
 
   const filteredCues = React.useMemo(() => transcript?.cues
@@ -538,8 +547,8 @@ function App(): React.ReactElement {
 
   const transcriptLanguage = transcript
     ? secondaryLanguageLabel
-      ? `${transcript.languageLabel} + ${secondaryLanguageLabel}`
-      : transcript.languageLabel
+      ? `${transcript.languageLabel || t("captionTrack")} + ${secondaryLanguageLabel || t("captionTrack")}`
+      : transcript.languageLabel || t("captionTrack")
     : "";
 
   return (

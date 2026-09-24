@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  useI18n: () => (key: string) => (key === "transcriptSpeakerLabel" ? "说话人 {n}" : key),
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 

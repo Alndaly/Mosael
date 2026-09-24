@@ -1,4 +1,5 @@
 import { humanError } from "@/api/errorMessage";
+import { messages } from "@/app/messages";
 
 const SERVER_KEY = "mosael.server.url";
 export const DEFAULT_API_BASE = "http://127.0.0.1:8800";
@@ -87,7 +88,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch (cause) {
-    throw new ApiOfflineError(`${API_BASE} 连不上`, { cause });
+    const text = messages[apiLocale === "en-US" ? "en-US" : "zh-CN"]["apiServerUnreachable"];
+    throw new ApiOfflineError(text.replace("{url}", API_BASE), { cause });
   }
   if (response.status === 401 && !path.startsWith("/api/auth/")) {
     onUnauthorized?.();

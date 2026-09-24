@@ -26,6 +26,19 @@ const zh = {
   saveAllSubtitles: "把整条字幕轨存成一篇笔记；有译文时原文与译文一起写入。",
   historyHint: "恢复会创建新版本，已有版本仍然保留。", localDraft: "已恢复本机未保存草稿", more: "加载更多",
   focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
+  node: {
+    imageLink: "图片链接",
+    alt: "替代文字",
+    apply: "应用图片修改",
+    cancel: "取消图片修改",
+    invalid: "请输入 https:// 图片地址或已有的素材引用。",
+    unavailable: "图片无法显示",
+    language: "代码语言",
+    plain: "纯文本",
+    copy: "复制代码",
+    copied: "已复制",
+    failed: "复制失败，请选中代码手动复制。",
+  },
 };
 type Strings = typeof zh;
 const en: Strings = {
@@ -55,5 +68,19 @@ const en: Strings = {
   saveAllSubtitles: "Save the whole subtitle track as one note; translations are written alongside the original.",
   historyHint: "Restoring creates a new version and keeps previous versions.", localDraft: "Recovered a local unsaved draft", more: "Load more",
   focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
+  node: {
+    imageLink: "Image address",
+    alt: "Alternative text",
+    apply: "Apply image changes",
+    cancel: "Cancel image changes",
+    invalid: "Use an https:// image address or an existing media reference.",
+    unavailable: "Image unavailable",
+    language: "Code language",
+    plain: "Plain text",
+    copy: "Copy code",
+    copied: "Copied",
+    failed: "Could not copy. Select the code and copy it manually.",
+  },
 };
-export function useNoteStrings() { return usePreferences().locale === "en-US" ? en : zh; }
+export function noteStrings(locale: string) { return locale === "en-US" ? en : zh; }
+export function useNoteStrings() { return noteStrings(usePreferences().locale); }

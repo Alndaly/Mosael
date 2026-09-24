@@ -150,7 +150,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                   type="button"
                   onClick={copyId}
                   className="group/id inline-flex max-w-full items-center gap-1 rounded-sm text-left font-mono text-ui-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground"
-                  title={copied ? t("assetIdCopied") : "复制 ID"}
+                  title={copied ? t("assetIdCopied") : t("assetCopyId")}
                 >
                   <span className="truncate">{asset.id}</span>
                   {copied ? (

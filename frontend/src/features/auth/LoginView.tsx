@@ -100,10 +100,10 @@ export function LoginView() {
         size="sm"
         className="absolute right-4 top-4 z-10 gap-1.5 text-muted-foreground [-webkit-app-region:no-drag]"
         onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
-        title={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
-        aria-label={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
+        title={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
+        aria-label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")}
       >
-        <Languages size={14} /> {locale === "zh-CN" ? "English" : "中文"}
+        <Languages size={14} /> {locale === "zh-CN" ? t("languageEn") : t("languageZh")}
       </Button>
 
       <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { messages, type MessageKey } from "@/app/messages";
+
 import { speakerChipStyle, speakerHue, speakerLabel, speakersAreMeaningful } from "./transcriptSpeakers";
 
 describe("speakersAreMeaningful", () => {
@@ -35,12 +37,19 @@ describe("speakerHue", () => {
 });
 
 describe("speakerLabel", () => {
+  const zh = (key: MessageKey) => messages["zh-CN"][key];
+  const en = (key: MessageKey) => messages["en-US"][key];
+
   it("引擎的写法换成人话", () => {
-    expect(speakerLabel("SPEAKER_00")).toBe("说话人 00");
+    expect(speakerLabel("SPEAKER_00", zh)).toBe("说话人 00");
+  });
+
+  it("英文界面跟着文案表走", () => {
+    expect(speakerLabel("SPEAKER_01", en)).toBe("Speaker 01");
   });
 
   it("已经是人名的原样留着", () => {
-    expect(speakerLabel("主持人")).toBe("主持人");
+    expect(speakerLabel("主持人", zh)).toBe("主持人");
   });
 });
 

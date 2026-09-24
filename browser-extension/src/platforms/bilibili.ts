@@ -1,4 +1,6 @@
 import type { Transcript, TranscriptCue, TranscriptTrack } from "../shared/types";
+import type { MessageKey } from "../i18n";
+import { localizedError } from "../shared/localized-error";
 
 type BilibiliCue = { from?: unknown; to?: unknown; content?: unknown };
 type LooseRecord = Record<string, any>;
@@ -24,7 +26,7 @@ export function listBilibiliTranscriptTracks(rawTracks: unknown): BilibiliTransc
       return [{
         id: `bilibili:source:${String(item.id_str || item.id || item.lan || index)}`,
         language: String(item.lan || ""),
-        languageLabel: String(item.lan_doc || item.lan || "字幕"),
+        languageLabel: String(item.lan_doc || item.lan || ""),
         kind: "source" as const,
         url,
       }];
@@ -49,11 +51,11 @@ export function normalizeBilibiliTranscript(payload: unknown): TranscriptCue[] {
   return cues;
 }
 
-function parseJson(body: string, message: string): unknown {
+function parseJson(body: string, message: MessageKey): unknown {
   try {
     return JSON.parse(body);
   } catch {
-    throw new Error(message);
+    throw localizedError(message);
   }
 }
 
@@ -65,15 +67,15 @@ export async function readBilibiliTranscript({
   fetchText,
 }: ReadBilibiliTranscriptOptions): Promise<Transcript> {
   const listingUrl = `https://api.bilibili.com/x/player/v2?bvid=${encodeURIComponent(bvid)}&cid=${encodeURIComponent(cid)}`;
-  const listing = parseJson(await fetchText(listingUrl), "B 站返回了无法识别的字幕清单");
+  const listing = parseJson(await fetchText(listingUrl), "bilibiliTrackListInvalid");
   const tracks = (listing as LooseRecord)?.data?.subtitle?.subtitles;
   const candidates = listBilibiliTranscriptTracks(tracks);
-  if (candidates.length === 0) throw new Error("当前视频没有可用字幕");
+  if (candidates.length === 0) throw localizedError("videoHasNoCaptions");
   const track = candidates.find((item) => item.id === trackId) || candidates[0];
   const subtitleUrl = track.url.startsWith("//") ? `https:${track.url}` : track.url;
-  const payload = parseJson(await fetchText(subtitleUrl), "B 站返回了无法识别的字幕内容");
+  const payload = parseJson(await fetchText(subtitleUrl), "bilibiliTrackBodyInvalid");
   const cues = normalizeBilibiliTranscript(payload);
-  if (cues.length === 0) throw new Error("字幕内容为空");
+  if (cues.length === 0) throw localizedError("captionsEmpty");
   return {
     trackId: track.id,
     language: track.language,

@@ -5,7 +5,8 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis } from "rechar
 import type { WorkspaceSummary } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { formatMicros } from "@/lib/money";
-import { useI18n, usePreferences } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
+import { useI18n } from "@/app/preferences";
 import {
   ChartContainer,
   ChartLegend,
@@ -116,7 +117,7 @@ export function UsageCostChart({
         body={
           missing.length > 0
             ? t("homeChartUsageUnpricedModels")
-                .replace("{models}", missing.join("、"))
+                .replace("{models}", missing.join(t("listSeparator")))
                 .replace("{more}", (unpriced?.length ?? 0) > 3 ? t("homeChartUsageUnpricedMore").replace("{n}", String((unpriced?.length ?? 0) - 3)) : "")
             : undefined
         }
@@ -345,26 +346,25 @@ const PLATFORM_COLORS = [
 // PLATFORM_DEFINITIONS 各一份),但它要的是"短到能塞进图例"的名字,和另两份的用途不同:
 // 后端那份是给下拉和说明用的完整名。加新平台时三处都要加 —— 漏了这里的后果很轻(退回显示裸
 // id,见下面的 fallback),所以没有为它单开一条契约。
-const PLATFORM_LABELS: Record<string, { zh: string; en: string }> = {
-  folder: { zh: "本地目录", en: "Folder" },
-  webhook: { zh: "Webhook", en: "Webhook" },
-  douyin: { zh: "抖音", en: "Douyin" },
-  bilibili: { zh: "B站", en: "Bilibili" },
-  xiaohongshu: { zh: "小红书", en: "Xiaohongshu" },
-  "weixin-channels": { zh: "视频号", en: "Channels" },
-  tiktok: { zh: "TikTok", en: "TikTok" },
-  youtube: { zh: "YouTube", en: "YouTube" },
+const PLATFORM_LABELS: Record<string, MessageKey> = {
+  folder: "homeChartPlatformFolder",
+  webhook: "homeChartPlatformWebhook",
+  douyin: "homeChartPlatformDouyin",
+  bilibili: "homeChartPlatformBilibili",
+  xiaohongshu: "homeChartPlatformXiaohongshu",
+  "weixin-channels": "homeChartPlatformWeixinChannels",
+  tiktok: "homeChartPlatformTiktok",
+  youtube: "homeChartPlatformYoutube",
 };
 
-function platformLabel(platform: string, locale: string): string {
+function platformLabel(platform: string, t: (key: MessageKey) => string): string {
   const known = PLATFORM_LABELS[platform];
   if (!known) return platform;
-  return locale.startsWith("zh") ? known.zh : known.en;
+  return t(known);
 }
 
 export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSummary["publish_platforms"] }) {
   const t = useI18n();
-  const { locale } = usePreferences();
   const entries = Object.entries(platforms)
     .filter(([, count]) => count > 0)
     .sort((a, b) => b[1] - a[1]);
@@ -376,7 +376,7 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
   const segments = entries.map(([platform, count], index) => ({
     platform,
     count,
-    name: platformLabel(platform, locale),
+    name: platformLabel(platform, t),
     color: PLATFORM_COLORS[index % PLATFORM_COLORS.length],
   }));
   const config: ChartConfig = Object.fromEntries(

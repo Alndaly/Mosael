@@ -33,6 +33,7 @@ import { AppearanceProvider } from "@/app/appearance";
 import { CustomCssProvider } from "@/app/customCss";
 import {
   PreferencesProvider,
+  translateNow,
   useI18n,
   usePreferences,
 } from "@/app/preferences";
@@ -69,7 +70,7 @@ import { RecordingProvider } from "@/features/media/RecordingProvider";
 
 
 const queryClient = new QueryClient({
-  mutationCache: createMutationCache((message) => toast.error(message)),
+  mutationCache: createMutationCache((message) => toast.error(message), translateNow),
   defaultOptions: {
     queries: {
       staleTime: 60_000,

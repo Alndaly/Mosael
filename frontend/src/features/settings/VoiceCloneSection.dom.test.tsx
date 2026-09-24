@@ -88,7 +88,7 @@ describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", (
     renderSection();
 
     await screen.findAllByRole("button", { name: /asrModelDownload/ });
-    await waitFor(() => expect(screen.getAllByText("ModelScope").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("settingsVoiceCloneSourceModelscope").length).toBeGreaterThan(0));
   });
 
   it("引擎不支持的源落到该引擎的第一个源上,而不是空白", async () => {
@@ -97,8 +97,8 @@ describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", (
     renderSection();
 
     await screen.findAllByRole("button", { name: /asrModelDownload/ });
-    await waitFor(() => expect(screen.getAllByText("HuggingFace").length).toBeGreaterThan(0));
-    expect(screen.queryByText("ModelScope")).toBeNull();
+    await waitFor(() => expect(screen.getAllByText("settingsVoiceCloneSourceHf").length).toBeGreaterThan(0));
+    expect(screen.queryByText("settingsVoiceCloneSourceModelscope")).toBeNull();
   });
 
   it("一个字没动,就不该是「改了还没保存」—— 否则每次刷新都要重存一遍", async () => {
@@ -217,8 +217,8 @@ describe("下载源的下拉显示的是**存着的那个值**", () => {
     // 只看**触发器上显示的那一行**。用 getByText 会匹配到 Radix 在 jsdom 里额外渲染的
     // 隐藏 <option> 列表 —— 那里面每个选项都在,断言不出"显示的是哪一个"。
     const picker = await screen.findByRole("combobox", { name: "voiceCloneSource" });
-    await waitFor(() => expect(picker.textContent).toContain("HuggingFace"));
-    expect(picker.textContent).not.toContain("镜像");
+    await waitFor(() => expect(picker.textContent).toContain("settingsVoiceCloneSourceHf"));
+    expect(picker.textContent).not.toContain("settingsVoiceCloneSourceHfMirror");
   });
 
   it("一个字没动,所以不该显示「改了还没保存」", async () => {

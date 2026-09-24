@@ -724,7 +724,7 @@ function TextStylePanel({
       <div className="flex flex-wrap gap-1">
         {TEXT_PRESETS.map((preset) => (
           <button key={preset.key} type="button" className={iconBtn(false)} onClick={() => set(preset.style)}>
-            {preset.label}
+            {t(preset.labelKey)}
           </button>
         ))}
       </div>

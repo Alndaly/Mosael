@@ -1,4 +1,4 @@
-import { usePreferences } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 
 /** 用户协议 / 隐私政策弹窗。条款正文较长且成段,不进 messages.ts 的扁平键值表,
@@ -47,10 +47,11 @@ const PRIVACY_EN: LegalSection[] = [
 export type LegalDoc = "terms" | "privacy";
 
 export function LegalDialog({ doc, onClose }: { doc: LegalDoc | null; onClose: () => void }) {
+  const t = useI18n();
   const { locale } = usePreferences();
   const zh = locale.startsWith("zh");
   const sections = doc === "privacy" ? (zh ? PRIVACY_ZH : PRIVACY_EN) : zh ? TERMS_ZH : TERMS_EN;
-  const title = doc === "privacy" ? (zh ? "隐私政策" : "Privacy Policy") : zh ? "用户协议" : "Terms of Service";
+  const title = doc === "privacy" ? t("legalPrivacyTitle") : t("legalTermsTitle");
   return (
     <ModalShell open={doc !== null} onOpenChange={(next) => !next && onClose()} title={title} className="w-[460px]">
       <div className="grid max-h-[min(420px,60vh)] gap-3 overflow-y-auto pr-1 [&_h3]:m-0 [&_h3]:text-ui-sm [&_h3]:font-semibold [&_h3]:text-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.7] [&_p]:text-muted-foreground">

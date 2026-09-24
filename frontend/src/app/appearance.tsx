@@ -1,5 +1,7 @@
 import React from "react";
 
+import type { MessageKey } from "@/app/messages";
+
 /**
  * Opt-in appearance customization: an app-wide background (gradient preset or a
  * user image) plus adjustable surface transparency and frosted-glass blur. All
@@ -20,16 +22,16 @@ export interface AppearanceState {
 
 export interface BackgroundPreset {
   id: string;
-  label: string;
+  labelKey: MessageKey;
   css: string;
 }
 
 export const BACKGROUND_PRESETS: BackgroundPreset[] = [
-  { id: "aurora", label: "极光", css: "linear-gradient(135deg, #1e3a8a 0%, #6d28d9 45%, #0891b2 100%)" },
-  { id: "dusk", label: "暮色", css: "linear-gradient(160deg, #fb7185 0%, #f59e0b 50%, #7c3aed 100%)" },
-  { id: "graphite", label: "石墨", css: "linear-gradient(180deg, #232a36 0%, #0f131a 100%)" },
-  { id: "mist", label: "晨雾", css: "linear-gradient(135deg, #a5b4fc 0%, #f5d0fe 55%, #fbcfe8 100%)" },
-  { id: "forest", label: "松林", css: "linear-gradient(150deg, #064e3b 0%, #065f46 45%, #0f766e 100%)" },
+  { id: "aurora", labelKey: "appearancePresetAurora", css: "linear-gradient(135deg, #1e3a8a 0%, #6d28d9 45%, #0891b2 100%)" },
+  { id: "dusk", labelKey: "appearancePresetDusk", css: "linear-gradient(160deg, #fb7185 0%, #f59e0b 50%, #7c3aed 100%)" },
+  { id: "graphite", labelKey: "appearancePresetGraphite", css: "linear-gradient(180deg, #232a36 0%, #0f131a 100%)" },
+  { id: "mist", labelKey: "appearancePresetMist", css: "linear-gradient(135deg, #a5b4fc 0%, #f5d0fe 55%, #fbcfe8 100%)" },
+  { id: "forest", labelKey: "appearancePresetForest", css: "linear-gradient(150deg, #064e3b 0%, #065f46 45%, #0f766e 100%)" },
 ];
 
 const PARAMS_KEY = "mosael.appearance";
@@ -129,13 +131,18 @@ export function useAppearance() {
 
 /** Downscale + JPEG-compress a picked image so it fits localStorage comfortably
  * (a wallpaper at 1920px q0.8 is a few hundred KB). Returns a data URL. */
-export function compressImageFile(file: File, maxDimension = 1920, quality = 0.8): Promise<string> {
+export function compressImageFile(
+  file: File,
+  t: (key: MessageKey) => string,
+  maxDimension = 1920,
+  quality = 0.8,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("读取图片失败"));
+    reader.onerror = () => reject(new Error(t("appearanceImageReadFailed")));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("无法解析图片"));
+      img.onerror = () => reject(new Error(t("appearanceImageDecodeFailed")));
       img.onload = () => {
         const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
         const w = Math.round(img.width * scale);
@@ -144,7 +151,7 @@ export function compressImageFile(file: File, maxDimension = 1920, quality = 0.8
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("画布不可用"));
+        if (!ctx) return reject(new Error(t("appearanceCanvasUnavailable")));
         ctx.drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL("image/jpeg", quality));
       };

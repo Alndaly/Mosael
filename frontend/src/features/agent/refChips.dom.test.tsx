@@ -16,6 +16,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/media/AssetPreviewModalById", () => ({ AssetPreviewModalById: () => null }));
 vi.mock("@/api/client", () => ({ assetThumbnailUrl: () => "" }));
+vi.mock("@/app/preferences", async () => {
+  const { messages } = await import("@/app/messages");
+  return { useI18n: () => (key: keyof (typeof messages)["zh-CN"]) => messages["zh-CN"][key] };
+});
 
 import { ToolResultCard } from "@/features/agent/toolResultShapes";
 

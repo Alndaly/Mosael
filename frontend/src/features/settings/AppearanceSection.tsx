@@ -140,7 +140,7 @@ export function BackgroundSection() {
   const pickImage = async (file: File | undefined) => {
     if (!file) return;
     try {
-      appearance.setImage(await compressImageFile(file));
+      appearance.setImage(await compressImageFile(file, t));
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -191,7 +191,7 @@ export function BackgroundSection() {
                 style={{ backgroundImage: preset.css }}
                 onClick={() => appearance.update({ preset: preset.id })}
               >
-                <span>{preset.label}</span>
+                <span>{t(preset.labelKey)}</span>
               </button>
             ))}
           </div>

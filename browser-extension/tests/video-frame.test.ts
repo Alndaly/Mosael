@@ -23,7 +23,7 @@ describe("video frame capture", () => {
 
   it("rejects videos whose decoded frame is not ready", () => {
     expect(() => captureVideoFrame({ videoWidth: 0, videoHeight: 0 }, vi.fn())).toThrow(
-      "视频画面尚未就绪",
+      "i18n:videoFrameNotReady",
     );
   });
 });
