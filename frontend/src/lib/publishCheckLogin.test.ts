@@ -24,7 +24,7 @@ vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
 import type { PageDriver } from "../../../electron/publish/pageDriver";
 
 // 动态 import:vi.mock("electron") 必须在模块求值前生效。
-const { TiktokAdapter, YoutubeAdapter } = await import("../../../electron/publish/adapters");
+const { TiktokAdapter, WeixinChannelsAdapter, YoutubeAdapter } = await import("../../../electron/publish/adapters");
 
 interface FakePage {
   url: string;
@@ -34,15 +34,23 @@ interface FakePage {
   texts?: string[];
   /** 页面上有没有文件输入(创作页的上传入口)。 */
   fileInput?: boolean;
-  /** 匹配得上的 CSS(TikTok 用 data-e2e 标记判登录页)。 */
+  /** 匹配得上、**看得见**的 CSS(TikTok 用 data-e2e 标记判登录页)。 */
   css?: string[];
+  /** 挂在 DOM 里但藏着的 CSS —— 登录后信息流上残留的登录弹窗就是这样。 */
+  hiddenCss?: string[];
+  /** 读 url() 时页面已经换成的下一个地址(模拟判定途中被服务端踢回登录页)。 */
+  nextUrl?: string;
 }
 
 /** 只实现 checkLogin 会用到的那几个原语;其余一律不该被调用。 */
 function fakeDriver(page: FakePage) {
   const calls: string[] = [];
   const driver = {
-    url: () => page.url,
+    url: () => {
+      const now = page.url;
+      if (page.nextUrl && calls.includes("hasTextDeep")) page.url = page.nextUrl;
+      return now;
+    },
     hasCookie: async (_url: string, names: readonly string[]) => {
       calls.push("hasCookie");
       return (page.cookies ?? []).some((name) => names.includes(name));
@@ -51,8 +59,12 @@ function fakeDriver(page: FakePage) {
       calls.push("fileInputAttached");
       return page.fileInput === true;
     },
-    cssAttached: async (selector: string) => (page.css ?? []).includes(selector),
-    hasTextDeep: async (text: string) => (page.texts ?? []).includes(text),
+    cssAttached: async (selector: string) => [...(page.css ?? []), ...(page.hiddenCss ?? [])].includes(selector),
+    cssVisible: async (selector: string) => (page.css ?? []).includes(selector),
+    hasTextDeep: async (text: string) => {
+      calls.push("hasTextDeep");
+      return (page.texts ?? []).includes(text);
+    },
   };
   return { driver: driver as unknown as PageDriver, calls };
 }
@@ -141,5 +153,47 @@ describe("TikTok 登录态判定", () => {
   it("没 cookie 没标志 —— 判未登录", async () => {
     const { driver } = fakeDriver({ url: "https://www.tiktok.com/foryou" });
     expect(await new TiktokAdapter(driver, task).checkLogin()).toBe(false);
+  });
+
+  it("**信息流上藏着的登录弹窗不算** —— 登完停在 /foryou,内嵌浏览器要能自己收起", async () => {
+    const { driver } = fakeDriver({
+      url: "https://www.tiktok.com/foryou?lang=en",
+      cookies: ["sessionid"],
+      hiddenCss: ['[data-e2e="login-title"], [data-e2e="channel-item"]'],
+    });
+    expect(await new TiktokAdapter(driver, task).checkLogin()).toBe(true);
+  });
+});
+
+describe("视频号登录态判定", () => {
+  const platform = "https://channels.weixin.qq.com/platform/post/create";
+
+  it("**「微信快捷登录」卡片不是已登录** —— 还没点确认,助手里没有会话", async () => {
+    // 线上现场:URL 已经是 post/create(被踢回登录页的那一瞬),页面还是登录页,底部介绍卡片
+    // 叫「内容管理」。两条都成立,账号被写成了已登录。
+    const { driver } = fakeDriver({
+      url: platform,
+      texts: ["登录视频号助手", "微信快捷登录", "使用其他头像、昵称或账号", "内容管理", "通知中心"],
+    });
+    expect(await new WeixinChannelsAdapter(driver, task).checkLogin()).toBe(false);
+  });
+
+  it("不在 /platform/ 下,创作页文案不算数", async () => {
+    const { driver } = fakeDriver({ url: "https://channels.weixin.qq.com/", texts: ["通知中心"] });
+    expect(await new WeixinChannelsAdapter(driver, task).checkLogin()).toBe(false);
+  });
+
+  it("判定途中被踢回登录页 —— 刚才看到的不是创作页", async () => {
+    const { driver } = fakeDriver({
+      url: platform,
+      texts: ["通知中心"],
+      nextUrl: "https://channels.weixin.qq.com/login.html",
+    });
+    expect(await new WeixinChannelsAdapter(driver, task).checkLogin()).toBe(false);
+  });
+
+  it("真在助手后台里:认得出来", async () => {
+    const { driver } = fakeDriver({ url: platform, texts: ["通知中心", "数据中心"] });
+    expect(await new WeixinChannelsAdapter(driver, task).checkLogin()).toBe(true);
   });
 });

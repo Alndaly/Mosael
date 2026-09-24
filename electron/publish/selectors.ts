@@ -82,7 +82,13 @@ export const SELECTORS = {
     publishDoneTexts: ["发表成功", "发布成功", "已发表", "审核中", "提交成功"], // i18n-ok
     adminVerifyText: "管理员本人验证", // i18n-ok
     noPermissionText: "你还不能发表视频", // i18n-ok
-    loggedInTexts: ["通知中心", "内容管理", "数据中心"], // i18n-ok
+    // 「内容管理」不在这里:登录落地页底部的功能介绍卡片就叫「内容管理」,登录页上也搜得到。
+    loggedInTexts: ["通知中心", "数据中心"], // i18n-ok
+    // 登录页的「微信快捷登录」卡片(已在手机上登过、只差点一下确认)。它**不是已登录** —— 这时
+    // 分区里没有助手的会话,点了确认才有。它不在 iframe 里,也不带 loginLanding 那几个类名。
+    loggedOutTexts: ["微信快捷登录", "登录视频号助手", "使用其他头像、昵称或账号"], // i18n-ok
+    // 已登录的助手页面都在 /platform/ 下。创作页标志只在这里算数(见 checkLogin)。
+    isPlatformUrl: (u: string): boolean => /^https:\/\/channels\.weixin\.qq\.com\/platform\//.test(u),
     // QR lives in a CROSS-ORIGIN iframe, so detect the login landing container.
     loginLanding:
       '.login-view, .login-qrcode-wrap, .qrcode-wrap, iframe[src*="login-for-iframe"], iframe[src*="login"]',

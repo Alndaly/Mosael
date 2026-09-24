@@ -28,8 +28,10 @@ export class TiktokAdapter implements PublishAdapter {
     if (this.s.isLoginUrl(this.driver.url())) {
       return false;
     }
-    // 结构优先:登录页的 data-e2e 标记比句子稳。
-    if (await this.driver.cssAttached(this.s.loggedOutMarks, 2_000)) {
+    // 结构优先:登录页的 data-e2e 标记比句子稳。**要看得见才算** —— 信息流页登录后仍可能把
+    // 登录弹窗挂在 DOM 里只是藏着;只看"挂没挂"会让已登录的人在信息流上一直被判成未登录,
+    // 内嵌浏览器也就一直不收起(线上那次:登完停在 /foryou,轮询满 10 分钟都没认出来)。
+    if (await this.driver.cssVisible(this.s.loggedOutMarks, 2_000)) {
       return false;
     }
     // 页面无关的一条:登录成功后 TikTok 常把人留在 www.tiktok.com 的信息流,不是 Studio。

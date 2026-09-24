@@ -441,6 +441,12 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     const adapter = createAdapter(platform, driver, stub);
     await adapter.openCreatorPage();
     const loggedIn = await adapter.checkLogin();
+    // 复检途中用户点了登录:这台视图已经交给登录流程,刚才的判定看的可能是登录页上的半截现场
+    // (线上:视频号的复检在人还停在「微信快捷登录」时回写了 bound)。账号状态归登录轮询管,不回写。
+    if (loginAccounts.has(acc.account_id)) {
+      plog("recheck abandoned (login took over):", acc.account_id);
+      return;
+    }
     plog("recheck result:", acc.account_id, loggedIn ? "bound" : "login_required");
     await backend.patchAccount(acc.account_id, {
       binding_status: loggedIn ? "bound" : "login_required",
@@ -452,6 +458,8 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
       settle(stub, "login_required");
     }
   } catch (error) {
+    // 登录接管会中止复检在飞的 goto —— 那是预期的,状态同样归登录轮询管。
+    if (loginAccounts.has(acc.account_id)) return;
     // 抖动别误判下线;把账号翻回复检前的状态(绝不能留在 checking——那不在任何
     // 认领条件里,会永久卡死),下个 ttl 再查。
     plog("recheck error:", acc.account_id, error instanceof Error ? error : String(error));
@@ -654,16 +662,21 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       updatedAt: "",
     });
     const deadline = Date.now() + 10 * 60 * 1000;
+    // 每换一页记一行「在这页上判成未登录」。此前轮询一句日志都不留,TikTok 登完停在信息流、
+    // 满 10 分钟都没认出来,事后只能从「超时之后的复检一查就是已登录」倒推。
+    let lastNegativeUrl = "";
     const poll = async () => {
       loginPollTimer = null;
       // stop/换代/视图销毁/超时:收工,不再续排。
       if (stopped || gen !== generation || !views || Date.now() > deadline) {
+        plog("login poll ended without login:", accountId, Date.now() > deadline ? "timeout" : "stopped");
         endLogin(gen, accountId);
         return;
       }
       // 用户把这个视图收起来了(返回 / 双击 Esc / 切去别的账号)= 他不打算登了。继续轮询没有意义,
       // 而且 loginAccounts 里挂着它会让复检一直跳过这个账号 —— 状态就永远停在「检测中」。
       if (views.visibleAccountId !== accountId) {
+        plog("login poll ended (view dismissed):", accountId);
         endLogin(gen, accountId);
         return;
       }
@@ -678,7 +691,13 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         endLogin(gen, accountId);
         return;
       }
+      if (!ok) {
+        const here = driver.url();
+        if (here !== lastNegativeUrl) plog("login poll: not logged in yet at", here.slice(0, 160));
+        lastNegativeUrl = here;
+      }
       if (ok) {
+        plog("login poll: logged in", accountId, def.id);
         try {
           await backend.patchAccount(accountId, { binding_status: "bound", last_error: null });
         } catch {

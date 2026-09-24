@@ -18,6 +18,15 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     await this.driver.goto(this.s.createUrl);
   }
 
+  /**
+   * 登上了吗。**线上误判过一次**:登录页只弹出「微信快捷登录」卡片、人还没点确认,账号就被写成了
+   * 已登录。当时两件事叠在一起 —— 进 /platform/post/create 被服务端踢回 login.html 的那一瞬,
+   * `url()` 已经是 post/create 而页面还是登录页;而登录页底部的介绍卡片恰好叫「内容管理」,
+   * 于是「URL 不是登录页 + 找到了创作页文案」两条都成立。
+   *
+   * 所以:登录页自己的文案先判未登录;创作页标志只在 /platform/ 下算数;判成已登录之前再看一眼
+   * URL —— 这期间被踢回登录页的话,刚才看到的就不是创作页。
+   */
   async checkLogin(): Promise<boolean> {
     if (this.s.isLoginUrl(this.driver.url())) {
       return false;
@@ -25,12 +34,23 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     if (await this.driver.cssVisible(this.s.loginLanding, 2_500)) {
       return false;
     }
-    for (const text of this.s.loggedInTexts) {
+    for (const text of this.s.loggedOutTexts) {
       if (await this.driver.hasTextDeep(text)) {
-        return true;
+        return false;
       }
     }
-    return this.driver.fileInputAttached(this.s.fileInput, 4_000);
+    if (!this.s.isPlatformUrl(this.driver.url())) {
+      return false;
+    }
+    let found = false;
+    for (const text of this.s.loggedInTexts) {
+      if (await this.driver.hasTextDeep(text)) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) found = await this.driver.fileInputAttached(this.s.fileInput, 4_000);
+    return found && this.s.isPlatformUrl(this.driver.url());
   }
 
   async uploadVideo(videoPath: string): Promise<void> {
