@@ -3810,6 +3810,23 @@ export interface paths {
         patch: operations["update_api_boards__board_id__patch"];
         trace?: never;
     };
+    "/api/boards/{board_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Duplicate */
+        post: operations["duplicate_api_boards__board_id__duplicate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/boards/{board_id}/generate": {
         parameters: {
             query?: never;
@@ -7066,6 +7083,16 @@ export interface components {
             canvas?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** BoardDuplicate */
+        BoardDuplicate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
         };
         /** BoardGenerate */
         BoardGenerate: {
@@ -20193,6 +20220,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BoardUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    duplicate_api_boards__board_id__duplicate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardDuplicate"];
             };
         };
         responses: {

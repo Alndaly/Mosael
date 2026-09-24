@@ -401,6 +401,33 @@ def create_board(
     return board
 
 
+def duplicate_board(
+    db: Session, *, workspace_id: str, board_id: str, name: str = "", actor_id: str | None = None
+) -> Board:
+    """复制一张画板:同样的项、连线和标记,落成新的一张。
+
+    **在跑的那几格不带过去。** 生成任务的回执认的是原板(见 receipt_to_item,board_id 写死在
+    任务的 payload 里),副本里留着 job_id 的话,那一格永远等不到回执 —— 框里一直转圈,底下的
+    提交键一直按不动。它们在副本里退回空槽:提示词和参数都还在,想要的话再点一次。
+
+    评论不跟着走:它们是对**那一张**的讨论,挂在原板的 subject_id 上。名字由调用方给(「× 副本」
+    是界面语言里的一句话,这一层不替它挑语言);没给就沿用原名。
+    """
+    source = get_board(db, workspace_id, board_id)
+    canvas = json.loads(json.dumps(source.canvas or {}))
+    for item in canvas.get("items") or []:
+        run = item.get("run")
+        if isinstance(run, dict) and run.get("job_id"):
+            item.pop("run")
+    return create_board(
+        db,
+        workspace_id=workspace_id,
+        name=(name or "").strip() or source.name,
+        canvas=canvas,
+        actor_id=actor_id,
+    )
+
+
 def update_board(
     db: Session,
     *,

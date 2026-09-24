@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite
+from app.api.schemas import BoardCreate, BoardDuplicate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -13,6 +13,7 @@ from app.domain.boards import (
     BoardRevisionConflict,
     create_board,
     delete_board,
+    duplicate_board,
     get_board,
     list_boards,
     update_board,
@@ -60,6 +61,17 @@ def create(body: BoardCreate, db: DbSession, user: CurrentUser) -> Board:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     try:
         return create_board(db, workspace_id=body.workspace_id, name=body.name, canvas=body.canvas, actor_id=user.id)
+    except BoardDomainError as exc:
+        raise _board_http_error(exc) from exc
+
+
+@router.post("/boards/{board_id}/duplicate", response_model=BoardOut)
+def duplicate(board_id: str, body: BoardDuplicate, db: DbSession, user: CurrentUser) -> Board:
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    try:
+        return duplicate_board(
+            db, workspace_id=body.workspace_id, board_id=board_id, name=body.name, actor_id=user.id
+        )
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
 

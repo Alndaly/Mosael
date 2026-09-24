@@ -1,6 +1,7 @@
 import React from "react";
 
 import { assetThumbnailUrl } from "@/api/client";
+import { cn } from "@/lib/utils";
 
 export interface PreviewItem { id: string; x: number; y: number; width?: number; height?: number; label?: string; assetId?: string; }
 
@@ -30,7 +31,7 @@ function PreviewBox({ item }: { item: Box }) {
 }
 
 /** Read-only overview of the saved canvas, using its real positions and connections. */
-export function CanvasPreview({ items, edges = [] }: { items: PreviewItem[]; edges?: { source: string; target: string }[] }) {
+export function CanvasPreview({ items, edges = [], className }: { items: PreviewItem[]; edges?: { source: string; target: string }[]; /** 选中态的主色描边之类,叠在外框上。 */ className?: string }) {
   const safe = items.filter(item => Number.isFinite(item.x) && Number.isFinite(item.y));
   const boxes = safe.map(item => ({ ...item, width: Math.max(40, item.width || 200), height: Math.max(30, item.height || 110) }));
   const left = Math.min(0, ...boxes.map(item => item.x)) - 40;
@@ -38,7 +39,7 @@ export function CanvasPreview({ items, edges = [] }: { items: PreviewItem[]; edg
   const right = Math.max(320, ...boxes.map(item => item.x + item.width)) + 40;
   const bottom = Math.max(180, ...boxes.map(item => item.y + item.height)) + 40;
   const byId = new Map(boxes.map(item => [item.id, item]));
-  return <div className="grid aspect-[16/9] w-full place-items-center overflow-hidden rounded-lg border border-border bg-panel-subtle p-5">
+  return <div className={cn("grid aspect-[16/9] w-full place-items-center overflow-hidden rounded-lg border border-border bg-panel-subtle p-5", className)}>
     <svg className="h-full w-full overflow-hidden" viewBox={`${left} ${top} ${right-left} ${bottom-top}`} aria-hidden="true">
       {edges.map((edge, i) => { const a = byId.get(edge.source), b = byId.get(edge.target); if (!a || !b) return null; const x1=a.x+a.width, y1=a.y+a.height/2, x2=b.x, y2=b.y+b.height/2; return <path key={i} d={`M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`} fill="none" stroke="var(--primary)" strokeOpacity=".45" strokeWidth="2" vectorEffect="non-scaling-stroke" />; })}
       {boxes.map(item => <PreviewBox key={`${item.id}:${item.assetId ?? ""}`} item={item} />)}

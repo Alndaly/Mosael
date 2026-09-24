@@ -131,6 +131,58 @@ def test_别的工作区的画板拿不到() -> None:
     assert client.get("/api/boards", params={"workspace_id": theirs}).json() == []
 
 
+def test_创建副本_内容照搬_在跑的格子退回空槽_原板不动() -> None:
+    """副本是新的一张:项、连线、标记都在,名字由调用方给。
+
+    在跑的那一格**不能带着 job_id 过去** —— 回执认的是原板,副本里那一格会永远转圈。
+    """
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "灵感"}).json()["id"]
+    canvas = {
+        "items": [
+            {"id": "n1", "kind": "note", "x": 10, "y": 20, "text": "开头", "color": "yellow"},
+            {
+                "id": "i1",
+                "kind": "image",
+                "x": 300,
+                "y": 20,
+                "form": {"prompt": "一只猫"},
+                "run": {"status": "running", "job_id": "job-1"},
+            },
+            {"id": "i2", "kind": "image", "x": 600, "y": 20, "run": {"status": "failed", "error": "超时"}},
+        ],
+        "edges": [{"id": "e1", "source": "n1", "target": "i1"}],
+        "markers": [{"id": "m1", "name": "起点", "x": 0, "y": 0}],
+    }
+    saved = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+    assert saved.status_code == 200, saved.text
+
+    copied = client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": ws, "name": "灵感 副本"})
+    assert copied.status_code == 200, copied.text
+    copy = copied.json()
+    assert copy["id"] != board_id
+    assert copy["name"] == "灵感 副本"
+    assert copy["revision"] == 1
+    items = {item["id"]: item for item in copy["canvas"]["items"]}
+    assert set(items) == {"n1", "i1", "i2"}
+    assert items["n1"]["text"] == "开头"
+    assert "run" not in items["i1"], "带着原板的 job_id 过去,那一格永远等不到回执"
+    assert items["i1"]["form"]["prompt"] == "一只猫", "提示词要留着,好再点一次"
+    assert items["i2"]["run"] == {"status": "failed", "error": "超时"}, "已经落定的状态照搬"
+    assert copy["canvas"]["edges"] == [{"id": "e1", "source": "n1", "target": "i1"}]
+    assert [marker["id"] for marker in copy["canvas"]["markers"]] == ["m1"]
+
+    original = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
+    assert original["canvas"]["items"][1]["run"] == {"status": "running", "job_id": "job-1"}, "复制不能改到原板"
+
+    # 没给名字就沿用原名;别的工作区复制不到(当作不存在)。
+    assert client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": ws}).json()["name"] == "灵感"
+    theirs = _workspace(client)
+    assert client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": theirs}).status_code == 404
+    assert len(client.get("/api/boards", params={"workspace_id": ws}).json()) == 3
+
+
 def test_画板不存在是404_画布不合法是400() -> None:
     """两者对调用方意味着完全不同的下一步:一个是"别再重试了",一个是"改完再发"。"""
     client = fresh_client()

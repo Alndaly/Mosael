@@ -23,9 +23,11 @@ import {
   ViewportPortal,
   addEdge,
   getBezierPath,
+  getSmoothStepPath,
   useEdgesState,
   useNodesState,
   type Connection,
+  type ConnectionLineType,
   type Edge,
   type Node,
   type ReactFlowInstance,
@@ -36,6 +38,8 @@ import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type Workspac
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { centerCanvasViewport, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
+import { shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationOption } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -89,6 +93,8 @@ export interface BoardCanvasApi {
   replace: (canvas: Canvas) => void;
   fitView: () => void;
   focusComment: (comment: CollaborationComment) => void;
+  /** 查找节点跳到某一项:把它摆到看得见的那块正中,放得下的话拉近到看得清。不改选中态。 */
+  focusItem: (itemId: string) => void;
   /** 位置书签。清单挂在工具条上,而它读的是画布这一份(事实来源在 React Flow 的节点里)。 */
   markers: CanvasMarker[];
   addMarker: () => void;
@@ -245,6 +251,20 @@ export function shouldSuppressCommentPlacement(gesture: {
     || (gesture.startedInsideOverlay && !gesture.endedInsideOverlay);
 }
 
+/**
+ * 查找节点跳过去时的缩放:至少拉到 0.9(看得清字),节点大到放不下时退到刚好装得下、四周留一圈;
+ * 不超过画布的最大缩放。已经比 0.9 更近、而且装得下时保持原样 —— 用户自己拉近的,别替他拉远。
+ */
+export function searchFocusZoom(
+  current: number,
+  size: { width: number; height: number },
+  visible: { width: number; height: number },
+  maxZoom = 2.5,
+): number {
+  const fit = Math.min(visible.width / (size.width * 1.25), visible.height / (size.height * 1.25));
+  return Math.min(Math.max(current, 0.9), fit, maxZoom);
+}
+
 export function BoardCommentModeHint({ onExit }: { onExit?: () => void }) {
   return <AnnotationModeHint kind="comment" onExit={onExit} />;
 }
@@ -301,6 +321,10 @@ interface Props {
   models?: GenerationOption[];
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
   showMinimap?: boolean;
+  /** 连线的走线方式。是看图习惯(存在本地偏好里),不写进画布 —— 见 components/app/canvasEdgeShape。 */
+  edgeShape?: EdgeShape;
+  /** 查找节点的命中集。命中的项外面画一圈(见 CanvasNodeSearch)。 */
+  searchHighlight?: CanvasSearchHighlight | null;
   /** 系统里拖进来的文件:上层负责传进素材库,回来的每一份就地摆到落点上。 */
   onDropFiles?: (files: File[]) => Promise<{ id: string; name: string; kind: "image" | "video" }[]>;
   uploading?: boolean;
@@ -332,7 +356,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
@@ -613,6 +637,30 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
 
   useMarkerShortcuts(markers, jumpToMarker, !commentMode);
 
+  /** 查找节点跳到某一项。和跳标记一样只动视口、不改选中态 —— 按 Enter 一路往下看的时候,
+   *  每一格都弹出自己的面板会把画布盖满。 */
+  const focusItem = React.useCallback((itemId: string) => {
+    const instance = rf.current;
+    const pane = surface.current;
+    const node = instance?.getNode(itemId);
+    if (!instance || !pane || !node) return;
+    const size = {
+      width: node.measured?.width ?? node.width ?? 200,
+      height: node.measured?.height ?? node.height ?? 120,
+    };
+    const insets = insetsOf(pane);
+    void centerCanvasViewport(
+      instance,
+      pane,
+      { x: node.position.x + size.width / 2, y: node.position.y + size.height / 2 },
+      insets,
+      {
+        zoom: searchFocusZoom(instance.getZoom(), size, visibleCanvasSize(pane.clientWidth, pane.clientHeight, insets)),
+        duration: 350,
+      },
+    );
+  }, [insetsOf]);
+
   /** 在当前视口中心放一枚标记。放在**看得见的地方**:标记标的是"我现在在看的这块地方"。 */
   const addMarker = React.useCallback((point?: { x: number; y: number }) => {
     const instance = rf.current;
@@ -652,6 +700,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } }
       : {
           ...node,
+          className: searchHighlightClass(searchHighlight, node.id),
           draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
           data: { ...node.data, onText: setText, onAspect: setAspect, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
         },
@@ -942,6 +991,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           void fitCanvasViewport(rf.current, surface.current, insetsOf(surface.current));
         }
       },
+      focusItem,
       focusComment: (comment) => {
         const x = comment.anchor?.x;
         const y = comment.anchor?.y;
@@ -955,7 +1005,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, onReady, insetsOf, centerOn, stepBack, stepForward, history, restore, markers, addMarker, jumpToMarker]);
+  }, [add, patch, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, restore, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
@@ -1009,7 +1059,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       <MarkerEditorProvider enabled={markerMode && markersVisible}>
       <ReactFlow
         nodes={displayNodes}
-        edges={edges.map(edge => ({ ...edge, selectable: !commentMode && !markerMode }))}
+        edges={shapeEdges(edges, edgeShape).map(edge => ({ ...edge, selectable: !commentMode && !markerMode }))}
+        connectionLineType={edgeShape as ConnectionLineType}
         nodeTypes={CANVAS_NODE_TYPES}
         minZoom={0.1}
         onNodesChange={onNodesChange}
@@ -1326,11 +1377,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           单子出现在别处等于要他把视线再挪一趟。 */}
       {linkMenu && (
         <>
-          {/* Same viewport and Bézier algorithm as React Flow's live connection. */}
+          {/* 和 React Flow 拖线时同一个视口、同一种走线(跟着走线偏好:贝塞尔或圆角折线)。 */}
           <ViewportPortal>
             <svg className="pointer-events-none absolute left-0 top-0 h-px w-px overflow-visible" aria-hidden data-pending-board-connection>
               <path
-                d={getBezierPath({
+                d={(edgeShape === "smoothstep" ? getSmoothStepPath : getBezierPath)({
                   sourceX: linkMenu.fromX,
                   sourceY: linkMenu.fromY,
                   sourcePosition: linkMenu.fromPosition,

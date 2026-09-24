@@ -51,17 +51,13 @@ import {
   Plus,
   Redo2,
   Repeat,
-  Search,
-  Spline,
   Square,
   Store,
   Trash2,
   Type,
   Undo2,
-  Waypoints,
   Workflow as WorkflowIcon,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -152,6 +148,8 @@ import {
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
+import { EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";
+import { CanvasNodeSearch, searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { relativeTime } from "@/lib/time";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSelection, usePersistentTab, usePersistentViewport } from "@/lib/usePersistentTab";
@@ -299,30 +297,7 @@ const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "json_schema_strict",
 ]);
 
-/** 连线统一带闭合箭头,方向一目了然。 */
-/**
- * 连线走线方式。值直接就是 React Flow 的内置边类型,不另建一层映射 ——
- * 多一层枚举只会在加一种时要改两处。
- *
- * 走线方式是**看图习惯**而不是工作流数据:同一张图,有人要贝塞尔的流畅,有人要直角好对齐。
- * 所以存本地偏好、对所有工作流生效,不写进 graph —— 写进去会让同一张图在两个人眼里长得不一样,
- * 还会让"换了个线型"变成一次图变更、触发自动保存和脏状态。
- */
-const EDGE_SHAPES = ["default", "smoothstep"] as const;
-type EdgeShape = (typeof EDGE_SHAPES)[number];
-
-const EDGE_SHAPE_ICON: Record<EdgeShape, LucideIcon> = {
-  default: Spline,
-  smoothstep: Waypoints,
-};
-
-/** 走线方式对应的 i18n key。`as const` 不能去掉:t() 只接受字面量键的联合,
- *  标成 Record<EdgeShape, string> 会把值放宽成 string,当场编译不过。 */
-const EDGE_SHAPE_LABEL = {
-  default: "wfEdgeBezier",
-  smoothstep: "wfEdgeSmoothStep",
-} as const;
-
+/** 连线统一带闭合箭头,方向一目了然。走线方式(贝塞尔/折线)见 components/app/canvasEdgeShape。 */
 const DEFAULT_EDGE_OPTIONS = {
   markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "var(--border-strong)" },
 };
@@ -871,15 +846,15 @@ function WorkflowEditor({
   const rightPanels = (dockedAgent ? 1 : 0) + (dockedHistory ? 1 : 0);
   const rightPanel = useResizableSidebar("workflow-right", { min: 320, max: 640, fallback: 400 });
   const rightOcclusion = rightPanels > 0 ? canvasRightDockOcclusion(rightPanel.width) : 0;
-  const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
+  const [edgeShape, setEdgeShape] = useEdgeShape("wf-edge-shape");
   //: 右下角的全览。默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。
   const [minimapMode, setShowMinimap] = usePersistentTab<"on" | "off">("wf-minimap", "on", ["on", "off"] as const);
   const showMinimap = minimapMode === "on";
   /** 节点的手动层级。只在会话内有效,不写进图 —— 叠放是看图时的临时诉求(把被压住的那个
    *  拎出来看一眼),固化进数据会让每次调整都变成一次图变更、触发自动保存。 */
   const [nodeZ, setNodeZ] = React.useState<Record<string, number>>({});
-  const [nodeSearchOpen, setNodeSearchOpen] = React.useState(false);
-  const [nodeSearch, setNodeSearch] = React.useState("");
+  //: 查找节点的命中集 —— 画在节点外壳上(见 CanvasNodeSearch)。
+  const [searchHit, setSearchHit] = React.useState<CanvasSearchHighlight | null>(null);
   // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
   // graph and interrupt React Flow's drag. The save fires once, right after the drag settles.
   const [dragging, setDragging] = React.useState(false);
@@ -955,6 +930,15 @@ function WorkflowEditor({
       });
     },
     [graph.nodes, focusPosition, selectInspectorNode],
+  );
+  //: 查找节点搜的是:改过的名字、类型的显示名、类型的原始值(按 `llm` 也能找到「大模型」)。
+  const searchEntries = React.useMemo(
+    () =>
+      graph.nodes.map((node) => {
+        const label = registry.get(node.type)?.label ?? node.type;
+        return { id: node.id, title: node.name || label, subtitle: label, text: [node.type] };
+      }),
+    [graph.nodes, registry],
   );
 
   // 智能体经确认卡改图后 updated_at 变化:画布无本地改动时自动跟进服务端版本。
@@ -1663,7 +1647,7 @@ function WorkflowEditor({
   const displayEdges = React.useMemo(() => {
     // type 显式写到每条边上,而不是只靠 defaultEdgeOptions —— 后者的语义是"新建边的默认值",
     // 指望它去改已存在的边是碰运气。
-    const shaped = edges.map((edge) => (edge.type === edgeShape ? edge : { ...edge, type: edgeShape }));
+    const shaped = shapeEdges(edges, edgeShape);
     if (Object.keys(runByNode).length === 0) return shaped;
     return shaped.map((edge) => {
       const from = runByNode[edge.source];
@@ -1771,6 +1755,7 @@ function WorkflowEditor({
         const step = runByNode[node.id];
         return {
           ...node,
+          className: cn(node.className, searchHighlightClass(searchHit, node.id)) || undefined,
           draggable: !annotationMode, selectable: !annotationMode,
           zIndex: nodeZ[node.id],
           data: {
@@ -1789,7 +1774,7 @@ function WorkflowEditor({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode],
+    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit],
   );
 
   return (
@@ -2057,104 +2042,13 @@ function WorkflowEditor({
             />
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("canvasViewTools")}>
-            <Popover
-              open={nodeSearchOpen}
-              onOpenChange={(open) => {
-                setNodeSearchOpen(open);
-                if (!open) setNodeSearch("");
-              }}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={t("wfNodeSearch")}
-                  title={t("wfNodeSearch")}
-                >
-                  <Search size={14} />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-[280px] p-1.5">
-                <div className="relative">
-                  <Search
-                    size={13}
-                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  />
-                  <Input
-                    autoFocus
-                    className="h-8 pl-[30px] pr-2 text-ui-sm focus-visible:border-primary focus-visible:ring-0"
-                    value={nodeSearch}
-                    onChange={(event) => setNodeSearch(event.target.value)}
-                    placeholder={t("wfNodeSearchPlaceholder")}
-                  />
-                </div>
-                <div className="mt-1.5 flex max-h-80 flex-col gap-0.5 overflow-auto">
-                  {(() => {
-                    const query = nodeSearch.trim().toLowerCase();
-                    const matches = graph.nodes.filter((node) => {
-                      if (!query) return true;
-                      const label = (registry.get(node.type)?.label ?? node.type).toLowerCase();
-                      return (
-                        (node.name || "").toLowerCase().includes(query) ||
-                        node.type.toLowerCase().includes(query) ||
-                        label.includes(query)
-                      );
-                    });
-                    if (matches.length === 0)
-                      return (
-                        <div className="px-2 py-2.5 text-center text-xs text-muted-foreground">
-                          {t("wfNodeSearchEmpty")}
-                        </div>
-                      );
-                    return matches.map((node) => {
-                      const label = registry.get(node.type)?.label ?? node.type;
-                      // 未改名时 name 就是类型标签,再补一列类型纯属重复 → 仅改过名才显示类型。
-                      const typeSub = node.name && node.name !== label ? label : null;
-                      return (
-                        <button
-                          key={node.id}
-                          type="button"
-                          className={cn(
-                            "flex cursor-pointer items-baseline justify-between gap-2.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
-                            node.id === selectedNodeId && "bg-accent hover:bg-accent",
-                          )}
-                          onClick={() => {
-                            focusNode(node.id);
-                            setNodeSearchOpen(false);
-                            setNodeSearch("");
-                          }}
-                        >
-                          <span className="truncate text-ui-sm font-semibold text-foreground">
-                            {node.name || label}
-                          </span>
-                          {typeSub && <span className="shrink-0 text-ui-xs text-muted-foreground">{typeSub}</span>}
-                        </button>
-                      );
-                    });
-                  })()}
-                </div>
-              </PopoverContent>
-            </Popover>
-            <div className="flex items-center gap-1">
-              {EDGE_SHAPES.map((shape) => {
-                const Icon = EDGE_SHAPE_ICON[shape];
-                return (
-                  <Button
-                    key={shape}
-                    variant={edgeShape === shape ? "secondary" : "ghost"}
-                    size="icon-sm"
-                    className={cn(edgeShape === shape && "bg-secondary text-foreground")}
-                    aria-label={t(EDGE_SHAPE_LABEL[shape])}
-                    title={t(EDGE_SHAPE_LABEL[shape])}
-                    aria-pressed={edgeShape === shape}
-                    onClick={() => setEdgeShape(shape)}
-                  >
-                    <Icon size={13} />
-                  </Button>
-                );
-              })}
-            </div>
+            <CanvasNodeSearch
+              entries={searchEntries}
+              selectedId={selectedNodeId}
+              onFocus={focusNode}
+              onHighlight={setSearchHit}
+            />
+            <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
             <CanvasInputModeSwitch />
             <Button
               variant="ghost"
@@ -2637,11 +2531,8 @@ function LoopBodyEditor({
   const [nodes, setNodes] = React.useState<Node[]>(() => toWorkflowFlowNodes(initialBody, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toWorkflowFlowEdges(initialBody, t, registry));
   // 循环体编辑器读同一个偏好:主画布是圆角折线、点进循环体却变回贝塞尔,会让人以为进错了地方。
-  const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
-  const shapedEdges = React.useMemo(
-    () => edges.map((edge) => (edge.type === edgeShape ? edge : { ...edge, type: edgeShape })),
-    [edges, edgeShape],
-  );
+  const [edgeShape, setEdgeShape] = useEdgeShape("wf-edge-shape");
+  const shapedEdges = React.useMemo(() => shapeEdges(edges, edgeShape), [edges, edgeShape]);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   /**
    * 子图里的检查器**和主图长一样**。
@@ -2857,23 +2748,7 @@ function LoopBodyEditor({
             </Button>
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("canvasViewTools")}>
-            {EDGE_SHAPES.map((shape) => {
-              const Icon = EDGE_SHAPE_ICON[shape];
-              return (
-                <Button
-                  key={shape}
-                  variant={edgeShape === shape ? "secondary" : "ghost"}
-                  size="icon-sm"
-                  className={cn(edgeShape === shape && "bg-secondary text-foreground")}
-                  aria-label={t(EDGE_SHAPE_LABEL[shape])}
-                  title={t(EDGE_SHAPE_LABEL[shape])}
-                  aria-pressed={edgeShape === shape}
-                  onClick={() => setEdgeShape(shape)}
-                >
-                  <Icon size={13} />
-                </Button>
-              );
-            })}
+            <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
             <CanvasInputModeSwitch />
           </CanvasToolbarGroup>
         </CanvasToolbar>

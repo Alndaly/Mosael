@@ -11249,6 +11249,58 @@
         }
       }
     },
+    "/api/boards/{board_id}/duplicate": {
+      "post": {
+        "tags": [
+          "boards"
+        ],
+        "summary": "Duplicate",
+        "operationId": "duplicate_api_boards__board_id__duplicate_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardDuplicate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/boards/{board_id}/generate": {
       "post": {
         "tags": [
@@ -20437,6 +20489,24 @@
           "workspace_id"
         ],
         "title": "BoardCreate"
+      },
+      "BoardDuplicate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "BoardDuplicate"
       },
       "BoardGenerate": {
         "properties": {

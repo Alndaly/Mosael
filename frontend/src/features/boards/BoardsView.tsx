@@ -6,7 +6,7 @@ import { useOpenRequest } from "@/lib/deepLink";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { ArrowUpRight, Bot, Check, CheckSquare, Copy, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,6 +14,7 @@ import {
   ApiError,
   createBoard,
   deleteBoard,
+  duplicateBoard,
   generateOnBoard,
   grabAssetFrame,
   speakOnBoard,
@@ -65,6 +66,12 @@ import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { boardSettlementPatch, itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { SelectionCheck } from "@/components/app/SelectionCheck";
+import { useMultiSelect } from "@/lib/useMultiSelect";
+import { EdgeShapeToggle, useEdgeShape } from "@/components/app/canvasEdgeShape";
+import { CanvasNodeSearch, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
+import { boardSearchEntries } from "@/features/boards/boardSearch";
 
 /**
  * 创意画板:除了和智能体对话之外,另一条把想法摊开的路。
@@ -107,10 +114,69 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const refreshList = () => void queryClient.invalidateQueries({ queryKey: ["boards", workspace.id] });
+
+  //: 卡片上的单条动作(「⋯」菜单与右键菜单共用):打开、重命名、创建副本、删除。
+  const [menuRenaming, setMenuRenaming] = React.useState<Board | null>(null);
+  const [menuDeleting, setMenuDeleting] = React.useState<Board | null>(null);
   const remove = useMutation({
     mutationFn: (boardId: string) => deleteBoard(boardId, workspace.id),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["boards", workspace.id] }),
+    onSuccess: () => {
+      setMenuDeleting(null);
+      refreshList();
+    },
+    // 失败时确认框留着,可以重试或取消。
     onError: (error: Error) => toast.error(error.message),
+  });
+  const rename = useMutation({
+    //: 带着列表里那份 revision 去改:画板开在别处、刚被改过的话,这次改名会撞上 409,
+    //: 而不是把别处的新画布悄悄盖掉(改名和存画布走的是同一个 CAS 口子)。
+    mutationFn: ({ board, name }: { board: Board; name: string }) =>
+      updateBoard(board.id, { workspace_id: workspace.id, base_revision: board.revision, name }),
+    onSuccess: () => {
+      setMenuRenaming(null);
+      refreshList();
+    },
+    onError: (error: Error) => {
+      refreshList();
+      toast.error(error instanceof ApiError && error.status === 409 ? t("boardsCanvasConflict") : error.message);
+    },
+  });
+  const duplicate = useMutation({
+    //: 「× 副本」是界面语言里的一句话,在这里按当前语言拼好再交给后端。
+    mutationFn: (board: Board) =>
+      duplicateBoard(board.id, { workspace_id: workspace.id, name: t("boardsCopyName").replace("{name}", board.name) }),
+    onSuccess: (made) => {
+      refreshList();
+      toast.success(t("boardsDuplicated").replace("{name}", made.name));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // 多选与首页、素材、工作流同一份状态机(见 lib/useMultiSelect):退出即清空、被删掉的自动剔除。
+  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(list, boardIdOf);
+  const [batchDeleting, setBatchDeleting] = React.useState(false);
+  const batchRemove = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // 没有批量接口:逐条发、一次性回报。失败的那几条要单独说出来,不能被"已删除 N 项"盖过去。
+      const results = await Promise.allSettled(ids.map((id) => deleteBoard(id, workspace.id)));
+      return {
+        ok: results.filter((result) => result.status === "fulfilled").length,
+        failed: results.filter((result) => result.status === "rejected").length,
+      };
+    },
+    onSuccess: ({ ok, failed }) => {
+      setBatchDeleting(false);
+      refreshList();
+      //: 全删掉了就退出选择模式;有失败的就留在模式里 —— 删掉的那些随列表刷新自动不算数
+      //: (useMultiSelect 会剔掉),剩下仍勾着的正是没删掉的,可以直接再试一次。
+      if (failed) {
+        toast.error(t("bulkPartialFailed").replace("{ok}", String(ok)).replace("{failed}", String(failed)));
+      } else {
+        exit();
+        toast.success(t("bulkDeleteDone").replace("{n}", String(ok)));
+      }
+    },
   });
 
   if (openSelection.restoring && boards.isPending) {
@@ -153,7 +219,41 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 用户会以为自己切到了别的应用里。
   return (
     <div className={STUDIO_PAGE}>
-      <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} count={boards.data?.length} actions={<Button loading={create.isPending} onClick={() => create.mutate()}><Plus />{t("boardsNew")}</Button>} />
+      <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} count={boards.data?.length} actions={
+        // 与工作流列表页同一条标题栏:平时是「选择」+「新建」,进了选择模式换成批量动作。
+        <span className="flex flex-wrap items-center gap-2">
+          {selectMode ? (
+            <>
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
+                {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
+              </span>
+              <Button variant="outline" onClick={() => selectAll(list)}>
+                <ListChecks size={13} /> {allSelected(list) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+              </Button>
+              <Button
+                variant="outline"
+                className="hover:border-destructive/50 hover:text-destructive"
+                disabled={selectedIds.size === 0}
+                onClick={() => setBatchDeleting(true)}
+              >
+                <Trash2 size={13} /> {t("delete")}
+              </Button>
+              <Button variant="outline" onClick={exit}>
+                <X size={13} /> {t("cancel")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" disabled={list.length === 0} onClick={() => setSelectMode(true)}>
+                <Check size={13} /> {t("mediaSelectMode")}
+              </Button>
+              <Button loading={create.isPending} onClick={() => create.mutate()}>
+                <Plus size={13} /> {t("boardsNew")}
+              </Button>
+            </>
+          )}
+        </span>
+      } />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {boards.isLoading ? (
@@ -172,44 +272,150 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
               <BoardCard
                 key={board.id}
                 board={board}
+                selecting={selectMode}
+                selected={selectedIds.has(board.id)}
                 onOpen={() => setOpenId(board.id)}
-                onDelete={() => remove.mutate(board.id)}
-                deleting={remove.isPending && remove.variables === board.id}
+                onToggle={() => {
+                  setSelectMode(true);
+                  toggle(board.id);
+                }}
+                onRename={() => setMenuRenaming(board)}
+                onDuplicate={() => duplicate.mutate(board)}
+                duplicating={duplicate.isPending && duplicate.variables?.id === board.id}
+                onDelete={() => setMenuDeleting(board)}
               />
             ))}
           </div>
         )}
       </div>
+      <RenameDialog
+        open={menuRenaming !== null}
+        title={t("rename")}
+        initialValue={menuRenaming?.name ?? ""}
+        onCancel={() => setMenuRenaming(null)}
+        pending={rename.isPending}
+        onSubmit={(name) => {
+          if (!menuRenaming) return;
+          if (name === menuRenaming.name) setMenuRenaming(null);
+          else rename.mutate({ board: menuRenaming, name });
+        }}
+      />
+      <ConfirmDialog
+        open={menuDeleting !== null}
+        title={t("boardsDeleteTitle")}
+        body={menuDeleting?.name}
+        onCancel={() => setMenuDeleting(null)}
+        pending={remove.isPending}
+        onConfirm={() => menuDeleting && remove.mutate(menuDeleting.id)}
+      />
+      <ConfirmDialog
+        open={batchDeleting}
+        title={t("boardsDeleteManyTitle").replace("{n}", String(selectedIds.size))}
+        body={t("boardsDeleteManyBody")}
+        onCancel={() => setBatchDeleting(false)}
+        pending={batchRemove.isPending}
+        onConfirm={() => batchRemove.mutate([...selectedIds])}
+      />
     </div>
   );
 }
 
-function BoardCard({ board, onOpen, onDelete, deleting }: { board: Board; onOpen: () => void; onDelete: () => void; deleting: boolean }) {
+/** useMultiSelect 的 id 取法要是稳定引用 —— 它拿这个函数做依赖,就地写的箭头函数每次渲染都是新的。 */
+const boardIdOf = (board: Board) => board.id;
+
+/**
+ * 画板卡片。**整张卡**是一个按钮:平时点它打开,选择模式下点它勾选。
+ *
+ * 单条动作(打开、重命名、创建副本、删除)两个入口、同一份清单:右上角的「⋯」和右键菜单 ——
+ * 和工作流、首页、场景的卡片一样。此前卡片上只有一个孤零零的垃圾桶,改名得先点进画板里去。
+ * 选择模式下「⋯」收起来,右上角让给勾选圈(批量动作在标题栏上)。
+ */
+function BoardCard({
+  board,
+  selecting,
+  selected,
+  onOpen,
+  onToggle,
+  onRename,
+  onDuplicate,
+  duplicating,
+  onDelete,
+}: {
+  board: Board;
+  selecting: boolean;
+  selected: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+  onRename: () => void;
+  onDuplicate: () => void;
+  duplicating: boolean;
+  onDelete: () => void;
+}) {
   const t = useI18n();
   const { locale } = usePreferences();
-  const [confirming, setConfirming] = React.useState(false);
   const count = board.canvas?.items?.length ?? 0;
+  const marked = selecting && selected;
 
   return (
-    <>
-      <div className="group relative min-w-0">
-        <button type="button" onClick={onOpen} className="grid w-full gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <CanvasPreview items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame",scene:"navScenes",document:"boardKindDocument"} as const)[item.kind]) }))} edges={board.canvas?.edges} />
-          <span className="truncate pr-8 text-ui-md font-semibold">{board.name}</span>
-          <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
-        </button>
-        <Button variant="ghost" size="icon-xs" className="absolute bottom-7 right-0 text-muted-foreground hover:text-destructive" aria-label={`${t("delete")}: ${board.name}`} onClick={() => setConfirming(true)}><Trash2 /></Button>
-      </div>
-      <ConfirmDialog
-        open={confirming}
-        title={t("boardsDeleteTitle")}
-        body={board.name}
-        onCancel={() => setConfirming(false)}
-        // 删完这张卡自己就没了;失败时确认框留着,可以重试或取消。
-        pending={deleting}
-        onConfirm={onDelete}
-      />
-    </>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="group relative min-w-0" data-board-card={board.id}>
+          <button
+            type="button"
+            onClick={selecting ? onToggle : onOpen}
+            aria-label={selecting ? `${t("mediaSelectMode")}: ${board.name}` : board.name}
+            aria-pressed={selecting ? selected : undefined}
+            className="grid w-full gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {/* 选中态和首页、素材、场景同一个样子:缩略图一圈主色 + 右上角的勾选圈。圈画在缩略图
+                **里面**(inset):画在外面的话,最左、最右两列会被滚动容器裁掉一截。 */}
+            <span className="relative block">
+              <CanvasPreview
+                className={marked ? "border-primary ring-1 ring-inset ring-primary" : undefined}
+                items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame",scene:"navScenes",document:"boardKindDocument"} as const)[item.kind]) }))}
+                edges={board.canvas?.edges}
+              />
+              {selecting && <SelectionCheck selected={selected} />}
+            </span>
+            <span className="truncate pr-8 text-ui-md font-semibold" title={board.name}>{board.name}</span>
+            <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
+          </button>
+          {!selecting && (
+            <div className="absolute right-2 top-2 rounded-lg bg-panel">
+              <ActionMenu
+                label={`${t("studioActions")}: ${board.name}`}
+                actions={[
+                  { label: t("boardsOpen"), icon: <ArrowUpRight />, onSelect: onOpen },
+                  { label: t("rename"), icon: <Pencil />, onSelect: onRename },
+                  { label: t("boardsDuplicate"), icon: <Copy />, disabled: duplicating, onSelect: onDuplicate },
+                  { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: onDelete },
+                ]}
+              />
+            </div>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent onCloseAutoFocus={(event) => event.preventDefault()}>
+        <ContextMenuItem onSelect={onOpen}>
+          <ArrowUpRight /> {t("boardsOpen")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onRename}>
+          <Pencil /> {t("rename")}
+        </ContextMenuItem>
+        <ContextMenuItem disabled={duplicating} onSelect={onDuplicate}>
+          <Copy /> {t("boardsDuplicate")}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        {/* 从右键直接进选择模式并勾上这一张 —— 想批量处理时,右键的往往就是第一张。 */}
+        <ContextMenuItem onSelect={onToggle}>
+          <CheckSquare /> {selecting && selected ? t("boardsDeselect") : t("boardsSelect")}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+          <Trash2 /> {t("delete")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -262,7 +468,17 @@ function BoardDetail({
   //: 全览默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。记在本地。
   const [minimapMode, setMinimap] = usePersistentTab<"on" | "off">("board-minimap", "on", ["on", "off"] as const);
   const showMinimap = minimapMode === "on";
+  //: 连线走线方式。和工作流同一套开关(components/app/canvasEdgeShape),各记各的偏好 ——
+  //: 和全览一样,画板这边的看图习惯不该把工作流那边也改了。
+  const [edgeShape, setEdgeShape] = useEdgeShape("board-edge-shape");
+  //: 查找节点的命中集,交给画布去画圈。
+  const [searchHit, setSearchHit] = React.useState<CanvasSearchHighlight | null>(null);
   const [canvas, setCanvas] = React.useState<Canvas | null>(board.canvas);
+  //: 搜的是画布**此刻**的样子(canvas 跟着每次编辑汇上来),刚写的便签马上就能搜到。
+  const searchEntries = React.useMemo(
+    () => boardSearchEntries((canvas ?? board.canvas)?.items ?? [], t),
+    [canvas, board.canvas, t],
+  );
   const [picking, setPicking] = React.useState<{ kind: MediaKind; place: (assetId: string) => void } | null>(null);
   //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards/canvas.py),
   //: 所以不能像文档那样先落一个空节点再补 —— 那种节点存不下去。
@@ -831,6 +1047,13 @@ function BoardDetail({
             />
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("canvasViewTools")}>
+            <CanvasNodeSearch
+              entries={searchEntries}
+              placeholder="boardSearchPlaceholder"
+              onFocus={(itemId) => api?.focusItem(itemId)}
+              onHighlight={setSearchHit}
+            />
+            <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
             <CanvasInputModeSwitch />
             <Button
               variant="ghost"
@@ -898,6 +1121,8 @@ function BoardDetail({
         onGrabFrame={grabFrame}
         models={models.data ?? []}
         showMinimap={showMinimap}
+        edgeShape={edgeShape}
+        searchHighlight={searchHit}
         onDropFiles={(files) => upload.mutateAsync(files)}
         uploading={upload.isPending}
         commentMode={commentMode}

@@ -24,6 +24,12 @@ class BoardCreate(ApiModel):
     canvas: dict | None = None
 
 
+class BoardDuplicate(ApiModel):
+    workspace_id: str
+    #: 副本叫什么。「× 副本」是界面语言里的一句话,由前端按当前语言拼好;留空就沿用原名。
+    name: str = ""
+
+
 class BoardUpdate(ApiModel):
     workspace_id: str
     #: New clients always send this. Optional only keeps pre-revision desktop clients able to save

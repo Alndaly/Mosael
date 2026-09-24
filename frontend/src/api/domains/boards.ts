@@ -82,6 +82,11 @@ export function createBoard(body: { workspace_id: string; name?: string }): Prom
   return api<Board>("/api/boards", { method: "POST", body: JSON.stringify(body) });
 }
 
+/** 创建副本。在跑的那几格在副本里退回空槽(回执认的是原板),见后端 duplicate_board。 */
+export function duplicateBoard(boardId: string, body: { workspace_id: string; name?: string }): Promise<Board> {
+  return api<Board>(`/api/boards/${boardId}/duplicate`, { method: "POST", body: JSON.stringify(body) });
+}
+
 export function updateBoard(
   boardId: string,
   body: { workspace_id: string; base_revision: number; name?: string; canvas?: BoardCanvas },
