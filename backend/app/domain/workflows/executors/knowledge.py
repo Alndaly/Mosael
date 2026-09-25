@@ -9,6 +9,11 @@ from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 
 
+#: 搜索结果每条摘录多长,以及命中处前面留多少上下文。
+_EXCERPT_CHARS = 1000
+_EXCERPT_LEAD = 160
+
+
 def _integer(value, default, minimum, maximum, label):
     if value in (None, ""):
         return default
@@ -34,8 +39,12 @@ def note_search(db: Session, workflow: Workflow, config: dict) -> dict:
         ref = read_reference(db, workflow.workspace_id, note.id)
         # An excerpt is deliberately labelled: read_note supplies the full source.
         markdown = ref.pop("markdown")
-        at = max(0, markdown.casefold().find(query.split()[0].casefold()) - 160) if query else 0
-        matches.append({**ref, "excerpt": markdown[at:at + 1000], "truncated": len(markdown) > 1000})
+        at = max(0, markdown.casefold().find(query.split()[0].casefold()) - _EXCERPT_LEAD) if query else 0
+        # 窗口往命中处挪,但**不越过全文末尾一窗的位置**:放得下的笔记从头给全文,不切开头。
+        at = min(at, max(0, len(markdown) - _EXCERPT_CHARS))
+        excerpt = markdown[at:at + _EXCERPT_CHARS]
+        # 切了就说切了 —— 开头切掉和结尾切掉一样,下游据此决定要不要 note_read。
+        matches.append({**ref, "excerpt": excerpt, "truncated": len(excerpt) < len(markdown)})
     return {"notes": matches, "ids": [r["note_id"] for r in matches], "count": len(matches),
             "has_more": len(rows) > limit,
             "text": "\n\n".join(f"[{r['title'] or '未命名笔记'}]({r['citation_url']})\n{r['excerpt']}" for r in matches)}

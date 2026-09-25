@@ -86,3 +86,19 @@ def test_board_pin_survives_source_updates_and_handles_deleted_source():
     result = client.patch('/api/boards/'+board['id'], json={**payload, 'base_revision': board['revision'], 'canvas': {'items': [moved], 'edges': []}})
     assert result.status_code == 200, result.text
     assert client.post('/api/boards', json=payload).status_code == 400
+
+
+def test_search_excerpt_never_hides_a_cut_behind_truncated_false():
+    """摘录的窗口会往命中处挪。短笔记也挪的话,开头那段就被切掉了,而 truncated 仍说 False ——
+    下游的模型据此以为自己拿到的是全文,不会再去 note_read。"""
+    client, ws, _, _, wid = setup()
+    body = '开头的定义很重要。' + '铺垫' * 200 + '关键词在这里'
+    client.post('/api/notes', json={'workspace_id': ws, 'title': '短笔记', 'markdown': body})
+    long_body = '前言' * 600 + '关键词在这里' + '后记' * 600
+    client.post('/api/notes', json={'workspace_id': ws, 'title': '长笔记', 'markdown': long_body})
+    with SessionLocal() as db:
+        found = {one['title']: one for one in note_search(db, db.get(Workflow, wid), {'query': '关键词'})['notes']}
+    short = found['短笔记']
+    assert short['excerpt'] == body and short['truncated'] is False, "放得下的笔记就给全文"
+    long = found['长笔记']
+    assert '关键词在这里' in long['excerpt'] and long['truncated'] is True
