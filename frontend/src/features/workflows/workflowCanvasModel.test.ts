@@ -90,7 +90,7 @@ describe("workflow canvas model", () => {
       ],
     };
 
-    expect(toWorkflowFlowEdges(graph, translate, registry)[0].className).toContain("wf-edge-mismatch");
+    expect(toWorkflowFlowEdges(graph, translate, registry)[0].className).toContain("canvas-edge-mismatch");
   });
 
   it("uses declared field labels in readiness messages", () => {

@@ -150,7 +150,8 @@ import {
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
-import { CANVAS_CONNECTION_LINE_STYLE, CANVAS_EDGE_CLASS, CANVAS_EDGE_MARKER, EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";
+import { EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";
+import { CANVAS_EDGE_CLASS, CANVAS_EDGE_OPTIONS, canvasEdgeClass } from "@/components/app/canvasEdges";
 import { CanvasNodeSearch, searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { relativeTime } from "@/lib/time";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -315,8 +316,8 @@ const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "json_schema_strict",
 ]);
 
-/** 连线统一带闭合箭头,方向一目了然。样式和走线方式(贝塞尔/折线)都见 components/app/canvasEdgeShape。 */
-const DEFAULT_EDGE_OPTIONS = { markerEnd: CANVAS_EDGE_MARKER };
+/** 连线统一带闭合箭头、同一条命中带。长什么样见 components/app/canvasEdges,怎么走(贝塞尔/折线)见 canvasEdgeShape。 */
+const DEFAULT_EDGE_OPTIONS = CANVAS_EDGE_OPTIONS;
 const EMPTY_SCOPE_VARIABLES: string[] = [];
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
@@ -1737,15 +1738,10 @@ function WorkflowEditor({
       const from = runByNode[edge.source];
       const to = runByNode[edge.target];
       const taken = from && to && from.status !== "skipped" && to.status !== "skipped";
-      // 描边直接给 style:Tailwind 的任意变体要和既有的 wf-edge-* 规则抢优先级,
-      // 而 React Flow 本来就支持按边给样式,确定性更高。
-      return taken
-        ? {
-            ...edge,
-            className: `${edge.className ?? ""} wf-edge-taken`.trim(),
-            style: { ...(edge.style ?? {}), stroke: "var(--success)", strokeWidth: 2.4 },
-          }
-        : edge;
+      //: 走过的线换成「运行走过」那一种(见 components/app/canvasEdges 的表)。颜色类是互斥的,
+      //: 所以整串重给,而不是在原来的类后面再追加一个去和它比权重;数据线留着流动的虚线。
+      //: 不写行内 style —— 此前写死的 success + 2.4px 压过了一切,选中它也不变主色。
+      return taken ? { ...edge, className: canvasEdgeClass("taken", { flow: edge.data?.kind === "data" }) } : edge;
     });
   }, [edges, runByNode, edgeShape]);
 
@@ -2292,7 +2288,6 @@ function WorkflowEditor({
             isValidConnection={isValidConnection}
             connectionRadius={36}
             connectionLineType={edgeShape as ConnectionLineType}
-            connectionLineStyle={CANVAS_CONNECTION_LINE_STYLE}
             onNodeClick={(event, node) => {
               if (markerMode) return;
               if (workflowComments.active) { const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }); if (point) workflowComments.place({ ...point, node_id: node.id }); return; }

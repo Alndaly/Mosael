@@ -16,7 +16,8 @@ import {
 } from "@xyflow/react";
 import type { LucideIcon } from "lucide-react";
 
-import { CANVAS_EDGE_MARKER, CANVAS_PENDING_EDGE_STYLE, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { CANVAS_EDGE_OPTIONS, canvasEdgeClass } from "@/components/app/canvasEdges";
 import { FLOATING_COLLISION_PADDING, FLOATING_SURFACE, MENU_ITEM_ROVING } from "@/components/ui/floating";
 import { cn } from "@/lib/utils";
 
@@ -192,8 +193,11 @@ export function decoratePendingLink<N extends Node, E extends Edge>(
     selectable: false,
     focusable: false,
     deletable: false,
-    style: CANVAS_PENDING_EDGE_STYLE,
-    markerEnd: { ...CANVAS_EDGE_MARKER, color: "var(--primary)" },
+    //: 「待定」那一种(见 components/app/canvasEdges 的表):主色静止虚线,箭头和实线同一个
+    //: (它取线自己的颜色)。和占位同一层 —— 待定的线被已有的项盖住,就看不出它接到哪儿了。
+    ...CANVAS_EDGE_OPTIONS,
+    className: canvasEdgeClass("pending"),
+    zIndex: ghost.zIndex,
     data: { pending: true },
   } as unknown as E;
   return { nodes: [...nodes, ghostNode], edges: [...edges, edge] };

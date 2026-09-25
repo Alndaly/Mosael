@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
-import { CANVAS_EDGE_CLASS } from "@/components/app/canvasEdgeShape";
+import { CANVAS_EDGE_CLASS } from "@/components/app/canvasEdges";
 import { WORKFLOW_CANVAS_CLASS, WORKFLOW_HANDLE_CLASS } from "@/features/workflows/workflowCanvasSkin";
 
 const SRC = join(import.meta.dirname, "..");
@@ -81,8 +81,11 @@ describe("编出来的层叠", () => {
     for (const name of [
       "react-flow__edge-path",
       "react-flow__edge-text",
+      "react-flow__connection-path",
       "react-flow__attribution a",
-      "react-flow__edge.wf-edge-data.selected",
+      "react-flow__edges .react-flow__edge.canvas-edge-taken",
+      "react-flow__edge:not(.selected):hover .react-flow__edge-path",
+      "canvas-edge-flow .react-flow__edge-path",
       "react-flow__handle-left:hover",
       "react-flow__handle-right:hover",
     ]) {
@@ -92,12 +95,16 @@ describe("编出来的层叠", () => {
     expect(utilities).not.toMatch(/\.react-flow\s+edge/);
     //: 按语义上色的那几条,落到的是 xyflow 读的变量。
     for (const [edge, token] of [
-      ["wf-edge-true", "--success"],
-      ["wf-edge-false", "--destructive"],
-      ["wf-edge-data", "--primary"],
-      ["wf-edge-mismatch", "--warning"],
+      ["canvas-edge-true", "--success"],
+      ["canvas-edge-false", "--destructive"],
+      ["canvas-edge-data", "--primary"],
+      ["canvas-edge-mismatch", "--warning"],
+      ["canvas-edge-taken", "--success"],
+      ["canvas-edge-pending", "--primary"],
     ]) {
       expect(utilities, edge).toMatch(new RegExp(`\\.${edge}[^{]*\\{[^}]*--xy-edge-stroke: var\\(${token}\\)`));
     }
+    //: 流动虚线的动画确实生成了(它的 keyframes 在 tokens.css 的 @theme 里),而且只在不要求减少动态时跑。
+    expect(utilities).toMatch(/prefers-reduced-motion: no-preference[\s\S]*animation: edge-flow 0\.6s linear infinite/);
   }, 20_000);
 });

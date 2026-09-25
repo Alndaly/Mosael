@@ -66,4 +66,17 @@ describe("semantic status colors", () => {
     expect(contrast(token(theme, "ruler-text"), token(theme, "ruler-bg"))).toBeGreaterThanOrEqual(4.5);
   });
 
+  it("画布上连线压得住点阵:点阵是底纹,连线对底色 ≥3:1、对点阵也拉得开", () => {
+    //: 此前点阵是 xyflow 默认的 #91919a、线是 --border-strong,深色主题下线比点还暗 —— 线糊进了点里。
+    for (const theme of [block(":root"), block(".dark")]) {
+      const paper = token(theme, "background");
+      const dot = contrast(token(theme, "canvas-dot"), paper);
+      const edge = contrast(token(theme, "canvas-edge"), paper);
+      expect(dot, "点阵还看得见").toBeGreaterThanOrEqual(1.3);
+      expect(dot, "点阵只是底纹").toBeLessThanOrEqual(1.8);
+      expect(edge, "连线对底色").toBeGreaterThanOrEqual(3);
+      expect(contrast(token(theme, "canvas-edge"), token(theme, "canvas-dot")), "连线对点阵").toBeGreaterThanOrEqual(2);
+    }
+  });
+
 });

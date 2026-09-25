@@ -35,7 +35,8 @@ import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type Workspac
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { centerCanvasViewport, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
-import { CANVAS_CONNECTION_LINE_STYLE, CANVAS_EDGE_CLASS, CANVAS_EDGE_MARKER, shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { CANVAS_EDGE_CLASS, CANVAS_EDGE_OPTIONS } from "@/components/app/canvasEdges";
 import {
   PENDING_GHOST_ID,
   PENDING_LINK_NODE_TYPES,
@@ -129,11 +130,17 @@ const CANVAS_NODE_TYPES = { ...BOARD_NODE_TYPES, marker: MarkerPin, ...PENDING_L
 const LAYERS = {
   /** 分组框永远在最底 —— 它是背景,盖住上面的项就没法点了。 */
   frame: 0,
-  item: 1,
+  /**
+   * 连线夹在分组框和项之间。在框之下的话(此前就是:两者都是 0,而 React Flow 把节点那层排在
+   * 连线之后),框那层 3% 的底色和虚线边框就压在线上,线一穿过框就像被切了一刀;在项之上的话,
+   * 线头会压住卡片。夹在中间:线完整地画在框上面,两头钻进卡片底下,箭头尖顶在卡片边框上。
+   */
+  edge: 1,
+  item: 2,
   /** 一枚贴在画布上的旗子,被别的东西盖住就点不到了。 */
-  marker: 2,
-  /** 拉线松手时的占位:它说的是「新的一格会落在这儿」,被已有的项盖住就等于没说。 */
-  pending: 3,
+  marker: 3,
+  /** 拉线松手时的占位和那根待定的线:它说的是「新的一格会落在这儿」,被已有的项盖住就等于没说。 */
+  pending: 4,
 } as const;
 
 function toNodes(items: BoardItem[]): Node[] {
@@ -792,9 +799,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
         },
   );
+  //: 箭头、命中宽度、层次都是**画出来的那一份**才有的东西,不进画布数据(toCanvas 只存 id 和两头)。
   const baseEdges: Edge[] = shapeEdges(edges, edgeShape).map((edge) => ({
     ...edge,
-    markerEnd: CANVAS_EDGE_MARKER,
+    ...CANVAS_EDGE_OPTIONS,
+    zIndex: LAYERS.edge,
     selectable: !commentMode && !markerMode,
   }));
 
@@ -1176,7 +1185,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         nodes={display.nodes}
         edges={display.edges}
         connectionLineType={edgeShape as ConnectionLineType}
-        connectionLineStyle={CANVAS_CONNECTION_LINE_STYLE}
         nodeTypes={CANVAS_NODE_TYPES}
         minZoom={0.1}
         onNodesChange={onNodesChange}

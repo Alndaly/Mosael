@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 
-import { CANVAS_EDGE_MARKER } from "@/components/app/canvasEdgeShape";
+import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { toMarkerNodes } from "@/features/markers/markers";
 import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -110,9 +110,6 @@ export function workflowPortPresentation(
   };
 }
 
-/** 条件分支两路的箭头色,和 workflowCanvasSkin 里那两条线色是同一对令牌。 */
-const BRANCH_MARKER_COLOR: Record<string, string> = { true: "var(--success)", false: "var(--destructive)" };
-
 /** Domain edges → React Flow handles, labels and soft type-mismatch styling. */
 export function toWorkflowFlowEdges(
   graph: WorkflowGraph,
@@ -135,13 +132,14 @@ export function toWorkflowFlowEdges(
         target: edge.target,
         sourceHandle: edge.source_output ? `out:${edge.source_output}` : undefined,
         targetHandle: edge.target_input ? `in:${edge.target_input}` : undefined,
-        className: mismatch ? "wf-edge-data wf-edge-mismatch" : "wf-edge-data",
-        animated: true,
+        //: 样子见 components/app/canvasEdges 那张表:流动虚线,颜色在「数据」和「类型不匹配」里二选一。
+        className: canvasEdgeClass(mismatch ? "mismatch" : "data", { flow: true }),
+        //: 数据线不画箭头(方向由流动的虚线说)。写成 undefined 是为了**盖掉** defaultEdgeOptions 的默认箭头。
         markerEnd: undefined,
         data: { kind: "data" },
       };
     }
-    const branchColor = BRANCH_MARKER_COLOR[edge.source_handle ?? ""];
+    const branch = edge.source_handle === "true" || edge.source_handle === "false" ? edge.source_handle : null;
     return {
       id: edge.id,
       source: edge.source,
@@ -153,11 +151,9 @@ export function toWorkflowFlowEdges(
           : edge.source_handle === "false"
             ? t("wfEdgeFalse")
             : undefined,
-      className: edge.source_handle ? `wf-edge-${edge.source_handle}` : undefined,
-      //: 箭头和线同色:线是真绿/假红(见 workflowCanvasSkin),箭头还是默认的灰就成了两截。
-      //: 箭头是 SVG marker,颜色只能从这里给,够不着 CSS 变量的继承。
-      //: 不是分支就**不写这个键** —— 写成 undefined 会盖掉 defaultEdgeOptions 给的默认箭头。
-      ...(branchColor ? { markerEnd: { ...CANVAS_EDGE_MARKER, color: branchColor } } : {}),
+      //: 箭头不在这里给:所有控制线用 defaultEdgeOptions 那一个,它取线自己的颜色(context-stroke),
+      //: 真绿假红自然跟上。
+      className: canvasEdgeClass(branch ?? "reference"),
     };
   });
 }

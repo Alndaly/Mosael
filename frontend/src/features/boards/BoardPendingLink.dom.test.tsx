@@ -58,6 +58,7 @@ vi.mock("@floating-ui/dom", async (importOriginal) => {
 import type { BoardCanvas as Canvas } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { PENDING_EDGE_ID, PENDING_GHOST_ID } from "@/components/app/canvasPendingLink";
+import { CANVAS_EDGE_OPTIONS, canvasEdgeClass } from "@/components/app/canvasEdges";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { DEFAULT_SIZE } from "@/features/boards/boardNodes";
 
@@ -196,9 +197,14 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
     const pending = pendingEdge()!;
     expect(pending).toMatchObject({ source: "n1", target: PENDING_GHOST_ID, type: "smoothstep" });
     expect(real.type).toBe("smoothstep");
-    expect((pending.markerEnd as { type: string }).type).toBe((real.markerEnd as { type: string }).type);
-    //: 虚线说明「还没定」。
-    expect(pending.style?.strokeDasharray).toBeTruthy();
+    //: 箭头**就是**实线那一个(它取线自己的颜色),不是另造一个主色的。
+    expect(pending.markerEnd).toEqual(real.markerEnd);
+    //: 「待定」那一种:主色静止虚线(样子在 canvasEdges 的类里,不是行内 style)。
+    expect(pending.className).toBe(canvasEdgeClass("pending"));
+    expect(pending.style).toBeUndefined();
+    //: 和占位同一层,压在已有的项之上 —— 否则穿过别的卡片时就看不出它接到哪儿了。
+    expect(pending.zIndex).toBe(ghost()!.zIndex);
+    expect(pending.zIndex!).toBeGreaterThan(shownNodes().find((node) => node.id === "n2")!.zIndex!);
   });
 
   it("单子打开时焦点在第一项;↓ 换高亮、回车选定 —— 节点落在占位那儿、连好线,撤销历史只多一步", async () => {
@@ -372,5 +378,32 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
     });
     expect(ghost()).toBeUndefined();
     expect(menu()).toBeNull();
+  });
+});
+
+describe("画板连线的层次与外观", () => {
+  it("连线夹在分组框和项之间:画在框的底色和虚线边框之上,两头钻进卡片底下", async () => {
+    const frame = { id: "f1", kind: "frame" as const, x: -40, y: -40, width: 800, height: 400 };
+    await mount({ items: [frame, note("n1"), note("n2", 400)], edges: [{ id: "e1", source: "n1", target: "n2" }], markers: [] });
+
+    const z = (id: string) => shownNodes().find((node) => node.id === id)!.zIndex!;
+    const edge = shownEdges().find((one) => one.id === "e1")!;
+    expect(edge.zIndex!).toBeGreaterThan(z("f1"));
+    expect(edge.zIndex!).toBeLessThan(z("n1"));
+    expect(edge.zIndex!).toBeLessThan(z("n2"));
+    //: 选中的线也不许浮到卡片上面去(React Flow 的 elevateEdgesOnSelect 会给它加 1000)。
+    expect(flow.props?.elevateEdgesOnSelect).not.toBe(true);
+  });
+
+  it("每条线都带共用的箭头和命中带;画出来的样子不写进画布数据", async () => {
+    const view = await mount({ items: [note("n1"), note("n2", 400)], edges: [{ id: "e1", source: "n1", target: "n2" }], markers: [] });
+
+    const edge = shownEdges().find((one) => one.id === "e1")!;
+    expect(edge.markerEnd).toBe(CANVAS_EDGE_OPTIONS.markerEnd);
+    expect(edge.interactionWidth).toBe(CANVAS_EDGE_OPTIONS.interactionWidth);
+    //: 画板的线就是「引用」那一种:不挂任何变体类,颜色吃容器上的默认线色。
+    expect(edge.className).toBeUndefined();
+    await settle(10);
+    expect(view.latest()?.edges).toEqual([{ id: "e1", source: "n1", target: "n2" }]);
   });
 });

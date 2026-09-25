@@ -152,8 +152,9 @@
     100% { transform: scale(1.45); opacity: 0; }
   }
   --animate-confirm-in: confirm-in 160ms ease-out;
-  --animate-wf-dash: wf-dash 0.6s linear infinite;
-  @keyframes wf-dash {
+  /* 数据线流动的虚线(见 components/app/canvasEdges):位移 -11 正好是虚线一个周期 6+5,首尾接得上。 */
+  --animate-edge-flow: edge-flow 0.6s linear infinite;
+  @keyframes edge-flow {
     to {
       stroke-dashoffset: -11;
     }
@@ -223,6 +224,14 @@
   --border-strong: #bdc7d5;
   /* Decorative outlines stay softer than handles and focus indicators. */
   --floating-border: color-mix(in srgb, var(--border) 65%, transparent);
+  /* 画布(工作流、创意画板)的点阵和连线。**两个值是一起调的** —— 连线看不看得清,比的不只是
+     底色,还有它身后那层点阵:此前点阵是 xyflow 默认的 #91919a(深浅主题同一个),线是
+     --border-strong,两者几乎同一个灰,线就糊进了点里。现在点阵退成底纹(对底色 ~1.5),
+     连线 ≥3:1(悬停时再往前景色走一截,见 components/app/canvasEdgeShape)。
+     实色,不用半透明:线和箭头、交叉的两根线叠在一起时,半透明会叠出一块更深的色斑。
+     棘轮见 design/semanticColors.test.ts。 */
+  --canvas-dot: #cdd3dc;
+  --canvas-edge: #858c99;
 
   /* 浮层与 chrome 使用磨玻璃;自定义背景下,内容面板共享外层表面。
      引用 --popover/--panel,自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
@@ -347,6 +356,8 @@
   --panel-inset: #101113;
   --viewport-canvas: #0d0f13;
   --border-strong: #444b55;
+  --canvas-dot: #373b41;
+  --canvas-edge: #7d828a;
   --floating-border: color-mix(in srgb, var(--border) 65%, transparent);
   --overlay-modal: rgb(6 9 14 / 0.24);
   --modal-solid: #23262c;
