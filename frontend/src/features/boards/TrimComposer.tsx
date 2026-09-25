@@ -41,6 +41,7 @@ export const TRIM_CONTROLS: Record<TrimKind, { mute: boolean; grabFrame: boolean
 export function TrimComposer({
   item,
   assetId,
+  initial,
   workspaceId,
   busy,
   onTrim,
@@ -49,6 +50,8 @@ export function TrimComposer({
   item: BoardItem & { kind: TrimKind };
   /** 剪哪一份素材 —— 帧条/波形都按它取。 */
   assetId: string;
+  /** 上一次截的那一段(截挂了回来重试时)。没给就从头到尾、带声音。 */
+  initial?: { start: number; end: number; mute: boolean };
   workspaceId: string;
   busy: boolean;
   onTrim: (input: { start: number; end: number; mute: boolean }) => void;
@@ -66,14 +69,14 @@ export function TrimComposer({
     return Number.isFinite(value) && value > 0 ? value : 0;
   }, [library.data, assetId]);
 
-  const [start, setStart] = React.useState("0");
-  const [end, setEnd] = React.useState("");
+  const [start, setStart] = React.useState(String(initial?.start ?? 0));
+  const [end, setEnd] = React.useState(initial ? String(initial.end) : "");
   //: 时长回来了才知道尾巴在哪 —— 用户没动过就自动填满整段(最常见的意图是「掐个头」)。
   React.useEffect(() => {
     if (duration > 0 && !end) setEnd(String(Math.round(duration * 10) / 10));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duration]);
-  const [mute, setMute] = React.useState(false);
+  const [mute, setMute] = React.useState(initial?.mute ?? false);
   //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
   const { submitting, run } = useSubmitting();
   const working = submitting || busy;

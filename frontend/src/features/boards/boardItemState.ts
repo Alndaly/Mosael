@@ -10,6 +10,25 @@ export function itemError(item: BoardItem): string | undefined {
   return item.run?.error;
 }
 
+/** 画布上一格底下挂的那块面板:写字、念出来、生成、截一段。 */
+export type BoardComposer = "write" | "speak" | "generate" | "trim";
+
+/**
+ * 选中这一格时底下挂哪块面板;不挂回 null。**一处说了算。**
+ *
+ * 便签不论空不空都挂写字(空的是从头写,有字的是照我说的改)。图片/视频/音频只在**还没有产出**
+ * 时挂:这一格是**截出来的**(表单上记着截的是哪一份,见后端 trim_on_board)挂截取面板 —— 截挂了
+ * 回来重试,要的是原样的范围再截一次,不是一块对着空提示词的生成面板;否则按种类,音频念、
+ * 图片视频生成。此前只按种类分,截挂了的那一格挂的是生成面板。
+ */
+export function composerFor(item: BoardItem): BoardComposer | null {
+  if (item.kind === "note") return "write";
+  if (item.kind !== "image" && item.kind !== "video" && item.kind !== "audio") return null;
+  if (item.asset_id) return null;
+  if (item.form?.trim) return "trim";
+  return item.kind === "audio" ? "speak" : "generate";
+}
+
 /** 所有画布节点共用的六态解释。 */
 export function itemRunStatus(item: BoardItem): BoardItemRunStatus {
   return item.run?.status ?? "idle";

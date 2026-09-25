@@ -53,7 +53,7 @@ import { AudioComposer } from "@/features/boards/AudioComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
-import { copiedItem, itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
+import { composerFor, copiedItem, itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
@@ -525,19 +525,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     } catch (error) { toast.error(errorText(error)); }
     finally { setRefreshingDocument(null); }
   };
+  //: 选中的那一格底下挂哪块面板 —— 规则在 composerFor,这里只认「选中了一格」。
   const composerItem = React.useMemo(() => {
     const picked = nodes.filter((node) => node.selected && node.type !== "marker");
     if (picked.length !== 1) return null;
-    const item = (picked[0].data as unknown as { item: BoardItem }).item;
-    if (item.kind === "image" || item.kind === "video" || item.kind === "audio") {
-      return item.asset_id ? null : item;
-    }
-    //: **便签不论空不空都挂。** 空的是「从头写」,有字的是「照我说的改」—— 后者才是这块
-    //: 面板最常被用到的样子(写完之后想「短一半」「换个语气」)。双击进编辑照旧,两者不冲突:
-    //: 面板挂在节点下方,不盖着字。
-    if (item.kind === "note") return item;
-    return null;
+    return (picked[0].data as unknown as { item: BoardItem }).item;
   }, [nodes]);
+  const composer = composerItem ? composerFor(composerItem) : null;
 
   /**
    * 连到这个节点上的上游产出,按连线的先后。
@@ -546,7 +540,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    * 已经出了产出的项收上来,交给面板照当前生成方式挂进槽位(一张图当首帧、多张当参考)。
    * 还没出产出的上游跳过 —— 它自己都还没有东西可给。
    */
-  const feeding = composerItem
+  //: 截取面板照着表单上记下的那份素材截,不吃上游 —— 只有吃上游的几块面板才去算、才会被取不到的
+  //: 上游文档拦住。
+  const feeding = composerItem && composer && composer !== "trim"
     ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
     : NO_UPSTREAM;
 
@@ -1549,11 +1545,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       />
 
       {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}
-      {composerItem && feeding.blocked && <NodeToolbar nodeId={composerItem.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}><div role={feeding.pending ? "status" : "alert"} className={cn(CANVAS_WINDOW_SURFACE_CLASS, "max-w-sm px-4 py-3 text-ui-sm text-muted-foreground")}>{t(feeding.pending ? "documentLoading" : "documentBlocked")}</div></NodeToolbar>}
+      {composerItem && composer && feeding.blocked && <NodeToolbar nodeId={composerItem.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}><div role={feeding.pending ? "status" : "alert"} className={cn(CANVAS_WINDOW_SURFACE_CLASS, "max-w-sm px-4 py-3 text-ui-sm text-muted-foreground")}>{t(feeding.pending ? "documentLoading" : "documentBlocked")}</div></NodeToolbar>}
 
       {/* 空便签:挂写文案的面板。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图
           这些东西,硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。 */}
-      {!feeding.blocked && composerItem?.kind === "note" && onWrite && (
+      {!feeding.blocked && composerItem && composer === "write" && onWrite && (
         <NoteComposer
           key={itemFormResetKey(composerItem)}
           item={composerItem}
@@ -1611,7 +1607,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       })()}
 
       {/* 音频:念一段文字。**不是「生成」那条路** —— 出图出片选生成模型,念字选的是音色。 */}
-      {!feeding.blocked && composerItem?.kind === "audio" && onSpeak && (
+      {!feeding.blocked && composerItem && composer === "speak" && onSpeak && (
         <AudioComposer
           key={itemFormResetKey(composerItem)}
           item={composerItem}
@@ -1625,7 +1621,34 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       )}
 
       {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
-      {!feeding.blocked && composerItem && composerItem.kind !== "note" && composerItem.kind !== "audio" && onGenerate && (
+      {/* 截出来的那一格还没有产出(截挂了、还在截):挂截取面板,照表单上记的那份、那段就地再截。 */}
+      {composerItem?.form?.trim && composer === "trim" && onTrim && (composerItem.kind === "video" || composerItem.kind === "audio") && (() => {
+        const source = composerItem.form.trim;
+        const node = nodes.find((one) => one.id === composerItem.id);
+        return (
+          <TrimComposer
+            key={itemFormResetKey(composerItem)}
+            item={{ ...composerItem, kind: composerItem.kind }}
+            assetId={source.asset_id}
+            initial={source}
+            workspaceId={workspaceId}
+            busy={itemIsRunning(composerItem)}
+            onTrim={({ start, end, mute }) =>
+              void onTrim({
+                itemId: composerItem.id,
+                assetId: source.asset_id,
+                start,
+                end,
+                mute,
+                x: node?.position.x ?? composerItem.x,
+                y: node?.position.y ?? composerItem.y,
+              })
+            }
+          />
+        );
+      })()}
+
+      {!feeding.blocked && composerItem && composer === "generate" && onGenerate && (
         <NodeComposer
           key={itemFormResetKey(composerItem)}
           item={composerItem}

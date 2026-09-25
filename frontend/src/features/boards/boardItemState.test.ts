@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoardItem } from "@/api/client";
-import { boardSettlementPatch, itemFormResetKey, itemIsRunning, itemRunStatus } from "./boardItemState";
+import { boardSettlementPatch, composerFor, itemFormResetKey, itemIsRunning, itemRunStatus } from "./boardItemState";
 
 function image(extra: Partial<BoardItem> = {}): BoardItem {
   return { id: "image-1", kind: "image", x: 0, y: 0, ...extra };
@@ -54,5 +54,25 @@ describe("终态轮询补丁", () => {
 
   it("还在跑的那一格不出补丁", () => {
     expect(boardSettlementPatch(image({ run: { status: "running", job_id: "job-1" } }))).toBeNull();
+  });
+});
+
+describe("选中一格时挂哪块面板", () => {
+  const trim = { asset_id: "src", start: 1, end: 3, mute: false };
+
+  it("截挂了的那一格挂截取面板,不是生成/念的面板", () => {
+    expect(composerFor({ id: "v", kind: "video", x: 0, y: 0, form: { trim }, run: { status: "failed", error: "截取失败" } })).toBe("trim");
+    expect(composerFor({ id: "a", kind: "audio", x: 0, y: 0, form: { trim }, run: { status: "failed" } })).toBe("trim");
+  });
+
+  it("其余没有产出的按种类:图片视频生成、音频念、便签写", () => {
+    expect(composerFor(image({ run: { status: "failed", error: "上游失败" } }))).toBe("generate");
+    expect(composerFor({ id: "a", kind: "audio", x: 0, y: 0 })).toBe("speak");
+    expect(composerFor({ id: "n", kind: "note", x: 0, y: 0, text: "有字" })).toBe("write");
+  });
+
+  it("有了产出的、分组框这类不挂", () => {
+    expect(composerFor(image({ asset_id: "a1", form: { trim } }))).toBeNull();
+    expect(composerFor({ id: "f", kind: "frame", x: 0, y: 0 })).toBeNull();
   });
 });

@@ -23,6 +23,7 @@
   "migrate-auth-session-expiry": "d4d2606528ce1a4e",
   "migrate-board-canvas-state": "2504b622f26face3",
   "migrate-board-revision": "b3c8bd07a61449c4",
+  "migrate-board-trim-slots-record-their-source": "a2c4feb41524dfbf",
   "migrate-browser-action-leases": "db82d8419ae90156",
   "migrate-browser-boolean-options": "8656267a8529d045",
   "migrate-browser-pool": "ba842907261bd6f7",

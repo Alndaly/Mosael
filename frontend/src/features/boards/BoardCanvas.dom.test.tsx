@@ -25,7 +25,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function mount(canvas: Canvas) {
+function mount(canvas: Canvas, extra: Partial<React.ComponentProps<typeof BoardCanvas>> = {}) {
   let api: BoardCanvasApi | null = null;
   const changes: Canvas[] = [];
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -42,6 +42,7 @@ function mount(canvas: Canvas) {
           onReady={(next) => {
             api = next;
           }}
+          {...extra}
         />
       </div>
       </ImagePreviewProvider>
@@ -174,5 +175,41 @@ describe("删除键只认冲着画布来的那一下", () => {
     select("n1");
     await press(document.querySelector<HTMLElement>('[data-id="n1"]')!, "Backspace");
     expect(view.latest().items.map((one) => one.id)).toEqual(["n2"]);
+  });
+});
+
+describe("截挂了的那一格,选中时挂的是截取面板", () => {
+  it("范围原样在,重截落回这一格;不挂生成面板", async () => {
+    const onTrim = vi.fn(async () => undefined);
+    const onGenerate = vi.fn(async () => undefined);
+    const cut = {
+      id: "cut",
+      kind: "video" as const,
+      x: 0,
+      y: 0,
+      width: 320,
+      height: 200,
+      form: { trim: { asset_id: "src", start: 1.5, end: 4, mute: true } },
+      run: { status: "failed" as const, error: "截取失败" },
+    };
+    mount({ items: [cut], edges: [], markers: [] }, { onTrim, onGenerate, models: [] });
+
+    const node = document.querySelector('[data-id="cut"]') as HTMLElement;
+    act(() => {
+      node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    const start = document.querySelector('[aria-label="boardTrimStartLabel"]') as HTMLInputElement | null;
+    expect(start?.value).toBe("1.5");
+    expect(document.querySelector('[aria-label="boardTrimEndLabel"]')).toHaveProperty("value", "4");
+    expect(document.querySelector('[title="boardDropSound"]')).not.toBeNull();
+
+    const submit = [...document.querySelectorAll("button")].find((one) => one.textContent?.includes("boardTrimSubmit"));
+    act(() => submit!.click());
+    expect(onTrim).toHaveBeenCalledWith(expect.objectContaining({ itemId: "cut", assetId: "src", start: 1.5, end: 4, mute: true }));
+    expect(onGenerate).not.toHaveBeenCalled();
   });
 });

@@ -1278,6 +1278,35 @@ def test_音频不能去掉声音_当场拒绝而不是剪出一个空文件() -
         assert db.query(Job).filter(Job.kind == "trim").count() == 0, "拒掉的截取不该留下任务"
 
 
+def test_截挂了的那一格记着截的是哪一份_就地重截() -> None:
+    """截出来的那一格和生成出来的同是视频:表单上要记下「截的是哪一份、哪一段」,截挂了回来
+    挂的才是截取面板;重截落在同一格上,不再另起一格。"""
+    from app.domain.jobs import wait_for_idle_jobs
+
+    client = fresh_client()
+    ws = _workspace(client)
+    video_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("片子.mp4", b"fake", "video/mp4")}
+    ).json()["id"]
+    board = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [], "edges": []}}).json()
+    trim = {"workspace_id": ws, "item_id": "cut", "asset_id": video_id, "start": 1.0, "end": 2.5, "mute": True, "x": 0, "y": 300}
+
+    placed = client.post(f"/api/boards/{board['id']}/trim", json={**trim, "base_revision": board["revision"]})
+    assert placed.status_code == 200, placed.text
+    wait_for_idle_jobs()
+    current = client.get(f"/api/boards/{board['id']}", params={"workspace_id": ws}).json()
+    [cut] = current["canvas"]["items"]
+    assert cut["form"]["trim"] == {"asset_id": video_id, "start": 1.0, "end": 2.5, "mute": True}
+    assert cut["run"]["status"] == "failed", "假的片子截不出来 —— 这一格落成失败"
+
+    again = client.post(f"/api/boards/{board['id']}/trim", json={**trim, "start": 0.5, "base_revision": current["revision"]})
+    assert again.status_code == 200, again.text
+    wait_for_idle_jobs()
+    items = client.get(f"/api/boards/{board['id']}", params={"workspace_id": ws}).json()["canvas"]["items"]
+    assert [one["id"] for one in items] == ["cut"], "重截落回同一格"
+    assert items[0]["form"]["trim"]["start"] == 0.5
+
+
 def test_截取产出走的是画板同一套回执() -> None:
     """截取任务给的是 asset_id(和语音合成同一个形状)—— 画板的回执两种都读得懂。"""
     from types import SimpleNamespace

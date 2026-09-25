@@ -27,6 +27,8 @@ export interface BoardItem {
     parameters?: Record<string, unknown>;
     source_assets?: { asset_id: string; role: string }[];
     mentioned_asset_ids?: string[];
+    /** 这一格是**从哪份素材截的哪一段**(剪一段的产出)。和后端 canvas._normalize_trim 同形。 */
+    trim?: { asset_id: string; start: number; end: number; mute: boolean };
     prompt_document?: { type?: string; content?: unknown[]; [key: string]: unknown };
   };
   run?: {

@@ -1985,6 +1985,74 @@ def _migrate_board_canvas_state() -> None:
                 )
 
 
+def _migrate_board_trim_slots_record_their_source() -> None:
+    """画板上截出来的那一格,把「截的是哪一份、哪一段」记到表单的 `trim` 上。
+
+    此前截取只在表单里记了 `parameters: {start, end, mute}`,没记截的是哪份素材。截挂了的那一格
+    于是和一格生成挂了的视频/音频长得一样:选中它挂的是生成面板,而要重截也不知道截的是哪一份。
+    现在截取写的是 `form.trim = {asset_id, start, end, mute}`(见 boards.actions.trim_on_board)。
+
+    **来历按任务认,不按参数长相猜**:截取任务的 payload 里记着原素材(`asset_id`)和回执落在哪张板
+    的哪一格。找得到那一格、它表单上正是这次截取的范围,才改;任务已经被清掉的,没法知道截的是
+    哪一份,原样留着(那几格要么已经有产出,要么本来就只剩一个空槽)。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "boards" not in tables or "jobs" not in tables:
+        return
+
+    def loads(raw: Any) -> Any:
+        try:
+            return json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            return None
+
+    with engine.begin() as conn:
+        sources: dict[tuple[str, str], str] = {}
+        for row in conn.execute(text("SELECT payload FROM jobs WHERE kind = 'trim'")).fetchall():
+            payload = loads(row[0])
+            receipt = payload.get("receipt") if isinstance(payload, dict) else None
+            if not isinstance(receipt, dict) or receipt.get("kind") != "board_item":
+                continue
+            asset_id = payload.get("asset_id")
+            if isinstance(asset_id, str) and asset_id and receipt.get("board_id") and receipt.get("item_id"):
+                sources[(str(receipt["board_id"]), str(receipt["item_id"]))] = asset_id
+        boards = {board_id for board_id, _ in sources}
+        for board_id in boards:
+            row = conn.execute(text("SELECT canvas FROM boards WHERE id = :id"), {"id": board_id}).fetchone()
+            canvas = loads(row[0]) if row else None
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            touched = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict):
+                    continue
+                asset_id = sources.get((board_id, str(item.get("id"))))
+                form = item.get("form")
+                parameters = form.get("parameters") if isinstance(form, dict) else None
+                if not asset_id or not isinstance(parameters, dict) or "trim" in form:
+                    continue
+                start, end = parameters.get("start"), parameters.get("end")
+                if not all(isinstance(one, (int, float)) and not isinstance(one, bool) for one in (start, end)):
+                    continue
+                rest = {key: value for key, value in parameters.items() if key not in ("start", "end", "mute")}
+                trimmed = {key: value for key, value in form.items() if key != "parameters"}
+                if rest:
+                    trimmed["parameters"] = rest
+                trimmed["trim"] = {
+                    "asset_id": asset_id,
+                    "start": float(start),
+                    "end": float(end),
+                    "mute": parameters.get("mute") is True,
+                }
+                item["form"] = trimmed
+                touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": board_id},
+                )
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -2780,6 +2848,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_publish_task_post,
                 _migrate_confirmation_summary_i18n,
                 _migrate_board_canvas_state,
+                _migrate_board_trim_slots_record_their_source,
                 _backfill_browser_pool,
                 _backfill_provider_models,
                 _migrate_provider_default_model_fk,

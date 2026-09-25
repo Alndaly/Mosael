@@ -475,6 +475,10 @@ function BoardDetail({
   //: 查找节点的命中集,交给画布去画圈。
   const [searchHit, setSearchHit] = React.useState<CanvasSearchHighlight | null>(null);
   const [canvas, setCanvas] = React.useState<Canvas | null>(board.canvas);
+  //: 本地那份画布的最新值,给定时器和动作的回调读。**不进定时器的依赖**:进了的话每拖一下轮询
+  //: 就重来一次,一直在拖就一直轮询不到 —— 产出要等人停手 2.5 秒之后才出现。
+  const localCanvas = React.useRef(canvas);
+  localCanvas.current = canvas;
   //: 搜的是画布**此刻**的样子(canvas 跟着每次编辑汇上来),刚写的便签马上就能搜到。
   const searchEntries = React.useMemo(
     () => boardSearchEntries((canvas ?? board.canvas)?.items ?? [], t),
@@ -797,12 +801,17 @@ function BoardDetail({
         return;
       }
       acceptBoard(placed);
-      //: **走画布的把手把新那一格加进去。** 回写这里的 canvas 状态是没用的 —— 画布的节点
-      //: 只在挂载时从 canvas 建一次(和写文案那条同一个坑)。
+      //: **走画布的把手落到本地。** 回写这里的 canvas 状态是没用的 —— 画布的节点只在挂载时从
+      //: canvas 建一次(和写文案那条同一个坑)。从一段片子上截是新的一格,加进去;截挂了的那一格
+      //: 就地重截,它已经在画布上了,只换表单和运行态(和服务端 place_pending 同一条:有就地改、没有才加)。
       const made = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
-      if (made) api?.add(made.kind, made);
+      if (made && localCanvas.current?.items.some((one) => one.id === made.id)) {
+        api?.patch(made.id, { form: made.form, run: made.run, asset_id: undefined });
+      } else if (made) {
+        api?.add(made.kind, made);
+      }
       onSaved();
-      setRunning((current) => [...current, input.itemId]);
+      setRunning((current) => (current.includes(input.itemId) ? current : [...current, input.itemId]));
     },
     [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially, flushSaves],
   );
@@ -819,10 +828,6 @@ function BoardDetail({
       return joined.length ? [...current, ...joined] : current;
     });
   }, [board.id, board.canvas.items, canvas]);
-  //: 本地那份画布的最新值,轮询时读它。**不进定时器的依赖**:进了的话每拖一下定时器就重来一次,
-  //: 一直在拖就一直轮询不到 —— 产出要等人停手 2.5 秒之后才出现。轮询的节奏只跟「有没有在等的」走。
-  const localCanvas = React.useRef(canvas);
-  localCanvas.current = canvas;
   React.useEffect(() => {
     if (running.length === 0) return;
     const timer = setInterval(async () => {

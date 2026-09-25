@@ -140,6 +140,9 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
         if not isinstance(mentioned, list):
             raise BoardDomainError("boardErr_itemFieldNotArray", item_id=item_id, field="form.mentioned_asset_ids")
         form["mentioned_asset_ids"] = [str(one).strip() for one in mentioned if str(one).strip()]
+    trim = form.get("trim")
+    if trim is not None:
+        form["trim"] = _normalize_trim(trim, item_id)
     prompt_document = form.get("prompt_document")
     if prompt_document is not None:
         if not isinstance(prompt_document, dict) or prompt_document.get("type") != "doc":
@@ -147,6 +150,28 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
         if len(json.dumps(prompt_document, ensure_ascii=False)) > MAX_TEXT_CHARS * 8:
             raise BoardDomainError("boardErr_promptDocumentTooLarge", item_id=item_id)
     return form
+
+
+def _normalize_trim(value: Any, item_id: str) -> dict[str, Any]:
+    """这一格是**从哪份素材截的哪一段**(见 actions.trim_on_board)。
+
+    截出来的那一格和生成出来的同是视频/音频,光看种类分不出它该挂哪块面板;截挂了回来重试时,
+    还得知道截的是哪一份 —— 所以截取把自己的来历记在表单上,而不是塞进生成参数里。
+    """
+    if not isinstance(value, dict):
+        raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field="form.trim")
+    asset_id = value.get("asset_id")
+    if not isinstance(asset_id, str) or not asset_id.strip():
+        raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="form.trim.asset_id")
+    mute = value.get("mute", False)
+    if not isinstance(mute, bool):
+        raise BoardDomainError("boardErr_itemFieldNotBool", item_id=item_id, field="form.trim.mute")
+    return {
+        "asset_id": asset_id.strip(),
+        "start": finite_number(value.get("start"), "form.trim.start", item_id),
+        "end": finite_number(value.get("end"), "form.trim.end", item_id),
+        "mute": mute,
+    }
 
 
 def _normalize_run(value: Any, item_id: str) -> dict[str, Any] | None:

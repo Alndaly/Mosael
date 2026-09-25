@@ -16,6 +16,7 @@ const apiMocks = vi.hoisted(() => ({
   updateBoard: vi.fn(),
   generateOnBoard: vi.fn(),
   writeOnBoard: vi.fn(),
+  trimOnBoard: vi.fn(),
   listComments: vi.fn(),
   listMembers: vi.fn(),
   api: vi.fn(),
@@ -102,6 +103,7 @@ const props = () => canvasHarness.props as {
   onChange: (canvas: BoardCanvas) => void;
   onGenerate: (input: Record<string, unknown>) => Promise<unknown>;
   onWrite: (input: Record<string, unknown>) => Promise<unknown>;
+  onTrim: (input: Record<string, unknown>) => Promise<unknown>;
 };
 
 beforeAll(() => {
@@ -235,6 +237,26 @@ describe("画板详情页与服务端的同步", () => {
     });
 
     expect(order).toEqual(["save:刚敲完的这段", "write@4"]);
+  });
+
+  it("截挂了的那一格就地重截:本地换的是那一格的运行态,不另加一格同名的", async () => {
+    const trim = { asset_id: "src", start: 1, end: 3, mute: false };
+    const failed = { id: "cut", kind: "video" as const, x: 0, y: 300, width: 320, height: 200, form: { trim }, run: { status: "failed" as const, error: "截取失败" } };
+    const server: BoardCanvas = { items: [failed], edges: [], markers: [] };
+    const retried = { ...failed, form: { trim: { ...trim, start: 0.5 } }, run: { status: "running" as const, job_id: "job-2" } };
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    apiMocks.trimOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [retried] }));
+    apiMocks.getBoard.mockReturnValue(new Promise(() => undefined));
+
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    await act(async () => {
+      await props().onTrim({ itemId: "cut", assetId: "src", start: 0.5, end: 3, mute: false, x: 0, y: 300 });
+    });
+
+    expect(apiMocks.trimOnBoard.mock.calls[0][1]).toMatchObject({ item_id: "cut", asset_id: "src", start: 0.5 });
+    expect(canvasHarness.api.add).not.toHaveBeenCalled();
+    expect(canvasHarness.api.patch).toHaveBeenCalledWith("cut", expect.objectContaining({ form: retried.form, run: retried.run }));
   });
 
   it("自动保存还在路上时点生成:生成等它回来,带着它换来的新版本号,不和自己撞 409", async () => {

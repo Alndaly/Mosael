@@ -185,7 +185,10 @@ def trim_on_board(
     end: float,
     mute: bool,
 ) -> Board:
-    """截出一段,产出一份新素材(原素材不动)。截取的错误(TrimError)原样抛出。"""
+    """截出一段,产出一份新素材(原素材不动)。截取的错误(TrimError)原样抛出。
+
+    `slot` 可以是新的一格(从一段片子上截),也可以是一格截挂了的(照它表单上记的再截一次)。
+    """
     from app.db.models import Asset
     from app.domain.boards.trim import start_trim
 
@@ -198,8 +201,10 @@ def trim_on_board(
         job = start_trim(db, asset=asset, start=start, end=end, mute=mute, created_by=actor_id)
     finally:
         reset_receipt(token)
+    #: 表单记下**截的是哪一份、哪一段**(见 canvas._normalize_trim):截挂了回来,这一格挂的是
+    #: 截取面板、范围原样还在,重试就地再截一次 —— 而不是一块对着空提示词的生成面板。
     return _pending(db, workspace_id, slot, actor_id=actor_id, kind=asset.kind, job_id=job.id,
-                    form={"parameters": {"start": start, "end": end, "mute": mute}})
+                    form={"trim": {"asset_id": asset.id, "start": start, "end": end, "mute": mute}})
 
 
 def write_on_board(
