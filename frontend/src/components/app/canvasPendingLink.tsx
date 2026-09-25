@@ -202,18 +202,24 @@ export function decoratePendingLink<N extends Node, E extends Edge>(
 /**
  * 一次待定连线的全部状态:松手点、单子上高亮的是哪一种、开关。
  *
- * `kinds` 的顺序就是单子的顺序;打开时高亮第一种,占位也先是它的大小。
+ * `kinds` 的顺序就是单子的顺序;打开时高亮第一种。
+ *
+ * **占位从头到尾一个大小(`ghostSize`),换高亮只换图标和名字。** 此前占位跟着高亮换成那一种的
+ * 默认大小:指针在单子上一移,旁边的框就一胀一缩 —— 单子要么跟着挪(指针底下换了一行,来回闪),
+ * 要么只能躲到「最大那一种」外面、离占位老远。选的时候什么都不该动;选定之后真节点按自己的
+ * 大小落下,线头那一侧的边中点仍钉在松手点上。
  */
 export function usePendingLink<K extends string>({
   kinds,
-  sizeOf,
+  ghostSize,
   describe,
   onChoose,
 }: {
   kinds: readonly K[];
-  sizeOf: (kind: K) => Size;
+  /** 占位的大小。不随高亮变 —— 见上。 */
+  ghostSize: Size;
   describe: (kind: K) => PendingLinkOption;
-  /** 选定了一种。建节点、连线由调用方做 —— 位置照 `ghostRect(link.at, sizeOf(kind), link.fromSource)`。 */
+  /** 选定了一种。建节点、连线由调用方做 —— 位置照 `ghostRect(link.at, 那一种的大小, link.fromSource)`。 */
   onChoose: (kind: K, link: PendingLink) => void;
 }) {
   const [link, setLink] = React.useState<PendingLink | null>(null);
@@ -236,32 +242,18 @@ export function usePendingLink<K extends string>({
 
   const decorate = React.useCallback(
     <N extends Node, E extends Edge>(nodes: N[], edges: E[], shape: EdgeShape, zIndex?: number) =>
-      decoratePendingLink(nodes, edges, link, { size: sizeOf(kind), option: describe(kind), shape, zIndex }),
-    [link, kind, sizeOf, describe],
+      decoratePendingLink(nodes, edges, link, { size: ghostSize, option: describe(kind), shape, zIndex }),
+    [link, kind, ghostSize, describe],
   );
 
   return { link, active, setActive, kind, open, cancel, choose, decorate };
 }
 
-/** 一组种类里最宽、最高的那个 —— 不管高亮哪一种,占位都落在这么大的一块里。 */
-function largestFootprint<K extends string>(kinds: readonly K[], sizeOf: (kind: K) => Size): Size {
-  return kinds.reduce(
-    (most, kind) => {
-      const size = sizeOf(kind);
-      return { width: Math.max(most.width, size.width), height: Math.max(most.height, size.height) };
-    },
-    { width: 0, height: 0 },
-  );
-}
-
 /**
  * 挂在占位旁边的那张单子。
  *
- * · **贴的是「装得下任何一种」的那块地方,不是占位本身。** 占位跟着高亮换大小;单子要是贴着
- *   占位,换一种它就挪一下 —— 指针没动,底下却换了一行,高亮又变、占位又变、单子又挪,
- *   来回闪个不停(真机上就是这样)。所以参照取 `ghostRect(松手点, 最大那一种, 同一侧)`:
- *   只取决于松手点和种类表,换高亮时纹丝不动;而任何一种的占位都落在它里面,单子摆在它外面
- *   就压不到占位。线头那一侧的边照旧钉在松手点上。
+ * · **贴着占位摆,参照就是占位那块地方。** 占位不随高亮变大小(见 usePendingLink),所以参照
+ *   只取决于松手点:换高亮时单子纹丝不动,也就不会「指针底下换了一行、高亮又变」地来回闪。
  * · **摆在「往外长」的那一侧**:从出口拉出来的摆在右边,从入口拉出来的摆在左边 —— 不会压在
  *   起手那一格和那根线上;和占位垂直居中(占位本身就是以松手点为中线的)。放不下就挪到下面、
  *   再不行上面,都不行就留在外侧贴着窗口边往里收 —— 从不翻到起手那一侧。
@@ -277,7 +269,7 @@ export function PendingLinkMenu<K extends string>({
   title,
   kinds,
   describe,
-  sizeOf,
+  ghostSize,
   active,
   onActiveChange,
   onChoose,
@@ -287,8 +279,8 @@ export function PendingLinkMenu<K extends string>({
   title: string;
   kinds: readonly K[];
   describe: (kind: K) => PendingLinkOption;
-  /** 每一种的大小 —— 和 usePendingLink 用的是同一个。单子据此算出「装得下任何一种」的那块地方。 */
-  sizeOf: (kind: K) => Size;
+  /** 占位的大小 —— 和 usePendingLink 用的是同一个。 */
+  ghostSize: Size;
   active: number;
   onActiveChange: (index: number) => void;
   onChoose: (kind: K) => void;
@@ -304,15 +296,14 @@ export function PendingLinkMenu<K extends string>({
   cancelRef.current = onCancel;
   //: 选定之后不把焦点还回去 —— 见上面的说明。
   const chosen = React.useRef(false);
-  const footprint = React.useMemo(() => largestFootprint(kinds, sizeOf), [kinds, sizeOf]);
   const { at, fromSource } = link;
 
   React.useLayoutEffect(() => {
     const floating = menuEl.current;
     if (!floating) return;
     let alive = true;
-    const area = ghostRect(at, footprint, fromSource);
-    //: 虚拟参照:那块地方的流坐标,每帧按当前视口换成屏幕坐标。不读任何 DOM,也不看高亮哪一种。
+    const area = ghostRect(at, ghostSize, fromSource);
+    //: 虚拟参照:占位那块地方的流坐标,每帧按当前视口换成屏幕坐标。不读任何 DOM,也不看高亮哪一种。
     const reference = {
       getBoundingClientRect: () => {
         const topLeft = toScreen.current({ x: area.x, y: area.y });
@@ -328,7 +319,7 @@ export function PendingLinkMenu<K extends string>({
           offset(12),
           //: 放不下时挪到下面、再不行上面(都从松手点往外长的那一侧起);**从不翻到另一侧** ——
           //: 另一侧正是起手那一格和待定的线。上下也放不下,就留在外侧,由 shift 贴着窗口边往里收:
-          //: 顶多压住最宽那一种占位的远端,线和起手那一格照旧露着。
+          //: 顶多压住占位的远端,线和起手那一格照旧露着。
           flip({
             fallbackPlacements: fromSource ? ["bottom-start", "top-start"] : ["bottom-end", "top-end"],
             fallbackStrategy: "initialPlacement",
@@ -349,7 +340,7 @@ export function PendingLinkMenu<K extends string>({
       alive = false;
       stop();
     };
-  }, [at, footprint, fromSource]);
+  }, [at, ghostSize.width, ghostSize.height, fromSource]);
 
   //: 打开时把焦点收进来,关掉时(取消的话)还回去。
   React.useEffect(() => {

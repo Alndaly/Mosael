@@ -74,6 +74,9 @@ import {
 } from "@/features/markers/markers";
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 
+/** 拉线松手后那块占位的大小:选的时候不随高亮变(见 usePendingLink),取一格图片的默认大小。 */
+const PENDING_GHOST_SIZE = DEFAULT_SIZE.image;
+
 /**
  * 创意画板的画布。
  *
@@ -1015,10 +1018,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     (kind: (typeof SPAWNABLE_KINDS)[number]) => ({ icon: kindIcon(kind), ...kindText(t, kind) }),
     [t],
   );
-  const sizeOfKind = React.useCallback((kind: (typeof SPAWNABLE_KINDS)[number]) => DEFAULT_SIZE[kind], []);
   const pending = usePendingLink({
     kinds: SPAWNABLE_KINDS,
-    sizeOf: sizeOfKind,
+    ghostSize: PENDING_GHOST_SIZE,
     describe: describeKind,
     onChoose: (kind, link) => spawnLinked(kind, link.nodeId, link.at, link.fromSource),
   });
@@ -1489,7 +1491,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           onActiveChange={pending.setActive}
           onChoose={pending.choose}
           onCancel={cancelPending}
-          sizeOf={sizeOfKind}
+          ghostSize={PENDING_GHOST_SIZE}
           link={pendingLink}
         />
       )}

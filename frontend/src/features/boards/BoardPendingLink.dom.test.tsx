@@ -169,7 +169,7 @@ async function zoomOut() {
 }
 
 describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
-  it("占位落在松手点,大小就是新节点的默认大小;换高亮就换成那一种的大小,线头那一边不动", async () => {
+  it("占位落在松手点,换高亮只换图标和名字、大小不变;选定后真节点按自己的大小落下,线头那一边不动", async () => {
     await mount(board);
     await zoomOut();
     release(300, 200);
@@ -183,8 +183,9 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
       item("boardKindVideo").dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
       item("boardKindVideo").focus();
     });
-    const video = DEFAULT_SIZE.video;
-    expect(ghost()).toMatchObject({ position: { x: 520, y: 360 - video.height / 2 }, width: video.width, height: video.height });
+    //: 选的时候什么都不动:占位还是原来那块,只是换成视频的图标。
+    expect(ghost()).toMatchObject({ position: { x: 520, y: 360 - image.height / 2 }, width: image.width, height: image.height });
+    expect(ghost()?.data).toMatchObject({ label: "boardKindVideo" });
   });
 
   it("待定的线是一条真边:走线跟着画布的偏好,箭头和实线同一种,从起手那一格接到占位上", async () => {
@@ -220,7 +221,9 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
 
     const saved = view.latest();
     const created = saved.items.find((one) => one.id !== "n1")!;
-    expect(created).toMatchObject({ kind: "video", x: placed.x, y: placed.y, ...DEFAULT_SIZE.video });
+    //: 真节点按视频自己的大小落下:线头那一侧(左边)和占位同一条边,竖直方向仍以松手点为中线。
+    const middle = placed.y + DEFAULT_SIZE.image.height / 2;
+    expect(created).toMatchObject({ kind: "video", x: placed.x, y: middle - DEFAULT_SIZE.video.height / 2, ...DEFAULT_SIZE.video });
     expect(saved.edges).toEqual([expect.objectContaining({ source: "n1", target: created.id })]);
     expect(ghost()).toBeUndefined();
     expect(pendingEdge()).toBeUndefined();
@@ -290,9 +293,8 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
     expect(view.latest().edges).toEqual([expect.objectContaining({ source: created.id, target: "n1" })]);
   });
 
-  it("换高亮只换占位的大小,单子纹丝不动 —— 否则单子一挪,指针底下换了一行,高亮又变,来回闪", async () => {
-    //: jsdom 没有布局:把占位节点的 DOM 矩形按它在画布上的位置、大小和视口算出来,和浏览器里一样
-    //: 跟着高亮的那一种变。单子要是贴着这块矩形摆,换一种它就得跟着挪。
+  it("换高亮时占位和单子都纹丝不动 —— 否则单子一挪,指针底下换了一行,高亮又变,来回闪", async () => {
+    //: jsdom 没有布局:把占位节点的 DOM 矩形按它在画布上的位置、大小和视口算出来,和浏览器里一样。
     const layout = Element.prototype.getBoundingClientRect;
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
       const node = ghost();
@@ -314,16 +316,15 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
       hover(label);
       await frame();
       expect(menuAt()).toEqual(first);
-      //: 单子的参照是一块装得下**任何一种**占位的地方 —— 摆在它外面,就压不到占位,不管高亮哪一种。
+      //: 单子贴的就是占位本身那块地方 —— 占位不变大小,参照也就不变。
       const reference = placement.references.at(-1)!;
       const { x, y, zoom } = flow.instance!.getViewport();
       const node = ghost()!;
-      const left = node.position.x * zoom + x;
-      const top = node.position.y * zoom + y;
-      expect(left).toBeGreaterThanOrEqual(reference.left - 0.01);
-      expect(top).toBeGreaterThanOrEqual(reference.top - 0.01);
-      expect(left + node.width! * zoom).toBeLessThanOrEqual(reference.right + 0.01);
-      expect(top + node.height! * zoom).toBeLessThanOrEqual(reference.bottom + 0.01);
+      expect(node).toMatchObject(DEFAULT_SIZE.image);
+      expect(reference.left).toBeCloseTo(node.position.x * zoom + x);
+      expect(reference.top).toBeCloseTo(node.position.y * zoom + y);
+      expect(reference.width).toBeCloseTo(node.width! * zoom);
+      expect(reference.height).toBeCloseTo(node.height! * zoom);
     }
   });
 
@@ -336,21 +337,22 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
     hover("boardKindAudio");
     expect(highlighted()).toEqual([item("boardKindAudio")]);
     expect(document.activeElement).toBe(item("boardKindAudio"));
-    expect(ghost()).toMatchObject(DEFAULT_SIZE.audio);
+    expect(ghost()).toMatchObject(DEFAULT_SIZE.image);
+    expect(ghost()?.data).toMatchObject({ label: "boardKindAudio" });
 
     act(() => {
       menu()!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
     expect(highlighted()).toEqual([item("boardKindNote")]);
     expect(document.activeElement).toBe(item("boardKindNote"));
-    expect(ghost()).toMatchObject(DEFAULT_SIZE.note);
+    expect(ghost()?.data).toMatchObject({ label: "boardKindNote" });
 
     act(() => {
       menu()!.dispatchEvent(new PointerEvent("pointerout", { bubbles: true }));
       menu()!.dispatchEvent(new PointerEvent("pointerleave"));
     });
     expect(highlighted()).toEqual([item("boardKindNote")]);
-    expect(ghost()).toMatchObject(DEFAULT_SIZE.note);
+    expect(ghost()?.data).toMatchObject({ label: "boardKindNote" });
 
     //: 只有一种画法:没有 hover:/focus: 的底色另画一行,图标也不会只在高亮时多出一圈描边。
     for (const row of rows()) {
