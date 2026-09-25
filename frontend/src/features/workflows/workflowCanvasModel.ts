@@ -9,10 +9,10 @@ import {
   outputLabel,
   outputType,
   typesCompatible,
-  type DataType,
   type NodeIssue,
 } from "@/features/workflows/analyze";
 import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
+import type { DataType } from "@/features/nodeForms/fieldTypes";
 
 type NodeRegistry = Map<string, WorkflowNodeType>;
 type Translate = (key: MessageKey) => string;

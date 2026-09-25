@@ -1,6 +1,5 @@
 import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
-import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
@@ -9,7 +8,7 @@ import { OPEN_WORKFLOW_TEMPLATE, useOpenRequest, useSectionEntry } from "@/lib/d
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/layout/ActionMenu";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
-import { type QueryClient, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import {
   Background,
@@ -39,12 +38,10 @@ import {
   FileUp,
   GitCommitVertical,
   History,
-  Link2,
   ListChecks,
   Loader2,
   Map as MapIcon,
   Maximize2,
-  PenLine,
   Pencil,
   Play,
   Plus,
@@ -67,11 +64,9 @@ import {
   createWorkflow,
   deleteWorkflow,
   exportWorkflowFile,
-  fetchWorkflowFieldOptions,
   fetchWorkflowNodeTypes,
   getWorkflow,
   importWorkflow,
-  listAssets,
   listJobEvents,
   listWorkflowRuns,
   importAsset,
@@ -119,10 +114,17 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
-import { RefEditor } from "@/features/workflows/RefEditor";
+import { RefEditor } from "@/features/nodeForms/RefEditor";
+import {
+  FIELD_BOX,
+  JsonField,
+  NodeConfigForm,
+  nodeConfigTiers,
+  useNodeFieldOptions,
+  type ConfigSpec,
+  type FieldBinding,
+} from "@/features/nodeForms/NodeConfigForm";
 import { syncFromServer } from "@/features/workflows/serverSync";
-import { MapField } from "@/features/workflows/MapField";
-import { CodeEditor } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import {
   canvasDockedPanelEdges,
@@ -165,10 +167,8 @@ import {
   analyzeWorkflow,
   bodyScope,
   extractRefs,
-  fieldDataType,
   isNestedScopeConfig,
 } from "@/features/workflows/analyze";
-import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
@@ -186,7 +186,6 @@ import {
 } from "@/features/workflows/scope";
 import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { boundRunId, RUN_ACTIVE } from "@/features/workflows/boundRun";
-import { ScenePropsField } from "@/features/workflows/ScenePropsField";
 import { errorText } from "@/api/errorMessage";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 import {
@@ -274,15 +273,6 @@ interface GenField {
   range?: { min: number; max: number };
   toggle?: boolean;
 }
-
-// Nested controls (such as MapField rows) own their dimensions and field styling.
-const FIELD_BOX =
-  "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground " +
-  "[&_small]:text-ui-xs [&_small]:leading-[1.5] [&_small]:text-muted-foreground " +
-  "[&>input]:h-10 [&>input]:w-full [&>input]:rounded-md [&>input]:border [&>input]:border-border [&>input]:bg-field [&>input]:px-2.5 [&>input]:text-ui-sm [&>input]:text-foreground " +
-  "[&>textarea]:w-full [&>textarea]:resize-y [&>textarea]:rounded-md [&>textarea]:border [&>textarea]:border-border [&>textarea]:bg-field [&>textarea]:px-2.5 [&>textarea]:py-2 [&>textarea]:text-ui-sm [&>textarea]:text-foreground " +
-  "[&>input:focus-visible]:border-primary [&>input:focus-visible]:outline-none " +
-  "[&>textarea:focus-visible]:border-primary [&>textarea:focus-visible]:outline-none";
 
 /** 助手面板的开合记忆。 */
 const AGENT_PANEL_KEY = "mosael:workflow-agent-open";
@@ -2487,27 +2477,6 @@ function WorkflowEditor({
   );
 }
 
-interface ConfigSpec {
-  type?: string;
-  description?: string;
-  required?: boolean;
-  options?: string[];
-  /** 清单之外还能不能手填(模型名那种:新模型上线往往早于目录更新)。 */
-  allow_custom?: boolean;
-  /** 选项的显示名(后端按语言翻好;值照旧是英文的,存进 config 的是它)。 */
-  option_labels?: Record<string, string>;
-  /** 后端声明的默认值,拿来做占位提示(告诉用户"留空会用什么")。 */
-  default?: string;
-  /** 留空也能跑的专业旋钮 —— 收进折叠的「高级选项」,不在第一眼糊到用户脸上。 */
-  advanced?: boolean;
-  /** 这个字段的值跟着谁走(后端 NODE_TYPES 声明)。父字段一换,这里的旧值就失效了。 */
-  depends_on?: string;
-  /** 选项要现查:来源名(后端 field_options)。清单跟着 depends_on 那个字段的值变。 */
-  options_from?: string;
-  /** 满足这些父字段取值时，本字段才参与表单、选项请求和校验。 */
-  active_when?: Record<string, unknown | unknown[]>;
-}
-
 /** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
 function upstreamVariables(
   graph: WorkflowGraph,
@@ -2534,44 +2503,6 @@ function upstreamVariables(
     for (const output of outputs) refs.push(`{{${node.id}.${output}}}`);
   }
   return refs;
-}
-
-/** object(JSON)字段:CodeMirror JSON 编辑,失焦解析回对象;非法给提示不写入。 */
-function JsonField({ value, onChange }: { value: unknown; onChange: (parsed: unknown) => void }) {
-  const t = useI18n();
-  const [text, setText] = React.useState(() => JSON.stringify(value ?? {}, null, 2));
-  // 上游(智能体改图)更新时回显,但不打断正在输入:仅当序列化值真变才重置。
-  const synced = React.useRef(text);
-  React.useEffect(() => {
-    const next = JSON.stringify(value ?? {}, null, 2);
-    if (next !== synced.current) {
-      synced.current = next;
-      setText(next);
-    }
-  }, [value]);
-  return (
-    <CodeEditor
-      value={text}
-      language="json"
-      minHeight={34}
-      gutter={false}
-      onChange={setText}
-      onBlur={() => {
-        try {
-          const parsed = JSON.parse(text || "{}");
-          synced.current = JSON.stringify(parsed ?? {}, null, 2);
-          onChange(parsed);
-        } catch {
-          toast.error(t("wfBadJson"));
-        }
-      }}
-    />
-  );
-}
-
-/** code 字段保持纯编辑器；上游变量不再作为整片提示标签铺在表单下面。 */
-function CodeField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <CodeEditor value={value} language="python" minHeight={140} onChange={onChange} />;
 }
 
 export function NodeInspector({
@@ -2614,9 +2545,7 @@ export function NodeInspector({
   const t = useI18n();
   const nodeVisual = workflowNodeVisual(node.type);
   const config = (node.config ?? {}) as Record<string, unknown>;
-  const specs = Object.entries((meta?.config ?? {}) as Record<string, ConfigSpec>);
-  // 变量插入要按光标位置写回,input 和 textarea 都有 selectionStart,两者都收。
-  const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | null>>({});
+  const allSpecs = (meta?.config ?? {}) as Record<string, ConfigSpec>;
   // 每字段的输入方式:手动填写 vs 连接上游输出(ComfyUI 式)。默认从值推断(纯引用=连接)。
   const variables = React.useMemo(
     () => Array.from(new Set([...scopeVariables, ...upstreamVariables(graph, node.id, registry)])),
@@ -2668,36 +2597,8 @@ export function NodeInspector({
     queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
     enabled: node.type === "ai_generate",
   });
-  // 选项要现查的字段(声明里带 options_from):每个字段一份查询,父字段一换就重查。
-  // 不认识具体节点 —— 音色、引擎这些清单从哪来、跟着谁变,都是后端声明的。
-  const allSpecs = (meta?.config ?? {}) as Record<string, ConfigSpec>;
-  const optionSpecs = specs.filter(([, spec]) =>
-    Boolean(spec?.options_from) && isWorkflowFieldActive(spec, config, allSpecs),
-  );
-  const dynamicOptionResults = useQueries({
-    queries: optionSpecs.map(([key, spec]) => {
-      const parentKey = spec?.depends_on ?? "";
-      const parentSpec = parentKey ? ((meta?.config ?? {}) as Record<string, ConfigSpec>)[parentKey] : undefined;
-      const parent = parentKey ? String(config[parentKey] ?? parentSpec?.default ?? "") : "";
-      return {
-        queryKey: ["workflow-field-options", spec?.options_from, workspaceId, parent, node.type, workflowId, key],
-        queryFn: () =>
-          fetchWorkflowFieldOptions(String(spec?.options_from), workspaceId, parent, {
-            nodeType: node.type,
-            workflowId,
-          }),
-        staleTime: 30_000,
-      };
-    }),
-  });
-  const fetchedOptions = new Map(optionSpecs.map(([key], index) => [key, dynamicOptionResults[index]?.data ?? []]));
-  // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
-  const hasAssetField = specs.some(([, spec]) => fieldDataType(spec) === "asset");
-  const assets = useQuery({
-    queryKey: ["workflow-assets", workspaceId],
-    queryFn: () => listAssets(workspaceId),
-    enabled: hasAssetField,
-  });
+  // 选项要现查的字段、素材下拉:由表单那一层按声明去拉(见 features/nodeForms)。
+  const fieldOptions = useNodeFieldOptions({ specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId });
   // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
   const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
     if (node.type === "llm") {
@@ -2759,7 +2660,7 @@ export function NodeInspector({
 
   // 换了父字段就清掉依赖它的子字段 —— 规则抽在 dependents.ts(有测试),这里只负责接线。
   const setConfig = (key: string, value: unknown, options?: SetGraphOptions) => {
-    onChange({ config: withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>) }, options);
+    onChange({ config: withDependentsCleared(config, key, value, allSpecs) }, options);
   };
   /**
    * **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回一个字母。
@@ -2922,48 +2823,15 @@ export function NodeInspector({
     [genSourceLines, genSourceRoles],
   );
 
-  /** 哪些动态下拉允许手填值。
-   *
-   * 素材/账号/音色这类**资源**是闭集:填一个不存在的 id 只会在运行时报错,所以下拉即全集。
-   * 模型名不是:供应商上新模型往往早于我们的目录更新,只给下拉等于把人堵在「列表里没有、
-   * 于是填不进去」的死角里。 */
-  //: 清单之外还能不能手填,由**声明**说了算(后端 allow_custom)——此前是按字段名猜 key === "model"。
-  const allowsCustomValue = (key: string) => Boolean(((meta?.config ?? {}) as Record<string, ConfigSpec>)[key]?.allow_custom);
-
-  /** 一个字段的下拉选项;返回 null 表示它不是下拉。
-
-      **不认识任何具体节点。** 选项从哪来由声明说了算:`options_from` 的去问后端那一个接口
-      (清单、依赖谁、怎么过滤都在后端 field_options),asset 型字段给工作区素材。此前这里按
-      节点类型写着一串 if —— 插件的包和工具、发布账号、可调用工作流、对话连接与模型各一条,
-      而插件节点是**运行时**才有的类型,前端那张表永远覆盖不到它。 */
-  const dynamicOptions = (
-    key: string,
-    spec?: { options_from?: string },
-  ): Array<{ value: string; label: string }> | null => {
-    if (spec?.options_from) {
-      return fetchedOptions.get(key) ?? [];
-    }
-    // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。按**数据类型**给,
-    // 不按节点 —— 任何声明成 asset 的字段都该能挑素材。
-    if (fieldDataType(spec as ConfigSpec | undefined) === "asset") {
-      return (assets.data ?? []).map((asset) => ({
-        value: asset.id,
-        label: asset.name || asset.original_filename,
-      }));
-    }
-    return null;
-  };
-
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
-  // 顺序就是后端声明的顺序。
-  const visibleSpecs = specs
-    .filter(([, spec]) => isWorkflowFieldActive(spec, config, allSpecs))
-    .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
-    .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)));
-  // 分级:留空也能跑的专业旋钮收进折叠区(由后端 NODE_TYPES 的 advanced 声明),第一眼只留下
-  // 决定「这个节点在做什么」的字段 —— 十几个采样参数一上来就糊到脸上,新手根本无从下手。
-  const basicSpecs = visibleSpecs.filter(([, spec]) => !spec?.advanced);
-  const advancedSpecs = visibleSpecs.filter(([, spec]) => Boolean(spec?.advanced));
+  // 顺序就是后端声明的顺序;基础 / 高级的分档规则在表单那一层(nodeConfigTiers)。
+  const { basic: basicSpecs, advanced: advancedSpecs } = nodeConfigTiers(
+    allSpecs,
+    config,
+    (key) =>
+      (node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)) ||
+      (node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)),
+  );
 
   // ── 功能区 ──────────────────────────────────────────────────────────────
   // 节点上方那条悬浮键分两组(中间一道竖线):左边是**这个节点有哪几块内容**,点了换下面
@@ -2987,152 +2855,62 @@ export function NodeInspector({
   const AREA_LABELS: Record<string, MessageKey> = { config: "wfaConfig", advanced: "wfAdvanced", outputs: "wfOutputs", run: "wfRunOutputs" };
 
 
-  /** 一个配置字段的渲染。抽出来是因为要渲染两遍:基础项直接铺开,高级项收进折叠区。 */
-  const renderField = ([key, spec]: [string, ConfigSpec]) => {
-          // 循环体 / 子图都是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
-          if (spec?.type === "graph") {
-            const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
-            //: 叫「循环体」还是「子图」,和后端 _body_label 同一个判据:体里有没有 `loop` 这个作用域。
-            const isSubgraph = !bodyScope(registry, node.type).includes("loop");
-            return (
-              <div className={FIELD_BOX} key={key}>
-                <label>{t(isSubgraph ? "wfSubgraphBody" : "wfLoopBody")}</label>
-                <div className="rounded-md border border-dashed border-border bg-muted px-2.5 py-2 text-ui-xs leading-normal text-muted-foreground">{t(isSubgraph ? "wfSubgraphBodyNote" : "wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
-              </div>
-            );
-          }
-          const value = config[key];
-          const isObject = spec?.type === "object";
-          const options = spec?.options
-            ? spec.options.map((option) => ({ value: option, label: spec.option_labels?.[option] ?? option }))
-            : dynamicOptions(key, spec as { options_from?: string } | undefined);
-          // 标签由节点声明提供(后端内置节点和运行时插件走同一份接口),最后才退到裸键名。
-          const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
-          // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
-          const canConnect = !isObject;
-          const connected = canConnect && connectedInputs.includes(key);
-          const boundEdge = connected ? dataEdgeFor(key) : null;
-          const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
-          return (
-            <div className={FIELD_BOX} key={key} data-field-key={key}>
-              <span>
-                {declaredLabel || key}
-                {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
-                {canConnect && (
-                  <button
-                    type="button"
-                    className={cn(
-                      "ml-auto inline-flex cursor-pointer items-center gap-[3px] rounded-full border border-border bg-transparent px-1.5 py-px text-ui-2xs font-medium text-muted-foreground transition-[border-color,color,background] duration-100 hover:border-border-strong hover:text-foreground",
-                      connected && "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
-                    )}
-                    title={t("wfInputModeHint")}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setConnected(key, !connected);
-                    }}
-                  >
-                    {connected ? <Link2 size={11} /> : <PenLine size={11} />}
-                    {connected ? t("wfInputRef") : t("wfInputManual")}
-                  </button>
-                )}
-              </span>
-              {connected ? (
-                <div className="relative pl-3 before:absolute before:left-0 before:top-1/2 before:h-[7px] before:w-[7px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-[''] [&_:where(button,[role=combobox])]:w-full">
-                  {/* 上游输出会长到几十条(每个上游节点各带一串),超过阈值 OptionPicker 自己
-                      换成可搜索的那一版 —— 在一列 `source_video.*` 里滚着找一个后缀最费眼。 */}
-                  <OptionPicker
-                    value={boundValue}
-                    onChange={(next) => {
-                      const dot = next.indexOf(".");
-                      bindInput(key, next.slice(0, dot), next.slice(dot + 1));
-                    }}
-                    options={upstreamOptions.map((option) => ({
-                      value: `${option.sourceId}.${option.output}`,
-                      label: `${option.sourceId}.${option.output}`,
-                    }))}
-                    placeholder={t("wfPickUpstream")}
-                  />
-                </div>
-              ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (
-                // 和下面的 scene_models 同一条:挑笔记这个控件由**后端的字段声明**点名。
-                <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
-              ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "scene_models" ? (
-                // 专用控件由**后端的字段声明**点名(editor: "scene_models"),不是这里按
-                // 节点类型 + 字段名认出来的 —— 后者是这份注册表一直在消灭的那种手抄表。
-                <ScenePropsField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
-              ) : options ? (
-                // 纯下拉只给**闭集**:固定选项、且没声明能手填。声明了 allow_custom 的(模型名、
-                // 逐镜决定的 source_group / render —— 值常是上游的 `{{…}}`)走可手填的那一版,
-                // 否则引用在纯下拉里显示成空白,也填不回去。
-                spec?.options && !allowsCustomValue(key) ? (
-                  <OptionPicker
-                    value={String(value ?? spec.default ?? "")}
-                    onChange={(next) => setConfig(key, next)}
-                    options={options}
-                    placeholder={t("wfPickOption")}
-                  />
-                ) : (
-                  // 动态资源列表(素材/账号/数据集/音色…)可能很长 → 可搜索。
-                  <Combobox
-                    value={String(value ?? spec?.default ?? "")}
-                    options={options}
-                    placeholder={t("wfPickOption")}
-                    emptyText={t("cmdkEmpty")}
-                    allowCustomValue={allowsCustomValue(key)}
-                    className="w-full"
-                    onValueChange={(next) => setConfig(key, next)}
-                  />
-                )
-              ) : isObject ? (
-                // 「名字 → 值」的映射给一行一对的编辑器,值那格能从上游输出里挑;
-                // 真正自由结构的(json_schema)才留原始 JSON。哪种由声明说了算,见后端 config_editor。
-                String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "json" ? (
-                  <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
-                ) : (
-                  <MapField
-                    value={value}
-                    variables={variables}
-                    onChange={typeConfig(key)}
-                  />
-                )
-              ) : spec?.type === "code" ? (
-                <CodeField value={String(value ?? "")} onChange={typeConfig(key)} />
-              ) : spec?.type === "template" ? (
-                // 模板字段:多行,而且里面的 `{{上游.输出}}` 显示成**可整体删除的标签** ——
-                // 纯文本时退格会把它咬成 `{{llm-1.tex`,而半截引用在运行前看不出错。
-                <RefEditor
-                  rows={2}
-                  value={String(value ?? "")}
-                  onChange={typeConfig(key)}
-                  variables={variables}
-                  placeholder={spec?.description ? undefined : t("wfRefEditorHint")}
-                />
-              ) : (
-                // string / number 是单行值,以前也铺成可拖拽的多行文本域 —— 于是同一个面板里
-                // 并排出现三种控件(Select / Combobox / 带拖拽手柄的文本域),看着像没做完。
-                // 控件跟着字段声明的类型走。
-                <Input
-                  ref={(el) => {
-                    fieldRefs.current[key] = el;
-                  }}
-                  // 数字字段也是 text:引擎对每个字段都插值,`{{source_video.width}}` 在这里合法
-                  // (官方模板就这么写)。type="number" 会把它当非法值显示成空,看着像没填,
-                  // 顺手填个数就把引用覆盖了。inputMode 仍然给触控键盘弹数字键盘。
-                  type="text"
-                  inputMode={spec?.type === "number" ? "decimal" : undefined}
-                  value={String(value ?? "")}
-                  placeholder={spec?.default ? String(spec.default) : ""}
-                  onChange={(event) => typeConfig(key)(event.target.value)}
-                />
-              )}
-              {spec?.description && (
-                <small>
-                  <InlineMarkdown text={spec.description} />
-                </small>
-              )}
-            </div>
-          );
+  /** 字段接上游 = 数据边(ComfyUI 式:暴露输入接点,再从画布拖数据边或下拉选源)。 */
+  const binding: FieldBinding = {
+    isBound: (key) => connectedInputs.includes(key),
+    setBound: setConnected,
+    renderBound: (key) => {
+      const boundEdge = dataEdgeFor(key);
+      const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
+      // 上游输出会长到几十条(每个上游节点各带一串),超过阈值 OptionPicker 自己
+      // 换成可搜索的那一版 —— 在一列 `source_video.*` 里滚着找一个后缀最费眼。
+      return (
+        <OptionPicker
+          value={boundValue}
+          onChange={(next) => {
+            const dot = next.indexOf(".");
+            bindInput(key, next.slice(0, dot), next.slice(dot + 1));
+          }}
+          options={upstreamOptions.map((option) => ({
+            value: `${option.sourceId}.${option.output}`,
+            label: `${option.sourceId}.${option.output}`,
+          }))}
+          placeholder={t("wfPickUpstream")}
+        />
+      );
+    },
   };
+
+  /** 表单不认识的那一种字段:内嵌子图(循环体 / 子图),只给只读概览。 */
+  const renderOwnField = (key: string, spec: ConfigSpec): React.ReactNode | null => {
+    // 循环体 / 子图都是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
+    if (spec?.type === "graph") {
+      const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
+      //: 叫「循环体」还是「子图」,和后端 _body_label 同一个判据:体里有没有 `loop` 这个作用域。
+      const isSubgraph = !bodyScope(registry, node.type).includes("loop");
+      return (
+        <div className={FIELD_BOX} key={key}>
+          <label>{t(isSubgraph ? "wfSubgraphBody" : "wfLoopBody")}</label>
+          <div className="rounded-md border border-dashed border-border bg-muted px-2.5 py-2 text-ui-xs leading-normal text-muted-foreground">{t(isSubgraph ? "wfSubgraphBodyNote" : "wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const renderFields = (fields: Array<[string, ConfigSpec]>) => (
+    <NodeConfigForm
+      fields={fields}
+      config={config}
+      workspaceId={workspaceId}
+      variables={variables}
+      fieldOptions={fieldOptions}
+      onSetConfig={(key, value) => setConfig(key, value)}
+      onTypeConfig={(key, value) => typeConfig(key)(value)}
+      binding={binding}
+      renderOwnField={renderOwnField}
+    />
+  );
 
   /**
    * **住在画布里,大小不跟着缩放变。**
@@ -3466,7 +3244,7 @@ export function NodeInspector({
                 </span>
                 <Combobox
                   value={valueForRole(genSourceLines, role)}
-                  options={(assets.data ?? []).map((asset) => ({
+                  options={fieldOptions.assets.map((asset) => ({
                     value: asset.id,
                     label: asset.name || asset.original_filename,
                   }))}
@@ -3677,8 +3455,8 @@ export function NodeInspector({
         {/* 每一档里的表单**整份一起读**,不再切碎;分档只分到「参数 / 高级 / 输出变量 /
             本次产出」这一层。高级从正文底下的折叠块升成条上的一档 —— 折叠块把「还有没有
             更多可调的」藏在一次点击后面,而条上摆着一眼就看得见。 */}
-        {area === "config" && basicSpecs.map(renderField)}
-        {area === "advanced" && advancedSpecs.map(renderField)}
+        {area === "config" && renderFields(basicSpecs)}
+        {area === "advanced" && renderFields(advancedSpecs)}
         {area === "outputs" && meta && (
           <div className="grid gap-[5px] pt-0.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>

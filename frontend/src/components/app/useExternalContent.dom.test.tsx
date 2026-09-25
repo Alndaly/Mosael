@@ -14,7 +14,7 @@ vi.mock("@/app/preferences", () => ({
 import { ChatComposer } from "@/features/agent/ChatComposer";
 import { PromptEditor } from "@/features/boards/PromptEditor";
 import { NoteEditor } from "@/features/notes/NoteEditor";
-import { RefEditor } from "@/features/workflows/RefEditor";
+import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { parseSourceAssetText, sourceAssetText } from "@/features/workflows/sourceAssetLines";
 import { COMPOSE_SETTLE_MS } from "./useExternalContent";
 

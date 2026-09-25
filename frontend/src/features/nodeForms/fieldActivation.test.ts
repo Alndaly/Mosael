@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import contract from "../../../../contracts/workflow-field-activation.json";
 
-import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
+import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 
 describe("isWorkflowFieldActive", () => {
   const specs = {

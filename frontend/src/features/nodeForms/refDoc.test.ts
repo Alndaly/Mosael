@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { docToString, filterRefs, parsePieces, piecesToDoc, piecesToString } from "@/features/workflows/refDoc";
+import { docToString, filterRefs, parsePieces, piecesToDoc, piecesToString } from "@/features/nodeForms/refDoc";
 
 describe("字符串 → 片段", () => {
   it("认得出引用和它两边的文字", () => {

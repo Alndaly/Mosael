@@ -1,5 +1,6 @@
 import type { TaskEvent } from "@/api/client";
-import { outputLabel, outputType, type DataType, type RegistryLike } from "@/features/workflows/analyze";
+import type { DataType } from "@/features/nodeForms/fieldTypes";
+import { outputLabel, outputType, type RegistryLike } from "@/features/workflows/analyze";
 
 /**
  * 一次运行的事件流 → 每个节点的状态。

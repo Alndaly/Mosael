@@ -16,7 +16,10 @@ import { describe, expect, it } from "vitest";
 
 export const RATCHET = true;
 
-const VIEW = readFileSync(join(import.meta.dirname, "WorkflowsView.tsx"), "utf8");
+//: 字段怎么渲染、下拉从哪来,住在节点表单那一层(features/nodeForms)—— 工作流检查器和画板
+//: 上的工具格共用它。检查器自己只剩宿主的事(数据边、专区)。
+const VIEW = readFileSync(join(import.meta.dirname, "../nodeForms/NodeConfigForm.tsx"), "utf8");
+const INSPECTOR = readFileSync(join(import.meta.dirname, "WorkflowsView.tsx"), "utf8");
 
 describe("节点检查器的下拉", () => {
   it("取选项那段里不出现节点类型判断", () => {
@@ -53,3 +56,12 @@ describe("节点检查器的字段编辑器", () => {
   });
 });
 
+describe("字段渲染只有一份", () => {
+  //: 检查器再长出自己的一份 renderField / dynamicOptions,上面几条就查不到它了 —— 而画板用的是表单那一份,
+  //: 两边就会渐渐长得不一样。
+  it("工作流检查器不自己渲染字段、不自己取选项", () => {
+    expect(INSPECTOR).not.toContain("const renderField = (");
+    expect(INSPECTOR).not.toContain("const dynamicOptions = (");
+    expect(INSPECTOR).toContain("<NodeConfigForm");
+  });
+});

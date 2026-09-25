@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { objectFromRows, rowsFromObject, suggestName } from "@/features/workflows/MapField";
+import { objectFromRows, rowsFromObject, suggestName } from "@/features/nodeForms/MapField";
 
 describe("对象 ↔ 行", () => {
   it("保持插入顺序,不排序", () => {

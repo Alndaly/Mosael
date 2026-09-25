@@ -17,7 +17,7 @@ import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { cn } from "@/lib/utils";
 
-import { TRIGGER, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/workflows/refDoc";
+import { TRIGGER, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/nodeForms/refDoc";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 
 /**
