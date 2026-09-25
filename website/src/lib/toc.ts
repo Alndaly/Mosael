@@ -1,5 +1,7 @@
 import GithubSlugger from "github-slugger";
 
+import { toPlainText } from "@/lib/inline-markdown";
+
 /**
  * 从 MDX 源码里抽出本页目录。
  *
@@ -32,11 +34,9 @@ export function tableOfContents(markdown: string): TocEntry[] {
 
     const match = HEADING.exec(line);
     if (!match) continue;
-    // 去掉标题里的行内标记(**粗体**、`代码`、[链接](…)),目录里只留字面。
-    const text = match[2]
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/[*_`]/g, "")
-      .trim();
+    // 去掉标题里的行内标记(**粗体**、`代码`、[链接](…)),目录里只留字面 —— 和 rehype-slug
+    // 取的字一样:代码里的 `run_host_code` 保留下划线,锚点才对得上。
+    const text = toPlainText(match[2]);
     if (!text) continue;
     entries.push({ depth: match[1].length as 2 | 3, text, id: slugger.slug(text) });
   }

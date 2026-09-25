@@ -30,9 +30,10 @@ test('beta tags stay marked pre-release and duplicate releases do not produce du
   assert.equal(result[0].prerelease, true);
 });
 
-test('release excerpts are bounded readable text with no markdown evaluation', () => {
-  assert.deepEqual(releaseHighlights('## Fixes\n\n- **Import** [files](https://example.com).\n- Keep `data` safe.'), ['Import files.', 'Keep data safe.']);
+test('release excerpts keep inline markdown for the renderer and never evaluate it', () => {
+  // 记号留给 InlineMarkdown 渲染(见 inline-markdown.test.mjs),这里只摘行、去列表符号。
+  assert.deepEqual(releaseHighlights('## Fixes\n\n- **Import** [files](https://example.com).\n- Keep `data` safe.'), ['**Import** [files](https://example.com).', 'Keep `data` safe.']);
   assert.equal(releaseHighlights(Array(20).fill('a'.repeat(400)).join('\n')).length, 5);
-  assert.ok(releaseHighlights('a'.repeat(400))[0].length <= 260);
+  assert.deepEqual(releaseHighlights('**Full Changelog**: https://x\n<!-- note -->'), []);
   assert.deepEqual(releaseHighlights(''), []);
 });

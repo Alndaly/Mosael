@@ -6,6 +6,7 @@ import { Byline } from "@/components/community/browse";
 import { PageGlow } from "@/components/page-hero";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { InlineMarkdown } from "@/lib/inline-markdown";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,6 +33,7 @@ export function DetailHeader({
   author: string;
   version: string;
   official: boolean;
+  /** 数据里的简介,行内 markdown。 */
   summary: string;
   actions: React.ReactNode;
 }) {
@@ -60,7 +62,9 @@ export function DetailHeader({
             <div className="grid min-w-0 gap-2">
               <h1 className="m-0 font-display text-3xl font-bold tracking-[-0.03em] text-balance sm:text-4xl">{name}</h1>
               <Byline locale={locale} author={author} version={version} official={official} />
-              <p className="m-0 max-w-[46rem] text-base leading-7 text-muted-foreground">{summary}</p>
+              <p className="m-0 max-w-[46rem] text-base leading-7 text-muted-foreground">
+                <InlineMarkdown text={summary} />
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2.5 lg:shrink-0">{actions}</div>

@@ -8,6 +8,7 @@ import { ActionLink, DetailBody, DetailHeader, InfoList, Section, SideCard, Step
 import { WorkflowTile } from "@/components/community/tile";
 import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { findWorkflow, listWorkflows } from "@/lib/registry";
 
 /** 每个模板 × 每种语言,构建期全出好 —— 数据来自应用内置模板导出的目录(public/workflows/catalog.json)。 */
@@ -24,7 +25,7 @@ export async function generateMetadata({
   if (!isLocale(locale)) return {};
   const workflow = findWorkflow(slug, locale);
   if (!workflow) return {};
-  return { title: `${workflow.name} · ${getMessages(locale).workflows.title}`, description: workflow.summary };
+  return { title: `${workflow.name} · ${getMessages(locale).workflows.title}`, description: toPlainText(workflow.summary) };
 }
 
 export default async function WorkflowDetailPage({
@@ -77,7 +78,9 @@ export default async function WorkflowDetailPage({
                     <span className="grid size-8 place-items-center rounded-full border border-primary/30 bg-brand-soft font-mono text-xs font-bold text-primary tabular-nums">
                       {index + 1}
                     </span>
-                    <span className="pt-1 leading-6">{stage}</span>
+                    <span className="pt-1 leading-6">
+                      <InlineMarkdown text={stage} />
+                    </span>
                   </li>
                 ))}
               </ol>
@@ -88,7 +91,9 @@ export default async function WorkflowDetailPage({
                 {workflow.requires.map((item) => (
                   <li key={item} className="flex items-start gap-2.5 leading-6">
                     <CheckCircle2 className="mt-1 size-4 shrink-0 text-primary" aria-hidden />
-                    {item}
+                    <span>
+                      <InlineMarkdown text={item} />
+                    </span>
                   </li>
                 ))}
               </ul>

@@ -13,12 +13,14 @@ import * as React from "react";
 import { PluginTile, WorkflowTile } from "@/components/community/tile";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { toPlainText } from "@/lib/inline-markdown";
 import type { PluginEntry, WorkflowEntry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 
+/** 搜的是看得见的字:简介里的 `**` 和反引号不该让「公网直链」搜不到、也不该让「**」搜得到。 */
 function matches(query: string, fields: readonly string[]): boolean {
   const q = query.trim().toLowerCase();
-  return !q || fields.some((field) => field.toLowerCase().includes(q));
+  return !q || fields.some((field) => toPlainText(field).toLowerCase().includes(q));
 }
 
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (next: string) => void; placeholder: string }) {
@@ -111,7 +113,8 @@ export function PluginCard({ locale, plugin }: { locale: Locale; plugin: PluginE
           <Byline locale={locale} author={plugin.author.name || "—"} version={`v${plugin.version}`} official={plugin.official} />
         </div>
       </div>
-      <p className="mt-4 mb-0 line-clamp-3 flex-1 text-sm leading-6 text-muted-foreground">{plugin.summary}</p>
+      {/* 卡片整张是链接、简介只截三行:这里用纯文本,格式留给详情页。 */}
+      <p className="mt-4 mb-0 line-clamp-3 flex-1 text-sm leading-6 text-muted-foreground">{toPlainText(plugin.summary)}</p>
       <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border pt-4 text-xs text-muted-foreground">
         <Meta icon={plugin.kind === "mcp" ? Plug : SquareTerminal}>{plugin.kind === "mcp" ? t.kindMcp : t.kindScript}</Meta>
         <Meta icon={Wrench}>{plugin.tools.length > 0 ? `${plugin.tools.length} ${t.tools}` : t.toolsFromServer}</Meta>
@@ -133,7 +136,7 @@ export function WorkflowCard({ locale, workflow }: { locale: Locale; workflow: W
           <Byline locale={locale} author={workflow.author} version={`${t.templateVersion} ${workflow.version}`} official={workflow.author === "Mosael"} />
         </div>
       </div>
-      <p className="mt-4 mb-0 line-clamp-3 text-sm leading-6 text-muted-foreground">{workflow.summary}</p>
+      <p className="mt-4 mb-0 line-clamp-3 text-sm leading-6 text-muted-foreground">{toPlainText(workflow.summary)}</p>
       {/* 流程的前几步:工作流是「一串事」,光看简介分不清两条相近的流程。 */}
       <ol className="mt-4 mb-0 grid flex-1 content-start list-none gap-1.5 p-0 text-xs" aria-label={t.stagesTitle}>
         {shown.map((stage, index) => (
@@ -141,7 +144,7 @@ export function WorkflowCard({ locale, workflow }: { locale: Locale; workflow: W
             <span className="grid size-5 shrink-0 place-items-center rounded-full bg-secondary font-mono text-[0.625rem] tabular-nums text-muted-foreground">
               {index + 1}
             </span>
-            <span className="truncate">{stage}</span>
+            <span className="truncate">{toPlainText(stage)}</span>
           </li>
         ))}
         {workflow.stages.length > shown.length && (

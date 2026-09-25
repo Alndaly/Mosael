@@ -4,6 +4,7 @@ import path from "node:path";
 import { docNavigationOrder } from "./docs-navigation";
 
 import type { Locale } from "@/i18n/config";
+import { toPlainText } from "@/lib/inline-markdown";
 
 /**
  * 文档内容层。
@@ -24,7 +25,9 @@ export type DocMeta = {
   name: string;
   /** 侧边栏内的排序,来自 frontmatter。 */
   order: number;
+  /** 标题只当标签用(侧边栏、上一篇/下一篇、`<title>`、搜索),读进来就是纯文本。 */
   title: string;
+  /** 页头那句导语,行内 markdown:页头用 InlineMarkdown,meta 用 toPlainText。 */
   description: string;
   updated: string;
   version: string;
@@ -55,7 +58,7 @@ function readMeta(locale: Locale, section: DocSection, file: string): DocMeta {
     section,
     name: file.replace(/\.mdx$/, ""),
     order: Number(data.order ?? 99),
-    title: data.title ?? file,
+    title: data.title ? toPlainText(data.title) : file,
     description: data.description ?? "",
     updated: data.updated ?? "",
     version: data.version ?? "",

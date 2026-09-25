@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { DEFAULT_LOCALE, type Locale } from "@/i18n/config";
+import { toPlainText } from "@/lib/inline-markdown";
 
 /**
  * 官方插件索引。
@@ -20,13 +21,19 @@ export type PluginEntry = {
   kind: "script" | "mcp";
   /** 声明式权限。空数组表示纯本地计算,什么都不要。 */
   permissions: string[];
-  /** 这个插件让智能体多会干什么 —— 取自 skills[0].description。 */
+  /**
+   * 这个插件让智能体多会干什么 —— 取自 skills[0].description。
+   *
+   * **原样保留行内 markdown**(技能描述是写给智能体的,里面会有 `**强调**`):要格式的地方交给
+   * InlineMarkdown,要纯文本的地方(卡片、meta、搜索)用 toPlainText。在这里剥掉,详情页就
+   * 再也拿不回格式;只剥 `**` 的话 `` ` `` 和链接照样露出来。
+   */
   summary: string;
   /** 仓库里的源码目录,相对仓库根。 */
   source: string;
   /** URL 里用的那一段 —— 就是插件的目录名(`baidu-pan`),不是那串带点的 id。 */
   slug: string;
-  /** 它带来哪些工具。MCP 插件的清单在服务那边,这里是空的。 */
+  /** 它带来哪些工具。MCP 插件的清单在服务那边,这里是空的。说明同 summary,是行内 markdown。 */
   tools: { name: string; description: string }[];
   /** 谁写的、去哪儿找他(清单的 `author`)。社区里的插件不全是官方的,署名要看得见。 */
   author: { name: string; url: string };
@@ -82,22 +89,22 @@ export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
       const kind = manifest.runtime?.kind;
       return {
         id: manifest.id ?? "",
-        name: textOf(manifest.name, locale),
+        // 名字、署名、凭据标签只当标签用,从来不显示格式 —— 读进来就收成纯文本。
+        name: toPlainText(textOf(manifest.name, locale)),
         version: manifest.version ?? "",
         kind: kind === "mcp" ? "mcp" : "script",
         permissions: manifest.permissions ?? [],
-        // 技能描述是写给智能体的,里面会有 **强调** —— 卡片上是纯文本,星号原样露出来很难看。
-        summary: textOf(manifest.skills?.[0]?.description, locale).replace(/\*\*(.+?)\*\*/g, "$1"),
+        summary: textOf(manifest.skills?.[0]?.description, locale),
         source: `plugins/examples/${path.basename(path.dirname(file))}`,
         slug: path.basename(path.dirname(file)),
         tools: (manifest.tools?.declare ?? [])
           .filter((tool) => tool.name)
           .map((tool) => ({ name: tool.name ?? "", description: textOf(tool.description, locale) })),
-        author: { name: textOf(manifest.author?.name, locale), url: httpUrl(manifest.author?.url) },
+        author: { name: toPlainText(textOf(manifest.author?.name, locale)), url: httpUrl(manifest.author?.url) },
         homepage: httpUrl(manifest.homepage),
         credentials: (manifest.instance?.credentials ?? [])
           .filter((credential) => credential.required !== false)
-          .map((credential) => textOf(credential.label, locale) || credential.key || "")
+          .map((credential) => toPlainText(textOf(credential.label, locale)) || credential.key || "")
           .filter(Boolean),
         official: true,
       };
@@ -126,6 +133,7 @@ export type WorkflowEntry = {
   /** URL 里那一段:`/workflows/<slug>`。模板 id 用下划线,URL 用连字符。 */
   slug: string;
   name: string;
+  /** 简介、步骤、准备项与插件的 summary 一样是行内 markdown,由页面决定渲染还是转纯文本。 */
   summary: string;
   nodes: number;
   requires: string[];
@@ -147,7 +155,7 @@ export function listWorkflows(locale: Locale = DEFAULT_LOCALE): WorkflowEntry[] 
   const catalog = JSON.parse(fs.readFileSync(path.join(process.cwd(), "public/workflows/catalog.json"), "utf8")) as WorkflowRecord[];
   return catalog.map((entry) => ({
     id: entry.id, slug: entry.id.replaceAll("_", "-"), author: entry.author, version: entry.version, nodes: entry.nodes,
-    name: entry.name[locale], summary: entry.summary[locale], requires: entry.requires[locale],
+    name: toPlainText(entry.name[locale]), summary: entry.summary[locale], requires: entry.requires[locale],
     stages: entry.stages[locale], graph: entry.download[locale],
   }));
 }

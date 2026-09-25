@@ -14,6 +14,7 @@ import { mdxComponents } from "@/components/mdx";
 import { LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { docHref, listDocs, readDoc } from "@/lib/docs";
+import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { SITE } from "@/lib/site";
 import { tableOfContents } from "@/lib/toc";
 
@@ -31,7 +32,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   if (!doc) return {};
   return {
     title: `${doc.title} · Mosael`,
-    description: doc.description,
+    description: toPlainText(doc.description),
     alternates: {
       canonical: `/${locale}/docs/${section}/${name}`,
       languages: Object.fromEntries(LOCALES.map((item) => [item, `/${item}/docs/${section}/${name}`])),
@@ -100,7 +101,11 @@ export default async function DocPage({ params }: { params: Params }) {
           <h1 className="mt-0 mb-4 max-w-[14ch] font-display text-[clamp(2rem,4.5vw,3.75rem)] leading-[1.1] font-[700] tracking-[-0.05em]">
             {doc.title}
           </h1>
-          {doc.description && <p className="m-0 text-base leading-relaxed text-muted-foreground sm:text-lg">{doc.description}</p>}
+          {doc.description && (
+            <p className="m-0 text-base leading-relaxed text-muted-foreground sm:text-lg">
+              <InlineMarkdown text={doc.description} />
+            </p>
+          )}
           {doc.version && <p className="mt-5 mb-0 text-xs text-muted-foreground">{t.reviewed} {doc.version} · {doc.updated}</p>}
         </header>
 

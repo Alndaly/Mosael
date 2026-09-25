@@ -1,6 +1,7 @@
 import GithubSlugger from "github-slugger";
 
 import { DOC_SECTIONS, docHref, listDocs, readDoc } from "@/lib/docs";
+import { toPlainText } from "@/lib/inline-markdown";
 import type { Locale } from "@/i18n/config";
 
 /**
@@ -27,15 +28,19 @@ export type SearchEntry = {
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const HEADING = /^(#{2,3})\s+(.+?)\s*#*$/;
 
-/** 去掉 markdown 与 MDX 的记号,只留人读的字 —— 索引里留着 `**` 和 `<Aside>` 只会干扰匹配。 */
+/**
+ * 去掉 markdown 与 MDX 的记号,只留人读的字 —— 索引里留着 `**` 和 `<Aside>` 只会干扰匹配。
+ *
+ * 这里只管**块级**的记号(MDX 标签、标题井号、列表符号、引用、表格竖线);行内的粗体、代码、
+ * 链接交给全站共用的 toPlainText,和页面上其它纯文本出口是同一套规则。
+ */
 function plain(text: string): string {
-  return text
+  const lines = text
     .replace(/<[^>]+>/g, " ")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[*_`>|#-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .split("\n")
+    .filter((line) => !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(line))
+    .map((line) => line.replace(/^\s*(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)/, "").replace(/\s\|\s|^\||\|$/g, " "));
+  return toPlainText(lines.join("\n"));
 }
 
 export function buildSearchIndex(locale: Locale, sectionLabels: Record<string, string>): SearchEntry[] {

@@ -11,6 +11,7 @@ import { PluginTile } from "@/components/community/tile";
 import { mdxComponents } from "@/components/mdx";
 import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { findPlugin, listPlugins, readPluginDoc } from "@/lib/registry";
 import { SITE } from "@/lib/site";
 
@@ -29,7 +30,7 @@ export async function generateMetadata({
   if (!plugin) return {};
   return {
     title: `${plugin.name} · ${getMessages(isLocale(locale) ? locale : "en").plugins.title}`,
-    description: plugin.summary,
+    description: toPlainText(plugin.summary),
   };
 }
 
@@ -138,7 +139,11 @@ export default async function PluginDetailPage({
                   {plugin.tools.map((tool) => (
                     <li key={tool.name} className="grid gap-1.5 border-border px-5 py-4 not-last:border-b">
                       <code className="w-fit rounded-md bg-secondary px-2 py-0.5 font-mono text-xs font-semibold">{tool.name}</code>
-                      {tool.description && <p className="m-0 text-sm leading-6 text-muted-foreground">{tool.description}</p>}
+                      {tool.description && (
+                        <p className="m-0 text-sm leading-6 text-muted-foreground">
+                          <InlineMarkdown text={tool.description} />
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>

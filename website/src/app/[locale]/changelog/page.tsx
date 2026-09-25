@@ -6,7 +6,8 @@ import { PageHero } from "@/components/page-hero";
 import { isLocale } from "@/i18n/config";
 import { listReleases } from "@/lib/releases";
 import { releaseCopy } from "@/lib/release-copy";
-import { releaseHighlights } from "@/lib/release-data";
+import { InlineMarkdown } from "@/lib/inline-markdown";
+import { HIGHLIGHT_MAX_LENGTH, releaseHighlights } from "@/lib/release-data";
 import { SITE } from "@/lib/site";
 
 export const revalidate = 3600;
@@ -44,7 +45,7 @@ export default async function ChangelogPage({ params }: { params: Params }) {
                 </div>
                 <div className="min-w-0 max-w-3xl">
                   <h2 id={`title-${release.tag}`} className="mb-5 mt-0 font-display text-3xl font-semibold tracking-tight"><a href={`#${release.tag}`} className="hover:text-primary">{release.tag}</a></h2>
-                  {highlights.length ? <ul className="mb-6 list-disc space-y-3 pl-5 leading-7 text-muted-foreground">{highlights.map((line, i) => <li key={i} className="break-words">{line}</li>)}</ul> : <p className="text-muted-foreground">{t.empty}</p>}
+                  {highlights.length ? <ul className="mb-6 list-disc space-y-3 pl-5 leading-7 text-muted-foreground">{highlights.map((line, i) => <li key={i} className="break-words"><InlineMarkdown text={line} maxLength={HIGHLIGHT_MAX_LENGTH} /></li>)}</ul> : <p className="text-muted-foreground">{t.empty}</p>}
                   <a href={release.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">{t.notes}<ArrowUpRight className="size-4" aria-hidden /></a>
                 </div>
               </article>
