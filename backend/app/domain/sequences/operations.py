@@ -147,7 +147,13 @@ def _ripple_make_room(
     return shifted, split
 
 
-def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Sequence:
+def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
+    """插入一个片段,返回**插进去的那一段**。
+
+    此前返回整条时间线,于是调用方只能自己去猜刚插的是哪一段:「接到时间线」取整条序列里
+    最新的一段(并行分支同时往上接时拿到的是别人的),字幕配音按落点在轨上找(重配同一句时
+    找到的是上一次的配音)—— 变速都加错了地方。新建的东西由建它的操作说出来,不要让人猜。
+    """
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
     asset = db.get(Asset, op.asset_id)
@@ -199,7 +205,7 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Sequence:
         actor_id=op.actor_id,
     )
     db.commit()
-    return sequence
+    return clip
 
 
 def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:

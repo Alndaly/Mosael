@@ -257,7 +257,7 @@ def _run_dub(job_id: str) -> None:
                 # 不是那次失败(这条 bug 就是这么被报上来的)。
                 if not track_id:
                     track_id = _dub_track(db, sequence_id, created_by)
-                sequence = insert_clip(
+                new_clip = insert_clip(
                     db,
                     sequence_id,
                     InsertClip(
@@ -271,9 +271,7 @@ def _run_dub(job_id: str) -> None:
                 if match_duration:
                     speed = _speed_for(audio_seconds, slot_seconds)
                     if speed is not None:
-                        new_clip = _clip_at(db, track_id, timeline_start)
-                        if new_clip is not None:
-                            set_clip_speed(db, sequence_id, SetClipSpeed(clip_id=new_clip.id, speed=speed))
+                        set_clip_speed(db, sequence_id, SetClipSpeed(clip_id=new_clip.id, speed=speed))
                 done += 1
                 job = db.get(Job, job_id)
                 job.progress = (index + 1) / max(1, total)
@@ -345,9 +343,3 @@ def _dub_track(db: Session, sequence_id: str, created_by: str | None) -> str:
     return track.id
 
 
-def _clip_at(db: Session, track_id: str, timeline_start: float) -> Clip | None:
-    """刚插进去的那一段。按落点找 —— insert_clip 返回的是整条时间线,不是片段。"""
-    for clip in db.scalars(select(Clip).where(Clip.track_id == track_id)):
-        if abs(clip.timeline_start - timeline_start) < 1e-6:
-            return clip
-    return None

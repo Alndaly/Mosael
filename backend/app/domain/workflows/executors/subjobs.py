@@ -423,7 +423,7 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
             (clip.timeline_start + timeline_span(clip) for clip in (track.clips or [])),
             default=0.0,
         )
-    insert_clip(
+    clip = insert_clip(
         db,
         sequence.id,
         InsertClip(
@@ -434,16 +434,14 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
             src_out=src_out,
         ),
     )
-    db.commit()
-    db.refresh(sequence)
-    clip = max((c for t in (sequence.tracks or []) for c in (t.clips or [])), key=lambda c: c.created_at, default=None)
     span = src_out - src_in
     speed = _fit_speed(span, config.get("max_duration"))
-    if clip is not None and speed is not None:
+    if speed is not None:
+        db.refresh(sequence)  # 版本号以库里为准:并行分支可能刚改过这条时间线
         set_clip_speed(db, sequence.id, SetClipSpeed(clip_id=clip.id, speed=speed))
         span = span / speed
     return {
-        "clip_id": clip.id if clip else "",
+        "clip_id": clip.id,
         "timeline_start": timeline_start,
         "timeline_end": timeline_start + span,
         "sequence_id": sequence.id,
