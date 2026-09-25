@@ -1,0 +1,392 @@
+{
+  "manifest_version": 1,
+  "id": "dev.mosael.manim",
+  "name": {
+    "zh": "Manim 教学动画",
+    "en": "Manim Teaching Animation"
+  },
+  "default_locale": "zh",
+  "version": "0.1.0",
+  "homepage": "https://docs.manim.community/",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/manim",
+    "en": "https://mosael.com/en/plugins/manim"
+  },
+  "runtime": {
+    "kind": "process",
+    "entry": "tools/main.py"
+  },
+  "permissions": [
+    "process:spawn",
+    "network:pypi",
+    "filesystem:write"
+  ],
+  "skills": [
+    {
+      "id": "manim",
+      "description": {
+        "zh": "用 Manim(3Blue1Brown 那套数学动画的社区版)做教学动画,本机渲染、零生成费用:公式推导、几何关系、函数图像、算法步骤、代码讲解、物理示意。要「一步一步地变」而且必须讲对的内容用它;要真实画面(人物、场景、实拍感)用视频生成模型;要排版精致的图文讲解卡片、数据图表也可以用 Remotion 插件。给结构化内容(每一步的标题、旁白、要点、公式 / 函数图 / 代码)就出讲解视频,不用写代码;更自由的画面写一段 Manim 场景代码(默认不开放,要在插件页勾选)。第一次用前在插件页运行「准备 Manim 环境」。Manim 是 MIT 许可。",
+        "en": "Teaching animations with Manim (the community edition of 3Blue1Brown's maths animation engine), rendered on this computer at no generation cost: derivations, geometry, function plots, algorithm steps, code walk-throughs, physics diagrams. Use it for content that must change step by step and be correct; use a video generation model for realistic footage; the Remotion plugin also suits polished text-and-chart explainer cards. Structured content (each step's title, narration, points and a formula / plot / code) becomes an explainer with no code; anything freer is a Manim scene in Python (off by default — enable it on the plugins page). Run \"Prepare Manim\" once on the plugins page first. Manim is MIT-licensed."
+      }
+    }
+  ],
+  "instance": {
+    "multiple": false,
+    "config": [
+      {
+        "key": "PIP_INDEX_URL",
+        "label": {
+          "zh": "PyPI 镜像",
+          "en": "PyPI mirror"
+        },
+        "type": "string",
+        "required": false,
+        "help": {
+          "zh": "可选。留空用官方源;国内网络可以填 `https://pypi.tuna.tsinghua.edu.cn/simple`。只在准备环境时用到。",
+          "en": "Optional. Leave empty for the official index. Used only while preparing the environment."
+        }
+      },
+      {
+        "key": "PYTHON_EXECUTABLE",
+        "label": {
+          "zh": "已装 Manim 的 Python",
+          "en": "Python with Manim"
+        },
+        "type": "string",
+        "required": false,
+        "help": {
+          "zh": "可选。留空时插件在自己的数据目录里建环境、装 Manim;已经用 conda / uv 装好了的,填那个环境里 python 的完整路径,就不再装一份。",
+          "en": "Optional. When empty the plugin installs Manim into its own data directory; if you already have Manim (conda / uv), put the full path of that environment's python here."
+        }
+      },
+      {
+        "key": "UNRESTRICTED_CODE",
+        "label": {
+          "zh": "不限制自定义代码",
+          "en": "Unrestricted custom code"
+        },
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "help": {
+          "zh": "默认关。自定义动画 / 静帧的代码默认只准 import 画图用的模块(manim、math、numpy …),不准读写文件、起进程、动态执行。这只是护栏、不是沙箱;打开后任何 Python 都会以你的身份在本机运行。",
+          "en": "Off by default. Custom animation / still code may only import drawing modules (manim, math, numpy …) and may not read or write files, start processes or run dynamic code. This is a guardrail, not a sandbox; when on, any Python runs on this computer as you."
+        }
+      }
+    ]
+  },
+  "tools": {
+    "expose": "selected",
+    "recommended": [
+      "manim_setup",
+      "manim_explainer"
+    ],
+    "declare": [
+      {
+        "name": "manim_setup",
+        "stream": true,
+        "timeout_seconds": 1200,
+        "label": {
+          "zh": "准备 Manim 环境",
+          "en": "Prepare Manim"
+        },
+        "description": {
+          "zh": "在插件自己的数据目录里建 Python 环境、装锁定版本的 Manim,查 LaTeX,试渲一帧;缺什么(macOS 的 cairo、Linux 的开发包、LaTeX)逐条说怎么装。第一次要一到几分钟,之后几乎瞬间完成。渲染工具不会顺手装环境,第一次请先跑它。",
+          "en": "Creates a Python environment in the plugin's data directory, installs the pinned Manim, checks LaTeX and renders a test frame; anything missing (cairo on macOS, dev packages on Linux, LaTeX) comes back with how to install it. The first run takes a few minutes; later runs are near-instant. The render tools do not install anything, so run this first."
+        },
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "reinstall": {
+              "type": "boolean",
+              "description": {
+                "zh": "删掉插件的环境重新装。环境坏了(升级 Mosael 后 Python 变了)时用。",
+                "en": "Delete the plugin's environment and install again — for a broken environment."
+              },
+              "x-advanced": true
+            }
+          }
+        },
+        "node": {
+          "outputs": ["ready", "manim", "latex", "summary"],
+          "output_types": {"ready": "json", "manim": "text", "latex": "json", "summary": "text"},
+          "output_labels": {
+            "ready": {"zh": "就绪", "en": "Ready"},
+            "manim": {"zh": "Manim 版本", "en": "Manim version"},
+            "latex": {"zh": "LaTeX 可用", "en": "LaTeX available"},
+            "summary": {"zh": "一句话", "en": "In one line"}
+          }
+        }
+      },
+      {
+        "name": "manim_explainer",
+        "stream": true,
+        "timeout_seconds": 170,
+        "label": {
+          "zh": "Manim 讲解视频",
+          "en": "Manim explainer"
+        },
+        "description": {
+          "zh": "给结构化的教学内容,出一段 Manim 讲解视频(mp4,进素材库),不用写代码:标题页 → 一步一步讲(每步:标题、旁白字幕、逐条出现的要点,再配一样:LaTeX 公式、函数图像或逐处高亮的代码)→ 要点回顾。每步多长按旁白的朗读时长自动算;返回每一步的实际起止时间(steps),可选同时出 .srt 字幕,方便配音对时间。本机没装 LaTeX 时公式写成一行纯文字,照样出片。默认 720p,智能体调用时别选 production / 4k。",
+          "en": "Turns structured teaching content into a Manim explainer video (mp4, into the asset library), no code needed: a title card, then steps (each with a title, narration captions, points revealed one by one, plus one visual: LaTeX formulas, a function plot or code highlighted stop by stop), then key takeaways. Step length follows the narration's reading time; returns each step's actual start and end (steps) and optionally an .srt file to sync a voice-over. Without LaTeX on this computer formulas are shown as plain text. 720p by default; avoid production / 4k when called by the agent."
+        },
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": {"zh": "标题页的大标题,最多 80 字。", "en": "Title-card heading, up to 80 characters."}
+            },
+            "subtitle": {
+              "type": "string",
+              "description": {"zh": "标题页的副标题,一句话说清讲什么。", "en": "Title-card subtitle: one line on what it covers."}
+            },
+            "label": {
+              "type": "string",
+              "description": {"zh": "标题上方的小标签,如「数学 · 第 3 课」。", "en": "Small tag above the title, e.g. \"Maths · Lesson 3\"."},
+              "x-advanced": true
+            },
+            "steps": {
+              "type": "array",
+              "description": {"zh": "一步一步讲的内容,1 到 20 步。每步的公式、函数图、代码三样最多放一样。", "en": "The steps, 1 to 20. Each step holds at most one of formulas, plot or code."},
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {"type": "string", "description": {"zh": "这一步的标题。", "en": "Step title."}},
+                  "narration": {"type": "string", "description": {"zh": "这一步的旁白,显示成底部字幕,也决定这一步多长(最多 600 字)。", "en": "Narration for this step, shown as a caption; it also sets the step's length (up to 600 characters)."}},
+                  "bullets": {"type": "array", "items": {"type": "string"}, "description": {"zh": "要点,随旁白逐条出现,最多 6 条。", "en": "Points revealed along the narration, up to 6."}},
+                  "formulas": {"type": "array", "items": {"type": "string"}, "description": {"zh": "LaTeX 公式,最多 3 条(如 a^2 + b^2 = c^2),逐条书写出来。不能用 \\input、\\def 这类命令。", "en": "LaTeX formulas, up to 3 (e.g. a^2 + b^2 = c^2), written out one by one. Commands such as \\input or \\def are not allowed."}},
+                  "plot": {
+                    "type": "object",
+                    "description": {"zh": "画一条函数曲线。", "en": "Plot a function."},
+                    "properties": {
+                      "expression": {"type": "string", "description": {"zh": "关于 x 的算式,如 sin(x) + x^2/8、exp(-x^2/2)、1/x。能用 sin cos tan exp log sqrt abs 等函数与 pi、e。", "en": "An expression in x, e.g. sin(x) + x^2/8, exp(-x^2/2), 1/x. Functions such as sin cos tan exp log sqrt abs and pi, e are available."}},
+                      "x_min": {"type": "number", "description": {"zh": "默认 -5。", "en": "Default -5."}},
+                      "x_max": {"type": "number", "description": {"zh": "默认 5。", "en": "Default 5."}},
+                      "y_min": {"type": "number", "description": {"zh": "留空按曲线自动定。", "en": "Automatic when empty."}},
+                      "y_max": {"type": "number", "description": {"zh": "留空按曲线自动定。", "en": "Automatic when empty."}},
+                      "label": {"type": "string", "description": {"zh": "曲线旁的文字,默认「y = 算式」。", "en": "Text beside the curve; \"y = expression\" by default."}}
+                    },
+                    "required": ["expression"]
+                  },
+                  "code": {
+                    "type": "object",
+                    "description": {"zh": "一段带语法高亮的代码,最多 30 行。", "en": "A syntax-highlighted snippet, up to 30 lines."},
+                    "properties": {
+                      "code": {"type": "string", "description": {"zh": "代码原文。", "en": "The source."}},
+                      "language": {"type": "string", "description": {"zh": "语言(Pygments 的名字),默认 python。", "en": "Language (a Pygments name), python by default."}},
+                      "highlight": {"type": "array", "items": {"type": ["integer", "string"]}, "description": {"zh": "讲解时依次框住的行:行号或「起-止」,如 [2, \"4-6\", 9]。", "en": "Lines boxed in turn during the step: line numbers or \"start-end\", e.g. [2, \"4-6\", 9]."}}
+                    },
+                    "required": ["code"]
+                  },
+                  "seconds": {"type": "number", "description": {"zh": "这一步的时长(秒)。留空按旁白自动算;给了也不会短于动画本身。", "en": "Step length in seconds. Automatic from the narration when empty; never shorter than the animation itself."}}
+                },
+                "required": ["title"]
+              }
+            },
+            "summary": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": {"zh": "结尾的要点回顾,最多 6 条。", "en": "Key takeaways at the end, up to 6."}
+            },
+            "aspect": {
+              "type": "string",
+              "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+              "description": {"zh": "默认横屏 16:9;竖屏短视频用 9:16。", "en": "16:9 by default; 9:16 for vertical short video."}
+            },
+            "quality": {
+              "type": "string",
+              "enum": ["low", "medium", "high", "production", "4k"],
+              "description": {"zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。越高渲得越久。", "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels. Higher takes longer."}
+            },
+            "fps": {
+              "type": "integer",
+              "enum": [15, 24, 25, 30, 60],
+              "description": {"zh": "默认 30(low 画质 15)。", "en": "30 by default (15 at low quality)."},
+              "x-advanced": true
+            },
+            "theme": {
+              "type": "string",
+              "enum": ["dark", "light"],
+              "description": {"zh": "深色(默认)或浅色。", "en": "Dark (default) or light."}
+            },
+            "accent": {
+              "type": "string",
+              "description": {"zh": "强调色 #RRGGBB。", "en": "Accent colour, #RRGGBB."},
+              "x-advanced": true
+            },
+            "font": {
+              "type": "string",
+              "description": {"zh": "字体名(本机装了的),留空自动挑一款中英文都好看的无衬线体。", "en": "Font family installed on this computer; empty picks a sans-serif that suits Chinese and English."},
+              "x-advanced": true
+            },
+            "show_narration": {
+              "type": "boolean",
+              "description": {"zh": "旁白显示成底部字幕,默认开。另配字幕时关掉。", "en": "Show narration as captions (on by default). Turn off when adding subtitles separately."},
+              "x-advanced": true
+            },
+            "subtitles": {
+              "type": "boolean",
+              "description": {"zh": "同时交出一份按旁白切好的 .srt 字幕。", "en": "Also hand back an .srt file cut from the narration."},
+              "x-advanced": true
+            },
+            "filename": {
+              "type": "string",
+              "description": {"zh": "产出文件名,留空用 explainer.mp4。", "en": "Output file name; explainer.mp4 when empty."},
+              "x-advanced": true
+            }
+          },
+          "required": ["title", "steps"]
+        },
+        "node": {
+          "outputs": ["asset_id", "asset_ids", "steps", "seconds", "summary"],
+          "output_types": {"asset_id": "asset", "asset_ids": "json", "steps": "json", "seconds": "number", "summary": "text"},
+          "output_labels": {
+            "asset_id": {"zh": "视频", "en": "Video"},
+            "asset_ids": {"zh": "全部产出", "en": "All outputs"},
+            "steps": {"zh": "每步起止时间", "en": "Step timings"},
+            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
+            "summary": {"zh": "一句话", "en": "In one line"}
+          }
+        }
+      },
+      {
+        "name": "manim_animation",
+        "stream": true,
+        "timeout_seconds": 170,
+        "label": {
+          "zh": "Manim 自定义动画",
+          "en": "Manim custom animation"
+        },
+        "description": {
+          "zh": "用一段 Manim(社区版 0.21)场景代码渲染动画(进素材库)。代码里定义 `class 名字(Scene)`,在 `construct(self)` 里 `self.play(...)`;`from manim import *` 即可,调用时给的 data 用 `from mosael import DATA` 读。默认只准 import manim、math、numpy 等画图模块,不准读写文件、起进程。报错会指出是第几行哪句代码,改了再调。**会在本机执行 Python 代码**,默认不开放。讲解类内容优先用「Manim 讲解视频」。",
+          "en": "Renders a Manim (Community 0.21) scene from Python code (into the asset library). Define `class Name(Scene)` and `self.play(...)` in `construct(self)`; `from manim import *` is enough, and the data given here is `from mosael import DATA`. By default only drawing modules (manim, math, numpy …) may be imported and files or processes are off limits. Errors point at the line and code, so fix and call again. **Runs Python code on this computer**; off by default. Prefer the explainer tool for lesson-style content."
+        },
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": {"zh": "Python 源码,至少一个 Scene 子类。", "en": "Python source with at least one Scene subclass."}
+            },
+            "scene": {
+              "type": "string",
+              "description": {"zh": "渲染哪个场景类;代码里只有一个时可留空。", "en": "Which scene class to render; may be empty when there is only one."}
+            },
+            "aspect": {
+              "type": "string",
+              "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+              "description": {"zh": "默认 16:9。", "en": "16:9 by default."}
+            },
+            "quality": {
+              "type": "string",
+              "enum": ["low", "medium", "high", "production", "4k"],
+              "description": {"zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。", "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."}
+            },
+            "fps": {
+              "type": "integer",
+              "enum": [15, 24, 25, 30, 60],
+              "description": {"zh": "默认 30(low 画质 15)。", "en": "30 by default (15 at low quality)."},
+              "x-advanced": true
+            },
+            "format": {
+              "type": "string",
+              "enum": ["mp4", "webm", "mov", "gif"],
+              "description": {"zh": "默认 mp4。", "en": "mp4 by default."},
+              "x-advanced": true
+            },
+            "transparent": {
+              "type": "boolean",
+              "description": {"zh": "透明背景(用于叠加);mp4 会自动改成 mov。", "en": "Transparent background for overlays; mp4 becomes mov."},
+              "x-advanced": true
+            },
+            "data": {
+              "type": "object",
+              "description": {"zh": "交给场景的数据,代码里 `from mosael import DATA`。", "en": "Data for the scene: `from mosael import DATA` in the code."},
+              "x-advanced": true
+            },
+            "filename": {
+              "type": "string",
+              "description": {"zh": "产出文件名,留空用 animation。", "en": "Output file name; animation when empty."},
+              "x-advanced": true
+            }
+          },
+          "required": ["code"]
+        },
+        "node": {
+          "outputs": ["asset_id", "seconds", "summary"],
+          "output_types": {"asset_id": "asset", "seconds": "number", "summary": "text"},
+          "output_labels": {
+            "asset_id": {"zh": "动画", "en": "Animation"},
+            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
+            "summary": {"zh": "一句话", "en": "In one line"}
+          }
+        }
+      },
+      {
+        "name": "manim_still",
+        "stream": true,
+        "timeout_seconds": 170,
+        "label": {
+          "zh": "Manim 静帧",
+          "en": "Manim still"
+        },
+        "description": {
+          "zh": "和「Manim 自定义动画」同样给一段场景代码,只要最后一帧(PNG,进素材库):几何图、函数图、示意图、封面。可以透明背景。同样会在本机执行代码,默认不开放。",
+          "en": "Same scene code as the custom animation tool, but only the last frame (PNG, into the asset library): diagrams, plots, covers. Supports a transparent background. Also runs code on this computer; off by default."
+        },
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": {"zh": "Python 源码,至少一个 Scene 子类。", "en": "Python source with at least one Scene subclass."}
+            },
+            "scene": {
+              "type": "string",
+              "description": {"zh": "渲染哪个场景类;只有一个时可留空。", "en": "Which scene class; may be empty when there is only one."}
+            },
+            "aspect": {
+              "type": "string",
+              "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+              "description": {"zh": "默认 16:9。", "en": "16:9 by default."}
+            },
+            "quality": {
+              "type": "string",
+              "enum": ["low", "medium", "high", "production", "4k"],
+              "description": {"zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。", "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."}
+            },
+            "transparent": {
+              "type": "boolean",
+              "description": {"zh": "透明背景。", "en": "Transparent background."},
+              "x-advanced": true
+            },
+            "data": {
+              "type": "object",
+              "description": {"zh": "交给场景的数据,代码里 `from mosael import DATA`。", "en": "Data for the scene: `from mosael import DATA` in the code."},
+              "x-advanced": true
+            },
+            "filename": {
+              "type": "string",
+              "description": {"zh": "产出文件名,留空用 frame。", "en": "Output file name; frame when empty."},
+              "x-advanced": true
+            }
+          },
+          "required": ["code"]
+        },
+        "node": {
+          "outputs": ["asset_id", "summary"],
+          "output_types": {"asset_id": "asset", "summary": "text"},
+          "output_labels": {
+            "asset_id": {"zh": "图片", "en": "Image"},
+            "summary": {"zh": "一句话", "en": "In one line"}
+          }
+        }
+      }
+    ]
+  }
+}

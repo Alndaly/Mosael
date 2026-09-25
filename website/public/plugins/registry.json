@@ -339,6 +339,80 @@
       "bundled": true
     },
     {
+      "id": "dev.mosael.manim",
+      "name": {
+        "zh": "Manim 教学动画",
+        "en": "Manim Teaching Animation"
+      },
+      "version": "0.1.0",
+      "description": {
+        "zh": "用 Manim(3Blue1Brown 那套数学动画的社区版)做教学动画,本机渲染、零生成费用:公式推导、几何关系、函数图像、算法步骤、代码讲解、物理示意。要「一步一步地变」而且必须讲对的内容用它;要真实画面(人物、场景、实拍感)用视频生成模型;要排版精致的图文讲解卡片、数据图表也可以用 Remotion 插件。给结构化内容(每一步的标题、旁白、要点、公式 / 函数图 / 代码)就出讲解视频,不用写代码;更自由的画面写一段 Manim 场景代码(默认不开放,要在插件页勾选)。第一次用前在插件页运行「准备 Manim 环境」。Manim 是 MIT 许可。",
+        "en": "Teaching animations with Manim (the community edition of 3Blue1Brown's maths animation engine), rendered on this computer at no generation cost: derivations, geometry, function plots, algorithm steps, code walk-throughs, physics diagrams. Use it for content that must change step by step and be correct; use a video generation model for realistic footage; the Remotion plugin also suits polished text-and-chart explainer cards. Structured content (each step's title, narration, points and a formula / plot / code) becomes an explainer with no code; anything freer is a Manim scene in Python (off by default — enable it on the plugins page). Run \"Prepare Manim\" once on the plugins page first. Manim is MIT-licensed."
+      },
+      "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/manim",
+        "en": "https://mosael.com/en/plugins/manim"
+      },
+      "homepage": "https://docs.manim.community/",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.manim.zip",
+      "permissions": [
+        "process:spawn",
+        "network:pypi",
+        "filesystem:write"
+      ],
+      "runtime": "process",
+      "provides": [],
+      "tools": [
+        {
+          "name": "manim_setup",
+          "label": {
+            "zh": "准备 Manim 环境",
+            "en": "Prepare Manim"
+          },
+          "description": {
+            "zh": "在插件自己的数据目录里建 Python 环境、装锁定版本的 Manim,查 LaTeX,试渲一帧;缺什么(macOS 的 cairo、Linux 的开发包、LaTeX)逐条说怎么装。第一次要一到几分钟,之后几乎瞬间完成。渲染工具不会顺手装环境,第一次请先跑它。",
+            "en": "Creates a Python environment in the plugin's data directory, installs the pinned Manim, checks LaTeX and renders a test frame; anything missing (cairo on macOS, dev packages on Linux, LaTeX) comes back with how to install it. The first run takes a few minutes; later runs are near-instant. The render tools do not install anything, so run this first."
+          }
+        },
+        {
+          "name": "manim_explainer",
+          "label": {
+            "zh": "Manim 讲解视频",
+            "en": "Manim explainer"
+          },
+          "description": {
+            "zh": "给结构化的教学内容,出一段 Manim 讲解视频(mp4,进素材库),不用写代码:标题页 → 一步一步讲(每步:标题、旁白字幕、逐条出现的要点,再配一样:LaTeX 公式、函数图像或逐处高亮的代码)→ 要点回顾。每步多长按旁白的朗读时长自动算;返回每一步的实际起止时间(steps),可选同时出 .srt 字幕,方便配音对时间。本机没装 LaTeX 时公式写成一行纯文字,照样出片。默认 720p,智能体调用时别选 production / 4k。",
+            "en": "Turns structured teaching content into a Manim explainer video (mp4, into the asset library), no code needed: a title card, then steps (each with a title, narration captions, points revealed one by one, plus one visual: LaTeX formulas, a function plot or code highlighted stop by stop), then key takeaways. Step length follows the narration's reading time; returns each step's actual start and end (steps) and optionally an .srt file to sync a voice-over. Without LaTeX on this computer formulas are shown as plain text. 720p by default; avoid production / 4k when called by the agent."
+          }
+        },
+        {
+          "name": "manim_animation",
+          "label": {
+            "zh": "Manim 自定义动画",
+            "en": "Manim custom animation"
+          },
+          "description": {
+            "zh": "用一段 Manim(社区版 0.21)场景代码渲染动画(进素材库)。代码里定义 `class 名字(Scene)`,在 `construct(self)` 里 `self.play(...)`;`from manim import *` 即可,调用时给的 data 用 `from mosael import DATA` 读。默认只准 import manim、math、numpy 等画图模块,不准读写文件、起进程。报错会指出是第几行哪句代码,改了再调。**会在本机执行 Python 代码**,默认不开放。讲解类内容优先用「Manim 讲解视频」。",
+            "en": "Renders a Manim (Community 0.21) scene from Python code (into the asset library). Define `class Name(Scene)` and `self.play(...)` in `construct(self)`; `from manim import *` is enough, and the data given here is `from mosael import DATA`. By default only drawing modules (manim, math, numpy …) may be imported and files or processes are off limits. Errors point at the line and code, so fix and call again. **Runs Python code on this computer**; off by default. Prefer the explainer tool for lesson-style content."
+          }
+        },
+        {
+          "name": "manim_still",
+          "label": {
+            "zh": "Manim 静帧",
+            "en": "Manim still"
+          },
+          "description": {
+            "zh": "和「Manim 自定义动画」同样给一段场景代码,只要最后一帧(PNG,进素材库):几何图、函数图、示意图、封面。可以透明背景。同样会在本机执行代码,默认不开放。",
+            "en": "Same scene code as the custom animation tool, but only the last frame (PNG, into the asset library): diagrams, plots, covers. Supports a transparent background. Also runs code on this computer; off by default."
+          }
+        }
+      ],
+      "bundled": false
+    },
+    {
       "id": "dev.mosael.remotion",
       "name": {
         "zh": "Remotion 动画",
