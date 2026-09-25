@@ -52,7 +52,9 @@ def _reads() -> list[tuple[str, int, bool]]:
                 if not (isinstance(node.slice, ast.Constant) and node.slice.value in KEY_FIELDS):
                     continue
                 source = ast.unparse(node)
-                if "NODE_TYPES" not in source:
+                # 目录有两个入口:常量 NODE_TYPES,和它加上插件节点的 available_node_types(引擎读后者,
+                # 按惯例叫 registry)。两个入口里存的都是 key。
+                if "NODE_TYPES" not in source and "registry[" not in source:
                     continue
                 # 同一个函数里出现 t( / fragment( 就算翻了(不强求同一行:拆成两步是常见写法)
                 body = ast.unparse(func)

@@ -26,8 +26,8 @@ from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import blame, create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
 from app.domain.workflows import (
-    NODE_TYPES,
     WorkflowDomainError,
+    available_node_types,
     reference_dependencies,
     topo_order,
     validate_graph,
@@ -201,6 +201,12 @@ def execute_graph(
             parent = check_db.get(Job, wf_job_id)
             return parent is None or parent.status not in ("queued", "running")
 
+    #: 节点类型的元数据 —— 只有要发事件时才用得到(节点叫什么)。**和启动前校验同一份组装**
+    #: (内置 + 插件,见 available_node_types):此前这里只查内置的 NODE_TYPES,于是一个没起名字的
+    #: 插件节点(智能体加节点时就不写名字,见 graph_ops.add_node)一开跑就在取名字这一步
+    #: KeyError —— 校验认得它、执行器也认得它,偏偏是给事件取个名字把整条工作流带崩了。
+    registry = available_node_types(db) if has_job else {}
+
     def node_label(nid: str) -> str:
         """这个节点在事件里叫什么。**回退到目录时要翻** —— 那一格存的是 i18n key。
 
@@ -212,16 +218,21 @@ def execute_graph(
         的语言重翻。平时走不到这条回退(模板和手工建的节点都有名字),只有智能体建的、
         或者名字被清空的才会露出来 —— 而那正是最难发现的那一类。
         """
-        return str(nodes_by_id[nid].get("name") or t(NODE_TYPES[node_types[nid]]["label"], DEFAULT_LOCALE))
+        return str(nodes_by_id[nid].get("name") or t(registry[node_types[nid]]["label"], DEFAULT_LOCALE))
 
     def node_label_key(nid: str) -> str:
         """节点名的 key(节点自己有名字时为空 —— 那是用户写的字,不是文案)。"""
-        return "" if nodes_by_id[nid].get("name") else str(NODE_TYPES[node_types[nid]]["label"])
+        return "" if nodes_by_id[nid].get("name") else str(registry[node_types[nid]]["label"])
 
     def event(kind: str, payload: dict[str, Any]) -> None:
         if has_job:
             emit_job_event(db, job.id, kind, payload)
             db.commit()
+
+    def node_event(kind: str, nid: str, **fields: Any) -> None:
+        """节点事件。名字只在真要发的时候才取 —— 内嵌子图(循环体 / subgraph)不发事件。"""
+        if has_job:
+            event(kind, {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid), **fields})
 
     def is_entry(nid: str) -> bool:
         # start 类型永远是入口;子图里无入边的根也是入口。
@@ -308,13 +319,13 @@ def execute_graph(
                 if not is_entry(nid) and not incoming_active(nid):
                     with lock:
                         done.add(nid)
-                    event("workflow.node.skipped", {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid)})
+                    node_event("workflow.node.skipped", nid)
                     processed += 1
                     if has_job:
                         job.progress = processed / total
                         db.commit()
                     continue
-                event("workflow.node.started", {"node_id": nid, "node_type": node_types[nid], "name": node_label(nid), "name_key": node_label_key(nid)})
+                node_event("workflow.node.started", nid, node_type=node_types[nid])
                 futures[pool.submit(contextvars.copy_context().run, run_node, nid)] = nid
 
         schedule_ready()
@@ -329,18 +340,14 @@ def execute_graph(
                     outputs = future.result()
                 except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
                     error = exc
-                    event(
-                        "workflow.node.failed",
-                        {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid), **_failure_payload(exc)},
-                    )
+                    node_event("workflow.node.failed", nid, **_failure_payload(exc))
                     break
                 with lock:
                     context[nid] = outputs
                     executed.add(nid)
                     done.add(nid)
                 processed += 1
-                event("workflow.node.finished", {"node_id": nid, "name": node_label(nid),
-                                                 "name_key": node_label_key(nid), "outputs": _trim_outputs(outputs)})
+                node_event("workflow.node.finished", nid, outputs=_trim_outputs(outputs))
                 if has_job:
                     job.progress = processed / total
                     db.commit()
@@ -349,8 +356,8 @@ def execute_graph(
         if cancelled:
             event("workflow.cancelled", {"pending": len(futures)})
             for pending_nid in futures.values():
-                event("workflow.node.failed", {"node_id": pending_nid, "name": node_label(pending_nid), "name_key": node_label_key(pending_nid),
-                         "error": t("jobErr_cancelled", DEFAULT_LOCALE), "error_key": "jobErr_cancelled"})
+                node_event("workflow.node.failed", pending_nid,
+                           error=t("jobErr_cancelled", DEFAULT_LOCALE), error_key="jobErr_cancelled")
 
     cancelled = cancelled or is_cancelled()
     if error is not None and not cancelled:
