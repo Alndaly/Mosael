@@ -110,16 +110,30 @@ export function isTypingTarget(target: EventTarget | null): boolean {
  * 而下拉、菜单、弹层都经 Portal 渲染到 body 底下:在检查器里展开一个下拉,焦点落在某个选项上
  * 按一下 Backspace,删掉的是**正在编辑的那个节点**。所以判据改成「从哪儿来」:
  *  · 焦点哪儿都不在(body)—— 点过画布空白处就是这样,算画布的;
- *  · 焦点在这块编辑器里,且不在输入框、不在声明了 `.nokey` 的面板里;
+ *  · 焦点在这块编辑器里,且不在输入框、不在某个控件(按钮、下拉、菜单项……)上、不在声明了
+ *    `.nokey` 的面板里 —— 浮在节点上的面板(画板的生成面板、选区工具条)长在画布里面,
+ *    焦点停在它的按钮上时按 Backspace 是冲着那颗按钮去的;
  *  · 其余(Portal 出去的菜单、对话框、别的页面区域)一律不算。
+ *
+ * 每块 React Flow 画布都经 components/app/useCanvasDeleteKey 用这一条。
  */
 export function isCanvasKeyTarget(target: EventTarget | null, editor: Element | null): boolean {
   const element = target as Element | null;
   if (!element || !editor || typeof element.closest !== "function") return false;
   if (element === element.ownerDocument?.body) return true;
   if (!editor.contains(element) || isTypingTarget(element)) return false;
-  return element.closest(".nokey") === null;
+  return element.closest(`.nokey, ${CONTROL_SELECTOR}`) === null;
 }
+
+/** 自己会接键盘的控件。画布节点本身(React Flow 给的是 role="group")不在里面。 */
+const CONTROL_SELECTOR = [
+  "button",
+  "a[href]",
+  "select",
+  ...["button", "combobox", "listbox", "option", "menu", "menuitem", "menuitemcheckbox", "menuitemradio", "switch", "checkbox", "radio", "slider", "tab", "spinbutton"].map(
+    (role) => `[role="${role}"]`,
+  ),
+].join(", ");
 
 /**
  * 应用自己占着的键。`owner` 是**做什么用的**,不是"在哪个页面" —— 拒绝的时候要让用户

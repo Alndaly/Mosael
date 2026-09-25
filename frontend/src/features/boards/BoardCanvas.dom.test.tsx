@@ -123,3 +123,56 @@ describe("上游断开之后,下游表单里那份引用跟着摘掉", () => {
     expect(items[0].form?.source_assets).toEqual([manual]);
   });
 });
+
+describe("删除键只认冲着画布来的那一下", () => {
+  //: 和工作流编辑器同一条规矩(lib/shortcuts 的 isCanvasKeyTarget):焦点停在面板里的按钮上、
+  //: 或者在 Portal 到 body 的下拉选项上时按 Backspace,是冲着那个控件去的,不是删选中的那一格。
+  const board: Canvas = { items: [note("n1", "留着"), note("n2", "也留着")], edges: [], markers: [] };
+
+  function select(id: string) {
+    const node = document.querySelector(`[data-id="${id}"]`) as HTMLElement;
+    act(() => {
+      node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  async function press(target: HTMLElement, key: string) {
+    act(() => {
+      target.focus();
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+  }
+
+  const ids = (view: ReturnType<typeof mount>) => view.latest()?.items.map((one) => one.id) ?? ["n1", "n2"];
+
+  it("焦点在面板的按钮上:不删", async () => {
+    const view = mount(board);
+    select("n1");
+    const button = document.querySelector<HTMLElement>(".react-flow__node-toolbar button");
+    expect(button, "选中之后应该有浮在节点上的面板").not.toBeNull();
+    await press(button!, "Backspace");
+    expect(ids(view)).toEqual(["n1", "n2"]);
+  });
+
+  it("焦点在 Portal 出去的下拉选项上:不删", async () => {
+    const view = mount(board);
+    select("n1");
+    const option = document.createElement("div");
+    option.setAttribute("role", "option");
+    option.tabIndex = -1;
+    document.body.appendChild(option);
+    await press(option, "Delete");
+    option.remove();
+    expect(ids(view)).toEqual(["n1", "n2"]);
+  });
+
+  it("焦点在画布上:照常删", async () => {
+    const view = mount(board);
+    select("n1");
+    await press(document.querySelector<HTMLElement>('[data-id="n1"]')!, "Backspace");
+    expect(view.latest().items.map((one) => one.id)).toEqual(["n2"]);
+  });
+});

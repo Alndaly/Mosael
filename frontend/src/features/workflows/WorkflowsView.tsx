@@ -208,7 +208,8 @@ import {
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
-import { isCanvasKeyTarget, isTypingTarget, leaveClipboardToSystem } from "@/lib/shortcuts";
+import { isTypingTarget, leaveClipboardToSystem } from "@/lib/shortcuts";
+import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 
 /** 主画布的节点类型。标记不是工作流节点(它不执行、不连线),但它在 React Flow 里得有个
  *  渲染器 —— 所以它加在这里,而不是加进 WORKFLOW_NODE_TYPES(那张表是"能跑的节点")。
@@ -1785,29 +1786,9 @@ function WorkflowEditor({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  /**
-   * Backspace / Delete 删掉画布上选中的节点和连线 —— **只在按键冲着画布时**。
-   *
-   * 走 React Flow 的 deleteElements,于是删除照旧经 onNodesChange / onEdgesChange 落进图里
-   * (标记、撤销粒度、脏标记都是同一套)。只是「这一下算不算」由我们判:检查器里展开的下拉、
-   * 弹出的菜单是 Portal 到 body 的,React Flow 自己的判据把那里的 Backspace 也当成删节点。
-   */
-  React.useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Backspace" && event.key !== "Delete") return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (!isCanvasKeyTarget(event.target, editorRef.current)) return;
-      const instance = rfRef.current;
-      if (!instance) return;
-      const doomedNodes = instance.getNodes().filter((node) => node.selected && node.deletable !== false);
-      const doomedEdges = instance.getEdges().filter((edge) => edge.selected && edge.deletable !== false);
-      if (doomedNodes.length === 0 && doomedEdges.length === 0) return;
-      event.preventDefault();
-      void instance.deleteElements({ nodes: doomedNodes, edges: doomedEdges });
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  //: Backspace / Delete 只删冲着画布来的那一下(检查器里的按钮、Portal 出去的下拉不算)——
+  //: 和画板同一个钩子,见 components/app/useCanvasDeleteKey。
+  useCanvasDeleteKey(editorRef, rfRef);
 
   /**
    * Cmd/Ctrl+] 把选中节点提到最前、[ 压到最后。与悬浮窗、剪辑页片段同键同义。

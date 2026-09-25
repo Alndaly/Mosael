@@ -26,6 +26,7 @@ import {
   getSmoothStepPath,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
   type ConnectionLineType,
   type Edge,
@@ -54,6 +55,7 @@ import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 import { copiedItem, itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
@@ -399,6 +401,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const surface = React.useRef<HTMLDivElement | null>(null);
+  //: Backspace / Delete 只删冲着画布来的那一下 —— 和工作流编辑器同一个钩子。实例从 Provider 取,
+  //: 不等 onInit:删除键在画布挂上的那一刻就该认。
+  const flow = useReactFlow();
+  const flowRef = React.useRef(flow);
+  flowRef.current = flow;
+  useCanvasDeleteKey(surface, flowRef);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
   const [draftAnchor, setDraftAnchor] = React.useState<NonNullable<CollaborationComment["anchor"]> | null>(null);
@@ -1250,7 +1258,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         zoomOnScroll={inputMode === "mouse"}
         zoomOnPinch
         maxZoom={2.5}
-        deleteKeyCode={["Backspace", "Delete"]}
+        // 删除键由 useCanvasDeleteKey 判(见下):React Flow 自带的那一套把面板按钮、Portal 出去的
+        // 下拉上的 Backspace 也当成删选中的这一格。
+        deleteKeyCode={null}
         nodesDraggable={!commentMode}
         nodesConnectable={!commentMode && !markerMode}
         elementsSelectable={!commentMode}
