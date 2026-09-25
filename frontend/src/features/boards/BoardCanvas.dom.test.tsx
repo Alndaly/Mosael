@@ -77,3 +77,49 @@ describe("画板的撤销与服务端那份", () => {
     expect(view.latest().items.map((one) => one.id)).toContain("agent");
   });
 });
+
+describe("上游断开之后,下游表单里那份引用跟着摘掉", () => {
+  const upstream = { id: "A", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, asset_id: "a1" };
+  const manual = { asset_id: "m1", role: "last_frame" };
+  const downstream = {
+    id: "V",
+    kind: "video" as const,
+    x: 400,
+    y: 0,
+    width: 320,
+    height: 200,
+    form: { prompt: "动起来", source_assets: [{ asset_id: "a1", role: "first_frame" }, manual] },
+  };
+  const board: Canvas = { items: [upstream, downstream], edges: [{ id: "e1", source: "A", target: "V" }], markers: [] };
+
+  it("上游那张换成另一份素材:下游挂着的旧那份不再发出去,手动挂的照留", async () => {
+    const view = mount(board);
+
+    act(() => view.api().patch("A", { asset_id: "b1" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    const video = view.latest().items.find((one) => one.id === "V")!;
+    expect(video.form?.source_assets).toEqual([manual]);
+  });
+
+  it("上游那一格删掉:下游挂着的那份不再发出去,手动挂的照留", async () => {
+    const view = mount(board);
+
+    const node = document.querySelector('[data-id="A"]') as HTMLElement;
+    act(() => {
+      node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    act(() => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    const items = view.latest().items;
+    expect(items.map((one) => one.id)).toEqual(["V"]);
+    expect(items[0].form?.source_assets).toEqual([manual]);
+  });
+});
