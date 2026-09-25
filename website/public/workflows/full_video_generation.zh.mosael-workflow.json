@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "从主题到完整视频",
   "description": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
-  "graph_hash": "56a8a1b3a0f88e9c6df1b964723a1be45307c636aa41071e9ae283291ecbbd1f",
+  "graph_hash": "d46dfebd73f22da52dcb8b1eab2956e53da43914fd95f236f16f2da114e31ddc",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 8,
+      "template_version": 9,
       "source": "official"
     },
     "nodes": [
@@ -1189,7 +1189,7 @@
                 "id": "shot_mode_first",
                 "source": "is_keyframes",
                 "target": "paint_first_frame",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "shot_first_needs_last",
@@ -1200,7 +1200,7 @@
                 "id": "shot_needs_last",
                 "source": "needs_last_frame",
                 "target": "paint_last_frame",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "shot_blockout_generate",
@@ -1211,13 +1211,13 @@
                 "id": "shot_voice_gate_narration",
                 "source": "has_voice",
                 "target": "has_narration",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "shot_narration_speak",
                 "source": "has_narration",
                 "target": "narrate",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "d-generate_clip-asset_id-organize_clip-asset_ids",
@@ -1321,7 +1321,7 @@
                 "id": "assemble_gate_narration",
                 "source": "has_audio",
                 "target": "append_narration",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "assemble_narration_caption",

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible, draw a turnaround sheet for every character and concept art for every location, auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video.",
-  "graph_hash": "6a722a756d138b23c6e101d8b0d09583b76d20a95be107c297fbd09bf77d2efb",
+  "graph_hash": "586d7e2b7980a7da5f44973b660bc2a986c395d7f97198197a9926f618efc3e8",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 8,
+      "template_version": 9,
       "source": "official"
     },
     "nodes": [
@@ -1189,7 +1189,7 @@
                 "id": "shot_mode_first",
                 "source": "is_keyframes",
                 "target": "paint_first_frame",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "shot_first_needs_last",
@@ -1200,7 +1200,7 @@
                 "id": "shot_needs_last",
                 "source": "needs_last_frame",
                 "target": "paint_last_frame",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "shot_blockout_generate",
@@ -1211,13 +1211,13 @@
                 "id": "shot_voice_gate_narration",
                 "source": "has_voice",
                 "target": "has_narration",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "shot_narration_speak",
                 "source": "has_narration",
                 "target": "narrate",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "d-generate_clip-asset_id-organize_clip-asset_ids",
@@ -1321,7 +1321,7 @@
                 "id": "assemble_gate_narration",
                 "source": "has_audio",
                 "target": "append_narration",
-                "branch": "true"
+                "source_handle": "true"
               },
               {
                 "id": "assemble_narration_caption",
