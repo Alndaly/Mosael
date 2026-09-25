@@ -162,6 +162,27 @@ describe("画板详情页与服务端的同步", () => {
     expect(toastMocks.error).not.toHaveBeenCalled();
   });
 
+  it("存回去的是撤销后的空槽,服务端留住了在跑的任务 —— 本地那一格跟着回到「在跑」", async () => {
+    // 运行态归服务端(见后端 _keep_server_owned_state)。服务端没收客户端那份运行态时,本地
+    // 还是一个能点的空槽:用户以为没点中又点一次,而第一轮还在跑。
+    const running = { id: "img", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, run: { status: "running" as const, job_id: "job-1" } };
+    const server: BoardCanvas = { items: [running], edges: [], markers: [] };
+    const undone: BoardCanvas = { items: [{ id: "img", kind: "image", x: 40, y: 0, width: 260, height: 180 }], edges: [], markers: [] };
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    apiMocks.updateBoard.mockResolvedValue(boardAt(4, { ...server, items: [{ ...running, x: 40 }] }));
+    apiMocks.getBoard.mockReturnValue(new Promise(() => undefined));
+
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    act(() => props().onChange(undone));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
+    expect(apiMocks.updateBoard).toHaveBeenCalledTimes(1);
+    expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ run: { status: "running", job_id: "job-1" } }));
+  });
+
   it("自动保存还在路上时点生成:生成等它回来,带着它换来的新版本号,不和自己撞 409", async () => {
     const server: BoardCanvas = {
       items: [{ id: "img", kind: "image", x: 0, y: 0, width: 260, height: 180 }],

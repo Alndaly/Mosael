@@ -63,7 +63,7 @@ import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas"
 import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
-import { boardSettlementPatch, itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
+import { boardSettlementPatch, itemError, itemIsRunning, itemJobId, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameCanvas } from "@/features/boards/boardProjection";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
@@ -847,7 +847,14 @@ function BoardDetail({
       //: 轮到它时再比、再读版本号:排在它前面的写请求可能刚把画布推进到这一份。
       serially(async () => {
         if (sameCanvas(next, confirmedCanvas.current)) return;
-        acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
+        const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
+        //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch)。
+        const sent = new Map(next.items.map((item) => [item.id, item]));
+        for (const stored of fresh.canvas.items) {
+          const mine = sent.get(stored.id);
+          const patch = mine && serverOwnedPatch(mine, stored);
+          if (patch) api?.patch(stored.id, patch);
+        }
       })
         // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
         .catch(async (error: Error) => {
@@ -857,7 +864,7 @@ function BoardDetail({
           // 下一次编辑仍会以最后一份真正成功的画布为基准。
           throw error;
         }),
-    [board.id, workspaceId, t, acceptBoard, recoverConflict, serially],
+    [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially],
   );
   // **不显示"已保存"。** 自动保存做对了就该是无声的:一个常驻的「已保存」既不能让人放心
   // (它任何时候都这么写),又占着顶栏一格。失败仍然会 toast —— 那才是需要打断的时刻。

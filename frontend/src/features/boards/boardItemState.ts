@@ -39,6 +39,18 @@ export function copiedItem(item: BoardItem, id: string): BoardItem {
   return { ...rest, id };
 }
 
+/**
+ * 存回去之后,服务端留下的**运行态和产出**和本地送出去的不一样时,本地那一格该改成什么。
+ *
+ * 这两样归服务端(见后端 _keep_server_owned_state):客户端的快照改不动在跑的任务、抹不掉已经
+ * 到了的产出。服务端没收下本地那一份时,本地要跟着回来 —— 否则撤销后的那一格看着是个能点的
+ * 空槽,任务其实还在跑。只动这两样:位置、表单、文字是用户的,请求在路上时他可能又改了。
+ */
+export function serverOwnedPatch(sent: BoardItem, stored: BoardItem): Partial<BoardItem> | null {
+  const same = JSON.stringify(sent.run ?? null) === JSON.stringify(stored.run ?? null) && sent.asset_id === stored.asset_id;
+  return same ? null : { run: stored.run, asset_id: stored.asset_id };
+}
+
 /** 服务端轮询到终态后写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。 */
 export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null {
   if (item.asset_id) {
