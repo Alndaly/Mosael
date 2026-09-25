@@ -38,6 +38,17 @@ export function oauthStart(provider: string): Promise<{ pending_id: string; url:
   return api<{ pending_id: string; url: string }>(`/api/auth/oauth/${provider}/start`, { method: "POST" });
 }
 
+/** 管理员共享给成员的本机文件夹(见后端 domain/host_files)。登录就能读,改它要部署管理员。 */
+export type SharedHostFolders = components["schemas"]["SharedHostFolders"];
+
+export function getSharedHostFolders(): Promise<SharedHostFolders> {
+  return api<SharedHostFolders>("/api/admin/shared-host-folders");
+}
+
+export function setSharedHostFolders(folders: string[]): Promise<SharedHostFolders> {
+  return api<SharedHostFolders>("/api/admin/shared-host-folders", { method: "PUT", body: JSON.stringify({ folders }) });
+}
+
 export function oauthPending(
   pendingId: string,
 ): Promise<{ status: string; token?: string; user?: User; error?: string }> {

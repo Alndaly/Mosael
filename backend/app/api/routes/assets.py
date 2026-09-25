@@ -16,6 +16,7 @@ from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
 from app.domain.assets import asset_project, delete_asset_with_clips, import_uploaded_asset, register_file_asset
 from app.domain.assets.proxies import start_proxy_job
+from app.domain import host_files
 from app.domain.assets.source_url import find_transcript_by_source
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
@@ -174,9 +175,12 @@ def import_local_asset(
         raise HTTPException(status_code=404, detail="Not found")
     ensure_workspace_perm(db, user, body.workspace_id, "upload")
 
-    path = Path(body.path).expanduser()
-    if not path.is_absolute() or not path.is_file():
-        raise HTTPException(status_code=422, detail=tr("routeErr_pathNotFile"))
+    # 桌面端的后端也可能被同事经远程访问连上 —— 这台电脑上的文件仍是部署主人的,
+    # 读之前过同一道闸(见 domain/host_files)。放行的是**真实路径**:软链接名叫 .mp4 不算数。
+    try:
+        path = host_files.ensure_readable(db, body.path, actor=user.id).path
+    except host_files.HostFileError as exc:
+        raise HTTPException(status_code=422, detail=tr("routeErr_pathNotFile")) from exc
     if path.suffix.lower() not in _LOCAL_IMPORT_SUFFIXES:
         raise HTTPException(status_code=422, detail=tr("routeErr_unsupportedFileType", suffix=path.suffix))
     # 复用「登记一个已存在的本机文件」这条既有路径 —— 渲染成片、配音产出、AI 生成结果

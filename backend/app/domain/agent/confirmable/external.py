@@ -109,9 +109,15 @@ def _summarize_run_host_code(db: Session, payload: dict[str, Any]) -> Summary:
     }
 
 def _execute_run_host_code(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain import host_code
+    from app.domain import host_code, host_files
 
     payload = confirmation.payload
+    # 不隔离的代码能读写这台电脑上的一切 —— 它是部署主人的,批准的人得是部署管理员
+    # (见 domain/host_files)。同事经远程访问批准这张卡,读不到主人的文件。
+    try:
+        host_files.ensure_whole_machine(db, actor=actor)
+    except host_files.HostFileNotAllowed as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
     try:
         return host_code.run(str(payload.get("code") or ""), dict(payload.get("inputs") or {}))
     except host_code.HostCodeError as exc:

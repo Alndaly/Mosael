@@ -15,7 +15,7 @@ from app.api.schemas import (
     UserSpendPoint,
 )
 from app.domain.permissions import ensure_deployment_admin
-from app.domain import deployment, members, usage
+from app.domain import deployment, host_files, members, usage
 from app.db.models import (
     Asset,
     AuthSession,
@@ -108,6 +108,32 @@ def set_registration(body: RegistrationSwitch, db: DbSession, user: CurrentUser)
     deployment.set_open_registration(db, body.open)
     db.commit()
     return {"open": deployment.open_registration(db)}
+
+
+class SharedHostFolders(BaseModel):
+    folders: list[str]
+
+
+@router.get("/admin/shared-host-folders", response_model=SharedHostFolders)
+def get_shared_host_folders(db: DbSession, user: CurrentUser) -> SharedHostFolders:
+    """管理员共享给成员的本机文件夹。
+
+    **登录就能读**,不只管理员:这份清单本来就是给成员用的 —— 工作流里填本机路径被挡下时,
+    他要知道该把文件放到哪儿。改它才是部署管理员的事。
+    """
+    return SharedHostFolders(folders=host_files.shared_folders(db))
+
+
+@router.put("/admin/shared-host-folders", response_model=SharedHostFolders)
+def set_shared_host_folders(body: SharedHostFolders, db: DbSession, user: CurrentUser) -> SharedHostFolders:
+    """这台电脑上哪些文件夹共享给成员读(见 domain/host_files)。和开放注册同一类:部署级的决定。"""
+    ensure_deployment_admin(db, user)
+    try:
+        folders = host_files.set_shared_folders(db, body.folders)
+    except host_files.HostFileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    return SharedHostFolders(folders=folders)
 
 
 @router.get("/admin/overview", response_model=AdminOverviewOut)

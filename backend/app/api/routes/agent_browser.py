@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import BrowserSession
-from app.domain import browser, sharing
+from app.db.models import Asset, BrowserSession
+from app.domain import browser, host_files, sharing
 
 router = APIRouter(tags=["agent-browser"])
 
@@ -48,11 +48,38 @@ def _verify(db, user, workspace_id: str, session_id: str, *, perm: str | None = 
     return session
 
 
+def _upload_source(db, user, workspace_id: str, args: dict[str, Any]) -> host_files.HostFile:
+    """上传动作要塞的那个文件:素材(本工作区素材库里的)或本机路径(经 domain/host_files 放行)。
+
+    此前 args 原样交给执行器:`{"path": "~/.ssh/id_rsa"}` 就能把这台电脑上的私钥塞进任意网页。
+    """
+    asset_id = str(args.get("asset_id") or "").strip()
+    if asset_id:
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.workspace_id != workspace_id or not asset.file_key:
+            raise HTTPException(status_code=404, detail=tr("routeErr_assetNotFound"))
+        return host_files.asset_file(asset)
+    try:
+        return host_files.ensure_readable(db, str(args.get("path") or ""), actor=user.id)
+    except host_files.HostFileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/agent-browser/act")
 def act(body: ActRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
     _verify(db, user, body.workspace_id, body.session_id, perm="edit")
     try:
-        result = browser.run_action(body.session_id, body.action, body.args)
+        if body.action == "upload":
+            file = _upload_source(db, user, body.workspace_id, body.args)
+            try:
+                timeout_ms = int(float(body.args.get("timeout_ms") or 15_000))
+            except (TypeError, ValueError):
+                timeout_ms = 15_000
+            result = browser.upload_file(
+                body.session_id, file, selector=str(body.args.get("selector") or ""), timeout_ms=timeout_ms
+            )
+        else:
+            result = browser.run_action(body.session_id, body.action, body.args)
     except browser.BrowserDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"result": result}

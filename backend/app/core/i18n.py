@@ -1360,6 +1360,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "run_at 必须是 ISO 日期时间",
         "en": "run_at must be an ISO datetime.",
     },
+    # 这台电脑上的文件是部署主人的私有资源(见 domain/host_files)。说的是怎么办。
+    "hostErr_notAbsolute": {
+        "zh": "本机文件路径必须是绝对路径",
+        "en": "A file path on this computer must be absolute.",
+    },
+    "hostErr_notAFile": {
+        "zh": "这个路径不是一个存在的文件",
+        "en": "That path isn't an existing file.",
+    },
+    "hostErr_notReadable": {
+        "zh": "这台电脑上的文件属于部署管理员,只有管理员能直接读。请改用素材库里的素材,或请管理员把所在文件夹加进「共享给成员的本机文件夹」",
+        "en": "Files on this computer belong to the deployment admin, and only admins can read them directly. Use an asset from the library instead, or ask an admin to add the folder to “Folders shared with members”.",
+    },
+    "hostErr_codeNeedsAdmin": {
+        "zh": "在这台电脑上直接运行代码能读写它的任何文件,只有部署管理员能批准",
+        "en": "Running code directly on this computer can read and write any of its files, so only a deployment admin can approve it.",
+    },
+    "hostErr_folderNotAbsolute": {
+        "zh": "共享文件夹必须是绝对路径:{path}",
+        "en": "A shared folder must be an absolute path: {path}",
+    },
+    "hostErr_folderMissing": {
+        "zh": "这台电脑上没有这个文件夹:{path}",
+        "en": "There's no such folder on this computer: {path}",
+    },
+    "hostErr_folderIsRoot": {
+        "zh": "不能共享根目录 —— 那等于把整台电脑交出去。请选具体的文件夹",
+        "en": "The root directory can't be shared — that would hand over the whole computer. Pick a specific folder.",
+    },
     "shareErr_unknownKind": {
         "zh": "未知的资源类型:{kind}",
         "en": "Unknown resource type: {kind}",
@@ -2775,7 +2804,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_upload_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},
     "wfNode_browser_upload_selector": {"zh": "文件输入框 CSS 选择器(默认 input[type=file])", "en": "CSS selector of the file input (defaults to input[type=file])"},
     "wfNode_browser_upload_asset_id": {"zh": "要上传的素材 id(如 {{export_1.asset_id}});与 file_path 二选一", "en": "The asset to upload (e.g. {{export_1.asset_id}}); either this or file_path"},
-    "wfNode_browser_upload_file_path": {"zh": "或直接给本地绝对路径;与 asset_id 二选一", "en": "Or a local absolute path directly; either this or asset_id"},
+    "wfNode_browser_upload_file_path": {"zh": "或直接给本机绝对路径;与 asset_id 二选一。本机文件只有部署管理员能读,其他成员只能用管理员共享出来的文件夹里的", "en": "Or an absolute path on this computer; either this or asset_id. Only deployment admins can read files on this computer — other members can only use files inside folders an admin has shared"},
     "wfNode_browser_upload_timeout_ms": {"zh": "等文件输入框出现的超时(毫秒,默认 15000)", "en": "How long to wait for the file input to appear (milliseconds, 15000 by default)"},
     "wfNode_browser_extract": {"zh": "浏览器·提取", "en": "Browser · extract"},
     "wfNode_browser_extract_desc": {"zh": "取元素的文本或属性;可一次取全部匹配。输出 value 供下游使用。", "en": "Read an element's text or an attribute; can take every match at once. Outputs value for downstream use."},
@@ -3631,6 +3660,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "publishErr_accountNotFound": {"zh": "账号不存在", "en": "Account not found."},
     "publishErr_unknownBindingStatus": {"zh": "未知登录态: {status}", "en": "Unknown sign-in status: {status}"},
     # 浏览器自动化
+    "browserErr_uploadNeedsHostFile": {
+        "zh": "上传的文件必须来自素材库,或是你有权读的本机路径",
+        "en": "The uploaded file must come from the asset library or be a path on this computer you're allowed to read.",
+    },
+    "browserErr_navigateScheme": {
+        "zh": "浏览器只能打开 http(s) 网址",
+        "en": "The browser can only open http(s) addresses.",
+    },
     "browserErr_profileNotFound": {"zh": "浏览器档案不存在", "en": "Browser profile not found."},
     "browserErr_profileHasSession": {
         "zh": "该档案有正在进行的会话,先结束再删",

@@ -1411,6 +1411,21 @@ def _migrate_plugin_registry_url() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN plugin_registry_url VARCHAR(500) NOT NULL DEFAULT ''"))
 
 
+def _migrate_shared_host_folders() -> None:
+    """deployment_config 新增 shared_host_folders(管理员共享给成员的本机文件夹)。
+
+    create_all 只建新表,不给**已有**表补列。空列表 = 一个都没共享:非管理员读不到本机任何路径,
+    只能用素材库里的文件(见 domain/host_files)—— 升级前谁都能填本机路径,那正是要收的口子。
+    """
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return
+    if "shared_host_folders" in {c["name"] for c in inspector.get_columns("deployment_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE deployment_config ADD COLUMN shared_host_folders JSON NOT NULL DEFAULT '[]'"))
+
+
 def _cleanup_orphan_resource_shares() -> None:
     """清掉指向已删资源的共享记录。
 
@@ -2951,6 +2966,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_browser_profile_start_url,
                 _migrate_usage_unpriced_reason,
                 _migrate_pricing_time_prices,
+                _migrate_shared_host_folders,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
             ),

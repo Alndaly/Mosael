@@ -29,3 +29,12 @@ def open_registration(db: Session) -> bool:
 
 def set_open_registration(db: Session, value: bool) -> None:
     _row(db).open_registration = bool(value)
+
+
+def shared_host_folders(db: Session) -> list[str]:
+    """管理员共享给成员的本机文件夹。校验与判定在 domain/host_files,这里只管存取。"""
+    return [str(item) for item in (_row(db).shared_host_folders or [])]
+
+
+def set_shared_host_folders(db: Session, folders: list[str]) -> None:
+    _row(db).shared_host_folders = list(folders)

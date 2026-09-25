@@ -42,6 +42,13 @@ def _execute_blender_execute(db: Session, confirmation: Any, actor: str | None) 
     user = db.get(User, actor) if actor else None
     if user is None:
         raise ConfirmationError("confirmErr_approverNotFound")
+    # Blender 跑在这台电脑上,它的 Python 能读写本机任何文件 —— 和「本机执行代码」同一道闸。
+    from app.domain import host_files
+
+    try:
+        host_files.ensure_whole_machine(db, actor=actor)
+    except host_files.HostFileNotAllowed as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
     payload = confirmation.payload
     result = blender_agent.execute(db, user, confirmation.workspace_id, str(payload.get("code") or ""),
                                    str(payload.get("instance_id") or ""))

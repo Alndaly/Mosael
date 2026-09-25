@@ -20,6 +20,7 @@ const t = (key: string) => key;
 vi.mock("@/app/preferences", () => ({ useI18n: () => t, usePreferences: () => ({ locale: "en-US" }) }));
 vi.mock("./AdminActivityChart", () => ({ AdminActivityChart: () => null }));
 vi.mock("./RegistrationSection", () => ({ RegistrationSection: () => null }));
+vi.mock("./SharedHostFoldersSection", () => ({ SharedHostFoldersSection: () => null }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 const rows: Array<Record<string, unknown>> = [];

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, is_message_key
 from app.domain import sharing
+from app.domain.host_files import HostFile
 from app.db.models import BrowserAction, BrowserProfile, BrowserSession, Job, PublishAccount, User, now
 
 _UNSET = object()  # update_profile 里区分「不改」与「置空」
@@ -312,6 +313,12 @@ def install() -> None:
     register_settle_listener("browser_sessions", _close_run_sessions)
 
 
+#: 导航只认这几种地址。`file://` 是**读本机文件**:在会话里打开 `file:///…/.ssh/id_rsa` 再
+#: extract,就把这台电脑上的私钥读出来了 —— 而本机文件只有部署管理员能读(domain/host_files),
+#: 浏览器这条路不该成为绕过它的后门。别的 scheme(javascript:/data:/chrome: …)也没有正当用途。
+_NAVIGABLE = re.compile(r"^(https?://|about:blank$)", re.I)
+
+
 def run_action(
     session_id: str,
     action: str,
@@ -322,7 +329,43 @@ def run_action(
     """在会话上跑一个动作:入队 → 阻塞轮询到终态 → 返回 result(失败/超时抛 BrowserDomainError)。
 
     用独立短会话轮询(照 wait_for_job),既避免长事务,又能看到 worker 在另一连接里的提交。
+
+    两类动作在这里就挡下:`upload` 只能经 `upload_file`(它只收放行过的 `HostFile`),导航只认
+    http(s) —— 两者都是「读这台电脑上的文件」的门,见 domain/host_files。
     """
+    if action == "upload":
+        raise BrowserDomainError("browserErr_uploadNeedsHostFile")
+    if action == "navigate":
+        url = str((args or {}).get("url") or "").strip()
+        if url and not _NAVIGABLE.match(url):
+            raise BrowserDomainError("browserErr_navigateScheme")
+    return _enqueue(session_id, action, args, timeout=timeout)
+
+
+def upload_file(
+    session_id: str,
+    file: HostFile,
+    *,
+    selector: str = "",
+    timeout_ms: int = 15_000,
+) -> dict:
+    """往会话页面的 `<input type=file>` 塞一个本机文件。
+
+    只收 `HostFile`:它只能由 domain/host_files 造出来(按工作区校验过的素材,或这个人有权读的本机
+    路径),所以这里不再判权限 —— 判过了才拿得到这个类型。收裸字符串的话,任何一个调用点忘了过闸,
+    别人电脑上的文件就被塞进了任意网页。
+    """
+    if not isinstance(file, HostFile):
+        raise BrowserDomainError("browserErr_uploadNeedsHostFile")
+    return _enqueue(
+        session_id,
+        "upload",
+        {"selector": (selector or "").strip(), "path": str(file.path), "timeout_ms": timeout_ms},
+        timeout=timeout_ms / 1000 + 20,
+    )
+
+
+def _enqueue(session_id: str, action: str, args: dict | None, *, timeout: float) -> dict:
     with SessionLocal() as db:
         session = db.get(BrowserSession, session_id)
         if session is None or session.status != "open":

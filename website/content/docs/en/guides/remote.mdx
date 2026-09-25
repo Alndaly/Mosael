@@ -2,7 +2,7 @@
 title: Remote deployment
 description: Connect a shared backend, configure access and workers, and understand where data is stored.
 order: 14
-updated: 2026-09-09
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -37,6 +37,25 @@ domains get listed one at a time.
 
 While you are at it: the first thing to do after exposing a deployment is turn **open registration**
 off (registration policy in Admin).
+
+## Files on the backend's computer belong to the deployment admin
+
+The backend can read files on the computer it runs on. A workflow's Upload file node accepts a local
+path, the desktop app can import an asset by path, and the agent can run code on this computer. On
+your own machine that computer is yours; once colleagues share the backend, "a local path" means
+**someone else's computer**.
+
+So these reads depend on who you are:
+
+- **Deployment admins** can read the whole computer, and can approve "run code on this computer" and
+  Blender code cards. On a single-user install you are the admin, so nothing changes;
+- **Other members** can only use assets from the library, or files inside the folders an admin lists
+  under **Admin → Folders shared with members**. Paths are compared after resolving symlinks and `..`,
+  so a link inside a shared folder can't point somewhere else;
+- Browser automation only opens `http(s)` addresses, never `file://`.
+
+If a colleague enters a path outside the shared folders, that step fails and says to ask an admin to
+share the folder, or to use an asset from the library instead.
 
 ## Workers have to cross the network too
 

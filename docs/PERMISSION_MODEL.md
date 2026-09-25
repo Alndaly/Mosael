@@ -38,6 +38,8 @@
 | `require_worker_key` | 数据目录下的进程密钥 | 本机卫星进程的 claim / report / heartbeat |
 | 确认卡 | 工具 manifest 的 `confirmation` + 会话规则 | 智能体对不可逆或对外动作的用户授权 |
 | `sharing.ensure_usable` | 是主人,或主人把它共享进了它所在的工作区 | **用**私有身份的那一刻:发布账号(`publish.start_publish`)、浏览器池档案(`browser.open_session` / `attach_session` / `usable_profile`)。`actor` 必填,None 被拒 |
+| `host_files.ensure_readable` | 是部署管理员,或路径(realpath 之后)落在管理员共享给成员的本机文件夹里 | **读一个用户给出的本机路径**的那一刻:工作流 `browser_upload` 的 `file_path`、智能体浏览器 upload 动作、按本机路径导入素材。放行得到 `HostFile`,`browser.upload_file` 只收它。`actor` 必填,None 被拒 |
+| `host_files.ensure_whole_machine` | 是部署管理员 | 在这台电脑上**不隔离地跑代码**:`run_host_code`、`blender_execute` 确认卡(批准的人) |
 
 工作区只使用 `owner > admin > editor > viewer` 四级角色。`ensure_workspace_perm`
 保留操作名是为了让调用点可读,而不是恢复可逐位覆盖的权限矩阵。
@@ -123,6 +125,32 @@ viewer 取供应商凭据 -> 200
 
 老数据不做兼容:已经存在的工作流 / 定时任务如果引用了 actor 用不了的账号或档案,下一次运行会带着这句话失败,
 由主人共享出来,或改用自己的。棘轮:`tests/test_private_identities_need_their_owner.py`。
+
+### 3.7 本机文件曾对所有成员开放 — ✅ 已修复
+
+后端跑在某一台电脑上。工作流 `browser_upload` 的 `file_path` 收这台电脑上的任意路径;智能体浏览器的
+`/agent-browser/act` 把 upload 动作的 args 原样交给执行器;`navigate` 接受 `file://`;「本机执行代码」与
+Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的,没问题;同事经团队部署或远程访问进来之后,
+填一个 `~/.ssh/id_rsa`,主人的私钥就被塞进了任意网页。
+
+现在**这台电脑上的文件是部署主人的私有资源**,读的那一刻查,且只在一处(`domain/host_files`):
+
+- 部署管理员(`User.is_deployment_admin`)整台机器都可以 —— 单机用时唯一的用户就是管理员,零摩擦;
+- 其他人只有两种:素材库里的文件(`host_files.asset_file`,调用方先按工作区校验素材),或落在管理员
+  **共享给成员的本机文件夹**(部署级设置 `DeploymentConfig.shared_host_folders`,管理控制台里改,
+  `ensure_deployment_admin`)里的路径。判断前一律 realpath —— 共享文件夹里的软链接、`..` 借不了道;
+- 没权限的人拿到的是 403(`hostErr_notReadable`),**不存在也是 403**:探不出别人机器上有什么;
+- 浏览器 `upload` 只能经 `browser.upload_file(…, HostFile)`,`run_action` 直接拒 upload;导航只认 http(s)。
+
+| 入口 | actor |
+| --- | --- |
+| `POST /assets/import-local`、`POST /agent-browser/act`(upload) | 当前登录用户 |
+| 工作流 `browser_upload` | 这次运行的 actor(与 §3.6 同一条) |
+| `run_host_code` / `blender_execute` 确认卡 | 批准这张卡的人 |
+
+棘轮:`tests/test_host_files_belong_to_the_deployment_owner.py`(seam 的 `actor` 必填、调用点不写 None、
+`HostFile` 只在 host_files 里构造、每个已知入口都过闸)。插件以用户身份运行、能读它读得到的一切 ——
+它们由部署管理员安装,不在这道闸里。
 
 ## 4. 已经对上的地方
 

@@ -4867,6 +4867,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/shared-host-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Shared Host Folders
+         * @description 管理员共享给成员的本机文件夹。
+         *
+         *     **登录就能读**,不只管理员:这份清单本来就是给成员用的 —— 工作流里填本机路径被挡下时,
+         *     他要知道该把文件放到哪儿。改它才是部署管理员的事。
+         */
+        get: operations["get_shared_host_folders_api_admin_shared_host_folders_get"];
+        /**
+         * Set Shared Host Folders
+         * @description 这台电脑上哪些文件夹共享给成员读(见 domain/host_files)。和开放注册同一类:部署级的决定。
+         */
+        put: operations["set_shared_host_folders_api_admin_shared_host_folders_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/overview": {
         parameters: {
             query?: never;
@@ -11154,6 +11181,11 @@ export interface components {
         ShareRequest: {
             /** Workspace Id */
             workspace_id: string;
+        };
+        /** SharedHostFolders */
+        SharedHostFolders: {
+            /** Folders */
+            folders: string[];
         };
         /**
          * SourceAssetRef
@@ -22635,6 +22667,68 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_shared_host_folders_api_admin_shared_host_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedHostFolders"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_shared_host_folders_api_admin_shared_host_folders_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedHostFolders"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedHostFolders"];
                 };
             };
             /** @description Validation Error */

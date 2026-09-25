@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AdminActivityChart } from "./AdminActivityChart";
 import { RegistrationSection } from "./RegistrationSection";
+import { SharedHostFoldersSection } from "./SharedHostFoldersSection";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { formatCosts, microsIn } from "@/lib/money";
 import { SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
@@ -194,6 +195,9 @@ export function AdminView() {
       </SettingsGroup>
 
       <RegistrationSection />
+
+      {/* 这台电脑上的文件归部署管理员;共享出来的文件夹才是成员读得到的(见 SharedHostFoldersSection)。 */}
+      <SharedHostFoldersSection />
 
       <ConfirmDialog
         open={removing !== null}

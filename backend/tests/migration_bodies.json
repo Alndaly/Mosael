@@ -76,6 +76,7 @@
   "migrate-scene-models-to-disk": "80c084b8618aeb26",
   "migrate-scene-models-to-workspace": "285f7da4cb74cd93",
   "migrate-session-groups-serve-both": "df30d38a56c6b759",
+  "migrate-shared-host-folders": "d75d0a271bbdb3e9",
   "migrate-shared-venvs": "26c7c33f9f8280c6",
   "migrate-source-assets-get-a-role": "17d49cdaf1d8fd8f",
   "migrate-subtitle-tracks-carry-no-sound": "fc096a887b9fd89a",

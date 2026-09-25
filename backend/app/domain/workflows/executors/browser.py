@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
-from app.domain import browser, sharing
+from app.domain import browser, host_files, sharing
 from app.domain.jobs import current_actor, current_parent_job_id
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
@@ -175,30 +175,39 @@ def browser_input(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
 
 @register("browser_upload")
 def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    """往 <input type=file> 塞一个本地文件(发布上传视频的关键)。asset_id 或 file_path 二选一——
-    asset_id 在后端解析成本机绝对路径再交给执行器(素材文件与执行器同机,本地优先)。"""
+    """往 <input type=file> 塞一个本地文件(发布上传视频的关键)。asset_id 或 file_path 二选一。
+
+    两条来源都经 domain/host_files 放行:asset_id 是本工作区素材库里的文件;file_path 是这台电脑上
+    的路径 —— 那是部署主人的私有资源,只有部署管理员、或路径落在管理员共享给成员的文件夹里才读得到。
+    否则同事在工作流里填一个 `~/.ssh/id_rsa`,就能把主人的私钥塞进任意网页。
+    """
     from app.db.models import Asset
-    from app.media.paths import resolve_key
 
     sid = _session_in(db, workflow, config)
     path = str(config.get("file_path") or "").strip()
     asset_id = str(config.get("asset_id") or "").strip()
-    if asset_id and not path:
-        asset = db.get(Asset, asset_id)
-        if asset is None or asset.workspace_id != workflow.workspace_id:
-            raise WorkflowDomainError("wfErr_uploadAssetMissing")
-        if not asset.file_key:
-            raise WorkflowDomainError("wfErr_uploadAssetNoFile")
-        path = str(resolve_key(asset.file_key))
-    if not path:
-        raise WorkflowDomainError("wfErr_uploadNeedsSource")
+    try:
+        if path:
+            file = host_files.ensure_readable(db, path, actor=current_actor(db))
+        elif asset_id:
+            asset = db.get(Asset, asset_id)
+            if asset is None or asset.workspace_id != workflow.workspace_id:
+                raise WorkflowDomainError("wfErr_uploadAssetMissing")
+            if not asset.file_key:
+                raise WorkflowDomainError("wfErr_uploadAssetNoFile")
+            file = host_files.asset_file(asset)
+        else:
+            raise WorkflowDomainError("wfErr_uploadNeedsSource")
+    except (host_files.HostFileError, host_files.HostFileNotAllowed) as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
-    _run(
-        sid,
-        "upload",
-        {"selector": str(config.get("selector") or "").strip(), "path": path, "timeout_ms": timeout_ms},
-        timeout=timeout_ms / 1000 + 20,
-    )
+    selector = str(config.get("selector") or "").strip()
+    try:
+        browser.upload_file(sid, file, selector=selector, timeout_ms=timeout_ms)
+    except browser.BrowserDomainError as exc:
+        raise WorkflowDomainError.from_error(
+            exc, details=_failure_scene(sid, "upload", {"selector": selector})
+        ) from exc
     return {"session": sid}
 
 
