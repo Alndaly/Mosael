@@ -500,3 +500,33 @@ def test_卸载连目录一起删_否则下次扫描又装回来() -> None:
     with SessionLocal() as db:
         installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
     assert packages(client) == {}
+
+
+def test_两种插件节点对没填的入参一个说法() -> None:
+    """编辑器给没填的格子种的是空串;上游引用落空插值出来也是空串。插件节点(`plugin.<包>.<工具>`)
+    早就把它们当"没给",而通用的 plugin_tool 节点原样交给工具 —— 必填校验看见键在,就放行了,
+    工具拿着一个空文本跑完,流程是绿的。同一个工具、两种节点,必填的意思不能是两个。"""
+    import pytest
+
+    from app.db.models import Workflow, Workspace
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors import get_executor
+    from tests.util import acting_as
+
+    client = install(SIMPLE)
+    instance_id = packages(client)["dev.simple"]["instances"][0]["id"]
+    assert client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True}).status_code == 200
+
+    with SessionLocal() as db:
+        workflow = Workflow(workspace_id=db.query(Workspace).first().id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        with acting_as(db):
+            for node_type, config in (
+                ("plugin.dev.simple.shout", {"text": ""}),
+                ("plugin_tool", {"plugin_id": "dev.simple", "tool_name": "shout", "input": {"text": ""}}),
+            ):
+                with pytest.raises(WorkflowDomainError) as caught:
+                    get_executor(node_type)(db, workflow, config)
+                assert caught.value.key == "wfErr_pluginToolFailed", node_type
+                assert "text" in str(caught.value), node_type

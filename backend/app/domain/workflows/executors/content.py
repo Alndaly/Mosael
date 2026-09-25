@@ -27,6 +27,10 @@ def _run_plugin_tool(
     if tool is not None and tool["internal"]:
         # 只给宿主适配层调的工具(见 plugins/manifest.ToolOverride.internal):图里存着也不跑。
         raise WorkflowDomainError("wfErr_pluginToolInternal", params={"tool": tool_name})
+    # 空字符串是编辑器给未填字段的种子值,上游引用落空插值出来也是它。原样发给工具会让"没填"
+    # 和"填了空串"变成同一件事,而工具的必填校验就此失效 —— 它收到的是一个存在但为空的键。
+    # 收在这里而不是各节点里:插件节点和通用插件节点曾经一个过滤一个不过滤。
+    payload = {key: value for key, value in payload.items() if value not in (None, "")}
     try:
         # 带上工作区:插件交出的**文件**产出要收进这个工作区的素材库,输出里换成 asset_id。
         # 不带的话,一个从网盘拉文件的节点在工作流里跑不通 —— 它没地方放拿到的东西。
@@ -98,11 +102,7 @@ def plugin_node(node_type: str):
             raise WorkflowDomainError("wfErr_pluginNodeType", params={"type": node_type})
         package_id, tool_name = parsed
         instance_id = _resolve_instance(db, package_id, tool_name, str(config.get("instance_id") or ""))
-        # 空字符串是编辑器给未填字段的种子值。原样发给工具会让"没填"和"填了空串"变成同一件事,
-        # 而工具的必填校验就此失效 —— 它收到的是一个存在但为空的键。
-        payload = {
-            key: value for key, value in config.items() if key != "instance_id" and value not in (None, "")
-        }
+        payload = {key: value for key, value in config.items() if key != "instance_id"}
         output = _run_plugin_tool(db, instance_id, tool_name, payload, workspace_id=workflow.workspace_id)
 
         tool = find(db, instance_id, tool_name)
