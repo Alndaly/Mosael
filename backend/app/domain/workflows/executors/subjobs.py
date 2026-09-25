@@ -19,7 +19,7 @@ from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors.common import id_list, text_lines, truthy, wait_for_job
+from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
             kind=kind,
             prompt=str(config.get("prompt", "")),
             negative_prompt=str(config.get("negative_prompt", "")),
-            parameters=dict(config.get("parameters") or {}),
+            parameters=provided(dict(config.get("parameters") or {})),
             source_assets=keep_source_group(
                 parse_source_assets(config.get("source_assets"), kind=kind),
                 str(config.get("source_group") or "all").strip(),

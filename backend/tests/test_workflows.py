@@ -1550,6 +1550,37 @@ def test_工作流的失败原因不按位置截断_带着文案_key(monkeypatch
     assert "结尾标记" in body, "失败通知里的原因被截断了"
 
 
+def test_生成节点的参数_没填的不发给供应商(monkeypatch) -> None:
+    """表单里留着的空行、落空的引用,插值出来都是空串。插件节点早就在交给工具之前把它们滤掉了,
+    生成节点没有:空串原样进 parameters,布尔参数报「不是布尔值」、时长报「不是整数」,
+    校验不管的就直接发给供应商。「没填」只有一种意思,两个节点走同一条规矩。"""
+    from app.domain import generation
+    from app.domain.workflows.executors import subjobs
+
+    seen: dict = {}
+
+    class Captured(Exception):
+        pass
+
+    def capture(db, **kwargs):
+        seen.update(kwargs["parameters"])
+        raise Captured
+
+    monkeypatch.setattr(generation, "create_generation_job", capture)
+    workflow = Workflow(workspace_id="ws", name="W", graph={"nodes": [], "edges": []})
+    with pytest.raises(Captured):
+        subjobs.ai_generate(
+            None,
+            workflow,
+            {
+                "kind": "video",
+                "prompt": "海边",
+                "parameters": {"watermark": "", "duration_seconds": "", "seed": None, "resolution": "720p", "audio": False},
+            },
+        )
+    assert seen == {"resolution": "720p", "audio": False}
+
+
 def test_parallel_fanout_and_join() -> None:
     """纯分流并发:start 拉两条控制边到 a/b(都跑),再各拉一条到 join(join 只跑一次、在两者之后)。"""
     client = fresh_client()

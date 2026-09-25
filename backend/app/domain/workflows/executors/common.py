@@ -174,6 +174,18 @@ def run_body(node_type: str, body: dict[str, Any], scope: dict[str, Any], *, wor
     return context
 
 
+def provided(values: dict[str, Any]) -> dict[str, Any]:
+    """只留**填了的**那几项 —— 节点把一份键值交给外面(插件工具的入参、生成供应商的参数)之前走这里。
+
+    空串是编辑器给没填的格子种的值,上游引用落空插值出来也是它。原样交出去会让"没填"和
+    "填了空串"变成同一件事:工具的必填校验失效(它收到一个存在但为空的键),布尔 / 整数参数
+    收到空串报「不是布尔值」「不是整数」,校验不管的就直接发给供应商。`False`、`0` 是填了的值,留着。
+
+    收在这一处:插件节点和生成节点曾经一个过滤一个不过滤。
+    """
+    return {key: value for key, value in values.items() if value is not None and value != ""}
+
+
 def id_list(value: Any) -> list[str]:
     """Accept either a comma-separated string or a real list.
 

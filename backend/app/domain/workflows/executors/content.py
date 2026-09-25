@@ -14,7 +14,7 @@ from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.workflows.executors import register, register_prefix
-from app.domain.workflows.executors.common import id_list
+from app.domain.workflows.executors.common import id_list, provided
 
 
 def _run_plugin_tool(
@@ -27,10 +27,8 @@ def _run_plugin_tool(
     if tool is not None and tool["internal"]:
         # 只给宿主适配层调的工具(见 plugins/manifest.ToolOverride.internal):图里存着也不跑。
         raise WorkflowDomainError("wfErr_pluginToolInternal", params={"tool": tool_name})
-    # 空字符串是编辑器给未填字段的种子值,上游引用落空插值出来也是它。原样发给工具会让"没填"
-    # 和"填了空串"变成同一件事,而工具的必填校验就此失效 —— 它收到的是一个存在但为空的键。
-    # 收在这里而不是各节点里:插件节点和通用插件节点曾经一个过滤一个不过滤。
-    payload = {key: value for key, value in payload.items() if value not in (None, "")}
+    # 收在这里而不是各节点里:插件节点和通用插件节点曾经一个过滤一个不过滤(见 common.provided)。
+    payload = provided(payload)
     try:
         # 带上工作区:插件交出的**文件**产出要收进这个工作区的素材库,输出里换成 asset_id。
         # 不带的话,一个从网盘拉文件的节点在工作流里跑不通 —— 它没地方放拿到的东西。
