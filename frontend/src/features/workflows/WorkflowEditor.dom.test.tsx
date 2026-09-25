@@ -325,3 +325,13 @@ describe("⌘Enter 运行", () => {
     expect(apiMocks.runWorkflow).not.toHaveBeenCalled();
   });
 });
+
+it("钻进一层时,新画布定位好之前是藏着的(不在默认视口上闪一帧)", async () => {
+  await renderEditor(LOOPED);
+  await waitFor(() => nodeEl("loop-1"));
+  await waitFor(() => expect(document.querySelector(".react-flow")!.className).not.toContain("opacity-0"));
+  fireEvent.click(nodeEl("loop-1"));
+  fireEvent.doubleClick(nodeEl("loop-1"));
+  expect(document.querySelector(".react-flow")!.className).toContain("opacity-0");
+  await waitFor(() => expect(document.querySelector(".react-flow")!.className).not.toContain("opacity-0"));
+});

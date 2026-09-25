@@ -978,6 +978,8 @@ function WorkflowEditor({
   const viewport = usePersistentViewport(atRoot ? `workflow:${workflow.id}` : `workflow:${workflow.id}:${scopePath.join(":")}`);
   /** 从别的层点了主流程里的某个节点(就绪清单):回到主流程,等那一层的画布挂好再聚焦它。 */
   const pendingFocusRef = React.useRef<string | null>(null);
+  /** 哪一层的画布已经定位好了。 */
+  const [placedScope, setPlacedScope] = React.useState<string | null>(null);
 
   /** 让画布只选中这一个(null = 全不选)。检查器跟着选中态走,见 selectedNodeId。 */
   const selectInspectorNode = React.useCallback((nodeId: string | null) => {
@@ -2219,7 +2221,8 @@ function WorkflowEditor({
           <ReactFlow
             // 每一层一个 React Flow 实例:换层时重挂,视口按那一层记的位置恢复(见 onInit)。
             key={scopeKey}
-            className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
+            // 定位好之前藏着 —— 按层算:换一层时新挂的画布也有一帧停在默认视口上。
+            className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", (!canvas.ready || placedScope !== scopeKey) && "opacity-0")}
             nodes={displayNodes}
             nodesConnectable={!annotationMode}
             elementsSelectable={!workflowComments.active}
@@ -2247,6 +2250,7 @@ function WorkflowEditor({
                   if (first) flow.setCenter(first.position.x + 450, first.position.y + 140, { zoom: 0.8, duration: 0 });
                 } else fitCanvas(flow, 0);
                 canvas.handlers.onInit();
+                setPlacedScope(scopeKey);
                 const pending = pendingFocusRef.current;
                 pendingFocusRef.current = null;
                 if (pending) focusNode(pending);
