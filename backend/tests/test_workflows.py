@@ -1512,6 +1512,44 @@ def test_延时节点等着的时候_取消立刻生效(monkeypatch) -> None:
     assert cancelled
 
 
+def test_工作流的失败原因不按位置截断_带着文案_key(monkeypatch) -> None:
+    """失败原因此前在引擎这一层被 `str(exc)[:500]` / 通知里 `[:300]` 按位置截断:长一点的
+    原因(条件节点把两边的原值带进去)后半截直接没了,用户看到的是半句话。
+
+    而且节点失败事件只存了那句渲染好的话,没有 key —— 和 job.error(带 error_key,出口按读的人
+    的语言重翻)不是同一个形状。失败现场走同一个 blame。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    left = "开头" + "字" * 600 + "结尾标记"
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "c", "type": "condition", "name": "比大小", "config": {"left": left, "op": "gt", "right": "3"}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "c"}],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "长原因", "graph": graph}).json()
+    job_id = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}}).json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.1)
+    assert job["status"] == "failed", job
+    assert "结尾标记" in job["error"], "任务上的失败原因被截断了"
+
+    events = client.get(f"/api/jobs/{job_id}/events").json()
+    failed = next(e["payload"] for e in events if e["type"] == "workflow.node.failed")
+    assert "结尾标记" in failed["error"], "节点失败事件里的原因被截断了"
+    assert failed["error_key"] == "wfErr_conditionNeedsNumbers", "节点失败事件没带文案 key,出口没法按读的人的语言重翻"
+    assert failed["error_params"]["left"] == left
+
+    items = client.get(f"/api/notifications?workspace_id={ws['id']}").json()["items"]
+    body = next(item["body"] for item in items if item["type"] == "workflow")
+    assert "结尾标记" in body, "失败通知里的原因被截断了"
+
+
 def test_parallel_fanout_and_join() -> None:
     """纯分流并发:start 拉两条控制边到 a/b(都跑),再各拉一条到 join(join 只跑一次、在两者之后)。"""
     client = fresh_client()

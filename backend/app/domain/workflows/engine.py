@@ -130,7 +130,7 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
                 workflow.workspace_id,
                 type="workflow",
                 title=f"工作流失败: {workflow.name}",
-                body=str(exc)[:300],
+                body=str(exc),
                 link="#/workflows",
                 payload={"workflow_id": workflow.id, "job_id": job.id},
             )
@@ -138,8 +138,13 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
 
 
 def _failure_payload(exc: Exception) -> dict[str, Any]:
-    """把异常变成任务总线可持久化的失败现场。"""
-    payload: dict[str, Any] = {"error": str(exc)[:500]}
+    """把异常变成任务总线可持久化的失败现场。
+
+    **和任务上的失败原因同一个形状**(见 jobs.blame):那句话本身、它的文案 key 和参数 ——
+    和节点事件的 `name` / `name_key` 同构,出口可以按读的人的语言重翻。不按位置截:此前
+    `str(exc)[:500]` 把长一点的原因(条件节点带着两边的原值)切成半句话,切掉的恰好是后半截。
+    """
+    payload: dict[str, Any] = {key: value for key, value in blame(exc).items() if value}
     details = getattr(exc, "details", None)
     if isinstance(details, dict) and details:
         payload["details"] = details

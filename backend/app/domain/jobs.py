@@ -172,7 +172,7 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
         try:
             with SessionLocal() as db:
                 job = db.get(Job, job_id)
-                if job is not None and finish_job(db, job, status="failed", error=str(exc)[:500]):
+                if job is not None and finish_job(db, job, status="failed", **blame(exc)):
                     say(job, "jobMsg_genericFailed", what=what)
                     db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
                     db.commit()
@@ -256,13 +256,16 @@ def blame(exc: Exception) -> dict[str, Any]:
     不带 key 的(第三方库、别的领域)只留那句话 —— 那是它自己的文本,我们翻不了。
 
     传给 `finish_job(**blame(exc))` 用,所以返回的是字段名对得上的一份字典。
+
+    **那句话不按位置截**:`error` 是 Text 列,长短是界面排版的事。此前的 `[:500]` 把长一点的
+    原因切成半句话 —— 切掉的恰好是后半截,而原因往往就写在后半截。
     """
     from app.core.i18n import is_message_key
 
     key = str(getattr(exc, "key", "") or "")
     params = getattr(exc, "params", None)
     return {
-        "error": str(exc)[:500],
+        "error": str(exc),
         #: 不截断:截断的 key 就不是 key 了。此前的 `[:80]` 正是一句 403 报错被切成"半截 key"的地方。
         "error_key": key if is_message_key(key) else "",
         "error_params": {k: str(v) for k, v in (params or {}).items()},
