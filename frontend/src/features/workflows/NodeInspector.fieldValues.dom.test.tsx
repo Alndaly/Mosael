@@ -85,7 +85,8 @@ describe("数字字段", () => {
   it("填数字照常存", () => {
     const { field, onChange } = renderInspector({ width: "", fps: "" });
     fireEvent.change(field("width"), { target: { value: "1080" } });
-    expect(onChange).toHaveBeenLastCalledWith({ config: { width: "1080", fps: "" } });
+    // 打字是这个字段的一串(撤销时塌成一条)。
+    expect(onChange).toHaveBeenLastCalledWith({ config: { width: "1080", fps: "" } }, { coalesce: "n1.width" });
   });
 });
 
@@ -103,7 +104,8 @@ describe("带固定选项的字段", () => {
     await user.click(trigger);
     await user.keyboard("{{{{shot.mode}}");
     await user.click(await screen.findByText(/comboboxUseCustomValue/));
-    expect(onChange).toHaveBeenLastCalledWith({ config: { mode: "{{shot.mode}}", kind: "x" } });
+    // 手填完点「使用」是一次提交,离散的一步。
+    expect(onChange).toHaveBeenLastCalledWith({ config: { mode: "{{shot.mode}}", kind: "x" } }, undefined);
   });
 
   it("没声明的仍是纯下拉,显示选项的名字", () => {

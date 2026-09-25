@@ -26,7 +26,7 @@ describe("工作流撤销历史", () => {
     const store = createWorkflowGraphStore(at(0));
     // React Flow 的 select 变更走的也是 setGraph,只是 updater 原样返回 —— 引用不变就该被滤掉。
     store.getState().setGraph((current) => current);
-    store.getState().setGraph((current) => current, { coalesce: true });
+    store.getState().setGraph((current) => current, { coalesce: "drag" });
     expect(store.temporal.getState().pastStates).toHaveLength(0);
   });
 
@@ -35,7 +35,7 @@ describe("工作流撤销历史", () => {
     try {
       const store = createWorkflowGraphStore(at(0));
       for (let x = 1; x <= 12; x += 1) {
-        store.getState().setGraph(at(x), { coalesce: true });
+        store.getState().setGraph(at(x), { coalesce: "drag" });
         vi.advanceTimersByTime(20);
       }
       vi.advanceTimersByTime(COALESCE_MS * 2);
@@ -50,9 +50,9 @@ describe("工作流撤销历史", () => {
     vi.useFakeTimers();
     try {
       const store = createWorkflowGraphStore(at(0));
-      store.getState().setGraph(at(1), { coalesce: true });
+      store.getState().setGraph(at(1), { coalesce: "drag" });
       vi.advanceTimersByTime(COALESCE_MS * 2);
-      store.getState().setGraph(at(2), { coalesce: true });
+      store.getState().setGraph(at(2), { coalesce: "drag" });
       vi.advanceTimersByTime(COALESCE_MS * 2);
       expect(positions(store)).toEqual([0, 1]);
     } finally {
@@ -69,6 +69,38 @@ describe("工作流撤销历史", () => {
       store.getState().setGraph(at(2)); // 紧接着又加一个
       vi.advanceTimersByTime(COALESCE_MS * 2);
       expect(positions(store)).toEqual([0, 1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("不是同一串的连发不合并 —— 刚打完字紧接着改另一个字段,是两步", () => {
+    vi.useFakeTimers();
+    try {
+      const store = createWorkflowGraphStore(at(0));
+      store.getState().setGraph(at(1), { coalesce: "n1.prompt" });
+      vi.advanceTimersByTime(10);
+      store.getState().setGraph(at(2), { coalesce: "n1.prompt" });
+      vi.advanceTimersByTime(10);
+      store.getState().setGraph(at(3), { coalesce: "n2.prompt" }); // 换了一个字段
+      vi.advanceTimersByTime(COALESCE_MS * 2);
+      expect(positions(store)).toEqual([0, 2]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("中间夹着一次离散编辑,这一串就断了", () => {
+    vi.useFakeTimers();
+    try {
+      const store = createWorkflowGraphStore(at(0));
+      store.getState().setGraph(at(1), { coalesce: "n1.prompt" }); // 打字
+      vi.advanceTimersByTime(10);
+      store.getState().setGraph(at(2)); // 换了个下拉
+      vi.advanceTimersByTime(10);
+      store.getState().setGraph(at(3), { coalesce: "n1.prompt" }); // 回去接着打
+      vi.advanceTimersByTime(COALESCE_MS * 2);
+      expect(positions(store)).toEqual([0, 1, 2]);
     } finally {
       vi.useRealTimers();
     }

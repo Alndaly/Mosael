@@ -1057,7 +1057,7 @@ function WorkflowEditor({
   }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
   const applyGraph = React.useCallback(
-    (next: WorkflowGraph, options?: { coalesce?: boolean }) => {
+    (next: WorkflowGraph, options?: SetGraphOptions) => {
       setGraph(next, options);
       rebuildNodes(next);
       setEdges(toWorkflowFlowEdges(next, t, registry));
@@ -1076,7 +1076,10 @@ function WorkflowEditor({
     (next: CanvasMarker) => {
       // 改名是"一串输入",在历史里塌成一条(和节点重命名同一套);换快捷键是离散的一步。
       const typing = markers.find((one) => one.id === next.id)?.name !== next.name;
-      applyGraph({ ...graph, markers: markers.map((one) => (one.id === next.id ? next : one)) }, { coalesce: typing });
+      applyGraph(
+        { ...graph, markers: markers.map((one) => (one.id === next.id ? next : one)) },
+        { coalesce: typing ? `marker:${next.id}.name` : undefined },
+      );
     },
     [graph, markers, applyGraph],
   );
@@ -1256,7 +1259,7 @@ function WorkflowEditor({
         }
         if (next !== current) setDirty(true);
         return next;
-      }, { coalesce: dragging });
+      }, { coalesce: dragging ? "drag" : undefined });
     },
     [],
   );
@@ -2385,19 +2388,16 @@ function WorkflowEditor({
             scopeVariables={scopeVariables}
             workspaceId={workspaceId}
             workflowId={workflow.id}
-            onChange={(patch) => {
-              // **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回
-              // 一个字母 —— 用户以为撤销坏了,其实是它太尽责。用拖拽那同一套合并机制:
-              // 一串输入在历史里塌成一条,存的是这串开始前的图(见 stores/workflowGraphStore)。
-              //
-              // 只有改文字才合并;改开关、换下拉那些仍然一步一条 —— 它们本来就是离散的。
-              const typing = "config" in patch || "name" in patch;
+            onChange={(patch, options) => {
+              // 这一下是打字(一串连发)还是离散的一步,由发出它的控件说(见 NodeInspector 的
+              // typingRun)。此前这里按「patch 里有 config」猜,于是换下拉、拨开关也被当成打字,
+              // 和前后 400ms 里的输入并成一条历史。
               applyGraph(
                 {
                   ...graph,
                   nodes: graph.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)),
                 },
-                { coalesce: typing },
+                options,
               );
             }}
             onApplyGraph={applyGraph}
@@ -2632,7 +2632,8 @@ export function NodeInspector({
   workspaceId: string;
   /** 正在编辑的这张图。可调用工作流的清单要把自己排掉;新建、未保存时为空。 */
   workflowId?: string;
-  onChange: (patch: Partial<WorkflowGraph["nodes"][number]>) => void;
+  /** `options.coalesce`:这一下属于哪一串打字(见 typingRun);离散的一步不给。 */
+  onChange: (patch: Partial<WorkflowGraph["nodes"][number]>, options?: SetGraphOptions) => void;
   onApplyGraph: (next: WorkflowGraph) => void;
   onDelete?: () => void;
   /** 只有子图 / 循环节点给 —— 双击进子画布的那件事,在悬浮键上也给一个入口。 */
@@ -2787,11 +2788,19 @@ export function NodeInspector({
   }, [onClose]);
 
   // 换了父字段就清掉依赖它的子字段 —— 规则抽在 dependents.ts(有测试),这里只负责接线。
-  const setConfig = (key: string, value: unknown) => {
-    onChange({ config: withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>) });
+  const setConfig = (key: string, value: unknown, options?: SetGraphOptions) => {
+    onChange({ config: withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>) }, options);
   };
+  /**
+   * **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回一个字母。
+   * 所以文字输入类控件把改动标成「这个节点这个字段的一串」,在历史里塌成一条(存的是这串开始前
+   * 的图,见 stores/workflowGraphStore);换下拉、拨开关不标,一步一条 —— 它们本来就是离散的。
+   * 串按字段分:在 A 里打完字紧接着改 B,是两步。
+   */
+  const typingRun = (field: string): SetGraphOptions => ({ coalesce: `${node.id}.${field}` });
+  const typeConfig = (key: string) => (value: unknown) => setConfig(key, value, typingRun(key));
   const responseFormat = String(config.response_format || "text");
-  const setTextConfig = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => setConfig(key, event.target.value);
+  const setTextConfig = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => typeConfig(key)(event.target.value);
 
   // 重新指向:把某字段里的失效引用整体替换为新引用(空串=移除该引用)。
   const repoint = (key: string, oldRef: string, newRef: string) => {
@@ -2873,7 +2882,7 @@ export function NodeInspector({
         ) ?? null
       : null;
   const genParams = (config.parameters ?? {}) as Record<string, unknown>;
-  const setGenParam = (key: string, value: string) => {
+  const setGenParam = (key: string, value: string, options?: SetGraphOptions) => {
     const next = { ...genParams };
     // 空值就删掉这一项,而不是塞空串:后端会把空串当"显式指定了空"传给供应商。
     if (value === "") delete next[key];
@@ -2884,7 +2893,7 @@ export function NodeInspector({
         next.duration_seconds = durations[0];
       }
     }
-    setConfig("parameters", next);
+    setConfig("parameters", next, options);
   };
   /**
    * 该模型声明支持的参数。两种形状:
@@ -3111,18 +3120,18 @@ export function NodeInspector({
                   <MapField
                     value={value}
                     variables={variables}
-                    onChange={(next) => setConfig(key, next)}
+                    onChange={typeConfig(key)}
                   />
                 )
               ) : spec?.type === "code" ? (
-                <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} />
+                <CodeField value={String(value ?? "")} onChange={typeConfig(key)} />
               ) : spec?.type === "template" ? (
                 // 模板字段:多行,而且里面的 `{{上游.输出}}` 显示成**可整体删除的标签** ——
                 // 纯文本时退格会把它咬成 `{{llm-1.tex`,而半截引用在运行前看不出错。
                 <RefEditor
                   rows={2}
                   value={String(value ?? "")}
-                  onChange={(next) => setConfig(key, next)}
+                  onChange={typeConfig(key)}
                   variables={variables}
                   placeholder={spec?.description ? undefined : t("wfRefEditorHint")}
                 />
@@ -3141,7 +3150,7 @@ export function NodeInspector({
                   inputMode={spec?.type === "number" ? "decimal" : undefined}
                   value={String(value ?? "")}
                   placeholder={spec?.default ? String(spec.default) : ""}
-                  onChange={(event) => setConfig(key, event.target.value)}
+                  onChange={(event) => typeConfig(key)(event.target.value)}
                 />
               )}
               {spec?.description && <small>{spec.description}</small>}
@@ -3267,7 +3276,7 @@ export function NodeInspector({
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}
             aria-label={t("wfNodeName")}
-            onChange={(event) => onChange({ name: event.target.value })}
+            onChange={(event) => onChange({ name: event.target.value }, typingRun("name"))}
           />
         </div>
         {/* 删除在上方悬浮键的操作组里 —— 一个动作只该有一个入口。 */}
@@ -3381,14 +3390,14 @@ export function NodeInspector({
                   <Input
                     value={String(config.provider ?? "")}
                     placeholder="openai-compatible"
-                    onChange={(event) => setConfig("provider", event.target.value)}
+                    onChange={setTextConfig("provider")}
                   />
                 </div>
                 <div className={FIELD_BOX}>
                   <span>{t("wffModel")}</span>
                   <Input
                     value={String(config.model ?? "")}
-                    onChange={(event) => setConfig("model", event.target.value)}
+                    onChange={setTextConfig("model")}
                   />
                 </div>
                 <div className={FIELD_BOX}>
@@ -3434,7 +3443,7 @@ export function NodeInspector({
                         max={range.max}
                         value={String(genParams[key] ?? "")}
                         placeholder={`${range.min}–${range.max}`}
-                        onChange={(event) => setGenParam(key, event.target.value)}
+                        onChange={(event) => setGenParam(key, event.target.value, typingRun(`parameters.${key}`))}
                       />
                     ) : (
                       <OptionPicker
@@ -3456,7 +3465,7 @@ export function NodeInspector({
                       type="number"
                       value={String(genParams.seed ?? "")}
                       placeholder={t("wfGenSeedHint")}
-                      onChange={(event) => setGenParam("seed", event.target.value)}
+                      onChange={(event) => setGenParam("seed", event.target.value, typingRun("parameters.seed"))}
                     />
                   </div>
                 )}
@@ -3503,8 +3512,7 @@ export function NodeInspector({
                   value={sourceAssetText(genExtraSourceLines)}
                   variables={variables}
                   onChange={(next: string) =>
-                    setConfig(
-                      "source_assets",
+                    typeConfig("source_assets")(
                       writeSourceAssets([
                         ...genSourceLines.filter(
                           (line) => line.role && (genSourceRoles as readonly string[]).includes(line.role),
@@ -3643,7 +3651,7 @@ export function NodeInspector({
               <RefEditor
                 rows={2}
                 value={String(config.stop ?? "")}
-                onChange={(next) => setConfig("stop", next)}
+                onChange={typeConfig("stop")}
                 variables={variables}
               />
               <small>{t("wfLlmStopHint")}</small>

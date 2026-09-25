@@ -27,7 +27,7 @@ describe("打字合并成一条历史", () => {
   it("连打五个字符,撤销一次回到打字之前", () => {
     const store = createWorkflowGraphStore(graphWith(""));
     for (const text of ["你", "你好", "你好世", "你好世界", "你好世界!"]) {
-      store.getState().setGraph(graphWith(text), { coalesce: true });
+      store.getState().setGraph(graphWith(text), { coalesce: "n1.prompt" });
     }
     expect(prompt(store.getState().graph)).toBe("你好世界!");
 
@@ -39,10 +39,10 @@ describe("打字合并成一条历史", () => {
     vi.useFakeTimers();
     try {
       const store = createWorkflowGraphStore(graphWith(""));
-      store.getState().setGraph(graphWith("第一段"), { coalesce: true });
+      store.getState().setGraph(graphWith("第一段"), { coalesce: "n1.prompt" });
       // 手停够久,这一串就算结束了
       vi.advanceTimersByTime(COALESCE_MS + 50);
-      store.getState().setGraph(graphWith("第一段第二段"), { coalesce: true });
+      store.getState().setGraph(graphWith("第一段第二段"), { coalesce: "n1.prompt" });
 
       store.temporal.getState().undo();
       expect(prompt(store.getState().graph)).toBe("第一段");

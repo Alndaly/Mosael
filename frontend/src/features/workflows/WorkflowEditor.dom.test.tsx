@@ -293,6 +293,28 @@ it("在检查器里展开的下拉上按 Esc 只收起下拉,检查器还开着"
   await waitFor(() => expect(screen.queryByLabelText("wfNodeName")).toBeNull());
 });
 
+it("刚改完名字就换了下拉:是两步,撤一次只退回下拉", async () => {
+  //: 打字才合并成一条历史;换下拉是离散的一步。此前检查器把**所有**配置改动都当成打字,
+  //: 400ms 内的这两下被并成一条,撤一次名字和下拉一起退回去。
+  Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {}, scrollIntoView: () => {} });
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("llm-1"));
+  fireEvent.click(nodeEl("llm-1"));
+  const panel = await screen.findByRole("complementary", { name: "llm" });
+  fireEvent.change(within(panel).getByLabelText("wfNodeName"), { target: { value: "改过的名字" } });
+  const trigger = within(panel).getAllByRole("combobox")[0];
+  fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: /wfPresetPrecise/ }));
+  await waitFor(() => expect(nodeEl("llm-1").textContent).toContain("改过的名字"));
+  fireEvent.click(screen.getAllByRole("button", { name: "undo" }).at(-1)!);
+  await waitFor(async () => {
+    const graph = await savedGraph();
+    expect(graph.nodes[1].config?.preset).toBeUndefined();
+    expect(graph.nodes[1].name).toBe("改过的名字");
+  }, { timeout: 3000 });
+});
+
 describe("⌘Enter 运行", () => {
   //: 运行跑的是**服务端存着的那一版**。工具栏的运行键在「还没存完」和「有阻断问题」时是灰的,
   //: 快捷键此前绕过了这两条:改完立刻按 ⌘Enter,跑的是改之前的图。

@@ -125,7 +125,8 @@ describe("声明了选项来源的字段", () => {
     const engineField = document.querySelector<HTMLElement>('[data-field-key="engine"]')!;
     await user.click(within(engineField).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "Edge" }));
-    expect(onChange).toHaveBeenCalledWith({ config: { text: "你好", engine: "edge", voice: "" } });
+    // 换下拉是离散的一步,不并进任何一串打字。
+    expect(onChange).toHaveBeenCalledWith({ config: { text: "你好", engine: "edge", voice: "" } }, undefined);
   });
 
   it("只渲染当前配置下启用的字段", async () => {
