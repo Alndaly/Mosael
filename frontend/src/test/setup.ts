@@ -36,6 +36,13 @@ if (typeof document !== "undefined") {
   }
   Element.prototype.scrollIntoView ??= () => {};
 
+  // jsdom 没有 Range 的版面接口。TipTap 的 focus() 会在下一帧把选区滚进视野(scrollIntoView →
+  // ProseMirror coordsAtPos → range.getClientRects),那一帧落在用例结束之后时,报成一条
+  // 「unhandled error」让整轮测试失败 —— 本机和 CI 的帧时机不同,于是 CI 上时红时绿。
+  // 给空矩形即可:没有版面,滚不滚都一样。
+  Range.prototype.getClientRects ??= () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect ??= () => new DOMRect(0, 0, 0, 0);
+
   // jsdom 30.1 的焦点回归:获得焦点的元素被移出 DOM 后,它把「上一个焦点」记成 document;
   // 下一次 focus() 时就对 document 派发 blur,并按规则转发到 window。浏览器不会这样 —— 焦点
   // 在同一个文档里移动时,文档同时在新旧两条焦点链上,规范里它不失焦。
