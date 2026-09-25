@@ -7,6 +7,7 @@ import {
   Check,
   Cpu,
   Images,
+  Music,
   Ratio,
   SlidersHorizontal,
   CircleAlert,
@@ -65,6 +66,8 @@ import {
   declaredParameters,
   declaredParameterValue,
   defaultDuration,
+  durationOptions,
+  durationRange,
   durationChoices,
   sizeOptions,
   maxImages,
@@ -76,6 +79,14 @@ import {
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
+import {
+  AUDIO_SOURCE_HINTS,
+  GeneratedAudioList,
+  LyricsField,
+  audioSourceRoles,
+  hasEnoughText,
+  lyricsLimit,
+} from "@/features/ai-studio/audioGeneration";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { GenerationModelGate } from "@/features/ai-studio/GenerationModelGate";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
@@ -117,7 +128,13 @@ type GenerationConfig = {
   usePreviousImage: boolean;
   /** 模型自己声明的参数(`parameter_schema`)里**用户动过的**那些,存控件里的原文。没动过的不发。 */
   declared: Record<string, string>;
+  /** 音频:歌词(和提示词分开的一段长文字)与纯音乐开关。见 audioGeneration.tsx。 */
+  lyrics: string;
+  instrumental: boolean;
 };
+
+/** 有专属控件的布尔参数 —— 不再进「调参」那一串通用开关里,免得同一个开关出现两次。 */
+const DEDICATED_BOOLEANS = new Set(["generate_audio", "instrumental"]);
 
 /** 三种「拿现成的东西当输入」各自说清自己是干什么的 —— 光看名字分不出编辑和续写的区别。 */
 const VIDEO_INPUT_HINTS = {
@@ -136,16 +153,23 @@ function defaultGenerationConfig(model: GenerationOption | null): GenerationConf
   const sizes = sizeOptions(model);
   const resolutions = videoResolutionOptions(model);
   const ratios = aspectRatioOptions(model);
+  // 音频的时长**可以不给**(多数音乐模型按歌词长短自己定曲长):只认模型**声明了**的默认值,
+  // 没声明就空着、空着就不发 —— 不能像视频那样取区间的第一档(Suno 会被悄悄定成 10 秒)。
+  const declaredDuration = model?.capabilities?.default_duration_seconds;
+  const duration =
+    model?.kind === "audio"
+      ? typeof declaredDuration === "number" ? String(declaredDuration) : ""
+      : String(defaultDuration(model));
   return {
     size: capabilityString(model, "default_size", sizes[0] ?? ""),
     numImages: "1",
     seed: "",
     negativePrompt: "",
-    durationSeconds: String(defaultDuration(model)),
+    durationSeconds: duration,
     generateAudio: capabilityBoolean(model, "default_generate_audio"),
     booleanParameters: Object.fromEntries(
       booleanParameterKeys(model)
-        .filter((key) => key !== "generate_audio")
+        .filter((key) => !DEDICATED_BOOLEANS.has(key))
         .map((key) => [key, capabilityBoolean(model, `default_${key}`)]),
     ),
     enumParameters: Object.fromEntries(
@@ -162,6 +186,8 @@ function defaultGenerationConfig(model: GenerationOption | null): GenerationConf
     // 想接着上一张改的时候,右栏有「用上一张结果」一键设上。
     usePreviousImage: false,
     declared: {},
+    lyrics: "",
+    instrumental: capabilityBoolean(model, "default_instrumental"),
   };
 }
 
@@ -172,7 +198,7 @@ function generationParameters(model: GenerationOption, config: GenerationConfig)
   const shared: Record<string, string | number | boolean> = {};
   if (supportsParameter(model, "seed") && config.seed.trim()) shared.seed = Number(config.seed);
   for (const key of booleanParameterKeys(model)) {
-    if (key !== "generate_audio") shared[key] = config.booleanParameters[key] ?? capabilityBoolean(model, `default_${key}`);
+    if (!DEDICATED_BOOLEANS.has(key)) shared[key] = config.booleanParameters[key] ?? capabilityBoolean(model, `default_${key}`);
   }
   for (const [key, choices] of parameterChoiceEntries(model)) {
     const value = config.enumParameters[key] ?? capabilityString(model, `default_${key}`, choices[0] ?? "");
@@ -189,6 +215,18 @@ function generationParameters(model: GenerationOption, config: GenerationConfig)
     const params: Record<string, string | number | boolean> = { ...shared };
     if (supportsParameter(model, "size") && config.size) params.size = config.size;
     if (supportsParameter(model, "num_images")) params.num_images = Math.max(1, Math.min(maxImages(model), Number(config.numImages) || 1));
+    return params;
+  }
+  if (model.kind === "audio") {
+    const params: Record<string, string | number | boolean | string[]> = { ...shared };
+    // 时长空着 = 让模型自己定;填了才发。
+    if (supportsParameter(model, "duration_seconds") && config.durationSeconds.trim() !== "") {
+      params.duration_seconds = Number(config.durationSeconds);
+    }
+    if (supportsParameter(model, "instrumental")) params.instrumental = config.instrumental;
+    // 纯音乐不带歌词 —— 两个都发,后端会拦下(各家要么报错、要么悄悄丢掉歌词)。
+    if (supportsParameter(model, "lyrics") && !config.instrumental && config.lyrics.trim()) params.lyrics = config.lyrics;
+    Object.assign(params, frameUrlParameters(config.frames, (role) => supportsParameter(model, role)));
     return params;
   }
   const params: Record<string, string | number | boolean> = { ...shared };
@@ -222,7 +260,7 @@ function findGenerationOption(
   return options.find((option) => option.value === generationOptionValue(providerProfileId, kind, model)) ?? null;
 }
 
-function defaultGenerationOption(options: GenerationEngineOption[], defaults: ProviderDefault[], kind: "image" | "video") {
+function defaultGenerationOption(options: GenerationEngineOption[], defaults: ProviderDefault[], kind: "image" | "video" | "audio") {
   const row = defaults.find((item) => item.capability === kind);
   if (!row?.provider_profile_id || !row.model) return null;
   return findGenerationOption(options, row.provider_profile_id, kind, row.model);
@@ -311,6 +349,11 @@ function GenerateWorkspace({
     queryKey: ["generation-options", "video"],
     queryFn: () => api<GenerationOption[]>("/api/generation/options?kind=video"),
   });
+  //: 音频(音乐、BGM、音效、给视频配声)和图像、视频是同一条生成管线、同一个选择器(ADR 0022)。
+  const audioOptions = useQuery({
+    queryKey: ["generation-options", "audio"],
+    queryFn: () => api<GenerationOption[]>("/api/generation/options?kind=audio"),
+  });
   const providers = useQuery({
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
@@ -350,11 +393,11 @@ function GenerateWorkspace({
   );
   const modelOptions = React.useMemo<GenerationEngineOption[]>(
     () =>
-      [...(imageOptions.data ?? []), ...(videoOptions.data ?? [])].map((option) => ({
+      [...(imageOptions.data ?? []), ...(videoOptions.data ?? []), ...(audioOptions.data ?? [])].map((option) => ({
         ...option,
         value: generationOptionValue(option.provider_profile_id, option.kind, option.model),
       })),
-    [imageOptions.data, videoOptions.data],
+    [imageOptions.data, videoOptions.data, audioOptions.data],
   );
   const optionByValue = React.useMemo(
     () => new Map(modelOptions.map((option) => [option.value, option])),
@@ -366,20 +409,30 @@ function GenerateWorkspace({
       : null;
   const defaultImageOption = defaultGenerationOption(modelOptions, defaults.data ?? [], "image");
   const selectedModel = (modelId ? optionByValue.get(modelId) : null) ?? sessionOption ?? defaultImageOption ?? modelOptions[0] ?? null;
-  const generationModelsLoading = imageOptions.isPending || videoOptions.isPending;
+  const generationModelsLoading = imageOptions.isPending || videoOptions.isPending || audioOptions.isPending;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
   const selectedSizes = sizeOptions(selectedModel);
   const selectedDurations = durationChoices(selectedModel, generationConfig.resolution);
   const selectedResolutions = videoResolutionOptions(selectedModel);
   const selectedAspectRatios = aspectRatioOptions(selectedModel);
+  // 音频的时长是**可选的数字输入**,不是下拉:Suno 收 10–360 秒,摊成下拉就是三百多项;而且空着
+  // 是合法的(让模型按歌词定),不能被下面那条「不在档位里就改成第一档」悄悄填上。
+  const audioDurationRange = selectedModel?.kind === "audio" ? durationRange(selectedModel) : null;
+  const durationIsFreeInput = selectedModel?.kind === "audio" && durationOptions(selectedModel).length === 0;
   React.useEffect(() => {
+    if (durationIsFreeInput) return;
     const current = Number(generationConfig.durationSeconds);
     if (selectedDurations.length > 0 && !selectedDurations.includes(current)) {
       setGenerationConfig((config) => ({ ...config, durationSeconds: String(selectedDurations[0]) }));
     }
-  }, [generationConfig.durationSeconds, selectedDurations]);
+  }, [generationConfig.durationSeconds, selectedDurations, durationIsFreeInput]);
   // 图像和视频分走两套栏目(张数 vs 时长/分辨率/画幅),这个判断在下面出现十来次。
   const isImageModel = selectedModel?.kind === "image";
+  // 音频多两样:歌词和纯音乐开关;结果是一段声音(见 audioGeneration.tsx)。
+  const isAudioModel = selectedModel?.kind === "audio";
+  const supportsLyrics = isAudioModel && supportsParameter(selectedModel, "lyrics");
+  const supportsInstrumental = isAudioModel && supportsParameter(selectedModel, "instrumental");
+  const selectedAudioRoles = audioSourceRoles(selectedModel);
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
   const supportsReferenceImage = supportsParameter(selectedModel, "reference_image");
   const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
@@ -421,11 +474,14 @@ function GenerateWorkspace({
     for (const model of modelOptions) {
       grouped.set(model.kind, [...(grouped.get(model.kind) ?? []), model]);
     }
-    return ["image", "video", ...[...grouped.keys()].filter((kind) => kind !== "image" && kind !== "video")]
+    const known = ["image", "video", "audio"];
+    return [...known, ...[...grouped.keys()].filter((kind) => !known.includes(kind))]
       .filter((kind) => (grouped.get(kind) ?? []).length > 0)
       .map((kind) => ({ kind, models: grouped.get(kind) ?? [] }));
   }, [modelOptions]);
-  const capabilityLabel = (kind: string) => (kind === "image" ? t("capImage") : kind === "video" ? t("capVideo") : kind);
+  const capabilityLabel = (kind: string) =>
+    kind === "image" ? t("capImage") : kind === "video" ? t("capVideo") : kind === "audio" ? t("capAudio") : kind;
+  const canSubmitText = hasEnoughText(selectedModel, prompt, generationConfig.lyrics, generationConfig.instrumental);
   const selectedCapabilityMissing = selectedModel ? !providerById.has(selectedModel.provider_profile_id) : false;
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
@@ -506,7 +562,11 @@ function GenerateWorkspace({
       if (!targetSessionId) {
         const payload: Record<string, string> = {
           workspace_id: workspace.id,
-          title: prompt.trim().slice(0, 40) || t("generationNewSession"),
+          // 音频可以只给歌词:那就拿歌词的第一行当会话名。
+          title:
+            prompt.trim().slice(0, 40) ||
+            generationConfig.lyrics.trim().split("\n")[0]?.slice(0, 40) ||
+            t("generationNewSession"),
         };
         if (modelId && selectedModel) {
           payload.provider_profile_id = selectedModel.provider_profile_id;
@@ -615,7 +675,7 @@ function GenerateWorkspace({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!prompt.trim() || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
+    if (!canSubmitText || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
     stick.scrollToBottom(); // 自己发的消息一定要看得见
     createGeneration.mutate();
   };
@@ -713,7 +773,8 @@ function GenerateWorkspace({
             rows={3}
             className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-ui-md leading-[1.55] shadow-none outline-none focus-visible:ring-0"
             value={prompt}
-            placeholder={t("promptPlaceholder")}
+            aria-label={t("genPromptLabel")}
+            placeholder={t(isAudioModel ? "audioPromptPlaceholder" : "promptPlaceholder")}
             onChange={(event) => {
               setPrompt(event.target.value);
               event.target.style.height = "auto";
@@ -756,7 +817,7 @@ function GenerateWorkspace({
               size="icon"
               className="shrink-0 rounded-full"
               aria-label={t("generate")}
-              disabled={!prompt.trim() || !selectedModel || !selectedAdapterAvailable} loading={createGeneration.isPending}
+              disabled={!canSubmitText || !selectedModel || !selectedAdapterAvailable} loading={createGeneration.isPending}
             >
               <Send size={15} />
             </Button>
@@ -913,8 +974,11 @@ function GenerateWorkspace({
                   </ParameterField>
                 )}
                 {!isImageModel && supportsParameter(selectedModel, "duration_seconds") && (
-                  <ParameterField label={t("genDuration")}>
-                    {selectedDurations.length > 0 ? (
+                  <ParameterField
+                    label={t("genDuration")}
+                    hint={audioDurationRange ? `${audioDurationRange.min}–${audioDurationRange.max}s` : undefined}
+                  >
+                    {selectedDurations.length > 0 && !durationIsFreeInput ? (
                       <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
                         <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
                           <SelectValue />
@@ -931,10 +995,33 @@ function GenerateWorkspace({
                       <Input
                         className={PARAMETER_CONTROL_CLASS}
                         type="number"
+                        aria-label={t("genDuration")}
+                        min={audioDurationRange?.min}
+                        max={audioDurationRange?.max}
+                        // 音频的时长空着 = 让模型按歌词长短自己定。
+                        placeholder={isAudioModel ? t("genDurationAuto") : undefined}
                         value={generationConfig.durationSeconds}
                         onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
                       />
                     )}
+                  </ParameterField>
+                )}
+                {supportsInstrumental && (
+                  <ParameterField label={t("genInstrumental")}>
+                    <Select
+                      value={generationConfig.instrumental ? "true" : "false"}
+                      onValueChange={(value) =>
+                        setGenerationConfig((current) => ({ ...current, instrumental: value === "true" }))
+                      }
+                    >
+                      <SelectTrigger className={PARAMETER_CONTROL_CLASS} aria-label={t("genInstrumental")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="false">{t("genWithVocals")}</SelectItem>
+                        <SelectItem value="true">{t("genInstrumentalOnly")}</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </ParameterField>
                 )}
                 {!isImageModel && supportsParameter(selectedModel, "generate_audio") && (
@@ -954,6 +1041,18 @@ function GenerateWorkspace({
                       </SelectContent>
                     </Select>
                   </ParameterField>
+                )}
+              </ParameterSection>
+
+              {/* 歌词:要唱的字,和提示词(怎么唱)分开。选了纯音乐就灰掉 —— 纯音乐没有歌词。 */}
+              <ParameterSection icon={Music} title={t("genLyrics")}>
+                {supportsLyrics && (
+                  <LyricsField
+                    value={generationConfig.lyrics}
+                    onChange={(value) => setGenerationConfig((current) => ({ ...current, lyrics: value }))}
+                    limit={lyricsLimit(selectedModel)}
+                    disabled={supportsInstrumental && generationConfig.instrumental}
+                  />
                 )}
               </ParameterSection>
 
@@ -1039,12 +1138,27 @@ function GenerateWorkspace({
                     disabledReason={t("genSourceGroupsExclusive")}
                   />
                 ))}
+                {/* 音频模型的输入:要配声的视频、参考 / 被翻唱的音频、图生音乐的图。同一个控件,
+                    提示语换成音频上的意思。 */}
+                {selectedAudioRoles.map((role) => (
+                  <FrameSlotField
+                    key={role}
+                    role={role}
+                    slots={generationConfig.frames[role]}
+                    limit={sourceLimit(selectedModel, role)}
+                    onChange={(slots) => setFrames(role, slots)}
+                    workspaceId={workspace.id}
+                    hint={t(AUDIO_SOURCE_HINTS[role])}
+                  />
+                ))}
               </ParameterSection>
 
               {/* 调参:seed、反向提示词,以及各家自己加的开关和枚举。它们决定"怎么出",
                   多数时候不用动 —— 所以排在最后,而不是和尺寸、张数混在一起。 */}
               <ParameterSection icon={SlidersHorizontal} title={t("genSectionAdvanced")}>
-                {isImageModel && supportsParameter(selectedModel, "seed") && (
+                {/* 种子与反向提示词**不分种类**:描述符声明了就给控件(generationParameters 的 shared
+                    那一段本来就不分种类地发它们)。 */}
+                {supportsParameter(selectedModel, "seed") && (
                   <ParameterField label={t("genSeed")}>
                     <Input
                       className={PARAMETER_CONTROL_CLASS}
@@ -1055,7 +1169,7 @@ function GenerateWorkspace({
                     />
                   </ParameterField>
                 )}
-                {isImageModel && supportsNegativePrompt && (
+                {supportsNegativePrompt && (
                   <ParameterField label={t("genNegativePrompt")}>
                     <Input
                       className={PARAMETER_CONTROL_CLASS}
@@ -1064,7 +1178,7 @@ function GenerateWorkspace({
                     />
                   </ParameterField>
                 )}
-                {booleanParameterKeys(selectedModel).filter((key) => key !== "generate_audio").map((key) => {
+                {booleanParameterKeys(selectedModel).filter((key) => !DEDICATED_BOOLEANS.has(key)).map((key) => {
                   const labelKey = GENERATION_BOOLEAN_LABELS[key];
                   return (
                     <ParameterField key={key} label={labelKey ? t(labelKey) : key}>
@@ -1087,7 +1201,12 @@ function GenerateWorkspace({
                   );
                 })}
                 {declaredParameters(selectedModel).map((parameter) => (
-                  <ParameterField key={parameter.key} label={parameter.label} title={toPlainText(parameter.description) || undefined}>
+                  <ParameterField
+                    key={parameter.key}
+                    // 宿主认得的参数名(人声、曲名……)按界面语言说;插件自己的参数用插件给的名字。
+                    label={GENERATION_PARAMETER_LABELS[parameter.key] ? t(GENERATION_PARAMETER_LABELS[parameter.key]) : parameter.label}
+                    title={toPlainText(parameter.description) || undefined}
+                  >
                     <DeclaredParameterControl
                       parameter={parameter}
                       value={generationConfig.declared[parameter.key] ?? ""}
@@ -1158,7 +1277,12 @@ function GenerationTurn({
   // 节拍时钟:运行中每秒刷计时;空闲 30s 一拍让「x 分钟前」不冻住。
   // (轮询回包无变化时 react-query 不触发重渲,光靠轮询计时会停走。)
   const now = useNow(isRunning ? 1000 : 30_000);
-  const prompt = String(generation.request.prompt ?? "");
+  //: 音频可以只给歌词(或者给视频配声什么字都不给):气泡里就显示歌词,都没有时说「按素材生成」。
+  const requestParameters = (generation.request.parameters ?? {}) as Record<string, unknown>;
+  const prompt =
+    String(generation.request.prompt ?? "").trim() ||
+    String(requestParameters.lyrics ?? "").trim() ||
+    (generation.kind === "audio" ? t("genAudioFromSources") : "");
   const durationSeconds = isRunning
     ? elapsedSecondsBetween(timestamp, now)
     : isFinished
@@ -1192,7 +1316,10 @@ function GenerationTurn({
         </MessageFooter>
       </div>
       <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
-        {generation.result_asset_id && generation.kind === "video" ? (
+        {outputs.length > 0 && generation.kind === "audio" ? (
+          //: 一次可能交回几首(Suno 一次两首):每一首一个播放器,而不是只放封面那一首。
+          <GeneratedAudioList assetIds={outputs} title={prompt.split("\n")[0]?.slice(0, 60) || generation.model} />
+        ) : generation.result_asset_id && generation.kind === "video" ? (
           <video
             className="block max-h-[420px] w-full max-w-[min(560px,100%)] rounded-lg border border-border bg-[#05070a]"
             src={assetFileUrl(generation.result_asset_id)}
@@ -1270,7 +1397,11 @@ function GeneratingTile({ kind, progress }: { kind: string; progress?: number })
       aria-busy="true"
       className={cn(
         "relative w-full overflow-hidden rounded-lg",
-        kind === "video" ? "aspect-video max-w-[min(560px,100%)]" : "aspect-square max-w-[320px]",
+        kind === "video"
+          ? "aspect-video max-w-[min(560px,100%)]"
+          : kind === "audio"
+            ? "h-16 max-w-[min(560px,100%)]"
+            : "aspect-square max-w-[320px]",
       )}
     >
       <Skeleton className="absolute inset-0 rounded-lg" />

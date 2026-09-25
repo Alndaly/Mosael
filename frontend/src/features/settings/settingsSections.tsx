@@ -142,13 +142,20 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "providerAudioTitle",
         icon: <AudioLines size={14} />,
         capabilities: ["tts", "podcast", "audio"],
-        render: ({ t }) => (
+        render: ({ t, focusCapability }) => (
           <>
             <ProviderProfilesSection capability="tts" title={t("providerTtsTitle")} description={t("providerTtsDesc")} />
             <ProviderProfilesSection
               capability="podcast"
               title={t("providerPodcastTitle")}
               description={t("providerPodcastDesc")}
+            />
+            {/* 音乐与音效是**生成**(和图像、视频同一条管线,ADR 0022),所以它有自己的默认模型。 */}
+            <ProviderDefaultsSection capabilities={["audio"]} focusCapability={focusCapability} />
+            <ProviderProfilesSection
+              capability="audio"
+              title={t("providerMusicTitle")}
+              description={t("providerMusicDesc")}
             />
           </>
         ),

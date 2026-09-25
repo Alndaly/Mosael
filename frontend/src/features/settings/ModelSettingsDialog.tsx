@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
+import { GENERATION_KINDS, type GenerationKind } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
 import { CapabilityProfileForm, ProfileField } from "./GenerationProfileForm";
@@ -131,7 +132,7 @@ function CapabilityRefField({
   onDescribe,
 }: {
   profileId: string;
-  kind: "image" | "video";
+  kind: GenerationKind;
   /** 双能力模型两个字段同组,kind 缀在字段名后面区分;单 kind 时缀它是噪音。 */
   showKind?: boolean;
   value: string | null;
@@ -246,7 +247,7 @@ export function ModelSettingsDialog({
   const qc = useQueryClient();
   /* **就地换体,不叠弹窗。** 写一份参数组曾经是"链接 → 库弹窗 → 编辑器弹窗",三层叠着,
      而且建完还得回到选择器再选一次。现在它换掉这个对话框的主体,保存后回来、且已选中。 */
-  const [describing, setDescribing] = React.useState<{ kind: "image" | "video"; rowId: string | null } | null>(null);
+  const [describing, setDescribing] = React.useState<{ kind: GenerationKind; rowId: string | null } | null>(null);
   const [draft, setDraft] = React.useState<ModelSettingsDraft | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const capabilityOptions = useCapabilityOptions(vendor);
@@ -307,7 +308,7 @@ export function ModelSettingsDialog({
   const effective = own.length > 0 ? own : (current?.effective_capability_ids ?? []);
   const isChat = effective.includes("chat");
   //: 生成模型才谈得上"生成参数按什么来"。图片和视频各有一套描述符,所以要分别问。
-  const generationKinds = (["image", "video"] as const).filter((kind) => effective.includes(kind));
+  const generationKinds = GENERATION_KINDS.filter((kind) => effective.includes(kind));
 
   return (
     describing ? (
@@ -629,7 +630,7 @@ function ProfileBody({
   onSaved,
 }: {
   profileId: string;
-  kind: "image" | "video";
+  kind: GenerationKind;
   /** null = 新建。 */
   rowId: string | null;
   open: boolean;

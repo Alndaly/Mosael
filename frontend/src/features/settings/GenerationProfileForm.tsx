@@ -21,13 +21,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
+import type { GenerationKind } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
 type Schema = components["schemas"]["CapabilityProfileSchemaOut"];
 type Descriptor = Record<string, unknown>;
 
-function useSchema(kind: "image" | "video") {
+function useSchema(kind: GenerationKind) {
   return useQuery({
     queryKey: ["capability-profile-schema", kind],
     queryFn: () => api<Schema>(`/api/generation/capability-profile-schema?kind=${kind}`),
@@ -261,7 +262,7 @@ export function CapabilityProfileForm({
   value,
   onChange,
 }: {
-  kind: "image" | "video";
+  kind: GenerationKind;
   value: Descriptor;
   onChange: (next: Descriptor) => void;
 }) {

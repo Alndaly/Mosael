@@ -11,6 +11,14 @@
 import type { GenerationOption } from "@/api/client";
 
 /**
+ * 生成的种类:图像、视频、音频(音乐 / BGM / 音效 / 给视频配声,见 ADR 0022)。和后端
+ * domain/generation/catalog.GENERATION_KINDS 同一份;设置页、工作流节点按它逐种列出,不再各写一份
+ * `["image", "video"]` —— 那样加一种介质时,漏改的那一处只会让它在某个入口上悄悄不见。
+ */
+export const GENERATION_KINDS = ["image", "video", "audio"] as const;
+export type GenerationKind = (typeof GENERATION_KINDS)[number];
+
+/**
  * **目录没声明可选值时,这里不再替它编一个。**
  *
  * 这三个常量原本是"给一个能跑的常见值,而不是空"。代价是:一个参数键只要出现、而清单缺席,

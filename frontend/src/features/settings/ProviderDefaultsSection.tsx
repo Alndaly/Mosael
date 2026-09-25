@@ -140,6 +140,7 @@ export function ProviderDefaultsSection({
     { capability: "chat", label: t("capChat")},
     { capability: "image", label: t("capImage")},
     { capability: "video", label: t("capVideo")},
+    { capability: "audio", label: t("capAudio")},
   ];
   const wanted = new Set(capabilities ?? SECTIONS_SHOWN_BY_DEFAULT);
   const rows = allRows.filter((row) => wanted.has(row.capability));

@@ -141,6 +141,10 @@ import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import {
+  GENERATION_KINDS,
+  type GenerationKind,
+  durationOptions,
+  durationRange,
   aspectRatioOptions,
   booleanParameterKeys,
   declaredParameters,
@@ -155,7 +159,11 @@ import {
   sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
+import {
+  GENERATION_BOOLEAN_LABELS,
+  GENERATION_KIND_LABELS,
+  GENERATION_PARAMETER_LABELS,
+} from "@/app/generationParameterLabels";
 import { declaredChoices } from "@/features/ai-studio/parameterPanel";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -2605,11 +2613,10 @@ export function NodeInspector({
     // 于是「模型支持哪些参数」这份信息在工作流侧根本拿不到。
     // 现在两种能力各取一次再合并 —— 和 AI 工作台看到的是同一份(后端联接好的)。
     queryFn: async () => {
-      const [image, video] = await Promise.all([
-        api<GenerationOption[]>("/api/generation/options?kind=image"),
-        api<GenerationOption[]>("/api/generation/options?kind=video"),
-      ]);
-      return [...image, ...video];
+      const lists = await Promise.all(
+        GENERATION_KINDS.map((kind) => api<GenerationOption[]>(`/api/generation/options?kind=${kind}`)),
+      );
+      return lists.flat();
     },
     enabled: node.type === "ai_generate",
   });
@@ -2641,7 +2648,7 @@ export function NodeInspector({
           (!config.kind || model.kind === config.kind),
       );
       const capability = String(config.kind || matchedModel?.kind || "image");
-      const capabilityLabel = capability === "image" ? t("capImage") : capability === "video" ? t("capVideo") : capability;
+      const capabilityLabel = t(GENERATION_KIND_LABELS[capability as GenerationKind] ?? "capImage");
       const section = `providers:${capability}`;
       if (chosenProvider && chosenModel && generationModels.isSuccess && !matchedModel) {
         return { message: t("wfGenModelMissing"), section, error: true };
@@ -2808,6 +2815,28 @@ export function NodeInspector({
       if (supportsParameter(genModel, "num_images") && images > 1) {
         out.push({ key: "num_images", label: t("wfGenNumImages"), options: [], range: { min: 1, max: images } });
       }
+    } else if (genModel.kind === "audio") {
+      // 音频:时长是个可选的区间(多数音乐模型按歌词长短自己定曲长),歌词是一段长文字。
+      const range = durationRange(genModel);
+      const durations = durationOptions(genModel);
+      if (supportsParameter(genModel, "duration_seconds")) {
+        out.push(
+          durations.length > 0
+            ? { key: "duration_seconds", label: t("wfGenDuration"), options: durations.map(String) }
+            : { key: "duration_seconds", label: t("wfGenDuration"), options: [], range: range ?? undefined },
+        );
+      }
+      if (supportsParameter(genModel, "lyrics")) {
+        out.push({
+          key: "lyrics",
+          label: t("genLyrics"),
+          options: [],
+          declared: {
+            key: "lyrics", type: "string", label: t("genLyrics"), description: t("genLyricsHint"),
+            defaultValue: undefined, options: [], multiline: true, advanced: false,
+          },
+        });
+      }
     } else {
       const resolutions = videoResolutionOptions(genModel);
       if (resolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: resolutions });
@@ -2827,7 +2856,8 @@ export function NodeInspector({
     }
     // 模型自己声明的参数(插件生成供应商:ComfyUI 每张工作流的采样器、步数……)。
     for (const parameter of declaredParameters(genModel)) {
-      out.push({ key: parameter.key, label: parameter.label, options: [], declared: parameter });
+      const labelKey = GENERATION_PARAMETER_LABELS[parameter.key];
+      out.push({ key: parameter.key, label: labelKey ? t(labelKey) : parameter.label, options: [], declared: parameter });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3127,7 +3157,7 @@ export function NodeInspector({
                 value={genModel?.id ?? ""}
                 options={(generationModels.data ?? []).map((model) => ({
                   value: model.id,
-                  label: `${model.model} · ${model.kind === "video" ? t("capVideo") : t("capImage")}`,
+                  label: `${model.model} · ${t(GENERATION_KIND_LABELS[model.kind as GenerationKind] ?? "capImage")}`,
                 }))}
                 placeholder={t("wfGenModelHint")}
                 emptyText={t("cmdkEmpty")}
@@ -3190,8 +3220,9 @@ export function NodeInspector({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="image">{t("capImage")}</SelectItem>
-                      <SelectItem value="video">{t("capVideo")}</SelectItem>
+                      {GENERATION_KINDS.map((kind) => (
+                        <SelectItem key={kind} value={kind}>{t(GENERATION_KIND_LABELS[kind])}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
