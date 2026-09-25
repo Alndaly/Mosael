@@ -58,7 +58,7 @@ def _subtitle_cue_count(db: Session, payload: dict[str, Any]) -> int | None:
 
 
 
-def _validate_edit_timeline(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_edit_timeline(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     _sequence_in(db, workspace_id, payload)
 
     operations = payload.get("operations")
@@ -86,7 +86,7 @@ def _execute_edit_timeline(db: Session, confirmation: Any, actor: str | None) ->
     return {"applied_operations": applied, "sequence_revision": sequence.revision if sequence else None}
 
 
-def _validate_render_sequence(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_render_sequence(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     _sequence_in(db, workspace_id, payload)
 
 
@@ -102,7 +102,7 @@ def _execute_render_sequence(db: Session, confirmation: Any, actor: str | None) 
     return {"job_id": job.id}
 
 
-def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     _sequence_in(db, workspace_id, payload)
 
     if str(payload.get("line") or "all") not in {"all", "first", "last"}:
@@ -167,7 +167,7 @@ def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) ->
     return {"job_id": job.id}
 
 
-def _validate_separate_audio(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_separate_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.db.models import Asset
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
@@ -195,7 +195,7 @@ def _execute_separate_audio(db: Session, confirmation: Any, actor: str | None) -
     return {"job_id": job.id}
 
 
-def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.ai.providers.contracts.denoise import DenoiseError, checked_strength
     from app.db.models import Asset
     from app.core.i18n import t
@@ -257,7 +257,7 @@ def _execute_denoise_audio(db: Session, confirmation: Any, actor: str | None) ->
     return {"job_id": job.id}
 
 
-def _validate_convert_video_to_gif(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_convert_video_to_gif(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.db.models import Asset
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))

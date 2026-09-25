@@ -156,6 +156,7 @@ def test_智能体改画板走确认卡_并且写坏的算子在批准前就失�
         workspace_id=ws,
         tool="edit_board",
         payload={"board_id": board_id, "operations": [{"kind": "set_text", "item_id": "a", "text": "改好的"}]},
+        actor_id=None,
         requested_by="agent",
     )
     assert ok.status == "pending", "写画板居然没出确认卡"
@@ -167,7 +168,8 @@ def test_智能体改画板走确认卡_并且写坏的算子在批准前就失�
             workspace_id=ws,
             tool="edit_board",
             payload={"board_id": board_id, "operations": [{"kind": "set_text", "item_id": "无", "text": "x"}]},
-            requested_by="agent",
+            actor_id=None,
+        requested_by="agent",
         )
     db.close()
 
@@ -205,7 +207,7 @@ def test_智能体删掉上游那一格或那根线_下游槽位里从那条线�
     with SessionLocal() as db:
         card = request_confirmation(
             db, workspace_id=ws, tool="edit_board",
-            payload={"board_id": board_id, "operations": [operation]}, requested_by="agent",
+            payload={"board_id": board_id, "operations": [operation]}, actor_id=None, requested_by="agent",
         )
         done = approve_confirmation(db, card)
         assert done.status == "executed", done.error

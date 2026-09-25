@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **90** 个工具,其中 **25** 个走确认卡、**1** 个停下来等用户作答。
+共 **92** 个工具,其中 **26** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -65,6 +65,7 @@ summaries — never raw internal schemas.
 | `invoke_plugin_tool` | 直接执行 | Runs directly: invoke one plugin tool returned by list_plugin_tools. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
+| `list_board_producers` | 直接执行 | Read-only: list the TOOLS you can put on a creative board as tool items. |
 | `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |
 | `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video / generate_sound. |
 | `list_jobs` | 直接执行 | Read-only: list recent background jobs (renders, transcriptions, generations, imports). |
@@ -87,6 +88,7 @@ summaries — never raw internal schemas.
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_scene_references` | 直接执行 | Render blockout references of one shot of a 3D scene and save them as assets: |
 | `render_sequence` | 确认卡 | Confirmation required: export an existing VIDEO TIMELINE sequence to mp4. |
+| `run_board_item` | 确认卡 | Run a TOOL ITEM (kind "action") on a creative board, as if the user pressed Run. |
 | `run_code` | 确认卡 | Confirmation required: run a short Python snippet in an ISOLATED sandbox and return `output`. |
 | `run_host_code` | 确认卡 | Confirmation required: run Python directly on the user's computer, NOT isolated. |
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |

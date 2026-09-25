@@ -431,7 +431,7 @@ class Test原声处理归配音本身:
             workspace_id = db.get(Sequence, sequence_id).workspace_id
             voice = make_voice(workspace_id)
             payload = {"sequence_id": sequence_id, "clip_ids": [clip_id], "voice_id": voice, "original_audio": "mute"}
-            card = confirmations.request_confirmation(db, workspace_id=workspace_id, tool="dub_subtitles", payload=payload)
+            card = confirmations.request_confirmation(db, workspace_id=workspace_id, tool="dub_subtitles", payload=payload, actor_id=None)
             assert "原声静音" in card.summary
             with pytest.raises(DubError, match="到此为止"):
                 confirmations._execute_approved(db, db.get(ToolConfirmation, card.id))
@@ -440,6 +440,6 @@ class Test原声处理归配音本身:
 
         with SessionLocal() as db, pytest.raises(confirmations.ConfirmationError, match="original_audio"):
             confirmations.request_confirmation(
-                db, workspace_id=workspace_id, tool="dub_subtitles",
+                db, workspace_id=workspace_id, tool="dub_subtitles", actor_id=None,
                 payload={**payload, "original_audio": "louder"},
             )

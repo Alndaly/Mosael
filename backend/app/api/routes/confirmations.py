@@ -34,6 +34,7 @@ def create_confirmation(
             workspace_id=body.workspace_id,
             tool=body.tool,
             payload=body.payload,
+            actor_id=user.id,
             requested_by=body.requested_by,
             session_id=autopilot.session_for_token(db, token),
         )

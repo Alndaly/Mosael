@@ -174,6 +174,7 @@ CONFIRMATION_TOOLS = frozenset(
         "dub_subtitles",
         "create_workflow",
         "edit_board",
+        "run_board_item",
         "edit_workflow",
         "update_workflow",
         "run_workflow",
@@ -219,6 +220,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_agent_sessions",
         "list_assets",
         "list_boards",
+        "list_board_producers",
         "list_generation_models",
         "list_provider_models",
         "open_view",
@@ -1832,7 +1834,8 @@ def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
     canvas then shows the kind, e.g. "Image") — use it to tell apart items of the
     same kind and to refer to them. Call this before edit_board so you know the
     exact item_id values and where things already sit — the user has arranged
-    them by hand.
+    them by hand. A tool item (kind "action") carries form.producer (which tool),
+    form.config, form.bindings and run (status, job_id, error).
     """
     return _get(f"/api/boards/{board_id}", {"workspace_id": workspace_id or _default_workspace_id()})
 
@@ -1850,6 +1853,13 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
 
     An image/video/audio item with no asset_id is an EMPTY SLOT: the user writes a
     prompt on it and generates. Adding empty slots is how you set up work for them.
+
+    A TOOL ITEM (type "action") runs one tool — a plugin tool or a built-in node
+    from list_board_producers — and its outputs land as new items to its right.
+    Name the tool in `producer`, fill `config` with its fields, and feed fields from
+    upstream items with `bindings` ({field: [{"from": item_id}]}; the upstream item
+    must also be connected to the tool item, and its kind must be one the field's
+    board_sources lists). Run it afterwards with run_board_item.
 
     operations is a list of:
       {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
@@ -1869,6 +1879,12 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
           (a line from A to B; the downstream node picks up A's output as its reference)
       {"kind":"remove_item","item_id":"n1"}                     (its edges go too)
       {"kind":"remove_edge","edge_id":"e-n1-i1"}
+      {"kind":"add_item","type":"action","item_id":"t1","producer":"node:text_transform",
+       "config":{"op":"upper"},"bindings":{"text":[{"from":"n1"}]}}
+          (a tool item; put {"kind":"connect","source":"n1","target":"t1"} in the same batch)
+      {"kind":"set_form","item_id":"t1","config":{"op":"lower"},"bindings":{"text":[{"from":"n2"}]}}
+          (config merges key by key, null removes a key; bindings replace per field, [] unbinds;
+           a new producer starts from an empty config and bindings)
     """
     confirmation = _post(
         "/api/confirmations",
@@ -1877,6 +1893,48 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
             "tool": "edit_board",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {"board_id": board_id, "operations": operations},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: list the TOOLS you can put on a creative board as tool items.
+
+    Each entry is a producer id (use it as `producer` in edit_board add_item/set_form),
+    its label, description, category, `effects` ("none" runs directly when you call
+    run_board_item; "paid"/"external" asks the user first) and `config` — the tool's
+    fields (type, required, options, description). A field's `board_sources` lists
+    the item kinds it can take from upstream through `bindings`; an empty list means
+    fill it in `config`. Plugin tools appear only for plugins the user has connected.
+    Built-in slots (note/image/video/audio) are not listed — add them as empty slots.
+    """
+    listed = _get("/api/boards/producers", {"workspace_id": workspace_id or _default_workspace_id()})
+    return [one for one in listed if "action" in (one.get("hosts") or [])]
+
+
+@mcp.tool()
+def run_board_item(board_id: str, item_id: str, workspace_id: str = "") -> dict[str, Any]:
+    """Run a TOOL ITEM (kind "action") on a creative board, as if the user pressed Run.
+
+    Runs whatever tool and form the item has on the board right now, with the
+    user's own plugin connection. A read-only tool (effects "none") runs directly;
+    a tool that costs money or acts outside the app needs the user's approval first.
+    The result means the run has STARTED (it returns the job_id); it finishes in the
+    background and its outputs then land as new items to the right of the tool item,
+    connected to it — get_job(job_id) says when, get_board shows them. Set the tool
+    item up with edit_board first. Do NOT use for image/
+    video/audio slots or notes (the user generates those from their panel) or for
+    visual workflows (run_workflow).
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "run_board_item",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"board_id": board_id, "item_id": item_id},
         },
     )
     return _confirmation_reply(confirmation)

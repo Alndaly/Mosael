@@ -310,7 +310,7 @@ def test_智能体往画板上放一个够不着的文档或场景_开卡时就�
         ):
             with pytest.raises(ConfirmationError):
                 request_confirmation(
-                    db, workspace_id=ws, tool="edit_board", requested_by="agent",
+                    db, workspace_id=ws, tool="edit_board", actor_id=None, requested_by="agent",
                     payload={"board_id": board_id, "operations": [op]},
                 )
 

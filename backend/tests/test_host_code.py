@@ -26,7 +26,7 @@ def test_远程部署上不跑_开卡前就说清(monkeypatch) -> None:
     monkeypatch.setattr(settings, "local_desktop", False)
     assert "本机桌面版" in (host_code.available() or "")
     with pytest.raises(ConfirmationError):
-        tool_spec("run_host_code").validate(None, "ws", {"code": "output = 1"})
+        tool_spec("run_host_code").validate(None, "ws", {"code": "output = 1"}, None)
 
 
 def test_真的能动本机文件_print_单独交回(desktop, tmp_path) -> None:

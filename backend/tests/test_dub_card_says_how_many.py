@@ -40,7 +40,7 @@ def _sequence_with_cues(client, texts: list[str]) -> tuple[str, str, str]:
 def _card(db, workspace_id: str, payload: dict) -> str:
     user = db.scalars(__import__("sqlalchemy").select(User)).first()
     return request_confirmation(
-        db, workspace_id=workspace_id, tool="dub_subtitles", payload=payload, requested_by=user.id
+        db, workspace_id=workspace_id, tool="dub_subtitles", payload=payload, actor_id=user.id, requested_by=user.id
     ).summary
 
 

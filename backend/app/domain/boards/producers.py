@@ -17,6 +17,9 @@ item 种类猜。第五种产出(插件工具、挑过的工作流节点)想上�
   跑同一个产出者时,拿到的是同一份校验,不必各自再写一遍;
 · `start` —— 建任务 → 摆占位 → 起任务,返回摆好占位的画板。
 
+跑之前的检查(dry_run)和替人写下的表单的检查(check_forms)也在这里 —— 智能体替人放工具格、
+替人点运行,问的是和界面**同一张注册表**,不另写一份「什么能跑、什么能接」。
+
 四个内置的本体仍在 `actions`(`*_on_board`),这里只把它们登记成同一种东西。
 """
 
@@ -105,6 +108,9 @@ class Producer:
     #: 能不能挑来填一个**空槽**(hosts 里那几种格子刚放下、还没有产出时)。一种格子有两个这样的
     #: 产出者时(音频槽:念一段 / 生成音乐音效),面板上给一个切换。截一段不是 —— 它得先有一段素材。
     fills_empty_slot: bool = False
+    #: 起任务之前的那几样检查,**不写任何东西**(见 dry_run);返回给确认卡看的事实(用哪条连接)。
+    #: 没有就只做注册表那几样(认产出者、问宿主、校验表单)。
+    preflight: Callable[[Session, RunRequest, Any], dict[str, Any]] | None = None
 
 
 class _Form(BaseModel):
@@ -412,6 +418,9 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.workflows import WorkflowDomainError
 
+    def bindings_of(form: NodeForm) -> dict[str, list[dict[str, str]]]:
+        return {field: [{"from": ref.source} for ref in refs] for field, refs in form.bindings.items()}
+
     def start(db: Session, request: RunRequest, form: NodeForm) -> Board:
         from app.core.i18n import get_current_locale, t
         from app.domain.boards.tools import run_node_on_board
@@ -422,10 +431,22 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
             node_type=node_type,
             meta=meta,
             config=dict(form.config),
-            bindings={field: [{"from": ref.source} for ref in refs] for field, refs in form.bindings.items()},
+            bindings=bindings_of(form),
             #: 任务中心里这一条叫什么(节点的名字)。
             label=t(str(meta.get("label") or node_type), get_current_locale()),
         )
+
+    def preflight(db: Session, request: RunRequest, form: NodeForm) -> dict[str, Any]:
+        from app.db.models import PluginInstance
+        from app.domain.boards.tools import prepare_node_run
+        from app.domain.plugins.nodes import parse_node_type
+
+        _board, resolved = prepare_node_run(db, request=request, node_type=node_type, meta=meta,
+                                            config=dict(form.config), bindings=bindings_of(form))
+        #: 插件工具用的是**这个人**自己的哪条连接(prepare 已经按人解析好了)。
+        plugin = parse_node_type(node_type) is not None
+        instance = db.get(PluginInstance, str(resolved.get("instance_id") or "")) if plugin else None
+        return {"connection": instance.name if instance is not None else ""}
 
     return Producer(
         id=node_producer_id(node_type),
@@ -437,6 +458,7 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
         #: 起任务之前就会失败的那几种(见 boards.tools.run_node_on_board):插件连接、数字字段、绑定的文档。
         failures=(WorkflowDomainError, PluginDomainError, NoteDomainError),
         meta=meta,
+        preflight=preflight,
     )
 
 
@@ -499,12 +521,8 @@ def producer_for_new_slot(kind: str) -> str | None:
     return generate.id if kind in generate.hosts else None
 
 
-def run(db: Session, request: RunRequest) -> Board:
-    """跑一次产出者。**画板上所有产出都从这里进**:路由、将来的智能体与工作流入口。
-
-    顺序:认产出者 → 问它能不能挂在这种格子上 → 校验表单 → 起。产出者自己那一侧的错误转成
-    ProducerFailed(带着原来的 key 和参数);画板自己的错误(版本冲突、这一格在跑)原样抛。
-    """
+def _admit(db: Session, request: RunRequest) -> tuple[Producer, BaseModel]:
+    """认产出者 → 问它能不能挂在这种格子上 → 校验表单。跑和干跑的前半截是同一段。"""
     producer = get_producer(db, request.producer, request.actor_id)
     if request.kind not in producer.hosts:
         raise BoardInputError("boardErr_producerCannotHost", producer=producer.id, kind=request.kind)
@@ -512,9 +530,90 @@ def run(db: Session, request: RunRequest) -> Board:
         form = producer.form.model_validate(request.form)
     except ValidationError as exc:
         raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
+    return producer, form
+
+
+def _failed(producer: Producer, exc: Exception) -> ProducerFailed:
+    failed = ProducerFailed.relay(exc)
+    failed.status = producer.failure_status
+    return failed
+
+
+def run(db: Session, request: RunRequest) -> Board:
+    """跑一次产出者。**画板上所有产出都从这里进**:路由、智能体(run_board_item)。
+
+    顺序:认产出者 → 问它能不能挂在这种格子上 → 校验表单 → 起。产出者自己那一侧的错误转成
+    ProducerFailed(带着原来的 key 和参数);画板自己的错误(版本冲突、这一格在跑)原样抛。
+    """
+    producer, form = _admit(db, request)
     try:
         return producer.start(db, request, form)
     except producer.failures as exc:
-        failed = ProducerFailed.relay(exc)
-        failed.status = producer.failure_status
-        raise failed from exc
+        raise _failed(producer, exc) from exc
+
+
+def dry_run(db: Session, request: RunRequest) -> tuple[Producer, dict[str, Any]]:
+    """把 run 在建任务之前会问的全问一遍,**不建任务、不动画布**。返回产出者和它给出的事实。
+
+    给「替人点运行之前先开一张卡」用(智能体的 run_board_item):注定起不了任务的卡(没有连接、
+    这一格在跑、数字字段填错了)在开卡时就拒;卡上说的连接,就是待会儿真跑时解析出来的那一条。
+    """
+    producer, form = _admit(db, request)
+    if producer.preflight is None:
+        return producer, {}
+    try:
+        return producer, producer.preflight(db, request, form)
+    except producer.failures as exc:
+        raise _failed(producer, exc) from exc
+
+
+def check_forms(db: Session, canvas: dict[str, Any], item_ids: list[str], actor_id: str | None) -> None:
+    """替人写下的表单(智能体 edit_board 放的、改的工具格)在这张画布上说得通,说不通抛 BoardDomainError。
+
+    `canvas` 是算子作用之后、**落库之前**的那一份(形状已经由 normalize 过了一遍)—— 绑定要在
+    normalize 摘掉断线的那几条**之前**看:写一条没连线的绑定是一个正在写的错,落库时悄悄摘掉的话,
+    智能体以为接上了,用户点运行时那个字段是空的。
+
+    问的和界面同一张注册表、同一张「什么能接什么」(tools.check_bindings):
+
+    · 这个人有这个产出者(插件工具是他自己接的连接暴露的 —— 没有的话说清楚是哪个插件);
+    · 它能挂在这种格子上;
+    · 工具的表单:配置里只有这个工具声明过的字段,声明成数字的是数,绑定都接得上。
+
+    内置产出者(写字、生成、念、截)的表单是各自面板的形状,归面板,这里只问前两样。
+    """
+    from app.domain.boards.tools import check_bindings
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.binding import check_number_fields
+
+    registry = _registry(db, actor_id)
+    by_id = {str(one.get("id")): one for one in canvas.get("items") or []}
+    for item_id in item_ids:
+        item = by_id[item_id]
+        form = dict(item.get("form") or {})
+        producer_id = str(form.get("producer") or "")
+        if not producer_id:
+            continue
+        producer = registry.get(producer_id) or get_producer(db, producer_id, actor_id)
+        if item.get("kind") not in producer.hosts:
+            raise BoardInputError("boardErr_producerCannotHost", producer=producer.id, kind=str(item.get("kind")))
+        node_type = node_type_of(producer.id)
+        if node_type is None:
+            continue
+        config = form.get("config") or {}
+        try:
+            node_form = NodeForm.model_validate({"config": config, "bindings": form.get("bindings") or {}})
+        except ValidationError as exc:
+            raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
+        specs = dict((producer.meta or {}).get("config") or {})
+        for key in config:
+            if key not in specs:
+                raise BoardInputError("boardErr_toolConfigUnknownField", tool=producer.id, field=key,
+                                      fields=", ".join(specs) or "-")
+        try:
+            check_number_fields(node_type, dict(config))
+        except WorkflowDomainError as exc:
+            raise BoardInputError.relay(exc) from exc
+        check_bindings(canvas, item_id, specs,
+                       {field: [{"from": ref.source} for ref in refs] for field, refs in node_form.bindings.items()},
+                       tool=producer.id)

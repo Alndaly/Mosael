@@ -56,7 +56,7 @@ def _escalate_graph(db: Session, tool: str, payload: dict[str, Any]) -> str | No
 
 
 
-def _validate_create_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_create_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     if not str(payload.get("name", "")).strip():
         raise ConfirmationError("create_workflow requires a name")
     if payload.get("graph") is not None:
@@ -88,7 +88,7 @@ def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) 
     return {"workflow_id": workflow.id}
 
 
-def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     workflow = _workflow_in(db, workspace_id, payload)
     if payload.get("graph") is not None:
         _check_graph(db, payload["graph"])
@@ -123,7 +123,7 @@ def _execute_update_workflow(db: Session, confirmation: Any, actor: str | None) 
     return {"workflow_id": workflow.id}
 
 
-def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.domain.workflows import WorkflowDomainError
     from app.domain.workflows.graph_ops import GRAPH_OP_KINDS, apply_graph_ops
 
@@ -180,7 +180,7 @@ def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) ->
     return {"workflow_id": workflow.id, "nodes": len((workflow.graph or {}).get("nodes", []))}
 
 
-def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     _workflow_in(db, workspace_id, payload)
 
 
@@ -204,14 +204,21 @@ def _execute_run_workflow(db: Session, confirmation: Any, actor: str | None) -> 
     return {"job_id": job.id}
 
 
-def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _board_in(db: Session, workspace_id: str, payload: dict[str, Any]):
+    """这次要改/要跑的那张画板,**收进这个工作区**。"""
     from app.db.models import Board
-    from app.domain.boards.ops import BOARD_OP_KINDS, apply_board_ops
-    from app.domain.boards import BoardDomainError, check_canvas
 
     board = db.get(Board, str(payload.get("board_id", "")))
     if board is None or board.workspace_id != workspace_id:
         raise ConfirmationError("confirmErr_boardNotInWorkspace")
+    return board
+
+
+def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    from app.domain.boards.ops import BOARD_OP_KINDS, apply_board_ops
+    from app.domain.boards import BoardDomainError, check_canvas, producers
+
+    board = _board_in(db, workspace_id, payload)
     operations = payload.get("operations")
     if not isinstance(operations, list) or not operations:
         raise ConfirmationError("confirmErr_editBoardNeedsOps")
@@ -220,9 +227,15 @@ def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]
         if kind not in BOARD_OP_KINDS:
             raise ConfirmationError("confirmErr_unknownBoardOp", kind=kind)
     # 先干跑一遍:写坏的算子要在**批准之前**就失败,而不是让用户点了同意才看到报错。
-    # 和落库过同一道(形状 + 引用),见 boards.check_canvas。
+    # 和落库过同一道(形状 + 引用),见 boards.check_canvas;这次写下的表单再过一遍注册表
+    # (工具在不在、绑定接不接得上),和界面、运行是同一张表,见 boards.producers.check_forms。
+    before = board.canvas or {}
     try:
-        check_canvas(db, workspace_id, apply_board_ops(board.canvas or {}, operations), board.canvas)
+        after = apply_board_ops(before, operations)
+        check_canvas(db, workspace_id, after, board.canvas)
+        was = {str(one.get("id")): one.get("form") for one in before.get("items") or []}
+        written = [str(one.get("id")) for one in after.get("items") or [] if one.get("form") != was.get(str(one.get("id")))]
+        producers.check_forms(db, after, written, actor)
     except BoardDomainError as exc:
         raise ConfirmationError(str(exc)) from exc
 
@@ -247,6 +260,120 @@ def _execute_edit_board(db: Session, confirmation: Any, actor: str | None) -> di
     canvas = apply_board_ops(board.canvas or {}, payload["operations"])
     update_board(db, workspace_id=board.workspace_id, board_id=board.id, name=None, canvas=canvas)
     return {"board_id": board.id, "items": len(canvas.get("items", []))}
+
+def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None):
+    """照画布上**现在**那一格拼一次运行:它存着的工具和表单,它自己的位置,这张板当前的版本。
+
+    版本取当前的,因为智能体不是拿着一份旧快照在改画布 —— 它要跑的就是此刻画布上的那一格;
+    「这一格正在跑」照样由 run 那一侧挡(见 actions._ensure_slot_ready)。
+    """
+    from app.domain.boards import producers
+    from app.domain.boards.canvas import item_not_found
+    from app.domain.boards.producer_ids import node_type_of
+
+    board = _board_in(db, workspace_id, payload)
+    item_id = str(payload.get("item_id") or "")
+    item = next((one for one in (board.canvas or {}).get("items") or [] if str(one.get("id")) == item_id), None)
+    if item is None:
+        raise ConfirmationError.relay(item_not_found(item_id))
+    form = dict(item.get("form") or {})
+    producer = str(form.pop("producer", "") or "")
+    # 只跑工具格。图片/视频/音频槽和便签的表单是各自面板的形状(提示词、模型、图例……),
+    # 拼成一次运行是面板的事;替人拼一份面板没见过的请求,跑出来的不是他在面板上看到的那一件。
+    if item.get("kind") != "action" or node_type_of(producer) is None:
+        raise ConfirmationError("confirmErr_runBoardItemNotTool", item_id=item_id)
+    return board, item, producers.RunRequest(
+        workspace_id=workspace_id,
+        board_id=board.id,
+        item_id=item_id,
+        kind="action",
+        x=float(item.get("x") or 0),
+        y=float(item.get("y") or 0),
+        base_revision=int(board.revision or 0),
+        actor_id=actor or "",
+        producer=producer,
+        form=form,
+    )
+
+
+def _validate_run_board_item(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    """开卡之前把这次运行干跑一遍,把卡上要说的事实写回 payload。
+
+    **写回的每一样都是覆盖,不是缺省**:`effects` 决定这次要不要问人、按哪一档问(见 needs_card /
+    escalate),它不能由调用方在 payload 里自己带。
+    """
+    from app.core.i18n import is_message_key
+    from app.domain.boards import BoardDomainError, producers
+
+    board, item, request = _run_request(db, workspace_id, payload, actor)
+    try:
+        producer, facts = producers.dry_run(db, request)
+    except BoardDomainError as exc:
+        raise ConfirmationError(str(exc)) from exc
+    label = str((producer.meta or {}).get("label") or producer.id)
+    payload.update({
+        "producer": producer.id,
+        "effects": producer.effects,
+        "tool": {"key": label} if is_message_key(label) else {"text": label},
+        "board_name": board.name,
+        "item_title": str(item.get("title") or ""),
+        "connection": str(facts.get("connection") or ""),
+    })
+
+
+def _needs_card_run_board_item(db: Session, payload: dict[str, Any]) -> bool:
+    """只读的工具(不花钱、不出门)直接跑;花钱的、对外有后果的等人点(ADR 0021 决定 2)。"""
+    return payload.get("effects") != "none"
+
+
+def _escalate_run_board_item(db: Session, tool: str, payload: dict[str, Any]) -> str | None:
+    """按工具的后果开卡:花钱的算 ai-cost(自动档里有连开上限),对外的算 external(自动档也回到人)。"""
+    return {"paid": "ai-cost", "external": "external"}.get(str(payload.get("effects") or ""))
+
+
+def _summarize_run_board_item(db: Session, payload: dict[str, Any]) -> Summary:
+    tool = payload.get("tool") or {}
+    effects = payload.get("effects")
+    connection = str(payload.get("connection") or "")
+    title = str(payload.get("item_title") or "")
+    return "confirm_runBoardItem", {
+        "tool": fragment(tool["key"]) if tool.get("key") else str(tool.get("text") or payload.get("producer") or ""),
+        "board": str(payload.get("board_name") or ""),
+        "item": fragment("confirm_boardItemNamed", name=title) if title else "",
+        "via": fragment("confirm_boardRunVia", name=connection) if connection else "",
+        "warning": fragment("confirm_boardRunPaid") if effects == "paid"
+        else fragment("confirm_boardRunExternal") if effects == "external" else "",
+    }
+
+
+def _execute_run_board_item(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """批准之后跑:**同一个** producers.run(界面点运行走的那一个),执行者是批准的人。
+
+    插件工具用的是批准者**自己**的连接(和共享画板上谁点运行用谁的连接同一条,决定 1);他在这个
+    工作区里得有这个工具要的权限。卡开出来之后那一格换了工具,就不跑 —— 他批准的不是这一个。
+    """
+    from app.db.models import User
+    from app.domain.boards import producers
+    from app.domain.permissions import ensure_workspace_perm
+
+    payload = confirmation.payload
+    _board, _item, request = _run_request(db, confirmation.workspace_id, payload, actor)
+    if request.producer != payload.get("producer"):
+        raise ConfirmationError("confirmErr_boardItemChanged", item_id=request.item_id)
+    user = db.get(User, actor or "")
+    if user is None:
+        raise ConfirmationError("confirmErr_noApprover")
+    producer = producers.get_producer(db, request.producer, user.id)
+    ensure_workspace_perm(db, user, confirmation.workspace_id, producer.permission)
+    board = producers.run(db, request)
+    item = next(one for one in (board.canvas or {}).get("items") or [] if str(one.get("id")) == request.item_id)
+    return {
+        "board_id": board.id,
+        "item_id": request.item_id,
+        "producer": request.producer,
+        "job_id": (item.get("run") or {}).get("job_id"),
+    }
+
 
 confirmable_tool(ConfirmableTool(
     name="create_workflow",
@@ -302,3 +429,14 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+confirmable_tool(ConfirmableTool(
+    name="run_board_item",
+    #: 下限。实际那一档按工具的后果升(escalate);只读的根本不问人(needs_card)。
+    permission="edit",
+    cost="none",
+    summarize=_summarize_run_board_item,
+    execute=_execute_run_board_item,
+    validate=_validate_run_board_item,
+    escalate=_escalate_run_board_item,
+    needs_card=_needs_card_run_board_item,
+))

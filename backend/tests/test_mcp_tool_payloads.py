@@ -35,6 +35,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "list_assets": {},
     "list_workflows": {},
     "list_boards": {},
+    "list_board_producers": {},
     "list_workflow_node_types": {},
     "list_memories": {},
     "search_notes": {"query": "灵感"},

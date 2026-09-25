@@ -18,7 +18,7 @@ from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, conf
 from app.domain.agent.errors import ConfirmationError
 
 
-def _validate_blender_execute(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_blender_execute(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.core.config import settings
 
     if not settings.local_desktop:

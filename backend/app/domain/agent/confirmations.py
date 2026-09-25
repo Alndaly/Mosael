@@ -53,14 +53,16 @@ def request_confirmation(
     workspace_id: str,
     tool: str,
     payload: dict[str, Any],
+    actor_id: str | None,
     requested_by: str = "external-agent",
     session_id: str | None = None,
 ) -> ToolConfirmation:
+    """开一张卡。`actor_id` 是开卡的人(发起这次调用的凭据是谁的),校验里因人而异的事实按他算。"""
     spec = tool_spec(tool)
     if spec is None:
         raise ConfirmationError(f"Unknown mutating tool: {tool}")
     if spec.validate is not None:
-        spec.validate(db, workspace_id, payload)
+        spec.validate(db, workspace_id, payload, actor_id)
     #: **key 和参数才是事实,渲染出来的那一行只是默认语言的快照。**
     #: 确认卡是授权界面 —— 用户点「批准」之前唯一会读的就是这一行,而卡落库、活得比一次请求久。
     #: 写入时就翻会把语言冻死在那一刻(`Job.message` 为这件事付过账,见 domain/jobs.say)。

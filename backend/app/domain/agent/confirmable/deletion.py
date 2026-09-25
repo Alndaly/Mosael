@@ -71,7 +71,7 @@ def _names(rows: list[Any], limit: int = 4) -> str:
 # ---------- 素材 ----------
 
 
-def _validate_delete_assets(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_delete_assets(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     rows = _rows(db, Asset, workspace_id, _ids(payload, "asset_ids"), "confirmErr_missingAssets")
     # 卡上要说清连带后果,所以在这里就数出来 —— 摘要不该自己再查一遍库。
     payload["_names"] = _names(rows)
@@ -108,7 +108,7 @@ def _execute_delete_assets(db: Session, confirmation: Any, actor: str | None) ->
 # ---------- 项目 ----------
 
 
-def _validate_delete_projects(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_delete_projects(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     rows = _rows(db, Project, workspace_id, _ids(payload, "project_ids"), "confirmErr_missingProjects")
     payload["_names"] = _names(rows)
     payload["_count"] = len(rows)

@@ -15,7 +15,7 @@ type Confirmation = components["schemas"]["ConfirmationOut"];
  * 这次对话里,**哪些操作是被自动放行的、被哪一档放的**。
  *
  * 后端为"这次写操作是谁批的、怎么批的"记了完整的一套(`decision_mode` 分 manual /
- * session-allow / auto / bypass,`resolved_at` 记时间,注释里写明了为什么要分开留痕)——
+ * session-allow / auto / bypass / no-card,`resolved_at` 记时间,注释里写明了为什么要分开留痕)——
  * 而这条链的最后一环没接上:前端对 `/api/confirmations` 的两个调用点**都写死
  * `status=pending`**,于是"决策之后"的那一半在界面上根本不存在。
  *
@@ -29,12 +29,15 @@ const GATE_ICON = {
   auto: ShieldCheck,
   bypass: ShieldAlert,
   "session-allow": Sparkles,
+  // 这一次本就不用问人(智能体跑一个只读的画板工具格):没被问到,也照样列出来。
+  "no-card": ShieldCheck,
 } as const;
 
 const GATE_LABEL = {
   auto: "permTraceGateAuto",
   bypass: "permTraceGateBypass",
   "session-allow": "permTraceGateSessionAllow",
+  "no-card": "permTraceGateNoCard",
 } as const;
 
 export function AutoApprovalTrace({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {

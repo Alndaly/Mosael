@@ -25,6 +25,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Board
+from app.domain.boards.actions import BoardInputError
 from app.domain.boards.canvas import get_board, receipt_to_item
 from app.domain.jobs import create_job, dispatch_job, reset_receipt, set_receipt
 
@@ -107,6 +108,47 @@ def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str)
     if sink == "scene":
         return str(source.get("scene_id") or "") or None
     return str(source.get("asset_id") or "") or None
+
+
+def check_bindings(
+    canvas: dict[str, Any],
+    item_id: str,
+    specs: dict[str, Any],
+    bindings: dict[str, list[dict[str, str]]],
+    tool: str,
+) -> None:
+    """**写**绑定时(替人填表单,如智能体的 edit_board)问的那几件事,说不通就抛 BoardInputError。
+
+    和运行时(resolve_bindings)判的是同一张表 —— 哪个字段接什么(binding_sink)、哪几种格子给得出
+    (_SOURCE_KINDS,也就是面板上 `board_sources` 的来历),只是运行时对说不通的那几条**不吭声地
+    跳过**(节点升级删了字段、上游还没生成出来,都不该让一次运行失败),而写的时候说清楚:这是一个
+    正在写的错,不是一份放旧了的表单。
+
+    · 字段得是这个工具声明过的、能接上游的;
+    · 上游那一格得在画布上、**有一根连到这一格的线**(线不在的绑定,落库时 normalize 会摘掉 ——
+      写进去的东西悄悄没了,比当场说「先连线」难查得多);
+    · 那一格的种类给得出这种值(便签给不了素材)。
+    """
+    canvas_items = {str(one.get("id")): one for one in canvas.get("items") or []}
+    wired = {(str(edge.get("source")), str(edge.get("target"))) for edge in canvas.get("edges") or []}
+    for field, refs in bindings.items():
+        spec = specs.get(field)
+        if not isinstance(spec, dict):
+            raise BoardInputError("boardErr_bindingUnknownField", tool=tool, field=field,
+                                  fields=", ".join(key for key in specs if binding_sink(key, specs[key])) or "-")
+        sink = binding_sink(field, spec)
+        if sink is None:
+            raise BoardInputError("boardErr_bindingFieldNotBindable", tool=tool, field=field)
+        for ref in refs:
+            source_id = str(ref.get("from") or "").strip()
+            source = canvas_items.get(source_id)
+            if source is None:
+                raise BoardInputError("boardErr_bindingSourceMissing", field=field, source=source_id)
+            if (source_id, item_id) not in wired:
+                raise BoardInputError("boardErr_bindingNotWired", field=field, source=source_id, item_id=item_id)
+            if source.get("kind") not in _SOURCE_KINDS[sink]:
+                raise BoardInputError("boardErr_bindingKindMismatch", field=field, source=source_id,
+                                      kind=str(source.get("kind")), kinds=", ".join(_SOURCE_KINDS[sink]))
 
 
 def resolve_bindings(
@@ -213,6 +255,34 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
 # ── 运行 ────────────────────────────────────────────────────────────────────
 
 
+def prepare_node_run(
+    db: Session,
+    *,
+    request: Any,
+    node_type: str,
+    meta: dict[str, Any],
+    config: dict[str, Any],
+    bindings: dict[str, list[dict[str, str]]],
+) -> tuple[Board, dict[str, Any]]:
+    """起任务之前的全部检查,**不写任何东西**;返回画板和这一轮交给执行器的配置。
+
+    该在花钱之前失败的都在这里失败(调用方收到 400,工具格不进「在跑」):版本对不上、这一格在跑、
+    插件工具没有这个人自己的连接、数字字段填的不是数、绑定的文档取不到。
+
+    单独成一步,因为「开卡之前先干跑一遍」(智能体的 run_board_item)问的就是这些 —— 注定起不了
+    任务的卡没有让人去批的道理;而它和真跑走的是同一个函数,两边说的不会是两套话。
+    """
+    from app.domain.boards.actions import _ensure_slot_ready
+    from app.domain.workflows.binding import check_number_fields
+
+    _ensure_slot_ready(db, request.workspace_id, request.slot)
+    board = get_board(db, request.workspace_id, request.board_id)
+    resolved = resolve_bindings(db, board, request.item_id, dict(meta.get("config") or {}), config, bindings)
+    resolved = check_number_fields(node_type, resolved)
+    _check_plugin_connection(db, node_type, resolved, request.actor_id)
+    return board, resolved
+
+
 def run_node_on_board(
     db: Session,
     *,
@@ -223,19 +293,11 @@ def run_node_on_board(
     bindings: dict[str, list[dict[str, str]]],
     label: str,
 ) -> Board:
-    """在工具格上跑一次节点。**顺序**和另外几个产出者一样:问版本和忙闲 → 建任务 → 摆占位 → 起任务。
+    """在工具格上跑一次节点。**顺序**和另外几个产出者一样:问版本和忙闲 → 建任务 → 摆占位 → 起任务。"""
+    from app.domain.boards.actions import _pending
 
-    该在花钱之前失败的都在这里失败(调用方收到 400,工具格不进「在跑」):
-    插件工具没有这个人自己的连接、数字字段填的不是数、绑定的文档取不到。
-    """
-    from app.domain.boards.actions import _ensure_slot_ready, _pending
-    from app.domain.workflows.binding import check_number_fields
-
-    _ensure_slot_ready(db, request.workspace_id, request.slot)
-    board = get_board(db, request.workspace_id, request.board_id)
-    resolved = resolve_bindings(db, board, request.item_id, dict(meta.get("config") or {}), config, bindings)
-    resolved = check_number_fields(node_type, resolved)
-    _check_plugin_connection(db, node_type, resolved, request.actor_id)
+    board, resolved = prepare_node_run(db, request=request, node_type=node_type, meta=meta, config=config,
+                                       bindings=bindings)
 
     token = set_receipt(receipt_to_item(request.board_id, request.item_id))
     try:
@@ -315,4 +377,13 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
             logger.info("board_run %s (%s) failed", job_id, label, exc_info=True)
 
 
-__all__ = ["BoardScope", "bindable_kinds", "binding_sink", "board_outputs", "resolve_bindings", "run_node_on_board"]
+__all__ = [
+    "BoardScope",
+    "bindable_kinds",
+    "binding_sink",
+    "board_outputs",
+    "check_bindings",
+    "prepare_node_run",
+    "resolve_bindings",
+    "run_node_on_board",
+]

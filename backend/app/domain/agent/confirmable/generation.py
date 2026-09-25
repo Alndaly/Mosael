@@ -47,21 +47,21 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
     return {"job_id": job.id, "generation_id": generation.id}
 
 
-def _validate_generate_image(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_generate_image(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
         raise ConfirmationError("Generation requires a prompt")
 
 def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateImage", {"asked": _asked_for(payload)}
 
-def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
         raise ConfirmationError("Generation requires a prompt")
 
 def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateVideo", {"asked": _asked_for(payload)}
 
-def _validate_generate_sound(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_generate_sound(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     # 文字规矩按模型走(只给歌词、给视频配声什么字都不给都合法),由生成漏斗按描述符判;
     # 这里只拦「什么都没给」—— 连一段要配声的视频都没有。
     parameters = payload.get("parameters") or {}
@@ -76,7 +76,7 @@ def _summarize_generate_sound(db: Session, payload: dict[str, Any]) -> Summary:
     asked = _asked_for(payload) or str((payload.get("parameters") or {}).get("lyrics") or "")[:80]
     return "confirm_generateSound", {"asked": asked}
 
-def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
         raise ConfirmationError("Generation requires a prompt")
 
@@ -114,7 +114,7 @@ def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -
     )
     return {"job_id": job.id}
 
-def _validate_generate_podcast(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_generate_podcast(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     mode = str(payload.get("mode") or "summarize")
     if mode not in {"summarize", "read", "research"}:
         raise ConfirmationError("Unsupported podcast mode")

@@ -70,8 +70,16 @@ def wait_for_idle_autopilot(timeout: float = 5.0) -> bool:
 def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     """这张卡该不该自动放行。**纯读**,不改任何东西。
 
-    顺序即优先级:没有会话 → 不是开模式的那个人 → 工具白名单 → bypass → auto 分档。
+    顺序即优先级:这一次不用问人 → 没有会话 → 不是开模式的那个人 → 工具白名单 → bypass → auto 分档。
+
+    第一条排在「没有会话」之前:它不是谁开的口子,而是这次调用本身不需要口子(工具自己声明,
+    见 ConfirmableTool.needs_card)—— MCP 直连、飞书上跑一个只读的工具格也一样直接跑。
     """
+    from app.domain.agent.confirmable import tool_spec
+
+    spec = tool_spec(confirmation.tool)
+    if spec is not None and spec.needs_card is not None and not spec.needs_card(db, confirmation.payload or {}):
+        return Decision(approve=True, mode="no-card", detail={"permission": confirmation.permission})
     if not confirmation.session_id:
         # MCP 直连、飞书外部智能体的卡没有会话可挂模式。让它们继承任何"默认模式"就是授权范围
         # 逃逸:用户为某次对话开的口子,被一条他根本没在看的通道用掉。

@@ -47,7 +47,7 @@ def _execute_publish_asset(db: Session, confirmation: Any, actor: str | None) ->
     )
     return {"task_id": task.id, "status": task.status}
 
-def _validate_http_request(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_http_request(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     url = str(payload.get("url") or "").strip()
     if not (url.startswith("http://") or url.startswith("https://")):
         # file:// 会把本机文件读成「请求结果」交回给模型。只认 http(s),而且在**开卡时**就认 ——
@@ -71,7 +71,7 @@ def _execute_http_request(db: Session, confirmation: Any, actor: str | None) -> 
         body=str(payload.get("body") or ""),
     )
 
-def _validate_run_code(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_run_code(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.domain import sandbox
 
     if sandbox.active_backend() is None:
@@ -93,7 +93,7 @@ def _execute_run_code(db: Session, confirmation: Any, actor: str | None) -> dict
 
     return run_python(str(payload.get("code") or ""), dict(payload.get("inputs") or {}))
 
-def _validate_run_host_code(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_run_host_code(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.domain import host_code
 
     reason = host_code.available()
@@ -123,7 +123,7 @@ def _execute_run_host_code(db: Session, confirmation: Any, actor: str | None) ->
     except host_code.HostCodeError as exc:
         raise ConfirmationError(exc.key, **exc.params) from exc
 
-def _validate_browser_open(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_browser_open(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     url = str(payload.get("url") or "").strip()
     if url and not (url.startswith("http://") or url.startswith("https://")):
         raise ConfirmationError("confirmErr_browserHttpOnly")
@@ -153,7 +153,7 @@ def _execute_browser_open(db: Session, confirmation: Any, actor: str | None) -> 
         browser_domain.run_action(session.id, "navigate", {"url": url})
     return {"session_id": session.id, "url": url}
 
-def _validate_browser_pool_open(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+def _validate_browser_pool_open(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.domain import browser as browser_domain
 
     url = str(payload.get("url") or "").strip()

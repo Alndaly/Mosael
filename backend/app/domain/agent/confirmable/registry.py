@@ -27,8 +27,10 @@ COSTS = ("none", "render", "ai")
 class ConfirmableTool:
     """一个会改东西的工具:开卡前怎么校验、卡上怎么说、批准之后做什么。
 
-    - `validate(db, workspace_id, payload)` —— 说不通的请求**在开卡之前**就拒(一张注定执行不了
-      的卡没有让用户去点的道理)。可以顺手把摘要要用的事实写回 payload。
+    - `validate(db, workspace_id, payload, actor)` —— 说不通的请求**在开卡之前**就拒(一张注定执行不了
+      的卡没有让用户去点的道理)。可以顺手把摘要要用的事实写回 payload。`actor` 是**开卡的人**
+      (发起这次调用的凭据是谁的):有些事实因人而异 —— 画板上一个插件工具在不在,取决于他接没接
+      那个插件(见 boards.producers)。批准之后替谁干是另一回事,见 execute 的 actor。
     - `summarize(db, payload)` —— 卡上那句话,返回 **(文案 key, 参数)**。说的必须是待会儿真要
       做的事。
 
@@ -47,7 +49,14 @@ class ConfirmableTool:
     cost: str
     summarize: Callable[[Session, dict[str, Any]], tuple[str, dict[str, Any]]]
     execute: Callable[[Session, Any, str | None], dict[str, Any]]
-    validate: Callable[[Session, str, dict[str, Any]], None] | None = None
+    validate: Callable[[Session, str, dict[str, Any], str | None], None] | None = None
+    #: 这一次调用**要不要问人**。None = 总要问(绝大多数工具)。返回 False 的调用照样开一张卡
+    #: (留痕、同一条等待协议),但不等人点 —— 判定见 autopilot.decide 的第一条。
+    #:
+    #: 为画板工具格而设(ADR 0021 决定 2):智能体替人跑一个只读的工具,和它读一份素材没有区别,
+    #: 弹卡只会让「帮我把这几张便签拼一下」变成三次点击;花钱的、对外的才要人看一眼。判据落在
+    #: validate 写回 payload 的事实上,所以说的是开卡这一刻那个工具的真实后果。
+    needs_card: Callable[[Session, dict[str, Any]], bool] | None = None
     #: 自动放行里的哪一档(`domain/agent/rules`)。空 = 这类操作没有可枚举的判据,一律回到人。
     #: **由工具自己声明**,而不是让权限领域去列一张工具名单 —— 它不该认识 Blender 是什么。
     gate: str = ""

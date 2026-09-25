@@ -386,7 +386,7 @@ class Test工作流节点和确认卡:
         from app.domain.agent.confirmations import ConfirmationError
 
         def _validate_payload(db, tool, workspace_id, payload):
-            tool_spec(tool).validate(db, workspace_id, payload)
+            tool_spec(tool).validate(db, workspace_id, payload, None)
         from tests.util import fresh_client
 
         client = fresh_client()

@@ -6,6 +6,10 @@
 
 算子按顺序作用在一份副本上,所以 add_item → connect 放在同一批里就能用(后面的算子看得见
 前面新加的项)。产物不在这里校验 —— 交给 normalize_canvas,它才是"存得下、读得回"的那道关。
+
+工具格(`action`)的表单也由算子写:`add_item` 带上 producer/config/bindings,`set_form` 改它。
+这里只管**形状**(是个工具、是个对象);「这个人有没有这个工具、绑定接得上吗、字段对不对」要看
+注册表和整张画布,由调用方在落库之前问 boards.producers.check_forms(见智能体的 edit_board)。
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import copy
 from typing import Any
 
 from app.domain.boards.canvas import DEFAULT_SIZE, ITEM_KINDS, NOTE_COLORS, BoardDomainError, finite_number, item_not_found
+from app.domain.boards.producer_ids import node_type_of
 
 BOARD_OP_KINDS = (
     "add_item",
@@ -25,7 +30,40 @@ BOARD_OP_KINDS = (
     "remove_item",
     "connect",
     "remove_edge",
+    "set_form",
 )
+
+#: 算子上写工具格表单的那三样(和画布上 `form` 里的键同名)。
+_FORM_KEYS = ("producer", "config", "bindings")
+
+
+def _tool_form(op: dict[str, Any], current: dict[str, Any], item_id: str) -> dict[str, Any]:
+    """按算子写一格工具格的表单:`{"config", "bindings", "producer"}`(产出者排最后,和 actions._pending 一致)。
+
+    · `producer` 只能是一个工具(`node:<节点类型>`)。内置的写字 / 生成 / 念 / 截的表单是各自面板的
+      形状,由用户在面板上填;替他写一份面板不认的表单,只会让面板打不开。
+    · 换了工具,旧的 config / bindings 属于上一个工具,一并清掉。
+    · 同一个工具:`config` **逐键合并**(值为 null = 删掉这个键),`bindings` **逐字段替换**
+      (空列表或 null = 这个字段不再接上游)—— 改一个字段不必把整张表单抄一遍。
+    """
+    producer = op.get("producer", current.get("producer"))
+    if node_type_of(str(producer or "")) is None:
+        raise BoardDomainError("boardErr_formNeedsTool", item_id=item_id, producer=str(producer or ""))
+    same = producer == current.get("producer")
+    config = dict(current.get("config") or {}) if same else {}
+    bindings = dict(current.get("bindings") or {}) if same else {}
+    for key, into in (("config", config), ("bindings", bindings)):
+        patch = op.get(key)
+        if patch is None:
+            continue
+        if not isinstance(patch, dict):
+            raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field=f"form.{key}")
+        for field, value in patch.items():
+            if value is None or (key == "bindings" and value == []):
+                into.pop(field, None)
+            else:
+                into[field] = value
+    return {"config": config, "bindings": bindings, "producer": producer}
 
 
 def _require(by_id: dict[str, dict], item_id: str) -> dict:
@@ -90,7 +128,12 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["note_revision"] = op.get("note_revision")
             if op.get("scene_id"):
                 item["scene_id"] = str(op["scene_id"])
-            if op.get("asset_id"):
+            if item_kind == "action":
+                #: 工具格就是「跑哪个工具」—— 没有工具的一格什么也做不了,不放。
+                item["form"] = _tool_form(op, {}, item_id)
+            elif any(op.get(key) is not None for key in _FORM_KEYS):
+                raise BoardDomainError("boardErr_formOnlyOnAction", item_id=item_id, kind=item_kind)
+            elif op.get("asset_id"):
                 item["asset_id"] = str(op["asset_id"])
             else:
                 #: 还没有产出的一格(便签、空的图片/视频/音频槽)写明它的产出者 —— 面板照它挂,
@@ -111,6 +154,14 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["title"] = title
             else:
                 item.pop("title", None)
+
+        elif kind == "set_form":
+            #: 改工具格的表单:换工具、改配置、改哪些字段接上游。只对工具格 —— 别的格子的表单归面板。
+            item_id = str(op.get("item_id", ""))
+            item = _require(by_id, item_id)
+            if item.get("kind") != "action":
+                raise BoardDomainError("boardErr_formOnlyOnAction", item_id=item_id, kind=str(item.get("kind")))
+            item["form"] = _tool_form(op, dict(item.get("form") or {}), item_id)
 
         elif kind == "set_text":
             _require(by_id, str(op.get("item_id", "")))["text"] = str(op.get("text", ""))
