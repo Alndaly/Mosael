@@ -9,14 +9,13 @@ from jsonschema import SchemaError, ValidationError, validate as validate_json_s
 from jsonschema.validators import validator_for
 from sqlalchemy.orm import Session
 
-from app.db.models import Workflow
 from app.core.usage_scope import workspace_scope
 from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
 from app.domain.usage import billable, once
 from app.domain.providers import require_connection
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 from app.domain.workflows.executors.common import text_lines
 
 LLM_TIMEOUT_SECONDS = 120
@@ -354,7 +353,7 @@ def _json_result(
 
 
 @register("llm")
-def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     profile = require_connection(db, config.get("profile_id"), user_id=current_actor(db), error=WorkflowDomainError)
     messages: list[dict[str, Any]] = []
     if config.get("system"):
@@ -407,9 +406,9 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             capability="chat",
             operation="workflow_llm",
             idempotency_key=once("workflow_llm"),
-            workspace_id=workflow.workspace_id,
+            workspace_id=scope.workspace_id,
             source_type="workflow",
-            source_id=workflow.id,
+            source_id=scope.id,
         ) as call:
             turn = list(messages)
             bad: _BadJson | None = None
@@ -462,7 +461,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
 
 
 @register("translate_lines")
-def translate_lines(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """整轨一次翻完。
 
     **收什么都行:一列字符串、一列带 `text` 的段落、一段 JSON 数组或一行一条的文本**
@@ -482,7 +481,7 @@ def translate_lines(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     texts = text_lines(config.get("texts"))
     if not texts:
         return {"texts": [], "count": 0}
-    with workspace_scope(getattr(workflow, "workspace_id", "") or ""):
+    with workspace_scope(getattr(scope, "workspace_id", "") or ""):
         translated = translate_many(
             db,
             texts,
@@ -497,15 +496,15 @@ def translate_lines(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
 
 
 @register("translate")
-def translate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def translate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.translate import translate as translate_text
 
     text = str(config.get("text", ""))
     if not text.strip():
         return {"text": ""}
     # 工作流跑在后台线程,没有 HTTP 请求把工作区绑进上下文 —— 显式圈一下,AI 翻译的用量才有归属。
-    # workflow 可能为 None(单元测试直接调节点);那时没有归属可绑,记账会跳过并 warning。
-    with workspace_scope(getattr(workflow, "workspace_id", "") or ""):
+    # scope 可能为 None(单元测试直接调节点);那时没有归属可绑,记账会跳过并 warning。
+    with workspace_scope(getattr(scope, "workspace_id", "") or ""):
         translated = translate_text(
             db,
             text,

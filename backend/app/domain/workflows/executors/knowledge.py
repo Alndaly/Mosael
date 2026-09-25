@@ -2,11 +2,10 @@
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.db.models import Workflow
 from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, create_note, query_notes, read_reference
 from app.domain.workflows import WorkflowDomainError, field_name
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 
 
 #: 搜索结果每条摘录多长,以及命中处前面留多少上下文。
@@ -29,16 +28,16 @@ def _integer(value, default, minimum, maximum, key):
 
 
 @register("note_search")
-def note_search(db: Session, workflow: Workflow, config: dict) -> dict:
+def note_search(db: Session, scope: RunScope, config: dict) -> dict:
     query = str(config.get("query") or "").strip()
     if len(query) > 300:
         raise WorkflowDomainError("wfErr_queryTooLong")
     limit = _integer(config.get("limit"), 10, 1, 50, "limit")
     offset = _integer(config.get("offset"), 0, 0, 1000000, "offset")
-    rows = query_notes(db, workflow.workspace_id, query, limit=limit + 1, offset=offset)
+    rows = query_notes(db, scope.workspace_id, query, limit=limit + 1, offset=offset)
     matches = []
     for note in rows[:limit]:
-        ref = read_reference(db, workflow.workspace_id, note.id)
+        ref = read_reference(db, scope.workspace_id, note.id)
         # An excerpt is deliberately labelled: read_note supplies the full source.
         markdown = ref.pop("markdown")
         at = max(0, markdown.casefold().find(query.split()[0].casefold()) - _EXCERPT_LEAD) if query else 0
@@ -53,10 +52,10 @@ def note_search(db: Session, workflow: Workflow, config: dict) -> dict:
 
 
 @register("note_read")
-def note_read(db: Session, workflow: Workflow, config: dict) -> dict:
+def note_read(db: Session, scope: RunScope, config: dict) -> dict:
     revision = _integer(config.get("revision"), None, 1, 1000000000, "revision")
     try:
-        ref = read_reference(db, workflow.workspace_id, str(config.get("note_id") or ""), revision)
+        ref = read_reference(db, scope.workspace_id, str(config.get("note_id") or ""), revision)
     except NoteDomainError as exc:
         # 领域到领域的翻译:笔记读不到,对工作流来说是这个节点失败。
         raise WorkflowDomainError.from_error(exc) from exc
@@ -64,15 +63,15 @@ def note_read(db: Session, workflow: Workflow, config: dict) -> dict:
 
 
 @register("note_create")
-def note_create(db: Session, workflow: Workflow, config: dict) -> dict:
+def note_create(db: Session, scope: RunScope, config: dict) -> dict:
     try:
         tags = config.get("tags") or ""
         tags = tags if isinstance(tags, list) else str(tags).replace("，", ",").split(",")
         content = NoteContent(title=config.get("title") or "", markdown=config.get("markdown") or "", tags=tags)
         if not content.markdown.strip():
             raise WorkflowDomainError("wfErr_noteBodyEmpty")
-        note = create_note(db, workflow.workspace_id, content)
-        ref = read_reference(db, workflow.workspace_id, note.id)
+        note = create_note(db, scope.workspace_id, content)
+        ref = read_reference(db, scope.workspace_id, note.id)
         return {"note_id": ref["note_id"], "title": ref["title"], "revision": ref["revision"], "citation_url": ref["citation_url"]}
     except (NoteDomainError, ValidationError) as exc:
         raise WorkflowDomainError.from_error(exc) from exc

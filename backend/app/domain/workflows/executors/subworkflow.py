@@ -14,21 +14,21 @@ from app.db.models import Job, Workflow
 from app.domain.jobs import current_parent_job_id
 from app.domain.workflows import WorkflowDomainError, interpolate
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 from app.domain.workflows.executors.common import run_body, wait_for_job
 
 MAX_NEST_DEPTH = 8
 
 
 @register("output")
-def output(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def output(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """声明工作流输出:config['values'] 里的引用已被引擎插值,原样作为具名输出返回。"""
     values = config.get("values")
     return {"output": dict(values) if isinstance(values, dict) else {}}
 
 
 @register("subgraph")
-def subgraph(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def subgraph(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """内嵌子图(ComfyUI 式「折叠为子图」的运行时):把一组节点封装成一个可复用单元,内嵌、可任意
     嵌套。**与主引擎同一套内核**(execute_graph):并行 / 数据边 / 条件分支语义与顶层一致。
 
@@ -41,7 +41,7 @@ def subgraph(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[st
     body = config.get("body") or {"nodes": [], "edges": []}
     inputs = config.get("inputs")
     seed = {"input": dict(inputs)} if isinstance(inputs, dict) else {"input": {}}
-    context = run_body("subgraph", body, seed, workflow_id=workflow.id)
+    context = run_body("subgraph", body, seed, workflow_id=scope.id)
     output_tpl = config.get("output")
     if output_tpl:
         return {"output": interpolate(output_tpl, context)}
@@ -70,17 +70,17 @@ def _guard_recursion(db: Session, target_id: str, current_wf_id: str) -> None:
 
 
 @register("call_workflow")
-def call_workflow(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def call_workflow(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.workflows.engine import start_workflow_job
 
     target_id = str(config.get("workflow_id") or "").strip()
     if not target_id:
         raise WorkflowDomainError("wfErr_pickWorkflow")
     target = db.get(Workflow, target_id)
-    if target is None or target.workspace_id != workflow.workspace_id:
+    if target is None or target.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_calledWorkflowMissing")
 
-    _guard_recursion(db, target_id, workflow.id)
+    _guard_recursion(db, target_id, scope.id)
 
     inputs = config.get("inputs")
     params = dict(inputs) if isinstance(inputs, dict) else {}

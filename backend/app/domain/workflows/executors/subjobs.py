@@ -14,10 +14,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Clip, Sequence, Transcript, Workflow
+from app.db.models import Asset, Clip, Sequence, Transcript
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job
 
@@ -52,11 +52,11 @@ def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
 
 
 @register("transcribe_asset")
-def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.voices.transcription import start_transcription
 
     # 收进工作区:转写结果会**返回到工作流输出里**,不挡等于让别的工作区的内容流出来。
-    asset_id = _asset_in(db, workflow, str(config.get("asset_id", "")).strip()).id
+    asset_id = _asset_in(db, scope, str(config.get("asset_id", "")).strip()).id
     child = start_transcription(
         db,
         asset_id,
@@ -98,12 +98,12 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
 
 
 @register("export_sequence")
-def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.render import start_export
 
     # start_export 会把渲染任务建在**序列所属的那个工作区**(workspace_id=sequence.workspace_id),
     # 所以不挡的话,A 工作区的工作流能在 B 工作区里起一个渲染任务并拿到产出的 asset_id。
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     child = start_export(db, sequence.id, created_by=current_actor(db))
     final = wait_for_job(child.id, release=db)
     asset_id = str((final.result or {}).get("asset_id", ""))
@@ -111,7 +111,7 @@ def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
 
 
 @register("ai_generate")
-def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import GenerationDomainError, keep_source_group, parse_source_assets
     from app.domain.generation.runner import start_generation_thread
@@ -121,7 +121,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     try:
         generation, child = create_generation_job(
             db,
-            workspace_id=workflow.workspace_id,
+            workspace_id=scope.workspace_id,
             session_id=None,
             project_id=None,
             created_by=current_actor(db),
@@ -155,11 +155,11 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
 
 
 @register("video_to_gif")
-def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def video_to_gif(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.assets.video_gif import VideoGifError, start_video_to_gif
 
     asset = db.get(Asset, str(config.get("asset_id") or ""))
-    if asset is None or asset.workspace_id != workflow.workspace_id:
+    if asset is None or asset.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_gifAssetNotInWorkspace")
     try:
         child = start_video_to_gif(
@@ -180,7 +180,7 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
     }
 
 
-def _speech_params(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def _speech_params(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """「引擎 + 音色」两格 → 合成要的那组参数(见 voices.engine_catalog.synthesis_params)。
 
     音色的报错原样转述(带着它的 key):此前在前面拼一截「语音合成」/「字幕配音」,那截是
@@ -195,14 +195,14 @@ def _speech_params(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
             voice=str(config.get("voice") or ""),
             speed=float(config.get("speed") or 1.0),
             user_id=current_actor(db),
-            workspace_id=workflow.workspace_id,
+            workspace_id=scope.workspace_id,
         )
     except VoiceError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
 
 
 @register("synthesize_speech")
-def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """把文本念出来。音色是一格,引擎决定它指什么(见 `_speech_params`)。"""
     from app.domain.voices.voices import start_synthesis
 
@@ -211,22 +211,22 @@ def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -
         text=str(config.get("text", "")),
         project_id=None,
         created_by=current_actor(db),
-        **_speech_params(db, workflow, config),
+        **_speech_params(db, scope, config),
     )
     final = wait_for_job(child.id, release=db)
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
 
 
 @register("publish")
-def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.db.models import Asset, PublishAccount
     from app.domain.publish import start_publish
 
     account = db.get(PublishAccount, str(config.get("account_id", "")))
-    if account is None or account.workspace_id != workflow.workspace_id:
+    if account is None or account.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_publishAccountMissing")
     asset = db.get(Asset, str(config.get("asset_id", "")))
-    if asset is None or asset.workspace_id != workflow.workspace_id:
+    if asset is None or asset.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_publishAssetMissing")
     # 用的是**这次运行**的授权:操作人(手动运行是点运行的人,定时任务 / webhook 是任务主人,
     # 见 scheduler.operations._open_run),加上被执行那一版图的担保人(见 workflows.authority)。
@@ -235,7 +235,7 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
 
     task = start_publish(
         db,
-        workspace_id=workflow.workspace_id,
+        workspace_id=scope.workspace_id,
         account=account,
         asset=asset,
         title=str(config.get("title", "")),
@@ -251,7 +251,7 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
 
 
 @register("edit_timeline")
-def edit_timeline(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def edit_timeline(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """把一组操作应用到时间线上。
 
     智能体早就能做这件事(edit_timeline 工具),而工作流只能「导出序列」—— 于是「生成素材
@@ -268,7 +268,7 @@ def edit_timeline(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     #
     # 智能体走同一个算子却不受影响:它在确认卡**建立时**就查过归属(见 agent/confirmations
     # 的 _validate_payload)。漏的只有这一条路。
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     sequence_id = sequence.id
     operations = config.get("operations")
     if isinstance(operations, str):
@@ -289,7 +289,7 @@ def edit_timeline(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
 
 
 @register("inspect_sequence")
-def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def inspect_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """看一眼时间线现在长什么样 —— 编排之前得先知道有哪些轨道、片段排到了第几秒。
 
     智能体有对应的工具;工作流此前只能盲改。
@@ -298,7 +298,7 @@ def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     if not sequence_id:
         raise WorkflowDomainError("wfErr_inspectNeedsSequence")
     sequence = db.get(Sequence, sequence_id)
-    if sequence is None or sequence.workspace_id != workflow.workspace_id:
+    if sequence is None or sequence.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_sequenceNotInWorkspace")
     tracks = [
         {
@@ -337,8 +337,8 @@ def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     }
 
 
-def _asset_in(db: Session, workflow: Workflow, asset_id: str) -> Asset:
-    """取这份素材,并确认它属于本工作流所在的工作区。和 _sequence_in 成对。
+def _asset_in(db: Session, scope: RunScope, asset_id: str) -> Asset:
+    """取这份素材,并确认它属于这次运行所在的工作区。和 _sequence_in 成对。
 
     asset_id 同样常常来自上游节点。少了这一条,A 工作区的工作流能转写 B 工作区的素材
     ——而转写结果是**要返回到工作流输出里**的,那是把别人的内容读出来。
@@ -346,13 +346,13 @@ def _asset_in(db: Session, workflow: Workflow, asset_id: str) -> Asset:
     if not asset_id:
         raise WorkflowDomainError("wfErr_assetIdMissing")
     asset = db.get(Asset, asset_id)
-    if asset is None or asset.workspace_id != workflow.workspace_id:
+    if asset is None or asset.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_assetNotInWorkspace")
     return asset
 
 
-def _sequence_in(db: Session, workflow: Workflow, sequence_id: str) -> Sequence:
-    """取这条序列,并确认它属于本工作流所在的工作区。
+def _sequence_in(db: Session, scope: RunScope, sequence_id: str) -> Sequence:
+    """取这条序列,并确认它属于这次运行所在的工作区。
 
     sequence_id 常常来自上游节点,而上游可能拿到任何地方的 id —— 这一条挡的是
     「用 A 工作区的工作流去改 B 工作区的时间线」。
@@ -360,7 +360,7 @@ def _sequence_in(db: Session, workflow: Workflow, sequence_id: str) -> Sequence:
     if not sequence_id:
         raise WorkflowDomainError("wfErr_sequenceIdMissing")
     sequence = db.get(Sequence, sequence_id)
-    if sequence is None or sequence.workspace_id != workflow.workspace_id:
+    if sequence is None or sequence.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_sequenceNotInWorkspace")
     return sequence
 
@@ -374,7 +374,7 @@ _TRACK_FOR_ASSET = {"audio": "audio"}
 
 
 @register("timeline_append")
-def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """把一份素材接到轨道上 —— 默认接在末尾,也可以放在指定的那一秒。
 
     **这是编排里占九成的动作**,所以它是一个有真表单的节点,而不是让人手写一条
@@ -383,12 +383,12 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     """
     from app.domain.sequences.operations import InsertClip, SetClipSpeed, insert_clip, set_clip_speed, timeline_span
 
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     asset_id = str(config.get("asset_id", "")).strip()
     if not asset_id:
         raise WorkflowDomainError("wfErr_assetIdMissing")
     asset = db.get(Asset, asset_id)
-    if asset is None or asset.workspace_id != workflow.workspace_id:
+    if asset is None or asset.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_assetNotInWorkspace")
 
     tracks = list(sequence.tracks or [])
@@ -470,10 +470,10 @@ def _fit_speed(span: float, max_duration: Any) -> float | None:
 
 
 @register("timeline_add_track")
-def timeline_add_track(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def timeline_add_track(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.sequences.operations import AddTrack, add_track
 
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     kind = str(config.get("kind", "video")).strip() or "video"
     before = {one.id for one in (sequence.tracks or [])}
     add_track(db, sequence.id, AddTrack(kind=kind))
@@ -484,14 +484,14 @@ def timeline_add_track(db: Session, workflow: Workflow, config: dict[str, Any]) 
 
 
 @register("timeline_clear")
-def timeline_clear(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def timeline_clear(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """删掉所有片段,轨道留着。
 
     留着轨道是有意的:重跑一条工作流时,下游的「接素材」还指望那几条轨道在。
     """
     from app.domain.sequences.operations import DeleteClip, delete_clip
 
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     clip_ids = [clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])]
     for clip_id in clip_ids:
         delete_clip(db, sequence.id, DeleteClip(clip_id=clip_id))
@@ -500,7 +500,7 @@ def timeline_clear(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
 
 
 @register("timeline_cut_ranges")
-def timeline_cut_ranges(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """一次删除同一片段的多个源时间范围，并把保留段首尾相接。
 
     不能循环调用 cut_clip_range：第一次裁切后原 clip_id 已经不存在。批量算子在删除原片段前先
@@ -508,7 +508,7 @@ def timeline_cut_ranges(db: Session, workflow: Workflow, config: dict[str, Any])
     """
     from app.domain.sequences.operations import CutClipRanges, cut_clip_ranges
 
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id") or "").strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id") or "").strip())
     clip_id = str(config.get("clip_id") or "").strip()
     if not clip_id:
         raise WorkflowDomainError("wfErr_cutNeedsClip")
@@ -663,7 +663,7 @@ def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
 
 
 @register("generate_subtitles")
-def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """把逐字稿段落批量插成时间线上的字幕条。
 
     **时间码来自 segments,文本可以来自别处**:这正是"翻译后配字幕"需要的形状 —— 译文是逐条
@@ -676,7 +676,7 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
     from app.domain.sequences.operations import GenerateSubtitles
     from app.domain.sequences.operations import generate_subtitles as generate
 
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     segments = _segments_in(config.get("segments"))
     allow_empty = _yes_no(config, "allow_empty", default=False)
     nothing = {"track_id": "", "clip_ids": [], "count": 0, "sequence_id": sequence.id}
@@ -737,7 +737,7 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
 
 
 @register("dub_subtitles")
-def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """给这些字幕条配音,落到一条专门的配音轨。
 
     和「语音合成」的分工:那个念一段文本、交出一份音频素材,由谁摆到哪一秒是下游的事;这个念
@@ -749,7 +749,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
     from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
 
-    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     clip_ids = id_list(config.get("clip_ids"))
     if not clip_ids:
         # **空进空出。**「该不该为空」是上游说了算的:「生成字幕」默认 0 条就报错,选了
@@ -763,7 +763,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
             "original_audio_note": t("dubOriginalAudio_keep", get_current_locale()),
         }
 
-    synthesis = _speech_params(db, workflow, config)
+    synthesis = _speech_params(db, scope, config)
     try:
         job = start_subtitle_dub(
             db,
@@ -792,7 +792,7 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
 
 
 @register("separate_audio")
-def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def separate_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """把一份素材拆成人声 + 背景音两份新素材。
 
     **节点不认识任何引擎** —— 它只跟 domain.separation 说话,由注册表决定这次用哪个
@@ -807,7 +807,7 @@ def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any])
 
     #: **收进工作区**,不是直接 db.get —— asset_id 常常来自上游节点,少了这一条,
     #: A 工作区的工作流能拆 B 工作区的素材,而产出的两份 stem 是要返回到工作流输出里的。
-    asset = _asset_in(db, workflow, str(config.get("asset_id") or "").strip())
+    asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
     try:
         child = start_separation_job(
             db, asset=asset, created_by=current_actor(db), engine=str(config.get("engine") or "")
@@ -823,7 +823,7 @@ def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any])
 
 
 @register("denoise_audio")
-def denoise_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def denoise_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """降噪,产出一份新素材。节点不认识任何引擎,只跟 domain.denoise 说话(ADR-0017)。
 
     排成子任务再等它,理由同分离节点。
@@ -832,7 +832,7 @@ def denoise_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) 
     from app.domain.denoise import start_denoise_job
 
     # 收进工作区(同分离节点):asset_id 常常来自上游,不能让一个工作区的流程动另一个工作区的素材。
-    asset = _asset_in(db, workflow, str(config.get("asset_id") or "").strip())
+    asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
     try:
         child = start_denoise_job(
             db,
@@ -848,7 +848,7 @@ def denoise_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) 
 
 
 @register("asset")
-def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def asset_node(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """指向一份素材,把它的 id 交给下游。
 
     **它不做任何事**,存在的意义是让「这条流程从这份素材开始」在画布上有一个说法 ——
@@ -861,7 +861,7 @@ def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[
     if not asset_id:
         raise WorkflowDomainError("wfErr_assetNodeEmpty")
     asset = db.get(Asset, asset_id)
-    if asset is None or asset.workspace_id != workflow.workspace_id:
+    if asset is None or asset.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_assetNotInWorkspace")
     media_info = asset.media_info or {}
 

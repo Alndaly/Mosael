@@ -14,9 +14,8 @@ from typing import Any, Iterator
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Workflow
 from app.domain.workflows import WorkflowDomainError, interpolate
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 from app.domain.workflows.executors.common import run_body, truthy
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
@@ -60,7 +59,7 @@ def _brief(item: Any) -> str:
 
 
 @register("loop_foreach")
-def loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     items = config.get("items")
     if isinstance(items, str):
         items = [line.strip() for line in items.splitlines() if line.strip()]
@@ -83,7 +82,7 @@ def loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
                 "loop_foreach",
                 body,
                 {"loop": {"item": item, "index": index}, "input": shared_inputs},
-                workflow_id=workflow.id,
+                workflow_id=scope.id,
             )
         if output_tpl:
             return interpolate(output_tpl, ctx)
@@ -178,7 +177,7 @@ def _all_failures(failures: list[tuple[int, BaseException]], *, total: int, skip
 
 
 @register("loop_while")
-def loop_while(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def loop_while(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     body = config.get("body") or {"nodes": [], "edges": []}
     condition_tpl = str(config.get("condition") or "")
     output_tpl = config.get("output", "")
@@ -192,7 +191,7 @@ def loop_while(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[
     # Do-while: the condition references body outputs, so it can only be evaluated after a run.
     while index < max_iter:
         with _blame_iteration(index, max_iter):
-            ctx = run_body("loop_while", body, {"loop": {"index": index}}, workflow_id=workflow.id)
+            ctx = run_body("loop_while", body, {"loop": {"index": index}}, workflow_id=scope.id)
         if output_tpl:
             results.append(interpolate(output_tpl, ctx))
         else:

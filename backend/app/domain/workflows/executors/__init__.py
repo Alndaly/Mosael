@@ -3,7 +3,7 @@
 NODE_TYPES(workflows/__init__.py)是节点的**元数据**接缝——驱动校验、画布 UI 和
 智能体提示;这里是节点的**行为**接缝:每种节点类型注册一个执行器适配器,统一签名
 
-    handler(db: Session, workflow: Workflow, config: dict) -> dict
+    handler(db: Session, scope: RunScope, config: dict) -> dict
 
 引擎(engine.py)只认这个注册表,对具体领域零 import——新增节点 = 新增一个执行器
 模块并 @register,引擎与调度语义不动。tests/test_workflows.py 的覆盖测试强制
@@ -12,13 +12,34 @@ NODE_TYPES 与本注册表一一对应,防止两个接缝漂移。
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Workflow
 
-Handler = Callable[[Session, Workflow, dict[str, Any]], dict[str, Any]]
+class RunScope(Protocol):
+    """执行器跑在**谁名下** —— 只有这三样,不是整个工作流。
+
+    执行器此前拿的是 Workflow 这个 ORM 对象,实际只读了三个属性:归哪个工作区(素材、用量、
+    通知的归属)、一个稳定 id(防递归、通知里指回去、子图的归属)、一个名字(新建东西时的默认名)。
+    把签名收窄到这三样,节点就不再只能在工作流里跑 —— 创意画板跑一个节点时给的是它自己的
+    作用域,而不是伪造一个工作流。**执行者是谁不在这里**:那是 `current_actor(db)`,跟着任务走。
+
+    Workflow 本身就满足这个协议,引擎直接传它。棘轮
+    tests/test_executors_only_read_run_scope.py 钉住执行器只碰这三个属性。
+    """
+
+    @property
+    def workspace_id(self) -> str: ...
+
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def name(self) -> str: ...
+
+
+Handler = Callable[[Session, RunScope, dict[str, Any]], dict[str, Any]]
 
 _REGISTRY: dict[str, Handler] = {}
 

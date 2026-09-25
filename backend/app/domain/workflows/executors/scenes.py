@@ -17,9 +17,9 @@ from typing import Any
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.db.models import Scene3D, Workflow
+from app.db.models import Scene3D
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 from app.domain.workflows.executors.common import id_list
 
 
@@ -51,7 +51,7 @@ def _canonical(layout: dict[str, Any]) -> dict[str, Any]:
 
 
 @register("scene_props")
-def scene_props(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def scene_props(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """交给布景师的道具清单:这个工作区里哪些模型能摆,各自多大。
 
     **尺寸是量出来的,不是填的**:读一遍 GLB 取包围盒。布景师要靠它决定摆在哪、和人偶比多高 ——
@@ -68,7 +68,7 @@ def scene_props(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
 
     # 逗号串(选择器存的)或列表(整串引用上游输出)都合法 —— 和素材 id 同一份解析。
     wanted = id_list(config.get("model_ids"))
-    available = {model.id: model for model in list_models(db, workflow.workspace_id)}
+    available = {model.id: model for model in list_models(db, scope.workspace_id)}
     chosen: list[Scene3DModel] = ([available[one] for one in wanted if one in available]
                                   if wanted else list(available.values()))
 
@@ -96,11 +96,11 @@ def scene_props(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
 
 
 @register("scene_create")
-def scene_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def scene_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.scene_types import SceneContent
     from app.domain.scenes import SceneDomainError, create_scene
 
-    name = str(config.get("name") or "").strip() or workflow.name
+    name = str(config.get("name") or "").strip() or scope.name
     try:
         content = SceneContent.model_validate(_canonical(_layout(config.get("layout"))))
     except ValidationError as exc:
@@ -110,7 +110,7 @@ def scene_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
         )
         raise WorkflowDomainError("wfErr_sceneLayoutInvalid", params={"reason": reasons}) from exc
     try:
-        scene = create_scene(db, workflow.workspace_id, name[:160], content)
+        scene = create_scene(db, scope.workspace_id, name[:160], content)
     except SceneDomainError as exc:
         raise WorkflowDomainError("wfErr_sceneLayoutInvalid", params={"reason": str(exc)}) from exc
     return {
@@ -121,12 +121,12 @@ def scene_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 
 @register("scene_render")
-def scene_render(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def scene_render(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.scenes import SceneDomainError, render_shot_references
 
     scene_id = str(config.get("scene_id") or "").strip()
     scene = db.get(Scene3D, scene_id) if scene_id else None
-    if scene is None or scene.workspace_id != workflow.workspace_id:
+    if scene is None or scene.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_sceneNotInWorkspace")
     try:
         return render_shot_references(

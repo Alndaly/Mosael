@@ -294,6 +294,7 @@ def execute_graph(
             with NODE_CONNECTIONS, SessionLocal() as node_db:  # 每节点独立 session(非线程安全)
                 if is_cancelled(node_db):
                     raise WorkflowDomainError("wfErr_cancelled")
+                # 工作流本身就是节点的运行作用域(RunScope:工作区、id、名字),直接给它。
                 wf = node_db.get(Workflow, wf_id)
                 outputs = handler(node_db, wf, config)
                 # **节点跑完就是它的事务边界。** 只在成功时提交:失败节点半途 flush 的东西不该留下。

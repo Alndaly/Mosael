@@ -7,13 +7,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Project, Workflow
+from app.db.models import Asset, Project
 from app.domain.jobs import current_actor
 from app.domain.notifications import notify
 from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
-from app.domain.workflows.executors import register, register_prefix
+from app.domain.workflows.executors import RunScope, register, register_prefix
 from app.domain.workflows.executors.common import id_list, provided
 
 
@@ -64,7 +64,7 @@ def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str)
 
 
 @register("plugin_tool")
-def plugin_tool(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def plugin_tool(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """通用插件节点。**保留但不再进节点面板** —— 插件工具现在各自是一个节点(见下面的前缀
     执行器),但用户磁盘上和导出文件里已经存着这种节点,它得继续跑。
 
@@ -73,7 +73,7 @@ def plugin_tool(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     instance_id = _resolve_instance(db, str(config.get("plugin_id", "")), tool_name, str(config.get("instance_id", "")))
     return {
         "output": _run_plugin_tool(
-            db, instance_id, tool_name, dict(config.get("input") or {}), workspace_id=workflow.workspace_id
+            db, instance_id, tool_name, dict(config.get("input") or {}), workspace_id=scope.workspace_id
         )
     }
 
@@ -91,7 +91,7 @@ def plugin_node(node_type: str):
     """
     from app.domain.plugins.nodes import parse_node_type
 
-    def run(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    def run(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
         from app.domain.plugins.nodes import node_meta
         from app.domain.plugins.tools import find
 
@@ -101,7 +101,7 @@ def plugin_node(node_type: str):
         package_id, tool_name = parsed
         instance_id = _resolve_instance(db, package_id, tool_name, str(config.get("instance_id") or ""))
         payload = {key: value for key, value in config.items() if key != "instance_id"}
-        output = _run_plugin_tool(db, instance_id, tool_name, payload, workspace_id=workflow.workspace_id)
+        output = _run_plugin_tool(db, instance_id, tool_name, payload, workspace_id=scope.workspace_id)
 
         tool = find(db, instance_id, tool_name)
         outputs = node_meta(tool)["outputs"] if tool else ["output"]
@@ -113,25 +113,25 @@ def plugin_node(node_type: str):
 
 
 @register("notify")
-def send_notify(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def send_notify(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     title = str(config.get("title", "")).strip()
     if not title:
         raise WorkflowDomainError("wfErr_notifyTitleEmpty")
     notify(
         db,
-        workflow.workspace_id,
+        scope.workspace_id,
         type="workflow",
         title=title,
         body=str(config.get("body", "")),
         link="#/workflows",
-        payload={"workflow_id": workflow.id},
+        payload={"workflow_id": scope.id},
     )
     db.commit()
     return {"sent": True}
 
 
 @register("asset_query")
-def asset_query(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def asset_query(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """Batch-select workspace assets by filters → {assets, ids, count}. Feeds loop_foreach.items."""
     kind = str(config.get("kind") or "all").strip()
     name_contains = str(config.get("name_contains") or "").strip()
@@ -143,7 +143,7 @@ def asset_query(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
         limit = 50
     limit = max(1, min(limit, 500))
 
-    stmt = select(Asset).where(Asset.workspace_id == workflow.workspace_id)
+    stmt = select(Asset).where(Asset.workspace_id == scope.workspace_id)
     if kind and kind != "all":
         stmt = stmt.where(Asset.kind == kind)
     if name_contains:
@@ -169,7 +169,7 @@ def asset_query(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
 
 
 @register("asset_tag")
-def asset_tag(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def asset_tag(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """Add / remove / replace tags on a batch of assets → {updated, count}."""
     asset_ids = id_list(config.get("asset_ids"))
     tags = id_list(config.get("tags"))
@@ -186,7 +186,7 @@ def asset_tag(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
         asset = db.get(Asset, asset_id)
         # Cross-workspace ids are skipped rather than fatal: a workflow fed by a query cannot
         # produce them, and one fed by hand should not be able to reach another workspace.
-        if asset is None or asset.workspace_id != workflow.workspace_id:
+        if asset is None or asset.workspace_id != scope.workspace_id:
             continue
         current = list(asset.tags or [])
         if mode == "add":
@@ -204,7 +204,7 @@ def asset_tag(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
 
 
 @register("asset_update")
-def asset_update(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def asset_update(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """Rename assets and/or file them under a project → {updated, count}."""
     asset_ids = id_list(config.get("asset_ids"))
     name = str(config.get("name") or "").strip()
@@ -215,13 +215,13 @@ def asset_update(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
         raise WorkflowDomainError("wfErr_updateNothingToDo")
     if project_id:
         project = db.get(Project, project_id)
-        if project is None or project.workspace_id != workflow.workspace_id:
+        if project is None or project.workspace_id != scope.workspace_id:
             raise WorkflowDomainError("wfErr_targetProjectMissing")
 
     updated: list[dict[str, Any]] = []
     for index, asset_id in enumerate(asset_ids):
         asset = db.get(Asset, asset_id)
-        if asset is None or asset.workspace_id != workflow.workspace_id:
+        if asset is None or asset.workspace_id != scope.workspace_id:
             continue
         if name:
             # One name across many assets would produce N identical names, which is unusable
@@ -235,11 +235,11 @@ def asset_update(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 
 @register("project_create")
-def project_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def project_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     name = str(config.get("name") or "").strip()
     if not name:
         raise WorkflowDomainError("wfErr_projectNameEmpty")
-    project = Project(workspace_id=workflow.workspace_id, name=name)
+    project = Project(workspace_id=scope.workspace_id, name=name)
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -247,7 +247,7 @@ def project_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
 
 
 @register("project_sequence_create")
-def project_sequence_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def project_sequence_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """建立可立即编排和导出的项目骨架。
 
     普通「新建项目」只负责归档素材；自动成片需要的是项目 + 序列 + 默认音视频轨。如果让模板
@@ -267,7 +267,7 @@ def project_sequence_create(db: Session, workflow: Workflow, config: dict[str, A
     if not 1 <= fps <= 240:
         raise WorkflowDomainError("wfErr_fpsRange")
 
-    project = Project(workspace_id=workflow.workspace_id, name=name)
+    project = Project(workspace_id=scope.workspace_id, name=name)
     scaffold = create_sequence_scaffold(
         db,
         project,

@@ -11,16 +11,16 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Job, Workflow
+from app.db.models import Job
 from app.domain import browser, host_files, sharing
 from app.domain.jobs import current_parent_job_id
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.authority import current_authority
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 
 
-def _session_in(db: Session, workflow: Workflow, config: dict[str, Any]) -> str:
-    """取这个浏览器会话,并确认它属于本工作流所在的工作区。和 subjobs 的 _sequence_in 成对。
+def _session_in(db: Session, scope: RunScope, config: dict[str, Any]) -> str:
+    """取这个浏览器会话,并确认它属于这次运行所在的工作区。和 subjobs 的 _sequence_in 成对。
 
     session 常常来自上游节点,而上游拿得到任何地方的 id;run_action 不认识工作区。不挡的话,
     A 工作区的工作流能在 B 工作区某人已登录的池档案会话里取 cookie、点发布,或者把它关掉。
@@ -32,7 +32,7 @@ def _session_in(db: Session, workflow: Workflow, config: dict[str, Any]) -> str:
     # 池档案会话还要这次运行能用那个档案:操作人,和被执行那一版图的担保人(见 browser.attach_session、
     # workflows.authority)。
     try:
-        session = browser.attach_session(db, sid, workspace_id=workflow.workspace_id, actor=current_authority(db))
+        session = browser.attach_session(db, sid, workspace_id=scope.workspace_id, actor=current_authority(db))
     except sharing.NotUsableError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     if session is None:
@@ -117,7 +117,7 @@ def _run_owner(db: Session) -> str | None:
 
 
 @register("browser_open")
-def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def browser_open(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     mode = str(config.get("session_mode") or "ephemeral")
     owner = _run_owner(db)
     #: 谁在用:这次运行的操作人(手动运行是点运行的人,定时任务 / webhook 是任务主人,见
@@ -130,13 +130,13 @@ def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
             if not profile_id:
                 raise WorkflowDomainError("wfErr_pickPoolProfile")
             session = browser.open_session(
-                db, workspace_id=workflow.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=owner,
+                db, workspace_id=scope.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=owner,
                 actor=actor,
             )
         else:
             session = browser.open_session(
                 db,
-                workspace_id=workflow.workspace_id,
+                workspace_id=scope.workspace_id,
                 kind="named" if mode == "named" else "ephemeral",
                 name=str(config.get("session_name") or ""),
                 owner_kind="workflow",
@@ -152,15 +152,15 @@ def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 
 @register("browser_navigate")
-def browser_navigate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_in(db, workflow, config)
+def browser_navigate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    sid = _session_in(db, scope, config)
     _run(sid, "navigate", {"url": str(config.get("url") or "")})
     return {"session": sid}
 
 
 @register("browser_click")
-def browser_click(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_in(db, workflow, config)
+def browser_click(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    sid = _session_in(db, scope, config)
     _run(sid, "click", {
         "selector": str(config.get("selector") or ""),
         "text": str(config.get("text") or ""),
@@ -170,14 +170,14 @@ def browser_click(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
 
 
 @register("browser_input")
-def browser_input(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_in(db, workflow, config)
+def browser_input(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    sid = _session_in(db, scope, config)
     _run(sid, "input", {"selector": str(config.get("selector") or ""), "value": str(config.get("value") or "")})
     return {"session": sid}
 
 
 @register("browser_upload")
-def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def browser_upload(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """往 <input type=file> 塞一个本地文件(发布上传视频的关键)。asset_id 或 file_path 二选一。
 
     两条来源都经 domain/host_files 放行:asset_id 是本工作区素材库里的文件;file_path 是这台电脑上
@@ -186,7 +186,7 @@ def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
     """
     from app.db.models import Asset
 
-    sid = _session_in(db, workflow, config)
+    sid = _session_in(db, scope, config)
     path = str(config.get("file_path") or "").strip()
     asset_id = str(config.get("asset_id") or "").strip()
     try:
@@ -194,7 +194,7 @@ def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
             file = host_files.ensure_readable(db, path, actor=current_authority(db))
         elif asset_id:
             asset = db.get(Asset, asset_id)
-            if asset is None or asset.workspace_id != workflow.workspace_id:
+            if asset is None or asset.workspace_id != scope.workspace_id:
                 raise WorkflowDomainError("wfErr_uploadAssetMissing")
             if not asset.file_key:
                 raise WorkflowDomainError("wfErr_uploadAssetNoFile")
@@ -215,8 +215,8 @@ def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
 
 
 @register("browser_extract")
-def browser_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_in(db, workflow, config)
+def browser_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    sid = _session_in(db, scope, config)
     attribute = str(config.get("attribute") or "").strip()
     out = _run(sid, "extract", {
         "selector": str(config.get("selector") or ""),
@@ -227,8 +227,8 @@ def browser_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
 
 
 @register("browser_wait")
-def browser_wait(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_in(db, workflow, config)
+def browser_wait(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    sid = _session_in(db, scope, config)
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
     args: dict[str, Any] = {"timeout_ms": timeout_ms}
     if config.get("selector"):
@@ -245,23 +245,23 @@ def browser_wait(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 
 @register("browser_scroll")
-def browser_scroll(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_in(db, workflow, config)
+def browser_scroll(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    sid = _session_in(db, scope, config)
     _run(sid, "scroll", {"selector": str(config.get("selector") or ""), "dy": _int(config.get("dy"), 600)})
     return {"session": sid}
 
 
 @register("browser_evaluate")
-def browser_evaluate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_in(db, workflow, config)
+def browser_evaluate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    sid = _session_in(db, scope, config)
     out = _run(sid, "evaluate", {"expression": str(config.get("expression") or "")})
     return {"session": sid, "value": out.get("value")}
 
 
 @register("browser_close")
-def browser_close(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def browser_close(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # 留空不报错:上游分支没走到「打开浏览器」时,关闭这一步本来就无事可做。
     if not str(config.get("session") or "").strip():
         return {}
-    browser.close_session(db, _session_in(db, workflow, config))
+    browser.close_session(db, _session_in(db, scope, config))
     return {}

@@ -12,9 +12,8 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
-from app.db.models import Workflow
 from app.domain.workflows import WorkflowDomainError, as_text
-from app.domain.workflows.executors import register
+from app.domain.workflows.executors import RunScope, register
 from app.domain.workflows.executors.common import wait_until
 
 HTTP_NODE_TIMEOUT_SECONDS = 60
@@ -34,14 +33,14 @@ print(json.dumps({"output": scope.get("output")}, ensure_ascii=False, default=st
 
 
 @register("start")
-def start(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def start(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # 引擎对 start 有特殊处理(合并运行参数);注册表仍登记它,保证「每种节点都有执行器」
     # 的不变量成立(子图校验/覆盖测试都依赖这一点)。
     return dict(config.get("params") or {})
 
 
 @register("condition")
-def condition(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def condition(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     left = config.get("left")
     right = config.get("right")
     op = str(config.get("op", "equals"))
@@ -90,7 +89,7 @@ def run_http(*, method: str, url: str, headers: dict[str, str], body: str) -> di
 
 
 @register("http_request")
-def http_request(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def http_request(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     return run_http(
         method=str(config.get("method") or "GET"),
         url=str(config.get("url", "")),
@@ -143,18 +142,18 @@ def run_python(code_text: str, inputs: dict[str, Any]) -> dict[str, Any]:
 
 
 @register("code")
-def code(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def code(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     return run_python(str(config.get("code", "")), dict(config.get("input") or {}))
 
 
 @register("template")
-def template(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def template(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # interpolate 已在 config 解析阶段完成,这里只需转成文本。
     return {"text": as_text(config.get("template"))}
 
 
 @register("json_extract")
-def json_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """Walk a JSON string/object by a dot path (list indices as integers). Missing → None."""
     source = config.get("source")
     data: Any = source
@@ -186,7 +185,7 @@ def json_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 
 @register("text_transform")
-def text_transform(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def text_transform(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     text = as_text(config.get("text"))
     op = str(config.get("op", "trim"))
     find = str(config.get("find", ""))
@@ -209,7 +208,7 @@ def text_transform(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
 
 
 @register("delay")
-def delay(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def delay(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     try:
         seconds = float(config.get("seconds") if config.get("seconds") not in (None, "") else 1)
     except (TypeError, ValueError):
