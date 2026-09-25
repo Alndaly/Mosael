@@ -32,7 +32,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.media.audio_io import AudioIOError, as_audio
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +121,18 @@ def separate_asset(
                 name=f"{asset.name} · {_SUFFIX[stem]}",
                 source="separated",
             )
+    # 派生关系放在新素材上;原素材不改一字(和转 GIF、降噪同款)。**记在产出它们的这一处**,
+    # 不在某个调用方里:此前只有界面那条任务路径记,工作流节点和配音收尾拆出来的 stem
+    # 都不知道自己是从哪份来的、哪份是人声。
+    for stem, produced in made.items():
+        produced.media_info = {
+            **(produced.media_info or {}),
+            "derived_from_asset_id": asset.id,
+            "derivation": "separate_audio",
+            "stem": stem,
+            "separation_engine": adapter.engine_id,
+        }
+    db.commit()
     return SeparatedAssets(vocals=made[VOCALS], background=made[BACKGROUND], engine=adapter.engine_id)
 
 
@@ -179,33 +191,25 @@ def _job_body(job_id: str, asset_id: str, engine: str) -> None:
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
             return
-        job.status = "running"
-        job.progress = 0.1
+        # 状态一律经 finish_job 写:排队时就被取消的不被写回 running,跑完时不盖掉中途的取消
+        # (工作流取消会级联到这里 —— 模型停不下来,但取消过的活不能又变成「完成」)。
+        if not finish_job(db, job, status="running", progress=0.1):
+            db.commit()
+            return
         say(job, "jobMsg_separateRunning")
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
         made = separate_asset(db, asset, engine=engine)
-        # 派生关系放在新素材上;原素材不改一字(和转 GIF 同款)。
-        for stem, produced in ((VOCALS, made.vocals), (BACKGROUND, made.background)):
-            produced.media_info = {
-                **(produced.media_info or {}),
-                "derived_from_asset_id": asset.id,
-                "derivation": "separate_audio",
-                "stem": stem,
-                "separation_engine": made.engine,
-            }
-        db.commit()
 
-        job.status = "succeeded"
-        job.progress = 1.0
-        job.result = {
+        result = {
             "vocals_asset_id": made.vocals.id,
             "background_asset_id": made.background.id,
             "source_asset_id": asset.id,
             "engine": made.engine,
         }
-        say(job, "jobMsg_separateDone")
-        emit_job_event(db, job.id, "job.succeeded", dict(job.result))
+        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+            say(job, "jobMsg_separateDone")
+            emit_job_event(db, job.id, "job.succeeded", dict(result))
         db.commit()
         logger.info("asset %s -> stems %s / %s", asset.id, made.vocals.id, made.background.id)

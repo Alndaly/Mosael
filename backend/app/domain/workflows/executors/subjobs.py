@@ -783,42 +783,54 @@ def separate_audio_node(db: Session, workflow: Workflow, config: dict[str, Any])
 
     **节点不认识任何引擎** —— 它只跟 domain.separation 说话,由注册表决定这次用哪个
     Adapter(ADR-0016)。所以加一个引擎不用改这里。
+
+    **排成子任务再等它**,和转写、导出同一条路:此前在节点线程里直接跑模型,绕开了界面那条
+    路占的 RENDER_SLOTS(循环里并行几个就一起把模型拉进内存),等待期间也一直攥着引擎的
+    连接预算(见 wait_for_job)。
     """
     from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.separation import separate_asset
+    from app.domain.separation import start_separation_job
 
     #: **收进工作区**,不是直接 db.get —— asset_id 常常来自上游节点,少了这一条,
     #: A 工作区的工作流能拆 B 工作区的素材,而产出的两份 stem 是要返回到工作流输出里的。
     asset = _asset_in(db, workflow, str(config.get("asset_id") or "").strip())
     try:
-        made = separate_asset(db, asset, engine=str(config.get("engine") or ""))
+        child = start_separation_job(
+            db, asset=asset, created_by=current_actor(db), engine=str(config.get("engine") or "")
+        )
     except SeparationError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
+    result = wait_for_job(child.id, release=db).result or {}
     return {
-        "vocals_asset_id": made.vocals.id,
-        "background_asset_id": made.background.id,
-        "engine": made.engine,
+        "vocals_asset_id": str(result.get("vocals_asset_id") or ""),
+        "background_asset_id": str(result.get("background_asset_id") or ""),
+        "engine": str(result.get("engine") or ""),
     }
 
 
 @register("denoise_audio")
 def denoise_audio_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    """降噪,产出一份新素材。节点不认识任何引擎,只跟 domain.denoise 说话(ADR-0017)。"""
+    """降噪,产出一份新素材。节点不认识任何引擎,只跟 domain.denoise 说话(ADR-0017)。
+
+    排成子任务再等它,理由同分离节点。
+    """
     from app.ai.providers.contracts.denoise import DenoiseError
-    from app.domain.denoise import denoise_asset
+    from app.domain.denoise import start_denoise_job
 
     # 收进工作区(同分离节点):asset_id 常常来自上游,不能让一个工作区的流程动另一个工作区的素材。
     asset = _asset_in(db, workflow, str(config.get("asset_id") or "").strip())
     try:
-        made, engine = denoise_asset(
+        child = start_denoise_job(
             db,
-            asset,
+            asset=asset,
+            created_by=current_actor(db),
             engine=str(config.get("engine") or ""),
             strength=str(config.get("strength") or ""),
         )
     except DenoiseError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    return {"asset_id": made.id, "engine": engine}
+    result = wait_for_job(child.id, release=db).result or {}
+    return {"asset_id": str(result.get("asset_id") or ""), "engine": str(result.get("engine") or "")}
 
 
 @register("asset")

@@ -23,7 +23,7 @@ from app.ai.runtime import denoise_models
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.media.audio_io import AudioIOError, as_audio, replace_audio
 
 logger = logging.getLogger(__name__)
@@ -199,18 +199,19 @@ def _job_body(job_id: str, asset_id: str, engine: str, strength: str) -> None:
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
             return
-        job.status = "running"
-        job.progress = 0.1
+        # 状态经 finish_job 写,理由同分离(见 separation._job_body)。
+        if not finish_job(db, job, status="running", progress=0.1):
+            db.commit()
+            return
         say(job, "jobMsg_denoiseRunning")
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
         made, used = denoise_asset(db, asset, engine=engine, strength=strength)
 
-        job.status = "succeeded"
-        job.progress = 1.0
-        job.result = {"asset_id": made.id, "source_asset_id": asset.id, "engine": used}
-        say(job, "jobMsg_denoiseDone")
-        emit_job_event(db, job.id, "job.succeeded", dict(job.result))
+        result = {"asset_id": made.id, "source_asset_id": asset.id, "engine": used}
+        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+            say(job, "jobMsg_denoiseDone")
+            emit_job_event(db, job.id, "job.succeeded", dict(result))
         db.commit()
         logger.info("asset %s -> denoised %s (%s)", asset.id, made.id, used)
