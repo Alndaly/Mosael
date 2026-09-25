@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Board, now
+from app.domain.boards.producer_ids import is_producer_id
 
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,12 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field="form")
     form = dict(value)
+    #: 这张表单是哪个产出者的(见 boards.producers)。**只认名字** —— 不问它此刻能不能跑,
+    #: 一张板在某个产出者不可用时也得能开能存。
+    producer = form.get("producer")
+    if producer is not None:
+        if not is_producer_id(producer):
+            raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="form.producer")
     prompt = form.get("prompt")
     if prompt is not None:
         if not isinstance(prompt, str):
@@ -808,13 +815,36 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
     return get_board(db, board.workspace_id, board.id)
 
 
+def outputs_of(job: Any) -> list[dict[str, Any]]:
+    """一个任务交回了什么,归一成画板认的一种形状:`[{"type": "asset", "asset_id"}, {"type": "text", "text"}]`。
+
+    **画板读任务结果只经过这一处。** 各种任务的结果本来就长得不一样 —— 生成一次可能出多张
+    (`asset_ids`),念字、截取一次出一份(`asset_id`),便签上写字交回一段正文(`text`)。这是
+    三种任务各自现行的结果约定,不是新旧两版:没有哪种旧形状要在这里兼容。回执只在任务落终态
+    那一刻读一次(见 deliver_generated / _deliver_if_already_settled),读完不再回头看。
+
+    没成功的任务没有产出(空列表)。
+    """
+    if str(getattr(job, "status", "")) != "succeeded":
+        return []
+    result = getattr(job, "result", None) or {}
+    if not isinstance(result, dict):
+        return []
+    ids = [str(one) for one in (result.get("asset_ids") or []) if one]
+    if not ids and result.get("asset_id"):
+        ids = [str(result["asset_id"])]
+    outputs: list[dict[str, Any]] = [{"type": "asset", "asset_id": one} for one in ids]
+    if isinstance(result.get("text"), str):
+        outputs.append({"type": "text", "text": result["text"]})
+    return outputs
+
+
 def _canvas_with_delivered_result(
     canvas: dict[str, Any],
     *,
     item_id: str,
     job_id: str,
-    asset_ids: list[str],
-    text: str | None,
+    outputs: list[dict[str, Any]],
     reason: str,
     cancelled: bool,
 ) -> dict[str, Any]:
@@ -826,8 +856,10 @@ def _canvas_with_delivered_result(
     **只收它自己那一轮**:那一格此刻跑的不是这个任务(占位还没落下、或已经是别的一轮),原样不动。
     占位与回执于是谁先谁后都一样 —— 先到的回执被放过,占位落下时补送(见 place_pending)。
 
-    产出是素材(`asset_ids`,生成/念/截)或一段正文(`text`,便签上写字);两样都没有就是没做成。
+    产出(见 outputs_of)是素材(生成/念/截)或一段正文(便签上写字);两样都没有就是没做成。
     """
+    asset_ids = [str(one["asset_id"]) for one in outputs if one.get("type") == "asset"]
+    text = next((str(one["text"]) for one in outputs if one.get("type") == "text"), None)
     items = list(canvas.get("items") or [])
     kept: list[dict[str, Any]] = []
     for item in items:
@@ -914,14 +946,7 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
 
     job_status = str(job.status)
     actor_id = getattr(job, "created_by", None)
-    #: **两种形状都要读。** 生成任务一次可能出多张,给的是 asset_ids;语音合成一次只出一段,
-    #: 给的是 asset_id —— 这不是新旧兼容,是两种任务本来就不同。
-    result = (job.result or {}) if job_status == "succeeded" else {}
-    asset_ids = [str(one) for one in (result.get("asset_ids") or []) if one]
-    if not asset_ids and result.get("asset_id"):
-        asset_ids = [str(result["asset_id"])]
-    #: 便签上写字交回的是一段正文。
-    text = result.get("text") if isinstance(result.get("text"), str) else None
+    outputs = outputs_of(job)
     #: 这一格为什么没拿到产出。任务成功结束却什么都没交回,原因就是这句话本身 —— 任务那一侧
     #: 没有 error 可给;失败/取消用任务自己记下的原因。
     reason = tr("boardErr_noOutput") if job_status == "succeeded" else str(getattr(job, "error", "") or "")
@@ -934,13 +959,13 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
         workspace_id=board.workspace_id,
         board_id=board.id,
         merge=lambda canvas: _canvas_with_delivered_result(
-            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, text=text, reason=reason,
+            canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason,
             cancelled=was_cancelled(job),
         ),
         actor_id=actor_id,
     )
     logger.info("board %s item %s -> %s", board_id, item_id,
-                ", ".join(asset_ids) or ("(text)" if text is not None else "(failed)"))
+                ", ".join(one.get("asset_id") or f"({one['type']})" for one in outputs) or "(failed)")
 
 
 def install() -> None:

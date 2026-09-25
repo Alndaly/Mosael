@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.exceptions import RequestValidationError
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BoardCreate, BoardDuplicate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite
+from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardRun, BoardUpdate
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -18,7 +19,7 @@ from app.domain.boards import (
     list_boards,
     update_board,
 )
-from app.domain.boards.actions import Slot, generate_on_board, speak_on_board, trim_on_board, write_on_board
+from app.domain.boards import producers
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 router = APIRouter(tags=["boards"])
@@ -36,6 +37,9 @@ def _board_http_error(exc: BoardDomainError) -> HTTPException:
                 "message": str(exc),
             },
         )
+    if isinstance(exc, producers.ProducerFailed):
+        # 产出者那一侧没做成:状态码由产出者声明(见 producers.Producer.failure_status)。
+        return HTTPException(status_code=exc.status, detail=str(exc))
     return HTTPException(status_code=404 if isinstance(exc, BoardNotFound) else 400, detail=str(exc))
 
 
@@ -104,114 +108,38 @@ def remove(board_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -
     return {"ok": True}
 
 
-@router.post("/boards/{board_id}/generate", response_model=BoardOut)
-def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUser) -> Board:
-    """在画板上生成一份素材,产出就地落回画布(见 boards.actions.generate_on_board)。"""
-    from app.domain.generation.operations import GenerationDomainError
+@router.post("/boards/{board_id}/run", response_model=BoardOut)
+def run(board_id: str, body: BoardRun, db: DbSession, user: CurrentUser) -> Board:
+    """在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。
 
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    画板上一切产出(生成、写字、念出来、截一段)都走这一条 —— 此前是四条各自的路由和请求体。
+    跑它要什么权限由产出者声明。
+    """
     try:
-        return generate_on_board(
-            db,
-            workspace_id=body.workspace_id,
-            slot=Slot(board_id, body.item_id, body.x, body.y, body.base_revision),
-            actor_id=user.id,
-            kind=body.kind,
-            prompt=body.prompt,
-            provider=body.provider,
-            provider_profile_id=body.provider_profile_id,
-            model=body.model,
-            parameters=dict(body.parameters or {}),
-            source_assets=[one.model_dump() for one in (body.source_assets or [])],
-            form=dict(body.form or {}),
-        )
+        producer = producers.get_producer(body.producer)
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
-    except GenerationDomainError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/boards/{board_id}/write", response_model=BoardOut)
-def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> Board:
-    """让 AI 往画板上的一张便签里写字(见 boards.actions.write_on_board)。"""
-    from app.domain.ai_chat import AiChatError
-
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    ensure_workspace_perm(db, user, body.workspace_id, producer.permission)
     try:
-        return write_on_board(
+        return producers.run(
             db,
-            workspace_id=body.workspace_id,
-            board_id=board_id,
-            item_id=body.item_id,
-            actor_id=user.id,
-            prompt=body.prompt,
-            provider_profile_id=body.provider_profile_id,
-            model=body.model,
-            source_asset_ids=list(body.source_assets),
-            context=list(body.context),
-            base_revision=body.base_revision,
+            producers.RunRequest(
+                workspace_id=body.workspace_id,
+                board_id=board_id,
+                item_id=body.item_id,
+                kind=body.kind,
+                x=body.x,
+                y=body.y,
+                base_revision=body.base_revision,
+                actor_id=user.id,
+                producer=producer.id,
+                form=dict(body.form or {}),
+            ),
         )
+    except producers.ProducerFormInvalid as exc:
+        # 表单是请求体的一部分,只是形状由产出者声明 —— 和请求体校验失败回同一种 422。
+        raise RequestValidationError(
+            [{**one, "loc": ("body", "form", *one.get("loc", ()))} for one in exc.errors]
+        ) from exc
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
-    except AiChatError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-@router.post("/boards/{board_id}/speak", response_model=BoardOut)
-def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> Board:
-    """把一段文字念成音频,产出落回画板上那一格(见 boards.actions.speak_on_board)。"""
-    from app.domain.voices.engine_catalog import CLONE_ENGINE, synthesis_params
-    from app.domain.voices.voices import VoiceError
-
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    engine = body.engine.strip() or CLONE_ENGINE
-    try:
-        # 引擎音色和克隆音色两条都要能走(此前只传 voice_id,画板配音只认克隆音色)。
-        synthesis = synthesis_params(
-            db,
-            engine=engine,
-            voice=(body.voice_id or "") if engine == CLONE_ENGINE else body.engine_voice,
-            speed=body.speed,
-            user_id=user.id,
-            workspace_id=body.workspace_id,
-            engine_voice_resource=body.engine_voice_resource,
-        )
-        return speak_on_board(
-            db,
-            workspace_id=body.workspace_id,
-            slot=Slot(board_id, body.item_id, body.x, body.y, body.base_revision),
-            actor_id=user.id,
-            text=body.text,
-            synthesis=synthesis,
-            voice_id=body.voice_id,
-            #: 表单照面板的形状记:克隆那条 engine 留空(不是 CLONE_ENGINE)。
-            engine=body.engine.strip(),
-            engine_voice=body.engine_voice,
-        )
-    except BoardDomainError as exc:
-        raise _board_http_error(exc) from exc
-    except VoiceError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-@router.post("/boards/{board_id}/trim", response_model=BoardOut)
-def trim(board_id: str, body: BoardTrim, db: DbSession, user: CurrentUser) -> Board:
-    """截出一段,产出落回画板上那一格(见 boards.actions.trim_on_board)。"""
-    from app.domain.boards.trim import TrimError
-
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    try:
-        return trim_on_board(
-            db,
-            workspace_id=body.workspace_id,
-            slot=Slot(board_id, body.item_id, body.x, body.y, body.base_revision),
-            actor_id=user.id,
-            asset_id=body.asset_id,
-            start=body.start,
-            end=body.end,
-            mute=body.mute,
-        )
-    except BoardDomainError as exc:
-        raise _board_http_error(exc) from exc
-    except TrimError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc

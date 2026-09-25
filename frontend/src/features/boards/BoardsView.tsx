@@ -15,11 +15,8 @@ import {
   createBoard,
   deleteBoard,
   duplicateBoard,
-  generateOnBoard,
   grabAssetFrame,
-  speakOnBoard,
-  trimOnBoard,
-  writeOnBoard,
+  runOnBoard,
   getBoard,
   importAsset,
   addComment,
@@ -32,13 +29,15 @@ import {
   type GenerationOption,
   type Board,
   type BoardCanvas as Canvas,
-  type BoardItem,
+  type BoardProducer,
+  type BoardRunRequest,
   type Workspace,
   type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { itemName, type MediaKind } from "@/features/boards/boardNodes";
 import { useI18n, usePreferences } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CanvasTitle } from "@/components/app/canvasTitle";
@@ -64,8 +63,8 @@ import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas"
 import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
-import { boardSettlementPatch, itemIsRunning, itemJobId, prunedSourcesPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
-import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
+import { boardSettlementPatch, itemIsRunning, prunedSourcesPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
+import { runNoteWrite } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -422,6 +421,14 @@ function BoardCard({
   );
 }
 
+/** 某个产出者没跑起来时那句提示。按产出者说 —— 「生成失败」挂在一次写字上是错话。 */
+const RUN_FAILED: Record<BoardProducer, MessageKey> = {
+  generate: "boardsGenerateFailed",
+  write: "boardWriteFailed",
+  speak: "boardSpeakFailed",
+  trim: "boardTrimFailed",
+};
+
 function BoardDetail({
   board,
   workspaceId,
@@ -652,115 +659,46 @@ function BoardDetail({
    */
   const { flush: flushSaves } = useAutosave(canvas, save);
 
-  /** 在这一格里生成。产出由后端回执填回画布,这里只负责发起 + 轮询到结果为止。 */
-  const generate = React.useCallback(
-    async (input: {
-      kind: "image" | "video";
-      prompt: string;
-      itemId?: string;
-      x?: number;
-      y?: number;
-      provider?: string;
-      providerProfileId?: string;
-      model?: string;
-      parameters?: Record<string, unknown>;
-      sourceAssets?: { asset_id: string; role: string }[];
-      form?: BoardItem["form"];
-    }) => {
-      const itemId = input.itemId ?? `${input.kind}-${Math.random().toString(36).slice(2, 9)}`;
+  /**
+   * 在画板上跑一次产出者(生成、写字、念出来、截一段)。**画布上的一切产出都从这里发** —— 走同一条
+   * runOnBoard,后端按 `producer` 分给注册表里那一个(见后端 boards/producers.py)。
+   *
+   * 写字是同步的:请求里就写完了,节点的「写作中 → 写好/写挂」由 runNoteWrite 管。其余是异步的:
+   * 服务端摆好占位、起好任务就回,产出由回执填回画布,这里只负责发起 + 轮询到结果为止。
+   */
+  const run = React.useCallback(
+    async (request: BoardRunRequest) => {
       if (!(await flushSaves())) return;
-      let placed;
+      //: 版本号**轮到它时再读** —— 排在它前面的写请求可能刚把画布推进到下一版。
+      const send = () =>
+        serially(() => runOnBoard(board.id, { ...request, workspace_id: workspaceId, base_revision: revision.current }));
+      let placed: Board;
       try {
-        placed = await serially(() => generateOnBoard(board.id, {
-          workspace_id: workspaceId,
-          base_revision: revision.current,
-          item_id: itemId,
-          kind: input.kind,
-          prompt: input.prompt,
-          x: input.x ?? 0,
-          y: input.y ?? 0,
-          provider: input.provider,
-          provider_profile_id: input.providerProfileId,
-          model: input.model,
-          parameters: input.parameters,
-          source_assets: input.sourceAssets,
-          form: input.form,
-        }));
+        if (request.producer === "write") {
+          acceptBoard(await runNoteWrite({ run: request, request: send, patch: (itemId, next) => api?.patch(itemId, next) }));
+          return;
+        }
+        placed = await send();
       } catch (error) {
         if (await recoverConflict(error)) return;
-        toast.error(t("boardsGenerateFailed"), { description: (error as Error).message });
+        toast.error(t(RUN_FAILED[request.producer]), { description: (error as Error).message });
         return;
       }
       acceptBoard(placed);
-      //: **马上把那一格标成「在生成」**。服务端已经摆好占位了,但画布的节点只在挂载时从
-      //: canvas 建一次 —— 不主动告诉它的话,节点还是个空槽、面板也不收:用户看到的就是
-      //: 「点了没反应」,然后再点一次。
-      //: 上一次的报错要一起清掉 —— 重来一次的时候还挂着上次为什么挂,用户会以为这次也挂了。
-      const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === itemId);
-      const jobId = pending ? itemJobId(pending) : undefined;
-      if (jobId) api?.patch(itemId, { form: pending?.form ?? input.form, run: { status: "running", job_id: jobId } });
-      setRunning((current) => (current.includes(itemId) ? current : [...current, itemId]));
-    },
-    [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially, flushSaves],
-  );
-
-  /** 让 AI 往某张便签里写字。同步返回,写完直接把新画布落回本地状态。 */
-  const write = React.useCallback(
-    async (input: NoteWriteInput) => {
-      if (!(await flushSaves())) return;
-      try {
-        const fresh = await runNoteWrite({
-          input,
-          patch: (itemId, next) => api?.patch(itemId, next),
-          request: () =>
-            serially(() => writeOnBoard(board.id, {
-              workspace_id: workspaceId,
-              base_revision: revision.current,
-              item_id: input.itemId,
-              prompt: input.prompt,
-              provider_profile_id: input.providerProfileId,
-              model: input.model,
-              source_assets: input.assets,
-              context: input.context,
-            })),
-        });
-        acceptBoard(fresh);
-      } catch (error) {
-        if (await recoverConflict(error)) return;
-        toast.error(t("boardWriteFailed"), { description: (error as Error).message });
+      //: **走画布的把手落到本地。** 回写这里的 canvas 状态是没用的 —— 画布的节点只在挂载时从
+      //: canvas 建一次。已经在画布上的那一格(在空槽里生成、截挂了就地重截)只换表单、运行态和产出
+      //: —— 马上标成「在跑」,不然用户看到的是「点了没反应」,然后再点一次;上一次的报错一起让位。
+      //: 新的一格(从一段片子上截)加进去。和服务端 place_pending 同一条:有就地改、没有才加。
+      const made = placed.canvas.items.find((one) => one.id === request.item_id);
+      if (made && localCanvas.current?.items.some((one) => one.id === made.id)) {
+        api?.patch(made.id, { form: made.form, run: made.run, asset_id: made.asset_id });
+      } else if (made) {
+        api?.add(made.kind, made);
       }
+      onSaved();
+      setRunning((current) => (current.includes(request.item_id) ? current : [...current, request.item_id]));
     },
-    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially, flushSaves],
-  );
-
-  /** 把一段文字念成音频。**异步** —— 和出图出片同一套:摆占位、起任务、轮询等回执填回来。 */
-  const speak = React.useCallback(
-    async (input: { itemId: string; text: string; voiceId: string; engine: string; engineVoice: string }) => {
-      if (!(await flushSaves())) return;
-      let placed;
-      try {
-        placed = await serially(() => speakOnBoard(board.id, {
-          workspace_id: workspaceId,
-          base_revision: revision.current,
-          item_id: input.itemId,
-          text: input.text,
-          voice_id: input.voiceId,
-          engine: input.engine,
-          engine_voice: input.engineVoice,
-        }));
-      } catch (error) {
-        if (await recoverConflict(error)) return;
-        toast.error(t("boardSpeakFailed"), { description: (error as Error).message });
-        return;
-      }
-      acceptBoard(placed);
-      //: 和生成那条一样:马上把这一格标成在跑,不然画布上看不出发生了什么。
-      const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
-      const jobId = pending ? itemJobId(pending) : undefined;
-      if (jobId) api?.patch(input.itemId, { run: { status: "running", job_id: jobId } });
-      setRunning((current) => (current.includes(input.itemId) ? current : [...current, input.itemId]));
-    },
-    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially, flushSaves],
+    [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially, flushSaves],
   );
 
   /** 取某一帧,存成一份新素材、落到一个新节点上。**是图片节点** —— 取出来的是一张图。 */
@@ -776,52 +714,6 @@ function BoardDetail({
       }
     },
     [api, onSaved, t],
-  );
-
-  /** 截出一段。**产出是一份新素材**,落到一个新节点上 —— 原素材不动。 */
-  const trim = React.useCallback(
-    async (input: {
-      itemId: string;
-      assetId: string;
-      start: number;
-      end: number;
-      mute: boolean;
-      x: number;
-      y: number;
-    }) => {
-      if (!(await flushSaves())) return;
-      let placed;
-      try {
-        placed = await serially(() => trimOnBoard(board.id, {
-          workspace_id: workspaceId,
-          base_revision: revision.current,
-          item_id: input.itemId,
-          asset_id: input.assetId,
-          start: input.start,
-          end: input.end,
-          mute: input.mute,
-          x: input.x,
-          y: input.y,
-        }));
-      } catch (error) {
-        if (await recoverConflict(error)) return;
-        toast.error(t("boardTrimFailed"), { description: (error as Error).message });
-        return;
-      }
-      acceptBoard(placed);
-      //: **走画布的把手落到本地。** 回写这里的 canvas 状态是没用的 —— 画布的节点只在挂载时从
-      //: canvas 建一次(和写文案那条同一个坑)。从一段片子上截是新的一格,加进去;截挂了的那一格
-      //: 就地重截,它已经在画布上了,只换表单和运行态(和服务端 place_pending 同一条:有就地改、没有才加)。
-      const made = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
-      if (made && localCanvas.current?.items.some((one) => one.id === made.id)) {
-        api?.patch(made.id, { form: made.form, run: made.run, asset_id: undefined });
-      } else if (made) {
-        api?.add(made.kind, made);
-      }
-      onSaved();
-      setRunning((current) => (current.includes(input.itemId) ? current : [...current, input.itemId]));
-    },
-    [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially, flushSaves],
   );
 
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
@@ -1155,10 +1047,7 @@ function BoardDetail({
         getInsets={getCanvasInsets}
         onChange={setCanvas}
         onPickAsset={(kind, place) => setPicking({ kind, place })}
-        onGenerate={generate}
-        onWrite={write}
-        onSpeak={speak}
-        onTrim={trim}
+        onRun={run}
         onGrabFrame={grabFrame}
         models={models.data ?? []}
         showMinimap={showMinimap}

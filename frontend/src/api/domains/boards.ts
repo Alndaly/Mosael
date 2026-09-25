@@ -24,7 +24,7 @@ export interface BoardItem {
     model?: string;
     mode?: string;
     voice_id?: string;
-    /** 引擎音色那条路。和 voice_id **二选一** —— 与后端 BoardSpeak 同形。 */
+    /** 引擎音色那条路。和 voice_id **二选一** —— 与后端 producers.SpeakForm 同形。 */
     engine?: string;
     engine_voice?: string;
     parameters?: Record<string, unknown>;
@@ -35,6 +35,8 @@ export interface BoardItem {
     /** 这一格是**从哪份素材截的哪一段**(剪一段的产出)。和后端 canvas._normalize_trim 同形。 */
     trim?: { asset_id: string; start: number; end: number; mute: boolean };
     prompt_document?: { type?: string; content?: unknown[]; [key: string]: unknown };
+    /** 这一格的产出者。排在表单最后(和后端摆占位时写的位置一致)。 */
+    producer?: BoardProducer;
   };
   run?: {
     status: "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -105,74 +107,62 @@ export function deleteBoard(boardId: string, workspaceId: string): Promise<void>
   return api<void>(`/api/boards/${boardId}?workspace_id=${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
 }
 
-export function generateOnBoard(
-  boardId: string,
-  body: {
-    workspace_id: string;
-    base_revision?: number;
-    item_id: string;
-    kind: "image" | "video";
+/**
+ * 画板上的产出者 —— 一格里「能产出东西」的那件事由谁来做(后端 boards/producers.py,ADR 0021)。
+ * 写在那一格的 `form.producer` 上,面板照它挂(见 boardItemState.producerOf),不按种类猜。
+ */
+export type BoardProducer = "generate" | "speak" | "trim" | "write";
+
+/** 每个产出者收的表单。和后端 producers.*Form 同形 —— 表单在后端领域里校验。 */
+export interface BoardRunForms {
+  generate: {
+    /** 发给模型的那句(可带运行时追加的图例)。 */
     prompt: string;
-    x: number;
-    y: number;
     provider?: string;
     provider_profile_id?: string;
     model?: string;
     parameters?: Record<string, unknown>;
+    /** 发出去的输入素材:槽位挂的 + 正文里 @ 到的。 */
     source_assets?: { asset_id: string; role: string }[];
-    form?: BoardItem["form"];
-  },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/generate`, { method: "POST", body: JSON.stringify(body) });
-}
-
-export function writeOnBoard(
-  boardId: string,
-  body: {
-    workspace_id: string;
-    base_revision?: number;
-    item_id: string;
+    /** 落在这一格上、用户可再次编辑的表单(不含运行时追加的图例)。 */
+    item_form?: BoardItem["form"];
+  };
+  write: {
     prompt: string;
     provider_profile_id?: string;
     model?: string;
+    /** 让模型看着写的素材(上游连过来的 + 正文里 @ 到的)。 */
     source_assets?: string[];
+    /** 上游便签给的材料。 */
     context?: string[];
-  },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/write`, { method: "POST", body: JSON.stringify(body) });
-}
-
-export function speakOnBoard(
-  boardId: string,
-  body: {
-    workspace_id: string;
-    base_revision?: number;
-    item_id: string;
+  };
+  speak: {
     text: string;
-    /** 克隆音色(配音库里那一行)。和下面的引擎音色**二选一** —— 后端 BoardSpeak 的注释同源。 */
+    /** 克隆音色(配音库里那一行)。和下面的引擎音色**二选一**。 */
     voice_id?: string;
     engine?: string;
     engine_voice?: string;
-    x?: number;
-    y?: number;
-  },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/speak`, { method: "POST", body: JSON.stringify(body) });
+  };
+  trim: { asset_id: string; start: number; end: number; mute?: boolean };
 }
 
-export function trimOnBoard(
-  boardId: string,
-  body: {
-    workspace_id: string;
-    base_revision?: number;
+/** 在画板上跑一次产出者:产出落在哪一格(`item_id`,新的一格就是新 id)、谁来做、表单是什么。 */
+export type BoardRunRequest = {
+  [P in BoardProducer]: {
+    producer: P;
     item_id: string;
-    asset_id: string;
-    start: number;
-    end: number;
-    mute?: boolean;
-    x?: number;
-    y?: number;
-  },
+    /** 宿主那一格的种类 —— 必须是这个产出者能挂的。 */
+    kind: BoardItem["kind"];
+    x: number;
+    y: number;
+    form: BoardRunForms[P];
+  };
+}[BoardProducer];
+
+/** 画板上的一切产出(生成、写字、念出来、截一段)都走这一条。返回摆好占位(写字是写完)的画板。 */
+export function runOnBoard(
+  boardId: string,
+  body: BoardRunRequest & { workspace_id: string; base_revision: number },
 ): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/trim`, { method: "POST", body: JSON.stringify(body) });
+  return api<Board>(`/api/boards/${boardId}/run`, { method: "POST", body: JSON.stringify(body) });
 }

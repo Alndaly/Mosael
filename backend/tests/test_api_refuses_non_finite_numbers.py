@@ -59,12 +59,13 @@ def test_真的通到接口上() -> None:
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     board = client.post("/api/boards", json={"workspace_id": workspace_id, "name": "B"}).json()
 
-    #: **声明为 float 的字段**由 schema 这一层挡下 —— 校验在进 handler 之前发生,所以
+    #: **声明为 float 的字段**由产出者的表单挡下 —— 校验在起任务之前发生,所以
     #: asset_id 指向什么都不影响这一条。
     typed = client.post(
-        f"/api/boards/{board['id']}/trim",
+        f"/api/boards/{board['id']}/run",
         content=(
-            '{"workspace_id": "%s", "item_id": "i1", "asset_id": "a1", "start": NaN, "end": 5}' % workspace_id
+            '{"workspace_id": "%s", "base_revision": %d, "item_id": "i1", "kind": "video", "producer": "trim",'
+            ' "form": {"asset_id": "a1", "start": NaN, "end": 5}}' % (workspace_id, board["revision"])
         ),
         headers={"content-type": "application/json"},
     )
@@ -75,8 +76,8 @@ def test_真的通到接口上() -> None:
     nested = client.patch(
         f"/api/boards/{board['id']}",
         content=(
-            '{"workspace_id": "%s", "canvas": {"items": [{"id": "a", "kind": "note", "x": NaN, "y": 0}],'
-            ' "edges": []}}' % workspace_id
+            '{"workspace_id": "%s", "base_revision": %d, "canvas": {"items": [{"id": "a", "kind": "note", "x": NaN, "y": 0}],'
+            ' "edges": []}}' % (workspace_id, board["revision"])
         ),
         headers={"content-type": "application/json"},
     )
@@ -87,6 +88,7 @@ def test_真的通到接口上() -> None:
         f"/api/boards/{board['id']}",
         json={
             "workspace_id": workspace_id,
+            "base_revision": board["revision"],
             "canvas": {"items": [{"id": "a", "kind": "note", "x": 12.5, "y": -4}], "edges": []},
         },
     )
@@ -107,9 +109,9 @@ def test_拒绝的那一刻不能自己崩掉() -> None:
     board = client.post("/api/boards", json={"workspace_id": workspace_id, "name": "B"}).json()
 
     response = client.post(
-        f"/api/boards/{board['id']}/trim",
-        content='{"workspace_id": "%s", "item_id": "i", "asset_id": "a", "start": Infinity, "end": 5}'
-        % workspace_id,
+        f"/api/boards/{board['id']}/run",
+        content='{"workspace_id": "%s", "base_revision": %d, "item_id": "i", "kind": "video", "producer": "trim",'
+        ' "form": {"asset_id": "a", "start": Infinity, "end": 5}}' % (workspace_id, board["revision"]),
         headers={"content-type": "application/json"},
     )
     assert response.status_code == 422

@@ -14,9 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   listBoards: vi.fn(),
   getBoard: vi.fn(),
   updateBoard: vi.fn(),
-  generateOnBoard: vi.fn(),
-  writeOnBoard: vi.fn(),
-  trimOnBoard: vi.fn(),
+  runOnBoard: vi.fn(),
   listComments: vi.fn(),
   listMembers: vi.fn(),
   api: vi.fn(),
@@ -101,9 +99,7 @@ function mount() {
 
 const props = () => canvasHarness.props as {
   onChange: (canvas: BoardCanvas) => void;
-  onGenerate: (input: Record<string, unknown>) => Promise<unknown>;
-  onWrite: (input: Record<string, unknown>) => Promise<unknown>;
-  onTrim: (input: Record<string, unknown>) => Promise<unknown>;
+  onRun: (request: Record<string, unknown>) => Promise<unknown>;
 };
 
 beforeAll(() => {
@@ -224,7 +220,7 @@ describe("画板详情页与服务端的同步", () => {
       order.push(`save:${body.canvas.items[0].text}`);
       return boardAt(4, body.canvas);
     });
-    apiMocks.writeOnBoard.mockImplementation(async (_id: string, body: { base_revision: number }) => {
+    apiMocks.runOnBoard.mockImplementation(async (_id: string, body: { base_revision: number }) => {
       order.push(`write@${body.base_revision}`);
       return boardAt(5, { ...typed, items: [{ ...typed.items[0], text: "改好的", run: { status: "succeeded" } }] });
     });
@@ -233,7 +229,10 @@ describe("画板详情页与服务端的同步", () => {
     await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
     act(() => props().onChange(typed));
     await act(async () => {
-      await props().onWrite({ itemId: "n1", prompt: "短一点", providerProfileId: "p", model: "m", assets: [], context: [] });
+      await props().onRun({
+        producer: "write", item_id: "n1", kind: "note", x: 0, y: 0,
+        form: { prompt: "短一点", provider_profile_id: "p", model: "m", source_assets: [], context: [] },
+      });
     });
 
     expect(order).toEqual(["save:刚敲完的这段", "write@4"]);
@@ -245,16 +244,19 @@ describe("画板详情页与服务端的同步", () => {
     const server: BoardCanvas = { items: [failed], edges: [], markers: [] };
     const retried = { ...failed, form: { trim: { ...trim, start: 0.5 } }, run: { status: "running" as const, job_id: "job-2" } };
     apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
-    apiMocks.trimOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [retried] }));
+    apiMocks.runOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [retried] }));
     apiMocks.getBoard.mockReturnValue(new Promise(() => undefined));
 
     mount();
     await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
     await act(async () => {
-      await props().onTrim({ itemId: "cut", assetId: "src", start: 0.5, end: 3, mute: false, x: 0, y: 300 });
+      await props().onRun({
+        producer: "trim", item_id: "cut", kind: "video", x: 0, y: 300,
+        form: { asset_id: "src", start: 0.5, end: 3, mute: false },
+      });
     });
 
-    expect(apiMocks.trimOnBoard.mock.calls[0][1]).toMatchObject({ item_id: "cut", asset_id: "src", start: 0.5 });
+    expect(apiMocks.runOnBoard.mock.calls[0][1]).toMatchObject({ item_id: "cut", producer: "trim", form: { asset_id: "src", start: 0.5 } });
     expect(canvasHarness.api.add).not.toHaveBeenCalled();
     expect(canvasHarness.api.patch).toHaveBeenCalledWith("cut", expect.objectContaining({ form: retried.form, run: retried.run }));
   });
@@ -291,7 +293,7 @@ describe("画板详情页与服务端的同步", () => {
     const save = deferred<Board>();
     apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
     apiMocks.updateBoard.mockReturnValue(save.promise);
-    apiMocks.generateOnBoard.mockResolvedValue(
+    apiMocks.runOnBoard.mockResolvedValue(
       boardAt(5, { ...moved, items: [{ ...moved.items[0], run: { status: "running", job_id: "job-1" } }] }),
     );
 
@@ -305,18 +307,18 @@ describe("画板详情页与服务端的同步", () => {
 
     let generating: Promise<unknown> = Promise.resolve();
     act(() => {
-      generating = props().onGenerate({ kind: "image", prompt: "一只猫", itemId: "img" });
+      generating = props().onRun({ producer: "generate", item_id: "img", kind: "image", x: 0, y: 0, form: { prompt: "一只猫" } });
     });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10);
     });
-    expect(apiMocks.generateOnBoard).not.toHaveBeenCalled();
+    expect(apiMocks.runOnBoard).not.toHaveBeenCalled();
 
     await act(async () => {
       save.resolve(boardAt(4, moved));
       await generating;
     });
-    expect(apiMocks.generateOnBoard).toHaveBeenCalledTimes(1);
-    expect(apiMocks.generateOnBoard.mock.calls[0][1]).toMatchObject({ base_revision: 4, item_id: "img" });
+    expect(apiMocks.runOnBoard).toHaveBeenCalledTimes(1);
+    expect(apiMocks.runOnBoard.mock.calls[0][1]).toMatchObject({ base_revision: 4, item_id: "img" });
   });
 });

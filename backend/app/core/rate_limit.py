@@ -114,7 +114,8 @@ def classify(method: str, path: str, settings: RateLimitSettings) -> LimitRule |
         or path.startswith("/api/agent/tools/")
         or (path.startswith("/api/agent/sessions/") and tail in {"compact", "messages"})
         or path in {"/api/agent/speech", "/api/asr/dictate"}
-        or (path.startswith("/api/boards/") and tail in {"generate", "write", "speak"})
+        #: 画板上一切产出都走 /run(生成、写字、念、截)—— 截取在本机,但同一条路由不再按表单分。
+        or (path.startswith("/api/boards/") and tail == "run")
         or (
             path.startswith("/api/workflows/")
             and tail in {"run", "ai-edit", "agent-session", "agent-sessions"}

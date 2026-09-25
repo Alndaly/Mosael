@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Board, BoardItem } from "@/api/client";
-import { runNoteWrite } from "./noteWriteLifecycle";
+import { runNoteWrite, type NoteWriteRun } from "./noteWriteLifecycle";
 
-const input = {
-  itemId: "note-1",
-  prompt: "描述这张图片",
-  providerProfileId: "profile-1",
-  model: "k3",
-  assets: ["asset-1"],
-  context: [],
+const run: NoteWriteRun = {
+  producer: "write",
+  item_id: "note-1",
+  kind: "note",
+  x: 0,
+  y: 0,
+  form: { prompt: "描述这张图片", provider_profile_id: "profile-1", model: "k3", source_assets: ["asset-1"], context: [] },
 };
 
 function board(item: BoardItem): Board {
@@ -35,7 +35,7 @@ describe("便签 AI 写作生命周期", () => {
     );
     const patch = vi.fn<(itemId: string, next: Partial<BoardItem>) => void>();
 
-    const pending = runNoteWrite({ input, request, patch });
+    const pending = runNoteWrite({ run, request, patch });
     expect(patch).toHaveBeenNthCalledWith(1, "note-1", {
       run: { status: "running" },
     });
@@ -75,7 +75,7 @@ describe("便签 AI 写作生命周期", () => {
     const failure = new Error("模型拒绝了请求");
 
     await expect(
-      runNoteWrite({ input, request: () => Promise.reject(failure), patch }),
+      runNoteWrite({ run, request: () => Promise.reject(failure), patch }),
     ).rejects.toThrow("模型拒绝了请求");
 
     expect(patch).toHaveBeenLastCalledWith("note-1", {

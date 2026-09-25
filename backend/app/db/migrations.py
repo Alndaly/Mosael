@@ -2201,6 +2201,56 @@ def _migrate_board_frame_names_become_titles() -> None:
                 )
 
 
+def _migrate_board_forms_name_their_producer() -> None:
+    """画板上每一格的表单写明是哪个产出者的(`form.producer`,ADR 0021)。
+
+    此前挂哪块面板由前端按种类猜(boardItemState.composerFor):便签挂写字;图片/视频/音频
+    还没产出时,表单上记着 trim 的挂截取,否则音频挂念字、图片视频挂生成。现在产出者是一格自己的
+    事实,面板照 `form.producer` 挂,推断删掉 —— 所以已有的格子要按**当时的那条推断**写上
+    (这份口径是迁移那一刻的快照,不跟着领域层走):
+
+    · 有表单的便签/图片/视频/音频:note → write;表单上有 trim → trim;audio → speak;
+      image/video → generate;
+    · 没表单、但此前会挂面板的(便签;还没产出的图片/视频/音频):补一张只写着产出者的表单。
+
+    已经写了 producer 的不动(幂等)。`producer` 排在表单最后,和服务端摆占位时写的位置一致。
+
+    **改到的板版本号 +1**:升级那一刻还开着这张板的客户端手里是没写产出者的旧快照,它存回来
+    该撞 409、拉最新的那份,而不是把刚写上的产出者整张盖掉。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    by_kind = {"note": "write", "audio": "speak", "image": "generate", "video": "generate"}
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            touched = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict) or item.get("kind") not in by_kind:
+                    continue
+                kind = item["kind"]
+                form = item.get("form")
+                if isinstance(form, dict):
+                    if "producer" in form:
+                        continue
+                    producer = by_kind[kind] if kind == "note" or form.get("trim") is None else "trim"
+                    item["form"] = {**form, "producer": producer}
+                    touched = True
+                elif form is None and (kind == "note" or not item.get("asset_id")):
+                    item["form"] = {"producer": by_kind[kind]}
+                    touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = revision + 1 WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -3452,6 +3502,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_trim_slots_record_their_source,
                 _migrate_board_sources_record_their_upstream,
                 _migrate_board_frame_names_become_titles,
+                _migrate_board_forms_name_their_producer,
                 _backfill_browser_pool,
                 _backfill_provider_models,
                 _migrate_provider_default_model_fk,

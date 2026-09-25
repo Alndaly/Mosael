@@ -47,19 +47,17 @@ import {
 } from "@/components/app/canvasPendingLink";
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
-import type { BoardCanvas as Canvas, BoardItem, GenerationOption } from "@/api/client";
+import type { BoardCanvas as Canvas, BoardItem, BoardRunRequest, GenerationOption } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
-import { NodeComposer } from "@/features/boards/NodeComposer";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
-import { AudioComposer } from "@/features/boards/AudioComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
-import { NoteComposer } from "@/features/boards/NoteComposer";
+import { BUILTIN_COMPOSERS } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
-import { composerFor, copiedItem, itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
+import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, withProducer } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
@@ -346,46 +344,13 @@ interface Props {
   onChange: (canvas: Canvas) => void;
   /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的。 */
   onPickAsset: (kind: MediaKind, place: (assetId: string) => void) => void;
-  /** 从某一项生成。上层拿得到 workspaceId 和接口,画布只提供"放哪儿"和"填回来"。 */
-  onGenerate?: (input: {
-    kind: "image" | "video";
-    prompt: string;
-    /** 填进**这一格**(节点即生成单元)。不给就是另开一格放在源节点右边。 */
-    itemId?: string;
-    x?: number;
-    y?: number;
-    provider?: string;
-    providerProfileId?: string;
-    model?: string;
-    parameters?: Record<string, unknown>;
-    sourceAssets?: { asset_id: string; role: string }[];
-    form?: BoardItem["form"];
-  }) => Promise<unknown>;
-  /** 让 AI 往某张便签里写字。**同步** —— 写字几秒就回,不走生成任务那条路。 */
-  /** 把一段文字念成音频。**异步** —— 走和出图出片同一套占位/回执。 */
-  onSpeak?: (input: { itemId: string; text: string; voiceId: string; engine: string; engineVoice: string }) => Promise<unknown>;
+  /**
+   * 在某一格上跑一个产出者(生成、写字、念出来、截一段)。上层拿得到 workspaceId 和接口,画布只
+   * 提供「落在哪一格」和「表单是什么」。写字同步返回,其余摆好占位就回、产出由回执填回来。
+   */
+  onRun?: (request: BoardRunRequest) => Promise<unknown>;
   /** 取某一帧,存成一份新素材、落到一个新节点上 —— 原素材不动。 */
   onGrabFrame?: (input: { assetId: string; at: number; x: number; y: number }) => Promise<unknown>;
-  /** 截出一段。产出是一份**新素材**,落到一个新节点上 —— 原素材不动。 */
-  onTrim?: (input: {
-    itemId: string;
-    assetId: string;
-    start: number;
-    end: number;
-    mute: boolean;
-    x: number;
-    y: number;
-  }) => Promise<unknown>;
-  onWrite?: (input: {
-    itemId: string;
-    prompt: string;
-    providerProfileId: string;
-    model: string;
-    /** 让模型看着写的图片(上游连过来的 + 正文里 @ 到的)。 */
-    assets: string[];
-    /** 上游便签给的材料。 */
-    context: string[];
-  }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationOption[];
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
@@ -425,7 +390,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onGrabFrame, models, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
@@ -570,13 +535,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     } catch (error) { toast.error(errorText(error)); }
     finally { setRefreshingDocument(null); }
   };
-  //: 选中的那一格底下挂哪块面板 —— 规则在 composerFor,这里只认「选中了一格」。
+  //: 选中的那一格底下挂哪个产出者的面板 —— 规则在 producerOf,这里只认「选中了一格」。
   const composerItem = React.useMemo(() => {
     const picked = nodes.filter((node) => node.selected && node.type !== "marker");
     if (picked.length !== 1) return null;
     return (picked[0].data as unknown as { item: BoardItem }).item;
   }, [nodes]);
-  const composer = composerItem ? composerFor(composerItem) : null;
+  const producer = composerItem ? producerOf(composerItem) : null;
 
   /**
    * 连到这个节点上的上游产出,按连线的先后。
@@ -587,7 +552,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    */
   //: 截取面板照着表单上记下的那份素材截,不吃上游 —— 只有吃上游的几块面板才去算、才会被取不到的
   //: 上游文档拦住。
-  const feeding = composerItem && composer && composer !== "trim"
+  const feeding = composerItem && producer && producer !== "trim"
     ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
     : NO_UPSTREAM;
 
@@ -950,6 +915,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         y: Math.round(center.y - DEFAULT_SIZE[kind].height / 2),
         ...DEFAULT_SIZE[kind],
         ...(kind === "note" ? { color: "yellow" } : {}),
+        //: 还没有产出的一格写明它的产出者 —— 面板照它挂(见 boardItemState.producerOf)。
+        ...newSlotForm(kind, extra),
         ...extra,
       };
       // **加完就选中它**:放一个空槽的下一步一定是写提示词,而面板只在选中时才挂。
@@ -1261,6 +1228,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             y: Math.round(point.y - DEFAULT_SIZE.note.height / 2),
             ...DEFAULT_SIZE.note,
             color: "yellow",
+            ...newSlotForm("note"),
           };
           setNodes((current) => [...current, ...toNodes([item])]);
         }}
@@ -1512,40 +1480,16 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onCopySelected={copySelection}
         onRename={commentMode || markerMode ? undefined : setRenaming}
         onPickAsset={onPickAsset}
-        onSpawn={onGenerate ? spawnLinked : undefined}
-        onTrimRequest={onTrim ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
+        onSpawn={onRun ? spawnLinked : undefined}
+        onTrimRequest={onRun ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
         trimmingId={trimming}
       />
 
       {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}
-      {composerItem && composer && feeding.blocked && <NodeToolbar nodeId={composerItem.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}><div role={feeding.pending ? "status" : "alert"} className={cn(CANVAS_WINDOW_SURFACE_CLASS, "max-w-sm px-4 py-3 text-ui-sm text-muted-foreground")}>{t(feeding.pending ? "documentLoading" : "documentBlocked")}</div></NodeToolbar>}
-
-      {/* 空便签:挂写文案的面板。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图
-          这些东西,硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。 */}
-      {!feeding.blocked && composerItem && composer === "write" && onWrite && (
-        <NoteComposer
-          key={itemFormResetKey(composerItem)}
-          item={composerItem}
-          busy={writing === composerItem.id}
-          workspaceId={workspaceId}
-          //: 上游连过来的素材,**不只是图**:视频抽帧给它看,音频有转写就当材料 ——
-          //: 一段片子连到便签,意思就是「照着这段写」。
-          upstreamAssets={feeding.assets.map((one) => one.assetId)}
-          //: 上游便签的字当**材料**,不是提示词 —— 「接着这段往下写」里,那段是素材,
-          //: 用户在框里打的才是指令。
-          upstreamTexts={feeding.texts.map((one) => one.text)}
-          onFormChange={(form) => patch(composerItem.id, { form })}
-          onWrite={({ prompt, providerProfileId, model, assets, context }) => {
-            setWriting(composerItem.id);
-            return onWrite({ itemId: composerItem.id, prompt, providerProfileId, model, assets, context }).finally(() =>
-              setWriting(null),
-            );
-          }}
-        />
-      )}
+      {composerItem && producer && feeding.blocked && <NodeToolbar nodeId={composerItem.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}><div role={feeding.pending ? "status" : "alert"} className={cn(CANVAS_WINDOW_SURFACE_CLASS, "max-w-sm px-4 py-3 text-ui-sm text-muted-foreground")}>{t(feeding.pending ? "documentLoading" : "documentBlocked")}</div></NodeToolbar>}
 
       {/* 剪一段:定起止,产出落到**新节点**上。 */}
-      {trimming && onTrim && (() => {
+      {trimming && onRun && (() => {
         const node = nodes.find((one) => one.id === trimming);
         const item = node && (node.data as unknown as { item: BoardItem }).item;
         if (!node || !item?.asset_id || (item.kind !== "video" && item.kind !== "audio")) return null;
@@ -1564,90 +1508,34 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
               y: node.position.y + (node.height ?? 200) + 60,
             }) : undefined}
             onTrim={({ start, end, mute }) => {
-              void onTrim({
+              void onRun({
+                producer: "trim",
                 //: 产出落到**新的一格**,摆在原件下面 —— 覆盖原件的话,上一版就没了。
-                itemId: `${item.kind}-${Date.now().toString(36)}`,
-                assetId: item.asset_id as string,
-                start,
-                end,
-                mute,
+                item_id: `${item.kind}-${Date.now().toString(36)}`,
+                kind: item.kind,
                 x: node.position.x,
                 y: node.position.y + (node.height ?? 200) + 60,
+                form: { asset_id: item.asset_id as string, start, end, mute },
               }).finally(() => setTrimming(null));
             }}
           />
         );
       })()}
 
-      {/* 音频:念一段文字。**不是「生成」那条路** —— 出图出片选生成模型,念字选的是音色。 */}
-      {!feeding.blocked && composerItem && composer === "speak" && onSpeak && (
-        <AudioComposer
-          key={itemFormResetKey(composerItem)}
-          item={composerItem}
-          busy={itemIsRunning(composerItem)}
-          workspaceId={workspaceId}
-          //: 上游便签的字**就是要念的内容** —— 让用户再抄一遍,那条线就白连了。
-          upstreamText={feeding.texts.map((one) => one.text).join("\n\n")}
-          onFormChange={(form) => patch(composerItem.id, { form })}
-          onSpeak={(input) => void onSpeak({ itemId: composerItem.id, ...input })}
-        />
-      )}
-
-      {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
-      {/* 截出来的那一格还没有产出(截挂了、还在截):挂截取面板,照表单上记的那份、那段就地再截。 */}
-      {composerItem?.form?.trim && composer === "trim" && onTrim && (composerItem.kind === "video" || composerItem.kind === "audio") && (() => {
-        const source = composerItem.form.trim;
-        const node = nodes.find((one) => one.id === composerItem.id);
-        return (
-          <TrimComposer
-            key={itemFormResetKey(composerItem)}
-            item={{ ...composerItem, kind: composerItem.kind }}
-            assetId={source.asset_id}
-            initial={source}
-            workspaceId={workspaceId}
-            busy={itemIsRunning(composerItem)}
-            onTrim={({ start, end, mute }) =>
-              void onTrim({
-                itemId: composerItem.id,
-                assetId: source.asset_id,
-                start,
-                end,
-                mute,
-                x: node?.position.x ?? composerItem.x,
-                y: node?.position.y ?? composerItem.y,
-              })
-            }
-          />
-        );
-      })()}
-
-      {!feeding.blocked && composerItem && composer === "generate" && onGenerate && (
-        <NodeComposer
-          key={itemFormResetKey(composerItem)}
-          item={composerItem}
-          models={models ?? []}
-          busy={itemIsRunning(composerItem)}
-          onPickAsset={onPickAsset}
-          workspaceId={workspaceId}
-          upstream={feeding.assets}
-          upstreamTexts={feeding.texts.filter(one => !documents.has(one.itemId))}
-          upstreamDocuments={feeding.references}
-          onFormChange={(form) => patch(composerItem.id, { form })}
-          onSubmit={({ prompt, provider, providerProfileId, model, parameters, sourceAssets, form }) =>
-            void onGenerate({
-              kind: composerItem.kind as "image" | "video",
-              prompt,
-              provider,
-              providerProfileId,
-              model,
-              parameters,
-              sourceAssets,
-              form,
-              itemId: composerItem.id,
-            })
-          }
-        />
-      )}
+      {/* 选中的那一格还等着产出:挂它的产出者的面板(一张表,见 boardComposers)。 */}
+      {!feeding.blocked && composerItem && producer && onRun && BUILTIN_COMPOSERS[producer]({
+        item: composerView(composerItem),
+        position: nodes.find((one) => one.id === composerItem.id)?.position ?? { x: composerItem.x, y: composerItem.y },
+        workspaceId,
+        feeding,
+        documents,
+        models: models ?? [],
+        writing: writing === composerItem.id,
+        setWriting,
+        onFormChange: (form) => patch(composerItem.id, { form: withProducer(form, producer) }),
+        onPickAsset,
+        run: onRun,
+      })}
     </div>
   );
 }

@@ -92,9 +92,9 @@ class Test画板配音:
     """和上面同一个漏法,所以一起钉住。"""
 
     def test_节点声明的字段都进了请求体(self) -> None:
-        from app.api.schemas.boards import BoardSpeak
+        from app.domain.boards.producers import SpeakForm
 
-        fields = set(BoardSpeak.model_fields)
+        fields = set(SpeakForm.model_fields)
         assert {"engine", "engine_voice", "engine_voice_resource", "speed"} <= fields
 
 

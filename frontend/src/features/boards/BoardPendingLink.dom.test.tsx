@@ -93,7 +93,7 @@ async function mount(canvas: Canvas, extra: Partial<React.ComponentProps<typeof 
             canvas={canvas}
             onChange={(next) => changes.push(next)}
             onPickAsset={() => undefined}
-            onGenerate={async () => undefined}
+            onRun={async () => undefined}
             onReady={(next) => {
               api = next;
             }}

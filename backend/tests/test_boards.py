@@ -15,7 +15,7 @@ import pytest
 
 from app.domain.boards import BoardDomainError, normalize_canvas
 from tests.media_fixtures import TINY_HEIC
-from tests.util import fresh_client
+from tests.util import board_revision, fresh_client, run_on_board
 
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
@@ -41,7 +41,7 @@ def test_建改读删一条龙() -> None:
         ],
         "edges": [{"id": "e1", "source": "n1", "target": "n2", "label": "然后"}],
     }
-    saved = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+    saved = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
     assert saved.status_code == 200, saved.text
     assert len(saved.json()["canvas"]["items"]) == 2
 
@@ -110,13 +110,13 @@ def test_改名和存画布互不覆盖() -> None:
     board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "原名"}).json()["id"]
 
     canvas = {"items": [{"id": "a", "kind": "note", "x": 0, "y": 0, "text": "x"}], "edges": []}
-    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
-    renamed = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "name": "新名"})
+    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
+    renamed = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "name": "新名"})
 
     assert renamed.json()["name"] == "新名"
     assert len(renamed.json()["canvas"]["items"]) == 1, "只改名字把画布清空了"
 
-    again = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+    again = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
     assert again.json()["name"] == "新名", "只存画布把名字改回去了"
 
 
@@ -155,7 +155,7 @@ def test_创建副本_内容照搬_在跑的格子退回空槽_原板不动() ->
         "edges": [{"id": "e1", "source": "n1", "target": "i1"}],
         "markers": [{"id": "m1", "name": "起点", "x": 0, "y": 0}],
     }
-    saved = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+    saved = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
     assert saved.status_code == 200, saved.text
 
     copied = client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": ws, "name": "灵感 副本"})
@@ -189,12 +189,13 @@ def test_画板不存在是404_画布不合法是400() -> None:
     ws = _workspace(client)
     board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
 
-    missing = client.patch("/api/boards/nope", json={"workspace_id": ws, "name": "x"})
+    missing = client.patch("/api/boards/nope", json={"workspace_id": ws, "base_revision": 1, "name": "x"})
     assert missing.status_code == 404
 
     bad = client.patch(
         f"/api/boards/{board_id}",
-        json={"workspace_id": ws, "canvas": {"items": [{"id": "a", "kind": "note", "x": "左边", "y": 0}]}},
+        json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws),
+              "canvas": {"items": [{"id": "a", "kind": "note", "x": "左边", "y": 0}]}},
     )
     assert bad.status_code == 400
     assert "x" in bad.json()["detail"]
@@ -391,7 +392,7 @@ def _pending_board(client, ws: str) -> tuple[str, str]:
         }],
         "edges": [],
     }
-    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
     return board_id, "gen-1"
 
 
@@ -504,7 +505,7 @@ def test_跑挂了也留着连进来的那条线() -> None:
         ],
         "edges": [{"id": "e1", "source": "note-1", "target": "gen-1"}],
     }
-    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
 
     db = SessionLocal()
     deliver_generated(db, SimpleNamespace(id="job-x", status="failed", result=None, error="炸了"), receipt_to_item(board_id, "gen-1"))
@@ -552,7 +553,7 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
     db.close()
 
     # 客户端把 t1 那份原样存回来 —— 它手上还是占位。
-    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": stale}).json()
     item = got["canvas"]["items"][0]
 
     assert item["asset_id"] == "asset-9", "客户端那份把已经到达的产出覆盖掉了"
@@ -578,7 +579,7 @@ def test_客户端不会把已经失败的节点重新写成_loading() -> None:
             receipt_to_item(board_id, item_id),
         )
 
-    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": stale}).json()
     item = got["canvas"]["items"][0]
     assert item["run"] == {"status": "failed", "error": "引用素材已删除"}
     assert "job_id" not in item.get("run", {})
@@ -620,7 +621,7 @@ def test_旧自动保存不会覆盖便签写作的成功正文和空表单() ->
             receipt_to_item(board_id, "n1"),
         )
 
-    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": stale}).json()
     item = got["canvas"]["items"][0]
     assert item["text"] == "生成后的正文"
     assert item["form"] == {"prompt": "", "model": "k3", "mentioned_asset_ids": [], "source_assets": []}
@@ -736,7 +737,7 @@ def test_失败之后重新生成_画布上是这一轮的占位而不是上一�
     with SessionLocal() as db:
         deliver_generated(db, SimpleNamespace(id="job-y", status="failed", result=None, error="又挂了"),
                           receipt_to_item(board_id, item_id))
-    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": stale}).json()
     assert got["canvas"]["items"][0]["run"] == {"status": "failed", "error": "又挂了"}
 
 
@@ -753,16 +754,16 @@ def test_便签写挂了之后重写_能重新进入写作中() -> None:
         "canvas": {"items": [{"id": "note-1", "kind": "note", "x": 0, "y": 0, "text": ""}], "edges": []},
     }).json()["id"]
     _writable_profile(client)
-    body = {"workspace_id": ws, "item_id": "note-1", "prompt": "写一句"}
+    body = {"producer": "write", "item_id": "note-1", "kind": "note", "form": {"prompt": "写一句"}}
 
     with mock_patch("app.domain.ai_chat.chat", side_effect=AiChatError("aiChatErr_failed")):
-        failed = client.post(f"/api/boards/{board_id}/write", json=body)
+        failed = run_on_board(client, board_id, ws, **body)
     assert failed.status_code == 422, failed.text
     note = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
     assert note["run"]["status"] == "failed"
 
     with mock_patch("app.domain.ai_chat.chat", return_value="写好了"):
-        again = client.post(f"/api/boards/{board_id}/write", json=body)
+        again = run_on_board(client, board_id, ws, **body)
     assert again.status_code == 200, again.text
     note = again.json()["canvas"]["items"][0]
     assert (note["text"], note["run"]) == ("写好了", {"status": "succeeded"})
@@ -775,7 +776,7 @@ def test_写字时炸了别的异常_那张便签照样收成失败() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import Job
-    from app.domain.boards.actions import write_on_board
+    from app.domain.boards import producers
 
     client = fresh_client()
     ws = _workspace(client)
@@ -788,10 +789,11 @@ def test_写字时炸了别的异常_那张便签照样收成失败() -> None:
     with SessionLocal() as db, mock_patch(
         "app.domain.boards.actions.look_at", side_effect=RuntimeError("磁盘读不出来")
     ), pytest.raises(RuntimeError):
-        write_on_board(
-            db, workspace_id=ws, board_id=board_id, item_id="n1", actor_id=user_id, prompt="改短",
-            provider_profile_id="", model="", source_asset_ids=["a1"], context=[],
-        )
+        producers.run(db, producers.RunRequest(
+            workspace_id=ws, board_id=board_id, item_id="n1", kind="note", x=0, y=0,
+            base_revision=board_revision(client, board_id, ws), actor_id=user_id, producer="write",
+            form={"prompt": "改短", "source_assets": ["a1"]},
+        ))
 
     note = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
     assert note["run"]["status"] == "failed", f"便签停在了「写作中」:{note['run']}"
@@ -979,7 +981,7 @@ def test_写文案就地落进那张便签_成功后重置一次性表单() -> N
     assert items[0]["run"] == {"status": "succeeded"}
     db.close()
 
-    missing = client.post(f"/api/boards/{board_id}/write", json={"workspace_id": ws, "item_id": "没这项", "prompt": "x"})
+    missing = run_on_board(client, board_id, ws, producer="write", item_id="没这项", kind="note", form={"prompt": "x"})
     assert missing.status_code == 404, missing.text
 
 
@@ -992,10 +994,8 @@ def test_写文案没配模型时给准信而不是五百() -> None:
         json={"workspace_id": ws, "name": "B", "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0}], "edges": []}},
     ).json()["id"]
 
-    answer = client.post(
-        f"/api/boards/{board_id}/write",
-        json={"workspace_id": ws, "item_id": "n1", "prompt": "写一句广告词"},
-    )
+    answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
+                          form={"prompt": "写一句广告词"})
     assert answer.status_code == 422, answer.text
     assert "供应商" in answer.json()["detail"]
     item = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
@@ -1003,10 +1003,7 @@ def test_写文案没配模型时给准信而不是五百() -> None:
     assert item["run"]["error"], "节点要保留可读错误，不能只在 toast 里闪一下"
 
     # 空要求也别发出去 —— 供应商那边回的是一句看不懂的英文 400。
-    empty = client.post(
-        f"/api/boards/{board_id}/write",
-        json={"workspace_id": ws, "item_id": "n1", "prompt": "   "},
-    )
+    empty = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note", form={"prompt": "   "})
     assert empty.status_code == 400
 
 
@@ -1054,10 +1051,8 @@ def test_便签上已有内容时是改写而不是重写() -> None:
         return "改过之后的那句话"
 
     with mock_patch("app.domain.ai_chat.chat", side_effect=fake_chat):
-        answer = client.post(
-            f"/api/boards/{board_id}/write",
-            json={"workspace_id": ws, "item_id": "n1", "prompt": "改短一半"},
-        )
+        answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
+                              form={"prompt": "改短一半"})
 
     assert answer.status_code == 200, answer.text
     messages = seen["messages"]
@@ -1106,10 +1101,8 @@ def test_连过来的图片会让模型看着写() -> None:
     seen: dict = {}
 
     with mock_patch("app.domain.ai_chat.chat", side_effect=lambda t, m, **k: seen.setdefault("m", m) and "" or "写好了"):
-        answer = client.post(
-            f"/api/boards/{board_id}/write",
-            json={"workspace_id": ws, "item_id": "n1", "prompt": "照这张图写一句", "source_assets": [image_id]},
-        )
+        answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
+                              form={"prompt": "照这张图写一句", "source_assets": [image_id]})
 
     assert answer.status_code == 200, answer.text
     last = seen["m"][-1]["content"]
@@ -1252,15 +1245,8 @@ def test_上游便签给的材料和要求分开发() -> None:
 
     seen: dict = {}
     with mock_patch("app.domain.ai_chat.chat", side_effect=lambda t, m, **k: seen.setdefault("m", m) and "" or "好"):
-        answer = client.post(
-            f"/api/boards/{board_id}/write",
-            json={
-                "workspace_id": ws,
-                "item_id": "n1",
-                "prompt": "缩成一句",
-                "context": ["第一段素材", "第二段素材"],
-            },
-        )
+        answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
+                              form={"prompt": "缩成一句", "context": ["第一段素材", "第二段素材"]})
     assert answer.status_code == 200, answer.text
     messages = seen["m"]
     material = next((one for one in messages if "第一段素材" in str(one["content"])), None)
@@ -1377,9 +1363,13 @@ def test_截挂了的那一格记着截的是哪一份_就地重截() -> None:
         "/api/assets/import", data={"workspace_id": ws}, files={"file": ("片子.mp4", b"fake", "video/mp4")}
     ).json()["id"]
     board = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [], "edges": []}}).json()
-    trim = {"workspace_id": ws, "item_id": "cut", "asset_id": video_id, "start": 1.0, "end": 2.5, "mute": True, "x": 0, "y": 300}
+    trim = {"asset_id": video_id, "start": 1.0, "end": 2.5, "mute": True}
 
-    placed = client.post(f"/api/boards/{board['id']}/trim", json={**trim, "base_revision": board["revision"]})
+    def trim_on_board(form: dict, revision: int):
+        return run_on_board(client, board["id"], ws, producer="trim", item_id="cut", kind="video", x=0, y=300,
+                            form=form, base_revision=revision)
+
+    placed = trim_on_board(trim, board["revision"])
     assert placed.status_code == 200, placed.text
     wait_for_idle_jobs()
     current = client.get(f"/api/boards/{board['id']}", params={"workspace_id": ws}).json()
@@ -1387,7 +1377,7 @@ def test_截挂了的那一格记着截的是哪一份_就地重截() -> None:
     assert cut["form"]["trim"] == {"asset_id": video_id, "start": 1.0, "end": 2.5, "mute": True}
     assert cut["run"]["status"] == "failed", "假的片子截不出来 —— 这一格落成失败"
 
-    again = client.post(f"/api/boards/{board['id']}/trim", json={**trim, "start": 0.5, "base_revision": current["revision"]})
+    again = trim_on_board({**trim, "start": 0.5}, current["revision"])
     assert again.status_code == 200, again.text
     wait_for_idle_jobs()
     items = client.get(f"/api/boards/{board['id']}", params={"workspace_id": ws}).json()["canvas"]["items"]
@@ -1554,14 +1544,9 @@ def test_画板把素材归一成字典再交给领域层() -> None:
 
     with mock_patch("app.domain.generation.create_generation_job", side_effect=spy):
         with pytest.raises(RuntimeError):
-            client.post(
-                f"/api/boards/{board_id}/generate",
-                json={
-                    "workspace_id": ws,
-                    "item_id": "gen-1",
-                    "kind": "image",
-                    "x": 0,
-                    "y": 0,
+            run_on_board(
+                client, board_id, ws, producer="generate", item_id="gen-1", kind="image", x=0, y=0,
+                form={
                     "prompt": "把这张图改成夜景",
                     "provider": "openai",
                     "model": "gpt-image-1",

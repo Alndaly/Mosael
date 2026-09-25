@@ -88,7 +88,7 @@ def test_board_route_answers_in_the_readers_language() -> None:
 
     en = client.patch(
         f"/api/boards/{board['id']}",
-        json={"workspace_id": ws, "canvas": bad},
+        json={"workspace_id": ws, "base_revision": board["revision"], "canvas": bad},
         headers={"Accept-Language": "en"},
     )
     assert en.status_code == 400
@@ -98,13 +98,13 @@ def test_board_route_answers_in_the_readers_language() -> None:
 
     zh = client.patch(
         f"/api/boards/{board['id']}",
-        json={"workspace_id": ws, "canvas": bad},
+        json={"workspace_id": ws, "base_revision": board["revision"], "canvas": bad},
         headers={"Accept-Language": "zh-CN"},
     )
     assert zh.json()["detail"].startswith("未知的画板项类型:sticker")
 
     # 冲突那一条是结构化的:数字原样、message 按读者语言。
-    client.patch(f"/api/boards/{board['id']}", json={"workspace_id": ws, "name": "v2"})
+    client.patch(f"/api/boards/{board['id']}", json={"workspace_id": ws, "base_revision": board["revision"], "name": "v2"})
     stale = client.patch(
         f"/api/boards/{board['id']}",
         json={"workspace_id": ws, "base_revision": 1, "name": "stale"},

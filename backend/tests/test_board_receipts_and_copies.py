@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from tests.util import fresh_client
+from tests.util import board_revision, fresh_client, run_on_board
 
 
 def _workspace(client) -> str:
@@ -27,6 +27,16 @@ def _deliver(board_id: str, item_id: str, job: SimpleNamespace) -> None:
 
 def _canvas(client, ws: str, board_id: str) -> dict:
     return client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+
+
+def _generate(ws: str, board_id: str, user_id: str, revision: int, form: dict):
+    """在 img 那一格上生成 —— 走产出者注册表,和路由同一个入口。"""
+    from app.domain.boards import producers
+
+    return producers.RunRequest(
+        workspace_id=ws, board_id=board_id, item_id="img", kind="image", x=0, y=0,
+        base_revision=revision, actor_id=user_id, producer="generate", form=form,
+    )
 
 
 def test_产出落回时画板上的标记还在() -> None:
@@ -103,8 +113,7 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
     import app.domain.generation as generation
     import app.domain.generation.runner as runner
     from app.core.db import SessionLocal
-    from app.domain.boards import update_board
-    from app.domain.boards.actions import Slot, generate_on_board
+    from app.domain.boards import producers, update_board
 
     client = fresh_client()
     ws = _workspace(client)
@@ -126,11 +135,10 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
 
     revision = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["revision"]
     with SessionLocal() as db:
-        generate_on_board(
-            db, workspace_id=ws, slot=Slot(board_id, "img", 0, 0, revision), actor_id=user_id, kind="image",
-            prompt="一只猫", provider="p", provider_profile_id="pp", model="m", parameters={}, source_assets=[],
-            form={"prompt": "一只猫"},
-        )
+        producers.run(db, _generate(ws, board_id, user_id, revision, {
+            "prompt": "一只猫", "provider": "p", "provider_profile_id": "pp", "model": "m",
+            "item_form": {"prompt": "一只猫"},
+        }))
 
     assert started == ["gen-1"], "任务建了却没起 —— 任务中心里永远排着一条"
     items = {one["id"]: one for one in _canvas(client, ws, board_id)["items"]}
@@ -179,8 +187,7 @@ def test_正在跑的那一格不能再起一个任务(monkeypatch) -> None:
 
     import app.domain.generation as generation
     from app.core.db import SessionLocal
-    from app.domain.boards import BoardDomainError
-    from app.domain.boards.actions import Slot, generate_on_board
+    from app.domain.boards import BoardDomainError, producers
 
     client = fresh_client()
     ws = _workspace(client)
@@ -195,11 +202,10 @@ def test_正在跑的那一格不能再起一个任务(monkeypatch) -> None:
     monkeypatch.setattr(generation, "create_generation_job", create_generation_job)
 
     with SessionLocal() as db, pytest.raises(BoardDomainError):
-        generate_on_board(
-            db, workspace_id=ws, slot=Slot(board_id, "img", 0, 0), actor_id=user_id, kind="image",
-            prompt="一只猫", provider="p", provider_profile_id="pp", model="m", parameters={}, source_assets=[],
-            form={"prompt": "一只猫"},
-        )
+        producers.run(db, _generate(ws, board_id, user_id, board_revision(client, board_id, ws), {
+            "prompt": "一只猫", "provider": "p", "provider_profile_id": "pp", "model": "m",
+            "item_form": {"prompt": "一只猫"},
+        }))
 
     assert created == [], "第一轮还在跑,又建了第二个任务"
 
@@ -211,7 +217,7 @@ def test_正文里_at_到的素材不会在失败后变成槽位里挂着的素�
     import app.domain.generation as generation
     import app.domain.generation.runner as runner
     from app.core.db import SessionLocal
-    from app.domain.boards.actions import Slot, generate_on_board
+    from app.domain.boards import producers
 
     client = fresh_client()
     ws = _workspace(client)
@@ -226,11 +232,10 @@ def test_正文里_at_到的素材不会在失败后变成槽位里挂着的素�
     form = {"prompt": "像 @猫 那样", "source_assets": slot_only, "mentioned_asset_ids": ["cat"]}
 
     with SessionLocal() as db:
-        generate_on_board(
-            db, workspace_id=ws, slot=Slot(board_id, "img", 0, 0), actor_id=user_id, kind="image",
-            prompt="像 猫 那样", provider="p", provider_profile_id="pp", model="m", parameters={},
-            source_assets=[*slot_only, {"asset_id": "cat", "role": "reference_image"}], form=form,
-        )
+        producers.run(db, _generate(ws, board_id, user_id, board_revision(client, board_id, ws), {
+            "prompt": "像 猫 那样", "provider": "p", "provider_profile_id": "pp", "model": "m",
+            "source_assets": [*slot_only, {"asset_id": "cat", "role": "reference_image"}], "item_form": form,
+        }))
     _deliver(board_id, "img", SimpleNamespace(id="job-1", status="failed", result=None, error="炸了"))
 
     saved = _canvas(client, ws, board_id)["items"][0]["form"]
@@ -250,11 +255,11 @@ def test_念出来时选的引擎和发音人留在节点表单上_失败后原�
 
     client = fresh_client()
     ws = _workspace(client)
-    form = {"prompt": "你好", "voice_id": "", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural"}
+    form = {"prompt": "你好", "voice_id": "", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural", "producer": "speak"}
     board_id = _board(client, ws, {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0, "form": form}], "edges": []})
 
-    spoken = client.post(f"/api/boards/{board_id}/speak", json={
-        "workspace_id": ws, "item_id": "a1", "text": "你好", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural",
+    spoken = run_on_board(client, board_id, ws, producer="speak", item_id="a1", kind="audio", form={
+        "text": "你好", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural",
     })
     assert spoken.status_code == 200, spoken.text
     placed = spoken.json()["canvas"]["items"][0]
@@ -337,8 +342,8 @@ def test_任务在占位落下之前就结束了_产出照样落回这一格(mon
     board_id = _board(client, ws, {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0,
                                                "form": {"prompt": "你好"}}], "edges": []})
 
-    spoken = client.post(f"/api/boards/{board_id}/speak", json={
-        "workspace_id": ws, "item_id": "a1", "text": "你好", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural",
+    spoken = run_on_board(client, board_id, ws, producer="speak", item_id="a1", kind="audio", form={
+        "text": "你好", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural",
     })
     assert spoken.status_code == 200, spoken.text
 

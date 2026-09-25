@@ -38,7 +38,7 @@ def test_policy_limits_auth_oauth_and_billable_mutations_only():
     assert classify("GET", "/api/auth/oauth/google/callback", settings).name == "oauth"
     assert classify("POST", "/api/generation/jobs", settings).identity == "session"
     assert classify("POST", "/api/agent/sessions/s1/messages", settings).name == "billable"
-    assert classify("POST", "/api/boards/b1/generate", settings).name == "billable"
+    assert classify("POST", "/api/boards/b1/run", settings).name == "billable"
     assert classify("POST", "/api/workflows/w1/run", settings).name == "billable"
     assert classify("POST", "/api/workflows/w1/agent-session", settings).name == "billable"
     assert classify("POST", "/api/assets/a1/transcribe", settings).name == "billable"

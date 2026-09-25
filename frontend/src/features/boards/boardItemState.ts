@@ -1,4 +1,4 @@
-import type { BoardItem } from "@/api/client";
+import type { BoardItem, BoardProducer } from "@/api/client";
 
 export type BoardItemRunStatus = NonNullable<BoardItem["run"]>["status"];
 
@@ -10,23 +10,55 @@ export function itemError(item: BoardItem): string | undefined {
   return item.run?.error;
 }
 
-/** 画布上一格底下挂的那块面板:写字、念出来、生成、截一段。 */
-export type BoardComposer = "write" | "speak" | "generate" | "trim";
+/**
+ * 选中这一格时底下挂哪个产出者的面板;不挂回 null。**一处说了算。**
+ *
+ * 产出者写在这一格的表单上(`form.producer`,见后端 boards/producers.py)—— 不再按种类猜。此前
+ * 这里按种类推断(便签写字、音频念、图片视频生成,表单记着 trim 的截取),升级时由迁移
+ * migrate-board-forms-name-their-producer 照那条推断写进了每一格。
+ *
+ * 已经有了产出(asset_id)的一格不挂 —— 它的事做完了;便签的产出是它自己的正文,不占 asset_id,
+ * 所以有字照样挂(有字就是照我说的改)。
+ */
+export function producerOf(item: BoardItem): BoardProducer | null {
+  const producer = item.form?.producer;
+  if (!producer || item.asset_id) return null;
+  return producer;
+}
 
 /**
- * 选中这一格时底下挂哪块面板;不挂回 null。**一处说了算。**
- *
- * 便签不论空不空都挂写字(空的是从头写,有字的是照我说的改)。图片/视频/音频只在**还没有产出**
- * 时挂:这一格是**截出来的**(表单上记着截的是哪一份,见后端 trim_on_board)挂截取面板 —— 截挂了
- * 回来重试,要的是原样的范围再截一次,不是一块对着空提示词的生成面板;否则按种类,音频念、
- * 图片视频生成。此前只按种类分,截挂了的那一格挂的是生成面板。
+ * 面板看到的那一格:表单里不带产出者。产出者不归面板编辑 —— 面板只管自己那几个字段,存回来的
+ * 表单由画布补上产出者(见 withProducer)。面板拿「上一次存下的表单」比对要不要回写,带着它的话
+ * 每次一挂上就会白写一遍。
  */
-export function composerFor(item: BoardItem): BoardComposer | null {
-  if (item.kind === "note") return "write";
-  if (item.kind !== "image" && item.kind !== "video" && item.kind !== "audio") return null;
-  if (item.asset_id) return null;
-  if (item.form?.trim) return "trim";
-  return item.kind === "audio" ? "speak" : "generate";
+export function composerView(item: BoardItem): BoardItem {
+  if (!item.form || !("producer" in item.form)) return item;
+  const { producer: _producer, ...form } = item.form;
+  return { ...item, form };
+}
+
+/** 面板存回来的表单,补上这一格的产出者。**排在最后** —— 和后端摆占位时写的位置一致,前端按 JSON 比对表单。 */
+export function withProducer(form: NonNullable<BoardItem["form"]>, producer: BoardProducer): NonNullable<BoardItem["form"]> {
+  const { producer: _producer, ...rest } = form;
+  return { ...rest, producer };
+}
+
+/** 新放下的一格(还没有产出)挂哪个产出者。和后端 producers.producer_for_new_slot 同一张表。 */
+const NEW_SLOT_PRODUCER: Partial<Record<BoardItem["kind"], BoardProducer>> = {
+  note: "write",
+  image: "generate",
+  video: "generate",
+  audio: "speak",
+};
+
+/**
+ * 新放下的一格带上的表单:写明它的产出者。这是**新建时的缺省**,写进去之后就是那一格自己的事实。
+ * 已经带着产出(贴进来的素材)或自带表单的不补 —— 前者不挂面板,后者自己说了算。
+ */
+export function newSlotForm(kind: BoardItem["kind"], extra: Partial<BoardItem> = {}): Pick<BoardItem, "form"> | null {
+  const producer = NEW_SLOT_PRODUCER[kind];
+  if (!producer || extra.asset_id || extra.form) return null;
+  return { form: { producer } };
 }
 
 /** 所有画布节点共用的六态解释。 */

@@ -178,8 +178,7 @@ describe("删除键只认冲着画布来的那一下", () => {
 
 describe("截挂了的那一格,选中时挂的是截取面板", () => {
   it("范围原样在,重截落回这一格;不挂生成面板", async () => {
-    const onTrim = vi.fn(async () => undefined);
-    const onGenerate = vi.fn(async () => undefined);
+    const onRun = vi.fn(async () => undefined);
     const cut = {
       id: "cut",
       kind: "video" as const,
@@ -187,10 +186,10 @@ describe("截挂了的那一格,选中时挂的是截取面板", () => {
       y: 0,
       width: 320,
       height: 200,
-      form: { trim: { asset_id: "src", start: 1.5, end: 4, mute: true } },
+      form: { trim: { asset_id: "src", start: 1.5, end: 4, mute: true }, producer: "trim" as const },
       run: { status: "failed" as const, error: "截取失败" },
     };
-    mount({ items: [cut], edges: [], markers: [] }, { onTrim, onGenerate, models: [] });
+    mount({ items: [cut], edges: [], markers: [] }, { onRun, models: [] });
 
     const node = document.querySelector('[data-id="cut"]') as HTMLElement;
     act(() => {
@@ -207,7 +206,11 @@ describe("截挂了的那一格,选中时挂的是截取面板", () => {
 
     const submit = [...document.querySelectorAll("button")].find((one) => one.textContent?.includes("boardTrimSubmit"));
     act(() => submit!.click());
-    expect(onTrim).toHaveBeenCalledWith(expect.objectContaining({ itemId: "cut", assetId: "src", start: 1.5, end: 4, mute: true }));
-    expect(onGenerate).not.toHaveBeenCalled();
+    expect(onRun).toHaveBeenCalledTimes(1);
+    expect(onRun).toHaveBeenCalledWith(expect.objectContaining({
+      producer: "trim",
+      item_id: "cut",
+      form: { asset_id: "src", start: 1.5, end: 4, mute: true },
+    }));
   });
 });

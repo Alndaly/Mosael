@@ -4,7 +4,7 @@
  *
  * 这里一度只列工作区配音库里的**克隆**音色,于是一台没克隆过任何嗓子的机器打开这张卡片,
  * 看到的是「还没有可用的音色」—— 而 Edge 有十几个免费内置音色,不要密钥、不用配置。
- * 后端的 BoardSpeak 早就同时收 voice_id 和 engine/engine_voice 两条路,漏的是这一侧。
+ * 后端念字的表单(producers.SpeakForm)早就同时收 voice_id 和 engine/engine_voice 两条路,漏的是这一侧。
  */
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";

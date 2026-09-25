@@ -1,5 +1,8 @@
 """画板上的四个动作:生成、写字、念出来、截一段。产出都落回画布上的那一格。
 
+它们是四个内置产出者(Producer)的本体;入口只有一个 —— boards.producers.run(ADR 0021)。
+表单上写明是哪个产出者(`form.producer`),界面据此挂面板,不再按种类猜。
+
 此前它们整个写在路由里 —— 拼提示词、调模型、摊平素材、查版本冲突,路由成了第二个领域层,
 而画板的第二个入口(智能体、工作流)想做同样的事就得再抄一遍。现在路由只认人、翻错误。
 
@@ -56,8 +59,9 @@ def _ensure_slot_ready(db: Session, workspace_id: str, slot: Slot) -> None:
         raise BoardInputError("boardErr_itemBusy")
 
 
-def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind: str,
+def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind: str, producer: str,
              form: dict[str, Any], job_id: str) -> Board:
+    """摆「正在做」的占位。表单末尾写上**是哪个产出者做的** —— 跑挂了回来,面板照它挂、照它重试。"""
     return place_pending(
         db,
         workspace_id=workspace_id,
@@ -67,7 +71,9 @@ def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind:
             "kind": kind,
             "x": slot.x,
             "y": slot.y,
-            "form": form,
+            #: 排在最后、覆盖调用方带来的那个 —— 这一轮是谁做的由这里说了算;位置固定,前端按
+            #: JSON 比对表单时不会因为键的先后误以为「表单变了」。
+            "form": {**{key: value for key, value in form.items() if key != "producer"}, "producer": producer},
             "run": {"status": "running", "job_id": job_id},
         },
         actor_id=actor_id,
@@ -119,7 +125,7 @@ def generate_on_board(
     finally:
         reset_receipt(token)
     board = _pending(
-        db, workspace_id, slot, actor_id=actor_id, kind=kind, job_id=job.id,
+        db, workspace_id, slot, actor_id=actor_id, kind=kind, producer="generate", job_id=job.id,
         form={
             **form,
             # 只存用户写的那句提示词;运行时追加的图例不该覆盖它。
@@ -169,7 +175,7 @@ def speak_on_board(
         job = start_synthesis(db, text=text, project_id=None, created_by=actor_id, **synthesis)
     finally:
         reset_receipt(token)
-    return _pending(db, workspace_id, slot, actor_id=actor_id, kind="audio", job_id=job.id,
+    return _pending(db, workspace_id, slot, actor_id=actor_id, kind="audio", producer="speak", job_id=job.id,
                     form={"prompt": text, "voice_id": voice_id or "", "engine": engine, "engine_voice": engine_voice})
 
 
@@ -202,7 +208,7 @@ def trim_on_board(
         reset_receipt(token)
     #: 表单记下**截的是哪一份、哪一段**(见 canvas._normalize_trim):截挂了回来,这一格挂的是
     #: 截取面板、范围原样还在,重试就地再截一次 —— 而不是一块对着空提示词的生成面板。
-    return _pending(db, workspace_id, slot, actor_id=actor_id, kind=asset.kind, job_id=job.id,
+    return _pending(db, workspace_id, slot, actor_id=actor_id, kind=asset.kind, producer="trim", job_id=job.id,
                     form={"trim": {"asset_id": asset.id, "start": start, "end": end, "mute": mute}})
 
 
@@ -259,7 +265,7 @@ def write_on_board(
         reset_receipt(token)
     db.commit()
     _pending(
-        db, workspace_id, Slot(board_id, item_id, 0, 0), actor_id=actor_id, kind="note", job_id=job.id,
+        db, workspace_id, Slot(board_id, item_id, 0, 0), actor_id=actor_id, kind="note", producer="write", job_id=job.id,
         #: 表单记下**这一轮**用的要求和模型 —— 写挂了回来,面板上原样还在,改一个字就能重来。
         form={**(slot_item.get("form") or {}), "prompt": prompt,
               "provider_profile_id": provider_profile_id, "model": model},

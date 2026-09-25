@@ -11281,14 +11281,14 @@
         }
       }
     },
-    "/api/boards/{board_id}/generate": {
+    "/api/boards/{board_id}/run": {
       "post": {
         "tags": [
           "boards"
         ],
-        "summary": "Generate",
-        "description": "在画板上生成一份素材,产出就地落回画布(见 boards.actions.generate_on_board)。",
-        "operationId": "generate_api_boards__board_id__generate_post",
+        "summary": "Run",
+        "description": "在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。\n\n画板上一切产出(生成、写字、念出来、截一段)都走这一条 —— 此前是四条各自的路由和请求体。\n跑它要什么权限由产出者声明。",
+        "operationId": "run_api_boards__board_id__run_post",
         "parameters": [
           {
             "name": "board_id",
@@ -11305,166 +11305,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BoardGenerate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/boards/{board_id}/write": {
-      "post": {
-        "tags": [
-          "boards"
-        ],
-        "summary": "Write",
-        "description": "让 AI 往画板上的一张便签里写字(见 boards.actions.write_on_board)。",
-        "operationId": "write_api_boards__board_id__write_post",
-        "parameters": [
-          {
-            "name": "board_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Board Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BoardWrite"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/boards/{board_id}/speak": {
-      "post": {
-        "tags": [
-          "boards"
-        ],
-        "summary": "Speak",
-        "description": "把一段文字念成音频,产出落回画板上那一格(见 boards.actions.speak_on_board)。",
-        "operationId": "speak_api_boards__board_id__speak_post",
-        "parameters": [
-          {
-            "name": "board_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Board Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BoardSpeak"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/boards/{board_id}/trim": {
-      "post": {
-        "tags": [
-          "boards"
-        ],
-        "summary": "Trim",
-        "description": "截出一段,产出落回画板上那一格(见 boards.actions.trim_on_board)。",
-        "operationId": "trim_api_boards__board_id__trim_post",
-        "parameters": [
-          {
-            "name": "board_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Board Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BoardTrim"
+                "$ref": "#/components/schemas/BoardRun"
               }
             }
           }
@@ -20556,88 +20397,6 @@
         ],
         "title": "BoardDuplicate"
       },
-      "BoardGenerate": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "base_revision": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Revision"
-          },
-          "item_id": {
-            "type": "string",
-            "title": "Item Id"
-          },
-          "kind": {
-            "type": "string",
-            "title": "Kind",
-            "default": "image"
-          },
-          "prompt": {
-            "type": "string",
-            "title": "Prompt"
-          },
-          "x": {
-            "type": "number",
-            "title": "X",
-            "default": 0
-          },
-          "y": {
-            "type": "number",
-            "title": "Y",
-            "default": 0
-          },
-          "provider": {
-            "type": "string",
-            "title": "Provider",
-            "default": ""
-          },
-          "provider_profile_id": {
-            "type": "string",
-            "title": "Provider Profile Id",
-            "default": ""
-          },
-          "model": {
-            "type": "string",
-            "title": "Model",
-            "default": ""
-          },
-          "parameters": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Parameters"
-          },
-          "source_assets": {
-            "items": {
-              "$ref": "#/components/schemas/SourceAssetRef"
-            },
-            "type": "array",
-            "title": "Source Assets"
-          },
-          "form": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Form"
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "item_id",
-          "prompt"
-        ],
-        "title": "BoardGenerate"
-      },
       "BoardOut": {
         "properties": {
           "id": {
@@ -20684,56 +20443,24 @@
         ],
         "title": "BoardOut"
       },
-      "BoardSpeak": {
+      "BoardRun": {
         "properties": {
           "workspace_id": {
             "type": "string",
             "title": "Workspace Id"
           },
           "base_revision": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "integer",
+            "minimum": 1.0,
             "title": "Base Revision"
           },
           "item_id": {
             "type": "string",
             "title": "Item Id"
           },
-          "text": {
+          "kind": {
             "type": "string",
-            "title": "Text"
-          },
-          "voice_id": {
-            "type": "string",
-            "title": "Voice Id",
-            "default": ""
-          },
-          "engine": {
-            "type": "string",
-            "title": "Engine",
-            "default": ""
-          },
-          "engine_voice": {
-            "type": "string",
-            "title": "Engine Voice",
-            "default": ""
-          },
-          "engine_voice_resource": {
-            "type": "string",
-            "title": "Engine Voice Resource",
-            "default": ""
-          },
-          "speed": {
-            "type": "number",
-            "title": "Speed",
-            "default": 1.0
+            "title": "Kind"
           },
           "x": {
             "type": "number",
@@ -20744,77 +20471,27 @@
             "type": "number",
             "title": "Y",
             "default": 0
+          },
+          "producer": {
+            "type": "string",
+            "title": "Producer"
+          },
+          "form": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Form"
           }
         },
         "type": "object",
         "required": [
           "workspace_id",
+          "base_revision",
           "item_id",
-          "text"
+          "kind",
+          "producer"
         ],
-        "title": "BoardSpeak",
-        "description": "把文字异步合成为音频并落回画板占位。"
-      },
-      "BoardTrim": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "base_revision": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Revision"
-          },
-          "item_id": {
-            "type": "string",
-            "title": "Item Id"
-          },
-          "asset_id": {
-            "type": "string",
-            "title": "Asset Id"
-          },
-          "start": {
-            "type": "number",
-            "title": "Start",
-            "default": 0
-          },
-          "end": {
-            "type": "number",
-            "title": "End"
-          },
-          "mute": {
-            "type": "boolean",
-            "title": "Mute",
-            "default": false
-          },
-          "x": {
-            "type": "number",
-            "title": "X",
-            "default": 0
-          },
-          "y": {
-            "type": "number",
-            "title": "Y",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "item_id",
-          "asset_id",
-          "end"
-        ],
-        "title": "BoardTrim",
-        "description": "截取视频或音频并把新素材落回画板；原素材不变。"
+        "title": "BoardRun",
+        "description": "在画板上跑一个产出者(生成、写字、念出来、截一段……),产出落回 `item_id` 那一格。\n\n`form` 是这个产出者自己的表单,形状由它声明、在领域里校验(见 domain/boards/producers)——\n这里不为每个产出者各开一个请求体。"
       },
       "BoardUpdate": {
         "properties": {
@@ -20823,15 +20500,8 @@
             "title": "Workspace Id"
           },
           "base_revision": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "integer",
+            "minimum": 1.0,
             "title": "Base Revision"
           },
           "name": {
@@ -20860,69 +20530,10 @@
         },
         "type": "object",
         "required": [
-          "workspace_id"
+          "workspace_id",
+          "base_revision"
         ],
         "title": "BoardUpdate"
-      },
-      "BoardWrite": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "base_revision": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Revision"
-          },
-          "item_id": {
-            "type": "string",
-            "title": "Item Id"
-          },
-          "prompt": {
-            "type": "string",
-            "title": "Prompt"
-          },
-          "provider_profile_id": {
-            "type": "string",
-            "title": "Provider Profile Id",
-            "default": ""
-          },
-          "model": {
-            "type": "string",
-            "title": "Model",
-            "default": ""
-          },
-          "source_assets": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Source Assets"
-          },
-          "context": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Context"
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "item_id",
-          "prompt"
-        ],
-        "title": "BoardWrite",
-        "description": "让 AI 同步写入一张画板便签。"
       },
       "Body_dictate_api_asr_dictate_post": {
         "properties": {

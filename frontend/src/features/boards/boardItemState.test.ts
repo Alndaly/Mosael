@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoardItem } from "@/api/client";
-import { boardSettlementPatch, composerFor, itemFormResetKey, itemIsRunning, itemRunStatus, prunedSourcesPatch } from "./boardItemState";
+import { boardSettlementPatch, composerView, itemFormResetKey, itemIsRunning, itemRunStatus, newSlotForm, producerOf, prunedSourcesPatch, withProducer } from "./boardItemState";
 
 function image(extra: Partial<BoardItem> = {}): BoardItem {
   return { id: "image-1", kind: "image", x: 0, y: 0, ...extra };
@@ -66,19 +66,41 @@ describe("选中一格时挂哪块面板", () => {
   const trim = { asset_id: "src", start: 1, end: 3, mute: false };
 
   it("截挂了的那一格挂截取面板,不是生成/念的面板", () => {
-    expect(composerFor({ id: "v", kind: "video", x: 0, y: 0, form: { trim }, run: { status: "failed", error: "截取失败" } })).toBe("trim");
-    expect(composerFor({ id: "a", kind: "audio", x: 0, y: 0, form: { trim }, run: { status: "failed" } })).toBe("trim");
+    expect(producerOf({ id: "v", kind: "video", x: 0, y: 0, form: { trim, producer: "trim" }, run: { status: "failed", error: "截取失败" } })).toBe("trim");
+    expect(producerOf({ id: "a", kind: "audio", x: 0, y: 0, form: { trim, producer: "trim" }, run: { status: "failed" } })).toBe("trim");
   });
 
-  it("其余没有产出的按种类:图片视频生成、音频念、便签写", () => {
-    expect(composerFor(image({ run: { status: "failed", error: "上游失败" } }))).toBe("generate");
-    expect(composerFor({ id: "a", kind: "audio", x: 0, y: 0 })).toBe("speak");
-    expect(composerFor({ id: "n", kind: "note", x: 0, y: 0, text: "有字" })).toBe("write");
+  it("其余没有产出的照表单上写的:图片视频生成、音频念、便签写", () => {
+    expect(producerOf(image({ form: { producer: "generate" }, run: { status: "failed", error: "上游失败" } }))).toBe("generate");
+    expect(producerOf({ id: "a", kind: "audio", x: 0, y: 0, form: { producer: "speak" } })).toBe("speak");
+    expect(producerOf({ id: "n", kind: "note", x: 0, y: 0, text: "有字", form: { producer: "write" } })).toBe("write");
   });
 
   it("有了产出的、分组框这类不挂", () => {
-    expect(composerFor(image({ asset_id: "a1", form: { trim } }))).toBeNull();
-    expect(composerFor({ id: "f", kind: "frame", x: 0, y: 0 })).toBeNull();
+    expect(producerOf(image({ asset_id: "a1", form: { trim, producer: "trim" } }))).toBeNull();
+    expect(producerOf({ id: "f", kind: "frame", x: 0, y: 0 })).toBeNull();
+  });
+
+  it("不按种类猜:表单上没写产出者就不挂", () => {
+    expect(producerOf({ id: "a", kind: "audio", x: 0, y: 0 })).toBeNull();
+    expect(producerOf({ id: "v", kind: "video", x: 0, y: 0, form: { trim } })).toBeNull();
+  });
+
+  it("新放下的一格写明产出者;带着产出或自带表单的不补", () => {
+    expect(newSlotForm("note")).toEqual({ form: { producer: "write" } });
+    expect(newSlotForm("image")).toEqual({ form: { producer: "generate" } });
+    expect(newSlotForm("video")).toEqual({ form: { producer: "generate" } });
+    expect(newSlotForm("audio")).toEqual({ form: { producer: "speak" } });
+    expect(newSlotForm("frame")).toBeNull();
+    expect(newSlotForm("image", { asset_id: "a1" })).toBeNull();
+    expect(newSlotForm("video", { form: { trim, producer: "trim" } })).toBeNull();
+  });
+
+  it("面板看不见产出者;存回来的表单把它补在最后", () => {
+    const item = image({ form: { producer: "generate", prompt: "猫" } });
+    expect(composerView(item).form).toEqual({ prompt: "猫" });
+    expect(Object.keys(withProducer({ producer: "speak", prompt: "猫" }, "generate"))).toEqual(["prompt", "producer"]);
+    expect(withProducer({ prompt: "猫" }, "generate")).toEqual({ prompt: "猫", producer: "generate" });
   });
 });
 

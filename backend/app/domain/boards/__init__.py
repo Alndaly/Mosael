@@ -2,7 +2,8 @@
 
 - `canvas` —— 画布的形状、读写、版本、回执(产出填回那一格);
 - `ops` —— 智能体用的细粒度编辑算子;
-- `actions` —— 画板上的四个动作(生成、写字、念出来、截一段);
+- `producers` —— 画板上的产出者注册表:一切产出都从 `producers.run` 进(ADR 0021);
+- `actions` —— 四个内置产出者的本体(生成、写字、念出来、截一段);
 - `trim` —— 截一段的任务本体。
 """
 
@@ -27,6 +28,7 @@ from app.domain.boards.canvas import (
     install,
     list_boards,
     normalize_canvas,
+    outputs_of,
     place_pending,
     receipt_to_item,
     update_board,
@@ -53,6 +55,7 @@ __all__ = [
     "install",
     "list_boards",
     "normalize_canvas",
+    "outputs_of",
     "place_pending",
     "receipt_to_item",
     "update_board",

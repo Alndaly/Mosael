@@ -3835,7 +3835,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/boards/{board_id}/generate": {
+    "/api/boards/{board_id}/run": {
         parameters: {
             query?: never;
             header?: never;
@@ -3845,70 +3845,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Generate
-         * @description 在画板上生成一份素材,产出就地落回画布(见 boards.actions.generate_on_board)。
+         * Run
+         * @description 在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。
+         *
+         *     画板上一切产出(生成、写字、念出来、截一段)都走这一条 —— 此前是四条各自的路由和请求体。
+         *     跑它要什么权限由产出者声明。
          */
-        post: operations["generate_api_boards__board_id__generate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/boards/{board_id}/write": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Write
-         * @description 让 AI 往画板上的一张便签里写字(见 boards.actions.write_on_board)。
-         */
-        post: operations["write_api_boards__board_id__write_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/boards/{board_id}/speak": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Speak
-         * @description 把一段文字念成音频,产出落回画板上那一格(见 boards.actions.speak_on_board)。
-         */
-        post: operations["speak_api_boards__board_id__speak_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/boards/{board_id}/trim": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trim
-         * @description 截出一段,产出落回画板上那一格(见 boards.actions.trim_on_board)。
-         */
-        post: operations["trim_api_boards__board_id__trim_post"];
+        post: operations["run_api_boards__board_id__run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7133,57 +7076,6 @@ export interface components {
              */
             name: string;
         };
-        /** BoardGenerate */
-        BoardGenerate: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Base Revision */
-            base_revision?: number | null;
-            /** Item Id */
-            item_id: string;
-            /**
-             * Kind
-             * @default image
-             */
-            kind: string;
-            /** Prompt */
-            prompt: string;
-            /**
-             * X
-             * @default 0
-             */
-            x: number;
-            /**
-             * Y
-             * @default 0
-             */
-            y: number;
-            /**
-             * Provider
-             * @default
-             */
-            provider: string;
-            /**
-             * Provider Profile Id
-             * @default
-             */
-            provider_profile_id: string;
-            /**
-             * Model
-             * @default
-             */
-            model: string;
-            /** Parameters */
-            parameters?: {
-                [key: string]: unknown;
-            };
-            /** Source Assets */
-            source_assets?: components["schemas"]["SourceAssetRef"][];
-            /** Form */
-            form?: {
-                [key: string]: unknown;
-            };
-        };
         /** BoardOut */
         BoardOut: {
             /** Id */
@@ -7210,43 +7102,21 @@ export interface components {
             updated_at: string;
         };
         /**
-         * BoardSpeak
-         * @description 把文字异步合成为音频并落回画板占位。
+         * BoardRun
+         * @description 在画板上跑一个产出者(生成、写字、念出来、截一段……),产出落回 `item_id` 那一格。
+         *
+         *     `form` 是这个产出者自己的表单,形状由它声明、在领域里校验(见 domain/boards/producers)——
+         *     这里不为每个产出者各开一个请求体。
          */
-        BoardSpeak: {
+        BoardRun: {
             /** Workspace Id */
             workspace_id: string;
             /** Base Revision */
-            base_revision?: number | null;
+            base_revision: number;
             /** Item Id */
             item_id: string;
-            /** Text */
-            text: string;
-            /**
-             * Voice Id
-             * @default
-             */
-            voice_id: string;
-            /**
-             * Engine
-             * @default
-             */
-            engine: string;
-            /**
-             * Engine Voice
-             * @default
-             */
-            engine_voice: string;
-            /**
-             * Engine Voice Resource
-             * @default
-             */
-            engine_voice_resource: string;
-            /**
-             * Speed
-             * @default 1
-             */
-            speed: number;
+            /** Kind */
+            kind: string;
             /**
              * X
              * @default 0
@@ -7257,83 +7127,25 @@ export interface components {
              * @default 0
              */
             y: number;
-        };
-        /**
-         * BoardTrim
-         * @description 截取视频或音频并把新素材落回画板；原素材不变。
-         */
-        BoardTrim: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Base Revision */
-            base_revision?: number | null;
-            /** Item Id */
-            item_id: string;
-            /** Asset Id */
-            asset_id: string;
-            /**
-             * Start
-             * @default 0
-             */
-            start: number;
-            /** End */
-            end: number;
-            /**
-             * Mute
-             * @default false
-             */
-            mute: boolean;
-            /**
-             * X
-             * @default 0
-             */
-            x: number;
-            /**
-             * Y
-             * @default 0
-             */
-            y: number;
+            /** Producer */
+            producer: string;
+            /** Form */
+            form?: {
+                [key: string]: unknown;
+            };
         };
         /** BoardUpdate */
         BoardUpdate: {
             /** Workspace Id */
             workspace_id: string;
             /** Base Revision */
-            base_revision?: number | null;
+            base_revision: number;
             /** Name */
             name?: string | null;
             /** Canvas */
             canvas?: {
                 [key: string]: unknown;
             } | null;
-        };
-        /**
-         * BoardWrite
-         * @description 让 AI 同步写入一张画板便签。
-         */
-        BoardWrite: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Base Revision */
-            base_revision?: number | null;
-            /** Item Id */
-            item_id: string;
-            /** Prompt */
-            prompt: string;
-            /**
-             * Provider Profile Id
-             * @default
-             */
-            provider_profile_id: string;
-            /**
-             * Model
-             * @default
-             */
-            model: string;
-            /** Source Assets */
-            source_assets?: string[];
-            /** Context */
-            context?: string[];
         };
         /** Body_dictate_api_asr_dictate_post */
         Body_dictate_api_asr_dictate_post: {
@@ -20442,7 +20254,7 @@ export interface operations {
             };
         };
     };
-    generate_api_boards__board_id__generate_post: {
+    run_api_boards__board_id__run_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -20453,112 +20265,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BoardGenerate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BoardOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    write_api_boards__board_id__write_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                board_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BoardWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BoardOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    speak_api_boards__board_id__speak_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                board_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BoardSpeak"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BoardOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    trim_api_boards__board_id__trim_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                board_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BoardTrim"];
+                "application/json": components["schemas"]["BoardRun"];
             };
         };
         responses: {

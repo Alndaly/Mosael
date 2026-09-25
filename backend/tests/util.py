@@ -264,6 +264,27 @@ def user_id(username: str = "tester") -> str:
         return db.query(User).filter(User.username == username).one().id
 
 
+def board_revision(client, board_id: str, workspace_id: str) -> int:
+    """这张画板现在的版本号。存画布、在画板上跑产出者都要带着它(base_revision 必填)。"""
+    return client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace_id}).json()["revision"]
+
+
+def run_on_board(client, board_id: str, workspace_id: str, *, producer: str, item_id: str, kind: str,
+                 form: dict, x: float = 0, y: float = 0, base_revision: int | None = None, **request):
+    """在画板上跑一次产出者(`POST /api/boards/{id}/run`)。没给版本号就取这张板现在的那一版。"""
+    body = {
+        "workspace_id": workspace_id,
+        "base_revision": base_revision if base_revision is not None else board_revision(client, board_id, workspace_id),
+        "item_id": item_id,
+        "kind": kind,
+        "x": x,
+        "y": y,
+        "producer": producer,
+        "form": form,
+    }
+    return client.post(f"/api/boards/{board_id}/run", json=body, **request)
+
+
 def pinned(db, workflow) -> dict:
     """一条工作流 job 的载荷:钉住这条工作流的当前修订,和 engine.start_workflow_job 一样。
 

@@ -104,6 +104,14 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["scene_id"] = str(op["scene_id"])
             if op.get("asset_id"):
                 item["asset_id"] = str(op["asset_id"])
+            else:
+                #: 还没有产出的一格(便签、空的图片/视频/音频槽)写明它的产出者 —— 面板照它挂,
+                #: 和手动放下的一格同一个样子(见 producers.producer_for_new_slot)。
+                from app.domain.boards.producers import producer_for_new_slot
+
+                producer = producer_for_new_slot(item_kind)
+                if producer:
+                    item["form"] = {"producer": producer}
             items.append(item)
             by_id[item_id] = item
 

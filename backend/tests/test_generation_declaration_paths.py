@@ -19,7 +19,7 @@ from app.core.db import SessionLocal
 from app.db.models import ProviderProfile, User
 from app.domain import provider_models
 from app.domain.generation.operations import GenerationDomainError, create_generation_job
-from tests.util import fresh_client, second_client
+from tests.util import fresh_client, run_on_board, second_client
 
 
 @pytest.fixture(autouse=True)
@@ -165,10 +165,10 @@ class Test从声明到提交只有一份规则:
         board_id = client.post(
             "/api/boards", json={"workspace_id": ws, "name": "B"}
         ).json()["id"]
-        rejected = client.post(
-            f"/api/boards/{board_id}/generate",
-            json={
-                "workspace_id": ws, "item_id": "n1", "kind": "image", "prompt": "一只猫",
+        rejected = run_on_board(
+            client, board_id, ws, producer="generate", item_id="n1", kind="image",
+            form={
+                "prompt": "一只猫",
                 "provider": "openai", "provider_profile_id": pid, "model": "gpt-image-2-client",
                 "parameters": {"quality": "ultra"},
             },
@@ -177,10 +177,10 @@ class Test从声明到提交只有一份规则:
         assert "quality" in rejected.json()["detail"]
 
         #: 声明内的值放行 —— 拦错了方向同样是这条链坏掉的样子。
-        accepted = client.post(
-            f"/api/boards/{board_id}/generate",
-            json={
-                "workspace_id": ws, "item_id": "n1", "kind": "image", "prompt": "一只猫",
+        accepted = run_on_board(
+            client, board_id, ws, producer="generate", item_id="n1", kind="image",
+            form={
+                "prompt": "一只猫",
                 "provider": "openai", "provider_profile_id": pid, "model": "gpt-image-2-client",
                 "parameters": {"quality": "high", "size": "1024x1536"},
             },
