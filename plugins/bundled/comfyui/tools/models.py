@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from typing import Any
@@ -64,60 +65,100 @@ def _parse_template(text: str, locale: str) -> dict[str, Any]:
     return parsed
 
 
-def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """模型 id → (API 图, 占位符的默认值)。"""
+def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str
+         ) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
+    """模型 id → (API 图, 占位符的默认值, 节点 id → 界面上的名字)。"""
     if model_id == BUILTIN:
         found = checkpoints(object_info)
         if not found:
             raise ComfyError(say(locale, "ComfyUI 里没有任何 checkpoint 模型 —— 先在 ComfyUI 里装一个",
                                  "ComfyUI has no checkpoint models. Install one in ComfyUI first."))
-        return graph.substitute_placeholders(BUILTIN_GRAPH, {"checkpoint": found[0]}), dict(PLACEHOLDER_DEFAULTS)
+        return graph.substitute_placeholders(BUILTIN_GRAPH, {"checkpoint": found[0]}), dict(PLACEHOLDER_DEFAULTS), {}
     if model_id == TEMPLATE:
         text = template_text()
         if not text:
             raise ComfyError(say(locale, "这个连接没有粘贴 API 模板", "This connection has no API template."))
-        return _parse_template(text, locale), dict(PLACEHOLDER_DEFAULTS)
+        parsed = _parse_template(text, locale)
+        return parsed, dict(PLACEHOLDER_DEFAULTS), graph.ui_titles(parsed)
     try:
         ui_graph = comfy.fetch_workflow(model_id)
     except ComfyError as exc:
         if exc.status == 404:
-            raise ComfyError(say(locale, f"ComfyUI 里已经没有工作流「{model_id}」了 —— 到插件页点「刷新模型」",
-                                 f"ComfyUI no longer has the workflow “{model_id}”. Click Refresh models on the Plugins page.")) from exc
+            raise ComfyError(say(locale, f"ComfyUI 里已经没有工作流「{model_id}」了 —— 到插件页点「刷新模型」,或用 list_workflows 看看现在有哪些",
+                                 f"ComfyUI no longer has the workflow “{model_id}”. Click Refresh models on the Plugins page, or call list_workflows to see what exists.")) from exc
         raise
-    return graph.graph_to_api_prompt(ui_graph, object_info), {}
+    return graph.graph_to_api_prompt(ui_graph, object_info), {}, graph.ui_titles(ui_graph)
 
 
-def _label(path: str) -> str:
+def label_of(path: str) -> str:
     return path[:-5] if path.endswith(".json") else path
+
+
+def each(comfy: Comfy, object_info: dict[str, Any], locale: str):
+    """这台服务器上的每个模型:(id, 名字, API 图, 节点名字, 转不过来的原因)。
+
+    一张图拉不下来 / 转不过来,照样交出来(带着原因)—— 目录里跳过它,`list_workflows` 把原因说出来:
+    智能体问「有哪些工作流」时,一张静默消失的图比一张标着「转换失败」的图更让人摸不着头脑。
+    """
+    if checkpoints(object_info):
+        api, _, titles = load(comfy, BUILTIN, object_info, locale)
+        yield BUILTIN, {"zh": "内置文生图", "en": "Built-in text-to-image"}, api, titles, ""
+    text = template_text()
+    if text:
+        try:
+            parsed = _parse_template(text, locale)
+            yield TEMPLATE, {"zh": "API 模板", "en": "API template"}, parsed, graph.ui_titles(parsed), ""
+        except ComfyError as exc:
+            yield TEMPLATE, {"zh": "API 模板", "en": "API template"}, {}, {}, str(exc)
+    for path in comfy.list_workflows():
+        try:
+            ui_graph = comfy.fetch_workflow(path)
+            api = graph.graph_to_api_prompt(ui_graph, object_info)
+        except Exception as exc:  # noqa: BLE001 — 一张图拉不下来 / 转不过来,别的照常列
+            yield path, label_of(path), {}, {}, str(exc) or type(exc).__name__
+            continue
+        if not api:
+            yield path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty")
+            continue
+        yield path, label_of(path), api, graph.ui_titles(ui_graph), ""
 
 
 def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
     """这台服务器现在有哪些模型。一张图转不过来就跳过它,不让它拖垮整份清单。"""
     object_info = comfy.object_info()
     models: list[dict[str, Any]] = []
-    if checkpoints(object_info):
-        api, _ = load(comfy, BUILTIN, object_info, locale)
-        builtin = graph.describe(BUILTIN, {"zh": "内置文生图", "en": "Built-in text-to-image"}, api, object_info)
-        builtin["parameters"]["size"]["default"] = "1024x1024"
-        builtin["prompt_dialect"] = "sd-tags"
-        models.append(builtin)
-    text = template_text()
-    if text:
-        try:
-            parsed = _parse_template(text, locale)
-            models.append(graph.describe(TEMPLATE, {"zh": "API 模板", "en": "API template"}, parsed, object_info,
-                                         graph.ui_titles(parsed)))
-        except ComfyError:
-            # 模板坏了也列出来:选中它时会把「哪里坏了」说清楚。不列的话它从选择器里静默消失,
-            # 用户只会以为连接没配上。
-            models.append({"id": TEMPLATE, "label": {"zh": "API 模板", "en": "API template"}, "kind": "image"})
-    for path in comfy.list_workflows():
-        try:
-            ui_graph = comfy.fetch_workflow(path)
-            api = graph.graph_to_api_prompt(ui_graph, object_info)
-        except Exception:  # noqa: BLE001 — 一张图拉不下来 / 转不过来,别的照常列
+    for model_id, label, api, titles, problem in each(comfy, object_info, locale):
+        if problem:
+            if model_id == TEMPLATE:
+                # 模板坏了也列出来:选中它时会把「哪里坏了」说清楚。不列的话它从选择器里静默消失,
+                # 用户只会以为连接没配上。
+                models.append({"id": TEMPLATE, "label": label, "kind": "image"})
             continue
-        if not api:
-            continue
-        models.append(graph.describe(path, _label(path), api, object_info, graph.ui_titles(ui_graph)))
+        model = graph.describe(model_id, label, api, object_info, titles)
+        if model_id == BUILTIN:
+            model["parameters"]["size"]["default"] = "1024x1024"
+            model["prompt_dialect"] = "sd-tags"
+        models.append(model)
     return models
+
+
+#: 判「模型清单有没有变」时顺带看的模型目录:换了一个 checkpoint / LoRA,参数里的下拉就该跟着变。
+_WATCHED_FOLDERS = ("checkpoints", "loras", "diffusion_models", "unet", "vae", "upscale_models", "controlnet")
+
+
+def fingerprint(comfy: Comfy) -> str:
+    """模型清单的**指纹**:保存的工作流(路径 + 大小 + 修改时间)、粘贴的模板、几个模型目录的文件名。
+
+    宿主隔一会儿问一次(见 docs/PLUGIN_MANIFEST 的「目录变了就刷新」):指纹没变就不必把每张工作流
+    重新拉一遍、转一遍。这里只列目录,不取任何一张图的内容 —— 一百张工作流也就一个请求。
+    """
+    digest = hashlib.sha256()
+    for item in sorted(comfy.workflow_listing(), key=lambda one: str(one.get("path"))):
+        digest.update(f"{item.get('path')}|{item.get('size')}|{item.get('modified')}\n".encode("utf-8"))
+    digest.update(template_text().encode("utf-8"))
+    folders = comfy.model_folders()
+    for folder in sorted(set(folders or ()) & set(_WATCHED_FOLDERS)):
+        digest.update(f"[{folder}]".encode("utf-8"))
+        for name in sorted(comfy.models_in(folder)):
+            digest.update(name.encode("utf-8") + b"\n")
+    return digest.hexdigest()[:32]

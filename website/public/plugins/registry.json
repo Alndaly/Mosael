@@ -217,10 +217,10 @@
     {
       "id": "dev.mosael.comfyui",
       "name": "ComfyUI",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": {
-        "zh": "把一台 ComfyUI(本机或局域网)接成图像 / 视频生成供应商:它里面保存的每张工作流都是一个模型,可调参数和参考图槽位自动识别,进度实时、能真的取消。",
-        "en": "Connect a ComfyUI server (local or on your LAN) as an image / video provider: every saved workflow becomes a model, with its tunable parameters and reference-image slots detected automatically, live progress and real cancellation."
+        "zh": "把一台 ComfyUI(本机或局域网)接进 Mosael:它保存的每张工作流都是一个图像 / 视频生成模型(参数、参考图、蒙版、首尾帧、视频输入自动识别,进度实时、能真的取消);另有一组工具 —— 原样跑任意一张工作流并交回全部产出(放大、抠图、局部重绘、修脸、补帧都用用户自己的图),列出工作流与模型文件,看显卡和队列,把历史产出收进素材库,以及中断、清队列、释放显存。",
+        "en": "Connect a ComfyUI server (local or on your LAN): every saved workflow becomes an image / video generation model (parameters, reference images, masks, first/last frames and video inputs detected automatically, live progress, real cancellation). Plus tools to run any workflow as-is and collect every output (upscale, background removal, inpainting, face restore, frame interpolation — with the user's own graphs), list workflows and model files, check the GPU and queue, import past outputs into the asset library, and interrupt / clear the queue / free VRAM."
       },
       "author": "Mosael",
       "author_url": "https://mosael.com",
@@ -244,6 +244,94 @@
           "description": {
             "zh": "替 Mosael 在这台 ComfyUI 上列出模型、做一次生成。只给宿主调。",
             "en": "Lists models and runs generations on this ComfyUI server for Mosael. Host-only."
+          }
+        },
+        {
+          "name": "list_workflows",
+          "label": {
+            "zh": "列出工作流",
+            "en": "List workflows"
+          },
+          "description": {
+            "zh": "这台 ComfyUI 上保存的每张工作流:能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…)。先用它挑一张,再用 run_workflow 跑。",
+            "en": "Every workflow saved on this ComfyUI: what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, and what it seems to do (upscale, inpaint, background removal…). Pick one here, then run it with run_workflow."
+          }
+        },
+        {
+          "name": "run_workflow",
+          "label": {
+            "zh": "运行工作流",
+            "en": "Run workflow"
+          },
+          "description": {
+            "zh": "原样跑一张 ComfyUI 工作流,交回**全部**产出(每个保存 / 预览节点的每一个文件进素材库,显示文字的节点说的话在 texts 里)。图、蒙版、视频、音频按 list_workflows 给的顺序接到读素材的节点上;任意节点上的值用 values 改。跑得久的(视频)可以 wait: false 只提交,之后用 import_outputs 取回。",
+            "en": "Runs a ComfyUI workflow as-is and returns **every** output (each file from every save / preview node goes into the asset library; text shown by display nodes is in texts). Images, masks, videos and audio go to the loader nodes in the order list_workflows reports; values overrides any literal input. For long runs (video) pass wait: false to only submit, then fetch the outputs with import_outputs."
+          }
+        },
+        {
+          "name": "import_outputs",
+          "label": {
+            "zh": "导入 ComfyUI 产出",
+            "en": "Import ComfyUI outputs"
+          },
+          "description": {
+            "zh": "把 ComfyUI 历史里的产出收进素材库:给任务号就取那一个(还在跑可以等一会儿),不给就取最近几次。在 ComfyUI 界面里跑出来的东西也能这样拿回来。",
+            "en": "Imports outputs from ComfyUI's history into the asset library: a task id fetches that one (optionally waiting while it runs), otherwise the most recent runs. Also works for things run directly in the ComfyUI interface."
+          }
+        },
+        {
+          "name": "server_status",
+          "label": {
+            "zh": "服务器状态",
+            "en": "Server status"
+          },
+          "description": {
+            "zh": "ComfyUI 的版本、显卡与空闲显存、内存,以及队列里在跑 / 排队的任务数。",
+            "en": "ComfyUI version, GPU and free VRAM, RAM, and how many tasks are running / queued."
+          }
+        },
+        {
+          "name": "list_models",
+          "label": {
+            "zh": "列出模型文件",
+            "en": "List model files"
+          },
+          "description": {
+            "zh": "服务器上装了哪些模型文件,按目录分:checkpoints、loras、vae、upscale_models、controlnet、diffusion_models…",
+            "en": "Model files installed on the server by folder: checkpoints, loras, vae, upscale_models, controlnet, diffusion_models…"
+          }
+        },
+        {
+          "name": "interrupt",
+          "label": {
+            "zh": "中断任务",
+            "en": "Interrupt"
+          },
+          "description": {
+            "zh": "停下 ComfyUI 正在跑的任务。给了任务号就只停那一个(在跑的中断,排队的删掉),不会误伤别人的任务。",
+            "en": "Stops the task ComfyUI is running. With a task id only that one is stopped (interrupted if running, removed if queued), leaving other people's tasks alone."
+          }
+        },
+        {
+          "name": "clear_queue",
+          "label": {
+            "zh": "清空队列",
+            "en": "Clear queue"
+          },
+          "description": {
+            "zh": "清掉 ComfyUI 里所有**排队中**的任务(在跑的不动)。同一台服务器上别人排的任务也会被清掉。",
+            "en": "Clears every **queued** task in ComfyUI (the running one is untouched). Tasks queued by other people on the same server are cleared too."
+          }
+        },
+        {
+          "name": "free_memory",
+          "label": {
+            "zh": "释放显存",
+            "en": "Free VRAM"
+          },
+          "description": {
+            "zh": "让 ComfyUI 卸载模型、释放显存。下一次生成要重新加载模型,会慢一些。",
+            "en": "Asks ComfyUI to unload models and free VRAM. The next run reloads its models and is slower."
           }
         }
       ],

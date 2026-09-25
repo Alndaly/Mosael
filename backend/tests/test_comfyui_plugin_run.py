@@ -128,7 +128,7 @@ def test_进度来自WebSocket(comfy, tmp_path: Path) -> None:
     comfy.state.websocket = True
     _, hooks, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"})
     messages = [message for _, message in hooks.progress]
-    assert "KSampler 5/20" in messages, messages
+    assert "采样 5/20 · 第 2/8 个节点" in messages, "说的是界面上的节点名字(用户起的「采样」)、第几步、第几个节点"
     fractions = [fraction for fraction, _ in hooks.progress]
     assert fractions == sorted(fractions), "进度只往前走"
 

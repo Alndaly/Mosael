@@ -43,7 +43,8 @@ def test_随应用装好_卸不掉() -> None:
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
     assert package["bundled"] is True and package["provides"] == ["generation"]
     assert package["config_fields"][0]["default"] == "http://127.0.0.1:8188"
-    assert package["config_fields"][1]["multiline"] is True
+    template = package["config_fields"][1]
+    assert (template["type"], template["language"]) == ("json", "json"), "API 模板是一段 JSON:代码编辑器 + 保存前校验"
     assert client.delete(f"/api/plugins/{PACKAGE}").status_code == 404
 
 
@@ -56,7 +57,8 @@ def test_每张保存的工作流都是选择器里的一个模型(connected) ->
     caps = portrait["capabilities"]
     assert caps["sizes"][0] == "832x1216" and caps["default_size"] == "832x1216"
     assert caps["source_limits"] == {"reference_image": 1}
-    assert caps["parameter_schema"]["3.steps"]["title"] == "采样 · steps"
+    assert caps["parameter_schema"]["3.steps"]["title"] == "步数"
+    assert caps["max_num_images"] == 4, "工作流的画布有 batch_size:一次最多出 4 张"
     assert caps["prompt_dialect"] == "sd-tags"
     assert set(_options(client, "video")) == {"video/wan.json"}
     status = client.get("/api/plugins").json()
@@ -103,3 +105,85 @@ def test_换一台服务器_模型跟着换(connected) -> None:
     assert refreshed.status_code == 200, refreshed.text
     assert set(_options(client, "image")) == {"builtin:txt2img", "only.json"}
     assert _options(client, "video") == {}, "ComfyUI 里删掉的工作流不留在选择器里"
+
+
+def test_参数的名字按看的人的语言说(connected) -> None:
+    """目录在后台刷新(刷新那一刻的语言不是看的人的),名字存成按语言分的,给人看时再挑。"""
+    client, _, _ = connected
+    options = client.get("/api/generation/options?kind=image", headers={"Accept-Language": "en-US"}).json()
+    portrait = next(one for one in options if one["provider"] == VENDOR and one["model"] == "portrait.json")
+    schema = portrait["capabilities"]["parameter_schema"]
+    assert schema["3.steps"]["title"] == "Steps" and schema["4.ckpt_name"]["title"] == "Checkpoint"
+    assert schema["3.steps"]["description"] == "采样 · steps", "原始的「节点 · 输入名」照旧给排错用"
+
+
+def test_插件页列出提供的模型(connected) -> None:
+    client, _, instance_id = connected
+    models = {one["id"]: one for one in client.get(f"/api/plugins/instances/{instance_id}/models").json()}
+    assert set(models) == {"builtin:txt2img", "portrait.json", "video/wan.json"}
+    portrait = models["portrait.json"]
+    assert portrait["kind"] == "image" and portrait["modes"] == ["text-to-image", "image-to-image"]
+    assert portrait["inputs"] == [{"role": "reference_image", "max": 1, "required": False}]
+    assert "size" in portrait["host_parameters"] and "num_images" in portrait["host_parameters"]
+    assert {"key": "3.steps", "title": "步数", "type": "integer", "advanced": False} in portrait["parameters"]
+    assert models["video/wan.json"]["inputs"] == [{"role": "first_frame", "max": 1, "required": False}]
+
+
+def test_工具出现在插件页_智能体和工作流里(connected) -> None:
+    """这个插件此前只替宿主做生成,插件页上一个工具都没有。现在工具在勾选表里,按 recommended 预勾。"""
+    client, _, instance_id = connected
+    package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
+    tools = {one["name"]: one for one in package["instances"][0]["tools"]}
+    assert "comfyui_generation" not in tools, "认领生成的那个工具只给宿主调"
+    assert set(tools) == {"list_workflows", "run_workflow", "import_outputs", "server_status", "list_models",
+                          "interrupt", "clear_queue", "free_memory"}
+    assert {name for name, tool in tools.items() if tool["exposed"]} == {
+        "list_workflows", "run_workflow", "import_outputs", "server_status", "list_models", "interrupt"}, (
+        "清队列、释放显存会动到同一台机器上别人的活:默认不开"
+    )
+    assert tools["list_workflows"]["read_only"] is True and tools["run_workflow"]["read_only"] is False
+    exposed = {one["name"] for one in client.get("/api/plugins/tools").json() if one["instance_id"] == instance_id}
+    assert "run_workflow" in exposed and "clear_queue" not in exposed
+
+
+def test_运行工作流_全部产出进素材库(connected) -> None:
+    from tests.fake_comfyui import UPSCALE_API
+
+    client, comfy, instance_id = connected
+    comfy.state.workflows["upscale.json"] = UPSCALE_API
+    comfy.state.outputs = {"4": {"images": [{"filename": "u1.png", "type": "output"}, {"filename": "u2.png", "type": "output"}]}}
+    workspace = client.post("/api/workspaces", json={"name": "ComfyUI 工具"}).json()["id"]
+    source = client.post(
+        "/api/assets/import", data={"workspace_id": workspace}, files={"file": ("原图.png", PNG, "image/png")}
+    ).json()["id"]
+    invoked = client.post(f"/api/plugins/instances/{instance_id}/tools/run_workflow/invoke", json={
+        "workspace_id": workspace, "input": {"workflow": "upscale.json", "image": source},
+    })
+    assert invoked.status_code == 200, invoked.text
+    body = invoked.json()
+    assert body["status"] == "succeeded", body
+    output = body["output"]
+    assert "artifacts" not in output, "交出去的是素材 id,不是一次性的暂存路径"
+    assert len(output["asset_ids"]) == 2 and output["asset_id"] == output["asset_ids"][0]
+    assert [one["filename"] if "filename" in one else one["asset_name"] for one in output["assets"]] == ["u1.png", "u2.png"]
+    assert output["assets"][0]["node"] == "4" and output["assets"][0]["media"] == "image"
+    names = {one["id"]: one["name"] for one in client.get(f"/api/assets?workspace_id={workspace}").json()}
+    assert {names[one] for one in output["asset_ids"]} == {"u1.png", "u2.png"}
+    [(_, uploaded)] = comfy.state.uploads
+    assert uploaded == PNG, "输入是素材库里那张图的副本"
+
+
+def test_目录变了才重新拉_问指纹不留调用记录(connected) -> None:
+    from app.db.models import PluginInvocation
+    from app.domain.generation import plugin_connections
+
+    client, comfy, instance_id = connected
+    with SessionLocal() as db:
+        calls_before = db.query(PluginInvocation).filter_by(instance_id=instance_id).count()
+    assert plugin_connections.check_for_changes() == 0, "什么都没变就不重新拉"
+    comfy.state.workflows["fresh.json"] = comfy.state.workflows["portrait.json"]
+    assert plugin_connections.check_for_changes() == 1
+    assert "fresh.json" in _options(client, "image"), "ComfyUI 里新存的工作流不用点刷新就出现"
+    with SessionLocal() as db:
+        rows = db.query(PluginInvocation).filter_by(instance_id=instance_id).all()
+    assert len(rows) == calls_before + 1, "只有真的重新拉目录那一次留记录;问指纹不留"

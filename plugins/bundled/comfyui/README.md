@@ -1,14 +1,14 @@
 # ComfyUI
 
-把一台 ComfyUI(本机或局域网里的另一台)接成 Mosael 的图像 / 视频生成供应商。**随 Mosael 一起发**,
-装好就在插件页里,不用去市场找。
+把一台 ComfyUI(本机或局域网里的另一台)接进 Mosael。**随 Mosael 一起发**,装好就在插件页里,不用去市场找。
+一个连接带来两样东西:**模型**(保存的每张工作流都是一个图像 / 视频生成模型)和**工具**(智能体和工作流直接用)。
 
 ## 怎么接
 
 1. 插件页 → ComfyUI → 「新建连接」,填服务器地址(本机默认 `http://127.0.0.1:8188`)。
 2. 授权 `network:comfyui`,打开连接。
 3. 它在 ComfyUI 里**保存的每张工作流**会作为一个模型出现在 AI 工作台、画板、工作流「AI 生成素材」节点的
-   模型选择器里;ComfyUI 里新存了工作流,在插件页点「刷新模型」。
+   模型选择器里;新存的工作流一分钟内出现(宿主每分钟问一次清单的指纹),等不及就在插件页点「刷新模型」。
 
 多台服务器就建多个连接,各自一串模型。
 
@@ -19,23 +19,55 @@
 | 采样器 / 引导器上游写提示词的节点(CLIPTextEncode 及 Flux、SDXL 的变体) | 主提示词、反向提示词 |
 | 采样器的 seed、RandomNoise 的 noise_seed | 「随机种子」(不填每次随机) |
 | 生成画布的节点(EmptyLatentImage、Wan / Hunyuan 的视频潜空间节点…)的宽高 | 「尺寸」(不选就用工作流自己的) |
-| 其余可调的字面量输入(步数、CFG、采样器、checkpoint、帧数…) | 参数表里的一项,名字是「节点标题 · 输入名」,范围和可选值来自 ComfyUI |
-| LoadImage 节点 | 参考图槽位;视频图里接到 `start_image` / `end_image` 的是首帧 / 尾帧 |
+| 画布节点的 batch_size | 「张数」(最多 4),几张全部交回 |
+| 其余可调的字面量输入 | 参数表里的一项:认得的输入用人话起名(`labels.py`:采样器、步数、LoRA…),撞名才带上节点标题或「第 2 个 KSampler」;常用的在前,其余收进「高级」;原始的「节点 · 输入名」在说明里 |
+| LoadImage 节点 | 参考图;视频图里接到 `start_image` / `end_image` 的是首帧 / 尾帧 |
+| LoadImageMask,或只用了 LoadImage 蒙版那一路的 | 蒙版(`mask`) |
+| LoadVideo / VHS_LoadVideo | 待编辑的视频(`source_video`,模式 `video-edit`) |
+| LoadAudio / VHS_LoadAudioUpload | 驱动音频(视频图)/ 参考音频 |
 | 视频输出节点(VHS_VideoCombine、SaveVideo…) | 这是一个视频模型 |
+
+没有提示词、也没有画布的图(放大、抠图):图是必须给的,模式只有 `image-to-image`。文件名前缀这类
+ComfyUI 那一侧的输入不列出来。
 
 另有两个模型:**内置文生图**(服务器上至少有一个 checkpoint 时)和**API 模板**(连接配置里粘贴了
 「导出 (API)」的 JSON 时,`{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{steps}}`
-占位符照旧)。
+占位符照旧;这个配置项是 `type: "json"`,插件页给代码编辑器并在保存前校验)。
+
+## 工具
+
+| 工具 | 只读 | 流式 | 默认开 | 做什么 |
+| --- | --- | --- | --- | --- |
+| `list_workflows` | ✓ | | ✓ | 每张工作流收什么(哪个参数喂哪个节点)、能调什么、交出什么、`features`(upscale / inpaint / img2img / remove-background / …);转不过来的也列,带原因 |
+| `run_workflow` | | ✓ | ✓ | 原样跑一张工作流,`image` / `images` / `mask` / `video` / `audio` 接到读素材的节点,`values` 按「节点 id 或标题.输入名」改值;交回**全部**产出(`artifacts` → 宿主换成 `assets` / `asset_ids`)、文字产出、按节点分的摘要。`wait: false` 只提交 |
+| `import_outputs` | | ✓ | ✓ | 按任务号(可等 `wait_seconds`)或最近 `last` 次,把历史里的产出收进素材库 |
+| `server_status` | ✓ | | ✓ | 版本、显卡与空闲显存、内存、队列 |
+| `list_models` | ✓ | | ✓ | `/models` 下的模型文件;老版本没有这个接口时看加载节点的下拉 |
+| `interrupt` | | | ✓ | 停下正在跑的;给了 `prompt_id` 只停那一个 |
+| `clear_queue` | | | | 清掉排队中的(别人的也会被清) |
+| `free_memory` | | | | `/free`:卸载模型、释放显存 |
+
+工具一次最多跑 30 分钟(清单里 `timeout_seconds: 1800`),智能体一次只等 3 分钟;跑得久的用 `wait: false`
++ `import_outputs`,或者走生成(6 小时、有回执、能续等)。
 
 ## 进度、取消、重启
 
-- 进度来自 ComfyUI 的 WebSocket:哪个节点在跑、采样器第几步。连不上就退回轮询。
-- 在任务中心取消,插件会让 ComfyUI 停下**这一个**任务(在跑的 interrupt,在排队的从队列删掉),
+- 进度来自 ComfyUI 的 WebSocket:哪个节点在跑(用界面上的节点名)、采样器第几步、第几个节点;连不上就退回轮询。
+  新版 ComfyUI 的 `progress_state` 也认。
+- 取消(生成任务、流式工具)时,插件会让 ComfyUI 停下**这一个**任务(在跑的 interrupt,在排队的从队列删掉),
   不会掐掉同一台机器上别人的任务。
 - Mosael 重启时正在跑的生成会接着等(按任务号),不会重新提交。
 
 ## 代码
 
-`tools/` 只用 Python 标准库:`graph.py`(UI 图 → API 图、看出参数和槽位、填图、收产出)、`models.py`
-(有哪些模型)、`run.py`(一次生成)、`comfy_http.py` / `ws.py`(和 ComfyUI 说话)。
-协议见 Mosael 仓库的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」。
+`tools/` 只用 Python 标准库:
+
+- `graph.py` —— UI 图 → API 图、看出提示词 / 种子 / 尺寸 / 槽位 / 输出节点、描述成模型、填图、收产出;
+- `labels.py` —— 可调输入的人话名字、顺序、常用与否、不在 Mosael 里调的那几个;
+- `models.py` —— 有哪些模型、一个模型 id 背后是哪张图、清单的指纹;
+- `run.py` —— 传素材、提交、跟进度、取消、取回(生成与 `run_workflow` 共用);
+- `workflows.py` —— `list_workflows` / `run_workflow` / `import_outputs`;
+- `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
+- `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。
+
+协议见 Mosael 仓库的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」「流式工具」「一次交出几份」。

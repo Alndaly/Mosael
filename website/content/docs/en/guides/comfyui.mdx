@@ -1,15 +1,20 @@
 ---
 title: Generating with ComfyUI
-description: Connect a ComfyUI server on this machine or your LAN; every saved workflow becomes a model you can pick.
+description: Connect a ComfyUI server on this machine or your LAN; every saved workflow becomes a model you can pick, and a set of tools lets the agent and workflows run any workflow as-is.
 order: 18
 updated: 2026-09-25
 version: 1.5.2
 ---
 
 ComfyUI is connected through the **ComfyUI plugin** that ships with Mosael: it is already on the Plugins page,
-with nothing to install from the market and no API key to paste. One ComfyUI server is one connection, and
-**every workflow saved on it** shows up as a model in the model pickers of AI Studio, boards and the workflow
-“AI generate” node, next to every other provider's models.
+with nothing to install from the market and no API key to paste. One ComfyUI server is one connection, and it
+brings two things:
+
+- **Models**: **every workflow saved on it** shows up as a model in the model pickers of AI Studio, boards and the
+  workflow “AI generate” node, next to every other provider's models;
+- **Tools**: run a workflow as-is and collect every output, list workflows and model files, check the GPU and queue,
+  import outputs from ComfyUI's history into the asset library, and interrupt / clear the queue / free VRAM. The agent
+  can call them directly, and each tool is a node in the workflow node panel.
 
 ## Connecting a ComfyUI server
 
@@ -18,19 +23,22 @@ with nothing to install from the market and no API key to paste. One ComfyUI ser
    (such as `http://192.168.1.20:8188`) uses another machine's GPU.
 3. Grant `network:comfyui` and switch the connection on.
 
-Mosael then asks the server which workflows it has; the connection card shows “N models · refreshed just now”,
-or — when it can't reach the server — the reason (usually ComfyUI isn't running or the URL is wrong). Create one
-connection per server; each brings its own models.
+Mosael then asks the server which workflows it has. The “Generation models” row on the connection card shows
+“N models · refreshed just now”; **View models** lists whether each one makes images or videos, which kinds of
+generation it supports, which inputs it takes and which parameters it has. When the server can't be reached the row
+says why (usually ComfyUI isn't running or the URL is wrong). Create one connection per server; each brings its own
+models and tools.
 
 Under Settings → AI image / AI video, a ComfyUI connection is shown as “Provided by a plugin”: rename it or change
 its URL on the Plugins page. Its models can be set as default models like any other.
 
 ## Saved workflows are models
 
-**Save** a workflow in ComfyUI (into its workflows folder), then click **Refresh models** on the Plugins page and it
-appears in the pickers; Mosael also refreshes once on every start. The model is named after the workflow, and its
-output nodes decide what it makes: a workflow with a video combine node (VHS Video Combine, Save Video …) is a
-video model, everything else is an image model.
+**Save** a workflow in ComfyUI (into its workflows folder) and it appears in the pickers **within a minute** — Mosael
+checks once a minute whether the workflows folder changed and only re-reads it when it did; click **Refresh models**
+on the Plugins page if you can't wait. The model is named after the workflow, and its output nodes decide what it
+makes: a workflow with a video combine node (VHS Video Combine, Save Video …) is a video model, everything else is an
+image model.
 
 Two more models may appear:
 
@@ -38,30 +46,66 @@ Two more models may appear:
   saved workflows;
 - **API template**, when an “Export (API)” JSON is pasted into the connection (see the last section).
 
-A workflow deleted in ComfyUI disappears from the pickers after the next refresh.
+A workflow deleted in ComfyUI disappears from the pickers too.
 
-## Parameters and reference images
+## Parameters and inputs
 
-Mosael reads **what each workflow lets you tune**:
+Mosael reads **what each workflow lets you tune and what it takes**:
 
 | In the workflow | In Mosael |
 | --- | --- |
 | The prompt nodes upstream of the sampler / guider | Prompt and negative prompt |
 | The sampler's seed, RandomNoise's noise_seed | Seed (random each time when left empty) |
 | Width and height of the node that creates the canvas (EmptyLatentImage, Wan / Hunyuan video latents) | Size (the workflow's own when not chosen) |
-| Other tunable inputs (steps, CFG, sampler, checkpoint, frame count …) | One entry each in the parameters panel, named “node title · input”, with ComfyUI's own ranges and choices |
-| LoadImage nodes | Reference image slots; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame |
+| The canvas node's batch_size | “Images”: how many per run (up to 4), all of them collected |
+| Checkpoint, LoRA, VAE, upscale model and ControlNet loaders | Drop-downs listing the files installed in ComfyUI |
+| Steps, CFG, sampler, scheduler, denoise, frame count … | One entry each in the parameters panel with a plain name (“Steps”, “Sampler”); common ones first, details under Advanced |
+| LoadImage nodes | Reference images; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame |
+| LoadImageMask, or a LoadImage whose only used output is its mask (alpha) | Mask (inpainting — white is the area to change) |
+| LoadVideo / VHS_LoadVideo | Video to edit (video-to-video) |
+| LoadAudio | Driving audio (in video workflows) or reference audio |
 
-Anything you leave untouched in the parameters panel is not sent, so the workflow keeps its own value. Reference
-images are uploaded to ComfyUI's input folder first and then wired into the matching LoadImage node — you just pick
-images from your asset library.
+When a workflow has two nodes of the same kind (two KSamplers, say), the parameter names say which is which: the node
+title if you gave it one, otherwise “KSampler #2”. Hover a parameter name to see which node and input it comes from.
+Inputs that only matter on the ComfyUI side, such as the filename prefix, are not listed.
+
+Anything you leave untouched in the parameters panel is not sent, so the workflow keeps its own value. Inputs are
+uploaded to ComfyUI's input folder first and then wired into the matching node — you just pick from your asset
+library. **Workflows without a prompt** (upscale, background removal) require their image — otherwise ComfyUI would
+run the example image saved in the workflow — and only offer “image to image”.
 
 Prompt optimization follows the workflow: SD 1.5 / SDXL workflows get comma-separated English tags plus a negative
 prompt; Flux-style workflows keep natural language.
 
+## Tools: ComfyUI for the agent and for workflows
+
+The tool list under the connection card has these tools; the first six are on by default:
+
+| Tool | What it does |
+| --- | --- |
+| **List workflows** (read-only) | What each workflow takes (which argument feeds which node), what it lets you tune, what it outputs, and what it seems to do (upscale, inpaint, background removal, face restore, frame interpolation …) |
+| **Run workflow** | Runs a workflow as-is: images / mask / video / audio go into the loader nodes, `values` overrides any literal input (`"3.steps": 30` or `"Node title.cfg": 6`), and **every output** goes into the asset library — each file from every save node, plus whatever text display nodes show |
+| **Import ComfyUI outputs** | Imports outputs from ComfyUI's history by task id (or the most recent runs) into the asset library — including things run directly in the ComfyUI interface |
+| **Server status** (read-only) | ComfyUI version, GPU and free VRAM, running / queued task counts |
+| **List model files** (read-only) | Installed checkpoints, LoRAs, VAEs, upscale models, ControlNets … |
+| **Interrupt** | Stops the running task; with a task id only that one, leaving other people's tasks alone |
+| Clear queue | Clears every **queued** task (including other people's on the same server); off by default |
+| Free VRAM | Unloads models and frees VRAM; off by default |
+
+**Tools or generation?** For a prompt that should turn into an image or a video, use the models (generation): they get
+progress in the task center, cancel, resume after a restart and usage records, and a run may last 6 hours. To **run a
+processing workflow as-is** (upscale, background removal, inpainting, face restore, frame interpolation), feed it
+several inputs at once, or get every intermediate output back, use “Run workflow”.
+
+“Run workflow” may run for up to 30 minutes and reports progress step by step (inside a workflow the run panel shows
+“Sampler 12/20”); cancelling stops that one task in ComfyUI. The agent only waits 3 minutes for a single tool call:
+for long runs it passes `wait: false` to only submit, gets the task id, and fetches the outputs later with “Import
+ComfyUI outputs”.
+
 ## Progress, cancel and restarts
 
-- Progress comes from ComfyUI itself: the task center shows which node is running and the sampler's step.
+- Progress comes from ComfyUI itself: the task center shows which node is running (by the name you gave it), the
+  step, and how many nodes are done.
 - **Cancel** in the task center really stops **this one** task in ComfyUI (interrupted if running, removed from the
   queue if waiting) without touching anyone else's task on the same server.
 - If Mosael restarts mid-generation (after an update, say), it **resumes waiting** for that task instead of
@@ -80,10 +124,13 @@ Earlier versions had ComfyUI as a provider under Settings → AI image; upgradin
   for image generation otherwise. A **video** “workflow” without a template never worked; it is left as it was and
   reports that the model is unavailable — pick a video workflow instead.
 
+ComfyUI connections you already have get the new tools automatically after upgrading, switched on as listed above.
+
 ## Workflows it can't read: the API template
 
 Mosael reads workflows in the UI format ComfyUI saves, which covers almost every workflow; a few unusual ones
-(lots of custom nodes, nested subgraphs) may not convert. For those, use **Export (API)** in ComfyUI and paste the
-JSON into the connection's “API template”; it shows up as the “API template” model. The template may contain
-placeholders — `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{steps}}` — which Mosael fills in
-when it generates.
+(lots of custom nodes, nested subgraphs) may not convert (“List workflows” lists them with the reason). For those,
+use **Export (API)** in ComfyUI, click **Edit** on the connection's “API template” row and paste the JSON into the
+code editor — it tells you the line and column of any mistake and won't save broken JSON. It shows up as the
+“API template” model. The template may contain placeholders — `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}`
+`{{height}}` `{{steps}}` — which Mosael fills in when it generates.

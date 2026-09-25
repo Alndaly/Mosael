@@ -97,12 +97,7 @@ class Comfy:
 
     def list_workflows(self) -> list[str]:
         """用户在 ComfyUI 里**保存**的工作流(相对 workflows/ 的路径)。"""
-        items = self.get("/api/userdata", {"dir": "workflows", "recurse": "true", "split": "false", "full_info": "true"})
-        paths: list[str] = []
-        for item in items if isinstance(items, list) else []:
-            path = item.get("path") if isinstance(item, dict) else item
-            if isinstance(path, str) and path.endswith(".json"):
-                paths.append(path)
+        paths = [str(item.get("path")) for item in self.workflow_listing() if str(item.get("path") or "").endswith(".json")]
         return sorted(paths, key=str.lower)
 
     def fetch_workflow(self, path: str) -> dict[str, Any]:
@@ -111,8 +106,50 @@ class Comfy:
             raise ComfyError(say(self.locale, f"工作流「{path}」不是一个 JSON 对象", f"Workflow “{path}” is not a JSON object"))
         return graph
 
+    def workflow_listing(self) -> list[dict[str, Any]]:
+        """保存的工作流连同大小和修改时间。**便宜** —— 只列目录,不取内容;判「有没有变」用它。"""
+        items = self.get("/api/userdata", {"dir": "workflows", "recurse": "true", "split": "false", "full_info": "true"})
+        return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+    def system_stats(self) -> dict[str, Any]:
+        stats = self.get("/system_stats")
+        return stats if isinstance(stats, dict) else {}
+
+    def queue(self) -> tuple[list[str], list[str]]:
+        """(在跑的任务号, 排队的任务号)。"""
+        queue = self.get("/queue") or {}
+
+        def ids(entries: Any) -> list[str]:
+            return [str(item[1]) for item in entries or [] if isinstance(item, list) and len(item) > 1]
+
+        return ids(queue.get("queue_running")), ids(queue.get("queue_pending"))
+
+    def history(self, prompt_id: str | None = None, *, max_items: int | None = None) -> dict[str, Any]:
+        """一个任务的历史(`{任务号: 条目}`),或最近的几条(给了 `max_items`)。"""
+        if prompt_id:
+            found = self.get(f"/history/{parse.quote(prompt_id, safe='')}")
+        else:
+            found = self.get("/history", {"max_items": max_items} if max_items else None)
+        return found if isinstance(found, dict) else {}
+
+    def model_folders(self) -> list[str] | None:
+        """服务器上有哪些模型目录(`/models`)。老版本没有这个接口 —— 回 None,调用方改看 object_info。"""
+        try:
+            found = self.get("/models")
+        except ComfyError as exc:
+            if exc.status == 404:
+                return None
+            raise
+        return [str(one) for one in found] if isinstance(found, list) else None
+
+    def models_in(self, folder: str) -> list[str]:
+        found = self.get(f"/models/{parse.quote(folder, safe='')}")
+        return [str(one) for one in found] if isinstance(found, list) else []
+
     def upload_image(self, source: Path, name: str) -> str:
-        """把一张参考图传进 ComfyUI 的 input 目录,返回 LoadImage 节点该填的那个名字。"""
+        """把一份输入素材传进 ComfyUI 的 input 目录,返回读素材的节点该填的那个名字。
+
+        图、视频、音频走的都是这一个接口(ComfyUI 自己的前端上传视频也用它)。"""
         boundary = f"----mosael{uuid.uuid4().hex}"
         parts: list[bytes] = []
         for key, value in (("overwrite", "true"), ("type", "input"), ("subfolder", "mosael")):

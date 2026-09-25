@@ -54,8 +54,24 @@ OBJECT_INFO: dict[str, Any] = {
         "length": ["INT", {"default": 81, "min": 1, "max": 4096}],
         "batch_size": ["INT", {"default": 1, "min": 1, "max": 4096}],
     }, "optional": {"start_image": ["IMAGE"], "end_image": ["IMAGE"]}}},
-    "VHS_VideoCombine": {"input": {"required": {"images": ["IMAGE"], "frame_rate": ["FLOAT", {"default": 8}]}}},
+    "VHS_VideoCombine": {"input": {"required": {"images": ["IMAGE"], "frame_rate": ["FLOAT", {"default": 8}]}},
+                         "output_node": True},
+    "LoadImageMask": {"input": {"required": {"image": [["mask.png"], {"image_upload": True}],
+                                             "channel": [["alpha", "red", "green", "blue"]]}}},
+    "LoadVideo": {"input": {"required": {"file": [["clip.mp4"], {"video_upload": True}]}}},
+    "UpscaleModelLoader": {"input": {"required": {"model_name": [["4x-UltraSharp.pth", "RealESRGAN_x2.pth"]]}}},
+    "ImageUpscaleWithModel": {"input": {"required": {"upscale_model": ["UPSCALE_MODEL"], "image": ["IMAGE"]}}},
+    "LoraLoader": {"input": {"required": {
+        "model": ["MODEL"], "clip": ["CLIP"], "lora_name": [["detail.safetensors", "anime.safetensors"]],
+        "strength_model": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}],
+        "strength_clip": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}],
+    }}},
+    "VAEEncode": {"input": {"required": {"pixels": ["IMAGE"], "vae": ["VAE"]}}},
+    "PreviewImage": {"input": {"required": {"images": ["IMAGE"]}}, "output_node": True},
+    "ShowText|pysssss": {"input": {"required": {"text": ["STRING", {"forceInput": True}]}}, "output_node": True},
 }
+for _name in ("SaveImage",):
+    OBJECT_INFO[_name]["output_node"] = True
 
 
 def widget(name: str) -> dict[str, Any]:
@@ -107,6 +123,32 @@ WAN_API: dict[str, Any] = {
 }
 
 
+#: 一张**放大**工作流:没有提示词、没有画布,读一张图 → 放大模型 → 存下来。
+UPSCALE_API: dict[str, Any] = {
+    "1": {"class_type": "LoadImage", "inputs": {"image": "example.png"}},
+    "2": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.pth"}},
+    "3": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["2", 0], "image": ["1", 0]}},
+    "4": {"class_type": "SaveImage", "inputs": {"images": ["3", 0], "filename_prefix": "up"}},
+    "5": {"class_type": "PreviewImage", "inputs": {"images": ["1", 0]}},
+}
+
+#: 模型目录(`/models` 与 `/models/<目录>`)。
+MODEL_FOLDERS: dict[str, list[str]] = {
+    "checkpoints": ["sd_xl_base.safetensors", "v1-5.ckpt"],
+    "loras": ["detail.safetensors"],
+    "upscale_models": ["4x-UltraSharp.pth"],
+    "vae": [],
+    "custom_nodes": [],
+}
+
+SYSTEM_STATS: dict[str, Any] = {
+    "system": {"os": "posix", "python_version": "3.12.4", "comfyui_version": "0.3.60",
+               "pytorch_version": "2.7.1+cu128", "ram_total": 64 * 1024 ** 3, "ram_free": 40 * 1024 ** 3},
+    "devices": [{"name": "cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync", "type": "cuda", "index": 0,
+                 "vram_total": 24 * 1024 ** 3, "vram_free": 20 * 1024 ** 3}],
+}
+
+
 @dataclass
 class State:
     workflows: dict[str, Any] = field(default_factory=lambda: {"portrait.json": PORTRAIT_UI, "video/wan.json": WAN_API})
@@ -122,6 +164,11 @@ class State:
     websocket: bool = False
     submitted: threading.Event = field(default_factory=threading.Event)
     next_id: int = 0
+    #: 老版本 ComfyUI 没有 `/models`。
+    models_api: bool = True
+    model_folders: dict[str, list[str]] = field(default_factory=lambda: json.loads(json.dumps(MODEL_FOLDERS)))
+    #: 这一次提交跑完时的产出;None = 按 `outcome` 给默认的那一份。
+    outputs: dict[str, Any] | None = None
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -157,7 +204,22 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/object_info":
             self._json(state.object_info)
         elif path == "/api/userdata" and query.get("dir") == ["workflows"]:
-            self._json([{"path": name, "size": 1, "modified": 1} for name in state.workflows])
+            self._json([{"path": name, "size": len(json.dumps(graph)), "modified": 1}
+                        for name, graph in state.workflows.items()])
+        elif path == "/system_stats":
+            self._json(SYSTEM_STATS)
+        elif path == "/models" and state.models_api:
+            self._json(list(state.model_folders))
+        elif path.startswith("/models/") and state.models_api:
+            folder = unquote(path[len("/models/"):])
+            if folder in state.model_folders:
+                self._json(state.model_folders[folder])
+            else:
+                self._json({"error": "not found"}, 404)
+        elif path == "/history":
+            items = list(state.history.items())
+            limit = int(query.get("max_items", ["0"])[0] or 0)
+            self._json(dict(items[-limit:] if limit else items))
         elif path.startswith("/api/userdata/"):
             name = unquote(path[len("/api/userdata/"):])
             workflow = state.workflows.get(name.removeprefix("workflows/"))
@@ -202,7 +264,13 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             state.next_id += 1
             prompt_id = f"p{state.next_id}"
-            if state.outcome == "success":
+            if state.outputs is not None:
+                state.history[prompt_id] = {
+                    "prompt": [state.next_id, prompt_id, body.get("prompt") or {}, {}, []],
+                    "status": {"status_str": "success", "completed": True, "messages": []},
+                    "outputs": json.loads(json.dumps(state.outputs)),
+                }
+            elif state.outcome == "success":
                 state.history[prompt_id] = {
                     "status": {"status_str": "success", "completed": True, "messages": []},
                     "outputs": {"9": {"images": [{"filename": "mosael_00001_.png", "subfolder": "", "type": "output"}],
@@ -224,7 +292,9 @@ class _Handler(BaseHTTPRequestHandler):
                 state.running.append(prompt_id)
             state.submitted.set()
             self._json({"prompt_id": prompt_id, "number": state.next_id, "node_errors": {}})
-        elif path in ("/interrupt", "/queue"):
+        elif path in ("/interrupt", "/queue", "/free"):
+            if path == "/queue" and body.get("clear"):
+                state.pending.clear()
             self._json({})
         else:
             self._json({"error": "unknown"}, 404)
