@@ -11067,6 +11067,53 @@
         }
       }
     },
+    "/api/boards/producers": {
+      "get": {
+        "tags": [
+          "boards"
+        ],
+        "summary": "List Producers",
+        "description": "画板上**这个人**能用的产出者:四个内置的,加上工具格能跑的节点(插件工具只列他自己接的)。\n\n节点的描述和工作流节点面板是同一份(标签、分组、字段一个字都不差),按请求方的语言翻好。\n**注册在 `/boards/{board_id}` 之前** —— 反过来的话 `producers` 会被当成一张板的 id。",
+        "operationId": "list_producers_api_boards_producers_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BoardProducerOut"
+                  },
+                  "title": "Response List Producers Api Boards Producers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/boards/{board_id}": {
       "get": {
         "tags": [
@@ -11287,7 +11334,7 @@
           "boards"
         ],
         "summary": "Run",
-        "description": "在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。\n\n画板上一切产出(生成、写字、念出来、截一段)都走这一条 —— 此前是四条各自的路由和请求体。\n跑它要什么权限由产出者声明。",
+        "description": "在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。\n\n画板上一切产出(生成、写字、念出来、截一段、工具格跑一个节点)都走这一条 —— 此前是四条各自的\n路由和请求体。跑它要什么权限由产出者声明。插件工具用的是**点运行的这个人**自己的连接。",
         "operationId": "run_api_boards__board_id__run_post",
         "parameters": [
           {
@@ -20489,6 +20536,111 @@
           "updated_at"
         ],
         "title": "BoardOut"
+      },
+      "BoardProducerOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": ""
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "outputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "output_types": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Output Types"
+          },
+          "output_labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Output Labels"
+          },
+          "plugin_name": {
+            "type": "string",
+            "title": "Plugin Name",
+            "default": ""
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name",
+            "default": ""
+          },
+          "body_scope": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Body Scope"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hosts"
+          },
+          "permission": {
+            "type": "string",
+            "title": "Permission"
+          },
+          "effects": {
+            "type": "string",
+            "title": "Effects"
+          },
+          "fills_empty_slot": {
+            "type": "boolean",
+            "title": "Fills Empty Slot",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "label",
+          "description",
+          "config",
+          "outputs",
+          "id",
+          "hosts",
+          "permission",
+          "effects"
+        ],
+        "title": "BoardProducerOut",
+        "description": "画板上的一个产出者:节点描述(和工作流节点面板同一份)+ 画板自己的几样(见 boards.producers.describe)。\n\n`type` 是节点类型(内置的四个就是它们自己的名字),字段选项接口认它;`id` 是产出者的名字,\n存在一格的 `form.producer` 上、跑的时候发的是它。配置字段里多一样 `board_sources`:\n这个字段能接哪几种上游格子。"
       },
       "BoardRun": {
         "properties": {

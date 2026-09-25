@@ -47,7 +47,9 @@ import {
 } from "@/components/app/canvasPendingLink";
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
-import type { BoardCanvas as Canvas, BoardItem, BoardRunRequest, GenerationOption } from "@/api/client";
+import { isNodeProducer, type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
+import { nodePickerOptions } from "@/features/nodeForms/nodePicker";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
@@ -55,8 +57,8 @@ import { cn } from "@/lib/utils";
 import { listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
 import { TrimComposer } from "@/features/boards/TrimComposer";
-import { BUILTIN_COMPOSERS } from "@/features/boards/boardComposers";
-import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
+import { renderComposer, slotProducers } from "@/features/boards/boardComposers";
+import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type BoardToolFace, type MediaKind } from "@/features/boards/boardNodes";
 import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, withProducer } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
@@ -353,6 +355,11 @@ interface Props {
   onGrabFrame?: (input: { assetId: string; at: number; x: number; y: number }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationOption[];
+  /** 这个人能用的产出者(后端 GET /api/boards/producers):工具格的表单、拉线菜单里的「工具」一组、
+   *  空槽在几个产出者之间的切换都照它。还没到是 undefined。 */
+  producers?: BoardProducerInfo[];
+  /** 停下某一格正在跑的任务(工具格上的停止按钮)。 */
+  onStop?: (itemId: string) => void;
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
   showMinimap?: boolean;
   /** 连线的走线方式。是看图习惯(存在本地偏好里),不写进画布 —— 见 components/app/canvasEdgeShape。 */
@@ -390,7 +397,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onGrabFrame, models, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onGrabFrame, models, producers, onStop, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
@@ -750,6 +757,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
   }, [setNodes, t, insetsOf]);
 
+  /** 工具格上显示的那几样,从产出者清单里查。清单没到是 undefined;查不到(插件卸了、没有连接)是 null。 */
+  const toolFace = (item: BoardItem): BoardToolFace | null | undefined => {
+    if (producers === undefined) return undefined;
+    const found = producers.find((one) => one.id === item.form?.producer);
+    return found ? { label: found.label, description: found.description, plugin: found.plugin_name } : null;
+  };
+
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
   const baseNodes: Node[] = nodes.map((node) =>
@@ -761,7 +775,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           ...node,
           className: searchHighlightClass(searchHighlight, node.id),
           draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
-          data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
+          data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
+            ...(node.type === "action" ? { tool: toolFace((node.data as unknown as { item: BoardItem }).item), onStop } : {}) },
         },
   );
   //: 箭头、命中宽度、层次都是**画出来的那一份**才有的东西,不进画布数据(toCanvas 只存 id 和两头)。
@@ -987,18 +1002,62 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   );
 
   /**
+   * 从某一格长出一个工具格并连上:上游那一格就是它的输入(必填字段会默认接上它,见 ActionComposer)。
+   * 摆放规则和其它种类同一个函数。
+   */
+  const spawnTool = React.useCallback(
+    (producerId: string, from: string, at: { x: number; y: number }, fromIsSource = true) => {
+      const { x, y } = ghostRect(at, DEFAULT_SIZE.action, fromIsSource);
+      const item = add("action", { x, y, form: { producer: producerId as BoardProducer } });
+      setEdges((current) =>
+        addEdge(
+          fromIsSource
+            ? { source: from, target: item.id, sourceHandle: null, targetHandle: null }
+            : { source: item.id, target: from, sourceHandle: null, targetHandle: null },
+          current,
+        ),
+      );
+    },
+    [add, setEdges],
+  );
+
+  /**
    * 从节点拉出一条线、松手在空白处:摆一个占位、连一根待定的线、旁边挂单子
    * (见 components/app/canvasPendingLink)。选中一种就在占位那儿建真节点、连真线。
+   *
+   * 单子上除了几种格子,还有「工具」:这个人能用的全部工具格(插件工具、能上画板的节点),分组和
+   * 工作流的「添加节点」面板是同一份(nodePicker),能搜。
    */
-  const describeKind = React.useCallback(
-    (kind: (typeof SPAWNABLE_KINDS)[number]) => ({ icon: kindIcon(kind), ...kindText(t, kind) }),
-    [t],
+  const tools = React.useMemo(
+    () => nodePickerOptions((producers ?? []).filter((one) => isNodeProducer(one.id)).map((one) => ({ ...one, type: one.id })), t("wfNodeGroupOther")),
+    [producers, t],
+  );
+  const linkChoices = React.useMemo(() => [...SPAWNABLE_KINDS, ...tools.map((one) => one.value)], [tools]);
+  const describeChoice = React.useCallback(
+    (choice: string) => {
+      const tool = tools.find((one) => one.value === choice);
+      if (tool) {
+        return {
+          icon: kindIcon("action"),
+          label: tool.label,
+          hint: tool.description,
+          group: `${t("boardsGroupTools")} · ${tool.group}`,
+          keywords: tool.keywords,
+        };
+      }
+      const kind = choice as (typeof SPAWNABLE_KINDS)[number];
+      return { icon: kindIcon(kind), ...kindText(t, kind), group: tools.length ? t("boardsGroupCreate") : undefined };
+    },
+    [t, tools],
   );
   const pending = usePendingLink({
-    kinds: SPAWNABLE_KINDS,
+    kinds: linkChoices,
     ghostSize: PENDING_GHOST_SIZE,
-    describe: describeKind,
-    onChoose: (kind, link) => spawnLinked(kind, link.nodeId, link.at, link.fromSource),
+    describe: describeChoice,
+    onChoose: (choice, link) =>
+      isNodeProducer(choice)
+        ? spawnTool(choice, link.nodeId, link.at, link.fromSource)
+        : spawnLinked(choice as (typeof SPAWNABLE_KINDS)[number], link.nodeId, link.at, link.fromSource),
   });
   const pendingLink = pending.link;
   const cancelPending = pending.cancel;
@@ -1461,8 +1520,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       {pendingLink && (
         <PendingLinkMenu
           title={t("boardSpawnTitle")}
-          kinds={SPAWNABLE_KINDS}
-          describe={describeKind}
+          kinds={linkChoices}
+          describe={describeChoice}
+          searchPlaceholder={tools.length ? t("boardToolSearch") : undefined}
           active={pending.active}
           onActiveChange={pending.setActive}
           onChoose={pending.choose}
@@ -1483,6 +1543,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onSpawn={onRun ? spawnLinked : undefined}
         onTrimRequest={onRun ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
         trimmingId={trimming}
+        producers={producers}
       />
 
       {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}
@@ -1523,7 +1584,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       })()}
 
       {/* 选中的那一格还等着产出:挂它的产出者的面板(一张表,见 boardComposers)。 */}
-      {!feeding.blocked && composerItem && producer && onRun && BUILTIN_COMPOSERS[producer]({
+      {!feeding.blocked && composerItem && producer && onRun && renderComposer(producer, {
         item: composerView(composerItem),
         position: nodes.find((one) => one.id === composerItem.id)?.position ?? { x: composerItem.x, y: composerItem.y },
         workspaceId,
@@ -1535,6 +1596,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onFormChange: (form) => patch(composerItem.id, { form: withProducer(form, producer) }),
         onPickAsset,
         run: onRun,
+        producers,
       })}
     </div>
   );
@@ -1559,6 +1621,7 @@ function ItemToolbar({
   onSpawn,
   onTrimRequest,
   trimmingId,
+  producers,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -1580,6 +1643,8 @@ function ItemToolbar({
   onTrimRequest?: (itemId: string) => void;
   /** 当前开着剪辑面板的那一项 —— 按钮据此变成按下态,再点一次就收起。 */
   trimmingId?: string | null;
+  /** 产出者清单:空槽能在哪几个之间切(音频槽:配音 / 生成)。 */
+  producers?: BoardProducerInfo[];
   /** 把当前选中的这几项圈成一组。 */
 }) {
   const t = useI18n();
@@ -1705,7 +1770,33 @@ function ItemToolbar({
             空节点一选中它的表单就开着,提示词已经由上游这一项填好(便签给文字、图片给首帧),
             用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都
             来不及说。已经在生成的那一项不给(它还没有产出)。 */}
-        {onSpawn && single && item && item.kind !== "frame" && !itemIsRunning(item) && (
+        {/* 空槽用什么产出:一种格子有几个能填空槽的产出者时(音频槽:配音 / 生成音乐音效)给一个切换。
+            **只换表单上写的那个产出者**,面板随之换成它的;在跑的时候不给换。 */}
+        {single && item && !itemIsRunning(item) && slotProducers(item, producers).length > 0 && (
+          <div role="radiogroup" aria-label={t("boardProducerSwitch")} className="flex items-center gap-0.5 rounded-full bg-secondary/60 p-0.5">
+            {slotProducers(item, producers).map((one) => {
+              const on = item.form?.producer === one.id;
+              return (
+                <button
+                  key={one.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  title={toPlainText(one.description)}
+                  className={cn(
+                    "cursor-pointer rounded-full px-2.5 py-1 text-ui-xs transition-colors",
+                    on ? "bg-panel text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => patch(item.id, { form: { ...item.form, producer: one.id as BoardProducer } })}
+                >
+                  {one.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {onSpawn && single && item && item.kind !== "frame" && item.kind !== "action" && !itemIsRunning(item) && (
           <>
             {(["image", "video", "note", "audio"] as const)
               //: 便签往下接图片,有产出的图片/视频往下接视频 —— 空槽自己都还没有东西可给。

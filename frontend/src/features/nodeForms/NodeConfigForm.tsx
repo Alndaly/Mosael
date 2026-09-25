@@ -197,8 +197,11 @@ export function useNodeFieldOptions({
   return { dynamicOptions, assets: assets.data ?? [] };
 }
 
-/** 字段「接上游」的那一半,由宿主给。工作流里上游是图里别的节点的输出,连法是数据边。 */
+/** 字段「接上游」的那一半,由宿主给。工作流里上游是图里别的节点的输出,连法是数据边;
+ *  画板上是连进来的那几格(便签、文档、图片……),见 boards/ActionComposer。 */
 export interface FieldBinding {
+  /** 这个字段能不能接上游。不给 = 除对象字段外都能(工作流);画板上只有上游里有接得上的才能。 */
+  canBind?: (key: string) => boolean;
   isBound: (key: string) => boolean;
   setBound: (key: string, bound: boolean) => void;
   /** 接上之后,这一格显示什么(挑哪个上游)。 */
@@ -257,7 +260,7 @@ export function NodeConfigForm({
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
           // ComfyUI 式:非 object 字段都可切到"连接"(值从上游来,而不是手填)。上游是什么、怎么挑,
           // 由调用方的 binding 说 —— 工作流里是数据边。
-          const canConnect = Boolean(binding) && !isObject;
+          const canConnect = Boolean(binding) && !isObject && (binding?.canBind?.(key) ?? true);
           const connected = canConnect && Boolean(binding?.isBound(key));
           return (
             <div className={FIELD_BOX} key={key} data-field-key={key}>

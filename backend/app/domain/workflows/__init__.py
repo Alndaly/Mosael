@@ -471,6 +471,15 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
     return _OUTPUT_DATA_TYPES.get(key, "any")
 
 
+#: 节点能在哪些地方用:`"surfaces": ["workflow", "board"]` 的节点同时是创意画板上的一种工具格
+#: (见 boards.producers —— 注册表**从这份声明里读**,不在画板那边另列一张表)。没写就只在工作流里。
+#: 不上画板的是有意的:llm / ai_generate / synthesize_speech 和画板内置的写字、生成、念重复;
+#: timeline_* / publish 副作用太大;流程控制类(start/output/condition/subgraph/loop/code/delay)
+#: 离开一张图就没有意义(ADR 0021 决定 3)。
+#:
+#: `"board_outputs"`:上了画板的节点,哪几个输出落成画布上的新格子(缺省是全部)。一个节点在工作流里
+#: 交出的东西有一半是给下游连线用的(字数、状态码、引擎名、输入素材的 id),摊在画板上全是噪音 ——
+#: 视频转 GIF 还会把**输入**那段视频原样再摆一格出来。
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "external": False,
@@ -538,6 +547,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "transcribe_asset": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["text"],
         "category": "wfCat_audio",
         "label": "wfNode_transcribe_asset",
         "description": "wfNode_transcribe_asset_desc",
@@ -563,6 +574,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "note_search": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["text"],
         "category": "wfCat_knowledge", "label": "wfNode_note_search", "description": "wfNode_note_search_desc",
         "config": {"query": {"type": "template"}, "limit": {"type": "number", "default": 10},
                    "offset": {"type": "number", "default": 0, "advanced": True}},
@@ -732,6 +745,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "video_to_gif": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["asset_id"],
         "category": "wfCat_asset",
         "label": "wfNode_video_to_gif",
         "description": "wfNode_video_to_gif_desc",
@@ -782,6 +797,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "http_request": {
         "external": True,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["text"],
         "category": "wfCat_data",
         "label": "wfNode_http_request",
         "description": "wfNode_http_request_desc",
@@ -806,6 +823,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "template": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["text"],
         "category": "wfCat_data",
         "label": "wfNode_template",
         "description": "wfNode_template_desc",
@@ -814,6 +833,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "json_extract": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["value"],
         "category": "wfCat_data",
         "label": "wfNode_json_extract",
         "description": "wfNode_json_extract_desc",
@@ -825,6 +846,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "text_transform": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["text"],
         "category": "wfCat_data",
         "label": "wfNode_text_transform",
         "description": "wfNode_text_transform_desc",
@@ -894,6 +917,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "translate": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["text"],
         "category": "wfCat_ai",
         "label": "wfNode_translate",
         "description": "wfNode_translate_desc",
@@ -977,6 +1002,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "scene_render": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id"],
         "category": "wfCat_3d",
         "label": "wfNode_scene_render",
         "description": "wfNode_scene_render_desc",
@@ -1010,6 +1037,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "separate_audio": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["vocals_asset_id", "background_asset_id"],
         "category": "wfCat_audio",
         "label": "wfNode_separate_audio",
         "description": "wfNode_separate_audio_desc",
@@ -1035,6 +1064,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #: 降噪(ADR-0017)。**产出一份新素材**:音频进音频出,视频进视频出(画面原样拷贝)。
     "denoise_audio": {
         "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["asset_id"],
         "category": "wfCat_audio",
         "label": "wfNode_denoise_audio",
         "description": "wfNode_denoise_audio_desc",
@@ -1266,6 +1297,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     # 组合/嵌套:把工作流当子流程调用,声明工作流的输出契约。
     "call_workflow": {
         "external": True,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["output"],
         "category": "wfCat_flow",
         "label": "wfNode_call_workflow",
         "description": "wfNode_call_workflow_desc",

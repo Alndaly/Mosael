@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Edge, FinalConnectionState, Node, ReactFlowInstance, ReactFlowProps } from "@xyflow/react";
@@ -419,5 +419,54 @@ describe("画板连线的层次与外观", () => {
     expect(edge.className).toBeUndefined();
     await settle(10);
     expect(view.latest()?.edges).toEqual([{ id: "e1", source: "n1", target: "n2" }]);
+  });
+});
+
+describe("拉线菜单里的「工具」一组", () => {
+  //: 形状和 GET /api/boards/producers 发下来的一样。内置的四个不进这一组(它们挂在各自的格子上)。
+  const producer = (id: string, label: string, category: string, extra: Record<string, unknown> = {}) =>
+    ({
+      id, type: id.replace(/^node:/, ""), label, description: `${label}的说明`, category, config: {}, outputs: [],
+      output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {}, hosts: ["action"],
+      permission: "edit", effects: "none", fills_empty_slot: false, ...extra,
+    }) as unknown as NonNullable<React.ComponentProps<typeof BoardCanvas>["producers"]>[number];
+  const producers = [
+    producer("write", "写字", "", { hosts: ["note"], fills_empty_slot: true }),
+    producer("node:text_transform", "文本处理", "数据"),
+    producer("node:plugin.cut.out", "去背景", "插件", { plugin_name: "我的抠图", tool_name: "remove_bg" }),
+  ];
+
+  it("分组照节点面板的分组;能搜(连插件的调用名一起);回车选定 —— 工具格落在占位那儿、连好线、写明跑哪个工具", async () => {
+    const view = await mount(board, { producers });
+    release(300, 200);
+
+    const groups = [...document.querySelectorAll("[data-pending-link-group]")].map((one) => one.textContent);
+    expect(groups).toEqual(["boardsGroupCreate", "boardsGroupTools · 数据", "boardsGroupTools · 插件"]);
+    expect(item("写字")).toBeUndefined();
+    //: 种类多了,打开时焦点在搜索框上 —— 直接打字就是在找。
+    const search = document.querySelector<HTMLInputElement>('[data-pending-link-menu] input[type="search"]')!;
+    expect(document.activeElement).toBe(search);
+    act(() => {
+      fireEvent.change(search, { target: { value: "remove_bg" } });
+    });
+    expect([...document.querySelectorAll('[role="menuitem"]')].map((one) => one.textContent)).toEqual([
+      expect.stringContaining("去背景"),
+    ]);
+    act(() => {
+      fireEvent.keyDown(search, { key: "Enter" });
+    });
+    await settle();
+
+    const made = view.latest().items.find((one) => one.kind === "action")!;
+    expect(made.form).toEqual({ producer: "node:plugin.cut.out" });
+    expect(view.latest().edges).toEqual([expect.objectContaining({ source: "n1", target: made.id })]);
+    expect(menu()).toBeNull();
+  });
+
+  it("没有工具可列时单子照旧:不给搜索框、不分组", async () => {
+    await mount(board, { producers: producers.slice(0, 1) });
+    release(300, 200);
+    expect(document.querySelector('[data-pending-link-menu] input[type="search"]')).toBeNull();
+    expect(document.querySelectorAll("[data-pending-link-group]")).toHaveLength(0);
   });
 });

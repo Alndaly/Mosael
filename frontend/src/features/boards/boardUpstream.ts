@@ -6,6 +6,8 @@ import { boardDocumentBlocked, boardSourceText, type BoardDocumentState } from "
 
 /** 连到某一项上游的东西,按它们各自该起的作用分好。 */
 export interface Upstream {
+  /** 连进来的每一格,按连线的先后 —— 工具格按它列绑定(接哪一格由用户挑,不在这里分好)。 */
+  sources: BoardItem[];
   /** 上游的图/视频 —— 当参考素材。 */
   assets: ReturnType<typeof boardAssetSources>;
   /** 上游便签/文档的文字 —— 当提示词。 */
@@ -17,7 +19,7 @@ export interface Upstream {
   pending: boolean;
 }
 
-export const NO_UPSTREAM: Upstream = { assets: [], texts: [], references: [], blocked: false, pending: false };
+export const NO_UPSTREAM: Upstream = { sources: [], assets: [], texts: [], references: [], blocked: false, pending: false };
 
 /**
  * 这一项从上游拿到什么。
@@ -41,6 +43,7 @@ export function upstreamOf(
     .map((edge) => byId.get(edge.source))
     .filter((item): item is BoardItem => Boolean(item));
   return {
+    sources,
     references: sources
       .filter((item) => item.kind === "document")
       .map((item) => documents.get(item.id)?.reference)

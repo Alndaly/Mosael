@@ -122,6 +122,10 @@ def _readable(entry: Any) -> dict[str, Any]:
     if not isinstance(entry, dict):
         return {}
     readable = dict(entry)
+    #: 和从 input_schema 生成的那条同一个认法(见 _config_from_schema):`format: asset` 就是素材字段。
+    #: 自己写 node.config 的插件不该因此丢掉素材选择器、画板上接不到上游的图片。
+    if readable.get("format") == ASSET_FORMAT and not readable.get("data_type"):
+        readable["data_type"] = "asset"
     for field in ("label", "description", "placeholder"):
         if field in readable:
             readable[field] = text_of(readable[field])
@@ -156,6 +160,9 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     output_labels = declared.get("output_labels")
     if not isinstance(output_labels, dict):
         output_labels = {}
+    #: 在创意画板上跑时,哪几个输出落成新的格子(和 NODE_TYPES 的 board_outputs 同一个意思,缺省全部)。
+    board_outputs = declared.get("board_outputs")
+    board_outputs = [str(name) for name in board_outputs if str(name) in outputs] if isinstance(board_outputs, list) else []
     # **给人看的字段一律走 text_of。** 清单里它们可以是 `{"zh": …, "en": …}`,裸 str() 会把
     # 那个字典按 Python 的样子印出来 —— 界面上就是一行 `{'zh': '从百度网盘导入', …}`。
     # 工具的 label/description 在上游已经解过了,而 `node` 这一块是原样透传的,所以解在这里。
@@ -181,6 +188,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         "output_types": {str(name): str(data_type) for name, data_type in output_types.items()},
         # 插件可以给专业术语一个更好的名字;未声明的由共用词典/可读降级兜底。
         "output_labels": {str(name): text_of(label) for name, label in output_labels.items()},
+        **({"board_outputs": board_outputs} if board_outputs else {}),
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。
         "plugin_name": tool.get("instance_name", ""),
         "tool_name": tool.get("name", ""),

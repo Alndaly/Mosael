@@ -26,6 +26,7 @@ import {
   Send,
   Sparkles,
   Split,
+  Wrench,
 } from "lucide-react";
 
 import { fetchJobKinds, type Job, type JobKind } from "@/api/client";
@@ -48,6 +49,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   separate_audio: Split,
   trim: Scissors,
   board_write: PenLine,
+  board_run: Wrench,
   proxy: Clapperboard,
 };
 

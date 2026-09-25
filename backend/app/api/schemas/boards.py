@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.workflows import WorkflowNodeTypeOut
 
 
 class BoardOut(OrmModel):
@@ -57,3 +58,21 @@ class BoardRun(ApiModel):
     y: float = 0
     producer: str
     form: dict = Field(default_factory=dict)
+
+
+class BoardProducerOut(WorkflowNodeTypeOut):
+    """画板上的一个产出者:节点描述(和工作流节点面板同一份)+ 画板自己的几样(见 boards.producers.describe)。
+
+    `type` 是节点类型(内置的四个就是它们自己的名字),字段选项接口认它;`id` 是产出者的名字,
+    存在一格的 `form.producer` 上、跑的时候发的是它。配置字段里多一样 `board_sources`:
+    这个字段能接哪几种上游格子。
+    """
+
+    id: str
+    #: 能挂在哪几种格子上(画板项的 kind)。
+    hosts: list[str]
+    permission: str
+    #: "none" | "paid" | "external" —— 智能体替人跑时要不要确认卡。
+    effects: str
+    #: 能不能挑来填一个空槽(一种格子有几个这样的产出者时,面板上给一个切换)。
+    fills_empty_slot: bool = False

@@ -12,7 +12,10 @@ import { toast } from "sonner";
 import {
   api as api2,
   ApiError,
+  cancelJob,
   createBoard,
+  isNodeProducer,
+  listBoardProducers,
   deleteBoard,
   duplicateBoard,
   grabAssetFrame,
@@ -29,13 +32,14 @@ import {
   type GenerationOption,
   type Board,
   type BoardCanvas as Canvas,
-  type BoardProducer,
+  type BuiltinProducer,
   type BoardRunRequest,
   type Workspace,
   type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { itemName, type MediaKind } from "@/features/boards/boardNodes";
+import { nodePickerOptions } from "@/features/nodeForms/nodePicker";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
@@ -63,7 +67,7 @@ import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas"
 import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
-import { boardSettlementPatch, itemIsRunning, prunedSourcesPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
+import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { runNoteWrite } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
@@ -422,7 +426,7 @@ function BoardCard({
 }
 
 /** 某个产出者没跑起来时那句提示。按产出者说 —— 「生成失败」挂在一次写字上是错话。 */
-const RUN_FAILED: Record<BoardProducer, MessageKey> = {
+const RUN_FAILED: Record<BuiltinProducer, MessageKey> = {
   generate: "boardsGenerateFailed",
   write: "boardWriteFailed",
   speak: "boardSpeakFailed",
@@ -589,18 +593,40 @@ function BoardDetail({
     [api, board.id, workspaceId, onSaved, t],
   );
 
-  // 提示词面板要让人选模型 —— 两种能力各取一次再合并,和 AI 工作台看到的是同一份。
+  //: 这个人在画板上能用的产出者:工具格的表单、「工具」那一组、空槽的产出者切换都照它。
+  const producers = useQuery({
+    queryKey: ["board-producers", workspaceId],
+    queryFn: () => listBoardProducers(workspaceId),
+    staleTime: 30_000,
+  });
+  //: 生成能挂在哪几种格子上,由后端说(generate 的 hosts 来自生成目录)—— 目录多认一种(音频),
+  //: 这里就多取一种的模型,不在前端写死 image / video。
+  const generationKinds = producers.data?.find((one) => one.id === "generate")?.hosts;
+
+  // 提示词面板要让人选模型 —— 每种能力各取一次再合并,和 AI 工作台看到的是同一份。
   const models = useQuery({
-    queryKey: ["generation-options", "board"],
-    queryFn: async () => {
-      const [image, video] = await Promise.all([
-        api2<GenerationOption[]>("/api/generation/options?kind=image"),
-        api2<GenerationOption[]>("/api/generation/options?kind=video"),
-      ]);
-      return [...image, ...video];
-    },
+    queryKey: ["generation-options", "board", generationKinds],
+    queryFn: async () =>
+      (
+        await Promise.all(
+          (generationKinds ?? []).map((kind) =>
+            api2<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`),
+          ),
+        )
+      ).flat(),
+    enabled: Boolean(generationKinds),
     staleTime: 60_000,
   });
+
+  //: 工具条「添加」里的「工具」一组:分组和工作流的「添加节点」面板是同一份(nodePicker)。
+  const toolOptions = React.useMemo(
+    () =>
+      nodePickerOptions(
+        (producers.data ?? []).filter((one) => isNodeProducer(one.id)).map((one) => ({ ...one, type: one.id })),
+        t("wfNodeGroupOther"),
+      ).map((one) => ({ ...one, group: `${t("boardsGroupTools")} · ${one.group}` })),
+    [producers.data, t],
+  );
 
   /** 系统里拖进来的文件:先传进素材库,再由画布摆到落点上。**只收图片和视频** ——
    *  画板上的项渲染的就是这两种,音频拖进来会变成一个放不了的空框。 */
@@ -625,7 +651,7 @@ function BoardDetail({
         if (sameContent(next, confirmedCanvas.current)) return;
         const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
         //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch);服务端摘掉的、线已经
-        //: 断了的槽位素材,本地也跟着摘(见 prunedSourcesPatch)。
+        //: 断了的槽位素材,本地也跟着摘(见 prunedLinksPatch)。
         const sent = new Map(next.items.map((item) => [item.id, item]));
         const local = new Map((localCanvas.current?.items ?? []).map((item) => [item.id, item]));
         for (const stored of fresh.canvas.items) {
@@ -633,7 +659,7 @@ function BoardDetail({
           if (!mine) continue;
           const patch = {
             ...serverOwnedPatch(mine, stored),
-            ...prunedSourcesPatch(mine, stored, local.get(stored.id) ?? mine),
+            ...prunedLinksPatch(mine, stored, local.get(stored.id) ?? mine),
           };
           if (Object.keys(patch).length) api?.patch(stored.id, patch);
         }
@@ -681,7 +707,9 @@ function BoardDetail({
         placed = await send();
       } catch (error) {
         if (await recoverConflict(error)) return;
-        toast.error(t(RUN_FAILED[request.producer]), { description: (error as Error).message });
+        toast.error(t(isNodeProducer(request.producer) ? "boardToolFailed" : RUN_FAILED[request.producer]), {
+          description: (error as Error).message,
+        });
         return;
       }
       acceptBoard(placed);
@@ -699,6 +727,25 @@ function BoardDetail({
       setRunning((current) => (current.includes(request.item_id) ? current : [...current, request.item_id]));
     },
     [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially, flushSaves],
+  );
+
+  /**
+   * 停下工具格正在跑的那一轮。走任务中心的那一个取消(cancel_job):插件进程登记在这个任务名下,
+   * 取消就被杀掉;节点派生的子任务(转写、分离……)一并取消。那一格的「已取消」由回执落回来,
+   * 这里照常轮询收尾。
+   */
+  const stop = React.useCallback(
+    async (itemId: string) => {
+      const item = localCanvas.current?.items.find((one) => one.id === itemId);
+      const jobId = item?.run?.job_id;
+      if (!jobId) return;
+      try {
+        await cancelJob(jobId);
+      } catch (error) {
+        toast.error(t("boardToolStopFailed"), { description: (error as Error).message });
+      }
+    },
+    [t],
   );
 
   /** 取某一帧,存成一份新素材、落到一个新节点上。**是图片节点** —— 取出来的是一张图。 */
@@ -880,6 +927,9 @@ function BoardDetail({
                   setPicking({ kind: media, place: (assetId) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "scene") {
                   setPickingScene(true);
+                } else if (isNodeProducer(kind)) {
+                  //: 工具格:表单上写明跑哪个节点,面板照它长出来(见 ActionComposer)。
+                  api?.add("action", { form: { producer: kind } });
                 } else {
                   api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
                 }
@@ -899,6 +949,7 @@ function BoardDetail({
                 { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
                 { value: "audio", label: t("boardsAddAudio"), group: t("boardsGroupCreate") },
                 { value: "frame", label: t("boardsAddFrame"), group: t("boardsGroupCreate") },
+                ...toolOptions,
               ]}
               trigger={
                 <button
@@ -1050,6 +1101,8 @@ function BoardDetail({
         onRun={run}
         onGrabFrame={grabFrame}
         models={models.data ?? []}
+        producers={producers.data}
+        onStop={stop}
         showMinimap={showMinimap}
         edgeShape={edgeShape}
         searchHighlight={searchHit}

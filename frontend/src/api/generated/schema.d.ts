@@ -3796,6 +3796,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/boards/producers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Producers
+         * @description 画板上**这个人**能用的产出者:四个内置的,加上工具格能跑的节点(插件工具只列他自己接的)。
+         *
+         *     节点的描述和工作流节点面板是同一份(标签、分组、字段一个字都不差),按请求方的语言翻好。
+         *     **注册在 `/boards/{board_id}` 之前** —— 反过来的话 `producers` 会被当成一张板的 id。
+         */
+        get: operations["list_producers_api_boards_producers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/boards/{board_id}": {
         parameters: {
             query?: never;
@@ -3848,8 +3871,8 @@ export interface paths {
          * Run
          * @description 在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。
          *
-         *     画板上一切产出(生成、写字、念出来、截一段)都走这一条 —— 此前是四条各自的路由和请求体。
-         *     跑它要什么权限由产出者声明。
+         *     画板上一切产出(生成、写字、念出来、截一段、工具格跑一个节点)都走这一条 —— 此前是四条各自的
+         *     路由和请求体。跑它要什么权限由产出者声明。插件工具用的是**点运行的这个人**自己的连接。
          */
         post: operations["run_api_boards__board_id__run_post"];
         delete?: never;
@@ -7121,6 +7144,68 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * BoardProducerOut
+         * @description 画板上的一个产出者:节点描述(和工作流节点面板同一份)+ 画板自己的几样(见 boards.producers.describe)。
+         *
+         *     `type` 是节点类型(内置的四个就是它们自己的名字),字段选项接口认它;`id` 是产出者的名字,
+         *     存在一格的 `form.producer` 上、跑的时候发的是它。配置字段里多一样 `board_sources`:
+         *     这个字段能接哪几种上游格子。
+         */
+        BoardProducerOut: {
+            /** Type */
+            type: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Outputs */
+            outputs: string[];
+            /** Output Types */
+            output_types?: {
+                [key: string]: string;
+            };
+            /** Output Labels */
+            output_labels?: {
+                [key: string]: string;
+            };
+            /**
+             * Plugin Name
+             * @default
+             */
+            plugin_name: string;
+            /**
+             * Tool Name
+             * @default
+             */
+            tool_name: string;
+            /** Body Scope */
+            body_scope?: {
+                [key: string]: string[];
+            };
+            /** Id */
+            id: string;
+            /** Hosts */
+            hosts: string[];
+            /** Permission */
+            permission: string;
+            /** Effects */
+            effects: string;
+            /**
+             * Fills Empty Slot
+             * @default false
+             */
+            fills_empty_slot: boolean;
         };
         /**
          * BoardRun
@@ -20189,6 +20274,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_producers_api_boards_producers_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardProducerOut"][];
                 };
             };
             /** @description Validation Error */

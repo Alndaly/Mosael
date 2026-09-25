@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +15,8 @@ const apiMocks = vi.hoisted(() => ({
   getBoard: vi.fn(),
   updateBoard: vi.fn(),
   runOnBoard: vi.fn(),
+  listBoardProducers: vi.fn(),
+  cancelJob: vi.fn(),
   listComments: vi.fn(),
   listMembers: vi.fn(),
   api: vi.fn(),
@@ -117,6 +119,7 @@ beforeEach(() => {
   apiMocks.listComments.mockResolvedValue([]);
   apiMocks.listMembers.mockResolvedValue({ members: [] });
   apiMocks.api.mockResolvedValue([]);
+  apiMocks.listBoardProducers.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -262,7 +265,7 @@ describe("画板详情页与服务端的同步", () => {
   });
 
   it("删掉那根线之后存回去:服务端摘掉了从那条线来的那份,本地那一格跟着摘,手动挂的照留", async () => {
-    // 「从上游来的那份活得和线一样长」只有后端一处规则(canvas._drop_detached_sources),前端收它存下的。
+    // 「从上游来的那份活得和线一样长」只有后端一处规则(canvas._drop_detached_bindings),前端收它存下的。
     const upstream = { id: "A", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, asset_id: "a1" };
     const fed = { asset_id: "a1", role: "first_frame", from: "A" };
     const manual = { asset_id: "m1", role: "last_frame" };
@@ -320,5 +323,91 @@ describe("画板详情页与服务端的同步", () => {
     });
     expect(apiMocks.runOnBoard).toHaveBeenCalledTimes(1);
     expect(apiMocks.runOnBoard.mock.calls[0][1]).toMatchObject({ base_revision: 4, item_id: "img" });
+  });
+});
+
+describe("工具格(跑一个插件工具 / 工作流节点)", () => {
+  const TOOL = {
+    id: "node:text_transform", type: "text_transform", label: "文本处理", description: "", category: "数据", config: {},
+    outputs: [], output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {},
+    hosts: ["action"], permission: "edit", effects: "none", fills_empty_slot: false,
+  };
+
+  it("工具条「添加」里有「工具」一组,选一个就放下一格写明跑哪个工具", async () => {
+    Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    apiMocks.listBoardProducers.mockResolvedValue([TOOL]);
+
+    const view = mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    await vi.waitFor(() => expect((canvasHarness.props as { producers?: unknown[] }).producers).toEqual([TOOL]));
+    act(() => {
+      fireEvent.click(view.container.ownerDocument.querySelector<HTMLElement>("[data-board-add-item]")!);
+    });
+    const option = await vi.waitFor(() => {
+      const found = [...document.querySelectorAll<HTMLElement>("[cmdk-item], [role=option]")].find((one) => one.textContent?.includes("文本处理"));
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    expect(document.body.textContent).toContain("boardsGroupTools · 数据");
+    act(() => {
+      fireEvent.click(option);
+    });
+    expect(canvasHarness.api.add).toHaveBeenCalledWith("action", { form: { producer: "node:text_transform" } });
+  });
+
+  it("运行发的是产出者 + 配置 + 绑定;停止取消的是那一格这一轮的任务;跑完右边新建的几格随服务端那份落下来", async () => {
+    const action = { id: "a1", kind: "action" as const, x: 0, y: 0, width: 280, height: 150, form: { producer: "node:text_transform" as const } };
+    const note = { id: "n1", kind: "note" as const, x: -300, y: 0, width: 220, height: 140, text: "hello" };
+    const server: BoardCanvas = { items: [note, action], edges: [{ id: "e1", source: "n1", target: "a1" }], markers: [] };
+    const running = { ...action, form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] }, producer: action.form.producer }, run: { status: "running" as const, job_id: "job-9" } };
+    const derived = { id: "a1-out-1", kind: "note" as const, x: 360, y: 0, width: 220, height: 140, text: "HELLO", form: { producer: "write" as const } };
+    const settled: BoardCanvas = {
+      items: [note, { ...running, run: { status: "succeeded" } }, derived],
+      edges: [...server.edges, { id: "a1->a1-out-1", source: "a1", target: "a1-out-1" }],
+      markers: [],
+    };
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    apiMocks.runOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [note, running] }));
+    apiMocks.getBoard.mockResolvedValue(boardAt(5, settled));
+    apiMocks.cancelJob.mockResolvedValue({ id: "job-9" });
+
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    act(() => props().onChange(server));
+    await act(async () => {
+      await props().onRun({
+        producer: "node:text_transform", item_id: "a1", kind: "action", x: 0, y: 0,
+        form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] } },
+      });
+    });
+    expect(apiMocks.runOnBoard.mock.calls[0][1]).toMatchObject({
+      producer: "node:text_transform", item_id: "a1", kind: "action",
+      form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] } },
+    });
+    expect(canvasHarness.api.patch).toHaveBeenCalledWith("a1", expect.objectContaining({ run: running.run }));
+
+    //: 画布把节点的最新样子交回来之后,点停止:取消的是这一格这一轮的任务。
+    act(() => props().onChange({ ...server, items: [note, running] }));
+    await act(async () => {
+      await (canvasHarness.props as { onStop: (id: string) => Promise<void> }).onStop("a1");
+    });
+    expect(apiMocks.cancelJob).toHaveBeenCalledWith("job-9");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(canvasHarness.api.replace).toHaveBeenCalledWith(settled);
+  });
+
+  it("工具跑不起来(比如没有这个插件的连接):提示说的是工具,不是「生成失败」", async () => {
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    apiMocks.runOnBoard.mockRejectedValue(new Error("你还没有能跑「去背景」的「抠图」连接"));
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    await act(async () => {
+      await props().onRun({ producer: "node:plugin.cut.out", item_id: "a1", kind: "action", x: 0, y: 0, form: { config: {}, bindings: {} } });
+    });
+    expect(toastMocks.error).toHaveBeenCalledWith("boardToolFailed", { description: "你还没有能跑「去背景」的「抠图」连接" });
   });
 });

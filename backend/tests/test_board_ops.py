@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import re
 
 import pytest
 
-from app.domain.boards.ops import DEFAULT_SIZE, apply_board_ops
+from app.domain.boards.canvas import DEFAULT_SIZE
+from app.domain.boards.ops import apply_board_ops
 from app.domain.boards import BoardDomainError, normalize_canvas
 
 RATCHET = True
@@ -103,7 +105,7 @@ def test_原画布不被就地改动() -> None:
 
 
 def test_新建的默认大小两端是同一组数() -> None:
-    """RATCHET:前端 boardNodes.DEFAULT_SIZE 和后端 boards/ops.DEFAULT_SIZE 必须一致。
+    """RATCHET:前端 boardNodes.DEFAULT_SIZE 和后端 boards/canvas.DEFAULT_SIZE 必须一致。
 
     智能体加的项比手动加的小一圈,看起来就像两种不同的东西。这是一份**跨栈手抄的表**,
     没有编译期约束能发现它们分了岔 —— 所以在这里比对。
@@ -117,9 +119,8 @@ def test_新建的默认大小两端是同一组数() -> None:
     front = {
         key: (int(value["width"]), int(value["height"]))
         for key, value in ast.literal_eval(
-            body.replace("{ width:", "{'width':").replace(", height:", ", 'height':").replace("\n", " ")
-            .replace("note:", "'note':").replace("image:", "'image':").replace("video:", "'video':")
-            .replace("audio:", "'audio':").replace("frame:", "'frame':").replace("scene:", "'scene':").replace("document:", "'document':")
+            #: 每个键(种类名、width、height)都加上引号 —— 逐个 replace 的话,加一种格子就得记得来这里补一行。
+            re.sub(r"(\w+):", r"'\1':", body.replace("\n", " "))
         ).items()
     }
     assert front == DEFAULT_SIZE, f"两端的默认大小分了岔:前端 {front} / 后端 {DEFAULT_SIZE}"

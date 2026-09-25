@@ -18,6 +18,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { type EdgeShape } from "@/components/app/canvasEdgeShape";
 import { CANVAS_EDGE_OPTIONS, canvasEdgeClass } from "@/components/app/canvasEdges";
+import { DraftInput } from "@/components/ui/draft-text";
 import { FLOATING_COLLISION_PADDING, FLOATING_SURFACE, MENU_ITEM_ROVING } from "@/components/ui/floating";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,17 @@ export interface PendingLinkOption {
   icon: LucideIcon;
   label: string;
   hint?: string;
+  /** 分在哪一组(单子上相邻的同组项上面挂一行组名)。不给就不分组。 */
+  group?: string;
+  /** 搜索时除了名字和说明,还按这些词找(工具的调用名之类)。 */
+  keywords?: string[];
+}
+
+/** 搜索框里这一串字能不能找到这一项:名字、说明、关键词里任一处包含它(不分大小写)。 */
+export function pendingOptionMatches(option: PendingLinkOption, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [option.label, option.hint ?? "", ...(option.keywords ?? [])].some((one) => one.toLowerCase().includes(needle));
 }
 
 type GhostData = { icon: LucideIcon; label: string };
@@ -279,9 +291,12 @@ export function PendingLinkMenu<K extends string>({
   onChoose,
   onCancel,
   link,
+  searchPlaceholder,
 }: {
   title: string;
   kinds: readonly K[];
+  /** 给了就在单子顶上放一个搜索框(种类多的时候 —— 画板把全部工具也列在这里)。打开时焦点在它上面。 */
+  searchPlaceholder?: string;
   describe: (kind: K) => PendingLinkOption;
   /** 占位的大小 —— 和 usePendingLink 用的是同一个。 */
   ghostSize: Size;
@@ -292,7 +307,16 @@ export function PendingLinkMenu<K extends string>({
   link: PendingLink;
 }) {
   const menuEl = React.useRef<HTMLDivElement>(null);
+  const searchEl = React.useRef<HTMLInputElement>(null);
   const items = React.useRef<(HTMLButtonElement | null)[]>([]);
+  const [query, setQuery] = React.useState("");
+  //: 单子上此刻列着的那几种(搜索过滤之后)。高亮(`active`)仍是 `kinds` 里的下标 —— 占位照它换图标。
+  const visible = React.useMemo(
+    () => kinds.filter((kind) => pendingOptionMatches(describe(kind), query)),
+    [kinds, describe, query],
+  );
+  const shown = visible.indexOf(kinds[active]);
+  const current = shown >= 0 ? shown : 0;
   const { flowToScreenPosition } = useReactFlow();
   const toScreen = React.useRef(flowToScreenPosition);
   toScreen.current = flowToScreenPosition;
@@ -346,10 +370,10 @@ export function PendingLinkMenu<K extends string>({
     };
   }, [at, ghostSize.width, ghostSize.height, fromSource]);
 
-  //: 打开时把焦点收进来,关掉时(取消的话)还回去。
+  //: 打开时把焦点收进来(有搜索框就放在搜索框上,直接打字就是在找),关掉时(取消的话)还回去。
   React.useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    items.current[0]?.focus({ preventScroll: true });
+    (searchEl.current ?? items.current[0])?.focus({ preventScroll: true });
     return () => {
       if (!chosen.current && previous?.isConnected && previous !== document.body) previous.focus({ preventScroll: true });
     };
@@ -375,10 +399,17 @@ export function PendingLinkMenu<K extends string>({
     };
   }, []);
 
-  /** 高亮挪到第 index 行,焦点跟过去。指针和方向键都走这一条。 */
+  //: 搜索改了、高亮的那一种被滤掉了:高亮落到剩下的第一种上。
+  React.useEffect(() => {
+    if (visible.length && !visible.includes(kinds[active])) onActiveChange(kinds.indexOf(visible[0]));
+  }, [visible, kinds, active, onActiveChange]);
+
+  /** 高亮挪到(列着的)第 index 行,焦点跟过去。指针和方向键都走这一条。 */
   const move = (index: number) => {
-    const next = (index + kinds.length) % kinds.length;
-    if (next !== active) onActiveChange(next);
+    if (visible.length === 0) return;
+    const next = (index + visible.length) % visible.length;
+    const kind = kinds.indexOf(visible[next]);
+    if (kind !== active) onActiveChange(kind);
     const row = items.current[next];
     if (row && document.activeElement !== row) row.focus({ preventScroll: true });
   };
@@ -395,26 +426,46 @@ export function PendingLinkMenu<K extends string>({
       className={cn(FLOATING_SURFACE, "fixed left-0 top-0 z-50 w-64 p-1.5")}
       onKeyDown={(event) => {
         if (isImeKeystroke(event)) return;
-        if (event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) move(active + 1);
-        else if (event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey)) move(active - 1);
-        else if (event.key === "Home") move(0);
-        else if (event.key === "End") move(kinds.length - 1);
+        //: 在搜索框里打字:空格、Home/End 是它自己的(空格是字,不是「选这一项」)。
+        const typing = event.target === searchEl.current;
+        if (event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) move(current + 1);
+        else if (event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey)) move(current - 1);
+        else if (event.key === "Home" && !typing) move(0);
+        else if (event.key === "End" && !typing) move(visible.length - 1);
         //: 回车/空格自己接,不等按钮的原生 click:焦点万一没落在按钮上(比如被别处抢走又
         //: 还回到菜单容器),原生那条就不会触发,而高亮的那一项是明确的。
-        else if (event.key === "Enter" || event.key === "Space" || event.key === " ") {
+        else if (event.key === "Enter" || (!typing && (event.key === "Space" || event.key === " "))) {
+          if (!visible.length) return;
           chosen.current = true;
-          onChoose(kinds[active]);
+          onChoose(visible[current]);
         } else return;
         event.preventDefault();
       }}
     >
       <p className="px-2.5 pb-1 pt-1.5 text-ui-2xs text-muted-foreground">{title}</p>
-      {kinds.map((kind, index) => {
-        const { icon: Icon, label, hint } = describe(kind);
-        const highlighted = index === active;
+      {searchPlaceholder && (
+        //: 草稿式的框(见 components/ui/draft-text):搜的多半是中文,拼音组词不能被打断。
+        <DraftInput
+          ref={searchEl}
+          type="search"
+          value={query}
+          placeholder={searchPlaceholder}
+          aria-label={searchPlaceholder}
+          onValueChange={setQuery}
+          className="mx-1 mb-1 h-8 w-[calc(100%-0.5rem)] rounded-md border border-border bg-field px-2 text-ui-xs text-foreground outline-none focus-visible:border-primary"
+        />
+      )}
+      <div className="max-h-[min(360px,55vh)] overflow-y-auto">
+      {visible.map((kind, index) => {
+        const { icon: Icon, label, hint, group } = describe(kind);
+        const highlighted = index === current;
+        const previousGroup = index > 0 ? describe(visible[index - 1]).group : undefined;
         return (
+          <React.Fragment key={kind}>
+          {group && group !== previousGroup && (
+            <p data-pending-link-group="" className="px-2.5 pb-0.5 pt-2 text-ui-2xs font-medium text-muted-foreground">{group}</p>
+          )}
           <button
-            key={kind}
             ref={(el) => {
               items.current[index] = el;
             }}
@@ -425,7 +476,7 @@ export function PendingLinkMenu<K extends string>({
             className={cn(MENU_ITEM_ROVING, "w-full text-left")}
             //: 听 move 不听 enter:单子底下的东西挪了、指针没动时浏览器也会补发 enter,那不是用户换了一行。
             onPointerMove={() => move(index)}
-            onFocus={() => onActiveChange(index)}
+            onFocus={() => onActiveChange(kinds.indexOf(kind))}
             onClick={() => {
               chosen.current = true;
               onChoose(kind);
@@ -437,8 +488,10 @@ export function PendingLinkMenu<K extends string>({
               {hint && <span className="truncate text-ui-2xs leading-4 text-muted-foreground">{hint}</span>}
             </span>
           </button>
+          </React.Fragment>
         );
       })}
+      </div>
     </div>,
     document.body,
   );

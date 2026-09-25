@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoardItem } from "@/api/client";
-import { boardSettlementPatch, composerView, itemFormResetKey, itemIsRunning, itemRunStatus, newSlotForm, producerOf, prunedSourcesPatch, withProducer } from "./boardItemState";
+import { boardSettlementPatch, composerView, itemFormResetKey, itemIsRunning, itemRunStatus, newSlotForm, producerOf, prunedLinksPatch, withProducer } from "./boardItemState";
 
 function image(extra: Partial<BoardItem> = {}): BoardItem {
   return { id: "image-1", kind: "image", x: 0, y: 0, ...extra };
@@ -113,13 +113,13 @@ describe("服务端摘掉的槽位素材,本地跟着摘", () => {
     const stored = image({ form: { source_assets: [manual] } });
     const later = { asset_id: "r1", role: "reference_image" };
     const local = image({ form: { prompt: "又改了", source_assets: [fed, manual, later] } });
-    expect(prunedSourcesPatch(sent, stored, local)).toEqual({
+    expect(prunedLinksPatch(sent, stored, local)).toEqual({
       form: { prompt: "又改了", source_assets: [manual, later] },
     });
   });
 
   it("服务端什么都没摘就不出补丁", () => {
     const sent = image({ form: { source_assets: [fed, manual] } });
-    expect(prunedSourcesPatch(sent, sent, sent)).toBeNull();
+    expect(prunedLinksPatch(sent, sent, sent)).toBeNull();
   });
 });

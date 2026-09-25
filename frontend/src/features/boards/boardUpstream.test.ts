@@ -40,6 +40,6 @@ describe("下游从上游拿到什么", () => {
 
   it("没有连线时什么都不给", () => {
     const up = upstreamOf("img", [note("n1", "孤零零"), image("img", "")], [], new Map());
-    expect(up).toEqual({ assets: [], texts: [], references: [], blocked: false, pending: false });
+    expect(up).toEqual({ sources: [], assets: [], texts: [], references: [], blocked: false, pending: false });
   });
 });

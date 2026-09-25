@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.exceptions import RequestValidationError
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardRun, BoardUpdate
+from app.core.i18n import get_current_locale
+from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardProducerOut, BoardRun, BoardUpdate
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -47,6 +48,17 @@ def _board_http_error(exc: BoardDomainError) -> HTTPException:
 def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Board]:
     ensure_workspace_access(db, user, workspace_id)
     return list_boards(db, workspace_id)
+
+
+@router.get("/boards/producers", response_model=list[BoardProducerOut])
+def list_producers(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    """画板上**这个人**能用的产出者:四个内置的,加上工具格能跑的节点(插件工具只列他自己接的)。
+
+    节点的描述和工作流节点面板是同一份(标签、分组、字段一个字都不差),按请求方的语言翻好。
+    **注册在 `/boards/{board_id}` 之前** —— 反过来的话 `producers` 会被当成一张板的 id。
+    """
+    ensure_workspace_access(db, user, workspace_id)
+    return producers.describe(db, user.id, get_current_locale())
 
 
 @router.get("/boards/{board_id}", response_model=BoardOut)
@@ -112,11 +124,11 @@ def remove(board_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -
 def run(board_id: str, body: BoardRun, db: DbSession, user: CurrentUser) -> Board:
     """在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。
 
-    画板上一切产出(生成、写字、念出来、截一段)都走这一条 —— 此前是四条各自的路由和请求体。
-    跑它要什么权限由产出者声明。
+    画板上一切产出(生成、写字、念出来、截一段、工具格跑一个节点)都走这一条 —— 此前是四条各自的
+    路由和请求体。跑它要什么权限由产出者声明。插件工具用的是**点运行的这个人**自己的连接。
     """
     try:
-        producer = producers.get_producer(body.producer)
+        producer = producers.get_producer(db, body.producer, user.id)
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
     ensure_workspace_perm(db, user, body.workspace_id, producer.permission)

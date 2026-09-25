@@ -20,6 +20,8 @@ export const RATCHET = true;
 //: 上的工具格共用它。检查器自己只剩宿主的事(数据边、专区)。
 const VIEW = readFileSync(join(import.meta.dirname, "../nodeForms/NodeConfigForm.tsx"), "utf8");
 const INSPECTOR = readFileSync(join(import.meta.dirname, "WorkflowsView.tsx"), "utf8");
+//: 画板上的工具格是这份表单的第二个宿主(ADR 0021 P2)。
+const BOARD_TOOL = readFileSync(join(import.meta.dirname, "../boards/ActionComposer.tsx"), "utf8");
 
 describe("节点检查器的下拉", () => {
   it("取选项那段里不出现节点类型判断", () => {
@@ -63,5 +65,18 @@ describe("字段渲染只有一份", () => {
     expect(INSPECTOR).not.toContain("const renderField = (");
     expect(INSPECTOR).not.toContain("const dynamicOptions = (");
     expect(INSPECTOR).toContain("<NodeConfigForm");
+  });
+});
+
+describe("画板上的工具格面板", () => {
+  //: 它跑的是任何一个插件工具或能上画板的节点 —— 为哪一个写特例,插件那边永远覆盖不到。
+  //: 画板只补自己那一半(字段接哪几格上游、用谁的连接),而「能接哪几种格子」也由后端说(board_sources)。
+  it("用的是表单那一份,不按节点类型、不按字段名分支", () => {
+    expect(BOARD_TOOL).toContain("<NodeConfigForm");
+    expect(BOARD_TOOL).not.toContain("const renderField = (");
+    expect(BOARD_TOOL).not.toContain("const dynamicOptions = (");
+    expect(BOARD_TOOL).not.toMatch(/(nodeType|producer|tool\.type|tool\.id)\s*===\s*["'`]/);
+    expect(BOARD_TOOL).not.toMatch(/\bkey\s*===\s*["']/);
+    expect(BOARD_TOOL).toContain("board_sources");
   });
 });

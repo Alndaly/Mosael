@@ -1,6 +1,15 @@
 import type React from "react";
 
-import type { BoardItem, BoardProducer, BoardRunRequest, GenerationOption } from "@/api/client";
+import {
+  isNodeProducer,
+  type BoardItem,
+  type BoardProducer,
+  type BoardProducerInfo,
+  type BoardRunRequest,
+  type BuiltinProducer,
+  type GenerationOption,
+} from "@/api/client";
+import { ActionComposer } from "@/features/boards/ActionComposer";
 import { AudioComposer } from "@/features/boards/AudioComposer";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
@@ -27,6 +36,8 @@ export interface ComposerHost {
   onPickAsset: (kind: MediaKind, place: (assetId: string) => void) => void;
   /** 跑这一格的产出者(见 BoardsView.run → runOnBoard)。 */
   run: (request: BoardRunRequest) => Promise<unknown>;
+  /** 这个人能用的产出者清单(后端 GET /api/boards/producers)。还没到是 undefined。 */
+  producers?: BoardProducerInfo[];
 }
 
 /**
@@ -36,7 +47,7 @@ export interface ComposerHost {
  *
  * 面板本身不认识画板的接口:它们交出自己那几个字段,这里拼成一次 runOnBoard 的请求。
  */
-export const BUILTIN_COMPOSERS: Record<BoardProducer, (host: ComposerHost) => React.ReactNode> = {
+export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => React.ReactNode> = {
   //: 便签:写文案。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图这些东西,
   //: 硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。
   write: ({ item, position, workspaceId, feeding, writing, setWriting, onFormChange, run }) => (
@@ -146,3 +157,36 @@ export const BUILTIN_COMPOSERS: Record<BoardProducer, (host: ComposerHost) => Re
     />
   ),
 };
+
+/**
+ * 一格该挂的面板。内置的四个查上面那张表;`node:*`(工具格)一律是 ActionComposer —— 表单照节点
+ * 声明长出来,不为哪个工具单写。工具在不在这个人的清单里(插件卸了、他没有连接)由面板自己说。
+ */
+export function renderComposer(producer: BoardProducer, host: ComposerHost): React.ReactNode {
+  if (!isNodeProducer(producer)) return BUILTIN_COMPOSERS[producer](host);
+  const { item, position, workspaceId, feeding, producers, onFormChange, run } = host;
+  const tool = producers === undefined ? undefined : (producers.find((one) => one.id === producer) ?? null);
+  return (
+    <ActionComposer
+      key={item.id}
+      item={item}
+      tool={tool}
+      sources={feeding.sources}
+      workspaceId={workspaceId}
+      busy={itemIsRunning(item)}
+      onFormChange={onFormChange}
+      onRun={(form) => run({ producer, item_id: item.id, kind: item.kind, ...position, form })}
+    />
+  );
+}
+
+/**
+ * 一格空槽能在哪几个产出者之间切换:能填空槽(`fills_empty_slot`)、又挂得在这种格子上的那几个。
+ * 只有一个就不用切。音频槽在「配音」和「生成(音乐、音效)」之间切,就是这一条 —— 生成目录一认
+ * 音频,后端 generate 的 hosts 里就有 audio,这里不用改。
+ */
+export function slotProducers(item: BoardItem, producers: BoardProducerInfo[] | undefined): BoardProducerInfo[] {
+  if (!producers || item.asset_id || isNodeProducer(item.form?.producer)) return [];
+  const fitting = producers.filter((one) => one.fills_empty_slot && one.hosts.includes(item.kind));
+  return fitting.length > 1 ? fitting : [];
+}

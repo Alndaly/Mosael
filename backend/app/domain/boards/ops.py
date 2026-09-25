@@ -13,7 +13,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from app.domain.boards.canvas import ITEM_KINDS, NOTE_COLORS, BoardDomainError, finite_number, item_not_found
+from app.domain.boards.canvas import DEFAULT_SIZE, ITEM_KINDS, NOTE_COLORS, BoardDomainError, finite_number, item_not_found
 
 BOARD_OP_KINDS = (
     "add_item",
@@ -26,18 +26,6 @@ BOARD_OP_KINDS = (
     "connect",
     "remove_edge",
 )
-
-#: 新建时的默认大小。**和前端 DEFAULT_SIZE 是同一组数** —— 智能体加的项不该比手动加的
-#: 小一圈,那看起来像两种不同的东西。
-DEFAULT_SIZE: dict[str, tuple[int, int]] = {
-    "note": (220, 140),
-    "image": (260, 180),
-    "video": (320, 200),
-    "audio": (280, 72),
-    "frame": (420, 300),
-    "scene": (320, 220),
-    "document": (320, 300),
-}
 
 
 def _require(by_id: dict[str, dict], item_id: str) -> dict:

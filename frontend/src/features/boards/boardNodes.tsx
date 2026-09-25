@@ -3,9 +3,10 @@ import { Streamdown } from "streamdown";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, Wrench, type LucideIcon } from "lucide-react";
 
-import type { BoardItem } from "@/api/client";
+import { getJob, type BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { DraftTextarea } from "@/components/ui/draft-text";
@@ -13,7 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
-import { itemError, itemRunStatus, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { itemError, itemIsRunning, itemJobId, itemRunStatus, type BoardItemRunStatus } from "@/features/boards/boardItemState";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
 
 /**
@@ -62,7 +64,19 @@ export type BoardNodeData = {
   onAspect: (id: string, ratio: number) => void;
   /** 评论模式只接受标注，不暴露会修改画布结构的连线入口。 */
   commentMode?: boolean;
+  /** 工具格跑的是哪个工具(从产出者清单里查到的)。null = 这个人此刻用不了它(插件卸了、没有连接);
+   *  undefined = 清单还没到。 */
+  tool?: BoardToolFace | null;
+  /** 停下这一格正在跑的任务(工具格的停止按钮)。 */
+  onStop?: (id: string) => void;
 };
+
+/** 工具格上要显示的那几样:名字、一句说明、出处(插件名;内置节点为空)。 */
+export interface BoardToolFace {
+  label: string;
+  description: string;
+  plugin: string;
+}
 
 /** 两侧各一个接点。**始终渲染但默认透明** —— 只在悬停/选中时显形:
  *  想法之间的关系是次要信息,一上来八个圆点会让画布看着像电路图。 */
@@ -140,6 +154,7 @@ const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey
   video: { icon: FilmIcon, label: "boardKindVideo", hint: "boardKindVideoHint" },
   audio: { icon: Music, label: "boardKindAudio", hint: "boardKindAudioHint" },
   frame: { icon: SquareIcon, label: "boardKindFrame", hint: "boardKindFrameHint" },
+  action: { icon: Wrench, label: "boardKindAction", hint: "boardKindActionHint" },
 };
 
 /** 这一类的图标。图标不需要翻译,所以它可以直接拿。 */
@@ -172,14 +187,14 @@ export const SPAWNABLE_KINDS = ["image", "video", "audio", "note", "document"] a
 
 /** 节点上方那一行:种类图标 + 名字(没起名是种类名)—— 一眼看出这格是什么,不用等它加载出来。
  *  双击改名,见 BoardNodeLabel。 */
-function NodeLabel({ data, icon, className }: { data: BoardNodeData; icon?: LucideIcon; className?: string }) {
+function NodeLabel({ data, icon, fallback, className }: { data: BoardNodeData; icon?: LucideIcon; fallback?: string; className?: string }) {
   const t = useI18n();
   const { item, renaming, commentMode, onRenaming, onRename } = data;
   return (
     <BoardNodeLabel
       icon={icon ?? kindIcon(item.kind)}
       title={item.title}
-      fallback={kindText(t, item.kind).label}
+      fallback={fallback || kindText(t, item.kind).label}
       renaming={Boolean(renaming)}
       readOnly={commentMode}
       onRenaming={onRenaming && ((on) => onRenaming(on ? item.id : null))}
@@ -225,6 +240,7 @@ export function NoteNode({ data, selected }: NodeProps) {
     if (editing) ref.current?.focus();
   }, [editing]);
 
+  const json = item.text_format === "json";
   const state = nodeRunProps(item);
   return (
     <div
@@ -251,13 +267,24 @@ export function NoteNode({ data, selected }: NodeProps) {
         <DraftTextarea
           ref={ref}
           // nodrag/nowheel:不挂的话在便签里选字会变成拖动整张便签,滚动会变成缩放画布。
-          className="nodrag nowheel h-full w-full resize-none border-0 bg-transparent p-0 text-ui-sm leading-relaxed text-foreground outline-none"
+          className={cn(
+            "nodrag nowheel h-full w-full resize-none border-0 bg-transparent p-0 text-ui-sm leading-relaxed text-foreground outline-none",
+            json && "font-mono text-ui-xs",
+          )}
           value={item.text ?? ""}
           onValueChange={(next) => onText(item.id, next)}
           onBlur={() => setEditing(false)}
         />
       ) : (
-        <div className="h-full w-full overflow-hidden whitespace-pre-wrap break-words text-foreground">
+        //: 工具格交回的结构化数据(JSON)按代码排版:等宽、能滚 —— 当成一段话排,
+        //: 一份几十行的对象挤成一团,看不出层次。
+        <div
+          data-text-format={item.text_format}
+          className={cn(
+            "h-full w-full overflow-hidden whitespace-pre-wrap break-words text-foreground",
+            json && "nowheel overflow-auto font-mono text-ui-xs leading-snug [overflow-wrap:anywhere]",
+          )}
+        >
           {item.text || <span className="text-muted-foreground">{t("boardNotePlaceholder")}</span>}
         </div>
       )}
@@ -650,6 +677,114 @@ export function SceneNode({ data, selected }: NodeProps) {
     </footer>
   </div>;
 }
+/**
+ * 工具格:跑一个插件工具或工作流节点。**它自己不放产出** —— 每跑一次,产出都新建成右边的几格、
+ * 连上线(后端 canvas._derive),上一轮的留着。所以这一格画的是「这是个什么工具、现在怎样」:
+ * 名字和出处、一句说明;在跑时整块扫光 + 状态字(和生成中的空槽同一种样子)+ 停止;
+ * 跑挂了写原因。表单挂在选中时的面板里(ActionComposer)。
+ *
+ * 进度只在任务自己报了的时候画(任务的 progress 在 0 和 1 之间)—— 不去猜一个数。
+ */
+function ActionNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, commentMode, tool, onStop } = nodeData;
+  const t = useI18n();
+  const status = itemRunStatus(item);
+  const running = itemIsRunning(item);
+  const jobId = itemJobId(item);
+  const job = useQuery({
+    queryKey: ["job", jobId],
+    queryFn: () => getJob(jobId as string),
+    enabled: running && Boolean(jobId),
+    refetchInterval: running ? 2000 : false,
+  });
+  const progress = running ? (job.data?.progress ?? 0) : 0;
+  const showProgress = progress > 0 && progress < 1;
+  const state = nodeRunProps(item);
+  const source = tool ? tool.plugin || t("boardToolBuiltin") : "";
+  return (
+    <div
+      data-board-run-status={state["data-board-run-status"]}
+      data-board-action=""
+      className={cn("group relative flex h-full w-full flex-col rounded-xl border border-border bg-panel shadow-sm", state.className)}
+    >
+      <NodeResizer minWidth={200} minHeight={110} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
+      <NodeLabel data={nodeData} icon={Wrench} fallback={tool?.label} />
+      <Ports visible={selected} disabled={commentMode} />
+      <header className="flex min-w-0 items-center gap-2 px-3 pt-3">
+        <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
+          <Wrench size={14} />
+        </span>
+        {/* 名字已经挂在框外正上方(没起名就是工具名);起了名之后,框里再写一次这是哪个工具。 */}
+        <span className="min-w-0 flex-1 truncate text-ui-sm font-semibold text-foreground" title={tool?.label}>
+          {item.title?.trim() ? tool?.label || t("boardKindAction") : ""}
+        </span>
+        {source && (
+          <span
+            data-board-tool-source=""
+            className="max-w-[45%] shrink-0 truncate rounded-full border border-border px-1.5 py-px text-ui-2xs text-muted-foreground"
+            title={source}
+          >
+            {source}
+          </span>
+        )}
+      </header>
+      <div className="relative min-h-0 flex-1 px-3 pb-3 pt-2">
+        {status === "running" || status === "queued" ? (
+          <div role="status" aria-busy="true" className="absolute inset-x-3 bottom-3 top-2 overflow-hidden rounded-lg">
+            <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
+            {showProgress && (
+              <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/15">
+                <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
+              </div>
+            )}
+            <div className="absolute inset-x-0 bottom-0 flex items-end gap-2 px-2.5 pb-2">
+              <span className="min-w-0 flex-1 text-ui-2xs font-semibold text-primary">
+                {t(status === "queued" ? "boardNodeQueued" : "boardToolRunning")}
+                {showProgress ? ` · ${Math.round(progress * 100)}%` : ""}
+              </span>
+              {onStop && running && !commentMode && (
+                <button
+                  type="button"
+                  data-board-stop=""
+                  className="nodrag nopan inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border bg-panel px-2 text-ui-2xs text-foreground transition-colors hover:border-destructive hover:text-destructive"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onStop(item.id);
+                  }}
+                >
+                  <SquareIcon size={9} className="fill-current" /> {t("boardToolStop")}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : status === "failed" ? (
+          <div role="alert" className="flex min-w-0 items-start gap-1.5 text-ui-2xs leading-relaxed">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0 text-destructive" />
+            <span className="line-clamp-3 min-w-0 [overflow-wrap:anywhere] text-muted-foreground">
+              <span className="font-semibold text-destructive">{t("boardToolRunFailed")}</span>
+              {itemError(item) ? ` · ${itemError(item)}` : ""}
+            </span>
+          </div>
+        ) : status === "cancelled" ? (
+          <div className="flex items-center gap-1.5 text-ui-2xs text-muted-foreground">
+            <Ban size={13} /> {t("boardNodeCancelled")}
+          </div>
+        ) : tool === null ? (
+          <div className="flex min-w-0 items-start gap-1.5 text-ui-2xs leading-relaxed text-muted-foreground">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <span className="line-clamp-3 min-w-0">{t("boardToolUnavailable")}</span>
+          </div>
+        ) : (
+          <p className="line-clamp-3 min-w-0 text-ui-2xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+            {tool?.description ? <InlineMarkdown text={tool.description} /> : null}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 //: **写成 Record<kind, …> 而不是随手一个对象** —— 后端加一种 item kind 时,这里漏登记
 //: 不会报错,只会让那种节点在画布上凭空消失。标上类型,漏一种就编译不过。
 export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<NodeProps>> = {
@@ -660,6 +795,7 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
   frame: FrameNode,
   scene: SceneNode,
   document: DocumentNode,
+  action: ActionNode,
 };
 
 /** 指向素材库一份的那几种。**只此一处** —— 操作条给不给「换一份」、选择器能选什么,
@@ -680,4 +816,5 @@ export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: nu
   frame: { width: 420, height: 300 },
   scene: { width: 320, height: 220 },
   document: { width: 320, height: 300 },
+  action: { width: 280, height: 150 },
 };

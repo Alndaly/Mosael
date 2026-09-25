@@ -103,20 +103,39 @@ export function serverOwnedPatch(sent: BoardItem, stored: BoardItem): Partial<Bo
 }
 
 /**
- * 存回去之后,服务端把槽位里哪几份摘掉了(顺着线挂上的、线已经断了 —— 规则只在后端
- * canvas._drop_detached_sources 一处)。回本地那一格该换成的表单;没摘就回 null。
+ * 存回去之后,服务端把哪些「顺着线接上的东西」摘掉了(线已经断了 —— 规则只在后端
+ * canvas._drop_detached_bindings 一处):槽位里顺着线挂上的素材、工具格上字段的绑定。
+ * 回本地那一格该换成的表单;没摘就回 null。
  *
  * 只摘**服务端摘掉的那几份**,拿本地此刻的那一格去摘:请求在路上时用户又挂上的、又改的照留。
  */
-export function prunedSourcesPatch(sent: BoardItem, stored: BoardItem, local: BoardItem): Partial<BoardItem> | null {
+export function prunedLinksPatch(sent: BoardItem, stored: BoardItem, local: BoardItem): Partial<BoardItem> | null {
+  let form: NonNullable<BoardItem["form"]> | null = null;
+
   const key = (one: { asset_id: string; role: string; from?: string }) => `${one.asset_id}|${one.role}|${one.from ?? ""}`;
   const kept = new Set((stored.form?.source_assets ?? []).map(key));
   const dropped = new Set((sent.form?.source_assets ?? []).map(key).filter((one) => !kept.has(one)));
   const mine = local.form?.source_assets ?? [];
-  if (dropped.size === 0 || !mine.some((one) => dropped.has(key(one)))) return null;
-  return { form: { ...local.form, source_assets: mine.filter((one) => !dropped.has(key(one))) } };
-}
+  if (dropped.size > 0 && mine.some((one) => dropped.has(key(one)))) {
+    form = { ...local.form, source_assets: mine.filter((one) => !dropped.has(key(one))) };
+  }
 
+  const bound = (bindings: NonNullable<BoardItem["form"]>["bindings"]) =>
+    new Set(Object.entries(bindings ?? {}).flatMap(([field, refs]) => refs.map((ref) => `${field}|${ref.from}`)));
+  const keptRefs = bound(stored.form?.bindings);
+  const droppedRefs = new Set([...bound(sent.form?.bindings)].filter((one) => !keptRefs.has(one)));
+  const myBindings = local.form?.bindings ?? {};
+  if (droppedRefs.size > 0 && [...bound(myBindings)].some((one) => droppedRefs.has(one))) {
+    const next = Object.fromEntries(
+      Object.entries(myBindings)
+        .map(([field, refs]) => [field, refs.filter((ref) => !droppedRefs.has(`${field}|${ref.from}`))] as const)
+        .filter(([, refs]) => refs.length > 0),
+    );
+    form = { ...(form ?? local.form), bindings: next };
+  }
+
+  return form ? { form } : null;
+}
 /**
  * 服务端轮询到的这一格已经不在跑了:写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。
  *

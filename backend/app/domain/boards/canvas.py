@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Board, now
-from app.domain.boards.producer_ids import is_producer_id
+from app.domain.boards.producer_ids import NOTE_PRODUCER, is_producer_id
 
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,26 @@ def _field_error(item_key: str, bare_key: str, field: str, item_id: str, **param
 #: 图片和视频**分开两种而不是合成一个 media**:它们在画板上的样子和操作都不同 ——
 #: 图片是一张静止的参考,视频要能就地播;而"从这张图生成视频"是图片才有的动作,
 #: 反过来"抽一帧"是视频才有的。合成一种的话每处都要先分辨一次它到底是哪个。
-ITEM_KINDS = ("note", "image", "video", "audio", "frame", "scene", "document")
+#:
+#: `action` 工具格:跑一个工作流节点(插件工具、挑过的内置节点,见 boards.producers)。它自己没有
+#: 产出可放 —— 每跑一次,产出都**新建**成右边的几格并连上线(见 _canvas_with_delivered_result)。
+ITEM_KINDS = ("note", "image", "video", "audio", "frame", "scene", "document", "action")
+
+#: 便签正文的格式。只有一种非默认的:工具格交回的结构化数据(JSON)落成的便签,界面按代码排版。
+TEXT_FORMATS = ("json",)
+
+#: 新建时的默认大小。**和前端 DEFAULT_SIZE 是同一组数** —— 智能体加的项不该比手动加的
+#: 小一圈,那看起来像两种不同的东西;工具格派生出来的几格也按它摆(见 _derive)。
+DEFAULT_SIZE: dict[str, tuple[int, int]] = {
+    "note": (220, 140),
+    "image": (260, 180),
+    "video": (320, 200),
+    "audio": (280, 72),
+    "frame": (420, 300),
+    "scene": (320, 220),
+    "document": (320, 300),
+    "action": (280, 150),
+}
 
 #: 必须指向素材库一份的那几种。空着的话存得下、打开却是个空白框。
 _NEEDS_ASSET = ("image", "video", "audio")
@@ -154,7 +173,49 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
             raise BoardDomainError("boardErr_promptDocumentNotDoc", item_id=item_id)
         if len(json.dumps(prompt_document, ensure_ascii=False)) > MAX_TEXT_CHARS * 8:
             raise BoardDomainError("boardErr_promptDocumentTooLarge", item_id=item_id)
+    #: 工具格的节点配置(键就是那个节点声明的字段)。**形状只钉到「是个对象、不太大」** —— 哪些
+    #: 键合法由节点自己的声明说了算,而插件节点是运行时才知道的;字段错了在运行时由执行器报。
+    config = form.get("config")
+    if config is not None:
+        if not isinstance(config, dict):
+            raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field="form.config")
+        try:
+            #: 和坐标同一条(见 finite_number):NaN / Infinity 写得进去、读不回来 —— 整张板打不开。
+            size = len(json.dumps(config, ensure_ascii=False, allow_nan=False))
+        except (TypeError, ValueError) as exc:
+            raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="form.config") from exc
+        if size > MAX_TEXT_CHARS * 8:
+            raise BoardDomainError("boardErr_formConfigTooLarge", item_id=item_id)
+    bindings = form.get("bindings")
+    if bindings is not None:
+        form["bindings"] = _normalize_bindings(bindings, item_id)
     return form
+
+
+def _normalize_bindings(value: Any, item_id: str) -> dict[str, list[dict[str, str]]]:
+    """工具格上「这个字段的值从上游哪几格来」:`{字段: [{"from": 上游那一格的 id}, …]}`。
+
+    值不存在这里 —— 运行时由服务端照当时的画布去取(便签的字、文档的正文、图片的素材……),
+    所以上游改了字,下一次运行就跟着变。顺序按用户挑的;同一格挑两次只算一次。
+    线断了的那几条在 _drop_detached_bindings 里摘掉。
+    """
+    if not isinstance(value, dict):
+        raise BoardDomainError("boardErr_itemFieldNotObject", item_id=item_id, field="form.bindings")
+    out: dict[str, list[dict[str, str]]] = {}
+    for field, refs in value.items():
+        if not isinstance(field, str) or not field.strip():
+            raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="form.bindings")
+        if not isinstance(refs, list) or any(not isinstance(one, dict) for one in refs):
+            raise BoardDomainError("boardErr_bindingsNotRefs", item_id=item_id, field=field)
+        seen: list[str] = []
+        for ref in refs:
+            origin = ref.get("from")
+            if not isinstance(origin, str) or not origin.strip():
+                raise BoardDomainError("boardErr_bindingsNotRefs", item_id=item_id, field=field)
+            if origin.strip() not in seen:
+                seen.append(origin.strip())
+        out[field] = [{"from": one} for one in seen]
+    return out
 
 
 def _normalize_title(value: Any, item_id: str) -> str:
@@ -171,7 +232,7 @@ def _normalize_title(value: Any, item_id: str) -> str:
 
 def _normalize_source(value: dict[str, Any]) -> dict[str, str] | None:
     """槽位里挂的一份素材。`from`:它是**顺着哪一格连过来的线**挂上的(手动挂的没有)——
-    见 _drop_detached_sources。缺素材或角色的是空位,不算。"""
+    见 _drop_detached_bindings。缺素材或角色的是空位,不算。"""
     asset_id = str(value.get("asset_id") or "").strip()
     role = str(value.get("role") or "").strip()
     if not asset_id or not role:
@@ -183,12 +244,17 @@ def _normalize_source(value: dict[str, Any]) -> dict[str, str] | None:
     return source
 
 
-def _drop_detached_sources(items: list[dict[str, Any]], edges: list[dict[str, Any]]) -> None:
-    """**顺着线挂上的素材,活得和那根线一样长。** 画板上「哪一份是从上游来的」只有这一处规则。
+def _drop_detached_bindings(items: list[dict[str, Any]], edges: list[dict[str, Any]]) -> None:
+    """**顺着线接上的东西,活得和那根线一样长。** 画板上「哪一份是从上游来的」只有这一处规则。
 
-    槽位里记着 `from` 的那一份,是面板照上游那一格的产出挂上的。线没了(删了线、删了上游那一格)、
-    或上游换了一份素材,它就不再是从上游来的 —— 留着的话,下次打开面板它还挂在首帧上,点生成照样
-    发出去,而画布上早就没有那条线了。手动挂的(没有 `from`)不动。
+    两种「从上游来」走的是同一条:
+
+    · 槽位里记着 `from` 的那一份素材(`form.source_assets`),是面板照上游那一格的产出挂上的。
+      线没了(删了线、删了上游那一格)、或上游换了一份素材,它就不再是从上游来的 —— 留着的话,
+      下次打开面板它还挂在首帧上,点生成照样发出去,而画布上早就没有那条线了。手动挂的(没有
+      `from`)不动。
+    · 工具格的绑定(`form.bindings`):字段的值从哪几格来。线没了、上游那一格没了,那一条就摘掉;
+      **工具格不能当上游**(它自己没有产出,产出是它右边新建的那几格),接到它上面的也摘掉。
 
     放在 normalize 里,因为画布的**每一次写入**都过这一道:客户端自动保存、智能体改画板
     (edit_board 删掉上游那一格)、服务端对单格的合并。判据只看这一份画布自己 —— 不拿「上一次」
@@ -197,17 +263,31 @@ def _drop_detached_sources(items: list[dict[str, Any]], edges: list[dict[str, An
     by_id = {item["id"]: item for item in items}
     wired = {(edge["source"], edge["target"]) for edge in edges}
     for item in items:
-        sources = (item.get("form") or {}).get("source_assets")
-        if not sources:
-            continue
-        kept = [
-            one
-            for one in sources
-            if "from" not in one
-            or ((one["from"], item["id"]) in wired and (by_id.get(one["from"]) or {}).get("asset_id") == one["asset_id"])
-        ]
-        if len(kept) != len(sources):
-            item["form"] = {**item["form"], "source_assets": kept}
+        form = item.get("form") or {}
+        sources = form.get("source_assets")
+        if sources:
+            kept = [
+                one
+                for one in sources
+                if "from" not in one
+                or ((one["from"], item["id"]) in wired and (by_id.get(one["from"]) or {}).get("asset_id") == one["asset_id"])
+            ]
+            if len(kept) != len(sources):
+                form = item["form"] = {**form, "source_assets": kept}
+        bindings = form.get("bindings")
+        if bindings:
+            attached = {
+                field: [
+                    ref
+                    for ref in refs
+                    if (ref["from"], item["id"]) in wired and (by_id.get(ref["from"]) or {}).get("kind") not in (None, "action")
+                ]
+                for field, refs in bindings.items()
+            }
+            #: 一个字段的线全断了,这个字段就不再是「接上游」的 —— 整个字段摘掉,不留一个空列表。
+            attached = {field: refs for field, refs in attached.items() if refs}
+            if attached != bindings:
+                item["form"] = {**form, "bindings": attached}
 
 
 def _normalize_trim(value: Any, item_id: str) -> dict[str, Any]:
@@ -330,6 +410,15 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError("boardErr_frameHasNoText", item_id=item_id)
             item["text"] = text
 
+        #: 正文按什么格式显示。只有便签有正文格式;缺省(没有这个字段)是纯文字。
+        text_format = entry.get("text_format")
+        if text_format is not None:
+            if text_format not in TEXT_FORMATS:
+                raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="text_format")
+            if kind != "note":
+                raise BoardDomainError("boardErr_textFormatNoteOnly", kind=kind)
+            item["text_format"] = text_format
+
         form = _normalize_form(entry.get("form"), item_id)
         if form is not None:
             item["form"] = form
@@ -408,7 +497,7 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError("boardErr_edgeLabelNotString")
             edge["label"] = label[:200]
         edges.append(edge)
-    _drop_detached_sources(items, edges)
+    _drop_detached_bindings(items, edges)
 
     # 标记和 items 平级,不混进去 —— 它不是画板项(没有素材、不生成、连不了线),
     # 混进去的话每一处遍历 items 的地方都要先分辨一次"这个是不是标记"。规则见 domain/markers。
@@ -815,13 +904,19 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
     return get_board(db, board.workspace_id, board.id)
 
 
+#: 一次运行的产出是哪几种。和工作流的输出类型词表对得上的那一半(见 boards.tools.board_outputs)。
+OUTPUT_TYPES = ("asset", "text", "json")
+
+
 def outputs_of(job: Any) -> list[dict[str, Any]]:
-    """一个任务交回了什么,归一成画板认的一种形状:`[{"type": "asset", "asset_id"}, {"type": "text", "text"}]`。
+    """一个任务交回了什么,归一成画板认的一种形状:
+    `[{"type": "asset", "asset_id"}, {"type": "text", "text"}, {"type": "json", "value"}]`。
 
     **画板读任务结果只经过这一处。** 各种任务的结果本来就长得不一样 —— 生成一次可能出多张
-    (`asset_ids`),念字、截取一次出一份(`asset_id`),便签上写字交回一段正文(`text`)。这是
-    三种任务各自现行的结果约定,不是新旧两版:没有哪种旧形状要在这里兼容。回执只在任务落终态
-    那一刻读一次(见 deliver_generated / _deliver_if_already_settled),读完不再回头看。
+    (`asset_ids`),念字、截取一次出一份(`asset_id`),便签上写字交回一段正文(`text`),工具格
+    跑一个节点交回的已经是这个形状(`outputs`,见 boards.tools)。这是四种任务各自现行的结果约定,
+    不是新旧几版:没有哪种旧形状要在这里兼容。回执只在任务落终态那一刻读一次(见 deliver_generated /
+    _deliver_if_already_settled),读完不再回头看。
 
     没成功的任务没有产出(空列表)。
     """
@@ -830,6 +925,8 @@ def outputs_of(job: Any) -> list[dict[str, Any]]:
     result = getattr(job, "result", None) or {}
     if not isinstance(result, dict):
         return []
+    if isinstance(result.get("outputs"), list):
+        return [one for one in result["outputs"] if isinstance(one, dict) and one.get("type") in OUTPUT_TYPES]
     ids = [str(one) for one in (result.get("asset_ids") or []) if one]
     if not ids and result.get("asset_id"):
         ids = [str(result["asset_id"])]
@@ -837,6 +934,113 @@ def outputs_of(job: Any) -> list[dict[str, Any]]:
     if isinstance(result.get("text"), str):
         outputs.append({"type": "text", "text": result["text"]})
     return outputs
+
+
+#: 工具格跑一次最多在画布上新建几格。插件的输出没声明类型时是按值猜的,一个列表可能有几百项 ——
+#: 全摊开的话画布被一次运行淹没。超出的那些合进最后一张 JSON 便签,一样不丢。
+MAX_DERIVED_ITEMS = 12
+
+#: 派生出来的几格离工具格多远、彼此隔多远(画布坐标)。上下留得宽一点:每一格的名字挂在框外正上方。
+_DERIVED_GAP_X = 80.0
+_DERIVED_GAP_Y = 48.0
+
+
+def _derived_item(output: dict[str, Any], assets: dict[str, tuple[str, str]]) -> dict[str, Any] | None:
+    """一份产出 → 画布上新的一格(还没有 id 和位置)。素材不在这个工作区里的(查不到)不落。
+
+    素材按它自己的种类落:图片、视频、音频各是那一种格子;别的文件(文档、压缩包……)画板上没有
+    对应的格子,落成一张写着素材名的便签。文字落成便签;结构化数据落成按 JSON 排版的便签。
+    落成的便签和手放的一样写明产出者(写字)—— 选中它照样能让 AI 改。
+    """
+    note_form = {"producer": NOTE_PRODUCER}
+    kind = output.get("type")
+    if kind == "asset":
+        found = assets.get(str(output.get("asset_id") or ""))
+        if found is None:
+            return None
+        asset_kind, name = found
+        if asset_kind in _NEEDS_ASSET:
+            return {"kind": asset_kind, "asset_id": str(output["asset_id"])}
+        return {"kind": "note", "text": _clip(name), "form": note_form}
+    if kind == "text":
+        return {"kind": "note", "text": _clip(str(output.get("text") or "")), "form": note_form}
+    if kind == "json":
+        return {"kind": "note", "text": _clip(_json_text(output.get("value"))), "text_format": "json", "form": note_form}
+    return None
+
+
+def _json_text(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=2, default=str)
+
+
+def _clip(text: str) -> str:
+    """便签正文有上限(MAX_TEXT_CHARS)。超了就截,并在末尾说一声 —— 整次回执因为一张便签太长
+    被 normalize 拒掉的话,工具格会一直停在「在跑」。"""
+    return text if len(text) <= MAX_TEXT_CHARS else text[: MAX_TEXT_CHARS - 1] + "…"
+
+
+def _overflow_value(output: dict[str, Any], assets: dict[str, tuple[str, str]]) -> Any:
+    """超出上限的那几份产出合进一张 JSON 便签时,每一份写成什么。"""
+    if output.get("type") == "asset":
+        _, name = assets.get(str(output.get("asset_id") or ""), ("", ""))
+        return {"asset_id": output.get("asset_id"), "name": name}
+    if output.get("type") == "text":
+        return output.get("text")
+    return output.get("value")
+
+
+def _derive(
+    action: dict[str, Any],
+    outputs: list[dict[str, Any]],
+    assets: dict[str, tuple[str, str]],
+    items: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """工具格这一轮的产出 → 新建的几格和连向它们的线。
+
+    **每一轮都是新的一列,不覆盖上一轮。** 摆在工具格右边、再往右避开它此前产出的那几列;一列里
+    从上往下排。上一轮的产出是用户可能已经拿去用的东西(连到了别处、改过字),重跑把它们换掉的话,
+    下游悄悄变了。
+    """
+    landed = [output for output in outputs if _derived_item(output, assets)]
+    made = [one for one in (_derived_item(output, assets) for output in landed) if one]
+    if len(made) > MAX_DERIVED_ITEMS:
+        rest = landed[MAX_DERIVED_ITEMS - 1 :]
+        made = made[: MAX_DERIVED_ITEMS - 1] + [{
+            "kind": "note",
+            "text": _clip(_json_text([_overflow_value(one, assets) for one in rest])),
+            "text_format": "json",
+            "form": {"producer": NOTE_PRODUCER},
+        }]
+    if not made:
+        return [], []
+
+    action_id = str(action["id"])
+    by_id = {str(one.get("id")): one for one in items}
+    earlier = [by_id[str(edge.get("target"))] for edge in edges
+               if edge.get("source") == action_id and str(edge.get("target")) in by_id]
+    right = max(
+        [float(action.get("x") or 0) + float(action.get("width") or DEFAULT_SIZE["action"][0])]
+        + [float(one.get("x") or 0) + float(one.get("width") or DEFAULT_SIZE.get(str(one.get("kind")), (0, 0))[0])
+           for one in earlier]
+    )
+    x = right + _DERIVED_GAP_X
+    y = float(action.get("y") or 0)
+    taken = {str(one.get("id")) for one in items}
+    new_items: list[dict[str, Any]] = []
+    new_edges: list[dict[str, Any]] = []
+    suffix = 0
+    for one in made:
+        suffix += 1
+        while f"{action_id}-out-{suffix}" in taken:
+            suffix += 1
+        item_id = f"{action_id}-out-{suffix}"
+        taken.add(item_id)
+        width, height = DEFAULT_SIZE[one["kind"]]
+        new_items.append({"id": item_id, **one, "x": x, "y": y, "width": float(width), "height": float(height)})
+        new_edges.append({"id": f"{action_id}->{item_id}", "source": action_id, "target": item_id})
+        y += height + _DERIVED_GAP_Y
+    return new_items, new_edges
 
 
 def _canvas_with_delivered_result(
@@ -847,6 +1051,8 @@ def _canvas_with_delivered_result(
     outputs: list[dict[str, Any]],
     reason: str,
     cancelled: bool,
+    succeeded: bool = False,
+    assets: dict[str, tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Merge one asynchronous receipt into the newest board projection.
 
@@ -856,17 +1062,27 @@ def _canvas_with_delivered_result(
     **只收它自己那一轮**:那一格此刻跑的不是这个任务(占位还没落下、或已经是别的一轮),原样不动。
     占位与回执于是谁先谁后都一样 —— 先到的回执被放过,占位落下时补送(见 place_pending)。
 
-    产出(见 outputs_of)是素材(生成/念/截)或一段正文(便签上写字);两样都没有就是没做成。
+    两种落法(ADR 0021 的「落点」):
+
+    · **就地**:宿主是一个等着产出的槽(图片/视频/音频/便签)。产出(见 outputs_of)是素材
+      (生成/念/截)或一段正文(便签上写字),第一份填进这一格,多出来的往右排;两样都没有就是没做成。
+    · **派生**:宿主是工具格(`action`)。它自己不放产出,每一份产出都新建一格、连一条线(见 _derive);
+      任务成功就算做成 —— 交回的东西落不成任何一格(全是空值)也是成功,只是右边没有新东西。
+      表单(节点配置、绑定)**不清空**:工具格就是一份可以反复跑的配置。
+
+    `assets`:产出里那些素材的种类和名字(回执那一侧从库里查好)—— 派生时靠它决定落成哪种格子。
     """
     asset_ids = [str(one["asset_id"]) for one in outputs if one.get("type") == "asset"]
     text = next((str(one["text"]) for one in outputs if one.get("type") == "text"), None)
     items = list(canvas.get("items") or [])
+    edges = list(canvas.get("edges") or [])
     kept: list[dict[str, Any]] = []
     for item in items:
         if item.get("id") != item_id or live_job(item) != job_id:
             kept.append(item)
             continue
-        if not asset_ids and text is None:
+        derives = item.get("kind") == "action"
+        if (derives and not succeeded) or (not derives and not asset_ids and text is None):
             # 失败/被取消:结束 run.running,留下这一项和它的提示词,并把原因写在上面。
             #
             # 此前是整项删掉。那让画布上的框凭空消失,连同用户刚写的提示词 —— 而他要做的
@@ -878,6 +1094,12 @@ def _canvas_with_delivered_result(
             if reason.strip():
                 run["error"] = reason.strip()[:300]
             kept.append({**item, "run": run})
+            continue
+        if derives:
+            kept.append({**item, "run": {"status": "succeeded"}})
+            new_items, new_edges = _derive(item, outputs, assets or {}, items, edges)
+            kept.extend(new_items)
+            edges.extend(new_edges)
             continue
         settled = dict(item)
         # 成功结束一次编辑周期：提示词和引用素材已经被消费，保留模型/参数方便继续同风格创作。
@@ -921,14 +1143,25 @@ def _canvas_with_delivered_result(
 
     # 连线可能指着刚被摘掉的那一项 —— normalize 会拒绝悬空的线,所以先把它们去掉。
     alive = {item["id"] for item in kept}
-    edges = [edge for edge in (canvas.get("edges") or []) if edge.get("source") in alive and edge.get("target") in alive]
+    edges = [edge for edge in edges if edge.get("source") in alive and edge.get("target") in alive]
     #: 只换 items 和 edges,**画布上别的层原样带着**(标记)。此前这里从零拼一个新字典,
     #: 于是每落回一次产出,用户放的标记就被 normalize 当成「没给」清空。
     return {**canvas, "items": kept, "edges": edges}
 
 
+def _asset_facts(db: Session, workspace_id: str, outputs: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
+    """产出里那些素材的种类和名字。**只认这个工作区里的** —— 别处的 id 当它不存在,不落到画布上。"""
+    from app.db.models import Asset
+
+    ids = {str(one.get("asset_id")) for one in outputs if one.get("type") == "asset" and one.get("asset_id")}
+    if not ids:
+        return {}
+    rows = db.scalars(select(Asset).where(Asset.id.in_(ids), Asset.workspace_id == workspace_id))
+    return {row.id: (str(row.kind or ""), str(row.name or row.id)) for row in rows}
+
+
 def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
-    """任务落终态 → 把产出填进画板上那一项。
+    """任务落终态 → 把产出填进画板上那一项(工具格:新建成右边的几格,见 _canvas_with_delivered_result)。
 
     **成功和失败都要处理。** 失败时保留可重试的节点并结束转圈状态。
 
@@ -954,13 +1187,14 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     board = db.get(Board, board_id)
     if board is None:
         return
+    assets = _asset_facts(db, board.workspace_id, outputs)
     _merge_into_latest(
         db,
         workspace_id=board.workspace_id,
         board_id=board.id,
         merge=lambda canvas: _canvas_with_delivered_result(
             canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason,
-            cancelled=was_cancelled(job),
+            cancelled=was_cancelled(job), succeeded=job_status == "succeeded", assets=assets,
         ),
         actor_id=actor_id,
     )
