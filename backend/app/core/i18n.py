@@ -1292,6 +1292,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "render 只能是 {choices}",
         "en": "render must be one of {choices}.",
     },
+    "sceneErr_projectNotInWorkspace": {
+        "zh": "要归档到的项目不在这个 3D 场景所在的工作区里",
+        "en": "The project to file the renders under isn't in this 3D scene's workspace.",
+    },
     "schedErr_workflowMissing": {
         "zh": "任务绑定的工作流不存在",
         "en": "The workflow bound to this task doesn't exist.",

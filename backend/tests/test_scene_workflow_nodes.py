@@ -95,6 +95,28 @@ def test_别的工作区的场景渲不了() -> None:
     assert caught.value.key == "wfErr_sceneNotInWorkspace"
 
 
+def test_渲出的素材不能归到别的工作区的项目里() -> None:
+    """project_id 常常来自上游或手填。此前原样写进新素材:素材在本工作区,项目在别人那儿 ——
+    本工作区的哪个项目里都看不到它,而那个项目被删时它会跟着被收走。"""
+    from app.db.models import Project
+
+    from tests.util import second_client
+
+    workflow = _workflow()
+    other_ws = second_client("other").post("/api/workspaces", json={"name": "别人的"}).json()["id"]
+    with SessionLocal() as db:
+        foreign = Project(workspace_id=other_ws, name="别人的项目")
+        db.add(foreign)
+        db.commit()
+        foreign_id = foreign.id
+    scene_id = _run("scene_create", workflow, {"layout": LAYOUT})["scene_id"]
+    with pytest.raises(WorkflowDomainError) as caught:
+        _run("scene_render", workflow, {"scene_id": scene_id, "shot_id": "shot-1", "project_id": foreign_id})
+    assert caught.value.key == "wfErr_sceneRenderFailed"
+    with SessionLocal() as db:
+        assert db.query(Asset).filter(Asset.project_id == foreign_id).count() == 0
+
+
 def test_没有这个镜头时说清楚() -> None:
     workflow = _workflow()
     scene_id = _run("scene_create", workflow, {"layout": LAYOUT})["scene_id"]

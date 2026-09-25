@@ -16,7 +16,7 @@ from uuid import uuid4
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, tr
-from app.db.models import Scene3D, Scene3DRevision, Scene3DModel
+from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.domain.scene_types import SceneContent
 from app.media.paths import resolve_key, scene_model_dir, scene_model_key
@@ -539,6 +539,13 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
 
     if render not in REFERENCE_RENDERS:
         raise SceneDomainError("sceneErr_badRender", choices=", ".join(REFERENCE_RENDERS))
+    if project_id:
+        # 渲出来的素材归场景所在的工作区,归档的项目也得在那儿。project_id 常常来自上游节点
+        # 或手填 —— 原样写进去,素材就挂在别人工作区的项目下:本工作区哪个项目里都看不到它,
+        # 那个项目被删时它还会被一起收走。三个入口(接口、工作流、智能体)都经过这里。
+        project = db.get(Project, project_id)
+        if project is None or project.workspace_id != scene.workspace_id:
+            raise SceneDomainError("sceneErr_projectNotInWorkspace")
     content = SceneContent.model_validate(scene.content)
     library = model_library(db, scene, content)
     try:
