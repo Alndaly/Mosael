@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 type Schema = components["schemas"]["CapabilityProfileSchemaOut"];
 type Descriptor = Record<string, unknown>;
@@ -81,6 +82,7 @@ function Chips({
         aria-label={ariaLabel}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
+          if (isImeKeystroke(event)) return;
           if (event.key === "Enter") {
             event.preventDefault();
             commit();

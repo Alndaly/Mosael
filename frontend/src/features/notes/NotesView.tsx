@@ -23,6 +23,7 @@ import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
 import { mergeAppendedNote } from "./appendMerge";
+import { isImeKeystroke } from "@/lib/shortcuts";
 import "./notes.css";
 type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteContent>)=>Promise<Note> };
 
@@ -292,5 +293,5 @@ function NoteLabels({label,placeholder,values,disabled,onChange}: {label:string;
   const [text,setText] = React.useState(value);
   React.useEffect(()=>setText(value),[value]);
   const commit = () => { const next = [...new Set(text.split(/[,，]/).map(v=>v.trim()).filter(Boolean))]; if (next.join(", ") !== value) onChange(next); setText(next.join(", ")); };
-  return <Input aria-label={label} placeholder={placeholder} value={text} disabled={disabled} onChange={e=>setText(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/>;
+  return <Input aria-label={label} placeholder={placeholder} value={text} disabled={disabled} onChange={e=>setText(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'&&!isImeKeystroke(e))e.currentTarget.blur();}}/>;
 }

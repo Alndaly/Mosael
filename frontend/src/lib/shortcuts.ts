@@ -101,9 +101,30 @@ export function formatCombo(combo: Combo): string {
  *
  * 组词期间的按键归输入法:回车是「按拼音上屏」、Esc 是「放弃这次组词」、空格是「选第一个词」。
  * Chromium 给这些 keydown 标 `isComposing`;开始组词的那一下还没标上,但 keyCode 已经是 229。
+ *
+ * React 的 `onKeyDown` 直接把事件传进来就行(读的是它的 nativeEvent)。凡是在 `onKeyDown` 里
+ * 认 Enter / Escape 的,开头都先问这一句(见 keyListeners.ratchet.test)。
  */
-export function isImeKeystroke(event: Pick<KeyboardEvent, "isComposing" | "keyCode">): boolean {
-  return event.isComposing || event.keyCode === 229;
+export function isImeKeystroke(
+  event: Pick<KeyboardEvent, "isComposing" | "keyCode"> | { nativeEvent: Pick<KeyboardEvent, "isComposing" | "keyCode"> },
+): boolean {
+  const native = "nativeEvent" in event ? event.nativeEvent : event;
+  return native.isComposing || native.keyCode === 229;
+}
+
+/**
+ * 弹窗 / 浮层的 `onEscapeKeyDown`:组词期间的 Esc 是「放弃这次组词」,不是「关掉弹窗」。
+ * Radix 的 DismissableLayer 在捕获阶段听 Esc、不看组词 —— 不拦的话,在弹窗里打中文按一下 Esc,
+ * 整个弹窗连同已经填好的字一起没了。components/ui 的四种弹层内容都套着它。
+ */
+export function escapeUnlessComposing<E extends KeyboardEvent>(handler?: (event: E) => void): (event: E) => void {
+  return (event) => {
+    if (isImeKeystroke(event)) {
+      event.preventDefault();
+      return;
+    }
+    handler?.(event);
+  };
 }
 
 /**

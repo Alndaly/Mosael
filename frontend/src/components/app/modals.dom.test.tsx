@@ -100,3 +100,22 @@ describe("ConfirmDialog 进行中", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 });
+
+describe("弹窗里用输入法打字时按 Esc", () => {
+  //: 组词时的 Esc 是「放弃这次组词」。Radix 在捕获阶段听 Esc、不看组词 —— 此前按一下,
+  //: 弹窗连同填了一半的字一起关掉。
+  it("组词中的 Esc 不关弹窗;平常的 Esc 照常关", () => {
+    const onOpenChange = vi.fn();
+    render(
+      <ModalShell open onOpenChange={onOpenChange} title="改名">
+        <input aria-label="名字" />
+      </ModalShell>,
+    );
+    const field = screen.getByLabelText("名字");
+    field.focus();
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", isComposing: true, keyCode: 229, bubbles: true, cancelable: true }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});

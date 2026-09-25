@@ -5,6 +5,7 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { FLOATING_MOTION, MODAL_SURFACE, MODAL_OVERLAY, MODAL_TITLE, MODAL_DESCRIPTION, MODAL_FOOTER } from "./floating"
 
+import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 import { buttonVariants } from "@/components/ui/button"
@@ -33,7 +34,7 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => {
+>(({ className, onEscapeKeyDown, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
   useModalTeardownGuard()
   return (
@@ -47,6 +48,7 @@ const AlertDialogContent = React.forwardRef<
           className
         )}
         {...props}
+        onEscapeKeyDown={escapeUnlessComposing(onEscapeKeyDown)}
       />
     </AlertDialogPortal>
   )

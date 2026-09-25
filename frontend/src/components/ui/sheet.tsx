@@ -6,6 +6,7 @@ import { X } from "lucide-react"
 
 import { MODAL_OVERLAY, MODAL_TITLE, MODAL_DESCRIPTION } from "./floating"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
+import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 
 /**
@@ -34,7 +35,7 @@ const SheetContent = React.forwardRef<
     side?: keyof typeof SIDES
     showClose?: boolean
   }
->(({ className, children, side = "right", showClose = true, ...props }, ref) => {
+>(({ className, children, side = "right", showClose = true, onEscapeKeyDown, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),和 Dialog 同一个理由。见 hook 注释。
   useModalTeardownGuard()
   return (
@@ -56,6 +57,7 @@ const SheetContent = React.forwardRef<
           className,
         )}
         {...props}
+        onEscapeKeyDown={escapeUnlessComposing(onEscapeKeyDown)}
       >
         {children}
         {showClose && (

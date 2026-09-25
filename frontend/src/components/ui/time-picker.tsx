@@ -5,6 +5,7 @@ import { useI18n } from "@/app/preferences";
 import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -111,6 +112,7 @@ function Column({
         tabIndex={0}
         className="grid max-h-56 gap-0.5 overflow-y-auto overscroll-contain rounded-md outline-none [scrollbar-width:none] focus-visible:ring-2 focus-visible:ring-ring"
         onKeyDown={(event) => {
+          if (isImeKeystroke(event)) return;
           const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
           if (step) {
             event.preventDefault();

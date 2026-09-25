@@ -11,6 +11,7 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 /**
  * 音频节点的「念出来」面板。
@@ -162,6 +163,7 @@ export function AudioComposer({
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
+            if (isImeKeystroke(event)) return;
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
               event.preventDefault();
               send();

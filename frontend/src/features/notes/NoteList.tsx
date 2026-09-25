@@ -22,6 +22,7 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useNoteStrings } from "./strings";
+import { isImeKeystroke } from "@/lib/shortcuts";
 export type NoteListAction =
   | "favorite"
   | "unfavorite"
@@ -142,6 +143,7 @@ export function NoteList({
             tabIndex={0}
             onContextMenuCapture={contextAt}
             onKeyDown={(e) => {
+              if (isImeKeystroke(e)) return;
               if (
                 (e.target as HTMLElement).closest(
                   'input:not([type="checkbox"]),textarea,[contenteditable="true"]',

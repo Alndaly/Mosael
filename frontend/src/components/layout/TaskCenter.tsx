@@ -16,6 +16,7 @@ import { LIST_HAIRLINE } from "@/components/ui/floating";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -244,6 +245,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(event) => {
+        if (isImeKeystroke(event)) return;
         if (event.key === "Enter") onOpen?.();
       }}
     >

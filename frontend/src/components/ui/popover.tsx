@@ -5,6 +5,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { FLOATING_SURFACE, FLOATING_MOTION, FLOATING_COLLISION_PADDING } from "./floating"
 
+import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 
 /**
@@ -28,7 +29,7 @@ const PopoverClose = PopoverPrimitive.Close
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "center", sideOffset = 6, ...props }, ref) => (
+>(({ className, align = "center", sideOffset = 6, onEscapeKeyDown, ...props }, ref) => (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
@@ -43,6 +44,7 @@ const PopoverContent = React.forwardRef<
         className
       )}
       {...props}
+      onEscapeKeyDown={escapeUnlessComposing(onEscapeKeyDown)}
     />
   </PopoverPrimitive.Portal>
 ))

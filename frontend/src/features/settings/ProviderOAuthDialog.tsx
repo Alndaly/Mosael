@@ -15,6 +15,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 type LoginState = components["schemas"]["OAuthLoginOut"];
 
@@ -156,6 +157,7 @@ export function AuthPromptField({
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             onKeyDown={(e) => {
+              if (isImeKeystroke(e)) return;
               if (e.key === "Enter" && answer.trim()) onSubmit(answer.trim());
             }}
           />

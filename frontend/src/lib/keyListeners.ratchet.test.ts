@@ -24,6 +24,35 @@ function sourceFiles(dir: string): string[] {
 const stripComments = (code: string): string =>
   code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
+/** 每个 `onKeyDown={…}` / `onKeyDownCapture={…}` 的整段(花括号配平)和它所在的行。 */
+function keyDownHandlers(code: string): { line: number; body: string }[] {
+  const found: { line: number; body: string }[] = [];
+  const start = /onKeyDown(Capture)?=\{/g;
+  for (let match = start.exec(code); match; match = start.exec(code)) {
+    let depth = 0;
+    let at = match.index + match[0].length - 1;
+    for (; at < code.length; at += 1) {
+      if (code[at] === "{") depth += 1;
+      else if (code[at] === "}" && --depth === 0) break;
+    }
+    found.push({ line: code.slice(0, match.index).split("\n").length, body: code.slice(match.index, at + 1) });
+  }
+  return found;
+}
+
+describe("组件上的 onKeyDown", () => {
+  //: 认 Enter / Escape 的那种最容易出事:组词时回车是「按拼音上屏」、Esc 是「放弃组词」,
+  //: 被当成「提交」「取消编辑」的话,字没打完就提交了 / 整段编辑被撤掉了。
+  it("认 Enter / Escape 的,都先问 isImeKeystroke(或自己判 isComposing)", () => {
+    const offenders = sourceFiles(SRC).flatMap((file) =>
+      keyDownHandlers(readFileSync(file, "utf8"))
+        .filter(({ body }) => /["'](Enter|Escape)["']/.test(body) && !/isImeKeystroke|isComposing/.test(body))
+        .map(({ line }) => `${file.slice(SRC.length + 1)}:${line}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("全局键盘监听", () => {
   it("没有地方绕过 listenKeys 直接挂 keydown / keyup / keypress", () => {
     const offenders = sourceFiles(SRC)

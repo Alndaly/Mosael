@@ -19,6 +19,7 @@ import {
   SettingsSectionStack,
   SETTINGS_FIELD_WIDTH,
 } from "@/components/settings/settings-layout";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 type Invite = { code: string; note: string; used: boolean; expires_at: string };
 
@@ -95,6 +96,7 @@ export function RegistrationSection() {
               placeholder={t("deployInviteNotePlaceholder")}
               onChange={(event) => setNote(event.currentTarget.value)}
               onKeyDown={(event) => {
+                if (isImeKeystroke(event)) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   createInvite.mutate();

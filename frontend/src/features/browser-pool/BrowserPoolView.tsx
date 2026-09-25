@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 // 过渡态:后台复检/登录在改登录态时轮询把徽标拉回真实值。
 const TRANSITIONAL = new Set(["checking", "unknown"]);
@@ -552,7 +553,7 @@ function OpenSiteDialog({
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com"
           autoFocus
-          onKeyDown={(e) => e.key === "Enter" && open()}
+          onKeyDown={(e) => { if (!isImeKeystroke(e) && e.key === "Enter") open(); }}
         />
         <small className="text-ui-xs text-muted-foreground">{t("poolOpenHint")}</small>
       </div>

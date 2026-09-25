@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>[number];
 type InstallPreview = Awaited<ReturnType<typeof previewPluginInstall>>;
@@ -180,6 +181,7 @@ export function PluginMarketDialog({
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
                   onKeyDown={(event) => {
+                    if (isImeKeystroke(event)) return;
                     if (event.key === "Enter" && url.trim()) preview.mutate(url.trim());
                   }}
                 />

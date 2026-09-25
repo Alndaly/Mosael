@@ -5,7 +5,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { markerShortcutConflict, type CanvasMarker, type MarkerShortcutConflict } from "@/features/markers/markers";
-import { comboFromEvent, formatCombo } from "@/lib/shortcuts";
+import { comboFromEvent, formatCombo, isImeKeystroke } from "@/lib/shortcuts";
 
 /**
  * 录一个快捷键:点一下,按一下,就绑上了。
@@ -48,6 +48,7 @@ export function ShortcutRecorder({
           type="button"
           // 录制期间**所有**按键都归它:不 preventDefault 的话,录 ⌘S 会顺手把工作流存一遍。
           onKeyDown={(event) => {
+            if (isImeKeystroke(event)) return;
             if (!recording) return;
             event.preventDefault();
             event.stopPropagation();

@@ -1,6 +1,7 @@
 import React from "react";
 import type { Vec3 } from "@/api/domains/scenes";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { isImeKeystroke } from "@/lib/shortcuts";
 export function Pick({
   value,
   options,
@@ -73,6 +74,7 @@ export function Num({
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
+          if (isImeKeystroke(e)) return;
           if (e.key === "Enter") {
             e.currentTarget.blur();
           }

@@ -23,6 +23,7 @@ import { CARD_GRID } from "@/components/layout/StudioPage";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/app/preferences";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 export function SceneList({
   scenes,
@@ -119,6 +120,7 @@ export function SceneList({
     <div
       className={cn("scene-list", "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto")}
       onKeyDown={(e) => {
+        if (isImeKeystroke(e)) return;
         if (
           busy ||
           (e.target as HTMLElement).closest(

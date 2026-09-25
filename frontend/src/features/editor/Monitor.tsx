@@ -18,6 +18,7 @@ import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 /**
  * 监视器。画面**只有一条路**:WebCodecs 解代理 → CanvasCompositor 合成到一张 canvas。
@@ -477,6 +478,7 @@ export function Monitor({
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onKeyDown={(event) => {
+                    if (isImeKeystroke(event)) return;
                     if (event.key === "Escape") {
                       cancelEditRef.current = true;
                       event.currentTarget.blur();

@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { trackRows, sameKey, type SceneKey } from "./sceneTracks";
 import { SHOT_FPS } from "./encodeVideo";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 /** One scroll surface keeps the ruler, object names and keys aligned, including scrollbar width. */
 export function SceneDopeSheet({ content, shot, time, selectedId, playing, disabled = false, controls,
@@ -103,6 +104,7 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
   return (
     <div ref={root} className="scene-dope" role="group" aria-label={t("sceneAnimTimeline")} tabIndex={-1}
       style={{height}} onKeyDown={event => {
+        if (isImeKeystroke(event)) return;
         if ((event.target as HTMLElement).closest("input,textarea,[role=combobox]")) return;
         if (["delete", "backspace", "x"].includes(event.key.toLowerCase())) {
           event.preventDefault(); event.stopPropagation(); deleteKeys();
