@@ -115,7 +115,10 @@ def generate_on_board(
             "provider_profile_id": generation.provider_profile_id,
             "model": generation.model,
             "parameters": dict(parameters),
-            "source_assets": list(source_assets),
+            #: 表单里的是**槽位**那一半;正文里 @ 到的那几份记在 mentioned_asset_ids 上,运行时才
+            #: 并进发出去的清单。把合并后的清单写回来,重试时 @ 过的素材就挂进了槽位 —— 正文里删掉
+            #: 那个 @ 它照样被发出去。只有调用方没给表单(智能体、脚本)时,才拿发出去的那份当槽位。
+            "source_assets": list(form["source_assets"] if "source_assets" in form else source_assets),
         },
     )
     start_generation_thread(generation.id)

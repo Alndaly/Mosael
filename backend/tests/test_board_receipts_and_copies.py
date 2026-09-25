@@ -139,6 +139,40 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
     assert "n1" in items, "占位把并发保存里刚加的那一项抹掉了"
 
 
+def test_正文里_at_到的素材不会在失败后变成槽位里挂着的素材(monkeypatch) -> None:
+    """发出去的 source_assets = 槽位挂的 + 正文里 @ 到的(见前端 mergeSourceAssets);表单里的
+    source_assets 只是**槽位**那一半,@ 的那几份记在 mentioned_asset_ids 上。此前占位把发出去的
+    合并清单写回表单,跑挂了重试时 @ 过的素材出现在槽位里 —— 正文里删掉那个 @,它照样被发出去。"""
+    import app.domain.generation as generation
+    import app.domain.generation.runner as runner
+    from app.core.db import SessionLocal
+    from app.domain.boards.actions import Slot, generate_on_board
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _board(client, ws, {"items": [{"id": "img", "kind": "image", "x": 0, "y": 0}], "edges": []})
+    user_id = client.get("/api/auth/me").json()["id"]
+    monkeypatch.setattr(
+        generation, "create_generation_job",
+        lambda db, **_: (SimpleNamespace(id="gen-1", provider="p", provider_profile_id="pp", model="m"), SimpleNamespace(id="job-1")),
+    )
+    monkeypatch.setattr(runner, "start_generation_thread", lambda _id: None)
+    slot_only = [{"asset_id": "slot-a", "role": "reference_image"}]
+    form = {"prompt": "像 @猫 那样", "source_assets": slot_only, "mentioned_asset_ids": ["cat"]}
+
+    with SessionLocal() as db:
+        generate_on_board(
+            db, workspace_id=ws, slot=Slot(board_id, "img", 0, 0), actor_id=user_id, kind="image",
+            prompt="像 猫 那样", provider="p", provider_profile_id="pp", model="m", parameters={},
+            source_assets=[*slot_only, {"asset_id": "cat", "role": "reference_image"}], form=form,
+        )
+    _deliver(board_id, "img", SimpleNamespace(id="job-1", status="failed", result=None, error="炸了"))
+
+    saved = _canvas(client, ws, board_id)["items"][0]["form"]
+    assert saved["source_assets"] == slot_only, "@ 到的素材被写进了槽位"
+    assert saved["mentioned_asset_ids"] == ["cat"]
+
+
 def test_念出来时选的引擎和发音人留在节点表单上_失败后原样重试(monkeypatch) -> None:
     """音频节点的表单是「念什么 + 用哪把嗓子」。引擎音色那条路的嗓子记在 engine/engine_voice 上,
     而摆占位时表单被整个换成 {prompt, voice_id} —— 跑挂了回来重试,面板落回第一个引擎,
