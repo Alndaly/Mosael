@@ -260,13 +260,13 @@ class ConfirmationOut(OrmModel):
         确认卡是授权界面:一个英文用户读不懂的授权提示,等于没有提示。
         老卡没有 key,那时 `summary` 就是它自己的原话,原样返回。
         """
-        from app.core.i18n import get_current_locale, render_nested
+        from app.core.i18n import get_current_locale, render_message
 
         data = info.data if isinstance(info.data, dict) else {}
         key = str(data.get("summary_key") or "")
         if not key:
             return value
-        return render_nested(key, data.get("summary_params") or {}, get_current_locale())
+        return render_message(key, get_current_locale(), data.get("summary_params") or {})
 
 
 class AgentSkillOut(ApiModel):

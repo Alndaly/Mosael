@@ -169,7 +169,8 @@ def _all_failures(failures: list[tuple[int, BaseException]], *, total: int, skip
         params={
             "count": len(failures),
             "total": total,
-            "which": "、".join(str(index + 1) for index, _ in failures),
+            # 列表交给渲染去连:顿号还是逗号是读的人的语言说了算(见 core/i18n._resolve_params)。
+            "which": [index + 1 for index, _ in failures],
             "skipped": skipped,
             "reason": reason,
         },

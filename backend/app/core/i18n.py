@@ -4043,7 +4043,7 @@ def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:
     if not params:
         return text
     try:
-        return text.format(**params)
+        return text.format(**_resolve_params(params, locale))
     except (KeyError, IndexError, ValueError):
         return _drop_placeholders(text)
 
@@ -4054,26 +4054,39 @@ def fragment(key: str, **params: Any) -> Any:
     确认卡的措辞是拼出来的(「给 *12 条字幕* 配音 *,并变速压回原段落长度*」),而拼进去的
     每一段自己也是文案。当场翻的话,外层就算存了 key,内层还是冻成了写它那天的语言。
 
-    返回的是一个带 `__key` 的小字典,`render_nested` 渲染时递归展开 —— 它落进
-    `summary_params`(JSON 列),所以形状必须是能 JSON 化的。
+    返回的是一个带 `__key` 的小字典,渲染(`t` / `render_message`)时递归展开 —— 它落进
+    JSON 列(确认卡的 `summary_params`、任务的 `error_params`),所以形状必须是能 JSON 化的。
+
+    报错里提到的字段名也是这种半句:「{field} 必须是整数」里的 field 在中文界面叫「条数上限」、
+    英文界面叫「Limit」。当场翻成字塞进参数,外层句子按读的人的语言翻了,里面那半截还是写它
+    那天的语言。
     """
     return {"__key": key, "params": params} if key else ""
 
 
-def render_nested(key: str, params: Any, locale: str = DEFAULT_LOCALE) -> str:
-    """渲染一条**可以嵌套**的文案:参数里带 `__key` 的那些先各自渲染,再填进外层。"""
+def stored_param(value: Any) -> Any:
+    """一个参数落库(JSON 列)前的形状:文案片段和列表原样留着,读的时候再翻、再按读的人的
+    习惯连起来(见 _resolve_params);其余写成字。"""
+    if isinstance(value, dict) and "__key" in value:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [stored_param(one) for one in value]
+    return str(value)
+
+
+def _resolve_params(params: dict[str, Any] | None, locale: str) -> dict[str, Any]:
+    """参数里带 `__key` 的那些(见 fragment)先各自按这个语言渲染,再交给外层去填。"""
 
     def resolve(value: Any) -> Any:
         if isinstance(value, dict) and "__key" in value:
-            return render_nested(str(value["__key"]), value.get("params") or {}, locale)
+            return render_message(str(value["__key"]), locale, value.get("params") or {})
         if isinstance(value, list):
             # **连接号也随语言变**:中文用顿号,英文用逗号加空格。先翻每一段,再按读的人的
             # 习惯连起来 —— 反过来(先连再翻)得到的是一串翻不动的拼接物。
             return _text("punct_listSep", locale).join(str(resolve(one)) for one in value)
         return value
 
-    resolved = {name: resolve(value) for name, value in (params or {}).items()}
-    return render_message(key, locale, resolved)
+    return {name: resolve(value) for name, value in (params or {}).items()}
 
 
 def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any] | None = None) -> str:
@@ -4089,7 +4102,7 @@ def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any
         return key
     text = _text(key, locale)
     try:
-        return text.format(**(params or {}))
+        return text.format(**_resolve_params(params, locale))
     except (KeyError, IndexError, ValueError):
         return _drop_placeholders(text)
 

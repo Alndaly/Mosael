@@ -59,7 +59,7 @@ def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str)
         return available[0]["id"]
     if not available:
         raise WorkflowDomainError("wfErr_pluginNoInstance", params={"package": package_id})
-    names = "、".join(item["name"] for item in available)
+    names = [item["name"] for item in available]
     raise WorkflowDomainError("wfErr_pluginManyInstances", params={"package": package_id, "names": names})
 
 

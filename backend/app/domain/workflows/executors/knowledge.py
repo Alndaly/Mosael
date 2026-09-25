@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Workflow
 from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, create_note, query_notes, read_reference
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.workflows.executors import register
 
 
@@ -14,7 +14,7 @@ _EXCERPT_CHARS = 1000
 _EXCERPT_LEAD = 160
 
 
-def _integer(value, default, minimum, maximum, label):
+def _integer(value, default, minimum, maximum, key):
     if value in (None, ""):
         return default
     try:
@@ -23,7 +23,9 @@ def _integer(value, default, minimum, maximum, label):
             raise ValueError()
         return number
     except (ValueError, TypeError, OverflowError) as exc:
-        raise WorkflowDomainError("wfErr_integerRange", params={"field": label, "min": minimum, "max": maximum}) from exc
+        raise WorkflowDomainError(
+            "wfErr_integerRange", params={"field": field_name(key), "min": minimum, "max": maximum}
+        ) from exc
 
 
 @register("note_search")
@@ -31,8 +33,8 @@ def note_search(db: Session, workflow: Workflow, config: dict) -> dict:
     query = str(config.get("query") or "").strip()
     if len(query) > 300:
         raise WorkflowDomainError("wfErr_queryTooLong")
-    limit = _integer(config.get("limit"), 10, 1, 50, "返回条数")
-    offset = _integer(config.get("offset"), 0, 0, 1000000, "起始位置")
+    limit = _integer(config.get("limit"), 10, 1, 50, "limit")
+    offset = _integer(config.get("offset"), 0, 0, 1000000, "offset")
     rows = query_notes(db, workflow.workspace_id, query, limit=limit + 1, offset=offset)
     matches = []
     for note in rows[:limit]:
@@ -52,7 +54,7 @@ def note_search(db: Session, workflow: Workflow, config: dict) -> dict:
 
 @register("note_read")
 def note_read(db: Session, workflow: Workflow, config: dict) -> dict:
-    revision = _integer(config.get("revision"), None, 1, 1000000000, "版本")
+    revision = _integer(config.get("revision"), None, 1, 1000000000, "revision")
     try:
         ref = read_reference(db, workflow.workspace_id, str(config.get("note_id") or ""), revision)
     except NoteDomainError as exc:

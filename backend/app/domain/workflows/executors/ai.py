@@ -14,7 +14,7 @@ from app.core.usage_scope import workspace_scope
 from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
 from app.domain.usage import billable, once
 from app.domain.providers import require_connection
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors import register
 from app.domain.workflows.executors.common import text_lines
@@ -47,11 +47,11 @@ def _float_config(config: dict[str, Any], key: str, *, min_value: float | None =
     try:
         value = float(raw)
     except (TypeError, ValueError) as exc:
-        raise WorkflowDomainError("wfErr_mustBeNumber", params={"field": key}) from exc
+        raise WorkflowDomainError("wfErr_mustBeNumber", params={"field": field_name(key)}) from exc
     if min_value is not None and value < min_value:
-        raise WorkflowDomainError("wfErr_belowMin", params={"field": key, "min": f"{min_value:g}"})
+        raise WorkflowDomainError("wfErr_belowMin", params={"field": field_name(key), "min": f"{min_value:g}"})
     if max_value is not None and value > max_value:
-        raise WorkflowDomainError("wfErr_aboveMax", params={"field": key, "max": f"{max_value:g}"})
+        raise WorkflowDomainError("wfErr_aboveMax", params={"field": field_name(key), "max": f"{max_value:g}"})
     return value
 
 
@@ -62,9 +62,9 @@ def _int_config(config: dict[str, Any], key: str, *, min_value: int | None = Non
     try:
         value = int(raw)
     except (TypeError, ValueError) as exc:
-        raise WorkflowDomainError("wfErr_mustBeInteger", params={"field": key}) from exc
+        raise WorkflowDomainError("wfErr_mustBeInteger", params={"field": field_name(key)}) from exc
     if min_value is not None and value < min_value:
-        raise WorkflowDomainError("wfErr_belowMin", params={"field": key, "min": min_value})
+        raise WorkflowDomainError("wfErr_belowMin", params={"field": field_name(key), "min": min_value})
     return value
 
 

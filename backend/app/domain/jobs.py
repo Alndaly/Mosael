@@ -260,7 +260,7 @@ def blame(exc: Exception) -> dict[str, Any]:
     **那句话不按位置截**:`error` 是 Text 列,长短是界面排版的事。此前的 `[:500]` 把长一点的
     原因切成半句话 —— 切掉的恰好是后半截,而原因往往就写在后半截。
     """
-    from app.core.i18n import is_message_key
+    from app.core.i18n import is_message_key, stored_param
 
     key = str(getattr(exc, "key", "") or "")
     params = getattr(exc, "params", None)
@@ -268,7 +268,8 @@ def blame(exc: Exception) -> dict[str, Any]:
         "error": str(exc),
         #: 不截断:截断的 key 就不是 key 了。此前的 `[:80]` 正是一句 403 报错被切成"半截 key"的地方。
         "error_key": key if is_message_key(key) else "",
-        "error_params": {k: str(v) for k, v in (params or {}).items()},
+        #: 参数里的文案片段(字段名之类,见 core/i18n.fragment)原样留着,读的时候一起翻。
+        "error_params": {k: stored_param(v) for k, v in (params or {}).items()},
     }
 
 

@@ -88,3 +88,54 @@ def test_领域异常自己就说得出缺省语言那一句() -> None:
     }
     #: 别的领域抛过来的原话没有 key —— 只留那句话,我们翻不了它。
     assert blame(ValueError("对方服务 502"))["error_key"] == ""
+
+
+def test_报错里提到的字段名也跟着读的人的语言走() -> None:
+    """知识库节点把「返回条数」「起始位置」这样的中文字段名当参数塞进报错:外层句子按 key 翻成了
+    英文,嵌在里面的字段名还是中文。字段名也是文案 —— 以 key 的形状(fragment)进参数,
+    落库之后、读的时候再和外层一起按读的人的语言翻。"""
+    import re
+
+    import pytest
+
+    from app.api.schemas import JobOut
+    from app.core.i18n import set_current_locale
+    from app.db.models import Job, Workflow, now
+    from app.domain.jobs import blame
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors.knowledge import note_search
+
+    with pytest.raises(WorkflowDomainError) as caught:
+        note_search(None, Workflow(workspace_id="w", name="W"), {"query": "x", "limit": "很多"})
+    job = Job(
+        id="j1", workspace_id="w", kind="workflow", status="failed", progress=1.0,
+        message="", message_key="", message_params={}, payload={}, result={},
+        created_at=now(), updated_at=now(), **blame(caught.value),
+    )
+    cjk = re.compile(r"[一-鿿]")
+    try:
+        set_current_locale("en")
+        assert not cjk.search(str(caught.value)), str(caught.value)
+        english = JobOut.model_validate(job).error
+        assert not cjk.search(english) and "Limit" in english, english
+        set_current_locale("zh")
+        assert "条数上限" in JobOut.model_validate(job).error
+    finally:
+        set_current_locale("zh")
+
+
+def test_报错里的一串名字按读的人的习惯连起来() -> None:
+    """顿号是中文的连接号。此前列表在抛错的地方就用「、」连成了一个字符串,英文句子里夹着顿号。"""
+    from app.core.i18n import set_current_locale
+    from app.domain.jobs import blame
+    from app.domain.workflows import WorkflowDomainError
+
+    exc = WorkflowDomainError("wfErr_pluginManyInstances", params={"package": "p", "names": ["A 号", "B 号"]})
+    assert blame(exc)["error_params"]["names"] == ["A 号", "B 号"], "列表该原样落库,读的时候再连"
+    try:
+        set_current_locale("en")
+        assert "A 号, B 号" in str(exc)
+        set_current_locale("zh")
+        assert "A 号、B 号" in str(exc)
+    finally:
+        set_current_locale("zh")

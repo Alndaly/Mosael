@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, render_nested
+from app.core.i18n import DEFAULT_LOCALE, render_message
 from app.db.models import ToolConfirmation, User, now
 from app.domain.agent.confirmable import tool_spec
 from app.domain.agent.errors import ConfirmationError
@@ -69,7 +69,7 @@ def request_confirmation(
         workspace_id=workspace_id,
         tool=tool,
         permission=effective_permission(db, tool, payload),
-        summary=render_nested(summary_key, summary_params, DEFAULT_LOCALE),
+        summary=render_message(summary_key, DEFAULT_LOCALE, summary_params),
         summary_key=summary_key,
         summary_params=summary_params,
         payload=payload,

@@ -19,12 +19,12 @@ def _summarize(tool: str, payload: dict, locale: str = "zh") -> str:
     `summarize` 返回的是 (文案 key, 参数),因为这一行会落库而卡活得比一次请求久(见
     confirmable/registry)。断言打在元组上的话,测的是内部表示而不是给人看的结果。
     """
-    from app.core.i18n import render_nested
+    from app.core.i18n import render_message
 
     spec = tool_spec(tool)
     assert spec is not None, tool
     key, params = spec.summarize(_NoDb(), payload)
-    return render_nested(key, params, locale)
+    return render_message(key, locale, params)
 
 
 

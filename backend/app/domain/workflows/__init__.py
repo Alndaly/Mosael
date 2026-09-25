@@ -82,13 +82,14 @@ class WorkflowDomainError(RuntimeError):
 
     def __init__(self, message: str, *, params: dict[str, Any] | None = None,
                  details: dict[str, Any] | None = None) -> None:
-        from app.core.i18n import DEFAULT_LOCALE, is_message_key, render_message
+        from app.core.i18n import DEFAULT_LOCALE, is_message_key, render_message, stored_param
 
         #: **只有认得出的才是 key。** 此前无条件记成 key,于是十几处 `WorkflowDomainError(str(exc))`
         #: 把第三方报错原文当 key 落了库(见 core/i18n.is_message_key)。
         self.key = message if is_message_key(message) else ""
         self.message = message
-        self.params = {k: str(v) for k, v in (params or {}).items()}
+        #: 参数里的文案片段(如 field_name 给的字段名)原样留着,渲染时按读的人的语言翻。
+        self.params = {k: stored_param(v) for k, v in (params or {}).items()}
         #: args 里放的是**缺省语言**那一句:pickle、repr 之类不经过 __str__ 的地方读它。
         super().__init__(render_message(message, DEFAULT_LOCALE, self.params))
         self.details = details or {}
@@ -360,6 +361,18 @@ def config_label(key: str, spec: dict[str, Any]) -> str:
     """这个配置字段在界面上叫什么。"""
     explicit = str(spec.get("label") or "").strip()
     return explicit or _FIELD_LABELS.get(key, "") or _humanize_field_key(key)
+
+
+def field_name(key: str, spec: dict[str, Any] | None = None) -> Any:
+    """报错里提到一个配置字段时,填进参数的那个名字。
+
+    和界面上那一格**同一个名字**(config_label),而且以文案片段的形状进参数(见
+    core/i18n.fragment):失败原因落库之后,读的时候和外层句子一起按读的人的语言翻。
+    当场写成字的话 —— 中文字段名嵌进英文句子,或者英文键名 `max_tokens` 嵌进中文句子。
+    """
+    from app.core.i18n import fragment
+
+    return fragment(config_label(key, spec or {}))
 
 
 def available_node_types(db: Session, *, user_id: str | None = None) -> dict[str, dict[str, Any]]:
