@@ -189,12 +189,18 @@ class Test清单从哪来都由声明说了算:
         mine = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
         other = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
         with SessionLocal() as db:
+            from app.db.models import User
+
+            me = db.query(User).filter(User.username == "tester").one().id
             db.add_all([
-                PublishAccount(workspace_id=mine, platform="douyin", name="我的号"),
-                PublishAccount(workspace_id=other, platform="douyin", name="别人的号"),
+                PublishAccount(workspace_id=mine, platform="douyin", name="我的号", owner_user_id=me),
+                PublishAccount(workspace_id=other, platform="douyin", name="别人的号", owner_user_id=me),
             ])
             db.commit()
-            assert [one["label"] for one in field_options(db, "publish_accounts", _ctx(mine))] == ["我的号"]
+            ctx = OptionContext(workspace_id=mine, user_id=me, parent="", locale="zh")
+            assert [one["label"] for one in field_options(db, "publish_accounts", ctx)] == ["我的号"]
+            # 说不出是谁在挑 —— 一个都不给(和用的那一刻同一个判据,见 sharing.usable_filter)。
+            assert field_options(db, "publish_accounts", _ctx(mine)) == []
 
     def test_插件节点的连接按它自己的包过滤(self, monkeypatch) -> None:
         """插件节点的包名在**节点类型**里(`plugin.<包>.<工具>`),不是某个字段的值 ——

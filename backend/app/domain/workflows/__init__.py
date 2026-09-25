@@ -1289,7 +1289,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "url": {"type": "template", "description": "wfNode_browser_open_url"},
             "session_mode": {"type": "string", "options": ["ephemeral", "named", "pool"], "description": "wfNode_browser_open_session_mode"},
             "session_name": {"type": "template", "description": "wfNode_browser_open_session_name"},
-            "profile_id": {"type": "string", "description": "wfNode_browser_open_profile_id"},
+            "profile_id": {"type": "string", "description": "wfNode_browser_open_profile_id", "options_from": "browser_profiles"},
         },
         "outputs": ["session"],
     },

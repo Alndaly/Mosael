@@ -37,24 +37,24 @@ def _claim(worker, timeout: float = 5.0) -> dict:
 def test_partition_isolation_from_publish() -> None:
     _, ws = _workspace()
     with SessionLocal() as db:
-        eph = browser.open_session(db, workspace_id=ws)
+        eph = browser.open_session(db, workspace_id=ws, actor=None)
         assert eph.kind == "ephemeral"
         assert eph.partition == f"ephemeral-{eph.id}"
         assert not eph.partition.startswith("persist:")  # 临时=内存态,关闭即清
 
-        named = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!")
+        named = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!", actor=None)
         assert named.partition == "persist:rpa-My-Profile"  # 名字清洗进 rpa 命名空间
         # 绝不撞发布账号的登录分区。前缀取自 PARTITION_PREFIX,不要写死——写死的话前缀一改,
         # 这个断言就悄悄变成在防一个已经不存在的名字,而真正的碰撞面无人看守。
         assert not named.partition.startswith(f"persist:{PARTITION_PREFIX}-")
 
         # 具名会话同名复用(要跨次保留登录)。
-        again = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!")
+        again = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!", actor=None)
         assert again.id == named.id
 
     # 恶意名字也进不了发布命名空间。
     with SessionLocal() as db:
-        evil = browser.open_session(db, workspace_id=ws, kind="named", name=f"{PARTITION_PREFIX}-someaccount")
+        evil = browser.open_session(db, workspace_id=ws, kind="named", name=f"{PARTITION_PREFIX}-someaccount", actor=None)
         assert evil.partition == f"persist:rpa-{PARTITION_PREFIX}-someaccount"
         assert not evil.partition.startswith(f"persist:{PARTITION_PREFIX}-")
 
@@ -63,7 +63,7 @@ def test_run_action_roundtrip_returns_worker_result() -> None:
     _, ws = _workspace()
     worker = worker_client()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
 
     holder: dict = {}
 
@@ -102,7 +102,7 @@ def test_run_action_failure_propagates() -> None:
     _, ws = _workspace()
     worker = worker_client()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
 
     holder: dict = {}
 
@@ -126,7 +126,7 @@ def test_run_action_failure_propagates() -> None:
 def test_run_action_rejects_closed_session() -> None:
     _, ws = _workspace()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
         browser.close_session(db, sid)
     try:
         browser.run_action(sid, "navigate", {"url": "https://x.test"}, timeout=2)
@@ -144,7 +144,7 @@ def test_worker_endpoints_need_worker_key() -> None:
 def test_reconcile_fails_pending_and_closes_sessions() -> None:
     _, ws = _workspace()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
         db.add(BrowserAction(session_id=sid, workspace_id=ws, action="navigate", args={}, status="running"))
         db.commit()
 
@@ -167,7 +167,7 @@ def test_认领带回租约三件套() -> None:
     _, ws = _workspace()
     worker = worker_client()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
         db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
         db.commit()
 
@@ -185,7 +185,7 @@ def test_令牌对不上的回报被拒() -> None:
     _, ws = _workspace()
     worker = worker_client()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
         db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
         db.commit()
 
@@ -207,7 +207,7 @@ def test_心跳续约_续不上的要说出来() -> None:
     _, ws = _workspace()
     worker = worker_client()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
         db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
         db.commit()
 
@@ -229,7 +229,7 @@ def test_租约到点的动作判失败_可重试() -> None:
     _, ws = _workspace()
     worker = worker_client()
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
         db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
         db.commit()
 

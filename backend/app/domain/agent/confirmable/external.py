@@ -42,7 +42,8 @@ def _execute_publish_asset(db: Session, confirmation: Any, actor: str | None) ->
         title=str(payload.get("title") or ""),
         description=str(payload.get("description") or ""),
         tags=[],
-        created_by=actor,
+        # 批准这张卡的人 —— 智能体自己不是主体,它用的是批准者的授权(见 confirmations._execute_approved)。
+        actor=actor,
     )
     return {"task_id": task.id, "status": task.status}
 
@@ -139,6 +140,7 @@ def _execute_browser_open(db: Session, confirmation: Any, actor: str | None) -> 
         kind="named" if str(payload.get("session_mode")) == "named" else "ephemeral",
         name=str(payload.get("session_name") or ""),
         owner_kind="agent",
+        actor=actor,
     )
     url = str(payload.get("url") or "").strip()
     if url:
@@ -176,11 +178,13 @@ def _execute_browser_pool_open(db: Session, confirmation: Any, actor: str | None
     from app.domain import browser as browser_domain
 
     # 用户已在确认卡上显式授权使用这个登录身份 → 在该池档案分区开会话(受租约)。
+    # 「批准」只是同意,不是权限:批准的人自己得能用这个档案 —— 别人的私有档案在 open_session 里被拒。
     session = browser_domain.open_session(
         db,
         workspace_id=confirmation.workspace_id,
         profile_id=str(payload.get("profile_id") or ""),
         owner_kind="agent",
+        actor=actor,
     )
     url = str(payload.get("url") or "").strip()
     if url:

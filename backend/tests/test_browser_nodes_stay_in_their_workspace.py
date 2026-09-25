@@ -52,7 +52,7 @@ def test_别的工作区的会话不能拿来跑动作(monkeypatch, node: str, c
     monkeypatch.setattr(bdom, "run_action", lambda sid, action, args, **k: (calls.append(action) or {}))
     a, b = _two_workspaces()
     with SessionLocal() as db:
-        foreign = bdom.open_session(db, workspace_id=a).id
+        foreign = bdom.open_session(db, workspace_id=a, actor=None).id
         with pytest.raises(WorkflowDomainError):
             getattr(bx, node)(db, _wf(b), {"session": foreign, **config})
     assert calls == [], f"{node} 把动作交给了别的工作区的会话:{calls}"
@@ -62,7 +62,7 @@ def test_别的工作区的会话不能拿来关(monkeypatch) -> None:
     monkeypatch.setattr(bdom, "run_action", lambda *a, **k: {})
     a, b = _two_workspaces()
     with SessionLocal() as db:
-        foreign = bdom.open_session(db, workspace_id=a).id
+        foreign = bdom.open_session(db, workspace_id=a, actor=None).id
         with pytest.raises(WorkflowDomainError):
             bx.browser_close(db, _wf(b), {"session": foreign})
     with SessionLocal() as db:
@@ -74,7 +74,7 @@ def test_本工作区的会话照常用(monkeypatch) -> None:
     monkeypatch.setattr(bdom, "run_action", lambda sid, action, args, **k: (calls.append((sid, action)) or {}))
     a, _ = _two_workspaces()
     with SessionLocal() as db:
-        sid = bdom.open_session(db, workspace_id=a).id
+        sid = bdom.open_session(db, workspace_id=a, actor=None).id
         assert bx.browser_click(db, _wf(a), {"session": sid, "selector": ".go"}) == {"session": sid}
         bx.browser_close(db, _wf(a), {"session": sid})
     assert calls == [(sid, "click")]

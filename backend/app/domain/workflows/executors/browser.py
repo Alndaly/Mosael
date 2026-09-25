@@ -11,9 +11,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import BrowserSession, Job, Workflow
-from app.domain import browser
-from app.domain.jobs import current_parent_job_id
+from app.db.models import Job, Workflow
+from app.domain import browser, sharing
+from app.domain.jobs import current_actor, current_parent_job_id
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 
@@ -28,8 +28,12 @@ def _session_in(db: Session, workflow: Workflow, config: dict[str, Any]) -> str:
     sid = str(config.get("session") or "").strip()
     if not sid:
         raise WorkflowDomainError("wfErr_browserSessionMissing")
-    session = db.get(BrowserSession, sid)
-    if session is None or session.workspace_id != workflow.workspace_id:
+    # 池档案会话还要这次运行的操作人自己能用那个档案(见 browser.attach_session)。
+    try:
+        session = browser.attach_session(db, sid, workspace_id=workflow.workspace_id, actor=current_actor(db))
+    except sharing.NotUsableError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    if session is None:
         raise WorkflowDomainError("wfErr_browserSessionNotInWorkspace")
     return session.id
 
@@ -114,13 +118,17 @@ def _run_owner(db: Session) -> str | None:
 def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     mode = str(config.get("session_mode") or "ephemeral")
     owner = _run_owner(db)
+    #: 谁在用:这次运行的操作人。手动运行是点运行的人,定时任务 / webhook 是任务主人
+    #: (见 scheduler.operations._open_run)。池档案是某人的登录身份,别人的私有档案在这里被拒。
+    actor = current_actor(db)
     try:
         if mode == "pool":
             profile_id = str(config.get("profile_id") or "").strip()
             if not profile_id:
                 raise WorkflowDomainError("wfErr_pickPoolProfile")
             session = browser.open_session(
-                db, workspace_id=workflow.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=owner
+                db, workspace_id=workflow.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=owner,
+                actor=actor,
             )
         else:
             session = browser.open_session(
@@ -130,8 +138,9 @@ def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
                 name=str(config.get("session_name") or ""),
                 owner_kind="workflow",
                 owner_id=owner,
+                actor=actor,
             )
-    except browser.BrowserDomainError as exc:
+    except (browser.BrowserDomainError, sharing.NotUsableError) as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     url = str(config.get("url") or "").strip()
     if url:

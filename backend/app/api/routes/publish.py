@@ -159,10 +159,13 @@ def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -
             title=body.title,
             description=body.description,
             tags=body.tags,
-            created_by=user.id,
+            actor=user.id,
             short_title=body.short_title,
             options=body.options,
         )
+    except sharing.NotUsableError as exc:
+        # 别人的私有账号:不是参数错了,是没有这个权限。
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return task_with_status(db, task)

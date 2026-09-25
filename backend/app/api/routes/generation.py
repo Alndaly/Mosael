@@ -372,6 +372,6 @@ def _require_generation_session(db: DbSession, user: CurrentUser, session_id: st
     else:
         ensure_workspace_perm(db, user, session.workspace_id, perm)
     # 看不见还不够:猜到 id 也得用不了,否则「私有」只是列表上的一层遮挡。
-    if not sharing.may_use(db, "generation_session", session, user):
+    if not sharing.may_use(db, "generation_session", session, user.id):
         raise HTTPException(status_code=404, detail="Not found")
     return session

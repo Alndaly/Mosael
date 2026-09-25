@@ -51,7 +51,7 @@ def list_profiles(workspace_id: str, db: DbSession, user: CurrentUser) -> list[B
     return [
         _serialize(db, prof, user, shared)
         for prof in browser.list_profiles(db, workspace_id)
-        if sharing.may_use(db, "browser_profile", prof, user)
+        if sharing.may_use(db, "browser_profile", prof, user.id)
     ]
 
 
@@ -98,7 +98,7 @@ def record_opened(
     last_used_at,于是一个刚登过、天天在用的档案卡片上一直写着「尚未使用」。
     """
     prof = db.get(BrowserProfile, profile_id)
-    if prof is None or not sharing.may_use(db, "browser_profile", prof, user):
+    if prof is None or not sharing.may_use(db, "browser_profile", prof, user.id):
         raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
     ensure_workspace_perm(db, user, prof.workspace_id, "edit")
     prof.start_url = body.url

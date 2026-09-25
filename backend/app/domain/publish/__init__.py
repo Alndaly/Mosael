@@ -302,10 +302,26 @@ def start_publish(
     title: str,
     description: str,
     tags: list[str],
-    created_by: str | None,
+    actor: str | None,
     short_title: str = "",
     options: dict[str, Any] | None = None,
 ) -> PublishTask:
+    """建一条发布任务 —— **所有发布入口的唯一实现**(发布页、工作流发布节点、智能体确认卡)。
+    守着它的是 tests/test_private_identities_need_their_owner.py:每个调用点都写出 actor,每个入口
+    都真的会拒。
+
+    `actor` 是**谁在发**:路由里是当前用户,工作流里是这次运行的操作人(`jobs.current_actor`;
+    定时任务与 webhook 触发的运行记在任务主人头上),确认卡是批准它的那个人。它同时是任务的
+    `created_by`。
+
+    **必填、没有默认值**,归属就在这里查:私有账号只有主人和被共享到的人能用(见
+    domain/sharing)。此前各入口只查了「是不是这个工作区的人」,同事猜到 id、或在工作流里填上
+    别人的账号 id,就能拿别人的登录态发帖。把这道闸放在入口上,第四个入口就会漏;放在这里,
+    漏传 `actor` 是类型错误,传 None 是被拒 —— 没有「不知道是谁就放行」。
+
+    执行器(publish worker)认领的是**已经过了这道闸**的任务,那一侧不再重查。
+    """
+    sharing.ensure_usable(db, "publish_account", account, actor)
     if not account.enabled:
         raise PublishDomainError("publishErr_accountDisabled")
     if not asset.file_key:
@@ -319,7 +335,7 @@ def start_publish(
         db,
         workspace_id=workspace_id,
         kind="publish",
-        created_by=created_by,
+        created_by=actor,
         payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform, "subject": title or asset.name},
         message="jobMsg_publishWaiting", message_params={"title": title or asset.name},
     )

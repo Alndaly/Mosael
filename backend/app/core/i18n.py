@@ -1364,6 +1364,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "未知的资源类型:{kind}",
         "en": "Unknown resource type: {kind}",
     },
+    # 用的那一刻被归属挡下(见 domain/sharing.ensure_usable)。说的是怎么办,不点名那一份叫什么。
+    "shareErr_notUsable": {
+        "zh": "这份资源属于别人且没有共享出来,只有主人和被共享到的人能用",
+        "en": "This belongs to someone else and hasn't been shared, so only its owner and the people it's shared with can use it.",
+    },
+    "shareErr_notUsable_publishAccount": {
+        "zh": "这个发布账号属于别人且没有共享出来,只有主人和被共享到的人能用它发布。请主人在发布页把它共享到这个工作区,或换一个自己的账号",
+        "en": "This publishing account belongs to someone else and hasn't been shared, so only its owner and the people it's shared with can publish with it. Ask the owner to share it to this workspace on the Publish page, or pick an account of your own.",
+    },
+    "shareErr_notUsable_browserProfile": {
+        "zh": "这个浏览器档案属于别人且没有共享出来,只有主人和被共享到的人能用它的登录态。请主人在浏览器池里把它共享到这个工作区,或换一个自己的档案",
+        "en": "This browser profile belongs to someone else and hasn't been shared, so only its owner and the people it's shared with can use its sign-ins. Ask the owner to share it to this workspace in the Browser pool, or pick a profile of your own.",
+    },
     "webErr_emptyQuery": {
         "zh": "query 不能为空",
         "en": "query can't be empty.",

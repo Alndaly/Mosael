@@ -2,7 +2,7 @@
 title: Browser profiles
 description: Manage sign-ins, proxies and identity permissions for publishing, imports and automation.
 order: 13
-updated: 2026-09-24
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -95,9 +95,25 @@ being deleted or signed out.
 
 ## Sharing in a team deployment
 
+Accounts and profiles **belong to whoever created them** and are private by default: other members of
+the same workspace can't see them and **can't use** them either. Guessing the id, typing it into a
+workflow or asking the agent to open it is refused with "This browser profile belongs to someone else
+and hasn't been shared".
+
 A profile you own can be **shared** into the workspace from the context menu. Other members can then
 publish through it and select it in workflows — without the credentials ever passing through
-anybody's hands, because what is shared is the session, not the password.
+anybody's hands, because what is shared is the session, not the password. A publishing account and
+its browser profile are one identity, shared and withdrawn together; once withdrawn, new publishes and
+opens by others are refused.
+
+Who counts as the one using it:
+
+- Publish page, Browser pool, import from link: the signed-in person.
+- A workflow run by hand: whoever pressed Run. **Scheduled and webhook-triggered runs act as the task's
+  owner** — the accounts and profiles in the graph must be the owner's own or shared into the workspace.
+- The agent: whoever approved the confirmation card.
+
+The workflow pickers for publishing account and pool profile only list the ones you may use.
 
 ## Where the data lives
 

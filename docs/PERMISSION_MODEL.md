@@ -13,7 +13,8 @@
 
 | 层 | 有哪些 |
 | --- | --- | --- |
-| **工作区级** | 素材、序列、片段、项目、工作流、发布账号、浏览器档案、定时任务、智能体会话与记忆、确认卡、用量事件、通知、字体、LUT、声音… |
+| **工作区级** | 素材、序列、片段、项目、工作流、智能体记忆、确认卡、用量事件、通知、字体、LUT、声音… |
+| **放在工作区里、但归人** | 发布账号、浏览器池档案、智能体会话、生成会话、定时任务 —— `owner_user_id` 说是谁的,`resource_shares` 说主人把它共享进了哪个工作区(见 `domain/sharing`) |
 | **用户级** | 登录会话、第三方身份、供应商连接与凭据、连接下的模型、每项能力的默认模型 |
 | **实例级** | 网络配置、TTS/ASR 运行时配置、插件包与启用状态、部署管理员身份等 |
 
@@ -36,6 +37,7 @@
 | `require_asset` / `require_sequence_access` | 资源存在 + 上述读/写闸门 | 资源定位与授权收在同一领域入口 |
 | `require_worker_key` | 数据目录下的进程密钥 | 本机卫星进程的 claim / report / heartbeat |
 | 确认卡 | 工具 manifest 的 `confirmation` + 会话规则 | 智能体对不可逆或对外动作的用户授权 |
+| `sharing.ensure_usable` | 是主人,或主人把它共享进了它所在的工作区 | **用**私有身份的那一刻:发布账号(`publish.start_publish`)、浏览器池档案(`browser.open_session` / `attach_session` / `usable_profile`)。`actor` 必填,None 被拒 |
 
 工作区只使用 `owner > admin > editor > viewer` 四级角色。`ensure_workspace_perm`
 保留操作名是为了让调用点可读,而不是恢复可逐位覆盖的权限矩阵。
@@ -90,6 +92,38 @@ viewer 取供应商凭据 -> 200
 不继承后端环境,并在没有隔离后端时 fail closed。旧的 `ensure_graph_node_privileges`
 和 `PRIVILEGED_NODE_TYPES` 已删除。
 
+### 3.6 私有账号 / 档案曾可被同事拿去用 — ✅ 已修复
+
+`sharing.may_use` 早就写好,但只挡住了列表:工作流发布节点、`browser_open` 池模式、`POST /publish/tasks`、
+智能体的发布与池档案确认卡、定时任务和 webhook 触发的运行,全都只查「是不是这个工作区的人」。同事猜到 id,
+或在工作流里填上别人的账号 id,就能拿别人的平台登录态发帖、在别人已登录的浏览器里取 cookie。
+
+现在**私有的发布账号和浏览器池档案只有主人和被共享到的人能用**,在用的那一刻查,且只在一处:
+
+- `publish.start_publish(…, actor=…)` —— 发布页、工作流发布节点、智能体 `publish_asset` 卡都经过它;
+- `browser.open_session(…, actor=…)` / `browser.usable_profile(…, actor=…)` —— 工作流 `browser_open` 池模式、
+  智能体 `browser_pool_open` 卡、从链接导入借 cookie(探测与下载);
+- `browser.attach_session(…, actor=…)` —— 接着用一个开着的池档案会话(工作流下游浏览器节点、智能体内联动作):
+  拿到会话 id 不等于有权用那个登录身份。
+
+`actor` 是**必填**关键字参数,没有默认值;传 None 一律拒绝。谁是 actor:
+
+| 入口 | actor |
+| --- | --- |
+| HTTP 路由 | 当前登录用户 |
+| 手动运行的工作流 | 点运行的人(`Job.created_by`,节点里经 `jobs.current_actor` 取) |
+| 定时任务 / webhook 触发的运行 | **任务主人**(`ScheduledTask.owner_user_id`,见 `scheduler.operations._open_run`)—— 与它用谁的钥匙、记谁的额度是同一条归属 |
+| 子流程 | 父运行的 actor |
+| 智能体确认卡 | 批准这张卡的人(`ToolConfirmation.decided_by`;自动放行记在会话主人头上) |
+| 发布执行器(桌面端 worker) | 不重查 —— 认领的是建任务时已经过闸的任务 |
+
+拒绝是 `sharing.NotUsableError`(文案 key `shareErr_notUsable_*`,中英两份),HTTP 回 403,工作流与确认卡
+把 key 原样记进失败原因。工作流字段下拉(`publish_accounts` / `browser_profiles`)、发布页账号列表、浏览器池
+列表用同一个判据(`sharing.usable_filter`)—— 列出来的,选了就用得上。
+
+老数据不做兼容:已经存在的工作流 / 定时任务如果引用了 actor 用不了的账号或档案,下一次运行会带着这句话失败,
+由主人共享出来,或改用自己的。棘轮:`tests/test_private_identities_need_their_owner.py`。
+
 ## 4. 已经对上的地方
 
 盘点不能只列问题,否则读的人会以为整套都在漏:
@@ -106,6 +140,11 @@ viewer 取供应商凭据 -> 200
 - 默认仍是本地单用户部署;远程多用户部署的全部路径需继续用隔离测试验证。
 - `credentials` 这个词仍同时出现在 Provider Credential 和插件凭据中;它们的归属已分开,
   但 UI 文案和新文档必须继续明确区分「我的 AI 连接」与「工作区插件秘密」。
+- 发布账号 / 浏览器池档案的**管理**(改名、停用、复检、删除)仍只查工作区角色,没有按归属收紧:
+  §3.6 管的是「用」。同事看不到别人的私有账号,但猜到 id 仍能改它、删它 —— 是否只许主人管理,另行决定。
+- 定时任务替**任务主人**跑,而它绑的工作流是工作区内容、同事能改,定时任务默认共享、同事能点「立即运行」。
+  于是同事改了图、再触发主人的任务,那次运行仍以主人的授权用主人的私有账号 / 档案。§3.6 挡住的是「以自己的
+  身份用别人的」,没挡住「借别人的任务用别人的」—— 要收紧,得让任务绑定到主人认可过的那一版图,另行决定。
 - worker key 证明的是卫星进程,不是最终用户;将 external job 放到其他机器前,
   需单独解决该部署的密钥下发与信任范围。
 

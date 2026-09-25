@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
@@ -181,34 +181,64 @@ def visible_filter(kind: str, user: User, workspace_id: str):
     两种看得见:**是我的**,或者**有人把它共享进了这个工作区**。前一半不能省 —— 主人自己必须始终
     看得见自己的东西,哪怕他从没共享过。
     """
+    return usable_filter(kind, user.id, workspace_id)
+
+
+def usable_filter(kind: str, actor_id: str | None, workspace_id: str):
+    """`may_use` 的 SQL 版:这个工作区里**这个人能用**的那些。
+
+    对放在这个工作区里的资源,「看得见」与「能用」是同一个判据 —— 所以列表、下拉(工作流字段
+    选项)和用的那一刻(`ensure_usable`)给出同一个答案:下拉里出现的,选了就用得上。
+    `actor_id` 为空时一条都不给。
+    """
     model = model_for(kind)
+    if not actor_id:
+        return false()
     shared = select(ResourceShare.resource_id).where(
         ResourceShare.kind == kind, ResourceShare.workspace_id == workspace_id
     )
-    return (model.owner_user_id == user.id) | (model.id.in_(shared))
+    return (model.owner_user_id == actor_id) | (model.id.in_(shared))
 
 
-def may_use(db: Session, kind: str, resource: Any, user: User) -> bool:
+def may_use(db: Session, kind: str, resource: Any, actor_id: str | None) -> bool:
     """他能不能**用**这一份,而不只是看得见。
 
     看得见不够:猜到 id 也得用不了,否则「私有」只是列表上的一层遮挡。
+
+    两种能用,和 `visible_filter` 同一个判据:**是他的**,或者**主人把它共享进了它所在的工作区**。
+    `actor_id` 为空 = 说不出是谁在用 —— 一律不能用。没有「不知道是谁就放行」这一档:那正是
+    此前工作流、智能体、定时任务一路漏过去的样子(只查了成员关系,没查归属)。
     """
-    if resource is None:
+    if resource is None or not actor_id:
         return False
-    if resource.owner_user_id == user.id:
+    if resource.owner_user_id == actor_id:
         return True
     if not resource.workspace_id:
         return False
-    return (
-        db.scalar(
-            select(ResourceShare).where(
-                ResourceShare.kind == kind,
-                ResourceShare.resource_id == resource.id,
-                ResourceShare.workspace_id == resource.workspace_id,
-            )
-        )
-        is not None
-    )
+    return is_shared_with(db, kind, resource.id, resource.workspace_id)
+
+
+class NotUsableError(SharingError):
+    """这一份是别人的,而且没有共享给你。带文案 key(`shareErr_notUsable_*`),按读的人的语言翻。
+
+    单列一类,是为了让入口能把它和「参数不对」分开:HTTP 路由回 403,工作流 / 确认卡把 key
+    原样记进失败原因。
+    """
+
+
+#: 每一类「用不了」怎么说。说的是**怎么办**(请主人共享,或换一个自己的),不点名那一份叫什么 ——
+#: 拿不到它的人本来也不该从报错里读到别人私有资源的名字。
+_NOT_USABLE_KEYS: dict[str, str] = {
+    "publish_account": "shareErr_notUsable_publishAccount",
+    "browser_profile": "shareErr_notUsable_browserProfile",
+}
+
+
+def ensure_usable(db: Session, kind: str, resource: Any, actor_id: str | None) -> None:
+    """`may_use` 的强制版:用不了就抛 `NotUsableError`。**用的那一刻**调(见 publish.start_publish、
+    browser.usable_profile),不是在每个入口各抄一遍。"""
+    if not may_use(db, kind, resource, actor_id):
+        raise NotUsableError(_NOT_USABLE_KEYS.get(kind, "shareErr_notUsable"))
 
 
 def shared_workspaces(db: Session, kind: str, resource_id: str) -> list[str]:

@@ -338,7 +338,7 @@ def _require_session(db: DbSession, user: CurrentUser, session_id: str, *, perm:
     else:
         ensure_workspace_perm(db, user, session.workspace_id, perm)
     # 看不见就是不存在(404,不是 403)—— 和工作区边界同一条口径,不泄露"这里有一个你看不到的东西"。
-    if not sharing.may_use(db, "agent_session", session, user):
+    if not sharing.may_use(db, "agent_session", session, user.id):
         raise HTTPException(status_code=404, detail="Not found")
     return session
 

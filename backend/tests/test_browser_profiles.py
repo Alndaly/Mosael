@@ -100,14 +100,14 @@ def test_profile_lease_one_active_session() -> None:
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="池号", owner=_me(db)).id
     with SessionLocal() as db:
-        s1 = browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A")
+        s1 = browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         assert s1.kind == "profile" and s1.partition.startswith("persist:pool-")
     with SessionLocal() as db:  # 同 owner 复用
-        s2 = browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A")
+        s2 = browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         assert s2.id == s1.id
     with SessionLocal() as db:  # 异 owner → 占用中(租约)
         with pytest.raises(browser.BrowserDomainError):
-            browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="B")
+            browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="B", actor=_me(db).id)
 
 
 def test_workflow_browser_open_pool_mode() -> None:
@@ -119,7 +119,8 @@ def test_workflow_browser_open_pool_mode() -> None:
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="流程用池号", owner=_me(db)).id
         wf_id = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}).id
-        run_id = create_job(db, workspace_id=ws, kind="workflow", payload={}, created_by=None).id
+        # 这次运行替谁跑:池档案是某人的登录身份,说不出是谁在用就不能借(见 browser.usable_profile)。
+        run_id = create_job(db, workspace_id=ws, kind="workflow", payload={}, created_by=_me(db).id).id
         db.commit()
     token = set_parent_job(run_id)
     try:
@@ -189,7 +190,7 @@ def test_cannot_delete_bound_or_busy_profile() -> None:
     # 有活动会话 → 拒删
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="忙", owner=_me(db)).id
-        browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A")
+        browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         with pytest.raises(browser.BrowserDomainError):
             browser.delete_profile(db, ws, pid)
 

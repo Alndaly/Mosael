@@ -127,7 +127,8 @@ def test_同一条工作流并发两次_不共用一个池档案会话(monkeypat
         workflow = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []})
         runs = []
         for _ in range(2):
-            job = create_job(db, workspace_id=ws, kind="workflow", payload={}, created_by=None)
+            # 替档案主人跑:池档案只有主人和被共享到的人能借(见 browser.usable_profile)。
+            job = create_job(db, workspace_id=ws, kind="workflow", payload={}, created_by=owner.id)
             job.status = "running"
             runs.append(job.id)
         db.commit()

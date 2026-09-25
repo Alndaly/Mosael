@@ -63,7 +63,7 @@ def list_shares(kind: str, resource_id: str, db: DbSession, user: CurrentUser) -
     except sharing.SharingError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     resource = db.get(model, resource_id)
-    if resource is None or not sharing.may_use(db, kind, resource, user):
+    if resource is None or not sharing.may_use(db, kind, resource, user.id):
         raise HTTPException(status_code=404, detail="Not found")
     return {
         "kind": kind,

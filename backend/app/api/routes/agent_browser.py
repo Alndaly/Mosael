@@ -15,7 +15,7 @@ from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import BrowserSession
-from app.domain import browser
+from app.domain import browser, sharing
 
 router = APIRouter(tags=["agent-browser"])
 
@@ -33,13 +33,18 @@ class CloseRequest(BaseModel):
 
 
 def _verify(db, user, workspace_id: str, session_id: str, *, perm: str | None = None) -> BrowserSession:
-    session = db.get(BrowserSession, session_id)
-    if session is None or session.workspace_id != workspace_id:
-        raise HTTPException(status_code=404, detail=tr("routeErr_browserSessionNotFound"))
     if perm is None:
-        ensure_workspace_access(db, user, session.workspace_id)
+        ensure_workspace_access(db, user, workspace_id)
     else:
-        ensure_workspace_perm(db, user, session.workspace_id, perm)
+        ensure_workspace_perm(db, user, workspace_id, perm)
+    # 池档案会话还要他自己能用那个档案 —— 拿到会话 id 不等于有权用别人已登录的浏览器
+    # (见 domain/browser.attach_session)。
+    try:
+        session = browser.attach_session(db, session_id, workspace_id=workspace_id, actor=user.id)
+    except sharing.NotUsableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if session is None:
+        raise HTTPException(status_code=404, detail=tr("routeErr_browserSessionNotFound"))
     return session
 
 

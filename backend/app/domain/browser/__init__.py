@@ -8,6 +8,8 @@ Electron 的浏览器 worker 认领 queued 动作 → 用 PageDriver 在会话�
 池档案会话用其档案分区(BrowserProfile.partition,可为发布登录的 `persist:mosael-<accountId>`)。
 「浏览器池」把持久登录身份统一成 BrowserProfile(不再只服务发布);池档案会话受**租约**(一档案
 一时刻一会话)约束,接入智能体时再叠**显式授权**闸——见 open_session / _open_profile_session。
+档案归人(见 domain/sharing):开池会话、接着用一个池会话、借档案的 cookie,都要**用的人**自己能用
+那个档案(`usable_profile` / `attach_session`,`actor` 必填)。
 """
 
 from __future__ import annotations
@@ -97,6 +99,18 @@ def get_profile(db: Session, workspace_id: str, profile_id: str) -> BrowserProfi
     return prof
 
 
+def usable_profile(db: Session, workspace_id: str, profile_id: str, *, actor: str | None) -> BrowserProfile:
+    """取一个**这个人能用**的池档案:在这个工作区里,而且是他的、或者主人共享出来了。
+
+    档案存的是某人已登录的浏览器 —— 借它开会话、取它的 cookie,就是在用那个人的身份。归属在
+    这里查(见 domain/sharing.ensure_usable),开会话(`open_session`)和借 cookie(assets/from_url)
+    都经过它,不在各入口各抄一遍。`actor` 必填、None 被拒:说不出是谁在用,就不能用别人的身份。
+    """
+    prof = get_profile(db, workspace_id, profile_id)
+    sharing.ensure_usable(db, "browser_profile", prof, actor)
+    return prof
+
+
 def list_profiles(db: Session, workspace_id: str) -> list[BrowserProfile]:
     return list(
         db.scalars(
@@ -151,11 +165,17 @@ def open_session(
     profile_id: str | None = None,
     owner_kind: str = "manual",
     owner_id: str | None = None,
+    actor: str | None,
 ) -> BrowserSession:
     """新建(或复用)浏览器会话。临时会话每次都是新隔离上下文;具名会话跨次复用;池档案会话在
-    档案分区上开,受**租约**约束(一个档案同一时刻一个活动会话:同 owner 复用、异 owner 拒绝)。"""
+    档案分区上开,受**租约**约束(一个档案同一时刻一个活动会话:同 owner 复用、异 owner 拒绝)。
+
+    `actor` 是**谁在用**(用户 id):工作流里是这次运行的操作人,确认卡是批准它的人。**必填、
+    没有默认值** —— 池档案是某人的登录身份,别人的私有档案在这里被拒(见 `usable_profile`)。
+    `owner_kind/owner_id` 是另一件事:会话**归哪次运行管**(谁来关它),不是谁有权用。
+    """
     if profile_id:
-        return _open_profile_session(db, workspace_id, profile_id, owner_kind, owner_id)
+        return _open_profile_session(db, workspace_id, profile_id, owner_kind, owner_id, actor)
     kind = "named" if kind == "named" else "ephemeral"
     safe = ""
     if kind == "named":
@@ -190,9 +210,9 @@ def open_session(
 
 
 def _open_profile_session(
-    db: Session, workspace_id: str, profile_id: str, owner_kind: str, owner_id: str | None
+    db: Session, workspace_id: str, profile_id: str, owner_kind: str, owner_id: str | None, actor: str | None
 ) -> BrowserSession:
-    prof = get_profile(db, workspace_id, profile_id)
+    prof = usable_profile(db, workspace_id, profile_id, actor=actor)
     if not prof.enabled:
         raise BrowserDomainError("browserErr_profileDisabled")
     # 租约:一个档案同一时刻只允许一个活动会话。
@@ -217,6 +237,23 @@ def _open_profile_session(
     prof.last_used_at = now()
     db.commit()
     db.refresh(session)
+    return session
+
+
+def attach_session(db: Session, session_id: str, *, workspace_id: str, actor: str | None) -> BrowserSession | None:
+    """接着用一个**已经开着**的会话(工作流下游的浏览器节点、智能体的内联动作)。
+
+    返回 None = 不存在或不在这个工作区,调用方按自己的语境报「找不到」。
+
+    池档案会话还要再查一次归属:会话 id 会顺着上游节点、对话流到别处,**拿到 id 不等于有权用
+    那个登录身份**。开会话时查过的是开的那个人;接着用的人得自己也能用这个档案,否则同事拿着
+    一个会话 id 就能在别人已登录的浏览器里取 cookie、点发布。
+    """
+    session = db.get(BrowserSession, session_id)
+    if session is None or session.workspace_id != workspace_id:
+        return None
+    if session.profile_id:
+        sharing.ensure_usable(db, "browser_profile", db.get(BrowserProfile, session.profile_id), actor)
     return session
 
 

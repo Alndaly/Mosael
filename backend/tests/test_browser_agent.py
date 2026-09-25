@@ -62,7 +62,7 @@ def test_agent_browser_act_enforces_ownership() -> None:
     client = fresh_client()
     ws = _ws(client)
     with SessionLocal() as db:
-        sid = browser.open_session(db, workspace_id=ws).id
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
 
     # 不存在的会话 → 404(在跑动作之前就挡下)
     assert client.post(

@@ -2,7 +2,7 @@
 title: Scheduled tasks
 description: Set workflow triggers, review run history and manage active schedules.
 order: 16
-updated: 2026-09-24
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -21,6 +21,14 @@ Clicking the bound workflow row in the detail area opens that task's workflow, n
 ## Run and disable
 
 Run a task immediately or toggle its enabled state in the detail area. Disabling prevents future automatic triggers; inspect history for work already running. Records show time, duration and result. Read failures and fix the workflow before retrying. The run history refreshes on its own: runs started outside this page — a webhook, a scheduled trigger, a teammate's **Run now** — appear too, and the **Last run** field updates with them, without reloading the page.
+
+### Who a run acts as
+
+Scheduled triggers, webhook triggers and a teammate's **Run now** all run **as the task's owner** (whoever
+created it): their model keys, their usage, and only the publishing accounts and browser profiles they may
+use — their own or those shared into the workspace. If the graph references an account or profile someone
+hasn't shared, that run fails saying it "belongs to someone else and hasn't been shared"; ask its owner to
+share it, or switch to one the task owner owns.
 
 Scheduling runs on the connected backend. In local mode it runs with the app, so fully quitting stops scheduled execution. With a remote backend, that server must stay running. Closing a window and quitting the application are different actions. See [Workflows](/docs/guides/workflows) for triggers and variables.
 

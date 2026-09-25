@@ -58,6 +58,12 @@ def start_url_import(
         raise UrlImportError("urlImportErr_tooMany", max=MAX_ITEMS)
     if kind not in ("video", "audio"):
         raise UrlImportError("urlImportErr_badKind")
+    if profile_id:
+        # 借登录态就是在用那个人的身份:别人的私有档案**建任务时**就拒(见 browser.usable_profile),
+        # 不让一个注定借不到 cookie 的任务排进队列、再悄悄按公开内容下。跑的时候经 open_session 再查一次。
+        from app.domain import browser
+
+        browser.usable_profile(db, workspace_id, profile_id, actor=created_by)
 
     job = create_job(
         db,
@@ -93,6 +99,7 @@ def _run(job_id: str) -> None:
         kind = str(payload.get("kind") or "video")
         profile_id = str(payload.get("profile_id") or "")
         max_height = int(payload.get("max_height") or 0)
+        actor = job.created_by
         job.status = "running"
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
@@ -103,8 +110,8 @@ def _run(job_id: str) -> None:
     asset_ids: list[str] = []
     total = len(items)
     workdir = Path(tempfile.mkdtemp(prefix="mosael-url-import-"))
-    cookie_file = _cookie_file(workspace_id, profile_id, workdir) if profile_id else None
     try:
+        cookie_file = _cookie_file(workspace_id, profile_id, workdir, actor=actor) if profile_id else None
         for index, item in enumerate(items):
             title = str(item.get("title") or item.get("url") or "")
             try:
@@ -227,10 +234,11 @@ def failure_report(failures: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int = 0):
+def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int = 0, actor: str | None):
     """这个链接后面有什么(只读元数据)。带了浏览器档案就借它的登录态去探。
 
     探和下是同一个 cookie 来源 —— 探得到、下不到(或反过来)的话,用户看到的列表就是假的。
+    `actor` 是谁在探:借的是档案主人的登录态,别人的私有档案被拒(`sharing.NotUsableError`)。
     """
     import shutil
     import tempfile
@@ -239,14 +247,14 @@ def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int =
 
     workdir = Path(tempfile.mkdtemp(prefix="mosael-probe-")) if profile_id else None
     try:
-        cookie_file = _cookie_file(workspace_id, profile_id, workdir) if workdir is not None else None
+        cookie_file = _cookie_file(workspace_id, profile_id, workdir, actor=actor) if workdir is not None else None
         return ytdlp.probe(url.strip(), cookie_file=cookie_file, start=start)
     finally:
         if workdir is not None:
             shutil.rmtree(workdir, ignore_errors=True)
 
 
-def _cookie_file(workspace_id: str, profile_id: str, workdir: Path) -> Path | None:
+def _cookie_file(workspace_id: str, profile_id: str, workdir: Path, *, actor: str | None) -> Path | None:
     """把浏览器池档案里的登录态借出来,写成 yt-dlp 认的 cookies.txt。
 
     **登录态只有 Electron 那一侧有** —— 它存在档案的持久分区里,后端看不到。所以走既有的
@@ -254,14 +262,18 @@ def _cookie_file(workspace_id: str, profile_id: str, workdir: Path) -> Path | No
 
     取不到就返回 None 而不是抛:没有 cookie 只是"下不了需要登录的那些",而公开内容照样能下 ——
     为了一个可能用不上的登录态让整批下载失败,是把辅助手段当成了前提。
+
+    **唯一的例外是「这个档案不归你用」**:那不是取不到,是被拒。吞掉它的话,借别人私有档案的
+    请求会悄悄降级成公开下载,用户看不出自己选的档案根本没被用上。
     """
-    from app.domain import browser
+    from app.domain import browser, sharing
 
     session = None
     try:
         with SessionLocal() as db:
             session = browser.open_session(
                 db, workspace_id=workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=None,
+                actor=actor,
             )
             session_id = session.id
         result = browser.run_action(session_id, "cookies", {})
@@ -272,6 +284,8 @@ def _cookie_file(workspace_id: str, profile_id: str, workdir: Path) -> Path | No
         target = workdir / "cookies.txt"
         target.write_text("# Netscape HTTP Cookie File\n" + "\n".join(lines) + "\n", encoding="utf-8")
         return target
+    except sharing.NotUsableError:
+        raise
     except Exception as exc:  # noqa: BLE001 — 借不到登录态就按公开内容下,不该让整批失败
         logger.warning("取浏览器档案 %s 的 cookie 失败:%s", profile_id, str(exc)[:200])
         return None

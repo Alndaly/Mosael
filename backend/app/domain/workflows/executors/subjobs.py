@@ -228,6 +228,8 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
     asset = db.get(Asset, str(config.get("asset_id", "")))
     if asset is None or asset.workspace_id != workflow.workspace_id:
         raise WorkflowDomainError("wfErr_publishAssetMissing")
+    # 用的是**这次运行的操作人**的授权:手动运行是点运行的人,定时任务 / webhook 是任务主人
+    # (见 scheduler.operations._open_run)。别人的私有账号在 start_publish 里被拒。
     task = start_publish(
         db,
         workspace_id=workflow.workspace_id,
@@ -235,7 +237,7 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
         asset=asset,
         title=str(config.get("title", "")),
         description=str(config.get("description", "")),
-        created_by=current_actor(db),
+        actor=current_actor(db),
         tags=[],
     )
     final = wait_for_job(task.job_id or "", release=db)

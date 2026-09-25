@@ -166,13 +166,41 @@ def _package_of(node_type: str) -> str:
 
 
 def _publish_accounts(db: Session, ctx: OptionContext) -> list[Option]:
-    """这个工作区里可用的发布账号。"""
+    """这个工作区里**他能用**的发布账号:自己的,或主人共享出来的。
+
+    此前列的是工作区里的全部账号 —— 同事的私有账号也在下拉里,选了之后运行时才被拒
+    (publish.start_publish 查归属)。下拉和用的那一刻必须是同一个判据(sharing.usable_filter)。
+    """
     from app.db.models import PublishAccount
+    from app.domain import sharing
 
     rows = db.scalars(
         select(PublishAccount)
-        .where(PublishAccount.workspace_id == ctx.workspace_id)
+        .where(
+            PublishAccount.workspace_id == ctx.workspace_id,
+            sharing.usable_filter("publish_account", ctx.user_id, ctx.workspace_id),
+        )
         .order_by(PublishAccount.created_at)
+    )
+    return [{"value": row.id, "label": row.name} for row in rows]
+
+
+def _browser_profiles(db: Session, ctx: OptionContext) -> list[Option]:
+    """「打开浏览器」池模式能借的档案:**他能用**的那些(自己的,或主人共享出来的)。
+
+    此前这一格是个自由文本框,要用户去浏览器池里把档案 id 抄过来 —— 抄得到别人的,运行时
+    才被拒(browser.usable_profile)。判据和浏览器池列表、用的那一刻是同一个。
+    """
+    from app.db.models import BrowserProfile
+    from app.domain import sharing
+
+    rows = db.scalars(
+        select(BrowserProfile)
+        .where(
+            BrowserProfile.workspace_id == ctx.workspace_id,
+            sharing.usable_filter("browser_profile", ctx.user_id, ctx.workspace_id),
+        )
+        .order_by(BrowserProfile.created_at.desc())
     )
     return [{"value": row.id, "label": row.name} for row in rows]
 
@@ -211,6 +239,7 @@ SOURCES: dict[str, Source] = {
     "plugin_tools": _plugin_tools,
     "plugin_instances": _plugin_instances,
     "publish_accounts": _publish_accounts,
+    "browser_profiles": _browser_profiles,
     "callable_workflows": _callable_workflows,
 }
 

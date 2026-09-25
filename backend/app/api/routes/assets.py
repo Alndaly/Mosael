@@ -91,8 +91,16 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     from app.domain.assets.from_url import probe_url as probe
     from app.media.ytdlp import YtdlpError
 
+    from app.domain import sharing
+
     try:
-        listing = probe(body.url, workspace_id=body.workspace_id, profile_id=body.profile_id or "", start=body.start)
+        listing = probe(
+            body.url, workspace_id=body.workspace_id, profile_id=body.profile_id or "", start=body.start,
+            actor=user.id,
+        )
+    except sharing.NotUsableError as exc:
+        # 别人的私有浏览器档案:借不了它的登录态。
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except YtdlpError as exc:
         # 出口才翻:领域抛的是原因 key,这里按请求方的 Accept-Language 渲染。
         raise HTTPException(status_code=422, detail=t(exc.key, get_current_locale(), **exc.params)) from exc
@@ -120,7 +128,9 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
 def import_from_url(body: UrlImportRequest, db: DbSession, user: CurrentUser) -> Job:
     """把选中的条目下载进素材库。返回任务 —— 下载要跑一阵,不该占着一个请求。"""
     ensure_workspace_perm(db, user, body.workspace_id, "upload")
+    from app.domain import sharing
     from app.domain.assets.from_url import UrlImportError, start_url_import
+    from app.domain.browser import BrowserDomainError
 
     try:
         return start_url_import(
@@ -133,7 +143,9 @@ def import_from_url(body: UrlImportRequest, db: DbSession, user: CurrentUser) ->
             profile_id=body.profile_id,
             max_height=body.max_height,
         )
-    except UrlImportError as exc:
+    except sharing.NotUsableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (UrlImportError, BrowserDomainError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

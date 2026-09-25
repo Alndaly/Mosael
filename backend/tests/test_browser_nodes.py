@@ -61,7 +61,7 @@ def test_browser_click_passes_text_and_exact(monkeypatch) -> None:
     monkeypatch.setattr(bdom, "run_action", lambda sid, action, args, **k: (seen.update({"action": action, "args": args}) or {}))
     ws = _workspace_id()
     with SessionLocal() as db:
-        sid = bdom.open_session(db, workspace_id=ws).id
+        sid = bdom.open_session(db, workspace_id=ws, actor=None).id
         bx.browser_click(db, _wf(ws), {"session": sid, "text": "登录", "exact": "是"})
     assert seen["action"] == "click"
     assert seen["args"]["text"] == "登录" and seen["args"]["exact"] is True
@@ -79,7 +79,7 @@ def test_browser_wait_needs_a_target(monkeypatch) -> None:
     monkeypatch.setattr(bdom, "run_action", lambda *a, **k: {})
     ws = _workspace_id()
     with SessionLocal() as db:
-        sid = bdom.open_session(db, workspace_id=ws).id
+        sid = bdom.open_session(db, workspace_id=ws, actor=None).id
         with pytest.raises(WorkflowDomainError, match="selector / url_contains / text"):
             bx.browser_wait(db, _wf(ws), {"session": sid})  # 无 selector/url_contains/text
 
