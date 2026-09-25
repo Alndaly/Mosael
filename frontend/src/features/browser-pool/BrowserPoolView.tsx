@@ -303,13 +303,18 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
             const loggedIn = bound && p.binding_status === "bound";
             const platformLabel = (platforms.data ?? []).find((m) => m.platform === p.platform)?.label ?? p.platform;
             // 卡片的 ⋯ 和右键菜单同一份清单(见 ActionContextMenuItems)。
-            const actions: MenuAction[] = [
-              { label: t("rename"), icon: <Pencil />, onSelect: () => setRenaming(p) },
-              { label: t("publishProxySet"), icon: <Globe />, onSelect: () => setProxyEditing(p) },
-              ...(p.is_mine ? [{ label: p.shared ? t("poolUnshare") : t("poolShare"), icon: <Users2 />, disabled: share.isPending, onSelect: () => share.mutate({ p, shared: !p.shared }) }] : []),
-              ...(canSignOut(p) && (!bound || loggedIn) ? [{ label: bound ? t("poolSignOut") : t("poolClearData"), icon: bound ? <LogOut /> : <Eraser />, onSelect: () => setSigningOut(p) }] : []),
-              { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setRemoving(p) },
-            ];
+            // **管只认主人**(后端 sharing.ensure_manageable):共享给我的,我能打开、能用,但改名、改代理、
+            // 退出登录、删除这些动作不摆出来 —— 摆出来点了也是 403。
+            const mine = p.is_mine;
+            const actions: MenuAction[] = mine
+              ? [
+                  { label: t("rename"), icon: <Pencil />, onSelect: () => setRenaming(p) },
+                  { label: t("publishProxySet"), icon: <Globe />, onSelect: () => setProxyEditing(p) },
+                  { label: p.shared ? t("poolUnshare") : t("poolShare"), icon: <Users2 />, disabled: share.isPending, onSelect: () => share.mutate({ p, shared: !p.shared }) },
+                  ...(canSignOut(p) && (!bound || loggedIn) ? [{ label: bound ? t("poolSignOut") : t("poolClearData"), icon: bound ? <LogOut /> : <Eraser />, onSelect: () => setSigningOut(p) }] : []),
+                  { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setRemoving(p) },
+                ]
+              : [];
             return (
               <ContextMenu key={p.id}>
                 <ContextMenuTrigger asChild>
@@ -323,7 +328,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <span className="mr-auto text-ui-sm font-medium text-muted-foreground">
                         {bound ? platformLabel : t("poolGeneric")}
                       </span>
-                      <ActionMenu label={`${t("studioActions")}: ${p.name}`} actions={actions} />
+                      {actions.length > 0 && <ActionMenu label={`${t("studioActions")}: ${p.name}`} actions={actions} />}
                       {p.proxy && (
                         <em
                           className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary"
@@ -335,7 +340,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       {p.shared && (
                         <em
                           className="rounded-full bg-secondary px-1.5 text-ui-2xs not-italic text-muted-foreground"
-                          title={t("poolSharedHint")}
+                          title={mine ? t("poolSharedHint") : t("poolOwnerOnly")}
                         >
                           <Users2 size={10} className="inline align-[-1px]" />
                         </em>
@@ -377,8 +382,15 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        title={window.mosaelPublish || window.mosaelBrowser?.openLogin ? undefined : t("publishNeedDesktop")}
-                        disabled={bound ? !window.mosaelPublish : !window.mosaelBrowser?.openLogin}
+                        title={
+                          !(window.mosaelPublish || window.mosaelBrowser?.openLogin)
+                            ? t("publishNeedDesktop")
+                            : bound && !loggedIn && !mine
+                              ? t("poolOwnerOnly")
+                              : undefined
+                        }
+                        // 登录 = 把这个身份换成某个平台账号的登录态,是主人的事;别人只能打开已经登好的。
+                        disabled={bound ? !window.mosaelPublish || (!loggedIn && !mine) : !window.mosaelBrowser?.openLogin}
                         onClick={() => (loggedIn ? openPage(p) : login(p))}
                       >
                         {loggedIn || !bound ? (
@@ -405,7 +417,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         </Button>
                       )}
                       {/* 已登录时「重新登录」退居次要动作:换号/掉线自查还需要它,但它不该是默认那一下。 */}
-                      {loggedIn && (
+                      {loggedIn && mine && (
                         <Button
                           size="icon-sm"
                           variant="ghost"
@@ -418,7 +430,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                           <KeyRound />
                         </Button>
                       )}
-                      {bound && (
+                      {bound && mine && (
                         <Button
                           size="icon-sm"
                           variant="ghost"
@@ -433,9 +445,10 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <span className="flex-1" />
                       {/* 开关控制的是「智能体/发布还能不能用这个账号」—— 光一个无字开关猜不出来,
                           把作用写在悬停里(卡上没地方常驻一行说明)。 */}
-                      <span title={t("publishAccountEnabledHint")}>
+                      <span title={mine ? t("publishAccountEnabledHint") : t("poolOwnerOnly")}>
                         <Switch
                           checked={p.enabled}
+                          disabled={!mine}
                           onCheckedChange={(next) => setEnabled.mutate({ p, enabled: next })}
                           aria-label={t("publishAccountEnabled")}
                         />
@@ -443,9 +456,11 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                     </div>
                   </div>
                 </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ActionContextMenuItems actions={actions} />
-                </ContextMenuContent>
+                {actions.length > 0 && (
+                  <ContextMenuContent>
+                    <ActionContextMenuItems actions={actions} />
+                  </ContextMenuContent>
+                )}
               </ContextMenu>
             );
         })}

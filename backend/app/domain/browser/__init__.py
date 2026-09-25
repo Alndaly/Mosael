@@ -131,8 +131,11 @@ def update_profile(
     name: str | None = None,
     proxy: str | None | object = _UNSET,
     enabled: bool | None = None,
+    actor: str | None,
 ) -> BrowserProfile:
+    """改档案。只有主人能改(见 sharing.ensure_manageable):共享出去是借给人用,不是交给人管。"""
     prof = get_profile(db, workspace_id, profile_id)
+    sharing.ensure_manageable(db, "browser_profile", prof, actor=actor)
     if name is not None:
         prof.name = name.strip()[:160]
     if proxy is not _UNSET:
@@ -144,9 +147,11 @@ def update_profile(
     return prof
 
 
-def delete_profile(db: Session, workspace_id: str, profile_id: str) -> None:
-    """删档案。有活动会话(租约未释放)或被发布账号绑定 → 拒删,避免删掉正在用/发布依赖的登录身份。"""
+def delete_profile(db: Session, workspace_id: str, profile_id: str, *, actor: str | None) -> None:
+    """删档案。只有主人能删(见 sharing.ensure_manageable)。有活动会话(租约未释放)或被发布账号绑定
+    → 拒删,避免删掉正在用/发布依赖的登录身份。"""
     prof = get_profile(db, workspace_id, profile_id)
+    sharing.ensure_manageable(db, "browser_profile", prof, actor=actor)
     if db.scalar(
         select(BrowserSession).where(BrowserSession.profile_id == profile_id, BrowserSession.status == "open")
     ):

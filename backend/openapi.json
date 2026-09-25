@@ -12308,8 +12308,8 @@
         "tags": [
           "publish"
         ],
-        "summary": "Update Account",
-        "operationId": "update_account_api_publish_accounts__account_id__patch",
+        "summary": "Update Account Route",
+        "operationId": "update_account_route_api_publish_accounts__account_id__patch",
         "parameters": [
           {
             "name": "account_id",
@@ -12358,8 +12358,8 @@
         "tags": [
           "publish"
         ],
-        "summary": "Delete Account",
-        "operationId": "delete_account_api_publish_accounts__account_id__delete",
+        "summary": "Delete Account Route",
+        "operationId": "delete_account_route_api_publish_accounts__account_id__delete",
         "parameters": [
           {
             "name": "account_id",
@@ -12393,9 +12393,9 @@
         "tags": [
           "publish"
         ],
-        "summary": "Recheck Account",
+        "summary": "Recheck Account Route",
         "description": "把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。",
-        "operationId": "recheck_account_api_publish_accounts__account_id__recheck_post",
+        "operationId": "recheck_account_route_api_publish_accounts__account_id__recheck_post",
         "parameters": [
           {
             "name": "account_id",

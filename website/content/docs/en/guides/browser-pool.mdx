@@ -106,11 +106,18 @@ anybody's hands, because what is shared is the session, not the password. A publ
 its browser profile are one identity, shared and withdrawn together; once withdrawn, new publishes and
 opens by others are refused.
 
+Sharing **lends it out for use; it doesn't hand over control**. Renaming, disabling or enabling, changing
+the proxy, rechecking, signing in or again, signing out or clearing data, and deleting are all owner-only —
+workspace admins included. On a card shared with you only **Open** remains; calling the API directly is
+refused too, saying only the owner can do that.
+
 Who counts as the one using it:
 
 - Publish page, Browser pool, import from link: the signed-in person.
 - A workflow run by hand: whoever pressed Run. **Scheduled and webhook-triggered runs act as the task's
-  owner** — the accounts and profiles in the graph must be the owner's own or shared into the workspace.
+  owner** — the accounts and profiles in the graph must be the owner's own or shared into the workspace;
+  **if someone else changed the version being run, they must be able to use them too**, or the owner
+  approves that version (see [Scheduled tasks](/docs/guides/scheduler)).
 - The agent: whoever approved the confirmation card.
 
 The workflow pickers for publishing account and pool profile only list the ones you may use.

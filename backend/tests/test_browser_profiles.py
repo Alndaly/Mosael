@@ -187,13 +187,13 @@ def test_cannot_delete_bound_or_busy_profile() -> None:
     with SessionLocal() as db:
         bound_pid = db.get(PublishAccount, acc_id).profile_id
         with pytest.raises(browser.BrowserDomainError):
-            browser.delete_profile(db, ws, bound_pid)
+            browser.delete_profile(db, ws, bound_pid, actor=_me(db).id)
     # 有活动会话 → 拒删
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="忙", owner=_me(db)).id
         browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         with pytest.raises(browser.BrowserDomainError):
-            browser.delete_profile(db, ws, pid)
+            browser.delete_profile(db, ws, pid, actor=_me(db).id)
 
 
 def test_manually_opening_a_generic_profile_is_remembered() -> None:

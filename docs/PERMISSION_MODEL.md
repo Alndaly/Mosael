@@ -38,6 +38,7 @@
 | `require_worker_key` | 数据目录下的进程密钥 | 本机卫星进程的 claim / report / heartbeat |
 | 确认卡 | 工具 manifest 的 `confirmation` + 会话规则 | 智能体对不可逆或对外动作的用户授权 |
 | `sharing.ensure_usable` | 是主人,或主人把它共享进了它所在的工作区 | **用**私有身份的那一刻:发布账号(`publish.start_publish`)、浏览器池档案(`browser.open_session` / `attach_session` / `usable_profile`)。`actor` 必填,None 被拒 |
+| `sharing.ensure_manageable` | 是主人(`owner_user_id == actor`),工作区 admin 也不行 | **管**私有身份:发布账号的改名 / 停用 / 改代理 / 复检 / 删除(`publish.update_account` / `recheck_account` / `delete_account`),浏览器档案的改名 / 停用 / 改代理 / 删除(`browser.update_profile` / `delete_profile`)。`actor` 必填,HTTP 回 403 |
 | 运行的授权(`domain/authority`) | 跑的人过得了闸,**且**被执行的每一版图(含子流程那一版)有一个担保人(作者或认可过它的人)也过得了 | 工作流节点调上面两道闸时,`actor=` 传 `workflows.authority.current_authority(db)`,不是 `current_actor`。见 §3.8 |
 | `host_files.ensure_readable` | 是部署管理员,或路径(realpath 之后)落在管理员共享给成员的本机文件夹里 | **读一个用户给出的本机路径**的那一刻:工作流 `browser_upload` 的 `file_path`、智能体浏览器 upload 动作、按本机路径导入素材。放行得到 `HostFile`,`browser.upload_file` 只收它。`actor` 必填,None 被拒 |
 | `host_files.ensure_whole_machine` | 是部署管理员 | 在这台电脑上**不隔离地跑代码**:`run_host_code`、`blender_execute` 确认卡(批准的人) |
@@ -179,6 +180,21 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
 单机用时跑的人、作者、担保人永远是同一个人,零摩擦。棘轮:`tests/test_runs_act_with_the_revision_authors_authority.py`
 (`created_by` 必填且调用点不写 None;执行器里调闸门的 `actor=` 不是 `current_actor(...)`)。
 
+### 3.9 同事猜到 id 就能管别人的私有账号 — ✅ 已修复
+
+§3.6 管的是「用」。改名、停用 / 启用、改代理、复检、删除仍只查工作区角色:同事看不到别人的私有账号,猜到 id
+照样能停掉、删掉;共享进工作区的那些更是就摆在列表里。
+
+现在**管只认主人**,且只在一处:`sharing.ensure_manageable(…, actor=…)`。私有的与共享进工作区的一视同仁 ——
+共享是主人借出去**用**,不是交出去**管**;工作区 admin 也不行(他管的是工作区里的内容,和 `routes/shares` 同一条)。
+管的动作收进领域函数(`publish.update_account` / `recheck_account` / `delete_account`、`browser.update_profile` /
+`delete_profile`),`actor` 必填;路由回 403(`shareErr_notManageable_*`,中英两份)。「记下停在哪一页」
+(`/browser/profiles/{id}/opened`)是用,不是管,仍按 `may_use`。退出登录 / 清除数据在桌面端主进程里做,不经后端 ——
+浏览器池只给主人摆这些按钮,也只给主人摆登录 / 重新登录(登录是把这个身份换成某个平台账号,是主人的事)。
+
+棘轮:`tests/test_private_identities_are_managed_by_their_owner.py`(闸门的 `actor` 必填、调用点不写 None、两张路由表里
+每条带 `{account_id}` / `{profile_id}` 的写入路由都过闸)。
+
 ## 4. 已经对上的地方
 
 盘点不能只列问题,否则读的人会以为整套都在漏:
@@ -195,8 +211,6 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
 - 默认仍是本地单用户部署;远程多用户部署的全部路径需继续用隔离测试验证。
 - `credentials` 这个词仍同时出现在 Provider Credential 和插件凭据中;它们的归属已分开,
   但 UI 文案和新文档必须继续明确区分「我的 AI 连接」与「工作区插件秘密」。
-- 发布账号 / 浏览器池档案的**管理**(改名、停用、复检、删除)仍只查工作区角色,没有按归属收紧:
-  §3.6 管的是「用」。同事看不到别人的私有账号,但猜到 id 仍能改它、删它 —— 是否只许主人管理,另行决定。
 - worker key 证明的是卫星进程,不是最终用户;将 external job 放到其他机器前,
   需单独解决该部署的密钥下发与信任范围。
 

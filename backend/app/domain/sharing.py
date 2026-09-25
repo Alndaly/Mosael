@@ -268,6 +268,28 @@ def ensure_usable(db: Session, kind: str, resource: Any, actor: Actor) -> None:
     )
 
 
+class NotManageableError(SharingError):
+    """这一份不是你的 —— 能用(共享给了你)也不等于能管。带文案 key(`shareErr_notManageable_*`),api 回 403。"""
+
+
+_NOT_MANAGEABLE_KEYS: dict[str, str] = {
+    "publish_account": "shareErr_notManageable_publishAccount",
+    "browser_profile": "shareErr_notManageable_browserProfile",
+}
+
+
+def ensure_manageable(db: Session, kind: str, resource: Any, *, actor: str | None) -> None:
+    """**管**一份私有身份(改名、停用 / 启用、改代理、复检、退出登录、删除)之前必须过这里:只有主人。
+
+    和「用」(`ensure_usable`)是两道闸:共享进工作区是主人**借出去用**,不是交出去管 —— 同事能拿它发帖,
+    但不能把它改名、停掉、换代理、删掉,也不能替主人重新登录成另一个号。工作区 admin 也不行:他管的是工作区
+    里的内容,不是别人的登录态(和 routes/shares 同一条)。此前这几条路由只查工作区角色,同事猜到 id 就能
+    删别人的私有账号。`actor` 必填;None 与没有主人的行一律拒绝。
+    """
+    if resource is None or not actor or resource.owner_user_id != actor:
+        raise NotManageableError(_NOT_MANAGEABLE_KEYS.get(kind, "shareErr_notManageable"))
+
+
 def shared_workspaces(db: Session, kind: str, resource_id: str) -> list[str]:
     return [
         row.workspace_id

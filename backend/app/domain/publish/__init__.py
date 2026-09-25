@@ -294,6 +294,42 @@ def create_account(
     return account
 
 
+def update_account(db: Session, account: PublishAccount, changes: dict[str, Any], *, actor: str | None) -> PublishAccount:
+    """改名、改配置、停用 / 启用、改代理。只有主人能改(见 sharing.ensure_manageable)。"""
+    sharing.ensure_manageable(db, "publish_account", account, actor=actor)
+    if changes.get("name"):
+        account.name = changes["name"]
+    if changes.get("config") is not None:
+        account.config = changes["config"]
+    if changes.get("enabled") is not None:
+        account.enabled = changes["enabled"]
+    if "proxy" in changes:
+        # 空串 → 清成 None(直连);否则存去空白后的值。
+        account.proxy = (changes["proxy"] or "").strip() or None
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def recheck_account(db: Session, account: PublishAccount, *, actor: str | None) -> PublishAccount:
+    """把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。只有主人能点。"""
+    sharing.ensure_manageable(db, "publish_account", account, actor=actor)
+    account.binding_status = "unknown"
+    account.last_checked_at = None
+    account.last_error = None
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -> None:
+    """删发布账号(发布任务随外键级联)。只有主人能删。"""
+    sharing.ensure_manageable(db, "publish_account", account, actor=actor)
+    sharing.forget(db, "publish_account", account.id)
+    db.delete(account)
+    db.commit()
+
+
 def start_publish(
     db: Session,
     *,

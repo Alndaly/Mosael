@@ -80,7 +80,10 @@ def update_profile(
             name=body.name if "name" in fields else None,
             proxy=body.proxy if "proxy" in fields else browser._UNSET,
             enabled=body.enabled if "enabled" in fields else None,
+            actor=user.id,
         )
+    except sharing.NotManageableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except browser.BrowserDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", prof.workspace_id))
@@ -114,7 +117,9 @@ def delete_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Respons
         raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
     ensure_workspace_perm(db, user, prof.workspace_id, "edit")
     try:
-        browser.delete_profile(db, prof.workspace_id, profile_id)
+        browser.delete_profile(db, prof.workspace_id, profile_id, actor=user.id)
+    except sharing.NotManageableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except browser.BrowserDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(status_code=204)

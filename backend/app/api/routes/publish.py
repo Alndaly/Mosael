@@ -22,10 +22,13 @@ from app.domain.publish import (
     PUBLISH_PLATFORMS,
     PublishDomainError,
     create_account,
+    delete_account,
     list_tasks,
     option_specs,
+    recheck_account,
     start_publish,
     task_with_status,
+    update_account,
 )
 
 router = APIRouter(tags=["publish"])
@@ -87,51 +90,42 @@ def create_account_route(body: PublishAccountCreate, db: DbSession, user: Curren
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.patch("/publish/accounts/{account_id}", response_model=PublishAccountOut)
-def update_account(account_id: str, body: PublishAccountUpdate, db: DbSession, user: CurrentUser) -> PublishAccount:
+def _account(db: DbSession, account_id: str) -> PublishAccount:
     account = db.get(PublishAccount, account_id)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    ensure_workspace_perm(db, user, account.workspace_id, "publish")
-    changes = body.model_dump(exclude_unset=True)
-    if changes.get("name"):
-        account.name = changes["name"]
-    if changes.get("config") is not None:
-        account.config = changes["config"]
-    if changes.get("enabled") is not None:
-        account.enabled = changes["enabled"]
-    if "proxy" in changes:
-        # 空串 → 清成 None(直连);否则存去空白后的值。
-        account.proxy = (changes["proxy"] or "").strip() or None
-    db.commit()
-    db.refresh(account)
     return account
+
+
+@router.patch("/publish/accounts/{account_id}", response_model=PublishAccountOut)
+def update_account_route(account_id: str, body: PublishAccountUpdate, db: DbSession, user: CurrentUser) -> PublishAccount:
+    account = _account(db, account_id)
+    ensure_workspace_perm(db, user, account.workspace_id, "publish")
+    try:
+        return update_account(db, account, body.model_dump(exclude_unset=True), actor=user.id)
+    except sharing.NotManageableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @router.post("/publish/accounts/{account_id}/recheck", response_model=PublishAccountOut)
-def recheck_account(account_id: str, db: DbSession, user: CurrentUser) -> PublishAccount:
+def recheck_account_route(account_id: str, db: DbSession, user: CurrentUser) -> PublishAccount:
     """把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。"""
-    account = db.get(PublishAccount, account_id)
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
+    account = _account(db, account_id)
     ensure_workspace_perm(db, user, account.workspace_id, "publish")
-    account.binding_status = "unknown"
-    account.last_checked_at = None
-    account.last_error = None
-    db.commit()
-    db.refresh(account)
-    return account
+    try:
+        return recheck_account(db, account, actor=user.id)
+    except sharing.NotManageableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @router.delete("/publish/accounts/{account_id}", status_code=204)
-def delete_account(account_id: str, db: DbSession, user: CurrentUser) -> Response:
-    account = db.get(PublishAccount, account_id)
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
+def delete_account_route(account_id: str, db: DbSession, user: CurrentUser) -> Response:
+    account = _account(db, account_id)
     ensure_workspace_perm(db, user, account.workspace_id, "publish")
-    sharing.forget(db, "publish_account", account.id)
-    db.delete(account)
-    db.commit()
+    try:
+        delete_account(db, account, actor=user.id)
+    except sharing.NotManageableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return Response(status_code=204)
 
 

@@ -1406,6 +1406,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而它要读这台电脑上的文件。请部署管理员打开这个工作流,确认改动后点「认可这一版」",
         "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and it reads files on this computer. Ask a deployment admin to open the workflow, review the change and click “Approve this version”.",
     },
+    # 管私有身份只认主人(见 domain/sharing.ensure_manageable)。共享是借出去用,不是交出去管。
+    "shareErr_notManageable": {
+        "zh": "这份资源属于别人,只有主人能改、停用或删除它",
+        "en": "This belongs to someone else, so only its owner can change, disable or delete it.",
+    },
+    "shareErr_notManageable_publishAccount": {
+        "zh": "这个发布账号属于别人。共享给你只是可以用它发布 —— 改名、停用、改代理、复检、退出登录和删除只有主人能做",
+        "en": "This publishing account belongs to someone else. Sharing it lets you publish with it — only its owner can rename, disable, change the proxy, recheck, sign out or delete it.",
+    },
+    "shareErr_notManageable_browserProfile": {
+        "zh": "这个浏览器档案属于别人。共享给你只是可以用它 —— 改名、停用、改代理、清除登录数据和删除只有主人能做",
+        "en": "This browser profile belongs to someone else. Sharing it lets you use it — only its owner can rename, disable, change the proxy, clear its sign-in data or delete it.",
+    },
     "shareErr_unknownKind": {
         "zh": "未知的资源类型:{kind}",
         "en": "Unknown resource type: {kind}",

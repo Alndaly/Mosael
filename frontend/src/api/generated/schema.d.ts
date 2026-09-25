@@ -4121,12 +4121,12 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Account */
-        delete: operations["delete_account_api_publish_accounts__account_id__delete"];
+        /** Delete Account Route */
+        delete: operations["delete_account_route_api_publish_accounts__account_id__delete"];
         options?: never;
         head?: never;
-        /** Update Account */
-        patch: operations["update_account_api_publish_accounts__account_id__patch"];
+        /** Update Account Route */
+        patch: operations["update_account_route_api_publish_accounts__account_id__patch"];
         trace?: never;
     };
     "/api/publish/accounts/{account_id}/recheck": {
@@ -4139,10 +4139,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Recheck Account
+         * Recheck Account Route
          * @description 把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。
          */
-        post: operations["recheck_account_api_publish_accounts__account_id__recheck_post"];
+        post: operations["recheck_account_route_api_publish_accounts__account_id__recheck_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -20991,7 +20991,7 @@ export interface operations {
             };
         };
     };
-    delete_account_api_publish_accounts__account_id__delete: {
+    delete_account_route_api_publish_accounts__account_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -21020,7 +21020,7 @@ export interface operations {
             };
         };
     };
-    update_account_api_publish_accounts__account_id__patch: {
+    update_account_route_api_publish_accounts__account_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -21055,7 +21055,7 @@ export interface operations {
             };
         };
     };
-    recheck_account_api_publish_accounts__account_id__recheck_post: {
+    recheck_account_route_api_publish_accounts__account_id__recheck_post: {
         parameters: {
             query?: never;
             header?: never;
