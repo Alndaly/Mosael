@@ -779,6 +779,20 @@ function WorkflowEditor({
   const [nodes, setNodes] = React.useState<Node[]>(() => toWorkflowFlowNodes(workflow.graph as unknown as WorkflowGraph, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toWorkflowFlowEdges(workflow.graph as unknown as WorkflowGraph, t, registry));
   React.useEffect(() => { setNodes(current => current.map(node => ({ ...node, selected: false }))); }, [markerMode, markersVisible, workflowComments.active]);
+  /**
+   * 检查器开给谁,**从 React Flow 的选中态派生**,不另记一份。
+   *
+   * 此前检查器自己存一个 selectedNodeId,再靠 selectInspectorNode「同一个动作更新两边」来对齐 ——
+   * 但选中态还有别的入口是 React Flow 自己改的:⌘/Ctrl 点击往选区里加、拖动一个没选中的节点、
+   * 框选。前者被节点点击回调里的「只选这一个」当场冲掉(⌘ 点击多选根本用不了),后两者让检查器
+   * 挂在 A 上而紫框在 B 上。一份事实就没有对齐问题:恰好选中一个 = 编辑它;选中多个 = 在
+   * 操作一组(折叠为子图),不是在编辑某一个。
+   */
+  const selectedFlowIds = React.useMemo(
+    () => nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id),
+    [nodes],
+  );
+  const selectedNodeId = selectedFlowIds.length === 1 ? selectedFlowIds[0] : null;
   const [dirty, setDirty] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
   const [showRevisions, setShowRevisions] = React.useState(false);
@@ -819,7 +833,6 @@ function WorkflowEditor({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
-  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   // 导出走后端信封(格式和版本的权威在后端),落成 .mosael-workflow.json —— 和列表页
@@ -891,9 +904,8 @@ function WorkflowEditor({
   // 每张工作流各记各的位置 —— 换一张图不该继承上一张停在哪儿。
   const viewport = usePersistentViewport(`workflow:${workflow.id}`);
 
-  /** 检查器节点与 React Flow 的紫色选中框必须由同一个动作更新，不能各记各的。 */
+  /** 让画布只选中这一个(null = 全不选)。检查器跟着选中态走,见 selectedNodeId。 */
   const selectInspectorNode = React.useCallback((nodeId: string | null) => {
-    setSelectedNodeId(nodeId);
     setNodes((current) => withSingleNodeSelected(current, nodeId));
   }, []);
   /**
@@ -1147,7 +1159,6 @@ function WorkflowEditor({
     setNodes(toWorkflowFlowNodes(next, registry).map((node) => ({ ...node, selected: pastedIds.has(node.id) })));
     setEdges(toWorkflowFlowEdges(next, t, registry));
     setDirty(true);
-    setSelectedNodeId(newNodes[0].id);
     return true;
   }, [graph, registry]);
 
@@ -1169,18 +1180,15 @@ function WorkflowEditor({
         // G = group,和别处"编组"是同一个键位。**要拦下浏览器的"查找下一个"** ——
         // 不 preventDefault 的话 Safari/Chrome 会在折叠的同时弹出查找栏。
         // 少于两个节点时不接管:那时这个操作本来就不成立,让系统的 ⌘G 照常工作。
-        // 就地从 nodes 取选中项:selectedFlowIds 声明在这条 effect 后面,而它本来就是
-        // nodes 的派生量 —— 为了顺序去搬一个几百行外的声明,只会让下一个人更难读。
-        const picked = nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id);
-        if (picked.length >= 2) {
+        if (selectedFlowIds.length >= 2) {
           event.preventDefault();
-          handleCollapse(picked);
+          handleCollapse(selectedFlowIds);
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [copySelection, pasteClipboard, nodes, handleCollapse]);
+  }, [copySelection, pasteClipboard, selectedFlowIds, handleCollapse]);
 
   const onNodesChange = React.useCallback(
     (changes: NodeChange[]) => {
@@ -1569,9 +1577,6 @@ function WorkflowEditor({
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  // 拖动时收起(跟着抖没有意义,还挡住落点),松手后 dragging 转 false 自然复现。
-  // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
-  const selectedFlowIds = nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id);
 
   // 就绪度分析:模型/密钥信号在编辑器层拉取(与属性面板共用 queryKey,自动去重),
   // 供画布角标 + 运行前 checklist。只有图里真有对应节点才请求。
@@ -2177,6 +2182,9 @@ function WorkflowEditor({
               if (markerMode) return;
               if (workflowComments.active) { const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }); if (point) workflowComments.place({ ...point, node_id: node.id }); return; }
               blurFloatingPanels(); // 层级快捷键交还给画布
+              // 按着多选键(⌘/Ctrl)或 Shift 点,是往选区里加减 —— React Flow 已经改好了选中态,
+              // 这里再「只选这一个并聚焦」就是把用户刚加进来的选区当场冲掉。
+              if (event.metaKey || event.ctrlKey || event.shiftKey) return;
               focusNode(node.id);
             }}
             onNodeDoubleClick={(_event, node) => {
