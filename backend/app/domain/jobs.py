@@ -703,6 +703,18 @@ def _cancel_descendants(db: Session, job_id: str) -> set[str]:
     return seen
 
 
+def cancel_job_tree(db: Session, job: Job) -> set[str] | None:
+    """取消这个任务,并广度遍历取消它的后代(连嵌套子工作流)。不 commit。
+
+    返回取消到的 id(含自己);它已经落了终态就返回 None、什么都不动。用户点取消(cancel_job)
+    和「等它的人不再要它了」(工作流这一轮正在停,见 workflows.executors.common.wait_until)
+    走的是同一条路 —— 取消只有一种做法。
+    """
+    if not _cancel_job_row(db, job):
+        return None
+    return _cancel_descendants(db, job.id)
+
+
 def cancel_job(db: Session, job: Job) -> Job:
     """用户主动取消:job 落终态,发布任务同步撤单,工作流在节点边界停下。
 
@@ -712,11 +724,10 @@ def cancel_job(db: Session, job: Job) -> Job:
     """
     if job.status not in ("queued", "running"):
         raise JobError("jobErr_alreadyFinished")
-    if not _cancel_job_row(db, job):
+    seen = cancel_job_tree(db, job)
+    if seen is None:
         db.rollback()
         raise JobError("jobErr_alreadyFinished")
-    # 广度遍历后代,连嵌套子工作流一并取消。
-    seen = _cancel_descendants(db, job.id)
     db.commit()
     db.refresh(job)
     logger.info("job %s [%s] cancelled by user (cascaded %d descendants)", job.id, job.kind, len(seen) - 1)

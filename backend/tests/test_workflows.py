@@ -1405,6 +1405,87 @@ def test_cancel_running_workflow() -> None:
     assert any(e["type"] == "workflow.node.started" and (e.get("payload") or {}).get("node_id") == "start"
                for e in events), "最早的节点事件被截断了"
 
+def _run_graph_in_thread(graph: dict, *, workspace_id: str) -> tuple[dict, str, object]:
+    """在后台线程里用一个真实的 workflow job 跑图,返回 (结果槽, job id, 线程)。"""
+    import threading
+
+    from app.domain.jobs import create_job, finish_job
+    from app.domain.workflows.engine import execute_graph
+
+    with SessionLocal() as db:
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph=graph)
+        db.add(workflow)
+        job = create_job(db, workspace_id=workspace_id, kind="workflow", payload={}, created_by=None)
+        finish_job(db, job, status="running")
+        db.commit()
+        workflow_id, job_id = workflow.id, job.id
+
+    outcome: dict = {}
+
+    def body() -> None:
+        with SessionLocal() as db:
+            job = db.get(Job, job_id)
+            try:
+                outcome["result"] = execute_graph(graph, wf_id=workflow_id, job=job, db=db, entry_is_root=True)
+            except Exception as exc:  # noqa: BLE001
+                outcome["error"] = exc
+
+    thread = threading.Thread(target=body, daemon=True)
+    thread.start()
+    return outcome, job_id, thread
+
+
+def test_一个节点失败_兄弟节点等着的子任务跟着取消(monkeypatch) -> None:
+    """一个节点失败,整条工作流就失败了。此前引擎要等所有还在跑的兄弟节点**自己**跑完才报失败 ——
+    而兄弟节点等的是它派生的子任务(生成、导出……),那些子任务照样在跑、照样花钱,
+    做完了也没人要。失败要让这一轮停下:兄弟节点等着的子任务取消,失败立刻报出来。"""
+    from app.domain.jobs import create_job, was_cancelled
+    from app.domain.workflows.executors import _REGISTRY
+    from app.domain.workflows.executors import common
+
+    monkeypatch.setattr(common, "CHILD_POLL_SECONDS", 0.05)
+    children: list[str] = []
+
+    def waits(db, workflow, config):
+        child = create_job(db, workspace_id=workflow.workspace_id, kind="t_child", payload={}, created_by=None)
+        db.commit()
+        children.append(child.id)
+        common.wait_for_job(child.id, release=db)
+        return {}
+
+    def fails(db, workflow, config):
+        while not children:
+            time.sleep(0.01)
+        raise WorkflowDomainError("wfErr_llmPromptEmpty")
+
+    monkeypatch.setitem(_REGISTRY, "t_waits", waits)
+    monkeypatch.setitem(_REGISTRY, "t_fails", fails)
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    graph = {
+        "nodes": [
+            {"id": "a", "type": "t_waits", "name": "等子任务", "config": {}},
+            {"id": "b", "type": "t_fails", "name": "失败", "config": {}},
+        ],
+        "edges": [],
+    }
+    outcome, _job_id, thread = _run_graph_in_thread(graph, workspace_id=ws)
+    thread.join(timeout=5)
+    stuck = thread.is_alive()
+    if stuck:  # 收拾现场:手动取消子任务,让线程退出
+        with SessionLocal() as db:
+            from app.domain.jobs import cancel_job
+
+            cancel_job(db, db.get(Job, children[0]))
+        thread.join(timeout=5)
+    assert not stuck, "一个节点失败了,引擎还在等兄弟节点的子任务自己跑完"
+    assert isinstance(outcome.get("error"), WorkflowDomainError)
+    assert outcome["error"].key == "wfErr_llmPromptEmpty", "报出来的该是真正失败的那个节点"
+    with SessionLocal() as db:
+        assert was_cancelled(db.get(Job, children[0])), "兄弟节点派生的子任务没被取消,照样在跑"
+
+
 def test_parallel_fanout_and_join() -> None:
     """纯分流并发:start 拉两条控制边到 a/b(都跑),再各拉一条到 join(join 只跑一次、在两者之后)。"""
     client = fresh_client()

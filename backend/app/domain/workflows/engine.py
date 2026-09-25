@@ -35,6 +35,7 @@ from app.domain.workflows import (
 )
 from app.domain.workflows.binding import apply_data_edges, interpolate_node_config
 from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.common import halt_scope
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 
 logger = logging.getLogger(__name__)
@@ -304,7 +305,8 @@ def execute_graph(
     error: Exception | None = None
     cancelled = False
 
-    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_NODES, total)) as pool:
+    # 「停」信号先于线程池压上:节点提交时带走的上下文里要有它(见 executors.common._HALTS)。
+    with halt_scope() as halt, ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_NODES, total)) as pool:
         futures: dict[Any, str] = {}
 
         def schedule_ready() -> None:
@@ -343,6 +345,9 @@ def execute_graph(
                 except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
                     error = exc
                     node_event("workflow.node.failed", nid, **_failure_payload(exc))
+                    # **失败让这一轮停下。** 还在跑的兄弟节点做完了也没人要:它们正在等的子任务
+                    # 由等的那一方取消掉(见 executors.common.wait_until),而不是陪它们跑完。
+                    halt.set()
                     break
                 with lock:
                     context[nid] = outputs
@@ -356,10 +361,21 @@ def execute_graph(
             if error is None and not cancelled:
                 schedule_ready()
         if cancelled:
+            halt.set()
             event("workflow.cancelled", {"pending": len(futures)})
             for pending_nid in futures.values():
                 node_event("workflow.node.failed", pending_nid,
                            error=t("jobErr_cancelled", DEFAULT_LOCALE), error_key="jobErr_cancelled")
+        elif error is not None:
+            # 失败之后还在飞的兄弟节点:等它们停下,各自落一个终态事件 —— 只有 started 的话,
+            # 执行历史会把它们永远画成「运行中」。
+            wait(list(futures.keys()))
+            for future, pending_nid in futures.items():
+                failure = future.exception()
+                if failure is not None:
+                    node_event("workflow.node.failed", pending_nid, **_failure_payload(failure))
+                else:
+                    node_event("workflow.node.finished", pending_nid, outputs=_trim_outputs(future.result()))
 
     cancelled = cancelled or is_cancelled()
     if error is not None and not cancelled:
