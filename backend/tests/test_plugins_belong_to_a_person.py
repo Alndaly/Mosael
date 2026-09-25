@@ -106,3 +106,41 @@ def test_someone_elses_call_log_is_not_mine() -> None:
     mate = second_client("mate")
 
     assert mate.get("/api/plugins/invocations").json() == []
+
+
+def test_my_workflow_cannot_run_on_someone_elses_instance() -> None:
+    """工作流里的插件节点,落到的连接也得是**跑这条流程的人**自己的。
+
+    此前节点解析连接时不按人过滤:我没接这个插件,「只有一个可用连接就自动用它」就自动用上
+    管理员那条 —— 拿着他的第三方密钥、花他的额度,账上看不出是我;点名他的连接 id 也照跑。
+    """
+    import pytest
+
+    from app.db.models import User, Workflow, Workspace
+    from app.domain.plugins.nodes import node_type_id
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors import get_executor
+    from tests.test_plugins import SIMPLE
+    from tests.util import acting_as
+
+    admin = install(SIMPLE)
+    theirs = _my_instances(admin)[0]["id"]
+    assert admin.patch(f"/api/plugins/instances/{theirs}", json={"enabled": True}).status_code == 200
+    second_client("mate")
+    run = get_executor(node_type_id("dev.simple", "shout"))
+
+    with SessionLocal() as db:
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+        workflow = Workflow(workspace_id=db.query(Workspace).first().id, name="借用", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        with acting_as(db, mate_id):
+            with pytest.raises(WorkflowDomainError) as auto:
+                run(db, workflow, {"text": "hi"})
+            assert auto.value.key == "wfErr_pluginNoInstance"
+            with pytest.raises(WorkflowDomainError) as named:
+                run(db, workflow, {"text": "hi", "instance_id": theirs})
+            assert named.value.key == "wfErr_pluginInstanceGone"
+        # 对照:接了它的人自己跑,照常自动选中他那唯一一条。
+        with acting_as(db, None):
+            assert run(db, workflow, {"text": "hi"})["output"]["loud"] == "HI"

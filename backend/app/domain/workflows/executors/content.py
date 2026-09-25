@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Project, Workflow
+from app.domain.jobs import current_actor
 from app.domain.notifications import notify
 from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
@@ -42,10 +43,12 @@ def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str)
 
     自动选是有理由的:绝大多数包只会被接一次,逼用户在下拉里点一下那唯一的一项是纯仪式。
     但有多个时**不猜** —— 从 B 站取和从抖音取是两件事,替用户选错比报错更糟。
+
+    候选只有**跑这条流程的人**自己接的连接:接入归人,别人那条带着别人的密钥和额度。
     """
     from app.domain.plugins.nodes import instances_for_node, node_type_id
 
-    available = instances_for_node(db, node_type_id(package_id, tool_name))
+    available = instances_for_node(db, node_type_id(package_id, tool_name), current_actor(db))
     if chosen:
         if any(item["id"] == chosen for item in available):
             return chosen

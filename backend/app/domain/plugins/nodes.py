@@ -201,8 +201,13 @@ def plugin_node_types(db: Session, user_id: str | None = None) -> dict[str, dict
     return out
 
 
-def instances_for_node(db: Session, node_type: str, user_id: str | None = None) -> list[dict[str, str]]:
-    """这个节点类型可以用哪些实例。节点配置里的「连接」下拉读它。"""
+def instances_for_node(db: Session, node_type: str, user_id: str | None) -> list[dict[str, str]]:
+    """这个节点类型可以用哪些实例 —— **这个人自己接的**那些。
+
+    `user_id` 和 `exposed` 一样是必填位置参数,不给默认值:此前默认 None(= 不按人过滤),
+    工作流执行器调它时就没传,于是我的流程会自动落到别人接的那条连接上,拿着他的第三方
+    密钥跑、记在他的额度上。给个默认值就等于让漏传的地方静默通过。
+    """
     from app.domain.plugins.tools import exposed
 
     parsed = parse_node_type(node_type)
