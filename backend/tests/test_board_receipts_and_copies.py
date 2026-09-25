@@ -284,6 +284,30 @@ def test_创建副本时正在写的便签不带着写作中过去() -> None:
     assert "run" not in copied.json()["canvas"]["items"][0]
 
 
+def test_智能体往画板上放一个够不着的文档或场景_开卡时就拒() -> None:
+    """edit_board 在开卡时先干跑一遍,「写坏的算子要在批准之前就失败」。可干跑只过了形状校验,
+    引用那一道(文档在不在、场景是不是这个工作区的)留到了批准之后 —— 用户点了同意才看到报错。"""
+    import pytest
+
+    from app.core.db import SessionLocal
+    from app.domain.agent.confirmations import ConfirmationError, request_confirmation
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _board(client, ws, {"items": [], "edges": []})
+
+    with SessionLocal() as db:
+        for op in (
+            {"kind": "add_item", "type": "document", "note_id": "no-such-note", "note_revision": 1},
+            {"kind": "add_item", "type": "scene", "scene_id": "no-such-scene"},
+        ):
+            with pytest.raises(ConfirmationError):
+                request_confirmation(
+                    db, workspace_id=ws, tool="edit_board", requested_by="agent",
+                    payload={"board_id": board_id, "operations": [op]},
+                )
+
+
 def _deleted_note_board(client, ws: str) -> tuple[str, dict]:
     """一张引用了某篇文档的板,那篇文档随后被删掉了 —— 画板上留着一个坏掉的引用。"""
     note = client.post("/api/notes", json={"workspace_id": ws, "title": "品牌规范", "markdown": "蓝色"}).json()

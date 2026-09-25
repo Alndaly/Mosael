@@ -376,6 +376,18 @@ def _validate_scene_references(db: Session, workspace_id: str, canvas: dict, exi
             # 领域到领域的翻译:引用的文档有问题,对调用方来说是"这块画板存不下"。
             raise BoardDomainError(str(exc)) from exc
 
+def check_canvas(db: Session, workspace_id: str, raw: Any, existing: dict[str, Any] | None = None) -> dict[str, Any]:
+    """一份画布存不存得下:形状(normalize_canvas)+ 引用(文档在不在、3D 场景是不是这个工作区的)。
+
+    **落库和干跑共用这一道。** 智能体改画板时开卡前先干跑一遍,为的是写坏的算子在批准之前就失败;
+    干跑只过形状的话,引用坏了要等用户点了同意才报错。`existing` 是这张板现在的样子(见
+    _validate_scene_references 里「已知引用」那一条)。
+    """
+    canvas = normalize_canvas(raw)
+    _validate_scene_references(db, workspace_id, canvas, existing)
+    return canvas
+
+
 def create_board(
     db: Session,
     *,
@@ -389,9 +401,8 @@ def create_board(
     board = Board(
         workspace_id=workspace_id,
         name=(name or "").strip() or "新画板",
-        canvas=normalize_canvas(canvas),
+        canvas=check_canvas(db, workspace_id, canvas, copied_from),
     )
-    _validate_scene_references(db, workspace_id, board.canvas, copied_from)
     db.add(board)
     db.flush()
     from app.domain.collaboration import record_activity

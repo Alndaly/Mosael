@@ -204,7 +204,7 @@ def _execute_run_workflow(db: Session, confirmation: Any, actor: str | None) -> 
 def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     from app.db.models import Board
     from app.domain.boards.ops import BOARD_OP_KINDS, apply_board_ops
-    from app.domain.boards import BoardDomainError, normalize_canvas
+    from app.domain.boards import BoardDomainError, check_canvas
 
     board = db.get(Board, str(payload.get("board_id", "")))
     if board is None or board.workspace_id != workspace_id:
@@ -217,8 +217,9 @@ def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]
         if kind not in BOARD_OP_KINDS:
             raise ConfirmationError("confirmErr_unknownBoardOp", kind=kind)
     # 先干跑一遍:写坏的算子要在**批准之前**就失败,而不是让用户点了同意才看到报错。
+    # 和落库过同一道(形状 + 引用),见 boards.check_canvas。
     try:
-        normalize_canvas(apply_board_ops(board.canvas or {}, operations))
+        check_canvas(db, workspace_id, apply_board_ops(board.canvas or {}, operations), board.canvas)
     except BoardDomainError as exc:
         raise ConfirmationError(str(exc)) from exc
 
