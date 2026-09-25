@@ -16,7 +16,7 @@ export const RATCHET = true;
 
 const SRC = join(import.meta.dirname, "..");
 //: 存量。**只减不增** —— 迁完一块就把这个数字改小。
-const BASELINE = 160;
+const BASELINE = 151;
 
 function sources(dir: string): string[] {
   const out: string[] = [];

@@ -1,35 +1,16 @@
 import React from "react";
-import { PageHeading } from "@/components/layout/StudioPage";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coins, ShieldCheck, Trash2, Users } from "lucide-react";
-import { toast } from "sonner";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
-import { useI18n, usePreferences } from "@/app/preferences";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/app/modals";
-import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { AdminActivityChart } from "./AdminActivityChart";
+import { useI18n } from "@/app/preferences";
+import { CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { usePersistentTab } from "@/lib/usePersistentTab";
+import { cn } from "@/lib/utils";
+import { AdminOverview } from "./AdminOverview";
+import { AdminMembers } from "./AdminMembers";
 import { RegistrationSection } from "./RegistrationSection";
 import { SharedHostFoldersSection } from "./SharedHostFoldersSection";
-import { EmptyState } from "@/components/layout/EmptyState";
-import { formatCosts, microsIn } from "@/lib/money";
-import { SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
-import { relativeTime } from "@/lib/time";
 
-type AdminUser = components["schemas"]["AdminUserOut"];
-type Overview = components["schemas"]["AdminOverviewOut"];
-
-/**
- * 「哪个界面」要不要加个前缀。
- *
- * `app` 是默认那一个,不加前缀(每一行都写「桌面端」等于什么都没说);扩展加。
- * 空 = 老客户端报的是旧语法(裸版本号),那就只显示版本 —— 编一个界面出来比留白更糟。
- */
-const SURFACE_LABEL = { "browser-extension": "adminSurfaceExtension" } as const;
+const TABS = ["overview", "members", "deployment"] as const;
+export type AdminTab = (typeof TABS)[number];
 
 /**
  * 管理员控制台 —— **这台部署**的状况。
@@ -39,207 +20,49 @@ const SURFACE_LABEL = { "browser-extension": "adminSurfaceExtension" } as const;
  * 客户端还停在旧版本。
  *
  * 入口只对部署管理员显示(见 AppShell),后端每条路由也各自把关 —— 藏起来的入口不是权限。
+ *
+ * **分三个 tab**:概览(读数与两张图)、成员(账户与邀请码)、部署设置(谁能加入、共享文件夹)。
+ * 此前是一整条长页,七块东西一路排下去,读的和改的混在一起。
+ *
+ * 版式上,页面本身是 STUDIO_PAGE —— 一条 flex 列,子项一律 `shrink-0`;每个 tab 的内容是一个
+ * **不定高**的网格。行高只由内容决定,没有哪一节能被压扁、让下一节画到它身上(见 adminLayout)。
  */
-
 export function AdminView() {
   const t = useI18n();
-  const { locale } = usePreferences();
-  const qc = useQueryClient();
-  const overview = useQuery({ queryKey: ["admin-overview"], queryFn: () => api<Overview>("/api/admin/overview") });
-  const users = useQuery({ queryKey: ["admin-users"], queryFn: () => api<AdminUser[]>("/api/admin/users") });
-
-  // 删账号:此前完全没有这条路 —— 能授予、能收回管理员,却删不掉一个账号,于是"清掉那个测试
-  // 账号"只能去手改数据库。删的范围与边界在后端(domain/members.delete_account):他独占的
-  // 工作区跟着走,还有别人在的挡下来并说清是哪几个。
-  const [removing, setRemoving] = React.useState<AdminUser | null>(null);
-  const removeUser = useMutation({
-    mutationFn: (id: string) => api(`/api/admin/users/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      setRemoving(null);
-      void qc.invalidateQueries({ queryKey: ["admin-users"] });
-      void qc.invalidateQueries({ queryKey: ["admin-overview"] });
-    },
-    // 挡下来的那句话(哪几个工作区里还有别人)本身就是下一步该做什么,原样给他看。
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const setAdmin = useMutation({
-    mutationFn: ({ id, granted }: { id: string; granted: boolean }) =>
-      api(`/api/auth/users/${id}/deployment-admin`, { method: "POST", body: JSON.stringify({ granted }) }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["admin-users"] }),
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const stats = overview.data;
-  const admins = (users.data ?? []).filter((row) => row.is_deployment_admin).length;
-  const spend = (stats?.spend_by_user ?? []).filter((row) => (row.costs ?? []).some((cost) => cost.micros > 0));
-  // 条形只能按一种钱量:取这台部署的主要币种(后端把它排在 costs 第一笔,也按它给人排序)。
-  // 其他币种的钱照原样写在旁边 —— 不换算、不相加。
-  const primaryCurrency = stats?.costs?.[0]?.currency ?? "";
-  const primaryMax = Math.max(0, ...spend.map((row) => microsIn(row.costs, primaryCurrency)));
+  const [tab, setTab] = usePersistentTab<AdminTab>("admin", "overview", TABS);
 
   return (
-    <div className="grid h-full min-h-0 content-start gap-7 overflow-y-auto px-6 py-7 xl:px-9 xl:py-8 [&_[data-slot=settings-group-title]]:text-ui-md [&_[data-slot=settings-group-description]]:text-ui-sm">
-      <PageHeading title={t("navAdmin")} description={t("studioAdminDesc")} />
-      {/* `overflow-y-auto` 只有在**高度被约束**时才会滚:没有 h-full/min-h-0,这个 grid 会一直
-          长下去、把溢出甩给外层,而外层并没在滚 —— 于是整页卡住。仓库里能滚的几页都是这个写法。 */}
-      {/* 四个数放在最上面:它们是"这台部署现在多大"的一句话回答。 */}
-      <div className="grid gap-0 divide-x divide-border rounded-xl border border-border bg-panel sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label={t("adminStatUsers")} value={stats?.users} hint={t("adminStatActive").replace("{n}", String(stats?.active_users_7d ?? 0))} />
-        <Stat label={t("adminStatWorkspaces")} value={stats?.workspaces} />
-        <Stat label={t("adminStatAssets")} value={stats?.assets} />
-        <Stat label={t("adminStatWindow")} value={stats?.window_days} hint={t("adminStatWindowHint")} />
-      </div>
-
-      <SettingsGroup title={t("adminJobsTitle")} description={t("adminJobsDesc")}>
-        <AdminActivityChart points={stats?.jobs_by_day ?? []} loading={overview.isPending} error={overview.isError} onRetry={() => void overview.refetch()} />
-      </SettingsGroup>
-
-      {/* 花销**按人分**:一个总数说明不了任何该做的决定,而按人分的这一列直接指向要谈的那个人。 */}
-      <SettingsGroup title={t("adminSpendTitle")} description={t("adminSpendDesc")}>
-        {spend.length === 0 ? (
-          <EmptyState
-            size="compact"
-            className="my-3 max-w-none gap-2 rounded-lg border border-border bg-panel py-6"
-            icon={<Coins size={18} />}
-            title={t("adminNoSpendTitle")}
-            body={t("adminNoSpend")}
+    <div className={STUDIO_PAGE} data-admin-page>
+      <div className="grid min-w-0 gap-4">
+        <PageHeading title={t("navAdmin")} description={t("studioAdminDesc")} />
+        <div className="border-b border-divider">
+          <CollectionTabs
+            label={t("adminTabsLabel")}
+            value={tab}
+            onChange={setTab}
+            items={[
+              { value: "overview", label: t("adminTabOverview") },
+              { value: "members", label: t("adminTabMembers") },
+              { value: "deployment", label: t("adminTabDeployment") },
+            ]}
           />
-        ) : (
-          /* 和这一页其它段落同一种壳:卡片 + 行。此前这一摞是**裸的** —— 上下都是带边框的卡,
-             中间夹一条没有容器的进度条,读起来像掉出去的一行。 */
-          <ul className="m-0 grid w-full list-none gap-2.5 rounded-md border border-border bg-panel p-2.5">
-            {spend.map((row) => (
-              <li
-                key={row.user_id || "unknown"}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 text-ui-sm"
-              >
-                <span className="min-w-0 truncate">{row.username || t("adminNoOwner")}</span>
-                {/* 金额**不设固定宽、不换行**:此前 w-24 装不下「0.0007 USD · 6」,
-                    调用次数被挤到第二行(真机截图)。 */}
-                <span className="whitespace-nowrap text-right text-ui-xs tabular-nums text-muted-foreground">
-                  {formatCosts(row.costs, locale)} · {row.calls}
-                </span>
-                <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <span
-                    className="block h-full rounded-full bg-primary"
-                    style={{ width: `${Math.max(2, (microsIn(row.costs, primaryCurrency) / (primaryMax || 1)) * 100)}%` }}
-                  />
-                </span>
-              </li>
-            ))}
-            {(stats?.costs ?? []).length > 1 && (
-              <li className="text-ui-xs text-muted-foreground">
-                {t("adminSpendCurrencyHint")
-                  .replace("{currency}", primaryCurrency)
-                  .replace("{total}", formatCosts(stats?.costs, locale))}
-              </li>
-            )}
-          </ul>
+        </div>
+      </div>
+      {/* 部署设置是一列开关与清单,拉满宽屏只会让开关离它的名字一屏远,所以收窄;概览和账户表要宽。 */}
+      <div
+        data-admin-panel={tab}
+        className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-10", tab === "deployment" && "max-w-4xl")}
+      >
+        {tab === "overview" && <AdminOverview />}
+        {tab === "members" && <AdminMembers onOpenDeployment={() => setTab("deployment")} />}
+        {tab === "deployment" && (
+          <>
+            <RegistrationSection />
+            {/* 这台电脑上的文件归部署管理员;共享出来的文件夹才是成员读得到的。 */}
+            <SharedHostFoldersSection />
+          </>
         )}
-      </SettingsGroup>
-
-      <SettingsGroup title={t("adminUsersTitle")} description={t("adminUsersDesc")}>
-        {users.isSuccess && (users.data ?? []).length === 0 && (
-          <EmptyState icon={<Users size={18} />} title={t("adminNoUsersTitle")} body={t("adminNoUsers")} />
-        )}
-        {(users.data ?? []).map((row) => (
-          <SettingsRow
-            key={row.id}
-            label={row.display_name || row.username}
-            description={`@${row.username} · ${
-              row.last_seen_at ? t("adminSeen").replace("{t}", relativeTime(row.last_seen_at, "zh-CN")) : t("adminNeverSeen")
-            } · ${row.workspaces} ${t("adminWorkspacesUnit")}`}
-          >
-            <span className="flex items-center gap-2">
-              {/* 版本由客户端自报;报不上来的老客户端显示"未知",不编一个号出来。
-                  界面和版本是**两栏**:此前只有一栏,而浏览器扩展往里塞的是产品名,
-                  于是这里渲染出「vbrowser-extension」。 */}
-              <code className="timecode text-ui-xs text-muted-foreground">
-                {row.client_version
-                  ? `${
-                      row.client_surface in SURFACE_LABEL
-                        ? `${t(SURFACE_LABEL[row.client_surface as keyof typeof SURFACE_LABEL])} `
-                        : ""
-                    }v${row.client_version}`
-                  : t("adminUnknownVersion")}
-              </code>
-              {row.is_deployment_admin && (
-                <Badge variant="default" className="gap-1">
-                  <ShieldCheck size={11} /> {t("deployAdminBadge")}
-                </Badge>
-              )}
-              <LastAdminHint active={row.is_deployment_admin && admins <= 1}>
-                <Switch
-                  checked={row.is_deployment_admin}
-                  // 最后一个部署管理员不能被收回 —— 后端会 409,这里先不给点。
-                  disabled={setAdmin.isPending || (row.is_deployment_admin && admins <= 1)}
-                  onCheckedChange={(granted) => setAdmin.mutate({ id: row.id, granted })}
-                  aria-label={t("deployAdminsTitle")}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-destructive"
-                  // 最后一个管理员删不得,同上。
-                  disabled={removeUser.isPending || (row.is_deployment_admin && admins <= 1)}
-                  onClick={() => setRemoving(row)}
-                  aria-label={t("adminDeleteUser")}
-                >
-                  <Trash2 size={13} />
-                </Button>
-              </LastAdminHint>
-            </span>
-          </SettingsRow>
-        ))}
-      </SettingsGroup>
-
-      <RegistrationSection />
-
-      {/* 这台电脑上的文件归部署管理员;共享出来的文件夹才是成员读得到的(见 SharedHostFoldersSection)。 */}
-      <SharedHostFoldersSection />
-
-      <ConfirmDialog
-        open={removing !== null}
-        title={t("adminDeleteUser")}
-        // 说清后果再问 —— 这一步不可撤销,而"删掉账号"四个字没说他的工作区也跟着走。
-        body={t("adminDeleteUserBody").replace("{name}", removing?.display_name || removing?.username || "")}
-        onCancel={() => setRemoving(null)}
-        pending={removeUser.isPending}
-        onConfirm={() => removing && removeUser.mutate(removing.id)}
-      />
-    </div>
-  );
-}
-
-/**
- * 最后一个部署管理员那一行的开关和删除是灰的 —— **为什么灰,就在灰的东西上说**。
- *
- * 此前这句话是账户列表底下的一段常驻文字:离那两个控件隔着整张列表,而且作为分组的子项,
- * 上面还被画了一根分割线,看着像一行没有内容的账户。禁用的控件收不到悬停,所以提示挂在
- * 外面包着的那一层上。
- */
-function LastAdminHint({ active, children }: { active: boolean; children: React.ReactNode }) {
-  const t = useI18n();
-  if (!active) return <>{children}</>;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="flex items-center gap-2" tabIndex={0} aria-label={t("deployLastAdminDesc")}>
-          {children}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[260px]">{t("deployLastAdminDesc")}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function Stat({ label, value, hint }: { label: string; value?: number; hint?: string }) {
-  return (
-    <div className="flex flex-col gap-3 p-6">
-      <span className="text-ui-xs text-muted-foreground">{label}</span>
-      <strong className="text-3xl font-semibold tabular-nums leading-tight">{value ?? "—"}</strong>
-      {hint && <span className="text-ui-2xs text-muted-foreground">{hint}</span>}
+      </div>
     </div>
   );
 }
