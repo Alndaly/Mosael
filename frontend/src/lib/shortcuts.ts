@@ -104,6 +104,24 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /**
+ * 这一下按键是**冲着这块画布**去的吗?删除这类破坏性的画布键只认这个。
+ *
+ * React Flow 自带的删除键判据是「不是输入框、不在 `.nokey` 里」—— 它听的是整个 document。
+ * 而下拉、菜单、弹层都经 Portal 渲染到 body 底下:在检查器里展开一个下拉,焦点落在某个选项上
+ * 按一下 Backspace,删掉的是**正在编辑的那个节点**。所以判据改成「从哪儿来」:
+ *  · 焦点哪儿都不在(body)—— 点过画布空白处就是这样,算画布的;
+ *  · 焦点在这块编辑器里,且不在输入框、不在声明了 `.nokey` 的面板里;
+ *  · 其余(Portal 出去的菜单、对话框、别的页面区域)一律不算。
+ */
+export function isCanvasKeyTarget(target: EventTarget | null, editor: Element | null): boolean {
+  const element = target as Element | null;
+  if (!element || !editor || typeof element.closest !== "function") return false;
+  if (element === element.ownerDocument?.body) return true;
+  if (!editor.contains(element) || isTypingTarget(element)) return false;
+  return element.closest(".nokey") === null;
+}
+
+/**
  * 应用自己占着的键。`owner` 是**做什么用的**,不是"在哪个页面" —— 拒绝的时候要让用户
  * 一眼知道这个键已经是干什么的,页面名字帮不上忙(他此刻就在那个页面上)。
  */

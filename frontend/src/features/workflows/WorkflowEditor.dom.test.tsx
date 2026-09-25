@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 
@@ -226,4 +226,48 @@ it("循环体里套的循环也能钻进去,改动写进最里面那层,返回�
   expect(outerBody.nodes.find((node) => node.id === "template-1")?.name).toBe("体内");
   fireEvent.click(screen.getByRole("button", { name: "wfLoopBack" }));
   await screen.findByText("loop · wfLoopBody");
+});
+
+it("焦点在检查器里(按钮、下拉)时按 Backspace 不删节点", async () => {
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("llm-1"));
+  fireEvent.click(nodeEl("llm-1"));
+  const panel = await screen.findByRole("complementary", { name: "llm" });
+  // 点过「手动 / 连接」切换之后焦点就停在这颗按钮上 —— 下一下 Backspace 是冲着面板去的。
+  const toggle = within(panel).getByRole("button", { name: /wfInputManual/ });
+  toggle.focus();
+  fireEvent.keyDown(toggle, { key: "Backspace" });
+  fireEvent.keyUp(toggle, { key: "Backspace" });
+  // 再改一下名字,逼出一次保存,看存下去的图。
+  fireEvent.change(within(panel).getByLabelText("wfNodeName"), { target: { value: "改名" } });
+  const graph = await savedGraph();
+  expect(graph.nodes.map((node) => node.id)).toContain("llm-1");
+});
+
+it("检查器里展开的下拉(Portal 到 body)里按 Backspace 不删节点", async () => {
+  Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {}, scrollIntoView: () => {} });
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("llm-1"));
+  fireEvent.click(nodeEl("llm-1"));
+  const panel = await screen.findByRole("complementary", { name: "llm" });
+  const trigger = within(panel).getAllByRole("combobox")[0];
+  fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+  fireEvent.click(trigger);
+  const option = await screen.findByRole("option", { name: /wfPresetPrecise/ });
+  option.focus();
+  fireEvent.keyDown(option, { key: "Backspace" });
+  fireEvent.keyUp(option, { key: "Backspace" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(document.querySelector('.react-flow__node[data-id="llm-1"]')).not.toBeNull();
+  expect(apiMocks.updateWorkflow).not.toHaveBeenCalled();
+});
+
+it("画布上选中节点按 Backspace 照常删", async () => {
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("template-1"));
+  fireEvent.click(nodeEl("template-1"));
+  fireEvent.keyDown(nodeEl("template-1"), { key: "Backspace" });
+  const graph = await savedGraph();
+  expect(graph.nodes.map((node) => node.id)).toEqual(["start", "llm-1"]);
+  expect(graph.edges.map((edge) => edge.id)).toEqual(["e-start-llm-1"]);
 });

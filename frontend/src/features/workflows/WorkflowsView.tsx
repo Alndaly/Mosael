@@ -202,7 +202,7 @@ import {
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
-import { leaveClipboardToSystem } from "@/lib/shortcuts";
+import { isCanvasKeyTarget, leaveClipboardToSystem } from "@/lib/shortcuts";
 
 /** 主画布的节点类型。标记不是工作流节点(它不执行、不连线),但它在 React Flow 里得有个
  *  渲染器 —— 所以它加在这里,而不是加进 WORKFLOW_NODE_TYPES(那张表是"能跑的节点")。
@@ -958,6 +958,8 @@ function WorkflowEditor({
   const [dragging, setDragging] = React.useState(false);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
   const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  /** 整块编辑器(工具条 + 画布 + 检查器)。删除键只认从这里面发出的按键,见 isCanvasKeyTarget。 */
+  const editorRef = React.useRef<HTMLDivElement | null>(null);
   const agentPanelRef = React.useRef<HTMLDivElement | null>(null);
   const historyPanelRef = React.useRef<HTMLDivElement | null>(null);
   // 悬浮时 wrapper 是 display:contents,量它自己拿到的是空矩形 —— 要量的是里面那块面板。
@@ -1717,6 +1719,30 @@ function WorkflowEditor({
   });
 
   /**
+   * Backspace / Delete 删掉画布上选中的节点和连线 —— **只在按键冲着画布时**。
+   *
+   * 走 React Flow 的 deleteElements,于是删除照旧经 onNodesChange / onEdgesChange 落进图里
+   * (标记、撤销粒度、脏标记都是同一套)。只是「这一下算不算」由我们判:检查器里展开的下拉、
+   * 弹出的菜单是 Portal 到 body 的,React Flow 自己的判据把那里的 Backspace 也当成删节点。
+   */
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!isCanvasKeyTarget(event.target, editorRef.current)) return;
+      const instance = rfRef.current;
+      if (!instance) return;
+      const doomedNodes = instance.getNodes().filter((node) => node.selected && node.deletable !== false);
+      const doomedEdges = instance.getEdges().filter((edge) => edge.selected && edge.deletable !== false);
+      if (doomedNodes.length === 0 && doomedEdges.length === 0) return;
+      event.preventDefault();
+      void instance.deleteElements({ nodes: doomedNodes, edges: doomedEdges });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /**
    * Cmd/Ctrl+] 把选中节点提到最前、[ 压到最后。与悬浮窗、剪辑页片段同键同义。
    *
    * **夹在 ±900 而不是无穷**:React Flow 的 elevateNodesOnSelect 是给选中节点的 z **加** 1000
@@ -1806,7 +1832,7 @@ function WorkflowEditor({
     // 没有照搬参考产品的左侧竖直悬浮栏:我们左边**已经有一条全局导航栏**,再加一条竖栏就是
     // 两条并排的竖条,用户得先分辨"哪条是应用的、哪条是这一页的"。所以横向成组、浮在顶部,
     // 保持"这一页的操作"和"整个应用的导航"在方向上就分得开。
-    <div className="relative grid min-h-0">
+    <div ref={editorRef} className="relative grid min-h-0">
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
         {/* 左边这组是**身份**(回哪儿去、这是谁),右边那组是**操作**。浮起来之后两组各自要有
             自己的底,否则它们会散在画布上,和节点抢注意力 —— 悬浮不等于没有边界。 */}
@@ -2247,7 +2273,9 @@ function WorkflowEditor({
             zoomOnPinch
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}
-            deleteKeyCode={["Backspace", "Delete"]}
+            // 删除键自己接(见下面那条 effect):React Flow 听整个 document,Portal 出去的下拉里
+            // 按 Backspace 也会删节点。
+            deleteKeyCode={null}
           >
             {atRoot && workflowComments.layer}
             {annotationMode && <AnnotationModeHint kind={markerMode ? "marker" : "comment"} onExit={() => { setMarkerMode(false); workflowComments.exit(); }} />}
@@ -3069,7 +3097,7 @@ export function NodeInspector({
         两组都按"有才出":没跑过就没有「本次产出」,不是子图就没有「进入子图」。
         和面板一样长在画布坐标系里,所以同样要挂 nodrag/nopan —— 不然按下去是在拖节点。 */}
     <NodeToolbar nodeId={node.id} isVisible position={Position.Top} align="center" offset={12}>
-      <div className="nodrag nopan flex items-center gap-1 rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]">
+      <div className="nodrag nopan nokey flex items-center gap-1 rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]">
         {areas.map((id) => (
           <button
             key={id}
@@ -3128,8 +3156,10 @@ export function NodeInspector({
         //   nodrag  —— 在面板里按下不要拖动节点/框选
         //   nopan   —— 不要平移画布
         //   nowheel —— 面板内滚动是滚它自己,不是缩放画布
+        //   nokey   —— 面板里的按键不是给画布的:焦点停在一颗按钮 / 下拉上时按 Backspace,
+        //              React Flow 只放过输入框,别的一律当成「删除选中节点」—— 删的正是在编辑的这个
         // 另外 viewport-portal 整个 user-select:none,面板里要能选中文字得显式改回来。
-        "nodrag nopan nowheel select-text",
+        "nodrag nopan nowheel nokey select-text",
         inert && "pointer-events-none",
       )}
       aria-label={node.name || meta?.label || node.type}
