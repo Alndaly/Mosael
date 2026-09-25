@@ -94,7 +94,8 @@ export function SettingsRow({
   className?: string;
   controlClassName?: string;
   label: string;
-  description?: string;
+  /** 通常是一句 i18n 文案;数据里带格式的说明(插件的配置帮助)传 `<InlineMarkdown>`。 */
+  description?: React.ReactNode;
   /**
    * 控件放到标题下面、占满整行。给**要写一段话**的控件(多行文本框)用。
    *

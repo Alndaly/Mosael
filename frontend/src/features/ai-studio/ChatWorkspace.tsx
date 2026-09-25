@@ -24,6 +24,8 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
 import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerChips } from "@/features/agent/ComposerChips";
@@ -843,7 +845,7 @@ function ToolPayload({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function ToolBrowserRow({ tool }: { tool: AgentTool }) {
+export function ToolBrowserRow({ tool }: { tool: AgentTool }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   return (
@@ -866,7 +868,8 @@ function ToolBrowserRow({ tool }: { tool: AgentTool }) {
           !open && "line-clamp-2",
         )}
       >
-        {tool.description}
+        {/* 工具说明是写给模型看的,常带 `代码` 和 **强调**;在按钮里,链接只留文字。 */}
+        <InlineMarkdown text={tool.description} links={false} />
       </span>
     </button>
   );
@@ -889,7 +892,7 @@ function ToolBrowser({
   const [query, setQuery] = React.useState("");
   const needle = query.trim().toLowerCase();
   const matched = needle
-    ? tools.filter((tool) => `${tool.name} ${tool.description}`.toLowerCase().includes(needle))
+    ? tools.filter((tool) => `${tool.name} ${toPlainText(tool.description)}`.toLowerCase().includes(needle))
     : tools;
   return (
     <ModalShell open={open} onOpenChange={onOpenChange} title={`${t("agentInspectorCapabilities")} · ${tools.length}`}>

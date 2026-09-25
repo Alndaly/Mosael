@@ -6,6 +6,7 @@ import { Check, CheckCheck, ShieldAlert, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
 import { PermissionBadge } from "@/features/agent/PermissionBadge";
@@ -111,7 +112,7 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
         <div className="grid gap-1.5 rounded-lg border border-floating-border border-l-[3px] border-l-primary bg-panel px-3 py-2.5 text-ui-sm" key={item.id}>
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
-              <ShieldAlert size={13} /> {item.summary}
+              <ShieldAlert size={13} /> <InlineMarkdown text={item.summary} />
             </span>
             <PermissionBadge permission={item.permission} />
           </div>

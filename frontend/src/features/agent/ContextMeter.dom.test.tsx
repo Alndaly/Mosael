@@ -146,3 +146,18 @@ describe("分项配色", () => {
     for (const name of used) expect(tokens).toContain(`${name}:`);
   });
 });
+
+it("压缩摘要是模型写的 markdown,展开后按 markdown 排,不露记号", () => {
+  const info = {
+    droppedMessages: 3,
+    tokensBefore: 50_000,
+    tokensAfter: 10_000,
+    summary: "## 目标\n\n- 用户要 **1080p** 成片\n- 素材在 `assets/raw`",
+  };
+  const { container } = render(<CompactionNotice info={info} />);
+  fireEvent.click(screen.getByText("expand"));
+  // Streamdown 的粗体是 <span data-streamdown="strong">。
+  expect(screen.getByText("1080p").getAttribute("data-streamdown")).toBe("strong");
+  expect(container.querySelectorAll("li")).toHaveLength(2);
+  expect(container.textContent).not.toMatch(/\*\*|##/);
+});

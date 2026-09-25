@@ -135,3 +135,10 @@ describe("降噪对话框", () => {
     expect(screen.queryByRole("button", { name: /denoiseGoDownload/ })).toBeNull();
   });
 });
+
+it("引擎说明里的 **强调** 渲染成粗体,不露星号", async () => {
+  renderDialog([BUILTIN, { ...RNNOISE, description: "轻量语音降噪;**背景音乐也会被当成噪声去掉**" }]);
+  const strong = await screen.findByText("背景音乐也会被当成噪声去掉");
+  expect(strong.tagName).toBe("STRONG");
+  expect(document.body.textContent).not.toContain("**");
+});

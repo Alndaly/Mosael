@@ -28,6 +28,7 @@ vi.mock("@/features/agent/confirmSurface", () => ({ registerInlineConfirmSurface
 const pendingCards = [
   { id: "c1", tool: "edit_timeline", summary: "改时间线", permission: "write", payload: {} },
   { id: "c2", tool: "render_sequence", summary: "导出", permission: "write", payload: {} },
+  { id: "c3", tool: "run_host_code", summary: "⚠️ **不隔离**,直接在你的电脑上运行", permission: "write", payload: {} },
 ];
 
 /** 决策请求停在这里,好在"正在飞"的那一刻断言。 */
@@ -116,4 +117,10 @@ it("权限徽标不跟着长摘要换行 —— 两个字被压成一列竖排�
   const badge = (await screen.findAllByText("write"))[0]; //: 这份夹具的档次是 write,没有文案,原样透出
   expect(badge.className).toContain("shrink-0");
   expect(badge.className).toContain("whitespace-nowrap");
+});
+
+it("摘要里的 **强调** 渲染成粗体 —— 这是用户批准前唯一会读的那一行", async () => {
+  const { container } = renderCards();
+  expect((await screen.findByText("不隔离")).tagName).toBe("STRONG");
+  expect(container.textContent).not.toContain("**");
 });

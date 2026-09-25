@@ -82,3 +82,14 @@ it("一次都没自动放行过时整块不出现 —— 常驻一句「暂无�
   await waitFor(() => expect(listed).toHaveBeenCalled());
   expect(screen.queryByText(/permTraceTitle/)).not.toBeInTheDocument();
 });
+
+it("摘要里的 **强调** 渲染成粗体,悬停提示是纯文本", async () => {
+  // 确认卡摘要来自后端文案目录:「⚠️ **不隔离**,直接在你的电脑上运行一段 Python」。
+  listed.mockResolvedValue([card("a", "bypass", "⚠️ **不隔离**,直接运行")]);
+
+  show();
+
+  const strong = await screen.findByText("不隔离");
+  expect(strong.tagName).toBe("STRONG");
+  expect(strong.closest("[title]")?.getAttribute("title")).toBe("⚠️ 不隔离,直接运行");
+});

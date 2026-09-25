@@ -35,6 +35,8 @@ import {
 } from "@/api/client";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -401,7 +403,11 @@ function NewConnectionDialog({
             />
             {/* 清单里的 help 此前一个字都没显示。Blender 插件那条正是用户会撞到的限制:
                 「互通要求 Blender 与后端在同一台电脑」。 */}
-            {field.help && <small className="text-ui-xs leading-[1.5] text-muted-foreground">{field.help}</small>}
+            {field.help && (
+              <small className="text-ui-xs leading-[1.5] text-muted-foreground">
+                <InlineMarkdown text={field.help} />
+              </small>
+            )}
           </label>
         ))}
       </div>
@@ -574,7 +580,7 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
       </SettingsRow>
 
       {(pkg.config_fields ?? []).map((field) => (
-        <SettingsRow key={field.key} label={field.label} description={field.help}>
+        <SettingsRow key={field.key} label={field.label} description={field.help ? <InlineMarkdown text={field.help} /> : undefined}>
           <FieldInput
             field={field}
             value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
@@ -650,7 +656,7 @@ function CapabilityPicker({
       if (onlyExposed && !tool.exposed) return false;
       if (!needle) return true;
       // 说明也参与匹配:工具名是 bilibili_web_fetch_* 这种机器名,而用户记得的是"字幕"。
-      return `${tool.name} ${tool.label} ${tool.description}`.toLowerCase().includes(needle);
+      return `${tool.name} ${tool.label} ${toPlainText(tool.description)}`.toLowerCase().includes(needle);
     });
   }, [tools, query, onlyExposed]);
 
@@ -857,7 +863,7 @@ export function CredentialRows({ instanceId, oauth }: { instanceId: string; oaut
         <SettingsRow
           key={item.key}
           label={item.label}
-          description={item.help || (item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty"))}
+          description={item.help ? <InlineMarkdown text={item.help} /> : item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}
         >
           <Input
             className="w-[240px] max-w-full"
@@ -969,9 +975,12 @@ export const ToolRow = React.memo(function ToolRow({
           onClick={() => setOpen((value) => !value)}
         >
           <Terminal size={14} className="shrink-0" />
-          <div className="min-w-0 flex-1 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-semibold">
+          <div className="min-w-0 flex-1 [&>small]:block [&>small]:truncate [&>small]:text-ui-xs [&>small]:text-muted-foreground [&>strong]:block [&>strong]:truncate [&>strong]:text-ui-sm [&>strong]:font-semibold">
             <strong>{tool.label || tool.name}</strong>
-            <small>{tool.description}</small>
+            {/* 在展开按钮里:链接只留文字。 */}
+            <small>
+              <InlineMarkdown text={tool.description} links={false} />
+            </small>
           </div>
           {tool.read_only && (
             <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
@@ -989,13 +998,18 @@ export const ToolRow = React.memo(function ToolRow({
         <div className="grid gap-5 border-t border-divider bg-panel-subtle/40 p-5">
           {fields.map(([key, spec]) => (
             <label
-              className="grid gap-2 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground [&_em]:not-italic [&_em]:text-destructive"
+              className="grid gap-2 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground"
               key={key}
             >
               <span>
                 {key}
-                {required.has(key) && <em>*</em>}
-                {spec.description ? ` — ${spec.description}` : ""}
+                {required.has(key) && <em className="not-italic text-destructive">*</em>}
+                {spec.description && (
+                  <>
+                    {" — "}
+                    <InlineMarkdown text={spec.description} />
+                  </>
+                )}
               </span>
               {spec.type === "boolean" ? <Select value={values[key] || "__default__"} onValueChange={(value) => setValues(current => ({ ...current, [key]: value === "__default__" ? "" : value }))}>
                 <SelectTrigger aria-label={key}><SelectValue /></SelectTrigger>

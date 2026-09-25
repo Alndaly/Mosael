@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { createPublishAccount, listPublishPlatforms, type PublishPlatform, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Input } from "@/components/ui/input";
@@ -86,7 +87,11 @@ export function AddAccountDialog({
               keywords: [item.platform],
             }))}
           />
-          {meta && <small>{meta.description}</small>}
+          {meta && (
+            <small>
+              <InlineMarkdown text={meta.description} />
+            </small>
+          )}
         </label>
         <label className={DIALOG_FIELD}>
           <span>{t("publishAccountName")}</span>
@@ -102,7 +107,11 @@ export function AddAccountDialog({
               value={config[key] ?? ""}
               onChange={(event) => setConfig((current) => ({ ...current, [key]: event.target.value }))}
             />
-            {spec?.description && <small>{spec.description}</small>}
+            {spec?.description && (
+              <small>
+                <InlineMarkdown text={spec.description} />
+              </small>
+            )}
           </label>
         ))}
         <label className={DIALOG_FIELD}>

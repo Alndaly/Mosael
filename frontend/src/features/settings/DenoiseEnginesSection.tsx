@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { type DenoiseEngine, installDenoiseEngine, listDenoiseEngines } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
@@ -77,7 +78,9 @@ function EngineRow({ engine, busy, onInstall }: { engine: DenoiseEngine; busy: b
               </span>
             )}
           </div>
-          <small className="text-ui-xs leading-[1.45] text-muted-foreground">{engine.description}</small>
+          <small className="text-ui-xs leading-[1.45] text-muted-foreground">
+            <InlineMarkdown text={engine.description} />
+          </small>
           {/* 不需要装、但现在用不了的(比如 ffmpeg 没带 RNNoise 滤镜):说清原因。 */}
           {!engine.installable && !engine.ready && engine.setup_hint && (
             <small className="text-ui-xs text-foreground">{engine.setup_hint}</small>

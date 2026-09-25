@@ -7,6 +7,7 @@ import { Check, ShieldAlert, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { useInlineConfirmSessions } from "@/features/agent/confirmSurface";
 import { PermissionBadge } from "@/features/agent/PermissionBadge";
@@ -64,7 +65,9 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
             </span>
             <PermissionBadge permission={item.permission} />
           </div>
-          <p className="mb-2 mt-0 text-ui-md font-semibold leading-[1.45]">{item.summary}</p>
+          <p className="mb-2 mt-0 text-ui-md font-semibold leading-[1.45]">
+            <InlineMarkdown text={item.summary} />
+          </p>
           {/* The whole payload, expanded. This card is the only thing standing between an
               agent-proposed mutation and it happening, and the summary alone was not enough to
               consent to: "1 个工作流编辑: add_node" hides a code node whose body is arbitrary

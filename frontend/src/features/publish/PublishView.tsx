@@ -22,6 +22,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
@@ -674,7 +675,9 @@ function CreatePublishDialog({
               <span className="grid min-w-0 gap-0.5">
                 <span className="text-xs font-semibold text-foreground">{spec.label}</span>
                 {spec.description && (
-                  <small className="text-ui-xs leading-[1.4] text-muted-foreground">{spec.description}</small>
+                  <small className="text-ui-xs leading-[1.4] text-muted-foreground">
+                    <InlineMarkdown text={spec.description} />
+                  </small>
                 )}
               </span>
               <Switch
@@ -692,7 +695,11 @@ function CreatePublishDialog({
                 className="w-full"
                 onValueChange={(next) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
               />
-              {spec.description && <small>{spec.description}</small>}
+              {spec.description && (
+                <small>
+                  <InlineMarkdown text={spec.description} />
+                </small>
+              )}
             </label>
           ),
         )}

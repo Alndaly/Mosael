@@ -28,7 +28,7 @@ const rows = (deepfilter: Record<string, unknown>) => [
     ...BASE, engine: "deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false,
     installable: true, status: "missing", size_bytes: 27_877_081, removes_music: true, ...deepfilter,
   },
-  { ...BASE, engine: "rnnoise", label: "RNNoise", description: "轻量", ready: false, status: "unavailable", setup_hint: "ffmpeg 不带这个滤镜", removes_music: true },
+  { ...BASE, engine: "rnnoise", label: "RNNoise", description: "轻量;**背景音乐也会被当成噪声去掉**", ready: false, status: "unavailable", setup_hint: "ffmpeg 不带这个滤镜", removes_music: true },
 ];
 
 function renderSection(deepfilter: Record<string, unknown> = {}) {
@@ -90,4 +90,11 @@ describe("降噪引擎设置页", () => {
     renderSection({ status: "installed", ready: true });
     expect(await rowOf("DeepFilterNet")).toHaveTextContent("denoiseInstalled");
   });
+});
+
+it("引擎说明里的 **强调** 渲染成粗体,不露星号", async () => {
+  renderSection();
+  const row = await rowOf("RNNoise");
+  expect(within(row).getByText("背景音乐也会被当成噪声去掉").tagName).toBe("STRONG");
+  expect(row.textContent).not.toContain("**");
 });

@@ -5,6 +5,7 @@ import { Check, HelpCircle } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -98,7 +99,9 @@ function QuestionCard({ row, onDone }: { row: Question; onDone: () => void }) {
                   {item.header}
                 </span>
               )}
-              <span className="text-ui-sm font-semibold text-foreground">{item.question}</span>
+              <span className="text-ui-sm font-semibold text-foreground">
+                <InlineMarkdown text={item.question} />
+              </span>
               {item.multi_select && <span className="text-ui-2xs text-muted-foreground">{t("askMultiHint")}</span>}
             </div>
             <div className="grid gap-1.5">
@@ -119,7 +122,9 @@ function QuestionCard({ row, onDone }: { row: Question; onDone: () => void }) {
                     {option.label}
                   </span>
                   {option.description && (
-                    <span className="text-ui-xs leading-[1.5] text-muted-foreground">{option.description}</span>
+                    <span className="text-ui-xs leading-[1.5] text-muted-foreground">
+                      <InlineMarkdown text={option.description} links={false} />
+                    </span>
                   )}
                 </button>
               ))}

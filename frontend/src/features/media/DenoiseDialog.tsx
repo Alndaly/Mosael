@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { denoiseAsset, listDenoiseEngines, type DenoiseStrength } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
@@ -124,7 +125,9 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                           </span>
                         )}
                       </span>
-                      <span className={cn("text-ui-xs leading-[1.5] text-muted-foreground", !one.ready && "opacity-60")}>{one.description}</span>
+                      <span className={cn("text-ui-xs leading-[1.5] text-muted-foreground", !one.ready && "opacity-60")}>
+                        <InlineMarkdown text={one.description} links={false} />
+                      </span>
                       {/* 没准备好时说去哪儿准备 —— 这句话由引擎自己给,这里不认识任何引擎。 */}
                       {needsSetup && (
                         <span id={hintId} className={cn("text-ui-xs leading-[1.5] text-muted-foreground", downloadable && "sr-only")}>

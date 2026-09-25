@@ -2,6 +2,7 @@ import React from "react";
 import { Loader2, Scissors } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import { cn } from "@/lib/utils";
@@ -212,9 +213,9 @@ export function CompactionNotice({ info }: { info: CompactionInfo }) {
         </MarkerContent>
       </Marker>
       {open && info.summary && (
-        <p className="m-0 whitespace-pre-wrap rounded-md bg-panel-subtle px-2.5 py-2 text-ui-xs leading-[1.6] text-foreground">
-          {info.summary}
-        </p>
+        <div className="min-w-0 rounded-md bg-panel-subtle px-2.5 py-2 text-ui-xs leading-[1.6] text-foreground">
+          <AgentMarkdown>{info.summary}</AgentMarkdown>
+        </div>
       )}
     </div>
   );

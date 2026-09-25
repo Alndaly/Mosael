@@ -240,3 +240,34 @@ describe("配置字段的控件", () => {
     expect(onChange).toHaveBeenCalledWith("旧的12新");
   });
 });
+
+describe("清单里的说明带 markdown", () => {
+  // 对象存储插件的工具说明写着「交回一条**限时直链**」—— 此前工具行上原样露着两对星号。
+  it("工具说明和参数说明渲染成格式,不露记号", () => {
+    const tool = {
+      name: "oss_upload",
+      label: "上传",
+      description: "交回一条**限时直链**",
+      read_only: false,
+      exposed: true,
+      input_schema: { properties: { key: { type: "string", description: "对象键,如 `videos/a.mp4`" } } },
+    };
+    const { container } = wrap(<ToolRow workspaceId="w1" instanceId="i1" tool={tool} blockedReason="" onToggle={() => undefined} />);
+    expect(screen.getByText("限时直链").tagName).toBe("STRONG");
+    // 说明在展开按钮里:不能再套一个链接进去。
+    expect(container.querySelector("button a")).toBeNull();
+    fireEvent.click(screen.getByText("上传"));
+    expect(screen.getByText("videos/a.mp4").tagName).toBe("CODE");
+    expect(container.textContent).not.toMatch(/\*\*|`/);
+  });
+
+  it("凭据的帮助文字同样", async () => {
+    listPluginCredentials.mockResolvedValue([
+      { key: "AK", label: "AccessKey", help: "在**控制台**的 `AccessKey 管理` 里创建", secret: true, filled: false, value: "" },
+    ]);
+    const { container } = wrap(<CredentialRows instanceId="i1" oauth={false} />);
+    expect((await screen.findByText("控制台")).tagName).toBe("STRONG");
+    expect(screen.getByText("AccessKey 管理").tagName).toBe("CODE");
+    expect(container.textContent).not.toMatch(/\*\*|`/);
+  });
+});

@@ -5,6 +5,8 @@ import { ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { relativeTime } from "@/lib/time";
 
 type Confirmation = components["schemas"]["ConfirmationOut"];
@@ -71,8 +73,8 @@ export function AutoApprovalTrace({ workspaceId, sessionId }: { workspaceId: str
                 className={card.decision_mode === "bypass" ? "mt-[3px] text-destructive" : "mt-[3px] text-primary"}
               />
               <span className="grid gap-0.5">
-                <span className="truncate text-foreground" title={card.summary}>
-                  {card.summary || card.tool}
+                <span className="truncate text-foreground" title={toPlainText(card.summary)}>
+                  {card.summary ? <InlineMarkdown text={card.summary} links={false} /> : card.tool}
                 </span>
                 <span className="text-muted-foreground">
                   {t(GATE_LABEL[card.decision_mode])}

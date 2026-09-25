@@ -89,6 +89,8 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 import type { MessageKey } from "@/app/messages";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import {
@@ -699,7 +701,7 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
       </div>
       {workflow.description ? (
         <p className="m-0 line-clamp-2 text-ui-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-          {workflow.description}
+          {toPlainText(workflow.description)}
         </p>
       ) : (
         <p className="m-0 text-ui-xs text-muted-foreground/60">{t("wfNoDescription")}</p>
@@ -737,7 +739,8 @@ function useNodePicker(nodeTypes: WorkflowNodeType[], t: ReturnType<typeof useI1
         value: meta.type,
         label: meta.label,
         // 同名工具可能来自不同插件(两个平台的 fetch_one_video),副标题点名是谁提供的。
-        description: meta.plugin_name ? `${meta.plugin_name} · ${meta.description}` : meta.description,
+        // 面板里的副标题只有一行、也参与搜索:用纯文本(节点说明里有 **强调**)。
+        description: meta.plugin_name ? `${meta.plugin_name} · ${toPlainText(meta.description)}` : toPlainText(meta.description),
         group: meta.category || t("wfNodeGroupOther"),
         keywords: meta.tool_name ? [meta.tool_name] : undefined,
       }));
@@ -3121,7 +3124,11 @@ export function NodeInspector({
                   onChange={(event) => typeConfig(key)(event.target.value)}
                 />
               )}
-              {spec?.description && <small>{spec.description}</small>}
+              {spec?.description && (
+                <small>
+                  <InlineMarkdown text={spec.description} />
+                </small>
+              )}
             </div>
           );
   };
@@ -3228,7 +3235,11 @@ export function NodeInspector({
               (每种节点各有颜色和图形),再写一遍只是让头部高了一倍。 */}
           <TooltipContent className="grid max-w-[260px] gap-1">
             <span className="font-semibold">{meta?.label ?? node.type}</span>
-            {meta?.description && <span className="text-ui-xs opacity-80">{meta.description}</span>}
+            {meta?.description && (
+              <span className="text-ui-xs opacity-80">
+                <InlineMarkdown text={meta.description} links={false} />
+              </span>
+            )}
           </TooltipContent>
         </Tooltip>
         <div className="grid min-w-0 flex-1 gap-0 [&_small]:pl-0 [&_small]:text-ui-2xs [&_small]:text-muted-foreground">
