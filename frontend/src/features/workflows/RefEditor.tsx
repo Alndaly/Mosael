@@ -14,6 +14,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 
 import { useI18n } from "@/app/preferences";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
+import { useExternalContent } from "@/components/app/useExternalContent";
 import { cn } from "@/lib/utils";
 
 import { TRIGGER, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/workflows/refDoc";
@@ -77,9 +78,15 @@ export function RefEditor({
   placeholder,
   rows = 2,
   className,
+  normalize,
 }: {
   value: string;
   onChange: (next: string) => void;
+  /**
+   * 调用方存之前会把文字规整一遍(去空行、去空白……)时,把那条规整规则给过来。
+   * 外面那份和编辑器里的规整后相同,就算同一份 —— 不拿规整过的去覆盖用户正在打的字。
+   */
+  normalize?: (text: string) => string;
   /** 上游能引用的输出,形如 `{{llm-1.text}}`。 */
   variables: string[];
   placeholder?: string;
@@ -167,11 +174,13 @@ export function RefEditor({
     },
   });
 
-  React.useEffect(() => {
-    if (!editor || value === emitted.current) return;
+  //: 组词期间不回灌(见 useExternalContent);外面那份只是自己发出去那版的**规整写法**时也不回灌 ——
+  //: 回灌的话敲的空格、刚回车出来的空行会被吃掉,光标跳走。
+  useExternalContent(editor, (instance) => {
+    if (value === emitted.current || (normalize && normalize(value) === normalize(emitted.current))) return;
     emitted.current = value;
-    editor.commands.setContent(piecesToDoc(parsePieces(value)), { emitUpdate: false });
-  }, [value, editor]);
+    instance.commands.setContent(piecesToDoc(parsePieces(value)), { emitUpdate: false });
+  }, [value]);
 
   return (
     <div className="relative">

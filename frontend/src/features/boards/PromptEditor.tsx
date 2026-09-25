@@ -18,6 +18,7 @@ import type { MessageKey } from "@/app/messages";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
+import { useExternalContent } from "@/components/app/useExternalContent";
 import { cn } from "@/lib/utils";
 
 export type PromptDocument = JSONContent;
@@ -316,14 +317,14 @@ export function PromptEditor({
     },
   });
 
-  React.useEffect(() => {
-    if (!editor) return;
+  //: 组词期间不回灌(见 useExternalContent)。
+  useExternalContent(editor, (instance) => {
     const nextDocument = document ?? textDocument(value);
     const serialized = JSON.stringify(nextDocument);
     if (value === emitted.current.value && serialized === emitted.current.document) return;
     emitted.current = { value, document: serialized };
-    editor.commands.setContent(nextDocument, { emitUpdate: false });
-  }, [value, document, editor]);
+    instance.commands.setContent(nextDocument, { emitUpdate: false });
+  }, [value, document]);
 
   return (
     <>

@@ -3481,6 +3481,8 @@ export function NodeInspector({
                 <RefEditor
                   rows={Math.min(genExtraSourceLines.length + 1, 4)}
                   value={sourceAssetText(genExtraSourceLines)}
+                  //: 存下去的是规整过的行(去空行、`x: role` → `x:role`),编辑器里留用户打的原样。
+                  normalize={(text) => sourceAssetText(parseSourceAssetText(text))}
                   variables={variables}
                   onChange={(next: string) =>
                     typeConfig("source_assets")(

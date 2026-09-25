@@ -10,6 +10,7 @@ import { useNoteStrings } from "./strings";
 import { noteExtensions, notePlaceholder } from "./editorExtensions";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
+import { useExternalContent } from "@/components/app/useExternalContent";
 import { listNotes, noteHref, type Note } from "@/api/domains/notes";
 import { importAsset } from "@/api/domains/assets";
 import { errorText } from "@/api/errorMessage";
@@ -21,7 +22,7 @@ export function NoteReader({ markdown }: { markdown: string }) {
   const { locale } = usePreferences();
   const editor = useEditor({ extensions: noteExtensions(true, locale), content: markdown, contentType: "markdown", editable: false,
     editorProps: { attributes: { class: "note-prose" } } });
-  React.useEffect(() => { editor?.commands.setContent(markdown, {contentType:"markdown", emitUpdate:false}); }, [editor, markdown]);
+  useExternalContent(editor, (instance) => { instance.commands.setContent(markdown, {contentType:"markdown", emitUpdate:false}); }, [markdown]);
   return <EditorContent editor={editor} />;
 }
 
@@ -93,11 +94,12 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   // Compare against the last emitted value: parent autosave must not rebuild the document or move the caret.
   // 内容从外面整个换掉(切换笔记、恢复版本)时,光标放回开头。不放的话它按旧文档的位置映射到新文档
   // **末尾** —— 新笔记以列表结尾时,一打开「无序列表」就亮着,而你根本没点进去。
-  React.useEffect(() => {
-    if (!editor || editor.getMarkdown() === markdown) return;
-    editor.chain().setContent(markdown, { contentType: "markdown", emitUpdate: false })
+  //: 组词期间不回灌:组词中的字还没进文档,getMarkdown() 和 markdown 必然对不上(见 useExternalContent)。
+  useExternalContent(editor, (instance) => {
+    if (instance.getMarkdown() === markdown) return;
+    instance.chain().setContent(markdown, { contentType: "markdown", emitUpdate: false })
       .command(({ tr }) => { tr.setSelection(Selection.atStart(tr.doc)); return true; }).run();
-  }, [editor, markdown]);
+  }, [markdown]);
   React.useEffect(() => { editor?.setEditable(editable, false); }, [editor, editable]);
   markdownPaste.current = (text) => { editor?.chain().focus().insertContent(text, { contentType: "markdown" }).run(); };
   upload.current = async (files, at) => {

@@ -6,6 +6,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { useI18n } from "@/app/preferences";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
+import { useExternalContent } from "@/components/app/useExternalContent";
 import { ReferenceChip, ReferenceThumb, REFERENCE_NODE } from "@/features/agent/ReferenceChip";
 import {
   REFERENCE_MENU_LIMIT,
@@ -212,12 +213,13 @@ export function ChatComposer({
 
   //: 外面改了(清空、把说的话填进来)才回灌 —— 自己发出去的那一版不跟,否则每敲一个字
   //: 都会被 prop 回流重建文档,光标跳到开头(画布那边同一个处理)。
-  React.useEffect(() => {
+  //: 组词期间不回灌(见 useExternalContent)。
+  useExternalContent(editor, (instance) => {
     const incoming = JSON.stringify(value);
-    if (!editor || incoming === emitted.current) return;
+    if (incoming === emitted.current) return;
     emitted.current = incoming;
-    editor.commands.setContent(value, { emitUpdate: false });
-  }, [editor, value]);
+    instance.commands.setContent(value, { emitUpdate: false });
+  }, [value]);
 
   return (
     <>
