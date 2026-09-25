@@ -65,6 +65,7 @@ import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { boardSettlementPatch, itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
+import { createWriteQueue, sameCanvas } from "@/features/boards/boardProjection";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -548,6 +549,9 @@ function BoardDetail({
   // The token and the projection it describes are one unit. A background refetch must never advance
   // only the token while leaving an older local canvas in place, or that stale canvas could pass CAS.
   const confirmedCanvas = React.useRef<Canvas>(board.canvas);
+  //: 这张板上的写请求(自动保存、改名、生成、写字、念、截)排成一队,各自轮到时才读版本号 ——
+  //: 见 boardProjection.createWriteQueue。
+  const [serially] = React.useState(createWriteQueue);
   const acceptBoard = React.useCallback(
     (fresh: Board) => {
       revision.current = fresh.revision;
@@ -619,7 +623,7 @@ function BoardDetail({
       const itemId = input.itemId ?? `${input.kind}-${Math.random().toString(36).slice(2, 9)}`;
       let placed;
       try {
-        placed = await generateOnBoard(board.id, {
+        placed = await serially(() => generateOnBoard(board.id, {
           workspace_id: workspaceId,
           base_revision: revision.current,
           item_id: itemId,
@@ -633,7 +637,7 @@ function BoardDetail({
           parameters: input.parameters,
           source_assets: input.sourceAssets,
           form: input.form,
-        });
+        }));
       } catch (error) {
         if (await recoverConflict(error)) return;
         toast.error(t("boardsGenerateFailed"), { description: (error as Error).message });
@@ -649,7 +653,7 @@ function BoardDetail({
       if (jobId) api?.patch(itemId, { form: pending?.form ?? input.form, run: { status: "running", job_id: jobId } });
       setRunning((current) => (current.includes(itemId) ? current : [...current, itemId]));
     },
-    [board.id, workspaceId, t, api, acceptBoard, recoverConflict],
+    [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially],
   );
 
   /** 让 AI 往某张便签里写字。同步返回,写完直接把新画布落回本地状态。 */
@@ -660,7 +664,7 @@ function BoardDetail({
           input,
           patch: (itemId, next) => api?.patch(itemId, next),
           request: () =>
-            writeOnBoard(board.id, {
+            serially(() => writeOnBoard(board.id, {
               workspace_id: workspaceId,
               base_revision: revision.current,
               item_id: input.itemId,
@@ -669,7 +673,7 @@ function BoardDetail({
               model: input.model,
               source_assets: input.assets,
               context: input.context,
-            }),
+            })),
         });
         acceptBoard(fresh);
       } catch (error) {
@@ -677,7 +681,7 @@ function BoardDetail({
         toast.error(t("boardWriteFailed"), { description: (error as Error).message });
       }
     },
-    [board.id, workspaceId, api, t, acceptBoard, recoverConflict],
+    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially],
   );
 
   /** 把一段文字念成音频。**异步** —— 和出图出片同一套:摆占位、起任务、轮询等回执填回来。 */
@@ -685,7 +689,7 @@ function BoardDetail({
     async (input: { itemId: string; text: string; voiceId: string; engine: string; engineVoice: string }) => {
       let placed;
       try {
-        placed = await speakOnBoard(board.id, {
+        placed = await serially(() => speakOnBoard(board.id, {
           workspace_id: workspaceId,
           base_revision: revision.current,
           item_id: input.itemId,
@@ -693,7 +697,7 @@ function BoardDetail({
           voice_id: input.voiceId,
           engine: input.engine,
           engine_voice: input.engineVoice,
-        });
+        }));
       } catch (error) {
         if (await recoverConflict(error)) return;
         toast.error(t("boardSpeakFailed"), { description: (error as Error).message });
@@ -706,7 +710,7 @@ function BoardDetail({
       if (jobId) api?.patch(input.itemId, { run: { status: "running", job_id: jobId } });
       setRunning((current) => (current.includes(input.itemId) ? current : [...current, input.itemId]));
     },
-    [board.id, workspaceId, api, t, acceptBoard, recoverConflict],
+    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially],
   );
 
   /** 取某一帧,存成一份新素材、落到一个新节点上。**是图片节点** —— 取出来的是一张图。 */
@@ -737,7 +741,7 @@ function BoardDetail({
     }) => {
       let placed;
       try {
-        placed = await trimOnBoard(board.id, {
+        placed = await serially(() => trimOnBoard(board.id, {
           workspace_id: workspaceId,
           base_revision: revision.current,
           item_id: input.itemId,
@@ -747,7 +751,7 @@ function BoardDetail({
           mute: input.mute,
           x: input.x,
           y: input.y,
-        });
+        }));
       } catch (error) {
         if (await recoverConflict(error)) return;
         toast.error(t("boardTrimFailed"), { description: (error as Error).message });
@@ -761,7 +765,7 @@ function BoardDetail({
       onSaved();
       setRunning((current) => [...current, input.itemId]);
     },
-    [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict],
+    [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially],
   );
 
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
@@ -778,7 +782,8 @@ function BoardDetail({
       const fresh = await getBoard(board.id, workspaceId).catch(() => null);
       if (!fresh) return;
       const local = canvas ?? confirmedCanvas.current;
-      const hasLocalChanges = JSON.stringify(local) !== JSON.stringify(confirmedCanvas.current);
+      //: 按内容比,不按字段顺序(见 sameCanvas)—— 否则本地永远「有改动」,回执落地时不采用。
+      const hasLocalChanges = !sameCanvas(local, confirmedCanvas.current);
       // When the local projection is clean, adopt the complete server projection (including extra
       // multi-image results) and its token together. With local edits pending, show settled states
       // below but keep the old token so the next save correctly conflicts instead of overwriting.
@@ -838,12 +843,12 @@ function BoardDetail({
   }, []);
 
   const save = React.useCallback(
-    (next: Canvas) => {
-      if (JSON.stringify(next) === JSON.stringify(confirmedCanvas.current)) return Promise.resolve();
-      return updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next })
-        .then((fresh) => {
-          acceptBoard(fresh);
-        })
+    (next: Canvas) =>
+      //: 轮到它时再比、再读版本号:排在它前面的写请求可能刚把画布推进到这一份。
+      serially(async () => {
+        if (sameCanvas(next, confirmedCanvas.current)) return;
+        acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
+      })
         // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
         .catch(async (error: Error) => {
           if (await recoverConflict(error)) throw error;
@@ -851,9 +856,8 @@ function BoardDetail({
           // 自动保存只在 Promise 完成后才把这份画布视为已落库。告诉它失败了,
           // 下一次编辑仍会以最后一份真正成功的画布为基准。
           throw error;
-        });
-    },
-    [board.id, workspaceId, t, acceptBoard, recoverConflict],
+        }),
+    [board.id, workspaceId, t, acceptBoard, recoverConflict, serially],
   );
   // **不显示"已保存"。** 自动保存做对了就该是无声的:一个常驻的「已保存」既不能让人放心
   // (它任何时候都这么写),又占着顶栏一格。失败仍然会 toast —— 那才是需要打断的时刻。
@@ -870,7 +874,7 @@ function BoardDetail({
     }
     // 存完再关:进行中确认键转圈(见 RenameDialog 的 pending)。
     setSavingName(true);
-    updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, name: next })
+    serially(() => updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, name: next }))
       .then((fresh) => {
         acceptBoard(fresh);
         setRenaming(false);
