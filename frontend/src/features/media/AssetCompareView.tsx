@@ -5,6 +5,7 @@ import { assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { listenKeys } from "@/lib/shortcuts";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
 /**
@@ -342,8 +343,7 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
       if (event.key === "Escape") onClose();
       if (event.key === "0") reset();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [onClose, reset]);
 
   if (images.length < 2) {

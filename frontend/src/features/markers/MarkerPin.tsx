@@ -4,6 +4,7 @@ import type { NodeProps } from "@xyflow/react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,6 +37,9 @@ export function MarkerPin({ data, selected }: NodeProps) {
   const { marker, markers, onChange, onDelete, editable = false } = data as unknown as MarkerNodeData;
   const { open, setOpen, onCloseAutoFocus } = useMarkerEditor();
   React.useEffect(() => { if (!editable) setOpen(false); }, [editable, setOpen]);
+  //: 名字住在 React Flow 的节点里(effect 里才抄进 store),直接 `value={marker.name}` 的话
+  //: 输入法组词会被打断 —— 走草稿框,见 components/ui/draft-text。
+  const name = useDraftText<HTMLInputElement>({ value: marker.name, onValueChange: (next) => onChange({ ...marker, name: next }) });
 
   return (
     <Popover open={editable && open} onOpenChange={(next) => editable && setOpen(next)}>
@@ -72,13 +76,7 @@ export function MarkerPin({ data, selected }: NodeProps) {
             <label className="text-ui-xs text-muted-foreground" htmlFor={`marker-name-${marker.id}`}>
               {t("markerName")}
             </label>
-            <Input
-              id={`marker-name-${marker.id}`}
-              className="h-8 px-2 text-ui-xs"
-              value={marker.name}
-              maxLength={80}
-              onChange={(event) => onChange({ ...marker, name: event.target.value })}
-            />
+            <Input id={`marker-name-${marker.id}`} className="h-8 px-2 text-ui-xs" maxLength={80} {...name} />
           </div>
           <ShortcutRecorder
             marker={marker}

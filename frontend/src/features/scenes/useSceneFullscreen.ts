@@ -1,5 +1,7 @@
 import React from "react";
 
+import { listenKeys } from "@/lib/shortcuts";
+
 /** Fullscreen the document so portaled menus remain usable above the 3D tools. */
 export function useSceneFullscreen(
   root: React.RefObject<HTMLDivElement | null>,
@@ -46,11 +48,11 @@ export function useSceneFullscreen(
         void leave();
     };
     document.addEventListener("fullscreenchange", changed);
-    window.addEventListener("keydown", escape);
+    const stopKeys = listenKeys(window, escape);
     return () => {
       alive.current = false;
       document.removeEventListener("fullscreenchange", changed);
-      window.removeEventListener("keydown", escape);
+      stopKeys();
       void leave();
     };
   }, [leave]);

@@ -81,7 +81,7 @@ import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
-import { leaveClipboardToSystem } from "@/lib/shortcuts";
+import { leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
 
 export function EditorView({
   workspace,
@@ -764,8 +764,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         }
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return listenKeys(window, onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sequence?.id, splitAtPlayhead, duplicateClip, copyClip, cutClip, pasteClip, moveClipLayer]);
 

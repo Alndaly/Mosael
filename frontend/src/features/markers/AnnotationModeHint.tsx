@@ -2,6 +2,7 @@ import React from "react";
 import { X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { Kbd } from "@/components/ui/kbd";
+import { listenKeys } from "@/lib/shortcuts";
 
 /** Shared hint and Escape behavior for both annotation modes and canvases. */
 export function AnnotationModeHint({ kind, onExit }: { kind: "comment" | "marker"; onExit?: () => void }) {
@@ -11,8 +12,7 @@ export function AnnotationModeHint({ kind, onExit }: { kind: "comment" | "marker
       if (event.key !== "Escape") return;
       event.preventDefault(); event.stopPropagation(); onExit?.();
     };
-    window.addEventListener("keydown", exit, true);
-    return () => window.removeEventListener("keydown", exit, true);
+    return listenKeys(window, exit, true);
   }, [onExit]);
   const exitLabel = t(kind === "comment" ? "boardExitCommentMode" : "markerExitMode");
   return <div data-board-comment-mode-hint="" className="absolute left-1/2 top-16 z-30 flex h-[42px] max-w-[calc(100%-24px)] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 py-1 pl-3 pr-1.5 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl"

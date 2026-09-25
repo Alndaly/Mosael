@@ -49,6 +49,7 @@ import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+import { listenKeys } from "@/lib/shortcuts";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import {
   canvasDockedPanelEdges,
@@ -892,8 +893,7 @@ function BoardDetail({
       event.preventDefault();
       trigger.click();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
     // 空依赖:这个监听不读任何会变的东西(它用 querySelector 现找那个按钮)。
     // 漏掉依赖数组的话,每次渲染都要拆一次装一次 —— 而画布拖动时那是每帧一次。
   }, []);

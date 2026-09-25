@@ -96,6 +96,37 @@ export function formatCombo(combo: Combo): string {
   return [...MODIFIER_ORDER.filter((one) => mods.has(one)).map((one) => (one === "Mod" ? "Ctrl" : one)), key].join("+");
 }
 
+/**
+ * 这一下是**输入法在组词**时按的吗(拼音、注音、假名……)?
+ *
+ * 组词期间的按键归输入法:回车是「按拼音上屏」、Esc 是「放弃这次组词」、空格是「选第一个词」。
+ * Chromium 给这些 keydown 标 `isComposing`;开始组词的那一下还没标上,但 keyCode 已经是 229。
+ */
+export function isImeKeystroke(event: Pick<KeyboardEvent, "isComposing" | "keyCode">): boolean {
+  return event.isComposing || event.keyCode === 229;
+}
+
+/**
+ * 往 window / document 上挂键盘监听的**唯一入口**,回一个拆掉它的函数(直接当 effect 的清理返回)。
+ *
+ * 做的事只有一件:输入法组词期间的按键不交给 handler(见 isImeKeystroke)。这条规矩要每个
+ * 全局快捷键都守,而四十来处各写一遍的结果是漏 —— 批注模式的 Esc 就在捕获阶段把「放弃组词」
+ * 当成「退出批注模式」吃掉了。所以收在这里,由 `keyListeners.ratchet.test` 盯着别处不再裸挂。
+ */
+export function listenKeys(
+  target: Window | Document,
+  handler: (event: KeyboardEvent) => void,
+  options?: boolean | AddEventListenerOptions,
+  type: "keydown" | "keyup" = "keydown",
+): () => void {
+  const listener = (event: Event) => {
+    if (isImeKeystroke(event as KeyboardEvent)) return;
+    handler(event as KeyboardEvent);
+  };
+  target.addEventListener(type, listener, options);
+  return () => target.removeEventListener(type, listener, options);
+}
+
 /** 焦点在能打字的地方时,所有单键快捷键都要让路 —— 否则用户打个 "1" 就被传送走了。 */
 export function isTypingTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;

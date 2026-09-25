@@ -52,6 +52,7 @@ import { NodeComposer } from "@/features/boards/NodeComposer";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+import { listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
 import { AudioComposer } from "@/features/boards/AudioComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
@@ -904,8 +905,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         stepForward();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [stepBack, stepForward, groupSelection]);
 
   const add = React.useCallback(
@@ -960,8 +960,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setTrimming(null);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [trimming]);
 
   //: 哪一张便签正在写。写字是同步的几秒,期间按钮转圈 —— 不给反馈的话用户会再点一次。

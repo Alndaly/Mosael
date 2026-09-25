@@ -1,7 +1,7 @@
 import React from "react";
 
 import { markerForCombo, type CanvasMarker } from "@/features/markers/markers";
-import { comboFromEvent, isTypingTarget } from "@/lib/shortcuts";
+import { comboFromEvent, isTypingTarget, listenKeys } from "@/lib/shortcuts";
 
 /**
  * 按下绑定的键 → 跳到那个标记。
@@ -32,7 +32,6 @@ export function useMarkerShortcuts(
       event.preventDefault();
       latest.current.jump(marker);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [enabled]);
 }

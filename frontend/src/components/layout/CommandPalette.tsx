@@ -29,6 +29,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { emitOpenEvent } from "@/lib/deepLink";
+import { listenKeys } from "@/lib/shortcuts";
 
 
 const ASSET_ICONS: Record<string, React.ReactNode> = {
@@ -65,10 +66,10 @@ export function CommandPalette({
     };
     // 顶栏搜索按钮通过该事件打开(它和面板不在同一组件树)。
     const onOpenEvent = () => setOpen(true);
-    document.addEventListener("keydown", onKeyDown);
+    const stopKeys = listenKeys(document, onKeyDown);
     window.addEventListener("mosael:open-cmdk", onOpenEvent);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      stopKeys();
       window.removeEventListener("mosael:open-cmdk", onOpenEvent);
     };
   }, []);

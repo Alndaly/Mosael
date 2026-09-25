@@ -8,6 +8,7 @@ import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Cl
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
+import { DraftInput, DraftTextarea } from "@/components/ui/draft-text";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
@@ -227,12 +228,15 @@ export function NoteNode({ data, selected }: NodeProps) {
       {selected && !editing && !commentMode && workspaceId && boardId && <div className="nodrag nowheel absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md bg-popover" onDoubleClick={e => e.stopPropagation()}><SaveToNote workspaceId={workspaceId} content={item.text || ""} sources={[{kind: "board", id: boardId, label: t("navBoards"), quote: item.text || ""}]} /></div>}
       <Ports visible={selected} disabled={commentMode} />
       {editing ? (
-        <textarea
+        //: **草稿式的框**(见 components/ui/draft-text):字住在 React Flow 的节点里,而 React Flow
+        //: 在 effect 里才把它抄进自己的 store —— 直接 `value={item.text}` 的话每敲一下 React 都
+        //: 先把框写回旧字,拼音组词被打断,字母直接上屏。
+        <DraftTextarea
           ref={ref}
           // nodrag/nowheel:不挂的话在便签里选字会变成拖动整张便签,滚动会变成缩放画布。
           className="nodrag nowheel h-full w-full resize-none border-0 bg-transparent p-0 text-ui-sm leading-relaxed text-foreground outline-none"
           value={item.text ?? ""}
-          onChange={(event) => onText(item.id, event.target.value)}
+          onValueChange={(next) => onText(item.id, next)}
           onBlur={() => setEditing(false)}
         />
       ) : (
@@ -420,11 +424,12 @@ export function FrameNode({ data, selected }: NodeProps) {
       <div className="pointer-events-auto absolute -top-5 left-0 flex max-w-[90%] items-center gap-1 text-ui-2xs text-muted-foreground">
         <Group size={11} className="shrink-0" />
         {editing ? (
-          <input
+          //: 和便签同一个坑、同一个框(见 NoteNode)。
+          <DraftInput
             autoFocus
             className="nodrag w-40 border-0 bg-transparent p-0 text-ui-2xs text-foreground outline-none"
             value={item.text ?? ""}
-            onChange={(event) => onText(item.id, event.target.value)}
+            onValueChange={(next) => onText(item.id, next)}
             onBlur={() => setEditing(false)}
           />
         ) : (

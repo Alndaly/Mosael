@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { isTypingTarget } from "@/lib/shortcuts";
+import { isTypingTarget, listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 /**
@@ -144,8 +144,7 @@ export function CanvasNodeSearch({
       setOpen(true);
       requestAnimationFrame(() => input.current?.select());
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, []);
 
   const close = () => {

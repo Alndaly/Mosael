@@ -207,7 +207,7 @@ import {
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
-import { isTypingTarget, leaveClipboardToSystem } from "@/lib/shortcuts";
+import { isTypingTarget, leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 
 /** 主画布的节点类型。标记不是工作流节点(它不执行、不连线),但它在 React Flow 里得有个
@@ -904,8 +904,7 @@ function WorkflowEditor({
         redo();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [undo, redo]);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -1206,8 +1205,7 @@ function WorkflowEditor({
         }
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [copySelection, pasteClipboard, selectedFlowIds, handleCollapse]);
 
   const onNodesChange = React.useCallback(
@@ -1779,8 +1777,7 @@ function WorkflowEditor({
         void startRun();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   });
 
   //: Backspace / Delete 只删冲着画布来的那一下(检查器里的按钮、Portal 出去的下拉不算)——
@@ -1821,8 +1818,7 @@ function WorkflowEditor({
         return next;
       });
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [nodes]);
 
   const displayNodes = React.useMemo(
@@ -2757,8 +2753,7 @@ export function NodeInspector({
       if (target && target !== target.ownerDocument?.body && !target.closest(".react-flow")) return;
       onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [onClose]);
 
   // 换了父字段就清掉依赖它的子字段 —— 规则抽在 dependents.ts(有测试),这里只负责接线。

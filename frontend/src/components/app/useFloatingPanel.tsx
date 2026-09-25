@@ -1,6 +1,7 @@
 import React from "react";
 
 import { cn } from "@/lib/utils";
+import { listenKeys } from "@/lib/shortcuts";
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 
 /**
@@ -263,8 +264,7 @@ export function useFloatingPanel({
       if (event.key === "]") raiseToTop(storageKey);
       else sendToBottom(storageKey);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [floating, storageKey]);
 
   /** 摊到面板根节点上:点哪儿都能让这个窗口拿到焦点并置顶。

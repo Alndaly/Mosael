@@ -7,6 +7,7 @@ import { expect, it, vi } from "vitest";
 import { MarkerPin } from "./MarkerPin";
 import { MarkerEditorProvider } from "./MarkerEditorProvider";
 import type { CanvasMarker } from "./markers";
+import { composeWithIme, watchValueWrites } from "@/test/ime";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
@@ -101,4 +102,29 @@ it("hiding markers or removing the active marker clears its editor without reope
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   rerender(<Pins />);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+//: 和画布一样:名字住在节点数据里,而 React Flow 在 **effect 里**才把新的 nodes 抄进自己的
+//: store。这里用一层「effect 里再抄一遍」照原样模拟那一拍的延迟。
+function LaggingPin({ onSaved }: { onSaved: (name: string) => void }) {
+  const [source, setSource] = React.useState(marker);
+  const [shown, setShown] = React.useState(marker);
+  React.useEffect(() => setShown(source), [source]);
+  const data = {
+    editable: true, marker: shown, markers: [shown], onDelete: vi.fn(),
+    onChange: (next: CanvasMarker) => { onSaved(next.name); setSource(next); },
+  };
+  return <MarkerPin {...({ data, selected: false } as unknown as React.ComponentProps<typeof MarkerPin>)} />;
+}
+
+it("名字里用拼音打中文:组词期间不被改写,上屏后名字是中文、只交出去一次", async () => {
+  const saved: string[] = [];
+  render(<LaggingPin onSaved={(name) => saved.push(name)} />, { wrapper: MarkerEditors });
+  fireEvent.click(screen.getByTitle("markerConfigure"));
+  const field = (await screen.findByLabelText("markerName")) as HTMLInputElement;
+  const writes = watchValueWrites(field);
+  composeWithIme(field, ["分镜起点j", "分镜起点ji", "分镜起点jie", "分镜起点jiew", "分镜起点jiewe", "分镜起点jiewei"], "分镜起点结尾");
+  expect(writes).toEqual([]);
+  expect(field.value).toBe("分镜起点结尾");
+  expect(saved).toEqual(["分镜起点结尾"]);
 });

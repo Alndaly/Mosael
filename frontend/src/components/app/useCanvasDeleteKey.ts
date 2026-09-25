@@ -1,6 +1,6 @@
 import React from "react";
 
-import { isCanvasKeyTarget } from "@/lib/shortcuts";
+import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
 
 interface Selectable {
   id: string;
@@ -43,8 +43,7 @@ export function useCanvasDeleteKey<N extends Selectable, E extends Selectable>(
       event.preventDefault();
       void instance.deleteElements({ nodes: doomedNodes, edges: doomedEdges });
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
     // 两个 ref 本身不变,读的都是 .current。
   }, [editor, canvas]);
 }

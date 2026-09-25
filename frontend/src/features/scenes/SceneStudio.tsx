@@ -3,6 +3,7 @@ import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
+import { listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { SceneList } from "./SceneList";
 import { LoadingState } from "@/components/layout/LoadingState";
@@ -700,8 +701,7 @@ function SceneEditor({
           return;
       }
     };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
+    return listenKeys(window, key);
   });
   function add(kind: SceneObject["kind"]) {
     if (draft.content.objects.length >= 500) {

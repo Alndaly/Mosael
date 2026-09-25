@@ -5,6 +5,7 @@ import { assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { listenKeys } from "@/lib/shortcuts";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { MIN_CELL, useBestFit } from "./AssetCompareView";
 import { formatSeconds } from "./MediaLibraryView";
@@ -163,8 +164,7 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
       } else if (event.key === "ArrowLeft") step(-1);
       else if (event.key === "ArrowRight") step(1);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return listenKeys(window, onKey);
   }, [onClose, playing, playAll, pauseAll, step]);
 
   if (videos.length < 2 || !clock) return null;
