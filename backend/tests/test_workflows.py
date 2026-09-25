@@ -671,12 +671,17 @@ def test_delay_node_clamps(monkeypatch) -> None:
     from app.domain.workflows.executors import basic
 
     slept: list[float] = []
-    monkeypatch.setattr(basic.time, "sleep", lambda s: slept.append(s))  # never actually block
+
+    def instant(check, *, deadline, **_kwargs):  # never actually block
+        slept.append(round(deadline - time.monotonic()))
+        return True
+
+    monkeypatch.setattr(basic, "wait_until", instant)
     assert basic.delay(None, None, {"seconds": 0})["waited"] == 0.0
     assert basic.delay(None, None, {"seconds": 99999})["waited"] == 300.0  # clamped to max
     assert basic.delay(None, None, {"seconds": "oops"})["waited"] == 1.0  # unparsable → default 1
     assert basic.delay(None, None, {})["waited"] == 1.0  # default
-    assert slept == [0.0, 300.0, 1.0, 1.0]
+    assert slept == [0, 300, 1, 1]
 
 
 def test_translate_node_google(monkeypatch) -> None:
@@ -1484,6 +1489,27 @@ def test_一个节点失败_兄弟节点等着的子任务跟着取消(monkeypat
     assert outcome["error"].key == "wfErr_llmPromptEmpty", "报出来的该是真正失败的那个节点"
     with SessionLocal() as db:
         assert was_cancelled(db.get(Job, children[0])), "兄弟节点派生的子任务没被取消,照样在跑"
+
+
+def test_延时节点等着的时候_取消立刻生效(monkeypatch) -> None:
+    """延时节点此前是一句 `time.sleep`:取消一条正在延时的工作流,要等满那几分钟(上限 300 秒)
+    引擎才走到下一个节点边界。等待要认「这一轮在停」,和等子任务是同一种等。"""
+    from app.domain.jobs import cancel_job
+    from app.domain.workflows.executors import common
+
+    monkeypatch.setattr(common, "CHILD_POLL_SECONDS", 0.05)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    graph = {"nodes": [{"id": "d", "type": "delay", "name": "等一会", "config": {"seconds": 30}}], "edges": []}
+    outcome, job_id, thread = _run_graph_in_thread(graph, workspace_id=ws)
+    time.sleep(0.3)
+    with SessionLocal() as db:
+        cancel_job(db, db.get(Job, job_id))
+    thread.join(timeout=5)
+    stuck = thread.is_alive()
+    assert not stuck, "取消了,延时节点还在睡"
+    _context, cancelled = outcome["result"]
+    assert cancelled
 
 
 def test_parallel_fanout_and_join() -> None:

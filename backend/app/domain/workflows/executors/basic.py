@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Workflow
 from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.workflows.executors import register
+from app.domain.workflows.executors.common import wait_until
 
 HTTP_NODE_TIMEOUT_SECONDS = 60
 HTTP_TEXT_CAP = 100_000
@@ -214,5 +215,8 @@ def delay(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, 
     except (TypeError, ValueError):
         seconds = 1.0
     seconds = max(0.0, min(DELAY_MAX_SECONDS, seconds))
-    time.sleep(seconds)
+    # 和等子任务是同一种等(见 common.wait_until):不占连接,这一轮在停(取消、别的节点失败)
+    # 就不再等。此前是一句 time.sleep —— 取消一条正在延时的工作流要等满那几分钟。
+    deadline = time.monotonic() + seconds
+    wait_until(lambda _db: time.monotonic() >= deadline or None, release=db, deadline=deadline)
     return {"waited": seconds}
