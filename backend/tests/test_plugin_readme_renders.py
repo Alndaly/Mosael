@@ -21,7 +21,8 @@ from pathlib import Path
 import pytest
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "plugins" / "examples"
-READMES = sorted(EXAMPLES.glob("*/README.md"))
+#: 随应用发的插件的 README 一样会被人读(仓库里、插件目录里)。
+READMES = sorted([*EXAMPLES.glob("*/README.md"), *(EXAMPLES.parent / "bundled").glob("*/README.md")])
 
 #: markdown 链接,排除 autolink(`<...>`)与锚点。
 LINK = re.compile(r"\]\((?!https?://|#)([^)]+)\)")

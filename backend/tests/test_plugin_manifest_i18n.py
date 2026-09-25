@@ -28,12 +28,15 @@ from app.domain.plugins.manifest import parse, text_of
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "plugins" / "examples"
+#: 随应用发的插件(ComfyUI)也是我们自己发的 —— 同一条规矩。
+BUNDLED = ROOT / "plugins" / "bundled"
 MANIFEST_NAME = "mosael.plugin.json"
 CJK = re.compile(r"[一-鿿]")
 
 
 def _manifests() -> list[tuple[str, dict[str, Any]]]:
-    return [(p.parent.name, json.loads(p.read_text(encoding="utf-8"))) for p in sorted(EXAMPLES.glob(f"*/{MANIFEST_NAME}"))]
+    paths = sorted([*EXAMPLES.glob(f"*/{MANIFEST_NAME}"), *BUNDLED.glob(f"*/{MANIFEST_NAME}")])
+    return [(p.parent.name, json.loads(p.read_text(encoding="utf-8"))) for p in paths]
 
 
 def _human_texts(raw: dict[str, Any]) -> list[tuple[str, Any]]:
@@ -372,10 +375,10 @@ class Test插件自己处理多语言:
         import json
         import pathlib
 
-        examples = pathlib.Path(__file__).resolve().parents[2] / "plugins" / "examples"
+        plugins = pathlib.Path(__file__).resolve().parents[2] / "plugins"
         missing = [
             path.parent.name
-            for path in sorted(examples.glob("*/mosael.plugin.json"))
+            for path in sorted([*plugins.glob("examples/*/mosael.plugin.json"), *plugins.glob("bundled/*/mosael.plugin.json")])
             if not str(json.loads(path.read_text(encoding="utf-8")).get("default_locale") or "").strip()
         ]
         assert not missing, f"这几个示例插件没声明原文语言:{missing}"

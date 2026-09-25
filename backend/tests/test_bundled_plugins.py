@@ -76,3 +76,23 @@ def test_插件页标出随包的那一个(shipped) -> None:
     client = fresh_client()
     entry = next(one for one in client.get("/api/plugins").json() if one["id"] == "test.bundled")
     assert entry["bundled"] is True
+
+
+def test_随包插件随后端一起打包() -> None:
+    """冻结之后 bundled_root 指向解包目录里的 plugins/bundled —— 打包命令得真的把它带上,
+    否则打包版里一个随包插件都没有,而开发时一切正常(那时读的是仓库里那一份)。"""
+    build = (Path(__file__).resolve().parents[2] / "package.json").read_text(encoding="utf-8")
+    command = next(line for line in build.splitlines() if '"build:backend"' in line)
+    assert "--add-data ../plugins/bundled:plugins/bundled" in command
+
+
+def test_仓库里随包的插件都能装() -> None:
+    """plugins/bundled 下的每一个都有合法清单、入口在 —— 坏一个,每次启动对账都会炸。"""
+    from app.domain.plugins.manifest import parse
+
+    shipped = bundled.plugins()
+    assert shipped, "plugins/bundled 下至少有 ComfyUI"
+    for plugin in shipped:
+        raw = json.loads((plugin.source / "mosael.plugin.json").read_text(encoding="utf-8"))
+        manifest = parse(raw, str(plugin.source))
+        assert (plugin.source / manifest.runtime.entry).is_file()

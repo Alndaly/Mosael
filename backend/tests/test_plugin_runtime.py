@@ -79,9 +79,10 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})  # plugin admin routes need an admin
     plugins = client.post("/api/plugins/scan").json()
-    assert plugins[0]["id"] == "dev.mosael.text-toolkit"
+    # 随应用发的插件(ComfyUI)本来就在,按 id 找,不按位置。
+    toolkit = next(one for one in plugins if one["id"] == "dev.mosael.text-toolkit")
     # 无配置无凭据的包扫进来就自带一个默认连接;启用的是连接,不是包。
-    instance_id = plugins[0]["instances"][0]["id"]
+    instance_id = toolkit["instances"][0]["id"]
     client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True})
 
     res = client.post(

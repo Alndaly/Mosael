@@ -1,0 +1,88 @@
+{
+  "id": "dev.mosael.comfyui",
+  "manifest_version": 1,
+  "name": "ComfyUI",
+  "default_locale": "zh",
+  "version": "1.0.0",
+  "homepage": "https://github.com/comfyanonymous/ComfyUI",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/docs/guides/comfyui",
+    "en": "https://mosael.com/en/docs/guides/comfyui"
+  },
+  "runtime": {
+    "kind": "process",
+    "entry": "tools/main.py"
+  },
+  "permissions": [
+    "network:comfyui"
+  ],
+  "provides": [
+    "generation"
+  ],
+  "skills": [
+    {
+      "id": "comfyui",
+      "description": {
+        "zh": "把一台 ComfyUI(本机或局域网)接成图像 / 视频生成供应商:它里面保存的每张工作流都是一个模型,可调参数和参考图槽位自动识别,进度实时、能真的取消。",
+        "en": "Connect a ComfyUI server (local or on your LAN) as an image / video provider: every saved workflow becomes a model, with its tunable parameters and reference-image slots detected automatically, live progress and real cancellation."
+      }
+    }
+  ],
+  "instance": {
+    "multiple": true,
+    "name_template": "ComfyUI · {server_url}",
+    "config": [
+      {
+        "key": "server_url",
+        "label": {
+          "zh": "服务器地址",
+          "en": "Server URL"
+        },
+        "type": "string",
+        "required": true,
+        "default": "http://127.0.0.1:8188",
+        "help": {
+          "zh": "本机默认是 http://127.0.0.1:8188;填局域网地址就能用另一台机器的显卡。多台服务器就建多个连接。",
+          "en": "http://127.0.0.1:8188 on this machine; a LAN address uses another machine's GPU. One connection per server."
+        }
+      },
+      {
+        "key": "api_workflow",
+        "label": {
+          "zh": "API 模板(可选)",
+          "en": "API template (optional)"
+        },
+        "type": "string",
+        "required": false,
+        "multiline": true,
+        "help": {
+          "zh": "认不出的非常规工作流的退路:在 ComfyUI 里「导出 (API)」后粘贴,可用 {{prompt}} {{negative}} {{seed}} {{width}} {{height}} {{steps}} 占位符。它会作为「API 模板」出现在模型列表里。",
+          "en": "A fallback for unusual workflows the converter can't read: use “Export (API)” in ComfyUI and paste it; {{prompt}} {{negative}} {{seed}} {{width}} {{height}} {{steps}} placeholders work. It shows up as “API template” in the model list."
+        }
+      }
+    ]
+  },
+  "tools": {
+    "expose": "all",
+    "declare": [
+      {
+        "name": "comfyui_generation",
+        "provides": [
+          "generation"
+        ],
+        "timeout_seconds": 21600,
+        "description": {
+          "zh": "替 Mosael 在这台 ComfyUI 上列出模型、做一次生成。只给宿主调。",
+          "en": "Lists models and runs generations on this ComfyUI server for Mosael. Host-only."
+        },
+        "input_schema": {
+          "type": "object"
+        }
+      }
+    ]
+  }
+}

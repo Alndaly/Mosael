@@ -22,7 +22,7 @@ SAYS_OPTIONAL = re.compile(r"留空|不填|可选|\bempty\b|\boptional\b|\bleave
 
 
 def _fields():
-    for manifest in sorted(PLUGINS.glob("*/mosael.plugin.json")):
+    for manifest in sorted([*PLUGINS.glob("*/mosael.plugin.json"), *(PLUGINS.parent / "bundled").glob("*/mosael.plugin.json")]):
         instance = json.loads(manifest.read_text(encoding="utf-8")).get("instance") or {}
         for group in ("config", "credentials"):
             for field in instance.get(group) or []:
