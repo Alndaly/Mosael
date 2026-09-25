@@ -359,13 +359,15 @@ def _validate_scene_references(db: Session, workspace_id: str, canvas: dict, exi
             raise BoardDomainError("boardErr_sceneNotInWorkspace")
 
     from app.domain.notes import NoteDomainError, read_reference
-    # Existing broken references remain movable/removable after a source is deleted.
-    retained = {(item["id"], item.get("note_id"), item.get("note_revision"))
+    # 板上已经有的引用不再重新校验:源文档删掉之后,坏掉的引用照样能挪、能删、能复制。
+    # **按「引用的是哪篇的哪一版」认,不按格子的 id 认** —— 画布上复制出来的那一格、副本里的
+    # 那一格,和原来那格是同一份引用;按 id 认的话它们被当成新引用去校验,整张板存不下、复制不出。
+    retained = {(item.get("note_id"), item.get("note_revision"))
                 for item in (existing or {}).get("items", []) if item["kind"] == "document"}
     for item in canvas["items"]:
         if item["kind"] != "document" or not item.get("note_id"):
             continue
-        if (item["id"], item["note_id"], item["note_revision"]) in retained:
+        if (item["note_id"], item["note_revision"]) in retained:
             continue
         try:
             ref = read_reference(db, workspace_id, item["note_id"], item["note_revision"])
@@ -375,14 +377,21 @@ def _validate_scene_references(db: Session, workspace_id: str, canvas: dict, exi
             raise BoardDomainError(str(exc)) from exc
 
 def create_board(
-    db: Session, *, workspace_id: str, name: str, canvas: Any = None, actor_id: str | None = None
+    db: Session,
+    *,
+    workspace_id: str,
+    name: str,
+    canvas: Any = None,
+    actor_id: str | None = None,
+    copied_from: dict[str, Any] | None = None,
 ) -> Board:
+    """`copied_from`:这张板照着哪份画布复制来的。那份上已有的引用算已知(见 _validate_scene_references)。"""
     board = Board(
         workspace_id=workspace_id,
         name=(name or "").strip() or "新画板",
         canvas=normalize_canvas(canvas),
     )
-    _validate_scene_references(db, workspace_id, board.canvas)
+    _validate_scene_references(db, workspace_id, board.canvas, copied_from)
     db.add(board)
     db.flush()
     from app.domain.collaboration import record_activity
@@ -426,6 +435,7 @@ def duplicate_board(
         name=(name or "").strip() or source.name,
         canvas=canvas,
         actor_id=actor_id,
+        copied_from=source.canvas,
     )
 
 

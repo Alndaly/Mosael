@@ -137,3 +137,42 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
     assert items["img"]["run"] == {"status": "running", "job_id": "job-1"}
     assert items["img"]["x"] == 40, "占位把并发保存里用户刚拖的位置盖回去了"
     assert "n1" in items, "占位把并发保存里刚加的那一项抹掉了"
+
+
+def _deleted_note_board(client, ws: str) -> tuple[str, dict]:
+    """一张引用了某篇文档的板,那篇文档随后被删掉了 —— 画板上留着一个坏掉的引用。"""
+    note = client.post("/api/notes", json={"workspace_id": ws, "title": "品牌规范", "markdown": "蓝色"}).json()
+    item = {"id": "doc", "kind": "document", "x": 0, "y": 0, "note_id": note["id"], "note_revision": 1}
+    board_id = _board(client, ws, {"items": [item], "edges": []})
+    trash = client.patch(f"/api/notes/{note['id']}", json={**note, "base_revision": 1, "trashed": True}).json()
+    client.delete(f"/api/notes/{note['id']}", params={"workspace_id": ws, "base_revision": trash["revision"]})
+    return board_id, item
+
+
+def test_引用的文档删掉之后_画板照样能创建副本() -> None:
+    """坏掉的引用在原板上照样能挪、能删(见 _validate_scene_references);副本是同样的项,
+    不该因为那一格就整张复制不出来。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, _item = _deleted_note_board(client, ws)
+
+    made = client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": ws, "name": "副本"})
+
+    assert made.status_code == 200, made.text
+    assert [one["kind"] for one in made.json()["canvas"]["items"]] == ["document"]
+
+
+def test_引用的文档删掉之后_复制那一格不会让整张板存不下() -> None:
+    """画布上「复制」一格是换了 id 的同一份引用。此前保留判断认的是**格子的 id**,于是复制出来的
+    那格被当成新引用去校验、校验失败 —— 之后每一次自动保存都被整个拒掉,用户只看到「画板没能保存」。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item = _deleted_note_board(client, ws)
+    revision = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["revision"]
+
+    saved = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": revision,
+        "canvas": {"items": [item, {**item, "id": "doc-copy", "x": 40}], "edges": []},
+    })
+
+    assert saved.status_code == 200, saved.text
