@@ -76,6 +76,22 @@ it("认不出参数时要出声,而不是和「确实没有参数」一样静默
   expect(screen.queryByRole("button", { name: "boardGenerationSettings" })).not.toBeInTheDocument();
 });
 
+it("存着的模型已经不在可选清单里时,选择器显示的就是实际要用的那一个", () => {
+  // 节点表单记着上次用的模型,而那个模型后来被删了(或那条通道被停了)。提交时用的是清单里的
+  // 第一个,选择器却还挂着那个已经不存在的值 —— 显示的和发出去的不是同一个模型。
+  const onSubmit = vi.fn();
+  render(<NodeComposer
+    item={{ id: "video", kind: "video", text: "A sunrise", form: { prompt: "A sunrise", provider_profile_id: "gone", model: "retired-model" } } as BoardItem}
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
+    busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
+  />);
+
+  const trigger = screen.getAllByRole("combobox").find((one) => one.textContent?.includes("a-long-video-model-name"));
+  expect(trigger).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ model: "a-long-video-model-name" }));
+});
+
 it("目录没给取值时,用户没填就一个值都不提交", async () => {
   // 这条盯的是整件事的要害。曾经的链条是:兜底给出 duration_seconds 这个键 → 界面渲染时长
   // → 没有可选值也没有默认值 → defaultDuration 编一个 5 → 提交带上 duration_seconds: 5

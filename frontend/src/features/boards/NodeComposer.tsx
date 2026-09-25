@@ -444,7 +444,10 @@ export function NodeComposer({
     [models, item.kind],
   );
   const current = options.find((model) => `${model.provider_profile_id}:${model.model}` === picked) ?? options[0] ?? null;
-  const modelValue = picked || (current ? `${current.provider_profile_id}:${current.model}` : "");
+  //: 显示的就是**实际要用的**那一个。存着的模型不在清单里(被删了、那条通道停了)时 current 已经
+  //: 退到第一个,选择器却还挂着那个不存在的值 —— 显示的和发出去的不是同一个模型。
+  //: 清单还没到时(current 为空)才沿用存着的那个。和写字、念字两块面板同一个做法。
+  const modelValue = current ? `${current.provider_profile_id}:${current.model}` : picked;
 
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
   //: 对着真机核过的。换模型时跟着换,所以用 key 重挂而不是 useState 记着上一个模型的值。
