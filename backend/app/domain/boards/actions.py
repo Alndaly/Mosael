@@ -20,6 +20,7 @@ from app.domain.boards.canvas import (
     BoardDomainError,
     ensure_revision,
     get_board,
+    live_job,
     place_pending,
     receipt_to_item,
     set_text_write_run,
@@ -41,6 +42,19 @@ class Slot:
     x: float
     y: float
     base_revision: int | None = None
+
+
+def _ensure_slot_ready(db: Session, workspace_id: str, slot: Slot) -> None:
+    """起任务之前问两件事:调用方看到的是不是最新的这张板;这一格是不是已经有一个任务在跑。
+
+    两件都要在**建任务之前**问 —— 之后才发现的话,钱已经花了。一格同一时刻只有一个任务:
+    第二次点生成时第一轮还在跑,放过去就是第二份钱,而第一轮的回执回来时照样填进这一格。
+    """
+    board = get_board(db, workspace_id, slot.board_id)
+    ensure_revision(board, slot.base_revision)
+    item = next((one for one in (board.canvas or {}).get("items", []) if one.get("id") == slot.item_id), None)
+    if live_job(item):
+        raise BoardInputError("boardErr_itemBusy")
 
 
 def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind: str,
@@ -85,7 +99,7 @@ def generate_on_board(
     from app.domain.generation.operations import parse_source_assets
     from app.domain.generation.runner import start_generation_thread
 
-    ensure_revision(get_board(db, workspace_id, slot.board_id), slot.base_revision)
+    _ensure_slot_ready(db, workspace_id, slot)
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
         generation, job = create_generation_job(
@@ -147,7 +161,7 @@ def speak_on_board(
     """
     from app.domain.voices.voices import start_synthesis
 
-    ensure_revision(get_board(db, workspace_id, slot.board_id), slot.base_revision)
+    _ensure_slot_ready(db, workspace_id, slot)
     text = text.strip()
     if not text:
         raise BoardInputError("boardErr_nothingToSpeak")
@@ -175,7 +189,7 @@ def trim_on_board(
     from app.db.models import Asset
     from app.domain.boards.trim import start_trim
 
-    ensure_revision(get_board(db, workspace_id, slot.board_id), slot.base_revision)
+    _ensure_slot_ready(db, workspace_id, slot)
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workspace_id:
         raise BoardInputError("boardErr_assetNotInWorkspace")

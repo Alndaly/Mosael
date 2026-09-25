@@ -448,17 +448,18 @@ def update_board(
     canvas: Any = None,
     base_revision: int | None = None,
     actor_id: str | None = None,
-    starts_run: bool = False,
+    server_write: bool = False,
 ) -> Board:
     """改名和改画布是同一个入口,因为它们都是"这张板变了"。
 
     **两者都可以单独传**:自动保存只发 canvas,重命名只发 name —— 各发各的那一半,
     另一半不该被 None 覆盖掉。
 
-    `starts_run`:这一次写入是服务端**自己开启新一轮运行**(摆生成占位、便签开始写),
-    不是客户端存回来的快照。那种写入不过 `_keep_arrived_results` —— 那道闸防的是「任务结束后
-    客户端拿着提交前的旧快照存回来」,而重新生成时库里正好是上一轮的终态,新一轮的 running
-    会被它当成旧快照打回去:后端新任务照常跑(照常扣钱),画布上却还挂着上次的失败。
+    `server_write`:这一次写入是服务端**自己对某一格的合并**(摆生成占位、便签开始写、回执),
+    不是客户端存回来的快照。那种写入不过 `_keep_server_owned_state` —— 那道闸防的是客户端
+    拿着旧快照改动运行态,而服务端这几种写入本来就是在改运行态:重新生成时库里正好是上一轮的
+    终态,新一轮的 running 会被当成旧快照打回去(后端新任务照常跑、照常扣钱,画布上却还挂着
+    上次的失败);回执要把 running 收成终态,同样不能被「运行态归服务端」挡住。
     """
     board = get_board(db, workspace_id, board_id)
     expected = board.revision if base_revision is None else base_revision
@@ -473,7 +474,7 @@ def update_board(
         next_name = cleaned
     if canvas is not None:
         normalized = normalize_canvas(canvas)
-        next_canvas = normalized if starts_run else _keep_arrived_results(board.canvas, normalized)
+        next_canvas = normalized if server_write else _keep_server_owned_state(board.canvas, normalized)
         _validate_scene_references(db, workspace_id, next_canvas, board.canvas)
     if next_name == board.name and next_canvas == board.canvas:
         return board
@@ -509,42 +510,53 @@ def update_board(
     return get_board(db, workspace_id, board_id)
 
 
-def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, Any]:
-    """**客户端不该覆盖它还不知道的产出。**
+def live_job(item: dict[str, Any] | None) -> str | None:
+    """这一格正在跑的任务(排队或运行中、有 job_id)。没有就是 None。"""
+    run = (item or {}).get("run") or {}
+    if run.get("status") in ("queued", "running") and run.get("job_id"):
+        return str(run["job_id"])
+    return None
 
-    这是一个必然的竞态,不是偶发:画板自动保存,而生成是异步的 ——
-      t1 客户端存了一份带占位(run 里有 job_id、没 asset_id)的画布;
-      t2 任务跑完,回执把 asset_id 填进那一项;
-      t3 用户又拖了一下,客户端把**它手上那份**存回来 —— 那份里还是占位。
-    产出就这么没了,而且不报错:那一项看着还在转圈,可任务早就结束了。
 
-    所以服务端在这一处做主:一项如果库里已经有 asset_id,而传来的那份还是占位,
-    保留库里那个。客户端下一次拉到的就是填好的。
+def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str, Any]:
+    """**运行态和产出归服务端,客户端的快照改不动它们。**
+
+    画板自动保存,而生成是异步的,客户端手上那份永远可能落后于服务端刚做的事:
+
+    · **产出已经到了**,客户端存回来的还是占位 ——
+        t1 客户端存了一份带占位(run 里有 job_id、没 asset_id)的画布;
+        t2 任务跑完,回执把 asset_id 填进那一项;
+        t3 用户又拖了一下,客户端把**它手上那份**存回来 —— 那份里还是占位。
+      产出就这么没了,而且不报错:那一项看着还在转圈,可任务早就结束了。
+    · **任务还在跑**,客户端存回来的是开跑之前的样子(撤销一步就是这样)—— 任务照跑、钱照花,
+      画布上却成了一个能再点一次生成的空槽,于是第二份钱也花出去了。
+
+    所以一项在库里已经有了产出或终态,而传来的那份还是占位,保留库里那个;一项在库里正跑着
+    任务,传来的那份不是这一轮,保留这一轮。别的字段(位置、表单、文字)照客户端的来。
+    客户端下一次拉到的就是服务端这份。
     """
-    have = {
-        str(item.get("id")): item
-        for item in ((stored or {}).get("items") or [])
-        if item.get("asset_id") or (item.get("run") or {}).get("status") in ("succeeded", "failed", "cancelled")
-    }
-    if not have:
+    by_id = {str(item.get("id")): item for item in ((stored or {}).get("items") or [])}
+    if not by_id:
         return incoming
     items = []
     for item in incoming["items"]:
-        settled = have.get(str(item.get("id")))
+        settled = by_id.get(str(item.get("id")))
+        settled_run = (settled or {}).get("run") or {}
+        live = live_job(settled)
         incoming_running = (item.get("run") or {}).get("status") in ("queued", "running")
-        if settled and not item.get("asset_id") and settled.get("asset_id"):
+        if live and live_job(item) != live:
+            kept = {**item, "run": settled_run}
+            kept.pop("asset_id", None)
+            items.append(kept)
+        elif settled and not item.get("asset_id") and settled.get("asset_id"):
             items.append({**item, "asset_id": settled["asset_id"], "run": settled.get("run", {"status": "succeeded"})})
-        elif settled and incoming_running and (settled.get("run") or {}).get("status") in (
-            "succeeded",
-            "failed",
-            "cancelled",
-        ):
+        elif settled and incoming_running and settled_run.get("status") in ("succeeded", "failed", "cancelled"):
             # 任务结束后的下一次自动保存，客户端手里往往还是提交前的 running 快照。终态必须
             # 赢，否则它会把节点重新写活，界面就永远 loading。
-            kept = {**item, "run": settled["run"]}
+            kept = {**item, "run": settled_run}
             # 同步便签写作没有 asset_id 可以充当「结果已到」的证据。服务端已经落下正文和
             # 清空后的表单时，晚到的 running 自动保存不能把三者一起覆盖回旧快照。
-            if (settled.get("run") or {}).get("status") == "succeeded" and settled.get("kind") == "note":
+            if settled_run.get("status") == "succeeded" and settled.get("kind") == "note":
                 kept["text"] = settled.get("text", "")
                 kept["form"] = settled.get("form", {})
             items.append(kept)
@@ -598,7 +610,6 @@ def _merge_into_latest(
     board_id: str,
     merge: Callable[[dict[str, Any]], dict[str, Any]],
     actor_id: str | None = None,
-    starts_run: bool = False,
 ) -> Board:
     """把服务端的一次单格改动**合到最新的画布上**,冲突就重读再合。
 
@@ -620,7 +631,7 @@ def _merge_into_latest(
                 canvas=canvas,
                 base_revision=board.revision,
                 actor_id=actor_id,
-                starts_run=starts_run,
+                server_write=True,
             )
         except BoardRevisionConflict:
             if attempt == _MERGE_ATTEMPTS - 1:
@@ -679,9 +690,7 @@ def place_pending(
             items[index] = merged
         return {**canvas, "items": items}
 
-    return _merge_into_latest(
-        db, workspace_id=workspace_id, board_id=board_id, merge=merge, actor_id=actor_id, starts_run=True
-    )
+    return _merge_into_latest(db, workspace_id=workspace_id, board_id=board_id, merge=merge, actor_id=actor_id)
 
 
 def set_text_write_run(
@@ -711,8 +720,6 @@ def set_text_write_run(
         board_id=board_id,
         merge=lambda canvas: _with_item(canvas, item_id, lambda item: {**item, "run": run}),
         actor_id=actor_id,
-        # 上一次写挂了、这次重写:库里是 failed,不能让它把这一轮的 running 打回去。
-        starts_run=status == "running",
     )
 
 

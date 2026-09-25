@@ -3148,6 +3148,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_opKindMissing": {"zh": "不支持的画板算子:(空)", "en": "A board operation is missing its kind."},
     "boardErr_nothingToSpeak": {"zh": "没有可念的文字", "en": "There's no text to read aloud."},
     "boardErr_assetNotInWorkspace": {"zh": "这个工作区里没有这份素材", "en": "This asset isn't in this workspace."},
+    "boardErr_itemBusy": {"zh": "这一格还在生成,等它结束(或在任务中心取消)再来", "en": "This item is still generating. Wait for it to finish, or cancel it in the task center, then try again."},
     "boardErr_writeNeedsPrompt": {"zh": "先写点要求,再让它写", "en": "Write what you want first, then ask it to write."},
     "trimErr_unsupportedKind": {"zh": "只能截取视频或音频", "en": "Only video or audio can be trimmed."},
     "trimErr_noLocalFile": {"zh": "素材没有本地文件", "en": "This asset has no local file."},

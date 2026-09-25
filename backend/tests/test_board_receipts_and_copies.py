@@ -139,6 +139,71 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
     assert "n1" in items, "占位把并发保存里刚加的那一项抹掉了"
 
 
+def _live_board(client, ws: str) -> str:
+    """一张板,上面那一格正在跑一个真由服务端摆下的任务(job-1)。"""
+    from app.core.db import SessionLocal
+    from app.domain.boards import place_pending
+
+    board_id = _board(client, ws, {"items": [{"id": "img", "kind": "image", "x": 0, "y": 0,
+                                               "form": {"prompt": "一只猫"}}], "edges": []})
+    with SessionLocal() as db:
+        place_pending(db, workspace_id=ws, board_id=board_id, item={
+            "id": "img", "kind": "image", "x": 0, "y": 0, "form": {"prompt": "一只猫"},
+            "run": {"status": "running", "job_id": "job-1"},
+        })
+    return board_id
+
+
+def test_客户端存回来的快照不能把正在跑的任务抹掉() -> None:
+    """撤销一步就回到「点生成之前」:那份快照里这一格是空槽。它存回来的话任务还在跑(钱已经花了),
+    画布上却成了一个能再点一次生成的空槽 —— 这正是「以为没点中又点了一次」的那条路。
+    运行态归服务端:只有摆占位和回执能改它。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _live_board(client, ws)
+    revision = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["revision"]
+
+    undone = {"items": [{"id": "img", "kind": "image", "x": 30, "y": 0, "form": {"prompt": "一只猫"}}], "edges": []}
+    saved = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": revision, "canvas": undone})
+
+    assert saved.status_code == 200, saved.text
+    item = saved.json()["canvas"]["items"][0]
+    assert item["run"] == {"status": "running", "job_id": "job-1"}, "客户端的快照把在跑的任务抹掉了"
+    assert item["x"] == 30, "用户那一侧的改动(位置)照常生效"
+
+
+def test_正在跑的那一格不能再起一个任务(monkeypatch) -> None:
+    """一格同一时刻只有一个任务。第二次点生成时第一轮还在跑:此前照样建第二个任务(第二份钱),
+    占位换成第二轮 —— 而第一轮的回执回来时照样填进这一格。"""
+    import pytest
+
+    import app.domain.generation as generation
+    from app.core.db import SessionLocal
+    from app.domain.boards import BoardDomainError
+    from app.domain.boards.actions import Slot, generate_on_board
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _live_board(client, ws)
+    user_id = client.get("/api/auth/me").json()["id"]
+    created: list[str] = []
+
+    def create_generation_job(db, **_kwargs):
+        created.append("job")
+        raise AssertionError("不该走到建任务这一步")
+
+    monkeypatch.setattr(generation, "create_generation_job", create_generation_job)
+
+    with SessionLocal() as db, pytest.raises(BoardDomainError):
+        generate_on_board(
+            db, workspace_id=ws, slot=Slot(board_id, "img", 0, 0), actor_id=user_id, kind="image",
+            prompt="一只猫", provider="p", provider_profile_id="pp", model="m", parameters={}, source_assets=[],
+            form={"prompt": "一只猫"},
+        )
+
+    assert created == [], "第一轮还在跑,又建了第二个任务"
+
+
 def test_正文里_at_到的素材不会在失败后变成槽位里挂着的素材(monkeypatch) -> None:
     """发出去的 source_assets = 槽位挂的 + 正文里 @ 到的(见前端 mergeSourceAssets);表单里的
     source_assets 只是**槽位**那一半,@ 的那几份记在 mentioned_asset_ids 上。此前占位把发出去的
