@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import select, update
@@ -576,13 +577,63 @@ def receipt_to_item(board_id: str, item_id: str) -> dict[str, Any]:
     return {"kind": RECEIPT_KIND, "board_id": board_id, "item_id": item_id}
 
 
+#: 服务端对**某一格**的合并(摆占位、写字、回执)在撞上并发写入时重试几次。
+_MERGE_ATTEMPTS = 4
+
+
+def _merge_into_latest(
+    db: Session,
+    *,
+    workspace_id: str,
+    board_id: str,
+    merge: Callable[[dict[str, Any]], dict[str, Any]],
+    actor_id: str | None = None,
+    starts_run: bool = False,
+) -> Board:
+    """把服务端的一次单格改动**合到最新的画布上**,冲突就重读再合。
+
+    客户端存回来的是整份快照,它不知道别人刚改了什么,所以按 base_revision 挡回去是对的。
+    服务端这几种写入不一样:它们只改自己那一格,从最新画布出发重做一遍 `merge` 就不会覆盖
+    任何人。此前它们各自带着调用方的 base_revision 去 CAS —— 于是任务已经建好(钱已经在路上)
+    之后,同一个人的一次自动保存恰好先落库,占位就撞 409:任务永远排着队,画布上什么都没有。
+    版本该在**花钱之前**问(见 ensure_revision),花了之后只剩「把结果放对地方」。
+    """
+    for attempt in range(_MERGE_ATTEMPTS):
+        board = get_board(db, workspace_id, board_id)
+        db.refresh(board)
+        canvas = merge(dict(board.canvas or {"items": [], "edges": []}))
+        try:
+            return update_board(
+                db,
+                workspace_id=workspace_id,
+                board_id=board_id,
+                canvas=canvas,
+                base_revision=board.revision,
+                actor_id=actor_id,
+                starts_run=starts_run,
+            )
+        except BoardRevisionConflict:
+            if attempt == _MERGE_ATTEMPTS - 1:
+                raise
+    raise AssertionError("unreachable")
+
+
+def _with_item(canvas: dict[str, Any], item_id: str, change: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    """把画布上某一格换成 `change` 之后的样子;找不到那一格就说清楚。"""
+    items = [dict(one) for one in (canvas.get("items") or [])]
+    index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
+    if index is None:
+        raise item_not_found(item_id)
+    items[index] = change(items[index])
+    return {**canvas, "items": items}
+
+
 def place_pending(
     db: Session,
     *,
     workspace_id: str,
     board_id: str,
     item: dict[str, Any],
-    base_revision: int | None = None,
     actor_id: str | None = None,
 ) -> Board:
     """把某一项的「正在生成」状态放到画布上,再去起任务。
@@ -597,32 +648,29 @@ def place_pending(
 
     就地更新时**保留它已有的位置和大小**:调用方只知道「它开始生成了」,不知道用户把它
     拖到哪儿、拉多大 —— 拿请求里的默认坐标覆盖,会让节点自己跳回左上角。
+
+    **不收 base_revision。** 调用方在建任务之前已经问过版本(ensure_revision);到这里任务
+    已经建好,只剩把占位合到最新画布上(见 _merge_into_latest)。
     """
-    board = get_board(db, workspace_id, board_id)
-    canvas = dict(board.canvas or {"items": [], "edges": []})
-    items = [dict(one) for one in (canvas.get("items") or [])]
 
-    index = next((i for i, one in enumerate(items) if one.get("id") == item.get("id")), None)
-    if index is None:
-        items.append(item)
-    else:
-        #: 位置和大小、表单归画布(用户编辑出来的),状态归这里(任务起来了)。
-        keep = {k: v for k, v in item.items() if k not in ("x", "y", "width", "height")}
-        merged = {**items[index], **keep}
-        #: 四个状态两两互斥 —— 重新生成时旧产出、上一次的失败都让位给这次的占位。
-        #: 不清的话,一个项会同时带着 run.running 和 asset_id(画布不知道该画哪个),
-        #: 或者一边转圈一边挂着上次的报错(用户以为这次也挂了)。
-        merged.pop("asset_id", None)
-        items[index] = merged
+    def merge(canvas: dict[str, Any]) -> dict[str, Any]:
+        items = [dict(one) for one in (canvas.get("items") or [])]
+        index = next((i for i, one in enumerate(items) if one.get("id") == item.get("id")), None)
+        if index is None:
+            items.append(item)
+        else:
+            #: 位置和大小、表单归画布(用户编辑出来的),状态归这里(任务起来了)。
+            keep = {k: v for k, v in item.items() if k not in ("x", "y", "width", "height")}
+            merged = {**items[index], **keep}
+            #: 四个状态两两互斥 —— 重新生成时旧产出、上一次的失败都让位给这次的占位。
+            #: 不清的话,一个项会同时带着 run.running 和 asset_id(画布不知道该画哪个),
+            #: 或者一边转圈一边挂着上次的报错(用户以为这次也挂了)。
+            merged.pop("asset_id", None)
+            items[index] = merged
+        return {**canvas, "items": items}
 
-    return update_board(
-        db,
-        workspace_id=workspace_id,
-        board_id=board_id,
-        canvas={**canvas, "items": items},
-        base_revision=base_revision,
-        actor_id=actor_id,
-        starts_run=True,
+    return _merge_into_latest(
+        db, workspace_id=workspace_id, board_id=board_id, merge=merge, actor_id=actor_id, starts_run=True
     )
 
 
@@ -637,25 +685,21 @@ def set_text_write_run(
     base_revision: int | None = None,
     actor_id: str | None = None,
 ) -> Board:
-    """同步便签写作的运行态也落在节点内；失败时不碰表单，用户可以原样重试。"""
+    """同步便签写作的运行态也落在节点内；失败时不碰表单，用户可以原样重试。
+
+    `base_revision` 在**调模型之前**问(没花钱时拒);写入本身是单格合并。
+    """
     if status not in ("running", "failed"):
         raise BoardDomainError("boardErr_textRunStatusInvalid", status=status)
-    board = get_board(db, workspace_id, board_id)
-    canvas = dict(board.canvas or {"items": [], "edges": []})
-    items = [dict(one) for one in (canvas.get("items") or [])]
-    index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
-    if index is None:
-        raise item_not_found(item_id)
+    ensure_revision(get_board(db, workspace_id, board_id), base_revision)
     run = {"status": status}
     if error.strip():
         run["error"] = error.strip()[:300]
-    items[index] = {**items[index], "run": run}
-    return update_board(
+    return _merge_into_latest(
         db,
         workspace_id=workspace_id,
         board_id=board_id,
-        canvas={**canvas, "items": items},
-        base_revision=base_revision,
+        merge=lambda canvas: _with_item(canvas, item_id, lambda item: {**item, "run": run}),
         actor_id=actor_id,
         # 上一次写挂了、这次重写:库里是 failed,不能让它把这一轮的 running 打回去。
         starts_run=status == "running",
@@ -671,34 +715,30 @@ def write_text(
     text: str,
     reset_form: bool = False,
     completed_form: dict[str, Any] | None = None,
-    base_revision: int | None = None,
     actor_id: str | None = None,
 ) -> Board:
     """把一段写好的文字放进某一项。
 
     **就地改,不新建** —— 调用方要写的那张便签是用户在画布上摆好的,位置、颜色、大小都归他。
+    模型已经写完了(钱已经花了),所以这里是单格合并,不拿调用方的旧版本去挡。
     """
-    board = get_board(db, workspace_id, board_id)
-    canvas = dict(board.canvas or {"items": [], "edges": []})
-    items = [dict(one) for one in (canvas.get("items") or [])]
-    index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
-    if index is None:
-        raise item_not_found(item_id)
-    updated = {**items[index], "text": text}
-    if reset_form:
-        form = dict(completed_form if completed_form is not None else updated.get("form") or {})
-        form["prompt"] = ""
-        form["mentioned_asset_ids"] = []
-        form.pop("prompt_document", None)
-        updated["form"] = form
-        updated["run"] = {"status": "succeeded"}
-    items[index] = updated
-    return update_board(
+
+    def change(item: dict[str, Any]) -> dict[str, Any]:
+        updated = {**item, "text": text}
+        if reset_form:
+            form = dict(completed_form if completed_form is not None else updated.get("form") or {})
+            form["prompt"] = ""
+            form["mentioned_asset_ids"] = []
+            form.pop("prompt_document", None)
+            updated["form"] = form
+            updated["run"] = {"status": "succeeded"}
+        return updated
+
+    return _merge_into_latest(
         db,
         workspace_id=workspace_id,
         board_id=board_id,
-        canvas={**canvas, "items": items},
-        base_revision=base_revision,
+        merge=lambda canvas: _with_item(canvas, item_id, change),
         actor_id=actor_id,
     )
 
@@ -807,32 +847,19 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     if not asset_ids and result.get("asset_id"):
         asset_ids = [str(result["asset_id"])]
 
-    for attempt in range(4):
-        board = db.get(Board, board_id)
-        if board is None:
-            return
-        db.refresh(board)
-        canvas = _canvas_with_delivered_result(
-            board.canvas or {"items": [], "edges": []},
-            item_id=item_id,
-            asset_ids=asset_ids,
-            job_status=job_status,
-            job_error=job_error,
-        )
-        try:
-            update_board(
-                db,
-                workspace_id=board.workspace_id,
-                board_id=board.id,
-                canvas=canvas,
-                base_revision=board.revision,
-                actor_id=actor_id,
-            )
-            logger.info("board %s item %s -> %s", board.id, item_id, ", ".join(asset_ids) or "(failed)")
-            return
-        except BoardRevisionConflict:
-            if attempt == 3:
-                raise
+    board = db.get(Board, board_id)
+    if board is None:
+        return
+    _merge_into_latest(
+        db,
+        workspace_id=board.workspace_id,
+        board_id=board.id,
+        merge=lambda canvas: _canvas_with_delivered_result(
+            canvas, item_id=item_id, asset_ids=asset_ids, job_status=job_status, job_error=job_error
+        ),
+        actor_id=actor_id,
+    )
+    logger.info("board %s item %s -> %s", board_id, item_id, ", ".join(asset_ids) or "(failed)")
 
 
 def install() -> None:

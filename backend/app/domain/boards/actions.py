@@ -57,7 +57,6 @@ def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind:
             "form": form,
             "run": {"status": "running", "job_id": job_id},
         },
-        base_revision=slot.base_revision,
         actor_id=actor_id,
     )
 
