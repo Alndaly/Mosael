@@ -1665,6 +1665,47 @@ def test_llm_节点会把用量记进账(monkeypatch) -> None:
         assert event.units["output_tokens"] == 7
 
 
+def test_经引擎跑的节点_记下的账真的落了库(monkeypatch) -> None:
+    """上面那条直接调执行器,然后**自己** commit —— 于是它测不到引擎那一侧。
+
+    记账跟着调用方的事务走(见 domain/usage.billable),而引擎给每个节点开的会话此前用完就
+    关、从不 commit:LLM 节点、翻译节点在真实运行里记下的每一笔账都随会话关闭回滚掉了,
+    首页的 Token 图和成本统计里工作流的 AI 调用是隐身的。
+    """
+    from app.db.models import ProviderUsageEvent
+    from app.domain.workflows.engine import execute_graph
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install_llm_transport(
+        monkeypatch,
+        ai_nodes,
+        lambda request: httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "hi"}}], "usage": {"prompt_tokens": 11, "completion_tokens": 7}},
+        ),
+    )
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db, name="LLM", vendor="openai-compatible", base_url="https://api.test", api_key="sk", model="m"
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.commit()
+        graph = {"nodes": [{"id": "llm", "type": "llm", "config": {"profile_id": profile.id, "prompt": "hi"}}], "edges": []}
+        with acting_as(db):
+            db.commit()  # 节点在自己的会话里读父 job
+            context, _cancelled = execute_graph(graph, wf_id=workflow.id, entry_is_root=True)
+
+    assert context["llm"]["text"] == "hi"
+    with SessionLocal() as db:
+        events = db.query(ProviderUsageEvent).filter_by(workspace_id=workspace_id).all()
+        assert len(events) == 1, "节点会话关闭时把账一起回滚掉了"
+        assert events[0].operation == "workflow_llm"
+
+
 def test_订阅授权那条路也会降级_而不是一个硬400(monkeypatch) -> None:
     """**同一个节点、同一份配置,两种连接不能两种行为。**
 
