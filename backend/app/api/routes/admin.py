@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
@@ -38,9 +38,11 @@ router = APIRouter(tags=["admin"])
 在侧边栏摆这个入口。
 """
 
-#: 图表窗口。一个跑了两年的部署不该在打开这一页时扫全库 —— 而"最近一个月"正是这一页要回答的
-#: 那些问题(谁在用、谁在花)的自然尺度。
+#: 图表窗口的默认值。一个跑了两年的部署不该在打开这一页时扫全库 —— 而"最近一个月"正是这一页
+#: 要回答的那些问题(谁在用、谁在花)的自然尺度。
 WINDOW_DAYS = 30
+#: 管理页上能选的最长窗口。再长就是在扫全库了,而那不是这一页要回答的问题。
+MAX_WINDOW_DAYS = 90
 #: "最近还在用"的判据。
 ACTIVE_DAYS = 7
 
@@ -137,21 +139,30 @@ def set_shared_host_folders(body: SharedHostFolders, db: DbSession, user: Curren
 
 
 @router.get("/admin/overview", response_model=AdminOverviewOut)
-def overview(db: DbSession, user: CurrentUser) -> AdminOverviewOut:
+def overview(
+    db: DbSession,
+    user: CurrentUser,
+    days: int = Query(default=WINDOW_DAYS, ge=1, le=MAX_WINDOW_DAYS),
+) -> AdminOverviewOut:
     """这一页顶部的几个数,加上两张图。
 
     **花销按人分**,不是只给一个总数:管理员要回答的是"谁在花" —— 一个总数说明不了任何该做的
     决定,而按人分的那一列直接指向要谈的那个人。
+
+    `days` 是两张图(任务活动、按人花费)的窗口:今天加上前 `days - 1` 天,从那天的零点(UTC)
+    算起。账户、工作区、素材是当前总数,不受它影响。
     """
     ensure_deployment_admin(db, user)
-    since = now() - timedelta(days=WINDOW_DAYS)
+    today = now().date()
+    first_day = today - timedelta(days=days - 1)
+    since = datetime.combine(first_day, time.min)
     active_since = now() - timedelta(days=ACTIVE_DAYS)
 
     active = db.scalar(
         select(func.count(func.distinct(AuthSession.user_id))).where(AuthSession.last_seen_at >= active_since)
     )
-    jobs_by_day = [
-        DaySeriesPoint(day=str(day), total=int(total), failed=int(failed or 0))
+    counted = {
+        str(day): (int(total), int(failed or 0))
         for day, total, failed in db.execute(
             select(
                 func.date(Job.created_at),
@@ -160,9 +171,15 @@ def overview(db: DbSession, user: CurrentUser) -> AdminOverviewOut:
             )
             .where(Job.created_at >= since)
             .group_by(func.date(Job.created_at))
-            .order_by(func.date(Job.created_at))
         ).all()
-    ]
+    }
+    # **没跑任务的那天也要有一格**,记 0。只回有数的日子,前端的类目轴就会把空着的日子挤掉 ——
+    # 九十天里跑过三天,画出来是三根挨着的柱子,看着像"这三天连着很忙"。
+    jobs_by_day = []
+    for offset in range(days):
+        day = str(first_day + timedelta(days=offset))
+        total, failed = counted.get(day, (0, 0))
+        jobs_by_day.append(DaySeriesPoint(day=day, total=total, failed=failed))
     # 用量事件记的是"哪次调用花了多少",归属在 job 上 —— 顺着 job.created_by 就知道是谁花的。
     in_window = ProviderUsageEvent.created_at >= since
     through_job = ((Job, Job.id == ProviderUsageEvent.job_id),)
@@ -209,5 +226,5 @@ def overview(db: DbSession, user: CurrentUser) -> AdminOverviewOut:
         assets=db.scalar(select(func.count()).select_from(Asset)) or 0,
         jobs_by_day=jobs_by_day,
         spend_by_user=spend,
-        window_days=WINDOW_DAYS,
+        window_days=days,
     )

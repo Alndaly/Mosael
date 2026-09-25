@@ -4881,6 +4881,9 @@ export interface paths {
          *
          *     **花销按人分**,不是只给一个总数:管理员要回答的是"谁在花" —— 一个总数说明不了任何该做的
          *     决定,而按人分的那一列直接指向要谈的那个人。
+         *
+         *     `days` 是两张图(任务活动、按人花费)的窗口:今天加上前 `days - 1` 天,从那天的零点(UTC)
+         *     算起。账户、工作区、素材是当前总数,不受它影响。
          */
         get: operations["overview_api_admin_overview_get"];
         put?: never;
@@ -22788,7 +22791,9 @@ export interface operations {
     };
     overview_api_admin_overview_get: {
         parameters: {
-            query?: never;
+            query?: {
+                days?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;

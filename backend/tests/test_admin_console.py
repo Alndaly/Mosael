@@ -130,3 +130,21 @@ def test_the_charts_have_a_bounded_window() -> None:
     admin, _mate = _admin_and_member()
     overview = admin.get("/api/admin/overview").json()
     assert len(overview["jobs_by_day"]) <= 30
+    # 上限也由后端守:界面上最长给到 90 天,再长就是在扫全库了。
+    assert admin.get("/api/admin/overview?days=91").status_code == 422
+    assert admin.get("/api/admin/overview?days=0").status_code == 422
+
+
+def test_the_window_is_the_admins_choice_and_every_day_has_a_slot() -> None:
+    """窗口由管理页顶上那一个范围控件选;没跑任务的日子也占一格(记 0)。
+
+    只回有数的日子时,类目轴会把空着的日子挤掉 —— 九十天里跑过三天,画出来是三根挨着的柱子。
+    """
+    admin, _mate = _admin_and_member()
+    overview = admin.get("/api/admin/overview?days=7").json()
+
+    assert overview["window_days"] == 7
+    days = [point["day"] for point in overview["jobs_by_day"]]
+    assert len(days) == 7
+    assert days == sorted(days) and len(set(days)) == 7
+    assert all(point["total"] >= point["failed"] >= 0 for point in overview["jobs_by_day"])

@@ -14594,8 +14594,22 @@
           "admin"
         ],
         "summary": "Overview",
-        "description": "这一页顶部的几个数,加上两张图。\n\n**花销按人分**,不是只给一个总数:管理员要回答的是\"谁在花\" —— 一个总数说明不了任何该做的\n决定,而按人分的那一列直接指向要谈的那个人。",
+        "description": "这一页顶部的几个数,加上两张图。\n\n**花销按人分**,不是只给一个总数:管理员要回答的是\"谁在花\" —— 一个总数说明不了任何该做的\n决定,而按人分的那一列直接指向要谈的那个人。\n\n`days` 是两张图(任务活动、按人花费)的窗口:今天加上前 `days - 1` 天,从那天的零点(UTC)\n算起。账户、工作区、素材是当前总数,不受它影响。",
         "operationId": "overview_api_admin_overview_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
