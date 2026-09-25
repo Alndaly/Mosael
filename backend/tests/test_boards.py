@@ -272,6 +272,31 @@ def test_写错的画布当场拒绝(canvas: dict, why: str) -> None:
         normalize_canvas(canvas)
 
 
+@pytest.mark.parametrize("kind", ["note", "image", "video", "audio", "frame", "document"])
+def test_每一种格子都能起名_名字是一行字(kind: str) -> None:
+    """名字不分种类:同是「图片」的五格,靠名字才分得开。没起名就不存这个字段 —— 显示时退回种类名。"""
+    got = normalize_canvas({"items": [{"id": "a", "kind": kind, "x": 0, "y": 0, "title": " 猫的\n正面  特写 "}]})
+    assert got["items"][0]["title"] == "猫的 正面 特写"
+    blank = normalize_canvas({"items": [{"id": "a", "kind": kind, "x": 0, "y": 0, "title": "   "}]})
+    assert "title" not in blank["items"][0]
+
+
+def test_名字写错了当场拒绝() -> None:
+    from app.domain.boards.canvas import MAX_TITLE_CHARS
+
+    normalize_canvas({"items": [{"id": "a", "kind": "image", "x": 0, "y": 0, "title": "长" * MAX_TITLE_CHARS}]})
+    with pytest.raises(BoardDomainError, match=str(MAX_TITLE_CHARS)):
+        normalize_canvas({"items": [{"id": "a", "kind": "image", "x": 0, "y": 0, "title": "长" * (MAX_TITLE_CHARS + 1)}]})
+    with pytest.raises(BoardDomainError, match="title"):
+        normalize_canvas({"items": [{"id": "a", "kind": "image", "x": 0, "y": 0, "title": 3}]})
+
+
+def test_分组框的名字只在_title() -> None:
+    """分组框没有正文。还往 text 里写的是没跟上的写入方 —— 存下来的话,改的名字在画布上不出现。"""
+    with pytest.raises(BoardDomainError, match="title"):
+        normalize_canvas({"items": [{"id": "f", "kind": "frame", "x": 0, "y": 0, "text": "第一幕"}]})
+
+
 def test_id_重复要拒绝() -> None:
     """前端按 id 索引,重了会**默默丢掉一个** —— 用户看到的是"我刚加的东西没了"。"""
     with pytest.raises(BoardDomainError, match="重复"):

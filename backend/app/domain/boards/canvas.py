@@ -83,6 +83,8 @@ NOTE_COLORS = ("yellow", "blue", "green", "pink", "purple", "gray")
 
 MAX_ITEMS = 2000
 MAX_TEXT_CHARS = 20_000
+#: 一格的名字(`title`)最长多少字。它挂在节点上方那一行、查找列表的一行里,是个**名字**不是一段话。
+MAX_TITLE_CHARS = 120
 RUN_STATUSES = ("idle", "queued", "running", "succeeded", "failed", "cancelled")
 
 
@@ -146,6 +148,18 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
         if len(json.dumps(prompt_document, ensure_ascii=False)) > MAX_TEXT_CHARS * 8:
             raise BoardDomainError("boardErr_promptDocumentTooLarge", item_id=item_id)
     return form
+
+
+def _normalize_title(value: Any, item_id: str) -> str:
+    """一格的名字:一行字。空白(连同换行、制表符)收成单个空格,首尾去掉;空的就是没起名。"""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="title")
+    title = " ".join(value.split())
+    if len(title) > MAX_TITLE_CHARS:
+        raise BoardDomainError("boardErr_titleTooLong", item_id=item_id, limit=MAX_TITLE_CHARS)
+    return title
 
 
 def _normalize_source(value: dict[str, Any]) -> dict[str, str] | None:
@@ -289,12 +303,24 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                     raise BoardDomainError("boardErr_itemSizeNotPositive", item_id=item_id, field=field)
                 item[field] = size
 
+        # **名字是每一格都有的一个字段,不分种类。** 节点上方那行标签、查找节点、智能体认格子
+        # 都读它;没起名(没有这个字段)就显示种类名 —— 那是「默认」的定义,不是缺了什么。
+        # 分组框的名字此前住在 `text` 里(见迁移 migrate-board-frame-names-become-titles),
+        # 一个名字两处放,读的人就得先分辨这格是不是分组框。
+        title = _normalize_title(entry.get("title"), item_id)
+        if title:
+            item["title"] = title
+
         text = entry.get("text")
         if text is not None:
             if not isinstance(text, str):
                 raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="text")
             if len(text) > MAX_TEXT_CHARS:
                 raise BoardDomainError("boardErr_textTooLong", item_id=item_id, limit=MAX_TEXT_CHARS)
+            #: 分组框没有正文 —— 它的名字在 title。还往 text 里写的是没跟上的写入方,拒掉比
+            #: 存一份没人读的字好:存下来的话,用户改的名字在画布上不出现,也不报错。
+            if kind == "frame":
+                raise BoardDomainError("boardErr_frameHasNoText", item_id=item_id)
             item["text"] = text
 
         form = _normalize_form(entry.get("form"), item_id)

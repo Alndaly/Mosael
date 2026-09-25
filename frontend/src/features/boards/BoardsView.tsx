@@ -37,7 +37,7 @@ import {
   type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import type { MediaKind } from "@/features/boards/boardNodes";
+import { itemName, type MediaKind } from "@/features/boards/boardNodes";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -374,7 +374,8 @@ function BoardCard({
             <span className="relative block">
               <CanvasPreview
                 className={marked ? "border-primary ring-1 ring-inset ring-primary" : undefined}
-                items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame",scene:"navScenes",document:"boardKindDocument"} as const)[item.kind]) }))}
+                //: 缩略图上每一格写一行字:起了名写名字,没起名写正文(便签那句话、文档标题),都没有写种类名。
+                items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.title?.trim() || item.text || itemName(t, item) }))}
                 edges={board.canvas?.edges}
               />
               {selecting && <SelectionCheck selected={selected} />}

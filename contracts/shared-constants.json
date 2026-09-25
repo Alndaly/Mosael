@@ -102,6 +102,23 @@
           "symbol": "CREDENTIAL_ACQUIRE_TIMEOUT_SECONDS"
         }
       ]
+    },
+    {
+      "name": "board_item_title_max_chars",
+      "value": 120,
+      "why": "画板上一格的名字(title)最长多少字。后端按它校验每一次保存,前端按它给改名输入框设 maxLength。前端放得比后端长时不会在输入那一刻报错 —— 名字照打,而下一次自动保存整张画板被拒,用户只看到「画板没能保存」,和刚才改的名字对不上号。",
+      "implementations": [
+        {
+          "runtime": "python",
+          "location": "backend/app/domain/boards/canvas.py",
+          "symbol": "MAX_TITLE_CHARS"
+        },
+        {
+          "runtime": "frontend",
+          "location": "frontend/src/features/boards/BoardNodeLabel.tsx",
+          "symbol": "BOARD_ITEM_TITLE_MAX"
+        }
+      ]
     }
   ],
   "budgets": [

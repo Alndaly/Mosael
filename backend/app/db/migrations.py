@@ -2165,6 +2165,42 @@ def _migrate_board_sources_record_their_upstream() -> None:
                 )
 
 
+def _migrate_board_frame_names_become_titles() -> None:
+    """分组框的名字从 `text` 搬到每一格都有的 `title`。
+
+    此前只有分组框能起名,名字借住在 `text` 里;现在每一格都能起名,名字统一放在 `title`
+    (见 boards.canvas.normalize_canvas)。搬过去时按 title 的口径收拾:空白收成单个空格、
+    首尾去掉、超过 120 字截断(这份口径是迁移那一刻的快照,不跟着领域层走)——
+    不截的话,这张板下一次保存会被「名字太长」整个拒掉。搬空的(只有空白)就是没起名。
+    分组框身上不再留 `text`:它没有正文。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            touched = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict) or item.get("kind") != "frame" or "text" not in item:
+                    continue
+                name = item.pop("text")
+                touched = True
+                if isinstance(name, str) and not item.get("title"):
+                    title = " ".join(name.split())[:120]
+                    if title:
+                        item["title"] = title
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -3030,6 +3066,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_canvas_state,
                 _migrate_board_trim_slots_record_their_source,
                 _migrate_board_sources_record_their_upstream,
+                _migrate_board_frame_names_become_titles,
                 _backfill_browser_pool,
                 _backfill_provider_models,
                 _migrate_provider_default_model_fk,

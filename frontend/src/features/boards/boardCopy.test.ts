@@ -15,7 +15,7 @@ const itemOf = (one: Node) => (one.data as { item: BoardItem }).item;
 
 describe("复制选中的几项", () => {
   it("一起复制的两项之间的那根线跟着复制,两端接到新的那两格上", () => {
-    const note = node({ id: "n1", kind: "note", x: 0, y: 0, text: "一只猫" });
+    const note = node({ id: "n1", kind: "note", x: 0, y: 0, title: "开场", text: "一只猫" });
     const image = node({ id: "img", kind: "image", x: 300, y: 0 });
     const outside = node({ id: "other", kind: "note", x: 0, y: 300 }, false);
     const edges: Edge[] = [
@@ -31,6 +31,8 @@ describe("复制选中的几项", () => {
     expect(copied.edges).toHaveLength(3);
     const added = copied.edges.find((one) => !["e1", "e2"].includes(one.id));
     expect(added).toMatchObject({ source: ids.get("n1"), target: ids.get("img") });
+    // 名字跟着复制:「同一套再来一份」,副本认得出是照哪一格复制的。
+    expect(itemOf(fresh.find((one) => one.id === ids.get("n1"))!).title).toBe("开场");
   });
 
   it("正在跑的那一格复制出来是空槽:任务的回执只认原件,副本会一直转圈", () => {

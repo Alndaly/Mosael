@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -76,6 +76,50 @@ describe("画板的撤销与服务端那份", () => {
     });
 
     expect(view.latest().items.map((one) => one.id)).toContain("agent");
+  });
+});
+
+describe("给一格改名", () => {
+  const image = (id: string, title?: string) => ({ id, kind: "image" as const, x: 0, y: 0, width: 260, height: 180, ...(title ? { title } : {}) });
+
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+  }
+
+  it("操作条上的「重命名」打开名字那一处;打完一个名字是撤销历史里的一步", async () => {
+    const view = mount({ items: [image("a"), image("b", "侧面")], edges: [], markers: [] });
+    const node = document.querySelector('[data-id="a"]') as HTMLElement;
+    act(() => {
+      node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect(view.api().canUndo).toBe(false);
+
+    const rename = document.querySelector<HTMLButtonElement>('.react-flow__node-toolbar button[aria-label="rename"]');
+    expect(rename, "单选一格时操作条上有「重命名」").not.toBeNull();
+    act(() => rename!.click());
+    const input = node.querySelector<HTMLInputElement>('input[aria-label="rename"]')!;
+    expect(input, "输入框开在这一格上方的名字那一处").not.toBeNull();
+
+    //: 一个字一个字地打:每一下都只进草稿,不进画布 —— 否则攒不成一步。
+    for (const value of ["正", "正面", "正面特写"]) {
+      fireEvent.change(input, { target: { value } });
+      await settle();
+    }
+    expect(view.latest().items.find((one) => one.id === "a")?.title).toBeUndefined();
+    expect(view.api().canUndo).toBe(false);
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    await settle();
+    expect(view.latest().items.map((one) => one.title)).toEqual(["正面特写", "侧面"]);
+    expect(node.querySelector("[data-board-node-label]")?.textContent).toBe("正面特写");
+
+    act(() => view.api().undo());
+    await settle();
+    expect(view.latest().items.map((one) => one.title)).toEqual([undefined, "侧面"]);
+    expect(view.api().canUndo).toBe(false);
   });
 });
 

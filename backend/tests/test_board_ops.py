@@ -232,3 +232,61 @@ def test_客户端存回来一份线已经断了的旧快照_照样摘掉() -> N
     board = _fed_board()
     board["edges"] = []
     assert normalize_canvas(board)["items"][1]["form"]["source_assets"] == [{"asset_id": "m1", "role": "last_frame"}]
+
+
+def test_给一格起名_改名_取消名字() -> None:
+    """名字是每一格都有的 `title`。智能体认格子、用户看节点上方那一行,读的都是它。"""
+    base = _canvas([
+        {"id": "i1", "kind": "image", "x": 0, "y": 0},
+        {"id": "f1", "kind": "frame", "x": 0, "y": 300, "title": "第一幕"},
+    ])
+    out = apply_board_ops(base, [
+        {"kind": "add_item", "type": "video", "item_id": "v1", "title": "  开场  镜头 "},
+        {"kind": "set_title", "item_id": "i1", "title": "主视觉"},
+        {"kind": "set_title", "item_id": "f1", "title": ""},
+    ])
+    canvas = normalize_canvas(out)
+    items = {one["id"]: one for one in canvas["items"]}
+    assert items["i1"]["title"] == "主视觉"
+    assert items["v1"]["title"] == "开场 镜头", "名字是一行字:空白收成单个空格"
+    assert "title" not in items["f1"], "空名字 = 不要名字了,退回显示种类名"
+
+    with pytest.raises(BoardDomainError):
+        apply_board_ops(base, [{"kind": "set_title", "item_id": "无", "title": "x"}])
+
+
+def test_智能体改名经确认卡落到画板上_读回来带着名字() -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [
+        {"id": "a", "kind": "image", "x": 0, "y": 0},
+        {"id": "b", "kind": "image", "x": 300, "y": 0},
+    ], "edges": []}}).json()["id"]
+
+    card = client.post("/api/confirmations", json={
+        "workspace_id": ws,
+        "tool": "edit_board",
+        "requested_by": "agent",
+        "payload": {"board_id": board_id, "operations": [
+            {"kind": "set_title", "item_id": "a", "title": "猫 · 正面"},
+            {"kind": "set_title", "item_id": "b", "title": "猫 · 侧面"},
+        ]},
+    })
+    assert card.status_code == 200, card.text
+    approved = client.post(f"/api/confirmations/{card.json()['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+
+    # get_board(MCP)读的就是这份:两张同是「图片」的格子,靠名字分得开。
+    items = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
+    assert [one.get("title") for one in items] == ["猫 · 正面", "猫 · 侧面"]
+
+    # 名字太长:开卡时干跑就拒,不等批准。
+    too_long = client.post("/api/confirmations", json={
+        "workspace_id": ws,
+        "tool": "edit_board",
+        "requested_by": "agent",
+        "payload": {"board_id": board_id, "operations": [{"kind": "set_title", "item_id": "a", "title": "长" * 121}]},
+    })
+    assert too_long.status_code >= 400

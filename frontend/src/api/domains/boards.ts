@@ -4,6 +4,9 @@ import { api } from "@/api/transport";
 export interface BoardItem {
   id: string;
   kind: "note" | "image" | "video" | "audio" | "frame" | "scene" | "document";
+  /** 用户给这一格起的名字。**每种都有、只此一处**(分组框的名字也在这,不在 text)。
+   *  没有 = 没起名,显示种类名(见 boardNodes.itemName)。和后端 canvas._normalize_title 同形。 */
+  title?: string;
   x: number;
   y: number;
   width?: number;

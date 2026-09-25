@@ -13,7 +13,7 @@ const items: BoardItem[] = [
   { id: "n1", kind: "note", x: 0, y: 0, text: "开场白\n先讲痛点,再讲猫" },
   { id: "i1", kind: "image", x: 0, y: 0, form: { prompt: "一只橘猫趴在窗台" } },
   { id: "v1", kind: "video", x: 0, y: 0 },
-  { id: "f1", kind: "frame", x: 0, y: 0, text: "第一幕" },
+  { id: "f1", kind: "frame", x: 0, y: 0, title: "第一幕" },
 ];
 
 describe("画板的查找条目", () => {
@@ -33,6 +33,21 @@ describe("画板的查找条目", () => {
     expect(matchCanvasEntries(entries, "猫").map((one) => one.id)).toEqual(["n1", "i1"]);
     expect(matchCanvasEntries(entries, "video").map((one) => one.id)).toEqual(["v1"]);
     expect(matchCanvasEntries(entries, t("boardKindFrame")).map((one) => one.id)).toEqual(["f1"]);
+  });
+
+  it("起了名的格子,列表里显示名字,也按名字搜得到", () => {
+    const named: BoardItem[] = [
+      { id: "a", kind: "image", x: 0, y: 0, title: "主视觉 · 正面", form: { prompt: "一只橘猫" } },
+      { id: "b", kind: "image", x: 0, y: 0, title: "主视觉 · 侧面" },
+      { id: "c", kind: "note", x: 0, y: 0, title: "旁白", text: "先讲痛点" },
+    ];
+    const entries = boardSearchEntries(named, t);
+    expect(entries.map((one) => one.title)).toEqual(["主视觉 · 正面", "主视觉 · 侧面", "旁白"]);
+    expect(matchCanvasEntries(entries, "侧面").map((one) => one.id)).toEqual(["b"]);
+    expect(matchCanvasEntries(entries, "主视觉").map((one) => one.id)).toEqual(["a", "b"]);
+    // 正文和提示词照样搜得到 —— 起了名不等于别的字就不算数了。
+    expect(matchCanvasEntries(entries, "痛点").map((one) => one.id)).toEqual(["c"]);
+    expect(matchCanvasEntries(entries, "橘猫").map((one) => one.id)).toEqual(["a"]);
   });
 
   it("太长的第一行截断,列表里一行放得下", () => {

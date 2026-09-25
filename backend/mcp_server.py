@@ -1765,9 +1765,12 @@ def list_boards(workspace_id: str = "") -> list[dict[str, Any]]:
 def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
     """Read-only: inspect one CREATIVE BOARD canvas in full.
 
-    Returns every item (id, kind, x, y, width, height, text, color, asset_id) and
-    every edge. Call this before edit_board so you know the exact item_id values
-    and where things already sit — the user has arranged them by hand.
+    Returns every item (id, kind, title, x, y, width, height, text, color, asset_id)
+    and every edge. `title` is the item's user-given name (absent = unnamed; the
+    canvas then shows the kind, e.g. "Image") — use it to tell apart items of the
+    same kind and to refer to them. Call this before edit_board so you know the
+    exact item_id values and where things already sit — the user has arranged
+    them by hand.
     """
     return _get(f"/api/boards/{board_id}", {"workspace_id": workspace_id or _default_workspace_id()})
 
@@ -1788,10 +1791,14 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
 
     operations is a list of:
       {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
-          (item_id/x/y/width/height optional — the server auto-ids and lays out to the right)
+          (item_id/x/y/width/height/title optional — the server auto-ids and lays out to the right)
           type is one of note / image / video / audio / frame / scene / document
+      {"kind":"add_item","type":"frame","title":"第一幕"}
+          (a frame is named by title; it has no text)
       {"kind":"add_item","type":"document","note_id":"<read_note id>","note_revision":1}
           (pins a workspace note revision; connect to writing/image/video/audio nodes to use its full text)
+      {"kind":"set_title","item_id":"i1","title":"主视觉"}
+          (name/rename any item, max 120 chars; "" clears the name)
       {"kind":"set_text","item_id":"n1","text":"新内容"}
       {"kind":"set_color","item_id":"n1","color":"green"}      (notes: yellow/blue/green/pink/purple/gray)
       {"kind":"move_item","item_id":"n1","x":400,"y":200}

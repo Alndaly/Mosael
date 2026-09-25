@@ -8,12 +8,13 @@ import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Cl
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
-import { DraftInput, DraftTextarea } from "@/components/ui/draft-text";
+import { DraftTextarea } from "@/components/ui/draft-text";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
 import { itemError, itemRunStatus, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
 
 /**
  * 画板上的三种项。
@@ -52,6 +53,11 @@ export type BoardNodeData = {
   onRefreshDocument?: (id: string) => void;
   refreshingDocument?: boolean;
   onText: (id: string, text: string) => void;
+  /** 这一格正在改名(双击名字、或操作条上的「重命名」)。状态归画布:两个入口进的是同一个。 */
+  renaming?: boolean;
+  onRenaming?: (id: string | null) => void;
+  /** 改好的名字;空串 = 不要名字了,退回显示种类名。 */
+  onRename?: (id: string, title: string) => void;
   /** 媒体加载出来之后报一次自然宽高比 —— 节点据此把高度校正过来,画面才铺得满。 */
   onAspect: (id: string, ratio: number) => void;
   /** 评论模式只接受标注，不暴露会修改画布结构的连线入口。 */
@@ -151,25 +157,35 @@ export function kindText(t: (key: MessageKey) => string, kind: BoardItem["kind"]
   return { label: t(meta.label), hint: t(meta.hint) };
 }
 
+/**
+ * 这一格**叫什么**:起了名就是名字,没起就是种类名(「图片」)。
+ *
+ * 节点上方那一行、查找节点、画板列表的缩略图都照这一条认 —— 没起名显示种类名是「默认」的定义,
+ * 不是兜底。
+ */
+export function itemName(t: (key: MessageKey) => string, item: Pick<BoardItem, "kind" | "title">): string {
+  return item.title?.trim() || kindText(t, item.kind).label;
+}
+
 /** 能从一条线的末端长出来的种类。分组框不在其中 —— 它是个容器,不是一份产出。 */
 export const SPAWNABLE_KINDS = ["image", "video", "audio", "note", "document"] as const;
 
-/** 节点上方那行类型标签 —— 一眼看出这格是图片还是视频,不用等它加载出来。 */
-function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
+/** 节点上方那一行:种类图标 + 名字(没起名是种类名)—— 一眼看出这格是什么,不用等它加载出来。
+ *  双击改名,见 BoardNodeLabel。 */
+function NodeLabel({ data, icon, className }: { data: BoardNodeData; icon?: LucideIcon; className?: string }) {
   const t = useI18n();
-  const Icon = kindIcon(kind);
-  const { label } = kindText(t, kind);
-  //: **反着视口缩放** —— 标签跟着画布缩的话,它在屏幕上的高度一直在变,而上方那块操作条
-  //: 的间距是按屏幕像素算的(NodeToolbar 的 offset)。两者对不上的结果:拉远时标签越缩越小,
-  //: 操作条和节点之间的空当越拉越大,而下方的面板纹丝不动。
-  const zoom = useStore((state) => state.transform[2]) || 1;
+  const { item, renaming, commentMode, onRenaming, onRename } = data;
   return (
-    <span
-      className="pointer-events-none absolute bottom-full left-0 inline-flex origin-bottom-left items-center gap-1 pb-1 text-ui-2xs text-muted-foreground"
-      style={{ transform: `scale(${1 / zoom})` }}
-    >
-      <Icon size={11} /> {label}
-    </span>
+    <BoardNodeLabel
+      icon={icon ?? kindIcon(item.kind)}
+      title={item.title}
+      fallback={kindText(t, item.kind).label}
+      renaming={Boolean(renaming)}
+      readOnly={commentMode}
+      onRenaming={onRenaming && ((on) => onRenaming(on ? item.id : null))}
+      onRename={onRename && ((title) => onRename(item.id, title))}
+      className={className}
+    />
   );
 }
 
@@ -199,7 +215,8 @@ function nodeRunProps(item: BoardItem) {
 
 /** 便签:双击进入编辑。**单击不进** —— 单击是选中/拖动,想法摆位比改字更频繁。 */
 export function NoteNode({ data, selected }: NodeProps) {
-  const { item, onText, commentMode, workspaceId, boardId } = data as unknown as BoardNodeData;
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, onText, commentMode, workspaceId, boardId } = nodeData;
   const t = useI18n();
   const [editing, setEditing] = React.useState(false);
   const ref = React.useRef<HTMLTextAreaElement | null>(null);
@@ -224,7 +241,7 @@ export function NoteNode({ data, selected }: NodeProps) {
       onDoubleClick={() => setEditing(true)}
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel kind="note" />
+      <NodeLabel data={nodeData} />
       {selected && !editing && !commentMode && workspaceId && boardId && <div className="nodrag nowheel absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md bg-popover" onDoubleClick={e => e.stopPropagation()}><SaveToNote workspaceId={workspaceId} content={item.text || ""} sources={[{kind: "board", id: boardId, label: t("navBoards"), quote: item.text || ""}]} /></div>}
       <Ports visible={selected} disabled={commentMode} />
       {editing ? (
@@ -350,7 +367,8 @@ function EmptySlot({ icon }: { icon: React.ReactNode }) {
 
 /** 图片:指向素材库的一份。加载不出来时说清楚 —— 素材可能已经被删了。 */
 export function ImageNode({ data, selected }: NodeProps) {
-  const { item, onAspect, commentMode } = data as unknown as BoardNodeData;
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, onAspect, commentMode } = nodeData;
   const state = nodeRunProps(item);
 
   return (
@@ -367,7 +385,7 @@ export function ImageNode({ data, selected }: NodeProps) {
       )}
     >
       <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel kind="image" />
+      <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<ImageIcon size={20} />} />
@@ -399,9 +417,8 @@ export function ImageNode({ data, selected }: NodeProps) {
  * 而且中间不吃指针事件:不然框里的便签就点不中了。
  */
 export function FrameNode({ data, selected }: NodeProps) {
-  const { item, onText } = data as unknown as BoardNodeData;
-  const t = useI18n();
-  const [editing, setEditing] = React.useState(false);
+  const nodeData = data as unknown as BoardNodeData;
+  const { item } = nodeData;
   const state = nodeRunProps(item);
 
   return (
@@ -418,36 +435,18 @@ export function FrameNode({ data, selected }: NodeProps) {
           拖不动,看着像坏了。标题栏早就是这么补的(下面那个 pointer-events-auto),手柄漏了。
           边线一并补上:它们透明但仍是拖拽热区,只有角能拉、边不能拉是同一个毛病挪了个位置。 */}
       <NodeResizer minWidth={160} minHeight={120} isVisible={selected} lineClassName="pointer-events-auto !border-transparent" handleClassName="pointer-events-auto !h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      {/* 只有标题吃指针事件 —— 拖它来移动整个框,框内区域让给里面的项。
-          **和别的节点同一套**:框外正上方、同样的字号和图标(见 TypeLabel)。此前它是一枚
-          带边框和底色的胶囊,摆在一排节点里像是另一个体系的东西。 */}
-      <div className="pointer-events-auto absolute -top-5 left-0 flex max-w-[90%] items-center gap-1 text-ui-2xs text-muted-foreground">
-        <Group size={11} className="shrink-0" />
-        {editing ? (
-          //: 和便签同一个坑、同一个框(见 NoteNode)。
-          <DraftInput
-            autoFocus
-            className="nodrag w-40 border-0 bg-transparent p-0 text-ui-2xs text-foreground outline-none"
-            value={item.text ?? ""}
-            onValueChange={(next) => onText(item.id, next)}
-            onBlur={() => setEditing(false)}
-          />
-        ) : (
-          <span
-            className="cursor-text truncate text-ui-2xs"
-            onDoubleClick={() => setEditing(true)}
-          >
-            {item.text || t("boardKindFrame")}
-          </span>
-        )}
-      </div>
+      {/* 只有标题吃指针事件 —— 拖它来移动整个框,框内区域让给里面的项(它是框唯一的抓手,
+          所以不论这会儿能不能改名都收回指针事件)。**和别的节点同一个组件**(NodeLabel):框外正上方、同样的字号,
+          名字也在同一个字段(title)—— 此前分组框的名字借住在 text 里,自己一枚输入框。 */}
+      <NodeLabel data={nodeData} icon={Group} className="pointer-events-auto" />
     </div>
   );
 }
 
 /** 视频:就地播。**不自动播、不循环** —— 画板上可能同时摆着五段片子,一起动是噪音。 */
 export function VideoNode({ data, selected }: NodeProps) {
-  const { item, onAspect, commentMode } = data as unknown as BoardNodeData;
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, onAspect, commentMode } = nodeData;
   const state = nodeRunProps(item);
 
   return (
@@ -462,7 +461,7 @@ export function VideoNode({ data, selected }: NodeProps) {
       )}
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel kind="video" />
+      <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<FilmIcon size={20} />} />
@@ -483,7 +482,8 @@ export function VideoNode({ data, selected }: NodeProps) {
 /** 音频项。配音、旁白、BGM —— 摊在画板上的想法不该只有能看的。
  *  和图片/视频同一套三状态:空槽 / 生成中 / 有产出。 */
 function AudioNode({ data, selected }: NodeProps) {
-  const { item, commentMode } = data as unknown as BoardNodeData;
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, commentMode } = nodeData;
   const state = nodeRunProps(item);
   return (
     <div
@@ -491,7 +491,7 @@ function AudioNode({ data, selected }: NodeProps) {
       className={cn("group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm", state.className)}
     >
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel kind="audio" />
+      <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
       <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
         {!item.asset_id ? (
@@ -506,6 +506,7 @@ function AudioNode({ data, selected }: NodeProps) {
 
 
 function DocumentNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as BoardNodeData;
   const {
     item,
     document,
@@ -513,7 +514,7 @@ function DocumentNode({ data, selected }: NodeProps) {
     onPickDocument,
     onRefreshDocument,
     refreshingDocument,
-  } = data as unknown as BoardNodeData;
+  } = nodeData;
   const t = useI18n();
   const ref = document?.reference;
   const iconButton =
@@ -531,7 +532,7 @@ function DocumentNode({ data, selected }: NodeProps) {
         isVisible={selected && !commentMode}
         lineClassName="!border-primary/40"
       />
-      <TypeLabel kind="document" />
+      <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <BookOpen size={16} className="shrink-0 text-primary" />
@@ -625,12 +626,13 @@ function DocumentNode({ data, selected }: NodeProps) {
 }
 
 export function SceneNode({ data, selected }: NodeProps) {
-  const { item, commentMode } = data as unknown as BoardNodeData;
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, commentMode } = nodeData;
   const t = useI18n();
   const fallback = <div className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
   return <div className="relative flex h-full w-full flex-col overflow-visible rounded-xl border border-border bg-panel shadow-sm">
     <NodeResizer minWidth={240} minHeight={180} isVisible={selected} lineClassName="!border-transparent" />
-    <TypeLabel kind="scene" /><Ports visible={selected} disabled={commentMode} />
+    <NodeLabel data={nodeData} /><Ports visible={selected} disabled={commentMode} />
     <div className="min-h-0 flex-1 overflow-hidden rounded-t-xl">
       {item.asset_id ? <AssetInlinePreview key={item.asset_id} assetId={item.asset_id} name={item.text || ""} kind="image" plain previewOnClick={false} lazy={false} imageFallback={fallback} className="h-full w-full object-contain" /> : fallback}
     </div>

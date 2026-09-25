@@ -2,7 +2,7 @@
 title: Creative boards
 description: Arrange documents, media and 3D scenes on an infinite canvas and connect generation inputs.
 order: 5
-updated: 2026-09-09
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -31,7 +31,7 @@ that still holds the previous auto-filled text.
 
 From left to right: add and undo/redo, comments and the discussion center, markers and their list, view and navigation, then the AI assistant. Thin dividers separate these groups.
 
-To delete the board, open **More** and confirm the deletion. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); boards remember their own choice. ⌘F finds nodes by text, prompt or type: matches are outlined on the canvas, Enter / ⇧Enter jumps to the next / previous one, Escape closes.
+To delete the board, open **More** and confirm the deletion. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); boards remember their own choice. ⌘F finds nodes by name, text, prompt or type (named nodes are listed by their names): matches are outlined on the canvas, Enter / ⇧Enter jumps to the next / previous one, Escape closes.
 
 In the board list, a card's ⋯ button and its right-click menu offer the same actions: open, rename, duplicate and delete (with confirmation). **Select** in the header enters multi-select with select-all and bulk delete; if some deletions fail, the message says how many and those cards stay selected. A duplicate leaves out cells that are still generating: they become empty slots with their prompts kept. In narrow windows, arrows scroll through the tools; the AI assistant and More stay visible.
 
@@ -61,6 +61,18 @@ The signal is not confined to a spinner in an empty media slot, so a failed reru
 when the node still has an older result. A new result or manual asset replacement rehydrates the form
 from that node's saved data; failure and cancellation keep the inputs intact for retry.
 
+### Naming nodes
+
+The line above each node shows its name, or its type ("Image", "Video", "Group"…) while it has
+none. With several images on a board, names are how you tell them apart. **Double-click that line
+to rename in place**, or select the node and use the pencil (Rename) in its action bar:
+<kbd>Enter</kbd> or clicking elsewhere confirms, <kbd>Esc</kbd> cancels, and the Enter that picks
+a candidate in an input method never confirms early. Clear the name to go back to the type. Names
+are up to 120 characters, and a rename is a single undo step.
+
+Group frames use the same name as every other node, and it is what board search, the board list
+thumbnails, duplicated copies and the AI assistant all see.
+
 ### Referencing assets with `@`
 
 Press `@` in a prompt to reference something from the asset library; the menu follows the caret.
@@ -87,7 +99,8 @@ The top-left title is the current conversation. Click it to search or switch ses
 ellipsizes when space is tight instead of introducing another framed picker.
 
 It can read the canvas (`get_board`) and change it (`edit_board`): add notes, rewrite text,
-connect, delete, move things. **Every change goes through a confirmation card** — nothing lands
+name nodes, connect, delete, move things. It sees the names you give nodes, so you can refer to
+a node by its name. **Every change goes through a confirmation card** — nothing lands
 until you approve it. It submits granular operations rather than a whole canvas, because a model
 handed the whole thing gets it wrong on any non-trivial board: items go missing, or the positions
 you arranged by hand get flattened.

@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import contract from "../../../contracts/shared-constants.json";
 import { WINDOW_CHROME_HEIGHT } from "@/lib/windowChrome";
 import { PUBLISH_BAR_HEIGHT } from "@/app/App";
+import { BOARD_ITEM_TITLE_MAX } from "@/features/boards/BoardNodeLabel";
 
 type Constant = (typeof contract)["constants"][number];
 
@@ -35,6 +36,10 @@ describe("shared-constants 的前端一侧", () => {
 
     expect(PUBLISH_BAR_HEIGHT).toBe(expected);
     expect(WINDOW_CHROME_HEIGHT).toBe(expected);
+  });
+
+  it("画板一格名字的长度上限:改名输入框的 maxLength 等于后端校验的那个数", () => {
+    expect(BOARD_ITEM_TITLE_MAX).toBe(constantNamed("board_item_title_max_chars").value);
   });
 
   it("契约点名的前端实现位置都还在", () => {

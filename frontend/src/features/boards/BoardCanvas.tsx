@@ -29,7 +29,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, PencilLine, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -492,6 +492,22 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   }, []);
 
   /**
+   * 正在改名的那一格。**两个入口一个状态**:双击节点上方的名字、操作条上的「重命名」。
+   * 改好只落一次(见 BoardNodeLabel),于是整个改名是撤销历史里的一步。
+   */
+  const [renaming, setRenaming] = React.useState<string | null>(null);
+  /** 落下一个名字。空串 = 不要名字了:删掉字段,节点上方退回显示种类名。 */
+  const setTitle = React.useCallback((id: string, title: string): void => {
+    setNodes((current: Node[]) =>
+      current.map((node: Node) => {
+        if (node.id !== id) return node;
+        const { title: _previous, ...rest } = (node.data as { item: BoardItem }).item;
+        return { ...node, data: { ...node.data, item: title ? { ...rest, title } : rest } };
+      }),
+    );
+  }, []);
+
+  /**
    * 媒体加载出来之后,把节点高度校正成它的**自然宽高比**。
    *
    * 不校正的话:一段 16:9 的视频摆在 320×200(1.6:1)的框里,上下各留一条黑边 —— 而画板上
@@ -770,7 +786,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           ...node,
           className: searchHighlightClass(searchHighlight, node.id),
           draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
-          data: { ...node.data, onText: setText, onAspect: setAspect, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
+          data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
         },
   );
   const baseEdges: Edge[] = shapeEdges(edges, edgeShape).map((edge) => ({
@@ -1012,6 +1028,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   React.useEffect(() => {
     if (pendingLink && !nodes.some((node) => node.id === pendingLink.nodeId)) cancelPending();
   }, [pendingLink, nodes, cancelPending]);
+  //: 改名改到一半那一格没了(撤销、服务端那份换进来):收掉 —— 留着的话它回来时自己又打开了输入框。
+  React.useEffect(() => {
+    if (renaming && !nodes.some((node) => node.id === renaming)) setRenaming(null);
+  }, [renaming, nodes]);
   //: 占位和待定的线**只进画出来的这一份** —— 不进 nodes/edges,于是不会被存、不进撤销历史。
   const display = pending.decorate(baseNodes, baseEdges, edgeShape, LAYERS.pending);
 
@@ -1480,6 +1500,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         setNodes={setNodes}
         onRemoveSelected={removeSelected}
         onCopySelected={copySelection}
+        onRename={commentMode || markerMode ? undefined : setRenaming}
         onPickAsset={onPickAsset}
         onSpawn={onGenerate ? spawnLinked : undefined}
         onTrimRequest={onTrim ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
@@ -1635,6 +1656,7 @@ function ItemToolbar({
   setNodes,
   onRemoveSelected,
   onCopySelected,
+  onRename,
   onPickAsset,
   onSpawn,
   onTrimRequest,
@@ -1646,6 +1668,8 @@ function ItemToolbar({
   onRemoveSelected: () => void;
   /** 复制选中的这几项(见 copySelected)。 */
   onCopySelected: () => void;
+  /** 给这一格改名:打开它上方名字那一处的输入框(和双击名字是同一个状态)。 */
+  onRename?: (itemId: string) => void;
   onPickAsset: Props["onPickAsset"];
   /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
   onSpawn?: (
@@ -1737,7 +1761,7 @@ function ItemToolbar({
                 src: item.kind === "image"
                   ? assetPreviewUrl(item.asset_id as string)
                   : assetFileUrl(item.asset_id as string),
-                title: item.text || "",
+                title: item.title || item.text || "",
                 //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
                 video: item.kind === "video",
               })
@@ -1829,6 +1853,18 @@ function ItemToolbar({
         )}
         </div>
 
+        {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
+        {single && item && onRename && (
+          <button
+            type="button"
+            aria-label={t("rename")}
+            title={t("rename")}
+            className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+            onClick={() => onRename(item.id)}
+          >
+            <PencilLine size={13} />
+          </button>
+        )}
         <button
           type="button"
           aria-label={t("copy")}

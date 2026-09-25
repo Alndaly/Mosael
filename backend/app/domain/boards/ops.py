@@ -17,6 +17,7 @@ from app.domain.boards.canvas import ITEM_KINDS, NOTE_COLORS, BoardDomainError, 
 
 BOARD_OP_KINDS = (
     "add_item",
+    "set_title",
     "set_text",
     "set_color",
     "move_item",
@@ -90,6 +91,8 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 "width": finite_number(op["width"], "width") if op.get("width") is not None else float(width),
                 "height": finite_number(op["height"], "height") if op.get("height") is not None else float(height),
             }
+            if op.get("title") is not None:
+                item["title"] = str(op["title"])
             if op.get("text") is not None:
                 item["text"] = str(op["text"])
             if op.get("color") is not None:
@@ -103,6 +106,15 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["asset_id"] = str(op["asset_id"])
             items.append(item)
             by_id[item_id] = item
+
+        elif kind == "set_title":
+            #: 给一格起名 / 改名。空串 = 不要名字了,退回显示种类名。长度和空白由 normalize 管。
+            item = _require(by_id, str(op.get("item_id", "")))
+            title = str(op.get("title") or "")
+            if title.strip():
+                item["title"] = title
+            else:
+                item.pop("title", None)
 
         elif kind == "set_text":
             _require(by_id, str(op.get("item_id", "")))["text"] = str(op.get("text", ""))
