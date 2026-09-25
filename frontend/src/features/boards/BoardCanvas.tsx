@@ -720,14 +720,38 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   //: 一次新编辑,重做就永远回不去了(表现是「撤销键按一下就灰了」)。
   const restoring = React.useRef<string | null>(null);
 
-  const restore = React.useCallback(
-    (snapshot: string) => {
-      const canvas = JSON.parse(snapshot) as Canvas;
-      restoring.current = snapshot;
-      setNodes([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)]);
-      setEdges(canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })));
+  /** 把一份画布装进 React Flow,回它装进去之后序列化出来的样子(和 `serialized` 同一种写法)。 */
+  const load = React.useCallback(
+    (canvas: Canvas): string => {
+      const nextNodes = [...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)];
+      const nextEdges = canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }));
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      return JSON.stringify(toCanvas(nextNodes, nextEdges));
     },
     [setNodes, setEdges],
+  );
+
+  const restore = React.useCallback(
+    (snapshot: string) => {
+      restoring.current = load(JSON.parse(snapshot) as Canvas);
+    },
+    [load],
+  );
+
+  /**
+   * 换成服务端那份(冲突之后、或回执落地时采用服务端画布)。**历史从这一份重新开始。**
+   *
+   * 之前那摞快照都建立在一份已经不成立的画布上:撤一步装回去的是「别人改之前」的样子 ——
+   * 智能体刚加的便签、别处刚落回的产出一起消失,下一次自动保存再带着新版本号把它们存没了。
+   */
+  const replace = React.useCallback(
+    (canvas: Canvas) => {
+      const snapshot = load(canvas);
+      restoring.current = snapshot;
+      setHistory(emptyHistory(snapshot));
+    },
+    [load],
   );
 
   React.useEffect(() => {
@@ -985,7 +1009,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     onReady?.({
       add,
       patch,
-      replace: (next) => restore(JSON.stringify(next)),
+      replace,
       fitView: () => {
         if (rf.current && surface.current) {
           void fitCanvasViewport(rf.current, surface.current, insetsOf(surface.current));
@@ -1005,7 +1029,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, restore, markers, addMarker, jumpToMarker]);
+  }, [add, patch, replace, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
