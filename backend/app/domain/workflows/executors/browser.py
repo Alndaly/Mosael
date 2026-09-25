@@ -11,17 +11,26 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Workflow
+from app.db.models import BrowserSession, Workflow
 from app.domain import browser
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 
 
-def _session_id(config: dict[str, Any]) -> str:
+def _session_in(db: Session, workflow: Workflow, config: dict[str, Any]) -> str:
+    """取这个浏览器会话,并确认它属于本工作流所在的工作区。和 subjobs 的 _sequence_in 成对。
+
+    session 常常来自上游节点,而上游拿得到任何地方的 id;run_action 不认识工作区。不挡的话,
+    A 工作区的工作流能在 B 工作区某人已登录的池档案会话里取 cookie、点发布,或者把它关掉。
+    智能体那条路一直挡着(api/routes/agent_browser._verify),漏的只有这一条。
+    """
     sid = str(config.get("session") or "").strip()
     if not sid:
         raise WorkflowDomainError("wfErr_browserSessionMissing")
-    return sid
+    session = db.get(BrowserSession, sid)
+    if session is None or session.workspace_id != workflow.workspace_id:
+        raise WorkflowDomainError("wfErr_browserSessionNotInWorkspace")
+    return session.id
 
 
 def _truthy(value: Any) -> bool:
@@ -111,14 +120,14 @@ def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 @register("browser_navigate")
 def browser_navigate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     _run(sid, "navigate", {"url": str(config.get("url") or "")})
     return {"session": sid}
 
 
 @register("browser_click")
 def browser_click(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     _run(sid, "click", {
         "selector": str(config.get("selector") or ""),
         "text": str(config.get("text") or ""),
@@ -129,7 +138,7 @@ def browser_click(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
 
 @register("browser_input")
 def browser_input(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     _run(sid, "input", {"selector": str(config.get("selector") or ""), "value": str(config.get("value") or "")})
     return {"session": sid}
 
@@ -141,7 +150,7 @@ def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
     from app.db.models import Asset
     from app.media.paths import resolve_key
 
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     path = str(config.get("file_path") or "").strip()
     asset_id = str(config.get("asset_id") or "").strip()
     if asset_id and not path:
@@ -165,7 +174,7 @@ def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
 
 @register("browser_extract")
 def browser_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     attribute = str(config.get("attribute") or "").strip()
     out = _run(sid, "extract", {
         "selector": str(config.get("selector") or ""),
@@ -177,7 +186,7 @@ def browser_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
 
 @register("browser_wait")
 def browser_wait(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
     args: dict[str, Any] = {"timeout_ms": timeout_ms}
     if config.get("selector"):
@@ -195,21 +204,22 @@ def browser_wait(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 @register("browser_scroll")
 def browser_scroll(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     _run(sid, "scroll", {"selector": str(config.get("selector") or ""), "dy": _int(config.get("dy"), 600)})
     return {"session": sid}
 
 
 @register("browser_evaluate")
 def browser_evaluate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = _session_id(config)
+    sid = _session_in(db, workflow, config)
     out = _run(sid, "evaluate", {"expression": str(config.get("expression") or "")})
     return {"session": sid, "value": out.get("value")}
 
 
 @register("browser_close")
 def browser_close(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    sid = str(config.get("session") or "").strip()
-    if sid:
-        browser.close_session(db, sid)
+    # 留空不报错:上游分支没走到「打开浏览器」时,关闭这一步本来就无事可做。
+    if not str(config.get("session") or "").strip():
+        return {}
+    browser.close_session(db, _session_in(db, workflow, config))
     return {}

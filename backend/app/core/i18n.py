@@ -2810,6 +2810,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_schemaEmpty": {"zh": "JSON Schema 不能为空", "en": "The JSON Schema cannot be empty"},
     "wfErr_llmPromptEmpty": {"zh": "LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。", "en": "The LLM node has no prompt: write one, or connect an upstream reference and make sure it produces output."},
     "wfErr_llmNotJson": {"zh": "LLM 未返回合法 JSON", "en": "The model did not return valid JSON"},
+    "wfErr_browserSessionNotInWorkspace": {"zh": "浏览器会话不存在,或不在这个工作区里", "en": "That browser session does not exist or is not in this workspace"},
     "wfErr_browserSessionMissing": {"zh": "缺少浏览器会话:先用「打开浏览器」节点,并把它的 session 输出连过来", "en": "No browser session: add an Open browser node and connect its session output"},
     "wfErr_uploadNeedsSource": {"zh": "上传节点需要 asset_id 或 file_path", "en": "The upload node needs asset_id or file_path"},
     "wfErr_uploadAssetMissing": {"zh": "上传素材不存在", "en": "That asset does not exist"},
