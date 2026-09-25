@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 const note: BoardItem = { id: "n1", kind: "note", x: 0, y: 0, width: 220, height: 140, color: "yellow", text: "" };
-const frame: BoardItem = { id: "f1", kind: "frame", x: 400, y: 0, width: 300, height: 200, text: "" };
+const frame: BoardItem = { id: "f1", kind: "frame", x: 400, y: 0, width: 300, height: 200 };
 
 /** 画布 + 真的自动保存(和 BoardsView 同一个钩子),记下每一次存了什么。 */
 function mount(items: BoardItem[]) {
@@ -127,12 +127,13 @@ describe("便签里用拼音打中文", () => {
   });
 });
 
-describe("分组框的标题里用拼音打中文", () => {
-  it("组词期间不被改写,上屏后标题是中文", async () => {
+describe("分组框的名字里用拼音打中文", () => {
+  //: 分组框和别的节点共用一个改名框(BoardNodeLabel),名字在 title 里;回车确认才落到画布上。
+  it("组词期间不被改写,选词的回车不算确认,上屏后再回车名字是中文", async () => {
     const view = mount([frame]);
     await settle();
     act(() => {
-      fireEvent.doubleClick(document.querySelector('[data-id="f1"] span.cursor-text')!);
+      fireEvent.doubleClick(document.querySelector('[data-id="f1"] span[title]')!);
     });
     const box = document.querySelector<HTMLInputElement>('[data-id="f1"] input')!;
     expect(box).not.toBeNull();
@@ -140,7 +141,10 @@ describe("分组框的标题里用拼音打中文", () => {
     composeWithIme(box, ["j", "ji", "jia", "jiao", "jiaos", "jiaose"], "角色");
     expect(writes).toEqual([]);
     expect(box.value).toBe("角色");
+    act(() => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
     await settle();
-    expect(view.textOf(view.emitted.at(-1), "f1")).toBe("角色");
+    expect(view.emitted.at(-1)?.items.find((one) => one.id === "f1")?.title).toBe("角色");
   });
 });
