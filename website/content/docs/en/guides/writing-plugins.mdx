@@ -2,7 +2,7 @@
 title: Writing a plugin
 description: Write a manifest, declare tools and permissions, and test file inputs and outputs.
 order: 11
-updated: 2026-09-09
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -209,6 +209,19 @@ anything expensive (hundreds of MB of dependencies, downloaded models) in
 ```
 
 See the [Remotion plugin](/plugins/remotion): dependencies live in the data directory and the render tool declares its own budget.
+
+## Generating for Mosael
+
+A plugin can also be a **generation provider**: declare `"provides": ["generation"]` in the manifest and let one
+tool claim it. Mosael calls that tool with two operations — `models` (which models this connection has, the
+parameters each one takes and its reference image slots) and `generate` (do one generation: take the prompt,
+parameters and reference image files, report progress and the remote task id one event per line, and hand back the
+output files). To cancel, Mosael creates a cancel file (its path is in `MOSAEL_PLUGIN_CANCEL_FILE`); when it appears,
+stop the remote work.
+
+That tool is host-only — it never shows up for the agent or in workflows. Its budget is 1 hour unless declared, up to
+6 hours. The full protocol and fields are in `docs/PLUGIN_MANIFEST.md` (“Generating for the host”) in the repository;
+the ComfyUI plugin that ships with Mosael (`plugins/bundled/comfyui`) is a complete example.
 
 ## Making it a workflow node
 

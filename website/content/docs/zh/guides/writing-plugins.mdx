@@ -2,7 +2,7 @@
 title: 开发插件
 description: 编写插件清单、声明工具与权限，测试文件输入和输出。
 order: 11
-updated: 2026-09-09
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -202,6 +202,17 @@ json.dump({
 ```
 
 范例见 [Remotion 插件](/plugins/remotion):依赖装在持久目录,渲染工具声明了自己的预算。
+
+## 替 Mosael 做生成
+
+插件还可以当一家**生成供应商**:在清单里写 `"provides": ["generation"]`,让一个工具认领它。
+Mosael 会调这个工具两种操作 —— `models`(这个连接有哪些模型、各收什么参数、有哪些参考图槽位)和
+`generate`(做一次:收提示词、参数和参考图文件,一行一个事件地说进度、交回远端任务号,最后交回产出文件)。
+取消时 Mosael 建一个取消文件(路径在 `MOSAEL_PLUGIN_CANCEL_FILE`),你看到它就去停远端的活。
+
+这个工具只给 Mosael 自己调,不出现在智能体和工作流里;预算不写是 1 小时,最长可以声明 6 小时。
+完整的协议和字段见仓库里的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」,随应用发的 ComfyUI 插件
+(`plugins/bundled/comfyui`)是完整的范例。
 
 ## 让它进工作流
 

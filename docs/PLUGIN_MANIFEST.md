@@ -311,6 +311,10 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 预算(Blender 互通)时以调用方为准。**预算该由最知道活有多重的一方给** —— 此前只有调用方能给,插件
 说不出「这一步要三分钟」。智能体那一侧单次工具调用最多等 180 秒(`agent-sidecar/src/tools.ts`)。
 
+**认领了生成能力的那个工具按能力给**(见「替宿主做生成」):不写是 1 小时,上限 6 小时
+(`tools.MAX_GENERATION_TIMEOUT_SECONDS`,和远端生成任务的轮询上限是同一个数)—— 一段长视频在一块普通
+显卡上跑一两个小时是常事。
+
 ### 持久目录
 
 `MOSAEL_PLUGIN_DATA_DIR`:每个插件一份(`<数据目录>/plugin-data/<id>`),跨调用、跨更新都在,卸载时
@@ -465,9 +469,10 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `runtime.transport` / `command` / `args` / `url` / `headers` | MCP 的连接方式 |
 | `instance.multiple` | 允许建多个连接 |
 | `instance.name_template` | 连接的默认名字,`{键}` / `{键:label}` |
-| `instance.config` | 明文配置:`key` `label` `type` `options` `required` `help` `default` |
+| `instance.config` | 明文配置:`key` `label` `type` `options` `required` `help` `default`;`multiline: true` 给多行框(一段 JSON 之类) |
 | `instance.credentials` | 密钥,字段同上;`secret` 默认 true |
 | `permissions` | 自由字符串,逐项授权 |
+| `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation`(见「声明『我能替宿主做成什么』」) |
 | `skills` | 给别的智能体看的高层描述 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
@@ -500,6 +505,10 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 
 它们都写了中英两份文案,可以直接照着抄多语言的写法。
 
+另有 `plugins/bundled/` 下**随应用一起发**的插件(今天是 **comfyui**):它们随后端一起打包,每次启动对账
+装进插件目录(按内容指纹,见 `domain/plugins/bundled`),卸不掉,也不进市场索引。ComfyUI 插件是
+「替宿主做生成」的完整范例:动态模型目录、JSON Schema 参数、参考图槽位、NDJSON 进度、取消文件、回执与接着取。
+
 ## 声明「我能替宿主做成什么」
 
 ```json
@@ -509,11 +518,12 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 }
 ```
 
-有些事宿主自己做不到,而某一类插件能做。今天只有一项:
+有些事宿主自己做不到,而某一类插件能做:
 
 | 能力 | 意思 | 谁需要它 |
 | --- | --- | --- |
 | `public_url` | 把一份**本地素材**变成一条公网可下载的地址 | 生成链路:某些模型的参考视频 / 源视频**只收链接**(方舟 Seedance 的参考图可以走 Base64,参考视频不行) |
+| `generation` | **当一家生成供应商**:列出自己的模型,做一次生成 | 选择器、画板、工作流、智能体 —— 插件的模型和内置供应商的模型一样出现(见下一节) |
 
 两处都要写:**包上的 `provides`** 说「这个插件能做这件事」,**工具上的 `provides`** 说「这件事归
 我」。负责 `public_url` 的工具收 `{asset_id, expires}`,交回 `{url}`。工具上声明了包上没有的能力,
@@ -537,19 +547,112 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 
 没装 / 没配好 / 几家没定 / 版本太旧 / 传失败,**各说各的下一步** —— 它们对用户意味着完全不同的事。
 
+## 替宿主做生成
+
+决策与取舍见 [ADR 0020](adr/0020-plugins-can-be-generation-providers.md);完整范例是
+`plugins/bundled/comfyui`。
+
+```jsonc
+{
+  "provides": ["generation"],
+  "runtime": { "kind": "process", "entry": "tools/main.py" },
+  "tools": { "declare": [
+    { "name": "my_generation", "provides": ["generation"], "timeout_seconds": 7200,
+      "description": "…", "input_schema": { "type": "object" } }
+  ] }
+}
+```
+
+比 `public_url` 多三条硬规矩,**装的那一刻就查**(清单不合法直接拒):
+
+- **只给进程形态**(MCP 是别人的协议,我们不往里加字段);
+- **有且只有一个工具认领** `generation`;
+- 这个工具**只给宿主调** —— 不出现在智能体工具表、工作流节点面板和插件页的勾选表里。它说的是下面这套
+  流式协议;让智能体直接调它,等于绕开生成任务、用量台账和回执。预算不写是 1 小时,上限 6 小时。
+
+同一个工具收两种 `input.op`。
+
+### `op: "models"` —— 这个连接有哪些模型
+
+一问一答(和普通工具同一个协议,60 秒预算)。回:
+
+```jsonc
+{"models": [
+  {
+    "id": "portrait.json",                 // 这个连接里稳定;会被存进画板、工作流、默认模型
+    "label": {"zh": "人像", "en": "Portrait"},
+    "kind": "image",                       // image | video(宿主今天只接这两种;别的照列、不进选择器)
+    "modes": ["text-to-image", "image-to-image"],
+    "parameters": {                        // 键 → JSON Schema 片段
+      "seed": {"type": "integer"},
+      "negative_prompt": {"type": "string"},
+      "size": {"type": "string", "enum": ["1024x1024", "832x1216"], "default": "1024x1024"},
+      "3.steps": {"type": "integer", "title": "KSampler · steps", "default": 20, "minimum": 1, "maximum": 150},
+      "3.sampler_name": {"type": "string", "enum": ["euler", "dpmpp_2m"], "x-advanced": true}
+    },
+    "inputs": [{"role": "reference_image", "max": 2}],
+    "max_outputs": 1,
+    "prompt_dialect": "sd-tags"            // 可选:提示词优化按哪种写法改
+  }
+]}
+```
+
+- `parameters` 认的键:`type`(integer / number / string / boolean)、`enum`、`default`、`minimum`、`maximum`、
+  `multipleOf`、`title`、`description`(后两个可按语言分)、`x-advanced`、`x-multiline`。认不出的类型整项丢掉。
+- **宿主自己有控件的那几个键**直接用宿主的控件:`seed`、`negative_prompt`、`size`(`enum` → 尺寸下拉)、
+  `resolution` / `aspect_ratio`、`duration_seconds`(`enum` 或 `minimum` / `maximum`)、`num_images`
+  (`maximum` → 张数上限,没写用 `max_outputs`)、`generate_audio`。**其余的键**进描述符的 `parameter_schema`,
+  AI 工作台、画板、工作流节点用同一个通用控件渲染;提交时宿主按它校验类型、范围和可选值。
+  用户没动过的参数**不发**,插件给的 `default` 只当占位提示(ADR 0015)。
+- `inputs` 的 `role` 取宿主的素材角色(`reference_image` / `first_frame` / `last_frame` / `reference_video` …),
+  `max` 是这个角色最多几份,`required: true` 是必须给。认不出的角色不接。
+- 宿主把这份清单**缓存成模型行**:连接新建、改配置、启停、授权 / 凭据变化、插件页点「刷新」,以及后端启动时
+  各问一次。问不到(服务没开)就保留上一份,原因显示在插件页;清单里没有了的模型从选择器里消失。
+
+### `op: "generate"` —— 做一次
+
+```jsonc
+{"op": "generate", "model": "portrait.json", "kind": "image",
+ "prompt": "…", "negative_prompt": "…",
+ "parameters": {"seed": 7, "3.steps": 30},
+ "inputs": [{"role": "reference_image", "path": "/…/inputs/01-reference_image.png"}],
+ "resume": null}
+```
+
+stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的结果;不是 JSON 对象的行跳过:
+
+```
+{"event": "progress", "progress": 0.42, "message": "KSampler 12/20"}
+{"event": "task", "task": {"prompt_id": "…"}}
+{"ok": true, "output": {"outputs": [{"path": "a.png"}], "usage": {"images": 1}, "raw": {…}}}
+```
+
+- **`progress`**:0..1 加一句话(按请求里的 `locale` 说),进任务中心。
+- **`task`**:远端回执(一个对象,≤ 8KB)。宿主**收到就落库**(`Job.payload.remote_task`,ADR 0019);发了它
+  就等于承诺:后端重启后宿主会带着 `"resume": <回执>` 再调一次,你要**接着等那个任务,不再提交**。
+- **输入文件**:`inputs[].path` 是宿主从素材库**拷出来的副本**,放在这次调用的暂存目录里,用完即删。
+- **产出**:`outputs` 里每一项和 `artifact` 同一套规则 —— 写进 `MOSAEL_PLUGIN_OUTPUT_DIR` 给 `path`,或者给
+  `url`(+ `headers` / `filename`)让宿主去下。宿主把它们交给生成执行器,登记成素材、记用量、写回执。
+- **取消**:宿主建一个文件,路径在环境变量 `MOSAEL_PLUGIN_CANCEL_FILE`。看到它就去停远端的活(ComfyUI 是
+  `/interrupt` + 删队列)然后退出;30 秒不退就被杀。用文件不用信号:Windows 上没有可靠的信号,而「一个文件在不在」
+  任何语言一行就写完。任务取消经任务总线拉下这个开关(和普通插件进程归它所在的任务同一套登记)。
+- **预算用完**也走取消那条路(先建取消文件、给宽限、再杀),报超时。
+
+一次调用照样留一条调用记录(插件页看得到),只是记录里不留那几个一次性的暂存路径。
+
 ## 接口
 
 | | |
 | --- | --- |
 | `POST /api/plugins/scan` | 扫描;顺带迁移老清单、清掉目录已不在的包 |
-| `GET /api/plugins` | 包 + 它们的连接 + 每个连接的工具与开关 |
+| `GET /api/plugins` | 包 + 它们的连接 + 每个连接的工具与开关;`provides`、`bundled`,以及每个连接的 `capability_status`(几个生成模型、何时刷新、为什么没刷出来) |
 | `DELETE /api/plugins/{包id}` | 卸载:删目录 + 删记录 |
 | `POST /api/plugins/{包id}/instances` | 新建连接 |
 | `PATCH /api/plugins/instances/{id}` | 改名 / 改配置 / 启停 |
 | `GET`/`PATCH` `/api/plugins/instances/{id}/credentials` | 凭据(掩码回显) |
 | `GET`/`PATCH` `/api/plugins/instances/{id}/permissions` | 授权 |
 | `PATCH /api/plugins/instances/{id}/capabilities` | 工具开关 |
-| `POST /api/plugins/instances/{id}/refresh` | 重拉 MCP 工具清单 |
+| `POST /api/plugins/instances/{id}/refresh` | 重拉 MCP 工具清单;替宿主做生成的插件顺带重问一遍模型清单 |
 | `GET /api/plugins/tools` | 所有可用连接**已开放**的工具 |
 | `POST /api/plugins/instances/{id}/tools/{工具}/invoke` | 执行一次,留痕 |
 

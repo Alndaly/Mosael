@@ -2,7 +2,7 @@
 title: Model connections
 description: Connect your model services, choose defaults and configure cost estimates.
 order: 1
-updated: 2026-09-24
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -69,6 +69,13 @@ This route is independent from the native Volcengine Seedance adapter, so you ca
 different regional, account or content-policy behaviour. Mosael adds no local "real person"
 keyword block, but it cannot promise policy bypass: acceptance still belongs to Evolink's current
 upstream model.
+
+### ComfyUI: provided by a plugin
+
+ComfyUI is not in the “Add provider” list: it is connected through the ComfyUI plugin that ships with Mosael, on
+the Plugins page (one connection per server). Once connected it appears under the image / video sections marked
+“Provided by a plugin”; its models are the workflows saved in ComfyUI and can be set as defaults. See
+[Generating with ComfyUI](/docs/guides/comfyui).
 
 ## Managing its models
 

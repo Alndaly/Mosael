@@ -4,7 +4,7 @@ export const DOC_GROUPS = [
   { id: "create", pages: ["guides/media", "guides/notes", "guides/boards", "guides/scenes"] },
   { id: "produce", pages: ["guides/editing", "guides/ai-studio", "guides/voice"] },
   { id: "automate", pages: ["guides/workflows", "guides/scheduler", "guides/browser-pool", "guides/publishing"] },
-  { id: "extend", pages: ["guides/browser-extension", "guides/plugins", "guides/writing-plugins", "guides/remote"] },
+  { id: "extend", pages: ["guides/browser-extension", "guides/plugins", "guides/comfyui", "guides/writing-plugins", "guides/remote"] },
   { id: "about", pages: ["about/project", "about/contact"] },
 ] as const;
 

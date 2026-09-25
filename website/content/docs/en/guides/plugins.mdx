@@ -2,7 +2,7 @@
 title: Using plugins
 description: Connect local tools or MCP services and configure permissions for agents and workflows.
 order: 10
-updated: 2026-09-09
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -138,6 +138,18 @@ workflow nodes.
 
 Export a workflow to a machine that lacks the plugin and opening it tells you exactly which tool of
 which plugin is missing.
+
+## Plugins that generate for Mosael
+
+Some plugins don't offer tools to the agent and workflows; they **generate for Mosael** instead. Such a plugin lists
+its models (the parameters each one takes and its reference image slots), and those models appear in the model
+pickers of AI Studio, boards and workflows exactly like a built-in provider's. Generation runs as the same kind of
+task — progress and cancel in the task center, outputs in the asset library, usage recorded as usual.
+
+**ComfyUI**, which ships with Mosael, is one of these: it is on the Plugins page from the start and can't be
+uninstalled (switch its connection off if you don't use it). See [Generating with ComfyUI](/docs/guides/comfyui)
+for setup. The connection card of such a plugin shows “N generation models · refreshed …”; after saving a new
+workflow in ComfyUI, click “Refresh models”.
 
 ## Examples
 

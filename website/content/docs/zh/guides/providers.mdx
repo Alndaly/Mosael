@@ -2,7 +2,7 @@
 title: 模型连接与配置
 description: 连接自己的模型服务，选择默认模型并设置用量价格。
 order: 1
-updated: 2026-09-24
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -61,6 +61,12 @@ Evolink Files API；视频与音频输入也走同一入口，但保留首尾帧
 
 这条路由与火山方舟的 Seedance Adapter 相互独立，可按内容策略、地区与账号可用性选择。Mosael
 不会在本地额外拦「真人」提示词，但也不承诺绕过审核：最终是否通过仍由 Evolink 当前路由的上游模型决定。
+
+### ComfyUI:由插件提供
+
+ComfyUI 不在「添加供应商」的列表里:它由随 Mosael 一起发的 ComfyUI 插件接入,在「插件」页建连接(一台服务器一个)。
+接好之后它的连接出现在绘图 / 视频分区里,标着「由插件提供」,模型就是 ComfyUI 里保存的每张工作流,可以设成默认模型。
+详见 [用 ComfyUI 生成](/docs/guides/comfyui)。
 
 ## 管理它下面的模型
 

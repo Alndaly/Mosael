@@ -275,6 +275,13 @@ _Avoid_: `providers/image/<vendor>.py` 式纯能力目录；一个供应商一�
 `domain/generation/resolution.py`，调用身份是 `(provider_profile_id, model)`。
 _Avoid_: 用一个 ref 同时描述图片与视频；由画板/工作流/MCP 各自拼契约；只凭 `(vendor, model)` 随机选连接
 
+**插件生成连接**:
+认领了 `generation` 宿主能力的插件实例,在生成域里的样子就是一条普通**连接**:`provider_profiles.plugin_instance_id`
+指向它(级联删),厂商 `plugin:<包 id>`;插件报来的模型清单缓存成 `source = "plugin"` 的模型行,每行自带能力描述
+(`declared_capabilities`,宿主词汇以外的参数进 `parameter_schema`)。适配器由注册表的动态来源给出,一次生成是对插件
+那个工具的一次流式调用(进度、回执、取消文件)。设置页里只读,改动回插件页。ComfyUI 是随应用发的第一个(ADR 0020)。
+_Avoid_: 在生成链路里写 `if 是插件`;在设置页改插件建出来的连接;把 ComfyUI 当内置供应商
+
 **订阅额度**:
 `domain/provider_quota.py`,六家(anthropic / codex / openrouter / kimi / xai / copilot)各一个解析器。
 **只在用户点击时查**——这些端点都不是官方承诺的公开接口,定时轮询既容易撞限流,也会在对方改接口后

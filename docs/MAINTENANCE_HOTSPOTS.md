@@ -51,7 +51,7 @@ cd backend && uv run --frozen python -m pytest -q tests/test_browser_extension_c
 
 ## Provider 分类 — ✅ 已解决(2026-09-01)
 
-原目录同时混有供应商分类(`comfyui` / `evolink`)和能力分类(`image` / `speech` / `video`)，公共
+原目录同时混有供应商分类(当时的 `comfyui` / `evolink`)和能力分类(`image` / `speech` / `video`)，公共
 `__init__.py` 又同时持有契约、具体 Adapter 导入和注册，新增引擎时必须先猜它该按哪条轴归档。
 
 现在分成三个有 Depth 的 Module：
@@ -67,7 +67,8 @@ ByteDance 已作为命名校准：方舟生成在 `bytedance/ark/`，火山语�
 `bytedance/volcano/`。`bytedance` / `volcano` / `volcano-podcast` 仍是兼容的连接 id，不因目录重排迁移。
 阿里云图像、视频和语音共享百炼 DashScope 协议族，统一在 `alibaba/dashscope/`，不再把企业名
 直接当成含混的协议目录。
-Evolink、ComfyUI 使用同一生成协议跨图像/视频，保留单一 `generation.py`，避免浅层复制。
+Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`，避免浅层复制。ComfyUI 已移出内置 Adapter，
+成为随应用发的插件(ADR 0020)：插件的生成连接由 `registry` 的动态来源给出同一个 `PluginGenerationAdapter`。
 
 ## 1. 发布执行器:平台 Adapter seam
 
