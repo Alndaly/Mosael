@@ -349,20 +349,24 @@ export function prioritizeFilledSourceSlots<T extends { role: string }>(
  */
 export function autoAssign(
   slots: { role: string; limit: number }[],
-  upstream: { assetId: string; kind: string }[],
-): { role: string; assetId: string }[] {
+  upstream: { assetId: string; kind: string; itemId?: string }[],
+): SlotSource[] {
   const taken = new Set<string>();
-  const out: { role: string; assetId: string }[] = [];
+  const out: SlotSource[] = [];
   for (const slot of slots) {
     for (const one of upstream) {
       if (out.filter((x) => x.role === slot.role).length >= slot.limit) break;
       if (taken.has(one.assetId) || one.kind !== roleAccepts(slot.role)) continue;
       taken.add(one.assetId);
-      out.push({ role: slot.role, assetId: one.assetId });
+      //: 顺着线挂上的记下是从哪一格来的 —— 线断了、上游换了素材,服务端存的时候把它摘掉。
+      out.push({ role: slot.role, assetId: one.assetId, ...(one.itemId ? { from: one.itemId } : {}) });
     }
   }
   return out;
 }
+
+/** 槽位里挂着的一份。`from`:顺着哪一格连过来的线挂上的(手动挂的没有)。 */
+export type SlotSource = { role: string; assetId: string; from?: string };
 
 /**
  * 上游连了这些东西时,默认该用哪种生成方式。
@@ -486,8 +490,8 @@ export function NodeComposer({
   }, [durations, duration]);
   //: 挂上去的输入素材,按角色分。**角色和上限都由描述符说了算** —— 参考图九张还是三张、
   //: 认不认尾帧,每个模型不一样;写死一套的话换个模型就要么少给要么超限。
-  const [sources, setSources] = React.useState<{ role: string; assetId: string }[]>(() =>
-    (saved.source_assets ?? []).map((one) => ({ role: one.role, assetId: one.asset_id })),
+  const [sources, setSources] = React.useState<SlotSource[]>(() =>
+    (saved.source_assets ?? []).map((one) => ({ role: one.role, assetId: one.asset_id, ...(one.from ? { from: one.from } : {}) })),
   );
 
   //: 「生成方式」= 描述符里那几个互斥分组。摆出来的槽只属于当前这一组 —— 两组同时摆着,
@@ -635,7 +639,7 @@ export function NodeComposer({
       model: current?.model ?? saved.model,
       mode: activeMode?.key ?? mode,
       parameters: formParameters,
-      source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role })),
+      source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role, ...(one.from ? { from: one.from } : {}) })),
       mentioned_asset_ids: mentioned,
     }),
     [prompt, promptDocument, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned],

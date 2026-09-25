@@ -1,7 +1,7 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { CommentCard } from "@/features/collaboration/CommentCard";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
-import { NO_UPSTREAM, detachedSourcePatches, upstreamAssetIds, upstreamOf } from "./boardUpstream";
+import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
 import { useQueries } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
@@ -220,8 +220,19 @@ export function copySelected(nodes: Node[], edges: Edge[]): { nodes: Node[]; edg
     const target = renamed.get(edge.target);
     return source && target ? [{ id: `${edge.id}-${source}-${target}`, source, target }] : [];
   });
+  //: 槽位里顺着线挂上的那几份跟着线走:上游也一起复制了的,出处改记成新的那一格(线也复制了);
+  //: 没一起复制的,副本上没有那根线,存的时候服务端把它摘掉 —— 和删掉那根线是同一条规则。
+  const rewired = copies.map((node) => {
+    const item = (node.data as unknown as { item: BoardItem }).item;
+    const sources = item.form?.source_assets;
+    if (!sources?.some((one) => one.from && renamed.has(one.from))) return node;
+    const source_assets = sources.map((one) =>
+      one.from && renamed.has(one.from) ? { ...one, from: renamed.get(one.from) } : one,
+    );
+    return { ...node, data: { ...node.data, item: { ...item, form: { ...item.form, source_assets } } } };
+  });
   return {
-    nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...copies],
+    nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...rewired],
     edges: [...edges, ...copiedEdges],
   };
 }
@@ -769,34 +780,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   //: 一次新编辑,重做就永远回不去了(表现是「撤销键按一下就灰了」)。
   const restoring = React.useRef<string | null>(null);
 
-  /**
-   * 上游断开(删线、删掉上游那一格、上游换了一份素材)时,下游表单槽位里原先从这条线来的那份
-   * 跟着摘掉 —— 规则见 detachedSourcePatches。比的是**上一次**每一格从连线拿到什么,所以这份
-   * 底账要跟着画布走;整份装进来(撤销、换成服务端那份)时重新记,不拿装之前的去比。
-   */
-  const upstreamBaseline = React.useRef<Map<string, Set<string>> | null>(null);
-  React.useEffect(() => {
-    const items = boardItems(nodes);
-    const now = upstreamAssetIds(items, edges);
-    const before = upstreamBaseline.current;
-    upstreamBaseline.current = now;
-    if (!before) return;
-    const patches = detachedSourcePatches(items, before, now);
-    if (patches.size === 0) return;
-    setNodes((current) =>
-      current.map((node) => {
-        const sources = patches.get(node.id);
-        if (!sources) return node;
-        const item = (node.data as unknown as { item: BoardItem }).item;
-        return { ...node, data: { ...node.data, item: { ...item, form: { ...item.form, source_assets: sources } } } };
-      }),
-    );
-  }, [nodes, edges, setNodes]);
-
   /** 把一份画布装进 React Flow,回它装进去之后序列化出来的样子(和 `serialized` 同一种写法)。 */
   const load = React.useCallback(
     (canvas: Canvas): string => {
-      upstreamBaseline.current = null;
       const nextNodes = [...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)];
       const nextEdges = canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }));
       setNodes(nextNodes);

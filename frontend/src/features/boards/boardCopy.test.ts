@@ -56,4 +56,29 @@ describe("复制选中的几项", () => {
 
     expect(copy.run).toBeUndefined();
   });
+
+  it("槽位里顺着线挂上的那一份,上游一起复制了就改记成新的那一格;没一起复制的原样交给服务端去摘", () => {
+    const upstream = node({ id: "A", kind: "image", x: 0, y: 0, asset_id: "a1" });
+    const video = node({
+      id: "V",
+      kind: "video",
+      x: 300,
+      y: 0,
+      form: { source_assets: [{ asset_id: "a1", role: "first_frame", from: "A" }, { asset_id: "m1", role: "last_frame" }] },
+    });
+
+    const both = copySelected([upstream, video], [{ id: "e1", source: "A", target: "V" }]);
+    const fresh = both.nodes.filter((one) => one.selected);
+    const newA = fresh.find((one) => itemOf(one).kind === "image")!.id;
+    const newV = itemOf(fresh.find((one) => itemOf(one).kind === "video")!);
+    expect(newV.form?.source_assets).toEqual([
+      { asset_id: "a1", role: "first_frame", from: newA },
+      { asset_id: "m1", role: "last_frame" },
+    ]);
+    expect(both.edges.some((one) => one.source === newA && one.target === newV.id)).toBe(true);
+
+    const alone = copySelected([node(itemOf(upstream), false), video], [{ id: "e1", source: "A", target: "V" }]);
+    const copy = itemOf(alone.nodes.find((one) => one.selected)!);
+    expect(copy.form?.source_assets?.[0]).toEqual({ asset_id: "a1", role: "first_frame", from: "A" });
+  });
 });

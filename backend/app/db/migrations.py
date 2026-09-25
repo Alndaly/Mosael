@@ -2053,6 +2053,57 @@ def _migrate_board_trim_slots_record_their_source() -> None:
                 )
 
 
+def _migrate_board_sources_record_their_upstream() -> None:
+    """表单槽位里顺着连线挂上的那几份素材,记下是从哪一格来的(`from`)。
+
+    「哪一份是从上游来的」此前只活在前端:每次画布变化拿「上一次每一格从连线拿到什么」去比,
+    断开的那份才摘掉。服务端不知道这件事 —— 智能体删掉上游那一格、删掉一根线,下游表单里那份
+    引用原样留着。现在出处记在那一份自己身上,由服务端一处判定(见 boards.canvas._drop_detached_sources)。
+
+    这里按**迁移前前端的口径**补:下游某一份的素材,正是一根连进来的线另一端那一格给出的素材
+    (图片/视频/音频/3D 场景那一格上的 asset_id),就记成从那一格来的 —— 和前端当时把它当成
+    「从连线来」的判据相同。连不上的照旧当手动挂的。这份口径是迁移那一刻的快照,不跟着领域层走。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    offers = {"image", "video", "audio", "scene"}
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            items = [item for item in canvas["items"] if isinstance(item, dict)]
+            by_id = {str(item.get("id")): item for item in items}
+            #: 每一格顺着线能拿到的素材 → 给出它的那一格(按线的先后,先连的算)。
+            upstream: dict[str, dict[str, str]] = {}
+            for edge in canvas.get("edges") or []:
+                if not isinstance(edge, dict):
+                    continue
+                source = by_id.get(str(edge.get("source")))
+                if not source or source.get("kind") not in offers or not source.get("asset_id"):
+                    continue
+                upstream.setdefault(str(edge.get("target")), {}).setdefault(str(source["asset_id"]), str(source["id"]))
+            touched = False
+            for item in items:
+                form = item.get("form")
+                sources = form.get("source_assets") if isinstance(form, dict) else None
+                fed = upstream.get(str(item.get("id")))
+                if not isinstance(sources, list) or not fed:
+                    continue
+                for one in sources:
+                    if isinstance(one, dict) and "from" not in one and str(one.get("asset_id")) in fed:
+                        one["from"] = fed[str(one["asset_id"])]
+                        touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -2849,6 +2900,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_confirmation_summary_i18n,
                 _migrate_board_canvas_state,
                 _migrate_board_trim_slots_record_their_source,
+                _migrate_board_sources_record_their_upstream,
                 _backfill_browser_pool,
                 _backfill_provider_models,
                 _migrate_provider_default_model_fk,

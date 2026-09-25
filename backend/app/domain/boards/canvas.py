@@ -130,11 +130,7 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
     if sources is not None:
         if not isinstance(sources, list) or any(not isinstance(one, dict) for one in sources):
             raise BoardDomainError("boardErr_sourceAssetsNotObjects", item_id=item_id)
-        form["source_assets"] = [
-            {"asset_id": str(one.get("asset_id") or "").strip(), "role": str(one.get("role") or "").strip()}
-            for one in sources
-            if str(one.get("asset_id") or "").strip() and str(one.get("role") or "").strip()
-        ]
+        form["source_assets"] = [one for one in map(_normalize_source, sources) if one]
     mentioned = form.get("mentioned_asset_ids")
     if mentioned is not None:
         if not isinstance(mentioned, list):
@@ -150,6 +146,47 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
         if len(json.dumps(prompt_document, ensure_ascii=False)) > MAX_TEXT_CHARS * 8:
             raise BoardDomainError("boardErr_promptDocumentTooLarge", item_id=item_id)
     return form
+
+
+def _normalize_source(value: dict[str, Any]) -> dict[str, str] | None:
+    """槽位里挂的一份素材。`from`:它是**顺着哪一格连过来的线**挂上的(手动挂的没有)——
+    见 _drop_detached_sources。缺素材或角色的是空位,不算。"""
+    asset_id = str(value.get("asset_id") or "").strip()
+    role = str(value.get("role") or "").strip()
+    if not asset_id or not role:
+        return None
+    source = {"asset_id": asset_id, "role": role}
+    origin = value.get("from")
+    if isinstance(origin, str) and origin.strip():
+        source["from"] = origin.strip()
+    return source
+
+
+def _drop_detached_sources(items: list[dict[str, Any]], edges: list[dict[str, Any]]) -> None:
+    """**顺着线挂上的素材,活得和那根线一样长。** 画板上「哪一份是从上游来的」只有这一处规则。
+
+    槽位里记着 `from` 的那一份,是面板照上游那一格的产出挂上的。线没了(删了线、删了上游那一格)、
+    或上游换了一份素材,它就不再是从上游来的 —— 留着的话,下次打开面板它还挂在首帧上,点生成照样
+    发出去,而画布上早就没有那条线了。手动挂的(没有 `from`)不动。
+
+    放在 normalize 里,因为画布的**每一次写入**都过这一道:客户端自动保存、智能体改画板
+    (edit_board 删掉上游那一格)、服务端对单格的合并。判据只看这一份画布自己 —— 不拿「上一次」
+    去比,所以旧快照存回来、同一份再存一遍,结果都一样。前端不另写一份,收服务端存下的那份。
+    """
+    by_id = {item["id"]: item for item in items}
+    wired = {(edge["source"], edge["target"]) for edge in edges}
+    for item in items:
+        sources = (item.get("form") or {}).get("source_assets")
+        if not sources:
+            continue
+        kept = [
+            one
+            for one in sources
+            if "from" not in one
+            or ((one["from"], item["id"]) in wired and (by_id.get(one["from"]) or {}).get("asset_id") == one["asset_id"])
+        ]
+        if len(kept) != len(sources):
+            item["form"] = {**item["form"], "source_assets": kept}
 
 
 def _normalize_trim(value: Any, item_id: str) -> dict[str, Any]:
@@ -338,6 +375,7 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError("boardErr_edgeLabelNotString")
             edge["label"] = label[:200]
         edges.append(edge)
+    _drop_detached_sources(items, edges)
 
     # 标记和 items 平级,不混进去 —— 它不是画板项(没有素材、不生成、连不了线),
     # 混进去的话每一处遍历 items 的地方都要先分辨一次"这个是不是标记"。规则见 domain/markers。

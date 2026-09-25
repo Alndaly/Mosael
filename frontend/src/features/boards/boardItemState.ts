@@ -71,6 +71,21 @@ export function serverOwnedPatch(sent: BoardItem, stored: BoardItem): Partial<Bo
 }
 
 /**
+ * 存回去之后,服务端把槽位里哪几份摘掉了(顺着线挂上的、线已经断了 —— 规则只在后端
+ * canvas._drop_detached_sources 一处)。回本地那一格该换成的表单;没摘就回 null。
+ *
+ * 只摘**服务端摘掉的那几份**,拿本地此刻的那一格去摘:请求在路上时用户又挂上的、又改的照留。
+ */
+export function prunedSourcesPatch(sent: BoardItem, stored: BoardItem, local: BoardItem): Partial<BoardItem> | null {
+  const key = (one: { asset_id: string; role: string; from?: string }) => `${one.asset_id}|${one.role}|${one.from ?? ""}`;
+  const kept = new Set((stored.form?.source_assets ?? []).map(key));
+  const dropped = new Set((sent.form?.source_assets ?? []).map(key).filter((one) => !kept.has(one)));
+  const mine = local.form?.source_assets ?? [];
+  if (dropped.size === 0 || !mine.some((one) => dropped.has(key(one)))) return null;
+  return { form: { ...local.form, source_assets: mine.filter((one) => !dropped.has(key(one))) } };
+}
+
+/**
  * 服务端轮询到的这一格已经不在跑了:写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。
  *
  * **按状态认「跑完了」,不按有没有失败原因。** 原因可以没有(任务失败时没留下话、被取消),

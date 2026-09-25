@@ -259,6 +259,28 @@ describe("画板详情页与服务端的同步", () => {
     expect(canvasHarness.api.patch).toHaveBeenCalledWith("cut", expect.objectContaining({ form: retried.form, run: retried.run }));
   });
 
+  it("删掉那根线之后存回去:服务端摘掉了从那条线来的那份,本地那一格跟着摘,手动挂的照留", async () => {
+    // 「从上游来的那份活得和线一样长」只有后端一处规则(canvas._drop_detached_sources),前端收它存下的。
+    const upstream = { id: "A", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, asset_id: "a1" };
+    const fed = { asset_id: "a1", role: "first_frame", from: "A" };
+    const manual = { asset_id: "m1", role: "last_frame" };
+    const video = { id: "V", kind: "video" as const, x: 400, y: 0, width: 320, height: 200, form: { prompt: "动起来", source_assets: [fed, manual] } };
+    const server: BoardCanvas = { items: [upstream, video], edges: [{ id: "e1", source: "A", target: "V" }], markers: [] };
+    const unwired: BoardCanvas = { ...server, edges: [] };
+    const stored: BoardCanvas = { ...unwired, items: [upstream, { ...video, form: { prompt: "动起来", source_assets: [manual] } }] };
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    apiMocks.updateBoard.mockResolvedValue(boardAt(4, stored));
+
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    act(() => props().onChange(unwired));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
+    expect(canvasHarness.api.patch).toHaveBeenCalledWith("V", { form: { prompt: "动起来", source_assets: [manual] } });
+  });
+
   it("自动保存还在路上时点生成:生成等它回来,带着它换来的新版本号,不和自己撞 409", async () => {
     const server: BoardCanvas = {
       items: [{ id: "img", kind: "image", x: 0, y: 0, width: 260, height: 180 }],

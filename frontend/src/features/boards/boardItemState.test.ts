@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoardItem } from "@/api/client";
-import { boardSettlementPatch, composerFor, itemFormResetKey, itemIsRunning, itemRunStatus } from "./boardItemState";
+import { boardSettlementPatch, composerFor, itemFormResetKey, itemIsRunning, itemRunStatus, prunedSourcesPatch } from "./boardItemState";
 
 function image(extra: Partial<BoardItem> = {}): BoardItem {
   return { id: "image-1", kind: "image", x: 0, y: 0, ...extra };
@@ -79,5 +79,25 @@ describe("选中一格时挂哪块面板", () => {
   it("有了产出的、分组框这类不挂", () => {
     expect(composerFor(image({ asset_id: "a1", form: { trim } }))).toBeNull();
     expect(composerFor({ id: "f", kind: "frame", x: 0, y: 0 })).toBeNull();
+  });
+});
+
+describe("服务端摘掉的槽位素材,本地跟着摘", () => {
+  const fed = { asset_id: "a1", role: "first_frame", from: "A" };
+  const manual = { asset_id: "m1", role: "last_frame" };
+
+  it("只摘服务端摘掉的那几份;请求在路上时又挂上的照留", () => {
+    const sent = image({ form: { source_assets: [fed, manual] } });
+    const stored = image({ form: { source_assets: [manual] } });
+    const later = { asset_id: "r1", role: "reference_image" };
+    const local = image({ form: { prompt: "又改了", source_assets: [fed, manual, later] } });
+    expect(prunedSourcesPatch(sent, stored, local)).toEqual({
+      form: { prompt: "又改了", source_assets: [manual, later] },
+    });
+  });
+
+  it("服务端什么都没摘就不出补丁", () => {
+    const sent = image({ form: { source_assets: [fed, manual] } });
+    expect(prunedSourcesPatch(sent, sent, sent)).toBeNull();
   });
 });

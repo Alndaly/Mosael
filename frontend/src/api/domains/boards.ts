@@ -25,7 +25,9 @@ export interface BoardItem {
     engine?: string;
     engine_voice?: string;
     parameters?: Record<string, unknown>;
-    source_assets?: { asset_id: string; role: string }[];
+    /** `from`:这一份是顺着哪一格连过来的线挂上的(手动挂的没有)。线断了、上游换了素材,
+     *  服务端存的时候就把它摘掉(后端 canvas._drop_detached_sources)。 */
+    source_assets?: { asset_id: string; role: string; from?: string }[];
     mentioned_asset_ids?: string[];
     /** 这一格是**从哪份素材截的哪一段**(剪一段的产出)。和后端 canvas._normalize_trim 同形。 */
     trim?: { asset_id: string; start: number; end: number; mute: boolean };

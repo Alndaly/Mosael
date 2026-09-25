@@ -169,3 +169,66 @@ def test_智能体改画板走确认卡_并且写坏的算子在批准前就失�
             requested_by="agent",
         )
     db.close()
+
+
+def _fed_board() -> dict:
+    """上游一张图 A 连到下游视频 V;V 的首帧是顺着线挂上的 A,尾帧是手动挂的。"""
+    return {
+        "items": [
+            {"id": "A", "kind": "image", "x": 0, "y": 0, "asset_id": "a1"},
+            {"id": "V", "kind": "video", "x": 400, "y": 0, "form": {"prompt": "动起来", "source_assets": [
+                {"asset_id": "a1", "role": "first_frame", "from": "A"},
+                {"asset_id": "m1", "role": "last_frame"},
+            ]}},
+        ],
+        "edges": [{"id": "e1", "source": "A", "target": "V"}],
+    }
+
+
+@pytest.mark.parametrize("operation", [
+    {"kind": "remove_item", "item_id": "A"},
+    {"kind": "remove_edge", "edge_id": "e1"},
+])
+def test_智能体删掉上游那一格或那根线_下游槽位里从那条线来的那份跟着摘掉(operation) -> None:
+    """前端画布上删线有这条规则,而智能体改画板(edit_board)在服务端落库时没有 —— 下游表单里那份
+    引用原样留着,下次打开面板还挂在首帧上,点生成照样发出去。手动挂的照留。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": _fed_board()}).json()["id"]
+
+    from app.core.db import SessionLocal
+    from app.domain.agent.confirmations import approve_confirmation, request_confirmation
+
+    with SessionLocal() as db:
+        card = request_confirmation(
+            db, workspace_id=ws, tool="edit_board",
+            payload={"board_id": board_id, "operations": [operation]}, requested_by="agent",
+        )
+        done = approve_confirmation(db, card)
+        assert done.status == "executed", done.error
+
+    canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+    video = next(one for one in canvas["items"] if one["id"] == "V")
+    assert video["form"]["source_assets"] == [{"asset_id": "m1", "role": "last_frame"}]
+
+
+def test_上游换了一份素材_下游挂着的旧那份不再算数() -> None:
+    board = _fed_board()
+    board["items"][0]["asset_id"] = "b1"
+    video = normalize_canvas(board)["items"][1]
+    assert video["form"]["source_assets"] == [{"asset_id": "m1", "role": "last_frame"}]
+
+
+def test_线还在就原样留着_同一份再存一遍结果一样() -> None:
+    once = normalize_canvas(_fed_board())
+    assert once["items"][1]["form"]["source_assets"] == _fed_board()["items"][1]["form"]["source_assets"]
+    assert normalize_canvas(once) == once
+
+
+def test_客户端存回来一份线已经断了的旧快照_照样摘掉() -> None:
+    """判据只看这一份画布自己,不拿「上一次」去比 —— 旧快照再存回来,结果和第一次一样。"""
+    board = _fed_board()
+    board["edges"] = []
+    assert normalize_canvas(board)["items"][1]["form"]["source_assets"] == [{"asset_id": "m1", "role": "last_frame"}]

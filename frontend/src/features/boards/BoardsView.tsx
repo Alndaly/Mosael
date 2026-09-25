@@ -63,7 +63,7 @@ import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas"
 import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
-import { boardSettlementPatch, itemIsRunning, itemJobId, serverOwnedPatch } from "@/features/boards/boardItemState";
+import { boardSettlementPatch, itemIsRunning, itemJobId, prunedSourcesPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
@@ -615,12 +615,18 @@ function BoardDetail({
       serially(async () => {
         if (sameContent(next, confirmedCanvas.current)) return;
         const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
-        //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch)。
+        //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch);服务端摘掉的、线已经
+        //: 断了的槽位素材,本地也跟着摘(见 prunedSourcesPatch)。
         const sent = new Map(next.items.map((item) => [item.id, item]));
+        const local = new Map((localCanvas.current?.items ?? []).map((item) => [item.id, item]));
         for (const stored of fresh.canvas.items) {
           const mine = sent.get(stored.id);
-          const patch = mine && serverOwnedPatch(mine, stored);
-          if (patch) api?.patch(stored.id, patch);
+          if (!mine) continue;
+          const patch = {
+            ...serverOwnedPatch(mine, stored),
+            ...prunedSourcesPatch(mine, stored, local.get(stored.id) ?? mine),
+          };
+          if (Object.keys(patch).length) api?.patch(stored.id, patch);
         }
       })
         // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
