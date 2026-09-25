@@ -266,6 +266,24 @@ def test_念出来时选的引擎和发音人留在节点表单上_失败后原�
     assert failed["form"] == form, "跑挂了之后表单不是用户提交时的样子,重试要重新挑一遍"
 
 
+def test_创建副本时正在写的便签不带着写作中过去() -> None:
+    """便签写作是同步的,没有 job_id —— 可它同样只落回原板那一格。副本里那张便签带着 running
+    过去的话,永远等不到写完,一直显示「写作中」。和带 job_id 的那种是同一条规则。"""
+    from app.core.db import SessionLocal
+    from app.domain.boards import set_text_write_run
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _board(client, ws, {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": ""}], "edges": []})
+    with SessionLocal() as db:
+        set_text_write_run(db, workspace_id=ws, board_id=board_id, item_id="n1", status="running")
+
+    copied = client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": ws})
+
+    assert copied.status_code == 200, copied.text
+    assert "run" not in copied.json()["canvas"]["items"][0]
+
+
 def _deleted_note_board(client, ws: str) -> tuple[str, dict]:
     """一张引用了某篇文档的板,那篇文档随后被删掉了 —— 画板上留着一个坏掉的引用。"""
     note = client.post("/api/notes", json={"workspace_id": ws, "title": "品牌规范", "markdown": "蓝色"}).json()
