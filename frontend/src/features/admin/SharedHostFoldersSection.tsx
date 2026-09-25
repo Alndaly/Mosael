@@ -1,4 +1,6 @@
 import React from "react";
+
+import { isImeKeystroke } from "@/lib/shortcuts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -64,7 +66,7 @@ export function SharedHostFoldersSection() {
             aria-label={t("deploySharedFoldersNew")}
             onChange={(event) => setDraft(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
+              if (event.key === "Enter" && !isImeKeystroke(event.nativeEvent)) {
                 event.preventDefault();
                 add();
               }

@@ -1,4 +1,6 @@
 import React from "react";
+
+import { listenKeys } from "@/lib/shortcuts";
 import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import {
@@ -346,10 +348,10 @@ export function PendingLinkMenu<K extends string>({
       if (target && (menuEl.current?.contains(target) || anchorRef.current()?.contains(target))) return;
       cancelRef.current();
     };
-    window.addEventListener("keydown", onKey, true);
+    const stopKeys = listenKeys(window, onKey, true);
     document.addEventListener("pointerdown", onPointer, true);
     return () => {
-      window.removeEventListener("keydown", onKey, true);
+      stopKeys();
       document.removeEventListener("pointerdown", onPointer, true);
     };
   }, []);
