@@ -73,7 +73,10 @@ def test_the_ui_actually_has_the_switch() -> None:
 
     frontend = Path(__file__).resolve().parents[2] / "frontend" / "src"
     section = (frontend / "features/admin/RegistrationSection.tsx").read_text()
-    assert '"/api/admin/registration"' in section, "管理页没有调这个开关"
+    # 接口调用按分层收在 api/domains(见 design/apiSeam.test):页面调那个函数,那个函数打这条路由。
+    identity = (frontend / "api/domains/identity.ts").read_text()
+    assert '"/api/admin/registration"' in identity and "export function setOpenRegistration" in identity
+    assert "setOpenRegistration(" in section, "管理页没有调这个开关"
     assert "deployRegistrationOpen" in section
 
     for name in ("app/messages.ts", "features/admin/RegistrationSection.tsx"):
