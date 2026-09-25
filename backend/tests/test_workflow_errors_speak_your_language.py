@@ -188,7 +188,7 @@ def test_报错里的一串名字按读的人的习惯连起来() -> None:
     from app.domain.jobs import blame
     from app.domain.workflows import WorkflowDomainError
 
-    exc = WorkflowDomainError("wfErr_pluginManyInstances", params={"package": "p", "names": ["A 号", "B 号"]})
+    exc = WorkflowDomainError("pluginErr_manyInstances", params={"package": "p", "names": ["A 号", "B 号"]})
     assert blame(exc)["error_params"]["names"] == ["A 号", "B 号"], "列表该原样落库,读的时候再连"
     try:
         set_current_locale("en")

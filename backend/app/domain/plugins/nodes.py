@@ -36,6 +36,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT
 from app.domain.plugins.manifest import text_of
 
@@ -227,6 +228,29 @@ def instances_for_node(db: Session, node_type: str, user_id: str | None) -> list
     ]
 
 
+def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, actor: str | None) -> str:
+    """跑这个工具用哪个连接:选了就用选的;没选而只有一个可用连接时自动用它。
+
+    自动选是有理由的:绝大多数包只会被接一次,逼用户在下拉里点一下那唯一的一项是纯仪式。
+    但有多个时**不猜** —— 从 B 站取和从抖音取是两件事,替用户选错比报错更糟。
+
+    候选只有**执行者**(`actor`)自己接的连接:接入归人,别人那条带着别人的密钥和额度。
+    选的那条不是他的,就当它不可用 —— 共享的工作流、共享的画板上存着别人选的连接 id,
+    照着跑就是拿别人的密钥花别人的额度。工作流节点和画板上的工具走的都是这一条。
+    """
+    available = instances_for_node(db, node_type_id(package_id, tool_name), actor)
+    if chosen:
+        if any(item["id"] == chosen for item in available):
+            return chosen
+        raise PluginDomainError("pluginErr_instanceGone", package=package_id)
+    if len(available) == 1:
+        return available[0]["id"]
+    if not available:
+        raise PluginDomainError("pluginErr_noInstance", package=package_id)
+    names = [item["name"] for item in available]
+    raise PluginDomainError("pluginErr_manyInstances", package=package_id, names=names)
+
+
 __all__ = [
     "PLUGIN_NODE_CATEGORY",
     "PLUGIN_NODE_PREFIX",
@@ -234,4 +258,5 @@ __all__ = [
     "node_type_id",
     "parse_node_type",
     "plugin_node_types",
+    "resolve_instance",
 ]

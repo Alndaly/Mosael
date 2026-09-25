@@ -137,10 +137,38 @@ def test_my_workflow_cannot_run_on_someone_elses_instance() -> None:
         with acting_as(db, mate_id):
             with pytest.raises(WorkflowDomainError) as auto:
                 run(db, workflow, {"text": "hi"})
-            assert auto.value.key == "wfErr_pluginNoInstance"
+            assert auto.value.key == "pluginErr_noInstance"
             with pytest.raises(WorkflowDomainError) as named:
                 run(db, workflow, {"text": "hi", "instance_id": theirs})
-            assert named.value.key == "wfErr_pluginInstanceGone"
+            assert named.value.key == "pluginErr_instanceGone"
         # 对照:接了它的人自己跑,照常自动选中他那唯一一条。
         with acting_as(db, None):
             assert run(db, workflow, {"text": "hi"})["output"]["loud"] == "HI"
+
+
+def test_选连接只在执行者自己的连接里找() -> None:
+    """resolve_instance 是工作流节点和(以后)画板上的工具共用的那一条:执行者由调用方给,
+    不从上下文猜。别人存下的连接 id 对我不可用;执行者是连接的主人时,同一个 id 照常可用。"""
+    import pytest
+
+    from app.db.models import User
+    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.nodes import resolve_instance
+    from tests.test_plugins import SIMPLE
+
+    admin = install(SIMPLE)
+    theirs = _my_instances(admin)[0]["id"]
+    assert admin.patch(f"/api/plugins/instances/{theirs}", json={"enabled": True}).status_code == 200
+    second_client("mate")
+
+    with SessionLocal() as db:
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+        owner_id = db.get(PluginInstance, theirs).owner_user_id
+        with pytest.raises(PluginDomainError) as named:
+            resolve_instance(db, "dev.simple", "shout", theirs, mate_id)
+        assert named.value.key == "pluginErr_instanceGone"
+        with pytest.raises(PluginDomainError) as auto:
+            resolve_instance(db, "dev.simple", "shout", "", mate_id)
+        assert auto.value.key == "pluginErr_noInstance"
+        assert resolve_instance(db, "dev.simple", "shout", theirs, owner_id) == theirs
+        assert resolve_instance(db, "dev.simple", "shout", "", owner_id) == theirs

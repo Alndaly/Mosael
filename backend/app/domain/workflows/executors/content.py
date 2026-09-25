@@ -41,26 +41,14 @@ def _run_plugin_tool(
 
 
 def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str) -> str:
-    """节点上选的连接;没选而只有一个可用连接时自动用它。
+    """节点上选的连接,只在**跑这条流程的人**自己的连接里找(见 plugins.nodes.resolve_instance)。"""
+    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.nodes import resolve_instance
 
-    自动选是有理由的:绝大多数包只会被接一次,逼用户在下拉里点一下那唯一的一项是纯仪式。
-    但有多个时**不猜** —— 从 B 站取和从抖音取是两件事,替用户选错比报错更糟。
-
-    候选只有**跑这条流程的人**自己接的连接:接入归人,别人那条带着别人的密钥和额度。
-    """
-    from app.domain.plugins.nodes import instances_for_node, node_type_id
-
-    available = instances_for_node(db, node_type_id(package_id, tool_name), current_actor(db))
-    if chosen:
-        if any(item["id"] == chosen for item in available):
-            return chosen
-        raise WorkflowDomainError("wfErr_pluginInstanceGone", params={"package": package_id})
-    if len(available) == 1:
-        return available[0]["id"]
-    if not available:
-        raise WorkflowDomainError("wfErr_pluginNoInstance", params={"package": package_id})
-    names = [item["name"] for item in available]
-    raise WorkflowDomainError("wfErr_pluginManyInstances", params={"package": package_id, "names": names})
+    try:
+        return resolve_instance(db, package_id, tool_name, chosen, current_actor(db))
+    except PluginDomainError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
 
 
 @register("plugin_tool")

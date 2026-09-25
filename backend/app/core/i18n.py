@@ -289,6 +289,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件执行超时({seconds}s)",
         "en": "The plugin timed out after {seconds}s.",
     },
+    #: 选连接的三种失败(见 plugins.nodes.resolve_instance)。工作流节点和画板上的工具共用,
+    #: 所以不说「在节点上」—— 选连接的那一格在哪,读的人自己眼前就是。
+    "pluginErr_instanceGone": {
+        "zh": "选的连接已不可用(插件 {package});请重新选一个",
+        "en": "The chosen connection is gone (plugin {package}); choose another",
+    },
+    "pluginErr_noInstance": {
+        "zh": "没有可用的「{package}」连接:请在插件页新建并启用一个",
+        "en": "No usable “{package}” connection: create and enable one on the Plugins page",
+    },
+    "pluginErr_manyInstances": {
+        "zh": "有多个「{package}」连接({names}),请选一个",
+        "en": "Several “{package}” connections exist ({names}); pick one",
+    },
     "pluginErr_cancelled": {
         "zh": "任务已取消,插件调用被中止",
         "en": "The task was cancelled, so the plugin call was stopped.",
@@ -2947,9 +2961,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "工具 {tool} 只供 Mosael 内部使用,不能在工作流里调用",
         "en": "The tool {tool} is reserved for Mosael itself and cannot run in a workflow",
     },
-    "wfErr_pluginInstanceGone": {"zh": "节点选的连接已不可用(插件 {package});请在节点上重新选一个", "en": "The connection this node picked is gone (plugin {package}); choose another on the node"},
-    "wfErr_pluginNoInstance": {"zh": "没有可用的「{package}」连接:请在插件页新建并启用一个", "en": "No usable “{package}” connection: create and enable one on the Plugins page"},
-    "wfErr_pluginManyInstances": {"zh": "有多个「{package}」连接({names}),请在节点上选一个", "en": "Several “{package}” connections exist ({names}); pick one on the node"},
     "wfErr_tagUnknownMode": {"zh": "素材打标签:未知的模式 {mode}", "en": "Tag assets: unknown mode {mode}"},
     "wfErr_pluginNodeType": {"zh": "插件节点类型不合法:{type}", "en": "Invalid plugin node type: {type}"},
     "wfErr_integerRange": {"zh": "{field}必须是 {min} 到 {max} 之间的整数", "en": "{field} must be a whole number between {min} and {max}"},
