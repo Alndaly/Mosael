@@ -20,6 +20,14 @@ from typing import Any
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.template_requirements import (
+    CHAT_MODEL,
+    CLONED_VOICE,
+    REFERENCE_IMAGE_MODEL,
+    REFERENCE_VIDEO_MODEL,
+    TRANSCRIPTION_ENGINE,
+    requirement,
+)
 
 HIGHLIGHT_SHORTS = "highlight_shorts"
 PRODUCT_ON_MODEL = "product_on_model"
@@ -1058,10 +1066,11 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "把一条口播、访谈或直播回放转成逐字稿,挑出能独立成立的片段,每条各建一条竖屏时间线、截取原片那一段、配上重写过的短句字幕并导出。不生成任何画面,所以除了转写和一次对话之外不花生成费用。",
             "en": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own, then give each one its own vertical timeline, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
         },
-        "requires": {
-            "zh": ["可用的转写引擎", "AI 对话模型", "一条有人说话的长视频"],
-            "en": ["Available transcription engine", "Chat model", "A long video with speech"],
-        },
+        "requires": [
+            requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(None, zh="一条有人说话的长视频", en="A long video with speech"),
+        ],
         "stages": {
             "zh": ["选择长视频", "生成带时间码逐字稿", "挑出能独立成立的片段", "逐条建竖屏时间线并截取", "配重写过的字幕", "逐条导出"],
             "en": ["Pick the long video", "Transcribe with timecodes", "Pick the passages that stand alone", "Give each its own vertical timeline", "Lay the rewritten captions", "Export each one"],
@@ -1074,10 +1083,21 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "给一张平铺图或面料图,规划几组投放场景,每组出一张模特上身图;视频模型可用时再把每一组动起来。商品图贯穿每一次生成 —— 版型、颜色、纹理、logo 都以它为准,不是照描述重画。卖点文案一并存成笔记。",
             "en": "From one flat-lay or fabric photo, plan a few sellable scenes and shoot an on-model image for each; where a video model is available, put every scene in motion too. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. The copy lines are saved as a note.",
         },
-        "requires": {
-            "zh": ["AI 对话模型", "能带参考图出图的图像模型(如 Seedream 4)", "一张商品平铺图或面料图", "短视频可选:支持首帧的视频模型"],
-            "en": ["Chat model", "Image model that takes reference images (e.g. Seedream 4)", "A flat-lay or fabric photo", "Optional motion: a video model that takes a first frame"],
-        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(
+                REFERENCE_IMAGE_MODEL,
+                zh="能带参考图出图的图像模型(如 Seedream 4)",
+                en="Image model that takes reference images (e.g. Seedream 4)",
+            ),
+            requirement(None, zh="一张商品平铺图或面料图", en="A flat-lay or fabric photo"),
+            requirement(
+                REFERENCE_VIDEO_MODEL,
+                zh="短视频可选:支持首帧的视频模型",
+                en="Optional motion: a video model that takes a first frame",
+                optional=True,
+            ),
+        ],
         "stages": {
             "zh": ["描述商品与人群", "选择商品图", "规划几组投放场景", "逐组出模特上身图", "可选:逐组出短视频", "卖点文案存成笔记"],
             "en": ["Describe the product and audience", "Pick the product photo", "Plan the scenes", "Shoot each scene on a model", "Optional: put each scene in motion", "Save the copy as a note"],
@@ -1090,10 +1110,12 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本,每一拍出一张带商品的画面、按这一拍的时长铺上时间线,配上口播与屏幕短句,导出竖屏成片。卖点只用你给的那几条,不编功效和数据。",
             "en": "From a product photo and a few selling points, write a beat-by-beat script, paint one frame per beat with the product in it, lay each on the timeline for that beat's length, add the voice-over and on-screen lines, and export a vertical short. Only the selling points you provide are used — no invented claims or figures.",
         },
-        "requires": {
-            "zh": ["AI 对话模型", "能带参考图出图的图像模型", "一把嗓子:配音库的克隆音色", "一张商品图"],
-            "en": ["Chat model", "Image model that takes reference images", "A voice: a cloned voice from the voice library", "A product photo"],
-        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(REFERENCE_IMAGE_MODEL, zh="能带参考图出图的图像模型", en="Image model that takes reference images"),
+            requirement(CLONED_VOICE, zh="一把嗓子:配音库的克隆音色", en="A voice: a cloned voice from the voice library"),
+            requirement(None, zh="一张商品图", en="A product photo"),
+        ],
         "stages": {
             "zh": ["填商品与卖点", "写分拍口播脚本", "逐拍出画面并铺上时间线", "合成口播", "导出竖屏成片"],
             "en": ["Product and selling points", "Write the beat-by-beat script", "Paint each beat onto the timeline", "Synthesize the voice-over", "Export the vertical short"],
@@ -1106,10 +1128,13 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材和留多久、写好旁白,然后按顺序接上时间线,逐段配音并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。",
             "en": "Pull a tagged batch of footage you already shot, let the model order the story, decide which clip each beat uses and how long it runs, and write the narration; then lay every segment on the timeline in order, speak and caption each one, and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only.",
         },
-        "requires": {
-            "zh": ["AI 对话模型", "一批打了同一个标签的视频素材", "旁白可选:配音库的克隆音色"],
-            "en": ["Chat model", "A batch of video assets sharing one tag", "Optional narration: a cloned voice"],
-        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(None, zh="一批打了同一个标签的视频素材", en="A batch of video assets sharing one tag"),
+            requirement(
+                CLONED_VOICE, zh="旁白可选:配音库的克隆音色", en="Optional narration: a cloned voice", optional=True,
+            ),
+        ],
         "stages": {
             "zh": ["填主题与素材标签", "按标签取出素材", "排出叙事顺序与旁白", "按顺序接上时间线", "逐段配音并铺字幕", "导出成片"],
             "en": ["Topic and footage tag", "Fetch the footage by tag", "Order the story and write the narration", "Lay the segments in order", "Speak and caption each one", "Export"],
@@ -1122,10 +1147,11 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "给一块面料的实拍图和参数,规划它真正适合做的几种成品,每种出一张放在真实空间里的效果图,并生成一页可直接发客户的规格与应用提案。规格只复述你给出的参数,没给的写「需与工厂确认」。",
             "en": "From one fabric photo and its specs, plan the products it genuinely suits, render each one in a real space, and produce a one-page proposal you can send to a client. The spec sheet only restates the numbers you provide; anything missing is marked as needing mill confirmation.",
         },
-        "requires": {
-            "zh": ["AI 对话模型", "能带参考图出图的图像模型", "一张面料实拍图"],
-            "en": ["Chat model", "Image model that takes reference images", "A photo of the actual fabric"],
-        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(REFERENCE_IMAGE_MODEL, zh="能带参考图出图的图像模型", en="Image model that takes reference images"),
+            requirement(None, zh="一张面料实拍图", en="A photo of the actual fabric"),
+        ],
         "stages": {
             "zh": ["填面料参数", "选择面料图", "规划应用与规格卡", "逐种出成品效果图", "生成可发客户的规格页"],
             "en": ["Fabric specs", "Pick the fabric photo", "Plan applications and the spec sheet", "Render each application", "Write the spec sheet to send"],

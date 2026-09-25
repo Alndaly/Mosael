@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -103,6 +104,24 @@ class WorkflowAiEditResponse(ApiModel):
     summary: str = ""
 
 
+class WorkflowTemplateRequirementOut(ApiModel):
+    """模板的一条前置条件(见 domain/workflows/template_requirements)。"""
+
+    text: str
+    #: 能自动查的那几样之一(chat_model / reference_image_model / …);空 = 运行时由用户给的素材,查不了。
+    check: str = ""
+    #: 缺了也能跑(旁白之类)。界面把「缺」说成「可选」,不报警。
+    optional: bool = False
+
+
+class WorkflowTemplateCheckOut(ApiModel):
+    """一个检查键此刻的状态。**按人、按工作区**,所以和模板目录分开拉 —— 目录能缓存,状态不能。"""
+
+    check: str
+    #: met = 齐了;missing = 没有;unknown = 本地引擎还在后台探测,**不拿未知冒充结论**。
+    status: Literal["met", "missing", "unknown"]
+
+
 class WorkflowTemplateOut(ApiModel):
     """官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);
     图标由界面按 id 给,和节点图标、任务种类同一条规矩。"""
@@ -112,5 +131,5 @@ class WorkflowTemplateOut(ApiModel):
     description: str
     #: 这条流程分几步 —— 卡片上那条竖线。
     stages: list[str] = Field(default_factory=list)
-    #: 跑之前要备好什么(模型、引擎、素材)。
-    requirements: list[str] = Field(default_factory=list)
+    #: 跑之前要备好什么(模型、引擎、素材)。每条带一个检查键,状态另走 /workflows/templates/checks。
+    requirements: list[WorkflowTemplateRequirementOut] = Field(default_factory=list)

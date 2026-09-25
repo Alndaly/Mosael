@@ -21,6 +21,44 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.aliyun-oss.zip",
       "permissions": [
         "network:oss"
+      ],
+      "runtime": "process",
+      "provides": [
+        "public_url"
+      ],
+      "tools": [
+        {
+          "name": "oss_upload",
+          "label": "",
+          "description": {
+            "zh": "把一份素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。这就是「本地文件怎么变成公网链接」的答案 —— 直接粘进生成节点的参考视频那一格。",
+            "en": "Upload an asset and hand back a time-limited direct link (the signature lives in the query string, so the bucket need not be public-read). This is how a local file becomes a URL."
+          }
+        },
+        {
+          "name": "oss_presign",
+          "label": "",
+          "description": {
+            "zh": "给桶里已有的对象签一条限时直链。",
+            "en": "Sign a time-limited direct link for an object already in the bucket."
+          }
+        },
+        {
+          "name": "oss_fetch",
+          "label": "",
+          "description": {
+            "zh": "把桶里的一个对象拉回素材库。**交回的是地址,由宿主搬字节** —— 进度、取消、重试都归它。",
+            "en": "Pull an object back into the asset library. The plugin hands over a URL and the host moves the bytes — progress, cancel and retry all come for free."
+          }
+        },
+        {
+          "name": "oss_list",
+          "label": "",
+          "description": {
+            "zh": "列出桶里某个前缀下的对象(路径、大小、修改时间)。",
+            "en": "List objects under a prefix (key, size, last modified)."
+          }
+        }
       ]
     },
     {
@@ -44,6 +82,44 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.aws-s3.zip",
       "permissions": [
         "network:s3"
+      ],
+      "runtime": "process",
+      "provides": [
+        "public_url"
+      ],
+      "tools": [
+        {
+          "name": "s3_upload",
+          "label": "",
+          "description": {
+            "zh": "把一份素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。这就是「本地文件怎么变成公网链接」的答案 —— 直接粘进生成节点的参考视频那一格。",
+            "en": "Upload an asset and hand back a time-limited direct link (the signature lives in the query string, so the bucket need not be public-read). This is how a local file becomes a URL."
+          }
+        },
+        {
+          "name": "s3_presign",
+          "label": "",
+          "description": {
+            "zh": "给桶里已有的对象签一条限时直链。",
+            "en": "Sign a time-limited direct link for an object already in the bucket."
+          }
+        },
+        {
+          "name": "s3_fetch",
+          "label": "",
+          "description": {
+            "zh": "把桶里的一个对象拉回素材库。**交回的是地址,由宿主搬字节** —— 进度、取消、重试都归它。",
+            "en": "Pull an object back into the asset library. The plugin hands over a URL and the host moves the bytes — progress, cancel and retry all come for free."
+          }
+        },
+        {
+          "name": "s3_list",
+          "label": "",
+          "description": {
+            "zh": "列出桶里某个前缀下的对象(路径、大小、修改时间)。",
+            "en": "List objects under a prefix (key, size, last modified)."
+          }
+        }
       ]
     },
     {
@@ -67,6 +143,42 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.baidu-pan.zip",
       "permissions": [
         "network:baidu-pan"
+      ],
+      "runtime": "process",
+      "provides": [],
+      "tools": [
+        {
+          "name": "pan_list",
+          "label": "",
+          "description": {
+            "zh": "列出百度网盘某个目录下的文件和子目录。返回每一项的 fs_id、文件名、大小、是不是目录。fs_id 是后面 pan_import 要用的。",
+            "en": "List the files and sub-directories under a Baidu Netdisk directory. Each entry carries its fs_id, name, size and whether it is a directory. The fs_id is what pan_import takes."
+          }
+        },
+        {
+          "name": "pan_search",
+          "label": "",
+          "description": {
+            "zh": "按文件名在百度网盘里搜索。找不准路径时用这个,比一层层 pan_list 快。返回同样带 fs_id。",
+            "en": "Search Baidu Netdisk by file name. Use this when you don't know the exact path — it beats walking down with pan_list. Results carry fs_id the same way."
+          }
+        },
+        {
+          "name": "pan_import",
+          "label": "",
+          "description": {
+            "zh": "把百度网盘里的一个文件拉进素材库。传 pan_list / pan_search 给出的 fs_id。返回 asset_id,之后就和别的素材一样用。",
+            "en": "Pull one file from Baidu Netdisk into the asset library. Pass an fs_id from pan_list or pan_search. Returns an asset_id you can use like any other asset."
+          }
+        },
+        {
+          "name": "pan_upload",
+          "label": "",
+          "description": {
+            "zh": "把素材库里的一个文件传到百度网盘。传 asset_id 和网盘上的目标路径(如 /我的资源/成片.mp4)。",
+            "en": "Send one file from the asset library to Baidu Netdisk. Pass an asset_id and the target path on the netdisk (e.g. /My files/final.mp4)."
+          }
+        }
       ]
     },
     {
@@ -93,7 +205,10 @@
         "network:localhost",
         "filesystem:read",
         "filesystem:write"
-      ]
+      ],
+      "runtime": "mcp",
+      "provides": [],
+      "tools": []
     },
     {
       "id": "dev.mosael.mcp-everything",
@@ -116,7 +231,10 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.mcp-everything.zip",
       "permissions": [
         "process:spawn"
-      ]
+      ],
+      "runtime": "mcp",
+      "provides": [],
+      "tools": []
     },
     {
       "id": "dev.mosael.remotion",
@@ -141,6 +259,43 @@
         "process:spawn",
         "network:npm",
         "filesystem:write"
+      ],
+      "runtime": "process",
+      "provides": [],
+      "tools": [
+        {
+          "name": "remotion_setup",
+          "label": {
+            "zh": "准备渲染环境",
+            "en": "Prepare the renderer"
+          },
+          "description": {
+            "zh": "安装 Remotion 与渲染用的浏览器。第一次要几十秒到几分钟,之后几乎是瞬间完成。渲染工具在环境缺失时会自动补,但第一次最好在插件页先跑一下它。",
+            "en": "Install Remotion and the rendering browser. The first run takes from tens of seconds to a few minutes; after that it is near-instant. The render tools fill in anything missing, but run this once from the plugin page first."
+          }
+        },
+        {
+          "name": "remotion_explainer",
+          "label": {
+            "zh": "讲解视频",
+            "en": "Explainer video"
+          },
+          "description": {
+            "zh": "给内容,出一段知识点讲解视频(mp4,进素材库):标题 → 一节一节讲(小标题、逐条出现的要点、KaTeX 公式、逐行出现的代码、提示)→ 要点回顾。每段多长按内容算,不用给时间轴。讲数学、物理、编程、概念解释、操作步骤都合适。",
+            "en": "Turn content into a lesson explainer video (mp4, into the asset library): a title, then sections (heading, points that appear one by one, a KaTeX formula, code that appears line by line, a note), then key takeaways. Timing follows the content; no timeline needed. Good for maths, physics, programming, concepts and how-tos."
+          }
+        },
+        {
+          "name": "remotion_animation",
+          "label": {
+            "zh": "自定义动画",
+            "en": "Custom animation"
+          },
+          "description": {
+            "zh": "用一段 Remotion 组件代码渲染动画(mp4,进素材库)。代码是一个 TSX 模块,`export default` 一个组件,它收到 `{ data }`(即这里传的 data);用 useCurrentFrame / useVideoConfig / interpolate / spring / AbsoluteFill / Sequence(都从 'remotion' 导入)做动画。只能 import react、remotion、katex。报错会原样返回,改了再调即可。讲解类内容优先用「讲解视频」。",
+            "en": "Render an animation from a Remotion component (mp4, into the asset library). The code is a TSX module that `export default`s a component receiving `{ data }` (the data given here); animate with useCurrentFrame / useVideoConfig / interpolate / spring / AbsoluteFill / Sequence from 'remotion'. Only react, remotion and katex can be imported. Errors come back verbatim, so fix and call again. Prefer the explainer tool for lesson-style content."
+          }
+        }
       ]
     },
     {
@@ -164,6 +319,44 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.tencent-cos.zip",
       "permissions": [
         "network:cos"
+      ],
+      "runtime": "process",
+      "provides": [
+        "public_url"
+      ],
+      "tools": [
+        {
+          "name": "cos_upload",
+          "label": "",
+          "description": {
+            "zh": "把一份素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。这就是「本地文件怎么变成公网链接」的答案 —— 直接粘进生成节点的参考视频那一格。",
+            "en": "Upload an asset and hand back a time-limited direct link (the signature lives in the query string, so the bucket need not be public-read). This is how a local file becomes a URL."
+          }
+        },
+        {
+          "name": "cos_presign",
+          "label": "",
+          "description": {
+            "zh": "给桶里已有的对象签一条限时直链。",
+            "en": "Sign a time-limited direct link for an object already in the bucket."
+          }
+        },
+        {
+          "name": "cos_fetch",
+          "label": "",
+          "description": {
+            "zh": "把桶里的一个对象拉回素材库。**交回的是地址,由宿主搬字节** —— 进度、取消、重试都归它。",
+            "en": "Pull an object back into the asset library. The plugin hands over a URL and the host moves the bytes — progress, cancel and retry all come for free."
+          }
+        },
+        {
+          "name": "cos_list",
+          "label": "",
+          "description": {
+            "zh": "列出桶里某个前缀下的对象(路径、大小、修改时间)。",
+            "en": "List objects under a prefix (key, size, last modified)."
+          }
+        }
       ]
     },
     {
@@ -182,7 +375,27 @@
       },
       "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/text-toolkit",
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.text-toolkit.zip",
-      "permissions": []
+      "permissions": [],
+      "runtime": "process",
+      "provides": [],
+      "tools": [
+        {
+          "name": "word_count",
+          "label": "",
+          "description": {
+            "zh": "统计文本的字数、词数与预计口播时长(按 4.5 字/秒)。",
+            "en": "Count characters and words in a text, and estimate read-aloud time (at 4.5 characters per second)."
+          }
+        },
+        {
+          "name": "extract_hashtags",
+          "label": "",
+          "description": {
+            "zh": "从文案中提取 #话题# 与 #hashtag 标签。",
+            "en": "Pull #topic# and #hashtag tags out of a piece of copy."
+          }
+        }
+      ]
     },
     {
       "id": "dev.mosael.tikhub",
@@ -202,7 +415,10 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.tikhub.zip",
       "permissions": [
         "network:tikhub"
-      ]
+      ],
+      "runtime": "mcp",
+      "provides": [],
+      "tools": []
     },
     {
       "id": "dev.mosael.volcengine-tos",
@@ -225,6 +441,44 @@
       "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.volcengine-tos.zip",
       "permissions": [
         "network:tos"
+      ],
+      "runtime": "process",
+      "provides": [
+        "public_url"
+      ],
+      "tools": [
+        {
+          "name": "tos_upload",
+          "label": "",
+          "description": {
+            "zh": "把一份素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。这就是「本地文件怎么变成公网链接」的答案 —— 直接粘进生成节点的参考视频那一格。",
+            "en": "Upload an asset and hand back a time-limited direct link (the signature lives in the query string, so the bucket need not be public-read). This is how a local file becomes a URL."
+          }
+        },
+        {
+          "name": "tos_presign",
+          "label": "",
+          "description": {
+            "zh": "给桶里已有的对象签一条限时直链。",
+            "en": "Sign a time-limited direct link for an object already in the bucket."
+          }
+        },
+        {
+          "name": "tos_fetch",
+          "label": "",
+          "description": {
+            "zh": "把桶里的一个对象拉回素材库。**交回的是地址,由宿主搬字节** —— 进度、取消、重试都归它。",
+            "en": "Pull an object back into the asset library. The plugin hands over a URL and the host moves the bytes — progress, cancel and retry all come for free."
+          }
+        },
+        {
+          "name": "tos_list",
+          "label": "",
+          "description": {
+            "zh": "列出桶里某个前缀下的对象(路径、大小、修改时间)。",
+            "en": "List objects under a prefix (key, size, last modified)."
+          }
+        }
       ]
     }
   ]

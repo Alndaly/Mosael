@@ -53,6 +53,22 @@ def entry(manifest_path: Path) -> dict:
         "download": DOWNLOAD_TEMPLATE.format(id=raw["id"]),
         # 权限**从清单来**:界面在装之前把它摊开给用户看,写错等于骗人。
         "permissions": [p for p in (raw.get("permissions") or []) if isinstance(p, str)],
+        # 它是本机脚本还是一个 MCP server —— 后者的工具由 server 自己报,装之前列不出来,
+        # 市场详情据此说「装上之后才知道」,而不是显示一个空的工具清单。
+        "runtime": str((raw.get("runtime") or {}).get("kind") or "process"),
+        # 它能替 Mosael 做哪类事(公网直链…)。和工具清单一样是「装了能得到什么」。
+        "provides": [p for p in (raw.get("provides") or []) if isinstance(p, str)],
+        # 声明的工具:名字、显示名和说明(按语言分的原样带过去)。**不带入参 schema** ——
+        # 市场里要回答的是"它能干什么",怎么调是装上之后的事,而 schema 会让索引胖一个数量级。
+        "tools": [
+            {
+                "name": str(tool["name"]),
+                "label": tool.get("label") or "",
+                "description": tool.get("description") or "",
+            }
+            for tool in ((raw.get("tools") or {}).get("declare") or [])
+            if isinstance(tool, dict) and tool.get("name")
+        ],
     }
 
 

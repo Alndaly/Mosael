@@ -66,6 +66,15 @@ class PluginPackageOut(ApiModel):
     instances: list[PluginInstanceOut] = Field(default_factory=list)
 
 
+class PluginMarketTool(ApiModel):
+    """市场里一个插件声明的工具。只有「它是什么」,没有入参 —— 怎么调是装上之后的事。"""
+
+    name: str
+    label: str = ""
+    #: 作者写的说明,**可能带 markdown**(`**公网直链**`)—— 界面负责渲染,不在这里剥。
+    description: str = ""
+
+
 class PluginMarketEntry(ApiModel):
     """市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"""
 
@@ -79,6 +88,11 @@ class PluginMarketEntry(ApiModel):
     docs: str = ""
     download: str = ""
     permissions: list[str] = Field(default_factory=list)
+    #: process = 本机脚本,工具就是 `tools` 那几个;mcp = 接一个 MCP server,工具由它自己报,装上才知道。
+    runtime: str = "process"
+    #: 它能替 Mosael 做的几类事(public_url …)。
+    provides: list[str] = Field(default_factory=list)
+    tools: list[PluginMarketTool] = Field(default_factory=list)
     #: 这台机器上装没装过同 id 的包。装过的话界面给的是「更新」而不是「安装」。
     installed: bool = False
     installed_version: str = ""

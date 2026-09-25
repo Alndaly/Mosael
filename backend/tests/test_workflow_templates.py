@@ -618,9 +618,12 @@ def test_模板卡片和图一一对应() -> None:
     for card in BUSINESS_TEMPLATE_CATALOG:
         for field in ("name", "summary"):
             assert {"zh", "en"} <= set(card[field]), f"{card['id']}.{field}"
-        for field in ("requires", "stages"):
-            assert {"zh", "en"} <= set(card[field]), f"{card['id']}.{field}"
-            assert card[field]["zh"] and card[field]["en"], f"{card['id']}.{field} 是空的"
+        assert {"zh", "en"} <= set(card["stages"]), f"{card['id']}.stages"
+        assert card["stages"]["zh"] and card["stages"]["en"], f"{card['id']}.stages 是空的"
+    for card in TEMPLATE_CATALOG:
+        assert card["requires"], f"{card['id']}.requires 是空的"
+        for one in card["requires"]:
+            assert one["text"]["zh"] and one["text"]["en"], f"{card['id']} 有一条前置条件缺了某种语言"
 
 
 def test_镜头数有一道成本闸门() -> None:

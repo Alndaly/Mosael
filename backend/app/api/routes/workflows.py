@@ -17,6 +17,7 @@ from app.api.schemas import (
     WorkflowAiEditResponse,
     WorkflowCreate,
     WorkflowFieldOptionOut,
+    WorkflowTemplateCheckOut,
     WorkflowTemplateOut,
     WorkflowImportRequest,
     WorkflowNodeTypeOut,
@@ -160,10 +161,27 @@ def workflow_templates() -> list[dict]:
             "name": pick_text(template["name"], locale),
             "description": pick_text(template["summary"], locale),
             "stages": [pick_text(stage, locale) for stage in _by_locale(template["stages"], locale)],
-            "requirements": [pick_text(one, locale) for one in _by_locale(template["requires"], locale)],
+            "requirements": [
+                {"text": pick_text(one["text"], locale), "check": one["check"], "optional": one["optional"]}
+                for one in template["requires"]
+            ],
         }
         for template in TEMPLATE_CATALOG
     ]
+
+
+@router.get("/workflows/templates/checks", response_model=list[WorkflowTemplateCheckOut])
+def workflow_template_checks(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    """模板前置条件里能自动查的那几样,**对这个人、这个工作区**各齐没齐。
+
+    和模板目录分开:目录是静态文案,能缓存五分钟;这个取决于他刚配没配模型、装没装引擎,
+    每次打开模板库都该是新的。
+    """
+    from app.domain.workflows.templates import requirement_statuses
+
+    ensure_workspace_access(db, user, workspace_id)
+    statuses = requirement_statuses(db, user_id=user.id, workspace_id=workspace_id)
+    return [{"check": check, "status": status} for check, status in statuses.items()]
 
 
 def _by_locale(value: object, locale: str) -> list:

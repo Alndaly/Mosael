@@ -153,3 +153,9 @@ export type WorkflowTemplate = components["schemas"]["WorkflowTemplateOut"];
 export function fetchWorkflowTemplates(): Promise<WorkflowTemplate[]> {
   return api<WorkflowTemplate[]>("/api/workflows/templates");
 }
+export type WorkflowTemplateRequirement = components["schemas"]["WorkflowTemplateRequirementOut"];
+/** 前置条件里能自动查的那几样,对这个人、这个工作区齐没齐。和目录分开拉:目录能缓存,状态不能。 */
+export type WorkflowTemplateCheck = components["schemas"]["WorkflowTemplateCheckOut"];
+export function fetchWorkflowTemplateChecks(workspaceId: string): Promise<WorkflowTemplateCheck[]> {
+  return api<WorkflowTemplateCheck[]>(`/api/workflows/templates/checks?workspace_id=${encodeURIComponent(workspaceId)}`);
+}

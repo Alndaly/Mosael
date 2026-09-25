@@ -491,6 +491,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const communityDialog = (
     <WorkflowCommunityDialog
       open={communityOpen}
+      workspaceId={workspace.id}
       workflows={workflows.data ?? []}
       installingId={create.isPending ? (create.variables ?? null) : null}
       focusTemplate={communityFocus}

@@ -58,6 +58,11 @@ def catalog_files() -> dict[str, str]:
         graph = template.pop("graph")
         entry = {**template, "author": "Mosael", "version": graph["meta"]["template_version"],
                  "nodes": len(graph["nodes"]), "download": {}}
+        #: 前置条件在后端是「一条一个对象」(带检查键,给应用里的就绪状态用);官网只展示句子,
+        #: 这里摊回「一种语言一串」—— 检查键说的是**这台机器**,对官网没有意义。
+        entry["requires"] = {
+            locale: [one["text"][locale] for one in template["requires"]] for locale in ("zh", "en")
+        }
         for locale in ("zh", "en"):
             name = f'{template["id"]}.{locale}.mosael-workflow.json'
             entry["download"][locale] = f"/workflows/{name}"

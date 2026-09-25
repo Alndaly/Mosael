@@ -63,6 +63,17 @@ def test_下载地址和_CI_产出的文件名对得上() -> None:
         assert "/releases/latest/download/" in entry["download"], f"{entry['id']} 的下载地址钉死了版本"
 
 
+def test_工具清单与运行方式一致() -> None:
+    """市场详情里「它带来哪些工具」照着索引列。漂了的话,用户装之前看到的是另一个插件。"""
+    registry = _registry()
+    for path in EXAMPLES.glob(f"*/{MANIFEST_NAME}"):
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        declared = [tool["name"] for tool in ((raw.get("tools") or {}).get("declare") or [])]
+        assert [tool["name"] for tool in registry[raw["id"]]["tools"]] == declared, f"{raw['id']} 的工具清单漂了"
+        runtime = (raw.get("runtime") or {}).get("kind") or "process"
+        assert registry[raw["id"]]["runtime"] == runtime, f"{raw['id']} 的运行方式漂了"
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天目录改了名,上面三条会一起真空通过。"""
     assert len(list(EXAMPLES.glob(f"*/{MANIFEST_NAME}"))) >= 3

@@ -25,6 +25,7 @@ from app.api.schemas import (
     PluginInvocationOut,
     PluginInvokeRequest,
     PluginMarketEntry,
+    PluginMarketTool,
     PluginPackageOut,
     PluginPermissionGrantOut,
     PluginPermissionGrantUpdate,
@@ -90,6 +91,17 @@ def browse_market(db: DbSession, user: CurrentUser) -> list[PluginMarketEntry]:
             name=text_of(entry.get("name")),
             description=text_of(entry.get("description")),
             permissions=[p for p in (entry.get("permissions") or []) if isinstance(p, str)],
+            runtime=str(entry.get("runtime") or "process"),
+            provides=[p for p in (entry.get("provides") or []) if isinstance(p, str)],
+            tools=[
+                PluginMarketTool(
+                    name=str(tool["name"]),
+                    label=text_of(tool.get("label")),
+                    description=text_of(tool.get("description")),
+                )
+                for tool in (entry.get("tools") or [])
+                if isinstance(tool, dict) and tool.get("name")
+            ],
             installed=entry["id"] in installed,
             installed_version=installed.get(entry["id"], ""),
         )

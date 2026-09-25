@@ -112,7 +112,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
   if (empty) return <div className={COLLECTION_DETAIL_PAGE}>
     {heading}<div className="flex min-h-0 flex-1 overflow-y-auto"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
-    <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onInstalled={() => invalidatePlugins(qc)} />
+    <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePlugins(qc)} />
   </div>;
 
   return (
@@ -164,7 +164,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
       </CollectionDetail>
-      <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onInstalled={() => invalidatePlugins(qc)} />
+      <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePlugins(qc)} />
     </div>
   );
 }

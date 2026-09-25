@@ -16,6 +16,16 @@ from app.domain.provider_defaults import get_row
 from app.domain.provider_models import effective_capabilities
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.template_requirements import (
+    CHAT_MODEL,
+    CLONED_VOICE,
+    CheckStatus,
+    REFERENCE_IMAGE_MODEL,
+    REFERENCE_VIDEO_MODEL,
+    SEPARATION_ENGINE,
+    TRANSCRIPTION_ENGINE,
+    requirement,
+)
 from app.domain.workflows.templates_business import (
     BUSINESS_TEMPLATE_CATALOG,
     FABRIC_LOOKBOOK,
@@ -246,20 +256,20 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
             "en": "Turn a topic into a creative brief, script and visual bible, draw a turnaround sheet for every character and concept art for every location, auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video."
         },
-        "requires": {
-            "zh": [
-                "AI 对话模型",
-                "能带参考图出图的图像模型（如 Seedream 4）",
-                "支持首帧或参考素材的视频模型（如 Seedance 2.0）",
-                "旁白可选：克隆音色"
-            ],
-            "en": [
-                "Chat model",
-                "Image model that takes reference images (e.g. Seedream 4)",
-                "Video model that takes a first frame or references (e.g. Seedance 2.0)",
-                "Optional narration: cloned voice"
-            ]
-        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(
+                REFERENCE_IMAGE_MODEL,
+                zh="能带参考图出图的图像模型（如 Seedream 4）",
+                en="Image model that takes reference images (e.g. Seedream 4)",
+            ),
+            requirement(
+                REFERENCE_VIDEO_MODEL,
+                zh="支持首帧或参考素材的视频模型（如 Seedance 2.0）",
+                en="Video model that takes a first frame or references (e.g. Seedance 2.0)",
+            ),
+            requirement(CLONED_VOICE, zh="旁白可选：克隆音色", en="Optional narration: cloned voice", optional=True),
+        ],
         "stages": {
             "zh": [
                 "输入主题",
@@ -293,18 +303,11 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
             "en": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original."
         },
-        "requires": {
-            "zh": [
-                "AI 对话模型",
-                "可用的转写引擎",
-                "待整理的视频素材"
-            ],
-            "en": [
-                "Chat model",
-                "Available transcription engine",
-                "Source video"
-            ]
-        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
+            requirement(None, zh="待整理的视频素材", en="Source video"),
+        ],
         "stages": {
             "zh": [
                 "选择视频",
@@ -334,22 +337,22 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
             "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts."
         },
-        "requires": {
-            "zh": [
-                "可用的转写引擎",
-                "翻译：AI 对话模型（节点上可换成 Google 翻译）",
-                "一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
-                "人声分离引擎（需提前安装）",
-                "有人说话的视频素材"
-            ],
-            "en": [
-                "Available transcription engine",
-                "Translation: a chat model (switchable to Google Translate on the node)",
-                "A voice: a cloned voice, or a built-in voice from any engine",
-                "A voice separation engine installed in advance",
-                "A video with speech"
-            ]
-        },
+        "requires": [
+            requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
+            requirement(
+                CHAT_MODEL,
+                zh="翻译：AI 对话模型（节点上可换成 Google 翻译）",
+                en="Translation: a chat model (switchable to Google Translate on the node)",
+            ),
+            #: 克隆音色和引擎自带音色都算数 —— 后一种要逐个引擎去问,这里不查,交给节点上的音色格。
+            requirement(
+                None,
+                zh="一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
+                en="A voice: a cloned voice, or a built-in voice from any engine",
+            ),
+            requirement(SEPARATION_ENGINE, zh="人声分离引擎（需提前安装）", en="A voice separation engine installed in advance"),
+            requirement(None, zh="有人说话的视频素材", en="A video with speech"),
+        ],
         "stages": {
             "zh": [
                 "选择视频",
@@ -1094,6 +1097,41 @@ def _first_voice_id(db: Session, workspace_id: str) -> str:
         select(Voice).where(Voice.workspace_id == workspace_id).order_by(Voice.created_at)
     ).first()
     return voice.id if voice else ""
+
+
+def _engines_status(runtime_status, engines: list[str]) -> CheckStatus:
+    """本地引擎(转写、人声分离)**有一个跑得起来就算齐**;探测还没回来的,说「还不知道」。
+
+    探测要起子进程 import torch,十几秒 —— 这里只读已知的结果,没测过的交给后台去测。
+    """
+    known_all = True
+    for engine in engines:
+        ready, known = runtime_status(engine)
+        if ready:
+            return "met"
+        known_all = known_all and known
+    return "missing" if known_all else "unknown"
+
+
+def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dict[str, CheckStatus]:
+    """模板前置条件里**能自动查的那几样**,对这个人、这个工作区各是什么状态。
+
+    判据和「用这个模板建一张图」时挑模型的是**同一套**(`_pick` / `_reference_image_model` /
+    `_shot_video_model` / `_first_voice_id`):这里说齐了,建出来的图上那一格就是填好的;
+    这里说缺,那一格就是空的。两处各写一份判据的话,迟早一处说齐、一处留空。
+    """
+    from app.ai.runtime import asr_models, separation_models
+
+    has_chat = bool(_pick(db, user_id, "chat", lambda _db, choice: bool(choice.model)).model)
+    statuses: dict[str, CheckStatus] = {
+        CHAT_MODEL: "met" if has_chat else "missing",
+        REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id).model else "missing",
+        REFERENCE_VIDEO_MODEL: "met" if _shot_video_model(db, user_id).model else "missing",
+        CLONED_VOICE: "met" if _first_voice_id(db, workspace_id) else "missing",
+        TRANSCRIPTION_ENGINE: _engines_status(asr_models.runtime_status, ["funasr", "whisperx"]),
+        SEPARATION_ENGINE: _engines_status(separation_models.runtime_status, list(separation_models.ENGINES)),
+    }
+    return statuses
 
 
 def full_video_generation_graph(

@@ -34,15 +34,18 @@ vi.mock("@/app/preferences", () => ({
 
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
 
-it("没装的插件:直接弹出它的安装确认,但不替人按「安装」", async () => {
+it("没装的插件:翻到它的详情并弹出安装确认,但不替人按「安装」", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <PluginMarketDialog open focusId="dev.mosael.remotion" onOpenChange={vi.fn()} onInstalled={vi.fn()} />
+      <PluginMarketDialog open focusId="dev.mosael.remotion" onOpenChange={vi.fn()} onChanged={vi.fn()} />
     </QueryClientProvider>,
   );
 
   expect(await screen.findByText("pluginInstallConfirmTitle")).toBeTruthy();
+  //: 确认卡后面停着的是它的详情页 —— 关掉确认卡,人还在看这个插件,而不是被丢回网格重找。
+  //: (确认卡是模态的,它后面那层对读屏是隐藏的,所以查的时候带上 hidden。)
+  expect(screen.getByRole("heading", { level: 3, name: "Remotion 动画", hidden: true })).toBeTruthy();
   expect(mocks.preview).toHaveBeenCalledTimes(1);
   expect(mocks.preview).toHaveBeenCalledWith("https://x/remotion.zip");
   await waitFor(() => expect(mocks.install).not.toHaveBeenCalled());

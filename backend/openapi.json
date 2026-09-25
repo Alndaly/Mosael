@@ -10185,6 +10185,53 @@
         }
       }
     },
+    "/api/workflows/templates/checks": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Workflow Template Checks",
+        "description": "模板前置条件里能自动查的那几样,**对这个人、这个工作区**各齐没齐。\n\n和模板目录分开:目录是静态文案,能缓存五分钟;这个取决于他刚配没配模型、装没装引擎,\n每次打开模板库都该是新的。",
+        "operationId": "workflow_template_checks_api_workflows_templates_checks_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowTemplateCheckOut"
+                  },
+                  "title": "Response Workflow Template Checks Api Workflows Templates Checks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/field-options": {
       "get": {
         "tags": [
@@ -25536,6 +25583,25 @@
             "type": "array",
             "title": "Permissions"
           },
+          "runtime": {
+            "type": "string",
+            "title": "Runtime",
+            "default": "process"
+          },
+          "provides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Provides"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/PluginMarketTool"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
           "installed": {
             "type": "boolean",
             "title": "Installed",
@@ -25553,6 +25619,30 @@
         ],
         "title": "PluginMarketEntry",
         "description": "市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"
+      },
+      "PluginMarketTool": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "PluginMarketTool",
+        "description": "市场里一个插件声明的工具。只有「它是什么」,没有入参 —— 怎么调是装上之后的事。"
       },
       "PluginOAuthCode": {
         "properties": {
@@ -31834,6 +31924,30 @@
         "type": "object",
         "title": "WorkflowRunRequest"
       },
+      "WorkflowTemplateCheckOut": {
+        "properties": {
+          "check": {
+            "type": "string",
+            "title": "Check"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "met",
+              "missing",
+              "unknown"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "check",
+          "status"
+        ],
+        "title": "WorkflowTemplateCheckOut",
+        "description": "一个检查键此刻的状态。**按人、按工作区**,所以和模板目录分开拉 —— 目录能缓存,状态不能。"
+      },
       "WorkflowTemplateOut": {
         "properties": {
           "id": {
@@ -31857,7 +31971,7 @@
           },
           "requirements": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/WorkflowTemplateRequirementOut"
             },
             "type": "array",
             "title": "Requirements"
@@ -31871,6 +31985,30 @@
         ],
         "title": "WorkflowTemplateOut",
         "description": "官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);\n图标由界面按 id 给,和节点图标、任务种类同一条规矩。"
+      },
+      "WorkflowTemplateRequirementOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "check": {
+            "type": "string",
+            "title": "Check",
+            "default": ""
+          },
+          "optional": {
+            "type": "boolean",
+            "title": "Optional",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "WorkflowTemplateRequirementOut",
+        "description": "模板的一条前置条件(见 domain/workflows/template_requirements)。"
       },
       "WorkflowUpdate": {
         "properties": {

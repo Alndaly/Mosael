@@ -15,6 +15,7 @@ vi.mock("@/api/client", () => ({
     { id: "full_video_generation", name: "从主题到完整视频", description: "a", stages: ["输入主题"], requirements: [] },
     { id: "product_pitch_short", name: "商品 → 带货口播短视频", description: "b", stages: ["填商品与卖点"], requirements: [] },
   ],
+  fetchWorkflowTemplateChecks: async () => [],
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
@@ -23,12 +24,13 @@ vi.mock("@/app/preferences", () => ({
 
 import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 
-it("打开时选中官网指定的那个模板,而不是列表第一个", async () => {
+it("打开时直接翻到官网指定的那个模板的详情,而不是停在网格上", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <WorkflowCommunityDialog
         open
+        workspaceId="ws"
         workflows={[]}
         installingId={null}
         focusTemplate="product_pitch_short"
@@ -38,6 +40,6 @@ it("打开时选中官网指定的那个模板,而不是列表第一个", async 
     </QueryClientProvider>,
   );
   const dialog = await screen.findByRole("dialog");
-  // 右侧详情的标题就是选中的那一条。
+  // 详情页的标题就是那一条。
   expect(await within(dialog).findByRole("heading", { level: 3, name: "商品 → 带货口播短视频" })).toBeTruthy();
 });

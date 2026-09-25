@@ -212,3 +212,23 @@ def _fake_client(payload):
             return FakeResponse()
 
     return FakeClient
+
+
+def test_市场接口把工具和能力按语言发下去(monkeypatch) -> None:
+    """市场详情要回答「装了能得到什么」:工具(名字 + 说明)、能力、运行方式。说明按看的人的语言挑好。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    monkeypatch.setattr(market, "fetch_index", lambda _url: [{
+        "id": "dev.test.demo", "name": {"zh": "演示", "en": "Demo"}, "version": "1.0.0",
+        "description": {"zh": "换回一条**公网直链**", "en": "Get a **public link**"},
+        "download": "https://x/demo.zip", "permissions": ["network:demo"],
+        "runtime": "process", "provides": ["public_url"],
+        "tools": [{"name": "go", "label": "", "description": {"zh": "跑一下", "en": "Run it"}}],
+    }])
+    [entry] = client.get("/api/plugins/market").json()
+    assert entry["provides"] == ["public_url"]
+    assert entry["runtime"] == "process"
+    assert entry["tools"] == [{"name": "go", "label": "", "description": "跑一下"}]
+    #: markdown 原样给 —— 渲染还是剥掉是界面的事,接口不替它决定。
+    assert entry["description"] == "换回一条**公网直链**"

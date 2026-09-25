@@ -69,12 +69,6 @@ const ALLOWED = new Set([
   // 通用下拉:调用方传进来的已经是纯文本(节点面板那边先过了 toPlainText)。
   "components/ui/searchable-select.tsx {item.description}",
   "components/ui/option-picker.tsx description={one.description}",
-  // 以下两个文件另有人在重做,它们会自己渲染 markdown。
-  "features/plugins/PluginMarket.tsx {pending.preview.description}",
-  "features/plugins/PluginMarket.tsx {entry.description}",
-  "features/workflows/WorkflowCommunityDialog.tsx {template.description}",
-  "features/workflows/WorkflowCommunityDialog.tsx {selected.description}",
-  "features/workflows/WorkflowCommunityDialog.tsx ${template.description}",
 ]);
 
 // `<AgentMarkdown>{…}</AgentMarkdown>` 是块级的那条出口(模型写的整段摘要),同样算过了关。

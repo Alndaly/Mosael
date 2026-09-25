@@ -3522,6 +3522,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/templates/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workflow Template Checks
+         * @description 模板前置条件里能自动查的那几样,**对这个人、这个工作区**各齐没齐。
+         *
+         *     和模板目录分开:目录是静态文案,能缓存五分钟;这个取决于他刚配没配模型、装没装引擎,
+         *     每次打开模板库都该是新的。
+         */
+        get: operations["workflow_template_checks_api_workflows_templates_checks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/field-options": {
         parameters: {
             query?: never;
@@ -9347,6 +9370,15 @@ export interface components {
             /** Permissions */
             permissions?: string[];
             /**
+             * Runtime
+             * @default process
+             */
+            runtime: string;
+            /** Provides */
+            provides?: string[];
+            /** Tools */
+            tools?: components["schemas"]["PluginMarketTool"][];
+            /**
              * Installed
              * @default false
              */
@@ -9356,6 +9388,24 @@ export interface components {
              * @default
              */
             installed_version: string;
+        };
+        /**
+         * PluginMarketTool
+         * @description 市场里一个插件声明的工具。只有「它是什么」,没有入参 —— 怎么调是装上之后的事。
+         */
+        PluginMarketTool: {
+            /** Name */
+            name: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
         };
         /**
          * PluginOAuthCode
@@ -12259,6 +12309,19 @@ export interface components {
             };
         };
         /**
+         * WorkflowTemplateCheckOut
+         * @description 一个检查键此刻的状态。**按人、按工作区**,所以和模板目录分开拉 —— 目录能缓存,状态不能。
+         */
+        WorkflowTemplateCheckOut: {
+            /** Check */
+            check: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "met" | "missing" | "unknown";
+        };
+        /**
          * WorkflowTemplateOut
          * @description 官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);
          *     图标由界面按 id 给,和节点图标、任务种类同一条规矩。
@@ -12273,7 +12336,25 @@ export interface components {
             /** Stages */
             stages?: string[];
             /** Requirements */
-            requirements?: string[];
+            requirements?: components["schemas"]["WorkflowTemplateRequirementOut"][];
+        };
+        /**
+         * WorkflowTemplateRequirementOut
+         * @description 模板的一条前置条件(见 domain/workflows/template_requirements)。
+         */
+        WorkflowTemplateRequirementOut: {
+            /** Text */
+            text: string;
+            /**
+             * Check
+             * @default
+             */
+            check: string;
+            /**
+             * Optional
+             * @default false
+             */
+            optional: boolean;
         };
         /** WorkflowUpdate */
         WorkflowUpdate: {
@@ -19590,6 +19671,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowTemplateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workflow_template_checks_api_workflows_templates_checks_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTemplateCheckOut"][];
                 };
             };
             /** @description Validation Error */
