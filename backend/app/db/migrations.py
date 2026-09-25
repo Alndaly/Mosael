@@ -2448,6 +2448,56 @@ def _migrate_line_fields_are_lists() -> None:
                 )
 
 
+def _migrate_condition_literals_are_json() -> None:
+    """条件节点两边手写的 `True` / `False` 改写成 `true` / `false`。
+
+    值当文字用时此前是 `str()`:上游交来的布尔在条件里读作 `True`,用户照着看到的写了 `True`
+    才对得上。现在统一写成 JSON(见 workflows.as_text),布尔读作 `true` —— 库里那些照旧写法
+    写好的条件会从此永远不等。这里一次改好,条件节点不为旧写法留分支。
+
+    只改**整格**就是这个字面量的(带引用、带别的字的不动),循环体 / 子图体里的一并改。排在修订
+    迁移之前:它会发现图变了,追加一份修订。
+    """
+    if "workflows" not in set(inspect(engine).get_table_names()):
+        return
+    literals = {"True": "true", "False": "false"}
+
+    def rewrite(graph: Any) -> Any:
+        if not isinstance(graph, dict):
+            return graph
+        nodes = []
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                nodes.append(node)
+                continue
+            config = dict(node.get("config") or {})
+            if node.get("type") == "condition":
+                for side in ("left", "right"):
+                    value = config.get(side)
+                    if isinstance(value, str) and value.strip() in literals:
+                        config[side] = literals[value.strip()]
+            for key, value in config.items():
+                if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                    config[key] = rewrite(value)
+            nodes.append({**node, "config": config} if config != (node.get("config") or {}) else node)
+        return {**graph, "nodes": nodes}
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
+        for row in rows:
+            raw_graph = row["graph"]
+            try:
+                graph = json.loads(raw_graph) if isinstance(raw_graph, str) else raw_graph
+            except (TypeError, ValueError):
+                continue
+            rewritten = rewrite(graph)
+            if rewritten != graph:
+                conn.execute(
+                    text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                    {"graph": json.dumps(rewritten, ensure_ascii=False), "id": row["id"]},
+                )
+
+
 def _disable_tasks_bound_to_deleted_workflows() -> None:
     """绑着一张**已经删掉**的工作流、却还是「启用」的定时任务,停用。
 
@@ -2751,6 +2801,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_node_names_are_not_i18n_keys,
                 _migrate_called_workflows_declare_their_output,
                 _migrate_line_fields_are_lists,
+                _migrate_condition_literals_are_json,
                 _migrate_workflow_revisions,
                 _disable_tasks_bound_to_deleted_workflows,
                 # Projection comes last so rows synthesized by earlier migrations are visible

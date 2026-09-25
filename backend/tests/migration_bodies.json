@@ -32,6 +32,7 @@
   "migrate-client-version": "af8a418cbc4b01c8",
   "migrate-clip-offline-asset": "3e878c268a57f4bc",
   "migrate-comment-canvas-context": "695d8506e3332bd8",
+  "migrate-condition-literals-are-json": "c4ea5974974871f5",
   "migrate-confirmation-summary-i18n": "2e278d24b6eab1f7",
   "migrate-connections-get-an-owner": "8afda861625e48f2",
   "migrate-deployment-admin": "81e8028d04c2d247",
