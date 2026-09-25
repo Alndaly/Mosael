@@ -664,6 +664,10 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 - **blender** — 接一台本机跑着的 Blender,工具按只读/可写分开申报
 - **remotion** — 用代码做动画视频:自带渲染项目,声明自己的超时预算(`timeout_seconds`),
   几百 MB 的依赖放进跨更新的持久目录(`MOSAEL_PLUGIN_DATA_DIR`)
+- **manim** — 用 Manim 做教学动画:在持久目录里用跑插件的那个 Python 建 venv、装锁定版本的依赖
+  (`manim_setup`,缺系统依赖时逐条说怎么装);四个工具都是**流式工具**(解析 Manim 的进度条报进度,
+  取消文件一出现就连同子进程一起停);讲解视频的内容走 JSON 交给一份固定的场景,**不拼进代码**;
+  会执行任意代码的工具不进 `recommended`,要用户自己勾上
 - **volcengine-tos** / **aliyun-oss** / **aws-s3** / **tencent-cos** — 对象存储四家。
   **同一套主体、各自的签名方言**:接口是同一套(PUT/GET 对象、列目录、虚拟主机式寻址),
   只有签名不同。`storage.py` 不认识任何一种签名,由插件把方言对象交给它
