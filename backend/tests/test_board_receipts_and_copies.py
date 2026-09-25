@@ -139,6 +139,34 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
     assert "n1" in items, "占位把并发保存里刚加的那一项抹掉了"
 
 
+def test_念出来时选的引擎和发音人留在节点表单上_失败后原样重试(monkeypatch) -> None:
+    """音频节点的表单是「念什么 + 用哪把嗓子」。引擎音色那条路的嗓子记在 engine/engine_voice 上,
+    而摆占位时表单被整个换成 {prompt, voice_id} —— 跑挂了回来重试,面板落回第一个引擎,
+    用户挑好的发音人没了。"""
+    import app.domain.voices.engine_catalog as engine_catalog
+    import app.domain.voices.voices as voices
+
+    monkeypatch.setattr(engine_catalog, "synthesis_params", lambda db, **kwargs: {})
+    monkeypatch.setattr(voices, "start_synthesis", lambda db, **kwargs: SimpleNamespace(id="job-tts"))
+
+    client = fresh_client()
+    ws = _workspace(client)
+    form = {"prompt": "你好", "voice_id": "", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural"}
+    board_id = _board(client, ws, {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0, "form": form}], "edges": []})
+
+    spoken = client.post(f"/api/boards/{board_id}/speak", json={
+        "workspace_id": ws, "item_id": "a1", "text": "你好", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural",
+    })
+    assert spoken.status_code == 200, spoken.text
+    placed = spoken.json()["canvas"]["items"][0]
+    assert placed["run"] == {"status": "running", "job_id": "job-tts"}
+    assert (placed["form"]["engine"], placed["form"]["engine_voice"]) == ("edge", "zh-CN-XiaoxiaoNeural")
+
+    _deliver(board_id, "a1", SimpleNamespace(id="job-tts", status="failed", result=None, error="超时"))
+    failed = _canvas(client, ws, board_id)["items"][0]
+    assert failed["form"] == form, "跑挂了之后表单不是用户提交时的样子,重试要重新挑一遍"
+
+
 def _deleted_note_board(client, ws: str) -> tuple[str, dict]:
     """一张引用了某篇文档的板,那篇文档随后被删掉了 —— 画板上留着一个坏掉的引用。"""
     note = client.post("/api/notes", json={"workspace_id": ws, "title": "品牌规范", "markdown": "蓝色"}).json()

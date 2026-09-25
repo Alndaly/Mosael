@@ -131,10 +131,16 @@ def speak_on_board(
     text: str,
     synthesis: dict[str, Any],
     voice_id: str | None,
+    engine: str = "",
+    engine_voice: str = "",
 ) -> Board:
     """把一段文字念成音频。合成的错误(VoiceError)原样抛出。
 
     回执打在上下文里,start_synthesis 建的任务自动带上 —— 不用把画板的概念塞进 voices 领域。
+
+    节点表单记下**这一次用哪把嗓子**:克隆音色是 voice_id,引擎音色是 engine + engine_voice
+    (和面板存的是同一个形状)。只记 voice_id 的话,引擎那条路跑挂了回来重试,面板落回第一个
+    引擎,用户挑好的发音人没了。
     """
     from app.domain.voices.voices import start_synthesis
 
@@ -148,7 +154,7 @@ def speak_on_board(
     finally:
         reset_receipt(token)
     return _pending(db, workspace_id, slot, actor_id=actor_id, kind="audio", job_id=job.id,
-                    form={"prompt": text, "voice_id": voice_id})
+                    form={"prompt": text, "voice_id": voice_id or "", "engine": engine, "engine_voice": engine_voice})
 
 
 def trim_on_board(

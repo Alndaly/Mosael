@@ -184,6 +184,9 @@ def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> 
             text=body.text,
             synthesis=synthesis,
             voice_id=body.voice_id,
+            #: 表单照面板的形状记:克隆那条 engine 留空(不是 CLONE_ENGINE)。
+            engine=body.engine.strip(),
+            engine_voice=body.engine_voice,
         )
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
