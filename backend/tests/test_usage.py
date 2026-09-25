@@ -237,3 +237,50 @@ def test_缓存读写单列并算出命中率() -> None:
     # 700 / (300 + 700 + 0) = 0.7
     assert summary["usage_cache_hit_ratio"] == 0.7
     assert summary["usage_token_daily"][-1]["cache_read_tokens"] == 700
+
+
+def test_调用方回滚_账照样留下_引用断开() -> None:
+    """钱花出去了就要在账上。调用方的事务回滚(失败的工作流节点)、或者会话没提交就关
+    (后台线程里的一次性会话,智能体的放行判断就是这样),此前都会把这一笔账一起带走。
+
+    账引用的任务是调用方刚 flush、随回滚一起没了的 —— 引用置空,和 schema 的 SET NULL 同义。
+    """
+    from app.db.models import Job
+    from app.domain.usage import billable, once
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    with SessionLocal() as db:
+        job = Job(workspace_id=ws, kind="workflow", payload={})
+        db.add(job)
+        db.flush()
+        with billable(db, capability="chat", operation="t", workspace_id=ws, job_id=job.id,
+                      idempotency_key="rolled-back") as call:
+            call.meter(input_tokens=3)
+        db.rollback()
+
+    with SessionLocal() as db:
+        with billable(db, capability="chat", operation="t", workspace_id=ws, idempotency_key=once("t")) as call:
+            call.meter(input_tokens=5)
+        # 不提交就关
+
+    with SessionLocal() as db:
+        events = db.query(ProviderUsageEvent).filter_by(workspace_id=ws).order_by(ProviderUsageEvent.created_at).all()
+        assert [event.units["input_tokens"] for event in events] == [3, 5]
+        assert events[0].job_id is None, "引用的任务随回滚没了,引用该断开而不是让补写失败"
+
+
+def test_调用方提交了_不会补出第二条() -> None:
+    from app.domain.usage import billable
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        with billable(db, capability="chat", operation="t", workspace_id=ws, idempotency_key="k") as call:
+            call.meter(input_tokens=3)
+        db.commit()
+        # 同一个会话接着开下一个事务、再回滚:上一笔已经确认过,不该再动它
+        db.rollback()
+    with SessionLocal() as db:
+        assert db.query(ProviderUsageEvent).filter_by(workspace_id=ws).count() == 1

@@ -10,8 +10,8 @@ from uuid import uuid4
 import time
 from typing import Any
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import event as orm_event, func, inspect, or_, select
+from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.usage_scope import current_workspace
 from app.db.models import ProviderPricingRule, ProviderUsageEvent, now
@@ -387,24 +387,101 @@ def record_usage(
     )
     db.add(event)
     db.flush()
-
-    if job_id:
-        emit_job_event(
-            db,
-            job_id,
-            "usage.recorded",
-            {
-                "usage_event_id": event.id,
-                "capability": capability,
-                "provider": provider,
-                "model": model,
-                "cost_micros": cost_micros,
-                "currency": currency,
-                "cost_confidence": cost_confidence,
-                "duration_seconds": duration_seconds,
-            },
-        )
+    _announce(db, event)
+    _hold_until_durable(db, event)
     return event
+
+
+def _announce(db: Session, event: ProviderUsageEvent) -> None:
+    """记在任务上的那一条时间线事件(有任务才有)。"""
+    if not event.job_id:
+        return
+    emit_job_event(
+        db,
+        event.job_id,
+        "usage.recorded",
+        {
+            "usage_event_id": event.id,
+            "capability": event.capability,
+            "provider": event.provider,
+            "model": event.model,
+            "cost_micros": event.cost_micros,
+            "currency": event.currency,
+            "cost_confidence": event.cost_confidence,
+            "duration_seconds": event.duration_seconds,
+        },
+    )
+
+
+# ---------- 账比调用方的事务活得久 ----------
+#
+# 账先写进**调用方的**会话:`job_id` / `agent_message_id` 是外键,常常指向调用方刚 flush、还没
+# commit 的行,独立事务看不见它们;SQLite 又只有一个写者,调用方 flush 过就攥着写锁,另开
+# 一条连接去写只会等到 busy_timeout 然后失败。所以"当场另开事务写"这条路是走不通的。
+#
+# 可**钱已经花出去了**,调用方的事务成不成跟这件事无关。失败的工作流节点会回滚(引擎只在
+# 成功时提交,半途 flush 的东西不该留下),会话用完没提交就关也是回滚(智能体的放行判断就是
+# 这样一条账都没留下)—— 此前这两种情况下,付过费的调用在账上凭空消失。
+#
+# 所以落库分两步:照旧先写进调用方的事务;调用方的事务**结束之后**(那时写锁已经放了),再用
+# 一个新会话确认这条账在库里,不在就补写。外键指向的行没能活下来时,引用置空 —— 和 schema
+# 里 `ondelete="SET NULL"` 是同一个语义:被引用的东西没了,账留着、链接断开。工作区那条是
+# CASCADE,工作区都没了的账不补。
+#
+# 挂在事务结束这一个跳变上,不挂在某个调用点上 —— 和 jobs._note_settled_jobs 同一个理由:
+# 调用方有十几处,各自记得 commit 的做法已经证明靠不住。
+
+#: 这个会话当前事务里记下、还没确认落库的账(列值快照)。挂在 session.info 上而不是模块级 ——
+#: 后台线程各有各的会话。
+_UNSETTLED = "mosael_unsettled_usage"
+
+
+def _hold_until_durable(db: Session, event: ProviderUsageEvent) -> None:
+    snapshot = {attr.key: getattr(event, attr.key) for attr in inspect(ProviderUsageEvent).column_attrs}
+    db.info.setdefault(_UNSETTLED, []).append(snapshot)
+
+
+@orm_event.listens_for(Session, "after_transaction_end")
+def _settle_usage(session: Session, transaction: SessionTransaction) -> None:
+    """调用方的根事务结束(提交、回滚、没提交就关)之后,确认这一轮记下的账都在库里。"""
+    if transaction.parent is not None:
+        return  # 保存点结束不算:外层事务还可能把它带走,也还可能把它带进库
+    pending = session.info.pop(_UNSETTLED, None)
+    if not pending:
+        return
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as fresh:
+        try:
+            for snapshot in pending:
+                _restore(fresh, snapshot)
+            fresh.commit()
+        except Exception:  # noqa: BLE001 — 记账是旁路,补写失败也不该把调用方带下水
+            fresh.rollback()
+            logger.warning("用量补记失败,已忽略", exc_info=True)
+
+
+def _restore(db: Session, snapshot: dict[str, Any]) -> None:
+    """补写一条随调用方事务回滚掉的账。已经在库里(调用方提交了)就什么都不做。"""
+    key = snapshot["idempotency_key"]
+    if db.scalar(select(ProviderUsageEvent.id).where(ProviderUsageEvent.idempotency_key == key)) is not None:
+        return
+    values = dict(snapshot)
+    for fk in ProviderUsageEvent.__table__.foreign_keys:
+        column = fk.parent.key
+        if values.get(column) is None:
+            continue
+        target = fk.column
+        if db.scalar(select(target).where(target == values[column])) is not None:
+            continue
+        if fk.ondelete != "SET NULL":
+            logger.warning("用量补记跳过:%s=%s 已不存在(idempotency_key=%s)", column, values[column], key)
+            return
+        values[column] = None
+    event = ProviderUsageEvent(**values)
+    db.add(event)
+    db.flush()
+    _announce(db, event)
 
 
 def _normalize_pricing_fields(fields: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
@@ -805,11 +882,11 @@ def billable(
 
     - **归属**:显式 workspace_id 优先;没给就取环境上下文(权限闸门绑的,见 core/usage_scope)。
       两个都没有时不记账,但会 warning 出来 —— 静默漏记正是这次要终结的毛病。
-    - **同一个事务**:落库用调用方的 Session。试过给它独立事务(理由是"钱已经花了,调用方
-      回滚不该抹掉这笔账"),但 `job_id` / `agent_message_id` 是外键,指向调用方**刚 flush
-      还没 commit** 的行 —— 独立事务看不见它们,插入直接违反外键。schema 已经把这件事定了:
-      账和它引用的东西必须同生共死。代价是只读接口(翻译、分析、提示词优化)记了账之后要
-      自己 commit 一次,那几处都写了注释。
+    - **先进调用方的事务,但不随它回滚**:落库用调用方的 Session —— `job_id` /
+      `agent_message_id` 是外键,指向调用方**刚 flush 还没 commit** 的行,独立事务看不见。
+      而钱已经花了:调用方的事务结束后,这条账没进库(回滚了、或者会话没提交就关了)就由
+      `_settle_usage` 补写,引用的行没活下来时引用置空(同 schema 的 SET NULL)。调用方
+      照常提交或回滚,不必为账操心。
     - **成败**:块里抛异常就记 failed 再原样抛出。失败的调用同样花钱(很多供应商按请求计费),
       而且"最近失败了多少次"本身就是用户想在账上看到的。
     - **幂等**:`idempotency_key` 是**必填的**。重放同一次调用不会重复入账 —— 而这句话只有在

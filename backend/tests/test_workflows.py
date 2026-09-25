@@ -1706,6 +1706,58 @@ def test_经引擎跑的节点_记下的账真的落了库(monkeypatch) -> None:
         assert events[0].operation == "workflow_llm"
 
 
+def test_失败的节点_花出去的钱照样记在账上(monkeypatch) -> None:
+    """引擎只在节点成功时提交它的会话 —— 失败节点半途 flush 的东西不该留下。**但账不是那种东西。**
+
+    JSON 修复两轮都不合格:两次付费调用已经发生,节点失败、会话回滚,而账跟着调用方的事务走,
+    于是这两次调用在账上凭空消失。钱花出去了就要记下来,和调用方的事务成不成无关。
+    """
+    from app.db.models import ProviderUsageEvent
+    from app.domain.workflows.engine import execute_graph
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    calls: list[int] = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "不是 JSON"}}], "usage": {"prompt_tokens": 11, "completion_tokens": 7}},
+        )
+
+    _install_llm_transport(monkeypatch, ai_nodes, handler)
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db, name="LLM", vendor="openai-compatible", base_url="https://api.test", api_key="sk", model="m"
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.commit()
+        graph = {
+            "nodes": [
+                {
+                    "id": "llm",
+                    "type": "llm",
+                    "config": {"profile_id": profile.id, "prompt": "hi", "response_format": "json_object"},
+                }
+            ],
+            "edges": [],
+        }
+        with acting_as(db):
+            db.commit()
+            with pytest.raises(WorkflowDomainError):
+                execute_graph(graph, wf_id=workflow.id, entry_is_root=True)
+
+    assert len(calls) >= 2, "前提:修复轮也打出去了"
+    with SessionLocal() as db:
+        events = db.query(ProviderUsageEvent).filter_by(workspace_id=workspace_id).all()
+        assert len(events) == 1, "节点失败、会话回滚,两次付费调用的账跟着一起没了"
+        assert events[0].units["input_tokens"] == 11 * len(calls)
+
+
 def test_订阅授权那条路也会降级_而不是一个硬400(monkeypatch) -> None:
     """**同一个节点、同一份配置,两种连接不能两种行为。**
 

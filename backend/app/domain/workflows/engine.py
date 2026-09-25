@@ -290,9 +290,9 @@ def execute_graph(
                     raise WorkflowDomainError("wfErr_cancelled")
                 wf = node_db.get(Workflow, wf_id)
                 outputs = handler(node_db, wf, config)
-                # **节点跑完就是它的事务边界。** 记账跟着调用方的事务走(见 domain/usage.billable,
-                # 只 flush 不 commit),而这个会话此前用完就关 —— 关闭即回滚,LLM / 翻译节点在真实
-                # 运行里记下的每一笔账都没落库。只在成功时提交:失败节点半途 flush 的东西不该留下。
+                # **节点跑完就是它的事务边界。** 只在成功时提交:失败节点半途 flush 的东西不该留下。
+                # 账不在此列 —— 付过费的调用在调用方回滚之后由记账那一层补写(见 domain/usage
+                # 的 _settle_usage),这里不用为它破例。
                 node_db.commit()
                 return outputs
         finally:
