@@ -8,9 +8,20 @@ upstream engine and lets a single profile/API key serve image and video nodes.
 Official protocol (evolink-media-mcp):
 
 * local inputs -> ``files-api.evolink.ai/api/v1/files/upload/stream``;
-* submit -> ``/v1/images/generations`` or ``/v1/videos/generations``;
+* submit -> ``/v1/images/generations``, ``/v1/videos/generations`` or ``/v1/audios/generations``;
 * poll -> ``/v1/tasks/{task_id}``;
 * result URLs are short lived, so download them into Mosael immediately.
+
+Audio (Suno) — https://evolink.ai/docs/en/api-manual/audio-series/suno/suno-music-generation and its
+OpenAPI JSON, checked 2026-09-25. Suno has two modes and the adapter picks by what the user gave:
+
+* **simple** (only a description): ``prompt`` is the description (≤500 chars). Every other creative
+  field is accepted but ignored in this mode, the docs say — so we never send them there.
+* **custom** (lyrics, instrumental, negative prompt, title, vocal gender or duration given): ``style``
+  and ``title`` are required, ``prompt`` becomes the lyrics (optional when instrumental). The user's
+  description is what Suno calls the style; the title defaults to the description's first line.
+
+One generation returns **two tracks** (product page https://evolink.ai/suno); both land in the library.
 """
 
 from __future__ import annotations
@@ -22,6 +33,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.ai.audio_files import audio_suffix
 from app.ai.providers.contracts.generation import (
     FIRST_CLIP,
     FIRST_FRAME,
@@ -38,7 +50,9 @@ from app.ai.providers.contracts.generation import (
     metering_from_request,
     poll_until_ready,
     adapter_http_error,
+    categorized_http_error,
     source_url_values,
+    upstream_error,
 )
 from app.core.http_retry import RetryingClient
 from app.media.image_preview import browser_compatible_image
@@ -119,6 +133,98 @@ def build_video_payload(
     if audios:
         payload["audio_urls"] = audios
     return payload
+
+
+#: Suno 的人声性别:宿主写 female / male,Suno 收 f / m。
+_SUNO_GENDER = {"female": "f", "male": "m"}
+#: 自定义模式的曲名上限(文档:max 80)。
+_SUNO_TITLE_MAX = 80
+
+
+def _suno_custom_mode(request: GenerationRequest) -> bool:
+    """用户给了任何只有自定义模式才认的东西,就走自定义模式 —— 简单模式会把它们悄悄忽略掉。"""
+    parameters = request.parameters
+    return bool(
+        str(parameters.get("lyrics") or "").strip()
+        or parameters.get("instrumental") is True
+        or request.negative_prompt.strip()
+        or str(parameters.get("title") or "").strip()
+        or parameters.get("vocal_gender")
+        or parameters.get("duration_seconds") is not None
+    )
+
+
+def build_audio_payload(request: GenerationRequest) -> dict[str, Any]:
+    """宿主请求 → Suno 请求体(两种模式见文件头)。"""
+    payload: dict[str, Any] = {"model": request.model}
+    if not _suno_custom_mode(request):
+        payload["prompt"] = request.prompt
+        return payload
+    parameters = request.parameters
+    payload["custom_mode"] = True
+    description = request.prompt.strip()
+    payload["style"] = description
+    title = str(parameters.get("title") or "").strip() or (description.splitlines()[0] if description else "")
+    payload["title"] = title[:_SUNO_TITLE_MAX]
+    lyrics = str(parameters.get("lyrics") or "").strip()
+    if parameters.get("instrumental") is True:
+        payload["instrumental"] = True
+    if lyrics:
+        payload["prompt"] = lyrics
+    if request.negative_prompt.strip():
+        payload["negative_tags"] = request.negative_prompt.strip()
+    gender = _SUNO_GENDER.get(str(parameters.get("vocal_gender") or ""))
+    if gender:
+        payload["vocal_gender"] = gender
+    if parameters.get("duration_seconds") is not None:
+        payload["duration"] = int(parameters["duration_seconds"])
+    return payload
+
+
+def extract_audio_urls(payload: dict[str, Any]) -> list[str] | None:
+    """音频任务的终态:**先认 `results`**,那是任务查询接口写明的结果地址清单。
+
+    `result_data` 的形状文档里有两种说法(`songs[]` 与列表),只在 `results` 为空时兜底读它 ——
+    两处都读并合并的话,同一首歌若在两处给了不同的地址(播放流 / 成品),会被当成四首下载。
+    """
+    task = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    status = str(task.get("status") or "").lower()
+    if status in _FAILED_STATUSES:
+        _raise_task_error(task, status)
+    urls = [str(url) for url in (task.get("results") or []) if url]
+    if not urls:
+        data = task.get("result_data")
+        songs = data.get("songs") if isinstance(data, dict) else data
+        for song in songs or []:
+            if isinstance(song, dict) and song.get("audio_url"):
+                urls.append(str(song["audio_url"]))
+    urls = list(dict.fromkeys(urls))
+    if urls and status in ("completed", ""):
+        return urls
+    if status == "completed":
+        raise GenerationAdapterError("providerErr_noResultUrl", vendor="Evolink")
+    return None
+
+
+#: 任务失败时 `error.code` 的归类(文档 Error Codes Reference)。
+_TASK_ERROR_CATEGORY = {
+    "content_policy_violation": "content_blocked",
+    "invalid_parameters": "invalid_params",
+    "quota_exceeded": "balance",
+    "resource_exhausted": "rate_limited",
+    "service_unavailable": "unavailable",
+    "service_error": "unavailable",
+    "generation_timeout": "unavailable",
+}
+
+
+def _raise_task_error(task: dict[str, Any], status: str) -> None:
+    error = task.get("error")
+    if isinstance(error, dict):
+        code = str(error.get("code") or "")
+        detail = error.get("message") or code or status
+        raise upstream_error("Evolink", _TASK_ERROR_CATEGORY.get(code), detail)
+    raise GenerationAdapterError("providerErr_generationFailed", vendor="Evolink", detail=error or status)
 
 
 def extract_result_urls(payload: dict[str, Any]) -> list[str] | None:
@@ -234,7 +340,9 @@ def download_results(urls: list[str], output_dir: Path, kind: str) -> list[Path]
     for index, url in enumerate(urls, start=1):
         staged = output_dir / f"generated-{index}.download"
         content_type = download_to_path(url, staged, timeout=180)
-        target = output_dir / f"generated-{index}{_suffix(url, kind, content_type)}"
+        # 音频的扩展名按音频的规矩定(mp4 容器里的音频记成 m4a,见 adapters/audio_files)。
+        suffix = audio_suffix(url, content_type) if kind == "audio" else _suffix(url, kind, content_type)
+        target = output_dir / f"generated-{index}{suffix}"
         staged.replace(target)
         targets.append(target)
     return targets
@@ -250,11 +358,14 @@ class EvolinkGenerationAdapter(GenerationAdapter):
     _SURFACE_BY_KIND = {
         "image": ("size", "num_images"),
         "video": ("duration_seconds", "resolution", "aspect_ratio", "generate_audio"),
+        # Suno 的请求体按「给了什么」选模式,不看模型名;每一格都是给了才发。
+        "audio": ("lyrics", "instrumental", "title", "vocal_gender", "duration_seconds"),
     }
     surface_depends_on_model = False
+    _PATH_BY_KIND = {"image": "images", "video": "videos", "audio": "audios"}
 
     def __init__(self, media_kind: str):
-        if media_kind not in {"image", "video"}:
+        if media_kind not in self._SURFACE_BY_KIND:
             raise ValueError(f"unsupported Evolink generation kind: {media_kind}")
         self.media_kind = media_kind
 
@@ -268,6 +379,9 @@ class EvolinkGenerationAdapter(GenerationAdapter):
         # 最高 4K。每个模型自己的更严限制由描述符在提交前拦,这里只是兜底。
         if not request.prompt.strip():
             raise GenerationAdapterError("providerErr_promptEmpty")
+        if request.kind == "audio":
+            # Suno 的每项上限(描述、歌词、时长)按型号不同,由描述符在提交前拦。
+            return
         if request.kind == "image":
             count = int(request.parameters.get("num_images", 1))
             if not 1 <= count <= 4:
@@ -286,15 +400,19 @@ class EvolinkGenerationAdapter(GenerationAdapter):
         if request.kind != self.media_kind:
             raise GenerationAdapterError(f"Evolink {self.media_kind} adapter received a {request.kind} request")
         try:
-            media = collect_media_urls(request, context)
-            payload = (
-                build_image_payload(request, media["image_urls"])
-                if self.media_kind == "image"
-                else build_video_payload(
-                    request, media["image_urls"], media.get("video_urls"), media.get("audio_urls")
+            if self.media_kind == "audio":
+                # Suno 不收任何输入素材(文档里没有参考音频 / 续写的字段)。
+                payload = build_audio_payload(request)
+            else:
+                media = collect_media_urls(request, context)
+                payload = (
+                    build_image_payload(request, media["image_urls"])
+                    if self.media_kind == "image"
+                    else build_video_payload(
+                        request, media["image_urls"], media.get("video_urls"), media.get("audio_urls")
+                    )
                 )
-            )
-            path = "/images/generations" if self.media_kind == "image" else "/videos/generations"
+            path = f"/{self._PATH_BY_KIND[self.media_kind]}/generations"
             with self._client(context) as client:
                 response = client.post(path, json=payload)
                 response.raise_for_status()
@@ -303,6 +421,8 @@ class EvolinkGenerationAdapter(GenerationAdapter):
                     raise GenerationAdapterError("providerErr_noTaskIdDetail", vendor="Evolink", detail=str(response.json())[:200])
                 return self._collect(client, f"/tasks/{task_id}", request, output_dir)
         except httpx.HTTPError as exc:
+            if self.media_kind == "audio":
+                raise categorized_http_error("Evolink", exc, context.api_key) from exc
             raise adapter_http_error("Evolink", exc, context.api_key) from exc
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
@@ -321,7 +441,7 @@ class EvolinkGenerationAdapter(GenerationAdapter):
     def _collect(self, client: RetryingClient, poll_path: str, request: GenerationRequest, output_dir: Path) -> GenerationResult:
         """提交之后的那一半。`generate` 和 `resume` 共用。"""
         urls, terminal = poll_until_ready(
-            client, poll_path, extract_result_urls,
+            client, poll_path, extract_audio_urls if self.media_kind == "audio" else extract_result_urls,
             interval=POLL_INTERVAL_SECONDS,
             vendor="Evolink",
         )

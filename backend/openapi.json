@@ -22867,13 +22867,13 @@
           },
           "kind": {
             "type": "string",
-            "pattern": "^(image|video)$",
+            "pattern": "^(image|video|audio)$",
             "title": "Kind"
           },
           "prompt": {
             "type": "string",
-            "minLength": 1,
-            "title": "Prompt"
+            "title": "Prompt",
+            "default": ""
           },
           "negative_prompt": {
             "type": "string",
@@ -22899,8 +22899,7 @@
           "workspace_id",
           "provider",
           "model",
-          "kind",
-          "prompt"
+          "kind"
         ],
         "title": "GenerationCreate"
       },
@@ -23141,7 +23140,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^(image|video)$"
+                "pattern": "^(image|video|audio)$"
               },
               {
                 "type": "null"
@@ -23309,7 +23308,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^(image|video)$"
+                "pattern": "^(image|video|audio)$"
               },
               {
                 "type": "null"

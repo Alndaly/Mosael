@@ -1,4 +1,4 @@
-"""出图、出片、念字、做播客 —— 花的是供应商的钱,所以都要先开卡。
+"""出图、出片、出音乐/音效、念字、做播客 —— 花的是供应商的钱,所以都要先开卡。
 
 它们**不自己实现生成**:都汇进 create_generation_job / voices 那两条漏斗。"""
 
@@ -17,19 +17,17 @@ def _asked_for(payload: dict[str, Any]) -> str:
     return str(payload.get("prompt") or payload.get("text") or payload.get("topic") or "")[:80]
 
 
-def _validate_generate_image(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
-    if not str(payload.get("prompt") or payload.get("text") or "").strip():
-        raise ConfirmationError("Generation requires a prompt")
+#: 走生成漏斗(create_generation_job)的那三个工具各自生成哪一种。此前 image / video 两个执行体
+#: 各抄一份、靠 `"image" if tool == "generate_image" else "video"` 判 —— 多一种就会被判成视频。
+_GENERATION_KIND_BY_TOOL = {"generate_image": "image", "generate_video": "video", "generate_sound": "audio"}
 
-def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
-    return "confirm_generateImage", {"asked": _asked_for(payload)}
 
-def _execute_generate_image(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import parse_source_assets
     from app.domain.generation.runner import start_generation_thread
-    kind = "image" if confirmation.tool == "generate_image" else "video"
+    kind = _GENERATION_KIND_BY_TOOL[confirmation.tool]
     generation, job = create_generation_job(
         db,
         workspace_id=confirmation.workspace_id,
@@ -40,13 +38,21 @@ def _execute_generate_image(db: Session, confirmation: Any, actor: str | None) -
         provider_profile_id=str(payload.get("provider_profile_id", "")).strip() or None,
         model=str(payload.get("model", "")),
         kind=kind,
-        prompt=str(payload["prompt"]),
+        prompt=str(payload.get("prompt") or ""),
         negative_prompt=str(payload.get("negative_prompt", "")),
         parameters=dict(payload.get("parameters") or {}),
         source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
     )
     start_generation_thread(generation.id)
     return {"job_id": job.id, "generation_id": generation.id}
+
+
+def _validate_generate_image(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    if not str(payload.get("prompt") or payload.get("text") or "").strip():
+        raise ConfirmationError("Generation requires a prompt")
+
+def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_generateImage", {"asked": _asked_for(payload)}
 
 def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
@@ -55,29 +61,20 @@ def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, 
 def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateVideo", {"asked": _asked_for(payload)}
 
-def _execute_generate_video(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    payload = confirmation.payload
-    from app.domain.generation import create_generation_job
-    from app.domain.generation.operations import parse_source_assets
-    from app.domain.generation.runner import start_generation_thread
-    kind = "image" if confirmation.tool == "generate_image" else "video"
-    generation, job = create_generation_job(
-        db,
-        workspace_id=confirmation.workspace_id,
-        session_id=None,
-        project_id=payload.get("project_id"),
-        created_by=actor,
-        provider=str(payload.get("provider", "")),
-        provider_profile_id=str(payload.get("provider_profile_id", "")).strip() or None,
-        model=str(payload.get("model", "")),
-        kind=kind,
-        prompt=str(payload["prompt"]),
-        negative_prompt=str(payload.get("negative_prompt", "")),
-        parameters=dict(payload.get("parameters") or {}),
-        source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
-    )
-    start_generation_thread(generation.id)
-    return {"job_id": job.id, "generation_id": generation.id}
+def _validate_generate_sound(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
+    # 文字规矩按模型走(只给歌词、给视频配声什么字都不给都合法),由生成漏斗按描述符判;
+    # 这里只拦「什么都没给」—— 连一段要配声的视频都没有。
+    parameters = payload.get("parameters") or {}
+    if not (
+        str(payload.get("prompt") or "").strip()
+        or str(parameters.get("lyrics") or "").strip()
+        or payload.get("source_assets")
+    ):
+        raise ConfirmationError("Generation requires a prompt, lyrics or a source asset")
+
+def _summarize_generate_sound(db: Session, payload: dict[str, Any]) -> Summary:
+    asked = _asked_for(payload) or str((payload.get("parameters") or {}).get("lyrics") or "")[:80]
+    return "confirm_generateSound", {"asked": asked}
 
 def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     if not str(payload.get("prompt") or payload.get("text") or "").strip():
@@ -160,7 +157,7 @@ confirmable_tool(ConfirmableTool(
     permission="ai-cost",
     cost="ai",
     summarize=_summarize_generate_image,
-    execute=_execute_generate_image,
+    execute=_execute_generation,
     validate=_validate_generate_image,
 ))
 
@@ -170,8 +167,18 @@ confirmable_tool(ConfirmableTool(
     permission="ai-cost",
     cost="ai",
     summarize=_summarize_generate_video,
-    execute=_execute_generate_video,
+    execute=_execute_generation,
     validate=_validate_generate_video,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="generate_sound",
+    permission="ai-cost",
+    cost="ai",
+    summarize=_summarize_generate_sound,
+    execute=_execute_generation,
+    validate=_validate_generate_sound,
 ))
 
 

@@ -14,7 +14,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-KNOWN_CAPABILITY_IDS = ("chat", "image", "video", "tts", "podcast")
+#: `audio` 是**音频生成**(音乐、BGM、歌曲、音效、给视频配声),和 `tts`(念一段字)是两种能力 ——
+#: 同一家常常两样都有(百炼、火山),而它们的模型、参数、价目都不相通(见 ADR 0022)。
+KNOWN_CAPABILITY_IDS = ("chat", "image", "video", "audio", "tts", "podcast")
 KNOWN_AUTH_TYPES = ("oauth", "api_key")
 KNOWN_FIELD_STORAGES = ("api_key", "base_url", "default_model", "extra")
 
@@ -128,8 +130,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "base_url": "https://dashscope.aliyuncs.com",
         # 百炼同时提供对话与向量嵌入(compatible-mode 端点),此前只写了 image,于是同一把
         # DashScope Key 想配对话还得再建一个「OpenAI 兼容端点」档案 —— 而它明明就是这一家。
-        "capabilities": "对话与向量嵌入(compatible-mode 端点)、图像生成(qwen-image)、视频生成(万相)、语音合成(qwen-tts)。同一把 DashScope Key。",
-        "capability_ids": ["chat", "image", "video", "tts"],
+        "capabilities": "对话与向量嵌入(compatible-mode 端点)、图像生成(qwen-image)、视频生成(万相)、音乐与音效生成(Fun-Music、AudioGen,仅北京地域)、语音合成(qwen-tts)。同一把 DashScope Key。",
+        "capability_ids": ["chat", "image", "video", "audio", "tts"],
         "fields": [
             {
                 "key": "api_key",
@@ -248,8 +250,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "minimax": {
         "label": "MiniMax",
         "base_url": "https://api.minimaxi.com/v1",
-        "capabilities": "对话/视觉理解,以及海螺(Hailuo)视频生成。图像与语音需等对应 Adapter 接入。",
-        "capability_ids": ["chat", "video"],
+        "capabilities": "对话/视觉理解、海螺(Hailuo)视频生成、音乐生成(2026-08-20 起只对已付费的老用户开放)。图像与语音需等对应 Adapter 接入。",
+        "capability_ids": ["chat", "video", "audio"],
         "fields": [
             {
                 "key": "api_key",
@@ -363,6 +365,33 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "volcano-music": {
+        "label": "火山引擎 AI 音乐生成",
+        "base_url": "https://open.volcengineapi.com",
+        # 第四个火山配置,同样不能和前三个合并:音乐生成属于「音视频理解与处理」那个产品
+        # (服务名 imagination),**只认账号级 AK/SK 签名** —— 方舟 Key、语音 Key、播客 Token 都不行。
+        # 只对企业认证账号开放(文档 https://www.volcengine.com/docs/84992/1404661)。
+        "capabilities": "人声歌曲与纯音乐 / BGM 生成(按秒后付费或资源包,需企业认证账号的 AK/SK)",
+        "capability_ids": ["audio"],
+        "fields": [
+            {
+                "key": "api_key",
+                "label": "Access Key ID (AK)",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+                "hint": "火山引擎账号的 AK(访问控制 → API 访问密钥),子账号需要「智能美化特效」权限。",
+            },
+            {
+                "key": "sk",
+                "label": "Secret Access Key (SK)",
+                "storage": "extra",
+                "secret": True,
+                "required": True,
+                "hint": "与 AK 配对的 SK。只用来给请求签名,不会发给对面。",
+            },
+        ],
+    },
     "openai-compatible": {
         "label": "OpenAI 兼容端点",
         "base_url": "",
@@ -394,8 +423,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "google": {
         "label": "Google (Veo/Gemini)",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
-        "capabilities": "视频生成(Veo)。Gemini/Imagen/Embedding 待对应 Adapter 接入后再开放。",
-        "capability_ids": ["video"],
+        "capabilities": "视频生成(Veo)与音乐生成(Lyria 3 / 3.5)。Gemini/Imagen/Embedding 待对应 Adapter 接入后再开放。",
+        "capability_ids": ["video", "audio"],
         "fields": [
             {
                 "key": "api_key",
@@ -422,8 +451,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "label": "Evolink AI",
         "base_url": "https://api.evolink.ai/v1",
         "health_path": "/models",
-        "capabilities": "统一图像/视频生成网关：Seedance、Kling、Veo、Hailuo、WAN、Sora、GPT Image、Gemini、Seedream 等共用一把 Key。",
-        "capability_ids": ["image", "video"],
+        "capabilities": "统一图像/视频/音乐生成网关：Seedance、Kling、Veo、Hailuo、WAN、Sora、GPT Image、Gemini、Seedream、Suno 等共用一把 Key。",
+        "capability_ids": ["image", "video", "audio"],
         "fields": [
             {
                 "key": "api_key",
@@ -501,8 +530,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "kuaishou": {
         "label": "快手 (Kling)",
         "base_url": "https://api.klingai.com",
-        "capabilities": "视频与图像生成(可灵 Kling)",
-        "capability_ids": ["video"],
+        "capabilities": "视频生成与音效生成(可灵 Kling:文生音效、视频生音效)",
+        "capability_ids": ["video", "audio"],
         "fields": [
             {
                 "key": "api_key",

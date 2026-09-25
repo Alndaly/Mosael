@@ -67,8 +67,10 @@ class GenerationCreate(ApiModel):
     provider_profile_id: str | None = None
     provider: str = Field(min_length=1, max_length=80)
     model: str = Field(min_length=1, max_length=120)
-    kind: str = Field(pattern="^(image|video)$")
-    prompt: str = Field(min_length=1)
+    kind: str = Field(pattern="^(image|video|audio)$")
+    #: 可以为空:音频只给歌词、给视频配声什么字都不给都是合法的。「图像 / 视频要提示词」这类按种类、
+    #: 按模型的规矩在提交校验里判(operations.validate_text_inputs),同样回 422。
+    prompt: str = ""
     negative_prompt: str = Field(default="", max_length=4000)
     parameters: dict = Field(default_factory=dict)
     source_assets: list[SourceAssetRef] = Field(default_factory=list)
@@ -127,7 +129,7 @@ class GenerationSessionCreate(ApiModel):
     title: str = Field(default="新生成", max_length=200)
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
-    kind: str | None = Field(default=None, pattern="^(image|video)$")
+    kind: str | None = Field(default=None, pattern="^(image|video|audio)$")
 
 
 class GenerationSessionUpdate(ApiModel):
@@ -136,7 +138,7 @@ class GenerationSessionUpdate(ApiModel):
     group_id: str | None = None
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
-    kind: str | None = Field(default=None, pattern="^(image|video)$")
+    kind: str | None = Field(default=None, pattern="^(image|video|audio)$")
 
 
 class GenerationSessionOut(OrmModel):

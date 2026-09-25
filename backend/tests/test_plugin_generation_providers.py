@@ -23,6 +23,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import (
+    Asset,
     GeneratedAsset,
     GenerationJob,
     Job,
@@ -62,7 +63,18 @@ MODELS: list[dict[str, Any]] = [
         "prompt_dialect": "sd-tags",
     },
     {"id": "clip.json", "label": "clip", "kind": "video", "parameters": {"4.length": {"type": "integer", "default": 81}}},
-    {"id": "song", "label": "song", "kind": "audio"},
+    # 音频模型(ADR 0022):歌词、纯音乐是宿主有控件的词汇,时长走宿主的时长控件。
+    {
+        "id": "song",
+        "label": "song",
+        "kind": "audio",
+        "modes": ["text-to-music", "lyrics-to-song"],
+        "parameters": {
+            "lyrics": {"type": "string", "x-multiline": True},
+            "instrumental": {"type": "boolean", "default": False},
+            "duration_seconds": {"type": "integer", "minimum": 5, "maximum": 60},
+        },
+    },
     {"bad": True},
     {"id": "", "kind": "image"},
 ]
@@ -111,6 +123,17 @@ if prompt == "cancel-me":
     sys.exit(0)
 if prompt == "ignore-cancel":
     time.sleep(60)
+if payload.get("kind") == "audio":
+    # 一秒钟的静音 wav —— 宿主要能按音频登记它(探测时长、画波形)。
+    import wave
+    out = Path(os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]) / "song.wav"
+    with wave.open(str(out), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(8000)
+        handle.writeframes(b"\x00\x00" * 8000)
+    emit({"ok": True, "output": {"outputs": [{"path": "song.wav"}], "raw": {"job": "t-1"}}})
+    sys.exit(0)
 out = Path(os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]) / "out.png"
 out.write_bytes(Path(inputs[0]["path"]).read_bytes() if inputs else PNG)
 emit({"ok": True, "output": {"outputs": [{"path": "out.png"}], "usage": {"images": 1}, "raw": {"job": "t-1"}}})
@@ -303,11 +326,20 @@ def test_接上之后_插件的模型出现在选择器里(plugged) -> None:
     }
     assert caps["parameter_schema"]["3.sampler_name"]["x-advanced"] is True
     assert "seed" not in caps["parameter_schema"] and "size" not in caps["parameter_schema"]
-    # 视频照样进;音频宿主还没接,坏条目丢掉
+    # 视频、音频照样进(音频是生成的第三种,ADR 0022);坏条目丢掉
     assert [one["model"] for one in _options(client, "video")] == ["clip.json"]
+    [song] = _options(client, "audio")
+    assert song["model"] == "song" and song["adapter_available"] is True
+    song_caps = song["capabilities"]
+    assert song_caps["parameter_keys"] == ["lyrics", "instrumental", "duration_seconds"]
+    # 歌词、纯音乐用宿主的控件(不进 parameter_schema);纯音乐是个布尔开关,默认值照插件说的
+    assert "parameter_schema" not in song_caps
+    assert song_caps["boolean_parameters"] == ["instrumental"] and song_caps["default_instrumental"] is False
+    assert song_caps["min_duration_seconds"] == 5 and song_caps["max_duration_seconds"] == 60
+    assert song_caps["modes"] == ["text-to-music", "lyrics-to-song"]
     status = client.get("/api/plugins").json()
     instance = next(one for one in status if one["id"] == PACKAGE_ID)["instances"][0]
-    assert instance["capability_status"]["generation"]["models"] == 2
+    assert instance["capability_status"]["generation"]["models"] == 3
     assert instance["capability_status"]["generation"]["error"] == ""
 
 
@@ -328,7 +360,7 @@ def test_目录刷不出来_记下原因且不丢已有的模型(plugged) -> Non
     assert changed.status_code == 200, changed.text
     status = changed.json()["capability_status"]["generation"]
     assert "连不上服务器" in status["error"]
-    assert status["models"] == 2, "上一次成功的数不该被失败抹掉"
+    assert status["models"] == 3, "上一次成功的数不该被失败抹掉"
     # ComfyUI 没开不等于它的工作流都没了:模型还在
     assert [one["model"] for one in _options(client, "image")] == ["flows/portrait.json"]
 
@@ -401,6 +433,62 @@ def test_一次生成走普通的生成执行器(plugged) -> None:
         ).first()
         assert invocation.status == "succeeded"
         assert invocation.input["inputs"] == ["reference_image"], "调用记录里不留一次性的暂存路径"
+
+
+def test_插件的音频模型走同一个生成执行器_产出登记成音频素材(plugged) -> None:
+    """音频是生成的第三种(ADR 0022):插件声明一个 kind=audio 的模型,就和图像一样经普通的
+    生成执行器跑完 —— 产出按**音频**进素材库(时长在 media_info 里),用量按「首」和探测到的
+    真实秒数记。"""
+    client, instance_id = plugged
+    workspace = client.post("/api/workspaces", json={"name": "生成"}).json()["id"]
+    response = client.post(
+        "/api/generation/jobs",
+        json={
+            "workspace_id": workspace,
+            "provider_profile_id": _profile_id(instance_id),
+            "provider": VENDOR,
+            "model": "song",
+            "kind": "audio",
+            "prompt": "",
+            "parameters": {"lyrics": "[Verse]\n啦啦啦", "instrumental": False},
+        },
+    )
+    assert response.status_code == 200, response.text
+    job_id = response.json()["job"]["id"]
+    assert wait_status(client, job_id, timeout=30) == "succeeded"
+    [request] = _requests(_data_dir())
+    sent = request["input"]
+    assert sent["kind"] == "audio" and sent["parameters"] == {"lyrics": "[Verse]\n啦啦啦", "instrumental": False}
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        [asset_id] = job.result["asset_ids"]
+        asset = db.get(Asset, asset_id)
+        assert asset.kind == "audio"
+        assert asset.media_info["duration"] == pytest.approx(1.0, abs=0.05)
+        usage = db.scalars(select(ProviderUsageEvent).where(ProviderUsageEvent.job_id == job_id)).one()
+        assert usage.capability == "audio"
+        assert usage.units["audios"] == 1
+        assert usage.units["audio_seconds"] == pytest.approx(1.0, abs=0.05)
+        assert usage.units["lyrics_characters"] == len("[Verse]\n啦啦啦")
+
+
+def test_插件的音频模型_纯音乐和歌词不能同时给(plugged) -> None:
+    client, instance_id = plugged
+    workspace = client.post("/api/workspaces", json={"name": "生成"}).json()["id"]
+    response = client.post(
+        "/api/generation/jobs",
+        json={
+            "workspace_id": workspace,
+            "provider_profile_id": _profile_id(instance_id),
+            "provider": VENDOR,
+            "model": "song",
+            "kind": "audio",
+            "prompt": "钢琴",
+            "parameters": {"lyrics": "啦啦啦", "instrumental": True},
+        },
+    )
+    assert response.status_code == 422
+    assert "纯音乐" in response.json()["detail"]
 
 
 def test_参数按插件的声明校验(plugged) -> None:

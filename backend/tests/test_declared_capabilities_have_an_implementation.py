@@ -45,6 +45,6 @@ def test_百炼四档齐全() -> None:
     """点名钉住这一家:它是"同一把 Key 挂着四种能力"的典型,少写一样用户就得多建一个档案。"""
     alibaba = provider_definition("alibaba")
     assert alibaba is not None
-    assert alibaba.capability_ids == ("chat", "image", "video", "tts")
-    for capability in ("image", "video", "tts"):
+    assert alibaba.capability_ids == ("chat", "image", "video", "audio", "tts")
+    for capability in ("image", "video", "audio", "tts"):
         assert has_capability_implementation("alibaba", capability), f"百炼的 {capability} 没接上"

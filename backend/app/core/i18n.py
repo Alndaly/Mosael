@@ -1873,6 +1873,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirm_generateImage": {"zh": "生成图片: {asked}", "en": "Generate an image: {asked}"},
     "confirm_generateVideo": {"zh": "生成视频: {asked}", "en": "Generate a video: {asked}"},
     "confirm_generateAudio": {"zh": "生成音频: {asked}", "en": "Generate audio: {asked}"},
+    "confirm_generateSound": {"zh": "生成音乐/音效: {asked}", "en": "Generate music / sound: {asked}"},
     "confirm_generatePodcast": {"zh": "生成播客: {asked}", "en": "Generate a podcast: {asked}"},
     "punct_listSep": {"zh": "、", "en": ", "},
     "confirm_createWorkflow": {"zh": "创建工作流「{name}」({nodes} 个节点){warning}", "en": "Create workflow \u300c{name}\u300d ({nodes} nodes){warning}"},
@@ -2268,6 +2269,39 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{vendor} could not fetch the first-frame image: {detail}",
     },
     "providerErr_generationFailed": {"zh": "{vendor} 生成失败:{detail}", "en": "{vendor} generation failed: {detail}"},
+    "providerErr_upstreamAuth": {
+        "zh": "{vendor} 不认这把密钥,请到设置里检查连接的凭据:{detail}",
+        "en": "{vendor} rejected the credentials; check the connection in Settings: {detail}",
+    },
+    "providerErr_upstreamBalance": {
+        "zh": "{vendor} 账户余额或额度不足,充值后再试:{detail}",
+        "en": "{vendor} account is out of balance or quota; top up and try again: {detail}",
+    },
+    "providerErr_upstreamRateLimited": {
+        "zh": "{vendor} 限流了,等一会儿再试:{detail}",
+        "en": "{vendor} is rate limiting requests; try again in a moment: {detail}",
+    },
+    "providerErr_upstreamContentBlocked": {
+        "zh": "{vendor} 的内容审核拦下了这次请求,换个说法再试:{detail}",
+        "en": "{vendor} content moderation blocked this request; rephrase and try again: {detail}",
+    },
+    "providerErr_upstreamInvalidParams": {
+        "zh": "{vendor} 说参数不对:{detail}",
+        "en": "{vendor} rejected the parameters: {detail}",
+    },
+    "providerErr_upstreamNotEntitled": {
+        "zh": "{vendor} 账号没有开通这项服务(或这个模型):{detail}",
+        "en": "{vendor} account is not entitled to this service or model: {detail}",
+    },
+    "providerErr_upstreamUnavailable": {
+        "zh": "{vendor} 服务暂时不可用,稍后再试:{detail}",
+        "en": "{vendor} is temporarily unavailable; try again later: {detail}",
+    },
+    "providerErr_noAudioData": {"zh": "{vendor} 没有返回音频", "en": "{vendor} returned no audio"},
+    "providerErr_volcanoMusicKeysMissing": {
+        "zh": "火山引擎音乐生成需要账号的 AK 和 SK,请到设置里把这条连接补全",
+        "en": "Volcengine music generation needs the account's AK and SK; complete the connection in Settings",
+    },
     "providerErr_noTaskId": {"zh": "{vendor} 没有返回任务 id", "en": "{vendor} did not return a task ID"},
     "providerErr_noTaskIdDetail": {"zh": "{vendor} 没有返回任务 id:{detail}", "en": "{vendor} did not return a task ID: {detail}"},
     "providerErr_noResultUrl": {
@@ -2312,6 +2346,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Duration must be -1 (auto) or between {min} and {max} seconds",
     },
     "providerErr_resolutionEmpty": {"zh": "分辨率不能为空", "en": "Resolution cannot be empty"},
+    "providerErr_lyricsInvalid": {
+        "zh": "歌词必须是一段不超过 {max} 字的文字",
+        "en": "Lyrics must be text of at most {max} characters",
+    },
     "providerErr_resolutionChoices": {"zh": "分辨率只能是 {choices} 之一", "en": "Resolution must be one of {choices}"},
     "providerErr_unreadableInputImage": {"zh": "{vendor} 无法读取输入图片:{name}", "en": "{vendor} could not read the input image: {name}"},
     "providerErr_uploadFailed": {"zh": "{vendor} 素材上传失败:{detail}", "en": "{vendor} media upload failed: {detail}"},
@@ -3629,6 +3667,35 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "genErr_sourceMustBeVideo": {"zh": "{label}素材必须是视频", "en": "The {label} asset must be a video."},
     "genErr_sourceMustBeImage": {"zh": "{label}素材必须是图片", "en": "The {label} asset must be an image."},
+    "genErr_sourceMustBeAudio": {"zh": "{label}素材必须是音频", "en": "The {label} asset must be audio."},
+    "genErr_audioNeedsText": {
+        "zh": "{provider} · {model}:描述和歌词至少要给一段",
+        "en": "{provider} · {model}: give a description, lyrics, or both.",
+    },
+    "genErr_lyricsTooLong": {
+        "zh": "{provider} · {model}:歌词最多 {cap} 字,现在是 {count} 字",
+        "en": "{provider} · {model}: lyrics can be at most {cap} characters; these are {count}.",
+    },
+    "genErr_lyricsExcludesPrompt": {
+        "zh": "{provider} · {model}:歌词和描述只能给一段 —— 两段都给时这个模型只用歌词,描述会被丢掉",
+        "en": "{provider} · {model}: give either lyrics or a description, not both — this model would use the lyrics and drop the description.",
+    },
+    "genErr_instrumentalWithLyrics": {
+        "zh": "{provider} · {model}:选了纯音乐就不要再给歌词 —— 两者只能二选一",
+        "en": "{provider} · {model}: an instrumental track has no lyrics; clear one of the two.",
+    },
+    "genErr_instrumentalNeedsPrompt": {
+        "zh": "{provider} · {model}:纯音乐要写一段描述(风格、情绪、乐器……)",
+        "en": "{provider} · {model}: an instrumental track needs a description (style, mood, instruments…).",
+    },
+    "genErr_promptRequired": {
+        "zh": "{provider} · {model}:这个模型要写一段描述",
+        "en": "{provider} · {model}: this model needs a description.",
+    },
+    "genErr_lyricsRequired": {
+        "zh": "{provider} · {model}:这个模型要给歌词",
+        "en": "{provider} · {model}: this model needs lyrics.",
+    },
     "genErr_sourceNoLocalFile": {"zh": "{label}素材缺少本地文件", "en": "The {label} asset has no local file."},
     "genErr_sourceFileMissing": {"zh": "{label}素材文件不存在", "en": "The {label} asset's file is missing."},
     # 生成:提示词优化

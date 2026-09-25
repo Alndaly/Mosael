@@ -65,8 +65,9 @@ def infer_capabilities(vendor: str, model_id: str) -> list[str]:
     if not name:
         return []
     from app.domain.generation import builtin_models_for
+    from app.domain.generation.catalog import GENERATION_KINDS
 
-    for kind in ("image", "video"):
+    for kind in GENERATION_KINDS:
         if any(name == known.lower() for known in builtin_models_for(vendor, kind)):
             return [kind]
     for needles, capability in _CAPABILITY_HINTS.get(vendor, ()):

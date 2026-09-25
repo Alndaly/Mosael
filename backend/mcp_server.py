@@ -169,6 +169,7 @@ CONFIRMATION_TOOLS = frozenset(
         "generate_image",
         "generate_video",
         "generate_audio",
+        "generate_sound",
         "generate_podcast",
         "dub_subtitles",
         "create_workflow",
@@ -756,12 +757,13 @@ def list_provider_models(capability: str = "", surface: str = "") -> dict[str, A
     empty `models` list means different things per surface, so read the echoed `surface`
     before telling the user they have nothing configured.
 
-    `capability` filters to one of chat / image / video / tts / podcast; empty returns all of
-    them. **The LLM one is called "chat"** — there is no "text" or "llm" capability, and asking
-    for one costs a failed call. `tts` is voice synthesis, `podcast` is multi-speaker dialogue.
+    `capability` filters to one of chat / image / video / audio / tts / podcast; empty returns all
+    of them. **The LLM one is called "chat"** — there is no "text" or "llm" capability, and asking
+    for one costs a failed call. `audio` is music / sound-effect generation (generate_sound),
+    `tts` is voice synthesis, `podcast` is multi-speaker dialogue.
 
-    This answers "which models exist". For what an image or video model ACCEPTS — sizes,
-    durations, which source roles it takes — call list_generation_models instead.
+    This answers "which models exist". For what an image, video or audio model ACCEPTS — sizes,
+    durations, lyrics, which source roles it takes — call list_generation_models instead.
     """
     if surface and surface not in _SURFACES:
         raise ValueError(f"unknown surface {surface!r}; valid values are {list(_SURFACES)}")
@@ -798,14 +800,15 @@ def list_provider_models(capability: str = "", surface: str = "") -> dict[str, A
 
 @mcp.tool()
 def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
-    """List the AI generation engines available to generate_image / generate_video.
+    """List the AI generation engines available to generate_image / generate_video / generate_sound.
 
     Read-only, no confirmation. Returns what the user has actually configured — each entry
     is one connection plus one model on it (a ComfyUI entry's "model" is a saved workflow).
-    Call this before generate_image/generate_video when the user names a specific engine or
-    asks what is available. kind filters to "image" or "video"; empty returns both.
+    Call this before generate_image/generate_video/generate_sound when the user names a specific
+    engine or asks what is available. kind filters to "image", "video" or "audio" (music, songs,
+    background music, sound effects, soundtrack for a video); empty returns all of them.
     """
-    kinds = [kind] if kind in ("image", "video") else ["image", "video"]
+    kinds = [kind] if kind in _GENERATION_KINDS else list(_GENERATION_KINDS)
     out: list[dict[str, Any]] = []
     for one in kinds:
         for item in _get("/api/generation/options", {"kind": one}):
@@ -827,6 +830,11 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
                 }
             )
     return out
+
+
+#: 生成种类。和后端 domain/generation/catalog.GENERATION_KINDS 同一份含义;这里是 MCP 进程,
+#: 不 import 后端领域(它经 HTTP 说话),所以只列名字 —— 后端认不出的种类会在 /generation/options 上回 422。
+_GENERATION_KINDS = ("image", "video", "audio")
 
 
 #: 描述符里,某个参数键对应的**取值清单**放在哪一栏。参数名和取值清单不同名是历史形状
@@ -957,6 +965,59 @@ def generate_video(
 
 
 @mcp.tool()
+def generate_sound(
+    prompt: str = "",
+    lyrics: str = "",
+    model: str = "",
+    provider: str = "",
+    provider_profile_id: str = "",
+    workspace_id: str = "",
+    parameters: dict[str, Any] | None = None,
+    source_assets: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Confirmation required: generate a NEW music / sound asset — a song (with vocals), background
+    music, an instrumental, a sound effect, or a soundtrack/foley for an existing video.
+
+    prompt describes the sound: genre, mood, instruments, tempo, "cinematic whoosh", "rain on a tin
+    roof". lyrics are the words to sing, with [Verse] / [Chorus] tags; give lyrics only for songs.
+    For an instrumental track pass parameters={"instrumental": true} and no lyrics. Some models need
+    only lyrics, and video-to-audio models may need no text at all — the model's own rules come from
+    list_generation_models(kind="audio"); call it first, pick provider/model from it, and read its
+    parameters (duration_seconds, instrumental, vocal_gender, title …) and source rules. Passing a
+    key the model does not accept is rejected, so do not guess.
+
+    source_assets attaches inputs with the role each plays: {"asset_id": "...", "role":
+    "source_video"} is the video to score (video-to-audio); "reference_audio" is a track to follow
+    or cover; "reference_image" an image to turn into music. Leave provider/model empty only when
+    the configured audio-generation default should be used. The result lands in the media pool.
+
+    Do NOT use for spoken narration / voiceover / reading text aloud — use generate_audio for that;
+    do NOT use for two-host podcasts — use generate_podcast. Do NOT use to separate or denoise an
+    existing recording (separate_audio / denoise_audio).
+    """
+    merged = dict(parameters or {})
+    if lyrics.strip():
+        merged["lyrics"] = lyrics
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "generate_sound",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "prompt": prompt,
+                "provider": provider,
+                "provider_profile_id": provider_profile_id,
+                "model": model,
+                "parameters": merged,
+                "source_assets": source_assets or [],
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
 def generate_audio(
     text: str,
     engine: str = "",
@@ -970,7 +1031,8 @@ def generate_audio(
     generated audio. Requires the user's approval because it may spend AI
     budget; once approved the generated audio appears in the media pool. Leave engine/model empty only
     when the configured speech default should be used. Do NOT use for two-host podcast/dialogue
-    audio — use generate_podcast for that. Do NOT use for
+    audio — use generate_podcast for that. Do NOT use for music, songs, background music or
+    sound effects — use generate_sound. Do NOT use for
     analyzing existing audio/video assets — use analyze_asset.
     """
     confirmation = _post(

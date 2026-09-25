@@ -10,7 +10,7 @@ capability: chat / image / video / tts / podcast。"""
 #: 能设默认模型的那几种能力。它曾经和 providers.ALL_CAPABILITY_IDS 差一项(embedding),
 #: 而那一项在弹窗里没有格子、在模型行上却有标签 —— 有人照着错的那份抄过一次。当前产品没有
 #: embedding 消费者,两份因此重新对齐;别再让它们分叉。
-DEFAULTABLE_CAPABILITIES = ("chat", "image", "video", "tts", "podcast")
+DEFAULTABLE_CAPABILITIES = ("chat", "image", "video", "audio", "tts", "podcast")
 
 
 def get_row(db: Session, capability: str, user_id: str | None) -> ProviderDefault | None:

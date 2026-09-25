@@ -14,17 +14,14 @@ from __future__ import annotations
 
 from app.core.i18n import LocalizedError
 
-import datetime as dt
-import hashlib
-import hmac
 import logging
 
 import httpx
 
+from app.ai.providers.adapters.bytedance.volcano.openapi_sign import HOST, signed_headers
+
 logger = logging.getLogger(__name__)
 
-HOST = "open.volcengineapi.com"
-REGION = "cn-beijing"
 SERVICE = "speech_saas_prod"
 TIMEOUT_SECONDS = 15
 #: The families a voice can belong to. Each is queried separately — there is no "all" — and
@@ -36,54 +33,9 @@ class VolcOpenAPIError(LocalizedError, RuntimeError):
     """Raised when the OpenAPI refuses the request, carrying 火山's own message (as `detail`, key `volcErr_*`)."""
 
 
-def _sign(key: bytes, message: str) -> bytes:
-    return hmac.new(key, message.encode("utf-8"), hashlib.sha256).digest()
-
-
 def _signed_headers(ak: str, sk: str, query: str, body: bytes) -> dict[str, str]:
-    """Build 火山's SigV4-style Authorization header.
-
-    Chained derivation (date → region → service → request) means the signing key never
-    equals the secret, so a leaked signature does not leak the credential.
-    """
-    now = dt.datetime.now(dt.UTC)
-    x_date = now.strftime("%Y%m%dT%H%M%SZ")
-    short_date = x_date[:8]
-    payload_hash = hashlib.sha256(body).hexdigest()
-
-    signed_header_names = "host;x-content-sha256;x-date"
-    canonical_request = "\n".join(
-        [
-            "POST",
-            "/",
-            query,
-            f"host:{HOST}",
-            f"x-content-sha256:{payload_hash}",
-            f"x-date:{x_date}",
-            "",
-            signed_header_names,
-            payload_hash,
-        ]
-    )
-    scope = f"{short_date}/{REGION}/{SERVICE}/request"
-    string_to_sign = "\n".join(
-        ["HMAC-SHA256", x_date, scope, hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()]
-    )
-
-    signing_key = _sign(_sign(_sign(sk.encode("utf-8"), short_date), REGION), SERVICE)
-    signing_key = _sign(signing_key, "request")
-    signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
-
-    return {
-        "Host": HOST,
-        "Content-Type": "application/json",
-        "X-Date": x_date,
-        "X-Content-Sha256": payload_hash,
-        "Authorization": (
-            f"HMAC-SHA256 Credential={ak}/{scope}, "
-            f"SignedHeaders={signed_header_names}, Signature={signature}"
-        ),
-    }
+    """火山的签名住在 ai 层(音乐生成也用它,见 openapi_sign);这里只点名服务。"""
+    return signed_headers(ak, sk, query, body, service=SERVICE)
 
 
 def _error_message(payload: dict) -> str:

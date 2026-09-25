@@ -8141,7 +8141,10 @@ export interface components {
             model: string;
             /** Kind */
             kind: string;
-            /** Prompt */
+            /**
+             * Prompt
+             * @default
+             */
             prompt: string;
             /**
              * Negative Prompt

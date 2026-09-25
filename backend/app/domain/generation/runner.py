@@ -7,10 +7,15 @@ import time
 from pathlib import Path
 
 from app.ai.providers import (
+    DRIVING_AUDIO,
+    FIRST_CLIP,
     FIRST_FRAME,
     LAST_FRAME,
+    MASK,
+    REFERENCE_AUDIO,
     REFERENCE_IMAGE,
     REFERENCE_VIDEO,
+    SOURCE_VIDEO,
     GenerationRequest,
     GenerationResult,
     GenerationAdapterContext,
@@ -217,7 +222,10 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             #: 回执里放**一串**。收成单数的话,消费方拿到的永远只是第一张 —— 而这正是
             #: 多出来那几张此前消失的地方。
             job.result = {"asset_ids": asset_ids}
-            _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
+            _record_generation_usage(
+                db, generation, job, request, context, result, started, "succeeded",
+                measured_audio_seconds=_measured_seconds(assets) if generation.kind == "audio" else None,
+            )
             emit_job_event(db, job.id, "job.succeeded", {"asset_ids": asset_ids})
             db.commit()
             logger.info(
@@ -293,13 +301,39 @@ def _fail(db, job: Job, reason: Exception | str) -> None:
     logger.warning("generation job %s failed: %s", job.id, fields["error"])
 
 
-#: 每种角色收什么素材。参考视频收视频,其余收图片 —— 这一条是**校验**,不是描述:
-#: 把一段视频当首帧递上去,各家的报错五花八门(有的干脆生成出一片黑),不如在这里拦住。
+#: 每种角色收什么素材 —— 这一条是**校验**,不是描述:把一段视频当首帧递上去,各家的报错
+#: 五花八门(有的干脆生成出一片黑),不如在这里拦住。
+#:
+#: 此前这张表只写了四个角色,其余一律按「图片」查 —— 于是从素材库挂一段待编辑的视频、一段参考
+#: 音频,在这里被判成「必须是图片」。每个角色都要写,漏写的由 `expected_asset_kind` 当场报错。
 ROLE_ASSET_KIND = {
     FIRST_FRAME: "image",
     LAST_FRAME: "image",
     REFERENCE_IMAGE: "image",
     REFERENCE_VIDEO: "video",
+    REFERENCE_AUDIO: "audio",
+    SOURCE_VIDEO: "video",
+    DRIVING_AUDIO: "audio",
+    FIRST_CLIP: "video",
+    MASK: "image",
+}
+
+#: 同一个角色在不同的生成种类下收不同的素材。**续写**在视频那边接的是一段视频,在音频那边
+#: 接的是一段音频 —— 语义一样(产出以它开头、往下长),介质跟着产出走。
+ROLE_ASSET_KIND_BY_GENERATION = {
+    ("audio", FIRST_CLIP): "audio",
+}
+
+
+def expected_asset_kind(role: str, generation_kind: str) -> str:
+    """这一次生成里,这个角色该挂哪种素材。"""
+    return ROLE_ASSET_KIND_BY_GENERATION.get((generation_kind, role)) or ROLE_ASSET_KIND[role]
+
+
+_ASSET_KIND_ERRORS = {
+    "image": "genErr_sourceMustBeImage",
+    "video": "genErr_sourceMustBeVideo",
+    "audio": "genErr_sourceMustBeAudio",
 }
 
 #: 报错里那个词。写死「首帧」的话,尾帧缺文件时用户看到的是「首帧素材文件不存在」。
@@ -320,11 +354,9 @@ def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset,
         asset = db.get(Asset, str(entry.get("asset_id") or ""))
         if asset is None or asset.workspace_id != generation.workspace_id:
             raise GenerationRunError("genErr_sourceMissing", label=label)
-        expected = ROLE_ASSET_KIND.get(role, "image")
+        expected = expected_asset_kind(role, generation.kind)
         if asset.kind != expected:
-            raise GenerationRunError(
-                "genErr_sourceMustBeVideo" if expected == "video" else "genErr_sourceMustBeImage", label=label
-            )
+            raise GenerationRunError(_ASSET_KIND_ERRORS[expected], label=label)
         if not asset.file_key:
             raise GenerationRunError("genErr_sourceNoLocalFile", label=label)
         path = resolve_key(asset.file_key)
@@ -342,6 +374,18 @@ def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset,
     return tuple(sources)
 
 
+def _measured_seconds(assets: list[Asset]) -> float | None:
+    """产出的**真实**时长之和(探测出来的,见 assets.importer)。有一份量不出就不报 —— 少算一段
+    比按零秒记更糟:按秒计价的规则会把它当成免费。"""
+    total = 0.0
+    for asset in assets:
+        duration = (asset.media_info or {}).get("duration")
+        if not isinstance(duration, (int, float)) or isinstance(duration, bool) or duration <= 0:
+            return None
+        total += float(duration)
+    return round(total, 3)
+
+
 def _record_generation_usage(
     db,
     generation: GenerationJob,
@@ -351,6 +395,8 @@ def _record_generation_usage(
     result: GenerationResult | None,
     started: float,
     status: str,
+    *,
+    measured_audio_seconds: float | None = None,
 ) -> None:
     units = dict(result.usage if result is not None else {})
     if "requests" not in units:
@@ -366,6 +412,16 @@ def _record_generation_usage(
         units.setdefault("resolution", str(request.parameters.get("resolution", "720p")))
         units.setdefault("aspect_ratio", str(request.parameters.get("aspect_ratio", "")))
         units.setdefault("source_images", len(request.sources))
+    if request.kind == "audio":
+        # 按条:产出了几份就是几份(一次出两首的那家,两首都在库里)。按秒:供应商回报了计费时长
+        # 的以它为准(Adapter 已写进 usage),没报的用探测到的真实时长 —— 请求里的时长只是期望,
+        # 多数音乐模型按歌词长短自己定曲长。
+        if result is not None:
+            # 交回了几首就是几首 —— Adapter 在请求时只知道「这是一次」,不知道对面会交回两首。
+            units["audios"] = len(result.output_paths)
+        units.setdefault("audios", 1)
+        if measured_audio_seconds is not None:
+            units.setdefault("audio_seconds", measured_audio_seconds)
     with billable(
         db,
         capability=generation.kind,

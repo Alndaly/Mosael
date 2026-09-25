@@ -1,4 +1,4 @@
-"""图像与视频生成 Adapter 的能力契约。
+"""图像、视频与音频生成 Adapter 的能力契约。
 
 Adapter 把已经通过领域校验的请求转换为本地媒体文件；素材登记、任务状态和计量仍由
 domain runner 持有。调用方只依赖本 Module 的 Interface，不依赖具体供应商 Implementation。
@@ -27,6 +27,9 @@ from app.core.i18n import LocalizedError
 from app.core.token_estimate import estimate_text_tokens
 
 MAX_NUM_IMAGES = 4
+#: 歌词这一栏的形状兜底(字符数)。每个模型自己的上限在描述符的 `max_lyrics_chars` 里,由提交前
+#: 的统一校验拦;这里只防一段明显不是歌词的东西(整本书)被直接发出去。
+MAX_LYRICS_CHARS = 20_000
 
 
 class GenerationAdapterError(LocalizedError, RuntimeError):
@@ -136,7 +139,7 @@ class SourceAsset:
 
 @dataclass(frozen=True)
 class GenerationRequest:
-    kind: str  # "image" | "video"
+    kind: str  # "image" | "video" | "audio"(见 domain/generation/catalog.GENERATION_KINDS)
     model: str
     prompt: str
     negative_prompt: str = ""
@@ -227,7 +230,9 @@ class GenerationAdapter(ABC):
         bounds before the runner reaches this seam; this method only rejects malformed values
         so direct/legacy callers cannot submit nonsense.
         """
-        if not request.prompt.strip():
+        # 音频的文字规矩按模型走(只给歌词、给视频配声什么字都不给都是合法的),由提交前的
+        # domain 校验(operations.validate_text_inputs)按描述符判;这里只管其余种类。
+        if request.kind != "audio" and not request.prompt.strip():
             raise GenerationAdapterError("providerErr_promptEmpty")
         if request.kind == "image":
             num_images = int(request.parameters.get("num_images", 1))
@@ -239,6 +244,15 @@ class GenerationAdapter(ABC):
                 raise GenerationAdapterError("providerErr_durationInvalid")
             if "resolution" in request.parameters and not str(request.parameters["resolution"]).strip():
                 raise GenerationAdapterError("providerErr_resolutionEmpty")
+        if request.kind == "audio":
+            # 音频的时长**可以不给** —— 多数音乐模型按歌词长短自己定曲长,没给就不替它编一个 5 秒。
+            if "duration_seconds" in request.parameters:
+                duration = float(request.parameters["duration_seconds"])
+                if not math.isfinite(duration) or duration <= 0:
+                    raise GenerationAdapterError("providerErr_durationInvalid")
+            lyrics = request.parameters.get("lyrics")
+            if lyrics is not None and (not isinstance(lyrics, str) or len(lyrics) > MAX_LYRICS_CHARS):
+                raise GenerationAdapterError("providerErr_lyricsInvalid", max=MAX_LYRICS_CHARS)
 
     #: 能不能接着取回一个**已经提交过**的远端任务(见 `resume`)。走异步任务的那几家都是。
     supports_resume: bool = False
@@ -295,6 +309,15 @@ def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
                 "source_images": len(request.sources),
             }
         )
+    elif request.kind == "audio":
+        # **按条**(每首 / 每段)是请求时就知道的;**按秒**要等产出回来才知道 —— 多数音乐模型的
+        # 曲长由歌词决定,请求里的时长(有的话)只是个期望。所以这里不记 `audio_seconds`:
+        # 供应商回报了计费时长的由 Adapter 记;没报的由运行器在登记素材后按探测到的真实时长补
+        # (runner._record_generation_usage)。先记一个请求值的话,那一格就再也改不回真实值了。
+        units["audios"] = 1
+        lyrics = str(request.parameters.get("lyrics") or "")
+        if lyrics.strip():
+            units["lyrics_characters"] = len(lyrics)
     return units
 
 
@@ -318,6 +341,56 @@ def adapter_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None
     的语言走,后面那段上游原文(已脱敏)原样放进 `detail`。
     """
     return GenerationAdapterError("providerErr_requestFailed", vendor=vendor, detail=http_error_detail(exc, credential))
+
+
+#: 供应商回话里**常见的几类失败**,各对应一句按读的人语言翻好的话。上游原文(已脱敏)仍放进
+#: `detail`,我们不翻、也不猜它;类别只是让用户一眼知道下一步是**换钥匙、充值、等一会儿、改提示词
+#: 还是改参数** —— 此前一律是「{vendor} 生成失败:1008 insufficient balance」,中文界面上只剩一串
+#: 英文和一个数字。
+#:
+#: 哪个错误码属于哪一类由各家 Adapter 按自己的文档判(错误码表各家各一套),这里只收类别。
+UPSTREAM_ERROR_KEYS = {
+    "auth": "providerErr_upstreamAuth",
+    "balance": "providerErr_upstreamBalance",
+    "rate_limited": "providerErr_upstreamRateLimited",
+    "content_blocked": "providerErr_upstreamContentBlocked",
+    "invalid_params": "providerErr_upstreamInvalidParams",
+    "not_entitled": "providerErr_upstreamNotEntitled",
+    "unavailable": "providerErr_upstreamUnavailable",
+}
+
+
+def upstream_error(vendor: str, category: str | None, detail: Any) -> GenerationAdapterError:
+    """一条归了类的上游失败。认不出类别的落回通用的「生成失败」,原文照带。"""
+    key = UPSTREAM_ERROR_KEYS.get(category or "", "providerErr_generationFailed")
+    return GenerationAdapterError(key, vendor=vendor, detail=str(detail)[:500])
+
+
+def http_status_category(status: int) -> str | None:
+    """HTTP 状态码 → 失败类别(见 UPSTREAM_ERROR_KEYS)。只收各家通用的那几个含义;
+    认不出的回 None,由调用方落回通用的「请求失败」。"""
+    if status in (401, 403):
+        return "auth"
+    if status == 402:
+        return "balance"
+    if status == 429:
+        return "rate_limited"
+    if status in (400, 422):
+        return "invalid_params"
+    if status >= 500:
+        return "unavailable"
+    return None
+
+
+def categorized_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None) -> GenerationAdapterError:
+    """同 `adapter_http_error`,但按状态码归类 —— 用户看到的是「密钥不对 / 余额不足 / 限流了」,
+    而不是一句「请求失败」加一段英文回包。上游原文照样在 `detail` 里。"""
+    response = getattr(exc, "response", None)
+    category = http_status_category(response.status_code) if response is not None else None
+    detail = http_error_detail(exc, credential)
+    if category is None:
+        return GenerationAdapterError("providerErr_requestFailed", vendor=vendor, detail=detail)
+    return upstream_error(vendor, category, detail)
 
 
 def http_error_detail(exc: httpx.HTTPError, credential: str | None) -> str:

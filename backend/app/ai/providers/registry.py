@@ -13,20 +13,25 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
+from app.ai.providers.adapters.alibaba.dashscope.audio import DashScopeAudioAdapter
 from app.ai.providers.adapters.alibaba.dashscope.image import QwenImageAdapter
 from app.ai.providers.adapters.alibaba.dashscope.speech import BailianSpeechAdapter, CosyVoiceSpeechAdapter
 from app.ai.providers.adapters.alibaba.dashscope.video import WanVideoAdapter
 from app.ai.providers.adapters.bytedance.ark.image import SeedreamAdapter
 from app.ai.providers.adapters.bytedance.ark.video import SeedanceAdapter
+from app.ai.providers.adapters.bytedance.volcano.music import VolcanoMusicAdapter
 from app.ai.providers.adapters.bytedance.volcano.speech import VolcanoSpeechAdapter
 from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapter
+from app.ai.providers.adapters.google.lyria import LyriaAdapter
 from app.ai.providers.adapters.google.veo import VeoAdapter
+from app.ai.providers.adapters.kuaishou.kling.audio import KlingAudioAdapter
 from app.ai.providers.adapters.kuaishou.kling.video import KlingVideoAdapter
 from app.ai.providers.adapters.local.demucs_separation import DemucsSeparationAdapter
 from app.ai.providers.adapters.local.deepfilter_denoise import DeepFilterDenoiseAdapter
 from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
 from app.ai.providers.adapters.local.rnnoise_denoise import RnnoiseDenoiseAdapter
 from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
+from app.ai.providers.adapters.minimax.music import MiniMaxMusicAdapter
 from app.ai.providers.adapters.minimax.video import MiniMaxVideoAdapter
 from app.ai.providers.adapters.openai.image import OpenAIImageAdapter
 from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
@@ -49,6 +54,13 @@ def _generation_adapters() -> tuple[GenerationAdapter, ...]:
         OpenAIImageAdapter("openai-compatible"),
         EvolinkGenerationAdapter("image"),
         EvolinkGenerationAdapter("video"),
+        # 音频生成(ADR 0022)。
+        EvolinkGenerationAdapter("audio"),
+        MiniMaxMusicAdapter(),
+        LyriaAdapter(),
+        KlingAudioAdapter(),
+        VolcanoMusicAdapter(),
+        DashScopeAudioAdapter(),
     )
 
 
@@ -193,7 +205,7 @@ def has_capability_implementation(vendor_id: str, capability: str) -> bool:
     """Whether the composed runtime can execute one declared Provider capability."""
     if capability == "chat":
         return True  # Chat uses the generic OpenAI-compatible/sidecar transport.
-    if capability in {"image", "video"}:
+    if capability in {"image", "video", "audio"}:
         return get_generation_adapter(vendor_id, capability) is not None
     if capability == "tts":
         return vendor_id in REMOTE_SPEECH_ADAPTERS

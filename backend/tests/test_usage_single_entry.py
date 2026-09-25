@@ -187,7 +187,9 @@ def test_每种能力都有记账的路径() -> None:
                     if kw.arg == "capability" and isinstance(kw.value, ast.Constant):
                         billed.add(kw.value.value)
 
-    # 生成域的 capability 是运行时变量(generation.kind),静态看不到 —— 它覆盖 image/video。
-    billed |= {"image", "video"}
+    # 生成域的 capability 是运行时变量(generation.kind),静态看不到 —— 它覆盖生成的全部种类。
+    from app.domain.generation.catalog import GENERATION_KINDS
+
+    billed |= set(GENERATION_KINDS)
     missing = sorted(set(ALL_CAPABILITY_IDS) - billed)
     assert missing == [], f"这些能力会花钱却没有任何记账路径: {missing}"

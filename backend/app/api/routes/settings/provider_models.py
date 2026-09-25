@@ -54,7 +54,9 @@ def _is_known_model(vendor: str, model_id: str, catalog: dict[str, dict]) -> boo
         return True
     from app.domain.generation import builtin_models_for
 
-    return any(model_id in builtin_models_for(vendor, kind) for kind in ("image", "video"))
+    from app.domain.generation.catalog import GENERATION_KINDS
+
+    return any(model_id in builtin_models_for(vendor, kind) for kind in GENERATION_KINDS)
 
 
 def _known_fields(
@@ -105,12 +107,12 @@ def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> Provide
         entry=catalog.get(model.model_id) or {},
         model=model,
     )
-    from app.domain.generation.resolution import declaration_refs_for_model, resolve_row
+    from app.domain.generation.resolution import KINDS, declaration_refs_for_model, resolve_row
 
     refs = declaration_refs_for_model(db, model)
     known_by_kind = {
         kind: resolve_row(db, model, kind).capabilities_known
-        for kind in ("image", "video")
+        for kind in KINDS
         if kind in provider_models.effective_capabilities(model)
     }
     return ProviderModelOut(
@@ -144,8 +146,9 @@ def _generation_capabilities_known(vendor: str, model) -> bool:
     否则设置页会对着一排 gpt-4 挂出"参数还没认出来",而那句话对它们毫无意义。
     """
     from app.domain.generation import capabilities_are_known
+    from app.domain.generation.catalog import GENERATION_KINDS
 
-    kinds = [k for k in ("image", "video") if k in provider_models.effective_capabilities(model)]
+    kinds = [k for k in GENERATION_KINDS if k in provider_models.effective_capabilities(model)]
     if not kinds:
         return True
     return all(
@@ -199,8 +202,9 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     # 内置目录:走原生端点、不在 /models 里的那些。能力**按 kind 给准**,而不是套用 vendor
     # 的全集 —— 一个万相视频模型不该被声明成"对话 + 图像 + 视频 + 语音"。
     from app.domain.generation import builtin_models_for
+    from app.domain.generation.catalog import GENERATION_KINDS
 
-    for kind in ("image", "video"):
+    for kind in GENERATION_KINDS:
         for model_id in builtin_models_for(profile.vendor, kind):
             if model_id in known:
                 continue

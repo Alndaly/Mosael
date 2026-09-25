@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **89** 个工具,其中 **24** 个走确认卡、**1** 个停下来等用户作答。
+共 **90** 个工具,其中 **25** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -49,6 +49,7 @@ summaries — never raw internal schemas.
 | `generate_audio` | 确认卡 | Confirmation required: generate a NEW spoken-audio asset from text. |
 | `generate_image` | 确认卡 | Confirmation required: generate or edit an image asset. |
 | `generate_podcast` | 确认卡 | Confirmation required: generate a NEW two-speaker podcast/dialogue audio asset. |
+| `generate_sound` | 确认卡 | Confirmation required: generate a NEW music / sound asset — a song (with vocals), background |
 | `generate_video` | 确认卡 | Confirmation required: generate a NEW video asset from a text prompt. |
 | `get_answer` | 直接执行 | Read what the user picked for an ask_user question (or whether they skipped). |
 | `get_board` | 直接执行 | Read-only: inspect one CREATIVE BOARD canvas in full. |
@@ -65,7 +66,7 @@ summaries — never raw internal schemas.
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
 | `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |
-| `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video. |
+| `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video / generate_sound. |
 | `list_jobs` | 直接执行 | Read-only: list recent background jobs (renders, transcriptions, generations, imports). |
 | `list_memories` | 直接执行 | Read-only: list what you already remember in this workspace. |
 | `list_plugin_tools` | 直接执行 | Read-only: list tools exposed by the user's enabled plugin connections. |

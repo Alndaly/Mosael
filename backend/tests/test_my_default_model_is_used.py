@@ -155,6 +155,6 @@ class Test生成不点名模型时用我的默认:
         for relative in ("api/routes/boards.py", "domain/scheduler/executors.py"):
             assert "resolve_default" not in (app / relative).read_text(encoding="utf-8"), relative
         generation = (app / "domain/agent/confirmable/generation.py").read_text(encoding="utf-8")
-        start = generation.index("def _execute_generate_image(")
+        start = generation.index("def _execute_generation(")
         end = generation.index("def _validate_generate_audio(")
         assert "resolve_default" not in generation[start:end]

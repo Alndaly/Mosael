@@ -15,7 +15,7 @@ def test_definition_exposes_typed_immutable_provider_metadata() -> None:
 
     assert alibaba is not None
     assert alibaba.vendor == "alibaba"
-    assert alibaba.capability_ids == ("chat", "image", "video", "tts")
+    assert alibaba.capability_ids == ("chat", "image", "video", "audio", "tts")
     assert alibaba.auth_types == ("api_key",)
     assert alibaba.field("api_key") is not None
     assert alibaba.field("api_key").secret is True

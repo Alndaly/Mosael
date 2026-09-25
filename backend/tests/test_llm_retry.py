@@ -185,6 +185,8 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         "app.ai.providers.adapters.bytedance.volcano.podcast",
         # 纯二进制编解码 Module，不执行网络 I/O。
         "app.ai.providers.adapters.bytedance.volcano.podcast_protocol",
+        # 火山 OpenAPI 的 AK/SK 签名:纯 HMAC 计算,请求由调用方(音乐 Adapter、音色列表)用自己的客户端发。
+        "app.ai.providers.adapters.bytedance.volcano.openapi_sign",
         # 分离跑在**本机**:这个模块起的是自己那个 venv 的子进程,一次 HTTP 都不发。
         # (权重下载发生在子进程里,由 demucs 自己做,不经过这一层。)
         "app.ai.providers.adapters.local.demucs_separation",

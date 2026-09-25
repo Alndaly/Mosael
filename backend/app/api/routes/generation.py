@@ -132,7 +132,9 @@ def get_capability_profile_schema(kind: str = "image") -> CapabilityProfileSchem
     """
     from app.domain.generation.custom_profiles import profile_form_schema
 
-    if kind not in ("image", "video"):
+    from app.domain.generation.catalog import GENERATION_KINDS
+
+    if kind not in GENERATION_KINDS:
         raise HTTPException(status_code=422, detail=tr("routeErr_badGenerationKind"))
     return CapabilityProfileSchemaOut(**profile_form_schema(kind))
 

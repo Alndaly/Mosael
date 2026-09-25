@@ -279,6 +279,7 @@ const TOOL_LABELS: Record<string, string> = {
   denoise_audio: "降噪",
   generate_image: "生成图片",
   generate_video: "生成视频",
+  generate_sound: "生成音乐/音效",
   create_workflow: "新建工作流",
   edit_workflow: "编辑工作流",
   update_workflow: "更新工作流",

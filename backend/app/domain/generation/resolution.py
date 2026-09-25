@@ -21,13 +21,15 @@ from app.db.models import (
 )
 from app.domain import provider_models
 from app.domain.generation.catalog import (
+    GENERATION_KINDS,
     capabilities_are_known,
     capabilities_for,
     resolve_capability_ref,
 )
 from app.domain.generation.custom_profiles import custom_capabilities_map
 
-KINDS = ("image", "video")
+#: 生成种类的那一份在 catalog(叶模块);这里保留旧名,画板产出者等调用方从这里读。
+KINDS = GENERATION_KINDS
 
 
 class GenerationResolutionError(LocalizedError, ValueError):

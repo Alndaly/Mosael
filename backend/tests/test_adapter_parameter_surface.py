@@ -33,6 +33,10 @@ DECLARED_INDEPENDENT = {
     ("openai-compatible", "image"),
     ("evolink", "image"),
     ("evolink", "video"),
+    # 音频(ADR 0022):Suno 的请求体按「给了什么」选模式,不看模型名;Lyria 没有结构化参数,
+    # 两项都是「设了才拼进提示词」。
+    ("evolink", "audio"),
+    ("google", "audio"),
 }
 
 

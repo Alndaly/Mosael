@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers import (
     FIRST_FRAME,
+    REFERENCE_AUDIO,
     REFERENCE_IMAGE,
     SOURCE_ROLES,
     allowed_source_url_parameters,
@@ -88,6 +89,10 @@ def create_generation_job(
         kind,
         parameters,
         source_assets,
+        capabilities=resolved.capabilities if resolved.capabilities_known else None,
+    )
+    validate_text_inputs(
+        provider, model, kind, prompt, parameters,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
     )
     uploaded = _validate_source_assets(
@@ -273,9 +278,9 @@ def _vendor_can_generate(db: Session, vendor: str, kind: str) -> bool:
     )
 
 
-#: 没写角色时按生成类型兜底:图生视频的那张图是首帧,图生图的那张图是参考。
-#: 这是**两种介质里最常见的那个意思**,不是随便挑的默认值。
-DEFAULT_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE}
+#: 没写角色时按生成类型兜底:图生视频的那张图是首帧,图生图的那张图是参考,生成音乐时挂的
+#: 那段音频是参考(「照这首的风格来」)。这是**每种介质里最常见的那个意思**,不是随便挑的默认值。
+DEFAULT_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE, "audio": REFERENCE_AUDIO}
 
 
 def keep_source_group(sources: list[dict[str, str]], group: str) -> list[dict[str, str]]:
@@ -497,6 +502,59 @@ def validate_against_capabilities(
     counts.update(roles_supplied_via_url(parameters, kind))
     _check_source_counts(provider, model, capabilities, counts)
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
+
+
+def validate_text_inputs(
+    provider: str,
+    model: str,
+    kind: str,
+    prompt: str,
+    parameters: dict[str, Any],
+    *,
+    capabilities: dict[str, Any] | None,
+) -> None:
+    """提示词和歌词这两段**文字**本身的规矩。和参数、素材一样拦在提交之前。
+
+    - 音频可以只给歌词不给描述(照着歌词写一首歌),所以「提示词不能为空」对音频是「两者至少
+      给一段」;给视频配声的模型(`prompt_optional`)连这一条都没有 —— 画面本身就是输入。
+      图像和视频照旧要提示词(那一条由 Adapter 的形状校验把关)。
+    - **纯音乐就不该有歌词**:两个都给,各家要么报错、要么悄悄丢掉歌词,哪一种都不是用户要的。
+      纯音乐也就只剩描述可依,所以它还要求描述。
+    - 歌词有自己的上限(`max_lyrics_chars`,各家文档的数)。超了的话供应商回的是一句英文的
+      invalid params,而那时请求已经发出去了。
+    - 有的模型**歌词和描述只收一段**(`lyrics_excludes_prompt`,火山的人声歌曲:同时给时以歌词为准、
+      描述被丢掉)。两段都给就当场说,而不是让描述悄悄不生效。
+    - `requires_prompt` / `requires_lyrics`:这个模型那一段必填(文档说的)。
+    """
+    lyrics = parameters.get("lyrics")
+    if lyrics is not None and not isinstance(lyrics, str):
+        raise GenerationDomainError("genErr_notText", provider=provider, model=model, name="lyrics")
+    has_lyrics = bool(str(lyrics or "").strip())
+    has_prompt = bool(prompt.strip())
+    caps = capabilities or {}
+    if kind != "audio" and not has_prompt:
+        raise GenerationDomainError("genErr_promptRequired", provider=provider, model=model)
+    # 纯音乐的两条先说:它们比「至少给一段」具体 —— 选了纯音乐却什么都没写,该听到的是「纯音乐要描述」。
+    if parameters.get("instrumental") is True:
+        if has_lyrics:
+            raise GenerationDomainError("genErr_instrumentalWithLyrics", provider=provider, model=model)
+        if not has_prompt:
+            raise GenerationDomainError("genErr_instrumentalNeedsPrompt", provider=provider, model=model)
+    if kind == "audio" and not has_prompt and not has_lyrics and not caps.get("prompt_optional"):
+        raise GenerationDomainError("genErr_audioNeedsText", provider=provider, model=model)
+    if capabilities is None:
+        return
+    cap = capabilities.get("max_lyrics_chars")
+    if has_lyrics and cap and len(str(lyrics)) > int(cap):
+        raise GenerationDomainError(
+            "genErr_lyricsTooLong", provider=provider, model=model, cap=cap, count=len(str(lyrics))
+        )
+    if has_lyrics and has_prompt and capabilities.get("lyrics_excludes_prompt"):
+        raise GenerationDomainError("genErr_lyricsExcludesPrompt", provider=provider, model=model)
+    if not has_lyrics and capabilities.get("requires_lyrics"):
+        raise GenerationDomainError("genErr_lyricsRequired", provider=provider, model=model)
+    if not has_prompt and capabilities.get("requires_prompt"):
+        raise GenerationDomainError("genErr_promptRequired", provider=provider, model=model)
 
 
 def _check_declared_parameter(provider: str, model: str, key: str, spec: dict[str, Any], value: Any) -> None:

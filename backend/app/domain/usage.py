@@ -126,6 +126,8 @@ PRICING_BILLING_UNITS = frozenset(
         #: 两种报价方式各家都有,硬折成秒会把「按条」的价摊错。
         "video",
         "video_second",
+        #: 按首/按段计的音频(音乐生成多按「每首」报价)。和 audio_second 并存,理由同上。
+        "audio",
         "audio_second",
         "character",
         "token",
@@ -686,6 +688,7 @@ def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None
         "image": ("image", "images", "image_count", "num_images"),
         "video": ("video", "videos", "video_count"),
         "video_second": ("video_second", "video_seconds", "duration_seconds"),
+        "audio": ("audio", "audios", "audio_count"),
         "audio_second": ("audio_second", "audio_seconds", "duration_seconds"),
         "character": ("character", "characters", "input_characters"),
         "token": ("token", "tokens", "total_token", "total_tokens"),

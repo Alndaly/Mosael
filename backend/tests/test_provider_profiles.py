@@ -191,10 +191,10 @@ def test_vendor_presets_listed() -> None:
     # 预设不再写死默认模型:实测 deepseek 那个 "deepseek-chat" 在真实端点上根本不存在,
     # 而这种字符串没人会去复核。模型从供应商目录实时拉。
     assert not presets["minimax"].get("default_model")
-    # 百炼是**一家四能力**,同一把 DashScope Key:对话与向量嵌入(compatible-mode)、
-    # 图像(qwen-image)、视频(万相)、语音(qwen-tts)。少写一样的代价是用户得为同一把 Key
-    # 再建一个档案 —— 早先只写 image 时就是这样。
-    assert presets["alibaba"]["capability_ids"] == ["chat", "image", "video", "tts"]
+    # 百炼是**一家五能力**,同一把 DashScope Key:对话与向量嵌入(compatible-mode)、
+    # 图像(qwen-image)、视频(万相)、音乐与音效(Fun-Music / AudioGen)、语音(qwen-tts)。
+    # 少写一样的代价是用户得为同一把 Key 再建一个档案 —— 早先只写 image 时就是这样。
+    assert presets["alibaba"]["capability_ids"] == ["chat", "image", "video", "audio", "tts"]
     alibaba_fields = {field["key"]: field for field in presets["alibaba"]["fields"]}
     assert alibaba_fields["base_url"]["label"] == "百炼 API Endpoint"
     assert alibaba_fields["default_model"]["label"] == "初始模型(可选)"

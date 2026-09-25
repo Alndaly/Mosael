@@ -50,6 +50,11 @@
 - **可灵(Kling)**:按「单位 / 积分」计价,国内 1 积分 = 1 元、国际 1 单位 = $0.14,一家两币;而应用
   判断不出这条连接开的是哪边的账户,又分有声 / 无声、带不带视频输入 —— 不收。
 - **中转站自己的价**(Evolink、147ai 等):不是原厂价目,不在这张表的范围里;中转的目录报了价就用目录的。
+  Evolink 上的 Suno(产品页写「8 积分 ≈ $0.118 / 两首」)同理不收。
+- **音频生成(ADR 0022)没收的**:MiniMax 音乐(价目页把 Music-3.0 / 2.6 标成「已下线」,2026-08-20 起不再
+  对新用户开放);可灵文生音效 / 视频生音效(每次 0.25 单位 / 积分,和可灵视频同一个一家两币的问题);
+  百炼 qwen-audio-3.1-tts-next(按 token 计价,而文档说计费按生成时长,换算关系没写);火山音乐的预付费
+  资源包(包价,不是按次价);Lyria RealTime(价目页没有列)。
 
 ## 分时段计价(2026-09 查证)
 
@@ -674,6 +679,7 @@ _OPENAI_PRICES = [
 # 只公布了「带音频(默认)」的价,按输出分辨率分档:记 720P,备注写其余档。
 # Veo 3.0 / 2.0 已于 2026-06-30 下线,价目页不再列,不收。
 _GOOGLE = "https://ai.google.dev/gemini-api/docs/pricing"
+_VOLCANO_MUSIC = "https://www.volcengine.com/docs/84992/1404661"
 _GOOGLE_PRICES = [
     _p("google", "veo-3.1-generate-preview", "video", "video_second", "0.4", "USD", _GOOGLE,
        remark=("带音频(默认)的价,720P 与 1080P 同价;4K 为 $0.60/秒", "With-audio (default) price, same for 720p and 1080p; 4K is $0.60/s")),
@@ -681,6 +687,28 @@ _GOOGLE_PRICES = [
        remark=("带音频(默认)、720P 的价;1080P 为 $0.12/秒,4K 为 $0.30/秒", "With-audio (default) 720p price; 1080p is $0.12/s, 4K is $0.30/s")),
     _p("google", "veo-3.1-lite-generate-preview", "video", "video_second", "0.05", "USD", _GOOGLE,
        remark=("带音频(默认)、720P 的价;1080P 为 $0.08/秒", "With-audio (default) 720p price; 1080p is $0.08/s")),
+]
+
+# —— 音频生成(音乐 / BGM / 音效,ADR 0022)—— 2026-09 查证。
+# Lyria 按「首」报价(一次生成交回一首),记在 `audio`(按首)这个单位上。
+_AUDIO_PRICES = [
+    _p("google", "lyria-3.5", "audio", "audio", "0.08", "USD", _GOOGLE,
+       remark=("按首计价,一次生成一首", "Priced per song; one generation returns one song")),
+    _p("google", "lyria-3-pro-preview", "audio", "audio", "0.08", "USD", _GOOGLE,
+       remark=("按首计价,一次生成一首", "Priced per song; one generation returns one song")),
+    _p("google", "lyria-3-clip-preview", "audio", "audio", "0.04", "USD", _GOOGLE,
+       remark=("按首计价,每首固定 30 秒", "Priced per song; each clip is 30 seconds")),
+    # 百炼 Fun-Music:按生成音频的秒数计(回包 usage.duration 就是计费秒数),输入免费;仅北京地域。
+    _p("alibaba", "fun-music-v1", "audio", "audio_second", "0.002", "CNY", _BAILIAN_CN, region="cn",
+       remark=("按生成音频的秒数计,输入免费;仅北京地域", "Billed per second of generated audio, input is free; Beijing region only")),
+    _p("alibaba", "fun-music-preview", "audio", "audio_second", "0.005", "CNY", _BAILIAN_CN, region="cn",
+       remark=("按生成音频的秒数计,输入免费;仅北京地域", "Billed per second of generated audio, input is free; Beijing region only")),
+    # 火山 AI 音乐生成:后付费(*ForTime)按成功生成的音频秒数计,人声歌曲与纯音乐同价。
+    # 预付费资源包(GenSongV4 / GenBGM)按首折算约 ¥1.5,是一次性买断的包价 —— 不是按次挂牌价,不收。
+    _p("volcano-music", "GenSongForTime", "audio", "audio_second", "0.002", "CNY", _VOLCANO_MUSIC, region="cn",
+       remark=("后付费,按成功生成的音频秒数计", "Postpaid, billed per second of successfully generated audio")),
+    _p("volcano-music", "GenBGMForTime", "audio", "audio_second", "0.002", "CNY", _VOLCANO_MUSIC, region="cn",
+       remark=("后付费,按成功生成的音频秒数计", "Postpaid, billed per second of successfully generated audio")),
 ]
 
 LIST_PRICES: tuple[ListPrice, ...] = (
@@ -697,6 +725,7 @@ LIST_PRICES: tuple[ListPrice, ...] = (
     *_MINIMAX_PRICES,
     *_OPENAI_PRICES,
     *_GOOGLE_PRICES,
+    *_AUDIO_PRICES,
 )
 
 

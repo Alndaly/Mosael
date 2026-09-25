@@ -61,9 +61,22 @@ _KNOWN_KEYS: dict[str, str] = {
     "requires_source": "str_list_list",
     "requires_companion": "str_to_str_list",
     "url_only_roles": "str_list",
+    # 音频(ADR 0022)。
+    "max_lyrics_chars": "positive_int",
+    "default_instrumental": "bool",
+    "default_asmr_mode": "bool",
+    "default_model_version": "str",
+    "lyrics_excludes_prompt": "bool",
+    "requires_prompt": "bool",
+    "requires_lyrics": "bool",
+    "prompt_optional": "bool",
+    "outputs_per_request": "positive_int",
 }
 
-_KINDS = ("image", "video")
+def _kinds() -> tuple[str, ...]:
+    from app.domain.generation.catalog import GENERATION_KINDS
+
+    return GENERATION_KINDS
 
 #: 每个键在可视表单里归哪一组。**后端给语义分组,前端只翻译组名和键名** —— 分组知识要是也
 #: 抄一份到前端,加一个键时漏掉不会有任何东西报错(见 routes/generation.py 的 schema 端点)。
@@ -103,6 +116,15 @@ _FIELD_GROUPS: dict[str, str] = {
     "supports_audio": "advanced",
     "supports_generate_audio": "advanced",
     "modes": "advanced",
+    "max_lyrics_chars": "limits",
+    "outputs_per_request": "limits",
+    "default_instrumental": "defaults",
+    "default_asmr_mode": "defaults",
+    "default_model_version": "defaults",
+    "lyrics_excludes_prompt": "advanced",
+    "requires_prompt": "advanced",
+    "requires_lyrics": "advanced",
+    "prompt_optional": "advanced",
 }
 
 
@@ -243,8 +265,8 @@ def _check(key: str, shape: str, value: Any) -> Any:
 
 def validate_capabilities(raw: Any, kind: str) -> dict[str, Any]:
     """把用户填的东西校成一份描述符。拦不住的只有"这个端点真的支持吗"。"""
-    if kind not in _KINDS:
-        _fail("genErr_profileKind", kinds=" / ".join(_KINDS))
+    if kind not in _kinds():
+        _fail("genErr_profileKind", kinds=" / ".join(_kinds()))
     if not isinstance(raw, dict):
         _fail("genErr_profileNotObject")
     unknown = [k for k in raw if k not in _KNOWN_KEYS]

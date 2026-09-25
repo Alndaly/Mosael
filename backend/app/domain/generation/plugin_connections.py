@@ -40,6 +40,7 @@ from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import PluginInstance, ProviderProfile
 from app.domain import provider_models
+from app.domain.generation.catalog import GENERATION_KINDS
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import generation as plugin_generation
@@ -52,8 +53,8 @@ logger = logging.getLogger(__name__)
 #: 插件连接的 vendor 前缀。vendor 绑**包**不绑实例:画板、工作流会被导出到别的机器,实例是本机事实
 #: —— 和工作流节点类型 `plugin.<包id>.<工具>` 是同一个理由(ADR 0005)。
 VENDOR_PREFIX = "plugin:"
-#: 宿主今天接进选择器的生成种类。插件可以列 audio 等,照样不进 —— 等宿主有了那一路再接。
-GENERATION_KINDS = ("image", "video")
+#: 宿主接进选择器的生成种类 —— 就是生成目录认的那几种(图像、视频、音频,见 catalog.GENERATION_KINDS),
+#: 不在这里另抄一份。
 
 
 def vendor_for(package_id: str) -> str:
@@ -70,12 +71,16 @@ def package_of(vendor: str) -> str:
 # ---------------------------------------------------------------------------
 
 #: 没说模式时按种类给最朴素的那一个。
-_DEFAULT_MODES = {"image": ["text-to-image"], "video": ["text-to-video"]}
+_DEFAULT_MODES = {"image": ["text-to-image"], "video": ["text-to-video"], "audio": ["text-to-audio"]}
 
 #: 宿主**自己有控件**的参数键:它们在插件的 `parameters` 里出现,就翻成描述符里对应的那几格,
 #: 由宿主的尺寸下拉、时长选择、种子框来渲染。其余的键进 `parameter_schema`,由通用控件渲染。
 _HOST_KEYS = frozenset(
-    {"seed", "negative_prompt", "size", "resolution", "aspect_ratio", "duration_seconds", "num_images", "generate_audio"}
+    {
+        "seed", "negative_prompt", "size", "resolution", "aspect_ratio", "duration_seconds", "num_images", "generate_audio",
+        # 音频(ADR 0022):歌词有宿主的歌词编辑器,纯音乐有宿主的开关 —— 插件叫这两个名字就用宿主的控件。
+        "lyrics", "instrumental",
+    }
 )
 
 
@@ -117,6 +122,10 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
             caps["supports_generate_audio"] = True
             if isinstance(default, bool):
                 caps["default_generate_audio"] = default
+        elif key == "instrumental":
+            caps.setdefault("boolean_parameters", []).append("instrumental")
+            if isinstance(default, bool):
+                caps["default_instrumental"] = default
         elif key not in _HOST_KEYS:
             schema[key] = dict(spec)
     limits: dict[str, int] = {}
