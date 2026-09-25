@@ -78,3 +78,29 @@ def test_没起名字的插件节点照样能跑(echo_plugin) -> None:
             if event.payload.get("node_id") == "echo"
         ]
     assert started and started[0]["name"] == "回声", "事件里的名字该是插件声明的 label"
+
+
+@pytest.mark.parametrize(
+    ("container", "extra"),
+    [
+        ("loop_foreach", {"items": ["a", "b"], "output": "{{echo.output}}"}),
+        ("subgraph", {"output": "{{echo.output}}"}),
+    ],
+)
+def test_循环体和子图里的插件节点照样能跑(echo_plugin, container: str, extra: dict) -> None:
+    """体此前由执行器在运行时**再校验一遍**,而那一遍不带插件节点类型 —— 体里的插件节点一律
+    被判成「来自插件 demo 的工具 echo,该插件未安装或未启用」。插件明明装着,顶层的同一个节点
+    也跑得好好的;用户会照着这句话去插件页找问题。"""
+    body = {"nodes": [{"id": "echo", "type": ECHO, "config": {"q": "{{loop.item}}" if container == "loop_foreach" else "内"}}], "edges": []}
+    status, result, error, _ = _run(
+        {
+            "nodes": [
+                {"id": "start", "type": "start", "config": {}},
+                {"id": "box", "type": container, "config": {"body": body, **extra}},
+            ],
+            "edges": [{"id": "e1", "source": "start", "target": "box"}],
+        }
+    )
+    assert status == "succeeded", error
+    produced = result["context"]["box"]
+    assert produced == ({"results": ["echo a", "echo b"], "count": 2} if container == "loop_foreach" else {"output": "echo 内"})

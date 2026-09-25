@@ -1,6 +1,6 @@
 """循环节点与循环体子图执行。
 
-run_subgraph 与主引擎共享同一套执行内核(execute_graph)。每次迭代一个子作用域;
+每次迭代经 common.run_body 跑一遍体(与主引擎同一套内核),一个子作用域;
 遍历循环可以让几次迭代同时跑(`concurrency`),结果仍按原顺序交出。
 """
 
@@ -15,9 +15,9 @@ from typing import Any, Iterator
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
-from app.domain.workflows import WorkflowDomainError, interpolate, validate_body_graph
+from app.domain.workflows import WorkflowDomainError, interpolate
 from app.domain.workflows.executors import register
-from app.domain.workflows.executors.common import truthy
+from app.domain.workflows.executors.common import run_body, truthy
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
 _NO_ITEM = object()
@@ -31,25 +31,6 @@ LOOP_FOREACH_HARD_CAP = 1000
 #: 遍历循环最多几次迭代同时跑。**不是越大越好**:循环体里多半是调供应商(按账号限流、按条计费)
 #: 或本机重活(导出、合成),而循环会嵌套 —— 外层 4 × 内层 4 就是 16 路。
 LOOP_FOREACH_MAX_CONCURRENCY = 4
-
-
-def run_subgraph(body: dict[str, Any], base_context: dict[str, Any], *, workflow_id: str) -> dict[str, Any]:
-    """跑一个循环体子图并返回其上下文。**与主引擎同一套内核**(execute_graph):并行调度、数据边
-    绑定、{{var}} 插值、条件分支语义完全一致——不再是阉割版。`base_context` 播种循环作用域
-    (如 {"loop": {"item": ..., "index": ...}}),子图节点用 {{loop.item}}/{{loop.index}} 与
-    {{node_id.output}} 互相引用;无入边的根即入口(entry_is_root)。
-    """
-    errors = validate_body_graph(body)
-    if errors:
-        raise WorkflowDomainError("；".join(errors))
-    from app.domain.workflows.engine import execute_graph  # 惰性:避开 engine↔executors 循环导入
-
-    context, _cancelled = execute_graph(
-        body, wf_id=workflow_id, initial_context=base_context, entry_is_root=True
-    )
-    if _cancelled:
-        raise WorkflowDomainError("wfErr_cancelled")
-    return context
 
 
 @contextmanager
@@ -98,7 +79,8 @@ def loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
     def iterate(index: int, item: Any) -> Any:
         with _blame_iteration(index, total, item=item):
-            ctx = run_subgraph(
+            ctx = run_body(
+                "loop_foreach",
                 body,
                 {"loop": {"item": item, "index": index}, "input": shared_inputs},
                 workflow_id=workflow.id,
@@ -209,7 +191,7 @@ def loop_while(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[
     # Do-while: the condition references body outputs, so it can only be evaluated after a run.
     while index < max_iter:
         with _blame_iteration(index, max_iter):
-            ctx = run_subgraph(body, {"loop": {"index": index}}, workflow_id=workflow.id)
+            ctx = run_body("loop_while", body, {"loop": {"index": index}}, workflow_id=workflow.id)
         if output_tpl:
             results.append(interpolate(output_tpl, ctx))
         else:

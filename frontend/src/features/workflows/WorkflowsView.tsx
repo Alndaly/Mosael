@@ -2874,7 +2874,7 @@ export function NodeInspector({
     const scopeRoots = new Set(scopeVariables.flatMap((value) => extractRefs(value).map(({ sourceId }) => sourceId)));
     const found: Array<{ key: string; ref: string }> = [];
     for (const [key, val] of Object.entries(node.config ?? {})) {
-      if (isNestedScopeConfig(node.type, key)) continue;
+      if (isNestedScopeConfig(registry, node.type, key)) continue;
       for (const { ref, sourceId } of extractRefs(val)) {
         if (!ids.has(sourceId) && !scopeRoots.has(sourceId) && !found.some((f) => f.key === key && f.ref === ref)) {
           found.push({ key, ref });
@@ -2882,7 +2882,7 @@ export function NodeInspector({
       }
     }
     return found;
-  }, [node.config, graph.nodes, scopeVariables]);
+  }, [node.config, node.type, graph.nodes, scopeVariables, registry]);
 
   /* LLM 专区仍直接使用连接清单；其它声明了 options_from 的字段统一走 field-options。 */
   const picksChatModel = node.type === "llm";

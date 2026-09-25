@@ -18,6 +18,7 @@ const registry: RegistryLike = {
       {
         config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string; active_when?: Record<string, unknown> }>;
         output_types?: Record<string, string>;
+        body_scope?: string[];
       }
     > = {
       start: { config: { params: { type: "object" } } },
@@ -50,9 +51,18 @@ const registry: RegistryLike = {
           profile_id: { type: "string", required: true, active_when: { engine: "ai" } },
         },
       },
-      subgraph: { config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } } },
+      // 体内看得见哪些作用域名,由后端随节点声明发下来(NODE_TYPES 的 body_scope)。
+      subgraph: {
+        config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } },
+        body_scope: ["input"],
+      },
       loop_foreach: {
         config: { items: { type: "template", required: true }, body: { type: "graph" }, output: { type: "template" } },
+        body_scope: ["loop", "input"],
+      },
+      loop_while: {
+        config: { body: { type: "graph" }, condition: { type: "template" }, output: { type: "template" } },
+        body_scope: ["loop"],
       },
     };
     return table[type];
@@ -105,11 +115,12 @@ describe("extractRefs", () => {
 
 describe("isNestedScopeConfig", () => {
   it("keeps parent validation out of loop and subgraph internal scopes", () => {
-    expect(isNestedScopeConfig("loop_foreach", "body")).toBe(true);
-    expect(isNestedScopeConfig("loop_foreach", "output")).toBe(true);
-    expect(isNestedScopeConfig("subgraph", "body")).toBe(true);
-    expect(isNestedScopeConfig("loop_foreach", "inputs")).toBe(false);
-    expect(isNestedScopeConfig("llm", "body")).toBe(false);
+    expect(isNestedScopeConfig(registry, "loop_foreach", "body")).toBe(true);
+    expect(isNestedScopeConfig(registry, "loop_foreach", "output")).toBe(true);
+    expect(isNestedScopeConfig(registry, "loop_while", "condition")).toBe(true);
+    expect(isNestedScopeConfig(registry, "subgraph", "body")).toBe(true);
+    expect(isNestedScopeConfig(registry, "loop_foreach", "inputs")).toBe(false);
+    expect(isNestedScopeConfig(registry, "llm", "body")).toBe(false);
   });
 });
 
@@ -420,6 +431,30 @@ describe("循环体和子图里的节点", () => {
       fullCtx,
     );
     expect(a.issues).toContainEqual(expect.objectContaining({ code: "stale-var", ref: "{{nobody.text}}" }));
+  });
+
+  /**
+   * 体内认哪些名字,**按节点声明的 body_scope**,不再是「一律认 loop 与 input」。多认一个的代价
+   * 不是"漏报一条"这么轻:子图体里的 `{{loop.item}}` 画布说能跑,后端启动前就拒;条件循环体里的
+   * `{{input.x}}` 两边都放行,运行时安静地变成空串。
+   */
+  it.each([
+    ["subgraph", "{{loop.item}}", "{{loop.item}}"],
+    ["loop_while", "{{input.voice_id}}", "{{input.voice_id}}"],
+  ])("%s 的体里引用它没有的作用域名要报", (type, template, ref) => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "box", type, config: { body: { nodes: [{ id: "inner", type: "template", config: { template } }], edges: [] } } },
+        ],
+        [{ id: "e1", source: "start", target: "box" }],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "box", code: "stale-var", ref }));
+    expect(a.runnable).toBe(false);
   });
 
   it("体里没有 start 不算缺开始节点", () => {

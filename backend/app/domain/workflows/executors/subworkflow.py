@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
 from app.domain.jobs import current_parent_job_id
-from app.domain.workflows import WorkflowDomainError, interpolate, validate_body_graph
+from app.domain.workflows import WorkflowDomainError, interpolate
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors import register
-from app.domain.workflows.executors.common import wait_for_job
+from app.domain.workflows.executors.common import run_body, wait_for_job
 
 MAX_NEST_DEPTH = 8
 
@@ -39,19 +39,9 @@ def subgraph(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[st
       子上下文(去掉 input 作用域)。
     """
     body = config.get("body") or {"nodes": [], "edges": []}
-    errors = validate_body_graph(body, scope="input")  # 子图作用域是 input(循环体是 loop)
-    if errors:
-        raise WorkflowDomainError("；".join(errors))
     inputs = config.get("inputs")
     seed = {"input": dict(inputs)} if isinstance(inputs, dict) else {"input": {}}
-
-    from app.domain.workflows.engine import execute_graph  # 惰性:避开 engine↔executors 循环导入
-
-    context, _cancelled = execute_graph(
-        body, wf_id=workflow.id, initial_context=seed, entry_is_root=True
-    )
-    if _cancelled:
-        raise WorkflowDomainError("wfErr_cancelled")
+    context = run_body("subgraph", body, seed, workflow_id=workflow.id)
     output_tpl = config.get("output")
     if output_tpl:
         return {"output": interpolate(output_tpl, context)}

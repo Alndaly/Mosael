@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.db import SessionLocal
 from app.db.models import Job
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -71,6 +71,27 @@ def _poll(job_id: str) -> Job:
             if job.status == "failed":
                 raise WorkflowDomainError("wfErr_childFailed", params={"reason": job.error or job.message})
         time.sleep(CHILD_POLL_SECONDS)
+
+
+def run_body(node_type: str, body: dict[str, Any], scope: dict[str, Any], *, workflow_id: str) -> dict[str, Any]:
+    """跑一个内嵌子图(循环体的一次迭代 / subgraph),返回它的上下文。
+
+    **与主引擎同一套内核**(execute_graph):并行调度、数据边绑定、插值、条件分支语义完全一致;
+    无入边的根即入口。`scope` 播种体内看得见的作用域名,**必须恰好是节点声明的 `body_scope`**
+    —— 校验和画布都按那份声明判断体内引用合不合法,这里播的少一个,那个名字下的引用就会校验
+    得过、运行时安静地变成空串。
+
+    体在运行前已经由 validate_graph 连同外层一起校验过(带着插件节点类型),这里不再校验一遍。
+    """
+    declared = set(NODE_TYPES[node_type]["body_scope"])
+    if set(scope) != declared:
+        raise RuntimeError(f"{node_type} seeds its body with {sorted(scope)} but declares body_scope {sorted(declared)}")
+    from app.domain.workflows.engine import execute_graph  # 惰性:避开 engine↔executors 循环导入
+
+    context, cancelled = execute_graph(body, wf_id=workflow_id, initial_context=scope, entry_is_root=True)
+    if cancelled:
+        raise WorkflowDomainError("wfErr_cancelled")
+    return context
 
 
 def id_list(value: Any) -> list[str]:

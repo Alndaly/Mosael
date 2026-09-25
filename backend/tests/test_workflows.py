@@ -579,16 +579,11 @@ def test_loop_foreach_rejects_start_in_body() -> None:
         "edges": [{"id": "e1", "source": "start", "target": "loop"}],
     }
     workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "坏循环", "graph": graph})
-    assert workflow.status_code == 200, workflow.text  # outer graph is valid; body checked at run time
+    assert workflow.status_code == 200, workflow.text  # 保存放行草稿;体和外层一起在运行前校验
     run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {"x": ["a"]}})
-    job_id = run.json()["id"]
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        job = client.get(f"/api/jobs/{job_id}").json()
-        if job["status"] in ("succeeded", "failed"):
-            break
-        time.sleep(0.2)
-    assert job["status"] == "failed", job
+    # 在启动前就拒,而不是接了任务、跑到循环才失败。
+    assert run.status_code == 422, run.text
+    assert "loop" in run.json()["detail"] and "开始节点" in run.json()["detail"], run.text
 
 
 def test_asset_query_filters_and_feeds_loop() -> None:

@@ -29,10 +29,11 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent.parent / "app"
 
 #: 拿不到 db、因而查不出插件节点的调用点。**每一条都要写清楚为什么**,这张表只减不增。
-NO_DB: dict[str, str] = {
-    # 循环体 / 子图是**图里的一段**,它的类型已经由外层那次校验管过了 —— 外层带着 extra_types。
-    "domain/workflows/__init__.py:validate_body_graph": "纯图校验,拿不到 db;外层那次校验已经带了 extra_types",
-}
+#:
+#: 曾经有一条:`validate_body_graph`,理由是"外层那次校验已经带了 extra_types"。**那句理由不成立**
+#: —— 外层只下探了体里的必填项,体的类型检查留给执行器运行时再做一遍,而那一遍不带插件类型,于是
+#: 循环体里的插件节点一律被判「未安装或未启用」。现在体由外层那次校验连同 extra_types 一起查。
+NO_DB: dict[str, str] = {}
 
 
 def _calls() -> list[tuple[str, int, bool]]:
@@ -69,7 +70,7 @@ def test_每一处校验都认得插件节点() -> None:
 
 
 def test_豁免清单只减不增() -> None:
-    assert len(NO_DB) <= 1
+    assert len(NO_DB) <= 0
     for where, reason in NO_DB.items():
         assert len(reason.strip()) > 10, f"{where} 的理由太短"
 

@@ -31463,6 +31463,13 @@
             "type": "string",
             "title": "Tool Name",
             "default": ""
+          },
+          "body_scope": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Body Scope"
           }
         },
         "type": "object",

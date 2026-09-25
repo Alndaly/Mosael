@@ -128,6 +128,8 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
             "output_labels": {output: t(output_label(output, meta), locale) for output in meta["outputs"]},
             "plugin_name": meta.get("plugin_name", ""),
             "tool_name": meta.get("tool_name", ""),
+            # 内嵌子图节点体内看得见的作用域名 —— 画布就绪检查和后端校验读同一格(见 NESTED_BODY_TYPES)。
+            "body_scope": list(meta.get("body_scope") or []),
         }
         for key, meta in registry.items()
     ]

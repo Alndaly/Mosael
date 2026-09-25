@@ -160,6 +160,7 @@ python3 scripts/sync-ratchet-docs.py
 | 冒烟测试:**每个工具发出去的载荷,后端接得住。** | `backend/tests/test_mcp_tool_payloads.py` |
 | 棘轮:**跑过一次的迁移,身体不能再改。** | `backend/tests/test_migration_bodies_are_frozen.py` |
 | 内置的模型上限表:形状、优先级、以及「宁可报小」那条。 | `backend/tests/test_model_limits.py` |
+| 内嵌子图(循环体 / subgraph)**体内看得见什么**,由节点自己声明一次(`body_scope`)。 | `backend/tests/test_nested_body_scope_is_declared_once.py` |
 | 工作流引擎同时占的连接数,必须由**池子的容量**决定,而不是三个相乘的常数。 | `backend/tests/test_nested_graphs_stay_inside_the_pool.py` |
 | 棘轮:**新加的迁移,必须带一条喂它旧形状数据的测试。** | `backend/tests/test_new_migrations_come_with_a_test.py` |
 | 吞掉异常不许再变多。 | `backend/tests/test_no_new_silent_swallows_on_the_clone_path.py` |

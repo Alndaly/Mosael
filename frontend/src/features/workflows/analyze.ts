@@ -119,6 +119,8 @@ interface NodeMetaLike {
   output_types?: Record<string, string>;
   /** 每个输出在人机界面上的名字(「人声」「背景音」),同样由后端声明并按语言发下来。 */
   output_labels?: Record<string, string>;
+  /** 内嵌子图节点(循环 / 子图)体内看得见的作用域名。**由后端声明**(NODE_TYPES 的 body_scope)。 */
+  body_scope?: string[];
 }
 
 export interface RegistryLike {
@@ -127,17 +129,27 @@ export interface RegistryLike {
 
 const VAR_RE = /\{\{\s*([\w.-]+)\s*\}\}/g;
 
-// 内嵌子图节点(循环体 / subgraph):body/output/condition 引用的是子作用域({{loop.*}} / {{input.*}})
-// 或**内部**节点,不在顶层解析,顶层失效检查要跳过它们(与后端 NESTED_BODY_TYPES / RAW_KEYS 对齐)。
 /** 选一个生成模型就同时填上这三项 —— 就绪检查里当作一条。 */
 const GENERATE_MODEL_KEYS = new Set(["provider", "model", "kind"]);
 
-const NESTED_BODY_TYPES = new Set(["loop_foreach", "loop_while", "subgraph"]);
+// 内嵌子图节点(循环体 / subgraph):body/output/condition 引用的是子作用域({{loop.*}} / {{input.*}})
+// 或**内部**节点,不在顶层解析,顶层失效检查要跳过它们(与后端 NESTED_BODY_RAW_KEYS 对齐)。
 const NESTED_BODY_RAW_KEYS = new Set(["body", "output", "condition"]);
 
+/**
+ * 这个节点的体内看得见哪些作用域名;不是内嵌子图节点就是空表。
+ *
+ * **后端说了算**:执行器给体播种的就是这几个名字,后端校验也按它判。此前这里自己写死
+ * 「循环和子图一律认 loop 与 input」—— 子图体里的 `{{loop.item}}` 画布说能跑,后端却拒绝;
+ * 条件循环体里的 `{{input.x}}` 两边都放行,运行时安静地变成空串。
+ */
+export function bodyScope(registry: RegistryLike, nodeType: string): string[] {
+  return registry.get(nodeType)?.body_scope ?? [];
+}
+
 /** 这些字段属于内嵌图自己的作用域，父图不能拿自己的节点表去判定其中的引用。 */
-export function isNestedScopeConfig(nodeType: string, configKey: string): boolean {
-  return NESTED_BODY_TYPES.has(nodeType) && NESTED_BODY_RAW_KEYS.has(configKey);
+export function isNestedScopeConfig(registry: RegistryLike, nodeType: string, configKey: string): boolean {
+  return bodyScope(registry, nodeType).length > 0 && NESTED_BODY_RAW_KEYS.has(configKey);
 }
 
 /** 从任意配置值里抽出 `{{id.output}}` 引用,返回 [{ ref, sourceId }]。 */
@@ -199,7 +211,8 @@ export interface Analysis {
  * 表现是画布全绿、点了运行、前面几步跑完花了钱,才在循环里第一镜上失败。
  *
  * `scopeExtras` 是这一层**注入的变量名**:体内的 `{{loop.item.x}}` 和 `{{input.y}}` 引用的
- * 不是节点,是作用域给的东西。不把它们算进来的话,递归下去会把每一条正常引用都报成失效。
+ * 不是节点,是作用域给的东西。不把它们算进来的话,递归下去会把每一条正常引用都报成失效;
+ * 多算一个的话,引用了一个运行时根本不存在的名字也会被放行。所以只认节点声明的那几个。
  *
  * `insideName` 有值时,这一层的问题**记在外层那个节点头上** —— 画布上只画得出顶层节点,
  * 给一个画不出来的 id 挂角标等于这条问题没人看得见。名字里带上路径("逐镜生成 › 合成口播"),
@@ -263,7 +276,7 @@ function collect(
         }
       }
       // 子图/循环体的 body/output/condition 引用子作用域或内部节点,顶层不做失效检查(否则误报)。
-      if (isNestedScopeConfig(node.type, key)) continue;
+      if (isNestedScopeConfig(registry, node.type, key)) continue;
       for (const { ref, sourceId } of extractRefs(config[key])) {
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
@@ -278,9 +291,7 @@ function collect(
         registry,
         ctx,
         issues,
-        // 这一层注入的两个名字。`loop.*` 只有循环有,`input.*` 循环和子图都有 —— 一起给,
-        // 多认一个名字的代价是漏报一条,而少认一个的代价是把正常引用报成失效。
-        new Set(["loop", "input"]),
+        new Set(bodyScope(registry, node.type)),
         attributeTo || node.id,
         insideName ? `${insideName} › ${nodeName}` : nodeName,
       );

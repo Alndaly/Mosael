@@ -12099,6 +12099,8 @@ export interface components {
              * @default
              */
             tool_name: string;
+            /** Body Scope */
+            body_scope?: string[];
         };
         /** WorkflowOut */
         WorkflowOut: {

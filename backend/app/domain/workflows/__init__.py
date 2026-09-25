@@ -1153,6 +1153,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
         },
         "outputs": ["results", "count"],
+        #: 体内看得见的作用域名 —— 执行器给体播种的正是这几个(见 executors/loops)。
+        #: 校验、画布就绪检查都读这一格,见 NESTED_BODY_TYPES 上那段。
+        "body_scope": ["loop", "input"],
     },
     "loop_while": {
         "external": False,
@@ -1169,6 +1172,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "output": {"type": "template", "description": "wfNode_loop_while_output"},
         },
         "outputs": ["results", "count", "iterations"],
+        #: 没有 `input`:条件循环没有「逐项共享输入」这一格,执行器只播 `loop.index`。
+        "body_scope": ["loop"],
     },
     "asset_query": {
         "external": False,
@@ -1271,6 +1276,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "output": {"type": "template", "description": "wfNode_subgraph_output"},
         },
         "outputs": ["output"],
+        "body_scope": ["input"],
     },
     # 浏览器自动化(RPA):在隔离浏览器会话里自动化操作网页,与发布登录完全隔离。
     # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。
@@ -1411,47 +1417,6 @@ def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
     return plugin_node_types(db)
 
 
-def _missing_required_in_bodies(
-    owner: str, config: dict[str, Any], known_types: dict[str, dict[str, Any]]
-) -> list[str]:
-    """内嵌子图(循环体 / subgraph)里缺的必填项,带上它住在谁里面。
-
-    只查必填,不查引用:引用要不要报错取决于内层作用域播了什么(`loop` / `input`),
-    那只有体自己说得清(见 `_unresolvable_body_refs` 上那段)。而"缺一个必填项"与作用域无关。
-    """
-    body = config.get("body")
-    if not isinstance(body, dict):
-        return []
-    nodes = body.get("nodes")
-    if not isinstance(nodes, list):
-        return []
-    bound = {
-        (str(edge.get("target")), str(edge.get("target_input")))
-        for edge in (body.get("edges") or [])
-        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input")
-    }
-    found: list[str] = []
-    for node in nodes:
-        if not isinstance(node, dict):
-            continue
-        node_id = str(node.get("id", ""))
-        meta = known_types.get(str(node.get("type", "")))
-        if not meta:
-            continue
-        inner_config = node.get("config") or {}
-        specs = meta["config"]
-        for key, spec in specs.items():
-            if not (isinstance(spec, dict) and spec.get("required")):
-                continue
-            if not config_field_active(spec, inner_config, specs):
-                continue
-            if inner_config.get(key) in (None, "") and (node_id, key) not in bound \
-                    and key not in (node.get("inputs") or []):
-                found.append(f"节点 {owner} 的子图里,节点 {node_id} 缺少必填配置 {key}")
-        found.extend(_missing_required_in_bodies(f"{owner}/{node_id}", inner_config, known_types))
-    return found
-
-
 def validate_graph(
     graph: dict[str, Any],
     *,
@@ -1536,14 +1501,21 @@ def validate_graph(
                     value = node_config.get(key)
                     if value in (None, "") and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
-            #: **必填检查要下到循环体里。** 体内的引用(`{{loop.item}}`)只有体自己说得清,所以
-            #: `_unresolvable_body_refs` 不下探;而"这个节点缺一个必填项"与作用域无关,下得去。
+            #: **运行前的校验要下到内嵌子图里,而且是整份校验。** 体是这张图的一段,它的每一种错
+            #: (缺必填、引用越出作用域、空体、体里有开始节点、环、未知类型)在这里不报,就只能等
+            #: 循环真跑到时才由执行器报 —— 那时工作流已经占了一个任务位、把循环之前的步骤全跑完
+            #: (在「从主题到完整视频」里那是好几次付费的 AI 调用),而同一处遗漏写在顶层是当场
+            #: 422、免费、且指得准。
             #:
-            #: 不下探的代价是真实的:体内缺一项的工作流**能启动** —— 它占一个任务位、把循环之前
-            #: 的步骤全跑完(在「从主题到完整视频」里那是好几次付费的 AI 调用),然后才死在
-            #: 循环上;而同一处遗漏写在顶层是当场 422、免费、且指得准。实测:顶层校验返回 []
-            #: 而体内校验说得出「节点 sheet 缺少必填配置 provider」。
-            errors.extend(_missing_required_in_bodies(node_id, node_config, known_types))
+            #: 此前这里只下探「缺必填」一项,其余的留给执行器在运行时再校验一遍 —— 而那一遍拿不到
+            #: `extra_types`,于是**循环体里的插件节点一律被判「未安装或未启用」**。现在体只在这里
+            #: 校验一次,带着和外层同一份节点类型。
+            if node_type in NESTED_BODY_TYPES:
+                where = f"节点 {node_id} 的{_body_label(node_type)}里:"
+                errors.extend(
+                    where + one
+                    for one in validate_body_graph(node_config.get("body"), node_type, extra_types=extra_types)
+                )
     if require_start:
         if start_count > 1 or (start_count == 0 and not allow_missing_start):
             errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
@@ -1587,28 +1559,44 @@ def validate_graph(
     return errors
 
 
-# 内嵌子图类节点:body/output/condition 属于**内层**作用域(见 binding.interpolate_node_config
-# 保留原文的理由),既是插值时机的依据,也是校验时不下钻的依据。binding.py 从这里取,单一真源。
-NESTED_BODY_TYPES = frozenset({"loop_foreach", "loop_while", "subgraph"})
+#: 内嵌子图类节点(循环体 / subgraph):**由节点自己声明**体内看得见哪些作用域名(`body_scope`)。
+#:
+#: 这份声明是三方的单一真源:执行器给体播种的就是这几个名字;校验据此判断体内的引用有没有
+#: 越出作用域;画布的就绪检查经 /api/workflows/node-types 拿到同一格。此前三方各写各的 ——
+#: 校验对所有循环一律放行 `loop` 与 `input`,可条件循环(loop_while)根本不播 `input`,于是
+#: 体内的 `{{input.x}}` 校验得过、运行时安静地变成空串;画布那一侧则对子图也放行 `loop`,
+#: 后端却会拒绝 —— 同一张图,一边说能跑,一边说不能。
+#:
+#: body/output/condition 属于**内层**作用域(见 binding.interpolate_node_config 保留原文的理由),
+#: 既是插值时机的依据,也是校验时不下钻的依据。binding.py 从这里取。
+NESTED_BODY_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if spec.get("body_scope"))
 NESTED_BODY_RAW_KEYS = ("body", "output", "condition")
 
 
-def validate_body_graph(body: dict[str, Any], *, scope: str = "loop") -> list[str]:
+def _body_label(node_type: str) -> str:
+    return "循环体" if "loop" in NODE_TYPES[node_type]["body_scope"] else "子图"
+
+
+def validate_body_graph(
+    body: Any, node_type: str, *, extra_types: dict[str, dict[str, Any]] | None = None
+) -> list[str]:
     """内嵌子图(循环体 / subgraph)校验:必须非空、无 start 节点、其余同 validate_graph;
-    再查引用是否越出作用域。scope 是执行时播种的作用域名——循环体用 "loop"、subgraph 用 "input"。"""
-    label = "循环体" if scope == "loop" else "子图"
+    再查引用是否越出 `node_type` 声明的作用域(`body_scope`)。
+
+    `extra_types` 和外层那次校验是同一份 —— 体里的插件节点和顶层的一样认得出来。"""
+    label = _body_label(node_type)
     nodes = body.get("nodes") if isinstance(body, dict) else None
     if not isinstance(nodes, list) or not nodes:
         return [f"{label}不能为空,至少要有一个节点"]
-    errors = validate_graph(body, require_start=False)
-    errors.extend(_unresolvable_body_refs(nodes, scope))
+    errors = validate_graph(body, require_start=False, extra_types=extra_types)
+    errors.extend(_unresolvable_body_refs(nodes, node_type))
     return errors
 
 
-def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
+def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
     """Reject a body template that references anything outside its own scope.
 
-    A body context is seeded with the scope var (`loop` for loops, `input` for subgraph) and the
+    A body context is seeded with the scope names its node type declares (`body_scope`) and the
     body's own nodes — nothing else. A body node referencing an outer node like {{start.prefix}}
     therefore interpolated to the empty string: no error, no warning, just silently missing text in
     whatever the body produced. That is the worst failure mode available, so name it at validation
@@ -1616,18 +1604,15 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
 
     (Making the body actually see the outer scope is not a matter of passing more context: body,
     output and condition are deliberately left un-interpolated at the outer scope so that
-    {{loop.item}} / {{input.x}} survive to be resolved when the body runs. Resolving outer
-    references there too means a second, guarded pass — a real change, not a tweak.)
+    {{loop.item}} / {{input.x}} survive to be resolved when the body runs. Outer values reach a
+    body through the node's `inputs`, which keeps the dependency visible on the canvas.)
 
-    Nested bodies are NOT descended into: a nested loop/subgraph node's own body/output/condition
-    belong to *its* inner scope and are validated when it runs. Scanning them here would misreport
-    the inner body's node names as out-of-scope references. Its `inputs`/`items` (outer-facing) are
-    still scanned, since those resolve in *this* scope.
+    Nested bodies are NOT descended into here: a nested loop/subgraph node's own
+    body/output/condition belong to *its* inner scope and validate_graph checks them against that
+    scope. Its `inputs`/`items` (outer-facing) are still scanned, since those resolve in *this* scope.
     """
-    # 循环体除 loop.item/index 外还能读取显式传入的 input.*。这不是偷看外层作用域:
-    # 外层值必须逐项写进循环节点的 inputs,因此依赖在画布上仍然清楚可见。
-    roots = {scope, "input"} if scope == "loop" else {scope}
-    known = roots | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    scope = list(NODE_TYPES[node_type]["body_scope"])
+    known = set(scope) | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
     unknown: set[str] = set()
     for node in nodes:
         if not isinstance(node, dict):
@@ -1642,12 +1627,10 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
                 unknown.add(root)
     if not unknown:
         return []
-    if scope == "loop":
-        return [
-            f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};"
-            "循环体只能引用 loop、input 与体内节点"
-        ]
-    return [f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 input 与体内节点"]
+    allowed = "、".join(scope)
+    if "loop" in scope:
+        return [f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 {allowed} 与体内节点"]
+    return [f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 {allowed} 与体内节点"]
 
 
 #: 后果**落在这个应用之外**的节点:发出去的帖子、别人服务器上的改动、本机跑过的代码、

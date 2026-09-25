@@ -52,9 +52,9 @@ class TestLoopBodyScope:
         }
 
     def test_referencing_an_outer_node_is_rejected(self) -> None:
-        """run_subgraph seeds the body with `loop` and the body's own nodes only, so this used
+        """run_body seeds the body with its declared scope and the body's own nodes only, so this used
         to interpolate to the empty string — silently missing text in whatever the loop made."""
-        errors = validate_body_graph(self._body("prefix = '{{start.prefix}}'"))
+        errors = validate_body_graph(self._body("prefix = '{{start.prefix}}'"), "loop_foreach")
         assert errors and any("循环外" in e for e in errors)
 
     def test_loop_and_sibling_references_are_allowed(self) -> None:
@@ -65,10 +65,10 @@ class TestLoopBodyScope:
             ],
             "edges": [{"source": "n1", "target": "n2"}],
         }
-        assert validate_body_graph(body) == []
+        assert validate_body_graph(body, "loop_foreach") == []
 
     def test_an_empty_body_is_still_rejected_first(self) -> None:
-        assert validate_body_graph({"nodes": [], "edges": []})
+        assert validate_body_graph({"nodes": [], "edges": []}, "loop_foreach")
 
 
 def test_foreach_is_capped_like_while() -> None:
@@ -81,4 +81,4 @@ def test_foreach_is_capped_like_while() -> None:
 @pytest.mark.parametrize("value", ["{{loop.item}}", "{{n1.output}}", "no templates here"])
 def test_body_validation_accepts_ordinary_templates(value: str) -> None:
     body = {"nodes": [{"id": "n1", "type": "code", "config": {"code": value}}], "edges": []}
-    assert all("循环外" not in e for e in validate_body_graph(body))
+    assert all("循环外" not in e for e in validate_body_graph(body, "loop_foreach"))
