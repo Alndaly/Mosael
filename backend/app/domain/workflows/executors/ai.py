@@ -17,6 +17,7 @@ from app.domain.providers import require_connection
 from app.domain.workflows import WorkflowDomainError
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors import register
+from app.domain.workflows.executors.common import text_lines
 
 LLM_TIMEOUT_SECONDS = 120
 
@@ -464,9 +465,10 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
 def translate_lines(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     """整轨一次翻完。
 
-    **收什么都行:一列字符串,或者一列带 `text` 的段落。** 上游最常见的是逐字稿的 segments
-    (每段带 start/end/text),而把整个段落对象交给翻译引擎就是把一坨 JSON 送去翻译 ——
-    此前的逐句循环靠模板里写 `{{loop.item.text}}` 绕开这件事,那是把节点的职责推给了调用方。
+    **收什么都行:一列字符串、一列带 `text` 的段落、一段 JSON 数组或一行一条的文本**
+    (见 common.text_lines)。上游最常见的是逐字稿的 segments(每段带 start/end/text),而把整个
+    段落对象交给翻译引擎就是把一坨 JSON 送去翻译 —— 此前的逐句循环靠模板里写
+    `{{loop.item.text}}` 绕开这件事,那是把节点的职责推给了调用方。
 
     逐句循环也能得到同样的结果,但那是 N 次**串行**节点调用、每次一个新连接;免费端点按 IP
     限流,串起来正好踩在它的节流上(真机上第 1/31 次就 429)。这里走 translate_many:
@@ -477,12 +479,7 @@ def translate_lines(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     """
     from app.domain.translate import translate_many
 
-    raw = config.get("texts")
-    items = raw if isinstance(raw, list) else []
-    texts = [
-        str(item.get("text", "")) if isinstance(item, dict) else str(item if item is not None else "")
-        for item in items
-    ]
+    texts = text_lines(config.get("texts"))
     if not texts:
         return {"texts": [], "count": 0}
     with workspace_scope(getattr(workflow, "workspace_id", "") or ""):

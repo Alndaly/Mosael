@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
@@ -83,6 +84,34 @@ def id_list(value: Any) -> list[str]:
         return [str(item).strip() for item in value if str(item).strip()]
     text = str(value or "").replace("，", ",")
     return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def text_lines(value: Any) -> list[str]:
+    """一列文本 —— 「翻译整轨」「生成字幕」的 texts 共用这一份解析。
+
+    三种写法都合法,因为它们来自三个地方:真正的列表(上游节点的输出,整串引用时插值保留
+    原类型)、一段 JSON 数组文本(接 LLM 的 text 输出)、一行一条的文本(手填)。列表里的
+    元素可以是带 `text` 的段落(逐字稿的 segments),取它的正文。
+
+    **不能按逗号拆** —— 句子里全是逗号,id_list 那套在这里会把一句话拆成五句。
+    **顺序即对齐**:空行照样占一个位置,下游靠第 i 条配第 i 段。
+    """
+    if isinstance(value, dict):
+        raise WorkflowDomainError("wfErr_textsArray")
+    if not isinstance(value, list):
+        text = str(value or "").strip()
+        if not text:
+            return []
+        try:
+            value = json.loads(text)
+        except json.JSONDecodeError:
+            return text.splitlines()
+        if not isinstance(value, list):
+            raise WorkflowDomainError("wfErr_textsArray")
+    return [
+        str(item.get("text", "")) if isinstance(item, dict) else str(item if item is not None else "")
+        for item in value
+    ]
 
 
 def truthy(value: Any) -> bool:

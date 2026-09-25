@@ -19,7 +19,7 @@ from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors.common import id_list, truthy, wait_for_job
+from app.domain.workflows.executors.common import id_list, text_lines, truthy, wait_for_job
 
 logger = logging.getLogger(__name__)
 
@@ -630,23 +630,6 @@ def _field(item: dict[str, Any], path: str) -> Any:
     return current
 
 
-def _lines_in(value: Any) -> list[str]:
-    """逐条替换的文本。**不能按逗号拆** —— 句子里全是逗号,id_list 那套在这里会把一句话拆成五句。"""
-    if isinstance(value, list):
-        return [str(item) for item in value]
-    text = str(value or "").strip()
-    if not text:
-        return []
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        # 一行一条:手填时最自然的写法,也是 loop_foreach 的 items 认的那种。
-        return text.splitlines()
-    if not isinstance(parsed, list):
-        raise WorkflowDomainError("wfErr_textsArray")
-    return [str(item) for item in parsed]
-
-
 def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
     """字幕落到哪条轨:指定了就用它,没指定就用第一条字幕轨,一条都没有就新建。
 
@@ -698,7 +681,7 @@ def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) 
         if allow_empty:
             return nothing
         raise WorkflowDomainError("wfErr_noSegments")
-    lines = _lines_in(config.get("texts"))
+    lines = text_lines(config.get("texts"))
     if lines and len(lines) != len(segments):
         raise WorkflowDomainError("wfErr_linesSegmentsMismatch", params={"lines": len(lines), "segments": len(segments)})
     keep_original = _yes_no(config, "keep_original", default=False)

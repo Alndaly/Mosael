@@ -160,6 +160,32 @@ def test_批量节点收段落也收字符串__顺序就是对齐(monkeypatch) -
     assert plain["texts"] == ["[en] a", "[en] b"]
 
 
+def test_批量节点收一段文本_不再静默交出空结果(monkeypatch) -> None:
+    """texts 是个模板字段:手填时它只能是一行一条的文本,接 LLM 的 text 输出时是一段 JSON 数组。
+
+    此前只认真正的列表,别的一律当空 —— 交出 `{"texts": [], "count": 0}`,不报错。下游的
+    「生成字幕」拿到空译文就退回用原文,于是整条"翻译后配字幕"跑完是绿的,成片里一句都没翻。
+    """
+    import pytest
+
+    from app.domain import translate as domain_translate
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors import ai as ai_executors
+
+    def fake_many(db, texts, target, *, user_id=None, engine="", profile_id=None, model=""):
+        return [f"[{target}] {one}" if one else "" for one in texts]
+
+    monkeypatch.setattr(domain_translate, "translate_many", fake_many)
+
+    typed = ai_executors.translate_lines(None, None, {"texts": "第一句\n\n第三句", "target_lang": "en"})
+    assert typed == {"texts": ["[en] 第一句", "", "[en] 第三句"], "count": 3}, "一行一条,空行也占位"
+    from_llm = ai_executors.translate_lines(None, None, {"texts": '["a", "b"]', "target_lang": "en"})
+    assert from_llm["texts"] == ["[en] a", "[en] b"]
+    with pytest.raises(WorkflowDomainError) as caught:
+        ai_executors.translate_lines(None, None, {"texts": {"text": "不是一列"}, "target_lang": "en"})
+    assert caught.value.key == "wfErr_textsArray"
+
+
 def test_模板不再逐句发请求() -> None:
     """真机上那条失败是「第 1/31 次迭代」—— 循环把一轨字幕拆成 31 次串行调用,
     每次一个新连接,而免费端点按 IP 限流。判据是模板里那一步**不是循环**。"""
