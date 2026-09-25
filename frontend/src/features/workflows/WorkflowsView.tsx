@@ -14,7 +14,6 @@ import { useStore } from "zustand";
 import {
   Background,
   ConnectionLineType,
-  MarkerType,
   MiniMap,
   Panel,
   Position,
@@ -151,7 +150,7 @@ import {
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
-import { EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";
+import { CANVAS_CONNECTION_LINE_STYLE, CANVAS_EDGE_CLASS, CANVAS_EDGE_MARKER, EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";
 import { CanvasNodeSearch, searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { relativeTime } from "@/lib/time";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -315,10 +314,8 @@ const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "json_schema_strict",
 ]);
 
-/** 连线统一带闭合箭头,方向一目了然。走线方式(贝塞尔/折线)见 components/app/canvasEdgeShape。 */
-const DEFAULT_EDGE_OPTIONS = {
-  markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "var(--border-strong)" },
-};
+/** 连线统一带闭合箭头,方向一目了然。样式和走线方式(贝塞尔/折线)都见 components/app/canvasEdgeShape。 */
+const DEFAULT_EDGE_OPTIONS = { markerEnd: CANVAS_EDGE_MARKER };
 const EMPTY_SCOPE_VARIABLES: string[] = [];
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
@@ -2194,7 +2191,8 @@ function WorkflowEditor({
       </div>
 
       <div className={cn(
-        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow__background]:bg-background [&_.react-flow__controls]:overflow-hidden [&_.react-flow__controls]:rounded-md [&_.react-flow__controls]:border [&_.react-flow__controls]:border-border [&_.react-flow__controls]:shadow-none [&_.react-flow__controls-button]:border-b [&_.react-flow__controls-button]:border-border [&_.react-flow__controls-button]:bg-panel [&_.react-flow__controls-button]:text-foreground [&_.react-flow__controls-button:hover]:bg-secondary [&_.react-flow__edge-path]:stroke-border-strong [&_.react-flow__edge-path]:[stroke-width:1.5] [&_.react-flow__edge-path]:[stroke-linecap:round] [&_.react-flow__edge-path]:[transition:stroke_120ms,stroke-width_120ms] [&_.react-flow__edge.selected_.react-flow__edge-path]:stroke-primary [&_.react-flow__edge.selected_.react-flow__edge-path]:[stroke-width:2.2] [&_.react-flow__edge:hover_.react-flow__edge-path]:[stroke-width:2.2] [&_.react-flow__edge-textbg]:fill-panel [&_.react-flow__edge-text]:fill-muted-foreground [&_.react-flow__edge-text]:text-[9.5px] [&_.react-flow__attribution]:bg-transparent [&_.react-flow__attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow__edge-path]:stroke-success [&_.wf-edge-false_.react-flow__edge-path]:stroke-destructive [&_.wf-edge-data_.react-flow__edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow__edge-path]:stroke-primary [&_.wf-edge-data_.react-flow__edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow__edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow__edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow__edge-path]:stroke-warning [&_.react-flow__minimap]:overflow-hidden [&_.react-flow__minimap]:rounded-md [&_.react-flow__minimap]:border [&_.react-flow__minimap]:border-border [&_.react-flow__minimap]:bg-background [&_.react-flow__minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow__minimap-node]:fill-border-strong",
+        CANVAS_EDGE_CLASS,
+        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow__background]:bg-background [&_.react-flow__controls]:overflow-hidden [&_.react-flow__controls]:rounded-md [&_.react-flow__controls]:border [&_.react-flow__controls]:border-border [&_.react-flow__controls]:shadow-none [&_.react-flow__controls-button]:border-b [&_.react-flow__controls-button]:border-border [&_.react-flow__controls-button]:bg-panel [&_.react-flow__controls-button]:text-foreground [&_.react-flow__controls-button:hover]:bg-secondary [&_.react-flow__edge-textbg]:fill-panel [&_.react-flow__edge-text]:fill-muted-foreground [&_.react-flow__edge-text]:text-[9.5px] [&_.react-flow__attribution]:bg-transparent [&_.react-flow__attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow__edge-path]:stroke-success [&_.wf-edge-false_.react-flow__edge-path]:stroke-destructive [&_.wf-edge-data_.react-flow__edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow__edge-path]:stroke-primary [&_.wf-edge-data_.react-flow__edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow__edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow__edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow__edge-path]:stroke-warning [&_.react-flow__minimap]:overflow-hidden [&_.react-flow__minimap]:rounded-md [&_.react-flow__minimap]:border [&_.react-flow__minimap]:border-border [&_.react-flow__minimap]:bg-background [&_.react-flow__minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow__minimap-node]:fill-border-strong",
       )}
         // 画布**始终占满**:助手和执行历史改成浮在上面,不再从画布身上切走一列。
         // 工具条已经浮起来了,右边再留一条实心栏,画布就被两面夹住 —— 而这一页的主角是画布。
@@ -2296,7 +2294,7 @@ function WorkflowEditor({
             isValidConnection={isValidConnection}
             connectionRadius={36}
             connectionLineType={edgeShape as ConnectionLineType}
-            connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
+            connectionLineStyle={CANVAS_CONNECTION_LINE_STYLE}
             onNodeClick={(event, node) => {
               if (markerMode) return;
               if (workflowComments.active) { const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }); if (point) workflowComments.place({ ...point, node_id: node.id }); return; }

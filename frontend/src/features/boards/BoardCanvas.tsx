@@ -8,9 +8,7 @@ import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
 import { type BoardDocumentState } from "./boardDocumentSources";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
-import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
-import { createPortal } from "react-dom";
 import { carriedByFrame } from "@/features/boards/frameCarry";
 import {
   Background,
@@ -22,8 +20,6 @@ import {
   ReactFlowProvider,
   ViewportPortal,
   addEdge,
-  getBezierPath,
-  getSmoothStepPath,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -39,7 +35,15 @@ import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type Workspac
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { centerCanvasViewport, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
-import { shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { CANVAS_CONNECTION_LINE_STYLE, CANVAS_EDGE_CLASS, CANVAS_EDGE_MARKER, shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import {
+  PENDING_GHOST_ID,
+  PENDING_LINK_NODE_TYPES,
+  PendingLinkMenu,
+  ghostRect,
+  pendingLinkFromRelease,
+  usePendingLink,
+} from "@/components/app/canvasPendingLink";
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationOption } from "@/api/client";
@@ -80,7 +84,7 @@ import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
  * 双向同步会打架:拖动时 React Flow 每帧改一次位置,回写又会重建节点,拖到一半会跳。
  */
 
-/** 只放**数据**。回调在渲染时注入(见 displayNodes)—— 存进节点里的话,它们会闭包住
+/** 只放**数据**。回调在渲染时注入(见 baseNodes)—— 存进节点里的话,它们会闭包住
  *  还没声明的 setNodes,而这个顺序绕不开:节点的初值本身就要用到它们。 */
 /** 画布交出去的把手。**只此一处** —— 上层曾经自己抄了一份同样形状的类型,加一个动作
  *  (撤销)时抄的那份不会报错,只会让按钮点了没反应。 */
@@ -107,8 +111,9 @@ export interface BoardCanvasApi {
   canRedo: boolean;
 }
 
-/** 画板的节点 + 标记。**标记不是画板项**,所以它进不了 BOARD_NODE_TYPES 那张按 kind 索引的表。 */
-const CANVAS_NODE_TYPES = { ...BOARD_NODE_TYPES, marker: MarkerPin };
+/** 画板的节点 + 标记 + 拉线松手时的占位。**后两样都不是画板项**,所以它们进不了
+ *  BOARD_NODE_TYPES 那张按 kind 索引的表。 */
+const CANVAS_NODE_TYPES = { ...BOARD_NODE_TYPES, marker: MarkerPin, ...PENDING_LINK_NODE_TYPES };
 
 /**
  * 这块画布的层次 —— **一处说了算**。
@@ -123,6 +128,8 @@ const LAYERS = {
   item: 1,
   /** 一枚贴在画布上的旗子,被别的东西盖住就点不到了。 */
   marker: 2,
+  /** 拉线松手时的占位:它说的是「新的一格会落在这儿」,被已有的项盖住就等于没说。 */
+  pending: 3,
 } as const;
 
 function toNodes(items: BoardItem[]): Node[] {
@@ -753,7 +760,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
 
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
-  const displayNodes: Node[] = nodes.map((node) =>
+  const baseNodes: Node[] = nodes.map((node) =>
     node.type === "marker"
       ? { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected,
           style: { ...node.style, pointerEvents: markerMode ? "auto" : "none" },
@@ -765,6 +772,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           data: { ...node.data, onText: setText, onAspect: setAspect, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
         },
   );
+  const baseEdges: Edge[] = shapeEdges(edges, edgeShape).map((edge) => ({
+    ...edge,
+    markerEnd: CANVAS_EDGE_MARKER,
+    selectable: !commentMode && !markerMode,
+  }));
 
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
   React.useEffect(() => {
@@ -955,30 +967,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   //: 哪一张便签正在写。写字是同步的几秒,期间按钮转圈 —— 不给反馈的话用户会再点一次。
   const [writing, setWriting] = React.useState<string | null>(null);
 
-  const [linkMenu, setLinkMenu] = React.useState<
-    {
-      screenX: number;
-      screenY: number;
-      /** Keep the released connection in flow coordinates, just like the live preview. */
-      fromX: number;
-      fromY: number;
-      fromPosition: Position;
-      x: number;
-      y: number;
-      from: string;
-      fromIsSource: boolean;
-    } | null
-  >(null);
-
-  React.useEffect(() => {
-    if (!linkMenu) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setLinkMenu(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [linkMenu]);
-
   /**
    * 从某一项长出下一项,并连上。
    *
@@ -988,11 +976,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    */
   const spawnLinked = React.useCallback(
     (kind: (typeof SPAWNABLE_KINDS)[number], from: string, at: { x: number; y: number }, fromIsSource = true) => {
-      const size = DEFAULT_SIZE[kind];
-      const item = add(kind, {
-        x: Math.round(at.x - (fromIsSource ? 0 : size.width)),
-        y: Math.round(at.y - size.height / 2),
-      });
+      //: 摆放规则和拉线松手时的占位是同一个函数 —— 占位在哪,节点就落在哪,选完不跳。
+      const { x, y } = ghostRect(at, DEFAULT_SIZE[kind], fromIsSource);
+      const item = add(kind, { x, y });
       //: 线的方向照着用户拉的那一头:从 source 拉出来的,新节点是终点;反之是起点。
       setEdges((current) =>
         addEdge(
@@ -1005,6 +991,30 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     },
     [add, setEdges],
   );
+
+  /**
+   * 从节点拉出一条线、松手在空白处:摆一个占位、连一根待定的线、旁边挂单子
+   * (见 components/app/canvasPendingLink)。选中一种就在占位那儿建真节点、连真线。
+   */
+  const describeKind = React.useCallback(
+    (kind: (typeof SPAWNABLE_KINDS)[number]) => ({ icon: kindIcon(kind), ...kindText(t, kind) }),
+    [t],
+  );
+  const sizeOfKind = React.useCallback((kind: (typeof SPAWNABLE_KINDS)[number]) => DEFAULT_SIZE[kind], []);
+  const pending = usePendingLink({
+    kinds: SPAWNABLE_KINDS,
+    sizeOf: sizeOfKind,
+    describe: describeKind,
+    onChoose: (kind, link) => spawnLinked(kind, link.nodeId, link.at, link.fromSource),
+  });
+  const pendingLink = pending.link;
+  const cancelPending = pending.cancel;
+  //: 起手那一格没了(撤销、服务端那份换进来、别处删掉),待定的线就没有一头可接 —— 一并取消。
+  React.useEffect(() => {
+    if (pendingLink && !nodes.some((node) => node.id === pendingLink.nodeId)) cancelPending();
+  }, [pendingLink, nodes, cancelPending]);
+  //: 占位和待定的线**只进画出来的这一份** —— 不进 nodes/edges,于是不会被存、不进撤销历史。
+  const display = pending.decorate(baseNodes, baseEdges, edgeShape, LAYERS.pending);
 
   /** 把某一项就地换成已完成的产出。轮询拿到结果后由上层调。 */
   /**
@@ -1095,7 +1105,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
     <div
       ref={surface}
-      className="relative h-full w-full overflow-hidden bg-background"
+      className={cn("relative h-full w-full overflow-hidden bg-background", CANVAS_EDGE_CLASS)}
       {...drop.handlers}
       // 坐标换算要在 drop 那一刻做 —— 这里把鼠标位置存下来给上面的回调用。
       onDragOver={(event) => {
@@ -1142,15 +1152,16 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     >
       <MarkerEditorProvider enabled={markerMode && markersVisible}>
       <ReactFlow
-        nodes={displayNodes}
-        edges={shapeEdges(edges, edgeShape).map(edge => ({ ...edge, selectable: !commentMode && !markerMode }))}
+        nodes={display.nodes}
+        edges={display.edges}
         connectionLineType={edgeShape as ConnectionLineType}
+        connectionLineStyle={CANVAS_CONNECTION_LINE_STYLE}
         nodeTypes={CANVAS_NODE_TYPES}
         minZoom={0.1}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(event, node) => {
-          if (markerMode) return;
+          if (markerMode || node.id === PENDING_GHOST_ID) return;
           if (commentMode) {
             if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor), suppressPaneClick.current)) return;
             const instance = rf.current;
@@ -1182,22 +1193,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onConnectEnd={(event, connection) => {
           if (commentMode || markerMode) return;
           const instance = rf.current;
-          const from = connection.fromNode?.id;
-          if (connection.isValid || !instance || !from || !connection.from || !connection.fromPosition) return;
-          const point = "changedTouches" in event ? event.changedTouches[0] : (event as MouseEvent);
-          if (!point) return;
-          const flow = instance.screenToFlowPosition({ x: point.clientX, y: point.clientY });
-          setLinkMenu({
-            screenX: point.clientX,
-            screenY: point.clientY,
-            fromX: connection.from.x,
-            fromY: connection.from.y,
-            fromPosition: connection.fromPosition,
-            x: flow.x,
-            y: flow.y,
-            from,
-            fromIsSource: connection.fromHandle?.type !== "target",
-          });
+          if (!instance) return;
+          const link = pendingLinkFromRelease(event, connection, instance.screenToFlowPosition);
+          if (link) pending.open(link);
         }}
         onNodeDragStart={(_event, node) => beginFrameDrag(node)}
         onNodeDrag={(_event, node) => dragFrame(node)}
@@ -1215,7 +1213,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             setReady(true);
           });
         }}
-        onMoveStart={() => setLinkMenu(null)}
+        //: 平移/缩放就取消待定 —— 单子钉在屏幕上、占位跟着画布走,两者会错开。
+        onMoveStart={(event) => {
+          if (event) cancelPending();
+        }}
         onMoveEnd={(_event, next) => viewport.remember(next)}
         // 双击空白处直接加一张便签 —— 想法来的时候不该先去找按钮。
         onDoubleClick={(event) => {
@@ -1459,63 +1460,19 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         </div>
       )}
 
-      {/* 从线尾长出下一个节点。位置跟着松手的地方,**不是屏幕中央** —— 用户刚把线拉到那儿,
-          单子出现在别处等于要他把视线再挪一趟。 */}
-      {linkMenu && (
-        <>
-          {/* 和 React Flow 拖线时同一个视口、同一种走线(跟着走线偏好:贝塞尔或圆角折线)。 */}
-          <ViewportPortal>
-            <svg className="pointer-events-none absolute left-0 top-0 h-px w-px overflow-visible" aria-hidden data-pending-board-connection>
-              <path
-                d={(edgeShape === "smoothstep" ? getSmoothStepPath : getBezierPath)({
-                  sourceX: linkMenu.fromX,
-                  sourceY: linkMenu.fromY,
-                  sourcePosition: linkMenu.fromPosition,
-                  targetX: linkMenu.x,
-                  targetY: linkMenu.y,
-                  targetPosition: linkMenu.fromIsSource ? Position.Left : Position.Right,
-                })[0]}
-                className="react-flow__connection-path"
-              />
-            </svg>
-          </ViewportPortal>
-          {/* Screen coordinates must escape ancestors with backdrop-filter/transform. */}
-          {createPortal(
-            <>
-              <div className="fixed inset-0 z-40" onPointerDown={() => setLinkMenu(null)} />
-              <div
-                className={cn(FLOATING_SURFACE, "fixed z-50 w-56 overflow-hidden p-1.5")}
-                style={{ left: linkMenu.screenX + 8, top: linkMenu.screenY + 8 }}
-              >
-                <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">{t("boardSpawnTitle")}</p>
-                {SPAWNABLE_KINDS.map((kind) => {
-                  const Icon = kindIcon(kind);
-                  const { label, hint } = kindText(t, kind);
-                  return (
-                    <button
-                      key={kind}
-                      type="button"
-                      onClick={() => {
-                        spawnLinked(kind, linkMenu.from, { x: linkMenu.x, y: linkMenu.y }, linkMenu.fromIsSource);
-                        setLinkMenu(null);
-                      }}
-                      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary"
-                    >
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
-                        <Icon size={14} />
-                      </span>
-                      <span className="grid min-w-0 gap-0.5">
-                        <span className="truncate text-ui-xs text-foreground">{label}</span>
-                        <span className="truncate text-ui-2xs text-muted-foreground">{hint}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>,
-            document.body,
-          )}
-        </>
+      {/* 从线尾长出下一个节点:占位和待定的线已经画在画布里(见 display),这里是挂在占位旁边的单子。 */}
+      {pendingLink && (
+        <PendingLinkMenu
+          title={t("boardSpawnTitle")}
+          kinds={SPAWNABLE_KINDS}
+          describe={describeKind}
+          active={pending.active}
+          onActiveChange={pending.setActive}
+          onChoose={pending.choose}
+          onCancel={cancelPending}
+          fromSource={pendingLink.fromSource}
+          anchor={() => surface.current?.querySelector(`.react-flow__node[data-id="${PENDING_GHOST_ID}"]`) ?? null}
+        />
       )}
 
       {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}

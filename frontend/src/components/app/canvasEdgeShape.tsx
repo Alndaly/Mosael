@@ -1,3 +1,4 @@
+import { MarkerType } from "@xyflow/react";
 import { Spline, Waypoints, type LucideIcon } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
@@ -31,6 +32,40 @@ const EDGE_SHAPE_LABEL = {
   default: "wfEdgeBezier",
   smoothstep: "wfEdgeSmoothStep",
 } as const;
+
+/**
+ * 连线**长什么样**。和走线方式一样,工作流和创意画板共用这一份。
+ *
+ * 画板此前没写任何连线样式,吃的是 xyflow 的默认值:#b1b1b7、1px、没有箭头 —— 深色主题下
+ * 也是那一抹灰,和工作流那边按设计令牌画的线不是一个东西。于是「拉线松手时那根待定的线」
+ * 该长得像谁都说不清。收成一处:线色、线宽、选中/悬停、箭头、拖线时和待定时的样子。
+ */
+
+/**
+ * 挂在画布外层容器上:所有边照设计令牌画,选中变主色、悬停/选中加粗。
+ *
+ * 两个坑,都让「类名挂上了、规则也生成了,线还是 xyflow 默认的 #b1b1b7 / 1px」:
+ *
+ *  · **写 xyflow 的 CSS 变量,不直接写 stroke。** xyflow 的 style.css 不在任何 @layer 里,
+ *    而 Tailwind 的工具类全在 `@layer utilities` —— 层外的声明无视选择器权重、永远压过层内的。
+ *    xyflow 自己读 `--xy-edge-stroke*`,变量在祖先上设、往下继承,和它的规则不冲突。
+ *    线帽和过渡 xyflow 没写,直接写属性就生效。
+ *  · **选择器里的下划线要转义。** Tailwind 把任意值里的 `_` 换成空格,`.react-flow__edge`
+ *    会变成 `.react-flow  edge`(一个选不中任何东西的后代选择器)。所以写成 `\_\_`,
+ *    并用 String.raw —— 普通字符串里的 `\_` 会被 JS 吃掉反斜杠,运行时的类名就和生成的
+ *    规则对不上了。
+ */
+export const CANVAS_EDGE_CLASS = String.raw`[--xy-edge-stroke:var(--border-strong)] [--xy-edge-stroke-width:1.5] [--xy-edge-stroke-selected:var(--primary)] [--xy-connectionline-stroke:var(--primary)] [--xy-connectionline-stroke-width:1.5] [&_.react-flow\_\_edge.selected]:[--xy-edge-stroke-width:2.2] [&_.react-flow\_\_edge:hover]:[--xy-edge-stroke-width:2.2] [&_.react-flow\_\_edge-path]:[stroke-linecap:round] [&_.react-flow\_\_edge-path]:[transition:stroke_120ms,stroke-width_120ms]`;
+
+/** 连线末端的闭合箭头:方向一目了然(上游 → 下游)。 */
+export const CANVAS_EDGE_MARKER = { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "var(--border-strong)" };
+
+/**
+ * 拖线途中那根线,和松手后还没定下来的那根**是同一个样子**:主色虚线。
+ * 从「正在拉」到「等你选」再到「连上了」,线只换一次样子(虚 → 实),不会中途变成另一根线。
+ */
+export const CANVAS_CONNECTION_LINE_STYLE = { stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" };
+export const CANVAS_PENDING_EDGE_STYLE = CANVAS_CONNECTION_LINE_STYLE;
 
 /**
  * 读写某块画布的走线偏好。`storageKey` 按画布**种类**分(工作流一份、画板一份),不按某一张图 ——
