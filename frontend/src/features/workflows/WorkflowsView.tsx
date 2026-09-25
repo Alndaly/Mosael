@@ -202,7 +202,7 @@ import {
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
-import { isCanvasKeyTarget, leaveClipboardToSystem } from "@/lib/shortcuts";
+import { isCanvasKeyTarget, isTypingTarget, leaveClipboardToSystem } from "@/lib/shortcuts";
 
 /** 主画布的节点类型。标记不是工作流节点(它不执行、不连线),但它在 React Flow 里得有个
  *  渲染器 —— 所以它加在这里,而不是加进 WORKFLOW_NODE_TYPES(那张表是"能跑的节点")。
@@ -2703,12 +2703,15 @@ export function NodeInspector({
   })();
 
   // Esc 收起检查器 —— 输入框/代码编辑器里不劫持(那里 Esc 另有用途)。
+  // **也只认画布里发出的 Esc。** 检查器里展开的下拉、弹层是 Portal 到 body 的,那一下 Esc
+  // 是「收起这个下拉」,此前却连检查器一起关了(选中也跟着没了)。
   React.useEffect(() => {
     if (!onClose) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      const target = event.target as HTMLElement | null;
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const target = event.target as Element | null;
+      if (isTypingTarget(target)) return;
+      if (target && target !== target.ownerDocument?.body && !target.closest(".react-flow")) return;
       onClose();
     };
     window.addEventListener("keydown", onKey);

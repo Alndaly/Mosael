@@ -271,3 +271,22 @@ it("画布上选中节点按 Backspace 照常删", async () => {
   expect(graph.nodes.map((node) => node.id)).toEqual(["start", "llm-1"]);
   expect(graph.edges.map((edge) => edge.id)).toEqual(["e-start-llm-1"]);
 });
+
+it("在检查器里展开的下拉上按 Esc 只收起下拉,检查器还开着", async () => {
+  Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {}, scrollIntoView: () => {} });
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("llm-1"));
+  fireEvent.click(nodeEl("llm-1"));
+  const panel = await screen.findByRole("complementary", { name: "llm" });
+  const trigger = within(panel).getAllByRole("combobox")[0];
+  fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+  fireEvent.click(trigger);
+  const option = await screen.findByRole("option", { name: /wfPresetPrecise/ });
+  option.focus();
+  fireEvent.keyDown(option, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("option", { name: /wfPresetPrecise/ })).toBeNull());
+  expect(screen.getByLabelText("wfNodeName")).toBeTruthy();
+  // 画布上的 Esc 照常收起检查器。
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByLabelText("wfNodeName")).toBeNull());
+});
