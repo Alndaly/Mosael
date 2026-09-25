@@ -323,8 +323,8 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
       expect(node).toMatchObject(DEFAULT_SIZE.image);
       expect(reference.left).toBeCloseTo(node.position.x * zoom + x);
       expect(reference.top).toBeCloseTo(node.position.y * zoom + y);
-      expect(reference.width).toBeCloseTo(node.width! * zoom);
-      expect(reference.height).toBeCloseTo(node.height! * zoom);
+      expect(reference.right - reference.left).toBeCloseTo(node.width! * zoom);
+      expect(reference.bottom - reference.top).toBeCloseTo(node.height! * zoom);
     }
   });
 
