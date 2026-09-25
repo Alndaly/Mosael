@@ -1,0 +1,103 @@
+/**
+ * 真的用 Tailwind 把 tokens.css 编一遍,看**生成出来的** CSS 长什么样。
+ *
+ * vendorStyles / arbitrarySelectors 两道棘轮读的是源码的写法;这里核对写法背后的那件事本身:
+ * 第三方样式确实落在 vendor 层、层序确实是那个顺序、工作流皮肤里的选择器确实选得中 React Flow
+ * 的真实类名。此前的失效恰恰是"源码看着对、生成的规则不对"—— 只读源码的断言拦不住它。
+ */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import { compile } from "tailwindcss";
+import { describe, expect, it } from "vitest";
+
+import { CANVAS_EDGE_CLASS } from "@/components/app/canvasEdgeShape";
+import { WORKFLOW_CANVAS_CLASS, WORKFLOW_HANDLE_CLASS } from "@/features/workflows/workflowCanvasSkin";
+
+const SRC = join(import.meta.dirname, "..");
+const NODE_MODULES = join(SRC, "..", "node_modules");
+
+/** 只认 tokens.css 里真正出现的几种 @import:tailwindcss 自己、tw-animate-css、vendor 表。 */
+function resolveStylesheet(id: string, base: string): string {
+  if (id.startsWith(".")) return join(base, id);
+  if (id === "tailwindcss") return join(NODE_MODULES, "tailwindcss", "index.css");
+  if (id === "tw-animate-css") return join(NODE_MODULES, "tw-animate-css", "dist", "tw-animate.css");
+  return join(NODE_MODULES, id);
+}
+
+async function build(candidates: string[]): Promise<string> {
+  const compiler = await compile(readFileSync(join(SRC, "design", "tokens.css"), "utf8"), {
+    base: join(SRC, "design"),
+    loadStylesheet: async (id, base) => {
+      const path = resolveStylesheet(id, base);
+      return { path, base: dirname(path), content: readFileSync(path, "utf8") };
+    },
+    loadModule: async () => {
+      throw new Error("tokens.css 没有 @plugin / @config");
+    },
+  });
+  return compiler.build(candidates);
+}
+
+/** 所有 `@layer <name> { … }` 块的正文,一块一项。 */
+function layerBodies(css: string, name: string): string[] {
+  const bodies: string[] = [];
+  for (const match of css.matchAll(new RegExp(`@layer ${name}\\s*\\{`, "g"))) {
+    let depth = 1;
+    let i = match.index! + match[0].length;
+    const start = i;
+    for (; i < css.length && depth > 0; i += 1) {
+      if (css[i] === "{") depth += 1;
+      else if (css[i] === "}") depth -= 1;
+    }
+    bodies.push(css.slice(start, i - 1));
+  }
+  return bodies;
+}
+
+const layerBody = (css: string, name: string) => layerBodies(css, name).join("\n");
+
+const classes = (...lists: string[]) => lists.flatMap((list) => list.split(/\s+/)).filter(Boolean);
+
+describe("编出来的层叠", () => {
+  it("层序是 theme → base → vendor → components → utilities,React Flow 的规则全在 vendor 层里", async () => {
+    const css = await build([]);
+    //: 层序按首次出现排。Tailwind 自己还会在最前面垫一个 `@layer properties;`(@property 的兜底),
+    //: 它不和任何人抢属性;要紧的是**第一句提到 theme 的层序声明**就是我们那句 —— Tailwind 自带的
+    //: `@layer theme, base, components, utilities;` 排在它后面,已经改不动先后了。
+    const orders = [...css.matchAll(/^@layer ([a-z, ]+);$/gm)].map((m) => m[1]).filter((one) => one.includes("theme"));
+    expect(orders[0]).toBe("theme, base, vendor, components, utilities");
+    const vendor = layerBody(css, "vendor");
+    expect(vendor).toContain(".react-flow__edge-path");
+    expect(vendor).toContain(".PhotoView-Portal");
+    //: vendor 层以外不该再有 React Flow 自己的规则 —— 有的话就是又有一份不分层的漏进来了。
+    const outside = layerBodies(css, "vendor").reduce((rest, body) => rest.replace(body, ""), css);
+    expect(outside).not.toMatch(/\.react-flow__edge-path\s*\{/);
+  }, 20_000);
+
+  it("画布皮肤的每一条都生成了规则,而且选择器里是 React Flow 的真实类名", async () => {
+    const candidates = classes(CANVAS_EDGE_CLASS, WORKFLOW_CANVAS_CLASS, WORKFLOW_HANDLE_CLASS);
+    const utilities = layerBody(await build(candidates), "utilities");
+    for (const name of [
+      "react-flow__edge-path",
+      "react-flow__edge-text",
+      "react-flow__attribution a",
+      "react-flow__edge.wf-edge-data.selected",
+      "react-flow__handle-left:hover",
+      "react-flow__handle-right:hover",
+    ]) {
+      expect(utilities, name).toContain(`.${name}`);
+    }
+    //: 没转义时生成的正是这种"类名里断开一截"的选择器。
+    expect(utilities).not.toMatch(/\.react-flow\s+edge/);
+    //: 按语义上色的那几条,落到的是 xyflow 读的变量。
+    for (const [edge, token] of [
+      ["wf-edge-true", "--success"],
+      ["wf-edge-false", "--destructive"],
+      ["wf-edge-data", "--primary"],
+      ["wf-edge-mismatch", "--warning"],
+    ]) {
+      expect(utilities, edge).toMatch(new RegExp(`\\.${edge}[^{]*\\{[^}]*--xy-edge-stroke: var\\(${token}\\)`));
+    }
+  }, 20_000);
+});

@@ -1,5 +1,26 @@
+/* 层的先后在这里一次说定,**必须是整份表的第一句**(层序按首次出现排,先写的优先级低)。
+ *
+ * 第三方组件自带的样式表(React Flow、react-photo-view)一律 `@import … layer(vendor)` 进来,
+ * **不在 JS 里 import**。JS 里 import 的 CSS 不在任何层里,而不分层的声明无视选择器权重、
+ * 永远压过 Tailwind 的 `@layer utilities` —— 于是 `[&_.react-flow\_\_edge-path]:stroke-success`
+ * 这类工具类规则生成了、类名也挂在 DOM 上,却一条都不算数(工作流里真/假分支的红绿、数据线的
+ * 主色和线宽就是这么"写了等于没写"的;大图预览为了压过它,每个类都得挂 `!`)。
+ *
+ * vendor 排在 base **之后**、components/utilities **之前**:
+ *  · 高过 base —— Tailwind 的 preflight(`* { margin: 0 }`、`button { background: transparent }`)
+ *    不会反过来抹掉第三方组件自己的结构样式(React Flow 面板的外边距、控制钮的底色);
+ *    这和它以前不分层时的结果一样。
+ *  · 低过 utilities —— 我们挂在它们元素上的工具类照常生效,不用再加 `!`。
+ *
+ * 主题色仍然优先走各组件自己公开的 CSS 变量(React Flow 的 `--xy-*`),工具类只管变量够不着的
+ * 那几项。棘轮见 design/vendorStyles.test.ts。 */
+@layer theme, base, vendor, components, utilities;
 @import "tailwindcss";
 @import "tw-animate-css";
+/* React Flow 的样式表**必须进主包**,不能跟着某一页走:工作流和创意画板都用它,页面按需加载
+ * 之后,只在某一页里 import 的话,没进过那一页就没有这份样式(画布 pane 不成形、拖不动)。 */
+@import "@xyflow/react/dist/style.css" layer(vendor);
+@import "react-photo-view/dist/react-photo-view.css" layer(vendor);
 /* Streamdown ships Tailwind-classed markup; include its dist for utility generation. */
 @source "../../node_modules/streamdown/dist/*.js";
 

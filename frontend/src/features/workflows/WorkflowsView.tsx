@@ -207,6 +207,7 @@ import {
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
+import { WORKFLOW_CANVAS_CLASS } from "@/features/workflows/workflowCanvasSkin";
 import { isTypingTarget, leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 
@@ -2188,7 +2189,8 @@ function WorkflowEditor({
 
       <div className={cn(
         CANVAS_EDGE_CLASS,
-        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow__background]:bg-background [&_.react-flow__controls]:overflow-hidden [&_.react-flow__controls]:rounded-md [&_.react-flow__controls]:border [&_.react-flow__controls]:border-border [&_.react-flow__controls]:shadow-none [&_.react-flow__controls-button]:border-b [&_.react-flow__controls-button]:border-border [&_.react-flow__controls-button]:bg-panel [&_.react-flow__controls-button]:text-foreground [&_.react-flow__controls-button:hover]:bg-secondary [&_.react-flow__edge-textbg]:fill-panel [&_.react-flow__edge-text]:fill-muted-foreground [&_.react-flow__edge-text]:text-[9.5px] [&_.react-flow__attribution]:bg-transparent [&_.react-flow__attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow__edge-path]:stroke-success [&_.wf-edge-false_.react-flow__edge-path]:stroke-destructive [&_.wf-edge-data_.react-flow__edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow__edge-path]:stroke-primary [&_.wf-edge-data_.react-flow__edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow__edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow__edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow__edge-path]:stroke-warning [&_.react-flow__minimap]:overflow-hidden [&_.react-flow__minimap]:rounded-md [&_.react-flow__minimap]:border [&_.react-flow__minimap]:border-border [&_.react-flow__minimap]:bg-background [&_.react-flow__minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow__minimap-node]:fill-border-strong",
+        WORKFLOW_CANVAS_CLASS,
+        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2",
       )}
         // 画布**始终占满**:助手和执行历史改成浮在上面,不再从画布身上切走一列。
         // 工具条已经浮起来了,右边再留一条实心栏,画布就被两面夹住 —— 而这一页的主角是画布。
@@ -2243,7 +2245,7 @@ function WorkflowEditor({
             // 每一层一个 React Flow 实例:换层时重挂,视口按那一层记的位置恢复(见 onInit)。
             key={scopeKey}
             // 定位好之前藏着 —— 按层算:换一层时新挂的画布也有一帧停在默认视口上。
-            className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", (!canvas.ready || placedScope !== scopeKey) && "opacity-0")}
+            className={cn((!canvas.ready || placedScope !== scopeKey) && "opacity-0")}
             nodes={displayNodes}
             nodesConnectable={!annotationMode}
             elementsSelectable={!workflowComments.active}

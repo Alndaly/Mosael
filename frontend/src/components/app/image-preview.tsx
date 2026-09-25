@@ -1,7 +1,6 @@
 import * as React from "react";
 import { ExternalLink } from "lucide-react";
 import { PhotoSlider } from "react-photo-view";
-import "react-photo-view/dist/react-photo-view.css";
 
 import { useI18n } from "@/app/preferences";
 import { VideoPlayer } from "@/components/app/media-playback";
@@ -107,12 +106,14 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         visible={visible && images.length > 0}
         onClose={close}
         afterClose={reset}
-        // react-photo-view 自带样式不在 cascade layer 里,会压过 utilities layer——覆盖其内部结构一律加 `!`。
+        // react-photo-view 自带的样式在 vendor 层(见 design/tokens.css 开头),工具类压得过它,不用加 `!`。
+        // 选中它内部结构时,类名里的 `__` 要写成 `\_\_`(整串 String.raw):Tailwind 会把任意值里的
+        // `_` 换成空格,不转义的话选择器选不中任何东西。
         // 关闭后这层还会在 DOM 里留一会儿(等它自己的收尾动画),期间虽然看不见却仍然接管
         // 点击 —— 表现为「关掉大图后有一小段时间画布点不动、节点拖不了」。不可见就不该拦事件。
         className={cn(
-          !visible && "pointer-events-none!",
-          "z-[150]! [&_.PhotoView-Slider__BannerWrap]:h-12! [&_.PhotoView-Slider__BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)]! [&_.PhotoView-Slider__Counter]:font-mono! [&_.PhotoView-Slider__Counter]:text-ui-xs! [&_.PhotoView-Slider__Counter]:text-[rgb(255_255_255/0.68)]! [&_.PhotoView-Slider__toolbarIcon]:h-9! [&_.PhotoView-Slider__toolbarIcon]:w-9! [&_.PhotoView-Slider__toolbarIcon]:text-[rgb(255_255_255/0.82)]! [&_:is(.PhotoView-Slider__ArrowLeft,.PhotoView-Slider__ArrowRight)]:text-[rgb(255_255_255/0.78)]!",
+          !visible && "pointer-events-none",
+          String.raw`z-[150] [&_.PhotoView-Slider\_\_BannerWrap]:h-12 [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)] [&_.PhotoView-Slider\_\_Counter]:font-mono [&_.PhotoView-Slider\_\_Counter]:text-ui-xs [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)] [&_.PhotoView-Slider\_\_toolbarIcon]:h-9 [&_.PhotoView-Slider\_\_toolbarIcon]:w-9 [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)] [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]`,
         )}
         maskClassName="will-change-[opacity]"
         photoClassName="rounded-lg will-change-[transform,opacity] [outline:1px_solid_rgb(255_255_255/0.12)]"

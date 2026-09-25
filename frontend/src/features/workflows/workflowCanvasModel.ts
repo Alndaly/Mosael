@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 
+import { CANVAS_EDGE_MARKER } from "@/components/app/canvasEdgeShape";
 import { toMarkerNodes } from "@/features/markers/markers";
 import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -109,6 +110,9 @@ export function workflowPortPresentation(
   };
 }
 
+/** 条件分支两路的箭头色,和 workflowCanvasSkin 里那两条线色是同一对令牌。 */
+const BRANCH_MARKER_COLOR: Record<string, string> = { true: "var(--success)", false: "var(--destructive)" };
+
 /** Domain edges → React Flow handles, labels and soft type-mismatch styling. */
 export function toWorkflowFlowEdges(
   graph: WorkflowGraph,
@@ -137,6 +141,7 @@ export function toWorkflowFlowEdges(
         data: { kind: "data" },
       };
     }
+    const branchColor = BRANCH_MARKER_COLOR[edge.source_handle ?? ""];
     return {
       id: edge.id,
       source: edge.source,
@@ -149,6 +154,10 @@ export function toWorkflowFlowEdges(
             ? t("wfEdgeFalse")
             : undefined,
       className: edge.source_handle ? `wf-edge-${edge.source_handle}` : undefined,
+      //: 箭头和线同色:线是真绿/假红(见 workflowCanvasSkin),箭头还是默认的灰就成了两截。
+      //: 箭头是 SVG marker,颜色只能从这里给,够不着 CSS 变量的继承。
+      //: 不是分支就**不写这个键** —— 写成 undefined 会盖掉 defaultEdgeOptions 给的默认箭头。
+      ...(branchColor ? { markerEnd: { ...CANVAS_EDGE_MARKER, color: branchColor } } : {}),
     };
   });
 }
