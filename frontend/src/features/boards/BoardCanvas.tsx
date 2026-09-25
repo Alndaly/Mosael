@@ -52,7 +52,7 @@ import { AudioComposer } from "@/features/boards/AudioComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
-import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
+import { copiedItem, itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
@@ -184,6 +184,44 @@ export function boardItems(nodes: Node[]): BoardItem[] {
   return nodes
     .filter((node) => node.type !== "marker")
     .map((node) => (node.data as unknown as { item: BoardItem }).item);
+}
+
+/**
+ * 复制选中的几项:换新 id、错开一点放,复制出来的那几项成为新的选中。
+ *
+ * **一起复制的几项之间的线也跟着复制**,两端接到新的那几格上 —— 一张便签连着一个图片槽,
+ * 复制这一对是想要「同一套再来一份」;线不跟着来的话,副本里的图片槽拿不到那段提示词,
+ * 那条线表达的关系就丢了。连着没被选中那项的线不跟着来:那一端没有副本可接。
+ *
+ * 每一格按 copiedItem 复制(进行中的运行态不带过去)。
+ */
+export function copySelected(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
+  // 标记也可能被选中(它在画布上就是一个节点),但它没有 item —— 而且"复制一枚旗子"
+  // 本来也不成立:两枚指着同一处的标记不表达任何东西。
+  const picked = nodes.filter((node) => node.selected && node.type !== "marker");
+  const renamed = new Map<string, string>();
+  const copies = picked.map((node) => {
+    const source = (node.data as unknown as { item: BoardItem }).item;
+    const copy = copiedItem(source, `${source.kind}-${Math.random().toString(36).slice(2, 9)}`);
+    renamed.set(node.id, copy.id);
+    return {
+      ...node,
+      id: copy.id,
+      // 错开一点放,不然复制出来的正好盖在原件上,看着像什么都没发生。
+      position: { x: node.position.x + 24, y: node.position.y + 24 },
+      selected: true,
+      data: { ...node.data, item: copy },
+    };
+  });
+  const copiedEdges = edges.flatMap((edge) => {
+    const source = renamed.get(edge.source);
+    const target = renamed.get(edge.target);
+    return source && target ? [{ id: `${edge.id}-${source}-${target}`, source, target }] : [];
+  });
+  return {
+    nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...copies],
+    edges: [...edges, ...copiedEdges],
+  };
 }
 
 /** 一次普通点击的选择结果。显式收口，避免 React Flow 的内部选择事件与受控 nodes 回写竞态。 */
@@ -602,6 +640,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     setNodes((current) => current.filter((node) => !gone.has(node.id)));
     setEdges((current) => current.filter((edge) => !gone.has(edge.source) && !gone.has(edge.target)));
   }, [nodes, setNodes, setEdges]);
+
+  /** 复制选中的这几项。节点和线一起换:两个 setter 分开调,理由同 removeSelected。 */
+  const copySelection = React.useCallback(() => {
+    const copied = copySelected(nodes, edges);
+    setNodes(copied.nodes);
+    setEdges(copied.edges);
+  }, [nodes, edges, setNodes, setEdges]);
 
   const deleteMarker = React.useCallback((id: string) => {
     setNodes((current) => current.filter((node) => node.id !== MARKER_PREFIX + id));
@@ -1461,6 +1506,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         nodes={nodes}
         setNodes={setNodes}
         onRemoveSelected={removeSelected}
+        onCopySelected={copySelection}
         onPickAsset={onPickAsset}
         onSpawn={onGenerate ? spawnLinked : undefined}
         onTrimRequest={onTrim ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
@@ -1588,6 +1634,7 @@ function ItemToolbar({
   nodes,
   setNodes,
   onRemoveSelected,
+  onCopySelected,
   onPickAsset,
   onSpawn,
   onTrimRequest,
@@ -1597,6 +1644,8 @@ function ItemToolbar({
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   /** 删掉选中的这几项 —— **连同挂在它们上面的线**。见 Inner 里的实现。 */
   onRemoveSelected: () => void;
+  /** 复制选中的这几项(见 copySelected)。 */
+  onCopySelected: () => void;
   onPickAsset: Props["onPickAsset"];
   /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
   onSpawn?: (
@@ -1631,26 +1680,7 @@ function ItemToolbar({
       ),
     );
 
-  const duplicate = () =>
-    setNodes((current) => [
-      ...current.map((node) => ({ ...node, selected: false })),
-      ...current
-        // 标记也可能被选中(它在画布上就是一个节点),但它没有 item —— 而且"复制一枚旗子"
-        // 本来也不成立:两枚指着同一处的标记不表达任何东西。
-        .filter((node) => node.selected && node.type !== "marker")
-        .map((node) => {
-          const source = (node.data as unknown as { item: BoardItem }).item;
-          const copy: BoardItem = { ...source, id: `${source.kind}-${Math.random().toString(36).slice(2, 9)}` };
-          return {
-            ...node,
-            id: copy.id,
-            // 错开一点放,不然复制出来的正好盖在原件上,看着像什么都没发生。
-            position: { x: node.position.x + 24, y: node.position.y + 24 },
-            selected: true,
-            data: { ...node.data, item: copy },
-          };
-        }),
-    ]);
+  const duplicate = onCopySelected;
 
   return (
     //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层

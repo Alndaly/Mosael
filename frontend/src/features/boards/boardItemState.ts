@@ -26,6 +26,19 @@ export function runningState(jobId: string): NonNullable<BoardItem["run"]> {
   return { status: "running", job_id: jobId };
 }
 
+/**
+ * 复制出来的一格。**进行中的运行态只属于原件**:任务的回执认的是原件那一格(见后端
+ * receipt_to_item),便签写作回来的也只落在原件上 —— 带着「在跑」过去的副本永远等不到结束,
+ * 框里一直转圈,面板一直按不动。副本退回空槽,表单(提示词、参数)照带,想要的话再点一次;
+ * 已经结束的状态(有产出、失败原因)照样带过去。和后端「创建副本」是同一条规则。
+ */
+export function copiedItem(item: BoardItem, id: string): BoardItem {
+  const status = itemRunStatus(item);
+  if (status !== "queued" && status !== "running") return { ...item, id };
+  const { run: _live, ...rest } = item;
+  return { ...rest, id };
+}
+
 /** 服务端轮询到终态后写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。 */
 export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null {
   if (item.asset_id) {
