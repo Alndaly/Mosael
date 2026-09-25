@@ -213,6 +213,37 @@ class Test清单从哪来都由声明说了算:
         assert [one["label"] for one in field_options(None, "plugin_instances", by_field)] == ["抖音"]
 
 
+def test_对话模型只列这条连接上会对话的_而且得是我的连接() -> None:
+    """LLM / 翻译节点的「模型」下拉。
+
+    此前列的是这条连接下**所有**启用的模型:同一个端点上的生图、生视频模型一起出现,选中
+    之后发出去的是一次对话请求,供应商回一句看不懂的 400。而且不核对连接归谁 —— 拿别人的
+    连接 id 当 parent 就能看到他那条连接上配了哪些模型。
+    """
+    from app.db.models import User
+    from app.domain import provider_models
+    from app.domain.workflows.field_options import field_options
+    from tests.util import add_provider, second_client
+
+    fresh_client()
+    second_client("other")
+    with SessionLocal() as db:
+        me = db.query(User).filter(User.username == "tester").one().id
+        mine = add_provider(db, name="我的", vendor="openai-compatible", base_url="https://api.test",
+                            api_key="sk", model="chat-m", capability_ids=["chat"])
+        provider_models.upsert(db, mine, "image-m", capability_ids=["image"])
+        theirs = add_provider(db, name="他的", vendor="openai-compatible", base_url="https://api.test",
+                              api_key="sk", model="their-m", capability_ids=["chat"], owner_username="other")
+        db.commit()
+
+        def options(parent: str) -> set[str]:
+            ctx = OptionContext(workspace_id="w", user_id=me, parent=parent, locale="zh")
+            return {one["value"] for one in field_options(db, "chat_models", ctx)}
+
+        assert options(mine.id) == {"chat-m"}
+        assert options(theirs.id) == set()
+
+
 def test_对话连接的订阅计划按自己那把钥匙判断() -> None:
     """oauth 连接的「可用」读的是当前用户自己那把凭据,不是档案行 —— 档案行上根本没有
     oauth_linked(那是 API schema 按用户算出来的展示字段),领域层直接读它曾让整个

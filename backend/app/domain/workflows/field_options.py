@@ -99,13 +99,24 @@ def _chat_connections(db: Session, ctx: OptionContext) -> list[Option]:
 
 
 def _chat_models(db: Session, ctx: OptionContext) -> list[Option]:
-    """这条连接上真实存在的模型。填不进去的死角由字段自己放行手填(allow_custom)——
-    新模型上线往往早于目录更新。"""
+    """这条连接上**会对话**的模型。填不进去的死角由字段自己放行手填(allow_custom)——
+    新模型上线往往早于目录更新。
+
+    和模型选择器同一个判据(provider_models.models_for_capability):**他自己的**连接、启用、
+    声明了 chat 能力、自动化这条执行通道走得通。此前直接列这条连接下全部启用的模型 ——
+    同一端点上的生图/生视频模型也在下拉里,选中就是一次注定 400 的对话请求;也不核对连接
+    归谁,拿别人的连接 id 当 parent 就能看到他配了哪些模型。
+    """
     from app.domain import provider_models
 
-    if not ctx.parent.strip():
+    parent = ctx.parent.strip()
+    if not parent:
         return []
-    rows = provider_models.list_models(db, ctx.parent.strip(), enabled_only=True)
+    rows = sorted(
+        (row for row in provider_models.models_for_capability(db, "chat", ctx.user_id, surface="automation")
+         if row.provider_profile_id == parent),
+        key=lambda row: row.model_id,
+    )
     return [{"value": row.model_id, "label": row.display_name or row.model_id} for row in rows]
 
 
