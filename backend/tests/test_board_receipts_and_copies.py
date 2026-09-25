@@ -308,6 +308,65 @@ def test_智能体往画板上放一个够不着的文档或场景_开卡时就�
                 )
 
 
+def test_任务在占位落下之前就结束了_产出照样落回这一格(monkeypatch) -> None:
+    """念字和截取是「建任务即派发」:任务线程和摆占位的请求线程赛跑。一段很短的合成、一个源文件
+    已经不在的截取,会在占位落下之前就落终态 —— 回执先到,占位后到:占位把刚填进去的产出摘掉、
+    挂上「在跑」,而这个任务再也不会有第二封回执。那一格永远转圈。
+
+    占位和回执必须谁先谁后都一样:回执只收它自己那一轮;占位落下时任务若已结束,当场补送。"""
+    import app.domain.voices.engine_catalog as engine_catalog
+    import app.domain.voices.voices as voices
+    from app.domain.jobs import create_job
+
+    def synthesis_that_finishes_at_once(db, **_kwargs):
+        job = create_job(db, workspace_id=ws, kind="tts", created_by=None, payload={"subject": "你好"},
+                         message="jobMsg_ttsRunning", message_params={"voice": "edge"})
+        db.commit()
+        job.status = "succeeded"
+        job.result = {"asset_id": "snd-1"}
+        db.commit()  # 回执在这次提交之后就送出去了 —— 占位还没落下
+        return job
+
+    monkeypatch.setattr(engine_catalog, "synthesis_params", lambda db, **kwargs: {})
+    monkeypatch.setattr(voices, "start_synthesis", synthesis_that_finishes_at_once)
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _board(client, ws, {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0,
+                                               "form": {"prompt": "你好"}}], "edges": []})
+
+    spoken = client.post(f"/api/boards/{board_id}/speak", json={
+        "workspace_id": ws, "item_id": "a1", "text": "你好", "engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural",
+    })
+    assert spoken.status_code == 200, spoken.text
+
+    item = _canvas(client, ws, board_id)["items"][0]
+    assert item.get("asset_id") == "snd-1", f"产出没落回来:{item}"
+    assert item["run"] == {"status": "succeeded"}, "任务早就结束了,这一格还挂着「在跑」"
+
+
+def test_不是这一轮的回执不动这一格() -> None:
+    """回执只收**它自己那一轮**。这是上一条(占位与回执谁先谁后都一样)的前提:占位之前到的回执,
+    那一格还不是这一轮,就不该动它 —— 否则它先填一遍、占位落下后补送再填一遍。
+    这里那一格正跑着 job-2,job-1 的回执到了:第二轮还在跑(还在花钱),画布上不能「完成」。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _live_board(client, ws)  # job-1 在跑
+    from app.core.db import SessionLocal
+    from app.domain.boards import place_pending
+
+    _deliver(board_id, "img", SimpleNamespace(id="job-1", status="failed", result=None, error="炸了"))
+    with SessionLocal() as db:
+        place_pending(db, workspace_id=ws, board_id=board_id, item={
+            "id": "img", "kind": "image", "x": 0, "y": 0, "run": {"status": "running", "job_id": "job-2"},
+        })
+    _deliver(board_id, "img", SimpleNamespace(id="job-1", status="succeeded", result={"asset_ids": ["late"]}))
+
+    item = _canvas(client, ws, board_id)["items"][0]
+    assert item["run"] == {"status": "running", "job_id": "job-2"}
+    assert "asset_id" not in item
+
+
 def _deleted_note_board(client, ws: str) -> tuple[str, dict]:
     """一张引用了某篇文档的板,那篇文档随后被删掉了 —— 画板上留着一个坏掉的引用。"""
     note = client.post("/api/notes", json={"workspace_id": ws, "title": "品牌规范", "markdown": "蓝色"}).json()

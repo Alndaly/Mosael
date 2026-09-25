@@ -703,7 +703,30 @@ def place_pending(
             items[index] = merged
         return {**canvas, "items": items}
 
-    return _merge_into_latest(db, workspace_id=workspace_id, board_id=board_id, merge=merge, actor_id=actor_id)
+    board = _merge_into_latest(db, workspace_id=workspace_id, board_id=board_id, merge=merge, actor_id=actor_id)
+    return _deliver_if_already_settled(db, board, item)
+
+
+def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any]) -> Board:
+    """占位落下时,它等的那个任务若已经结束,当场补送回执。
+
+    念字、截取是「建任务即派发」:任务线程和摆占位的请求赛跑。很短的合成、源文件已经不在的截取,
+    会在占位落下之前就落终态 —— 那封回执到的时候这一格还不是这一轮,被放过了(见
+    _canvas_with_delivered_result),而这个任务不会再有第二封。不补的话那一格永远转圈。
+    和正常送到的那封撞在一起也没关系:先落库的收掉这一轮,后到的那封就不再是「这一轮」了。
+    """
+    from app.db.models import Job
+    from app.domain.jobs import TERMINAL_STATUSES
+
+    job_id = live_job(item)
+    job = db.get(Job, job_id) if job_id else None
+    if job is None:
+        return board
+    db.refresh(job)
+    if job.status not in TERMINAL_STATUSES:
+        return board
+    deliver_generated(db, job, receipt_to_item(board.id, str(item.get("id"))))
+    return get_board(db, board.workspace_id, board.id)
 
 
 def set_text_write_run(
@@ -777,6 +800,7 @@ def _canvas_with_delivered_result(
     canvas: dict[str, Any],
     *,
     item_id: str,
+    job_id: str,
     asset_ids: list[str],
     job_status: str,
     job_error: str,
@@ -785,11 +809,14 @@ def _canvas_with_delivered_result(
 
     The merge is deliberately pure so a compare-and-swap conflict can reload the latest canvas
     and retry without replaying any task side effects.
+
+    **只收它自己那一轮**:那一格此刻跑的不是这个任务(占位还没落下、或已经是别的一轮),原样不动。
+    占位与回执于是谁先谁后都一样 —— 先到的回执被放过,占位落下时补送(见 place_pending)。
     """
     items = list(canvas.get("items") or [])
     kept: list[dict[str, Any]] = []
     for item in items:
-        if item.get("id") != item_id:
+        if item.get("id") != item_id or live_job(item) != job_id:
             kept.append(item)
             continue
         if not asset_ids:
@@ -885,7 +912,7 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
         workspace_id=board.workspace_id,
         board_id=board.id,
         merge=lambda canvas: _canvas_with_delivered_result(
-            canvas, item_id=item_id, asset_ids=asset_ids, job_status=job_status, job_error=job_error
+            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, job_status=job_status, job_error=job_error
         ),
         actor_id=actor_id,
     )
