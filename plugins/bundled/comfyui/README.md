@@ -36,10 +36,19 @@ ComfyUI 那一侧的输入不列出来。
 
 ## 工具
 
+**每张工作流一个工具**(`wf_<id>`,「工作流 · 名字」,见 `tools/tooling.py`):插件在 `op: tools` 里报给宿主
+(宿主能力 `tools`,和 `generation` 由同一个 `comfyui_generation` 认领),入参、输出都从那张图推 ——
+提示词、每个读素材的节点(`image_10`、`mask_11`、`video_1`…)、每个可调参数(`steps_3`…,和生成参数同一套名字)、
+种子 / 尺寸 / 张数(高级);输出按输出节点(`image_9`、`text_40`…)。名字取 ComfyUI 写在工作流文件里的 id
+(改名、挪目录不变),没有的退到路径哈希;模板是 `wf_api_template`。每个工具带着 `replaces`,宿主据此把存着的
+`run_workflow` 节点改写过来。
+
+固定的那几个:
+
 | 工具 | 只读 | 流式 | 默认开 | 做什么 |
 | --- | --- | --- | --- | --- |
 | `list_workflows` | ✓ | | ✓ | 每张工作流收什么(哪个参数喂哪个节点)、能调什么、交出什么、`features`(upscale / inpaint / img2img / remove-background / …);转不过来的也列,带原因 |
-| `run_workflow` | | ✓ | ✓ | 原样跑一张工作流,`image` / `images` / `mask` / `video` / `audio` 接到读素材的节点,`values` 按「节点 id 或标题.输入名」改值;交回**全部**产出(`artifacts` → 宿主换成 `assets` / `asset_ids`)、文字产出、按节点分的摘要。`wait: false` 只提交 |
+| `run_workflow` | | ✓ | | 原样跑一张工作流,`image` / `images` / `mask` / `video` / `audio` 接到读素材的节点,`values` 按「节点 id 或标题.输入名」改值;交回**全部**产出(`artifacts` → 宿主换成 `assets` / `asset_ids`)、文字产出、按节点分的摘要。`wait: false` 只提交 |
 | `import_outputs` | | ✓ | ✓ | 按任务号(可等 `wait_seconds`)或最近 `last` 次,把历史里的产出收进素材库 |
 | `server_status` | ✓ | | ✓ | 版本、显卡与空闲显存、内存、队列 |
 | `list_models` | ✓ | | ✓ | `/models` 下的模型文件;老版本没有这个接口时看加载节点的下拉 |
@@ -67,6 +76,7 @@ ComfyUI 那一侧的输入不列出来。
 - `models.py` —— 有哪些模型、一个模型 id 背后是哪张图、清单的指纹;
 - `run.py` —— 传素材、提交、跟进度、取消、取回(生成与 `run_workflow` 共用);
 - `workflows.py` —— `list_workflows` / `run_workflow` / `import_outputs`;
+- `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。
 

@@ -83,7 +83,11 @@ def conn(name: str, link: int) -> dict[str, Any]:
 
 
 #: 一张保存的**文生图 + 参考图**工作流(UI 格式),形状照 ComfyUI 前端保存下来的那种。
+#: 新版 ComfyUI 前端保存工作流时写进去的 id(改名、挪目录都不变)。
+PORTRAIT_ID = "3f2b1c9e-8d7a-4b6c-9e1f-0a1b2c3d4e5f"
+
 PORTRAIT_UI: dict[str, Any] = {
+    "id": PORTRAIT_ID,
     "nodes": [
         {"id": 3, "type": "KSampler", "title": "采样",
          "widgets_values": [42, "randomize", 20, 7.0, "euler", "normal", 1.0],

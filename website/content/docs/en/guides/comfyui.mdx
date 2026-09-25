@@ -12,9 +12,10 @@ brings two things:
 
 - **Models**: **every workflow saved on it** shows up as a model in the model pickers of AI Studio, boards and the
   workflow “AI generate” node, next to every other provider's models;
-- **Tools**: run a workflow as-is and collect every output, list workflows and model files, check the GPU and queue,
-  import outputs from ComfyUI's history into the asset library, and interrupt / clear the queue / free VRAM. The agent
-  can call them directly, and each tool is a node in the workflow node panel.
+- **Tools**: **every workflow is also a tool** (“Workflow · name”) whose inputs are that graph's own prompts, loader
+  nodes and tunable parameters, returning every output; plus listing workflows and model files, checking the GPU and
+  queue, importing outputs from ComfyUI's history into the asset library, and interrupt / clear the queue / free VRAM.
+  The agent can call them directly, and each tool is a node in the workflow node panel.
 
 ## Connecting a ComfyUI server
 
@@ -79,12 +80,27 @@ prompt; Flux-style workflows keep natural language.
 
 ## Tools: ComfyUI for the agent and for workflows
 
-The tool list under the connection card has these tools; the first six are on by default:
+**One tool per workflow.** Every workflow saved in ComfyUI (and a pasted API template) shows up as “Workflow · name” in
+the tool list, the workflow node panel and the agent's tools, with a form made from that graph:
+
+- prompt and negative prompt (empty keeps the workflow's own);
+- one field per loader node — “Image”, “Mask”, “Video”, “Audio” — listing only that kind of asset, with the node's
+  title when you gave it one;
+- one field per tunable parameter, named and ranged as in the generation parameters, common ones first; seed, size and
+  image count under Advanced;
+- outputs per output node: connect “Image · SaveImage” downstream directly, or use “All outputs” / “Text outputs”.
+
+Renaming or moving a workflow in ComfyUI keeps the same tool (ComfyUI stores the workflow's id in the file); files saved
+by a very old ComfyUI have no id, so a rename makes them a different tool. Workflow nodes that used “Run workflow” with a
+particular graph are **rewritten to that graph's own tool automatically** (incoming data edges too); if a field doesn't
+map (a value keyed by node title, say) the node is left as it was and keeps working.
+
+Of the other tools, the five in bold are on by default:
 
 | Tool | What it does |
 | --- | --- |
 | **List workflows** (read-only) | What each workflow takes (which argument feeds which node), what it lets you tune, what it outputs, and what it seems to do (upscale, inpaint, background removal, face restore, frame interpolation …) |
-| **Run workflow** | Runs a workflow as-is: images / mask / video / audio go into the loader nodes, `values` overrides any literal input (`"3.steps": 30` or `"Node title.cfg": 6`), and **every output** goes into the asset library — each file from every save node, plus whatever text display nodes show |
+| Run workflow by id | An escape hatch for the agent, off by default. Runs a workflow as-is: images / mask / video / audio go into the loader nodes, `values` overrides any literal input (`"3.steps": 30` or `"Node title.cfg": 6`), and **every output** goes into the asset library — each file from every save node, plus whatever text display nodes show |
 | **Import ComfyUI outputs** | Imports outputs from ComfyUI's history by task id (or the most recent runs) into the asset library — including things run directly in the ComfyUI interface |
 | **Server status** (read-only) | ComfyUI version, GPU and free VRAM, running / queued task counts |
 | **List model files** (read-only) | Installed checkpoints, LoRAs, VAEs, upscale models, ControlNets … |
@@ -92,12 +108,12 @@ The tool list under the connection card has these tools; the first six are on by
 | Clear queue | Clears every **queued** task (including other people's on the same server); off by default |
 | Free VRAM | Unloads models and frees VRAM; off by default |
 
-**Tools or generation?** For a prompt that should turn into an image or a video, use the models (generation): they get
+**Which one?** A workflow's own tool is the easiest (its inputs are its own). For a prompt that should turn into an image or a video, use the models (generation): they get
 progress in the task center, cancel, resume after a restart and usage records, and a run may last 6 hours. To **run a
 processing workflow as-is** (upscale, background removal, inpainting, face restore, frame interpolation), feed it
-several inputs at once, or get every intermediate output back, use “Run workflow”.
+several inputs at once, or get every intermediate output back, use that workflow's tool.
 
-“Run workflow” may run for up to 30 minutes and reports progress step by step (inside a workflow the run panel shows
+A workflow tool may run for up to 30 minutes and reports progress step by step (inside a workflow the run panel shows
 “Sampler 12/20”); cancelling stops that one task in ComfyUI. The agent only waits 3 minutes for a single tool call:
 for long runs it passes `wait: false` to only submit, gets the task id, and fetches the outputs later with “Import
 ComfyUI outputs”.

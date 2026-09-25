@@ -5,11 +5,13 @@
 **替宿主做生成** —— 工具 `comfyui_generation`,只给宿主调:
 
     {"op": "models"}      → 一行结果:这台 ComfyUI 上有哪些模型(内置文生图、粘贴的模板、保存的每张工作流)+ 指纹
-    {"op": "fingerprint"} → 一行结果:模型清单的指纹(宿主隔一会儿问一次,变了才重新拉目录)
+    {"op": "tools"}       → 一行结果:每张工作流一个工具(入参、输出都从那张图推出来)+ 指纹
+    {"op": "fingerprint"} → 一行结果:清单的指纹(宿主隔一会儿问一次,变了才重新拉目录)
     {"op": "generate", …} → 一行一个事件(进度、回执),最后一行是结果
 
 **给智能体和工作流的工具**:
 
+    wf_<id>                                                每张工作流自己的那个(运行时报出,流式)
     list_workflows / server_status / list_models           只读,一问一答
     run_workflow / import_outputs                          流式(清单里 `stream: true`):进度一行一个,最后一行是结果
     interrupt / clear_queue / free_memory                  会动服务器,一问一答
@@ -28,6 +30,7 @@ from typing import Any, Callable
 import models
 import run
 import server
+import tooling
 import workflows
 from comfy_http import Comfy, env_base_url
 from lines import ComfyError, say
@@ -42,7 +45,10 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
     op = payload.get("op")
     if op == "models":
         return {"models": models.catalog(comfy, locale), "fingerprint": models.fingerprint(comfy)}
+    if op == "tools":
+        return {"tools": tooling.catalog(comfy, locale), "fingerprint": models.fingerprint(comfy)}
     if op == "fingerprint":
+        # 模型清单和工具清单出自同一批图,指纹是同一个(请求里的 `capability` 说问的是哪一份)
         return {"fingerprint": models.fingerprint(comfy)}
     if op == "generate":
         return run.generate(payload, comfy, locale, emit)
@@ -78,6 +84,9 @@ def main() -> None:
             output = _PLAIN[tool](payload, comfy, locale)
         elif tool in _STREAMING:
             output = _STREAMING[tool](payload, comfy, locale, emit)
+        elif isinstance(tool, str) and tool.startswith("wf_"):
+            # 每张工作流一个的那些工具(运行时报给宿主的,见 tooling)
+            output = tooling.run_tool(tool, payload, comfy, locale, emit)
         else:
             raise ComfyError(say(locale, f"不认识的工具:{tool}", f"Unknown tool: {tool}"))
         emit({"ok": True, "output": output})

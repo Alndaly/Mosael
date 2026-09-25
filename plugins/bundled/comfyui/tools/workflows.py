@@ -19,6 +19,7 @@ from typing import Any
 import graph
 import models
 import run
+import tooling
 from comfy_http import Comfy
 from lines import ComfyError, say
 
@@ -48,14 +49,20 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
     query = str(payload.get("query") or "").strip().lower()
     object_info = comfy.object_info()
     found: list[dict[str, Any]] = []
-    for model_id, label, api, titles, problem in models.each(comfy, object_info, locale):
-        name = _text(label, locale)
-        if query and query not in model_id.lower() and query not in name.lower():
+    entries = list(models.each(comfy, object_info, locale))
+    names = tooling.tool_names(entries)
+    for entry in entries:
+        name = _text(entry.label, locale)
+        if query and query not in entry.id.lower() and query not in name.lower():
             continue
-        if problem:
-            found.append({"id": model_id, "label": name, "error": problem})
+        if entry.problem:
+            found.append({"id": entry.id, "label": name, "error": entry.problem})
             continue
-        found.append(inspect(model_id, name, api, object_info, titles, locale))
+        described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale)
+        if entry.id in names:
+            # 这张工作流自己的那个工具(输入就是它自己的节点):智能体优先调它,而不是 run_workflow
+            described["tool"] = names[entry.id]
+        found.append(described)
     return {
         "workflows": found,
         "count": len(found),
@@ -212,7 +219,7 @@ def run_workflow(payload: dict[str, Any], comfy: Comfy, locale: str, emit: run.E
             "summary": say(locale, f"已提交到 ComfyUI(任务 {prompt_id});跑完后用 import_outputs 取回产出",
                            f"Submitted to ComfyUI (task {prompt_id}); fetch the outputs with import_outputs when it is done"),
         }
-    return _deliver(comfy, [(prompt_id, entry)], prompt, titles, locale, model_id,
+    return deliver(comfy, [(prompt_id, entry)], prompt, titles, locale, model_id,
                     include_previews=payload.get("include_previews") is True, workflow=model_id)
 
 
@@ -242,13 +249,13 @@ def import_outputs(payload: dict[str, Any], comfy: Comfy, locale: str, emit: run
                     "summary": say(locale, f"任务 {prompt_id} 还没跑完({'在跑' if state == 'running' else '排队中'})",
                                    f"Task {prompt_id} is not finished yet ({state})"),
                 }
-        return _deliver(comfy, [(prompt_id, entry)], None, {}, locale, prompt_id, include_previews=include_previews)
+        return deliver(comfy, [(prompt_id, entry)], None, {}, locale, prompt_id, include_previews=include_previews)
     last = min(MAX_HISTORY, max(1, int(payload.get("last") or 1)))
     history = comfy.history(max_items=last)
     entries = [(key, value) for key, value in history.items() if isinstance(value, dict)][-last:]
     if not entries:
         raise ComfyError(say(locale, "ComfyUI 的历史是空的", "ComfyUI's history is empty"))
-    return _deliver(comfy, entries, None, {}, locale, "comfyui-history", include_previews=include_previews)
+    return deliver(comfy, entries, None, {}, locale, "comfyui-history", include_previews=include_previews)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +263,7 @@ def import_outputs(payload: dict[str, Any], comfy: Comfy, locale: str, emit: run
 # ---------------------------------------------------------------------------
 
 
-def _deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dict[str, Any] | None,
+def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dict[str, Any] | None,
              titles: dict[str, str], locale: str, stem: str, *, include_previews: bool,
              workflow: str = "") -> dict[str, Any]:
     """一条或几条历史 → 取回**全部**文件交给宿主(`artifacts`),外加一份按节点分的摘要和所有文字产出。"""
@@ -279,6 +286,14 @@ def _deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: di
             "ComfyUI finished but produced nothing. The workflow needs a save / preview node (SaveImage, PreviewImage, a video combine…)",
         ))
     artifacts = run.download(comfy, files, Path(stem).stem or "comfyui") if files else []
+    # 每个输出节点的第一份记成一个具名输出(`image_9` / `video_30` …):声明了按节点输出的工具(每张工作流
+    # 自己的那个)下游可以直接接「那个保存节点的图」。宿主按 artifact 上的 `output` 把素材 id 填进去。
+    named: set[str] = set()
+    for one, artifact in zip(files, artifacts):
+        key = tooling.output_key(one["media"], one["node"])
+        if key not in named and len(entries) == 1:
+            artifact["output"] = key
+            named.add(key)
     summary: dict[str, dict[str, Any]] = {}
     for one, artifact in zip(files, artifacts):
         node = summary.setdefault(f"{one['prompt_id']}:{one['node']}", _node_summary(one, titles))
@@ -290,7 +305,11 @@ def _deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: di
     counts: dict[str, int] = {}
     for one in files:
         counts[one["media"]] = counts.get(one["media"], 0) + 1
+    node_texts: dict[str, list[str]] = {}
+    for one in texts:
+        node_texts.setdefault(tooling.output_key("text", one["node"]), []).append(one["text"])
     result: dict[str, Any] = {
+        **({key: "\n".join(values) for key, values in node_texts.items()} if len(entries) == 1 else {}),
         "prompt_id": entries[0][0] if len(entries) == 1 else "",
         "prompt_ids": [prompt_id for prompt_id, _ in entries],
         "status": "succeeded",

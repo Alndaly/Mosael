@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from typing import Any
+from typing import Any, Iterator, NamedTuple
 
 import graph
 from comfy_http import Comfy
@@ -94,48 +94,67 @@ def label_of(path: str) -> str:
     return path[:-5] if path.endswith(".json") else path
 
 
-def each(comfy: Comfy, object_info: dict[str, Any], locale: str):
-    """这台服务器上的每个模型:(id, 名字, API 图, 节点名字, 转不过来的原因)。
+class Entry(NamedTuple):
+    """这台服务器上的一个模型(= 一张图)。"""
+
+    id: str
+    label: Any
+    api: dict[str, Any]
+    titles: dict[str, str]
+    #: 转不过来的原因;空串 = 没问题
+    problem: str
+    #: ComfyUI 保存工作流时写进图里的 id(新版前端的 UUID)。**改名、挪目录都不变**,工具名靠它稳住;
+    #: 老版本存的图没有,是空串。
+    ident: str = ""
+
+
+def _ident(ui_graph: Any) -> str:
+    raw = ui_graph.get("id") if isinstance(ui_graph, dict) else None
+    return raw.strip() if isinstance(raw, str) and len(raw.strip()) >= 8 else ""
+
+
+def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Entry]:
+    """这台服务器上的每个模型。
 
     一张图拉不下来 / 转不过来,照样交出来(带着原因)—— 目录里跳过它,`list_workflows` 把原因说出来:
     智能体问「有哪些工作流」时,一张静默消失的图比一张标着「转换失败」的图更让人摸不着头脑。
     """
     if checkpoints(object_info):
         api, _, titles = load(comfy, BUILTIN, object_info, locale)
-        yield BUILTIN, {"zh": "内置文生图", "en": "Built-in text-to-image"}, api, titles, ""
+        yield Entry(BUILTIN, {"zh": "内置文生图", "en": "Built-in text-to-image"}, api, titles, "")
     text = template_text()
     if text:
         try:
             parsed = _parse_template(text, locale)
-            yield TEMPLATE, {"zh": "API 模板", "en": "API template"}, parsed, graph.ui_titles(parsed), ""
+            yield Entry(TEMPLATE, {"zh": "API 模板", "en": "API template"}, parsed, graph.ui_titles(parsed), "")
         except ComfyError as exc:
-            yield TEMPLATE, {"zh": "API 模板", "en": "API template"}, {}, {}, str(exc)
+            yield Entry(TEMPLATE, {"zh": "API 模板", "en": "API template"}, {}, {}, str(exc))
     for path in comfy.list_workflows():
         try:
             ui_graph = comfy.fetch_workflow(path)
             api = graph.graph_to_api_prompt(ui_graph, object_info)
         except Exception as exc:  # noqa: BLE001 — 一张图拉不下来 / 转不过来,别的照常列
-            yield path, label_of(path), {}, {}, str(exc) or type(exc).__name__
+            yield Entry(path, label_of(path), {}, {}, str(exc) or type(exc).__name__)
             continue
         if not api:
-            yield path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty")
+            yield Entry(path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty"), _ident(ui_graph))
             continue
-        yield path, label_of(path), api, graph.ui_titles(ui_graph), ""
+        yield Entry(path, label_of(path), api, graph.ui_titles(ui_graph), "", _ident(ui_graph))
 
 
 def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
     """这台服务器现在有哪些模型。一张图转不过来就跳过它,不让它拖垮整份清单。"""
     object_info = comfy.object_info()
     models: list[dict[str, Any]] = []
-    for model_id, label, api, titles, problem in each(comfy, object_info, locale):
-        if problem:
-            if model_id == TEMPLATE:
+    for entry in each(comfy, object_info, locale):
+        if entry.problem:
+            if entry.id == TEMPLATE:
                 # 模板坏了也列出来:选中它时会把「哪里坏了」说清楚。不列的话它从选择器里静默消失,
                 # 用户只会以为连接没配上。
-                models.append({"id": TEMPLATE, "label": label, "kind": "image"})
+                models.append({"id": TEMPLATE, "label": entry.label, "kind": "image"})
             continue
-        model = graph.describe(model_id, label, api, object_info, titles)
-        if model_id == BUILTIN:
+        model = graph.describe(entry.id, entry.label, entry.api, object_info, entry.titles)
+        if entry.id == BUILTIN:
             model["parameters"]["size"]["default"] = "1024x1024"
             model["prompt_dialect"] = "sd-tags"
         models.append(model)

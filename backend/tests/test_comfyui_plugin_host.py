@@ -41,7 +41,7 @@ def _options(client, kind: str) -> dict[str, dict]:
 def test_随应用装好_卸不掉() -> None:
     client = fresh_client()
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
-    assert package["bundled"] is True and package["provides"] == ["generation"]
+    assert package["bundled"] is True and package["provides"] == ["generation", "tools"]
     assert package["config_fields"][0]["default"] == "http://127.0.0.1:8188"
     template = package["config_fields"][1]
     assert (template["type"], template["language"]) == ("json", "json"), "API 模板是一段 JSON:代码编辑器 + 保存前校验"
@@ -135,15 +135,17 @@ def test_工具出现在插件页_智能体和工作流里(connected) -> None:
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)
     tools = {one["name"]: one for one in package["instances"][0]["tools"]}
     assert "comfyui_generation" not in tools, "认领生成的那个工具只给宿主调"
-    assert set(tools) == {"list_workflows", "run_workflow", "import_outputs", "server_status", "list_models",
-                          "interrupt", "clear_queue", "free_memory"}
-    assert {name for name, tool in tools.items() if tool["exposed"]} == {
-        "list_workflows", "run_workflow", "import_outputs", "server_status", "list_models", "interrupt"}, (
-        "清队列、释放显存会动到同一台机器上别人的活:默认不开"
+    fixed = {name for name in tools if not name.startswith("wf_")}
+    assert fixed == {"list_workflows", "run_workflow", "import_outputs", "server_status", "list_models",
+                     "interrupt", "clear_queue", "free_memory"}
+    assert {name for name in fixed if tools[name]["exposed"]} == {
+        "list_workflows", "import_outputs", "server_status", "list_models", "interrupt"}, (
+        "清队列、释放显存会动到同一台机器上别人的活:默认不开;run_workflow 让位给每张工作流自己的工具"
     )
+    assert all(tool["exposed"] for name, tool in tools.items() if name.startswith("wf_"))
     assert tools["list_workflows"]["read_only"] is True and tools["run_workflow"]["read_only"] is False
     exposed = {one["name"] for one in client.get("/api/plugins/tools").json() if one["instance_id"] == instance_id}
-    assert "run_workflow" in exposed and "clear_queue" not in exposed
+    assert "list_workflows" in exposed and "clear_queue" not in exposed
 
 
 def test_运行工作流_全部产出进素材库(connected) -> None:
@@ -175,15 +177,15 @@ def test_运行工作流_全部产出进素材库(connected) -> None:
 
 def test_目录变了才重新拉_问指纹不留调用记录(connected) -> None:
     from app.db.models import PluginInvocation
-    from app.domain.generation import plugin_connections
+    from app.domain.plugins import catalog_watch
 
     client, comfy, instance_id = connected
     with SessionLocal() as db:
         calls_before = db.query(PluginInvocation).filter_by(instance_id=instance_id).count()
-    assert plugin_connections.check_for_changes() == 0, "什么都没变就不重新拉"
+    assert catalog_watch.check_for_changes() == 0, "什么都没变就不重新拉"
     comfy.state.workflows["fresh.json"] = comfy.state.workflows["portrait.json"]
-    assert plugin_connections.check_for_changes() == 1
+    assert catalog_watch.check_for_changes() == 2, "模型目录和工具清单各刷一次"
     assert "fresh.json" in _options(client, "image"), "ComfyUI 里新存的工作流不用点刷新就出现"
     with SessionLocal() as db:
         rows = db.query(PluginInvocation).filter_by(instance_id=instance_id).all()
-    assert len(rows) == calls_before + 1, "只有真的重新拉目录那一次留记录;问指纹不留"
+    assert len(rows) == calls_before + 2, "只有真的重新拉目录的那两次留记录;问指纹不留"

@@ -217,10 +217,10 @@
     {
       "id": "dev.mosael.comfyui",
       "name": "ComfyUI",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": {
-        "zh": "把一台 ComfyUI(本机或局域网)接进 Mosael:它保存的每张工作流都是一个图像 / 视频生成模型(参数、参考图、蒙版、首尾帧、视频输入自动识别,进度实时、能真的取消);另有一组工具 —— 原样跑任意一张工作流并交回全部产出(放大、抠图、局部重绘、修脸、补帧都用用户自己的图),列出工作流与模型文件,看显卡和队列,把历史产出收进素材库,以及中断、清队列、释放显存。",
-        "en": "Connect a ComfyUI server (local or on your LAN): every saved workflow becomes an image / video generation model (parameters, reference images, masks, first/last frames and video inputs detected automatically, live progress, real cancellation). Plus tools to run any workflow as-is and collect every output (upscale, background removal, inpainting, face restore, frame interpolation — with the user's own graphs), list workflows and model files, check the GPU and queue, import past outputs into the asset library, and interrupt / clear the queue / free VRAM."
+        "zh": "把一台 ComfyUI(本机或局域网)接进 Mosael:它保存的每张工作流既是一个图像 / 视频生成模型,也是一个工具(「工作流 · 名字」,入参就是那张图自己的提示词、读素材的节点和可调参数,交回全部产出)。另有列出工作流与模型文件、看显卡和队列、把历史产出收进素材库、中断 / 清队列 / 释放显存。",
+        "en": "Connect a ComfyUI server (local or on your LAN): every saved workflow is both an image / video generation model and a tool (“Workflow · name”, whose inputs are that graph's own prompts, loader nodes and tunable parameters, returning every output). Plus listing workflows and model files, GPU and queue status, importing past outputs into the asset library, and interrupt / clear queue / free VRAM."
       },
       "author": "Mosael",
       "author_url": "https://mosael.com",
@@ -235,15 +235,16 @@
       ],
       "runtime": "process",
       "provides": [
-        "generation"
+        "generation",
+        "tools"
       ],
       "tools": [
         {
           "name": "comfyui_generation",
           "label": "",
           "description": {
-            "zh": "替 Mosael 在这台 ComfyUI 上列出模型、做一次生成。只给宿主调。",
-            "en": "Lists models and runs generations on this ComfyUI server for Mosael. Host-only."
+            "zh": "替 Mosael 在这台 ComfyUI 上列出模型与工具(每张工作流一个)、做一次生成。只给宿主调。",
+            "en": "Lists models and tools (one per workflow) and runs generations on this ComfyUI server for Mosael. Host-only."
           }
         },
         {
@@ -260,12 +261,12 @@
         {
           "name": "run_workflow",
           "label": {
-            "zh": "运行工作流",
-            "en": "Run workflow"
+            "zh": "按 id 跑工作流",
+            "en": "Run workflow by id"
           },
           "description": {
-            "zh": "原样跑一张 ComfyUI 工作流,交回**全部**产出(每个保存 / 预览节点的每一个文件进素材库,显示文字的节点说的话在 texts 里)。图、蒙版、视频、音频按 list_workflows 给的顺序接到读素材的节点上;任意节点上的值用 values 改。跑得久的(视频)可以 wait: false 只提交,之后用 import_outputs 取回。",
-            "en": "Runs a ComfyUI workflow as-is and returns **every** output (each file from every save / preview node goes into the asset library; text shown by display nodes is in texts). Images, masks, videos and audio go to the loader nodes in the order list_workflows reports; values overrides any literal input. For long runs (video) pass wait: false to only submit, then fetch the outputs with import_outputs."
+            "zh": "给智能体的退路:按 id 原样跑任意一张工作流,输入用通用的几个参数(`image` / `images` / `mask` / `video` / `audio`,`values` 改任意节点的值)。**每张工作流都有自己的工具**(「工作流 · 名字」,入参就是它自己的节点),优先用那个;这个工具的长处是 `wait: false` 只提交、之后用 import_outputs 取回。",
+            "en": "An escape hatch for the agent: run any workflow by id with generic inputs (`image` / `images` / `mask` / `video` / `audio`, `values` for any node). **Every workflow has its own tool** (“Workflow · name”, whose inputs are that workflow's own nodes) — prefer it; this one is for `wait: false` submit-now, fetch-later with import_outputs."
           }
         },
         {
