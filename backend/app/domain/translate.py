@@ -85,13 +85,6 @@ def resolve_ai_chat_target(db, profile_id: str | None, user_id: str | None, mode
         raise TranslateError(str(exc)) from exc
 
 
-def ai_translate(db, text: str, target: str, profile_id: str | None, user_id: str | None, model: str = "") -> str:
-    """Translate via an enabled AI provider (LLM). Reused by the workflow node + the API."""
-    if not text.strip():
-        return ""
-    return ai_translate_with(resolve_ai_chat_target(db, profile_id, user_id, model), text, target)
-
-
 def ai_translate_with(
     chat_target: ChatTarget,
     text: str,
@@ -129,9 +122,14 @@ def translate(
     profile_id: str | None = None,
     model: str = "",
 ) -> str:
-    """Dispatch to the requested engine."""
+    """Dispatch to the requested engine.
+
+    **AI 那条就是只有一句的批量。** 此前它另有一份 `ai_translate`:解析目标、调 chat —— 唯独
+    没带记账,于是工作流翻译节点的每一次 AI 调用在账上都是隐身的,而批量那条一直记着。
+    同一件事两份实现,漏的那一份不会报错。现在记账、连接解析只在 translate_many 里。
+    """
     if engine == "ai":
-        return ai_translate(db, text, target, profile_id, user_id, model)
+        return translate_many(db, [text], target, user_id=user_id, engine=engine, profile_id=profile_id, model=model)[0]
     return google_translate(text, target)
 
 

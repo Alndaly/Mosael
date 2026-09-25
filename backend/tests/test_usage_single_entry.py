@@ -100,6 +100,48 @@ def test_翻译走的是记账链路而不是又一份实现(monkeypatch) -> Non
         assert events[0].units["output_tokens"] == 6
 
 
+def test_工作流的单句翻译节点也记账(monkeypatch) -> None:
+    """翻译节点(engine=ai)一句一次调用,此前走的是 `translate()` → `ai_translate`,那条路
+    调 chat 时**没带记账** —— 批量那条记、单句这条不记,于是工作流里的 AI 翻译在账上是隐身的。"""
+    import httpx
+
+    from app.core import http_retry as ai_retry
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderUsageEvent, Workflow
+    from app.domain.workflows.executors import ai as ai_executors
+    from tests.util import acting_as, add_provider, fresh_client
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "你好"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    real = ai_retry.RetryingClient
+    monkeypatch.setattr(ai_retry, "RetryingClient", lambda *a, **kw: real(*a, **{**kw, "transport": transport}))
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        add_provider(db, name="LLM", vendor="openai-compatible", base_url="https://api.test", api_key="sk", model="m")
+        workflow = Workflow(workspace_id=ws, name="翻译", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.commit()
+        with acting_as(db):
+            out = ai_executors.translate(db, workflow, {"text": "hello", "target_lang": "zh-CN", "engine": "ai"})
+        db.commit()
+    assert out == {"text": "你好"}
+
+    with SessionLocal() as db:
+        events = db.query(ProviderUsageEvent).filter_by(workspace_id=ws).all()
+        assert len(events) == 1, "单句 AI 翻译也花钱,账上得有它"
+        assert events[0].units["input_tokens"] == 5
+
+
 def test_没有工作区归属时不静默(caplog) -> None:
     """记不了账要喊出来 —— 静默漏记正是这次要终结的毛病。"""
     import logging
