@@ -196,6 +196,25 @@ stdout 是**一行一个 JSON 对象**(NDJSON),最后一行是和普通协议同
   上限仍是 30 分钟;要跑更久的走生成。
 - 宿主的素材角色多了 `mask`(局部重绘的蒙版),不是 ComfyUI 专用 —— 哪一家生成接口收蒙版都用它。
 
+## 补充(2026-09-26):工具也可以在运行时报出
+
+第二句反馈是「运行工作流的参数是写死的吗?每个工作流应该参数是不同的吧」。`run_workflow` 的入参是清单里写死的
+一张表,不管选哪张工作流都一样。**决定:插件可以在运行时报出工具**(宿主能力 `tools`,和 `generation` 同一套
+「认领 + op + 指纹」),而不是给 ComfyUI 开一个特例:
+
+- 报出的工具存进 `plugin_instances.discovered_tools` —— MCP 连接从服务拉来的清单本来就存在这里,一个连接只有一份
+  「运行时知道的工具」,开关、执行、节点类型、智能体工具表全都不用分支;
+- ComfyUI:每张保存的工作流(和粘贴的模板)一个工具 `wf_<id>`,名字取 ComfyUI 写在工作流文件里的 id(改名不变),
+  入参、输出都从那张图推;通用的 `run_workflow` 留给智能体当退路(`wait: false` + `import_outputs`),不再默认开放;
+- 存着的 `run_workflow` 节点由插件声明 `replaces`、宿主通用地改写(`domain/workflows/plugin_references`):每次清单刷新,
+  以及每次启动的对账步骤 `rewrite-replaced-plugin-tools`。它依赖插件报出的清单(ComfyUI 的图只在 ComfyUI 里),
+  所以不是一次性迁移;对不上的节点原样留着,老工具仍在,不会坏;
+- 目录巡检从生成域挪到插件域(`plugins/catalog_watch`),对每项给过指纹的能力一视同仁;
+- 插件页「试一下」和工作流节点用**同一个表单组件**、同一份字段声明,素材数组有了挑选控件。
+
+被否掉的:**给 run_workflow 的表单按选中的工作流动态换字段**(依赖字段、`options_from`)—— 那只修了插件页,
+工作流节点、智能体看到的仍是一张写死的表;而且节点的输出口也没法按工作流声明。
+
 ## Considered options
 
 - **生成领域认两种连接**(ProviderProfile 或 PluginInstance)—— 拒绝:外键在七八张表上,每处都要分支,

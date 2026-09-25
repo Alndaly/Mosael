@@ -73,8 +73,6 @@ class Catalog:
 
 #: 指纹最长多少。它只拿来比「变没变」,不是存档。
 _MAX_FINGERPRINT = 200
-#: 问一次指纹最多等多久。它该是一个只列目录的请求,几秒还没回就当这一轮没问到。
-FINGERPRINT_TIMEOUT_SECONDS = 20.0
 
 
 def catalog(db: Session, instance: PluginInstance) -> Catalog:
@@ -92,21 +90,6 @@ def catalog(db: Session, instance: PluginInstance) -> Catalog:
             seen.add(model.id)
             models.append(model)
     return Catalog(models=models, fingerprint=_fingerprint(output))
-
-
-def fingerprint(db: Session, instance: PluginInstance) -> str:
-    """问插件**模型清单的指纹**(`op: fingerprint`)。便宜的一问:只为判「要不要重新拉整份目录」。
-
-    不留调用记录(宿主每隔一会儿就问一次,那不是一次「调用」)。插件答不上来就抛,由调用方决定
-    怎么办 —— 不能把「没问到」当成「没变」或「变了」。
-    """
-    output = tools.invoke_host(
-        db, instance.id, GENERATION, {"op": "fingerprint"}, timeout=FINGERPRINT_TIMEOUT_SECONDS, record=False
-    )
-    found = _fingerprint(output)
-    if not found:
-        raise PluginDomainError("pluginErr_generationNoFingerprint", name=instance.name)
-    return found
 
 
 def _fingerprint(output: dict[str, Any]) -> str:
@@ -316,13 +299,11 @@ def generate(
 __all__ = [
     "CATALOG_TIMEOUT_SECONDS",
     "Catalog",
-    "FINGERPRINT_TIMEOUT_SECONDS",
     "GENERATION",
     "GenerationCall",
     "GenerationOutcome",
     "MODEL_KINDS",
     "PluginModel",
     "catalog",
-    "fingerprint",
     "generate",
 ]

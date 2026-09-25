@@ -181,6 +181,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{name}」完成了生成,但没有交回任何文件",
         "en": "“{name}” finished generating but handed back no files.",
     },
+    "pluginErr_toolsBadShape": {
+        "zh": "「{name}」交回的工具清单格式不对,应当是 {shape}",
+        "en": "“{name}” returned a tool list in the wrong shape; it should be {shape}.",
+    },
     "pluginErr_generationNoFingerprint": {
         "zh": "「{name}」没有交回模型清单的指纹",
         "en": "“{name}” returned no fingerprint for its model list.",

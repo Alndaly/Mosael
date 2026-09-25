@@ -12,15 +12,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 //: 路径在 api/domains/plugins 里,界面调的是**有名字的函数** —— 所以这里打桩的也是它们,
 //: 断言的是"带着哪个连接、哪个工具、哪些参数",而不是一串拼出来的 URL。
-const { listPluginCredentials, savePluginCredentials, invokePluginTool } = vi.hoisted(() => ({
+const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssets } = vi.hoisted(() => ({
   listPluginCredentials: vi.fn(),
   savePluginCredentials: vi.fn(),
   invokePluginTool: vi.fn(),
+  listAssets: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({
   listPluginCredentials,
   savePluginCredentials,
   invokePluginTool,
+  listAssets,
+  fetchWorkflowFieldOptions: vi.fn().mockResolvedValue([]),
   startPluginOauth: vi.fn(),
   finishPluginOauth: vi.fn(),
   invalidatePlugins: () => undefined,
@@ -52,7 +55,15 @@ function wrap(node: React.ReactNode) {
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {} });
   listPluginCredentials.mockReset();
+  listAssets.mockReset();
+  listAssets.mockResolvedValue([
+    { id: "img-1", name: "海边.png", original_filename: "a.png", kind: "image" },
+    { id: "img-2", name: "山.png", original_filename: "b.png", kind: "image" },
+    { id: "vid-1", name: "成片.mp4", original_filename: "c.mp4", kind: "video" },
+  ]);
   savePluginCredentials.mockReset();
   invokePluginTool.mockReset();
   listPluginCredentials.mockResolvedValue([
@@ -140,6 +151,7 @@ describe("素材工具的工作区归属", () => {
     const tool = {
       name, label: name, description: "", read_only: false, exposed: true,
       input_schema: { properties: Object.fromEntries(Object.keys(input).map((key) => [key, { type: "string" }])) },
+      form: Object.fromEntries(Object.keys(input).map((key) => [key, { type: "string", label: key }])),
     };
     invokePluginTool.mockResolvedValue({ id: "invocation", status: "succeeded", output });
     const props = { instanceId: "i1", tool, blockedReason: "", onToggle: () => undefined };
@@ -147,7 +159,7 @@ describe("素材工具的工作区归属", () => {
     const invalidate = vi.spyOn(client, "invalidateQueries");
     fireEvent.click(screen.getByText(name));
     for (const [key, value] of Object.entries(input)) {
-      fireEvent.change(screen.getByLabelText(key), { target: { value } });
+      fireEvent.change(fieldInput(key), { target: { value } });
     }
     fireEvent.click(screen.getByRole("button", { name: "运行" }));
     await waitFor(() => expect(invokePluginTool).toHaveBeenCalledWith("i1", name, { input, workspace_id: "workspace-a" }));
@@ -162,21 +174,62 @@ describe("素材工具的工作区归属", () => {
   });
 });
 
-describe("typed plugin controls", () => {
-  it("distinguishes an omitted boolean from an explicit false and preserves workspace scope", async () => {
+/** 表单里某一格的输入框。表单是节点表单(NodeConfigForm),每一格带着 data-field-key。 */
+function fieldInput(key: string): HTMLInputElement {
+  return document.querySelector<HTMLInputElement>(`[data-field-key="${key}"] input`)!;
+}
+
+describe("试跑表单就是工作流节点的那张表单", () => {
+  //: 形状和后端 `_tool_form` 发下来的一样(节点目录的字段声明,已按语言翻好)
+  const tool = {
+    name: "wf_portrait", label: "工作流 · portrait", description: "", read_only: false, exposed: true,
+    input_schema: { properties: {} },
+    form: {
+      steps_3: { type: "number", label: "步数", default: "20", description: "采样 · steps" },
+      image_10: { type: "template", label: "图", data_type: "asset", media: "image", required: true },
+      images: { type: "asset_list", label: "更多的图", data_type: "asset", media: "image" },
+      include_previews: { type: "template", label: "也取回预览", advanced: true, options: ["true", "false"],
+                          option_labels: { true: "是", false: "否" } },
+    },
+  };
+
+  it("人话标签、默认值当占位、素材选择器只列那一种素材、一串素材不是 JSON 框、高级项收起来", async () => {
     invokePluginTool.mockResolvedValue({ id: "invocation", status: "succeeded", output: {} });
-    const tool = { name: "upload", label: "Upload", description: "", read_only: false, exposed: true,
-      input_schema: { properties: { overwrite: { type: "boolean" }, options: { type: "object" } } } };
     wrap(<ToolRow workspaceId="workspace-a" instanceId="i1" tool={tool} blockedReason="" onToggle={() => undefined} />);
-    fireEvent.click(screen.getByText("Upload"));
-    fireEvent.click(screen.getByRole("button", { name: "运行" }));
-    await waitFor(() => expect(invokePluginTool).toHaveBeenCalledWith("i1", "upload", { input: {}, workspace_id: "workspace-a" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "运行" })).not.toBeDisabled());
-    fireEvent.click(screen.getByRole("combobox", { name: "overwrite" }));
-    fireEvent.click(await screen.findByRole("option", { name: "studioBooleanFalse" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "options" }), { target: { value: '{"copies":2}' } });
-    fireEvent.click(screen.getByRole("button", { name: "运行" }));
-    await waitFor(() => expect(invokePluginTool).toHaveBeenLastCalledWith("i1", "upload", { input: { overwrite: false, options: { copies: 2 } }, workspace_id: "workspace-a" }));
+    fireEvent.click(screen.getByText("工作流 · portrait"));
+
+    const steps = document.querySelector<HTMLElement>('[data-field-key="steps_3"]')!;
+    expect(within(steps).getByText("步数")).toBeTruthy();
+    expect(fieldInput("steps_3").placeholder).toBe("20");
+    expect(document.body.textContent).not.toContain("string");
+    expect(document.querySelector("textarea")).toBeNull();
+    expect(document.querySelector('[data-field-key="include_previews"]')).toBeNull();
+    // 必填的图没挑:按钮灰着,旁边说为什么
+    expect(screen.getByRole("button", { name: /运行/ })).toBeDisabled();
+    expect(screen.getByText("还有必填参数没填")).toBeTruthy();
+
+    const image = document.querySelector<HTMLElement>('[data-field-key="image_10"]')!;
+    fireEvent.click(within(image).getByRole("combobox"));
+    expect(await screen.findByRole("option", { name: "海边.png" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "成片.mp4" })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "海边.png" }));
+
+    const images = document.querySelector<HTMLElement>('[data-field-key="images"]')!;
+    for (const name of ["山.png", "海边.png"]) {
+      fireEvent.click(within(images).getByRole("combobox"));
+      fireEvent.click(await screen.findByRole("option", { name }));
+    }
+    expect(within(images).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["山.png", "海边.png"]);
+    fireEvent.change(fieldInput("steps_3"), { target: { value: "30" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /wfAdvanced/ }));
+    expect(document.querySelector('[data-field-key="include_previews"]')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /运行/ }));
+    await waitFor(() => expect(invokePluginTool).toHaveBeenCalledWith("i1", "wf_portrait", {
+      input: { image_10: "img-1", images: ["img-2", "img-1"], steps_3: "30" },
+      workspace_id: "workspace-a",
+    }));
   });
 });
 
@@ -251,6 +304,7 @@ describe("清单里的说明带 markdown", () => {
       read_only: false,
       exposed: true,
       input_schema: { properties: { key: { type: "string", description: "对象键,如 `videos/a.mp4`" } } },
+      form: { key: { type: "template", label: "对象键", description: "对象键,如 `videos/a.mp4`" } },
     };
     const { container } = wrap(<ToolRow workspaceId="w1" instanceId="i1" tool={tool} blockedReason="" onToggle={() => undefined} />);
     expect(screen.getByText("限时直链").tagName).toBe("STRONG");

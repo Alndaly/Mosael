@@ -127,6 +127,9 @@ return {
 }
 ```
 
+一份产出上可以写 `"output": "image_9"`:这一份就是工具在 `node.outputs` 里声明的那个具名输出口,宿主把它的素材 id
+填进返回值的同名一格(同名只认第一份,你自己写了那一格就不覆盖)—— 下游能直接接「那个保存节点的图」。
+
 宿主全部收进素材库,返回值里 `artifacts` 换成:
 
 - `assets`:每一份 `{asset_id, asset_name, …}` —— 每一项上除了 `path` / `url` / `headers` / `filename` 之外的
@@ -373,6 +376,71 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 画板会说清楚是哪个插件、去插件页建。`internal` 的工具不上画板。取消画板上的那一轮会杀掉你的进程
 (和工作流里一样,见「预算」)。
 
+### 运行时报出的工具
+
+清单里 `declare` 的工具是写死的。可有些插件的工具**只有运行时才知道**:ComfyUI 插件里每张保存的工作流都该是一个
+工具,入参就是那张图自己的提示词、读素材的节点和可调参数 —— 写死成一个 `run_workflow` 的话,不管选哪张工作流
+表单都长一个样,放大工作流也问你要提示词。
+
+声明一项宿主能力 `tools`,由一个只给宿主调的工具认领(可以和 `generation` 是同一个工具):
+
+```jsonc
+{
+  "provides": ["generation", "tools"],
+  "tools": { "declare": [ { "name": "my_host", "provides": ["generation", "tools"], "input_schema": {"type": "object"} } ] }
+}
+```
+
+它收两种 `op`:
+
+```jsonc
+{"op": "tools"}        // → {"tools": [ … ], "fingerprint": "…"}
+{"op": "fingerprint", "capability": "tools"}   // → {"fingerprint": "…"}  便宜的一问,见「目录变了就刷新」
+```
+
+`tools` 里每一项和 `declare` 里的写法一样,宿主认这些键:`name`(`[A-Za-z][A-Za-z0-9_-]*`,不能有点 —— 它要进节点类型
+`plugin.<包>.<工具>`;不能和清单里声明的重名)、`label`、`description`(可以按语言分)、`input_schema`(属性的 `title` /
+`description` 也可以按语言分)、`read_only`、`stream`、`timeout_seconds`(上限照旧)、`node`(`outputs` /
+`output_types` / `output_labels`)、`recommended`(`true` = 第一次出现时默认开放)、`replaces`(见下)。**别的键丢掉**,
+尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主认领能力,也不能把自己藏起来。最多 300 个。
+
+报出来的工具存进 `plugin_instances.discovered_tools`(MCP 连接从服务拉来的清单也存在这里),和清单里声明的走
+**同一条路**:插件页的工具表和开关、智能体工具表(`plugin__<连接>__<工具>`)、工作流节点(`plugin.<包>.<工具>`)、
+同一个执行入口。调用时你照常收到 `{"tool": <名字>, "input": …}`。刷新时机和生成模型目录一样:连接新建、改配置、
+启停、授权、插件页「刷新」、启动时,以及指纹变了;问不到就保留上一份,原因记在 `capability_status["tools"]`。
+
+**名字要稳。** 工作流节点和智能体记的是工具名;一个工具换了名字,存着的节点就找不到它了。ComfyUI 插件用的是 ComfyUI
+写进工作流文件里的 id(改名、挪目录都不变),没有 id 的老文件才退到路径的哈希。
+
+#### 取代老工具:`replaces`
+
+一个报出来的工具可以说它取代了某个老工具的某一种用法,宿主据此把**存着的老节点自动改写过来**(工作流里的节点和
+连进来的数据边,画板上的工具格和它的绑定;每次清单刷新、以及每次启动的对账步骤 `rewrite-replaced-plugin-tools` 都会做,后者用缓存的清单):
+
+```jsonc
+"replaces": {
+  "tool": "run_workflow",                    // 老工具
+  "match": {"workflow": "portrait.json"},    // 老节点的配置里这几格是这些值才算
+  "rename": {"image": "image_10", "images.0": "image_11", "values.3.steps": "steps_3"},
+  "drop_if": {"wait": true}                  // 这几格是这个值时直接丢(老工具的默认)
+}
+```
+
+配置按 `键.子键` / `键.序号` 展开后,每一格要么在 `rename` 里、要么新工具有同名的一格、要么按 `drop_if` 可以丢;
+**有一格对不上就不改那个节点** —— 宁可留着能跑的老节点,也不丢用户填的值。改过的工作流追加一版修订(`migration`),
+作者和认可人沿用上一版。
+
+#### 表单长什么样
+
+同一份 `input_schema` 在工作流里是节点表单,在插件页是「试一下」的表单 —— 两处是**同一个表单组件**,按同一份字段
+声明渲染(`GET /api/plugins` 里每个工具带着 `form`,就是节点目录里的那一份):`title` 是标签;`description` 按行内
+Markdown 渲染;`default` 是占位提示;`enum` 是下拉,`boolean` 是「是 / 否」下拉;`integer` / `number` 是数字;
+`format: "asset"` 是素材选择器,`x-media: "image" | "video" | "audio"` 让它只列那一种素材;素材数组是挑出来的一排,
+不是 JSON 框;`x-advanced` 收进「高级选项」;字符串上 `x-multiline` 给高一点的编辑框。
+
+表单里填的都是文字。宿主在交给你之前**按 `input_schema` 把 `integer` / `number` / `boolean` 转回类型**
+(空字符串当没填、去掉那一格),转不了的原样给你 —— 工作流节点送来的也是这些字符串,两条路同一个规矩。
+
 ### 技能
 
 `skills` 是给**别的智能体**看的一段高层描述(进 `/api/agent/skills`)。工具回答"能调什么",
@@ -578,7 +646,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `instance.config` | 明文配置:`key` `label` `type` `options` `required` `help` `default`;`type` 见「配置项的类型」(`json` / `code` 给代码编辑器,`code` 另写 `language`);`multiline: true` 给多行框 |
 | `instance.credentials` | 密钥,字段同上;`secret` 默认 true |
 | `permissions` | 自由字符串,逐项授权 |
-| `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation`(见「声明『我能替宿主做成什么』」) |
+| `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation` / `tools`(见「声明『我能替宿主做成什么』」「运行时报出的工具」) |
 | `skills` | 给别的智能体看的高层描述 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
@@ -632,6 +700,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | --- | --- | --- |
 | `public_url` | 把一份**本地素材**变成一条公网可下载的地址 | 生成链路:某些模型的参考视频 / 源视频**只收链接**(方舟 Seedance 的参考图可以走 Base64,参考视频不行) |
 | `generation` | **当一家生成供应商**:列出自己的模型,做一次生成 | 选择器、画板、工作流、智能体 —— 插件的模型和内置供应商的模型一样出现(见下一节) |
+| `tools` | **运行时报出工具清单** | 工具表、节点面板、智能体 —— 见「运行时报出的工具」 |
 
 两处都要写:**包上的 `provides`** 说「这个插件能做这件事」,**工具上的 `provides`** 说「这件事归
 我」。负责 `public_url` 的工具收 `{asset_id, expires}`,交回 `{url}`。工具上声明了包上没有的能力,
@@ -735,7 +804,9 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
   「保存的工作流的路径 + 大小 + 修改时间、粘贴的模板、几个模型目录的文件名」的哈希;
 - 再支持 `op: "fingerprint"`,只回 `{"fingerprint": "…"}` —— **便宜**,只列目录,不取任何一张图。
 
-宿主每分钟问一次指纹(不留调用记录,那不是一次「调用」),和上次刷新时记下的不一样才重新 `op: models`。
+宿主每分钟问一次指纹(`{"op": "fingerprint", "capability": "generation"}`,不留调用记录,那不是一次「调用」),
+和上次刷新时记下的不一样才重新 `op: models`。`tools` 那一项同理(见「运行时报出的工具」);巡检不认识具体能力
+(`domain/plugins/catalog_watch`),哪项能力上次给过指纹就问哪项。
 不给指纹的插件不受影响:它们照旧只在上面那几个时机刷新。指纹问不到(服务没开)不算失败,下一分钟再问。
 
 ### `op: "generate"` —— 做一次

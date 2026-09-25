@@ -45,6 +45,18 @@ def register(capability: str, handler: Handler, *, listing: Listing | None = Non
         _listings[capability] = listing
 
 
+def handles(capability: str) -> bool:
+    """这项能力有没有宿主侧登记过。"""
+    return capability in _handlers
+
+
+def refresh(db: Session, instance: PluginInstance, capability: str) -> None:
+    """只让**这一项**能力的宿主侧重新问一遍插件(目录指纹变了,见 catalog_watch)。失败照抛。"""
+    handler = _handlers.get(capability)
+    if handler is not None:
+        handler(db, instance, True)
+
+
 def listing(db: Session, instance: PluginInstance, capability: str) -> list[dict[str, Any]] | None:
     """这个实例在 `capability` 上提供的东西。宿主侧没登记列法(或这项能力不产出可列的东西)回 None。"""
     lister = _listings.get(capability)
@@ -75,4 +87,4 @@ def notify(db: Session, instance: PluginInstance, *, refresh: bool) -> None:
             logger.exception("插件实例 %s 的「%s」宿主侧没能对齐", instance.id, capability)
 
 
-__all__ = ["Handler", "Listing", "listing", "notify", "register"]
+__all__ = ["Handler", "Listing", "handles", "listing", "notify", "refresh", "register"]

@@ -37,6 +37,8 @@ class PluginToolStateOut(ApiModel):
     input_schema: dict = Field(default_factory=dict)
     #: 暴不暴露给智能体与工作流。默认关 —— 一个 MCP 端点可能报几十个工具。
     exposed: bool = False
+    #: 试跑表单的字段:和这个工具当工作流节点时同一份声明(节点目录的形状,已按语言翻好)。
+    form: dict = Field(default_factory=dict)
 
 
 class PluginCapabilityStatusOut(ApiModel):
@@ -44,6 +46,8 @@ class PluginCapabilityStatusOut(ApiModel):
 
     #: 上一次刷新成功时插件列了几个能用的模型。从没成功过就是 None。
     models: int | None = None
+    #: 运行时报出的工具那一项:上一次报了几个工具。
+    tools: int | None = None
     refreshed_at: str | None = None
     #: 上一次失败的原因(已按看的人的语言翻好)。成功过后清空。
     error: str = ""

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -21,7 +22,7 @@ from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import HOST_ONLY_CAPABILITIES, Manifest, text_of
+from app.domain.plugins.manifest import GENERATION, HOST_ONLY_CAPABILITIES, Manifest, localized_tool, text_of
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
 from app.domain.plugins.runtime import (
     PluginRuntimeError,
@@ -90,7 +91,7 @@ def _declared_timeout(tool: dict[str, Any]) -> float | None:
     认领了生成能力的那个工具按能力给预算(见 MAX_GENERATION_TIMEOUT_SECONDS):不写是 1 小时,
     上限 6 小时。
     """
-    generates = _claims(tool) & HOST_ONLY_CAPABILITIES
+    generates = GENERATION in _claims(tool)
     raw = tool.get("timeout_seconds")
     if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
         return float(DEFAULT_GENERATION_TIMEOUT_SECONDS) if generates else None
@@ -117,9 +118,18 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
     手抄一份端点清单会随服务升级而烂,而且烂得很安静。
     """
     manifest = inst.manifest_for(db, instance)
-    raw = instance.discovered_tools if manifest.is_mcp else manifest.declared_tools
+    if manifest.is_mcp:
+        raw = list(instance.discovered_tools or [])
+    else:
+        # 进程插件:清单里声明的,加上它**运行时报出的**(见 dynamic_tools;和 MCP 的清单存在同一格)。
+        # 后者的文字原样存着,读的时候按此刻的语言定下来。
+        declared = {str(tool.get("name")) for tool in manifest.declared_tools}
+        raw = list(manifest.declared_tools) + [
+            localized_tool(tool) for tool in (instance.discovered_tools or [])
+            if isinstance(tool, dict) and str(tool.get("name")) not in declared
+        ]
     out: list[dict[str, Any]] = []
-    for tool in raw or []:
+    for tool in raw:
         if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
             continue
         override = manifest.overrides.get(tool["name"])
@@ -276,6 +286,7 @@ def invoke(
     scratch: Path | None = None
     # 进程隔离:插件崩了、超时了、吐了非 JSON —— 失败的是这次调用记录,不是应用。
     try:
+        payload = plugin_inputs.coerce(tool, payload)
         check_required_input(tool, payload)
         if manifest.is_mcp:
             secrets = inst.secrets_for(db, instance)
@@ -483,6 +494,8 @@ MAX_ARTIFACTS = 64
 #: 一份产出上,除了「怎么拿到它」(path / url / headers)之外,插件可以附带的说明(哪个节点、什么类型)。
 #: 原样跟着素材 id 回给调用方;只收标量,免得一份产出带着一整棵结构进了对话记录。
 _ARTIFACT_TRANSPORT_KEYS = frozenset({"path", "url", "headers"})
+#: 一份产出可以说「我是哪个具名输出」(`output`)。键名的样子和工具声明里的输出口一样。
+_OUTPUT_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
 def _collect_artifact(
@@ -524,9 +537,15 @@ def _collect_artifact(
             )
             extras = {
                 str(key): value for key, value in spec.items()
-                if key not in _ARTIFACT_TRANSPORT_KEYS and key != "filename" and isinstance(value, (str, int, float, bool))
+                if key not in _ARTIFACT_TRANSPORT_KEYS and key not in ("filename", "output")
+                and isinstance(value, (str, int, float, bool))
             }
             assets.append({**extras, "asset_id": ref, "asset_name": name})
+            # 具名输出:这一份就是工具声明里的某个输出口(`image_9` —— 那个保存节点的图)。
+            # 同名的只认第一份;插件自己在输出里写了同名的一格就不覆盖。
+            named = spec.get("output")
+            if isinstance(named, str) and _OUTPUT_KEY.match(named) and named not in collected:
+                collected[named] = ref
         collected["assets"] = assets
         collected["asset_ids"] = [one["asset_id"] for one in assets]
         if assets and "asset_id" not in collected:

@@ -57,6 +57,40 @@ def asset_fields(tool: dict[str, Any]) -> list[str]:
     ]
 
 
+def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    """表单里填的是文字(工作流节点的配置、插件页试跑的输入框都是字符串),按 `input_schema` 声明的类型转回来:
+    `integer` / `number` / `boolean` 的一格是字符串时转成数 / 布尔,空字符串当没填(去掉这一格)。
+
+    转不了的原样留着(一个 `{{上游.输出}}` 没接上时就是这样)—— 交给插件去说哪里不对,不在这里替它猜。
+    """
+    schema = tool.get("input_schema")
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    if not isinstance(properties, dict):
+        return payload
+    out = dict(payload)
+    for key, spec in properties.items():
+        value = out.get(key)
+        if not isinstance(spec, dict) or not isinstance(value, str):
+            continue
+        kind = spec.get("type")
+        if kind not in ("integer", "number", "boolean"):
+            continue
+        text = value.strip()
+        if not text:
+            out.pop(key)
+            continue
+        if kind == "boolean":
+            if text.lower() in ("true", "false", "1", "0", "yes", "no"):
+                out[key] = text.lower() in ("true", "1", "yes")
+            continue
+        try:
+            number = float(text)
+        except ValueError:
+            continue
+        out[key] = int(number) if kind == "integer" and number.is_integer() else number
+    return out
+
+
 def materialize(
     db: Session,
     tool: dict[str, Any],
@@ -94,4 +128,4 @@ def materialize(
     return resolved
 
 
-__all__ = ["ASSET_FORMAT", "asset_fields", "materialize"]
+__all__ = ["ASSET_FORMAT", "asset_fields", "coerce", "materialize"]

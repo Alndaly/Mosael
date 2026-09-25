@@ -70,13 +70,14 @@ def test_真实计划里_只有对账那几步是每次都跑的() -> None:
     """**create_all 必须每次跑**:记账跳过它,新版本加的表就再也建不出来 —— 而表缺了不会在启动时
     报错,要等第一次查询才炸。另外两条处理的东西会不断再产生(孤儿共享、job 的消息键)。
     托管 venv 那条对的是随包解释器的次版本 —— 每次随包解释器换次版本,都会再出现一批。
-    随包插件那条对的是这一版带的插件(见 domain/plugins/bundled)—— 每个版本都可能变。"""
+    随包插件那条对的是这一版带的插件(见 domain/plugins/bundled)—— 每个版本都可能变。
+    改写被取代的插件工具那条依据的是插件上一次报出的工具清单,清单会变(见 workflows/plugin_references)。"""
     from app.db.migrations import migration_plan
 
     recurring = {step.name for step in migration_plan().steps if not step.once}
     assert recurring == {
         "create-current-schema", "cleanup-orphan-resource-shares", "migrate-job-keys-are-keys",
-        "drop-venvs-built-on-another-python", "install-bundled-plugins",
+        "drop-venvs-built-on-another-python", "install-bundled-plugins", "rewrite-replaced-plugin-tools",
     }
 
 

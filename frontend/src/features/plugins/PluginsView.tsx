@@ -3,7 +3,6 @@ import { assetKeys } from "@/api/queryKeys";
 import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
 
@@ -55,6 +54,7 @@ import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { cn } from "@/lib/utils";
+import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 
 /**
  * 插件页 = 包 → 连接 → 能力 三层。
@@ -964,10 +964,17 @@ interface ToolState {
   read_only: boolean;
   input_schema?: { [key: string]: unknown };
   exposed: boolean;
+  /** 试跑表单的字段:和这个工具当工作流节点时**同一份声明**(后端节点目录的形状,已按语言翻好)。 */
+  form?: { [key: string]: unknown };
 }
 
-/** 工具的入参模式:生成的类型只知道它是个对象,这里收一次窄化,免得每处各写一遍断言。 */
-type InputSchema = { properties?: Record<string, { type?: string; description?: string }>; required?: string[] };
+/** 表单里的一格有没有填。素材列表空着、字符串空着都算没填(不发出去)。 */
+function filled(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
 
 /** 工具行:左边一个「暴不暴露」的勾,展开后按 input_schema 生成表单试跑。
  *
@@ -990,29 +997,13 @@ export const ToolRow = React.memo(function ToolRow({
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
-  const [values, setValues] = React.useState<Record<string, string>>({});
   const [result, setResult] = React.useState<PluginInvocation | null>(null);
 
-  const schema = (tool.input_schema ?? {}) as InputSchema;
-  const fields = Object.entries(schema.properties ?? {});
-  const required = new Set(schema.required ?? []);
-
   const invoke = useMutation({
-    mutationFn: () => {
-      const input: Record<string, unknown> = {};
-      for (const [key, spec] of fields) {
-        const raw = values[key] ?? "";
-        if (!raw) continue;
-        if (spec.type === "number" || spec.type === "integer") input[key] = Number(raw);
-        else if (spec.type === "boolean") input[key] = raw === "true";
-        else if (spec.type === "object" || spec.type === "array") {
-          try {
-            input[key] = JSON.parse(raw);
-          } catch {
-            input[key] = raw;
-          }
-        } else input[key] = raw;
-      }
+    mutationFn: (config: Record<string, unknown>) => {
+      // 数字、开关按工具的入参声明转回类型是后端的事(plugins/inputs.coerce):工作流节点送来的也是这些字符串,
+      // 两条路同一个规矩。这里只把没填的去掉。
+      const input = Object.fromEntries(Object.entries(config).filter(([, value]) => filled(value)));
       return invokePluginTool(instanceId, tool.name, { input, workspace_id: workspaceId });
     },
     onSuccess: (invocation) => {
@@ -1023,8 +1014,6 @@ export const ToolRow = React.memo(function ToolRow({
       }
     },
   });
-
-  const missingRequired = [...required].some((key) => !(values[key] ?? "").trim());
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-panel">
@@ -1060,58 +1049,94 @@ export const ToolRow = React.memo(function ToolRow({
       </div>
       {open && (
         <div className="grid gap-5 border-t border-divider bg-panel-subtle/40 p-5">
-          {fields.map(([key, spec]) => (
-            <label
-              className="grid gap-2 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground"
-              key={key}
-            >
-              <span>
-                {key}
-                {required.has(key) && <em className="not-italic text-destructive">*</em>}
-                {spec.description && (
-                  <>
-                    {" — "}
-                    <InlineMarkdown text={spec.description} />
-                  </>
-                )}
-              </span>
-              {spec.type === "boolean" ? <Select value={values[key] || "__default__"} onValueChange={(value) => setValues(current => ({ ...current, [key]: value === "__default__" ? "" : value }))}>
-                <SelectTrigger aria-label={key}><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="__default__">{t("studioBooleanDefault")}</SelectItem><SelectItem value="true">{t("studioBooleanTrue")}</SelectItem><SelectItem value="false">{t("studioBooleanFalse")}</SelectItem></SelectContent>
-              </Select> : spec.type === "object" || spec.type === "array" ? <Textarea aria-label={key} rows={4} className="font-mono" value={values[key] ?? ""} placeholder={spec.type === "array" ? "[]" : "{}"} onChange={event => setValues(current => ({ ...current, [key]: event.target.value }))} /> : <Input
-                aria-label={key}
-                type={spec.type === "number" || spec.type === "integer" ? "number" : "text"}
-                step={spec.type === "integer" ? 1 : "any"}
-                value={values[key] ?? ""}
-                placeholder={spec.type ?? "string"}
-                onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))}
-              />}
-            </label>
-          ))}
-          {/* **把理由摆在按钮旁边。** 「未启用」这句话本来只写在整组的标题下,而工具行
-              可能在它下面好几百像素处 —— 用户看到的就只是一个灰着的按钮,试不出所以然。
-              缺必填参数同理:不说的话,他会以为是插件坏了。 */}
-          <div className="flex items-center justify-end gap-2">
-            {(blockedReason || missingRequired) && (
-              <small className="min-w-0 truncate text-ui-xs text-muted-foreground">
-                {blockedReason || t("pluginToolMissingRequired")}
-              </small>
-            )}
-            <Button
-              size="sm"
-              disabled={Boolean(blockedReason) || missingRequired}
-              loading={invoke.isPending}
-              onClick={() => invoke.mutate()}
-            >
-              <Play size={13} /> {t("runTool")}
-            </Button>
-          </div>
+          <ToolTryForm
+            tool={tool}
+            workspaceId={workspaceId}
+            blockedReason={blockedReason}
+            pending={invoke.isPending}
+            onRun={(config) => invoke.mutate(config)}
+          />
           {result && <ResultBlock ok={result.status === "succeeded"} body={result.status === "succeeded" ? result.output : result.error ?? result.status} />}
         </div>
       )}
     </div>
   );
 });
+
+/**
+ * 工具的「试一下」表单:**用工作流节点的那个表单组件**(NodeConfigForm)渲染后端给的同一份字段声明 ——
+ * 名字是人话、说明按行内 Markdown 渲染、素材字段是素材选择器(一串素材是挑出来的一排,不是 JSON 框)、
+ * 可选值是下拉、数字是数字框、留空也能跑的收进「高级选项」。
+ *
+ * 此前这里按 input_schema 自己拼:标签是裸键名、每个输入框的占位都是 `string`、一串图要手写 `[]`。
+ * 同一个工具在工作流里是一张像样的表单,在插件页却是这副样子 —— 两处各写一遍的结果。
+ */
+export function ToolTryForm({
+  tool,
+  workspaceId,
+  blockedReason,
+  pending,
+  onRun,
+}: {
+  tool: ToolState;
+  workspaceId: string;
+  blockedReason: string;
+  pending: boolean;
+  onRun: (config: Record<string, unknown>) => void;
+}) {
+  const t = useI18n();
+  const specs = React.useMemo(() => (tool.form ?? {}) as Record<string, ConfigSpec>, [tool.form]);
+  const [config, setConfig] = React.useState<Record<string, unknown>>({});
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const fieldOptions = useNodeFieldOptions({ specs, config, workspaceId, nodeType: "" });
+  const { basic, advanced } = nodeConfigTiers(specs, config);
+  const set = (key: string, value: unknown) => setConfig((current) => ({ ...current, [key]: value }));
+  const missingRequired = Object.entries(specs).some(([key, spec]) => spec?.required && !filled(config[key]));
+  const form = (fields: Array<[string, ConfigSpec]>) => (
+    <NodeConfigForm
+      fields={fields}
+      config={config}
+      workspaceId={workspaceId}
+      variables={[]}
+      fieldOptions={fieldOptions}
+      onSetConfig={set}
+      onTypeConfig={set}
+    />
+  );
+  return (
+    <>
+      {basic.length > 0 && <div className="grid gap-4">{form(basic)}</div>}
+      {advanced.length > 0 && (
+        <div className="grid gap-4">
+          <button
+            type="button"
+            aria-expanded={showAdvanced}
+            className="inline-flex w-fit cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-ui-sm font-medium text-muted-foreground hover:text-foreground"
+            onClick={() => setShowAdvanced((value) => !value)}
+          >
+            {showAdvanced ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            {t("wfAdvanced")}
+            <span className="text-ui-xs font-normal">{advanced.length}</span>
+          </button>
+          {showAdvanced && form(advanced)}
+        </div>
+      )}
+      {/* **把理由摆在按钮旁边。** 「未启用」这句话本来只写在整组的标题下,而工具行
+          可能在它下面好几百像素处 —— 用户看到的就只是一个灰着的按钮,试不出所以然。
+          缺必填参数同理:不说的话,他会以为是插件坏了。 */}
+      <div className="flex items-center justify-end gap-2">
+        {(blockedReason || missingRequired) && (
+          <small className="min-w-0 truncate text-ui-xs text-muted-foreground">
+            {blockedReason || t("pluginToolMissingRequired")}
+          </small>
+        )}
+        <Button size="sm" disabled={Boolean(blockedReason) || missingRequired} loading={pending} onClick={() => onRun(config)}>
+          <Play size={13} /> {t("runTool")}
+        </Button>
+      </div>
+    </>
+  );
+}
 
 function InvocationList({ instanceId }: { instanceId: string }) {
   const t = useI18n();

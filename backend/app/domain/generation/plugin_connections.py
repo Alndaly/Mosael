@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -39,13 +38,13 @@ from app.ai.providers import (
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, get_current_locale, pick_text
-from app.db.models import PluginInstance, PluginPackage, ProviderProfile
+from app.db.models import PluginInstance, ProviderProfile
 from app.domain import provider_models
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import GENERATION, manifest_of
+from app.domain.plugins.manifest import GENERATION
 from app.domain.plugins.runtime import PluginCancelled, PluginRuntimeError, StreamHooks
 
 logger = logging.getLogger(__name__)
@@ -217,94 +216,6 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
 
 def _handler(db: Session, instance: PluginInstance, refresh: bool) -> None:
     sync(db, instance, refresh)
-
-
-def _generation_instances(db: Session) -> list[PluginInstance]:
-    out: list[PluginInstance] = []
-    for instance in db.scalars(select(PluginInstance)):
-        package = db.get(PluginPackage, instance.package_id)
-        if package is not None and GENERATION in manifest_of(package).provides:
-            out.append(instance)
-    return out
-
-
-def refresh_all() -> None:
-    """把每个提供生成的实例刷一遍。启动时做一次:ComfyUI 里昨晚新存的工作流,今天打开就在选择器里。"""
-    with SessionLocal() as db:
-        for instance in _generation_instances(db):
-            try:
-                sync(db, instance, True)
-            except Exception:  # noqa: BLE001 — 一个实例刷不出来不该挡住下一个
-                db.rollback()
-                logger.exception("刷新插件实例 %s 的生成模型失败", instance.id)
-
-
-# ---------------------------------------------------------------------------
-# 目录变了就刷新(插件给了指纹时)
-# ---------------------------------------------------------------------------
-
-#: 多久问一次指纹。ComfyUI 里刚存了一张工作流,一分钟内它就出现在选择器里;问一次只是列一下目录,
-#: 不拉任何一张图。
-WATCH_INTERVAL_SECONDS = 60.0
-
-_watch_stop = threading.Event()
-_watch_thread: threading.Thread | None = None
-
-
-def check_for_changes() -> int:
-    """问一遍每个**可用、上次交过指纹**的实例:指纹变了就重新拉目录。返回刷新了几个。
-
-    插件没交过指纹(老版本、别家不支持)就不问 —— 那种只在启动、改配置、点「刷新」时刷新。
-    问不到(服务器没开)不记失败:这是后台的一次顺手检查,不该把插件页上「上次刷新成功」改成红字;
-    下一轮再问。
-    """
-    refreshed = 0
-    with SessionLocal() as db:
-        for instance in _generation_instances(db):
-            status = dict((instance.capability_status or {}).get(GENERATION) or {})
-            known = str(status.get("fingerprint") or "")
-            if not known or inst.blocked_reason(db, instance):
-                continue
-            try:
-                current = plugin_generation.fingerprint(db, instance)
-            except (PluginDomainError, PluginRuntimeError) as exc:
-                db.rollback()
-                logger.debug("插件实例 %s 的模型清单指纹没问到:%s", instance.id, exc)
-                continue
-            if current == known:
-                continue
-            try:
-                sync(db, instance, True)
-                refreshed += 1
-            except Exception:  # noqa: BLE001 — 一个实例刷不出来不该挡住下一个
-                db.rollback()
-                logger.exception("插件实例 %s 的模型清单变了,但没刷出来", instance.id)
-    return refreshed
-
-
-def _watch() -> None:
-    refresh_all()
-    while not _watch_stop.wait(WATCH_INTERVAL_SECONDS):
-        try:
-            check_for_changes()
-        except Exception:  # noqa: BLE001 — 后台线程死了就再也不会刷新,宁可记一笔接着转
-            logger.exception("检查插件生成模型清单时出错")
-
-
-def start_watching() -> threading.Thread:
-    """后端启动时调一次:先在后台把每个实例刷一遍,然后每隔 WATCH_INTERVAL_SECONDS 看一眼指纹。
-
-    后台做:一台没开的 ComfyUI 不该拖慢启动。
-    """
-    global _watch_thread
-    _watch_stop.clear()
-    _watch_thread = threading.Thread(target=_watch, daemon=True, name="plugin-generation-catalog")
-    _watch_thread.start()
-    return _watch_thread
-
-
-def stop_watching() -> None:
-    _watch_stop.set()
 
 
 # ---------------------------------------------------------------------------
@@ -490,11 +401,7 @@ __all__ = [
     "descriptor",
     "install",
     "package_of",
-    "refresh_all",
-    "check_for_changes",
     "provided_models",
-    "start_watching",
-    "stop_watching",
     "sync",
     "vendor_for",
 ]

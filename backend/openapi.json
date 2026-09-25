@@ -24833,6 +24833,17 @@
             ],
             "title": "Models"
           },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools"
+          },
           "refreshed_at": {
             "anyOf": [
               {
@@ -25758,6 +25769,11 @@
             "type": "boolean",
             "title": "Exposed",
             "default": false
+          },
+          "form": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Form"
           }
         },
         "type": "object",

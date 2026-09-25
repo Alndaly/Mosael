@@ -358,16 +358,24 @@ def set_exposed(db: Session, instance: PluginInstance, choices: dict[str, bool])
     db.commit()
 
 
-def seed_capabilities(db: Session, instance: PluginInstance, manifest: Manifest, tool_names: list[str]) -> None:
+def seed_capabilities(
+    db: Session,
+    instance: PluginInstance,
+    manifest: Manifest,
+    tool_names: list[str],
+    *,
+    recommended: set[str] | frozenset[str] = frozenset(),
+) -> None:
     """给还没有记录的工具建一条:`expose: "all"` 全开,否则只开 manifest 推荐的那些。
 
+    `recommended` 是清单之外、**运行时报出的**工具自己说的推荐(见 dynamic_tools)。
     默认关是有意的 —— 见 models.py 里 PluginCapability 的说明。
     """
     known = {
         row.tool_name
         for row in db.scalars(select(PluginCapability).where(PluginCapability.instance_id == instance.id))
     }
-    recommended = set(manifest.recommended)
+    recommended = set(manifest.recommended) | set(recommended)
     for name in tool_names:
         if name in known:
             continue

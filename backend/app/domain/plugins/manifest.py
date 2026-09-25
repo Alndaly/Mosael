@@ -40,7 +40,10 @@ CODE_FIELD_TYPES = ("json", "code")
 #: 让智能体直接调它,等于留一条绕开生成任务、用量台账和回执的后门(和 `internal: true` 同一个理由,
 #: 这里由能力本身决定,作者不必再写一遍)。
 GENERATION = "generation"
-HOST_ONLY_CAPABILITIES = frozenset({GENERATION})
+#: `tools`:**运行时报出工具清单**(见 domain/plugins/dynamic_tools)。认领它的那个工具只回答「我这个连接此刻
+#: 有哪些工具」,本身不是给智能体调的。
+TOOLS = "tools"
+HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS})
 
 
 #: 这次调用要说哪种语言,插件自己也会拿到它(见 runtime/mcp_bridge 里的 MOSAEL_LOCALE)。
@@ -230,6 +233,15 @@ def _humanized(entry: dict[str, Any], *keys: str, pick: Callable[[Any], str] = t
     """
     picked = {k: pick(entry[k]) for k in keys if k in entry}
     return {**entry, **picked} if picked else entry
+
+
+def localized_tool(tool: dict[str, Any]) -> dict[str, Any]:
+    """一个**运行时报出的**工具声明,按此刻的语言定下给人看的字(名字、说明、入参的 title / description)。
+
+    清单里声明的工具在解析清单时就定了;运行时报出的那些原样存着(刷新发生在后台,那一刻的语言不是
+    看的人的语言),每次读的时候走这里。
+    """
+    return _humanized_schema(_humanized(tool, "label", "description"))
 
 
 #: JSON Schema 里给人看的键。**这两个会显示在界面上**,别的(type、format、enum…)是数据。
@@ -531,8 +543,10 @@ __all__ = [
     "ManifestError",
     "PATH_KEY",
     "Runtime",
+    "TOOLS",
     "ToolOverride",
     "expand",
+    "localized_tool",
     "manifest_of",
     "parse",
     "render_name",

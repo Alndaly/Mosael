@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { fetchWorkflowFieldOptions, listAssets, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { CodeEditor } from "@/components/app/code-editor";
+import { AssetListField } from "@/features/nodeForms/AssetListField";
 import { Combobox } from "@/components/app/combobox";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,10 @@ export interface ConfigSpec {
   options_from?: string;
   /** 满足这些父字段取值时，本字段才参与表单、选项请求和校验。 */
   active_when?: Record<string, unknown | unknown[]>;
+  /** 素材字段只收哪一种素材(image / video / audio)—— 选择器只列那一种。 */
+  media?: string;
+  /** 模板字段要写一段话(提示词):给高一点的编辑框。 */
+  multiline?: boolean;
 }
 
 // Nested controls (such as MapField rows) own their dimensions and field styling.
@@ -186,10 +191,14 @@ export function useNodeFieldOptions({
     // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。按**数据类型**给,
     // 不按节点 —— 任何声明成 asset 的字段都该能挑素材。
     if (fieldDataType(spec as ConfigSpec | undefined) === "asset") {
-      return (assets.data ?? []).map((asset) => ({
-        value: asset.id,
-        label: asset.name || asset.original_filename,
-      }));
+      // 声明了素材种类的(插件工具:「读图的节点」只收图)只列那一种
+      const media = (spec as ConfigSpec | undefined)?.media;
+      return (assets.data ?? [])
+        .filter((asset) => !media || asset.kind === media)
+        .map((asset) => ({
+          value: asset.id,
+          label: asset.name || asset.original_filename,
+        }));
     }
     return null;
   };
@@ -253,6 +262,7 @@ export function NodeConfigForm({
           if (own) return <React.Fragment key={key}>{own}</React.Fragment>;
           const value = config[key];
           const isObject = spec?.type === "object";
+          const isAssetList = spec?.type === "asset_list";
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: spec.option_labels?.[option] ?? option }))
             : fieldOptions.dynamicOptions(key, spec);
@@ -260,7 +270,7 @@ export function NodeConfigForm({
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
           // ComfyUI 式:非 object 字段都可切到"连接"(值从上游来,而不是手填)。上游是什么、怎么挑,
           // 由调用方的 binding 说 —— 工作流里是数据边。
-          const canConnect = Boolean(binding) && !isObject && (binding?.canBind?.(key) ?? true);
+          const canConnect = Boolean(binding) && !isObject && !isAssetList && (binding?.canBind?.(key) ?? true);
           const connected = canConnect && Boolean(binding?.isBound(key));
           return (
             <div className={FIELD_BOX} key={key} data-field-key={key}>
@@ -296,6 +306,9 @@ export function NodeConfigForm({
                 // 专用控件由**后端的字段声明**点名(editor: "scene_models"),不是这里按
                 // 节点类型 + 字段名认出来的 —— 后者是这份注册表一直在消灭的那种手抄表。
                 <ScenePropsField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
+              ) : isAssetList ? (
+                // 一串素材:挑出来的一排标签 + 再加一份,不是一个写着 `[]` 的 JSON 框
+                <AssetListField value={value} options={options ?? []} onChange={(next) => setConfig(key, next)} />
               ) : options ? (
                 // 纯下拉只给**闭集**:固定选项、且没声明能手填。声明了 allow_custom 的(模型名、
                 // 逐镜决定的 source_group / render —— 值常是上游的 `{{…}}`)走可手填的那一版,
@@ -337,7 +350,7 @@ export function NodeConfigForm({
                 // 模板字段:多行,而且里面的 `{{上游.输出}}` 显示成**可整体删除的标签** ——
                 // 纯文本时退格会把它咬成 `{{llm-1.tex`,而半截引用在运行前看不出错。
                 <RefEditor
-                  rows={2}
+                  rows={spec?.multiline ? 4 : 2}
                   value={String(value ?? "")}
                   onChange={typeConfig(key)}
                   variables={variables}

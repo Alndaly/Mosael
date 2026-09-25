@@ -2939,6 +2939,26 @@ def _install_bundled_plugins() -> None:
         bundled.install(db, settings.plugins_dir)
 
 
+def _rewrite_replaced_plugin_tools() -> None:
+    """工作流里、画板工具格上存着的、已被插件运行时报出的新工具取代的老插件节点,改写成新工具(见
+    domain/workflows/plugin_references 与 domain/boards/plugin_references)。ComfyUI 的 `run_workflow` + 某张工作流 → 那张工作流自己的工具。
+
+    **对账,不是一次性迁移**:依据是插件上一次报出的工具清单(缓存在 `plugin_instances.discovered_tools`),
+    清单会变(用户在 ComfyUI 里新存了工作流),新出现的对应关系下次启动也该迁;清单刷新时同一个函数也会跑。
+    没有可迁的就什么都不做。
+    """
+    from sqlalchemy.orm import Session
+
+    from app.domain.boards import plugin_references as board_references
+    from app.domain.workflows import plugin_references
+
+    if not {"plugin_instances", "workflows", "workflow_revisions", "boards"} <= set(inspect(engine).get_table_names()):
+        return
+    with Session(engine) as db:
+        plugin_references.rewrite_replaced_tools(db)
+        board_references.rewrite_replaced_tools(db)
+
+
 def _migrate_plugin_generation_columns() -> None:
     """插件可以是生成供应商(ADR 0020)要的三列。
 
@@ -3545,6 +3565,8 @@ def migration_plan() -> MigrationPlan:
             ),
             #: 要用到上一步刚装好的 ComfyUI 插件包(ADR 0020)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_comfyui_connections_become_plugin_instances),
+            #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
+            *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

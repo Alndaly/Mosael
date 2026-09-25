@@ -8975,6 +8975,8 @@ export interface components {
         PluginCapabilityStatusOut: {
             /** Models */
             models?: number | null;
+            /** Tools */
+            tools?: number | null;
             /** Refreshed At */
             refreshed_at?: string | null;
             /**
@@ -9554,6 +9556,10 @@ export interface components {
              * @default false
              */
             exposed: boolean;
+            /** Form */
+            form?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * PodcastRequest

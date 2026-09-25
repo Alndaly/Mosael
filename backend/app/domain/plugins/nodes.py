@@ -98,16 +98,40 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
         entry: dict[str, Any] = {"type": _SCHEMA_TYPES.get(str(raw_type), "template")}
         if key in required:
             entry["required"] = True
+        # 界面上叫什么:JSON Schema 的 `title`(可以按语言分)。不写就由节点目录按键名给一个可读名。
+        if spec.get("title"):
+            entry["label"] = text_of(spec["title"])
         # 插件用 `format: asset` 声明「这是一份素材」(运行时据此换成本地路径,见 inputs)。
         # 类型跟着声明走,不靠字段名碰运气:字段不叫 asset_id 时,命名约定认不出它,
-        # 工作流里就拿不到素材选择器。
+        # 工作流里就拿不到素材选择器。`x-media` 说是哪一种素材(image / video / audio),选择器只列那一种。
+        items = spec.get("items") if isinstance(spec.get("items"), dict) else {}
         if spec.get("format") == ASSET_FORMAT:
             entry["data_type"] = "asset"
+        elif raw_type == "array" and items.get("format") == ASSET_FORMAT:
+            # 一串素材:给能挑好几份的选择器,不是一个让人手写 `["…"]` 的 JSON 框
+            entry = {**entry, "type": "asset_list", "data_type": "asset"}
+            items_media = items.get("x-media")
+            if isinstance(items_media, str):
+                entry["media"] = items_media
+        media = spec.get("x-media")
+        if isinstance(media, str) and media in ("image", "video", "audio"):
+            entry["media"] = media
         if spec.get("description"):
             entry["description"] = text_of(spec["description"])
         enum = spec.get("enum")
         if isinstance(enum, list) and enum:
             entry["options"] = [str(value) for value in enum]
+        elif raw_type == "boolean":
+            # 开关给「是 / 否」下拉(选项名由节点目录按语言翻);留空 = 不设
+            entry["options"] = ["true", "false"]
+        # 默认值当占位提示(告诉用户「留空会用什么」),不替他填
+        default = spec.get("default")
+        if isinstance(default, bool):
+            entry["default"] = "true" if default else "false"
+        elif isinstance(default, (str, int, float)) and str(default) != "":
+            entry["default"] = str(default)
+        if spec.get("x-multiline") is True and entry["type"] == "template":
+            entry["multiline"] = True
         # 「留空也能跑的专业旋钮」收进高级区,和内置节点同一套语义(NODE_TYPES 的 advanced)。
         # JSON Schema 没有这个概念,所以认 `x-advanced` 这个扩展键;直接写 `advanced` 也认 ——
         # 插件作者八成会先试后者,为一个拼写把人挡在门外不值得。

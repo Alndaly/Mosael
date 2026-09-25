@@ -272,13 +272,28 @@ def _instance(db: DbSession, instance) -> dict:
         "config": instance.config or {},
         "blocked_reason": inst.blocked_reason(db, instance),
         # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。
-        "tools": [{**tool, "exposed": tool["name"] in chosen} for tool in tools_domain.all_tools(db, instance)
-                  if not tool["internal"]],
+        "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool)}
+                  for tool in tools_domain.all_tools(db, instance) if not tool["internal"]],
         "capability_status": {
             capability: _capability_status(status)
             for capability, status in (instance.capability_status or {}).items()
             if isinstance(status, dict)
         },
+    }
+
+
+def _tool_form(tool: dict) -> dict:
+    """插件页「试一下」那张表单的字段 —— **和这个工具在工作流里当节点时是同一份声明**(名字、素材选择器、
+    下拉、数字框、高级那一档),前端用同一个表单组件渲染。选连接那一格不要:试跑就是在这个连接上。"""
+    from app.domain.plugins.nodes import node_meta
+    from app.domain.workflows.node_catalog import translated_spec, with_data_type
+
+    locale = get_current_locale()
+    config = node_meta(tool).get("config") or {}
+    return {
+        key: translated_spec(key, with_data_type(key, spec), locale)
+        for key, spec in config.items()
+        if key != "instance_id" and isinstance(spec, dict)
     }
 
 
@@ -288,7 +303,12 @@ def _capability_status(status: dict) -> dict:
     error = render_message(key, get_current_locale(), status.get("error_params") or {}) if key else str(
         status.get("error") or ""
     )
-    return {"models": status.get("models"), "refreshed_at": status.get("refreshed_at"), "error": error}
+    return {
+        "models": status.get("models"),
+        "tools": status.get("tools"),
+        "refreshed_at": status.get("refreshed_at"),
+        "error": error,
+    }
 
 
 # --- 实例 ---------------------------------------------------------------
