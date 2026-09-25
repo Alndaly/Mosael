@@ -42,10 +42,10 @@ def test_依赖指向的父字段真的存在() -> None:
 
 def test_依赖发到了接口上() -> None:
     """在后端声明但没发出去,前端就没法照它清理 —— 等于没声明。"""
-    from app.api.routes.workflows import _with_data_type
+    from app.domain.workflows.node_catalog import with_data_type
 
-    assert _with_data_type("model", {"type": "string", "depends_on": "profile_id"})["depends_on"] == "profile_id"
-    assert "depends_on" not in _with_data_type("model", {"type": "string"})
+    assert with_data_type("model", {"type": "string", "depends_on": "profile_id"})["depends_on"] == "profile_id"
+    assert "depends_on" not in with_data_type("model", {"type": "string"})
 
 
 def test_条件启用声明引用本节点字段() -> None:

@@ -162,7 +162,7 @@ def test_插件_schema_里标了_format_asset_的字段就是素材() -> None:
     """插件用 `"format": "asset"` 声明「这个字段是一份素材」(见 plugins/inputs)—— 运行时
     据此把素材换成本地路径。字段名不叫 asset_id 时,此前命名约定认不出来,工作流里就拿不到
     素材选择器,只能手打一串 id。**声明在哪,类型就从哪来**,不靠字段名碰运气。"""
-    from app.api.routes.workflows import _with_data_type
+    from app.domain.workflows.node_catalog import with_data_type
     from app.domain.plugins.nodes import _config_from_schema
 
     config = _config_from_schema(
@@ -178,7 +178,7 @@ def test_插件_schema_里标了_format_asset_的字段就是素材() -> None:
     assert config["cover"]["data_type"] == "asset"
     assert "data_type" not in config["title"]
     # 发给前端的那份也带着它 —— 素材选择器认的是这一格。
-    assert _with_data_type("video", config["video"])["data_type"] == "asset"
+    assert with_data_type("video", config["video"])["data_type"] == "asset"
 
 
 def test_显式声明压过命名约定() -> None:
@@ -192,11 +192,11 @@ def test_显式声明压过命名约定() -> None:
 
 def test_节点类型接口把类型发出去() -> None:
     """推出来了但没发给前端,等于没推。"""
-    from app.api.routes.workflows import _with_data_type
+    from app.domain.workflows.node_catalog import with_data_type
 
-    assert _with_data_type("asset_id", {"type": "template"})["data_type"] == "asset"
+    assert with_data_type("asset_id", {"type": "template"})["data_type"] == "asset"
     # 推不出来的字段不该凭空多一个空 data_type —— 那会让前端以为它被声明过。
-    assert "data_type" not in _with_data_type("prompt", {"type": "template"})
+    assert "data_type" not in with_data_type("prompt", {"type": "template"})
 
 
 def test_每个配置字段都有中文标签() -> None:
@@ -339,7 +339,7 @@ def test_下拉选项都有中英文名字() -> None:
     键名 `wfOpt_<字段>_<值>`,通用的是/否用 `wfOpt__<值>`。HTTP 方法这类专业术语例外
     (`LITERAL_OPTION_FIELDS`)—— 把 GET 翻成中文只会更难懂。
     """
-    from app.api.routes.workflows import LITERAL_OPTION_FIELDS
+    from app.domain.workflows.node_catalog import LITERAL_OPTION_FIELDS
     from app.core.i18n import LOCALES, MESSAGES
     from app.domain.workflows import NODE_TYPES
 
@@ -354,3 +354,24 @@ def test_下拉选项都有中英文名字() -> None:
                 if entry is None or not all(entry.get(locale) for locale in LOCALES):
                     missing.append(f"{node}.{field} = {option}(要一条 {keys[0]})")
     assert not missing, "这些下拉选项没有名字:\n" + "\n".join(missing)
+
+
+def test_节点描述对任意一份注册表都成立() -> None:
+    """节点面板和画板的工具清单共用 describe_node_types:调用方可以只给注册表的一部分
+    (画板只列挑过的节点),翻译和分组排序照样对 —— 同一个节点在两处不会叫两个名字、排两个位置。"""
+    from app.domain.plugins.nodes import PLUGIN_NODE_CATEGORY, node_meta
+    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_catalog import describe_node_types
+
+    registry = {
+        "plugin.demo.echo": node_meta({"name": "echo", "input_schema": {"properties": {"q": {"type": "string"}}}}),
+        "translate": NODE_TYPES["translate"],
+        "start": NODE_TYPES["start"],
+    }
+    for locale in ("zh", "en"):
+        described = describe_node_types(registry, locale)
+        # 流程控制排最前,插件排最后 —— 按分组的 key 排,不按翻译后的字。
+        assert [item["type"] for item in described] == ["start", "translate", "plugin.demo.echo"], locale
+        assert described[-1]["category"] == PLUGIN_NODE_CATEGORY
+        assert "category_key" not in described[0]
+    assert describe_node_types(registry, "en")[1]["label"] != describe_node_types(registry, "zh")[1]["label"]
