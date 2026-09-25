@@ -182,6 +182,20 @@ class TestProjectCreate:
             _run(project_create, workflow_id, {"name": "  "})
 
 
+def test_asset_query_name_filter_is_literal() -> None:
+    """「名字包含」是字面量。此前直接拼进 LIKE:素材名里最常见的下划线(`clip_01`)是单字符
+    通配符,`%` 是任意串 —— 筛出来的比写的多,喂给下游的批量打标签/归档就一起动了。"""
+    from app.domain.workflows.executors.content import asset_query
+
+    workflow_id, _, workspace_id = _setup()
+    with SessionLocal() as db:
+        for name in ("clip_01", "clipX01", "100%完成", "100分"):
+            db.add(Asset(workspace_id=workspace_id, name=name, kind="video"))
+        db.commit()
+    assert _run(asset_query, workflow_id, {"name_contains": "clip_"})["count"] == 1
+    assert [one["name"] for one in _run(asset_query, workflow_id, {"name_contains": "100%"})["assets"]] == ["100%完成"]
+
+
 def test_every_new_node_type_is_registered_and_executable() -> None:
     """A type in the registry with no handler is offered in the palette and fails at run time."""
     from app.domain.workflows.executors import registered_types

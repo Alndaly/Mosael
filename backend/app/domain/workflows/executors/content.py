@@ -149,7 +149,8 @@ def asset_query(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     if kind and kind != "all":
         stmt = stmt.where(Asset.kind == kind)
     if name_contains:
-        stmt = stmt.where(Asset.name.contains(name_contains))
+        # 字面量:素材名里的 `_` / `%` 不是通配符(和笔记检索同一个写法)。
+        stmt = stmt.where(Asset.name.contains(name_contains, autoescape=True))
     stmt = stmt.order_by(Asset.created_at.desc())
     rows = list(db.scalars(stmt))
     if wanted_tags:
