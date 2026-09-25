@@ -34,6 +34,11 @@ export type DraftTextOptions<E extends Field> = DraftHandlers<E> & {
   value: string;
   /** 用户改出来的新字 —— 组词期间不调,上屏后调一次;和上一次交出去的相同时不重复调。 */
   onValueChange: (next: string) => void;
+  /**
+   * 什么时候往外交。`"change"`(默认):每一次改动(上屏之后)都交。`"blur"`:只在离开时交一次 ——
+   * 外面那份是服务端(每交一次就是一次请求)时用它,一段编辑只写一次。
+   */
+  commit?: "change" | "blur";
 };
 
 export function useDraftText<E extends Field>({
@@ -43,6 +48,7 @@ export function useDraftText<E extends Field>({
   onBlur,
   onCompositionStart,
   onCompositionEnd,
+  commit = "change",
 }: DraftTextOptions<E>) {
   const [draft, setDraft] = React.useState(value);
   const composing = React.useRef(false);
@@ -76,7 +82,7 @@ export function useDraftText<E extends Field>({
     value: draft,
     onChange: (event: React.ChangeEvent<E>) => {
       setDraft(event.target.value);
-      if (!composing.current && !(event.nativeEvent as InputEvent).isComposing) hand(event.target.value);
+      if (commit === "change" && !composing.current && !(event.nativeEvent as InputEvent).isComposing) hand(event.target.value);
     },
     onCompositionStart: (event: React.CompositionEvent<E>) => {
       composing.current = true;
@@ -86,7 +92,7 @@ export function useDraftText<E extends Field>({
       composing.current = false;
       const next = event.currentTarget.value;
       setDraft(next);
-      hand(next);
+      if (commit === "change") hand(next);
       onCompositionEnd?.(event);
     },
     onFocus: (event: React.FocusEvent<E>) => {
@@ -110,8 +116,8 @@ type NativeProps<E extends Field, P> = Omit<P, "value" | "defaultValue" | "onCha
 export const DraftTextarea = React.forwardRef<
   HTMLTextAreaElement,
   NativeProps<HTMLTextAreaElement, React.ComponentProps<"textarea">>
->(({ value, onValueChange, onFocus, onBlur, onCompositionStart, onCompositionEnd, ...props }, ref) => {
-  const draft = useDraftText<HTMLTextAreaElement>({ value, onValueChange, onFocus, onBlur, onCompositionStart, onCompositionEnd });
+>(({ value, onValueChange, commit, onFocus, onBlur, onCompositionStart, onCompositionEnd, ...props }, ref) => {
+  const draft = useDraftText<HTMLTextAreaElement>({ value, onValueChange, commit, onFocus, onBlur, onCompositionStart, onCompositionEnd });
   return <textarea ref={ref} {...props} {...draft} />;
 });
 DraftTextarea.displayName = "DraftTextarea";
@@ -120,8 +126,8 @@ DraftTextarea.displayName = "DraftTextarea";
 export const DraftInput = React.forwardRef<
   HTMLInputElement,
   NativeProps<HTMLInputElement, React.ComponentProps<"input">>
->(({ value, onValueChange, onFocus, onBlur, onCompositionStart, onCompositionEnd, ...props }, ref) => {
-  const draft = useDraftText<HTMLInputElement>({ value, onValueChange, onFocus, onBlur, onCompositionStart, onCompositionEnd });
+>(({ value, onValueChange, commit, onFocus, onBlur, onCompositionStart, onCompositionEnd, ...props }, ref) => {
+  const draft = useDraftText<HTMLInputElement>({ value, onValueChange, commit, onFocus, onBlur, onCompositionStart, onCompositionEnd });
   return <input ref={ref} {...props} {...draft} />;
 });
 DraftInput.displayName = "DraftInput";

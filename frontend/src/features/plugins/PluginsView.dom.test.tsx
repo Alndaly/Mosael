@@ -40,6 +40,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { CredentialRows, FieldInput, ToolRow } from "./PluginsView";
+import { composeWithIme, watchValueWrites } from "@/test/ime";
 
 function wrap(node: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -218,5 +219,24 @@ describe("配置字段的控件", () => {
     render(<FieldInput field={field({ label: "连接端口" })} value="9876" onChange={onChange} />);
     fireEvent.change(screen.getByDisplayValue("9876"), { target: { value: "9877" } });
     expect(onChange).toHaveBeenCalledWith("9877");
+  });
+
+  //: 连接上的配置住在服务端:value 要等请求回来才变。此前每敲一个字就发一次 PATCH,
+  //: 回来之前框里的字还被 React 写回旧值 —— 英文丢字,中文组词当场断掉。
+  it("改的是服务端那份时:框里的字不被写回旧值,离开时只交一次", () => {
+    const onChange = vi.fn();
+    render(<FieldInput field={field({ label: "连接名" })} value="旧的" commit="blur" onChange={onChange} />);
+    const box = screen.getByDisplayValue("旧的") as HTMLInputElement;
+    box.focus();
+    fireEvent.change(box, { target: { value: "旧的1" } });
+    fireEvent.change(box, { target: { value: "旧的12" } });
+    expect(box.value).toBe("旧的12");
+    expect(onChange).not.toHaveBeenCalled();
+    const writes = watchValueWrites(box);
+    composeWithIme(box, ["旧的12x", "旧的12xi", "旧的12xin"], "旧的12新");
+    expect(writes).toEqual([]);
+    fireEvent.blur(box);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith("旧的12新");
   });
 });

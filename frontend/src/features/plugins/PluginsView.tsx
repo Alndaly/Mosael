@@ -42,6 +42,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
+import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -418,11 +419,14 @@ export function FieldInput({
   value,
   onChange,
   className,
+  commit,
 }: {
   field: PluginField;
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  /** 文本框什么时候往外交(见 useDraftText)。改的是服务端那份时给 `"blur"`:一段编辑一次请求。 */
+  commit?: "change" | "blur";
 }) {
   const t = useI18n();
   if (field.type === "enum") {
@@ -452,13 +456,22 @@ export function FieldInput({
       />
     );
   }
+  return <FieldText field={field} value={value} onChange={onChange} className={className} commit={commit} />;
+}
+
+/** 文本类的配置项。**草稿式**(见 components/ui/draft-text):连接上的配置住在服务端,
+ *  直接 `value={服务端那份}` 的话每敲一个字发一次请求,回来之前框里的字还被写回旧值 —— 中文组词
+ *  当场断掉,英文也会丢字。 */
+function FieldText({ field, value, onChange, className, commit }: {
+  field: PluginField; value: string; onChange: (value: string) => void; className?: string; commit?: "change" | "blur";
+}) {
+  const draft = useDraftText<HTMLInputElement>({ value, onValueChange: onChange, commit });
   return (
     <Input
       className={className}
       type={field.secret ? "password" : field.type === "number" ? "number" : "text"}
-      value={value}
       placeholder={field.label}
-      onChange={(event) => onChange(event.target.value)}
+      {...draft}
     />
   );
 }
@@ -565,6 +578,7 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
           <FieldInput
             field={field}
             value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
+            commit="blur"
             onChange={(value) => patch.mutate({ config: { [field.key]: value } })}
           />
         </SettingsRow>
