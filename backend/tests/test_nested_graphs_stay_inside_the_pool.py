@@ -58,7 +58,9 @@ def test_等待中的节点会把预算还回去() -> None:
 
     from app.domain.workflows.executors import common
 
-    source = inspect.getsource(common.wait_for_job)
+    #: 节点里的「等」只有一个形状(common.wait_until),等子任务和延时都走它。
+    assert "release=release" in inspect.getsource(common.wait_for_job)
+    source = inspect.getsource(common.wait_until)
     assert "release" in source
     assert "_budget_released" in source
 

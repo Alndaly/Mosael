@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import contextvars
 import json
-import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -14,6 +12,7 @@ from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain.jobs import cancel_job_tree, current_parent_job_id
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows.run_scope import halted
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -22,33 +21,9 @@ CHILD_POLL_SECONDS = 2.0
 
 T = TypeVar("T")
 
-#: 这一轮图的「停」信号,外层图在前、当前这张图在最后。
-#:
-#: 一轮图要停有两种原因:外层工作流被取消(库里那一行落了终态),或者**同一张图里有节点失败了**
-#: —— 整条工作流已经失败,还在跑的兄弟节点做完了也没人要。前者任何人都能从库里读到;后者只有
-#: 引擎知道,由它在失败那一刻立起来(见 engine.execute_graph)。
-#:
-#: 用上下文变量传:节点在引擎的线程池里带着提交时的上下文跑(copy_context),嵌套的图(循环体、
-#: 子图)在节点线程里再压一层 —— 外层停了,里面所有层都看得见。
-_HALTS: contextvars.ContextVar[tuple[threading.Event, ...]] = contextvars.ContextVar(
-    "mosael_workflow_halts", default=()
-)
-
-
-@contextmanager
-def halt_scope() -> Iterator[threading.Event]:
-    """为一轮图压一个「停」信号。在这里面提交的节点都认它。"""
-    halt = threading.Event()
-    token = _HALTS.set((*_HALTS.get(), halt))
-    try:
-        yield halt
-    finally:
-        _HALTS.reset(token)
-
-
 def _stopping(db: Session) -> bool:
     """这一轮是不是正在停:哪一层图立了停的信号,或者外层工作流已经落了终态。"""
-    if any(halt.is_set() for halt in _HALTS.get()):
+    if halted():
         return True
     parent_id = current_parent_job_id()
     if parent_id is None:
@@ -66,7 +41,7 @@ def wait_until(
 ) -> T:
     """节点里「等」的唯一形状:每一拍用一个新会话问一次 `check`,给出非 None 就返回它。
 
-    - **这一轮在停,等就结束**(见 _HALTS):先让 `on_stop` 收拾自己等的东西(子任务取消掉),
+    - **这一轮在停,等就结束**(见 workflows.run_scope):先让 `on_stop` 收拾自己等的东西(子任务取消掉),
       再抛 wfErr_cancelled。此前等子任务只认子任务的终态,等延时干脆是一句 `time.sleep` ——
       取消一条正在延时的工作流要等满那几分钟,一个节点失败了,引擎还要陪兄弟节点把子任务跑完。
     - **等的时候不占连接**:`release` 是调用方自己的会话,连同引擎的连接预算一起交还

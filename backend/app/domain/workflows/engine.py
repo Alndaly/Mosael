@@ -35,8 +35,8 @@ from app.domain.workflows import (
 )
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor
-from app.domain.workflows.executors.common import halt_scope
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
+from app.domain.workflows.run_scope import halt_scope
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +310,7 @@ def execute_graph(
     error: Exception | None = None
     cancelled = False
 
-    # 「停」信号先于线程池压上:节点提交时带走的上下文里要有它(见 executors.common._HALTS)。
+    # 「停」信号先于线程池压上:节点提交时带走的上下文里要有它(见 workflows.run_scope)。
     with halt_scope() as halt, ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_NODES, total)) as pool:
         futures: dict[Any, str] = {}
 
