@@ -38,7 +38,7 @@ def graph_digest(graph: dict) -> str:
 
 
 def _revision_projection(value):
-    """只从图节点剥离画布坐标，并递归处理循环/子流程里的嵌套图。
+    """只从图里剥离纯布局(节点坐标、标记)，并递归处理循环/子流程里的嵌套图。
 
     这里按「graph-like 对象里的 nodes」识别节点，不能粗暴删除所有名为 ``position`` 的键：
     节点配置可能真的有一个会影响执行的 position 参数，那种值必须参与版本判定。
@@ -51,6 +51,10 @@ def _revision_projection(value):
     graph_like = isinstance(value.get("nodes"), list) and isinstance(value.get("edges"), list)
     projected = {}
     for key, child in value.items():
+        # 标记(位置书签,见 domain/markers)和节点坐标一样是纯布局:不执行、不连线、不产出。
+        # 算进版本身份的话,拖一下书签就增一版,真正改了执行内容的那几版被挤出历史窗口。
+        if graph_like and key == "markers":
+            continue
         if graph_like and key == "nodes":
             projected[key] = [
                 {
