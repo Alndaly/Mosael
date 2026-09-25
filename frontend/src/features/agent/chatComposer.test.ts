@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { collectReferences, documentText, sendsOnEnter } from "./ChatComposer";
+import { appendText, collectReferences, documentText, emptyDocument, sendsOnEnter } from "./ChatComposer";
 import { REFERENCE_NODE } from "./ReferenceChip";
 
 /**
@@ -124,5 +124,27 @@ describe("候选清单的配额", () => {
     const out = await searchReferences("ws", "");
     expect([...new Set(out.map((one) => one.kind))].sort()).toEqual(["asset", "board", "note", "workflow"]);
     expect(out.length).toBeLessThanOrEqual(REFERENCE_MENU_LIMIT);
+  });
+});
+
+describe("说话输入往草稿里接一段", () => {
+  //: 草稿是文档不是字符串 —— 此前两个调用方写的是 `current.trim()`,一按说话输入就抛。
+  it("空草稿:就是说的那句", () => {
+    expect(documentText(appendText(emptyDocument, "你好"))).toBe("你好");
+  });
+
+  it("已经打了半句:接在后面,中间隔一个空格,末尾多的空白收掉", () => {
+    expect(documentText(appendText(doc(text("先打的半句  ")), "再说的"))).toBe("先打的半句 再说的");
+  });
+
+  it("引用胶囊留着,说的话接在它后面", () => {
+    const next = appendText(doc(text("看看 "), ref("asset", "a1", "运镜练习")), "这段");
+    expect(documentText(next)).toBe("看看 @运镜练习 这段");
+    expect(collectReferences(next).map((one) => one.id)).toEqual(["a1"]);
+  });
+
+  it("刚回车出来的空行:接在新的那一行上,不补空格", () => {
+    const twoLines: JSONContent = { type: "doc", content: [{ type: "paragraph", content: [text("第一行")] }, { type: "paragraph" }] };
+    expect(documentText(appendText(twoLines, "第二行"))).toBe("第一行\n第二行");
   });
 });

@@ -59,6 +59,32 @@ export function sendsOnEnter(
 export const emptyDocument: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
 
 /**
+ * 往草稿**末尾接一段字**(说话输入把说的话填进来)。**追加,不覆盖** —— 他可能先打了半句
+ * 再改用说的;前面有字就隔一个空格,末尾多出来的空白先收掉。
+ *
+ * 草稿是一份文档,不是字符串:此前两个调用方照字符串写 `current.trim()`,而 JSONContent 带着
+ * 任意键的索引签名,类型检查拦不住 —— 一按说话输入就抛。
+ */
+export function appendText(document: JSONContent | undefined, text: string): JSONContent {
+  if (!text) return document ?? emptyDocument;
+  const paragraph = (content: JSONContent[]): JSONContent => ({ type: "paragraph", content });
+  if (!documentText(document).trim()) return { type: "doc", content: [paragraph([{ type: "text", text }])] };
+  const blocks = [...(document?.content ?? [])];
+  const last = blocks.at(-1);
+  if (last?.type !== "paragraph") return { ...document, type: "doc", content: [...blocks, paragraph([{ type: "text", text }])] };
+  const inline = [...(last.content ?? [])];
+  const tail = inline.at(-1);
+  if (tail?.type === "text") {
+    const trimmed = (tail.text ?? "").trimEnd();
+    if (trimmed) inline[inline.length - 1] = { ...tail, text: trimmed };
+    else inline.pop();
+  }
+  inline.push({ type: "text", text: inline.length ? ` ${text}` : text });
+  blocks[blocks.length - 1] = { ...last, content: inline };
+  return { ...document, type: "doc", content: blocks };
+}
+
+/**
  * 文档 → 发给模型的那句话。引用序列化成 `@名字`(和 ReferenceChip 的 renderText 同一约定)。
  *
  * **不借编辑器实例来做这件事**:发送时手上只有 state 里的文档,而编辑器可能还没建、

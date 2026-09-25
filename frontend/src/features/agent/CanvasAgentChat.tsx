@@ -40,7 +40,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import type { JSONContent } from "@tiptap/react";
 
-import { ChatComposer, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
 import type { AgentReference } from "@/features/agent/references";
 import { InlineConfirmations } from "@/features/agent/InlineConfirmations";
 import { InlineQuestions } from "@/features/agent/InlineQuestions";
@@ -581,7 +581,7 @@ export function CanvasAgentChat({
             <DictateButton
               onText={(text) =>
                 // **追加**,不覆盖 —— 他可能先打了半句再改用说的。
-                setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text))
+                setDraft((current) => appendText(current, text))
               }
             />
             {/* 免提是另一件事:说话输入把话填进框里等你过目,这个直接发出去。做成一个按钮的

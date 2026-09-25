@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { JSONContent } from "@tiptap/react";
 
-import { ChatComposer, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
@@ -564,7 +564,7 @@ export function ChatWorkspace({
                   {/* 和工作区助手共用同一个组件:两边各写一份的话,位置、顺序、有无迟早不一致。 */}
                   <DictateButton
                     onText={(text) =>
-                      setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text))
+                      setDraft((current) => appendText(current, text))
                     }
                   />
                   {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
