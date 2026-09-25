@@ -30,6 +30,20 @@
       "active": true
     },
     {
+      "name": "null means unset and reads the parent default",
+      "spec": { "active_when": { "engine": "google" } },
+      "config": { "engine": null },
+      "specs": { "engine": { "default": "google" } },
+      "active": true
+    },
+    {
+      "name": "empty string means unset and reads the parent default",
+      "spec": { "active_when": { "engine": "google" } },
+      "config": { "engine": "" },
+      "specs": { "engine": { "default": "google" } },
+      "active": true
+    },
+    {
       "name": "runtime template stays configurable",
       "spec": { "active_when": { "engine": "ai" } },
       "config": { "engine": "{{start.engine}}" },
