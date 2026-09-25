@@ -68,6 +68,7 @@ export function ModalShell({
   bodyClassName,
   dismissible = true,
   modal = true,
+  onEscapeKeyDown,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -85,6 +86,11 @@ export function ModalShell({
   dismissible?: boolean;
   /** Non-modal panels leave the rest of the application interactive and omit the overlay. */
   modal?: boolean;
+  /**
+   * 按 Esc 时**先问调用方**。弹窗里有自己一层「返回」的(目录弹窗的详情页)在这里
+   * `preventDefault()` 并退回上一层 —— Esc 先退一层,再按一次才关窗,和浏览器的后退同一个直觉。
+   */
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={modal}>
@@ -92,7 +98,11 @@ export function ModalShell({
         showClose={dismissible}
         showOverlay={modal}
         onEscapeKeyDown={(event) => {
-          if (!dismissible) event.preventDefault();
+          if (!dismissible) {
+            event.preventDefault();
+            return;
+          }
+          onEscapeKeyDown?.(event);
         }}
         onPointerDownOutside={(event) => {
           if (!dismissible) event.preventDefault();
