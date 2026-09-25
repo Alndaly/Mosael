@@ -12,7 +12,7 @@ from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.media.paths import resolve_key
 from app.media.video_gif import encode_video_gif
 
@@ -78,8 +78,11 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
             return
-        job.status = "running"
-        job.progress = 0.1
+        # 状态经 finish_job 写:排队时就被取消的不被写回 running,编码完时不盖掉中途的取消
+        # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
+        if not finish_job(db, job, status="running", progress=0.1):
+            db.commit()
+            return
         say(job, "jobMsg_videoGifRunning")
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
@@ -110,11 +113,10 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
             }
             db.commit()
 
-        job.status = "succeeded"
-        job.progress = 1.0
-        job.result = {"asset_id": made.id, "source_asset_id": asset.id}
-        say(job, "jobMsg_videoGifDone")
-        emit_job_event(db, job.id, "job.succeeded", dict(job.result))
+        result = {"asset_id": made.id, "source_asset_id": asset.id}
+        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+            say(job, "jobMsg_videoGifDone")
+            emit_job_event(db, job.id, "job.succeeded", dict(result))
         db.commit()
         logger.info("video %s -> gif asset %s", asset.id, made.id)
 

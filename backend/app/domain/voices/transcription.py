@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.core.text import blame_line
 from app.core.db import SessionLocal
-from app.domain.jobs import ASR_SLOTS, blame, run_job_guarded, say
+from app.domain.jobs import ASR_SLOTS, blame, finish_job, run_job_guarded, say
 from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
@@ -283,9 +283,12 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             language = str((job.payload or {}).get("language") or "")
             requested_engine = str((job.payload or {}).get("engine") or "")
             python_executable, engine_id = resolve_transcription_runtime(language, engine=requested_engine)
-            job.status = "running"
+            # 状态经 finish_job 写:排队时就被取消的不被写回 running,转完时不盖掉中途的取消
+            # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
+            if not finish_job(db, job, status="running", progress=0.1):
+                db.commit()
+                return
             say(job, "jobMsg_asrRunning", provider=engine_id)
-            job.progress = 0.1
             emit_job_event(db, job.id, "job.running", {"provider": engine_id})
             db.commit()
             logger.info("transcription job %s: engine=%s asset=%s", job_id, engine_id, asset_id)
@@ -316,24 +319,20 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 source=f"asr:{engine_id}",
             )
             job = db.get(Job, job_id)
-            job.status = "succeeded"
-            job.progress = 1.0
-            say(job, "jobMsg_asrDone")
-            job.result = {"transcript_id": transcript.id, "segments": len(segments)}
-            emit_job_event(db, job.id, "job.succeeded", {"transcript_id": transcript.id})
+            result = {"transcript_id": transcript.id, "segments": len(segments)}
+            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+                say(job, "jobMsg_asrDone")
+                emit_job_event(db, job.id, "job.succeeded", {"transcript_id": transcript.id})
             db.commit()
             logger.info("transcription job %s succeeded: %d segments (%s)", job_id, len(segments), engine_id)
         except Exception as exc:  # noqa: BLE001 — worker thread must record, not die
             db.rollback()
             job = db.get(Job, job_id)
-            if job is not None:
-                job.status = "failed"
+            #: 失败原因存 key + 参数,接口按读的人的语言翻(见 jobs.blame)。
+            if job is not None and finish_job(db, job, status="failed", **blame(exc)):
                 say(job, "jobMsg_asrFailed")
-                #: 失败原因存 key + 参数,接口按读的人的语言翻(见 jobs.blame)。
-                for field, value in blame(exc).items():
-                    setattr(job, field, value)
                 emit_job_event(db, job.id, "job.failed", {})
-                db.commit()
+            db.commit()
             logger.warning("transcription job %s failed: %s", job_id, exc)
 
 
