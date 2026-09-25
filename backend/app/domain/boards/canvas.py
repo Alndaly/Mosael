@@ -754,12 +754,22 @@ def _canvas_with_delivered_result(
         #: 多出来的那几张挨着它往右排。宽度按这一项自己的宽 —— 用户可能已经把它拉大了,
         #: 用一个写死的间距会让它们叠在一起。
         step = float(settled.get("width") or 260) + 24
-        for offset, extra in enumerate(asset_ids[1:], start=1):
+        #: 新格子的 id 要避开**整张板上已有的**:同一格再出一次多张时,上一轮的 `-2` 还在板上,
+        #: 照序号直接拼会撞上它 —— 整次回执被 normalize 拒掉,产出一张都落不回来,这一格永远在转圈。
+        #: 位置跟着序号走(第 n 格在第 n-1 列),于是也不会正好叠在上一轮那一格上。
+        taken = {str(one.get("id")) for one in items}
+        suffix = 1
+        for extra in asset_ids[1:]:
+            suffix += 1
+            while f"{item_id}-{suffix}" in taken:
+                suffix += 1
+            extra_id = f"{item_id}-{suffix}"
+            taken.add(extra_id)
             kept.append(
                 {
                     **settled,
-                    "id": f"{item_id}-{offset + 1}",
-                    "x": float(settled.get("x") or 0) + step * offset,
+                    "id": extra_id,
+                    "x": float(settled.get("x") or 0) + step * (suffix - 1),
                     "asset_id": extra,
                 }
             )
@@ -767,7 +777,9 @@ def _canvas_with_delivered_result(
     # 连线可能指着刚被摘掉的那一项 —— normalize 会拒绝悬空的线,所以先把它们去掉。
     alive = {item["id"] for item in kept}
     edges = [edge for edge in (canvas.get("edges") or []) if edge.get("source") in alive and edge.get("target") in alive]
-    return {"items": kept, "edges": edges}
+    #: 只换 items 和 edges,**画布上别的层原样带着**(标记)。此前这里从零拼一个新字典,
+    #: 于是每落回一次产出,用户放的标记就被 normalize 当成「没给」清空。
+    return {**canvas, "items": kept, "edges": edges}
 
 
 def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
