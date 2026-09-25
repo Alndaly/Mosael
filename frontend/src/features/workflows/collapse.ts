@@ -43,7 +43,7 @@ export type CollapseResult = CollapseOk | CollapseErr;
 
 /** 深度改写一个 config 值里的所有 `{{id...}}` 引用:remap(leadingId) 返回新的前导段(可含点,
  *  如 "input.llm-1"),返回 null 则保持原样。非字符串/数组/对象原样递归。 */
-function rewriteRefs(value: unknown, remap: (leadingId: string) => string | null): unknown {
+export function rewriteRefs(value: unknown, remap: (leadingId: string) => string | null): unknown {
   if (typeof value === "string") {
     if (!value.includes("{{")) return value;
     return value.replace(VAR_RE, (whole, inner: string) => {

@@ -165,6 +165,7 @@ import {
 import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
+import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
 import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { boundRunId, RUN_ACTIVE } from "@/features/workflows/boundRun";
 import { ScenePropsField } from "@/features/workflows/ScenePropsField";
@@ -1090,10 +1091,7 @@ function WorkflowEditor({
 
   // 节点剪贴板(应用内,按 workflow 编辑器实例存活)。存被选中的节点 + 其内部边,
   // 粘贴时整体换新 id、内部连线原样重连、位置向右下错开。
-  const clipboardRef = React.useRef<{ nodes: WorkflowGraph["nodes"]; edges: WorkflowGraph["edges"] }>({
-    nodes: [],
-    edges: [],
-  });
+  const clipboardRef = React.useRef<NodeClip>({ nodes: [], edges: [] });
   const copySelection = React.useCallback((): boolean => {
     // 标记不进剪贴板:它是一个位置书签,粘一份出来只会得到两枚指着同一处的旗子。
     const selectedIds = new Set(nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id));
@@ -1105,59 +1103,15 @@ function WorkflowEditor({
     return true;
   }, [nodes, graph]);
   const pasteClipboard = React.useCallback((): boolean => {
-    const clip = clipboardRef.current;
-    if (clip.nodes.length === 0) return false;
-    const used = new Set(graph.nodes.map((node) => node.id));
-    const freshId = (type: string): string => {
-      const base = type.replace(/[_.]/g, "-");
-      let index = 1;
-      while (used.has(`${base}-${index}`)) index += 1;
-      const id = `${base}-${index}`;
-      used.add(id);
-      return id;
-    };
-    const idMap = new Map<string, string>();
-    const newNodes: WorkflowGraph["nodes"] = [];
-    for (const node of clip.nodes) {
-      if (node.type === "start") continue; // start 唯一,不复制
-      const id = freshId(node.type);
-      idMap.set(node.id, id);
-      newNodes.push({
-        ...structuredClone(node),
-        id,
-        position: { x: (node.position?.x ?? 0) + 48, y: (node.position?.y ?? 0) + 48 },
-      });
-    }
-    if (newNodes.length === 0) return false;
-    const newEdges = clip.edges
-      .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
-      .map((edge) => {
-        const source = idMap.get(edge.source)!;
-        const target = idMap.get(edge.target)!;
-        const id =
-          edge.kind === "data"
-            ? `d-${source}-${edge.source_output}-${target}-${edge.target_input}`
-            : `e-${source}${edge.source_handle ? `-${edge.source_handle}` : ""}-${target}`;
-        return { ...structuredClone(edge), id, source, target };
-      });
-    const next: WorkflowGraph = {
-      ...graph,
-      nodes: [...graph.nodes, ...newNodes],
-      edges: [...graph.edges, ...newEdges],
-    };
+    const pasted = pasteNodes(graph, clipboardRef.current);
+    if (!pasted) return false;
     // 让下次 Cmd+V 继续向右下错开,避免层层重叠。
-    clipboardRef.current = structuredClone({
-      nodes: clip.nodes.map((node) => ({
-        ...node,
-        position: { x: (node.position?.x ?? 0) + 48, y: (node.position?.y ?? 0) + 48 },
-      })),
-      edges: clip.edges,
-    });
-    setGraph(next);
-    const pastedIds = new Set(newNodes.map((node) => node.id));
+    clipboardRef.current = pasted.clip;
+    setGraph(pasted.graph);
+    const pastedIds = new Set(pasted.pastedIds);
     // 只让粘贴出来的新节点选中(旧选区取消),方便立刻整体拖走。
-    setNodes(toWorkflowFlowNodes(next, registry).map((node) => ({ ...node, selected: pastedIds.has(node.id) })));
-    setEdges(toWorkflowFlowEdges(next, t, registry));
+    setNodes(toWorkflowFlowNodes(pasted.graph, registry).map((node) => ({ ...node, selected: pastedIds.has(node.id) })));
+    setEdges(toWorkflowFlowEdges(pasted.graph, t, registry));
     setDirty(true);
     return true;
   }, [graph, registry]);

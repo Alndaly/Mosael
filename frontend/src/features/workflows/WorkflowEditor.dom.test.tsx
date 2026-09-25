@@ -75,6 +75,13 @@ async function renderEditor(graph: WorkflowGraph) {
   await screen.findByRole("group", { name: "canvasTools" }, { timeout: 10000 });
 }
 
+/** 最后一次保存出去的图 —— 编辑器的"落库结果"。 */
+async function savedGraph(): Promise<WorkflowGraph> {
+  await waitFor(() => expect(apiMocks.updateWorkflow).toHaveBeenCalled(), { timeout: 3000 });
+  const calls = apiMocks.updateWorkflow.mock.calls;
+  return (calls[calls.length - 1][1] as { graph: WorkflowGraph }).graph;
+}
+
 function nodeEl(id: string): HTMLElement {
   const el = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${id}"]`);
   if (!el) throw new Error(`node ${id} not rendered`);
@@ -114,4 +121,16 @@ it("⌘/Ctrl 点击是往选区里加,不是换成只选这一个", async () => 
   // 选了两个就不是在编辑某一个:检查器收起,换成「折叠为子图」。
   expect(screen.queryByLabelText("wfNodeName")).toBeNull();
   expect(screen.getByText("wfCollapseToSubgraph")).toBeTruthy();
+});
+
+it("复制粘贴一组节点:组内的 {{引用}} 跟着换成新节点,组外的不动", async () => {
+  await renderEditor(CHAIN);
+  await selectNodes(["llm-1", "template-1"]);
+  fireEvent.keyDown(window, { key: "c", metaKey: true });
+  fireEvent.keyDown(window, { key: "v", metaKey: true });
+  const graph = await savedGraph();
+  const pasted = graph.nodes.find((node) => node.id === "template-2");
+  expect(pasted?.config).toEqual({ template: "前缀 {{llm-2.text}} / {{start.topic}}" });
+  // 原件原样不动。
+  expect(graph.nodes.find((node) => node.id === "template-1")?.config).toEqual(CHAIN.nodes[2].config);
 });
