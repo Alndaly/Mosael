@@ -36,3 +36,20 @@ describe("节点检查器的下拉", () => {
     expect(line).not.toMatch(/key === "model"/);
   });
 });
+
+describe("节点检查器的字段编辑器", () => {
+  //: 一个字段用哪种控件(映射、JSON、挑 3D 模型、挑笔记……)由后端的字段声明点名(`editor`),
+  //: 不由这里按「节点类型 + 字段名」认出来 —— 那是一张手抄表,插件节点永远进不去,而这条棘轮此前
+  //: 只看取选项那段,于是 `node.type === "note_read" && key === "note_id"` 就在隔壁活了下来。
+  it("渲染字段那段里不按节点类型、不按字段名分支", () => {
+    const start = VIEW.indexOf("const renderField = (");
+    expect(start, "renderField 改名了?这条棘轮要跟着改").toBeGreaterThan(0);
+    const body = VIEW.slice(start, VIEW.indexOf("\n  };", start));
+    expect(body).not.toMatch(/node\.type\s*===/);
+    expect(body).not.toMatch(/node\.type\.startsWith/);
+    expect(body).not.toMatch(/\bkey\s*===\s*["']/);
+    //: 专用控件按声明选。
+    expect(body).toMatch(/editor[^\n]*=== "note_ref"/);
+  });
+});
+

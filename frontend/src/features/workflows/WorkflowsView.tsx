@@ -161,6 +161,7 @@ const AGENT_MODES = ["docked", "floating"] as const;
 import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/components/app/useFloatingPanel";
 import {
   analyzeWorkflow,
+  bodyScope,
   extractRefs,
   fieldDataType,
   isNestedScopeConfig,
@@ -3016,7 +3017,8 @@ export function NodeInspector({
           // 循环体 / 子图都是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
           if (spec?.type === "graph") {
             const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
-            const isSubgraph = node.type === "subgraph";
+            //: 叫「循环体」还是「子图」,和后端 _body_label 同一个判据:体里有没有 `loop` 这个作用域。
+            const isSubgraph = !bodyScope(registry, node.type).includes("loop");
             return (
               <div className={FIELD_BOX} key={key}>
                 <label>{t(isSubgraph ? "wfSubgraphBody" : "wfLoopBody")}</label>
@@ -3076,7 +3078,8 @@ export function NodeInspector({
                     placeholder={t("wfPickUpstream")}
                   />
                 </div>
-              ) : node.type === "note_read" && key === "note_id" ? (
+              ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (
+                // 和下面的 scene_models 同一条:挑笔记这个控件由**后端的字段声明**点名。
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "scene_models" ? (
                 // 专用控件由**后端的字段声明**点名(editor: "scene_models"),不是这里按
