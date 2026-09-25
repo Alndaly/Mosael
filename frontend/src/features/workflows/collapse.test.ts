@@ -7,9 +7,9 @@ import type { WorkflowGraph } from "@/api/client";
 /** 只有「哪些节点带内嵌子图」这一格和折叠有关 —— 后端随节点声明发下来的 body_scope。 */
 const registry: RegistryLike = {
   get: (type) =>
-    ({ loop_foreach: { body_scope: ["loop", "input"] }, subgraph: { body_scope: ["input"] } } as Record<
+    ({ loop_foreach: { body_scope: { loop: ["item", "index"], input: ["*inputs"] } }, subgraph: { body_scope: { input: ["*inputs"] } } } as Record<
       string,
-      { body_scope: string[] }
+      { body_scope: Record<string, string[]> }
     >)[type],
 };
 

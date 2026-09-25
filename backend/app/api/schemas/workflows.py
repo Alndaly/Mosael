@@ -82,8 +82,9 @@ class WorkflowNodeTypeOut(ApiModel):
     plugin_name: str = ""
     #: 插件工具的稳定调用名。只参与搜索/诊断，不拿它顶替给人看的 label。
     tool_name: str = ""
-    #: 内嵌子图节点(循环 / 子图)体内看得见的作用域名,如 ["loop", "input"];普通节点为空。
-    body_scope: list[str] = Field(default_factory=list)
+    #: 内嵌子图节点(循环 / 子图)体内看得见什么:作用域名 → 字段,`*字段名` 表示那个配置字段里的
+    #: 每个键。如 {"loop": ["item", "index"], "input": ["*inputs"]};普通节点为空。
+    body_scope: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class WorkflowAiEditRequest(ApiModel):

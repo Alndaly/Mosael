@@ -121,5 +121,32 @@ def test_每种内嵌子图节点都声明了作用域() -> None:
     assert NESTED_BODY_TYPES == {"loop_foreach", "loop_while", "subgraph"}
     for name in NESTED_BODY_TYPES:
         scope = NODE_TYPES[name]["body_scope"]
-        assert scope and all(isinstance(one, str) and one for one in scope), name
+        # 作用域名 → 这个名字底下有哪些字段。`*字段名` 表示「这个配置字段里的每个键」(和 start 的
+        # `*params` 输出同一种写法):子图的 {{input.*}} 是用户自己在 inputs 里起的名字。
+        assert isinstance(scope, dict) and scope, name
+        for root, fields in scope.items():
+            assert isinstance(root, str) and root, name
+            assert isinstance(fields, list) and fields and all(isinstance(one, str) and one for one in fields), name
+            for field in fields:
+                if field.startswith("*"):
+                    assert field[1:] in NODE_TYPES[name]["config"], f"{name}.{root} 的键来自一个不存在的配置字段"
         assert NODE_TYPES[name]["config"]["body"]["type"] == "graph", f"{name} 声明了作用域却没有体"
+
+
+def test_作用域的字段随节点类型发到画布() -> None:
+    """画布给体里的引用选择器列 {{loop.item}} 还是只列 {{loop.index}},读的就是这一格 ——
+    此前前端按「是不是 subgraph」自己写了一份,条件循环体里也列出了它根本拿不到的 loop.item。"""
+    rows = {row["type"]: row for row in fresh_client().get("/api/workflows/node-types").json()}
+    assert rows["loop_while"]["body_scope"] == {"loop": ["index"]}
+    assert rows["loop_foreach"]["body_scope"] == {"loop": ["item", "index"], "input": ["*inputs"]}
+    assert rows["subgraph"]["body_scope"] == {"input": ["*inputs"]}
+    assert rows["template"]["body_scope"] == {}
+
+
+def test_条件循环体里的_loop_item_在启动前就被拒() -> None:
+    """`loop` 这个名字条件循环有,但它底下只有 `index`。只认名字的话,`{{loop.item}}` 校验得过、
+    运行时安静地变成空串 —— 和 `{{input.x}}` 那条是同一种失败。"""
+    workflow = _saved(_graph("loop_while", "x={{loop.item}}", output="{{say.text}}"))
+    with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
+        start_workflow_job(db, db.get(Workflow, workflow.id), created_by=None)
+    assert "loop.item" in str(caught.value) and "box" in str(caught.value)

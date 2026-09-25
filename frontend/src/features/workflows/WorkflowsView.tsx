@@ -171,11 +171,13 @@ import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
 import {
   bodyKey,
+  declaredFieldNames,
   graphAtScope,
   parseScopeId,
   scopeContainer,
   scopeId,
   scopeIds,
+  scopeVariables as scopeVariablesOf,
   withGraphAtScope,
   type ScopePath,
 } from "@/features/workflows/scope";
@@ -803,16 +805,11 @@ function WorkflowEditor({
     [rootGraph, scopePath, registry],
   );
   const scopeNode = React.useMemo(() => scopeContainer(rootGraph, scopePath, registry), [rootGraph, scopePath, registry]);
-  /** 体里能引用的虚拟变量:容器在运行时注入的 `{{loop.*}}` / `{{input.*}}`。它们不是图里的节点。 */
-  const scopeVariables = React.useMemo(() => {
-    if (!scopeNode) return EMPTY_SCOPE_VARIABLES;
-    const rawInputs = scopeNode.config?.inputs;
-    const inputVariables =
-      rawInputs && typeof rawInputs === "object" && !Array.isArray(rawInputs)
-        ? Object.keys(rawInputs).map((key) => `{{input.${key}}}`)
-        : [];
-    return scopeNode.type === "subgraph" ? inputVariables : ["{{loop.item}}", "{{loop.index}}", ...inputVariables];
-  }, [scopeNode]);
+  /** 体里能引用的虚拟变量:容器在运行时注入的 `{{loop.*}}` / `{{input.*}}`,按后端声明的 body_scope 给(见 scope.ts)。 */
+  const scopeVariables = React.useMemo(
+    () => (scopeNode ? scopeVariablesOf(scopeNode, registry) : EMPTY_SCOPE_VARIABLES),
+    [scopeNode, registry],
+  );
   /** 写这一层:把新的这层放回整张图。撤销的合并、脏标记、自动保存因此照旧只有一套。 */
   const setGraph = React.useCallback(
     (updater: GraphUpdater, options?: SetGraphOptions) => {
@@ -2555,12 +2552,9 @@ function upstreamVariables(
   const refs: string[] = [];
   for (const node of graph.nodes) {
     if (!ancestors.has(node.id)) continue;
-    if (node.type === "start") {
-      const params = ((node.config as { params?: Record<string, unknown> })?.params ?? {}) as object;
-      for (const key of Object.keys(params)) refs.push(`{{${node.id}.${key}}}`);
-    } else {
-      for (const output of registry.get(node.type)?.outputs ?? []) refs.push(`{{${node.id}.${output}}}`);
-    }
+    //: 输出名按声明展开:`*params` 这种是「那个配置字段里的每个键」(和容器体的 body_scope 同一种写法)。
+    const outputs = declaredFieldNames(registry.get(node.type)?.outputs ?? [], node.config as Record<string, unknown> | undefined);
+    for (const output of outputs) refs.push(`{{${node.id}.${output}}}`);
   }
   return refs;
 }

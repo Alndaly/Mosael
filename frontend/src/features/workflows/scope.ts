@@ -19,9 +19,9 @@ type WNode = WorkflowGraph["nodes"][number];
 
 export type ScopePath = readonly string[];
 
-/** 只用到节点类型的配置声明。 */
+/** 只用到节点类型的配置声明,和容器体内看得见什么(后端的 body_scope)。 */
 export interface ScopeRegistry {
-  get(type: string): { config?: Record<string, unknown> } | undefined;
+  get(type: string): { config?: Record<string, unknown>; body_scope?: Record<string, string[]> } | undefined;
 }
 
 const EMPTY_GRAPH: WorkflowGraph = { nodes: [], edges: [] };
@@ -111,3 +111,31 @@ export function scopeIds(root: WorkflowGraph, registry: ScopeRegistry): string[]
   walk(root, []);
   return out;
 }
+
+/**
+ * 声明里的一串字段名,展开成这个节点实际有的名字。`*字段` 表示「这个配置字段里的每个键」——
+ * start 的 `*params` 输出、容器体里的 `{{input.*}}` 都是用户自己起的名字,只有这份配置知道。
+ */
+export function declaredFieldNames(fields: readonly string[], config: Record<string, unknown> | undefined): string[] {
+  return fields.flatMap((field) => {
+    if (!field.startsWith("*")) return [field];
+    const value = config?.[field.slice(1)];
+    return value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value) : [];
+  });
+}
+
+/**
+ * 容器体里能引用的变量(`{{loop.item}}`、`{{input.x}}`):运行时由容器注入,不是图里的节点。
+ *
+ * **只从后端的声明来**(节点类型的 body_scope)。此前这里按「是不是子图」写死:不是子图就一律
+ * 给 `{{loop.item}}` 和 `{{loop.index}}` —— 条件循环体里也列出了它根本拿不到的 `loop.item`,
+ * 选进去之后运行时安静地变成空串。
+ */
+export function scopeVariables(container: WNode | null, registry: ScopeRegistry): string[] {
+  if (!container) return [];
+  const declared = registry.get(container.type)?.body_scope ?? {};
+  return Object.entries(declared).flatMap(([root, fields]) =>
+    declaredFieldNames(fields, container.config as Record<string, unknown> | undefined).map((field) => `{{${root}.${field}}}`),
+  );
+}
+

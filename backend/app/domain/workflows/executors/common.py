@@ -83,9 +83,13 @@ def run_body(node_type: str, body: dict[str, Any], scope: dict[str, Any], *, wor
 
     体在运行前已经由 validate_graph 连同外层一起校验过(带着插件节点类型),这里不再校验一遍。
     """
-    declared = set(NODE_TYPES[node_type]["body_scope"])
-    if set(scope) != declared:
+    declared: dict[str, list[str]] = NODE_TYPES[node_type]["body_scope"]
+    if set(scope) != set(declared):
         raise RuntimeError(f"{node_type} seeds its body with {sorted(scope)} but declares body_scope {sorted(declared)}")
+    for root, fields in declared.items():
+        # 字段固定的作用域(`loop`)逐个字段核对;`*配置字段` 的键来自这次的配置,不在这里核。
+        if not any(one.startswith("*") for one in fields) and set(scope[root]) != set(fields):
+            raise RuntimeError(f"{node_type} seeds {root} with {sorted(scope[root])} but declares {sorted(fields)}")
     from app.domain.workflows.engine import execute_graph  # 惰性:避开 engine↔executors 循环导入
 
     context, cancelled = execute_graph(body, wf_id=workflow_id, initial_context=scope, entry_is_root=True)

@@ -12100,7 +12100,9 @@ export interface components {
              */
             tool_name: string;
             /** Body Scope */
-            body_scope?: string[];
+            body_scope?: {
+                [key: string]: string[];
+            };
         };
         /** WorkflowOut */
         WorkflowOut: {

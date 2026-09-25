@@ -1154,9 +1154,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
         },
         "outputs": ["results", "count"],
-        #: 体内看得见的作用域名 —— 执行器给体播种的正是这几个(见 executors/loops)。
-        #: 校验、画布就绪检查都读这一格,见 NESTED_BODY_TYPES 上那段。
-        "body_scope": ["loop", "input"],
+        #: 体内看得见什么 —— 执行器给体播种的正是这些(见 executors/loops)。
+        #: 校验、画布就绪检查、引用选择器都读这一格,见 NESTED_BODY_TYPES 上那段。
+        "body_scope": {"loop": ["item", "index"], "input": ["*inputs"]},
     },
     "loop_while": {
         "external": False,
@@ -1173,8 +1173,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "output": {"type": "template", "description": "wfNode_loop_while_output"},
         },
         "outputs": ["results", "count", "iterations"],
-        #: 没有 `input`:条件循环没有「逐项共享输入」这一格,执行器只播 `loop.index`。
-        "body_scope": ["loop"],
+        #: 没有 `input`,`loop` 底下也没有 `item`:条件循环没有「逐项」这回事,执行器只播 `loop.index`。
+        "body_scope": {"loop": ["index"]},
     },
     "asset_query": {
         "external": False,
@@ -1277,7 +1277,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "output": {"type": "template", "description": "wfNode_subgraph_output"},
         },
         "outputs": ["output"],
-        "body_scope": ["input"],
+        "body_scope": {"input": ["*inputs"]},
     },
     # 浏览器自动化(RPA):在隔离浏览器会话里自动化操作网页,与发布登录完全隔离。
     # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。
@@ -1561,10 +1561,13 @@ def validate_graph(
     return errors
 
 
-#: 内嵌子图类节点(循环体 / subgraph):**由节点自己声明**体内看得见哪些作用域名(`body_scope`)。
+#: 内嵌子图类节点(循环体 / subgraph):**由节点自己声明**体内看得见什么(`body_scope`)——
+#: 作用域名 → 这个名字底下的字段。`*字段名` 表示「这个配置字段里的每个键」(和 start 的 `*params`
+#: 输出同一种写法):子图的 `{{input.*}}` 是用户自己在 `inputs` 里起的名字,只有运行时那份配置知道。
 #:
-#: 这份声明是三方的单一真源:执行器给体播种的就是这几个名字;校验据此判断体内的引用有没有
-#: 越出作用域;画布的就绪检查经 /api/workflows/node-types 拿到同一格。此前三方各写各的 ——
+#: 这份声明是各方的单一真源:执行器给体播种的就是这些(run_body 逐名逐字段核对);校验据此判断
+#: 体内的引用有没有越出作用域;画布的就绪检查和体内的引用选择器经 /api/workflows/node-types
+#: 拿到同一格。选择器此前按「是不是子图」自己写了一份,条件循环体里也列出了拿不到的 `loop.item`。此前三方各写各的 ——
 #: 校验对所有循环一律放行 `loop` 与 `input`,可条件循环(loop_while)根本不播 `input`,于是
 #: 体内的 `{{input.x}}` 校验得过、运行时安静地变成空串;画布那一侧则对子图也放行 `loop`,
 #: 后端却会拒绝 —— 同一张图,一边说能跑,一边说不能。
@@ -1621,9 +1624,14 @@ def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
     body/output/condition belong to *its* inner scope and validate_graph checks them against that
     scope. Its `inputs`/`items` (outer-facing) are still scanned, since those resolve in *this* scope.
     """
-    scope = list(NODE_TYPES[node_type]["body_scope"])
-    known = set(scope) | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    declared: dict[str, list[str]] = NODE_TYPES[node_type]["body_scope"]
+    scope = list(declared)
+    body_ids = {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    known = set(scope) | body_ids
+    #: 字段是固定几个的作用域(`loop`),字段也要对得上;字段来自配置的(`*inputs`)只有运行时知道。
+    fixed = {root: set(fields) for root, fields in declared.items() if not any(one.startswith("*") for one in fields)}
     unknown: set[str] = set()
+    missing: set[str] = set()
     for node in nodes:
         if not isinstance(node, dict):
             continue
@@ -1632,15 +1640,22 @@ def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
             for key in NESTED_BODY_RAW_KEYS:
                 config.pop(key, None)
         for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False)):
-            root = match.group(1).strip().split(".")[0]
+            parts = match.group(1).strip().split(".")
+            root = parts[0]
             if root and root not in known:
                 unknown.add(root)
+            elif root in fixed and root not in body_ids and len(parts) > 1 and parts[1] not in fixed[root]:
+                missing.add(f"{root}.{parts[1]}")
+    errors: list[str] = []
+    if missing:
+        provided = "、".join(f"{root}.{field}" for root, fields in fixed.items() for field in sorted(fields))
+        errors.append(f"{_body_label(node_type)}里没有 {', '.join(sorted(missing))};这里只提供 {provided}")
     if not unknown:
-        return []
+        return errors
     allowed = "、".join(scope)
     if "loop" in scope:
-        return [f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 {allowed} 与体内节点"]
-    return [f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 {allowed} 与体内节点"]
+        return [*errors, f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 {allowed} 与体内节点"]
+    return [*errors, f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 {allowed} 与体内节点"]
 
 
 #: 后果**落在这个应用之外**的节点:发出去的帖子、别人服务器上的改动、本机跑过的代码、

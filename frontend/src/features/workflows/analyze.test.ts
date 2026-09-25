@@ -18,7 +18,7 @@ const registry: RegistryLike = {
       {
         config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string; active_when?: Record<string, unknown> }>;
         output_types?: Record<string, string>;
-        body_scope?: string[];
+        body_scope?: Record<string, string[]>;
       }
     > = {
       start: { config: { params: { type: "object" } } },
@@ -54,15 +54,15 @@ const registry: RegistryLike = {
       // 体内看得见哪些作用域名,由后端随节点声明发下来(NODE_TYPES 的 body_scope)。
       subgraph: {
         config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } },
-        body_scope: ["input"],
+        body_scope: { input: ["*inputs"] },
       },
       loop_foreach: {
         config: { items: { type: "template", required: true }, body: { type: "graph" }, output: { type: "template" } },
-        body_scope: ["loop", "input"],
+        body_scope: { loop: ["item", "index"], input: ["*inputs"] },
       },
       loop_while: {
         config: { body: { type: "graph" }, condition: { type: "template" }, output: { type: "template" } },
-        body_scope: ["loop"],
+        body_scope: { loop: ["index"] },
       },
     };
     return table[type];

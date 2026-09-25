@@ -119,8 +119,8 @@ interface NodeMetaLike {
   output_types?: Record<string, string>;
   /** 每个输出在人机界面上的名字(「人声」「背景音」),同样由后端声明并按语言发下来。 */
   output_labels?: Record<string, string>;
-  /** 内嵌子图节点(循环 / 子图)体内看得见的作用域名。**由后端声明**(NODE_TYPES 的 body_scope)。 */
-  body_scope?: string[];
+  /** 内嵌子图节点(循环 / 子图)体内看得见什么:作用域名 → 字段。**由后端声明**(NODE_TYPES 的 body_scope)。 */
+  body_scope?: Record<string, string[]>;
 }
 
 export interface RegistryLike {
@@ -144,7 +144,7 @@ const NESTED_BODY_RAW_KEYS = new Set(["body", "output", "condition"]);
  * 条件循环体里的 `{{input.x}}` 两边都放行,运行时安静地变成空串。
  */
 export function bodyScope(registry: RegistryLike, nodeType: string): string[] {
-  return registry.get(nodeType)?.body_scope ?? [];
+  return Object.keys(registry.get(nodeType)?.body_scope ?? {});
 }
 
 /** 这些字段属于内嵌图自己的作用域，父图不能拿自己的节点表去判定其中的引用。 */

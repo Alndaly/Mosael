@@ -31465,10 +31465,13 @@
             "default": ""
           },
           "body_scope": {
-            "items": {
-              "type": "string"
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
-            "type": "array",
+            "type": "object",
             "title": "Body Scope"
           }
         },
