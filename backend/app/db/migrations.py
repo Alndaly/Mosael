@@ -2617,6 +2617,73 @@ def _migrate_condition_literals_are_json() -> None:
                 )
 
 
+def _migrate_condition_edges_use_source_handle() -> None:
+    """边上的 `branch` 键改写成 `source_handle`。
+
+    全片生成模板里五条条件边写的是 `"branch": "true"`,而没有任何代码读 `branch`:它们能按
+    「真」那一支跑,只是因为没写 handle 的条件边缺省就是真;画布上也就没有真 / 假的标记。
+    模板已经改成 `source_handle`;从它装出来的那些工作流在这里一次改好,编辑器和引擎只认
+    `source_handle` 一种写法。
+
+    从会分支的节点出发、还没写 handle 的,`branch` 的值搬进 `source_handle`;其余的只是把这个
+    没人读的键删掉。循环体 / 子图体里的一并改。
+
+    **改完自己把修订对上。** 排在修订迁移之前只在「两步同一次启动里都没跑过」时有用;修订迁移
+    早已记过账的机器上它不会再跑,而当前图和最新快照的摘要对不上的工作流是**跑不起来的**
+    (wfErr_revisionDigestMismatch)。修订迁移本身是可重入的(图变了就追加一份修订),改完就调它。
+    """
+    if "workflows" not in set(inspect(engine).get_table_names()):
+        return
+    from app.domain.workflows import BRANCHING_NODE_TYPES
+
+    def rewrite(graph: Any) -> Any:
+        if not isinstance(graph, dict):
+            return graph
+        types = {
+            str(node.get("id")): str(node.get("type"))
+            for node in graph.get("nodes") or []
+            if isinstance(node, dict)
+        }
+        edges = []
+        for edge in graph.get("edges") or []:
+            if not isinstance(edge, dict) or "branch" not in edge:
+                edges.append(edge)
+                continue
+            moved = {key: value for key, value in edge.items() if key != "branch"}
+            if types.get(str(edge.get("source"))) in BRANCHING_NODE_TYPES and not edge.get("source_handle"):
+                moved["source_handle"] = str(edge["branch"])
+            edges.append(moved)
+        nodes = []
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                nodes.append(node)
+                continue
+            config = dict(node.get("config") or {})
+            for key, value in config.items():
+                if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                    config[key] = rewrite(value)
+            nodes.append({**node, "config": config} if config != (node.get("config") or {}) else node)
+        return {**graph, "nodes": nodes, "edges": edges}
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
+        for row in rows:
+            raw_graph = row["graph"]
+            try:
+                graph = json.loads(raw_graph) if isinstance(raw_graph, str) else raw_graph
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(graph, dict):
+                continue
+            rewritten = rewrite(graph)
+            if rewritten != graph:
+                conn.execute(
+                    text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                    {"graph": json.dumps(rewritten, ensure_ascii=False), "id": row["id"]},
+                )
+    _migrate_workflow_revisions()
+
+
 def _disable_tasks_bound_to_deleted_workflows() -> None:
     """绑着一张**已经删掉**的工作流、却还是「启用」的定时任务,停用。
 
@@ -2923,6 +2990,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_called_workflows_declare_their_output,
                 _migrate_line_fields_are_lists,
                 _migrate_condition_literals_are_json,
+                _migrate_condition_edges_use_source_handle,
                 _migrate_workflow_revisions,
                 _disable_tasks_bound_to_deleted_workflows,
                 # Projection comes last so rows synthesized by earlier migrations are visible

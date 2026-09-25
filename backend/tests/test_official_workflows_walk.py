@@ -157,3 +157,29 @@ def test_必填检查下得到循环体里() -> None:
         + "\n  ".join(errors or ["(什么都没报)"])
     )
     assert any(loop["id"] in one for one in errors), f"报错没说清它住在哪个循环里:{errors}"
+
+
+#: 边上有人读的键。多出来的键没有任何代码读它 —— 模板作者以为自己写了一个设定,其实什么都没写。
+EDGE_KEYS = {"id", "source", "target", "kind", "source_handle", "source_output", "target_input", "label"}
+
+
+def _edges(graph: dict, where: str):
+    for edge in graph.get("edges") or []:
+        yield where, edge
+    for node in graph.get("nodes") or []:
+        for key, value in (node.get("config") or {}).items():
+            if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                yield from _edges(value, f"{where}/{node['id']}.{key}")
+
+
+@pytest.mark.parametrize("template_id", TEMPLATE_IDS)
+def test_模板的边只用引擎认得的键(template_id: str) -> None:
+    """全片生成模板里五条条件边写的是 `"branch": "true"` —— 没有任何代码读 `branch`。它们能按
+    「真」那一支跑,只是因为没写 handle 的条件边缺省就是真;画布上也就没有真 / 假的标记。
+    分支走哪一支,只有 `source_handle` 一种写法。"""
+    stray = [
+        f"{where}: {edge.get('id')} 多了 {sorted(set(edge) - EDGE_KEYS)}"
+        for where, edge in _edges(_graph(template_id), template_id)
+        if set(edge) - EDGE_KEYS
+    ]
+    assert not stray, "\n".join(stray)

@@ -82,7 +82,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 8,
+        "template_version": 9,
         "source": "official",
     }
 
@@ -381,12 +381,12 @@ class Test分镜写了口播就要真的配上:
         assert gate["config"] == {"left": "{{input.voice_id}}", "op": "not_empty"}
         # 合成只挂在 true 分支上。
         to_narration = [e for e in generate["body"]["edges"] if e["source"] == "has_voice"]
-        assert to_narration and all(e.get("branch") == "true" for e in to_narration)
+        assert to_narration and all(e.get("source_handle") == "true" for e in to_narration)
         # 上时间线那一轮:没合成出口播的镜头不去接口播。
         placed = {n["id"]: n for n in assemble["body"]["nodes"]}
         assert placed["has_audio"]["config"] == {"left": "{{loop.item.narrate.asset_id}}", "op": "not_empty"}
         gated = [e for e in assemble["body"]["edges"] if e["source"] == "has_audio"]
-        assert gated and all(e.get("branch") == "true" for e in gated)
+        assert gated and all(e.get("source_handle") == "true" for e in gated)
 
     def test_这一镜没口播也跳过(self) -> None:
         """分镜 schema 明说"无则写空字符串" —— 纯画面镜头是正常的,而空文本交给合成会失败,
@@ -395,7 +395,7 @@ class Test分镜写了口播就要真的配上:
         nodes = {n["id"]: n for n in generate["body"]["nodes"]}
         assert nodes["has_narration"]["config"] == {"left": "{{loop.item.narration}}", "op": "not_empty"}
         edges = [e for e in generate["body"]["edges"] if e["source"] == "has_narration"]
-        assert edges and all(e.get("branch") == "true" for e in edges)
+        assert edges and all(e.get("source_handle") == "true" for e in edges)
 
     def test_口播链路不影响画面(self) -> None:
         """加配音不该动到已经能用的那半边。"""

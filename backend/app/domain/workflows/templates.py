@@ -1341,15 +1341,15 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
         ],
         "edges": [
             {"id": "shot_blockout_mode", "source": "render_blockout", "target": "is_keyframes"},
-            {"id": "shot_mode_first", "source": "is_keyframes", "target": "paint_first_frame", "branch": "true"},
+            {"id": "shot_mode_first", "source": "is_keyframes", "target": "paint_first_frame", "source_handle": "true"},
             {"id": "shot_first_needs_last", "source": "paint_first_frame", "target": "needs_last_frame"},
-            {"id": "shot_needs_last", "source": "needs_last_frame", "target": "paint_last_frame", "branch": "true"},
+            {"id": "shot_needs_last", "source": "needs_last_frame", "target": "paint_last_frame", "source_handle": "true"},
             #: 生成视频只挂在白模之后:首尾帧那两个节点在参考那条路上会被跳过,而它们被引用 ——
             #: 引用即依赖,生成会等它们落定(跑完或被跳过)再开始。
             {"id": "shot_blockout_generate", "source": "render_blockout", "target": "generate_clip"},
             {"id": "shot_generate_organize", "source": "generate_clip", "target": "organize_clip"},
-            {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "branch": "true"},
-            {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "branch": "true"},
+            {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "source_handle": "true"},
+            {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "source_handle": "true"},
         ],
     }
     # 这一段遍历的是上一段的**结果**:每一项是那一镜的全部产物,连同那一镜的分镜本身
@@ -1402,7 +1402,7 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
         ],
         "edges": [
             {"id": "assemble_clip_gate", "source": "append_clip", "target": "has_audio"},
-            {"id": "assemble_gate_narration", "source": "has_audio", "target": "append_narration", "branch": "true"},
+            {"id": "assemble_gate_narration", "source": "has_audio", "target": "append_narration", "source_handle": "true"},
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
     }
@@ -1790,7 +1790,7 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 8, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 9, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
