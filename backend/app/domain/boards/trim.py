@@ -53,6 +53,10 @@ def start_trim(
         raise TrimError("trimErr_endBeforeStart")
     if start < 0:
         raise TrimError("trimErr_negativeStart")
+    #: 「去掉声音」只对有画面的有意义:音频本身就是那段声音,`-an` 之后什么都不剩 —— ffmpeg
+    #: 交出一个空文件,任务几秒后才报错。
+    if mute and asset.kind != "video":
+        raise TrimError("trimErr_muteNeedsVideo")
 
     job = create_job(
         db,

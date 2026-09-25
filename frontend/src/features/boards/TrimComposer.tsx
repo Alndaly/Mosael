@@ -14,6 +14,21 @@ import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 
+/** 能剪的两种媒体。 */
+export type TrimKind = "video" | "audio";
+
+/**
+ * 剪一段时,每种媒体给哪几个开关。**开关从媒体种类来,不在各处各判一遍。**
+ *
+ *  · 去掉声音 —— 只有视频有:音频本身就是那段声音,去掉之后什么都不剩(ffmpeg 交出一个空文件,
+ *    任务报错)。此前音频也摆着这个开关,点了就是一次必然失败的截取。
+ *  · 取一帧 —— 只有视频有:音频没有画面。
+ */
+export const TRIM_CONTROLS: Record<TrimKind, { mute: boolean; grabFrame: boolean }> = {
+  video: { mute: true, grabFrame: true },
+  audio: { mute: false, grabFrame: false },
+};
+
 /**
  * 「剪一段」面板:定起止、要不要声音。
  *
@@ -31,7 +46,7 @@ export function TrimComposer({
   onTrim,
   onGrabFrame,
 }: {
-  item: BoardItem;
+  item: BoardItem & { kind: TrimKind };
   /** 剪哪一份素材 —— 帧条/波形都按它取。 */
   assetId: string;
   workspaceId: string;
@@ -41,6 +56,7 @@ export function TrimComposer({
   onGrabFrame?: (at: number) => void;
 }) {
   const t = useI18n();
+  const controls = TRIM_CONTROLS[item.kind];
   //: 时长从素材库里查 —— 画布上的项只记着 asset_id,而"拖到哪儿是第几秒"全靠它。
   //: 查不到就不画那条轨(退回填秒数),而不是猜一个:猜错会把长素材截短。
   const library = useQuery({ queryKey: assetKeys.list(workspaceId), queryFn: () => listAssets(workspaceId) });
@@ -69,7 +85,7 @@ export function TrimComposer({
 
   const send = () => {
     if (!ok || working) return;
-    run(() => onTrim({ start: from, end: to, mute }));
+    run(() => onTrim({ start: from, end: to, mute: controls.mute && mute }));
   };
 
   return (
@@ -80,7 +96,7 @@ export function TrimComposer({
         {duration ? (
           <TrimTrack
             assetId={assetId}
-            kind={item.kind === "audio" ? "audio" : "video"}
+            kind={item.kind}
             duration={duration}
             start={Number(start) || 0}
             end={Number(end) || duration}
@@ -116,6 +132,7 @@ export function TrimComposer({
         </label>
         <span className="text-ui-2xs text-muted-foreground">{t("boardTrimSeconds")}</span>
 
+        {controls.mute && (
         <button
           type="button"
           aria-pressed={mute}
@@ -128,10 +145,11 @@ export function TrimComposer({
         >
           {mute ? <VolumeX size={13} /> : <Volume2 size={13} />}
         </button>
+        )}
 
         {/* 取一帧:**用起点那个把手的位置** —— 轨已经在那儿了,再给一个「取帧位置」等于
             让用户在同一条轨上记两个数。 */}
-        {onGrabFrame && item.kind === "video" && (
+        {onGrabFrame && controls.grabFrame && (
           <button
             type="button"
             title={t("boardGrabFrameTitle")}

@@ -1255,6 +1255,29 @@ def test_截取范围写错时当场拒绝_而不是让_ffmpeg_去发现() -> No
             start_trim(db, asset=db.get(Asset, picture), start=0, end=1, created_by=None)
 
 
+def test_音频不能去掉声音_当场拒绝而不是剪出一个空文件() -> None:
+    """音频本身就是那段声音:`-an` 之后什么都不剩,ffmpeg 交出空文件,任务几秒后才报错。"""
+    import pytest as _pytest
+
+    from app.core.db import SessionLocal
+    from app.db.models import Asset, Job
+    from app.domain.boards.trim import TrimError, start_trim
+
+    client = fresh_client()
+    ws = _workspace(client)
+    audio_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("一段话.mp3", b"fake", "audio/mpeg")}
+    ).json()["id"]
+
+    with SessionLocal() as db:
+        audio = db.get(Asset, audio_id)
+        assert audio.kind == "audio"
+        with _pytest.raises(TrimError) as caught:
+            start_trim(db, asset=audio, start=0, end=1, mute=True, created_by=None)
+        assert caught.value.key == "trimErr_muteNeedsVideo"
+        assert db.query(Job).filter(Job.kind == "trim").count() == 0, "拒掉的截取不该留下任务"
+
+
 def test_截取产出走的是画板同一套回执() -> None:
     """截取任务给的是 asset_id(和语音合成同一个形状)—— 画板的回执两种都读得懂。"""
     from types import SimpleNamespace

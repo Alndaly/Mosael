@@ -1579,11 +1579,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       {trimming && onTrim && (() => {
         const node = nodes.find((one) => one.id === trimming);
         const item = node && (node.data as unknown as { item: BoardItem }).item;
-        if (!node || !item?.asset_id) return null;
+        if (!node || !item?.asset_id || (item.kind !== "video" && item.kind !== "audio")) return null;
         return (
           <TrimComposer
             key={item.id}
-            item={item}
+            item={{ ...item, kind: item.kind }}
             assetId={item.asset_id as string}
             workspaceId={workspaceId}
             busy={false}
