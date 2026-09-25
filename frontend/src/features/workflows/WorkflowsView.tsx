@@ -3032,7 +3032,11 @@ export function NodeInspector({
                   ref={(el) => {
                     fieldRefs.current[key] = el;
                   }}
-                  type={spec?.type === "number" ? "number" : "text"}
+                  // 数字字段也是 text:引擎对每个字段都插值,`{{source_video.width}}` 在这里合法
+                  // (官方模板就这么写)。type="number" 会把它当非法值显示成空,看着像没填,
+                  // 顺手填个数就把引用覆盖了。inputMode 仍然给触控键盘弹数字键盘。
+                  type="text"
+                  inputMode={spec?.type === "number" ? "decimal" : undefined}
                   value={String(value ?? "")}
                   placeholder={spec?.default ? String(spec.default) : ""}
                   onChange={(event) => setConfig(key, event.target.value)}
