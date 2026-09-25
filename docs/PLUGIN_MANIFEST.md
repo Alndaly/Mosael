@@ -758,7 +758,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
   {
     "id": "portrait.json",                 // 这个连接里稳定;会被存进画板、工作流、默认模型
     "label": {"zh": "人像", "en": "Portrait"},
-    "kind": "image",                       // image | video(宿主今天只接这两种;别的照列、不进选择器)
+    "kind": "image",                       // image | video | audio(音乐 / 音效,ADR 0022);别的照列、不进选择器
     "modes": ["text-to-image", "image-to-image"],
     "parameters": {                        // 键 → JSON Schema 片段
       "seed": {"type": "integer"},
@@ -783,7 +783,8 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
   界面上悬停看得到。**顺序就是界面上的顺序**:常用的在前,留空也能跑的标 `x-advanced`。
 - **宿主自己有控件的那几个键**直接用宿主的控件:`seed`、`negative_prompt`、`size`(`enum` → 尺寸下拉)、
   `resolution` / `aspect_ratio`、`duration_seconds`(`enum` 或 `minimum` / `maximum`)、`num_images`
-  (`maximum` → 张数上限,没写用 `max_outputs`)、`generate_audio`。**其余的键**进描述符的 `parameter_schema`,
+  (`maximum` → 张数上限,没写用 `max_outputs`)、`generate_audio`,以及音频模型的 `lyrics`(歌词编辑器)与
+  `instrumental`(纯音乐开关)。**其余的键**进描述符的 `parameter_schema`,
   AI 工作台、画板、工作流节点用同一个通用控件渲染;提交时宿主按它校验类型、范围和可选值。
   用户没动过的参数**不发**,插件给的 `default` 只当占位提示(ADR 0015)。
 - `inputs` 的 `role` 取宿主的素材角色(`reference_image` / `first_frame` / `last_frame` / `reference_video` /

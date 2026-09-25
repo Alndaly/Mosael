@@ -155,7 +155,28 @@ clip" and it will check what the model supports before sending — passing a par
 does not accept is rejected outright rather than quietly producing something else.
 
 
+### Music and sound effects
+
+The model picker on the Generate page has a third group: **Music & sound**. Pick an audio model to generate a song
+(with vocals), an instrumental / background track, a sound effect, or a soundtrack for a video. It runs on the same
+generation pipeline as images and video — same session, same parameter descriptors; results land in the media
+library, usage is metered, and paid asynchronous tasks are collected again after a backend restart.
+
+- **The prompt** says *how* it should sound: genre, mood, instruments, tempo — or a sound effect such as "rain on a tin roof".
+- **Lyrics** have their own field (Lyrics in the right panel): the words to sing, with `[Verse]` / `[Chorus]` sections.
+  The corner shows the length and this model's limit. Lyrics alone, with no prompt, can be submitted.
+- **Vocals**: choosing "Instrumental (no vocals)" greys out the lyrics — an instrumental has none, and sending both is rejected.
+- **Duration** appears only when the model supports it, and it **may stay empty**: most music models size the track to the lyrics.
+- **Video-to-audio** models (Kling) need a video attached. They accept public links only; a local video is first turned
+  into a time-limited link by an object-storage plugin.
+- Results are **players**, not thumbnails; a model that returns two tracks per request (Suno on Evolink) shows both.
+
+What each vendor supports, and what is wired from documentation only, is in the "Music and sound" section of
+[Providers](/docs/guides/providers).
+
 ## Audio: speech and podcasts
+
+> This page reads text aloud (speech synthesis) and makes podcasts. Music, background tracks and sound effects are generated on the Generate page with an audio model — see the section above.
 
 **Audio** produces standalone audio assets. They land in the media library, and the most recent ones
 are listed below the form so you can play them in place.

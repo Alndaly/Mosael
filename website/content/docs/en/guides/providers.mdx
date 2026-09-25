@@ -17,7 +17,7 @@ Settings groups AI providers into four **capability sections**, each configured 
 | **AI Chat** | the agent and workflow LLM nodes |
 | **AI Image** | text-to-image generation |
 | **AI Video** | text-to-video generation |
-| **AI Audio** | TTS voiceover / podcast synthesis |
+| **AI Audio** | TTS voiceover / podcast synthesis / music and sound generation |
 
 At the top of each section is the **default model**: the default provider and model for that capability, overridable in place wherever it's used. The dropdown lists **models** (e.g. "DeepSeek · deepseek-v4-pro"), not providers — several models under one provider each appear on their own.
 
@@ -76,6 +76,24 @@ ComfyUI is not in the “Add provider” list: it is connected through the Comfy
 the Plugins page (one connection per server). Once connected it appears under the image / video sections marked
 “Provided by a plugin”; its models are the workflows saved in ComfyUI and can be set as defaults. See
 [Generating with ComfyUI](/docs/guides/comfyui).
+
+### Music and sound
+
+"Music & sound generation" in the **AI audio** section holds connections that *generate* audio. It is a different
+capability from speech synthesis (one reads text aloud, the other composes music or makes sound effects) and has its
+own default model. Wired so far — all from official documentation, checked 2026-09-25, not yet run with a real key:
+
+| Provider | Models | What it does | Notes |
+| --- | --- | --- | --- |
+| Google | `lyria-3.5`, `lyria-3-pro-preview`, `lyria-3-clip-preview` | Songs, instrumentals, image-to-music | Same Gemini API key. No duration or BPM parameters — everything goes through the prompt and lyrics |
+| Evolink | six Suno models such as `suno-v5.5-beta` | Songs, instrumentals | Two tracks per request; only v5.5 takes a duration (10–360 s) |
+| Kuaishou Kling | `kling-text-to-audio`, `kling-video-to-audio` | Sound effects; effects / music for a video | Video 3–20 s, links only; effects 3–10 s |
+| Alibaba Model Studio | `fun-music-v1`, `fun-music-preview`, `qwen-audio-3.1-tts-next` | Songs, instrumentals; effects / ambience | Beijing region only; Fun-Music needs an application in the Model Gallery |
+| MiniMax | `music-3.0`, `music-2.6`, `music-cover` | Songs, instrumentals, covers | **Closed to new users since 2026-08-20**; existing paying users keep access |
+| Volcengine AI music | `GenSongForTime`, `GenBGMForTime` (postpaid), `GenSongV4`, `GenBGM` (packs) | Vocal songs, instrumentals | Its own connection: account **AK + SK** (enterprise-verified accounts); instrumental prompts must be Chinese |
+
+OpenAI has no music or sound-effect endpoint today (speech synthesis only), so it is not listed. Plugins can provide
+audio models too (`kind: "audio"`); they join the picker like the built-in ones.
 
 ## Managing its models
 
