@@ -1056,7 +1056,7 @@ function WorkflowEditor({
   // 框选 → 折叠为子图(ComfyUI 式):把选中节点收进一个 subgraph 节点,进出边界的引用/数据边自动重写。
   const handleCollapse = React.useCallback(
     (ids: string[]) => {
-      const res = collapseToSubgraph(graph, ids, { name: t("wfSubgraphBody") });
+      const res = collapseToSubgraph(graph, ids, registry, { name: t("wfSubgraphBody") });
       if (!res.ok) {
         const description =
           res.reason === "start"
@@ -1073,7 +1073,7 @@ function WorkflowEditor({
       selectInspectorNode(res.subgraphId);
       toast.success(t("wfCollapseDone"));
     },
-    [graph, applyGraph, selectInspectorNode, t],
+    [graph, registry, applyGraph, selectInspectorNode, t],
   );
 
   // 节点剪贴板(应用内,按 workflow 编辑器实例存活)。存被选中的节点 + 其内部边,

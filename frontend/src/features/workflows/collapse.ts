@@ -12,8 +12,16 @@
  *
  *  会拒绝的情况:选区含 start(子图体不能有 start);选区非凸(中间隔着未选中的节点,收缩后成环);
  *  出边界从**条件节点**的分支拉出(子图只有单一 output,无法再暴露 true/false 分支,会丢语义)。
+ *
+ *  **「谁依赖谁」和后端同一个算法**(domain/workflows.reference_dependencies):连线,加上**这一层
+ *  作用域里**的 `{{…}}` 引用。两处此前都和后端不一样:
+ *   - 凸性只看连线 —— 只靠引用串起来的 a ← w ← c 选 {a,c} 照样折叠,存盘时后端才报环路;
+ *   - 引用改写钻进了循环 / 子图节点的 body/output/condition —— 那里的 `{{template-1.text}}` 指的是
+ *     **体内**的 template-1(体的节点 id 自成一套,和外层撞名是常态),却被当成外层节点改写成
+ *     `{{input.template-1.text}}`,折叠完的循环安静地读错了值。
  */
 import type { WorkflowGraph } from "../../api/client";
+import { extractRefs, isNestedScopeConfig, type RegistryLike } from "@/features/workflows/analyze";
 
 type Graph = WorkflowGraph;
 type WNode = Graph["nodes"][number];
@@ -55,6 +63,26 @@ function rewriteRefs(value: unknown, remap: (leadingId: string) => string | null
   return value;
 }
 
+/** 只改写**这一层作用域**里的引用:内嵌子图节点的 body/output/condition 属于体自己,原样保留。 */
+function rewriteOuterRefs(
+  node: WNode,
+  registry: RegistryLike,
+  remap: (leadingId: string) => string | null,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node.config ?? {})) {
+    out[key] = isNestedScopeConfig(registry, node.type, key) ? value : rewriteRefs(value, remap);
+  }
+  return out;
+}
+
+/** 这个节点在**这一层**引用了哪些节点 id(与后端 reference_dependencies 同一口径)。 */
+function outerRefSources(node: WNode, registry: RegistryLike): string[] {
+  return Object.entries(node.config ?? {})
+    .filter(([key]) => !isNestedScopeConfig(registry, node.type, key))
+    .flatMap(([, value]) => extractRefs(value).map(({ sourceId }) => sourceId));
+}
+
 /** 生成一个当前 graph 里没用过的节点 id(deterministic:扫已用后缀,不用随机/时间)。 */
 function freshId(graph: Graph, base: string): string {
   const used = new Set(graph.nodes.map((n) => n.id));
@@ -71,16 +99,26 @@ function averagePosition(nodes: WNode[]): { x: number; y: number } {
   return { x: Math.round(sum.x / pts.length), y: Math.round(sum.y / pts.length) };
 }
 
-/** 把选区收缩成一个代表点 sg 后,图是否仍无环(凸性检查)。有环 → 选区非凸,不能折叠。 */
-function contractionHasCycle(graph: Graph, selected: Set<string>, sgId: string): boolean {
+/** 把选区收缩成一个代表点 sg 后,图是否仍无环(凸性检查)。有环 → 选区非凸,不能折叠。
+ *  依赖 = 连线 + 这一层的 `{{…}}` 引用(引用即依赖,后端排序和查环都这么算)。 */
+function contractionHasCycle(graph: Graph, selected: Set<string>, sgId: string, registry: RegistryLike): boolean {
   const rep = (id: string) => (selected.has(id) ? sgId : id);
   const adj = new Map<string, Set<string>>();
   const nodes = new Set<string>([sgId]);
   for (const n of graph.nodes) if (!selected.has(n.id)) nodes.add(n.id);
   for (const id of nodes) adj.set(id, new Set());
-  for (const e of graph.edges) {
-    const a = rep(e.source);
-    const b = rep(e.target);
+  const ids = new Set(graph.nodes.map((n) => n.id));
+  const dependencies: Array<[string, string]> = [
+    ...graph.edges.map((e): [string, string] => [e.source, e.target]),
+    ...graph.nodes.flatMap((n) =>
+      outerRefSources(n, registry)
+        .filter((source) => ids.has(source) && source !== n.id)
+        .map((source): [string, string] => [source, n.id]),
+    ),
+  ];
+  for (const [source, target] of dependencies) {
+    const a = rep(source);
+    const b = rep(target);
     if (a === b) continue; // 内部边/自环,不影响外层排序
     if (!adj.has(a) || !adj.has(b)) continue;
     adj.get(a)!.add(b);
@@ -102,10 +140,12 @@ function contractionHasCycle(graph: Graph, selected: Set<string>, sgId: string):
   return visited !== nodes.size;
 }
 
-/** 纯变换:把 selected 收进一个 subgraph 节点。name 是新节点的显示名(调用方按界面语言给);opts.id 便于测试固定。 */
+/** 纯变换:把 selected 收进一个 subgraph 节点。name 是新节点的显示名(调用方按界面语言给);opts.id 便于测试固定。
+ *  registry 说明哪些节点带内嵌子图(body_scope)—— 它们的体属于自己的作用域。 */
 export function collapseToSubgraph(
   graph: Graph,
   selected: string[],
+  registry: RegistryLike,
   opts: { name: string; id?: string },
 ): CollapseResult {
   const S = new Set(selected.filter((id) => graph.nodes.some((n) => n.id === id)));
@@ -136,20 +176,20 @@ export function collapseToSubgraph(
     return { ok: false, reason: "condition-branch" };
   }
   // 2. 凸性检查
-  if (contractionHasCycle(graph, S, sgId)) return { ok: false, reason: "not-convex" };
+  if (contractionHasCycle(graph, S, sgId, registry)) return { ok: false, reason: "not-convex" };
 
   // 3. 子图体节点:改写内部对外层源的引用 → input.*
   const inSources = new Set<string>();
   const bodyNodes: WNode[] = selNodes.map((n) => ({
     ...n,
-    config: rewriteRefs(n.config ?? {}, (src) => {
+    config: rewriteOuterRefs(n, registry, (src) => {
       if (S.has(src)) return null; // 内部引用,保持
       if (outerIds.has(src)) {
         inSources.add(src);
         return `input.${src}`; // 入边界:外层节点
       }
       return null; // loop/input/typo 等非节点 token,保持
-    }) as Record<string, unknown>,
+    }),
   }));
   const bodyById = new Map(bodyNodes.map((n) => [n.id, n]));
   // 入边界数据边 → 目标节点 config 上的 {{input.u.so}} 模板
@@ -178,10 +218,7 @@ export function collapseToSubgraph(
     .filter((n) => !S.has(n.id))
     .map((n) => ({
       ...n,
-      config: rewriteRefs(n.config ?? {}, (src) => (S.has(src) ? `${sgId}.output.${src}` : null)) as Record<
-        string,
-        unknown
-      >,
+      config: rewriteOuterRefs(n, registry, (src) => (S.has(src) ? `${sgId}.output.${src}` : null)),
     }));
   const keptById = new Map(keptNodes.map((n) => [n.id, n]));
   // 出边界数据边 → 外层目标 config 上的 {{sg.output.v.so}} 模板
