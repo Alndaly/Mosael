@@ -36,7 +36,7 @@ describe("studio browsing controls", () => {
   });
   it("closes the action surface before returning to the collection", () => {
     const rename = vi.fn();
-    render(<ActionMenu label="Project actions" actions={[{label:"Rename", onSelect:rename}]} />);
+    render(<ActionMenu label="Project actions" actions={[{label:"Rename", icon:<svg />, onSelect:rename}]} />);
     fireEvent.click(screen.getByRole("button", {name:"Project actions"}));
     fireEvent.click(screen.getByRole("menuitem", {name:"Rename"}));
     expect(rename).toHaveBeenCalledOnce();

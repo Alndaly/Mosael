@@ -2,12 +2,14 @@ import { MENU_ITEM, MENU_ITEM_DESTRUCTIVE, MENU_SEPARATOR } from "@/components/u
 import { Fragment, type KeyboardEvent, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-type Action = {
+export type MenuAction = {
   label: string;
-  icon?: ReactNode;
+  /** 必填:同一个菜单里有的行有图标、有的没有,文字就对不齐(浏览器池卡片的「重命名」漏过一次)。 */
+  icon: ReactNode;
   /** 行尾一小段弱化的附注(如「版本历史」后面的 `v29`)。不拼进 label:拼进去就和名字抢同一种字重。 */
   hint?: string;
   onSelect: () => void;
@@ -29,7 +31,7 @@ type Action = {
  * 键盘:打开后焦点落在第一个可用条目;↑↓ 循环移动、Home/End 到两端,Enter/空格触发;
  * Esc 关闭,焦点回到 ⋯ 按钮(Radix Popover 的默认行为)。
  */
-export function ActionMenu({ label, actions }: { label: string; actions: Action[] }) {
+export function ActionMenu({ label, actions }: { label: string; actions: MenuAction[] }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -44,7 +46,7 @@ export function ActionMenu({ label, actions }: { label: string; actions: Action[
       >
         {actions.map((action, i) => (
           <Fragment key={action.label}>
-            {action.destructive && i > 0 && !actions[i - 1].destructive && <div className={MENU_SEPARATOR} role="separator" />}
+            {startsDestructiveGroup(actions, i) && <div className={MENU_SEPARATOR} role="separator" />}
             <PopoverClose asChild>
               <button
                 type="button"
@@ -79,4 +81,36 @@ function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
   if (next === null) return;
   event.preventDefault();
   items[next].focus();
+}
+
+/** 第一个破坏性条目前面(且前面还有别的)才画分组线 —— ⋯ 菜单和右键菜单同一条规则。 */
+function startsDestructiveGroup(actions: MenuAction[], i: number): boolean {
+  return Boolean(actions[i].destructive) && i > 0 && !actions[i - 1].destructive;
+}
+
+/**
+ * 同一份动作清单画成右键菜单的条目,放进调用方自己的 `<ContextMenuContent>`。
+ *
+ * 卡片的 ⋯ 和右键菜单此前是两份手抄的清单:浏览器池卡片右键的「重命名」漏了图标,
+ * 工作流卡片右键的条目不跟着 ⋯ 那边变灰。**清单只写一份**,两个菜单都从它画。
+ */
+export function ActionContextMenuItems({ actions }: { actions: MenuAction[] }) {
+  return (
+    <>
+      {actions.map((action, i) => (
+        <Fragment key={action.label}>
+          {startsDestructiveGroup(actions, i) && <ContextMenuSeparator />}
+          <ContextMenuItem
+            className={cn(action.destructive && MENU_ITEM_DESTRUCTIVE)}
+            disabled={action.disabled}
+            onSelect={action.onSelect}
+          >
+            {action.icon}
+            <span className="min-w-0 flex-1 truncate">{action.label}</span>
+            {action.hint && <span className="shrink-0 pl-4 text-ui-xs tabular-nums text-muted-foreground">{action.hint}</span>}
+          </ContextMenuItem>
+        </Fragment>
+      ))}
+    </>
+  );
 }

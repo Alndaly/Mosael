@@ -6,7 +6,7 @@ import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { OPEN_WORKFLOW_TEMPLATE, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
-import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/layout/ActionMenu";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { type QueryClient, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -100,7 +100,7 @@ import {
 } from "@/features/workflows/sourceAssetLines";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
 import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
@@ -424,6 +424,13 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     },
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
+  // 卡片的 ⋯ 和右键菜单同一份清单(见 ActionContextMenuItems)。
+  const cardActions = (workflow: Workflow): MenuAction[] => [
+    { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, onSelect: () => menuRun.mutate(workflow.id) },
+    { label: t("rename"), icon: <Pencil />, onSelect: () => setMenuRenaming(workflow) },
+    { label: t("wfExport"), icon: <Download />, disabled: menuExport.isPending, onSelect: () => menuExport.mutate(workflow) },
+    { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setMenuDeleting(workflow) },
+  ];
 
   // 列表页 / 详情页两态:**没选中就是列表**。
   //
@@ -624,28 +631,11 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                     <WorkflowCard workflow={workflow} />
                     {selectMode && <SelectionCheck selected={selectedIds.has(workflow.id)} />}
                   </button>
-                  {!selectMode && <div className="absolute right-2 top-2 rounded-lg bg-panel"><ActionMenu label={`${t("studioActions")}: ${workflow.name}`} actions={[
-                    {label:t("wfRun"), icon:<Play />, disabled:menuRun.isPending, onSelect:()=>menuRun.mutate(workflow.id)},
-                    {label:t("rename"), icon:<Pencil />, onSelect:()=>setMenuRenaming(workflow)},
-                    {label:t("wfExport"), icon:<Download />, disabled:menuExport.isPending, onSelect:()=>menuExport.mutate(workflow)},
-                    {label:t("delete"), icon:<Trash2 />, destructive:true, onSelect:()=>setMenuDeleting(workflow)},
-                  ]} /></div>}
+                  {!selectMode && <div className="absolute right-2 top-2 rounded-lg bg-panel"><ActionMenu label={`${t("studioActions")}: ${workflow.name}`} actions={cardActions(workflow)} /></div>}
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <ContextMenuItem onSelect={() => menuRun.mutate(workflow.id)}>
-                  <Play /> {t("wfRun")}
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => setMenuRenaming(workflow)}>
-                  <Pencil /> {t("rename")}
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => menuExport.mutate(workflow)}>
-                  <Download /> {t("wfExport")}
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(workflow)}>
-                  <Trash2 /> {t("delete")}
-                </ContextMenuItem>
+                <ActionContextMenuItems actions={cardActions(workflow)} />
               </ContextMenuContent>
             </ContextMenu>
           ))}

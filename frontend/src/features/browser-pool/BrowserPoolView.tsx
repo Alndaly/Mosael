@@ -1,8 +1,8 @@
 import React from "react";
-import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/layout/ActionMenu";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Boxes, Eraser, ExternalLink, Globe, KeyRound, LogIn, LogOut, Plus, RefreshCcw, SquarePen, Trash2, Users, Users2 } from "lucide-react";
+import { Boxes, Eraser, ExternalLink, Globe, KeyRound, LogIn, LogOut, Pencil, Plus, RefreshCcw, SquarePen, Trash2, Users, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -21,7 +21,7 @@ import {
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell, RenameDialog } from "@/components/app/modals";
 import { AddAccountDialog } from "@/features/publish/AddAccountDialog";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -302,6 +302,14 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
             // 「已登录」只认 bound 这一个状态:checking/unknown 是"还不知道",不能当成"能用"。
             const loggedIn = bound && p.binding_status === "bound";
             const platformLabel = (platforms.data ?? []).find((m) => m.platform === p.platform)?.label ?? p.platform;
+            // 卡片的 ⋯ 和右键菜单同一份清单(见 ActionContextMenuItems)。
+            const actions: MenuAction[] = [
+              { label: t("rename"), icon: <Pencil />, onSelect: () => setRenaming(p) },
+              { label: t("publishProxySet"), icon: <Globe />, onSelect: () => setProxyEditing(p) },
+              ...(p.is_mine ? [{ label: p.shared ? t("poolUnshare") : t("poolShare"), icon: <Users2 />, disabled: share.isPending, onSelect: () => share.mutate({ p, shared: !p.shared }) }] : []),
+              ...(canSignOut(p) && (!bound || loggedIn) ? [{ label: bound ? t("poolSignOut") : t("poolClearData"), icon: bound ? <LogOut /> : <Eraser />, onSelect: () => setSigningOut(p) }] : []),
+              { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setRemoving(p) },
+            ];
             return (
               <ContextMenu key={p.id}>
                 <ContextMenuTrigger asChild>
@@ -315,13 +323,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <span className="mr-auto text-ui-sm font-medium text-muted-foreground">
                         {bound ? platformLabel : t("poolGeneric")}
                       </span>
-                      <ActionMenu label={`${t("studioActions")}: ${p.name}`} actions={[
-                        { label: t("rename"), onSelect: () => setRenaming(p) },
-                        { label: t("publishProxySet"), icon: <Globe />, onSelect: () => setProxyEditing(p) },
-                        ...(p.is_mine ? [{ label: p.shared ? t("poolUnshare") : t("poolShare"), icon: <Users2 />, disabled: share.isPending, onSelect: () => share.mutate({p, shared:!p.shared}) }] : []),
-                        ...(canSignOut(p) && (!bound || loggedIn) ? [{ label: bound ? t("poolSignOut") : t("poolClearData"), icon: bound ? <LogOut /> : <Eraser />, onSelect: () => setSigningOut(p) }] : []),
-                        { label: t("delete"), icon: <Trash2 />, destructive:true, onSelect: () => setRemoving(p) },
-                      ]} />
+                      <ActionMenu label={`${t("studioActions")}: ${p.name}`} actions={actions} />
                       {p.proxy && (
                         <em
                           className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary"
@@ -442,23 +444,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem onSelect={() => setRenaming(p)}>{t("rename")}</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => setProxyEditing(p)}>
-                    <Globe /> {t("publishProxySet")}
-                  </ContextMenuItem>
-                  {p.is_mine && (
-                    <ContextMenuItem onSelect={() => share.mutate({ p, shared: !p.shared })}>
-                      <Users2 /> {p.shared ? t("poolUnshare") : t("poolShare")}
-                    </ContextMenuItem>
-                  )}
-                  {canSignOut(p) && (!bound || loggedIn) && (
-                    <ContextMenuItem onSelect={() => setSigningOut(p)}>
-                      {bound ? <LogOut /> : <Eraser />} {bound ? t("poolSignOut") : t("poolClearData")}
-                    </ContextMenuItem>
-                  )}
-                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setRemoving(p)}>
-                    <Trash2 /> {t("delete")}
-                  </ContextMenuItem>
+                  <ActionContextMenuItems actions={actions} />
                 </ContextMenuContent>
               </ContextMenu>
             );
