@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   getBoard: vi.fn(),
   updateBoard: vi.fn(),
   generateOnBoard: vi.fn(),
+  writeOnBoard: vi.fn(),
   listComments: vi.fn(),
   listMembers: vi.fn(),
   api: vi.fn(),
@@ -100,6 +101,7 @@ function mount() {
 const props = () => canvasHarness.props as {
   onChange: (canvas: BoardCanvas) => void;
   onGenerate: (input: Record<string, unknown>) => Promise<unknown>;
+  onWrite: (input: Record<string, unknown>) => Promise<unknown>;
 };
 
 beforeAll(() => {
@@ -204,6 +206,35 @@ describe("画板详情页与服务端的同步", () => {
 
     expect(apiMocks.getBoard).toHaveBeenCalled();
     expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
+  });
+
+  it("刚在便签上敲完字就点「改写」:先把这段字存上,改写照着眼前这段来", async () => {
+    // 服务端从它那份画布上读便签现在的字。自动保存还在 600ms 防抖里时就发改写,读到的是上一版。
+    const server: BoardCanvas = {
+      items: [{ id: "n1", kind: "note", x: 0, y: 0, width: 220, height: 140, text: "旧的那段" }],
+      edges: [],
+      markers: [],
+    };
+    const typed: BoardCanvas = { ...server, items: [{ ...server.items[0], text: "刚敲完的这段" }] };
+    const order: string[] = [];
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    apiMocks.updateBoard.mockImplementation(async (_id: string, body: { canvas: BoardCanvas }) => {
+      order.push(`save:${body.canvas.items[0].text}`);
+      return boardAt(4, body.canvas);
+    });
+    apiMocks.writeOnBoard.mockImplementation(async (_id: string, body: { base_revision: number }) => {
+      order.push(`write@${body.base_revision}`);
+      return boardAt(5, { ...typed, items: [{ ...typed.items[0], text: "改好的", run: { status: "succeeded" } }] });
+    });
+
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    act(() => props().onChange(typed));
+    await act(async () => {
+      await props().onWrite({ itemId: "n1", prompt: "短一点", providerProfileId: "p", model: "m", assets: [], context: [] });
+    });
+
+    expect(order).toEqual(["save:刚敲完的这段", "write@4"]);
   });
 
   it("自动保存还在路上时点生成:生成等它回来,带着它换来的新版本号,不和自己撞 409", async () => {

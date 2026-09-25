@@ -605,6 +605,41 @@ function BoardDetail({
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const save = React.useCallback(
+    (next: Canvas) =>
+      //: 轮到它时再比、再读版本号:排在它前面的写请求可能刚把画布推进到这一份。
+      serially(async () => {
+        if (sameContent(next, confirmedCanvas.current)) return;
+        const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
+        //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch)。
+        const sent = new Map(next.items.map((item) => [item.id, item]));
+        for (const stored of fresh.canvas.items) {
+          const mine = sent.get(stored.id);
+          const patch = mine && serverOwnedPatch(mine, stored);
+          if (patch) api?.patch(stored.id, patch);
+        }
+      })
+        // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
+        .catch(async (error: Error) => {
+          if (await recoverConflict(error)) throw error;
+          toast.error(t("boardsSaveFailed"), { description: error.message });
+          // 自动保存只在 Promise 完成后才把这份画布视为已落库。告诉它失败了,
+          // 下一次编辑仍会以最后一份真正成功的画布为基准。
+          throw error;
+        }),
+    [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially],
+  );
+  // **不显示"已保存"。** 自动保存做对了就该是无声的:一个常驻的「已保存」既不能让人放心
+  // (它任何时候都这么写),又占着顶栏一格。失败仍然会 toast —— 那才是需要打断的时刻。
+  /**
+   * `flushSaves`:画布上的动作(生成、写字、念、截)发出去之前,**先把没存的编辑送到服务端**。
+   *
+   * 服务端照着它那份画布去做 —— 写字读的是便签上现在的字。自动保存要等 600ms 防抖,用户刚敲完
+   * 字就点「改写」,服务端读到的还是上一版,改写的对象不是他眼前那一段。存不上时(已经提示过了)
+   * 动作就不发。
+   */
+  const { flush: flushSaves } = useAutosave(canvas, save);
+
   /** 在这一格里生成。产出由后端回执填回画布,这里只负责发起 + 轮询到结果为止。 */
   const generate = React.useCallback(
     async (input: {
@@ -621,6 +656,7 @@ function BoardDetail({
       form?: BoardItem["form"];
     }) => {
       const itemId = input.itemId ?? `${input.kind}-${Math.random().toString(36).slice(2, 9)}`;
+      if (!(await flushSaves())) return;
       let placed;
       try {
         placed = await serially(() => generateOnBoard(board.id, {
@@ -653,12 +689,13 @@ function BoardDetail({
       if (jobId) api?.patch(itemId, { form: pending?.form ?? input.form, run: { status: "running", job_id: jobId } });
       setRunning((current) => (current.includes(itemId) ? current : [...current, itemId]));
     },
-    [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially],
+    [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially, flushSaves],
   );
 
   /** 让 AI 往某张便签里写字。同步返回,写完直接把新画布落回本地状态。 */
   const write = React.useCallback(
     async (input: NoteWriteInput) => {
+      if (!(await flushSaves())) return;
       try {
         const fresh = await runNoteWrite({
           input,
@@ -681,12 +718,13 @@ function BoardDetail({
         toast.error(t("boardWriteFailed"), { description: (error as Error).message });
       }
     },
-    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially],
+    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially, flushSaves],
   );
 
   /** 把一段文字念成音频。**异步** —— 和出图出片同一套:摆占位、起任务、轮询等回执填回来。 */
   const speak = React.useCallback(
     async (input: { itemId: string; text: string; voiceId: string; engine: string; engineVoice: string }) => {
+      if (!(await flushSaves())) return;
       let placed;
       try {
         placed = await serially(() => speakOnBoard(board.id, {
@@ -710,7 +748,7 @@ function BoardDetail({
       if (jobId) api?.patch(input.itemId, { run: { status: "running", job_id: jobId } });
       setRunning((current) => (current.includes(input.itemId) ? current : [...current, input.itemId]));
     },
-    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially],
+    [board.id, workspaceId, api, t, acceptBoard, recoverConflict, serially, flushSaves],
   );
 
   /** 取某一帧,存成一份新素材、落到一个新节点上。**是图片节点** —— 取出来的是一张图。 */
@@ -739,6 +777,7 @@ function BoardDetail({
       x: number;
       y: number;
     }) => {
+      if (!(await flushSaves())) return;
       let placed;
       try {
         placed = await serially(() => trimOnBoard(board.id, {
@@ -765,7 +804,7 @@ function BoardDetail({
       onSaved();
       setRunning((current) => [...current, input.itemId]);
     },
-    [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially],
+    [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially, flushSaves],
   );
 
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
@@ -848,33 +887,6 @@ function BoardDetail({
     // 漏掉依赖数组的话,每次渲染都要拆一次装一次 —— 而画布拖动时那是每帧一次。
   }, []);
 
-  const save = React.useCallback(
-    (next: Canvas) =>
-      //: 轮到它时再比、再读版本号:排在它前面的写请求可能刚把画布推进到这一份。
-      serially(async () => {
-        if (sameContent(next, confirmedCanvas.current)) return;
-        const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
-        //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch)。
-        const sent = new Map(next.items.map((item) => [item.id, item]));
-        for (const stored of fresh.canvas.items) {
-          const mine = sent.get(stored.id);
-          const patch = mine && serverOwnedPatch(mine, stored);
-          if (patch) api?.patch(stored.id, patch);
-        }
-      })
-        // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
-        .catch(async (error: Error) => {
-          if (await recoverConflict(error)) throw error;
-          toast.error(t("boardsSaveFailed"), { description: error.message });
-          // 自动保存只在 Promise 完成后才把这份画布视为已落库。告诉它失败了,
-          // 下一次编辑仍会以最后一份真正成功的画布为基准。
-          throw error;
-        }),
-    [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially],
-  );
-  // **不显示"已保存"。** 自动保存做对了就该是无声的:一个常驻的「已保存」既不能让人放心
-  // (它任何时候都这么写),又占着顶栏一格。失败仍然会 toast —— 那才是需要打断的时刻。
-  useAutosave(canvas, save);
 
   //: 改名走**全站那一个** RenameDialog(设置、首页、会话列表、工作流都走它)。此前这里是
   //: 就地把标题换成一个输入框 —— 少一处确认、少一条校验(空名靠 onBlur 悄悄回滚),

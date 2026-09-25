@@ -195,4 +195,55 @@ describe("useAutosave", () => {
     await act(async () => first.resolve());
     expect(save.mock.calls.map((call) => call[0])).toEqual(["b", "c"]);
   });
+
+  it("flush 不等防抖,现在就存掉欠着的那份,存完才回", async () => {
+    const saving = deferred();
+    const save = vi.fn(() => saving.promise);
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+      initialProps: { value: "a" as string | null },
+    });
+
+    rerender({ value: "b" });
+    let saved: boolean | undefined;
+    act(() => void result.current.flush().then((ok) => (saved = ok)));
+    expect(save).toHaveBeenCalledWith("b");
+    await act(async () => Promise.resolve());
+    expect(saved).toBeUndefined();
+
+    await act(async () => saving.resolve());
+    expect(saved).toBe(true);
+    act(() => void vi.advanceTimersByTime(500));
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("flush 时有一份在路上、后面还欠着一份:两份都存完才回;存不上回 false", async () => {
+    const first = deferred();
+    const second = deferred();
+    const save = vi.fn().mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+      initialProps: { value: "a" as string | null },
+    });
+
+    rerender({ value: "b" });
+    act(() => void vi.advanceTimersByTime(500));
+    rerender({ value: "c" });
+    let saved: boolean | undefined;
+    act(() => void result.current.flush().then((ok) => (saved = ok)));
+
+    await act(async () => first.resolve());
+    expect(save.mock.calls.map((call) => call[0])).toEqual(["b", "c"]);
+    expect(saved).toBeUndefined();
+
+    await act(async () => second.reject(new Error("离线")));
+    expect(saved).toBe(false);
+  });
+
+  it("没有欠着的,flush 立刻回", async () => {
+    const save = vi.fn();
+    const { result } = renderHook(({ value }) => useAutosave(value, save, 500), {
+      initialProps: { value: "a" as string | null },
+    });
+    await expect(result.current.flush()).resolves.toBe(true);
+    expect(save).not.toHaveBeenCalled();
+  });
 });

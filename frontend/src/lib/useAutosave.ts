@@ -16,12 +16,15 @@ import React from "react";
  *  · **只有服务端确认才算落库。** Promise 失败后仍保持 pending,也不能把失败的值当成已保存。
  *  · **卸载时把欠着的那次补上。** 用户拖完最后一下就切走,防抖窗口还没到 —— 不补的话
  *    那一下就丢了,而他看到的是"我明明拖过"。
+ *
+ * `flush()`:不等防抖,现在就把欠着的存掉,回「存上了没有」。给**要服务端照着画布去做的动作**
+ * 用 —— 用户刚敲完字就点「改写」,防抖窗口还没到,服务端读到的还是上一版(见画板的写字)。
  */
 export function useAutosave<T>(
   value: T | null,
   save: (value: T) => void | Promise<void>,
   delay = 600,
-): { pending: boolean } {
+): { pending: boolean; flush: () => Promise<boolean> } {
   const [pending, setPending] = React.useState(false);
   //: 上一次**已被服务端确认**的值。请求只是发出去还不算落定。
   const confirmedValue = React.useRef<T | null>(null);
@@ -35,17 +38,26 @@ export function useAutosave<T>(
   const inFlightValue = React.useRef<T | null>(null);
   const mounted = React.useRef(true);
   const flushLatestRef = React.useRef<() => void>(() => undefined);
+  //: 等着「欠着的都存完」的那几个 flush()。队列停下来时一起告诉它们存上了没有。
+  const waiters = React.useRef<((saved: boolean) => void)[]>([]);
+  const settle = (saved: boolean) => {
+    const waiting = waiters.current;
+    waiters.current = [];
+    waiting.forEach((resolve) => resolve(saved));
+  };
 
   flushLatestRef.current = () => {
     if (inFlight.current) return;
     const next = queuedValue.current;
     if (next === null) {
       if (mounted.current) setPending(false);
+      settle(true);
       return;
     }
     if (Object.is(next, confirmedValue.current)) {
       queuedValue.current = null;
       if (mounted.current) setPending(false);
+      settle(true);
       return;
     }
 
@@ -69,8 +81,10 @@ export function useAutosave<T>(
       }
       if (queuedValue.current !== null && (saved || hasNewerValue)) {
         flushLatestRef.current();
-      } else if (mounted.current) {
-        setPending(queuedValue.current !== null);
+      } else {
+        if (mounted.current) setPending(queuedValue.current !== null);
+        //: 停下来了:还欠着的就是没存上的那份。
+        settle(queuedValue.current === null);
       }
     };
 
@@ -119,5 +133,17 @@ export function useAutosave<T>(
     };
   }, []);
 
-  return { pending };
+  const flush = React.useCallback((): Promise<boolean> => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (!inFlight.current && queuedValue.current === null) return Promise.resolve(true);
+    const done = new Promise<boolean>((resolve) => waiters.current.push(resolve));
+    //: 有一次在路上的话,它回来时会接着存最新那份(见 finish),那时再告诉这里。
+    if (!inFlight.current) flushLatestRef.current();
+    return done;
+  }, []);
+
+  return { pending, flush };
 }
