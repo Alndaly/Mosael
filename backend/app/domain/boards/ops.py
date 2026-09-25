@@ -148,8 +148,14 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
             if source == target:
                 raise BoardDomainError("boardErr_selfEdge")
             edge_id = str(op.get("edge_id") or "").strip() or f"e-{source}-{target}"
-            if any(str(edge.get("id")) == edge_id for edge in edges):
-                continue  # 已经连过了,重复一次不是错
+            #: 已经连过了,重复一次不是错。**按「哪两项」认,不只按 id** —— 画布上手拉的线 id 是
+            #: React Flow 起的,只按 id 查的话同一对会多出第二根,下游拿上游文字时被拼进提示词两遍。
+            if any(
+                str(edge.get("id")) == edge_id
+                or (str(edge.get("source")) == source and str(edge.get("target")) == target)
+                for edge in edges
+            ):
+                continue
             edges.append({"id": edge_id, "source": source, "target": target})
 
         elif kind == "remove_edge":

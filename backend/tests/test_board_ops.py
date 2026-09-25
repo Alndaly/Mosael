@@ -66,6 +66,20 @@ def test_删掉一项时连着它的线一起走() -> None:
     normalize_canvas(out)
 
 
+def test_已经连着的两项再连一次不会多出第二根线() -> None:
+    """画布上手拉的线 id 是 React Flow 起的(不是 e-a-b)。智能体再 connect 同一对时按 id 查重
+    查不出来,于是多出第二根:下游从上游拿文字时这段话被拼进提示词两遍。连线表达的是「这两项
+    有关系」,同一对连两次不多表达任何东西。"""
+    out = apply_board_ops(
+        _canvas(
+            [{"id": "a", "kind": "note", "x": 0, "y": 0, "text": "一只猫"}, {"id": "b", "kind": "image", "x": 300, "y": 0}],
+            [{"id": "xy-edge__a-b", "source": "a", "target": "b"}],
+        ),
+        [{"kind": "connect", "source": "a", "target": "b"}],
+    )
+    assert out["edges"] == [{"id": "xy-edge__a-b", "source": "a", "target": "b"}]
+
+
 def test_算子写错了当场拒绝() -> None:
     cases = [
         [{"kind": "add_item", "type": "sticker"}],           # 没这种项
