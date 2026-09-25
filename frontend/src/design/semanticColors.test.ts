@@ -79,4 +79,15 @@ describe("semantic status colors", () => {
     }
   });
 
+  it("「运行走过」的线有自己的颜色:看得清,也和条件的真 / 假、数据线、警示不是同一种", () => {
+    //: 此前它借 --success,和「真」那一路同一种绿,只能靠粗细分。
+    for (const theme of [block(":root"), block(".dark")]) {
+      const run = token(theme, "canvas-edge-run");
+      expect(contrast(run, token(theme, "background")), "对底色").toBeGreaterThanOrEqual(3);
+      for (const other of ["success", "destructive", "primary", "warning", "canvas-edge"]) {
+        expect(run.toLowerCase(), other).not.toBe(token(theme, other).toLowerCase());
+      }
+    }
+  });
+
 });

@@ -99,7 +99,7 @@ describe("编出来的层叠", () => {
       ["canvas-edge-false", "--destructive"],
       ["canvas-edge-data", "--primary"],
       ["canvas-edge-mismatch", "--warning"],
-      ["canvas-edge-taken", "--success"],
+      ["canvas-edge-taken", "--canvas-edge-run"],
       ["canvas-edge-pending", "--primary"],
     ]) {
       expect(utilities, edge).toMatch(new RegExp(`\\.${edge}[^{]*\\{[^}]*--xy-edge-stroke: var\\(${token}\\)`));

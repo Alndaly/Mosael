@@ -62,7 +62,7 @@
   | `true` / `false` | 条件节点的真 / 假两路 | `--success` / `--destructive` 实线 + 箭头 + 标签 |
   | `data` + flow | 端口之间传值 | `--primary` 流动虚线,无箭头 |
   | `mismatch` + flow | 数据线两端类型不兼容(软提示) | `--warning` 流动虚线,无箭头 |
-  | `taken`(数据线再带 flow) | 上一次运行走过 | `--success`,选中那一档线宽 |
+  | `taken`(数据线再带 flow) | 上一次运行走过 | `--canvas-edge-run`(紫,不和「真」那一路的绿撞),选中那一档线宽 |
   | `pending` / 拖线途中 | 松手在空白处待选 / 正在拉 | `--primary` 静止虚线 + 箭头 |
   | 悬停 / 选中 | —— | 本色往前景色走一截、2.5px / `--primary`、2.75px |
 

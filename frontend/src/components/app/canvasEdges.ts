@@ -18,7 +18,7 @@ import { MarkerType } from "@xyflow/react";
  * | 条件为假        | `canvas-edge-false`                   | 条件节点「假」那一路                     | `--destructive` 实线 + 箭头 + 「假」标签 |
  * | 数据            | `canvas-edge-data canvas-edge-flow`   | 端口之间传值(不是执行顺序)               | `--primary` 流动虚线,无箭头            |
  * | 类型对不上      | `canvas-edge-mismatch canvas-edge-flow` | 数据线两端类型不兼容(软提示,不拦)      | `--warning` 流动虚线,无箭头            |
- * | 运行走过        | `canvas-edge-taken`(数据线再带 flow) | 上一次运行真的走了这根                   | `--success`,线宽取选中档               |
+ * | 运行走过        | `canvas-edge-taken`(数据线再带 flow) | 上一次运行真的走了这根                   | `--canvas-edge-run`(紫),线宽取选中档  |
  * | 待定            | `canvas-edge-pending`                 | 拉线松手在空白处,等你在单子上选一种      | `--primary` 静止虚线 + 箭头            |
  * | 拖线途中        | (xyflow 的 connection line)          | 正在拉                                   | 和「待定」同一个样子                   |
  * | 悬停            | `:hover`                              | 指针在这根线上                           | 本色往 `--foreground` 走一截,线宽 2.5  |
@@ -30,8 +30,8 @@ import { MarkerType } from "@xyflow/react";
  *  · **颜色互斥,图案另算。** 一根线只挂一个颜色类(true/false/data/mismatch/taken/pending 之一),
  *    「流动虚线」是单独的 `canvas-edge-flow`。于是「数据线跑过了」= taken + flow,颜色由调用方
  *    一次定好,不靠两条同权重规则谁后生成谁赢。
- *  · 意思相同的状态色**复用同一个令牌**:「真」和「运行走过」都是 success —— 走过的线靠更粗那一档
- *    和它两头节点的运行状态区分。
+ *  · **每种意思一个颜色,互不借用。**「运行走过」此前借 success,和「真」那一路是同一种绿,只能靠
+ *    粗细分;现在它有自己的 `--canvas-edge-run`(紫),和真/假/数据/警示/选中都不撞。
  *
  * 怎么接进来:
  *  1. 画布外层容器挂 `CANVAS_EDGE_CLASS`(颜色、线宽、悬停/选中、各变体、拖线途中的样子、点阵)。
@@ -101,7 +101,7 @@ export const CANVAS_EDGE_CLASS = [
   "[&_.canvas-edge-false]:[--xy-edge-stroke:var(--destructive)]",
   "[&_.canvas-edge-data]:[--xy-edge-stroke:var(--primary)]",
   "[&_.canvas-edge-mismatch]:[--xy-edge-stroke:var(--warning)]",
-  "[&_.canvas-edge-taken]:[--xy-edge-stroke:var(--success)]",
+  "[&_.canvas-edge-taken]:[--xy-edge-stroke:var(--canvas-edge-run)]",
   "[&_.canvas-edge-pending]:[--xy-edge-stroke:var(--primary)]",
   String.raw`[&_.react-flow\_\_edges_.react-flow\_\_edge.canvas-edge-taken]:[--xy-edge-stroke-width:2.75]`,
   // 图案:数据线流动的虚线(周期 11,和 edge-flow 动画的位移一致;减少动态效果时停住);

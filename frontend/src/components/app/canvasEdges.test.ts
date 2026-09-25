@@ -150,7 +150,7 @@ describe("共用的连线外观", () => {
       false: "var(--destructive)",
       data: "var(--primary)",
       mismatch: "var(--warning)",
-      taken: "var(--success)",
+      taken: "var(--canvas-edge-run)",
       pending: "var(--primary)",
     };
     for (const [tone, token] of Object.entries(expected)) {

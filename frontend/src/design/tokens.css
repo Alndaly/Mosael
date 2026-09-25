@@ -232,6 +232,9 @@
      棘轮见 design/semanticColors.test.ts。 */
   --canvas-dot: #cdd3dc;
   --canvas-edge: #858c99;
+  /* 「上一次运行走了这根」。**不用 --success**:条件节点「真」那一路已经是绿的,两种绿只能靠
+     粗细分(用户指出过)。取一个画布上别处不用的紫:和真/假/数据/警示/选中都拉得开。 */
+  --canvas-edge-run: #7a5bc7;
 
   /* 浮层与 chrome 使用磨玻璃;自定义背景下,内容面板共享外层表面。
      引用 --popover/--panel,自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
@@ -358,6 +361,7 @@
   --border-strong: #444b55;
   --canvas-dot: #373b41;
   --canvas-edge: #7d828a;
+  --canvas-edge-run: #b59bd9;
   --floating-border: color-mix(in srgb, var(--border) 65%, transparent);
   --overlay-modal: rgb(6 9 14 / 0.24);
   --modal-solid: #23262c;
