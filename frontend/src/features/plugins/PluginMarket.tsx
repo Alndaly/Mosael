@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { describePermission, describeProvides } from "@/features/plugins/pluginPermissions";
 import { isImeKeystroke } from "@/lib/shortcuts";
+import { cn } from "@/lib/utils";
 
 type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>["plugins"][number];
 type InstallPreview = Awaited<ReturnType<typeof previewPluginInstall>>;
@@ -591,15 +592,21 @@ function MarketDetail({
   );
 }
 
+/**
+ * 权限卡里「标题行」和「每一条」共用的两栏:图标一栏、文字一栏。此前标题行是 flex + gap-1.5、
+ * 条目是 14px 栏 + gap-2,两处文字的左边差了几像素,看着像没对齐。
+ */
+const PERMISSION_ROW = "grid grid-cols-[14px_minmax(0,1fr)] items-start gap-2";
+
 /** 权限:先说人话,码在旁边小字留着 —— 那是和插件作者、和权限设置页对得上的唯一凭据。 */
 function PermissionList({ permissions }: { permissions: string[] }) {
   const t = useI18n();
   return (
-    <ul className="m-0 grid list-none gap-2 p-0">
+    <ul className="m-0 grid list-none gap-2.5 p-0">
       {permissions.map((one) => {
         const said = describePermission(t, one);
         return (
-          <li key={one} className="grid grid-cols-[14px_minmax(0,1fr)] gap-2 text-ui-xs">
+          <li key={one} className={cn(PERMISSION_ROW, "text-ui-xs")}>
             <ShieldAlert size={13} className="mt-0.5 text-warning" aria-hidden />
             <span className="grid min-w-0 gap-0.5">
               {said && <span className="text-foreground">{said}</span>}
@@ -673,17 +680,25 @@ function InstallConfirm({
         {preview.description && (
           <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground"><InlineMarkdown text={preview.description} /></p>
         )}
-        <div className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-3">
-          <span className="flex items-center gap-1.5 text-ui-xs font-semibold text-foreground">
-            <ShieldAlert size={13} />
+        {/* 标题和列表之间比条目之间宽一档 —— 否则标题像是列表的第一条。 */}
+        <div className="grid gap-3 rounded-lg border border-border bg-panel-subtle p-3.5">
+          <span className={cn(PERMISSION_ROW, "text-ui-xs font-semibold text-foreground")}>
+            <ShieldAlert size={13} className="mt-0.5" aria-hidden />
             {perms.length > 0 ? t("pluginInstallDeclaredPerms") : t("pluginInstallNoPerms")}
           </span>
           {perms.length > 0 && <PermissionList permissions={perms} />}
         </div>
         {toolNames.length > 0 && (
-          <div className="grid gap-0.5 text-ui-xs text-muted-foreground">
+          <div className="grid gap-2 text-ui-xs">
             <span className="font-semibold text-foreground">{t("pluginInstallTools")}</span>
-            <span className="timecode">{toolNames.join(" · ")}</span>
+            {/* 一个工具一枚:此前是一串用 · 连起来的等宽字,长了只能硬折行,分不清哪到哪是一个。 */}
+            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+              {toolNames.map((name) => (
+                <li key={name} className="timecode rounded-md border border-border bg-panel-subtle px-2 py-0.5 text-ui-2xs text-muted-foreground">
+                  {name}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {preview.installed && (
