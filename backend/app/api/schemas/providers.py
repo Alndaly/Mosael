@@ -279,6 +279,11 @@ class ProviderProfileOut(OrmModel):
     #: 那行「未配置你的密钥」。判据由后端给:前端按 vendor 名字硬编,下一个免密钥的 vendor
     #: 加进来时没有任何东西会提醒你。
     needs_key: bool = True
+    #: 这条连接**是一个插件实例**(提供生成能力的插件,见 ADR 0020)。有值时它由插件管理:
+    #: 名字、地址、模型都跟着插件实例走,设置页只读、点过去是插件页。
+    plugin_instance_id: str | None = None
+    #: 那个插件实例属于哪个包 —— 界面「去插件页」据此直接选中它。
+    plugin_package_id: str | None = None
     #: Non-secret extras come back verbatim; secret ones only as "…abcd", never in full —
     #: same rule as api_key/key_hint.
     extra: dict[str, str] = Field(default_factory=dict)

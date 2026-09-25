@@ -38,6 +38,9 @@ from app.ai.providers.contracts.generation import (
     SOURCE_VIDEO,
     GenerationProgressCallbacks,
     RemoteTaskWatch,
+    metering_from_request,
+    remember_remote_task,
+    remote_task_cancelled,
     watching_remote_tasks,
     GenerationAdapter,
     GenerationRequest,
@@ -62,6 +65,7 @@ from app.ai.providers.registry import (
     get_generation_adapter,
     has_capability_implementation,
     connection_vendor_for_speech_engine,
+    register_generation_adapter_source,
 )
 
 __all__ = [
@@ -90,6 +94,9 @@ __all__ = [
     "EdgeSpeechAdapter",
     "GenerationProgressCallbacks",
     "RemoteTaskWatch",
+    "metering_from_request",
+    "remember_remote_task",
+    "remote_task_cancelled",
     "watching_remote_tasks",
     "GenerationAdapter",
     "GenerationRequest",
@@ -108,6 +115,7 @@ __all__ = [
     "get_generation_adapter",
     "has_capability_implementation",
     "is_cosyvoice",
+    "register_generation_adapter_source",
     "resolve_dashscope_native_base",
     "roles_supplied_via_url",
     "synthesize_many",

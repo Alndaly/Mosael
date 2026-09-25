@@ -44,6 +44,12 @@ class ProviderProfile(Base):
     #: `secret: True` 声明,而那也正是渲染表单的同一份声明。
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: 这条连接**是一个插件实例**(提供生成能力的插件,见 ADR 0020)。有值时 vendor 是
+    #: `plugin:<包 id>`,配置与凭据都在那个实例上 —— 这一行只是生成领域指向它的把手
+    #: (模型、默认模型、生成历史、用量的外键都挂在连接上)。实例删掉,连接跟着删。
+    plugin_instance_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("plugin_instances.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
@@ -148,6 +154,11 @@ class ProviderModel(Base):
     #: 留空 = 跟随目录,和旁边几格同一个约定。**它不参与"猜"**:要么目录认得这个模型,要么
     #: 用户在这里说了,两者都没有就落到兜底(什么参数都不声明),界面据此说"还没认出来"。
     generation_capability_ref: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None)
+    #: **连接自己声明的**生成参数描述符,按 kind 分(`{"image": {...}}`)。今天只有插件连接写它:
+    #: 插件在目录里说出每个模型收什么(ComfyUI 的每张工作流各有各的采样器、步数、参考图槽位),
+    #: 刷新目录时落到这里(见 domain/generation/plugin_connections)。解析顺序:用户声明 → 它 →
+    #: 内置目录 → 兜底(见 domain/generation/resolution)。留空 = 连接什么都没说。
+    declared_capabilities: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

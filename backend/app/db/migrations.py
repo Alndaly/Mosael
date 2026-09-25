@@ -2541,6 +2541,58 @@ def _migrate_browser_boolean_options() -> None:
                 )
 
 
+def _install_bundled_plugins() -> None:
+    """随应用发的插件(`plugins/bundled/`)装进插件目录并登记包记录。
+
+    **对账,不是迁移**:每个版本带的插件都可能变,判据是内容指纹(见 domain/plugins/bundled)。
+    在这里而不是 lifespan:把老数据搬到插件上的迁移(ComfyUI 连接 → ComfyUI 插件实例)要先有
+    这个包;而且不跑 lifespan 的入口(TestClient、脚本)拿到的也该是装好的系统。
+    """
+    from sqlalchemy.orm import Session
+
+    from app.domain.plugins import bundled
+
+    if "plugin_packages" not in set(inspect(engine).get_table_names()):
+        return
+    with Session(engine) as db:
+        bundled.install(db, settings.plugins_dir)
+
+
+def _migrate_plugin_generation_columns() -> None:
+    """插件可以是生成供应商(ADR 0020)要的三列。
+
+    - `provider_profiles.plugin_instance_id`:这条连接**是**哪个插件实例(外键,实例删掉连接跟着删);
+    - `provider_models.declared_capabilities`:连接自己声明的生成参数描述符(插件目录刷新时写);
+    - `plugin_instances.capability_status`:这个实例替宿主做的事上一次做得怎么样(几个模型、失败原因)。
+
+    `create_all` 不给已有的表加列,所以在它之前。表不在(还没建过)的跳过 —— 那种库由
+    `create-current-schema` 直接建成带这几列的样子。
+    """
+    with engine.begin() as conn:
+        def columns(table: str) -> set[str]:
+            return {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+
+        profile_columns = columns("provider_profiles")
+        if profile_columns and "plugin_instance_id" not in profile_columns:
+            conn.execute(text(
+                "ALTER TABLE provider_profiles ADD COLUMN plugin_instance_id VARCHAR(64) "
+                "REFERENCES plugin_instances (id) ON DELETE CASCADE"
+            ))
+        if profile_columns:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_provider_profiles_plugin_instance_id "
+                "ON provider_profiles (plugin_instance_id)"
+            ))
+        model_columns = columns("provider_models")
+        if model_columns and "declared_capabilities" not in model_columns:
+            conn.execute(text("ALTER TABLE provider_models ADD COLUMN declared_capabilities JSON"))
+        instance_columns = columns("plugin_instances")
+        if instance_columns and "capability_status" not in instance_columns:
+            conn.execute(text(
+                "ALTER TABLE plugin_instances ADD COLUMN capability_status JSON NOT NULL DEFAULT '{}'"
+            ))
+
+
 def _migrate_plugin_instances() -> None:
     """插件从「一行 = 一个包 = 一次接入」拆成「包 → 实例 → 能力」三层。
 
@@ -3051,6 +3103,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_shared_host_folders,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,
+                # 排在上一步之后:它可能刚把 plugin_instances 建出来。
+                _migrate_plugin_generation_columns,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -3103,6 +3157,9 @@ def migration_plan() -> MigrationPlan:
                 MigrationPhase.AFTER_SCHEMA,
                 _cleanup_orphan_resource_shares,
                 _migrate_job_keys_are_keys,
+                # 随应用发的插件每个版本都可能变(见 domain/plugins/bundled)。排在所有一次性迁移
+                # 之后、而且在要用到它的包记录的那些迁移之前。
+                _install_bundled_plugins,
             ),
             *_steps(
                 MigrationPhase.FILESYSTEM,

@@ -428,6 +428,9 @@ def validate_against_capabilities(
     for name in capabilities.get("boolean_parameters") or ():
         if name in parameters and not isinstance(parameters[name], bool):
             raise GenerationDomainError("genErr_notBoolean", provider=provider, model=model, name=name)
+    for name, spec in (capabilities.get("parameter_schema") or {}).items():
+        if name in parameters and isinstance(spec, dict):
+            _check_declared_parameter(provider, model, name, spec, parameters[name])
     for name, choices_key in (("size", "sizes"), ("resolution", "resolutions"), ("aspect_ratio", "aspect_ratios")):
         choices = capabilities.get(choices_key)
         value = parameters.get(name)
@@ -494,6 +497,42 @@ def validate_against_capabilities(
     counts.update(roles_supplied_via_url(parameters, kind))
     _check_source_counts(provider, model, capabilities, counts)
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
+
+
+def _check_declared_parameter(provider: str, model: str, key: str, spec: dict[str, Any], value: Any) -> None:
+    """一个**模型自己声明的**参数(`parameter_schema`,见 ADR 0020)按它的声明查一遍。
+
+    插件在目录里用 JSON Schema 说了类型、范围、可选值 —— 那就在提交这一刻按它查,而不是把一个
+    越界的步数原样交给 ComfyUI,等它排完队再回一句英文的 `Value 500 bigger than max of 150`。
+    报错说的是界面上那个名字(`title`),不是 `3.steps` 这种内部键。
+    """
+    name = str(spec.get("title") or key)
+    kind = spec.get("type")
+    if kind == "boolean":
+        if not isinstance(value, bool):
+            raise GenerationDomainError("genErr_notBoolean", provider=provider, model=model, name=name)
+    elif kind == "integer":
+        number: float = _integer_parameter(provider, model, name, value)
+    elif kind == "number":
+        if isinstance(value, bool):
+            raise GenerationDomainError("genErr_notNumber", provider=provider, model=model, name=name)
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise GenerationDomainError("genErr_notNumber", provider=provider, model=model, name=name) from None
+        if number != number or number in (float("inf"), float("-inf")):
+            raise GenerationDomainError("genErr_notNumber", provider=provider, model=model, name=name)
+    elif kind == "string" and not isinstance(value, str):
+        raise GenerationDomainError("genErr_notText", provider=provider, model=model, name=name)
+    choices = spec.get("enum")
+    if isinstance(choices, list) and choices and str(value) not in [str(one) for one in choices]:
+        raise GenerationDomainError("genErr_choiceOnly", provider=provider, model=model, name=name, choices=_join(choices))
+    if kind in ("integer", "number"):
+        low, high = spec.get("minimum"), spec.get("maximum")
+        if isinstance(low, (int, float)) and number < low:
+            raise GenerationDomainError("genErr_paramBelow", provider=provider, model=model, name=name, low=low)
+        if isinstance(high, (int, float)) and number > high:
+            raise GenerationDomainError("genErr_paramAbove", provider=provider, model=model, name=name, high=high)
 
 
 def _check_conditional_duration(

@@ -25133,6 +25133,40 @@
         ],
         "title": "PasswordUpdate"
       },
+      "PluginCapabilityStatusOut": {
+        "properties": {
+          "models": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          },
+          "refreshed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed At"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "PluginCapabilityStatusOut",
+        "description": "一项宿主能力上一次对齐的结果。生成能力:刷出了几个模型、什么时候、没刷出来的话为什么。"
+      },
       "PluginCapabilityUpdate": {
         "properties": {
           "tools": {
@@ -25245,6 +25279,11 @@
             "type": "string",
             "title": "Default",
             "default": ""
+          },
+          "multiline": {
+            "type": "boolean",
+            "title": "Multiline",
+            "default": false
           }
         },
         "type": "object",
@@ -25398,6 +25437,13 @@
             },
             "type": "array",
             "title": "Tools"
+          },
+          "capability_status": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PluginCapabilityStatusOut"
+            },
+            "type": "object",
+            "title": "Capability Status"
           }
         },
         "type": "object",
@@ -25728,6 +25774,18 @@
           "oauth": {
             "type": "boolean",
             "title": "Oauth",
+            "default": false
+          },
+          "provides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Provides"
+          },
+          "bundled": {
+            "type": "boolean",
+            "title": "Bundled",
             "default": false
           },
           "instances": {
@@ -27302,6 +27360,28 @@
             "type": "boolean",
             "title": "Needs Key",
             "default": true
+          },
+          "plugin_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plugin Instance Id"
+          },
+          "plugin_package_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plugin Package Id"
           },
           "extra": {
             "additionalProperties": {

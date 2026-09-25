@@ -122,6 +122,87 @@ export function parameterChoiceEntries(model: GenerationOption | null): Array<[s
     .filter(([, choices]) => choices.length > 0);
 }
 
+/**
+ * 模型**自己声明的**参数(`parameter_schema`)。
+ *
+ * 内置目录里的参数是宿主的词汇(尺寸、时长、种子……),各有专门的控件。而插件提供的生成供应商
+ * (ADR 0020)每个模型有自己的一套:ComfyUI 的一张工作流有它自己的采样器、步数、CFG、帧数。
+ * 插件用 JSON Schema 片段说清楚它们(类型、范围、可选值、默认值、给人看的名字),三个界面
+ * (AI 工作台、画板、工作流节点)都照这一份渲染 —— 不认识任何一家,也不为某一家开分支。
+ */
+export type DeclaredParameterType = "integer" | "number" | "string" | "boolean";
+
+export interface DeclaredParameter {
+  key: string;
+  type: DeclaredParameterType;
+  /** 界面上的名字:插件给的 title,没有就是键本身。 */
+  label: string;
+  description: string;
+  /** 插件说的默认值 —— **只用作占位提示**,不替用户提交(ADR 0015:没设过的不发)。 */
+  defaultValue: string | number | boolean | undefined;
+  minimum?: number;
+  maximum?: number;
+  step?: number;
+  options: string[];
+  multiline: boolean;
+  advanced: boolean;
+}
+
+const DECLARED_TYPES: readonly DeclaredParameterType[] = ["integer", "number", "string", "boolean"];
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** 这个模型声明的那些参数,常用的在前、「高级」的在后(两段内部保持插件给的顺序)。 */
+export function declaredParameters(model: GenerationOption | null): DeclaredParameter[] {
+  const schema = model?.capabilities?.parameter_schema;
+  if (!schema || typeof schema !== "object") return [];
+  const out: DeclaredParameter[] = [];
+  for (const [key, raw] of Object.entries(schema as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object" || !supportsParameter(model, key)) continue;
+    const spec = raw as Record<string, unknown>;
+    const type = spec.type as DeclaredParameterType;
+    if (!DECLARED_TYPES.includes(type)) continue;
+    const fallback = spec.default;
+    out.push({
+      key,
+      type,
+      label: typeof spec.title === "string" && spec.title.trim() ? spec.title : key,
+      description: typeof spec.description === "string" ? spec.description : "",
+      defaultValue:
+        typeof fallback === "string" || typeof fallback === "number" || typeof fallback === "boolean" ? fallback : undefined,
+      minimum: finiteNumber(spec.minimum),
+      maximum: finiteNumber(spec.maximum),
+      step: finiteNumber(spec.multipleOf) ?? (type === "integer" ? 1 : undefined),
+      options: Array.isArray(spec.enum) ? spec.enum.map(String) : [],
+      multiline: spec["x-multiline"] === true,
+      advanced: spec["x-advanced"] === true,
+    });
+  }
+  return [...out.filter((one) => !one.advanced), ...out.filter((one) => one.advanced)];
+}
+
+/**
+ * 控件里的一段文字 → 按声明的类型发出去的值。空串 = **不设**(不发,让模型用它自己的默认)。
+ *
+ * 不能走 `parseGenerationParameterInput`:那个按「长得像数字就当数字」猜,而一个声明成文本的
+ * 参数填了 `123` 就会被发成数字,提交时被校验器按类型拦下。这里类型是声明给的,不用猜。
+ */
+export function declaredParameterValue(
+  parameter: DeclaredParameter,
+  text: string,
+): string | number | boolean | undefined {
+  if (text === "") return undefined;
+  if (parameter.type === "boolean") return text === "true";
+  if (parameter.type === "integer" || parameter.type === "number") {
+    const value = Number(text);
+    if (!Number.isFinite(value)) return undefined;
+    return parameter.type === "integer" ? Math.trunc(value) : value;
+  }
+  return text;
+}
+
 /** 这个模型能出哪些尺寸。**不限图像** —— 万相视频收的也是 `宽*高` 的像素对,
  *  而名字里带 image 会让人以为视频不该有这一栏(它此前就是这么被漏掉的)。 */
 export function sizeOptions(model: GenerationOption | null): string[] {

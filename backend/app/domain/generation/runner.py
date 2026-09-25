@@ -165,7 +165,10 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             #: 远端任务一出现就落库(见 contracts.generation.watching_remote_tasks)——从那一刻起
             #: 它在花钱,回执只活在适配器的局部变量里的话,线程一死就再也找不回来。
             with watching_remote_tasks(_remote_task_watch(db, job)):
-                if resume_from:
+                if resume_from and adapter.supports_progress_callbacks:
+                    # 接着取的那一段也要有进度和取消 —— 一段本地长视频重启后可能还要跑一小时。
+                    result = adapter.resume(resume_from, request, context, workdir, callbacks=_job_callbacks(db, job))
+                elif resume_from:
                     result = adapter.resume(resume_from, request, context, workdir)
                 elif adapter.supports_progress_callbacks:
                     result = adapter.generate(request, context, workdir, callbacks=_job_callbacks(db, job))

@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
+from app.domain.plugins import host_capabilities
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Field, Manifest, manifest_of, render_name
 from app.core.i18n import tr
@@ -72,6 +73,7 @@ def create(
     db.commit()
     db.refresh(instance)
     _sync_permissions(db, instance, manifest)
+    host_capabilities.notify(db, instance, refresh=True)
     return instance
 
 
@@ -98,14 +100,21 @@ def reconcile_fields(db: Session, instance: PluginInstance, manifest: Manifest) 
     db.commit()
 
 
-def rename(db: Session, instance: PluginInstance, name: str) -> PluginInstance:
+#: 下面几个会改实例的函数都带 `notify`:改完要不要通知替宿主做事的那一侧(见 host_capabilities)。
+#: 默认通知;一次请求里连改几样的调用方(改名 + 改配置 + 启用)关掉逐个通知、最后统一通知一次 ——
+#: 否则一个 ComfyUI 实例的一次保存会把服务器上的工作流清单拉三遍。
+
+
+def rename(db: Session, instance: PluginInstance, name: str, *, notify: bool = True) -> PluginInstance:
     instance.name = name.strip() or instance.name
     db.commit()
     db.refresh(instance)
+    if notify:
+        host_capabilities.notify(db, instance, refresh=False)
     return instance
 
 
-def set_enabled(db: Session, instance: PluginInstance, enabled: bool) -> PluginInstance:
+def set_enabled(db: Session, instance: PluginInstance, enabled: bool, *, notify: bool = True) -> PluginInstance:
     instance.enabled = enabled
     db.commit()
     if enabled:
@@ -115,10 +124,13 @@ def set_enabled(db: Session, instance: PluginInstance, enabled: bool) -> PluginI
         from app.domain.plugins.tools import refresh_tools
 
         try:
-            refresh_tools(db, instance)
+            refresh_tools(db, instance, notify=False)
         except PluginDomainError:
             pass
     db.refresh(instance)
+    if notify:
+        # 启用 = 它能做的事可能变了(刚能用上),停用 = 宿主那一侧要跟着停。
+        host_capabilities.notify(db, instance, refresh=enabled)
     return instance
 
 
@@ -148,7 +160,9 @@ def _coerce(spec: Field, raw: Any) -> Any:
     return value
 
 
-def set_config(db: Session, instance: PluginInstance, values: dict[str, Any]) -> PluginInstance:
+def set_config(
+    db: Session, instance: PluginInstance, values: dict[str, Any], *, notify: bool = True
+) -> PluginInstance:
     manifest = manifest_for(db, instance)
     allowed = {spec.key for spec in manifest.config}
     unknown = sorted(set(values) - allowed)
@@ -161,6 +175,9 @@ def set_config(db: Session, instance: PluginInstance, values: dict[str, Any]) ->
         instance.name = render_name(manifest, instance.config)
     db.commit()
     db.refresh(instance)
+    if notify:
+        # 配置变了(换了一台服务器)= 它能做的事可能变了,重新问一遍。
+        host_capabilities.notify(db, instance, refresh=True)
     return instance
 
 
@@ -197,7 +214,9 @@ def describe_credentials(db: Session, instance: PluginInstance) -> list[dict[str
     return out
 
 
-def set_credentials(db: Session, instance: PluginInstance, values: dict[str, str]) -> None:
+def set_credentials(
+    db: Session, instance: PluginInstance, values: dict[str, str], *, notify: bool = True
+) -> None:
     manifest = manifest_for(db, instance)
     allowed = {spec.key for spec in manifest.credentials}
     unknown = sorted(set(values) - allowed)
@@ -212,6 +231,8 @@ def set_credentials(db: Session, instance: PluginInstance, values: dict[str, str
         else:
             row.value = value
     db.commit()
+    if notify:
+        host_capabilities.notify(db, instance, refresh=True)
 
 
 def missing_credentials(db: Session, instance: PluginInstance) -> list[str]:
@@ -263,6 +284,8 @@ def set_permissions(db: Session, instance: PluginInstance, grants: dict[str, boo
         if row is not None:
             row.granted = granted
     db.commit()
+    # 授权是「能不能用」的最后一道门:刚授全了就该去问它能做什么,撤了就该停。
+    host_capabilities.notify(db, instance, refresh=True)
     return list_permissions(db, instance)
 
 
@@ -338,6 +361,15 @@ def seed_capabilities(db: Session, instance: PluginInstance, manifest: Manifest,
     db.commit()
 
 
+def set_capability_status(db: Session, instance: PluginInstance, capability: str, status: dict[str, Any]) -> None:
+    """记下这个实例替宿主做 `capability` 那件事**上一次做得怎么样**(见 PluginInstance.capability_status)。
+
+    整份换掉而不是就地改:JSON 列上的就地修改 ORM 看不见,会静默地不落库。
+    """
+    instance.capability_status = {**(instance.capability_status or {}), capability: dict(status)}
+    db.commit()
+
+
 __all__ = [
     "MASK",
     "blocked_reason",
@@ -357,6 +389,7 @@ __all__ = [
     "seed_capabilities",
     "set_config",
     "set_credentials",
+    "set_capability_status",
     "set_enabled",
     "set_exposed",
     "set_permissions",

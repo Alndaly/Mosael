@@ -23,6 +23,8 @@ class PluginFieldOut(ApiModel):
     secret: bool = False
     options: list[dict] = Field(default_factory=list)
     default: str = ""
+    #: 多行文本(一段 JSON 之类)。界面给多行框。
+    multiline: bool = False
 
 
 class PluginToolStateOut(ApiModel):
@@ -35,6 +37,16 @@ class PluginToolStateOut(ApiModel):
     exposed: bool = False
 
 
+class PluginCapabilityStatusOut(ApiModel):
+    """一项宿主能力上一次对齐的结果。生成能力:刷出了几个模型、什么时候、没刷出来的话为什么。"""
+
+    #: 上一次刷新成功时插件列了几个能用的模型。从没成功过就是 None。
+    models: int | None = None
+    refreshed_at: str | None = None
+    #: 上一次失败的原因(已按看的人的语言翻好)。成功过后清空。
+    error: str = ""
+
+
 class PluginInstanceOut(ApiModel):
     id: str
     package_id: str
@@ -44,6 +56,8 @@ class PluginInstanceOut(ApiModel):
     #: 为什么还不能用(未启用 / 缺配置 / 缺凭据 / 未授权)。空串 = 可用。
     blocked_reason: str = ""
     tools: list[PluginToolStateOut] = Field(default_factory=list)
+    #: 它替宿主做的那些事上一次做得怎么样,按能力分(今天只有 generation)。
+    capability_status: dict[str, PluginCapabilityStatusOut] = Field(default_factory=dict)
 
 
 class PluginPackageOut(ApiModel):
@@ -63,6 +77,10 @@ class PluginPackageOut(ApiModel):
     credential_fields: list[PluginFieldOut] = Field(default_factory=list)
     #: 这个插件能不能自己走 OAuth。界面据此决定要不要给「去授权」。
     oauth: bool = False
+    #: 它能替宿主做成哪些事(`public_url` / `generation`)。
+    provides: list[str] = Field(default_factory=list)
+    #: 随应用一起发的(见 domain/plugins/bundled)。卸不掉,界面不给「卸载」。
+    bundled: bool = False
     instances: list[PluginInstanceOut] = Field(default_factory=list)
 
 

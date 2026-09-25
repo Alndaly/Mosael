@@ -50,7 +50,12 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     credential = provider_credentials.get(db, profile.id, user.id)
     out.key_hint = provider_credentials.key_hint(credential)
     out.is_mine = credential is not None
-    out.needs_key = not is_keyless(profile.vendor)
+    # 插件连接的钥匙在插件实例上(ADR 0020),这条连接上没有钥匙可配。
+    out.needs_key = not (is_keyless(profile.vendor) or profile.plugin_instance_id)
+    if profile.plugin_instance_id:
+        from app.domain.generation.plugin_connections import package_of
+
+        out.plugin_package_id = package_of(profile.vendor) or None
     out.extra = _masked_extra(profile, credential)
     out.config = _masked_config(db, profile, credential)
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
@@ -349,7 +354,7 @@ def put_my_credential(
 
     不要求部署管理员:连接与钥匙都归当前用户，只是端点配置和秘密/OAuth 状态分别保存、分别更新。
     """
-    profile = require_own_profile(db, user, profile_id)
+    profile = require_own_profile(db, user, profile_id, editing=True)
     credential = provider_credentials.upsert(
         db,
         profile.id,
@@ -369,7 +374,7 @@ def put_my_credential(
 @router.delete("/settings/providers/{profile_id}/credential", status_code=204)
 def delete_my_credential(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
     """撤回我自己的钥匙。**连接不动** —— 它不是我的。"""
-    require_own_profile(db, user, profile_id)
+    require_own_profile(db, user, profile_id, editing=True)
     provider_credentials.forget(db, profile_id, user.id)
     db.commit()
     return Response(status_code=204)
@@ -458,7 +463,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
 def update_provider_profile(
     profile_id: str, body: ProviderProfileUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderProfileOut:
-    profile = require_own_profile(db, user, profile_id)
+    profile = require_own_profile(db, user, profile_id, editing=True)
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch and body.name is not None:
         profile.name = body.name
@@ -533,7 +538,7 @@ def probe_provider_health(profile_id: str, db: DbSession, user: CurrentUser) -> 
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)
 def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
-    profile = require_own_profile(db, user, profile_id)
+    profile = require_own_profile(db, user, profile_id, editing=True)
     if profile is not None:
         db.delete(profile)
         db.commit()

@@ -81,7 +81,10 @@ def resolve_connection(
     if user_id is not None and profile.owner_user_id != user_id:
         return None
     credential = pick(db, profile.id, user_id)
-    if credential is None and not is_keyless(profile.vendor):
+    # **插件连接的钥匙在插件实例上**(ADR 0020):这条连接只是生成领域指向那个实例的把手,
+    # 凭据、端点都由插件运行时只注入给那个插件自己。在这里要一把连接上的钥匙,等于要一把
+    # 永远不会有的钥匙。
+    if credential is None and not (is_keyless(profile.vendor) or profile.plugin_instance_id):
         return None
     if credential is None:
         return _keyless(profile)

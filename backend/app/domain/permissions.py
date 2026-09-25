@@ -191,14 +191,20 @@ def require_sequence_access(db: Session, user: User, sequence_id: str, *, perm: 
     return sequence
 
 
-def require_own_profile(db: Session, user: User, profile_id: str) -> ProviderProfile:
+def require_own_profile(db: Session, user: User, profile_id: str, *, editing: bool = False) -> ProviderProfile:
     """**我自己那条**供应商连接,不是就当它不存在。
 
     连接归人(见 db.models.ProviderProfile)。"别人的连接"和"不存在的连接"对他是同一件事 ——
     回 403 等于告诉他这个 id 有效。归属判定只此一处:每个路由各写一遍的话,漏掉任何一处都不会
     报错,只会让那条路径能读到、改到别人的东西。(此前它是设置路由里的私有函数,被七个路由借用。)
+
+    `editing=True`:要**改**这条连接本身(名字、端点、钥匙、模型行、参数模板)。插件连接改不得
+    (ADR 0020)—— 它是插件实例在生成领域的把手,名字、地址、模型都跟着实例和插件目录走,
+    在这里改了下次对齐就被冲掉,而用户会以为改成功了。去插件页改。
     """
     profile = db.get(ProviderProfile, profile_id)
     if profile is None or profile.owner_user_id != user.id:
         raise NotVisible("permErr_providerNotFound")
+    if editing and profile.plugin_instance_id:
+        raise PermissionDenied("permErr_providerManagedByPlugin")
     return profile

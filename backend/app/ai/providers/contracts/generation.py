@@ -382,6 +382,24 @@ def watching_remote_tasks(watch: RemoteTaskWatch) -> Iterator[None]:
         _REMOTE_TASK_WATCH.reset(token)
 
 
+def remember_remote_task(receipt: str) -> None:
+    """把一张远端回执报给运行器(没装 watch 时什么都不做)。
+
+    `poll_until_ready` 在开始等之前调它;**不走那个轮询循环的**适配器 —— 插件提供的生成供应商
+    (ADR 0020),回执由插件进程在对面交回来 —— 在收到的那一刻调它。两条路报的是同一格
+    (`Job.payload.remote_task`),重启后运行器照同一个判据决定接着取。
+    """
+    watch = _REMOTE_TASK_WATCH.get()
+    if watch is not None:
+        watch.remember(receipt)
+
+
+def remote_task_cancelled() -> bool:
+    """用户取消了吗(没装 watch 时是 False)。见 `remember_remote_task`。"""
+    watch = _REMOTE_TASK_WATCH.get()
+    return bool(watch is not None and watch.is_cancelled())
+
+
 #: 轮询到手的产物形状由那一家决定:一个地址,或者一串(图像接口的 n 一次给多张)。
 _Ready = TypeVar("_Ready")
 
@@ -408,14 +426,12 @@ def poll_until_ready(
     计时用 `time.monotonic()` 而不是 `time.time()`:墙钟会跳(NTP 校时、夏令时),跳一下
     要么把还在跑的任务判成超时,要么让它多等一个小时。六家原本都用的是墙钟。
     """
-    watch = _REMOTE_TASK_WATCH.get()
-    if watch is not None:
-        #: **开始等之前先报回执。** 这是远端任务号唯一一次离开适配器的局部变量。
-        watch.remember(poll_path)
+    #: **开始等之前先报回执。** 这是远端任务号唯一一次离开适配器的局部变量。
+    remember_remote_task(poll_path)
     deadline = time.monotonic() + timeout
     payload: dict[str, Any] = {}
     while time.monotonic() < deadline:
-        if watch is not None and watch.is_cancelled():
+        if remote_task_cancelled():
             raise GenerationAdapterError("providerErr_cancelled")
         response = client.get(poll_path)
         response.raise_for_status()

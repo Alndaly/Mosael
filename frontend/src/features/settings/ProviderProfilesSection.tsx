@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronDown, ExternalLink, KeyRound, ListChecks, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Power, RotateCw, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, KeyRound, ListChecks, LogIn, LogOut, MoreHorizontal, Pencil, Plug, Plus, Power, RotateCw, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -24,6 +24,7 @@ import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
+import { gotoRecord, OPEN_PLUGIN_IN_MARKET } from "@/lib/deepLink";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -158,10 +159,14 @@ export function ProviderProfilesSection({
     const items = vendors.data ?? [];
     return capability ? items.filter((item) => (item.capability_ids ?? []).includes(capability)) : items;
   }, [capability, vendors.data]);
-  const visibleProfiles = React.useMemo(() => {
+  const inCapability = React.useMemo(() => {
     const items = profiles.data ?? [];
     return capability ? items.filter((profile) => (profile.capability_ids ?? []).includes(capability)) : items;
   }, [capability, profiles.data]);
+  //: **插件提供的连接**(ComfyUI 这类,见 ADR 0020)不在这张可编辑的列表里:它的名字、地址、模型都跟着
+  //: 插件实例走,在这里改了下次对齐就被冲掉(后端也拒)。单独列在下面,点过去是插件页。
+  const visibleProfiles = React.useMemo(() => inCapability.filter((profile) => !profile.plugin_instance_id), [inCapability]);
+  const pluginProfiles = React.useMemo(() => inCapability.filter((profile) => profile.plugin_instance_id), [inCapability]);
   const initialVendor = vendorOptions[0]?.vendor ?? "moonshot";
 
   React.useEffect(() => {
@@ -648,10 +653,36 @@ export function ProviderProfilesSection({
             </div>
           )}
           {profiles.isPending && <p className="m-0 text-xs text-muted-foreground">{t("connecting")}</p>}
-          {profiles.isSuccess && visibleProfiles.length === 0 && (
+          {profiles.isSuccess && visibleProfiles.length === 0 && pluginProfiles.length === 0 && (
             <p className="m-0 text-xs text-muted-foreground">{capability ? t("providerNoCapabilityProfiles") : t("providerNoProfiles")}</p>
           )}
         </SettingsBlock>
+      )}
+
+      {pluginProfiles.length > 0 && (
+        <SettingsListBlock>
+          {pluginProfiles.map((profile) => (
+            <SettingsListItem
+              key={profile.id}
+              className={cn("grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2", !profile.enabled && "opacity-55")}
+            >
+              <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
+                <Plug size={13} />
+              </span>
+              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
+                <strong>{profile.name}</strong>
+                <small>{t("providerManagedByPlugin")}</small>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => gotoRecord("/plugins", OPEN_PLUGIN_IN_MARKET, profile.plugin_package_id ?? "")}
+              >
+                {t("providerOpenPlugin")}
+              </Button>
+            </SettingsListItem>
+          ))}
+        </SettingsListBlock>
       )}
 
       {authing && (

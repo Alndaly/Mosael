@@ -3,11 +3,15 @@
 能力契约在 ``contracts``，协议 Implementation 在 ``adapters``；这个 Module 只回答两件事：
 某个 ``(vendor, kind)`` 应使用哪个生成 Adapter，以及某个语音引擎 id 应构造哪个 Speech Adapter。
 重复键在启动时直接失败，不能由后一次导入静默覆盖前一次注册。
+
+生成 Adapter 另有**动态来源**:插件可以是生成供应商(ADR 0020),而装了哪些插件是用户机器上的
+事实,不是这份代码的常量。来源由上层在组装根登记(`register_generation_adapter_source`),
+这里不认识插件 —— 内置的精确登记永远先查,动态来源只回答内置表里没有的 vendor。
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from app.ai.providers.adapters.alibaba.dashscope.image import QwenImageAdapter
 from app.ai.providers.adapters.alibaba.dashscope.speech import BailianSpeechAdapter, CosyVoiceSpeechAdapter
@@ -66,9 +70,28 @@ def _index_generation_adapters(
 _GENERATION_ADAPTERS = _index_generation_adapters(_generation_adapters())
 
 
+#: 一个动态来源:给 (vendor, kind),认得就回一个 Adapter,不认得回 None。
+GenerationAdapterSource = Callable[[str, str], GenerationAdapter | None]
+
+_GENERATION_SOURCES: list[GenerationAdapterSource] = []
+
+
+def register_generation_adapter_source(source: GenerationAdapterSource) -> None:
+    """登记一个动态来源(插件生成供应商由 domain/generation/plugin_connections 登记)。重复登记同一个是空操作。"""
+    if source not in _GENERATION_SOURCES:
+        _GENERATION_SOURCES.append(source)
+
+
 def get_generation_adapter(vendor_id: str, media_kind: str) -> GenerationAdapter | None:
-    """按精确的供应商和能力类型返回生成 Adapter。"""
-    return _GENERATION_ADAPTERS.get((vendor_id, media_kind))
+    """按精确的供应商和能力类型返回生成 Adapter。内置表先查,再问动态来源。"""
+    adapter = _GENERATION_ADAPTERS.get((vendor_id, media_kind))
+    if adapter is not None:
+        return adapter
+    for source in _GENERATION_SOURCES:
+        found = source(vendor_id, media_kind)
+        if found is not None:
+            return found
+    return None
 
 
 # Podcast synthesis has a distinct request/result contract and therefore is not
@@ -210,4 +233,5 @@ __all__ = [
     "connection_vendor_for_speech_engine",
     "get_generation_adapter",
     "has_capability_implementation",
+    "register_generation_adapter_source",
 ]

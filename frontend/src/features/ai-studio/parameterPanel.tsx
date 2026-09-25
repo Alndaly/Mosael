@@ -1,7 +1,12 @@
 import React from "react";
 import type { LucideIcon } from "lucide-react";
 
+import { useI18n } from "@/app/preferences";
 import { InspectorCard } from "@/components/layout/InspectorCard";
+import { Input } from "@/components/ui/input";
+import { OptionPicker } from "@/components/ui/option-picker";
+import { Textarea } from "@/components/ui/textarea";
+import type { DeclaredParameter } from "@/lib/generationCapabilities";
 
 /**
  * 「引擎参数」侧栏的排版词汇 —— 和对话页右侧的智能体检查器共用一套壳(InspectorCard)。
@@ -77,3 +82,67 @@ export function ParameterSection({
     </InspectorCard>
   );
 }
+
+
+/**
+ * 模型**自己声明的**一个参数(`parameter_schema`,见 lib/generationCapabilities.declaredParameters)的控件。
+ *
+ * 值存的是控件里的原文,空串 = 没动过(不发)。插件给的默认值只放在占位 / 「默认」那一项里,
+ * 不替用户选 —— 那是模型自己的默认,不是用户的选择(ADR 0015)。
+ */
+export function DeclaredParameterControl({
+  parameter,
+  value,
+  onChange,
+}: {
+  parameter: DeclaredParameter;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const t = useI18n();
+  const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
+  const defaultLabel = fallback ? t("genDeclaredDefault").replace("{value}", fallback) : t("genDeclaredDefaultNone");
+  if (parameter.type === "boolean" || parameter.options.length > 0) {
+    const choices =
+      parameter.type === "boolean"
+        ? [
+            { value: "true", label: t("wfGenToggleOn") },
+            { value: "false", label: t("wfGenToggleOff") },
+          ]
+        : parameter.options.map((option) => ({ value: option, label: option }));
+    return (
+      <OptionPicker
+        value={value || DEFAULT_CHOICE}
+        onChange={(next) => onChange(next === DEFAULT_CHOICE ? "" : next)}
+        options={[{ value: DEFAULT_CHOICE, label: defaultLabel }, ...choices]}
+        className={PARAMETER_CONTROL_CLASS}
+      />
+    );
+  }
+  if (parameter.multiline) {
+    return (
+      <Textarea
+        className="min-h-20 rounded-lg border-border bg-field text-ui-sm text-foreground"
+        value={value}
+        placeholder={fallback}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  }
+  const numeric = parameter.type === "integer" || parameter.type === "number";
+  return (
+    <Input
+      className={PARAMETER_CONTROL_CLASS}
+      type={numeric ? "number" : "text"}
+      min={parameter.minimum}
+      max={parameter.maximum}
+      step={parameter.step ?? (numeric ? "any" : undefined)}
+      value={value}
+      placeholder={fallback}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+/** 「默认」那一项的值。空串不能当 Select 的值,所以借一个不会和真实选项撞上的哨兵。 */
+export const DEFAULT_CHOICE = "__model_default__";

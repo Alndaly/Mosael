@@ -50,7 +50,12 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { AudioWorkspace } from "@/features/ai-studio/AudioWorkspace";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/agent/sessionSelection";
-import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/features/ai-studio/parameterPanel";
+import {
+  DeclaredParameterControl,
+  PARAMETER_CONTROL_CLASS,
+  ParameterField,
+  ParameterSection,
+} from "@/features/ai-studio/parameterPanel";
 import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
@@ -60,6 +65,8 @@ import {
   booleanParameterKeys,
   capabilityBoolean,
   capabilityString,
+  declaredParameters,
+  declaredParameterValue,
   defaultDuration,
   durationChoices,
   sizeOptions,
@@ -110,6 +117,8 @@ type GenerationConfig = {
   /** 带角色的输入素材:首帧 / 尾帧 / 参考图。它们是同一种东西,差的只是用途。 */
   frames: FrameSlots;
   usePreviousImage: boolean;
+  /** 模型自己声明的参数(`parameter_schema`)里**用户动过的**那些,存控件里的原文。没动过的不发。 */
+  declared: Record<string, string>;
   workflow: string; // ComfyUI:选中的工作流路径("" = 用档案默认/内置文生图)
 };
 
@@ -155,6 +164,7 @@ function defaultGenerationConfig(model: GenerationOption | null): GenerationConf
     // 用户输入一句全新的提示词,出来的图却还带着上一张的人和构图,而参考图那一栏他从没碰过。
     // 想接着上一张改的时候,右栏有「用上一张结果」一键设上。
     usePreviousImage: false,
+    declared: {},
     workflow: "",
   };
 }
@@ -172,6 +182,12 @@ function generationParameters(model: GenerationOption, config: GenerationConfig)
   for (const [key, choices] of parameterChoiceEntries(model)) {
     const value = config.enumParameters[key] ?? capabilityString(model, `default_${key}`, choices[0] ?? "");
     if (value) shared[key] = value;
+  }
+  // 模型自己声明的参数:**只发用户动过的**。插件给的默认值只是占位提示 —— 它本来就是那个模型
+  // 自己的默认,原样发回去没有意义,而且会把「我没选过」变成「我选了这个」(ADR 0015)。
+  for (const parameter of declaredParameters(model)) {
+    const value = declaredParameterValue(parameter, config.declared[parameter.key] ?? "");
+    if (value !== undefined) shared[parameter.key] = value;
   }
 
   if (model.kind === "image") {
@@ -1192,6 +1208,20 @@ function GenerateWorkspace({
                     </ParameterField>
                   );
                 })}
+                {declaredParameters(selectedModel).map((parameter) => (
+                  <ParameterField key={parameter.key} label={parameter.label} hint={parameter.description || undefined}>
+                    <DeclaredParameterControl
+                      parameter={parameter}
+                      value={generationConfig.declared[parameter.key] ?? ""}
+                      onChange={(value) =>
+                        setGenerationConfig((current) => ({
+                          ...current,
+                          declared: { ...current.declared, [parameter.key]: value },
+                        }))
+                      }
+                    />
+                  </ParameterField>
+                ))}
                 {parameterChoiceEntries(selectedModel).map(([key, choices]) => {
                   const labelKey = GENERATION_PARAMETER_LABELS[key];
                   return (

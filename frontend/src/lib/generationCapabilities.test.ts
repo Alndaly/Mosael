@@ -13,6 +13,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   booleanParameterKeys,
+  declaredParameters,
+  declaredParameterValue,
   defaultDuration,
   durationChoices,
   durationOptions,
@@ -149,5 +151,53 @@ describe("尺寸这一栏跟着描述符走", () => {
     expect(parseGenerationParameterInput("false")).toBe(false);
     expect(parseGenerationParameterInput("true")).toBe(true);
     expect(parseGenerationParameterInput("-1")).toBe(-1);
+  });
+});
+
+/**
+ * 模型**自己声明的**参数(插件生成供应商,ADR 0020):ComfyUI 的一张工作流有它自己的采样器、步数。
+ * 三个界面照同一份声明渲染,不认识 ComfyUI,也不为它开分支。
+ */
+describe("模型自己声明的参数", () => {
+  const comfy = {
+    kind: "image",
+    capabilities: {
+      parameter_keys: ["seed", "3.steps", "3.sampler_name", "3.denoise", "9.filename_prefix", "reference_image"],
+      parameter_schema: {
+        "3.denoise": { type: "number", title: "KSampler · denoise", default: 1, minimum: 0, maximum: 1, multipleOf: 0.01, "x-advanced": true },
+        "3.steps": { type: "integer", title: "KSampler · steps", default: 20, minimum: 1, maximum: 150 },
+        "3.sampler_name": { type: "string", enum: ["euler", "dpmpp_2m"], default: "euler" },
+        "9.filename_prefix": { type: "string", "x-multiline": true },
+        // 声明了 schema 却不在 parameter_keys 里的不算:参数键是契约,schema 只是它的说明书
+        "ghost": { type: "integer" },
+        // 认不出的类型不渲染
+        "3.weird": { type: "object" },
+      },
+    },
+  } as unknown as Model;
+
+  it("按声明给出控件所需的一切,常用的在前、高级的在后", () => {
+    const parameters = declaredParameters(comfy);
+    expect(parameters.map((one) => one.key)).toEqual(["3.steps", "3.sampler_name", "9.filename_prefix", "3.denoise"]);
+    const [steps, sampler, prefix, denoise] = parameters;
+    expect(steps).toMatchObject({ type: "integer", label: "KSampler · steps", defaultValue: 20, minimum: 1, maximum: 150, step: 1 });
+    expect(sampler).toMatchObject({ label: "3.sampler_name", options: ["euler", "dpmpp_2m"], defaultValue: "euler" });
+    expect(prefix).toMatchObject({ multiline: true, advanced: false });
+    expect(denoise).toMatchObject({ advanced: true, step: 0.01 });
+  });
+
+  it("没声明 schema 的模型一个都没有 —— 内置模型不受影响", () => {
+    expect(declaredParameters({ capabilities: { parameter_keys: ["size"] } } as unknown as Model)).toEqual([]);
+    expect(declaredParameters(null)).toEqual([]);
+  });
+
+  it("值按声明的类型发出去;空 = 不发,让模型用它自己的默认", () => {
+    const [steps, sampler] = declaredParameters(comfy);
+    expect(declaredParameterValue(steps, "30.7")).toBe(30);
+    expect(declaredParameterValue(steps, "")).toBeUndefined();
+    expect(declaredParameterValue(steps, "abc")).toBeUndefined();
+    // 声明成文本的,长得像数字也是文本 —— 否则提交时被校验器按类型拦下
+    expect(declaredParameterValue({ ...sampler, options: [] }, "123")).toBe("123");
+    expect(declaredParameterValue({ ...sampler, type: "boolean" }, "false")).toBe(false);
   });
 });

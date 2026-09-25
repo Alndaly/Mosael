@@ -21,6 +21,7 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/sourceFrames";
+import { DEFAULT_CHOICE } from "@/features/ai-studio/parameterPanel";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,6 +31,8 @@ import {
   booleanParameterKeys,
   capabilityBoolean,
   capabilityString,
+  declaredParameters,
+  declaredParameterValue,
   defaultDuration,
   durationChoices,
   exclusiveSourceGroups,
@@ -191,6 +194,9 @@ export function generationSettingBlocks(
   if (supportsParameter(model, "duration_seconds")) blocks.push("duration_seconds");
   blocks.push(...booleanParameterKeys(model).filter((key) => key !== "generate_audio"));
   blocks.push(...parameterChoiceEntries(model).map(([key]) => key));
+  //: 模型自己声明的参数(插件生成供应商的每张工作流一套)也是一块 —— 否则 ComfyUI 那些
+  //: 采样器、步数只在 AI 工作台里调得了,画板上的同一个模型少了一截。
+  blocks.push(...declaredParameters(model).map((parameter) => parameter.key));
   if (supportsParameter(model, "generate_audio")) blocks.push("generate_audio");
   return blocks;
 }
@@ -485,6 +491,14 @@ export function NodeComposer({
       String(savedParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "")),
     ])),
   );
+  //: 模型自己声明的参数里**用户动过的**那些(控件原文)。没动过的不存、不发(ADR 0015)。
+  const [declared, setDeclared] = React.useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      declaredParameters(current)
+        .filter((parameter) => savedParameters[parameter.key] !== undefined)
+        .map((parameter) => [parameter.key, String(savedParameters[parameter.key])]),
+    ),
+  );
   const [count, setCount] = React.useState(Number(savedParameters.num_images ?? 1));
   React.useEffect(() => {
     if (durations.length > 0 && !durations.includes(duration)) setDuration(durations[0]);
@@ -637,9 +651,13 @@ export function NodeComposer({
       const value = enumParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "");
       if (value) parameters[key] = value;
     }
+    for (const parameter of declaredParameters(current)) {
+      const value = declaredParameterValue(parameter, declared[parameter.key] ?? "");
+      if (value !== undefined) parameters[parameter.key] = value;
+    }
     if (maxImages(current) > 1 && count > 1) parameters.num_images = count;
     return parameters;
-  }, [current, ratio, resolution, size, duration, audio, booleanKeys, booleanParameters, enumEntries, enumParameters, count]);
+  }, [current, ratio, resolution, size, duration, audio, booleanKeys, booleanParameters, enumEntries, enumParameters, declared, count]);
 
   const editableForm = React.useMemo<NonNullable<BoardItem["form"]>>(
     () => ({
@@ -893,6 +911,7 @@ export function NodeComposer({
                       capabilityString(target, `default_${key}`, choices[0] ?? ""),
                     ]),
                   ));
+                  setDeclared({});
                   setCount(1);
                   setMode("");
                   touched.current = false;
@@ -1018,6 +1037,27 @@ export function NodeComposer({
                         value: choice,
                         label: choice,
                       }))}
+                    />
+                  );
+                })}
+                {declaredParameters(current).map((parameter) => {
+                  const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
+                  const choices = parameter.type === "boolean"
+                    ? [{ value: "true", label: t("wfGenToggleOn") }, { value: "false", label: t("wfGenToggleOff") }]
+                    : parameter.options.map((option) => ({ value: option, label: option }));
+                  return (
+                    <Pick
+                      key={parameter.key}
+                      label={parameter.label}
+                      value={declared[parameter.key] || (choices.length > 0 ? DEFAULT_CHOICE : "")}
+                      onChange={(next) =>
+                        setDeclared((values) => ({ ...values, [parameter.key]: next === DEFAULT_CHOICE ? "" : next }))
+                      }
+                      options={choices.length > 0
+                        ? [{ value: DEFAULT_CHOICE, label: fallback ? t("genDeclaredDefault").replace("{value}", fallback) : t("genDeclaredDefaultNone") }, ...choices]
+                        : []}
+                      allowFreeValue
+                      placeholder={fallback || t("genDeclaredDefaultNone")}
                     />
                   );
                 })}

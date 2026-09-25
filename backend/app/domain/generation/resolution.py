@@ -132,6 +132,8 @@ def resolve_row(db: Session, model: ProviderModel, kind: str) -> ResolvedGenerat
     if profile is None:
         raise GenerationResolutionError("genErr_connectionMissing")
     ref, custom = _resolved_ref(db, model, kind)
+    # 连接自己声明的那一份(插件目录刷新时写进模型行,见 ADR 0020)。
+    declared = (model.declared_capabilities or {}).get(kind)
     return ResolvedGenerationModel(
         row=model,
         profile_id=profile.id,
@@ -139,9 +141,11 @@ def resolve_row(db: Session, model: ProviderModel, kind: str) -> ResolvedGenerat
         provider=profile.vendor,
         model=model.model_id,
         kind=kind,
-        capabilities=capabilities_for(profile.vendor, model.model_id, kind, ref=ref, custom=custom),
+        capabilities=capabilities_for(
+            profile.vendor, model.model_id, kind, ref=ref, custom=custom, declared=declared
+        ),
         capabilities_known=capabilities_are_known(
-            profile.vendor, model.model_id, kind, ref=ref, custom=custom
+            profile.vendor, model.model_id, kind, ref=ref, custom=custom, declared=declared
         ),
         declaration_ref=ref,
     )

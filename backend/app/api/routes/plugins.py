@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.core.i18n import tr
+from app.core.i18n import get_current_locale, render_message, tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     PluginOAuthCode,
@@ -35,6 +35,8 @@ from app.core.config import settings
 from app.domain.permissions import ensure_deployment_admin, ensure_workspace_perm
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import PluginDomainError
+from app.domain.plugins import bundled
+from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
@@ -192,6 +194,7 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
     都不该出现 —— 此前这里不做过滤,新账号一进插件页就看到管理员接好的一排。
     """
     out: list[dict] = []
+    shipped = {one.id for one in bundled.plugins()}
     for package in db.scalars(select(PluginPackage).order_by(PluginPackage.name)):
         manifest = manifest_of(package)
         out.append(
@@ -213,6 +216,8 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                 #: 声明了 OAuth 就给一个「去授权」的入口,不必手抄令牌(见 domain/plugins/oauth)。
                 #: 声明不全的当没声明 —— 半个声明会长出一个点了必然失败的按钮。
                 "oauth": manifest.oauth is not None,
+                "provides": manifest.provides,
+                "bundled": package.id in shipped,
                 "instances": [
                     _instance(db, i)
                     for i in pkg.instances_of(db, package.id)
@@ -233,6 +238,7 @@ def _field(spec) -> dict:
         "secret": spec.secret,
         "options": spec.options,
         "default": spec.default,
+        "multiline": spec.multiline,
     }
 
 
@@ -248,7 +254,21 @@ def _instance(db: DbSession, instance) -> dict:
         # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。
         "tools": [{**tool, "exposed": tool["name"] in chosen} for tool in tools_domain.all_tools(db, instance)
                   if not tool["internal"]],
+        "capability_status": {
+            capability: _capability_status(status)
+            for capability, status in (instance.capability_status or {}).items()
+            if isinstance(status, dict)
+        },
     }
+
+
+def _capability_status(status: dict) -> dict:
+    """落库的那一份(失败原因存的是文案 key + 参数,见 jobs.blame)→ 按看的人的语言说出来。"""
+    key = str(status.get("error_key") or "")
+    error = render_message(key, get_current_locale(), status.get("error_params") or {}) if key else str(
+        status.get("error") or ""
+    )
+    return {"models": status.get("models"), "refreshed_at": status.get("refreshed_at"), "error": error}
 
 
 # --- 实例 ---------------------------------------------------------------
@@ -270,12 +290,15 @@ def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, 
 def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession, user: CurrentUser) -> dict:
     try:
         instance = my_instance(db, instance_id, user)
+        # 一次保存可能同时改名、改配置、启停:逐个改、**最后统一通知一次**替宿主做事的那一侧 ——
+        # 否则一个 ComfyUI 实例的一次保存会把服务器上的工作流清单拉三遍。
         if body.name is not None:
-            inst.rename(db, instance, body.name)
+            inst.rename(db, instance, body.name, notify=False)
         if body.config is not None:
-            inst.set_config(db, instance, body.config)
+            inst.set_config(db, instance, body.config, notify=False)
         if body.enabled is not None:
-            inst.set_enabled(db, instance, body.enabled)
+            inst.set_enabled(db, instance, body.enabled, notify=False)
+        host_capabilities.notify(db, instance, refresh=body.config is not None or body.enabled is not None)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _instance(db, instance)
@@ -347,9 +370,9 @@ def update_instance_credentials(
         instance = my_instance(db, instance_id, user)
         inst.set_credentials(db, instance, body.values)
         # 凭据是连上服务的前提,填完顺手重拉一次清单 —— 否则用户填完 key 还要再找一个
-        # 「刷新」按钮点一下,而中间那段时间插件看起来像是坏的。
+        # 「刷新」按钮点一下,而中间那段时间插件看起来像是坏的。宿主侧已经在 set_credentials 里通知过了。
         try:
-            tools_domain.refresh_tools(db, instance)
+            tools_domain.refresh_tools(db, instance, notify=False)
         except PluginDomainError:
             pass
         return inst.describe_credentials(db, instance)
@@ -490,7 +513,7 @@ def plugin_oauth_complete(
         raise HTTPException(status_code=422, detail=tr("routeErr_pluginTokenExchangeFailed", detail=str(exc)[:200])) from exc
     inst.set_credentials(db, instance, values)
     try:
-        tools_domain.refresh_tools(db, instance)
+        tools_domain.refresh_tools(db, instance, notify=False)
     except PluginDomainError:
         pass
     return inst.describe_credentials(db, instance)

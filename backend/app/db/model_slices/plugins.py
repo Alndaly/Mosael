@@ -47,6 +47,11 @@ class PluginInstance(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     #: MCP 实例的工具清单从服务现拉,缓存在这里(进程类插件写在 manifest 里,此列为空)。
     discovered_tools: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    #: 这个实例替宿主做的那些事(`provides`)**上一次做得怎么样**:按能力分,
+    #: `{"generation": {"models": 12, "refreshed_at": "…", "error": ""}}`。插件页据此说
+    #: 「12 个生成模型 · 刚刷新」或者「连不上服务器:…」—— 目录刷新发生在后台(启动、改配置),
+    #: 失败了不记下来的话,用户只会看到选择器里少了东西,不知道为什么。
+    capability_status: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

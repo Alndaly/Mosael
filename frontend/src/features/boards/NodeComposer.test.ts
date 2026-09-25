@@ -288,6 +288,16 @@ describe("「参数」按钮只在真有参数时出现", () => {
     ]);
   });
 
+  it("模型自己声明的参数也是一格 —— 画板上的 ComfyUI 工作流也调得了步数", () => {
+    const model = {
+      capabilities: {
+        parameter_keys: ["3.steps"],
+        parameter_schema: { "3.steps": { type: "integer", title: "KSampler · steps" } },
+      },
+    } as unknown as GenerationOption;
+    expect(generationSettingBlocks(model, { modes: 0, durations: 0 })).toEqual(["3.steps"]);
+  });
+
   it("声明了时长但没有可选值时**仍然算一格** —— 它渲染成自由输入,不是消失", () => {
     // 这条断言原本是反的:"两个条件都成立才算"。那时候没有可选值确实等于没东西可显示,
     // 于是把它算进去会让「参数」点开是个空盒子。

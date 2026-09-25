@@ -114,6 +114,10 @@
 - `app/domain/workflows/executors/__init__.py:_REGISTRY`、
   `app/domain/workflows/executors/__init__.py:_PREFIX_REGISTRY`
 - `app/domain/plugins/media_bridge.py:_sink`、`app/domain/plugins/media_bridge.py:_source`
+- `app/domain/plugins/host_capabilities.py:_handlers` — 插件实例变了,谁替宿主那一侧对齐(今天是生成:
+  实例 → 连接 + 模型行,见 ADR 0020)。
+- `app/ai/providers/registry.py:_GENERATION_SOURCES` — 生成 Adapter 的动态来源(`plugin:<包 id>` → 插件生成
+  供应商)。装了哪些插件在库里,这张表只记「去哪儿问」。
 
 ---
 

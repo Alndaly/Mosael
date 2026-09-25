@@ -104,6 +104,17 @@ def _download(spec: dict[str, Any], scratch: Path) -> Path:
     return target
 
 
+def fetch(spec: dict[str, Any], scratch: Path) -> Path:
+    """把一份产出**弄到手**:自己下好的就核对它落在暂存目录里,给的是地址就去下。返回本地路径。
+
+    和「交给谁」分开:工具的产出进素材库(`register`),生成的产出交给生成执行器(它自己登记素材、
+    记用量、写回执)—— 两条路收文件的规矩是同一套(落点受限、单份上限、只认 http(s)),不该各抄一份。
+    """
+    if spec.get("url"):
+        return _download(spec, scratch)
+    return _resolve_local(spec, scratch)
+
+
 def register(
     db: Session,
     spec: dict[str, Any],
@@ -114,10 +125,7 @@ def register(
     fallback_name: str,
 ) -> tuple[str, str]:
     """把一份产出交出去。两种交法在这里合流,交接那一步只有一条。返回 (引用, 名字)。"""
-    if spec.get("url"):
-        path = _download(spec, scratch)
-    else:
-        path = _resolve_local(spec, scratch)
+    path = fetch(spec, scratch)
     name = str(spec.get("filename") or "").strip() or path.name or fallback_name
     # 落到哪儿由**装配层**决定(见 plugins/media_bridge)。这里不 import 素材库 ——
     # 插件系统不该因为"产出也许要进素材库"而认识素材库。
@@ -129,6 +137,7 @@ __all__ = [
     "MAX_ARTIFACT_BYTES",
     "SCRATCH_ENV",
     "cleanup_scratch_dir",
+    "fetch",
     "make_scratch_dir",
     "register",
 ]

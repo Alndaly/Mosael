@@ -100,6 +100,53 @@ def find_enabled_connection(
     return db.scalars(stmt.order_by(ProviderProfile.created_at).limit(1)).first()
 
 
+#: 连接名的上限(ProviderProfile.name 的列宽)。插件实例的名字可以更长。
+_NAME_LIMIT = 120
+
+
+def adopt_plugin_connection(
+    db: Session,
+    *,
+    plugin_instance_id: str,
+    owner_user_id: str,
+    vendor: str,
+    name: str,
+    enabled: bool,
+) -> ProviderProfile:
+    """**一个提供生成能力的插件实例,就是一条连接**(ADR 0020)。建出或对齐它。
+
+    生成领域的一切 —— 选择器、默认模型、生成历史、用量、画板、工作流 —— 都指向连接和模型行。
+    给它们各自加一个「也可能是插件」的分支,是七八处漏一处就静默失效的分支;反过来让插件实例
+    **有一条连接**,那些地方一行都不用改。
+
+    这一行是把手,不是副本:端点、配置、凭据都在插件实例上,这里只有身份 —— 归谁、叫什么、
+    开没开。所以它没有 base_url,也不收钥匙(见 provider_credentials.resolve_connection)。
+    实例删掉时外键级联把它删掉。
+    """
+    profile = db.scalars(
+        select(ProviderProfile).where(ProviderProfile.plugin_instance_id == plugin_instance_id)
+    ).first()
+    if profile is None:
+        profile = ProviderProfile(
+            plugin_instance_id=plugin_instance_id,
+            owner_user_id=owner_user_id,
+            name=name[:_NAME_LIMIT],
+            vendor=vendor,
+            base_url="",
+            auth_type="api_key",
+            extra={},
+            enabled=enabled,
+        )
+        db.add(profile)
+    else:
+        profile.owner_user_id = owner_user_id
+        profile.name = name[:_NAME_LIMIT]
+        profile.vendor = vendor
+        profile.enabled = enabled
+    db.flush()
+    return profile
+
+
 def list_enabled_connections(
     db: Session,
     *,

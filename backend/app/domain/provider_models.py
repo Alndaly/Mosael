@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any, Literal
 
 from sqlalchemy import select
@@ -210,7 +212,8 @@ def upsert(
     capability_ids: list[str] | None = None,
     **fields: Any,
 ) -> ProviderModel:
-    """新增或更新一行。这是**唯一**建 ProviderModel 的地方(数据归属棘轮会盯着)。"""
+    """新增或更新一行。建 ProviderModel 只在这个模块里(数据归属棘轮会盯着):逐行的走这里,
+    连接自己声明的整份目录走 replace_declared_catalog。"""
     model_id = (model_id or "").strip()
     if not model_id:
         raise ValueError(tr("providerErr_modelIdRequired"))
@@ -230,6 +233,51 @@ def upsert(
             setattr(model, key, value)
     db.flush()
     return model
+
+
+@dataclass(frozen=True)
+class DeclaredModel:
+    """连接**自己说**它有的一个模型(今天只有插件连接会说,见 ADR 0020)。
+
+    `capabilities` 按 kind 分的生成参数描述符,和内置目录同形(parameter_keys / sizes / …);
+    它会存进模型行的 `declared_capabilities`,解析时排在用户声明之后、内置目录之前。
+    """
+
+    model_id: str
+    display_name: str
+    capability_ids: list[str]
+    capabilities: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
+
+
+def replace_declared_catalog(db: Session, profile: ProviderProfile, entries: list[DeclaredModel]) -> int:
+    """连接自己声明的模型清单 → 这条连接下的模型行。**清单就是答案**:在的对齐,不在的删掉。
+
+    和供应商目录那条路不一样(那边「目录里没了也不删」,因为别名和私有部署仍要能用):这里的清单
+    是连接自己的权威说法 —— ComfyUI 服务器上那张工作流删掉了,留着的那一行只会在选中时失败。
+    删掉的行上若挂着默认模型,外键把默认置空,那一格回到「没设」,而不是指着一个跑不了的东西。
+
+    `enabled` 在已有的行上不动(那是用户的选择),新行默认启用。返回清单里的模型数。
+    """
+    existing = {row.model_id: row for row in list_models(db, profile.id)}
+    kept: set[str] = set()
+    for entry in entries:
+        model_id = (entry.model_id or "").strip()
+        if not model_id or model_id in kept:
+            continue
+        row = existing.get(model_id)
+        if row is None:
+            row = ProviderModel(provider_profile_id=profile.id, model_id=model_id, enabled=True)
+            db.add(row)
+        row.source = "plugin"
+        row.display_name = (entry.display_name or "")[:160]
+        row.capability_ids = normalize_capability_ids(entry.capability_ids) or []
+        row.declared_capabilities = dict(entry.capabilities)
+        kept.add(model_id)
+    for model_id, row in existing.items():
+        if model_id not in kept:
+            db.delete(row)
+    db.flush()
+    return len(kept)
 
 
 def model_id_for(

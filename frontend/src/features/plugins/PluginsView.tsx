@@ -28,16 +28,18 @@ import {
   setPluginPermissions,
   startPluginOauth,
   updatePluginInstance,
+  type PluginCapabilityStatus,
   type PluginField,
   type PluginInstance,
   type PluginInvocation,
   type PluginPackage,
 } from "@/api/client";
 import { toast } from "sonner";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
+import { relativeTime } from "@/lib/time";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -280,15 +282,19 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
                 </a>
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="default"
-              className="shrink-0 text-muted-foreground hover:text-destructive"
-              loading={uninstall.isPending}
-              onClick={() => setConfirmUninstall(true)}
-            >
-              <Trash2 size={13} /> {t("pluginUninstall")}
-            </Button>
+            {/* 随应用发的插件卸不掉(后端也拒):下次启动对账又会装回来,「删了又回来」比
+                「删不了」更让人困惑。不想用就停用它的连接。 */}
+            {!pkg.bundled && (
+              <Button
+                variant="ghost"
+                size="default"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                loading={uninstall.isPending}
+                onClick={() => setConfirmUninstall(true)}
+              >
+                <Trash2 size={13} /> {t("pluginUninstall")}
+              </Button>
+            )}
           </span>
         </div>
         {/* 元信息一行说完 —— 它们是查故障时才看的东西,不值一整块版面。 */}
@@ -465,10 +471,51 @@ export function FieldInput({
   return <FieldText field={field} value={value} onChange={onChange} className={className} commit={commit} />;
 }
 
+/**
+ * 替宿主做生成的插件(ComfyUI 这类)上一次交出的模型清单:几个、什么时候刷的,没刷出来的话为什么。
+ *
+ * 刷新发生在后台(启动时、改配置时),失败了不写在这里的话,用户只会看到选择器里少了东西、
+ * 不知道为什么 —— 比如 ComfyUI 没开。
+ */
+function GenerationStatusRow({ status }: { status?: PluginCapabilityStatus }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const models = status?.models;
+  const summary = status?.error
+    ? t("pluginGenerationError").replace("{error}", status.error)
+    : models === null || models === undefined
+      ? t("pluginGenerationNever")
+      : t("pluginGenerationCount")
+          .replace("{n}", String(models))
+          .replace("{time}", status?.refreshed_at ? relativeTime(status.refreshed_at, locale) : "");
+  return (
+    <SettingsRow label={t("pluginGenerationModels")} description={t("pluginGenerationModelsDesc")}>
+      <span className={cn("text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}>{summary}</span>
+    </SettingsRow>
+  );
+}
+
 /** 文本类的配置项。**草稿式**(见 components/ui/draft-text):连接上的配置住在服务端,
  *  直接 `value={服务端那份}` 的话每敲一个字发一次请求,回来之前框里的字还被写回旧值 —— 中文组词
  *  当场断掉,英文也会丢字。 */
 function FieldText({ field, value, onChange, className, commit }: {
+  field: PluginField; value: string; onChange: (value: string) => void; className?: string; commit?: "change" | "blur";
+}) {
+  if (field.multiline) {
+    return <FieldTextarea field={field} value={value} onChange={onChange} className={className} commit={commit} />;
+  }
+  return <FieldLine field={field} value={value} onChange={onChange} className={className} commit={commit} />;
+}
+
+/** 多行的那种(一段 JSON 之类):单行框装一份几百行的东西,用户看到的只是它的第一行。 */
+function FieldTextarea({ field, value, onChange, className, commit }: {
+  field: PluginField; value: string; onChange: (value: string) => void; className?: string; commit?: "change" | "blur";
+}) {
+  const draft = useDraftText<HTMLTextAreaElement>({ value, onValueChange: onChange, commit });
+  return <Textarea className={cn("min-h-28 w-[420px] max-w-full font-mono text-ui-xs", className)} placeholder={field.label} {...draft} />;
+}
+
+function FieldLine({ field, value, onChange, className, commit }: {
   field: PluginField; value: string; onChange: (value: string) => void; className?: string; commit?: "change" | "blur";
 }) {
   const draft = useDraftText<HTMLInputElement>({ value, onValueChange: onChange, commit });
@@ -524,6 +571,10 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
   });
 
   const exposedCount = (instance.tools ?? []).filter((tool) => tool.exposed).length;
+  const tools = instance.tools ?? [];
+  //: 替宿主做生成的插件(ComfyUI 这类)把模型交给选择器,而不是把工具交给智能体 —— 它的
+  //: 「刷新」刷的是模型清单,卡片上该说的是「几个模型」而不是「开放了 0 / 0 个工具」。
+  const generates = (pkg.provides ?? []).includes("generation");
 
   return (
     <SettingsGroup
@@ -532,7 +583,9 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
       description={
         instance.blocked_reason
           ? instance.blocked_reason
-          : t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String((instance.tools ?? []).length))
+          : generates && tools.length === 0
+            ? t("pluginGenerationDesc")
+            : t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String(tools.length))
       }
       actions={
         <div className="flex items-center gap-2">
@@ -540,10 +593,10 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
             <span>{instance.enabled ? t("pluginOn") : t("pluginOff")}</span>
             <Switch checked={instance.enabled} onCheckedChange={(enabled) => patch.mutate({ enabled })} />
           </label>
-          {pkg.kind === "mcp" && (
+          {(pkg.kind === "mcp" || generates) && (
             <Button variant="outline" size="default" loading={refresh.isPending} onClick={() => refresh.mutate()}>
               <RefreshCcw size={13} />
-              {t("pluginRefreshTools")}
+              {pkg.kind === "mcp" ? t("pluginRefreshTools") : t("pluginRefreshModels")}
             </Button>
           )}
           <Button
@@ -594,6 +647,8 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
         <CredentialRows instanceId={instance.id} oauth={Boolean(pkg.oauth)} />
       )}
 
+      {generates && <GenerationStatusRow status={instance.capability_status?.generation} />}
+
 
       {(grants.data ?? []).map((grant) => (
         <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
@@ -607,14 +662,18 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
         </SettingsRow>
       ))}
 
-      <CapabilityPicker
-        instanceId={instance.id}
-        workspaceId={workspaceId}
-        tools={instance.tools ?? []}
-        blockedReason={instance.blocked_reason ?? ""}
-        onToggle={(tools) => setCapabilities.mutate(tools)}
-        pending={setCapabilities.isPending}
-      />
+      {/* 只提供生成的插件没有给智能体和工作流的工具(认领生成的那个工具只给宿主调),
+          一张空的勾选表只会让人以为它坏了。 */}
+      {(tools.length > 0 || !generates) && (
+        <CapabilityPicker
+          instanceId={instance.id}
+          workspaceId={workspaceId}
+          tools={tools}
+          blockedReason={instance.blocked_reason ?? ""}
+          onToggle={(choices) => setCapabilities.mutate(choices)}
+          pending={setCapabilities.isPending}
+        />
+      )}
 
       <InvocationList instanceId={instance.id} />
     </SettingsGroup>

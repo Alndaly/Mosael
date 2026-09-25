@@ -96,6 +96,19 @@ _GUIDES: dict[str, PlatformGuide] = {
     ),
 }
 
+#: 按**提示词写法**选的指南 —— 由模型自己说(描述符里的 `prompt_dialect`),不由它是哪一家推。
+#:
+#: 插件提供的生成供应商(ADR 0020)不是一个 vendor 能概括的:同一个 ComfyUI 上,SD 1.5 的图吃
+#: 逗号分隔的标签,Flux 的图吃自然语言。所以写法跟着模型走,插件在目录里逐个模型说它是哪一种。
+_DIALECT_GUIDES: dict[str, PlatformGuide] = {
+    "sd-tags": PlatformGuide(
+        label="Stable Diffusion",
+        style=_SD_STYLE + " " + _SD_NEGATIVE_HINT,
+        prompt_lang="en",
+        wants_negative=True,
+    ),
+}
+
 _DEFAULT_GUIDE = PlatformGuide(
     label="通用",
     style=_NATURAL_STYLE,
@@ -104,10 +117,11 @@ _DEFAULT_GUIDE = PlatformGuide(
 )
 
 
-def guide_for(provider: str, model: str) -> PlatformGuide:
-    """按 provider(必要时 model)选平台指南。编辑类模型(qwen-image-edit)走「编辑指令」范式。"""
+def guide_for(provider: str, model: str, dialect: str = "") -> PlatformGuide:
+    """按模型说的写法(`prompt_dialect`),再按 provider(必要时 model)选平台指南。
+    编辑类模型(qwen-image-edit)走「编辑指令」范式。"""
+    base = _DIALECT_GUIDES.get(dialect) or _GUIDES.get(provider, _DEFAULT_GUIDE)
     if "edit" in model.lower():
-        base = _GUIDES.get(provider, _DEFAULT_GUIDE)
         return PlatformGuide(
             label=base.label + "(编辑)",
             style=(
@@ -119,7 +133,18 @@ def guide_for(provider: str, model: str) -> PlatformGuide:
             wants_negative=False,
             is_edit=True,
         )
-    return _GUIDES.get(provider, _DEFAULT_GUIDE)
+    return base
+
+
+def _dialect_of(db: Session, user_id: str | None, provider: str, model: str) -> str:
+    """这个图像模型自己说它吃哪种写法(描述符的 `prompt_dialect`);说不出来就是空串。"""
+    from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
+
+    try:
+        resolved = resolve_generation_model(db, user_id=user_id, provider=provider, model=model, kind="image")
+    except GenerationResolutionError:
+        return ""
+    return str(resolved.capabilities.get("prompt_dialect") or "")
 
 
 def _build_system_prompt(guide: PlatformGuide, ui_language: str) -> str:
@@ -186,7 +211,7 @@ def optimize_image_prompt(
     """
     if not raw_prompt.strip():
         raise PromptOptimizeError("genErr_optimizeEmptyPrompt")
-    guide = guide_for(provider, model)
+    guide = guide_for(provider, model, _dialect_of(db, user_id, provider, model))
     # 用「对话」默认 LLM 重写(与助手同一个),不是图像模型本身:图像 provider 的 default_model 是
     # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
     # 传入的 profile / 首个启用的供应商。

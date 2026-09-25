@@ -35,8 +35,12 @@ logger = logging.getLogger(__name__)
 MAX_VALUE_CHARS = 8192
 
 
-def persist(db: Session, instance: PluginInstance, state: dict[str, Any]) -> None:
-    """把插件交回的状态按声明分流落库。空的就什么都不做。"""
+def persist(db: Session, instance: PluginInstance, state: dict[str, Any], *, notify: bool = True) -> None:
+    """把插件交回的状态按声明分流落库。空的就什么都不做。
+
+    `notify=False`:这份状态是插件在**替宿主做事的途中**交回来的(刷新目录、做一次生成),
+    不该反过来再触发一次「实例变了,去重新问一遍插件」—— 那会在一次调用里嵌套起另一次调用。
+    """
     if not state:
         return
     from app.domain.plugins import instances as inst
@@ -55,9 +59,9 @@ def persist(db: Session, instance: PluginInstance, state: dict[str, Any]) -> Non
     credentials = {key: str(value) for key, value in state.items() if key in credential_keys}
     config = {key: value for key, value in state.items() if key in config_keys and key not in credential_keys}
     if credentials:
-        inst.set_credentials(db, instance, credentials)
+        inst.set_credentials(db, instance, credentials, notify=notify)
     if config:
-        inst.set_config(db, instance, config)
+        inst.set_config(db, instance, config, notify=notify)
     logger.info("插件 %s 记住了 %d 项状态", instance.id, len(state))
 
 

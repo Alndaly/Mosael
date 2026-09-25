@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -20,9 +20,17 @@ from app.domain.jobs import PLUGIN_SLOTS
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import Manifest, text_of
+from app.domain.plugins.manifest import HOST_ONLY_CAPABILITIES, Manifest, text_of
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
-from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, data_dir_for, execute_tool
+from app.domain.plugins.runtime import (
+    PluginRuntimeError,
+    StreamHooks,
+    ToolResult,
+    check_required_input,
+    data_dir_for,
+    execute_tool,
+    stream_tool,
+)
 
 
 def _short_description_label(description: str) -> str:
@@ -63,17 +71,36 @@ def _display_label(tool: dict[str, Any], override_label: str = "") -> str:
 #: 插件自己能声明的最长预算。再长的活该拆步(先准备、再干活),而不是让一次调用挂半小时。
 MAX_DECLARED_TIMEOUT_SECONDS = 1800
 
+#: **替宿主做生成**的那个工具能声明的最长预算:6 小时,和远端生成任务的轮询上限是同一个数
+#: (contracts.generation.POLL_TIMEOUT_SECONDS)。一段长视频在一块普通显卡上跑一两个小时是常事,
+#: 而那 1800 秒的上限是给「一次普通调用」定的。这个上限只防一个永远不回话的对面(ADR 0019),
+#: 不是我们等烦了 —— 进度是真的、取消是真的,用户随时能停。
+MAX_GENERATION_TIMEOUT_SECONDS = 6 * 3600
+#: 生成工具没写预算时的默认值。
+DEFAULT_GENERATION_TIMEOUT_SECONDS = 3600
+
 
 def _declared_timeout(tool: dict[str, Any]) -> float | None:
     """进程插件在 declare 里写的 `timeout_seconds`。没写、写错都当没写(用运行时的默认 60s)。
 
     **预算该由最知道活有多重的一方给。** 此前只有调用方能给(Blender 互通自己传),插件自己
     说不出「我这一步要三分钟」—— 于是一个渲染视频的工具,不管从哪里调都会在第 60 秒被掐掉。
+
+    认领了生成能力的那个工具按能力给预算(见 MAX_GENERATION_TIMEOUT_SECONDS):不写是 1 小时,
+    上限 6 小时。
     """
+    generates = _claims(tool) & HOST_ONLY_CAPABILITIES
     raw = tool.get("timeout_seconds")
     if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
-        return None
-    return float(min(raw, MAX_DECLARED_TIMEOUT_SECONDS))
+        return float(DEFAULT_GENERATION_TIMEOUT_SECONDS) if generates else None
+    cap = MAX_GENERATION_TIMEOUT_SECONDS if generates else MAX_DECLARED_TIMEOUT_SECONDS
+    return float(min(raw, cap))
+
+
+def _claims(tool: dict[str, Any]) -> set[str]:
+    """这个工具**认领**了哪些宿主能力(工具声明上的 `provides`)。"""
+    provides = tool.get("provides")
+    return {str(one) for one in provides} if isinstance(provides, list) else set()
 
 
 def _ensure_data_dir(package_id: str) -> Path:
@@ -111,7 +138,10 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 # (MCP 插件只能这么写 —— 它的清单是从服务拉的)。任一处标了就算。
                 "read_only": bool((override and override.read_only) or tool.get("read_only")),
                 "node": (override.node if override else None) or tool.get("node"),
-                "internal": bool(override and override.internal),
+                # 只给宿主调的:清单上标了 internal 的,和认领了「只给宿主」那类能力的(生成)——
+                # 后者说的是一套流式协议,智能体和工作流调不了、也不该调(见 manifest.HOST_ONLY_CAPABILITIES)。
+                "internal": bool((override and override.internal) or (_claims(tool) & HOST_ONLY_CAPABILITIES)),
+                "provides": sorted(_claims(tool)),
                 # MCP 的清单是对方服务给的,那里没有这个字段 —— 只认进程插件自己声明的。
                 "timeout_seconds": None if manifest.is_mcp else _declared_timeout(tool),
             }
@@ -119,11 +149,19 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
     return out
 
 
-def refresh_tools(db: Session, instance: PluginInstance) -> PluginInstance:
-    """向 MCP 服务重新要一次工具清单。进程类实例的清单写在 manifest 里,无需刷新。"""
+def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True) -> PluginInstance:
+    """向 MCP 服务重新要一次工具清单。进程类实例的清单写在 manifest 里,无需刷新。
+
+    插件页的「刷新」也走这里,所以顺带让替宿主做事的那一侧重新问一遍(`notify`,见
+    host_capabilities):ComfyUI 里新存了一张工作流,点一下刷新它就该出现在模型选择器里。
+    """
+    from app.domain.plugins import host_capabilities
+
     manifest = inst.manifest_for(db, instance)
     if not manifest.is_mcp:
         inst.seed_capabilities(db, instance, manifest, [t["name"] for t in all_tools(db, instance)])
+        if notify:
+            host_capabilities.notify(db, instance, refresh=True)
         return instance
     for absent in (inst.missing_config(db, instance), inst.missing_credentials(db, instance)):
         if absent:
@@ -289,7 +327,105 @@ def invoke(
     return invocation
 
 
-__all__ = ["all_tools", "exposed", "find", "invoke", "refresh_tools"]
+def host_tool(db: Session, instance: PluginInstance, capability: str) -> dict[str, Any]:
+    """这个实例上**认领** `capability` 的那个工具。没有就说清楚是哪个插件、缺什么。"""
+    tool = next((one for one in all_tools(db, instance) if capability in one["provides"]), None)
+    if tool is None:
+        raise PluginDomainError("pluginErr_capabilityNoTool", name=instance.name, capability=capability)
+    return tool
+
+
+def invoke_host(
+    db: Session,
+    instance_id: str,
+    capability: str,
+    payload: dict[str, Any],
+    *,
+    prepare: Callable[[Path], dict[str, Any]] | None = None,
+    collect: Callable[[dict[str, Any], Path], dict[str, Any]] | None = None,
+    hooks: StreamHooks | None = None,
+    timeout: float | None = None,
+) -> dict[str, Any]:
+    """**宿主**替自己调一次插件(它声明能做的那件事)。和 `invoke` 走同一道门:
+
+    可用性判定(启用 / 配置 / 凭据 / 授权)、只注入这个实例自己的配置与凭据、留一条调用记录、
+    状态落库 —— 这些一样不少。不同的只有三处,都是因为调用方是宿主而不是智能体:
+
+    - **失败抛异常**,不是回一条失败记录:宿主要据此决定下一步(生成任务失败、目录刷新记下原因);
+    - `prepare(暂存目录)` 让宿主在进程起来之前把文件拷进去,返回真正发给插件的 payload
+      (生成的输入素材;和 `format: "asset"` 那条同一个规矩:给副本不给原件);
+    - `collect(output, 暂存目录)` 在暂存目录被删**之前**让宿主把产出拿走,返回留进调用记录的那一份;
+    - 给了 `hooks` 就走流式协议(进度、回执、取消,见 runtime.stream_tool)。
+
+    `timeout` 不给就用工具自己声明的预算。
+    """
+    instance = db.get(PluginInstance, instance_id)
+    if instance is None:
+        raise PluginDomainError("pluginErr_instanceNotFound")
+    blocked = inst.blocked_reason(db, instance)
+    if blocked:
+        raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
+    tool = host_tool(db, instance, capability)
+    manifest = inst.manifest_for(db, instance)
+    budget = timeout if timeout is not None else tool.get("timeout_seconds")
+    invocation = PluginInvocation(
+        instance_id=instance.id, tool_name=tool["name"], status="running", input=_recorded(payload), output={}
+    )
+    db.add(invocation)
+    db.commit()
+    scratch = make_scratch_dir()
+    try:
+        sent = prepare(scratch) if prepare is not None else payload
+        run_kwargs: dict[str, Any] = {
+            "scratch_dir": scratch,
+            "data_dir": _ensure_data_dir(manifest.id),
+            **({"timeout": budget} if budget is not None else {}),
+        }
+        result: ToolResult
+        if hooks is not None:
+            result = stream_tool(
+                Path(manifest.path), manifest.runtime.entry, tool["name"], sent,
+                inst.process_env(db, instance), hooks=hooks, **run_kwargs,
+            )
+        else:
+            # 一问一答(问目录)和别的工具调用一样占一个插件名额(jobs.PLUGIN_SLOTS)。流式的那条
+            # 不占:它是一次生成,已经在生成任务的名额(GENERATION_SLOTS)里了 —— 一段跑一小时的
+            # 视频占着插件名额,别的插件调用就得陪它等一小时。
+            env = inst.process_env(db, instance)
+            with _plugin_slot(db):
+                result = execute_tool(
+                    Path(manifest.path), manifest.runtime.entry, tool["name"], sent, env, **run_kwargs,
+                )
+        plugin_state.persist(db, instance, result.state, notify=False)
+        output = result.output
+        recorded = collect(output, scratch) if collect is not None else output
+        invocation.status, invocation.output = "succeeded", recorded
+        db.commit()
+        return output
+    except Exception as exc:
+        invocation.status = "failed"
+        invocation.error = str(exc) if isinstance(exc, (PluginRuntimeError, PluginDomainError, ArtifactError)) else tr(
+            "pluginErr_runtimeCrashed", detail=str(exc)
+        )
+        db.commit()
+        raise
+    finally:
+        cleanup_scratch_dir(scratch)
+
+
+#: 调用记录里一个值最多留多长。生成的提示词可能很长,参数表可能很大;记录是给人翻的,不是存档。
+_RECORDED_TEXT_LIMIT = 2000
+
+
+def _recorded(payload: dict[str, Any]) -> dict[str, Any]:
+    """留进调用记录的那一份输入:长文本截断(记录不是存档)。"""
+    out: dict[str, Any] = {}
+    for key, value in payload.items():
+        out[key] = value[:_RECORDED_TEXT_LIMIT] if isinstance(value, str) else value
+    return out
+
+
+__all__ = ["all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "refresh_tools"]
 
 
 @contextmanager

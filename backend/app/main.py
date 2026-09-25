@@ -115,6 +115,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     for table, count in settled.items():
         if count:
             logger.info("reconciled %d orphaned %s left by a previous restart", count, table)
+    # 插件生成供应商(ComfyUI 等)的模型清单在后台刷一遍:ComfyUI 里昨晚新存的工作流,今天打开就在
+    # 选择器里。后台做:一台没开的 ComfyUI 不该拖慢启动(见 generation/plugin_connections)。
+    from app.domain.generation import plugin_connections
+
+    plugin_connections.refresh_all_in_background()
     if settings.scheduler_enabled:
         start_scheduler_loop()
         logger.info("scheduler loop started")
@@ -265,8 +270,12 @@ def _wire_seams() -> None:
     # 同一条道理:sidecar 是基础设施,不认识"网络配置存在哪张表"。
     from app.ai.sidecar import adapters as sidecar_adapters
     from app.domain.network import subprocess_env_for_child
+    # 插件可以是生成供应商(ADR 0020):生成域把「实例变了就对齐连接」和「plugin:<包> 的 Adapter」
+    # 登记进来。插件域不认识生成域,ai/providers 的 registry 也不认识插件 —— 两头都是在这里接上的。
+    from app.domain.generation import plugin_connections
 
     agent_receipts.install()
+    plugin_connections.install()
     asset_plugin_bridge.install()
     board_receipts.install()
     browser_sessions.install()

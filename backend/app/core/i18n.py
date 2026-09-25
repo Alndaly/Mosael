@@ -145,6 +145,38 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path} 的工具 {tool} 声明了包上没有的能力: {capabilities}",
         "en": "In plugin manifest {path}, tool {tool} declares capabilities the package doesn't: {capabilities}",
     },
+    "pluginErr_manifestCapabilityNeedsProcess": {
+        "zh": "插件清单 {path}:能力 {capability} 只能由本地脚本形态的插件提供(MCP 插件不支持)",
+        "en": "In plugin manifest {path}, the {capability} capability can only be provided by a local-script plugin (not MCP).",
+    },
+    "pluginErr_manifestCapabilityUnclaimed": {
+        "zh": "插件清单 {path} 声明了能力 {capability},但没有哪个工具认领它 —— 在负责它的那个工具上也写上 provides",
+        "en": "Plugin manifest {path} declares the {capability} capability, but no tool claims it — add provides to the tool that handles it.",
+    },
+    "pluginErr_manifestCapabilityClaimedTwice": {
+        "zh": "插件清单 {path}:能力 {capability} 被多个工具同时认领({tools}),只能有一个",
+        "en": "In plugin manifest {path}, the {capability} capability is claimed by several tools ({tools}); only one may claim it.",
+    },
+    "pluginErr_streamNoResult": {
+        "zh": "插件没有给出结果就结束了(最后一行应当是 {shape})",
+        "en": "The plugin finished without a result (its last line should be {shape}).",
+    },
+    "pluginErr_capabilityNoTool": {
+        "zh": "「{name}」没有负责 {capability} 的工具,请到插件页更新这个插件",
+        "en": "“{name}” has no tool that handles {capability}. Update the plugin from the Plugins page.",
+    },
+    "pluginErr_generationBadModels": {
+        "zh": "「{name}」交回的模型清单格式不对,应当是 {shape}",
+        "en": "“{name}” returned a model list in the wrong shape; it should be {shape}.",
+    },
+    "pluginErr_generationNoOutput": {
+        "zh": "「{name}」完成了生成,但没有交回任何文件",
+        "en": "“{name}” finished generating but handed back no files.",
+    },
+    "pluginErr_bundledCannotUninstall": {
+        "zh": "「{name}」随 Mosael 一起提供,不能卸载;不想用的话停用它的连接即可",
+        "en": "“{name}” ships with Mosael and can't be uninstalled; disable its connection if you don't want to use it.",
+    },
     "pluginErr_manifestNotJson": {
         "zh": "插件清单不是合法 JSON: {path}",
         "en": "The plugin manifest is not valid JSON: {path}",
@@ -1137,6 +1169,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "permErr_providerNotFound": {
         "zh": "供应商不存在",
         "en": "Provider not found.",
+    },
+    "permErr_providerManagedByPlugin": {
+        "zh": "这条连接由插件管理,请到插件页修改",
+        "en": "This connection is managed by a plugin. Change it from the Plugins page.",
     },
     "poemErr_noToken": {
         "zh": "今日诗词没有返回 token",
@@ -2236,6 +2272,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{vendor} returned an image URL where inline image data was expected",
     },
     "providerErr_cancelled": {"zh": "已取消", "en": "Cancelled"},
+    "providerErr_pluginConnectionGone": {
+        "zh": "这条生成连接对应的插件连接已经不在了,请重新选择模型",
+        "en": "The plugin connection behind this model no longer exists. Pick a model again.",
+    },
+    "providerErr_pluginFailed": {"zh": "「{name}」生成失败:{detail}", "en": "“{name}” failed to generate: {detail}"},
+    "providerErr_pluginSourceNotLibrary": {
+        "zh": "只能把素材库里的文件交给插件,「{name}」不是",
+        "en": "Only files from the asset library can be handed to a plugin, and “{name}” is not one.",
+    },
     "providerErr_pollTimeout": {
         "zh": "生成超时(远端任务 {task} 在 {hours} 小时内没有结束)",
         "en": "Generation timed out (remote task {task} did not finish within {hours} h)",
@@ -3516,6 +3561,22 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genErr_notBoolean": {
         "zh": "{provider}/{model} 的 {name} 必须是布尔值 true/false",
         "en": "{name} for {provider}/{model} must be true or false.",
+    },
+    "genErr_notNumber": {
+        "zh": "{provider}/{model} 的 {name} 必须是数字",
+        "en": "{name} for {provider}/{model} must be a number.",
+    },
+    "genErr_notText": {
+        "zh": "{provider}/{model} 的 {name} 必须是文本",
+        "en": "{name} for {provider}/{model} must be text.",
+    },
+    "genErr_paramBelow": {
+        "zh": "{provider}/{model} 的 {name} 不能小于 {low}",
+        "en": "{name} for {provider}/{model} can't be less than {low}.",
+    },
+    "genErr_paramAbove": {
+        "zh": "{provider}/{model} 的 {name} 不能大于 {high}",
+        "en": "{name} for {provider}/{model} can't be more than {high}.",
     },
     "genErr_choiceOnly": {
         "zh": "{provider}/{model} 的 {name} 只能是:{choices}",

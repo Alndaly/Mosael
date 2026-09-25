@@ -9,6 +9,7 @@ import { api } from "@/api/transport";
 export type PluginPackage = components["schemas"]["PluginPackageOut"];
 export type PluginInstance = components["schemas"]["PluginInstanceOut"];
 export type PluginField = components["schemas"]["PluginFieldOut"];
+export type PluginCapabilityStatus = components["schemas"]["PluginCapabilityStatusOut"];
 export type PluginToolState = components["schemas"]["PluginToolStateOut"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
 export type PluginInvocation = components["schemas"]["PluginInvocationOut"];

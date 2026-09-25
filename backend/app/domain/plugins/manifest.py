@@ -28,6 +28,15 @@ KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 FIELD_TYPES = ("string", "enum", "number", "boolean")
 
+#: 插件能替宿主做成的事里,**只给宿主调**的那几项(见 docs/adr/0020)。
+#:
+#: `public_url` 不在里面:对象存储的上传工具本身就是个正经工具,智能体和工作流也该调得到。
+#: `generation` 在:认领它的那个工具说的是一套流式协议(进度、回执、取消),不是一次普通调用 ——
+#: 让智能体直接调它,等于留一条绕开生成任务、用量台账和回执的后门(和 `internal: true` 同一个理由,
+#: 这里由能力本身决定,作者不必再写一遍)。
+GENERATION = "generation"
+HOST_ONLY_CAPABILITIES = frozenset({GENERATION})
+
 
 #: 这次调用要说哪种语言,插件自己也会拿到它(见 runtime/mcp_bridge 里的 MOSAEL_LOCALE)。
 LOCALE_ENV = "MOSAEL_LOCALE"
@@ -60,6 +69,9 @@ class Field:
     secret: bool = False
     options: list[dict[str, str]] = field(default_factory=list)
     default: str = ""
+    #: 多行文本(一段 JSON、一段脚本)。只对 `string` 有意义:单行框装一份几百行的 JSON,
+    #: 用户看到的只是它的第一行。
+    multiline: bool = False
 
     def option_label(self, value: str) -> str:
         for option in self.options:
@@ -287,6 +299,7 @@ def _fields(raw: Any, *, secret: bool, pick: Callable[[Any], str] = text_of) -> 
                 secret=bool(entry.get("secret", secret)),
                 options=options,
                 default=str(entry.get("default") or ""),
+                multiline=entry.get("multiline") is True and declared_type in ("string", ""),
             )
         )
     return out
@@ -372,6 +385,7 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
             raise ManifestError(
                 "pluginErr_manifestToolExtraCapability", path=path, tool=tool.get("name"), capabilities=", ".join(sorted(extra))
             )
+    _check_host_only(package_provides, declared, runtime_of(raw), path)
     return Manifest(
         id=raw["id"].strip(),
         name=name,
@@ -398,6 +412,30 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         # 然后得到一个静默消失的授权按钮 —— 这个坑第一个踩进去的就是写解析器的人。
         oauth=_oauth(instance.get("oauth")),
     )
+
+
+def _check_host_only(
+    package_provides: set[str], declared: list[dict[str, Any]], runtime: Runtime, path: str
+) -> None:
+    """只给宿主调的能力(今天是 `generation`)比 `public_url` 多三条硬规矩,**装的那一刻就说清楚**。
+
+    `public_url` 那边「包上声明了、没有工具认领」是一个老版本,生成时再让用户去更新;这里不留那个口子:
+    生成能力是新的,没有老版本要照顾,而一个认领不清的生成插件会在选择器里长出一排点了必然失败的模型。
+    """
+    for capability in sorted(package_provides & HOST_ONLY_CAPABILITIES):
+        # MCP 是别人的协议,我们不往里加字段(和 artifact / state 同一条)。
+        if runtime.kind != "process":
+            raise ManifestError("pluginErr_manifestCapabilityNeedsProcess", path=path, capability=capability)
+        owners = [
+            str(tool.get("name")) for tool in declared
+            if isinstance(tool.get("provides"), list) and capability in tool["provides"]
+        ]
+        if not owners:
+            raise ManifestError("pluginErr_manifestCapabilityUnclaimed", path=path, capability=capability)
+        if len(owners) > 1:
+            raise ManifestError(
+                "pluginErr_manifestCapabilityClaimedTwice", path=path, capability=capability, tools=", ".join(owners)
+            )
 
 
 def _author(raw: object, pick: Callable[[Any], str] = text_of) -> Author:
@@ -469,6 +507,8 @@ def render_name(manifest: Manifest, config: dict[str, Any]) -> str:
 
 __all__ = [
     "Field",
+    "GENERATION",
+    "HOST_ONLY_CAPABILITIES",
     "Manifest",
     "ManifestError",
     "PATH_KEY",

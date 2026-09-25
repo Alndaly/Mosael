@@ -143,7 +143,10 @@ import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import {
   aspectRatioOptions,
   booleanParameterKeys,
+  declaredParameters,
+  declaredParameterValue,
   durationChoices,
+  type DeclaredParameter,
   sizeOptions,
   maxImages,
   parameterChoiceEntries,
@@ -153,6 +156,7 @@ import {
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
+import { DEFAULT_CHOICE } from "@/features/ai-studio/parameterPanel";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";
@@ -273,6 +277,8 @@ interface GenField {
   options: string[];
   range?: { min: number; max: number };
   toggle?: boolean;
+  /** 模型自己声明的参数(`parameter_schema`)。控件和取值都按它的声明来,见 DeclaredGenControl。 */
+  declared?: DeclaredParameter;
 }
 
 /** 助手面板的开合记忆。 */
@@ -2474,6 +2480,55 @@ function upstreamVariables(
   return refs;
 }
 
+/**
+ * 模型自己声明的一个参数(插件生成供应商,见 lib/generationCapabilities.declaredParameters)。
+ *
+ * 可选值 / 开关给下拉,其余给输入框。第一项永远是「默认」= 不发,让模型用它自己的默认值 ——
+ * 插件给的那个默认只拿来当提示,不替用户选(ADR 0015)。`typing` 告诉调用方这一下是不是打字
+ * (撤销时要合并成一步,见 typingRun)。
+ */
+function DeclaredGenControl({
+  parameter,
+  value,
+  onChange,
+}: {
+  parameter: DeclaredParameter;
+  value: string;
+  onChange: (text: string, typing: boolean) => void;
+}) {
+  const t = useI18n();
+  const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
+  if (parameter.type === "boolean" || parameter.options.length > 0) {
+    const choices = parameter.type === "boolean"
+      ? [{ value: "true", label: t("wfGenToggleOn") }, { value: "false", label: t("wfGenToggleOff") }]
+      : parameter.options.map((option) => ({ value: option, label: option }));
+    return (
+      <OptionPicker
+        value={value || DEFAULT_CHOICE}
+        onChange={(next) => onChange(next === DEFAULT_CHOICE ? "" : next, false)}
+        options={[
+          { value: DEFAULT_CHOICE, label: fallback ? t("genDeclaredDefault").replace("{value}", fallback) : t("genDeclaredDefaultNone") },
+          ...choices,
+        ]}
+      />
+    );
+  }
+  const numeric = parameter.type === "integer" || parameter.type === "number";
+  return parameter.multiline ? (
+    <textarea rows={4} value={value} placeholder={fallback} onChange={(event) => onChange(event.target.value, true)} />
+  ) : (
+    <Input
+      type={numeric ? "number" : "text"}
+      min={parameter.minimum}
+      max={parameter.maximum}
+      step={parameter.step ?? (numeric ? "any" : undefined)}
+      value={value}
+      placeholder={fallback || t("genDeclaredDefaultNone")}
+      onChange={(event) => onChange(event.target.value, true)}
+    />
+  );
+}
+
 export function NodeInspector({
   inert = false,
   step = null,
@@ -2772,6 +2827,10 @@ export function NodeInspector({
     for (const [key, options] of parameterChoiceEntries(genModel)) {
       const labelKey = GENERATION_PARAMETER_LABELS[key];
       out.push({ key, label: labelKey ? t(labelKey) : key, options });
+    }
+    // 模型自己声明的参数(插件生成供应商:ComfyUI 每张工作流的采样器、步数……)。
+    for (const parameter of declaredParameters(genModel)) {
+      out.push({ key: parameter.key, label: parameter.label, options: [], declared: parameter });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3145,12 +3204,25 @@ export function NodeInspector({
             {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。 */}
             {genModel && genParamKeys.length > 0 && (
               <>
-                {genParamKeys.map(({ key, label, options, range, toggle }) => (
+                {genParamKeys.map(({ key, label, options, range, toggle, declared }) => (
                   <div className={FIELD_BOX} key={key}>
                     <span>{label}</span>
                     {/* 区间给数字框(上下界来自描述符),枚举给下拉。写死成下拉的话,
                         4–15 秒的模型只剩两个档,而用户看不出少了什么。 */}
-                    {toggle ? (
+                    {declared ? (
+                      <DeclaredGenControl
+                        parameter={declared}
+                        value={genParams[key] === undefined ? "" : String(genParams[key])}
+                        onChange={(text, typing) => {
+                          const next = { ...genParams };
+                          const value = declaredParameterValue(declared, text);
+                          // 没动过 / 清空 = 不发,让模型用它自己的默认(见 ADR 0015)。
+                          if (value === undefined) delete next[key];
+                          else next[key] = value;
+                          setConfig("parameters", next, typing ? typingRun(`parameters.${key}`) : undefined);
+                        }}
+                      />
+                    ) : toggle ? (
                       <Select
                         value={genParams[key] === undefined ? "" : String(Boolean(genParams[key]))}
                         onValueChange={(next) => setGenParam(key, next)}

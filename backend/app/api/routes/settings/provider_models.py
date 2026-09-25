@@ -240,7 +240,7 @@ def add_provider_model(
 ) -> ProviderModelOut:
     """把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
     手填是为了私有部署与别名:目录查不到不等于不能用。"""
-    profile = require_own_profile(db, user, profile_id)
+    profile = require_own_profile(db, user, profile_id, editing=True)
     model_id = (body.model_id or "").strip()
     if not model_id:
         raise HTTPException(status_code=422, detail=tr("routeErr_modelIdRequired"))
@@ -278,7 +278,7 @@ def update_provider_model(
     MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
     表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
     运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。"""
-    profile = require_own_profile(db, user, profile_id)
+    profile = require_own_profile(db, user, profile_id, editing=True)
     model = provider_models.get_model(db, profile_id, model_id)
     if model is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_modelNotInConnection"))
@@ -307,7 +307,7 @@ def update_provider_model(
 def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: CurrentUser) -> Response:
     """移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
     手填的则彻底消失 —— 它本来就只存在于这一行里。"""
-    require_own_profile(db, user, profile_id)  # 归属判定,和这条连接上其余操作同一道门
+    require_own_profile(db, user, profile_id, editing=True)  # 归属判定,和这条连接上其余操作同一道门
     model = provider_models.get_model(db, profile_id, model_id)
     if model is not None:
         db.delete(model)

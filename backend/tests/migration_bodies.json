@@ -60,6 +60,7 @@
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
   "migrate-official-workflow-data-bindings": "4149f3e6496c5393",
   "migrate-permission-modes": "bbacb632b8f0e565",
+  "migrate-plugin-generation-columns": "2f050e11c98100aa",
   "migrate-plugin-instances": "b334be866194ded2",
   "migrate-plugin-instances-get-an-owner": "7ea9716a35ff0dbf",
   "migrate-plugin-registry-url": "ea65d9e176535f45",

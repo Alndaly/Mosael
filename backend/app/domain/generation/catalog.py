@@ -1203,7 +1203,13 @@ def resolve_capability_ref(
 
 
 def capabilities_for(
-    vendor: str, model: str, kind: str, *, ref: str | None = None, custom: dict[str, dict[str, Any]] | None = None
+    vendor: str,
+    model: str,
+    kind: str,
+    *,
+    ref: str | None = None,
+    custom: dict[str, dict[str, Any]] | None = None,
+    declared: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """某个模型在某种生成能力下的参数描述符(尺寸/时长/支持哪些参数)。
 
@@ -1222,9 +1228,14 @@ def capabilities_for(
     此前这里返回的是空集,于是一个中转上的模型看起来像"它就是没有参数",而那段代码早就知道
     自己准备发哪七项(见 ADR 0015)。
     """
-    declared = resolve_capability_ref(ref, kind, custom=custom)
-    if declared is not None:
-        return declared
+    chosen = resolve_capability_ref(ref, kind, custom=custom)
+    if chosen is not None:
+        return chosen
+    # **连接自己说的**(插件生成供应商在目录里声明的,见 ADR 0020)排在内置目录前面:
+    # 那是 Adapter —— 这里就是插件 —— 对它自己要发的请求的描述,正是 ADR 0015 的「参数面由
+    # Adapter 说」。内置目录里本来也没有它们。
+    if declared:
+        return dict(declared)
     exact = known_capabilities_for(vendor, model, kind)
     if exact is not None:
         return exact
@@ -1263,7 +1274,13 @@ def fallback_capabilities(vendor: str, kind: str) -> dict[str, Any]:
 
 
 def capabilities_are_known(
-    vendor: str, model: str, kind: str, *, ref: str | None = None, custom: dict[str, dict[str, Any]] | None = None
+    vendor: str,
+    model: str,
+    kind: str,
+    *,
+    ref: str | None = None,
+    custom: dict[str, dict[str, Any]] | None = None,
+    declared: dict[str, Any] | None = None,
 ) -> bool:
     """这个模型的参数是**认出来的**,还是落到了兜底。
 
@@ -1272,6 +1289,7 @@ def capabilities_are_known(
     """
     return (
         resolve_capability_ref(ref, kind, custom=custom) is not None
+        or bool(declared)
         or known_capabilities_for(vendor, model, kind) is not None
     )
 

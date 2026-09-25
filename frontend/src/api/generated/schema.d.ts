@@ -9087,6 +9087,21 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /**
+         * PluginCapabilityStatusOut
+         * @description 一项宿主能力上一次对齐的结果。生成能力:刷出了几个模型、什么时候、没刷出来的话为什么。
+         */
+        PluginCapabilityStatusOut: {
+            /** Models */
+            models?: number | null;
+            /** Refreshed At */
+            refreshed_at?: string | null;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+        };
         /** PluginCapabilityUpdate */
         PluginCapabilityUpdate: {
             /** Tools */
@@ -9174,6 +9189,11 @@ export interface components {
              * @default
              */
             default: string;
+            /**
+             * Multiline
+             * @default false
+             */
+            multiline: boolean;
         };
         /**
          * PluginInstallPreview
@@ -9275,6 +9295,10 @@ export interface components {
             blocked_reason: string;
             /** Tools */
             tools?: components["schemas"]["PluginToolStateOut"][];
+            /** Capability Status */
+            capability_status?: {
+                [key: string]: components["schemas"]["PluginCapabilityStatusOut"];
+            };
         };
         /** PluginInstanceUpdate */
         PluginInstanceUpdate: {
@@ -9466,6 +9490,13 @@ export interface components {
              * @default false
              */
             oauth: boolean;
+            /** Provides */
+            provides?: string[];
+            /**
+             * Bundled
+             * @default false
+             */
+            bundled: boolean;
             /** Instances */
             instances?: components["schemas"]["PluginInstanceOut"][];
         };
@@ -10124,6 +10155,10 @@ export interface components {
              * @default true
              */
             needs_key: boolean;
+            /** Plugin Instance Id */
+            plugin_instance_id?: string | null;
+            /** Plugin Package Id */
+            plugin_package_id?: string | null;
             /** Extra */
             extra?: {
                 [key: string]: string;

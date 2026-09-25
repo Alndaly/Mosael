@@ -36,27 +36,34 @@ def scan(db: Session, plugins_dir: Path) -> list[PluginPackage]:
     plugins_dir.mkdir(parents=True, exist_ok=True)
     scanned: list[PluginPackage] = []
     for manifest_path in _iter_manifest_paths(plugins_dir):
-        # 老写法在这里就地改成新写法(改名 + 改内容),之后的代码只认一种形状。
-        manifest_path = migrate_directory(manifest_path.parent) or manifest_path
-        raw = _load(manifest_path)
-        raw[PATH_KEY] = str(manifest_path.parent)
-        try:
-            manifest = parse(raw, str(manifest_path))
-        except ManifestError as exc:
-            raise PluginDomainError(str(exc)) from exc
-        package = db.get(PluginPackage, manifest.id)
-        if package is None:
-            package = PluginPackage(id=manifest.id, name=manifest.name, version=manifest.version, manifest=raw)
-            db.add(package)
-            db.flush()
-        else:
-            package.name, package.version, package.manifest = manifest.name, manifest.version, raw
-        scanned.append(package)
+        scanned.append(register(db, manifest_path))
     _prune(db, plugins_dir)
     db.commit()
     for package in scanned:
         db.refresh(package)
     return scanned
+
+
+def register(db: Session, manifest_path: Path) -> PluginPackage:
+    """登记**一个**插件目录(清单在 `manifest_path`)。扫描逐个走它;随应用发的内置插件
+    (见 bundled)只登记自己那几个 —— 不该因为插件目录里另一个第三方包的清单写坏了而装不上。
+    """
+    # 老写法在这里就地改成新写法(改名 + 改内容),之后的代码只认一种形状。
+    manifest_path = migrate_directory(manifest_path.parent) or manifest_path
+    raw = _load(manifest_path)
+    raw[PATH_KEY] = str(manifest_path.parent)
+    try:
+        manifest = parse(raw, str(manifest_path))
+    except ManifestError as exc:
+        raise PluginDomainError(str(exc)) from exc
+    package = db.get(PluginPackage, manifest.id)
+    if package is None:
+        package = PluginPackage(id=manifest.id, name=manifest.name, version=manifest.version, manifest=raw)
+        db.add(package)
+        db.flush()
+    else:
+        package.name, package.version, package.manifest = manifest.name, manifest.version, raw
+    return package
 
 
 def uninstall(db: Session, package_id: str, plugins_dir: Path) -> None:
@@ -72,6 +79,12 @@ def uninstall(db: Session, package_id: str, plugins_dir: Path) -> None:
     package = db.get(PluginPackage, package_id)
     if package is None:
         raise PluginDomainError("pluginErr_notFound")
+    from app.domain.plugins import bundled
+
+    # 随应用发的插件卸不掉:下次启动对账又会把它装回来(见 bundled),而「我删了它怎么又回来了」
+    # 比「这个删不了」更让人困惑。不想用就停用它的连接。
+    if bundled.is_bundled(package_id):
+        raise PluginDomainError("pluginErr_bundledCannotUninstall", name=package.name)
     raw = (package.manifest or {}).get(PATH_KEY)
     if raw:
         path = Path(str(raw)).resolve()
@@ -142,4 +155,4 @@ def instances_of(db: Session, package_id: str) -> list[PluginInstance]:
     )
 
 
-__all__ = ["MANIFEST_FILENAMES", "instances_of", "scan", "uninstall"]
+__all__ = ["MANIFEST_FILENAMES", "instances_of", "register", "scan", "uninstall"]
