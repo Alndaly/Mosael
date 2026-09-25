@@ -36,6 +36,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.domain.plugins.inputs import ASSET_FORMAT
 from app.domain.plugins.manifest import text_of
 
 PLUGIN_NODE_PREFIX = "plugin."
@@ -96,6 +97,11 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
         entry: dict[str, Any] = {"type": _SCHEMA_TYPES.get(str(raw_type), "template")}
         if key in required:
             entry["required"] = True
+        # 插件用 `format: asset` 声明「这是一份素材」(运行时据此换成本地路径,见 inputs)。
+        # 类型跟着声明走,不靠字段名碰运气:字段不叫 asset_id 时,命名约定认不出它,
+        # 工作流里就拿不到素材选择器。
+        if spec.get("format") == ASSET_FORMAT:
+            entry["data_type"] = "asset"
         if spec.get("description"):
             entry["description"] = text_of(spec["description"])
         enum = spec.get("enum")

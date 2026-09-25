@@ -422,6 +422,8 @@ _DATA_TYPE_BY_NAME = (
     ("asset_ids", "asset"),
     ("asset_id", "asset"),
     ("sequence_id", "sequence"),
+    # 场景卡(分镜)。画板把上游的场景接进来时,靠它判断这一格能不能接到那个字段上。
+    ("scene_id", "scene"),
 )
 
 

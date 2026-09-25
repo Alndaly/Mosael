@@ -147,6 +147,40 @@ def test_素材和时间线字段自己会声明类型() -> None:
                 assert config_data_type(key, meta) == "sequence", f"{name}.{key} 没被认成时间线"
 
 
+def test_场景字段按命名约定认成场景() -> None:
+    """`scene_id` 和 asset_id / sequence_id 同一套约定 —— 画板把上游的场景卡接进来时,
+    靠这个类型判断「这一格能不能接到那个字段上」。"""
+    from app.domain.workflows import NODE_TYPES, config_data_type
+
+    assert config_data_type("scene_id", {}) == "scene"
+    assert config_data_type("source_scene_id", {}) == "scene"
+    scene_render = NODE_TYPES["scene_render"]["config"]["scene_id"]
+    assert config_data_type("scene_id", scene_render) == "scene"
+
+
+def test_插件_schema_里标了_format_asset_的字段就是素材() -> None:
+    """插件用 `"format": "asset"` 声明「这个字段是一份素材」(见 plugins/inputs)—— 运行时
+    据此把素材换成本地路径。字段名不叫 asset_id 时,此前命名约定认不出来,工作流里就拿不到
+    素材选择器,只能手打一串 id。**声明在哪,类型就从哪来**,不靠字段名碰运气。"""
+    from app.api.routes.workflows import _with_data_type
+    from app.domain.plugins.nodes import _config_from_schema
+
+    config = _config_from_schema(
+        {
+            "properties": {
+                "video": {"type": "string", "format": "asset"},
+                "cover": {"type": ["string", "null"], "format": "asset"},
+                "title": {"type": "string"},
+            }
+        }
+    )
+    assert config["video"]["data_type"] == "asset"
+    assert config["cover"]["data_type"] == "asset"
+    assert "data_type" not in config["title"]
+    # 发给前端的那份也带着它 —— 素材选择器认的是这一格。
+    assert _with_data_type("video", config["video"])["data_type"] == "asset"
+
+
 def test_显式声明压过命名约定() -> None:
     """约定覆盖不到的字段(名字不叫 asset_id 但装的就是素材)要能显式指定,
     否则这条约定就从"省事"变成了"挡路"。"""
