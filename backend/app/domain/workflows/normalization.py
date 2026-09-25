@@ -150,13 +150,23 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         for edge in edges
         if edge.get("kind") == "data"
     } | {(source, target) for source, _, target, _ in new_bindings}
+
+    def routes(edge: dict[str, Any]) -> bool:
+        """这条控制边带路由语义吗:从会分支的节点出发的,没写 handle 也是「真」那一支。"""
+        source = by_id.get(str(edge.get("source", "")))
+        source_type = str(source.get("type", "")) if source else ""
+        return bool((node_types.get(source_type) or {}).get("branches"))
+
     if connected_pairs:
+        # 同一对节点间已有数据边时,无 handle 的控制边只剩"排先后"一个作用,而数据边本身就排先后
+        # —— 可以折掉。带路由语义的不行:折掉它等于把"只在真时跑"改成"总是跑"。
         edges[:] = [
             edge
             for edge in edges
             if not (
                 edge.get("kind", "control") == "control"
                 and not edge.get("source_handle")
+                and not routes(edge)
                 and (str(edge.get("source", "")), str(edge.get("target", ""))) in connected_pairs
             )
         ]

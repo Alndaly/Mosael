@@ -1532,8 +1532,9 @@ def validate_graph(
             errors.append(f"连线引用了不存在的节点: {source} → {target}")
             continue
         handle = edge.get("source_handle")
-        if node_types.get(source) == "condition" and handle not in (None, "true", "false"):
-            errors.append(f"条件节点的分支端点必须是 true/false: {source}")
+        branches = known_types.get(node_types.get(source, ""), {}).get("branches")
+        if branches and handle not in (None, *branches):
+            errors.append(f"条件节点的分支端点必须是 {'/'.join(branches)}: {source}")
         adjacency.setdefault(source, []).append(target)
         indegree[target] = indegree.get(target, 0) + 1
     #: 引用即依赖(见 reference_dependencies):一个节点引用了它自己的下游,就是一个环 ——
@@ -1571,6 +1572,14 @@ def validate_graph(
 #: 既是插值时机的依据,也是校验时不下钻的依据。binding.py 从这里取。
 NESTED_BODY_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if spec.get("body_scope"))
 NESTED_BODY_RAW_KEYS = ("body", "output", "condition")
+
+#: 会分支的节点(条件):**控制边**从它出发时带路由语义 —— `source_handle` 说走哪一支,没写就是
+#: 第一支(「真」)。数据边从它的输出口出发只说"值从哪来",不参与路由。
+#:
+#: 由节点声明(`branches`),引擎路由、保存校验、规范化折叠边都读这一格。此前引擎对来自条件节点
+#: 的**每一条**边都做路由,于是把 `result` 输出接进一个节点,条件为假时那个节点整个被跳过;
+#: 规范化则把"同一对节点间已有数据边"的无 handle 控制边当多余的折掉,连带折掉了它的路由语义。
+BRANCHING_NODE_TYPES = frozenset(name for name, spec in NODE_TYPES.items() if spec.get("branches"))
 
 
 def _body_label(node_type: str) -> str:

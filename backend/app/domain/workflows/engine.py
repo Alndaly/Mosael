@@ -26,6 +26,7 @@ from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import blame, create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
 from app.domain.workflows import (
+    BRANCHING_NODE_TYPES,
     WorkflowDomainError,
     available_node_types,
     reference_dependencies,
@@ -257,7 +258,8 @@ def execute_graph(
                 if source not in executed:
                     continue
                 source_result = context.get(source, {}).get("result") if isinstance(context.get(source), dict) else None
-            if node_types.get(source) == "condition":
+            # 路由只属于控制边(见 BRANCHING_NODE_TYPES):接 `result` 输出的数据边两个分支都要跑。
+            if node_types.get(source) in BRANCHING_NODE_TYPES and str(edge.get("kind", "")) != "data":
                 wanted = str(edge.get("source_handle") or "true")
                 if wanted != ("true" if source_result else "false"):
                     continue
