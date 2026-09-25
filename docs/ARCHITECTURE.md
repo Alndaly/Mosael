@@ -128,6 +128,12 @@ TaskEvent 行只在总线创建。
 | 写 / 改文案 | `ai_chat.chat`(与工作流 LLM 共用单次补全 Interface;智能体走 pi Agent Adapter) | 同步,几秒就回 |
 | 文案转音频 | `start_synthesis`(TTS 不是「生成」能力,选的是音色) | 任务 + 回执 |
 | 剪一段 | 一次 ffmpeg,`register_file_asset` 登记成新素材 | 任务 + 回执 |
+| 工具格跑一个节点(`node:*`) | `workflows.executors.get_executor`,作用域是 `BoardScope`(`boards/tools`) | `board_run` 任务 + 回执,产出新建成右边的几格 |
+
+工具格(`action`)的产出者不逐个登记:内置节点在 `NODE_TYPES` 上声明 `"surfaces": ["workflow", "board"]`
+(和哪几个输出落到画板上的 `board_outputs`),插件工具是**运行的这个人**自己接的那些(`plugins.tools.exposed`)。
+字段绑定上游格子(`form.bindings`),值由服务端在运行那一刻按连线顺序从画布上取;能接哪几种格子由
+`boards.tools.bindable_kinds` 一处决定,随 `GET /api/boards/producers` 发给界面(`board_sources`)。
 
 **产出落回画布靠回执**:建任务前用 `set_receipt()` 或 `job.payload["receipt"]` 标记「这次的
 产出属于哪张板的哪一项」,任务落终态时由 `domain/boards.deliver_generated` 填回去。回执的登记
@@ -135,8 +141,8 @@ TaskEvent 行只在总线创建。
 (TestClient、脚本)照样要能把产出填回画布。
 
 `deliver_generated` 读任务结果**只经过 `outputs_of(job)`**,归一成
-`[{"type": "asset", "asset_id"}, {"type": "text", "text"}]`:生成任务一次可能出多张(`asset_ids`),
-语音合成和剪辑一次出一段(`asset_id`),便签写字交回正文(`text`)。这不是新旧兼容,是几种任务
+`[{"type": "asset", "asset_id"}, {"type": "text", "text"}, {"type": "json", "value"}]`:生成任务一次可能出多张(`asset_ids`),
+语音合成和剪辑一次出一段(`asset_id`),便签写字交回正文(`text`),工具格交回的已经是这个形状(`outputs`)。这不是新旧兼容,是几种任务
 本来就不同;只认一种的话,另一种落终态时占位会被当成失败摘掉 —— 用户看到的是「生成完就没了」。
 
 节点的 `form` 与 `run` 是画布 JSON 的一部分,不是 React 选中态的副产品。`form` 保存提示词、模型、

@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted — 2026-09-25. P0 (behaviour-preserving groundwork) and P1 (the registry, a pure refactor)
-are **done**; P2–P4 are next. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
+Accepted — 2026-09-25. P0 (behaviour-preserving groundwork), P1 (the registry, a pure refactor) and
+P2 (tool items, 2026-09-26) are **done**; P3–P4 are next. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
 landed before P1, so board generation already sees plugin models as ordinary provider models.
 
 ## Context
@@ -153,7 +153,7 @@ loses the four old functions.
 | --- | --- | --- |
 | **P0** groundwork (behaviour unchanged) | ① `format: asset` → `data_type: "asset"`; `scene_id` → `scene` in the naming table. ② Executors take a `RunScope` protocol (workspace_id, id, name); a ratchet keeps them to those three. ③ Plugin processes registered as job children; `PLUGIN_SLOTS`. ④ Extract `NodeConfigForm`, the node-picker grouping, `describe_node_types`, `resolve_instance`. | **done** |
 | **P1** registry (pure refactor) | `producers.py` with the four built-ins, `/run`, the migration, `outputs_of`; frontend switches to runOnBoard/producerOf; old routes and schemas deleted; test_boards.py / test_board_receipts_and_copies.py go through `/run` with unchanged assertions. | **done** |
-| P2 tool items | `node:*` producers, `surfaces`, the `action` kind, bindings and detaching, derived outputs; ActionComposer, ActionNode, stop button, tool picker; `generate` hosts from the generation catalog (meets the ComfyUI work). | — |
+| **P2** tool items | `node:*` producers, `surfaces`, the `action` kind, bindings and detaching, derived outputs; ActionComposer, ActionNode, stop button, tool picker; `generate` hosts from the generation catalog (meets the ComfyUI work). | **done** |
 | P3 agent | add_item/set_form, list_board_producers, the run_board_item card, agent/prompt.py. | — |
 | P4 extras | `node:*` on media slots with in-place output (manifest node block declares `board.primary_output`); multi-file plugin outputs; PLUGIN_MANIFEST "how it looks on a board". | — |
 
@@ -243,6 +243,73 @@ loses the four old functions.
 - **Agent / MCP.** Nothing called the four routes or `*_on_board` (the MCP server only reads boards;
   the agent edits boards through `ops`), so there was nothing to reroute. Tests that called
   `generate_on_board`/`write_on_board` directly now go through `producers.run`.
+
+### What P2 actually did (and where it differs from the draft)
+
+- **Registry.** `producers.list_producers(db, actor_id)` / `get_producer(db, producer_id, actor_id)`
+  now take the session and the person running: the registry is the four built-ins plus
+  `_node_producers` — built-in nodes whose `NODE_TYPES` entry declares `"surfaces": ["workflow", "board"]`
+  (the twelve of the first batch; ratchet in `test_board_producers.py`: declarations, registry and
+  executors agree, and the kept-off nodes of decision 3 stay off) and the actor's own non-internal
+  plugin tools (`plugins.tools.exposed(db, actor)`; none when there is no actor). All `node:*` have
+  `hosts=("action",)`, `permission="edit"`; effects are `external` for built-ins declared
+  `external` (http_request, call_workflow) else `none`, and for plugin tools `none` iff `read_only`.
+  `Producer` gained `meta` (a `NODE_TYPES`-shaped entry; the built-ins have a label + description
+  only) and `fills_empty_slot`. An unknown `node:plugin.*` explains itself: `boardErr_toolInternal`
+  for an internal tool, otherwise `boardErr_pluginNotConnected` naming the plugin and the tool.
+- **Run.** `boards/tools.py` (new): `run_node_on_board` checks revision/busy, **resolves bindings,
+  checks number fields and resolves the plugin connection before creating the job** — a missing
+  connection, a non-number in a number field or an unreadable document is a 400, not a failed job.
+  Then `board_run` job (receipt to the item) → pending → `dispatch_job`; the thread takes
+  `NODE_CONNECTIONS` then a session (same order as the engine, so `wait_for_job(release=db)` stays
+  balanced) and runs `get_executor(node_type)(db, BoardScope(ws, "board:<id>", name), config)` inside
+  `run_job_inline`. `form.config.instance_id` counts only if it is one of the runner's own
+  connections; otherwise it is treated as unchosen (auto-pick the only one) rather than reported as
+  "gone". The form keeps what the user saved (bindings, the owner's choice), not the resolved values.
+  New job kind `board_run` (announce always; affects boards, assets).
+- **Bindings.** Values are read by the server at run time in **edge order**; text fields join
+  with `\n\n`, `*asset_ids` fields take a list, other asset/scene fields take the first. Which item
+  kinds fit a field is decided **once, on the server** (`tools.binding_sink` / `bindable_kinds`) and
+  sent to the UI as `board_sources` on every field in `GET /api/boards/producers` — the frontend
+  does not keep its own table. The default binding (required field → first fitting upstream) is set
+  by the panel and persisted; the server resolves only what is saved. `_drop_detached_sources`
+  became `_drop_detached_bindings` and also drops binding refs whose edge is gone or whose source is
+  an action; a field with no refs left is removed. `form.config` must be an object that serialises
+  without NaN/Infinity.
+- **Outputs.** `tools.board_outputs(meta, output)` → `[{"type": "asset"|"text"|"json", …}]` in
+  `job.result["outputs"]`, the fourth current result contract read by `canvas.outputs_of` (still no
+  legacy shape). **Not in the draft: `board_outputs`** — a `NODE_TYPES` entry (and a plugin's `node`
+  block) may name which outputs land on the board; half of what a node returns exists for wiring
+  (counts, status codes, engine names) and `video_to_gif` would otherwise re-place its own input.
+  The receipt looks up asset kinds and names (this workspace only) and `_derive` places a new column
+  right of the action and of its earlier outputs, top-down, each connected by an edge; at most 12,
+  the rest merged into one JSON note. Derived notes carry `form.producer = "write"` (like a
+  hand-placed note) and JSON notes `text_format: "json"` (notes only). Derived items get no title —
+  a title is user data and would freeze the runner's language. On an action, success with nothing
+  landable is still success; failure/cancel keep the form and the reason.
+- **Import layering.** `DEFAULT_SIZE` moved from `ops` to `canvas` (the receipt places items;
+  `ops` re-imports it) and the note producer name is `producer_ids.NOTE_PRODUCER`, so `canvas`
+  never reaches back to `ops`/`producers`/`tools` (the no-lazy-cycles ratchet).
+- **Plugin nodes.** A plugin's own `node.config` entry with `"format": "asset"` now gets
+  `data_type: "asset"`, like the schema-derived one (P0 fixed only the latter).
+- **`generate` on audio.** The generation catalog (`resolution.KINDS`) still has no audio, so the
+  hosts are unchanged. The UI is ready for it: an empty slot whose kind is hosted by more than one
+  `fills_empty_slot` producer gets a switch in its action bar (audio: speak / generate), and the
+  board's model list is fetched per kind in `generate.hosts` — both derived from the registry.
+  `NodeComposer` has not been exercised on an audio slot yet.
+- **Frontend.** `features/boards/ActionComposer.tsx` renders `NodeConfigForm` with the board's
+  `FieldBinding` (upstream chips filtered by `board_sources`; the form gained an optional
+  `canBind` seam), a connection hint ("runs with your connection X" / no connection → link to
+  `#/plugins`), Run / Run again. `boardNodes` `ActionNode`: tool name as the label fallback, source
+  badge (plugin name / built-in), shimmer + job progress + Stop (→ `cancel_job`), failure reason,
+  "unavailable" when the tool is not in the person's list. `boardComposers.renderComposer` maps
+  `node:*` to the action panel. Tools appear in the toolbar Add menu and in the pull-to-create menu
+  (which gained group headers and a search box) with `nodePicker` grouping. `prunedSourcesPatch`
+  became `prunedLinksPatch` (sources and bindings). The `nodeInspectorIsNodeAgnostic` ratchet now
+  covers the action panel too.
+- **Not in P2.** The agent side (P3): `ops.add_item` accepts kind `action` (it is in `ITEM_KINDS`)
+  but cannot set a form yet. The `_keep_server_owned_state` "in-place output is text" generalisation
+  was not needed (actions derive; they have no in-place output).
 
 ## Alternatives rejected
 

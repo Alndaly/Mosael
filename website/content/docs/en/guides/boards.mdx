@@ -2,7 +2,7 @@
 title: Creative boards
 description: Arrange documents, media and 3D scenes on an infinite canvas and connect generation inputs.
 order: 5
-updated: 2026-09-25
+updated: 2026-09-26
 version: 1.5.2
 ---
 
@@ -45,8 +45,9 @@ Select a node: the action bar sits above it, its form below.
 - **Note** — empty means "write it"; with text it means "change it the way I say", which is what
   this panel is used for most (you wrote something, now you want it half as long). Double-click
   still edits by hand.
-- **Audio** — pick a voice and the text to read. Audio here is not a "generation" capability; it
-  is TTS, so you choose a voice rather than a model.
+- **Audio** — pick a voice and the text to read (voice-over). Once a generation model supports
+  audio, the action bar above an empty audio item switches between Voice-over and Generate
+  (music, sound effects).
 - **Group frame** — fence things off and name them. Select a few nodes and press
   <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
 
@@ -88,6 +89,48 @@ like. When you do want frame accuracy, the number fields on the right are still 
 
 **The original is untouched.** A trim produces a new asset in a new node — every step on a board
 should be one you can walk back from.
+
+## Tool items: run plugin tools and workflow nodes on a board
+
+Besides generate, write, voice-over and trim, a board can **run a tool**: every tool your installed
+plugins provide, plus a set of workflow nodes that fit a board (transcribe, translate, text
+transform, JSON extract, template, video to GIF, separate vocals, denoise, note search, render a 3D
+scene, call a workflow, HTTP request).
+
+**Placing one**: the "Tools" group in the toolbar's Add menu, or drag a line out of an item and
+release it on empty canvas, then pick from the menu (it has a search box that also matches a plugin
+tool's call name). A tool item grown out of another item is already connected; that item is its input.
+
+**The form is the one workflows use**: fields, dropdowns and the knobs under "Advanced" are all
+declared by the tool. What differs is **how a field takes upstream input** — a board has no
+`{{upstream.output}}`; the input is whatever is connected:
+
+| Upstream item | Fits which fields | What the run reads |
+| --- | --- | --- |
+| Note | Free-text fields (text, template) | The note's text; several notes join in connection order with a blank line |
+| Document | Same | The pinned revision's text |
+| Image / video / audio | Asset fields | That asset |
+| 3D scene | Scene fields | That scene |
+
+A field that can take upstream input has a Manual / Connected switch; once connected, the row below
+lists the upstream items that fit, and you pick which ones to read from. **A required field is bound
+to the first fitting upstream item by default**; you can change it and the choice is saved on the
+item. Values are read **when you press Run**: edit the upstream note and the next run follows.
+Delete the line and the binding goes with it.
+
+**Results land to the right**: every run **adds a new column of items** to the right, each connected
+by a line — images, videos and audio become those kinds of items, other files become a note naming
+the file, text becomes a note, structured data becomes a code-formatted note. Earlier results stay;
+nothing is overwritten. One run adds at most 12 items; anything beyond that is merged into the last note.
+
+**While it runs** the item shimmers and shows a percentage when the tool reports progress; **Stop**
+really stops the plugin process (and cancels the job in the task center). If it fails, the reason is
+written on the item and the form stays as it was — adjust it and press "Run again".
+
+**Whose connection**: a plugin tool runs with **the connection of whoever presses Run**. The panel says
+"Runs with your connection “X”". On a shared board, pressing Run on a teammate's tool item uses your
+own connection — if you have none, the panel names the plugin and links to the Plugins page to create
+one. With several connections, pick one under Advanced.
 
 ## The AI assistant
 

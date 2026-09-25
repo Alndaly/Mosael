@@ -107,7 +107,11 @@ _Avoid_: 前端 `for (const id of ids) await 单个操作(...)`;把顺序依赖(
 (`domain/boards/producers`,ADR 0021)。每个产出者声明能挂的格子种类(hosts)、要的权限、有无花钱
 或对外的副作用(effects)和自己的表单;一格的产出者写在它的 `form.producer` 上,面板照它挂。
 画板上的一切产出都走 `producers.run` / `POST /api/boards/{id}/run` 这一个入口。
-_Avoid_: 按 item 种类猜该挂哪块面板;为某一种产出单开路由或请求体;把产出者当成 item 种类
+第五种是**工具格**(`action`):产出者 `node:<节点类型>` 跑一个工作流节点 —— 这个人自己接的插件工具,
+或声明了 `surfaces: [..., "board"]` 的内置节点;字段绑定上游格子(`form.bindings`),产出新建成右边的几格。
+插件工具用**点运行的人自己的连接**。
+_Avoid_: 按 item 种类猜该挂哪块面板;为某一种产出单开路由或请求体;把产出者当成 item 种类;
+在画板那边另列一张「能上画板的节点」清单(声明在 NODE_TYPES 上)
 
 **活动事件(Activity event)**:
 工作区级、追加写、不可变的协作审计投影。产品领域通过 `domain/collaboration.record_activity`
