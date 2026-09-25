@@ -262,7 +262,7 @@ tool_confirmations
 `ToolConfirmation` 加三列:
 
 ```
-decision_mode    TEXT   -- manual | session-allow | auto | bypass
+decision_mode    TEXT   -- manual | session-allow | auto | bypass | no-card
 decided_by       TEXT   -- user_id;自动放行也记行动人
 decision_detail  JSON   -- 命中的规则 / 计数快照 / 派生出的档位
 ```
@@ -278,6 +278,17 @@ decision_detail  JSON   -- 命中的规则 / 计数快照 / 派生出的档位
 JSON 列 `auto_allow_tools`,和模式在**同一个判定函数**里求值:先看工具白名单,再看档位。
 不新增表,不新增第二个判定点。语义保持不变(它是用户读过卡之后逐个点的),但留痕里标成
 `session-allow`,与 `auto` 区分开 —— 两者不是一回事。
+
+### 4.11 这一次本就不用问人(`no-card`)
+
+有的工具**同一个名字、后果因参数而异**,其中一部分根本不该问人:智能体替人跑画板工具格
+(`run_board_item`)时,只读的工具(文字处理、笔记搜索、插件自报只读的)和它读一份素材没有区别,
+花钱或对外的才要人看一眼(ADR 0021 决定 2)。工具在登记时声明 `needs_card(db, payload)`,判据落在
+开卡时 validate 写回 payload 的事实上(调用方自带的同名字段被覆盖)。判定函数的**第一条**就问它,
+排在「没有会话」之前 —— 这不是谁开的口子,而是这次调用不需要口子,所以 MCP 直连、飞书也一样直接跑。
+
+卡照开:留痕(`decision_mode = no-card`,`decided_by` 是开卡的人)、同一条等待协议(sidecar 照样
+阻塞轮询,只是马上就到了),执行仍经 `authorize_and_approve` —— 绕过的是「用户同意」,不是授权。
 
 ---
 

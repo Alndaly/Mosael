@@ -159,7 +159,12 @@ TaskEvent 行只在总线创建。
 
 智能体改画板走 `edit_board`(细粒度算子 + 确认卡),和 `edit_workflow` 同一套:它表达意图,
 服务端落到当前画布 —— 让模型吐回整份 canvas 的话,稍复杂一点的板必然出错(漏项,或把用户
-一手拖好的位置推平),而这两种错都不报错。
+一手拖好的位置推平),而这两种错都不报错。工具格的表单也由算子写(`add_item` 带
+producer/config/bindings、`set_form`);开卡时的干跑除了 `check_canvas`,还让这次写下的表单过一遍
+`boards.producers.check_forms` —— 和界面、运行同一张注册表、同一张「什么能接什么」。
+替人点运行是 `run_board_item`:开卡前 `producers.dry_run`(起任务之前会问的全问一遍,不写东西),
+批准后 `producers.run`,执行者是批准的人;只读的工具(effects 为 none)由 `ConfirmableTool.needs_card`
+判成不用问人,卡照开(留痕、同一条等待协议)但立即执行。
 
 ### 工作流节点的字段声明
 

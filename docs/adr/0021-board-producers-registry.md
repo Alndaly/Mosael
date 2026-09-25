@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted — 2026-09-25. P0 (behaviour-preserving groundwork), P1 (the registry, a pure refactor) and
-P2 (tool items, 2026-09-26) are **done**; P3–P4 are next. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
+Accepted — 2026-09-25. P0 (behaviour-preserving groundwork), P1 (the registry, a pure refactor),
+P2 (tool items, 2026-09-26) and P3 (the agent, 2026-09-26) are **done**; P4 is next. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
 landed before P1, so board generation already sees plugin models as ordinary provider models.
 
 ## Context
@@ -154,7 +154,7 @@ loses the four old functions.
 | **P0** groundwork (behaviour unchanged) | ① `format: asset` → `data_type: "asset"`; `scene_id` → `scene` in the naming table. ② Executors take a `RunScope` protocol (workspace_id, id, name); a ratchet keeps them to those three. ③ Plugin processes registered as job children; `PLUGIN_SLOTS`. ④ Extract `NodeConfigForm`, the node-picker grouping, `describe_node_types`, `resolve_instance`. | **done** |
 | **P1** registry (pure refactor) | `producers.py` with the four built-ins, `/run`, the migration, `outputs_of`; frontend switches to runOnBoard/producerOf; old routes and schemas deleted; test_boards.py / test_board_receipts_and_copies.py go through `/run` with unchanged assertions. | **done** |
 | **P2** tool items | `node:*` producers, `surfaces`, the `action` kind, bindings and detaching, derived outputs; ActionComposer, ActionNode, stop button, tool picker; `generate` hosts from the generation catalog (meets the ComfyUI work). | **done** |
-| P3 agent | add_item/set_form, list_board_producers, the run_board_item card, agent/prompt.py. | — |
+| **P3** agent | add_item/set_form, list_board_producers, the run_board_item card, agent/prompt.py. | **done** |
 | P4 extras | `node:*` on media slots with in-place output (manifest node block declares `board.primary_output`); multi-file plugin outputs; PLUGIN_MANIFEST "how it looks on a board". | — |
 
 ### What P0 actually did (and where it differs from the draft)
@@ -310,6 +310,56 @@ loses the four old functions.
 - **Not in P2.** The agent side (P3): `ops.add_item` accepts kind `action` (it is in `ITEM_KINDS`)
   but cannot set a form yet. The `_keep_server_owned_state` "in-place output is text" generalisation
   was not needed (actions derive; they have no in-place output).
+
+### What P3 actually did (and where it differs from the draft)
+
+- **Ops.** `ops.add_item` with `type: "action"` takes `producer` / `config` / `bindings` on the op itself
+  and writes `form = {config, bindings, producer}` (producer last, like `_pending`). An action without
+  a producer is refused (`boardErr_formNeedsTool`); a form on any other kind is refused
+  (`boardErr_formOnlyOnAction`). New op `set_form` (action items only): `config` merges key by key
+  (null deletes a key), `bindings` replace per field (`[]`/null unbinds), a different producer starts
+  from an empty config and bindings. **Only `node:*` producers** — the built-in panels' forms
+  (prompt, model, legends…) are the panel's shape; the agent writing one the panel has never seen
+  would make a panel that cannot open.
+- **One check, same tables.** `producers.check_forms(db, canvas, item_ids, actor_id)` runs on the
+  post-ops canvas **before** normalize would silently drop detached bindings: producer exists for the
+  actor (unknown plugin tools explain themselves as at run time), `kind ∈ hosts`, `NodeForm` shape,
+  config keys ⊆ the tool's declared fields, `check_number_fields`, and `tools.check_bindings` —
+  field declared and bindable (`binding_sink`), source on the canvas, **an edge source → item**, and
+  a source kind in `_SOURCE_KINDS` (the table `board_sources` is made from). `_validate_edit_board`
+  runs it on every item whose form this batch changed. At run time `resolve_bindings` stays lenient
+  (a field removed by a plugin upgrade, an upstream not generated yet) — a stale form must still run;
+  a form being written must be right.
+- **Validators know who opens the card.** `request_confirmation(..., actor_id)` (the route passes the
+  token's user) and every `ConfirmableTool.validate` takes `(db, workspace_id, payload, actor)`:
+  whether a plugin tool exists is a per-person fact. Execution keeps using the approver.
+- **`list_board_producers`** (read-only MCP tool) returns `GET /api/boards/producers` entries — the
+  same `describe` the panel reads, so plugin tools are the caller's own — filtered to those hosted by
+  `action` (built-in slots are added as empty slots, not configured by the agent).
+- **`run_board_item`** (`agent/confirmable/automation.py`, payload `{board_id, item_id}`). Validate
+  builds a `RunRequest` from the item **as it is on the board now** (its saved form, its position, the
+  board's current revision) and calls the new `producers.dry_run` — `_admit` (look up, host, form) plus
+  the producer's `preflight`, which for `node:*` is `tools.prepare_node_run`, the first half of
+  `run_node_on_board` (revision/busy, bindings, number fields, the actor's own plugin connection). It
+  writes the facts back (`producer`, `effects`, tool label, board name, item title, connection name) —
+  always overwriting, so a caller cannot claim `effects: "none"`. Only action items with a `node:*`
+  producer can be run (`confirmErr_runBoardItemNotTool`). Execute re-reads the item, refuses if its
+  producer changed since the card (`confirmErr_boardItemChanged`), checks the approver's
+  `producer.permission` and calls `producers.run` with the approver as actor — so the approver's own
+  connection is used (decision 1). It returns `{board_id, item_id, producer, job_id}`; the job's
+  receipt still goes to the item (a job has one receipt), so the agent follows it with `get_job`.
+- **Cards by effect (decision 2).** `escalate`: `paid` → `ai-cost` (auto mode's streak limit applies),
+  `external` → `external` (auto mode asks the human; no gate declared). **Read-only runs need no card:**
+  new `ConfirmableTool.needs_card(db, payload)`; `autopilot.decide` asks it first — before "no session",
+  because this is not someone's standing permission but a call that needs none — and approves with
+  `decision_mode = "no-card"`. The card still exists (audit trail, and the sidecar's one waiting
+  protocol stays true: the tool is `confirmation: true` and the card resolves at once); execution
+  still goes through `authorize_and_approve`. The session's auto-approval trace lists these too.
+- **No cost estimate.** Nothing in the codebase estimates the cost of a generation or a plugin call
+  before it runs, and the only `paid` producers (the built-ins) are not agent-runnable; the card says
+  "costs money" or "acts outside the app" instead of a number.
+- **Prompts.** The backend system prompt, the frontend board-assistant context (zh/en) and the MCP
+  docstrings of `edit_board` / `get_board` describe tool items, `set_form` and `run_board_item` briefly.
 
 ## Alternatives rejected
 

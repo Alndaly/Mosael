@@ -148,6 +148,29 @@ until you approve it. It submits granular operations rather than a whole canvas,
 handed the whole thing gets it wrong on any non-trivial board: items go missing, or the positions
 you arranged by hand get flattened.
 
+### Letting the agent use tool items
+
+The assistant can also place tool items, wire up their inputs and run them for you. It first looks at
+the tools available (`list_board_producers` — the same list you see under Add → Tools, with plugin
+tools only from **your own** connections). When it places a tool item it names the tool, fills in its
+fields, says which fields take which upstream items, and connects them in the same batch
+(`edit_board`). Placing and editing still go through a confirmation card, and a broken edit (no such
+tool, no such field, a binding to an item that isn't connected, a note bound to an asset field) is
+refused when the card is opened, not after you approve it.
+
+**Running** (`run_board_item`) takes the same path as pressing Run yourself, with **the approver's own
+connection**:
+
+- **Read-only tools run directly** (text processing, JSON extraction, note search, plugin tools that
+  declare themselves read-only…) — no card;
+- **Tools that cost money or act outside the app wait for you** — HTTP requests, calling a workflow,
+  and plugin tools not declared read-only. The card says which tool runs on which board, with which of
+  your connections, and whether it costs money or reaches outside the app. Reject it and nothing runs.
+
+Auto-approval still applies: in auto mode paid runs have a streak limit and outward-facing ones come
+back to you; "Approve everything" approves everything. The read-only runs you weren't asked about are
+still listed under "Auto-approved in this chat" in the session settings.
+
 ## Undo
 
 <kbd>⌘</kbd><kbd>Z</kbd> undoes, <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> redoes, and the toolbar has
