@@ -99,6 +99,11 @@ except Exception as exc:
 key = os.environ["MY_API_KEY"]
 ```
 
+配置项的 `type` 可以是 `string`(默认)、`enum`、`number`、`boolean`,以及两种**一段代码**:`json`(代码编辑器,
+保存前校验,错在第几行第几列当场说)和 `code`(代码编辑器,`language` 决定高亮)。一段 JSON 别写成多行文本框 ——
+那样用户只看得见第一行,少一个逗号要等插件跑起来才知道。值照旧是字符串,你自己解析。`help` 里的占位符用反引号
+写成行内代码。
+
 **环境注入与系统权限是两回事。** 子进程只接收基础环境和自己声明的凭据，Mosael 不主动传入应用的模型密钥或会话令牌。但本地插件以当前用户权限运行，并不是操作系统沙箱；它仍可能读取该用户有权访问的文件。请明确声明所需权限，并避免在日志中输出凭据。
 
 ## 要交出一个文件
@@ -128,6 +133,9 @@ return {"artifact": {
 宿主收下之后，`artifact` 会被**换成** `asset_id`，调用方拿到的就是一个素材 id，和别的
 产素材的工具一样。[百度网盘插件](/plugins/baidu-pan)走的就是第二种。
 
+一次交出几份,就写 `artifacts`(一串,每一项和 `artifact` 同一种写法,最多 64 份):宿主全部收进素材库,返回值里
+换成 `assets`(每份的 `asset_id`、名字,以及你在那一项上附带的标量说明)和 `asset_ids`,第一份同时记成 `asset_id`。
+
 ## 要**收**一个文件
 
 反过来:你的工具要处理一份**已有的**素材 —— 传到网盘、发给外部服务转码。在
@@ -156,6 +164,8 @@ upload_to_somewhere(local)
 
 给的是**副本**，不是库里那一份 —— 你改坏了或删掉了都伤不到用户的素材。调用结束即删，
 所以别往那个路径写你想留下的东西（想留下就用 `artifact` 交回去）。
+
+一次要几份:`{"type": "array", "items": {"type": "string", "format": "asset"}}`,收到的是一串路径。
 
 为什么不让你自己去取：你的环境里没有数据库、没有 API 令牌、没有媒体目录 —— 那是隔离边界
 的一部分，不是疏漏。
@@ -203,6 +213,12 @@ json.dump({
 
 范例见 [Remotion 插件](/plugins/remotion):依赖装在持久目录,渲染工具声明了自己的预算。
 
+跑几分钟的工具再加一条 `"stream": true`:stdout 改成一行一个 JSON,进度写成
+`{"event": "progress", "progress": 0.4, "message": "第 8/20 步"}`,最后一行照旧是结果。在工作流里跑时,
+执行面板上看得到这句进度;任务被取消时 Mosael 先建一个取消文件(`MOSAEL_PLUGIN_CANCEL_FILE`),你去停掉远端的活
+再退出,而不是被直接杀掉。给智能体用的长活,做成「只提交、交回任务号」+「按任务号取回」两个工具 ——
+随应用发的 ComfyUI 插件的 `run_workflow`(`wait: false`)和 `import_outputs` 就是这样。
+
 ## 替 Mosael 做生成
 
 插件还可以当一家**生成供应商**:在清单里写 `"provides": ["generation"]`,让一个工具认领它。
@@ -211,6 +227,9 @@ Mosael 会调这个工具两种操作 —— `models`(这个连接有哪些模�
 取消时 Mosael 建一个取消文件(路径在 `MOSAEL_PLUGIN_CANCEL_FILE`),你看到它就去停远端的活。
 
 这个工具只给 Mosael 自己调,不出现在智能体和工作流里;预算不写是 1 小时,最长可以声明 6 小时。
+模型清单里再给一个 `fingerprint`(清单的指纹),并支持一个便宜的 `op: "fingerprint"`,Mosael 就每分钟问一次,
+变了才重新拉清单 —— 用户在你那边新加的模型不用手动刷新就出现。参数的 `title` 可以按语言写
+(`{"zh": "步数", "en": "Steps"}`),Mosael 给人看时再挑。
 完整的协议和字段见仓库里的 `docs/PLUGIN_MANIFEST.md`「替宿主做生成」,随应用发的 ComfyUI 插件
 (`plugins/bundled/comfyui`)是完整的范例。
 

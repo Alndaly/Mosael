@@ -40,8 +40,12 @@ logger = logging.getLogger(__name__)
 ASSET_FORMAT = "asset"
 
 
+def _is_asset(spec: Any) -> bool:
+    return isinstance(spec, dict) and spec.get("format") == ASSET_FORMAT
+
+
 def asset_fields(tool: dict[str, Any]) -> list[str]:
-    """这个工具的哪些输入要换成文件。"""
+    """这个工具的哪些输入要换成文件:`format: asset` 的字符串,以及 `items` 是它的数组(一次交几份)。"""
     schema = tool.get("input_schema")
     properties = schema.get("properties") if isinstance(schema, dict) else None
     if not isinstance(properties, dict):
@@ -49,7 +53,7 @@ def asset_fields(tool: dict[str, Any]) -> list[str]:
     return [
         key
         for key, spec in properties.items()
-        if isinstance(spec, dict) and spec.get("format") == ASSET_FORMAT
+        if _is_asset(spec) or (isinstance(spec, dict) and spec.get("type") == "array" and _is_asset(spec.get("items")))
     ]
 
 
@@ -61,7 +65,7 @@ def materialize(
     *,
     workspace_id: str | None,
 ) -> dict[str, Any]:
-    """把 payload 里声明为素材的字段换成插件看得见的**本地路径**。
+    """把 payload 里声明为素材的字段换成插件看得见的**本地路径**(数组就是一串路径)。
 
     没有这类字段就原样返回 —— 绝大多数工具走这条,不该为此付出任何代价。
     """
@@ -75,11 +79,18 @@ def materialize(
 
     resolved = dict(payload)
     for key in fields:
-        ref = str(payload[key])
-        path = media_bridge.source()(db, ref, into=scratch, workspace_id=workspace_id)
-        # 给的是**绝对路径**:插件的 cwd 是它自己的目录,相对路径会指到别处去。
-        resolved[key] = str(path)
-        logger.info("插件输入 %s: %s → %s", key, ref, path.name)
+        value = payload[key]
+        refs = [str(one) for one in value if one] if isinstance(value, list) else [str(value)]
+        paths = []
+        for ref in refs:
+            # 每一份落进自己的子目录:两份素材同名(都叫 image.png)时不互相覆盖
+            into = scratch / "inputs" / f"{key}-{len(paths) + 1}"
+            into.mkdir(parents=True, exist_ok=True)
+            path = media_bridge.source()(db, ref, into=into, workspace_id=workspace_id)
+            logger.info("插件输入 %s: %s → %s", key, ref, path.name)
+            # 给的是**绝对路径**:插件的 cwd 是它自己的目录,相对路径会指到别处去。
+            paths.append(str(path))
+        resolved[key] = paths if isinstance(value, list) else paths[0]
     return resolved
 
 

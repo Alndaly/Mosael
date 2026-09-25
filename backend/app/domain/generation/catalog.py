@@ -28,6 +28,7 @@ SOURCE_ROLE_LABELS = {
     "source_video": "待编辑的视频",
     "first_clip": "待续写的片段",
     "driving_audio": "驱动音频",
+    "mask": "蒙版",
 }
 
 #: 给智能体的一句话:这个角色到底是什么意思。**光有名字不够** —— 「参考视频」和「待编辑的
@@ -41,6 +42,7 @@ SOURCE_ROLE_HELP = {
     "source_video": "**被编辑的那一段**;成片就是它改过之后的样子",
     "first_clip": "**被接着往下拍的那一段**;成片以它开头,总时长要比它长",
     "driving_audio": "画面跟着它走 —— 口型同步、动作卡点",
+    "mask": "局部重绘的蒙版:白色是要改的地方,和要改的那张图(参考图)一起给",
 }
 
 KEYFRAME_GROUP = ["first_frame", "last_frame"]

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
-from app.domain.jobs import PLUGIN_SLOTS
+from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
@@ -144,6 +145,9 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 "provides": sorted(_claims(tool)),
                 # MCP 的清单是对方服务给的,那里没有这个字段 —— 只认进程插件自己声明的。
                 "timeout_seconds": None if manifest.is_mcp else _declared_timeout(tool),
+                # 边跑边说进度、取消时先让插件去停远端的活(见 runtime.stream_tool)。只给进程形态:
+                # MCP 是别人的协议,我们不往里加字段。
+                "stream": (not manifest.is_mcp) and tool.get("stream") is True,
             }
         )
     return out
@@ -297,17 +301,18 @@ def invoke(
             resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id)
             env = inst.process_env(db, instance)
             data_dir = _ensure_data_dir(manifest.id)
+            budget = {"timeout": timeout} if timeout is not None else {}
             with _plugin_slot(db):
-                result = execute_tool(
-                    Path(manifest.path),
-                    manifest.runtime.entry,
-                    tool_name,
-                    resolved,
-                    env,
-                    scratch_dir=scratch,
-                    data_dir=data_dir,
-                    **({"timeout": timeout} if timeout is not None else {}),
-                )
+                if tool["stream"]:
+                    result = stream_tool(
+                        Path(manifest.path), manifest.runtime.entry, tool_name, resolved, env,
+                        hooks=_tool_hooks(), scratch_dir=scratch, data_dir=data_dir, **budget,
+                    )
+                else:
+                    result = execute_tool(
+                        Path(manifest.path), manifest.runtime.entry, tool_name, resolved, env,
+                        scratch_dir=scratch, data_dir=data_dir, **budget,
+                    )
             output = result.output
             # 先落状态再收产出:刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子
             # (下载失败、磁盘满),这次刷新就白做了 —— 而旧令牌已经被百度那边作废了。
@@ -325,6 +330,30 @@ def invoke(
     db.commit()
     db.refresh(invocation)
     return invocation
+
+
+#: 流式工具的进度多久往上报一次。插件可能每一步都说一句(采样器 20 步就是 20 行),上报要写库。
+_PROGRESS_INTERVAL_SECONDS = 1.0
+
+
+def _tool_hooks() -> StreamHooks:
+    """**普通工具**的流式调用接到哪儿(生成那条由生成执行器自己接,见 generation/plugin_connections)。
+
+    - 进度交给任务总线的上报口(`jobs.report_progress`):在工作流节点里跑时,它成了那个节点的
+      `workflow.node.progress` 事件,执行面板上看得到「采样 12/20」;不在任务里(插件页试跑、智能体)就没人听;
+    - 回执不记:普通工具的调用不跨重启续等(那是生成任务的事,见 ADR 0020);
+    - 取消不靠轮询:在任务里跑时,取消任务会拉下挂在任务名下的开关,先建取消文件让插件去停远端的活。
+    """
+    last = [0.0]
+
+    def on_progress(fraction: float, message: str) -> None:
+        now = time.monotonic()
+        if now - last[0] < _PROGRESS_INTERVAL_SECONDS and fraction < 1.0:
+            return
+        last[0] = now
+        report_progress(fraction, message)
+
+    return StreamHooks(on_progress=on_progress, on_task=lambda _task: None, is_cancelled=lambda: False)
 
 
 def host_tool(db: Session, instance: PluginInstance, capability: str) -> dict[str, Any]:
@@ -345,6 +374,7 @@ def invoke_host(
     collect: Callable[[dict[str, Any], Path], dict[str, Any]] | None = None,
     hooks: StreamHooks | None = None,
     timeout: float | None = None,
+    record: bool = True,
 ) -> dict[str, Any]:
     """**宿主**替自己调一次插件(它声明能做的那件事)。和 `invoke` 走同一道门:
 
@@ -358,6 +388,9 @@ def invoke_host(
     - 给了 `hooks` 就走流式协议(进度、回执、取消,见 runtime.stream_tool)。
 
     `timeout` 不给就用工具自己声明的预算。
+
+    `record=False` 不留调用记录:宿主**隔一会儿就问一次**的那种(目录指纹,见 generation/plugin_connections)
+    不是一次「调用」,每分钟一行会把插件页的调用记录淹掉,真正的调用反而找不到。失败照样抛。
     """
     instance = db.get(PluginInstance, instance_id)
     if instance is None:
@@ -371,8 +404,9 @@ def invoke_host(
     invocation = PluginInvocation(
         instance_id=instance.id, tool_name=tool["name"], status="running", input=_recorded(payload), output={}
     )
-    db.add(invocation)
-    db.commit()
+    if record:
+        db.add(invocation)
+        db.commit()
     scratch = make_scratch_dir()
     try:
         sent = prepare(scratch) if prepare is not None else payload
@@ -400,14 +434,16 @@ def invoke_host(
         output = result.output
         recorded = collect(output, scratch) if collect is not None else output
         invocation.status, invocation.output = "succeeded", recorded
-        db.commit()
+        if record:
+            db.commit()
         return output
     except Exception as exc:
         invocation.status = "failed"
         invocation.error = str(exc) if isinstance(exc, (PluginRuntimeError, PluginDomainError, ArtifactError)) else tr(
             "pluginErr_runtimeCrashed", detail=str(exc)
         )
-        db.commit()
+        if record:
+            db.commit()
         raise
     finally:
         cleanup_scratch_dir(scratch)
@@ -441,6 +477,14 @@ def _plugin_slot(db: Session) -> Iterator[None]:
         yield
 
 
+#: 一次调用最多交出多少份文件(`artifacts`)。和生成的上限同一个数(见 generation.MAX_OUTPUTS):
+#: 再多多半是插件把中间帧也交出来了。
+MAX_ARTIFACTS = 64
+#: 一份产出上,除了「怎么拿到它」(path / url / headers)之外,插件可以附带的说明(哪个节点、什么类型)。
+#: 原样跟着素材 id 回给调用方;只收标量,免得一份产出带着一整棵结构进了对话记录。
+_ARTIFACT_TRANSPORT_KEYS = frozenset({"path", "url", "headers"})
+
+
 def _collect_artifact(
     db: Session,
     output: dict[str, Any],
@@ -450,20 +494,44 @@ def _collect_artifact(
     project_id: str | None,
     fallback_name: str,
 ) -> dict[str, Any]:
-    """把输出里的文件产出收进素材库,`artifact` 换成 `asset_id`。
+    """把输出里的文件产出收进素材库:`artifact`(一份)换成 `asset_id`,`artifacts`(一串)换成
+    `assets` / `asset_ids`,并在还没有 `asset_id` 时把第一份记成它 —— 下游(工作流里 `{{n1.asset_id}}`)
+    不必知道这个工具交的是一份还是几份。
 
     换掉而不是两个都留:留着的话,下游会拿到一个指向已经删掉的暂存目录的路径 —— 那条路径
     在返回的那一刻就已经失效了(finally 里刚清完),而它看起来完全像个能用的路径。
     """
-    spec = output.get("artifact")
-    if not isinstance(spec, dict):
+    single = output.get("artifact")
+    many = output.get("artifacts")
+    if not isinstance(single, dict) and not isinstance(many, list):
         return output
-    if workspace_id is None or scratch is None:
+    specs = [spec for spec in (many if isinstance(many, list) else []) if isinstance(spec, dict)]
+    if len(specs) > MAX_ARTIFACTS:
+        raise ArtifactError("pluginErr_artifactTooMany", limit=MAX_ARTIFACTS)
+    collected = {key: value for key, value in output.items() if key not in ("artifact", "artifacts")}
+    if (isinstance(single, dict) or specs) and (workspace_id is None or scratch is None):
         raise ArtifactError("pluginErr_artifactNeedsWorkspace")
-    ref, name = artifacts.register(
-        db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
-    )
-    return {**{k: v for k, v in output.items() if k != "artifact"}, "asset_id": ref, "asset_name": name}
+    if isinstance(single, dict):
+        ref, name = artifacts.register(
+            db, single, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
+        )
+        collected.update({"asset_id": ref, "asset_name": name})
+    if isinstance(many, list):
+        assets: list[dict[str, Any]] = []
+        for spec in specs:
+            ref, name = artifacts.register(
+                db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
+            )
+            extras = {
+                str(key): value for key, value in spec.items()
+                if key not in _ARTIFACT_TRANSPORT_KEYS and key != "filename" and isinstance(value, (str, int, float, bool))
+            }
+            assets.append({**extras, "asset_id": ref, "asset_name": name})
+        collected["assets"] = assets
+        collected["asset_ids"] = [one["asset_id"] for one in assets]
+        if assets and "asset_id" not in collected:
+            collected["asset_id"] = assets[0]["asset_id"]
+    return collected
 
 
 def reconcile_orphaned_invocations(db: Session) -> int:

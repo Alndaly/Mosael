@@ -112,6 +112,30 @@ return {"artifact": {
 里面(插件本来就以你的身份运行、读得到你读得到的一切,这条挡的不是提权,是「随手交出一个
 别处的文件」—— 素材库里的东西是能被发布出去的)。
 
+#### 一次交出几份
+
+跑一张 ComfyUI 工作流会交出好几张图、一段视频、再加一张预览 —— 用 `artifacts`(一串,每一项和
+`artifact` 同一套写法):
+
+```python
+return {
+    "artifacts": [
+        {"path": "up-01.png", "filename": "up_00001_.png", "node": "4", "media": "image"},
+        {"path": "up-02.png", "filename": "up_00002_.png", "node": "4", "media": "image"},
+    ],
+    "summary": "2 张图",
+}
+```
+
+宿主全部收进素材库,返回值里 `artifacts` 换成:
+
+- `assets`:每一份 `{asset_id, asset_name, …}` —— 每一项上除了 `path` / `url` / `headers` / `filename` 之外的
+  **标量**(上面的 `node`、`media`)原样跟着回来,嵌套结构不带;
+- `asset_ids`:按顺序的一串 id(工作流里接下游用);
+- `asset_id`:第一份(还没有 `asset_id` 时)—— 下游写 `{{n1.asset_id}}` 不必知道这个工具交的是一份还是几份。
+
+一次最多 64 份(`tools.MAX_ARTIFACTS`),多了整次调用失败 —— 多半是插件把中间帧也交出来了。
+
 ### 要**收**一个文件
 
 反过来:你的工具要处理一份已有的素材(传到网盘、发给外部服务转码)。在 `input_schema` 里
@@ -127,6 +151,9 @@ return {"artifact": {
 调用方传素材 id,**你收到的是一个本地绝对路径** —— 你不知道素材库存在,也不需要知道。
 字段叫什么名字都行:工作流里这个字段按 `format` 认成素材,给的是素材选择器,不是一个让人
 手打 id 的文本框。
+
+一次要几份就写成数组:`{"type": "array", "items": {"type": "string", "format": "asset"}}`。调用方传一串
+素材 id,你收到一串本地路径(顺序不变)。
 
 给的是**副本**,不是库里那一份:你改坏了或删掉了都伤不到用户的素材。调用结束即删,
 所以不要往那个路径写你想留下的东西(想留下就用 `artifact` 交回去)。
@@ -219,6 +246,23 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 `{REGION}` 取配置值,`{REGION:label}` 取枚举的显示文案。**名字必须由配置生成** —— 否则用户配了
 「中国」而卡片上写着「美国」,那比没有名字更坏(这正是重构前的一个真实 bug)。
+
+### 配置项的类型
+
+| `type` | 控件 | 存的是 |
+| --- | --- | --- |
+| `string`(默认) | 文本框;`multiline: true` 给多行框 | 字符串 |
+| `enum` | 下拉(`options`);只有一个选项时显示成锁定的值 | 选中项的 `value` |
+| `number` | 数字框 | 数字 |
+| `boolean` | 开关 | 布尔 |
+| `json` | **代码编辑器**(连接卡片上是摘要 +「编辑」,编辑在大弹窗里);边敲边校验,错在第几行第几列当场说,错着存不了;后端保存前再查一遍 | 你粘进去的**原文**(字符串) |
+| `code` | 代码编辑器,`language` 决定高亮(`python` / `json` …,认不得的照常编辑、不高亮);不校验 | 原文(字符串) |
+
+一段 JSON、一段脚本**不要**写成 `multiline` 的 `string`:那是一个 200px 宽的文本框,几百行只看得见第一行,
+少一个逗号要等插件跑起来才报。`json` / `code` 存的仍是字符串 —— 插件拿到的就是用户粘进去的那一段,自己解析;
+存成解析后的对象会让原文的缩进、键的顺序在一次保存之后悄悄变样。
+
+`help` 里的占位符、键名用反引号写成行内代码(`` `{{prompt}}` ``),界面按行内 Markdown 渲染。
 
 ### 配置还是凭据?
 
@@ -314,6 +358,30 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 **认领了生成能力的那个工具按能力给**(见「替宿主做生成」):不写是 1 小时,上限 6 小时
 (`tools.MAX_GENERATION_TIMEOUT_SECONDS`,和远端生成任务的轮询上限是同一个数)—— 一段长视频在一块普通
 显卡上跑一两个小时是常事。
+
+### 边跑边说进度:流式工具
+
+一个要跑几分钟的工具(跑一张 ComfyUI 工作流、转一段视频),在 `declare` 的那条上写 `"stream": true`
+(只给进程形态):
+
+```jsonc
+{ "name": "run_workflow", "stream": true, "timeout_seconds": 1800, "input_schema": { … } }
+```
+
+stdout 就和「替宿主做生成」同一套 NDJSON:进度一行一个,最后一行是结果。
+
+```
+{"event": "progress", "progress": 0.42, "message": "采样 12/20"}
+{"ok": true, "output": {…}}
+```
+
+- **进度**交给宿主的上报口:在工作流节点里跑时,它成了那个节点的 `workflow.node.progress` 事件,执行面板上
+  看得到「采样 12/20」;插件页试跑、智能体调用时没人听,照样能跑。
+- **取消**:在任务里跑时,取消任务 = 宿主建取消文件(`MOSAEL_PLUGIN_CANCEL_FILE`),你看到它就去停远端的活,
+  然后退出;30 秒不退才杀。不流式的工具取消时是直接杀掉进程 —— 远端那一份(ComfyUI 的一张图)会被它自己跑完。
+- **回执不记**:普通工具不跨重启续等(那是生成任务的事)。要跑一小时以上的活,做成生成供应商。
+- **预算照旧**:上限 1800 秒。智能体那一侧一次只等 180 秒 —— 长活给一个「只提交」的开关,交回任务号,再给一个
+  「按任务号取回」的工具(ComfyUI 插件的 `run_workflow` + `wait: false` 与 `import_outputs` 就是这么配的)。
 
 ### 持久目录
 
@@ -469,14 +537,14 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `runtime.transport` / `command` / `args` / `url` / `headers` | MCP 的连接方式 |
 | `instance.multiple` | 允许建多个连接 |
 | `instance.name_template` | 连接的默认名字,`{键}` / `{键:label}` |
-| `instance.config` | 明文配置:`key` `label` `type` `options` `required` `help` `default`;`multiline: true` 给多行框(一段 JSON 之类) |
+| `instance.config` | 明文配置:`key` `label` `type` `options` `required` `help` `default`;`type` 见「配置项的类型」(`json` / `code` 给代码编辑器,`code` 另写 `language`);`multiline: true` 给多行框 |
 | `instance.credentials` | 密钥,字段同上;`secret` 默认 true |
 | `permissions` | 自由字符串,逐项授权 |
 | `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation`(见「声明『我能替宿主做成什么』」) |
 | `skills` | 给别的智能体看的高层描述 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
-| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉) |
+| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。每条可写 `read_only`、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |
 | `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `node` / `internal` |
 | `input_schema` 属性的 `x-advanced` | 标成高级,收进面板的「高级」一档。判据:**留空也能跑**的才算 |
 
@@ -506,10 +574,11 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 它们都写了中英两份文案,可以直接照着抄多语言的写法。
 
 另有 `plugins/bundled/` 下**随应用一起发**的插件(今天是 **comfyui**):它们随后端一起打包,每次启动对账
-装进插件目录(按内容指纹,见 `domain/plugins/bundled`),卸不掉。它们**也在市场索引里**(标
+装进插件目录(按内容指纹,见 `domain/plugins/bundled`;新版本多了工具时,已经接好的连接按 `recommended` 补上开关),卸不掉。它们**也在市场索引里**(标
 `bundled: true`、没有 `download`),应用内的市场和官网插件页都列出它们、标「内置」,只是不给安装 ——
 新版跟着应用来;远端索引拉不到时,市场照样由本机清单列出它们。ComfyUI 插件是
-「替宿主做生成」的完整范例:动态模型目录、JSON Schema 参数、参考图槽位、NDJSON 进度、取消文件、回执与接着取。
+「替宿主做生成」的完整范例:动态模型目录与指纹、按语言分的参数名、参考图 / 蒙版 / 视频槽位、NDJSON 进度、取消文件、
+回执与接着取;也是**流式工具**和**一次交出几份文件**的范例(`run_workflow`、`import_outputs`),以及 `json` 配置项(API 模板)。
 
 ## 声明「我能替宿主做成什么」
 
@@ -596,20 +665,41 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
     "max_outputs": 1,
     "prompt_dialect": "sd-tags"            // 可选:提示词优化按哪种写法改
   }
-]}
+],
+ "fingerprint": "9f2c…"                   // 可选:这份清单的指纹,见下面「目录变了就刷新」
+}
 ```
 
 - `parameters` 认的键:`type`(integer / number / string / boolean)、`enum`、`default`、`minimum`、`maximum`、
-  `multipleOf`、`title`、`description`(后两个可按语言分)、`x-advanced`、`x-multiline`。认不出的类型整项丢掉。
+  `multipleOf`、`title`、`description`、`x-advanced`、`x-multiline`。认不出的类型整项丢掉。`title` / `description`
+  可以按语言分(`{"zh": "步数", "en": "Steps"}`):宿主**原样存着、给人看时再挑** —— 目录是在后台刷新的,刷新那一刻
+  的语言不是看的人的语言。`title` 写人话(「采样器」),原始的内部名(`KSampler · sampler_name`)放 `description`,
+  界面上悬停看得到。**顺序就是界面上的顺序**:常用的在前,留空也能跑的标 `x-advanced`。
 - **宿主自己有控件的那几个键**直接用宿主的控件:`seed`、`negative_prompt`、`size`(`enum` → 尺寸下拉)、
   `resolution` / `aspect_ratio`、`duration_seconds`(`enum` 或 `minimum` / `maximum`)、`num_images`
   (`maximum` → 张数上限,没写用 `max_outputs`)、`generate_audio`。**其余的键**进描述符的 `parameter_schema`,
   AI 工作台、画板、工作流节点用同一个通用控件渲染;提交时宿主按它校验类型、范围和可选值。
   用户没动过的参数**不发**,插件给的 `default` 只当占位提示(ADR 0015)。
-- `inputs` 的 `role` 取宿主的素材角色(`reference_image` / `first_frame` / `last_frame` / `reference_video` …),
-  `max` 是这个角色最多几份,`required: true` 是必须给。认不出的角色不接。
+- `inputs` 的 `role` 取宿主的素材角色(`reference_image` / `first_frame` / `last_frame` / `reference_video` /
+  `source_video` / `driving_audio` / `mask` …,见 `ai/providers/contracts/generation.SOURCE_ROLES`),`max` 是这个角色
+  最多几份,`required: true` 是必须给(放大、抠图这类没有提示词的工作流,图就是必须的)。认不出的角色不接。
+- 一次能出几张:声明 `num_images`(`maximum` 是上限,宿主一次最多 4 张)并把 `max_outputs` 设成同一个数;
+  `generate` 时 `parameters.num_images` 就是这次要几张,产出几份交回几份。
 - 宿主把这份清单**缓存成模型行**:连接新建、改配置、启停、授权 / 凭据变化、插件页点「刷新」,以及后端启动时
-  各问一次。问不到(服务没开)就保留上一份,原因显示在插件页;清单里没有了的模型从选择器里消失。
+  各问一次。问不到(服务没开)就保留上一份,原因显示在插件页;清单里没有了的模型从选择器里消失。插件页上
+  「查看模型」列的就是这份缓存(`GET /api/plugins/instances/{id}/models`):名字、种类、模式、收什么、有哪些参数。
+
+### 目录变了就刷新:`fingerprint`
+
+用户在 ComfyUI 里新存一张工作流,不该还得回插件页点一下「刷新」。可是每分钟把上百张工作流全拉一遍、转一遍也不行。
+所以分两步:
+
+- `op: models` 的结果里带一个 `fingerprint`(字符串,≤ 200 字符):这份清单的指纹 —— ComfyUI 插件用的是
+  「保存的工作流的路径 + 大小 + 修改时间、粘贴的模板、几个模型目录的文件名」的哈希;
+- 再支持 `op: "fingerprint"`,只回 `{"fingerprint": "…"}` —— **便宜**,只列目录,不取任何一张图。
+
+宿主每分钟问一次指纹(不留调用记录,那不是一次「调用」),和上次刷新时记下的不一样才重新 `op: models`。
+不给指纹的插件不受影响:它们照旧只在上面那几个时机刷新。指纹问不到(服务没开)不算失败,下一分钟再问。
 
 ### `op: "generate"` —— 做一次
 
@@ -655,6 +745,7 @@ stdout 是**一行一个 JSON 对象**,最后一行是和普通协议同形的�
 | `GET`/`PATCH` `/api/plugins/instances/{id}/permissions` | 授权 |
 | `PATCH /api/plugins/instances/{id}/capabilities` | 工具开关 |
 | `POST /api/plugins/instances/{id}/refresh` | 重拉 MCP 工具清单;替宿主做生成的插件顺带重问一遍模型清单 |
+| `GET /api/plugins/instances/{id}/models` | 替宿主做生成的连接**提供的模型**(缓存的那一份):名字、种类、模式、收什么、参数 |
 | `GET /api/plugins/tools` | 所有可用连接**已开放**的工具 |
 | `POST /api/plugins/instances/{id}/tools/{工具}/invoke` | 执行一次,留痕 |
 

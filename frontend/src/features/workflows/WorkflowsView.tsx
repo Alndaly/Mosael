@@ -156,7 +156,7 @@ import {
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
-import { DEFAULT_CHOICE } from "@/features/ai-studio/parameterPanel";
+import { declaredChoices } from "@/features/ai-studio/parameterPanel";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";
@@ -257,6 +257,7 @@ const SOURCE_ROLE_ORDER = [
   "source_video",
   "first_clip",
   "driving_audio",
+  "mask",
 ] as const;
 
 const SOURCE_ROLE_LABELS: Record<(typeof SOURCE_ROLE_ORDER)[number], MessageKey> = {
@@ -268,6 +269,7 @@ const SOURCE_ROLE_LABELS: Record<(typeof SOURCE_ROLE_ORDER)[number], MessageKey>
   source_video: "genSourceVideo",
   first_clip: "genFirstClip",
   driving_audio: "genDrivingAudio",
+  mask: "genMask",
 };
 
 /** 生成节点里的一个参数控件:枚举给下拉、区间给数字框、布尔给开关。 */
@@ -1814,7 +1816,7 @@ function WorkflowEditor({
           data: {
             ...node.data,
             badge,
-            run: step ? { status: step.status, ms: step.ms, error: step.error } : null,
+            run: step ? { status: step.status, ms: step.ms, error: step.error, message: step.message } : null,
             runAssets: assetOutputs(outputRows(registry, node.data.nodeType as string, step?.outputs)),
             runSummary: outputSummary(registry, node.data.nodeType as string, step?.outputs),
             // **这两项算在这里,不在 toWorkflowFlowNodes。** 那个函数跑在 useState 的初始化里,
@@ -2499,17 +2501,12 @@ function DeclaredGenControl({
   const t = useI18n();
   const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
   if (parameter.type === "boolean" || parameter.options.length > 0) {
-    const choices = parameter.type === "boolean"
-      ? [{ value: "true", label: t("wfGenToggleOn") }, { value: "false", label: t("wfGenToggleOff") }]
-      : parameter.options.map((option) => ({ value: option, label: option }));
+    const choices = declaredChoices(parameter, t);
     return (
       <OptionPicker
-        value={value || DEFAULT_CHOICE}
-        onChange={(next) => onChange(next === DEFAULT_CHOICE ? "" : next, false)}
-        options={[
-          { value: DEFAULT_CHOICE, label: fallback ? t("genDeclaredDefault").replace("{value}", fallback) : t("genDeclaredDefaultNone") },
-          ...choices,
-        ]}
+        value={choices.shown(value)}
+        onChange={(next) => onChange(choices.stored(next), false)}
+        options={choices.options}
       />
     );
   }

@@ -28,18 +28,16 @@ import {
   setPluginPermissions,
   startPluginOauth,
   updatePluginInstance,
-  type PluginCapabilityStatus,
   type PluginField,
   type PluginInstance,
   type PluginInvocation,
   type PluginPackage,
 } from "@/api/client";
 import { toast } from "sonner";
-import { useI18n, usePreferences } from "@/app/preferences";
+import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
-import { relativeTime } from "@/lib/time";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -54,6 +52,8 @@ import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
+import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
+import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { cn } from "@/lib/utils";
 
 /**
@@ -174,6 +174,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
 function invalidatePlugins(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ["plugins"] });
   void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
+  void qc.invalidateQueries({ queryKey: ["plugin-models"] });
   void qc.invalidateQueries({ queryKey: ["workflow-node-types"] });
 }
 
@@ -377,6 +378,8 @@ function NewConnectionDialog({
 }) {
   const t = useI18n();
   const fields = pkg.config_fields ?? [];
+  //: 有一段 JSON 填错了就不让建 —— 后端也会拒,但那时用户已经点完了,只拿回一句报错。
+  const broken = fields.some((field) => field.type === "json" && jsonProblem(draft[field.key] ?? field.default ?? "") !== null);
   // 没有配置项时还要分一次:有凭据的插件说"不需要配置"是错的 —— AppKey 这些确实要填,
   // 只是填在**建好之后的连接上**(凭据挂在连接上,不是插件上)。
   const hint = fields.length
@@ -389,24 +392,34 @@ function NewConnectionDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t("pluginNewConnection")}
-      className="w-[420px]"
+      className={fields.some(isCodeField) ? "w-[600px] max-w-[calc(100vw-32px)]" : "w-[420px]"}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" disabled={pending} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-          <Button loading={pending} onClick={onCreate}><Plus size={13} /> {t("pluginAddConnection")}</Button>
+          <Button loading={pending} disabled={broken} onClick={onCreate}><Plus size={13} /> {t("pluginAddConnection")}</Button>
         </div>
       }
     >
       <div className="grid gap-4">
         <p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">{hint}</p>
         {fields.map((field) => (
-          <label key={field.key} className="grid gap-1.5">
+          <label key={field.key} className="grid min-w-0 gap-1.5">
             <span className="text-ui-sm font-medium text-foreground">{field.label}</span>
-            <FieldInput
-              field={field}
-              value={draft[field.key] ?? field.default}
-              onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-            />
+            {isCodeField(field) ? (
+              <CodeFieldEditor
+                field={field}
+                value={draft[field.key] ?? field.default}
+                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+                minHeight={120}
+                maxHeight={280}
+              />
+            ) : (
+              <FieldInput
+                field={field}
+                value={draft[field.key] ?? field.default}
+                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+              />
+            )}
             {/* 清单里的 help 此前一个字都没显示。Blender 插件那条正是用户会撞到的限制:
                 「互通要求 Blender 与后端在同一台电脑」。 */}
             {field.help && (
@@ -469,30 +482,6 @@ export function FieldInput({
     );
   }
   return <FieldText field={field} value={value} onChange={onChange} className={className} commit={commit} />;
-}
-
-/**
- * 替宿主做生成的插件(ComfyUI 这类)上一次交出的模型清单:几个、什么时候刷的,没刷出来的话为什么。
- *
- * 刷新发生在后台(启动时、改配置时),失败了不写在这里的话,用户只会看到选择器里少了东西、
- * 不知道为什么 —— 比如 ComfyUI 没开。
- */
-function GenerationStatusRow({ status }: { status?: PluginCapabilityStatus }) {
-  const t = useI18n();
-  const { locale } = usePreferences();
-  const models = status?.models;
-  const summary = status?.error
-    ? t("pluginGenerationError").replace("{error}", status.error)
-    : models === null || models === undefined
-      ? t("pluginGenerationNever")
-      : t("pluginGenerationCount")
-          .replace("{n}", String(models))
-          .replace("{time}", status?.refreshed_at ? relativeTime(status.refreshed_at, locale) : "");
-  return (
-    <SettingsRow label={t("pluginGenerationModels")} description={t("pluginGenerationModelsDesc")}>
-      <span className={cn("text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}>{summary}</span>
-    </SettingsRow>
-  );
 }
 
 /** 文本类的配置项。**草稿式**(见 components/ui/draft-text):连接上的配置住在服务端,
@@ -634,12 +623,21 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
 
       {(pkg.config_fields ?? []).map((field) => (
         <SettingsRow key={field.key} label={field.label} description={field.help ? <InlineMarkdown text={field.help} /> : undefined}>
-          <FieldInput
-            field={field}
-            value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
-            commit="blur"
-            onChange={(value) => patch.mutate({ config: { [field.key]: value } })}
-          />
+          {isCodeField(field) ? (
+            /* 一段代码塞不进这一栏:这里只放摘要和「编辑」,编辑在大弹窗里(见 CodeConfigField)。 */
+            <CodeConfigControl
+              field={field}
+              value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
+              onSave={(value) => patch.mutateAsync({ config: { [field.key]: value } })}
+            />
+          ) : (
+            <FieldInput
+              field={field}
+              value={String((instance.config as Record<string, unknown>)[field.key] ?? "")}
+              commit="blur"
+              onChange={(value) => patch.mutate({ config: { [field.key]: value } })}
+            />
+          )}
         </SettingsRow>
       ))}
 
@@ -647,7 +645,14 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
         <CredentialRows instanceId={instance.id} oauth={Boolean(pkg.oauth)} />
       )}
 
-      {generates && <GenerationStatusRow status={instance.capability_status?.generation} />}
+      {generates && (
+        <GenerationModelsRow
+          instance={instance}
+          status={instance.capability_status?.generation}
+          refreshing={refresh.isPending}
+          onRefresh={() => refresh.mutate()}
+        />
+      )}
 
 
       {(grants.data ?? []).map((grant) => (

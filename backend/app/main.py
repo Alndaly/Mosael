@@ -115,11 +115,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     for table, count in settled.items():
         if count:
             logger.info("reconciled %d orphaned %s left by a previous restart", count, table)
-    # 插件生成供应商(ComfyUI 等)的模型清单在后台刷一遍:ComfyUI 里昨晚新存的工作流,今天打开就在
-    # 选择器里。后台做:一台没开的 ComfyUI 不该拖慢启动(见 generation/plugin_connections)。
+    # 插件生成供应商(ComfyUI 等)的模型清单在后台刷一遍,之后隔一会儿看一眼指纹:ComfyUI 里新存的工作流,
+    # 一分钟内就在选择器里。后台做:一台没开的 ComfyUI 不该拖慢启动(见 generation/plugin_connections)。
     from app.domain.generation import plugin_connections
 
-    plugin_connections.refresh_all_in_background()
+    plugin_connections.start_watching()
     if settings.scheduler_enabled:
         start_scheduler_loop()
         logger.info("scheduler loop started")
@@ -137,6 +137,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Mosael backend ready")
     yield
     logger.info("Mosael backend shutting down")
+    plugin_connections.stop_watching()
     stop_scheduler_loop()
     if settings.feishu_autostart:
         stop_all_connections()

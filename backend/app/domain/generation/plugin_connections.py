@@ -38,7 +38,7 @@ from app.ai.providers import (
 )
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import PluginInstance, PluginPackage, ProviderProfile
 from app.domain import provider_models
 from app.domain.plugins import host_capabilities
@@ -180,7 +180,7 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
     if not usable or not (refresh or not previous.get("refreshed_at")):
         return
     try:
-        models = plugin_generation.catalog(db, instance)
+        found = plugin_generation.catalog(db, instance)
     except (PluginDomainError, PluginRuntimeError) as exc:
         db.rollback()
         from app.domain.jobs import blame
@@ -195,13 +195,23 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
             capability_ids=[model.kind],
             capabilities={model.kind: descriptor(model)},
         )
-        for model in models
+        for model in found.models
         if model.kind in GENERATION_KINDS
     ]
     count = provider_models.replace_declared_catalog(db, profile, entries)
     db.commit()
     inst.set_capability_status(
-        db, instance, GENERATION, {"models": count, "refreshed_at": _now(), "error": "", "error_key": "", "error_params": {}}
+        db,
+        instance,
+        GENERATION,
+        {
+            "models": count,
+            "refreshed_at": _now(),
+            "fingerprint": found.fingerprint,
+            "error": "",
+            "error_key": "",
+            "error_params": {},
+        },
     )
 
 
@@ -209,25 +219,143 @@ def _handler(db: Session, instance: PluginInstance, refresh: bool) -> None:
     sync(db, instance, refresh)
 
 
+def _generation_instances(db: Session) -> list[PluginInstance]:
+    out: list[PluginInstance] = []
+    for instance in db.scalars(select(PluginInstance)):
+        package = db.get(PluginPackage, instance.package_id)
+        if package is not None and GENERATION in manifest_of(package).provides:
+            out.append(instance)
+    return out
+
+
 def refresh_all() -> None:
-    """启动时在后台把每个提供生成的实例刷一遍。ComfyUI 里昨晚新存的工作流,今天打开就在选择器里。"""
+    """把每个提供生成的实例刷一遍。启动时做一次:ComfyUI 里昨晚新存的工作流,今天打开就在选择器里。"""
     with SessionLocal() as db:
-        rows = list(db.scalars(select(PluginInstance)))
-        for instance in rows:
-            package = db.get(PluginPackage, instance.package_id)
-            if package is None or GENERATION not in manifest_of(package).provides:
-                continue
+        for instance in _generation_instances(db):
             try:
                 sync(db, instance, True)
             except Exception:  # noqa: BLE001 — 一个实例刷不出来不该挡住下一个
                 db.rollback()
-                logger.exception("启动时刷新插件实例 %s 的生成模型失败", instance.id)
+                logger.exception("刷新插件实例 %s 的生成模型失败", instance.id)
 
 
-def refresh_all_in_background() -> threading.Thread:
-    thread = threading.Thread(target=refresh_all, daemon=True, name="plugin-generation-catalog")
-    thread.start()
-    return thread
+# ---------------------------------------------------------------------------
+# 目录变了就刷新(插件给了指纹时)
+# ---------------------------------------------------------------------------
+
+#: 多久问一次指纹。ComfyUI 里刚存了一张工作流,一分钟内它就出现在选择器里;问一次只是列一下目录,
+#: 不拉任何一张图。
+WATCH_INTERVAL_SECONDS = 60.0
+
+_watch_stop = threading.Event()
+_watch_thread: threading.Thread | None = None
+
+
+def check_for_changes() -> int:
+    """问一遍每个**可用、上次交过指纹**的实例:指纹变了就重新拉目录。返回刷新了几个。
+
+    插件没交过指纹(老版本、别家不支持)就不问 —— 那种只在启动、改配置、点「刷新」时刷新。
+    问不到(服务器没开)不记失败:这是后台的一次顺手检查,不该把插件页上「上次刷新成功」改成红字;
+    下一轮再问。
+    """
+    refreshed = 0
+    with SessionLocal() as db:
+        for instance in _generation_instances(db):
+            status = dict((instance.capability_status or {}).get(GENERATION) or {})
+            known = str(status.get("fingerprint") or "")
+            if not known or inst.blocked_reason(db, instance):
+                continue
+            try:
+                current = plugin_generation.fingerprint(db, instance)
+            except (PluginDomainError, PluginRuntimeError) as exc:
+                db.rollback()
+                logger.debug("插件实例 %s 的模型清单指纹没问到:%s", instance.id, exc)
+                continue
+            if current == known:
+                continue
+            try:
+                sync(db, instance, True)
+                refreshed += 1
+            except Exception:  # noqa: BLE001 — 一个实例刷不出来不该挡住下一个
+                db.rollback()
+                logger.exception("插件实例 %s 的模型清单变了,但没刷出来", instance.id)
+    return refreshed
+
+
+def _watch() -> None:
+    refresh_all()
+    while not _watch_stop.wait(WATCH_INTERVAL_SECONDS):
+        try:
+            check_for_changes()
+        except Exception:  # noqa: BLE001 — 后台线程死了就再也不会刷新,宁可记一笔接着转
+            logger.exception("检查插件生成模型清单时出错")
+
+
+def start_watching() -> threading.Thread:
+    """后端启动时调一次:先在后台把每个实例刷一遍,然后每隔 WATCH_INTERVAL_SECONDS 看一眼指纹。
+
+    后台做:一台没开的 ComfyUI 不该拖慢启动。
+    """
+    global _watch_thread
+    _watch_stop.clear()
+    _watch_thread = threading.Thread(target=_watch, daemon=True, name="plugin-generation-catalog")
+    _watch_thread.start()
+    return _watch_thread
+
+
+def stop_watching() -> None:
+    _watch_stop.set()
+
+
+# ---------------------------------------------------------------------------
+# 插件页上的「这个实例提供了哪些模型」
+# ---------------------------------------------------------------------------
+
+
+def provided_models(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
+    """这个实例现在提供的模型(模型行上缓存的那一份),给插件页列出来:名字、种类、模式、收什么、几个参数。
+
+    读模型行而不是现问插件:插件页一打开就去拉一遍 ComfyUI 上的每张工作流,和 ADR 0020 拒绝「每次打开
+    选择器都现问」是同一个理由。要最新的,点「刷新模型」。
+    """
+    profile = db.scalar(select(ProviderProfile).where(ProviderProfile.plugin_instance_id == instance.id))
+    if profile is None:
+        return []
+    locale = get_current_locale()
+    out: list[dict[str, Any]] = []
+    for row in provider_models.list_models(db, profile.id):
+        for kind in row.capability_ids or []:
+            caps = (row.declared_capabilities or {}).get(kind) or {}
+            schema = caps.get("parameter_schema") or {}
+            limits = caps.get("source_limits") or {}
+            required = {group[0] for group in caps.get("requires_source") or [] if group}
+            out.append(
+                {
+                    "id": row.model_id,
+                    "label": row.display_name or row.model_id,
+                    "kind": kind,
+                    "enabled": row.enabled,
+                    "modes": [str(one) for one in caps.get("modes") or []],
+                    "inputs": [
+                        {"role": role, "max": int(count), "required": role in required}
+                        for role, count in limits.items()
+                    ],
+                    "host_parameters": [
+                        key for key in caps.get("parameter_keys") or [] if key in _HOST_KEYS
+                    ],
+                    "parameters": [
+                        {
+                            "key": key,
+                            "title": pick_text(spec.get("title"), locale) or key,
+                            "type": str(spec.get("type") or ""),
+                            "advanced": spec.get("x-advanced") is True,
+                        }
+                        for key, spec in schema.items()
+                        if isinstance(spec, dict)
+                    ],
+                }
+            )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +479,7 @@ def _adapter_source(vendor: str, kind: str) -> GenerationAdapter | None:
 
 def install() -> None:
     """组装根调一次:登记宿主侧(实例变了就对齐连接)和 Adapter 的动态来源。"""
-    host_capabilities.register(GENERATION, _handler)
+    host_capabilities.register(GENERATION, _handler, listing=provided_models)
     register_generation_adapter_source(_adapter_source)
 
 
@@ -363,7 +491,10 @@ __all__ = [
     "install",
     "package_of",
     "refresh_all",
-    "refresh_all_in_background",
+    "check_for_changes",
+    "provided_models",
+    "start_watching",
+    "stop_watching",
     "sync",
     "vendor_for",
 ]

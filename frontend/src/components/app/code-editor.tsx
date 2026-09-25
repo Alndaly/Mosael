@@ -15,6 +15,11 @@ function useIsDark(): boolean {
   return dark;
 }
 
+const LANGUAGES: Record<string, () => ReturnType<typeof json>[]> = {
+  python: () => [python()],
+  json: () => [json()],
+};
+
 export interface CodeEditorHandle {
   /** 把文本插到光标处(变量 chip 用),无编辑器时追加到末尾。 */
   insertAtCursor: (text: string) => void;
@@ -29,16 +34,19 @@ export const CodeEditor = React.forwardRef<
   {
     value: string;
     onChange: (value: string) => void;
-    language: "python" | "json";
+    /** 高亮用哪种语言。认得的是 python / json,别的(插件配置里声明的 yaml、text……)照常编辑、不高亮。 */
+    language: string;
     minHeight?: number;
     maxHeight?: number;
     placeholder?: string;
     /** 关掉行号/折叠槽:小 JSON 配置块用,单行时不至于挂个孤零零的行号。 */
     gutter?: boolean;
     onBlur?: () => void;
+    /** 一打开就把光标放进去(弹窗里只有它一个要填的东西时)。 */
+    autoFocus?: boolean;
   }
 >(function CodeEditor(
-  { value, onChange, language, minHeight = 96, maxHeight = 320, placeholder, gutter = true, onBlur },
+  { value, onChange, language, minHeight = 96, maxHeight = 320, placeholder, gutter = true, onBlur, autoFocus },
   ref,
 ) {
   const dark = useIsDark();
@@ -82,11 +90,12 @@ export const CodeEditor = React.forwardRef<
         value={value}
         onChange={onChange}
         onBlur={onBlur}
+        autoFocus={autoFocus}
         theme={dark ? "dark" : "light"}
         placeholder={placeholder}
         minHeight={`${minHeight}px`}
         maxHeight={`${maxHeight}px`}
-        extensions={language === "python" ? [python()] : [json()]}
+        extensions={LANGUAGES[language]?.() ?? []}
         basicSetup={{
           lineNumbers: gutter,
           foldGutter: gutter,

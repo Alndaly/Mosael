@@ -63,7 +63,21 @@ class PluginModel:
     prompt_dialect: str = ""
 
 
-def catalog(db: Session, instance: PluginInstance) -> list[PluginModel]:
+@dataclass(frozen=True)
+class Catalog:
+    """一次 `op: models` 的结果。`fingerprint` 是插件给的「这份清单的指纹」(可以没有,见 `fingerprint`)。"""
+
+    models: list[PluginModel]
+    fingerprint: str = ""
+
+
+#: 指纹最长多少。它只拿来比「变没变」,不是存档。
+_MAX_FINGERPRINT = 200
+#: 问一次指纹最多等多久。它该是一个只列目录的请求,几秒还没回就当这一轮没问到。
+FINGERPRINT_TIMEOUT_SECONDS = 20.0
+
+
+def catalog(db: Session, instance: PluginInstance) -> Catalog:
     """问这个实例现在有哪些模型。认不出的条目**丢掉**,不让一条坏条目拖垮整份清单。"""
     output = tools.invoke_host(db, instance.id, GENERATION, {"op": "models"}, timeout=CATALOG_TIMEOUT_SECONDS)
     raw = output.get("models")
@@ -77,7 +91,27 @@ def catalog(db: Session, instance: PluginInstance) -> list[PluginModel]:
         if model is not None and model.id not in seen:
             seen.add(model.id)
             models.append(model)
-    return models
+    return Catalog(models=models, fingerprint=_fingerprint(output))
+
+
+def fingerprint(db: Session, instance: PluginInstance) -> str:
+    """问插件**模型清单的指纹**(`op: fingerprint`)。便宜的一问:只为判「要不要重新拉整份目录」。
+
+    不留调用记录(宿主每隔一会儿就问一次,那不是一次「调用」)。插件答不上来就抛,由调用方决定
+    怎么办 —— 不能把「没问到」当成「没变」或「变了」。
+    """
+    output = tools.invoke_host(
+        db, instance.id, GENERATION, {"op": "fingerprint"}, timeout=FINGERPRINT_TIMEOUT_SECONDS, record=False
+    )
+    found = _fingerprint(output)
+    if not found:
+        raise PluginDomainError("pluginErr_generationNoFingerprint", name=instance.name)
+    return found
+
+
+def _fingerprint(output: dict[str, Any]) -> str:
+    raw = output.get("fingerprint")
+    return raw.strip()[:_MAX_FINGERPRINT] if isinstance(raw, str) else ""
 
 
 def _model(entry: Any, text: Any) -> PluginModel | None:
@@ -117,12 +151,14 @@ def _parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
         if kind not in _PARAMETER_TYPES:
             continue
         clean: dict[str, Any] = {"type": kind}
-        title = text(spec.get("title")).strip()
+        # 名字和说明**按语言分的就原样留着**,到给人看的那一刻再挑(见 generation/resolution):
+        # 目录是在后台刷新的(启动时、隔一会儿),刷新那一刻的语言不是看的人的语言。
+        title = _localizable(spec.get("title"), text, 120)
         if title:
-            clean["title"] = title[:120]
-        description = text(spec.get("description")).strip()
+            clean["title"] = title
+        description = _localizable(spec.get("description"), text, 500)
         if description:
-            clean["description"] = description[:500]
+            clean["description"] = description
         enum = spec.get("enum")
         if isinstance(enum, list):
             values = [one for one in enum if _scalar(one)][:_MAX_ENUM]
@@ -141,6 +177,14 @@ def _parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
             clean["x-multiline"] = True
         out[key] = clean
     return out
+
+
+def _localizable(value: Any, text: Any, limit: int) -> str | dict[str, str]:
+    """一段给人看的字:普通字符串,或 `{"zh": …, "en": …}`(只留字符串值)。空的回空串。"""
+    if isinstance(value, dict):
+        kept = {str(lang)[:16]: one.strip()[:limit] for lang, one in value.items() if isinstance(one, str) and one.strip()}
+        return kept or ""
+    return text(value).strip()[:limit]
 
 
 def _inputs(raw: Any, text: Any) -> tuple[dict[str, Any], ...]:
@@ -271,11 +315,14 @@ def generate(
 
 __all__ = [
     "CATALOG_TIMEOUT_SECONDS",
+    "Catalog",
+    "FINGERPRINT_TIMEOUT_SECONDS",
     "GENERATION",
     "GenerationCall",
     "GenerationOutcome",
     "MODEL_KINDS",
     "PluginModel",
     "catalog",
+    "fingerprint",
     "generate",
 ]

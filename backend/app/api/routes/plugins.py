@@ -30,6 +30,7 @@ from app.api.schemas import (
     PluginPackageOut,
     PluginPermissionGrantOut,
     PluginPermissionGrantUpdate,
+    PluginProvidedModelOut,
     PluginToolOut,
 )
 from app.core.config import settings
@@ -43,7 +44,7 @@ from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
-from app.domain.plugins.manifest import manifest_of, text_of, web_url
+from app.domain.plugins.manifest import GENERATION, manifest_of, text_of, web_url
 
 router = APIRouter(tags=["plugins"])
 
@@ -257,6 +258,7 @@ def _field(spec) -> dict:
         "options": spec.options,
         "default": spec.default,
         "multiline": spec.multiline,
+        "language": spec.language,
     }
 
 
@@ -339,6 +341,17 @@ def refresh_instance_tools(instance_id: str, db: DbSession, user: CurrentUser) -
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _instance(db, instance)
+
+
+@router.get("/plugins/instances/{instance_id}/models", response_model=list[PluginProvidedModelOut])
+def list_instance_models(instance_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    """这个连接**替宿主提供的模型**(生成能力;见 ADR 0020)。读的是缓存的那一份,不现问插件 ——
+    要最新的走 `/refresh`。不提供生成的连接回空列表。"""
+    try:
+        instance = my_instance(db, instance_id, user)
+    except PluginDomainError as exc:
+        raise _fail(exc, 404) from exc
+    return host_capabilities.listing(db, instance, GENERATION) or []
 
 
 @router.patch("/plugins/instances/{instance_id}/capabilities", response_model=PluginInstanceOut)

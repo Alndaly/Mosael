@@ -17,14 +17,16 @@ class PluginFieldOut(ApiModel):
 
     key: str
     label: str
-    type: str = "string"  # string | enum | number | boolean
+    type: str = "string"  # string | enum | number | boolean | json | code
     help: str = ""
     required: bool = True
     secret: bool = False
     options: list[dict] = Field(default_factory=list)
     default: str = ""
-    #: 多行文本(一段 JSON 之类)。界面给多行框。
+    #: 多行文本。界面给多行框。
     multiline: bool = False
+    #: `json` / `code` 的语言(给代码编辑器挑高亮)。其余类型是空串。
+    language: str = ""
 
 
 class PluginToolStateOut(ApiModel):
@@ -45,6 +47,34 @@ class PluginCapabilityStatusOut(ApiModel):
     refreshed_at: str | None = None
     #: 上一次失败的原因(已按看的人的语言翻好)。成功过后清空。
     error: str = ""
+
+
+class PluginProvidedInputOut(ApiModel):
+    role: str
+    max: int = 1
+    required: bool = False
+
+
+class PluginProvidedParameterOut(ApiModel):
+    key: str
+    title: str = ""
+    type: str = ""
+    advanced: bool = False
+
+
+class PluginProvidedModelOut(ApiModel):
+    """一个替宿主做生成的实例**提供的一个模型**(模型行上缓存的那一份),给插件页列出来。"""
+
+    id: str
+    label: str
+    kind: str
+    enabled: bool = True
+    modes: list[str] = Field(default_factory=list)
+    inputs: list[PluginProvidedInputOut] = Field(default_factory=list)
+    #: 宿主自己有控件的那几项(尺寸、种子、反向提示词、一次几张……)。
+    host_parameters: list[str] = Field(default_factory=list)
+    #: 这个模型自己的参数(参数表里的那些)。
+    parameters: list[PluginProvidedParameterOut] = Field(default_factory=list)
 
 
 class PluginInstanceOut(ApiModel):

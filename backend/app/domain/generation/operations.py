@@ -25,7 +25,7 @@ from app.domain.generation.catalog import (
     known_capabilities_for,
 )
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
-from app.core.i18n import LocalizedError, tr
+from app.core.i18n import LocalizedError, pick_text, tr
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
 
@@ -506,7 +506,7 @@ def _check_declared_parameter(provider: str, model: str, key: str, spec: dict[st
     越界的步数原样交给 ComfyUI,等它排完队再回一句英文的 `Value 500 bigger than max of 150`。
     报错说的是界面上那个名字(`title`),不是 `3.steps` 这种内部键。
     """
-    name = str(spec.get("title") or key)
+    name = pick_text(spec.get("title")) or key
     kind = spec.get("type")
     if kind == "boolean":
         if not isinstance(value, bool):

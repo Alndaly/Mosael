@@ -1,5 +1,5 @@
 /**
- * 生成面板里那些「带角色的输入素材」:首帧、尾帧、参考图、参考视频、参考音频。
+ * 生成面板里那些「带角色的输入素材」:首帧、尾帧、参考图、参考视频、参考音频、蒙版……
  *
  * 此前每一种都在 AiStudio.tsx 里各占一套 —— 三个配置字段、一个 ref、一条上传变更、
  * 一个清除函数、六十行 JSX。加尾帧就是把这一整套再抄一遍,而抄漏的那一处不会报错。
@@ -32,6 +32,7 @@ export const SOURCE_ROLES = [
   "source_video",
   "first_clip",
   "driving_audio",
+  "mask",
 ] as const;
 export type SourceRole = (typeof SOURCE_ROLES)[number];
 
@@ -114,6 +115,13 @@ export const ROLE_COPY: Record<SourceRole, RoleCopy> = {
     urlLabel: "genFirstClipUrl",
     accept: "video/*",
   },
+  mask: {
+    label: "genMask",
+    upload: "genMaskUpload",
+    uploading: "genMaskUploading",
+    urlLabel: "genMaskUrl",
+    accept: "image/*",
+  },
 };
 
 /** 这个槽位是空的吗 —— 素材和外链都没有。 */
@@ -166,6 +174,7 @@ export function emptyFrames(): FrameSlots {
     source_video: [{ ...EMPTY_SLOT }],
     first_clip: [{ ...EMPTY_SLOT }],
     driving_audio: [{ ...EMPTY_SLOT }],
+    mask: [{ ...EMPTY_SLOT }],
   };
 }
 

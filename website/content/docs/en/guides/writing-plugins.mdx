@@ -101,6 +101,12 @@ Declare them in the manifest, the user fills them on the Plugins page, and they 
 key = os.environ["MY_API_KEY"]
 ```
 
+A config field's `type` can be `string` (the default), `enum`, `number`, `boolean`, or one of two kinds of **code**:
+`json` (a code editor, validated before saving — it points at the line and column of a mistake) and `code` (a code
+editor highlighted by `language`). Don't declare a JSON snippet as a multiline text box: users would only see its
+first line and learn about a missing comma when the plugin runs. The value is still stored as a string for you to
+parse. Write placeholders in `help` as inline code with backticks.
+
 **Environment injection is not a sandbox.** Mosael passes a minimal environment and the declared credentials. Local plugins still run with the current user’s operating-system permissions and may read accessible files. Declare the permissions your tools need and keep credentials out of logs.
 
 ## Handing over a file
@@ -131,6 +137,10 @@ even if it didn't, the user sees no progress and cancel does nothing.
 Once accepted, `artifact` is **replaced** by `asset_id`, so callers get a media id just like any
 other asset-producing tool. The [Baidu Netdisk plugin](/plugins/baidu-pan) uses the second form.
 
+To hand over several files, return `artifacts` (a list; each item is written like `artifact`, up to 64): the host
+imports them all and replaces the list with `assets` (each file's `asset_id`, name and any scalar notes you put on
+that item) and `asset_ids`; the first one also becomes `asset_id`.
+
 ## Taking a file
 
 The other direction: your tool needs to work on an **existing** asset — upload it to a netdisk,
@@ -160,6 +170,9 @@ You don't know the media library exists, and you don't need to.
 You get a **copy**, not the library's own file — breaking or deleting it cannot touch the user's
 asset. It is removed when the call ends, so don't write anything there you want to keep (hand
 that back with `artifact` instead).
+
+To take several at once, use `{"type": "array", "items": {"type": "string", "format": "asset"}}` — you receive a
+list of paths.
 
 Why you don't fetch it yourself: your environment has no database, no API token, no media
 directory — that is the isolation boundary, not an oversight.
@@ -210,6 +223,13 @@ anything expensive (hundreds of MB of dependencies, downloaded models) in
 
 See the [Remotion plugin](/plugins/remotion): dependencies live in the data directory and the render tool declares its own budget.
 
+A tool that runs for minutes can also declare `"stream": true`: stdout becomes one JSON object per line, progress is
+written as `{"event": "progress", "progress": 0.4, "message": "step 8/20"}`, and the last line is the result as
+usual. Inside a workflow the run panel shows that progress; when the task is cancelled Mosael first creates a cancel
+file (`MOSAEL_PLUGIN_CANCEL_FILE`) so you can stop the remote work before exiting, instead of being killed outright.
+For long work meant for the agent, offer a “submit and return a task id” tool plus a “fetch by task id” tool — the
+bundled ComfyUI plugin's `run_workflow` (`wait: false`) and `import_outputs` work that way.
+
 ## Generating for Mosael
 
 A plugin can also be a **generation provider**: declare `"provides": ["generation"]` in the manifest and let one
@@ -220,7 +240,10 @@ output files). To cancel, Mosael creates a cancel file (its path is in `MOSAEL_P
 stop the remote work.
 
 That tool is host-only — it never shows up for the agent or in workflows. Its budget is 1 hour unless declared, up to
-6 hours. The full protocol and fields are in `docs/PLUGIN_MANIFEST.md` (“Generating for the host”) in the repository;
+6 hours. Add a `fingerprint` to the model list and support a cheap `op: "fingerprint"`, and Mosael asks once a minute
+and only re-reads the list when it changed — models the user adds on your side appear without a manual refresh.
+Parameter `title`s may be written per language (`{"zh": "步数", "en": "Steps"}`); Mosael picks one when it shows
+them. The full protocol and fields are in `docs/PLUGIN_MANIFEST.md` (“Generating for the host”) in the repository;
 the ComfyUI plugin that ships with Mosael (`plugins/bundled/comfyui`) is a complete example.
 
 ## Making it a workflow node

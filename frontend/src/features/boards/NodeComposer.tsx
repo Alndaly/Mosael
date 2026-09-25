@@ -21,7 +21,7 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/sourceFrames";
-import { DEFAULT_CHOICE } from "@/features/ai-studio/parameterPanel";
+import { ParameterRow, declaredChoices } from "@/features/ai-studio/parameterPanel";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -45,6 +45,7 @@ import {
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
 
@@ -75,6 +76,7 @@ function Pick({
   className,
   allowFreeValue,
   placeholder,
+  hint,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -96,6 +98,8 @@ function Pick({
    */
   allowFreeValue?: boolean;
   placeholder?: string;
+  /** 悬停在标签上看到的全文(原始的「节点 · 输入名」这类)。 */
+  hint?: string;
 }) {
   if (options.length === 0 && !allowFreeValue) return null;
   const control = options.length === 0 ? (
@@ -104,7 +108,7 @@ function Pick({
       onChange={(event) => onChange(event.target.value)}
       aria-label={label}
       placeholder={placeholder}
-      className="h-8 w-full min-w-0 px-2 text-ui-xs"
+      className="h-8 w-full min-w-0 px-2.5 text-ui-xs"
     />
   ) : (
     /* 选项一多自动换成可搜索的那一版(阈值在 OptionPicker 里)—— 模型清单动辄十几项,
@@ -115,17 +119,20 @@ function Pick({
       options={options}
       ariaLabel={label}
       icon={icon}
-      /* 带标签的排在设置弹层的两列网格里,要撑满自己那一格;不带标签的活在工具行里,
-         **按内容取宽** —— 撑满会把箭头顶到行尾,名字和箭头之间空出一大片。 */
+      /* 带标签的排在设置弹层里,要撑满自己那一格,**和旁边的输入框同一个样子**(有边框的字段,
+         和全应用的表单一家):此前下拉是无边框的深色填充、输入框是描边的浅底,并排时像两种控件。
+         不带标签的活在工具行里,**按内容取宽** —— 撑满会把箭头顶到行尾,名字和箭头之间空出一大片。 */
       className={cn(
-        "h-8 min-w-0 gap-1 border-0 px-2 text-ui-xs shadow-none",
-        label ? "w-full bg-control" : "w-auto max-w-full bg-transparent text-muted-foreground transition-colors hover:bg-secondary",
+        "h-8 min-w-0 gap-1 text-ui-xs",
+        label
+          ? "w-full px-2.5"
+          : "w-auto max-w-full border-0 bg-transparent px-2 text-muted-foreground shadow-none transition-colors hover:bg-secondary",
         className,
       )}
       contentClassName="max-w-[min(440px,calc(100vw-16px))]"
     />
   );
-  return label ? <div className="grid min-w-0 grid-cols-[112px_minmax(0,1fr)] items-center gap-3"><span className="text-ui-xs text-muted-foreground">{label}</span>{control}</div> : control;
+  return label ? <ParameterRow label={label} title={hint}>{control}</ParameterRow> : control;
 }
 
 /** 区间时长仍用紧凑 Pick，但把 min..max 的每个合法整数都列出来。
@@ -1042,20 +1049,18 @@ export function NodeComposer({
                 })}
                 {declaredParameters(current).map((parameter) => {
                   const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
-                  const choices = parameter.type === "boolean"
-                    ? [{ value: "true", label: t("wfGenToggleOn") }, { value: "false", label: t("wfGenToggleOff") }]
-                    : parameter.options.map((option) => ({ value: option, label: option }));
+                  const listed = parameter.type === "boolean" || parameter.options.length > 0;
+                  const choices = declaredChoices(parameter, t);
                   return (
                     <Pick
                       key={parameter.key}
                       label={parameter.label}
-                      value={declared[parameter.key] || (choices.length > 0 ? DEFAULT_CHOICE : "")}
+                      hint={parameter.description ? `${parameter.label} — ${toPlainText(parameter.description)}` : parameter.label}
+                      value={listed ? choices.shown(declared[parameter.key] ?? "") : (declared[parameter.key] ?? "")}
                       onChange={(next) =>
-                        setDeclared((values) => ({ ...values, [parameter.key]: next === DEFAULT_CHOICE ? "" : next }))
+                        setDeclared((values) => ({ ...values, [parameter.key]: listed ? choices.stored(next) : next }))
                       }
-                      options={choices.length > 0
-                        ? [{ value: DEFAULT_CHOICE, label: fallback ? t("genDeclaredDefault").replace("{value}", fallback) : t("genDeclaredDefaultNone") }, ...choices]
-                        : []}
+                      options={listed ? choices.options : []}
                       allowFreeValue
                       placeholder={fallback || t("genDeclaredDefaultNone")}
                     />

@@ -281,7 +281,12 @@ export function WorkflowRunHistory({
                         ) : (
                           <Loader2 size={12} className="animate-mosael-spin shrink-0 text-primary" />
                         )}
-                        <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {s.name}
+                          {s.status === "running" && s.message && (
+                            <span className="ml-1.5 text-ui-2xs text-muted-foreground">{s.message}</span>
+                          )}
+                        </span>
                         {s.status === "skipped" ? (
                           <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">{t("wfStepSkipped")}</span>
                         ) : s.status === "running" && s.startAt != null ? (

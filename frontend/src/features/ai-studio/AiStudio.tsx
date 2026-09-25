@@ -93,6 +93,7 @@ import {
   type FrameSlots,
 } from "@/features/ai-studio/sourceFrames";
 import { cn } from "@/lib/utils";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -1086,7 +1087,7 @@ function GenerateWorkspace({
                   );
                 })}
                 {declaredParameters(selectedModel).map((parameter) => (
-                  <ParameterField key={parameter.key} label={parameter.label} hint={parameter.description || undefined}>
+                  <ParameterField key={parameter.key} label={parameter.label} title={toPlainText(parameter.description) || undefined}>
                     <DeclaredParameterControl
                       parameter={parameter}
                       value={generationConfig.declared[parameter.key] ?? ""}

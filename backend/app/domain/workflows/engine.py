@@ -23,7 +23,19 @@ from sqlalchemy.orm import Session
 from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
 from app.core.i18n import DEFAULT_LOCALE, t
 from app.db.models import Job, Workflow, WorkflowRevision
-from app.domain.jobs import blame, create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
+from app.domain.jobs import (
+    blame,
+    create_job,
+    current_parent_job_id,
+    dispatch_job,
+    emit_job_event,
+    finish_job,
+    listening_for_progress,
+    reset_parent_job,
+    say,
+    set_parent_job,
+    stop_listening_for_progress,
+)
 from app.domain.notifications import notify
 from app.domain.workflows import (
     BRANCHING_NODE_TYPES,
@@ -288,6 +300,9 @@ def execute_graph(
             raise WorkflowDomainError("wfErr_noExecutor", params={"type": ntype})
         # Each pool has new threads, including nested graphs: restore the captured parent explicitly.
         token = set_parent_job(wf_job_id)
+        # 节点里的长活(插件跑一张 ComfyUI 工作流)报的进度,记成这个节点的事件 —— 执行面板上看得到
+        # 「采样 12/20」,而不是一个转了十分钟的圈。内嵌子图不发节点事件,也就不听。
+        listening = listening_for_progress(progress_listener(nid) if has_job else None)
         try:
             # **先拿预算,再开会话** —— 顺序就是这条规矩的全部(见 NODE_CONNECTIONS)。
             # 反过来的话,等的那个线程已经把连接攥在手里了。
@@ -303,8 +318,26 @@ def execute_graph(
                 node_db.commit()
                 return outputs
         finally:
+            stop_listening_for_progress(listening)
             if token is not None:
                 reset_parent_job(token)
+
+    def progress_listener(nid: str) -> Any:
+        """一个节点的进度上报 → `workflow.node.progress` 事件。
+
+        在节点的线程里被调,所以**自己开一个短会话**写事件:引擎的会话不是线程安全的,而节点的会话
+        只在节点成功时提交(见上面的事务边界),不能为了一条进度提前提交它。
+        """
+
+        def listen(fraction: float, message: str) -> None:
+            with SessionLocal() as progress_db:
+                emit_job_event(progress_db, job.id, "workflow.node.progress", {
+                    "node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid),
+                    "progress": round(fraction, 4), "message": message,
+                })
+                progress_db.commit()
+
+        return listen
 
     processed = 0
     scheduled: set[str] = set()

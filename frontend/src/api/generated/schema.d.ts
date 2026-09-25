@@ -5257,6 +5257,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Instance Models
+         * @description 这个连接**替宿主提供的模型**(生成能力;见 ADR 0020)。读的是缓存的那一份,不现问插件 ——
+         *     要最新的走 `/refresh`。不提供生成的连接回空列表。
+         */
+        get: operations["list_instance_models_api_plugins_instances__instance_id__models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/capabilities": {
         parameters: {
             query?: never;
@@ -8969,6 +8990,11 @@ export interface components {
              * @default false
              */
             multiline: boolean;
+            /**
+             * Language
+             * @default
+             */
+            language: string;
         };
         /**
          * PluginInstallPreview
@@ -9321,6 +9347,66 @@ export interface components {
             grants?: {
                 [key: string]: boolean;
             };
+        };
+        /** PluginProvidedInputOut */
+        PluginProvidedInputOut: {
+            /** Role */
+            role: string;
+            /**
+             * Max
+             * @default 1
+             */
+            max: number;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+        };
+        /**
+         * PluginProvidedModelOut
+         * @description 一个替宿主做生成的实例**提供的一个模型**(模型行上缓存的那一份),给插件页列出来。
+         */
+        PluginProvidedModelOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Modes */
+            modes?: string[];
+            /** Inputs */
+            inputs?: components["schemas"]["PluginProvidedInputOut"][];
+            /** Host Parameters */
+            host_parameters?: string[];
+            /** Parameters */
+            parameters?: components["schemas"]["PluginProvidedParameterOut"][];
+        };
+        /** PluginProvidedParameterOut */
+        PluginProvidedParameterOut: {
+            /** Key */
+            key: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+            /**
+             * Advanced
+             * @default false
+             */
+            advanced: boolean;
         };
         /**
          * PluginToolOut
@@ -23379,6 +23465,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginInstanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_instance_models_api_plugins_instances__instance_id__models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginProvidedModelOut"][];
                 };
             };
             /** @description Validation Error */

@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
-import { DeclaredParameterControl } from "@/features/ai-studio/parameterPanel";
+import { DEFAULT_CHOICE, DeclaredParameterControl, ParameterRow, declaredChoices } from "@/features/ai-studio/parameterPanel";
 import type { DeclaredParameter } from "@/lib/generationCapabilities";
 
 const steps: DeclaredParameter = {
@@ -54,15 +54,59 @@ describe("模型自己声明的参数", () => {
     expect(screen.getByDisplayValue(/a\s+b/).tagName).toBe("TEXTAREA");
   });
 
-  it("有可选值的给下拉,第一项是「默认」(= 不发)", () => {
+  it("有可选值的给下拉:默认值就是列表里标着「默认」的那一项,不另加一项", () => {
+    const onChange = vi.fn();
     render(
       <DeclaredParameterControl
         parameter={{ ...steps, type: "string", options: ["euler", "dpmpp_2m"], defaultValue: "euler" }}
         value=""
-        onChange={vi.fn()}
+        onChange={onChange}
       />,
     );
-    // 触发器上显示的是「默认(euler)」那一项,不是 euler 本身 —— 两者提交出去的东西不一样
-    expect(screen.getByRole("combobox").textContent).toContain("genDeclaredDefault");
+    // 没动过:触发器上就是 euler 本身(它就是会用的那个值),而不是「默认(euler)」
+    const trigger = screen.getByRole("combobox");
+    expect(trigger.textContent).toBe("euler");
+    expect(trigger.getAttribute("title")).toBe("euler");
+  });
+});
+
+describe("declaredChoices", () => {
+  const t = (key: string) => key;
+  const sampler: DeclaredParameter = { ...steps, type: "string", options: ["euler", "dpmpp_2m"], defaultValue: "euler" };
+
+  it("默认值在可选值里:标一句「默认」,选它 = 不发", () => {
+    const choices = declaredChoices(sampler, t);
+    expect(choices.options.map((one) => one.value)).toEqual(["euler", "dpmpp_2m"]);
+    expect(choices.options[0].description).toBe("genDeclaredDefaultHint");
+    expect(choices.shown("")).toBe("euler");
+    expect(choices.stored("euler")).toBe("");
+    expect(choices.stored("dpmpp_2m")).toBe("dpmpp_2m");
+    expect(choices.shown("dpmpp_2m")).toBe("dpmpp_2m");
+  });
+
+  it("没有默认值(或不在可选值里):另加一项「模型默认」", () => {
+    const choices = declaredChoices({ ...sampler, defaultValue: undefined }, t);
+    expect(choices.options[0]).toEqual({ value: DEFAULT_CHOICE, label: "genDeclaredDefaultNone", description: undefined });
+    expect(choices.shown("")).toBe(DEFAULT_CHOICE);
+    expect(choices.stored(DEFAULT_CHOICE)).toBe("");
+  });
+});
+
+describe("ParameterRow", () => {
+  it("标签单行截断、悬停看全名;按容器宽度决定两列还是上下叠", () => {
+    const long = "CheckpointLoaderSimple · ckpt_name";
+    render(
+      <ParameterRow label="模型" title={long}>
+        <input aria-label="模型" />
+      </ParameterRow>,
+    );
+    const label = screen.getByText("模型", { selector: "[data-slot=parameter-label]" });
+    expect(label.className).toContain("truncate");
+    expect(label.className).toContain("min-w-0");
+    expect(label.getAttribute("title")).toBe(long);
+    const grid = label.parentElement!;
+    // 两列只在容器够宽时才出现;控件那一列是 minmax(0,1fr),不会被长值顶出去
+    expect(grid.className).toMatch(/@\[\d+px\]\/parameter-row:grid-cols-\[112px_minmax\(0,1fr\)\]/);
+    expect(grid.parentElement!.className).toContain("@container/parameter-row");
   });
 });

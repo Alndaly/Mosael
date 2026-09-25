@@ -87,7 +87,7 @@ export function OptionPicker({
           /* 结构照抄 SelectTrigger:一个 span 一个 chevron。调用方那串 `[&>svg]:hidden`、
              `[&>span]:truncate` 才会同样落到实处,而不是只对其中一个分支生效。 */
           /* role=combobox 和 Select 的触发器一致 —— 换了实现不该换掉读屏里听到的东西。 */
-          <button type="button" role="combobox" aria-label={ariaLabel} disabled={disabled} className={cn(FIELD_TRIGGER_CLASS, className)} {...rest}>
+          <button type="button" role="combobox" aria-label={ariaLabel} title={selected?.label} disabled={disabled} className={cn(FIELD_TRIGGER_CLASS, className)} {...rest}>
             {icon}
             <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")} style={selected?.style}>
               {selected?.label ?? placeholder ?? ""}
@@ -100,7 +100,9 @@ export function OptionPicker({
   }
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger aria-label={ariaLabel} className={className} {...rest}>
+      {/* 选中的值在触发器里会被截断(一个 checkpoint 文件名动辄四五十个字符):悬停看得到全名,
+          展开的列表里整行折行显示。 */}
+      <SelectTrigger aria-label={ariaLabel} title={selected?.label} className={className} {...rest}>
         {icon}
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>

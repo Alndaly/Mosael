@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy import select
@@ -60,6 +61,7 @@ def create(
     ).all()
     if existing and not manifest.multiple:
         raise PluginDomainError("pluginErr_singleConnection", name=manifest.name)
+    _check_json(manifest, config or {})
     merged = _fit_config(manifest, config or {})
     instance = PluginInstance(
         package_id=package_id,
@@ -160,6 +162,23 @@ def _coerce(spec: Field, raw: Any) -> Any:
     return value
 
 
+def _check_json(manifest: Manifest, values: dict[str, Any]) -> None:
+    """`type: "json"` 的配置项保存前必须能解析。**错在哪一行哪一列当场说** —— 存进去再让插件报一句
+    「不是合法 JSON」,用户要从插件的一次失败里倒推是哪一格、哪个逗号。空的不查(没填 ≠ 填错)。"""
+    for spec in manifest.config:
+        if spec.type != "json" or spec.key not in values:
+            continue
+        text = str(values[spec.key] or "")
+        if not text.strip():
+            continue
+        try:
+            json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise PluginDomainError(
+                "pluginErr_configNotJson", label=spec.label, line=exc.lineno, column=exc.colno, detail=exc.msg
+            ) from exc
+
+
 def set_config(
     db: Session, instance: PluginInstance, values: dict[str, Any], *, notify: bool = True
 ) -> PluginInstance:
@@ -168,6 +187,7 @@ def set_config(
     unknown = sorted(set(values) - allowed)
     if unknown:
         raise PluginDomainError("pluginErr_unknownConfig", keys=", ".join(unknown))
+    _check_json(manifest, values)
     previous_name = render_name(manifest, instance.config or {})
     instance.config = _fit_config(manifest, {**(instance.config or {}), **values})
     # 名字跟着配置走 —— 除非用户改过它。判据是"当前名字正是上一份配置生成的那个"。

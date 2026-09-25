@@ -15671,6 +15671,53 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/models": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "List Instance Models",
+        "description": "这个连接**替宿主提供的模型**(生成能力;见 ADR 0020)。读的是缓存的那一份,不现问插件 ——\n要最新的走 `/refresh`。不提供生成的连接回空列表。",
+        "operationId": "list_instance_models_api_plugins_instances__instance_id__models_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginProvidedModelOut"
+                  },
+                  "title": "Response List Instance Models Api Plugins Instances  Instance Id  Models Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/capabilities": {
       "patch": {
         "tags": [
@@ -24772,6 +24819,11 @@
             "type": "boolean",
             "title": "Multiline",
             "default": false
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": ""
           }
         },
         "type": "object",
@@ -25366,6 +25418,114 @@
         },
         "type": "object",
         "title": "PluginPermissionGrantUpdate"
+      },
+      "PluginProvidedInputOut": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "max": {
+            "type": "integer",
+            "title": "Max",
+            "default": 1
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "PluginProvidedInputOut"
+      },
+      "PluginProvidedModelOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "modes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Modes"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/PluginProvidedInputOut"
+            },
+            "type": "array",
+            "title": "Inputs"
+          },
+          "host_parameters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Host Parameters"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/PluginProvidedParameterOut"
+            },
+            "type": "array",
+            "title": "Parameters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind"
+        ],
+        "title": "PluginProvidedModelOut",
+        "description": "一个替宿主做生成的实例**提供的一个模型**(模型行上缓存的那一份),给插件页列出来。"
+      },
+      "PluginProvidedParameterOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": ""
+          },
+          "advanced": {
+            "type": "boolean",
+            "title": "Advanced",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "PluginProvidedParameterOut"
       },
       "PluginToolOut": {
         "properties": {
@@ -29516,7 +29676,7 @@
           },
           "role": {
             "type": "string",
-            "pattern": "^(first_frame|last_frame|reference_image|reference_video|reference_audio|source_video|first_clip|driving_audio)$",
+            "pattern": "^(first_frame|last_frame|reference_image|reference_video|reference_audio|source_video|first_clip|driving_audio|mask)$",
             "title": "Role",
             "default": "first_frame"
           }

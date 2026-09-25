@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import get_generation_adapter
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import (
     GenerationCapabilityDeclaration,
     GenerationCapabilityProfile,
@@ -202,13 +202,34 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
                 "kind": kind,
                 "model": resolved.model,
                 "label": f"{resolved.profile_name} · {row.display_name or resolved.model}",
-                "capabilities": resolved.capabilities,
+                "capabilities": _for_reader(resolved.capabilities),
                 "capabilities_known": resolved.capabilities_known,
                 "adapter_available": get_generation_adapter(resolved.provider, kind) is not None,
             }
         )
     options.sort(key=lambda item: (item["profile_name"], item["model"]))
     return options
+
+
+def _for_reader(capabilities: dict[str, Any]) -> dict[str, Any]:
+    """描述符里**给人看的字**按看的人的语言挑好:`parameter_schema` 里的 title / description 可以是
+    `{"zh": …, "en": …}`(插件声明的模型参数,见 ADR 0020)。
+
+    在这里挑而不是存的时候挑:目录是在后台刷新的,刷新那一刻的语言不是看的人的语言。
+    """
+    schema = capabilities.get("parameter_schema")
+    if not isinstance(schema, dict):
+        return capabilities
+    locale = get_current_locale()
+    readable: dict[str, Any] = {}
+    for key, spec in schema.items():
+        if isinstance(spec, dict):
+            spec = {
+                **spec,
+                **{field: pick_text(spec[field], locale) for field in ("title", "description") if isinstance(spec.get(field), dict)},
+            }
+        readable[key] = spec
+    return {**capabilities, "parameter_schema": readable}
 
 
 def template_reference_count(db: Session, template_id: str) -> int:

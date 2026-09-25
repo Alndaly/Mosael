@@ -18,6 +18,7 @@ export type PluginCredential = components["schemas"]["PluginCredentialOut"];
 export type PluginMarketEntry = components["schemas"]["PluginMarketEntry"];
 export type PluginMarketListing = components["schemas"]["PluginMarketOut"];
 export type PluginInstallPreview = components["schemas"]["PluginInstallPreview"];
+export type PluginProvidedModel = components["schemas"]["PluginProvidedModelOut"];
 
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
 export const pluginDir = () => api<{ path: string }>("/api/plugins/dir");
@@ -32,6 +33,9 @@ export const removePluginInstance = (instanceId: string) =>
   api(`/api/plugins/instances/${instanceId}`, { method: "DELETE" });
 export const refreshPluginInstance = (instanceId: string) =>
   api<PluginInstance>(`/api/plugins/instances/${instanceId}/refresh`, { method: "POST" });
+/** 替宿主做生成的连接**提供的模型**(缓存的那一份;要最新的先 refresh)。 */
+export const listPluginInstanceModels = (instanceId: string) =>
+  api<PluginProvidedModel[]>(`/api/plugins/instances/${instanceId}/models`);
 export const setPluginCapabilities = (instanceId: string, body: Record<string, unknown>) =>
   api<PluginInstance>(`/api/plugins/instances/${instanceId}/capabilities`, { method: "PATCH", body: JSON.stringify(body) });
 

@@ -64,6 +64,10 @@ FIRST_CLIP = "first_clip"
 #: 成片的节奏和口型是跟着它走的,所以两者不能混:选错了拿到的是一段对不上嘴的视频。
 DRIVING_AUDIO = "driving_audio"
 
+#: **蒙版**:和要改的那张图一起给,白色是要改的地方(局部重绘)。它不是参考图 —— 参考图说「照这个来」,
+#: 蒙版说「只动这一块」;混成参考图的话,整张图都会被重画。
+MASK = "mask"
+
 #: 全部角色。描述符(domain/generation/catalog)声明某个模型认哪几种,界面和智能体都读它。
 SOURCE_ROLES = (
     FIRST_FRAME,
@@ -74,6 +78,7 @@ SOURCE_ROLES = (
     SOURCE_VIDEO,
     FIRST_CLIP,
     DRIVING_AUDIO,
+    MASK,
 )
 
 #: **首尾帧**和**参考素材**是两回事,不是同一个东西的两种叫法。
@@ -460,6 +465,7 @@ ROLE_URL_PARAMETERS = {
     SOURCE_VIDEO: ("source_video_url", "video_url"),
     FIRST_CLIP: ("first_clip_url",),
     DRIVING_AUDIO: ("driving_audio_url",),
+    MASK: ("mask_url",),
 }
 
 

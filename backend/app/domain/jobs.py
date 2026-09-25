@@ -87,6 +87,38 @@ def reset_receipt(token: contextvars.Token) -> None:
     _current_receipt.reset(token)
 
 
+#: 「这一步走到哪了」的上报口。
+#:
+#: 一个长活(插件跑一张 ComfyUI 工作流、下一个大文件)在某个**更大的活**里面跑 —— 工作流的一个节点。
+#: 做活的那一方知道进度,听的那一方(工作流引擎要把它记成那个节点的事件)不该被它认识,反过来也一样。
+#: 所以在总线上留一个口:谁在跑一段活,谁就压一个听众进来(`listening_for_progress`);做活的一方只管
+#: `report_progress`,没人听就什么都不发生。和 _current_parent_job 同一个做法:线程不继承上下文变量,
+#: 起线程的地方自己带过去(工作流节点在线程池里带着 copy_context 跑)。
+_progress_listener: contextvars.ContextVar[Callable[[float, str], None] | None] = contextvars.ContextVar(
+    "mosael_progress_listener", default=None
+)
+
+
+def listening_for_progress(listener: Callable[[float, str], None] | None) -> contextvars.Token:
+    """从现在起,`report_progress` 报给 `listener`。返回的 token 用于 stop_listening_for_progress。"""
+    return _progress_listener.set(listener)
+
+
+def stop_listening_for_progress(token: contextvars.Token) -> None:
+    _progress_listener.reset(token)
+
+
+def report_progress(fraction: float, message: str) -> None:
+    """报一次进度(0..1 加一句话)。**听的那一方出错不外抛** —— 进度是锦上添花,不该让活本身失败。"""
+    listener = _progress_listener.get()
+    if listener is None:
+        return
+    try:
+        listener(max(0.0, min(1.0, float(fraction))), str(message or "")[:200])
+    except Exception:  # noqa: BLE001 — 见上
+        logger.exception("进度上报失败")
+
+
 #: 这一次 HTTP 请求里建出来的任务。中间件在请求开始时放一个空列表进来,create_job 往里记,
 #: 请求结束时有记录就在响应头上告诉前端(见 app/api/middleware 的 AnnounceNewJobs)。
 #:

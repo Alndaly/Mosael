@@ -3,6 +3,31 @@ import { describe, expect, it } from "vitest";
 import type { TaskEvent } from "@/api/client";
 import { toSteps } from "@/features/workflows/runSteps";
 
+describe("节点自己报的进度", () => {
+  const event = (id: string, type: string, at: string, payload: Record<string, unknown>) =>
+    ({ id, job_id: "j1", type, created_at: at, payload }) as TaskEvent;
+
+  it("跑着的节点带上最新的一句;跑完之后迟到的进度不再改它", () => {
+    const running = [
+      event("e1", "workflow.node.started", "2026-09-25T08:00:00Z", { node_id: "n1", name: "放大" }),
+      event("e2", "workflow.node.progress", "2026-09-25T08:00:01Z", { node_id: "n1", progress: 0.2, message: "采样 4/20" }),
+      event("e3", "workflow.node.progress", "2026-09-25T08:00:02Z", { node_id: "n1", progress: 0.5, message: "采样 10/20" }),
+    ];
+    const [step] = toSteps(running);
+    expect(step.status).toBe("running");
+    expect(step.message).toBe("采样 10/20");
+    expect(step.progress).toBe(0.5);
+
+    const finished = toSteps([
+      ...running,
+      event("e4", "workflow.node.finished", "2026-09-25T08:00:03Z", { node_id: "n1", outputs: {} }),
+      event("e5", "workflow.node.progress", "2026-09-25T08:00:04Z", { node_id: "n1", progress: 0.9, message: "迟到的一句" }),
+    ]);
+    expect(finished[0].status).toBe("done");
+    expect(finished[0].message).toBe("采样 10/20");
+  });
+});
+
 describe("工作流失败步骤", () => {
   it("保留任务事件里的结构化失败现场", () => {
     const events = [

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -24,15 +25,30 @@ from app.db.models import PluginInstance
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[Session, PluginInstance, bool], None]
+#: 这个实例替宿主做出来的**东西**(生成能力就是它提供的那些模型),给插件页列出来。
+Listing = Callable[[Session, PluginInstance], list[dict[str, Any]]]
 
 _handlers: dict[str, Handler] = {}
+_listings: dict[str, Listing] = {}
 
 
-def register(capability: str, handler: Handler) -> None:
-    """某项能力的宿主侧登记自己。同一项登记两次是装配错误,不是覆盖。"""
+def register(capability: str, handler: Handler, *, listing: Listing | None = None) -> None:
+    """某项能力的宿主侧登记自己。同一项登记两次是装配错误,不是覆盖。
+
+    `listing` 可选:这项能力做出来的东西能不能列给人看(生成 → 模型清单)。插件页据此显示
+    「它提供了哪些模型」,而不只是一个数。
+    """
     if capability in _handlers and _handlers[capability] is not handler:
         raise RuntimeError(f"host capability {capability!r} is already registered")
     _handlers[capability] = handler
+    if listing is not None:
+        _listings[capability] = listing
+
+
+def listing(db: Session, instance: PluginInstance, capability: str) -> list[dict[str, Any]] | None:
+    """这个实例在 `capability` 上提供的东西。宿主侧没登记列法(或这项能力不产出可列的东西)回 None。"""
+    lister = _listings.get(capability)
+    return lister(db, instance) if lister is not None else None
 
 
 def notify(db: Session, instance: PluginInstance, *, refresh: bool) -> None:
@@ -59,4 +75,4 @@ def notify(db: Session, instance: PluginInstance, *, refresh: bool) -> None:
             logger.exception("插件实例 %s 的「%s」宿主侧没能对齐", instance.id, capability)
 
 
-__all__ = ["Handler", "notify", "register"]
+__all__ = ["Handler", "Listing", "listing", "notify", "register"]

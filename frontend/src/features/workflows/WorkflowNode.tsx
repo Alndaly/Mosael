@@ -182,7 +182,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   inputs?: string[];
   outputs?: string[];
   /** 本次运行到这一步的状态。运行结束后保留,方便回看这次跑成什么样。 */
-  run?: { status: "running" | "done" | "skipped" | "failed"; ms?: number; error?: string } | null;
+  run?: { status: "running" | "done" | "skipped" | "failed"; ms?: number; error?: string; message?: string } | null;
   /** 这一步产出的素材(节点注册表里声明为 asset 的输出),**连同它们各自的名字**。 */
   runAssets?: AssetOutput[];
   /** 非素材产出的一行摘要 —— 节点上直接看见"这步给了什么",以及那是**哪一个**产出。 */
@@ -288,7 +288,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
       {d.run && (
         <span
           className="absolute -left-1.5 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full border border-border bg-panel px-[3px]"
-          title={d.run.error ?? undefined}
+          title={d.run.error ?? (d.run.status === "running" ? d.run.message : undefined) ?? undefined}
         >
           {d.run.status === "running" ? (
             <Loader2 size={11} className="animate-spin text-primary" />

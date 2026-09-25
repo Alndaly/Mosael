@@ -50,6 +50,7 @@
 | `app/integrations/feishu/service.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
 | `app/ai/sidecar/adapters.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
 | `app/workers/scheduler.py:_stop_event` | 定时任务线程的停止信号 | 每个进程一个调度线程 —— 多进程下同一条定时任务会被触发多次。 |
+| `app/domain/generation/plugin_connections.py:_watch_stop`、`app/domain/generation/plugin_connections.py:_watch_thread` | 插件生成供应商的目录巡检线程(启动时刷一遍,之后每分钟问一次指纹,变了才重新拉目录) | 重启后重新刷一遍,不丢东西(目录缓存在模型行上)。第二个进程会**再巡检一份**:每分钟多问一次 ComfyUI,结果一样,只是多一倍请求。 |
 
 ## 三、启动时装配的配置快照
 
@@ -115,7 +116,7 @@
   `app/domain/workflows/executors/__init__.py:_PREFIX_REGISTRY`
 - `app/domain/plugins/media_bridge.py:_sink`、`app/domain/plugins/media_bridge.py:_source`
 - `app/domain/plugins/host_capabilities.py:_handlers` — 插件实例变了,谁替宿主那一侧对齐(今天是生成:
-  实例 → 连接 + 模型行,见 ADR 0020)。
+  实例 → 连接 + 模型行,见 ADR 0020);`app/domain/plugins/host_capabilities.py:_listings` —— 那一侧做出来的东西怎么列给插件页(生成 → 提供的模型)。
 - `app/ai/providers/registry.py:_GENERATION_SOURCES` — 生成 Adapter 的动态来源(`plugin:<包 id>` → 插件生成
   供应商)。装了哪些插件在库里,这张表只记「去哪儿问」。
 

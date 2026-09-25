@@ -22,6 +22,9 @@ export type Step = {
   outputs?: Record<string, unknown>;
   error?: string;
   details?: Record<string, unknown>;
+  /** 跑着的时候节点自己报的进度(插件跑一张 ComfyUI 工作流:「采样 12/20」)。跑完就不再显示。 */
+  progress?: number;
+  message?: string;
 };
 
 const TERMINAL_RUN_EVENTS = new Set(["workflow.failed", "workflow.cancelled", "job.failed", "job.cancelled"]);
@@ -48,6 +51,8 @@ export function toSteps(events: TaskEvent[]): Step[] {
       outputs?: Record<string, unknown>;
       error?: string;
       details?: Record<string, unknown>;
+      progress?: number;
+      message?: string;
     };
     const nid = p.node_id ?? "";
     if (!nid) continue;
@@ -75,6 +80,12 @@ export function toSteps(events: TaskEvent[]): Step[] {
       s.error = p.error;
       s.details = p.details;
       if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
+    } else if (e.type === "workflow.node.progress") {
+      const s = byNode.get(nid);
+      if (s && s.status === "running") {
+        s.progress = typeof p.progress === "number" ? p.progress : s.progress;
+        s.message = p.message || s.message;
+      }
     } else if (e.type === "workflow.node.skipped") {
       if (!byNode.has(nid)) order.push(nid);
       byNode.set(nid, { nid, name: p.name ?? nid, status: "skipped" });

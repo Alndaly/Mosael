@@ -26,7 +26,12 @@ if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块�
 #: 配置项 / 凭据项的键。同时是 `${...}` 占位符的名字,也是进程插件的环境变量名(大写化)。
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-FIELD_TYPES = ("string", "enum", "number", "boolean")
+#: 配置项的类型。`json` / `code` 是**一段代码**:界面给代码编辑器(不是一个多行文本框),`json` 保存前
+#: 必须能解析(错在第几行第几列当场说)。值照旧存成字符串 —— 插件拿到的就是它粘进去的那一段原文,
+#: 自己解析;存成解析后的对象会让「原文里的注释、键的顺序、缩进」在一次保存之后悄悄变样。
+FIELD_TYPES = ("string", "enum", "number", "boolean", "json", "code")
+#: 代码类的配置项。
+CODE_FIELD_TYPES = ("json", "code")
 
 #: 插件能替宿主做成的事里,**只给宿主调**的那几项(见 docs/adr/0020)。
 #:
@@ -69,9 +74,11 @@ class Field:
     secret: bool = False
     options: list[dict[str, str]] = field(default_factory=list)
     default: str = ""
-    #: 多行文本(一段 JSON、一段脚本)。只对 `string` 有意义:单行框装一份几百行的 JSON,
-    #: 用户看到的只是它的第一行。
+    #: 多行文本。只对 `string` 有意义:单行框装一份几百行的东西,用户看到的只是它的第一行。
+    #: 一段 JSON、一段脚本不要用它 —— 用 `type: "json"` / `type: "code"`,那两种有代码编辑器和校验。
     multiline: bool = False
+    #: `code` 的语言(`python` / `yaml` / …),决定编辑器按什么高亮;`json` 固定是 json。
+    language: str = ""
 
     def option_label(self, value: str) -> str:
         for option in self.options:
@@ -300,9 +307,20 @@ def _fields(raw: Any, *, secret: bool, pick: Callable[[Any], str] = text_of) -> 
                 options=options,
                 default=str(entry.get("default") or ""),
                 multiline=entry.get("multiline") is True and declared_type in ("string", ""),
+                language=_language(declared_type, entry.get("language")),
             )
         )
     return out
+
+
+def _language(declared_type: str, raw: Any) -> str:
+    """代码类配置项的语言:`json` 就是 json;`code` 取声明的(只收小写字母数字,那是给编辑器挑高亮的名字)。"""
+    if declared_type == "json":
+        return "json"
+    if declared_type != "code":
+        return ""
+    language = str(raw or "").strip().lower()
+    return language if re.fullmatch(r"[a-z0-9+#-]{1,20}", language) else "text"
 
 
 def runtime_of(raw: dict[str, Any]) -> Runtime:

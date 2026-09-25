@@ -26,7 +26,9 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.interpreter import is_frozen
-from app.domain.plugins import packages
+from app.db.models import PluginPackage
+from app.domain.plugins import instances, packages
+from app.domain.plugins.manifest import manifest_of
 from app.domain.plugins.migrations import CANONICAL_FILENAME
 
 logger = logging.getLogger(__name__)
@@ -103,9 +105,23 @@ def install(db: Session, plugins_dir: Path) -> list[str]:
             staging.rename(target)
             replaced.append(plugin.id)
             logger.info("装上随应用发的插件 %s", plugin.id)
-        packages.register(db, target / CANONICAL_FILENAME)
+        package = packages.register(db, target / CANONICAL_FILENAME)
+        db.flush()
+        _seed_new_tools(db, package)
     db.commit()
     return replaced
+
+
+def _seed_new_tools(db: Session, package: PluginPackage) -> None:
+    """新版本多了工具:给**已经接好**的连接补上开关(按清单的 recommended / expose 预勾)。
+
+    不补的话,升级之后插件页上新工具一个都没开,智能体和工作流里也看不到 —— 而用户什么都没做错,
+    只是那几个工具在他建连接的时候还不存在。已有的开关不动(那是用户的选择)。
+    """
+    manifest = manifest_of(package)
+    names = [str(tool["name"]) for tool in manifest.declared_tools if tool.get("name")]
+    for instance in packages.instances_of(db, package.id):
+        instances.seed_capabilities(db, instance, manifest, names)
 
 
 __all__ = ["BundledPlugin", "bundled_root", "install", "is_bundled", "plugins"]

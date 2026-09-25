@@ -105,6 +105,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个工具产出了文件,但这次调用没有归属工作区,收不下",
         "en": "This tool produced a file, but this call doesn't belong to a workspace, so it can't be saved.",
     },
+    "pluginErr_configNotJson": {
+        "zh": "「{label}」不是合法的 JSON:第 {line} 行第 {column} 列,{detail}",
+        "en": "“{label}” is not valid JSON: line {line}, column {column}: {detail}",
+    },
+    "pluginErr_artifactTooMany": {
+        "zh": "插件一次交出的文件超过 {limit} 份",
+        "en": "The plugin returned more than {limit} files in one call.",
+    },
     "pluginErr_runtimeCrashed": {
         "zh": "插件运行时异常: {detail}",
         "en": "Plugin runtime error: {detail}",
@@ -172,6 +180,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pluginErr_generationNoOutput": {
         "zh": "「{name}」完成了生成,但没有交回任何文件",
         "en": "“{name}” finished generating but handed back no files.",
+    },
+    "pluginErr_generationNoFingerprint": {
+        "zh": "「{name}」没有交回模型清单的指纹",
+        "en": "“{name}” returned no fingerprint for its model list.",
     },
     "pluginErr_bundledCannotUninstall": {
         "zh": "「{name}」随 Mosael 一起提供,不能卸载;不想用的话停用它的连接即可",
@@ -3481,6 +3493,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genRole_source_video": {"zh": "待编辑的视频", "en": "video to edit"},
     "genRole_first_clip": {"zh": "待续写的片段", "en": "clip to extend"},
     "genRole_driving_audio": {"zh": "驱动音频", "en": "driving audio"},
+    "genRole_mask": {"zh": "蒙版", "en": "mask"},
     "genErr_orSep": {"zh": "或", "en": " or "},
     "genErr_andSep": {"zh": " 和 ", "en": " and "},
     "genErr_none": {"zh": "无", "en": "none"},
