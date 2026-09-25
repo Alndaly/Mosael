@@ -11,8 +11,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import BrowserSession, Workflow
+from app.db.models import BrowserSession, Job, Workflow
 from app.domain import browser
+from app.domain.jobs import current_parent_job_id
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 
@@ -90,16 +91,36 @@ def _run(session_id: str, action: str, args: dict[str, Any], *, timeout: float |
         raise WorkflowDomainError.from_error(exc, details=_failure_scene(session_id, action, args)) from exc
 
 
+def _run_owner(db: Session) -> str | None:
+    """会话归谁:**这次运行** —— 最外层那条工作流任务。
+
+    不是这条工作流:同一条工作流并发跑两次时,两次会拿到同一个池档案会话(同 owner 复用),
+    一次的「关闭」关掉的是另一次正在用的视图。也不是当前这一层:子流程(call_workflow)是
+    这次运行的一部分,「登录」子流程把 session 交回给调用方是正当用法,不能在子流程收尾时就关。
+
+    运行落终态(成功、失败、取消)时,它名下的会话由 domain/browser 的收拾动作关掉。
+    """
+    owner: str | None = None
+    job_id = current_parent_job_id()
+    while job_id:
+        job = db.get(Job, job_id)
+        if job is None or job.kind != "workflow":
+            break
+        owner, job_id = job.id, job.parent_job_id
+    return owner
+
+
 @register("browser_open")
 def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     mode = str(config.get("session_mode") or "ephemeral")
+    owner = _run_owner(db)
     try:
         if mode == "pool":
             profile_id = str(config.get("profile_id") or "").strip()
             if not profile_id:
                 raise WorkflowDomainError("wfErr_pickPoolProfile")
             session = browser.open_session(
-                db, workspace_id=workflow.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=workflow.id
+                db, workspace_id=workflow.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=owner
             )
         else:
             session = browser.open_session(
@@ -108,7 +129,7 @@ def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
                 kind="named" if mode == "named" else "ephemeral",
                 name=str(config.get("session_name") or ""),
                 owner_kind="workflow",
-                owner_id=workflow.id,
+                owner_id=owner,
             )
     except browser.BrowserDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc

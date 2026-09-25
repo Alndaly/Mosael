@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, is_message_key
 from app.domain import sharing
-from app.db.models import BrowserAction, BrowserProfile, BrowserSession, PublishAccount, User, now
+from app.db.models import BrowserAction, BrowserProfile, BrowserSession, Job, PublishAccount, User, now
 
 _UNSET = object()  # update_profile 里区分「不改」与「置空」
 
@@ -221,17 +221,58 @@ def _open_profile_session(
 
 
 def close_session(db: Session, session_id: str) -> None:
-    """关闭会话:落 closed + 入队一条 close 动作,让 worker 拆掉视图(临时会话顺带清存储)。"""
+    """关闭会话:落 closed + 入队一条 close 动作,让 worker 拆掉视图(临时会话顺带清存储)。
+
+    **还没跑完的动作一并落 failed。** 否则关掉之后,排在 close 前面的那些照样会被执行器领走
+    去执行 —— 用户取消了流程,「点发布」照样点下去;而正等着它们的调用方(run_action)要一直
+    等到自己超时才放手。
+    """
     session = db.get(BrowserSession, session_id)
     if session is None or session.status != "open":
         return
     session.status = "closed"
+    db.execute(
+        update(BrowserAction)
+        .where(BrowserAction.session_id == session_id, BrowserAction.status.in_(("queued", "running")))
+        .values(status="failed", error="browserErr_sessionClosed")
+    )
     db.add(
         BrowserAction(
             session_id=session_id, workspace_id=session.workspace_id, action="close", args={}, status="queued"
         )
     )
     db.commit()
+
+
+def close_sessions_owned_by(db: Session, *, owner_kind: str, owner_id: str) -> int:
+    """关掉归这个 owner 的所有还开着的会话。返回关了几个。"""
+    owned = db.scalars(
+        select(BrowserSession.id).where(
+            BrowserSession.owner_kind == owner_kind,
+            BrowserSession.owner_id == owner_id,
+            BrowserSession.status == "open",
+        )
+    ).all()
+    for session_id in owned:
+        close_session(db, session_id)
+    return len(owned)
+
+
+def _close_run_sessions(db: Session, job: Job) -> None:
+    """工作流的一次运行落了终态(成功、失败、取消):它开的会话跟着关。
+
+    工作流节点开会话时把 owner 记成**这次运行**的工作流任务(见 workflows/executors/browser)。
+    能关会话的「关闭浏览器」节点在失败和取消时都走不到,所以不能只靠它。
+    """
+    if job.kind == "workflow":
+        close_sessions_owned_by(db, owner_kind="workflow", owner_id=job.id)
+
+
+def install() -> None:
+    """装配:任务总线不认识浏览器,是浏览器在这里把「运行结束就关会话」登记进去(app/main.py)。"""
+    from app.domain.jobs import register_settle_listener
+
+    register_settle_listener("browser_sessions", _close_run_sessions)
 
 
 def run_action(

@@ -2788,7 +2788,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_evaluate_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},
     "wfNode_browser_evaluate_expression": {"zh": "JS 表达式,其返回值即输出 value", "en": "A JS expression; its return value becomes the output value"},
     "wfNode_browser_close": {"zh": "关闭浏览器", "en": "Close browser"},
-    "wfNode_browser_close_desc": {"zh": "关闭会话:临时会话顺带清掉 cookie/存储。用完记得关,免得视图常驻。", "en": "Close the session; a throwaway session also has its cookies and storage wiped. Close it when you are done, or the view stays around."},
+    "wfNode_browser_close_desc": {"zh": "关闭会话:临时会话顺带清掉 cookie/存储。这次运行结束时(成功、失败或取消)会自动关;想在用完那一刻就释放视图和池档案的占用,接在那一步后面。", "en": "Close the session; a throwaway session also has its cookies and storage wiped. The run closes it automatically when it ends (succeeded, failed or cancelled); add this node to release the view and the pool profile as soon as you are done with them."},
     "wfNode_browser_close_session": {"zh": "要关闭的 session", "en": "The session to close"},
     # ---- 工作流执行期的失败原因(WorkflowDomainError 的 key) ----
     "wfErr_cancelled": {"zh": "已取消", "en": "Cancelled"},

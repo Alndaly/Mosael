@@ -47,6 +47,8 @@ class BrowserSession(Base):
         ForeignKey("browser_profiles.id", ondelete="SET NULL"), nullable=True
     )
     owner_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    #: owner_kind=workflow 时是**这次运行**的(最外层)工作流任务 id —— 运行落终态时它名下的
+    #: 会话一并关掉(见 domain/browser 的 _close_run_sessions)。
     owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     last_url: Mapped[str] = mapped_column(Text, nullable=False, default="")

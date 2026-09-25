@@ -111,18 +111,27 @@ def test_profile_lease_one_active_session() -> None:
 
 
 def test_workflow_browser_open_pool_mode() -> None:
-    """工作流 browser_open 的 pool 模式:在池档案分区上开会话,owner=workflow;缺档案报错。"""
+    """工作流 browser_open 的 pool 模式:在池档案分区上开会话,owner=这次运行的工作流任务;缺档案报错。"""
+    from app.domain.jobs import create_job, reset_parent_job, set_parent_job
+
     client = fresh_client()
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="流程用池号", owner=_me(db)).id
         wf_id = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}).id
+        run_id = create_job(db, workspace_id=ws, kind="workflow", payload={}, created_by=None).id
+        db.commit()
+    token = set_parent_job(run_id)
+    try:
+        with SessionLocal() as db:
+            wf = db.get(Workflow, wf_id)
+            out = get_executor("browser_open")(db, wf, {"session_mode": "pool", "profile_id": pid})
+    finally:
+        reset_parent_job(token)
     with SessionLocal() as db:
-        wf = db.get(Workflow, wf_id)
-        out = get_executor("browser_open")(db, wf, {"session_mode": "pool", "profile_id": pid})
         sess = db.get(BrowserSession, out["session"])
         assert sess.kind == "profile" and sess.profile_id == pid
-        assert sess.owner_kind == "workflow" and sess.owner_id == wf_id
+        assert sess.owner_kind == "workflow" and sess.owner_id == run_id
         assert sess.partition.startswith("persist:pool-")
     with SessionLocal() as db:
         wf = db.get(Workflow, wf_id)

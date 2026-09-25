@@ -243,6 +243,9 @@ def _wire_seams() -> None:
     from app.domain.assets import plugin_bridge as asset_plugin_bridge
     # 画板上生成的产出要落回画布 —— 同样是「任务不认识画板,画板认识任务」。
     from app.domain import boards as board_receipts
+    # 工作流一次运行开的浏览器会话,随这次运行落终态而关(成功、失败、取消)——
+    # 同样是「任务不认识浏览器,浏览器认识任务」。
+    from app.domain import browser as browser_sessions
     # 「TTS 配置从哪儿读」:ai/runtime 是基础设施,不认识数据库,默认只读环境变量,
     # 真正那份由这里喂进去(见 ai/runtime/config.use_source)。
     #
@@ -259,6 +262,7 @@ def _wire_seams() -> None:
     agent_receipts.install()
     asset_plugin_bridge.install()
     board_receipts.install()
+    browser_sessions.install()
     tts_runtime_config.use_source(tts_settings.load)
     sidecar_adapters.use_proxy_source(subprocess_env_for_child)
 

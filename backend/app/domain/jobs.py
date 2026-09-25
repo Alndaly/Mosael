@@ -276,9 +276,23 @@ def register_receipt_deliverer(kind: str, deliver: Callable[[Session, Job, dict[
     _RECEIPT_DELIVERERS[kind] = deliver
 
 
-#: 这次事务里刚落终态、等着送回执的 job id。挂在 session.info 上而不是模块级 ——
+#: 「任务落了终态,谁要跟着收拾」。和回执同一道缝、同一个方向:任务这一层不认识那些**随某个
+#: 任务而生**的资源(工作流这次运行开的浏览器会话……),是持有它们的那一域在装配时登记进来
+#: (app/main.py)。
+#:
+#: 挂在同一个状态跳变上,所以成功、失败、**取消**都走得到。取消不经过执行体的收尾代码 ——
+#: 执行体那时可能正阻塞在某个等待里 —— 能在那一刻接住它的只有这里。
+_SETTLE_LISTENERS: dict[str, Callable[[Session, Job], None]] = {}
+
+
+def register_settle_listener(name: str, listener: Callable[[Session, Job], None]) -> None:
+    """登记一个「任务落终态之后」的收拾动作。同名后登记的覆盖先登记的。"""
+    _SETTLE_LISTENERS[name] = listener
+
+
+#: 这次事务里刚落终态的 job id(等着收拾、送回执)。挂在 session.info 上而不是模块级 ——
 #: 后台线程各有各的 session,模块级变量会让两个线程的回执串到一起。
-_PENDING_RECEIPTS = "mosael_pending_receipts"
+_PENDING_SETTLED = "mosael_pending_settled_jobs"
 
 
 @event.listens_for(Session, "after_flush")
@@ -300,17 +314,17 @@ def _note_settled_jobs(session: Session, _flush_context: Any) -> None:
             continue
         was = history.deleted[0] if history.deleted else None
         if obj.status in TERMINAL_STATUSES and was not in TERMINAL_STATUSES:
-            session.info.setdefault(_PENDING_RECEIPTS, []).append(obj.id)
+            session.info.setdefault(_PENDING_SETTLED, []).append(obj.id)
 
 
 @event.listens_for(Session, "after_commit")
-def _deliver_settled_receipts(session: Session) -> None:
-    """提交之后才送。
+def _after_jobs_settled(session: Session) -> None:
+    """提交之后才收拾、才送。
 
     送信会写库(往对话里放一条消息)、还会叫醒一个智能体回合 —— 在 flush 里做的话,
-    它看到的是一份还没提交的任务状态,而万一外层回滚,消息已经发出去了。
+    它看到的是一份还没提交的任务状态,而万一外层回滚,消息已经发出去了。收拾同理。
     """
-    job_ids = session.info.pop(_PENDING_RECEIPTS, None)
+    job_ids = session.info.pop(_PENDING_SETTLED, None)
     if not job_ids:
         return
     # 用**新的** session:调用方那个刚提交完,在它上面接着写会把这次送信卷进调用方的
@@ -322,6 +336,13 @@ def _deliver_settled_receipts(session: Session) -> None:
             job = fresh.get(Job, job_id)
             if job is None:
                 continue
+            for name, listener in list(_SETTLE_LISTENERS.items()):
+                try:
+                    listener(fresh, job)
+                except Exception:
+                    # 收拾不成**不能**反过来改写任务的终态 —— 那一笔已经提交了。记下来。
+                    fresh.rollback()
+                    logger.warning("job %s [%s] 落终态后的收拾没做成 (%s)", job.id, job.kind, name, exc_info=True)
             receipt = (job.payload or {}).get("receipt")
             if not isinstance(receipt, dict):
                 continue
