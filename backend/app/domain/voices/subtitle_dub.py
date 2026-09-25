@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
-from app.domain.jobs import blame, create_job, dispatch_job, emit_job_event, say
+from app.domain.jobs import JobError, blame, create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
 from app.domain.voices.original_audio import (
     DEFAULT_ORIGINAL_AUDIO,
@@ -204,7 +204,10 @@ def _run_dub(job_id: str) -> None:
         # 现在取出来:commit 之后这些属性会过期,而 job 出了这个 with 就是 detached 的 ——
         # 到下一个 session 里再读 job.created_by 会去刷一个已经关掉的连接。
         created_by = job.created_by
-        job.status = "running"
+        # 状态一律经 finish_job 写:排队时就被取消的,不能在这里被写回 running。
+        if not finish_job(db, job, status="running"):
+            db.commit()
+            return
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
@@ -225,13 +228,18 @@ def _run_dub(job_id: str) -> None:
                 slot_seconds = max(0.0, (clip.src_out - clip.src_in) / (clip.speed or 1.0))
                 timeline_start = clip.timeline_start
                 sequence = db.get(Sequence, sequence_id)
-                child = start_synthesis(
-                    db,
-                    text=text,
-                    project_id=sequence.project_id if sequence else None,
-                    created_by=created_by,
-                    **synthesis,
-                )
+                try:
+                    child = start_synthesis(
+                        db,
+                        text=text,
+                        project_id=sequence.project_id if sequence else None,
+                        created_by=created_by,
+                        **synthesis,
+                    )
+                except JobError:
+                    # 这次配音已经收尾(用户取消,或外面那条工作流取消后级联下来):总线不再让它
+                    # 派下一句。每一句都是一次付费合成,到此为止。
+                    return
                 db.commit()
                 child_id = child.id
 
@@ -274,7 +282,9 @@ def _run_dub(job_id: str) -> None:
                         set_clip_speed(db, sequence_id, SetClipSpeed(clip_id=new_clip.id, speed=speed))
                 done += 1
                 job = db.get(Job, job_id)
-                job.progress = (index + 1) / max(1, total)
+                if not finish_job(db, job, status="running", progress=(index + 1) / max(1, total)):
+                    db.commit()
+                    return
                 say(job, "jobMsg_dubRunning", done=done, total=total)
                 db.commit()
 
@@ -283,40 +293,39 @@ def _run_dub(job_id: str) -> None:
             if job is None:
                 return
             if done == 0:
-                job.status = "failed"
-                say(job, "jobMsg_dubFailed")
                 #: 失败原因和任务消息同一条规矩:落库存 key,出口按读的人的语言翻。
-                job.error_key = "jobErr_noDubSucceeded"
-                job.error = t("jobErr_noDubSucceeded", DEFAULT_LOCALE)
-                emit_job_event(db, job.id, "job.failed", {})
-            else:
+                if finish_job(
+                    db, job, status="failed",
+                    error_key="jobErr_noDubSucceeded", error=t("jobErr_noDubSucceeded", DEFAULT_LOCALE),
+                ):
+                    say(job, "jobMsg_dubFailed")
+                    emit_job_event(db, job.id, "job.failed", {})
+            elif finish_job(db, job, status="running"):
                 # 原声的处理放在**任务里**、成功之前:分离要跑一阵,而任务说"完成"时成片应当已经是
                 # 最终的样子。它自己开会话改时间线(每一步都是剪辑操作,各自提交)。
+                # 先确认没被取消 —— 取消了的配音不该再去动原片的音轨。
+                db.commit()
                 applied = apply_original_audio(db, sequence_id, track_id, original_audio, actor_id=created_by)
                 db.expire_all()
                 job = db.get(Job, job_id)
-                job.status = "succeeded"
-                job.progress = 1.0
                 # 部分失败也是成功的一种:配好的那些是真的配好了。但**不能都说成「完成」** ——
                 # 「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
-                if failed:
-                    say(job, "jobMsg_dubPartial", done=done, failed=failed)
-                else:
-                    say(job, "jobMsg_dubDone", done=done)
-                job.result = {"track_id": track_id, "done": done, "failed": failed, "original_audio": applied}
-                emit_job_event(db, job.id, "job.succeeded", {"track_id": track_id})
+                result = {"track_id": track_id, "done": done, "failed": failed, "original_audio": applied}
+                if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+                    if failed:
+                        say(job, "jobMsg_dubPartial", done=done, failed=failed)
+                    else:
+                        say(job, "jobMsg_dubDone", done=done)
+                    emit_job_event(db, job.id, "job.succeeded", {"track_id": track_id})
             db.commit()
     except Exception as exc:  # noqa: BLE001 — 任何意外都要落进任务行,否则会话永远停在 running
         logger.exception("字幕配音任务 %s 失败", job_id)
         with SessionLocal() as db:
             job = db.get(Job, job_id)
-            if job is not None:
-                job.status = "failed"
+            if job is not None and finish_job(db, job, status="failed", **blame(exc)):
                 say(job, "jobMsg_dubFailed")
-                for field, value in blame(exc).items():
-                    setattr(job, field, value)
                 emit_job_event(db, job.id, "job.failed", {})
-                db.commit()
+            db.commit()
 
 
 def _dub_track(db: Session, sequence_id: str, created_by: str | None) -> str:

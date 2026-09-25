@@ -492,6 +492,12 @@ def create_job(
         parent_job = db.get(Job, parent)
         if parent_job is not None and not lock_active_job(db, parent_job):
             raise JobError("jobErr_parentFinished")
+    elif parent and db.scalar(select(Job.status).where(Job.id == parent)) == "failed":
+        # derived 放宽的只是「父任务**成功**收尾之后」(导出收尾时登记产物、排代理转码)。
+        # 父任务被取消或失败了就不再起新活:取消级联停得住正在跑的那一个子任务,可执行体的
+        # 循环会接着派下一个 —— 字幕配音逐句合成,每一句都是一次付费调用。读库里的状态,
+        # 不读身份映射里那一份:取消是别的会话写进来的。
+        raise JobError("jobErr_parentFinished")
     receipt = _current_receipt.get()
     if receipt is not None and "receipt" not in payload:
         payload = {**payload, "receipt": receipt}
