@@ -134,7 +134,7 @@ def test_批量节点收段落也收字符串__顺序就是对齐(monkeypatch) -
 
     seen: dict[str, object] = {}
 
-    def fake_many(db, texts, target, *, user_id=None, engine="", profile_id=None, model=""):
+    def fake_many(db, texts, target, *, user_id=None, engine="", profile_id=None, model="", surface="direct"):
         seen["texts"] = list(texts)
         seen["engine"] = engine
         return [f"[{target}] {one}" if one else "" for one in texts]
@@ -172,7 +172,7 @@ def test_批量节点收一段文本_不再静默交出空结果(monkeypatch) ->
     from app.domain.workflows import WorkflowDomainError
     from app.domain.workflows.executors import ai as ai_executors
 
-    def fake_many(db, texts, target, *, user_id=None, engine="", profile_id=None, model=""):
+    def fake_many(db, texts, target, *, user_id=None, engine="", profile_id=None, model="", surface="direct"):
         return [f"[{target}] {one}" if one else "" for one in texts]
 
     monkeypatch.setattr(domain_translate, "translate_many", fake_many)

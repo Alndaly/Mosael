@@ -491,6 +491,7 @@ def translate_lines(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
             engine=str(config.get("engine") or "google").lower(),
             profile_id=str(config.get("profile_id") or "") or None,
             model=str(config.get("model") or ""),
+            surface="automation",
         )
     return {"texts": translated, "count": len(translated)}
 
@@ -513,5 +514,6 @@ def translate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
             engine=str(config.get("engine") or "google").lower(),
             profile_id=str(config.get("profile_id") or "") or None,
             model=str(config.get("model") or ""),
+            surface="automation",
         )
     return {"text": translated}

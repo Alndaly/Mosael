@@ -51,7 +51,7 @@ def stubs(monkeypatch):
         assert target_lang == "en", "模板的目标语言该原样传下去"
         return TRANSLATED.get(text, text)
 
-    def fake_translate_many(db, texts, target_lang, *, user_id=None, engine="", profile_id=None, model=""):
+    def fake_translate_many(db, texts, target_lang, *, user_id=None, engine="", profile_id=None, model="", surface="direct"):
         """整轨一次翻完那条路。**打这里而不是打 google_translate** —— 这条测试要钉的是
         「模板把段落原样交给了批量节点、顺序不变」,不是某个引擎怎么发请求;打在引擎上
         会让它真的去连网络(改成批量节点时就撞到了:live 端点当场 429)。"""

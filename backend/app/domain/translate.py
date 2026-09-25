@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import time
+from typing import Literal
 
 import httpx
 
@@ -19,6 +20,9 @@ from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.core import http_retry as ai_retry
 from app.domain.usage import BillableCall, billable, once
+
+#: 调用方在哪条执行通道上(见 ai_chat.target_for 的 surface)。
+ChatSurface = Literal["direct", "automation"]
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
 _TIMEOUT = 30
@@ -63,7 +67,11 @@ def language_label(code: str) -> str:
     return _LANG_NAMES.get(code, code)
 
 
-def resolve_ai_chat_target(db, profile_id: str | None, user_id: str | None, model: str = "") -> ChatTarget:
+def resolve_ai_chat_target(
+    db, profile_id: str | None, user_id: str | None, model: str = "", *, surface: ChatSurface = "direct"
+) -> ChatTarget:
+    """`surface` 是调用方所在的执行通道(见 ai_chat.target_for):工作流节点是 automation ——
+    订阅授权的连接经网关可用,和 LLM 节点一样;界面上的翻译接口是 direct。"""
     from app.domain import provider_credentials
     from app.domain.providers import find_enabled_connection, first_enabled_connection
 
@@ -80,7 +88,7 @@ def resolve_ai_chat_target(db, profile_id: str | None, user_id: str | None, mode
     try:
         # model 留空 = 按这条连接的 chat 能力解析(target_for 自己做)。给了就用给的那个:
         # 一条连接上常常有好几个模型,而"用哪个模型翻译"和"用哪条连接"是两个问题。
-        return target_for(db, resolved, model=model)
+        return target_for(db, resolved, model=model, surface=surface)
     except AiChatError as exc:
         raise TranslateError(str(exc)) from exc
 
@@ -121,6 +129,7 @@ def translate(
     engine: str = "google",
     profile_id: str | None = None,
     model: str = "",
+    surface: ChatSurface = "direct",
 ) -> str:
     """Dispatch to the requested engine.
 
@@ -129,7 +138,9 @@ def translate(
     同一件事两份实现,漏的那一份不会报错。现在记账、连接解析只在 translate_many 里。
     """
     if engine == "ai":
-        return translate_many(db, [text], target, user_id=user_id, engine=engine, profile_id=profile_id, model=model)[0]
+        return translate_many(
+            db, [text], target, user_id=user_id, engine=engine, profile_id=profile_id, model=model, surface=surface
+        )[0]
     return google_translate(text, target)
 
 
@@ -183,6 +194,7 @@ def translate_many(
     engine: str = "google",
     profile_id: str | None = None,
     model: str = "",
+    surface: ChatSurface = "direct",
 ) -> list[str]:
     """Translate a batch, running the round-trips concurrently.
 
@@ -196,7 +208,7 @@ def translate_many(
     """
     if not texts:
         return []
-    chat_target = resolve_ai_chat_target(db, profile_id, user_id, model) if engine == "ai" else None
+    chat_target = resolve_ai_chat_target(db, profile_id, user_id, model, surface=surface) if engine == "ai" else None
     indexed = [(i, text) for i, text in enumerate(texts) if text.strip()]
     results = [""] * len(texts)
     if not indexed:
@@ -225,10 +237,12 @@ def translate_many(
         return results
 
     # AI 供应商是有正式配额的 API，保留并发与通用重试策略。
+    # 共享连接只对直连有意义:订阅授权走网关(sidecar),没有调用方 HTTP 连接可复用。
     with ai_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
+        shared = None if chat_target.execution_surface == "gateway" else client
         # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
         # "这次翻译花了多少"。
         with billable(db, capability="chat", operation="translate_batch",
                       idempotency_key=once("translate_batch")) as call:
-            run(lambda item: (item[0], ai_translate_with(chat_target, item[1], target, client=client, call=call)))
+            run(lambda item: (item[0], ai_translate_with(chat_target, item[1], target, client=shared, call=call)))
     return results

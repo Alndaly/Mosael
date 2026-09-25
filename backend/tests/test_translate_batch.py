@@ -59,7 +59,10 @@ def test_ai_concurrency_is_bounded(monkeypatch) -> None:
         def __enter__(self): return None
         def __exit__(self, *_args): return False
 
-    monkeypatch.setattr(tr, "resolve_ai_chat_target", lambda *args, **kwargs: object())
+    from types import SimpleNamespace
+
+    #: 直连目标(批量共用一条 HTTP 连接的那一种)。
+    monkeypatch.setattr(tr, "resolve_ai_chat_target", lambda *args, **kwargs: SimpleNamespace(execution_surface="direct"))
     monkeypatch.setattr(tr, "ai_translate_with", fake_ai)
     monkeypatch.setattr(tr, "billable", lambda *args, **kwargs: Billing())
     tr.translate_many(None, [f"c{i}" for i in range(64)], "en", user_id=None, engine="ai")

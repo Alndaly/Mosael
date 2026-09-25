@@ -1769,6 +1769,42 @@ def test_订阅授权那条路也会降级_而不是一个硬400(monkeypatch) ->
     assert kinds == ["json_schema", "json_object"], f"网关那条路没有走降级链:{kinds}"
 
 
+def test_翻译节点也能用订阅授权的连接(monkeypatch) -> None:
+    """翻译节点的「连接」下拉和 LLM 节点是同一份(chat_connections),订阅授权的连接在列。
+
+    但翻译解析调用目标时走的是 direct 通道,选中它就报「当前操作只支持直连 API,请改用
+    …工作流…入口」—— 而用户此刻就在工作流里。同一个下拉、两个节点,一个能用一个不能。
+    """
+    from app.ai.sidecar import adapters
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    seen: list[dict] = []
+
+    def fake_gateway(**kwargs):
+        seen.append(kwargs)
+        return adapters.GatewayResult(text="你好", usage={"input": 3, "output": 1})
+
+    monkeypatch.setattr(adapters, "gateway_complete", fake_gateway)
+    with SessionLocal() as db:
+        profile = add_provider(
+            db, name="Kimi Code", vendor="kimi-coding", base_url="", auth_type="oauth",
+            oauth_credential={"access_token": "x"}, model="k3", capability_ids=["chat"],
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        config = {"target_lang": "zh-CN", "engine": "ai", "profile_id": profile.id}
+        with acting_as(db):
+            single = ai_nodes.translate(db, workflow, {**config, "text": "hello"})
+            batch = ai_nodes.translate_lines(db, workflow, {**config, "texts": ["hello", "world"]})
+
+    assert single == {"text": "你好"}
+    assert batch == {"texts": ["你好", "你好"], "count": 2}
+    assert len(seen) == 3
+
+
 def test_没被强制过的Schema_报错时要说出来(monkeypatch) -> None:
     """本地那次 Schema 校验,在两种完全不同的情况下原先报**同一句话**。
 
