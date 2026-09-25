@@ -162,11 +162,25 @@ async function frame() {
   });
 }
 
-/** 把视口摆成平移 (40, 20)、缩放 0.5 —— 松手点换算成流坐标就不是原样,缩放也一并验了。 */
+/**
+ * 把视口摆成平移 (40, 20)、缩放 0.5 —— 松手点换算成流坐标就不是原样,缩放也一并验了。
+ *
+ * **摆上了才算数。** CI 上文件里的第一条用例(冷启动、机器慢)松手换算出了 NaN 的位置,错却报在
+ * 后面「占位在哪」的断言上 —— 画布这时的视口不是这一份(平移缩放器还没装好:setViewport 没生效,
+ * 或者对着还没量出尺寸的画布算出了 NaN)。所以一直推到视口真是这一份为止;推不到就在这里说清
+ * 是视口没摆上,而不是让一个 NaN 流到后面去。
+ */
 async function zoomOut() {
-  await act(async () => {
-    await flow.instance!.setViewport({ x: 40, y: 20, zoom: 0.5 });
-  });
+  const target = { x: 40, y: 20, zoom: 0.5 };
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await act(async () => {
+      await flow.instance!.setViewport(target);
+    });
+    const now = flow.instance!.getViewport();
+    if (now.x === target.x && now.y === target.y && now.zoom === target.zoom) return;
+    await settle(10);
+  }
+  expect(flow.instance!.getViewport(), "视口一直没摆上 —— 画布的平移缩放器没装好").toEqual(target);
 }
 
 describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
