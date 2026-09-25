@@ -725,6 +725,12 @@
     "updated_at",
     "workspace_id"
   ],
+  "workflow_revision_attestations": [
+    "created_at",
+    "id",
+    "revision_id",
+    "user_id"
+  ],
   "workflow_revisions": [
     "created_at",
     "created_by",

@@ -18,7 +18,7 @@ from app.db.model_base import new_id, now  # noqa: F401
 from app.db.model_slices.jobs import Job, TaskEvent  # noqa: E402,F401
 from app.db.model_slices.notifications import Notification  # noqa: E402,F401
 from app.db.model_slices.scheduler import ScheduledTask, ScheduledTaskRun  # noqa: E402,F401
-from app.db.model_slices.workflows import Workflow, WorkflowRevision  # noqa: E402,F401
+from app.db.model_slices.workflows import Workflow, WorkflowRevision, WorkflowRevisionAttestation  # noqa: E402,F401
 from app.db.model_slices.boards import Board  # noqa: E402,F401
 from app.db.model_slices.notes import Note, NoteRevision  # noqa: E402,F401
 from app.db.model_slices.collaboration import ActivityEvent, Comment, CommentMention  # noqa: E402,F401

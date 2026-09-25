@@ -30,7 +30,7 @@ from app.core.db import SessionLocal
 from app.db.models import BrowserSession, Job, User
 from app.domain import browser, sharing
 from app.domain.publish import start_publish
-from tests.util import fresh_client, make_video_asset, second_client
+from tests.util import pinned, fresh_client, make_video_asset, second_client
 
 #: 用的那一刻。每一个都必须有一个**必填**的关键字参数 `actor`。
 SEAMS = {
@@ -198,8 +198,9 @@ def _run_node(node_type: str, workspace_id: str, actor_id: str | None, config: d
     from app.domain.workflows.executors import get_executor
 
     with SessionLocal() as db:
-        workflow_id = create_workflow(db, workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []}).id
-        run = create_job(db, workspace_id=workspace_id, kind="workflow", payload={}, created_by=actor_id)
+        workflow = create_workflow(db, workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []}, created_by=actor_id)
+        workflow_id = workflow.id
+        run = create_job(db, workspace_id=workspace_id, kind="workflow", payload=pinned(db, workflow), created_by=actor_id)
         run.status = "running"
         db.commit()
         run_id = run.id

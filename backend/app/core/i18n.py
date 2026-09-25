@@ -1389,6 +1389,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "不能共享根目录 —— 那等于把整台电脑交出去。请选具体的文件夹",
         "en": "The root directory can't be shared — that would hand over the whole computer. Pick a specific folder.",
     },
+    # 跑的人用得了,但被执行的那一版是别人改的(见 domain/authority)。说的是怎么办:请主人认可这一版。
+    "shareErr_notVouched": {
+        "zh": "工作流「{workflow}」的 v{revision} 是别人改的,它要用的这份资源不归改它的人用。请资源的主人打开这个工作流,确认改动后点「认可这一版」",
+        "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and they can't use what it needs here. Ask the owner to open the workflow, review the change and click “Approve this version”.",
+    },
+    "shareErr_notVouched_publishAccount": {
+        "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而它要用一个改它的人用不了的私有发布账号。请账号主人打开这个工作流,确认改动后点「认可这一版」",
+        "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and it publishes with a private account they can't use. Ask the account's owner to open the workflow, review the change and click “Approve this version”.",
+    },
+    "shareErr_notVouched_browserProfile": {
+        "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而它要用一个改它的人用不了的私有浏览器档案。请档案主人打开这个工作流,确认改动后点「认可这一版」",
+        "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and it uses a private browser profile they can't use. Ask the profile's owner to open the workflow, review the change and click “Approve this version”.",
+    },
+    "hostErr_notVouched": {
+        "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而它要读这台电脑上的文件。请部署管理员打开这个工作流,确认改动后点「认可这一版」",
+        "en": "Version v{revision} of the workflow “{workflow}” was changed by someone else, and it reads files on this computer. Ask a deployment admin to open the workflow, review the change and click “Approve this version”.",
+    },
     "shareErr_unknownKind": {
         "zh": "未知的资源类型:{kind}",
         "en": "Unknown resource type: {kind}",

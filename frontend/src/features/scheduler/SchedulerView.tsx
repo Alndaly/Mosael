@@ -9,6 +9,7 @@ import {
   API_BASE,
   createScheduledTask,
   deleteScheduledTask,
+  attestRequestOf,
   listScheduledTaskRuns,
   resetWebhookSecret,
   listScheduledTasks,
@@ -25,6 +26,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useJobKinds } from "@/components/layout/jobKinds";
+import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { relativeTime } from "@/lib/time";
@@ -624,6 +626,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
     return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
   })();
   const message = run.error ?? (running ? job?.message : null);
+  const attest = run.status === "failed" ? attestRequestOf((run.result as Record<string, unknown> | undefined)?.attest) : null;
   //: 这一次运行派生的子任务。**只在跑着的时候拉** —— 历史里几十条各拉一次是白花请求,
   //: 而"它到底在动没动"这个问题只有当下那一条会问。
   //:
@@ -664,6 +667,8 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
           </small>
         )}
       </div>
+      {/* 停在「这一版工作流是别人改的,要主人认可」:认可那一版之后,下次运行就借得到了。 */}
+      {attest && <AttestRevisionButton attest={attest} />}
       {durationText && <span className="timecode shrink-0 text-ui-xs text-muted-foreground">{durationText}</span>}
       <em
         className={cn(

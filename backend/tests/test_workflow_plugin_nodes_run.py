@@ -20,7 +20,7 @@ from app.db.models import Job, TaskEvent
 from app.domain.workflows import create_workflow
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.executors import get_executor
-from tests.util import fresh_client
+from tests.util import user_id, fresh_client
 
 ECHO = "plugin.demo.echo"
 
@@ -43,7 +43,7 @@ def echo_plugin(monkeypatch):
 def _run(graph: dict) -> tuple[str, dict, str | None, str]:
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        workflow = create_workflow(db, workspace_id=ws, name="插件节点", graph=graph)
+        workflow = create_workflow(db, workspace_id=ws, name="插件节点", graph=graph, created_by=user_id())
         job_id = start_workflow_job(db, workflow, created_by=None).id
     for _ in range(100):
         with SessionLocal() as db:

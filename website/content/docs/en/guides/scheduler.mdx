@@ -30,6 +30,14 @@ use — their own or those shared into the workspace. If the graph references an
 hasn't shared, that run fails saying it "belongs to someone else and hasn't been shared"; ask its owner to
 share it, or switch to one the task owner owns.
 
+**The version being run counts too.** Teammates can edit workflows: when the owner's task runs a version
+**someone else changed**, whoever changed it must also be able to use the private accounts, browser
+profiles or files on this computer it needs — otherwise the run stops and says this version was changed
+by someone else. Once the owner has reviewed the change, **Approve this version** on that run's row lets
+the next run go through. Approving doesn't change the graph or add a version, and it only counts for
+things the approver can use. On a single-user install the author and the owner are the same person, so
+this never comes up.
+
 Scheduling runs on the connected backend. In local mode it runs with the app, so fully quitting stops scheduled execution. With a remote backend, that server must stay running. Closing a window and quitting the application are different actions. See [Workflows](/docs/guides/workflows) for triggers and variables.
 
 ### When the bound workflow is deleted

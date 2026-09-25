@@ -4,6 +4,7 @@
   "backfill-browser-pool": "8bf5b8bae7117258",
   "backfill-plugin-instances": "607a169e43a09c66",
   "backfill-provider-models": "42f3503a7d899e55",
+  "backfill-workflow-revision-authors": "170443938e8f3302",
   "disable-tasks-bound-to-deleted-workflows": "fdbd666fa2cea718",
   "drop-clip-linked-clip-id": "bc919d41280e74c6",
   "drop-generation-models": "cde9e3b09eed1146",

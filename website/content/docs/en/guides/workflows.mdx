@@ -2,7 +2,7 @@
 title: Visual workflows
 description: Connect media, models and tools, check inputs and run repeatable creative tasks.
 order: 6
-updated: 2026-09-17
+updated: 2026-09-25
 version: 1.5.2
 ---
 
@@ -136,6 +136,15 @@ Settings → Backend. Tasks missed while the app was closed run once on next sta
 occurrence is recomputed from now, so missed runs do not pile up).
 
 </Aside>
+
+### Versions someone else changed
+
+Version history shows who saved each version. When a run uses a private publishing account, browser
+profile or files on this computer, both the person running it **and the author of the version being run**
+(or someone who approved it) must be able to use them — a workflow started by a Call workflow node
+counts with its own version too. If a teammate's version would borrow something of yours, the run stops
+and names the workflow and version; after reviewing the change, click **Approve this version** in the run
+history or version history. Approving doesn't change the graph or add a version.
 
 ## Let AI build it
 

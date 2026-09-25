@@ -1426,6 +1426,52 @@ def _migrate_shared_host_folders() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN shared_host_folders JSON NOT NULL DEFAULT '[]'"))
 
 
+def _backfill_workflow_revision_authors() -> None:
+    """给说不出作者的工作流修订补上作者:这条工作流的创建者,找不到就是它所在工作区的 owner。
+
+    一次运行用私有发布账号 / 浏览器档案 / 本机文件时,被执行那一版的作者(或认可过它的人)也得
+    用得了(见 domain/authority)。此前 `created_by` 可空:迁移、官方模板改写落下的修订都没有作者,
+    更早的版本里写入路径也不总是填它 —— 不补的话,升级之后每条老工作流的定时任务都会停下来
+    要人认可,而单机用户根本不知道在认可什么。
+
+    「创建者」取这条工作流**最早一版里有记录的作者**;一版都没有记录时取工作区 owner(最早加入的
+    那位)。都找不到的留空 —— 那一版没有担保人,借不到任何人的私有资源,直到有人认可它。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if not {"workflow_revisions", "workflows", "workspace_members"} <= tables:
+        return
+    with engine.begin() as conn:
+        workflows = conn.execute(
+            text(
+                "SELECT DISTINCT w.id, w.workspace_id FROM workflows w "
+                "JOIN workflow_revisions r ON r.workflow_id = w.id WHERE r.created_by IS NULL"
+            )
+        ).all()
+        for workflow_id, workspace_id in workflows:
+            author = conn.execute(
+                text(
+                    "SELECT r.created_by FROM workflow_revisions r JOIN users u ON u.id = r.created_by "
+                    "WHERE r.workflow_id = :id ORDER BY r.revision LIMIT 1"
+                ),
+                {"id": workflow_id},
+            ).scalar()
+            if author is None:
+                author = conn.execute(
+                    text(
+                        "SELECT user_id FROM workspace_members WHERE workspace_id = :ws AND role = 'owner' "
+                        "ORDER BY created_at LIMIT 1"
+                    ),
+                    {"ws": workspace_id},
+                ).scalar()
+            if author is None:
+                continue
+            conn.execute(
+                text("UPDATE workflow_revisions SET created_by = :author WHERE workflow_id = :id AND created_by IS NULL"),
+                {"author": author, "id": workflow_id},
+            )
+
+
 def _cleanup_orphan_resource_shares() -> None:
     """清掉指向已删资源的共享记录。
 
@@ -3009,6 +3055,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_condition_edges_use_source_handle,
                 _migrate_workflow_revisions,
                 _disable_tasks_bound_to_deleted_workflows,
+                # 排在所有会落修订的迁移之后:它们写下的那几版也要有作者。
+                _backfill_workflow_revision_authors,
                 # Projection comes last so rows synthesized by earlier migrations are visible
                 # immediately, rather than waiting for the next application startup.
                 _backfill_activity_events,

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.db import PARTITION_PREFIX
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, Job, PublishAccount, PublishTask, User
+from app.domain.authority import Actor, actor_id
 from app.domain import sharing
 from app.domain.jobs import create_job, register_external_kind
 
@@ -302,7 +303,7 @@ def start_publish(
     title: str,
     description: str,
     tags: list[str],
-    actor: str | None,
+    actor: Actor,
     short_title: str = "",
     options: dict[str, Any] | None = None,
 ) -> PublishTask:
@@ -312,7 +313,8 @@ def start_publish(
 
     `actor` 是**谁在发**:路由里是当前用户,工作流里是这次运行的操作人(`jobs.current_actor`;
     定时任务与 webhook 触发的运行记在任务主人头上),确认卡是批准它的那个人。它同时是任务的
-    `created_by`。
+    `created_by`。工作流里它是这次运行的 `Authority`(见 domain/authority):被执行的那一版图也要有
+    一个能用这个账号的担保人 —— 同事改过的图借不到主人的账号,直到主人认可那一版。
 
     **必填、没有默认值**,归属就在这里查:私有账号只有主人和被共享到的人能用(见
     domain/sharing)。此前各入口只查了「是不是这个工作区的人」,同事猜到 id、或在工作流里填上
@@ -335,7 +337,7 @@ def start_publish(
         db,
         workspace_id=workspace_id,
         kind="publish",
-        created_by=actor,
+        created_by=actor_id(actor),
         payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform, "subject": title or asset.name},
         message="jobMsg_publishWaiting", message_params={"title": title or asset.name},
     )

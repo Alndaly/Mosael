@@ -15,7 +15,7 @@ from app.domain import browser
 from app.domain.publish import create_account
 from app.domain.workflows import WorkflowDomainError, create_workflow
 from app.domain.workflows.executors import get_executor
-from tests.util import fresh_client
+from tests.util import pinned, user_id, fresh_client
 
 
 def _me(db) -> User:
@@ -118,9 +118,10 @@ def test_workflow_browser_open_pool_mode() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="流程用池号", owner=_me(db)).id
-        wf_id = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}).id
+        wf = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}, created_by=user_id())
+        wf_id = wf.id
         # 这次运行替谁跑:池档案是某人的登录身份,说不出是谁在用就不能借(见 browser.usable_profile)。
-        run_id = create_job(db, workspace_id=ws, kind="workflow", payload={}, created_by=_me(db).id).id
+        run_id = create_job(db, workspace_id=ws, kind="workflow", payload=pinned(db, wf), created_by=_me(db).id).id
         db.commit()
     token = set_parent_job(run_id)
     try:

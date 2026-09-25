@@ -129,6 +129,25 @@ export function restoreWorkflowRevision(workflowId: string, revision: number): P
   return api<Workflow>(`/api/workflows/${workflowId}/revisions/${revision}/restore`, { method: "POST" });
 }
 
+/**
+ * 「认可这一版」:不改图、不增版,只把自己记成这一版的担保人。同事改过的一版要借你的私有账号 /
+ * 档案 / 本机文件时,运行会停下来要你认可(见后端 domain/authority)。
+ */
+export function attestWorkflowRevision(workflowId: string, revision: number): Promise<WorkflowRevision> {
+  return api<WorkflowRevision>(`/api/workflows/${workflowId}/revisions/${revision}/attest`, { method: "POST" });
+}
+
+/** 运行失败现场里的「哪条工作流的哪一版等人认可」。 */
+export type RevisionAttestRequest = { workflow_id: string; workflow_name: string; revision: number };
+
+export function attestRequestOf(value: unknown): RevisionAttestRequest | null {
+  if (!value || typeof value !== "object") return null;
+  const one = value as Record<string, unknown>;
+  const revision = Number(one.revision);
+  if (typeof one.workflow_id !== "string" || !one.workflow_id || !Number.isFinite(revision) || revision <= 0) return null;
+  return { workflow_id: one.workflow_id, workflow_name: String(one.workflow_name ?? ""), revision };
+}
+
 /** 官方模板目录:名字、介绍、步骤、前置条件。文案由后端按语言选好(图标在前端)。 */
 export type WorkflowTemplate = components["schemas"]["WorkflowTemplateOut"];
 export function fetchWorkflowTemplates(): Promise<WorkflowTemplate[]> {

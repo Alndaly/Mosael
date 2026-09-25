@@ -26,7 +26,7 @@ from app.domain.jobs import cancel_job, create_job, reset_parent_job, set_parent
 from app.domain.workflows import WorkflowDomainError, create_workflow
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.executors import browser as bx
-from tests.util import fresh_client
+from tests.util import pinned, user_id, fresh_client
 
 
 def _ws() -> str:
@@ -45,7 +45,7 @@ def _graph(*steps: dict) -> dict:
 
 def _start(ws: str, graph: dict) -> str:
     with SessionLocal() as db:
-        workflow = create_workflow(db, workspace_id=ws, name="RPA", graph=graph)
+        workflow = create_workflow(db, workspace_id=ws, name="RPA", graph=graph, created_by=user_id())
         return start_workflow_job(db, workflow, created_by=None).id
 
 
@@ -124,11 +124,11 @@ def test_同一条工作流并发两次_不共用一个池档案会话(monkeypat
     with SessionLocal() as db:
         owner = db.query(User).order_by(User.created_at).first()
         profile_id = bdom.create_profile(db, workspace_id=ws, name="池号", owner=owner).id
-        workflow = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []})
+        workflow = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}, created_by=user_id())
         runs = []
         for _ in range(2):
             # 替档案主人跑:池档案只有主人和被共享到的人能借(见 browser.usable_profile)。
-            job = create_job(db, workspace_id=ws, kind="workflow", payload={}, created_by=owner.id)
+            job = create_job(db, workspace_id=ws, kind="workflow", payload=pinned(db, workflow), created_by=owner.id)
             job.status = "running"
             runs.append(job.id)
         db.commit()

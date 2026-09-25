@@ -19,7 +19,7 @@ from app.domain.workflows import (
     update_workflow,
     validate_graph,
 )
-from tests.util import acting_as, add_provider, fresh_client
+from tests.util import user_id, acting_as, add_provider, fresh_client
 
 
 def _install_llm_transport(monkeypatch, module, handler) -> None:
@@ -318,12 +318,12 @@ def test_workflow_revision_history_returns_the_latest_bounded_window() -> None:
     workspace_id = client.post("/api/workspaces", json={"name": "Bounded history"}).json()["id"]
     graph = linear_graph()
     with SessionLocal() as db:
-        workflow = create_workflow(db, workspace_id=workspace_id, name="Many revisions", graph=graph)
+        workflow = create_workflow(db, workspace_id=workspace_id, name="Many revisions", graph=graph, created_by=user_id())
         total = WORKFLOW_REVISION_HISTORY_LIMIT + 3
         for revision in range(2, total + 1):
             changed = linear_graph()
             changed["nodes"][1]["config"]["template"] = f"revision {revision}"
-            update_workflow(db, workflow, {"graph": changed}, base_graph_hash=workflow.graph_hash)
+            update_workflow(db, workflow, {"graph": changed}, base_graph_hash=workflow.graph_hash, created_by=user_id())
 
         visible = list_workflow_revisions(db, workflow.id)
         assert len(visible) == WORKFLOW_REVISION_HISTORY_LIMIT
@@ -356,14 +356,14 @@ def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None
     before = linear_graph()
     before["nodes"][1]["config"]["template"] = "入队前"
     with SessionLocal() as db:
-        workflow = create_workflow(db, workspace_id=ws["id"], name="固定修订", graph=before)
+        workflow = create_workflow(db, workspace_id=ws["id"], name="固定修订", graph=before, created_by=user_id())
         job = workflow_engine.start_workflow_job(db, workflow, created_by=None)
         job_id = job.id
         monkeypatch.setattr(workflow_engine.threading, "Thread", real_thread)
 
         after = linear_graph()
         after["nodes"][1]["config"]["template"] = "入队后"
-        update_workflow(db, workflow, {"graph": after}, base_graph_hash=workflow.graph_hash)
+        update_workflow(db, workflow, {"graph": after}, base_graph_hash=workflow.graph_hash, created_by=user_id())
 
     target = pending["target"]
     assert callable(target)

@@ -38,6 +38,7 @@
 | `require_worker_key` | 数据目录下的进程密钥 | 本机卫星进程的 claim / report / heartbeat |
 | 确认卡 | 工具 manifest 的 `confirmation` + 会话规则 | 智能体对不可逆或对外动作的用户授权 |
 | `sharing.ensure_usable` | 是主人,或主人把它共享进了它所在的工作区 | **用**私有身份的那一刻:发布账号(`publish.start_publish`)、浏览器池档案(`browser.open_session` / `attach_session` / `usable_profile`)。`actor` 必填,None 被拒 |
+| 运行的授权(`domain/authority`) | 跑的人过得了闸,**且**被执行的每一版图(含子流程那一版)有一个担保人(作者或认可过它的人)也过得了 | 工作流节点调上面两道闸时,`actor=` 传 `workflows.authority.current_authority(db)`,不是 `current_actor`。见 §3.8 |
 | `host_files.ensure_readable` | 是部署管理员,或路径(realpath 之后)落在管理员共享给成员的本机文件夹里 | **读一个用户给出的本机路径**的那一刻:工作流 `browser_upload` 的 `file_path`、智能体浏览器 upload 动作、按本机路径导入素材。放行得到 `HostFile`,`browser.upload_file` 只收它。`actor` 必填,None 被拒 |
 | `host_files.ensure_whole_machine` | 是部署管理员 | 在这台电脑上**不隔离地跑代码**:`run_host_code`、`blender_execute` 确认卡(批准的人) |
 
@@ -152,6 +153,32 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
 `HostFile` 只在 host_files 里构造、每个已知入口都过闸)。插件以用户身份运行、能读它读得到的一切 ——
 它们由部署管理员安装,不在这道闸里。
 
+### 3.8 同事改了图,主人的任务就替他用主人的东西 — ✅ 已修复
+
+§3.6 挡住的是「以自己的身份用别人的」。可工作流是工作区内容、同事能改,而定时任务 / webhook 替**任务主人**跑:
+同事改了主人的图,到点一跑,那次运行就以主人的授权用主人的私有账号 / 档案 / 本机文件 —— 借别人的任务用别人的东西。
+
+现在一次运行的授权是两半的**交集**(`domain/authority`):
+
+- **跑的人**:和以前一样(路由是当前用户,手动运行是点运行的人,定时任务 / webhook 是任务主人);
+- **被执行的每一版图的担保人**:保存这一版的人(`WorkflowRevision.created_by`),加上事后「认可这一版」的人
+  (`workflow_revision_attestations`)。`workflows.authority.current_authority` 沿 job 父链往上收:
+  `call_workflow` 调起的子流程是一条子 job,它自己那一版也要有担保人。每一版都得有**至少一个**担保人
+  自己也过得了闸。
+
+作者因此必须记全:`create_workflow` / `update_workflow` / `edit_workflow_graph` / `commit_graph_revision` /
+`create_initial_revision` / `restore_workflow_revision` 的 `created_by` 必填、没有默认值。画布保存、导入、官方
+模板记点按钮的人;智能体改图记批准那张卡的人(自动放行记在会话主人头上);恢复旧版记恢复的人。老修订由迁移
+`backfill-workflow-revision-authors` 补上:这条工作流最早一版有记录的作者,都没有时是工作区 owner。
+
+挡下来时报 `shareErr_notVouched_*` / `hostErr_notVouched`(中英两份),说是哪条工作流的哪一版,失败现场带
+`details.attest = {workflow_id, workflow_name, revision}`。工作流运行历史与定时任务的运行记录据此给「认可这一版」
+(`POST /workflows/{id}/revisions/{n}/attest`);版本历史里当前版是别人存的、自己还没认可时也给。认可**不改图、
+不增版**(修订不可变、执行语义相同不增版),只多记一个担保人;谁都能点,但只对点的人**自己用得了**的东西有用。
+
+单机用时跑的人、作者、担保人永远是同一个人,零摩擦。棘轮:`tests/test_runs_act_with_the_revision_authors_authority.py`
+(`created_by` 必填且调用点不写 None;执行器里调闸门的 `actor=` 不是 `current_actor(...)`)。
+
 ## 4. 已经对上的地方
 
 盘点不能只列问题,否则读的人会以为整套都在漏:
@@ -170,9 +197,6 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
   但 UI 文案和新文档必须继续明确区分「我的 AI 连接」与「工作区插件秘密」。
 - 发布账号 / 浏览器池档案的**管理**(改名、停用、复检、删除)仍只查工作区角色,没有按归属收紧:
   §3.6 管的是「用」。同事看不到别人的私有账号,但猜到 id 仍能改它、删它 —— 是否只许主人管理,另行决定。
-- 定时任务替**任务主人**跑,而它绑的工作流是工作区内容、同事能改,定时任务默认共享、同事能点「立即运行」。
-  于是同事改了图、再触发主人的任务,那次运行仍以主人的授权用主人的私有账号 / 档案。§3.6 挡住的是「以自己的
-  身份用别人的」,没挡住「借别人的任务用别人的」—— 要收紧,得让任务绑定到主人认可过的那一版图,另行决定。
 - worker key 证明的是卫星进程,不是最终用户;将 external job 放到其他机器前,
   需单独解决该部署的密钥下发与信任范围。
 

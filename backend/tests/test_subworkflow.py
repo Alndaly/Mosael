@@ -10,7 +10,7 @@ from app.db.models import Job, Workflow
 from app.domain.workflows import NODE_TYPES, create_workflow, update_workflow
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.executors import registered_types
-from tests.util import fresh_client
+from tests.util import user_id, fresh_client
 
 
 def _ws() -> str:
@@ -53,7 +53,7 @@ def test_call_workflow_passes_inputs_and_returns_declared_output() -> None:
                     {"id": "out", "type": "output", "config": {"values": {"greeting": "你好 {{start.who}}"}}},
                 ],
                 "edges": [{"id": "e1", "source": "start", "target": "out"}],
-            },
+            }, created_by=user_id(),
         )
         child_id = child.id
         # 父流程:start → 调用子流程 → 用自己的 output 节点把子输出转成父输出(完整 A 契约)
@@ -71,7 +71,7 @@ def test_call_workflow_passes_inputs_and_returns_declared_output() -> None:
                     {"id": "e1", "source": "start", "target": "call"},
                     {"id": "e2", "source": "call", "target": "out"},
                 ],
-            },
+            }, created_by=user_id(),
         )
         parent_id = parent.id
 
@@ -99,7 +99,7 @@ def test_self_recursion_is_rejected() -> None:
                     {"id": "call", "type": "call_workflow", "config": {"workflow_id": "SELF", "inputs": {}}},
                 ],
                 "edges": [{"id": "e1", "source": "start", "target": "call"}],
-            },
+            }, created_by=user_id(),
         )
         wf_id = wf.id
         # 深拷贝重建,确保 SQLAlchemy 侦测到 JSON 变更(原地改同一 dict 不会触发)。
@@ -109,7 +109,7 @@ def test_self_recursion_is_rejected() -> None:
         for node in graph["nodes"]:
             if node["id"] == "call":
                 node["config"]["workflow_id"] = wf_id  # 指向自己
-        update_workflow(db, wf, {"graph": graph}, base_graph_hash=wf.graph_hash)
+        update_workflow(db, wf, {"graph": graph}, base_graph_hash=wf.graph_hash, created_by=user_id())
 
     status, _result, err, _ = _run(wf_id)
     assert status == "failed"
@@ -147,7 +147,7 @@ def test_subgraph_seeds_input_and_resolves_output() -> None:
                     {"id": "e1", "source": "start", "target": "sg"},
                     {"id": "e2", "source": "sg", "target": "out"},
                 ],
-            },
+            }, created_by=user_id(),
         )
         wf_id = wf.id
 
@@ -195,7 +195,7 @@ def test_subgraph_nests_arbitrarily() -> None:
                     {"id": "e1", "source": "start", "target": "outer_sg"},
                     {"id": "e2", "source": "outer_sg", "target": "out"},
                 ],
-            },
+            }, created_by=user_id(),
         )
         wf_id = wf.id
 

@@ -253,3 +253,24 @@ def executable_source(module_or_path: object) -> str:
                     and isinstance(body[0].value.value, str):
                 node.body = body[1:] or [ast.Pass()]
     return ast.unparse(tree)
+
+
+def user_id(username: str = "tester") -> str:
+    """这个用户名的 id。修订要记作者(见 workflows.revisions),测试直接调领域函数时从这里取。"""
+    from app.core.db import SessionLocal
+    from app.db.models import User
+
+    with SessionLocal() as db:
+        return db.query(User).filter(User.username == username).one().id
+
+
+def pinned(db, workflow) -> dict:
+    """一条工作流 job 的载荷:钉住这条工作流的当前修订,和 engine.start_workflow_job 一样。
+
+    节点里用私有账号 / 档案 / 本机文件时,被执行那一版的作者也要用得了(见 workflows.authority);
+    说不出是哪一版的运行没有担保人。测试直接建 job 调节点时,从这里拿引擎本来会写的那份载荷。
+    """
+    from app.domain.workflows.revisions import current_workflow_revision
+
+    revision = current_workflow_revision(db, workflow)
+    return {"workflow_id": workflow.id, "workflow_revision_id": revision.id, "workflow_revision": revision.revision}

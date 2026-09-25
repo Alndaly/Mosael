@@ -50,7 +50,12 @@ class WorkflowRevisionOut(OrmModel):
     graph_hash: str
     source: str
     note: str
+    #: 这一版的作者。一次运行用私有账号 / 档案 / 本机文件时,作者或认可过这一版的人得用得了
+    #: (见 domain/authority)。
     created_by: str | None
+    created_by_name: str = ""
+    #: 事后「认可这一版」的人(用户 id),不含作者。
+    attested_by: list[str] = Field(default_factory=list)
     created_at: datetime
 
 

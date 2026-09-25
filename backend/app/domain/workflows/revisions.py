@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.model_base import now
-from app.db.models import Workflow, WorkflowRevision
+from app.db.models import Workflow, WorkflowRevision, WorkflowRevisionAttestation
 
 
 #: 版本历史是给人恢复工作流用的浏览窗口，不是运行快照的生命周期。
@@ -83,10 +83,10 @@ def create_initial_revision(
     workflow: Workflow,
     *,
     source: str,
-    created_by: str | None = None,
+    created_by: str | None,
     note: str = "",
 ) -> WorkflowRevision:
-    """为刚创建且尚未提交的工作流建立 revision 1。"""
+    """为刚创建且尚未提交的工作流建立 revision 1。`created_by` 见 `commit_graph_revision`。"""
 
     digest = graph_digest(workflow.graph)
     workflow.revision = 1
@@ -164,10 +164,14 @@ def commit_graph_revision(
     change: GraphChange,
     *,
     source: str,
-    created_by: str | None = None,
+    created_by: str | None,
     note: str = "",
 ) -> WorkflowRevision | None:
     """把 `change` 落到**库里最新那份图**上;只有执行语义变化时才原子追加修订。
+
+    `created_by` 是这一版的**作者**,必填、没有默认值:一次运行用私有账号 / 档案 / 本机文件时,
+    被执行那一版的作者(或认可过它的人)也得用得了(见 domain/authority)。说不出作者的一版
+    没有人为它担保 —— 它照样能存、能跑,只是借不到任何人的私有资源,直到有人认可它。
 
     每一轮都重读当前图、重新调用 `change`,UPDATE 以「读到的那份」(graph_hash + revision)为条件。
     条件没中说明读写空档里有人写入:整份快照在下一轮的 `change` 里撞 `WorkflowGraphConflict`,
@@ -293,7 +297,7 @@ def restore_workflow_revision(
     workflow: Workflow,
     target_revision: int,
     *,
-    created_by: str | None = None,
+    created_by: str | None,
 ) -> WorkflowRevision | None:
     target = get_workflow_revision(db, workflow.id, target_revision)
     if target is None:
@@ -311,3 +315,46 @@ def restore_workflow_revision(
     db.commit()
     db.refresh(workflow)
     return restored
+
+
+def revision_vouchers(db: Session, revision: WorkflowRevision) -> frozenset[str]:
+    """谁为这一版担保:保存它的人,加上事后认可过它的人。"""
+    attested = db.scalars(
+        select(WorkflowRevisionAttestation.user_id).where(WorkflowRevisionAttestation.revision_id == revision.id)
+    )
+    return frozenset({user for user in (revision.created_by, *attested) if user})
+
+
+def attest_revision(db: Session, workflow: Workflow, target_revision: int, *, attested_by: str) -> WorkflowRevision:
+    """「认可这一版」:不改图、不增版,只在这一版上多记一个担保人。
+
+    同事改过的一版要借主人的私有账号 / 档案 / 本机文件时,运行会停下来要主人认可(见
+    domain/authority)。认可不能是「再存一版」:执行语义没变就不增版(本模块的不变量),而且已经
+    排队、钉在这一版上的运行也该一并认得。所以它是修订旁边的一行记录,修订本身仍然不可变。
+    重复认可不产生第二行。
+    """
+    revision = get_workflow_revision(db, workflow.id, target_revision)
+    if revision is None:
+        raise WorkflowRevisionError("wfErr_revisionNotFound", revision=target_revision)
+    if attested_by in revision_vouchers(db, revision):
+        return revision
+    attestation = WorkflowRevisionAttestation(revision_id=revision.id, user_id=attested_by)
+    db.add(attestation)
+    db.flush()
+    from app.domain.collaboration import record_activity
+
+    record_activity(
+        db,
+        workspace_id=workflow.workspace_id,
+        actor_id=attested_by,
+        action="workflow.revision_attested",
+        subject_type="workflow",
+        subject_id=workflow.id,
+        summary="认可了工作流版本",
+        payload={"revision": revision.revision},
+        source_type="workflow_revision_attestation",
+        source_id=attestation.id,
+    )
+    db.commit()
+    db.refresh(revision)
+    return revision

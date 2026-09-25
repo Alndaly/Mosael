@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
 from app.domain import browser, host_files, sharing
-from app.domain.jobs import current_actor, current_parent_job_id
+from app.domain.jobs import current_parent_job_id
 from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.authority import current_authority
 from app.domain.workflows.executors import register
 
 
@@ -28,9 +29,10 @@ def _session_in(db: Session, workflow: Workflow, config: dict[str, Any]) -> str:
     sid = str(config.get("session") or "").strip()
     if not sid:
         raise WorkflowDomainError("wfErr_browserSessionMissing")
-    # 池档案会话还要这次运行的操作人自己能用那个档案(见 browser.attach_session)。
+    # 池档案会话还要这次运行能用那个档案:操作人,和被执行那一版图的担保人(见 browser.attach_session、
+    # workflows.authority)。
     try:
-        session = browser.attach_session(db, sid, workspace_id=workflow.workspace_id, actor=current_actor(db))
+        session = browser.attach_session(db, sid, workspace_id=workflow.workspace_id, actor=current_authority(db))
     except sharing.NotUsableError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     if session is None:
@@ -118,9 +120,10 @@ def _run_owner(db: Session) -> str | None:
 def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     mode = str(config.get("session_mode") or "ephemeral")
     owner = _run_owner(db)
-    #: 谁在用:这次运行的操作人。手动运行是点运行的人,定时任务 / webhook 是任务主人
-    #: (见 scheduler.operations._open_run)。池档案是某人的登录身份,别人的私有档案在这里被拒。
-    actor = current_actor(db)
+    #: 谁在用:这次运行的操作人(手动运行是点运行的人,定时任务 / webhook 是任务主人,见
+    #: scheduler.operations._open_run),加上被执行那一版图的担保人(见 workflows.authority)。
+    #: 池档案是某人的登录身份,别人的私有档案、同事改过而主人没认可的那一版,在这里被拒。
+    actor = current_authority(db)
     try:
         if mode == "pool":
             profile_id = str(config.get("profile_id") or "").strip()
@@ -188,7 +191,7 @@ def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
     asset_id = str(config.get("asset_id") or "").strip()
     try:
         if path:
-            file = host_files.ensure_readable(db, path, actor=current_actor(db))
+            file = host_files.ensure_readable(db, path, actor=current_authority(db))
         elif asset_id:
             asset = db.get(Asset, asset_id)
             if asset is None or asset.workspace_id != workflow.workspace_id:

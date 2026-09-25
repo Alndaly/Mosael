@@ -59,6 +59,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "ScheduledTaskRun": ("app/domain/scheduler/",),
     "Workflow": ("app/domain/workflows/",),
     "WorkflowRevision": ("app/domain/workflows/",),
+    "WorkflowRevisionAttestation": ("app/domain/workflows/",),
     "Scene3D": ("app/domain/scenes.py",),
     "Scene3DRevision": ("app/domain/scenes.py",),
     "Scene3DModel": ("app/domain/scenes.py",),

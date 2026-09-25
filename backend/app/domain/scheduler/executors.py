@@ -181,6 +181,12 @@ def sync_run_states(db: Session) -> None:
             source = job
         run.status = source.status
         run.error = source.error
+        # 「这一版工作流要主人认可」:运行记录上带着是哪条哪一版,任务页据此给「认可这一版」
+        # (见 domain/authority)。只抄这一项 —— 运行记录不是 job 结果的第二份拷贝。
+        failure = (source.result or {}).get("failure") if isinstance(source.result, dict) else None
+        attest = ((failure or {}).get("details") or {}).get("attest") if isinstance(failure, dict) else None
+        if isinstance(attest, dict):
+            run.result = {**(run.result or {}), "attest": attest}
         run.finished_at = now()
         say(job, source.message)
     db.commit()

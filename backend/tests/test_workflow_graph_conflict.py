@@ -13,7 +13,7 @@ from copy import deepcopy
 
 from app.core.db import SessionLocal
 from app.db.models import Workflow
-from tests.util import fresh_client
+from tests.util import user_id, fresh_client
 
 
 def _graph(template: str = "关于 {{start.topic}}") -> dict:
@@ -145,7 +145,7 @@ def _write_behind_our_back(workflow_id: str, template: str) -> None:
     with SessionLocal() as other:
         row = other.get(Workflow, workflow_id)
         assert row is not None
-        update_workflow(other, row, {"graph": _graph(template)}, base_graph_hash=row.graph_hash)
+        update_workflow(other, row, {"graph": _graph(template)}, base_graph_hash=row.graph_hash, created_by=user_id())
 
 
 def test_整图保存的读写空档里有人写入_撞冲突而不是重试着盖掉() -> None:
@@ -165,7 +165,7 @@ def test_整图保存的读写空档里有人写入_撞冲突而不是重试着�
         row = db.get(Workflow, workflow["id"])
         assert row is not None
         try:
-            commit_graph_revision(db, row, sneaky, source="edit")
+            commit_graph_revision(db, row, sneaky, source="edit", created_by=user_id())
         except WorkflowGraphConflict:
             pass
         else:
@@ -193,7 +193,7 @@ def test_按算子改图_撞上并发写入就在最新那份上重做() -> None
     with SessionLocal() as db:
         row = db.get(Workflow, workflow["id"])
         assert row is not None
-        edit_workflow_graph(db, row, rename_start, source="agent")
+        edit_workflow_graph(db, row, rename_start, source="agent", created_by=user_id())
     current = client.get(f"/api/workflows/{workflow['id']}").json()
     assert current["graph"]["nodes"][0]["name"] == "智能体改的名"
     assert current["graph"]["nodes"][1]["config"]["template"] == "空档里写的"

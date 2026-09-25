@@ -95,7 +95,15 @@ def wait_for_job(job_id: str, *, release: "Session | None" = None) -> Job:
         if job is None:
             raise WorkflowDomainError("wfErr_childMissing")
         if job.status == "failed":
-            raise WorkflowDomainError("wfErr_childFailed", params={"reason": job.error or job.message})
+            # 子流程里「这一版要主人认可」的那一句要能从外层点到(见 domain/authority):
+            # 只转 attest,子任务的截图之类现场留在它自己的运行记录里。
+            failure = (job.result or {}).get("failure") if isinstance(job.result, dict) else None
+            attest = ((failure or {}).get("details") or {}).get("attest") if isinstance(failure, dict) else None
+            raise WorkflowDomainError(
+                "wfErr_childFailed",
+                params={"reason": job.error or job.message},
+                details={"attest": attest} if isinstance(attest, dict) else None,
+            )
         if job.status == "succeeded":
             db.expunge(job)
             return job

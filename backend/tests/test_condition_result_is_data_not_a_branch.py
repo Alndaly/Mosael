@@ -23,13 +23,13 @@ from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
 from app.domain.workflows import BRANCHING_NODE_TYPES, NODE_TYPES, create_workflow
 from app.domain.workflows.engine import start_workflow_job
-from tests.util import fresh_client
+from tests.util import user_id, fresh_client
 
 
 def _run(graph: dict) -> tuple[dict, dict]:
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        workflow = create_workflow(db, workspace_id=ws, name="条件", graph=graph)
+        workflow = create_workflow(db, workspace_id=ws, name="条件", graph=graph, created_by=user_id())
         saved = workflow.graph
         job_id = start_workflow_job(db, db.get(Workflow, workflow.id), created_by=None).id
     for _ in range(100):

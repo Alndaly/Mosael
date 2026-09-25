@@ -46,9 +46,11 @@ from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.revisions import (
     WorkflowGraphConflict,
     WorkflowRevisionError,
+    attest_revision,
     get_workflow_revision,
     list_workflow_revisions,
     restore_workflow_revision,
+    revision_vouchers,
 )
 from app.domain.workflows.templates import built_in_template_graph
 
@@ -349,11 +351,39 @@ def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentU
         raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 
 
+def _with_vouchers(db, rows: list[WorkflowRevision]) -> list[WorkflowRevision]:
+    """给修订标上作者名和认可过它的人(非映射属性,只为序列化而挂)。"""
+    from app.db.models import User
+
+    for row in rows:
+        author = db.get(User, row.created_by) if row.created_by else None
+        row.created_by_name = (author.display_name or author.username) if author is not None else ""
+        row.attested_by = sorted(revision_vouchers(db, row) - {row.created_by})
+    return rows
+
+
 @router.get("/workflows/{workflow_id}/revisions", response_model=list[WorkflowRevisionOut])
 def list_revisions(workflow_id: str, db: DbSession, user: CurrentUser) -> list[WorkflowRevision]:
     workflow = _get(db, workflow_id)
     ensure_workspace_access(db, user, workflow.workspace_id)
-    return list_workflow_revisions(db, workflow.id)
+    return _with_vouchers(db, list_workflow_revisions(db, workflow.id))
+
+
+@router.post("/workflows/{workflow_id}/revisions/{revision}/attest", response_model=WorkflowRevisionOut)
+def attest(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) -> WorkflowRevision:
+    """「认可这一版」:不改图、不增版,只把自己记成这一版的担保人。
+
+    同事改过的一版要借主人的私有发布账号 / 浏览器档案 / 本机文件时,运行会停下来说这一版需要主人
+    认可(见 domain/authority)。认可只对**认可的人自己用得了的东西**有用 —— 所以谁能在这里点都
+    无妨,门槛和编辑工作流一样;真正的判断在用的那一刻。
+    """
+    workflow = _get(db, workflow_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    try:
+        attested = attest_revision(db, workflow, revision, attested_by=user.id)
+    except WorkflowRevisionError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _with_vouchers(db, [attested])[0]
 
 
 @router.get("/workflows/{workflow_id}/revisions/{revision}", response_model=WorkflowRevisionDetailOut)
@@ -363,7 +393,7 @@ def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUs
     item = get_workflow_revision(db, workflow.id, revision)
     if item is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_workflowRevisionNotFound"))
-    return item
+    return _with_vouchers(db, [item])[0]
 
 
 @router.post("/workflows/{workflow_id}/revisions/{revision}/restore", response_model=WorkflowOut)

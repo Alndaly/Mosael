@@ -6,6 +6,7 @@ from sqlalchemy import false, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
+from app.domain.authority import Actor, Voucher, ensure
 from app.db.models import (
     AgentSession,
     BrowserProfile,
@@ -234,11 +235,37 @@ _NOT_USABLE_KEYS: dict[str, str] = {
 }
 
 
-def ensure_usable(db: Session, kind: str, resource: Any, actor_id: str | None) -> None:
+class NotVouchedError(NotUsableError):
+    """跑的人用得了,但被执行的那一版图是别人改的,而改它的人用不了这一份 —— 要主人认可这一版。
+
+    `details["attest"]` 说是哪条工作流的哪一版(界面据此给「认可这一版」),和 key 一起顺着
+    工作流的失败现场走(见 workflows.engine._failure_payload)。
+    """
+
+    def __init__(self, key: str, voucher: Voucher) -> None:
+        super().__init__(key, workflow=voucher.workflow_name, revision=voucher.revision)
+        self.details = voucher.attest_details()
+
+
+_NOT_VOUCHED_KEYS: dict[str, str] = {
+    "publish_account": "shareErr_notVouched_publishAccount",
+    "browser_profile": "shareErr_notVouched_browserProfile",
+}
+
+
+def ensure_usable(db: Session, kind: str, resource: Any, actor: Actor) -> None:
     """`may_use` 的强制版:用不了就抛 `NotUsableError`。**用的那一刻**调(见 publish.start_publish、
-    browser.usable_profile),不是在每个入口各抄一遍。"""
-    if not may_use(db, kind, resource, actor_id):
-        raise NotUsableError(_NOT_USABLE_KEYS.get(kind, "shareErr_notUsable"))
+    browser.usable_profile),不是在每个入口各抄一遍。
+
+    `actor` 可以是一个用户 id(路由、确认卡),也可以是一次工作流运行的 `Authority`:那时除了跑的人,
+    被执行的每一版图还要有一个担保人(作者或认可过它的人)自己也能用这一份(见 domain/authority)。
+    """
+    ensure(
+        actor,
+        lambda user: may_use(db, kind, resource, user),
+        denied=lambda: NotUsableError(_NOT_USABLE_KEYS.get(kind, "shareErr_notUsable")),
+        unvouched=lambda voucher: NotVouchedError(_NOT_VOUCHED_KEYS.get(kind, "shareErr_notVouched"), voucher),
+    )
 
 
 def shared_workspaces(db: Session, kind: str, resource_id: str) -> list[str]:

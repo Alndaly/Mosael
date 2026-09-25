@@ -3634,6 +3634,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/{workflow_id}/revisions/{revision}/attest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attest
+         * @description 「认可这一版」:不改图、不增版,只把自己记成这一版的担保人。
+         *
+         *     同事改过的一版要借主人的私有发布账号 / 浏览器档案 / 本机文件时,运行会停下来说这一版需要主人
+         *     认可(见 domain/authority)。认可只对**认可的人自己用得了的东西**有用 —— 所以谁能在这里点都
+         *     无妨,门槛和编辑工作流一样;真正的判断在用的那一刻。
+         */
+        post: operations["attest_api_workflows__workflow_id__revisions__revision__attest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}/revisions/{revision}": {
         parameters: {
             query?: never;
@@ -12182,6 +12206,13 @@ export interface components {
             /** Created By */
             created_by: string | null;
             /**
+             * Created By Name
+             * @default
+             */
+            created_by_name: string;
+            /** Attested By */
+            attested_by?: string[];
+            /**
              * Created At
              * Format: date-time
              */
@@ -12207,6 +12238,13 @@ export interface components {
             note: string;
             /** Created By */
             created_by: string | null;
+            /**
+             * Created By Name
+             * @default
+             */
+            created_by_name: string;
+            /** Attested By */
+            attested_by?: string[];
             /**
              * Created At
              * Format: date-time
@@ -19841,6 +19879,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowRevisionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attest_api_workflows__workflow_id__revisions__revision__attest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                revision: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRevisionOut"];
                 };
             };
             /** @description Validation Error */

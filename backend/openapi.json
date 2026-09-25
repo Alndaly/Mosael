@@ -10608,6 +10608,58 @@
         }
       }
     },
+    "/api/workflows/{workflow_id}/revisions/{revision}/attest": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Attest",
+        "description": "「认可这一版」:不改图、不增版,只把自己记成这一版的担保人。\n\n同事改过的一版要借主人的私有发布账号 / 浏览器档案 / 本机文件时,运行会停下来说这一版需要主人\n认可(见 domain/authority)。认可只对**认可的人自己用得了的东西**有用 —— 所以谁能在这里点都\n无妨,门槛和编辑工作流一样;真正的判断在用的那一刻。",
+        "operationId": "attest_api_workflows__workflow_id__revisions__revision__attest_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRevisionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/revisions/{revision}": {
       "get": {
         "tags": [
@@ -31666,6 +31718,18 @@
             ],
             "title": "Created By"
           },
+          "created_by_name": {
+            "type": "string",
+            "title": "Created By Name",
+            "default": ""
+          },
+          "attested_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Attested By"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -31727,6 +31791,18 @@
               }
             ],
             "title": "Created By"
+          },
+          "created_by_name": {
+            "type": "string",
+            "title": "Created By Name",
+            "default": ""
+          },
+          "attested_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Attested By"
           },
           "created_at": {
             "type": "string",

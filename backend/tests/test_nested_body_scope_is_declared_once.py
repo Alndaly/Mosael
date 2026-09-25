@@ -22,7 +22,7 @@ from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
 from app.domain.workflows import NESTED_BODY_TYPES, NODE_TYPES, WorkflowDomainError, create_workflow, validate_graph
 from app.domain.workflows.engine import start_workflow_job
-from tests.util import fresh_client
+from tests.util import user_id, fresh_client
 
 RATCHET = True
 
@@ -45,7 +45,7 @@ def _graph(container: str, body_template: str, **config) -> dict:
 def _saved(graph: dict) -> Workflow:
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        workflow = create_workflow(db, workspace_id=ws, name="体的作用域", graph=graph)
+        workflow = create_workflow(db, workspace_id=ws, name="体的作用域", graph=graph, created_by=user_id())
         db.expunge(workflow)
         return workflow
 

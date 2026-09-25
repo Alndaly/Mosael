@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, User
 from app.domain import deployment
+from app.domain.authority import Actor, Voucher, ensure
 from app.domain.permissions import PermissionDenied
 
 
@@ -40,6 +41,17 @@ class HostFileError(LocalizedError, ValueError):
 
 class HostFileNotAllowed(PermissionDenied):
     """这个人不能读这台电脑上的这个位置。是 `PermissionDenied`,api 回 403。"""
+
+
+class HostFileNotVouched(HostFileNotAllowed):
+    """跑的人读得了,但被执行的那一版工作流是别人改的,改它的人读不了 —— 要管理员认可这一版。
+
+    `details["attest"]` 说是哪条工作流的哪一版(见 domain/authority)。
+    """
+
+    def __init__(self, key: str, voucher: Voucher) -> None:
+        super().__init__(key, workflow=voucher.workflow_name, revision=voucher.revision)
+        self.details = voucher.attest_details()
 
 
 @dataclass(frozen=True)
@@ -80,7 +92,7 @@ def _in_shared_folder(db: Session, real: Path) -> bool:
 
 
 def may_read(db: Session, path: str | os.PathLike[str], *, actor: str | None) -> bool:
-    """`ensure_readable` 的判断版,不查文件存不存在。"""
+    """这**一个人**读不读得了这个位置(不查文件存不存在)。一次运行的全部授权见 `ensure_readable`。"""
     if not actor:
         return False
     if _is_admin(db, actor):
@@ -88,17 +100,22 @@ def may_read(db: Session, path: str | os.PathLike[str], *, actor: str | None) ->
     return _in_shared_folder(db, _real(path))
 
 
-def ensure_readable(db: Session, path: str | os.PathLike[str], *, actor: str | None) -> HostFile:
+def ensure_readable(db: Session, path: str | os.PathLike[str], *, actor: Actor) -> HostFile:
     """读本机一个**用户给出的**路径之前,必须先过这里。返回放行后的真实路径。
 
     先判权限、再判存在:没权限的人不该从「文件不存在 / 存在」的区别里探出别人机器上有什么。
+    工作流里 `actor` 是这次运行的 `Authority`:被执行的每一版图也要有一个读得了它的担保人。
     """
     raw = os.fspath(path).strip() if isinstance(path, str) else os.fspath(path)
     if not raw or not Path(os.path.expanduser(raw)).is_absolute():
         raise HostFileError("hostErr_notAbsolute")
     real = _real(raw)
-    if not may_read(db, real, actor=actor):
-        raise HostFileNotAllowed("hostErr_notReadable")
+    ensure(
+        actor,
+        lambda user: may_read(db, real, actor=user),
+        denied=lambda: HostFileNotAllowed("hostErr_notReadable"),
+        unvouched=lambda voucher: HostFileNotVouched("hostErr_notVouched", voucher),
+    )
     if not real.is_file():
         raise HostFileError("hostErr_notAFile")
     return HostFile(real)
@@ -114,10 +131,14 @@ def asset_file(asset: Asset) -> HostFile:
     return HostFile(resolve_key(asset.file_key))
 
 
-def ensure_whole_machine(db: Session, *, actor: str | None) -> None:
+def ensure_whole_machine(db: Session, *, actor: Actor) -> None:
     """在这台电脑上**直接跑代码**(不隔离):它能读写任何文件,所以只认部署管理员,共享文件夹不算数。"""
-    if not _is_admin(db, actor):
-        raise HostFileNotAllowed("hostErr_codeNeedsAdmin")
+    ensure(
+        actor,
+        lambda user: _is_admin(db, user),
+        denied=lambda: HostFileNotAllowed("hostErr_codeNeedsAdmin"),
+        unvouched=lambda voucher: HostFileNotVouched("hostErr_notVouched", voucher),
+    )
 
 
 def set_shared_folders(db: Session, folders: list[str]) -> list[str]:

@@ -2,7 +2,8 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
 
-import { listJobEvents, listWorkflowRuns, type Job } from "@/api/client";
+import { attestRequestOf, listJobEvents, listWorkflowRuns, type Job } from "@/api/client";
+import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import { useI18n } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
@@ -35,6 +36,13 @@ function outputsText(outputs: Record<string, unknown>): string {
   return Object.entries(outputs)
     .map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
     .join("\n");
+}
+
+/** 失败现场里「哪条工作流的哪一版等人认可」(后端 engine 把它记在 result.failure.details.attest)。 */
+function runAttest(job: Job) {
+  const failure = (job.result as Record<string, unknown> | undefined)?.failure as Record<string, unknown> | undefined;
+  const details = failure?.details as Record<string, unknown> | undefined;
+  return job.status === "failed" ? attestRequestOf(details?.attest) : null;
 }
 
 function RunIcon({ status }: { status: string }) {
@@ -241,6 +249,12 @@ export function WorkflowRunHistory({
                 >
                   <XCircle size={13} className="mt-0.5 shrink-0" />
                   <p className="m-0 min-w-0 whitespace-pre-wrap break-words">{selected.error}</p>
+                </div>
+              )}
+              {/* 这次停在「这一版是别人改的,要主人认可」:就地给认可那一版的按钮(见 AttestRevisionButton)。 */}
+              {runAttest(selected) && (
+                <div className="mb-2 flex justify-end">
+                  <AttestRevisionButton attest={runAttest(selected)!} />
                 </div>
               )}
               <ol className="m-0 flex list-none flex-col gap-0.5 p-0">

@@ -49,3 +49,22 @@ class WorkflowRevision(Base):
     note: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class WorkflowRevisionAttestation(Base):
+    """有人「认可了这一版」:不改图、不增版,只为这一版多担保一个人。
+
+    一次运行用私有发布账号 / 浏览器档案 / 本机文件时,被执行那一版的担保人(作者 + 这里记下的人)
+    里得有一个自己用得了(见 domain/authority)。同事改过的一版借不到主人的东西,直到主人认可它。
+    挂在修订上而不是再存一版:修订不可变,执行语义没变也不增版。
+    """
+
+    __tablename__ = "workflow_revision_attestations"
+    __table_args__ = (
+        UniqueConstraint("revision_id", "user_id", name="uq_workflow_revision_attestations_revision_user"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("workflow_revisions.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

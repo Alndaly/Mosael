@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, is_message_key
 from app.domain import sharing
+from app.domain.authority import Actor
 from app.domain.host_files import HostFile
 from app.db.models import BrowserAction, BrowserProfile, BrowserSession, Job, PublishAccount, User, now
 
@@ -100,7 +101,7 @@ def get_profile(db: Session, workspace_id: str, profile_id: str) -> BrowserProfi
     return prof
 
 
-def usable_profile(db: Session, workspace_id: str, profile_id: str, *, actor: str | None) -> BrowserProfile:
+def usable_profile(db: Session, workspace_id: str, profile_id: str, *, actor: Actor) -> BrowserProfile:
     """取一个**这个人能用**的池档案:在这个工作区里,而且是他的、或者主人共享出来了。
 
     档案存的是某人已登录的浏览器 —— 借它开会话、取它的 cookie,就是在用那个人的身份。归属在
@@ -166,7 +167,7 @@ def open_session(
     profile_id: str | None = None,
     owner_kind: str = "manual",
     owner_id: str | None = None,
-    actor: str | None,
+    actor: Actor,
 ) -> BrowserSession:
     """新建(或复用)浏览器会话。临时会话每次都是新隔离上下文;具名会话跨次复用;池档案会话在
     档案分区上开,受**租约**约束(一个档案同一时刻一个活动会话:同 owner 复用、异 owner 拒绝)。
@@ -211,7 +212,7 @@ def open_session(
 
 
 def _open_profile_session(
-    db: Session, workspace_id: str, profile_id: str, owner_kind: str, owner_id: str | None, actor: str | None
+    db: Session, workspace_id: str, profile_id: str, owner_kind: str, owner_id: str | None, actor: Actor
 ) -> BrowserSession:
     prof = usable_profile(db, workspace_id, profile_id, actor=actor)
     if not prof.enabled:
@@ -241,7 +242,7 @@ def _open_profile_session(
     return session
 
 
-def attach_session(db: Session, session_id: str, *, workspace_id: str, actor: str | None) -> BrowserSession | None:
+def attach_session(db: Session, session_id: str, *, workspace_id: str, actor: Actor) -> BrowserSession | None:
     """接着用一个**已经开着**的会话(工作流下游的浏览器节点、智能体的内联动作)。
 
     返回 None = 不存在或不在这个工作区,调用方按自己的语境报「找不到」。

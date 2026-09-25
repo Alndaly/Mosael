@@ -116,6 +116,9 @@ class WorkflowDomainError(RuntimeError):
         """
         from app.core.i18n import is_message_key
 
+        # 别的领域带着的失败现场(如「这一版要主人认可」的 attest,见 domain/authority)跟着走。
+        if details is None and isinstance(getattr(exc, "details", None), dict):
+            details = dict(exc.details)  # type: ignore[attr-defined]
         key = str(getattr(exc, "key", "") or "")
         if is_message_key(key):
             return cls(key, params=dict(getattr(exc, "params", None) or {}), details=details)
@@ -1847,7 +1850,7 @@ def create_workflow(
     description: str = "",
     graph: dict[str, Any] | None = None,
     source: str = "create",
-    created_by: str | None = None,
+    created_by: str | None,
     revision_note: str = "",
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
@@ -1894,7 +1897,7 @@ def update_workflow(
     *,
     base_graph_hash: str | None = None,
     source: str = "edit",
-    created_by: str | None = None,
+    created_by: str | None,
     revision_note: str = "",
 ) -> Workflow:
     """改名、改描述、存整份图。
@@ -1933,7 +1936,7 @@ def edit_workflow_graph(
     change: Callable[[dict[str, Any]], dict[str, Any]],
     *,
     source: str,
-    created_by: str | None = None,
+    created_by: str | None,
 ) -> Workflow:
     """只改图里自己那一处(按算子改图):落在**最新那份图**上,撞上并发写入就重读再合。
 

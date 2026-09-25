@@ -9,7 +9,9 @@ import {
   type Workflow,
   type WorkflowRevision,
 } from "@/api/client";
+import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import type { MessageKey } from "@/app/messages";
 import {
   AlertDialog,
@@ -57,6 +59,7 @@ export function WorkflowRevisionHistory({
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const [pending, setPending] = React.useState<WorkflowRevision | null>(null);
+  const me = useAuth().user?.id ?? null;
   const revisions = useQuery({
     // 修订号属于查询身份。只按 workflow.id 缓存时，面板第一次在 v3 打开后会一直复用那三行，
     // 即使后台轮询已经把工作流本身更新到 v7——标题显示 v7，列表却只到 v3。
@@ -114,6 +117,10 @@ export function WorkflowRevisionHistory({
                 const current = item.revision === workflow.revision;
                 const sameContent = item.graph_hash === workflow.graph_hash;
                 const sourceKey = SOURCE_LABELS[item.source];
+                const attested = item.attested_by ?? [];
+                // 担保人 = 作者 + 认可过它的人(见后端 domain/authority)。别人改的、我还没认可的那一版
+                // 才给「认可这一版」:只有它借不到我的私有账号 / 档案 / 本机文件。
+                const iVouch = me !== null && (item.created_by === me || attested.includes(me));
                 return (
                   <li
                     key={item.id}
@@ -142,6 +149,18 @@ export function WorkflowRevisionHistory({
                           {relativeTime(item.created_at, locale)}
                         </time>
                         <span aria-hidden>·</span>
+                        <span className="truncate">
+                          {item.created_by_name
+                            ? t("wfRevisionAuthor").replace("{name}", item.created_by_name)
+                            : t("wfRevisionAuthorUnknown")}
+                        </span>
+                        {attested.length > 0 && (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span className="truncate">{t("wfRevisionAttestedCount").replace("{n}", String(attested.length))}</span>
+                          </>
+                        )}
+                        <span aria-hidden>·</span>
                         <span className="truncate font-mono" title={item.graph_hash}>
                           {item.graph_hash.slice(0, 10)}
                         </span>
@@ -155,6 +174,16 @@ export function WorkflowRevisionHistory({
                         )}
                       </div>
                     </div>
+                    {current && !iVouch && (
+                      <AttestRevisionButton
+                        attest={{ workflow_id: workflow.id, workflow_name: "", revision: item.revision }}
+                      />
+                    )}
+                    {current && iVouch && item.created_by !== me && (
+                      <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-ui-2xs">
+                        {t("wfRevisionYouVouch")}
+                      </Badge>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
