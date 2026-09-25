@@ -14,6 +14,7 @@ import {
   collect,
   PromptEditor,
   restorePromptDocument,
+  textDocument,
   type PromptDocument,
 } from "@/features/boards/PromptEditor";
 import { useSubmitting } from "@/features/boards/useSubmitting";
@@ -542,12 +543,22 @@ export function NodeComposer({
    * 就白连了。但**不覆盖他自己写的**:只有输入框还空着、或者里面正好是上一次自动填进去的
    * 那段时才替换;他改过或删掉之后就不再回填(那本身就是一次表态)。
    */
+  //:
+  //: **正文和文档一起换。** 提示词框照文档画(document 优先于 value):只换 prompt 的话,框里
+  //: 还是旧的那份文档(比如删空之后留下的空段落),填进去的字看不见,提交出去的却是它。
   const textKey = texts.map((one) => `${one.itemId}:${one.text}`).join("|");
   const filled = React.useRef("");
+  const promptNow = React.useRef(prompt);
+  promptNow.current = prompt;
   React.useEffect(() => {
     const joined = texts.map((one) => one.text).join("\n\n");
     if (!joined || joined === filled.current) return;
-    setPrompt((current) => (current.trim() === "" || current === filled.current ? joined : current));
+    const current = promptNow.current;
+    if (current.trim() === "" || current === filled.current) {
+      setPrompt(joined);
+      setPromptDocument(textDocument(joined));
+      setMentioned([]);
+    }
     filled.current = joined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [textKey]);

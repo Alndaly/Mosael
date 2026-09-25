@@ -8,7 +8,7 @@ import { NodeComposer } from "./NodeComposer";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [] }) }));
-vi.mock("./PromptEditor", () => ({ PromptEditor: () => <div />, restorePromptDocument: vi.fn(), collect: () => [] }));
+vi.mock("./PromptEditor", () => ({ PromptEditor: () => <div />, restorePromptDocument: vi.fn(), textDocument: vi.fn(), collect: () => [] }));
 
 it("edits parameters in the settings popup, persists them after closing, and submits those values", async () => {
   HTMLElement.prototype.scrollIntoView = vi.fn();

@@ -23,7 +23,8 @@ import { cn } from "@/lib/utils";
 
 export type PromptDocument = JSONContent;
 
-function textDocument(value: string): PromptDocument {
+/** 一段纯文本的提示词文档(没有素材 chip)。 */
+export function textDocument(value: string): PromptDocument {
   return value
     ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: value }] }] }
     : { type: "doc", content: [{ type: "paragraph" }] };
