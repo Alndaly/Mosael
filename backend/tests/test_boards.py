@@ -325,6 +325,24 @@ def test_当前画布解析器不再解释旧状态字段() -> None:
 # ── 在画板上生成 ────────────────────────────────────────────────────────────
 
 
+def _writable_profile(client) -> str:
+    """一条能「写字」的模型连接。**真建** —— 计量事件带着 provider_profile_id 的外键,拿个假对象
+    顶上会在落账时炸。调用由测试自己 mock 掉,不会真的发出去。"""
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from app.domain import provider_models
+
+    profile_id = client.post(
+        "/api/settings/providers",
+        json={"vendor": "openai", "name": "演示", "api_key": "sk-test", "base_url": "http://127.0.0.1:1"},
+    ).json()["id"]
+    client.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-test"})
+    with SessionLocal() as db:
+        provider_models.upsert(db, db.get(ProviderProfile, profile_id), "gpt-4.1-mini", source="manual")
+        db.commit()
+    return profile_id
+
+
 def _pending_board(client, ws: str) -> tuple[str, str]:
     """一张板 + 一项「正在生成」的占位。返回 (board_id, item_id)。"""
     board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
@@ -542,9 +560,11 @@ def test_客户端不会把已经失败的节点重新写成_loading() -> None:
 
 
 def test_旧自动保存不会覆盖便签写作的成功正文和空表单() -> None:
-    """同步写作没有 asset_id，仍要像异步产出一样抵抗晚到的 running 快照。"""
+    """写字没有 asset_id，仍要像异步产出一样抵抗晚到的 running 快照。"""
+    from types import SimpleNamespace
+
     from app.core.db import SessionLocal
-    from app.domain.boards import write_text
+    from app.domain.boards import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -560,7 +580,7 @@ def test_旧自动保存不会覆盖便签写作的成功正文和空表单() ->
                         "x": 0,
                         "y": 0,
                         "form": {"prompt": "描述图片", "model": "k3", "mentioned_asset_ids": ["asset-1"]},
-                        "run": {"status": "running"},
+                        "run": {"status": "running", "job_id": "job-w"},
                     }
                 ],
                 "edges": [],
@@ -570,19 +590,15 @@ def test_旧自动保存不会覆盖便签写作的成功正文和空表单() ->
     stale = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
 
     with SessionLocal() as db:
-        write_text(
-            db,
-            workspace_id=ws,
-            board_id=board_id,
-            item_id="n1",
-            text="生成后的正文",
-            reset_form=True,
+        deliver_generated(
+            db, SimpleNamespace(id="job-w", status="succeeded", result={"text": "生成后的正文"}),
+            receipt_to_item(board_id, "n1"),
         )
 
     got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
     item = got["canvas"]["items"][0]
     assert item["text"] == "生成后的正文"
-    assert item["form"] == {"prompt": "", "model": "k3", "mentioned_asset_ids": []}
+    assert item["form"] == {"prompt": "", "model": "k3", "mentioned_asset_ids": [], "source_assets": []}
     assert item["run"] == {"status": "succeeded"}
 
 
@@ -700,8 +716,10 @@ def test_失败之后重新生成_画布上是这一轮的占位而不是上一�
 
 
 def test_便签写挂了之后重写_能重新进入写作中() -> None:
-    from app.core.db import SessionLocal
-    from app.domain.boards import set_text_write_run
+    """写挂了的那一格(run.failed)再写一次:新一轮照常进入写作中、照常写成。"""
+    from unittest.mock import patch as mock_patch
+
+    from app.domain.ai_chat import AiChatError
 
     client = fresh_client()
     ws = _workspace(client)
@@ -709,11 +727,55 @@ def test_便签写挂了之后重写_能重新进入写作中() -> None:
         "workspace_id": ws,
         "canvas": {"items": [{"id": "note-1", "kind": "note", "x": 0, "y": 0, "text": ""}], "edges": []},
     }).json()["id"]
-    with SessionLocal() as db:
-        set_text_write_run(db, workspace_id=ws, board_id=board_id, item_id="note-1", status="failed", error="模型超时")
-        again = set_text_write_run(db, workspace_id=ws, board_id=board_id, item_id="note-1", status="running")
+    _writable_profile(client)
+    body = {"workspace_id": ws, "item_id": "note-1", "prompt": "写一句"}
 
-    assert again.canvas["items"][0]["run"] == {"status": "running"}
+    with mock_patch("app.domain.ai_chat.chat", side_effect=AiChatError("aiChatErr_failed")):
+        failed = client.post(f"/api/boards/{board_id}/write", json=body)
+    assert failed.status_code == 422, failed.text
+    note = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
+    assert note["run"]["status"] == "failed"
+
+    with mock_patch("app.domain.ai_chat.chat", return_value="写好了"):
+        again = client.post(f"/api/boards/{board_id}/write", json=body)
+    assert again.status_code == 200, again.text
+    note = again.json()["canvas"]["items"][0]
+    assert (note["text"], note["run"]) == ("写好了", {"status": "succeeded"})
+
+
+def test_写字时炸了别的异常_那张便签照样收成失败() -> None:
+    """模型之外的异常(读素材、记账、写回……)此前一概漏过去:便签在服务端一直停在「写作中」,
+    只等下一次客户端自动保存碰巧把它盖掉。写字是一个任务,任何异常都经任务总线落成失败。"""
+    from unittest.mock import patch as mock_patch
+
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+    from app.domain.boards.actions import write_on_board
+
+    client = fresh_client()
+    ws = _workspace(client)
+    user_id = client.get("/api/auth/me").json()["id"]
+    board_id = client.post("/api/boards", json={
+        "workspace_id": ws,
+        "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "原来的字"}], "edges": []},
+    }).json()["id"]
+
+    with SessionLocal() as db, mock_patch(
+        "app.domain.boards.actions.look_at", side_effect=RuntimeError("磁盘读不出来")
+    ), pytest.raises(RuntimeError):
+        write_on_board(
+            db, workspace_id=ws, board_id=board_id, item_id="n1", actor_id=user_id, prompt="改短",
+            provider_profile_id="", model="", source_asset_ids=["a1"], context=[],
+        )
+
+    note = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
+    assert note["run"]["status"] == "failed", f"便签停在了「写作中」:{note['run']}"
+    assert "磁盘读不出来" in note["run"].get("error", "")
+    assert note["text"] == "原来的字"
+    assert note["form"]["prompt"] == "改短", "写挂了之后要求要留给重试"
+    with SessionLocal() as db:
+        [job] = db.query(Job).filter(Job.kind == "board_write").all()
+        assert job.status == "failed"
 
 
 def test_在已有的空槽上生成不会撞上自己() -> None:
@@ -836,8 +898,11 @@ def test_分组框记得住联动拖动这件事() -> None:
 
 def test_写文案就地落进那张便签_成功后重置一次性表单() -> None:
     """AI 写完保留节点与稳定模型选择，但提示词和手动引用已经消费完，下一轮应从空表单开始。"""
+    from types import SimpleNamespace
+
     from app.core.db import SessionLocal
-    from app.domain.boards import write_text
+    from app.db.models import Board
+    from app.domain.boards import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -861,7 +926,7 @@ def test_写文案就地落进那张便签_成功后重置一次性表单() -> N
                             "model": "k3",
                             "mentioned_asset_ids": ["asset-1"],
                         },
-                        "run": {"status": "running"},
+                        "run": {"status": "running", "job_id": "job-w"},
                     }
                 ],
                 "edges": [],
@@ -870,15 +935,12 @@ def test_写文案就地落进那张便签_成功后重置一次性表单() -> N
     ).json()["id"]
 
     db = SessionLocal()
-    board = write_text(
-        db,
-        workspace_id=ws,
-        board_id=board_id,
-        item_id="n1",
-        text="城市夜景下的一只白猫",
-        reset_form=True,
+    deliver_generated(
+        db, SimpleNamespace(id="job-w", status="succeeded", result={"text": "城市夜景下的一只白猫"}),
+        receipt_to_item(board_id, "n1"),
     )
-    items = board.canvas["items"]
+    db.expire_all()
+    items = db.get(Board, board_id).canvas["items"]
     assert len(items) == 1, "写字居然新建了一项"
     assert items[0]["text"] == "城市夜景下的一只白猫"
     assert (items[0]["x"], items[0]["y"], items[0]["color"]) == (40, 80, "green"), "把用户摆好的东西改了"
@@ -887,12 +949,13 @@ def test_写文案就地落进那张便签_成功后重置一次性表单() -> N
         "provider_profile_id": "profile-1",
         "model": "k3",
         "mentioned_asset_ids": [],
+        "source_assets": [],
     }
     assert items[0]["run"] == {"status": "succeeded"}
-
-    with pytest.raises(BoardDomainError):
-        write_text(db, workspace_id=ws, board_id=board_id, item_id="没这项", text="x")
     db.close()
+
+    missing = client.post(f"/api/boards/{board_id}/write", json={"workspace_id": ws, "item_id": "没这项", "prompt": "x"})
+    assert missing.status_code == 404, missing.text
 
 
 def test_写文案没配模型时给准信而不是五百() -> None:

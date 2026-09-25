@@ -20,6 +20,7 @@ import {
   Link as LinkIcon,
   type LucideIcon,
   Mic,
+  PenLine,
   Radio,
   Scissors,
   Send,
@@ -46,6 +47,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   denoise_audio: AudioWaveform,
   separate_audio: Split,
   trim: Scissors,
+  board_write: PenLine,
   proxy: Clapperboard,
 };
 

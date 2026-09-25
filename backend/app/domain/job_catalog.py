@@ -52,6 +52,8 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("denoise_audio", "always", ("assets",), view="media"),
         JobKind("separate_audio", "always", ("assets",), view="media"),
         JobKind("trim", "always", ("assets", "boards"), view="boards"),
+        # 画板上写字:几秒就回,用户就盯着那张便签 —— 结果落在便签上,失败在便签上和提示里都说了。
+        JobKind("board_write", "never", ("boards",), view="boards"),
         # 导入、导出之后顺手排的;成功了没人在等,失败了才值得一说(素材预览会不流畅)。
         JobKind("proxy", "failures", ("assets",), view="media"),
     )

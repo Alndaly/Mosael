@@ -20,13 +20,12 @@ from app.domain.boards.canvas import (
     BoardDomainError,
     ensure_revision,
     get_board,
+    item_not_found,
     live_job,
     place_pending,
     receipt_to_item,
-    set_text_write_run,
-    write_text,
 )
-from app.domain.jobs import reset_receipt, set_receipt
+from app.domain.jobs import create_job, reset_receipt, run_job_inline, set_receipt
 
 
 class BoardInputError(BoardDomainError):
@@ -223,9 +222,14 @@ def write_on_board(
 ) -> Board:
     """让 AI 往一张便签里写字。模型的错误(AiChatError)在把失败落进便签之后原样抛出。
 
-    **不走生成任务那条路。** 写字几秒就回,同步返回更直接 —— 为它铺一套任务/回执,用户看到的
-    只是一个多余的转圈。**也不自己实现「调 LLM」**:供应商解析、调用、计量和工作流的 LLM 节点、
-    智能体是同三样东西。
+    **同步返回,但照样是一个任务。** 写字几秒就回,调用方等着结果;可「这一格在写」这件事
+    得由任务总线收尾 —— 此前运行态是这里手写的两笔(开始写 running、AiChatError 时写 failed),
+    别的异常(读素材炸了、记账出错、写回撞了什么)一概漏过去,便签在服务端一直停在「写作中」,
+    只等下一次客户端自动保存碰巧把它盖掉。现在和生成/念/截同一套:建任务 → 摆占位 → 跑 →
+    回执把正文(或失败原因)落回这一格。任务在调用方线程里跑完(见 jobs.run_job_inline),
+    任何异常都先落成失败再抛出;进程中途没了,重启时 reconcile 收掉。
+
+    **也不自己实现「调 LLM」**:供应商解析、调用、计量和工作流的 LLM 节点、智能体是同三样东西。
     """
     from app.domain.ai_chat import AiChatError, chat, target_for
     from app.domain.providers import require_connection
@@ -237,21 +241,34 @@ def write_on_board(
 
     #: 这张便签上已经有的字。**从画布上读,不让前端拼进提示词** —— 拼在前端意味着「现在写的是
     #: 什么」和「要求是什么」揉成了一段。有字就是**改写**,没字才是从头写。
-    board = get_board(db, workspace_id, board_id)
-    existing = next(
-        (str(one.get("text") or "") for one in (board.canvas or {}).get("items", []) if one.get("id") == item_id),
-        "",
-    ).strip()
+    slot_item = _slot_item(db, workspace_id, board_id, item_id)
+    existing = str(slot_item.get("text") or "").strip()
+    _ensure_slot_ready(db, workspace_id, Slot(board_id, item_id, 0, 0, base_revision))
 
-    # 同步并不等于没有生命周期:先把 running 落进节点,失败/成功再在同一节点收口。
-    set_text_write_run(db, workspace_id=workspace_id, board_id=board_id, item_id=item_id,
-                       status="running", base_revision=base_revision, actor_id=actor_id)
-
-    #: 上游连过来的 + 正文里 @ 到的。图片和视频给画面,音频给转写 —— 见 look_at。
-    pictures, from_assets = look_at(db, workspace_id, source_asset_ids)
-    materials = [one.strip() for one in context if one and one.strip()] + from_assets
-
+    token = set_receipt(receipt_to_item(board_id, item_id))
     try:
+        job = create_job(
+            db,
+            workspace_id=workspace_id,
+            kind="board_write",
+            created_by=actor_id,
+            payload={"board_id": board_id, "item_id": item_id, "subject": prompt[:80]},
+            message="jobMsg_boardWriteQueued",
+        )
+    finally:
+        reset_receipt(token)
+    db.commit()
+    _pending(
+        db, workspace_id, Slot(board_id, item_id, 0, 0), actor_id=actor_id, kind="note", job_id=job.id,
+        #: 表单记下**这一轮**用的要求和模型 —— 写挂了回来,面板上原样还在,改一个字就能重来。
+        form={**(slot_item.get("form") or {}), "prompt": prompt,
+              "provider_profile_id": provider_profile_id, "model": model},
+    )
+
+    def write() -> dict[str, Any]:
+        #: 上游连过来的 + 正文里 @ 到的。图片和视频给画面,音频给转写 —— 见 look_at。
+        pictures, from_assets = look_at(db, workspace_id, source_asset_ids)
+        materials = [one.strip() for one in context if one and one.strip()] + from_assets
         profile = require_connection(db, provider_profile_id or None, user_id=actor_id, error=AiChatError)
         target = target_for(db, profile, model=model, surface="automation")
         with billable(
@@ -311,26 +328,20 @@ def write_on_board(
                 call=call,
                 label="画板写文案",
             ).strip()
-    except AiChatError as exc:
-        set_text_write_run(db, workspace_id=workspace_id, board_id=board_id, item_id=item_id,
-                           status="failed", error=str(exc), actor_id=actor_id)
-        raise
+        return {"text": text}
 
-    return write_text(
-        db,
-        workspace_id=workspace_id,
-        board_id=board_id,
-        item_id=item_id,
-        text=text,
-        reset_form=True,
-        completed_form={
-            "prompt": "",
-            "provider_profile_id": provider_profile_id,
-            "model": model,
-            "mentioned_asset_ids": [],
-        },
-        actor_id=actor_id,
-    )
+    run_job_inline(db, job, write, running="jobMsg_boardWriteRunning", done="jobMsg_boardWriteDone")
+    db.expire_all()
+    return get_board(db, workspace_id, board_id)
+
+
+def _slot_item(db: Session, workspace_id: str, board_id: str, item_id: str) -> dict[str, Any]:
+    """画布上的那一格;不在就说清楚。"""
+    board = get_board(db, workspace_id, board_id)
+    item = next((one for one in (board.canvas or {}).get("items", []) if one.get("id") == item_id), None)
+    if item is None:
+        raise item_not_found(item_id)
+    return item
 
 
 def look_at(db: Session, workspace_id: str, asset_ids: list[str]) -> tuple[list[dict], list[str]]:

@@ -11,10 +11,10 @@ export interface NoteWriteInput {
 }
 
 /**
- * 同步写作也有完整的节点生命周期。
+ * 写字也有完整的节点生命周期。
  *
- * 请求本身不需要后台 job，但 loading / success / failure 仍然属于节点，而不是提交按钮。
- * 服务端返回的节点是最终事实；fallback 只防御一次不完整响应。
+ * 请求同步返回(服务端在请求里把写字任务跑完,见后端 write_on_board),但 loading / success /
+ * failure 属于节点,而不是提交按钮。服务端返回的节点是最终事实；fallback 只防御一次不完整响应。
  */
 export async function runNoteWrite({
   input,

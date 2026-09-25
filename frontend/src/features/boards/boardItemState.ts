@@ -79,9 +79,10 @@ export function serverOwnedPatch(sent: BoardItem, stored: BoardItem): Partial<Bo
  */
 export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null {
   if (itemIsRunning(item)) return null;
-  if (item.asset_id) {
+  if (item.asset_id || itemRunStatus(item) === "succeeded") {
     return {
-      asset_id: item.asset_id,
+      //: 产出:媒体是 asset_id,便签是正文(写字的回执把它写进 text)。
+      ...(item.kind === "note" ? { text: item.text } : { asset_id: item.asset_id }),
       form: item.form,
       run: item.run ?? { status: "succeeded" },
     };

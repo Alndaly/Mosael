@@ -455,7 +455,7 @@ def duplicate_board(
     **在跑的那几格不带过去。** 生成任务的回执认的是原板(见 receipt_to_item,board_id 写死在
     任务的 payload 里),便签写作也只写回原板那一格;副本里留着「在跑」的话,那一格永远等不到
     结束 —— 框里一直转圈,底下的提交键一直按不动。判据是**状态**(排队/运行中),不是有没有
-    job_id:同步写作没有 job_id,照样只落回原件。它们在副本里退回空槽:提示词和参数都还在,
+    job_id:客户端的快照里在跑的那一格不一定带着 job_id,照样只落回原件。它们在副本里退回空槽:提示词和参数都还在,
     想要的话再点一次。前端「复制选中项」是同一条规则(boardItemState.copiedItem)。
 
     评论不跟着走:它们是对**那一张**的讨论,挂在原板的 subject_id 上。名字由调用方给(「× 副本」
@@ -592,8 +592,8 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
             # 任务结束后的下一次自动保存，客户端手里往往还是提交前的 running 快照。终态必须
             # 赢，否则它会把节点重新写活，界面就永远 loading。
             kept = {**item, "run": settled_run}
-            # 同步便签写作没有 asset_id 可以充当「结果已到」的证据。服务端已经落下正文和
-            # 清空后的表单时，晚到的 running 自动保存不能把三者一起覆盖回旧快照。
+            # 便签上写字的产出是正文,没有 asset_id 可以充当「结果已到」的证据。服务端已经落下
+            # 正文和清空后的表单时，晚到的 running 自动保存不能把三者一起覆盖回旧快照。
             if settled_run.get("status") == "succeeded" and settled.get("kind") == "note":
                 kept["text"] = settled.get("text", "")
                 kept["form"] = settled.get("form", {})
@@ -677,16 +677,6 @@ def _merge_into_latest(
     raise AssertionError("unreachable")
 
 
-def _with_item(canvas: dict[str, Any], item_id: str, change: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
-    """把画布上某一格换成 `change` 之后的样子;找不到那一格就说清楚。"""
-    items = [dict(one) for one in (canvas.get("items") or [])]
-    index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
-    if index is None:
-        raise item_not_found(item_id)
-    items[index] = change(items[index])
-    return {**canvas, "items": items}
-
-
 def place_pending(
     db: Session,
     *,
@@ -754,79 +744,13 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
     return get_board(db, board.workspace_id, board.id)
 
 
-def set_text_write_run(
-    db: Session,
-    *,
-    workspace_id: str,
-    board_id: str,
-    item_id: str,
-    status: str,
-    error: str = "",
-    base_revision: int | None = None,
-    actor_id: str | None = None,
-) -> Board:
-    """同步便签写作的运行态也落在节点内；失败时不碰表单，用户可以原样重试。
-
-    `base_revision` 在**调模型之前**问(没花钱时拒);写入本身是单格合并。
-    """
-    if status not in ("running", "failed"):
-        raise BoardDomainError("boardErr_textRunStatusInvalid", status=status)
-    ensure_revision(get_board(db, workspace_id, board_id), base_revision)
-    run = {"status": status}
-    if error.strip():
-        run["error"] = error.strip()[:300]
-    return _merge_into_latest(
-        db,
-        workspace_id=workspace_id,
-        board_id=board_id,
-        merge=lambda canvas: _with_item(canvas, item_id, lambda item: {**item, "run": run}),
-        actor_id=actor_id,
-    )
-
-
-def write_text(
-    db: Session,
-    *,
-    workspace_id: str,
-    board_id: str,
-    item_id: str,
-    text: str,
-    reset_form: bool = False,
-    completed_form: dict[str, Any] | None = None,
-    actor_id: str | None = None,
-) -> Board:
-    """把一段写好的文字放进某一项。
-
-    **就地改,不新建** —— 调用方要写的那张便签是用户在画布上摆好的,位置、颜色、大小都归他。
-    模型已经写完了(钱已经花了),所以这里是单格合并,不拿调用方的旧版本去挡。
-    """
-
-    def change(item: dict[str, Any]) -> dict[str, Any]:
-        updated = {**item, "text": text}
-        if reset_form:
-            form = dict(completed_form if completed_form is not None else updated.get("form") or {})
-            form["prompt"] = ""
-            form["mentioned_asset_ids"] = []
-            form.pop("prompt_document", None)
-            updated["form"] = form
-            updated["run"] = {"status": "succeeded"}
-        return updated
-
-    return _merge_into_latest(
-        db,
-        workspace_id=workspace_id,
-        board_id=board_id,
-        merge=lambda canvas: _with_item(canvas, item_id, change),
-        actor_id=actor_id,
-    )
-
-
 def _canvas_with_delivered_result(
     canvas: dict[str, Any],
     *,
     item_id: str,
     job_id: str,
     asset_ids: list[str],
+    text: str | None,
     reason: str,
     cancelled: bool,
 ) -> dict[str, Any]:
@@ -837,6 +761,8 @@ def _canvas_with_delivered_result(
 
     **只收它自己那一轮**:那一格此刻跑的不是这个任务(占位还没落下、或已经是别的一轮),原样不动。
     占位与回执于是谁先谁后都一样 —— 先到的回执被放过,占位落下时补送(见 place_pending)。
+
+    产出是素材(`asset_ids`,生成/念/截)或一段正文(`text`,便签上写字);两样都没有就是没做成。
     """
     items = list(canvas.get("items") or [])
     kept: list[dict[str, Any]] = []
@@ -844,7 +770,7 @@ def _canvas_with_delivered_result(
         if item.get("id") != item_id or live_job(item) != job_id:
             kept.append(item)
             continue
-        if not asset_ids:
+        if not asset_ids and text is None:
             # 失败/被取消:结束 run.running,留下这一项和它的提示词,并把原因写在上面。
             #
             # 此前是整项删掉。那让画布上的框凭空消失,连同用户刚写的提示词 —— 而他要做的
@@ -868,6 +794,11 @@ def _canvas_with_delivered_result(
             form.pop("prompt_document", None)
             settled["form"] = form
         settled["run"] = {"status": "succeeded"}
+        if text is not None:
+            settled["text"] = text
+        if not asset_ids:
+            kept.append(settled)
+            continue
         kept.append({**settled, "asset_id": asset_ids[0]})
         #: 多出来的那几张挨着它往右排。宽度按这一项自己的宽 —— 用户可能已经把它拉大了,
         #: 用一个写死的间距会让它们叠在一起。
@@ -925,6 +856,8 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     asset_ids = [str(one) for one in (result.get("asset_ids") or []) if one]
     if not asset_ids and result.get("asset_id"):
         asset_ids = [str(result["asset_id"])]
+    #: 便签上写字交回的是一段正文。
+    text = result.get("text") if isinstance(result.get("text"), str) else None
     #: 这一格为什么没拿到产出。任务成功结束却什么都没交回,原因就是这句话本身 —— 任务那一侧
     #: 没有 error 可给;失败/取消用任务自己记下的原因。
     reason = tr("boardErr_noOutput") if job_status == "succeeded" else str(getattr(job, "error", "") or "")
@@ -937,12 +870,13 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
         workspace_id=board.workspace_id,
         board_id=board.id,
         merge=lambda canvas: _canvas_with_delivered_result(
-            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, reason=reason,
+            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, text=text, reason=reason,
             cancelled=was_cancelled(job),
         ),
         actor_id=actor_id,
     )
-    logger.info("board %s item %s -> %s", board_id, item_id, ", ".join(asset_ids) or "(failed)")
+    logger.info("board %s item %s -> %s", board_id, item_id,
+                ", ".join(asset_ids) or ("(text)" if text is not None else "(failed)"))
 
 
 def install() -> None:

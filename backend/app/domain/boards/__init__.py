@@ -29,9 +29,7 @@ from app.domain.boards.canvas import (
     normalize_canvas,
     place_pending,
     receipt_to_item,
-    set_text_write_run,
     update_board,
-    write_text,
 )
 
 __all__ = [
@@ -57,7 +55,5 @@ __all__ = [
     "normalize_canvas",
     "place_pending",
     "receipt_to_item",
-    "set_text_write_run",
     "update_board",
-    "write_text",
 ]

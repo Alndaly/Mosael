@@ -52,6 +52,11 @@ describe("终态轮询补丁", () => {
     expect(boardSettlementPatch(image({ run: { status: "cancelled" } }))).toEqual({ run: { status: "cancelled" } });
   });
 
+  it("便签写成了:补丁带回的是正文,不是 asset_id", () => {
+    const note: BoardItem = { id: "n1", kind: "note", x: 0, y: 0, text: "写好的", form: { prompt: "" }, run: { status: "succeeded" } };
+    expect(boardSettlementPatch(note)).toEqual({ text: "写好的", form: { prompt: "" }, run: { status: "succeeded" } });
+  });
+
   it("还在跑的那一格不出补丁", () => {
     expect(boardSettlementPatch(image({ run: { status: "running", job_id: "job-1" } }))).toBeNull();
   });

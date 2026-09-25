@@ -348,8 +348,8 @@ Adapter 按自身协议限制，不强行塞进格式归一化 Module。
 failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑失败也要在节点外壳上看得出来。表单的
 “重置”有两层：产物版本变化后从 `BoardItem.form` 重新水合组件局部状态；成功后由领域层清空已消费的
 一次性输入（prompt、手动引用素材），同时保留模型等稳定选择。失败/取消不能清空，拖动和逐字保存更
-不能参与 reset key，否则会丢失光标和重试输入。同步便签写作也必须把 running/succeeded/failed 写进
-`BoardItem.run`，不能只让提交按钮转圈。
+不能参与 reset key，否则会丢失光标和重试输入。便签写作也把 running/succeeded/failed 写进
+`BoardItem.run`（经任务与回执，和生成同一套），不能只让提交按钮转圈。
 正文中的 `@` 引用还要把 TipTap JSON 存进 `form.prompt_document`；`prompt` 只是模型所需纯文本，
 `mentioned_asset_ids` 只说明引用了谁，两者都无法单独恢复 chip 在句子中的位置。
 引用在文档结构中是不可拆的 `assetRef` 原子节点，视觉使用“小缩略图 + 素材名”的紧凑胶囊；不要把它

@@ -267,16 +267,18 @@ def test_念出来时选的引擎和发音人留在节点表单上_失败后原�
 
 
 def test_创建副本时正在写的便签不带着写作中过去() -> None:
-    """便签写作是同步的,没有 job_id —— 可它同样只落回原板那一格。副本里那张便签带着 running
-    过去的话,永远等不到写完,一直显示「写作中」。和带 job_id 的那种是同一条规则。"""
+    """便签上的写字只落回原板那一格。副本里那张便签带着 running 过去的话,永远等不到写完,
+    一直显示「写作中」。和生成那种是同一条规则。"""
     from app.core.db import SessionLocal
-    from app.domain.boards import set_text_write_run
+    from app.domain.boards import place_pending
 
     client = fresh_client()
     ws = _workspace(client)
     board_id = _board(client, ws, {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": ""}], "edges": []})
     with SessionLocal() as db:
-        set_text_write_run(db, workspace_id=ws, board_id=board_id, item_id="n1", status="running")
+        place_pending(db, workspace_id=ws, board_id=board_id, item={
+            "id": "n1", "kind": "note", "x": 0, "y": 0, "run": {"status": "running", "job_id": "job-w"},
+        })
 
     copied = client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": ws})
 

@@ -180,6 +180,51 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
             logger.exception("could not record the failure of %s %s", what, job_id)
 
 
+def run_job_inline(
+    db: Session,
+    job: Job,
+    body: Callable[[], dict[str, Any]],
+    *,
+    running: str,
+    done: str,
+) -> bool:
+    """在调用方自己的线程里把一个任务跑完 —— 给「几秒就回、调用方等着要结果」的活儿(画板上写字)。
+
+    收尾和派发出去的任务是同一套:起步、成功、**任何一种异常**都经 finish_job 落终态,回执随
+    状态跳变送出(见 _after_jobs_settled)。执行体抛出的异常在任务落成失败**之后**原样抛回,
+    调用方照旧按类型翻成 HTTP —— 没有哪条异常路径能把任务(和挂着它的那一格)留在「运行中」。
+    进程在中途没了的,重启时 reconcile_orphaned_jobs 同样收掉它。
+
+    `body` 回任务的 result。返回 True 表示成功落了终态;False 表示跑之前或跑的时候被取消了
+    (这时结果作废,终态由取消那一侧写)。
+    """
+    if not finish_job(db, job, status="running"):
+        db.commit()
+        return False
+    say(job, running)
+    emit_job_event(db, job.id, "job.running", {})
+    db.commit()
+    try:
+        result = body()
+    except BaseException as exc:
+        # 执行体可能把会话留在一个坏掉的事务里 —— 先回滚,再在同一个会话上落失败。
+        db.rollback()
+        try:
+            if finish_job(db, job, status="failed", **blame(exc)):
+                emit_job_event(db, job.id, "job.failed", {"stage": "inline"})
+            db.commit()
+        except Exception:  # noqa: BLE001 — 库本身出了问题;原来那个异常更要紧
+            logger.exception("could not record the failure of job %s", job.id)
+        raise
+    if not finish_job(db, job, status="succeeded", progress=1.0, result=result):
+        db.commit()
+        return False
+    say(job, done)
+    emit_job_event(db, job.id, "job.succeeded", {})
+    db.commit()
+    return True
+
+
 class JobError(LocalizedError, ValueError):
     """任务这一层说不行(已结束、租约不对)。带文案 key(`jobErr_*`);是 ValueError,调用方照旧翻成 409。"""
 
