@@ -1165,7 +1165,7 @@ function WorkflowEditor({
     return true;
   }, [nodes, graph]);
   const pasteClipboard = React.useCallback((): boolean => {
-    const pasted = pasteNodes(graph, clipboardRef.current);
+    const pasted = pasteNodes(graph, clipboardRef.current, registry);
     if (!pasted) return false;
     // 让下次 Cmd+V 继续向右下错开,避免层层重叠。
     clipboardRef.current = pasted.clip;

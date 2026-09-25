@@ -11,7 +11,7 @@
  * 和外层 id 是两套命名空间,不能拿外层的换名表去改。
  */
 import type { WorkflowGraph } from "@/api/client";
-import { isNestedScopeConfig } from "@/features/workflows/analyze";
+import { isNestedScopeConfig, type RegistryLike } from "@/features/workflows/analyze";
 import { rewriteRefs } from "@/features/workflows/collapse";
 
 type WNode = WorkflowGraph["nodes"][number];
@@ -39,12 +39,12 @@ function idAllocator(graph: WorkflowGraph): (type: string) => string {
 }
 
 /** 一个节点的配置里,把指向组内节点的引用换成新 id。 */
-function remapConfig(node: WNode, idMap: Map<string, string>): WNode["config"] {
+function remapConfig(node: WNode, idMap: Map<string, string>, registry: RegistryLike): WNode["config"] {
   const config = node.config ?? {};
   return Object.fromEntries(
     Object.entries(config).map(([key, value]) => [
       key,
-      isNestedScopeConfig(node.type, key) ? value : rewriteRefs(value, (source) => idMap.get(source) ?? null),
+      isNestedScopeConfig(registry, node.type, key) ? value : rewriteRefs(value, (source) => idMap.get(source) ?? null),
     ]),
   );
 }
@@ -57,6 +57,7 @@ function remapConfig(node: WNode, idMap: Map<string, string>): WNode["config"] {
 export function pasteNodes(
   graph: WorkflowGraph,
   clip: NodeClip,
+  registry: RegistryLike,
 ): { graph: WorkflowGraph; pastedIds: string[]; clip: NodeClip } | null {
   const freshId = idAllocator(graph);
   const idMap = new Map<string, string>();
@@ -75,7 +76,7 @@ export function pasteNodes(
       ...structuredClone(node),
       id: idMap.get(node.id)!,
       position: shift(node),
-      config: remapConfig(structuredClone(node), idMap),
+      config: remapConfig(structuredClone(node), idMap, registry),
     }));
   const newEdges = clip.edges
     .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
