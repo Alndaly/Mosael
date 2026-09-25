@@ -183,6 +183,29 @@ describe("画板详情页与服务端的同步", () => {
     expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ run: { status: "running", job_id: "job-1" } }));
   });
 
+  it("一直在拖的时候,在跑的那一格照样按时轮询到产出 —— 不等人停手", async () => {
+    const running = { id: "img", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, run: { status: "running" as const, job_id: "job-1" } };
+    const note = { id: "n1", kind: "note" as const, x: 400, y: 0, width: 220, height: 140, text: "拖着我" };
+    const server: BoardCanvas = { items: [running, note], edges: [], markers: [] };
+    const settled = { ...running, asset_id: "a1", run: { status: "succeeded" as const } };
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    apiMocks.updateBoard.mockImplementation(async (_id: string, body: { canvas: BoardCanvas }) => boardAt(4, body.canvas));
+    apiMocks.getBoard.mockResolvedValue(boardAt(5, { ...server, items: [settled, note] }));
+
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    // 每 0.5 秒拖一下,拖满 6 秒 —— 比轮询的间隔长得多。
+    for (let step = 1; step <= 12; step += 1) {
+      act(() => props().onChange({ ...server, items: [running, { ...note, x: 400 + step * 10 }] }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+    }
+
+    expect(apiMocks.getBoard).toHaveBeenCalled();
+    expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
+  });
+
   it("自动保存还在路上时点生成:生成等它回来,带着它换来的新版本号,不和自己撞 409", async () => {
     const server: BoardCanvas = {
       items: [{ id: "img", kind: "image", x: 0, y: 0, width: 260, height: 180 }],

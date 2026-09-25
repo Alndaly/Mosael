@@ -774,14 +774,22 @@ function BoardDetail({
   // 恢复待观察列表，而不是依赖这个组件一次挂载期内的临时 state。
   React.useEffect(() => {
     const ids = (canvas?.items ?? board.canvas.items).filter(itemIsRunning).map((item) => item.id);
-    if (ids.length) setRunning((current) => Array.from(new Set([...current, ...ids])));
+    //: 名单真的多了一格才换一份 —— 每次编辑都换一份新数组的话,下面的定时器跟着重来一次。
+    setRunning((current) => {
+      const joined = ids.filter((id) => !current.includes(id));
+      return joined.length ? [...current, ...joined] : current;
+    });
   }, [board.id, board.canvas.items, canvas]);
+  //: 本地那份画布的最新值,轮询时读它。**不进定时器的依赖**:进了的话每拖一下定时器就重来一次,
+  //: 一直在拖就一直轮询不到 —— 产出要等人停手 2.5 秒之后才出现。轮询的节奏只跟「有没有在等的」走。
+  const localCanvas = React.useRef(canvas);
+  localCanvas.current = canvas;
   React.useEffect(() => {
     if (running.length === 0) return;
     const timer = setInterval(async () => {
       const fresh = await getBoard(board.id, workspaceId).catch(() => null);
       if (!fresh) return;
-      const local = canvas ?? confirmedCanvas.current;
+      const local = localCanvas.current ?? confirmedCanvas.current;
       //: 按内容比,不按字段顺序(见 sameContent)—— 否则本地永远「有改动」,回执落地时不采用。
       const hasLocalChanges = !sameContent(local, confirmedCanvas.current);
       // When the local projection is clean, adopt the complete server projection (including extra
@@ -812,7 +820,7 @@ function BoardDetail({
       if (settled.length) setRunning((current) => current.filter((id) => !settled.includes(id)));
     }, 2500);
     return () => clearInterval(timer);
-  }, [running, board.id, workspaceId, api, canvas]);
+  }, [running, board.id, workspaceId, api]);
 
   /**
    * ⌘/Ctrl+N 打开「添加」弹层 —— 和工作流详情页同键同义(那边是 ⌘N 添加节点)。
