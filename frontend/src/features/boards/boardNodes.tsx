@@ -3,7 +3,7 @@ import { Streamdown } from "streamdown";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -266,17 +266,24 @@ export function NoteNode({ data, selected }: NodeProps) {
 }
 
 /**
- * 还在生成的样子:静态骨架 + 转圈 + 提示词摘要。提示词让并行生成的多个空槽可以区分，
- * 但只显示三行且允许任意长 URL 换行，不能撑破节点。
+ * 还在生成的样子:整张卡按这一格的比例铺一层扫光占位,左下角一行状态 —— 「生成中」+ 提示词摘要。
+ *
+ * **不是中间一个孤零零的小圈。** 此前是静止的灰底(调用处挂 `animate-none` 把占位的动画关了)
+ * 加正中一个转圈,整张卡读起来像一块坏掉的灰板。扫光本身就说明"在动",状态落成字:
+ * 减少动态时光停了,字还在。提示词让并行生成的多个空槽可以区分,只显示两行、允许任意长
+ * URL 换行,不能撑破节点。
+ *
+ * 进度只写这一格自己知道的:`item.run` 里没有百分比,这里就不画 —— 不去猜一个数。
  */
 function Generating({ text }: { text?: string }) {
+  const t = useI18n();
   return (
-    <div className="relative grid h-full w-full place-items-center overflow-hidden rounded-lg">
-      <Skeleton className="absolute inset-0 h-full w-full animate-none rounded-lg" />
-      <div className="relative grid w-full min-w-0 max-w-full justify-items-center gap-1.5 px-3 text-center">
-        <Loader2 size={16} className="animate-spin text-primary" />
+    <div role="status" aria-busy="true" className="relative h-full w-full overflow-hidden rounded-lg">
+      <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
+      <div className="absolute inset-x-0 bottom-0 grid min-w-0 max-w-full gap-0.5 px-2.5 pb-2 pt-1.5 text-left">
+        <span className="text-ui-2xs font-semibold text-primary">{t("generating")}</span>
         {text ? (
-          <span className="line-clamp-3 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
+          <span className="line-clamp-2 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-snug text-muted-foreground">
             {text}
           </span>
         ) : null}

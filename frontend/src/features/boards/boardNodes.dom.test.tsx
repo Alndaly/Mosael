@@ -17,6 +17,7 @@ vi.mock("@/app/preferences", () => ({
     ({
       boardNodeQueued: "等待执行",
       boardNodeRunning: "生成中",
+      generating: "生成中",
       boardNodeSucceeded: "已完成",
       boardNodeFailed: "失败",
       boardNodeCancelled: "已取消",
@@ -127,6 +128,25 @@ describe("无限画布节点运行状态", () => {
     const { getAllByText, queryByText } = renderNode("video", "cancelled");
     expect(getAllByText("已取消")).toHaveLength(1);
     expect(queryByText("生成中")).toBeNull();
+  });
+
+  it.each(["image", "video", "audio"] as const)("%s 生成中:整张卡是扫光占位,状态落成字,不是正中一个转圈", (kind) => {
+    const { getByRole, container } = renderNode(kind, "running", { form: { prompt: "a beautiful girl" } });
+    const status = getByRole("status");
+    expect(status).toHaveAttribute("aria-busy", "true");
+    expect(status).toHaveTextContent("生成中");
+    expect(status).toHaveTextContent("a beautiful girl");
+    //: 扫光来自共用的 <Skeleton>,铺满这一格;调用处不再挂 animate-none 把它关掉。
+    const skeleton = status.querySelector<HTMLElement>("[data-slot='skeleton']");
+    expect(skeleton).not.toBeNull();
+    expect(skeleton).toHaveClass("skeleton", "absolute", "inset-0");
+    expect(skeleton!.className).not.toMatch(/\banimate-/);
+    expect(container.querySelector(".animate-spin, .animate-mosael-spin")).toBeNull();
+  });
+
+  it("排队中不扫光 —— 它在等,不是在动", () => {
+    const { container } = renderNode("image", "queued");
+    expect(container.querySelector("[data-slot='skeleton']")).toBeNull();
   });
 
   it.each(["queued", "running", "failed"] as const)("%s 的长 URL 文案限制在节点宽度内", (status) => {

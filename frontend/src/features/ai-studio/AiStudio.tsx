@@ -1234,9 +1234,11 @@ function GenerationTurn({
           </div>
         ) : status === "failed" ? (
           <GenerationFailureCard error={job?.error ?? ""} />
+        ) : status === "running" ? (
+          <GeneratingTile kind={generation.kind} progress={job?.progress} />
         ) : (
           <span className="inline-flex items-center gap-1.5 py-2 text-ui-sm text-muted-foreground">
-            <Loader2 size={13} className="animate-mosael-spin" /> {status === "running" ? t("generating") : t("genQueued")}
+            <Loader2 size={13} className="animate-mosael-spin" /> {t("genQueued")}
           </span>
         )}
         <small className="flex flex-wrap items-center gap-2 justify-self-start text-ui-xs text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
@@ -1248,6 +1250,34 @@ function GenerationTurn({
         </small>
       </div>
     </article>
+  );
+}
+
+/**
+ * 正在生成的那一条:在产出将要出现的位置先铺一块扫光占位,左下角写「生成中」和进度。
+ *
+ * 此前这里只有一行「转圈 + 生成中」—— 产出出来时版面从一行字跳成一张大图。占位先占住
+ * 产出的位置(视频按 16:9,其余按首屏加载时那块方形),出图时原地换掉。
+ * 进度只在任务真的报了(`job.progress` > 0)时才写;没报就不写,不去猜一个数。
+ */
+function GeneratingTile({ kind, progress }: { kind: string; progress?: number }) {
+  const t = useI18n();
+  const percent = typeof progress === "number" && progress > 0 ? Math.round(progress * 100) : null;
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      className={cn(
+        "relative w-full overflow-hidden rounded-lg",
+        kind === "video" ? "aspect-video max-w-[min(560px,100%)]" : "aspect-square max-w-[320px]",
+      )}
+    >
+      <Skeleton className="absolute inset-0 rounded-lg" />
+      <span className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 px-3 pb-2.5 pt-1.5 text-ui-xs">
+        <span className="font-semibold text-primary">{t("generating")}</span>
+        {percent !== null ? <span className="tabular-nums text-muted-foreground">{percent}%</span> : null}
+      </span>
+    </div>
   );
 }
 

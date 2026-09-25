@@ -1,4 +1,3 @@
-import { LoadingState } from "@/components/layout/LoadingState";
 import { assetKeys } from "@/api/queryKeys";
 import { ACTION_MENU } from "@/components/ui/floating";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
@@ -35,6 +34,7 @@ import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
@@ -393,7 +393,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onQueued={() => void qc.invalidateQueries({ queryKey: assetKeys.everywhere() })}
       />
 
-      {assets.isPending ? <LoadingState className="h-auto flex-1" /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : (assets.data ?? []).length === 0 ? (
+      {assets.isPending ? <MediaLibrarySkeleton list={display === "list"} /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : (assets.data ?? []).length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={22} />}
           title={t("mediaEmptyTitle")}
@@ -577,6 +577,45 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
         </span>
       </div>
     </article>
+  );
+}
+
+/**
+ * 素材还没拉回来时,按**当前的展示方式**先把卡片/行的骨架摆出来。
+ *
+ * 此前是页面正中一个转圈:素材一到,版面从一个圈跳成满屏的卡片。骨架和 AssetTile 同一套
+ * 尺寸(卡片 16:9 缩略图 + 两行字;列表 128×80 缩略图 + 三行字),到了原地换掉,不跳。
+ */
+function MediaLibrarySkeleton({ list }: { list: boolean }) {
+  const t = useI18n();
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      className={cn("py-6", list ? "grid divide-y divide-divider" : "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-7")}
+    >
+      <span className="sr-only">{t("pageLoading")}</span>
+      {Array.from({ length: list ? 6 : 8 }, (_, index) =>
+        list ? (
+          <div key={index} className="-mx-3 flex items-center gap-5 px-3 py-4" aria-hidden="true">
+            <Skeleton className="h-20 w-32 shrink-0 rounded-lg" />
+            <div className="grid min-w-0 flex-1 gap-2">
+              <Skeleton className="h-4 w-2/5" />
+              <Skeleton className="h-3 w-1/4" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+        ) : (
+          <div key={index} className="grid gap-3" aria-hidden="true">
+            <Skeleton className="aspect-video w-full rounded-lg" />
+            <div className="grid gap-2 px-0.5">
+              <Skeleton className="h-4 w-3/5" />
+              <Skeleton className="h-3 w-2/5" />
+            </div>
+          </div>
+        ),
+      )}
+    </div>
   );
 }
 

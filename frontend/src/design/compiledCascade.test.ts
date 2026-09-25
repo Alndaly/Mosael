@@ -107,4 +107,37 @@ describe("编出来的层叠", () => {
     //: 流动虚线的动画确实生成了(它的 keyframes 在 tokens.css 的 @theme 里),而且只在不要求减少动态时跑。
     expect(utilities).toMatch(/prefers-reduced-motion: no-preference[\s\S]*animation: edge-flow 0\.6s linear infinite/);
   }, 20_000);
+
+  it("加载占位块的扫光:落在 components 层、走 transform、减少动态时只剩底色", async () => {
+    //: 带上画板生成中那一格真实挂的工具类:它们得在 utilities 层,才压得过 .skeleton 的默认定位与圆角。
+    const css = await build(["absolute", "inset-0", "rounded-lg"]);
+    const components = layerBody(css, "components");
+    const rule = (selector: string) => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return components.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+    };
+    const host = rule(".skeleton");
+    expect(host).toContain("position: relative");
+    //: 光要顺着使用方给的圆角被裁掉。
+    expect(host).toContain("overflow: hidden");
+    expect(host).toContain("background-color: var(--skeleton-base)");
+    const sweep = rule(".skeleton::after");
+    expect(sweep).toContain("animation: var(--animate-skeleton-shimmer)");
+    expect(sweep).toMatch(/linear-gradient\(90deg, transparent 0%, var\(--skeleton-highlight\) 50%, transparent 100%\)/);
+    expect(sweep).toContain("transform: translateX(-100%)");
+    expect(sweep).toContain("pointer-events: none");
+    //: 动画 token 与关键帧确实生成了;平移的是 transform,不是会触发重绘的 background-position。
+    expect(css).toMatch(/--animate-skeleton-shimmer: skeleton-shimmer 1\.6s ease-in-out infinite/);
+    const keyframes = css.match(/@keyframes skeleton-shimmer\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+    expect(keyframes).toContain("translateX(100%)");
+    expect(keyframes).not.toContain("background-position");
+    //: 减少动态:扫光整个撤掉,而且这条也在 components 层里 —— 不靠文末那条把时长压成 0.01ms
+    //: 的全局兜底(无限循环的动画压短之后是每帧闪一下)。
+    expect(components).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.skeleton::after\s*\{[^}]*display: none;[^}]*animation: none;/,
+    );
+    //: 使用方的工具类在 utilities 层,排在 components 之后。
+    const utilities = layerBody(css, "utilities");
+    expect(utilities).toMatch(/\.absolute\s*\{\s*position: absolute;/);
+  }, 20_000);
 });

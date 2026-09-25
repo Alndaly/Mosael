@@ -151,6 +151,19 @@
     0% { transform: scale(0.92); opacity: 0.55; }
     100% { transform: scale(1.45); opacity: 0; }
   }
+  /* 加载占位块上扫过的那道光(见 components/ui/skeleton 与下面 @layer components 里的 .skeleton)。
+     前 70% 从左扫到右,后 30% 停在右边外面不动 —— 一道光接一道光、中间留口气,读起来是
+     「在来的路上」,而不是一块一直在闪的灯牌。走 transform,合成层上跑,不触发重绘。 */
+  --animate-skeleton-shimmer: skeleton-shimmer 1.6s ease-in-out infinite;
+  @keyframes skeleton-shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    70%,
+    100% {
+      transform: translateX(100%);
+    }
+  }
   --animate-confirm-in: confirm-in 160ms ease-out;
   /* 数据线流动的虚线(见 components/app/canvasEdges):位移 -11 正好是虚线一个周期 6+5,首尾接得上。 */
   --animate-edge-flow: edge-flow 0.6s linear infinite;
@@ -312,6 +325,10 @@
   --track-overlay-bg: #fbe4ef;
   --track-overlay-border: #eba8c9;
   --track-overlay-text: #8f3a63;
+  /* 加载占位块:底色是**前景色的低透明度叠加**,合成在它踩着的那层表面上(页面、卡片、弹层
+     拉开的是同一个相对差,见 components/ui/skeleton 的说明);扫过的光在浅色下是提亮的白。 */
+  --skeleton-base: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --skeleton-highlight: rgb(255 255 255 / 0.6);
 
 
   /* Default stack; the appearance preference overrides this token for the whole interface. */
@@ -417,6 +434,9 @@
   --holiday-violet: #b59bd9;
   --holiday-sky: #86b7dd;
   --holiday-orange: #dda171;
+  /* 深色下前景是近白:底色同样取 12%,光再叠一层 10% 前景色 —— 白光打在石墨上太刺眼。 */
+  --skeleton-base: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --skeleton-highlight: color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 /* 弹窗默认使用一层磨砂表面，与自定义页面背景的透明度独立。 */
@@ -478,6 +498,36 @@
   .modal-overlay {
     -webkit-backdrop-filter: var(--modal-overlay-filter);
     backdrop-filter: var(--modal-overlay-filter);
+  }
+  /* 加载占位块(components/ui/skeleton 的唯一实现):一块底色 + 一道从左到右扫过的光。
+   *
+   * **放在 components 层,不是 utilities。** 这里给的 position / overflow / 底色都是**默认值**:
+   * 使用方常常要把它铺满一张卡(`absolute inset-0`)或者换个圆角,那些工具类在 utilities 层,
+   * 排在后面,稳稳压过这里 —— 不用加 `!`,也不会和某个工具类抢同一个属性时看生成顺序碰运气。
+   *
+   * 光画在 ::after 上、用 transform 平移:走合成层,几十块占位同时扫也不触发重绘。
+   * `overflow: hidden` 让光顺着使用方给的圆角被裁掉,不会在圆角外面露出一截方边。 */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--skeleton-base);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(90deg, transparent 0%, var(--skeleton-highlight) 50%, transparent 100%);
+    transform: translateX(-100%);
+    animation: var(--animate-skeleton-shimmer);
+  }
+  /* 要求减少动态:只留一块安静的底色。不能指望文末那条全局兜底 —— 它把动画时长压成 0.01ms,
+     而这道光是无限循环的,压短之后是**每帧闪一下**,比原来更晃眼。 */
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton::after {
+      display: none;
+      animation: none;
+    }
   }
 }
 
