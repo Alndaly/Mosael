@@ -36,6 +36,34 @@ def apply_data_edges(
     return config
 
 
+def check_number_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any]:
+    """声明成数字(`"type": "number"`)的字段,插值、绑定之后必须真是数字 —— 或者留空。
+
+    **按声明查一遍,所有节点一条规矩。** 此前各执行体自己 `float(config.get(...))`:语速填了
+    「快一点」、或者一个引用落成了一段文字,抛出来的是 `could not convert string to float` ——
+    没有 key、只有英文、也不说是哪一格。留空不归这里管:没填是合法的,缺省值是节点自己的事。
+    """
+    from app.domain.workflows import NODE_TYPES, WorkflowDomainError, field_name
+
+    fields = (NODE_TYPES.get(node_type) or {}).get("config") or {}
+    for key, spec in fields.items():
+        if spec.get("type") != "number" or key not in config:
+            continue
+        value = config[key]
+        if value is None or isinstance(value, (int, float)):
+            continue
+        if isinstance(value, str):
+            if not value.strip():
+                continue
+            try:
+                float(value)
+                continue
+            except ValueError:
+                pass
+        raise WorkflowDomainError("wfErr_mustBeNumber", params={"field": field_name(key, spec)})
+    return config
+
+
 def interpolate_node_config(
     node_type: str, config: dict[str, Any], context: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:

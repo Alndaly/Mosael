@@ -36,7 +36,7 @@ from typing import Any, Literal
 import httpx
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, get_current_locale, t, tr
+from app.core.i18n import LocalizedError, fragment, tr
 from app.domain.provider_credentials import ResolvedConnection
 from app.core import http_retry as ai_retry
 from app.domain import provider_models
@@ -77,12 +77,13 @@ class AiChatError(LocalizedError, RuntimeError):
     也可以是调用方给的一句现成的话 —— 渲染时按当时的语言翻,认不出的原样用。
     """
 
-    def __str__(self) -> str:
-        locale = get_current_locale()
-        params = dict(self.params)
+    def __init__(self, key: str, **params: object) -> None:
+        # label 是一段文案(或一句现成的话),以片段的形状进参数:转述到别的领域、落进任务的
+        # 失败原因之后,读的时候照样按读的人的语言翻(见 core/i18n.fragment)。此前是在这个类
+        # 自己的 __str__ 里特判 —— 转述出去就没人认它了,英文界面里露出一个裸 key。
         if "label" in params:
-            params["label"] = t(str(params["label"]), locale)
-        return t(self.key, locale, **params)
+            params["label"] = fragment(str(params["label"]))
+        super().__init__(key, **params)
 
 
 @dataclass(frozen=True)

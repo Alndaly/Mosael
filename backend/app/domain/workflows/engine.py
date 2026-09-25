@@ -33,7 +33,7 @@ from app.domain.workflows import (
     topo_order,
     validate_graph,
 )
-from app.domain.workflows.binding import apply_data_edges, interpolate_node_config
+from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor
 from app.domain.workflows.executors.common import halt_scope
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
@@ -278,7 +278,7 @@ def execute_graph(
         with lock:
             snapshot = dict(context)
         config = apply_data_edges(nid, dict(node.get("config") or {}), edges, snapshot)
-        config = interpolate_node_config(ntype, config, snapshot)
+        config = check_number_fields(ntype, interpolate_node_config(ntype, config, snapshot))
         if ntype == "start":
             merged = dict(config.get("params") or {})
             merged.update(params or {})

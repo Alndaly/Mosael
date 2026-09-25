@@ -32,14 +32,8 @@ _LLM_TIMEOUT_SECONDS = 60.0
 class PromptOptimizeError(LocalizedError, RuntimeError):
     """提示词优化失败(供应商缺失、LLM 调用失败、返回非法 JSON 等)。带文案 key(`genErr_optimize*`)。
 
-    对话那一层的报错(AiChatError)带 key 就接着传 key,不带就是它自己的一句话,原样透传。
+    对话那一层的报错(AiChatError)用 `relay` 转述:带 key 就接着传 key,不带就是它自己的一句话。
     """
-
-    @classmethod
-    def from_chat(cls, exc: Exception) -> "PromptOptimizeError":
-        if isinstance(exc, LocalizedError):
-            return cls(exc.key, **exc.params)
-        return cls(str(exc))
 
 
 @dataclass(frozen=True)
@@ -165,7 +159,7 @@ def _chat_json(target: ChatTarget, system: str, user: str, call: BillableCall | 
             label="提示词优化",
         ).strip()
     except AiChatError as exc:
-        raise PromptOptimizeError.from_chat(exc) from exc
+        raise PromptOptimizeError.relay(exc) from exc
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -212,7 +206,7 @@ def optimize_image_prompt(
     try:
         target = target_for(db, chat_profile, model=chat_model)
     except AiChatError as exc:
-        raise PromptOptimizeError.from_chat(exc) from exc
+        raise PromptOptimizeError.relay(exc) from exc
     # 归属走环境上下文:路由已经过了 ensure_workspace_perm,那里把工作区绑好了。
     with billable(db, capability="chat", operation="optimize_prompt",
                   idempotency_key=once("optimize_prompt")) as call:

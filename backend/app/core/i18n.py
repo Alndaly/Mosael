@@ -4134,6 +4134,19 @@ class LocalizedError(Exception):
     def __str__(self) -> str:
         return t(self.key, get_current_locale(), **self.params)
 
+    @classmethod
+    def relay(cls, exc: BaseException) -> "LocalizedError":
+        """把别的领域的错误转述成这一类,**带着它的 key 和参数**。
+
+        此前各处写的是 `XxxError(str(exc))`:上游那句话在抛出那一刻就翻成了字,key 丢了 ——
+        落进任务失败原因、接口 detail 的只剩写下它那一刻的语言。认不出 key 的(第三方库的原话)
+        照旧当字面量:`t` 查不到就原样返回那句话。
+        """
+        key = str(getattr(exc, "key", "") or "")
+        if is_message_key(key):
+            return cls(key, **dict(getattr(exc, "params", None) or {}))
+        return cls(str(exc))
+
 
 #: 状态字典里放模板参数的那一栏。翻完就摘掉 —— 它是给翻译用的,不该出现在 API 响应里。
 PARAMS_FIELD = "message_params"

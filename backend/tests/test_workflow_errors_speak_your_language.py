@@ -124,6 +124,64 @@ def test_报错里提到的字段名也跟着读的人的语言走() -> None:
         set_current_locale("zh")
 
 
+def test_数字字段填了不是数字_说是哪一格而不是一句_python_原话() -> None:
+    """语速填了「快一点」(或者引用落成一段文字),此前执行体里一句 `float(...)` 直接抛出
+    `could not convert string to float` —— 没有 key、英文、也不说是哪一格。声明成数字的字段,
+    插值之后就按声明查一遍,所有节点一条规矩。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Workflow
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.engine import execute_graph
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        workflow = Workflow(workspace_id=ws, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.commit()
+        workflow_id = workflow.id
+    graph = {
+        "nodes": [{"id": "s", "type": "synthesize_speech",
+                   "config": {"text": "你好", "engine": "edge", "voice": "v", "speed": "快一点"}}],
+        "edges": [],
+    }
+    import pytest
+
+    with pytest.raises(WorkflowDomainError) as caught:
+        execute_graph(graph, wf_id=workflow_id, entry_is_root=True)
+    assert caught.value.key == "wfErr_mustBeNumber"
+    assert caught.value.params["field"] == {"__key": "wfField_speed", "params": {}}
+
+
+def test_翻译转述上游的失败_带着上游的_key() -> None:
+    """AI 翻译失败时此前是 `TranslateError(str(exc))`:上游那句话在抛出那一刻就翻成了字,key 丢了,
+    落进任务失败原因的只剩缺省语言的一句话。"""
+    import pytest
+
+    from app.core.i18n import set_current_locale
+    from app.domain import translate as tr
+    from app.domain.ai_chat import AiChatError, ChatTarget
+
+    def broken(*_args, **_kwargs):
+        raise AiChatError("aiChatErr_network", label="aiChat_labelDefault", detail="timed out")
+
+    target = ChatTarget(base_url="https://x", api_key="k", model="m")
+    original = tr.chat
+    tr.chat = broken
+    try:
+        with pytest.raises(tr.TranslateError) as caught:
+            tr.ai_translate_with(target, "你好", "en")
+    finally:
+        tr.chat = original
+    assert caught.value.key == "aiChatErr_network"
+    try:
+        set_current_locale("en")
+        assert str(caught.value) == "AI call failed (network/connection): timed out"
+    finally:
+        set_current_locale("zh")
+
+
 def test_报错里的一串名字按读的人的习惯连起来() -> None:
     """顿号是中文的连接号。此前列表在抛错的地方就用「、」连成了一个字符串,英文句子里夹着顿号。"""
     from app.core.i18n import set_current_locale

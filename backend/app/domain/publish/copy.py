@@ -26,11 +26,6 @@ class CopyParseError(LocalizedError, ValueError):
     """模型的输出解析不出文案。它的话会回给模型重试,也会进最终报错的 detail。"""
 
 
-def _from_chat(exc: AiChatError) -> PublishDomainError:
-    """对话那一层的报错:带 key 就接着传 key,不带就是它自己的一句话,原样透传。"""
-    if isinstance(exc, LocalizedError):
-        return PublishDomainError(exc.key, **exc.params)
-    return PublishDomainError(str(exc))
 TRANSCRIPT_EXCERPT_CHARS = 1500
 
 _SYSTEM = """你是短视频发布运营。根据素材信息写发布文案,只输出一个 JSON 对象,不要解释、不要代码围栏:
@@ -68,7 +63,7 @@ def generate_copy(
     try:
         target = target_for(db, profile)
     except AiChatError as exc:
-        raise _from_chat(exc) from exc
+        raise PublishDomainError.relay(exc) from exc
 
     with billable(
         db,
@@ -115,5 +110,5 @@ def _chat(target: ChatTarget, user: str, call: BillableCall) -> str:
             label="AI 文案生成",
         )
     except AiChatError as exc:
-        raise _from_chat(exc) from exc
+        raise PublishDomainError.relay(exc) from exc
 

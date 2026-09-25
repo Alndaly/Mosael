@@ -16,6 +16,7 @@ from typing import Literal
 
 import httpx
 
+from app.core.i18n import LocalizedError
 from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.core import http_retry as ai_retry
@@ -47,20 +48,13 @@ LANGUAGES: tuple[tuple[str, str], ...] = (
 _LANG_NAMES = dict(LANGUAGES)
 
 
-class TranslateError(RuntimeError):
+class TranslateError(LocalizedError, RuntimeError):
     """带 key 的错误。
 
-    领域里不拼句子 —— 存 key + 参数,出口(路由)按请求方语言翻。`str(exc)` 仍给一句默认语言的
-    人话,好让日志和不走 HTTP 的调用方(工作流节点)有东西可看;上游 AiChatError 转过来的消息
-    不是 key,`t` 查不到就原样返回,正好。
+    领域里不拼句子 —— 存 key + 参数,出口(路由)按请求方语言翻。上游 AiChatError 用
+    `TranslateError.relay` 转述,**带着它的 key 和参数** —— 此前是 `TranslateError(str(exc))`,
+    上游那句话在转述那一刻就翻成了缺省语言的字。
     """
-
-    def __init__(self, key: str, **params: object) -> None:
-        from app.core.i18n import DEFAULT_LOCALE, t
-
-        self.key = key
-        self.params = params
-        super().__init__(t(key, DEFAULT_LOCALE, **params))
 
 
 def language_label(code: str) -> str:
@@ -90,7 +84,7 @@ def resolve_ai_chat_target(
         # 一条连接上常常有好几个模型,而"用哪个模型翻译"和"用哪条连接"是两个问题。
         return target_for(db, resolved, model=model, surface=surface)
     except AiChatError as exc:
-        raise TranslateError(str(exc)) from exc
+        raise TranslateError.relay(exc) from exc
 
 
 def ai_translate_with(
@@ -117,7 +111,7 @@ def ai_translate_with(
             label="AI 翻译",
         ).strip()
     except AiChatError as exc:
-        raise TranslateError(str(exc)) from exc
+        raise TranslateError.relay(exc) from exc
 
 
 def translate(
