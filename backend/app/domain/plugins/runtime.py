@@ -23,6 +23,8 @@ Contract with the plugin's entry script:
 - Anything long-running or mutating goes through jobs and confirmation cards.
 - Every call is recorded in plugin_invocations; a crashing or hanging plugin
   fails its invocation, never the app.
+- Called inside a job (a workflow node, anything run by dispatch_job), the process is
+  registered as that job's child: cancelling the job kills it. See execute_tool.
 """
 from __future__ import annotations
 
@@ -33,11 +35,12 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from app.core.interpreter import base_python
 from app.core.child_process import run_logged
 from app.core.text import blame_line
 from app.core.i18n import LocalizedError, get_current_locale
+from app.domain.jobs import current_parent_job_id, detach_job_child, register_job_child
 from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
 from app.domain.plugins.manifest import LOCALE_ENV
 
@@ -135,6 +138,28 @@ def resolve_entry(plugin_dir: Path, entry: str) -> Path:
     return entry_path
 
 
+class _CancelSwitch:
+    """挂在任务名下的那个插件进程。记下「是不是取消杀的」,好把原因说对。"""
+
+    def __init__(self, job_id: str, process: subprocess.Popen) -> None:
+        self.job_id = job_id
+        self._process = process
+        self.pulled = False
+
+    def kill(self) -> None:
+        self.pulled = True
+        self._process.kill()
+
+
+def _attach_to(job_id: str, attached: list[_CancelSwitch]) -> Callable[[subprocess.Popen], None]:
+    def attach(process: subprocess.Popen) -> None:
+        switch = _CancelSwitch(job_id, process)
+        attached.append(switch)
+        register_job_child(job_id, switch)
+
+    return attach
+
+
 def check_required_input(tool: dict[str, Any], input_payload: dict[str, Any]) -> None:
     schema = tool.get("input_schema") or {}
     required = schema.get("required") if isinstance(schema, dict) else None
@@ -179,6 +204,11 @@ def execute_tool(
         **(credentials or {}),
     }
     started = time.monotonic()
+    #: **跑在一个任务里时,这个进程归那个任务。** 取消任务要真的停下它,而不只是改一行状态 ——
+    #: 否则一个跑十分钟的插件在用户点了停止之后照跑,工作流的并行分支、画板上的运行都一样。
+    #: 登记在父任务名下(工作流里是工作流那个任务;同一个任务可以同时挂几个,见 jobs)。
+    job_id = current_parent_job_id()
+    attached: list[_CancelSwitch] = []
     try:
         # 打包版里 sys.executable 是应用自己 —— 拿它跑插件等于再起一个后端(见 core/interpreter)。
         python = base_python()
@@ -191,9 +221,16 @@ def execute_tool(
             text=True,
             timeout=timeout,
             cwd=entry_path.parent,
-            env=env, what="插件命令")
+            env=env, what="插件命令",
+            on_child=_attach_to(job_id, attached) if job_id else None)
     except subprocess.TimeoutExpired as exc:
         raise PluginTimeout("pluginErr_timeout", seconds=f"{timeout:g}") from exc
+    finally:
+        for switch in attached:
+            detach_job_child(switch.job_id, switch)
+    if any(switch.pulled for switch in attached):
+        # 是取消杀的,不是插件自己崩的 —— 别把一个 -9 退出码当成插件的错报出去。
+        raise PluginRuntimeError("pluginErr_cancelled")
     duration_ms = int((time.monotonic() - started) * 1000)
 
     if result.returncode != 0:

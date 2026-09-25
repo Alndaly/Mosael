@@ -20,7 +20,8 @@ import subprocess
 import threading
 import time
 from collections import deque
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any
 
 from app.core.text import strip_ansi
 
@@ -229,7 +230,50 @@ def _plain(result: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
     return result
 
 
-def run_logged(args, *, what: str, level: int = logging.INFO, **kwargs) -> subprocess.CompletedProcess:
+def _run_announcing_child(
+    args,
+    on_child: Callable[[subprocess.Popen], Any],
+    *,
+    input=None,
+    capture_output: bool = False,
+    timeout: float | None = None,
+    check: bool = False,
+    **kwargs,
+) -> subprocess.CompletedProcess:
+    """`subprocess.run` 的同一套语义,只多一步:子进程一起来就交给 `on_child`。
+
+    `subprocess.run` 不交出 Popen,而任务要在取消时杀得掉它(见 jobs.register_job_child),
+    所以照 CPython 的实现写这一份 —— 只有要登记子进程的调用方走这里。
+    """
+    if input is not None:
+        kwargs["stdin"] = subprocess.PIPE
+    if capture_output:
+        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+    with subprocess.Popen(args, **kwargs) as process:
+        try:
+            on_child(process)
+            stdout, stderr = process.communicate(input, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise
+        except BaseException:
+            process.kill()
+            raise
+        retcode = process.poll()
+    if check and retcode:
+        raise subprocess.CalledProcessError(retcode, process.args, output=stdout, stderr=stderr)
+    return subprocess.CompletedProcess(process.args, retcode, stdout, stderr)
+
+
+def run_logged(
+    args,
+    *,
+    what: str,
+    level: int = logging.INFO,
+    on_child: Callable[[subprocess.Popen], Any] | None = None,
+    **kwargs,
+) -> subprocess.CompletedProcess:
     """`subprocess.run`,外加一行日志。**外部命令只从这一个口子出去。**
 
     此前 35 个调用点各自裸调 `subprocess.run`,于是 ffmpeg、转写 worker、pip、git 全是黑箱:
@@ -244,6 +288,9 @@ def run_logged(args, *, what: str, level: int = logging.INFO, **kwargs) -> subpr
 
     `level` 只影响**成功**那条:每导入一个素材就跑一次的 ffprobe、每次都问一遍的 docker 探测
     压到 DEBUG,否则真正值得看的那几行会被淹掉。失败一律 WARNING —— 频繁不是不报的理由。
+
+    `on_child` 在子进程起来的那一刻拿到它的 Popen —— 给要在任务取消时杀掉它的调用方
+    (插件工具,见 plugins/runtime.execute_tool)。
     """
     # 文本模式默认 UTF-8(见 TEXT_IO)。调用方只说了「我要字符串」,没说"按这台机器的
     # locale 猜一个编码" —— 而后者在中文 Windows 上是 GBK,ffprobe 报一个中文文件名就炸。
@@ -253,7 +300,10 @@ def run_logged(args, *, what: str, level: int = logging.INFO, **kwargs) -> subpr
     line = _describe(args)
     started = time.monotonic()
     try:
-        result = subprocess.run(args, **kwargs)
+        if on_child is None:
+            result = subprocess.run(args, **kwargs)
+        else:
+            result = _run_announcing_child(args, on_child, **kwargs)
     except subprocess.TimeoutExpired:
         logger.warning("%s 超时(%s):%s", what, _took(time.monotonic() - started), line)
         raise

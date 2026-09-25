@@ -110,18 +110,21 @@ def watch_new_jobs() -> tuple[list[str], contextvars.Token]:
 def stop_watching_new_jobs(token: contextvars.Token) -> None:
     _request_new_jobs.reset(token)
 
-# Children (ffmpeg, ASR/TTS workers) belonging to a running job, so cancelling can actually
-# stop the work. Without this, cancel only flipped a database row: ffmpeg ran to completion,
+# Children (ffmpeg, ASR/TTS workers, plugin tools) belonging to a running job, so cancelling can
+# actually stop the work. Without this, cancel only flipped a database row: ffmpeg ran to completion,
 # burning CPU the user had asked to stop, and then the worker overwrote the cancellation with
 # "succeeded" — the cancelled export reappeared in the library as if nothing had happened.
-_CHILDREN: dict[str, Any] = {}
+#
+# A job can own several at once: a workflow runs plugin nodes in parallel, and every one of their
+# processes belongs to the workflow job (see plugins/runtime.execute_tool).
+_CHILDREN: dict[str, list[Any]] = {}
 _CHILDREN_LOCK = threading.Lock()
 
 
 def register_job_child(job_id: str, child: Any) -> None:
     """Associate a killable child (anything with .kill()) with a job for its lifetime."""
     with _CHILDREN_LOCK:
-        _CHILDREN[job_id] = child
+        _CHILDREN.setdefault(job_id, []).append(child)
     # Cancellation may have committed before the subprocess existed.
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -129,19 +132,30 @@ def register_job_child(job_id: str, child: Any) -> None:
             child.kill()
 
 
+def detach_job_child(job_id: str, child: Any) -> None:
+    """This one child is done; the job's other children stay registered."""
+    with _CHILDREN_LOCK:
+        children = _CHILDREN.get(job_id)
+        if children is None:
+            return
+        _CHILDREN[job_id] = [each for each in children if each is not child]
+        if not _CHILDREN[job_id]:
+            del _CHILDREN[job_id]
+
+
 def unregister_job_child(job_id: str) -> None:
+    """The job's run is over: forget every child it registered."""
     with _CHILDREN_LOCK:
         _CHILDREN.pop(job_id, None)
 
 
 def kill_job_child(job_id: str) -> bool:
-    """Stop the child of a running job, if one is registered. True if something was killed."""
+    """Stop the children of a running job, if any are registered. True if something was killed."""
     with _CHILDREN_LOCK:
-        child = _CHILDREN.get(job_id)
-    if child is None:
-        return False
-    child.kill()
-    return True
+        children = list(_CHILDREN.get(job_id, ()))
+    for child in children:
+        child.kill()
+    return bool(children)
 
 
 # Admission control for work that is heavy in CPU, GPU or memory. There was none: ten
@@ -153,6 +167,9 @@ RENDER_SLOTS = threading.Semaphore(2)
 ASR_SLOTS = threading.Semaphore(1)      # torch/funasr: one model in memory at a time
 TTS_SLOTS = threading.Semaphore(1)
 GENERATION_SLOTS = threading.Semaphore(4)  # mostly waiting on a remote API
+#: 同时在跑的插件工具调用。每一次都是一个新进程(进程插件起一个解释器,MCP·stdio 起一个 server),
+#: 大多在等第三方接口 —— 但工作流里一个循环 × 并行分支就能同时拉起几十个。见 plugins/tools.invoke。
+PLUGIN_SLOTS = threading.Semaphore(4)
 
 
 def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job") -> None:

@@ -289,6 +289,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件执行超时({seconds}s)",
         "en": "The plugin timed out after {seconds}s.",
     },
+    "pluginErr_cancelled": {
+        "zh": "任务已取消,插件调用被中止",
+        "en": "The task was cancelled, so the plugin call was stopped.",
+    },
     "pluginErr_processExit": {
         "zh": "插件进程退出码 {code}:{detail}",
         "en": "The plugin process exited with code {code}: {detail}",

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
+from app.domain.jobs import PLUGIN_SLOTS
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
@@ -233,31 +236,40 @@ def invoke(
     try:
         check_required_input(tool, payload)
         if manifest.is_mcp:
+            secrets = inst.secrets_for(db, instance)
             # MCP 那一侧没有 state 槽 —— 它是别人的协议,我们不往里加字段。要记东西的插件
             # 走进程形态(见 domain/plugins/state 的说明)。
-            output = mcp_call(
-                _runtime_manifest(manifest),
-                tool_name,
-                payload,
-                inst.secrets_for(db, instance),
-                **({"timeout": timeout} if timeout is not None else {}),
-            )
+            #
+            # **取消停不下它。** server 进程是 MCP 客户端库在事件循环里起的,拿不到句柄登记到
+            # 任务名下(进程插件能,见 runtime.execute_tool)。任务取消后这次调用照常跑完,
+            # 结果被丢掉:工作流在节点边界看到已取消就不再往下走。
+            with _plugin_slot(db):
+                output = mcp_call(
+                    _runtime_manifest(manifest),
+                    tool_name,
+                    payload,
+                    secrets,
+                    **({"timeout": timeout} if timeout is not None else {}),
+                )
         else:
             scratch = make_scratch_dir()
             # 声明为素材的输入换成插件看得见的本地路径(见 plugins/inputs)。
             # 在这里而不是让插件自己取:它的环境里没有数据库、没有令牌、没有媒体目录,
             # 那是隔离边界的一部分。
             resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id)
-            result = execute_tool(
-                Path(manifest.path),
-                manifest.runtime.entry,
-                tool_name,
-                resolved,
-                inst.process_env(db, instance),
-                scratch_dir=scratch,
-                data_dir=_ensure_data_dir(manifest.id),
-                **({"timeout": timeout} if timeout is not None else {}),
-            )
+            env = inst.process_env(db, instance)
+            data_dir = _ensure_data_dir(manifest.id)
+            with _plugin_slot(db):
+                result = execute_tool(
+                    Path(manifest.path),
+                    manifest.runtime.entry,
+                    tool_name,
+                    resolved,
+                    env,
+                    scratch_dir=scratch,
+                    data_dir=data_dir,
+                    **({"timeout": timeout} if timeout is not None else {}),
+                )
             output = result.output
             # 先落状态再收产出:刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子
             # (下载失败、磁盘满),这次刷新就白做了 —— 而旧令牌已经被百度那边作废了。
@@ -278,6 +290,19 @@ def invoke(
 
 
 __all__ = ["all_tools", "exposed", "find", "invoke", "refresh_tools"]
+
+
+@contextmanager
+def _plugin_slot(db: Session) -> Iterator[None]:
+    """占一个插件名额(jobs.PLUGIN_SLOTS)跑这一次调用。
+
+    **先交还连接再排队**(见 jobs 的 RENDER_SLOTS 那段):前面读实例、凭据、素材时会话攥上了
+    一条连接,排队的线程不该一直攥着它。这里提交不会带出半截东西 —— 调用记录在前面已经提交过,
+    从那以后到这里只读过实例、凭据和素材。
+    """
+    db.commit()
+    with PLUGIN_SLOTS:
+        yield
 
 
 def _collect_artifact(
