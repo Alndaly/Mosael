@@ -39,6 +39,7 @@ export function CatalogDialog<T, F extends string = string>({
   onQueryChange,
   headerActions,
   filters,
+  notice,
   items,
   itemKey,
   renderCard,
@@ -60,6 +61,8 @@ export function CatalogDialog<T, F extends string = string>({
   /** 搜索框右边的按钮(插件市场的「从链接安装」)。 */
   headerActions?: React.ReactNode;
   filters?: { label: string; value: F; onChange: (value: F) => void; items: CatalogFilter<F>[] };
+  /** 网格上方的一条提示(插件市场:远端索引拉不到,下面只列出内置的)。详情页上不显示。 */
+  notice?: React.ReactNode;
   /** 已经按搜索和筛选过滤好的条目。 */
   items: T[];
   itemKey: (item: T) => string;
@@ -158,6 +161,7 @@ export function CatalogDialog<T, F extends string = string>({
       }
     >
       <div ref={rootRef} className="min-h-full min-w-0">
+        {!detail && notice && <div className="mb-3">{notice}</div>}
         {detail ? (
           renderDetail(detail)
         ) : items.length > 0 ? (

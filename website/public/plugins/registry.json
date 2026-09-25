@@ -59,7 +59,8 @@
             "en": "List objects under a prefix (key, size, last modified)."
           }
         }
-      ]
+      ],
+      "bundled": false
     },
     {
       "id": "dev.mosael.aws-s3",
@@ -120,7 +121,8 @@
             "en": "List objects under a prefix (key, size, last modified)."
           }
         }
-      ]
+      ],
+      "bundled": false
     },
     {
       "id": "dev.mosael.baidu-pan",
@@ -179,7 +181,8 @@
             "en": "Send one file from the asset library to Baidu Netdisk. Pass an asset_id and the target path on the netdisk (e.g. /My files/final.mp4)."
           }
         }
-      ]
+      ],
+      "bundled": false
     },
     {
       "id": "dev.mosael.blender",
@@ -208,7 +211,43 @@
       ],
       "runtime": "mcp",
       "provides": [],
-      "tools": []
+      "tools": [],
+      "bundled": false
+    },
+    {
+      "id": "dev.mosael.comfyui",
+      "name": "ComfyUI",
+      "version": "1.0.0",
+      "description": {
+        "zh": "把一台 ComfyUI(本机或局域网)接成图像 / 视频生成供应商:它里面保存的每张工作流都是一个模型,可调参数和参考图槽位自动识别,进度实时、能真的取消。",
+        "en": "Connect a ComfyUI server (local or on your LAN) as an image / video provider: every saved workflow becomes a model, with its tunable parameters and reference-image slots detected automatically, live progress and real cancellation."
+      },
+      "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/docs/guides/comfyui",
+        "en": "https://mosael.com/en/docs/guides/comfyui"
+      },
+      "homepage": "https://github.com/comfyanonymous/ComfyUI",
+      "download": "",
+      "permissions": [
+        "network:comfyui"
+      ],
+      "runtime": "process",
+      "provides": [
+        "generation"
+      ],
+      "tools": [
+        {
+          "name": "comfyui_generation",
+          "label": "",
+          "description": {
+            "zh": "替 Mosael 在这台 ComfyUI 上列出模型、做一次生成。只给宿主调。",
+            "en": "Lists models and runs generations on this ComfyUI server for Mosael. Host-only."
+          }
+        }
+      ],
+      "bundled": true
     },
     {
       "id": "dev.mosael.mcp-everything",
@@ -234,7 +273,8 @@
       ],
       "runtime": "mcp",
       "provides": [],
-      "tools": []
+      "tools": [],
+      "bundled": false
     },
     {
       "id": "dev.mosael.remotion",
@@ -296,7 +336,8 @@
             "en": "Render an animation from a Remotion component (mp4, into the asset library). The code is a TSX module that `export default`s a component receiving `{ data }` (the data given here); animate with useCurrentFrame / useVideoConfig / interpolate / spring / AbsoluteFill / Sequence from 'remotion'. Only react, remotion and katex can be imported. Errors come back verbatim, so fix and call again. Prefer the explainer tool for lesson-style content."
           }
         }
-      ]
+      ],
+      "bundled": false
     },
     {
       "id": "dev.mosael.tencent-cos",
@@ -357,7 +398,8 @@
             "en": "List objects under a prefix (key, size, last modified)."
           }
         }
-      ]
+      ],
+      "bundled": false
     },
     {
       "id": "dev.mosael.text-toolkit",
@@ -395,7 +437,8 @@
             "en": "Pull #topic# and #hashtag tags out of a piece of copy."
           }
         }
-      ]
+      ],
+      "bundled": false
     },
     {
       "id": "dev.mosael.tikhub",
@@ -418,7 +461,8 @@
       ],
       "runtime": "mcp",
       "provides": [],
-      "tools": []
+      "tools": [],
+      "bundled": false
     },
     {
       "id": "dev.mosael.volcengine-tos",
@@ -479,7 +523,8 @@
             "en": "List objects under a prefix (key, size, last modified)."
           }
         }
-      ]
+      ],
+      "bundled": false
     }
   ]
 }

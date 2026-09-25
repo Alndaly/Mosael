@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Check, Download, ExternalLink, Link2, Search, ShieldAlert, ShieldCheck, Store, Trash2, Wrench } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, Download, ExternalLink, Link2, Package, Search, ShieldAlert, ShieldCheck, Store, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { installPlugin, listPluginMarket, previewPluginInstall, removePluginPackage } from "@/api/client";
@@ -14,6 +14,7 @@ import {
   CatalogSection,
 } from "@/components/app/CatalogDialog";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -24,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { describePermission, describeProvides } from "@/features/plugins/pluginPermissions";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
-type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>[number];
+type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>["plugins"][number];
 type InstallPreview = Awaited<ReturnType<typeof previewPluginInstall>>;
 type Filter = "all" | "installed" | "updates";
 
@@ -39,10 +40,14 @@ function upToDate(entry: { installed?: boolean; installed_version?: string; vers
   return Boolean(entry.installed && entry.installed_version && entry.installed_version === entry.version);
 }
 
-/** 一条市场条目此刻**要人做什么**。三态,不是两态:装过 ≠ 有新版。 */
-type Stance = "install" | "update" | "current";
+/**
+ * 一条市场条目此刻**要人做什么**。装过 ≠ 有新版;内置的另算一态 —— 它跟着应用装、跟着应用
+ * 更新,这里什么都不用做(也做不了:没有下载地址,卸了下次启动又会装回来)。
+ */
+type Stance = "install" | "update" | "current" | "bundled";
 
 function stanceOf(entry: MarketEntry): Stance {
+  if (entry.bundled) return "bundled";
   if (upToDate(entry)) return "current";
   return entry.installed ? "update" : "install";
 }
@@ -159,7 +164,9 @@ export function PluginMarketDialog({
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const entries = market.data ?? [];
+  const entries = market.data?.plugins ?? [];
+  //: 远端索引拉不到时,接口照样列出随应用内置的插件,并把原因放在 index_error 里。
+  const indexError = market.data?.index_error ?? "";
   const searched = entries.filter((entry) => matches(entry, query));
   const shown = searched.filter((entry) => passes(entry, filter));
   const detail = entries.find((entry) => entry.id === detailId) ?? null;
@@ -189,8 +196,13 @@ export function PluginMarketDialog({
         <Skeleton key={i} className="h-[184px] rounded-xl" />
       ))}
     </div>
-  ) : market.isError ? (
-    <EmptyState size="compact" icon={<Store size={15} />} title={t("pluginMarketFailed")} body={String((market.error as Error).message)} />
+  ) : market.isError || (indexError && entries.length === 0) ? (
+    <EmptyState
+      size="compact"
+      icon={<Store size={15} />}
+      title={t("pluginMarketFailed")}
+      body={indexError || String((market.error as Error).message)}
+    />
   ) : entries.length === 0 ? (
     <EmptyState size="compact" icon={<Store size={15} />} title={t("pluginMarketEmpty")} />
   ) : (
@@ -231,6 +243,18 @@ export function PluginMarketDialog({
               ],
             }
           : undefined
+      }
+      //: 拉不到索引、但还有内置的可列:说清楚下面为什么只有这几个,别让人以为市场里就这些。
+      notice={
+        indexError && entries.length > 0 ? (
+          <Alert role="status">
+            <AlertTriangle size={14} aria-hidden />
+            <span className="grid min-w-0">
+              <AlertTitle>{t("pluginMarketIndexPartial")}</AlertTitle>
+              <AlertDescription className="text-muted-foreground">{indexError}</AlertDescription>
+            </span>
+          </Alert>
+        ) : undefined
       }
       items={market.isSuccess ? shown : []}
       itemKey={(entry) => entry.id}
@@ -322,11 +346,11 @@ function InstallFromUrl({
   );
 }
 
-/** 装 / 更新那颗按钮。已是最新时**不画**:一个永远按不下去的按钮占着最显眼的位置,什么都不做。 */
+/** 装 / 更新那颗按钮。已是最新、或是内置的时候**不画**:一个永远按不下去的按钮占着最显眼的位置,什么都不做。 */
 function PickButton({ entry, busy, onPick, size }: { entry: MarketEntry; busy: boolean; onPick: () => void; size?: "sm" }) {
   const t = useI18n();
   const stance = stanceOf(entry);
-  if (stance === "current") return null;
+  if (stance === "current" || stance === "bundled") return null;
   return (
     <Button size={size} disabled={!entry.download} loading={busy} onClick={onPick}>
       <Download />
@@ -339,6 +363,7 @@ function PickButton({ entry, busy, onPick, size }: { entry: MarketEntry; busy: b
 function StanceBadge({ entry }: { entry: MarketEntry }) {
   const t = useI18n();
   const stance = stanceOf(entry);
+  if (stance === "bundled") return <CatalogBadge tone="primary" icon={<Package />}>{t("pluginMarketBundledBadge")}</CatalogBadge>;
   if (stance === "update") return <CatalogBadge tone="warning">{t("pluginMarketHasUpdate")}</CatalogBadge>;
   if (stance === "current") return <CatalogBadge tone="success" icon={<Check />}>{t("pluginMarketInstalledBadge")}</CatalogBadge>;
   return null;
@@ -464,7 +489,8 @@ function MarketDetail({
               </a>
             </Button>
           )}
-          {entry.installed && (
+          {/* 内置的卸不掉(后端也拒):卸了下次启动又会装回来。 */}
+          {entry.installed && stance !== "bundled" && (
             <Button variant="outline" onClick={onUninstall}>
               <Trash2 />
               {t("pluginUninstall")}
@@ -488,7 +514,7 @@ function MarketDetail({
           <CatalogSection title={t("pluginMarketInfo")}>
             <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2 text-ui-xs">
               <InfoRow label={t("pluginMarketVersion")}>v{entry.version}</InfoRow>
-              {entry.installed && entry.installed_version && (
+              {entry.installed && entry.installed_version && stance !== "bundled" && (
                 <InfoRow label={t("pluginMarketInstalledVersion")}>v{entry.installed_version}</InfoRow>
               )}
               {entry.author && (
@@ -512,6 +538,12 @@ function MarketDetail({
         </>
       }
     >
+      {stance === "bundled" && (
+        <Alert role="note">
+          <Package size={14} aria-hidden />
+          <AlertDescription>{t("pluginMarketBundledNote")}</AlertDescription>
+        </Alert>
+      )}
       {entry.description && (
         <CatalogSection title={t("pluginMarketAbout")}>
           {/* 说明是一段话,只带行内记号 —— 走行内渲染器,不起块级的 Streamdown。 */}

@@ -4,7 +4,8 @@
  *
  * 钉住的是用户会碰到的几件事:卡片上的摘要不露 markdown 标记、点名字或按回车都能看详情、
  * 返回键和 Esc 都退回网格并把焦点还给那张卡、从卡片和从详情都能装(装之前先确认权限)、
- * 搜索和筛选收窄的是卡片。
+ * 搜索和筛选收窄的是卡片。随应用内置的插件(ComfyUI)搜得到、标「内置」、不给装 / 更新 / 卸载;
+ * 远端索引拉不到时照样列出内置的,并说清楚为什么只有这几个。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -33,14 +34,23 @@ const MCP = {
   runtime: "mcp", provides: [], tools: [],
 };
 
+const COMFY = {
+  id: "dev.mosael.comfyui", name: "ComfyUI", version: "1.0.0", download: "",
+  description: "把一台 ComfyUI 接成图像 / 视频生成供应商。", permissions: ["network:comfyui"],
+  installed: true, installed_version: "1.0.0", author: "Mosael", author_url: "https://mosael.com",
+  docs: "https://mosael.com/zh/docs/guides/comfyui", homepage: "https://github.com/comfyanonymous/ComfyUI",
+  runtime: "process", provides: ["generation"], tools: [{ name: "comfyui_run", label: "", description: "" }], bundled: true,
+};
+
 const mocks = vi.hoisted(() => ({
+  market: vi.fn(),
   preview: vi.fn(),
   install: vi.fn(async () => []),
   remove: vi.fn(async (_id: string) => ({})),
 }));
 
 vi.mock("@/api/client", () => ({
-  listPluginMarket: async () => [OSS, PAN, MCP],
+  listPluginMarket: mocks.market,
   previewPluginInstall: mocks.preview,
   installPlugin: mocks.install,
   removePluginPackage: mocks.remove,
@@ -68,6 +78,8 @@ const cards = () => screen.getAllByRole("article");
 const card = (name: string) => cards().find((one) => within(one).queryByRole("button", { name }))!;
 
 beforeEach(() => {
+  mocks.market.mockReset();
+  mocks.market.mockImplementation(async () => ({ plugins: [OSS, PAN, MCP], index_error: "" }));
   mocks.preview.mockReset();
   mocks.preview.mockImplementation(async (url: string) => ({
     id: url.includes("oss") ? OSS.id : PAN.id, name: url.includes("oss") ? OSS.name : PAN.name, version: "0.1.2",
@@ -217,5 +229,60 @@ describe("安装", () => {
     await user.click(within(confirm).getByRole("button", { name: "pluginUninstall" }));
     await waitFor(() => expect(mocks.remove).toHaveBeenCalled());
     expect(mocks.remove.mock.calls[0][0]).toBe("dev.mosael.mcp-everything");
+  });
+});
+
+describe("随应用内置的插件", () => {
+  const withComfy = () => mocks.market.mockImplementation(async () => ({ plugins: [COMFY, OSS, PAN, MCP], index_error: "" }));
+
+  it("搜「comfy」找得到它:标「内置」,不给安装 / 更新", async () => {
+    withComfy();
+    const user = userEvent.setup();
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    await user.type(screen.getByRole("textbox", { name: "pluginMarketSearch" }), "comfy");
+    expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["ComfyUI"]);
+    const comfy = card("ComfyUI");
+    expect(within(comfy).getByText("pluginMarketBundledBadge")).toBeTruthy();
+    expect(within(comfy).queryByRole("button", { name: /pluginInstall|pluginUpdate/ })).toBeNull();
+  });
+
+  it("「已安装」筛选里有它,「有新版」里没有", async () => {
+    withComfy();
+    const user = userEvent.setup();
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    await user.click(screen.getByRole("button", { name: "pluginMarketFilterInstalled 3" }));
+    expect(cards().map((one) => within(one).getByRole("heading").textContent)).toContain("ComfyUI");
+    await user.click(screen.getByRole("button", { name: "pluginMarketFilterUpdates 1" }));
+    expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["百度网盘"]);
+  });
+
+  it("详情:说它随应用安装和更新,没有安装 / 更新 / 卸载", async () => {
+    withComfy();
+    const user = userEvent.setup();
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    await user.click(within(card("ComfyUI")).getByRole("button", { name: "ComfyUI" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("pluginMarketBundledNote")).toBeTruthy();
+    expect(within(dialog).getByText("pluginMarketBundledBadge")).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: /pluginInstall|pluginUpdate|pluginUninstall/ })).toBeNull();
+  });
+
+  it("远端索引拉不到:照样列出内置的,并说清楚为什么只有这一个", async () => {
+    mocks.market.mockImplementation(async () => ({ plugins: [COMFY], index_error: "连不上 mosael.com:timeout" }));
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    expect(cards()).toHaveLength(1);
+    expect(screen.getByText("pluginMarketIndexPartial")).toBeTruthy();
+    expect(screen.getByText("连不上 mosael.com:timeout")).toBeTruthy();
+  });
+
+  it("拉不到而且一个内置的都没有:还是「打不开插件市场」,原因照说", async () => {
+    mocks.market.mockImplementation(async () => ({ plugins: [], index_error: "连不上 mosael.com:timeout" }));
+    renderMarket();
+    expect(await screen.findByText("pluginMarketFailed")).toBeTruthy();
+    expect(screen.getByText("连不上 mosael.com:timeout")).toBeTruthy();
   });
 });

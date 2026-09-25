@@ -104,6 +104,7 @@ export default async function PluginDetailPage({
         author={author}
         version={`v${plugin.version}`}
         official={plugin.official}
+        builtIn={plugin.bundled}
         summary={plugin.summary}
         actions={
           <>
@@ -169,8 +170,9 @@ export default async function PluginDetailPage({
         }
         aside={
           <>
-            <SideCard title={t.community.install}>
-              <Steps steps={t.plugins.installSteps} />
+            {/* 内置的不用装:给安装步骤的话,访客会去市场里找一颗不存在的「安装」按钮。 */}
+            <SideCard title={plugin.bundled ? t.plugins.builtInTitle : t.community.install}>
+              <Steps steps={plugin.bundled ? t.plugins.builtInSteps : t.plugins.installSteps} />
               <p className="mt-5 mb-0 text-xs text-muted-foreground">
                 {t.community.noApp}{" "}
                 <a className="font-semibold text-primary hover:underline" href={localePath(locale, "/docs/start/download")}>

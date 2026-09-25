@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""从 plugins/examples/ 生成插件市场索引,写进 website/public/plugins/registry.json。
+"""从 plugins/examples/ 和 plugins/bundled/ 生成插件市场索引,写进 website/public/plugins/registry.json。
+
+**两个目录一条规则。** examples 是要从市场装的;bundled 是随应用一起发的第一方插件(ComfyUI),
+装好就在 —— 但它照样该在市场里搜得到:用户不知道哪些是内置的,他只会去市场里找「ComfyUI」,
+找不到就以为没有。内置的条目标 `bundled: true`、不给下载地址(它跟着应用走,不从市场装,
+新版也跟着应用来);应用里的市场据此只标「内置」,不给装 / 更新 / 卸载。
 
 **索引不手写。** 手写的话它和插件本身会漂:版本号改了索引没改、插件加了个权限索引还写着
 旧的那几条 —— 而用户在装之前看到的正是索引里那一份。由清单生成,漂不了。
@@ -18,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "plugins" / "examples"
+BUNDLED = ROOT / "plugins" / "bundled"
 OUT = ROOT / "website" / "public" / "plugins" / "registry.json"
 MANIFEST_NAME = "mosael.plugin.json"
 
@@ -31,8 +37,14 @@ MANIFEST_NAME = "mosael.plugin.json"
 DOWNLOAD_TEMPLATE = "https://github.com/Alndaly/Mosael/releases/latest/download/{id}.zip"
 
 
-def entry(manifest_path: Path) -> dict:
+#: 仓库里插件目录的网页地址。与后端 domain/plugins/registry.REPO_PLUGINS_URL 是同一个。
+REPO_PLUGINS_URL = "https://github.com/Alndaly/Mosael/tree/main/plugins"
+
+
+def entry(manifest_path: Path, *, bundled: bool = False) -> dict:
+    """一条索引。内置插件的那一条与后端 registry.bundled_entry 由本机清单生成的一一对应。"""
     raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    folder = manifest_path.parent
     skills = raw.get("skills") or []
     return {
         "id": raw["id"],
@@ -49,8 +61,9 @@ def entry(manifest_path: Path) -> dict:
         # 主页**先用插件自己写的**:那是它的文档站,是用户装之前真正想看的东西。
         # 没写才退到仓库里它的目录 —— 至少还能读到源码和 README。
         "homepage": str(raw.get("homepage") or "").strip()
-        or f"https://github.com/Alndaly/Mosael/tree/main/plugins/examples/{manifest_path.parent.name}",
-        "download": DOWNLOAD_TEMPLATE.format(id=raw["id"]),
+        or f"{REPO_PLUGINS_URL}/{folder.parent.name}/{folder.name}",
+        # 内置的不给下载地址:它不从市场装,CI 也不把它打成 release 附件。
+        "download": "" if bundled else DOWNLOAD_TEMPLATE.format(id=raw["id"]),
         # 权限**从清单来**:界面在装之前把它摊开给用户看,写错等于骗人。
         "permissions": [p for p in (raw.get("permissions") or []) if isinstance(p, str)],
         # 它是本机脚本还是一个 MCP server —— 后者的工具由 server 自己报,装之前列不出来,
@@ -69,12 +82,14 @@ def entry(manifest_path: Path) -> dict:
             for tool in ((raw.get("tools") or {}).get("declare") or [])
             if isinstance(tool, dict) and tool.get("name")
         ],
+        "bundled": bundled,
     }
 
 
 def main() -> None:
     entries = sorted(
-        (entry(path) for path in EXAMPLES.glob(f"*/{MANIFEST_NAME}")),
+        [entry(path) for path in EXAMPLES.glob(f"*/{MANIFEST_NAME}")]
+        + [entry(path, bundled=True) for path in BUNDLED.glob(f"*/{MANIFEST_NAME}")],
         key=lambda one: one["id"],
     )
     OUT.parent.mkdir(parents=True, exist_ok=True)

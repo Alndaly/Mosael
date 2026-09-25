@@ -5157,6 +5157,10 @@ export interface paths {
         /**
          * Browse Market
          * @description 市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。
+         *
+         *     **随应用内置的插件总在里面**,不管远端索引有没有它、拉不拉得到:它就装在这台机器上,
+         *     条目由本地那份清单生成(版本也是本地的)。远端若也列了它,以本地为准 —— 内置插件的新版
+         *     跟着应用发,远端的版本号不该在这里长出一个「更新」。
          */
         get: operations["browse_market_api_plugins_market_get"];
         put?: never;
@@ -9373,6 +9377,27 @@ export interface components {
              * @default
              */
             installed_version: string;
+            /**
+             * Bundled
+             * @default false
+             */
+            bundled: boolean;
+        };
+        /**
+         * PluginMarketOut
+         * @description 市场这一屏:条目 + 远端索引这一次拉没拉到。
+         *
+         *     **随应用内置的插件不依赖远端索引** —— 它就在这台机器上。所以索引拉不到时照样列出它们,
+         *     同时把拉不到的原因交给界面说出来:只给一个空列表,人会以为市场里就这么几个。
+         */
+        PluginMarketOut: {
+            /** Plugins */
+            plugins: components["schemas"]["PluginMarketEntry"][];
+            /**
+             * Index Error
+             * @default
+             */
+            index_error: string;
         };
         /**
          * PluginMarketTool
@@ -23390,7 +23415,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginMarketEntry"][];
+                    "application/json": components["schemas"]["PluginMarketOut"];
                 };
             };
             /** @description Validation Error */

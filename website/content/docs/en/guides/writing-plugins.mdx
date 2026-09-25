@@ -259,5 +259,9 @@ The market index is plain JSON that anyone can host — including on a company i
 `download` points at a zip containing your directory — one wrapping folder is fine too, since
 archives from GitHub always have one. Point the app at your index address and it can install.
 
+The official index has one more kind of entry: `"bundled": true` with no `download` — a plugin
+that ships with Mosael (ComfyUI). It is listed so people can find it, not so they can install it:
+the app marks it **Built in**, and it updates with the app.
+
 **Get `permissions` right.** People decide whether to install based on that list, and installing
 a plugin puts code that will be executed on their machine.

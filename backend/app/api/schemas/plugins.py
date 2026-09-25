@@ -114,6 +114,21 @@ class PluginMarketEntry(ApiModel):
     #: 这台机器上装没装过同 id 的包。装过的话界面给的是「更新」而不是「安装」。
     installed: bool = False
     installed_version: str = ""
+    #: 随应用一起发的(`plugins/bundled/`,见 domain/plugins/bundled)。它不从市场装、也不从市场
+    #: 更新 —— 新版跟着应用来,所以界面不给装 / 更新 / 卸载,只标「内置」。
+    bundled: bool = False
+
+
+class PluginMarketOut(ApiModel):
+    """市场这一屏:条目 + 远端索引这一次拉没拉到。
+
+    **随应用内置的插件不依赖远端索引** —— 它就在这台机器上。所以索引拉不到时照样列出它们,
+    同时把拉不到的原因交给界面说出来:只给一个空列表,人会以为市场里就这么几个。
+    """
+
+    plugins: list[PluginMarketEntry]
+    #: 远端索引拉不到的原因(已按看的人的语言译好);拉到了就是空串。
+    index_error: str = ""
 
 
 class PluginInstallRequest(ApiModel):

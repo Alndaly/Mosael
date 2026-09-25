@@ -23,6 +23,7 @@ export function DetailHeader({
   author,
   version,
   official,
+  builtIn = false,
   summary,
   actions,
 }: {
@@ -33,6 +34,8 @@ export function DetailHeader({
   author: string;
   version: string;
   official: boolean;
+  /** 随应用内置的插件:署名旁标出来(见 Byline)。 */
+  builtIn?: boolean;
   /** 数据里的简介,行内 markdown。 */
   summary: string;
   actions: React.ReactNode;
@@ -61,7 +64,7 @@ export function DetailHeader({
             {tile}
             <div className="grid min-w-0 gap-2">
               <h1 className="m-0 font-display text-3xl font-bold tracking-[-0.03em] text-balance sm:text-4xl">{name}</h1>
-              <Byline locale={locale} author={author} version={version} official={official} />
+              <Byline locale={locale} author={author} version={version} official={official} builtIn={builtIn} />
               <p className="m-0 max-w-[46rem] text-base leading-7 text-muted-foreground">
                 <InlineMarkdown text={summary} />
               </p>

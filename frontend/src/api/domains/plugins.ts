@@ -16,6 +16,7 @@ export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
 export type PluginCredential = components["schemas"]["PluginCredentialOut"];
 export type PluginMarketEntry = components["schemas"]["PluginMarketEntry"];
+export type PluginMarketListing = components["schemas"]["PluginMarketOut"];
 export type PluginInstallPreview = components["schemas"]["PluginInstallPreview"];
 
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
@@ -60,7 +61,7 @@ export const clearPluginInvocations = (instanceId: string) =>
 export const removePluginInvocation = (invocationId: string) =>
   api(`/api/plugins/invocations/${invocationId}`, { method: "DELETE" });
 
-export const listPluginMarket = () => api<PluginMarketEntry[]>("/api/plugins/market");
+export const listPluginMarket = () => api<PluginMarketListing>("/api/plugins/market");
 export const previewPluginInstall = (url: string) =>
   api<PluginInstallPreview>("/api/plugins/install/preview", { method: "POST", body: JSON.stringify({ url }) });
 export const installPlugin = (url: string, overwrite: boolean) =>

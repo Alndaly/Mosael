@@ -226,9 +226,75 @@ def test_市场接口把工具和能力按语言发下去(monkeypatch) -> None:
         "runtime": "process", "provides": ["public_url"],
         "tools": [{"name": "go", "label": "", "description": {"zh": "跑一下", "en": "Run it"}}],
     }])
-    [entry] = client.get("/api/plugins/market").json()
+    listing = client.get("/api/plugins/market").json()
+    assert listing["index_error"] == ""
+    entry = next(one for one in listing["plugins"] if one["id"] == "dev.test.demo")
+    assert entry["bundled"] is False
     assert entry["provides"] == ["public_url"]
     assert entry["runtime"] == "process"
     assert entry["tools"] == [{"name": "go", "label": "", "description": "跑一下"}]
     #: markdown 原样给 —— 渲染还是剥掉是界面的事,接口不替它决定。
     assert entry["description"] == "换回一条**公网直链**"
+
+
+# --- 随应用内置的插件在市场里 -------------------------------------------------
+#
+# 市场索引此前只收 plugins/examples/,而 ComfyUI 是随应用内置的(plugins/bundled/)—— 用户在市场里
+# 搜「ComfyUI」什么都搜不到,以为没有。内置插件就装在这台机器上,市场里**总该有它**:远端索引没列、
+# 列的是旧版本、甚至整个拉不到,都不影响。
+
+def _comfyui_manifest() -> dict:
+    from app.domain.plugins import bundled
+
+    source = next(one.source for one in bundled.plugins() if one.id == "dev.mosael.comfyui")
+    return json.loads((source / "mosael.plugin.json").read_text(encoding="utf-8"))
+
+
+def test_远端索引没列内置插件_市场里照样有它(monkeypatch) -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()  # 建库时的对账步骤已经把内置插件装好、登记好
+    monkeypatch.setattr(market, "fetch_index", lambda _url: [{"id": "dev.test.demo", "name": "演示", "version": "1.0.0",
+                                                             "download": "https://x/demo.zip"}])
+    listing = client.get("/api/plugins/market").json()
+    ids = [one["id"] for one in listing["plugins"]]
+    assert "dev.test.demo" in ids
+    comfy = next(one for one in listing["plugins"] if one["id"] == "dev.mosael.comfyui")
+    assert comfy["bundled"] is True and comfy["installed"] is True
+    assert comfy["download"] == "", "内置插件不从市场装,不该有下载地址"
+    assert comfy["version"] == comfy["installed_version"] == _comfyui_manifest()["version"]
+    assert comfy["name"] == "ComfyUI"
+    assert comfy["tools"], "工具清单由本机清单生成,不该是空的"
+
+
+def test_远端列了更新版本的内置插件_不长出更新(monkeypatch) -> None:
+    """内置插件的新版跟着应用来。远端写着 9.9.9,这台机器装的是哪版就报哪版,也不重复列两条。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    monkeypatch.setattr(market, "fetch_index", lambda _url: [{
+        "id": "dev.mosael.comfyui", "name": "ComfyUI", "version": "9.9.9",
+        "download": "https://x/comfyui.zip", "bundled": True,
+    }])
+    plugins = client.get("/api/plugins/market").json()["plugins"]
+    comfy = [one for one in plugins if one["id"] == "dev.mosael.comfyui"]
+    assert len(comfy) == 1
+    assert comfy[0]["version"] == comfy[0]["installed_version"] == _comfyui_manifest()["version"]
+    assert comfy[0]["download"] == "" and comfy[0]["bundled"] is True
+
+
+def test_远端索引拉不到_内置插件照样在_原因也交给界面(monkeypatch) -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()
+
+    def unreachable(_url):
+        raise PluginDomainError("pluginErr_marketUnreachable", detail="timeout")
+
+    monkeypatch.setattr(market, "fetch_index", unreachable)
+    response = client.get("/api/plugins/market")
+    assert response.status_code == 200, response.text
+    listing = response.json()
+    assert [one["id"] for one in listing["plugins"]] == ["dev.mosael.comfyui"]
+    assert listing["plugins"][0]["bundled"] is True
+    assert "timeout" in listing["index_error"], "拉不到的原因要说出来,不然人会以为市场里就这一个"

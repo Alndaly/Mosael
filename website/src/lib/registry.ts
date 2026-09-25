@@ -8,7 +8,9 @@ import { toPlainText } from "@/lib/inline-markdown";
  * 官方插件索引。
  *
  * **数据源是仓库里那些真的能装的 manifest**(`plugins/examples/<名字>/mosael.plugin.json`),
- * 构建期读进来 —— 不是在这里另抄一份。抄一份的下场是插件改了版本号、改了权限,官网还挂着
+ * 以及随应用内置的那些(`plugins/bundled/<名字>/`,如 ComfyUI),构建期读进来 —— 不是在这里
+ * 另抄一份。内置的也要列出来:访客会来这儿找「ComfyUI」,找不到就以为 Mosael 没有。
+ * 和应用内市场的索引(scripts/sync-plugin-registry.py)是同一条规则。抄一份的下场是插件改了版本号、改了权限,官网还挂着
  * 半年前那版,而访客照着它去装。
  *
  * manifest 的完整字段见 docs/PLUGIN_MANIFEST.md;这里只取展示要用的那几项。
@@ -41,8 +43,13 @@ export type PluginEntry = {
   homepage: string;
   /** 用之前要填的凭据(按清单里的标签),装之前就该知道要准备什么。 */
   credentials: string[];
-  /** 官方维护的:这份列表读的是仓库里 `plugins/examples/` 下的插件,目前都是。 */
+  /** 官方维护的:这份列表读的是仓库里 `plugins/` 下的插件,目前都是。 */
   official: boolean;
+  /**
+   * 随应用内置(`plugins/bundled/`):装好就在、跟着应用更新,不从市场装。页面据此标「随应用内置」,
+   * 不给安装步骤。
+   */
+  bundled: boolean;
 };
 
 /**
@@ -71,7 +78,24 @@ type Manifest = {
   tools?: { declare?: { name?: string; description?: Text }[] };
 };
 
-const EXAMPLES = path.join(process.cwd(), "..", "plugins", "examples");
+const PLUGINS = path.join(process.cwd(), "..", "plugins");
+/** 两个来源:要从市场装的示例插件,和随应用内置的第一方插件。 */
+const SOURCES = [
+  { dir: "examples", bundled: false },
+  { dir: "bundled", bundled: true },
+] as const;
+
+/** 仓库里所有插件的目录(相对 plugins/)与它是不是内置的。目录名就是 slug。 */
+function pluginDirs(): { slug: string; folder: string; bundled: boolean }[] {
+  return SOURCES.flatMap(({ dir, bundled }) => {
+    const root = path.join(PLUGINS, dir);
+    if (!fs.existsSync(root)) return [];
+    return fs
+      .readdirSync(root)
+      .filter((slug) => fs.existsSync(path.join(root, slug, "mosael.plugin.json")))
+      .map((slug) => ({ slug, folder: path.join(dir, slug), bundled }));
+  });
+}
 
 /** 清单里的链接会直接变成页面上的 `<a href>`:只认 http(s),和应用里的规则一样。 */
 function httpUrl(value: string | undefined): string {
@@ -79,13 +103,9 @@ function httpUrl(value: string | undefined): string {
 }
 
 export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
-  if (!fs.existsSync(EXAMPLES)) return [];
-  return fs
-    .readdirSync(EXAMPLES)
-    .map((dir) => path.join(EXAMPLES, dir, "mosael.plugin.json"))
-    .filter((file) => fs.existsSync(file))
-    .map((file): PluginEntry => {
-      const manifest = JSON.parse(fs.readFileSync(file, "utf8")) as Manifest;
+  return pluginDirs()
+    .map(({ slug, folder, bundled }): PluginEntry => {
+      const manifest = JSON.parse(fs.readFileSync(path.join(PLUGINS, folder, "mosael.plugin.json"), "utf8")) as Manifest;
       const kind = manifest.runtime?.kind;
       return {
         id: manifest.id ?? "",
@@ -95,8 +115,8 @@ export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
         kind: kind === "mcp" ? "mcp" : "script",
         permissions: manifest.permissions ?? [],
         summary: textOf(manifest.skills?.[0]?.description, locale),
-        source: `plugins/examples/${path.basename(path.dirname(file))}`,
-        slug: path.basename(path.dirname(file)),
+        source: `plugins/${folder.split(path.sep).join("/")}`,
+        slug,
         tools: (manifest.tools?.declare ?? [])
           .filter((tool) => tool.name)
           .map((tool) => ({ name: tool.name ?? "", description: textOf(tool.description, locale) })),
@@ -107,6 +127,7 @@ export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
           .map((credential) => toPlainText(textOf(credential.label, locale)) || credential.key || "")
           .filter(Boolean),
         official: true,
+        bundled,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -123,8 +144,9 @@ export function findPlugin(slug: string, locale: Locale = DEFAULT_LOCALE): Plugi
  * 详情页照样成立(清单里的信息已经够看了),而不是渲染一块空白。
  */
 export function readPluginDoc(slug: string): string | null {
-  const file = path.join(EXAMPLES, slug, "README.md");
-  return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+  const found = pluginDirs().find((one) => one.slug === slug);
+  const file = found ? path.join(PLUGINS, found.folder, "README.md") : "";
+  return file && fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
 }
 
 /** Official downloadable templates, generated from the application's template factories. */

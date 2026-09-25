@@ -15464,7 +15464,7 @@
           "plugins"
         ],
         "summary": "Browse Market",
-        "description": "市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。",
+        "description": "市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。\n\n**随应用内置的插件总在里面**,不管远端索引有没有它、拉不拉得到:它就装在这台机器上,\n条目由本地那份清单生成(版本也是本地的)。远端若也列了它,以本地为准 —— 内置插件的新版\n跟着应用发,远端的版本号不该在这里长出一个「更新」。",
         "operationId": "browse_market_api_plugins_market_get",
         "responses": {
           "200": {
@@ -15472,11 +15472,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PluginMarketEntry"
-                  },
-                  "type": "array",
-                  "title": "Response Browse Market Api Plugins Market Get"
+                  "$ref": "#/components/schemas/PluginMarketOut"
                 }
               }
             }
@@ -25538,6 +25534,11 @@
             "type": "string",
             "title": "Installed Version",
             "default": ""
+          },
+          "bundled": {
+            "type": "boolean",
+            "title": "Bundled",
+            "default": false
           }
         },
         "type": "object",
@@ -25546,6 +25547,28 @@
         ],
         "title": "PluginMarketEntry",
         "description": "市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"
+      },
+      "PluginMarketOut": {
+        "properties": {
+          "plugins": {
+            "items": {
+              "$ref": "#/components/schemas/PluginMarketEntry"
+            },
+            "type": "array",
+            "title": "Plugins"
+          },
+          "index_error": {
+            "type": "string",
+            "title": "Index Error",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "plugins"
+        ],
+        "title": "PluginMarketOut",
+        "description": "市场这一屏:条目 + 远端索引这一次拉没拉到。\n\n**随应用内置的插件不依赖远端索引** —— 它就在这台机器上。所以索引拉不到时照样列出它们,\n同时把拉不到的原因交给界面说出来:只给一个空列表,人会以为市场里就这么几个。"
       },
       "PluginMarketTool": {
         "properties": {

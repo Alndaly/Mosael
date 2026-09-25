@@ -39,7 +39,7 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import ManifestError, parse
+from app.domain.plugins.manifest import Manifest, ManifestError, parse
 from app.domain.plugins.migrations import CANONICAL_FILENAME as MANIFEST_NAME
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,9 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
 
     兜底会让「市场里怎么少了一个」变成一个查不清的问题:用户看到的到底是这一刻的索引,
     还是某次成功之后留下的旧副本?
+
+    拉不到时市场里照样列着随应用内置的插件(见 routes/plugins.browse_market)—— 那不是远端的
+    兜底副本,而是本机装着的事实;拉不到的原因照样交给界面说出来。
     """
     if not url.startswith(("http://", "https://")):
         raise PluginDomainError("pluginErr_marketBadScheme")
@@ -80,6 +83,39 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
     if not isinstance(entries, list):
         raise PluginDomainError("pluginErr_marketBadShape", example='{"plugins": [...]}')
     return [entry for entry in entries if isinstance(entry, dict) and entry.get("id")]
+
+
+#: 仓库里插件目录的网页地址。条目没写主页时退到它 —— 至少还能读到源码和 README。
+#: 与 scripts/sync-plugin-registry.py 同一条规则(那边生成官网上的索引,这边补本机内置的条目)。
+REPO_PLUGINS_URL = "https://github.com/Alndaly/Mosael/tree/main/plugins"
+
+
+def bundled_entry(manifest: Manifest, folder: str) -> dict[str, Any]:
+    """随应用内置的插件在市场里的那一条,**由本机那份清单生成**,形状与远端索引的条目一样。
+
+    和 scripts/sync-plugin-registry.py 给内置插件生成的条目一一对应:`bundled` 为真、没有下载
+    地址(它跟着应用走,不从市场装)。取本机清单而不是远端那条,是因为远端可能更旧、可能拉不到,
+    而这台机器上装着的是哪一版只有本机知道。
+    """
+    return {
+        "id": manifest.id,
+        "name": manifest.name,
+        "version": manifest.version,
+        "description": (manifest.skills[0].get("description") if manifest.skills else "") or "",
+        "author": manifest.author.name,
+        "author_url": manifest.author.url,
+        "docs": manifest.docs,
+        "homepage": manifest.homepage or f"{REPO_PLUGINS_URL}/bundled/{folder}",
+        "download": "",
+        "permissions": list(manifest.permissions),
+        "runtime": manifest.runtime.kind,
+        "provides": list(manifest.provides),
+        "tools": [
+            {"name": str(tool["name"]), "label": tool.get("label") or "", "description": tool.get("description") or ""}
+            for tool in manifest.declared_tools
+        ],
+        "bundled": True,
+    }
 
 
 def _download(url: str) -> bytes:
@@ -202,6 +238,8 @@ def preview_from_url(url: str) -> dict[str, Any]:
 __all__ = [
     "MAX_ARCHIVE_BYTES",
     "MAX_UNPACKED_BYTES",
+    "REPO_PLUGINS_URL",
+    "bundled_entry",
     "fetch_index",
     "inspect_archive",
     "install_archive",

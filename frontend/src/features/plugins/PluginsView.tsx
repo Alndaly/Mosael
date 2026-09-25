@@ -188,7 +188,7 @@ function ScanButton({ pending, onScan }: { pending: boolean; onScan: () => void 
 function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: string }) {
   const t = useI18n();
   const market = useQuery({ queryKey: ["plugin-market"], queryFn: () => listPluginMarket(), retry: false });
-  const docs = pkg.docs || market.data?.find((entry) => entry.id === pkg.id)?.docs || "";
+  const docs = pkg.docs || market.data?.plugins.find((entry) => entry.id === pkg.id)?.docs || "";
   const qc = useQueryClient();
   const [confirmUninstall, setConfirmUninstall] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);

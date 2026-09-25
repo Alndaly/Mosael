@@ -7,7 +7,7 @@
  * 不用为了一次过滤跑一趟服务器。卡片整张可点,进详情页。
  */
 import Link from "next/link";
-import { BadgeCheck, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X } from "lucide-react";
+import { BadgeCheck, Package, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X } from "lucide-react";
 import * as React from "react";
 
 import { PluginTile, WorkflowTile } from "@/components/community/tile";
@@ -72,8 +72,25 @@ function Empty({ locale, onClear }: { locale: Locale; onClear: () => void }) {
   );
 }
 
-/** 署名那一行:作者 + 官方标记 + 版本。卡片和详情页头用同一个。 */
-export function Byline({ locale, author, version, official }: { locale: Locale; author: string; version: string; official: boolean }) {
+/**
+ * 署名那一行:作者 + 官方标记 + 版本。卡片和详情页头用同一个。
+ *
+ * `builtIn`:随应用内置的插件(ComfyUI)另标一句 —— 它不用装,访客该一眼看出来,而不是照着
+ * 安装步骤去市场里找一颗不存在的「安装」按钮。
+ */
+export function Byline({
+  locale,
+  author,
+  version,
+  official,
+  builtIn = false,
+}: {
+  locale: Locale;
+  author: string;
+  version: string;
+  official: boolean;
+  builtIn?: boolean;
+}) {
   const t = getMessages(locale).community;
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
@@ -82,6 +99,12 @@ export function Byline({ locale, author, version, official }: { locale: Locale; 
         <span className="inline-flex items-center gap-0.5 font-medium text-primary">
           <BadgeCheck className="size-3.5" aria-hidden />
           {t.official}
+        </span>
+      )}
+      {builtIn && (
+        <span className="inline-flex items-center gap-0.5 font-medium text-primary">
+          <Package className="size-3.5" aria-hidden />
+          {getMessages(locale).plugins.builtIn}
         </span>
       )}
       <span aria-hidden>·</span>
@@ -110,7 +133,13 @@ export function PluginCard({ locale, plugin }: { locale: Locale; plugin: PluginE
         <PluginTile seed={plugin.id} name={plugin.name} />
         <div className="grid min-w-0 gap-0.5">
           <h3 className="m-0 truncate text-base font-semibold tracking-tight group-hover:text-primary">{plugin.name}</h3>
-          <Byline locale={locale} author={plugin.author.name || "—"} version={`v${plugin.version}`} official={plugin.official} />
+          <Byline
+            locale={locale}
+            author={plugin.author.name || "—"}
+            version={`v${plugin.version}`}
+            official={plugin.official}
+            builtIn={plugin.bundled}
+          />
         </div>
       </div>
       {/* 卡片整张是链接、简介只截三行:这里用纯文本,格式留给详情页。 */}

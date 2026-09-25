@@ -25,6 +25,7 @@ from app.api.schemas import (
     PluginInvocationOut,
     PluginInvokeRequest,
     PluginMarketEntry,
+    PluginMarketOut,
     PluginMarketTool,
     PluginPackageOut,
     PluginPermissionGrantOut,
@@ -74,41 +75,58 @@ def _registry_url(db: DbSession) -> str:
     return (config.plugin_registry_url if config else "").strip() or DEFAULT_REGISTRY_URL
 
 
-@router.get("/plugins/market", response_model=list[PluginMarketEntry])
-def browse_market(db: DbSession, user: CurrentUser) -> list[PluginMarketEntry]:
-    """市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。"""
+@router.get("/plugins/market", response_model=PluginMarketOut)
+def browse_market(db: DbSession, user: CurrentUser) -> PluginMarketOut:
+    """市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。
+
+    **随应用内置的插件总在里面**,不管远端索引有没有它、拉不拉得到:它就装在这台机器上,
+    条目由本地那份清单生成(版本也是本地的)。远端若也列了它,以本地为准 —— 内置插件的新版
+    跟着应用发,远端的版本号不该在这里长出一个「更新」。
+    """
     ensure_deployment_admin(db, user)
+    installed = {row.id: row for row in db.scalars(select(PluginPackage))}
+    shipped = [one for one in bundled.plugins() if one.id in installed]
+    index_error = ""
     try:
-        entries = market.fetch_index(_registry_url(db))
+        remote = market.fetch_index(_registry_url(db))
     except PluginDomainError as exc:
-        raise _fail(exc) from exc
-    installed = {row.id: row.version for row in db.scalars(select(PluginPackage))}
-    return [
-        PluginMarketEntry(
-            **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download")},
-            author_url=web_url(entry.get("author_url")),
-            #: docs 在索引里也可以按语言分,和名字、简介一样在这儿定语言。
-            docs=web_url(text_of(entry.get("docs"))),
-            #: 索引里的名字和简介照搬清单,而清单里它们可以是按语言分的对象 —— 在这儿定语言。
-            name=text_of(entry.get("name")),
-            description=text_of(entry.get("description")),
-            permissions=[p for p in (entry.get("permissions") or []) if isinstance(p, str)],
-            runtime=str(entry.get("runtime") or "process"),
-            provides=[p for p in (entry.get("provides") or []) if isinstance(p, str)],
-            tools=[
-                PluginMarketTool(
-                    name=str(tool["name"]),
-                    label=text_of(tool.get("label")),
-                    description=text_of(tool.get("description")),
-                )
-                for tool in (entry.get("tools") or [])
-                if isinstance(tool, dict) and tool.get("name")
-            ],
-            installed=entry["id"] in installed,
-            installed_version=installed.get(entry["id"], ""),
-        )
-        for entry in entries
+        remote, index_error = [], str(exc)
+    local_ids = {one.id for one in shipped}
+    entries = [market.bundled_entry(manifest_of(installed[one.id]), one.source.name) for one in shipped] + [
+        entry for entry in remote if entry["id"] not in local_ids
     ]
+    return PluginMarketOut(
+        plugins=[_market_entry(entry, installed) for entry in entries],
+        index_error=index_error,
+    )
+
+
+def _market_entry(entry: dict, installed: dict[str, PluginPackage]) -> PluginMarketEntry:
+    package = installed.get(entry["id"])
+    return PluginMarketEntry(
+        **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download")},
+        author_url=web_url(entry.get("author_url")),
+        #: docs 在索引里也可以按语言分,和名字、简介一样在这儿定语言。
+        docs=web_url(text_of(entry.get("docs"))),
+        #: 索引里的名字和简介照搬清单,而清单里它们可以是按语言分的对象 —— 在这儿定语言。
+        name=text_of(entry.get("name")),
+        description=text_of(entry.get("description")),
+        permissions=[p for p in (entry.get("permissions") or []) if isinstance(p, str)],
+        runtime=str(entry.get("runtime") or "process"),
+        provides=[p for p in (entry.get("provides") or []) if isinstance(p, str)],
+        tools=[
+            PluginMarketTool(
+                name=str(tool["name"]),
+                label=text_of(tool.get("label")),
+                description=text_of(tool.get("description")),
+            )
+            for tool in (entry.get("tools") or [])
+            if isinstance(tool, dict) and tool.get("name")
+        ],
+        installed=package is not None,
+        installed_version=package.version if package else "",
+        bundled=entry.get("bundled") is True,
+    )
 
 
 @router.post("/plugins/install/preview", response_model=PluginInstallPreview)

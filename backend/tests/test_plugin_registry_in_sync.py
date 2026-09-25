@@ -7,6 +7,9 @@
 显示问题:用户是照着它决定装不装的。
 
 所以索引由 scripts/sync-plugin-registry.py 生成,这条钉住它没过期。
+
+索引收两类插件:`plugins/examples/`(从市场装)和 `plugins/bundled/`(随应用内置)。后者此前
+漏在索引外面 —— ComfyUI 成了内置插件之后,在市场里怎么搜都搜不到它。
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "plugins" / "examples"
+BUNDLED = ROOT / "plugins" / "bundled"
 REGISTRY = ROOT / "website" / "public" / "plugins" / "registry.json"
 MANIFEST_NAME = "mosael.plugin.json"
 
@@ -27,15 +31,31 @@ def _registry() -> dict[str, dict]:
     return {one["id"]: one for one in payload["plugins"]}
 
 
-def test_每个示例插件都在索引里() -> None:
+def _manifests() -> list[Path]:
+    """索引收的所有插件清单:要从市场装的 + 随应用内置的。"""
+    return [*EXAMPLES.glob(f"*/{MANIFEST_NAME}"), *BUNDLED.glob(f"*/{MANIFEST_NAME}")]
+
+
+def test_每个插件都在索引里() -> None:
     """漏一个的话,那个插件对用市场的人根本不存在 —— 而它明明就在仓库里。"""
-    manifests = {json.loads(p.read_text(encoding="utf-8"))["id"] for p in EXAMPLES.glob(f"*/{MANIFEST_NAME}")}
-    assert manifests == set(_registry()), "索引和 plugins/examples 对不上,跑一下 scripts/sync-plugin-registry.py"
+    manifests = {json.loads(p.read_text(encoding="utf-8"))["id"] for p in _manifests()}
+    assert manifests == set(_registry()), "索引和 plugins/examples + plugins/bundled 对不上,跑一下 scripts/sync-plugin-registry.py"
+
+
+def test_内置插件标了_bundled_且没有下载地址() -> None:
+    """内置插件跟着应用走:市场里只标「内置」,不给装。给了下载地址,界面就会长出一颗「安装」。"""
+    registry = _registry()
+    bundled_ids = {json.loads(p.read_text(encoding="utf-8"))["id"] for p in BUNDLED.glob(f"*/{MANIFEST_NAME}")}
+    assert bundled_ids, "plugins/bundled 下一个插件都没扫到"
+    for plugin_id, entry in registry.items():
+        assert entry["bundled"] is (plugin_id in bundled_ids), f"{plugin_id} 的 bundled 标记不对"
+        if plugin_id in bundled_ids:
+            assert entry["download"] == "", f"{plugin_id} 是内置的,不该有下载地址"
 
 
 def test_版本号一致() -> None:
     registry = _registry()
-    for path in EXAMPLES.glob(f"*/{MANIFEST_NAME}"):
+    for path in _manifests():
         raw = json.loads(path.read_text(encoding="utf-8"))
         assert registry[raw["id"]]["version"] == raw.get("version"), f"{raw['id']} 的版本号漂了"
 
@@ -43,7 +63,7 @@ def test_版本号一致() -> None:
 def test_权限清单一致() -> None:
     """这一条最要紧:用户是照着索引里的权限决定装不装的。少写一条 = 骗人。"""
     registry = _registry()
-    for path in EXAMPLES.glob(f"*/{MANIFEST_NAME}"):
+    for path in _manifests():
         raw = json.loads(path.read_text(encoding="utf-8"))
         assert registry[raw["id"]]["permissions"] == (raw.get("permissions") or []), f"{raw['id']} 的权限清单漂了"
 
@@ -58,6 +78,8 @@ def test_下载地址和_CI_产出的文件名对得上() -> None:
     assert "dist/plugins/$id.zip" in workflow, "CI 不再按 <id>.zip 打包了"
     assert "gh release upload" in workflow and "dist/plugins/*.zip" in workflow, "CI 没有上传插件包"
     for entry in _registry().values():
+        if entry["bundled"]:
+            continue  # 内置的不从市场装,CI 也不打它的包(见上一条)
         assert entry["download"].endswith(f"/{entry['id']}.zip"), f"{entry['id']} 的下载地址和 CI 的文件名对不上"
         # 不钉版本号:索引由网站部署、附件由发版流程产出,两者各走各的。
         assert "/releases/latest/download/" in entry["download"], f"{entry['id']} 的下载地址钉死了版本"
@@ -66,7 +88,7 @@ def test_下载地址和_CI_产出的文件名对得上() -> None:
 def test_工具清单与运行方式一致() -> None:
     """市场详情里「它带来哪些工具」照着索引列。漂了的话,用户装之前看到的是另一个插件。"""
     registry = _registry()
-    for path in EXAMPLES.glob(f"*/{MANIFEST_NAME}"):
+    for path in _manifests():
         raw = json.loads(path.read_text(encoding="utf-8"))
         declared = [tool["name"] for tool in ((raw.get("tools") or {}).get("declare") or [])]
         assert [tool["name"] for tool in registry[raw["id"]]["tools"]] == declared, f"{raw['id']} 的工具清单漂了"
@@ -77,3 +99,4 @@ def test_工具清单与运行方式一致() -> None:
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天目录改了名,上面三条会一起真空通过。"""
     assert len(list(EXAMPLES.glob(f"*/{MANIFEST_NAME}"))) >= 3
+    assert len(list(BUNDLED.glob(f"*/{MANIFEST_NAME}"))) >= 1

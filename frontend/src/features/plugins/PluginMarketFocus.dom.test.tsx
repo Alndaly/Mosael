@@ -18,12 +18,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/client", () => ({
-  listPluginMarket: async () => [
+  listPluginMarket: async () => ({ index_error: "", plugins: [
     { id: "dev.mosael.remotion", name: "Remotion 动画", version: "0.1.0", download: "https://x/remotion.zip",
       permissions: ["process:spawn"], installed: false, installed_version: "", author: "Mosael", author_url: "", docs: "", homepage: "", description: "" },
     { id: "dev.mosael.aws-s3", name: "Amazon S3", version: "0.1.2", download: "https://x/s3.zip",
       permissions: [], installed: false, installed_version: "", author: "Mosael", author_url: "", docs: "", homepage: "", description: "" },
-  ],
+  ] }),
   previewPluginInstall: mocks.preview,
   installPlugin: mocks.install,
 }));

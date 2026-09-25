@@ -506,7 +506,9 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 它们都写了中英两份文案,可以直接照着抄多语言的写法。
 
 另有 `plugins/bundled/` 下**随应用一起发**的插件(今天是 **comfyui**):它们随后端一起打包,每次启动对账
-装进插件目录(按内容指纹,见 `domain/plugins/bundled`),卸不掉,也不进市场索引。ComfyUI 插件是
+装进插件目录(按内容指纹,见 `domain/plugins/bundled`),卸不掉。它们**也在市场索引里**(标
+`bundled: true`、没有 `download`),应用内的市场和官网插件页都列出它们、标「内置」,只是不给安装 ——
+新版跟着应用来;远端索引拉不到时,市场照样由本机清单列出它们。ComfyUI 插件是
 「替宿主做生成」的完整范例:动态模型目录、JSON Schema 参数、参考图槽位、NDJSON 进度、取消文件、回执与接着取。
 
 ## 声明「我能替宿主做成什么」
