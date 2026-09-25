@@ -1618,6 +1618,25 @@ function WorkflowEditor({
       }),
     [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen],
   );
+  /**
+   * 运行 —— 工具栏的运行键和 ⌘Enter 共用这**一个**入口。
+   *
+   * 运行跑的是服务端存着的那一版。还有没存的改动就先存(复用同一条保存,和打开版本历史那条
+   * 一样),存失败就不跑;就绪清单里有阻断问题就不跑。此前两个入口各写各的判据:运行键在
+   * 「还没存完」和「有阻断问题」时是灰的,快捷键两条都没管 —— 改完立刻按 ⌘Enter,跑的是
+   * 改之前的图。
+   */
+  const startRun = React.useCallback(async () => {
+    if (run.isPending || !analysis.runnable) return;
+    if (pendingSaveRef.current) {
+      try {
+        await save.mutateAsync();
+      } catch {
+        return;
+      }
+    }
+    run.mutate();
+  }, [run, save, analysis.runnable]);
   const checklistCount = analysis.errorCount + analysis.warnCount;
   const checklistLabel = analysis.errorCount
     ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
@@ -1711,7 +1730,7 @@ function WorkflowEditor({
         if (!save.isPending) save.mutate();
       } else if (event.key === "Enter") {
         event.preventDefault();
-        if (!run.isPending) run.mutate();
+        void startRun();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1983,7 +2002,7 @@ function WorkflowEditor({
                     loading={run.isPending}
                     aria-label={t("wfRun")}
                     title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
-                    onClick={() => run.mutate()}
+                    onClick={() => void startRun()}
                   >
                     <Play size={14} />
                   </Button>

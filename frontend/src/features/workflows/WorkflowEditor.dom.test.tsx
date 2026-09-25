@@ -2,13 +2,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
-import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
   listWorkflows: vi.fn(),
   fetchWorkflowNodeTypes: vi.fn(),
   updateWorkflow: vi.fn(),
   listWorkflowRuns: vi.fn(),
+  runWorkflow: vi.fn(),
 }));
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -55,6 +56,7 @@ beforeEach(() => {
   localStorage.setItem("mosael:selected:workflows", "wf1");
   apiMocks.fetchWorkflowNodeTypes.mockResolvedValue(NODE_TYPES);
   apiMocks.listWorkflowRuns.mockResolvedValue([]);
+  apiMocks.runWorkflow.mockResolvedValue({ id: "job-1", status: "queued" });
   apiMocks.updateWorkflow.mockImplementation(async (_id: string, body: { graph: WorkflowGraph }) => workflowWith(body.graph));
 });
 afterEach(() => {
@@ -289,4 +291,37 @@ it("在检查器里展开的下拉上按 Esc 只收起下拉,检查器还开着"
   // 画布上的 Esc 照常收起检查器。
   fireEvent.keyDown(document.body, { key: "Escape" });
   await waitFor(() => expect(screen.queryByLabelText("wfNodeName")).toBeNull());
+});
+
+describe("⌘Enter 运行", () => {
+  //: 运行跑的是**服务端存着的那一版**。工具栏的运行键在「还没存完」和「有阻断问题」时是灰的,
+  //: 快捷键此前绕过了这两条:改完立刻按 ⌘Enter,跑的是改之前的图。
+  it("还有没存的改动时,先存再跑 —— 跑的是屏幕上这一版", async () => {
+    const order: string[] = [];
+    apiMocks.updateWorkflow.mockImplementation(async (_id: string, body: { graph: WorkflowGraph }) => {
+      order.push("save");
+      return workflowWith(body.graph);
+    });
+    apiMocks.runWorkflow.mockImplementation(async () => {
+      order.push("run");
+      return { id: "job-1", status: "queued" };
+    });
+    await renderEditor(CHAIN);
+    await waitFor(() => nodeEl("llm-1"));
+    fireEvent.click(nodeEl("llm-1"));
+    fireEvent.change(await screen.findByLabelText("wfNodeName"), { target: { value: "改过" } });
+    fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+    await waitFor(() => expect(order).toContain("run"));
+    expect(order).toEqual(["save", "run"]);
+  });
+
+  it("有阻断问题时不跑(和运行键同一个判据)", async () => {
+    const broken = structuredClone(CHAIN);
+    broken.nodes[2].config = { template: "" };
+    await renderEditor(broken);
+    await waitFor(() => nodeEl("llm-1"));
+    fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(apiMocks.runWorkflow).not.toHaveBeenCalled();
+  });
 });
