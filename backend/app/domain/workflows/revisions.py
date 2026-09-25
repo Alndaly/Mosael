@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from copy import deepcopy
 
 from sqlalchemy import select, update
@@ -119,63 +120,97 @@ def create_initial_revision(
     return revision
 
 
+#: 一次整图写入:拿**库里当前那份图**,给出要存的那份。
+#:
+#: 写入分两种,冲突时的处理也就两种(和画板 update_board / _merge_into_latest 同一条):
+#: - 客户端存回来的**整份快照**(自动保存、智能体整图替换):它不知道别人刚改了什么,底子对不上
+#:   就该挡回去让它重载 —— 见 `replace_graph`;
+#: - **只改自己那一处**的合并(按算子改图、恢复到某一版):从最新那份出发重做一遍就不会盖掉任何人,
+#:   撞了就重读再合。
+GraphChange = Callable[[dict], dict]
+
+
+class WorkflowGraphConflict(WorkflowRevisionError):
+    """拿着旧底子存整图:库里那份在这期间被别处改过。"""
+
+    def __init__(self, base_graph_hash: str, current_graph_hash: str):
+        self.base_graph_hash = base_graph_hash
+        self.current_graph_hash = current_graph_hash
+        super().__init__("wfErr_graphConflict")
+
+
+def replace_graph(graph: dict, *, base_graph_hash: str) -> GraphChange:
+    """整份快照:只在库里仍是它读到的那份(`base_graph_hash`)时才落库。
+
+    底子用整图摘要而不是 revision:revision 只在执行语义变了才增,纯布局(挪节点、改标记)
+    不成版 —— 拿它当底子,别人刚挪好的位置照样会被旧快照盖回去。存的恰好就是库里那份时
+    不算冲突:两边写的是同一个东西,谁也没丢。
+    """
+
+    wanted = graph_digest(graph)
+
+    def change(current: dict) -> dict:
+        current_hash = graph_digest(current)
+        if current_hash not in (base_graph_hash, wanted):
+            raise WorkflowGraphConflict(base_graph_hash, current_hash)
+        return graph
+
+    return change
+
+
 def commit_graph_revision(
     db: Session,
     workflow: Workflow,
-    graph: dict,
+    change: GraphChange,
     *,
     source: str,
     created_by: str | None = None,
     note: str = "",
 ) -> WorkflowRevision | None:
-    """保存完整画布；只有执行语义变化时才原子追加修订。
+    """把 `change` 落到**库里最新那份图**上;只有执行语义变化时才原子追加修订。
 
-    修订号在 UPDATE 内递增，而不是在 Python 里用 ``workflow.revision + 1``。这样两个重叠的
-    自动保存会由数据库串行取得不同版本，不会同时尝试写同一个唯一键。布局保存也带当前修订
-    条件，不能在并发语义编辑落库后拿旧画布覆盖新内容。
+    每一轮都重读当前图、重新调用 `change`,UPDATE 以「读到的那份」(graph_hash + revision)为条件。
+    条件没中说明读写空档里有人写入:整份快照在下一轮的 `change` 里撞 `WorkflowGraphConflict`,
+    合并型写入在新图上重做 —— 不存在「重试时拿旧图盖掉新内容」这条路。修订号在 UPDATE 内递增,
+    两个重叠的写入由数据库串行取得不同版本,不会同时写同一个唯一键。
     """
 
-    digest = graph_digest(graph)
-    semantic_digest = revision_digest(graph)
     db.flush()
-
-    # SQLite 会串行写事务；revision 条件再负责发现「读取当前快照后、真正 UPDATE 前」发生的
-    # 并发提交。重读后重新分类为布局保存或语义修订即可，不需要让调用方理解冲突重试。
     for _attempt in range(8):
         db.refresh(workflow)
         current = current_workflow_revision(db, workflow)
+        expected_hash = workflow.graph_hash
         expected_revision = workflow.revision
+        graph = change(deepcopy(workflow.graph))
+        digest = graph_digest(graph)
+        if digest == expected_hash:
+            return None
+        unchanged_since_read = update(Workflow).where(
+            Workflow.id == workflow.id,
+            Workflow.revision == expected_revision,
+            Workflow.graph_hash == expected_hash,
+        )
 
-        if revision_digest(current.graph) == semantic_digest:
-            db.execute(
-                update(Workflow)
-                .where(
-                    Workflow.id == workflow.id,
-                    Workflow.revision == expected_revision,
-                    Workflow.graph_hash != digest,
-                )
-                .values(graph=deepcopy(graph), graph_hash=digest, updated_at=now())
-            )
+        if revision_digest(current.graph) == revision_digest(graph):
+            written = db.execute(
+                unchanged_since_read.values(graph=deepcopy(graph), graph_hash=digest, updated_at=now())
+                .execution_options(synchronize_session=False)
+            ).rowcount
             db.flush()
             db.refresh(workflow)
-            if workflow.revision == expected_revision:
+            if int(written or 0) == 1:
                 return None
             continue
 
         revision_number = db.execute(
-            update(Workflow)
-            .where(
-                Workflow.id == workflow.id,
-                Workflow.revision == expected_revision,
-                Workflow.graph_hash != digest,
-            )
-            .values(
+            unchanged_since_read.values(
                 graph=deepcopy(graph),
                 graph_hash=digest,
                 revision=Workflow.revision + 1,
                 updated_at=now(),
             )
             .returning(Workflow.revision)
+            .execution_options(synchronize_session=False)
         ).scalar_one_or_none()
         if revision_number is None:
             continue
@@ -263,10 +298,12 @@ def restore_workflow_revision(
     target = get_workflow_revision(db, workflow.id, target_revision)
     if target is None:
         raise WorkflowRevisionError("wfErr_revisionNotFound", revision=target_revision)
+    #: 恢复是「回到那一版」这个明确的意图,不是拿着旧底子的快照:落到最新那份上就是替换它。
+    snapshot = deepcopy(target.graph)
     restored = commit_graph_revision(
         db,
         workflow,
-        target.graph,
+        lambda _current: snapshot,
         source="restore",
         created_by=created_by,
         note=f"v{target_revision}",

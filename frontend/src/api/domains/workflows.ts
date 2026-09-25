@@ -55,9 +55,15 @@ export function createWorkflow(body: {
   return api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function getWorkflow(workflowId: string): Promise<Workflow> {
+  return api<Workflow>(`/api/workflows/${workflowId}`);
+}
+
+/** 改名 / 改描述,或存整份图。**存整份图必须带底子**(读到的那份图的 graph_hash):
+ *  库里那份在这期间被别处改过就撞 409,而不是把别人的写入静默盖掉。 */
 export function updateWorkflow(
   workflowId: string,
-  body: { name?: string; description?: string; graph?: WorkflowGraph },
+  body: { name?: string; description?: string } | { graph: WorkflowGraph; base_graph_hash: string },
 ): Promise<Workflow> {
   return api<Workflow>(`/api/workflows/${workflowId}`, { method: "PATCH", body: JSON.stringify(body) });
 }

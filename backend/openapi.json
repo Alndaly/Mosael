@@ -31743,6 +31743,19 @@
               }
             ],
             "title": "Graph"
+          },
+          "base_graph_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Graph Hash"
           }
         },
         "type": "object",

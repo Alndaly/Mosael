@@ -19,6 +19,9 @@ class WorkflowUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=180)
     description: str | None = Field(default=None, max_length=2000)
     graph: dict | None = None
+    #: 这份图是在哪一份上改出来的(读到时的 `graph_hash`)。存整份图必须带:库里那份在这期间
+    #: 被别处改过就撞 409,而不是把别人的写入静默盖掉。只改名/描述时不需要。
+    base_graph_hash: str | None = Field(default=None, min_length=64, max_length=64)
 
 
 class WorkflowImportRequest(ApiModel):

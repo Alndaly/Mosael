@@ -44,6 +44,7 @@ from app.domain.workflows import (
 )
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.revisions import (
+    WorkflowGraphConflict,
     WorkflowRevisionError,
     get_workflow_revision,
     list_workflow_revisions,
@@ -327,9 +328,23 @@ def get_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Workflow:
 def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentUser) -> Workflow:
     workflow = _get(db, workflow_id)
     ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
-    changes = body.model_dump(exclude_unset=True)
+    changes = body.model_dump(exclude_unset=True, exclude={"base_graph_hash"})
     try:
-        return update_workflow(db, workflow, changes, source="edit", created_by=user.id)
+        return update_workflow(
+            db, workflow, changes, base_graph_hash=body.base_graph_hash, source="edit", created_by=user.id
+        )
+    except WorkflowGraphConflict as exc:
+        db.rollback()
+        # 和画板的 409 同一个形状(见 routes/boards):界面据此重载最新那份,而不是只弹一句报错。
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "workflow_graph_conflict",
+                "base_graph_hash": exc.base_graph_hash,
+                "current_graph_hash": exc.current_graph_hash,
+                "message": str(exc),
+            },
+        ) from exc
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 

@@ -65,7 +65,7 @@ import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { boardSettlementPatch, itemError, itemIsRunning, itemJobId, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
-import { createWriteQueue, sameCanvas } from "@/features/boards/boardProjection";
+import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -550,7 +550,7 @@ function BoardDetail({
   // only the token while leaving an older local canvas in place, or that stale canvas could pass CAS.
   const confirmedCanvas = React.useRef<Canvas>(board.canvas);
   //: 这张板上的写请求(自动保存、改名、生成、写字、念、截)排成一队,各自轮到时才读版本号 ——
-  //: 见 boardProjection.createWriteQueue。
+  //: 见 lib/optimisticWrites.createWriteQueue。
   const [serially] = React.useState(createWriteQueue);
   const acceptBoard = React.useCallback(
     (fresh: Board) => {
@@ -782,8 +782,8 @@ function BoardDetail({
       const fresh = await getBoard(board.id, workspaceId).catch(() => null);
       if (!fresh) return;
       const local = canvas ?? confirmedCanvas.current;
-      //: 按内容比,不按字段顺序(见 sameCanvas)—— 否则本地永远「有改动」,回执落地时不采用。
-      const hasLocalChanges = !sameCanvas(local, confirmedCanvas.current);
+      //: 按内容比,不按字段顺序(见 sameContent)—— 否则本地永远「有改动」,回执落地时不采用。
+      const hasLocalChanges = !sameContent(local, confirmedCanvas.current);
       // When the local projection is clean, adopt the complete server projection (including extra
       // multi-image results) and its token together. With local edits pending, show settled states
       // below but keep the old token so the next save correctly conflicts instead of overwriting.
@@ -846,7 +846,7 @@ function BoardDetail({
     (next: Canvas) =>
       //: 轮到它时再比、再读版本号:排在它前面的写请求可能刚把画布推进到这一份。
       serially(async () => {
-        if (sameCanvas(next, confirmedCanvas.current)) return;
+        if (sameContent(next, confirmedCanvas.current)) return;
         const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
         //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch)。
         const sent = new Map(next.items.map((item) => [item.id, item]));

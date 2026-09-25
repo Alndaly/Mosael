@@ -3806,6 +3806,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     # 工作流:选项来源、修订、AI 编排、JSON 校验
     "wfErr_unknownOptionSource": {"zh": "未知的选项来源:{source}", "en": "Unknown option source: {source}"},
+    "wfErr_graphConflict": {
+        "zh": "工作流已在别处更新,请载入最新内容后再改",
+        "en": "This workflow was changed somewhere else. Load the latest version and try again.",
+    },
+    "wfErr_graphBaseMissing": {
+        "zh": "保存整张工作流图时必须带上它所基于的版本(base_graph_hash)",
+        "en": "Saving a whole workflow graph requires the version it was based on (base_graph_hash).",
+    },
     "wfErr_revisionConcurrent": {
         "zh": "工作流在保存期间被连续修改，请重试",
         "en": "The workflow kept changing while it was being saved. Try again.",

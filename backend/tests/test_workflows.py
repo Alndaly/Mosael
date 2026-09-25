@@ -156,7 +156,7 @@ def test_workflow_crud_and_run() -> None:
 
     duplicated_start = linear_graph()
     duplicated_start["nodes"].append({"id": "start-2", "type": "start", "name": "开始 2", "config": {}})
-    bad = client.patch(f"/api/workflows/{workflow_id}", json={"graph": duplicated_start})
+    bad = client.patch(f"/api/workflows/{workflow_id}", json={"graph": duplicated_start, "base_graph_hash": created.json()["graph_hash"]})
     assert bad.status_code == 422
 
     types = client.get("/api/workflows/node-types").json()
@@ -185,7 +185,8 @@ def test_workflow_crud_and_run() -> None:
         assert "workflow.node.started" in types_seen
         assert "workflow.finished" in types_seen
 
-    empty = client.patch(f"/api/workflows/{workflow_id}", json={"graph": {"nodes": [], "edges": []}})
+    base = client.get(f"/api/workflows/{workflow_id}").json()["graph_hash"]
+    empty = client.patch(f"/api/workflows/{workflow_id}", json={"graph": {"nodes": [], "edges": []}, "base_graph_hash": base})
     assert empty.status_code == 200, empty.text
     blocked_run = client.post(f"/api/workflows/{workflow_id}/run", json={"params": {}})
     assert blocked_run.status_code == 422
@@ -209,13 +210,15 @@ def test_workflow_revisions_are_immutable_and_restore_appends() -> None:
     assert len(workflow["graph_hash"]) == 64
 
     # 相同内容和纯元数据修改不制造空修订。
-    same = client.patch(f"/api/workflows/{workflow['id']}", json={"name": "已改名", "graph": original})
+    same = client.patch(f"/api/workflows/{workflow['id']}", json={"name": "已改名", "graph": original, "base_graph_hash": workflow["graph_hash"]})
     assert same.status_code == 200, same.text
     assert same.json()["revision"] == 1
 
     edited = linear_graph()
     edited["nodes"][1]["config"]["template"] = "围绕 {{start.topic}} 写一句"
-    changed = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": edited})
+    changed = client.patch(
+        f"/api/workflows/{workflow['id']}", json={"graph": edited, "base_graph_hash": same.json()["graph_hash"]}
+    )
     assert changed.status_code == 200, changed.text
     assert changed.json()["revision"] == 2
 
@@ -259,7 +262,7 @@ def test_layout_autosave_persists_without_creating_an_execution_revision() -> No
     moved = deepcopy(original)
     moved["nodes"][0]["position"] = {"x": 480, "y": 320}
     moved["nodes"][1]["position"] = {"x": 840, "y": 320}
-    saved = client.patch(f"/api/workflows/{created['id']}", json={"graph": moved})
+    saved = client.patch(f"/api/workflows/{created['id']}", json={"graph": moved, "base_graph_hash": created["graph_hash"]})
     assert saved.status_code == 200, saved.text
     assert saved.json()["revision"] == 1
     assert saved.json()["graph"] == moved
@@ -278,7 +281,9 @@ def test_layout_autosave_persists_without_creating_an_execution_revision() -> No
 
     edited = deepcopy(moved)
     edited["nodes"][1]["config"]["template"] = "执行语义已经改变"
-    changed = client.patch(f"/api/workflows/{created['id']}", json={"graph": edited})
+    changed = client.patch(
+        f"/api/workflows/{created['id']}", json={"graph": edited, "base_graph_hash": saved.json()["graph_hash"]}
+    )
     assert changed.status_code == 200, changed.text
     assert changed.json()["revision"] == 2
 
@@ -318,7 +323,7 @@ def test_workflow_revision_history_returns_the_latest_bounded_window() -> None:
         for revision in range(2, total + 1):
             changed = linear_graph()
             changed["nodes"][1]["config"]["template"] = f"revision {revision}"
-            update_workflow(db, workflow, {"graph": changed})
+            update_workflow(db, workflow, {"graph": changed}, base_graph_hash=workflow.graph_hash)
 
         visible = list_workflow_revisions(db, workflow.id)
         assert len(visible) == WORKFLOW_REVISION_HISTORY_LIMIT
@@ -358,7 +363,7 @@ def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None
 
         after = linear_graph()
         after["nodes"][1]["config"]["template"] = "入队后"
-        update_workflow(db, workflow, {"graph": after})
+        update_workflow(db, workflow, {"graph": after}, base_graph_hash=workflow.graph_hash)
 
     target = pending["target"]
     assert callable(target)

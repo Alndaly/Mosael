@@ -89,9 +89,12 @@ def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) 
 
 
 def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
-    _workflow_in(db, workspace_id, payload)
+    workflow = _workflow_in(db, workspace_id, payload)
     if payload.get("graph") is not None:
         _check_graph(db, payload["graph"])
+        # 整份图是对着**开卡这一刻**的图审的:记下它的底子。批准之前用户又改过的话,执行时撞冲突,
+        # 而不是拿这份整图把用户刚做的改动静默盖掉(和界面自动保存同一道,见 update_workflow)。
+        payload["base_graph_hash"] = workflow.graph_hash
 
 
 def _summarize_update_workflow(db: Session, payload: dict[str, Any]) -> Summary:
@@ -113,6 +116,7 @@ def _execute_update_workflow(db: Session, confirmation: Any, actor: str | None) 
         db,
         workflow,
         {key: payload[key] for key in ("name", "description", "graph") if key in payload},
+        base_graph_hash=payload.get("base_graph_hash"),
         source="agent",
         created_by=actor,
     )
@@ -160,21 +164,20 @@ def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.db.models import Workflow
-    from app.domain.workflows import update_workflow
+    from app.domain.workflows import edit_workflow_graph
     from app.domain.workflows.graph_ops import apply_graph_ops
 
     workflow = db.get(Workflow, str(payload["workflow_id"]))
     assert workflow is not None
-    # Re-apply onto the CURRENT graph at approval time (not the request-time snapshot).
-    new_graph = apply_graph_ops(workflow.graph or {}, payload["operations"])
-    update_workflow(
+    # 算子落在**最新那份图**上(不是开卡时的快照),撞上并发写入就在新图上重做 —— 见 edit_workflow_graph。
+    edit_workflow_graph(
         db,
         workflow,
-        {"graph": new_graph},
+        lambda current: apply_graph_ops(current or {}, payload["operations"]),
         source="agent",
         created_by=actor,
     )
-    return {"workflow_id": workflow.id, "nodes": len(new_graph.get("nodes", []))}
+    return {"workflow_id": workflow.id, "nodes": len((workflow.graph or {}).get("nodes", []))}
 
 
 def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:

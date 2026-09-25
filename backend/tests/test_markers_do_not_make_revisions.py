@@ -21,6 +21,7 @@ def test_标记的增删改挪都不增版() -> None:
     graph = {"nodes": [{"id": "start", "type": "start", "config": {}}], "edges": []}
     workflow = client.post("/api/workflows", json={"workspace_id": ws, "name": "标记", "graph": graph}).json()
     revision = workflow["revision"]
+    base = workflow["graph_hash"]
 
     steps = []
     marked = copy.deepcopy(graph)
@@ -32,15 +33,17 @@ def test_标记的增删改挪都不增版() -> None:
     steps.append(copy.deepcopy(graph))  # 删掉
 
     for step in steps:
-        saved = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": step})
+        saved = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": step, "base_graph_hash": base})
         assert saved.status_code == 200, saved.text
         assert saved.json()["graph"].get("markers", []) == step.get("markers", []), "标记本身要存下来"
         assert saved.json()["revision"] == revision, "只动了标记,却多出一个执行版本"
+        base = saved.json()["graph_hash"]
 
     # 真改了执行内容,照样增版。
     changed = copy.deepcopy(graph)
     changed["nodes"][0]["config"] = {"params": {"topic": "猫"}}
-    assert client.patch(f"/api/workflows/{workflow['id']}", json={"graph": changed}).json()["revision"] == revision + 1
+    changed_saved = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": changed, "base_graph_hash": base})
+    assert changed_saved.json()["revision"] == revision + 1
 
     # 当前投影和最新修订仍然一致:能照常运行。
     run = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}})

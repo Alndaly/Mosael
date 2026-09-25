@@ -87,7 +87,7 @@ def test_reentrant_migration_preserves_and_repairs_the_current_revision() -> Non
             "edges": [],
         }
         response = client.patch(
-            f"/api/workflows/{workflow['id']}", json={"graph": graph}
+            f"/api/workflows/{workflow['id']}", json={"graph": graph, "base_graph_hash": workflow["graph_hash"]}
         )
         assert response.status_code == 200
         workflow = response.json()
@@ -96,7 +96,9 @@ def test_reentrant_migration_preserves_and_repairs_the_current_revision() -> Non
     # 布局会进入当前投影但不产生执行版本；启动迁移也必须理解这条边界。
     graph = json.loads(json.dumps(graph))
     graph["nodes"][0]["position"] = {"x": 640, "y": 360}
-    layout_saved = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": graph})
+    layout_saved = client.patch(
+        f"/api/workflows/{workflow['id']}", json={"graph": graph, "base_graph_hash": workflow["graph_hash"]}
+    )
     assert layout_saved.status_code == 200
     assert layout_saved.json()["revision"] == 3
 

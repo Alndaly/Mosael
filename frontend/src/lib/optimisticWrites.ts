@@ -1,16 +1,17 @@
 /**
- * 画板详情页手上那份画布(本地投影)和服务端那份之间的两条规矩。
+ * 编辑器手上那份文档(本地投影)和服务端那份之间的两条规矩。画板和工作流都是「整份快照 +
+ * 底子(base_revision / base_graph_hash)去 CAS」,同一套规矩只写一处。
  */
 
 /**
- * 两份画布是不是同一份 —— **按内容比,不按字段顺序**。
+ * 两份文档是不是同一份 —— **按内容比,不按字段顺序**。
  *
  * 服务端按 normalize 的顺序写每一项的字段(id、kind、x、y、width、height、text、form、color…),
  * 而本地的项是一路 `{...item, text}` 长出来的:新建之后才写字的便签,text 排在 color 后面。
  * 直接比 JSON 串的话,这两份永远「不一样」—— 轮询于是认定本地有没存的改动,回执落地时不采用
  * 服务端那份,接着那次补丁触发的自动保存带着旧版本号撞 409:每出一张图就弹一次「有冲突」。
  */
-export function sameCanvas(a: unknown, b: unknown): boolean {
+export function sameContent(a: unknown, b: unknown): boolean {
   return canonical(a) === canonical(b);
 }
 
@@ -23,7 +24,7 @@ function canonical(value: unknown): string {
 }
 
 /**
- * 一张板上的写请求排成一队:前一个回来、版本号推进之后,后一个才读版本号发出去。
+ * 同一份文档上的写请求排成一队:前一个回来、版本号推进之后,后一个才读版本号发出去。
  *
  * 每个写请求都带 base_revision 去 CAS。各发各的话,自动保存还在路上时点一下生成,两者带着
  * **同一个**旧版本号出门 —— 后到的那个必然 409:要么生成被挡回(用户以为没点中),要么

@@ -22,6 +22,7 @@ from app.domain.sequences.operations import EDIT_OP_KINDS
 
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import select
@@ -1845,39 +1846,79 @@ def create_workflow(
     return workflow
 
 
+def _checked_graph(db: Session, graph: Any) -> dict[str, Any]:
+    """落库前的同一道:规范化 + 校验(草稿级,允许缺配置、缺开始节点)。"""
+    from app.domain.workflows.normalization import normalize_graph
+
+    extra_types = _plugin_types(db)
+    normalized = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
+    errors = validate_graph(normalized, require_config=False, allow_missing_start=True, extra_types=extra_types)
+    if errors:
+        raise WorkflowDomainError("；".join(errors))
+    return normalized
+
+
 def update_workflow(
     db: Session,
     workflow: Workflow,
     changes: dict[str, Any],
     *,
+    base_graph_hash: str | None = None,
     source: str = "edit",
     created_by: str | None = None,
     revision_note: str = "",
 ) -> Workflow:
+    """改名、改描述、存整份图。
+
+    **存整份图必须带底子**(`base_graph_hash`,调用方读到的那份图的摘要):整份快照不知道别人
+    刚改了什么,底子对不上就撞 `WorkflowGraphConflict`,而不是把别人的写入静默盖掉。
+    只改自己那一处的写入走 `edit_workflow_graph`。
+    """
+    from app.domain.workflows.revisions import commit_graph_revision, replace_graph
+
     graph = changes.get("graph")
-    if "graph" in changes and changes["graph"] is not None:
-        from app.domain.workflows.normalization import normalize_graph
-
-        extra_types = _plugin_types(db)
-        graph = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
-        errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=extra_types)
-        if errors:
-            raise WorkflowDomainError("；".join(errors))
-    if changes.get("name"):
-        workflow.name = changes["name"]
-    if changes.get("description") is not None:
-        workflow.description = changes["description"]
     if graph is not None:
-        from app.domain.workflows.revisions import commit_graph_revision
-
+        if base_graph_hash is None:
+            raise WorkflowDomainError("wfErr_graphBaseMissing")
+        # 图先落:撞了冲突时名字和描述也一起不动,不留半次写入。
         commit_graph_revision(
             db,
             workflow,
-            graph,
+            replace_graph(_checked_graph(db, graph), base_graph_hash=base_graph_hash),
             source=source,
             created_by=created_by,
             note=revision_note,
         )
+    if changes.get("name"):
+        workflow.name = changes["name"]
+    if changes.get("description") is not None:
+        workflow.description = changes["description"]
+    db.commit()
+    db.refresh(workflow)
+    return workflow
+
+
+def edit_workflow_graph(
+    db: Session,
+    workflow: Workflow,
+    change: Callable[[dict[str, Any]], dict[str, Any]],
+    *,
+    source: str,
+    created_by: str | None = None,
+) -> Workflow:
+    """只改图里自己那一处(按算子改图):落在**最新那份图**上,撞上并发写入就重读再合。
+
+    和画板的 `_merge_into_latest` 同一条 —— 从最新那份出发重做一遍,不会盖掉任何人。
+    """
+    from app.domain.workflows.revisions import commit_graph_revision
+
+    commit_graph_revision(
+        db,
+        workflow,
+        lambda current: _checked_graph(db, change(current)),
+        source=source,
+        created_by=created_by,
+    )
     db.commit()
     db.refresh(workflow)
     return workflow

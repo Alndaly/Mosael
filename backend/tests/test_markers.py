@@ -82,6 +82,6 @@ def test_workflow_graph_carries_markers_without_them_becoming_nodes():
     assert [node["id"] for node in wf["graph"]["nodes"]] == ["start"]
 
     graph["markers"].append({"id": "m2", "x": 0, "y": 0, "shortcut": "mod+alt+2"})
-    r = c.patch(f"/api/workflows/{wf['id']}", json={"graph": graph})
+    r = c.patch(f"/api/workflows/{wf['id']}", json={"graph": graph, "base_graph_hash": wf["graph_hash"]})
     assert r.status_code == 422, r.text
     assert "Mod+Alt+2" in r.text

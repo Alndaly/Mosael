@@ -12213,6 +12213,8 @@ export interface components {
             graph?: {
                 [key: string]: unknown;
             } | null;
+            /** Base Graph Hash */
+            base_graph_hash?: string | null;
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {

@@ -109,7 +109,7 @@ def test_self_recursion_is_rejected() -> None:
         for node in graph["nodes"]:
             if node["id"] == "call":
                 node["config"]["workflow_id"] = wf_id  # 指向自己
-        update_workflow(db, wf, {"graph": graph})
+        update_workflow(db, wf, {"graph": graph}, base_graph_hash=wf.graph_hash)
 
     status, _result, err, _ = _run(wf_id)
     assert status == "failed"
