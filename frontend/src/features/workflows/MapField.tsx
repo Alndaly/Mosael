@@ -42,12 +42,16 @@ export function rowsFromObject(value: unknown): MapRow[] {
  *
  * 值尽量还原成原本的类型:`3` 存成数字而不是字符串 `"3"`。带 {{}} 的一律当字符串 ——
  * 那是模板,要留给引擎去插值。
+ *
+ * **同名的行,先出现的那行算数。** 同名几乎总是「正在敲一个以已有名字开头的新名字」的中间态
+ * (已有 topic,正敲 topic_en,敲到 topic 那一下),让后面那行顶掉的话,存下去的是已有那行
+ * 被清空的值。
  */
 export function objectFromRows(rows: MapRow[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const row of rows) {
     const key = row.key.trim();
-    if (!key) continue;
+    if (!key || key in out) continue;
     const text = row.value;
     if (text.includes("{{")) {
       out[key] = text;
@@ -74,14 +78,17 @@ export function MapField({
   keyPlaceholder?: string;
 }) {
   const t = useI18n();
-  // 本地保留行,因为「名字敲了一半、值还空着」在对象里根本表示不出来 —— 只按对象渲染的话,
-  // 每敲一个字符行就会被重建,光标跳走。
+  // 本地保留行,因为「名字敲了一半、值还空着」「两行暂时同名」在对象里根本表示不出来 ——
+  // 只按对象渲染的话,每敲一个字符行就会被重建,光标跳走、撞名的那行直接消失。
   const [rows, setRows] = React.useState<MapRow[]>(() => rowsFromObject(value));
-  const emitted = React.useRef(JSON.stringify(rowsFromObject(value)));
+  //: 最后一次发出去的**对象**。比较在对象这一层做:行 → 对象是有损的(空名字的行、同名的行、
+  //: 名字两头的空格都会在这一步合并掉),拿对象还原出的行去和本地行比,自己发出去的那一版
+  //: 就会被错认成「外面改的」,于是本地行被整份换掉。
+  const emitted = React.useRef(JSON.stringify(objectFromRows(rowsFromObject(value))));
 
   // 外面改了(撤销、智能体改图)才跟;自己发出去的那一版不跟,否则打字会被回流打断。
   React.useEffect(() => {
-    const incoming = JSON.stringify(rowsFromObject(value));
+    const incoming = JSON.stringify(objectFromRows(rowsFromObject(value)));
     if (incoming === emitted.current) return;
     emitted.current = incoming;
     setRows(rowsFromObject(value));
@@ -89,8 +96,9 @@ export function MapField({
 
   const push = (next: MapRow[]) => {
     setRows(next);
-    emitted.current = JSON.stringify(next.filter((row) => row.key.trim()));
-    onChange(objectFromRows(next));
+    const object = objectFromRows(next);
+    emitted.current = JSON.stringify(object);
+    onChange(object);
   };
 
   /* 存进去的是 `{{source_video.asset_id}}`(那是要交给引擎插值的模板),但**屏幕上不摆花括号**:

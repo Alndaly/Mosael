@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { messages } from "@/app/messages";
@@ -40,5 +40,44 @@ describe("具名输出的「值或上游输出」", () => {
     for (const ref of variables) {
       expect(container.textContent, `${ref} 不该在面板上另列一遍`).not.toContain(ref.replace(/[{}]/g, ""));
     }
+  });
+});
+
+describe("在面板里敲名字", () => {
+  beforeAll(() => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  });
+
+  /** 和检查器一样受控:每次变更都经对象存回去,再作为 value 传回来。 */
+  function Controlled({ initial, onSaved }: { initial: Record<string, unknown>; onSaved: (value: Record<string, unknown>) => void }) {
+    const [value, setValue] = React.useState(initial);
+    return (
+      <MapField
+        value={value}
+        variables={variables}
+        onChange={(next) => {
+          setValue(next);
+          onSaved(next);
+        }}
+      />
+    );
+  }
+
+  //: 已有一行 topic,新加一行想叫 topic_en —— 敲到 "topic" 那一下两行同名,对象里只剩一个键。
+  //: 此前组件拿「对象还原出来的行」去和本地行比,认定是外面改了,把本地行整个换掉:
+  //: 原来那行的值被新行的空值顶掉,新行消失,光标所在的输入框也跟着没了。
+  it("敲到和已有的名字撞上时,已有那行和正在敲的这行都还在", () => {
+    const saved: Array<Record<string, unknown>> = [];
+    render(<Controlled initial={{ topic: "{{llm-1.text}}" }} onSaved={(value) => saved.push(value)} />);
+    fireEvent.click(screen.getByRole("button", { name: zh.wfMapAdd }));
+    const typing = () => screen.getAllByPlaceholderText(zh.wfMapKey)[1] as HTMLInputElement;
+    for (const key of ["t", "to", "top", "topi", "topic", "topic_", "topic_e", "topic_en"]) {
+      fireEvent.change(typing(), { target: { value: key } });
+      expect(screen.getAllByPlaceholderText(zh.wfMapKey), `敲到 "${key}" 时`).toHaveLength(2);
+    }
+    expect(typing().value).toBe("topic_en");
+    expect(saved.at(-1)).toEqual({ topic: "{{llm-1.text}}", topic_en: "" });
+    // 撞名的那一瞬间存下去的也不能丢掉已有那行的值。
+    expect(saved.every((value) => value.topic === "{{llm-1.text}}")).toBe(true);
   });
 });
