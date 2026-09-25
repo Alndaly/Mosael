@@ -853,18 +853,29 @@ def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[
         raise WorkflowDomainError("wfErr_assetNotInWorkspace")
     media_info = asset.media_info or {}
 
-    def number(name: str, default: float) -> float:
-        try:
-            return float(media_info.get(name) or default)
-        except (TypeError, ValueError):
-            return default
+    def number(name: str) -> float | None:
+        """素材自己的那个数;**不知道就是 None**。
 
+        此前缺了就交 1920×1080、30fps、0 秒 —— 音频本来就没有画面尺寸,探测失败的视频什么都
+        没有,而下游拿着编出来的数建项目、放时间线(0 秒的结尾点直接把片段放没了)。缺省是
+        下游各自的事:建项目有它的画布缺省,放上时间线会去读素材真实的时长。
+        """
+        value = media_info.get(name)
+        if isinstance(value, bool) or value in (None, ""):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number > 0 else None
+
+    width, height = number("width"), number("height")
     return {
         "asset_id": asset.id,
         "name": asset.name,
         "kind": asset.kind,
-        "duration": number("duration", 0.0),
-        "width": int(number("width", 1920)),
-        "height": int(number("height", 1080)),
-        "fps": number("fps", 30.0),
+        "duration": number("duration"),
+        "width": int(width) if width is not None else None,
+        "height": int(height) if height is not None else None,
+        "fps": number("fps"),
     }

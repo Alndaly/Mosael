@@ -203,3 +203,28 @@ def test_every_new_node_type_is_registered_and_executable() -> None:
     for node_type in ("asset_tag", "asset_update", "project_create"):
         assert node_type in NODE_TYPES, f"{node_type} missing from the palette"
         assert node_type in registered_types(), f"{node_type} has no executor"
+
+
+def test_素材节点不编造尺寸和帧率() -> None:
+    """素材缺尺寸 / 帧率(音频本来就没有,探测失败的视频也没有)时,此前节点交出 1920×1080、
+    30fps、0 秒 —— 下游拿着编出来的数建项目、算时长,而用户以为那是素材本来的样子。
+    不知道就说不知道:交 None,下游各自按自己的缺省处理(建项目有它的画布缺省,放上时间线
+    会去读素材真实的时长)。"""
+    from app.domain.workflows.executors.subjobs import asset_node
+
+    workflow_id, _, workspace_id = _setup()
+    with SessionLocal() as db:
+        audio = Asset(workspace_id=workspace_id, name="配乐", kind="audio", media_info={"duration": 12.5})
+        bare = Asset(workspace_id=workspace_id, name="没探测", kind="video", media_info={})
+        video = Asset(workspace_id=workspace_id, name="成片", kind="video",
+                      media_info={"duration": 3.0, "width": 720, "height": 1280, "fps": 25})
+        db.add_all([audio, bare, video])
+        db.commit()
+        ids = audio.id, bare.id, video.id
+
+    out = _run(asset_node, workflow_id, {"asset_id": ids[0]})
+    assert (out["duration"], out["width"], out["height"], out["fps"]) == (12.5, None, None, None)
+    out = _run(asset_node, workflow_id, {"asset_id": ids[1]})
+    assert (out["duration"], out["width"], out["height"], out["fps"]) == (None, None, None, None)
+    out = _run(asset_node, workflow_id, {"asset_id": ids[2]})
+    assert (out["duration"], out["width"], out["height"], out["fps"]) == (3.0, 720, 1280, 25.0)
