@@ -63,7 +63,7 @@ import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas"
 import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
-import { boardSettlementPatch, itemError, itemIsRunning, itemJobId, serverOwnedPatch } from "@/features/boards/boardItemState";
+import { boardSettlementPatch, itemIsRunning, itemJobId, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
@@ -799,17 +799,15 @@ function BoardDetail({
         //: 整项没了(比如别处把它删了):没什么可等的了。
         if (!item) {
           settled.push(id);
-        } else if (item.asset_id) {
-          //: 产出到了:服务端返回 asset_id 与终态 run，整组写回，避免本地继续显示运行中。
-          api?.patch(id, boardSettlementPatch(item) ?? {});
-          settled.push(id);
-        } else if (itemError(item)) {
-          //: **跑挂了也要落到画布上。** 此前这里只把 id 从「还在等」的名单里划掉,却没告诉
-          //: 画布 —— 而画布的节点只在挂载时从 canvas 建一次,那一格于是会一直保留 running:
-          //: 框里持续转圈,底下那个提交按钮也一直按不动。
-          api?.patch(id, boardSettlementPatch(item) ?? {});
-          settled.push(id);
+          continue;
         }
+        //: 服务端那一格不在跑了(产出到了、跑挂了、被取消):整组写回本地。**跑挂了也要落到画布
+        //: 上** —— 画布的节点只在挂载时从 canvas 建一次,不告诉它的话那一格一直保留 running:
+        //: 框里持续转圈,底下那个提交按钮也一直按不动。
+        const patch = boardSettlementPatch(item);
+        if (!patch) continue;
+        api?.patch(id, patch);
+        settled.push(id);
       }
       if (settled.length) setRunning((current) => current.filter((id) => !settled.includes(id)));
     }, 2500);

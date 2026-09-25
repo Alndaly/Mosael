@@ -418,3 +418,23 @@ def test_引用的文档删掉之后_复制那一格不会让整张板存不下(
     })
 
     assert saved.status_code == 200, saved.text
+
+
+def test_成功结束却没交回产出_失败原因不是任务状态() -> None:
+    """任务成功结束、结果里一份产出都没有:格子落成「失败」,原因要说的是「没有产出」——
+    此前原因拿任务状态顶上,格子上写着失败原因「succeeded」。"""
+    from app.core.i18n import t
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _board(client, ws, {
+        "items": [{"id": "img", "kind": "image", "x": 0, "y": 0, "run": {"status": "running", "job_id": "job-1"}}],
+        "edges": [],
+    })
+
+    _deliver(board_id, "img", SimpleNamespace(id="job-1", status="succeeded", result={"asset_ids": []}, error=""))
+
+    run = _canvas(client, ws, board_id)["items"][0]["run"]
+    assert run["status"] == "failed"
+    assert run.get("error") == t("boardErr_noOutput"), run
+

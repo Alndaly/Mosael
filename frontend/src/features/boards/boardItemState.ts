@@ -51,8 +51,15 @@ export function serverOwnedPatch(sent: BoardItem, stored: BoardItem): Partial<Bo
   return same ? null : { run: stored.run, asset_id: stored.asset_id };
 }
 
-/** 服务端轮询到终态后写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。 */
+/**
+ * 服务端轮询到的这一格已经不在跑了:写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。
+ *
+ * **按状态认「跑完了」,不按有没有失败原因。** 原因可以没有(任务失败时没留下话、被取消),
+ * 此前按原因认,服务端只好拿状态名顶一个原因上去,格子上的失败原因于是写着「succeeded」。
+ * 还在跑就回 null。
+ */
 export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null {
+  if (itemIsRunning(item)) return null;
   if (item.asset_id) {
     return {
       asset_id: item.asset_id,
@@ -60,13 +67,7 @@ export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null
       run: item.run ?? { status: "succeeded" },
     };
   }
-  const error = itemError(item);
-  if (error) {
-    return {
-      run: item.run ?? { status: "failed", error },
-    };
-  }
-  return null;
+  return { run: item.run };
 }
 
 /**

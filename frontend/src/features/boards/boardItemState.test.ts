@@ -45,4 +45,14 @@ describe("终态轮询补丁", () => {
     });
     expect(boardSettlementPatch(item)).toMatchObject({ asset_id: "asset-1", form: item.form });
   });
+
+  it("按状态认「跑完了」:没留下原因的失败、被取消,同样落回画布", () => {
+    // 服务端不再拿状态名顶替原因 —— 原因可以没有,那一格照样要停下转圈。
+    expect(boardSettlementPatch(image({ run: { status: "failed" } }))).toEqual({ run: { status: "failed" } });
+    expect(boardSettlementPatch(image({ run: { status: "cancelled" } }))).toEqual({ run: { status: "cancelled" } });
+  });
+
+  it("还在跑的那一格不出补丁", () => {
+    expect(boardSettlementPatch(image({ run: { status: "running", job_id: "job-1" } }))).toBeNull();
+  });
 });

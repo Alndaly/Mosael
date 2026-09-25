@@ -26,7 +26,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, tr
 from app.db.models import Board, now
 
 
@@ -802,8 +802,7 @@ def _canvas_with_delivered_result(
     item_id: str,
     job_id: str,
     asset_ids: list[str],
-    job_status: str,
-    job_error: str,
+    reason: str,
     cancelled: bool,
 ) -> dict[str, Any]:
     """Merge one asynchronous receipt into the newest board projection.
@@ -826,16 +825,12 @@ def _canvas_with_delivered_result(
             # 此前是整项删掉。那让画布上的框凭空消失,连同用户刚写的提示词 —— 而他要做的
             # 下一件事十有八九是"改一个字再来一次"。留着才能重来;原因写在上面,他也不必
             # 去任务中心翻一遍才知道为什么。
-            kept.append(
-                {
-                    **item,
-                    "run": {
-                        "status": "cancelled" if cancelled else "failed",
-                        #: 「生成失败」这句话由界面说；这里只存真正原因。
-                        "error": job_error[:300] or job_status,
-                    },
-                }
-            )
+            #: 「生成失败」这句话由界面说;这里只存**真正的原因**,没有就不写。此前没原因时拿任务
+            #: 状态顶上 —— 一个成功结束却没交回产出的任务,格子上的失败原因就成了「succeeded」。
+            run = {"status": "cancelled" if cancelled else "failed"}
+            if reason.strip():
+                run["error"] = reason.strip()[:300]
+            kept.append({**item, "run": run})
             continue
         settled = dict(item)
         # 成功结束一次编辑周期：提示词和引用素材已经被消费，保留模型/参数方便继续同风格创作。
@@ -898,7 +893,6 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
         return
 
     job_status = str(job.status)
-    job_error = str(getattr(job, "error", "") or "")
     actor_id = getattr(job, "created_by", None)
     #: **两种形状都要读。** 生成任务一次可能出多张,给的是 asset_ids;语音合成一次只出一段,
     #: 给的是 asset_id —— 这不是新旧兼容,是两种任务本来就不同。
@@ -906,6 +900,9 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     asset_ids = [str(one) for one in (result.get("asset_ids") or []) if one]
     if not asset_ids and result.get("asset_id"):
         asset_ids = [str(result["asset_id"])]
+    #: 这一格为什么没拿到产出。任务成功结束却什么都没交回,原因就是这句话本身 —— 任务那一侧
+    #: 没有 error 可给;失败/取消用任务自己记下的原因。
+    reason = tr("boardErr_noOutput") if job_status == "succeeded" else str(getattr(job, "error", "") or "")
 
     board = db.get(Board, board_id)
     if board is None:
@@ -915,8 +912,8 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
         workspace_id=board.workspace_id,
         board_id=board.id,
         merge=lambda canvas: _canvas_with_delivered_result(
-            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, job_status=job_status,
-            job_error=job_error, cancelled=was_cancelled(job),
+            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, reason=reason,
+            cancelled=was_cancelled(job),
         ),
         actor_id=actor_id,
     )

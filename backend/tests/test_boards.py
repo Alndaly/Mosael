@@ -422,8 +422,9 @@ def test_任务失败时留着这一项并写上原因() -> None:
     assert failed["form"]["source_assets"], "失败后参考素材不能消失"
 
 
-def test_任务失败但没留下原因时不写空() -> None:
-    """空的 error 会被 normalize 丢掉,于是那一项看起来又像个没开始的空槽。"""
+def test_任务失败但没留下原因时不编一个原因() -> None:
+    """「跑挂了」由 run.status 说,不靠 error 在不在 —— 没留下原因就不写原因。此前拿任务状态
+    顶上,格子上的失败原因写着「failed」(成功却没产出的写着「succeeded」)。"""
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
@@ -439,7 +440,7 @@ def test_任务失败但没留下原因时不写空() -> None:
     items = db.get(Board, board_id).canvas["items"]
     db.close()
 
-    assert items[0]["run"] == {"status": "failed", "error": "failed"}
+    assert items[0]["run"] == {"status": "failed"}
 
 
 def test_跑挂了也留着连进来的那条线() -> None:
