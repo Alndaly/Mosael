@@ -12,9 +12,9 @@ from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
-from app.db.models import Asset, Job, Transcript, Project
+from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
-from app.domain.assets import delete_asset_with_clips, import_uploaded_asset, register_file_asset
+from app.domain.assets import asset_project, delete_asset_with_clips, import_uploaded_asset, register_file_asset
 from app.domain.assets.proxies import start_proxy_job
 from app.domain.assets.source_url import find_transcript_by_source
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
@@ -50,7 +50,7 @@ def url_support(
 @router.post("/assets", response_model=AssetOut)
 def create_asset(body: AssetCreate, db: DbSession, user: CurrentUser) -> Asset:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    asset = Asset(**body.model_dump())
+    asset = Asset(**{**body.model_dump(), "project_id": asset_project(db, body.workspace_id, body.project_id)})
     db.add(asset)
     db.commit()
     db.refresh(asset)
@@ -246,15 +246,9 @@ def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentU
                 cleaned.append(value)
         asset.tags = cleaned
     if body.project_id is not None:
-        target = body.project_id.strip()
-        if target:
-            project = db.get(Project, target)
-            # 跨工作区归档会让素材从原工作区消失 —— 拒绝而不是静默照做。
-            if project is None or project.workspace_id != asset.workspace_id:
-                raise HTTPException(status_code=422, detail=tr("routeErr_projectNotInWorkspace"))
-            asset.project_id = project.id
-        else:
-            asset.project_id = None  # 空串 = 移出项目
+        # 跨工作区归档会让素材从原工作区消失 —— 拒绝而不是静默照做(见 assets/project_scope);
+        # 空串 = 移出项目。
+        asset.project_id = asset_project(db, asset.workspace_id, body.project_id)
     db.commit()
     db.refresh(asset)
     return asset

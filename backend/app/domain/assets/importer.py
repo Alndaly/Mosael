@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, new_id
+from app.domain.assets.project_scope import asset_project
 from app.media.paths import asset_dir, asset_key, resolve_key
 from app.media.probe import guess_kind, probe_media, remux_in_place, repackage_as_mp4
 from app.domain.assets.proxies import start_proxy_job
@@ -152,7 +153,10 @@ def _import_stream(
     `Asset(**body)` 建行,底下没有文件,也就没有探测、缩略图、波形和 proxy。全仓只有测试在调它
     (前端、智能体、扩展都不用),它同时也是数据归属棘轮那 11 处豁免之一。要么让它走这里,
     要么删掉 —— 在那之前,这句话得说全,否则下一个人会以为拿到 Asset 就一定有这些派生物。
+
+    挂到哪个项目在**落盘之前**就判(见 project_scope):拒了的导入不该在磁盘上留下文件。
     """
+    project_id = asset_project(db, workspace_id, project_id)
     asset_id = new_id()
     target_dir = asset_dir(workspace_id, asset_id)
     target_dir.mkdir(parents=True, exist_ok=True)

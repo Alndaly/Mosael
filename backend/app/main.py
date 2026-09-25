@@ -67,6 +67,7 @@ from app.db.migrations import init_db
 logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
+from app.domain.assets import AssetProjectError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes import SceneDomainError
 from app.domain.blender.bridge import BlenderDomainError
@@ -191,6 +192,12 @@ def _install_permission_handlers(app: FastAPI) -> None:
         引用的文档、工作流知识节点要读它。收在边界,那些调用方就不必反过来 catch
         HTTPException 再翻回自己的领域错误。
         """
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(AssetProjectError)
+    async def _asset_project_error(_request: Request, exc: AssetProjectError) -> JSONResponse:
+        """素材要挂的项目不在这个工作区。入库有十几个入口(上传、按路径、从链接、插件交回的
+        文件……),判断收在 assets/project_scope 一处,翻成 422 也收在这一处。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(SceneDomainError)

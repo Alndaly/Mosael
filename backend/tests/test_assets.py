@@ -105,3 +105,47 @@ def test_update_asset_rejects_a_project_from_another_workspace() -> None:
     denied = client.patch(f"/api/assets/{asset['id']}", json={"project_id": elsewhere["id"]})
     assert denied.status_code == 422, denied.text
     assert client.get(f"/api/assets/{asset['id']}").json()["project_id"] is None
+
+
+def test_导入时挂到别的工作区的项目_同样拒绝() -> None:
+    """改归档那条路拦着跨工作区的项目,导入这条路没拦:`POST /assets/import` 带上别的工作区的
+    project_id,素材就挂在了一个别人的项目下 —— 在自己工作区的项目列表里看不见,在别人的
+    项目里却能按 project_id 查到。入库有一个唯一的实现(importer._import_stream),在那里
+    拦一次,所有入口(上传、按路径注册、渲染 / 配音 / 生成的产出)都跟着拦住。"""
+    import pytest
+
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+    from app.domain.assets import import_binary_asset
+    from app.domain.assets import AssetProjectError
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    other_ws = client.post("/api/workspaces", json={"name": "别处"}).json()
+    elsewhere = client.post("/api/projects", json={"workspace_id": other_ws["id"], "name": "别处的"}).json()
+    mine = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "自己的"}).json()
+
+    denied = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"], "project_id": elsewhere["id"]},
+        files={"file": ("photo.heic", TINY_HEIC, "image/heic")},
+    )
+    assert denied.status_code == 422, denied.text
+    with SessionLocal() as db:
+        with pytest.raises(AssetProjectError):
+            import_binary_asset(db, workspace_id=ws["id"], project_id=elsewhere["id"], data=TINY_HEIC, original="a.heic")
+        assert db.query(Asset).filter_by(workspace_id=ws["id"]).count() == 0
+
+    kept = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"], "project_id": mine["id"]},
+        files={"file": ("photo.heic", TINY_HEIC, "image/heic")},
+    )
+    assert kept.status_code == 200, kept.text
+    assert kept.json()["project_id"] == mine["id"]
+
+    created = client.post(
+        "/api/assets",
+        json={"workspace_id": ws["id"], "project_id": elsewhere["id"], "kind": "video", "name": "x"},
+    )
+    assert created.status_code == 422, created.text

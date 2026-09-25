@@ -418,7 +418,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "不支持的文件类型:{suffix}",
         "en": "Unsupported file type: {suffix}",
     },
-    "routeErr_projectNotInWorkspace": {
+    "assetErr_projectNotInWorkspace": {
         "zh": "项目不存在或不属于该工作区",
         "en": "The project doesn't exist or isn't in this workspace.",
     },
