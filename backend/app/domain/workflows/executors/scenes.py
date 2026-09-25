@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Scene3D, Workflow
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
+from app.domain.workflows.executors.common import id_list
 
 
 def _layout(value: Any) -> dict[str, Any]:
@@ -65,7 +66,8 @@ def scene_props(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     from app.domain.scene_render.model_mesh import read_model, UnsupportedModel
     from app.domain.scenes import list_models, model_file
 
-    wanted = [one.strip() for one in str(config.get("model_ids") or "").split(",") if one.strip()]
+    # 逗号串(选择器存的)或列表(整串引用上游输出)都合法 —— 和素材 id 同一份解析。
+    wanted = id_list(config.get("model_ids"))
     available = {model.id: model for model in list_models(db, workflow.workspace_id)}
     chosen: list[Scene3DModel] = ([available[one] for one in wanted if one in available]
                                   if wanted else list(available.values()))

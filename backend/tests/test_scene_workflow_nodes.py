@@ -145,6 +145,18 @@ class Test可用的3D道具:
         picked = _run("scene_props", workflow, {"model_ids": first})
         assert picked["model_ids"] == [first] and "道具乙" not in picked["catalog"]
 
+    def test_勾选也可以是上游交来的一列_id(self, tmp_path) -> None:
+        """model_ids 是模板字段,整串引用上游(`{{筛选.model_ids}}`)时插值保留列表原样。
+
+        此前按字符串拆逗号:列表被 str() 成 `['…']`,一个都对不上,清单里只剩一句
+        "指定的模型不在这个工作区里" —— 而它们明明就在。
+        """
+        workflow = _workflow()
+        first = _import_glb(workflow.workspace_id, "道具甲", tmp_path)
+        _import_glb(workflow.workspace_id, "道具乙", tmp_path)
+        picked = _run("scene_props", workflow, {"model_ids": [first]})
+        assert picked["model_ids"] == [first], picked["catalog"]
+
     def test_一件都没有时明说_而不是交一份空白(self) -> None:
         # 空白清单会让布景师以为自己漏看了什么。说清楚"这次只用基本体"。
         out = _run("scene_props", _workflow(), {"model_ids": ""})
