@@ -345,6 +345,20 @@ def test_任务在占位落下之前就结束了_产出照样落回这一格(mon
     assert item["run"] == {"status": "succeeded"}, "任务早就结束了,这一格还挂着「在跑」"
 
 
+def test_在任务中心取消的那一格落成已取消_而不是生成失败() -> None:
+    """任务总线把「被取消」记成 failed + jobErr_cancelled(没有单独的 cancelled 状态)。回执只看
+    status,于是用户自己取消的那一格挂着红色的「生成失败」—— 节点明明有「已取消」这个样子。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = _live_board(client, ws)
+
+    _deliver(board_id, "img", SimpleNamespace(
+        id="job-1", status="failed", result=None, error="已取消", error_key="jobErr_cancelled",
+    ))
+
+    assert _canvas(client, ws, board_id)["items"][0]["run"]["status"] == "cancelled"
+
+
 def test_不是这一轮的回执不动这一格() -> None:
     """回执只收**它自己那一轮**。这是上一条(占位与回执谁先谁后都一样)的前提:占位之前到的回执,
     那一格还不是这一轮,就不该动它 —— 否则它先填一遍、占位落下后补送再填一遍。

@@ -22,6 +22,16 @@ logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("succeeded", "failed")
 
+
+def was_cancelled(job: Any) -> bool:
+    """这个任务是不是被人取消的。
+
+    总线把「被取消」记成 failed + jobErr_cancelled(见 _cancel_job_row),没有单独的状态。
+    对外要分开说的地方(外部钩子、画板上那一格)都问这一处 —— 各自判一遍的话,哪天取消换了
+    记法,漏改的那一处就把「我自己停掉的」说成「跑挂了」。
+    """
+    return getattr(job, "status", None) == "failed" and getattr(job, "error_key", None) == "jobErr_cancelled"
+
 # 「当前正在执行的父任务」:之后 create_job 建出来的任务,都挂在它下面(ADR-0018)。
 #
 # 两个来源,强弱不同:

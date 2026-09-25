@@ -20,7 +20,7 @@ from app.api.deps import DbSession
 from app.api.schemas import JobOut
 from app.core.i18n import tr
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun
-from app.domain.jobs import JobError, cancel_job
+from app.domain.jobs import JobError, cancel_job, was_cancelled
 from app.domain.scheduler import SchedulerDomainError, trigger_scheduled_task
 from app.api.schemas.base import ApiModel
 
@@ -68,7 +68,7 @@ def _out(db, run: ScheduledTaskRun) -> HookRunOut:
     shown = JobOut.model_validate(job)  # 按请求语言渲染 message / error(见 JobOut)
     # 任务系统把「被取消」记成 failed + jobErr_cancelled。对外单列成 cancelled:调用方对
     # 「我自己停掉的」和「跑挂了」该做的事不一样(后者要报警、要重试)。
-    status = "cancelled" if job.status == "failed" and job.error_key == "jobErr_cancelled" else job.status
+    status = "cancelled" if was_cancelled(job) else job.status
     return HookRunOut(
         run_id=run.id, job_id=job.id, status=status, progress=job.progress or 0,
         message=shown.message, error=shown.error, result=job.result or {},

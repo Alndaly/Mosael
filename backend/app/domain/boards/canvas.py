@@ -804,6 +804,7 @@ def _canvas_with_delivered_result(
     asset_ids: list[str],
     job_status: str,
     job_error: str,
+    cancelled: bool,
 ) -> dict[str, Any]:
     """Merge one asynchronous receipt into the newest board projection.
 
@@ -829,7 +830,7 @@ def _canvas_with_delivered_result(
                 {
                     **item,
                     "run": {
-                        "status": "cancelled" if job_status == "cancelled" else "failed",
+                        "status": "cancelled" if cancelled else "failed",
                         #: 「生成失败」这句话由界面说；这里只存真正原因。
                         "error": job_error[:300] or job_status,
                     },
@@ -889,6 +890,8 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     **回执也遵守乐观并发。** 用户可能在任务完成的同一刻移动节点；冲突时重新读取最新画布，
     只把任务终态合并进去再 CAS，既不覆盖用户编辑，也不让已完成的结果丢失。
     """
+    from app.domain.jobs import was_cancelled
+
     board_id = str(receipt.get("board_id") or "")
     item_id = str(receipt.get("item_id") or "")
     if not board_id or not item_id:
@@ -912,7 +915,8 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
         workspace_id=board.workspace_id,
         board_id=board.id,
         merge=lambda canvas: _canvas_with_delivered_result(
-            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, job_status=job_status, job_error=job_error
+            canvas, item_id=item_id, job_id=str(job.id), asset_ids=asset_ids, job_status=job_status,
+            job_error=job_error, cancelled=was_cancelled(job),
         ),
         actor_id=actor_id,
     )
