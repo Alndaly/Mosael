@@ -134,3 +134,96 @@ it("复制粘贴一组节点:组内的 {{引用}} 跟着换成新节点,组外�
   // 原件原样不动。
   expect(graph.nodes.find((node) => node.id === "template-1")?.config).toEqual(CHAIN.nodes[2].config);
 });
+
+const LOOPED: WorkflowGraph = {
+  nodes: [
+    { id: "start", type: "start", position: { x: 0, y: 0 }, config: {} },
+    {
+      id: "loop-1",
+      type: "loop_foreach",
+      position: { x: 200, y: 0 },
+      config: {
+        items: "{{start.list}}",
+        output: "",
+        body: {
+          nodes: [{ id: "template-1", type: "template", name: "体内", position: { x: 0, y: 0 }, config: { template: "{{loop.item}}" } }],
+          edges: [],
+        },
+      },
+    },
+  ],
+  edges: [{ id: "e-start-loop-1", source: "start", target: "loop-1" }],
+} as WorkflowGraph;
+
+/** 双击循环节点钻进循环体 —— 和用户的路径一致(双击之前那一下单击会选中循环节点)。 */
+async function drillInto(id: string) {
+  await waitFor(() => nodeEl(id));
+  fireEvent.click(nodeEl(id));
+  fireEvent.doubleClick(nodeEl(id));
+  await screen.findByText(/wfLoopBody/);
+}
+
+it("循环体里按 Delete 删的是循环体里选中的节点,不会把外面那个循环节点一起删掉", async () => {
+  await renderEditor(LOOPED);
+  await drillInto("loop-1");
+  await waitFor(() => nodeEl("template-1"));
+  fireEvent.click(nodeEl("template-1"));
+  fireEvent.keyDown(document.body, { key: "Backspace" });
+  fireEvent.keyUp(document.body, { key: "Backspace" });
+  const graph = await savedGraph();
+  expect(graph.nodes.map((node) => node.id)).toEqual(["start", "loop-1"]);
+  expect(graph.nodes[1].config).toMatchObject({ body: { nodes: [] } });
+});
+
+it("循环体里的改动能撤销,撤销后循环体画面跟着变回去", async () => {
+  await renderEditor(LOOPED);
+  await drillInto("loop-1");
+  await waitFor(() => nodeEl("template-1"));
+  fireEvent.click(nodeEl("template-1"));
+  const name = await screen.findByLabelText("wfNodeName");
+  fireEvent.change(name, { target: { value: "体内a" } });
+  fireEvent.change(name, { target: { value: "体内ab" } });
+  await waitFor(() => expect(nodeEl("template-1").textContent).toContain("体内ab"));
+  // 一串输入在历史里是一条:撤一次就回到输入之前。
+  fireEvent.click(screen.getAllByRole("button", { name: "undo" }).at(-1)!);
+  await waitFor(() => expect(nodeEl("template-1").textContent).not.toContain("体内a"));
+  expect((screen.getByLabelText("wfNodeName") as HTMLInputElement).value).toBe("体内");
+});
+
+it("循环体里 ⌘C ⌘V 复制的是循环体里的节点,粘进循环体", async () => {
+  await renderEditor(LOOPED);
+  await drillInto("loop-1");
+  await waitFor(() => nodeEl("template-1"));
+  fireEvent.click(nodeEl("template-1"));
+  fireEvent.keyDown(document.body, { key: "c", metaKey: true });
+  fireEvent.keyDown(document.body, { key: "v", metaKey: true });
+  const graph = await savedGraph();
+  // 外层图没有多出节点;粘出来的那一个在循环体里。
+  expect(graph.nodes.map((node) => node.id)).toEqual(["start", "loop-1"]);
+  const body = graph.nodes[1].config!.body as WorkflowGraph;
+  expect(body.nodes.map((node) => node.id)).toEqual(["template-1", "template-2"]);
+});
+
+it("循环体里套的循环也能钻进去,改动写进最里面那层,返回一次回上一层", async () => {
+  const inner = { nodes: [{ id: "template-1", type: "template", name: "最里", position: { x: 0, y: 0 }, config: { template: "" } }], edges: [] };
+  const graph = structuredClone(LOOPED);
+  (graph.nodes[1].config!.body as WorkflowGraph).nodes.push({
+    id: "loop-2", type: "loop_foreach", name: "内层", position: { x: 300, y: 0 }, config: { items: "", body: inner },
+  } as WorkflowGraph["nodes"][number]);
+  await renderEditor(graph);
+  await drillInto("loop-1");
+  await waitFor(() => nodeEl("loop-2"));
+  fireEvent.click(nodeEl("loop-2"));
+  fireEvent.doubleClick(nodeEl("loop-2"));
+  await screen.findByText("内层 · wfLoopBody");
+  fireEvent.click(nodeEl("template-1"));
+  fireEvent.change(await screen.findByLabelText("wfNodeName"), { target: { value: "改过" } });
+  const saved = await savedGraph();
+  const outerBody = saved.nodes[1].config!.body as WorkflowGraph;
+  const innerBody = outerBody.nodes.find((node) => node.id === "loop-2")!.config!.body as WorkflowGraph;
+  expect(innerBody.nodes[0].name).toBe("改过");
+  // 外层体里同名的 template-1 不受影响。
+  expect(outerBody.nodes.find((node) => node.id === "template-1")?.name).toBe("体内");
+  fireEvent.click(screen.getByRole("button", { name: "wfLoopBack" }));
+  await screen.findByText("loop · wfLoopBody");
+});

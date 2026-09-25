@@ -99,8 +99,8 @@ function parseViewport(raw: string | null): StoredViewport | null {
  * 少了它,每次刷新或重新进入工作流详情都会 fitView —— 把所有节点框回视野里。图一大就意味着
  * 用户每次回来都要重新找到自己刚才在看的那一块,而他离开时的位置本来就是最有价值的信息。
  *
- * **只在挂载时读一次**(useState 惰性初值):读成响应式的话,自己保存又会触发自己重定位,
- * 画布会在用户拖动时和自己打架。
+ * **每个 key 只读一次**:读成响应式的话,自己保存又会触发自己重定位,画布会在用户拖动时
+ * 和自己打架。key 换了(工作流钻进另一层)才重读 —— 那是另一张画布,该回到它自己上次的位置。
  */
 export function usePersistentViewport(key: string): {
   /** 上次的位置;没有(第一次进来)就是 null —— 调用方这时才该 fitView。 */
@@ -108,13 +108,13 @@ export function usePersistentViewport(key: string): {
   remember: (viewport: StoredViewport) => void;
 } {
   const storageKey = `mosael:viewport:${key}`;
-  const [saved] = React.useState<StoredViewport | null>(() => {
+  const saved = React.useMemo<StoredViewport | null>(() => {
     try {
       return parseViewport(localStorage.getItem(storageKey));
     } catch {
       return null;
     }
-  });
+  }, [storageKey]);
 
   const remember = React.useCallback(
     (viewport: StoredViewport) => {

@@ -129,7 +129,7 @@ import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
-import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
+import { createWorkflowGraphStore, type GraphUpdater, type SetGraphOptions } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -166,6 +166,16 @@ import { isWorkflowFieldActive } from "@/features/workflows/fieldActivation";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
+import {
+  bodyKey,
+  graphAtScope,
+  parseScopeId,
+  scopeContainer,
+  scopeId,
+  scopeIds,
+  withGraphAtScope,
+  type ScopePath,
+} from "@/features/workflows/scope";
 import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { boundRunId, RUN_ACTIVE } from "@/features/workflows/boundRun";
 import { ScenePropsField } from "@/features/workflows/ScenePropsField";
@@ -772,13 +782,69 @@ function WorkflowEditor({
     graphStoreRef.current = createWorkflowGraphStore(structuredClone(workflow.graph as unknown as WorkflowGraph));
   }
   const graphStore = graphStoreRef.current;
-  const graph = useStore(graphStore, (s) => s.graph);
-  const graphHasStart = graph.nodes.some((node) => node.type === "start");
-  const setGraph = useStore(graphStore, (s) => s.setGraph);
+  /** 整张图:保存、撤销、就绪度分析、运行状态都对着它。 */
+  const rootGraph = useStore(graphStore, (s) => s.graph);
+  const setRootGraph = useStore(graphStore, (s) => s.setGraph);
   const canUndo = useStore(graphStore.temporal, (s) => s.pastStates.length > 0);
   const canRedo = useStore(graphStore.temporal, (s) => s.futureStates.length > 0);
-  const [nodes, setNodes] = React.useState<Node[]>(() => toWorkflowFlowNodes(workflow.graph as unknown as WorkflowGraph, registry));
-  const [edges, setEdges] = React.useState<Edge[]>(() => toWorkflowFlowEdges(workflow.graph as unknown as WorkflowGraph, t, registry));
+
+  // ── 正在编辑哪一层:主流程,或钻进去的循环 / 子图体(见 scope.ts)。
+  // **记在本地** —— 用户正在体里编辑,刷新一下被弹回主流程,还得再点进去找刚才那处。
+  // 存的路径每次对着当前图校验:那一层没了(容器被删、被撤销掉)就回到主流程。
+  // key 按工作流分,免得 A 里记下的节点 id 跑去 B 里生效。
+  const scopeCandidates = React.useMemo(() => scopeIds(rootGraph, registry), [rootGraph, registry]);
+  const [storedScope, setStoredScope] = usePersistentSelection(`workflow-scope:${workflow.id}`, scopeCandidates);
+  const scopePath = React.useMemo(() => parseScopeId(storedScope), [storedScope]);
+  const scopeKey = scopeId(scopePath);
+  const atRoot = scopePath.length === 0;
+  const scopeRef = React.useRef(scopePath);
+  scopeRef.current = scopePath;
+  const enterScope = React.useCallback(
+    (path: ScopePath) => setStoredScope(path.length > 0 ? scopeId(path) : null),
+    [setStoredScope],
+  );
+  /** 画布上这一层的图。下面的编辑逻辑(连线、删除、添加、复制粘贴、折叠)全都对着它,
+   *  不知道也不需要知道自己在第几层。 */
+  const graph = React.useMemo(
+    () => graphAtScope(rootGraph, scopePath, registry) ?? rootGraph,
+    [rootGraph, scopePath, registry],
+  );
+  const scopeNode = React.useMemo(() => scopeContainer(rootGraph, scopePath, registry), [rootGraph, scopePath, registry]);
+  /** 体里能引用的虚拟变量:容器在运行时注入的 `{{loop.*}}` / `{{input.*}}`。它们不是图里的节点。 */
+  const scopeVariables = React.useMemo(() => {
+    if (!scopeNode) return EMPTY_SCOPE_VARIABLES;
+    const rawInputs = scopeNode.config?.inputs;
+    const inputVariables =
+      rawInputs && typeof rawInputs === "object" && !Array.isArray(rawInputs)
+        ? Object.keys(rawInputs).map((key) => `{{input.${key}}}`)
+        : [];
+    return scopeNode.type === "subgraph" ? inputVariables : ["{{loop.item}}", "{{loop.index}}", ...inputVariables];
+  }, [scopeNode]);
+  /** 写这一层:把新的这层放回整张图。撤销的合并、脏标记、自动保存因此照旧只有一套。 */
+  const setGraph = React.useCallback(
+    (updater: GraphUpdater, options?: SetGraphOptions) => {
+      setRootGraph((root) => {
+        const path = scopeRef.current;
+        const scoped = graphAtScope(root, path, registry);
+        if (!scoped) return root;
+        const next = typeof updater === "function" ? updater(scoped) : updater;
+        return next === scoped ? root : withGraphAtScope(root, path, next, registry);
+      }, options);
+    },
+    [setRootGraph, registry],
+  );
+  //: start 唯一,而且只在主流程里 —— 体的入口是容器节点注入的 {{loop.*}} / {{input.*}}。
+  const canAddStart = atRoot && !rootGraph.nodes.some((node) => node.type === "start");
+  const [nodes, setNodes] = React.useState<Node[]>(() => toWorkflowFlowNodes(graph, registry));
+  const [edges, setEdges] = React.useState<Edge[]>(() => toWorkflowFlowEdges(graph, t, registry));
+  // 换了一层,画布节点整份换成那一层的。在渲染中对齐而不是用 effect:effect 慢一帧,
+  // 新那层的 React Flow 会先拿着上一层的节点挂载、定位一次。
+  const [flowScope, setFlowScope] = React.useState(scopeKey);
+  if (flowScope !== scopeKey) {
+    setFlowScope(scopeKey);
+    setNodes(toWorkflowFlowNodes(graph, registry));
+    setEdges(toWorkflowFlowEdges(graph, t, registry));
+  }
   React.useEffect(() => { setNodes(current => current.map(node => ({ ...node, selected: false }))); }, [markerMode, markersVisible, workflowComments.active]);
   /**
    * 检查器开给谁,**从 React Flow 的选中态派生**,不另记一份。
@@ -798,13 +864,31 @@ function WorkflowEditor({
   const [showHistory, setShowHistory] = React.useState(false);
   const [showRevisions, setShowRevisions] = React.useState(false);
 
+  /** 用新图重建画布节点,**保留 React Flow 的选中态**。
+   *
+   *  这条必须只有一处实现:重建节点的路径有三条(本地编辑走 applyGraph,服务端回传走同步
+   *  effect,撤销/重做走 syncFromGraph),每条都会把 selection 冲掉。第一次只修了第一条,于是
+   *  "拖完节点过一会儿焦点自己没了"又冒了出来 —— 拖动触发的自动保存回来走的是第二条。
+   *  检查器跟着选中态走,所以冲掉选中 = 撤销一下检查器就关了。 */
+  const rebuildNodes = React.useCallback(
+    (next: WorkflowGraph) =>
+      setNodes((current) => {
+        const selectedIds = new Set(current.filter((node) => node.selected).map((node) => node.id));
+        return toWorkflowFlowNodes(next, registry).map((node) =>
+          selectedIds.has(node.id) ? { ...node, selected: true } : node,
+        );
+      }),
+    [registry],
+  );
   // 撤销/重做:temporal 改的是 store.graph,再从新 graph 重建 React Flow 的 nodes/edges。
   const syncFromGraph = React.useCallback(() => {
-    const next = graphStore.getState().graph;
-    setNodes(toWorkflowFlowNodes(next, registry));
+    const root = graphStore.getState().graph;
+    // 这一层被撤销掉了(比如撤销的正是「添加这个循环」)就先按整张图画 —— 路径校验随后把画布带回主流程。
+    const next = graphAtScope(root, scopeRef.current, registry) ?? root;
+    rebuildNodes(next);
     setEdges(toWorkflowFlowEdges(next, t, registry));
     setDirty(true);
-  }, [graphStore, registry]);
+  }, [graphStore, registry, rebuildNodes]);
   const undo = React.useCallback(() => {
     if (graphStore.temporal.getState().pastStates.length === 0) return;
     graphStore.temporal.getState().undo();
@@ -872,20 +956,6 @@ function WorkflowEditor({
   // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
   // graph and interrupt React Flow's drag. The save fires once, right after the drag settles.
   const [dragging, setDragging] = React.useState(false);
-  // Drill-in: double-click a loop OR subgraph node to edit its nested body sub-graph in an overlay canvas.
-  /**
-   * 钻进了哪个子图。**记在本地,不是纯 state** —— 刷新一下就被弹回上一层是不对的:
-   * 用户正在子图里编辑,按了刷新(或者应用自己重载),回来发现自己站在主流程上,
-   * 而刚才改到一半的地方还得再点进去找。
-   *
-   * 和"选中哪个工作流"用的是同一个 hook:它会拿 ids 校验,那个节点被删掉之后自动回到主流程,
-   * 不会卡在一个不存在的子图里。key 按工作流分,免得 A 工作流记下的节点 id 跑去 B 里生效。
-   */
-  const drillableIds = React.useMemo(
-    () => graph.nodes.filter((node) => node.type === "subgraph" || node.type.startsWith("loop_")).map((node) => node.id),
-    [graph.nodes],
-  );
-  const [editingLoopId, setEditingLoopId] = usePersistentSelection(`workflow-drill:${workflow.id}`, drillableIds);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
   const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const agentPanelRef = React.useRef<HTMLDivElement | null>(null);
@@ -902,8 +972,10 @@ function WorkflowEditor({
   // 画布姿态(是否已 fitView、视口动过几次、正不正在平移)。三条各自的来历见 useCanvasPosture
   // —— 它们是 React Flow 的机制,不是工作流的概念,所以不和图 / 弹窗 / 搜索那些 state 混在一起。
   const canvas = useCanvasPosture();
-  // 每张工作流各记各的位置 —— 换一张图不该继承上一张停在哪儿。
-  const viewport = usePersistentViewport(`workflow:${workflow.id}`);
+  // 每张工作流、每一层各记各的位置 —— 换一张图、钻进一层,不该继承上一处停在哪儿。
+  const viewport = usePersistentViewport(atRoot ? `workflow:${workflow.id}` : `workflow:${workflow.id}:${scopePath.join(":")}`);
+  /** 从别的层点了主流程里的某个节点(就绪清单):回到主流程,等那一层的画布挂好再聚焦它。 */
+  const pendingFocusRef = React.useRef<string | null>(null);
 
   /** 让画布只选中这一个(null = 全不选)。检查器跟着选中态走,见 selectedNodeId。 */
   const selectInspectorNode = React.useCallback((nodeId: string | null) => {
@@ -959,21 +1031,6 @@ function WorkflowEditor({
   // 自己保存引发的那次 refetch 不能重建画布(重建会丢掉 React Flow 的实测尺寸、造成闪烁与
   // 拖拽中断)。不靠比对 updated_at 字符串——两端序列化只要差一点就会误判。
   const selfSaveRef = React.useRef(false);
-  /** 用新图重建画布节点,**保留 React Flow 的选中态**。
-   *
-   *  这条必须只有一处实现:重建节点的路径有两条(本地编辑走 applyGraph,服务端回传走同步
-   *  effect),两条都会把 selection 冲掉。第一次只修了前者,于是"拖完节点过一会儿焦点自己没了"
-   *  又冒了出来 —— 因为拖动会触发自动保存,保存回来的 updated_at 走的是后者。 */
-  const rebuildNodes = React.useCallback(
-    (next: WorkflowGraph) =>
-      setNodes((current) => {
-        const selectedIds = new Set(current.filter((node) => node.selected).map((node) => node.id));
-        return toWorkflowFlowNodes(next, registry).map((node) =>
-          selectedIds.has(node.id) ? { ...node, selected: true } : node,
-        );
-      }),
-    [registry],
-  );
 
   React.useEffect(() => {
     const { action, next: synced } = syncFromServer(
@@ -984,9 +1041,10 @@ function WorkflowEditor({
     selfSaveRef.current = synced.ours;
     if (action !== "apply") return;
     const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
-    setGraph(next);
-    rebuildNodes(next);
-    setEdges(toWorkflowFlowEdges(next, t, registry));
+    setRootGraph(next);
+    const scoped = graphAtScope(next, scopeRef.current, registry) ?? next;
+    rebuildNodes(scoped);
+    setEdges(toWorkflowFlowEdges(scoped, t, registry));
   }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
   const applyGraph = React.useCallback(
@@ -1305,7 +1363,7 @@ function WorkflowEditor({
   const addNode = (type: string) => {
     const meta = registry.get(type);
     if (!meta) return;
-    if (type === "start" && graph.nodes.some((node) => node.type === "start")) return;
+    if (type === "start" && !canAddStart) return;
     const base = type.replace(/[_.]/g, "-");
     let index = 1;
     while (graph.nodes.some((node) => node.id === `${base}-${index}`)) index += 1;
@@ -1384,7 +1442,7 @@ function WorkflowEditor({
   }, isMediaFile);
 
   const save = useMutation({
-    mutationFn: () => updateWorkflow(workflow.id, { graph }),
+    mutationFn: () => updateWorkflow(workflow.id, { graph: rootGraph }),
     onSuccess: (saved) => {
       setDirty(false);
       // 自己存的这一版一会儿会随重新拉取回来。标一下,让同步 effect 认下它而**不重建画布** ——
@@ -1449,16 +1507,17 @@ function WorkflowEditor({
     (saved: Workflow) => {
       const next = structuredClone(saved.graph as unknown as WorkflowGraph);
       lastSyncedRef.current = saved.updated_at;
-      setGraph(next);
-      rebuildNodes(next);
-      setEdges(toWorkflowFlowEdges(next, t, registry));
+      setRootGraph(next);
+      const scoped = graphAtScope(next, scopeRef.current, registry) ?? next;
+      rebuildNodes(scoped);
+      setEdges(toWorkflowFlowEdges(scoped, t, registry));
       graphStore.temporal.getState().clear();
       selectInspectorNode(null);
       selfSaveRef.current = false;
       pendingSaveRef.current = false;
       setDirty(false);
     },
-    [graphStore, rebuildNodes, registry, selectInspectorNode, setGraph, t],
+    [graphStore, rebuildNodes, registry, selectInspectorNode, setRootGraph, t],
   );
   const rename = useMutation({
     mutationFn: (name: string) => updateWorkflow(workflow.id, { name }),
@@ -1534,8 +1593,8 @@ function WorkflowEditor({
 
   // 就绪度分析:模型/密钥信号在编辑器层拉取(与属性面板共用 queryKey,自动去重),
   // 供画布角标 + 运行前 checklist。只有图里真有对应节点才请求。
-  const hasLlm = graph.nodes.some((node) => node.type === "llm");
-  const hasGen = graph.nodes.some((node) => node.type === "ai_generate");
+  const hasLlm = rootGraph.nodes.some((node) => node.type === "llm");
+  const hasGen = rootGraph.nodes.some((node) => node.type === "ai_generate");
   const providers = useQuery({
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
@@ -1543,7 +1602,7 @@ function WorkflowEditor({
   });
   const analysis = React.useMemo(
     () =>
-      analyzeWorkflow(graph, registry, {
+      analyzeWorkflow(rootGraph, registry, {
         providerIds: new Set(
           (providers.data ?? []).filter(supportsAutomationChat).map((p) => p.id),
         ),
@@ -1555,7 +1614,7 @@ function WorkflowEditor({
         ),
         genProvidersLoaded: !hasGen || providers.isSuccess,
       }),
-    [graph, registry, providers.data, providers.isSuccess, hasLlm, hasGen],
+    [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen],
   );
   const checklistCount = analysis.errorCount + analysis.warnCount;
   const checklistLabel = analysis.errorCount
@@ -1582,7 +1641,7 @@ function WorkflowEditor({
       registry={registry}
       // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
       // 是就渲染成缩略图/播放器而不是一串裸 id。
-      nodeTypeById={Object.fromEntries(graph.nodes.map((n) => [n.id, n.type]))}
+      nodeTypeById={Object.fromEntries(rootGraph.nodes.map((n) => [n.id, n.type]))}
       mode={historyMode}
       onModeChange={setHistoryMode}
       onClose={() => setShowHistory(false)}
@@ -1705,13 +1764,15 @@ function WorkflowEditor({
         if (isMarkerNode(node)) {
           return { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected, style: { ...node.style, pointerEvents: markerMode ? "auto" as const : "none" as const }, data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } };
         }
-        const nodeIssues = analysis.byNode.get(node.id);
-        const severity = analysis.severityByNode.get(node.id);
+        // 就绪度和运行状态按**主流程**的节点 id 记;体里的 id 是另一套命名空间(体里也可以有
+        // 一个 llm-1),拿去查只会张冠李戴。
+        const nodeIssues = atRoot ? analysis.byNode.get(node.id) : undefined;
+        const severity = atRoot ? analysis.severityByNode.get(node.id) : undefined;
         const badge =
           nodeIssues && severity
             ? { severity, count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry)).join("\n") }
             : null;
-        const step = runByNode[node.id];
+        const step = atRoot ? runByNode[node.id] : undefined;
         return {
           ...node,
           className: cn(node.className, searchHighlightClass(searchHit, node.id)) || undefined,
@@ -1733,7 +1794,7 @@ function WorkflowEditor({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit],
+    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot],
   );
 
   return (
@@ -1753,13 +1814,25 @@ function WorkflowEditor({
             而这一格真正要回答的是"**哪一个**工作流"。
             保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
             拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
-        <CanvasTitle
-          onBack={onBack}
-          backLabel={t("navWorkflows")}
-          name={workflow.name}
-          onRename={() => setRenaming(true)}
-          renameLabel={t("rename")}
-        />
+        {scopeNode ? (
+          // 钻进了某一层:返回键是「回上一层」而不是「回清单」,所以用 ←。
+          // 名字在它自己的节点上改,这里不给 onRename。
+          <CanvasTitle
+            onBack={() => enterScope(scopePath.slice(0, -1))}
+            backLabel={t("wfLoopBack")}
+            backIcon={<ArrowLeft size={16} />}
+            icon={scopeNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />}
+            name={`${scopeNode.name || registry.get(scopeNode.type)?.label || scopeNode.type} · ${t(scopeNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}`}
+          />
+        ) : (
+          <CanvasTitle
+            onBack={onBack}
+            backLabel={t("navWorkflows")}
+            name={workflow.name}
+            onRename={() => setRenaming(true)}
+            renameLabel={t("rename")}
+          />
+        )}
         <CanvasToolbar
           label={t("canvasTools")}
           data-workflow-toolbar-actions=""
@@ -1831,7 +1904,12 @@ function WorkflowEditor({
                                   "grid cursor-pointer grid-cols-[14px_auto_1fr] items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
                                   issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-warning",
                                 )}
-                                onClick={() => focusNode(issue.nodeId)}
+                                onClick={() => {
+                                  // 就绪清单说的是主流程里的节点。人在体里时先回主流程,画布挂好再聚焦。
+                                  if (atRoot) return focusNode(issue.nodeId);
+                                  pendingFocusRef.current = issue.nodeId;
+                                  enterScope([]);
+                                }}
                               >
                                 <AlertTriangle size={12} />
                                 <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
@@ -1933,7 +2011,7 @@ function WorkflowEditor({
                 addNode(value);
               }}
               searchPlaceholder={t("wfAddNode")}
-              options={[...nodeOptions.filter((option) => option.value !== "start" || !graphHasStart)]}
+              options={[...nodeOptions.filter((option) => option.value !== "start" || canAddStart)]}
               trigger={
                 <button
                   type="button"
@@ -1969,6 +2047,10 @@ function WorkflowEditor({
               <Redo2 size={14} />
             </Button>
           </CanvasToolbarGroup>
+          {/* 讨论和标记钉在**主流程**的画布坐标上,体里是另一张画布 —— 在那儿摆出来,
+              要么标在错的位置,要么落进体里跟着体一起被执行器忽略。 */}
+          {atRoot && (
+            <>
           <CanvasToolbarGroup label={t("boardCommentMode")}>
             {workflowComments.controls(() => setMarkerMode(false))}
             <Button
@@ -2000,6 +2082,8 @@ function WorkflowEditor({
               }}
             />
           </CanvasToolbarGroup>
+            </>
+          )}
           <CanvasToolbarGroup label={t("canvasViewTools")}>
             <CanvasNodeSearch
               entries={searchEntries}
@@ -2088,6 +2172,8 @@ function WorkflowEditor({
           )}
           <MarkerEditorProvider enabled={markerMode && markersVisible}>
           <ReactFlow
+            // 每一层一个 React Flow 实例:换层时重挂,视口按那一层记的位置恢复(见 onInit)。
+            key={scopeKey}
             className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
             nodes={displayNodes}
             nodesConnectable={!annotationMode}
@@ -2116,6 +2202,9 @@ function WorkflowEditor({
                   if (first) flow.setCenter(first.position.x + 450, first.position.y + 140, { zoom: 0.8, duration: 0 });
                 } else fitCanvas(flow, 0);
                 canvas.handlers.onInit();
+                const pending = pendingFocusRef.current;
+                pendingFocusRef.current = null;
+                if (pending) focusNode(pending);
               });
             }}
             onNodesChange={onNodesChange}
@@ -2144,8 +2233,7 @@ function WorkflowEditor({
             onNodeDoubleClick={(_event, node) => {
               if (annotationMode) return;
               const g = graph.nodes.find((item) => item.id === node.id);
-              if (g && (g.type === "loop_foreach" || g.type === "loop_while" || g.type === "subgraph"))
-                setEditingLoopId(node.id);
+              if (g && bodyKey(registry, g.type)) enterScope([...scopePath, node.id]);
             }}
             onPaneClick={(event) => {
               const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -2161,7 +2249,7 @@ function WorkflowEditor({
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Backspace", "Delete"]}
           >
-            {workflowComments.layer}
+            {atRoot && workflowComments.layer}
             {annotationMode && <AnnotationModeHint kind={markerMode ? "marker" : "comment"} onExit={() => { setMarkerMode(false); workflowComments.exit(); }} />}
             {selectedFlowIds.length >= 2 && !annotationMode && (
               <Panel position="top-center">
@@ -2190,14 +2278,15 @@ function WorkflowEditor({
               nodeColor="var(--border-strong)"
               nodeStrokeColor="transparent"
             />}
-        {selectedNode && !editingLoopId && !annotationMode && (
+        {selectedNode && !annotationMode && (
           <NodeInspector
             inert={canvas.panning}
-            step={runByNode[selectedNode.id] ?? null}
+            step={atRoot ? (runByNode[selectedNode.id] ?? null) : null}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}
             registry={registry}
+            scopeVariables={scopeVariables}
             workspaceId={workspaceId}
             workflowId={workflow.id}
             onChange={(patch) => {
@@ -2227,15 +2316,18 @@ function WorkflowEditor({
               selectInspectorNode(null);
             }}
             onDrillIn={
-              selectedNode.type === "subgraph" || selectedNode.type.startsWith("loop_")
-                ? () => setEditingLoopId(selectedNode.id)
-                : undefined
+              bodyKey(registry, selectedNode.type) ? () => enterScope([...scopePath, selectedNode.id]) : undefined
             }
             onClose={() => selectInspectorNode(null)}
           />
         )}
           </ReactFlow>
           </MarkerEditorProvider>
+          {scopeNode && graph.nodes.length === 0 && (
+            <div className="pointer-events-none absolute left-1/2 top-14 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
+              {t(scopeNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}
+            </div>
+          )}
         </div>
 
         {/* 讨论侧栏。和画板那份是同一个组件 —— 评论对后端来说只是换了个 subject_type。 */}
@@ -2297,35 +2389,6 @@ function WorkflowEditor({
             两个都浮动时右栏根本不渲染,面板就跟着消失了。 */}
         {showHistory && !dockedHistory && historyPanel}
         {agentOpen && !dockedAgent && agentPanel}
-        {editingLoopId &&
-          (() => {
-            const loopNode = graph.nodes.find((item) => item.id === editingLoopId);
-            if (!loopNode) return null;
-            return (
-              <LoopBodyEditor
-                workflowId={workflow.id}
-                loopNode={loopNode}
-                registry={registry}
-                nodeTypes={nodeTypes}
-                workspaceId={workspaceId}
-                canUndo={canUndo}
-                canRedo={canRedo}
-                undo={undo}
-                redo={redo}
-                onChange={(body) =>
-                  applyGraph({
-                    ...graph,
-                    nodes: graph.nodes.map((item) =>
-                      item.id === editingLoopId ? { ...item, config: { ...(item.config ?? {}), body } } : item,
-                    ),
-                  })
-                }
-                onClose={() => setEditingLoopId(null)}
-              />
-            );
-          })()}
-        {/* 钻进循环体时不渲染外层检查器:它和覆盖层同为 z-index:30 且在 DOM 里更靠后,会盖住
-            子画布头部(返回/面包屑/添加节点)。子画布有自己的检查器;外层节点回主流程再编辑。 */}
       </div>
 
       <RenameDialog
@@ -2442,344 +2505,6 @@ function JsonField({ value, onChange }: { value: unknown; onChange: (parsed: unk
 /** code 字段保持纯编辑器；上游变量不再作为整片提示标签铺在表单下面。 */
 function CodeField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return <CodeEditor value={value} language="python" minHeight={140} onChange={onChange} />;
-}
-
-/** Dify 式节点属性浮层:枚举字段用 Select,模板字段带上游变量插入器。 */
-/** Drill-in editor for a loop / subgraph node's nested `body` sub-graph (Dify / ComfyUI-style).
- *  A self-contained mini-canvas: add/connect/move/delete/config body nodes; changes flow up via
- *  onChange. Header/hints switch on the node type (loop scope {{loop.*}} vs subgraph {{input.*}}). */
-function LoopBodyEditor({
-  workflowId,
-  loopNode,
-  registry,
-  nodeTypes,
-  workspaceId,
-  onChange,
-  onClose,
-  canUndo,
-  canRedo,
-  undo,
-  redo,
-}: {
-  /** 只用来给「子图停在哪儿」当存储键 —— 节点 id 在不同工作流里会重名。 */
-  workflowId: string;
-  loopNode: WorkflowGraph["nodes"][number];
-  registry: Map<string, WorkflowNodeType>;
-  nodeTypes: WorkflowNodeType[];
-  workspaceId: string;
-  onChange: (body: WorkflowGraph) => void;
-  onClose: () => void;
-  /** 撤销/重做走主图那一套 —— 子图的每次编辑本来就是主图的一次变更。 */
-  canUndo: boolean;
-  canRedo: boolean;
-  undo: () => void;
-  redo: () => void;
-}) {
-  const [inputMode] = useCanvasInputMode();
-  const t = useI18n();
-  const { options: subOptions } = useNodePicker(nodeTypes, t);
-  const [bodyViewReady, setBodyViewReady] = React.useState(false);
-  // config.body may be missing, or "" (addNode seeds unknown field types with an empty string) —
-  // anything not shaped like a graph must become an empty one, or body.nodes.length blows up the
-  // whole app on open.
-  const initialBody = React.useMemo<WorkflowGraph>(() => {
-    const raw = loopNode.config?.body as unknown;
-    return raw && typeof raw === "object" && Array.isArray((raw as WorkflowGraph).nodes)
-      ? (raw as WorkflowGraph)
-      : { nodes: [], edges: [] };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once; body state owns it after
-  }, []);
-  const [body, setBody] = React.useState<WorkflowGraph>(() => structuredClone(initialBody));
-  const [nodes, setNodes] = React.useState<Node[]>(() => toWorkflowFlowNodes(initialBody, registry));
-  const [edges, setEdges] = React.useState<Edge[]>(() => toWorkflowFlowEdges(initialBody, t, registry));
-  // 循环体编辑器读同一个偏好:主画布是圆角折线、点进循环体却变回贝塞尔,会让人以为进错了地方。
-  const [edgeShape, setEdgeShape] = useEdgeShape("wf-edge-shape");
-  const shapedEdges = React.useMemo(() => shapeEdges(edges, edgeShape), [edges, edgeShape]);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  /**
-   * 子图里的检查器**和主图长一样**。
-   *
-   * 这里此前不传 anchor,于是走了"贴右边占满整条高度"的兜底样式 —— 同一个东西在主图是贴着
-   * 节点浮现的小面板,进了子图变成一条右侧长栏,还把工具条右边那组盖住。用户会以为自己进错了
-   * 地方,而这只是少传了一个参数。
-   */
-  const subRf = React.useRef<ReactFlowInstance | null>(null);
-  //: 和主图同一套画布姿态。**平移/缩放时把检查器设成 inert** —— 否则滚轮滚到面板上就被它吃掉,
-  //: 画布停住不动:用户以为滚坏了,其实是指针从画布挪到了浮层上。
-  const subCanvas = useCanvasPosture();
-  // 子图按「哪张工作流的哪个节点」各记各的。
-  const subViewport = usePersistentViewport(`workflow:${workflowId}:${loopNode.id}`);
-
-  //: 最后一次**我们自己发出去**的 body。用来分辨"这次 prop 变化是我引起的"还是"外面改的"。
-  const emitted = React.useRef<string>("");
-
-  const commit = React.useCallback(
-    (next: WorkflowGraph) => {
-      setBody(next);
-      setNodes(toWorkflowFlowNodes(next, registry));
-      setEdges(toWorkflowFlowEdges(next, t, registry));
-      emitted.current = JSON.stringify(next);
-      onChange(next);
-    },
-    [registry, onChange],
-  );
-
-  /**
-   * **外面改了 body 就跟上。**
-   *
-   * 子图的每次编辑本来就走主图的 applyGraph(body 存在父节点的 config 里),所以撤销栈里
-   * 一直记着它 —— 缺的不是历史,是这一层不听外面的话:body 只在挂载时取一次,撤销把主图
-   * 改回去了,覆盖层还显示着改之前的样子。用户按下 Cmd+Z,画面纹丝不动,再按一次就退过头了。
-   *
-   * 只在**不是自己发出去的那一版**时才跟 —— 否则每次自己的编辑都会被 prop 回流覆盖一遍,
-   * 打字打到一半光标就跳。
-   */
-  React.useEffect(() => {
-    const incoming = JSON.stringify(initialBody);
-    if (incoming === emitted.current) return;
-    emitted.current = incoming;
-    setBody(structuredClone(initialBody));
-    setNodes(toWorkflowFlowNodes(initialBody, registry));
-    setEdges(toWorkflowFlowEdges(initialBody, t, registry));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBody, registry]);
-
-  const onNodesChange = React.useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((current) => applyNodeChanges(changes, current));
-      setBody((current) => {
-        let next = current;
-        for (const change of changes) {
-          if (change.type === "position" && change.position) {
-            next = {
-              ...next,
-              nodes: next.nodes.map((node) =>
-                node.id === change.id ? { ...node, position: { x: change.position!.x, y: change.position!.y } } : node,
-              ),
-            };
-          } else if (change.type === "remove") {
-            next = {
-              ...next,
-              nodes: next.nodes.filter((node) => node.id !== change.id),
-              edges: next.edges.filter((edge) => edge.source !== change.id && edge.target !== change.id),
-            };
-          }
-        }
-        if (next !== current) onChange(next);
-        return next;
-      });
-    },
-    [onChange],
-  );
-
-  const onEdgesChange = React.useCallback(
-    (changes: EdgeChange[]) => {
-      setEdges((current) => applyEdgeChanges(changes, current));
-      setBody((current) => {
-        let next = current;
-        for (const change of changes) {
-          if (change.type === "remove") next = { ...next, edges: next.edges.filter((edge) => edge.id !== change.id) };
-        }
-        if (next !== current) onChange(next);
-        return next;
-      });
-    },
-    [onChange],
-  );
-
-  const onConnect = React.useCallback(
-    (connection: Connection) => {
-      if (!connection.source || !connection.target) return;
-      const srcHandle = connection.sourceHandle ?? undefined;
-      const tgtHandle = connection.targetHandle ?? undefined;
-      let next: WorkflowGraph;
-      if (srcHandle?.startsWith("out:") && tgtHandle?.startsWith("in:")) {
-        const output = srcHandle.slice(4);
-        const targetInput = tgtHandle.slice(3);
-        const kept = body.edges.filter(
-          (edge) => !(edge.kind === "data" && edge.target === connection.target && edge.target_input === targetInput),
-        );
-        next = {
-          ...body,
-          edges: [
-            ...kept,
-            { id: `d-${connection.source}-${output}-${connection.target}-${targetInput}`, source: connection.source, target: connection.target, kind: "data", source_output: output, target_input: targetInput },
-          ],
-          nodes: body.nodes.map((node) =>
-            node.id === connection.target
-              ? { ...node, inputs: Array.from(new Set([...(node.inputs ?? []), targetInput])), config: { ...(node.config ?? {}), [targetInput]: "" } }
-              : node,
-          ),
-        };
-      } else {
-        const id = `e-${connection.source}${srcHandle ? `-${srcHandle}` : ""}-${connection.target}`;
-        if (body.edges.some((edge) => edge.id === id)) return;
-        next = { ...body, edges: [...body.edges, { id, source: connection.source, target: connection.target, source_handle: srcHandle ?? null }] };
-      }
-      commit(next);
-    },
-    [body, commit],
-  );
-
-  const addNode = (type: string) => {
-    const meta = registry.get(type);
-    if (!meta || type === "start") return;
-    const base = type.replace(/[_.]/g, "-");
-    let index = 1;
-    while (body.nodes.some((node) => node.id === `${base}-${index}`)) index += 1;
-    const maxX = Math.max(0, ...body.nodes.map((node) => node.position?.x ?? 0));
-    const config: Record<string, unknown> = {};
-    for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
-      // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
-      config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
-    }
-    commit({
-      ...body,
-      nodes: [
-        ...body.nodes,
-        { id: `${base}-${index}`, type, name: meta.label, position: { x: maxX + 240, y: 140 + (body.nodes.length % 3) * 90 }, config },
-      ],
-    });
-  };
-
-  const selectedNode = selectedId ? (body.nodes.find((node) => node.id === selectedId) ?? null) : null;
-  const scopeVariables = React.useMemo(() => {
-    const rawInputs = loopNode.config?.inputs;
-    const inputVariables =
-      rawInputs && typeof rawInputs === "object" && !Array.isArray(rawInputs)
-        ? Object.keys(rawInputs).map((key) => `{{input.${key}}}`)
-        : [];
-    return loopNode.type === "subgraph"
-      ? inputVariables
-      : ["{{loop.item}}", "{{loop.index}}", ...inputVariables];
-  }, [loopNode.config?.inputs, loopNode.type]);
-
-  return (
-    // 工具条和主编辑器一样浮在画布上 —— 子图也是画布,没有理由这里就顶一条实心横带。
-    //: 底色用 bg-background,和创意画板那张画布同一个 —— 画布是「摊开东西的地方」,
-    //: 而 bg-panel 是「一块面板」;两种画布用两种底色,切过去时会觉得走进了另一个应用。
-    <div className="absolute inset-0 z-30 grid overflow-hidden rounded-lg border border-border bg-background">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
-        {/* 和主画布、创意画板同一颗胶囊 —— 它们是同一类东西:「你现在在哪儿」。
-            返回键在这里是「离开这一层」而不是「回上一层清单」,所以用 ←。
-            名字在它自己的节点上改,这里不给 onRename。 */}
-        <CanvasTitle
-          onBack={onClose}
-          backLabel={t("wfLoopBack")}
-          backIcon={<ArrowLeft size={16} />}
-          icon={loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />}
-          name={`${loopNode.name} · ${t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}`}
-        />
-        <CanvasToolbar label={t("canvasTools")}>
-          <CanvasToolbarGroup label={t("canvasEditTools")}>
-            <SearchableSelect
-              value=""
-              onValueChange={addNode}
-              searchPlaceholder={t("wfAddNode")}
-              options={subOptions.filter((option) => option.value !== "start")}
-              trigger={
-                <button
-                  type="button"
-                  className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
-                  aria-label={t("wfAddNode")}
-                  title={t("wfAddNode")}
-                >
-                  <Plus size={15} />
-                </button>
-              }
-            />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={`${t("undo")} ⌘Z`}
-              aria-label={t("undo")}
-              disabled={!canUndo}
-              onClick={undo}
-            >
-              <Undo2 size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={`${t("redo")} ⇧⌘Z`}
-              aria-label={t("redo")}
-              disabled={!canRedo}
-              onClick={redo}
-            >
-              <Redo2 size={14} />
-            </Button>
-          </CanvasToolbarGroup>
-          <CanvasToolbarGroup label={t("canvasViewTools")}>
-            <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
-            <CanvasInputModeSwitch />
-          </CanvasToolbarGroup>
-        </CanvasToolbar>
-      </div>
-      <div className="relative min-h-0">
-        <ReactFlow
-          className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !bodyViewReady && "opacity-0")}
-          nodes={nodes}
-          edges={shapedEdges}
-          nodeTypes={WORKFLOW_CANVAS_NODE_TYPES}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={(_event, node) => setSelectedId(node.id)}
-          onPaneClick={() => setSelectedId(null)}
-          panOnScroll={inputMode === "trackpad"}
-          zoomOnScroll={inputMode === "mouse"}
-          zoomOnPinch
-          connectionLineType={edgeShape as ConnectionLineType}
-          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-          deleteKeyCode={["Backspace", "Delete"]}
-          onInit={(instance) => {
-            subRf.current = instance as unknown as ReactFlowInstance;
-            subCanvas.handlers.onInit();
-            requestAnimationFrame(() => {
-              if (subViewport.saved) instance.setViewport(subViewport.saved);
-              else instance.fitView({ padding: 0.3, maxZoom: 1 });
-              setBodyViewReady(true);
-            });
-          }}
-          onMoveStart={subCanvas.handlers.onMoveStart}
-          onMoveEnd={(event, next) => {
-            subCanvas.handlers.onMoveEnd();
-            subViewport.remember(next);
-          }}
-          // 和主图一致:署名照常显示 —— 隐藏它是 Pro 授权才允许的事,不能因为"看着干净"就关掉。
-          proOptions={{ hideAttribution: false }}
-        >
-          <Background gap={20} size={1.2} />
-        {selectedNode && (
-          <NodeInspector
-            inert={subCanvas.panning}
-            node={selectedNode}
-            meta={registry.get(selectedNode.type) ?? null}
-            graph={body}
-            registry={registry}
-            scopeVariables={scopeVariables}
-            workspaceId={workspaceId}
-            workflowId={workflowId}
-            onChange={(patch) =>
-              commit({ ...body, nodes: body.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)) })
-            }
-            onApplyGraph={(next) => commit(next)}
-            onDelete={() => {
-              commit({
-                ...body,
-                nodes: body.nodes.filter((node) => node.id !== selectedNode.id),
-                edges: body.edges.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id),
-              });
-              setSelectedId(null);
-            }}
-            onClose={() => setSelectedId(null)}
-          />
-        )}
-        </ReactFlow>
-        {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t(loopNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}</div>}
-      </div>
-    </div>
-  );
 }
 
 export function NodeInspector({
