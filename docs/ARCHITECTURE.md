@@ -116,7 +116,11 @@ TaskEvent 行只在总线创建。
 实现生成** —— 出图出片汇进 `create_generation_job` 那条漏斗(前四个入口:AI 工作台、定时任务、
 工作流节点、智能体),于是描述符校验、能力探测、计量记账、任务中心全都白拿。
 
-四种产出走三条路,因为它们本来就不是一回事:
+画板上能产出东西的动作是一张**产出者注册表**(`domain/boards/producers`,ADR 0021):每个产出者
+声明能挂在哪种格子上、要什么权限、有没有花钱或对外的副作用、收什么表单(在领域里用 pydantic 校验),
+入口只有 `producers.run`(路由 `POST /api/boards/{id}/run`)。一格的产出者写在它的 `form.producer`
+上,前端照它挂面板(`boardItemState.producerOf` → `boardComposers.BUILTIN_COMPOSERS`),不按种类猜。
+四个内置产出者背后是三条路,因为它们本来就不是一回事:
 
 | 动作 | 走哪条 | 同步还是任务 |
 | --- | --- | --- |
@@ -130,9 +134,10 @@ TaskEvent 行只在总线创建。
 在组合层(`app/main._wire_seams`)的**导入期**,不在 lifespan 里 —— 不跑 lifespan 的入口
 (TestClient、脚本)照样要能把产出填回画布。
 
-`deliver_generated` **要认两种产出形状**:生成任务一次可能出多张(`asset_ids`),语音合成和剪辑
-一次出一段(`asset_id`)。这不是新旧兼容,是两种任务本来就不同;只认一种的话,另一种落终态时
-占位会被当成失败摘掉 —— 用户看到的是「生成完就没了」。
+`deliver_generated` 读任务结果**只经过 `outputs_of(job)`**,归一成
+`[{"type": "asset", "asset_id"}, {"type": "text", "text"}]`:生成任务一次可能出多张(`asset_ids`),
+语音合成和剪辑一次出一段(`asset_id`),便签写字交回正文(`text`)。这不是新旧兼容,是几种任务
+本来就不同;只认一种的话,另一种落终态时占位会被当成失败摘掉 —— 用户看到的是「生成完就没了」。
 
 节点的 `form` 与 `run` 是画布 JSON 的一部分,不是 React 选中态的副产品。`form` 保存提示词、模型、
 参数与引用素材；`run` 保存 job id 和 idle/queued/running/succeeded/failed/cancelled 终态。保存时若旧快照
@@ -238,8 +243,8 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 `api/domains/` 同构；两个装配入口只剩一串转发，里面**不定义任何东西**。
 （这里曾经写着确切的类数与文件数。每次拆分它们都会多几个，而没有任何东西提醒去改这句话 ——
 一个写在散文里的数字，唯一的作用是在一年后骗人，而"分在若干个文件里"这个信息去掉数字照样成立。
-要数就去数：`ls backend/app/db/model_slices | wc -l`。）`SourceAssetRef` 作为生成域的共享 schema 独立成文件，boards 只依赖该契约
-而不反向依赖装配入口。
+要数就去数：`ls backend/app/db/model_slices | wc -l`。）`SourceAssetRef` 作为生成域的共享 schema 独立成文件，不反向依赖装配入口
+(画板产出者的表单在领域里自己声明,见 `domain/boards/producers`)。
 `tests/test_domain_assembly_entries.py` 与 `frontend/src/api/clientAssembly.test.ts` 钉住重导出身份和 ORM
 metadata 注册，防止“文件移动成功、统一入口漏装配”这种只在运行期出现的错误 —— 前者已从逐域手写的
 断言换成三条通用不变量，新切一个域自动被覆盖。

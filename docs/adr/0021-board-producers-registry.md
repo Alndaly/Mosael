@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted — 2026-09-25. Phase P0 (behaviour-preserving groundwork) is **in progress**; P1–P4 wait
-for the concurrent "ComfyUI becomes a plugin generation provider" work (ADR 0020, on its own
-branch) to merge.
+Accepted — 2026-09-25. P0 (behaviour-preserving groundwork) and P1 (the registry, a pure refactor)
+are **done**; P2–P4 are next. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
+landed before P1, so board generation already sees plugin models as ordinary provider models.
 
 ## Context
 
@@ -44,7 +44,7 @@ Along the way we found problems that exist today, independent of the board:
 ## Decision
 
 Collect the board's producers into **one Producer registry** — a new module `producers` in the
-boards domain (created in P1; it does not exist yet):
+boards domain (`domain/boards/producers.py`, created in P1):
 
 ```python
 @dataclass(frozen=True)
@@ -115,7 +115,8 @@ when effects ≠ none, read-only plugins run directly.
 **Data, migration, API, frontend.** Item: `{"kind":"action","form":{"producer":"node:plugin…",
 "config":{…,"instance_id":…},"bindings":{…}},"run":{…}}`; derived notes may carry
 `text_format:"json"`. `_normalize_form` validates producer against
-`^(generate|speak|trim|write|node:[\w.\-]+)$`, config as an object, and the bindings shape;
+`^(generate|speak|trim|write|node:[\w.\-]+)$` (P1 accepts the four built-in names; P2 adds the
+`node:` form), config as an object, and the bindings shape;
 `DEFAULT_SIZE` gains `action` (both ends). Migration `_migrate_board_forms_name_their_producer`:
 form.trim → trim; note → write; audio → speak; image/video → generate; idempotent, in the upgrade
 fixture; afterwards `composerFor` inference is deleted. API: `GET /api/boards/producers?workspace_id=`
@@ -150,8 +151,8 @@ loses the four old functions.
 
 | phase | scope | state |
 | --- | --- | --- |
-| **P0** groundwork (behaviour unchanged) | ① `format: asset` → `data_type: "asset"`; `scene_id` → `scene` in the naming table. ② Executors take a `RunScope` protocol (workspace_id, id, name); a ratchet keeps them to those three. ③ Plugin processes registered as job children; `PLUGIN_SLOTS`. ④ Extract `NodeConfigForm`, the node-picker grouping, `describe_node_types`, `resolve_instance`. | **in progress** |
-| P1 registry (pure refactor) | `producers.py` with the four built-ins, `/run`, the migration, `outputs_of`; frontend switches to runOnBoard/producerOf; old routes and schemas deleted; test_boards.py / test_board_receipts_and_copies.py go through `/run` with unchanged assertions. | waiting on ADR 0020 |
+| **P0** groundwork (behaviour unchanged) | ① `format: asset` → `data_type: "asset"`; `scene_id` → `scene` in the naming table. ② Executors take a `RunScope` protocol (workspace_id, id, name); a ratchet keeps them to those three. ③ Plugin processes registered as job children; `PLUGIN_SLOTS`. ④ Extract `NodeConfigForm`, the node-picker grouping, `describe_node_types`, `resolve_instance`. | **done** |
+| **P1** registry (pure refactor) | `producers.py` with the four built-ins, `/run`, the migration, `outputs_of`; frontend switches to runOnBoard/producerOf; old routes and schemas deleted; test_boards.py / test_board_receipts_and_copies.py go through `/run` with unchanged assertions. | **done** |
 | P2 tool items | `node:*` producers, `surfaces`, the `action` kind, bindings and detaching, derived outputs; ActionComposer, ActionNode, stop button, tool picker; `generate` hosts from the generation catalog (meets the ComfyUI work). | — |
 | P3 agent | add_item/set_form, list_board_producers, the run_board_item card, agent/prompt.py. | — |
 | P4 extras | `node:*` on media slots with in-place output (manifest node block declares `board.primary_output`); multi-file plugin outputs; PLUGIN_MANIFEST "how it looks on a board". | — |
@@ -183,6 +184,65 @@ loses the four old functions.
   `normalizeDataType`, now `nodeForms/fieldTypes.ts`). Workflows import them from there.
 - `scene` is only added on the input side; the frontend treats unknown data types as `any`, so no
   current connection check changes.
+
+### What P1 actually did (and where it differs from the draft)
+
+- **Registry.** `domain/boards/producers.py`: `Producer(id, hosts, permission, effects, form, start,
+  failures, failure_status)` and `RunRequest(workspace_id, board_id, item_id, kind, x, y,
+  base_revision, actor_id, producer, form)`; `run(db, request)` is the one entry — it looks the
+  producer up (unknown → `boardErr_unknownProducer`, 400), checks `kind ∈ hosts`
+  (`boardErr_producerCannotHost`, 400), validates the form with the producer's pydantic model
+  (`allow_inf_nan=False`, like `ApiModel`), then starts it. The four built-ins wrap the existing
+  `actions.*_on_board`; `generate` edit/paid, `write` ai/paid, `speak` edit/paid, `trim` edit/none.
+  The registry is rebuilt per call (four cheap entries; no process state). **`meta` is not in P1** —
+  nothing consumes it until `GET /api/boards/producers` arrives with P2.
+- **`generate` hosts** come from the generation catalog's kinds (`generation/resolution.KINDS`),
+  which today is `("image", "video")`. An audio slot **cannot** pick `generate` yet: the catalog
+  (and `plugin_connections.GENERATION_KINDS`) deliberately keeps plugin audio models out of the
+  pickers until the host has an audio generation path. That needs new host code and UI, so it moves
+  to P2 as planned rather than falling out of P1.
+- **Errors keep their status codes.** A producer's own domain errors are relayed as
+  `ProducerFailed` with the key and params intact and the status the producer declares
+  (`GenerationDomainError`/`TrimError` 400, `AiChatError`/`VoiceError` 422 — as the four routes
+  answered). A form that does not fit is re-raised by the route as a `RequestValidationError`
+  (422, `loc: ["body", "form", …]`), so NaN in `form.start` still fails at the door with the
+  readable 422 of `test_api_refuses_non_finite_numbers`.
+- **`/run` requires `base_revision` too** (not only `BoardUpdate`): the check has to happen before
+  money is spent, and the frontend always sent it. The rate limiter now treats `/boards/{id}/run`
+  as billable, which includes trim (the old `/trim` route was not in the list).
+- **Result shapes (owner decision 4).** `canvas.outputs_of(job)` is the only reader of `job.result`
+  for the board and normalises to `[{"type":"asset","asset_id"}, {"type":"text","text"}]`. There
+  is **no legacy shape to migrate**: `asset_ids` (generation), `asset_id` (speech, trim) and `text`
+  (board write) are the three job kinds' *current* result contracts, and the receipt reads
+  `job.result` exactly once, at the terminal transition (or, for a job the same request just
+  created, in `_deliver_if_already_settled`) — a stored result is never re-read later. So no
+  compatibility branch and no data migration are needed for results.
+- **Migration `migrate-board-forms-name-their-producer`.** Mirrors the old `composerFor` exactly:
+  items with a form get `form.producer` (note → write; `form.trim` → trim; audio → speak;
+  image/video → generate); items with **no** form that used to get a panel — every note, and
+  image/video/audio slots without an asset — get `{"producer": …}`, otherwise they would lose
+  their panel. Items already naming a producer are left alone (idempotent). `producer` goes last in
+  the form. Boards it changes get `revision + 1`, so a client still holding a pre-upgrade snapshot
+  gets a 409 and reloads instead of saving forms without producers over the migrated ones.
+- **Who writes `form.producer` from now on.** `actions._pending` writes the running producer last
+  (overriding whatever the caller sent); the frontend stamps new empty slots at creation
+  (`boardItemState.newSlotForm`, used by `add()` and double-click); the agent's `ops.add_item` does
+  the same through `producers.producer_for_new_slot`. `normalize_canvas` only checks the name
+  (`boards/producer_ids.py` — a dependency-free table, because canvas → producers → actions →
+  canvas would otherwise be an import cycle) and does not require a producer.
+- **Frontend.** `api/domains/boards.ts` has `runOnBoard` + `BoardRunRequest`/`BoardRunForms`
+  (kept by hand: `form` is a bare dict in OpenAPI; recorded in `domainShadows.test.ts`).
+  `boardItemState.producerOf(item)` reads `form.producer` (no producer, or an asset already there →
+  no panel). The four conditional blocks became `features/boards/boardComposers.tsx`
+  `BUILTIN_COMPOSERS` (producer → panel); `BoardCanvas` takes one `onRun` instead of
+  onGenerate/onWrite/onSpeak/onTrim. Panels never see or edit the producer: `composerView` hides
+  it, `withProducer` puts it back (last) when a panel saves its form — so a panel does not rewrite
+  its form merely by opening. `BoardsView.run` is the one submit path: write keeps the synchronous
+  `runNoteWrite` lifecycle; the others share one settlement (patch the local item with the server's
+  form/run/asset, or add it when it is a new item) and failure toasts per producer.
+- **Agent / MCP.** Nothing called the four routes or `*_on_board` (the MCP server only reads boards;
+  the agent edits boards through `ops`), so there was nothing to reroute. Tests that called
+  `generate_on_board`/`write_on_board` directly now go through `producers.run`.
 
 ## Alternatives rejected
 

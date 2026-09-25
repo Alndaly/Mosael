@@ -100,6 +100,14 @@ _Avoid_: 前端 `for (const id of ids) await 单个操作(...)`;把顺序依赖(
 `Board.revision` 是无限画布当前投影的乐观并发令牌，不是历史快照编号。客户端每次写入携带
 `base_revision`，服务端以条件 UPDATE 原子认领并递增；内容未变化不递增。冲突返回 409 和当前
 修订，客户端重新载入当前投影，不得用一份过期的完整 canvas 静默覆盖队友或异步任务的结果。
+`base_revision` 必填(存画布、在画板上跑产出者都是)。
+
+**产出者(Producer)**:
+画板上「一格里能产出东西」的那件事由谁来做 —— 生成、写字、念出来、截一段是四个内置产出者
+(`domain/boards/producers`,ADR 0021)。每个产出者声明能挂的格子种类(hosts)、要的权限、有无花钱
+或对外的副作用(effects)和自己的表单;一格的产出者写在它的 `form.producer` 上,面板照它挂。
+画板上的一切产出都走 `producers.run` / `POST /api/boards/{id}/run` 这一个入口。
+_Avoid_: 按 item 种类猜该挂哪块面板;为某一种产出单开路由或请求体;把产出者当成 item 种类
 
 **活动事件(Activity event)**:
 工作区级、追加写、不可变的协作审计投影。产品领域通过 `domain/collaboration.record_activity`
