@@ -22,6 +22,8 @@ type Rules = {
 
 const EMPTY: Rules = { http_request: "ask", publish: "ask", run_code: "ask", run_host_code: "ask", blender: "ask", notes: "" };
 
+const sameRules = (a: Rules, b: Rules) => JSON.stringify(a) === JSON.stringify(b);
+
 /** 几类撤不回来的操作,同一种判据。顺序即页面顺序。沙箱与不隔离是两档:放开前者不连带后者。 */
 const GATES = [
   { key: "http_request", label: "autopilotHttp", desc: "autopilotHttpDesc" },
@@ -58,9 +60,16 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
   const canEdit = role === "admin" || role === "owner";
 
   const [draft, setDraft] = React.useState<Rules>(EMPTY);
+  //: 草稿是照着哪一份服务端准则改的。服务端那份变了(后台重新拉取、别人改过)**只在这里没有
+  //: 没存的改动时**跟上 —— 此前每次拉回来都整份盖掉草稿,正在写的补充说明说没就没。
+  const basis = React.useRef<Rules>(EMPTY);
+  const adopt = React.useCallback((next: Rules, from: Rules = basis.current) => {
+    setDraft((current) => (sameRules(current, from) ? next : current));
+    basis.current = next;
+  }, []);
   React.useEffect(() => {
-    if (query.data) setDraft(query.data.rules);
-  }, [query.data]);
+    if (query.data) adopt(query.data.rules);
+  }, [query.data, adopt]);
 
   const save = useMutation({
     mutationFn: (rules: Rules) =>
@@ -68,8 +77,9 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
         method: "PUT",
         body: JSON.stringify({ rules }),
       }),
-    onSuccess: (data) => {
-      setDraft(data.rules);
+    onSuccess: (data, sent) => {
+      //: 存的时候还在改的话,手上那份比刚存下的新 —— 不拿回执盖掉。
+      adopt(data.rules, sent);
       void qc.invalidateQueries({ queryKey: ["autopilot-rules", workspace.id] });
       toast.success(t("autopilotSaved"));
     },
