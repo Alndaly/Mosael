@@ -30,7 +30,6 @@ class ProviderField:
     required: bool = False
     default: str = ""
     hint: str = ""
-    multiline: bool = False
 
     @classmethod
     def from_mapping(cls, vendor: str, value: Mapping[str, object]) -> ProviderField:
@@ -49,7 +48,6 @@ class ProviderField:
             required=bool(value.get("required", False)),
             default=str(value.get("default") or ""),
             hint=str(value.get("hint") or ""),
-            multiline=bool(value.get("multiline", False)),
         )
 
 
@@ -71,7 +69,6 @@ class ProviderDefinition:
     fields: tuple[ProviderField, ...] = ()
     auth_types: tuple[str, ...] = ("api_key",)
     pi_provider: str = ""
-    keyless: bool = False
     health_path: str = ""
 
     @classmethod
@@ -116,7 +113,6 @@ class ProviderDefinition:
             fields=fields,
             auth_types=auth_types,
             pi_provider=str(value.get("pi_provider") or ""),
-            keyless=bool(value.get("keyless", False)),
             health_path=health_path,
         )
 
@@ -364,37 +360,6 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                 "secret": False,
                 "required": True,
                 "hint": "语音技术控制台的 App ID",
-            },
-        ],
-    },
-    "comfyui": {
-        "label": "ComfyUI(本地)",
-        "base_url": "http://127.0.0.1:8188",
-        # 探活走 /system_stats:ComfyUI 没有 /models,而这个接口无鉴权、必然存在、返回小。
-        "health_path": "/system_stats",
-        # **免密钥**,而且这一条要机器读得懂:整条钥匙链的判据是"有没有一份带秘密的凭据",
-        # 对它一视同仁的话,这条连接永远解析不出来(见 domain/provider_credentials.resolve_connection),
-        # 界面上还挂着一行"未配置你的密钥"—— 而它压根没有密钥可配。
-        "keyless": True,
-        # 本地(或局域网 GPU 机器)的 ComfyUI 实例。工作流模板是接缝——
-        # 任意 ComfyUI 图经 {{prompt}} 等占位符适配成"提示词 → 图"契约;留空用内置
-        # txt2img(checkpoint 从 /object_info 现场发现)。
-        "capabilities": "图像与视频生成(本地 ComfyUI,免密钥;图像可开箱即用,视频需粘贴工作流模板)",
-        "capability_ids": ["image", "video"],
-        "fields": [
-            {
-                "key": "base_url",
-                "label": "ComfyUI 地址",
-                "storage": "base_url",
-                "default": "http://127.0.0.1:8188",
-                "hint": "本机默认 8188;填局域网地址即可用远程 GPU 机器",
-            },
-            {
-                "key": "workflow_template",
-                "label": "工作流模板(可选,API 格式 JSON)",
-                "storage": "extra",
-                "multiline": True,
-                "hint": "ComfyUI 里「导出 (API)」后粘贴;支持 {{prompt}} {{negative}} {{seed}} {{width}} {{height}} {{steps}} 占位符。留空用内置文生图。",
             },
         ],
     },

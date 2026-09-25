@@ -24,8 +24,6 @@ import {
   assetFileUrl,
   assetPreviewUrl,
   assetThumbnailUrl,
-  listComfyuiWorkflows,
-  listComfyuiWorkflowParams,
   optimizeImagePrompt,
   type GenerationCreateResponse,
   type GenerationJob,
@@ -44,7 +42,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { OptionPicker } from "@/components/ui/option-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
 import { AudioWorkspace } from "@/features/ai-studio/AudioWorkspace";
@@ -119,7 +116,6 @@ type GenerationConfig = {
   usePreviousImage: boolean;
   /** 模型自己声明的参数(`parameter_schema`)里**用户动过的**那些,存控件里的原文。没动过的不发。 */
   declared: Record<string, string>;
-  workflow: string; // ComfyUI:选中的工作流路径("" = 用档案默认/内置文生图)
 };
 
 /** 三种「拿现成的东西当输入」各自说清自己是干什么的 —— 光看名字分不出编辑和续写的区别。 */
@@ -131,7 +127,7 @@ const VIDEO_INPUT_HINTS = {
 
 /** 选项**由后端联接好**(/generation/options),前端只补一个用于下拉的 value。
  *  以前这里拿生成目录 / 启用档案 / 能力默认三张表在浏览器里做交叉连接,三份口径任何一份
- *  变一点,拼出来的就和设置页对不上 —— ComfyUI 的工作流只在目录里、设置页加的模型进不来,
+ *  变一点,拼出来的就和设置页对不上 —— 有的模型只在目录里、设置页加的模型进不来,
  *  都是这么来的。 */
 type GenerationEngineOption = GenerationOption & { value: string };
 
@@ -165,16 +161,14 @@ function defaultGenerationConfig(model: GenerationOption | null): GenerationConf
     // 想接着上一张改的时候,右栏有「用上一张结果」一键设上。
     usePreviousImage: false,
     declared: {},
-    workflow: "",
   };
 }
 
 function generationParameters(model: GenerationOption, config: GenerationConfig) {
   // **图像和视频都要的那几项先放这儿。** 此前它们写在 image 分支里,于是视频那条路上
-  // 控件照常渲染、值却在这一行被丢掉 —— 用户选了 ComfyUI 工作流没反应、填了种子不生效,
+  // 控件照常渲染、值却在这一行被丢掉 —— 用户填了种子不生效,
   // 而界面什么都没说。控件的显示条件本来就不分 kind(见 supportsParameter 那几处)。
   const shared: Record<string, string | number | boolean> = {};
-  if (model.provider === "comfyui" && config.workflow) shared.workflow = config.workflow;
   if (supportsParameter(model, "seed") && config.seed.trim()) shared.seed = Number(config.seed);
   for (const key of booleanParameterKeys(model)) {
     if (key !== "generate_audio") shared[key] = config.booleanParameters[key] ?? capabilityBoolean(model, `default_${key}`);
@@ -415,117 +409,6 @@ function GenerateWorkspace({
       groups.filter((group) => !active.includes(group)).flatMap((group) => group),
     );
   }, [selectedModel, generationConfig.frames]);
-  // ComfyUI:拉取该实例保存的工作流,生成时可直接选一个(自动转换 + 注入提示词)。
-  const isComfyui = selectedModel?.provider === "comfyui";
-  const comfyWorkflows = useQuery({
-    queryKey: ["comfyui-workflows", selectedModel?.provider_profile_id],
-    queryFn: () => listComfyuiWorkflows(selectedModel?.provider_profile_id),
-    enabled: Boolean(isComfyui && selectedModel?.provider_profile_id),
-    staleTime: 60_000,
-    retry: false,
-  });
-  // 选了具体工作流 → 拉它的可调参数(动态表单);用户改过的值存这里,覆盖工作流默认。
-  const [workflowParams, setWorkflowParams] = React.useState<Record<string, Record<string, unknown>>>({});
-  const comfyParams = useQuery({
-    queryKey: ["comfyui-workflow-params", selectedModel?.provider_profile_id, generationConfig.workflow],
-    queryFn: () => listComfyuiWorkflowParams(generationConfig.workflow, selectedModel?.provider_profile_id),
-    enabled: Boolean(isComfyui && selectedModel?.provider_profile_id && generationConfig.workflow),
-    staleTime: 60_000,
-    retry: false,
-  });
-  React.useEffect(() => {
-    setWorkflowParams({}); // 换工作流/档案 → 清用户覆盖,回到该工作流默认
-  }, [generationConfig.workflow, selectedModel?.provider_profile_id]);
-  const setWorkflowParam = (nodeId: string, name: string, value: unknown) =>
-    setWorkflowParams((current) => ({ ...current, [nodeId]: { ...(current[nodeId] ?? {}), [name]: value } }));
-  // ComfyUI 的工作流选择 + 动态参数,图像/视频分支共用。动态参数隐藏已有主控件对应的角色:
-  // 图像有提示词/尺寸/seed 主控件 → 隐藏它们;视频没有尺寸主控件 → 保留 width/height 让用户手调。
-  const comfyWorkflowSection = React.useMemo(() => {
-    if (!isComfyui || !selectedModel) return null;
-    const hiddenRoles = new Set(
-      selectedModel.kind === "image"
-        ? ["prompt", "negative", "seed", "width", "height"]
-        : ["prompt", "negative", "seed"],
-    );
-    const visibleParams = (comfyParams.data ?? []).filter((param) => !param.role || !hiddenRoles.has(param.role));
-    return (
-      <>
-        <ParameterField
-          label={t("comfyWorkflow")}
-          hint={
-            comfyWorkflows.isError
-              ? t("comfyWorkflowError")
-              : comfyWorkflows.data && comfyWorkflows.data.length === 0
-                ? t("comfyWorkflowEmpty")
-                : t("comfyWorkflowHint")
-          }
-        >
-          {/* 一个 ComfyUI 装几十上百张图是常态 —— 超过阈值 OptionPicker 自己换成可搜索的那一版。 */}
-          <OptionPicker
-            value={generationConfig.workflow || "__default__"}
-            onChange={(value) => setConfigValue("workflow", value === "__default__" ? "" : value)}
-            options={[
-              { value: "__default__", label: t("comfyWorkflowDefault") },
-              ...(comfyWorkflows.data ?? []).map((wf) => ({ value: wf.path, label: wf.name, keywords: [wf.path] })),
-            ]}
-            className={PARAMETER_CONTROL_CLASS}
-          />
-        </ParameterField>
-        {generationConfig.workflow && visibleParams.length > 0 && (
-          <div className="grid gap-2 rounded-lg border border-border bg-panel/50 p-2.5">
-            <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("comfyParams")}</span>
-            {visibleParams.map((param) => {
-              const current = workflowParams[param.node_id]?.[param.name] ?? param.value;
-              const label = `${param.title || param.class_type} · ${param.name}`;
-              return (
-                <label key={`${param.node_id}:${param.name}`} className="grid grid-cols-[1fr_130px] items-center gap-2 text-ui-xs text-muted-foreground">
-                  <span className="truncate" title={label}>{label}</span>
-                  {param.type === "COMBO" ? (
-                    <SearchableSelect
-                      className="h-7"
-                      value={String(current)}
-                      onValueChange={(value) => setWorkflowParam(param.node_id, param.name, value)}
-                      options={param.options ?? []}
-                    />
-                  ) : param.type === "BOOLEAN" ? (
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 justify-self-start accent-primary"
-                      checked={Boolean(current)}
-                      onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.checked)}
-                    />
-                  ) : param.type === "INT" || param.type === "FLOAT" ? (
-                    <Input
-                      className="h-7 w-full rounded-md border-border bg-field text-ui-sm text-foreground"
-                      type="number"
-                      value={String(current ?? "")}
-                      min={param.min}
-                      max={param.max}
-                      step={param.step ?? (param.type === "INT" ? 1 : 0.01)}
-                      onChange={(event) =>
-                        setWorkflowParam(
-                          param.node_id,
-                          param.name,
-                          param.type === "INT" ? Math.trunc(Number(event.target.value) || 0) : Number(event.target.value) || 0,
-                        )
-                      }
-                    />
-                  ) : (
-                    <Input
-                      className="h-7 w-full rounded-md border-border bg-field text-ui-sm text-foreground"
-                      value={String(current ?? "")}
-                      onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.value)}
-                    />
-                  )}
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </>
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isComfyui, selectedModel, comfyWorkflows.data, comfyWorkflows.isError, comfyParams.data, generationConfig.workflow, workflowParams, t]);
   React.useEffect(() => {
     setModelId(null);
   }, [activeSession?.id]);
@@ -649,12 +532,7 @@ function GenerateWorkspace({
           kind: selectedModel!.kind,
           prompt,
           negative_prompt: supportsNegativePrompt ? generationConfig.negativePrompt.trim() : "",
-          parameters: {
-            ...generationParameters(selectedModel!, generationConfig),
-            ...(isComfyui && generationConfig.workflow && Object.keys(workflowParams).length > 0
-              ? { workflow_params: workflowParams }
-              : {}),
-          },
+          parameters: generationParameters(selectedModel!, generationConfig),
           // 每份素材带着**它的用途**。此前这里是一个裸 id 数组,谁是首帧靠后端「取第 0 个」
           // 那条约定 —— 尾帧因此没地方放,而多加一个位置约定不会报错,只会生成出别的东西。
           source_assets: sourceAssetsFrom(
@@ -953,7 +831,6 @@ function GenerateWorkspace({
                     className={PARAMETER_CONTROL_CLASS}
                   />
                 </ParameterField>
-                {comfyWorkflowSection}
               </ParameterSection>
 
               {/* 出片规格 = "出多大、出几张、出多久、带不带声" —— 看一眼就知道成片长什么样的那几栏。

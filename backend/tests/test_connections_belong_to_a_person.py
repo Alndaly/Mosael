@@ -106,14 +106,14 @@ def test_i_can_see_my_own_endpoint() -> None:
 
 
 def test_connection_resolution_checks_vendor_as_well_as_owner() -> None:
-    """显式 id 不能让调用方口中的 vendor 失效；否则 ComfyUI 路径能拿 OpenAI 连接去调用。"""
+    """显式 id 不能让调用方口中的 vendor 失效；否则 MiniMax 那条路能拿 OpenAI 连接去调用。"""
     from app.domain.providers import find_enabled_connection
 
     client = fresh_client()
     profile_id = _create(client, "OpenAI")
     with SessionLocal() as db:
         user_id = db.query(User).filter(User.username == "tester").one().id
-        assert find_enabled_connection(db, "comfyui", profile_id, owner_user_id=user_id) is None
+        assert find_enabled_connection(db, "minimax", profile_id, owner_user_id=user_id) is None
 
 
 def test_analysis_default_selection_skips_other_users_earlier_connection() -> None:

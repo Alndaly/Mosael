@@ -122,7 +122,7 @@ REFERENCE_IMAGES_NEEDED = 9
 
 
 def _can_take_references(db: Session | None, choice: ModelChoice) -> bool:
-    """图像模型能不能带着一组参考图出图。认不出的算能(用户自建的、ComfyUI 查不到能力表)。"""
+    """图像模型能不能带着一组参考图出图。认不出的算能(用户自建的、查不到能力表的)。"""
     capabilities = _capabilities(db, choice, "image")
     if capabilities is None:
         return bool(choice.model)

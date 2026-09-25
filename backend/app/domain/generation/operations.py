@@ -408,7 +408,7 @@ def validate_against_capabilities(
     「invalid parameter」,或者更糟:那家默默忽略了它,于是用户要的 10 秒变成了默认的 5 秒,
     而界面上一切正常。
 
-    描述符查不到的模型(用户自己加的、ComfyUI 的工作流)放行:我们不知道它认什么,
+    描述符查不到的模型(用户自己加的、中转上的别名)放行:我们不知道它认什么,
     猜着拦只会挡住本来能用的东西。
     """
     if capabilities is _UNSET_CAPABILITIES:

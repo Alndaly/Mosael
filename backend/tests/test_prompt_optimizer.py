@@ -21,7 +21,9 @@ def test_empty_api_key_sends_no_auth_header() -> None:
 
 
 def test_sd_platform_wants_tags_and_negative() -> None:
-    g = guide_for("comfyui", "workflow")
+    """SD 那一路的写法由模型自己说(描述符的 `prompt_dialect`),不由 vendor 推 —— 同一个 ComfyUI 上
+    也有吃自然语言的 Flux 工作流。"""
+    g = guide_for("plugin:dev.mosael.comfyui", "portrait.json", "sd-tags")
     assert g.wants_negative is True
     assert g.prompt_lang == "en"
     assert "标签" in g.style  # tag-style guidance

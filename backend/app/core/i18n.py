@@ -520,14 +520,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "kind 只能是 image 或 video",
         "en": "kind must be image or video.",
     },
-    "routeErr_comfyConnectFailed": {
-        "zh": "连接 ComfyUI 失败({base}):{detail}",
-        "en": "Could not connect to ComfyUI ({base}): {detail}",
-    },
-    "routeErr_comfyWorkflowParamsFailed": {
-        "zh": "读取 ComfyUI 工作流参数失败({base}):{detail}",
-        "en": "Could not read the ComfyUI workflow parameters ({base}): {detail}",
-    },
     "routeErr_jobNotFound": {
         "zh": "job 不存在",
         "en": "Job not found.",
@@ -2245,7 +2237,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ---- i18n 分区 B2(ai/ 下的供应商与运行时):这一批新加的 key 放在这行下面 ----
     # ---- 生成供应商(ai/providers):上游原话放在 {detail} 里,不翻 ----
     # 文案里**不写字面花括号**:任务失败原因那条路(render_message)总会 format 一遍,字面的 { } 会被吃掉;
-    # 要显示花括号就走参数(见 providerErr_comfyTemplateEmpty 的 {shape})。
+    # 要显示花括号就走参数(见 pluginErr_streamNoResult 的 {shape})。
     "providerErr_apiKeyMissing": {
         "zh": "{vendor} 的 API Key 还没配置,请在设置 → 供应商配置里填写",
         "en": "{vendor} API key is not configured. Add it in Settings → Provider config.",
@@ -2335,44 +2327,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "providerErr_klingTooManyElements": {
         "zh": "可灵一次最多引用 {max} 个主体,这次给了 {given} 个",
         "en": "Kling can reference at most {max} elements per request; got {given}",
-    },
-    "providerErr_comfyNoOutput": {
-        "zh": "ComfyUI 完成了执行但没有产出文件——工作流模板里需要 SaveImage(图)或视频合成输出节点(视频)",
-        "en": "ComfyUI finished but produced no files. The workflow template needs a SaveImage node (images) or a video-combine output node (video).",
-    },
-    "providerErr_comfyConnectFailed": {
-        "zh": "连接 ComfyUI 失败({base}):{detail}。请确认 ComfyUI 正在运行,地址在设置 → AI 绘图 → ComfyUI 里可改。",
-        "en": "Could not connect to ComfyUI ({base}): {detail}. Make sure ComfyUI is running; you can change its address in Settings → AI image → ComfyUI.",
-    },
-    "providerErr_comfyWorkflowFailed": {
-        "zh": "拉取或转换 ComfyUI 工作流「{workflow}」失败:{detail}。可在生成时改选其它工作流、内置文生图,或在档案里粘贴自定义 API 模板。",
-        "en": "Could not fetch or convert the ComfyUI workflow “{workflow}”: {detail}. Pick another workflow or the built-in text-to-image when generating, or paste a custom API template into the profile.",
-    },
-    "providerErr_comfyTemplateNotJson": {
-        "zh": "ComfyUI 工作流模板不是合法 JSON——请从 ComfyUI 用「导出 (API)」格式导出后粘贴",
-        "en": "The ComfyUI workflow template is not valid JSON. Export it from ComfyUI with “Export (API)” and paste that.",
-    },
-    "providerErr_comfyTemplateEmpty": {
-        "zh": "ComfyUI 工作流模板为空——需要 API 格式(节点 id → {shape})",
-        "en": "The ComfyUI workflow template is empty. It must be in API format (node id → {shape}).",
-    },
-    "providerErr_comfyVideoNeedsTemplate": {
-        "zh": "ComfyUI 视频生成需要工作流模板:在 ComfyUI 里搭好视频工作流(如 AnimateDiff / WAN),「导出 (API)」后粘贴到该档案的模板字段,提示词位置写 {placeholder}",
-        "en": "ComfyUI video generation needs a workflow template: build a video workflow in ComfyUI (e.g. AnimateDiff / WAN), use “Export (API)”, paste it into this profile's template field, and put {placeholder} where the prompt goes.",
-    },
-    "providerErr_comfyNoCheckpoint": {
-        "zh": "ComfyUI 里没有任何 checkpoint 模型——请先在 ComfyUI 安装一个模型,或在档案里粘贴自定义工作流模板",
-        "en": "ComfyUI has no checkpoint models. Install one in ComfyUI first, or paste a custom workflow template into the profile.",
-    },
-    "providerErr_comfyRejected": {"zh": "ComfyUI 拒绝了工作流:{detail}", "en": "ComfyUI rejected the workflow: {detail}"},
-    "providerErr_comfyExecutionFailed": {"zh": "ComfyUI 执行失败:{detail}", "en": "ComfyUI execution failed: {detail}"},
-    "providerErr_comfyExecutionFailedNoDetail": {
-        "zh": "ComfyUI 执行失败:未知错误(详见 ComfyUI 日志)",
-        "en": "ComfyUI execution failed with an unknown error (see the ComfyUI log)",
-    },
-    "providerErr_comfyTimeout": {
-        "zh": "ComfyUI 生成超时({seconds}s)——工作流可能仍在排队,可在 ComfyUI 界面查看",
-        "en": "ComfyUI generation timed out ({seconds}s). The workflow may still be queued; check the ComfyUI interface.",
     },
     # ---- 语音合成 / 播客 ----
     "providerErr_unknownSpeechEngine": {"zh": "未知的语音引擎:{engine}", "en": "Unknown speech engine: {engine}"},

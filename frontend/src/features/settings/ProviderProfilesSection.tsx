@@ -16,7 +16,6 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
-import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
@@ -419,24 +418,12 @@ export function ProviderProfilesSection({
                     </FormLabel>
                     <FormControl>
                       {/* 密的字段是**我的**,谁都能改;其余是连接的配置,只有部署管理员改得动。 */}
-                      {spec.multiline ? (
-                        <CodeEditor
-                          language="json"
-                          value={field.value ?? ""}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          placeholder={spec.default || ""}
-                          minHeight={140}
-                          maxHeight={320}
-                        />
-                      ) : (
-                        <Input
-                          type={spec.secret ? "password" : "text"}
-                          placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : spec.default || ""}
-                          {...field}
-                          value={field.value ?? ""}
-                        />
-                      )}
+                      <Input
+                        type={spec.secret ? "password" : "text"}
+                        placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : spec.default || ""}
+                        {...field}
+                        value={field.value ?? ""}
+                      />
                     </FormControl>
                     {(spec.hint || spec.default) && (
                       <FormDescription>
@@ -538,13 +525,8 @@ export function ProviderProfilesSection({
                     </>
                   ) : profile.key_hint ? (
                     ` · ${profile.key_hint}`
-                  ) : profile.needs_key ? (
-                    <> · <span className="text-destructive">{t("providerNoKeyOfMine")}</span></>
                   ) : (
-                    /* 免密钥的(本机 ComfyUI):它压根没有密钥可配,一行红字只会让人去找一个
-                       不存在的输入框。判据由后端给(needs_key),不在这里按 vendor 名字硬编 ——
-                       下一个免密钥的 vendor 加进来时,硬编的那份没有任何东西会提醒你。 */
-                    <> · {t("providerKeyless")}</>
+                    <> · <span className="text-destructive">{t("providerNoKeyOfMine")}</span></>
                   )}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                   {/* 在线状态贴在地址后面:它说的正是"这个地址通不通"。 */}

@@ -34,9 +34,6 @@ const KEPT_BY_HAND: Record<string, string> = {
   "boards.ts:BoardItem": "同上:画布里的一项,它的形状住在那个裸 dict 里。",
   "boards.ts:BoardEdge": "同上:画布里的一条连线,形状同样住在那个裸 dict 里。",
   "boards.ts:BoardMarker": "同上:画布上的一枚标记,形状同样住在那个裸 dict 里。",
-  "generation.ts:ComfyWorkflow":
-    "形状由**外部 ComfyUI 服务器**决定,两侧都不拥有;路由返回裸 dict,没有 response_model。",
-  "generation.ts:ComfyParam": "同上:ComfyUI 那边的参数表,我们只是转发,两侧都不拥有它。",
   "scenes.ts:SceneModel": "3D 场景的内容是裸 dict(scene.content),同 boards 的账。",
   "scenes.ts:ScenePreviewData": "同上:预览结构由场景内容那个裸 dict 决定。",
   "scenes.ts:PreviewObject": "同上:预览里的一个物体,形状由场景内容决定。",

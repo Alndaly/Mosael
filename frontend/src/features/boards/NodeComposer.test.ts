@@ -260,7 +260,7 @@ describe("参考素材格子的合并判据", () => {
 
 describe("「参数」按钮只在真有参数时出现", () => {
   /**
-   * 10 个图片模型里 8 个的 `parameter_keys` 是空的(gemini 那几族、ComfyUI 工作流、gemma4…),
+   * 10 个图片模型里 8 个的 `parameter_keys` 是空的(gemini 那几族、手填的别名、gemma4…),
    * 而互斥输入组只有一组时 `sourceModes` 也回空 —— 于是弹层里每一个条件块都是 false,
    * 点开「参数」是一个只有标题的空盒子。
    */

@@ -174,7 +174,7 @@ export function roleAccepts(role: string): "image" | "video" | "audio" {
  * 「参数」弹层里**会出现哪几块**。按 key 回一个清单,而不是回一个 boolean。
  *
  * 按钮的显隐和弹层的内容必须出自**同一处**。分开写的结果已经见过了:10 个图片模型里 8 个的
- * `parameter_keys` 是空的(gemini 那几族、ComfyUI 工作流、gemma4…),而互斥输入组只有一组时
+ * `parameter_keys` 是空的(gemini 那几族、手填的别名、gemma4…),而互斥输入组只有一组时
  * `sourceModes` 也回空 —— 于是每一个条件块都是 false,点开「参数」是一个只有标题的空盒子。
  * 这正是这个仓库一直在消灭的那种"点了没反应"。
  *

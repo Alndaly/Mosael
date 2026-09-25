@@ -139,20 +139,6 @@ class TestSeedream4:
         assert "1280x720" in C.SEEDREAM_4_IMAGE_CAPABILITIES["sizes"]
 
 
-class TestComfyUI:
-    """核查日期 2026-08-27,本地 ComfyUI 0.34.0。端到端跑通:工作流转换(14 节点)→ 参数注入
-    → 提交 → 35 秒生成成功。
-
-    **它的能力取决于用户装的工作流**,所以描述符里那几个尺寸档只是缺省值 —— 真正可调的
-    参数由 extract_workflow_params 从工作流里扫出来(那次扫到 20 个,并正确识别出
-    prompt / negative / seed 三个角色)。
-    """
-
-    def test_声明了需要工作流模板(self) -> None:
-        """漏了这条的话,界面会把 ComfyUI 当成一个开箱即用的模型 —— 而它没有工作流跑不了。"""
-        assert C.COMFYUI_VIDEO_CAPABILITIES.get("requires_workflow_template") is True
-
-
 class TestOpenAI图像:
     """核查日期 2026-08-27(gpt-image-2,经 147ai)。接口原话:
     `Width and height must both be divisible by 16.` 与

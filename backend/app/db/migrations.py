@@ -2541,6 +2541,337 @@ def _migrate_browser_boolean_options() -> None:
                 )
 
 
+def _migrate_comfyui_connections_become_plugin_instances() -> None:
+    """ComfyUI 从内核供应商搬成随应用发的插件(ADR 0020):每条 `comfyui` 连接 → 同一个人的 ComfyUI
+    插件实例,**连接原地改成插件连接**,存着的引用改成新写法。
+
+    **连接 id 不变**,于是模型行、默认模型、生成历史、用量、定价这些挂在连接上的外键一个都不用动。
+    连接上的地址和粘贴的模板搬进实例配置(`server_url` / `api_workflow`),`network:comfyui` 直接授予
+    —— 他早就配过这台服务器,升级不该让他再点一次。
+
+    模型与引用的新写法(和插件目录说的是同一套 id):
+
+    - 选过 ComfyUI 里保存的工作流(`parameters.workflow` = 路径)→ **那个工作流就是模型**,
+      动态参数表 `workflow_params: {节点: {输入: 值}}` 拍平成 `<节点>.<输入>`;
+    - 假模型 `workflow`:连接粘过模板的 → `api-workflow`;没粘的图像 → `builtin:txt2img`(内置文生图);
+      没粘模板的视频原来就跑不了(没有内置视频图),**保持原样**,运行时明确报「这个模型不可用」;
+    - 指向旧目录档案的参数声明(`comfyui-image` / `comfyui-video` / `model:comfyui/workflow`)和这些连接上
+      的参数模板删掉:那是对旧 Adapter 的断言,插件连接的参数由插件目录说。
+
+    改写的地方:生成任务与任务表里的回执、产出记录、用量与定价、生成会话、定时任务、画板上的生成格、
+    工作流(连同循环体 / 子图;改过的追加一版修订,作者和认可人沿用上一版 —— 机械改写不换担保人)。
+    引用到的模型行不在就补上,插件目录刷新时再对齐。
+
+    幂等:第二次跑时已经没有 `comfyui` 连接、也没有 `comfyui` 的引用。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"provider_profiles", "provider_models", "plugin_instances", "plugin_packages"} <= tables:
+        return
+    package_id = "dev.mosael.comfyui"
+    vendor = f"plugin:{package_id}"
+    obsolete_refs = ("profile:comfyui-image", "profile:comfyui-video", "model:comfyui/workflow")
+
+    def loads(raw: Any, fallback: Any) -> Any:
+        if raw is None:
+            return fallback
+        if not isinstance(raw, str):
+            return raw
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return fallback
+
+    def dumps(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False)
+
+    # 和 SQLAlchemy 的 DateTime 在 SQLite 里存的是同一种写法;直接传 datetime 走的是已弃用的默认适配器。
+    stamp = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    with engine.begin() as conn:
+        profiles = conn.execute(text(
+            "SELECT id, owner_user_id, name, base_url, extra, enabled FROM provider_profiles WHERE vendor = 'comfyui'"
+        )).mappings().all()
+        if profiles and conn.execute(text("SELECT 1 FROM plugin_packages WHERE id = :id"), {"id": package_id}).first() is None:
+            raise RuntimeError("the bundled ComfyUI plugin is not installed; ComfyUI connections cannot be migrated yet")
+
+        #: 这次搬过的连接 → 它有没有粘过模板(决定假模型 `workflow` 改成什么)。
+        templated: dict[str, bool] = {}
+        for profile in profiles:
+            extra = loads(profile["extra"], {}) or {}
+            template = str(extra.get("workflow_template") or "").strip()
+            templated[profile["id"]] = bool(template)
+            instance_id = uuid.uuid4().hex
+            config = {"server_url": (profile["base_url"] or "").strip() or "http://127.0.0.1:8188", "api_workflow": template}
+            conn.execute(
+                text(
+                    "INSERT INTO plugin_instances (id, owner_user_id, package_id, name, enabled, config,"
+                    " discovered_tools, capability_status, created_at, updated_at)"
+                    " VALUES (:id, :owner, :package, :name, :enabled, :config, '[]', '{}', :now, :now)"
+                ),
+                {"id": instance_id, "owner": profile["owner_user_id"] or "", "package": package_id,
+                 "name": profile["name"], "enabled": int(bool(profile["enabled"])), "config": dumps(config), "now": stamp},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO plugin_permission_grants (instance_id, permission, granted, created_at, updated_at)"
+                    " VALUES (:id, 'network:comfyui', 1, :now, :now)"
+                ),
+                {"id": instance_id, "now": stamp},
+            )
+            conn.execute(
+                text(
+                    "UPDATE provider_profiles SET vendor = :vendor, plugin_instance_id = :instance, base_url = '',"
+                    " extra = '{}' WHERE id = :id"
+                ),
+                {"vendor": vendor, "instance": instance_id, "id": profile["id"]},
+            )
+            # 免密钥的连接不该有钥匙行;有的话(随手敲过几个字骗过旧判据)也没有任何意义了。
+            conn.execute(text("DELETE FROM provider_credentials WHERE profile_id = :id"), {"id": profile["id"]})
+            if "generation_capability_declarations" in tables:
+                conn.execute(
+                    text(
+                        "DELETE FROM generation_capability_declarations WHERE provider_model_id IN"
+                        " (SELECT id FROM provider_models WHERE provider_profile_id = :id)"
+                    ),
+                    {"id": profile["id"]},
+                )
+            if "generation_capability_profiles" in tables:
+                conn.execute(text("DELETE FROM generation_capability_profiles WHERE provider_profile_id = :id"),
+                             {"id": profile["id"]})
+            conn.execute(text("UPDATE provider_models SET generation_capability_ref = NULL WHERE provider_profile_id = :id"),
+                         {"id": profile["id"]})
+            # 假模型 `workflow` 改名。目标那一行已经在(用户早就加过)就把默认模型挪过去再删掉这一行。
+            for row in conn.execute(
+                text("SELECT id, capability_ids FROM provider_models WHERE provider_profile_id = :id AND model_id = 'workflow'"),
+                {"id": profile["id"]},
+            ).mappings().all():
+                capabilities = loads(row["capability_ids"], []) or []
+                if template:
+                    target = "api-workflow"
+                elif "image" in capabilities or not capabilities:
+                    target = "builtin:txt2img"
+                else:
+                    continue  # 没有模板的视频:原来就跑不了,保持原样
+                existing = conn.execute(
+                    text("SELECT id FROM provider_models WHERE provider_profile_id = :p AND model_id = :m"),
+                    {"p": profile["id"], "m": target},
+                ).scalar()
+                if existing:
+                    if "provider_defaults" in tables:
+                        conn.execute(text("UPDATE provider_defaults SET provider_model_id = :new WHERE provider_model_id = :old"),
+                                     {"new": existing, "old": row["id"]})
+                    conn.execute(text("DELETE FROM provider_models WHERE id = :id"), {"id": row["id"]})
+                else:
+                    conn.execute(text("UPDATE provider_models SET model_id = :m, source = 'plugin' WHERE id = :id"),
+                                 {"m": target, "id": row["id"]})
+
+        if "generation_capability_declarations" in tables:
+            conn.execute(
+                text("DELETE FROM generation_capability_declarations WHERE catalog_ref IN (:a, :b, :c)"),
+                dict(zip(("a", "b", "c"), obsolete_refs)),
+            )
+        conn.execute(
+            text("UPDATE provider_models SET generation_capability_ref = NULL WHERE generation_capability_ref IN (:a, :b, :c)"),
+            dict(zip(("a", "b", "c"), obsolete_refs)),
+        )
+
+        #: 引用里用到、而连接下还没有行的模型:(连接, 模型 id) → 种类。最后补上。
+        wanted: dict[tuple[str, str], str] = {}
+
+        def rewrite(ref: dict[str, Any]) -> dict[str, Any] | None:
+            """一份存着的引用 `{provider?, provider_profile_id?, model, kind?, parameters?}` → 新写法;
+            跟 ComfyUI 无关的回 None(不动它)。"""
+            profile_id = str(ref.get("provider_profile_id") or "")
+            if ref.get("provider") != "comfyui" and profile_id not in templated:
+                return None
+            out = dict(ref)
+            if "provider" in out:
+                out["provider"] = vendor
+            parameters = dict(out.get("parameters") or {}) if isinstance(out.get("parameters"), dict) else {}
+            workflow = str(parameters.pop("workflow", "") or "").strip()
+            nested = parameters.pop("workflow_params", None)
+            if isinstance(nested, dict):
+                for node_id, inputs in nested.items():
+                    if isinstance(inputs, dict):
+                        for name, value in inputs.items():
+                            parameters[f"{node_id}.{name}"] = value
+            kind = str(out.get("kind") or "image")
+            model = str(out.get("model") or "")
+            if workflow and workflow not in ("builtin", "custom"):
+                model = workflow
+            elif model == "workflow" and templated.get(profile_id):
+                model = "api-workflow"
+            elif model == "workflow" and kind == "image":
+                model = "builtin:txt2img"
+            out["model"] = model
+            if "parameters" in out or parameters:
+                out["parameters"] = parameters
+            if profile_id and model and model != "workflow":
+                wanted.setdefault((profile_id, model), kind)
+            return out
+
+        # 生成任务:列上的 provider / model,请求里的参数。
+        if "generation_jobs" in tables:
+            for row in conn.execute(text(
+                "SELECT id, provider, provider_profile_id, model, kind, request FROM generation_jobs"
+                " WHERE provider = 'comfyui' OR provider_profile_id IN (SELECT id FROM provider_profiles WHERE vendor = :v)"
+            ), {"v": vendor}).mappings().all():
+                request = loads(row["request"], {}) or {}
+                changed = rewrite({"provider": row["provider"], "provider_profile_id": row["provider_profile_id"],
+                                   "model": row["model"], "kind": row["kind"], "parameters": request.get("parameters") or {}})
+                if changed is None:
+                    continue
+                conn.execute(
+                    text("UPDATE generation_jobs SET provider = :p, model = :m, request = :r WHERE id = :id"),
+                    {"p": changed["provider"], "m": changed["model"],
+                     "r": dumps({**request, "parameters": changed["parameters"]}), "id": row["id"]},
+                )
+        if "jobs" in tables:
+            for row in conn.execute(text("SELECT id, payload FROM jobs WHERE kind = 'ai_generation'")).mappings().all():
+                payload = loads(row["payload"], {}) or {}
+                request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+                changed = rewrite({"provider": payload.get("provider"), "provider_profile_id": payload.get("provider_profile_id"),
+                                   "model": payload.get("model"), "kind": payload.get("kind"),
+                                   "parameters": request.get("parameters") or {}})
+                if changed is None:
+                    continue
+                payload.update(provider=changed["provider"], model=changed["model"])
+                if request:
+                    payload["request"] = {**request, "parameters": changed["parameters"]}
+                conn.execute(text("UPDATE jobs SET payload = :p WHERE id = :id"), {"p": dumps(payload), "id": row["id"]})
+        for table in ("generated_assets", "provider_usage_events", "provider_pricing_rules"):
+            if table in tables:
+                conn.execute(text(f"UPDATE {table} SET provider = :v WHERE provider = 'comfyui'"), {"v": vendor})
+        if "generation_sessions" in tables:
+            for row in conn.execute(text(
+                "SELECT id, provider_profile_id, model, kind FROM generation_sessions WHERE model = 'workflow'"
+                " AND provider_profile_id IN (SELECT id FROM provider_profiles WHERE vendor = :v)"
+            ), {"v": vendor}).mappings().all():
+                changed = rewrite({"provider_profile_id": row["provider_profile_id"], "model": row["model"], "kind": row["kind"]})
+                if changed is not None and changed["model"] != row["model"]:
+                    conn.execute(text("UPDATE generation_sessions SET model = :m WHERE id = :id"),
+                                 {"m": changed["model"], "id": row["id"]})
+        if "scheduled_tasks" in tables:
+            for row in conn.execute(text("SELECT id, payload FROM scheduled_tasks")).mappings().all():
+                payload = loads(row["payload"], {}) or {}
+                if not isinstance(payload, dict) or not ("provider" in payload or "provider_profile_id" in payload):
+                    continue
+                changed = rewrite(payload)
+                if changed is not None and changed != payload:
+                    conn.execute(text("UPDATE scheduled_tasks SET payload = :p WHERE id = :id"),
+                                 {"p": dumps(changed), "id": row["id"]})
+        if "boards" in tables:
+            board_columns = {column["name"] for column in inspect(conn).get_columns("boards")}
+            for row in conn.execute(text("SELECT id, canvas FROM boards")).mappings().all():
+                canvas = loads(row["canvas"], None)
+                if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                    continue
+                touched = False
+                for item in canvas["items"]:
+                    form = item.get("form") if isinstance(item, dict) else None
+                    if not isinstance(form, dict):
+                        continue
+                    changed = rewrite({**form, "kind": item.get("kind")})
+                    if changed is not None:
+                        changed.pop("kind", None)
+                        if changed != form:
+                            item["form"] = changed
+                            touched = True
+                if touched:
+                    bump = ", revision = revision + 1" if "revision" in board_columns else ""
+                    conn.execute(text(f"UPDATE boards SET canvas = :c{bump} WHERE id = :id"),
+                                 {"c": dumps(canvas), "id": row["id"]})
+        if "workflows" in tables:
+
+            def rewrite_graph(graph: Any) -> Any:
+                if not isinstance(graph, dict):
+                    return graph
+                nodes = []
+                for node in graph.get("nodes") or []:
+                    if not isinstance(node, dict):
+                        nodes.append(node)
+                        continue
+                    config = dict(node.get("config") or {})
+                    if node.get("type") == "ai_generate":
+                        changed = rewrite(config)
+                        if changed is not None:
+                            config = changed
+                    for key, value in config.items():
+                        if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                            config[key] = rewrite_graph(value)
+                    nodes.append({**node, "config": config} if config != (node.get("config") or {}) else node)
+                return {**graph, "nodes": nodes}
+
+            def digest(graph: Any) -> str:
+                canonical = json.dumps(graph or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+            has_revisions = "workflow_revisions" in tables
+            for row in conn.execute(text("SELECT id, graph FROM workflows")).mappings().all():
+                graph = loads(row["graph"], None)
+                if not isinstance(graph, dict):
+                    continue
+                rewritten = rewrite_graph(graph)
+                if rewritten == graph:
+                    continue
+                if not has_revisions:
+                    conn.execute(text("UPDATE workflows SET graph = :g WHERE id = :id"),
+                                 {"g": dumps(rewritten), "id": row["id"]})
+                    continue
+                latest = conn.execute(
+                    text("SELECT id, revision, created_by FROM workflow_revisions WHERE workflow_id = :id"
+                         " ORDER BY revision DESC LIMIT 1"),
+                    {"id": row["id"]},
+                ).mappings().first()
+                revision = int(latest["revision"]) + 1 if latest else 1
+                revision_id = uuid.uuid4().hex
+                conn.execute(
+                    text(
+                        "INSERT INTO workflow_revisions (id, workflow_id, revision, graph, graph_hash, source, note,"
+                        " created_by, created_at) VALUES (:id, :workflow, :revision, :graph, :hash, 'migration',"
+                        " 'ComfyUI 搬进插件:模型与参数改成插件的写法', :author, :now)"
+                    ),
+                    {"id": revision_id, "workflow": row["id"], "revision": revision, "graph": dumps(rewritten),
+                     "hash": digest(rewritten), "author": latest["created_by"] if latest else None, "now": stamp},
+                )
+                if latest and "workflow_revision_attestations" in tables:
+                    for attester in conn.execute(
+                        text("SELECT user_id FROM workflow_revision_attestations WHERE revision_id = :id"),
+                        {"id": latest["id"]},
+                    ).scalars().all():
+                        conn.execute(
+                            text("INSERT INTO workflow_revision_attestations (id, revision_id, user_id, created_at)"
+                                 " VALUES (:id, :revision, :user, :now)"),
+                            {"id": uuid.uuid4().hex, "revision": revision_id, "user": attester, "now": stamp},
+                        )
+                conn.execute(
+                    text("UPDATE workflows SET graph = :g, revision = :r, graph_hash = :h WHERE id = :id"),
+                    {"g": dumps(rewritten), "r": revision, "h": digest(rewritten), "id": row["id"]},
+                )
+
+        # 引用到的模型在连接下还没有行的,补上 —— 否则插件目录刷新之前,那些画板和工作流选不到它。
+        for (profile_id, model), kind in wanted.items():
+            known = conn.execute(
+                text("SELECT 1 FROM provider_models WHERE provider_profile_id = :p AND model_id = :m"),
+                {"p": profile_id, "m": model},
+            ).first()
+            is_plugin = conn.execute(
+                text("SELECT 1 FROM provider_profiles WHERE id = :p AND vendor = :v"), {"p": profile_id, "v": vendor}
+            ).first()
+            if known or not is_plugin:
+                continue
+            conn.execute(
+                text(
+                    "INSERT INTO provider_models (id, provider_profile_id, model_id, display_name, capability_ids, enabled,"
+                    " source, created_at, updated_at) VALUES (:id, :p, :m, :name, :caps, 1, 'plugin', :now, :now)"
+                ),
+                {"id": uuid.uuid4().hex, "p": profile_id, "m": model[:160],
+                 "name": (model[:-5] if model.endswith(".json") else model)[:160],
+                 "caps": dumps([kind if kind in ("image", "video") else "image"]), "now": stamp},
+            )
+    if profiles:
+        logger.info("把 %d 条 ComfyUI 连接搬成了 ComfyUI 插件的连接", len(profiles))
+
+
 def _install_bundled_plugins() -> None:
     """随应用发的插件(`plugins/bundled/`)装进插件目录并登记包记录。
 
@@ -3161,6 +3492,8 @@ def migration_plan() -> MigrationPlan:
                 # 之后、而且在要用到它的包记录的那些迁移之前。
                 _install_bundled_plugins,
             ),
+            #: 要用到上一步刚装好的 ComfyUI 插件包(ADR 0020)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_comfyui_connections_become_plugin_instances),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

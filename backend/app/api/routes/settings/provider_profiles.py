@@ -26,7 +26,7 @@ from app.domain import provider_credentials, provider_health, provider_models
 from app.domain.agent.host import mint_tool_token
 from app.domain.permissions import require_own_profile
 from app.domain.provider_auth import read_credential
-from app.domain.provider_credentials import ResolvedConnection, is_keyless
+from app.domain.provider_credentials import ResolvedConnection
 from app.domain.provider_presets import ProviderField, provider_definition, provider_definitions
 from app.domain.provider_quota import is_expired, supports_quota
 from app.domain.providers import normalize_auth_type, pi_provider_id
@@ -50,8 +50,6 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     credential = provider_credentials.get(db, profile.id, user.id)
     out.key_hint = provider_credentials.key_hint(credential)
     out.is_mine = credential is not None
-    # 插件连接的钥匙在插件实例上(ADR 0020),这条连接上没有钥匙可配。
-    out.needs_key = not (is_keyless(profile.vendor) or profile.plugin_instance_id)
     if profile.plugin_instance_id:
         from app.domain.generation.plugin_connections import package_of
 
@@ -522,7 +520,7 @@ def _resolved_or_bare(db: DbSession, profile: ProviderProfile, user: CurrentUser
 def probe_provider_health(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderHealthOut:
     """探一次这条连接通不通、往返多久。
 
-    **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
+    **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 Ollama、云端 /models),
     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
     """
     profile = require_own_profile(db, user, profile_id)

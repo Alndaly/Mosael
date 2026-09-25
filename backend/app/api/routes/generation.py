@@ -226,51 +226,6 @@ def optimize_prompt(body: PromptOptimizeRequest, db: DbSession, user: CurrentUse
     return PromptOptimizeResponse(**result)
 
 
-@router.get("/generation/comfyui/workflows")
-def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | None = None) -> list[dict]:
-    """列出某 ComfyUI 档案实例里保存的工作流,供生成表单下拉。ComfyUI 细节封在 comfyui_client,
-    这里只解析档案地址、转发列表。连不上 ComfyUI → 502,前端据此提示。"""
-    from app.ai.providers.adapters.comfyui.client import ComfyUIClient
-    from app.domain.providers import resolve_connection
-
-    from app.domain import provider_models
-
-    profile = resolve_connection(db, "comfyui", profile_id, user_id=user.id)
-    base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
-    try:
-        workflows = ComfyUIClient(base).list_workflows()
-    except Exception as exc:  # noqa: BLE001 — 网络/解析失败都回可读 502
-        raise HTTPException(status_code=502, detail=tr("routeErr_comfyConnectFailed", base=base, detail=str(exc))) from exc
-    if profile is None:
-        return workflows
-    # 设置页里加入并启用过工作流,就只给这些 —— 否则设置页那份清单只是装饰:用户在那里
-    # 挑挑拣拣,生成页照样把实例里所有东西铺出来。一条都没配过时给全量(不能因为"还没配"
-    # 就让本来能用的功能变成空列表)。
-    chosen = {
-        model.model_id
-        for model in provider_models.list_models(db, profile.id, enabled_only=True)
-    }
-    if not chosen:
-        return workflows
-    return [item for item in workflows if item.get("path") in chosen]
-
-
-@router.get("/generation/comfyui/workflow-params")
-def get_comfyui_workflow_params(
-    workflow: str, db: DbSession, user: CurrentUser, profile_id: str | None = None
-) -> list[dict]:
-    """提取某工作流的可调参数(类型/范围/当前值/语义角色),供动态表单渲染。"""
-    from app.ai.providers.adapters.comfyui.client import ComfyUIClient
-    from app.domain.providers import resolve_connection
-
-    profile = resolve_connection(db, "comfyui", profile_id, user_id=user.id)
-    base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
-    try:
-        return ComfyUIClient(base).fetch_workflow_params(workflow)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=tr("routeErr_comfyWorkflowParamsFailed", base=base, detail=str(exc))) from exc
-
-
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
 def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")

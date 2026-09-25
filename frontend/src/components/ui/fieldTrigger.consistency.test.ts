@@ -31,7 +31,7 @@ describe("下拉触发器只有一份样式", () => {
 
   it.each(Object.entries(FILES))("%s 不自带触发器高度", (_name, path) => {
     // 触发器那一串的标志是「flex + 边框 + bg-field」同时出现;它一旦自带 h-*,
-    // 就是又抄了一份。调用点仍然可以用 className 覆盖(见 AiStudio 的 ComfyUI 参数列表),
+    // 就是又抄了一份。调用点仍然可以用 className 覆盖(见 AiStudio 里模型自己声明的那些参数),
     // 那是 cn() 之后的事,不在这几个文件里。
     const source = readFileSync(path, "utf8");
     const handwritten = source

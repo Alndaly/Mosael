@@ -180,7 +180,7 @@ class GenerationProgressCallbacks:
 
     on_progress reports a coarse fraction (0..1) plus a user-facing message; is_cancelled
     is checked between provider round-trips so a user cancel can stop the remote work
-    (e.g. ComfyUI /interrupt) instead of merely abandoning it. Adapters that opt in set
+    (a plugin provider such as ComfyUI interrupts its task) instead of merely abandoning it. Adapters that opt in set
     supports_progress_callbacks and accept the keyword; everyone else keeps the old signature —
     the runner only passes callbacks where they are understood.
     """

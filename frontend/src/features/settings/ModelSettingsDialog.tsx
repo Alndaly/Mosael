@@ -42,7 +42,7 @@ type VendorPreset = components["schemas"]["VendorPresetOut"];
  * `providers.ALL_CAPABILITY_IDS` 六项 —— 于是 embedding 在列表行上有标签、在弹窗里却根本没有
  * 对应的格子,既看不到也改不了。
  *
- * 用**这个 vendor 的**预设而不是全集,还顺带解决了另一半:给 ComfyUI 工作流列 chat/tts、
+ * 用**这个 vendor 的**预设而不是全集,还顺带解决了另一半:给纯生图的端点列 chat/tts、
  * 给 DeepSeek 端点列 video,都是让人多读几个不可能的选项。而它正是"未指定时跟随预设"里的
  * 那个预设,所以弹窗里的格子和它下面那句提示永远说的是同一件事。
  */
@@ -236,7 +236,7 @@ export function ModelSettingsDialog({
 }: {
   profileId: string;
   modelId: string;
-  /** 决定标题措辞与可选能力范围。ComfyUI 这里管的是工作流,不是模型。 */
+  /** 决定可选能力范围(这个 vendor 的预设)。 */
   vendor?: string;
   open: boolean;
   onOpenChange: (next: boolean) => void;
@@ -334,7 +334,7 @@ export function ModelSettingsDialog({
     <ModalShell
       open={open}
       onOpenChange={onOpenChange}
-      title={vendor === "comfyui" ? t("workflowSettingsTitle") : t("modelSettingsTitle")}
+      title={t("modelSettingsTitle")}
       footer={
         <>
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>

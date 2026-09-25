@@ -81,17 +81,12 @@ export function ProviderModelList({
     onSuccess: invalidate,
   });
 
-  // ComfyUI 的选择单位是**工作流**不是模型 —— 它是个工作流引擎,没有模型目录可言。
-  // 但交互完全一样(加入 / 启停 / 设能力 / 删除),所以走同一套行,只换文案:后端把
-  // 实例里保存的工作流当成这条连接的"目录"返回(见 settings._catalog_entries)。
-  // 在前端分叉成两个组件的话,两边的行样式和批量选择迟早各长各的。
-  const isWorkflowUnit = vendor === "comfyui";
   const unit = {
-    add: isWorkflowUnit ? t("workflowAddPlaceholder") : t("modelAddPlaceholder"),
-    search: isWorkflowUnit ? t("workflowSearchPlaceholder") : t("modelSearchPlaceholder"),
-    empty: isWorkflowUnit ? t("workflowNoMatch") : t("modelNoMatch"),
-    custom: isWorkflowUnit ? t("workflowAddCustom") : t("modelAddCustom"),
-    gone: isWorkflowUnit ? t("workflowNotInInstance") : t("modelNotInCatalog"),
+    add: t("modelAddPlaceholder"),
+    search: t("modelSearchPlaceholder"),
+    empty: t("modelNoMatch"),
+    custom: t("modelAddCustom"),
+    gone: t("modelNotInCatalog"),
   };
 
   const rows = models.data ?? [];

@@ -293,22 +293,22 @@ def test_generation_jobs_surface_cost(tmp_path: Path) -> None:
 def test_设置页加了什么_生成页就有什么() -> None:
     """这条钉住这次重构的目的:两个页面同一个来源。
 
-    以前生成页看 generation_models(内置目录)、设置页看 provider_models,于是 ComfyUI 的
-    工作流只在生成页出现(还是个叫 `workflow` 的假模型 id),而设置页里新加的模型进不了生成页。
+    以前生成页看 generation_models(内置目录)、设置页看 provider_models,于是有的模型只在生成页
+    出现(ComfyUI 当年还是个叫 `workflow` 的假模型 id),而设置页里新加的模型进不了生成页。
     """
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
     profile_id = _configure(
-        client, "comfyui", "本地 ComfyUI", [("my-flow.json", ["image", "video"])], base_url="http://127.0.0.1:1"
+        client, "openai-compatible", "中转", [],
+        base_url="https://relay.example/v1", api_key="sk-test", default_model="my-image-alias",
     )
 
-    for kind in ("image", "video"):
-        options = client.get(f"/api/generation/options?kind={kind}").json()
-        assert [(o["provider_profile_id"], o["model"]) for o in options] == [(profile_id, "my-flow.json")]
+    options = client.get("/api/generation/options?kind=image").json()
+    assert [(o["provider_profile_id"], o["model"]) for o in options] == [(profile_id, "my-image-alias")]
 
     # 在设置里停用 → 生成页立刻没有了(同一个来源的直接后果)
     client.patch(
-        f"/api/settings/providers/{profile_id}/models/my-flow.json", json={"enabled": False}
+        f"/api/settings/providers/{profile_id}/models/my-image-alias", json={"enabled": False}
     )
     assert client.get("/api/generation/options?kind=image").json() == []
 
@@ -318,10 +318,6 @@ def test_描述符按模型查_查不到给不猜参数的保守兜底() -> None
     from app.domain.generation import capabilities_for
 
     assert capabilities_for("bytedance", "doubao-seedance-2-0-260128", "video")["resolutions"]
-    assert capabilities_for("comfyui", "随便什么名字.json", "image") == {
-        "modes": ["text-to-image"],
-        "parameter_keys": [],
-    }
     # 完全不认识的 vendor
     assert capabilities_for("nobody", "x", "image") == {
         "modes": ["text-to-image"],

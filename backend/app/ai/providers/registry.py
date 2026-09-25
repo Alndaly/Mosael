@@ -19,7 +19,6 @@ from app.ai.providers.adapters.alibaba.dashscope.video import WanVideoAdapter
 from app.ai.providers.adapters.bytedance.ark.image import SeedreamAdapter
 from app.ai.providers.adapters.bytedance.ark.video import SeedanceAdapter
 from app.ai.providers.adapters.bytedance.volcano.speech import VolcanoSpeechAdapter
-from app.ai.providers.adapters.comfyui import ComfyUIGenerationAdapter
 from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapter
 from app.ai.providers.adapters.google.veo import VeoAdapter
 from app.ai.providers.adapters.kuaishou.kling.video import KlingVideoAdapter
@@ -48,8 +47,6 @@ def _generation_adapters() -> tuple[GenerationAdapter, ...]:
         KlingVideoAdapter(),
         OpenAIImageAdapter("openai"),
         OpenAIImageAdapter("openai-compatible"),
-        ComfyUIGenerationAdapter("image"),
-        ComfyUIGenerationAdapter("video"),
         EvolinkGenerationAdapter("image"),
         EvolinkGenerationAdapter("video"),
     )

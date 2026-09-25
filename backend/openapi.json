@@ -8323,125 +8323,6 @@
         }
       }
     },
-    "/api/generation/comfyui/workflows": {
-      "get": {
-        "tags": [
-          "generation"
-        ],
-        "summary": "List Comfyui Workflows",
-        "description": "列出某 ComfyUI 档案实例里保存的工作流,供生成表单下拉。ComfyUI 细节封在 comfyui_client,\n这里只解析档案地址、转发列表。连不上 ComfyUI → 502,前端据此提示。",
-        "operationId": "list_comfyui_workflows_api_generation_comfyui_workflows_get",
-        "parameters": [
-          {
-            "name": "profile_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Profile Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": true
-                  },
-                  "title": "Response List Comfyui Workflows Api Generation Comfyui Workflows Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/generation/comfyui/workflow-params": {
-      "get": {
-        "tags": [
-          "generation"
-        ],
-        "summary": "Get Comfyui Workflow Params",
-        "description": "提取某工作流的可调参数(类型/范围/当前值/语义角色),供动态表单渲染。",
-        "operationId": "get_comfyui_workflow_params_api_generation_comfyui_workflow_params_get",
-        "parameters": [
-          {
-            "name": "workflow",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Workflow"
-            }
-          },
-          {
-            "name": "profile_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Profile Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": true
-                  },
-                  "title": "Response Get Comfyui Workflow Params Api Generation Comfyui Workflow Params Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/generation/jobs": {
       "post": {
         "tags": [
@@ -12927,7 +12808,7 @@
           "settings"
         ],
         "summary": "Probe Provider Health",
-        "description": "探一次这条连接通不通、往返多久。\n\n**只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),\n定时轮询等于替用户持续产生请求 —— 而\"它现在通不通\"这个问题只在他看着这一页时才有意义。",
+        "description": "探一次这条连接通不通、往返多久。\n\n**只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 Ollama、云端 /models),\n定时轮询等于替用户持续产生请求 —— 而\"它现在通不通\"这个问题只在他看着这一页时才有意义。",
         "operationId": "probe_provider_health_api_settings_providers__profile_id__health_get",
         "parameters": [
           {
@@ -27356,11 +27237,6 @@
             "title": "Is Mine",
             "default": false
           },
-          "needs_key": {
-            "type": "boolean",
-            "title": "Needs Key",
-            "default": true
-          },
           "plugin_instance_id": {
             "anyOf": [
               {
@@ -31357,11 +31233,6 @@
             "type": "string",
             "title": "Hint",
             "default": ""
-          },
-          "multiline": {
-            "type": "boolean",
-            "title": "Multiline",
-            "default": false
           }
         },
         "type": "object",

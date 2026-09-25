@@ -2987,47 +2987,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/generation/comfyui/workflows": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Comfyui Workflows
-         * @description 列出某 ComfyUI 档案实例里保存的工作流,供生成表单下拉。ComfyUI 细节封在 comfyui_client,
-         *     这里只解析档案地址、转发列表。连不上 ComfyUI → 502,前端据此提示。
-         */
-        get: operations["list_comfyui_workflows_api_generation_comfyui_workflows_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generation/comfyui/workflow-params": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Comfyui Workflow Params
-         * @description 提取某工作流的可调参数(类型/范围/当前值/语义角色),供动态表单渲染。
-         */
-        get: operations["get_comfyui_workflow_params_api_generation_comfyui_workflow_params_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/generation/jobs": {
         parameters: {
             query?: never;
@@ -4322,7 +4281,7 @@ export interface paths {
          * Probe Provider Health
          * @description 探一次这条连接通不通、往返多久。
          *
-         *     **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
+         *     **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 Ollama、云端 /models),
          *     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
          */
         get: operations["probe_provider_health_api_settings_providers__profile_id__health_get"];
@@ -10150,11 +10109,6 @@ export interface components {
              * @default false
              */
             is_mine: boolean;
-            /**
-             * Needs Key
-             * @default true
-             */
-            needs_key: boolean;
             /** Plugin Instance Id */
             plugin_instance_id?: string | null;
             /** Plugin Package Id */
@@ -12033,11 +11987,6 @@ export interface components {
              * @default
              */
             hint: string;
-            /**
-             * Multiline
-             * @default false
-             */
-            multiline: boolean;
         };
         /** VendorPresetOut */
         VendorPresetOut: {
@@ -18498,73 +18447,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PromptOptimizeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_comfyui_workflows_api_generation_comfyui_workflows_get: {
-        parameters: {
-            query?: {
-                profile_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_comfyui_workflow_params_api_generation_comfyui_workflow_params_get: {
-        parameters: {
-            query: {
-                workflow: string;
-                profile_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
                 };
             };
             /** @description Validation Error */

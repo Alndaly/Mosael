@@ -13,8 +13,6 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ProviderCredential, ProviderProfile
 
-# 叶子模块:预设是纯数据。从 providers 引会成环(它在顶层 import 本模块)。
-from app.domain.provider_presets import provider_definition
 
 
 @dataclass(frozen=True)
@@ -70,13 +68,12 @@ def resolve_connection(
 ) -> ResolvedConnection | None:
     """这条连接 + 这个人该用的钥匙。没有可用的钥匙就回 None(调用方报「请先配置」)。
 
-    **免密钥的 vendor 例外**(今天只有本地 ComfyUI):它没有账号也没有 key,而"有没有一份带
-    秘密的凭据"这个判据对它永远为假 —— 于是那条连接一次都用不了,界面上还挂着一行"未配置你的
-    密钥",而它压根没有密钥可配。用户唯一的出路是随便敲几个字符骗过判据,那既不是配置也不是安全。
+    **插件连接例外**(ADR 0020):它的凭据在插件实例上,由插件运行时只注入给那个插件自己;
+    "有没有一份带秘密的凭据"这个判据对它永远为假 —— 照判的话那条连接一次都用不了。
     """
     if profile is None or not profile.enabled:
         return None
-    # 连接本身也归人；不能只靠“找不到这个人的凭据”间接隔离。ComfyUI 这类免密连接没有
+    # 连接本身也归人；不能只靠“找不到这个人的凭据”间接隔离。插件连接没有
     # ProviderCredential 行，少了这道判断就会让任何用户使用别人的本地端点。
     if user_id is not None and profile.owner_user_id != user_id:
         return None
@@ -84,10 +81,10 @@ def resolve_connection(
     # **插件连接的钥匙在插件实例上**(ADR 0020):这条连接只是生成领域指向那个实例的把手,
     # 凭据、端点都由插件运行时只注入给那个插件自己。在这里要一把连接上的钥匙,等于要一把
     # 永远不会有的钥匙。
-    if credential is None and not (is_keyless(profile.vendor) or profile.plugin_instance_id):
+    if credential is None and not profile.plugin_instance_id:
         return None
     if credential is None:
-        return _keyless(profile)
+        return _without_key(profile)
     extra = dict(profile.extra or {})
     extra.update(credential.secrets or {})
     return ResolvedConnection(
@@ -106,18 +103,8 @@ def resolve_connection(
     )
 
 
-def is_keyless(vendor: str) -> bool:
-    """这家供应商**不需要任何凭据**吗 —— 今天只有本机 ComfyUI。
-
-    由预设声明,不从"有没有 secret 字段"反推:那个推论对 openrouter / anthropic 这些
-    `fields: []` 但确实收 key 的 vendor 是错的(它们的 key 走通用的「我的密钥」入口)。
-    """
-    definition = provider_definition(vendor)
-    return bool(definition and definition.keyless)
-
-
-def _keyless(profile: ProviderProfile) -> ResolvedConnection:
-    """免密钥连接的解析结果 —— 除了没有钥匙,和正常那份一模一样。"""
+def _without_key(profile: ProviderProfile) -> ResolvedConnection:
+    """插件连接的解析结果:没有连接上的钥匙 —— 钥匙在插件实例上(见 resolve_connection)。"""
     return ResolvedConnection(
         id=profile.id,
         name=profile.name,

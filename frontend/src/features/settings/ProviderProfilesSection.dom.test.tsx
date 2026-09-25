@@ -107,7 +107,6 @@ describe("供应商连接列表", () => {
       capability_ids: ["chat"],
       config: { base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", default_model: "qwen-plus" },
       base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      needs_key: false,
       quota_supported: false,
     }];
     renderSection();
@@ -135,7 +134,6 @@ describe("供应商连接列表", () => {
       capability_ids: ["chat", "image"],
       config: { base_url: "https://x.example/v1" },
       base_url: "https://x.example/v1",
-      needs_key: false,
       quota_supported: false,
     }];
 
@@ -172,7 +170,6 @@ describe("供应商连接列表", () => {
       capability_ids: ["chat", "image"],
       config: { base_url: "https://x.example/v1" },
       base_url: "https://x.example/v1",
-      needs_key: false,
       quota_supported: false,
     }];
     apiCalls.length = 0;
@@ -212,9 +209,9 @@ describe("供应商连接列表", () => {
     vendorsResult = [];
     providersResult = [
       { id: "on", name: "开着的", vendor: "openai-compatible", enabled: true, auth_type: "api_key",
-        oauth_linked: false, capability_ids: ["chat"], config: {}, base_url: "http://a", needs_key: false },
+        oauth_linked: false, capability_ids: ["chat"], config: {}, base_url: "http://a" },
       { id: "off", name: "停用的", vendor: "openai-compatible", enabled: false, auth_type: "api_key",
-        oauth_linked: false, capability_ids: ["chat"], config: {}, base_url: "http://b", needs_key: false },
+        oauth_linked: false, capability_ids: ["chat"], config: {}, base_url: "http://b" },
     ];
     const { container } = renderSection();
 

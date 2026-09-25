@@ -182,7 +182,7 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
 
     以前这份列表是前端现拼的:拿 generation_models 的目录、enabled 的档案、provider_defaults
     三张表在浏览器里做交叉连接。三份数据任何一份的口径变一点,拼出来的东西就和设置页看到的
-    对不上 —— ComfyUI 的工作流只在目录里(还是个叫 `workflow` 的假模型 id)、设置页里加的
+    对不上 —— 有的模型只在目录里(ComfyUI 当年还是个叫 `workflow` 的假模型 id)、设置页里加的
     模型进不了生成页,都是这么来的。
 
     现在只有一条线:**有哪些模型 = provider_models**(设置页管的就是它),参数描述符按

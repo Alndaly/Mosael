@@ -516,35 +516,6 @@ SEEDANCE_15_VIDEO_CAPABILITIES = {
 }
 
 
-COMFYUI_IMAGE_CAPABILITIES = {
-    "modes": ["text-to-image"],
-    "max_prompt_chars": 8000,
-    # workflow / workflow_params:**选一个 ComfyUI 里保存的工作流**,以及它那张动态参数表单。
-    # 适配器一直读这两个键(providers/adapters/comfyui/generation),界面也一直在发,只是描述符没声明 ——
-    # 于是校验器把它们当成"这个模型不支持的参数"当场拦下:选了工作流就提交不了,而选工作流
-    # 正是接 ComfyUI 的理由。没有测试覆盖"带工作流提交",所以一直是绿的。
-    "parameter_keys": ["size", "seed", "steps", "negative_prompt", "workflow", "workflow_params"],
-    # 本地生成没有服务端尺寸白名单;这里是常用档,模板可自带任意尺寸。
-    "sizes": ["1024x1024", "832x1216", "1216x832", "1280x720", "720x1280"],
-    "default_size": "1024x1024",
-    "max_num_images": 1,
-}
-
-COMFYUI_VIDEO_CAPABILITIES = {
-    "modes": ["text-to-video"],
-    "max_prompt_chars": 8000,
-    # 尺寸/步数/采样器等由所选工作流的动态参数表单调,主控件只留时长/负向(之前 size 有 key 却没
-    # sizes、给了 resolutions 又没挂,尺寸下拉是空的——一并去掉)。
-    # 同上 —— 视频这边界面只发 workflow_params(workflow 那一半漏在 image 分支里,见下),
-    # 两个都得声明,否则选了工作流照样提交不了。
-    "parameter_keys": ["duration_seconds", "seed", "negative_prompt", "workflow", "workflow_params"],
-    "duration_seconds": [3, 5, 10],
-    "default_duration_seconds": 5,
-    "max_duration_seconds": 10,
-    # 视频没有内置图:选一个 ComfyUI 里保存的视频工作流,或在档案里粘贴 API 模板。
-    "requires_workflow_template": True,
-}
-
 #: MiniMax 海螺 H3(2026-07)。原生 2K、4–15 秒、可给首帧;文生视频必须给具体比例,
 #: 图生视频恒为 adaptive(见 ``ai/providers/adapters/minimax/video.py``)。
 MINIMAX_VIDEO_CAPABILITIES = {
@@ -891,20 +862,6 @@ BUILTIN_MODELS = [
         "capabilities": MINIMAX_VIDEO_CAPABILITIES,
     },
     {
-        "id": "comfyui:workflow:image",
-        "provider": "comfyui",
-        "kind": "image",
-        "model": "workflow",
-        "capabilities": COMFYUI_IMAGE_CAPABILITIES,
-    },
-    {
-        "id": "comfyui:workflow:video",
-        "provider": "comfyui",
-        "kind": "video",
-        "model": "workflow",
-        "capabilities": COMFYUI_VIDEO_CAPABILITIES,
-    },
-    {
         "id": "openai:gpt-image-2:image",
         "provider": "openai",
         "kind": "image",
@@ -1121,8 +1078,6 @@ CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
     "seedance-2-small-video": SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
     "seedance-1-video": SEEDANCE_1_VIDEO_CAPABILITIES,
     "seedance-15-video": SEEDANCE_15_VIDEO_CAPABILITIES,
-    "comfyui-image": COMFYUI_IMAGE_CAPABILITIES,
-    "comfyui-video": COMFYUI_VIDEO_CAPABILITIES,
     "minimax-video": MINIMAX_VIDEO_CAPABILITIES,
     "evolink-video-t2v": EVOLINK_VIDEO_T2V_CAPABILITIES,
     "evolink-video-i2v": EVOLINK_VIDEO_I2V_CAPABILITIES,
@@ -1215,8 +1170,8 @@ def capabilities_for(
 
     **这是关于供应商 API 的静态知识,不是用户配置** —— 所以它是一张查表,不再是数据库里的行。
     以前每条描述符都在 `generation_models` 里占一行,于是"有哪些模型可选"这件事有了第二个
-    答案:设置页看 provider_models,生成页看 generation_models,两边永远对不齐(ComfyUI 的
-    工作流只在后者里,而且是个叫 `workflow` 的假模型 id)。
+    答案:设置页看 provider_models,生成页看 generation_models,两边永远对不齐(有的模型只在
+    后者里,设置页加的进不了前者)。
 
     只精确匹配 (provider, model, kind)。查不到时**不猜这个模型** —— 同一个供应商下,同系列
     不同型号的时长、素材角色和枚举值经常不同,继承目录第一项会让界面主动发送用户没有选择、
@@ -1298,7 +1253,7 @@ def known_capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any]
     """同上,但**查不到就是 None**,不给兜底。
 
     兜底那份是给界面用的 —— 总得渲染出点什么。校验不能用它:落到兜底的意思是「我们不认识
-    这个模型」(用户自建的、ComfyUI 的工作流),拿那份窄名单去拦,会挡住本来能用的参数。
+    这个模型」(用户自建的、中转上的别名),拿那份窄名单去拦,会挡住本来能用的参数。
     两种需求共用一个返回值时,分不出「它只支持这些」和「我们不知道它支持什么」。
     """
     for item in BUILTIN_MODELS:

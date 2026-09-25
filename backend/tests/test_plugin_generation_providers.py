@@ -347,8 +347,7 @@ def test_插件连接在设置页只读(plugged) -> None:
     client, instance_id = plugged
     profile_id = _profile_id(instance_id)
     listed = next(one for one in client.get("/api/settings/providers").json() if one["id"] == profile_id)
-    assert listed["plugin_instance_id"] == instance_id
-    assert listed["needs_key"] is False, "插件连接的钥匙在插件实例上"
+    assert listed["plugin_instance_id"] == instance_id and listed["plugin_package_id"] == PACKAGE_ID
     assert client.patch(f"/api/settings/providers/{profile_id}", json={"name": "改名"}).status_code == 403
     assert client.delete(f"/api/settings/providers/{profile_id}").status_code == 403
     assert client.post(f"/api/settings/providers/{profile_id}/models", json={"id": "x"}).status_code == 403

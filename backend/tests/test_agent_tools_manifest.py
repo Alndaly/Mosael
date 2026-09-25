@@ -276,7 +276,7 @@ def test_requested_by_reaches_the_confirmation_card(monkeypatch) -> None:
 
 
 def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
-    """The agent can only pick provider="comfyui" if something tells it that pair exists —
+    """The agent can only pick a (provider, model) pair if something tells it that pair exists —
     list_generation_models is that something, read-only and confirmation-free."""
     import mcp_server
 
@@ -292,12 +292,11 @@ def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
     # 生成选项现在直接来自用户配置的连接+模型(不再有内置目录表),所以先配一条。
     profile = client.post(
         "/api/settings/providers",
-        json={"name": "本地 ComfyUI", "vendor": "comfyui", "config": {"base_url": "http://127.0.0.1:1"}},
+        json={"name": "中转", "vendor": "openai-compatible",
+              "config": {"base_url": "https://relay.example/v1", "api_key": "sk-test",
+                         "default_model": "my-image-alias"}},
     ).json()
-    client.post(
-        f"/api/settings/providers/{profile['id']}/models",
-        json={"model_id": "my-workflow.json", "enabled": True, "capability_ids": ["image"]},
-    )
+    assert profile["id"]
 
     manifest = {tool["name"]: tool for tool in _manifest(client)}
     assert manifest["list_generation_models"]["confirmation"] is False
@@ -308,7 +307,7 @@ def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
     assert res.status_code == 200, res.text
     pairs = {(m["provider"], m["model"]) for m in res.json()["result"]}
     # 智能体看到的就是用户配的那份 —— 以前它看的是内置目录,里面有个叫 workflow 的假模型 id。
-    assert ("comfyui", "my-workflow.json") in pairs
+    assert ("openai-compatible", "my-image-alias") in pairs
     assert workspace_id  # workspace 仅为初始化,断言防未用警告
 
 
