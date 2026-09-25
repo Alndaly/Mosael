@@ -749,7 +749,16 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
     clip_ids = id_list(config.get("clip_ids"))
     if not clip_ids:
-        raise WorkflowDomainError("wfErr_noCuesToDub")
+        # **空进空出。**「该不该为空」是上游说了算的:「生成字幕」默认 0 条就报错,选了
+        # allow_empty(整片可能没有口播)才交出 0 条。此前这里再报一次「没有要配音的字幕条」,
+        # 于是上游明说可以为空的那条流程,在下一步照样失败。什么都没配,原声就原样留着。
+        return {
+            "track_id": "",
+            "done": 0,
+            "failed": 0,
+            "original_audio": "keep",
+            "original_audio_note": t("dubOriginalAudio_keep", get_current_locale()),
+        }
 
     synthesis = _speech_params(db, workflow, config)
     try:

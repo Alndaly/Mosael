@@ -178,6 +178,19 @@ class Test字幕配音:
             dub.start_subtitle_dub = original
         assert seen["match_duration"] is False
 
+    def test_上游允许交出_0_条时_配音也交出_0_条而不是失败(self) -> None:
+        """「生成字幕」选了 allow_empty(整片可能没有口播):交出 0 条是正常结果。此前接在它后面的
+        「字幕配音」拿到空列表就报「没有要配音的字幕条」,于是 allow_empty 放过的那条流程在下一步
+        照样失败。「该不该为空」由上游说了算,下游空进空出。"""
+        ws, sequence_id = _setup()
+        subtitles = _run("generate_subtitles", ws, {"sequence_id": sequence_id, "segments": [], "allow_empty": "yes"})
+        assert subtitles["clip_ids"] == []
+        out = _run("dub_subtitles", ws, {
+            "sequence_id": sequence_id, "clip_ids": subtitles["clip_ids"], "voice": make_voice(ws),
+        })
+        assert out["track_id"] == "" and out["done"] == 0 and out["failed"] == 0
+        assert out["original_audio"] == "keep", "什么都没配,原声就原样留着"
+
     def test_没选音色时直说(self) -> None:
         ws, sequence_id = _setup()
         with pytest.raises(WorkflowDomainError, match="没有选音色"):

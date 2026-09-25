@@ -2680,7 +2680,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_dub_subtitles": {"zh": "字幕配音", "en": "Dub subtitles"},
     "wfNode_dub_subtitles_desc": {"zh": "把选中的字幕条逐条念出来,落到一条专门的配音轨 —— 原声和原素材一个字不动,不满意整条轨删掉就回到原样。", "en": "Speak the chosen subtitle cues onto a dedicated dub track — the original audio and clips are untouched, so deleting that one track undoes everything."},
     "wfNode_dub_subtitles_sequence_id": {"zh": "配音落到哪条时间线", "en": "The timeline the dub goes onto"},
-    "wfNode_dub_subtitles_clip_ids": {"zh": "要配音的字幕条,如 {{生成字幕.clip_ids}}", "en": "The subtitle cues to dub, e.g. {{generate_subtitles.clip_ids}}"},
+    "wfNode_dub_subtitles_clip_ids": {"zh": "要配音的字幕条,如 {{生成字幕.clip_ids}};一条都没有时什么都不做(配 0 条、原声不动)", "en": "The subtitle cues to dub, e.g. {{generate_subtitles.clip_ids}}; with none, nothing is dubbed and the original audio is left alone"},
     "wfNode_dub_subtitles_match_duration": {"zh": "把配音快进/放慢到原段落的长度,好让它对得上画面", "en": "Speed each dubbed line up or down to fill the original segment, so it stays in sync with the picture"},
     "wfNode_dub_subtitles_line": {
         "zh": "双语字幕包含两行时，选择哪部分交给语音合成；单语字幕选择「完整字幕」即可。",
@@ -2863,7 +2863,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_subtitleTrackFailed": {"zh": "新建字幕轨失败", "en": "Could not create the subtitle track"},
     "wfErr_noSegments": {"zh": "没有可用来生成字幕的逐字稿段落", "en": "No transcript segments to build subtitles from"},
     "wfErr_noUsableSegments": {"zh": "这些段落里没有一条能生成字幕(文本为空或时长为 0)", "en": "None of these segments can become a subtitle (empty text, or zero length)"},
-    "wfErr_noCuesToDub": {"zh": "没有要配音的字幕条", "en": "No subtitle cues to dub"},
     "wfErr_assetNodeEmpty": {"zh": "素材节点没有选素材", "en": "The asset node has no asset selected"},
     "wfErr_startNegative": {"zh": "落点不能是负数", "en": "The start point cannot be negative"},
     "wfErr_ratioNumbers": {"zh": "最低置信度和最大删除比例必须是 0–1 的数字", "en": "The confidence floor and the removal cap must be numbers between 0 and 1"},
