@@ -28,7 +28,7 @@ const PAN = {
   runtime: "process", provides: [], tools: [{ name: "pan_list", label: "", description: "" }],
 };
 const MCP = {
-  id: "dev.mosael.mcp-everything", name: "MCP Everything", version: "0.1.0", download: "https://x/mcp.zip",
+  id: "dev.example.mcp-sample", name: "MCP Sample", version: "0.1.0", download: "https://x/mcp.zip",
   description: "把一个现成的 MCP server 接成插件。", permissions: ["process:spawn"],
   installed: true, installed_version: "0.1.0", author: "Mosael", author_url: "", docs: "", homepage: "",
   runtime: "mcp", provides: [], tools: [],
@@ -112,7 +112,7 @@ describe("插件市场的卡片网格", () => {
     expect(within(card("阿里云 OSS")).getByRole("button", { name: "pluginInstall" })).toBeTruthy();
     expect(within(card("百度网盘")).getByRole("button", { name: "pluginUpdate" })).toBeTruthy();
     expect(within(card("百度网盘")).getByText("pluginMarketHasUpdate")).toBeTruthy();
-    const current = card("MCP Everything");
+    const current = card("MCP Sample");
     expect(within(current).queryByRole("button", { name: /pluginInstall|pluginUpdate/ })).toBeNull();
     expect(within(current).getByText("pluginMarketInstalledBadge")).toBeTruthy();
   });
@@ -125,7 +125,7 @@ describe("插件市场的卡片网格", () => {
     expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["百度网盘"]);
     await user.clear(screen.getByRole("textbox", { name: "pluginMarketSearch" }));
     await user.click(screen.getByRole("button", { name: "pluginMarketFilterInstalled 2" }));
-    expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["百度网盘", "MCP Everything"]);
+    expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["百度网盘", "MCP Sample"]);
   });
 });
 
@@ -186,7 +186,7 @@ describe("插件详情", () => {
     const user = userEvent.setup();
     renderMarket();
     await screen.findByRole("list", { name: "pluginMarket" });
-    await user.click(within(card("MCP Everything")).getByRole("button", { name: "MCP Everything" }));
+    await user.click(within(card("MCP Sample")).getByRole("button", { name: "MCP Sample" }));
     expect(screen.getByText("pluginMarketMcpToolsBody")).toBeTruthy();
     expect(screen.getByText("pluginPermProcess")).toBeTruthy();
   });
@@ -222,13 +222,13 @@ describe("安装", () => {
     const user = userEvent.setup();
     renderMarket();
     await screen.findByRole("list", { name: "pluginMarket" });
-    await user.click(within(card("MCP Everything")).getByRole("button", { name: "MCP Everything" }));
+    await user.click(within(card("MCP Sample")).getByRole("button", { name: "MCP Sample" }));
     await user.click(screen.getByRole("button", { name: "pluginUninstall" }));
     expect(mocks.remove).not.toHaveBeenCalled();
     const confirm = await screen.findByRole("alertdialog");
     await user.click(within(confirm).getByRole("button", { name: "pluginUninstall" }));
     await waitFor(() => expect(mocks.remove).toHaveBeenCalled());
-    expect(mocks.remove.mock.calls[0][0]).toBe("dev.mosael.mcp-everything");
+    expect(mocks.remove.mock.calls[0][0]).toBe("dev.example.mcp-sample");
   });
 });
 

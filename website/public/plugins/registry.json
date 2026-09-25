@@ -338,33 +338,6 @@
       "bundled": true
     },
     {
-      "id": "dev.mosael.mcp-everything",
-      "name": {
-        "zh": "MCP 接入范例",
-        "en": "MCP Example"
-      },
-      "version": "0.1.2",
-      "description": {
-        "zh": "把一个现成的 MCP server 接成 Mosael 插件的范例。工具清单由 server 自己提供,不写在这个文件里。",
-        "en": "An example of wiring an existing MCP server up as an Mosael plugin. The tool list comes from the server itself, not from this file."
-      },
-      "author": "Mosael",
-      "author_url": "https://mosael.com",
-      "docs": {
-        "zh": "https://mosael.com/zh/plugins/mcp-everything",
-        "en": "https://mosael.com/en/plugins/mcp-everything"
-      },
-      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
-      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.mcp-everything.zip",
-      "permissions": [
-        "process:spawn"
-      ],
-      "runtime": "mcp",
-      "provides": [],
-      "tools": [],
-      "bundled": false
-    },
-    {
       "id": "dev.mosael.remotion",
       "name": {
         "zh": "Remotion 动画",

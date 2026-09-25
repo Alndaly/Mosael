@@ -555,7 +555,6 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 - **text-toolkit** — 纯函数,零依赖零凭据,`expose: "all"`
 - **baidu-pan** — 本地脚本 + 凭据自动续期 + 收发文件 + 工作流节点
 - **tikhub** — 零代码接 MCP + 多连接 + 枚举配置 + 凭据
-- **mcp-everything** — 最小的 MCP 接入声明
 - **blender** — 接一台本机跑着的 Blender,工具按只读/可写分开申报
 - **remotion** — 用代码做动画视频:自带渲染项目,声明自己的超时预算(`timeout_seconds`),
   几百 MB 的依赖放进跨更新的持久目录(`MOSAEL_PLUGIN_DATA_DIR`)

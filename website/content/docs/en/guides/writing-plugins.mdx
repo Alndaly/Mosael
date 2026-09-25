@@ -17,7 +17,7 @@ One question: **does the thing already have an MCP server?**
 If it does, don't write a script. Adding a layer that translates stdin JSON into one HTTP call
 and the result back into stdout re-implements something that exists — and every new endpoint
 means changing code. Wiring up MCP takes a manifest and zero lines of code;
-[mcp-everything](/plugins/mcp-everything) is exactly that.
+[TikHub](/plugins/tikhub) is wired up exactly that way: its manifest only names the MCP server and its credentials.
 
 If it doesn't — or what you want is local computation (reading files, computing something,
 calling a private HTTP API) — write a script. That's what the rest of this page covers.

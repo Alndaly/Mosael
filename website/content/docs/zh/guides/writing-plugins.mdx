@@ -16,7 +16,7 @@ version: 1.5.2
 
 有就别写脚本。再写一层把 stdin 的 JSON 翻成一次 HTTP 调用、再把结果翻回 stdout，是在重新
 实现一个已经存在的东西，而且每加一个端点都要改代码。接 MCP 只要一份清单，零行代码 ——
-[mcp-everything](/plugins/mcp-everything) 就是这么一个例子。
+[TikHub](/plugins/tikhub) 就是这么接的:它的清单里只写了 MCP 服务的地址和凭据。
 
 没有，或者你要做的是本地计算（读文件、算东西、调一个私有 HTTP 接口），那就写脚本。
 下面讲的是这一种。
