@@ -2981,7 +2981,10 @@ export function NodeInspector({
                 // 节点类型 + 字段名认出来的 —— 后者是这份注册表一直在消灭的那种手抄表。
                 <ScenePropsField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
               ) : options ? (
-                spec?.options ? (
+                // 纯下拉只给**闭集**:固定选项、且没声明能手填。声明了 allow_custom 的(模型名、
+                // 逐镜决定的 source_group / render —— 值常是上游的 `{{…}}`)走可手填的那一版,
+                // 否则引用在纯下拉里显示成空白,也填不回去。
+                spec?.options && !allowsCustomValue(key) ? (
                   <OptionPicker
                     value={String(value ?? spec.default ?? "")}
                     onChange={(next) => setConfig(key, next)}
@@ -2991,7 +2994,7 @@ export function NodeInspector({
                 ) : (
                   // 动态资源列表(素材/账号/数据集/音色…)可能很长 → 可搜索。
                   <Combobox
-                    value={String(value ?? "")}
+                    value={String(value ?? spec?.default ?? "")}
                     options={options}
                     placeholder={t("wfPickOption")}
                     emptyText={t("cmdkEmpty")}
