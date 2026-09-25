@@ -1750,6 +1750,22 @@ def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:
     return order
 
 
+def as_text(value: Any) -> str:
+    """一个值**当文字用**时写成什么。插值把值嵌进文字、节点把整个值当文字用,都走这一处。
+
+    结构化的值(对象、列表)和布尔、空值写成 JSON —— 此前是 `str()`,于是对象嵌进 HTTP 请求体
+    是 Python 的 repr(`{'ok': True, 'n': None}`),没有一个 JSON 解析器认它;布尔写成
+    `True`,和条件节点右边照 JSON 习惯写的 `true` 永远对不上。`None` 是"没有值",写成空串。
+    """
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    if isinstance(value, (bool, dict, list, tuple)):
+        return json.dumps(value, ensure_ascii=False, default=str)
+    return str(value)
+
+
 def interpolate(value: Any, context: dict[str, dict[str, Any]]) -> Any:
     """把字符串里的 {{node.key}} 换成上下文值;整串引用时保留原类型。"""
     if isinstance(value, dict):
@@ -1784,7 +1800,7 @@ def interpolate(value: Any, context: dict[str, dict[str, Any]]) -> Any:
     whole = VARIABLE_RE.fullmatch(value.strip())
     if whole:
         return lookup(whole.group(1))
-    return VARIABLE_RE.sub(lambda m: str(lookup(m.group(1))), value)
+    return VARIABLE_RE.sub(lambda m: as_text(lookup(m.group(1))), value)
 
 
 def list_workflows(db: Session, workspace_id: str) -> list[Workflow]:

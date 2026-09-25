@@ -13,7 +13,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.workflows.executors import register
 
 HTTP_NODE_TIMEOUT_SECONDS = 60
@@ -44,8 +44,8 @@ def condition(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
     left = config.get("left")
     right = config.get("right")
     op = str(config.get("op", "equals"))
-    left_text = "" if left is None else str(left)
-    right_text = "" if right is None else str(right)
+    left_text = as_text(left)
+    right_text = as_text(right)
 
     def as_number(value: Any) -> float | None:
         try:
@@ -94,7 +94,7 @@ def http_request(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
         method=str(config.get("method") or "GET"),
         url=str(config.get("url", "")),
         headers={str(k): str(v) for k, v in dict(config.get("headers") or {}).items()},
-        body="" if config.get("body") in (None, "") else str(config.get("body")),
+        body=as_text(config.get("body")),
     )
 
 
@@ -149,7 +149,7 @@ def code(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, A
 @register("template")
 def template(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     # interpolate 已在 config 解析阶段完成,这里只需转成文本。
-    return {"text": str(config.get("template", ""))}
+    return {"text": as_text(config.get("template"))}
 
 
 @register("json_extract")
@@ -186,7 +186,7 @@ def json_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 @register("text_transform")
 def text_transform(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    text = str(config.get("text", ""))
+    text = as_text(config.get("text"))
     op = str(config.get("op", "trim"))
     find = str(config.get("find", ""))
     if op == "trim":

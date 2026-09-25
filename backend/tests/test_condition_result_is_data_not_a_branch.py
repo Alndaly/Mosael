@@ -46,7 +46,7 @@ def _condition(right: str) -> dict:
     return {"id": "check", "type": "condition", "config": {"left": "a", "op": "equals", "right": right}}
 
 
-@pytest.mark.parametrize(("right", "expected"), [("a", "结果:True"), ("b", "结果:False")])
+@pytest.mark.parametrize(("right", "expected"), [("a", "结果:true"), ("b", "结果:false")])
 def test_接了_result_的节点两个分支都跑(right: str, expected: str) -> None:
     context, _ = _run(
         {
