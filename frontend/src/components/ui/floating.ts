@@ -25,7 +25,15 @@ export const MODAL_SURFACE = "modal-surface rounded-2xl border border-[var(--mod
 export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:no-drag] fixed inset-0 z-50 bg-[var(--overlay-modal)]";
 export const MODAL_TITLE = "m-0 text-ui-lg font-semibold leading-snug tracking-tight break-words";
 export const MODAL_DESCRIPTION = "text-ui-sm leading-relaxed text-muted-foreground break-words";
-export const MENU_ITEM = "relative flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-ui-sm leading-5 outline-none transition-colors hover:bg-secondary focus:bg-secondary data-[highlighted]:bg-secondary disabled:pointer-events-none disabled:opacity-40 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:size-4 [&_svg]:shrink-0";
+const MENU_ITEM_SHAPE = "relative flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-ui-sm leading-5 outline-none transition-colors";
+const MENU_ITEM_STATES = "data-[highlighted]:bg-secondary disabled:pointer-events-none disabled:opacity-40 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:size-4 [&_svg]:shrink-0";
+export const MENU_ITEM = `${MENU_ITEM_SHAPE} hover:bg-secondary focus:bg-secondary ${MENU_ITEM_STATES}`;
+/**
+ * 自己管着「高亮哪一行」的菜单用这一版:和 MENU_ITEM 同一副样子,只是底色**只**看
+ * `data-highlighted`。这种菜单只有一个高亮下标 —— 指针移到哪行、方向键走到哪行都改它 ——
+ * 再叠一层 `hover:` 底色的话,方向键走开之后,指针还停着的那一行也亮着,一张单子上两行高亮。
+ */
+export const MENU_ITEM_ROVING = `${MENU_ITEM_SHAPE} ${MENU_ITEM_STATES}`;
 /**
  * 菜单里的破坏性条目(删除、移除…):叠在 MENU_ITEM 上,只换字色 —— 行高、内边距、悬停底色
  * 都和别的条目一样,**不加描边、不换底色**。和右键菜单里 `text-destructive focus:text-destructive`

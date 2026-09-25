@@ -31,6 +31,30 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   return { ...actual, ReactFlow: RecordingFlow };
 });
 
+//: 单子的定位交给 floating-ui。jsdom 里没有布局、也不会自己一帧一帧地跑,所以只接管**这张单子**
+//: 的那两步:autoUpdate 把「下一帧」攒起来由测试手动推(frame()),computePosition 记下这一帧
+//: 用的参照矩形,并把单子贴在参照的右上角 —— 断言看的是「参照换没换」,而不是 floating-ui 本身。
+const placement = { frames: new Set<() => void>(), references: [] as { left: number; top: number; right: number; bottom: number }[] };
+vi.mock("@floating-ui/dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@floating-ui/dom")>();
+  const ours = (el: unknown) => el instanceof HTMLElement && el.hasAttribute("data-pending-link-menu");
+  return {
+    ...actual,
+    autoUpdate: ((reference, floating, update, options) => {
+      if (!ours(floating)) return actual.autoUpdate(reference, floating, update, options);
+      placement.frames.add(update);
+      update();
+      return () => placement.frames.delete(update);
+    }) satisfies typeof actual.autoUpdate,
+    computePosition: (async (reference, floating, options) => {
+      if (!ours(floating)) return actual.computePosition(reference, floating, options);
+      const rect = reference.getBoundingClientRect();
+      placement.references.push(rect);
+      return { x: rect.right + 12, y: rect.top, placement: options?.placement ?? "right", strategy: "fixed", middlewareData: {} };
+    }) satisfies typeof actual.computePosition,
+  };
+});
+
 import type { BoardCanvas as Canvas } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { PENDING_EDGE_ID, PENDING_GHOST_ID } from "@/components/app/canvasPendingLink";
@@ -45,10 +69,13 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   flow.props = null;
   flow.instance = null;
+  placement.frames.clear();
+  placement.references = [];
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 async function mount(canvas: Canvas, extra: Partial<React.ComponentProps<typeof BoardCanvas>> = {}) {
@@ -114,6 +141,23 @@ function release(clientX: number, clientY: number, handle: "source" | "target" =
   } as unknown as FinalConnectionState;
   act(() => {
     flow.props!.onConnectEnd!(new MouseEvent("mouseup", { clientX, clientY }), state);
+  });
+}
+
+/** 指针移到某一行上:先 pointerover(进了这一行),再 pointermove —— 真机上两个都会来。 */
+function hover(label: string) {
+  act(() => {
+    item(label).dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    item(label).dispatchEvent(new PointerEvent("pointermove", { bubbles: true }));
+  });
+}
+
+/** 推一帧:跑一遍单子的定位,等它把位置写上。 */
+async function frame() {
+  await act(async () => {
+    for (const update of placement.frames) update();
+    await Promise.resolve();
+    await Promise.resolve();
   });
 }
 
@@ -244,6 +288,75 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
     const created = view.latest().items.find((one) => one.id !== "n1")!;
     expect(created).toMatchObject({ kind: "note", x: -40 - DEFAULT_SIZE.note.width, y: 360 - DEFAULT_SIZE.note.height / 2 });
     expect(view.latest().edges).toEqual([expect.objectContaining({ source: created.id, target: "n1" })]);
+  });
+
+  it("换高亮只换占位的大小,单子纹丝不动 —— 否则单子一挪,指针底下换了一行,高亮又变,来回闪", async () => {
+    //: jsdom 没有布局:把占位节点的 DOM 矩形按它在画布上的位置、大小和视口算出来,和浏览器里一样
+    //: 跟着高亮的那一种变。单子要是贴着这块矩形摆,换一种它就得跟着挪。
+    const layout = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const node = ghost();
+      if (node && flow.instance && this.matches(`.react-flow__node[data-id="${PENDING_GHOST_ID}"]`)) {
+        const { x, y, zoom } = flow.instance.getViewport();
+        return new DOMRect(node.position.x * zoom + x, node.position.y * zoom + y, node.width! * zoom, node.height! * zoom);
+      }
+      return layout.call(this);
+    });
+    await mount(board);
+    await zoomOut();
+    release(300, 200);
+    await frame();
+    const menuAt = () => ({ left: menu()!.style.left, top: menu()!.style.top });
+    const first = menuAt();
+    expect(first.left).not.toBe("");
+
+    for (const label of ["boardKindVideo", "boardKindAudio", "boardKindDocument", "boardKindNote", "boardKindImage"]) {
+      hover(label);
+      await frame();
+      expect(menuAt()).toEqual(first);
+      //: 单子的参照是一块装得下**任何一种**占位的地方 —— 摆在它外面,就压不到占位,不管高亮哪一种。
+      const reference = placement.references.at(-1)!;
+      const { x, y, zoom } = flow.instance!.getViewport();
+      const node = ghost()!;
+      const left = node.position.x * zoom + x;
+      const top = node.position.y * zoom + y;
+      expect(left).toBeGreaterThanOrEqual(reference.left - 0.01);
+      expect(top).toBeGreaterThanOrEqual(reference.top - 0.01);
+      expect(left + node.width! * zoom).toBeLessThanOrEqual(reference.right + 0.01);
+      expect(top + node.height! * zoom).toBeLessThanOrEqual(reference.bottom + 0.01);
+    }
+  });
+
+  it("高亮只有一处:指针移到哪一行就是哪一行(焦点也跟过去),方向键接着从它往下走;移出单子留在最后那一行", async () => {
+    await mount(board);
+    release(300, 200);
+    const rows = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+    const highlighted = () => rows().filter((row) => row.hasAttribute("data-highlighted"));
+
+    hover("boardKindAudio");
+    expect(highlighted()).toEqual([item("boardKindAudio")]);
+    expect(document.activeElement).toBe(item("boardKindAudio"));
+    expect(ghost()).toMatchObject(DEFAULT_SIZE.audio);
+
+    act(() => {
+      menu()!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    expect(highlighted()).toEqual([item("boardKindNote")]);
+    expect(document.activeElement).toBe(item("boardKindNote"));
+    expect(ghost()).toMatchObject(DEFAULT_SIZE.note);
+
+    act(() => {
+      menu()!.dispatchEvent(new PointerEvent("pointerout", { bubbles: true }));
+      menu()!.dispatchEvent(new PointerEvent("pointerleave"));
+    });
+    expect(highlighted()).toEqual([item("boardKindNote")]);
+    expect(ghost()).toMatchObject(DEFAULT_SIZE.note);
+
+    //: 只有一种画法:没有 hover:/focus: 的底色另画一行,图标也不会只在高亮时多出一圈描边。
+    for (const row of rows()) {
+      expect(row.className).not.toMatch(/(^|\s)(hover|focus):bg-/);
+      expect(row.querySelector('[class*="border"]')).toBeNull();
+    }
   });
 
   it("连到了别的接点上(isValid)不弹 —— 那是一次正常连线", async () => {

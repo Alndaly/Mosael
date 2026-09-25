@@ -1489,8 +1489,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           onActiveChange={pending.setActive}
           onChoose={pending.choose}
           onCancel={cancelPending}
-          fromSource={pendingLink.fromSource}
-          anchor={() => surface.current?.querySelector(`.react-flow__node[data-id="${PENDING_GHOST_ID}"]`) ?? null}
+          sizeOf={sizeOfKind}
+          link={pendingLink}
         />
       )}
 

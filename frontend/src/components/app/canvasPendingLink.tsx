@@ -1,11 +1,12 @@
 import React from "react";
 
-import { listenKeys } from "@/lib/shortcuts";
+import { isImeKeystroke, listenKeys } from "@/lib/shortcuts";
 import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import {
   Handle,
   Position,
+  useReactFlow,
   useStore,
   type Edge,
   type FinalConnectionState,
@@ -16,7 +17,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import { CANVAS_EDGE_MARKER, CANVAS_PENDING_EDGE_STYLE, type EdgeShape } from "@/components/app/canvasEdgeShape";
-import { FLOATING_COLLISION_PADDING, FLOATING_SURFACE, MENU_ITEM } from "@/components/ui/floating";
+import { FLOATING_COLLISION_PADDING, FLOATING_SURFACE, MENU_ITEM_ROVING } from "@/components/ui/floating";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,6 +32,7 @@ import { cn } from "@/lib/utils";
  *  · **占位就是将来那一格的位置和大小。** 摆放规则只有 `ghostRect` 这一处,真正建节点时
  *    也照它算 —— 两边各算一份的话,选完那一下节点会跳一下,占位就成了骗人的。
  *    单子上高亮哪一种,占位就换成哪一种的大小:落点那一侧的边始终钉在松手点上,线头不动。
+ *    **单子却不跟着动** —— 它贴的是「装得下任何一种」的那块地方(见 PendingLinkMenu)。
  *  · **占位和待定的线只活在「画出来的那一份」里。** 它们由 `decorate` 在渲染时贴到节点/连线
  *    数组末尾,不进画布状态 —— 于是不会被自动保存带到服务端,也不会在撤销历史里留下一步
  *    「多了个占位」。选中一种时建的是真节点 + 真连线,一次状态变更,历史里正好一步。
@@ -109,7 +111,8 @@ export interface PendingLinkOption {
 type GhostData = { icon: LucideIcon; label: string };
 
 /**
- * 占位节点。虚线描边 + 一层很淡的主色底 + 中间一枚图标,上方一行和真节点同款的类型标签。
+ * 占位节点。虚线描边 + 一层很淡的主色底 + 正中一枚图标,上方一行和真节点同款的类型标签。
+ * 就这几样:它是「将来那一格」的轮廓,不是一张卡片 —— 图标外面不再套一圈虚线圆。
  *
  * **它跟着画布缩放**(它就是将来那一格,拉远了自然也该小);只有上方那行字反着缩放,
  * 和真节点的类型标签一样在屏幕上保持一个字号。接点是两个看不见的贴边小方块 ——
@@ -125,7 +128,7 @@ export function PendingLinkGhost({ data }: NodeProps) {
     <div
       data-pending-link-ghost=""
       aria-hidden
-      className="relative grid h-full w-full place-items-center rounded-xl border-[1.5px] border-dashed border-primary/70 bg-[color-mix(in_oklab,var(--primary)_9%,transparent)] text-primary"
+      className="relative grid h-full w-full place-items-center rounded-xl border-[1.5px] border-dashed border-primary/60 bg-[color-mix(in_oklab,var(--primary)_7%,transparent)] text-primary"
     >
       <span
         className="pointer-events-none absolute bottom-full left-0 inline-flex origin-bottom-left items-center gap-1 whitespace-nowrap pb-1 text-ui-2xs text-primary"
@@ -133,9 +136,7 @@ export function PendingLinkGhost({ data }: NodeProps) {
       >
         <Icon size={11} /> {label}
       </span>
-      <span className="grid h-10 w-10 place-items-center rounded-full border border-dashed border-primary/50 bg-panel/80">
-        <Icon size={18} />
-      </span>
+      <Icon size={22} strokeWidth={1.75} className="opacity-75" />
       <Handle type="target" position={Position.Left} isConnectable={false} style={flush} className={anchor} />
       <Handle type="source" position={Position.Right} isConnectable={false} style={flush} className={anchor} />
     </div>
@@ -242,13 +243,31 @@ export function usePendingLink<K extends string>({
   return { link, active, setActive, kind, open, cancel, choose, decorate };
 }
 
+/** 一组种类里最宽、最高的那个 —— 不管高亮哪一种,占位都落在这么大的一块里。 */
+function largestFootprint<K extends string>(kinds: readonly K[], sizeOf: (kind: K) => Size): Size {
+  return kinds.reduce(
+    (most, kind) => {
+      const size = sizeOf(kind);
+      return { width: Math.max(most.width, size.width), height: Math.max(most.height, size.height) };
+    },
+    { width: 0, height: 0 },
+  );
+}
+
 /**
  * 挂在占位旁边的那张单子。
  *
- * · **贴着占位摆**:从出口拉出来的摆在占位右边,从入口拉出来的摆在左边(都是「往外长」的
- *   那一侧,不会压在起手那一格和那根线上);放不下就挪到占位下面、再不行上面,最后才翻到
- *   另一侧,并贴边挪进窗口。
- *   位置交给 floating-ui,每帧跟着占位的真实矩形走。
+ * · **贴的是「装得下任何一种」的那块地方,不是占位本身。** 占位跟着高亮换大小;单子要是贴着
+ *   占位,换一种它就挪一下 —— 指针没动,底下却换了一行,高亮又变、占位又变、单子又挪,
+ *   来回闪个不停(真机上就是这样)。所以参照取 `ghostRect(松手点, 最大那一种, 同一侧)`:
+ *   只取决于松手点和种类表,换高亮时纹丝不动;而任何一种的占位都落在它里面,单子摆在它外面
+ *   就压不到占位。线头那一侧的边照旧钉在松手点上。
+ * · **摆在「往外长」的那一侧**:从出口拉出来的摆在右边,从入口拉出来的摆在左边 —— 不会压在
+ *   起手那一格和那根线上;和占位垂直居中(占位本身就是以松手点为中线的)。放不下就挪到下面、
+ *   再不行上面,都不行就留在外侧贴着窗口边往里收 —— 从不翻到起手那一侧。
+ *   参照每帧按视口现算,平移缩放时跟着走。
+ * · **高亮只有一个**:指针移到哪一行、方向键走到哪一行,改的都是同一个 `active`,焦点也跟
+ *   过去;指针移出单子时留在最后那一行。行的底色只看 `data-highlighted`(MENU_ITEM_ROVING)。
  * · **键盘走得通**:打开就把焦点放在第一项上;↑↓(Home/End)换高亮,回车选定,Esc 取消。
  *   取消时焦点还给打开前的那个元素;选定时不还 —— 新的那一格会被选中、挂上它的面板。
  * · **点别处、拖画布就取消**:用 document 上的 pointerdown 听,而不是铺一层透明遮罩 ——
@@ -258,65 +277,70 @@ export function PendingLinkMenu<K extends string>({
   title,
   kinds,
   describe,
+  sizeOf,
   active,
   onActiveChange,
   onChoose,
   onCancel,
-  fromSource,
-  anchor,
+  link,
 }: {
   title: string;
   kinds: readonly K[];
   describe: (kind: K) => PendingLinkOption;
+  /** 每一种的大小 —— 和 usePendingLink 用的是同一个。单子据此算出「装得下任何一种」的那块地方。 */
+  sizeOf: (kind: K) => Size;
   active: number;
   onActiveChange: (index: number) => void;
   onChoose: (kind: K) => void;
   onCancel: () => void;
-  fromSource: boolean;
-  /** 占位节点的 DOM。每帧现取 —— 缩放、换大小之后它的矩形都会变。 */
-  anchor: () => Element | null;
+  link: PendingLink;
 }) {
   const menuEl = React.useRef<HTMLDivElement>(null);
   const items = React.useRef<(HTMLButtonElement | null)[]>([]);
-  const anchorRef = React.useRef(anchor);
-  anchorRef.current = anchor;
+  const { flowToScreenPosition } = useReactFlow();
+  const toScreen = React.useRef(flowToScreenPosition);
+  toScreen.current = flowToScreenPosition;
   const cancelRef = React.useRef(onCancel);
   cancelRef.current = onCancel;
   //: 选定之后不把焦点还回去 —— 见上面的说明。
   const chosen = React.useRef(false);
+  const footprint = React.useMemo(() => largestFootprint(kinds, sizeOf), [kinds, sizeOf]);
+  const { at, fromSource } = link;
 
   React.useLayoutEffect(() => {
     const floating = menuEl.current;
     if (!floating) return;
     let alive = true;
-    let lastRect: DOMRect | null = null;
-    //: 占位节点和单子同一轮挂上,但 React Flow 量完尺寸前它的矩形可能还是空的 —— 沿用上一帧的。
+    const area = ghostRect(at, footprint, fromSource);
+    //: 虚拟参照:那块地方的流坐标,每帧按当前视口换成屏幕坐标。不读任何 DOM,也不看高亮哪一种。
     const reference = {
       getBoundingClientRect: () => {
-        const rect = anchorRef.current()?.getBoundingClientRect();
-        if (rect && rect.width > 0 && rect.height > 0) lastRect = rect;
-        return lastRect ?? rect ?? new DOMRect();
+        const topLeft = toScreen.current({ x: area.x, y: area.y });
+        const bottomRight = toScreen.current({ x: area.x + area.width, y: area.y + area.height });
+        return new DOMRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
       },
     };
-    const side = fromSource ? "right" : "left";
     const stop = autoUpdate(reference, floating, () => {
       void computePosition(reference, floating, {
         strategy: "fixed",
-        placement: `${side}-start`,
+        placement: fromSource ? "right" : "left",
         middleware: [
           offset(12),
-          //: 放不下时先上下、最后才翻到另一侧 —— 另一侧正是起手那一格和待定的线所在,
-          //: 翻过去就把线盖住了。
+          //: 放不下时挪到下面、再不行上面(都从松手点往外长的那一侧起);**从不翻到另一侧** ——
+          //: 另一侧正是起手那一格和待定的线。上下也放不下,就留在外侧,由 shift 贴着窗口边往里收:
+          //: 顶多压住最宽那一种占位的远端,线和起手那一格照旧露着。
           flip({
-            fallbackPlacements: fromSource ? ["bottom-start", "top-start", "left-start"] : ["bottom-end", "top-end", "right-start"],
+            fallbackPlacements: fromSource ? ["bottom-start", "top-start"] : ["bottom-end", "top-end"],
+            fallbackStrategy: "initialPlacement",
             //: 只在左右放不下时才换位置;上下差一点交给 shift 往里挪 —— 否则占位靠近窗口底边时,
-            //: 单子会为了几个像素整个跳到占位上面,盖住起手那一格。
+            //: 单子会为了几个像素整个跳到占位上面。
             crossAxis: false,
             padding: FLOATING_COLLISION_PADDING,
           }),
           shift({ padding: FLOATING_COLLISION_PADDING, crossAxis: true }),
         ],
       }).then(({ x, y }) => {
+        //: 只写样式、不动 React 状态 —— 定位不会反过来触发一轮渲染、再触发一次定位。
         if (!alive) return;
         Object.assign(floating.style, { left: `${x}px`, top: `${y}px`, opacity: "1" });
       });
@@ -325,7 +349,7 @@ export function PendingLinkMenu<K extends string>({
       alive = false;
       stop();
     };
-  }, [fromSource]);
+  }, [at, footprint, fromSource]);
 
   //: 打开时把焦点收进来,关掉时(取消的话)还回去。
   React.useEffect(() => {
@@ -344,8 +368,8 @@ export function PendingLinkMenu<K extends string>({
       cancelRef.current();
     };
     const onPointer = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null;
-      if (target && (menuEl.current?.contains(target) || anchorRef.current()?.contains(target))) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && (menuEl.current?.contains(target) || target.closest(`.react-flow__node[data-id="${PENDING_GHOST_ID}"]`))) return;
       cancelRef.current();
     };
     const stopKeys = listenKeys(window, onKey, true);
@@ -356,10 +380,12 @@ export function PendingLinkMenu<K extends string>({
     };
   }, []);
 
+  /** 高亮挪到第 index 行,焦点跟过去。指针和方向键都走这一条。 */
   const move = (index: number) => {
     const next = (index + kinds.length) % kinds.length;
-    onActiveChange(next);
-    items.current[next]?.focus({ preventScroll: true });
+    if (next !== active) onActiveChange(next);
+    const row = items.current[next];
+    if (row && document.activeElement !== row) row.focus({ preventScroll: true });
   };
 
   return createPortal(
@@ -371,15 +397,16 @@ export function PendingLinkMenu<K extends string>({
       //: 摆好位置之前先透明 —— **不能用 visibility: hidden**:隐藏的元素拿不到焦点,打开时
       //: 往第一项上放的焦点会落空,键盘就用不了(真机上焦点留在了起手那一格上)。
       style={{ opacity: 0 }}
-      className={cn(FLOATING_SURFACE, "fixed left-0 top-0 z-50 w-60 p-1.5")}
+      className={cn(FLOATING_SURFACE, "fixed left-0 top-0 z-50 w-64 p-1.5")}
       onKeyDown={(event) => {
+        if (isImeKeystroke(event)) return;
         if (event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) move(active + 1);
         else if (event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey)) move(active - 1);
         else if (event.key === "Home") move(0);
         else if (event.key === "End") move(kinds.length - 1);
         //: 回车/空格自己接,不等按钮的原生 click:焦点万一没落在按钮上(比如被别处抢走又
         //: 还回到菜单容器),原生那条就不会触发,而高亮的那一项是明确的。
-        else if ((event.key === "Enter" || event.key === "Space" || event.key === " ") && !event.nativeEvent.isComposing) {
+        else if (event.key === "Enter" || event.key === "Space" || event.key === " ") {
           chosen.current = true;
           onChoose(kinds[active]);
         } else return;
@@ -400,24 +427,18 @@ export function PendingLinkMenu<K extends string>({
             role="menuitem"
             tabIndex={highlighted ? 0 : -1}
             data-highlighted={highlighted ? "" : undefined}
-            className={cn(MENU_ITEM, "w-full text-left")}
-            onPointerEnter={() => onActiveChange(index)}
+            className={cn(MENU_ITEM_ROVING, "w-full text-left")}
+            //: 听 move 不听 enter:单子底下的东西挪了、指针没动时浏览器也会补发 enter,那不是用户换了一行。
+            onPointerMove={() => move(index)}
             onFocus={() => onActiveChange(index)}
             onClick={() => {
               chosen.current = true;
               onChoose(kind);
             }}
           >
-            <span
-              className={cn(
-                "grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
-                highlighted ? "border-primary/40 bg-panel text-primary" : "border-transparent bg-secondary text-muted-foreground",
-              )}
-            >
-              <Icon />
-            </span>
-            <span className="grid min-w-0 gap-0.5">
-              <span className="truncate text-ui-xs text-foreground">{label}</span>
+            <Icon className="text-muted-foreground" />
+            <span className="grid min-w-0">
+              <span className="truncate">{label}</span>
               {hint && <span className="truncate text-ui-2xs leading-4 text-muted-foreground">{hint}</span>}
             </span>
           </button>
