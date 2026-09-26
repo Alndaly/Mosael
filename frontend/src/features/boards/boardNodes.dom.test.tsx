@@ -14,6 +14,7 @@ vi.mock("@xyflow/react", () => ({
     selector({ transform: [0, 0, 1] }),
 }));
 vi.mock("@/app/preferences", () => ({
+  usePreferences: () => ({ locale: "zh" }),
   useI18n: () => (key: string) =>
     ({
       boardNodeQueued: "等待执行",
@@ -249,6 +250,24 @@ it("document contents drag the node and suppress native image dragging", () => {
   const image = container.querySelector("img")!;
   expect(image).not.toBeNull();
   expect(fireEvent.dragStart(image)).toBe(false);
+});
+
+it("文档格和笔记页是同一个渲染器:表格是笔记里那张表,外面不再多套一层框", () => {
+  //: 此前是聊天消息那套 Markdown 渲染 —— 段距、字体和笔记页对不上,表格外面还多一层渲染器自己的圆角框。
+  const Node = BOARD_NODE_TYPES.document;
+  const markdown = "首先,前期可以先避免收费\n\n| xsa | xas |\n| --- | --- |\n| da | da |";
+  const props = { data: { item: { id: "doc", kind: "document", note_id: "note", note_revision: 13 },
+    document: { reference: { title: "本项目盈利方", markdown, revision: 13 } } }, selected: false } as unknown as React.ComponentProps<typeof Node>;
+  const { container } = render(<Node {...props} />);
+  const preview = container.querySelector<HTMLElement>("[data-document-preview]")!;
+  expect(preview.classList.contains("note-card")).toBe(true);
+  const prose = preview.querySelector(".note-prose");
+  expect(prose, "用的是笔记页的 .note-prose").not.toBeNull();
+  expect(prose!.textContent).toContain("首先,前期可以先避免收费");
+  const table = prose!.querySelector("table")!;
+  expect(table).not.toBeNull();
+  expect([...table.querySelectorAll("th")].map((one) => one.textContent)).toEqual(["xsa", "xas"]);
+  expect(preview.querySelector("[data-streamdown]"), "不再是聊天消息那套渲染").toBeNull();
 });
 
 it("选中的文档不加彩色描边(和图片、视频、便签同一条);3D 场景悬停时接点显形", () => {

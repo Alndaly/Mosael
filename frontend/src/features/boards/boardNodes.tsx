@@ -1,5 +1,4 @@
 import React from "react";
-import { Streamdown } from "streamdown";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
@@ -11,6 +10,8 @@ import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { DraftTextarea } from "@/components/ui/draft-text";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NoteReader } from "@/features/notes/NoteEditor";
+import "@/features/notes/notes.css";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
@@ -796,10 +797,13 @@ function DocumentNode({ data, selected }: NodeProps) {
           {t("documentUnavailable")}
         </div>
       ) : (
-        <div data-document-preview="" onDragStartCapture={(event) => event.preventDefault()} className="nowheel select-none min-h-0 flex-1 overflow-y-auto break-words px-4 py-3 text-ui-xs leading-relaxed text-foreground/85 [overflow-wrap:anywhere] [&_p]:my-2 [&_h1]:my-3 [&_h1]:text-base [&_h2]:my-3 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h3]:text-ui-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-secondary [&_pre]:p-2 [&_img]:max-w-full [&_a]:text-primary [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3">
-          <Streamdown mode="static" controls={false} className="pointer-events-none">
-            {ref?.markdown.slice(0, 6000) || ""}
-          </Streamdown>
+        //: **和笔记页同一个渲染器**(NoteReader,同一套 .note-prose),只由 .note-card 把尺度缩到卡片上 ——
+        //: 此前是聊天消息那套 Markdown 渲染,段距、字体、表格都和笔记页对不上,表格外面还多一层框。
+        //: 整块不接指针:拖它就是拖格子,点它就是选中格子(看全文走右下角「打开」)。
+        <div data-document-preview="" onDragStartCapture={(event) => event.preventDefault()} className="note-card nowheel select-none min-h-0 flex-1 overflow-y-auto px-4 py-3 text-foreground/85">
+          <div className="pointer-events-none">
+            <NoteReader markdown={ref?.markdown.slice(0, 6000) || ""} />
+          </div>
           {(ref?.markdown.length ?? 0) > 6000 && (
             <p className="text-muted-foreground">…</p>
           )}

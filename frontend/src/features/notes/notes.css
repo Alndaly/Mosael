@@ -219,4 +219,24 @@
 .note-error-notice .note-notice-row > span { display:flex; align-items:center; gap:6px; min-width:0; }
 .note-error-notice svg { flex-shrink:0; color:var(--destructive); }
 .note-document-header .note-status[data-state=error] { color:var(--destructive); }
+
+/* 画板上的文档格:**和笔记页同一个渲染器、同一套 .note-prose**(NoteReader),只把尺度缩到一张卡片上。
+   此前文档格用的是聊天消息那套 Markdown 渲染加一串手写的小号样式 —— 段距、字体、表格都和笔记页对不上,
+   表格外面还多套了一层渲染器自己的圆角框。这里只改尺寸(字号、段距、内边距),长相全部继承笔记页。
+   标题用 em:跟着卡片的字号走,不是笔记页那几个写死的 px。 */
+.note-card .note-prose { min-height:0; font-size:var(--text-ui-xs); line-height:1.75; }
+.note-card .note-prose p { margin:0 0 .75em; }
+.note-card .note-prose h1 { font-size:1.45em; }
+.note-card .note-prose h2 { font-size:1.25em; }
+.note-card .note-prose h3 { font-size:1.1em; }
+.note-card .note-prose h1,.note-card .note-prose h2,.note-card .note-prose h3,
+.note-card .note-prose h4,.note-card .note-prose h5,.note-card .note-prose h6 { margin:1em 0 .45em; }
+.note-card .note-prose > :first-child { margin-top:0; }
+.note-card .note-prose .tableWrapper { margin:10px 0; }
+.note-card .note-prose table { margin:0; }
+.note-card .note-prose th,.note-card .note-prose td { min-width:0; padding:5px 8px; }
+.note-card .note-prose img { margin:10px auto; border-radius:8px; }
+.note-card .note-prose pre { padding:10px; }
+.note-card .note-prose .note-code-block pre { font-size:var(--text-ui-2xs); }
+.note-card .note-prose hr { margin:14px 0; }
 }

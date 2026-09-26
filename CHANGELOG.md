@@ -41,6 +41,8 @@ commit list and downloadable artifacts.
 
 #### 修好的
 
+- **画板上的文档格和笔记页排得一样。** 此前文档格用的是聊天消息那套 Markdown 渲染加一串手写的小号样式,段距、字体、
+  代码块和表格都和笔记页对不上,表格外面还多套了一层框;现在是笔记页同一个渲染器,只把字号和间距缩到卡片上。
 - **用登录授权接入的模型(走 sidecar 的那一类)在画板上「让 AI 写」、压缩上下文、刷新登录凭据时不再失败。** 自 1.4.3
   起这三种一次性请求一个都送不回结果 —— sidecar 读到请求就退出了,请求还没发出去;报错里是一段 sidecar 的启动日志
   (「[sidecar] outbound proxy enabled… stdin closed; exiting」)。用 API Key 接入的模型不受影响。
