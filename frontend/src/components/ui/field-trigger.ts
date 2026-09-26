@@ -1,4 +1,4 @@
-import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { FIELD_SIZE, type FieldSize } from "@/components/ui/control-size";
 
 /**
  * 「看起来像输入框的下拉触发器」的唯一样式来源。
@@ -20,8 +20,20 @@ import { CONTROL_HEIGHT } from "@/components/ui/control-size";
  * 箭头」三样,justify-between 会把中间那个值摆到正中 —— 值短时(「跟随系统默认」)居中,
  * 值长被截断时又贴左,同一排两个下拉一个居中一个靠左。按钮默认的 text-align:center 也得压掉。
  */
-export const FIELD_TRIGGER_CLASS =
-  `flex ${CONTROL_HEIGHT.md} w-full min-w-0 items-center justify-start gap-1.5 text-left whitespace-nowrap rounded-md border border-field-border bg-field px-3 py-2 text-ui-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate`;
+const FIELD_TRIGGER_BASE =
+  "flex w-full min-w-0 items-center justify-start gap-1.5 text-left whitespace-nowrap rounded-md border border-field-border bg-field ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate";
+
+/**
+ * 某一档的触发器样式。档位和输入框、按钮是**同一把尺**(control-size.ts 的 FIELD_SIZE)——
+ * 工具行里 `<SelectTrigger size="xs">` 挨着 `<Button size="xs">`、表单里挨着 `<Input>`,
+ * 高度、左右留白、字号都对得上。别在调用点用 `h-*` 改高度:`design/fieldScale.test.ts` 会拦。
+ */
+export function fieldTriggerClass(size: FieldSize = "md"): string {
+  return `${FIELD_TRIGGER_BASE} ${FIELD_SIZE[size]}`;
+}
+
+/** 默认档(md)的触发器 —— 表单里和默认高度的输入框、按钮并排的那一种。 */
+export const FIELD_TRIGGER_CLASS = fieldTriggerClass("md");
 
 /** 触发器右侧的下拉箭头。尺寸与透明度跟着触发器走,三种控件同一个写法。 */
 export const FIELD_TRIGGER_CHEVRON = "ml-auto h-4 w-4 shrink-0 opacity-50";

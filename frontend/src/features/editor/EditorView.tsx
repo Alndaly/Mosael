@@ -1247,7 +1247,7 @@ function ExportControl({ sequence }: { sequence: Sequence }) {
           <div className="grid gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">{t("exportResolution")}</span>
             <Select value={params.resolution} onValueChange={(v) => updateParams({ resolution: v as ExportParams["resolution"] })}>
-              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="original">{t("exportResolutionOriginal")}({sequence.width}×{sequence.height})</SelectItem>
                 <SelectItem value="1080p">1080p</SelectItem>
@@ -1262,7 +1262,7 @@ function ExportControl({ sequence }: { sequence: Sequence }) {
               value={params.fps == null ? "follow" : String(params.fps)}
               onValueChange={(v) => updateParams({ fps: v === "follow" ? null : Number(v) })}
             >
-              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="follow">{t("exportFpsFollow")}({sequence.fps}fps)</SelectItem>
                 {[24, 25, 30, 50, 60].map((rate) => (
@@ -1274,7 +1274,7 @@ function ExportControl({ sequence }: { sequence: Sequence }) {
           <div className="grid gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">{t("exportQuality")}</span>
             <Select value={params.quality} onValueChange={(v) => updateParams({ quality: v as ExportParams["quality"] })}>
-              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="high">{t("exportQualityHigh")}</SelectItem>
                 <SelectItem value="standard">{t("exportQualityStandard")}</SelectItem>

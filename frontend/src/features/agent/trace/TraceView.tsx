@@ -357,7 +357,8 @@ export function TraceView({
             ))}
           </div>
           <Input
-            className="ml-auto h-7 w-full max-w-[220px] min-w-[120px]"
+            size="xs"
+            className="ml-auto w-full max-w-[220px] min-w-[120px]"
             value={query}
             placeholder={t("traceSearchPlaceholder")}
             onChange={(event) => setQuery(event.target.value)}

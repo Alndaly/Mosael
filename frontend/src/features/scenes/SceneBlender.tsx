@@ -203,7 +203,7 @@ export function SceneBlender({
           <>
             <div className="scene-blender-connection">
               <Pick
-                className="h-8"
+                size="sm"
                 label={t("sceneBlenderConnection")}
                 value={instance}
                 options={available.map((c) => [c.id, c.name])}

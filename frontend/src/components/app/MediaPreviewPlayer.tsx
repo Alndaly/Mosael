@@ -91,7 +91,7 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
             setSpeed(value);
             if (ref.current) ref.current.playbackRate = Number(value);
           }}>
-            <SelectTrigger aria-label={t("mediaSpeed")} className="h-8 w-20 border-transparent bg-control text-ui-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("mediaSpeed")} size="sm" className="w-20 border-transparent bg-control text-ui-xs"><SelectValue /></SelectTrigger>
             <SelectContent>{[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => <SelectItem key={rate} value={String(rate)}>{rate}×</SelectItem>)}</SelectContent>
           </Select>
           {kind === "video" && <Button variant="ghost" size="icon-sm" aria-label={t("boardFullscreen")} onClick={() => {

@@ -3,7 +3,8 @@ import { Check, ChevronDown } from "lucide-react";
 
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
+import type { FieldSize } from "@/components/ui/control-size";
+import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
 import { insideDialog } from "@/components/ui/insideDialog";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ export function SearchableSelect({
   searchPlaceholder,
   emptyText,
   className,
+  size,
   contentClassName,
   disabled,
   trigger,
@@ -57,6 +59,8 @@ export function SearchableSelect({
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  /** 默认触发器的档位,和 `<Input size>`、`<Button size>` 同一把尺。自定义 `trigger` 时不起作用。 */
+  size?: FieldSize;
   /** 浮层自己的类名 —— 主要用来给宽度兜底:触发器只有一枚小胶囊那么宽时,对齐它等于不可读。 */
   contentClassName?: string;
   disabled?: boolean;
@@ -97,11 +101,11 @@ export function SearchableSelect({
             <button
               type="button"
               disabled={disabled}
-              /* **共用 FIELD_TRIGGER_CLASS**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
+              /* **共用 fieldTriggerClass**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
                  px-2.5,而 Select 和 Combobox 是 h-10 / gap-1.5 / px-3 —— 三种控件并排在同一行
                  表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
                  留白也窄一截。那正是这个 token 的注释点名要消灭的情况。 */
-              className={cn(FIELD_TRIGGER_CLASS, "text-foreground", className)}
+              className={cn(fieldTriggerClass(size), "text-foreground", className)}
             >
               {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
                   未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色

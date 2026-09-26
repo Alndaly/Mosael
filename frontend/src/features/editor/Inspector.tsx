@@ -360,7 +360,8 @@ export function Inspector({
                           <div className="relative">
                             <Input
                               key={`${f.key}-${selectedClip.id}`}
-                              className="h-[26px] w-full rounded-md border border-border bg-field pl-1.5 pr-5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                              size="xs"
+                              className="w-full rounded-md border border-border bg-field pl-1.5 pr-5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                               type="number"
                               min={0}
                               step={0.1}
@@ -753,7 +754,7 @@ function TextStylePanel({
               style: { fontFamily: uploadedFontStack(font.family) },
             })),
           ]}
-          className="h-[26px]"
+          size="xs"
         />
       </div>
       {onUploadFont && (

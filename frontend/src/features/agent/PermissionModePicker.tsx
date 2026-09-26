@@ -84,7 +84,8 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
         }}
       >
         <SelectTrigger
-          className="h-8 w-full justify-between gap-1.5 px-2.5 text-xs text-muted-foreground"
+          size="sm"
+          className="w-full justify-between text-xs text-muted-foreground"
           aria-label={t("permModeLabel")}
         >
           {/* 不用 SelectValue:它会把选中项的**全部内容**克隆进触发器,而选项里带着一行说明 ——

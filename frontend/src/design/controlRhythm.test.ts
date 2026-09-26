@@ -63,6 +63,10 @@ const BUTTON_SIZE = new Map([
   ["default", 40], ["lg", 44], ["icon", 36],
   ["sm", 32], ["icon-sm", 32], ["xs", 28], ["icon-xs", 28],
 ]);
+/** 字段的 `size` 档(components/ui/control-size.ts 的 FIELD_SIZE),和按钮同名同高。 */
+const FIELD_SIZE_PX = new Map([["xs", 28], ["sm", 32], ["md", 40]]);
+/** 走 FIELD_SIZE 档位的字段:输入框和各种下拉触发器。没写 size 就是 md。 */
+const FIELD = new Set(["Input", "SelectTrigger", "Pick", "OptionPicker", "Combobox", "TimePicker"]);
 /** 走 portal 渲染,不占所在行的空间。 */
 const PORTALED = new Set([
   "Popover", "PopoverContent", "Dialog", "DialogContent", "ModalShell", "Tooltip",
@@ -188,7 +192,7 @@ const classOf = (attrs: string) => {
  * 工具类 —— 所以 `.scene-blender-connection [role="combobox"] { height: 32px }` 这种写法在浏览器里
  * 不算数,而这条棘轮此前把它当真了:测试说 32/32,屏幕上是 40/32。对它们只认调用点的 class 和尺寸档。
  */
-const SIZED_BY_UTILITY = new Set(["Button", "Input", "SelectTrigger", "Pick"]);
+const SIZED_BY_UTILITY = new Set(["Button", ...FIELD]);
 function measure(tag: string, attrs: string, parentClass: string | undefined): number | null {
   for (const name of SIZED_BY_UTILITY.has(tag) ? [] : (parentClass ?? "").split(/\s+/).filter(Boolean)) {
     const scoped = height(`${name} ${tag}`)
@@ -203,7 +207,7 @@ function measure(tag: string, attrs: string, parentClass: string | undefined): n
     if (own != null) return own;
   }
   if (tag === "Button") return BUTTON_SIZE.get(attrs.match(/size="([^"]+)"/)?.[1] ?? "default") ?? 40;
-  if (tag === "Input" || tag === "SelectTrigger" || tag === "Pick") return 40;
+  if (FIELD.has(tag)) return FIELD_SIZE_PX.get(attrs.match(/size="([^"]+)"/)?.[1] ?? "md") ?? 40;
   for (const name of (componentClass.get(tag) ?? "").split(/\s+/).filter(Boolean)) {
     const own = height(name);
     if (own != null) return own;

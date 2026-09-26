@@ -185,7 +185,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                     value={bot.capability}
                     onValueChange={(capability) => patchBot.mutate({ id: bot.id, body: { capability } })}
                   >
-                    <SelectTrigger className="h-8 w-[104px]" title={t("feishuCapability")} aria-label={t("feishuCapability")}>
+                    <SelectTrigger size="sm" className="w-[104px]" title={t("feishuCapability")} aria-label={t("feishuCapability")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

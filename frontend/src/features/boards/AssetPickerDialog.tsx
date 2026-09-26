@@ -71,7 +71,7 @@ export function AssetPickerDialog({
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
           placeholder={t("boardsSearchImages")}
-          className="h-8"
+          size="sm"
         />
       }
     >

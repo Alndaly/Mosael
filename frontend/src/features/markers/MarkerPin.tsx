@@ -76,7 +76,7 @@ export function MarkerPin({ data, selected }: NodeProps) {
             <label className="text-ui-xs text-muted-foreground" htmlFor={`marker-name-${marker.id}`}>
               {t("markerName")}
             </label>
-            <Input id={`marker-name-${marker.id}`} className="h-8 px-2 text-ui-xs" maxLength={80} {...name} />
+            <Input id={`marker-name-${marker.id}`} size="sm" className="text-ui-xs" maxLength={80} {...name} />
           </div>
           <ShortcutRecorder
             marker={marker}

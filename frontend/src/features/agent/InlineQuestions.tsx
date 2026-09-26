@@ -130,7 +130,8 @@ function QuestionCard({ row, onDone }: { row: Question; onDone: () => void }) {
               ))}
               {/* 模型给的选项常常不全。逼人从三个都不对的里面挑一个,比不问还糟。 */}
               <Input
-                className="h-8 rounded-md border-border bg-panel px-2.5 text-ui-sm"
+                size="sm"
+                className="border-border bg-panel"
                 placeholder={t("askOtherPlaceholder")}
                 value={other[item.question] ?? ""}
                 onChange={(event) => setOther((current) => ({ ...current, [item.question]: event.target.value }))}

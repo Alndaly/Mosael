@@ -185,7 +185,8 @@ export function CanvasNodeSearch({
           <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={input}
-            className="h-8 pl-[30px] pr-12 text-ui-sm focus-visible:border-primary focus-visible:ring-0"
+            size="sm"
+            className="pl-[30px] pr-12 focus-visible:border-primary focus-visible:ring-0"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t(placeholder)}

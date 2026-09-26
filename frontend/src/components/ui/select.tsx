@@ -4,7 +4,8 @@ import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
-import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
+import type { FieldSize } from "@/components/ui/control-size"
+import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
 import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
@@ -17,11 +18,14 @@ const SelectValue = SelectPrimitive.Value
 
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
+    /** 档位,和 `<Input size>`、`<Button size>` 同一把尺。见 control-size.ts 的 FIELD_SIZE。 */
+    size?: FieldSize
+  }
+>(({ className, children, size, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
-    className={cn(FIELD_TRIGGER_CLASS, className)}
+    className={cn(fieldTriggerClass(size), className)}
     {...props}
   >
     {children}

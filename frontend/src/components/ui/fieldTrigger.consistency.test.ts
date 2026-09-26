@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
-import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "./field-trigger";
+import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS, fieldTriggerClass } from "./field-trigger";
 
 const UI = __dirname;
 const FILES = {
@@ -25,19 +25,19 @@ const FILES = {
 };
 
 describe("下拉触发器只有一份样式", () => {
-  it.each(Object.entries(FILES))("%s 用 FIELD_TRIGGER_CLASS", (_name, path) => {
-    expect(readFileSync(path, "utf8")).toContain("FIELD_TRIGGER_CLASS");
+  it.each(Object.entries(FILES))("%s 用 fieldTriggerClass", (_name, path) => {
+    expect(readFileSync(path, "utf8")).toContain("fieldTriggerClass(");
   });
 
   it.each(Object.entries(FILES))("%s 不自带触发器高度", (_name, path) => {
     // 触发器那一串的标志是「flex + 边框 + bg-field」同时出现;它一旦自带 h-*,
     // 就是又抄了一份。调用点仍然可以用 className 覆盖(见 AiStudio 里模型自己声明的那些参数),
-    // 那是 cn() 之后的事,不在这几个文件里。
+    // 那是 cn() 之后的事,不在这几个文件里(改高度走 size,见 design/fieldScale.test.ts)。
     const source = readFileSync(path, "utf8");
     const handwritten = source
       .split("\n")
       .filter((line) => /\bh-\d/.test(line) && /bg-field/.test(line));
-    expect(handwritten, "触发器样式只该来自 FIELD_TRIGGER_CLASS").toEqual([]);
+    expect(handwritten, "触发器样式只该来自 fieldTriggerClass").toEqual([]);
   });
 
   it.each(Object.entries(FILES))("%s 的触发器箭头用 FIELD_TRIGGER_CHEVRON", (_name, path) => {
@@ -45,7 +45,7 @@ describe("下拉触发器只有一份样式", () => {
     // **只看触发器里那一枚。** select.tsx 还有一个 ScrollDownButton 的箭头(列表滚到底时的
     // 指示),它和触发器不是同一个东西,尺寸也不该跟着走 —— 判据得说清是哪一枚,
     // 否则这条测试会逼人把无关的图标也塞进同一个 token。
-    const start = source.indexOf("FIELD_TRIGGER_CLASS,");
+    const start = source.indexOf("fieldTriggerClass(size)");
     if (start < 0) return;
     const trigger = source.slice(start, source.indexOf("</", start) + 2);
     const adhoc = trigger
@@ -58,7 +58,10 @@ describe("下拉触发器只有一份样式", () => {
 it("值靠左、箭头顶到最右 —— 「图标 + 值 + 箭头」时值不会被摆到正中", () => {
   // justify-between 下三样东西里中间那个会居中:短值(「跟随系统默认」)居中,长值被截断又贴左,
   // 同一排两个下拉一个居中一个靠左。
-  expect(FIELD_TRIGGER_CLASS).not.toMatch(/\bjustify-(between|center)\b/);
-  expect(FIELD_TRIGGER_CLASS).toMatch(/\btext-left\b/);
+  for (const size of ["xs", "sm", "md"] as const) {
+    expect(fieldTriggerClass(size)).not.toMatch(/\bjustify-(between|center)\b/);
+    expect(fieldTriggerClass(size)).toMatch(/\btext-left\b/);
+  }
+  expect(FIELD_TRIGGER_CLASS).toBe(fieldTriggerClass("md"));
   expect(FIELD_TRIGGER_CHEVRON).toMatch(/\bml-auto\b/);
 });

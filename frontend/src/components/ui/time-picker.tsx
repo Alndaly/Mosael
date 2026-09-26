@@ -2,7 +2,8 @@ import * as React from "react";
 import { ChevronDown, Clock } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
+import type { FieldSize } from "@/components/ui/control-size";
+import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-trigger";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -25,7 +26,7 @@ function split(value: string): [number, number] {
  * 图标都不吃表单的样式,和同一行的下拉框摆在一起高矮、底色、圆角都对不上;点开是 Chromium
  * 自带的蓝色拨盘,和应用里其它浮层不是一套东西。
  *
- * 这里触发器和 Select **共用 FIELD_TRIGGER_CLASS** —— 并排时看不出是两种控件;弹层是两列
+ * 这里触发器和 Select **共用 fieldTriggerClass** —— 并排时看不出是两种控件;弹层是两列
  * 可滚动的「时 / 分」,选中态、悬停与菜单项同一套写法。选了分钟就收起(那是最后一步),
  * 选小时不收(通常接着要选分钟)。上下方向键在当前列里挪一格。
  *
@@ -36,12 +37,15 @@ export function TimePicker({
   onChange,
   ariaLabel,
   className,
+  size,
   disabled,
 }: {
   value: string;
   onChange: (next: string) => void;
   ariaLabel?: string;
   className?: string;
+  /** 触发器档位,和 `<Input size>`、`<Button size>` 同一把尺。 */
+  size?: FieldSize;
   disabled?: boolean;
 }) {
   const t = useI18n();
@@ -55,7 +59,7 @@ export function TimePicker({
           type="button"
           aria-label={ariaLabel}
           disabled={disabled}
-          className={cn(FIELD_TRIGGER_CLASS, "tabular-nums", className)}
+          className={cn(fieldTriggerClass(size), "tabular-nums", className)}
         >
           <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span>{`${pad(hour)}:${pad(minute)}`}</span>

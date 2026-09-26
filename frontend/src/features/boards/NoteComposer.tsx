@@ -233,7 +233,8 @@ export function NoteComposer({
                 label: one.display_name || one.model,
                 keywords: [one.model],
               }))}
-              className="h-7 w-auto min-w-0 max-w-[min(11rem,45%)] shrink gap-1 border-0 bg-transparent px-1.5 text-ui-2xs text-muted-foreground shadow-none transition-colors hover:bg-secondary data-[state=open]:text-foreground"
+              size="xs"
+              className="w-auto min-w-0 max-w-[min(11rem,45%)] shrink gap-1 border-0 bg-transparent px-1.5 text-ui-2xs text-muted-foreground shadow-none transition-colors hover:bg-secondary data-[state=open]:text-foreground"
               contentClassName="max-w-[min(360px,calc(100vw-16px))]"
             />
           )}

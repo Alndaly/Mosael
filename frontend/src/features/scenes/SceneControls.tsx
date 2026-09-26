@@ -1,5 +1,6 @@
 import React from "react";
 import type { Vec3 } from "@/api/domains/scenes";
+import type { FieldSize } from "@/components/ui/control-size";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { isImeKeystroke } from "@/lib/shortcuts";
 export function Pick({
@@ -8,6 +9,7 @@ export function Pick({
   onChange,
   label,
   icon,
+  size,
   className,
 }: {
   value: string;
@@ -15,6 +17,8 @@ export function Pick({
   onChange: (v: string) => void;
   label: string;
   icon?: React.ReactNode;
+  /** 档位跟着所在那一行走(工具栏 xs、浮层里 sm),和同行的按钮同一把尺。 */
+  size?: FieldSize;
   className?: string;
 }) {
   // 物体/机位清单跟着场景走,一多就得能搜(阈值在 OptionPicker 里)。
@@ -25,6 +29,7 @@ export function Pick({
       options={options.map(([id, name]) => ({ value: id, label: name }))}
       ariaLabel={label}
       icon={icon}
+      size={size}
       className={className}
     />
   );

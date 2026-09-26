@@ -541,7 +541,8 @@ export function CapabilityProfileForm({
                     value=""
                     onChange={(key) => key && openField(key)}
                     options={idle.map((field) => ({ value: field.key, label: labelOf(field.key) }))}
-                    className="h-7 w-auto gap-1 px-2 text-ui-xs text-muted-foreground"
+                    size="xs"
+                    className="w-auto gap-1 text-muted-foreground"
                     contentClassName="max-w-[min(420px,calc(100vw-32px))]"
                     align="end"
                   />

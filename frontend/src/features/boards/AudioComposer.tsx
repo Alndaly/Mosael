@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { listTtsEngines, listTtsVoices, listVoices, type BoardItem, type Voice } from "@/api/client";
 import { compactSpeechEngineChoices } from "@/features/voice/speechEngines";
+import type { FieldSize } from "@/components/ui/control-size";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
@@ -31,9 +32,9 @@ import { isImeKeystroke } from "@/lib/shortcuts";
 /**
  * 紧凑工具行里的选择器。底色、焦点环、内边距全由触发器这一个盒子出 —— 和视频卡片同一套。
  *
- * **高度由调用点给**,不写在这里:「同一行的控件一样高」是那一行的决定,而这个组件不知道自己
- * 会被摆进哪一行。design/controlRhythm 那条棘轮也正是按调用点读的 —— 把高度藏进来,它就只能
- * 按 `Pick` 的默认档(40px)猜,于是要么误报、要么把真参差放过去。
+ * **档位由调用点给**(`size`),不写在这里:「同一行的控件一样高」是那一行的决定,而这个组件
+ * 不知道自己会被摆进哪一行。design/controlRhythm 那条棘轮也正是按调用点的 `size` 读的 —— 把档位
+ * 藏进来,它就只能按 `Pick` 的默认档(40px)猜,于是要么误报、要么把真参差放过去。
  */
 function Pick({
   value,
@@ -41,14 +42,14 @@ function Pick({
   options,
   ariaLabel,
   icon,
-  className,
+  size,
 }: {
   value: string;
   onChange: (next: string) => void;
   options: { value: string; label: string }[];
   ariaLabel: string;
   icon?: React.ReactNode;
-  className: string;
+  size: FieldSize;
 }) {
   if (options.length === 0) return null;
   return (
@@ -58,10 +59,8 @@ function Pick({
       options={options}
       ariaLabel={ariaLabel}
       icon={icon}
-      className={cn(
-        "w-auto max-w-[min(11rem,40%)] gap-1 border-0 bg-transparent px-1.5 text-ui-2xs text-muted-foreground shadow-none transition-colors hover:bg-secondary data-[state=open]:text-foreground",
-        className,
-      )}
+      size={size}
+      className="w-auto max-w-[min(11rem,40%)] gap-1 border-0 bg-transparent px-1.5 text-ui-2xs text-muted-foreground shadow-none transition-colors hover:bg-secondary data-[state=open]:text-foreground"
       contentClassName="max-w-[min(360px,calc(100vw-16px))]"
     />
   );
@@ -183,7 +182,7 @@ export function AudioComposer({
                   看起来就该一样。包一层外壳只负责 hover 的写法会让悬停和聚焦高亮出两个不同
                   大小的框,而 `[&>svg]:hidden` 会让这一格看起来根本不像个下拉。 */}
               <Pick
-                className="h-7"
+                size="xs"
                 ariaLabel={t("subtitleDubEngine")}
                 icon={<AudioLines size={12} className="shrink-0 text-muted-foreground" />}
                 value={activeEngine?.id ?? ""}
@@ -202,7 +201,7 @@ export function AudioComposer({
                 ) : (
                   /* 音色一多自动带搜索 —— 一个供应商挂几十个音色是常态,滚着找「若曦」不现实。 */
                   <Pick
-                    className="h-7"
+                    size="xs"
                     ariaLabel={t("subtitleDubVoice")}
                     value={current?.id ?? ""}
                     onChange={setPicked}
@@ -211,7 +210,7 @@ export function AudioComposer({
                 )
               ) : (
                 <Pick
-                  className="h-7"
+                  size="xs"
                   ariaLabel={t("subtitleDubVoice")}
                   value={activeEngineVoice?.value ?? ""}
                   onChange={setEngineVoice}

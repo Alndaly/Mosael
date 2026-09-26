@@ -641,7 +641,7 @@ export function Recorder({
                   }}
                   disabled={recording || starting}
                 >
-                  <SelectTrigger className="h-8" title={t("recordCamera")} aria-label={t("recordCamera")}>
+                  <SelectTrigger size="sm" title={t("recordCamera")} aria-label={t("recordCamera")}>
                     <Video size={12} className="shrink-0 text-muted-foreground" />
                     <SelectValue />
                   </SelectTrigger>
@@ -664,7 +664,7 @@ export function Recorder({
                 }}
                 disabled={recording || starting}
               >
-                <SelectTrigger className="h-8" title={t("recordMic")} aria-label={t("recordMic")}>
+                <SelectTrigger size="sm" title={t("recordMic")} aria-label={t("recordMic")}>
                   <Mic size={12} className="shrink-0 text-muted-foreground" />
                   <SelectValue />
                 </SelectTrigger>

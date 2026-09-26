@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { CONTROL_HEIGHT, FIELD_SIZE } from "@/components/ui/control-size";
 import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
 
 export const RATCHET = true;
@@ -30,7 +30,15 @@ describe("控件高度只有一个出处", () => {
     const { buttonVariants } = await import("@/components/ui/button");
     expect(buttonVariants()).toContain(CONTROL_HEIGHT.md);
     expect(FIELD_TRIGGER_CLASS).toContain(CONTROL_HEIGHT.md);
-    expect(readFileSync(join(__dirname, "input.tsx"), "utf8")).toContain("CONTROL_HEIGHT.md");
+    expect(FIELD_SIZE.md).toContain(CONTROL_HEIGHT.md);
+  });
+
+  it("字段的每一档和同名按钮同高 —— 同一行里 size 一样就对得齐", async () => {
+    const { buttonVariants } = await import("@/components/ui/button");
+    expect(FIELD_SIZE.xs).toContain(CONTROL_HEIGHT.xs);
+    expect(buttonVariants({ size: "xs" })).toContain(CONTROL_HEIGHT.xs);
+    expect(FIELD_SIZE.sm).toContain(CONTROL_HEIGHT.sm);
+    expect(buttonVariants({ size: "sm" })).toContain(CONTROL_HEIGHT.sm);
   });
 
   it("描边按钮和输入框是同一种描边 —— 并排时外轮廓一样清楚", async () => {

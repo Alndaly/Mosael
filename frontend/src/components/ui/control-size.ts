@@ -23,3 +23,22 @@ export const CONTROL_SQUARE = {
   sm: "size-8",
   md: "size-9",
 } as const;
+
+/**
+ * 字段(输入框、下拉触发器)的**档位**:高度 + 左右留白 + 字号一起走,和 `buttonVariants` 的
+ * xs/sm/default 是同一把尺 —— `<Input size="sm">` 挨着 `<Button size="sm">`,同高是构造出来的,
+ * 不是两边碰巧都写了 `h-8`。
+ *
+ * 此前输入框只有一个高度,要矮一档的调用点只能在 className 里写 `h-8`/`h-7`/`h-[26px]`,刻度
+ * 于是住在十几个 className 里:插件页的工具筛选那一行,搜索框写了 `h-8`、旁边的却走默认档,
+ * 比同卡的输入框矮一截。字号跟着高度走,理由同按钮的 xs 档:28px 的框里 text-ui-sm 会把字顶满。
+ *
+ * 没有 lg:字段没有「更醒目」的需要,真有了再加一档。棘轮:`design/fieldScale.test.ts`。
+ */
+export type FieldSize = "xs" | "sm" | "md";
+
+export const FIELD_SIZE: Record<FieldSize, string> = {
+  xs: `${CONTROL_HEIGHT.xs} px-2 text-ui-xs`,
+  sm: `${CONTROL_HEIGHT.sm} px-2.5 text-ui-sm`,
+  md: `${CONTROL_HEIGHT.md} px-3 text-ui-sm`,
+};

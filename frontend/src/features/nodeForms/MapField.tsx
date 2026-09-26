@@ -122,7 +122,8 @@ export function MapField({
       {rows.map((row, index) => (
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_24px] items-center gap-1" key={index}>
           <Input
-            className="h-8 min-w-0 rounded-md text-ui-xs"
+            size="sm"
+            className="min-w-0 text-ui-xs"
             value={row.key}
             placeholder={keyPlaceholder ?? t("wfMapKey")}
             onChange={(event) => push(rows.map((one, i) => (i === index ? { ...one, key: event.target.value } : one)))}
@@ -134,7 +135,8 @@ export function MapField({
             emptyText={t("cmdkEmpty")}
             // 手填是**常态**:值可以是上游引用,也可以是写死的字面量。
             allowCustomValue
-            className="h-8 w-full min-w-0 text-ui-xs"
+            size="sm"
+            className="w-full min-w-0 text-ui-xs"
             onValueChange={(next: string) =>
               push(
                 rows.map((one, i) =>

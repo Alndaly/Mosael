@@ -110,7 +110,8 @@ function Pick({
       onChange={(event) => onChange(event.target.value)}
       aria-label={label}
       placeholder={placeholder}
-      className="h-8 w-full min-w-0 px-2.5 text-ui-xs"
+      size="sm"
+      className="w-full min-w-0 text-ui-xs"
     />
   ) : (
     /* 选项一多自动换成可搜索的那一版(阈值在 OptionPicker 里)—— 模型清单动辄十几项,
@@ -121,13 +122,14 @@ function Pick({
       options={options}
       ariaLabel={label}
       icon={icon}
+      size="sm"
       /* 带标签的排在设置弹层里,要撑满自己那一格,**和旁边的输入框同一个样子**(有边框的字段,
          和全应用的表单一家):此前下拉是无边框的深色填充、输入框是描边的浅底,并排时像两种控件。
          不带标签的活在工具行里,**按内容取宽** —— 撑满会把箭头顶到行尾,名字和箭头之间空出一大片。 */
       className={cn(
-        "h-8 min-w-0 gap-1 text-ui-xs",
+        "min-w-0 gap-1 text-ui-xs",
         label
-          ? "w-full px-2.5"
+          ? "w-full"
           : "w-auto max-w-full border-0 bg-transparent px-2 text-muted-foreground shadow-none transition-colors hover:bg-secondary",
         className,
       )}

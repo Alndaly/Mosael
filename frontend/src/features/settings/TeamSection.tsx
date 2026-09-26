@@ -266,7 +266,7 @@ function MemberRow({
       <div className="flex shrink-0 items-center gap-1.5">
         {canEditRole ? (
           <Select value={member.role} onValueChange={onRole}>
-            <SelectTrigger className="h-8 w-[116px]">
+            <SelectTrigger size="sm" className="w-[116px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

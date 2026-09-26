@@ -5,7 +5,7 @@ import { Brain } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
+import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import { cn } from "@/lib/utils";
@@ -96,8 +96,8 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
         type="button"
         disabled
         className={cn(
-          FIELD_TRIGGER_CLASS,
-          "h-8 justify-start gap-1.5 px-2.5 text-xs text-muted-foreground",
+          fieldTriggerClass("sm"),
+          "text-xs text-muted-foreground",
         )}
         aria-label={reason}
         title={models.isPending ? reason : `${reason}\n${t("agentThinkingUnavailableHint")}`}
@@ -139,7 +139,8 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题(与分析方式同一处理)。
     <Select key={value} value={value} onValueChange={(next) => setLevel.mutate(next)}>
       <SelectTrigger
-        className="h-8 w-full justify-between gap-1.5 px-2.5 text-xs text-muted-foreground"
+        size="sm"
+        className="w-full justify-between text-xs text-muted-foreground"
         aria-label={t("agentThinkingLevel")}
         title={t("agentThinkingLevel")}
       >

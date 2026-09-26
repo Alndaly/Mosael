@@ -3,7 +3,8 @@ import { Check, ChevronDown } from "lucide-react";
 
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
+import type { FieldSize } from "@/components/ui/control-size"
+import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
 import { insideDialog } from "@/components/ui/insideDialog";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ export function Combobox({
   customValueLabel,
   disabled,
   className,
+  size,
   contentClassName,
   onValueChange,
 }: {
@@ -54,6 +56,8 @@ export function Combobox({
   customValueLabel?: (query: string) => string;
   disabled?: boolean;
   className?: string;
+  /** 触发器档位,和 `<Input size>`、`<Button size>` 同一把尺。 */
+  size?: FieldSize;
   contentClassName?: string;
   onValueChange: (value: string) => void;
 }) {
@@ -89,14 +93,14 @@ export function Combobox({
     >
       <PopoverTrigger asChild>
         {/* 不用 <Button variant="outline">:它的默认尺寸是 rounded-full px-4 的胶囊,
-            和旁边的 Select 并排时圆角、左右留白、箭头全都对不上。共用 FIELD_TRIGGER_CLASS。 */}
+            和旁边的 Select 并排时圆角、左右留白、箭头全都对不上。共用 fieldTriggerClass。 */}
         <button
           ref={triggerRef}
           type="button"
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className={cn(FIELD_TRIGGER_CLASS, "cursor-pointer text-left", className)}
+          className={cn(fieldTriggerClass(size), "cursor-pointer text-left", className)}
         >
           <span className={value ? "text-foreground" : "text-muted-foreground"}>
             {selected?.label ?? (value || placeholder)}

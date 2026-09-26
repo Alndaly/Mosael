@@ -118,7 +118,8 @@ export function TrimComposer({
             value={start}
             onChange={(event) => setStart(event.target.value)}
             inputMode="decimal"
-            className="h-7 w-16 px-1.5 text-center text-ui-xs"
+            size="xs"
+            className="w-16 px-1.5 text-center"
             aria-label={t("boardTrimStartLabel")}
           />
         </label>
@@ -129,7 +130,8 @@ export function TrimComposer({
             onChange={(event) => setEnd(event.target.value)}
             inputMode="decimal"
             placeholder={duration ? String(Math.round(duration * 10) / 10) : t("boardTrimSeconds")}
-            className="h-7 w-16 px-1.5 text-center text-ui-xs"
+            size="xs"
+            className="w-16 px-1.5 text-center"
             aria-label={t("boardTrimEndLabel")}
           />
         </label>

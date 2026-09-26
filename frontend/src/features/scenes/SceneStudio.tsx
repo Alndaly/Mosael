@@ -1462,7 +1462,8 @@ function SceneEditor({
                   label={t("sceneCurrentShot")}
                   value={shot.id}
                   options={draft.content.shots.map((s) => [s.id, s.name])}
-                  className="h-7 w-[150px] min-w-[70px] shrink px-2.5 text-ui-xs"
+                  size="xs"
+                  className="w-[150px] min-w-[70px] shrink"
                   icon={<Camera size={14} className="shrink-0 text-muted-foreground" />}
                   onChange={(id) => {
                     setShotId(id);
