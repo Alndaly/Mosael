@@ -542,6 +542,11 @@ def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
     assert "extra" not in by_id["node:plugin.dev.test.boardtools.paint"]["config"]
     assert "description" not in by_id["node:scene_render"]["config"]["scene_id"]
     assert by_id["node:video_to_gif"]["board_description"] == "把一段视频做成 GIF 动图"
+    #: 工具格上「产出」那一行说的是落板的内容,不是节点的全部输出(源素材 id、引擎名不算)。
+    assert by_id["node:video_to_gif"]["board_products"] == ["asset_id"]
+    assert by_id["node:separate_audio"]["board_products"] == ["vocals_asset_id", "background_asset_id"]
+    assert by_id["node:translate"]["board_products"] == ["text"]
+    assert all(set(one["board_products"]) <= set(one["outputs"]) and one["board_products"] for one in tools)
     #: 按吃什么内容分组、同组挨在一起(菜单按相邻的同名组归组)。
     groups = [one["board_group"] for one in tools]
     assert groups == sorted(groups, key=BOARD_GROUPS.index)

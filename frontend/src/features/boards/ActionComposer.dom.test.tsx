@@ -22,7 +22,8 @@ vi.mock("@xyflow/react", () => ({
 
 import type { BoardItem, BoardProducerInfo, BoardRunRequest } from "@/api/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ActionComposer, defaultBindings } from "@/features/boards/ActionComposer";
+import { ActionComposer } from "@/features/boards/ActionComposer";
+import { defaultBindings } from "@/features/boards/boardTools";
 import { renderComposer, slotProducers, type ComposerHost } from "@/features/boards/boardComposers";
 import { NO_UPSTREAM } from "@/features/boards/boardUpstream";
 

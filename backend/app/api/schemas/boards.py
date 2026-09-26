@@ -83,3 +83,6 @@ class BoardProducerOut(WorkflowNodeTypeOut):
     board_group_label: str = ""
     #: 给创作者看的一句说明 —— 不是工作流节点那段写给搭流程的人的说明。
     board_description: str = ""
+    #: 跑一次会在右边新建成格子的**内容**是哪几个输出(boards.transforms.content_outputs):工具格上
+    #: 「产出」那一行照它说。名字对得上 `outputs`,类型和名字在 `output_types` / `output_labels`。
+    board_products: list[str] = Field(default_factory=list)

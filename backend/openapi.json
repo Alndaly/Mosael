@@ -20666,6 +20666,13 @@
             "type": "string",
             "title": "Board Description",
             "default": ""
+          },
+          "board_products": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Board Products"
           }
         },
         "type": "object",

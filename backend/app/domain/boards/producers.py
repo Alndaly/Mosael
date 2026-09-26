@@ -488,7 +488,7 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
     """
     from app.core.i18n import t
     from app.domain.boards.tools import bindable_kinds
-    from app.domain.boards.transforms import BOARD_GROUPS, board_config_view, board_description, board_group
+    from app.domain.boards.transforms import BOARD_GROUPS, board_config_view, board_description, board_group, content_outputs
     from app.domain.workflows.node_catalog import describe_node_types
 
     registry = _registry(db, actor_id)
@@ -521,6 +521,7 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
                 "board_group": group,
                 "board_group_label": t(f"boardToolGroup_{group}", locale),
                 "board_description": board_description(producer.meta or {}, locale),
+                "board_products": content_outputs(producer.meta or {}),
             }
         out.append({
             **entry,

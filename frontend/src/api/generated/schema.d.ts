@@ -7227,6 +7227,8 @@ export interface components {
              * @default
              */
             board_description: string;
+            /** Board Products */
+            board_products?: string[];
         };
         /**
          * BoardRun

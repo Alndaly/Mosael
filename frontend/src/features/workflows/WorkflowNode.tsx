@@ -3,65 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   AlertTriangle,
-  AlignLeft,
-  AppWindow,
   AudioLines,
-  AudioWaveform,
-  Bell,
-  BookOpen,
-  BookPlus,
-  Box,
-  Boxes,
-  Braces,
-  Captions,
-  CaseSensitive,
   CheckCircle2,
-  Clapperboard,
-  Code2,
-  Download,
-  Eraser,
-  FileOutput,
-  FileUp,
-  FileVideo,
   Film,
-  Filter,
-  Flag,
-  FolderInput,
-  FolderPlus,
-  GitBranch,
-  Globe,
-  Hourglass,
   Image as ImageIcon,
-  Keyboard,
-  Languages,
-  ListPlus,
   Loader2,
-  Mic,
-  MousePointer2,
-  MousePointerClick,
-  PanelTopClose,
-  RefreshCw,
-  Repeat,
-  Rocket,
-  Rows3,
-  ScanText,
-  Scissors,
-  Search,
-  Shapes,
   SkipForward,
-  SlidersHorizontal,
-  Sparkles,
-  Tags,
-  Timer,
   Type,
-  Wand2,
-  Workflow as WorkflowIcon,
-  Wrench,
   XCircle,
 } from "lucide-react";
 
 import { api, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
 import type { AssetOutput } from "@/features/workflows/runSteps";
 import { WORKFLOW_HANDLE_CLASS } from "@/features/workflows/workflowCanvasSkin";
@@ -95,7 +49,6 @@ const WF_NODE_COLORS: Record<string, string> = {
   loop_while: "var(--primary)",
 };
 
-/** 节点类型 → 图标(与节点面板/画布一致)。 */
 /** 素材节点按**素材本身**取图标 —— 图片、视频、音频各是各的样子。 */
 const ASSET_KIND_ICONS: Record<string, React.ReactNode> = {
   image: <ImageIcon size={13} />,
@@ -103,73 +56,12 @@ const ASSET_KIND_ICONS: Record<string, React.ReactNode> = {
   audio: <AudioLines size={13} />,
 };
 
-const NODE_ICONS: Record<string, React.ReactNode> = {
-  start: <Flag size={13} />,
-  llm: <Sparkles size={13} />,
-  plugin_tool: <Wrench size={13} />,
-  transcribe_asset: <Mic size={13} />,
-  export_sequence: <Download size={13} />,
-  ai_generate: <Wand2 size={13} />,
-  condition: <GitBranch size={13} />,
-  http_request: <Globe size={13} />,
-  code: <Code2 size={13} />,
-  template: <AlignLeft size={13} />,
-  publish: <Rocket size={13} />,
-  json_extract: <Braces size={13} />,
-  text_transform: <CaseSensitive size={13} />,
-  delay: <Timer size={13} />,
-  synthesize_speech: <AudioLines size={13} />,
-  //: 把一条音轨剪成两条 —— 剪刀比音波更能说出"分开"这件事。
-  separate_audio: <Scissors size={13} />,
-  //: 把一条毛糙的波形理平。
-  denoise_audio: <AudioWaveform size={13} />,
-  //: 3D 白模:搭一个盒子,再从机位上"拍"它。
-  scene_props: <Shapes size={13} />,
-  scene_create: <Box size={13} />,
-  scene_render: <Clapperboard size={13} />,
-  browser_open: <AppWindow size={13} />,
-  browser_navigate: <Globe size={13} />,
-  browser_click: <MousePointerClick size={13} />,
-  browser_input: <Keyboard size={13} />,
-  browser_upload: <FileUp size={13} />,
-  browser_extract: <ScanText size={13} />,
-  browser_wait: <Hourglass size={13} />,
-  browser_scroll: <MousePointer2 size={13} />,
-  browser_evaluate: <Code2 size={13} />,
-  browser_close: <PanelTopClose size={13} />,
-  call_workflow: <WorkflowIcon size={13} />,
-  output: <FileOutput size={13} />,
-  subgraph: <Boxes size={13} />,
-  notify: <Bell size={13} />,
-  translate: <Languages size={13} />,
-  translate_lines: <Languages size={13} />,
-  loop_foreach: <Repeat size={13} />,
-  loop_while: <RefreshCw size={13} />,
-  asset_query: <Filter size={13} />,
-  note_search: <Search size={13} />,
-  note_read: <BookOpen size={13} />,
-  note_create: <BookPlus size={13} />,
-  asset_tag: <Tags size={13} />,
-  asset_update: <FolderInput size={13} />,
-  project_create: <FolderPlus size={13} />,
-  project_sequence_create: <FolderPlus size={13} />,
-  timeline_cut_ranges: <Scissors size={13} />,
-  // 时间线那一族:此前只有 timeline_cut_ranges 有图标,同排的另外三个退到通用的文字图标 ——
-  // 一排本该成套的节点里三个顶着"T",看起来像它们不是同一类东西。
-  timeline_append: <ListPlus size={13} />,
-  timeline_add_track: <Rows3 size={13} />,
-  timeline_clear: <Eraser size={13} />,
-  edit_timeline: <SlidersHorizontal size={13} />,
-  generate_subtitles: <Captions size={13} />,
-  dub_subtitles: <Mic size={13} />,
-  inspect_sequence: <Search size={13} />,
-  video_to_gif: <FileVideo size={13} />,
-  asset: <ImageIcon size={13} />,
-};
+
 
 /** Shared semantic presentation for canvas nodes and their inspector header. */
 export function workflowNodeVisual(nodeType: string): { color: string | undefined; icon: React.ReactNode | undefined } {
-  return { color: WF_NODE_COLORS[nodeType], icon: NODE_ICONS[nodeType] };
+  const Icon = nodeTypeIcon(nodeType);
+  return { color: WF_NODE_COLORS[nodeType], icon: Icon ? <Icon size={13} /> : undefined };
 }
 
 export interface WorkflowNodeData extends Record<string, unknown> {

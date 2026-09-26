@@ -8,7 +8,8 @@ import { useI18n } from "@/app/preferences";
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
-import { kindIcon, kindText } from "@/features/boards/boardNodes";
+import { kindIcon, sourceName } from "@/features/boards/boardNodes";
+import { defaultBindings, givesValue } from "@/features/boards/boardTools";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import {
   NodeConfigForm,
@@ -28,55 +29,9 @@ type Bindings = Form["bindings"];
 /** 工具清单里一个字段的声明:节点表单那一份 + 画板多给的一样 —— 它能接哪几种上游格子。 */
 type BoardFieldSpec = ConfigSpec & { board_sources?: string[] };
 
-/**
- * 上游这一格**能不能给出值**。还没有产出的空槽(图片还在生成、文档还没挑)接上去也取不到东西 ——
- * 服务端运行时照样会跳过它,这里就不把它列成一个可以点的选项。
- */
-function givesValue(item: BoardItem): boolean {
-  if (item.kind === "note") return true;
-  if (item.kind === "document") return Boolean(item.note_id);
-  if (item.kind === "scene") return Boolean(item.scene_id);
-  return Boolean(item.asset_id);
-}
-
-/** 绑定芯片上怎么称呼上游那一格:起了名用名字;便签没起名就用开头几个字(几张便签都叫「便签」分不开)。 */
-function sourceName(t: ReturnType<typeof useI18n>, item: BoardItem): string {
-  const title = item.title?.trim();
-  if (title) return title;
-  if (item.kind === "note" && item.text?.trim()) {
-    const text = item.text.trim().replace(/\s+/g, " ");
-    return text.length > 18 ? `${text.slice(0, 18)}…` : text;
-  }
-  if (item.kind === "document" && item.text?.trim()) return item.text.trim();
-  return kindText(t, item.kind).label;
-}
-
 /** 这个字段收一串还是一份:文字字段(多张便签按连线顺序拼起来)和复数的素材字段收一串。 */
 function takesMany(key: string, spec: BoardFieldSpec): boolean {
   return Boolean(spec.board_sources?.includes("note")) || /(^|_)asset_ids$/.test(key);
-}
-
-/**
- * 一格上游 → 接到哪些字段的默认绑定:**必填**、能接上游、还没绑也没手填过的字段,绑第一个接得上的上游。
- *
- * 「没手填过」看的是 config 里有没有这个键 —— 用户把它切回「手填」时,面板会把它写成空串
- * (见 setBound),于是不会刚解开就又被绑回去。返回 null 表示不用改。
- */
-export function defaultBindings(
-  specs: Record<string, BoardFieldSpec>,
-  config: Record<string, unknown>,
-  bindings: Bindings,
-  sources: BoardItem[],
-): Bindings | null {
-  let next: Bindings | null = null;
-  for (const [key, spec] of Object.entries(specs)) {
-    if (!spec?.required || !spec.board_sources?.length) continue;
-    if (bindings[key]?.length || key in config) continue;
-    const first = sources.find((one) => spec.board_sources?.includes(one.kind) && givesValue(one));
-    if (!first) continue;
-    next = { ...(next ?? bindings), [key]: [{ from: first.id }] };
-  }
-  return next;
 }
 
 /**

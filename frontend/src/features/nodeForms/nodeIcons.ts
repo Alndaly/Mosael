@@ -1,0 +1,131 @@
+import {
+  AlignLeft,
+  AppWindow,
+  AudioLines,
+  AudioWaveform,
+  Bell,
+  BookOpen,
+  BookPlus,
+  Box,
+  Boxes,
+  Braces,
+  Captions,
+  CaseSensitive,
+  Clapperboard,
+  Code2,
+  Download,
+  Eraser,
+  FileOutput,
+  FileUp,
+  FileVideo,
+  Filter,
+  Flag,
+  FolderInput,
+  FolderPlus,
+  GitBranch,
+  Globe,
+  Hourglass,
+  Image as ImageIcon,
+  Keyboard,
+  Languages,
+  ListPlus,
+  Mic,
+  MousePointer2,
+  MousePointerClick,
+  PanelTopClose,
+  RefreshCw,
+  Repeat,
+  Rocket,
+  Rows3,
+  ScanText,
+  Scissors,
+  Search,
+  Shapes,
+  SlidersHorizontal,
+  Sparkles,
+  Tags,
+  Timer,
+  Wand2,
+  Workflow as WorkflowIcon,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
+
+/**
+ * 节点类型 → 图标。**只此一处**:工作流画布上的节点、检查器的标题,和创意画板上的工具格(格子、
+ * 格子上方那一行、「添加」和拉线菜单里那一行)读的都是它 —— 同一个节点在两个地方不该长两个样子。
+ *
+ * 存的是图标组件,不是画好的元素:工作流节点画 13px,画板上的格子各有各的尺寸。
+ *
+ * 节点类型的真源在后端的 NODE_TYPES,这张表跟着它走(棘轮 test_every_node_type_has_an_icon)。
+ * 插件节点(`plugin.<插件>.<工具>`)不在这里:插件的 node 块不声明图标,由用它的地方按内容给
+ * (画板按它吃什么内容分的组,见 features/boards/boardTools)。
+ */
+const NODE_ICONS: Record<string, LucideIcon> = {
+  start: Flag,
+  llm: Sparkles,
+  plugin_tool: Wrench,
+  transcribe_asset: Mic,
+  export_sequence: Download,
+  ai_generate: Wand2,
+  condition: GitBranch,
+  http_request: Globe,
+  code: Code2,
+  template: AlignLeft,
+  publish: Rocket,
+  json_extract: Braces,
+  text_transform: CaseSensitive,
+  delay: Timer,
+  synthesize_speech: AudioLines,
+  //: 把一条音轨剪成两条 —— 剪刀比音波更能说出"分开"这件事。
+  separate_audio: Scissors,
+  //: 把一条毛糙的波形理平。
+  denoise_audio: AudioWaveform,
+  //: 3D 白模:搭一个盒子,再从机位上"拍"它。
+  scene_props: Shapes,
+  scene_create: Box,
+  scene_render: Clapperboard,
+  browser_open: AppWindow,
+  browser_navigate: Globe,
+  browser_click: MousePointerClick,
+  browser_input: Keyboard,
+  browser_upload: FileUp,
+  browser_extract: ScanText,
+  browser_wait: Hourglass,
+  browser_scroll: MousePointer2,
+  browser_evaluate: Code2,
+  browser_close: PanelTopClose,
+  call_workflow: WorkflowIcon,
+  output: FileOutput,
+  subgraph: Boxes,
+  notify: Bell,
+  translate: Languages,
+  translate_lines: Languages,
+  loop_foreach: Repeat,
+  loop_while: RefreshCw,
+  asset_query: Filter,
+  note_search: Search,
+  note_read: BookOpen,
+  note_create: BookPlus,
+  asset_tag: Tags,
+  asset_update: FolderInput,
+  project_create: FolderPlus,
+  project_sequence_create: FolderPlus,
+  timeline_cut_ranges: Scissors,
+  // 时间线那一族:此前只有 timeline_cut_ranges 有图标,同排的另外三个退到通用的文字图标 ——
+  // 一排本该成套的节点里三个顶着"T",看起来像它们不是同一类东西。
+  timeline_append: ListPlus,
+  timeline_add_track: Rows3,
+  timeline_clear: Eraser,
+  edit_timeline: SlidersHorizontal,
+  generate_subtitles: Captions,
+  dub_subtitles: Mic,
+  inspect_sequence: Search,
+  video_to_gif: FileVideo,
+  asset: ImageIcon,
+};
+
+/** 这个节点类型的图标;表里没有(插件节点、没登记的)是 undefined,由调用方给兜底。 */
+export function nodeTypeIcon(nodeType: string | undefined): LucideIcon | undefined {
+  return nodeType && Object.hasOwn(NODE_ICONS, nodeType) ? NODE_ICONS[nodeType] : undefined;
+}

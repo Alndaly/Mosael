@@ -4,7 +4,7 @@ import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, Wrench, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, CircleDashed, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, Wrench, type LucideIcon } from "lucide-react";
 
 import { getJob, type BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -71,11 +71,22 @@ export type BoardNodeData = {
   onStop?: (id: string) => void;
 };
 
-/** 工具格上要显示的那几样:名字、一句说明、出处(插件名;内置节点为空)。 */
+/**
+ * 工具格上要显示的那几样(boardTools.boardToolFace 从工具声明和这一格的表单里读出来):名字、一句说明、
+ * 出处(插件名;内置节点为空 —— 「内置」对创作者不是一个有意义的区分)、图标,和一份一眼看懂的摘要:
+ * 吃什么、一两个关键设置、产出什么。
+ */
 export interface BoardToolFace {
   label: string;
   description: string;
   plugin: string;
+  icon: LucideIcon;
+  /** 能接上游的字段。`source` = 此刻从哪一格取(绑定的,或跑的时候会默认接上的);`text` = 手填的字。 */
+  inputs: { key: string; label: string; kinds: BoardItem["kind"][]; source?: BoardItem; text?: string }[];
+  /** 关键设置;`value` 为 null = 必填、还没选。 */
+  settings: { key: string; label: string; value: string | null }[];
+  /** 跑一次在右边新建的内容;`text` 的落成便签。 */
+  products: { label: string; text: boolean }[];
 }
 
 /** 两侧各一个接点。**始终渲染但默认透明** —— 只在悬停/选中时显形:
@@ -180,6 +191,19 @@ export function kindText(t: (key: MessageKey) => string, kind: BoardItem["kind"]
  */
 export function itemName(t: (key: MessageKey) => string, item: Pick<BoardItem, "kind" | "title">): string {
   return item.title?.trim() || kindText(t, item.kind).label;
+}
+
+/** 当作**上游**称呼一格(工具格上「接的是哪一格」、面板上的绑定芯片):起了名用名字;便签没起名就用
+ *  开头几个字(几张便签都叫「便签」分不开);文档用它的标题。 */
+export function sourceName(t: (key: MessageKey) => string, item: BoardItem): string {
+  const title = item.title?.trim();
+  if (title) return title;
+  if (item.kind === "note" && item.text?.trim()) {
+    const text = item.text.trim().replace(/\s+/g, " ");
+    return text.length > 18 ? `${text.slice(0, 18)}…` : text;
+  }
+  if (item.kind === "document" && item.text?.trim()) return item.text.trim();
+  return kindText(t, item.kind).label;
 }
 
 /** 能从一条线的末端长出来的种类。分组框不在其中 —— 它是个容器,不是一份产出。 */
@@ -680,8 +704,10 @@ export function SceneNode({ data, selected }: NodeProps) {
 /**
  * 工具格:跑一个插件工具或工作流节点。**它自己不放产出** —— 每跑一次,产出都新建成右边的几格、
  * 连上线(后端 canvas._derive),上一轮的留着。所以这一格画的是「这是个什么工具、现在怎样」:
- * 名字和出处、一句说明;在跑时整块扫光 + 状态字(和生成中的空槽同一种样子)+ 停止;
- * 跑挂了写原因。表单挂在选中时的面板里(ActionComposer)。
+ * 这个工具自己的图标(不是一把通用的扳手 —— 每个工具看着都一样,等于没有图标)、一句说明;
+ * 空着时一份安静的摘要 —— 吃什么(接没接上)、一两个关键设置、产出什么 —— 和别的空格子一样
+ * 一眼说清「这里差什么」,不是一张缩小的表单;在跑时整块扫光 + 状态字(和生成中的空槽同一种样子)
+ * + 停止;跑挂了写原因。表单挂在选中时的面板里(ActionComposer)。
  *
  * 进度只在任务自己报了的时候画(任务的 progress 在 0 和 1 之间)—— 不去猜一个数。
  */
@@ -701,7 +727,9 @@ function ActionNode({ data, selected }: NodeProps) {
   const progress = running ? (job.data?.progress ?? 0) : 0;
   const showProgress = progress > 0 && progress < 1;
   const state = nodeRunProps(item);
-  const source = tool ? tool.plugin || t("boardToolBuiltin") : "";
+  const Icon = tool?.icon ?? kindIcon("action");
+  //: 名字已经挂在框外正上方(没起名就是工具名);起了名之后,框里再写一次这是哪个工具。
+  const renamed = Boolean(item.title?.trim());
   return (
     <div
       data-board-run-status={state["data-board-run-status"]}
@@ -709,27 +737,37 @@ function ActionNode({ data, selected }: NodeProps) {
       className={cn("group relative flex h-full w-full flex-col rounded-xl border border-border bg-panel shadow-sm", state.className)}
     >
       <NodeResizer minWidth={200} minHeight={110} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <NodeLabel data={nodeData} icon={Wrench} fallback={tool?.label} />
+      <NodeLabel data={nodeData} icon={Icon} fallback={tool?.label} />
       <Ports visible={selected} disabled={commentMode} />
-      <header className="flex min-w-0 items-center gap-2 px-3 pt-3">
-        <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
-          <Wrench size={14} />
+      <header className="flex min-w-0 items-start gap-2.5 px-3 pt-3">
+        <span
+          data-board-tool-icon=""
+          className="grid size-7 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary"
+        >
+          <Icon size={14} />
         </span>
-        {/* 名字已经挂在框外正上方(没起名就是工具名);起了名之后,框里再写一次这是哪个工具。 */}
-        <span className="min-w-0 flex-1 truncate text-ui-sm font-semibold text-foreground" title={tool?.label}>
-          {item.title?.trim() ? tool?.label || t("boardKindAction") : ""}
-        </span>
-        {source && (
-          <span
-            data-board-tool-source=""
-            className="max-w-[45%] shrink-0 truncate rounded-full border border-border px-1.5 py-px text-ui-2xs text-muted-foreground"
-            title={source}
-          >
-            {source}
-          </span>
-        )}
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          {renamed && tool && (
+            <span className="truncate text-ui-sm font-semibold text-foreground" title={tool.label}>
+              {tool.label}
+            </span>
+          )}
+          {tool && (tool.plugin || tool.description) && (
+            //: 插件工具点名出处,和「添加」菜单里那一行同一个写法(「插件名 · 说明」):它告诉你会用谁的服务。
+            //: 内置的不标 —— 「内置」是工程上的区分,对创作者没有意义。
+            <p className={cn("min-w-0 text-ui-2xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]", renamed ? "line-clamp-1" : "line-clamp-2")}>
+              {tool.plugin && (
+                <span data-board-tool-source="" className="font-medium">
+                  {tool.plugin}
+                  {tool.description ? " · " : ""}
+                </span>
+              )}
+              {tool.description ? <InlineMarkdown text={tool.description} /> : null}
+            </p>
+          )}
+        </div>
       </header>
-      <div className="relative min-h-0 flex-1 px-3 pb-3 pt-2">
+      <div className="relative min-h-0 flex-1 overflow-hidden px-3 pb-3 pt-2.5">
         {status === "running" || status === "queued" ? (
           <div role="status" aria-busy="true" className="absolute inset-x-3 bottom-3 top-2 overflow-hidden rounded-lg">
             <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
@@ -775,13 +813,79 @@ function ActionNode({ data, selected }: NodeProps) {
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             <span className="line-clamp-3 min-w-0">{t("boardToolUnavailable")}</span>
           </div>
-        ) : (
-          <p className="line-clamp-3 min-w-0 text-ui-2xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-            {tool?.description ? <InlineMarkdown text={tool.description} /> : null}
-          </p>
-        )}
+        ) : tool ? (
+          <ToolSummary tool={tool} />
+        ) : null}
       </div>
     </div>
+  );
+}
+
+/** 「A、B 或 C」。 */
+function eitherOf(t: (key: MessageKey) => string, words: string[]): string {
+  if (words.length < 2) return words[0] ?? "";
+  return `${words.slice(0, -1).join(t("listSeparator"))}${t("boardToolKindsOr")}${words[words.length - 1]}`;
+}
+
+/**
+ * 工具格空着(或跑完)时的那份摘要:左边一列是名目,右边一列是此刻的样子。
+ *
+ * 和别的空格子一个口气:没接上的那一行是**虚的**(虚线圈 + 灰字「接一段便签或文档」),接上了的
+ * 实起来(那一格的图标 + 名字);必填还没选的设置写「待选」。字号、颜色和格子里别处一样,不画成表单。
+ */
+function ToolSummary({ tool }: { tool: BoardToolFace }) {
+  const t = useI18n();
+  const products = [...new Set(tool.products.map((one) => (one.text ? kindText(t, "note").label : one.label)))];
+  if (!tool.inputs.length && !tool.settings.length && !products.length) return null;
+  const term = "min-w-0 truncate text-muted-foreground";
+  return (
+    <dl data-board-tool-summary="" className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 text-ui-2xs leading-relaxed">
+      {tool.inputs.map((input) => {
+        const Source = input.source ? kindIcon(input.source.kind) : null;
+        return (
+          <React.Fragment key={input.key}>
+            <dt className={term}>{input.label}</dt>
+            <dd
+              data-board-tool-input={input.key}
+              data-connected={input.source ? "true" : "false"}
+              className="flex min-w-0 items-center gap-1"
+            >
+              {input.source && Source ? (
+                <>
+                  <Source size={11} className="shrink-0 text-primary" />
+                  <span className="truncate text-foreground">{sourceName(t, input.source)}</span>
+                </>
+              ) : input.text ? (
+                <span className="truncate text-foreground">{input.text}</span>
+              ) : (
+                <>
+                  <CircleDashed size={11} className="shrink-0 text-muted-foreground" />
+                  <span className="truncate text-muted-foreground">
+                    {t("boardToolConnect").replace("{kinds}", eitherOf(t, input.kinds.map((kind) => kindText(t, kind).label)))}
+                  </span>
+                </>
+              )}
+            </dd>
+          </React.Fragment>
+        );
+      })}
+      {tool.settings.map((setting) => (
+        <React.Fragment key={setting.key}>
+          <dt className={term}>{setting.label}</dt>
+          <dd data-board-tool-setting={setting.key} className={cn("min-w-0 truncate", setting.value === null ? "text-muted-foreground" : "text-foreground")}>
+            {setting.value ?? t("boardToolUnset")}
+          </dd>
+        </React.Fragment>
+      ))}
+      {products.length > 0 && (
+        <>
+          <dt className={term}>{t("boardToolProduces")}</dt>
+          <dd data-board-tool-products="" className="min-w-0 truncate text-foreground">
+            {products.join(t("listSeparator"))}
+          </dd>
+        </>
+      )}
+    </dl>
   );
 }
 

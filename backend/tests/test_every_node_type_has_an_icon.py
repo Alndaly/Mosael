@@ -1,7 +1,7 @@
 """棘轮:**每个节点类型在画布上都有自己的图标**。
 
-`WorkflowNode.tsx` 里那张 `NODE_ICONS` 是手写的,而节点类型的真源在后端的 `NODE_TYPES`。
-两边各长各的,漏掉不报错 —— 缺图标的节点会退到一个通用的文字图标(`<Type>`),于是
+`nodeForms/nodeIcons.ts` 里那张 `NODE_ICONS` 是手写的(工作流画布和画板的工具格读的都是它),
+而节点类型的真源在后端的 `NODE_TYPES`。两边各长各的,漏掉不报错 —— 缺图标的节点会退到一个通用的文字图标(`<Type>`),于是
 `timeline_append`、`timeline_clear`、`timeline_add_track` 顶着一个"T"站在
 `timeline_cut_ranges`(剪刀)旁边,看起来像它们不是同一类东西。发现时漏了 7 个。
 
@@ -21,7 +21,7 @@ RATCHET = True
 
 ICONS_FILE = (
     pathlib.Path(__file__).resolve().parents[2]
-    / "frontend" / "src" / "features" / "workflows" / "WorkflowNode.tsx"
+    / "frontend" / "src" / "features" / "nodeForms" / "nodeIcons.ts"
 )
 
 
@@ -37,7 +37,7 @@ def test_每个节点类型都有图标() -> None:
 
     missing = sorted(set(NODE_TYPES) - _declared_icons())
     assert not missing, (
-        "这些节点类型在 WorkflowNode.tsx 的 NODE_ICONS 里没有图标,画布上会退到通用的"
+        "这些节点类型在 nodeIcons.ts 的 NODE_ICONS 里没有图标,画布上会退到通用的"
         f"文字图标,和同族节点摆在一起显得不是一类东西:\n  {missing}"
     )
 

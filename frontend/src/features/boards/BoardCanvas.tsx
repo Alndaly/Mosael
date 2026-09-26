@@ -48,7 +48,7 @@ import {
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
 import { isNodeProducer, type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
-import { boardToolOptions } from "@/features/boards/boardTools";
+import { boardToolFace, boardToolOptions } from "@/features/boards/boardTools";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -757,12 +757,18 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
   }, [setNodes, t, insetsOf]);
 
-  /** 工具格上显示的那几样,从产出者清单里查。清单没到是 undefined;查不到(插件卸了、没有连接)是 null。 */
+  /** 工具格上显示的那几样,从产出者清单里查。清单没到是 undefined;查不到(插件卸了、没有连接)是 null。
+   *  「接没接上」看的是此刻连进来的那几格(和面板同一份:按连线的先后)。 */
+  const itemsById = new Map(boardItems(nodes).map((item) => [item.id, item]));
   const toolFace = (item: BoardItem): BoardToolFace | null | undefined => {
     if (producers === undefined) return undefined;
     const found = producers.find((one) => one.id === item.form?.producer);
-    //: 格子上那句说明是**画板那一句**(给创作者看的),不是工作流节点那段写给搭流程的人的。
-    return found ? { label: found.label, description: found.board_description ?? "", plugin: found.plugin_name } : null;
+    if (!found) return null;
+    const sources = edges
+      .filter((edge) => edge.target === item.id)
+      .map((edge) => itemsById.get(edge.source))
+      .filter((one): one is BoardItem => Boolean(one));
+    return boardToolFace(found, item, sources);
   };
 
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
