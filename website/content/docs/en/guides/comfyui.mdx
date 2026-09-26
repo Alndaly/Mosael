@@ -2,7 +2,7 @@
 title: Generating with ComfyUI
 description: Connect a ComfyUI server on this machine or your LAN; every saved workflow becomes a model you can pick, and a set of tools lets the agent and workflows run any workflow as-is.
 order: 18
-updated: 2026-09-25
+updated: 2026-09-26
 version: 1.5.2
 ---
 
@@ -98,9 +98,13 @@ the tool list, the workflow node panel and the agent's tools, with a form made f
 - outputs per output node: connect “Image · SaveImage” downstream directly, or use “All outputs” / “Text outputs”.
 
 Renaming or moving a workflow in ComfyUI keeps the same tool (ComfyUI stores the workflow's id in the file); files saved
-by a very old ComfyUI have no id, so a rename makes them a different tool. Workflow nodes that used “Run workflow” with a
-particular graph are **rewritten to that graph's own tool automatically** (incoming data edges too); if a field doesn't
-map (a value keyed by node title, say) the node is left as it was and keeps working.
+by a very old ComfyUI have no id, so a rename makes them a different tool — open and save one in a current ComfyUI and it
+gets an id; saved nodes move to the new tool name automatically. A copy made outside ComfyUI carries the same id as the
+original, so both are then named by their path (the copy never takes over the original's tool). Workflow nodes that
+used “Run workflow” with a particular graph are **rewritten to that graph's own tool automatically** (incoming data
+edges too); if a field doesn't map (a value keyed by node title, say) the node is left as it was and keeps working.
+
+Without a seed the workflow's own setting applies: a seed set to “randomize” changes every run, a “fixed” one is kept.
 
 Of the other tools, the five in bold are on by default:
 
