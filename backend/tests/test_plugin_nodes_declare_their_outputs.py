@@ -23,20 +23,15 @@ MANIFESTS = sorted([*ROOT.glob("examples/*/mosael.plugin.json"), *ROOT.glob("bun
 PRODUCES_FILES = {
     ("dev.mosael.remotion", "remotion_explainer"), ("dev.mosael.remotion", "remotion_animation"),
     ("dev.mosael.manim", "manim_explainer"), ("dev.mosael.manim", "manim_animation"), ("dev.mosael.manim", "manim_still"),
+    ("dev.mosael.object-storage", "storage_fetch"),
 }
 
-
-#: 还欠着的:对象存储四家同样只写了 output_labels 没写 outputs。它们在另一处一起改(storage.py 四份字节相同),
-#: 改完删掉这一行 —— 这张表只许变短。
-NOT_YET = {"dev.mosael.aliyun-oss", "dev.mosael.aws-s3", "dev.mosael.tencent-cos", "dev.mosael.volcengine-tos"}
 
 
 def _tools() -> list[tuple[str, dict]]:
     out = []
     for path in MANIFESTS:
         manifest = json.loads(path.read_text(encoding="utf-8"))
-        if manifest["id"] in NOT_YET:
-            continue
         out += [(manifest["id"], tool) for tool in (manifest.get("tools") or {}).get("declare") or []]
     return out
 

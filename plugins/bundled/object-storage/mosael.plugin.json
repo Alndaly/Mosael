@@ -215,7 +215,13 @@
               "zh": "一句话",
               "en": "In one line"
             }
-          }
+          },
+          "outputs": [
+            "url",
+            "public_url",
+            "key",
+            "summary"
+          ]
         },
         "stream": true,
         "timeout_seconds": 1800
@@ -259,7 +265,11 @@
               "zh": "一句话",
               "en": "In one line"
             }
-          }
+          },
+          "outputs": [
+            "url",
+            "summary"
+          ]
         }
       },
       {
@@ -286,11 +296,25 @@
         },
         "node": {
           "output_labels": {
+            "asset_id": {
+              "zh": "素材",
+              "en": "Asset"
+            },
             "summary": {
               "zh": "一句话",
               "en": "In one line"
             }
-          }
+          },
+          "outputs": [
+            "asset_id",
+            "summary"
+          ],
+          "output_types": {
+            "asset_id": "asset"
+          },
+          "board_outputs": [
+            "asset_id"
+          ]
         }
       },
       {
@@ -342,7 +366,12 @@
               "zh": "下一页",
               "en": "Next page"
             }
-          }
+          },
+          "outputs": [
+            "items",
+            "summary",
+            "next_cursor"
+          ]
         }
       }
     ]

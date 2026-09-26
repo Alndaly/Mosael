@@ -307,6 +307,7 @@ def invoke(
     manifest = inst.manifest_for(db, instance)
     scratch: Path | None = None
     # 进程隔离:插件崩了、超时了、吐了非 JSON —— 失败的是这次调用记录,不是应用。
+    baseline: dict[str, str] | None = None
     try:
         payload = plugin_inputs.coerce(tool, payload)
         check_required_input(tool, payload)
@@ -358,7 +359,7 @@ def invoke(
         invocation.status, invocation.output = "succeeded", output
     except (PluginRuntimeError, McpBridgeError, ArtifactError, PluginDomainError) as exc:
         invocation.status, invocation.error = "failed", str(exc)
-        _persist_failed_state(db, instance, exc)
+        _persist_failed_state(db, instance, exc, baseline=baseline)
     except Exception as exc:  # noqa: BLE001 — runtime must never bubble
         invocation.status, invocation.error = "failed", tr("pluginErr_runtimeCrashed", detail=str(exc))
     finally:
@@ -444,6 +445,7 @@ def invoke_host(
         db.add(invocation)
         db.commit()
     scratch = make_scratch_dir()
+    baseline: dict[str, str] | None = None
     try:
         sent = prepare(scratch) if prepare is not None else payload
         run_kwargs: dict[str, Any] = {
@@ -479,7 +481,7 @@ def invoke_host(
         invocation.error = str(exc) if isinstance(exc, (PluginRuntimeError, PluginDomainError, ArtifactError)) else tr(
             "pluginErr_runtimeCrashed", detail=str(exc)
         )
-        _persist_failed_state(db, instance, exc, notify=False)
+        _persist_failed_state(db, instance, exc, baseline=baseline, notify=False)
         if record:
             db.commit()
         raise
@@ -487,13 +489,24 @@ def invoke_host(
         cleanup_scratch_dir(scratch)
 
 
-def _persist_failed_state(db: Session, instance: PluginInstance, exc: BaseException, *, notify: bool = True) -> None:
-    """插件失败时交回的 `state` 照样落库(见 runtime._final_response)。落不下只记日志 —— 那不该盖掉这次失败本身的原因。"""
+def _persist_failed_state(
+    db: Session,
+    instance: PluginInstance,
+    exc: BaseException,
+    *,
+    baseline: dict[str, str] | None,
+    notify: bool = True,
+) -> None:
+    """插件失败时交回的 `state` 照样落库(见 runtime._final_response)。落不下只记日志 —— 那不该盖掉这次失败本身的原因。
+
+    和成功那条路同一个比较交换(`baseline` 是这次注入的那一份,见 plugins/state.persist):失败的那次
+    也可能正和另一次并发刷新令牌。还没走到注入那一步就失败的(`baseline` 为 None),插件根本没跑,没有状态可落。
+    """
     state = getattr(exc, "state", None)
-    if not isinstance(exc, PluginRuntimeError) or not state:
+    if not isinstance(exc, PluginRuntimeError) or not state or baseline is None:
         return
     try:
-        plugin_state.persist(db, instance, state, notify=notify)
+        plugin_state.persist(db, instance, state, baseline=baseline, notify=notify)
     except PluginDomainError:
         logger.warning("插件 %s 失败时交回的状态没能记下", instance.id, exc_info=True)
 
