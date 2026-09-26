@@ -5,10 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { assetThumbnailUrl, listAssets, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/app/modals";
-import type { MediaKind } from "@/features/boards/boardNodes";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PickListDialog } from "@/components/app/PickListDialog";
+import { kindIcon, type MediaKind } from "@/features/boards/boardNodes";
 
 /**
  * 往画板上贴一份现成素材:从素材库里挑。
@@ -57,72 +55,37 @@ export function AssetPickerDialog({
     );
   }, [assets.data, kind, keyword]);
 
+  const EmptyIcon = kindIcon(kind);
   return (
-    <ModalShell
+    <PickListDialog
       open={open}
       onOpenChange={onOpenChange}
       title={t(kind === "video" ? "boardsPickVideo" : kind === "audio" ? "boardsPickAudio" : "boardsPickImage")}
-      className="w-[560px]"
-      //: 搜索框**钉在头里**:它作用于下面整份清单,翻到第三十个素材时它该还在原地。
-      //: (放在滚动体里还有个副作用:它贴着滚动容器的上边缘,焦点框会被裁掉半圈。)
-      header={
-        <Input
-          autoFocus
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          placeholder={t("boardsSearchImages")}
-          size="sm"
-        />
-      }
-    >
-      <div className="grid gap-2">
-        {assets.isLoading ? (
-          <div className="grid grid-cols-4 gap-2">
-            {[0, 1, 2, 3].map((n) => (
-              <Skeleton key={n} className="aspect-square rounded-md" />
-            ))}
-          </div>
-        ) : images.length === 0 ? (
-          <p className="py-8 text-center text-ui-xs text-muted-foreground">{t(kind === "video" ? "boardsNoVideos" : kind === "audio" ? "boardsNoAudios" : "boardsNoImages")}</p>
-        ) : (
-          // **一行一个,不是缩略图墙。** 光看图分不出「同一个人的三版」哪个是哪个 ——
-          // 名字、尺寸、时长才是真正用来挑的信息。缩略图退到行首当认脸用。
-          //
-          // 顺带修掉一个布局错:此前是 grid-cols-4 + aspect-square,而 grid 默认 align-items:
-          // stretch —— 一行里最高的那个把整行撑开,其余的图就顶破了自己的格子。
-          // 滚动归 ModalShell 那一层管 —— 这里再套一层的话,弹窗里会有两个滚动条。
-          <div className="grid content-start gap-1">
-            {images.map((asset: Asset) => (
-              <button
-                key={asset.id}
-                type="button"
-                onClick={() => onPick(asset.id)}
-                className="flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent p-1.5 text-left transition-colors hover:border-border hover:bg-secondary"
-              >
-                {/* 音频没有缩略图 —— 拿它的 URL 去当图片只会得到一个碎图标。 */}
-                {kind === "audio" ? (
-                  <span className="grid h-10 w-14 shrink-0 place-items-center rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] text-muted-foreground">
-                    <Music size={16} />
-                  </span>
-                ) : (
-                  <img
-                    src={assetThumbnailUrl(asset.id)}
-                    alt=""
-                    loading="lazy"
-                    className="h-10 w-14 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
-                  />
-                )}
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="truncate text-ui-xs text-foreground">
-                    {asset.name || asset.original_filename}
-                  </span>
-                  <span className="truncate text-ui-2xs text-muted-foreground">{describe(asset)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </ModalShell>
+      searchLabel={t("boardsSearchImages")}
+      query={keyword}
+      onQueryChange={setKeyword}
+      items={images}
+      itemKey={(asset) => asset.id}
+      //: **一行一个,不是缩略图墙。** 光看图分不出「同一个人的三版」哪个是哪个 —— 名字、尺寸、时长才是
+      //: 真正用来挑的信息,缩略图退到行首当认脸用。音频没有缩略图:拿它的 URL 当图只会是一个碎图标。
+      row={(asset) => ({
+        lead:
+          kind === "audio" ? (
+            <Music size={16} />
+          ) : (
+            <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" className="h-full w-full object-cover" />
+          ),
+        title: asset.name || asset.original_filename || "",
+        subtitle: describe(asset),
+      })}
+      onPick={(asset) => onPick(asset.id)}
+      pending={assets.isLoading}
+      error={assets.isError ? assets.error.message : null}
+      onRetry={() => void assets.refetch()}
+      empty={{
+        icon: <EmptyIcon size={24} strokeWidth={1.5} />,
+        text: t(kind === "video" ? "boardsNoVideos" : kind === "audio" ? "boardsNoAudios" : "boardsNoImages"),
+      }}
+    />
   );
 }

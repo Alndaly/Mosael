@@ -1,4 +1,5 @@
 import React from "react";
+import { noteSnippet } from "@/features/notes/noteSnippet";
 import {
   CheckSquare,
   Copy,
@@ -196,7 +197,7 @@ export function NoteList({
                     {n.favorite && <Star size={12} fill="currentColor" />}
                     <span>{n.title || s.untitled}</span>
                   </strong>
-                  <p>{snippet(n.markdown)}</p>
+                  <p>{noteSnippet(n.markdown, 100)}</p>
                   <time>
                     {new Date(n.updated_at).toLocaleDateString()}
                     {n.topics.length ? ` · ${n.topics.join(", ")}` : ""}
@@ -410,13 +411,4 @@ export function NoteList({
       />
     </>
   );
-}
-function snippet(markdown: string) {
-  return markdown
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/[#*>`_]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 100);
 }

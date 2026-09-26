@@ -1,18 +1,12 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Search } from "lucide-react";
+import { BookOpen, FileText } from "lucide-react";
 import { getNote, listNotes, type Note } from "@/api/domains/notes";
-import { useI18n } from "@/app/preferences";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { useI18n, usePreferences } from "@/app/preferences";
+import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { LoadingState } from "@/components/layout/LoadingState";
+import { noteSnippet } from "@/features/notes/noteSnippet";
+import { relativeTime } from "@/lib/time";
 
 export function NotePickerDialog({
   workspaceId,
@@ -26,6 +20,7 @@ export function NotePickerDialog({
   onPick: (note: Note) => void;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const [search, setSearch] = React.useState("");
   const [query, setQuery] = React.useState("");
   React.useEffect(() => {
@@ -38,78 +33,33 @@ export function NotePickerDialog({
     enabled: open,
   });
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(36rem,calc(100dvh-2rem))] max-w-xl flex-col overflow-hidden gap-4">
-        <DialogHeader>
-          <DialogTitle>{t("documentPick")}</DialogTitle>
-          <DialogDescription>{t("documentPickHint")}</DialogDescription>
-        </DialogHeader>
-        <div className="relative">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            className="pl-9"
-            aria-label={t("documentSearch")}
-            placeholder={t("documentSearch")}
-            value={search}
-            maxLength={300}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {notes.isPending ? (
-            <LoadingState />
-          ) : notes.isError ? (
-            <div
-              role="alert"
-              className="m-auto text-center text-ui-sm text-muted-foreground"
-            >
-              {notes.error.message}
-              <Button variant="ghost" onClick={() => void notes.refetch()}>
-                {t("retry")}
-              </Button>
-            </div>
-          ) : !notes.data.length ? (
-            <div className="m-auto flex flex-col items-center gap-3 py-8 text-center text-muted-foreground">
-              <BookOpen size={28} strokeWidth={1.5} />
-              <span>{t("documentNoMatches")}</span>
-            </div>
-          ) : (
-            notes.data.map((note) => (
-              <button
-                key={note.id}
-                className="flex shrink-0 items-start gap-3 rounded-lg p-3 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => {
-                  onPick(note);
-                  onOpenChange(false);
-                }}
-              >
-                <BookOpen size={18} className="mt-1 shrink-0 text-primary" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-ui-sm font-medium">
-                    {note.title || t("documentUntitled")}
-                  </span>
-                  <span className="mt-1 line-clamp-2 break-words text-ui-xs text-muted-foreground">
-                    {note.markdown.slice(0, 200)}
-                  </span>
-                  <span className="mt-2 block text-ui-2xs text-muted-foreground">
-                    v{note.revision} ·{" "}
-                    {new Date(note.updated_at).toLocaleDateString()}
-                  </span>
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-        {(notes.data?.length ?? 0) >= 200 && (
-          <p className="text-ui-xs text-muted-foreground">
-            {t("documentRefineSearch")}
-          </p>
-        )}
-      </DialogContent>
-    </Dialog>
+    <PickListDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("documentPick")}
+      description={t("documentPickHint")}
+      searchLabel={t("documentSearch")}
+      query={search}
+      onQueryChange={setSearch}
+      items={notes.data ?? []}
+      itemKey={(note) => note.id}
+      row={(note) => ({
+        lead: <FileText size={16} />,
+        title: note.title || t("documentUntitled"),
+        subtitle: noteSnippet(note.markdown),
+        //: 版本号是挑了之后钉住的那一版(引用的是这一版的正文);时间说「多久前改过」,和列表、评论一个说法。
+        meta: `v${note.revision} · ${relativeTime(note.updated_at, locale)}`,
+      })}
+      onPick={(note) => {
+        onPick(note);
+        onOpenChange(false);
+      }}
+      pending={notes.isPending}
+      error={notes.isError ? notes.error.message : null}
+      onRetry={() => void notes.refetch()}
+      empty={{ icon: <BookOpen size={24} strokeWidth={1.5} />, text: t("documentNoMatches") }}
+      notice={(notes.data?.length ?? 0) >= 200 ? t("documentRefineSearch") : undefined}
+    />
   );
 }
 
