@@ -10,6 +10,8 @@
       "drop_if": {"wait": true}                     // 这几格是这个值时可以直接丢(那是老工具的默认)
     }
 
+取代好几种老用法时是一组这样的对象(ComfyUI 的工作流工具还取代它自己以前按路径哈希起的名字)。
+
 ComfyUI 插件就是这样:以前一个 `run_workflow` + `workflow: "portrait.json"`,现在每张工作流有自己的工具
 (`wf_…`,入参就是那张图自己的节点)。存着的老节点**自动迁过去**,不留兼容分支:
 
@@ -66,11 +68,13 @@ def replacements(db: Session) -> list[Replacement]:
     found: list[Replacement] = []
     for instance in db.scalars(select(PluginInstance)):
         for tool in instance.discovered_tools or []:
-            if not isinstance(tool, dict) or not isinstance(tool.get("replaces"), dict):
+            if not isinstance(tool, dict):
                 continue
+            raw = tool.get("replaces")
+            specs = [raw] if isinstance(raw, dict) else [one for one in raw if isinstance(one, dict)] if isinstance(raw, list) else []
             schema = tool.get("input_schema") if isinstance(tool.get("input_schema"), dict) else {}
             properties = set((schema.get("properties") or {}).keys())
-            found.append(Replacement(instance.package_id, instance.id, str(tool["name"]), tool["replaces"], properties))
+            found.extend(Replacement(instance.package_id, instance.id, str(tool["name"]), spec, properties) for spec in specs)
     return [one for one in found if one.old_tool]
 
 

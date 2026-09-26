@@ -12,8 +12,8 @@
   `format: "asset"` 带着素材种类)、每个可调输入一格(`steps_3`、`lora_name_10`…,名字、范围、常用与否
   和生成参数同一套,见 labels);种子、尺寸、一次几张收进「高级」;
 - 输出按输出节点声明(`image_9`、`video_30`、`text_40`…),外加 `asset_id` / `asset_ids` / `texts` / `summary`;
-- `replaces` 告诉宿主:存着的 `run_workflow`(选的是这张工作流)怎么改写成这个工具 —— 宿主据此把工作流里
-  的老节点迁过来(见 domain/workflows/plugin_references),ComfyUI 的知识仍只在这里。
+- `replaces` 告诉宿主:存着的 `run_workflow`(选的是这张工作流)、以及这张图以前按路径哈希起的名字,怎么改写成
+  这个工具 —— 宿主据此把工作流里的老节点迁过来(见 domain/workflows/plugin_references),ComfyUI 的知识仍只在这里。
 
 跑的时候**按当前的图重新推一遍**这些键:工作流在 ComfyUI 里改过了,认得的键照样接上,认不得的不接。
 """
@@ -282,13 +282,24 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
         "recommended": True,
         "input_schema": {"type": "object", "properties": shape.properties, "required": shape.required},
         "node": {"outputs": shape.outputs, "output_types": shape.output_types, "output_labels": shape.output_labels},
-        "replaces": {
-            "tool": "run_workflow",
-            "match": {"workflow": entry.id},
-            "rename": shape.rename,
-            "drop_if": {"wait": True},
-        },
+        "replaces": _replaces(entry, name, shape),
     }
+
+
+def _replaces(entry: models.Entry, name: str, shape: Shape) -> list[dict[str, Any]]:
+    """存着的哪些老节点该改写成这个工具(宿主据此迁,见 domain/workflows/plugin_references):
+
+    - 选了这张图的通用 `run_workflow`;
+    - 这张图**以前按路径哈希起的名字**:老版本 ComfyUI 存的图没有 id,在新版里打开再存一次就有了,工具名跟着从
+      `wf_<路径哈希>` 变成 `wf_<id>` —— 不迁的话,存着的节点从此找不到它。入参是同一张图推出来的,按同名接。
+    """
+    found: list[dict[str, Any]] = [
+        {"tool": "run_workflow", "match": {"workflow": entry.id}, "rename": shape.rename, "drop_if": {"wait": True}},
+    ]
+    by_path = f"wf_{_hash(entry.id)}"
+    if name not in (by_path, TEMPLATE_TOOL):
+        found.append({"tool": by_path, "match": {}, "rename": {}, "drop_if": {}})
+    return found
 
 
 def _cache_path() -> Path | None:

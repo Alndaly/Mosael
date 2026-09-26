@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 CATALOG_TIMEOUT_SECONDS = 60.0
 #: 一个连接最多报多少个工具。再多工具表和节点面板就没法用了。
 MAX_TOOLS = 300
+#: 一个工具最多声明取代几种老用法。
+MAX_REPLACES = 8
 #: 报出来的工具上宿主认的键。别的丢掉 —— 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主
 #: 认领能力,也不能把自己藏成「只给宿主」。
 _KEPT = ("name", "label", "description", "input_schema", "read_only", "effects", "stream", "timeout_seconds", "node",
@@ -87,7 +89,13 @@ def _clean(entry: Any, declared: set[str]) -> dict[str, Any] | None:
         clean["read_only"] = False
     if not isinstance(clean.get("node"), dict):
         clean.pop("node", None)
-    if not isinstance(clean.get("replaces"), dict):
+    # 取代一种老用法是一个对象;一个工具取代好几种(老的通用工具 + 自己以前的名字)是一组
+    replaces = clean.get("replaces")
+    if isinstance(replaces, list):
+        replaces = [one for one in replaces if isinstance(one, dict)][:MAX_REPLACES] or None
+    if isinstance(replaces, (dict, list)):
+        clean["replaces"] = replaces
+    else:
         clean.pop("replaces", None)
     return clean
 

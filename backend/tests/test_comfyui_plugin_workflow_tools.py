@@ -84,9 +84,12 @@ def test_入参从这张图里推(comfy, tmp_path: Path) -> None:
     assert node["outputs"][0] == "image_9" and node["output_types"]["image_9"] == "asset"
     assert node["output_labels"]["image_9"] == {"zh": "图 · SaveImage", "en": "Image · SaveImage"}
     assert {"asset_id", "asset_ids", "texts", "summary"} <= set(node["outputs"])
-    rename = tool["replaces"]["rename"]
-    assert tool["replaces"]["tool"] == "run_workflow" and tool["replaces"]["match"] == {"workflow": "portrait.json"}
+    generic, by_path = tool["replaces"]
+    rename = generic["rename"]
+    assert generic["tool"] == "run_workflow" and generic["match"] == {"workflow": "portrait.json"}
     assert rename["image"] == "image_10" and rename["values.3.steps"] == "steps_3" and rename["prompt"] == "prompt"
+    assert by_path == {"tool": "wf_" + hashlib.sha1(b"portrait.json").hexdigest()[:12], "match": {}, "rename": {},
+                       "drop_if": {}}, "老版本存的图没有 id、再存一次就有了:以前按路径哈希起的名字迁过来"
 
 
 def test_放大工作流_图必填_没有提示词(comfy, tmp_path: Path) -> None:

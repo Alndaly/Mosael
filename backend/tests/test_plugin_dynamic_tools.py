@@ -151,6 +151,36 @@ def test_老的run_workflow节点改写成那张工作流自己的工具(connect
         assert plugin_references.rewrite_replaced_tools(db) == 0, "再跑一次什么都不动"
 
 
+def test_图后来有了id_按路径哈希起的老工具名改写过来(connected) -> None:
+    """老版本 ComfyUI 存的图没有 id,工具名是路径的哈希;在新版里打开再存一次就有了 id,工具名变成 `wf_<id>`。
+    存着的老名字的节点按同名的入参迁过去。"""
+    import hashlib
+
+    from app.domain.workflows import plugin_references
+
+    client, _, instance_id = connected
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    by_path = "wf_" + hashlib.sha1(b"portrait.json").hexdigest()[:12]
+    graph = {"nodes": [
+        {"id": "start", "type": "start", "config": {}},
+        {"id": "n1", "type": f"plugin.{PACKAGE}.{PORTRAIT_TOOL}", "config": {"prompt": "柴犬", "steps_3": 30}},
+    ], "edges": [{"id": "e1", "source": "start", "target": "n1"}]}
+    workflow_id = _workflow(client, instance_id, ws, graph)
+    with SessionLocal() as db:
+        # 存下它的那时候,这张图还没有 id,工具叫按路径哈希起的那个名字(图和它的修订快照一起改,摘要对得上)
+        from app.domain.workflows.revisions import current_workflow_revision, graph_digest
+
+        workflow = db.get(Workflow, workflow_id)
+        revision = current_workflow_revision(db, workflow)
+        graph["nodes"][1]["type"] = f"plugin.{PACKAGE}.{by_path}"
+        workflow.graph, revision.graph = graph, graph
+        workflow.graph_hash = revision.graph_hash = graph_digest(graph)
+        db.commit()
+        assert plugin_references.rewrite_replaced_tools(db) == 1
+        node = next(one for one in db.get(Workflow, workflow_id).graph["nodes"] if one["id"] == "n1")
+    assert node["type"] == f"plugin.{PACKAGE}.{PORTRAIT_TOOL}" and node["config"] == {"prompt": "柴犬", "steps_3": 30}
+
+
 def test_画板上的老工具格也改写过去(connected) -> None:
     """工具格(ADR 0021 P2)存的是 `node:<节点类型>` + 配置 + 绑定。绑定的字段名跟着改。"""
     from app.db.models import Board
