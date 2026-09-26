@@ -202,7 +202,7 @@
         "zh": "Blender MCP",
         "en": "Blender MCP"
       },
-      "version": "0.3.0",
+      "version": "0.3.1",
       "description": {
         "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 2.0.3 Add-on。",
         "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.0.3 add-on."

@@ -98,7 +98,8 @@ def connection(db, user, instance_id):
     instance = db.get(PluginInstance, instance_id)
     if not instance or instance.owner_user_id != user.id or instance.package_id != PACKAGE:
         raise BlenderNotFound('blenderErr_connectionNotFound')
-    if instance.config.get('BLENDER_HOST', '127.0.0.1') not in ('localhost', '127.0.0.1', '::1'):
+    # 只有 IPv4 回环:上游的 MCP 服务和 Add-on 两头都开 AF_INET 套接字,`::1` 连不上(见迁移 blender-host-is-ipv4)。
+    if instance.config.get('BLENDER_HOST', '127.0.0.1') not in ('localhost', '127.0.0.1'):
         raise BlenderDomainError('blenderErr_localOnly')
     try:
         if not 1 <= int(instance.config.get('BLENDER_PORT', '9876')) <= 65535:

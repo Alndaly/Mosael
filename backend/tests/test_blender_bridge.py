@@ -64,7 +64,7 @@ def test_manifest_passes_local_connection_config():
     assert fields['DISABLE_TELEMETRY'].default == 'true'
     assert manifest.runtime.kind == 'mcp'
     assert manifest.multiple
-    assert [o['value'] for o in fields['BLENDER_HOST'].options] == ['127.0.0.1', 'localhost', '::1']
+    assert [o['value'] for o in fields['BLENDER_HOST'].options] == ['127.0.0.1', 'localhost']
 
 
 def test_returned_baked_camera_keys_keep_linear_timing():

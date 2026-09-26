@@ -2955,6 +2955,31 @@ def _migrate_comfyui_connections_become_plugin_instances() -> None:
         logger.info("把 %d 条 ComfyUI 连接搬成了 ComfyUI 插件的连接", len(profiles))
 
 
+def _migrate_blender_host_is_ipv4() -> None:
+    """Blender 连接的主机 `::1` 改成 `127.0.0.1`。
+
+    清单里原先有 `::1` 这一项,而它从来连不上:mcp-for-blender 2.0.3 的 MCP 服务和 Blender 里的 Add-on
+    两头都开 IPv4 套接字(`socket.AF_INET`),拿 `::1` 去连报「nodename nor servname provided」,界面上
+    说的却是「Add-on 没开」。这一项删了;存着它的连接改成同一台机器的 IPv4 回环 —— 用户选 `::1` 的意思
+    正是「本机」。**写死包 id 与取值**:迁移是历史的快照,不跟着清单走。幂等。
+    """
+    if "plugin_instances" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, config FROM plugin_instances WHERE package_id = 'dev.mosael.blender'")
+        ).fetchall()
+        for instance_id, raw in rows:
+            try:
+                config = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+            except (TypeError, ValueError):
+                continue
+            if isinstance(config, dict) and config.get("BLENDER_HOST") == "::1":
+                config["BLENDER_HOST"] = "127.0.0.1"
+                conn.execute(text("UPDATE plugin_instances SET config = :c WHERE id = :i"),
+                             {"c": json.dumps(config, ensure_ascii=False), "i": instance_id})
+
+
 def _remove_minimax_music_models() -> None:
     """MiniMax 音乐撤掉(见 ADR 0022 的补充):它 2026-08-20 起不再向新用户开放,接口留着只会让新用户配好之后
     在第一次付费调用时被对面拒掉。代码里的 Adapter、目录里的三个模型和两份能力档案都删了,这里清掉**存着的指向**。
@@ -3785,6 +3810,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_comfyui_connections_become_plugin_instances,
                 # MiniMax 音乐撤掉(ADR 0022 补充):清掉存着的指向。
                 _remove_minimax_music_models,
+                # Blender 连接的 `::1` 从来连不上(上游两头都是 IPv4 套接字),改成 127.0.0.1。
+                _migrate_blender_host_is_ipv4,
             ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),
