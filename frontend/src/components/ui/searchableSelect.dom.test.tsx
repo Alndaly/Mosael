@@ -173,3 +173,23 @@ describe("同名的几项各是各的", () => {
     expect(onChange).toHaveBeenCalledWith("scene-b");
   });
 });
+
+/**
+ * 用户看到的:画板「参数」弹层里,「项目」的下拉没排在标签右边撑满,而是掉到下一行、只有标签列
+ * 那 112px 宽。根因:可搜索下拉(项多于 SEARCHABLE_THRESHOLD)在触发器旁边插了一个
+ * `hidden` 的探针 span,表单行的 `[&>span]:flex` 把它重新显示出来,空 span 占掉了右格。
+ * 下拉只能交出**一个**元素给所在的版面 —— 触发器本身。
+ */
+describe("可搜索下拉在版面里只占一格", () => {
+  it("除了触发器不渲染任何兄弟元素", () => {
+    const { container } = render(
+      <div data-row="">
+        <span>项目</span>
+        <OptionPicker value="" onChange={() => {}} options={options(SEARCHABLE_THRESHOLD + 1)} placeholder="请选择" />
+      </div>,
+    );
+    const row = container.querySelector<HTMLElement>("[data-row]")!;
+    expect([...row.children].map((child) => child.tagName)).toEqual(["SPAN", "BUTTON"]);
+    expect(row.children[1].getAttribute("role")).toBe("combobox");
+  });
+});
