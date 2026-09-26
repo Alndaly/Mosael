@@ -105,6 +105,29 @@ describe("节点表单", () => {
     expect(document.body.textContent).not.toContain("wfInputManual");
   });
 
+  it("text 字段就是一段字:一个普通的文本框,`{{…}}` 原样是字,不变成引用标签(画板上的模板字段)", () => {
+    const specs = { caption: { type: "text", label: "文案", multiline: true } } as unknown as Record<string, ConfigSpec>;
+    const onType = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <NodeConfigForm
+          fields={Object.entries(specs)}
+          config={{ caption: "写 {{不是引用}}" }}
+          workspaceId="w1"
+          variables={[]}
+          fieldOptions={{ dynamicOptions: () => null, assets: [] }}
+          onSetConfig={vi.fn()}
+          onTypeConfig={onType}
+        />
+      </QueryClientProvider>,
+    );
+    const field = document.querySelector<HTMLElement>('[data-field-key="caption"]')!;
+    const box = within(field).getByRole("textbox") as HTMLTextAreaElement;
+    expect(box.tagName).toBe("TEXTAREA");
+    expect(box.rows).toBe(4);
+    expect(box.value).toBe("写 {{不是引用}}");
+  });
+
   it("下拉按声明去问后端,素材型字段给工作区素材", async () => {
     const { asked } = renderForm({ video: "a1" });
     await waitFor(() => expect(asked).toEqual(expect.arrayContaining(["some_source:plugin.any.tool", "assets"])));

@@ -20651,6 +20651,21 @@
             "type": "boolean",
             "title": "Fills Empty Slot",
             "default": false
+          },
+          "board_group": {
+            "type": "string",
+            "title": "Board Group",
+            "default": ""
+          },
+          "board_group_label": {
+            "type": "string",
+            "title": "Board Group Label",
+            "default": ""
+          },
+          "board_description": {
+            "type": "string",
+            "title": "Board Description",
+            "default": ""
           }
         },
         "type": "object",

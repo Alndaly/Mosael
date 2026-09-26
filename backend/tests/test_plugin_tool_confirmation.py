@@ -311,7 +311,10 @@ def test_运行时报出的工具带着后果_写错或打架时按保守那边�
 
 
 def test_画板工具格和对话里是同一条规矩() -> None:
-    setup = Setup()
+    #: 画板上只放内容变换(ADR 0021 修订):同一批工具各声明交出一份素材,才上得了画板。
+    on_board = {**MANIFEST, "tools": {**MANIFEST["tools"], "declare": [
+        {**tool, "node": {"outputs": ["asset_id"]}} for tool in MANIFEST["tools"]["declare"]]}}
+    setup = Setup(on_board)
     producers = {
         one["id"]: one for one in
         setup.client.get("/api/boards/producers", params={"workspace_id": setup.workspace_id}).json()

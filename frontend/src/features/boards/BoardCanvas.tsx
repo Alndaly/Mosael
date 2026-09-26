@@ -48,7 +48,7 @@ import {
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
 import { isNodeProducer, type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
-import { nodePickerOptions } from "@/features/nodeForms/nodePicker";
+import { boardToolOptions } from "@/features/boards/boardTools";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -761,7 +761,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const toolFace = (item: BoardItem): BoardToolFace | null | undefined => {
     if (producers === undefined) return undefined;
     const found = producers.find((one) => one.id === item.form?.producer);
-    return found ? { label: found.label, description: found.description, plugin: found.plugin_name } : null;
+    //: 格子上那句说明是**画板那一句**(给创作者看的),不是工作流节点那段写给搭流程的人的。
+    return found ? { label: found.label, description: found.board_description ?? "", plugin: found.plugin_name } : null;
   };
 
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
@@ -1025,23 +1026,20 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 从节点拉出一条线、松手在空白处:摆一个占位、连一根待定的线、旁边挂单子
    * (见 components/app/canvasPendingLink)。选中一种就在占位那儿建真节点、连真线。
    *
-   * 单子上除了几种格子,还有「工具」:这个人能用的全部工具格(插件工具、能上画板的节点),分组和
-   * 工作流的「添加节点」面板是同一份(nodePicker),能搜。
+   * 单子上除了几种格子,还有这个人能用的工具(把内容变成新内容的插件工具和内置节点),和工具条「添加」
+   * 里同一份分组(boardTools:按它吃什么内容分 —— 处理图片、处理视频……),能搜。
    */
-  const tools = React.useMemo(
-    () => nodePickerOptions((producers ?? []).filter((one) => isNodeProducer(one.id)).map((one) => ({ ...one, type: one.id })), t("wfNodeGroupOther")),
-    [producers, t],
-  );
+  const tools = React.useMemo(() => boardToolOptions(producers ?? []), [producers]);
   const linkChoices = React.useMemo(() => [...SPAWNABLE_KINDS, ...tools.map((one) => one.value)], [tools]);
   const describeChoice = React.useCallback(
     (choice: string) => {
       const tool = tools.find((one) => one.value === choice);
       if (tool) {
         return {
-          icon: kindIcon("action"),
+          icon: tool.icon,
           label: tool.label,
           hint: tool.description,
-          group: `${t("boardsGroupTools")} · ${tool.group}`,
+          group: tool.group,
           keywords: tool.keywords,
         };
       }

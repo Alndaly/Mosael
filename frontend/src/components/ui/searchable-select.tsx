@@ -16,6 +16,9 @@ type Option = {
   description?: string;
   /** 分组标题。相邻的同名项归一组;顺序即传入顺序,这里不排序 —— 谁提供选项,谁决定顺序。 */
   group?: string;
+  /** 行首图标。当动作菜单用时(画板的「添加」)每一行都给一个 —— 同一个菜单里有的行有图标、有的没有,
+   *  文字就对不齐(和 ActionMenu 的 MenuAction.icon 同一条规矩)。 */
+  icon?: React.ReactNode;
   /** 不展示但参与搜索的稳定名/别名。展示名变成人话后，仍可按内部标识精确查找。 */
   keywords?: string[];
   /** 只作用在这一项的行内样式。用于**用样式本身当信息**的清单:字体选择器按各自的字体渲染。 */
@@ -165,6 +168,11 @@ export function SearchableSelect({
                   >
                     {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
                         而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
+                    {item.icon && (
+                      <span aria-hidden className="grid size-4 shrink-0 place-items-center self-start pt-px text-muted-foreground [&_svg]:size-3.5">
+                        {item.icon}
+                      </span>
+                    )}
                     <span className="grid min-w-0 flex-1 gap-px leading-[1.35]" style={item.style}>
                       <span className="truncate">{item.label}</span>
                       {item.description && (

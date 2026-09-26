@@ -350,7 +350,7 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
 
     from app.db.models import PluginInstance, PluginPackage
     from app.domain.plugins.nodes import parse_node_type
-    from app.domain.plugins.tools import all_tools
+    from app.domain.plugins.tools import all_tools, exposed
 
     parsed = parse_node_type(node_type)
     if parsed is None:
@@ -364,6 +364,11 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
         if any(tool["name"] == tool_name and tool["internal"] for tool in all_tools(db, instance)):
             #: 只给宿主调的工具(生成协议那一类):画布上存着也不跑(和工作流里同一条)。
             raise BoardInputError("boardErr_toolInternal", tool=tool_name)
+    if actor_id and any(tool["package_id"] == package_id and tool["name"] == tool_name for tool in exposed(db, actor_id)):
+        #: 他接着这个插件、工具也开着,只是它不是一个内容变换(列清单、看状态、上传……)——
+        #: 这不是「去插件页建连接」能解决的事,是「这件事在工作流里做」。清单会变(ComfyUI 的工具随
+        #: 服务器上的工作流),所以画布上存着一个此刻不合格的工具格是正常的,跑的时候说清楚。
+        raise BoardInputError("boardErr_toolNotOnBoard", tool=tool_name)
     raise BoardInputError("boardErr_pluginNotConnected", plugin=package.name if package is not None else package_id,
                           tool=tool_name)
 
@@ -388,19 +393,22 @@ class NodeForm(_Form):
 
 
 def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
-    """工具格能跑的节点。两个来源,**都从节点注册表里读**,画板这边不列清单:
+    """工具格能跑的节点。两个来源,**都从节点注册表里读**,画板这边不列清单;两个来源过**同一条**
+    规矩 —— 画板上只放内容变换(boards.transforms.is_content_transform,ADR 0021 修订):
 
     · 内置节点里声明了 `"surfaces": [..., "board"]` 的(见 workflows.NODE_TYPES 上方的说明);
-    · **这个人自己**接的、可用的插件连接暴露的工具(plugins.tools.exposed,已经跳过只给宿主调的)。
+    · **这个人自己**接的、可用的插件连接暴露的工具(plugins.tools.exposed,已经跳过只给宿主调的),
+      按它声明的输出判:列清单、看状态、上传这类不交出内容的工具不上画板。
       同一个包接了两条连接,节点只有一个 —— 用哪条是表单里的 instance_id,运行时按人解析。
       没有执行者(None)就不列插件:「不按人过滤」只给后台无人路径用,画板上总有一个点运行的人。
     """
+    from app.domain.boards.transforms import is_content_transform
     from app.domain.workflows import NODE_TYPES
 
     out: dict[str, Producer] = {}
     for node_type, meta in NODE_TYPES.items():
-        if "board" in (meta.get("surfaces") or ()):
-            #: 声明了后果在应用之外的(发请求、调别的流程)要确认卡;其余在本机做完。
+        if "board" in (meta.get("surfaces") or ()) and is_content_transform(meta):
+            #: 声明了后果在应用之外的要确认卡;其余在本机做完。
             out[node_producer_id(node_type)] = _node_producer(node_type, meta, "external" if meta.get("external") else "none")
     if actor_id:
         from app.domain.plugins.nodes import node_meta, node_type_id
@@ -408,10 +416,11 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
 
         for tool in exposed(db, actor_id):
             node_type = node_type_id(tool["package_id"], tool["name"])
-            if node_producer_id(node_type) not in out:
+            meta = node_meta(tool)
+            if node_producer_id(node_type) not in out and is_content_transform(meta):
                 #: 后果就是插件工具自己那一个(plugins.tools.all_tools 按清单算好的,见 domain/effects)——
                 #: 智能体在对话里直接调它、在画板上替人点运行,问不问人是同一条规矩。
-                out[node_producer_id(node_type)] = _node_producer(node_type, node_meta(tool), tool["effects"])
+                out[node_producer_id(node_type)] = _node_producer(node_type, meta, tool["effects"])
     return out
 
 
@@ -471,8 +480,15 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
 
     每个配置字段多一样 `board_sources`:它能接哪几种上游格子(见 boards.tools.bindable_kinds)。
     面板照它列绑定,不在前端另写一套「什么能接什么」。
+
+    工具格(`node:*`)的描述是**画板的那一份**,不照搬工作流的(boards.transforms):字段只留创作者
+    看得懂的(映射、原始 JSON、代码不出现,模板字段是一段字);`board_group` / `board_group_label` 说
+    它在「添加」菜单里归哪一组(按吃什么内容分,不是工作流面板的「流程 / 数据 / AI」),
+    `board_description` 是给创作者看的一句说明。工具按分组排好,组内保持注册表的顺序。
     """
+    from app.core.i18n import t
     from app.domain.boards.tools import bindable_kinds
+    from app.domain.boards.transforms import BOARD_GROUPS, board_config_view, board_description, board_group
     from app.domain.workflows.node_catalog import describe_node_types
 
     registry = _registry(db, actor_id)
@@ -488,16 +504,27 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
     }
     described = describe_node_types(metas, locale)
     by_id = {entry["type"]: entry for entry in described}
-    ordered = [producer.id for producer in registry.values() if not producer.id.startswith("node:")] + [
-        entry["type"] for entry in described if entry["type"].startswith("node:")
-    ]
+    groups = {producer.id: board_group(producer.meta or {}) for producer in registry.values() if node_type_of(producer.id)}
+    tools = sorted((entry["type"] for entry in described if entry["type"] in groups),
+                   key=lambda producer_id: BOARD_GROUPS.index(groups[producer_id]))
+    ordered = [producer.id for producer in registry.values() if producer.id not in groups] + tools
     out = []
     for producer_id in ordered:
         producer = registry[producer_id]
         entry = dict(by_id[producer_id])
         node_type = node_type_of(producer_id)
+        board: dict[str, Any] = {}
+        if node_type is not None:
+            group = groups[producer_id]
+            board = {
+                "config": board_config_view(entry["config"]),
+                "board_group": group,
+                "board_group_label": t(f"boardToolGroup_{group}", locale),
+                "board_description": board_description(producer.meta or {}, locale),
+            }
         out.append({
             **entry,
+            **board,
             #: `type` 是节点类型(字段选项接口认的是它);`id` 是产出者的名字(存在表单上、跑的时候发的是它)。
             "type": node_type or producer_id,
             "id": producer_id,
@@ -585,6 +612,7 @@ def check_forms(db: Session, canvas: dict[str, Any], item_ids: list[str], actor_
     内置产出者(写字、生成、念、截)的表单是各自面板的形状,归面板,这里只问前两样。
     """
     from app.domain.boards.tools import check_bindings
+    from app.domain.boards.transforms import wiring_field
     from app.domain.workflows import WorkflowDomainError
     from app.domain.workflows.binding import check_number_fields
 
@@ -607,7 +635,10 @@ def check_forms(db: Session, canvas: dict[str, Any], item_ids: list[str], actor_
             node_form = NodeForm.model_validate({"config": config, "bindings": form.get("bindings") or {}})
         except ValidationError as exc:
             raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
-        specs = dict((producer.meta or {}).get("config") or {})
+        #: 画板上露出来的那几个字段(boards.transforms.wiring_field):映射、原始 JSON、代码这类字段
+        #: 在画板的表单上根本不出现,替人写进去等于留一份面板打开也看不见、改不了的配置。
+        specs = {key: spec for key, spec in ((producer.meta or {}).get("config") or {}).items()
+                 if not wiring_field(key, spec)}
         for key in config:
             if key not in specs:
                 raise BoardInputError("boardErr_toolConfigUnknownField", tool=producer.id, field=key,

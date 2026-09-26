@@ -3,7 +3,9 @@
 ## Status
 
 Accepted — 2026-09-25. P0 (behaviour-preserving groundwork), P1 (the registry, a pure refactor),
-P2 (tool items, 2026-09-26) and P3 (the agent, 2026-09-26) are **done**; P4 is next. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
+P2 (tool items, 2026-09-26) and P3 (the agent, 2026-09-26) are **done**; P4 is next. **Amended
+2026-09-26** (「修订:画板上只放内容变换」): the board and workflows serve different purposes, so tool
+items are content transforms only. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
 landed before P1, so board generation already sees plugin models as ordinary provider models.
 
 ## Context
@@ -67,6 +69,7 @@ Sources:
 3. Built-in nodes that declare `"surfaces": ["workflow", "board"]` in `NODE_TYPES`. First batch:
    transcribe_asset, translate, text_transform, json_extract, template, video_to_gif,
    separate_audio, denoise_audio, note_search, scene_render, call_workflow, http_request.
+   (**Amended** — only content transforms stay on the board; see 修订 below.)
 
 A `node:*` producer creates a `board_run` job (payload carries `receipt_to_item`), places the
 pending item, and dispatches through `jobs.dispatch_job` (so the parent job and `current_actor`
@@ -363,12 +366,108 @@ loses the four old functions.
 - **Prompts.** The backend system prompt, the frontend board-assistant context (zh/en) and the MCP
   docstrings of `edit_board` / `get_board` describe tool items, `set_form` and `run_board_item` briefly.
 
+## 修订:画板上只放内容变换(2026-09-26,随 1.6.0)
+
+P2 把「声明了 `surfaces: board` 的节点 + 这个人的全部插件工具」都放上了画板,结果画板长成了工作流:
+「调用工作流」带着入参映射 JSON 和 `{{call_1.output.xxx}}` 摆在画板上,HTTP 请求、文本模板、JSON 提取、
+文本处理、检索笔记也在;百度网盘的列目录 / 上传、ComfyUI 的服务器状态这种不产出内容的插件工具照样一格;
+「添加」菜单照抄工作流面板的「工具 · 流程 / 工具 · AI」,格子上是写给搭流程的人的节点说明。决定 3 本来就说
+流程控制不上画板,`call_workflow` 却上了 —— 缺的是一条**从注册表推出来、能审的规矩**,而不是再列一张清单。
+
+### 两者各自是什么(判断一个功能归哪边的依据)
+
+**工作流:「做一次,跑无数次」。** 把做过一次的事变成换个输入就能再跑、没人看着也能跑、成批地跑的东西:
+可复用、带参数(开始节点的入参、模板);跨素材 / 时间线 / 字幕 / 导出 / 发布端到端出成品;循环、并发、分支
+成批地做,失败说清是哪一条;定时、webhook、被智能体或别的工作流调用,不用人在场;就绪检查、每次运行每个
+节点的输入输出和错误、修订和作者,可查可追。**流程本身就是产品。**
+
+**画板:「想法摊开,边看边做」。** 把素材、文字、生成结果摊在一张桌上,看、比、改,直到一个想法成形:内容
+就是界面,摆放和分组就是组织;并排试、挑一个接着做(同一句提示词三个模型、三个版本并排),发散、非线性;
+一根线的意思是「参考它」(参考图、首帧、抄材料),不是「然后做它」;每一格记得自己是怎么来的(提示词、模型、
+参考),能重生成、截一段、再跑,失败留着输入;评论、标记、共享画板、AI 助手一起改。**内容才是主角。**
+
+**分界的问题:「这件事做第二次时,你是想再看着做一遍,还是想换个输入让它自己再来?」** 前者是画板,后者是
+工作流。
+
+| | 画板 | 工作流 |
+| --- | --- | --- |
+| 主角 | 内容 | 流程 |
+| 方式 | 发散 | 收敛 |
+| 人 | 在场 | 可以不在 |
+| 单位 | 一格内容 | 一步 |
+| 一根线 | 参考它 | 然后做它 |
+| 能力边界 | 只有「内容 → 内容」的变换 | 流程控制、批量、数据、时间线、发布 |
+
+两边**互相交接**,不共用积木:画板上的工具格跑的是同一个执行器(这份 ADR 的注册表不变),但画板只收其中
+内容变换那一部分。
+
+### 规矩(`boards/transforms.py`,内置节点和插件工具同一条)
+
+一个节点要上画板,得是**内容变换**:
+
+1. **不是流程或数据搬运**:分组不在 `workflows.WIRING_CATEGORIES`(流程控制、数据处理、知识库)里。按分组判,
+   因为输出类型分不开 —— 模板、字符串处理的输出也是文字。
+2. **交出画板摆得下的内容**:落板的输出(`board_outputs`,缺省全部)里有素材(`asset`),或**点名落板**的
+   文字(写在 `board_outputs` 里、类型是 `text`)。只有类型没点名的文字不算 —— 一段转写和一行状态摘要光看
+   类型分不开,得节点说「这段是成品」;没声明类型的输出(`any`)不算。
+3. **吃画板上的内容,或者凭空产出素材**:至少一个字段能接上游的素材 / 文字 / 3D 场景(`binding_sink`),
+   或者交出素材。凭空产出素材的留下(提示词出图的 ComfyUI 工作流、按参数出讲解视频、从对象存储取回文件)——
+   画板内置的「生成」就是这种,它们做的正是往桌上放新材料;不吃内容、只交出文字的是报告(装环境、看状态),
+   不留。
+4. **必填的字段创作者填得了**:见下面的参数规矩。
+
+内置节点仍要先在 `NODE_TYPES` 上声明 `surfaces: ["board"]`(和画板内置的写字 / 生成 / 念重复的、副作用大的
+照旧不声明,规矩本身会放过它们);**声明了过不了规矩的由棘轮当场报出来**(`test_board_producers`),注册表
+(`producers._node_producers`)也不收 —— 同一道门,不只是测试。插件工具不用声明,按清单 `node` 块的
+`outputs` / `output_types` / `board_outputs` 判,每次取注册表现算(连接、ComfyUI 上的工作流会变)。
+
+结果:内置的留下转写、翻译、视频转 GIF、分离人声、降噪、渲白模参考;撤掉调用工作流、HTTP 请求、文本模板、
+JSON 提取、文本处理、检索笔记(检索笔记是查知识库、交回一串结果,不是把画板上的内容变成新内容;要把一篇
+笔记放上桌,画板本来就有「文档」格)。插件里 ComfyUI 每张工作流的工具(`wf_…`)、对象存储的「取回」、网盘的
+「导入」、ComfyUI 的「导入产出」、Manim / Remotion 的自定义代码动画留下;网盘的列目录 / 搜索 / 上传、对象存储
+的列表 / 签链接 / 上传、ComfyUI 的状态 / 列工作流 / 列模型 / 中断 / 清队列 / 释放显存、两个「准备环境」不上。
+
+### 参数规矩
+
+画板上的工具格表单**只摆创作者看得懂的参数**:模型、比例、风格、时长、语言这一类。参数映射、`{{…}}` 引用、
+原始 JSON、代码、节点引用一律不出现。做法是**画板那一份字段声明**(`transforms.board_config_view`,
+`GET /api/boards/producers` 发的就是它,界面和智能体看到的同一份):`object` / `code` / `graph` 类型和
+`data_type: json` 的字段不列;`template` 字段在画板上是 `type: "text"`(一段字,前端给普通文本框,不给引用
+标签);说明里教 `{{…}}` 写法的那句不带过来。**必填**这种字段的工具在画板上填不完,规矩 4 让它不上画板
+(Manim / Remotion 的「讲解视频」要一串结构化的步骤,就在工作流和对话里用)。智能体替人写表单时同一条:
+画板上看不见的字段写不进去(`check_forms`)。
+
+### 画板自己的呈现
+
+`board_group`(按吃什么内容分:产出新素材 / 处理图片 / 视频 / 音频 / 文字 / 3D 场景 / 素材)和
+`board_description`(给创作者看的一句)是注册表上的声明:内置节点写明,插件可以在 `node` 块里写,没写就按
+字段(素材字段的 `media`)和输出推、取说明的第一句。「添加」菜单和拉线菜单按它分组、每行带图标,不再照抄
+工作流面板的「工具 · 流程」。
+
+### 已有数据
+
+迁移 `migrate-board-wiring-tools-become-notes`:画布上跑那六种节点的工具格**改成一张便签**,同一个 id、位置、
+大小、名字;正文写明「这一步归工作流」并附上原来的设置(模板里的字、请求地址不丢)。选便签而不是删掉:进出
+它的线都还连得上,不留悬空的线;它跑出来的产出本来就是独立的格子,一格不动。插件工具的格子不迁 —— 它合不合格
+随清单变,运行时由注册表说清楚:内置的回 `boardErr_nodeNotOnBoard`(「……流程控制和数据处理请在工作流里做」),
+插件工具接着连接却不合格的回 `boardErr_toolNotOnBoard`,而不是叫人去插件页建连接。
+
+### 下一版
+
+- 「从画板沉淀为工作流」:一串在画板上验证过的变换,存成一张工作流;
+- 「把工作流结果送到画板挑选」:工作流批量出的几版落到一张画板上并排比;
+- 内容优先的操作:选中一格内容,就地列出能用在它身上的变换(规矩已经给出「吃什么内容」,`board_group` 就是
+  这个入口的索引)。
+
 ## Alternatives rejected
 
 - **A. Only make plugins generation providers.** Non-generation plugins would still be unusable on
   the board.
 - **B. A mini-workflow embedded in an item.** Breaks the one-item-one-job invariant.
-- **C. A "run workflow" item.** Comes for free as `call_workflow` in the registry.
+- **C. A "run workflow" item.** Comes for free as `call_workflow` in the registry. (After the 修订
+  this no longer holds: `call_workflow` is flow control and is off the board; the hand-off between
+  board and workflow is the next version's "save a board as a workflow" / "send workflow results to a
+  board".)
 - **D. A board-only plugin-tool item.** Yet another dedicated route — the thing this ADR removes.
 
 ## Consequences

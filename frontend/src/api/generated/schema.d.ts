@@ -7212,6 +7212,21 @@ export interface components {
              * @default false
              */
             fills_empty_slot: boolean;
+            /**
+             * Board Group
+             * @default
+             */
+            board_group: string;
+            /**
+             * Board Group Label
+             * @default
+             */
+            board_group_label: string;
+            /**
+             * Board Description
+             * @default
+             */
+            board_description: string;
         };
         /**
          * BoardRun

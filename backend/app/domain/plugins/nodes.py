@@ -187,6 +187,10 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     #: 在创意画板上跑时,哪几个输出落成新的格子(和 NODE_TYPES 的 board_outputs 同一个意思,缺省全部)。
     board_outputs = declared.get("board_outputs")
     board_outputs = [str(name) for name in board_outputs if str(name) in outputs] if isinstance(board_outputs, list) else []
+    #: 画板「添加」菜单里归哪一组、给创作者看的一句说明(和 NODE_TYPES 的同名声明一个意思;不写就由
+    #: boards.transforms 按字段和输出推、取说明的第一句)。
+    board_group = str(declared.get("board_group") or "")
+    board_description = text_of(declared.get("board_description") or "")
     # **给人看的字段一律走 text_of。** 清单里它们可以是 `{"zh": …, "en": …}`,裸 str() 会把
     # 那个字典按 Python 的样子印出来 —— 界面上就是一行 `{'zh': '从百度网盘导入', …}`。
     # 工具的 label/description 在上游已经解过了,而 `node` 这一块是原样透传的,所以解在这里。
@@ -213,6 +217,8 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         # 插件可以给专业术语一个更好的名字;未声明的由共用词典/可读降级兜底。
         "output_labels": {str(name): text_of(label) for name, label in output_labels.items()},
         **({"board_outputs": board_outputs} if board_outputs else {}),
+        **({"board_group": board_group} if board_group else {}),
+        **({"board_description": board_description} if board_description else {}),
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。
         "plugin_name": tool.get("instance_name", ""),
         "tool_name": tool.get("name", ""),

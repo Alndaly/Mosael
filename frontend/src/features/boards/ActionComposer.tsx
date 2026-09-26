@@ -245,9 +245,10 @@ export function ActionComposer({
           </p>
         ) : (
           <>
-            {tool.description && (
+            {/* 画板那一句说明(给创作者看的「它把内容变成什么」),不是工作流节点那段写给搭流程的人的。 */}
+            {tool.board_description && (
               <p className="text-ui-xs leading-relaxed text-muted-foreground">
-                <InlineMarkdown text={tool.description} />
+                <InlineMarkdown text={tool.board_description} />
               </p>
             )}
             {connectionSpec?.options_from && (

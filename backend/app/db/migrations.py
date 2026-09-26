@@ -2285,6 +2285,71 @@ def _migrate_board_forms_name_their_producer() -> None:
                 )
 
 
+def _migrate_board_wiring_tools_become_notes() -> None:
+    """画板上跑流程控制 / 数据处理节点的工具格,改成一张写明「这一步归工作流」的便签(ADR 0021 修订)。
+
+    画板上只放内容变换:调用工作流、HTTP 请求、文本模板、JSON 提取、文本处理、检索笔记不再是
+    画板上的工具(它们撤掉了 `surfaces: ["board"]`)。已经摆在画板上的这几种工具格,跑是跑不了了
+    (注册表里没有它们,运行时回 boardErr_nodeNotOnBoard),留着就是一格永远「用不了」的死格子。
+
+    **改成便签,不删**:
+    · 同一个 id、同一个位置和大小、起过的名字照留 —— 连进来的线(上游 → 它)和它连出去的线
+      (它 → 跑出来的那几格产出)都还连得上,不留一根悬空的线;便签能当上游,也能被连;
+    · 它跑出来的产出(右边那几格)本来就是独立的格子,一格不动;
+    · 正文写明这一步挪去了工作流,并把原来的设置(节点配置)照原样附在后面 —— 模板里写的字、
+      请求的地址、检索的关键词不丢,要在工作流里重搭时照着抄。绑定(接的是哪几格上游)由保留的
+      连线看得出来,不另记。
+    · 挂上便签的产出者(`write`),和手放的便签一样能让 AI 改写。
+
+    文字用部署缺省的中文(迁移时没有请求,也就没有读的人的语言,见 core/i18n 开头那段);节点名
+    和那句话是迁移那一刻的快照,不跟着领域层走。插件工具不在这里:它合不合格随清单变(连接、
+    ComfyUI 上的工作流),运行时由注册表说清楚为什么(boardErr_toolNotOnBoard)。
+
+    改到的板版本号 +1:升级那一刻还开着这张板的客户端,手里的旧快照要撞 409,不能把工具格存回来。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    labels = {
+        "node:call_workflow": "调用工作流",
+        "node:http_request": "HTTP 请求",
+        "node:template": "文本模板",
+        "node:json_extract": "JSON 提取",
+        "node:text_transform": "文本处理",
+        "node:note_search": "检索笔记",
+    }
+    limit = 20_000
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            touched = False
+            for index, item in enumerate(canvas["items"]):
+                if not isinstance(item, dict) or item.get("kind") != "action":
+                    continue
+                form = item.get("form") if isinstance(item.get("form"), dict) else {}
+                label = labels.get(str(form.get("producer") or ""))
+                if label is None:
+                    continue
+                body = f"「{label}」这一步已经不在画板上了:画板只放把内容变成新内容的工具,流程控制和数据处理归工作流 —— 需要的话在工作流里用它。"
+                config = form.get("config")
+                if isinstance(config, dict) and config:
+                    body += "\n\n原来的设置:\n" + json.dumps(config, ensure_ascii=False, indent=2)
+                if len(body) > limit:
+                    body = body[: limit - 1] + "…"
+                note = {key: value for key, value in item.items() if key not in ("kind", "form", "run", "text")}
+                canvas["items"][index] = {**note, "kind": "note", "text": body, "form": {"producer": "write"}}
+                touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = revision + 1 WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -4135,6 +4200,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_sources_record_their_upstream,
                 _migrate_board_frame_names_become_titles,
                 _migrate_board_forms_name_their_producer,
+                _migrate_board_wiring_tools_become_notes,
                 _backfill_browser_pool,
                 _backfill_provider_models,
                 _migrate_provider_default_model_fk,

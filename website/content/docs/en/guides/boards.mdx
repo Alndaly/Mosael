@@ -6,7 +6,9 @@ updated: 2026-09-26
 version: 1.6.0
 ---
 
-Place sticky notes, documents, images, videos, audio and 3D scenes on a creative board, then organize them into groups. **A connection passes upstream content to a downstream input**: for example, a reference image to a video node or a document to a writing node.
+A creative board is where you **lay ideas out and work on them in plain sight**: put media, text and generations on one desk, then look, compare and revise until an idea takes shape. The content is the interface, and placement and groups are how you organize it; try one prompt on several models side by side and carry on with the one you like; every item remembers how it was made, so you can regenerate or run it again. When you want to lock a process in and have it run again by itself on new input, use a [workflow](/docs/guides/workflows).
+
+Place sticky notes, documents, images, videos, audio and 3D scenes on a creative board, then organize them into groups. **A connection passes upstream content to a downstream input**: for example, a reference image to a video node or a document to a writing node — a line means "refer to this", not "then do this".
 
 Drop a connection onto the visible **+** area on either side of a node. Select a node to open its actions above and its generation or editing form below.
 
@@ -90,24 +92,34 @@ like. When you do want frame accuracy, the number fields on the right are still 
 **The original is untouched.** A trim produces a new asset in a new node — every step on a board
 should be one you can walk back from.
 
-## Tool items: run plugin tools and workflow nodes on a board
+## Tool items: turn what you have into something new
 
-Besides generate, write, voice-over and trim, a board can **run a tool**: every tool your installed
-plugins provide, plus a set of workflow nodes that fit a board (transcribe, translate, text
-transform, JSON extract, template, video to GIF, separate vocals, denoise, note search, render a 3D
-scene, call a workflow, HTTP request).
+Besides generate, write, voice-over and trim, a board can **run a tool** that turns the item in front of
+you into something new: video to GIF, speech in audio or video to text, translate, separate voice and
+background, reduce noise, render references from a shot of a 3D scene, and the content tools plugins
+provide — such as every workflow saved in ComfyUI, fetching a file back from object storage, or
+importing one from a cloud drive.
 
-**Placing one**: the "Tools" group in the toolbar's Add menu, or drag a line out of an item and
-release it on empty canvas, then pick from the menu (it has a search box that also matches a plugin
-tool's call name). A tool item grown out of another item is already connected; that item is its input.
+A board **only holds these content-to-content tools**. Flow and data steps — calling a workflow, HTTP
+requests, text templates, JSON extraction, string handling, note search — and plugin tools that only
+list, report status or upload are not on boards; use them in a [workflow](/docs/guides/workflows).
+Tool items of those kinds already on a board before the upgrade become a note saying the step now
+belongs in a workflow, with the old settings attached; their connections and the results they made stay.
 
-**The form is the one workflows use**: fields, dropdowns and the knobs under "Advanced" are all
-declared by the tool. What differs is **how a field takes upstream input** — a board has no
-`{{upstream.output}}`; the input is whatever is connected:
+**Placing one**: in the toolbar's Add menu or the drag-out menu, tools are **grouped by the content they
+work on** — New assets, Work on images, video, audio, text or 3D scenes — each with one line on what it
+does (the menu has a search box that also matches a plugin tool's call name). A tool item grown out of
+another item is already connected; that item is its input.
+
+**The form only asks what a creator decides**: model, language, style, duration and the like, with rarer
+knobs under "Advanced". Parameter mappings, raw JSON and code — fields meant for whoever builds a
+workflow — are not on boards; a tool that requires one (such as an explainer video that needs a
+structured list of steps) is used in a workflow or in chat. **Fields take upstream input** without any
+`{{upstream.output}}` either; the input is whatever is connected:
 
 | Upstream item | Fits which fields | What the run reads |
 | --- | --- | --- |
-| Note | Free-text fields (text, template) | The note's text; several notes join in connection order with a blank line |
+| Note | Free-text fields (text to translate, a prompt) | The note's text; several notes join in connection order with a blank line |
 | Document | Same | The pinned revision's text |
 | Image / video / audio | Asset fields | That asset |
 | 3D scene | Scene fields | That scene |
@@ -151,8 +163,8 @@ you arranged by hand get flattened.
 ### Letting the agent use tool items
 
 The assistant can also place tool items, wire up their inputs and run them for you. It first looks at
-the tools available (`list_board_producers` — the same list you see under Add → Tools, with plugin
-tools only from **your own** connections). When it places a tool item it names the tool, fills in its
+the tools available (`list_board_producers` — the same tools, groups and fields you see in the Add
+menu, with plugin tools only from **your own** connections). When it places a tool item it names the tool, fills in its
 fields, says which fields take which upstream items, and connects them in the same batch
 (`edit_board`). Placing and editing still go through a confirmation card, and a broken edit (no such
 tool, no such field, a binding to an item that isn't connected, a note bound to an asset field) is
@@ -161,10 +173,10 @@ refused when the card is opened, not after you approve it.
 **Running** (`run_board_item`) takes the same path as pressing Run yourself, with **the approver's own
 connection**:
 
-- **Read-only tools run directly** (text processing, JSON extraction, note search, plugin tools that
-  declare themselves read-only…) — no card;
-- **Tools that cost money or act outside the app wait for you** — HTTP requests, calling a workflow,
-  and plugin tools not declared read-only. The card says which tool runs on which board, with which of
+- **Tools that neither cost money nor reach outside run directly** (translate, transcribe, video to GIF,
+  plugin tools that declare themselves read-only…) — no card;
+- **Tools that cost money or act outside the app wait for you** — such as running a ComfyUI workflow,
+  and plugin tools that declare outward effects. The card says which tool runs on which board, with which of
   your connections, and whether it costs money or reaches outside the app. Reject it and nothing runs.
 
 Auto-approval still applies: in auto mode paid runs have a streak limit and outward-facing ones come

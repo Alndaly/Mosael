@@ -119,6 +119,20 @@ def test_放大工作流_图必填_没有提示词(comfy, tmp_path: Path) -> Non
     assert [key for key in tool["node"]["outputs"] if key.startswith("image_")] == ["image_4", "image_5"]
 
 
+def test_每张工作流的工具都上画板_按吃什么素材分组(comfy, tmp_path: Path) -> None:
+    """画板上只放内容变换(ADR 0021 修订):每张工作流都交出素材(`asset_id` 是素材),所以都在画板的
+    「添加」菜单里;读图的放大归「处理图片」,只收提示词的文生图归「产出新素材」。"""
+    from app.domain.boards.transforms import board_group, is_content_transform
+    from app.domain.plugins.nodes import node_meta
+
+    tools = _tools(comfy.url, tmp_path)
+    metas = {name: node_meta(tool) for name, tool in tools.items()}
+    assert all(is_content_transform(meta) for meta in metas.values()), [
+        name for name, meta in metas.items() if not is_content_transform(meta)]
+    assert board_group(metas[UPSCALE_TOOL]) == "image"
+    assert board_group(metas["wf_builtin_txt2img"]) == "new"
+
+
 def test_跑一张工作流的工具_字符串转回类型_素材接上_具名输出(comfy, tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()

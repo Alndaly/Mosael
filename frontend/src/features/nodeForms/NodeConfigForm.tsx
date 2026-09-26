@@ -32,6 +32,8 @@ import { cn } from "@/lib/utils";
  */
 
 export interface ConfigSpec {
+  /** template(可插 `{{上游.输出}}` 的一段字)/ text(就是一段字,画板上的模板字段)/ string / number /
+   *  object / code / asset_list … */
   type?: string;
   description?: string;
   required?: boolean;
@@ -346,6 +348,15 @@ export function NodeConfigForm({
                 )
               ) : spec?.type === "code" ? (
                 <CodeField value={String(value ?? "")} onChange={typeConfig(key)} />
+              ) : spec?.type === "text" ? (
+                // 一段字,没有引用:创意画板上的模板字段就是这一种(后端 boards.transforms.board_config_view)——
+                // 画板上没有「上游的输出」可引用,上游是连进来的格子,`{{…}}` 不该出现在创作者面前。
+                <textarea
+                  rows={spec?.multiline ? 4 : 2}
+                  value={String(value ?? "")}
+                  placeholder={spec?.default ? String(spec.default) : ""}
+                  onChange={(event) => typeConfig(key)(event.target.value)}
+                />
               ) : spec?.type === "template" ? (
                 // 模板字段:多行,而且里面的 `{{上游.输出}}` 显示成**可整体删除的标签** ——
                 // 纯文本时退格会把它咬成 `{{llm-1.tex`,而半截引用在运行前看不出错。

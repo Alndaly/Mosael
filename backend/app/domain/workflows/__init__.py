@@ -157,6 +157,15 @@ NODE_CATEGORIES: tuple[str, ...] = (
     "wfCat_plugin",
 )
 
+#: **围着「一张图怎么跑」转的分组**:流程控制(开始、条件、循环、调子流程)、数据搬运(请求、模板、
+#: 取 JSON、字符串处理)、知识库的查与写。它们交出的是给下游连线用的中间值 —— 一个状态码、一段拼好的
+#: 字符串、一串检索结果 —— 不是一样「手里这东西接下来变成了什么」的新内容。
+#:
+#: 创意画板只放**内容变换**(见 boards.transforms,ADR 0021 修订):这几组的节点即使声明了
+#: `surfaces: ["board"]` 也不上画板,棘轮钉着(test_board_producers)。按分组判而不是按输出类型判,
+#: 因为 template / text_transform 的输出也是文字 —— 输出类型分不开「一段译文」和「一段拼好的请求体」。
+WIRING_CATEGORIES: frozenset[str] = frozenset({"wfCat_flow", "wfCat_data", "wfCat_knowledge"})
+
 #: 一个 object 字段该用**哪种编辑器**。
 #:
 #: 绝大多数 object 配置其实是「名字 → 值」的映射:入参映射、请求头、具名输出、启动参数……
@@ -473,13 +482,21 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 
 #: 节点能在哪些地方用:`"surfaces": ["workflow", "board"]` 的节点同时是创意画板上的一种工具格
 #: (见 boards.producers —— 注册表**从这份声明里读**,不在画板那边另列一张表)。没写就只在工作流里。
-#: 不上画板的是有意的:llm / ai_generate / synthesize_speech 和画板内置的写字、生成、念重复;
-#: timeline_* / publish 副作用太大;流程控制类(start/output/condition/subgraph/loop/code/delay)
-#: 离开一张图就没有意义(ADR 0021 决定 3)。
+#:
+#: **声明了也要过一道规矩:画板上只有内容变换**(boards.transforms.content_transform_gap,ADR 0021 修订)——
+#: 吃画板上的内容(素材 / 文字 / 3D 场景)或凭空产出素材,交出画板摆得下的内容(素材,或点名落板的文字),
+#: 不在 WIRING_CATEGORIES 里,必填字段没有只有工程师看得懂的(映射、原始 JSON、代码)。声明了却过不了的,
+#: 棘轮当场报出来,注册表也不收。不上画板的还有:llm / ai_generate / synthesize_speech 和画板内置的写字、
+#: 生成、念重复;timeline_* / publish 副作用太大(ADR 0021 决定 3)。
 #:
 #: `"board_outputs"`:上了画板的节点,哪几个输出落成画布上的新格子(缺省是全部)。一个节点在工作流里
 #: 交出的东西有一半是给下游连线用的(字数、状态码、引擎名、输入素材的 id),摊在画板上全是噪音 ——
-#: 视频转 GIF 还会把**输入**那段视频原样再摆一格出来。
+#: 视频转 GIF 还会把**输入**那段视频原样再摆一格出来。文字输出只有在这里**点了名**才算这个节点的产出
+#: (一段转写 vs 一行状态摘要,光看类型分不开)。
+#:
+#: `"board_group"` / `"board_description"`:画板「添加」菜单里它归哪一组(按它吃的是什么内容分,
+#: 词表见 boards.transforms.BOARD_GROUPS)、一句给创作者看的说明(i18n key)。工作流的节点说明是写给
+#: 搭流程的人的(输出口、`{{…}}` 引用),画板上不照搬。
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "external": False,
@@ -549,6 +566,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["text"],
+        "board_group": "audio", "board_description": "wfNode_transcribe_asset_board",
         "category": "wfCat_audio",
         "label": "wfNode_transcribe_asset",
         "description": "wfNode_transcribe_asset_desc",
@@ -574,8 +592,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "note_search": {
         "external": False,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["text"],
         "category": "wfCat_knowledge", "label": "wfNode_note_search", "description": "wfNode_note_search_desc",
         "config": {"query": {"type": "template"}, "limit": {"type": "number", "default": 10},
                    "offset": {"type": "number", "default": 0, "advanced": True}},
@@ -750,6 +766,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id"],
+        "board_group": "video", "board_description": "wfNode_video_to_gif_board",
         "category": "wfCat_asset",
         "label": "wfNode_video_to_gif",
         "description": "wfNode_video_to_gif_desc",
@@ -800,8 +817,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "http_request": {
         "external": True,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["text"],
         "category": "wfCat_data",
         "label": "wfNode_http_request",
         "description": "wfNode_http_request_desc",
@@ -826,8 +841,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "template": {
         "external": False,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["text"],
         "category": "wfCat_data",
         "label": "wfNode_template",
         "description": "wfNode_template_desc",
@@ -836,8 +849,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "json_extract": {
         "external": False,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["value"],
         "category": "wfCat_data",
         "label": "wfNode_json_extract",
         "description": "wfNode_json_extract_desc",
@@ -849,8 +860,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "text_transform": {
         "external": False,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["text"],
         "category": "wfCat_data",
         "label": "wfNode_text_transform",
         "description": "wfNode_text_transform_desc",
@@ -922,6 +931,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["text"],
+        "board_group": "text", "board_description": "wfNode_translate_board",
         "category": "wfCat_ai",
         "label": "wfNode_translate",
         "description": "wfNode_translate_desc",
@@ -1007,6 +1017,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id"],
+        "board_group": "scene", "board_description": "wfNode_scene_render_board",
         "category": "wfCat_3d",
         "label": "wfNode_scene_render",
         "description": "wfNode_scene_render_desc",
@@ -1042,6 +1053,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["vocals_asset_id", "background_asset_id"],
+        "board_group": "audio", "board_description": "wfNode_separate_audio_board",
         "category": "wfCat_audio",
         "label": "wfNode_separate_audio",
         "description": "wfNode_separate_audio_desc",
@@ -1069,6 +1081,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id"],
+        "board_group": "audio", "board_description": "wfNode_denoise_audio_board",
         "category": "wfCat_audio",
         "label": "wfNode_denoise_audio",
         "description": "wfNode_denoise_audio_desc",
@@ -1300,8 +1313,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     # 组合/嵌套:把工作流当子流程调用,声明工作流的输出契约。
     "call_workflow": {
         "external": True,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["output"],
         "category": "wfCat_flow",
         "label": "wfNode_call_workflow",
         "description": "wfNode_call_workflow_desc",

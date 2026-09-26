@@ -38,8 +38,8 @@ import {
   type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import { itemName, type MediaKind } from "@/features/boards/boardNodes";
-import { nodePickerOptions } from "@/features/nodeForms/nodePicker";
+import { itemName, kindIcon, type MediaKind } from "@/features/boards/boardNodes";
+import { boardToolOptions } from "@/features/boards/boardTools";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
@@ -618,15 +618,18 @@ function BoardDetail({
     staleTime: 60_000,
   });
 
-  //: 工具条「添加」里的「工具」一组:分组和工作流的「添加节点」面板是同一份(nodePicker)。
+  //: 工具条「添加」里的工具:按它对内容做什么分组(处理图片 / 视频 / 音频 / 文字……,见 boardTools),
+  //: 不照搬工作流「添加节点」面板的「流程 / 数据」。
   const toolOptions = React.useMemo(
     () =>
-      nodePickerOptions(
-        (producers.data ?? []).filter((one) => isNodeProducer(one.id)).map((one) => ({ ...one, type: one.id })),
-        t("wfNodeGroupOther"),
-      ).map((one) => ({ ...one, group: `${t("boardsGroupTools")} · ${one.group}` })),
-    [producers.data, t],
+      boardToolOptions(producers.data ?? []).map(({ icon: Icon, ...one }) => ({ ...one, icon: <Icon /> })),
+    [producers.data],
   );
+  /** 「添加」里一种格子的那一行:图标就是那种格子的图标(画布上、拉线菜单里是同一颗)。 */
+  const kindOption = (value: string, kind: Parameters<typeof kindIcon>[0], label: string, group: string) => {
+    const Icon = kindIcon(kind);
+    return { value, label, group, icon: <Icon /> };
+  };
 
   /** 系统里拖进来的文件:先传进素材库,再由画布摆到落点上。**只收图片和视频** ——
    *  画板上的项渲染的就是这两种,音频拖进来会变成一个放不了的空框。 */
@@ -939,16 +942,17 @@ function BoardDetail({
                 //: **同一组的选项必须挨在一起。** SearchableSelect 按*相邻*的同名 group 归组
                 //: (它不重排,理由见那边的注释),所以隔开写就会渲染出第二个同名小标题 ——
                 //: 「选一张图片」此前排在最末,菜单里于是有两个「素材库」。
-                { value: "document", label: t("boardKindDocument"), group: t("boardsGroupAssets") },
-                { value: "scene", label: t("navScenes"), group: t("boardsGroupAssets") },
-                { value: "pick-image", label: t("boardsPickImage"), group: t("boardsGroupAssets") },
-                { value: "pick-video", label: t("boardsPickVideo"), group: t("boardsGroupAssets") },
-                { value: "pick-audio", label: t("boardsPickAudio"), group: t("boardsGroupAssets") },
-                { value: "note", label: t("boardsAddNote"), group: t("boardsGroupCreate") },
-                { value: "image", label: t("boardsAddImage"), group: t("boardsGroupCreate") },
-                { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
-                { value: "audio", label: t("boardsAddAudio"), group: t("boardsGroupCreate") },
-                { value: "frame", label: t("boardsAddFrame"), group: t("boardsGroupCreate") },
+                kindOption("document", "document", t("boardKindDocument"), t("boardsGroupAssets")),
+                kindOption("scene", "scene", t("navScenes"), t("boardsGroupAssets")),
+                kindOption("pick-image", "image", t("boardsPickImage"), t("boardsGroupAssets")),
+                kindOption("pick-video", "video", t("boardsPickVideo"), t("boardsGroupAssets")),
+                kindOption("pick-audio", "audio", t("boardsPickAudio"), t("boardsGroupAssets")),
+                kindOption("note", "note", t("boardsAddNote"), t("boardsGroupCreate")),
+                kindOption("image", "image", t("boardsAddImage"), t("boardsGroupCreate")),
+                kindOption("video", "video", t("boardsAddVideo"), t("boardsGroupCreate")),
+                kindOption("audio", "audio", t("boardsAddAudio"), t("boardsGroupCreate")),
+                kindOption("frame", "frame", t("boardsAddFrame"), t("boardsGroupCreate")),
+                //: 工具按吃什么内容分成几组,每组的名字(「处理视频」)自己就说明了这是一组工具。
                 ...toolOptions,
               ]}
               trigger={

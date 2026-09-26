@@ -1907,10 +1907,10 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
           (a line from A to B; the downstream node picks up A's output as its reference)
       {"kind":"remove_item","item_id":"n1"}                     (its edges go too)
       {"kind":"remove_edge","edge_id":"e-n1-i1"}
-      {"kind":"add_item","type":"action","item_id":"t1","producer":"node:text_transform",
-       "config":{"op":"upper"},"bindings":{"text":[{"from":"n1"}]}}
+      {"kind":"add_item","type":"action","item_id":"t1","producer":"node:translate",
+       "config":{"target_lang":"en"},"bindings":{"text":[{"from":"n1"}]}}
           (a tool item; put {"kind":"connect","source":"n1","target":"t1"} in the same batch)
-      {"kind":"set_form","item_id":"t1","config":{"op":"lower"},"bindings":{"text":[{"from":"n2"}]}}
+      {"kind":"set_form","item_id":"t1","config":{"target_lang":"ja"},"bindings":{"text":[{"from":"n2"}]}}
           (config merges key by key, null removes a key; bindings replace per field, [] unbinds;
            a new producer starts from an empty config and bindings)
     """
@@ -1930,12 +1930,22 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
 def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
     """Read-only: list the TOOLS you can put on a creative board as tool items.
 
+    A board only holds CONTENT TRANSFORMS — tools that turn an asset, text or 3D scene
+    into new content (video to GIF, transcribe, translate, separate vocals, denoise,
+    render a 3D shot, a ComfyUI workflow that makes images…) or make new assets.
+    Flow control and data plumbing (call a workflow, HTTP requests, templates, JSON,
+    string handling, note search) and plugin tools that only list, report or upload
+    are not board tools: build a workflow for those.
+
     Each entry is a producer id (use it as `producer` in edit_board add_item/set_form),
-    its label, description, category, `effects` ("none" runs directly when you call
-    run_board_item; "paid"/"external" asks the user first) and `config` — the tool's
-    fields (type, required, options, description). A field's `board_sources` lists
-    the item kinds it can take from upstream through `bindings`; an empty list means
-    fill it in `config`. Plugin tools appear only for plugins the user has connected.
+    its label, `board_description` (one line on what it does to content),
+    `board_group` (what content it works on: new / image / video / audio / text /
+    scene / asset), `effects` ("none" runs directly when you call run_board_item;
+    "paid"/"external" asks the user first) and `config` — the fields a creator fills
+    on the board (type, required, options, description; mappings, raw JSON and code
+    fields are not on the board). A field's `board_sources` lists the item kinds it
+    can take from upstream through `bindings`; an empty list means fill it in
+    `config`. Plugin tools appear only for plugins the user has connected.
     Built-in slots (note/image/video/audio) are not listed — add them as empty slots.
     """
     listed = _get("/api/boards/producers", {"workspace_id": workspace_id or _default_workspace_id()})

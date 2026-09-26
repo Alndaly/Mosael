@@ -326,14 +326,15 @@ describe("画板详情页与服务端的同步", () => {
   });
 });
 
-describe("工具格(跑一个插件工具 / 工作流节点)", () => {
+describe("工具格(跑一个把内容变成新内容的工具)", () => {
   const TOOL = {
-    id: "node:text_transform", type: "text_transform", label: "文本处理", description: "", category: "数据", config: {},
-    outputs: [], output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {},
+    id: "node:translate", type: "translate", label: "翻译", description: "把文本翻译成目标语言:Google 免费接口或 AI 供应商。",
+    category: "工作流面板的分组", config: {}, outputs: [], output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {},
     hosts: ["action"], permission: "edit", effects: "none", fills_empty_slot: false,
+    board_group: "text", board_group_label: "处理文字", board_description: "把便签或文档里的文字翻成另一种语言",
   };
 
-  it("工具条「添加」里有「工具」一组,选一个就放下一格写明跑哪个工具", async () => {
+  it("工具条「添加」里的工具按它对内容做什么分组,选一个就放下一格写明跑哪个工具", async () => {
     Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
     apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
     apiMocks.listBoardProducers.mockResolvedValue([TOOL]);
@@ -345,19 +346,23 @@ describe("工具格(跑一个插件工具 / 工作流节点)", () => {
       fireEvent.click(view.container.ownerDocument.querySelector<HTMLElement>("[data-board-add-item]")!);
     });
     const option = await vi.waitFor(() => {
-      const found = [...document.querySelectorAll<HTMLElement>("[cmdk-item], [role=option]")].find((one) => one.textContent?.includes("文本处理"));
+      const found = [...document.querySelectorAll<HTMLElement>("[cmdk-item], [role=option]")].find((one) => one.textContent?.includes("翻译"));
       expect(found).toBeTruthy();
       return found!;
     });
-    expect(document.body.textContent).toContain("boardsGroupTools · 数据");
+    //: 组名是内容那一边的(「处理文字」),不是工作流面板的分组;副标题是画板那一句说明;每一行都有图标。
+    expect(document.body.textContent).toContain("处理文字");
+    expect(document.body.textContent).not.toContain("工作流面板的分组");
+    expect(option.textContent).toContain("把便签或文档里的文字翻成另一种语言");
+    expect(option.querySelector("svg")).not.toBeNull();
     act(() => {
       fireEvent.click(option);
     });
-    expect(canvasHarness.api.add).toHaveBeenCalledWith("action", { form: { producer: "node:text_transform" } });
+    expect(canvasHarness.api.add).toHaveBeenCalledWith("action", { form: { producer: "node:translate" } });
   });
 
   it("运行发的是产出者 + 配置 + 绑定;停止取消的是那一格这一轮的任务;跑完右边新建的几格随服务端那份落下来", async () => {
-    const action = { id: "a1", kind: "action" as const, x: 0, y: 0, width: 280, height: 150, form: { producer: "node:text_transform" as const } };
+    const action = { id: "a1", kind: "action" as const, x: 0, y: 0, width: 280, height: 150, form: { producer: "node:translate" as const } };
     const note = { id: "n1", kind: "note" as const, x: -300, y: 0, width: 220, height: 140, text: "hello" };
     const server: BoardCanvas = { items: [note, action], edges: [{ id: "e1", source: "n1", target: "a1" }], markers: [] };
     const running = { ...action, form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] }, producer: action.form.producer }, run: { status: "running" as const, job_id: "job-9" } };
@@ -377,12 +382,12 @@ describe("工具格(跑一个插件工具 / 工作流节点)", () => {
     act(() => props().onChange(server));
     await act(async () => {
       await props().onRun({
-        producer: "node:text_transform", item_id: "a1", kind: "action", x: 0, y: 0,
+        producer: "node:translate", item_id: "a1", kind: "action", x: 0, y: 0,
         form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] } },
       });
     });
     expect(apiMocks.runOnBoard.mock.calls[0][1]).toMatchObject({
-      producer: "node:text_transform", item_id: "a1", kind: "action",
+      producer: "node:translate", item_id: "a1", kind: "action",
       form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] } },
     });
     expect(canvasHarness.api.patch).toHaveBeenCalledWith("a1", expect.objectContaining({ run: running.run }));

@@ -16,7 +16,7 @@ import mcp_server
 from tests.test_board_producers import _connect, _derived, _install_plugin, _me, _settled
 from tests.util import fresh_client, second_client
 
-TEXT_TRANSFORM = "node:text_transform"
+TRANSLATE = "node:translate"
 SHOUT = "node:plugin.dev.test.boardtools.shout"
 PAINT = "node:plugin.dev.test.boardtools.paint"
 
@@ -62,8 +62,8 @@ def test_智能体放一个工具格_带配置和绑定_同一批连上线() -> 
     board_id = _board(client, ws, [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "hello"}])
 
     card = _edit(client, ws, board_id, [
-        {"kind": "add_item", "type": "action", "item_id": "t1", "producer": TEXT_TRANSFORM,
-         "config": {"op": "upper"}, "bindings": {"text": [{"from": "n1"}]}},
+        {"kind": "add_item", "type": "action", "item_id": "t1", "producer": TRANSLATE,
+         "config": {"target_lang": "en"}, "bindings": {"text": [{"from": "n1"}]}},
         {"kind": "connect", "source": "n1", "target": "t1"},
     ])
     assert card.status_code == 200, card.text
@@ -72,14 +72,14 @@ def test_智能体放一个工具格_带配置和绑定_同一批连上线() -> 
 
     tool = _items(client, ws, board_id)["t1"]
     assert tool["kind"] == "action"
-    assert tool["form"] == {"config": {"op": "upper"}, "bindings": {"text": [{"from": "n1"}]}, "producer": TEXT_TRANSFORM}
+    assert tool["form"] == {"config": {"target_lang": "en"}, "bindings": {"text": [{"from": "n1"}]}, "producer": TRANSLATE}
     assert list(tool["form"])[-1] == "producer", "产出者排在表单最后,和界面、运行写的同一个样子"
 
 
 @pytest.mark.parametrize(("operations", "says"), [
     #: 没连线的绑定:落库时 normalize 会悄悄摘掉 —— 开卡时就得说「先连线」。
-    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TEXT_TRANSFORM,
-       "config": {"op": "upper"}, "bindings": {"text": [{"from": "n1"}]}}], "n1"),
+    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TRANSLATE,
+       "config": {"target_lang": "en"}, "bindings": {"text": [{"from": "n1"}]}}], "n1"),
     #: 没有这个工具。
     ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": "node:no_such_node"}], "no_such_node"),
     #: 内置的写字/生成的表单是面板的形状,不由智能体写。
@@ -87,23 +87,25 @@ def test_智能体放一个工具格_带配置和绑定_同一批连上线() -> 
     #: 工具格没有工具。
     ([{"kind": "add_item", "type": "action", "item_id": "t1"}], "t1"),
     #: 别的格子不收工具表单。
-    ([{"kind": "add_item", "type": "note", "item_id": "n2", "producer": TEXT_TRANSFORM}], "n2"),
+    ([{"kind": "add_item", "type": "note", "item_id": "n2", "producer": TRANSLATE}], "n2"),
     #: 工具没有这个字段。
-    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TEXT_TRANSFORM,
-       "config": {"opp": "upper"}}], "opp"),
+    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TRANSLATE,
+       "config": {"lang": "en"}}], "lang"),
     #: 声明成数字的字段填的不是数。
-    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": "node:note_search",
-       "config": {"limit": "好多"}}], "条数上限"),
+    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": "node:video_to_gif",
+       "config": {"fps": "好多"}}], "帧率"),
+    #: 流程和数据处理的节点不在画板上(归工作流)。
+    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": "node:text_transform"}], "text_transform"),
     #: 固定选项的字段不接上游。
-    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TEXT_TRANSFORM,
-       "bindings": {"op": [{"from": "n1"}]}},
-      {"kind": "connect", "source": "n1", "target": "t1"}], "op"),
+    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TRANSLATE,
+       "bindings": {"target_lang": [{"from": "n1"}]}},
+      {"kind": "connect", "source": "n1", "target": "t1"}], "target_lang"),
     #: 便签给不了素材;图片给不了文字。
-    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TEXT_TRANSFORM,
+    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TRANSLATE,
        "bindings": {"text": [{"from": "i1"}]}},
       {"kind": "connect", "source": "i1", "target": "t1"}], "i1"),
     #: 绑定到一个不在画布上的格子。
-    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TEXT_TRANSFORM,
+    ([{"kind": "add_item", "type": "action", "item_id": "t1", "producer": TRANSLATE,
        "bindings": {"text": [{"from": "ghost"}]}}], "ghost"),
 ])
 def test_写坏的工具格在开卡时就拒(operations: list[dict], says: str) -> None:
@@ -127,25 +129,25 @@ def test_set_form_配置逐键合并_绑定逐字段替换_换工具从头来() 
         {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "a"},
         {"id": "n2", "kind": "note", "x": 0, "y": 200, "text": "b"},
         {"id": "t1", "kind": "action", "x": 300, "y": 0, "form": {
-            "config": {"op": "replace", "find": "a", "replace": "b"},
-            "bindings": {"text": [{"from": "n1"}]}, "producer": TEXT_TRANSFORM}},
+            "config": {"target_lang": "en", "engine": "ai", "model": "m"},
+            "bindings": {"text": [{"from": "n1"}]}, "producer": TRANSLATE}},
     ], "edges": [{"id": "e1", "source": "n1", "target": "t1"}]}
 
-    out = apply_board_ops(base, [{"kind": "set_form", "item_id": "t1", "config": {"find": "x", "replace": None},
+    out = apply_board_ops(base, [{"kind": "set_form", "item_id": "t1", "config": {"engine": "google", "model": None},
                                   "bindings": {"text": [{"from": "n2"}]}}])
     form = next(one for one in out["items"] if one["id"] == "t1")["form"]
-    assert form == {"config": {"op": "replace", "find": "x"}, "bindings": {"text": [{"from": "n2"}]},
-                    "producer": TEXT_TRANSFORM}
+    assert form == {"config": {"target_lang": "en", "engine": "google"}, "bindings": {"text": [{"from": "n2"}]},
+                    "producer": TRANSLATE}
 
     unbound = apply_board_ops(base, [{"kind": "set_form", "item_id": "t1", "bindings": {"text": []}}])
     assert next(one for one in unbound["items"] if one["id"] == "t1")["form"]["bindings"] == {}
 
-    switched = apply_board_ops(base, [{"kind": "set_form", "item_id": "t1", "producer": "node:template"}])
+    switched = apply_board_ops(base, [{"kind": "set_form", "item_id": "t1", "producer": "node:video_to_gif"}])
     assert next(one for one in switched["items"] if one["id"] == "t1")["form"] == {
-        "config": {}, "bindings": {}, "producer": "node:template"}, "上一个工具的配置留给了新工具"
+        "config": {}, "bindings": {}, "producer": "node:video_to_gif"}, "上一个工具的配置留给了新工具"
 
     with pytest.raises(BoardDomainError):
-        apply_board_ops(base, [{"kind": "set_form", "item_id": "n1", "config": {"op": "upper"}}])
+        apply_board_ops(base, [{"kind": "set_form", "item_id": "n1", "config": {"target_lang": "en"}}])
     with pytest.raises(BoardDomainError):
         apply_board_ops(base, [{"kind": "set_form", "item_id": "t1", "producer": "generate"}])
 
@@ -157,7 +159,7 @@ def test_set_form_经确认卡落库_绑定要有线() -> None:
         {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "hello"},
         {"id": "n2", "kind": "note", "x": 0, "y": 200, "text": "board"},
         {"id": "t1", "kind": "action", "x": 300, "y": 0, "form": {
-            "config": {"op": "upper"}, "bindings": {"text": [{"from": "n1"}]}, "producer": TEXT_TRANSFORM}},
+            "config": {"target_lang": "en"}, "bindings": {"text": [{"from": "n1"}]}, "producer": TRANSLATE}},
     ], [{"id": "e1", "source": "n1", "target": "t1"}])
 
     #: n2 没连过来:拒。
@@ -166,12 +168,12 @@ def test_set_form_经确认卡落库_绑定要有线() -> None:
 
     card = _edit(client, ws, board_id, [
         {"kind": "connect", "source": "n2", "target": "t1"},
-        {"kind": "set_form", "item_id": "t1", "config": {"op": "lower"}, "bindings": {"text": [{"from": "n2"}]}},
+        {"kind": "set_form", "item_id": "t1", "config": {"target_lang": "ja"}, "bindings": {"text": [{"from": "n2"}]}},
     ])
     assert card.status_code == 200, card.text
     assert client.post(f"/api/confirmations/{card.json()['id']}/approve").json()["status"] == "executed"
     assert _items(client, ws, board_id)["t1"]["form"] == {
-        "config": {"op": "lower"}, "bindings": {"text": [{"from": "n2"}]}, "producer": TEXT_TRANSFORM}
+        "config": {"target_lang": "ja"}, "bindings": {"text": [{"from": "n2"}]}, "producer": TRANSLATE}
 
 
 def test_别人接的插件工具_我写不进工具格(tmp_path) -> None:
@@ -190,6 +192,29 @@ def test_别人接的插件工具_我写不进工具格(tmp_path) -> None:
     _connect(_me(owner))
     assert _edit(owner, ws, board_id, [{"kind": "add_item", "type": "action", "item_id": "t1",
                                         "producer": SHOUT}]).status_code == 200
+
+
+def test_画板表单上看不见的字段_智能体也写不进去(tmp_path) -> None:
+    """参数规矩对智能体也一样:原始 JSON 这类字段在画板的表单上不出现,替人写进去就是一份面板打开也看不见、
+    改不了的配置。不是内容变换的插件工具(列清单)也放不上工具格,说清楚它归工作流。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    _install_plugin(tmp_path)
+    _connect(_me(client))
+    board_id = _board(client, ws, [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "hi"}])
+
+    hidden = _edit(client, ws, board_id, [{"kind": "add_item", "type": "action", "item_id": "t1", "producer": PAINT,
+                                           "config": {"prompt": "猫", "extra": {"a": 1}}}])
+    assert hidden.status_code == 422, hidden.text
+    assert "extra" in hidden.json()["detail"]
+
+    listing = _edit(client, ws, board_id, [{"kind": "add_item", "type": "action", "item_id": "t1",
+                                            "producer": "node:plugin.dev.test.boardtools.listing"}])
+    assert listing.status_code == 422, listing.text
+    assert "listing" in listing.json()["detail"] and "工作流" in listing.json()["detail"]
+
+    assert _edit(client, ws, board_id, [{"kind": "add_item", "type": "action", "item_id": "t1", "producer": PAINT,
+                                         "config": {"prompt": "猫"}}]).status_code == 200
 
 
 # ── list_board_producers ────────────────────────────────────────────────────
@@ -229,23 +254,25 @@ def test_list_board_producers_只列这个人自己接的工具(tmp_path, monkey
     #: 和界面拿到的是同一份(同一个接口),只是只留能放在工具格上的那些。
     panel = {one["id"]: one for one in client.get("/api/boards/producers", params={"workspace_id": ws}).json()}
     assert all(listed[one] == panel[one] for one in listed)
-    assert SHOUT in listed and TEXT_TRANSFORM in listed
+    assert SHOUT in listed and TRANSLATE in listed
     assert not any(one.startswith("node:plugin.dev.test.othertools.") for one in listed), "列出了别人的连接"
     assert not {"generate", "write", "speak", "trim"} & set(listed), "内置槽位不在工具格上"
     assert listed[SHOUT]["effects"] == "none" and listed[PAINT]["effects"] == "external"
-    assert listed[TEXT_TRANSFORM]["config"]["text"]["board_sources"] == ["note", "document"]
+    assert listed[TRANSLATE]["config"]["text"]["board_sources"] == ["note", "document"]
 
 
 # ── run_board_item ──────────────────────────────────────────────────────────
 
 
-def test_只读的工具直接跑_卡留痕不等人() -> None:
+def test_只读的工具直接跑_卡留痕不等人(tmp_path) -> None:
     client = fresh_client()
     ws = _workspace(client)
+    _install_plugin(tmp_path)
+    _connect(_me(client))
     board_id = _board(client, ws, [
         {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "hello"},
         {"id": "a1", "kind": "action", "x": 300, "y": 0, "form": {
-            "config": {"op": "upper"}, "bindings": {"text": [{"from": "n1"}]}, "producer": TEXT_TRANSFORM}},
+            "config": {}, "bindings": {"text": [{"from": "n1"}]}, "producer": SHOUT}},
     ], [{"id": "e1", "source": "n1", "target": "a1"}])
 
     #: 调用方在 payload 里自称「只读」不算数 —— 由开卡时的干跑写回。
@@ -331,7 +358,7 @@ def test_批准之前那一格换了工具_就不跑(tmp_path) -> None:
     assert card.status_code == 200, card.text
 
     board = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
-    board["canvas"]["items"][0]["form"] = {"config": {"op": "upper"}, "bindings": {}, "producer": TEXT_TRANSFORM}
+    board["canvas"]["items"][0]["form"] = {"config": {"target_lang": "en"}, "bindings": {}, "producer": TRANSLATE}
     saved = client.patch(f"/api/boards/{board_id}", json={
         "workspace_id": ws, "base_revision": board["revision"], "canvas": board["canvas"]})
     assert saved.status_code == 200, saved.text
@@ -365,14 +392,16 @@ def test_花钱的按_ai_cost_开卡_对外的按_external() -> None:
     assert spec.needs_card(None, {}) is True
 
 
-def test_智能体经工具入口跑只读工具格_拿到的是执行结果(monkeypatch) -> None:
+def test_智能体经工具入口跑只读工具格_拿到的是执行结果(tmp_path, monkeypatch) -> None:
     """sidecar 那条路:run_board_item 是确认门控工具,调用只拿到卡;卡已经被判「不用问人」执行掉了。"""
     client = fresh_client()
     ws = _workspace(client)
+    _install_plugin(tmp_path)
+    _connect(_me(client))
     board_id = _board(client, ws, [
         {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "hi"},
         {"id": "a1", "kind": "action", "x": 300, "y": 0, "form": {
-            "config": {"op": "upper"}, "bindings": {"text": [{"from": "n1"}]}, "producer": TEXT_TRANSFORM}},
+            "config": {}, "bindings": {"text": [{"from": "n1"}]}, "producer": SHOUT}},
     ], [{"id": "e1", "source": "n1", "target": "a1"}])
     _route_mcp_to(client, monkeypatch)
 
@@ -398,12 +427,12 @@ def test_卡上说清跑哪个工具_用哪条连接_有什么后果() -> None:
     from app.domain.agent.confirmable import tool_spec
 
     spec = tool_spec("run_board_item")
-    external = {"producer": "node:http_request", "effects": "external", "tool": {"key": "wfNode_http_request"},
+    external = {"producer": "node:translate", "effects": "external", "tool": {"key": "wfNode_translate"},
                 "board_name": "Storyboard", "item_title": "", "connection": ""}
     key, params = spec.summarize(None, external)
     zh, en = render_message(key, "zh", params), render_message(key, "en", params)
-    assert "HTTP 请求" in zh and "Storyboard" in zh and "撤不回" in zh
-    assert "HTTP request" in en and "cannot be undone" in en
+    assert "翻译" in zh and "Storyboard" in zh and "撤不回" in zh
+    assert "Translate" in en and "cannot be undone" in en
     assert not re.search(r"[一-鿿]", en), f"英文卡里还有中文:{en}"
 
     plugin = {"producer": PAINT, "effects": "paid", "tool": {"text": "Paint"}, "board_name": "B",

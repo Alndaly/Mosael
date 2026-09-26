@@ -276,15 +276,31 @@ PLUGIN_TOOLS = [
     },
     {
         "name": "paint",
-        "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}}},
+        #: `extra` 是一份原始 JSON(选填):工作流里有编辑器,画板的表单上不出现。
+        "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}, "extra": {"type": "object"}}},
         "node": {"outputs": ["caption", "asset_id"], "output_types": {"caption": "text"}},
     },
-    #: 声明了输出名、没声明类型:值是一个列表,按值猜 —— 一个列表落成好几格。
-    {"name": "many", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["lines"]}},
-    {"name": "boom", "input_schema": {"type": "object", "properties": {}}},
-    {"name": "sleep", "input_schema": {"type": "object", "properties": {}}},
+    #: 可能交出一个文件(所以是内容变换),这回交的是一列没声明类型的字:按值猜 —— 一个列表落成好几格。
+    {"name": "many", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["lines", "asset_id"]}},
+    {"name": "boom", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["asset_id"]}},
+    {"name": "sleep", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["asset_id"]}},
     {"name": "secret", "input_schema": {"type": "object", "properties": {}}},
+    #: 下面四个不是内容变换,不上画板(工作流里照样用):
+    #: 列清单(缺省的一个 output,类型不明)、看状态(文字没点名落板,是摘要)、
+    #: 装环境(点名落板的只有文字,又不吃任何内容 —— 是一份报告)、必填一份 JSON(画板上填不了)。
+    {"name": "listing", "read_only": True,
+     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}},
+    {"name": "status", "read_only": True, "input_schema": {"type": "object", "properties": {}},
+     "node": {"outputs": ["summary"], "output_types": {"summary": "text"}}},
+    {"name": "setup", "input_schema": {"type": "object", "properties": {"reinstall": {"type": "boolean"}}},
+     "node": {"outputs": ["summary"], "output_types": {"summary": "text"}, "board_outputs": ["summary"]}},
+    {"name": "explain",
+     "input_schema": {"type": "object", "properties": {"steps": {"type": "array"}}, "required": ["steps"]},
+     "node": {"outputs": ["asset_id"]}},
 ]
+
+#: 上面这份清单里能上画板的那几个(内容变换)。
+BOARD_TOOLS = ("shout", "paint", "many", "boom", "sleep")
 
 
 def _install_plugin(root: Path, package_id: str = "dev.test.boardtools") -> Path:
@@ -363,39 +379,177 @@ def _derived(canvas: dict) -> list[dict]:
     return sorted((one for one in canvas["items"] if one["id"] in targets), key=lambda one: (one["x"], one["y"]))
 
 
-def test_工具格能跑的节点从节点声明里读_和第一批清单一致() -> None:
-    """RATCHET:`surfaces` 声明和注册表是同一件事。清单只在 NODE_TYPES 里写一次,画板不另列。"""
+#: 画板上的内置工具:只有内容变换(ADR 0021 修订)。
+BOARD_NODES = {"transcribe_asset", "translate", "video_to_gif", "separate_audio", "denoise_audio", "scene_render"}
+
+
+def test_工具格能跑的节点从节点声明里读_只有内容变换() -> None:
+    """RATCHET:`surfaces` 声明和注册表是同一件事,清单只在 NODE_TYPES 里写一次,画板不另列;
+    **声明了画板的节点必须是内容变换** —— 流程控制、数据处理、知识库的节点声明了也不算数,这里当场报出来。"""
     from app.core.db import SessionLocal
+    from app.core.i18n import MESSAGES
     from app.domain.boards import producers
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.boards.transforms import BOARD_GROUPS, content_transform_gap
+    from app.domain.workflows import NODE_TYPES, WIRING_CATEGORIES
     from app.domain.workflows.executors import get_executor
 
-    first_batch = {
-        "transcribe_asset", "translate", "text_transform", "json_extract", "template", "video_to_gif",
-        "separate_audio", "denoise_audio", "note_search", "scene_render", "call_workflow", "http_request",
-    }
     declared = {name for name, spec in NODE_TYPES.items() if "board" in (spec.get("surfaces") or ())}
-    assert declared == first_batch
-    #: 决定 3:和内置写字/生成/念重复的、副作用大的、流程控制类不上画板。
+    assert declared == BOARD_NODES
+    #: 决定 3:和内置写字/生成/念重复的、副作用大的、流程控制类不上画板;
+    #: 修订:数据搬运和知识库查询也不上(调用工作流、HTTP 请求、模板、JSON 提取、文本处理、检索笔记)。
     for kept_off in ("llm", "ai_generate", "synthesize_speech", "publish", "timeline_append", "start", "output",
-                     "condition", "subgraph", "loop_foreach", "code", "delay"):
+                     "condition", "subgraph", "loop_foreach", "code", "delay", "call_workflow", "http_request",
+                     "template", "json_extract", "text_transform", "note_search"):
         assert "board" not in (NODE_TYPES[kept_off].get("surfaces") or ()), kept_off
     for name, spec in NODE_TYPES.items():
         assert set(spec.get("surfaces") or ()) <= {"workflow", "board"}, name
         if "board" in (spec.get("surfaces") or ()):
+            assert spec["category"] not in WIRING_CATEGORIES, f"{name} 是流程 / 数据 / 知识库节点,不该声明画板"
+            assert content_transform_gap(spec) is None, f"{name} 声明了画板却不是内容变换:{content_transform_gap(spec)}"
             assert get_executor(name) is not None, name
             assert set(spec.get("board_outputs") or spec["outputs"]) <= set(spec["outputs"]), name
+            #: 添加菜单里归哪一组、给创作者看的一句话:内置的都写明,不靠推。
+            assert spec.get("board_group") in BOARD_GROUPS, name
+            assert spec.get("board_description") in MESSAGES, name
         else:
-            assert "board_outputs" not in spec, f"{name} 没上画板却声明了 board_outputs"
+            for board_only in ("board_outputs", "board_group", "board_description"):
+                assert board_only not in spec, f"{name} 没上画板却声明了 {board_only}"
 
     fresh_client()
     with SessionLocal() as db:
         registry = {one.id: one for one in producers.list_producers(db, None)}
     nodes = {one for one in registry if one.startswith("node:")}
-    assert nodes == {f"node:{name}" for name in first_batch}
+    assert nodes == {f"node:{name}" for name in BOARD_NODES}
     assert all(registry[one].hosts == ("action",) for one in nodes)
-    #: 后果落在应用之外的(发请求、调别的流程)要确认卡。
-    assert {one for one in nodes if registry[one].effects == "external"} == {"node:http_request", "node:call_workflow"}
+    #: 这几个都在本机做完(对外发请求、调别的流程的那两个已经不在画板上了)。
+    assert all(registry[one].effects == "none" for one in nodes)
+
+
+def test_声明了画板的流程节点注册表也不收_跑的时候说清楚(monkeypatch) -> None:
+    """规矩是注册表的一道门,不只是棘轮:哪天有人给 HTTP 请求写回 `surfaces: ["board"]`,画板上也不会多出它;
+    画布上存着的那一格点运行,说清楚这件事归工作流。"""
+    from app.core.db import SessionLocal
+    from app.domain.boards import producers
+    from app.domain.workflows import NODE_TYPES
+
+    monkeypatch.setitem(NODE_TYPES, "http_request", {**NODE_TYPES["http_request"], "surfaces": ["workflow", "board"],
+                                                     "board_outputs": ["text"]})
+    client = fresh_client()
+    with SessionLocal() as db:
+        assert "node:http_request" not in {one.id for one in producers.list_producers(db, None)}
+
+    ws = _workspace(client)
+    for gone in ("node:http_request", "node:text_transform", "node:call_workflow"):
+        board_id = _action_board(client, ws, gone)
+        refused = _run_tool(client, board_id, ws, gone)
+        assert refused.status_code == 400, refused.text
+        assert "工作流" in refused.json()["detail"], refused.json()["detail"]
+
+
+def test_内容变换的规矩() -> None:
+    """一条规矩管内置节点和插件工具(boards.transforms.content_transform_gap):"""
+    from app.domain.boards.transforms import board_group, content_transform_gap
+    from app.domain.plugins.nodes import node_meta
+
+    def tool(**declared) -> dict:
+        return node_meta({"name": "t", **declared})
+
+    text_in = {"type": "object", "properties": {"text": {"type": "string"}}}
+    #: 吃文字、交出点名落板的文字:内容变换(翻译、改写这一类)。
+    assert content_transform_gap(tool(input_schema=text_in, node={
+        "outputs": ["text", "count"], "output_types": {"text": "text", "count": "number"}, "board_outputs": ["text"]})) is None
+    #: 文字只有类型、没点名落板:不算内容(列清单、看状态的 summary 就是这样)。
+    assert content_transform_gap(tool(input_schema=text_in, node={
+        "outputs": ["summary"], "output_types": {"summary": "text"}})) == "no_content_output"
+    #: 缺省的一个 output(类型不明)不算内容。
+    assert content_transform_gap(tool(input_schema=text_in)) == "no_content_output"
+    #: 点名的只有 JSON 也不算。
+    assert content_transform_gap(tool(input_schema=text_in, node={
+        "outputs": ["tags"], "output_types": {"tags": "json"}, "board_outputs": ["tags"]})) == "no_content_output"
+    #: 不吃内容、只交出文字:是一份报告。
+    assert content_transform_gap(tool(node={
+        "outputs": ["summary"], "output_types": {"summary": "text"}, "board_outputs": ["summary"]})) == "no_content_input"
+    #: 不吃内容、交出素材:凭空产出(提示词出图、按参数出讲解视频、从存储取回一个文件)。
+    made = tool(input_schema={"type": "object", "properties": {"key": {"type": "string"}}},
+                node={"outputs": ["asset_id", "summary"], "output_types": {"asset_id": "asset"}, "board_outputs": ["asset_id"]})
+    assert content_transform_gap(made) is None and board_group(made) == "new"
+    #: 吃一张图、交出一张图:归「处理图片」。
+    picture = {"type": "object", "properties": {"image": {"type": "string", "format": "asset", "x-media": "image"}}}
+    upscale = tool(input_schema=picture, node={"outputs": ["asset_id"]})
+    assert content_transform_gap(upscale) is None and board_group(upscale) == "image"
+    #: 吃素材、交出的是链接:上传 / 导出这类不上画板。
+    upload = tool(input_schema={"type": "object", "properties": {"asset_id": {"type": "string", "format": "asset"}}},
+                  node={"outputs": ["url", "key"]})
+    assert content_transform_gap(upload) == "no_content_output"
+    #: 必填一份 JSON:画板的表单上填不了。
+    assert content_transform_gap(tool(input_schema={"type": "object", "properties": {"steps": {"type": "array"}},
+                                                    "required": ["steps"]}, node={"outputs": ["asset_id"]})) == "needs_wiring"
+    #: 流程 / 数据 / 知识库分组:不管输出是什么。
+    assert content_transform_gap({**upscale, "category": "wfCat_data"}) == "wiring"
+
+
+def test_随包的插件工具_哪些上画板() -> None:
+    """对着仓库里的清单:取回文件、导入、出片的上画板;列清单、看状态、上传、装环境的不上。"""
+    from app.domain.boards.transforms import is_content_transform
+    from app.domain.plugins.nodes import node_meta
+
+    root = Path(__file__).resolve().parents[2] / "plugins"
+    eligible = set()
+    for path in sorted(root.glob("*/*/mosael.plugin.json")):
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        tools = manifest.get("tools") or {}
+        for declared in tools.get("declare") or []:
+            if not declared.get("internal") and is_content_transform(node_meta(declared)):
+                eligible.add(f"{manifest['id']}.{declared['name']}")
+    for name in ("dev.mosael.object-storage.storage_fetch", "dev.mosael.baidu-pan.pan_import",
+                 "dev.mosael.comfyui.import_outputs", "dev.mosael.manim.manim_still", "dev.mosael.remotion.remotion_animation"):
+        assert name in eligible, name
+    for name in ("dev.mosael.baidu-pan.pan_list", "dev.mosael.baidu-pan.pan_search", "dev.mosael.baidu-pan.pan_upload",
+                 "dev.mosael.comfyui.server_status", "dev.mosael.comfyui.list_workflows", "dev.mosael.comfyui.list_models",
+                 "dev.mosael.comfyui.interrupt", "dev.mosael.comfyui.clear_queue", "dev.mosael.comfyui.free_memory",
+                 "dev.mosael.object-storage.storage_upload", "dev.mosael.object-storage.storage_list",
+                 "dev.mosael.object-storage.storage_presign", "dev.mosael.manim.manim_setup",
+                 "dev.mosael.remotion.remotion_setup",
+                 #: 必填一串结构化的步骤 / 小节(JSON):画板的表单上填不了,在工作流或对话里用。
+                 "dev.mosael.manim.manim_explainer", "dev.mosael.remotion.remotion_explainer"):
+        assert name not in eligible, name
+
+
+def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
+    """参数规矩:工具格的表单里没有映射、原始 JSON、代码,没有 `{{…}}` 引用写法;说明是画板那一句。
+    接口给的就是这一份 —— 界面和智能体(list_board_producers)看到的一样。"""
+    from app.domain.boards.transforms import BOARD_GROUPS
+
+    client = fresh_client()
+    ws = _workspace(client)
+    _install_plugin(tmp_path)
+    _connect(_me(client))
+    listed = client.get("/api/boards/producers", params={"workspace_id": ws}, headers={"Accept-Language": "zh"})
+    assert listed.status_code == 200, listed.text
+    tools = [one for one in listed.json() if one["id"].startswith("node:")]
+    assert tools
+    for entry in tools:
+        for key, spec in entry["config"].items():
+            assert spec.get("type") not in ("template", "object", "code", "graph"), (entry["id"], key, spec)
+            assert spec.get("data_type") != "json", (entry["id"], key)
+            assert spec.get("editor") not in ("map", "json"), (entry["id"], key)
+            assert "{{" not in str(spec.get("description") or ""), (entry["id"], key)
+        assert entry["board_group"] in BOARD_GROUPS and entry["board_group_label"], entry["id"]
+        assert entry["board_description"] and "{{" not in entry["board_description"], entry["id"]
+    by_id = {one["id"]: one for one in tools}
+    #: 模板字段在画板上就是一段字;原始 JSON 的字段不出现;3D 场景那格的说明(教 `{{…}}` 写法的)不带过来。
+    assert by_id["node:translate"]["config"]["text"]["type"] == "text"
+    assert "extra" not in by_id["node:plugin.dev.test.boardtools.paint"]["config"]
+    assert "description" not in by_id["node:scene_render"]["config"]["scene_id"]
+    assert by_id["node:video_to_gif"]["board_description"] == "把一段视频做成 GIF 动图"
+    #: 按吃什么内容分组、同组挨在一起(菜单按相邻的同名组归组)。
+    groups = [one["board_group"] for one in tools]
+    assert groups == sorted(groups, key=BOARD_GROUPS.index)
+    assert by_id["node:translate"]["board_group"] == "text" and by_id["node:translate"]["board_group_label"] == "处理文字"
+    assert by_id["node:plugin.dev.test.boardtools.paint"]["board_group"] == "new"
+    assert by_id["node:plugin.dev.test.boardtools.shout"]["board_group"] == "text"
+    #: 内置的四个不在「添加 → 工具」里,不带分组。
+    assert all(one["board_group"] == "" for one in listed.json() if not one["id"].startswith("node:"))
 
 
 def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp_path) -> None:
@@ -415,7 +569,8 @@ def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp
         mine = {one.id: one for one in producers.list_producers(db, me)}
         theirs = {one.id for one in producers.list_producers(db, other)}
     tools = {one for one in mine if one.startswith("node:plugin.")}
-    assert tools == {f"node:plugin.dev.test.boardtools.{name}" for name in ("shout", "paint", "many", "boom", "sleep")}
+    #: 只有内容变换:列清单、看状态、装环境、必填 JSON 的那几个不在(工作流里照样用)。
+    assert tools == {f"node:plugin.dev.test.boardtools.{name}" for name in BOARD_TOOLS}
     #: 只读的不花钱不出门,别的按保守那边算。
     assert mine["node:plugin.dev.test.boardtools.shout"].effects == "none"
     assert mine["node:plugin.dev.test.boardtools.paint"].effects == "external"
@@ -434,12 +589,13 @@ def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp
     assert shout["hosts"] == ["action"] and shout["plugin_name"] == "我的工具箱"
     assert shout["config"]["text"]["board_sources"] == ["note", "document"]
     assert shout["config"]["instance_id"]["board_sources"] == [], "选连接的下拉不接上游"
-    transform = by_id["node:text_transform"]
-    assert transform["config"]["text"]["board_sources"] == ["note", "document"]
-    assert transform["config"]["op"]["board_sources"] == [], "固定选项的字段不接上游"
+    translate = by_id["node:translate"]
+    assert translate["config"]["text"]["board_sources"] == ["note", "document"]
+    assert translate["config"]["target_lang"]["board_sources"] == [], "固定选项的字段不接上游"
     assert by_id["node:video_to_gif"]["config"]["asset_id"]["board_sources"] == ["image", "video", "audio"]
     assert by_id["node:scene_render"]["config"]["scene_id"]["board_sources"] == ["scene"]
     assert "node:plugin.dev.test.boardtools.secret" not in by_id
+    assert "node:plugin.dev.test.boardtools.listing" not in by_id
 
     #: 只给宿主调的工具:画布上存着也不跑,说清楚为什么。
     board_id = _action_board(client, ws, "node:plugin.dev.test.boardtools.secret")
@@ -447,10 +603,21 @@ def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp
     assert refused.status_code == 400, refused.text
     assert "secret" in refused.json()["detail"]
 
+    #: 接着插件、工具也开着,只是它不是内容变换(清单会变,画布上存着这么一格是正常的):
+    #: 跑的时候说清楚它归工作流,而不是叫人去插件页建连接。
+    board_id = _action_board(client, ws, "node:plugin.dev.test.boardtools.listing")
+    refused = _run_tool(client, board_id, ws, "node:plugin.dev.test.boardtools.listing")
+    assert refused.status_code == 400, refused.text
+    assert "listing" in refused.json()["detail"] and "工作流" in refused.json()["detail"]
+    assert "run" not in next(one for one in refused_canvas(client, board_id, ws) if one["id"] == "a1")
 
-def test_内置的文字处理跑在便签上_产出新建在右边并连上线_重跑不覆盖() -> None:
+
+def test_工具格吃便签的字_产出新建在右边并连上线_重跑不覆盖(tmp_path) -> None:
     client = fresh_client()
     ws = _workspace(client)
+    _install_plugin(tmp_path)
+    _connect(_me(client))
+    shout = "node:plugin.dev.test.boardtools.shout"
     notes = [
         {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "hello"},
         {"id": "n2", "kind": "note", "x": 0, "y": 200, "text": "board"},
@@ -458,31 +625,36 @@ def test_内置的文字处理跑在便签上_产出新建在右边并连上线_
     #: 线的先后是 n2 在前 —— 拼起来按连线的先后,不按绑定里写的顺序。
     edges = [{"id": "e2", "source": "n2", "target": "a1"}, {"id": "e1", "source": "n1", "target": "a1"}]
     bindings = {"text": [{"from": "n1"}, {"from": "n2"}]}
-    board_id = _action_board(client, ws, "node:text_transform", config={"op": "upper"}, bindings=bindings,
-                             items=notes, edges=edges)
+    board_id = _action_board(client, ws, shout, bindings=bindings, items=notes, edges=edges)
 
-    placed = _run_tool(client, board_id, ws, "node:text_transform", config={"op": "upper"}, bindings=bindings)
+    placed = _run_tool(client, board_id, ws, shout, bindings=bindings)
     assert placed.status_code == 200, placed.text
     action = next(one for one in placed.json()["canvas"]["items"] if one["id"] == "a1")
     assert action["run"]["status"] in ("queued", "running")
-    assert list(action["form"]) [-1] == "producer" and action["form"]["producer"] == "node:text_transform"
+    assert list(action["form"]) [-1] == "producer" and action["form"]["producer"] == shout
 
     canvas = _settled(client, board_id, ws)
     action = next(one for one in canvas["items"] if one["id"] == "a1")
     assert action["run"] == {"status": "succeeded"}
     #: 工具格就是一份能反复跑的配置 —— 跑完不清表单。
-    assert action["form"]["config"] == {"op": "upper"} and action["form"]["bindings"] == bindings
+    assert action["form"]["config"] == {} and action["form"]["bindings"] == bindings
     [made] = _derived(canvas)
     assert made["kind"] == "note" and made["text"] == "BOARD\n\nHELLO"
-    #: 只落 board_outputs 点名的那个(字数不上画板),摆在工具格右边。
+    #: 只落 board_outputs 点名的那个(计数不上画板),摆在工具格右边。
     assert made["x"] > action["x"] + action["width"]
     assert made["form"] == {"producer": "write"}, "落成的便签和手放的一样能让 AI 改"
 
-    _run_tool(client, board_id, ws, "node:text_transform", config={"op": "lower"}, bindings=bindings)
+    #: 改了上游便签的字再跑:取的是这一刻的字,上一轮的产出留着。
+    board = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
+    next(one for one in board["canvas"]["items"] if one["id"] == "n1")["text"] = "again"
+    saved = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": board["revision"], "canvas": board["canvas"]})
+    assert saved.status_code == 200, saved.text
+    _run_tool(client, board_id, ws, shout, bindings=bindings)
     again = _settled(client, board_id, ws)
     first, second = _derived(again)
     assert first == made, "重跑把上一轮的产出换掉了"
-    assert second["text"] == "board\n\nhello" and second["x"] > first["x"]
+    assert second["text"] == "BOARD\n\nAGAIN" and second["x"] > first["x"]
     #: 版本号跟着回执涨 —— 客户端手里的旧快照存回来会撞 409,不会把派生出来的格子盖掉。
     stale = client.patch(f"/api/boards/{board_id}", json={
         "workspace_id": ws, "base_revision": placed.json()["revision"], "canvas": placed.json()["canvas"]})
@@ -622,8 +794,8 @@ def refused_canvas(client, board_id: str, ws: str) -> list[dict]:
 def test_数字字段填的不是数_起任务之前就拒() -> None:
     client = fresh_client()
     ws = _workspace(client)
-    board_id = _action_board(client, ws, "node:note_search")
-    refused = _run_tool(client, board_id, ws, "node:note_search", config={"query": "猫", "limit": "好多"})
+    board_id = _action_board(client, ws, "node:video_to_gif")
+    refused = _run_tool(client, board_id, ws, "node:video_to_gif", config={"fps": "好多"})
     assert refused.status_code == 400, refused.text
     items = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
     assert "run" not in next(one for one in items if one["id"] == "a1"), "没起任务,工具格不该进「在跑」"
@@ -636,12 +808,12 @@ def test_线断了绑定就摘掉_工具格不能当上游() -> None:
         "items": [
             {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "连着"},
             {"id": "n2", "kind": "note", "x": 0, "y": 0, "text": "线删了"},
-            {"id": "t0", "kind": "action", "x": 0, "y": 0, "form": {"producer": "node:template"}},
+            {"id": "t0", "kind": "action", "x": 0, "y": 0, "form": {"producer": "node:video_to_gif"}},
             {"id": "a1", "kind": "action", "x": 0, "y": 0, "form": {
-                "producer": "node:text_transform",
-                "config": {"op": "trim"},
-                "bindings": {"text": [{"from": "n1"}, {"from": "n2"}, {"from": "n1"}], "find": [{"from": "t0"}],
-                             "replace": [{"from": "gone"}]},
+                "producer": "node:translate",
+                "config": {"target_lang": "en"},
+                "bindings": {"text": [{"from": "n1"}, {"from": "n2"}, {"from": "n1"}], "engine": [{"from": "t0"}],
+                             "model": [{"from": "gone"}]},
             }},
         ],
         "edges": [{"source": "n1", "target": "a1"}, {"source": "t0", "target": "a1"}],
@@ -649,16 +821,16 @@ def test_线断了绑定就摘掉_工具格不能当上游() -> None:
     action = next(one for one in canvas["items"] if one["id"] == "a1")
     #: 同一格挑两次只算一次;线没了的摘掉;接在另一个工具格上的摘掉;一个字段全摘光了整个字段就没了。
     assert action["form"]["bindings"] == {"text": [{"from": "n1"}]}
-    assert action["form"]["config"] == {"op": "trim"}
+    assert action["form"]["config"] == {"target_lang": "en"}
 
     for bad in ({"text": "n1"}, {"text": [{"source": "n1"}]}, {"text": [{"from": ""}]}):
         with pytest.raises(BoardDomainError):
             normalize_canvas({"items": [{"id": "a1", "kind": "action", "x": 0, "y": 0,
-                                         "form": {"producer": "node:template", "bindings": bad}}]})
+                                         "form": {"producer": "node:translate", "bindings": bad}}]})
     for bad_config in ([1], {"x": float("nan")}):
         with pytest.raises(BoardDomainError):
             normalize_canvas({"items": [{"id": "a1", "kind": "action", "x": 0, "y": 0,
-                                         "form": {"producer": "node:template", "config": bad_config}}]})
+                                         "form": {"producer": "node:translate", "config": bad_config}}]})
     #: 正文格式只有便签有。
     with pytest.raises(BoardDomainError):
         normalize_canvas({"items": [{"id": "i", "kind": "image", "x": 0, "y": 0, "text_format": "json"}]})

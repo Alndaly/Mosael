@@ -424,24 +424,25 @@ describe("画板连线的层次与外观", () => {
 
 describe("拉线菜单里的「工具」一组", () => {
   //: 形状和 GET /api/boards/producers 发下来的一样。内置的四个不进这一组(它们挂在各自的格子上)。
-  const producer = (id: string, label: string, category: string, extra: Record<string, unknown> = {}) =>
+  const producer = (id: string, label: string, group: [string, string] | null, extra: Record<string, unknown> = {}) =>
     ({
-      id, type: id.replace(/^node:/, ""), label, description: `${label}的说明`, category, config: {}, outputs: [],
+      id, type: id.replace(/^node:/, ""), label, description: `${label}的说明`, category: "工作流里的分组", config: {}, outputs: [],
       output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {}, hosts: ["action"],
-      permission: "edit", effects: "none", fills_empty_slot: false, ...extra,
+      permission: "edit", effects: "none", fills_empty_slot: false,
+      board_group: group?.[0] ?? "", board_group_label: group?.[1] ?? "", board_description: `${label}一句话`, ...extra,
     }) as unknown as NonNullable<React.ComponentProps<typeof BoardCanvas>["producers"]>[number];
   const producers = [
-    producer("write", "写字", "", { hosts: ["note"], fills_empty_slot: true }),
-    producer("node:text_transform", "文本处理", "数据"),
-    producer("node:plugin.cut.out", "去背景", "插件", { plugin_name: "我的抠图", tool_name: "remove_bg" }),
+    producer("write", "写字", null, { hosts: ["note"], fills_empty_slot: true }),
+    producer("node:translate", "翻译", ["text", "处理文字"]),
+    producer("node:plugin.cut.out", "去背景", ["image", "处理图片"], { plugin_name: "我的抠图", tool_name: "remove_bg" }),
   ];
 
-  it("分组照节点面板的分组;能搜(连插件的调用名一起);回车选定 —— 工具格落在占位那儿、连好线、写明跑哪个工具", async () => {
+  it("分组按工具对内容做什么(不照搬工作流面板);能搜(连插件的调用名一起);回车选定 —— 工具格落在占位那儿、连好线、写明跑哪个工具", async () => {
     const view = await mount(board, { producers });
     release(300, 200);
 
     const groups = [...document.querySelectorAll("[data-pending-link-group]")].map((one) => one.textContent);
-    expect(groups).toEqual(["boardsGroupCreate", "boardsGroupTools · 数据", "boardsGroupTools · 插件"]);
+    expect(groups).toEqual(["boardsGroupCreate", "处理文字", "处理图片"]);
     expect(item("写字")).toBeUndefined();
     //: 种类多了,打开时焦点在搜索框上 —— 直接打字就是在找。
     const search = document.querySelector<HTMLInputElement>('[data-pending-link-menu] input[type="search"]')!;

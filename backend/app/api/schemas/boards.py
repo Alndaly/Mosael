@@ -76,3 +76,10 @@ class BoardProducerOut(WorkflowNodeTypeOut):
     effects: str
     #: 能不能挑来填一个空槽(一种格子有几个这样的产出者时,面板上给一个切换)。
     fills_empty_slot: bool = False
+    #: 工具格在「添加」菜单里归哪一组:按它吃的是什么内容分(new / image / video / audio / text / scene /
+    #: asset,见 boards.transforms.BOARD_GROUPS),不是工作流面板的分组。内置的四个是空串。
+    board_group: str = ""
+    #: 那一组给人看的名字(按请求的语言翻好)。
+    board_group_label: str = ""
+    #: 给创作者看的一句说明 —— 不是工作流节点那段写给搭流程的人的说明。
+    board_description: str = ""
