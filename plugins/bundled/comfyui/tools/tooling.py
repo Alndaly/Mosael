@@ -6,9 +6,8 @@
 「运行时报出的工具」):
 
 - 工具名 `wf_<12 位>`:取 ComfyUI 保存工作流时写进图里的 id(新版前端的 UUID)—— **改名、挪目录都不变**,
-  工作流节点和智能体记着的名字不会因此失效;老版本存的图没有 id,退到路径的哈希(改名就是另一个工具);
-  两张图撞了同一个 id(「另存为」有时会带着原来的 id),后出现的那张退到路径的哈希;粘贴的 API 模板是
-  `wf_api_template`;
+  工作流节点和智能体记着的名字不会因此失效;老版本存的图没有 id(或是全零的占位),退到路径的哈希(改名就是
+  另一个工具);几张图撞了同一个 id(拷出来的副本),它们都退到路径的哈希;粘贴的 API 模板是 `wf_api_template`;
 - 入参从图里读:提示词 / 反向提示词、每个读素材的节点一格(`image_10`、`mask_11`、`video_1`…,
   `format: "asset"` 带着素材种类)、每个可调输入一格(`steps_3`、`lora_name_10`…,名字、范围、常用与否
   和生成参数同一套,见 labels);种子、尺寸、一次几张收进「高级」;
@@ -80,22 +79,33 @@ def _hash(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
 
 
+def _ident_key(entry: models.Entry) -> str:
+    ident = re.sub(r"[^0-9a-fA-F]", "", entry.ident).lower()
+    # 全零的 UUID 是老版本前端的占位(新版前端存盘前会换掉它),不是这张图自己的 id
+    return ident[:12] if len(ident) >= 12 and ident.strip("0") else ""
+
+
 def tool_names(entries: list[models.Entry]) -> dict[str, str]:
-    """模型 id → 工具名。内置文生图不是工具(它只是生成那一路的兜底);转不过来的图没有工具。"""
+    """模型 id → 工具名。内置文生图不是工具(它只是生成那一路的兜底);转不过来的图没有工具。
+
+    **几张图带着同一个 id**(在 ComfyUI 外面拷了一份文件、老版本「另存为」带着原来的 id)时,它们都退到路径的
+    哈希:谁拿那个 id 的名字要是按路径顺序定,新拷出来的「a 副本.json」排在前面就抢走了原来那张的名字,存着的
+    工作流节点从此悄悄跑的是另一张图。宁可名字变了、调用时说「找不到」,也不张冠李戴。
+    """
+    counts: dict[str, int] = {}
+    for entry in entries:
+        key = _ident_key(entry)
+        if key and not entry.problem:
+            counts[key] = counts.get(key, 0) + 1
     names: dict[str, str] = {}
-    taken: set[str] = set()
     for entry in entries:
         if entry.problem or entry.id == models.BUILTIN:
             continue
         if entry.id == models.TEMPLATE:
-            name = TEMPLATE_TOOL
-        else:
-            ident = re.sub(r"[^0-9a-fA-F]", "", entry.ident).lower()
-            name = f"wf_{ident[:12]}" if len(ident) >= 12 else f"wf_{_hash(entry.id)}"
-            if name in taken:
-                name = f"wf_{_hash(entry.id)}"
-        taken.add(name)
-        names[entry.id] = name
+            names[entry.id] = TEMPLATE_TOOL
+            continue
+        key = _ident_key(entry)
+        names[entry.id] = f"wf_{key}" if key and counts[key] == 1 else f"wf_{_hash(entry.id)}"
     return names
 
 

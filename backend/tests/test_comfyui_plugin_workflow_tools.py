@@ -54,6 +54,18 @@ def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
     assert PORTRAIT_TOOL in renamed and renamed[PORTRAIT_TOOL]["label"]["zh"] == "工作流 · people/人像"
 
 
+def test_几张图撞了同一个id_都退到路径哈希_不抢名字(comfy, tmp_path: Path) -> None:
+    """在 ComfyUI 外面拷了一份 portrait.json:按路径排在前面的副本不能抢走原来那张的工具名 ——
+    否则存着的工作流节点从此悄悄跑的是副本。全零的 UUID(老版本前端的占位)也不算 id。"""
+    comfy.state.workflows["a 副本.json"] = comfy.state.workflows["portrait.json"]
+    comfy.state.workflows["zero.json"] = {**comfy.state.workflows["portrait.json"],
+                                          "id": "00000000-0000-0000-0000-000000000000"}
+    tools = _tools(comfy.url, tmp_path)
+    assert PORTRAIT_TOOL not in tools
+    for path in ("portrait.json", "a 副本.json", "zero.json"):
+        assert "wf_" + hashlib.sha1(path.encode()).hexdigest()[:12] in tools, path
+
+
 def test_入参从这张图里推(comfy, tmp_path: Path) -> None:
     tool = _tools(comfy.url, tmp_path)[PORTRAIT_TOOL]
     schema = tool["input_schema"]
