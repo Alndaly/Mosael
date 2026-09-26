@@ -545,6 +545,31 @@ def test_卸载连目录一起删_否则下次扫描又装回来() -> None:
     assert packages(client) == {}
 
 
+def test_一个包的清单坏了_别的包照样登记_扫描说清是哪个() -> None:
+    """此前第一个解析失败的清单就让整次扫描抛出去:目录里躺着一个坏掉的第三方包,别的包就再也
+    登记不上,从市场装新插件(装完要扫一遍)也跟着报错。坏的那个**已有的记录不动** —— 作者手滑
+    改坏了清单,不该连带清掉用户在它上面填过的凭据。"""
+    client = install(SIMPLE)
+    broken = plugins_root() / "broken"
+    broken.mkdir()
+    (broken / "mosael.plugin.json").write_text(json.dumps({**SIMPLE, "id": "dev.broken", "version": ""}), encoding="utf-8")
+    fresh = plugins_root() / "fresh"
+    fresh.mkdir()
+    (fresh / "mosael.plugin.json").write_text(json.dumps({**SIMPLE, "id": "dev.fresh"}), encoding="utf-8")
+    (fresh / "main.py").write_text(ENV_ENTRY, encoding="utf-8")
+    # 已经登记过的包,清单被改坏了:记录原样留着,连接也在。
+    simple_dir = next(path for path in plugins_root().iterdir() if path.name == "simple")
+    (simple_dir / "mosael.plugin.json").write_text("{ 写坏了", encoding="utf-8")
+
+    scanned = client.post("/api/plugins/scan")
+    assert scanned.status_code == 422
+    assert "broken" in scanned.json()["detail"] and "simple" in scanned.json()["detail"]
+    listed = packages(client)
+    assert "dev.fresh" in listed, "一个坏包挡住了别的包"
+    assert "dev.broken" not in listed
+    assert listed["dev.simple"]["instances"], "清单写坏了一次,连接不该跟着没了"
+
+
 def test_两种插件节点对没填的入参一个说法() -> None:
     """编辑器给没填的格子种的是空串;上游引用落空插值出来也是空串。插件节点(`plugin.<包>.<工具>`)
     早就把它们当"没给",而通用的 plugin_tool 节点原样交给工具 —— 必填校验看见键在,就放行了,

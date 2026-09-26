@@ -121,6 +121,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "工具 {tool} 只供 Mosael 内部使用,不能直接调用",
         "en": "The tool {tool} is reserved for Mosael itself and can't be called directly.",
     },
+    "pluginErr_scanSkipped": {
+        "zh": "其余插件都已登记,这几个没登记上:{detail}",
+        "en": "All other plugins were registered; these could not be: {detail}",
+    },
     "pluginErr_runtimeCrashed": {
         "zh": "插件运行时异常: {detail}",
         "en": "Plugin runtime error: {detail}",

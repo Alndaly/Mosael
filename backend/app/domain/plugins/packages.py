@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -27,21 +28,40 @@ logger = logging.getLogger(__name__)
 #: 兼容负担在升级那一刻付一次,读取代码里不留分支。
 MANIFEST_FILENAMES = (CANONICAL_FILENAME, *LEGACY_FILENAMES)
 
-def scan(db: Session, plugins_dir: Path) -> list[PluginPackage]:
+@dataclass(frozen=True)
+class ScanResult:
+    """一次扫描:登记上的包,和**没登记上的那几个目录**(目录名 → 为什么)。"""
+
+    packages: list[PluginPackage]
+    problems: dict[str, str]
+
+
+def scan(db: Session, plugins_dir: Path) -> ScanResult:
     """扫描插件目录。新包只登记不启用;目录已经不在的包连同它的实例一起清掉。
 
     **无配置的包自动建一个默认实例**:text-toolkit 这种装上就能用的东西,不该逼用户先去
     "新建一个连接"。有配置的包留给用户自己建 —— 因为建之前我们不知道它该叫什么名字。
+
+    **一个包的清单写坏了,不挡别的包。** 此前第一个解析失败的清单就让整次扫描抛出去:插件目录里
+    躺着一个坏掉的第三方包,别的包就再也登记不上,从市场装新插件(装完要扫一遍)也跟着报错。
+    现在坏的那个跳过、原因交给调用方说,**它已有的记录不动** —— 作者手滑改坏了清单,不该连带
+    清掉用户在它上面填过的凭据;改好再扫一遍就对上了。
     """
     plugins_dir.mkdir(parents=True, exist_ok=True)
     scanned: list[PluginPackage] = []
+    problems: dict[str, str] = {}
     for manifest_path in _iter_manifest_paths(plugins_dir):
-        scanned.append(register(db, manifest_path))
+        try:
+            with db.begin_nested():
+                scanned.append(register(db, manifest_path))
+        except PluginDomainError as exc:
+            problems[manifest_path.parent.name] = str(exc)
+            logger.warning("插件目录 %s 没登记上:%s", manifest_path.parent, exc)
     _prune(db, plugins_dir)
     db.commit()
     for package in scanned:
         db.refresh(package)
-    return scanned
+    return ScanResult(packages=scanned, problems=problems)
 
 
 def register(db: Session, manifest_path: Path) -> PluginPackage:
@@ -158,4 +178,4 @@ def instances_of(db: Session, package_id: str) -> list[PluginInstance]:
     )
 
 
-__all__ = ["MANIFEST_FILENAMES", "instances_of", "register", "scan", "uninstall"]
+__all__ = ["MANIFEST_FILENAMES", "ScanResult", "instances_of", "register", "scan", "uninstall"]

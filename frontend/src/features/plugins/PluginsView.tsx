@@ -80,7 +80,8 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   });
   const scan = useMutation({
     mutationFn: () => rescanPlugins(),
-    onSuccess: () => invalidatePluginDependents(qc),
+    // 失败时也刷新:扫描跳过坏掉的那个包、照样登记别的(后端说清是哪个),列表得跟上登记上的那些。
+    onSettled: () => invalidatePluginDependents(qc),
   });
 
   const list = packages.data ?? [];

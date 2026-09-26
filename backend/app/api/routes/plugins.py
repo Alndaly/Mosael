@@ -60,7 +60,7 @@ def _fail(exc: PluginDomainError, status: int = 422) -> HTTPException:
 def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     ensure_deployment_admin(db, user)
     try:
-        installer.sync(db, settings.plugins_dir, owner_user_id=user.id)
+        installer.raise_problems(installer.sync(db, settings.plugins_dir, owner_user_id=user.id))
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _packages(db, user)

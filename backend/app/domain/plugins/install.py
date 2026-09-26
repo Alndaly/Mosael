@@ -10,16 +10,22 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr
 from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins import instances as inst
 from app.domain.plugins import packages as pkg
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest, manifest_of
 
 
-def sync(db: Session, plugins_dir: Path, *, owner_user_id: str = "") -> list[PluginPackage]:
-    """扫描插件目录并把实例对齐。插件页的「扫描插件」走这条。"""
-    scanned = pkg.scan(db, plugins_dir)
-    for package in scanned:
+def sync(db: Session, plugins_dir: Path, *, owner_user_id: str = "") -> pkg.ScanResult:
+    """扫描插件目录并把实例对齐。插件页的「扫描插件」和装完插件之后都走这条。
+
+    有包没登记上时,**别的包照样对齐完**;没登记上的那几个在结果里(见 packages.scan),
+    要不要说给人听由调用方定(见 `raise_problems`)。
+    """
+    result = pkg.scan(db, plugins_dir)
+    for package in result.packages:
         manifest = manifest_of(package)
         _ensure_default_instance(db, package, manifest, owner_user_id)
         for instance in pkg.instances_of(db, package.id):
@@ -27,7 +33,20 @@ def sync(db: Session, plugins_dir: Path, *, owner_user_id: str = "") -> list[Plu
             # 重填是我们的问题,不是他的。
             inst.reconcile_fields(db, instance, manifest)
             _seed(db, instance, manifest)
-    return scanned
+    return result
+
+
+def raise_problems(result: pkg.ScanResult) -> None:
+    """扫描里有没登记上的包就说清是哪几个、为什么。
+
+    「扫描插件」按钮要说:用户点它就是想知道目录里有什么。从市场装一个包之后不说:装的那个在
+    装之前就验过清单,别处一个坏掉的包不该让这次安装看起来失败了(它已经记进日志)。
+    """
+    if result.problems:
+        raise PluginDomainError(
+            "pluginErr_scanSkipped",
+            detail=tr("punct_listSep").join(f"{folder}: {why}" for folder, why in sorted(result.problems.items())),
+        )
 
 
 def _ensure_default_instance(
@@ -63,4 +82,4 @@ def _seed(db: Session, instance: PluginInstance, manifest: Manifest) -> None:
     inst.seed_capabilities(db, instance, manifest, [str(t["name"]) for t in manifest.declared_tools if t.get("name")])
 
 
-__all__ = ["sync"]
+__all__ = ["raise_problems", "sync"]
