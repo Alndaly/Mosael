@@ -188,7 +188,7 @@ export function ActionComposer({
           底栏一格按内容高、永远在面板底边。 */}
       <div
         data-action-composer=""
-        className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel grid max-h-[min(520px,70vh)] w-[400px] grid-rows-[minmax(0,1fr)_auto] overflow-hidden")}
+        className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel grid max-h-[min(520px,70vh)] w-[400px] grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden")}
       >
         <div data-action-composer-body="" className="grid min-h-0 content-start gap-3 overflow-y-auto p-3">
         {tool === undefined ? (
