@@ -424,7 +424,8 @@ def tunable(
         defs = _input_defs(object_info, class_type)
         for name, value in (node.get("inputs") or {}).items():
             order += 1
-            if not _literal(value) or name in labels.HIDDEN_INPUTS:
+            if not isinstance(value, (str, int, float, bool)) or name in labels.HIDDEN_INPUTS:
+                # 连线,以及包成 {"__value__": …} 的数组值(参数表只有标量控件)
                 continue
             if isinstance(value, str) and _PLACEHOLDER.search(value):
                 continue  # 占位符由宿主的主控件填,不再单独列

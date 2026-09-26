@@ -345,6 +345,14 @@ def test_其余可调的输入带着ComfyUI给的类型和范围(graph, convert)
     assert "5.batch_size" not in parameters, "一次几张是宿主的控件(num_images)"
 
 
+def test_值不是一个标量的输入不列成参数(graph) -> None:
+    """数组值的 widget 在 API 图里包成 {"__value__": [...]}(曲线、点列):参数表只有标量控件,列出来就是一个
+    没有默认值的文本框,用户一填就把那一格的结构换成一串字。"""
+    api = {"1": {"class_type": "Points", "inputs": {"points": {"__value__": [1, 2]}, "radius": 3}}}
+    info = {"Points": {"input": {"required": {"points": ["STRING", {}], "radius": ["INT", {"default": 1}]}}}}
+    assert list(graph.tunable(api, info)) == ["1.radius"]
+
+
 def test_常用的在前_细节收进高级(graph, convert) -> None:
     parameters = _portrait(graph, convert)["parameters"]
     tuned = [key for key in parameters if "." in key]
