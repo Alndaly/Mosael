@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 from typing import Any
 
@@ -50,6 +51,15 @@ PLUGIN_META_TOOLS = frozenset({"list_plugin_tools", "invoke_plugin_tool"})
 PLUGIN_TOOL_PREFIX = "plugin__"
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_]+")
 
+#: 函数名的长度上限:各家里最严的那个(OpenAI 兼容接口、Gemini 都是 64)。
+#:
+#: 连接 id 是 32 位十六进制,`plugin__<id>__` 就占了 42 个字符,留给工具名的只剩 22 个。而 MCP 服务的
+#: 工具名常常更长(TikHub 的 `fetch_one_video_by_share_url`、Blender 的 `get_blendfile_summary_datablocks`)——
+#: 这样的工具一勾上,**整轮请求**被供应商以「函数名太长」拒掉,智能体连一句话都回不了。
+MAX_AGENT_TOOL_NAME = 64
+#: 缩短时带上的指纹长度(十六进制位)。它保证缩短之后仍然一个名字对一个工具。
+_NAME_DIGEST = 8
+
 
 def agent_tool_name(instance_id: str, tool_name: str) -> str:
     """插件工具在智能体工具表里的名字。
@@ -58,8 +68,19 @@ def agent_tool_name(instance_id: str, tool_name: str) -> str:
 
     各家 API 对函数名的字符集要求都是 `[A-Za-z0-9_-]`,非法字符统一折成下划线。折叠可能撞名,
     所以调用时是反查这份清单、按折叠后的名字匹配,而不是把名字劈开再拼回 id —— 拼回去才会错。
+
+    **不超过 MAX_AGENT_TOOL_NAME。** 放得下就是完整的 `plugin__<连接>__<工具>`(已有的名字一个不变);
+    放不下时连接 id 只留前 8 位、工具名能留多少留多少,末尾接上完整名字的指纹 —— 模型仍读得出
+    是哪个工具,两个工具也不会缩成同一个名字。
     """
-    return f"{PLUGIN_TOOL_PREFIX}{_SAFE_NAME.sub('_', instance_id)}__{_SAFE_NAME.sub('_', tool_name)}"
+    safe_instance = _SAFE_NAME.sub("_", instance_id)
+    safe_tool = _SAFE_NAME.sub("_", tool_name)
+    full = f"{PLUGIN_TOOL_PREFIX}{safe_instance}__{safe_tool}"
+    if len(full) <= MAX_AGENT_TOOL_NAME:
+        return full
+    digest = hashlib.sha256(full.encode("utf-8")).hexdigest()[:_NAME_DIGEST]
+    head = f"{PLUGIN_TOOL_PREFIX}{safe_instance[:8]}__{safe_tool}"
+    return f"{head[: MAX_AGENT_TOOL_NAME - _NAME_DIGEST - 1]}_{digest}"
 
 
 def _plugin_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:

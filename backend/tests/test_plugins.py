@@ -387,6 +387,33 @@ def test_插件工具在智能体清单里是一等公民_且按连接区分() -
     assert result.json()["result"]["loud"] == "HI"
 
 
+def test_智能体函数名不超过_64_个字符_长名字的工具照样调得到() -> None:
+    """连接 id 就占了 32 位,`plugin__<id>__` 只给工具名留 22 个字符。MCP 服务的工具名常常更长
+    (TikHub 的 `fetch_one_video_by_share_url`)—— 这样的工具一勾上,整轮请求就被供应商以
+    「函数名太长」拒掉(OpenAI 兼容接口、Gemini 都限 64),智能体连一句话都回不了。"""
+    import re
+
+    from app.domain.agent.tool_manifest import MAX_AGENT_TOOL_NAME, agent_tool_name
+
+    long_tool = "fetch_one_video_by_share_url_with_extras"
+    manifest = {**SIMPLE, "tools": {"expose": "all", "declare": [
+        {**SIMPLE["tools"]["declare"][0], "name": long_tool},
+        {**SIMPLE["tools"]["declare"][0], "name": long_tool + "_v2"},
+    ]}}
+    client = install(manifest)
+    instance = packages(client)["dev.simple"]["instances"][0]
+    client.patch(f"/api/plugins/instances/{instance['id']}", json={"enabled": True})
+    names = [t["name"] for t in client.get("/api/agent/tools").json() if t["name"].startswith("plugin__")]
+    assert len(names) == 2 and len(set(names)) == 2, "两个工具缩短之后撞成了一个名字"
+    for name in names:
+        assert len(name) <= MAX_AGENT_TOOL_NAME and re.fullmatch(r"[A-Za-z0-9_-]+", name), name
+        assert "fetch_one_video" in name, "缩短之后模型得还认得出是哪个工具"
+    called = client.post(f"/api/agent/tools/{agent_tool_name(instance['id'], long_tool)}", json={"arguments": {"text": "hi"}})
+    assert called.status_code == 200 and called.json()["result"]["loud"] == "HI"
+    # 放得下的名字一个字不变:已经存在会话里、确认卡上的名字不受影响。
+    assert agent_tool_name(instance["id"], "shout") == f"plugin__{instance['id']}__shout"
+
+
 def test_停用后智能体那条路径立刻关上() -> None:
     client = install(SIMPLE)
     instance = packages(client)["dev.simple"]["instances"][0]
