@@ -145,7 +145,10 @@ def _invoke_plugin_tool(
             "summary": confirmation.summary,
         })}
     if workspace_id:
-        ensure_workspace_member(db, user, workspace_id)
+        # 和插件页「试一下」同一道闸:带着工作区跑的插件工具会读它的素材、把产出收进它的素材库。
+        # 此前这里只查「是不是成员」—— 只读成员经 MCP 直连带上工作区 id,就能往里写素材
+        # (effects: none 的工具不开卡,「收进素材库」正是 none)。
+        ensure_workspace_perm(db, user, workspace_id, "edit")
     try:
         invocation = invoke(db, match["instance_id"], match["name"], body.arguments, workspace_id=workspace_id or None)
     except PluginDomainError as exc:

@@ -108,3 +108,26 @@ def test_context_free_tools_remain_compatible(panel):
     result = client.post(f"/api/plugins/instances/{instance_id}/tools/pan_list/invoke", json={"input": {}})
     assert result.status_code == 200
     assert result.json()["status"] == "succeeded", result.json()
+
+
+def test_智能体那条路直接跑的工具也要工作区的写权限(panel):
+    """插件页「试一下」要写权限(工具会读素材、产出文件入库)。智能体那条路上不开卡的工具(effects: none,
+    比如把网盘文件收进素材库)此前只查「是不是成员」—— 一个只读成员用 MCP 直连带上工作区 id,就能往
+    他只读的那个工作区里写素材。"""
+    from app.domain.agent.tool_manifest import agent_tool_name
+
+    client, _, instance_id, _, user = panel
+    with SessionLocal() as db:
+        other = Workspace(name="只读的工作区")
+        db.add(other)
+        db.flush()
+        db.add(WorkspaceMember(workspace_id=other.id, user_id=user, role="viewer"))
+        db.commit()
+        other_id = other.id
+    client.patch(f"/api/plugins/instances/{instance_id}/capabilities", json={"tools": {"pan_import": True}})
+    name = agent_tool_name(instance_id, "pan_import")
+    result = client.post(f"/api/agent/tools/{name}?workspace_id={other_id}", json={"arguments": {"fs_id": "1"}})
+    assert result.status_code == 403, result.text
+    with SessionLocal() as db:
+        assert db.scalar(select(PluginInvocation.id)) is None
+        assert db.scalar(select(Asset.id).where(Asset.workspace_id == other_id)) is None
