@@ -70,7 +70,11 @@ def _resolve_local(spec: dict[str, Any], scratch: Path) -> Path:
     # **必须落在给它的暂存目录里**。插件本来就以用户身份运行、读得到用户读得到的一切,
     # 所以这不挡提权;它挡的是「随手交出一个别处的文件」—— 比如把 ~/.ssh/id_rsa 收进素材库,
     # 而素材库里的东西是能被发布出去的。限定目录还让清理变成一件确定的事。
-    if not str(path).startswith(str(scratch.resolve()) + "/"):
+    #
+    # 按路径的**段**比(is_relative_to),不拼 `+ "/"` 比字符串前缀:Windows 上分隔符是 `\\`,
+    # 那样拼出来的前缀谁都对不上,插件写好的每一份产出都被判成「不在暂存目录里」。
+    root = scratch.resolve()
+    if path == root or not path.is_relative_to(root):
         raise ArtifactError("pluginErr_artifactOutsideScratch", env=SCRATCH_ENV)
     if not path.is_file():
         raise ArtifactError("pluginErr_artifactMissing")
@@ -86,8 +90,13 @@ def _download(spec: dict[str, Any], scratch: Path) -> Path:
     if not url.startswith(("http://", "https://")):
         raise ArtifactError("pluginErr_artifactBadScheme")
     headers = {str(k): str(v) for k, v in (spec.get("headers") or {}).items()}
-    name = str(spec.get("filename") or "").strip() or "download"
-    target = scratch / Path(name).name
+    # 名字是插件给的:只取最后一段,`.` / `..` / 空的当没给。每次下载落进**自己的**子目录 ——
+    # 直接落在暂存目录顶层的话,一份叫 `out.png` 的下载会盖掉插件自己写在那儿、还没收走的 `out.png`,
+    # 叫 `inputs` 的会撞上宿主放输入素材的那个目录。
+    name = Path(str(spec.get("filename") or "").strip()).name
+    if name in ("", ".", ".."):
+        name = "download"
+    target = Path(tempfile.mkdtemp(prefix=".download-", dir=scratch)) / name
     written = 0
     try:
         with RetryingClient(timeout=DOWNLOAD_TIMEOUT_SECONDS, headers=headers, follow_redirects=True) as client:

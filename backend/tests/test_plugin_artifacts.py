@@ -224,6 +224,48 @@ class Test交出下载凭据:
             artifacts._download({"url": "https://e/big"}, scratch)
 
 
+    @pytest.mark.parametrize("filename", ["..", ".", "inputs", "out.png", "../../etc/passwd"])
+    def test_下载的名字撞不上别的东西(self, tmp_path, monkeypatch, filename) -> None:
+        """名字是插件给的。此前直接落在暂存目录顶层:`..` 落到暂存目录的上一层(打开一个目录写,
+        炸成一句看不懂的错),`out.png` 盖掉插件自己写在那儿、还没收走的同名产出。"""
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def iter_bytes(self):
+                yield b"downloaded"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        class FakeClient:
+            def __init__(self, **kw):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def stream(self, method, url):
+                return FakeResponse()
+
+        monkeypatch.setattr(artifacts, "RetryingClient", FakeClient)
+        scratch = tmp_path / "out"
+        (scratch / "inputs").mkdir(parents=True)
+        (scratch / "out.png").write_bytes(b"plugin wrote this")
+        path = artifacts._download({"url": "https://e/x", "filename": filename}, scratch)
+        assert path.read_bytes() == b"downloaded"
+        assert path.resolve().is_relative_to(scratch.resolve())
+        assert (scratch / "out.png").read_bytes() == b"plugin wrote this"
+        assert artifacts.fetch({"path": str(path)}, scratch) == path.resolve()
+
+
 class Test收口在唯一那条执行路径:
     def test_产出换成_asset_id(self, tmp_path) -> None:
         """换掉而不是两个都留:留着的话下游会拿到一个指向已删暂存目录的路径 —— 它在返回的
