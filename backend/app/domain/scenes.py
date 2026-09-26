@@ -547,6 +547,12 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
         if project is None or project.workspace_id != scene.workspace_id:
             raise SceneDomainError("sceneErr_projectNotInWorkspace")
     content = SceneContent.model_validate(scene.content)
+    if not shot_id:
+        #: 没指定镜头:场景只有一个时就是它(表单把它显示成当前值,见节点声明的 sole_option_default);
+        #: 有好几个时不猜 —— 渲错了镜头的参考比报错更难发现。
+        if len(content.shots) != 1:
+            raise SceneDomainError("sceneErr_pickShot", shots=", ".join(shot.name for shot in content.shots))
+        shot_id = content.shots[0].id
     library = model_library(db, scene, content)
     try:
         shot = find_shot(content, shot_id)

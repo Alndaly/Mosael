@@ -81,9 +81,18 @@ def binding_sink(key: str, spec: Any) -> str | None:
 
 
 def bindable_kinds(key: str, spec: Any) -> list[str]:
-    """这个字段能接哪几种上游格子(画板项的 kind)。给界面列绑定用。"""
+    """这个字段能接哪几种上游格子(画板项的 kind)。给界面列绑定用,写绑定、运行时取值也认这一份。
+
+    素材字段声明了只收哪几种素材(`media`,见 workflows.config_media)时只接那几种格子:转写只吃
+    音频和视频,接一张图片进去只会在运行时报错。
+    """
+    from app.domain.workflows import config_media
+
     sink = binding_sink(key, spec)
-    return list(_SOURCE_KINDS[sink]) if sink else []
+    if not sink:
+        return []
+    media = config_media(spec) if sink == "asset" else ()
+    return [kind for kind in _SOURCE_KINDS[sink] if not media or kind in media]
 
 
 def _is_list_field(key: str, spec: dict[str, Any]) -> bool:
@@ -91,10 +100,10 @@ def _is_list_field(key: str, spec: dict[str, Any]) -> bool:
     return key == "asset_ids" or key.endswith("_asset_ids")
 
 
-def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str) -> str | None:
+def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str, kinds: list[str]) -> str | None:
     """上游一格在这种字段里给出什么值。给不出(种类不对、还没有产出)回 None。"""
     kind = source.get("kind")
-    if kind not in _SOURCE_KINDS[sink]:
+    if kind not in kinds:
         return None
     if sink == "text":
         if kind == "note":
@@ -146,9 +155,10 @@ def check_bindings(
                 raise BoardInputError("boardErr_bindingSourceMissing", field=field, source=source_id)
             if (source_id, item_id) not in wired:
                 raise BoardInputError("boardErr_bindingNotWired", field=field, source=source_id, item_id=item_id)
-            if source.get("kind") not in _SOURCE_KINDS[sink]:
+            kinds = bindable_kinds(field, spec)
+            if source.get("kind") not in kinds:
                 raise BoardInputError("boardErr_bindingKindMismatch", field=field, source=source_id,
-                                      kind=str(source.get("kind")), kinds=", ".join(_SOURCE_KINDS[sink]))
+                                      kind=str(source.get("kind")), kinds=", ".join(kinds))
 
 
 def resolve_bindings(
@@ -175,11 +185,12 @@ def resolve_bindings(
         if sink is None:
             continue
         wanted = {ref["from"] for ref in refs}
+        kinds = bindable_kinds(field, spec)
         values = [
             value
             for source_id in order
             if source_id in wanted and source_id in by_id
-            for value in [_value_of(db, board.workspace_id, by_id[source_id], sink)]
+            for value in [_value_of(db, board.workspace_id, by_id[source_id], sink, kinds)]
             if value is not None
         ]
         if not values:

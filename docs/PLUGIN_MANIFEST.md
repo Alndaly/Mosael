@@ -394,7 +394,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 - 一次最多新建 12 格,超出的合进最后一张 JSON 便签;一个返回几百项的工具,在画板上请交一个
   汇总字段 + `board_outputs` 只点它。
 - **归哪一组、一句话说明**:「添加」菜单按工具**吃什么内容**分组(产出新素材 / 处理图片 / 视频 / 音频 /
-  文字 / 3D 场景 / 素材)。缺省按字段推:素材字段写了 `x-media` 就归那一种,没有素材字段、交出素材的归
+  文字 / 3D 场景 / 素材)。缺省按字段推:素材字段的 `x-media` 只有一种就归那一种,没有素材字段、交出素材的归
   「产出新素材」。想指定就在 `node` 块写 `"board_group": "image"`;菜单和格子上那句说明缺省取 `description`
   的第一句,写给画板的另写 `"board_description": {"zh": "…", "en": "…"}` —— 说它把内容变成什么,不说输出口
   和引用写法。
@@ -520,7 +520,8 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 同一份 `input_schema` 在工作流里是节点表单,在插件页是「试一下」的表单 —— 两处是**同一个表单组件**,按同一份字段
 声明渲染(`GET /api/plugins` 里每个工具带着 `form`,就是节点目录里的那一份):`title` 是标签;`description` 按行内
 Markdown 渲染;`default` 是占位提示;`enum` 是下拉,`boolean` 是「是 / 否」下拉;`integer` / `number` 是数字;
-`format: "asset"` 是素材选择器,`x-media: "image" | "video" | "audio"` 让它只列那一种素材;素材数组是挑出来的一排,
+`format: "asset"` 是素材选择器,`x-media: "image" | "video" | "audio"` 让它只列那一种素材(收几种就写成列表,
+如 `["audio", "video"]`;画板上也只有这几种格子接得上);素材数组是挑出来的一排,
 不是 JSON 框;`x-advanced` 收进「高级选项」;字符串上 `x-multiline` 给高一点的编辑框。
 
 表单里填的都是文字。宿主在交给你之前**按 `input_schema` 把 `integer` / `number` / `boolean` 转回类型**

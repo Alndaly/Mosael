@@ -276,7 +276,10 @@ describe("试跑表单就是工作流节点的那张表单", () => {
     expect(screen.getByText("还有必填参数没填")).toBeTruthy();
 
     const image = document.querySelector<HTMLElement>('[data-field-key="image_10"]')!;
-    fireEvent.click(within(image).getByRole("combobox"));
+    // 「试一下」的值是字面量(没有 `{{…}}` 引用):素材只能从清单里挑,是标准下拉 —— Radix 的
+    // Select 在 jsdom 里靠键盘开。清单到之前它是灰的(没得挑的下拉不给点开)。
+    await waitFor(() => expect(within(image).getByRole("combobox")).not.toBeDisabled());
+    fireEvent.keyDown(within(image).getByRole("combobox"), { key: "Enter" });
     expect(await screen.findByRole("option", { name: "海边.png" })).toBeTruthy();
     expect(screen.queryByRole("option", { name: "成片.mp4" })).toBeNull();
     fireEvent.click(screen.getByRole("option", { name: "海边.png" }));

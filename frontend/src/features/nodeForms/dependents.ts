@@ -35,6 +35,19 @@ export function withDependentsCleared(
 ): Record<string, unknown> {
   const next = { ...config, [key]: value };
   if (config[key] === value) return next;
+  return dependentsCleared(next, key, specs);
+}
+
+/**
+ * 只清 `key` 的下游,不动 `key` 自己:父字段的值**不在配置里**换了的时候用 —— 画板上父字段接的是
+ * 上游那一格(换接另一格场景,镜头就该失效),值在绑定里,不在 config 里。
+ */
+export function dependentsCleared(
+  config: Record<string, unknown>,
+  key: string,
+  specs: Record<string, DependencySpec | undefined>,
+): Record<string, unknown> {
+  const next = { ...config };
   const queue = [key];
   const visited = new Set<string>();
   while (queue.length) {

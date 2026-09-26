@@ -40,6 +40,7 @@ export function Combobox({
   searchPlaceholder,
   emptyText,
   allowCustomValue = false,
+  acceptsCustomValue,
   customValueLabel,
   disabled,
   className,
@@ -53,6 +54,9 @@ export function Combobox({
   searchPlaceholder?: string;
   emptyText?: string;
   allowCustomValue?: boolean;
+  /** 清单之外**哪种**手填收(不给 = 什么都收)。节点表单里挑东西的下拉只收 `{{…}}` 引用:
+   *  随手敲的一串字在那里是一个不存在的 id,只会在运行时报错。 */
+  acceptsCustomValue?: (query: string) => boolean;
   customValueLabel?: (query: string) => string;
   disabled?: boolean;
   className?: string;
@@ -73,6 +77,7 @@ export function Combobox({
   const canUseCustom =
     allowCustomValue &&
     Boolean(trimmedQuery) &&
+    (acceptsCustomValue?.(trimmedQuery) ?? true) &&
     !options.some((option) => option.value === trimmedQuery || option.label === trimmedQuery);
 
   const choose = (nextValue: string) => {

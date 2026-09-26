@@ -1438,6 +1438,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "render 只能是 {choices}",
         "en": "render must be one of {choices}.",
     },
+    "sceneErr_pickShot": {
+        "zh": "这个场景有好几个镜头({shots}),要指定渲哪一个",
+        "en": "This scene has several shots ({shots}); pick the one to render.",
+    },
     "sceneErr_projectNotInWorkspace": {
         "zh": "要归档到的项目不在这个 3D 场景所在的工作区里",
         "en": "The project to file the renders under isn't in this 3D scene's workspace.",
@@ -2807,7 +2811,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Render the first frame, last frame and camera-move video of one shot in a 3D scene as new assets to use as references for image or video generation, plus a line of camera language computed from the camera path (lens, height, dolly/pan/orbit) that can go straight into a prompt. Rendered locally at no cost; imported 3D models are drawn too (any that could not be read are counted in skipped_models).",
     },
     "wfNode_scene_render_scene_id": {"zh": "要渲的 3D 场景,如 {{搭建白模.scene_id}}", "en": "The 3D scene to render, e.g. {{build_blockout.scene_id}}"},
-    "wfNode_scene_render_shot_id": {"zh": "场景里哪个镜头(镜头 id)", "en": "Which shot in the scene (shot id)"},
+    "wfNode_scene_render_shot_id": {"zh": "场景里的哪个镜头。场景只有一个镜头时可以留空", "en": "Which shot in the scene. Can be left empty when the scene has only one shot"},
     "wfNode_scene_render_render": {
         "zh": "只要静帧(首尾两张,约两秒)、只要运镜视频(逐帧渲,一个 5 秒镜头半分钟上下),或者都要",
         "en": "Stills only (first and last frame, about two seconds), the camera-move video only (rendered frame by frame, about half a minute for a 5-second shot), or both",
@@ -2953,7 +2957,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_asset_update_desc": {"zh": "重命名素材、或把素材归入某个项目。", "en": "Rename assets, or move them into a project."},
     "wfNode_asset_update_asset_ids": {"zh": "逗号分隔", "en": "Comma separated"},
     "wfNode_asset_update_name": {"zh": "新名称;多个素材时会自动加序号。留空则不改名", "en": "New name; a number is appended automatically when there are several assets. Leave empty to keep the names"},
-    "wfNode_asset_update_project_id": {"zh": "归入的项目 id;留空则不改动归属", "en": "The project to move them into; leave empty to keep them where they are"},
+    "wfNode_asset_update_project_id": {"zh": "归入哪个项目;留空则不改动归属", "en": "The project to move them into; leave empty to keep them where they are"},
     "wfNode_project_create": {"zh": "新建项目", "en": "Create project"},
     "wfNode_project_create_desc": {"zh": "在当前工作区建一个项目,输出它的 id —— 可接「素材整理」把素材归进去。", "en": "Create a project in this workspace and output its id — can feed “Organize assets” to file assets into it."},
     "wfNode_project_create_name": {"zh": "项目名", "en": "Project name"},

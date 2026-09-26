@@ -14,7 +14,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { fieldDataType } from "@/features/nodeForms/fieldTypes";
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
-import { MapField } from "@/features/nodeForms/MapField";
+import { MapField, bareRef } from "@/features/nodeForms/MapField";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { ScenePropsField } from "@/features/nodeForms/ScenePropsField";
 import { cn } from "@/lib/utils";
@@ -52,10 +52,14 @@ export interface ConfigSpec {
   options_from?: string;
   /** 满足这些父字段取值时，本字段才参与表单、选项请求和校验。 */
   active_when?: Record<string, unknown | unknown[]>;
-  /** 素材字段只收哪一种素材(image / video / audio)—— 选择器只列那一种。 */
-  media?: string;
+  /** 素材字段只收哪几种素材(image / video / audio;一种是字符串,几种是列表)—— 选择器只列那几种。 */
+  media?: string | string[];
   /** 模板字段要写一段话(提示词):给高一点的编辑框。 */
   multiline?: boolean;
+  /** 留空 = 清单里只有一项时就用它(运行时同一条规矩)。表单把那一项显示成当前值,不替人写进配置。 */
+  sole_option_default?: boolean;
+  /** 界面上叫什么(后端按语言翻好)。 */
+  label?: string;
 }
 
 // Nested controls (such as MapField rows) own their dimensions and field styling.
@@ -124,11 +128,27 @@ export function nodeConfigTiers(
   };
 }
 
+/** 一个现查的清单**为什么是空的** —— 空下拉要说得出原因,而不是点开一片空白。 */
+export type EmptyOptions =
+  | { kind: "pending" }
+  /** 它跟着的那个字段(`depends_on`)还没填。 */
+  | { kind: "parent"; parent: string }
+  /** 它跟着的那个字段接的是上游(或是一段 `{{…}}` 引用):清单要到运行时才知道。 */
+  | { kind: "upstream"; parent: string }
+  | { kind: "none" };
+
 export interface NodeFieldOptions {
   /** 一个字段的下拉选项;返回 null 表示它不是下拉。 */
   dynamicOptions: (key: string, spec?: ConfigSpec) => Array<{ value: string; label: string }> | null;
+  /** 现查的清单是空的时候,为什么。 */
+  whyEmpty: (key: string) => EmptyOptions;
   /** 工作区素材(有素材字段时才拉)。 */
   assets: Asset[];
+}
+
+/** 值里有没有一段 `{{…}}` 引用。 */
+export function hasReference(value: string): boolean {
+  return /\{\{[^{}]+\}\}/.test(value);
 }
 
 /**
@@ -142,33 +162,48 @@ export function useNodeFieldOptions({
   workspaceId,
   nodeType,
   workflowId = "",
+  boundValues = {},
 }: {
   specs: Record<string, ConfigSpec>;
   config: Record<string, unknown>;
   workspaceId: string;
   nodeType: string;
   workflowId?: string;
+  /** 接了上游的字段 → 那个上游**此刻**给出的值(画板上场景格给场景 id);说不出(工作流里上游的
+   *  输出要运行时才有)就是空串。依赖它的字段按这个值查清单 —— 值在绑定里,不在 config 里。 */
+  boundValues?: Record<string, string>;
 }): NodeFieldOptions {
   const optionSpecs = Object.entries(specs).filter(([, spec]) =>
     Boolean(spec?.options_from) && isWorkflowFieldActive(spec, config, specs),
   );
+  /** 它跟着的那个字段现在是什么值;`upstream` = 值要到运行时才知道(接的上游、或是一段引用)。 */
+  const parentOf = (spec?: ConfigSpec): { key: string; value: string; upstream: boolean } => {
+    const key = spec?.depends_on ?? "";
+    if (!key) return { key, value: "", upstream: false };
+    if (key in boundValues) return { key, value: boundValues[key] ?? "", upstream: !boundValues[key] };
+    const value = String(config[key] ?? specs[key]?.default ?? "");
+    return { key, value, upstream: hasReference(value) };
+  };
   const dynamicOptionResults = useQueries({
     queries: optionSpecs.map(([key, spec]) => {
-      const parentKey = spec?.depends_on ?? "";
-      const parentSpec = parentKey ? specs[parentKey] : undefined;
-      const parent = parentKey ? String(config[parentKey] ?? parentSpec?.default ?? "") : "";
+      const parent = parentOf(spec);
       return {
-        queryKey: ["workflow-field-options", spec?.options_from, workspaceId, parent, nodeType, workflowId, key],
+        queryKey: ["workflow-field-options", spec?.options_from, workspaceId, parent.value, nodeType, workflowId, key],
         queryFn: () =>
-          fetchWorkflowFieldOptions(String(spec?.options_from), workspaceId, parent, {
+          fetchWorkflowFieldOptions(String(spec?.options_from), workspaceId, parent.value, {
             nodeType,
             workflowId,
           }),
+        // 父字段的值要到运行时才知道:问了也是空清单。
+        enabled: !parent.upstream,
         staleTime: 30_000,
       };
     }),
   });
   const fetchedOptions = new Map(optionSpecs.map(([key], index) => [key, dynamicOptionResults[index]?.data ?? []]));
+  const pendingOptions = new Set(
+    optionSpecs.filter((_, index) => dynamicOptionResults[index]?.isLoading).map(([key]) => key),
+  );
   // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
   const hasAssetField = Object.values(specs).some((spec) => fieldDataType(spec) === "asset");
   const assets = useQuery({
@@ -193,10 +228,11 @@ export function useNodeFieldOptions({
     // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。按**数据类型**给,
     // 不按节点 —— 任何声明成 asset 的字段都该能挑素材。
     if (fieldDataType(spec as ConfigSpec | undefined) === "asset") {
-      // 声明了素材种类的(插件工具:「读图的节点」只收图)只列那一种
-      const media = (spec as ConfigSpec | undefined)?.media;
+      // 声明了素材种类的只列那几种:转 GIF 只收视频,转写只收音频和视频(一种是字符串,几种是列表)
+      const declared = (spec as ConfigSpec | undefined)?.media;
+      const media = declared === undefined ? [] : Array.isArray(declared) ? declared : [declared];
       return (assets.data ?? [])
-        .filter((asset) => !media || asset.kind === media)
+        .filter((asset) => media.length === 0 || media.includes(asset.kind))
         .map((asset) => ({
           value: asset.id,
           label: asset.name || asset.original_filename,
@@ -205,7 +241,17 @@ export function useNodeFieldOptions({
     return null;
   };
 
-  return { dynamicOptions, assets: assets.data ?? [] };
+  const whyEmpty = (key: string): EmptyOptions => {
+    const spec = specs[key];
+    const parent = parentOf(spec);
+    const parentName = parent.key ? String(specs[parent.key]?.label || parent.key) : "";
+    if (parent.upstream) return { kind: "upstream", parent: parentName };
+    if (pendingOptions.has(key) || (fieldDataType(spec) === "asset" && assets.isLoading)) return { kind: "pending" };
+    if (parent.key && !parent.value) return { kind: "parent", parent: parentName };
+    return { kind: "none" };
+  };
+
+  return { dynamicOptions, whyEmpty, assets: assets.data ?? [] };
 }
 
 /** 字段「接上游」的那一半,由宿主给。工作流里上游是图里别的节点的输出,连法是数据边;
@@ -229,6 +275,7 @@ export function NodeConfigForm({
   onTypeConfig,
   binding,
   renderOwnField,
+  references = false,
 }: {
   /** 要渲染的字段(nodeConfigTiers 的一档)。 */
   fields: Array<[string, ConfigSpec]>;
@@ -244,6 +291,10 @@ export function NodeConfigForm({
   binding?: FieldBinding;
   /** 宿主自己认得的字段;返回 null 就按声明渲染。 */
   renderOwnField?: (key: string, spec: ConfigSpec) => React.ReactNode | null;
+  /** 这个宿主里值能不能是一段 `{{上游.输出}}` 引用。工作流能(引擎对每个值都插值,循环体里的
+   *  `{{loop.item.…}}` 也只能这么写);画板、插件的「试一下」不能 —— 那里的值就是字面量。
+   *  能的话,挑东西的下拉在清单之外也收引用,并把上游的输出列在清单后面。 */
+  references?: boolean;
 }) {
   const t = useI18n();
   const setConfig = onSetConfig;
@@ -256,6 +307,19 @@ export function NodeConfigForm({
       于是填不进去」的死角里。 */
   //: 清单之外还能不能手填,由**声明**说了算(后端 allow_custom)——此前是按字段名猜 key === "model"。
   const allowsCustomValue = (spec?: ConfigSpec) => Boolean(spec?.allow_custom);
+
+  /** 引用也是一项:存的是 `{{source_video.asset_id}}`,列表里显示成不带花括号的 `source_video.asset_id`
+   *  (和 MapField 同一个写法)。排在这个工作区的东西后面 —— 挑现成的是常态。 */
+  const referenceOptions = references ? variables.map((ref) => ({ value: ref, label: bareRef(ref) })) : [];
+
+  /** 现查的清单是空的:占位里说为什么(还在查 / 先填哪一格 / 那一格接的是上游 / 真的没有)。 */
+  const emptyHint = (key: string): string => {
+    const why = fieldOptions.whyEmpty(key);
+    if (why.kind === "pending") return t("wfOptionsLoading");
+    if (why.kind === "parent") return t("wfPickParentFirst").replace("{field}", why.parent);
+    if (why.kind === "upstream") return t("wfParentFromUpstream").replace("{field}", why.parent);
+    return t("wfNoOptions");
+  };
 
   /** 一个配置字段的渲染。 */
   const renderField = ([key, spec]: [string, ConfigSpec]) => {
@@ -311,11 +375,10 @@ export function NodeConfigForm({
               ) : isAssetList ? (
                 // 一串素材:挑出来的一排标签 + 再加一份,不是一个写着 `[]` 的 JSON 框
                 <AssetListField value={value} options={options ?? []} onChange={(next) => setConfig(key, next)} />
-              ) : options ? (
-                // 纯下拉只给**闭集**:固定选项、且没声明能手填。声明了 allow_custom 的(模型名、
-                // 逐镜决定的 source_group / render —— 值常是上游的 `{{…}}`)走可手填的那一版,
-                // 否则引用在纯下拉里显示成空白,也填不回去。
-                spec?.options && !allowsCustomValue(spec) ? (
+              ) : spec?.options && options ? (
+                // 固定选项:闭集给纯下拉;声明了 allow_custom 的(逐镜决定的 source_group / render ——
+                // 值常是上游的 `{{…}}`)走可手填的那一版,否则引用在纯下拉里显示成空白,也填不回去。
+                !allowsCustomValue(spec) ? (
                   <OptionPicker
                     value={String(value ?? spec.default ?? "")}
                     onChange={(next) => setConfig(key, next)}
@@ -323,17 +386,54 @@ export function NodeConfigForm({
                     placeholder={t("wfPickOption")}
                   />
                 ) : (
-                  // 动态资源列表(素材/账号/数据集/音色…)可能很长 → 可搜索。
                   <Combobox
-                    value={String(value ?? spec?.default ?? "")}
+                    value={String(value ?? spec.default ?? "")}
                     options={options}
                     placeholder={t("wfPickOption")}
                     emptyText={t("cmdkEmpty")}
-                    allowCustomValue={allowsCustomValue(spec)}
+                    allowCustomValue
                     className="w-full"
                     onValueChange={(next) => setConfig(key, next)}
                   />
                 )
+              ) : options ? (
+                // 现查的清单(场景、镜头、项目、时间线、账号、音色、素材……):**挑一个**,不是抄一串 id。
+                (() => {
+                  const current = String(value ?? spec?.default ?? "");
+                  //: 留空 = 唯一的那一项(sole_option_default):显示成当前值,不写进配置 —— 运行时同一条规矩。
+                  const shown =
+                    !current && spec?.sole_option_default && options.length === 1 ? options[0].value : current;
+                  const placeholder = options.length > 0 ? t("wfPickOption") : emptyHint(key);
+                  // 清单之外还收什么:声明了 allow_custom 的(模型名)什么都收;能写引用的宿主里收引用。
+                  if (allowsCustomValue(spec) || references) {
+                    const known = new Set(options.map((option) => option.value));
+                    return (
+                      <Combobox
+                        value={shown}
+                        options={[...options, ...referenceOptions.filter((option) => !known.has(option.value))]}
+                        placeholder={placeholder}
+                        emptyText={t("cmdkEmpty")}
+                        allowCustomValue
+                        acceptsCustomValue={allowsCustomValue(spec) ? undefined : hasReference}
+                        customValueLabel={
+                          allowsCustomValue(spec) ? undefined : (query) => t("wfUseReference").replace("{q}", query)
+                        }
+                        className="w-full"
+                        onValueChange={(next) => setConfig(key, next)}
+                      />
+                    );
+                  }
+                  // 画板、插件的「试一下」:值只能是清单里的一项 —— 标准下拉,项多了自动换成能搜的那一版。
+                  return (
+                    <OptionPicker
+                      value={shown}
+                      onChange={(next) => setConfig(key, next)}
+                      options={options}
+                      placeholder={placeholder}
+                      disabled={options.length === 0}
+                    />
+                  );
+                })()
               ) : isObject ? (
                 // 「名字 → 值」的映射给一行一对的编辑器,值那格能从上游输出里挑;
                 // 真正自由结构的(json_schema)才留原始 JSON。哪种由声明说了算,见后端 config_editor。

@@ -92,6 +92,9 @@ After a node runs it writes results into the context; output variables look like
 Each field can switch between **two input modes** (the small pill at the right of the label row):
 
 - **Manual**: type a value / pick an option; in template fields press **`@`** to pull up upstream variables (keep typing to filter), or click a variable chip to insert at the cursor.
+  Fields that point at something (3D scene, shot, timeline, track, project, account, connection…) are dropdowns: this workspace's items first, then upstream outputs.
+  You can also type a `{{…}}` reference into the search box (that is how `{{loop.item.…}}` inside a loop body is written); other free text is not accepted.
+  A dropdown that follows another field (shot follows scene, track follows timeline) says its choices are known at run time when that field comes from upstream.
   When the node has nothing upstream yet, `@` says so instead of doing nothing.
 - **Connected**: the field becomes a port; pick one from the **upstream outputs** dropdown — equivalent to binding `{{upstream.output}}`. Switching back to manual keeps the previous value.
 

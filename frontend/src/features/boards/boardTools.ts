@@ -89,6 +89,17 @@ export function givesValue(item: BoardItem): boolean {
 }
 
 /**
+ * 上游这一格**此刻**给出的值 —— 和服务端 boards.tools._value_of 同一张表:场景给场景 id、媒体给素材 id、
+ * 便签给字。文档的正文要按钉住的版本去读,这里说不出,给空串。依赖它的字段(镜头跟着场景)拿它查清单。
+ */
+export function sourceValue(item: BoardItem): string {
+  if (item.kind === "scene") return item.scene_id ?? "";
+  if (item.kind === "note") return item.text ?? "";
+  if (item.kind === "document") return "";
+  return item.asset_id ?? "";
+}
+
+/**
  * 一格上游 → 接到哪些字段的默认绑定:**必填**、能接上游、还没绑也没手填过的字段,绑第一个接得上的上游。
  *
  * 「没手填过」看的是 config 里有没有这个键 —— 用户把它切回「手填」时,面板会把它写成空串

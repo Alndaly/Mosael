@@ -9,7 +9,7 @@ import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout"
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { kindIcon, sourceName } from "@/features/boards/boardNodes";
-import { defaultBindings, givesValue } from "@/features/boards/boardTools";
+import { defaultBindings, givesValue, sourceValue } from "@/features/boards/boardTools";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import {
   NodeConfigForm,
@@ -18,6 +18,7 @@ import {
   type ConfigSpec,
   type FieldBinding,
 } from "@/features/nodeForms/NodeConfigForm";
+import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
 import { cn } from "@/lib/utils";
 
 type Form = BoardRunForms["node"];
@@ -74,7 +75,19 @@ export function ActionComposer({
   const config = React.useMemo(() => item.form?.config ?? {}, [item.form?.config]);
   const bindings = React.useMemo(() => item.form?.bindings ?? {}, [item.form?.bindings]);
   const nodeType = tool?.type ?? "";
-  const fieldOptions = useNodeFieldOptions({ specs, config, workspaceId, nodeType });
+  //: 接了上游的字段此刻的值(第一格给得出值的上游,按连线先后)。「镜头」跟着「3D 场景」:场景接的是
+  //: 画布上的场景格时,镜头清单按那一格的场景查 —— 值在绑定里,不在 config 里。
+  const boundValues = React.useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [key, refs] of Object.entries(bindings)) {
+      if (!refs?.length) continue;
+      const wanted = new Set(refs.map((one) => one.from));
+      const first = sources.find((one) => wanted.has(one.id) && givesValue(one));
+      out[key] = first ? sourceValue(first) : "";
+    }
+    return out;
+  }, [bindings, sources]);
+  const fieldOptions = useNodeFieldOptions({ specs, config, workspaceId, nodeType, boundValues });
   const { submitting, run } = useSubmitting();
   const working = submitting || busy;
   const [showAdvanced, setShowAdvanced] = React.useState(false);
@@ -115,15 +128,16 @@ export function ActionComposer({
   const binding: FieldBinding = {
     canBind: (key) => fits(key).length > 0 || Boolean(bindings[key]?.length),
     isBound: (key) => Boolean(bindings[key]?.length),
+    //: 换了接哪一格,这个字段的值就换了 —— 跟着它的字段(镜头跟着场景)一并清掉,和手填换值同一条。
     setBound: (key, bound) => {
       if (bound) {
         const first = fits(key)[0];
-        if (first) save({ bindings: { ...bindings, [key]: [{ from: first.id }] } });
+        if (first) save({ bindings: { ...bindings, [key]: [{ from: first.id }] }, config: dependentsCleared(config, key, specs) });
         return;
       }
       const { [key]: _dropped, ...rest } = bindings;
       //: 切回手填:把这个键写进 config(空串也算),默认绑定就不会刚解开又绑回去。
-      save({ bindings: rest, config: key in config ? config : { ...config, [key]: "" } });
+      save({ bindings: rest, config: dependentsCleared(key in config ? config : { ...config, [key]: "" }, key, specs) });
     },
     renderBound: (key) => {
       const spec = specs[key] ?? {};
@@ -159,7 +173,7 @@ export function ActionComposer({
                       ? [...current, { from: source.id }]
                       : [{ from: source.id }];
                   if (next.length === 0) binding.setBound(key, false);
-                  else save({ bindings: { ...bindings, [key]: next } });
+                  else save({ bindings: { ...bindings, [key]: next }, config: dependentsCleared(config, key, specs) });
                 }}
               >
                 <Icon size={11} className="shrink-0" />
@@ -173,7 +187,8 @@ export function ActionComposer({
   };
 
   const { basic, advanced } = nodeConfigTiers(specs, config);
-  const setConfig = (key: string, value: unknown) => save({ config: { ...config, [key]: value } });
+  //: 换了父字段就清掉跟着它的(换场景 → 旧镜头失效),和工作流检查器同一条规矩(nodeForms/dependents)。
+  const setConfig = (key: string, value: unknown) => save({ config: withDependentsCleared(config, key, value, specs) });
 
   const blocked = !tool || missingConnection || working;
   const send = () => {

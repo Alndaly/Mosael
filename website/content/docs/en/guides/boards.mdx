@@ -128,7 +128,7 @@ structured list of steps) is used in a workflow or in chat. **Fields take upstre
 | --- | --- | --- |
 | Note | Free-text fields (text to translate, a prompt) | The note's text; several notes join in connection order with a blank line |
 | Document | Same | The pinned revision's text |
-| Image / video / audio | Asset fields | That asset |
+| Image / video / audio | Asset fields (only the kinds the field takes: transcribe, separate and denoise take video and audio; video to GIF takes video) | That asset |
 | 3D scene | Scene fields | That scene |
 
 A field that can take upstream input has a Manual / Connected switch; once connected, the row below
@@ -136,6 +136,14 @@ lists the upstream items that fit, and you pick which ones to read from. **A req
 to the first fitting upstream item by default**; you can change it and the choice is saved on the
 item. Values are read **when you press Run**: edit the upstream note and the next run follows.
 Delete the line and the binding goes with it.
+
+**Fields that point at something are dropdowns, not id boxes**: the 3D scene, shot, project and connection
+are picked from this workspace, with search once the list grows. In "Render blockout references" the shot
+follows the scene — a picked scene lists its shots, a connected scene item lists that item's shots, and
+changing the scene clears the shot you had picked. When the scene has a single shot there is nothing to
+pick: the dropdown shows that shot. With several and none picked, the run says which ones exist. While the
+scene is connected upstream, the scene dropdown gives way to the row of upstream items, so the two never
+show at once.
 
 **Results land to the right**: every run **adds a new column of items** to the right, each connected
 by a line — images, videos and audio become those kinds of items, other files become a note naming

@@ -113,7 +113,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
-import { withDependentsCleared } from "@/features/workflows/dependents";
+import { withDependentsCleared } from "@/features/nodeForms/dependents";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { useNodePicker } from "@/features/nodeForms/nodePicker";
 import {
@@ -2653,7 +2653,13 @@ export function NodeInspector({
     enabled: node.type === "ai_generate",
   });
   // 选项要现查的字段、素材下拉:由表单那一层按声明去拉(见 features/nodeForms)。
-  const fieldOptions = useNodeFieldOptions({ specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId });
+  //: 接了数据边的字段,值是上游的输出 —— 运行时才有。依赖它的下拉(镜头跟着场景)因此说「运行时才知道」,
+  //: 而不是拿空值去查一张空清单、再说「先选场景」。
+  const boundValues = React.useMemo(
+    () => Object.fromEntries((node.inputs ?? []).map((key) => [key, ""])),
+    [node.inputs],
+  );
+  const fieldOptions = useNodeFieldOptions({ specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId, boundValues });
   // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
   const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
     if (node.type === "llm") {
@@ -3020,6 +3026,7 @@ export function NodeInspector({
       onTypeConfig={(key, value) => typeConfig(key)(value)}
       binding={binding}
       renderOwnField={renderOwnField}
+      references
     />
   );
 

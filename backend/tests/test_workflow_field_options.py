@@ -272,3 +272,84 @@ def test_对话连接的订阅计划按自己那把钥匙判断() -> None:
         options = field_options(db, "chat_connections", OptionContext(workspace_id="w", user_id=user_id, parent="", locale="zh"))
 
         assert {one["value"] for one in options} == {linked.id, keyed.id}
+
+
+class Test指向工作区里某样东西的字段:
+    """场景、镜头、项目、时间线、轨道此前都是文本框(「有些应该是下拉选择而非输入吧」)。
+    清单只列**这个工作区**的;依赖另一个字段的(镜头跟场景、轨道跟时间线)按 parent 列,
+    parent 说不出是哪一个(没挑、是一段 `{{…}}` 引用、在别的工作区)时是空清单。
+    """
+
+    @staticmethod
+    def _two_workspaces() -> tuple[str, str]:
+        from tests.util import second_client
+
+        mine = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+        other = second_client("other").post("/api/workspaces", json={"name": "别人的"}).json()["id"]
+        return mine, other
+
+    def test_场景和它的镜头(self) -> None:
+        from app.db.models import Scene3D
+        from app.domain.workflows.field_options import field_options
+
+        mine, other = self._two_workspaces()
+        with SessionLocal() as db:
+            shots = [
+                {"id": "shot-1", "name": "开场", "camera_id": "camera-1"},
+                {"id": "shot-2", "name": "近景", "camera_id": "camera-1"},
+                {"id": "shot-3", "name": "近景", "camera_id": "camera-1"},
+            ]
+            scene = Scene3D(workspace_id=mine, name="客厅", content={"shots": shots})
+            foreign = Scene3D(workspace_id=other, name="别人的场景", content={"shots": shots[:1]})
+            db.add_all([scene, foreign])
+            db.commit()
+
+            assert field_options(db, "scenes", _ctx(mine)) == [{"value": scene.id, "label": "客厅"}]
+            #: 按场景里的顺序,显示镜头名;重名的带上 id,下拉里才分得开。
+            assert field_options(db, "scene_shots", _ctx(mine, parent=scene.id)) == [
+                {"value": "shot-1", "label": "开场"},
+                {"value": "shot-2", "label": "近景 · shot-2"},
+                {"value": "shot-3", "label": "近景 · shot-3"},
+            ]
+            for parent in ("", "{{搭建白模.scene_id}}", foreign.id):
+                assert field_options(db, "scene_shots", _ctx(mine, parent=parent)) == [], parent
+
+    def test_项目_时间线_轨道(self) -> None:
+        from app.db.models import Project
+        from app.domain.sequences.creation import create_sequence_scaffold
+        from app.domain.workflows.field_options import field_options
+
+        mine, other = self._two_workspaces()
+        with SessionLocal() as db:
+            project = Project(workspace_id=mine, name="新品发布")
+            foreign = Project(workspace_id=other, name="别人的项目")
+            db.add_all([project, foreign])
+            db.flush()
+            scaffold = create_sequence_scaffold(db, project, name="主时间线", width=1920, height=1080, fps=30)
+            create_sequence_scaffold(db, foreign, name="主时间线", width=1920, height=1080, fps=30)
+            db.commit()
+            sequence_id = scaffold.sequence.id
+
+            assert field_options(db, "projects", _ctx(mine)) == [{"value": project.id, "label": "新品发布"}]
+            #: 每个项目的时间线默认同名 —— 带上项目名才分得出是谁的。
+            assert field_options(db, "sequences", _ctx(mine)) == [{"value": sequence_id, "label": "新品发布 / 主时间线"}]
+            assert field_options(db, "sequence_tracks", _ctx(mine, parent=sequence_id)) == [
+                {"value": scaffold.video_track.id, "label": "V1 · 视频"},
+                {"value": scaffold.audio_track.id, "label": "A1 · 音频"},
+            ]
+            assert field_options(db, "sequence_tracks", _ctx(other, parent=sequence_id)) == []
+            assert field_options(db, "sequence_tracks", _ctx(mine, parent="{{新建时间线.sequence_id}}")) == []
+
+    def test_节点声明把来源和依赖发下去(self) -> None:
+        client = fresh_client()
+        types = {item["type"]: item for item in client.get("/api/workflows/node-types").json()}
+        render = types["scene_render"]["config"]
+        assert render["scene_id"]["options_from"] == "scenes" and render["scene_id"]["data_type"] == "scene"
+        assert render["shot_id"]["options_from"] == "scene_shots" and render["shot_id"]["depends_on"] == "scene_id"
+        assert render["shot_id"]["sole_option_default"] is True and not render["shot_id"].get("required")
+        assert render["project_id"]["options_from"] == "projects"
+        append = types["timeline_append"]["config"]
+        assert append["sequence_id"]["options_from"] == "sequences"
+        assert (append["track_id"]["options_from"], append["track_id"]["depends_on"]) == ("sequence_tracks", "sequence_id")
+        plugin = types["plugin_tool"]["config"]["instance_id"]
+        assert (plugin["options_from"], plugin["depends_on"]) == ("plugin_instances", "plugin_id")

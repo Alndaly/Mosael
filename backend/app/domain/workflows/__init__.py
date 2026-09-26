@@ -17,6 +17,7 @@ from __future__ import annotations
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
 from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
+from app.domain.media_kinds import declared_media
 from app.domain.scenes import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 
@@ -436,6 +437,15 @@ _DATA_TYPE_BY_NAME = (
 )
 
 
+def config_media(spec: Any) -> tuple[str, ...]:
+    """这个素材字段收哪几种素材(`"media"`:一种写字符串,几种写列表);没声明就是空 —— 哪种都收。
+
+    素材选择器只列这几种,画板上只有这几种格子接得上(boards.tools.bindable_kinds)。此前「素材转写」
+    没声明,画板格子上写着「接图片、视频或音频」,而转写只吃有声音的那两种。
+    """
+    return declared_media(spec.get("media") if isinstance(spec, dict) else None)
+
+
 def config_data_type(key: str, spec: dict[str, Any]) -> str:
     """这个配置字段装的是什么。推不出来就返回空串(界面按"随便什么值"处理)。"""
     explicit = str(spec.get("data_type") or "").strip()
@@ -497,6 +507,16 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 #: `"board_group"` / `"board_description"`:画板「添加」菜单里它归哪一组(按它吃的是什么内容分,
 #: 词表见 boards.transforms.BOARD_GROUPS)、一句给创作者看的说明(i18n key)。工作流的节点说明是写给
 #: 搭流程的人的(输出口、`{{…}}` 引用),画板上不照搬。
+#:
+#: **指向某样东西的字段给选择器,不给文本框**(棘轮 test_entity_fields_have_a_picker):场景、镜头、项目、
+#: 时间线、轨道、账号、连接、工作流……值是一个 id,让人去别处抄一串十六进制回来是这张表的失职。
+#: 清单从哪来写在声明里 —— `options_from`(后端 field_options 现查,`depends_on` 的值作为 parent 带上)、
+#: `options`(闭集)、`editor`(专用控件),素材字段由 data_type 给素材选择器。模板字段挂了选择器仍然能写
+#: `{{上游.输出}}`:表单在工作流里对模板字段收「选一项,或一段引用」(见 nodeForms/NodeConfigForm)。
+#:
+#: `"sole_option_default": True`:**留空 = 清单里只有一项时用那一项**,多于一项时运行时不猜、报出来。
+#: 是默认而不是预选:表单不替人把它写进配置(父字段常常是上游接进来的,那一刻清单还不知道),只把它
+#: 显示成当前值;真正做决定的是运行时的同一条规矩(插件连接的 resolve_instance、渲白模的镜头)。
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "external": False,
@@ -556,8 +576,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "plugin_id": {"type": "string", "required": True, "options_from": "plugin_packages"},
             "tool_name": {"type": "string", "required": True, "depends_on": "plugin_id", "options_from": "plugin_tools"},
-            # 同一个插件可以接多个连接;留空且只有一个可用连接时自动用它。
-            "instance_id": {"advanced": True, "type": "string", "description": "wfNode_plugin_tool_instance_id", "plugin_instances": True, "depends_on": "plugin_id"},
+            # 同一个插件可以接多个连接;留空且只有一个可用连接时自动用它(plugins.nodes.resolve_instance)。
+            "instance_id": {"advanced": True, "type": "string", "description": "wfNode_plugin_tool_instance_id",
+                            "depends_on": "plugin_id", "options_from": "plugin_instances", "sole_option_default": True},
             "input": {"type": "object", "description": "wfNode_plugin_tool_input"},
         },
         "outputs": ["output"],
@@ -571,7 +592,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_transcribe_asset",
         "description": "wfNode_transcribe_asset_desc",
         "config": {
-            "asset_id": {"type": "template", "required": True, "description": "wfNode_transcribe_asset_asset_id"},
+            "asset_id": {"type": "template", "required": True, "media": ["audio", "video"],
+                         "description": "wfNode_transcribe_asset_asset_id"},
             "engine": {
                 "type": "string",
                 "default": "auto",
@@ -587,7 +609,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_asset",
         "label": "wfNode_export_sequence",
         "description": "wfNode_export_sequence_desc",
-        "config": {"sequence_id": {"type": "template", "required": True}},
+        "config": {"sequence_id": {"type": "template", "required": True, "options_from": "sequences"}},
         "outputs": ["asset_id"],
     },
     "note_search": {
@@ -631,7 +653,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_asset",
         "label": "wfNode_inspect_sequence",
         "description": "wfNode_inspect_sequence_desc",
-        "config": {"sequence_id": {"type": "template", "required": True}},
+        "config": {"sequence_id": {"type": "template", "required": True, "options_from": "sequences"}},
         "outputs": ["sequence_id", "revision", "tracks", "duration", "video_track_id", "audio_track_id"],
     },
     "timeline_append": {
@@ -640,9 +662,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_timeline_append",
         "description": "wfNode_timeline_append_desc",
         "config": {
-            "sequence_id": {"type": "template", "required": True, "description": "wfNode_timeline_append_sequence_id"},
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences", "description": "wfNode_timeline_append_sequence_id"},
             "asset_id": {"type": "template", "required": True, "description": "wfNode_timeline_append_asset_id"},
-            "track_id": {"advanced": True, "type": "template", "description": "wfNode_timeline_append_track_id"},
+            "track_id": {"advanced": True, "type": "template", "depends_on": "sequence_id", "options_from": "sequence_tracks",
+                         "description": "wfNode_timeline_append_track_id"},
             "start": {"advanced": True, "type": "number", "description": "wfNode_timeline_append_start"},
             "end": {"advanced": True, "type": "number", "description": "wfNode_timeline_append_end"},
             "at": {"advanced": True, "type": "number", "description": "wfNode_timeline_append_at"},
@@ -656,7 +679,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_timeline_add_track",
         "description": "wfNode_timeline_add_track_desc",
         "config": {
-            "sequence_id": {"type": "template", "required": True},
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences"},
             "kind": {
                 "type": "string",
                 "required": True,
@@ -671,7 +694,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_asset",
         "label": "wfNode_timeline_clear",
         "description": "wfNode_timeline_clear_desc",
-        "config": {"sequence_id": {"type": "template", "required": True}},
+        "config": {"sequence_id": {"type": "template", "required": True, "options_from": "sequences"}},
         "outputs": ["removed", "sequence_id"],
     },
     "timeline_cut_ranges": {
@@ -680,7 +703,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_timeline_cut_ranges",
         "description": "wfNode_timeline_cut_ranges_desc",
         "config": {
-            "sequence_id": {"type": "template", "required": True},
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences"},
             "clip_id": {"type": "template", "required": True, "description": "wfNode_timeline_cut_ranges_clip_id"},
             "ranges": {
                 "type": "template",
@@ -707,7 +730,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_edit_timeline",
         "description": "wfNode_edit_timeline_desc",
         "config": {
-            "sequence_id": {"type": "template", "required": True},
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences"},
             "operations": {
                 "type": "template",
                 "required": True,
@@ -771,7 +794,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_video_to_gif",
         "description": "wfNode_video_to_gif_desc",
         "config": {
-            "asset_id": {"type": "template", "required": True, "description": "wfNode_video_to_gif_asset_id"},
+            "asset_id": {"type": "template", "required": True, "media": "video", "description": "wfNode_video_to_gif_asset_id"},
             "fps": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_fps"},
             "width": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_width"},
             "start": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_start"},
@@ -1022,14 +1045,19 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_scene_render",
         "description": "wfNode_scene_render_desc",
         "config": {
-            "scene_id": {"type": "template", "required": True, "description": "wfNode_scene_render_scene_id"},
-            "shot_id": {"type": "template", "required": True, "description": "wfNode_scene_render_shot_id"},
+            "scene_id": {"type": "template", "required": True, "options_from": "scenes",
+                         "description": "wfNode_scene_render_scene_id"},
+            #: 挑的是**这个场景的**镜头:换场景就换了一整套镜头 id(depends_on 清掉旧值、把场景带给选项来源)。
+            #: 留空 = 场景只有一个镜头时用它 —— 运行时同一条规矩(scenes.render_shot_references),
+            #: 所以不必替人把那唯一的一项写进配置;有好几个时不猜,报出来让人挑。
+            "shot_id": {"type": "template", "depends_on": "scene_id", "options_from": "scene_shots",
+                        "sole_option_default": True, "description": "wfNode_scene_render_shot_id"},
             #: 允许手填:整片流程里"这一镜要不要运镜视频"是逐镜决定的,值来自上游(`{{…}}`)。
             "render": {
                 "type": "string", "default": "stills", "options": list(REFERENCE_RENDERS),
                 "allow_custom": True, "description": "wfNode_scene_render_render",
             },
-            "project_id": {"advanced": True, "type": "template", "description": "wfNode_scene_render_project_id"},
+            "project_id": {"advanced": True, "type": "template", "options_from": "projects", "description": "wfNode_scene_render_project_id"},
         },
         "outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id", "camera_move",
                     "skipped_models", "model_warnings"],
@@ -1058,7 +1086,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_separate_audio",
         "description": "wfNode_separate_audio_desc",
         "config": {
-            "asset_id": {"type": "template", "required": True, "description": "wfNode_separate_audio_asset_id"},
+            "asset_id": {"type": "template", "required": True, "media": ["audio", "video"],
+                         "description": "wfNode_separate_audio_asset_id"},
             # auto = 用现在跑得起来的那个。点名一个引擎是给"装了好几个"的人用的。
             # **选项从注册表读** —— 在这里再写一遍引擎名,加一个引擎就得改两处,
             # 漏改的那处表现为"装好了却选不到"。
@@ -1086,7 +1115,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_denoise_audio",
         "description": "wfNode_denoise_audio_desc",
         "config": {
-            "asset_id": {"type": "template", "required": True, "description": "wfNode_denoise_audio_asset_id"},
+            "asset_id": {"type": "template", "required": True, "media": ["audio", "video"],
+                         "description": "wfNode_denoise_audio_asset_id"},
             # 选项从注册表读(同分离节点)。auto = 内置的那个,它不会顺手去掉音乐。
             "engine": {
                 "type": "string",
@@ -1111,7 +1141,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_generate_subtitles",
         "description": "wfNode_generate_subtitles_desc",
         "config": {
-            "sequence_id": {"type": "template", "required": True, "description": "wfNode_generate_subtitles_sequence_id"},
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences", "description": "wfNode_generate_subtitles_sequence_id"},
             "segments": {"type": "template", "required": True, "description": "wfNode_generate_subtitles_segments"},
             "texts": {"type": "template", "description": "wfNode_generate_subtitles_texts"},
             "keep_original": {
@@ -1121,7 +1151,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_generate_subtitles_keep_original",
             },
             "offset": {"advanced": True, "type": "number", "description": "wfNode_generate_subtitles_offset"},
-            "track_id": {"advanced": True, "type": "template", "description": "wfNode_generate_subtitles_track_id"},
+            "track_id": {"advanced": True, "type": "template", "depends_on": "sequence_id", "options_from": "sequence_tracks",
+                         "description": "wfNode_generate_subtitles_track_id"},
             # 段落不是逐字稿、而是别的对象列表时(比如循环每一项的产物),起止和文本各在哪个字段。
             "start_field": {"advanced": True, "type": "template", "default": "start", "description": "wfNode_generate_subtitles_start_field"},
             "end_field": {"advanced": True, "type": "template", "default": "end", "description": "wfNode_generate_subtitles_end_field"},
@@ -1145,7 +1176,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_dub_subtitles",
         "description": "wfNode_dub_subtitles_desc",
         "config": {
-            "sequence_id": {"type": "template", "required": True, "description": "wfNode_dub_subtitles_sequence_id"},
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences", "description": "wfNode_dub_subtitles_sequence_id"},
             "clip_ids": {"type": "template", "required": True, "description": "wfNode_dub_subtitles_clip_ids"},
             "match_duration": {
                 "type": "string",
@@ -1283,7 +1314,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "asset_ids": {"type": "template", "required": True, "description": "wfNode_asset_update_asset_ids"},
             "name": {"type": "template", "description": "wfNode_asset_update_name"},
-            "project_id": {"type": "template", "description": "wfNode_asset_update_project_id"},
+            "project_id": {"type": "template", "options_from": "projects", "description": "wfNode_asset_update_project_id"},
         },
         "outputs": ["updated", "count"],
     },

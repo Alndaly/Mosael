@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { withDependentsCleared } from "@/features/workflows/dependents";
+import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
 
 /** llm 节点的真实形状:模型跟着供应商配置走。 */
 const LLM = { profile_id: {}, model: { depends_on: "profile_id" } };
@@ -65,5 +65,16 @@ describe("withDependentsCleared", () => {
   it("没有依赖声明时就是普通赋值", () => {
     const before = { a: "1", b: "2" };
     expect(withDependentsCleared(before, "a", "9", { a: {}, b: {} })).toEqual({ a: "9", b: "2" });
+  });
+});
+
+describe("dependentsCleared", () => {
+  it("父字段的值不在配置里(画板上接的是场景格):只清下游,不动它自己", () => {
+    const specs = { scene_id: {}, shot_id: { depends_on: "scene_id" } };
+    expect(dependentsCleared({ scene_id: "", shot_id: "shot-2", render: "both" }, "scene_id", specs)).toEqual({
+      scene_id: "",
+      shot_id: "",
+      render: "both",
+    });
   });
 });

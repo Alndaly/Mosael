@@ -138,11 +138,14 @@ def board_group(meta: dict[str, Any]) -> str:
     sinks = _sinks(meta)
     if "scene" in sinks.values():
         return "scene"
+    from app.domain.workflows import config_media
+
     specs = meta.get("config") or {}
-    media = {str(specs[key].get("media") or "") for key, sink in sinks.items() if sink == "asset"}
+    media = [set(config_media(specs[key])) for key, sink in sinks.items() if sink == "asset"]
     if media:
-        only = next(iter(media)) if len(media) == 1 else ""
-        return only if only in ("image", "video", "audio") else "asset"
+        #: 一个字段没声明就是哪种都收;几个字段各说各的也分不到某一种 —— 都归「素材」。
+        kinds = set.union(*media) if all(media) else set()
+        return next(iter(kinds)) if len(kinds) == 1 else "asset"
     return "new" if _makes_media(meta) else "text"
 
 

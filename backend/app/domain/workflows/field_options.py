@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, t
+from app.core.i18n import MESSAGES, LocalizedError, t
 
 
 class FieldOptionsError(LocalizedError, ValueError):
@@ -229,7 +229,90 @@ def _scene_models(db: Session, ctx: OptionContext) -> list[Option]:
     return [{"value": model.id, "label": model.name} for model in list_models(db, ctx.workspace_id)]
 
 
+def _scenes(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个工作区里的 3D 场景,按最近改过的排 —— 和「3D 场景」列表同一个顺序。
+
+    此前「渲染白模参考」的场景一格是个文本框,要人去场景页把 id 抄过来。
+    """
+    from app.db.models import Scene3D
+
+    rows = db.scalars(
+        select(Scene3D).where(Scene3D.workspace_id == ctx.workspace_id).order_by(Scene3D.updated_at.desc())
+    )
+    return [{"value": row.id, "label": row.name} for row in rows]
+
+
+def _scene_shots(db: Session, ctx: OptionContext) -> list[Option]:
+    """`parent` 那个场景里的镜头,按场景里的顺序,显示镜头名。
+
+    parent 说不出是哪个场景(还没挑、是一段 `{{…}}` 引用、不在这个工作区)时是空清单 ——
+    不猜,也不把别的工作区的场景内容透出来。镜头重名时(从 Blender 取回的相机常常同名)
+    名字后面带上 id,否则下拉里两项长得一样。
+    """
+    from app.db.models import Scene3D
+
+    scene_id = ctx.parent.strip()
+    scene = db.get(Scene3D, scene_id) if scene_id else None
+    if scene is None or scene.workspace_id != ctx.workspace_id:
+        return []
+    shots = [shot for shot in (scene.content or {}).get("shots") or [] if isinstance(shot, dict) and shot.get("id")]
+    names = [str(shot.get("name") or "").strip() or str(shot["id"]) for shot in shots]
+    return [
+        {"value": str(shot["id"]), "label": name if names.count(name) == 1 else f"{name} · {shot['id']}"}
+        for shot, name in zip(shots, names)
+    ]
+
+
+def _projects(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个工作区里的项目,按最近改过的排(和项目列表同一个顺序)。"""
+    from app.db.models import Project
+
+    rows = db.scalars(
+        select(Project).where(Project.workspace_id == ctx.workspace_id).order_by(Project.updated_at.desc())
+    )
+    return [{"value": row.id, "label": row.name} for row in rows]
+
+
+def _sequences(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个工作区里的时间线,显示成「项目 / 时间线」—— 每个项目的时间线默认都叫同一个名字,
+    不带项目名的话一列「主时间线」分不出谁是谁。"""
+    from app.db.models import Project, Sequence
+
+    rows = db.execute(
+        select(Sequence.id, Sequence.name, Project.name)
+        .join(Project, Project.id == Sequence.project_id)
+        .where(Sequence.workspace_id == ctx.workspace_id)
+        .order_by(Sequence.updated_at.desc())
+    )
+    return [{"value": sequence_id, "label": f"{project} / {name}"} for sequence_id, name, project in rows]
+
+
+def _sequence_tracks(db: Session, ctx: OptionContext) -> list[Option]:
+    """`parent` 那条时间线上的轨道,按轨道顺序,显示「名字 · 种类」(V1 · 视频)。
+
+    parent 说不出是哪条时间线(还没挑、是上游的引用、不在这个工作区)时是空清单。
+    """
+    from app.db.models import Sequence, Track
+
+    sequence_id = ctx.parent.strip()
+    sequence = db.get(Sequence, sequence_id) if sequence_id else None
+    if sequence is None or sequence.workspace_id != ctx.workspace_id:
+        return []
+    rows = db.scalars(select(Track).where(Track.sequence_id == sequence.id).order_by(Track.position))
+
+    def kind(value: str) -> str:
+        key = f"wfOpt_kind_{value}"
+        return t(key, ctx.locale) if key in MESSAGES else value
+
+    return [{"value": row.id, "label": f"{row.name} · {kind(row.kind)}"} for row in rows]
+
+
 SOURCES: dict[str, Source] = {
+    "scenes": _scenes,
+    "scene_shots": _scene_shots,
+    "projects": _projects,
+    "sequences": _sequences,
+    "sequence_tracks": _sequence_tracks,
     "scene_models": _scene_models,
     "speech_engines": _speech_engines,
     "speech_voices": _speech_voices,

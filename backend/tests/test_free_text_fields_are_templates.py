@@ -57,7 +57,6 @@ def test_自由文本字段都声明成了template() -> None:
         # 声明了选项来源的字段本来就是选择器(清单由 field_options 现查)——
         # 这条声明比下面按键名列的名单更直接,新的选择器应该走这里。
         and not (meta or {}).get("options_from")
-        and not (meta or {}).get("plugin_instances")
         and key not in _PICKER_KEYS
     ]
     assert not offenders, (

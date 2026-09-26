@@ -79,6 +79,16 @@ def parse_node_type(node_type: str) -> tuple[str, str] | None:
     return plugin_id, tool_name
 
 
+def _media(declared: Any) -> str | list[str] | None:
+    """`x-media` → 节点声明的 `media`,和内置节点同一个写法:一种是字符串,几种是列表;认不出的丢掉。"""
+    from app.domain.media_kinds import declared_media
+
+    kinds = declared_media(declared)
+    if not kinds:
+        return None
+    return kinds[0] if len(kinds) == 1 else list(kinds)
+
+
 def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
     """JSON Schema → 节点 config 声明。"""
     if not isinstance(schema, dict):
@@ -104,18 +114,19 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
             entry["label"] = text_of(spec["title"])
         # 插件用 `format: asset` 声明「这是一份素材」(运行时据此换成本地路径,见 inputs)。
         # 类型跟着声明走,不靠字段名碰运气:字段不叫 asset_id 时,命名约定认不出它,
-        # 工作流里就拿不到素材选择器。`x-media` 说是哪一种素材(image / video / audio),选择器只列那一种。
+        # 工作流里就拿不到素材选择器。`x-media` 说是哪几种素材(`"image"`,或 `["audio", "video"]`),
+        # 选择器只列那几种,画板上也只有那几种格子接得上(workflows.config_media)。
         items = spec.get("items") if isinstance(spec.get("items"), dict) else {}
         if spec.get("format") == ASSET_FORMAT:
             entry["data_type"] = "asset"
         elif raw_type == "array" and items.get("format") == ASSET_FORMAT:
             # 一串素材:给能挑好几份的选择器,不是一个让人手写 `["…"]` 的 JSON 框
             entry = {**entry, "type": "asset_list", "data_type": "asset"}
-            items_media = items.get("x-media")
-            if isinstance(items_media, str):
+            items_media = _media(items.get("x-media"))
+            if items_media:
                 entry["media"] = items_media
-        media = spec.get("x-media")
-        if isinstance(media, str) and media in ("image", "video", "audio"):
+        media = _media(spec.get("x-media"))
+        if media:
             entry["media"] = media
         if spec.get("description"):
             entry["description"] = text_of(spec["description"])
@@ -221,6 +232,8 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
                 "options_from": "plugin_instances",
                 # 只接了一个实例时留空即可 —— 正是「留空也能跑」,不该占第一屏。
                 "advanced": True,
+                # 留空时用的就是那唯一的一条(resolve_instance),表单把它显示成当前值。
+                "sole_option_default": True,
             },
             **config,
         },

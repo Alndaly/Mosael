@@ -61,7 +61,7 @@ The single toolbar contains shot selection, add/delete shot, playback, time, ins
 
 Lighting information accompanies the prompt. An optional clay reference renders neutral materials to emphasize lighting and composition; it is separate from the normal textured frame. Camera helpers are excluded from frames, videos and GLB exports.
 
-Workflows can use the same scene as a reference: the backend has its own blockout renderer for the reference frames and the camera-move video, and what it draws — geometry, camera interpolation, light direction — matches what this page shows. **Imported models are drawn too**, using their own material colours. Anything it cannot draw — a Draco- or meshopt-compressed mesh, a model over the reference frame's triangle budget, a missing file — is reported one by one with the reason, rather than quietly leaving a gap.
+In "Render blockout references" on workflows and boards, the scene and shot are picked from dropdowns (a scene with a single shot needs no pick). Workflows can use the same scene as a reference: the backend has its own blockout renderer for the reference frames and the camera-move video, and what it draws — geometry, camera interpolation, light direction — matches what this page shows. **Imported models are drawn too**, using their own material colours. Anything it cannot draw — a Draco- or meshopt-compressed mesh, a model over the reference frame's triangle budget, a missing file — is reported one by one with the reason, rather than quietly leaving a gap.
 
 **Export** saves frames, camera previews and models. Preview encoding uses deterministic MP4 frames where supported, with a WebM recording fallback when necessary.
 

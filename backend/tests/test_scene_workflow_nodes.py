@@ -125,6 +125,22 @@ def test_没有这个镜头时说清楚() -> None:
     assert caught.value.key == "wfErr_sceneRenderFailed"
 
 
+def test_没指定镜头时_只有一个就用它_好几个就说清楚() -> None:
+    """表单把「只有一个镜头」显示成当前值、不替人写进配置(节点声明的 sole_option_default),
+    所以运行时得是同一条规矩:唯一的那个就用它;好几个时不猜,报出有哪几个。"""
+    workflow = _workflow()
+    single = _run("scene_create", workflow, {"layout": LAYOUT})["scene_id"]
+    out = _run("scene_render", workflow, {"scene_id": single, "shot_id": "", "render": "stills"})
+    assert out["first_frame_asset_id"] and "dolly in 2.0 m" in out["camera_move"]
+
+    two = {**LAYOUT, "shots": [*LAYOUT["shots"], {"id": "shot-2", "name": "反打", "duration": 3, "camera_id": "cam-1"}]}
+    several = _run("scene_create", workflow, {"layout": two})["scene_id"]
+    with pytest.raises(WorkflowDomainError) as caught:
+        _run("scene_render", workflow, {"scene_id": several})
+    assert caught.value.key == "wfErr_sceneRenderFailed"
+    assert "推近主角" in str(caught.value) and "反打" in str(caught.value)
+
+
 def _import_glb(workspace_id: str, name: str, tmp_path, **params) -> str:
     """往这个工作区里收一份真 GLB,返回 model_id。用后端自己的写入器造,读的那一侧和写的对表。"""
     from app.domain.scene_render import find_shot

@@ -2350,6 +2350,65 @@ def _migrate_board_wiring_tools_become_notes() -> None:
                 )
 
 
+def _migrate_board_scene_render_shot_is_picked() -> None:
+    """画板上「渲染白模参考」的镜头和项目不再接便签 / 文档,改成从清单里挑。
+
+    这两格此前是随手写字的模板字段,于是能接便签和文档的字(画板的 binding_sink 按「能写字」判)——
+    必填的镜头还会**默认接上第一张连进来的便签**。现在它们声明了选项来源(场景的镜头、工作区的
+    项目),不再是写字的地方:存着的这种绑定运行时一律不认(tools.resolve_bindings 跳过接不了的字段),
+    面板上却还显示成「已接上游」,点开是一排接不上的空芯片。
+
+    · 绑定摘掉(只摘这两格,别的字段、连线一概不动);
+    · 镜头绑的是便签、表单里又没手填过镜头的,把便签上那段字(去掉两头空白)填进表单 ——
+      那正是上次运行时它取到的值,摘了绑定照样渲同一个镜头。文档的正文当不了镜头 id,不搬;
+      项目也不搬(接便签的项目本来就填不对,留空 = 不归档)。
+
+    改到的板版本号 +1:升级那一刻还开着这张板的客户端要撞 409,不能把旧绑定存回来。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    fields = ("shot_id", "project_id")
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            items = {str(item.get("id")): item for item in canvas["items"] if isinstance(item, dict)}
+            touched = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict) or item.get("kind") != "action":
+                    continue
+                form = item.get("form")
+                if not isinstance(form, dict) or form.get("producer") != "node:scene_render":
+                    continue
+                bindings = form.get("bindings")
+                if not isinstance(bindings, dict) or not any(key in bindings for key in fields):
+                    continue
+                config = dict(form.get("config")) if isinstance(form.get("config"), dict) else {}
+                refs = bindings.get("shot_id") if isinstance(bindings.get("shot_id"), list) else []
+                if not str(config.get("shot_id") or "").strip():
+                    for ref in refs:
+                        source = items.get(str(ref.get("from") if isinstance(ref, dict) else ""))
+                        written = str((source or {}).get("text") or "").strip() if (source or {}).get("kind") == "note" else ""
+                        if written:
+                            config["shot_id"] = written
+                            break
+                item["form"] = {
+                    **form,
+                    "config": config,
+                    "bindings": {key: value for key, value in bindings.items() if key not in fields},
+                }
+                touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = revision + 1 WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -4337,6 +4396,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_frame_names_become_titles,
                 _migrate_board_forms_name_their_producer,
                 _migrate_board_wiring_tools_become_notes,
+                _migrate_board_scene_render_shot_is_picked,
                 _backfill_browser_pool,
                 _backfill_provider_models,
                 _migrate_provider_default_model_fk,

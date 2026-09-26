@@ -597,8 +597,12 @@ def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp
     translate = by_id["node:translate"]
     assert translate["config"]["text"]["board_sources"] == ["note", "document"]
     assert translate["config"]["target_lang"]["board_sources"] == [], "固定选项的字段不接上游"
-    assert by_id["node:video_to_gif"]["config"]["asset_id"]["board_sources"] == ["image", "video", "audio"]
+    #: 素材字段只接它声明的那几种素材(`media`):转 GIF 只吃视频,转写只吃有声音的两种。
+    assert by_id["node:video_to_gif"]["config"]["asset_id"]["board_sources"] == ["video"]
+    assert by_id["node:transcribe_asset"]["config"]["asset_id"]["board_sources"] == ["video", "audio"]
     assert by_id["node:scene_render"]["config"]["scene_id"]["board_sources"] == ["scene"]
+    #: 镜头是从场景里挑的,不再接便签(此前「能写字」就能接)。
+    assert by_id["node:scene_render"]["config"]["shot_id"]["board_sources"] == []
     assert "node:plugin.dev.test.boardtools.secret" not in by_id
     assert "node:plugin.dev.test.boardtools.listing" not in by_id
 
@@ -888,3 +892,38 @@ def test_插件自己写的节点表单里_format_asset_也是素材字段() -> 
     meta = node_meta({"name": "cut", "node": {"config": {"picture": {"type": "template", "format": "asset"}}}})
     assert meta["config"]["picture"]["data_type"] == "asset"
     assert bindable_kinds("picture", meta["config"]["picture"]) == ["image", "video", "audio"]
+
+
+def test_素材字段只接它声明的那几种素材() -> None:
+    """「素材转写」此前没声明收哪种素材:画板格子上写着「接图片、视频或音频」,而转写只吃有声音的两种。
+    `media` 可以是一种(字符串)或几种(列表);界面列的、写绑定时查的、运行时取值认的是同一份。"""
+    from app.domain.boards.actions import BoardInputError
+    from app.domain.boards.tools import bindable_kinds, check_bindings
+    from app.domain.boards.transforms import board_group
+    from app.domain.plugins.nodes import node_meta
+    from app.domain.workflows import NODE_TYPES
+
+    transcribe = NODE_TYPES["transcribe_asset"]["config"]
+    assert bindable_kinds("asset_id", transcribe["asset_id"]) == ["video", "audio"]
+    assert bindable_kinds("asset_id", NODE_TYPES["video_to_gif"]["config"]["asset_id"]) == ["video"]
+    for audio_or_video in ("separate_audio", "denoise_audio"):
+        assert bindable_kinds("asset_id", NODE_TYPES[audio_or_video]["config"]["asset_id"]) == ["video", "audio"]
+    #: 没声明的照旧哪种都收(时间线追加、发布)。
+    assert bindable_kinds("asset_id", NODE_TYPES["timeline_append"]["config"]["asset_id"]) == ["image", "video", "audio"]
+
+    #: 插件的 `x-media` 也能写几种;一种照旧写成字符串;认不出的丢掉。
+    sound = {"type": "object", "properties": {
+        "clip": {"type": "string", "format": "asset", "x-media": ["audio", "video", "nonsense"]},
+        "cover": {"type": "string", "format": "asset", "x-media": "image"},
+    }}
+    meta = node_meta({"name": "t", "input_schema": sound, "node": {"outputs": ["asset_id"]}})
+    assert meta["config"]["clip"]["media"] == ["video", "audio"] and meta["config"]["cover"]["media"] == "image"
+    assert bindable_kinds("clip", meta["config"]["clip"]) == ["video", "audio"]
+    #: 两个素材字段收的不是同一种:归「素材」,不归某一种。
+    assert board_group(meta) == "asset"
+
+    canvas = {"items": [{"id": "img", "kind": "image", "asset_id": "a"}, {"id": "t", "kind": "action"}],
+              "edges": [{"source": "img", "target": "t"}]}
+    with pytest.raises(BoardInputError) as caught:
+        check_bindings(canvas, "t", transcribe, {"asset_id": [{"from": "img"}]}, "transcribe_asset")
+    assert caught.value.key == "boardErr_bindingKindMismatch"
