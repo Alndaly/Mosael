@@ -272,6 +272,7 @@ python3 scripts/sync-ratchet-docs.py
 | 棘轮:界面上给人看的字**走文案表**(`app/messages.ts` 的中英两份),不在组件里写死中文。 | `frontend/src/design/uiTextIsTranslated.test.ts` |
 | tokens.css 里给全局兜底的那几条规则,**必须写在 @layer 里面**。 | `frontend/src/design/unlayeredGlobals.test.ts` |
 | 第三方组件的样式表**必须进主包**,而且**必须进 vendor 层**。 | `frontend/src/design/vendorStyles.test.ts` |
+| 画板上每一块格子面板都套同一个壳(BoardComposerShell),不再各写各的外框。 | `frontend/src/features/boards/composerShell.test.ts` |
 | 棘轮:**画布上的叠放顺序不许在调用处现挑一个数。** | `frontend/src/features/canvasLayers.test.ts` |
 | 配音完成后要刷**哪些**缓存。 | `frontend/src/features/editor/dubRefresh.test.ts` |
 | 剪辑台上的分段 tab 只有一种长相。 | `frontend/src/features/editor/editorTabRhythm.test.ts` |

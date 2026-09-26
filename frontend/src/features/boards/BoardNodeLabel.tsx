@@ -29,6 +29,7 @@ export function BoardNodeLabel({
   icon: Icon,
   title,
   fallback,
+  secondary,
   renaming,
   readOnly = false,
   onRenaming,
@@ -39,6 +40,8 @@ export function BoardNodeLabel({
   title?: string;
   /** 没起名时显示什么(种类名)。也是输入框的占位 —— 清空名字就回到它。 */
   fallback: string;
+  /** 名字后面淡淡的一句(工具格:插件名;起了名的工具格还有工具名)。改名时不显示。 */
+  secondary?: string;
   renaming: boolean;
   /** 评论/标记模式:只看,不改。 */
   readOnly?: boolean;
@@ -96,6 +99,11 @@ export function BoardNodeLabel({
           {name || fallback}
         </span>
       )}
+      {secondary && !editing ? (
+        <span data-board-node-label-secondary="" className="min-w-0 shrink-[3] truncate opacity-70" title={secondary}>
+          · {secondary}
+        </span>
+      ) : null}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BoardItem } from "@/api/client";
@@ -21,7 +22,10 @@ vi.mock("@/app/preferences", () => ({
       boardNodeSucceeded: "已完成",
       boardNodeFailed: "失败",
       boardNodeCancelled: "已取消",
-      boardsGenerateFailed: "生成失败",
+      boardNodeGenerateFailed: "生成失败",
+      boardNodeRunFailed: "运行失败",
+      boardToolRunning: "正在运行",
+      boardToolStop: "停止",
       boardKindNote: "便签",
       boardKindImage: "图片",
       boardKindVideo: "视频",
@@ -52,7 +56,7 @@ const STATUS_CLASS = {
   idle: "ring-0",
   queued: "ring-primary/15",
   running: "ring-primary/25",
-  succeeded: "ring-success/20",
+  succeeded: "ring-0",
   failed: "ring-destructive/25",
   cancelled: "border-dashed",
 } as const;
@@ -74,6 +78,7 @@ function renderNode(
   status: NonNullable<BoardItem["run"]>["status"],
   extra: Partial<BoardItem> = {},
   commentMode = false,
+  onStop?: (id: string) => void,
 ) {
   const Node = BOARD_NODE_TYPES[kind];
   const item: BoardItem = {
@@ -92,10 +97,16 @@ function renderNode(
   };
   const props = {
     id: item.id,
-    data: { item, onText: vi.fn(), onAspect: vi.fn(), commentMode },
+    data: { item, onText: vi.fn(), onAspect: vi.fn(), commentMode, onStop },
     selected: false,
   } as unknown as React.ComponentProps<typeof Node>;
-  return render(<Node {...props} />);
+  //: 在跑的格子按任务查进度(和工具格同一份),要一个 QueryClient。
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <Node {...props} />
+    </QueryClientProvider>,
+  );
 }
 
 describe("无限画布节点运行状态", () => {
@@ -109,15 +120,64 @@ describe("无限画布节点运行状态", () => {
     }
   });
 
-  it.each(KINDS)("%s 节点的六种状态都有自己的节点级样式", (kind) => {
+  it.each(KINDS)("%s 节点的六种状态都有自己的节点级样式;成功不留彩色描边", (kind) => {
     for (const status of STATUSES) {
       const { container, unmount } = renderNode(kind, status);
       const node = container.querySelector<HTMLElement>("[data-board-run-status]");
       expect(node?.dataset.boardRunStatus).toBe(status);
       expect(node?.className).toContain(STATUS_CLASS[status]);
+      if (status === "succeeded") expect(node?.className).not.toMatch(/ring-success|border-success/);
       unmount();
     }
   });
+
+  it("刚在眼前跑成功的那一格闪一下,然后安静下来;打开时本来就成功着的不闪", () => {
+    vi.useFakeTimers();
+    try {
+      const Node = BOARD_NODE_TYPES.image;
+      const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } });
+      const view = (run: BoardItem["run"], asset_id?: string) => (
+        <QueryClientProvider client={client}>
+          <Node {...({ id: "i", data: { item: { id: "i", kind: "image", x: 0, y: 0, asset_id, run }, onText: vi.fn(), onAspect: vi.fn() }, selected: false } as unknown as React.ComponentProps<typeof Node>)} />
+        </QueryClientProvider>
+      );
+      const node = () => document.querySelector<HTMLElement>("[data-board-run-status]")!;
+      const { rerender } = render(view({ status: "running", job_id: "j" }));
+      rerender(view({ status: "succeeded" }, "a1"));
+      expect(node().className).toContain("ring-success/35");
+      act(() => void vi.advanceTimersByTime(2000));
+      expect(node().className).not.toContain("ring-success");
+      cleanup();
+      render(view({ status: "succeeded" }, "a1"));
+      expect(node().className).not.toContain("ring-success");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["image", "video", "audio"] as const)("%s 在跑:外壳上有停止,点了交给上层取消那一轮", (kind) => {
+    const onStop = vi.fn();
+    const { container } = renderNode(kind, "running", { form: { producer: "generate", prompt: "猫" } }, false, onStop);
+    fireEvent.click(container.querySelector<HTMLElement>("[data-board-stop]")!);
+    expect(onStop).toHaveBeenCalledWith(`${kind}-running`);
+    cleanup();
+    //: 排队中也停得下;评论模式、没在跑的不给。
+    expect(renderNode(kind, "queued", {}, false, onStop).container.querySelector("[data-board-stop]")).not.toBeNull();
+    cleanup();
+    expect(renderNode(kind, "running", {}, true, onStop).container.querySelector("[data-board-stop]")).toBeNull();
+    cleanup();
+    expect(renderNode(kind, "failed", {}, false, onStop).container.querySelector("[data-board-stop]")).toBeNull();
+  });
+
+  it("失败按产出者说:生成挂了是「生成失败」,截一段挂了是「运行失败」—— 不是「没能发起生成」", () => {
+    const { getByRole } = renderNode("image", "failed", { form: { producer: "generate" } });
+    expect(getByRole("alert")).toHaveTextContent("生成失败");
+    cleanup();
+    const trimmed = renderNode("video", "failed", { form: { producer: "trim" } });
+    expect(trimmed.getByRole("alert")).toHaveTextContent("运行失败");
+    expect(trimmed.getByRole("alert")).toHaveTextContent("上游拒绝了请求");
+  });
+
 
   it.each(Object.entries(STATUS_LABEL))("%s 状态不再重复显示在节点右上角", (status, label) => {
     const { queryByLabelText } = renderNode("image", status as keyof typeof STATUS_LABEL);
@@ -173,4 +233,17 @@ it("document contents drag the node and suppress native image dragging", () => {
   const image = container.querySelector("img")!;
   expect(image).not.toBeNull();
   expect(fireEvent.dragStart(image)).toBe(false);
+});
+
+it("选中的文档不加彩色描边(和图片、视频、便签同一条);3D 场景悬停时接点显形", () => {
+  const Doc = BOARD_NODE_TYPES.document;
+  const docProps = { data: { item: { id: "doc", kind: "document" } }, selected: true } as unknown as React.ComponentProps<typeof Doc>;
+  const doc = render(<Doc {...docProps} />);
+  const box = doc.container.firstElementChild as HTMLElement;
+  expect(box.className).not.toMatch(/border-primary|ring-primary/);
+  cleanup();
+  const Scene = BOARD_NODE_TYPES.scene;
+  const sceneProps = { data: { item: { id: "s", kind: "scene", scene_id: "sc" } }, selected: false } as unknown as React.ComponentProps<typeof Scene>;
+  const scene = render(<Scene {...sceneProps} />);
+  expect((scene.container.firstElementChild as HTMLElement).className.split(/\s+/)).toContain("group");
 });

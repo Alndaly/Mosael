@@ -79,6 +79,35 @@ def content_outputs(meta: dict[str, Any]) -> list[str]:
     return out
 
 
+#: 工具格上「这一格会长出什么」的那几种格子。`asset` = 一份素材,但没说是哪一种。
+OUTPUT_KINDS: tuple[str, ...] = ("note", "image", "video", "audio", "asset")
+
+
+def output_kinds(meta: dict[str, Any]) -> list[str]:
+    """跑一次落成哪几种格子,和 `content_outputs` 一一对应(同序)。
+
+    ADR 0025 的 `output_kinds`:工具格画成它要产出的那种内容的空格子(图片 / 视频 / 音频 / 便签),
+    界面读这一份,不按工具名或输出名猜。文字落成便签;素材看节点的 `output_media`
+    (`{输出名: image | video | audio}`,和输入字段的 `media` 同一个词表);没声明的,工具吃的那一种
+    素材就是它吐的那一种(`board_group` 是 image / video / audio 时:降噪、抠图);再说不清就是
+    `asset` —— 界面按最通用的媒体格(图片)画。
+    """
+    from app.domain.media_kinds import declared_media
+    from app.domain.workflows import output_data_type
+
+    declared = meta.get("output_media") if isinstance(meta.get("output_media"), dict) else {}
+    group = board_group(meta)
+    fallback = group if group in ("image", "video", "audio") else "asset"
+    kinds = []
+    for name in content_outputs(meta):
+        if output_data_type(name, meta) == "text":
+            kinds.append("note")
+            continue
+        media = declared_media(declared.get(name))
+        kinds.append(media[0] if len(media) == 1 else fallback)
+    return kinds
+
+
 def _makes_media(meta: dict[str, Any]) -> bool:
     from app.domain.workflows import output_data_type
 

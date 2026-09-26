@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { Languages, Package, Sparkles } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo } from "@/api/client";
-import { kindIcon } from "@/features/boards/boardNodes";
-import { boardToolFace, boardToolIcon, boardToolOptions } from "@/features/boards/boardTools";
+import { DEFAULT_SIZE, kindIcon } from "@/features/boards/boardNodes";
+import { boardToolFace, boardToolIcon, boardToolOptions, toolCellKind, toolCellSize } from "@/features/boards/boardTools";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 
 /** 形状和 GET /api/boards/producers 发下来的一样(后端已按 board_group 排好、同组挨着)。 */
@@ -65,7 +65,7 @@ describe("画板上的工具怎么分组(boardToolOptions)", () => {
   });
 });
 
-describe("工具格上那份摘要(boardToolFace)", () => {
+describe("工具格长成什么(boardToolFace / toolCellKind)", () => {
   //: 形状照 GET /api/boards/producers 里翻译那一格(字段声明已按语言翻好,带 board_sources)。
   const translate = producer("node:translate", "翻译", {
     type: "translate",
@@ -74,50 +74,54 @@ describe("工具格上那份摘要(boardToolFace)", () => {
     config: {
       text: { type: "text", required: true, label: "文本", board_sources: ["note", "document"] },
       target_lang: { type: "string", required: true, label: "目标语言", options: ["en", "ja"], option_labels: { en: "英语", ja: "日语" }, board_sources: [] },
-      engine: { type: "string", label: "引擎", default: "google", options: ["google", "ai"], option_labels: { google: "Google 翻译", ai: "AI 模型" }, board_sources: [] },
-      profile_id: { type: "string", label: "供应商配置", options_from: "chat_connections", active_when: { engine: "ai" }, board_sources: [] },
       extra: { type: "number", label: "高级旋钮", advanced: true, board_sources: [] },
     },
     outputs: ["text"],
     output_types: { text: "text" },
     output_labels: { text: "文本" },
-    board_products: ["text"],
+    output_kinds: ["note"],
   });
   const tool = (item: Partial<BoardItem> = {}) => ({ id: "a", kind: "action", x: 0, y: 0, form: { producer: "node:translate" }, ...item }) as BoardItem;
   const note: BoardItem = { id: "n1", kind: "note", x: 0, y: 0, text: "你好" };
 
-  it("空着:吃什么(没接上)、必填还没选的设置、产出什么;缺省值没改过的、要现查的、高级的都不摆", () => {
+  it("长成它主产出的那种内容格:文字是便签,素材按后端说的种类;说不清的(asset)按图片格;清单没到也是图片格", () => {
+    expect(toolCellKind({ output_kinds: ["note"] })).toBe("note");
+    expect(toolCellKind({ output_kinds: ["audio", "audio"] })).toBe("audio");
+    //: 一次出好几种:第一种是主产出(渲白模参考:首帧、尾帧、运镜视频)。
+    expect(toolCellKind({ output_kinds: ["image", "image", "video"] })).toBe("image");
+    expect(toolCellKind({ output_kinds: ["video"] })).toBe("video");
+    expect(toolCellKind({ output_kinds: ["asset"] })).toBe("image");
+    expect(toolCellKind({ output_kinds: [] })).toBe("image");
+    expect(toolCellKind(undefined)).toBe("image");
+    //: 放下时和那种内容格一样大。
+    expect(toolCellSize({ output_kinds: ["audio"] })).toEqual(DEFAULT_SIZE.audio);
+    expect(toolCellSize({ output_kinds: ["note"] })).toEqual(DEFAULT_SIZE.note);
+    expect(toolCellSize(undefined)).toEqual(DEFAULT_SIZE.action);
+  });
+
+  it("空着:格子上至多一句「还差什么」—— 第一个没接上、没手填的必填输入能接哪几种;设置不上格子", () => {
     const face = boardToolFace(translate, tool(), []);
-    expect(face.icon).toBe(Languages);
-    expect(face.plugin).toBe("");
-    expect(face.inputs).toEqual([{ key: "text", label: "文本", kinds: ["note", "document"], source: undefined, text: undefined }]);
-    expect(face.settings).toEqual([{ key: "target_lang", label: "目标语言", value: null }]);
-    expect(face.products).toEqual([{ label: "文本", text: true }]);
+    expect(face).toMatchObject({ label: "翻译", plugin: "", icon: Languages, kind: "note", missing: ["note", "document"] });
+    expect(Object.keys(face).sort()).toEqual(["description", "icon", "kind", "label", "missing", "plugin"]);
   });
 
-  it("连上一张便签就算接上了(必填字段跑的时候默认接第一个合适的上游);设置按显示名说,改过缺省值的才摆", () => {
-    const face = boardToolFace(translate, tool({ form: { producer: "node:translate", config: { target_lang: "en", engine: "ai" } } }), [note]);
-    expect(face.inputs[0].source?.id).toBe("n1");
-    expect(face.settings).toEqual([
-      { key: "target_lang", label: "目标语言", value: "英语" },
-      { key: "engine", label: "引擎", value: "AI 模型" },
-    ]);
-  });
-
-  it("手填了字、没接上游:给那段字;绑到的那一格已经不在上游了就不算接上", () => {
-    const typed = boardToolFace(translate, tool({ form: { producer: "node:translate", config: { text: "hello" } } }), [note]);
-    expect(typed.inputs[0]).toMatchObject({ source: undefined, text: "hello" });
+  it("连上一张便签就不差了(必填字段跑的时候默认接第一个合适的上游);手填了字也不差", () => {
+    expect(boardToolFace(translate, tool(), [note]).missing).toBeNull();
+    expect(boardToolFace(translate, tool({ form: { producer: "node:translate", config: { text: "hello" } } }), []).missing).toBeNull();
+    //: 绑到的那一格已经不在上游了,就又差了。
     const gone = boardToolFace(translate, tool({ form: { producer: "node:translate", config: { text: "" }, bindings: { text: [{ from: "n9" }] } } }), [note]);
-    expect(gone.inputs[0].source).toBeUndefined();
+    expect(gone.missing).toEqual(["note", "document"]);
   });
 
   it("插件工具带上插件名,图标按组", () => {
     const face = boardToolFace(
-      producer("node:plugin.cut.out", "去背景", { type: "plugin.cut.out", board_group: "image", plugin_name: "我的抠图" }),
+      producer("node:plugin.cut.out", "去背景", { type: "plugin.cut.out", board_group: "image", plugin_name: "我的抠图", output_kinds: ["image"] }),
       tool(),
       [],
     );
     expect(face.plugin).toBe("我的抠图");
     expect(face.icon).toBe(kindIcon("image"));
+    expect(face.kind).toBe("image");
+    expect(face.missing).toBeNull();
   });
 });

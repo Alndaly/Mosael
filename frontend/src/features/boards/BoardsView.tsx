@@ -732,9 +732,9 @@ function BoardDetail({
   );
 
   /**
-   * 停下工具格正在跑的那一轮。走任务中心的那一个取消(cancel_job):插件进程登记在这个任务名下,
-   * 取消就被杀掉;节点派生的子任务(转写、分离……)一并取消。那一格的「已取消」由回执落回来,
-   * 这里照常轮询收尾。
+   * 停下一格正在跑的那一轮 —— **每一种在跑的格子都有停止**(生成、念、写、截、工具,见 boardNodes 的运行态外壳)。
+   * 走任务中心的那一个取消(cancel_job):插件进程登记在这个任务名下,取消就被杀掉;节点派生的子任务
+   * (转写、分离……)一并取消。那一格的「已取消」由回执落回来,这里照常轮询收尾。
    */
   const stop = React.useCallback(
     async (itemId: string) => {
@@ -942,7 +942,7 @@ function BoardDetail({
                 //: (它不重排,理由见那边的注释),所以隔开写就会渲染出第二个同名小标题 ——
                 //: 「选一张图片」此前排在最末,菜单里于是有两个「素材库」。
                 kindOption("document", "document", t("boardKindDocument"), t("boardsGroupAssets")),
-                kindOption("scene", "scene", t("navScenes"), t("boardsGroupAssets")),
+                kindOption("scene", "scene", t("boardKindScene"), t("boardsGroupAssets")),
                 kindOption("pick-image", "image", t("boardsPickImage"), t("boardsGroupAssets")),
                 kindOption("pick-video", "video", t("boardsPickVideo"), t("boardsGroupAssets")),
                 kindOption("pick-audio", "audio", t("boardsPickAudio"), t("boardsGroupAssets")),

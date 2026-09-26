@@ -37,6 +37,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import is_message_key, tr
+from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT
 from app.domain.plugins.manifest import text_of
@@ -199,6 +200,13 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     #: 在创意画板上跑时,哪几个输出落成新的格子(和 NODE_TYPES 的 board_outputs 同一个意思,缺省全部)。
     board_outputs = declared.get("board_outputs")
     board_outputs = [str(name) for name in board_outputs if str(name) in outputs] if isinstance(board_outputs, list) else []
+    #: 素材输出是哪种素材(`{输出名: image | video | audio}`):画板上的工具格据此画成那种内容的空格子
+    #: (boards.transforms.output_kinds)。认不出的项丢掉。
+    output_media = declared.get("output_media")
+    output_media = (
+        {str(name): kind for name, kind in output_media.items() if str(name) in outputs and kind in MEDIA_KINDS}
+        if isinstance(output_media, dict) else {}
+    )
     #: 只给工作流连线用的输出(id、个数、摘要、任务号):画板上**从不**落成格子(见 boards.tools.landing_outputs)。
     wiring_outputs = declared.get("wiring_outputs")
     wiring_outputs = [str(name) for name in wiring_outputs if str(name) in outputs] if isinstance(wiring_outputs, list) else []
@@ -243,6 +251,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         "output_labels": {str(name): text_of(label) for name, label in output_labels.items()},
         **({"board_outputs": board_outputs} if board_outputs else {}),
         **({"wiring_outputs": wiring_outputs} if wiring_outputs else {}),
+        **({"output_media": output_media} if output_media else {}),
         **({"mirrors": mirrors} if mirrors is not None else {}),
         **({"board_group": board_group} if board_group else {}),
         **({"board_description": board_description} if board_description else {}),

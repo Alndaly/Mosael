@@ -5,10 +5,12 @@ import { toast } from "sonner";
 
 import { fetchWorkflowFieldOptions, listAssets, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { CodeEditor } from "@/components/app/code-editor";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
 import { Combobox } from "@/components/app/combobox";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
@@ -70,6 +72,25 @@ export const FIELD_BOX =
   "[&>textarea]:w-full [&>textarea]:resize-y [&>textarea]:rounded-md [&>textarea]:border [&>textarea]:border-border [&>textarea]:bg-field [&>textarea]:px-2.5 [&>textarea]:py-2 [&>textarea]:text-ui-sm [&>textarea]:text-foreground " +
   "[&>input:focus-visible]:border-primary [&>input:focus-visible]:outline-none " +
   "[&>textarea:focus-visible]:border-primary [&>textarea:focus-visible]:outline-none";
+
+/**
+ * 紧凑的一行一项(`compact`):标签在左、控件在右,标签小而淡,说明收进标签的悬停 —— 和生成面板
+ * 「参数」弹层里那几行(ai-studio/parameterPanel 的 ParameterRow)同一个样子。画板上工具格的「参数」
+ * 弹层用它:同一份字段渲染,不是工作流检查器那一列带大标签的表单。
+ */
+export const COMPACT_FIELD_BOX =
+  "grid min-w-0 grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3 gap-y-1 " +
+  "[&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-xs [&>span]:text-muted-foreground " +
+  "[&>textarea]:w-full [&>textarea]:resize-y [&>textarea]:rounded-md [&>textarea]:border [&>textarea]:border-border [&>textarea]:bg-field [&>textarea]:px-2.5 [&>textarea]:py-1.5 [&>textarea]:text-ui-sm [&>textarea]:text-foreground " +
+  "[&>textarea:focus-visible]:border-primary [&>textarea:focus-visible]:outline-none";
+
+/** 一个现查的清单是空的时候,占位里怎么说(还在查 / 先填哪一格 / 那一格接的是上游 / 真的没有)。 */
+export function emptyOptionsHint(t: (key: MessageKey) => string, why: EmptyOptions): string {
+  if (why.kind === "pending") return t("wfOptionsLoading");
+  if (why.kind === "parent") return t("wfPickParentFirst").replace("{field}", why.parent);
+  if (why.kind === "upstream") return t("wfParentFromUpstream").replace("{field}", why.parent);
+  return t("wfNoOptions");
+}
 
 /** object(JSON)字段:CodeMirror JSON 编辑,失焦解析回对象;非法给提示不写入。 */
 export function JsonField({ value, onChange }: { value: unknown; onChange: (parsed: unknown) => void }) {
@@ -276,6 +297,7 @@ export function NodeConfigForm({
   binding,
   renderOwnField,
   references = false,
+  compact = false,
 }: {
   /** 要渲染的字段(nodeConfigTiers 的一档)。 */
   fields: Array<[string, ConfigSpec]>;
@@ -295,8 +317,12 @@ export function NodeConfigForm({
    *  `{{loop.item.…}}` 也只能这么写);画板、插件的「试一下」不能 —— 那里的值就是字面量。
    *  能的话,挑东西的下拉在清单之外也收引用,并把上游的输出列在清单后面。 */
   references?: boolean;
+  /** 一行一项的紧凑排法(见 COMPACT_FIELD_BOX):画板的「参数」弹层。缺省是检查器那一列。 */
+  compact?: boolean;
 }) {
   const t = useI18n();
+  //: 紧凑排法里控件用 sm 档 —— 和生成面板「参数」弹层里的下拉同高。
+  const size = compact ? "sm" : undefined;
   const setConfig = onSetConfig;
   const typeConfig = (key: string) => (value: unknown) => onTypeConfig(key, value);
 
@@ -313,13 +339,7 @@ export function NodeConfigForm({
   const referenceOptions = references ? variables.map((ref) => ({ value: ref, label: bareRef(ref) })) : [];
 
   /** 现查的清单是空的:占位里说为什么(还在查 / 先填哪一格 / 那一格接的是上游 / 真的没有)。 */
-  const emptyHint = (key: string): string => {
-    const why = fieldOptions.whyEmpty(key);
-    if (why.kind === "pending") return t("wfOptionsLoading");
-    if (why.kind === "parent") return t("wfPickParentFirst").replace("{field}", why.parent);
-    if (why.kind === "upstream") return t("wfParentFromUpstream").replace("{field}", why.parent);
-    return t("wfNoOptions");
-  };
+  const emptyHint = (key: string): string => emptyOptionsHint(t, fieldOptions.whyEmpty(key));
 
   /** 一个配置字段的渲染。 */
   const renderField = ([key, spec]: [string, ConfigSpec]) => {
@@ -339,8 +359,8 @@ export function NodeConfigForm({
           const canConnect = Boolean(binding) && !isObject && !isAssetList && (binding?.canBind?.(key) ?? true);
           const connected = canConnect && Boolean(binding?.isBound(key));
           return (
-            <div className={FIELD_BOX} key={key} data-field-key={key}>
-              <span>
+            <div className={compact ? COMPACT_FIELD_BOX : FIELD_BOX} key={key} data-field-key={key}>
+              <span title={compact && spec?.description ? toPlainText(spec.description) : undefined}>
                 {declaredLabel || key}
                 {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
                 {canConnect && (
@@ -384,6 +404,7 @@ export function NodeConfigForm({
                     onChange={(next) => setConfig(key, next)}
                     options={options}
                     placeholder={t("wfPickOption")}
+                    size={size}
                   />
                 ) : (
                   <Combobox
@@ -392,6 +413,7 @@ export function NodeConfigForm({
                     placeholder={t("wfPickOption")}
                     emptyText={t("cmdkEmpty")}
                     allowCustomValue
+                    size={size}
                     className="w-full"
                     onValueChange={(next) => setConfig(key, next)}
                   />
@@ -418,6 +440,7 @@ export function NodeConfigForm({
                         customValueLabel={
                           allowsCustomValue(spec) ? undefined : (query) => t("wfUseReference").replace("{q}", query)
                         }
+                        size={size}
                         className="w-full"
                         onValueChange={(next) => setConfig(key, next)}
                       />
@@ -431,6 +454,7 @@ export function NodeConfigForm({
                       options={options}
                       placeholder={placeholder}
                       disabled={options.length === 0}
+                      size={size}
                     />
                   );
                 })()
@@ -476,13 +500,14 @@ export function NodeConfigForm({
                   // (官方模板就这么写)。type="number" 会把它当非法值显示成空,看着像没填,
                   // 顺手填个数就把引用覆盖了。inputMode 仍然给触控键盘弹数字键盘。
                   type="text"
+                  size={size}
                   inputMode={spec?.type === "number" ? "decimal" : undefined}
                   value={String(value ?? "")}
                   placeholder={spec?.default ? String(spec.default) : ""}
                   onChange={(event) => typeConfig(key)(event.target.value)}
                 />
               )}
-              {spec?.description && (
+              {spec?.description && !compact && (
                 <small>
                   <InlineMarkdown text={spec.description} />
                 </small>

@@ -1,8 +1,6 @@
-import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
-import { NodeToolbar, Position } from "@xyflow/react";
-import { Camera, Loader2, Scissors, Volume2, VolumeX } from "lucide-react";
+import { Camera, Scissors, Volume2, VolumeX } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,7 +10,7 @@ import { TrimTrack } from "@/features/boards/TrimTrack";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
-import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
 
 /** 能剪的两种媒体。 */
 export type TrimKind = "video" | "audio";
@@ -92,26 +90,58 @@ export function TrimComposer({
   };
 
   return (
-    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan grid w-[420px] gap-2 p-2")}>
-        {/* 看着片子本身去剪。**填数字的问题不在麻烦,在于你不知道第 3.2 秒是什么** ——
-            要么反复播放去数,要么剪出来再看一眼、不对再来一次。 */}
-        {duration ? (
-          <TrimTrack
-            assetId={assetId}
-            kind={item.kind}
-            duration={duration}
-            start={Number(start) || 0}
-            end={Number(end) || duration}
-            onChange={(range) => {
-              setStart(String(range.start));
-              setEnd(String(range.end));
-            }}
-          />
-        ) : null}
-
-      <div className="flex items-center gap-2">
-        <Scissors size={13} className="shrink-0 text-muted-foreground" />
+    <BoardComposerShell
+      nodeId={item.id}
+      name="trim"
+      bar={
+        <>
+          {controls.mute && (
+            <button
+              type="button"
+              aria-pressed={mute}
+              title={t(mute ? "boardDropSound" : "boardKeepSound")}
+              onClick={() => setMute((on) => !on)}
+              className={cn(
+                "grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full transition-colors hover:bg-secondary",
+                mute ? "text-foreground" : "text-muted-foreground/60 hover:text-foreground",
+              )}
+            >
+              {mute ? <VolumeX size={13} /> : <Volume2 size={13} />}
+            </button>
+          )}
+          {/* 取一帧:**用起点那个把手的位置** —— 轨已经在那儿了,再给一个「取帧位置」等于
+              让用户在同一条轨上记两个数。 */}
+          {onGrabFrame && controls.grabFrame && (
+            <button
+              type="button"
+              title={t("boardGrabFrameTitle")}
+              disabled={working}
+              onClick={() => run(() => onGrabFrame(from))}
+              className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-ui-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed"
+            >
+              <Camera size={13} /> {t("boardGrabFrame")}
+            </button>
+          )}
+        </>
+      }
+      send={{ label: t("boardTrimSubmit"), onSend: send, disabled: !ok, working, icon: Scissors }}
+    >
+      {/* 看着片子本身去剪。**填数字的问题不在麻烦,在于你不知道第 3.2 秒是什么** ——
+          要么反复播放去数,要么剪出来再看一眼、不对再来一次。 */}
+      {duration ? (
+        <TrimTrack
+          assetId={assetId}
+          kind={item.kind}
+          duration={duration}
+          start={Number(start) || 0}
+          end={Number(end) || duration}
+          onChange={(range) => {
+            setStart(String(range.start));
+            setEnd(String(range.end));
+          }}
+        />
+      ) : null}
+      <div className="flex min-w-0 items-center gap-2">
         <label className="flex items-center gap-1 text-ui-2xs text-muted-foreground">
           {t("boardTrimFrom")}
           <Input
@@ -136,51 +166,7 @@ export function TrimComposer({
           />
         </label>
         <span className="text-ui-2xs text-muted-foreground">{t("boardTrimSeconds")}</span>
-
-        {controls.mute && (
-        <button
-          type="button"
-          aria-pressed={mute}
-          title={t(mute ? "boardDropSound" : "boardKeepSound")}
-          onClick={() => setMute((on) => !on)}
-          className={cn(
-            "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full transition-colors",
-            mute ? "text-foreground" : "text-muted-foreground/60 hover:text-foreground",
-          )}
-        >
-          {mute ? <VolumeX size={13} /> : <Volume2 size={13} />}
-        </button>
-        )}
-
-        {/* 取一帧:**用起点那个把手的位置** —— 轨已经在那儿了,再给一个「取帧位置」等于
-            让用户在同一条轨上记两个数。 */}
-        {onGrabFrame && controls.grabFrame && (
-          <button
-            type="button"
-            title={t("boardGrabFrameTitle")}
-            disabled={working}
-            onClick={() => run(() => onGrabFrame(from))}
-            className="ml-auto flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-full px-2.5 text-ui-2xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed"
-          >
-            <Camera size={12} /> {t("boardGrabFrame")}
-          </button>
-        )}
-
-        <button
-          type="button"
-          disabled={!ok || working}
-          onClick={send}
-          className={cn(
-            "flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-ui-2xs transition-colors",
-            !ok || working
-              ? "cursor-not-allowed bg-secondary text-muted-foreground"
-              : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
-          )}
-        >
-          {working ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />} {t("boardTrimSubmit")}
-        </button>
-        </div>
       </div>
-    </NodeToolbar>
+    </BoardComposerShell>
   );
 }

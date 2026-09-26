@@ -257,7 +257,8 @@ describe("截挂了的那一格,选中时挂的是截取面板", () => {
     expect(document.querySelector('[aria-label="boardTrimEndLabel"]')).toHaveProperty("value", "4");
     expect(document.querySelector('[title="boardDropSound"]')).not.toBeNull();
 
-    const submit = [...document.querySelectorAll("button")].find((one) => one.textContent?.includes("boardTrimSubmit"));
+    //: 发送键是面板壳上那枚圆键(只有图标,名字在 aria-label 上)。
+    const submit = document.querySelector<HTMLButtonElement>('[data-board-composer="trim"] button[aria-label="boardTrimSubmit"]');
     act(() => submit!.click());
     expect(onRun).toHaveBeenCalledTimes(1);
     expect(onRun).toHaveBeenCalledWith(expect.objectContaining({
@@ -265,5 +266,105 @@ describe("截挂了的那一格,选中时挂的是截取面板", () => {
       item_id: "cut",
       form: { asset_id: "src", start: 1.5, end: 4, mute: true },
     }));
+  });
+});
+
+describe("选中之后挂什么", () => {
+  const select = (id: string) =>
+    act(() => {
+      document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  const toolbarButton = (text: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>(".react-flow__node-toolbar button")].find((one) => one.textContent?.includes(text));
+  const writeNote = (id: string, extra: Record<string, unknown> = {}) =>
+    ({ ...note(id, "开场白"), form: { producer: "write" as const }, ...extra });
+
+  it("选中一张便签不弹写作面板 —— 挪一挪它不用先关掉什么;操作条上「让 AI 写」才打开,再点一次收起", () => {
+    mount({ items: [writeNote("n1")], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
+    select("n1");
+    expect(document.querySelector('[data-board-composer="write"]')).toBeNull();
+    const ask = toolbarButton("boardAskAiWrite");
+    expect(ask, "操作条上有「让 AI 写」").toBeTruthy();
+    act(() => ask!.click());
+    expect(document.querySelector('[data-board-composer="write"]')).not.toBeNull();
+    expect(toolbarButton("boardAskAiWrite")!.getAttribute("aria-pressed")).toBe("true");
+    act(() => toolbarButton("boardAskAiWrite")!.click());
+    expect(document.querySelector('[data-board-composer="write"]')).toBeNull();
+  });
+
+  it("工具交回的 JSON 便签没有「让 AI 写」", () => {
+    mount({ items: [writeNote("j1", { text: '{"a":1}', text_format: "json" })], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
+    select("j1");
+    expect(toolbarButton("boardAskAiWrite")).toBeUndefined();
+    expect(document.querySelector('[data-board-composer="write"]')).toBeNull();
+  });
+
+  it("空的图片槽选中就挂生成面板(那一格就是要生成的)", () => {
+    mount(
+      { items: [{ id: "i1", kind: "image", x: 0, y: 0, width: 260, height: 180, form: { producer: "generate" } }], edges: [], markers: [] },
+      { onRun: vi.fn(async () => undefined) },
+    );
+    select("i1");
+    expect(document.querySelector('[data-board-composer="generate"]')).not.toBeNull();
+  });
+});
+
+describe("操作条上的「接着做」", () => {
+  const select = (id: string) =>
+    act(() => {
+      document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  const grow = () =>
+    Object.fromEntries(
+      [...document.querySelectorAll<HTMLButtonElement>("[data-board-grow]")].map((one) => [one.dataset.boardGrow, one]),
+    );
+
+  it("悬停说的是这一格往那一种长,图标是要长出来的那种格子", () => {
+    mount({ items: [note("n1", "一只猫")], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
+    select("n1");
+    const buttons = grow();
+    expect(Object.keys(buttons)).toEqual(["image", "video", "note", "audio"]);
+    expect(buttons.image.title).toBe("boardSpawnImageFromNote");
+    //: 此前便签往下接视频时说的是「用这段文字生成图片」。
+    expect(buttons.video.title).toBe("boardSpawnVideoFromText");
+    expect(buttons.video.querySelector("svg.lucide-film")).not.toBeNull();
+    expect(buttons.audio.querySelector("svg.lucide-music")).not.toBeNull();
+    expect(document.querySelector("[data-board-grow] svg.lucide-sparkles")).toBeNull();
+  });
+
+  it("有产出的图片往下接视频:拿它当首帧;空槽什么都不长", () => {
+    mount(
+      {
+        items: [
+          { id: "i1", kind: "image", x: 0, y: 0, width: 260, height: 180, asset_id: "a1" },
+          { id: "i2", kind: "image", x: 400, y: 0, width: 260, height: 180, form: { producer: "generate" } },
+        ],
+        edges: [],
+        markers: [],
+      },
+      { onRun: vi.fn(async () => undefined) },
+    );
+    select("i1");
+    expect(grow().video.title).toBe("boardSpawnVideoFromImage");
+    select("i2");
+    expect(Object.keys(grow())).toEqual([]);
+  });
+});
+
+describe("停止属于运行态的外壳", () => {
+  it("在跑的生成格(不只工具格)上有停止,点了交给上层", () => {
+    const onStop = vi.fn();
+    mount(
+      {
+        items: [{ id: "i1", kind: "image", x: 0, y: 0, width: 260, height: 180, form: { producer: "generate", prompt: "猫" }, run: { status: "running", job_id: "job-1" } }],
+        edges: [],
+        markers: [],
+      },
+      { onStop },
+    );
+    const stop = document.querySelector<HTMLElement>('[data-id="i1"] [data-board-stop]');
+    expect(stop).not.toBeNull();
+    act(() => stop!.click());
+    expect(onStop).toHaveBeenCalledWith("i1");
   });
 });

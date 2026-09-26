@@ -789,6 +789,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id"],
+        #: 落板的输出是哪种素材(见 boards.transforms.output_kinds):GIF 是一张动图,不是一段视频。
+        "output_media": {"asset_id": "image"},
         "board_group": "video", "board_description": "wfNode_video_to_gif_board",
         "category": "wfCat_asset",
         "label": "wfNode_video_to_gif",
@@ -1040,6 +1042,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id"],
+        "output_media": {"first_frame_asset_id": "image", "last_frame_asset_id": "image", "video_asset_id": "video"},
         "board_group": "scene", "board_description": "wfNode_scene_render_board",
         "category": "wfCat_3d",
         "label": "wfNode_scene_render",
@@ -1081,6 +1084,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["vocals_asset_id", "background_asset_id"],
+        "output_media": {"vocals_asset_id": "audio", "background_asset_id": "audio"},
         "board_group": "audio", "board_description": "wfNode_separate_audio_board",
         "category": "wfCat_audio",
         "label": "wfNode_separate_audio",
@@ -1110,6 +1114,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id"],
+        #: 视频进视频出;画板上它首先是一个音频工具,格子按音频画。
+        "output_media": {"asset_id": "audio"},
         "board_group": "audio", "board_description": "wfNode_denoise_audio_board",
         "category": "wfCat_audio",
         "label": "wfNode_denoise_audio",

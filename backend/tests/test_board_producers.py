@@ -406,7 +406,8 @@ PLUGIN_TOOLS = [
         "name": "paint",
         #: `extra` 是一份原始 JSON(选填):工作流里有编辑器,画板的表单上不出现。
         "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}, "extra": {"type": "object"}}},
-        "node": {"outputs": ["caption", "asset_id"], "output_types": {"caption": "text"}},
+        #: `output_media`:交出的那份是一段视频 —— 画板上这一格画成视频的空格子。
+        "node": {"outputs": ["caption", "asset_id"], "output_types": {"caption": "text"}, "output_media": {"asset_id": "video"}},
     },
     #: 可能交出一个文件(所以是内容变换),这回交的是一列没声明类型的字:按值猜 —— 一个列表落成好几格。
     {"name": "many", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["lines", "asset_id"]}},
@@ -646,7 +647,7 @@ def test_随包的插件工具_哪些上画板() -> None:
 def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
     """参数规矩:工具格的表单里没有映射、原始 JSON、代码,没有 `{{…}}` 引用写法;说明是画板那一句。
     接口给的就是这一份 —— 界面和智能体(list_board_producers)看到的一样。"""
-    from app.domain.boards.transforms import BOARD_GROUPS
+    from app.domain.boards.transforms import BOARD_GROUPS, OUTPUT_KINDS
 
     client = fresh_client()
     ws = _workspace(client)
@@ -670,11 +671,17 @@ def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
     assert "extra" not in by_id["node:plugin.dev.test.boardtools.paint"]["config"]
     assert "description" not in by_id["node:scene_render"]["config"]["scene_id"]
     assert by_id["node:video_to_gif"]["board_description"] == "把一段视频做成 GIF 动图"
-    #: 工具格上「产出」那一行说的是落板的内容,不是节点的全部输出(源素材 id、引擎名不算)。
-    assert by_id["node:video_to_gif"]["board_products"] == ["asset_id"]
-    assert by_id["node:separate_audio"]["board_products"] == ["vocals_asset_id", "background_asset_id"]
-    assert by_id["node:translate"]["board_products"] == ["text"]
-    assert all(set(one["board_products"]) <= set(one["outputs"]) and one["board_products"] for one in tools)
+    #: 工具格画成它要产出的那种内容(output_kinds,ADR 0025):只算落板的内容,不是节点的全部输出
+    #: (源素材 id、引擎名不算)。GIF 是一张图,不是视频 —— 声明说了算,不按工具吃什么猜。
+    assert by_id["node:video_to_gif"]["output_kinds"] == ["image"]
+    assert by_id["node:separate_audio"]["output_kinds"] == ["audio", "audio"]
+    assert by_id["node:translate"]["output_kinds"] == ["note"]
+    assert by_id["node:scene_render"]["output_kinds"] == ["image", "image", "video"]
+    assert all(one["output_kinds"] and set(one["output_kinds"]) <= set(OUTPUT_KINDS) for one in tools)
+    assert "board_products" not in by_id["node:translate"]
+    #: 插件工具在 node 块里声明 output_media;没声明、又说不清吃哪种素材的,是 asset(界面按图片格画)。
+    assert by_id["node:plugin.dev.test.boardtools.paint"]["output_kinds"] == ["video"]
+    assert by_id["node:plugin.dev.test.boardtools.many"]["output_kinds"] == ["asset"]
     #: 按吃什么内容分组、同组挨在一起(菜单按相邻的同名组归组)。
     groups = [one["board_group"] for one in tools]
     assert groups == sorted(groups, key=BOARD_GROUPS.index)

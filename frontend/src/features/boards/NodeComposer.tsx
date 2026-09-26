@@ -1,11 +1,8 @@
-import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { assetKeys } from "@/api/queryKeys";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { documentPrompt } from "./boardDocumentSources";
-import { MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
-import { NodeToolbar, Position } from "@xyflow/react";
-import { ArrowLeftRight, ArrowUp, Loader2, Plus, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowLeftRight, Plus, Sparkles } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -49,7 +46,7 @@ import {
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
-import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
 
 /**
@@ -64,10 +61,10 @@ import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview
  *
  * 所以:放下一个**空槽**,底下就挂着这块面板;写完提交,槽里就地变成图。改一版还是同一个格子。
  *
- * ## 位置
+ * ## 位置和样子
  *
- * 用 NodeToolbar 挂在节点下方 —— 它渲染在 React Flow 的视口层里,平移缩放时自己跟着节点走。
- * 自己算坐标的话,画布一动它就飘(这个仓库在 @ 引用菜单上踩过一次)。
+ * 外框、位置、底栏和发送键都由画板面板的壳摆(BoardComposerShell):它用 NodeToolbar 挂在节点下方,
+ * 平移缩放时自己跟着节点走。这块面板是那个壳的样板 —— 写字、配音、剪一段、工具格的面板都长成它这样。
  */
 /** 模型和参数共用选择控件;参数在弹层中显示独立标签。 */
 function Pick({
@@ -732,251 +729,228 @@ export function NodeComposer({
     );
   };
 
-  return (
-    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan relative w-[560px] max-w-[calc(100vw-2rem)] p-3")}>
-        {/* 输入素材:图片是一排参考图(可多张),视频是首帧 ⇄ 尾帧。**格子按模型声明出** ——
-            见 slots 那段。挂满上限就不再给 + ,免得点了才被校验器拦下。 */}
-        {slots.length > 0 && (
-          // 槽位行和提示词之间给一道界:上面挂的是**素材**,下面写的是**话**,两件事。
-          <div className="mb-1.5 flex flex-wrap items-center gap-1 border-b border-border px-1 pb-1.5">
-            {mergedSlots ? (
-              <>
-                {mergedSlots.flatMap((slot) =>
-                  sources
-                    .filter((one) => one.role === slot.role)
-                    .map((one) => {
-                      const kind = assetKindById.get(one.assetId);
-                      return (
-                        <SourceAssetSlotPreview
-                          key={one.assetId}
-                          assetId={one.assetId}
-                          kind={kind === "image" || kind === "video" || kind === "audio" ? kind : roleAccepts(slot.role)}
-                          label={roleLabel(t, slot.role)}
-                          onRemove={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
-                        />
-                      );
-                    }),
-                )}
-                {mergedSlots.some(
-                  (slot) => sources.filter((one) => one.role === slot.role).length < slot.limit,
-                ) && (
-                  // **一个**加号,不是三个。一份素材归哪个角色由它自己的类型唯一决定
-                  // (mergeableSourceSlots 保证了这一点),所以让用户先在三个长得一样、
-                  // 只靠 tooltip 区分的虚线框之间选,等于让他猜一件他不需要知道的事。
-                  // 份数上限按模型各不相同,所以「还能加几份」在这里现算,不写进文案。
-                  <Popover open={addOpen} onOpenChange={setAddOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        title={t("boardAddSource")}
-                        aria-label={t("boardAddSource")}
-                        className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-                      >
-                        <Plus size={13} />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-[248px] p-1.5">
-                      <p className="m-0 px-1.5 pb-1.5 pt-1 text-ui-xs leading-[1.5] text-muted-foreground">
-                        {t("boardAddSourceHint")}
-                      </p>
-                      <div className="grid gap-0.5">
-                        {mergedSlots.map((slot) => {
-                          const left = slot.limit - sources.filter((one) => one.role === slot.role).length;
-                          return (
-                            <button
-                              key={slot.role}
-                              type="button"
-                              disabled={left <= 0}
-                              onClick={() => {
-                                setAddOpen(false);
-                                onPickAsset(roleAccepts(slot.role), (assetId) =>
-                                  setSources((all) => [...all, { role: slot.role, assetId }]),
-                                );
-                              }}
-                              className="flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-left text-ui-sm text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
-                            >
-                              <span className="min-w-0 truncate">{roleLabel(t, slot.role)}</span>
-                              <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
-                                {left > 0 ? t("boardSourceRemaining").replace("{n}", String(left)) : t("boardSourceFull")}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </>
-            ) : (
-              displaySlots.map((slot, index) => {
-              // 首尾帧和参考素材**分属互斥的两组**(厂商硬约束,描述符里声明着)——
-              // 组与组之间给一道竖线,否则一排虚线框读起来像五个平级的槽。
-              const previous = displaySlots[index - 1]?.role;
-              const groupChanged =
-                previous !== undefined &&
-                previous.endsWith("_frame") !== slot.role.endsWith("_frame");
-              const mine = sources.filter((one) => one.role === slot.role);
-              return (
-                <React.Fragment key={slot.role}>
-                  {groupChanged && <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />}
-                  {index > 0 && slot.role === "last_frame" && (
-                    // 首帧和尾帧之间那个交换 —— 摆反了是最常见的手误,而重挂两次很烦。
-                    <button
-                      type="button"
-                      aria-label={t("boardSwapFrames")}
-                      title={t("boardSwapFrames")}
-                      className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      onClick={() =>
-                        setSources((current) =>
-                          current.map((one) =>
-                            one.role === "first_frame"
-                              ? { ...one, role: "last_frame" }
-                              : one.role === "last_frame"
-                                ? { ...one, role: "first_frame" }
-                                : one,
-                          ),
-                        )
-                      }
-                    >
-                      <ArrowLeftRight size={12} />
-                    </button>
-                  )}
-                  {mine.map((one) => {
-                    const label = roleLabel(t, slot.role);
-                    // 素材库数据到了以后以真实类型为准；首屏尚未取回时按角色兜底。两条信息都来自
-                    // 同一份领域契约，旧表单里即使没存 kind 也不会退回“全部当图片”。
-                    const kind = assetKindById.get(one.assetId);
-                    const previewKind = kind === "image" || kind === "video" || kind === "audio"
-                      ? kind
-                      : roleAccepts(slot.role);
-                    return (
-                      <SourceAssetSlotPreview
-                        key={one.assetId}
-                        assetId={one.assetId}
-                        kind={previewKind}
-                        label={label}
-                        onRemove={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
-                      />
-                    );
-                  })}
-                  {mine.length < slot.limit && (
-                    <button
-                      type="button"
-                      title={roleLabel(t, slot.role)}
-                      onClick={() =>
-                        onPickAsset(roleAccepts(slot.role), (assetId) =>
-                          setSources((all) => [...all, { role: slot.role, assetId }]),
-                        )
-                      }
-                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-                    >
-                      <Plus size={13} />
-                    </button>
-                  )}
-                </React.Fragment>
-              );
-              })
-            )}
-          </div>
-        )}
+  //: 换模型:每一项参数回到新模型描述符里的默认值,生成方式交还给「按上游挑」。
+  const pickModel = (next: string) => {
+    setPicked(next);
+    const target = options.find((one) => `${one.provider_profile_id}:${one.model}` === next) ?? null;
+    setRatio(capabilityString(target, "default_aspect_ratio", aspectRatioOptions(target)[0] ?? ""));
+    setResolution(capabilityString(target, "default_resolution", videoResolutionOptions(target)[0] ?? ""));
+    setSize(capabilityString(target, "default_size", sizeOptions(target)[0] ?? ""));
+    setDuration(defaultDuration(target));
+    setAudio(capabilityBoolean(target, "default_generate_audio"));
+    setBooleanParameters(Object.fromEntries(
+      booleanParameterKeys(target)
+        .filter((key) => key !== "generate_audio")
+        .map((key) => [key, capabilityBoolean(target, `default_${key}`)]),
+    ));
+    setEnumParameters(Object.fromEntries(
+      parameterChoiceEntries(target).map(([key, choices]) => [
+        key,
+        capabilityString(target, `default_${key}`, choices[0] ?? ""),
+      ]),
+    ));
+    setDeclared({});
+    setCount(1);
+    setMode("");
+    touched.current = false;
+  };
 
-        {/* 提示词。`@` 在**表单内部**引用素材,菜单跟着光标走 —— 和工作流的上游引用同一套
-            机件(TipTap + 共用的 useSuggestionMenu)。自己判 @ 的那一版栽在输入法上:
-            中文选词时按回车会被菜单当成「选中候选」吃掉,候选词上不了屏。 */}
-        {!!upstreamDocuments?.length && <div className="mb-2 flex flex-wrap gap-1.5">{upstreamDocuments.map(doc => <a key={doc.note_id} href={noteHref(doc.note_id)} title={t("documentOpen")} className="max-w-full truncate rounded-md bg-primary/10 px-2 py-1 text-ui-xs text-primary">{t("boardKindDocument")} · {doc.title || t("documentUntitled")} · v{doc.revision}</a>)}</div>}
-        {currentPromptMode === "none" ? (
-          // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的编辑器。
-          <p className="m-0 px-1 py-2 text-ui-sm text-muted-foreground">{t("genPromptNotUsed")}</p>
-        ) : (
-          <PromptEditor
-            value={prompt}
-            document={promptDocument}
-            onChange={(next, assets, document) => {
-              setPrompt(next);
-              setMentioned(assets);
-              setPromptDocument(document);
-            }}
-            placeholder={t(
-              currentPromptMode === "optional"
-                ? "boardPromptPlaceholderOptional"
-                : slots.length > 0
-                  ? "boardPromptPlaceholderMention"
-                  : "boardPromptPlaceholder",
+  //: 上面那一排:挂上的参考素材(按模型声明出的槽)和连进来的文档。
+  const upstreamChips =
+    slots.length > 0 || upstreamDocuments?.length ? (
+      <>
+        {mergedSlots ? (
+          <>
+            {mergedSlots.flatMap((slot) =>
+              sources
+                .filter((one) => one.role === slot.role)
+                .map((one) => {
+                  const kind = assetKindById.get(one.assetId);
+                  return (
+                    <SourceAssetSlotPreview
+                      key={one.assetId}
+                      assetId={one.assetId}
+                      kind={kind === "image" || kind === "video" || kind === "audio" ? kind : roleAccepts(slot.role)}
+                      label={roleLabel(t, slot.role)}
+                      onRemove={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
+                    />
+                  );
+                }),
             )}
-            candidates={candidates}
-            //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
-            //: 正是这句话十有八九要指的东西。
-            linked={feed.map((one) => one.assetId)}
-            onSubmit={send}
-            emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
-          />
-        )}
-        {/* Keep model, settings, and submit on one row; detailed parameters belong in the settings popover. */}
-        <div className="flex min-w-0 items-center gap-2 border-t border-divider pt-2">
-          {options.length === 0 ? (
-            // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-            <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoGenerationModel")}</span>
-          ) : (
-            <>
-              {/* 上限而不是 flex-1:模型名短的时候这一格就该短。名字长了在上限处截断,
-                  而不是把「参数」推到行尾 —— 它和模型是一组,该挨着。
-                  上限落在触发器本身而不是外面包一层:那一层曾经同时担着 hover 底色,
-                  于是和触发器的焦点环成了两个大小不同的高亮框(见 OptionPicker 的 icon)。 */}
-              <Pick
-                className="max-w-[min(15rem,45%)]"
-                icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
-                value={modelValue}
-                placeholder={t("genPickModel")}
-                onChange={(next) => {
-                  setPicked(next);
-                  const target = options.find((one) => `${one.provider_profile_id}:${one.model}` === next) ?? null;
-                  setRatio(capabilityString(target, "default_aspect_ratio", aspectRatioOptions(target)[0] ?? ""));
-                  setResolution(capabilityString(target, "default_resolution", videoResolutionOptions(target)[0] ?? ""));
-                  setSize(capabilityString(target, "default_size", sizeOptions(target)[0] ?? ""));
-                  setDuration(defaultDuration(target));
-                  setAudio(capabilityBoolean(target, "default_generate_audio"));
-                  setBooleanParameters(Object.fromEntries(
-                    booleanParameterKeys(target)
-                      .filter((key) => key !== "generate_audio")
-                      .map((key) => [key, capabilityBoolean(target, `default_${key}`)]),
-                  ));
-                  setEnumParameters(Object.fromEntries(
-                    parameterChoiceEntries(target).map(([key, choices]) => [
-                      key,
-                      capabilityString(target, `default_${key}`, choices[0] ?? ""),
-                    ]),
-                  ));
-                  setDeclared({});
-                  setCount(1);
-                  setMode("");
-                  touched.current = false;
-                }}
-                options={options.map((one) => ({
-                  value: `${one.provider_profile_id}:${one.model}`,
-                  label: `${one.model} · ${one.profile_name}`,
-                }))}
-              />
-
-              {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮 —— 点开是一个只有标题的
-                  空盒子。而「我们不认识这个模型」是另一回事:它多半**有**参数,只是目录里查不到
-                  (手填的别名、经另一条中转配的同一个模型)。那种情况静默地什么都不显示,看起来
-                  就和前一种一样,于是用户以为这个模型就是没参数 —— 今天就是这么错的。
-                  显隐和弹层内容共用 settingBlocks,不会再各走各的(见 generationSettingBlocks)。 */}
-              {settingBlocks.length === 0 && current?.capabilities_known === false && (
-                <span className="min-w-0 truncate px-1 text-ui-2xs text-muted-foreground" title={t("boardGenerationUnknownParams")}>
-                  {t("boardGenerationUnknownParams")}
-                </span>
-              )}
-              {settingBlocks.length > 0 && (
-              <Popover>
+            {mergedSlots.some(
+              (slot) => sources.filter((one) => one.role === slot.role).length < slot.limit,
+            ) && (
+              // **一个**加号,不是三个。一份素材归哪个角色由它自己的类型唯一决定
+              // (mergeableSourceSlots 保证了这一点),所以让用户先在三个长得一样、
+              // 只靠 tooltip 区分的虚线框之间选,等于让他猜一件他不需要知道的事。
+              // 份数上限按模型各不相同,所以「还能加几份」在这里现算,不写进文案。
+              <Popover open={addOpen} onOpenChange={setAddOpen}>
                 <PopoverTrigger asChild>
-                  <button type="button" aria-label={t("boardGenerationSettings")} className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-ui-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                    <SlidersHorizontal size={14} /><span>{t("boardGenerationSettings")}</span>
+                  <button
+                    type="button"
+                    title={t("boardAddSource")}
+                    aria-label={t("boardAddSource")}
+                    className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                  >
+                    <Plus size={13} />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="end" side="top" className={cn(MODAL_SURFACE, "nodrag nopan nowheel grid max-h-[min(440px,calc(100dvh-32px))] w-[360px] gap-3 overflow-y-auto rounded-xl p-4")}>
-                  <span className="text-ui-sm font-medium">{t("boardGenerationSettings")}</span>
+                <PopoverContent align="start" className="w-[248px] p-1.5">
+                  <p className="m-0 px-1.5 pb-1.5 pt-1 text-ui-xs leading-[1.5] text-muted-foreground">
+                    {t("boardAddSourceHint")}
+                  </p>
+                  <div className="grid gap-0.5">
+                    {mergedSlots.map((slot) => {
+                      const left = slot.limit - sources.filter((one) => one.role === slot.role).length;
+                      return (
+                        <button
+                          key={slot.role}
+                          type="button"
+                          disabled={left <= 0}
+                          onClick={() => {
+                            setAddOpen(false);
+                            onPickAsset(roleAccepts(slot.role), (assetId) =>
+                              setSources((all) => [...all, { role: slot.role, assetId }]),
+                            );
+                          }}
+                          className="flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-left text-ui-sm text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+                        >
+                          <span className="min-w-0 truncate">{roleLabel(t, slot.role)}</span>
+                          <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
+                            {left > 0 ? t("boardSourceRemaining").replace("{n}", String(left)) : t("boardSourceFull")}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </>
+        ) : (
+          displaySlots.map((slot, index) => {
+          // 首尾帧和参考素材**分属互斥的两组**(厂商硬约束,描述符里声明着)——
+          // 组与组之间给一道竖线,否则一排虚线框读起来像五个平级的槽。
+          const previous = displaySlots[index - 1]?.role;
+          const groupChanged =
+            previous !== undefined &&
+            previous.endsWith("_frame") !== slot.role.endsWith("_frame");
+          const mine = sources.filter((one) => one.role === slot.role);
+          return (
+            <React.Fragment key={slot.role}>
+              {groupChanged && <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />}
+              {index > 0 && slot.role === "last_frame" && (
+                // 首帧和尾帧之间那个交换 —— 摆反了是最常见的手误,而重挂两次很烦。
+                <button
+                  type="button"
+                  aria-label={t("boardSwapFrames")}
+                  title={t("boardSwapFrames")}
+                  className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  onClick={() =>
+                    setSources((current) =>
+                      current.map((one) =>
+                        one.role === "first_frame"
+                          ? { ...one, role: "last_frame" }
+                          : one.role === "last_frame"
+                            ? { ...one, role: "first_frame" }
+                            : one,
+                      ),
+                    )
+                  }
+                >
+                  <ArrowLeftRight size={12} />
+                </button>
+              )}
+              {mine.map((one) => {
+                const label = roleLabel(t, slot.role);
+                // 素材库数据到了以后以真实类型为准；首屏尚未取回时按角色兜底。两条信息都来自
+                // 同一份领域契约，旧表单里即使没存 kind 也不会退回“全部当图片”。
+                const kind = assetKindById.get(one.assetId);
+                const previewKind = kind === "image" || kind === "video" || kind === "audio"
+                  ? kind
+                  : roleAccepts(slot.role);
+                return (
+                  <SourceAssetSlotPreview
+                    key={one.assetId}
+                    assetId={one.assetId}
+                    kind={previewKind}
+                    label={label}
+                    onRemove={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
+                  />
+                );
+              })}
+              {mine.length < slot.limit && (
+                <button
+                  type="button"
+                  title={roleLabel(t, slot.role)}
+                  onClick={() =>
+                    onPickAsset(roleAccepts(slot.role), (assetId) =>
+                      setSources((all) => [...all, { role: slot.role, assetId }]),
+                    )
+                  }
+                  className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                >
+                  <Plus size={13} />
+                </button>
+              )}
+            </React.Fragment>
+          );
+          })
+        )}
+        {upstreamDocuments?.map((doc) => (
+          <a
+            key={doc.note_id}
+            href={noteHref(doc.note_id)}
+            title={t("documentOpen")}
+            className="max-w-full truncate rounded-md bg-primary/10 px-2 py-1 text-ui-xs text-primary"
+          >
+            {t("boardKindDocument")} · {doc.title || t("documentUntitled")} · v{doc.revision}
+          </a>
+        ))}
+      </>
+    ) : null;
+
+  return (
+    <BoardComposerShell
+      nodeId={item.id}
+      name="generate"
+      width="lg"
+      upstream={upstreamChips}
+      bar={
+        options.length === 0 ? (
+          // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
+          <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoGenerationModel")}</span>
+        ) : (
+          <>
+            {/* 上限而不是 flex-1:模型名短的时候这一格就该短。名字长了在上限处截断,
+                而不是把「参数」推到行尾 —— 它和模型是一组,该挨着。 */}
+            <Pick
+              className="max-w-[min(15rem,45%)]"
+              icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
+              value={modelValue}
+              placeholder={t("genPickModel")}
+              onChange={pickModel}
+              options={options.map((one) => ({
+                value: `${one.provider_profile_id}:${one.model}`,
+                label: `${one.model} · ${one.profile_name}`,
+              }))}
+            />
+            {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮;「我们不认识这个模型」
+                (手填的别名、经另一条中转配的同一个模型)要说出来 —— 静默地什么都不显示,
+                用户会以为这个模型就是没参数。显隐和弹层内容共用 settingBlocks。 */}
+            {settingBlocks.length === 0 && current?.capabilities_known === false && (
+              <span className="min-w-0 truncate px-1 text-ui-2xs text-muted-foreground" title={t("boardGenerationUnknownParams")}>
+                {t("boardGenerationUnknownParams")}
+              </span>
+            )}
+          </>
+        )
+      }
+      settings={
+        options.length > 0 && settingBlocks.length > 0
+          ? {
+              content: (
+                <>
                   {/* 生成方式排第一格:它决定上面那排槽位是首尾帧还是参考,后面几项都在它之下。 */}
                 {modes.length > 0 && (
                   <Pick
@@ -1106,43 +1080,58 @@ export function NodeComposer({
                       ]}
                     />
               )}
-                </PopoverContent>
-              </Popover>
-              )}
-
-              <span className="ml-auto flex shrink-0 items-center gap-1">
-                {maxImages(current) > 1 && (
-                  <span className="flex w-14 items-center rounded-md transition-colors hover:bg-secondary">
-                    <Pick
-                      value={String(count)}
-                      onChange={(next) => setCount(Number(next))}
-                      options={Array.from({ length: maxImages(current) }, (_, index) => ({
-                        value: String(index + 1),
-                        label: `${index + 1}×`,
-                      }))}
-                    />
-                  </span>
-                )}
-                <button
-                  type="button"
-                  aria-label={t("boardGenerate")}
-                  title={`${t("boardGenerate")}  ⌘↵`}
-                  disabled={!canSend || busy}
-                  onClick={send}
-                  className={cn(
-                    "grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors",
-                    !canSend || busy
-                      ? "cursor-not-allowed bg-secondary text-muted-foreground"
-                      : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
-                  )}
-                >
-                  {working ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
-                </button>
-              </span>
-            </>
+                </>
+              ),
+            }
+          : null
+      }
+      trailing={
+        options.length > 0 && maxImages(current) > 1 ? (
+          <span className="flex w-14 items-center rounded-md transition-colors hover:bg-secondary">
+            <Pick
+              value={String(count)}
+              onChange={(next) => setCount(Number(next))}
+              options={Array.from({ length: maxImages(current) }, (_, index) => ({
+                value: String(index + 1),
+                label: `${index + 1}×`,
+              }))}
+            />
+          </span>
+        ) : null
+      }
+      send={
+        options.length > 0
+          ? { label: t("boardGenerate"), onSend: send, disabled: !canSend || busy, working, shortcut: true }
+          : null
+      }
+    >
+      {currentPromptMode === "none" ? (
+        // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的编辑器。
+        <p className="m-0 px-1 py-2 text-ui-sm text-muted-foreground">{t("genPromptNotUsed")}</p>
+      ) : (
+        <PromptEditor
+          value={prompt}
+          document={promptDocument}
+          onChange={(next, assets, document) => {
+            setPrompt(next);
+            setMentioned(assets);
+            setPromptDocument(document);
+          }}
+          placeholder={t(
+            currentPromptMode === "optional"
+              ? "boardPromptPlaceholderOptional"
+              : slots.length > 0
+                ? "boardPromptPlaceholderMention"
+                : "boardPromptPlaceholder",
           )}
-        </div>
-      </div>
-    </NodeToolbar>
+          candidates={candidates}
+          //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
+          //: 正是这句话十有八九要指的东西。
+          linked={feed.map((one) => one.assetId)}
+          onSubmit={send}
+          emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
+        />
+      )}
+    </BoardComposerShell>
   );
 }

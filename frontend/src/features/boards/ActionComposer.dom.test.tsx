@@ -5,8 +5,9 @@ import React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * 工具格的面板:表单照节点声明长出来,画板只补两件自己的事 —— 字段接上游(芯片,按后端给的
- * `board_sources` 过滤)和「用谁的连接」。
+ * 工具格的面板:和画板上别的面板同一个壳(BoardComposerShell)。上游芯片按后端给的 `board_sources` 过滤,
+ * 正文是那段自由的字,挑一个的字段是底栏芯片(必填在前、至多三枚),其余进「参数」;分到哪一块全按字段
+ * 声明推。再加画板自己的一件事:「用谁的连接」。
  *
  * 用的工具是假的(`plugin.any.echo`),钉住「面板不认识具体工具」。
  */
@@ -118,40 +119,96 @@ function Stateful({
   );
 }
 
+const panel = () => document.querySelector<HTMLElement>('[data-board-composer="tool"]')!;
+const sendButton = () => document.querySelector<HTMLButtonElement>("[data-board-composer-send]")!;
+const chips = (key: string) => document.querySelector<HTMLElement>(`[data-binding-chips="${key}"]`);
+const barField = (key: string) =>
+  document.querySelector<HTMLElement>(`[data-board-composer-bar] [data-field-key="${key}"]`);
+
 describe("工具格的面板", () => {
-  it("必填的文字字段默认接上第一张便签;芯片只列接得上的上游,点一下就存", async () => {
+  it("和别的面板同一个壳:上面是上游芯片,正文是那段字,底栏是设置芯片 +「参数」+ 圆形发送键 —— 不是一列带大标签的表单", async () => {
+    stubApi([{ value: "i1", label: "我的回声" }]);
+    mount(<Stateful initial={action()} sources={[]} />);
+    await waitFor(() => expect(sendButton()).toBeTruthy());
+    //: 正文就是那段要交给工具的字(第一个没接上游的文字字段),不是一行「文字 *」标签 + 输入框。
+    const body = panel().querySelector<HTMLElement>("[data-board-composer-body]")!;
+    expect(body.querySelector('textarea[data-field-key="text"]')?.getAttribute("placeholder")).toBe("文字");
+    //: 挑一个的字段是底栏里的一枚芯片(标签在芯片里)。
+    expect(within(barField("mode")!).getByRole("combobox").textContent).toContain("模式");
+    //: 其余的进「参数」;发送键是那枚圆键,和生成面板一样。
+    expect(screen.getByRole("button", { name: "boardGenerationSettings" })).toBeTruthy();
+    expect(sendButton().className).toContain("rounded-full");
+    expect(sendButton().getAttribute("aria-label")).toBe("boardToolRun");
+    //: 没有检查器那一列的大标签和「手填 / 接上游」切换。
+    expect(document.querySelector("[data-field-key] > span > em")).toBeNull();
+    expect(screen.queryByText("wfInputManual")).toBeNull();
+  });
+
+  it("必填的文字字段默认接上第一张便签;每个能接上游的字段一组芯片,只列接得上的上游,点一下就存", async () => {
     stubApi([{ value: "i1", label: "我的回声" }]);
     const saved: BoardItem["form"][] = [];
     mount(<Stateful initial={action()} sources={[picture, note("n1", "第一张"), note("n2", "第二张")]} onSaved={(form) => saved.push(form)} />);
 
     await waitFor(() => expect(saved[0]?.bindings).toEqual({ text: [{ from: "n1" }] }));
-    const text = document.querySelector<HTMLElement>('[data-field-key="text"]')!;
-    const chips = within(text).getAllByRole("button", { pressed: undefined }).filter((one) => one.dataset.bindingSource);
-    //: 文字字段只接便签和文档 —— 图片不在这一排里。
-    expect(chips.map((one) => one.dataset.bindingSource)).toEqual(["n1", "n2"]);
-    expect(chips[0].getAttribute("aria-pressed")).toBe("true");
+    const text = () => [...chips("text")!.querySelectorAll<HTMLElement>("[data-binding-source]")];
+    //: 文字字段只接便签和文档 —— 图片不在这一组里。
+    expect(text().map((one) => one.dataset.bindingSource)).toEqual(["n1", "n2"]);
+    expect(text()[0].getAttribute("aria-pressed")).toBe("true");
+    //: 接上了:正文里不再摆那个字段的输入框。
+    expect(panel().querySelector('textarea[data-field-key="text"]')).toBeNull();
 
     //: 文字字段收一串:再点一张,两张都接上(运行时按连线顺序拼起来)。
-    fireEvent.click(chips[1]);
+    fireEvent.click(text()[1]);
     expect(saved.at(-1)?.bindings).toEqual({ text: [{ from: "n1" }, { from: "n2" }] });
 
-    //: 素材字段不是必填,不默认接;点开「接上游」,接的是图片。
-    const pictureField = document.querySelector<HTMLElement>('[data-field-key="picture"]')!;
-    fireEvent.click(within(pictureField).getByText("wfInputManual"));
+    //: 素材字段不是必填,不默认接;它那一组里点图片就接上。
+    const pictures = [...chips("picture")!.querySelectorAll<HTMLElement>("[data-binding-source]")];
+    expect(pictures.map((one) => one.dataset.bindingSource)).toEqual(["img"]);
+    expect(pictures[0].getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(pictures[0]);
     expect(saved.at(-1)?.bindings).toEqual({ text: [{ from: "n1" }, { from: "n2" }], picture: [{ from: "img" }] });
-    //: 固定选项的字段没有「接上游」。
-    const mode = document.querySelector<HTMLElement>('[data-field-key="mode"]')!;
-    expect(within(mode).queryByText("wfInputManual")).toBeNull();
+    //: 固定选项的字段没有上游芯片 —— 它在底栏。
+    expect(chips("mode")).toBeNull();
   });
 
-  it("切回手填之后不会又被默认绑回去", async () => {
+  it("把最后一枚芯片点掉就是切回手填:正文出现那段字,不会又被默认绑回去", async () => {
     stubApi([{ value: "i1", label: "我的回声" }]);
     const saved: BoardItem["form"][] = [];
     mount(<Stateful initial={action({ bindings: { text: [{ from: "n1" }] } })} sources={[note("n1", "便签")]} onSaved={(form) => saved.push(form)} />);
-    const text = document.querySelector<HTMLElement>('[data-field-key="text"]')!;
-    fireEvent.click(within(text).getByText("wfInputRef"));
+    fireEvent.click(chips("text")!.querySelector<HTMLElement>('[data-binding-source="n1"]')!);
     await waitFor(() => expect(saved.at(-1)).toMatchObject({ bindings: {}, config: { text: "" } }));
+    expect(panel().querySelector('textarea[data-field-key="text"]')).not.toBeNull();
     expect(defaultBindings(TOOL.config as never, { text: "" }, {}, [note("n1", "便签")])).toBeNull();
+  });
+
+  it("底栏的芯片:挑一个的字段,必填的排前面,至多三枚;其余进「参数」,里面有必填还空着时按钮上一个点", async () => {
+    stubApi([{ value: "i1", label: "我的回声" }]);
+    const many = {
+      ...TOOL,
+      config: {
+        ...TOOL.config,
+        style: { type: "string", options: ["x", "y"], label: "风格", board_sources: [] },
+        speed: { type: "string", options: ["slow", "fast"], label: "速度", board_sources: [] },
+        lang: { type: "string", required: true, options: ["en", "ja"], option_labels: { en: "英语", ja: "日语" }, label: "目标语言", board_sources: [] },
+        seed: { type: "number", required: true, label: "种子", board_sources: [] },
+      },
+    } as unknown as BoardProducerInfo;
+    mount(<Stateful initial={action()} sources={[]} tool={many} />);
+    await waitFor(() => expect(sendButton()).toBeTruthy());
+    const bar = [...document.querySelectorAll<HTMLElement>("[data-board-composer-bar] [data-field-key]")].map((one) => one.dataset.fieldKey);
+    expect(bar).toEqual(["lang", "mode", "style"]);
+    //: 必填还没选:芯片上写「待选」。
+    expect(within(barField("lang")!).getByRole("combobox").textContent).toContain("boardToolUnset");
+    //: 第四个挑一个的字段(速度)和必填的数字(种子)进「参数」;种子空着 → 按钮上有个点。
+    const settings = screen.getByRole("button", { name: "boardGenerationSettings" });
+    expect(settings.dataset.attention).toBe("true");
+    fireEvent.click(settings);
+    const popover = await screen.findByRole("dialog");
+    expect(popover.querySelector('[data-field-key="speed"]')).not.toBeNull();
+    expect(popover.querySelector('[data-field-key="seed"]')).not.toBeNull();
+    //: 紧凑的一行一项(和生成面板的参数弹层一个样子),不是检查器那一列。
+    expect(popover.querySelector('[data-field-key="seed"]')!.className).toContain("grid-cols-[112px_minmax(0,1fr)]");
+    expect(popover.querySelector('[data-field-key="lang"]')).toBeNull();
   });
 
   it("运行发出去的是这一格的产出者、配置和绑定", async () => {
@@ -173,7 +230,7 @@ describe("工具格的面板", () => {
     };
     mount(<>{renderComposer("node:plugin.any.echo", host)}</>);
     await waitFor(() => expect(screen.getByText("boardToolConnection".replace("{name}", "我的回声"))).toBeTruthy());
-    fireEvent.click(document.querySelector<HTMLElement>("[data-board-tool-run]")!);
+    fireEvent.click(sendButton());
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
     expect(run.mock.calls[0][0]).toEqual({
       producer: "node:plugin.any.echo",
@@ -191,27 +248,27 @@ describe("工具格的面板", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("boardToolNoConnection".replace("{plugin}", "我的回声"));
     expect(within(alert).getByRole("link", { name: "boardToolOpenPlugins" }).getAttribute("href")).toBe("#/plugins");
-    expect(document.querySelector<HTMLButtonElement>("[data-board-tool-run]")!.disabled).toBe(true);
+    expect(sendButton().disabled).toBe(true);
   });
 
-  // 展开「高级选项」时「运行」不能被挤出面板:正文一格自己滚,底栏在滚动区**外面**、钉在面板底边。
-  it("运行那一行不在滚动的正文里,展开多少字段都钉在底部", async () => {
+  // 正文再长,发送键也不能被挤出面板:正文一格自己滚,底栏在滚动区**外面**、钉在面板底边。
+  it("发送键不在滚动的正文里,钉在底栏", async () => {
     stubApi([{ value: "i1", label: "我的回声" }]);
     mount(<Stateful initial={action()} sources={[]} />);
-    const run = await waitFor(() => document.querySelector<HTMLElement>("[data-board-tool-run]")!);
-    const panel = document.querySelector<HTMLElement>("[data-action-composer]")!;
-    const body = panel.querySelector<HTMLElement>("[data-action-composer-body]")!;
+    await waitFor(() => expect(sendButton()).toBeTruthy());
+    const body = panel().querySelector<HTMLElement>("[data-board-composer-body]")!;
     expect(body.className).toContain("overflow-y-auto");
-    expect(panel.className).not.toContain("overflow-y-auto");
-    expect(body.contains(run)).toBe(false);
-    expect(run.closest("[data-action-composer-footer]")?.parentElement).toBe(panel);
+    expect(panel().className).not.toContain("overflow-y-auto");
+    expect(panel().className).toContain("grid-rows-[minmax(0,1fr)_auto]");
+    expect(body.contains(sendButton())).toBe(false);
+    expect(sendButton().closest("[data-board-composer-bar]")?.parentElement).toBe(panel());
   });
 
   it("清单里没有这个工具(插件卸了、这个人没接):不给表单", () => {
     stubApi([]);
     mount(<Stateful initial={action()} sources={[]} tool={null} />);
     expect(screen.getByRole("alert").textContent).toContain("boardToolUnavailable");
-    expect(document.querySelector("[data-board-tool-run]")).toBeNull();
+    expect(document.querySelector("[data-board-composer-send]")).toBeNull();
   });
 });
 
@@ -253,54 +310,53 @@ describe("指向某样东西的字段是下拉", () => {
     }) as never;
     return asked;
   }
-  const field = (key: string) => document.querySelector<HTMLElement>(`[data-field-key="${key}"]`)!;
+  const chip = (key: string) => within(barField(key)!).getByRole("combobox");
 
-  it("没接上游:场景和镜头都是标准下拉;镜头按挑中的场景列,换场景清掉旧镜头", async () => {
+  it("没接上游:场景和镜头都是底栏的下拉芯片;镜头按挑中的场景列,换场景清掉旧镜头", async () => {
     const asked = stubScenes();
     const saved: BoardItem["form"][] = [];
     mount(<Stateful initial={action({ config: { scene_id: "s1", shot_id: "shot-2" } })} sources={[]} tool={SCENE_TOOL}
                     onSaved={(form) => saved.push(form)} />);
 
-    await waitFor(() => expect(within(field("shot_id")).getByRole("combobox").textContent).toContain("近景"));
+    await waitFor(() => expect(chip("shot_id").textContent).toContain("近景"));
     expect(asked).toEqual(expect.arrayContaining(["scenes:", "scene_shots:s1"]));
-    //: 标准下拉(Select),不是能随手敲字的输入框;画板上没有 `{{…}}` 引用可写。
-    expect(field("scene_id").querySelector("textarea, input")).toBeNull();
-    expect(field("shot_id").querySelector("textarea, input")).toBeNull();
+    //: 挑一个,不是能随手敲字的输入框;画板上没有 `{{…}}` 引用可写。
+    expect(document.querySelector('textarea[data-field-key="scene_id"], input')).toBeNull();
 
-    fireEvent.keyDown(within(field("scene_id")).getByRole("combobox"), { key: "Enter" });
+    fireEvent.keyDown(chip("scene_id"), { key: "Enter" });
     fireEvent.click(await screen.findByRole("option", { name: "天台" }));
     await waitFor(() => expect(saved.at(-1)?.config).toEqual({ scene_id: "s2", shot_id: "" }));
     //: 天台只有一个镜头:留空就是它,显示成当前值 —— 不替人写进配置(运行时同一条规矩)。
-    await waitFor(() => expect(within(field("shot_id")).getByRole("combobox").textContent).toContain("俯拍"));
+    await waitFor(() => expect(chip("shot_id").textContent).toContain("俯拍"));
     expect(saved.at(-1)?.config).toEqual({ scene_id: "s2", shot_id: "" });
   });
 
-  it("场景接了画布上的场景格:场景那一格是芯片不是下拉,镜头按那一格的场景列;换接另一格清掉旧镜头", async () => {
+  it("场景接了画布上的场景格:场景那一格是上游芯片不是下拉,镜头按那一格的场景列;换接另一格清掉旧镜头", async () => {
     const asked = stubScenes();
     const saved: BoardItem["form"][] = [];
     mount(<Stateful initial={action({ config: { shot_id: "shot-2" }, bindings: { scene_id: [{ from: "c1" }] } })}
                     sources={[sceneCell("c1", "s1"), sceneCell("c2", "s2")]} tool={SCENE_TOOL}
                     onSaved={(form) => saved.push(form)} />);
 
-    await waitFor(() => expect(within(field("shot_id")).getByRole("combobox").textContent).toContain("近景"));
+    await waitFor(() => expect(chip("shot_id").textContent).toContain("近景"));
     expect(asked).toContain("scene_shots:s1");
     //: 接上了:挑场景的下拉让位给上游芯片,两个来源不会同时摆着。
-    expect(within(field("scene_id")).queryByRole("combobox")).toBeNull();
-    expect(field("scene_id").querySelector("[data-binding-chips]")).not.toBeNull();
+    expect(barField("scene_id")).toBeNull();
+    expect(chips("scene_id")).not.toBeNull();
 
-    fireEvent.click(field("scene_id").querySelector<HTMLElement>('[data-binding-source="c2"]')!);
+    fireEvent.click(chips("scene_id")!.querySelector<HTMLElement>('[data-binding-source="c2"]')!);
     await waitFor(() => expect(saved.at(-1)).toMatchObject({
       bindings: { scene_id: [{ from: "c2" }] }, config: { shot_id: "" },
     }));
-    await waitFor(() => expect(within(field("shot_id")).getByRole("combobox").textContent).toContain("俯拍"));
+    await waitFor(() => expect(chip("shot_id").textContent).toContain("俯拍"));
     expect(asked).toContain("scene_shots:s2");
   });
 
   it("场景还没挑:镜头说先挑哪一格,是灰的", async () => {
     stubScenes();
     mount(<Stateful initial={action({ config: {} })} sources={[]} tool={SCENE_TOOL} />);
-    await waitFor(() => expect(within(field("shot_id")).getByRole("combobox").textContent).toContain("wfPickParentFirst"));
-    expect(within(field("shot_id")).getByRole("combobox")).toBeDisabled();
+    await waitFor(() => expect(chip("shot_id").textContent).toContain("wfPickParentFirst"));
+    expect(chip("shot_id")).toBeDisabled();
   });
 });
 

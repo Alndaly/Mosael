@@ -1,24 +1,24 @@
 import React from "react";
-import { NodeToolbar, Position } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Link2, Loader2, Play, PlugZap } from "lucide-react";
+import { Loader2, PlugZap } from "lucide-react";
 
 import { fetchWorkflowFieldOptions, type BoardItem, type BoardProducerInfo, type BoardRunForms } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
-import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { OptionPicker } from "@/components/ui/option-picker";
+import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { kindIcon, sourceName } from "@/features/boards/boardNodes";
 import { defaultBindings, givesValue, sourceValue } from "@/features/boards/boardTools";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import {
+  emptyOptionsHint,
   NodeConfigForm,
   nodeConfigTiers,
   useNodeFieldOptions,
   type ConfigSpec,
-  type FieldBinding,
 } from "@/features/nodeForms/NodeConfigForm";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
+import { fieldDataType } from "@/features/nodeForms/fieldTypes";
 import { cn } from "@/lib/utils";
 
 type Form = BoardRunForms["node"];
@@ -28,27 +28,63 @@ const CONNECTION_SOURCE = "plugin_instances";
 type Bindings = Form["bindings"];
 
 /** 工具清单里一个字段的声明:节点表单那一份 + 画板多给的一样 —— 它能接哪几种上游格子。 */
-type BoardFieldSpec = ConfigSpec & { board_sources?: string[] };
+type BoardFieldSpec = ConfigSpec & { board_sources?: string[]; editor?: string };
+
+/** 底栏里至多摆几枚设置芯片;其余的进「参数」。 */
+const BAR_CHIP_LIMIT = 3;
 
 /** 这个字段收一串还是一份:文字字段(多张便签按连线顺序拼起来)和复数的素材字段收一串。 */
 function takesMany(key: string, spec: BoardFieldSpec): boolean {
   return Boolean(spec.board_sources?.includes("note")) || /(^|_)asset_ids$/.test(key);
 }
 
+/** 能接上游的格子(便签、文档、图片 …… 3D 场景)—— 后端说的(`board_sources`)。 */
+function bindable(spec: BoardFieldSpec | undefined): boolean {
+  return Boolean(spec?.board_sources?.length);
+}
+
+/** 挑一个的字段:声明了固定选项,或者选项要现查(`options_from`)。清单之外还能手填的(`allow_custom`)不算 ——
+ *  芯片只能挑,那种字段进「参数」,在那里能手填。 */
+function picksOne(spec: BoardFieldSpec | undefined): boolean {
+  return Boolean((spec?.options?.length || spec?.options_from) && !spec?.allow_custom);
+}
+
+/** 一段自由的字(翻译的原文、出图的提示词):面板的正文就是它。挑一个的、素材、专用控件都不算。 */
+function freeText(spec: BoardFieldSpec | undefined): boolean {
+  return (
+    (spec?.type === "text" || spec?.type === "template") &&
+    !spec.options?.length &&
+    !spec.options_from &&
+    !spec.editor &&
+    fieldDataType(spec) !== "asset"
+  );
+}
+
+function filled(value: unknown): boolean {
+  return typeof value === "number" || typeof value === "boolean" || (typeof value === "string" && value.trim() !== "");
+}
+
 /**
- * 工具格的面板:跑一个插件工具或工作流节点。
+ * 工具格的面板:跑一个插件工具或工作流节点。**和画板上别的面板同一个壳**(BoardComposerShell),
+ * 不是工作流检查器那一列带大标签的表单:
  *
- * **表单不是为这一个工具写的。** 字段、下拉、基础 / 高级分档全由节点声明说了算,渲染用的是工作流
- * 检查器那一份 NodeConfigForm —— 这里不认识任何具体节点(棘轮 nodeInspectorIsNodeAgnostic)。
- * 画板只补自己那一半:
+ *  · **上面一排是上游芯片**。工作流里模板字段写 `{{上游.输出}}`;画板上没有「输出」可引用,上游是连进来的
+ *    那几格 —— 能接上游的字段(后端说的 `board_sources`)各一组芯片,点哪一格就从哪一格取(便签给字、
+ *    文档给正文、图片 / 视频 / 音频给素材、3D 场景给场景)。必填的默认接第一个接得上的上游,可以改,改了存在
+ *    这一格上;值在运行时由服务端从画布上取。
+ *  · **正文是那段自由的字**(第一个没接上游的文字字段:翻译的原文、出图的提示词)。没有这样的字段时,正文是
+ *    工具那一句说明。
+ *  · **底栏是设置芯片**:挑一个的字段(固定选项、现查的清单),必填的在前,至多三枚 —— 「目标语言 英语 ▾」
+ *    「场景 客厅 ▾」「镜头 ▾」。**其余的进「参数」**,和生成面板的模型参数同一个弹层;里面有必填还空着时,
+ *    按钮上一个点。发送键是同一枚圆键。
  *
- *  · **字段接上游**。工作流里模板字段写 `{{上游.输出}}`;画板上没有「输出」可引用,上游是连进来的
- *    那几格 —— 所以接上游的字段显示成一排芯片,点哪一格就从哪一格取(便签给字、文档给正文、
- *    图片/视频/音频给素材、3D 场景给场景)。哪种格子能接哪个字段由后端说(`board_sources`)。
- *    必填的字段默认绑第一个接得上的上游,可以改,改了存在这一格上。值在运行时由服务端从画布上取:
- *    上游改了字,下次运行就跟着变。
- *  · **用谁的连接**。插件工具跑的是点运行的这个人自己接的连接 —— 共享画板上尤其如此。面板写明
- *    「将用你的连接「X」运行」;没有就说清楚、给一个去插件页的入口。
+ * **表单不是为这一个工具写的。** 分到哪一块全按字段声明(`board_sources` / `options` / `options_from` /
+ * `allow_custom` / `required` / `advanced` / `active_when`)推;「参数」里的字段用的是节点表单那一份渲染
+ * (NodeConfigForm 的紧凑排法),下拉的来源、跟着谁变、唯一一项当缺省也都是它那一份(useNodeFieldOptions)——
+ * 这里不认识任何具体节点(棘轮 nodeInspectorIsNodeAgnostic)。
+ *
+ * **用谁的连接**:插件工具跑的是点运行的这个人自己接的连接 —— 共享画板上尤其如此。正文末尾写明
+ * 「将用你的连接「X」运行」;没有就说清楚、给一个去插件页的入口,发送键是灰的。
  */
 export function ActionComposer({
   item,
@@ -90,7 +126,6 @@ export function ActionComposer({
   const fieldOptions = useNodeFieldOptions({ specs, config, workspaceId, nodeType, boundValues });
   const { submitting, run } = useSubmitting();
   const working = submitting || busy;
-  const [showAdvanced, setShowAdvanced] = React.useState(false);
 
   const save = React.useCallback(
     (next: { config?: Record<string, unknown>; bindings?: Bindings }) =>
@@ -125,189 +160,233 @@ export function ActionComposer({
 
   const fits = (key: string) =>
     sources.filter((one) => specs[key]?.board_sources?.includes(one.kind) && givesValue(one));
-  const binding: FieldBinding = {
-    canBind: (key) => fits(key).length > 0 || Boolean(bindings[key]?.length),
-    isBound: (key) => Boolean(bindings[key]?.length),
-    //: 换了接哪一格,这个字段的值就换了 —— 跟着它的字段(镜头跟着场景)一并清掉,和手填换值同一条。
-    setBound: (key, bound) => {
-      if (bound) {
-        const first = fits(key)[0];
-        if (first) save({ bindings: { ...bindings, [key]: [{ from: first.id }] }, config: dependentsCleared(config, key, specs) });
-        return;
-      }
-      const { [key]: _dropped, ...rest } = bindings;
-      //: 切回手填:把这个键写进 config(空串也算),默认绑定就不会刚解开又绑回去。
-      save({ bindings: rest, config: dependentsCleared(key in config ? config : { ...config, [key]: "" }, key, specs) });
-    },
-    renderBound: (key) => {
-      const spec = specs[key] ?? {};
-      const picked = new Set((bindings[key] ?? []).map((one) => one.from));
-      const options = fits(key);
-      const many = takesMany(key, spec);
-      if (options.length === 0) {
-        return <span className="text-ui-2xs text-muted-foreground">{t("boardToolNoUpstreamFit")}</span>;
-      }
-      return (
-        <div role="group" aria-label={t("boardToolPickUpstream")} data-binding-chips={key} className="flex flex-wrap gap-1.5">
-          {options.map((source) => {
-            const Icon = kindIcon(source.kind);
-            const on = picked.has(source.id);
-            return (
-              <button
-                key={source.id}
-                type="button"
-                aria-pressed={on}
-                data-binding-source={source.id}
-                title={sourceName(t, source)}
-                className={cn(
-                  "inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-ui-2xs transition-colors",
-                  on
-                    ? "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary"
-                    : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
-                )}
-                onClick={() => {
-                  const current = bindings[key] ?? [];
-                  const next = on
-                    ? current.filter((one) => one.from !== source.id)
-                    : many
-                      ? [...current, { from: source.id }]
-                      : [{ from: source.id }];
-                  if (next.length === 0) binding.setBound(key, false);
-                  else save({ bindings: { ...bindings, [key]: next }, config: dependentsCleared(config, key, specs) });
-                }}
-              >
-                <Icon size={11} className="shrink-0" />
-                <span className="truncate">{sourceName(t, source)}</span>
-              </button>
-            );
-          })}
-        </div>
-      );
-    },
+  const isBound = (key: string) => Boolean(bindings[key]?.length);
+  //: 换了接哪一格,这个字段的值就换了 —— 跟着它的字段(镜头跟着场景)一并清掉,和手填换值同一条。
+  const unbind = (key: string) => {
+    const { [key]: _dropped, ...rest } = bindings;
+    //: 切回手填:把这个键写进 config(空串也算),默认绑定就不会刚解开又绑回去。
+    save({ bindings: rest, config: dependentsCleared(key in config ? config : { ...config, [key]: "" }, key, specs) });
   };
-
-  const { basic, advanced } = nodeConfigTiers(specs, config);
+  const toggleSource = (key: string, source: BoardItem) => {
+    const current = bindings[key] ?? [];
+    const on = current.some((one) => one.from === source.id);
+    const next = on
+      ? current.filter((one) => one.from !== source.id)
+      : takesMany(key, specs[key] ?? {})
+        ? [...current, { from: source.id }]
+        : [{ from: source.id }];
+    if (next.length === 0) unbind(key);
+    else save({ bindings: { ...bindings, [key]: next }, config: dependentsCleared(config, key, specs) });
+  };
   //: 换了父字段就清掉跟着它的(换场景 → 旧镜头失效),和工作流检查器同一条规矩(nodeForms/dependents)。
   const setConfig = (key: string, value: unknown) => save({ config: withDependentsCleared(config, key, value, specs) });
 
-  const blocked = !tool || missingConnection || working;
+  //: 分到哪一块:上游芯片(能接上游、有得接或已经接上)、正文(第一段自由的字)、底栏芯片(挑一个的,必填在前)、
+  //: 其余进「参数」。只看此刻参与的字段(active_when)。
+  const { basic, advanced } = nodeConfigTiers(specs, config);
+  const active = [...basic, ...advanced];
+  const upstreamFields = active.filter(([key, spec]) => bindable(spec) && (fits(key).length > 0 || isBound(key)));
+  const bodyField = basic.find(([key, spec]) => freeText(spec) && !isBound(key));
+  const chipFields = basic
+    .filter(([key, spec]) => picksOne(spec) && !isBound(key) && key !== bodyField?.[0])
+    .sort(([, a], [, b]) => Number(Boolean(b.required)) - Number(Boolean(a.required)))
+    .slice(0, BAR_CHIP_LIMIT);
+  const placed = new Set([bodyField?.[0], ...chipFields.map(([key]) => key)]);
+  const rest = (fields: Array<[string, BoardFieldSpec]>) => fields.filter(([key]) => !placed.has(key) && !isBound(key));
+  const restBasic = rest(basic);
+  const restAdvanced = rest(advanced);
+  //: 「参数」里有必填还空着的:按钮上一个点 —— 不点开就看不见的必填,不能让它安静地缺着。
+  const attention = [...restBasic, ...restAdvanced].some(
+    ([key, spec]) => spec.required && !filled(config[key]) && !filled(spec.default),
+  );
+
+  const blocked = !tool || missingConnection;
   const send = () => {
-    if (blocked) return;
+    if (blocked || working) return;
     run(() => onRun({ config, bindings }));
   };
 
+  const fieldLabel = (key: string, spec: BoardFieldSpec) => String(spec.label || key);
+
   return (
-    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      {/* **两段:正文滚、底栏钉住。** 此前整块一起 overflow-y-auto,「运行」那一行排在正文末尾 ——
-          一展开「高级选项」它就被挤出视口,要滚到底才点得到。现在正文一格自己滚(minmax(0,1fr)),
-          底栏一格按内容高、永远在面板底边。 */}
-      <div
-        data-action-composer=""
-        className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel grid max-h-[min(520px,70vh)] w-[400px] grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden")}
-      >
-        <div data-action-composer-body="" className="grid min-h-0 content-start gap-3 overflow-y-auto p-3">
-        {tool === undefined ? (
-          <div role="status" className="flex items-center gap-2 text-ui-xs text-muted-foreground">
-            <Loader2 size={13} className="animate-spin" /> {t("boardKindAction")}
-          </div>
-        ) : tool === null ? (
-          <p role="alert" className="text-ui-xs leading-relaxed text-muted-foreground">
-            {t("boardToolUnavailable")}{" "}
-            <a href="#/plugins" className="text-primary underline-offset-2 hover:underline">
-              {t("boardToolOpenPlugins")}
-            </a>
-          </p>
-        ) : (
-          <>
-            {/* 画板那一句说明(给创作者看的「它把内容变成什么」),不是工作流节点那段写给搭流程的人的。 */}
-            {tool.board_description && (
-              <p className="text-ui-xs leading-relaxed text-muted-foreground">
-                <InlineMarkdown text={tool.board_description} />
-              </p>
-            )}
-            {connectionSpec?.options_from && (
-              <div data-tool-connection="" className="flex items-start gap-1.5 text-ui-2xs leading-relaxed">
-                <PlugZap size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
-                {missingConnection ? (
-                  <span role="alert" className="text-foreground">
-                    {t("boardToolNoConnection").replace("{plugin}", plugin)}{" "}
-                    <a href="#/plugins" className="text-primary underline-offset-2 hover:underline">
-                      {t("boardToolOpenPlugins")}
-                    </a>
-                  </span>
-                ) : connection ? (
-                  <span className="text-muted-foreground">{t("boardToolConnection").replace("{name}", connection.label)}</span>
-                ) : connections.isSuccess ? (
-                  <span className="text-muted-foreground">{t("boardToolPickConnection").replace("{plugin}", plugin)}</span>
-                ) : null}
-              </div>
-            )}
-            {basic.length > 0 && (
-              <div className="grid gap-3">
-                <NodeConfigForm
-                  fields={basic}
-                  config={config}
-                  workspaceId={workspaceId}
-                  variables={[]}
-                  fieldOptions={fieldOptions}
-                  onSetConfig={setConfig}
-                  onTypeConfig={setConfig}
-                  binding={binding}
-                />
-              </div>
-            )}
-            {advanced.length > 0 && (
-              <div className="grid gap-3">
-                <button
-                  type="button"
-                  aria-expanded={showAdvanced}
-                  onClick={() => setShowAdvanced((open) => !open)}
-                  className="inline-flex w-fit cursor-pointer items-center gap-1 text-ui-2xs text-muted-foreground hover:text-foreground"
+    <BoardComposerShell
+      nodeId={item.id}
+      name="tool"
+      upstream={
+        tool && upstreamFields.length > 0
+          ? upstreamFields.map(([key, spec]) => {
+              const picked = new Set((bindings[key] ?? []).map((one) => one.from));
+              return (
+                <span
+                  key={key}
+                  role="group"
+                  aria-label={fieldLabel(key, spec)}
+                  data-binding-chips={key}
+                  className="flex min-w-0 flex-wrap items-center gap-1"
                 >
-                  <ChevronDown size={12} className={cn("transition-transform", showAdvanced ? "" : "-rotate-90")} />
-                  {t("wfAdvanced")}
-                </button>
-                {showAdvanced && (
-                  <NodeConfigForm
-                    fields={advanced}
-                    config={config}
-                    workspaceId={workspaceId}
-                    variables={[]}
-                    fieldOptions={fieldOptions}
-                    onSetConfig={setConfig}
-                    onTypeConfig={setConfig}
-                    binding={binding}
+                  <span className="px-1 text-ui-2xs text-muted-foreground">{fieldLabel(key, spec)}</span>
+                  {fits(key).map((source) => {
+                    const Icon = kindIcon(source.kind);
+                    const on = picked.has(source.id);
+                    return (
+                      <button
+                        key={source.id}
+                        type="button"
+                        aria-pressed={on}
+                        data-binding-source={source.id}
+                        title={sourceName(t, source)}
+                        onClick={() => toggleSource(key, source)}
+                        className={cn(
+                          "inline-flex h-6 max-w-full cursor-pointer items-center gap-1 rounded-full border px-2 text-ui-2xs transition-colors",
+                          on
+                            ? "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary"
+                            : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
+                        )}
+                      >
+                        <Icon size={11} className="shrink-0" />
+                        <span className="truncate">{sourceName(t, source)}</span>
+                      </button>
+                    );
+                  })}
+                </span>
+              );
+            })
+          : null
+      }
+      bar={
+        tool
+          ? chipFields.map(([key, spec]) => {
+              const options = spec.options?.length
+                ? spec.options.map((option) => ({ value: option, label: spec.option_labels?.[option] ?? option }))
+                : (fieldOptions.dynamicOptions(key, spec) ?? []);
+              const current = String(config[key] ?? spec.default ?? "");
+              //: 留空 = 唯一的那一项(sole_option_default):显示成当前值,不写进配置 —— 运行时同一条规矩。
+              const shown = !current && spec.sole_option_default && options.length === 1 ? options[0].value : current;
+              return (
+                <span key={key} data-field-key={key} className="flex min-w-0 shrink">
+                  <OptionPicker
+                    size="sm"
+                    ariaLabel={fieldLabel(key, spec)}
+                    icon={<span className="shrink-0 text-muted-foreground">{fieldLabel(key, spec)}</span>}
+                    value={shown}
+                    onChange={(next) => setConfig(key, next)}
+                    options={options}
+                    disabled={options.length === 0}
+                    placeholder={
+                      options.length === 0
+                        ? emptyOptionsHint(t, fieldOptions.whyEmpty(key))
+                        : spec.required
+                          ? t("boardToolUnset")
+                          : t("wfPickOption")
+                    }
+                    className={cn(BAR_PICKER, "text-foreground")}
+                    contentClassName="max-w-[min(360px,calc(100vw-16px))]"
                   />
-                )}
-              </div>
-            )}
-          </>
-        )}
+                </span>
+              );
+            })
+          : null
+      }
+      settings={
+        tool && (restBasic.length > 0 || restAdvanced.length > 0)
+          ? {
+              attention,
+              content: (
+                <>
+                  {restBasic.length > 0 && (
+                    <NodeConfigForm
+                      compact
+                      fields={restBasic}
+                      config={config}
+                      workspaceId={workspaceId}
+                      variables={[]}
+                      fieldOptions={fieldOptions}
+                      onSetConfig={setConfig}
+                      onTypeConfig={setConfig}
+                    />
+                  )}
+                  {restAdvanced.length > 0 && (
+                    <>
+                      {restBasic.length > 0 && (
+                        <span className="border-t border-divider pt-2 text-ui-2xs text-muted-foreground">{t("wfAdvanced")}</span>
+                      )}
+                      <NodeConfigForm
+                        compact
+                        fields={restAdvanced}
+                        config={config}
+                        workspaceId={workspaceId}
+                        variables={[]}
+                        fieldOptions={fieldOptions}
+                        onSetConfig={setConfig}
+                        onTypeConfig={setConfig}
+                      />
+                    </>
+                  )}
+                </>
+              ),
+            }
+          : null
+      }
+      send={
+        tool
+          ? {
+              label: t(item.run?.status === "succeeded" ? "boardToolRerun" : "boardToolRun"),
+              hint: t("boardToolOutputsHint"),
+              onSend: send,
+              disabled: blocked,
+              working,
+            }
+          : null
+      }
+    >
+      {tool === undefined ? (
+        <div role="status" className="flex items-center gap-2 px-1 py-2 text-ui-xs text-muted-foreground">
+          <Loader2 size={13} className="animate-spin" /> {t("boardKindAction")}
         </div>
-        {tool && (
-            <div data-action-composer-footer="" className="flex items-center gap-2 border-t border-border px-3 pb-3 pt-2.5">
-              <span className="flex min-w-0 flex-1 items-center gap-1 text-ui-2xs text-muted-foreground">
-                <Link2 size={11} className="shrink-0" />
-                <span className="truncate" title={t("boardToolOutputsHint")}>{t("boardToolOutputsHint")}</span>
-              </span>
-              <button
-                type="button"
-                data-board-tool-run=""
-                disabled={blocked}
-                onClick={send}
-                className={cn(
-                  "flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-ui-2xs transition-colors",
-                  blocked
-                    ? "cursor-not-allowed bg-secondary text-muted-foreground"
-                    : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
-                )}
-              >
-                {working ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-                {t(item.run?.status === "succeeded" ? "boardToolRerun" : "boardToolRun")}
-              </button>
-            </div>
-        )}
-      </div>
-    </NodeToolbar>
+      ) : tool === null ? (
+        <p role="alert" className="m-0 px-1 py-2 text-ui-xs leading-relaxed text-muted-foreground">
+          {t("boardToolUnavailable")}{" "}
+          <a href="#/plugins" className="text-primary underline-offset-2 hover:underline">
+            {t("boardToolOpenPlugins")}
+          </a>
+        </p>
+      ) : (
+        <>
+          {bodyField ? (
+            <textarea
+              data-field-key={bodyField[0]}
+              aria-label={fieldLabel(...bodyField)}
+              value={String(config[bodyField[0]] ?? "")}
+              onChange={(event) => setConfig(bodyField[0], event.target.value)}
+              rows={bodyField[1].multiline ? 4 : 3}
+              placeholder={fieldLabel(...bodyField)}
+              className="nowheel w-full resize-none border-0 bg-transparent px-1 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          ) : tool.board_description ? (
+            //: 没有要写的字:正文是这个工具那一句说明(给创作者看的「它把内容变成什么」)。
+            <p className="m-0 px-1 py-1 text-ui-sm leading-relaxed text-muted-foreground">
+              <InlineMarkdown text={tool.board_description} />
+            </p>
+          ) : null}
+          {connectionSpec?.options_from && connections.isSuccess ? (
+            <p data-tool-connection="" className="m-0 flex items-start gap-1.5 px-1 text-ui-2xs leading-relaxed text-muted-foreground">
+              <PlugZap size={12} className="mt-0.5 shrink-0" />
+              {missingConnection ? (
+                <span role="alert" className="text-foreground">
+                  {t("boardToolNoConnection").replace("{plugin}", plugin)}{" "}
+                  <a href="#/plugins" className="text-primary underline-offset-2 hover:underline">
+                    {t("boardToolOpenPlugins")}
+                  </a>
+                </span>
+              ) : connection ? (
+                <span>{t("boardToolConnection").replace("{name}", connection.label)}</span>
+              ) : (
+                <span>{t("boardToolPickConnection").replace("{plugin}", plugin)}</span>
+              )}
+            </p>
+          ) : null}
+        </>
+      )}
+    </BoardComposerShell>
   );
 }

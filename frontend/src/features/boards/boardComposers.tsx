@@ -14,7 +14,7 @@ import { AudioComposer } from "@/features/boards/AudioComposer";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
-import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
+import { itemFormResetKey, itemIsRunning, producerOf } from "@/features/boards/boardItemState";
 import type { BoardDocumentState } from "@/features/boards/boardDocumentSources";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import type { Upstream } from "@/features/boards/boardUpstream";
@@ -189,4 +189,28 @@ export function slotProducers(item: BoardItem, producers: BoardProducerInfo[] | 
   if (!producers || item.asset_id || isNodeProducer(item.form?.producer)) return [];
   const fitting = producers.filter((one) => one.fills_empty_slot && one.hosts.includes(item.kind));
   return fitting.length > 1 ? fitting : [];
+}
+
+/**
+ * 这个产出者的面板**选中就挂**,还是**等人点了才挂**。写字是便签的一个帮手,不是便签本身:便签首先是
+ * 自己写的字,选中它多半是要挪一挪、改个颜色 —— 此前一选中就弹出写作面板,挪一张便签也得先把它关掉。
+ * 写作面板由操作条上的「让 AI 写」打开(BoardCanvas 的 writerFor)。别的产出者的格子(空的图片 / 视频槽、
+ * 工具格)选中它就是要跑它,面板照旧直接挂。一张表,不按产出者名字逐个比。
+ */
+const COMPOSER_ON_DEMAND: Record<BuiltinProducer, boolean> = {
+  write: true,
+  generate: false,
+  speak: false,
+  trim: false,
+};
+
+export function composerOnDemand(producer: BoardProducer): boolean {
+  return !isNodeProducer(producer) && COMPOSER_ON_DEMAND[producer];
+}
+
+/** 这一格能不能打开按需的面板(「让 AI 写」)。工具交回的结构化数据(JSON 便签)不给 —— 它是一份数据,
+ *  不是一段要改写的文案。 */
+export function canAskWriter(item: BoardItem): boolean {
+  const producer = producerOf(item);
+  return Boolean(producer && composerOnDemand(producer) && item.text_format !== "json");
 }

@@ -20667,12 +20667,12 @@
             "title": "Board Description",
             "default": ""
           },
-          "board_products": {
+          "output_kinds": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Board Products"
+            "title": "Output Kinds"
           }
         },
         "type": "object",

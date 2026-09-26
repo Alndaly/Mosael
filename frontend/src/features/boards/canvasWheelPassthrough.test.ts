@@ -28,11 +28,9 @@ function surfaceClasses(source: string): string[] {
 }
 
 describe("画布浮层与滚轮", () => {
+  //: 格子下面那几块面板的外框都在壳里(BoardComposerShell,见 composerShell.test)。
   const panels = [
-    "NodeComposer.tsx",
-    "NoteComposer.tsx",
-    "AudioComposer.tsx",
-    "TrimComposer.tsx",
+    "BoardComposerShell.tsx",
     "../collaboration/CommentCard.tsx",
     "../collaboration/CommentComposer.tsx",
   ];
@@ -51,6 +49,13 @@ describe("画布浮层与滚轮", () => {
 
   it("提示词编辑器不挂 nowheel —— 它只有 min-height,没有东西可滚", () => {
     expect(read("PromptEditor.tsx")).not.toMatch(/nodrag nowheel/);
+  });
+
+  it("面板的正文**真的会滚时**才吞滚轮:没满的面板不是画布上一片滚不动的死区", () => {
+    const shell = read("BoardComposerShell.tsx");
+    //: 正文那一格的 nowheel 跟着「量出来会滚」走,不写死在类名里。
+    expect(shell).toMatch(/scrolls && "nowheel"/);
+    expect(shell).not.toMatch(/data-board-composer-body=""\s+className="[^"]*nowheel/);
   });
 
   it("真的会滚的那两处仍然挂着", () => {

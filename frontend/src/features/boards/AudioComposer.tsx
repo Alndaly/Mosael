@@ -1,17 +1,13 @@
-import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import React from "react";
-import { NodeToolbar, Position } from "@xyflow/react";
-import { ArrowUp, AudioLines, Loader2 } from "lucide-react";
+import { AudioLines } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listTtsEngines, listTtsVoices, listVoices, type BoardItem, type Voice } from "@/api/client";
 import { compactSpeechEngineChoices } from "@/features/voice/speechEngines";
-import type { FieldSize } from "@/components/ui/control-size";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
-import { cn } from "@/lib/utils";
-import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
 /**
@@ -29,27 +25,19 @@ import { isImeKeystroke } from "@/lib/shortcuts";
  * 不要密钥、不用配置。后端念字的表单(producers.SpeakForm)早就同时收 voice_id 和 engine/engine_voice 两条路
  * (它的注释写着"两条都要能走"),漏的是这一侧。
  */
-/**
- * 紧凑工具行里的选择器。底色、焦点环、内边距全由触发器这一个盒子出 —— 和视频卡片同一套。
- *
- * **档位由调用点给**(`size`),不写在这里:「同一行的控件一样高」是那一行的决定,而这个组件
- * 不知道自己会被摆进哪一行。design/controlRhythm 那条棘轮也正是按调用点的 `size` 读的 —— 把档位
- * 藏进来,它就只能按 `Pick` 的默认档(40px)猜,于是要么误报、要么把真参差放过去。
- */
+/** 底栏里的一枚选择器:和别的面板底栏同一枚(BAR_PICKER、sm 档)。没得选就不摆。 */
 function Pick({
   value,
   onChange,
   options,
   ariaLabel,
   icon,
-  size,
 }: {
   value: string;
   onChange: (next: string) => void;
   options: { value: string; label: string }[];
   ariaLabel: string;
   icon?: React.ReactNode;
-  size: FieldSize;
 }) {
   if (options.length === 0) return null;
   return (
@@ -59,8 +47,8 @@ function Pick({
       options={options}
       ariaLabel={ariaLabel}
       icon={icon}
-      size={size}
-      className="w-auto max-w-[min(11rem,40%)] gap-1 border-0 bg-transparent px-1.5 text-ui-2xs text-muted-foreground shadow-none transition-colors hover:bg-secondary data-[state=open]:text-foreground"
+      size="sm"
+      className={BAR_PICKER}
       contentClassName="max-w-[min(360px,calc(100vw-16px))]"
     />
   );
@@ -156,86 +144,68 @@ export function AudioComposer({
   };
 
   return (
-    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan w-[420px] p-2")}>
-        <textarea
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (isImeKeystroke(event)) return;
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              send();
-            }
-          }}
-          rows={3}
-          placeholder={t("boardSpeakPlaceholder")}
-          className="nowheel w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
-        />
-        <div className="flex items-center gap-1 border-t border-border pt-1.5">
-          {engineChoices.length === 0 ? (
-            // 一个引擎都没有时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-            <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoVoices")}</span>
-          ) : (
-            <>
-              {/* 图标画在触发器**里面**,箭头不藏:这一排和视频卡片的模型选择器是同一类控件,
-                  看起来就该一样。包一层外壳只负责 hover 的写法会让悬停和聚焦高亮出两个不同
-                  大小的框,而 `[&>svg]:hidden` 会让这一格看起来根本不像个下拉。 */}
-              <Pick
-                size="xs"
-                ariaLabel={t("subtitleDubEngine")}
-                icon={<AudioLines size={12} className="shrink-0 text-muted-foreground" />}
-                value={activeEngine?.id ?? ""}
-                onChange={(next) => {
-                  setEngine(next);
-                  //: 换了引擎,上一把嗓子多半不在新目录里 —— 清掉,让它重新落在第一个。
-                  setEngineVoice("");
-                }}
-                /* label 后端已按 Accept-Language 翻好(routes/voices.py 的 translate_fields),别再过一次 t()。 */
-                options={engineChoices.map((one) => ({ value: one.id, label: one.label }))}
-              />
-              {usingClone ? (
-                cloneOptions.length === 0 ? (
-                  // 克隆库空着不等于"没有音色可用" —— 上面那个下拉里还有别的引擎。
-                  <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoVoices")}</span>
-                ) : (
-                  /* 音色一多自动带搜索 —— 一个供应商挂几十个音色是常态,滚着找「若曦」不现实。 */
-                  <Pick
-                    size="xs"
-                    ariaLabel={t("subtitleDubVoice")}
-                    value={current?.id ?? ""}
-                    onChange={setPicked}
-                    options={cloneOptions.map((one: Voice) => ({ value: one.id, label: one.name }))}
-                  />
-                )
+    <BoardComposerShell
+      nodeId={item.id}
+      name="speak"
+      bar={
+        engineChoices.length === 0 ? (
+          // 一个引擎都没有时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
+          <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoVoices")}</span>
+        ) : (
+          <>
+            {/* 图标画在触发器**里面**,箭头不藏:这一排和图片 / 视频格的模型选择器是同一枚控件。 */}
+            <Pick
+              ariaLabel={t("subtitleDubEngine")}
+              icon={<AudioLines size={12} className="shrink-0 text-muted-foreground" />}
+              value={activeEngine?.id ?? ""}
+              onChange={(next) => {
+                setEngine(next);
+                //: 换了引擎,上一把嗓子多半不在新目录里 —— 清掉,让它重新落在第一个。
+                setEngineVoice("");
+              }}
+              /* label 后端已按 Accept-Language 翻好(routes/voices.py 的 translate_fields),别再过一次 t()。 */
+              options={engineChoices.map((one) => ({ value: one.id, label: one.label }))}
+            />
+            {usingClone ? (
+              cloneOptions.length === 0 ? (
+                // 克隆库空着不等于"没有音色可用" —— 左边那个下拉里还有别的引擎。
+                <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoVoices")}</span>
               ) : (
+                /* 音色一多自动带搜索 —— 一个供应商挂几十个音色是常态,滚着找「若曦」不现实。 */
                 <Pick
-                  size="xs"
                   ariaLabel={t("subtitleDubVoice")}
-                  value={activeEngineVoice?.value ?? ""}
-                  onChange={setEngineVoice}
-                  options={engineVoiceChoices.map((one) => ({ value: one.value, label: one.label }))}
+                  value={current?.id ?? ""}
+                  onChange={setPicked}
+                  options={cloneOptions.map((one: Voice) => ({ value: one.id, label: one.name }))}
                 />
-              )}
-            </>
-          )}
-          <button
-            type="button"
-            aria-label={t("boardSpeak")}
-            title={`${t("boardSpeak")}  ⌘↵`}
-            disabled={!text.trim() || !ready || working}
-            onClick={send}
-            className={cn(
-              "ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
-              !text.trim() || !ready || working
-                ? "cursor-not-allowed bg-secondary text-muted-foreground"
-                : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
+              )
+            ) : (
+              <Pick
+                ariaLabel={t("subtitleDubVoice")}
+                value={activeEngineVoice?.value ?? ""}
+                onChange={setEngineVoice}
+                options={engineVoiceChoices.map((one) => ({ value: one.value, label: one.label }))}
+              />
             )}
-          >
-            {working ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
-          </button>
-        </div>
-      </div>
-    </NodeToolbar>
+          </>
+        )
+      }
+      send={{ label: t("boardSpeak"), onSend: send, disabled: !text.trim() || !ready, working, shortcut: true }}
+    >
+      <textarea
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (isImeKeystroke(event)) return;
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            send();
+          }
+        }}
+        rows={3}
+        placeholder={t("boardSpeakPlaceholder")}
+        className="nowheel w-full resize-none border-0 bg-transparent px-1 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+      />
+    </BoardComposerShell>
   );
 }

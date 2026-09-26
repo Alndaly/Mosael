@@ -135,7 +135,9 @@ TaskEvent 行只在总线创建。
 两个来源过同一道门:**画板上只放内容变换**(`boards/transforms.content_transform_gap`,ADR 0021 修订)——
 分组不是流程 / 数据 / 知识库(`workflows.WIRING_CATEGORIES`),交出素材或点名落板的文字,吃画板上的内容或
 凭空产出素材,必填字段里没有映射 / 原始 JSON / 代码。`GET /api/boards/producers` 发的是画板那一份描述:
-字段去掉工程字段、模板字段成 `type: "text"`,带 `board_group`(按吃什么内容分组)和 `board_description`。
+字段去掉工程字段、模板字段成 `type: "text"`,带 `board_group`(按吃什么内容分组)、`board_description`,
+和 `output_kinds`(跑一次落成哪几种格子,`boards/transforms.output_kinds`:文字是便签,素材读节点的 `output_media`,
+没声明按它吃的那种素材)—— 界面据此把工具格画成它要产出的那种内容的空格子,放下时也是那种格子的大小。
 字段绑定上游格子(`form.bindings`),值由服务端在运行那一刻按连线顺序从画布上取;能接哪几种格子由
 `boards.tools.bindable_kinds` 一处决定,随 `GET /api/boards/producers` 发给界面(`board_sources`)。
 

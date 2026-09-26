@@ -1,7 +1,7 @@
 import { Package, Sparkles, type LucideIcon } from "lucide-react";
 
 import { isNodeProducer, type BoardItem, type BoardProducerInfo, type BoardRunForms } from "@/api/client";
-import { kindIcon, type BoardToolFace } from "@/features/boards/boardNodes";
+import { DEFAULT_SIZE, kindIcon, type BoardToolFace, type ToolCellKind } from "@/features/boards/boardNodes";
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 
@@ -122,10 +122,6 @@ export function defaultBindings(
   return next;
 }
 
-/** 格子上最多摆几行「吃什么」、几行设置 —— 它是一眼看懂的摘要,不是第二张表单。 */
-const MAX_INPUTS = 3;
-const MAX_SETTINGS = 2;
-
 function filledText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
@@ -133,60 +129,47 @@ function filledText(value: unknown): string {
 }
 
 /**
+ * 工具格画成哪一种内容的空格子:它跑一次**主要**产出的那一种(后端 `output_kinds` 的第一个,ADR 0025)。
+ * 文字落成便签;说不清是哪种素材(`asset`)的按最通用的媒体格 —— 图片。不按工具名猜。
+ */
+export function toolCellKind(tool: Pick<BoardProducerInfo, "output_kinds"> | null | undefined): ToolCellKind {
+  const first = tool?.output_kinds?.[0];
+  return first === "note" || first === "video" || first === "audio" ? first : "image";
+}
+
+/** 放下一格这个工具时它多大:和它长得像的那种内容格一样大(清单没到、查不到时是工具格的缺省)。 */
+export function toolCellSize(tool: Pick<BoardProducerInfo, "output_kinds"> | null | undefined): { width: number; height: number } {
+  return tool ? DEFAULT_SIZE[toolCellKind(tool)] : DEFAULT_SIZE.action;
+}
+
+/**
  * 工具格上要画的那几样,全从工具声明和这一格自己的表单里读 —— 不为哪个工具单写:
  *
- *  · **吃什么**:能接上游的字段(`board_sources`),不在「高级」里、此刻参与的。接上了的说接的是哪一格
- *    (绑定的,或者跑的时候会默认接上的第一个合适的上游,和面板同一条 defaultBindings);手填了的给那段字;
- *    都没有的由格子说「接一段……」。
- *  · **一两个关键设置**:不接上游、不在「高级」里、此刻参与的字段里,必填的和改过缺省值的 —— 选项
- *    按后端翻好的显示名说(「目标语言 · 英语」)。选项要现查的(连接、模型)不摆:格子上拿不到它的名字。
- *  · **产出什么**:后端说的落板内容(`board_products`),文字的落成便签。
+ *  · **长成什么**:主产出的那种内容格(toolCellKind)。
+ *  · **还差什么**:第一个**必填**、能接上游(`board_sources`)、此刻参与的字段,既没接上(绑定的,或跑的
+ *    时候会默认接上的第一个合适的上游,和面板同一条 defaultBindings)也没手填 —— 格子上说「接视频」。
+ *    至多这一句;选填的、设置项都不上格子(它们在面板里)。
  */
 export function boardToolFace(tool: BoardProducerInfo, item: BoardItem, sources: BoardItem[]): BoardToolFace {
   const specs = (tool.config ?? {}) as Record<string, ToolFieldSpec>;
   const config = item.form?.config ?? {};
   const saved = item.form?.bindings ?? {};
   const bindings = defaultBindings(specs, config, saved, sources) ?? saved;
-  const byId = new Map(sources.map((one) => [one.id, one]));
-  const active = Object.entries(specs).filter(
-    ([, spec]) => spec && !spec.advanced && isWorkflowFieldActive(spec, config, specs),
+  const present = new Set(sources.map((one) => one.id));
+  const lacking = Object.entries(specs).find(
+    ([key, spec]) =>
+      spec?.required &&
+      spec.board_sources?.length &&
+      isWorkflowFieldActive(spec, config, specs) &&
+      !(bindings[key] ?? []).some((one) => present.has(one.from)) &&
+      !filledText(config[key]),
   );
-
-  const inputs = active
-    .filter(([, spec]) => spec.board_sources?.length)
-    .slice(0, MAX_INPUTS)
-    .map(([key, spec]) => ({
-      key,
-      label: spec.label || key,
-      kinds: (spec.board_sources ?? []) as BoardItem["kind"][],
-      source: (bindings[key] ?? []).map((one) => byId.get(one.from)).find((one) => one !== undefined),
-      text: filledText(config[key]) || undefined,
-    }));
-
-  const settings = active
-    .filter(([, spec]) => !spec.board_sources?.length && !spec.options_from)
-    .flatMap(([key, spec]) => {
-      const fallback = filledText(spec.default);
-      const raw = filledText(config[key]);
-      //: 选填的只在改过缺省值时才值得一提;必填的一定摆出来 —— 没选的那一行正是「还差什么」。
-      if (!spec.required && (!raw || raw === fallback)) return [];
-      const shown = raw || fallback;
-      return [{ key, label: spec.label || key, value: shown ? (spec.option_labels?.[shown] ?? shown) : null }];
-    })
-    .slice(0, MAX_SETTINGS);
-
-  const products = (tool.board_products ?? []).map((name) => ({
-    label: tool.output_labels?.[name] || name,
-    text: tool.output_types?.[name] === "text",
-  }));
-
   return {
     label: tool.label,
     description: tool.board_description ?? "",
     plugin: tool.plugin_name,
     icon: boardToolIcon(tool),
-    inputs,
-    settings,
-    products,
+    kind: toolCellKind(tool),
+    missing: lacking ? ((lacking[1].board_sources ?? []) as BoardItem["kind"][]) : null,
   };
 }

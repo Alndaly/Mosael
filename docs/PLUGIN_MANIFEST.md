@@ -383,6 +383,10 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
   (图片 / 视频 / 音频按素材种类,别的文件落成写着文件名的便签),`text` / `number` 是便签,
   `json` 是按代码排版的便签。**没声明类型的输出按值猜**:字符串当文字,带 `asset_id` 的对象当文件,
   列表拆成好几格,别的当 JSON —— 一个没声明的 `output` 往往就是一张大 JSON 便签。
+- **说清交出的是哪种素材**:`"output_media": {"asset_id": "video"}`(`node` 块里,值是 `image` / `video` /
+  `audio`,和输入字段的 `x-media` / `media` 同一个词表)。画板上的工具格长得像它要产出的那种内容 —— 出图的工具是
+  一块空的图片格、出视频的是一块空的视频格;落板的第一个输出是主产出。没写的,工具吃哪一种素材就按哪一种画
+  (`board_group` 是图片 / 视频 / 音频时),再说不清按图片格画。文字输出落成便签,不用写。
 - **只落有用的那几个**:`"board_outputs": ["image", "caption"]`(`node` 块里)点名哪些输出落到画板上,
   缺省是全部。给下游连线用的计数、状态码、引擎名摊在画板上全是噪音。
 - **说清哪几个只给连线用**:`"wiring_outputs": ["asset_ids", "count", "summary"]`(`node` 块里)—— id 列表、
@@ -407,6 +411,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
       "outputs": ["asset_id", "mask_ratio", "engine"],
       "output_types": { "mask_ratio": "number" },
       "board_outputs": ["asset_id"],         // 画板上只落抠好的那张图
+      "output_media": { "asset_id": "image" }, // 交出的是一张图:画板上的工具格画成空的图片格
       "wiring_outputs": ["engine"]           // 给连线用的,画板上不落
     }
   }
@@ -443,7 +448,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 `plugin.<包>.<工具>`;不能和清单里声明的重名)、`label`、`description`(可以按语言分)、`input_schema`(属性的 `title` /
 `description` 也可以按语言分)、`read_only`、`effects`(见「确认」;写错的当没写,只读却声明了别的后果按后果算、只读作废)、
 `stream`、`timeout_seconds`(上限照旧)、`node`(`outputs` /
-`output_types` / `output_labels` / `board_outputs` / `wiring_outputs`)、`recommended`(`true` = 第一次出现时默认开放)、
+`output_types` / `output_labels` / `board_outputs` / `wiring_outputs` / `output_media`)、`recommended`(`true` = 第一次出现时默认开放)、
 `replaces`、`mirrors`(见下)。**别的键丢掉**,
 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主认领能力,也不能把自己藏起来。最多 300 个。
 

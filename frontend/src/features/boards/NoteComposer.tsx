@@ -1,8 +1,6 @@
-import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
-import { NodeToolbar, Position } from "@xyflow/react";
-import { ArrowUp, Loader2, Sparkles } from "lucide-react";
+import { Film, Music, Sparkles, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listAssets, listCapabilityModels, type Asset, type BoardItem } from "@/api/client";
@@ -14,13 +12,11 @@ import {
 } from "@/features/boards/PromptEditor";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
-import { Film, Music, X } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useI18n } from "@/app/preferences";
-import { cn } from "@/lib/utils";
-import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 
 /**
  * 便签的「写文案」面板。
@@ -147,23 +143,30 @@ export function NoteComposer({
     );
   };
 
+  //: 有字和没字问的**不是同一件事**:一个是「写什么」,一个是「怎么改」。
+  const rewriting = Boolean((item.text ?? "").trim());
+  const verb = t(rewriting ? "boardRewrite" : "boardWrite");
+
   return (
-    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan w-[420px] p-2")}>
-        {/* 连过来的素材摆在最上面。**看得见才知道它在起作用** —— 一条线连过来之后表单上
-            什么都不变的话,用户不知道模型到底看没看见那张图。点一下开大图,叉叉解开引用。 */}
-        {referenced.length > 0 && (
-          <div className="mb-1.5 flex flex-wrap items-center gap-1 border-b border-border px-1 pb-1.5">
-            {referenced.map((asset) => (
+    <BoardComposerShell
+      nodeId={item.id}
+      name="write"
+      //: 连过来的素材摆在最上面。**看得见才知道它在起作用** —— 一条线连过来之后表单上
+      //: 什么都不变的话,用户不知道模型到底看没看见那张图。点一下开大图,叉叉解开引用。
+      upstream={
+        referenced.length > 0
+          ? referenced.map((asset) => (
               <span key={asset.id} className="group/thumb relative shrink-0">
                 <button
                   type="button"
                   title={asset.name || asset.original_filename || ""}
-                  onClick={() => openImagePreview({
-                    src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
-                    title: asset.name || "",
-                    ...(asset.kind === "video" ? { video: true } : {}),
-                  })}
+                  onClick={() =>
+                    openImagePreview({
+                      src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
+                      title: asset.name || "",
+                      ...(asset.kind === "video" ? { video: true } : {}),
+                    })
+                  }
                   className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
                 >
                   {asset.kind === "image" ? (
@@ -188,73 +191,49 @@ export function NoteComposer({
                   </button>
                 )}
               </span>
-            ))}
-          </div>
-        )}
-
-        <PromptEditor
-          value={prompt}
-          document={promptDocument}
-          onChange={(next, assets, document) => {
-            setPrompt(next);
-            setMentioned(assets);
-            setPromptDocument(document);
-          }}
-          //: 有字和没字问的**不是同一件事**:一个是「写什么」,一个是「怎么改」。
-          //: 用同一句提示语的话,用户会以为它要把整篇重写一遍。
-          placeholder={
-            (item.text ?? "").trim()
-              ? t("boardRewritePlaceholder")
-              : t("boardWritePlaceholder")
-          }
-          candidates={candidates}
-          onSubmit={send}
-          emptyHint={() => t("boardNoAssetsToMention")}
-        />
-        <div className="flex items-center gap-1 border-t border-border pt-1.5">
-          {options.length === 0 ? (
-            // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-            <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoChatModel")}</span>
-          ) : (
-            /* 模型多了自动带搜索(阈值在 OptionPicker 里)。keywords 挂原始 model id:
-               展示名换成中文之后,记得住 `gpt-4o` 的人仍然搜得到。
-
-               **图标画在触发器里面,箭头留着。** 这一格和视频卡片的模型选择器是同一类控件,
-               看起来就该一样:此前它外面包一层只负责 hover 底色的壳(于是悬停和聚焦高亮出两个
-               不同大小的框),`[&>svg]:hidden` 把下拉箭头藏了(看起来根本不像个下拉),
-               `focus:ring-0` 又把焦点环也关了(键盘走到这里没有任何反馈)。 */
-            <OptionPicker
-              ariaLabel={t("agentModel")}
-              icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
-              value={`${current?.provider_profile_id}:${current?.model}`}
-              onChange={setPicked}
-              options={options.map((one) => ({
-                value: `${one.provider_profile_id}:${one.model}`,
-                label: one.display_name || one.model,
-                keywords: [one.model],
-              }))}
-              size="xs"
-              className="w-auto min-w-0 max-w-[min(11rem,45%)] shrink gap-1 border-0 bg-transparent px-1.5 text-ui-2xs text-muted-foreground shadow-none transition-colors hover:bg-secondary data-[state=open]:text-foreground"
-              contentClassName="max-w-[min(360px,calc(100vw-16px))]"
-            />
-          )}
-          <button
-            type="button"
-            aria-label={t((item.text ?? "").trim() ? "boardRewrite" : "boardWrite")}
-            title={`${t((item.text ?? "").trim() ? "boardRewrite" : "boardWrite")}  ⌘↵`}
-            disabled={!prompt.trim() || !current || working}
-            onClick={send}
-            className={cn(
-              "ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
-              !prompt.trim() || !current || working
-                ? "cursor-not-allowed bg-secondary text-muted-foreground"
-                : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
-            )}
-          >
-            {working ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
-          </button>
-        </div>
-      </div>
-    </NodeToolbar>
+            ))
+          : null
+      }
+      bar={
+        options.length === 0 ? (
+          // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
+          <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoChatModel")}</span>
+        ) : (
+          /* 模型多了自动带搜索(阈值在 OptionPicker 里)。keywords 挂原始 model id:
+             展示名换成中文之后,记得住 `gpt-4o` 的人仍然搜得到。图标画在触发器里面、箭头留着 ——
+             和图片 / 视频格的模型选择器是同一枚控件。 */
+          <OptionPicker
+            ariaLabel={t("agentModel")}
+            icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
+            value={`${current?.provider_profile_id}:${current?.model}`}
+            onChange={setPicked}
+            options={options.map((one) => ({
+              value: `${one.provider_profile_id}:${one.model}`,
+              label: one.display_name || one.model,
+              keywords: [one.model],
+            }))}
+            size="sm"
+            className={BAR_PICKER}
+            contentClassName="max-w-[min(360px,calc(100vw-16px))]"
+          />
+        )
+      }
+      send={{ label: verb, onSend: send, disabled: !prompt.trim() || !current, working, shortcut: true }}
+    >
+      <PromptEditor
+        value={prompt}
+        document={promptDocument}
+        onChange={(next, assets, document) => {
+          setPrompt(next);
+          setMentioned(assets);
+          setPromptDocument(document);
+        }}
+        //: 用同一句提示语的话,用户会以为它要把整篇重写一遍。
+        placeholder={t(rewriting ? "boardRewritePlaceholder" : "boardWritePlaceholder")}
+        candidates={candidates}
+        onSubmit={send}
+        emptyHint={() => t("boardNoAssetsToMention")}
+      />
+    </BoardComposerShell>
   );
 }

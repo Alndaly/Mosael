@@ -9,8 +9,9 @@ import type { BoardItem } from "@/api/client";
 /**
  * 工具格在画布上的样子,和它交回的结构化数据落成的便签。
  *
- * 工具格自己不放产出:画的是「这是什么工具、从哪来、现在怎样」—— 它自己的图标、空着时一份摘要
- * (吃什么、关键设置、产出什么),在跑时扫光 + 停止按钮,跑挂了写原因,清单里查不到时说它用不了。
+ * 工具格长得像它要产出的那种内容的空格子(出图的是一块空图片格,翻译是一张空便签):同一个外壳、正中
+ * 一枚淡淡的图标 —— 是这个工具自己的图标;格子里没有「吃什么 / 设置 / 产出」那张小字表,缺必填输入时
+ * 至多一句「接……」。在跑、跑挂了和生成格同一个外壳(扫光 + 进度 + 停止、失败写原因)。
  */
 
 vi.mock("@xyflow/react", () => ({
@@ -38,9 +39,8 @@ const TOOL: BoardToolFace = {
   description: "把**主体**抠出来",
   plugin: "我的抠图",
   icon: ImageIcon,
-  inputs: [{ key: "image", label: "图片", kinds: ["image"] }],
-  settings: [],
-  products: [{ label: "抠好的图", text: false }],
+  kind: "image",
+  missing: ["image"],
 };
 
 const TRANSLATE: BoardToolFace = {
@@ -48,9 +48,8 @@ const TRANSLATE: BoardToolFace = {
   description: "把便签或文档里的文字翻成另一种语言",
   plugin: "",
   icon: Languages,
-  inputs: [{ key: "text", label: "文本", kinds: ["note", "document"] }],
-  settings: [{ key: "target_lang", label: "目标语言", value: null }],
-  products: [{ label: "文本", text: true }],
+  kind: "note",
+  missing: ["note", "document"],
 };
 
 /** lucide 的图标画成 `<svg class="lucide lucide-<名字>">` —— 按类名认是哪一颗。 */
@@ -76,89 +75,93 @@ const action = (run?: BoardItem["run"]): BoardItem => ({
   id: "a1", kind: "action", x: 0, y: 0, form: { producer: "node:plugin.cut.out" }, ...(run ? { run } : {}),
 });
 
+const root = () => document.querySelector<HTMLElement>("[data-board-action]")!;
+
 describe("工具格", () => {
-  it("没起名时用工具的名字;插件工具在说明前点名插件(和「添加」菜单同一个写法);说明按行内 Markdown 渲染", () => {
+  it("没起名时格子上方写工具名;插件工具在名字后面淡淡地点名插件;说明悬停看,格子里不写字", () => {
     renderAction(action(), { tool: TOOL });
-    expect(screen.getAllByText("去背景").length).toBeGreaterThan(0);
-    expect(document.querySelector("[data-board-tool-source]")?.textContent).toBe("我的抠图 · ");
-    expect(document.querySelector("strong")?.textContent).toBe("主体");
+    const label = document.querySelector<HTMLElement>("[data-board-node-label]")!;
+    expect(label.textContent).toContain("去背景");
+    expect(label.querySelector("[data-board-node-label-secondary]")?.textContent).toContain("我的抠图");
+    expect(root().getAttribute("title")).toBe("把主体抠出来");
+    expect(document.querySelector("strong")).toBeNull();
   });
 
-  it("内置工具不挂「内置」,也不挂任何出处", () => {
+  it("起了名:名字后面带上工具名(和插件名);内置工具不挂出处", () => {
+    renderAction({ ...action(), title: "抠封面" }, { tool: TOOL });
+    expect(document.querySelector("[data-board-node-label-secondary]")?.textContent).toBe("· 去背景 · 我的抠图");
+    cleanup();
     renderAction(action(), { tool: TRANSLATE });
-    expect(document.querySelector("[data-board-tool-source]")).toBeNull();
-    expect(document.body.textContent).not.toContain("boardToolBuiltin");
+    expect(document.querySelector("[data-board-node-label-secondary]")).toBeNull();
   });
 
-  it("格子里、格子上方那一行用的是这个工具自己的图标,不是一把通用的扳手", () => {
+  it("长成它要产出的那种内容的空格子:出图的是一块图片格,翻译是一张便签 —— 没有那张小字表", () => {
+    renderAction(action(), { tool: TOOL });
+    expect(root().dataset.boardToolKind).toBe("image");
+    //: 和空的图片格同一个外壳(ImageNode:rounded-lg、面板底、安静的实线边)。
+    expect(root().className).toContain("rounded-lg");
+    expect(root().className).toContain("bg-panel");
+    expect(document.querySelector("[data-board-empty-slot]")).not.toBeNull();
+    for (const gone of ["[data-board-tool-summary]", "dl", "dt", "[data-board-tool-input]", "[data-board-tool-setting]", "[data-board-tool-products]"]) {
+      expect(document.querySelector(gone), gone).toBeNull();
+    }
+    cleanup();
     renderAction(action(), { tool: TRANSLATE });
-    expect(iconsIn("[data-board-tool-icon]").join(" ")).toContain("lucide-languages");
+    expect(root().dataset.boardToolKind).toBe("note");
+    //: 和便签同一个外壳:有色的圆角卡。
+    expect(root().className).toContain("rounded-xl");
+    expect(root().className).toContain("#f5c518");
+  });
+
+  it("正中那枚图标是这个工具自己的(格子上方那一行也是),不是一把通用的扳手", () => {
+    renderAction(action(), { tool: TRANSLATE });
+    expect(iconsIn("[data-board-empty-slot]").join(" ")).toContain("lucide-languages");
     expect(document.querySelector("svg.lucide-wrench")).toBeNull();
     expect(document.querySelectorAll("svg.lucide-languages").length).toBe(2);
     cleanup();
-    renderAction(action(), { tool: TOOL });
-    expect(iconsIn("[data-board-tool-icon]").join(" ")).toContain("lucide-image");
-    cleanup();
     //: 清单还没到:先用工具格的通用图标,不空着。
     renderAction(action());
-    expect(iconsIn("[data-board-tool-icon]").join(" ")).toContain("lucide-wrench");
+    expect(iconsIn("[data-board-empty-slot]").join(" ")).toContain("lucide-wrench");
   });
 
-  it("空着:说清吃什么(没接上是虚的)、必填还没选的设置、产出什么", () => {
+  it("缺必填输入时,图标下面至多一句「接……」;不缺就什么都不写", () => {
     renderAction(action(), { tool: TRANSLATE });
-    const input = document.querySelector<HTMLElement>('[data-board-tool-input="text"]')!;
-    expect(input.dataset.connected).toBe("false");
-    expect(input.textContent).toBe("接boardKindNote或boardKindDocument");
-    expect(document.querySelector('[data-board-tool-setting="target_lang"]')?.textContent).toBe("boardToolUnset");
-    expect(document.querySelector("[data-board-tool-products]")?.textContent).toBe("boardKindNote");
-    expect(document.querySelector("[data-board-tool-summary]")?.textContent).toContain("目标语言");
+    expect(document.querySelector("[data-board-empty-hint]")?.textContent).toBe("接boardKindNote或boardKindDocument");
     cleanup();
-    renderAction(action(), { tool: { ...TRANSLATE, inputs: [{ key: "asset_id", label: "素材", kinds: ["image", "video", "audio"] }] } });
-    expect(document.querySelector('[data-board-tool-input="asset_id"]')?.textContent).toBe("接boardKindImage、boardKindVideo或boardKindAudio");
+    renderAction(action(), { tool: { ...TRANSLATE, missing: ["image", "video", "audio"] } });
+    expect(document.querySelector("[data-board-empty-hint]")?.textContent).toBe("接boardKindImage、boardKindVideo或boardKindAudio");
+    cleanup();
+    renderAction(action(), { tool: { ...TRANSLATE, missing: null } });
+    expect(document.querySelector("[data-board-empty-hint]")).toBeNull();
+    expect(root().textContent).toBe("翻译");
   });
 
-  it("接上了:那一格的名字;设置按显示名;素材产出按输出名", () => {
-    const note: BoardItem = { id: "n1", kind: "note", x: 0, y: 0, text: "早上好" };
-    renderAction(action(), {
-      tool: { ...TRANSLATE, inputs: [{ ...TRANSLATE.inputs[0], source: note }], settings: [{ key: "target_lang", label: "目标语言", value: "英语" }] },
-    });
-    const input = document.querySelector<HTMLElement>('[data-board-tool-input="text"]')!;
-    expect(input.dataset.connected).toBe("true");
-    expect(input.textContent).toBe("早上好");
-    expect(document.querySelector('[data-board-tool-setting="target_lang"]')?.textContent).toBe("英语");
-    cleanup();
-    renderAction(action(), { tool: TOOL });
-    expect(document.querySelector("[data-board-tool-products]")?.textContent).toBe("抠好的图");
-  });
-
-  it("在跑、跑挂了的时候不摆摘要(那一块留给状态)", () => {
-    renderAction(action({ status: "running", job_id: "job-1" }), { tool: TRANSLATE });
-    expect(document.querySelector("[data-board-tool-summary]")).toBeNull();
-    cleanup();
-    renderAction(action({ status: "failed", error: "x" }), { tool: TRANSLATE });
-    expect(document.querySelector("[data-board-tool-summary]")).toBeNull();
-    cleanup();
-    //: 跑完了:摘要回来,外壳按成功上色。
-    renderAction(action({ status: "succeeded" }), { tool: TRANSLATE });
-    expect(document.querySelector("[data-board-tool-summary]")).not.toBeNull();
-    expect(document.querySelector("[data-board-run-status]")?.getAttribute("data-board-run-status")).toBe("succeeded");
-  });
-
-  it("在跑:扫光占位 + 进度 + 停止,停止交给上层取消那一轮", async () => {
+  it("在跑:和生成格同一个外壳 —— 扫光 + 进度 + 停止,停止交给上层取消那一轮", async () => {
     const onStop = vi.fn();
     renderAction(action({ status: "running", job_id: "job-1" }), { tool: TOOL, onStop });
     expect(document.querySelector("[data-slot=skeleton]")).not.toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("boardToolRunning");
     expect(await screen.findByText(/40%/)).toBeTruthy();
     fireEvent.click(document.querySelector<HTMLElement>("[data-board-stop]")!);
     expect(onStop).toHaveBeenCalledWith("a1");
   });
 
-  it("跑挂了写原因;清单里查不到这个工具时说它用不了", () => {
+  it("跑挂了:说「运行失败」和原因(和生成失败同一种样子);跑完:回到安静的空格子,不留彩色描边", () => {
     renderAction(action({ status: "failed", error: "上游挂了" }), { tool: TOOL });
-    expect(screen.getByRole("alert").textContent).toContain("上游挂了");
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("boardNodeRunFailed");
+    expect(alert.textContent).toContain("上游挂了");
     cleanup();
+    renderAction(action({ status: "succeeded" }), { tool: TRANSLATE });
+    expect(root().dataset.boardRunStatus).toBe("succeeded");
+    expect(document.querySelector("[data-board-empty-slot]")).not.toBeNull();
+    expect(root().className).not.toMatch(/ring-success|border-success/);
+  });
+
+  it("清单里查不到这个工具时说它用不了(一句短的,全文悬停看);没有停止", () => {
     renderAction(action(), { tool: null });
-    expect(document.body.textContent).toContain("boardToolUnavailable");
+    expect(document.querySelector("[data-board-empty-hint]")?.textContent).toBe("boardToolUnavailableShort");
+    expect(root().getAttribute("title")).toBe("boardToolUnavailable");
     expect(document.querySelector("[data-board-stop]")).toBeNull();
   });
 });
