@@ -436,18 +436,17 @@ def invoke_host(
             "data_dir": _ensure_data_dir(manifest.id),
             **({"timeout": budget} if budget is not None else {}),
         }
+        env = inst.process_env(db, instance)
         result: ToolResult
-        if hooks is not None:
-            result = stream_tool(
-                Path(manifest.path), manifest.runtime.entry, tool["name"], sent,
-                inst.process_env(db, instance), hooks=hooks, **run_kwargs,
-            )
-        else:
-            # 一问一答(问目录)和别的工具调用一样占一个插件名额(jobs.PLUGIN_SLOTS)。流式的那条
-            # 不占:它是一次生成,已经在生成任务的名额(GENERATION_SLOTS)里了 —— 一段跑一小时的
-            # 视频占着插件名额,别的插件调用就得陪它等一小时。
-            env = inst.process_env(db, instance)
-            with _plugin_slot(db):
+        # 一问一答(问目录)和别的工具调用一样占一个插件名额(jobs.PLUGIN_SLOTS)。流式的那条
+        # 不占:它是一次生成,已经在生成任务的名额(GENERATION_SLOTS)里了 —— 一段跑一小时的
+        # 视频占着插件名额,别的插件调用就得陪它等一小时。**两条都先交还连接**(见 _plugin_slot)。
+        with _plugin_slot(db, take=hooks is None):
+            if hooks is not None:
+                result = stream_tool(
+                    Path(manifest.path), manifest.runtime.entry, tool["name"], sent, env, hooks=hooks, **run_kwargs,
+                )
+            else:
                 result = execute_tool(
                     Path(manifest.path), manifest.runtime.entry, tool["name"], sent, env, **run_kwargs,
                 )
@@ -486,14 +485,19 @@ __all__ = ["all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host",
 
 
 @contextmanager
-def _plugin_slot(db: Session) -> Iterator[None]:
-    """占一个插件名额(jobs.PLUGIN_SLOTS)跑这一次调用。
+def _plugin_slot(db: Session, *, take: bool = True) -> Iterator[None]:
+    """跑插件进程的那一段:**先交还连接**,`take` 时再占一个插件名额(jobs.PLUGIN_SLOTS)。
 
-    **先交还连接再排队**(见 jobs 的 RENDER_SLOTS 那段):前面读实例、凭据、素材时会话攥上了
-    一条连接,排队的线程不该一直攥着它。这里提交不会带出半截东西 —— 调用记录在前面已经提交过,
-    从那以后到这里只读过实例、凭据和素材。
+    前面读实例、凭据、素材时会话攥上了一条连接(和一个没结束的读事务),而接下来是等一个子进程 ——
+    排队的、跑着的线程都不该一直攥着它(见 jobs 的 RENDER_SLOTS 那段)。流式的生成一跑就是几十分钟到
+    几小时:此前那条路不经过这里,每一次插件生成都攥着一条连接和一个读事务直到结束 —— 连接池被几次
+    生成占满,SQLite 的 WAL 因为一直有读者而没法回卷。这里提交不会带出半截东西 —— 调用记录在前面
+    已经提交过,从那以后到这里只读过实例、凭据和素材。
     """
     db.commit()
+    if not take:
+        yield
+        return
     with PLUGIN_SLOTS:
         yield
 

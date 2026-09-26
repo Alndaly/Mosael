@@ -632,3 +632,26 @@ def test_流式_用户取消(tmp_path: Path) -> None:
 def test_流式_没给结果就退出要说清楚(tmp_path: Path) -> None:
     _, error, _, _ = _stream(tmp_path, "import sys\nsys.stdin.read()\nprint('hi')\n", timeout=20)
     assert error is not None and "ok" in str(error)
+
+
+def test_插件跑着的时候不攥着数据库连接(plugged, monkeypatch: pytest.MonkeyPatch) -> None:
+    """一次插件生成一跑就是几十分钟到几小时。此前流式那条不经过「先交还连接」那一步:
+    每次生成都攥着一条连接和一个没结束的读事务直到跑完 —— 连接池被几次生成占满,
+    SQLite 的 WAL 因为一直有读者而回卷不了。一问一答那条早就先交还了,两条该是一个规矩。"""
+    from app.domain.plugins import tools
+    from app.domain.plugins.runtime import StreamHooks, ToolResult
+
+    _, instance_id = plugged
+    seen: list[bool] = []
+
+    with SessionLocal() as db:
+        def fake_run(*args: Any, **kwargs: Any) -> ToolResult:
+            seen.append(db.in_transaction())
+            return ToolResult(output={"models": []})
+
+        monkeypatch.setattr(tools, "stream_tool", fake_run)
+        monkeypatch.setattr(tools, "execute_tool", fake_run)
+        hooks = StreamHooks(on_progress=lambda *_: None, on_task=lambda _t: None, is_cancelled=lambda: False)
+        tools.invoke_host(db, instance_id, "generation", {"op": "generate"}, hooks=hooks)
+        tools.invoke_host(db, instance_id, "generation", {"op": "models"})
+    assert seen == [False, False], "插件进程跑着的时候,会话还攥着一个读事务"
