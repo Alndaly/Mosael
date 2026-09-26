@@ -31,7 +31,7 @@ def _board(client, ws: str, items: list[dict]) -> str:
     return created.json()["id"]
 
 
-def test_内置的四个产出者各自挂在该挂的格子上() -> None:
+def test_内置的产出者各自挂在该挂的格子上() -> None:
     from app.core.db import SessionLocal
     from app.domain.boards import producers
     from app.domain.boards.producer_ids import BUILTIN_PRODUCER_IDS
@@ -41,23 +41,24 @@ def test_内置的四个产出者各自挂在该挂的格子上() -> None:
     with SessionLocal() as db:
         registry = producers.list_producers(db, None)
     by_id = {one.id: one for one in registry if not one.id.startswith("node:")}
-    assert set(by_id) == {"generate", "speak", "trim", "write"}
+    assert set(by_id) == {"generate", "speak", "trim", "write", "scene_render"}
     #: canvas 校验表单时认的那张名字表,和注册表是同一份。
     assert set(BUILTIN_PRODUCER_IDS) == set(by_id)
-    #: 能挑来填空槽的是这三个(一种格子有两个时面板上给切换);截一段得先有一段素材。
-    assert {one for one in by_id if by_id[one].fills_empty_slot} == {"generate", "speak", "write"}
+    #: 能挑来填空槽的是这几个(一种格子有两个时面板上给切换);截一段得先有一段素材。场景格永远「还能再渲」。
+    assert {one for one in by_id if by_id[one].fills_empty_slot} == {"generate", "speak", "write", "scene_render"}
 
     #: 生成挂在哪由生成目录说了算,不在画板这边另写一份。
     assert by_id["generate"].hosts == tuple(KINDS)
     assert by_id["write"].hosts == ("note",)
     assert by_id["speak"].hosts == ("audio",)
     assert set(by_id["trim"].hosts) == {"video", "audio"}
+    assert by_id["scene_render"].hosts == ("scene",)
 
     assert {one: by_id[one].permission for one in by_id} == {
-        "generate": "edit", "speak": "edit", "trim": "edit", "write": "ai",
+        "generate": "edit", "speak": "edit", "trim": "edit", "write": "ai", "scene_render": "edit",
     }
-    #: 智能体替人跑时要不要确认卡看这个:只有本机截取既不花钱也不出门。
-    assert {one for one in by_id if by_id[one].effects == "none"} == {"trim"}
+    #: 智能体替人跑时要不要确认卡看这个:本机截取、本机渲白模既不花钱也不出门。
+    assert {one for one in by_id if by_id[one].effects == "none"} == {"trim", "scene_render"}
     assert all(one.effects in ("none", "paid", "external") for one in by_id.values())
 
 
@@ -77,8 +78,9 @@ def test_每个产出者的表单都不收非有限的数() -> None:
 def test_新放下的一格挂哪个产出者() -> None:
     from app.domain.boards.producer_ids import SLOT_PRODUCERS
 
-    assert SLOT_PRODUCERS == {"note": "write", "image": "generate", "video": "generate", "audio": "speak"}
-    assert all(SLOT_PRODUCERS.get(kind) is None for kind in ("frame", "scene", "document", "action"))
+    assert SLOT_PRODUCERS == {"note": "write", "image": "generate", "video": "generate", "audio": "speak",
+                              "scene": "scene_render"}
+    assert all(SLOT_PRODUCERS.get(kind) is None for kind in ("frame", "document", "action"))
 
 
 def test_空槽的缺省产出者和注册表对得上() -> None:
@@ -110,7 +112,7 @@ def test_写入之后每一个能产出的空槽都写明了产出者() -> None:
     from app.core.db import SessionLocal
     from app.domain.boards import normalize_canvas, producers
     from app.domain.boards.canvas import ITEM_KINDS
-    from app.domain.boards.producer_ids import SLOT_PRODUCERS
+    from app.domain.boards.producer_ids import DERIVED_BUILTINS, SLOT_PRODUCERS
 
     fresh_client()
     with SessionLocal() as db:
@@ -139,7 +141,9 @@ def test_写入之后每一个能产出的空槽都写明了产出者() -> None:
         producer = (item.get("form") or {}).get("producer")
         if item["id"] in written:
             continue
-        producible = item["kind"] in SLOT_PRODUCERS and (item["kind"] == "note" or not item.get("asset_id"))
+        #: 产出派生到右边的格子(3D 场景格)的 asset_id 是缩略图,不是产出:有它照样挂。
+        producible = item["kind"] in SLOT_PRODUCERS and (
+            item["kind"] == "note" or SLOT_PRODUCERS[item["kind"]] in DERIVED_BUILTINS or not item.get("asset_id"))
         if not producible:
             assert producer is None, f"{item['id']} 不是能产出的空槽,不该被补上产出者"
             continue
@@ -358,8 +362,12 @@ def test_升级之后新建却没写明产出者的空槽_迁移补上() -> None
     }
     assert revision == 2, "改到的板版本号 +1:开着它的旧快照要撞 409"
     assert _canvas(untouched_id)[1] == 2, "没改到的板版本号不动"
-    #: 迁移和 normalize 是同一条规则:迁完的画布再过 normalize 一个字都不变。
-    assert [item.get("form") for item in normalize_canvas(once)["items"]] == [item.get("form") for item in once["items"]]
+    #: 迁移和 normalize 是同一条规则:迁完的画布再过 normalize 一个字都不变。3D 场景格除外 —— 它挂渲白模是
+    #: 后来的规则,由后来的那一步(migrate-board-scene-cells-render-themselves)补,这一步的身体已经冻住了。
+    def forms(canvas: dict) -> list:
+        return [item.get("form") for item in canvas["items"] if item["kind"] != "scene"]
+
+    assert forms(normalize_canvas(once)) == forms(once)
 
 
 # ── P2:工具格(`action`)跑一个节点 ─────────────────────────────────────────────
@@ -509,7 +517,8 @@ def _derived(canvas: dict) -> list[dict]:
 
 
 #: 画板上的内置工具:只有内容变换(ADR 0021 修订)。
-BOARD_NODES = {"transcribe_asset", "translate", "video_to_gif", "separate_audio", "denoise_audio", "scene_render"}
+#: 渲白模不在这里:画板上它是 3D 场景格自己会做的事(内置产出者 scene_render,见 test_board_scene_cells_render)。
+BOARD_NODES = {"transcribe_asset", "translate", "video_to_gif", "separate_audio", "denoise_audio"}
 
 
 def test_工具格能跑的节点从节点声明里读_只有内容变换() -> None:
@@ -692,14 +701,12 @@ def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
     #: 模板字段在画板上就是一段字;原始 JSON 的字段不出现;3D 场景那格的说明(教 `{{…}}` 写法的)不带过来。
     assert by_id["node:translate"]["config"]["text"]["type"] == "text"
     assert "extra" not in by_id["node:plugin.dev.test.boardtools.paint"]["config"]
-    assert "description" not in by_id["node:scene_render"]["config"]["scene_id"]
     assert by_id["node:video_to_gif"]["board_description"] == "把一段视频做成 GIF 动图"
     #: 工具格画成它要产出的那种内容(output_kinds,ADR 0025):只算落板的内容,不是节点的全部输出
     #: (源素材 id、引擎名不算)。GIF 是一张图,不是视频 —— 声明说了算,不按工具吃什么猜。
     assert by_id["node:video_to_gif"]["output_kinds"] == ["image"]
     assert by_id["node:separate_audio"]["output_kinds"] == ["audio", "audio"]
     assert by_id["node:translate"]["output_kinds"] == ["note"]
-    assert by_id["node:scene_render"]["output_kinds"] == ["image", "image", "video"]
     assert all(one["output_kinds"] and set(one["output_kinds"]) <= set(OUTPUT_KINDS) for one in tools)
     assert "board_products" not in by_id["node:translate"]
     #: 插件工具在 node 块里声明 output_media;没声明、又说不清吃哪种素材的,是 asset(界面按图片格画)。
@@ -711,7 +718,7 @@ def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
     assert by_id["node:translate"]["board_group"] == "text" and by_id["node:translate"]["board_group_label"] == "处理文字"
     assert by_id["node:plugin.dev.test.boardtools.paint"]["board_group"] == "new"
     assert by_id["node:plugin.dev.test.boardtools.shout"]["board_group"] == "text"
-    #: 内置的四个不在「添加 → 工具」里,不带分组。
+    #: 内置的不在「添加 → 工具」里,不带分组。
     assert all(one["board_group"] == "" for one in listed.json() if not one["id"].startswith("node:"))
 
 
@@ -759,9 +766,8 @@ def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp
     #: 素材字段只接它声明的那几种素材(`media`):转 GIF 只吃视频,转写只吃有声音的两种。
     assert by_id["node:video_to_gif"]["config"]["asset_id"]["board_sources"] == ["video"]
     assert by_id["node:transcribe_asset"]["config"]["asset_id"]["board_sources"] == ["video", "audio"]
-    assert by_id["node:scene_render"]["config"]["scene_id"]["board_sources"] == ["scene"]
-    #: 镜头是从场景里挑的,不再接便签(此前「能写字」就能接)。
-    assert by_id["node:scene_render"]["config"]["shot_id"]["board_sources"] == []
+    #: 渲白模的镜头是从场景里挑的,不接便签(此前「能写字」就能接);场景由它挂着的那一格给。
+    assert by_id["scene_render"]["config"]["shot_id"]["board_sources"] == []
     assert "node:plugin.dev.test.boardtools.secret" not in by_id
     assert "node:plugin.dev.test.boardtools.listing" not in by_id
 

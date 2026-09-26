@@ -13,6 +13,7 @@ import { ActionComposer } from "@/features/boards/ActionComposer";
 import { AudioComposer } from "@/features/boards/AudioComposer";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
+import { SceneComposer } from "@/features/boards/SceneComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { itemFormResetKey, itemIsRunning, producerOf } from "@/features/boards/boardItemState";
 import type { BoardDocumentState } from "@/features/boards/boardDocumentSources";
@@ -124,6 +125,21 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
     );
   },
 
+  //: 3D 场景格:从它的一个镜头渲白模参考。渲染是场景格自己会做的事(此前是旁边另放一格工具格);
+  //: 字段照后端的声明长(镜头、渲什么),产出新建在右边。不吃上游 —— 场景就是这一格。
+  scene_render: ({ item, position, workspaceId, producers, onFormChange, run }) => (
+    <SceneComposer
+      key={item.id}
+      item={item}
+      //: 声明从清单里认:挂得在这种格子上、表单就是运行那一份(`runs_from_draft`)的那一个 —— 字段照它长。
+      producer={producers?.find((one) => one.id === "scene_render" && one.runs_from_draft && one.hosts.includes(item.kind))}
+      workspaceId={workspaceId}
+      busy={itemIsRunning(item)}
+      onFormChange={onFormChange}
+      onRun={(form) => run({ producer: "scene_render", item_id: item.id, kind: item.kind, ...position, form })}
+    />
+  ),
+
   //: 还没有产出的图片/视频槽:提示词面板 —— 节点本身就是生成单元。
   generate: ({ item, position, workspaceId, feeding, documents, models, onFormChange, onPickAsset, run }) => (
     <NodeComposer
@@ -202,6 +218,7 @@ const COMPOSER_ON_DEMAND: Record<BuiltinProducer, boolean> = {
   generate: false,
   speak: false,
   trim: false,
+  scene_render: false,
 };
 
 export function composerOnDemand(producer: BoardProducer): boolean {

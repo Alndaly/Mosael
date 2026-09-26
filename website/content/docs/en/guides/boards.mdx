@@ -107,7 +107,7 @@ should be one you can walk back from.
 
 Besides generate, write, voice-over and trim, a board can **run a tool** that turns the item in front of
 you into something new: video to GIF, speech in audio or video to text, translate, separate voice and
-background, reduce noise, render references from a shot of a 3D scene, and the content tools plugins
+background, reduce noise, and the content tools plugins
 provide — such as every workflow saved in ComfyUI, or Manim / Remotion animations.
 
 A board **only holds these content-to-content tools**. Flow and data steps — calling a workflow, HTTP
@@ -161,13 +161,10 @@ to the first fitting upstream item by default**; you can change it and the choic
 item. Values are read **when you press Run**: edit the upstream note and the next run follows.
 Delete the line and the binding goes with it.
 
-**Fields that point at something are dropdowns, not id boxes**: the 3D scene, shot, project and connection
-are picked from this workspace, with search once the list grows. In "Render blockout references" the shot
-follows the scene — a picked scene lists its shots, a connected scene item lists that item's shots, and
-changing the scene clears the shot you had picked. When the scene has a single shot there is nothing to
-pick: the dropdown shows that shot. With several and none picked, the run says which ones exist. While the
-scene is connected upstream, the scene chip in the bottom bar gives way to the row of upstream items, so
-the two never show at once.
+**Fields that point at something are dropdowns, not id boxes**: the 3D scene, project and connection
+are picked from this workspace, with search once the list grows. A dropdown that follows another field (a
+model that follows the connection) is cleared when that field changes. While a field is connected upstream,
+its chip in the bottom bar gives way to the row of upstream items, so the two never show at once.
 
 **Results land to the right**: every run **adds a new column of items** to the right, each connected
 by a line — images, videos and audio become those kinds of items, other files become a note naming
@@ -252,7 +249,21 @@ Switching modes or undoing preserves graph connections. Toolbar groups use separ
 
 Use Add → Document to select a fixed note revision. Dragging its text or embedded image moves the node, and its header keeps the same height across modes. Connect it downstream as reference text; update the revision or open the source from the footer.
 
-Add → 3D scene selects a workspace scene. Generate images from its reference frame, or feed first/last frames or a camera preview into a video model. See [3D scenes & animation](/docs/guides/scenes).
+Add → 3D scene selects a workspace scene. **A scene item renders its own blockout references**: select it,
+pick a **Shot** in the panel's bottom bar (a scene with a single shot needs no pick — the chip shows it; a scene
+with no shots greys the chip out, so open the scene and add one) and **What to render** (first and last frame,
+camera-move video, or both), then press the round button. While it renders the item shows the same shimmer,
+progress and Stop as any other item; the first frame, last frame and camera-move video **land as new items to
+the right of the scene item**, connected to it, and the scene item and its thumbnail stay as they were. Render
+again and you get a new column; the earlier one stays. **Edit scene** in the panel opens the scene page to
+change the framing or add shots. Connect the rendered frames and video to image or video items as references.
+
+This used to take a separate "Render blockout references" tool item next to the scene item, where you picked
+the scene all over again — two halves of one thing. That tool item is off the board now (the workflow node is
+unchanged). On upgrade, each such tool item moves its shot and render choice onto the scene item it was
+connected to and goes away; what it already rendered stays and is now connected from the scene item. One that
+has no scene item on the board becomes a note carrying its old settings. See
+[3D scenes & animation](/docs/guides/scenes).
 
 ![Document references and canvas markers](/media/screens/en/annotations.png)
 

@@ -570,9 +570,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 已经出了产出的项收上来,交给面板照当前生成方式挂进槽位(一张图当首帧、多张当参考)。
    * 还没出产出的上游跳过 —— 它自己都还没有东西可给。
    */
-  //: 截取面板照着表单上记下的那份素材截,不吃上游 —— 只有吃上游的几块面板才去算、才会被取不到的
-  //: 上游文档拦住。
-  const feeding = composerItem && producer && producer !== "trim"
+  //: 截取面板照着表单上记下的那份素材截、场景格渲的是它自己的场景,都不吃上游 —— 只有吃上游的几块面板
+  //: 才去算、才会被取不到的上游文档拦住。
+  const feeding = composerItem && producer && producer !== "trim" && producer !== "scene_render"
     ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
     : NO_UPSTREAM;
 

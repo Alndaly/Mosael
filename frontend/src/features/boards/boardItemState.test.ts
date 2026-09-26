@@ -102,12 +102,15 @@ describe("选中一格时挂哪块面板", () => {
     expect(made.form).toEqual({ ...draft, producer: "generate" });
     expect(Object.keys(made.form ?? {}).at(-1)).toBe("producer");
     expect(producerOf(made)).toBe("generate");
-    //: 写明了的不动;有了产出的媒体格、不产出的种类不补;便签有字照样补(它的产出是正文)。
+    //: 写明了的不动;有了产出的媒体格、不产出的种类不补;便签有字照样补(它的产出是正文);3D 场景格挂渲白模,
+    //: 有缩略图也补(缩略图不是它的产出,渲出来的落在右边)。
     expect(withSlotProducer(image({ form: { producer: "trim", trim } })).form?.producer).toBe("trim");
     expect(withSlotProducer(image({ asset_id: "a1" })).form).toBeUndefined();
-    const scene: BoardItem = { id: "s", kind: "scene", x: 0, y: 0, scene_id: "s1" };
+    const scene: BoardItem = { id: "s", kind: "scene", x: 0, y: 0, scene_id: "s1", asset_id: "thumb" };
+    const frame: BoardItem = { id: "f", kind: "frame", x: 0, y: 0 };
     const note: BoardItem = { id: "n", kind: "note", x: 0, y: 0, text: "有字" };
-    expect(withSlotProducer(scene).form).toBeUndefined();
+    expect(withSlotProducer(scene).form).toEqual({ producer: "scene_render" });
+    expect(withSlotProducer(frame).form).toBeUndefined();
     expect(withSlotProducer(note).form).toEqual({ producer: "write" });
   });
 

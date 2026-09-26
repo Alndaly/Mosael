@@ -20652,6 +20652,11 @@
             "title": "Fills Empty Slot",
             "default": false
           },
+          "runs_from_draft": {
+            "type": "boolean",
+            "title": "Runs From Draft",
+            "default": false
+          },
           "board_group": {
             "type": "string",
             "title": "Board Group",

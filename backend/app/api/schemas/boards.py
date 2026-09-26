@@ -76,6 +76,9 @@ class BoardProducerOut(WorkflowNodeTypeOut):
     effects: str
     #: 能不能挑来填一个空槽(一种格子有几个这样的产出者时,面板上给一个切换)。
     fills_empty_slot: bool = False
+    #: 这个产出者的格子上存着的表单就是一次运行发的那一份(工具格、3D 场景格渲白模):智能体能照它
+    #: 替人填(edit_board 的 set_form)、替人点运行(run_board_item)。
+    runs_from_draft: bool = False
     #: 工具格在「添加」菜单里归哪一组:按它吃的是什么内容分(new / image / video / audio / text / scene /
     #: asset,见 boards.transforms.BOARD_GROUPS),不是工作流面板的分组。内置的四个是空串。
     board_group: str = ""

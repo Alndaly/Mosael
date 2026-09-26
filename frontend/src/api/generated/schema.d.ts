@@ -7213,6 +7213,11 @@ export interface components {
              */
             fills_empty_slot: boolean;
             /**
+             * Runs From Draft
+             * @default false
+             */
+            runs_from_draft: boolean;
+            /**
              * Board Group
              * @default
              */

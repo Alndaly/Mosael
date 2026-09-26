@@ -270,7 +270,7 @@ def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor:
     """
     from app.domain.boards import producers
     from app.domain.boards.canvas import item_not_found
-    from app.domain.boards.producer_ids import node_type_of
+    from app.domain.boards.producer_ids import runs_from_draft
 
     board = _board_in(db, workspace_id, payload)
     item_id = str(payload.get("item_id") or "")
@@ -279,15 +279,16 @@ def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor:
         raise ConfirmationError.relay(item_not_found(item_id))
     form = dict(item.get("form") or {})
     producer = str(form.pop("producer", "") or "")
-    # 只跑工具格。图片/视频/音频槽和便签的表单是各自面板的形状(提示词、模型、图例……),
-    # 拼成一次运行是面板的事;替人拼一份面板没见过的请求,跑出来的不是他在面板上看到的那一件。
-    if item.get("kind") != "action" or node_type_of(producer) is None:
+    # 只跑存着的表单就是运行那一份的格子:工具格、3D 场景格(渲白模)。图片/视频/音频槽和便签的表单是
+    # 各自面板的形状(提示词、模型、图例……),拼成一次运行是面板的事;替人拼一份面板没见过的请求,
+    # 跑出来的不是他在面板上看到的那一件。挂不挂得上这种格子由 producers 那一侧问(boardErr_producerCannotHost)。
+    if not runs_from_draft(producer):
         raise ConfirmationError("confirmErr_runBoardItemNotTool", item_id=item_id)
     return board, item, producers.RunRequest(
         workspace_id=workspace_id,
         board_id=board.id,
         item_id=item_id,
-        kind="action",
+        kind=str(item.get("kind") or ""),
         x=float(item.get("x") or 0),
         y=float(item.get("y") or 0),
         base_revision=int(board.revision or 0),

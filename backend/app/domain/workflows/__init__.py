@@ -1046,12 +1046,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["scene_id", "shot_ids", "shot_count"],
         "output_types": {"shot_ids": "json", "shot_count": "number"},
     },
+    #: 不上画板的工具格:画板上渲白模是 **3D 场景格自己会做的事**(内置产出者 `scene_render`,见
+    #: boards.producers),跑的是这同一个执行器、读的是这同一份字段声明 —— 此前一格工具格引用一格场景格,
+    #: 同一件事分成两半摆在桌上。
     "scene_render": {
         "external": False,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id"],
+        "surfaces": ["workflow"],
         "output_media": {"first_frame_asset_id": "image", "last_frame_asset_id": "image", "video_asset_id": "video"},
-        "board_group": "scene", "board_description": "wfNode_scene_render_board",
         "category": "wfCat_3d",
         "label": "wfNode_scene_render",
         "description": "wfNode_scene_render_desc",

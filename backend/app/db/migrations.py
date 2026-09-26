@@ -2456,6 +2456,144 @@ def _migrate_board_scene_render_shot_is_picked() -> None:
                 )
 
 
+def _migrate_board_scene_cells_render_themselves() -> None:
+    """画板上渲白模改成 3D 场景格自己做的事,「渲染白模参考」工具格撤掉。
+
+    此前一格场景格(引用一个场景、导出缩略图)旁边还要放一格工具格(`node:scene_render`),在工具格上挑
+    场景、挑镜头、挑渲什么 —— 同一件事分成两半摆在桌上。现在场景格挂内置产出者 `scene_render`
+    (和视频 / 音频格上的「剪一段」同一个样子),工作流节点撤掉了 `surfaces: ["board"]`。存着的画布:
+
+    · **每一格场景格写明产出者** `scene_render`(面板照它挂;新放下的场景格由 normalize 补,见
+      producer_ids.SLOT_PRODUCERS)。
+    · 工具格的场景**接的是**(绑定、且那根线还在)或**填的是**这张板上某一格场景格的场景:它的设置(镜头、
+      渲什么、归档项目;`{{…}}` 引用、不在选项里的值不搬)写进那一格场景格的 `form.config`,工具格删掉。
+      它跑出来的产出一格不动,**连向产出的线改从场景格连出**(同一对已经连着就不再多一根);连进工具格的线
+      随它去掉。一格场景格被好几格工具格接着时,第一格的设置搬过去;后面设置不同的那几格照下一条改成便签
+      (它们的镜头选择不能悄悄丢)。
+    · 其余(没接、没填,或填的场景这张板上没有格子):**改成一张便签**,同一个 id、位置、大小、名字,正文
+      写明渲染挪到了场景格上并附上原来的设置 —— 和 `migrate-board-wiring-tools-become-notes` 同一种做法:
+      进出它的线都还连得上,产出不动。
+
+    文字用部署缺省的中文(迁移时没有读的人的语言)。改到的板版本号 +1:升级那一刻还开着这张板的客户端
+    手里的旧快照要撞 409,不能把工具格存回来。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    fields = ("shot_id", "render", "project_id")
+    renders = ("stills", "video", "both")
+    limit = 20_000
+
+    def settings_of(config: dict) -> dict:
+        out = {}
+        for key in fields:
+            value = config.get(key)
+            if not isinstance(value, str) or not value.strip() or "{{" in value:
+                continue
+            if key == "render" and value.strip() not in renders:
+                continue
+            out[key] = value.strip()
+        return out
+
+    def note_of(item: dict, config: dict) -> dict:
+        body = ("「渲染白模参考」这一格不在画板上了:渲白模现在是 3D 场景格自己会做的事 —— 把场景放上画板,"
+                "选中它,挑一个镜头就能渲出首尾帧或运镜视频。")
+        if config:
+            body += "\n\n原来的设置:\n" + json.dumps(config, ensure_ascii=False, indent=2)
+        if len(body) > limit:
+            body = body[: limit - 1] + "…"
+        kept = {key: value for key, value in item.items() if key not in ("kind", "form", "run", "text")}
+        return {**kept, "kind": "note", "text": body, "form": {"producer": "write"}}
+
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            items = [item for item in canvas["items"] if isinstance(item, dict)]
+            edges = [edge for edge in canvas.get("edges") or [] if isinstance(edge, dict)]
+            by_id = {str(item.get("id")): item for item in items}
+            wired = {(str(edge.get("source")), str(edge.get("target"))) for edge in edges}
+            scenes = [item for item in items if item.get("kind") == "scene"]
+            touched = False
+
+            for scene in scenes:
+                form = scene.get("form") if isinstance(scene.get("form"), dict) else {}
+                if not form.get("producer"):
+                    scene["form"] = {**form, "producer": "scene_render"}
+                    touched = True
+
+            moved: dict[str, str] = {}
+            filled: set[str] = set()
+            for index, item in enumerate(canvas["items"]):
+                if not isinstance(item, dict) or item.get("kind") != "action":
+                    continue
+                form = item.get("form") if isinstance(item.get("form"), dict) else {}
+                if form.get("producer") != "node:scene_render":
+                    continue
+                touched = True
+                item_id = str(item.get("id"))
+                config = form.get("config") if isinstance(form.get("config"), dict) else {}
+                bindings = form.get("bindings") if isinstance(form.get("bindings"), dict) else {}
+                host = None
+                for ref in bindings.get("scene_id") if isinstance(bindings.get("scene_id"), list) else []:
+                    source = str(ref.get("from") if isinstance(ref, dict) else "")
+                    if (by_id.get(source) or {}).get("kind") == "scene" and (source, item_id) in wired:
+                        host = by_id[source]
+                        break
+                wanted = config.get("scene_id")
+                if host is None and isinstance(wanted, str) and wanted.strip():
+                    host = next((one for one in scenes if one.get("scene_id") == wanted.strip()), None)
+                settings = settings_of(config)
+                if host is not None:
+                    host_id = str(host.get("id"))
+                    host_form = host.get("form") if isinstance(host.get("form"), dict) else {}
+                    current = host_form.get("config") if isinstance(host_form.get("config"), dict) else {}
+                    if host_id not in filled and not current:
+                        rest = {key: value for key, value in host_form.items() if key not in ("config", "producer")}
+                        host["form"] = {**rest, **({"config": settings} if settings else {}), "producer": "scene_render"}
+                        filled.add(host_id)
+                        moved[item_id] = host_id
+                        continue
+                    if settings == current or (not settings and not current):
+                        moved[item_id] = host_id
+                        continue
+                canvas["items"][index] = note_of(item, config)
+
+            if moved:
+                taken = {str(edge.get("id")) for edge in edges}
+                pairs = {(str(edge.get("source")), str(edge.get("target"))) for edge in edges}
+                kept_edges = []
+                for edge in edges:
+                    source, target = str(edge.get("source")), str(edge.get("target"))
+                    if target in moved:
+                        continue
+                    if source not in moved:
+                        kept_edges.append(edge)
+                        continue
+                    host_id = moved[source]
+                    if target == host_id or target in moved or (host_id, target) in pairs:
+                        continue
+                    edge_id = f"{host_id}->{target}"
+                    suffix = 1
+                    while edge_id in taken:
+                        suffix += 1
+                        edge_id = f"{host_id}->{target}-{suffix}"
+                    taken.add(edge_id)
+                    pairs.add((host_id, target))
+                    kept_edges.append({**edge, "id": edge_id, "source": host_id})
+                canvas["edges"] = kept_edges
+                canvas["items"] = [item for item in canvas["items"]
+                                   if not (isinstance(item, dict) and str(item.get("id")) in moved)]
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = revision + 1 WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -4444,6 +4582,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_forms_name_their_producer,
                 _migrate_board_wiring_tools_become_notes,
                 _migrate_board_scene_render_shot_is_picked,
+                # 排在上一步之后:它把镜头绑定搬进了表单,这一步再把表单搬到场景格上。
+                _migrate_board_scene_cells_render_themselves,
                 _backfill_browser_pool,
                 _backfill_provider_models,
                 _migrate_provider_default_model_fk,

@@ -316,12 +316,19 @@ def run_node_on_board(
     config: dict[str, Any],
     bindings: dict[str, list[dict[str, str]]],
     label: str,
+    fixed: dict[str, Any] | None = None,
+    draft: dict[str, Any] | None = None,
 ) -> Board:
-    """在工具格上跑一次节点。**顺序**和另外几个产出者一样:问版本和忙闲 → 建任务 → 摆占位 → 起任务。"""
+    """在工具格上跑一次节点。**顺序**和另外几个产出者一样:问版本和忙闲 → 建任务 → 摆占位 → 起任务。
+
+    宿主不一定是工具格:3D 场景格渲白模跑的也是这一个(同一个执行器、同一种任务、同一套计量和取消),
+    只是节点的一部分配置由宿主给(`fixed`:场景格给 `scene_id`),存回那一格的表单是它自己的形状(`draft`)。
+    """
     from app.domain.boards.actions import _pending
 
     board, resolved = prepare_node_run(db, request=request, node_type=node_type, meta=meta, config=config,
                                        bindings=bindings)
+    resolved = {**resolved, **(fixed or {})}
 
     token = set_receipt(receipt_to_item(request.board_id, request.item_id))
     try:
@@ -339,11 +346,12 @@ def run_node_on_board(
         reset_receipt(token)
     db.commit()
     placed = _pending(
-        db, request.workspace_id, request.slot, actor_id=request.actor_id, kind="action",
+        db, request.workspace_id, request.slot, actor_id=request.actor_id, kind=request.kind,
         producer=request.producer, job_id=job.id,
         #: 表单存的是用户填的那份(绑定原样、连接原样),不是这一轮取出来的值 —— 下一次运行时
         #: 上游变了,取到的就是新的。
-        form={"config": dict(config), "bindings": {field: list(refs) for field, refs in bindings.items()}},
+        form=draft if draft is not None
+        else {"config": dict(config), "bindings": {field: list(refs) for field, refs in bindings.items()}},
     )
     scope = BoardScope(workspace_id=request.workspace_id, id=f"board:{board.id}", name=board.name)
     job_id = job.id

@@ -284,6 +284,7 @@ const RUN_COPY: Record<BuiltinProducer, { running: MessageKey; failed: MessageKe
   speak: { running: "generating", failed: "boardNodeGenerateFailed" },
   write: { running: "generating", failed: "boardNodeGenerateFailed" },
   trim: { running: "boardToolRunning", failed: "boardNodeRunFailed" },
+  scene_render: { running: "boardToolRunning", failed: "boardNodeRunFailed" },
 };
 const TOOL_RUN_COPY: { running: MessageKey; failed: MessageKey } = { running: "boardToolRunning", failed: "boardNodeRunFailed" };
 
@@ -802,22 +803,32 @@ function DocumentNode({ data, selected }: NodeProps) {
   );
 }
 
+/**
+ * 3D 场景格:引用一个场景,**自己会渲白模参考**(后端内置产出者 `scene_render`)—— 选中它,面板上挑镜头、
+ * 挑渲什么,首尾帧 / 运镜视频新建在右边(SceneComposer)。此前旁边还要另放一格「渲染白模参考」工具格。
+ *
+ * 格子里是场景的缩略图;还没导出过缩略图时说这一格能做什么。在跑、跑挂了和别的格子同一个外壳
+ * (PendingSlot:扫光 + 进度 + 停止、失败写原因);跑完回到缩略图,产出在右边。「编辑场景」在面板上。
+ */
 export function SceneNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as BoardNodeData;
-  const { item, commentMode } = nodeData;
+  const { item, commentMode, onStop } = nodeData;
   const t = useI18n();
-  const fallback = <div className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
+  const state = useRunState(item);
+  const status = itemRunStatus(item);
+  const fallback = <div data-board-scene-hint="" className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
+  const pending = status === "queued" || status === "running" || status === "failed";
   //: `group`:接点在悬停时显形(group-hover)—— 少了它,3D 场景格的接点只有选中了才看得见。
-  return <div className="group relative flex h-full w-full flex-col overflow-visible rounded-xl border border-border bg-panel shadow-sm">
+  return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible rounded-xl border border-border bg-panel shadow-sm", state.className)}>
     <NodeResizer minWidth={240} minHeight={180} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
     <NodeLabel data={nodeData} /><Ports visible={selected} disabled={commentMode} />
     <div className="min-h-0 flex-1 overflow-hidden rounded-t-xl">
-      {item.asset_id ? <AssetInlinePreview key={item.asset_id} assetId={item.asset_id} name={item.text || ""} kind="image" plain previewOnClick={false} lazy={false} imageFallback={fallback} className="h-full w-full object-contain" /> : fallback}
+      {pending ? <PendingSlot item={item} icon={<Box size={20} />} onStop={commentMode ? undefined : onStop} />
+        : item.asset_id ? <AssetInlinePreview key={item.asset_id} assetId={item.asset_id} name={item.text || ""} kind="image" plain previewOnClick={false} lazy={false} imageFallback={fallback} className="h-full w-full object-contain" /> : fallback}
     </div>
     <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
       <Box size={15} className="shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate text-ui-sm" title={item.text}>{item.text || t("boardKindScene")}</span>
-      <a className="nodrag nopan shrink-0 rounded-md border border-border bg-control px-2 py-1 text-ui-xs transition-colors hover:bg-secondary" href={`#/scenes?scene=${encodeURIComponent(item.scene_id ?? "")}`}>{t("boardSceneOpen")}</a>
     </footer>
   </div>;
 }

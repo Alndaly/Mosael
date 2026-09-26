@@ -1,4 +1,4 @@
-import { withSlotProducer, type BoardItem, type BoardProducer } from "@/api/client";
+import { derivesOutputs, withSlotProducer, type BoardItem, type BoardProducer } from "@/api/client";
 
 export type BoardItemRunStatus = NonNullable<BoardItem["run"]>["status"];
 
@@ -18,11 +18,12 @@ export function itemError(item: BoardItem): string | undefined {
  * migrate-board-forms-name-their-producer 照那条推断写进了每一格。
  *
  * 已经有了产出(asset_id)的一格不挂 —— 它的事做完了;便签的产出是它自己的正文,不占 asset_id,
- * 所以有字照样挂(有字就是照我说的改)。
+ * 所以有字照样挂(有字就是照我说的改)。产出新建在右边的(3D 场景格渲白模)也照样挂:场景格的
+ * asset_id 是缩略图,不是它的产出(api/domains/boards 的 derivesOutputs)。
  */
 export function producerOf(item: BoardItem): BoardProducer | null {
   const producer = item.form?.producer;
-  if (!producer || item.asset_id) return null;
+  if (!producer || (item.asset_id && !derivesOutputs(producer))) return null;
   return producer;
 }
 

@@ -260,6 +260,8 @@ def test_list_board_producers_只列这个人自己接的工具(tmp_path, monkey
     assert SHOUT in listed and TRANSLATE in listed
     assert not any(one.startswith("node:plugin.dev.test.othertools.") for one in listed), "列出了别人的连接"
     assert not {"generate", "write", "speak", "trim"} & set(listed), "内置槽位不在工具格上"
+    #: 3D 场景格上的渲白模也在:它的表单就是运行那一份,智能体能写、能替人点运行。
+    assert listed["scene_render"]["hosts"] == ["scene"] and "node:scene_render" not in listed
     assert listed[SHOUT]["effects"] == "none" and listed[PAINT]["effects"] == "external"
     assert listed[TRANSLATE]["config"]["text"]["board_sources"] == ["note", "document"]
 

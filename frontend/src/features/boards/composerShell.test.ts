@@ -26,12 +26,13 @@ const panels = readdirSync(HERE).filter(
 );
 
 describe("画板面板的壳", () => {
-  it("扫描面站得住 —— 五块面板都在(生成、写、念、截、工具)", () => {
+  it("扫描面站得住 —— 六块面板都在(生成、写、念、截、工具、3D 场景渲白模)", () => {
     expect(panels.sort()).toEqual([
       "ActionComposer.tsx",
       "AudioComposer.tsx",
       "NodeComposer.tsx",
       "NoteComposer.tsx",
+      "SceneComposer.tsx",
       "TrimComposer.tsx",
     ]);
   });

@@ -39,7 +39,8 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
   不在画板上 —— 用户要的是「每次换个输入自动再来」时,那是一张工作流:
   先 list_board_producers 看有哪些、字段怎么填;add_item 带 producer/config/bindings 放下它
   (bindings 接上游的便签/文档/素材,同一批里 connect 一根线),set_form 改它;再 run_board_item 跑 ——
-  只读的直接跑,花钱或对外的会先弹卡。
+  只读的直接跑,花钱或对外的会先弹卡。**3D 场景格自己会渲白模参考**(不是另放一格工具格):set_form 在
+  场景格上写 config(shot_id 镜头、render 渲什么),再对场景格 run_board_item,首尾帧 / 运镜视频落在它右边。
 - 修改工作流画布用 get_workflow / list_workflow_node_types / edit_workflow。
   删除工作流节点必须调用 edit_workflow 的 remove_node 操作,不要调用 edit_timeline。
   start/开始节点也可以删除;删除后工作流保存为草稿,但运行前需要重新添加 start。

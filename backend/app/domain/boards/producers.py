@@ -20,14 +20,16 @@ item 种类猜。第五种产出(插件工具、挑过的工作流节点)想上�
 跑之前的检查(dry_run)和替人写下的表单的检查(check_forms)也在这里 —— 智能体替人放工具格、
 替人点运行,问的是和界面**同一张注册表**,不另写一份「什么能跑、什么能接」。
 
-四个内置的本体仍在 `actions`(`*_on_board`),这里只把它们登记成同一种东西。
+内置的本体仍在 `actions`(`*_on_board`),这里只把它们登记成同一种东西。3D 场景格上的渲白模
+(`scene_render`)是个例外:它跑的就是工作流那个节点的执行器(boards.tools.run_node_on_board),只是挂在
+场景格上、场景由那一格给 —— 和工具格同一条运行的路,产出同样新建成右边的几格。
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.orm import Session
@@ -43,7 +45,13 @@ from app.domain.boards.actions import (
     write_on_board,
 )
 from app.domain.boards.canvas import BoardDomainError
-from app.domain.boards.producer_ids import BUILTIN_PRODUCER_IDS, node_producer_id, node_type_of
+from app.domain.boards.producer_ids import (
+    BUILTIN_PRODUCER_IDS,
+    SCENE_PRODUCER,
+    node_producer_id,
+    node_type_of,
+    runs_from_draft,
+)
 
 
 class ProducerFailed(BoardDomainError):
@@ -172,6 +180,31 @@ class TrimForm(_Form):
     mute: bool = False
 
 
+#: 渲白模在场景格上收的那几个字段 —— **就是工作流节点 `scene_render` 声明的那几个**(字段说明、选项来源、
+#: 「只有一个镜头就用它」都读那一份,见 _scene_render_meta),少了 `scene_id`:场景由宿主那一格给。
+SCENE_RENDER_FIELDS = ("shot_id", "render", "project_id")
+
+
+class SceneRenderConfig(_Form):
+    """场景格上渲白模的设置。和节点的配置同名同义;画板上没有 `{{…}}`,所以「渲什么」只收那三种。"""
+
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+
+    #: 留空 = 场景只有一个镜头时用它(和节点同一条规矩,见 scenes.render_shot_references)。
+    shot_id: str = Field(default="", max_length=128)
+    #: 取值和节点的选项是同一张表(scenes.REFERENCE_RENDERS),棘轮钉着。
+    render: Literal["stills", "video", "both"] = "stills"
+    #: 渲出来的素材归档进哪个项目;留空不归档。
+    project_id: str = Field(default="", max_length=64)
+
+
+class SceneRenderForm(_Form):
+    """场景格上的表单。**存在那一格上的就是这一份**(`form.config`),和工具格一样:跑完不清,下一次照它再渲 ——
+    智能体替人点运行时读的也是它。"""
+
+    config: SceneRenderConfig = Field(default_factory=SceneRenderConfig)
+
+
 def _start_generate(db: Session, request: RunRequest, form: GenerateForm) -> Board:
     return generate_on_board(
         db,
@@ -246,6 +279,83 @@ def _start_trim(db: Session, request: RunRequest, form: TrimForm) -> Board:
     )
 
 
+def _host_scene_id(db: Session, request: RunRequest) -> str:
+    """宿主那一格引用的是哪个场景。画布上一定有(场景格没有 scene_id 存不下,见 normalize_canvas)。"""
+    from app.domain.boards.canvas import get_board, item_not_found
+
+    board = get_board(db, request.workspace_id, request.board_id)
+    item = next((one for one in (board.canvas or {}).get("items") or [] if one.get("id") == request.item_id), None)
+    if item is None:
+        raise item_not_found(request.item_id)
+    return str(item.get("scene_id") or "")
+
+
+def _scene_render_args(db: Session, request: RunRequest, form: SceneRenderForm) -> dict[str, Any]:
+    """场景格上的一次渲染 → 跑节点那条路要的东西:节点配置(空着的字段不写,节点照自己的缺省)、宿主给的场景。
+
+    `meta` 是渲白模自己那一份(_scene_render_meta):落板的输出按它点名的三份素材算,不是节点的全部输出。
+    """
+    return {
+        "node_type": SCENE_PRODUCER,
+        "meta": _scene_render_meta(),
+        "config": {key: value for key, value in form.config.model_dump().items() if value != ""},
+        "bindings": {},
+        "fixed": {"scene_id": _host_scene_id(db, request)},
+    }
+
+
+def _start_scene_render(db: Session, request: RunRequest, form: SceneRenderForm) -> Board:
+    """在场景格上渲一次:**工作流节点 `scene_render` 的同一个执行器**,走工具格那条路(建 `board_run` 任务、
+    挂在它下面计量、能停),产出新建成场景格右边的几格(canvas._derive)。场景格自己不动。"""
+    from app.core.i18n import get_current_locale, t
+    from app.domain.boards.tools import run_node_on_board
+
+    args = _scene_render_args(db, request, form)
+    return run_node_on_board(
+        db,
+        request=request,
+        node_type=args["node_type"],
+        meta=args["meta"],
+        config=args["config"],
+        bindings=args["bindings"],
+        label=t("boardProducer_scene_render", get_current_locale()),
+        fixed=args["fixed"],
+        draft={"config": form.config.model_dump(exclude_unset=True)},
+    )
+
+
+def _preflight_scene_render(db: Session, request: RunRequest, form: SceneRenderForm) -> dict[str, Any]:
+    from app.domain.boards.tools import prepare_node_run
+
+    args = _scene_render_args(db, request, form)
+    prepare_node_run(db, request=request, node_type=args["node_type"], meta=args["meta"], config=args["config"],
+                     bindings=args["bindings"])
+    return {}
+
+
+def _scene_render_meta() -> dict[str, Any]:
+    """渲白模给界面的描述:名字和一句说明是画板自己的,**字段和输出是工作流节点那一份**(不抄)——
+    字段说明、选项来源(场景的镜头、工作区的项目)、「只有一个镜头就用它」、每个输出是哪种素材。
+
+    落板的只有三份素材(首帧、尾帧、运镜视频);镜头语言、跳过的模型、模型提醒是给工作流连线的。
+    """
+    from app.domain.workflows import NODE_TYPES
+
+    node = NODE_TYPES[SCENE_PRODUCER]
+    config = {key: dict(node["config"][key]) for key in SCENE_RENDER_FIELDS}
+    #: 画板上没有 `{{…}}`:渲什么只在那三种里挑(节点允许手填,是给整片流程逐镜传值用的)。
+    config["render"].pop("allow_custom", None)
+    return {
+        **_builtin_meta(SCENE_PRODUCER),
+        "config": config,
+        "outputs": list(node["outputs"]),
+        "output_types": dict(node.get("output_types") or {}),
+        "output_labels": dict(node.get("output_labels") or {}),
+        "output_media": dict(node.get("output_media") or {}),
+        "board_outputs": ["first_frame_asset_id", "last_frame_asset_id", "video_asset_id"],
+    }
+
+
 def _builtin_meta(producer_id: str) -> dict[str, Any]:
     """内置产出者给界面的那一点描述:名字和一句说明(i18n key)。没有字段声明 —— 它们的面板是专门写的。"""
     return {
@@ -258,13 +368,14 @@ def _builtin_meta(producer_id: str) -> dict[str, Any]:
 
 
 def _builtins() -> dict[str, Producer]:
-    """四个内置产出者。**导入期不碰这些领域** —— 生成、配音、截取各自的模块很重,且会回头
+    """内置产出者。**导入期不碰这些领域** —— 生成、配音、截取各自的模块很重,且会回头
     认识画板;错误类型在这里才取。"""
     from app.domain.ai_chat import AiChatError
     from app.domain.boards.trim import TrimError
     from app.domain.generation.operations import GenerationDomainError
     from app.domain.generation.resolution import KINDS as GENERATION_KINDS
     from app.domain.voices.voices import VoiceError
+    from app.domain.workflows import WorkflowDomainError
 
     return {
         one.id: one
@@ -316,6 +427,22 @@ def _builtins() -> dict[str, Producer]:
                 form=TrimForm,
                 start=_start_trim,
                 failures=(TrimError,),
+            ),
+            Producer(
+                id=SCENE_PRODUCER,
+                meta=_scene_render_meta(),
+                #: 场景格永远「还能再渲」:它的内容是场景本身,渲出来的落在右边(producer_ids.DERIVED_BUILTINS)。
+                #: 新放下的场景格挂的就是它(SLOT_PRODUCERS)。
+                fills_empty_slot=True,
+                hosts=("scene",),
+                permission="edit",
+                #: 本机渲染,不花钱、不出门 —— 智能体替人跑不用开卡。
+                effects="none",
+                form=SceneRenderForm,
+                start=_start_scene_render,
+                preflight=_preflight_scene_render,
+                #: 起任务之前就会失败的那几种(和工具格同一条路,见 boards.tools.prepare_node_run)。
+                failures=(WorkflowDomainError,),
             ),
         )
     }
@@ -564,6 +691,14 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
                 "board_description": board_description(producer.meta or {}, locale),
                 "output_kinds": output_kinds(producer.meta or {}),
             }
+        elif runs_from_draft(producer_id):
+            #: 表单是节点字段的内置产出者(3D 场景格渲白模):字段照工具格那一份画板视图发,面板照它长;
+            #: 不进「添加 → 工具」,所以没有分组。
+            board = {
+                "config": board_config_view(entry["config"]),
+                "board_description": board_description(producer.meta or {}, locale),
+                "output_kinds": output_kinds(producer.meta or {}),
+            }
         out.append({
             **entry,
             **board,
@@ -574,6 +709,7 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
             "permission": producer.permission,
             "effects": producer.effects,
             "fills_empty_slot": producer.fills_empty_slot,
+            "runs_from_draft": runs_from_draft(producer_id),
         })
     return out
 
@@ -637,7 +773,8 @@ def check_forms(db: Session, canvas: dict[str, Any], item_ids: list[str], actor_
     · 它能挂在这种格子上;
     · 工具的表单:配置里只有这个工具声明过的字段,声明成数字的是数,绑定都接得上。
 
-    内置产出者(写字、生成、念、截)的表单是各自面板的形状,归面板,这里只问前两样。
+    内置产出者(写字、生成、念、截)的表单是各自面板的形状,归面板,这里只问前两样;3D 场景格上渲白模的表单
+    存的就是运行发的那一份(runs_from_draft),照它自己的表单模型校验。
     """
     from app.domain.boards.tools import check_bindings
     from app.domain.boards.transforms import wiring_field
@@ -657,6 +794,11 @@ def check_forms(db: Session, canvas: dict[str, Any], item_ids: list[str], actor_
             raise BoardInputError("boardErr_producerCannotHost", producer=producer.id, kind=str(item.get("kind")))
         node_type = node_type_of(producer.id)
         if node_type is None:
+            if runs_from_draft(producer.id):
+                try:
+                    producer.form.model_validate({key: value for key, value in form.items() if key != "producer"})
+                except ValidationError as exc:
+                    raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
             continue
         config = form.get("config") or {}
         try:

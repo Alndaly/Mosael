@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Board, now
-from app.domain.boards.producer_ids import NOTE_PRODUCER, is_producer_id, missing_slot_producer
+from app.domain.boards.producer_ids import NOTE_PRODUCER, derives_outputs, is_producer_id, missing_slot_producer
 
 
 logger = logging.getLogger(__name__)
@@ -799,11 +799,14 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
         settled_run = (settled or {}).get("run") or {}
         live = live_job(settled)
         incoming_running = (item.get("run") or {}).get("status") in ("queued", "running")
+        #: 派生落点的宿主(工具格、3D 场景格)自己的 asset_id 不是产出 —— 场景格的是缩略图,归客户端。
+        derived = derives_outputs(settled or item)
         if live and live_job(item) != live:
             kept = {**item, "run": settled_run}
-            kept.pop("asset_id", None)
+            if not derived:
+                kept.pop("asset_id", None)
             items.append(kept)
-        elif settled and not item.get("asset_id") and settled.get("asset_id"):
+        elif settled and not derived and not item.get("asset_id") and settled.get("asset_id"):
             items.append({**item, "asset_id": settled["asset_id"], "run": settled.get("run", {"status": "succeeded"})})
         elif settled and incoming_running and settled_run.get("status") in ("succeeded", "failed", "cancelled"):
             # 任务结束后的下一次自动保存，客户端手里往往还是提交前的 running 快照。终态必须
@@ -930,8 +933,10 @@ def place_pending(
             merged = {**items[index], **keep}
             #: 四个状态两两互斥 —— 重新生成时旧产出、上一次的失败都让位给这次的占位。
             #: 不清的话,一个项会同时带着 run.running 和 asset_id(画布不知道该画哪个),
-            #: 或者一边转圈一边挂着上次的报错(用户以为这次也挂了)。
-            merged.pop("asset_id", None)
+            #: 或者一边转圈一边挂着上次的报错(用户以为这次也挂了)。派生落点的宿主不清:它的产出
+            #: 在右边,它自己的 asset_id(3D 场景格的缩略图)不是上一次的产出。
+            if not derives_outputs(merged):
+                merged.pop("asset_id", None)
             items[index] = merged
         return {**canvas, "items": items}
 
@@ -1053,7 +1058,7 @@ def _derive(
     items: list[dict[str, Any]],
     edges: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """工具格这一轮的产出 → 新建的几格和连向它们的线。
+    """工具格(或别的派生落点的宿主,如 3D 场景格)这一轮的产出 → 新建的几格和连向它们的线。
 
     **每一轮都是新的一列,不覆盖上一轮。** 摆在工具格右边、再往右避开它此前产出的那几列;一列里
     从上往下排。上一轮的产出是用户可能已经拿去用的东西(连到了别处、改过字),重跑把它们换掉的话,
@@ -1077,7 +1082,7 @@ def _derive(
     earlier = [by_id[str(edge.get("target"))] for edge in edges
                if edge.get("source") == action_id and str(edge.get("target")) in by_id]
     right = max(
-        [float(action.get("x") or 0) + float(action.get("width") or DEFAULT_SIZE["action"][0])]
+        [float(action.get("x") or 0) + float(action.get("width") or DEFAULT_SIZE.get(str(action.get("kind")), DEFAULT_SIZE["action"])[0])]
         + [float(one.get("x") or 0) + float(one.get("width") or DEFAULT_SIZE.get(str(one.get("kind")), (0, 0))[0])
            for one in earlier]
     )
@@ -1123,7 +1128,8 @@ def _canvas_with_delivered_result(
 
     · **就地**:宿主是一个等着产出的槽(图片/视频/音频/便签)。产出(见 outputs_of)是素材
       (生成/念/截)或一段正文(便签上写字),第一份填进这一格,多出来的往右排;两样都没有就是没做成。
-    · **派生**:宿主是工具格(`action`)。它自己不放产出,每一份产出都新建一格、连一条线(见 _derive);
+    · **派生**:宿主是工具格(`action`),或挂着派生产出者的格子(3D 场景格渲白模,见
+      producer_ids.derives_outputs)。它自己不放产出,每一份产出都新建一格、连一条线(见 _derive);
       任务成功就算做成 —— 交回的东西落不成任何一格(全是空值)也是成功,只是右边没有新东西。
       表单(节点配置、绑定)**不清空**:工具格就是一份可以反复跑的配置。
 
@@ -1138,7 +1144,7 @@ def _canvas_with_delivered_result(
         if item.get("id") != item_id or live_job(item) != job_id:
             kept.append(item)
             continue
-        derives = item.get("kind") == "action"
+        derives = derives_outputs(item)
         if (derives and not succeeded) or (not derives and not asset_ids and text is None):
             # 失败/被取消:结束 run.running,留下这一项和它的提示词,并把原因写在上面。
             #

@@ -432,6 +432,7 @@ const RUN_FAILED: Record<BuiltinProducer, MessageKey> = {
   write: "boardWriteFailed",
   speak: "boardSpeakFailed",
   trim: "boardTrimFailed",
+  scene_render: "boardSceneRenderFailed",
 };
 
 function BoardDetail({

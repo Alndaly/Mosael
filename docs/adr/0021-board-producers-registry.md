@@ -511,6 +511,23 @@ id、位置、名字不变,产出者 `generate`,选的就是那条连接下的�
 做法和 `migrate-board-wiring-tools-become-notes` 一样(同一个 id、位置、名字,正文写明归工作流、附原来的设置)。
 只改连接说得出、而且每条连接都说它按编号取东西的格子;还没改到的,点运行时回 `boardErr_toolFetchesByExternalId`。
 
+### 修订 4:3D 场景格自己渲白模,「渲染白模参考」工具格撤下画板(2026-09-26)
+
+「一个概念一个入口」的又一处:画板上渲白模要**两格** —— 一格场景格(引用场景、放缩略图),旁边一格工具格
+(`node:scene_render`,在上面再挑一遍场景、挑镜头、挑渲什么)。两格是同一件事的两半,连线也只是把场景 id 递过去。
+
+- **渲染是场景格自己会做的事**:内置产出者 `scene_render`,`hosts=("scene",)`,和「剪一段」挂在视频 / 音频格上
+  同一个样子。表单是 `{config: {shot_id, render, project_id}}` —— 字段**就是工作流节点声明的那三个**(说明、选项来源、
+  `sole_option_default` 读同一份,`render` 在画板上去掉 `allow_custom`),场景由宿主那一格给。跑的是**同一个执行器**,
+  走工具格那条路(`tools.run_node_on_board`:`board_run` 任务、计量、取消、归属都一样);产出按 `landing: derived`
+  新建在场景格右边、连线(`producer_ids.DERIVED_BUILTINS` / `derives_outputs` —— 宿主的 `asset_id` 是缩略图,
+  摆占位、回执、保存都不动它)。`effects: none`(本机渲染);存在格子上的表单就是运行那一份(`runs_from_draft`),
+  智能体能 `set_form`、`run_board_item`。新放下的场景格挂它(`SLOT_PRODUCERS["scene"]`)。
+- 节点 `scene_render` 撤掉 `surfaces: board`(和 `board_outputs` / `board_group` / `board_description`),工作流里不变。
+- **已有数据**:迁移 `migrate-board-scene-cells-render-themselves` —— 每一格场景格写明产出者;工具格接着(绑定且线在)
+  或填的是板上某一格场景格的场景时,设置搬进那一格的 `form.config`、工具格删掉,连向产出的线改从场景格连出(同一对不重复);
+  其余(或同一格场景已经收了另一套设置的)照 `migrate-board-wiring-tools-become-notes` 改成便签。改到的板版本号 +1。
+
 ### 下一版
 
 - 「从画板沉淀为工作流」:一串在画板上验证过的变换,存成一张工作流;

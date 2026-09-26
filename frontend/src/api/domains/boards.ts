@@ -120,9 +120,10 @@ export function deleteBoard(boardId: string, workspaceId: string): Promise<void>
  * 画板上的产出者 —— 一格里「能产出东西」的那件事由谁来做(后端 boards/producers.py,ADR 0021)。
  * 写在那一格的 `form.producer` 上,面板照它挂(见 boardItemState.producerOf),不按种类猜。
  *
- * 四个内置的各有专门的面板;`node:<节点类型>` 是工具格跑的一个节点,表单由节点声明生成。
+ * 内置的各有专门的面板;`node:<节点类型>` 是工具格跑的一个节点,表单由节点声明生成。`scene_render` 挂在
+ * 3D 场景格上:从场景的一个镜头渲白模参考(跑的是工作流那个节点,产出新建在场景格右边)。
  */
-export type BuiltinProducer = "generate" | "speak" | "trim" | "write";
+export type BuiltinProducer = "generate" | "scene_render" | "speak" | "trim" | "write";
 export type NodeProducer = `node:${string}`;
 export type BoardProducer = BuiltinProducer | NodeProducer;
 
@@ -130,6 +131,17 @@ export const NODE_PRODUCER_PREFIX = "node:";
 
 export function isNodeProducer(producer: string | undefined | null): producer is NodeProducer {
   return Boolean(producer?.startsWith(NODE_PRODUCER_PREFIX));
+}
+
+/**
+ * 产出**不落进宿主**、新建成宿主右边几格的内置产出者。和后端 boards/producer_ids.DERIVED_BUILTINS 同一张表 ——
+ * 宿主自己的 asset_id(3D 场景格的缩略图)不是它的产出:有它照样挂面板、照样还能再跑。
+ */
+const DERIVED_BUILTINS: ReadonlySet<BoardProducer> = new Set<BoardProducer>(["scene_render"]);
+
+/** 这个产出者的产出新建在宿主右边(工具格、场景格渲白模),而不是填进宿主。 */
+export function derivesOutputs(producer: BoardProducer | undefined | null): boolean {
+  return Boolean(producer && (isNodeProducer(producer) || DERIVED_BUILTINS.has(producer)));
 }
 
 /**
@@ -141,18 +153,19 @@ const SLOT_PRODUCER: Partial<Record<BoardItem["kind"], BuiltinProducer>> = {
   image: "generate",
   video: "generate",
   audio: "speak",
+  scene: "scene_render",
 };
 
 /**
  * 能产出、还没产出的一格补上它的产出者 —— **前端新建一格都过这一处**(画布的「添加」、拖进来 / 粘贴进来的
  * 素材、3D 场景页建的画板)。规则和后端 canvas.normalize_canvas 那一条相同(缺了按上面的表补,已经写明的
- * 不动,有了产出的媒体格不补;便签的产出是自己的正文,有字照样补):服务端存的时候也会补,但本地这一格
+ * 不动,有了产出的媒体格不补;便签的产出是自己的正文,有字照样补;3D 场景格的 asset_id 是缩略图,照样补):服务端存的时候也会补,但本地这一格
  * 要**当场**就挂得上面板,不能等下一次从服务端拉。自带的草稿(提示词、参考)原样留着,产出者排在最后
  * (和后端摆占位时写的位置一致,前端按 JSON 比对表单)。
  */
 export function withSlotProducer<T extends Pick<BoardItem, "kind" | "asset_id" | "form">>(item: T): T {
   const producer = SLOT_PRODUCER[item.kind];
-  if (!producer || item.form?.producer || (item.kind !== "note" && item.asset_id)) return item;
+  if (!producer || item.form?.producer || (item.kind !== "note" && item.asset_id && !derivesOutputs(producer))) return item;
   const { producer: _none, ...draft } = item.form ?? {};
   return { ...item, form: { ...draft, producer } };
 }
@@ -196,6 +209,9 @@ export interface BoardRunForms {
     engine_voice?: string;
   };
   trim: { asset_id: string; start: number; end: number; mute?: boolean };
+  /** 3D 场景格渲白模:场景由那一格给;镜头留空 = 场景只有一个镜头时用它。和后端 producers.SceneRenderForm 同形 ——
+   *  存在那一格上的表单就是这一份。 */
+  scene_render: { config: { shot_id?: string; render?: "stills" | "video" | "both"; project_id?: string } };
   /** 工具格:节点配置 + 哪些字段接上游(值由服务端运行时从画布上取)。和后端 producers.NodeForm 同形。 */
   node: { config: Record<string, unknown>; bindings: Record<string, { from: string }[]> };
 }

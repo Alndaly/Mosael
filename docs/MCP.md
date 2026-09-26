@@ -88,7 +88,7 @@ summaries — never raw internal schemas.
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_scene_references` | 直接执行 | Render blockout references of one shot of a 3D scene and save them as assets: |
 | `render_sequence` | 确认卡 | Confirmation required: export an existing VIDEO TIMELINE sequence to mp4. |
-| `run_board_item` | 确认卡 | Run a TOOL ITEM (kind "action") on a creative board, as if the user pressed Run. |
+| `run_board_item` | 确认卡 | Run a TOOL ITEM (kind "action") or a 3D SCENE ITEM (kind "scene") on a creative board, as if the user pressed Run. |
 | `run_code` | 确认卡 | Confirmation required: run a short Python snippet in an ISOLATED sandbox and return `output`. |
 | `run_host_code` | 确认卡 | Confirmation required: run Python directly on the user's computer, NOT isolated. |
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
