@@ -3,7 +3,6 @@ import React from "react";
 import { useI18n } from "@/app/preferences";
 import { CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { usePersistentTab } from "@/lib/usePersistentTab";
-import { cn } from "@/lib/utils";
 import { AdminOverview } from "./AdminOverview";
 import { AdminMembers } from "./AdminMembers";
 import { RegistrationSection } from "./RegistrationSection";
@@ -48,11 +47,9 @@ export function AdminView() {
           />
         </div>
       </div>
-      {/* 部署设置是一列开关与清单,拉满宽屏只会让开关离它的名字一屏远,所以收窄;概览和账户表要宽。 */}
-      <div
-        data-admin-panel={tab}
-        className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-10", tab === "deployment" && "max-w-4xl")}
-      >
+      {/* 三个 tab 同一个宽度:铺满内容区,和设置页、插件页一致。部署设置此前单独收窄到 max-w-4xl,
+          右边空出半屏,和上面铺满的 tab 栏对不齐(用户指出过)。 */}
+      <div data-admin-panel={tab} className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-10">
         {tab === "overview" && <AdminOverview />}
         {tab === "members" && <AdminMembers onOpenDeployment={() => setTab("deployment")} />}
         {tab === "deployment" && (
