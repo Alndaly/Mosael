@@ -100,6 +100,13 @@ def test_刚装好还没存过工作流_照样列出内置文生图(comfy) -> No
     assert fingerprint.output["fingerprint"]
 
 
+def test_workflows目录里的隐藏文件不是工作流(comfy) -> None:
+    """老版本前端在 workflows/ 下放一份 .index.json(收藏、排序):它不是一张图,不该列成一个「转不过来」的模型。"""
+    comfy.state.workflows[".index.json"] = {"favorites": ["portrait.json"]}
+    listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
+    assert ".index.json" not in {one["id"] for one in listed["workflows"]}
+
+
 def test_没有checkpoint就不列内置文生图(comfy) -> None:
     comfy.state.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"] = [[]]
     assert "builtin:txt2img" not in {one["id"] for one in _models(comfy.url)}

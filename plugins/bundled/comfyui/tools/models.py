@@ -18,7 +18,7 @@ from typing import Any, Iterator, NamedTuple
 
 import convert
 import graph
-from comfy_http import Comfy
+from comfy_http import Comfy, is_workflow_path
 from lines import ComfyError, say
 
 BUILTIN = "builtin:txt2img"
@@ -174,7 +174,8 @@ def fingerprint(comfy: Comfy) -> str:
     重新拉一遍、转一遍。这里只列目录,不取任何一张图的内容 —— 一百张工作流也就一个请求。
     """
     digest = hashlib.sha256()
-    for item in sorted(comfy.workflow_listing(), key=lambda one: str(one.get("path"))):
+    listed = [item for item in comfy.workflow_listing() if is_workflow_path(str(item.get("path") or ""))]
+    for item in sorted(listed, key=lambda one: str(one.get("path"))):
         digest.update(f"{item.get('path')}|{item.get('size')}|{item.get('modified')}\n".encode("utf-8"))
     digest.update(template_text().encode("utf-8"))
     folders = comfy.model_folders()

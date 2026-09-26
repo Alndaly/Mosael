@@ -108,8 +108,8 @@ class Comfy:
         return info if isinstance(info, dict) else {}
 
     def list_workflows(self) -> list[str]:
-        """用户在 ComfyUI 里**保存**的工作流(相对 workflows/ 的路径)。"""
-        paths = [str(item.get("path")) for item in self.workflow_listing() if str(item.get("path") or "").endswith(".json")]
+        """用户在 ComfyUI 里**保存**的工作流(相对 workflows/ 的路径)。隐藏文件不算(老版本前端的 .index.json)。"""
+        paths = [str(item.get("path")) for item in self.workflow_listing() if is_workflow_path(str(item.get("path") or ""))]
         return sorted(paths, key=str.lower)
 
     def fetch_workflow(self, path: str) -> dict[str, Any]:
@@ -209,6 +209,10 @@ class Comfy:
         scheme = "wss" if self.base.startswith("https://") else "ws"
         host = self.base.split("://", 1)[1]
         return f"{scheme}://{host}/ws?clientId={parse.quote(client_id)}"
+
+
+def is_workflow_path(path: str) -> bool:
+    return path.endswith(".json") and not any(part.startswith(".") for part in path.split("/"))
 
 
 def env_base_url() -> str:
