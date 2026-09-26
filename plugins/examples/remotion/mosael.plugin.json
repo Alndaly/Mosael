@@ -98,6 +98,16 @@
         "input_schema": {
           "type": "object",
           "properties": {}
+        },
+        "node": {
+          "outputs": ["node", "browser", "summary"],
+          "output_types": {"node": "text", "browser": "text", "summary": "text"},
+          "board_outputs": ["summary"],
+          "output_labels": {
+            "node": {"zh": "Node.js 版本", "en": "Node.js version"},
+            "browser": {"zh": "渲染用的浏览器", "en": "Rendering browser"},
+            "summary": {"zh": "一句话", "en": "In one line"}
+          }
         }
       },
       {
@@ -170,9 +180,13 @@
           "required": ["title", "sections"]
         },
         "node": {
+          "outputs": ["asset_id", "seconds", "summary"],
+          "output_types": {"asset_id": "asset", "seconds": "number", "summary": "text"},
+          "board_outputs": ["asset_id"],
           "output_labels": {
-            "summary": {"zh": "一句话", "en": "In one line"},
-            "seconds": {"zh": "时长(秒)", "en": "Length (s)"}
+            "asset_id": {"zh": "视频", "en": "Video"},
+            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
+            "summary": {"zh": "一句话", "en": "In one line"}
           }
         }
       },
@@ -222,9 +236,13 @@
           "required": ["code", "seconds"]
         },
         "node": {
+          "outputs": ["asset_id", "seconds", "summary"],
+          "output_types": {"asset_id": "asset", "seconds": "number", "summary": "text"},
+          "board_outputs": ["asset_id"],
           "output_labels": {
-            "summary": {"zh": "一句话", "en": "In one line"},
-            "seconds": {"zh": "时长(秒)", "en": "Length (s)"}
+            "asset_id": {"zh": "动画", "en": "Animation"},
+            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
+            "summary": {"zh": "一句话", "en": "In one line"}
           }
         }
       }
