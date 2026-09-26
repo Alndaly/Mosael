@@ -54,6 +54,7 @@ import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
+import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 
@@ -79,7 +80,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   });
   const scan = useMutation({
     mutationFn: () => rescanPlugins(),
-    onSuccess: () => invalidatePlugins(qc),
+    onSuccess: () => invalidatePluginDependents(qc),
   });
 
   const list = packages.data ?? [];
@@ -115,7 +116,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
   if (empty) return <div className={COLLECTION_DETAIL_PAGE}>
     {heading}<div className="flex min-h-0 flex-1 overflow-y-auto"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
-    <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePlugins(qc)} />
+    <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePluginDependents(qc)} />
   </div>;
 
   return (
@@ -167,16 +168,9 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
       </CollectionDetail>
-      <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePlugins(qc)} />
+      <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePluginDependents(qc)} />
     </div>
   );
-}
-
-function invalidatePlugins(qc: ReturnType<typeof useQueryClient>) {
-  void qc.invalidateQueries({ queryKey: ["plugins"] });
-  void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
-  void qc.invalidateQueries({ queryKey: ["plugin-models"] });
-  void qc.invalidateQueries({ queryKey: ["workflow-node-types"] });
 }
 
 /** 扫描按钮:pending 时图标转起来、文案改成「扫描中」—— 以前只是 disabled,点下去像没点上。 */
@@ -200,7 +194,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
     mutationFn: () => removePluginPackage(pkg.id),
     onSuccess: () => {
       setConfirmUninstall(false);
-      invalidatePlugins(qc);
+      invalidatePluginDependents(qc);
     },
   });
   const createInstance = useMutation({
@@ -210,7 +204,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
       // 建好就关窗、清草稿 —— 留着开会让人以为没成功,而新连接已经出现在下面的列表里了。
       setAddOpen(false);
       setDraft({});
-      invalidatePlugins(qc);
+      invalidatePluginDependents(qc);
     },
   });
 
@@ -527,23 +521,23 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       updatePluginInstance(instance.id, body),
-    onSuccess: () => invalidatePlugins(qc),
+    onSuccess: () => invalidatePluginDependents(qc),
   });
   const remove = useMutation({
     mutationFn: () => removePluginInstance(instance.id),
     onSuccess: () => {
       setConfirmDelete(false);
-      invalidatePlugins(qc);
+      invalidatePluginDependents(qc);
     },
   });
   const refresh = useMutation({
     mutationFn: () => refreshPluginInstance(instance.id),
-    onSuccess: () => invalidatePlugins(qc),
+    onSuccess: () => invalidatePluginDependents(qc),
   });
   const setCapabilities = useMutation({
     mutationFn: (tools: Record<string, boolean>) =>
       setPluginCapabilities(instance.id, { tools }),
-    onSuccess: () => invalidatePlugins(qc),
+    onSuccess: () => invalidatePluginDependents(qc),
   });
 
   const grants = useQuery({
@@ -556,7 +550,7 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
       setPluginPermissions(instance.id, { grants: grantsBody }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["plugin-permissions", instance.id] });
-      invalidatePlugins(qc);
+      invalidatePluginDependents(qc);
     },
   });
 
@@ -826,7 +820,7 @@ function PluginOAuth({ instanceId, save }: { instanceId: string; save?: React.Re
       setCode("");
       toast.success(t("pluginOauthDone"));
       void qc.invalidateQueries({ queryKey: ["plugin-credentials", instanceId] });
-      invalidatePlugins(qc);
+      invalidatePluginDependents(qc);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -908,7 +902,7 @@ export function CredentialRows({ instanceId, oauth }: { instanceId: string; oaut
     onSuccess: () => {
       setDraft({});
       void qc.invalidateQueries({ queryKey: ["plugin-credentials", instanceId] });
-      invalidatePlugins(qc);
+      invalidatePluginDependents(qc);
     },
   });
 

@@ -26,7 +26,6 @@ vi.mock("@/api/client", () => ({
   fetchWorkflowFieldOptions: vi.fn().mockResolvedValue([]),
   startPluginOauth: vi.fn(),
   finishPluginOauth: vi.fn(),
-  invalidatePlugins: () => undefined,
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
