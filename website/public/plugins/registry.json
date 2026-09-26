@@ -443,7 +443,7 @@
         "zh": "Remotion 动画",
         "en": "Remotion Animation"
       },
-      "version": "0.1.1",
+      "version": "0.2.0",
       "description": {
         "zh": "用代码做动画视频,零生成费用:知识点讲解、公式推导、代码演示、数据图表。要讲准确的东西(文字、公式、步骤、数字)用它;要真实画面(人物、场景、实拍感)用视频生成模型。讲解视频给内容就能出片;更自由的画面写一段 Remotion 组件代码。需要本机装有 Node.js 18+。Remotion 对个人与 3 人以内的公司免费,更大的公司需要购买 Remotion 公司许可。",
         "en": "Make animated videos with code, at no generation cost: lesson explainers, formula walk-throughs, code demos, data charts. Use it when accuracy matters (text, formulas, steps, numbers); use a video generation model for realistic footage. Explainers need only content; anything freer is a short Remotion component. Needs Node.js 18+ on this computer. Remotion is free for individuals and companies of up to 3 people; larger companies need a Remotion company license."
@@ -471,8 +471,8 @@
             "en": "Prepare the renderer"
           },
           "description": {
-            "zh": "安装 Remotion 与渲染用的浏览器。第一次要几十秒到几分钟,之后几乎是瞬间完成。渲染工具在环境缺失时会自动补,但第一次最好在插件页先跑一下它。",
-            "en": "Install Remotion and the rendering browser. The first run takes from tens of seconds to a few minutes; after that it is near-instant. The render tools fill in anything missing, but run this once from the plugin page first."
+            "zh": "安装 Remotion 与渲染用的浏览器。第一次要几十秒到几分钟,之后几乎是瞬间完成。渲染工具不会顺手装环境(装到一半被预算掐掉只会留下半截),第一次请先在插件页跑它;插件升级换了 Remotion 版本、Node.js 换了架构时,渲染工具会提醒再跑一次。",
+            "en": "Install Remotion and the rendering browser. The first run takes from tens of seconds to a few minutes; after that it is near-instant. The render tools do not install anything (a half-finished install cut off by their budget only leaves a broken one), so run this first from the plugin page; the render tools say when to run it again (a new Remotion version, a Node.js with another architecture)."
           },
           "effects": "none"
         },

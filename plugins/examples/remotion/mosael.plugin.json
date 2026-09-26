@@ -6,7 +6,7 @@
     "en": "Remotion Animation"
   },
   "default_locale": "zh",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
   "author": {
     "name": "Mosael",
@@ -85,13 +85,14 @@
       {
         "name": "remotion_setup",
         "effects": "none",
+        "stream": true,
         "label": {
           "zh": "准备渲染环境",
           "en": "Prepare the renderer"
         },
         "description": {
-          "zh": "安装 Remotion 与渲染用的浏览器。第一次要几十秒到几分钟,之后几乎是瞬间完成。渲染工具在环境缺失时会自动补,但第一次最好在插件页先跑一下它。",
-          "en": "Install Remotion and the rendering browser. The first run takes from tens of seconds to a few minutes; after that it is near-instant. The render tools fill in anything missing, but run this once from the plugin page first."
+          "zh": "安装 Remotion 与渲染用的浏览器。第一次要几十秒到几分钟,之后几乎是瞬间完成。渲染工具不会顺手装环境(装到一半被预算掐掉只会留下半截),第一次请先在插件页跑它;插件升级换了 Remotion 版本、Node.js 换了架构时,渲染工具会提醒再跑一次。",
+          "en": "Install Remotion and the rendering browser. The first run takes from tens of seconds to a few minutes; after that it is near-instant. The render tools do not install anything (a half-finished install cut off by their budget only leaves a broken one), so run this first from the plugin page; the render tools say when to run it again (a new Remotion version, a Node.js with another architecture)."
         },
         "timeout_seconds": 900,
         "input_schema": {
@@ -102,6 +103,7 @@
       {
         "name": "remotion_explainer",
         "effects": "none",
+        "stream": true,
         "label": {
           "zh": "讲解视频",
           "en": "Explainer video"
@@ -177,6 +179,7 @@
       {
         "name": "remotion_animation",
         "effects": "local-code",
+        "stream": true,
         "label": {
           "zh": "自定义动画",
           "en": "Custom animation"

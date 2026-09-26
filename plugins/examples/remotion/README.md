@@ -21,7 +21,7 @@ Remotion 不是 MIT 许可。按 [Remotion License](https://www.remotion.dev/lic
 ## 要求
 
 - **Node.js 18 或更新版本**(带 npm)。从 [nodejs.org](https://nodejs.org) 安装;装好后重启 Mosael。
-- 约 **250 MB** 磁盘空间:Remotion 与渲染用的浏览器,装在 Mosael 数据目录的 `plugin-data/dev.mosael.remotion` 下。插件更新不会重装;卸载插件时一起删掉。
+- 约 **250 MB** 磁盘空间:Remotion 与渲染用的浏览器,装在 Mosael 数据目录的 `plugin-data/dev.mosael.remotion` 下。插件更新不会重装(除非换了 Remotion 的版本);卸载插件时一起删掉。
 
 ## 三个工具
 
@@ -33,7 +33,9 @@ Remotion 不是 MIT 许可。按 [Remotion License](https://www.remotion.dev/lic
 
 产出的 mp4 直接进素材库。讲解视频支持横屏 16:9、竖屏 9:16、方形 1:1,深色 / 浅色,自定强调色;每段多长按内容自动算。
 
-**第一次请在插件页先运行一次「准备渲染环境」。** 渲染工具在环境缺失时也会自动补,但智能体单次调用最多等 180 秒,首次安装可能超过。
+**第一次请在插件页先运行一次「准备渲染环境」。** 渲染工具不会顺手装环境:智能体单次调用最多等 180 秒,首次安装常常超过,装到一半被掐掉只会留下半截。环境不齐时渲染工具会说清楚缺什么(还没准备、插件升级换了 Remotion 版本、Node.js 换了架构),再跑一次「准备渲染环境」就好。
+
+三个工具都会边跑边报进度(工作流执行面板里看得到「渲染 40%」);在工作流或任务里取消时,Node 连同它起的浏览器一起停下。
 
 ## 国内网络
 
@@ -68,4 +70,4 @@ export default function Scene({ data }: { data: { word: string } }) {
 
 ## 版本
 
-Remotion 4.0.526、React 19.3.0、KaTeX 0.18.7,均锁定精确版本(`tools/project/package.json`)。插件升级换了版本时会自动重装。
+Remotion 4.0.526、React 19.3.0、KaTeX 0.18.7,均锁定精确版本(`tools/project/package.json`)。插件升级换了版本时,渲染工具会提醒再运行一次「准备渲染环境」,它按新版本重装。

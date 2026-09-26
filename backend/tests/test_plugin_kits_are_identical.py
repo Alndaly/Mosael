@@ -26,7 +26,7 @@ posix_only = pytest.mark.skipif(sys.platform == "win32", reason="用 os.kill(pid
 
 
 def test_每份拷贝字节相同() -> None:
-    assert {path.parent.parent.name for path in COPIES} >= {"manim"}
+    assert {path.parent.parent.name for path in COPIES} >= {"manim", "remotion"}
     assert len({path.read_bytes() for path in COPIES}) == 1, [str(path) for path in COPIES]
 
 
