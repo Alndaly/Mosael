@@ -679,6 +679,16 @@ def test_视频要的是合成的那一段_不是第一帧(graph) -> None:
     assert [item["filename"] for item in graph.collect_outputs(entry, "video")] == ["out.mp4"]
 
 
+def test_视频只在预览里_也不拿存下来的第一帧顶替(graph) -> None:
+    """VHS 合成节点关了 save_output:视频是临时文件(type=temp),存下来的只有逐帧的图。
+    要的是视频,就该交回那段临时的视频,而不是把第一帧当成「视频」交回去。"""
+    entry = {"outputs": {
+        "8": {"images": [{"filename": "frame_00001.png", "type": "output"}]},
+        "12": {"gifs": [{"filename": "out.mp4", "subfolder": "", "type": "temp"}]},
+    }}
+    assert [item["filename"] for item in graph.collect_outputs(entry, "video")] == ["out.mp4"]
+
+
 def test_校验错误和执行错误说得出是哪个节点(graph) -> None:
     detail = {"error": {"message": "Prompt outputs failed validation"},
               "node_errors": {"4": {"errors": [{"message": "Value not in list", "details": "ckpt_name: 'x' not in [...]"}]}}}

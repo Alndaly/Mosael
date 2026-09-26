@@ -782,12 +782,15 @@ def collect_outputs(history_entry: dict[str, Any], kind: str) -> list[dict[str, 
     存下来的优先;一个都没有才用预览 —— 只接了 PreviewImage 的图也能出东西。视频图里常常同时有逐帧的图
     和合成的视频:要的是视频那几份,不是第一帧。
     """
-    files, _ = all_outputs(history_entry)
-    wanted = [one["item"] for one in files if one["media"] == kind]
-    if wanted:
-        return wanted
+    files, _ = all_outputs(history_entry, include_previews=True)
+    wanted = [one for one in files if one["media"] == kind]
+    # 这一种里存下来的优先;一份都没存(VHS 关了 save_output)才用预览 —— 不拿别的种类顶替
+    saved = [one["item"] for one in wanted if one["item"].get("type") != "temp"]
+    if saved or wanted:
+        return saved or [one["item"] for one in wanted]
     # 认不出种类(没有后缀的文件名之类):照旧交回第一份,总比说「没有产出」强
-    return [one["item"] for one in files][:1]
+    fallback = [one for one in files if one["item"].get("type") != "temp"] or files
+    return [one["item"] for one in fallback][:1]
 
 
 def interrupted(status: dict[str, Any]) -> bool:
