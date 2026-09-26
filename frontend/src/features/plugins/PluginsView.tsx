@@ -49,7 +49,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
-import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
+import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "@/components/ui/field-trigger";
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
@@ -459,13 +459,13 @@ export function FieldInput({
     const options = (field.options as { value: string; label: string }[]) ?? [];
     if (options.length <= 1) {
       const only = options[0];
-      // **长得还是一个字段框。** 共用 FIELD_TRIGGER_CLASS,与旁边的下拉逐像素一致 ——
+      // **长得还是一个字段框。** 共用 fieldTriggerClass(),与旁边的下拉(默认档)逐像素一致 ——
       // 排成一列时,一行光秃秃的文字读起来像"这块没做完",那比"假下拉"更糟。
       // 变的只有两处:锁图标占了箭头的位置(说明它是钉死的),以及整块不可点。
       return (
         <div
           aria-readonly="true"
-          className={cn(FIELD_TRIGGER_CLASS, "cursor-default text-muted-foreground", className)}
+          className={cn(fieldTriggerClass(), "cursor-default text-muted-foreground", className)}
         >
           <span className="min-w-0 truncate">{only?.label ?? value}</span>
           <Lock className={cn(FIELD_TRIGGER_CHEVRON, "size-3.5")} />

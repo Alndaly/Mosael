@@ -32,8 +32,5 @@ export function fieldTriggerClass(size: FieldSize = "md"): string {
   return `${FIELD_TRIGGER_BASE} ${FIELD_SIZE[size]}`;
 }
 
-/** 默认档(md)的触发器 —— 表单里和默认高度的输入框、按钮并排的那一种。 */
-export const FIELD_TRIGGER_CLASS = fieldTriggerClass("md");
-
 /** 触发器右侧的下拉箭头。尺寸与透明度跟着触发器走,三种控件同一个写法。 */
 export const FIELD_TRIGGER_CHEVRON = "ml-auto h-4 w-4 shrink-0 opacity-50";

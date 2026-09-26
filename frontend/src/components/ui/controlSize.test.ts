@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { CONTROL_HEIGHT, FIELD_SIZE } from "@/components/ui/control-size";
-import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
+import { fieldTriggerClass } from "@/components/ui/field-trigger";
 
 export const RATCHET = true;
 
@@ -29,7 +29,7 @@ describe("控件高度只有一个出处", () => {
   it("输入框、下拉触发器、默认按钮同高", async () => {
     const { buttonVariants } = await import("@/components/ui/button");
     expect(buttonVariants()).toContain(CONTROL_HEIGHT.md);
-    expect(FIELD_TRIGGER_CLASS).toContain(CONTROL_HEIGHT.md);
+    expect(fieldTriggerClass()).toContain(CONTROL_HEIGHT.md);
     expect(FIELD_SIZE.md).toContain(CONTROL_HEIGHT.md);
   });
 
@@ -44,6 +44,6 @@ describe("控件高度只有一个出处", () => {
   it("描边按钮和输入框是同一种描边 —— 并排时外轮廓一样清楚", async () => {
     const { buttonVariants } = await import("@/components/ui/button");
     expect(buttonVariants({ variant: "outline" })).toContain("border-field-border");
-    expect(FIELD_TRIGGER_CLASS).toContain("border-field-border");
+    expect(fieldTriggerClass()).toContain("border-field-border");
   });
 });

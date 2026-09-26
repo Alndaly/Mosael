@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
-import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS, fieldTriggerClass } from "./field-trigger";
+import { FIELD_TRIGGER_CHEVRON, fieldTriggerClass } from "./field-trigger";
 
 const UI = __dirname;
 const FILES = {
@@ -62,6 +62,6 @@ it("值靠左、箭头顶到最右 —— 「图标 + 值 + 箭头」时值不�
     expect(fieldTriggerClass(size)).not.toMatch(/\bjustify-(between|center)\b/);
     expect(fieldTriggerClass(size)).toMatch(/\btext-left\b/);
   }
-  expect(FIELD_TRIGGER_CLASS).toBe(fieldTriggerClass("md"));
+  expect(fieldTriggerClass()).toBe(fieldTriggerClass("md"));
   expect(FIELD_TRIGGER_CHEVRON).toMatch(/\bml-auto\b/);
 });
