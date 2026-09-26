@@ -736,24 +736,25 @@ function CapabilityPicker({
         <p className="m-0 text-xs text-muted-foreground">{t("noTools")}</p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-1.5">
+          {/* 和这张卡片上别的输入框同一档高度(标准的 md):此前搜索框写死 h-8、按钮用 sm,
+              一行 32px 夹在一列 40px 的字段中间,看着像另一个控件体系。 */}
+          <div className="flex flex-wrap items-center gap-2">
             <Input
-              className="h-8 min-w-[180px] flex-1"
+              className="min-w-[180px] flex-1"
               value={query}
               placeholder={t("pluginToolSearch").replace("{n}", String(tools.length))}
               onChange={(event) => setQuery(event.target.value)}
             />
             <Button
               variant={onlyExposed ? "default" : "outline"}
-              size="sm"
               onClick={() => setOnlyExposed((value) => !value)}
             >
               {t("pluginToolOnlyExposed").replace("{n}", String(exposedCount))}
             </Button>
-            <Button variant="outline" size="sm" disabled={pending || !matched.length} onClick={() => bulk(true)}>
+            <Button variant="outline" disabled={pending || !matched.length} onClick={() => bulk(true)}>
               {t("pluginToolEnableAll")}
             </Button>
-            <Button variant="outline" size="sm" disabled={pending || !matched.length} onClick={() => bulk(false)}>
+            <Button variant="outline" disabled={pending || !matched.length} onClick={() => bulk(false)}>
               {t("pluginToolDisableAll")}
             </Button>
           </div>
