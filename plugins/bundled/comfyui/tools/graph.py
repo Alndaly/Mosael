@@ -610,7 +610,7 @@ def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]]) 
         names = uploaded.get(slot["role"]) or []
         index = used.get(slot["role"], 0)
         if index < len(names):
-            graph[slot["node"]]["inputs"][slot["field"]] = names[index]
+            put_input(graph, slot["node"], names[index])
             used[slot["role"]] = index + 1
     masks = uploaded.get("mask") or []
     if masks and not any(slot["role"] == "mask" for slot in found):
@@ -623,9 +623,38 @@ def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]]) 
                     node["inputs"][name] = [new_id, 0]
                     rewired = True
         if rewired:
-            graph[new_id] = {"class_type": "LoadImageMask", "inputs": {"image": masks[0], "channel": "red"},
+            graph[new_id] = {"class_type": "LoadImageMask", "inputs": {"image": masks[0], "channel": _MASK_CHANNEL},
                              "_meta": {"title": "Mosael mask"}}
     return graph
+
+
+#: 宿主的蒙版是「白色是要改的地方」的黑白图(见 ai/providers/contracts/generation.MASK),没有透明通道 ——
+#: 读它的红色通道。照 alpha 读的话一张不透明的图读出来是全空的蒙版,什么都不重绘。
+_MASK_CHANNEL = "red"
+
+
+def put_input(api: dict[str, Any], node_id: str, name: str) -> dict[str, Any]:
+    """把传上去的一份素材(ComfyUI input 目录里的名字)接到读素材的节点 `node_id` 上。就地改,也交回这张图。
+
+    蒙版按宿主的规矩读(白色是要改的地方):LoadImageMask 改读红色通道;只用了 alpha 那一路的 LoadImage
+    (蒙版槽位)就地换成读红色通道的 LoadImageMask,下游改接它唯一的那个输出。
+    """
+    node = api[node_id]
+    class_type = str(node.get("class_type", ""))
+    inputs = node.setdefault("inputs", {})
+    field_name = _LOADERS[class_type][1] if class_type in _LOADERS else "image"
+    if class_type == "LoadImageMask":
+        inputs.update({field_name: name, "channel": _MASK_CHANNEL})
+    elif class_type == "LoadImage" and {slot for _, _, slot in _consumers(api).get(node_id, [])} == {1}:
+        node["class_type"] = "LoadImageMask"
+        node["inputs"] = {"image": name, "channel": _MASK_CHANNEL}
+        for other in api.values():
+            for key, value in (other.get("inputs") or {}).items():
+                if isinstance(value, list) and len(value) >= 2 and str(value[0]) == node_id and value[1] == 1:
+                    other["inputs"][key] = [value[0], 0]
+    else:
+        inputs[field_name] = name
+    return api
 
 
 def set_value(api: dict[str, Any], key: str, value: Any, titles: dict[str, str] | None = None) -> bool:

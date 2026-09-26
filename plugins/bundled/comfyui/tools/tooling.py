@@ -366,7 +366,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
     parameters: dict[str, Any] = {}
     overrides: dict[str, Any] = {}
     texts: dict[str, Any] = {}
-    slots: dict[tuple[str, str], str] = {}
+    slots: dict[str, str] = {}
     alpha_mask = ""
     include_previews = False
     for key, value in payload.items():
@@ -378,7 +378,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
             if how == "text":
                 texts[binding[1]] = str(value)
             elif how == "slot":
-                slots[(binding[1], binding[2])] = str(value)
+                slots[binding[1]] = str(value)
             elif how == "alpha_mask":
                 alpha_mask = str(value)
             elif how == "param":
@@ -396,15 +396,15 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
     values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
     prompt = graph.fill(api, values, overrides)
 
-    uploads = run.upload(comfy, [{"role": f"{node}|{field}", "path": path} for (node, field), path in slots.items()]
+    uploads = run.upload(comfy, [{"role": f"slot:{node}", "path": path} for node, path in slots.items()]
                          + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))
     for role, names in uploads.items():
         if role == "mask":
             prompt = graph.wire_inputs(prompt, kind, {"mask": names})
             continue
-        node, _, field = role.partition("|")
+        node = role.removeprefix("slot:")
         if node in prompt:
-            prompt[node]["inputs"][field] = names[0]
+            graph.put_input(prompt, node, names[0])
 
     prompt_id, finished = run.run_prompt(comfy, prompt, emit, locale, titles)
     from workflows import deliver  # 避免循环 import:workflows 也用这里的 output_key

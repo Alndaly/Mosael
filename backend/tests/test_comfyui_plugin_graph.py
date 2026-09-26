@@ -561,6 +561,26 @@ def test_没有蒙版节点时_给的蒙版替掉LoadImage的alpha那一路(grap
     assert wired["10"]["inputs"]["image"] == "mosael/img.png"
 
 
+def test_给的蒙版按白色是要改的地方读_不读alpha(graph) -> None:
+    """宿主的蒙版是「白色是要改的地方」的黑白图,没有透明通道:照 alpha 读出来是一张全空的蒙版,什么都不重绘。
+
+    - LoadImageMask 读 alpha 的,改成读红色通道;
+    - 只用了 alpha 那一路的 LoadImage(蒙版槽位),就地换成读红色通道的 LoadImageMask,下游改接它唯一的输出。
+    """
+    api = {
+        "11": {"class_type": "LoadImageMask", "inputs": {"image": "m.png", "channel": "alpha"}},
+        "12": {"class_type": "LoadImage", "inputs": {"image": "b.png"}},
+        "20": {"class_type": "VAEEncodeForInpaint", "inputs": {"mask": ["11", 0]}},
+        "21": {"class_type": "SetLatentNoiseMask", "inputs": {"mask": ["12", 1]}},
+    }
+    wired = graph.wire_inputs(api, "image", {"mask": ["mosael/a.png", "mosael/b.png"]})
+    assert wired["11"]["inputs"] == {"image": "mosael/a.png", "channel": "red"}
+    assert wired["12"]["class_type"] == "LoadImageMask"
+    assert wired["12"]["inputs"] == {"image": "mosael/b.png", "channel": "red"}
+    assert wired["21"]["inputs"]["mask"] == ["12", 0]
+    assert graph.put_input(api, "11", "mosael/c.png")["11"]["inputs"]["channel"] == "red", "每张工作流自己的工具走同一条"
+
+
 def test_按节点标题改值(graph) -> None:
     api = {"3": {"class_type": "KSampler", "inputs": {"steps": 20, "cfg": 7.0}}}
     assert graph.set_value(api, "采样.steps", 30, {"3": "采样"}) and api["3"]["inputs"]["steps"] == 30
