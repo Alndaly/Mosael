@@ -290,6 +290,14 @@ class _Handler(BaseHTTPRequestHandler):
                     "outputs": {"8": {"images": [{"filename": "frame_00001.png", "subfolder": "", "type": "output"}]},
                                 "30": {"gifs": [{"filename": "wan_00001.mp4", "subfolder": "video", "type": "output"}]}},
                 }
+            elif state.outcome == "interrupted":
+                # 有人在 ComfyUI 界面里点了中断:历史里记成 error,消息里是 execution_interrupted
+                state.history[prompt_id] = {"status": {
+                    "status_str": "error", "completed": False,
+                    "messages": [["execution_start", {"prompt_id": prompt_id}],
+                                 ["execution_interrupted", {"prompt_id": prompt_id, "node_id": "3",
+                                                            "node_type": "KSampler", "executed": ["4"]}]],
+                }, "outputs": {}}
             elif state.outcome == "error":
                 state.history[prompt_id] = {"status": {
                     "status_str": "error", "completed": False,

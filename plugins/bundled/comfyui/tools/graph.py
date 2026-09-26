@@ -765,6 +765,12 @@ def collect_outputs(history_entry: dict[str, Any], kind: str) -> list[dict[str, 
     return [one["item"] for one in files][:1]
 
 
+def interrupted(status: dict[str, Any]) -> bool:
+    """这个任务是被中断的(ComfyUI 界面上点了中断、别人 /interrupt 了它),不是跑出了错。"""
+    return any(isinstance(message, list) and message and message[0] == "execution_interrupted"
+               for message in status.get("messages") or [])
+
+
 def execution_error(status: dict[str, Any]) -> str:
     """ComfyUI 自己说的失败原因;一句都没有就是空串。"""
     for message in reversed(status.get("messages") or []):

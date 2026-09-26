@@ -252,6 +252,12 @@ def test_执行失败带出ComfyUI自己的原因(comfy, tmp_path: Path) -> None
         _generate(comfy.url, tmp_path, {"model": "portrait.json"})
 
 
+def test_在ComfyUI里被中断了就说被中断_不说执行失败(comfy, tmp_path: Path) -> None:
+    comfy.state.outcome = "interrupted"
+    with pytest.raises(runtime.PluginRuntimeError, match="被中断"):
+        _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+
+
 def test_工作流在ComfyUI里删掉了_提示去刷新(comfy, tmp_path: Path) -> None:
     with pytest.raises(runtime.PluginRuntimeError, match="刷新模型"):
         _generate(comfy.url, tmp_path, {"model": "gone.json"})

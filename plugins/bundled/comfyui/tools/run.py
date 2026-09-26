@@ -268,6 +268,8 @@ def history_entry(comfy: Comfy, prompt_id: str) -> dict[str, Any] | None:
     if not entry:
         return None
     status = entry.get("status") or {}
+    if status.get("status_str") == "error" and graph.interrupted(status):
+        raise ComfyError(say(comfy.locale, "ComfyUI 里这个任务被中断了", "The task was interrupted in ComfyUI"))
     if status.get("status_str") == "error":
         said = graph.execution_error(status)
         raise ComfyError(say(comfy.locale, f"ComfyUI 执行失败:{said or '详见 ComfyUI 日志'}",
