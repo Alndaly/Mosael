@@ -264,6 +264,11 @@ def _env(
     return {
         **base_env(),
         "MOSAEL_PLUGIN": "1",
+        #: **协议是 UTF-8 的 JSON,插件的 stdio 就是 UTF-8。** 不给这一格,子进程里的 Python 按 locale 编解码:
+        #: 中文 Windows 上 stdin 按 GBK 解成乱码,英文 Windows 上 `ensure_ascii=False` 写中文直接
+        #: UnicodeEncodeError —— 插件一个字都交不回来。跑插件的解释器是宿主挑的,所以由宿主说一次,
+        #: 不让每个插件各自 reconfigure 一遍(第三方插件照着文档里的样板写,不会知道要这么做)。
+        "PYTHONUTF8": "1",
         LOCALE_ENV: locale,
         **({ARTIFACT_SCRATCH_ENV: str(scratch_dir)} if scratch_dir is not None else {}),
         **({DATA_ENV: str(data_dir)} if data_dir is not None else {}),

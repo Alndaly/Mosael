@@ -100,3 +100,21 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
 
     history = client.get("/api/plugins/invocations").json()
     assert len(history) == 2
+
+
+def test_plugin_stdio_is_utf8_whatever_the_locale(tmp_path, monkeypatch) -> None:
+    """协议是 UTF-8 的 JSON,插件的 stdin/stdout 就得是 UTF-8 —— 不能问这台机器的 locale 要。
+
+    宿主往 stdin 写的是 UTF-8;而子进程里的 Python 按 locale 解码 stdin、编码 stdout。中文 Windows 上那是
+    GBK(读进来是乱码),英文 Windows 上是 cp1252(`ensure_ascii=False` 写中文直接 UnicodeEncodeError,
+    插件一个字都交不回来)。这里用一个 Latin-1 的 locale 在 macOS / Linux 上复现同一件事。
+    """
+    monkeypatch.setenv("LANG", "en_US.ISO8859-1")
+    plugin = make_plugin(tmp_path, """
+        import json, sys
+        request = json.loads(sys.stdin.read())
+        text = request["input"]["text"]
+        json.dump({"ok": True, "output": {"chars": len(text), "summary": f"{len(text)} 个字"}}, sys.stdout, ensure_ascii=False)
+    """)
+    output = execute_tool(*plugin, "x", {"text": "中文 ✓ 😀"}).output
+    assert (output["chars"], output["summary"]) == (6, "6 个字"), output

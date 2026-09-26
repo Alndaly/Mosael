@@ -555,7 +555,8 @@ stdout 就和「替宿主做生成」同一套 NDJSON:进度一行一个,最后�
 
 ## 拿不到什么
 
-插件进程只拿到 `PATH` / `HOME` / `LANG`,加上**它自己这个连接**声明的配置与凭据。
+插件进程只拿到 `PATH` / `HOME` / `LANG`,加上**它自己这个连接**声明的配置与凭据。另有 `PYTHONUTF8=1`:
+协议是 UTF-8 的 JSON,stdin / stdout 不跟着这台机器的 locale 走(中文 Windows 上那是 GBK)。
 
 拿不到:Mosael 的供应商 API Key、数据库、内部 API token、别的插件的凭据。
 
