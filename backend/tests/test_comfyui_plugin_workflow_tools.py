@@ -115,6 +115,30 @@ def test_跑一张工作流的工具_字符串转回类型_素材接上_具名�
     assert result["text_40"] == "一只猫"
 
 
+def test_自定义输出节点的产出落在它声明的那个输出上(comfy, tmp_path: Path) -> None:
+    """object_info 里标了 output_node 的自定义保存节点,工具声明的是 `output_12`:交回时也得记在 `output_12` 上,
+    不能按文件后缀另起一个 `image_12` —— 那样下游接「那个保存节点的图」永远是空的。"""
+    comfy.state.object_info["SaveImageExtended"] = {"input": {"required": {"images": ["IMAGE"]}}, "output_node": True}
+    comfy.state.workflows["custom.json"] = {
+        "1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+        "12": {"class_type": "SaveImageExtended", "inputs": {"images": ["1", 0]}},
+    }
+    tool_name = "wf_" + hashlib.sha1(b"custom.json").hexdigest()[:12]
+    tool = _tools(comfy.url, tmp_path)[tool_name]
+    assert "output_12" in tool["node"]["outputs"]
+    comfy.state.outputs = {"12": {"images": [{"filename": "x.png", "type": "output"}]}}
+    image = tmp_path / "x.png"
+    image.write_bytes(PNG)
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    result = runtime.stream_tool(
+        PLUGIN, ENTRY, tool_name, {"image_1": str(image)}, {"SERVER_URL": comfy.url},
+        hooks=runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False),
+        scratch_dir=scratch, data_dir=tmp_path, timeout=60,
+    ).output
+    assert [one["output"] for one in result["artifacts"]] == ["output_12"]
+
+
 def test_没记住对照表也找得到(comfy, tmp_path: Path) -> None:
     """插件的持久目录是空的(刚升级、被清过):按名字重新扫一遍找到那张图。"""
     comfy.state.outputs = {"4": {"images": [{"filename": "up.png", "type": "output"}]}}

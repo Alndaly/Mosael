@@ -283,22 +283,31 @@ def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
     found: list[dict[str, str]] = []
     for node_id in sorted(api, key=_node_order):
         class_type = str(api[node_id].get("class_type", ""))
-        declared = bool((object_info.get(class_type) or {}).get("output_node"))
-        if class_type in _VIDEO_OUTPUT_TYPES:
-            media = "video"
-        elif class_type in _AUDIO_OUTPUT_TYPES:
-            media = "audio"
-        elif class_type in _IMAGE_OUTPUT_TYPES:
-            media = "image"
-        elif class_type in _TEXT_OUTPUT_TYPES:
-            media = "text"
-        elif declared:
-            media = "any"
-        else:
+        if class_type not in _KNOWN_OUTPUT_TYPES and not (object_info.get(class_type) or {}).get("output_node"):
             continue
         found.append({"node": node_id, "class_type": class_type, "title": titles.get(node_id) or class_type,
-                      "media": media})
+                      "media": output_media(class_type)})
     return found
+
+
+_KNOWN_OUTPUT_TYPES = _VIDEO_OUTPUT_TYPES | _AUDIO_OUTPUT_TYPES | _IMAGE_OUTPUT_TYPES | _TEXT_OUTPUT_TYPES
+
+
+def output_media(class_type: str) -> str:
+    """一个输出节点交出的是什么:认得的几类说 image / video / audio / text,别的(自定义的输出节点)是 any。
+
+    声明输出(output_nodes)和交回产出(按节点记具名输出)用的是同一个判据 —— 两边各判各的,
+    一个自定义保存节点声明的是 `output_12`,交回时却记在按文件后缀起名的 `image_12` 上。
+    """
+    if class_type in _VIDEO_OUTPUT_TYPES:
+        return "video"
+    if class_type in _AUDIO_OUTPUT_TYPES:
+        return "audio"
+    if class_type in _IMAGE_OUTPUT_TYPES:
+        return "image"
+    if class_type in _TEXT_OUTPUT_TYPES:
+        return "text"
+    return "any"
 
 
 # ---------------------------------------------------------------------------

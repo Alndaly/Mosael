@@ -285,7 +285,7 @@ def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dic
     # 自己的那个)下游可以直接接「那个保存节点的图」。宿主按 artifact 上的 `output` 把素材 id 填进去。
     named: set[str] = set()
     for one, artifact in zip(files, artifacts):
-        key = tooling.output_key(one["media"], one["node"])
+        key = _named_output(one, one["media"])
         if key not in named and len(entries) == 1:
             artifact["output"] = key
             named.add(key)
@@ -302,7 +302,7 @@ def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dic
         counts[one["media"]] = counts.get(one["media"], 0) + 1
     node_texts: dict[str, list[str]] = {}
     for one in texts:
-        node_texts.setdefault(tooling.output_key("text", one["node"]), []).append(one["text"])
+        node_texts.setdefault(_named_output(one, "text"), []).append(one["text"])
     result: dict[str, Any] = {
         **({key: "\n".join(values) for key, values in node_texts.items()} if len(entries) == 1 else {}),
         "prompt_id": entries[0][0] if len(entries) == 1 else "",
@@ -317,6 +317,11 @@ def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dic
     if workflow:
         result["workflow"] = workflow
     return result
+
+
+def _named_output(one: dict[str, Any], media: str) -> str:
+    """一份产出记在哪个具名输出上:和声明输出同一个判据(graph.output_media),交出它的节点类型不知道时按它自己的种类。"""
+    return tooling.output_key(graph.output_media(one["class_type"]) if one["class_type"] else media, one["node"])
 
 
 def _node_summary(one: dict[str, Any], titles: dict[str, str]) -> dict[str, Any]:
