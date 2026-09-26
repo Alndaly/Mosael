@@ -572,10 +572,10 @@
     {
       "id": "dev.mosael.text-toolkit",
       "name": "Text Toolkit",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "description": {
-        "zh": "文本小工具:统计字数、提取话题标签、生成标题候选。纯本地计算,无需任何权限。",
-        "en": "Small text utilities: count words, pull out hashtags, draft title candidates. All local, no permissions needed."
+        "zh": "文本小工具:统计字数、词数与念完要多久,提取 #话题# 与 #hashtag 标签。纯本地计算,无需任何权限。",
+        "en": "Small text utilities: count characters and words, estimate read-aloud time, and pull out #topic# and #hashtag tags. All local, no permissions needed."
       },
       "author": "Mosael",
       "author_url": "https://mosael.com",
@@ -593,8 +593,8 @@
           "name": "word_count",
           "label": "",
           "description": {
-            "zh": "统计文本的字数、词数与预计口播时长(按 4.5 字/秒)。",
-            "en": "Count characters and words in a text, and estimate read-aloud time (at 4.5 characters per second)."
+            "zh": "统计文本的字数、词数与预计口播时长(中文每秒约 4.5 字,英文每分钟约 150 词)。中日韩文一个字算一个词。",
+            "en": "Count characters and words in a text and estimate read-aloud time (about 4.5 Chinese characters a second, 150 English words a minute). Each CJK character counts as a word."
           },
           "effects": "none"
         },
@@ -602,8 +602,8 @@
           "name": "extract_hashtags",
           "label": "",
           "description": {
-            "zh": "从文案中提取 #话题# 与 #hashtag 标签。",
-            "en": "Pull #topic# and #hashtag tags out of a piece of copy."
+            "zh": "从文案中提取 #话题# 与 #hashtag 标签,按出现的先后;大小写不同的算同一个,纯数字的(#1)不算。",
+            "en": "Pull #topic# and #hashtag tags out of a piece of copy, in order of appearance; case-insensitive duplicates and all-digit tags (#1) are skipped."
           },
           "effects": "none"
         }

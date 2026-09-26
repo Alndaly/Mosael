@@ -37,7 +37,7 @@ def test_example_plugin_word_count_end_to_end() -> None:
 
 
 def test_plugin_error_response_raises() -> None:
-    with pytest.raises(PluginRuntimeError, match="unknown tool"):
+    with pytest.raises(PluginRuntimeError, match="不认识的工具:nope"):
         execute_tool(*_example(), "nope", {})
 
 

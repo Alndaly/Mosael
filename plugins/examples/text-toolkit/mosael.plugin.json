@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "name": "Text Toolkit",
   "default_locale": "zh",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -21,8 +21,8 @@
     {
       "id": "text_toolkit",
       "description": {
-        "zh": "文本小工具:统计字数、提取话题标签、生成标题候选。纯本地计算,无需任何权限。",
-        "en": "Small text utilities: count words, pull out hashtags, draft title candidates. All local, no permissions needed."
+        "zh": "文本小工具:统计字数、词数与念完要多久,提取 #话题# 与 #hashtag 标签。纯本地计算,无需任何权限。",
+        "en": "Small text utilities: count characters and words, estimate read-aloud time, and pull out #topic# and #hashtag tags. All local, no permissions needed."
       }
     }
   ],
@@ -32,8 +32,8 @@
       {
         "name": "word_count",
         "description": {
-          "zh": "统计文本的字数、词数与预计口播时长(按 4.5 字/秒)。",
-          "en": "Count characters and words in a text, and estimate read-aloud time (at 4.5 characters per second)."
+          "zh": "统计文本的字数、词数与预计口播时长(中文每秒约 4.5 字,英文每分钟约 150 词)。中日韩文一个字算一个词。",
+          "en": "Count characters and words in a text and estimate read-aloud time (about 4.5 Chinese characters a second, 150 English words a minute). Each CJK character counts as a word."
         },
         "input_schema": {
           "type": "object",
@@ -48,19 +48,46 @@
         },
         "read_only": true,
         "node": {
+          "outputs": [
+            "chars",
+            "words",
+            "estimated_seconds",
+            "summary"
+          ],
+          "output_types": {
+            "chars": "number",
+            "words": "number",
+            "estimated_seconds": "number",
+            "summary": "text"
+          },
           "output_labels": {
+            "chars": {
+              "zh": "字数",
+              "en": "Characters"
+            },
+            "words": {
+              "zh": "词数",
+              "en": "Words"
+            },
+            "estimated_seconds": {
+              "zh": "念完约几秒",
+              "en": "Read-aloud seconds"
+            },
             "summary": {
               "zh": "一句话",
               "en": "In one line"
             }
-          }
+          },
+          "board_outputs": [
+            "summary"
+          ]
         }
       },
       {
         "name": "extract_hashtags",
         "description": {
-          "zh": "从文案中提取 #话题# 与 #hashtag 标签。",
-          "en": "Pull #topic# and #hashtag tags out of a piece of copy."
+          "zh": "从文案中提取 #话题# 与 #hashtag 标签,按出现的先后;大小写不同的算同一个,纯数字的(#1)不算。",
+          "en": "Pull #topic# and #hashtag tags out of a piece of copy, in order of appearance; case-insensitive duplicates and all-digit tags (#1) are skipped."
         },
         "input_schema": {
           "type": "object",
@@ -75,12 +102,33 @@
         },
         "read_only": true,
         "node": {
+          "outputs": [
+            "hashtags",
+            "count",
+            "summary"
+          ],
+          "output_types": {
+            "hashtags": "json",
+            "count": "number",
+            "summary": "text"
+          },
           "output_labels": {
+            "hashtags": {
+              "zh": "话题标签",
+              "en": "Hashtags"
+            },
+            "count": {
+              "zh": "个数",
+              "en": "Count"
+            },
             "summary": {
               "zh": "一句话",
               "en": "In one line"
             }
-          }
+          },
+          "board_outputs": [
+            "hashtags"
+          ]
         }
       }
     ]
