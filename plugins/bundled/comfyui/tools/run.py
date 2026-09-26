@@ -159,6 +159,7 @@ class _Tracker:
     """
 
     def __init__(self, prompt: dict[str, Any], locale: str, titles: dict[str, str] | None = None) -> None:
+        self.prompt = prompt
         self.total = max(1, len(prompt))
         self.names = {
             node_id: (titles or {}).get(node_id) or str((node.get("_meta") or {}).get("title") or "")
@@ -245,9 +246,8 @@ def _follow_ws(comfy: Comfy, socket: WebSocket, prompt_id: str, tracker: _Tracke
                             tracker.step = min(1.0, value / maximum)
                             progress(emit, tracker.fraction(), tracker.message(f"{int(value)}/{int(maximum)}"))
             elif kind == "execution_error" and data.get("prompt_id") == prompt_id:
-                said = f"{data.get('node_type') or ''}: {data.get('exception_message') or ''}".strip(": ")
-                raise ComfyError(say(locale, f"ComfyUI 执行失败:{said or '详见 ComfyUI 日志'}",
-                                     f"ComfyUI execution failed: {said or 'see the ComfyUI log'}"))
+                raise failure(locale, str(data.get("node_type") or ""), str(data.get("exception_message") or ""),
+                              tracker.prompt)
             elif kind == "execution_interrupted" and data.get("prompt_id") == prompt_id:
                 raise ComfyError(say(locale, "ComfyUI 里这个任务被中断了", "The task was interrupted in ComfyUI"))
             elif kind == "execution_success" and data.get("prompt_id") == prompt_id:
@@ -263,6 +263,45 @@ def _follow_ws(comfy: Comfy, socket: WebSocket, prompt_id: str, tracker: _Tracke
                 return entry
 
 
+#: ComfyUI 的「这个输入是空的」:加载节点交出的东西里缺了这一块。最常见的是 checkpoint 文件里本来就没有
+#: 文本编码器(或 VAE)—— Flux、Anima 这类模型的权重单独发,要在图里另加一个加载节点。
+_MISSING_PART = re.compile(r"\b(clip|vae) input is invalid: None", re.IGNORECASE)
+
+
+def failure(locale: str, node: str, said: str, api: dict[str, Any] | None) -> ComfyError:
+    """ComfyUI 执行失败时给人看的那句。
+
+    认得出的原因说人话、点名是哪个模型文件、说怎么办;认不出的照旧带上 ComfyUI 的原话。此前一律是
+    「ComfyUI 执行失败:CLIPTextEncode: ERROR: clip input is invalid: None If the clip is from a checkpoint…」——
+    用户在「模型」里挑了一个不带文本编码器的文件,读完这句也不知道是哪个文件、该换成什么。
+    """
+    missing = _MISSING_PART.search(said or "")
+    if missing:
+        files = graph.checkpoint_files(api or {})
+        named_zh = "、".join(f"「{one}」" for one in files) or "图里加载的那个"
+        named_en = ", ".join(f"“{one}”" for one in files) or "the one this graph loads"
+        if missing.group(1).lower() == "clip":
+            return ComfyError(say(
+                locale,
+                f"模型文件{named_zh}里没有文本编码器(CLIP),用普通的 checkpoint 加载节点读不出来 —— Flux、Anima 这类"
+                "模型的文本编码器是单独的文件。换一个完整的 checkpoint;或者在 ComfyUI 里搭一张单独加载文本编码器的工作流"
+                "并保存,再在 Mosael 里选那个工作流。",
+                f"The model file {named_en} has no text encoder (CLIP), so a plain checkpoint loader can't read one. Models "
+                "such as Flux or Anima ship their text encoder separately. Pick a complete checkpoint, or save a workflow in "
+                "ComfyUI that loads the text encoder on its own and pick that workflow in Mosael.",
+            ))
+        return ComfyError(say(
+            locale,
+            f"模型文件{named_zh}里没有 VAE。换一个自带 VAE 的 checkpoint;或者在 ComfyUI 里给工作流加一个 VAE 加载节点"
+            "并保存,再在 Mosael 里选那个工作流。",
+            f"The model file {named_en} has no VAE. Pick a checkpoint with a baked-in VAE, or add a VAE loader to a "
+            "workflow in ComfyUI, save it, and pick that workflow in Mosael.",
+        ))
+    text = f"{node}: {said}".strip(": ")
+    return ComfyError(say(locale, f"ComfyUI 执行失败:{text or '详见 ComfyUI 日志'}",
+                          f"ComfyUI execution failed: {text or 'see the ComfyUI log'}"))
+
+
 def history_entry(comfy: Comfy, prompt_id: str) -> dict[str, Any] | None:
     """这个任务跑完了吗:跑完了回它的那一条历史,失败了直接说原因,还没完回 None。"""
     entry = comfy.history(prompt_id).get(prompt_id)
@@ -272,9 +311,11 @@ def history_entry(comfy: Comfy, prompt_id: str) -> dict[str, Any] | None:
     if status.get("status_str") == "error" and graph.interrupted(status):
         raise ComfyError(say(comfy.locale, "ComfyUI 里这个任务被中断了", "The task was interrupted in ComfyUI"))
     if status.get("status_str") == "error":
-        said = graph.execution_error(status)
-        raise ComfyError(say(comfy.locale, f"ComfyUI 执行失败:{said or '详见 ComfyUI 日志'}",
-                             f"ComfyUI execution failed: {said or 'see the ComfyUI log'}"))
+        node, said = graph.execution_error_parts(status) or ("", "")
+        #: 历史条目里存着提交的那张图(`prompt` 的第三项):接着等上一个进程提交的任务时,手里只有它。
+        submitted = entry.get("prompt")
+        api = submitted[2] if isinstance(submitted, list) and len(submitted) > 2 and isinstance(submitted[2], dict) else {}
+        raise failure(comfy.locale, node, said, api)
     if status.get("completed") or entry.get("outputs"):
         return entry
     return None

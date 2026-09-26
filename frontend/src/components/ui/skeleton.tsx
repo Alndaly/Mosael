@@ -17,8 +17,25 @@ import { cn } from "@/lib/utils";
  * **1.14**(深色)—— 眼睛看不出那儿有东西。用户报的「加载中没有 Skeleton」其实是有,只是看不见。
  * 前景色的低透明度叠加没有这个问题:它合成在**当前这层**上面,拉开的都是同一个相对差。
  */
-function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="skeleton" className={cn("skeleton rounded-md", className)} {...props} />;
+function Skeleton({
+  className,
+  surface = false,
+  ...props
+}: React.ComponentProps<"div"> & {
+  /**
+   * 铺满一整块表面(画板上生成中的那一格)。底色和光都轻得多:给列表里一小条定的那一档铺满一张卡,
+   * 就是一块发亮的灰板,比周围所有东西都抢眼。档位写在 tokens.css(`--skeleton-surface-*`),不在调用处改底色。
+   */
+  surface?: boolean;
+}) {
+  return (
+    <div
+      data-slot="skeleton"
+      data-surface={surface ? "" : undefined}
+      className={cn("skeleton rounded-md", className)}
+      {...props}
+    />
+  );
 }
 
 export { Skeleton };

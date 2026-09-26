@@ -444,7 +444,7 @@ function Generating({ item, text, onStop }: { item: BoardItem; text?: string; on
   const progress = useJobProgress(itemJobId(item), itemIsRunning(item));
   return (
     <div role="status" aria-busy="true" className="relative h-full w-full overflow-hidden rounded-lg">
-      <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
+      <Skeleton surface className="absolute inset-0 h-full w-full rounded-lg" />
       {progress > 0 && (
         <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/15">
           <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />

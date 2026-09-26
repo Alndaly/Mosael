@@ -77,4 +77,13 @@ describe("加载占位", () => {
     const users = files.filter(([, text]) => /<Skeleton\b/.test(text)).length;
     expect(users).toBeGreaterThan(5);
   });
+
+  it("铺满整块表面的那一档:两个主题都有自己更轻的底色和光,画板上生成中的那一格用它", () => {
+    //: 12% 是给列表里一小条定的;铺满一张 300px 的卡,在深色画布上就是一块发亮的灰板(用户截图)。
+    const tokens = fs.readFileSync(path.join(SRC, "design/tokens.css"), "utf8");
+    expect(tokens.match(/--skeleton-surface-base:/g)?.length, "浅色、深色各一份").toBe(2);
+    expect(tokens.match(/--skeleton-surface-highlight:/g)?.length).toBe(2);
+    const board = files.find(([file]) => file.endsWith("features/boards/boardNodes.tsx"))?.[1] ?? "";
+    expect(board).toMatch(/<Skeleton surface\b/);
+  });
 });

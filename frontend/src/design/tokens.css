@@ -329,6 +329,10 @@
      拉开的是同一个相对差,见 components/ui/skeleton 的说明);扫过的光在浅色下是提亮的白。 */
   --skeleton-base: color-mix(in srgb, var(--foreground) 12%, transparent);
   --skeleton-highlight: rgb(255 255 255 / 0.6);
+  /* 铺满一整块表面的占位(画板上生成中的那一格):同一种叠加,只是轻得多 —— 12% 是给列表里一小条定的,
+     铺满一张 300px 的卡就成了一块发亮的灰板,比旁边的空格子、别的卡片都抢眼。 */
+  --skeleton-surface-base: color-mix(in srgb, var(--foreground) 5%, transparent);
+  --skeleton-surface-highlight: rgb(255 255 255 / 0.45);
 
 
   /* Default stack; the appearance preference overrides this token for the whole interface. */
@@ -437,6 +441,8 @@
   /* 深色下前景是近白:底色同样取 12%,光再叠一层 10% 前景色 —— 白光打在石墨上太刺眼。 */
   --skeleton-base: color-mix(in srgb, var(--foreground) 12%, transparent);
   --skeleton-highlight: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --skeleton-surface-base: color-mix(in srgb, var(--foreground) 4%, transparent);
+  --skeleton-surface-highlight: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
 /* 弹窗默认使用一层磨砂表面，与自定义页面背景的透明度独立。 */
@@ -520,6 +526,13 @@
     background-image: linear-gradient(90deg, transparent 0%, var(--skeleton-highlight) 50%, transparent 100%);
     transform: translateX(-100%);
     animation: var(--animate-skeleton-shimmer);
+  }
+  /* 铺满一整块表面的那一档(<Skeleton surface>):底色和光都轻得多,见 --skeleton-surface-base。 */
+  .skeleton[data-surface] {
+    background-color: var(--skeleton-surface-base);
+  }
+  .skeleton[data-surface]::after {
+    background-image: linear-gradient(90deg, transparent 0%, var(--skeleton-surface-highlight) 50%, transparent 100%);
   }
   /* 要求减少动态:只留一块安静的底色。不能指望文末那条全局兜底 —— 它把动画时长压成 0.01ms,
      而这道光是无限循环的,压短之后是**每帧闪一下**,比原来更晃眼。 */

@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "name": "ComfyUI",
   "default_locale": "zh",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",
   "author": {
     "name": "Mosael",

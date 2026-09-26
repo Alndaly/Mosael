@@ -899,6 +899,8 @@ def test_空格子上的生成器_对得上的产出填进去_别的新建在右
     assert wait_status(client, job_id, timeout=20) == "succeeded"
     job = client.get(f"/api/jobs/{job_id}").json()
     assert job["kind"] == "board_run"
+    #: 任务中心 / 通知里那句话带着这一项的名字:此前跑完是「「」跑完了」—— 开始、跑完两句整句重写时没带名字。
+    assert job["message"].endswith("跑完了") and "「」" not in job["message"], job["message"]
 
     canvas = _settled(client, board_id, ws)
     slot = next(one for one in canvas["items"] if one["id"] == "a1")

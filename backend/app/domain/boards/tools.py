@@ -441,7 +441,8 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
         if job is None:
             return
         try:
-            run_job_inline(db, job, body, running="jobMsg_boardRunRunning", done="jobMsg_boardRunDone")
+            run_job_inline(db, job, body, running="jobMsg_boardRunRunning", done="jobMsg_boardRunDone",
+                           params={"name": label})
         except Exception:  # noqa: BLE001 — 失败已经由 run_job_inline 落到任务上(回执随之送到那一格)
             logger.info("board_run %s (%s) failed", job_id, label, exc_info=True)
 

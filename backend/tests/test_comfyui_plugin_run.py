@@ -295,6 +295,26 @@ def test_执行失败带出ComfyUI自己的原因(comfy, tmp_path: Path) -> None
         _generate(comfy.url, tmp_path, {"model": "portrait.json"})
 
 
+_NO_CLIP = ("ERROR: clip input is invalid: None\n\nIf the clip is from a checkpoint loader node your checkpoint "
+            "does not contain a valid clip or text encoder model.")
+
+
+@pytest.mark.parametrize("websocket", [False, True], ids=["轮询", "WebSocket"])
+def test_模型文件里没有文本编码器_点名是哪个文件并说怎么办(comfy, tmp_path: Path, websocket: bool) -> None:
+    """用户在「模型」里挑了一个 Anima / Flux 这类不带文本编码器的 checkpoint:ComfyUI 的原话是一段英文,读完也
+    不知道是哪个文件、该换成什么。WebSocket 推来的失败和轮询历史读到的失败说同一句。"""
+    comfy.state.websocket = websocket
+    comfy.state.outcome = "error"
+    comfy.state.error_node = "CLIPTextEncode"
+    comfy.state.error_message = _NO_CLIP
+    with pytest.raises(runtime.PluginRuntimeError) as caught:
+        _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    said = str(caught.value)
+    assert "「sd_xl_base.safetensors」里没有文本编码器" in said
+    assert "换一个完整的 checkpoint" in said
+    assert "clip input is invalid" not in said
+
+
 def test_在ComfyUI里被中断了就说被中断_不说执行失败(comfy, tmp_path: Path) -> None:
     comfy.state.outcome = "interrupted"
     with pytest.raises(runtime.PluginRuntimeError, match="被中断"):

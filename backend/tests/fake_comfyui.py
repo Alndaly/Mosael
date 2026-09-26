@@ -181,6 +181,9 @@ class State:
     #: prompt_id → history 条目。提交时按 `outcome` 生成;None = 永远跑不完(测取消)。
     history: dict[str, Any] = field(default_factory=dict)
     outcome: str = "success"  # success | error | never | video
+    #: outcome == "error" 时 ComfyUI 说的是哪一类节点、什么原话(WebSocket 和历史里是同一句)。
+    error_node: str = "KSampler"
+    error_message: str = "CUDA out of memory"
     reject: dict[str, Any] | None = None
     running: list[str] = field(default_factory=list)
     pending: list[str] = field(default_factory=list)
@@ -338,10 +341,15 @@ class _Handler(BaseHTTPRequestHandler):
                                                             "node_type": "KSampler", "executed": ["4"]}]],
                 }, "outputs": {}}
             elif state.outcome == "error":
-                state.history[prompt_id] = {"status": {
-                    "status_str": "error", "completed": False,
-                    "messages": [["execution_error", {"node_type": "KSampler", "exception_message": "CUDA out of memory"}]],
-                }}
+                # 和真的 ComfyUI 一样,历史里存着提交的那张图(`prompt` 的第三项)。
+                state.history[prompt_id] = {
+                    "prompt": [state.next_id, prompt_id, body.get("prompt") or {}, {}, []],
+                    "status": {
+                        "status_str": "error", "completed": False,
+                        "messages": [["execution_error", {"node_type": state.error_node,
+                                                          "exception_message": state.error_message}]],
+                    },
+                }
             else:
                 state.running.append(prompt_id)
             state.submitted.set()
@@ -379,6 +387,12 @@ class _Handler(BaseHTTPRequestHandler):
             self.connection.close()
             return
         self.wfile.write(bytes([0x82, 4]) + b"\x00\x01\x02\x03")  # 一帧二进制预览图:插件该跳过
+        if state.outcome == "error":
+            _frame(self.wfile, {"type": "execution_error", "data": {
+                "prompt_id": prompt_id, "node_id": "6", "node_type": state.error_node,
+                "exception_message": state.error_message}})
+            self.wfile.flush()
+            return
         for message in (
             {"type": "execution_start", "data": {"prompt_id": prompt_id}},
             {"type": "execution_cached", "data": {"nodes": ["4"], "prompt_id": prompt_id}},

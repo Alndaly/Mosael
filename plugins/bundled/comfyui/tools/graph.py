@@ -840,15 +840,32 @@ def interrupted(status: dict[str, Any]) -> bool:
                for message in status.get("messages") or [])
 
 
-def execution_error(status: dict[str, Any]) -> str:
-    """ComfyUI 自己说的失败原因;一句都没有就是空串。"""
+def execution_error_parts(status: dict[str, Any]) -> tuple[str, str] | None:
+    """ComfyUI 自己说的失败:(哪一类节点, 它的原话);历史里没有 execution_error 就是 None。"""
     for message in reversed(status.get("messages") or []):
         if isinstance(message, list) and len(message) == 2 and message[0] == "execution_error":
             payload = message[1] or {}
-            node = payload.get("node_type") or ""
-            said = payload.get("exception_message") or ""
-            return f"{node}: {said}".strip(": ") if said or node else "execution_error"
-    return ""
+            return str(payload.get("node_type") or ""), str(payload.get("exception_message") or "")
+    return None
+
+
+def execution_error(status: dict[str, Any]) -> str:
+    """ComfyUI 自己说的失败原因;一句都没有就是空串。"""
+    parts = execution_error_parts(status)
+    if parts is None:
+        return ""
+    node, said = parts
+    return f"{node}: {said}".strip(": ") if said or node else "execution_error"
+
+
+def checkpoint_files(api: dict[str, Any]) -> list[str]:
+    """图里用 checkpoint 加载节点读的是哪几个模型文件(`ckpt_name`),按出现先后、不重复。"""
+    found: list[str] = []
+    for node in (api or {}).values():
+        name = ((node or {}).get("inputs") or {}).get("ckpt_name") if isinstance(node, dict) else None
+        if isinstance(name, str) and name.strip() and name not in found:
+            found.append(name)
+    return found
 
 
 #: 校验错误里一条 details 最多留多少字:「Value not in list」的 details 带着整张可选值列表。

@@ -236,6 +236,7 @@ def run_job_inline(
     *,
     running: str,
     done: str,
+    params: dict[str, object] | None = None,
 ) -> bool:
     """在调用方自己的线程里把一个任务跑完 —— 给「几秒就回、调用方等着要结果」的活儿(画板上写字)。
 
@@ -245,12 +246,13 @@ def run_job_inline(
     进程在中途没了的,重启时 reconcile_orphaned_jobs 同样收掉它。
 
     `body` 回任务的 result。返回 True 表示成功落了终态;False 表示跑之前或跑的时候被取消了
-    (这时结果作废,终态由取消那一侧写)。
+    (这时结果作废,终态由取消那一侧写)。`params` 填进 `running` / `done` 那两句(「正在跑「{name}」」)——
+    每句话都是整句重写,不带参数的话名字就成了空的「」。
     """
     if not finish_job(db, job, status="running"):
         db.commit()
         return False
-    say(job, running)
+    say(job, running, **(params or {}))
     emit_job_event(db, job.id, "job.running", {})
     db.commit()
     try:
@@ -268,7 +270,7 @@ def run_job_inline(
     if not finish_job(db, job, status="succeeded", progress=1.0, result=result):
         db.commit()
         return False
-    say(job, done)
+    say(job, done, **(params or {}))
     emit_job_event(db, job.id, "job.succeeded", {})
     db.commit()
     return True
