@@ -108,12 +108,13 @@ describe("授权是连接级别的", () => {
     capability_status: {},
   } as PluginInstance;
 
-  it("授权那一条紧跟卡片抬头,排在名称和凭据之前", async () => {
+  it("授权那一行是正文第一行,排在名称和凭据之前", async () => {
     const { container } = wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
     const content = container.querySelector('[data-slot="settings-group-content"]') as HTMLElement;
-    const strip = content.querySelector('[data-slot="plugin-authorization"]') as HTMLElement;
-    // 组正文的**第一项**就是它:名称、AppKey 都在它下面。
-    expect(content.firstElementChild).toBe(strip);
+    // 组正文的**第一项**就是它(一行设置行):名称、AppKey 都在它下面。
+    const strip = content.firstElementChild as HTMLElement;
+    expect(strip.getAttribute("data-slot")).toBe("settings-row");
+    expect(strip.querySelector('[data-slot="plugin-authorization"]')).toBeTruthy();
     expect(within(strip).getByText("未授权")).toBeTruthy();
     expect(within(strip).getByRole("button", { name: "去授权" })).toBeTruthy();
     // 全卡片只有这一颗「去授权」—— 凭据组末尾不再另长一颗。
@@ -129,48 +130,17 @@ describe("授权是连接级别的", () => {
   });
 });
 
-describe("授权会填的令牌不当主输入", () => {
-  beforeEach(() => {
+describe("授权会填的令牌不在凭据里", () => {
+  it("凭据只列 AppKey 这类注册应用拿的;令牌归授权那一行", async () => {
     listPluginCredentials.mockResolvedValue([
       { key: "APP_KEY", label: "AppKey", help: "", secret: true, filled: true, value: "" },
       { key: "REFRESH_TOKEN", label: "Refresh Token", help: "", secret: true, filled: true, value: "" },
       { key: "ACCESS_TOKEN", label: "Access Token", help: "", secret: true, filled: false, value: "" },
     ]);
-  });
-
-  it("平时收起,只说填没填;展开之后照样能手动改、能保存", async () => {
     wrap(<CredentialRows instanceId="i1" oauthFields={["REFRESH_TOKEN", "ACCESS_TOKEN"]} />);
-    // AppKey 是注册应用拿的,授权替代不了 —— 它仍是主输入。
     await screen.findByPlaceholderText("APP_KEY");
     expect(screen.queryByPlaceholderText("REFRESH_TOKEN")).toBeNull();
     expect(screen.queryByPlaceholderText("ACCESS_TOKEN")).toBeNull();
-    expect(screen.getByText("授权令牌")).toBeTruthy();
-    expect(screen.getByText("Refresh Token · 已填")).toBeTruthy();
-    expect(screen.getByText("Access Token · 未填")).toBeTruthy();
-
-    const toggle = screen.getByRole("button", { name: "手动填写" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "收起" }).getAttribute("aria-expanded")).toBe("true");
-
-    fireEvent.change(screen.getByPlaceholderText("REFRESH_TOKEN"), { target: { value: "r-by-hand" } });
-    savePluginCredentials.mockResolvedValue([]);
-    fireEvent.click(await screen.findByRole("button", { name: "保存" }));
-    await waitFor(() => expect(savePluginCredentials).toHaveBeenCalledWith("i1", { REFRESH_TOKEN: "r-by-hand" }));
-  });
-
-  it("展开的令牌行直接排在组里,不包一层(组的分隔线只认这一层)", async () => {
-    const { container } = wrap(
-      <div data-testid="group">
-        <CredentialRows instanceId="i1" oauthFields={["REFRESH_TOKEN", "ACCESS_TOKEN"]} />
-      </div>,
-    );
-    await screen.findByPlaceholderText("APP_KEY");
-    fireEvent.click(screen.getByRole("button", { name: "手动填写" }));
-    const group = container.querySelector('[data-testid="group"]') as HTMLElement;
-    const rows = Array.from(group.children).map((child) => child.getAttribute("data-slot"));
-    // AppKey、「授权令牌」、Refresh Token、Access Token:四行并排,都是组的直接子项。
-    expect(rows).toEqual(["settings-row", "settings-row", "settings-row", "settings-row"]);
   });
 });
 

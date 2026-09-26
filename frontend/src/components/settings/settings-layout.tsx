@@ -93,7 +93,7 @@ export function SettingsRow({
   id?: string;
   className?: string;
   controlClassName?: string;
-  label: string;
+  label: React.ReactNode;
   /** 通常是一句 i18n 文案;数据里带格式的说明(插件的配置帮助)传 `<InlineMarkdown>`。 */
   description?: React.ReactNode;
   /**

@@ -86,15 +86,15 @@ that is certain to 401 only burns a turn restating what the settings page alread
 ## Letting it do the OAuth for you
 
 A plugin that needs OAuth tokens (cloud drives, photo services) can declare an `oauth` block. When
-it does, each connection card gets an **Authorization** strip right under its header: it says whether
-the connection is **Not authorized**, **Authorized** or **Needs re-authorization**, next to an
-**Authorize** button (**Re-authorize** once it has been done). Fill in the app credentials such as the
-AppKey and SecretKey, click it, sign in on the provider's page, and paste the code it gives you back into
-the same strip. The tokens land in the right credential fields on their own.
+it does, the first row of each connection is **Authorization**: next to the title it says whether
+the connection is **Not authorized**, **Authorized** or **Needs re-authorization**, with an
+**Authorize** button on the right (**Re-authorize** once it has been done). Fill in the app credentials such as the
+AppKey and SecretKey, click it, sign in on the provider's page, and paste the code it gives you into the
+**Authorization code** row that appears below. The tokens land in the right credential fields on their own.
 
 The fields the authorization fills (a Refresh Token, an Access Token) are not laid out as main inputs next
-to the AppKey. They are folded into one **Authorization tokens** row that only says which are set. If you
-already have tokens, click **Enter manually** to open them up and fill them in yourself.
+to the AppKey; they belong to the Authorization row. If you already have tokens, click
+**Enter tokens manually** to open them up below it and fill them in yourself.
 
 When the provider stops accepting the stored tokens (the refresh_token was revoked, the app was disabled),
 the connection is marked **Needs re-authorization** — run **Re-authorize** once and it is back.

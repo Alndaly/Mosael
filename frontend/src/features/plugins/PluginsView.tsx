@@ -52,6 +52,7 @@ import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
+import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
@@ -294,9 +295,8 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
         </div>
         {/* 元信息一行说完 —— 它们是查故障时才看的东西,不值一整块版面。 */}
         <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">
+          {/* 版本号不在这里重复:标题下面那行已经写着。 */}
           <span className="timecode">{pkg.id}</span>
-          <span aria-hidden>·</span>
-          <span>v{pkg.version}</span>
           <span aria-hidden>·</span>
           <span>{pkg.kind === "mcp" ? t("pluginKindMcp") : t("pluginKindProcess")}</span>
           {live > 0 && (
@@ -610,10 +610,10 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
         onConfirm={() => remove.mutate()}
       />
 
-      {/* 授权是**连接级别**的:写的是这个连接的令牌,管的是这个连接能不能用 —— 所以紧跟抬头,
-          不在凭据组末尾(见 ConnectionAuthorization)。 */}
+      {/* 授权是**连接级别**的:写的是这个连接的令牌,管的是这个连接能不能用 —— 所以是正文第一行,
+          不在凭据组末尾;长相和下面各行同一套(见 ConnectionAuthorization)。 */}
       {pkg.oauth && instance.authorization && (
-        <ConnectionAuthorization instanceId={instance.id} state={instance.authorization} />
+        <ConnectionAuthorization instanceId={instance.id} state={instance.authorization} fields={pkg.oauth.fills ?? []} />
       )}
 
       <SettingsRow label={t("pluginConnectionName")} description={t("pluginConnectionNameDesc")}>
@@ -663,7 +663,12 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
 
 
       {(grants.data ?? []).map((grant) => (
-        <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
+        <SettingsRow
+          key={grant.permission}
+          // 权限是清单里的自由字符串(`network:baidu-pan`),照原样写 —— 但它是一个标识,不是标题:等宽、跟在「权限」后面。
+          label={<>{t("permissionRowLabel")} <span className="timecode text-ui-sm font-normal text-muted-foreground">{grant.permission}</span></>}
+          description={t("permissionRowDesc")}
+        >
           <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
             <span>{grant.granted ? t("granted") : t("denied")}</span>
             <Switch
@@ -807,19 +812,11 @@ function CapabilityPicker({
  * 不画上边框:组的契约是 `[&>*+*]:border-t`,因为每个子元素都是**一项设置** —— 而这是上面
  * 那组的动作,画一条线等于在它和它所属的东西之间切了一刀,视觉上反倒成了下一项的开头。
  */
-function GroupActions({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 px-0.5 py-3 !border-t-0">
-      <div className="flex shrink-0 items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
 //: 导出**只为测试**。这两个组件里各有一处靠肉眼才发现的毛病(两个动作叠成两块、
 //: 灰按钮不说明理由),而它们都是结构性的 —— 结构该由测试盯着,不该由下一次截图盯着。
 export function CredentialRows({ instanceId, oauthFields }: {
   instanceId: string;
-  /** 授权流程会写的那几格(清单 `oauth.stores` 指向的)。空 = 这个插件不走授权。 */
+  /** 授权流程会写的那几格(清单 `oauth.stores` 指向的)。它们归授权那一行管(见 ConnectionAuthorization),这里不列。 */
   oauthFields: string[];
 }) {
   const t = useI18n();
@@ -829,7 +826,6 @@ export function CredentialRows({ instanceId, oauthFields }: {
     queryFn: () => listPluginCredentials(instanceId),
   });
   const [draft, setDraft] = React.useState<Record<string, string>>({});
-  const [manual, setManual] = React.useState(false);
   const save = useMutation({
     mutationFn: () =>
       savePluginCredentials(instanceId, draft),
@@ -840,78 +836,41 @@ export function CredentialRows({ instanceId, oauthFields }: {
     },
   });
 
-  // 整组一次提交,不逐格失焦即存:密钥输错一个字符和输对长得一模一样,而逐格自动保存会让
-  // "改了一半"和"改完了"在后端无法区分 —— 改到一半正好等于一条连不上的连接。一个显式的
-  // 保存按钮同时也是"现在去重连试试"的时机。**它是一个,不是每行一个**:显示条件
-  // (`draft` 非空)是整组的,画在 map 里的话改任何一格每行都会长出一个"保存"。
   const dirty = Object.keys(draft).length > 0;
-  const saveButton = (
-    <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
-      <KeyRound size={13} /> {t("pluginCredentialsSave")}
-    </Button>
-  );
-
-  const items = credentials.data ?? [];
-  // 授权会写的那几格(Refresh Token、Access Token)**不和 AppKey 摆成一样的主输入**:它们本来由
-  // 「去授权」填,摆在最显眼的位置等于告诉人「这里要手抄」—— 而手抄正是授权要替掉的那一步。
-  // 收进「手动填写」,平时只说填没填;已经有令牌的人展开照样能改。
   const byFlow = new Set(oauthFields);
-  const primary = items.filter((item) => !byFlow.has(item.key));
-  const tokens = items.filter((item) => byFlow.has(item.key));
-  const row = (item: (typeof items)[number]) => (
-    <SettingsRow
-      key={item.key}
-      label={item.label}
-      description={item.help ? <InlineMarkdown text={item.help} /> : item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}
-    >
-      <Input
-        className="w-[240px] max-w-full"
-        type={item.secret ? "password" : "text"}
-        value={draft[item.key] ?? item.value}
-        placeholder={item.key}
-        onChange={(event) => setDraft((current) => ({ ...current, [item.key]: event.target.value }))}
-      />
-    </SettingsRow>
-  );
+  const items = (credentials.data ?? []).filter((item) => !byFlow.has(item.key));
 
   return (
     <>
-      {primary.map(row)}
-      {tokens.length > 0 && (
+      {items.map((item) => (
         <SettingsRow
-          label={t("pluginOauthTokens")}
-          description={
-            <>
-              {t("pluginOauthTokensDesc")}
-              <span data-slot="plugin-oauth-token-states" className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                {tokens.map((item) => (
-                  <span key={item.key} className="inline-flex items-center gap-1.5">
-                    <span className={cn("size-1.5 shrink-0 rounded-full bg-border-strong", item.filled && "bg-success")} aria-hidden />
-                    {item.label} · {item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}
-                  </span>
-                ))}
-              </span>
-            </>
-          }
+          key={item.key}
+          label={item.label}
+          description={item.help ? <InlineMarkdown text={item.help} /> : item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}
         >
-          <Button size="sm" variant="outline" aria-expanded={manual} onClick={() => setManual((open) => !open)}>
-            {manual ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            {manual ? t("pluginOauthManualHide") : t("pluginOauthManual")}
-          </Button>
+          <Input
+            className="w-[240px] max-w-full"
+            type={item.secret ? "password" : "text"}
+            value={draft[item.key] ?? item.value}
+            placeholder={item.key}
+            onChange={(event) => setDraft((current) => ({ ...current, [item.key]: event.target.value }))}
+          />
         </SettingsRow>
-      )}
-      {/* 展开后是一样的设置行,直接排在组里(不包一层):组的分隔线只认行和块这一层。 */}
-      {manual && tokens.map(row)}
+      ))}
       {/* 整组一次提交,不逐格失焦即存:密钥输错一个字符和输对长得一模一样,而逐格自动保存
           会让"改了一半"和"改完了"在后端无法区分 —— 改到一半正好等于一条连不上的连接。
           一个显式的保存按钮同时也是"现在去重连试试"的时机。
 
           **所以它是一个,不是每行一个。** 此前这个按钮画在 map 里,而它的显示条件
           (`draft` 非空)是整组的:改任何一格,每一行都长出一个按钮,四个密钥就是四个
-          "保存",点哪个都一样 —— 看起来像四件事,其实是同一件。
-
-          「去授权」不在这一行:它是连接级别的,摆在卡片抬头下面(见 ConnectionAuthorization)。 */}
-      {dirty && <GroupActions>{saveButton}</GroupActions>}
+          "保存",点哪个都一样 —— 看起来像四件事,其实是同一件。 */}
+      {dirty && (
+        <GroupActions>
+          <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
+            <KeyRound size={13} /> {t("pluginCredentialsSave")}
+          </Button>
+        </GroupActions>
+      )}
     </>
   );
 }
