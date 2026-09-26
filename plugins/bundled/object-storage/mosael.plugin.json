@@ -11,6 +11,7 @@
     "name": "Mosael",
     "url": "https://mosael.com"
   },
+  "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/bundled/object-storage",
   "docs": {
     "zh": "https://mosael.com/zh/plugins/object-storage",
     "en": "https://mosael.com/en/plugins/object-storage"

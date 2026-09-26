@@ -8,6 +8,7 @@
     "name": "Mosael",
     "url": "https://mosael.com"
   },
+  "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/text-toolkit",
   "docs": {
     "zh": "https://mosael.com/zh/plugins/text-toolkit",
     "en": "https://mosael.com/en/plugins/text-toolkit"
