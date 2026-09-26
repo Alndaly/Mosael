@@ -6,7 +6,9 @@ Accepted — 2026-09-25. P0 (behaviour-preserving groundwork), P1 (the registry,
 P2 (tool items, 2026-09-26) and P3 (the agent, 2026-09-26) are **done**; P4 is next. **Amended
 2026-09-26** (「修订:画板上只放内容变换」): the board and workflows serve different purposes, so tool
 items are content transforms only; 修订 2 adds "one concept, one entry" (a plugin tool that `mirrors` a
-generation model the user can use stays off the board) and `wiring_outputs` (never landed on the board). The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
+generation model the user can use stays off the board) and `wiring_outputs` (never landed on the board); 修订 3 keeps
+tools that fetch by an id from another system (`external_id` fields) off the board and stops counting ComfyUI preview
+nodes as outputs when deciding `mirrors`. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
 landed before P1, so board generation already sees plugin models as ordinary provider models.
 
 ## Context
@@ -484,6 +486,30 @@ id、位置、名字不变,产出者 `generate`,选的就是那条连接下的�
 一格「尺寸」;「也取回预览」)、选的连接、工具格的尺寸和上一轮的运行状态。在跑的那一格等它落终态再改;没选连接、
 几条连接给出的模型不是同一个时不改,点运行时回 `boardErr_toolMirroredByGeneration`(说清楚去用生成),而不是
 「它不交出素材」。
+
+### 修订 3:不按另一个系统里的编号去取东西、预览不算输出节点(2026-09-26,随 ComfyUI 1.5.2、网盘 0.7.2、对象存储 1.0.2)
+
+用户在「添加」单子里看到两个不该在的工具。
+
+- **规矩 5:`external_id`**。「导入 ComfyUI 产出」(任务号)、网盘的「导入」(`fs_id`)、对象存储的「取回」(对象路径)
+  过了规矩 3 —— 不吃内容、交出素材,被当成「凭空产出」。可它们是在**寻址另一个系统**:按编号把东西拉进来,不是把
+  内容变成新内容;规矩 3 的「凭空产出」说的是按参数做出来(提示词出图、按参数出视频)。字段在声明里说清楚:
+  `data_type: "external_id"`(插件写 `"format": "external_id"`,`workflows.EXTERNAL_ID`)。**必填**这种字段的,创作者
+  在画板上填不出;**不吃画板内容却收**这种字段的(「导入产出」的任务号是选填,不给就取最近几次),交出的素材也是从
+  外面取回来的 —— 两种都不上画板,工作流和智能体照常用。这种字段不接上游格子、不在画板表单上出现。上面「结果」里
+  留下的「取回」「导入」「导入产出」据此撤掉。对象存储的对象路径虽然人读得懂(`videos/a.mp4`),也按这条判:它是
+  对象在桶里的身份,工具做的是按地址导入;把文件放上画板走素材库和拖放。同一句声明也是选择器棘轮的归类:名字以
+  `_id` 结尾的字段要么是工作区里的一种实体(给选择器),要么声明成外部编号(`test_entity_fields_have_a_picker`,
+  插件清单一起查)。
+- **`mirrors` 不数预览节点**。ComfyUI 的判据是「只有一个输出节点」,把「保存 + 看一眼线稿的 PreviewImage」的 ControlNet
+  图数成两个,于是不声明 `mirrors`,同一张图在画板上两个入口。预览写的是临时文件:生成跑完不交回(`collect_outputs`),
+  工具缺省也不交回。现在判据只数生成会交回的那几个(`graph.generation_nodes`:这一种里存下来的,一个都不存才是预览),
+  和 `collect_outputs` 同一条;别的种类里存下来的文件、文字产出照旧说明「只有工具交得全」。
+
+**已有数据**:两者都是对账,不是一次性迁移 —— 合不合格读的是插件此刻的清单,插件升级可能在任何一次启动之后。
+被生成取代的照旧由 `rewrite_mirrored_tools` 改写成生成格;按编号取东西的由 `retire_external_id_tools` 改成便签,
+做法和 `migrate-board-wiring-tools-become-notes` 一样(同一个 id、位置、名字,正文写明归工作流、附原来的设置)。
+只改连接说得出、而且每条连接都说它按编号取东西的格子;还没改到的,点运行时回 `boardErr_toolFetchesByExternalId`。
 
 ### 下一版
 

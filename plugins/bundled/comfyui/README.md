@@ -45,8 +45,10 @@ ComfyUI 那一侧的输入不列出来。
 名字取 ComfyUI 写在工作流文件里的 id(改名、挪目录不变),没有的退到路径哈希;模板是 `wf_api_template`,内置文生图是
 `wf_builtin_txt2img`。
 
-**和生成模型是同一件事的图声明 `mirrors`**(1.5.0):只有一个输出节点、交出的是图 / 视频 / 音频、没有「拿 LoadImage
-的 alpha 当蒙版」那一格的工作流,工具带着 `{"generation_model": <模型 id>, "kind": …}` 和入参到生成表单的对照
+**和生成模型是同一件事的图声明 `mirrors`**(1.5.0):只有一个**存下来的**输出节点、交出的是图 / 视频 / 音频、没有
+文字产出、没有「拿 LoadImage 的 alpha 当蒙版」那一格的工作流(1.5.2 起预览节点不算:PreviewImage、关了 `save_output`
+的视频合成写的是临时文件,生成跑完不交回它们(`graph.collect_outputs`),工具缺省也不交回 —— 判据是
+`graph.generation_nodes`,和生成收文件的是同一条;「保存 + 看一眼线稿的预览」的 ControlNet 图因此也是生成模型),工具带着 `{"generation_model": <模型 id>, "kind": …}` 和入参到生成表单的对照
 (提示词、素材角色、`steps_3` → `3.steps` 这类参数键;宽高对不过去)。宿主据此在画板上只留生成那一个入口、把存着的
 工具格改写成生成格;工作流里两个都在。**只交出一段字的图(打标签、反推提示词)不进模型目录**(`graph.media_outputs`),
 只是工具。
@@ -60,7 +62,7 @@ ComfyUI 那一侧的输入不列出来。
 | 工具 | 只读 | 流式 | 默认开 | 做什么 |
 | --- | --- | --- | --- | --- |
 | `list_workflows` | ✓ | | ✓ | 每张工作流收什么(哪个节点读哪种素材)、能调什么、交出什么、`features`(upscale / inpaint / img2img / remove-background / …),以及跑它的工具(`tool`);转不过来的也列,带原因 |
-| `import_outputs` | | ✓ | ✓ | 按任务号(可等 `wait_seconds`)或最近 `last` 次,把历史里的产出收进素材库 |
+| `import_outputs` | | ✓ | ✓ | 按任务号(可等 `wait_seconds`)或最近 `last` 次,把历史里的产出收进素材库。任务号声明成 `format: "external_id"`:这是按 ComfyUI 里的编号取东西,不是内容变换,只在工作流和对话里用,不上画板 |
 | `server_status` | ✓ | | ✓ | 版本、显卡与空闲显存、内存、队列 |
 | `list_models` | ✓ | | ✓ | `/models` 下的模型文件;老版本没有这个接口时看加载节点的下拉 |
 | `interrupt` | | | ✓ | 停下正在跑的;给了 `prompt_id` 只停那一个 |

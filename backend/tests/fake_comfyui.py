@@ -137,6 +137,26 @@ UPSCALE_API: dict[str, Any] = {
     "5": {"class_type": "PreviewImage", "inputs": {"images": ["1", 0]}},
 }
 
+#: 一张 **ControlNet** 出图工作流:读一张图 → Canny 线稿 → 控制采样 → 存下来;线稿接了一个 PreviewImage
+#: (看一眼预处理得对不对)。存下来的只有 SaveImage 那一张 —— 它和生成模型 controlnet.json 是同一件事。
+CONTROLNET_API: dict[str, Any] = {
+    "3": {"class_type": "KSampler", "inputs": {"seed": 5, "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                                                "scheduler": "normal", "denoise": 1.0, "model": ["4", 0],
+                                                "positive": ["21", 0], "negative": ["7", 0], "latent_image": ["5", 0]}},
+    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5.ckpt"}},
+    "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 1}},
+    "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a house", "clip": ["4", 1]}},
+    "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry", "clip": ["4", 1]}},
+    "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+    "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "cn"}},
+    "11": {"class_type": "LoadImage", "inputs": {"image": "pose.png"}},
+    "12": {"class_type": "Canny", "inputs": {"image": ["11", 0], "low_threshold": 0.4, "high_threshold": 0.8}},
+    "13": {"class_type": "PreviewImage", "inputs": {"images": ["12", 0]}},
+    "20": {"class_type": "ControlNetLoader", "inputs": {"control_net_name": "control_canny.safetensors"}},
+    "21": {"class_type": "ControlNetApply", "inputs": {"conditioning": ["6", 0], "control_net": ["20", 0],
+                                                       "image": ["12", 0], "strength": 1.0}},
+}
+
 #: 模型目录(`/models` 与 `/models/<目录>`)。
 MODEL_FOLDERS: dict[str, list[str]] = {
     "checkpoints": ["sd_xl_base.safetensors", "v1-5.ckpt"],

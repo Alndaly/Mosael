@@ -6,7 +6,7 @@
     "en": "Baidu Netdisk"
   },
   "default_locale": "zh",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "homepage": "https://pan.baidu.com/union/doc/",
   "author": {
     "name": "Mosael",
@@ -189,6 +189,7 @@
           "properties": {
             "fs_id": {
               "type": "string",
+              "format": "external_id",
               "description": {
                 "zh": "文件的 fs_id",
                 "en": "The file's fs_id"

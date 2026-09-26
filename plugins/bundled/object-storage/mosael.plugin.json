@@ -6,7 +6,7 @@
     "en": "Object Storage"
   },
   "default_locale": "zh",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -246,6 +246,7 @@
           "properties": {
             "key": {
               "type": "string",
+              "format": "external_id",
               "description": {
                 "zh": "对象路径。",
                 "en": "The object key."
@@ -297,6 +298,7 @@
           "properties": {
             "key": {
               "type": "string",
+              "format": "external_id",
               "description": {
                 "zh": "对象路径。",
                 "en": "The object key."
@@ -359,6 +361,7 @@
             },
             "cursor": {
               "type": "string",
+              "format": "external_id",
               "x-advanced": true,
               "description": {
                 "zh": "上一页交回的 next_cursor,留空从头列。",

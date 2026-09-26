@@ -132,12 +132,15 @@ progress in the task center, cancel, resume after a restart and usage records, a
 processing workflow as-is** (upscale, background removal, inpainting, face restore, frame interpolation), feed it
 several inputs at once, or get every intermediate output back, use that workflow's tool.
 
-**On a board a workflow has one entry.** A workflow with a single image / video / audio output node and no
-alpha-as-mask input is the same thing as the model of the same name: the board's Add menu no longer lists its tool —
+**On a board a workflow has one entry.** A workflow with a single saved image / video / audio output node, no
+text output and no alpha-as-mask input (preview nodes such as PreviewImage don't count — they write temporary files
+that neither generation nor the tool returns by default, so a “save + peek at the line art” ControlNet workflow
+qualifies too) is the same thing as the model of the same name: the board's Add menu no longer lists its tool —
 add an image (video, audio) item and pick that model; the result lands in place, several at a time, with a longer wait.
 Tool items already on a board with such a tool are turned into the matching generation item automatically: position,
 name, prompt, reference images and parameters carry over; width / height and “Include previews” have no place in
-generation and are dropped. Workflows with several output nodes, text outputs or an alpha mask stay tools on boards.
+generation and are dropped. Workflows with several saved output nodes, text outputs or an alpha mask stay tools on boards. “Import outputs”
+fetches by task id, so it is not on boards; use it in workflows and chat.
 Workflows keep both, and the tool's description ends with “If you only need the image, use the “AI generate” node with
 this model”.
 

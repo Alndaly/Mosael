@@ -108,17 +108,18 @@ should be one you can walk back from.
 Besides generate, write, voice-over and trim, a board can **run a tool** that turns the item in front of
 you into something new: video to GIF, speech in audio or video to text, translate, separate voice and
 background, reduce noise, render references from a shot of a 3D scene, and the content tools plugins
-provide — such as every workflow saved in ComfyUI, fetching a file back from object storage, or
-importing one from a cloud drive.
+provide — such as every workflow saved in ComfyUI, or Manim / Remotion animations.
 
 A board **only holds these content-to-content tools**. Flow and data steps — calling a workflow, HTTP
-requests, text templates, JSON extraction, string handling, note search — and plugin tools that only
-list, report status or upload are not on boards; use them in a [workflow](/docs/guides/workflows).
+requests, text templates, JSON extraction, string handling, note search — plugin tools that only
+list, report status or upload, and plugin tools that **fetch things by an id from another system** (importing
+ComfyUI outputs by task id, a cloud-drive file by fs_id, an object-storage file by key) are not on boards; use them
+in a [workflow](/docs/guides/workflows) or in chat. To put a file on a board, drag it in from the asset library.
 Tool items of those kinds already on a board before the upgrade become a note saying the step now
 belongs in a workflow, with the old settings attached; their connections and the results they made stay.
 
 **One thing, one entry.** When a plugin tool is the same thing as a generation model — a ComfyUI workflow with a
-single image / video / audio output node is already a model in image and video items — and you can use that model,
+single saved image / video / audio output node (preview nodes don't count) is already a model in image and video items — and you can use that model,
 it is not listed as a tool: add an image (video, audio) item and pick the model; the result lands in place, several
 at a time, with a longer wait. Tool items of that kind already on a board are turned into the matching generation
 item automatically; position, name, prompt, reference images and parameters carry over, and what generation has no

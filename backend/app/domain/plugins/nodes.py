@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import is_message_key, tr
 from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.inputs import ASSET_FORMAT
+from app.domain.plugins.inputs import ASSET_FORMAT, EXTERNAL_ID_FORMAT
 from app.domain.plugins.manifest import text_of, tool_label
 
 PLUGIN_NODE_PREFIX = "plugin."
@@ -126,6 +126,10 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
             items_media = _media(items.get("x-media"))
             if items_media:
                 entry["media"] = items_media
+        elif spec.get("format") == EXTERNAL_ID_FORMAT:
+            # 另一个系统里的编号(任务号、fs_id、对象路径):工作流里照样能接上游、能手填,画板据此认出
+            # 「按编号去外面取东西」的工具(workflows.EXTERNAL_ID、boards.transforms)。
+            entry["data_type"] = EXTERNAL_ID_FORMAT  # format 名就是 data_type 名,和 asset 一样
         media = _media(spec.get("x-media"))
         if media:
             entry["media"] = media
@@ -163,6 +167,8 @@ def _readable(entry: Any) -> dict[str, Any]:
     #: 自己写 node.config 的插件不该因此丢掉素材选择器、画板上接不到上游的图片。
     if readable.get("format") == ASSET_FORMAT and not readable.get("data_type"):
         readable["data_type"] = "asset"
+    if readable.get("format") == EXTERNAL_ID_FORMAT and not readable.get("data_type"):
+        readable["data_type"] = EXTERNAL_ID_FORMAT
     for field in ("label", "description", "placeholder"):
         if field in readable:
             readable[field] = text_of(readable[field])

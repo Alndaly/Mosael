@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 
 #: `input_schema` 里标记"这个字段是一份素材"的 format 值。
 ASSET_FORMAT = "asset"
+#: `input_schema` 里标记"这个字段是另一个系统里的编号"(任务号、fs_id、对象路径)的 format 值。
+#: 运行时不换任何东西,只是一句声明:节点上它的 data_type 是 external_id(见 workflows.EXTERNAL_ID)。
+EXTERNAL_ID_FORMAT = "external_id"
 
 
 def _is_asset(spec: Any) -> bool:
@@ -128,4 +131,4 @@ def materialize(
     return resolved
 
 
-__all__ = ["ASSET_FORMAT", "asset_fields", "coerce", "materialize"]
+__all__ = ["ASSET_FORMAT", "EXTERNAL_ID_FORMAT", "asset_fields", "coerce", "materialize"]

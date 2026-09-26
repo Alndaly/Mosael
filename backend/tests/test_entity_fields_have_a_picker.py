@@ -12,6 +12,11 @@
 插件工具的入参(JSON Schema → 节点声明,见 plugins.nodes)一起查:随应用带的和示例插件的清单
 都要过这一道 —— 插件节点和内置节点在表单上没有区别。
 
+**另一个系统里的编号不是这个工作区里的东西**:ComfyUI 的任务号(`prompt_id`)、网盘的 `fs_id`、对象存储的
+对象路径,清单只在那个系统里,给不出选择器。它们在声明里说清楚 —— `data_type: "external_id"`(插件写
+`"format": "external_id"`,见 workflows.EXTERNAL_ID),不进豁免名单:画板靠同一句声明认出「按编号去外面
+取东西」的工具。名字以 `_id` 结尾的字段(内置的和插件的)要么是下面那张实体表里的一种,要么这样声明过。
+
 `EXEMPT` 是**说得出理由**的例外,只减不增。
 """
 
@@ -47,9 +52,17 @@ EXEMPT: dict[str, str] = {
 _REPO = Path(__file__).resolve().parents[2]
 
 
+def _is_external(key: str, spec: dict[str, Any]) -> bool:
+    from app.domain.workflows import EXTERNAL_ID, config_data_type
+
+    return config_data_type(key, spec) == EXTERNAL_ID
+
+
 def _is_entity(key: str, spec: dict[str, Any]) -> bool:
     from app.domain.workflows import config_data_type
 
+    if _is_external(key, spec):
+        return False
     return bool(_ENTITY_ID.search(key)) or config_data_type(key, spec) in _ENTITY_DATA_TYPES
 
 
@@ -104,17 +117,21 @@ def test_指向某样东西的字段都有选择器() -> None:
     )
 
 
-def test_每个以_id_结尾的内置字段都归了类() -> None:
-    """实体表要是漏了一种,上面那条就对它睁一只眼。新加的 `xxx_id` 字段得先想清楚它指向什么。"""
-    from app.domain.workflows import NODE_TYPES
-
+def test_每个以_id_结尾的字段都归了类() -> None:
+    """实体表要是漏了一种,上面那条就对它睁一只眼。新加的 `xxx_id` 字段得先想清楚它指向什么:这个工作区里的
+    一种东西(进实体表、给选择器),还是另一个系统里的编号(声明 external_id)。插件清单一起查 —— 此前
+    `prompt_id` / `fs_id` 不在实体表里,于是悄悄漏过,画板也就认不出「按任务号取回」不是内容变换。"""
     unknown = sorted(
         f"{name}.{key}"
-        for name, meta in NODE_TYPES.items()
-        for key in (meta.get("config") or {})
+        for name, meta in _registry().items()
+        for key, spec in (meta.get("config") or {}).items()
         if re.search(r"_ids?$", key) and not _ENTITY_ID.search(key)
+        and not (isinstance(spec, dict) and _is_external(key, spec))
     )
-    assert not unknown, f"这些字段名看着是 id,却不在 _ENTITIES 里:{unknown}"
+    assert not unknown, (
+        "这些字段名看着是 id,却既不在 _ENTITIES 里、也没声明是另一个系统里的编号"
+        f"(data_type / format: external_id):{unknown}"
+    )
 
 
 def test_插件清单确实被查到了() -> None:

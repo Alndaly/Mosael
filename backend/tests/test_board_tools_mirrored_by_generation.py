@@ -23,7 +23,7 @@ MIRRORED = "wf_portrait"
 NOT_MIRRORED = "wf_upscale"
 
 #: 两个运行时报出的工具(形状照 ComfyUI 插件报的那种):一个和生成模型 portrait.json 是同一件事,
-#: 一个有两个输出节点(只有工具交得全)。
+#: 一个没声明 `mirrors`(插件判它只有工具交得全,比如两个都存下来的输出节点)。
 REPORTED = [
     {
         "name": MIRRORED,
@@ -238,6 +238,66 @@ def test_存着的工具格改写成那种素材的生成格(tmp_path: Path) -> 
     assert by_id["a2"]["form"]["source_assets"] == [{"asset_id": "asset-picked", "role": "reference_image"}]
     assert by_id["a3"]["kind"] == "action", "在跑的那一格不动"
     assert by_id["a4"]["kind"] == "action" and by_id["a4"]["form"]["producer"] == kept
+
+
+def test_保存加预览的ControlNet工作流_存着的工具格也改写成生成格(tmp_path: Path) -> None:
+    """「工作流 · controlnet」:一个 SaveImage 加一个看线稿的 PreviewImage。插件 1.5.2 起预览不算输出节点,它声明了
+    `mirrors`;画布上存着的这种工具格,对账照样改写成图片格、选 controlnet.json。清单是插件对着假 ComfyUI 现报的。"""
+    from app.core.db import SessionLocal
+    from app.db.models import PluginInstance, ProviderModel
+    from app.domain.boards.plugin_references import rewrite_mirrored_tools
+    from app.domain.plugins import runtime
+    from app.domain.plugins.dynamic_tools import clean_mirror
+    from app.domain.plugins.tools import refresh_tools
+    from app.domain.providers import adopt_plugin_connection
+    from tests.fake_comfyui import CONTROLNET_API, FakeComfyUI
+    from tests.util import seed_assets
+
+    plugin = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
+    with FakeComfyUI() as comfy:
+        comfy.state.workflows = {"controlnet.json": CONTROLNET_API}
+        output = runtime.execute_tool(plugin, "tools/main.py", "comfyui_generation", {"op": "tools"},
+                                      {"SERVER_URL": comfy.url}, data_dir=tmp_path, timeout=60).output
+    [tool] = [one for one in output["tools"] if one["label"]["zh"] == "工作流 · controlnet"]
+    assert tool["mirrors"]["generation_model"] == "controlnet.json"
+
+    client = fresh_client()
+    me = _me(client)
+    _install_plugin(tmp_path)
+    with SessionLocal() as db:
+        instance = PluginInstance(package_id=PACKAGE, name="我的 ComfyUI", enabled=True, owner_user_id=me,
+                                  discovered_tools=[{**tool, "mirrors": clean_mirror(tool["mirrors"])}])
+        db.add(instance)
+        db.commit()
+        refresh_tools(db, instance, notify=False)
+        profile = adopt_plugin_connection(db, plugin_instance_id=instance.id, owner_user_id=me,
+                                          vendor=f"plugin:{PACKAGE}", name="我的 ComfyUI", enabled=True)
+        db.add(ProviderModel(provider_profile_id=profile.id, model_id="controlnet.json", display_name="controlnet",
+                             enabled=True, capability_ids=["image"]))
+        db.commit()
+        profile_id = profile.id
+    ws = _workspace(client)
+    seed_assets(ws, {"asset-pose": "image"})
+    producer = f"node:plugin.{PACKAGE}.{tool['name']}"
+    created = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [
+        {"id": "i1", "kind": "image", "x": 0, "y": 0, "asset_id": "asset-pose"},
+        {"id": "a1", "kind": "action", "x": 300, "y": 0, "title": "线稿出图",
+         "form": {"producer": producer, "config": {"prompt": "一座房子", "steps_3": "30", "include_previews": "true"},
+                  "bindings": {"image_11": [{"from": "i1"}]}}},
+    ], "edges": [{"id": "e1", "source": "i1", "target": "a1"}]}})
+    assert created.status_code == 200, created.text
+    with SessionLocal() as db:
+        assert rewrite_mirrored_tools(db) == 1
+    board = client.get(f"/api/boards/{created.json()['id']}", params={"workspace_id": ws}).json()
+    cell = next(one for one in board["canvas"]["items"] if one["id"] == "a1")
+    assert (cell["kind"], cell["title"]) == ("image", "线稿出图")
+    #: 「也取回预览」在生成里没有位置,丢掉(生成本来就不交回预览)。
+    assert cell["form"] == {
+        "prompt": "一座房子", "provider": f"plugin:{PACKAGE}", "provider_profile_id": profile_id, "model": "controlnet.json",
+        "parameters": {"3.steps": "30"},
+        "source_assets": [{"asset_id": "asset-pose", "role": "reference_image", "from": "i1"}],
+        "producer": "generate",
+    }
 
 
 def test_说不准用哪条连接就不改(tmp_path: Path) -> None:

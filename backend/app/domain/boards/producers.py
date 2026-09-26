@@ -382,10 +382,14 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
                 #: 存着的这种工具格会被对账改写成生成格,还没改到的这一格在这里说清楚)。
                 raise BoardInputError("boardErr_toolMirroredByGeneration", tool=str(tool.get("label") or tool_name),
                                       model=str(row.display_name or row.model_id))
-        #: 他接着这个插件、工具也开着,只是它不是一个内容变换(列清单、看状态、上传……)——
+        #: 他接着这个插件、工具也开着,只是它不是一个内容变换(列清单、看状态、上传、按编号取回……)——
         #: 这不是「去插件页建连接」能解决的事,是「这件事在工作流里做」。清单会变(ComfyUI 的工具随
-        #: 服务器上的工作流),所以画布上存着一个此刻不合格的工具格是正常的,跑的时候说清楚。
-        raise BoardInputError("boardErr_toolNotOnBoard", tool=tool_name)
+        #: 服务器上的工作流),所以画布上存着一个此刻不合格的工具格是正常的,跑的时候说清楚:叫得出工具的名字,
+        #: 按编号取东西的说它是在按编号取东西(它明明交出素材,「它不交出素材」那句是错的)。
+        label = str(mine_exposed[0].get("label") or tool_name)
+        if content_transform_gap(node_meta(mine_exposed[0])) == "external_id":
+            raise BoardInputError("boardErr_toolFetchesByExternalId", tool=label)
+        raise BoardInputError("boardErr_toolNotOnBoard", tool=label)
     raise BoardInputError("boardErr_pluginNotConnected", plugin=package.name if package is not None else package_id,
                           tool=tool_name)
 

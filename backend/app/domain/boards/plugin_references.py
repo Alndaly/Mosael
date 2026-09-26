@@ -25,10 +25,19 @@ domain/workflows/plugin_references,规则在那边一处),这里用同一套判�
 什么时候跑:和 replaces 同一个时机 —— 插件的工具清单每刷新一次(`dynamic_tools.on_refreshed`,生成目录在它前面
 刷新,见清单里 `provides` 的顺序),以及每次启动(对账步骤 `rewrite-replaced-plugin-tools`)。`mirrors` 只有插件
 报出清单之后才有,所以这是对账,不是一次性迁移;没有可改的就什么都不做。
+
+**按另一个系统里的编号取东西的工具格**(boards.transforms 的 `external_id`:ComfyUI 的「导入产出」、网盘的「导入」、
+对象存储的「取回」)改成一张便签,和内置流程节点的那次迁移(`migrate-board-wiring-tools-become-notes`)同一个做法:
+同一个 id、位置、大小、名字,正文写明这一步归工作流、附上原来的设置;进出它的线都还连得上,它跑出来的产出一格
+不动。**也是对账,不是一次性迁移**:合不合格读的是插件此刻的清单 —— 升级插件(1.5.2 的 ComfyUI、0.7.2 的网盘)
+可能在任何一次启动之后,一次性迁移跑的时候清单里还没有这句声明。只认连接报得出这个工具、而且**每一条**
+(选了连接就只看那一条)都说它按编号取东西的格子;没有连接知道它、或者说法不一的不动,跑的时候由注册表说清楚
+(`boardErr_toolFetchesByExternalId`)。在跑的那一格等它落终态。
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
@@ -273,10 +282,94 @@ def rewrite_mirrored_tools(db: Session) -> int:
     return changed
 
 
+# ── 按另一个系统里的编号取东西的工具格 ─────────────────────────────────────
+
+
+#: 便签正文最长多少字(和内置流程节点改成便签的那次迁移同一档)。
+_NOTE_LIMIT = 20_000
+
+
+def _fetchers(db: Session) -> dict[tuple[str, str], dict[str, str]]:
+    """(包, 工具) → {连接 id: 工具的名字}:连接报出的工具,**按另一个系统里的编号取东西**的记名字
+    (boards.transforms 的 `external_id`),不是的记空串 —— 几条连接说法不一就不改。"""
+    from app.domain.boards.transforms import content_transform_gap
+    from app.domain.plugins.errors import PluginDomainError
+    from app.domain.plugins.nodes import node_meta
+    from app.domain.plugins.tools import all_tools
+
+    found: dict[tuple[str, str], dict[str, str]] = {}
+    for instance in db.scalars(select(PluginInstance)):
+        try:
+            tools = all_tools(db, instance)
+        except PluginDomainError:
+            continue  # 包已经删了:说不出它的工具是什么
+        for tool in tools:
+            gap = content_transform_gap(node_meta({**tool, "package_id": instance.package_id}))
+            label = str(tool.get("label") or tool["name"]) if gap == "external_id" else ""
+            found.setdefault((instance.package_id, str(tool["name"])), {})[instance.id] = label
+    return found
+
+
+def _to_note(item: dict[str, Any], fetchers: dict[tuple[str, str], dict[str, str]]) -> dict[str, Any] | None:
+    """一格跑着按编号取东西的工具的工具格 → 写明「这一步归工作流」的便签。改不了的(说不准、在跑)回 None。"""
+    from app.core.i18n import t
+    from app.domain.plugins.nodes import parse_node_type
+
+    form = item.get("form") if isinstance(item.get("form"), dict) else None
+    if item.get("kind") != "action" or form is None:
+        return None
+    parsed = parse_node_type(node_type_of(str(form.get("producer") or "")) or "")
+    if parsed is None or (item.get("run") or {}).get("status") in ("queued", "running"):
+        return None  # 这一轮的回执要落回这一格:等它落终态,下一次对账再改
+    config = form.get("config") if isinstance(form.get("config"), dict) else {}
+    by_instance = fetchers.get(parsed) or {}
+    chosen = str(config.get("instance_id") or "")
+    labels = [label for instance_id, label in by_instance.items() if not chosen or instance_id == chosen]
+    if not labels or not all(labels):
+        return None
+    #: 迁移时没有请求,也就没有读的人的语言:按部署缺省(见 core/i18n 开头那段)。
+    body = t("boardNote_toolFetchesByExternalId", tool=labels[0])
+    settings = {key: value for key, value in config.items() if key != "instance_id"}
+    if settings:
+        body += f"\n\n{t('boardNote_originalSettings')}\n" + json.dumps(settings, ensure_ascii=False, indent=2)
+    if len(body) > _NOTE_LIMIT:
+        body = body[: _NOTE_LIMIT - 1] + "…"
+    kept = {key: value for key, value in item.items() if key not in ("kind", "form", "run", "text")}
+    return {**kept, "kind": "note", "text": body, "form": {"producer": "write"}}
+
+
+def retire_external_id_tools(db: Session) -> int:
+    """把库里所有画板上跑着「按编号取东西」的工具格改成便签。返回改了几块画板。"""
+    fetchers = _fetchers(db)
+    if not any(label for by_instance in fetchers.values() for label in by_instance.values()):
+        return 0
+    changed = 0
+    for board in db.scalars(select(Board)):
+        canvas = board.canvas if isinstance(board.canvas, dict) else {}
+        items = canvas.get("items") if isinstance(canvas.get("items"), list) else []
+        touched = False
+        rewritten_items = []
+        for item in items:
+            rewritten = _to_note(item, fetchers) if isinstance(item, dict) else None
+            touched = touched or rewritten is not None
+            rewritten_items.append(rewritten if rewritten is not None else item)
+        if not touched:
+            continue
+        board.canvas = {**deepcopy(canvas), "items": rewritten_items}
+        board.revision = (board.revision or 0) + 1
+        changed += 1
+    db.commit()
+    if changed:
+        logger.info("把 %d 块画板上按编号取东西的插件工具格改成了便签", changed)
+    return changed
+
+
 def reconcile_plugin_tool_cells(db: Session) -> None:
-    """画板上存着的插件工具格跟上插件报出的清单:先按 `replaces` 改名,再把被生成取代的改成生成格。"""
+    """画板上存着的插件工具格跟上插件报出的清单:先按 `replaces` 改名,再把被生成取代的改成生成格,
+    按编号取东西的改成便签。"""
     rewrite_replaced_tools(db)
     rewrite_mirrored_tools(db)
+    retire_external_id_tools(db)
 
 
 def _after_refresh(db: Session, instance: PluginInstance) -> None:
@@ -296,6 +389,7 @@ __all__ = [
     "mirrored_model",
     "mirrors",
     "reconcile_plugin_tool_cells",
+    "retire_external_id_tools",
     "rewrite_mirrored_tools",
     "rewrite_replaced_tools",
 ]

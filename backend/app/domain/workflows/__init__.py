@@ -436,6 +436,14 @@ _DATA_TYPE_BY_NAME = (
     ("scene_id", "scene"),
 )
 
+#: 字段装的是**另一个系统里的编号**:ComfyUI 的任务号、网盘的 fs_id、对象存储的对象路径、翻页游标。
+#: 它指向的东西不在这个工作区里,创作者既写不出也认不出 —— 值从上游接(列清单、跑工作流的那一步交出来的),
+#: 或者由智能体从上一次调用里抄。命名推不出来(`prompt_id` 和 `project_id` 长得一样),所以只认声明:
+#: 内置节点写 `"data_type": "external_id"`,插件在 input_schema 里写 `"format": "external_id"`(见 plugins.nodes)。
+#: 画板据此判一个工具是不是「按编号去外面取东西」(boards.transforms 的 `external_id`);选择器棘轮据此知道
+#: 这个 `*_id` 不是工作区里的实体(tests/test_entity_fields_have_a_picker)。
+EXTERNAL_ID = "external_id"
+
 
 def config_media(spec: Any) -> tuple[str, ...]:
     """这个素材字段收哪几种素材(`"media"`:一种写字符串,几种写列表);没声明就是空 —— 哪种都收。

@@ -214,7 +214,7 @@ def test_画板表单上看不见的字段_智能体也写不进去(tmp_path) ->
     listing = _edit(client, ws, board_id, [{"kind": "add_item", "type": "action", "item_id": "t1",
                                             "producer": "node:plugin.dev.test.boardtools.listing"}])
     assert listing.status_code == 422, listing.text
-    assert "listing" in listing.json()["detail"] and "工作流" in listing.json()["detail"]
+    assert "Listing" in listing.json()["detail"] and "工作流" in listing.json()["detail"], "说的是工具的名字"
 
     assert _edit(client, ws, board_id, [{"kind": "add_item", "type": "action", "item_id": "t1", "producer": PAINT,
                                          "config": {"prompt": "猫"}}]).status_code == 200

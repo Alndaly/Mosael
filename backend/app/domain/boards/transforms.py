@@ -17,21 +17,29 @@
    光看类型分不开,得节点自己说「这段是我的成品」。没声明类型的输出(`any`)也不算 —— 它可能是
    任何东西。
 3. **吃画板上的内容,或者凭空产出素材。** 至少有一个字段能接上游的格子(`tools.binding_sink`:
-   素材、文字、3D 场景),或者它交出的是素材(文生图、按参数出一段讲解视频、从对象存储取回一个文件)。
+   素材、文字、3D 场景),或者它交出的是素材(文生图、按参数出一段讲解视频)。
    不吃内容、只交出文字的是报告(状态、设置环境的结果),不是创作材料。
 4. **必填的字段创作者填得了。** 画板上的表单只摆创作者看得懂的参数(模型、比例、风格、时长、语言
    这一类);映射、原始 JSON、代码、子图这些只有搭流程的人看得懂的字段(`wiring_field`)在画板上
    不出现。一个工具**必填**这种字段的话,它在画板上填不完,不上画板。
-5. **一个概念一个入口。** 插件报出的工具声明了 `mirrors`(它和某个生成模型是同一件事,ComfyUI 里只有一个
-   图 / 视频 / 音频输出节点的工作流就是),而点运行的这个人在生成目录里用得上那个模型时,画板上只留生成
-   (图片 / 视频 / 音频格选那个模型:结果落在原位、有张数、用量、6 小时),工具格不再列出它。工作流里两个都在。
+5. **不按另一个系统里的编号去取东西。** 字段声明了 `external_id`(workflows.EXTERNAL_ID:ComfyUI 的任务号、
+   网盘的 fs_id、对象存储的对象路径)的工具,是在**寻址**一个外部系统:必填这种字段的,创作者在画板上填不出来
+   (得去别的系统抄一串编号);不吃画板内容、却收这种字段的(哪怕选填),交出的素材是按编号从外面取回来的,
+   不是「凭空产出」—— 第 3 条的「凭空产出素材」说的是按参数做出来(提示词出图、按参数出视频)。导入该走
+   素材库和拖放;按编号取回是流程里的一步(列清单 → 取回),归工作流和智能体。这种字段也不接上游格子
+   (便签上的字不是任务号,tools.binding_sink),画板的表单上不出现。
+6. **一个概念一个入口。** 插件报出的工具声明了 `mirrors`(它和某个生成模型是同一件事,ComfyUI 里只有一个
+   存下来的图 / 视频 / 音频输出节点的工作流就是 —— 预览节点不算),而点运行的这个人在生成目录里用得上
+   那个模型时,画板上只留生成(图片 / 视频 / 音频格选那个模型:结果落在原位、有张数、用量、6 小时),
+   工具格不再列出它。工作流里两个都在。
    「用得上」要按人、按连接问,规矩本身不查库:调用方(producers._node_producers)把答案递进来。
 
 同一条规矩管内置节点和插件工具:内置节点还要先在 `NODE_TYPES` 上声明 `surfaces: ["board"]`
 (和画板内置的写字 / 生成 / 念重复的、副作用大的,不声明),声明了过不了规矩的由棘轮当场报出来;
 插件工具不用声明,按它清单里 `node` 块声明的输出判。插件工具能不能上画板随它接的连接、清单
 (ComfyUI 每张工作流一个工具)变,所以规矩在每次取注册表时现算(producers._node_producers),
-不缓存;存在画布上、此刻不再合格的工具格,跑的时候说清楚为什么(producers.get_producer)。
+不缓存;存在画布上、此刻不再合格的工具格,跑的时候说清楚为什么(producers.get_producer)。被生成取代的
+由对账改写成生成格,按编号去外面取东西的由对账改成一张便签(都在 boards.plugin_references)。
 
 画板**怎么摆**一个变换也从这里出:归「添加」菜单的哪一组(`board_group`,按吃什么内容分)、
 一句给创作者看的说明(`board_description`)、表单里哪些字段露出来(`board_config_view`)。
@@ -64,6 +72,13 @@ def wiring_field(key: str, spec: Any) -> bool:
     if spec.get("type") in _WIRING_FIELD_TYPES:
         return True
     return config_data_type(key, spec) == "json"
+
+
+def external_id_field(key: str, spec: Any) -> bool:
+    """这个字段装的是不是另一个系统里的编号(任务号、fs_id、对象路径)—— 创作者写不出、认不出,画板上不摆。"""
+    from app.domain.workflows import EXTERNAL_ID, config_data_type
+
+    return isinstance(spec, dict) and config_data_type(key, spec) == EXTERNAL_ID
 
 
 def content_outputs(meta: dict[str, Any]) -> list[str]:
@@ -129,9 +144,10 @@ def content_transform_gap(meta: dict[str, Any], *, generation_has: Callable[[dic
 
     回的是原因的名字(给棘轮和测试说清楚为什么):
     `wiring`(流程 / 数据 / 知识库分组)、`needs_wiring`(必填一个只有搭流程的人看得懂的字段)、
-    `no_content_output`(不交出素材,也没点名落板的文字)、`no_content_input`(不吃画板上的内容,
+    `no_content_output`(不交出素材,也没点名落板的文字)、`external_id`(按另一个系统里的编号去取东西:
+    必填一个编号,或者不吃画板内容却收一个编号,见模块说明第 5 条)、`no_content_input`(不吃画板上的内容,
     又只交出文字)、`mirrored_by_generation`(它声明了和某个生成模型是同一件事,而 `generation_has`
-    说点运行的人用得上那个模型 —— 画板上走生成那一个入口,见模块说明第 5 条)。
+    说点运行的人用得上那个模型 —— 画板上走生成那一个入口,见模块说明第 6 条)。
     """
     from app.domain.workflows import WIRING_CATEGORIES
 
@@ -142,6 +158,9 @@ def content_transform_gap(meta: dict[str, Any], *, generation_has: Callable[[dic
         return "needs_wiring"
     if not content_outputs(meta):
         return "no_content_output"
+    external = [spec for key, spec in specs.items() if external_id_field(key, spec)]
+    if any(spec.get("required") for spec in external) or (external and not _sinks(meta)):
+        return "external_id"
     if not _makes_media(meta) and not _sinks(meta):
         return "no_content_input"
     mirror = meta.get("mirrors")
@@ -198,14 +217,14 @@ def board_description(meta: dict[str, Any], locale: str) -> str:
 def board_config_view(config: dict[str, Any]) -> dict[str, Any]:
     """画板表单上露出来的字段(一份已经按语言翻好的节点字段声明 → 画板那一份)。
 
-    · 映射、原始 JSON、代码、子图(wiring_field)不出现;
+    · 映射、原始 JSON、代码、子图(wiring_field)不出现,另一个系统里的编号(external_id_field)也不出现;
     · 模板字段在画板上就是一段字(`type: "text"`):画板上没有「上游的输出」可引用,上游是连进来的
       格子(`board_sources`),`{{…}}` 这种写法不该出现在创作者面前;
     · 说明里教 `{{…}}` 写法的那一句(写给工作流的)不带过来。
     """
     view: dict[str, Any] = {}
     for key, spec in config.items():
-        if wiring_field(key, spec):
+        if wiring_field(key, spec) or external_id_field(key, spec):
             continue
         field = dict(spec)
         if field.get("type") == "template":
@@ -223,6 +242,7 @@ __all__ = [
     "board_group",
     "content_outputs",
     "content_transform_gap",
+    "external_id_field",
     "is_content_transform",
     "wiring_field",
 ]

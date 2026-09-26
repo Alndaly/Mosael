@@ -598,10 +598,31 @@ def test_内容变换的规矩() -> None:
     #: 不吃内容、只交出文字:是一份报告。
     assert content_transform_gap(tool(node={
         "outputs": ["summary"], "output_types": {"summary": "text"}, "board_outputs": ["summary"]})) == "no_content_input"
-    #: 不吃内容、交出素材:凭空产出(提示词出图、按参数出讲解视频、从存储取回一个文件)。
-    made = tool(input_schema={"type": "object", "properties": {"key": {"type": "string"}}},
+    #: 不吃内容、交出素材:凭空产出(提示词出图、按参数出讲解视频)。
+    made = tool(input_schema={"type": "object", "properties": {"style": {"type": "string"}}},
                 node={"outputs": ["asset_id", "summary"], "output_types": {"asset_id": "asset"}, "board_outputs": ["asset_id"]})
     assert content_transform_gap(made) is None and board_group(made) == "new"
+    #: 按另一个系统里的编号取回(必填):创作者在画板上填不出一个 fs_id —— 不是内容变换。
+    fetched = {"outputs": ["asset_id"], "output_types": {"asset_id": "asset"}}
+    by_id = tool(input_schema={"type": "object", "properties": {"fs_id": {"type": "string", "format": "external_id"}},
+                               "required": ["fs_id"]}, node=fetched)
+    assert by_id["config"]["fs_id"]["data_type"] == "external_id"
+    assert content_transform_gap(by_id) == "external_id"
+    #: 编号选填、也不吃画板内容(不给任务号就取最近几次):交出的素材还是从外面取回来的,不是做出来的。
+    recent = tool(input_schema={"type": "object", "properties": {
+        "prompt_id": {"type": "string", "format": "external_id"}, "last": {"type": "integer"}}}, node=fetched)
+    assert content_transform_gap(recent) == "external_id"
+    #: 编号不接上游格子(便签上的字不是任务号),画板表单上也不出现。
+    from app.domain.boards.tools import binding_sink
+    from app.domain.boards.transforms import board_config_view
+
+    assert binding_sink("prompt_id", recent["config"]["prompt_id"]) is None
+    assert "prompt_id" not in board_config_view(recent["config"]) and "last" in board_config_view(recent["config"])
+    #: 吃画板上的一张图、编号选填(比如「接着这个任务」):还是一个内容变换,编号在画板上不摆。
+    reusing = tool(input_schema={"type": "object", "properties": {
+        "image": {"type": "string", "format": "asset", "x-media": "image"},
+        "prompt_id": {"type": "string", "format": "external_id"}}}, node=fetched)
+    assert content_transform_gap(reusing) is None
     #: 吃一张图、交出一张图:归「处理图片」。
     picture = {"type": "object", "properties": {"image": {"type": "string", "format": "asset", "x-media": "image"}}}
     upscale = tool(input_schema=picture, node={"outputs": ["asset_id"]})
@@ -618,7 +639,7 @@ def test_内容变换的规矩() -> None:
 
 
 def test_随包的插件工具_哪些上画板() -> None:
-    """对着仓库里的清单:取回文件、导入、出片的上画板;列清单、看状态、上传、装环境的不上。"""
+    """对着仓库里的清单:出片的上画板;列清单、看状态、上传、装环境、按编号取回 / 导入的不上。"""
     from app.domain.boards.transforms import is_content_transform
     from app.domain.plugins.nodes import node_meta
 
@@ -630,8 +651,7 @@ def test_随包的插件工具_哪些上画板() -> None:
         for declared in tools.get("declare") or []:
             if not declared.get("internal") and is_content_transform(node_meta(declared)):
                 eligible.add(f"{manifest['id']}.{declared['name']}")
-    for name in ("dev.mosael.object-storage.storage_fetch", "dev.mosael.baidu-pan.pan_import",
-                 "dev.mosael.comfyui.import_outputs", "dev.mosael.manim.manim_still", "dev.mosael.remotion.remotion_animation"):
+    for name in ("dev.mosael.manim.manim_still", "dev.mosael.remotion.remotion_animation"):
         assert name in eligible, name
     for name in ("dev.mosael.baidu-pan.pan_list", "dev.mosael.baidu-pan.pan_search", "dev.mosael.baidu-pan.pan_upload",
                  "dev.mosael.comfyui.server_status", "dev.mosael.comfyui.list_workflows", "dev.mosael.comfyui.list_models",
@@ -640,7 +660,10 @@ def test_随包的插件工具_哪些上画板() -> None:
                  "dev.mosael.object-storage.storage_presign", "dev.mosael.manim.manim_setup",
                  "dev.mosael.remotion.remotion_setup",
                  #: 必填一串结构化的步骤 / 小节(JSON):画板的表单上填不了,在工作流或对话里用。
-                 "dev.mosael.manim.manim_explainer", "dev.mosael.remotion.remotion_explainer"):
+                 "dev.mosael.manim.manim_explainer", "dev.mosael.remotion.remotion_explainer",
+                 #: 按另一个系统里的编号取回(任务号、fs_id、对象路径):是导入,不是内容变换 —— 工作流和对话里用。
+                 "dev.mosael.comfyui.import_outputs", "dev.mosael.baidu-pan.pan_import",
+                 "dev.mosael.object-storage.storage_fetch"):
         assert name not in eligible, name
 
 
@@ -753,7 +776,8 @@ def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp
     board_id = _action_board(client, ws, "node:plugin.dev.test.boardtools.listing")
     refused = _run_tool(client, board_id, ws, "node:plugin.dev.test.boardtools.listing")
     assert refused.status_code == 400, refused.text
-    assert "listing" in refused.json()["detail"] and "工作流" in refused.json()["detail"]
+    #: 说的是工具的名字(清单里的 label,没写就按调用名给一个可读名),不是调用名。
+    assert "Listing" in refused.json()["detail"] and "工作流" in refused.json()["detail"]
     assert "run" not in next(one for one in refused_canvas(client, board_id, ws) if one["id"] == "a1")
 
 

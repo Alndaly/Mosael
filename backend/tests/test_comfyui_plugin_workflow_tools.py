@@ -257,6 +257,7 @@ ALPHA_API: dict[str, Any] = {
 TAGGER_TOOL = "wf_" + hashlib.sha1(b"tagger.json").hexdigest()[:12]
 ALPHA_TOOL = "wf_" + hashlib.sha1(b"alpha.json").hexdigest()[:12]
 WAN_TOOL = "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]
+CONTROLNET_TOOL = "wf_" + hashlib.sha1(b"controlnet.json").hexdigest()[:12]
 
 
 def _with_tagger_and_alpha(comfy) -> None:
@@ -308,10 +309,58 @@ def test_只有一个图视频音频输出节点的图_声明它和生成模型�
     assert tools[WAN_TOOL]["mirrors"]["sources"] == {"image_12": "first_frame"}
     assert models["video/wan.json"]["kind"] == "video"
     assert tools["wf_builtin_txt2img"]["mirrors"]["generation_model"] == "builtin:txt2img"
-    #: 只有工具做得到的:两个输出节点(保存 + 预览)、只交出一段字、拿 alpha 当蒙版 —— 不声明。
-    for only_tool in (UPSCALE_TOOL, TAGGER_TOOL, ALPHA_TOOL):
+    #: 只有工具做得到的:只交出一段字、拿 alpha 当蒙版 —— 不声明。(保存 + 预览的放大图声明:预览不算产出,
+    #: 见下一条。)
+    for only_tool in (TAGGER_TOOL, ALPHA_TOOL):
         assert "mirrors" not in tools[only_tool], only_tool
     assert "mask" in tools[ALPHA_TOOL]["input_schema"]["properties"]
+    assert tools[UPSCALE_TOOL]["mirrors"]["sources"] == {"image_1": "reference_image"}
+
+
+def test_保存加预览的图_预览不算输出节点_和生成模型是同一件事_不上画板(comfy, tmp_path: Path) -> None:
+    """用户看到「工作流 · controlnet」和图片格模型选择器里的「controlnet.json · ComfyUI」同时在:图里是一个 SaveImage
+    加一个看线稿的 PreviewImage,此前「只有一个输出节点」把预览也数进去,于是不声明 `mirrors`,画板上两个入口。
+    预览写的是临时文件,生成跑完不交回它(collect_outputs),工具缺省也不交回 —— 判「同一件事」只数存下来的那几个
+    (graph.generation_nodes,和 collect_outputs 同一个判据)。两个都存下来的图照旧只有工具交得全。"""
+    from app.domain.boards.transforms import content_transform_gap
+    from app.domain.plugins.nodes import node_meta
+    from tests.fake_comfyui import CONTROLNET_API
+
+    comfy.state.workflows["controlnet.json"] = CONTROLNET_API
+    both_saved = {**UPSCALE_API, "5": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "raw"}}}
+    comfy.state.workflows["two-saves.json"] = both_saved
+    tools = _tools(comfy.url, tmp_path)
+    tool = tools[CONTROLNET_TOOL]
+    assert {"image_9", "image_13"} <= set(tool["node"]["outputs"]), "预览节点照旧是工作流里接得上的一个输出"
+    mirror = tool["mirrors"]
+    assert (mirror["generation_model"], mirror["kind"]) == ("controlnet.json", "image")
+    assert mirror["sources"] == {"image_11": "reference_image"} and mirror["prompt"] == "prompt"
+    assert "mirrors" not in tools["wf_" + hashlib.sha1(b"two-saves.json").hexdigest()[:12]], "两个保存节点:只有工具交得全"
+
+    #: 同一个 id 就在模型目录里:用得上它的人,画板上这件事只走生成。
+    models = _models(comfy)
+    assert models["controlnet.json"]["kind"] == "image"
+    usable = {(model["kind"], model_id) for model_id, model in models.items()}
+    has = lambda one: (one["kind"], one["generation_model"]) in usable  # noqa: E731
+    assert content_transform_gap(node_meta(tool), generation_has=has) == "mirrored_by_generation"
+
+    #: 生成那条路交回的就是 SaveImage 那一张:预览不算产出,和上面数的是同一个。
+    comfy.state.outputs = {"9": {"images": [{"filename": "cn_00001_.png", "subfolder": "", "type": "output"}]},
+                           "13": {"images": [{"filename": "canny.png", "subfolder": "", "type": "temp"}]}}
+    scratch = tmp_path / "gen"
+    scratch.mkdir()
+    image = tmp_path / "pose.png"
+    image.write_bytes(PNG)
+    output = runtime.stream_tool(
+        PLUGIN, ENTRY, "comfyui_generation",
+        {"op": "generate", "kind": "image", "model": "controlnet.json", "prompt": "", "negative_prompt": "",
+         "parameters": {}, "inputs": [{"role": "reference_image", "path": str(image)}], "resume": None},
+        {"SERVER_URL": comfy.url}, hooks=runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False),
+        scratch_dir=scratch, timeout=60,
+    ).output
+    assert output["usage"] == {"images": 1}
+    viewed = [query for method, path, query in comfy.state.calls if method == "GET" and path == "/view"]
+    assert [one.get("filename") for one in viewed] == [["cn_00001_.png"]], viewed
 
 
 def test_只交出一段字的图不是生成模型_照样是工具(comfy, tmp_path: Path) -> None:

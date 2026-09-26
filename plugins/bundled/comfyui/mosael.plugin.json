@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "name": "ComfyUI",
   "default_locale": "zh",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",
   "author": {
     "name": "Mosael",
@@ -163,6 +163,7 @@
           "properties": {
             "prompt_id": {
               "type": "string",
+              "format": "external_id",
               "description": {
                 "zh": "任务号(工作流工具交回的 `prompt_id`,或 ComfyUI 历史里的);不填就按「最近几次」",
                 "en": "A task id (the `prompt_id` a workflow tool returned, or one from ComfyUI's history); empty = most recent runs"
@@ -300,6 +301,7 @@
           "properties": {
             "prompt_id": {
               "type": "string",
+              "format": "external_id",
               "description": {
                 "zh": "只停这一个任务",
                 "en": "Only stop this task"

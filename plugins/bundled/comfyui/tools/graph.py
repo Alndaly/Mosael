@@ -50,6 +50,9 @@ _IMAGE_OUTPUT_TYPES = frozenset({"SaveImage", "PreviewImage", "Image Save", "Sav
 _TEXT_OUTPUT_TYPES = frozenset({"ShowText|pysssss", "PreviewAny", "PreviewText", "Display Any (rgthree)",
                                 "ShowText", "easy showAnything"})
 _SAVE_NODE_TYPES = _VIDEO_OUTPUT_TYPES | _AUDIO_OUTPUT_TYPES | _IMAGE_OUTPUT_TYPES
+#: 只把结果写进 ComfyUI 临时目录的输出节点(历史里记成 `type: temp`):看一眼用的,不是这张图的成品 ——
+#: 放大图里预览的是读进来的原图,ControlNet 图里预览的是预处理出来的线稿 / 深度图。
+_PREVIEW_OUTPUT_TYPES = frozenset({"PreviewImage", "PreviewAudio"})
 
 #: 读入一份素材的节点 → (它读的是什么, 文件名写在哪个输入里)。
 #: LoadImage 读图;它的第二个输出是 alpha 通道当蒙版 —— 只接了那一路的,当蒙版槽位用。
@@ -323,6 +326,32 @@ def media_outputs(api: dict[str, Any], object_info: dict[str, Any] | None = None
     它交不出成片,`kind_of` 却会把它兜成 image,选了它的生成永远拿不回一张图。它照样是一个工具(见 tooling)。
     """
     return [node for node in output_nodes(api, object_info, titles) if node["media"] != "text"]
+
+
+def persists(node: dict[str, Any]) -> bool:
+    """这个输出节点交出的文件**存下来**吗(历史里是 `type: output`),还是只是预览(`type: temp`)。
+
+    预览节点(PreviewImage、PreviewAudio)不存;视频合成(VHS_VideoCombine)关了 `save_output` 也只是预览。
+    和 `all_outputs` / `collect_outputs` 按历史里的 `type` 分的是同一件事,这里是跑之前在图上判。
+    """
+    class_type = str(node.get("class_type", ""))
+    if class_type in _PREVIEW_OUTPUT_TYPES:
+        return False
+    inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}
+    return not (class_type == "VHS_VideoCombine" and inputs.get("save_output") is False)
+
+
+def generation_nodes(api: dict[str, Any], kind: str, object_info: dict[str, Any] | None = None,
+                     titles: dict[str, str] | None = None) -> list[dict[str, str]]:
+    """一次**生成**交回的是哪几个输出节点的文件 —— 和 `collect_outputs` 同一个判据,只是跑之前在图上判:
+
+    这一种(`kind`)的输出节点里存下来的那几个;一个都不存(只接了 PreviewImage、VHS 关了 save_output)才是这一种的
+    预览节点。别的种类不算(视频图里逐帧的预览不是成片)。工具那边判「这张图就是一个生成模型」(tooling._mirror)
+    问的就是这一份,两边对「产出是什么」说的是同一句话。
+    """
+    wanted = [node for node in output_nodes(api, object_info, titles) if node["media"] == kind]
+    saved = [node for node in wanted if persists(api.get(node["node"]) or {})]
+    return saved or wanted
 
 
 def output_media(class_type: str) -> str:
@@ -791,7 +820,8 @@ def collect_outputs(history_entry: dict[str, Any], kind: str) -> list[dict[str, 
     """一次**生成**要交回的文件:这次要的那一种(图 / 视频 / 音频),全部。
 
     存下来的优先;一个都没有才用预览 —— 只接了 PreviewImage 的图也能出东西。视频图里常常同时有逐帧的图
-    和合成的视频:要的是视频那几份,不是第一帧。
+    和合成的视频:要的是视频那几份,不是第一帧。跑之前在图上判的是 `generation_nodes`(同一个判据):
+    工具说「我和这个生成模型是同一件事」就是按它说的。
     """
     files, _ = all_outputs(history_entry, include_previews=True)
     wanted = [one for one in files if one["media"] == kind]
