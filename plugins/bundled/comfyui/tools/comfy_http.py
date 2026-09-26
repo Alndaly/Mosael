@@ -23,6 +23,9 @@ TIMEOUT_SECONDS = 30.0
 #: 下载成片的上限。一段几百 MB 的视频在局域网里也就几十秒。
 DOWNLOAD_TIMEOUT_SECONDS = 600.0
 
+#: 出错时最多读多少正文。
+_MAX_ERROR_BODY = 1024 * 1024
+
 _OPENER = request.build_opener(request.ProxyHandler({}))
 
 
@@ -81,12 +84,14 @@ class Comfy:
         return self.request_json("POST", path, body=body)
 
     def _http_error(self, exc: error.HTTPError) -> ComfyError:
+        # 正文留全(调用方要解析它:/prompt 的校验错误带着整张可选值列表,动辄几 KB),给人看的那句才截短
         try:
-            detail = exc.read().decode("utf-8", "replace")[:400]
+            body = exc.read(_MAX_ERROR_BODY).decode("utf-8", "replace")
         except Exception:  # noqa: BLE001 — 正文读不出来也要把状态码说出来
-            detail = ""
-        return ComfyError(say(self.locale, f"ComfyUI 回了 HTTP {exc.code}:{detail or exc.reason}",
-                              f"ComfyUI answered HTTP {exc.code}: {detail or exc.reason}"), status=exc.code, body=detail)
+            body = ""
+        shown = body[:400] or exc.reason
+        return ComfyError(say(self.locale, f"ComfyUI 回了 HTTP {exc.code}:{shown}",
+                              f"ComfyUI answered HTTP {exc.code}: {shown}"), status=exc.code, body=body)
 
     # --- 接口 -------------------------------------------------------------
 

@@ -776,15 +776,23 @@ def execution_error(status: dict[str, Any]) -> str:
     return ""
 
 
+#: 校验错误里一条 details 最多留多少字:「Value not in list」的 details 带着整张可选值列表。
+_MAX_DETAIL = 160
+
+
 def validation_errors(detail: dict[str, Any]) -> str:
-    """`/prompt` 回 400 时的校验错误:顶层那句 + 每个节点的每一条。"""
+    """`/prompt` 回 400 时的校验错误:顶层那句 + 每个节点的每一条(details 截短)。"""
     lines: list[str] = []
     top = detail.get("error")
     if isinstance(top, dict) and top.get("message"):
-        lines.append(str(top["message"]))
+        # 「节点不存在 / 自定义节点没装」这类只有顶层一句,details 里说的是哪个节点
+        extra = str(top.get("details") or "")[:_MAX_DETAIL]
+        lines.append(f"{top['message']}{(' (' + extra + ')') if extra else ''}")
     for node_id, node in (detail.get("node_errors") or {}).items():
         for problem in (node or {}).get("errors") or []:
             said = problem.get("message") if isinstance(problem, dict) else problem
-            extra = problem.get("details") if isinstance(problem, dict) else ""
-            lines.append(f"#{node_id} {said}{(': ' + str(extra)) if extra else ''}")
+            extra = str(problem.get("details") or "") if isinstance(problem, dict) else ""
+            if len(extra) > _MAX_DETAIL:
+                extra = extra[:_MAX_DETAIL] + "…"
+            lines.append(f"#{node_id} {said}{(': ' + extra) if extra else ''}")
     return "; ".join(lines)

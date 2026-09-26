@@ -231,6 +231,21 @@ def test_校验不过说出是哪个节点(comfy, tmp_path: Path) -> None:
         _generate(comfy.url, tmp_path, {"model": "portrait.json"})
 
 
+def test_校验错误很长时照样逐条说出是哪个节点(comfy, tmp_path: Path) -> None:
+    """「Value not in list」的 details 带着整张可选值列表(几百个 checkpoint):回包动辄几 KB。
+    只读前 400 字再去解析 JSON,解析失败就把半截 JSON 原样甩给用户。"""
+    options = [f"model_{index:03d}.safetensors" for index in range(300)]
+    comfy.state.reject = {
+        "error": {"type": "prompt_outputs_failed_validation", "message": "Prompt outputs failed validation"},
+        "node_errors": {"4": {"class_type": "CheckpointLoaderSimple", "errors": [{
+            "type": "value_not_in_list", "message": "Value not in list",
+            "details": f"ckpt_name: 'gone.safetensors' not in {options}"}]}},
+    }
+    with pytest.raises(runtime.PluginRuntimeError, match="#4 Value not in list: ckpt_name: 'gone.safetensors'") as caught:
+        _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    assert len(str(caught.value)) < 1200, "给人看的那句不带几 KB 的可选值列表"
+
+
 def test_执行失败带出ComfyUI自己的原因(comfy, tmp_path: Path) -> None:
     comfy.state.outcome = "error"
     with pytest.raises(runtime.PluginRuntimeError, match="CUDA out of memory"):
