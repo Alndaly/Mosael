@@ -501,6 +501,9 @@ def describe(
             modes = ["image-to-video"]
         else:
             modes = ["text-to-video"] + (["reference-to-video"] if "reference_image" in counts else [])
+    elif kind == "audio":
+        # 音乐 / 音效 / 配音(ADR 0022):宿主的音频模式里通用的那一个
+        modes = ["text-to-audio"]
     else:
         has_image = any(role in counts for role in image_roles) or "mask" in counts
         modes = (["text-to-image"] if prompted and not needs_image else []) + (["image-to-image"] if has_image else [])

@@ -345,6 +345,8 @@ def run_prompt(comfy: Comfy, prompt: dict[str, Any], emit: Emit, locale: str,
 
 
 _DEFAULT_SUFFIX = {"image": ".png", "video": ".mp4", "audio": ".wav"}
+#: 用量按宿主的计量单位记(见 ai/providers/contracts/generation.metering_from_request)。
+_USAGE_UNITS = {"image": "images", "video": "videos", "audio": "audios"}
 
 
 def download(comfy: Comfy, files: list[dict[str, Any]], stem: str) -> list[dict[str, Any]]:
@@ -387,5 +389,5 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
                              "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))
     outputs = [{"path": one["path"]} for one in download(comfy, files, "comfyui")]
-    usage = {"videos": len(outputs)} if kind == "video" else {"images": len(outputs)}
+    usage = {_USAGE_UNITS.get(kind, "images"): len(outputs)}
     return {"outputs": outputs, "usage": usage, "raw": {"prompt_id": prompt_id}}

@@ -146,6 +146,18 @@ def test_反向提示词空着_用它自己存的那句(comfy, tmp_path: Path) -
     assert prompt["7"]["inputs"]["text"] == "blurry"
 
 
+def test_音频图_模式是文生音频_用量记成几段音频(comfy, tmp_path: Path) -> None:
+    comfy.state.workflows["music.json"] = {
+        "1": {"class_type": "EmptyAceStepLatentAudio", "inputs": {"seconds": 30, "batch_size": 1}},
+        "2": {"class_type": "SaveAudio", "inputs": {"audio": ["1", 0], "filename_prefix": "audio/ComfyUI"}},
+    }
+    comfy.state.outputs = {"2": {"audio": [{"filename": "ComfyUI_00001_.flac", "subfolder": "audio", "type": "output"}]}}
+    models = {one["id"]: one for one in _models(comfy.url)}
+    assert models["music.json"]["kind"] == "audio" and models["music.json"]["modes"] == ["text-to-audio"]
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "music.json", "kind": "audio", "prompt": ""})
+    assert output["usage"] == {"audios": 1}, "宿主按 audios 计量,不是 images"
+
+
 def test_进度来自WebSocket(comfy, tmp_path: Path) -> None:
     comfy.state.websocket = True
     _, hooks, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"})
