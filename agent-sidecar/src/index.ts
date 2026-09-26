@@ -173,6 +173,15 @@ async function main(): Promise<void> {
   });
   const rl = readline.createInterface({ input: process.stdin });
   send({ type: "ready" });
+  //: **一次性的请求**:后端写一帧就关 stdin(补全、压缩、刷新凭据 —— 见 backend/app/ai/sidecar/adapters.py),
+  //: 结果只从 stdout 回。读循环结束时它们多半还在路上(一次模型请求要几秒),退出前得等它们把结果写出去 ——
+  //: 此前读循环一结束就 exit,这三种请求**一个都送不回结果**,后端只拿到这段启动日志当报错(「写不出来」)。
+  //: 对话轮次不在这里:stdin 关了说明后端不要它了,挂着的轮次正是「stdin 关了就退」要甩掉的东西。
+  const oneShots = new Set<Promise<unknown>>();
+  const oneShot = (work: Promise<unknown>) => {
+    oneShots.add(work);
+    void work.finally(() => oneShots.delete(work));
+  };
   log("started; awaiting run_turn frames on stdin");
   for await (const line of rl) {
     const trimmed = line.trim();
@@ -198,8 +207,8 @@ async function main(): Promise<void> {
             running.delete(msg.turnId);
           });
       } else if (msg.type === "gateway_complete") {
-        void handleGatewayCompletion(msg).catch((err) =>
-          send({ type: "error", turnId: msg.turnId, message: String(err) }),
+        oneShot(
+          handleGatewayCompletion(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) })),
         );
       } else if (msg.type === "steer") {
         const agent = active.get(msg.turnId);
@@ -223,12 +232,12 @@ async function main(): Promise<void> {
         }
         send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && msg.prompts.length > 0 });
       } else if (msg.type === "refresh_credential") {
-        void handleRefreshCredential(msg).catch((err) =>
-          send({ type: "error", turnId: msg.turnId, message: String(err) }),
+        oneShot(
+          handleRefreshCredential(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) })),
         );
       } else if (msg.type === "compact") {
         // 同样不 await:压缩要调一次模型做摘要,期间 stdin 仍要能收 abort。
-        void handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) }));
+        oneShot(handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) })));
       } else if (msg.type === "abort") {
         const agent = active.get(msg.turnId);
         if (agent) agent.abort();
@@ -264,8 +273,13 @@ async function main(): Promise<void> {
   // **真的退出**,而不是让 main() 返回。轮次是故意不 await 的,读循环结束时可能还挂着一次
   // 没返回的模型请求 —— 那些 promise 会把事件循环钉住(远端任务的轮询上限是六小时),
   // 于是"stdin 关了就退"这句日志打完,进程还在。
+  if (oneShots.size > 0) {
+    log(`stdin closed; finishing ${oneShots.size} one-shot request(s) first`);
+    await Promise.allSettled([...oneShots]);
+  }
   log("stdin closed; exiting");
-  process.exit(0);
+  //: 等 stdout 写空再退:往管道写是异步的,直接 exit 会把最后那一帧结果截掉。
+  process.stdout.write("", () => process.exit(0));
 }
 
 main().catch((err) => {
