@@ -44,9 +44,16 @@ export const CodeEditor = React.forwardRef<
     onBlur?: () => void;
     /** 一打开就把光标放进去(弹窗里只有它一个要填的东西时)。 */
     autoFocus?: boolean;
+    /**
+     * 贴在编辑器顶边的一条工具栏(格式化、清空这类**作用于这段代码**的次要动作),和编辑器共用一个外框。
+     *
+     * 放这里而不是调用方的弹窗底部:那些动作放在「取消 / 保存」旁边,读起来像是弹窗的动作,
+     * 而且和主按钮挤在一行分不清主次。工具栏里放 `size="xs"` 的按钮 —— 全应用工具栏的刻度。
+     */
+    toolbar?: React.ReactNode;
   }
 >(function CodeEditor(
-  { value, onChange, language, minHeight = 96, maxHeight = 320, placeholder, gutter = true, onBlur, autoFocus },
+  { value, onChange, language, minHeight = 96, maxHeight = 320, placeholder, gutter = true, onBlur, autoFocus, toolbar },
   ref,
 ) {
   const dark = useIsDark();
@@ -82,9 +89,23 @@ export const CodeEditor = React.forwardRef<
       //    vertical-align:baseline),于是它按文字基线坐,而不是按行框居中,看着整体偏下。
       //    改成 flex 居中,箭头就落在行的正中。不给 leading-none —— 那会让裁切的文字被
       //    削掉顶和底(见 app/clippedText.test.ts 那道护栏),而 flex 居中本身已经够了。
-      className="h-fit overflow-hidden rounded-md border border-field-border focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)] [&_.cm-foldGutter_.cm-gutterElement]:flex [&_.cm-foldGutter_.cm-gutterElement]:items-center [&_.cm-foldGutter_.cm-gutterElement]:justify-center"
+      // 4) 底色和聚焦跟输入框(ui/input)走同一套 token:底是 bg-field、聚焦是 ring-2 ring-ring。
+      //    CodeMirror 自带主题的底色(浅色 #fff、深色 one-dark 的 #282c34)是写死的,深色下是一块
+      //    发蓝的灰,和应用的中性深色、弹窗里半透明的 --field 都不是一家;所以编辑器和行号槽一律透明,
+      //    底色只由外框给。聚焦**只认编辑器本身**(.cm-focused),不用 focus-within —— 否则点一下
+      //    工具栏上的按钮,整个编辑器也跟着亮起聚焦框。
+      className="h-fit overflow-hidden rounded-md border border-field-border bg-field transition-shadow has-[.cm-focused]:ring-2 has-[.cm-focused]:ring-ring [&_.cm-editor]:bg-transparent! [&_.cm-gutters]:bg-transparent! [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)] [&_.cm-foldGutter_.cm-gutterElement]:flex [&_.cm-foldGutter_.cm-gutterElement]:items-center [&_.cm-foldGutter_.cm-gutterElement]:justify-center"
       style={{ "--cm-min-h": `${minHeight}px` } as React.CSSProperties}
     >
+      {toolbar && (
+        <div
+          role="toolbar"
+          data-slot="code-editor-toolbar"
+          className="flex min-w-0 items-center gap-1 border-b border-field-border py-0.5 pl-2.5 pr-1"
+        >
+          {toolbar}
+        </div>
+      )}
       <CodeMirror
         ref={cmRef}
         value={value}

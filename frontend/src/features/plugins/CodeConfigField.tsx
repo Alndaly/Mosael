@@ -1,5 +1,5 @@
 import React from "react";
-import { Braces, Pencil } from "lucide-react";
+import { Braces, Eraser, Pencil, Undo2 } from "lucide-react";
 
 import type { PluginField } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -69,7 +69,23 @@ export function codeSummary(text: string): { lines: number; placeholders: number
   return { lines: trimmed.split("\n").length, placeholders: placeholders.size };
 }
 
-/** 编辑器本体 + 校验那一行。新建连接的弹窗里直接用它,连接卡片上包在弹窗里用。 */
+/** 编辑器能读出的语言名,贴在工具栏左边;纯文本不标。 */
+function languageTag(field: PluginField): string {
+  if (field.type === "json") return "JSON";
+  const language = (field.language ?? "").trim();
+  return language && language !== "text" ? language.toUpperCase() : "";
+}
+
+/**
+ * 编辑器本体 + 贴在它顶边的工具栏 + 校验那一行。新建连接的弹窗里直接用它,连接卡片上包在弹窗里用。
+ *
+ * 「格式化 / 清空」长在**编辑器的工具栏**里,不在弹窗底部:它们作用于这段代码,不是弹窗的动作;
+ * 放在「取消 / 保存」那一行时一个灰一个黑、一个有图标一个没有,和主按钮挤在一起分不清主次。
+ * 在这里它们是一家:同一个 ghost + xs(工具栏刻度)、都带图标、都是次要色。
+ *
+ * 「清空」不弹确认,而是**当场可撤销**:清空后那个位置换成「撤销」,一敲字就作废 ——
+ * 确认框对一个随手就能撤回的动作是多余的一步,可一段几百行的模板被一下清掉又必须能找回来。
+ */
 export function CodeFieldEditor({
   field,
   value,
@@ -77,6 +93,7 @@ export function CodeFieldEditor({
   minHeight = 160,
   maxHeight = 360,
   autoFocus,
+  disabled = false,
 }: {
   field: PluginField;
   value: string;
@@ -84,20 +101,84 @@ export function CodeFieldEditor({
   minHeight?: number;
   maxHeight?: number;
   autoFocus?: boolean;
+  /** 外面正在保存:工具栏的动作先按不动(编辑器照常显示)。 */
+  disabled?: boolean;
 }) {
   const t = useI18n();
   const language = field.type === "json" ? "json" : field.language || "text";
   const problem = field.type === "json" ? jsonProblem(value) : null;
+  const tag = languageTag(field);
+  // 清空前的原文。只在「清空之后还没再动过」这段时间里有效:一敲字就作废。
+  const [cleared, setCleared] = React.useState<string | null>(null);
+  const canUndo = cleared !== null && value === "";
+
+  const edit = (next: string) => {
+    setCleared(null);
+    onChange(next);
+  };
+  const format = () => {
+    try {
+      edit(JSON.stringify(JSON.parse(value), null, 2));
+    } catch {
+      // 不合法的 JSON 没法格式化;编辑器下面那一行已经在说哪里不对
+    }
+  };
+  const clear = () => {
+    onChange("");
+    setCleared(value);
+  };
+  const undoClear = () => {
+    if (cleared === null) return;
+    edit(cleared);
+  };
+
   return (
-    <div className="grid min-w-0 gap-1.5">
+    <div role="group" aria-label={field.label} className="grid min-w-0 gap-1.5">
       <CodeEditor
         value={value}
-        onChange={onChange}
+        onChange={edit}
         language={language}
         minHeight={minHeight}
         maxHeight={maxHeight}
         autoFocus={autoFocus}
         placeholder={field.type === "json" ? "{ }" : undefined}
+        toolbar={
+          <>
+            {tag && <span className="font-mono text-ui-xs tracking-wide text-muted-foreground">{tag}</span>}
+            <span className="flex-1" />
+            {field.type === "json" && (
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="text-muted-foreground"
+                disabled={disabled || !value.trim() || Boolean(problem)}
+                onClick={format}
+              >
+                <Braces />
+                {t("pluginCodeFormat")}
+              </Button>
+            )}
+            {canUndo ? (
+              <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={disabled} onClick={undoClear}>
+                <Undo2 />
+                {t("undo")}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="text-muted-foreground"
+                disabled={disabled || !value}
+                onClick={clear}
+              >
+                <Eraser />
+                {t("pluginCodeClear")}
+              </Button>
+            )}
+          </>
+        }
       />
       {problem && (
         <p role="alert" className="m-0 text-ui-xs leading-[1.5] text-destructive">
@@ -150,13 +231,6 @@ export function CodeConfigControl({
       setSaving(false);
     }
   };
-  const format = () => {
-    try {
-      setDraft(JSON.stringify(JSON.parse(draft), null, 2));
-    } catch {
-      // 不合法的 JSON 没法格式化;编辑器下面那一行已经在说哪里不对
-    }
-  };
 
   return (
     <>
@@ -182,29 +256,21 @@ export function CodeConfigControl({
         title={t("pluginCodeEditTitle").replace("{label}", field.label)}
         className="w-[760px] max-w-[calc(100vw-32px)]"
         footer={
-          <div className="flex w-full items-center gap-2">
-            {field.type === "json" && (
-              <Button variant="ghost" disabled={saving || !draft.trim() || Boolean(problem)} onClick={format}>
-                <Braces size={13} />
-                {t("pluginCodeFormat")}
-              </Button>
-            )}
-            <Button variant="ghost" disabled={saving || !draft} onClick={() => setDraft("")}>
-              {t("pluginCodeClear")}
-            </Button>
-            <span className="flex-1" />
+          <>
             <Button variant="outline" disabled={saving} onClick={() => setOpen(false)}>
               {t("cancel")}
             </Button>
             <Button loading={saving} disabled={Boolean(problem) || draft === value} onClick={() => void save()}>
               {t("save")}
             </Button>
-          </div>
+          </>
         }
       >
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {field.help && (
-            <p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">
+            // 说明里常有一串行内代码(占位符),它们挨着排、会折行:行距放宽到 1.75 让上下两行的
+            // 代码底色不贴在一起,每个代码片段整体换行,不在自己中间断开。
+            <p className="m-0 text-ui-sm leading-[1.75] text-muted-foreground [&_code]:whitespace-nowrap">
               <InlineMarkdown text={field.help} />
             </p>
           )}
@@ -213,7 +279,15 @@ export function CodeConfigControl({
               {serverError}
             </p>
           )}
-          <CodeFieldEditor field={field} value={draft} onChange={setDraft} minHeight={320} maxHeight={560} autoFocus />
+          <CodeFieldEditor
+            field={field}
+            value={draft}
+            onChange={setDraft}
+            minHeight={320}
+            maxHeight={560}
+            autoFocus
+            disabled={saving}
+          />
         </div>
       </ModalShell>
     </>

@@ -361,7 +361,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
  * 和端口,而 Blender 插件那个「已关闭」(其实是"关闭上游遥测")完全猜不出来 —— 标签一直在
  * 清单里,只是被塞进了 placeholder,而 placeholder 只在空着时显示。
  */
-function NewConnectionDialog({
+export function NewConnectionDialog({
   pkg, open, onOpenChange, draft, setDraft, pending, onCreate,
 }: {
   pkg: PluginPackage;
@@ -399,33 +399,38 @@ function NewConnectionDialog({
     >
       <div className="grid gap-4">
         <p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">{hint}</p>
-        {fields.map((field) => (
-          <label key={field.key} className="grid min-w-0 gap-1.5">
-            <span className="text-ui-sm font-medium text-foreground">{field.label}</span>
-            {isCodeField(field) ? (
-              <CodeFieldEditor
-                field={field}
-                value={draft[field.key] ?? field.default}
-                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-                minHeight={120}
-                maxHeight={280}
-              />
-            ) : (
-              <FieldInput
-                field={field}
-                value={draft[field.key] ?? field.default}
-                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-              />
-            )}
-            {/* 清单里的 help 此前一个字都没显示。Blender 插件那条正是用户会撞到的限制:
-                「互通要求 Blender 与后端在同一台电脑」。 */}
-            {field.help && (
-              <small className="text-ui-xs leading-[1.5] text-muted-foreground">
-                <InlineMarkdown text={field.help} />
-              </small>
-            )}
-          </label>
-        ))}
+        {fields.map((field) => {
+          // 代码字段不能包在 <label> 里:编辑器不是可被 label 关联的控件,而它的工具栏里有按钮 ——
+          // label 会把点击转给它里面**第一个按钮**,于是点一下字段标题就等于点了「格式化」。
+          const Row = isCodeField(field) ? "div" : "label";
+          return (
+            <Row key={field.key} className="grid min-w-0 gap-1.5">
+              <span className="text-ui-sm font-medium text-foreground">{field.label}</span>
+              {isCodeField(field) ? (
+                <CodeFieldEditor
+                  field={field}
+                  value={draft[field.key] ?? field.default}
+                  onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+                  minHeight={120}
+                  maxHeight={280}
+                />
+              ) : (
+                <FieldInput
+                  field={field}
+                  value={draft[field.key] ?? field.default}
+                  onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+                />
+              )}
+              {/* 清单里的 help 此前一个字都没显示。Blender 插件那条正是用户会撞到的限制:
+                  「互通要求 Blender 与后端在同一台电脑」。 */}
+              {field.help && (
+                <small className="text-ui-xs leading-[1.5] text-muted-foreground">
+                  <InlineMarkdown text={field.help} />
+                </small>
+              )}
+            </Row>
+          );
+        })}
       </div>
     </ModalShell>
   );
