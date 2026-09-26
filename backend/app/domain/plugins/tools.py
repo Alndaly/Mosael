@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -34,6 +35,8 @@ from app.domain.plugins.runtime import (
     execute_tool,
     stream_tool,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _short_description_label(description: str) -> str:
@@ -355,6 +358,7 @@ def invoke(
         invocation.status, invocation.output = "succeeded", output
     except (PluginRuntimeError, McpBridgeError, ArtifactError, PluginDomainError) as exc:
         invocation.status, invocation.error = "failed", str(exc)
+        _persist_failed_state(db, instance, exc)
     except Exception as exc:  # noqa: BLE001 — runtime must never bubble
         invocation.status, invocation.error = "failed", tr("pluginErr_runtimeCrashed", detail=str(exc))
     finally:
@@ -475,11 +479,23 @@ def invoke_host(
         invocation.error = str(exc) if isinstance(exc, (PluginRuntimeError, PluginDomainError, ArtifactError)) else tr(
             "pluginErr_runtimeCrashed", detail=str(exc)
         )
+        _persist_failed_state(db, instance, exc, notify=False)
         if record:
             db.commit()
         raise
     finally:
         cleanup_scratch_dir(scratch)
+
+
+def _persist_failed_state(db: Session, instance: PluginInstance, exc: BaseException, *, notify: bool = True) -> None:
+    """插件失败时交回的 `state` 照样落库(见 runtime._final_response)。落不下只记日志 —— 那不该盖掉这次失败本身的原因。"""
+    state = getattr(exc, "state", None)
+    if not isinstance(exc, PluginRuntimeError) or not state:
+        return
+    try:
+        plugin_state.persist(db, instance, state, notify=notify)
+    except PluginDomainError:
+        logger.warning("插件 %s 失败时交回的状态没能记下", instance.id, exc_info=True)
 
 
 #: 调用记录里一个值最多留多长。生成的提示词可能很长,参数表可能很大;记录是给人翻的,不是存档。

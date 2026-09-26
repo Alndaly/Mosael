@@ -197,3 +197,22 @@ class Test顺序:
         persist_at = code.index("plugin_state.persist(")
         collect_at = code.index("output = _collect_artifact(")
         assert persist_at < collect_at, "收产出排在了落状态前面"
+
+
+class Test失败时交回的状态也要记住:
+    def test_续了令牌之后这次调用失败_新令牌照样落库(self, tmp_path) -> None:
+        """百度换 access_token 时会**连 refresh_token 一起轮换**,旧的当场作废。插件续完令牌、重试却撞上
+        「文件不存在」这类与令牌无关的失败时,此前宿主只在成功时读 `state` —— 新令牌随失败一起丢了,
+        下一次拿着已作废的 refresh_token 去换,用户只能重新授权。"""
+        ws, instance_id = install(
+            tmp_path,
+            """
+            import json, sys
+            sys.stdin.read()
+            print(json.dumps({"ok": False, "error": "文件不存在", "state": {"TOKEN": "续出来的"}}))
+            """,
+        )
+        with SessionLocal() as db:
+            invocation = invoke(db, instance_id, "go", {}, workspace_id=ws)
+            assert invocation.status == "failed" and "文件不存在" in (invocation.error or "")
+            assert inst.credential_values(db, instance_id)["TOKEN"] == "续出来的"

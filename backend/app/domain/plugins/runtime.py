@@ -78,6 +78,9 @@ MAX_OUTPUT_BYTES = 1_000_000
 class PluginRuntimeError(LocalizedError, RuntimeError):
     """插件进程没跑成。带文案 key(`pluginErr_*`);插件自己报的原因走 `pluginErr_upstream`。"""
 
+    #: 插件**失败时**交回的 `state`(见 _final_response)。只读的类属性当缺省,出错时才换成一份新的。
+    state: dict[str, Any] = {}
+
 
 class PluginCancelled(PluginRuntimeError):
     """调用方(用户)取消了这次调用。不是插件坏了 —— 调用方据此把任务记成「已取消」而不是「失败」。"""
@@ -265,15 +268,19 @@ def _final_response(response: Any) -> ToolResult:
     """最后那一个 JSON 对象 → 结果。一问一答和流式两条路共用这一段判读。"""
     if not isinstance(response, dict):
         raise PluginRuntimeError("pluginErr_outputNotObject")
+    state = response.get("state")
     if not response.get("ok"):
         said = str(response.get("error") or "")
-        if said:
-            raise PluginRuntimeError("pluginErr_upstream", detail=said)
-        raise PluginRuntimeError("pluginErr_failedNoReason")
+        error = PluginRuntimeError("pluginErr_upstream", detail=said) if said else PluginRuntimeError(
+            "pluginErr_failedNoReason")
+        # **失败也可能带着要记住的东西**:令牌续好了、重试却撞上一个与令牌无关的失败。百度换令牌时连
+        # refresh_token 一起轮换、旧的当场作废 —— 这份丢了,下一次只能让用户重新授权。落库归调用方(tools)。
+        if isinstance(state, dict):
+            error.state = dict(state)
+        raise error
     output = response.get("output")
     if not isinstance(output, dict):
         raise PluginRuntimeError("pluginErr_outputNoOutput")
-    state = response.get("state")
     if state is not None and not isinstance(state, dict):
         raise PluginRuntimeError("pluginErr_stateNotObject")
     return ToolResult(output=output, state=dict(state or {}))

@@ -45,12 +45,21 @@ atexit.register(lambda: sys.stderr.write("CALLS=" + json.dumps(_CALLS, ensure_as
 """
 
 
-def run(tool: str, payload: dict, responses: list, env: dict | None = None) -> tuple[dict, list]:
-    """跑一次插件,返回 (响应, 它发出去的请求)。"""
+def run(tool: str, payload: dict, responses: list, env: dict | None = None,
+        locale: str | None = None) -> tuple[dict, list]:
+    """跑一次插件,返回 (响应, 它发出去的请求)。响应是 stdout 的**最后一行** —— 流式工具前面还有进度行。"""
+    out, calls, _ = run_streaming(tool, payload, responses, env, locale)
+    return out, calls
+
+
+def run_streaming(tool: str, payload: dict, responses: list, env: dict | None = None,
+                  locale: str | None = None) -> tuple[dict, list, list]:
+    """同 run,另外交回进度行。"""
     script = STUB.format(responses=json.dumps(responses)) + "\n" + ENTRY.read_text(encoding="utf-8")
+    request = {"tool": tool, "input": payload, **({"locale": locale} if locale else {})}
     result = subprocess.run(
         [sys.executable, "-c", script],
-        input=json.dumps({"tool": tool, "input": payload}),
+        input=json.dumps(request),
         capture_output=True,
         text=True,
         timeout=30,
@@ -65,7 +74,8 @@ def run(tool: str, payload: dict, responses: list, env: dict | None = None) -> t
     )
     assert result.returncode == 0, result.stderr
     calls = json.loads(result.stderr.split("CALLS=", 1)[1]) if "CALLS=" in result.stderr else []
-    return json.loads(result.stdout), calls
+    lines = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+    return lines[-1], calls, lines[:-1]
 
 
 LIST_OK = {
@@ -479,3 +489,112 @@ class Test上传:
         assert upload["input_schema"]["properties"]["asset_id"]["format"] == "asset"
         source = ENTRY.read_text(encoding="utf-8")
         assert "os.path.isfile(local)" in source, "没把它当路径用"
+
+
+class Test这一轮修掉的:
+    def test_上传时令牌过期_也会续期重试(self, tmp_path) -> None:
+        """此前 precreate / create 绕开了续期那个口子:令牌一过期,列目录、导入自己续好了,上传却直接报错。"""
+        local = tmp_path / "a.mp4"
+        local.write_bytes(b"x" * 10)
+        out, calls = run(
+            "pan_upload", {"asset_id": str(local), "path": "/a.mp4"},
+            [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R"}, UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CREATE],
+        )
+        assert out["ok"], out.get("error")
+        assert "oauth/2.0/token" in calls[1]["url"]
+        assert "access_token=NEW" in calls[2]["url"] and "method=precreate" in calls[2]["url"]
+        assert out["state"]["BAIDU_PAN_ACCESS_TOKEN"] == "NEW"
+
+    def test_同一次调用里第二次续期_用的是刚轮换出来的refresh_token(self, tmp_path) -> None:
+        """百度换令牌时连 refresh_token 一起轮换、旧的当场作废。一次上传里 precreate 和 create 各续一次时,
+        第二次还拿环境变量里那个旧的去换,换来的是「refresh_token 已作废」。"""
+        local = tmp_path / "a.mp4"
+        local.write_bytes(b"x" * 10)
+        out, calls = run(
+            "pan_upload", {"asset_id": str(local), "path": "/a.mp4"},
+            [{"errno": 111}, {"access_token": "A2", "refresh_token": "R2"}, UPLOAD_PRE, UPLOAD_CHUNK,
+             {"errno": 111}, {"access_token": "A3", "refresh_token": "R3"}, UPLOAD_CREATE],
+        )
+        assert out["ok"], out.get("error")
+        refreshes = [c["url"] for c in calls if "oauth/2.0/token" in c["url"]]
+        assert "refresh_token=R2" in refreshes[1], "第二次续期还在用已经作废的那个 refresh_token"
+        assert out["state"] == {"BAIDU_PAN_ACCESS_TOKEN": "A3", "BAIDU_PAN_REFRESH_TOKEN": "R3"}
+
+    def test_续完令牌之后失败了_令牌照样交回去(self) -> None:
+        """续期成功、重试却撞上「文件不存在」:旧的 refresh_token 已经作废,这份新的不交回去,下一次只能重新授权。"""
+        out, _ = run("pan_list", {}, [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R2"}, {"errno": -9}])
+        assert out["ok"] is False and "不存在" in out["error"]
+        assert out["state"] == {"BAIDU_PAN_ACCESS_TOKEN": "NEW", "BAIDU_PAN_REFRESH_TOKEN": "R2"}
+
+    def test_上传按流式协议报进度(self, tmp_path) -> None:
+        """此前没有进度、也没声明预算(默认 60 秒):几百 MB 的成片必然超时,而用户什么都看不到。"""
+        local = tmp_path / "big.mp4"
+        local.write_bytes(b"x" * (9 * 1024 * 1024))
+        out, _, progress = run_streaming(
+            "pan_upload", {"asset_id": str(local), "path": "/big.mp4"},
+            [UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CHUNK, UPLOAD_CHUNK, UPLOAD_CREATE],
+        )
+        assert out["ok"], out.get("error")
+        assert [p["event"] for p in progress] == ["progress"] * 3 and progress[-1]["progress"] == 1.0
+        manifest = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
+        upload = next(t for t in manifest["tools"]["declare"] if t["name"] == "pan_upload")
+        assert upload["stream"] is True and upload["timeout_seconds"] == 1800
+
+    def test_取消时停在片与片之间(self, tmp_path) -> None:
+        local = tmp_path / "big.mp4"
+        local.write_bytes(b"x" * (9 * 1024 * 1024))
+        flag = tmp_path / "cancel"
+        flag.write_text("1")
+        out, calls = run("pan_upload", {"asset_id": str(local), "path": "/big.mp4"}, [UPLOAD_PRE],
+                         env={"MOSAEL_PLUGIN_CANCEL_FILE": str(flag)})
+        assert out["ok"] is False and "取消" in out["error"]
+        assert not [c for c in calls if "superfile2" in c["url"]]
+
+    def test_每一片的表单分隔符都不一样(self, tmp_path) -> None:
+        """写死的分隔符碰上一段恰好含着那串字节的视频,表单就被切断了。"""
+        local = tmp_path / "big.mp4"
+        local.write_bytes(b"x" * (5 * 1024 * 1024))
+        _, calls = run("pan_upload", {"asset_id": str(local), "path": "/big.mp4"},
+                       [UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CHUNK, UPLOAD_CREATE])
+        boundaries = {c["headers"].get("Content-type") for c in calls if "superfile2" in c["url"]}
+        assert len(boundaries) == 2
+
+    def test_网盘路径没写根也认(self, tmp_path) -> None:
+        """`我的资源/成片.mp4` 这种相对写法,百度按参数错误拒掉,而错误里不说为什么。"""
+        local = tmp_path / "a.mp4"
+        local.write_bytes(b"x")
+        _, calls = run("pan_upload", {"asset_id": str(local), "path": "我的资源/成片.mp4"},
+                       [UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CREATE])
+        assert "path=%2F%E6%88%91" in calls[0]["body"]
+
+    def test_fs_id_不是数字时说人话(self) -> None:
+        out, calls = run("pan_import", {"fs_id": "成片.mp4"}, [])
+        assert out["ok"] is False and "数字" in out["error"] and "内部错误" not in out["error"]
+        assert calls == []
+
+    def test_导入目录时说清楚(self) -> None:
+        out, _ = run("pan_import", {"fs_id": "222"},
+                     [{"errno": 0, "list": [{"fs_id": 222, "isdir": 1, "dlink": "https://d/x?y=1"}]}])
+        assert out["ok"] is False and "目录" in out["error"]
+
+    def test_列目录截掉的要说出来_给出下一页从哪儿开始(self) -> None:
+        """此前只截不说:57 条里给了 2 条,调用方以为目录里就这两个。"""
+        many = {"errno": 0, "list": [
+            {"fs_id": i, "server_filename": f"f{i}", "path": f"/f{i}", "isdir": 0, "size": 1} for i in range(57)
+        ]}
+        out, _ = run("pan_list", {"limit": 2}, [many])
+        assert out["output"]["has_more"] is True and out["output"]["next_start"] == 2
+        out, calls = run("pan_list", {"limit": 100, "start": 100}, [LIST_OK])
+        assert "start=100" in calls[0]["url"]
+        assert out["output"]["has_more"] is False and "next_start" not in out["output"]
+
+    def test_搜索截掉的也说出来(self) -> None:
+        many = {"errno": 0, "list": [
+            {"fs_id": i, "server_filename": f"f{i}", "path": f"/f{i}", "isdir": 0, "size": 1} for i in range(5)
+        ]}
+        out, _ = run("pan_search", {"keyword": "f", "limit": 3}, [many])
+        assert out["output"]["has_more"] is True
+
+    def test_按调用方的语言说(self) -> None:
+        out, _ = run("pan_list", {}, [{"errno": -9}], locale="en")
+        assert out["ok"] is False and "does not exist" in out["error"]
