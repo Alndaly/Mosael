@@ -17,14 +17,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import get_current_locale, tr
+from app.core.i18n import tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import GENERATION, HOST_ONLY_CAPABILITIES, Manifest, localized_tool, text_of
+from app.domain.plugins.manifest import GENERATION, HOST_ONLY_CAPABILITIES, Manifest, localized_tool, text_of, tool_label
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
 from app.domain.plugins.runtime import (
     PluginRuntimeError,
@@ -37,41 +37,6 @@ from app.domain.plugins.runtime import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _short_description_label(description: str) -> str:
-    """从缺少 ``title`` 的旧 MCP 工具描述里取一个可读名称。
-
-    MCP 的 ``Tool.title`` 是可选字段，TikHub 等不少服务只把短名称写在 description，形如
-    ``获取视频详情/Get video detail``。把整段描述永远当标题会制造另一种坏 UI，所以这里只
-    接受第一行里足够短的一半；不满足就继续回退到人性化后的稳定名。
-    """
-    first_line = next((line.strip() for line in description.splitlines() if line.strip()), "")
-    if not first_line:
-        return ""
-    parts = [part.strip() for part in first_line.split("/", 1)]
-    locale = get_current_locale()
-    candidate = parts[1] if locale == "en" and len(parts) > 1 else parts[0]
-    candidate = candidate.strip().rstrip("。.!！?？;；")
-    return candidate if 1 <= len(candidate) <= 48 else ""
-
-
-def _humanize_tool_name(name: str) -> str:
-    """最后一道展示兜底；稳定的调用名仍原样保存在 ``name``。"""
-    words = " ".join(name.replace("-", "_").split("_")).strip()
-    return words[:1].upper() + words[1:] if words else name
-
-
-def _display_label(tool: dict[str, Any], override_label: str = "") -> str:
-    """插件工具唯一的展示名称解析入口。"""
-    description = text_of(tool.get("description"))
-    return (
-        override_label.strip()
-        or text_of(tool.get("title"))
-        or text_of(tool.get("label"))
-        or _short_description_label(description)
-        or _humanize_tool_name(str(tool.get("name") or ""))
-    )
 
 
 #: 插件自己能声明的最长预算。再长的活该拆步(先准备、再干活),而不是让一次调用挂半小时。
@@ -148,10 +113,11 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
         # 两个来源:工具自己声明的(进程插件写在 declare 里),和 overrides 里覆盖的
         # (MCP 插件只能这么写 —— 它的清单是从服务拉的)。任一处标了就算。
         read_only = bool((override and override.read_only) or tool.get("read_only"))
+        node = (override.node if override else None) or tool.get("node")
         out.append(
             {
                 "name": tool["name"],
-                "label": _display_label(tool, override.label if override else ""),
+                "label": tool_label({**tool, "node": node}, override.label if override else ""),
                 "description": description,
                 "input_schema": tool.get("input_schema") or {"type": "object", "properties": {}},
                 "read_only": read_only,
@@ -163,7 +129,7 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                     declared=(override.effects if override and override.effects else None) or tool.get("effects"),
                     default=manifest.default_effects or None,
                 ),
-                "node": (override.node if override else None) or tool.get("node"),
+                "node": node,
                 # 只给宿主调的:清单上标了 internal 的,和认领了「只给宿主」那类能力的(生成)——
                 # 后者说的是一套流式协议,智能体和工作流调不了、也不该调(见 manifest.HOST_ONLY_CAPABILITIES)。
                 "internal": bool((override and override.internal) or (_claims(tool) & HOST_ONLY_CAPABILITIES)),
@@ -247,10 +213,14 @@ def exposed(db: Session, user_id: str | None) -> list[dict[str, Any]]:
         if package is None:
             continue
         chosen = inst.exposed_tools(db, instance.id)
+        #: 插件叫什么(按此刻的语言)。节点按包聚合(见 nodes.plugin_node_types),所以节点、画板菜单上
+        #: 标「出自哪儿」用的是它,不是连接名 —— 连接名是「阿里云 OSS · 某个桶」这种本机事实。
+        package_name = inst.manifest_for(db, instance).name
         for tool in all_tools(db, instance):
             if tool["name"] not in chosen or tool["internal"]:
                 continue
-            out.append({**tool, "instance_id": instance.id, "instance_name": instance.name, "package_id": package.id})
+            out.append({**tool, "instance_id": instance.id, "instance_name": instance.name,
+                        "package_id": package.id, "package_name": package_name})
     return out
 
 

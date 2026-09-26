@@ -3,7 +3,7 @@ import { Languages, Package, Sparkles } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo } from "@/api/client";
 import { DEFAULT_SIZE, kindIcon } from "@/features/boards/boardNodes";
-import { boardToolFace, boardToolIcon, boardToolOptions, toolCellKind, toolCellSize } from "@/features/boards/boardTools";
+import { boardToolFace, boardToolIcon, boardToolOptions, boardToolSubtitle, firstSentence, toolCellKind, toolCellSize } from "@/features/boards/boardTools";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 
 /** 形状和 GET /api/boards/producers 发下来的一样(后端已按 board_group 排好、同组挨着)。 */
@@ -19,7 +19,7 @@ describe("画板上的工具怎么分组(boardToolOptions)", () => {
   const producers = [
     producer("write", "写字", { hosts: ["note"], fills_empty_slot: true }),
     producer("node:plugin.comfy.wf_1", "工作流 · 文生图", {
-      board_group: "new", board_group_label: "产出新素材", board_description: "按提示词出图", plugin_name: "ComfyUI · 本机", tool_name: "wf_1",
+      board_group: "new", board_group_label: "产出新素材", board_description: "按提示词出图", plugin_name: "ComfyUI", tool_name: "wf_1",
     }),
     producer("node:video_to_gif", "视频转 GIF", { board_group: "video", board_group_label: "处理视频", board_description: "把一段视频做成 GIF 动图" }),
     producer("node:separate_audio", "分离人声与背景音", { board_group: "audio", board_group_label: "处理音频", board_description: "拆成人声和背景音" }),
@@ -41,7 +41,7 @@ describe("画板上的工具怎么分组(boardToolOptions)", () => {
 
   it("副标题是画板那一句说明(插件工具点名出处),不是带 {{…}} 的节点说明;调用名能搜", () => {
     const [comfy, gif] = boardToolOptions(producers);
-    expect(comfy.description).toBe("ComfyUI · 本机 · 按提示词出图");
+    expect(comfy.description).toBe("ComfyUI · 按提示词出图");
     expect(comfy.keywords).toEqual(["wf_1"]);
     expect(gif.description).toBe("把一段视频做成 GIF 动图");
     expect(boardToolOptions(producers).every((one) => !one.description.includes("{{"))).toBe(true);
@@ -62,6 +62,30 @@ describe("画板上的工具怎么分组(boardToolOptions)", () => {
     //: 没见过的组(后端多了一种)也有图标,不会是一行空着的;原型链上的名字不算节点类型。
     expect(boardToolIcon({ type: "plugin.x.y", board_group: "someday" })).toBe(kindIcon("action"));
     expect(boardToolIcon({ type: "constructor", board_group: "" })).toBe(kindIcon("action"));
+  });
+});
+
+describe("菜单里工具那一行的副标题(boardToolSubtitle)", () => {
+  const tool = (label: string, extra: Partial<BoardProducerInfo> = {}) =>
+    ({ label, plugin_name: "", board_description: "", board_group_label: "产出新素材", ...extra }) as BoardProducerInfo;
+
+  it("说明只取第一句、去掉 markdown 记号 —— 两颗星号不上菜单", () => {
+    expect(firstSentence("把桶里的一个对象拉回素材库。**交回的是地址** —— 进度归宿主。")).toBe("把桶里的一个对象拉回素材库。");
+    expect(firstSentence("Pull an object back. The **host** moves the bytes.")).toBe("Pull an object back.");
+    expect(firstSentence("**只有加粗的一句**")).toBe("只有加粗的一句");
+    //: 版本号里的点不是句末。
+    expect(firstSentence("Works with v1.5 and later")).toBe("Works with v1.5 and later");
+  });
+
+  it("出处只写插件名;名字已经以它开头就不再念一遍;和名字一样的说明不重复", () => {
+    expect(boardToolSubtitle(tool("从对象存储取回", { plugin_name: "对象存储", board_description: "把桶里的一个对象拉回素材库。" })))
+      .toBe("对象存储 · 把桶里的一个对象拉回素材库。");
+    expect(boardToolSubtitle(tool("ComfyUI 服务器状态", { plugin_name: "ComfyUI", board_description: "看一眼显存。" }))).toBe("看一眼显存。");
+    expect(boardToolSubtitle(tool("把对象拉回素材库。", { plugin_name: "对象存储", board_description: "把对象拉回素材库。**交地址**" }))).toBe("对象存储");
+  });
+
+  it("什么都没说的工具也不空着:退到它那一组", () => {
+    expect(boardToolSubtitle(tool("转一下"))).toBe("产出新素材");
   });
 });
 

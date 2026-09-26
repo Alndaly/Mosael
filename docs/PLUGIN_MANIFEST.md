@@ -791,7 +791,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `skills` | 给别的智能体看的高层描述 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
-| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。工具名以字母开头,只用字母、数字、`_`、`-`,最长 64,不能重名。每条可写 `read_only`、`effects`(见「确认」)、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |
+| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。工具名以字母开头,只用字母、数字、`_`、`-`,最长 64,不能重名。每条写一个 `label`(给人看的名字,可以按语言分;不写时依次退到 `node.label`、人性化的工具名 —— **从不取 `description`**)。可写 `read_only`、`effects`(见「确认」)、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |
 | `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `effects` / `node` / `internal` |
 | `tools.default_effects` | 没声明后果的工具按什么算(`none` / `paid` / `external` / `local-code`);不写是 `external` |
 | `input_schema` 属性的 `x-advanced` | 标成高级,收进面板的「高级」一档。判据:**留空也能跑**的才算 |

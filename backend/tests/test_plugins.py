@@ -301,8 +301,9 @@ def test_expose_all_的包全开() -> None:
 def test_插件工具的展示名和调用名各司其职() -> None:
     """name 是稳定协议，label 才是节点面板里给人看的名字。
 
-    很多 MCP 服务（TikHub 也是）没填可选的 Tool.title，只把简短双语名称放在
-    description 里；这时不能把 snake_case 的调用名直接当产品文案。
+    **名字从不取自说明**(见 manifest.tool_label):说明是一整句、常带 markdown,拿它当名字,
+    菜单上就是一行「把桶里的一个对象拉回素材库。**交回的是地…」,底下的说明行再念一遍。
+    没写名字的工具退到人性化的调用名;写了的(`label`,可以按语言分)用它。
     """
     client = install(SIMPLE)
     instance = packages(client)["dev.simple"]["instances"][0]
@@ -310,6 +311,15 @@ def test_插件工具的展示名和调用名各司其职() -> None:
 
     tool = client.get("/api/plugins/tools").json()[0]
     assert tool["name"] == "shout"
+    assert tool["label"] == "Shout", "没写名字就用调用名,不拿说明「把文本变大写。」顶替"
+
+    labelled = {**SIMPLE, "tools": {**SIMPLE["tools"], "declare": [
+        {**SIMPLE["tools"]["declare"][0], "label": {"zh": "把文本变大写", "en": "Shout"}},
+    ]}}
+    client = install(labelled)
+    instance = packages(client)["dev.simple"]["instances"][0]
+    client.patch(f"/api/plugins/instances/{instance['id']}", json={"enabled": True})
+    tool = client.get("/api/plugins/tools").json()[0]
     assert tool["label"] == "把文本变大写"
 
     node = next(

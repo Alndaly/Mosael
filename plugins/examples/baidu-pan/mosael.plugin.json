@@ -6,7 +6,7 @@
     "en": "Baidu Netdisk"
   },
   "default_locale": "zh",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "homepage": "https://pan.baidu.com/union/doc/",
   "author": {
     "name": "Mosael",
@@ -95,6 +95,10 @@
     "declare": [
       {
         "name": "pan_list",
+        "label": {
+          "zh": "列出网盘目录",
+          "en": "List a Netdisk folder"
+        },
         "description": {
           "zh": "列出百度网盘某个目录下的文件和子目录。返回每一项的 fs_id、文件名、大小、是不是目录。fs_id 是后面 pan_import 要用的。一次最多 limit 条,还有没列出的时 has_more 为真,把 next_start 传回 start 接着列。",
           "en": "List the files and sub-directories under a Baidu Netdisk directory. Each entry carries its fs_id, name, size and whether it is a directory. The fs_id is what pan_import takes. At most limit entries per call; when has_more is true, pass next_start back as start to continue."
@@ -130,6 +134,10 @@
       },
       {
         "name": "pan_search",
+        "label": {
+          "zh": "搜索网盘文件",
+          "en": "Search Baidu Netdisk"
+        },
         "description": {
           "zh": "按文件名在百度网盘里搜索。找不准路径时用这个,比一层层 pan_list 快。返回同样带 fs_id;命中比 limit 多时 has_more 为真 —— 换个更准的关键词或限定目录。",
           "en": "Search Baidu Netdisk by file name. Use this when you don't know the exact path — it beats walking down with pan_list. Results carry fs_id the same way; has_more is true when there were more hits than limit — use a sharper keyword or narrow the directory."
@@ -167,6 +175,10 @@
       },
       {
         "name": "pan_import",
+        "label": {
+          "zh": "从百度网盘导入",
+          "en": "Import from Baidu Netdisk"
+        },
         "effects": "none",
         "description": {
           "zh": "把百度网盘里的一个文件拉进素材库。传 pan_list / pan_search 给出的 fs_id。返回 asset_id,之后就和别的素材一样用。",
@@ -188,10 +200,6 @@
           ]
         },
         "node": {
-          "label": {
-            "zh": "从百度网盘导入",
-            "en": "Import from Baidu Netdisk"
-          },
           "outputs": [
             "asset_id",
             "asset_name"
@@ -200,6 +208,10 @@
       },
       {
         "name": "pan_upload",
+        "label": {
+          "zh": "上传到百度网盘",
+          "en": "Upload to Baidu Netdisk"
+        },
         "effects": "external",
         "description": {
           "zh": "把素材库里的一个文件传到百度网盘。传 asset_id 和网盘上的目标路径(如 /我的资源/成片.mp4)。边传边报进度,最长 30 分钟。",
@@ -237,10 +249,6 @@
           ]
         },
         "node": {
-          "label": {
-            "zh": "上传到百度网盘",
-            "en": "Upload to Baidu Netdisk"
-          },
           "outputs": [
             "fs_id",
             "path"

@@ -38,9 +38,9 @@ import {
   type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import { isMediaKind, itemName, kindIcon, type MediaKind } from "@/features/boards/boardNodes";
+import { isMediaKind, itemName, type MediaKind } from "@/features/boards/boardNodes";
 import type { PlacedAsset } from "@/features/boards/boardPlacement";
-import { boardToolOptions } from "@/features/boards/boardTools";
+import { boardAddCatalog } from "@/features/boards/boardTools";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
@@ -619,18 +619,13 @@ function BoardDetail({
     staleTime: 60_000,
   });
 
-  //: 工具条「添加」里的工具:按它对内容做什么分组(处理图片 / 视频 / 音频 / 文字……,见 boardTools),
-  //: 不照搬工作流「添加节点」面板的「流程 / 数据」。
-  const toolOptions = React.useMemo(
-    () =>
-      boardToolOptions(producers.data ?? []).map(({ icon: Icon, ...one }) => ({ ...one, icon: <Icon /> })),
-    [producers.data],
+  //: 工具条「添加」的整张单子:几种格子,再接按对内容做什么分组的工具(处理图片 / 视频 / 音频 / 文字……,
+  //: 见 boardTools.boardAddCatalog),不照搬工作流「添加节点」面板的「流程 / 数据」。每一行都是图标、名字、
+  //: 一句说明;图标就是那种格子 / 那个工具的图标(画布上、拉线菜单里是同一颗)。
+  const addOptions = React.useMemo(
+    () => boardAddCatalog(t, producers.data ?? []).map(({ icon: Icon, ...one }) => ({ ...one, icon: <Icon /> })),
+    [t, producers.data],
   );
-  /** 「添加」里一种格子的那一行:图标就是那种格子的图标(画布上、拉线菜单里是同一颗)。 */
-  const kindOption = (value: string, kind: Parameters<typeof kindIcon>[0], label: string, group: string) => {
-    const Icon = kindIcon(kind);
-    return { value, label, group, icon: <Icon /> };
-  };
 
   /** 系统里拖进来 / 粘贴进来的文件:先传进素材库,再由画布按种类各放一格(图片、视频、音频都有自己的格子,
    *  见 boardPlacement.assetItem)。素材库认成别的种类的(画板上没有那种格子)只进库、不上画板。 */
@@ -937,23 +932,7 @@ function BoardDetail({
                 }
               }}
               searchPlaceholder={t("boardsAddItem")}
-              options={[
-                //: **同一组的选项必须挨在一起。** SearchableSelect 按*相邻*的同名 group 归组
-                //: (它不重排,理由见那边的注释),所以隔开写就会渲染出第二个同名小标题 ——
-                //: 「选一张图片」此前排在最末,菜单里于是有两个「素材库」。
-                kindOption("document", "document", t("boardKindDocument"), t("boardsGroupAssets")),
-                kindOption("scene", "scene", t("boardKindScene"), t("boardsGroupAssets")),
-                kindOption("pick-image", "image", t("boardsPickImage"), t("boardsGroupAssets")),
-                kindOption("pick-video", "video", t("boardsPickVideo"), t("boardsGroupAssets")),
-                kindOption("pick-audio", "audio", t("boardsPickAudio"), t("boardsGroupAssets")),
-                kindOption("note", "note", t("boardsAddNote"), t("boardsGroupCreate")),
-                kindOption("image", "image", t("boardsAddImage"), t("boardsGroupCreate")),
-                kindOption("video", "video", t("boardsAddVideo"), t("boardsGroupCreate")),
-                kindOption("audio", "audio", t("boardsAddAudio"), t("boardsGroupCreate")),
-                kindOption("frame", "frame", t("boardsAddFrame"), t("boardsGroupCreate")),
-                //: 工具按吃什么内容分成几组,每组的名字(「处理视频」)自己就说明了这是一组工具。
-                ...toolOptions,
-              ]}
+              options={addOptions}
               trigger={
                 <button
                   type="button"

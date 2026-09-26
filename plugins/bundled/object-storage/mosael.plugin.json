@@ -6,7 +6,7 @@
     "en": "Object Storage"
   },
   "default_locale": "zh",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -158,6 +158,10 @@
     "declare": [
       {
         "name": "storage_upload",
+        "label": {
+          "zh": "上传到对象存储",
+          "en": "Upload to object storage"
+        },
         "effects": "external",
         "provides": [
           "public_url"
@@ -229,6 +233,10 @@
       },
       {
         "name": "storage_presign",
+        "label": {
+          "zh": "签一条限时直链",
+          "en": "Sign a direct link"
+        },
         "description": {
           "zh": "给桶里已有的对象签一条限时直链。",
           "en": "Sign a time-limited direct link for an object already in the bucket."
@@ -275,6 +283,10 @@
       },
       {
         "name": "storage_fetch",
+        "label": {
+          "zh": "从对象存储取回",
+          "en": "Fetch from object storage"
+        },
         "effects": "none",
         "description": {
           "zh": "把桶里的一个对象拉回素材库。**交回的是地址,由宿主搬字节** —— 进度、取消、重试都归它。",
@@ -320,6 +332,10 @@
       },
       {
         "name": "storage_list",
+        "label": {
+          "zh": "列出桶里的对象",
+          "en": "List bucket objects"
+        },
         "description": {
           "zh": "列出桶里某个前缀下的对象(路径、大小、修改时间)。一页最多 1000 条,还有下一页时交回 next_cursor。",
           "en": "List objects under a prefix (key, size, last modified). Up to 1000 per page; next_cursor is returned when there is more."

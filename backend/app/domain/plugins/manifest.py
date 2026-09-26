@@ -81,6 +81,31 @@ def text_of(value: Any, locale: str | None = None, *, author_locale: str = "") -
     return pick_text(value, locale, author_locale=author_locale)
 
 
+def _humanized_tool_name(name: str) -> str:
+    """最后一道展示兜底(`fetch_one_video` → `Fetch one video`);稳定的调用名仍原样留在 ``name``。"""
+    words = " ".join(name.replace("-", "_").split("_")).strip()
+    return words[:1].upper() + words[1:] if words else name
+
+
+def tool_label(tool: dict[str, Any], override_label: str = "") -> str:
+    """插件工具**叫什么** —— 插件页、智能体、工作流节点、画板「添加」读的都是这一个。
+
+    依次:清单 `overrides` 里改的名字 → 工具自己的 `title` / `label`(可以按语言分)→ `node` 块的
+    `label` → 按调用名人性化。**从不拿说明顶替名字。** 此前没写名字的工具会退到「说明的第一行」,
+    于是画板菜单上有一行叫「把桶里的一个对象拉回素材库。**交回的是地…」—— 连着 markdown 记号,
+    底下的说明行又把同一句念一遍。说明是说明,名字没写就老老实实用调用名,缺名字由清单的棘轮挡住
+    (tests/test_plugin_tool_labels.py)。
+    """
+    node = tool.get("node") if isinstance(tool.get("node"), dict) else {}
+    return (
+        override_label.strip()
+        or text_of(tool.get("title")).strip()
+        or text_of(tool.get("label")).strip()
+        or text_of(node.get("label")).strip()
+        or _humanized_tool_name(str(tool.get("name") or ""))
+    )
+
+
 @dataclass(frozen=True)
 class Field:
     """一个配置项或凭据项。凭据只是「secret=True 的配置」—— 差别在控件和回显,不在语义。"""

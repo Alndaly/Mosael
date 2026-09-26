@@ -6,7 +6,7 @@
     "en": "Blender MCP"
   },
   "default_locale": "zh",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
   "author": {
     "name": "Mosael",
@@ -71,30 +71,66 @@
         }
       },
       "get_viewport_screenshot": {
+        "label": {
+          "zh": "截取 Blender 视口",
+          "en": "Capture Blender viewport"
+        },
         "read_only": true
       },
       "get_addon_status": {
+        "label": {
+          "zh": "查看 Add-on 状态",
+          "en": "Check add-on status"
+        },
         "read_only": true
       },
       "describe_node_type": {
+        "label": {
+          "zh": "查询节点类型",
+          "en": "Describe a node type"
+        },
         "read_only": true
       },
       "bpy_api_lookup": {
+        "label": {
+          "zh": "查询 Blender API",
+          "en": "Look up the Blender API"
+        },
         "read_only": true
       },
       "get_polyhaven_status": {
+        "label": {
+          "zh": "Poly Haven 状态",
+          "en": "Poly Haven status"
+        },
         "read_only": true
       },
       "get_hyper3d_status": {
+        "label": {
+          "zh": "Hyper3D 状态",
+          "en": "Hyper3D status"
+        },
         "read_only": true
       },
       "get_sketchfab_status": {
+        "label": {
+          "zh": "Sketchfab 状态",
+          "en": "Sketchfab status"
+        },
         "read_only": true
       },
       "get_polypizza_status": {
+        "label": {
+          "zh": "Poly Pizza 状态",
+          "en": "Poly Pizza status"
+        },
         "read_only": true
       },
       "get_hunyuan3d_status": {
+        "label": {
+          "zh": "混元 3D 状态",
+          "en": "Hunyuan3D status"
+        },
         "read_only": true
       },
       "execute_blender_code": {

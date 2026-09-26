@@ -126,7 +126,7 @@ def _plugin_packages(db: Session, ctx: OptionContext) -> list[Option]:
 
     seen: dict[str, str] = {}
     for tool in exposed(db, ctx.user_id):
-        seen.setdefault(str(tool["package_id"]), str(tool["instance_name"]))
+        seen.setdefault(str(tool["package_id"]), str(tool["package_name"]))
     return [{"value": package, "label": label} for package, label in seen.items()]
 
 

@@ -40,7 +40,7 @@ from app.core.i18n import is_message_key, tr
 from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT
-from app.domain.plugins.manifest import text_of
+from app.domain.plugins.manifest import text_of, tool_label
 
 PLUGIN_NODE_PREFIX = "plugin."
 
@@ -219,7 +219,8 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     # **给人看的字段一律走 text_of。** 清单里它们可以是 `{"zh": …, "en": …}`,裸 str() 会把
     # 那个字典按 Python 的样子印出来 —— 界面上就是一行 `{'zh': '从百度网盘导入', …}`。
     # 工具的 label/description 在上游已经解过了,而 `node` 这一块是原样透传的,所以解在这里。
-    label = text_of(declared.get("label") or tool.get("label") or tool.get("name") or "")
+    #: 名字只有一条解析(manifest.tool_label):清单的名字 → node 块的名字 → 调用名。从不拿说明顶替。
+    label = tool_label(tool)
     description = text_of(declared.get("description") or tool.get("description") or "")
     if mirrors is not None and description:
         #: 节点面板上说一声:只要那一种成片的话,「AI 生成素材」节点选这个模型是同一件事(还有回执、用量、
@@ -230,7 +231,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     return {
         "label": label,
         # 面板上每行都有一句说明;插件没写就退到"来自哪个插件",总比空着强。
-        "description": description or f"来自插件「{tool.get('instance_name', '')}」的工具。",
+        "description": description or f"来自插件「{tool.get('package_name', '')}」的工具。",
         "category": PLUGIN_NODE_CATEGORY,
         # 「用哪个连接」是节点的一个普通配置项,和别的字段走同一套表单与校验。
         "config": {
@@ -255,8 +256,9 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         **({"mirrors": mirrors} if mirrors is not None else {}),
         **({"board_group": board_group} if board_group else {}),
         **({"board_description": board_description} if board_description else {}),
-        # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。
-        "plugin_name": tool.get("instance_name", ""),
+        # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。是**插件**的名字,不是连接名:
+        # 节点按包聚合,连接名(「阿里云 OSS · 某个桶」)只是碰巧排在第一的那条连接。
+        "plugin_name": tool.get("package_name", ""),
         "tool_name": tool.get("name", ""),
     }
 

@@ -1,7 +1,9 @@
 import { Package, Sparkles, type LucideIcon } from "lucide-react";
 
 import { isNodeProducer, type BoardItem, type BoardProducerInfo, type BoardRunForms } from "@/api/client";
-import { DEFAULT_SIZE, kindIcon, type BoardToolFace, type ToolCellKind } from "@/features/boards/boardNodes";
+import type { MessageKey } from "@/app/messages";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
+import { DEFAULT_SIZE, kindIcon, kindText, type BoardToolFace, type ToolCellKind } from "@/features/boards/boardNodes";
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 
@@ -46,6 +48,30 @@ export function boardToolIcon(tool: Pick<BoardProducerInfo, "type" | "board_grou
   return nodeTypeIcon(tool?.type) ?? GROUP_ICONS[tool?.board_group ?? ""] ?? kindIcon("action");
 }
 
+/** 句末:中文的。!?,英文的句点后面跟空白(`v1.5` 里的点不算)—— 和后端 boards.transforms 同一种切法。 */
+const SENTENCE_END = /(?<=[。！？!?])|(?<=\.)\s/u;
+
+/** 一段说明的**第一句**,去掉 markdown 记号(`**交回的是地址**` 不该把两颗星号印在菜单上)。 */
+export function firstSentence(text: string): string {
+  return (toPlainText(text).split(SENTENCE_END)[0] ?? "").trim();
+}
+
+/**
+ * 菜单里工具那一行的副标题:**出处 · 一句说明**,一行读完。
+ *
+ *  · 说明是画板那一句(`board_description`)的第一句、纯文字;和名字一模一样的不再念一遍。
+ *  · 出处是**插件名**(后端给的 `plugin_name` 就是插件名,不是「阿里云 OSS · 某个桶」那种连接名):
+ *    同名工具可能来自不同插件,点名是谁提供的。名字本身已经以它开头(「ComfyUI 服务器状态」)就不再重复。
+ *  · 两样都没有时退到它所在的那一组(「处理视频」)—— 菜单上不留只有名字、没有说明的一行。
+ */
+export function boardToolSubtitle(tool: Pick<BoardProducerInfo, "label" | "plugin_name" | "board_description" | "board_group_label">): string {
+  const label = tool.label.trim();
+  const sentence = firstSentence(tool.board_description ?? "");
+  const plugin = (tool.plugin_name ?? "").trim();
+  const parts = [plugin && !label.startsWith(plugin) ? plugin : "", sentence !== label ? sentence : ""].filter(Boolean);
+  return parts.join(" · ") || (tool.board_group_label ?? "").trim() || plugin;
+}
+
 /** 这个人能放上画板的工具(内置的四个挂在各自的格子上,不在这里)。 */
 export function boardToolOptions(producers: BoardProducerInfo[]): BoardToolOption[] {
   return producers
@@ -53,12 +79,51 @@ export function boardToolOptions(producers: BoardProducerInfo[]): BoardToolOptio
     .map((one) => ({
       value: one.id,
       label: one.label,
-      // 同名工具可能来自不同插件(两个平台的 fetch_one_video),副标题点名是谁提供的。
-      description: one.plugin_name ? `${one.plugin_name} · ${one.board_description ?? ""}` : (one.board_description ?? ""),
+      description: boardToolSubtitle(one),
       group: one.board_group_label || one.board_group || "",
       icon: boardToolIcon(one),
       keywords: one.tool_name ? [one.tool_name] : undefined,
     }));
+}
+
+/** 「添加」里格子那一段的一行:放一格什么(`value` 是 BoardsView 认的那个动作)、在哪一组。 */
+interface KindRow {
+  value: string;
+  kind: BoardItem["kind"];
+  group: "assets" | "create";
+  /** 从素材库挑一份的那几行有自己的名字和说明;其余就是那种格子的名字和说明(kindText)。 */
+  text?: { label: MessageKey; hint: MessageKey };
+}
+
+//: **同一组的必须挨在一起。** SearchableSelect 按*相邻*的同名 group 归组(它不重排),隔开写就会渲染出
+//: 第二个同名小标题 —— 「选一张图片」此前排在最末,菜单里于是有两个「素材库」。
+const KIND_ROWS: KindRow[] = [
+  { value: "document", kind: "document", group: "assets" },
+  { value: "scene", kind: "scene", group: "assets" },
+  { value: "pick-image", kind: "image", group: "assets", text: { label: "boardsPickImage", hint: "boardsPickImageHint" } },
+  { value: "pick-video", kind: "video", group: "assets", text: { label: "boardsPickVideo", hint: "boardsPickVideoHint" } },
+  { value: "pick-audio", kind: "audio", group: "assets", text: { label: "boardsPickAudio", hint: "boardsPickAudioHint" } },
+  { value: "note", kind: "note", group: "create" },
+  { value: "image", kind: "image", group: "create" },
+  { value: "video", kind: "video", group: "create" },
+  { value: "audio", kind: "audio", group: "create" },
+  { value: "frame", kind: "frame", group: "create" },
+];
+
+/**
+ * 工具条「添加」的整张单子:几种格子,再接工具(按吃什么内容分组,见 boardToolOptions)。
+ *
+ * **每一行都是同一个样子:图标、名字、一句说明。** 此前格子那几行只有图标和名字,工具那几行两行
+ * 高,同一张单子里一半有说明、一半没有。格子的说明和拉线菜单读的是同一份(kindText),不另写一套。
+ */
+export function boardAddCatalog(t: (key: MessageKey) => string, producers: BoardProducerInfo[]): BoardToolOption[] {
+  const groups = { assets: t("boardsGroupAssets"), create: t("boardsGroupCreate") };
+  const kinds = KIND_ROWS.map(({ value, kind, group, text }) => {
+    const { label, hint } = text ? { label: t(text.label), hint: t(text.hint) } : kindText(t, kind);
+    return { value, label, description: hint, group: groups[group], icon: kindIcon(kind) };
+  });
+  //: 工具按吃什么内容分成几组,每组的名字(「处理视频」)自己就说明了这是一组工具。
+  return [...kinds, ...boardToolOptions(producers)];
 }
 
 type Bindings = BoardRunForms["node"]["bindings"];

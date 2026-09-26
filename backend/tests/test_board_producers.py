@@ -726,7 +726,8 @@ def test_插件工具只列执行者自己的连接_跳过只给宿主调的(tmp
     assert by_id["trim"]["fills_empty_slot"] is False and by_id["write"]["fills_empty_slot"] is True
     shout = by_id["node:plugin.dev.test.boardtools.shout"]
     assert shout["type"] == "plugin.dev.test.boardtools.shout"
-    assert shout["hosts"] == ["action"] and shout["plugin_name"] == "我的工具箱"
+    #: 出处是插件名(「画板工具箱」),不是连接名(「我的工具箱」)—— 节点按包聚合,连接只是碰巧排第一的那条。
+    assert shout["hosts"] == ["action"] and shout["plugin_name"] == "画板工具箱"
     assert shout["config"]["text"]["board_sources"] == ["note", "document"]
     assert shout["config"]["instance_id"]["board_sources"] == [], "选连接的下拉不接上游"
     translate = by_id["node:translate"]
