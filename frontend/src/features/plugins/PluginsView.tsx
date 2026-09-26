@@ -53,6 +53,7 @@ import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "@/components/ui/fiel
 import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
+import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 
@@ -962,6 +963,8 @@ interface ToolState {
   label: string;
   description: string;
   read_only: boolean;
+  /** 后果(none / paid / external / local-code)。不是 none 的,智能体调它之前先开确认卡。 */
+  effects: string;
   input_schema?: { [key: string]: unknown };
   exposed: boolean;
   /** 试跑表单的字段:和这个工具当工作流节点时**同一份声明**(后端节点目录的形状,已按语言翻好)。 */
@@ -1040,6 +1043,7 @@ export const ToolRow = React.memo(function ToolRow({
               {t("pluginToolReadOnly")}
             </small>
           )}
+          <ToolEffectBadge effects={tool.effects} />
           {open ? (
             <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
           ) : (

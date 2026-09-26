@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { describePermission, describeProvides } from "@/features/plugins/pluginPermissions";
+import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -573,6 +574,7 @@ function MarketDetail({
                 <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                   <strong className="text-ui-sm font-semibold text-foreground">{tool.label || tool.name}</strong>
                   {tool.label && <code className="timecode text-ui-2xs text-muted-foreground">{tool.name}</code>}
+                  <ToolEffectBadge effects={tool.effects} />
                 </span>
                 {tool.description && (
                   <span className="line-clamp-3 text-ui-xs leading-relaxed text-muted-foreground">

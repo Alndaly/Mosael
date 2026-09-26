@@ -116,6 +116,7 @@ describe("灰着的运行按钮要说明自己为什么灰", () => {
     label: "Pan list",
     description: "列目录",
     read_only: true,
+    effects: "none",
     exposed: true,
     input_schema: { type: "object", properties: {} },
   };
@@ -143,13 +144,28 @@ describe("灰着的运行按钮要说明自己为什么灰", () => {
   });
 });
 
+describe("智能体调用前要确认的工具标「需确认」", () => {
+  const base = { name: "manim_still", label: "Manim 静帧", description: "", read_only: false, exposed: true, input_schema: {} };
+
+  it("有后果的标出来,悬停说清是哪一种", () => {
+    wrap(<ToolRow workspaceId="w" instanceId="i1" tool={{ ...base, effects: "local-code" }} blockedReason="" onToggle={() => undefined} />);
+    const badge = screen.getByText("pluginToolNeedsConfirm");
+    expect(badge.getAttribute("title")).toBe("pluginToolEffectLocalCode");
+  });
+
+  it("none 的不标 —— 不问人就不说要问", () => {
+    wrap(<ToolRow workspaceId="w" instanceId="i1" tool={{ ...base, effects: "none" }} blockedReason="" onToggle={() => undefined} />);
+    expect(screen.queryByText("pluginToolNeedsConfirm")).toBeNull();
+  });
+});
+
 describe("素材工具的工作区归属", () => {
   it.each([
     { name: "pan_import", input: { fs_id: "230120330866997" }, output: { asset_id: "imported-asset" } },
     { name: "pan_upload", input: { asset_id: "source-asset", path: "/成片.mp4" }, output: { fs_id: "uploaded-file" } },
   ])("$name 将当前工作区与工具参数分开传递", async ({ name, input, output }) => {
     const tool = {
-      name, label: name, description: "", read_only: false, exposed: true,
+      name, label: name, description: "", read_only: false, effects: name === "pan_upload" ? "external" : "none", exposed: true,
       input_schema: { properties: Object.fromEntries(Object.keys(input).map((key) => [key, { type: "string" }])) },
       form: Object.fromEntries(Object.keys(input).map((key) => [key, { type: "string", label: key }])),
     };
@@ -182,7 +198,7 @@ function fieldInput(key: string): HTMLInputElement {
 describe("试跑表单就是工作流节点的那张表单", () => {
   //: 形状和后端 `_tool_form` 发下来的一样(节点目录的字段声明,已按语言翻好)
   const tool = {
-    name: "wf_portrait", label: "工作流 · portrait", description: "", read_only: false, exposed: true,
+    name: "wf_portrait", label: "工作流 · portrait", description: "", read_only: false, effects: "paid", exposed: true,
     input_schema: { properties: {} },
     form: {
       steps_3: { type: "number", label: "步数", default: "20", description: "采样 · steps" },
@@ -302,6 +318,7 @@ describe("清单里的说明带 markdown", () => {
       label: "上传",
       description: "交回一条**限时直链**",
       read_only: false,
+      effects: "external",
       exposed: true,
       input_schema: { properties: { key: { type: "string", description: "对象键,如 `videos/a.mp4`" } } },
       form: { key: { type: "template", label: "对象键", description: "对象键,如 `videos/a.mp4`" } },
