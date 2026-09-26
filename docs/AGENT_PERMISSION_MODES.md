@@ -105,6 +105,8 @@
 | `edit_workflow` | `edit` | 扫 **ops 应用后**的图(复用已有的 `_graph_to_persist`) |
 | `create/update_workflow` | `edit` | 扫 `payload["graph"]` |
 | `delete_assets` / `delete_projects` | `destroy` | 不必派生;这一档没有"某些参数更安全"的说法 |
+| `run_board_item` | `edit` | 按工具格那个工具的 `effects`:`paid` → `ai-cost`,`external` / `local-code` → `external`,`none` 不问人(§4.11) |
+| 插件工具 `plugin__<连接>__<工具>` | `edit` | 同上,按插件清单里这个工具的 `effects`(§4.12) |
 | 其余 | —— | 不变 |
 
 **`destroy` 档**(2026-09 加):后果在这个应用**之内**但撤不回来 —— 素材文件从盘上清掉、
@@ -290,6 +292,24 @@ JSON 列 `auto_allow_tools`,和模式在**同一个判定函数**里求值:先�
 卡照开:留痕(`decision_mode = no-card`,`decided_by` 是开卡的人)、同一条等待协议(sidecar 照样
 阻塞轮询,只是马上就到了),执行仍经 `authorize_and_approve` —— 绕过的是「用户同意」,不是授权。
 
+### 4.12 插件工具(`effects`,ADR 0023)
+
+智能体直接调的插件工具(`plugin__<连接>__<工具>`,MCP 的 `invoke_plugin_tool` 走同一条路)按清单里声明的
+`effects` 定要不要问人 —— 和画板工具格**同一份词表、同一个判据**(`backend/app/domain/effects.py`):
+
+- `none`(只读的一定是它):不开卡,直接跑。
+- `paid` → `ai-cost`;`external`、`local-code` → `external`。**没声明的按 `external`**。
+
+卡**以具体的工具名开**(确认内核按前缀认领这一族,见 `confirmable/registry.confirmable_family`),所以:
+
+- 「本会话始终允许」按这一个工具记 —— 允许了 Manim 渲染,不连带放开往云盘传文件;
+- auto 档下 `external` / `local-code` 没有可枚举的准则(`rules.evaluate` 查不到 gate),一律回到人;
+  `paid` 按计费档放行,受 `COST_AUTO_LIMIT` 约束;bypass 放行;
+- 后果由开卡这一刻的工具说了算(validate 覆盖写回 payload),调用方自带的 `effects` 不算数;
+- 批准之后用**批准者自己**接的连接执行(连接归人),别人批不了。
+
+人自己点的(插件页「试一下」、工作流插件节点、画板上自己点运行)不开卡。
+
 ---
 
 ## 5. 数据模型改动
@@ -378,7 +398,7 @@ workspaces
 - **不给 39 个直接执行的工具做模式**。但要记下这条路存在:`read_only` 的定义是「不在
   `CONFIRMATION_TOOLS` 里」,于是 `browser_type` / `browser_click` / `browser_evaluate` 全算只读;
   `browser_pool_open` 批准之后,智能体可以用真实登录身份点、填、提交,整个过程一张 `external` 卡
-  都不会出现;写类插件工具同样无卡。**在把批准变便宜之前,值得先确认被卡住的集合确实是危险的
+  都不会出现。(写类插件工具曾经同样无卡,2026-09 起按清单的 `effects` 开卡,见 §4.12。)**在把批准变便宜之前,值得先确认被卡住的集合确实是危险的
   集合** —— 但那是另一个 ADR 的题目。
 - **不做沙箱**(ADR 已否掉,同意:那是另一个功能,不该塞进权限模式里当它的前提)。
 - **不给智能体改模式的工具**。

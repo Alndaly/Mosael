@@ -47,7 +47,7 @@
       {
         "name": "count_words",
         "description": "统计字数、词数与预计口播时长。",
-        "read_only": true,            // 见下面「只读」
+        "read_only": true,            // 见下面「只读」;有后果的工具写 effects,见「确认」
         "input_schema": {
           "type": "object",
           "properties": { "text": { "type": "string", "description": "要统计的文本" } },
@@ -400,7 +400,8 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 `tools` 里每一项和 `declare` 里的写法一样,宿主认这些键:`name`(`[A-Za-z][A-Za-z0-9_-]*`,不能有点 —— 它要进节点类型
 `plugin.<包>.<工具>`;不能和清单里声明的重名)、`label`、`description`(可以按语言分)、`input_schema`(属性的 `title` /
-`description` 也可以按语言分)、`read_only`、`stream`、`timeout_seconds`(上限照旧)、`node`(`outputs` /
+`description` 也可以按语言分)、`read_only`、`effects`(见「确认」;写错的当没写,只读却声明了别的后果按后果算、只读作废)、
+`stream`、`timeout_seconds`(上限照旧)、`node`(`outputs` /
 `output_types` / `output_labels`)、`recommended`(`true` = 第一次出现时默认开放)、`replaces`(见下)。**别的键丢掉**,
 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主认领能力,也不能把自己藏起来。最多 300 个。
 
@@ -448,11 +449,52 @@ Markdown 渲染;`default` 是占位提示;`enum` 是下拉,`boolean` 是「是 /
 
 ### 只读
 
-`read_only: true` 的工具才会给**子智能体**用。默认不标。
+`read_only: true` 的工具才会给**子智能体**用,智能体调它也不开确认卡(它的后果就是 `none`,见下面「确认」)。默认不标。
 
 内置工具的只读判据是"没有确认门"—— 会改东西的都走确认卡。插件工具没有这个对应关系:它跑的是
 你的代码,没有确认门也照样能发请求、写文件。所以默认落在保守那侧。宁可让子智能体少一个工具,
 也不要让它在一次「帮我查一下」里替用户发了条微博。
+
+### 确认:`effects`
+
+智能体(应用里的助手、Claude CLI 这类 MCP 客户端、飞书)**直接调**一个插件工具之前要不要先问用户,由这个工具的
+`effects` 决定 —— 它说的是「这一下的后果落在哪儿」:
+
+| `effects` | 意思 | 智能体调它时 |
+| --- | --- | --- |
+| `none` | 不花钱、不出门:只读,或者只往 Mosael 自己里面写(收进素材库之类) | 直接跑 |
+| `paid` | 会花钱或占付费算力(按次计费的接口、在显卡上跑生成) | 先开确认卡,归 `ai-cost` 档 |
+| `external` | 后果在 Mosael 之外、撤不回:传到别人的服务器、改别处的数据、对外发送 | 先开确认卡,归 `external` 档 |
+| `local-code` | 在这台电脑上执行一段**调用方写的代码**(不是你插件自己的固定逻辑) | 先开确认卡,归 `external` 档,卡上写明「会在你的电脑上运行代码」 |
+
+```jsonc
+"tools": {
+  "default_effects": "paid",                      // 可选:这个包里没声明后果的工具按什么算
+  "declare": [
+    { "name": "render_scene", "effects": "local-code", … },   // 跑模型写的场景代码
+    { "name": "upload",       "effects": "external",   … },   // 传到用户的云存储
+    { "name": "import",       "effects": "none",       … },   // 只把东西收进素材库
+    { "name": "list",         "read_only": true,       … }    // 只读 = none
+  ],
+  "overrides": { "some_mcp_tool": { "effects": "external" } } // MCP 插件只能在这里写
+}
+```
+
+**默认值是 `external`**:不只读、也没写 `effects` 的工具,智能体调用前一律先问 —— 插件跑的是别人的代码,「不知道」
+落在保守那一边。只读的一定是 `none`;`read_only: true` 再写别的 `effects` 是两句互相矛盾的话,**装的那一刻就报错**
+(只读的工具会交给子智能体,而子智能体等不了确认卡);写了不认识的值同样当场报错,不会悄悄按 external 跑。取值顺序:
+`overrides` 里的 > 工具自己声明的 > `tools.default_effects` > `external`。
+
+几件事因此自动成立,不用插件再做什么:
+
+- 卡上写着哪个工具、哪条连接、参数摘要和为什么要确认;批准之后走的是同一个执行入口,用的是**批准者自己**的连接
+  (别人批不了你的连接);拒了什么都不跑。
+- 三档权限模式照常作用(见 [AGENT_PERMISSION_MODES.md](AGENT_PERMISSION_MODES.md)):bypass 放行;auto 档下 `paid`
+  按计费那一档放行(有连开上限),`external` / `local-code` 回到人;「本会话始终允许」按**这一个工具**记。
+- 画板上智能体替人点运行一个工具格(`run_board_item`)读的是同一个 `effects`。
+- 插件页工具旁、市场详情里,有后果的工具标着「需确认」。
+
+**人自己点的不问**:插件页的「试一下」、工作流里的插件节点(用户自己启动的运行)、画板上自己点运行,都不开卡。
 
 ### 预算
 
@@ -650,8 +692,9 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `skills` | 给别的智能体看的高层描述 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
-| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。每条可写 `read_only`、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |
-| `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `node` / `internal` |
+| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。每条可写 `read_only`、`effects`(见「确认」)、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |
+| `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `effects` / `node` / `internal` |
+| `tools.default_effects` | 没声明后果的工具按什么算(`none` / `paid` / `external` / `local-code`);不写是 `external` |
 | `input_schema` 属性的 `x-advanced` | 标成高级,收进面板的「高级」一档。判据:**留空也能跑**的才算 |
 
 ## 范例

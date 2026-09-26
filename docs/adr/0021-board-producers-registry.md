@@ -62,7 +62,8 @@ Sources:
 1. The four existing actions become built-in producers wrapping today's `*_on_board`; the hosts of
    `generate` are derived from the kinds the generation catalog actually offers.
 2. Every non-internal plugin tool from `available_node_types(db, user_id)` becomes
-   `node:plugin.<package>.<tool>`, hosted by a new item kind `action`, effects from `read_only`.
+   `node:plugin.<package>.<tool>`, hosted by a new item kind `action`, effects from `read_only`
+   (since ADR 0023: the tool's declared `effects`, the same value the agent's own plugin calls use).
 3. Built-in nodes that declare `"surfaces": ["workflow", "board"]` in `NODE_TYPES`. First batch:
    transcribe_asset, translate, text_transform, json_extract, template, video_to_gif,
    separate_audio, denoise_audio, note_search, scene_render, call_workflow, http_request.
@@ -253,7 +254,8 @@ loses the four old functions.
   executors agree, and the kept-off nodes of decision 3 stay off) and the actor's own non-internal
   plugin tools (`plugins.tools.exposed(db, actor)`; none when there is no actor). All `node:*` have
   `hosts=("action",)`, `permission="edit"`; effects are `external` for built-ins declared
-  `external` (http_request, call_workflow) else `none`, and for plugin tools `none` iff `read_only`.
+  `external` (http_request, call_workflow) else `none`, and for plugin tools `none` iff `read_only`
+  (superseded by ADR 0023: plugin tools carry their manifest `effects`, which adds `local-code`).
   `Producer` gained `meta` (a `NODE_TYPES`-shaped entry; the built-ins have a label + description
   only) and `fills_empty_slot`. An unknown `node:plugin.*` explains itself: `boardErr_toolInternal`
   for an internal tool, otherwise `boardErr_pluginNotConnected` naming the plugin and the tool.
