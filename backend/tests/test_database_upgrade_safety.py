@@ -84,3 +84,23 @@ def test_待跑的迁移由记账本回答_不由常量回答() -> None:
     assert plan.pending() == ("只跑一次的",)
     plan.run()
     assert plan.pending() == ()
+
+
+def test_发版冒烟用的旧库_升级后长成夹具说的样子(tmp_path) -> None:
+    """`test/upgrade_db_fixture.py` 是打包冒烟拿来验「旧库升级」的:它只在发版构建里跑,CI 不跑。
+    迁移改了旧数据的形状而夹具没跟上,就要到发版那一刻才炸(1.6.0 就是这样)—— 这里在 CI 里先跑一遍。"""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parents[2] / "test" / "upgrade_db_fixture.py"
+    data_dir = tmp_path / "data"
+    subprocess.run([sys.executable, str(fixture), "seed", str(data_dir)], check=True)
+    migrate = "from app.db.migrations import init_db; init_db()"
+    env = {**os.environ, "MOSAEL_DATA_DIR": str(data_dir)}
+    subprocess.run([sys.executable, "-c", migrate], check=True, env=env, cwd=Path(__file__).resolve().parents[1])
+    verified = subprocess.run(
+        [sys.executable, str(fixture), "verify", str(data_dir)], capture_output=True, text=True
+    )
+    assert verified.returncode == 0, verified.stdout + verified.stderr

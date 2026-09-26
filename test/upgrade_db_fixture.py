@@ -78,7 +78,7 @@ def verify(data_dir: Path) -> None:
         item = board["items"][0]
         if item.get("run") != {"status": "running", "job_id": "job-1"}:
             raise SystemExit(f"upgrade failed: board run state is {item.get('run')!r}")
-        if item.get("form") != {"prompt": "old prompt"}:
+        if item.get("form") != {"prompt": "old prompt", "producer": "generate"}:
             raise SystemExit(f"upgrade failed: board form is {item.get('form')!r}")
         if "job_id" in item or "error" in item:
             raise SystemExit(f"upgrade failed: board kept legacy state fields: {item!r}")
