@@ -31,6 +31,8 @@ _GUIDER_MARK = "Guider"  # CFGGuider / BasicGuider / DualCFGGuider … Flux 那�
 #: 写提示词的节点上,文字放在哪几个输入里。CLIPTextEncodeFlux 分成 clip_l / t5xxl 两格,SDXL 的
 #: CLIPTextEncodeSDXL 分成 text_g / text_l —— 同一句话写进每一格。
 _TEXT_INPUTS = ("text", "clip_l", "t5xxl", "text_g", "text_l")
+#: 后端的「一段文字」节点:提示词常常写在它身上,再连进 CLIPTextEncode 的 text(新版的模板就这么排)。
+_STRING_SOURCES = frozenset({"PrimitiveString", "PrimitiveStringMultiline"})
 #: 这些节点**生成画布**:宽高写在它们身上就是成片的尺寸。
 _SIZE_NODE_TYPES = frozenset(
     {"WanImageToVideo", "WanFirstLastFrameToVideo", "WanVaceToVideo", "HunyuanImageToVideo", "LTXVImgToVideo",
@@ -77,6 +79,13 @@ def _literal(value: Any) -> bool:
     return not isinstance(value, list)
 
 
+def text_fields(node: dict[str, Any]) -> list[str]:
+    """这个节点上存着提示词文字的那几格(字面量字符串)。"""
+    inputs = node.get("inputs") or {}
+    names = ("value",) if str(node.get("class_type", "")) in _STRING_SOURCES else _TEXT_INPUTS
+    return [name for name in names if name in inputs and _literal(inputs[name]) and isinstance(inputs[name], str)]
+
+
 def _trace_text_node(api: dict[str, Any], ref: Any, prefer: str, seen: set[str]) -> str | None:
     """从 [节点, 槽位] 往上游追到写提示词的节点,穿过 ControlNetApply、FluxGuidance 这类条件处理节点。"""
     if not isinstance(ref, list) or not ref:
@@ -89,8 +98,14 @@ def _trace_text_node(api: dict[str, Any], ref: Any, prefer: str, seen: set[str])
     if not isinstance(node, dict):
         return None
     inputs = node.get("inputs") or {}
-    if any(key in inputs and _literal(inputs[key]) and isinstance(inputs[key], str) for key in _TEXT_INPUTS):
+    if text_fields(node):
         return node_id
+    for key in _TEXT_INPUTS:
+        # 文字从一个「一段文字」节点连进来:提示词写在那个节点上
+        source = inputs.get(key)
+        upstream = api.get(str(source[0])) if isinstance(source, list) and source else None
+        if isinstance(upstream, dict) and str(upstream.get("class_type", "")) in _STRING_SOURCES and text_fields(upstream):
+            return str(source[0])
     for key in (prefer, "conditioning", "positive", "negative"):  # 优先同名槽,正负不混
         found = _trace_text_node(api, inputs.get(key), prefer, seen)
         if found is not None:
@@ -135,8 +150,7 @@ def prompt_requirement(api: dict[str, Any], roles: dict[str, str] | None = None,
         return "none"
     for node_id in positive:
         inputs = api[node_id].get("inputs") or {}
-        saved = [inputs[name] for name in _TEXT_INPUTS
-                 if name in inputs and _literal(inputs[name]) and isinstance(inputs[name], str)]
+        saved = [inputs[name] for name in text_fields(api[node_id])]
         if not any(text.strip() for text in saved):
             return "required"
     return "optional"
@@ -414,7 +428,7 @@ def tunable(
                 continue
             if isinstance(value, str) and _PLACEHOLDER.search(value):
                 continue  # 占位符由宿主的主控件填,不再单独列
-            if node_id in roles and name in _TEXT_INPUTS:
+            if node_id in roles and name in text_fields(node):
                 continue  # 提示词 / 反向提示词
             if (node_id, name) in seeds:
                 continue
@@ -588,9 +602,8 @@ def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any])
         if text is None:
             continue
         inputs = graph[node_id]["inputs"]
-        for name in _TEXT_INPUTS:
-            if name in inputs and _literal(inputs[name]) and isinstance(inputs[name], str):
-                inputs[name] = text
+        for name in text_fields(graph[node_id]):
+            inputs[name] = text
     for node_id, name in seed_inputs(graph):
         if values.get("seed") is not None:
             graph[node_id]["inputs"][name] = values["seed"]

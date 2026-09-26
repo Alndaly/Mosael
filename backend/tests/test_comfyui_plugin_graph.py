@@ -536,6 +536,20 @@ def test_Flux与SDXL的写提示词节点_每一格都写(graph) -> None:
     assert filled["25"]["inputs"]["noise_seed"] == 7, "RandomNoise 的种子也是种子"
 
 
+def test_提示词写在后端的一段文字节点上_连进CLIPTextEncode(graph) -> None:
+    api = {
+        "3": {"class_type": "KSampler", "inputs": {"seed": 1, "positive": ["6", 0], "negative": ["7", 0]}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": ["30", 0], "clip": ["4", 1]}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "bad", "clip": ["4", 1]}},
+        "30": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": "a red fox"}},
+    }
+    assert graph.text_roles(api) == {"30": "prompt", "7": "negative"}
+    assert graph.prompt_requirement(api) == "optional"
+    assert graph.fill(api, {"prompt": "a cat"}, {})["30"]["inputs"]["value"] == "a cat"
+    assert "30.value" not in graph.tunable(api, {"PrimitiveStringMultiline": {"input": {"required": {
+        "value": ["STRING", {"multiline": True}]}}}}), "提示词由宿主的主控件填,不再单列"
+
+
 def test_连线来的文字不被字面量盖掉(graph) -> None:
     api = {
         "3": {"class_type": "KSampler", "inputs": {"seed": 0, "positive": ["6", 0], "negative": ["7", 0]}},
