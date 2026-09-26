@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from app.core.interpreter import base_python
-from app.core.child_process import ChildProcess, kill_tree, own_group, popen_text, run_logged
+from app.core.child_process import ChildProcess, ProcessOutputLimitExceeded, kill_tree, own_group, popen_text, run_logged
 from app.core.text import blame_line
 from app.core.i18n import LocalizedError, get_current_locale
 from app.domain.jobs import current_parent_job_id, detach_job_child, register_job_child
@@ -202,9 +202,13 @@ def execute_tool(
             env=env, what="插件命令",
             # 自成一组:超时、取消停的是整棵进程树(见 _CancelSwitch)。
             group=True,
+            # 读到上限就停下它:整个读进内存再比,一个死循环打字的插件能在超时前撑爆后端。
+            max_stdout=MAX_OUTPUT_BYTES,
             on_child=_attach_to(job_id, attached) if job_id else None)
     except subprocess.TimeoutExpired as exc:
         raise PluginTimeout("pluginErr_timeout", seconds=f"{timeout:g}") from exc
+    except ProcessOutputLimitExceeded as exc:
+        raise PluginRuntimeError("pluginErr_outputTooLarge") from exc
     finally:
         for switch in attached:
             detach_job_child(switch.job_id, switch)

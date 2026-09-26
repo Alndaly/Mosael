@@ -290,12 +290,15 @@ def _run_announcing_child(
     timeout: float | None = None,
     check: bool = False,
     group: bool = False,
+    max_stdout: int | None = None,
     **kwargs,
 ) -> subprocess.CompletedProcess:
-    """`subprocess.run` 的同一套语义,多两样:子进程一起来就交给 `on_child`;`group` 时自成一组。
+    """`subprocess.run` 的同一套语义,多三样:子进程一起来就交给 `on_child`;`group` 时自成一组;
+    `max_stdout` 时 stdout 有上限(见 `_communicate_bounded`)。
 
     `subprocess.run` 不交出 Popen,而任务要在取消时杀得掉它(见 jobs.register_job_child),
-    所以照 CPython 的实现写这一份 —— 要登记子进程、或要超时时停下整棵进程树的调用方走这里。
+    所以照 CPython 的实现写这一份 —— 要登记子进程、要超时时停下整棵进程树、或跑的是别人的代码
+    (输出不能无限攒)的调用方走这里。
     """
     if input is not None:
         kwargs["stdin"] = subprocess.PIPE
@@ -314,7 +317,10 @@ def _run_announcing_child(
         try:
             if on_child is not None:
                 on_child(process)
-            stdout, stderr = process.communicate(input, timeout=timeout)
+            if max_stdout is None:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            else:
+                stdout, stderr = _communicate_bounded(process, input, timeout, max_stdout, stop)
         except subprocess.TimeoutExpired:
             stop(process)
             process.wait()
@@ -328,6 +334,84 @@ def _run_announcing_child(
     return subprocess.CompletedProcess(process.args, retcode, stdout, stderr)
 
 
+#: `max_stdout` 时 stderr 只留最后这么多(字符 / 字节):它只拿来说失败原因(见 core/text.blame_line)。
+_BOUNDED_STDERR_TAIL = 64 * 1024
+
+
+def _communicate_bounded(
+    process: subprocess.Popen,
+    input: Any,
+    timeout: float | None,
+    max_stdout: int,
+    stop: Callable[[subprocess.Popen], None],
+) -> tuple[Any, Any]:
+    """`communicate()`,但 stdout **读到上限就停下子进程**,stderr 只留尾巴。
+
+    `communicate()` 把两条管道整个读进内存,读完才轮到调用方比上限 —— 一个死循环往 stdout 打字的
+    子进程(插件、别人的代码),在超时之前能把几 GB 攒进后端的内存。超了抛 ProcessOutputLimitExceeded。
+    """
+    text = getattr(process.stdout, "encoding", None) is not None
+    empty: Any = "" if text else b""
+    out_parts: list[Any] = []
+    err_tail: deque[Any] = deque()
+    err_size = [0]
+    exceeded = threading.Event()
+
+    def drain_stdout() -> None:
+        total = 0
+        try:
+            while chunk := process.stdout.read(16 * 1024):
+                total += len(chunk)
+                if total > max_stdout:
+                    exceeded.set()
+                    stop(process)
+                    return
+                out_parts.append(chunk)
+        except (OSError, ValueError):
+            pass  # 管道被关了:子进程被停下了
+
+    def drain_stderr() -> None:
+        if process.stderr is None:
+            return
+        try:
+            while chunk := process.stderr.read(16 * 1024):
+                err_tail.append(chunk)
+                err_size[0] += len(chunk)
+                while err_size[0] - len(err_tail[0]) >= _BOUNDED_STDERR_TAIL:
+                    err_size[0] -= len(err_tail.popleft())
+        except (OSError, ValueError):
+            pass
+
+    def feed() -> None:
+        if process.stdin is None:
+            return
+        try:
+            if input is not None:
+                process.stdin.write(input)
+                process.stdin.flush()
+        except (BrokenPipeError, OSError, ValueError):
+            pass  # 子进程没读就退了 —— 退出码和 stderr 会说为什么
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+
+    threads = [threading.Thread(target=target, daemon=True) for target in (drain_stdout, drain_stderr, feed)]
+    for thread in threads:
+        thread.start()
+    process.wait(timeout=timeout)
+    for thread in threads:
+        # 主进程退了而孙进程还攥着管道时,读线程等不到 EOF:给它收尾的时间,再停下整组。
+        thread.join(timeout=REAP_TIMEOUT)
+        if thread.is_alive():
+            stop(process)
+            thread.join(timeout=1.0)
+    if exceeded.is_set():
+        raise ProcessOutputLimitExceeded(f"stdout exceeded {max_stdout}")
+    return empty.join(out_parts), empty.join(err_tail)
+
+
 def run_logged(
     args,
     *,
@@ -335,6 +419,7 @@ def run_logged(
     level: int = logging.INFO,
     on_child: Callable[[subprocess.Popen], Any] | None = None,
     group: bool = False,
+    max_stdout: int | None = None,
     **kwargs,
 ) -> subprocess.CompletedProcess:
     """`subprocess.run`,外加一行日志。**外部命令只从这一个口子出去。**
@@ -357,6 +442,9 @@ def run_logged(
 
     `group=True`:子进程自成一组,超时停下的是整棵进程树(见 own_group / kill_tree)——
     跑别人的代码时要这样,它起的孙进程不归我们管,却会在超时之后照跑。
+
+    `max_stdout`:stdout 最多收这么多(文本模式按字符),超了立刻停下子进程、抛
+    ProcessOutputLimitExceeded;stderr 只留尾巴。同样是给跑别人代码的调用方。
     """
     # 文本模式默认 UTF-8(见 TEXT_IO)。调用方只说了「我要字符串」,没说"按这台机器的
     # locale 猜一个编码" —— 而后者在中文 Windows 上是 GBK,ffprobe 报一个中文文件名就炸。
@@ -366,10 +454,10 @@ def run_logged(
     line = _describe(args)
     started = time.monotonic()
     try:
-        if on_child is None and not group:
+        if on_child is None and not group and max_stdout is None:
             result = subprocess.run(args, **kwargs)
         else:
-            result = _run_announcing_child(args, on_child, group=group, **kwargs)
+            result = _run_announcing_child(args, on_child, group=group, max_stdout=max_stdout, **kwargs)
     except subprocess.TimeoutExpired:
         logger.warning("%s 超时(%s):%s", what, _took(time.monotonic() - started), line)
         raise
@@ -394,7 +482,7 @@ def run_logged(
 
 
 class ProcessOutputLimitExceeded(RuntimeError):
-    """A child exceeded its combined stdout/stderr byte budget."""
+    """A child exceeded its output budget (run_bounded: stdout + stderr; run_logged(max_stdout=): stdout)."""
 
 
 def run_bounded(args, *, input: bytes = b"", timeout: float, max_output_bytes: int,

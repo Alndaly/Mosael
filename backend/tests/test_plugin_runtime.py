@@ -118,3 +118,34 @@ def test_plugin_stdio_is_utf8_whatever_the_locale(tmp_path, monkeypatch) -> None
     """)
     output = execute_tool(*plugin, "x", {"text": "中文 ✓ 😀"}).output
     assert (output["chars"], output["summary"]) == (6, "6 个字"), output
+
+
+def test_输出停不下来的插件在超过上限时就停_不等到超时(tmp_path) -> None:
+    """此前 stdout 整个读进内存、读完才比上限:一个死循环往 stdout 打字的插件,后端会在超时之前
+    一直攒它的输出(每秒几百 MB 到几 GB)—— 「插件坏了只失败这一次调用」变成了整个应用被撑爆。
+    现在读到上限就停下它。"""
+    import time
+
+    plugin = make_plugin(tmp_path, """
+        import sys, time
+        chunk = "x" * 65536
+        while True:
+            sys.stdout.write(chunk)
+            sys.stdout.flush()
+            time.sleep(0.001)
+    """)
+    started = time.monotonic()
+    with pytest.raises(PluginRuntimeError) as caught:
+        execute_tool(*plugin, "x", {}, timeout=20)
+    assert caught.value.key == "pluginErr_outputTooLarge"
+    assert time.monotonic() - started < 10, "读到上限了还在等它"
+
+
+def test_stderr_很吵的插件照样成功(tmp_path) -> None:
+    """stdout 有上限,stderr 没有:pip、ffmpeg 往 stderr 打几 MB 进度是正常的,只留尾巴给失败原因用。"""
+    plugin = make_plugin(tmp_path, """
+        import json, sys
+        sys.stderr.write("进度 " * 1_000_000)
+        print(json.dumps({"ok": True, "output": {"done": True}}))
+    """)
+    assert execute_tool(*plugin, "x", {}).output["done"] is True
