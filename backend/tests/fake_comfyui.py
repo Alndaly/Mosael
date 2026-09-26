@@ -13,6 +13,7 @@ import base64
 import hashlib
 import json
 import re
+import socket
 import struct
 import threading
 from dataclasses import dataclass, field
@@ -166,6 +167,8 @@ class State:
     uploads: list[tuple[str, bytes]] = field(default_factory=list)
     calls: list[tuple[str, str, Any]] = field(default_factory=list)
     websocket: bool = False
+    #: WebSocket 在提交之后被对面**重置**(ComfyUI 重启、网络抖一下、代理掐线):插件该退回轮询。
+    websocket_reset: bool = False
     submitted: threading.Event = field(default_factory=threading.Event)
     next_id: int = 0
     #: 老版本 ComfyUI 没有 `/models`。
@@ -322,6 +325,12 @@ class _Handler(BaseHTTPRequestHandler):
         if not state.submitted.wait(timeout=10):
             return
         prompt_id = f"p{state.next_id}"
+        if state.websocket_reset:
+            self.wfile.write(b"\x81")  # 半个帧头,然后 RST
+            self.wfile.flush()
+            self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            self.connection.close()
+            return
         self.wfile.write(bytes([0x82, 4]) + b"\x00\x01\x02\x03")  # 一帧二进制预览图:插件该跳过
         for message in (
             {"type": "execution_start", "data": {"prompt_id": prompt_id}},

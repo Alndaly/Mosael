@@ -167,6 +167,14 @@ def test_进度来自WebSocket(comfy, tmp_path: Path) -> None:
     assert fractions == sorted(fractions), "进度只往前走"
 
 
+def test_WebSocket中途被重置_退回轮询照样取回(comfy, tmp_path: Path) -> None:
+    """进度是锦上添花:WebSocket 断了(连接被重置、读超时)不能让这次生成失败。"""
+    comfy.state.websocket = True
+    comfy.state.websocket_reset = True
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    assert len(output["outputs"]) == 1
+
+
 def test_视频图取回的是合成的视频_首帧接到start_image(comfy, tmp_path: Path) -> None:
     comfy.state.outcome = "video"
     output, _, scratch = _generate(comfy.url, tmp_path, {

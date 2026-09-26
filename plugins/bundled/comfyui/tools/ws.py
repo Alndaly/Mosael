@@ -40,7 +40,7 @@ class WebSocket:
         key = base64.b64encode(os.urandom(16)).decode("ascii")
         handshake = (
             f"GET {path} HTTP/1.1\r\n"
-            f"Host: {host}:{port}\r\n"
+            f"Host: {f'[{host}]' if ':' in host else host}:{port}\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
             f"Sec-WebSocket-Key: {key}\r\n"
@@ -56,7 +56,11 @@ class WebSocket:
     # --- 读 ---------------------------------------------------------------
 
     def _fill(self) -> None:
-        chunk = self._sock.recv(65536)
+        # 读的时候断了(对面重置、读超时、TLS 出错)都是「连接没了」:调用方退回轮询,而不是让这次生成失败
+        try:
+            chunk = self._sock.recv(65536)
+        except OSError as exc:
+            raise WebSocketClosed(str(exc) or type(exc).__name__) from exc
         if not chunk:
             raise WebSocketClosed("connection closed")
         self._buffer += chunk
@@ -76,9 +80,13 @@ class WebSocket:
         return data
 
     def _readable(self, timeout: float) -> bool:
-        if self._buffer:
+        # TLS 层可能已经解好一段还没取走的数据:select 看不见它,只看套接字本身
+        if self._buffer or (isinstance(self._sock, ssl.SSLSocket) and self._sock.pending()):
             return True
-        ready, _, _ = select.select([self._sock], [], [], timeout)
+        try:
+            ready, _, _ = select.select([self._sock], [], [], timeout)
+        except (OSError, ValueError) as exc:
+            raise WebSocketClosed(str(exc) or type(exc).__name__) from exc
         return bool(ready)
 
     def recv(self, timeout: float) -> str | None:
@@ -86,7 +94,10 @@ class WebSocket:
         if not self._readable(timeout):
             return None
         # 一旦开始读一帧就读完它:帧读到一半停下,下一次就对不上边界了。
-        self._sock.settimeout(30.0)
+        try:
+            self._sock.settimeout(30.0)
+        except OSError as exc:
+            raise WebSocketClosed(str(exc) or type(exc).__name__) from exc
         message = b""
         text = False
         while True:
