@@ -228,10 +228,14 @@ export function ActionComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
+      {/* **两段:正文滚、底栏钉住。** 此前整块一起 overflow-y-auto,「运行」那一行排在正文末尾 ——
+          一展开「高级选项」它就被挤出视口,要滚到底才点得到。现在正文一格自己滚(minmax(0,1fr)),
+          底栏一格按内容高、永远在面板底边。 */}
       <div
         data-action-composer=""
-        className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel grid max-h-[min(520px,70vh)] w-[400px] gap-3 overflow-y-auto p-3")}
+        className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel grid max-h-[min(520px,70vh)] w-[400px] grid-rows-[minmax(0,1fr)_auto] overflow-hidden")}
       >
+        <div data-action-composer-body="" className="grid min-h-0 content-start gap-3 overflow-y-auto p-3">
         {tool === undefined ? (
           <div role="status" className="flex items-center gap-2 text-ui-xs text-muted-foreground">
             <Loader2 size={13} className="animate-spin" /> {t("boardKindAction")}
@@ -307,7 +311,11 @@ export function ActionComposer({
                 )}
               </div>
             )}
-            <div className="flex items-center gap-2 border-t border-border pt-2.5">
+          </>
+        )}
+        </div>
+        {tool && (
+            <div data-action-composer-footer="" className="flex items-center gap-2 border-t border-border px-3 pb-3 pt-2.5">
               <span className="flex min-w-0 flex-1 items-center gap-1 text-ui-2xs text-muted-foreground">
                 <Link2 size={11} className="shrink-0" />
                 <span className="truncate" title={t("boardToolOutputsHint")}>{t("boardToolOutputsHint")}</span>
@@ -328,7 +336,6 @@ export function ActionComposer({
                 {t(item.run?.status === "succeeded" ? "boardToolRerun" : "boardToolRun")}
               </button>
             </div>
-          </>
         )}
       </div>
     </NodeToolbar>

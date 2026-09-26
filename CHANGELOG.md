@@ -3,6 +3,12 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [Unreleased]
+
+#### 修好的
+
+- **画板工具格展开「高级选项」后,「运行」不再被挤出面板。** 正文自己滚,运行那一行钉在面板底部。
+
 ## [1.6.0] - 2026-09-26
 
 ### ComfyUI 成了插件、画板能跑工具、AI 工作台会出音乐

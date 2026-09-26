@@ -193,6 +193,19 @@ describe("工具格的面板", () => {
     expect(document.querySelector<HTMLButtonElement>("[data-board-tool-run]")!.disabled).toBe(true);
   });
 
+  // 展开「高级选项」时「运行」不能被挤出面板:正文一格自己滚,底栏在滚动区**外面**、钉在面板底边。
+  it("运行那一行不在滚动的正文里,展开多少字段都钉在底部", async () => {
+    stubApi([{ value: "i1", label: "我的回声" }]);
+    mount(<Stateful initial={action()} sources={[]} />);
+    const run = await waitFor(() => document.querySelector<HTMLElement>("[data-board-tool-run]")!);
+    const panel = document.querySelector<HTMLElement>("[data-action-composer]")!;
+    const body = panel.querySelector<HTMLElement>("[data-action-composer-body]")!;
+    expect(body.className).toContain("overflow-y-auto");
+    expect(panel.className).not.toContain("overflow-y-auto");
+    expect(body.contains(run)).toBe(false);
+    expect(run.closest("[data-action-composer-footer]")?.parentElement).toBe(panel);
+  });
+
   it("清单里没有这个工具(插件卸了、这个人没接):不给表单", () => {
     stubApi([]);
     mount(<Stateful initial={action()} sources={[]} tool={null} />);
