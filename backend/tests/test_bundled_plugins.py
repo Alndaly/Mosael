@@ -96,3 +96,20 @@ def test_仓库里随包的插件都能装() -> None:
         raw = json.loads((plugin.source / "mosael.plugin.json").read_text(encoding="utf-8"))
         manifest = parse(raw, str(plugin.source))
         assert (plugin.source / manifest.runtime.entry).is_file()
+
+
+def test_问哪几个是随包的不读插件的文件(shipped, monkeypatch: pytest.MonkeyPatch) -> None:
+    """插件页列表、市场、卸载判定都要问「哪几个是随包的」。此前每问一次就把随包插件的整个目录
+    读一遍、哈希一遍 —— 打开一次插件页就是一次。指纹只有启动对账要。"""
+    def boom(_root: Path) -> str:
+        raise AssertionError("只问 id 的时候不该去算内容指纹")
+
+    from app.db.migrations import _install_bundled_plugins
+    from tests.util import second_client
+
+    _install_bundled_plugins()  # 启动对账:只有这一处该算指纹
+    monkeypatch.setattr(bundled, "_digest", boom)
+    assert [one.id for one in bundled.plugins()] == ["test.bundled"]
+    assert bundled.is_bundled("test.bundled")
+    listed = second_client("tester").get("/api/plugins")
+    assert listed.status_code == 200 and any(one["bundled"] for one in listed.json())

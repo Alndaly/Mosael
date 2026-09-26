@@ -52,7 +52,15 @@ def bundled_root() -> Path:
 class BundledPlugin:
     id: str
     source: Path
-    digest: str
+
+    @property
+    def digest(self) -> str:
+        """内容指纹。**用到才算**:只有启动对账要它。
+
+        此前在 `plugins()` 里给每个随包插件现算一遍 —— 而 `plugins()` 还被插件页列表、市场、卸载
+        判定拿来问「哪几个是随包的」,于是每次打开插件页都把 ComfyUI 整个目录读一遍、哈希一遍。
+        """
+        return _digest(self.source)
 
 
 def _digest(root: Path) -> str:
@@ -68,7 +76,7 @@ def _digest(root: Path) -> str:
 
 
 def plugins() -> list[BundledPlugin]:
-    """这一版带了哪些插件。目录不在(比如只拷了后端出来跑)就是一个都没有。"""
+    """这一版带了哪些插件。目录不在(比如只拷了后端出来跑)就是一个都没有。只读清单,不碰别的文件。"""
     root = bundled_root()
     if not root.is_dir():
         return []
@@ -78,7 +86,7 @@ def plugins() -> list[BundledPlugin]:
         if not manifest.is_file():
             continue
         raw = json.loads(manifest.read_text(encoding="utf-8"))
-        found.append(BundledPlugin(id=str(raw["id"]), source=child, digest=_digest(child)))
+        found.append(BundledPlugin(id=str(raw["id"]), source=child))
     return found
 
 
@@ -94,12 +102,13 @@ def install(db: Session, plugins_dir: Path) -> list[str]:
         target = plugins_dir / plugin.id
         marker = target / DIGEST_FILENAME
         current = marker.read_text(encoding="utf-8").strip() if marker.is_file() else ""
-        if current != plugin.digest:
+        digest = plugin.digest
+        if current != digest:
             # 先拷到旁边再换过去:拷到一半断电,留下的是一个没用的临时目录,不是半个插件。
             staging = plugins_dir / f".{plugin.id}.installing"
             shutil.rmtree(staging, ignore_errors=True)
             shutil.copytree(plugin.source, staging, ignore=shutil.ignore_patterns("__pycache__"))
-            (staging / DIGEST_FILENAME).write_text(plugin.digest, encoding="utf-8")
+            (staging / DIGEST_FILENAME).write_text(digest, encoding="utf-8")
             if target.exists():
                 shutil.rmtree(target)
             staging.rename(target)
