@@ -1,19 +1,21 @@
 """**每张工作流一个工具**:它自己的提示词、它自己读素材的节点、它自己能调的参数、它自己的输出节点。
 
-此前只有一个 `run_workflow`,入参是写死的一张表(workflow / prompt / image / images / mask / values…),
-不管选的是哪张工作流都长一个样 —— 插件页上它的表单里全是 `string` 占位,放大工作流也问你要提示词。
-而每张工作流该收什么,图里写得清清楚楚。所以插件在运行时把工具清单交给宿主(见 docs/PLUGIN_MANIFEST 的
-「运行时报出的工具」):
+最早只有一个通用的 `run_workflow`,入参是写死的一张表(workflow / prompt / image / images / mask / values…):
+它连要跑哪张工作流都不知道,表单却要人填参数 —— 放大工作流也问你要提示词。而每张工作流该收什么,图里写得
+清清楚楚。所以插件在运行时把工具清单交给宿主(见 docs/PLUGIN_MANIFEST 的「运行时报出的工具」),`run_workflow`
+删掉了:它能跑的每一种图(保存的工作流、粘贴的 API 模板、内置文生图)在这里都有自己的工具。
 
 - 工具名 `wf_<12 位>`:取 ComfyUI 保存工作流时写进图里的 id(新版前端的 UUID)—— **改名、挪目录都不变**,
   工作流节点和智能体记着的名字不会因此失效;老版本存的图没有 id(或是全零的占位),退到路径的哈希(改名就是
-  另一个工具);几张图撞了同一个 id(拷出来的副本),它们都退到路径的哈希;粘贴的 API 模板是 `wf_api_template`;
+  另一个工具);几张图撞了同一个 id(拷出来的副本),它们都退到路径的哈希;粘贴的 API 模板是 `wf_api_template`,
+  内置文生图是 `wf_builtin_txt2img`;
 - 入参从图里读:提示词 / 反向提示词、每个读素材的节点一格(`image_10`、`mask_11`、`video_1`…,
   `format: "asset"` 带着素材种类)、每个可调输入一格(`steps_3`、`lora_name_10`…,名字、范围、常用与否
   和生成参数同一套,见 labels);种子、尺寸、一次几张收进「高级」;
 - 输出按输出节点声明(`image_9`、`video_30`、`text_40`…),外加 `asset_id` / `asset_ids` / `texts` / `summary`;
-- `replaces` 告诉宿主:存着的 `run_workflow`(选的是这张工作流)、以及这张图以前按路径哈希起的名字,怎么改写成
-  这个工具 —— 宿主据此把工作流里的老节点迁过来(见 domain/workflows/plugin_references),ComfyUI 的知识仍只在这里。
+- `replaces` 告诉宿主:存着的 `run_workflow`(选的是这张工作流;那个工具已经删了)、以及这张图以前按路径哈希起的
+  名字,怎么改写成这个工具 —— 宿主据此把工作流和画板上的老节点迁过来(见 domain/workflows/plugin_references),
+  ComfyUI 的知识仍只在这里。
 
 跑的时候**按当前的图重新推一遍**这些键:工作流在 ComfyUI 里改过了,认得的键照样接上,认不得的不接。
 """
@@ -34,6 +36,7 @@ from comfy_http import Comfy
 from lines import ComfyError, say
 
 TEMPLATE_TOOL = "wf_api_template"
+BUILTIN_TOOL = "wf_builtin_txt2img"
 #: 工具一次最多跑多久(宿主的上限就是 1800 秒)。更长的走生成(6 小时、有回执、能续等)。
 TIMEOUT_SECONDS = 1800
 
@@ -84,8 +87,12 @@ def _ident_key(entry: models.Entry) -> str:
     return ident[:12] if len(ident) >= 12 and ident.strip("0") else ""
 
 
+#: 不在 ComfyUI 里存着的那两张图:名字写死(它们没有路径,也没有 ComfyUI 给的 id)。
+_FIXED_NAMES = {models.TEMPLATE: TEMPLATE_TOOL, models.BUILTIN: BUILTIN_TOOL}
+
+
 def tool_names(entries: list[models.Entry]) -> dict[str, str]:
-    """模型 id → 工具名。内置文生图不是工具(它只是生成那一路的兜底);转不过来的图没有工具。
+    """模型 id → 工具名。转不过来的图没有工具。
 
     **几张图带着同一个 id**(在 ComfyUI 外面拷了一份文件、老版本「另存为」带着原来的 id)时,它们都退到路径的
     哈希:谁拿那个 id 的名字要是按路径顺序定,新拷出来的「a 副本.json」排在前面就抢走了原来那张的名字,存着的
@@ -98,10 +105,10 @@ def tool_names(entries: list[models.Entry]) -> dict[str, str]:
             counts[key] = counts.get(key, 0) + 1
     names: dict[str, str] = {}
     for entry in entries:
-        if entry.problem or entry.id == models.BUILTIN:
+        if entry.problem:
             continue
-        if entry.id == models.TEMPLATE:
-            names[entry.id] = TEMPLATE_TOOL
+        if entry.id in _FIXED_NAMES:
+            names[entry.id] = _FIXED_NAMES[entry.id]
             continue
         key = _ident_key(entry)
         names[entry.id] = f"wf_{key}" if key and counts[key] == 1 else f"wf_{_hash(entry.id)}"
@@ -124,7 +131,8 @@ class Shape:
         self.outputs: list[str] = []
         self.output_types: dict[str, str] = {}
         self.output_labels: dict[str, dict[str, str]] = {}
-        #: 老的 `run_workflow` 入参 → 这里的键(给宿主迁移存着的节点用)
+        #: 老的 `run_workflow` 入参 → 这里的键(给宿主迁移存着的节点用;`values.` 开头的两种写法都有:
+        #: 「节点 id.输入名」和「节点标题.输入名」)
         self.rename: dict[str, str | None] = {}
         #: 几个输出节点
         self.output_nodes = 0
@@ -139,6 +147,14 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     found = graph.slots(api, kind, titles)
     described = graph.describe(entry.id, entry.label, api, object_info, titles)
     required_roles = {one["role"] for one in described["inputs"] if one.get("required")}
+
+    def alias(node: str, name: str, key: str) -> None:
+        """老的 `values` 按「节点 id 或节点标题.输入名」写(见 graph.set_value):两种写法都迁到 `key` 这一格。
+        标题撞了别的节点(几个节点同名、或者标题就是另一个节点的 id)时它指的不止这一处,不给别名。"""
+        shape.rename[f"values.{node}.{name}"] = key
+        title = titles.get(node, "")
+        if title and title not in api and list(titles.values()).count(title) == 1:
+            shape.rename[f"values.{title}.{name}"] = key
 
     if "prompt" in roles.values() or "prompt" in placeholders:
         shape.properties["prompt"] = {
@@ -201,9 +217,18 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
             key = f"{key}_{_hash(combined)[:4]}"
         shape.properties[key] = dict(spec)
         shape.bindings[key] = ("param", node, name, spec["type"])
-        shape.rename[f"values.{combined}"] = key
+        alias(node, name, key)
 
-    if graph.seed_inputs(api) or "seed" in placeholders:
+    if "steps" in placeholders:
+        # 内置文生图和粘贴的模板里的 `{{steps}}`:保存的工作流的步数是上面那样的一格参数
+        shape.properties["steps"] = {
+            "type": "integer", "minimum": 1, "default": models.PLACEHOLDER_DEFAULTS["steps"], "title": _pair("步数", "Steps"),
+        }
+        shape.bindings["steps"] = ("value", "steps", "integer")
+        shape.rename["steps"] = "steps"
+
+    seeds = graph.seed_inputs(api)
+    if seeds or "seed" in placeholders:
         shape.properties["seed"] = {
             "type": "integer", "minimum": 0, "x-advanced": True, "title": _pair("随机种子", "Seed"),
             "description": _pair("留空照工作流里的设定:固定的用存着的那个,每次随机的换一个",
@@ -211,6 +236,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         }
         shape.bindings["seed"] = ("value", "seed", "integer")
         shape.rename["seed"] = "seed"
+        if len(seeds) == 1:
+            alias(*seeds[0], "seed")
     sized = graph.size_node(api)
     if sized is not None or {"width", "height"} & placeholders:
         own = (api[sized]["inputs"] if sized is not None else {})
@@ -221,6 +248,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
             shape.properties[name] = spec
             shape.bindings[name] = ("value", name, "integer")
             shape.rename[name] = name
+            if sized is not None:
+                alias(sized, name, name)
     batched = graph.batch_input(api)
     if batched is not None and kind == "image":
         shape.properties["num_images"] = {
@@ -288,7 +317,8 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
 def _replaces(entry: models.Entry, name: str, shape: Shape) -> list[dict[str, Any]]:
     """存着的哪些老节点该改写成这个工具(宿主据此迁,见 domain/workflows/plugin_references):
 
-    - 选了这张图的通用 `run_workflow`;
+    - 选了这张图的通用 `run_workflow`(已经删掉的那个工具;`wait: true` 是它的默认,丢掉)。它不在了,宿主迁的时候
+      把这里没有位置的几格丢掉、记进修订说明,而不是留下一个跑不起来的节点;
     - 这张图**以前按路径哈希起的名字**:老版本 ComfyUI 存的图没有 id,在新版里打开再存一次就有了,工具名跟着从
       `wf_<路径哈希>` 变成 `wf_<id>` —— 不迁的话,存着的节点从此找不到它。入参是同一张图推出来的,按同名接。
     """
@@ -296,7 +326,7 @@ def _replaces(entry: models.Entry, name: str, shape: Shape) -> list[dict[str, An
         {"tool": "run_workflow", "match": {"workflow": entry.id}, "rename": shape.rename, "drop_if": {"wait": True}},
     ]
     by_path = f"wf_{_hash(entry.id)}"
-    if name not in (by_path, TEMPLATE_TOOL):
+    if name != by_path and name not in _FIXED_NAMES.values():
         found.append({"tool": by_path, "match": {}, "rename": {}, "drop_if": {}})
     return found
 
@@ -342,10 +372,10 @@ def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) 
         try:
             api, _, titles = models.load(comfy, model_id, object_info, locale)
             ident = ""
-            if model_id not in (models.TEMPLATE, models.BUILTIN):
+            if model_id not in _FIXED_NAMES:
                 ident = models._ident(comfy.fetch_workflow(model_id))  # noqa: SLF001
             entry = models.Entry(model_id, models.label_of(model_id), api, titles, "", ident)
-            if tool_names([entry]).get(model_id) == name or name == TEMPLATE_TOOL:
+            if tool_names([entry]).get(model_id) == name:
                 return entry
         except ComfyError:
             pass

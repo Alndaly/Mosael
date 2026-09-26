@@ -227,8 +227,9 @@ A tool that runs for minutes can also declare `"stream": true`: stdout becomes o
 written as `{"event": "progress", "progress": 0.4, "message": "step 8/20"}`, and the last line is the result as
 usual. Inside a workflow the run panel shows that progress; when the task is cancelled Mosael first creates a cancel
 file (`MOSAEL_PLUGIN_CANCEL_FILE`) so you can stop the remote work before exiting, instead of being killed outright.
-For long work meant for the agent, offer a “submit and return a task id” tool plus a “fetch by task id” tool — the
-bundled ComfyUI plugin's `run_workflow` (`wait: false`) and `import_outputs` work that way.
+For long work the agent may call without confirmation, offer a “submit and return a task id” tool plus a “fetch by
+task id” tool; tools that need confirmation (paid, external, local code) open a card and run in the background once
+approved, so they don't count against the agent's wait for a single call.
 
 ## Generating for Mosael
 

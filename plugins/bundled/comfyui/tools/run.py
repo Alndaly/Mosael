@@ -1,7 +1,7 @@
 """在 ComfyUI 上跑一张图:传素材、提交、看进度、能取消、能接着等、取回产出。
 
 两条路共用这里:**替宿主做一次生成**(`generate`,见 docs/PLUGIN_MANIFEST 的「替宿主做生成」)和
-**跑一张工作流**(工具 `run_workflow`,见 workflows.py)。这一侧只做三件宿主做不了的事:
+**跑一张工作流**(每张工作流自己的工具,见 tooling.py)。这一侧只做三件宿主做不了的事:
 
 - **说出进度**:WebSocket 上的真实进度(哪个节点、第几步),连不上就退回轮询 `/history` / `/queue`;
 - **停下远端**:宿主建了取消文件,就把这一个任务从 ComfyUI 里停掉 —— 在跑的 `/interrupt`,
@@ -324,16 +324,14 @@ def _open_socket(comfy: Comfy, client_id: str) -> WebSocket | None:
 
 
 def run_prompt(comfy: Comfy, prompt: dict[str, Any], emit: Emit, locale: str,
-               titles: dict[str, str] | None = None, *, wait: bool = True) -> tuple[str, dict[str, Any] | None]:
-    """提交一张填好的 API 图并等它跑完。返回 (任务号, 历史条目);`wait=False` 时提交完就回(条目是 None)。"""
+               titles: dict[str, str] | None = None) -> tuple[str, dict[str, Any] | None]:
+    """提交一张填好的 API 图并等它跑完。返回 (任务号, 历史条目)。"""
     client_id = uuid.uuid4().hex
     # 先连 WebSocket 再提交:ComfyUI 只把事件推给**已经连着**的那个 clientId,晚连就错过开头。
-    socket = _open_socket(comfy, client_id) if wait else None
+    socket = _open_socket(comfy, client_id)
     try:
         prompt_id = submit(comfy, prompt, client_id, locale)
         emit({"event": "task", "task": {"prompt_id": prompt_id, "client_id": client_id}})
-        if not wait:
-            return prompt_id, None
         tracker = _Tracker(prompt, locale, titles)
         progress(emit, 0.02, tracker.message())
         if socket is not None:

@@ -1,13 +1,14 @@
-"""给智能体和工作流用的三个工具:看有哪些工作流、跑一张工作流、把 ComfyUI 里的产出收进素材库。
+"""给智能体和工作流用的两个工具:看有哪些工作流、把 ComfyUI 里的产出收进素材库;以及交回产出的那一段
+(每张工作流自己的工具跑完也走这里,见 tooling.run_tool)。
+
+**跑一张工作流用它自己的工具**(「工作流 · 名字」,见 tooling):入参就是那张图自己的提示词、读素材的节点和
+可调参数。此前还有一个通用的 `run_workflow`(按 id 跑、入参是写死的一张表),它连要跑哪张图都不知道,
+表单却要人填参数 —— 已经删掉,存着的老节点由每张图的工具声明 `replaces`、宿主改写过去。
 
 和「替宿主做生成」(run.generate)的区别:生成是**一段提示词 → 一份成片**,由宿主的生成任务管着
-(回执、用量、重启后接着等);这里是**一张工作流原样跑一遍**,输入可以是图、蒙版、视频、音频、任意节点
-上的值,交回**全部**产出(每个保存 / 预览节点的每一个文件,以及显示文字的节点说的话)—— 放大、抠图、
-局部重绘、修脸、补帧,用的都是用户自己的那张图。
-
-长活怎么办(见 docs/PLUGIN_MANIFEST 的「预算」与 comfyui 指南):工具一次最多跑 30 分钟,智能体那一侧
-一次只等 3 分钟。所以 `run_workflow` 可以 `wait: false` 只提交、马上交回任务号,之后用 `import_outputs`
-按任务号取回;要跑一小时的视频走生成(每张工作流本来就是一个生成模型),那里有回执和重启续等。
+(回执、用量、重启后接着等,一次能跑 6 小时);工作流工具是**一张工作流原样跑一遍**,交回**全部**产出
+(每个保存 / 预览节点的每一个文件,以及显示文字的节点说的话),一次最多 30 分钟。`import_outputs` 按任务号
+或最近几次把 ComfyUI 历史里的产出取回 —— 在 ComfyUI 界面里跑出来的也行。
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ def _text(value: Any, locale: str) -> str:
 
 
 def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """保存的每张工作流(加内置文生图、粘贴的模板):能喂什么、能调什么、会交出什么。"""
+    """保存的每张工作流(加内置文生图、粘贴的模板):能喂什么、能调什么、会交出什么,跑它用哪个工具。"""
     query = str(payload.get("query") or "").strip().lower()
     object_info = comfy.object_info()
     found: list[dict[str, Any]] = []
@@ -60,7 +61,7 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
             continue
         described = inspect(entry.id, name, entry.api, object_info, entry.titles, locale)
         if entry.id in names:
-            # 这张工作流自己的那个工具(输入就是它自己的节点):智能体优先调它,而不是 run_workflow
+            # 跑它用的工具(输入就是它自己的节点)
             described["tool"] = names[entry.id]
         found.append(described)
     return {
@@ -93,7 +94,6 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
             if bound in spec:
                 entry[bound] = spec[bound]
         parameters.append(entry)
-    image_slots = [slot for slot in found_slots if slot["media"] == "image"]
     return {
         "id": model_id,
         "label": label,
@@ -102,120 +102,14 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
         "prompt": "prompt" in roles.values(),
         "negative_prompt": "negative" in roles.values(),
         "size": size,
-        # 智能体按这个顺序给 `image` / `images`:第一个读图的节点吃 `image`,后面的依次吃 `images`
         "inputs": [
             {"node": slot["node"], "title": slot["title"], "class_type": slot["class_type"],
-             "media": slot["media"], "role": slot["role"],
-             "argument": _argument_for(slot, image_slots)}
+             "media": slot["media"], "role": slot["role"]}
             for slot in found_slots
         ],
         "parameters": parameters,
         "outputs": graph.output_nodes(api, object_info, titles),
     }
-
-
-def _argument_for(slot: dict[str, str], image_slots: list[dict[str, str]]) -> str:
-    """这个槽位由 `run_workflow` 的哪个参数喂。"""
-    if slot["media"] == "image":
-        index = image_slots.index(slot)
-        return "image" if index == 0 else f"images[{index - 1}]"
-    return {"mask": "mask", "video": "video", "audio": "audio"}.get(slot["media"], "")
-
-
-# ---------------------------------------------------------------------------
-# run_workflow
-# ---------------------------------------------------------------------------
-
-
-def _paths(value: Any) -> list[str]:
-    if isinstance(value, str) and value.strip():
-        return [value]
-    if isinstance(value, list):
-        return [str(one) for one in value if isinstance(one, str) and one.strip()]
-    return []
-
-
-def _assign(found_slots: list[dict[str, str]], payload: dict[str, Any], locale: str) -> list[dict[str, str]]:
-    """`image` / `images` / `mask` / `video` / `audio` → 按槽位顺序排好的 `{role, path}`(交给 run.upload)。"""
-    wanted = {
-        "image": _paths(payload.get("image")) + _paths(payload.get("images")),
-        "mask": _paths(payload.get("mask")),
-        "video": _paths(payload.get("video")),
-        "audio": _paths(payload.get("audio")),
-    }
-    assigned: list[dict[str, str]] = []
-    for media, paths in wanted.items():
-        if not paths:
-            continue
-        targets = [slot for slot in found_slots if slot["media"] == media]
-        if media == "mask" and not targets:
-            # 没有单独的蒙版节点也能收:LoadImage 的 alpha 那一路会被改接到给的蒙版上(见 graph.wire_inputs)
-            if any(slot["class_type"] == "LoadImage" for slot in found_slots):
-                assigned.append({"role": "mask", "path": paths[0]})
-                continue
-        if not targets:
-            raise ComfyError(say(
-                locale,
-                f"这张工作流里没有读{_media_zh(media)}的节点,给的{_media_zh(media)}接不上去",
-                f"This workflow has no node that loads {_media_en(media)}, so the given {_media_en(media)} has nowhere to go",
-            ))
-        if len(paths) > len(targets):
-            raise ComfyError(say(
-                locale,
-                f"给了 {len(paths)} 份{_media_zh(media)},这张工作流只有 {len(targets)} 个读{_media_zh(media)}的节点",
-                f"Got {len(paths)} {_media_en(media)} inputs but the workflow only has {len(targets)} {_media_en(media)} loader(s)",
-            ))
-        for slot, path in zip(targets, paths):
-            assigned.append({"role": slot["role"], "path": path})
-    return assigned
-
-
-def _media_zh(media: str) -> str:
-    return {"image": "图", "mask": "蒙版", "video": "视频", "audio": "音频"}.get(media, media)
-
-
-def _media_en(media: str) -> str:
-    return {"image": "images", "mask": "masks", "video": "videos", "audio": "audio"}.get(media, media)
-
-
-def run_workflow(payload: dict[str, Any], comfy: Comfy, locale: str, emit: run.Emit) -> dict[str, Any]:
-    model_id = str(payload.get("workflow") or "").strip()
-    if not model_id:
-        raise ComfyError(say(locale, "要跑哪张工作流?`workflow` 填 list_workflows 里的 id",
-                             "Which workflow? Set `workflow` to an id from list_workflows"))
-    object_info = comfy.object_info()
-    api, defaults, titles = models.load(comfy, model_id, object_info, locale)
-    kind = graph.kind_of(api)
-    parameters = {key: payload[key] for key in ("seed", "width", "height", "steps") if key in payload}
-    if "num_images" in payload:
-        parameters["num_images"] = payload["num_images"]
-    # 没给提示词就用工作流里写好的那一句;跑一张存好的工作流,种子没给就用它存着的
-    values = run.values_from(payload.get("prompt"), payload.get("negative_prompt"), parameters, defaults,
-                             keep_seed=not defaults)
-    prompt = graph.fill(api, values, {})
-    unknown = []
-    for key, value in (payload.get("values") or {}).items():
-        if not graph.set_value(prompt, str(key), value, titles):
-            unknown.append(str(key))
-    if unknown:
-        raise ComfyError(say(locale, f"这些值在工作流里对不上(写成「节点 id 或节点标题.输入名」):{', '.join(unknown)}",
-                             f"These values match no literal input (use “node id or title.input name”): {', '.join(unknown)}"))
-    found_slots = graph.slots(prompt, kind, titles)
-    uploaded = run.upload(comfy, _assign(found_slots, payload, locale))
-    if uploaded:
-        prompt = graph.wire_inputs(prompt, kind, uploaded)
-    wait = payload.get("wait") is not False
-    prompt_id, entry = run.run_prompt(comfy, prompt, emit, locale, titles, wait=wait)
-    if entry is None:
-        return {
-            "workflow": model_id,
-            "prompt_id": prompt_id,
-            "status": "queued",
-            "summary": say(locale, f"已提交到 ComfyUI(任务 {prompt_id});跑完后用 import_outputs 取回产出",
-                           f"Submitted to ComfyUI (task {prompt_id}); fetch the outputs with import_outputs when it is done"),
-        }
-    return deliver(comfy, [(prompt_id, entry)], prompt, titles, locale, model_id,
-                    include_previews=payload.get("include_previews") is True, workflow=model_id)
 
 
 # ---------------------------------------------------------------------------

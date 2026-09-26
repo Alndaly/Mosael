@@ -3414,9 +3414,65 @@ def _install_bundled_plugins() -> None:
         bundled.install(db, settings.plugins_dir)
 
 
+def _forget_comfyui_run_workflow_tool() -> None:
+    """ComfyUI 插件 1.4.0 删掉了通用的「按 id 跑工作流」(`run_workflow`):它连要跑哪张图都不知道,表单却要人填
+    参数;它能跑的每一种图(保存的工作流、粘贴的 API 模板、内置文生图)都有了自己的工具。
+
+    **存着的节点不在这里改。** 工作流里、画板工具格上的 `plugin.dev.mosael.comfyui.run_workflow` 要改成哪张图的
+    工具、入参怎么改名,只有插件报出的工具清单说得出(`replaces`,图在 ComfyUI 里);那是每次启动和每次清单刷新都跑
+    的对账 `rewrite-replaced-plugin-tools` 的事 —— 老工具不在了,对不上的格子由它丢掉并记进修订说明。定时任务
+    只指着工作流,工作流改好就是改好了。选的那张图在 ComfyUI 里已经删了的节点无从改起,留着,运行前检查报「未知的
+    节点类型」—— 和一个指向已删工作流的 `wf_…` 节点是同一种状态。
+
+    这里清的是**只挂着工具名、没有别的去处**的几样,它们不用等清单:
+
+    - `plugin_capabilities` 里这个工具的开关(工具不在了,开关没有意义;以后要是再有同名工具,不该继承它);
+    - 会话里「本会话始终允许」的 `plugin__<连接>__run_workflow`(折叠规则同 agent.tool_manifest.agent_tool_name)。
+      不转给每张图的工具:允许过「按 id 跑任意一张」不等于允许过哪一张。
+
+    调用记录和确认卡是历史,不动。幂等:第二次跑时已经没有这些行。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"plugin_instances", "plugin_capabilities"} <= tables:
+        return
+    package_id = "dev.mosael.comfyui"
+
+    def safe(value: str) -> str:
+        return re.sub(r"[^A-Za-z0-9_-]", "_", value)
+
+    with engine.begin() as conn:
+        instance_ids = conn.execute(
+            text("SELECT id FROM plugin_instances WHERE package_id = :p"), {"p": package_id}
+        ).scalars().all()
+        if not instance_ids:
+            return
+        for instance_id in instance_ids:
+            conn.execute(
+                text("DELETE FROM plugin_capabilities WHERE instance_id = :id AND tool_name = 'run_workflow'"),
+                {"id": instance_id},
+            )
+        if "agent_sessions" not in tables:
+            return
+        retired = {f"plugin__{safe(instance_id)}__run_workflow" for instance_id in instance_ids}
+        for session in conn.execute(text("SELECT id, auto_allow_tools FROM agent_sessions")).mappings().all():
+            raw = session["auto_allow_tools"]
+            try:
+                allowed = json.loads(raw) if isinstance(raw, str) else raw
+            except ValueError:
+                continue
+            if isinstance(allowed, list) and retired & set(allowed):
+                conn.execute(
+                    text("UPDATE agent_sessions SET auto_allow_tools = :v WHERE id = :id"),
+                    {"v": json.dumps([name for name in allowed if name not in retired], ensure_ascii=False),
+                     "id": session["id"]},
+                )
+
+
 def _rewrite_replaced_plugin_tools() -> None:
     """工作流里、画板工具格上存着的、已被插件运行时报出的新工具取代的老插件节点,改写成新工具(见
     domain/workflows/plugin_references 与 domain/boards/plugin_references)。ComfyUI 的 `run_workflow` + 某张工作流 → 那张工作流自己的工具。
+    老工具已经从插件里删掉了的(ComfyUI 的 `run_workflow` 就是),新工具上没有位置的格子丢掉、记进修订说明 ——
+    留着一个跑不起来的节点不是保住了用户的值。
 
     **对账,不是一次性迁移**:依据是插件上一次报出的工具清单(缓存在 `plugin_instances.discovered_tools`),
     清单会变(用户在 ComfyUI 里新存了工作流),新出现的对应关系下次启动也该迁;清单刷新时同一个函数也会跑。
@@ -4119,6 +4175,9 @@ def migration_plan() -> MigrationPlan:
                 _drop_plugin_packages_that_break_the_manifest_rules,
                 # 四个对象存储插件合成随应用内置的「对象存储」:要用到上面刚装好的那个包。
                 _merge_object_storage_plugins,
+                # ComfyUI 插件删掉了通用的 run_workflow:清掉只挂着这个工具名的开关和会话放行;
+                # 存着的节点由下面的对账按插件报出的清单改。
+                _forget_comfyui_run_workflow_tool,
             ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),

@@ -2,10 +2,11 @@
 
 生成那一路钉在 test_comfyui_plugin_run.py;这里钉的是给智能体和工作流的那一组(见 mosael.plugin.json):
 
-- `list_workflows`:每张工作流能喂什么(哪个参数喂哪个节点)、能调什么、交出什么、在做什么;
-- `run_workflow`:素材按顺序接到读素材的节点上,任意节点的值能改,**全部**产出取回(每个保存节点的
-  每个文件 + 显示文字的节点说的话),进度一行一个,取消只停这一个任务,`wait: false` 只提交;
-- `import_outputs`:按任务号或最近几次把历史产出取回;
+- `list_workflows`:每张工作流能喂什么(哪个节点读哪种素材)、能调什么、交出什么、在做什么、用哪个工具跑;
+- 跑一张工作流(每张图自己的那个工具,入参怎么推钉在 test_comfyui_plugin_workflow_tools.py):**全部**产出取回
+  (每个保存节点的每个文件 + 显示文字的节点说的话),进度一行一个,取消只停这一个任务;通用的 `run_workflow`
+  已经删了(它不知道要跑哪张图,表单却要人填参数);
+- `import_outputs`:按任务号或最近几次把历史产出取回(在 ComfyUI 界面里跑出来的也行);
 - `server_status` / `list_models`:显卡、队列、模型文件(老版本没有 `/models` 时看加载节点的下拉);
 - `interrupt` / `clear_queue` / `free_memory`:只动该动的那一个。
 
@@ -14,6 +15,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -21,10 +23,19 @@ from typing import Any
 import pytest
 
 from app.domain.plugins import runtime
-from tests.fake_comfyui import PNG, UPSCALE_API, FakeComfyUI
+from tests.fake_comfyui import PNG, PORTRAIT_ID, UPSCALE_API, FakeComfyUI
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
+PORTRAIT_TOOL = "wf_" + PORTRAIT_ID.replace("-", "")[:12]
+
+
+def _by_path(path: str) -> str:
+    """没有 ComfyUI 给的 id 的图(测试里直接放 API 图的那几张),工具名是路径的哈希。"""
+    return "wf_" + hashlib.sha1(path.encode()).hexdigest()[:12]
+
+
+UPSCALE_TOOL = _by_path("upscale.json")
 
 
 @pytest.fixture
@@ -71,13 +82,14 @@ def _png(tmp_path: Path, name: str = "图.png") -> Path:
 # --- list_workflows --------------------------------------------------------------
 
 
-def test_列出工作流_说清楚哪个参数喂哪个节点(comfy) -> None:
+def test_列出工作流_说清楚读什么素材_用哪个工具跑(comfy) -> None:
     listed = {one["id"]: one for one in _call(comfy.url, "list_workflows")["workflows"]}
     assert set(listed) == {"builtin:txt2img", "portrait.json", "upscale.json", "video/wan.json"}
     upscale = listed["upscale.json"]
     assert upscale["features"] == ["upscale"] and upscale["prompt"] is False
     assert upscale["inputs"] == [{"node": "1", "title": "LoadImage", "class_type": "LoadImage", "media": "image",
-                                  "role": "reference_image", "argument": "image"}]
+                                  "role": "reference_image"}]
+    assert upscale["tool"] == UPSCALE_TOOL and listed["builtin:txt2img"]["tool"] == "wf_builtin_txt2img"
     assert [(one["node"], one["media"]) for one in upscale["outputs"]] == [("4", "image"), ("5", "image")]
     [model_param] = upscale["parameters"]
     assert model_param == {"key": "2.model_name", "title": "放大模型", "type": "string", "default": "4x-UltraSharp.pth",
@@ -98,7 +110,7 @@ def test_按名字筛(comfy) -> None:
     assert [one["id"] for one in listed] == ["upscale.json"]
 
 
-# --- run_workflow ----------------------------------------------------------------
+# --- 跑一张工作流(它自己的工具) ----------------------------------------------------------
 
 
 def test_跑一张放大工作流_图接上去_全部产出取回(comfy, tmp_path: Path) -> None:
@@ -108,14 +120,14 @@ def test_跑一张放大工作流_图接上去_全部产出取回(comfy, tmp_pat
         "5": {"images": [{"filename": "preview.png", "subfolder": "", "type": "temp"}]},
         "9": {"text": ["done: 2 images"]},
     }
-    output, hooks, scratch = _stream(comfy.url, "run_workflow", {
-        "workflow": "upscale.json", "image": str(_png(tmp_path)), "values": {"2.model_name": "RealESRGAN_x2.pth"},
+    output, hooks, scratch = _stream(comfy.url, UPSCALE_TOOL, {
+        "image_1": str(_png(tmp_path)), "model_name_2": "RealESRGAN_x2.pth",
     }, tmp_path)
     [(uploaded, content)] = comfy.state.uploads
     assert content == PNG
     prompt = comfy.posted("/prompt")[0]["prompt"]
     assert prompt["1"]["inputs"]["image"] == f"mosael/{uploaded}"
-    assert prompt["2"]["inputs"]["model_name"] == "RealESRGAN_x2.pth", "values 改的是那个节点上的那一格"
+    assert prompt["2"]["inputs"]["model_name"] == "RealESRGAN_x2.pth", "参数那一格改的是那个节点上的那一格"
     assert prompt["4"]["inputs"]["filename_prefix"] == "up", "没给的都用工作流自己的"
     assert [one["filename"] for one in output["artifacts"]] == ["up_00001_.png", "up_00002_.png"], "预览不算(有保存节点时)"
     assert all((scratch / one["path"]).read_bytes() == PNG for one in output["artifacts"])
@@ -128,15 +140,15 @@ def test_跑一张放大工作流_图接上去_全部产出取回(comfy, tmp_pat
 
 def test_没有保存节点时_预览就是产出(comfy, tmp_path: Path) -> None:
     comfy.state.outputs = {"5": {"images": [{"filename": "preview.png", "subfolder": "", "type": "temp"}]}}
-    output, _, _ = _stream(comfy.url, "run_workflow", {"workflow": "upscale.json"}, tmp_path)
+    output, _, _ = _stream(comfy.url, UPSCALE_TOOL, {}, tmp_path)
     assert [one["filename"] for one in output["artifacts"]] == ["preview.png"]
 
 
-def test_按标题改值_提示词和种子没给就用工作流自己的(comfy, tmp_path: Path) -> None:
+def test_提示词和种子没给就用工作流自己的(comfy, tmp_path: Path) -> None:
     fixed = json.loads(json.dumps(comfy.state.workflows["portrait.json"]))
     fixed["nodes"][0]["widgets_values"][1] = "fixed"
     comfy.state.workflows["portrait.json"] = fixed
-    _stream(comfy.url, "run_workflow", {"workflow": "portrait.json", "values": {"采样.steps": 9}}, tmp_path)
+    _stream(comfy.url, PORTRAIT_TOOL, {"steps_3": 9}, tmp_path)
     prompt = comfy.posted("/prompt")[0]["prompt"]
     assert prompt["3"]["inputs"]["steps"] == 9
     assert prompt["6"]["inputs"]["text"] == "a cat" and prompt["7"]["inputs"]["text"] == "blurry"
@@ -147,20 +159,9 @@ def test_工作流里设成每次随机的种子_没给就换一个(comfy, tmp_p
     """界面上 KSampler 的种子默认「每次生成后随机」:同一张图通过工具跑两遍,不该拿回同一张图
     (ComfyUI 还会整张命中缓存,第二遍一步都不跑)。"""
     for _ in range(2):
-        _stream(comfy.url, "run_workflow", {"workflow": "portrait.json"}, tmp_path)
+        _stream(comfy.url, PORTRAIT_TOOL, {}, tmp_path)
     first, second = (one["prompt"]["3"]["inputs"]["seed"] for one in comfy.posted("/prompt"))
     assert first != second and 42 not in (first, second)
-
-
-def test_对不上的值和多给的图说清楚(comfy, tmp_path: Path) -> None:
-    with pytest.raises(runtime.PluginRuntimeError, match="nope.steps"):
-        _stream(comfy.url, "run_workflow", {"workflow": "portrait.json", "values": {"nope.steps": 1}}, tmp_path)
-    with pytest.raises(runtime.PluginRuntimeError, match="只有 1 个读图的节点"):
-        _stream(comfy.url, "run_workflow", {"workflow": "upscale.json", "image": str(_png(tmp_path)),
-                                            "images": [str(_png(tmp_path, "b.png"))]}, tmp_path)
-    with pytest.raises(runtime.PluginRuntimeError, match="没有读视频的节点"):
-        _stream(comfy.url, "run_workflow", {"workflow": "upscale.json", "video": str(_png(tmp_path))}, tmp_path)
-    assert comfy.posted("/prompt") == [], "对不上就不提交"
 
 
 def test_蒙版接到LoadImage的alpha那一路(comfy, tmp_path: Path) -> None:
@@ -169,8 +170,8 @@ def test_蒙版接到LoadImage的alpha那一路(comfy, tmp_path: Path) -> None:
         "2": {"class_type": "VAEEncodeForInpaint", "inputs": {"pixels": ["1", 0], "mask": ["1", 1]}},
         "3": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "p"}},
     }
-    _stream(comfy.url, "run_workflow", {"workflow": "inpaint.json", "image": str(_png(tmp_path)),
-                                        "mask": str(_png(tmp_path, "mask.png"))}, tmp_path)
+    _stream(comfy.url, _by_path("inpaint.json"), {"image_1": str(_png(tmp_path)),
+                                                  "mask": str(_png(tmp_path, "mask.png"))}, tmp_path)
     prompt = comfy.posted("/prompt")[0]["prompt"]
     mask_node = prompt["2"]["inputs"]["mask"][0]
     assert prompt[mask_node]["class_type"] == "LoadImageMask"
@@ -178,31 +179,28 @@ def test_蒙版接到LoadImage的alpha那一路(comfy, tmp_path: Path) -> None:
     assert len(comfy.state.uploads) == 2
 
 
-def test_只提交不等_之后用import_outputs取回(comfy, tmp_path: Path) -> None:
-    comfy.state.outcome = "never"
-    output, _, _ = _stream(comfy.url, "run_workflow", {"workflow": "upscale.json", "wait": False}, tmp_path)
-    assert output["status"] == "queued" and output["prompt_id"] == "p1" and "artifacts" not in output
-    waiting, _, _ = _stream(comfy.url, "import_outputs", {"prompt_id": "p1"}, tmp_path)
-    assert waiting["status"] == "running" and "artifacts" not in waiting
-    comfy.state.running.clear()
-    comfy.state.history["p1"] = {"status": {"status_str": "success", "completed": True},
-                                 "outputs": {"4": {"images": [{"filename": "late.png", "type": "output"}]}}}
-    done, _, _ = _stream(comfy.url, "import_outputs", {"prompt_id": "p1"}, tmp_path)
-    assert [one["filename"] for one in done["artifacts"]] == ["late.png"]
+def test_内置文生图也是一个工具_步数种子尺寸都能给(comfy, tmp_path: Path) -> None:
+    _stream(comfy.url, "wf_builtin_txt2img", {"prompt": "a fox", "steps": "8", "seed": "7", "width": "512",
+                                              "height": "768"}, tmp_path)
+    prompt = comfy.posted("/prompt")[0]["prompt"]
+    assert prompt["6"]["inputs"]["text"] == "a fox" and prompt["3"]["inputs"]["steps"] == 8
+    assert prompt["3"]["inputs"]["seed"] == 7
+    assert (prompt["5"]["inputs"]["width"], prompt["5"]["inputs"]["height"]) == (512, 768)
+    assert prompt["4"]["inputs"]["ckpt_name"] == "sd_xl_base.safetensors", "checkpoint 用服务器上的第一个"
 
 
 def test_运行中取消只停这一个任务(comfy, tmp_path: Path) -> None:
     comfy.state.outcome = "never"
     comfy.state.pending = ["someone-else"]
     with pytest.raises(runtime.PluginCancelled):
-        _stream(comfy.url, "run_workflow", {"workflow": "upscale.json"}, tmp_path, _Hooks(cancel=True))
+        _stream(comfy.url, UPSCALE_TOOL, {}, tmp_path, _Hooks(cancel=True))
     assert comfy.posted("/interrupt") == [{"prompt_id": "p1"}]
     assert comfy.posted("/queue") == []
 
 
 def test_进度里有节点名和步数(comfy, tmp_path: Path) -> None:
     comfy.state.websocket = True
-    _, hooks, _ = _stream(comfy.url, "run_workflow", {"workflow": "portrait.json"}, tmp_path)
+    _, hooks, _ = _stream(comfy.url, PORTRAIT_TOOL, {}, tmp_path)
     assert any("5/20" in message for _, message in hooks.progress), hooks.progress
 
 
@@ -218,6 +216,18 @@ def test_取最近几次的产出(comfy, tmp_path: Path) -> None:
     output, _, _ = _stream(comfy.url, "import_outputs", {"last": 2}, tmp_path)
     assert [one["filename"] for one in output["artifacts"]] == ["h2.png", "h3.png"]
     assert output["prompt_ids"] == ["h2", "h3"]
+
+
+def test_还在跑的任务_等一会儿_跑完了再取(comfy, tmp_path: Path) -> None:
+    """在 ComfyUI 界面里提交、还没跑完的任务:先说还在跑,跑完了按任务号取回。"""
+    comfy.state.running = ["p1"]
+    waiting, _, _ = _stream(comfy.url, "import_outputs", {"prompt_id": "p1"}, tmp_path)
+    assert waiting["status"] == "running" and "artifacts" not in waiting
+    comfy.state.running.clear()
+    comfy.state.history["p1"] = {"status": {"status_str": "success", "completed": True},
+                                 "outputs": {"4": {"images": [{"filename": "late.png", "type": "output"}]}}}
+    done, _, _ = _stream(comfy.url, "import_outputs", {"prompt_id": "p1"}, tmp_path)
+    assert [one["filename"] for one in done["artifacts"]] == ["late.png"]
 
 
 def test_不认识的任务号说清楚(comfy, tmp_path: Path) -> None:

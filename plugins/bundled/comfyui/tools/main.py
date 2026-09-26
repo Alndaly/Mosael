@@ -13,7 +13,7 @@
 
     wf_<id>                                                每张工作流自己的那个(运行时报出,流式)
     list_workflows / server_status / list_models           只读,一问一答
-    run_workflow / import_outputs                          流式(清单里 `stream: true`):进度一行一个,最后一行是结果
+    import_outputs                                         流式(清单里 `stream: true`):进度一行一个,最后一行是结果
     interrupt / clear_queue / free_memory                  会动服务器,一问一答
 
 标准库之外什么都不用 —— 插件跑在随应用发的那个 Python 上。
@@ -66,7 +66,6 @@ _PLAIN: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {
 }
 #: 流式的工具(清单里声明了 `stream: true`):边跑边说进度,宿主取消时去停 ComfyUI 那边的任务。
 _STREAMING: dict[str, Callable[[dict[str, Any], Comfy, str, run.Emit], dict[str, Any]]] = {
-    "run_workflow": workflows.run_workflow,
     "import_outputs": workflows.import_outputs,
 }
 

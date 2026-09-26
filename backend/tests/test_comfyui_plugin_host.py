@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -136,14 +137,15 @@ def test_工具出现在插件页_智能体和工作流里(connected) -> None:
     tools = {one["name"]: one for one in package["instances"][0]["tools"]}
     assert "comfyui_generation" not in tools, "认领生成的那个工具只给宿主调"
     fixed = {name for name in tools if not name.startswith("wf_")}
-    assert fixed == {"list_workflows", "run_workflow", "import_outputs", "server_status", "list_models",
-                     "interrupt", "clear_queue", "free_memory"}
+    assert fixed == {"list_workflows", "import_outputs", "server_status", "list_models",
+                     "interrupt", "clear_queue", "free_memory"}, (
+        "没有通用的 run_workflow:它不知道要跑哪张图,表单却要人填参数 —— 每张图有自己的工具")
     assert {name for name in fixed if tools[name]["exposed"]} == {
         "list_workflows", "import_outputs", "server_status", "list_models", "interrupt"}, (
-        "清队列、释放显存会动到同一台机器上别人的活:默认不开;run_workflow 让位给每张工作流自己的工具"
+        "清队列、释放显存会动到同一台机器上别人的活:默认不开"
     )
     assert all(tool["exposed"] for name, tool in tools.items() if name.startswith("wf_"))
-    assert tools["list_workflows"]["read_only"] is True and tools["run_workflow"]["read_only"] is False
+    assert tools["list_workflows"]["read_only"] is True and tools["import_outputs"]["read_only"] is False
     exposed = {one["name"] for one in client.get("/api/plugins/tools").json() if one["instance_id"] == instance_id}
     assert "list_workflows" in exposed and "clear_queue" not in exposed
 
@@ -158,8 +160,10 @@ def test_运行工作流_全部产出进素材库(connected) -> None:
     source = client.post(
         "/api/assets/import", data={"workspace_id": workspace}, files={"file": ("原图.png", PNG, "image/png")}
     ).json()["id"]
-    invoked = client.post(f"/api/plugins/instances/{instance_id}/tools/run_workflow/invoke", json={
-        "workspace_id": workspace, "input": {"workflow": "upscale.json", "image": source},
+    client.post(f"/api/plugins/instances/{instance_id}/refresh")
+    upscale = "wf_" + hashlib.sha1(b"upscale.json").hexdigest()[:12]
+    invoked = client.post(f"/api/plugins/instances/{instance_id}/tools/{upscale}/invoke", json={
+        "workspace_id": workspace, "input": {"image_1": source},
     })
     assert invoked.status_code == 200, invoked.text
     body = invoked.json()

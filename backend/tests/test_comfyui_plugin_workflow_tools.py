@@ -2,11 +2,13 @@
 
 用户看到 `run_workflow` 的表单问:「参数是写死的吗?每个工作流应该参数是不同的吧」。是的 —— 所以插件在运行时
 把每张工作流报成一个工具,入参从那张图里推:它自己的提示词、它自己读素材的节点、它自己能调的参数、它自己的
-输出节点。这里对着假的 ComfyUI 钉住:
+输出节点。后来又问:「它连要跑哪张工作流都不知道,却要人填参数」—— 通用的 `run_workflow` 于是删了,它能跑的
+每一种图(内置文生图也算)都有自己的工具。这里对着假的 ComfyUI 钉住:
 
-- 工具名稳:有 UUID 的图用 UUID(改名、挪目录都不变),没有的退到路径哈希,模板是 `wf_api_template`;
+- 工具名稳:有 UUID 的图用 UUID(改名、挪目录都不变),没有的退到路径哈希,模板是 `wf_api_template`,
+  内置文生图是 `wf_builtin_txt2img`;
 - 入参:提示词 / 素材(带种类)/ 参数(人话名字、范围、可选值、高级)/ 种子尺寸张数(高级),必填的是真必须的;
-- 输出按输出节点声明;`replaces` 说清楚老的 `run_workflow` 怎么改写过来;
+- 输出按输出节点声明;`replaces` 说清楚老的 `run_workflow` 怎么改写过来(`values` 按节点 id 和按节点标题的都认);
 - 跑起来:表单里的字符串按声明的类型转回来、素材接到对应节点、每个输出节点的第一份记成具名输出。
 """
 
@@ -44,8 +46,8 @@ def _tools(url: str, data_dir: Path, **env: str) -> dict[str, dict[str, Any]]:
 def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
     template = '{"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}}}'
     tools = _tools(comfy.url, tmp_path, API_WORKFLOW=template)
-    assert set(tools) == {PORTRAIT_TOOL, UPSCALE_TOOL, "wf_api_template",
-                          "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]}, "内置文生图只是生成的兜底,不是工具"
+    assert set(tools) == {PORTRAIT_TOOL, UPSCALE_TOOL, "wf_api_template", "wf_builtin_txt2img",
+                          "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]}, "通用的 run_workflow 能跑的每一种图都有工具"
     assert tools[PORTRAIT_TOOL]["label"] == {"zh": "工作流 · portrait", "en": "Workflow · portrait"}
     assert tools[PORTRAIT_TOOL]["stream"] is True and tools[PORTRAIT_TOOL]["recommended"] is True
     # 在 ComfyUI 里改了名、挪了目录:图里的 id 没变,工具名就不变 —— 工作流节点和智能体记着的名字不失效
@@ -88,8 +90,23 @@ def test_入参从这张图里推(comfy, tmp_path: Path) -> None:
     rename = generic["rename"]
     assert generic["tool"] == "run_workflow" and generic["match"] == {"workflow": "portrait.json"}
     assert rename["image"] == "image_10" and rename["values.3.steps"] == "steps_3" and rename["prompt"] == "prompt"
+    assert rename["values.采样.steps"] == "steps_3", "老的 values 也可以按节点标题写(graph.set_value 两种都认)"
+    assert rename["values.3.seed"] == "seed" and rename["values.5.width"] == "width", "种子和尺寸写在 values 里的也有去处"
     assert by_path == {"tool": "wf_" + hashlib.sha1(b"portrait.json").hexdigest()[:12], "match": {}, "rename": {},
                        "drop_if": {}}, "老版本存的图没有 id、再存一次就有了:以前按路径哈希起的名字迁过来"
+
+
+def test_内置文生图的工具_占位符就是它的入参(comfy, tmp_path: Path) -> None:
+    tool = _tools(comfy.url, tmp_path)["wf_builtin_txt2img"]
+    assert tool["label"] == {"zh": "工作流 · 内置文生图", "en": "Workflow · Built-in text-to-image"}
+    properties = tool["input_schema"]["properties"]
+    assert {"prompt", "negative_prompt", "steps", "seed", "width", "height"} <= set(properties)
+    assert properties["steps"]["default"] == 20 and "x-advanced" not in properties["steps"]
+    assert properties["ckpt_name_4"]["enum"] == ["sd_xl_base.safetensors", "v1-5.ckpt"]
+    assert tool["replaces"] == [{"tool": "run_workflow", "match": {"workflow": "builtin:txt2img"},
+                                 "rename": tool["replaces"][0]["rename"], "drop_if": {"wait": True}}], (
+        "它没有路径,也就没有按路径哈希起过名字")
+    assert tool["replaces"][0]["rename"]["steps"] == "steps"
 
 
 def test_放大工作流_图必填_没有提示词(comfy, tmp_path: Path) -> None:
@@ -202,4 +219,4 @@ def test_工作流删掉了说清楚(comfy, tmp_path: Path) -> None:
 def test_list_workflows_说出每张工作流自己的工具(comfy) -> None:
     listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
     tools = {one["id"]: one.get("tool") for one in listed["workflows"]}
-    assert tools["portrait.json"] == PORTRAIT_TOOL and tools["builtin:txt2img"] is None
+    assert tools["portrait.json"] == PORTRAIT_TOOL and tools["builtin:txt2img"] == "wf_builtin_txt2img"

@@ -98,7 +98,7 @@
     {
       "id": "dev.mosael.comfyui",
       "name": "ComfyUI",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "description": {
         "zh": "把一台 ComfyUI(本机或局域网)接进 Mosael:它保存的每张工作流既是一个图像 / 视频生成模型,也是一个工具(「工作流 · 名字」,入参就是那张图自己的提示词、读素材的节点和可调参数,交回全部产出)。另有列出工作流与模型文件、看显卡和队列、把历史产出收进素材库、中断 / 清队列 / 释放显存。",
         "en": "Connect a ComfyUI server (local or on your LAN): every saved workflow is both an image / video generation model and a tool (“Workflow · name”, whose inputs are that graph's own prompts, loader nodes and tunable parameters, returning every output). Plus listing workflows and model files, GPU and queue status, importing past outputs into the asset library, and interrupt / clear queue / free VRAM."
@@ -136,22 +136,10 @@
             "en": "List workflows"
           },
           "description": {
-            "zh": "这台 ComfyUI 上保存的每张工作流:能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…)。先用它挑一张,再用 run_workflow 跑。",
-            "en": "Every workflow saved on this ComfyUI: what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, and what it seems to do (upscale, inpaint, background removal…). Pick one here, then run it with run_workflow."
+            "zh": "这台 ComfyUI 上的每张工作流(连同内置文生图和粘贴的 API 模板):能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…),以及跑它用哪个工具(`tool`,「工作流 · 名字」,入参就是它自己的节点)。",
+            "en": "Every workflow on this ComfyUI (plus the built-in text-to-image and a pasted API template): what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, what it seems to do (upscale, inpaint, background removal…), and which tool runs it (`tool`, “Workflow · name”, whose inputs are that workflow's own nodes)."
           },
           "effects": "none"
-        },
-        {
-          "name": "run_workflow",
-          "label": {
-            "zh": "按 id 跑工作流",
-            "en": "Run workflow by id"
-          },
-          "description": {
-            "zh": "给智能体的退路:按 id 原样跑任意一张工作流,输入用通用的几个参数(`image` / `images` / `mask` / `video` / `audio`,`values` 改任意节点的值)。**每张工作流都有自己的工具**(「工作流 · 名字」,入参就是它自己的节点),优先用那个;这个工具的长处是 `wait: false` 只提交、之后用 import_outputs 取回。",
-            "en": "An escape hatch for the agent: run any workflow by id with generic inputs (`image` / `images` / `mask` / `video` / `audio`, `values` for any node). **Every workflow has its own tool** (“Workflow · name”, whose inputs are that workflow's own nodes) — prefer it; this one is for `wait: false` submit-now, fetch-later with import_outputs."
-          },
-          "effects": "paid"
         },
         {
           "name": "import_outputs",

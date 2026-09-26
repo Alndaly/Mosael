@@ -87,7 +87,7 @@ prompt; Flux-style workflows keep natural language.
 
 ## Tools: ComfyUI for the agent and for workflows
 
-**One tool per workflow.** Every workflow saved in ComfyUI (and a pasted API template) shows up as “Workflow · name” in
+**One tool per workflow.** Every workflow saved in ComfyUI (plus a pasted API template and the built-in text-to-image) shows up as “Workflow · name” in
 the tool list, the workflow node panel and the agent's tools, with a form made from that graph:
 
 - prompt and negative prompt (empty keeps the workflow's own);
@@ -100,9 +100,14 @@ the tool list, the workflow node panel and the agent's tools, with a form made f
 Renaming or moving a workflow in ComfyUI keeps the same tool (ComfyUI stores the workflow's id in the file); files saved
 by a very old ComfyUI have no id, so a rename makes them a different tool — open and save one in a current ComfyUI and it
 gets an id; saved nodes move to the new tool name automatically. A copy made outside ComfyUI carries the same id as the
-original, so both are then named by their path (the copy never takes over the original's tool). Workflow nodes that
-used “Run workflow” with a particular graph are **rewritten to that graph's own tool automatically** (incoming data
-edges too); if a field doesn't map (a value keyed by node title, say) the node is left as it was and keeps working.
+original, so both are then named by their path (the copy never takes over the original's tool).
+
+There used to be a generic “Run workflow by id” tool as well: it didn't know which workflow it would run, yet its form
+asked you for parameters. It is gone — everything it could run now has its own tool. Workflow nodes and board tool cells
+that used it with a particular graph are **rewritten to that graph's own tool automatically** (incoming data edges and
+board bindings too; values keyed by node id or by node title both carry over); fields the new tool has no place for are
+dropped, and the workflow revision's note lists them. Nodes whose graph has since been deleted in ComfyUI are left as
+they are and the run check reports an unknown node type; pick another one.
 
 Without a seed the workflow's own setting applies: a seed set to “randomize” changes every run, a “fixed” one is kept.
 
@@ -110,8 +115,7 @@ Of the other tools, the five in bold are on by default:
 
 | Tool | What it does |
 | --- | --- |
-| **List workflows** (read-only) | What each workflow takes (which argument feeds which node), what it lets you tune, what it outputs, and what it seems to do (upscale, inpaint, background removal, face restore, frame interpolation …) |
-| Run workflow by id | An escape hatch for the agent, off by default. Runs a workflow as-is: images / mask / video / audio go into the loader nodes, `values` overrides any literal input (`"3.steps": 30` or `"Node title.cfg": 6`), and **every output** goes into the asset library — each file from every save node, plus whatever text display nodes show |
+| **List workflows** (read-only) | What each workflow takes (which node loads which kind of asset), what it lets you tune, what it outputs, what it seems to do (upscale, inpaint, background removal, face restore, frame interpolation …), and which tool runs it |
 | **Import ComfyUI outputs** | Imports outputs from ComfyUI's history by task id (or the most recent runs) into the asset library — including things run directly in the ComfyUI interface |
 | **Server status** (read-only) | ComfyUI version, GPU and free VRAM, running / queued task counts |
 | **List model files** (read-only) | Installed checkpoints, LoRAs, VAEs, upscale models, ControlNets … |
@@ -125,9 +129,10 @@ processing workflow as-is** (upscale, background removal, inpainting, face resto
 several inputs at once, or get every intermediate output back, use that workflow's tool.
 
 A workflow tool may run for up to 30 minutes and reports progress step by step (inside a workflow the run panel shows
-“Sampler 12/20”); cancelling stops that one task in ComfyUI. The agent only waits 3 minutes for a single tool call:
-for long runs it passes `wait: false` to only submit, gets the task id, and fetches the outputs later with “Import
-ComfyUI outputs”.
+“Sampler 12/20”); cancelling stops that one task in ComfyUI, and **every output** goes into the asset library — each
+file from every save node, plus whatever text display nodes show. It uses the GPU, so the agent asks you first
+(a confirmation card); once approved it runs in the background, not bound by the agent's 3-minute wait for a single
+tool call. Longer runs belong in generation.
 
 ## Progress, cancel and restarts
 

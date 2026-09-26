@@ -41,15 +41,17 @@ ComfyUI 那一侧的输入不列出来。
 (宿主能力 `tools`,和 `generation` 由同一个 `comfyui_generation` 认领),入参、输出都从那张图推 ——
 提示词、每个读素材的节点(`image_10`、`mask_11`、`video_1`…)、每个可调参数(`steps_3`…,和生成参数同一套名字)、
 种子 / 尺寸 / 张数(高级);输出按输出节点(`image_9`、`text_40`…)。名字取 ComfyUI 写在工作流文件里的 id
-(改名、挪目录不变),没有的退到路径哈希;模板是 `wf_api_template`。每个工具带着 `replaces`,宿主据此把存着的
-`run_workflow` 节点改写过来。
+(改名、挪目录不变),没有的退到路径哈希;模板是 `wf_api_template`,内置文生图是 `wf_builtin_txt2img`。
+
+以前还有一个通用的 `run_workflow`(按 id 跑,入参是写死的一张表):它不知道要跑哪张图,表单却要人填参数,
+1.4.0 删掉了。它能跑的每一种图在上面都有自己的工具;每个工具带着 `replaces`,宿主据此把存着的 `run_workflow`
+节点和画板工具格改写过来(`values` 按节点 id 或节点标题写的都认;新工具里没有位置的几格丢掉,记进修订说明)。
 
 固定的那几个:
 
 | 工具 | 只读 | 流式 | 默认开 | 做什么 |
 | --- | --- | --- | --- | --- |
-| `list_workflows` | ✓ | | ✓ | 每张工作流收什么(哪个参数喂哪个节点)、能调什么、交出什么、`features`(upscale / inpaint / img2img / remove-background / …);转不过来的也列,带原因 |
-| `run_workflow` | | ✓ | | 原样跑一张工作流,`image` / `images` / `mask` / `video` / `audio` 接到读素材的节点,`values` 按「节点 id 或标题.输入名」改值;交回**全部**产出(`artifacts` → 宿主换成 `assets` / `asset_ids`)、文字产出、按节点分的摘要。`wait: false` 只提交 |
+| `list_workflows` | ✓ | | ✓ | 每张工作流收什么(哪个节点读哪种素材)、能调什么、交出什么、`features`(upscale / inpaint / img2img / remove-background / …),以及跑它的工具(`tool`);转不过来的也列,带原因 |
 | `import_outputs` | | ✓ | ✓ | 按任务号(可等 `wait_seconds`)或最近 `last` 次,把历史里的产出收进素材库 |
 | `server_status` | ✓ | | ✓ | 版本、显卡与空闲显存、内存、队列 |
 | `list_models` | ✓ | | ✓ | `/models` 下的模型文件;老版本没有这个接口时看加载节点的下拉 |
@@ -57,8 +59,9 @@ ComfyUI 那一侧的输入不列出来。
 | `clear_queue` | | | | 清掉排队中的(别人的也会被清) |
 | `free_memory` | | | | `/free`:卸载模型、释放显存 |
 
-工具一次最多跑 30 分钟(清单里 `timeout_seconds: 1800`),智能体一次只等 3 分钟;跑得久的用 `wait: false`
-+ `import_outputs`,或者走生成(6 小时、有回执、能续等)。
+工作流的工具一次最多跑 30 分钟(`timeout_seconds: 1800`),交回**全部**产出(`artifacts` → 宿主换成 `assets` /
+`asset_ids`)、文字产出、按节点分的摘要;占的是显卡,标 `effects: "paid"` —— 智能体调它先开确认卡,批准后在后台跑,
+不占智能体那一次调用的等待时间。更久的走生成(6 小时、有回执、能续等)。
 
 ## 进度、取消、重启
 
@@ -78,8 +81,8 @@ ComfyUI 那一侧的输入不列出来。
 - `graph.py` —— 看出提示词 / 种子 / 尺寸 / 槽位 / 输出节点、描述成模型、填图、收产出;
 - `labels.py` —— 可调输入的人话名字、顺序、常用与否、不在 Mosael 里调的那几个;
 - `models.py` —— 有哪些模型、一个模型 id 背后是哪张图、清单的指纹;
-- `run.py` —— 传素材、提交、跟进度、取消、取回(生成与 `run_workflow` 共用);
-- `workflows.py` —— `list_workflows` / `run_workflow` / `import_outputs`;
+- `run.py` —— 传素材、提交、跟进度、取消、取回(生成与工作流的工具共用);
+- `workflows.py` —— `list_workflows` / `import_outputs`,以及交回产出的那一段;
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `comfy_http.py` / `ws.py` —— 和 ComfyUI 说话。

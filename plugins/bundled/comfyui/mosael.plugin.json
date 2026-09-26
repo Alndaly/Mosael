@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "name": "ComfyUI",
   "default_locale": "zh",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",
   "author": {
     "name": "Mosael",
@@ -113,8 +113,8 @@
           "en": "List workflows"
         },
         "description": {
-          "zh": "这台 ComfyUI 上保存的每张工作流:能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…)。先用它挑一张,再用 run_workflow 跑。",
-          "en": "Every workflow saved on this ComfyUI: what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, and what it seems to do (upscale, inpaint, background removal…). Pick one here, then run it with run_workflow."
+          "zh": "这台 ComfyUI 上的每张工作流(连同内置文生图和粘贴的 API 模板):能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…),以及跑它用哪个工具(`tool`,「工作流 · 名字」,入参就是它自己的节点)。",
+          "en": "Every workflow on this ComfyUI (plus the built-in text-to-image and a pasted API template): what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, what it seems to do (upscale, inpaint, background removal…), and which tool runs it (`tool`, “Workflow · name”, whose inputs are that workflow's own nodes)."
         },
         "input_schema": {
           "type": "object",
@@ -142,192 +142,6 @@
         }
       },
       {
-        "name": "run_workflow",
-        "effects": "paid",
-        "stream": true,
-        "timeout_seconds": 1800,
-        "label": {
-          "zh": "按 id 跑工作流",
-          "en": "Run workflow by id"
-        },
-        "description": {
-          "zh": "给智能体的退路:按 id 原样跑任意一张工作流,输入用通用的几个参数(`image` / `images` / `mask` / `video` / `audio`,`values` 改任意节点的值)。**每张工作流都有自己的工具**(「工作流 · 名字」,入参就是它自己的节点),优先用那个;这个工具的长处是 `wait: false` 只提交、之后用 import_outputs 取回。",
-          "en": "An escape hatch for the agent: run any workflow by id with generic inputs (`image` / `images` / `mask` / `video` / `audio`, `values` for any node). **Every workflow has its own tool** (“Workflow · name”, whose inputs are that workflow's own nodes) — prefer it; this one is for `wait: false` submit-now, fetch-later with import_outputs."
-        },
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "workflow": {
-              "type": "string",
-              "description": {
-                "zh": "list_workflows 里的 id(保存的工作流是它在 ComfyUI 里的路径,如 upscale.json;另有 builtin:txt2img 和 api-workflow)",
-                "en": "An id from list_workflows (a saved workflow's path in ComfyUI such as upscale.json; also builtin:txt2img and api-workflow)"
-              }
-            },
-            "prompt": {
-              "type": "string",
-              "description": {
-                "zh": "写进正向提示词节点;不填就用工作流里写好的",
-                "en": "Goes into the positive prompt node; leave empty to keep the workflow's own"
-              }
-            },
-            "negative_prompt": {
-              "type": "string",
-              "description": {
-                "zh": "写进反向提示词节点;不填就用工作流里写好的",
-                "en": "Goes into the negative prompt node; empty keeps the workflow's own"
-              },
-              "x-advanced": true
-            },
-            "image": {
-              "type": "string",
-              "format": "asset",
-              "description": {
-                "zh": "第一个读图节点(LoadImage)的图",
-                "en": "Image for the first image loader (LoadImage)"
-              }
-            },
-            "images": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "format": "asset"
-              },
-              "description": {
-                "zh": "其余读图节点的图,按 list_workflows 里的顺序",
-                "en": "Images for the remaining image loaders, in list_workflows order"
-              },
-              "x-advanced": true
-            },
-            "mask": {
-              "type": "string",
-              "format": "asset",
-              "description": {
-                "zh": "局部重绘的蒙版(白色是要改的地方)。没有单独的蒙版节点时接到 LoadImage 的 alpha 那一路",
-                "en": "Inpainting mask (white = area to change). Without a separate mask loader it replaces LoadImage's alpha output"
-              }
-            },
-            "video": {
-              "type": "string",
-              "format": "asset",
-              "description": {
-                "zh": "读视频节点(LoadVideo / VHS_LoadVideo)的视频",
-                "en": "Video for the video loader (LoadVideo / VHS_LoadVideo)"
-              }
-            },
-            "audio": {
-              "type": "string",
-              "format": "asset",
-              "description": {
-                "zh": "读音频节点(LoadAudio)的音频",
-                "en": "Audio for the audio loader (LoadAudio)"
-              }
-            },
-            "seed": {
-              "type": "integer",
-              "description": {
-                "zh": "写进每个采样器的种子;不填就用工作流存着的",
-                "en": "Written into every sampler seed; empty keeps the workflow's"
-              },
-              "x-advanced": true
-            },
-            "width": {
-              "type": "integer",
-              "description": {
-                "zh": "画布宽度,只对有画布节点的工作流",
-                "en": "Canvas width, for workflows with a latent / canvas node"
-              },
-              "x-advanced": true
-            },
-            "height": {
-              "type": "integer",
-              "description": {
-                "zh": "画布高度,只对有画布节点的工作流",
-                "en": "Canvas height, for workflows with a latent / canvas node"
-              },
-              "x-advanced": true
-            },
-            "values": {
-              "type": "object",
-              "description": {
-                "zh": "改任意节点上的值:{\"3.steps\": 30, \"采样.cfg\": 6} —— 键是「节点 id 或节点标题.输入名」",
-                "en": "Override any literal input: {\"3.steps\": 30, \"Sampler.cfg\": 6} — keys are “node id or node title.input name”"
-              },
-              "x-advanced": true
-            },
-            "wait": {
-              "type": "boolean",
-              "description": {
-                "zh": "默认等它跑完并取回产出;false = 只提交,交回任务号",
-                "en": "Default waits and collects the outputs; false only submits and returns the task id"
-              },
-              "x-advanced": true
-            },
-            "include_previews": {
-              "type": "boolean",
-              "description": {
-                "zh": "也取回 PreviewImage 这类预览节点的临时文件(有保存节点时默认不取)",
-                "en": "Also collect temporary files from preview nodes (skipped by default when the workflow has save nodes)"
-              },
-              "x-advanced": true
-            }
-          },
-          "required": [
-            "workflow"
-          ]
-        },
-        "node": {
-          "outputs": [
-            "asset_id",
-            "asset_ids",
-            "assets",
-            "texts",
-            "outputs",
-            "summary",
-            "prompt_id"
-          ],
-          "output_types": {
-            "asset_id": "asset",
-            "asset_ids": "json",
-            "assets": "json",
-            "texts": "json",
-            "outputs": "json",
-            "summary": "text",
-            "prompt_id": "text"
-          },
-          "output_labels": {
-            "asset_id": {
-              "zh": "第一份产出",
-              "en": "First output"
-            },
-            "asset_ids": {
-              "zh": "全部产出",
-              "en": "All outputs"
-            },
-            "assets": {
-              "zh": "产出明细",
-              "en": "Output details"
-            },
-            "texts": {
-              "zh": "文字产出",
-              "en": "Text outputs"
-            },
-            "outputs": {
-              "zh": "各节点产出",
-              "en": "Outputs by node"
-            },
-            "summary": {
-              "zh": "摘要",
-              "en": "Summary"
-            },
-            "prompt_id": {
-              "zh": "任务号",
-              "en": "Task id"
-            }
-          }
-        }
-      },
-      {
         "name": "import_outputs",
         "effects": "none",
         "stream": true,
@@ -346,8 +160,8 @@
             "prompt_id": {
               "type": "string",
               "description": {
-                "zh": "run_workflow 交回的任务号,或 ComfyUI 历史里的;不填就按「最近几次」",
-                "en": "A task id from run_workflow or ComfyUI's history; empty = most recent runs"
+                "zh": "任务号(工作流工具交回的 `prompt_id`,或 ComfyUI 历史里的);不填就按「最近几次」",
+                "en": "A task id (the `prompt_id` a workflow tool returned, or one from ComfyUI's history); empty = most recent runs"
               }
             },
             "last": {

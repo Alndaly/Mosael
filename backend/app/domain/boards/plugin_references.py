@@ -3,7 +3,8 @@
 工具格(ADR 0021 P2)存的是 `form.producer = "node:plugin.<包>.<工具>"`、`form.config`(填的值)和
 `form.bindings`(字段 → 从哪几格来)。插件报出的新工具声明了 `replaces` 时(见
 domain/workflows/plugin_references,规则在那边一处),这里用同一套判据改画板:配置按那张表改名,
-绑定的字段名跟着改;有一格对不上就不动这一格。画板的数据归画板域写(见 domain/ownership),
+绑定的字段名跟着改;有一格对不上时,老工具还在就不动这一格,老工具已经不在了就把没有位置的配置和绑定丢掉
+(和工作流那边同一条)。画板的数据归画板域写(见 domain/ownership),
 所以它住在这里而不是工作流那边。
 """
 
@@ -29,7 +30,8 @@ def _rewrite_item(item: dict[str, Any], found: list[Any]) -> dict[str, Any] | No
     node_type = node_type_of(str((form or {}).get("producer") or ""))
     if form is None or not node_type:
         return None
-    result = rewrite_node(node_type, dict(form.get("config") or {}), found)
+    dropped: list[str] = []
+    result = rewrite_node(node_type, dict(form.get("config") or {}), found, dropped)
     if result is None:
         return None
     new_type, converted, replacement = result
@@ -38,8 +40,13 @@ def _rewrite_item(item: dict[str, Any], found: list[Any]) -> dict[str, Any] | No
     for field, refs in bindings.items():
         target = replacement.target(str(field))
         if target is MISSING:
-            return None
+            if not replacement.retired:
+                return None
+            dropped.append(f"{field}(绑定)")  # 老工具已经不在了:这一格在新工具上没有位置,绑定拆掉
+            continue
         renamed[target] = refs
+    if dropped:
+        logger.info("画板工具格 %s 改写成 %s 时丢掉了 %s", item.get("id"), new_type, dropped)
     return {**item, "form": {**form, "producer": node_producer_id(new_type), "config": converted, "bindings": renamed}}
 
 
