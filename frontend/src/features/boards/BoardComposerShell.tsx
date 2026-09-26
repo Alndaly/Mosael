@@ -1,5 +1,5 @@
 import React from "react";
-import { NodeToolbar, Position, useStore } from "@xyflow/react";
+import { NodeToolbar, Position } from "@xyflow/react";
 import { ArrowUp, Loader2, SlidersHorizontal, type LucideIcon } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
@@ -140,8 +140,6 @@ const CANVAS_MARGIN = 12;
  * (测试环境没有布局)就什么都不做。
  */
 function useKeepInCanvas(ref: React.RefObject<HTMLDivElement | null>): React.CSSProperties | undefined {
-  //: 画布一平移、一缩放,面板在屏幕上的位置就变了 —— 订阅视口,变了就重量。
-  const viewport = useStore((state) => state.transform);
   const [fit, setFit] = React.useState<{ dx: number; maxHeight?: number }>({ dx: 0 });
   const measure = React.useCallback(() => {
     const panel = ref.current;
@@ -160,16 +158,28 @@ function useKeepInCanvas(ref: React.RefObject<HTMLDivElement | null>): React.CSS
       return dx === current.dx && maxHeight === current.maxHeight ? current : { dx, maxHeight };
     });
   }, [ref]);
-  React.useLayoutEffect(measure, [measure, viewport]);
+  React.useLayoutEffect(measure, [measure]);
   React.useEffect(() => {
     const panel = ref.current;
     if (!panel || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
+    //: 画布一平移、一缩放,面板在屏幕上的位置就变了:视口那一层的 style(transform)一变就重量,一帧量一次。
+    //: 看的是 DOM,不订阅画布库的内部 store —— 面板不必知道自己挂在哪个 ReactFlow 实例里。
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+    const observer = new ResizeObserver(schedule);
     observer.observe(panel);
-    window.addEventListener("resize", measure);
+    const viewport = panel.closest(".react-flow")?.querySelector(".react-flow__viewport");
+    const moves = viewport ? new MutationObserver(schedule) : null;
+    if (viewport && moves) moves.observe(viewport, { attributes: true, attributeFilter: ["style"] });
+    window.addEventListener("resize", schedule);
     return () => {
+      cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("resize", measure);
+      moves?.disconnect();
+      window.removeEventListener("resize", schedule);
     };
   }, [ref, measure]);
   if (fit.dx === 0 && fit.maxHeight === undefined) return undefined;
