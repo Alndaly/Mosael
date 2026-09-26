@@ -7472,6 +7472,8 @@ export interface components {
             group: string;
             /** Defaults For */
             defaults_for?: string | null;
+            /** Choices */
+            choices?: string[] | null;
         };
         /**
          * CapabilityProfileSchemaOut

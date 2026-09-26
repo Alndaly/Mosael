@@ -67,11 +67,17 @@ _KNOWN_KEYS: dict[str, str] = {
     "default_asmr_mode": "bool",
     "default_model_version": "str",
     "lyrics_excludes_prompt": "bool",
-    "requires_prompt": "bool",
     "requires_lyrics": "bool",
-    "prompt_optional": "bool",
     "outputs_per_request": "positive_int",
+    #: 提示词要不要写(见 catalog.PROMPT_MODES):required / optional / none。
+    "prompt": "choice",
 }
+
+def _choices() -> dict[str, tuple[str, ...]]:
+    """`choice` 形状的键各能取哪几个值。和上面那张表一样**白名单**:取值的事实源在 catalog。"""
+    from app.domain.generation.catalog import PROMPT_MODES
+
+    return {"prompt": PROMPT_MODES}
 
 def _kinds() -> tuple[str, ...]:
     from app.domain.generation.catalog import GENERATION_KINDS
@@ -122,9 +128,8 @@ _FIELD_GROUPS: dict[str, str] = {
     "default_asmr_mode": "defaults",
     "default_model_version": "defaults",
     "lyrics_excludes_prompt": "advanced",
-    "requires_prompt": "advanced",
     "requires_lyrics": "advanced",
-    "prompt_optional": "advanced",
+    "prompt": "advanced",
 }
 
 
@@ -180,6 +185,7 @@ def profile_form_schema(kind: str) -> dict[str, Any]:
     from app.domain.generation.catalog import SOURCE_ROLE_LABELS
 
     capabilities = _builtin_capabilities(kind)
+    choices = _choices()
     enum_parameters = sorted(
         {name for caps in capabilities for name in (caps.get("parameter_choices") or {})}
     )
@@ -199,6 +205,8 @@ def profile_form_schema(kind: str) -> dict[str, Any]:
                 "shape": shape,
                 "group": _FIELD_GROUPS[key],
                 "defaults_for": _defaults_for(key),
+                #: `choice` 形状的可选值 —— 表单照它摆下拉,不在前端再抄一份。
+                **({"choices": list(choices[key])} if shape == "choice" else {}),
             }
             for key, shape in _KNOWN_KEYS.items()
         ],
@@ -239,6 +247,11 @@ def _check(key: str, shape: str, value: Any) -> Any:
     if shape == "bool":
         if not isinstance(value, bool):
             _fail("genErr_profileBool", field=key)
+        return value
+    if shape == "choice":
+        allowed = _choices()[key]
+        if value not in allowed:
+            _fail("genErr_profileChoice", field=key, choices=" / ".join(allowed))
         return value
     if shape == "str_to_int":
         if not isinstance(value, dict):

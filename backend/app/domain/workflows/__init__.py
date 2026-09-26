@@ -714,7 +714,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "provider": {"type": "string", "required": True},
             "model": {"type": "string", "required": True, "depends_on": "provider"},
             "kind": {"type": "string", "required": True, "description": "wfNode_ai_generate_kind", "options": ["image", "video", "audio"]},
-            "prompt": {"type": "template", "required": True},
+            #: **不标必填。** 提示词要不要写是模型说的(描述符的 `prompt`:放大工作流不收、视频配声可以不写),
+            #: 由生成漏斗按描述符判;这里标必填的话,不收提示词的模型永远过不了运行前校验。界面按选中的
+            #: 模型把它标成必填 / 可选 / 藏起来(见前端 WorkflowsView 与 analyze)。
+            "prompt": {"type": "template"},
             # 下面三项执行器一直支持,却没在这里声明 —— 于是编辑器渲染不出输入框、AI 助手也不知道
             # 它们存在,工作流里生成不出竖屏视频这类最常见的诉求。声明即接口。
             "negative_prompt": {"advanced": True, "type": "template", "description": "wfNode_ai_generate_negative_prompt"},

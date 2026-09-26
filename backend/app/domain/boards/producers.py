@@ -128,8 +128,9 @@ class SourceRef(_Form):
 
 
 class GenerateForm(_Form):
-    #: 发给模型的那句提示词(可带运行时追加的图例)。
-    prompt: str
+    #: 发给模型的那句提示词(可带运行时追加的图例)。可以空着:要不要写由模型的描述符说(`prompt`),
+    #: 生成漏斗判 —— 放大这类不收提示词的模型本来就不该有。
+    prompt: str = ""
     provider: str = ""
     provider_profile_id: str = ""
     model: str = ""

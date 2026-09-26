@@ -10,6 +10,27 @@ from typing import Any
 #: voices/speak 那条路)不是一回事 —— 见 ADR 0022。
 GENERATION_KINDS = ("image", "video", "audio")
 
+#: 一个模型对**提示词**的要求 —— 描述符的 `prompt` 格子,三种取值,没写就是 `required`:
+#:
+#: - `required`:要写一段描述。会唱歌词的模型(参数里有 `lyrics`)只给歌词也行 —— 歌词本身就是
+#:   「写一首什么样的歌」;
+#: - `optional`:可以不写。给视频配声、按素材出结果的模型,写了是锦上添花;
+#: - `none`:这个模型**不收**提示词(ComfyUI 里的放大、抠图这类工作流)。写了也不会生效,所以
+#:   提交时带着提示词是错 —— 当场说,而不是让人以为那句话起了作用。
+#:
+#: **一个格子、一套规矩**(operations.validate_text_inputs),不按种类分支:此前图像 / 视频「必须有
+#: 提示词」写死在契约层,音频另有「必须写描述」「可以不写描述」两个布尔,于是插件里一张
+#: 不需要提示词的放大工作流,也逼着人先敲一句没用的话。三个界面(AI 工作台、画板、工作流节点)
+#: 和智能体都照这一格摆提示词框、判能不能提交。
+PROMPT_MODES = ("required", "optional", "none")
+
+
+def prompt_mode(capabilities: dict[str, Any] | None) -> str:
+    """这个描述符对提示词的要求。没写(或写了认不出的值)就是 `required` —— 保守的那一边。"""
+    value = (capabilities or {}).get("prompt")
+    return value if value in PROMPT_MODES else "required"
+
+
 #: 一份素材**能给几份**,按角色分开算。描述符里写 `source_limits`,校验在
 #: domain/generation/operations.validate_against_capabilities 里统一做。
 #:
@@ -835,8 +856,8 @@ EVOLINK_VEO_31_PRO_CAPABILITIES = {**EVOLINK_VIDEO_T2V_CAPABILITIES, "supports_a
 #   reference_audio 参考音频(照着它的风格 / 音色来);source_video 要配声的那段视频;reference_image 图生音乐的图。
 #
 # 描述符上的音频专属格子:`max_lyrics_chars`、`default_instrumental`、`lyrics_excludes_prompt`(这家
-# 歌词和描述只收一段)、`requires_prompt`、`prompt_optional`(视频配声可以什么字都不给)、
-# `outputs_per_request`(一次交回几首,Suno 是两首)。
+# 歌词和描述只收一段)、`requires_lyrics`、`outputs_per_request`(一次交回几首,Suno 是两首)。
+# 提示词要不要写是各种生成共用的那一格 `prompt`(见文件头的 PROMPT_MODES):视频配声是 `optional`。
 #
 # **只收官方文档查得到的**:每一份都写了文档地址和核对日期(2026-09-25)。一个都没有真机跑过 ——
 # 没有密钥可核,而这些接口按次收钱。
@@ -884,7 +905,6 @@ KLING_TEXT_TO_AUDIO_CAPABILITIES = {
     "min_duration_seconds": 3,
     "max_duration_seconds": 10,
     "default_duration_seconds": 5,
-    "requires_prompt": True,
     "max_prompt_chars": 200,
 }
 
@@ -900,7 +920,7 @@ KLING_VIDEO_TO_AUDIO_CAPABILITIES = {
     "source_limits": {"source_video": 1},
     "requires_source": [["source_video"]],
     "url_only_roles": ["source_video"],
-    "prompt_optional": True,
+    "prompt": "optional",
     "max_prompt_chars": 200,
     "parameter_schema": {"bgm_prompt": {"type": "string", "title": "BGM prompt"}},
 }
@@ -929,7 +949,6 @@ VOLCANO_BGM_CAPABILITIES = {
     "duration_seconds": [],
     "min_duration_seconds": 30,
     "max_duration_seconds": 120,
-    "requires_prompt": True,
 }
 
 #: Google Lyria 3 / 3.5(Gemini API generateContent)。文档:https://ai.google.dev/gemini-api/docs/generate-content/music-generation
@@ -965,7 +984,6 @@ ALIBABA_FUN_MUSIC_PREVIEW_CAPABILITIES = {
     "boolean_parameters": ["instrumental"],
     "default_instrumental": False,
     "max_prompt_chars": 2000,
-    "requires_prompt": True,
     "parameter_choices": {"output_format": ["mp3", "wav"]},
     "default_output_format": "mp3",
 }
@@ -978,7 +996,6 @@ ALIBABA_AUDIOGEN_CAPABILITIES = {
     "modes": ["text-to-sfx", "text-to-audio"],
     "parameter_keys": ["reference_audio", "seed", "output_format"],
     "source_limits": {"reference_audio": 3},
-    "requires_prompt": True,
     "max_prompt_chars": 3000,
     "parameter_choices": {"output_format": ["wav", "mp3"]},
     "default_output_format": "wav",

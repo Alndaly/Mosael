@@ -29,8 +29,9 @@ const registry: RegistryLike = {
         },
         output_types: { text: "text", json: "json" },
       },
+      // 提示词不在声明里标必填:要不要写由选中的模型说(见 AnalyzeContext.generationPromptMode)。
       ai_generate: {
-        config: { provider: { type: "string", required: true }, prompt: { type: "template", required: true } },
+        config: { provider: { type: "string", required: true }, prompt: { type: "template" } },
         output_types: { asset_id: "asset", generation_id: "text" },
       },
       // `data_type` 由后端按字段名推出来(见 domain/workflows.config_data_type),随节点声明
@@ -301,6 +302,29 @@ describe("analyzeWorkflow", () => {
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
     expect(a.byNode.get("gen")?.some((i) => i.code === "gen-provider-unconfigured")).toBe(true);
+  });
+
+  it("ai_generate 的提示词要不要写由选中的模型说:不收的、可以不写的空着不报,要写的空着报", () => {
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "gen", type: "ai_generate", config: { provider: "alibaba", model: "upscale", prompt: "" } },
+      ],
+      [{ id: "e1", source: "start", target: "gen" }],
+    );
+    const missingPrompt = (ctx: AnalyzeContext) =>
+      analyzeWorkflow(g, registry, ctx).byNode.get("gen")?.some(
+        (i) => i.code === "required-missing" && i.configKey === "prompt",
+      ) ?? false;
+    // 模型清单还没到(没给判据):和以前一样按要写拦。
+    expect(missingPrompt(fullCtx)).toBe(true);
+    expect(missingPrompt({ ...fullCtx, generationPromptMode: () => "required" })).toBe(true);
+    expect(missingPrompt({ ...fullCtx, generationPromptMode: () => "optional" })).toBe(false);
+    expect(missingPrompt({ ...fullCtx, generationPromptMode: () => "none" })).toBe(false);
+    // 判据拿到的是这个节点自己的配置
+    const seen: Array<Record<string, unknown>> = [];
+    analyzeWorkflow(g, registry, { ...fullCtx, generationPromptMode: (config) => (seen.push(config), "none") });
+    expect(seen[0]).toMatchObject({ model: "upscale" });
   });
 
   it("holds binding checks until async data has loaded", () => {

@@ -155,6 +155,7 @@ import {
   maxImages,
   parameterChoiceEntries,
   parseGenerationParameterInput,
+  promptMode,
   supportsParameter,
   sourceLimit,
   videoResolutionOptions,
@@ -309,6 +310,29 @@ const AGENT_PANEL_KEY = "mosael:workflow-agent-open";
 const GENERATE_SPECIAL_CONFIG_KEYS = new Set([
   "provider_profile_id", "provider", "model", "kind", "parameters", "source_assets",
 ]);
+
+/** 每一种生成的模型清单,合成一份。面板(参数区按 capabilities 渲染)和编辑器(就绪检查看提示词要不要写)
+ *  共用这一个 queryKey 与取法 —— 同一份清单拉两种形状,两边迟早对不上。 */
+const GENERATION_OPTIONS_KEY = ["generation-options", "all"] as const;
+async function fetchAllGenerationOptions(): Promise<GenerationOption[]> {
+  const lists = await Promise.all(
+    GENERATION_KINDS.map((kind) => api<GenerationOption[]>(`/api/generation/options?kind=${kind}`)),
+  );
+  return lists.flat();
+}
+
+/** AI 生成节点的配置指的是清单里哪一个模型。连接身份随模型一起存,同一 vendor/model 可以在多条连接上。 */
+function generationModelOf(models: GenerationOption[], config: Record<string, unknown>): GenerationOption | null {
+  return (
+    models.find(
+      (item) =>
+        item.provider === config.provider &&
+        item.model === config.model &&
+        item.kind === config.kind &&
+        (!config.provider_profile_id || item.provider_profile_id === config.provider_profile_id),
+    ) ?? null
+  );
+}
 
 const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "preset",
@@ -1627,6 +1651,12 @@ function WorkflowEditor({
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
     enabled: hasLlm || hasGen,
   });
+  //: 生成节点的提示词要不要写,由选中的模型说(描述符的 `prompt`)—— 就绪检查要看它。
+  const generationModels = useQuery({
+    queryKey: GENERATION_OPTIONS_KEY,
+    queryFn: fetchAllGenerationOptions,
+    enabled: hasGen,
+  });
   const analysis = React.useMemo(
     () =>
       analyzeWorkflow(rootGraph, registry, {
@@ -1640,8 +1670,9 @@ function WorkflowEditor({
             .map((p) => p.vendor),
         ),
         genProvidersLoaded: !hasGen || providers.isSuccess,
+        generationPromptMode: (config) => promptMode(generationModelOf(generationModels.data ?? [], config)),
       }),
-    [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen],
+    [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen, generationModels.data],
   );
   /**
    * 运行 —— 工具栏的运行键和 ⌘Enter 共用这**一个**入口。
@@ -2608,16 +2639,11 @@ export function NodeInspector({
   //: 插件的包与工具、发布账号、可调用工作流、对话连接与模型此前各拉一份清单、各写一段过滤,
   //: 现在都由后端按 `options_from` 给(见 domain/workflows/field_options)。
   const generationModels = useQuery({
-    queryKey: ["generation-options", "all"],
+    queryKey: GENERATION_OPTIONS_KEY,
     // 要完整类型:参数区靠 capabilities 决定渲染什么。以前这里只取了四个字段,
     // 于是「模型支持哪些参数」这份信息在工作流侧根本拿不到。
-    // 现在两种能力各取一次再合并 —— 和 AI 工作台看到的是同一份(后端联接好的)。
-    queryFn: async () => {
-      const lists = await Promise.all(
-        GENERATION_KINDS.map((kind) => api<GenerationOption[]>(`/api/generation/options?kind=${kind}`)),
-      );
-      return lists.flat();
-    },
+    // 现在每种能力各取一次再合并 —— 和 AI 工作台看到的是同一份(后端联接好的)。
+    queryFn: fetchAllGenerationOptions,
     enabled: node.type === "ai_generate",
   });
   const providerDefaults = useQuery({
@@ -2770,16 +2796,10 @@ export function NodeInspector({
   // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────
   /** 是否展开「手动指定 provider/model/类型」。目录里有的模型不需要看见这三项。 */
   const [genCustom, setGenCustom] = React.useState(false);
-  const genModel =
-    node.type === "ai_generate"
-      ? (generationModels.data ?? []).find(
-          (item) =>
-            item.provider === config.provider &&
-            item.model === config.model &&
-            item.kind === config.kind &&
-            (!config.provider_profile_id || item.provider_profile_id === config.provider_profile_id),
-        ) ?? null
-      : null;
+  const genModel = node.type === "ai_generate" ? generationModelOf(generationModels.data ?? [], config) : null;
+  //: 这个模型对提示词的要求:不收的把「提示词」一格藏起来,可以不写的说一句,要写的标必填
+  //: (节点声明里不再标必填 —— 那是按模型变的,见后端 NODE_TYPES 的 ai_generate)。
+  const genPromptMode = promptMode(genModel);
   const genParams = (config.parameters ?? {}) as Record<string, unknown>;
   const setGenParam = (key: string, value: string, options?: SetGraphOptions) => {
     const next = { ...genParams };
@@ -2880,12 +2900,23 @@ export function NodeInspector({
 
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
   // 顺序就是后端声明的顺序;基础 / 高级的分档规则在表单那一层(nodeConfigTiers)。
+  const panelSpecs =
+    node.type === "ai_generate" && allSpecs.prompt
+      ? {
+          ...allSpecs,
+          prompt:
+            genPromptMode === "optional"
+              ? { ...allSpecs.prompt, description: t("wfGenPromptOptional") }
+              : { ...allSpecs.prompt, required: genPromptMode === "required" },
+        }
+      : allSpecs;
   const { basic: basicSpecs, advanced: advancedSpecs } = nodeConfigTiers(
-    allSpecs,
+    panelSpecs,
     config,
     (key) =>
       (node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)) ||
-      (node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)),
+      (node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)) ||
+      (node.type === "ai_generate" && key === "prompt" && genPromptMode === "none"),
   );
 
   // ── 功能区 ──────────────────────────────────────────────────────────────

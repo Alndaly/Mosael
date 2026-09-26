@@ -140,10 +140,15 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     db.commit()
-    start_generation_thread(generation.id)
-    wait_for_job(child.id, release=db)
-    db.refresh(generation)
-    db.refresh(child)
+    generation_id, child_id = generation.id, child.id
+    start_generation_thread(generation_id)
+    wait_for_job(child_id, release=db)
+    # 等待时交还了会话(release 会 close 它,里面的对象全部脱管)—— 按 id 重新取,不能 refresh 脱管的那两个:
+    # 此前这里 refresh,生成跑完之后节点必然炸在「not persistent within this Session」。
+    from app.db.models import GenerationJob, Job
+
+    generation = db.get(GenerationJob, generation_id)
+    child = db.get(Job, child_id)
     #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是全部 —— 生成一次可能出多张
     #: (图像接口的 n),只往下游传第一张的话,其余的在工作流里就没人看得见了。
     asset_ids = [str(one) for one in ((child.result or {}).get("asset_ids") or []) if one]

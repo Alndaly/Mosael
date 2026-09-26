@@ -215,6 +215,19 @@ stdout 是**一行一个 JSON 对象**(NDJSON),最后一行是和普通协议同
 被否掉的:**给 run_workflow 的表单按选中的工作流动态换字段**(依赖字段、`options_from`)—— 那只修了插件页,
 工作流节点、智能体看到的仍是一张写死的表;而且节点的输出口也没法按工作流声明。
 
+## 补充(2026-09-26):模型说自己要不要提示词
+
+ComfyUI 的放大工作流当生成模型用时,三个界面都逼人先敲一句用不上的提示词(图像 / 视频「必须有提示词」写死在
+契约层)。**决定:提示词要不要写是描述符的一格 `prompt`(`required` / `optional` / `none`,没写就是 `required`)**,
+内置目录、用户参数组、插件共用;插件在 `op: models` 的每个模型上说,宿主只收认得的那三个值。生成漏斗
+(`operations.validate_text_inputs`)是唯一的判据 —— `none` 带着提示词当场拒,`optional` 空着放行,`required`
+空着拒(会唱歌词的模型只给歌词也行);契约层那条按种类写死的检查删掉。ComfyUI 插件从图里读:没有文字喂进
+采样器 / 引导器是 `none`,提示词节点里存着话是 `optional`(空着就用那一句,插件不再把它清成空串),存的是空的
+或模板里是 `{{prompt}}` 是 `required`。AI 工作台、画板、工作流节点照它把提示词框藏起来 / 标可选 / 标必填;工作流**点运行时**(建任务之前、连同循环体)
+按每个生成节点选中的模型用同一条规矩判一遍字面量提示词,不等前面的付费节点跑完才报;
+智能体从 `list_generation_models` 看到它,开卡时按同一套规矩判。音频此前的 `requires_prompt` / `prompt_optional`
+两个布尔并进这一格,用户参数组里存着的由迁移 `migrate-prompt-requirement-becomes-one-field` 改写。
+
 ## Considered options
 
 - **生成领域认两种连接**(ProviderProfile 或 PluginInstance)—— 拒绝:外键在七八张表上,每处都要分支,

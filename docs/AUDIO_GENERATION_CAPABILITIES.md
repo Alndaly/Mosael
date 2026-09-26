@@ -20,8 +20,9 @@
 | `reference_audio` | 参考音频(照着它的风格 / 音色) | 百炼 AudioGen(≤3 段) |
 | `reference_image` | 图生音乐 | Lyria(≤10 张) |
 
-描述符上的音频专属格子:`max_lyrics_chars`、`default_instrumental`、`lyrics_excludes_prompt`、`requires_prompt`、
-`requires_lyrics`、`prompt_optional`、`outputs_per_request`。
+描述符上的音频专属格子:`max_lyrics_chars`、`default_instrumental`、`lyrics_excludes_prompt`、`requires_lyrics`、
+`outputs_per_request`。提示词要不要写是各种生成共用的一格 `prompt`(`required` / `optional` / `none`,没写是
+`required`;会唱歌词的模型只给歌词也算写了),视频配声是 `optional`。
 
 ## 已接通
 

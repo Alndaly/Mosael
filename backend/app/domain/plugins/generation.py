@@ -61,6 +61,9 @@ class PluginModel:
     inputs: tuple[dict[str, Any], ...] = ()
     max_outputs: int = 1
     prompt_dialect: str = ""
+    #: 提示词要不要写:`required` / `optional` / `none`(空串 = 没说,按 required)。认不认这个值由宿主侧判
+    #: (生成域的 PROMPT_MODES)—— 和 `inputs` 的角色同一条:插件域只收形状,不认识生成的词汇。
+    prompt: str = ""
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,7 @@ def _model(entry: Any, text: Any) -> PluginModel | None:
         inputs=_inputs(entry.get("inputs"), text),
         max_outputs=min(max(max_outputs, 1), 16),
         prompt_dialect=str(entry.get("prompt_dialect") or "").strip()[:40],
+        prompt=str(entry.get("prompt") or "").strip().lower()[:16] if isinstance(entry.get("prompt"), str) else "",
     )
 
 

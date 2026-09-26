@@ -75,6 +75,9 @@ import {
   supportsParameter,
   sourceLimit,
   exclusiveSourceGroups,
+  hasEnoughText,
+  promptMode,
+  promptToSend,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
@@ -84,7 +87,6 @@ import {
   GeneratedAudioList,
   LyricsField,
   audioSourceRoles,
-  hasEnoughText,
   lyricsLimit,
 } from "@/features/ai-studio/audioGeneration";
 import { SessionList } from "@/features/ai-studio/SessionList";
@@ -430,6 +432,8 @@ function GenerateWorkspace({
   const isImageModel = selectedModel?.kind === "image";
   // 音频多两样:歌词和纯音乐开关;结果是一段声音(见 audioGeneration.tsx)。
   const isAudioModel = selectedModel?.kind === "audio";
+  //: 这个模型对提示词的要求(见 promptMode):不收的不摆框,可以不写的在占位里说清楚。
+  const selectedPromptMode = promptMode(selectedModel);
   const supportsLyrics = isAudioModel && supportsParameter(selectedModel, "lyrics");
   const supportsInstrumental = isAudioModel && supportsParameter(selectedModel, "instrumental");
   const selectedAudioRoles = audioSourceRoles(selectedModel);
@@ -591,7 +595,7 @@ function GenerateWorkspace({
           provider: selectedModel!.provider,
           model: selectedModel!.model,
           kind: selectedModel!.kind,
-          prompt,
+          prompt: promptToSend(selectedModel, prompt),
           negative_prompt: supportsNegativePrompt ? generationConfig.negativePrompt.trim() : "",
           parameters: generationParameters(selectedModel!, generationConfig),
           // 每份素材带着**它的用途**。此前这里是一个裸 id 数组,谁是首帧靠后端「取第 0 个」
@@ -769,24 +773,38 @@ function GenerateWorkspace({
           className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-control px-2.5 pb-1.5 pl-3 pt-2.5 transition-colors duration-100 focus-within:border-ring"
           onSubmit={submit}
         >
-          <Textarea
-            rows={3}
-            className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-ui-md leading-[1.55] shadow-none outline-none focus-visible:ring-0"
-            value={prompt}
-            aria-label={t("genPromptLabel")}
-            placeholder={t(isAudioModel ? "audioPromptPlaceholder" : "promptPlaceholder")}
-            onChange={(event) => {
-              setPrompt(event.target.value);
-              event.target.style.height = "auto";
-              event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                submit(event);
-              }
-            }}
-          />
+          {selectedPromptMode === "none" ? (
+            // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的框,
+            // 说清楚该做什么 —— 挂素材、调参数,直接生成。
+            <p className="m-0 min-h-11 px-0 py-0.5 pb-1.5 text-ui-sm leading-[1.55] text-muted-foreground">
+              {t("genPromptNotUsed")}
+            </p>
+          ) : (
+            <Textarea
+              rows={3}
+              className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-ui-md leading-[1.55] shadow-none outline-none focus-visible:ring-0"
+              value={prompt}
+              aria-label={t("genPromptLabel")}
+              placeholder={t(
+                selectedPromptMode === "optional"
+                  ? "promptPlaceholderOptional"
+                  : isAudioModel
+                    ? "audioPromptPlaceholder"
+                    : "promptPlaceholder",
+              )}
+              onChange={(event) => {
+                setPrompt(event.target.value);
+                event.target.style.height = "auto";
+                event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  submit(event);
+                }
+              }}
+            />
+          )}
           <div className="flex items-center justify-between gap-1.5 pt-0.5">
             <div className="flex items-center gap-1.5">
               {selectedModel && (
@@ -795,7 +813,7 @@ function GenerateWorkspace({
                 </span>
               )}
               <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} />
-              {selectedModel?.kind === "image" && (
+              {selectedModel?.kind === "image" && selectedPromptMode !== "none" && (
                 <Button
                   type="button"
                   variant="ghost"

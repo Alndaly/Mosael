@@ -230,10 +230,9 @@ class GenerationAdapter(ABC):
         bounds before the runner reaches this seam; this method only rejects malformed values
         so direct/legacy callers cannot submit nonsense.
         """
-        # 音频的文字规矩按模型走(只给歌词、给视频配声什么字都不给都是合法的),由提交前的
-        # domain 校验(operations.validate_text_inputs)按描述符判;这里只管其余种类。
-        if request.kind != "audio" and not request.prompt.strip():
-            raise GenerationAdapterError("providerErr_promptEmpty")
+        # 提示词要不要写按模型走(描述符的 `prompt`:放大工作流不收、视频配声可以不写、歌曲只给
+        # 歌词也行),由提交前的 domain 校验(operations.validate_text_inputs)统一判 —— 这里不再按
+        # 种类写死一条「图像和视频必须有提示词」,那会把声明了不收提示词的模型挡在门外。
         if request.kind == "image":
             num_images = int(request.parameters.get("num_images", 1))
             if not 1 <= num_images <= MAX_NUM_IMAGES:

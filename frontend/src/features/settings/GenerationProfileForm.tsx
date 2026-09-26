@@ -270,6 +270,8 @@ export function CapabilityProfileForm({
   const schema = useSchema(kind);
   const fields = schema.data?.fields ?? [];
   const shapeOf = (key: string) => fields.find((field) => field.key === key)?.shape ?? "";
+  /** `choice` 形状的可选值:后端表单结构给的(提示词要不要写那一格),前端不再抄一份。 */
+  const fieldChoices = (key: string) => fields.find((field) => field.key === key)?.choices ?? [];
   /* 键名由后端 schema 驱动,翻译键跟着拼 —— t 的键是静态联合类型,这里必须断言一次:
      后端加字段时 messages.ts 的 genField_* 要同步加(缺了界面就露出原始键名,看得见)。 */
   const labelOf = (key: string) => t(`genField_${key}` as Parameters<typeof t>[0]);
@@ -367,6 +369,18 @@ export function CapabilityProfileForm({
     }
     if (shape === "bool") {
       return <Switch checked={current === true} aria-label={labelOf(key)} onCheckedChange={(next) => set(key, next)} />;
+    }
+    if (shape === "choice") {
+      const choices = fieldChoices(key);
+      return (
+        <OptionPicker
+          ariaLabel={labelOf(key)}
+          value={typeof current === "string" ? current : (choices[0] ?? "")}
+          onChange={(next) => set(key, next)}
+          // 取值的名字按「字段_取值」翻(genField_prompt_none …),和字段名同一套前缀。
+          options={choices.map((one) => ({ value: one, label: t(`genField_${key}_${one}` as Parameters<typeof t>[0]) }))}
+        />
+      );
     }
     if (shape === "str") {
       return (
@@ -552,5 +566,7 @@ function initialFor(shape: string): unknown {
   if (shape === "positive_int" || shape === "int") return 1;
   if (shape === "bool") return false;
   if (shape === "str") return "";
+  //: 打开「提示词要不要写」这一格多半是为了放宽它 —— 从「可以不写」开始。
+  if (shape === "choice") return "optional";
   return {};
 }

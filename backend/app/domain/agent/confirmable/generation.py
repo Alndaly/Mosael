@@ -13,8 +13,9 @@ from app.domain.agent.errors import ConfirmationError
 
 
 def _asked_for(payload: dict[str, Any]) -> str:
-    """卡上写出**要生成什么**。提示词/正文/选题三个键里哪个有就用哪个(四个工具各用一个)。"""
-    return str(payload.get("prompt") or payload.get("text") or payload.get("topic") or "")[:80]
+    """卡上写出**要生成什么**。提示词/正文/选题三个键里哪个有就用哪个(四个工具各用一个);
+    不收提示词的模型(放大这类)什么字都没有,卡上就写用哪个模型。"""
+    return str(payload.get("prompt") or payload.get("text") or payload.get("topic") or payload.get("model") or "")[:80]
 
 
 #: 走生成漏斗(create_generation_job)的那三个工具各自生成哪一种。此前 image / video 两个执行体
@@ -47,30 +48,41 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
     return {"job_id": job.id, "generation_id": generation.id}
 
 
+def _check_generation_text(db: Session, payload: dict[str, Any], actor: str | None, kind: str) -> None:
+    """提示词 / 歌词按**选中模型的描述符**判(见 generation.operations.check_text_inputs),和执行时的漏斗
+    同一套规矩:放大这类不收提示词的模型不写提示词是对的,写了反而当场说;文生图什么都不写照样拦。
+    此前这里写死「必须有提示词」,于是智能体想替人跑一张放大工作流,卡都开不出来。"""
+    from app.domain.generation.operations import GenerationDomainError, check_text_inputs
+
+    try:
+        check_text_inputs(
+            db,
+            user_id=actor,
+            kind=kind,
+            provider=str(payload.get("provider") or ""),
+            model=str(payload.get("model") or ""),
+            provider_profile_id=str(payload.get("provider_profile_id") or "").strip() or None,
+            prompt=str(payload.get("prompt") or ""),
+            parameters=dict(payload.get("parameters") or {}),
+        )
+    except GenerationDomainError as exc:
+        raise ConfirmationError.relay(exc) from exc
+
+
 def _validate_generate_image(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    if not str(payload.get("prompt") or payload.get("text") or "").strip():
-        raise ConfirmationError("Generation requires a prompt")
+    _check_generation_text(db, payload, actor, "image")
 
 def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateImage", {"asked": _asked_for(payload)}
 
 def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    if not str(payload.get("prompt") or payload.get("text") or "").strip():
-        raise ConfirmationError("Generation requires a prompt")
+    _check_generation_text(db, payload, actor, "video")
 
 def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateVideo", {"asked": _asked_for(payload)}
 
 def _validate_generate_sound(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    # 文字规矩按模型走(只给歌词、给视频配声什么字都不给都合法),由生成漏斗按描述符判;
-    # 这里只拦「什么都没给」—— 连一段要配声的视频都没有。
-    parameters = payload.get("parameters") or {}
-    if not (
-        str(payload.get("prompt") or "").strip()
-        or str(parameters.get("lyrics") or "").strip()
-        or payload.get("source_assets")
-    ):
-        raise ConfirmationError("Generation requires a prompt, lyrics or a source asset")
+    _check_generation_text(db, payload, actor, "audio")
 
 def _summarize_generate_sound(db: Session, payload: dict[str, Any]) -> Summary:
     asked = _asked_for(payload) or str((payload.get("parameters") or {}).get("lyrics") or "")[:80]

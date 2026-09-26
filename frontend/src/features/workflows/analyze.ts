@@ -2,6 +2,7 @@ import type { WorkflowGraph } from "@/api/client";
 
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
+import type { PromptMode } from "@/lib/generationCapabilities";
 
 /**
  * 工作流"就绪度"分析:纯函数,单一事实来源,同时喂给画布告警角标、
@@ -76,6 +77,12 @@ export interface AnalyzeContext {
   /** 已配置且启用 image/video 能力的生成供应商名。 */
   configuredGenProviders: Set<string>;
   genProvidersLoaded: boolean;
+  /**
+   * AI 生成节点选中的那个模型对提示词的要求(描述符的 `prompt`,见 lib/generationCapabilities.promptMode)。
+   * 提示词不再在节点声明里标必填 —— 放大这类模型不收提示词,标了就永远过不了检查;所以「空着算不算
+   * 缺」由这里按模型说。不给(模型清单还没拉到)就按 required,和以前一样拦。
+   */
+  generationPromptMode?: (config: Record<string, unknown>) => PromptMode;
 }
 
 interface ConfigSpecLike {
@@ -281,6 +288,10 @@ function collect(
         push("error", "provider-missing", { configKey: "profile_id" });
     }
     if (node.type === "ai_generate") {
+      const mode = ctx.generationPromptMode?.(config) ?? "required";
+      if (mode === "required" && isEmpty(config.prompt) && !dataBound.has(`${node.id}:prompt`)) {
+        push("error", "required-missing", { configKey: "prompt" });
+      }
       const provider = config.provider;
       if (
         typeof provider === "string" &&

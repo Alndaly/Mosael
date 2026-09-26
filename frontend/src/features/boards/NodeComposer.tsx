@@ -36,8 +36,10 @@ import {
   defaultDuration,
   durationChoices,
   exclusiveSourceGroups,
+  hasEnoughText,
   maxImages,
   parameterChoiceEntries,
+  promptMode,
   sizeOptions,
   sourceLimit,
   supportsParameter,
@@ -688,23 +690,31 @@ export function NodeComposer({
     onFormChange(JSON.parse(serializedForm) as NonNullable<BoardItem["form"]>);
   }, [serializedForm, onFormChange]);
 
+  //: 这个模型对提示词的要求(见 promptMode):不收的不摆编辑器、发空串;可以不写的,空着也能跑。
+  const currentPromptMode = promptMode(current);
+  const canSend = Boolean(current) && hasEnoughText(current, prompt);
+
   const send = () => {
-    const text = prompt.trim();
-    if (!text || !current || working) return;
+    //: 不收提示词的模型:编辑器里残留的字(换模型之前写的)不跟着发出去。
+    const text = currentPromptMode === "none" ? "" : prompt.trim();
+    if (!canSend || !current || working) return;
     //: 只发这个模型**认的**那几项 —— 多发一项会被校验器当场拦下(它照描述符判)。
     const parameters = formParameters;
     //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
     //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
     //: 落到第一个收得下它的槽上(通常就是参考图)。
-    const sourceAssets = mergeSourceAssets(sources, mentioned, library.data ?? [], slots);
+    //: 编辑器藏起来时,里面残留的 @ 也不算数 —— 用户看不见的引用不该发出去。
+    const sourceAssets = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, library.data ?? [], slots);
     //: 正文里写的是名字,而模型收到的是一串没有名字的图 —— 末尾补一段对应关系(见 referenceLegend)。
     //: 角色名走 ROLE_COPY —— 和 AI 工作台、工作流面板同一份,不在这儿再抄一张表。
     const legend = referenceLegend(sourceAssets, library.data ?? [], (role) =>
       t(ROLE_COPY[role as SourceRole]?.label ?? "genReferenceImage"),
     );
+    //: 图例是给正文里 @ 到的名字配的对照;正文空着就没有要对照的,不单独发一段图例当提示词。
+    const withLegend = legend && text ? `${text}\n\n${t("boardPromptLegend")}${legend}` : text;
     run(() =>
       onSubmit({
-        prompt: documentPrompt(legend ? `${text}\n\n${t("boardPromptLegend")}${legend}` : text, upstreamDocuments ?? []),
+        prompt: currentPromptMode === "none" ? "" : documentPrompt(withLegend, upstreamDocuments ?? []),
         provider: current.provider,
         providerProfileId: current.provider_profile_id,
         model: current.model,
@@ -868,22 +878,33 @@ export function NodeComposer({
             机件(TipTap + 共用的 useSuggestionMenu)。自己判 @ 的那一版栽在输入法上:
             中文选词时按回车会被菜单当成「选中候选」吃掉,候选词上不了屏。 */}
         {!!upstreamDocuments?.length && <div className="mb-2 flex flex-wrap gap-1.5">{upstreamDocuments.map(doc => <a key={doc.note_id} href={noteHref(doc.note_id)} title={t("documentOpen")} className="max-w-full truncate rounded-md bg-primary/10 px-2 py-1 text-ui-xs text-primary">{t("boardKindDocument")} · {doc.title || t("documentUntitled")} · v{doc.revision}</a>)}</div>}
-        <PromptEditor
-          value={prompt}
-          document={promptDocument}
-          onChange={(next, assets, document) => {
-            setPrompt(next);
-            setMentioned(assets);
-            setPromptDocument(document);
-          }}
-          placeholder={t(slots.length > 0 ? "boardPromptPlaceholderMention" : "boardPromptPlaceholder")}
-          candidates={candidates}
-          //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
-          //: 正是这句话十有八九要指的东西。
-          linked={feed.map((one) => one.assetId)}
-          onSubmit={send}
-          emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
-        />
+        {currentPromptMode === "none" ? (
+          // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的编辑器。
+          <p className="m-0 px-1 py-2 text-ui-sm text-muted-foreground">{t("genPromptNotUsed")}</p>
+        ) : (
+          <PromptEditor
+            value={prompt}
+            document={promptDocument}
+            onChange={(next, assets, document) => {
+              setPrompt(next);
+              setMentioned(assets);
+              setPromptDocument(document);
+            }}
+            placeholder={t(
+              currentPromptMode === "optional"
+                ? "boardPromptPlaceholderOptional"
+                : slots.length > 0
+                  ? "boardPromptPlaceholderMention"
+                  : "boardPromptPlaceholder",
+            )}
+            candidates={candidates}
+            //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
+            //: 正是这句话十有八九要指的东西。
+            linked={feed.map((one) => one.assetId)}
+            onSubmit={send}
+            emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
+          />
+        )}
         {/* Keep model, settings, and submit on one row; detailed parameters belong in the settings popover. */}
         <div className="flex min-w-0 items-center gap-2 border-t border-divider pt-2">
           {options.length === 0 ? (
@@ -1098,11 +1119,11 @@ export function NodeComposer({
                   type="button"
                   aria-label={t("boardGenerate")}
                   title={`${t("boardGenerate")}  ⌘↵`}
-                  disabled={!prompt.trim() || !current || busy}
+                  disabled={!canSend || busy}
                   onClick={send}
                   className={cn(
                     "grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors",
-                    !prompt.trim() || !current || busy
+                    !canSend || busy
                       ? "cursor-not-allowed bg-secondary text-muted-foreground"
                       : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
                   )}

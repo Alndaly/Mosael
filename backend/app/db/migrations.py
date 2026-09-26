@@ -476,6 +476,39 @@ def _migrate_generation_capability_profiles() -> None:
     GenerationCapabilityDeclaration.__table__.create(bind=engine, checkfirst=True)
 
 
+def _migrate_prompt_requirement_becomes_one_field() -> None:
+    """用户写下的参数组里,「提示词要不要写」从两个布尔收成一格 `prompt`(见 catalog.PROMPT_MODES)。
+
+    此前是 `requires_prompt`(必须写)和 `prompt_optional`(可以不写)两个布尔,而且只对音频生效;现在
+    是一格三值 `required` / `optional` / `none`,各种生成共用。参数组是用户手填的描述符,校验按白名单
+    (见 custom_profiles._KNOWN_KEYS),不搬的话老键会让这份参数组**再也存不回去**。
+
+    - `prompt_optional: true` → `prompt: "optional"`;
+    - `requires_prompt: true` → 不写(`required` 就是没写时的意思);
+    - 两个布尔一律删掉。已经有 `prompt` 的不覆盖。
+
+    幂等:第二次跑时已经没有这两个键。
+    """
+    if "generation_capability_profiles" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, capabilities FROM generation_capability_profiles")).mappings().all():
+            raw = row["capabilities"]
+            try:
+                capabilities = json.loads(raw) if isinstance(raw, str) else raw
+            except ValueError:
+                continue
+            if not isinstance(capabilities, dict) or not {"requires_prompt", "prompt_optional"} & set(capabilities):
+                continue
+            capabilities.pop("requires_prompt", None)
+            if capabilities.pop("prompt_optional", None) is True:
+                capabilities.setdefault("prompt", "optional")
+            conn.execute(
+                text("UPDATE generation_capability_profiles SET capabilities = :c WHERE id = :id"),
+                {"c": json.dumps(capabilities, ensure_ascii=False), "id": row["id"]},
+            )
+
+
 def _migrate_provider_model_capability_ref() -> None:
     """给模型行补 `generation_capability_ref` 列。
 
@@ -3719,6 +3752,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_subtitle_tracks_carry_no_sound,
                 _migrate_provider_model_capability_ref,
                 _migrate_generation_capability_profiles,
+                _migrate_prompt_requirement_becomes_one_field,
                 _migrate_browser_boolean_options,
                 _migrate_official_workflow_data_bindings,
                 # 必须在 _migrate_workflow_revisions 之前:补完输出节点,下面那一步才会把

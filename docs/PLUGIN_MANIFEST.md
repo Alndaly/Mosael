@@ -816,7 +816,8 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
     },
     "inputs": [{"role": "reference_image", "max": 2}],
     "max_outputs": 1,
-    "prompt_dialect": "sd-tags"            // 可选:提示词优化按哪种写法改
+    "prompt_dialect": "sd-tags",           // 可选:提示词优化按哪种写法改
+    "prompt": "optional"                   // 可选:required(默认)/ optional / none,见下
   }
 ],
  "fingerprint": "9f2c…"                   // 可选:这份清单的指纹,见下面「目录变了就刷新」
@@ -837,6 +838,11 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 - `inputs` 的 `role` 取宿主的素材角色(`reference_image` / `first_frame` / `last_frame` / `reference_video` /
   `source_video` / `driving_audio` / `mask` …,见 `ai/providers/contracts/generation.SOURCE_ROLES`),`max` 是这个角色
   最多几份,`required: true` 是必须给(放大、抠图这类没有提示词的工作流,图就是必须的)。认不出的角色不接。
+- `prompt`:这个模型**要不要提示词**。`required`(不写就是它)要写一段;`optional` 可以空着(比如图里存着一句
+  默认的提示词,空着就用它);`none` **不收**提示词(放大、抠图这类「处理一份素材」的模型)—— 宿主不摆提示词框,
+  智能体不写,带着提示词提交会被当场拒。认不出的值当没写。ComfyUI 插件从图里读:没有文字喂进采样器是 `none`,
+  提示词节点里存着话是 `optional`,存的是空的或模板里是 `{{prompt}}` 是 `required`。`optional` 的模型,
+  `generate` 请求里的 `prompt` 可能是空串 —— 空串的意思是「没写」,用你自己的默认,不是「清成空」。
 - 一次能出几张:声明 `num_images`(`maximum` 是上限,宿主一次最多 4 张)并把 `max_outputs` 设成同一个数;
   `generate` 时 `parameters.num_images` 就是这次要几张,产出几份交回几份。
 - 宿主把这份清单**缓存成模型行**:连接新建、改配置、启停、授权 / 凭据变化、插件页点「刷新」,以及后端启动时

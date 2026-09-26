@@ -75,6 +75,11 @@ uploaded to ComfyUI's input folder first and then wired into the matching node �
 library. **Workflows without a prompt** (upscale, background removal) require their image — otherwise ComfyUI would
 run the example image saved in the workflow — and only offer “image to image”.
 
+**Whether a prompt is needed is read from the workflow too.** A workflow with no text feeding its sampler (upscale,
+background removal, face restore, frame interpolation) takes no prompt: AI Studio, boards and workflow nodes show no
+prompt box, and attaching the input is enough. If the prompt node already holds a sentence, the prompt is optional
+(empty keeps the workflow's own); if it is empty, or the pasted template has `{{prompt}}`, you need to write one.
+
 Prompt optimization follows the workflow: SD 1.5 / SDXL workflows get comma-separated English tags plus a negative
 prompt; Flux-style workflows keep natural language.
 

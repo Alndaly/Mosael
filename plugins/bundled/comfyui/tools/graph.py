@@ -232,6 +232,36 @@ def text_roles(api: dict[str, Any]) -> dict[str, str]:
     return roles
 
 
+def prompt_requirement(api: dict[str, Any], roles: dict[str, str] | None = None,
+                       placeholders: set[str] | None = None) -> str:
+    """这张图对提示词的要求(宿主描述符的 `prompt`,见 docs/PLUGIN_MANIFEST 的「替宿主做生成」):
+
+    - `required`:模板里有 `{{prompt}}` 占位符(没有默认值,不填就是一句字面的占位符),或者喂给采样器的
+      提示词节点里有一个存着的是空串 —— 不写的话那张图拿空话去跑;
+    - `optional`:有喂给采样器的提示词节点,而且**每一个都存着一句话** —— 不写就用这张图自己那句,
+      写了就换成你的;
+    - `none`:没有任何文字喂进采样器(放大、抠图、修脸、补帧这类「处理一份素材」的图)。宿主不摆
+      提示词框,也不逼人敲一句没用的话。
+
+    判的是**喂进采样器 / 引导器的**文字(见 text_roles),不是图里有没有 CLIPTextEncode:一个没接上的
+    文字节点什么都不影响。反向提示词不算 —— 它有自己的控件。
+    """
+    placeholders = _placeholders_in(api) if placeholders is None else placeholders
+    if "prompt" in placeholders:
+        return "required"
+    roles = text_roles(api) if roles is None else roles
+    positive = [node_id for node_id, role in roles.items() if role == "prompt"]
+    if not positive:
+        return "none"
+    for node_id in positive:
+        inputs = api[node_id].get("inputs") or {}
+        saved = [inputs[name] for name in _TEXT_INPUTS
+                 if name in inputs and _literal(inputs[name]) and isinstance(inputs[name], str)]
+        if not any(text.strip() for text in saved):
+            return "required"
+    return "optional"
+
+
 def seed_inputs(api: dict[str, Any]) -> list[tuple[str, str]]:
     """所有字面量的种子:采样器的 seed、RandomNoise 的 noise_seed…… 一个种子该写进每一处。"""
     found: list[tuple[str, str]] = []
@@ -523,7 +553,8 @@ def describe(
       `num_images`);
     - 其余可调的字面量输入按 `<节点 id>.<输入名>` 列成参数(见 `tunable`);
     - 读素材的节点列成输入槽位(图、蒙版、首尾帧、视频、音频);
-    - 粘贴的模板里的 `{{占位符}}` 一样认。
+    - 粘贴的模板里的 `{{占位符}}` 一样认;
+    - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement)。
     """
     titles = titles or {}
     kind = kind_of(api)
@@ -605,6 +636,8 @@ def describe(
         "parameters": parameters,
         "inputs": inputs,
         "max_outputs": max_outputs,
+        # 提示词要不要写:从图里读(见 prompt_requirement)。放大这类图是 none —— 宿主不再逼人敲一句没用的话。
+        "prompt": prompt_requirement(api, roles, placeholders),
     }
     types = {str(node.get("class_type", "")) for node in api.values()}
     # 提示词写法:SD 1.5 / SDXL 那一路(CheckpointLoaderSimple)吃逗号分隔的标签;Flux 这类走 UNETLoader

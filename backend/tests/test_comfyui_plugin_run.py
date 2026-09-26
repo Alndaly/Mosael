@@ -124,6 +124,21 @@ def test_一次生成_参考图传上去接到LoadImage上_产出取回(comfy, t
     assert output["usage"] == {"images": 1}, "预览图(temp)不算产出"
 
 
+def test_目录里说清每张图要不要写提示词(comfy) -> None:
+    template = json.dumps({"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}},
+                           "2": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x", "images": ["1", 0]}}})
+    models = {one["id"]: one for one in _models(comfy.url, API_WORKFLOW=template)}
+    assert models["builtin:txt2img"]["prompt"] == "required", "内置文生图的提示词是占位符,没有默认"
+    assert models["portrait.json"]["prompt"] == "optional", "存着「a cat」:不写就用它"
+
+
+def test_可以不写提示词的图_空着就用它自己存的那句(comfy, tmp_path: Path) -> None:
+    """宿主发来的空提示词是「没写」,不是「清成空串」—— 否则一张存好提示词的图拿一句空话去跑。"""
+    _generate(comfy.url, tmp_path, {"model": "portrait.json", "prompt": ""})
+    prompt = comfy.posted("/prompt")[0]["prompt"]
+    assert prompt["6"]["inputs"]["text"] == "a cat"
+
+
 def test_进度来自WebSocket(comfy, tmp_path: Path) -> None:
     comfy.state.websocket = True
     _, hooks, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"})

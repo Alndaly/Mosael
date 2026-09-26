@@ -82,9 +82,9 @@ def test_guardrails_reject_out_of_bounds() -> None:
     with pytest.raises(GenerationAdapterError) as err:
         video.validate_request(make_request("video", resolution=""))
     assert err.value.key == "providerErr_resolutionEmpty"
-    with pytest.raises(GenerationAdapterError) as err:
-        video.validate_request(GenerationRequest(kind="video", model="m", prompt="  "))
-    assert err.value.key == "providerErr_promptEmpty"
+    # 提示词要不要写不归契约层的形状校验管:模型在描述符里说(`prompt`),提交前的漏斗统一判 ——
+    # 这里再按种类拦一次,就会把声明了不收提示词的模型(放大工作流)挡在门外。
+    video.validate_request(GenerationRequest(kind="video", model="m", prompt="  "))
 
 
 def test_openai_image_advanced_parameters_are_sent_by_generation_and_edit() -> None:

@@ -369,7 +369,9 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         object_info = comfy.object_info()
         api, defaults, titles = models.load(comfy, str(request.get("model") or ""), object_info, locale)
         parameters = request.get("parameters") or {}
-        values = values_from(request.get("prompt") or "", request.get("negative_prompt"), parameters, defaults)
+        # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement),
+        # 不是「把它清成空串」—— 否则一张存好了提示词的工作流,不写就会拿一句空话去跑。
+        values = values_from(request.get("prompt") or None, request.get("negative_prompt"), parameters, defaults)
         prompt = graph.fill(api, values, overrides_from(parameters))
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:

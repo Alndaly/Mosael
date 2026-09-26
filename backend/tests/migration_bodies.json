@@ -68,6 +68,7 @@
   "migrate-plugin-registry-url": "ea65d9e176535f45",
   "migrate-prepared-publish-tasks": "e7458dde5ee5ff42",
   "migrate-pricing-time-prices": "98e02b3582792dc3",
+  "migrate-prompt-requirement-becomes-one-field": "013dfb49e737ba8d",
   "migrate-provider-capabilities": "31aab9cb69056d6e",
   "migrate-provider-credentials": "c968917a2acfa546",
   "migrate-provider-default-model-fk": "6c69140410703512",

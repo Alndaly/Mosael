@@ -80,6 +80,8 @@ def start_workflow_job(
     errors = validate_graph(revision.graph, extra_types=plugin_node_types(db))
     if errors:
         raise WorkflowDomainError("；".join(errors))
+    #: 生成节点的文字规矩按**选中的模型**判,在任何节点跑之前 —— 和执行时替同一个人解析同一个模型。
+    _check_generation_text(db, revision.graph, job.created_by if job is not None else created_by)
     pinned_payload = {
         "workflow_id": workflow.id,
         "workflow_revision_id": revision.id,
@@ -109,6 +111,68 @@ def start_workflow_job(
     # 由 tests/test_jobs_are_dispatched_by_the_bus.py 守着。)
     dispatch_job(db, job, lambda: _run_workflow_thread(workflow.id, revision.id, job.id, params or {}))
     return job
+
+
+def _templated(value: Any) -> bool:
+    return isinstance(value, str) and "{{" in value
+
+
+def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
+    """「AI 生成素材」节点的提示词要不要写,**运行前**按它选中的模型判(连同循环体 / 子图里的)。
+
+    提示词不在节点声明里标必填 —— 要不要写是模型说的(描述符的 `prompt`,放大工作流不收),纯的
+    validate_graph 看不到模型。可不在这里判的话,一个要提示词却空着的生成节点要等前面那些付费节点
+    全跑完、轮到它时才报错(「工作流花了钱才说缺什么」,修过一次的那类)。所以在建任务之前,用和执行时
+    同一条规矩(operations.check_text_inputs)、同一种解析(同一个人、同一个 provider / 连接 / 模型)
+    判一遍。
+
+    只判**字面量**:提示词是引用(`{{…}}`)或由数据边供值的,算给了 —— 它的值要到运行时才知道,那时
+    漏斗照样会判;模型选择本身是引用的也跳过。模型解析不出来(没设默认、连接没了)不在这里说,那是执行时
+    漏斗的事 —— 这里只管文字。
+    """
+    from app.core.i18n import fragment
+    from app.domain.generation.operations import GenerationDomainError, check_text_inputs
+
+    if not isinstance(graph, dict):
+        return
+    edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
+    bound = {
+        (str(edge.get("target")), str(edge.get("target_input")))
+        for edge in edges
+        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input")
+    }
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        for value in config.values():
+            if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                _check_generation_text(db, value, actor)
+        if node.get("type") != "ai_generate":
+            continue
+        node_id = str(node.get("id") or "")
+        prompt = config.get("prompt")
+        choice = (config.get("provider"), config.get("provider_profile_id"), config.get("model"), config.get("kind"))
+        if _templated(prompt) or (node_id, "prompt") in bound or any(_templated(one) for one in choice):
+            continue
+        parameters = config.get("parameters") if isinstance(config.get("parameters"), dict) else {}
+        try:
+            check_text_inputs(
+                db,
+                user_id=actor,
+                kind=str(config.get("kind", "image")).strip() or "image",
+                provider=str(config.get("provider", "")),
+                provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
+                model=str(config.get("model", "")),
+                prompt=str(prompt or ""),
+                parameters=dict(parameters),
+            )
+        except GenerationDomainError as exc:
+            # 原因留成 key(fragment),按读的人的语言翻,不在这里冻成一种语言。
+            raise WorkflowDomainError(
+                "wfErr_generateNodeText",
+                params={"node": str(node.get("name") or node_id), "reason": fragment(exc.key, **exc.params)},
+            ) from exc
 
 
 def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any]) -> None:

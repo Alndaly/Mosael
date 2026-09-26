@@ -105,3 +105,11 @@ rows (with their declarations, defaults and price rules), clears pointers to the
 model choice wherever it was saved — AI Studio sessions, board generation cells, workflow `ai_generate` nodes (a new
 revision) and scheduled generations (disabled, so a schedule never silently spends on another model). Generation
 history and usage keep their records. MiniMax chat and Hailuo video are unaffected.
+
+## Addendum (2026-09-26): the prompt requirement is one descriptor field
+
+Decision 4's `requires_prompt` / `prompt_optional` booleans and the hard-coded "image and video need a prompt" are
+replaced by one field for every kind: `prompt` = `required` (default; lyrics count for models that take lyrics) /
+`optional` / `none` (takes no prompt; sending one is rejected). The rule set stays in `validate_text_inputs`; see
+the ADR 0020 addendum of the same date. Saved custom profiles are rewritten by
+`migrate-prompt-requirement-becomes-one-field`.

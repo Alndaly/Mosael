@@ -207,6 +207,47 @@ def test_放大这类处理一张图的工作流_图必须给(graph) -> None:
     assert "upscale" in graph.features(UPSCALE_API)
 
 
+# --- 提示词要不要写:从图里读 -------------------------------------------------------
+
+
+def test_放大这类图没有喂给采样器的文字_不收提示词(graph) -> None:
+    """放大、抠图这类「处理一张图」的工作流:宿主不摆提示词框,也不逼人敲一句没用的话。"""
+    assert graph.describe("upscale.json", "upscale", UPSCALE_API, OBJECT_INFO)["prompt"] == "none"
+    assert graph.prompt_requirement(UPSCALE_API) == "none"
+
+
+def test_没接上采样器的文字节点不算提示词(graph) -> None:
+    """判的是**喂进采样器的**文字,不是图里有没有 CLIPTextEncode —— 一个没接上的文字节点什么都不影响。"""
+    api = {**UPSCALE_API, "9": {"class_type": "CLIPTextEncode", "inputs": {"text": "孤零零的一句"}}}
+    assert graph.prompt_requirement(api) == "none"
+
+
+def test_存着提示词的图_可以不写(graph) -> None:
+    """不写就用这张图自己那句,写了换成你的。"""
+    assert _portrait(graph)["prompt"] == "optional"
+    assert graph.describe("video/wan.json", "wan", WAN_API, OBJECT_INFO)["prompt"] == "optional", "穿过视频节点的条件也认"
+    flux = {
+        "13": {"class_type": "SamplerCustomAdvanced", "inputs": {"guider": ["22", 0]}},
+        "22": {"class_type": "BasicGuider", "inputs": {"conditioning": ["6", 0]}},
+        "6": {"class_type": "CLIPTextEncodeFlux", "inputs": {"clip_l": "", "t5xxl": "a fox", "guidance": 3.5}},
+    }
+    assert graph.prompt_requirement(flux) == "optional", "Flux 那种一个节点几格字:有一格存着话就够"
+
+
+def test_提示词节点存的是空串_或者模板里是占位符_要写(graph) -> None:
+    empty = {
+        "3": {"class_type": "KSampler", "inputs": {"seed": 1, "positive": ["6", 0], "negative": ["7", 0]}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "  "}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry"}},
+    }
+    assert graph.prompt_requirement(empty) == "required", "反向提示词存着话不算:它有自己的控件"
+    template = {
+        "3": {"class_type": "KSampler", "inputs": {"seed": "{{seed}}", "positive": ["6", 0]}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}},
+    }
+    assert graph.describe("api-workflow", "t", template, OBJECT_INFO)["prompt"] == "required"
+
+
 def test_蒙版_单独的蒙版节点和只接了alpha的LoadImage(graph) -> None:
     api = {
         "3": {"class_type": "KSampler", "inputs": {"seed": 1, "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["20", 0]}},

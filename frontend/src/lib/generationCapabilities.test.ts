@@ -18,8 +18,11 @@ import {
   defaultDuration,
   durationChoices,
   durationOptions,
+  hasEnoughText,
   parseGenerationParameterInput,
   parameterChoiceEntries,
+  promptMode,
+  promptToSend,
   sizeOptions,
   supportsParameter,
   videoResolutionOptions,
@@ -199,5 +202,35 @@ describe("模型自己声明的参数", () => {
     // 声明成文本的,长得像数字也是文本 —— 否则提交时被校验器按类型拦下
     expect(declaredParameterValue({ ...sampler, options: [] }, "123")).toBe("123");
     expect(declaredParameterValue({ ...sampler, type: "boolean" }, "false")).toBe(false);
+  });
+});
+
+describe("提示词要不要写(描述符的 prompt)", () => {
+  const withPrompt = (prompt?: string, keys: string[] = []) =>
+    ({ capabilities: { parameter_keys: keys, ...(prompt === undefined ? {} : { prompt }) } }) as unknown as Model;
+
+  it("没说、说了认不出的值,都按要写;只认那三个值", () => {
+    expect(promptMode(null)).toBe("required");
+    expect(promptMode(withPrompt())).toBe("required");
+    expect(promptMode(withPrompt("sometimes"))).toBe("required");
+    expect(promptMode(withPrompt("optional"))).toBe("optional");
+    expect(promptMode(withPrompt("none"))).toBe("none");
+  });
+
+  it("够不够提交:和后端 validate_text_inputs 同一套判据", () => {
+    expect(hasEnoughText(withPrompt("none"), "")).toBe(true);
+    expect(hasEnoughText(withPrompt("optional"), "")).toBe(true);
+    expect(hasEnoughText(withPrompt(), "  ")).toBe(false);
+    expect(hasEnoughText(withPrompt(), "一只猫")).toBe(true);
+    // 会唱歌词的模型只给歌词也行;不会唱的给了也不算;纯音乐要描述
+    expect(hasEnoughText(withPrompt(undefined, ["lyrics"]), "", "[Verse] 啦")).toBe(true);
+    expect(hasEnoughText(withPrompt(), "", "[Verse] 啦")).toBe(false);
+    expect(hasEnoughText(withPrompt(undefined, ["lyrics"]), "", "啦", true)).toBe(false);
+  });
+
+  it("不收提示词的模型发空串 —— 换模型之前框里写过的字不跟着发出去", () => {
+    expect(promptToSend(withPrompt("none"), "上一个模型的提示词")).toBe("");
+    expect(promptToSend(withPrompt("optional"), "更清楚")).toBe("更清楚");
+    expect(promptToSend(withPrompt(), "一只猫")).toBe("一只猫");
   });
 });

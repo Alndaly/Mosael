@@ -17,7 +17,7 @@ import { assetFileUrl, type GenerationOption } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Textarea } from "@/components/ui/textarea";
-import { capabilityBoolean, capabilityNumber, supportsParameter } from "@/lib/generationCapabilities";
+import { capabilityNumber, supportsParameter } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
 /** 音频模型能挂的输入素材,按在面板上出现的顺序:要配声的视频、参考音频、图生音乐的图。 */
@@ -40,23 +40,6 @@ export function audioSourceRoles(model: GenerationOption | null): AudioSourceRol
 /** 歌词最多几个字;描述符没说就是 0(不限,由后端和供应商把关)。 */
 export function lyricsLimit(model: GenerationOption | null): number {
   return capabilityNumber(model, "max_lyrics_chars", 0);
-}
-
-/**
- * 能不能提交 —— 音频的文字规矩和图像、视频不一样:
- * 可以只给歌词(照着歌词写一首歌),给视频配声的模型(`prompt_optional`)什么字都不给也行。
- * 其余种类照旧要提示词。和后端 operations.validate_text_inputs 是同一套判据;后端仍会再判一遍。
- */
-export function hasEnoughText(
-  model: GenerationOption | null,
-  prompt: string,
-  lyrics: string,
-  instrumental: boolean,
-): boolean {
-  if (prompt.trim()) return true;
-  if (model?.kind !== "audio") return false;
-  if (capabilityBoolean(model, "prompt_optional")) return true;
-  return !instrumental && Boolean(lyrics.trim()) && supportsParameter(model, "lyrics");
 }
 
 /** 歌词编辑器:一个够高的文本框,带字数与上限;选了纯音乐时灰掉并说明为什么。 */

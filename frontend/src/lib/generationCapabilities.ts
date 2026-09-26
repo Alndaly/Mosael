@@ -113,6 +113,44 @@ export function supportsParameter(model: GenerationOption | null, key: string) {
   return declared.map(String).includes(key);
 }
 
+/**
+ * 这个模型对**提示词**的要求(描述符的 `prompt`,和后端 catalog.PROMPT_MODES 同一份):
+ *
+ * - `required`(没写就是它):要写一段描述;会唱歌词的模型(参数里有 `lyrics`)只给歌词也行;
+ * - `optional`:可以不写 —— 给视频配声、按素材出结果的模型,写了是锦上添花;
+ * - `none`:这个模型不收提示词(ComfyUI 里的放大、抠图这类工作流)—— 框不摆,发出去的是空串。
+ *
+ * 三个界面(AI 工作台、画板、工作流节点)都照它摆提示词框、判能不能提交;后端
+ * operations.validate_text_inputs 用同一套规矩再判一遍。
+ */
+export type PromptMode = "required" | "optional" | "none";
+
+export function promptMode(model: GenerationOption | null): PromptMode {
+  const value = model?.capabilities?.prompt;
+  return value === "optional" || value === "none" ? value : "required";
+}
+
+/** 真正发出去的提示词:不收提示词的模型发空串 —— 框藏起来之前写过的字不该悄悄跟着发出去。 */
+export function promptToSend(model: GenerationOption | null, prompt: string): string {
+  return promptMode(model) === "none" ? "" : prompt;
+}
+
+/**
+ * 字够不够提交。和后端 validate_text_inputs 是同一套判据(后端仍会再判一遍):
+ * 提示词按 `promptMode`;要描述的模型里,会唱歌词的只给歌词也行;纯音乐只剩描述可依,所以要描述。
+ */
+export function hasEnoughText(
+  model: GenerationOption | null,
+  prompt: string,
+  lyrics = "",
+  instrumental = false,
+): boolean {
+  const mode = promptMode(model);
+  if (mode !== "required") return true;
+  if (prompt.trim()) return true;
+  return !instrumental && Boolean(lyrics.trim()) && supportsParameter(model, "lyrics");
+}
+
 /** 需要开关控件的参数。参数类型也是能力契约的一部分，不能在各页面各抄一张名单。 */
 export function booleanParameterKeys(model: GenerationOption | null): string[] {
   const value = model?.capabilities?.boolean_parameters;

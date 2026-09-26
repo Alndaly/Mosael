@@ -40,6 +40,8 @@ const SCHEMA = {
       { key: "max_num_images", shape: "positive_int", group: "limits" },
       //: 必需素材那种形状 —— 一行是"一组素材角色",而空的一组在描述符里存不下。
       { key: "requires_source", shape: "str_list_list", group: "advanced" },
+      //: 三选一的一格(提示词要不要写):可选值由后端随表单结构给,界面不再抄一份。
+      { key: "prompt", shape: "choice", group: "advanced", choices: ["required", "optional", "none"] },
     ],
   },
 };
@@ -277,4 +279,23 @@ it("旋钮取消勾选之后,它那一格默认值跟着消失", () => {
 
   fireEvent.click(screen.getByRole("button", { name: "genParam_size" }));
   expect(screen.queryByText("genField_default_size")).not.toBeInTheDocument();
+});
+
+it("三选一的一格:可选值来自表单结构,打开时从「可以不写」开始,选了什么就存什么", async () => {
+  apiMock.mockResolvedValue({ id: "x", ref: "profile:x" });
+  open_dialog();
+  describe_endpoint();
+  const adders = screen.getAllByRole("combobox", { name: "genFormAddField" });
+  fireEvent.click(adders[1]);
+  fireEvent.click(await screen.findByRole("option", { name: "genField_prompt" }));
+  const picker = screen.getByRole("combobox", { name: "genField_prompt" });
+  expect(picker).toHaveTextContent("genField_prompt_optional");
+  fireEvent.click(picker);
+  fireEvent.click(await screen.findByRole("option", { name: "genField_prompt_none" }));
+
+  fireEvent.change(screen.getByLabelText(/generationProfilesName/), { target: { value: "放大" } });
+  fireEvent.click(screen.getByText("save"));
+  await waitFor(() => expect(apiMock).toHaveBeenCalled());
+  const body = JSON.parse((apiMock.mock.calls[0] as [string, { body: string }])[1].body);
+  expect(body.capabilities.prompt).toBe("none");
 });

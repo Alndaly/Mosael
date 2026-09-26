@@ -109,6 +109,8 @@ class CapabilityProfileFieldOut(ApiModel):
     #: 这一格是**哪个参数**的默认值(`default_quality` → `quality`)。只有 defaults 组有。
     #: 界面据此决定"这个旋钮要不要有一格默认值",而不是自己攒一张名单。
     defaults_for: str | None = None
+    #: `choice` 形状的可选值(提示词要不要写:required / optional / none)。别的形状没有这一项。
+    choices: list[str] | None = None
 
 
 class CapabilityProfileSchemaOut(ApiModel):

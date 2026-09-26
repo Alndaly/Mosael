@@ -40,7 +40,7 @@ from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import PluginInstance, ProviderProfile
 from app.domain import provider_models
-from app.domain.generation.catalog import GENERATION_KINDS
+from app.domain.generation.catalog import GENERATION_KINDS, PROMPT_MODES
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import generation as plugin_generation
@@ -148,6 +148,9 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
         caps["requires_source"] = required
     if model.prompt_dialect:
         caps["prompt_dialect"] = model.prompt_dialect
+    # 提示词要不要写:插件说了、而且是宿主认得的那三个值才写进去;没说就不出现(= required)。
+    if model.prompt in PROMPT_MODES:
+        caps["prompt"] = model.prompt
     return caps
 
 

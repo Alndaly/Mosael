@@ -98,29 +98,31 @@ def _text(kind: str, prompt: str, parameters: dict, capabilities: dict | None = 
     validate_text_inputs("p", "m", kind, prompt, parameters, capabilities=capabilities)
 
 
-def test_音频可以只给歌词_什么都不给不行() -> None:
-    _text("audio", "", {"lyrics": "[Verse] 啦"})
-    _text("audio", "城市流行", {})
+def test_会唱歌词的模型可以只给歌词_什么都不给不行() -> None:
+    caps = C.EVOLINK_SUNO_CAPABILITIES
+    _text("audio", "", {"lyrics": "[Verse] 啦"}, caps)
+    _text("audio", "城市流行", {}, caps)
     with pytest.raises(GenerationDomainError, match="描述和歌词至少要给一段"):
-        _text("audio", "  ", {"lyrics": " "})
+        _text("audio", "  ", {"lyrics": " "}, caps)
 
 
 def test_给视频配声的模型什么字都可以不给() -> None:
+    assert C.KLING_VIDEO_TO_AUDIO_CAPABILITIES["prompt"] == "optional"
     _text("audio", "", {}, C.KLING_VIDEO_TO_AUDIO_CAPABILITIES)
 
 
-def test_图像和视频照旧要提示词() -> None:
-    for kind in ("image", "video"):
-        with pytest.raises(GenerationDomainError, match="要写一段描述"):
-            _text(kind, "", {})
+def test_不会唱歌词的模型照旧要提示词() -> None:
+    with pytest.raises(GenerationDomainError, match="要写一段描述"):
+        _text("audio", "", {}, C.KLING_TEXT_TO_AUDIO_CAPABILITIES)
 
 
 def test_纯音乐不带歌词_而且要有描述() -> None:
+    caps = C.GOOGLE_LYRIA_CAPABILITIES
     with pytest.raises(GenerationDomainError, match="二选一"):
-        _text("audio", "钢琴", {"instrumental": True, "lyrics": "啦啦"})
+        _text("audio", "钢琴", {"instrumental": True, "lyrics": "啦啦"}, caps)
     with pytest.raises(GenerationDomainError, match="纯音乐要写一段描述"):
-        _text("audio", "", {"instrumental": True})
-    _text("audio", "钢琴", {"instrumental": True})
+        _text("audio", "", {"instrumental": True}, caps)
+    _text("audio", "钢琴", {"instrumental": True}, caps)
 
 
 def test_歌词按模型的上限拦() -> None:
@@ -138,7 +140,7 @@ def test_歌词和描述只收一段的模型_两段都给当场说() -> None:
         _text("audio", "欢快的流行", {"lyrics": "啦啦啦啦啦"}, caps)
 
 
-def test_必须写描述的模型() -> None:
+def test_不会唱歌词的模型_给了歌词也不能代替描述() -> None:
     with pytest.raises(GenerationDomainError, match="要写一段描述"):
         _text("audio", "", {"lyrics": "只有歌词"}, C.KLING_TEXT_TO_AUDIO_CAPABILITIES)
 
@@ -321,7 +323,8 @@ def test_提交只给歌词的音频_接口不再要求提示词() -> None:
         "model": "song-2", "kind": "audio", "prompt": "",
     }
     rejected = client.post("/api/generation/jobs", json={**body, "parameters": {}})
-    assert rejected.status_code == 422 and "至少要给一段" in rejected.json()["detail"]
+    # 目录不认识的模型:不知道它收不收歌词,所以只给歌词放行;什么都不给时说的是「要写一段描述」。
+    assert rejected.status_code == 422 and "要写一段描述" in rejected.json()["detail"]
     accepted = client.post("/api/generation/jobs", json={**body, "parameters": {"lyrics": "啦啦啦"}})
     assert accepted.status_code == 200, accepted.text
     assert wait_status(client, accepted.json()["job"]["id"], timeout=30) == "succeeded"

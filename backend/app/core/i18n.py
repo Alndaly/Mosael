@@ -3000,6 +3000,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_responseFormat": {"zh": "response_format 只能是 text/json_object/json_schema", "en": "response_format must be text, json_object or json_schema"},
     "wfErr_schemaEmpty": {"zh": "JSON Schema 不能为空", "en": "The JSON Schema cannot be empty"},
     "wfErr_llmPromptEmpty": {"zh": "LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。", "en": "The LLM node has no prompt: write one, or connect an upstream reference and make sure it produces output."},
+    "wfErr_generateNodeText": {"zh": "节点「{node}」还不能跑:{reason}", "en": "Node “{node}” can't run yet: {reason}"},
     "wfErr_llmNotJson": {"zh": "LLM 未返回合法 JSON", "en": "The model did not return valid JSON"},
     "wfErr_browserSessionNotInWorkspace": {"zh": "浏览器会话不存在,或不在这个工作区里", "en": "That browser session does not exist or is not in this workspace"},
     "wfErr_browserSessionMissing": {"zh": "缺少浏览器会话:先用「打开浏览器」节点,并把它的 session 输出连过来", "en": "No browser session: add an Open browser node and connect its session output"},
@@ -3724,7 +3725,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genErr_sourceMustBeVideo": {"zh": "{label}素材必须是视频", "en": "The {label} asset must be a video."},
     "genErr_sourceMustBeImage": {"zh": "{label}素材必须是图片", "en": "The {label} asset must be an image."},
     "genErr_sourceMustBeAudio": {"zh": "{label}素材必须是音频", "en": "The {label} asset must be audio."},
-    "genErr_audioNeedsText": {
+    "genErr_promptOrLyricsRequired": {
         "zh": "{provider} · {model}:描述和歌词至少要给一段",
         "en": "{provider} · {model}: give a description, lyrics, or both.",
     },
@@ -3747,6 +3748,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genErr_promptRequired": {
         "zh": "{provider} · {model}:这个模型要写一段描述",
         "en": "{provider} · {model}: this model needs a description.",
+    },
+    "genErr_promptNotAccepted": {
+        "zh": "{provider} · {model}:这个模型不收提示词 —— 它只按素材和参数出结果;把提示词清空再提交",
+        "en": "{provider} · {model}: this model takes no prompt — it works from the inputs and parameters alone. Clear the prompt and submit again.",
     },
     "genErr_lyricsRequired": {
         "zh": "{provider} · {model}:这个模型要给歌词",
@@ -3827,6 +3832,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genErr_profileStr": {"zh": "{field} 要是一段非空文字", "en": "{field} must be non-empty text."},
     "genErr_profileInt": {"zh": "{field} 要是一个整数", "en": "{field} must be a whole number."},
     "genErr_profileBool": {"zh": "{field} 要是 true 或 false", "en": "{field} must be true or false."},
+    "genErr_profileChoice": {"zh": "{field} 只能是 {choices} 之一", "en": "{field} must be one of {choices}."},
     "genErr_profileStrToInt": {"zh": "{field} 要是一组「名字 → 正整数」", "en": "{field} must map names to positive whole numbers."},
     "genErr_profileStrToStrList": {"zh": "{field} 要是一组「名字 → 可选值」", "en": "{field} must map names to lists of allowed values."},
     "genErr_profileStrToIntList": {"zh": "{field} 要是一组「名字 → 一串整数」", "en": "{field} must map names to lists of whole numbers."},

@@ -641,7 +641,7 @@ def convert_video_to_gif(
 
 @mcp.tool()
 def generate_image(
-    prompt: str,
+    prompt: str = "",
     model: str = "",
     provider: str = "",
     provider_profile_id: str = "",
@@ -655,6 +655,12 @@ def generate_image(
     existing image asset ids when the user asks to edit/transform/continue from
     a specific image, for example "把这张图里的女孩变成男孩" or "按上一张图继续改"。
 
+    Whether a prompt is needed depends on the model — list_generation_models
+    gives each model a "prompt" of "required", "optional" or "none". A model
+    with "none" (an upscale / background-removal workflow) takes no prompt:
+    leave prompt empty and pass the image in source_asset_ids; a prompt sent to
+    it is rejected. "optional" runs with or without one.
+
     parameters carries the model's own settings — size, num_images, seed,
     negative_prompt and so on. Which keys a model accepts, and the allowed
     values, come from list_generation_models; call it first whenever the user
@@ -664,7 +670,7 @@ def generate_image(
     budget; once approved the finished image appears in the media pool. Leave provider/model empty only when the user wants the
     configured image-generation default. When the user names an engine (e.g.
     "用 ComfyUI 画"), call list_generation_models to see valid provider/model
-    pairs; local ComfyUI is provider="comfyui", model="workflow" and needs no
+    pairs; each saved ComfyUI workflow is its own model there and needs no
     API key. Do NOT use to analyze an existing asset (analyze_asset), tag an
     asset (update_asset_tags), or edit a
     workflow/timeline.
@@ -810,6 +816,8 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
     Call this before generate_image/generate_video/generate_sound when the user names a specific
     engine or asks what is available. kind filters to "image", "video" or "audio" (music, songs,
     background music, sound effects, soundtrack for a video); empty returns all of them.
+    Each entry's "prompt" says whether the model needs a prompt: "required", "optional", or
+    "none" (it takes none — an upscale workflow; send it no prompt).
     """
     kinds = [kind] if kind in _GENERATION_KINDS else list(_GENERATION_KINDS)
     out: list[dict[str, Any]] = []
@@ -829,6 +837,9 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
                     # 都问不出来,只能盲发一个没有参数的请求。
                     "parameters": _parameter_help(capabilities),
                     "modes": capabilities.get("modes") or [],
+                    # 提示词要不要写:required / optional / none(放大这类工作流不收)。智能体据此决定
+                    # 写不写 —— 不说的话它只能照「生成都要提示词」的老习惯硬编一句,而那句会被拒。
+                    "prompt": capabilities.get("prompt") or "required",
                     "source_rules": _source_rules(capabilities),
                 }
             )
@@ -917,7 +928,7 @@ def _parameter_help(capabilities: dict[str, Any]) -> dict[str, Any]:
 
 @mcp.tool()
 def generate_video(
-    prompt: str,
+    prompt: str = "",
     model: str = "",
     provider: str = "",
     provider_profile_id: str = "",
@@ -928,7 +939,10 @@ def generate_video(
     """Confirmation required: generate a NEW video asset from a text prompt.
 
     Use when the user asks to create new footage/animation/B-roll as a media
-    asset. This does not place the video onto a timeline; after approval the
+    asset. The prompt describes the shot; models whose "prompt" in
+    list_generation_models is "none" (frame interpolation, video upscaling
+    workflows) take none — leave it empty — and "optional" ones run without it.
+    This does not place the video onto a timeline; after approval the
     generated asset lands in the media pool and can later be inserted with
     edit_timeline. Leave provider/model empty only when the configured
     video-generation default should be used.

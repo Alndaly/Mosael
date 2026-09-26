@@ -24,6 +24,7 @@ from app.domain.generation.catalog import (
     SOURCE_GROUPS,
     SOURCE_ROLE_LABELS,
     known_capabilities_for,
+    prompt_mode,
 )
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.core.i18n import LocalizedError, pick_text, tr
@@ -149,6 +150,40 @@ def create_generation_job(
     db.refresh(generation)
     db.refresh(job)
     return generation, job
+
+
+def check_text_inputs(
+    db: Session,
+    *,
+    user_id: str | None,
+    kind: str,
+    provider: str,
+    model: str,
+    prompt: str,
+    parameters: dict[str, Any],
+    provider_profile_id: str | None = None,
+) -> None:
+    """按**选中的那个模型**判一遍文字规矩(validate_text_inputs),不建任务。
+
+    给「提交之前还有一道关」的入口用 —— 智能体的确认卡:开卡时就该知道这张卡批了也跑不起来
+    (放大模型却写了一句提示词、文生图却什么都没写),而不是等人点了批准才报。和
+    create_generation_job 同一个判据、同一种解析;模型本身解析不出来(没设默认、连接没了)不在这里说,
+    那由执行时的漏斗说清楚 —— 这里只管文字。
+    """
+    provider = provider.strip()
+    model = model.strip()
+    try:
+        if not provider or not model:
+            provider, model, provider_profile_id = _default_model(db, kind, user_id)
+        resolved = resolve_generation_model(
+            db, user_id=user_id, provider=provider, model=model, kind=kind, provider_profile_id=provider_profile_id,
+        )
+    except (GenerationDomainError, GenerationResolutionError):
+        return
+    validate_text_inputs(
+        resolved.provider, model, kind, prompt, parameters,
+        capabilities=resolved.capabilities if resolved.capabilities_known else None,
+    )
 
 
 def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, str, str | None]:
@@ -515,16 +550,24 @@ def validate_text_inputs(
 ) -> None:
     """提示词和歌词这两段**文字**本身的规矩。和参数、素材一样拦在提交之前。
 
-    - 音频可以只给歌词不给描述(照着歌词写一首歌),所以「提示词不能为空」对音频是「两者至少
-      给一段」;给视频配声的模型(`prompt_optional`)连这一条都没有 —— 画面本身就是输入。
-      图像和视频照旧要提示词(那一条由 Adapter 的形状校验把关)。
+    **一套规矩,由描述符说,不按种类分支**(见 catalog.PROMPT_MODES)。提示词要不要写看 `prompt`:
+
+    - `required`(没写就是它):要一段描述。**会唱歌词的模型只给歌词也行** —— 歌词本身就是「写一首
+      什么样的歌」。描述符查不到的模型(用户自建的、中转上的别名)同样按它判,只是给了歌词就放行:
+      我们不知道它收不收歌词,猜着拦只会挡住本来能用的东西(和 validate_against_capabilities 同一条);
+    - `optional`:可以不写(给视频配声、按素材出结果的模型);
+    - `none`:这个模型**不收**提示词(放大、抠图这类工作流)。带着提示词提交当场拒 —— 写了也不会生效,
+      让人以为那句话起了作用比报错更糟。
+
+    其余几条是歌词的:
+
     - **纯音乐就不该有歌词**:两个都给,各家要么报错、要么悄悄丢掉歌词,哪一种都不是用户要的。
-      纯音乐也就只剩描述可依,所以它还要求描述。
+      要描述的模型选了纯音乐,就只剩描述可依,所以它还要求描述;
     - 歌词有自己的上限(`max_lyrics_chars`,各家文档的数)。超了的话供应商回的是一句英文的
-      invalid params,而那时请求已经发出去了。
+      invalid params,而那时请求已经发出去了;
     - 有的模型**歌词和描述只收一段**(`lyrics_excludes_prompt`,火山的人声歌曲:同时给时以歌词为准、
-      描述被丢掉)。两段都给就当场说,而不是让描述悄悄不生效。
-    - `requires_prompt` / `requires_lyrics`:这个模型那一段必填(文档说的)。
+      描述被丢掉)。两段都给就当场说,而不是让描述悄悄不生效;
+    - `requires_lyrics`:这个模型歌词必填(文档说的)。
     """
     lyrics = parameters.get("lyrics")
     if lyrics is not None and not isinstance(lyrics, str):
@@ -532,16 +575,24 @@ def validate_text_inputs(
     has_lyrics = bool(str(lyrics or "").strip())
     has_prompt = bool(prompt.strip())
     caps = capabilities or {}
-    if kind != "audio" and not has_prompt:
-        raise GenerationDomainError("genErr_promptRequired", provider=provider, model=model)
-    # 纯音乐的两条先说:它们比「至少给一段」具体 —— 选了纯音乐却什么都没写,该听到的是「纯音乐要描述」。
+    mode = prompt_mode(caps)
+    if mode == "none" and has_prompt:
+        raise GenerationDomainError("genErr_promptNotAccepted", provider=provider, model=model)
+    # 纯音乐的两条先说:它们比「要一段描述」具体 —— 选了纯音乐却什么都没写,该听到的是「纯音乐要描述」。
     if parameters.get("instrumental") is True:
         if has_lyrics:
             raise GenerationDomainError("genErr_instrumentalWithLyrics", provider=provider, model=model)
-        if not has_prompt:
+        if not has_prompt and mode == "required":
             raise GenerationDomainError("genErr_instrumentalNeedsPrompt", provider=provider, model=model)
-    if kind == "audio" and not has_prompt and not has_lyrics and not caps.get("prompt_optional"):
-        raise GenerationDomainError("genErr_audioNeedsText", provider=provider, model=model)
+    if mode == "required" and not has_prompt:
+        sings = capabilities is None or "lyrics" in allowed_parameter_keys(caps, kind)
+        if not sings:
+            raise GenerationDomainError("genErr_promptRequired", provider=provider, model=model)
+        if not has_lyrics:
+            raise GenerationDomainError(
+                "genErr_promptOrLyricsRequired" if capabilities is not None else "genErr_promptRequired",
+                provider=provider, model=model,
+            )
     if capabilities is None:
         return
     cap = capabilities.get("max_lyrics_chars")
@@ -553,8 +604,6 @@ def validate_text_inputs(
         raise GenerationDomainError("genErr_lyricsExcludesPrompt", provider=provider, model=model)
     if not has_lyrics and capabilities.get("requires_lyrics"):
         raise GenerationDomainError("genErr_lyricsRequired", provider=provider, model=model)
-    if not has_prompt and capabilities.get("requires_prompt"):
-        raise GenerationDomainError("genErr_promptRequired", provider=provider, model=model)
 
 
 def _check_declared_parameter(provider: str, model: str, key: str, spec: dict[str, Any], value: Any) -> None:
