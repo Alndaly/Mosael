@@ -247,6 +247,33 @@ class Test索引:
         assert market.fetch_index("https://e/r.json") == []
         assert seen["max_retries"] == 0
 
+    def test_对方回了错误码_说是哪个地址回了几_不甩_httpx_原文(self, monkeypatch) -> None:
+        """默认索引跟过跳转落在某一版的附件上;那一版没附索引时,要看到的是「v1.5.2 的 registry.json
+        回了 404」,不是 httpx 那整句带 MDN 链接的原文。"""
+        import httpx
+
+        landed = "https://github.com/Alndaly/Mosael/releases/download/v1.5.2/registry.json"
+
+        class FakeClient:
+            def __init__(self, **kw):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def get(self, url):
+                return httpx.Response(404, request=httpx.Request("GET", landed))
+
+        monkeypatch.setattr(market, "RetryingClient", FakeClient)
+        with pytest.raises(PluginDomainError) as caught:
+            market.fetch_index("https://e/r.json")
+        message = str(caught.value)
+        assert landed in message and "404" in message
+        assert "mozilla" not in message and "For more information" not in message
+
     def test_只认_http(self) -> None:
         with pytest.raises(PluginDomainError, match="http"):
             market.fetch_index("file:///etc/passwd")

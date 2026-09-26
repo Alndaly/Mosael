@@ -78,6 +78,12 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
             response = client.get(url)
             response.raise_for_status()
             payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        # 连上了、对方说「没有」:说清是**哪个地址**(跟过跳转之后的那个 —— 默认索引会跳到某一版的
+        # 附件上,是哪一版正是要知道的)回了几。httpx 的原文整句带着一个 MDN 链接,不是给人看的。
+        raise PluginDomainError(
+            "pluginErr_marketStatus", url=str(exc.response.url), status=exc.response.status_code
+        ) from exc
     except httpx.HTTPError as exc:
         raise PluginDomainError("pluginErr_marketUnreachable", detail=str(exc)) from exc
     except ValueError as exc:

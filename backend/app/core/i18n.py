@@ -305,6 +305,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "打不开插件市场:{detail}",
         "en": "Could not open the plugin marketplace: {detail}",
     },
+    "pluginErr_marketStatus": {
+        "zh": "插件市场的索引取不到:{url} 返回 HTTP {status}",
+        "en": "Could not fetch the plugin marketplace index: {url} returned HTTP {status}",
+    },
     "pluginErr_marketNotJson": {
         "zh": "插件市场返回的不是合法 JSON",
         "en": "The plugin marketplace did not return valid JSON.",
