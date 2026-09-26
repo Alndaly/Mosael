@@ -149,6 +149,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path} 缺少必填字段: {field}",
         "en": "Plugin manifest {path} is missing a required field: {field}",
     },
+    "pluginErr_manifestBadId": {
+        "zh": "插件清单 {path} 的 id「{id}」不合法:只能用字母、数字和 . _ -,并以字母或数字开头",
+        "en": "Plugin manifest {path} has an invalid id “{id}”: use only letters, digits and . _ -, starting with a letter or digit.",
+    },
+    "pluginErr_manifestBadToolName": {
+        "zh": "插件清单 {path} 的工具名「{tool}」不合法:以字母开头,只能用字母、数字、_ 和 -,最长 64 个字符",
+        "en": "Plugin manifest {path} has an invalid tool name “{tool}”: start with a letter and use only letters, digits, _ and -, up to 64 characters.",
+    },
+    "pluginErr_manifestDuplicateTool": {
+        "zh": "插件清单 {path} 里有两个工具都叫 {tool}",
+        "en": "Plugin manifest {path} declares two tools named {tool}.",
+    },
+    "pluginErr_manifestReservedKey": {
+        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 会盖掉宿主给插件的环境变量(PATH、HOME、LANG、MOSAEL_* 等),请换个名字",
+        "en": "In plugin manifest {path}, the config/credential key {field} would override an environment variable the host provides (PATH, HOME, LANG, MOSAEL_* and so on); please rename it.",
+    },
+    "pluginErr_manifestDuplicateKey": {
+        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 和 {other} 大写后是同一个环境变量",
+        "en": "In plugin manifest {path}, the config/credential keys {field} and {other} become the same environment variable once upper-cased.",
+    },
     "pluginErr_manifestToolExtraCapability": {
         "zh": "插件清单 {path} 的工具 {tool} 声明了包上没有的能力: {capabilities}",
         "en": "In plugin manifest {path}, tool {tool} declares capabilities the package doesn't: {capabilities}",

@@ -21,12 +21,26 @@ from typing import TYPE_CHECKING, Any
 from app.core.i18n import LocalizedError, pick_text
 #: 后果词表也是纯叶子(不依赖任何模块)。
 from app.domain.effects import EFFECTS, NONE as NO_EFFECTS
+#: 宿主给插件子进程的那一半环境也是叶子(只依赖标准库)。
+from app.domain.plugins.child_env import is_reserved
 
 if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块是叶子
     from app.db.models import PluginPackage
 
 #: 配置项 / 凭据项的键。同时是 `${...}` 占位符的名字,也是进程插件的环境变量名(大写化)。
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+#: 插件 id。它同时是**插件目录名**(`<插件目录>/<id>`,见 registry.install_archive)、持久目录名、
+#: 节点类型的一段(`plugin.<id>.<工具>`)和生成连接 vendor 的一段(`plugin:<id>`)。
+#:
+#: 此前只要求「非空字符串」。而 id 来自压缩包里的清单 —— 写成 `"../../Documents"` 的包装的时候会被
+#: 搬到插件目录**之外**,「更新」时还会先把那个目录整个 rmtree 掉。首字符必须是字母或数字(挡住
+#: `.` / `..`),其后只收字母、数字和 `._-`(没有路径分隔符);长度和库里那一列(String(160))一致。
+PLUGIN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
+
+#: 工具名。它要进节点类型 `plugin.<包>.<工具>`(按**最后一个**点切,所以不能有点)和智能体的函数名
+#: (各家只收 `[A-Za-z0-9_-]`)。清单里声明的和运行时报出的(dynamic_tools)是同一条规矩。
+TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 
 #: 配置项的类型。`json` / `code` 是**一段代码**:界面给代码编辑器(不是一个多行文本框),`json` 保存前
 #: 必须能解析(错在第几行第几列当场说)。值照旧存成字符串 —— 插件拿到的就是它粘进去的那一段原文,
@@ -414,8 +428,17 @@ def _tools_policy(raw: dict[str, Any], path: str, pick: Callable[[Any], str] = t
         for t in (tools.get("declare") or [])
         if isinstance(t, dict) and isinstance(t.get("name"), str)
     ]
+    seen: set[str] = set()
     for tool in declared:
-        _checked_effects(tool.get("effects"), read_only=tool.get("read_only") is True, path=path, tool=tool["name"])
+        name = tool["name"]
+        # 名字写错在装的那一刻就说:带点的工具名会让节点类型切错包和工具,带空格的进不了智能体的函数表。
+        if not TOOL_NAME_RE.match(name):
+            raise ManifestError("pluginErr_manifestBadToolName", path=path, tool=name[:80])
+        # 同名两个:按名字找工具的每一处(执行、开关、节点)都只会拿到第一个,另一个静默消失。
+        if name in seen:
+            raise ManifestError("pluginErr_manifestDuplicateTool", path=path, tool=name)
+        seen.add(name)
+        _checked_effects(tool.get("effects"), read_only=tool.get("read_only") is True, path=path, tool=name)
     default_effects = _checked_effects(tools.get("default_effects"), read_only=False, path=path, tool="tools.default_effects")
     recommended = [str(n) for n in (tools.get("recommended") or [])]
     return _ToolsPolicy(("all" if expose == "all" else "selected"), recommended, overrides, declared, default_effects)
@@ -435,6 +458,8 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
     for key in ("id", "version"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
             raise ManifestError("pluginErr_manifestMissingField", path=path, field=key)
+    if not PLUGIN_ID_RE.match(raw["id"].strip()):
+        raise ManifestError("pluginErr_manifestBadId", path=path, id=raw["id"].strip()[:80])
     author_locale = str(raw.get("default_locale") or "").strip()
 
     def pick(value: Any) -> str:
@@ -457,6 +482,9 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
                 "pluginErr_manifestToolExtraCapability", path=path, tool=tool.get("name"), capabilities=", ".join(sorted(extra))
             )
     _check_host_only(package_provides, declared, runtime_of(raw), path)
+    config = _fields(instance.get("config"), secret=False, pick=pick)
+    credentials = _fields(instance.get("credentials"), secret=True, pick=pick)
+    _check_field_keys([*config, *credentials], path)
     return Manifest(
         id=raw["id"].strip(),
         name=name,
@@ -465,8 +493,8 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         runtime=runtime_of(raw),
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str) and p.strip()],
         skills=[_humanized(s, "name", "description", pick=pick) for s in (raw.get("skills") or []) if isinstance(s, dict)],
-        config=_fields(instance.get("config"), secret=False, pick=pick),
-        credentials=_fields(instance.get("credentials"), secret=True, pick=pick),
+        config=config,
+        credentials=credentials,
         multiple=instance.get("multiple") is True,
         name_template=pick(instance.get("name_template")),
         expose=policy.expose,
@@ -484,6 +512,25 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         # 然后得到一个静默消失的授权按钮 —— 这个坑第一个踩进去的就是写解析器的人。
         oauth=_oauth(instance.get("oauth")),
     )
+
+
+def _check_field_keys(fields: list[Field], path: str) -> None:
+    """配置项和凭据项的键都会**大写之后**注入插件进程的环境(见 instances.process_env)。
+
+    · 盖掉宿主给的变量的不收:一个叫 `path` 的配置项会把 PATH 换成用户填的路径,插件连解释器都
+      找不到;`MOSAEL_*` 是宿主和插件之间的约定(产出目录、取消文件……),让插件自己声明一个同名的,
+      宿主告诉它的那个就被用户填的值顶掉了。
+    · 大写后撞名的不收(`token` 和 `TOKEN`、配置和凭据各一个):两个框填的值进同一个环境变量,
+      谁盖掉谁取决于字典的合并顺序 —— 用户在界面上看到两个框,插件只看得到一个。
+    """
+    seen: dict[str, str] = {}
+    for spec in fields:
+        if is_reserved(spec.key):
+            raise ManifestError("pluginErr_manifestReservedKey", path=path, field=spec.key)
+        upper = spec.key.upper()
+        if upper in seen:
+            raise ManifestError("pluginErr_manifestDuplicateKey", path=path, field=spec.key, other=seen[upper])
+        seen[upper] = spec.key
 
 
 def _check_host_only(
@@ -584,8 +631,10 @@ __all__ = [
     "Manifest",
     "ManifestError",
     "PATH_KEY",
+    "PLUGIN_ID_RE",
     "Runtime",
     "TOOLS",
+    "TOOL_NAME_RE",
     "ToolOverride",
     "expand",
     "localized_tool",

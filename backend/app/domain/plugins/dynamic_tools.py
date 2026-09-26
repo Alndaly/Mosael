@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -33,7 +32,8 @@ from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import TOOLS
+#: 工具名的规矩和清单里声明的工具是同一条(见 manifest.TOOL_NAME_RE)。
+from app.domain.plugins.manifest import TOOL_NAME_RE, TOOLS
 from app.domain.plugins.runtime import PluginRuntimeError
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,6 @@ logger = logging.getLogger(__name__)
 CATALOG_TIMEOUT_SECONDS = 60.0
 #: 一个连接最多报多少个工具。再多工具表和节点面板就没法用了。
 MAX_TOOLS = 300
-#: 工具名:要能进节点类型 `plugin.<包>.<工具>`(按最后一个点切,所以不能有点)和智能体的函数名。
-_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 #: 报出来的工具上宿主认的键。别的丢掉 —— 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主
 #: 认领能力,也不能把自己藏成「只给宿主」。
 _KEPT = ("name", "label", "description", "input_schema", "read_only", "effects", "stream", "timeout_seconds", "node",
@@ -68,7 +66,7 @@ def _clean(entry: Any, declared: set[str]) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
     name = str(entry.get("name") or "").strip()
-    if not _NAME.match(name) or name in declared:
+    if not TOOL_NAME_RE.match(name) or name in declared:
         return None
     schema = entry.get("input_schema")
     if not isinstance(schema, dict):

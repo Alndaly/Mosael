@@ -278,6 +278,9 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 两者都参与 `${...}` 展开,也都注入本地脚本的环境变量(**键名大写**:`API_KEY` → `$API_KEY`)。
 
+键名大写之后**不能盖掉宿主给的变量**(`PATH`、`HOME`、`LANG`、`MOSAEL_*`,以及 Windows 上的
+`SYSTEMROOT`、`APPDATA`、`TEMP` 等),配置和凭据之间大写后也不能撞名 —— 这两种写法装的时候就报错。
+
 判据:**这个值要不要藏起来**。要 → 凭据。不要 → 配置。把区域塞进凭据,用户会得到一个没有选项、
 没有校验的密码框。
 
@@ -675,7 +678,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 
 | 字段 | 说明 |
 | --- | --- |
-| `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;`name` 可写成按语言分的对象 |
+| `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;只能用字母、数字和 `._-`,以字母或数字开头(它就是插件目录名);`name` 可写成按语言分的对象 |
 | `default_locale` | 可选。你那些裸字符串是用哪种语言写的(见「多语言」),挑不到要的语言时先退到它 |
 | `manifest_version` | 当前是 `1`。老清单扫描时自动迁移并补上 |
 | `homepage` | **你的文档站**。界面在插件详情页、市场条目、安装确认三处给一个「文档」链接;不写就不画。只认 `http(s)` |
@@ -693,7 +696,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `skills` | 给别的智能体看的高层描述 |
 | `tools.expose` | `"selected"`(默认)/ `"all"` |
 | `tools.recommended` | 首次启用默认勾上的工具名 |
-| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。每条可写 `read_only`、`effects`(见「确认」)、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |
+| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉)。工具名以字母开头,只用字母、数字、`_`、`-`,最长 64,不能重名。每条可写 `read_only`、`effects`(见「确认」)、`timeout_seconds`、`stream`(边跑边说进度,见「流式工具」)、`provides`、`node` |
 | `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `effects` / `node` / `internal` |
 | `tools.default_effects` | 没声明后果的工具按什么算(`none` / `paid` / `external` / `local-code`);不写是 `external` |
 | `input_schema` 属性的 `x-advanced` | 标成高级,收进面板的「高级」一档。判据:**留空也能跑**的才算 |
