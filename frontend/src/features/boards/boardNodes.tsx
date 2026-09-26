@@ -708,7 +708,8 @@ function AudioNode({ data, selected }: NodeProps) {
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
-      <div className={cn("grid h-full w-full place-items-center overflow-hidden px-2", CELL_INNER_RADIUS)}>
+      {/* 左右留白只给播放器:空槽 / 生成中的占位要贴满格子,否则占位两边各缩进一截,看着像一块小一号的卡叠在格子里。 */}
+      <div className={cn("grid h-full w-full place-items-center overflow-hidden", item.asset_id && "px-2", CELL_INNER_RADIUS)}>
         {!item.asset_id ? (
           <PendingSlot item={item} icon={<Music size={20} />} onStop={commentMode ? undefined : onStop} />
         ) : (

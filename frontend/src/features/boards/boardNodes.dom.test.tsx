@@ -142,7 +142,10 @@ describe("无限画布节点运行状态", () => {
       expect(shell?.className, kind).toContain("rounded-xl");
       expect(shell?.className, kind).not.toContain("rounded-lg");
       if (kind !== "note") {
-        expect(container.querySelector('[role="status"]')?.className, kind).toContain("rounded-[calc(var(--radius-xl)-1px)]");
+        const status = container.querySelector<HTMLElement>('[role="status"]')!;
+        expect(status.className, kind).toContain("rounded-[calc(var(--radius-xl)-1px)]");
+        //: 生成中的占位贴满格子:外面那层不给它留白(音频格此前带着给播放器的 px-2,占位两边各缩进一截)。
+        expect(status.parentElement?.className ?? "", kind).not.toMatch(/\bp[xy]?-\d/);
       }
       unmount();
     }
