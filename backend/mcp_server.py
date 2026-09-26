@@ -1862,10 +1862,12 @@ def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
     canvas then shows the kind, e.g. "Image") — use it to tell apart items of the
     same kind and to refer to them. Call this before edit_board so you know the
     exact item_id values and where things already sit — the user has arranged
-    them by hand. A tool item (kind "action") carries form.producer (which tool),
-    form.config, form.bindings and run (status, job_id, error); a 3D scene item
-    (kind "scene") carries form.producer "scene_render" and form.config (its render
-    settings) and run the same way.
+    them by hand. An item's form.abilities holds the last-used settings of each of
+    its abilities ({producer: {config, bindings}}); run (status, job_id, error,
+    ability) says what is running on it — `ability` names the ability when the run
+    is one. An empty slot running a plugin generator carries form.producer (that
+    generator), form.config and form.bindings; a 3D scene item (kind "scene")
+    carries form.producer "scene_render" and form.config (its render settings).
     """
     return _get(f"/api/boards/{board_id}", {"workspace_id": workspace_id or _default_workspace_id()})
 
@@ -1884,12 +1886,19 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
     An image/video/audio item with no asset_id is an EMPTY SLOT: the user writes a
     prompt on it and generates. Adding empty slots is how you set up work for them.
 
-    A TOOL ITEM (type "action") runs one tool — a plugin tool or a built-in node
-    from list_board_producers — and its outputs land as new items to its right.
-    Name the tool in `producer`, fill `config` with its fields, and feed fields from
-    upstream items with `bindings` ({field: [{"from": item_id}]}; the upstream item
-    must also be connected to the tool item, and its kind must be one the field's
-    board_sources lists). Run it afterwards with run_board_item.
+    There are NO separate tool items. Tools that turn content into new content are
+    ABILITIES of the content item itself (audio/video: transcribe, separate vocals,
+    denoise; video: to GIF; note/document: translate; plugin tools on the kinds
+    their content input takes — see list_board_producers, role "ability"). The
+    item's own content is the tool's input (the field named in host_fields — do not
+    set it). To prepare one, set_form on the HOST item with that ability's
+    `producer`: `config` is its other settings, `bindings` feeds its other inputs
+    from items connected INTO the host ({field: [{"from": item_id}]}; connect them in
+    the same batch; the upstream kind must be one the field's board_sources lists).
+    Run it with run_board_item(item_id=host, producer=...); outputs land as new
+    items to the host's right. A plugin GENERATOR that consumes no board content
+    (role "slot") is set as an empty slot's own producer instead: add_item an empty
+    image/video/audio slot with `producer`/`config`, or set_form it on one.
 
     A 3D SCENE ITEM (type "scene") renders itself: there is no separate render tool
     item. Its producer is "scene_render"; set its `config` (shot_id — a shot of that
@@ -1900,7 +1909,7 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
     operations is a list of:
       {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
           (item_id/x/y/width/height/title optional — the server auto-ids and lays out to the right)
-          type is one of note / image / video / audio / frame / scene / document / action
+          type is one of note / image / video / audio / frame / scene / document
       {"kind":"add_item","type":"image","asset_id":"<asset id>"}
           (places an existing asset; it must be in this workspace and match the item type:
            image → image asset, video → video asset, audio → audio asset)
@@ -1920,12 +1929,12 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
           (a line from A to B; the downstream node picks up A's output as its reference)
       {"kind":"remove_item","item_id":"n1"}                     (its edges go too)
       {"kind":"remove_edge","edge_id":"e-n1-i1"}
-      {"kind":"add_item","type":"action","item_id":"t1","producer":"node:translate",
-       "config":{"target_lang":"en"},"bindings":{"text":[{"from":"n1"}]}}
-          (a tool item; put {"kind":"connect","source":"n1","target":"t1"} in the same batch)
-      {"kind":"set_form","item_id":"t1","config":{"target_lang":"ja"},"bindings":{"text":[{"from":"n2"}]}}
-          (config merges key by key, null removes a key; bindings replace per field, [] unbinds;
-           a new producer starts from an empty config and bindings)
+      {"kind":"set_form","item_id":"n1","producer":"node:translate","config":{"target_lang":"en"}}
+          (the settings of note n1's "translate" ability — n1's own text is what gets translated;
+           config merges key by key, null removes a key; bindings replace per field, [] unbinds)
+      {"kind":"add_item","type":"video","item_id":"v2","producer":"node:plugin.<package>.<tool>",
+       "config":{"prompt":"…"}}
+          (an empty slot filled by a plugin generator — role "slot" in list_board_producers)
       {"kind":"set_form","item_id":"s1","config":{"shot_id":"<shot id>","render":"both"}}
           (a 3D scene item's render settings; scene_render takes no bindings)
     """
@@ -1943,46 +1952,55 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
 
 @mcp.tool()
 def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
-    """Read-only: list the TOOLS you can put on a creative board as tool items.
+    """Read-only: list what content items on a creative board can DO — their abilities and slot generators.
 
     A board only holds CONTENT TRANSFORMS — tools that turn an asset, text or 3D scene
     into new content (video to GIF, transcribe, translate, separate vocals, denoise,
-    a ComfyUI workflow that makes images…) or make new assets.
+    a ComfyUI workflow that makes images…) or make new assets. There are no separate
+    tool items: each entry lives on content items.
     Flow control and data plumbing (call a workflow, HTTP requests, templates, JSON,
     string handling, note search) and plugin tools that only list, report or upload
     are not board tools: build a workflow for those.
 
-    Each entry is a producer id (use it as `producer` in edit_board add_item/set_form),
-    its label, `board_description` (one line on what it does to content),
-    `board_group` (what content it works on: new / image / video / audio / text /
-    scene / asset), `effects` ("none" runs directly when you call run_board_item;
-    "paid"/"external" asks the user first) and `config` — the fields a creator fills
-    on the board (type, required, options, description; mappings, raw JSON and code
-    fields are not on the board). A field's `board_sources` lists the item kinds it
-    can take from upstream through `bindings`; an empty list means fill it in
-    `config`. Plugin tools appear only for plugins the user has connected.
-    Built-in slots (note/image/video/audio) are not listed — add them as empty slots.
-    Also listed: "scene_render" (hosts ["scene"]) — rendering a 3D shot is done by the
-    scene item itself, not a tool item; set its config on the scene item.
+    Each entry is a producer id (use it as `producer` in edit_board set_form/add_item
+    and run_board_item), its label, `role`, `hosts`, `board_description` (one line on
+    what it does to content), `effects` ("none" runs directly when you call
+    run_board_item; "paid"/"external" asks the user first) and `config` — the fields a
+    creator fills on the board (type, required, options, description; mappings, raw
+    JSON and code fields are not on the board).
+      role "ability": an ability of items of the kinds in `hosts`. The host item's own
+        content fills the field named in `host_fields[kind]` — never set that field.
+        Store its settings with set_form on the host (with `producer`) and run it with
+        run_board_item(item_id=host, producer=id); outputs land to the host's right.
+      role "slot": a generator that consumes no board content; it fills an EMPTY slot
+        of a kind in `hosts` — set it as that slot's own producer.
+    A field's `board_sources` lists the item kinds it can take from items connected
+    into the host through `bindings`; an empty list means fill it in `config`. Plugin
+    tools appear only for plugins the user has connected. Built-in slot producers
+    (generate/write/speak) are not listed — add empty slots and let the user generate.
+    Also listed: "scene_render" (hosts ["scene"]) — the scene item renders itself; set
+    its config on the scene item and run_board_item on it.
     """
     listed = _get("/api/boards/producers", {"workspace_id": workspace_id or _default_workspace_id()})
     return [one for one in listed if one.get("runs_from_draft")]
 
 
 @mcp.tool()
-def run_board_item(board_id: str, item_id: str, workspace_id: str = "") -> dict[str, Any]:
-    """Run a TOOL ITEM (kind "action") or a 3D SCENE ITEM (kind "scene") on a creative board, as if the user pressed Run.
+def run_board_item(board_id: str, item_id: str, producer: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Run an ABILITY of a content item on a creative board (or its slot generator / 3D render), as if the user pressed it.
 
-    Runs whatever tool and form the item has on the board right now, with the
-    user's own plugin connection. A read-only tool (effects "none") runs directly;
-    a tool that costs money or acts outside the app needs the user's approval first.
-    A scene item renders its chosen shot (form.config shot_id / render) locally.
-    The result means the run has STARTED (it returns the job_id); it finishes in the
-    background and its outputs then land as new items to the right of the item,
-    connected to it — get_job(job_id) says when, get_board shows them. Set the
-    item up with edit_board first. Do NOT use for image/
-    video/audio slots or notes (the user generates those from their panel) or for
-    visual workflows (run_workflow).
+    With `producer` (an id from list_board_producers, role "ability"): runs that ability
+    on the item — the item's own content is the input, its settings are the ones stored
+    on the item (set them first with edit_board set_form, same producer). Without it:
+    runs the item's own producer when that is runnable from its saved form — a plugin
+    generator on an empty slot, or a 3D scene item's render (form.config shot_id /
+    render). Uses the user's own plugin connection. A read-only tool (effects "none")
+    runs directly; one that costs money or acts outside the app needs the user's
+    approval first. The result means the run has STARTED (it returns the job_id); it
+    finishes in the background and its outputs land as new items to the right of the
+    item, connected to it (a slot generator fills the slot itself) — get_job(job_id)
+    says when, get_board shows them. Do NOT use for built-in generate/write/voice-over
+    (the user starts those from their panel) or for visual workflows (run_workflow).
     """
     confirmation = _post(
         "/api/confirmations",
@@ -1990,7 +2008,7 @@ def run_board_item(board_id: str, item_id: str, workspace_id: str = "") -> dict[
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "run_board_item",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"board_id": board_id, "item_id": item_id},
+            "payload": {"board_id": board_id, "item_id": item_id, **({"producer": producer} if producer else {})},
         },
     )
     return _confirmation_reply(confirmation)

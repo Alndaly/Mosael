@@ -1,4 +1,5 @@
-"""工具格:在画板上跑一个工作流节点(插件工具、挑过的内置节点),产出落成右边新的几格(ADR 0021 P2)。
+"""在画板上跑一个工作流节点(插件工具、挑过的内置节点):内容格的一项能力、空格子上的生成器、
+3D 场景格渲白模(ADR 0021 P2,ADR 0025 修订「能力住在内容格上」)。
 
 **不自己实现任何能力。** 跑的是工作流那张执行器注册表里的同一个执行器
 (`workflows.executors.get_executor`),拿到的作用域是画板自己的(BoardScope:工作区、
@@ -6,9 +7,11 @@
 任务线程由 `jobs.dispatch_job` 起,父任务就是这一轮 `board_run`,于是节点里派生的子任务
 (转写、分离、调子工作流)都挂在它下面,取消它就一并停下;插件进程登记在它名下,取消就被杀掉。
 
-画板在这里只多做三件自己的事:
+画板在这里只多做四件自己的事:
 
-· **上游 → 输入**(resolve_bindings):字段绑定的是上游哪几格,值在运行这一刻从画布上取 ——
+· **宿主 → 输入**(host_value):一项能力吃的就是它挂着的那一格的内容 —— 音频格的那段音频、便签上的字、
+  文档钉住那一版的正文、3D 场景格的场景。那个字段不是绑定、不在表单上,它**就是**宿主。
+· **上游 → 输入**(resolve_bindings):别的字段绑定的是上游哪几格,值在运行这一刻从画布上取 ——
   便签给字、文档给正文、图片/视频/音频给素材、3D 场景给场景 id。
 · **产出 → 格子**(board_outputs):按节点声明的输出类型把返回值归一成画板认的那几种产出
   (见 canvas.outputs_of),回执再把它们摆成右边新的几格。
@@ -60,8 +63,8 @@ _SOURCE_KINDS = {
 def binding_sink(key: str, spec: Any) -> str | None:
     """这个字段从上游接的是哪一种值:`"asset"` / `"scene"` / `"text"`;接不了回 None。
 
-    **前端不另写一份**:工具清单(`GET /api/boards/producers`)给每个字段带上 `board_sources`
-    (见 bindable_kinds),面板照它列上游。
+    **前端不另写一份**:产出者清单(`GET /api/boards/producers`)给每个字段带上 `board_sources`
+    (见 bindable_kinds),面板照它列上游;能力挂在哪几种格子上(boards.transforms.board_hosts)也从它推。
     """
     from app.domain.workflows import config_data_type
 
@@ -100,6 +103,18 @@ def _is_list_field(key: str, spec: dict[str, Any]) -> bool:
     return key == "asset_ids" or key.endswith("_asset_ids")
 
 
+def host_value(db: Session, workspace_id: str, host: dict[str, Any], key: str, sink: str) -> Any:
+    """一项能力挂着的那一格,给它吃内容的那个字段的值;宿主还没有内容(空槽、空便签、没挑笔记的文档)回 None。
+
+    和上游格子给的是同一种值(_value_of):便签给字、文档给钉住那一版的正文、媒体给素材、3D 场景给场景。
+    收一串素材的字段(`*_asset_ids`)给一份的列表。
+    """
+    value = _value_of(db, workspace_id, host, sink, [str(host.get("kind"))])
+    if value is None or not value.strip():
+        return None
+    return [value] if sink == "asset" and _is_list_field(key, {}) else value
+
+
 def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str, kinds: list[str]) -> str | None:
     """上游一格在这种字段里给出什么值。给不出(种类不对、还没有产出)回 None。"""
     kind = source.get("kind")
@@ -126,7 +141,7 @@ def check_bindings(
     bindings: dict[str, list[dict[str, str]]],
     tool: str,
 ) -> None:
-    """**写**绑定时(替人填表单,如智能体的 edit_board)问的那几件事,说不通就抛 BoardInputError。
+    """**写**绑定时(替人填表单,如智能体的 edit_board 写一项能力的设置)问的那几件事,说不通就抛 BoardInputError。
 
     和运行时(resolve_bindings)判的是同一张表 —— 哪个字段接什么(binding_sink)、哪几种格子给得出
     (_SOURCE_KINDS,也就是面板上 `board_sources` 的来历),只是运行时对说不通的那几条**不吭声地
@@ -134,8 +149,8 @@ def check_bindings(
     正在写的错,不是一份放旧了的表单。
 
     · 字段得是这个工具声明过的、能接上游的;
-    · 上游那一格得在画布上、**有一根连到这一格的线**(线不在的绑定,落库时 normalize 会摘掉 ——
-      写进去的东西悄悄没了,比当场说「先连线」难查得多);
+    · 上游那一格得在画布上、不是这一格自己、**有一根连到这一格的线**(线不在的绑定,落库时 normalize
+      会摘掉 —— 写进去的东西悄悄没了,比当场说「先连线」难查得多);
     · 那一格的种类给得出这种值(便签给不了素材)。
     """
     canvas_items = {str(one.get("id")): one for one in canvas.get("items") or []}
@@ -153,7 +168,7 @@ def check_bindings(
             source = canvas_items.get(source_id)
             if source is None:
                 raise BoardInputError("boardErr_bindingSourceMissing", field=field, source=source_id)
-            if (source_id, item_id) not in wired:
+            if source_id == item_id or (source_id, item_id) not in wired:
                 raise BoardInputError("boardErr_bindingNotWired", field=field, source=source_id, item_id=item_id)
             kinds = bindable_kinds(field, spec)
             if source.get("kind") not in kinds:
@@ -287,11 +302,16 @@ def prepare_node_run(
     meta: dict[str, Any],
     config: dict[str, Any],
     bindings: dict[str, list[dict[str, str]]],
+    host_input: tuple[str, str] | None = None,
+    label: str = "",
 ) -> tuple[Board, dict[str, Any]]:
     """起任务之前的全部检查,**不写任何东西**;返回画板和这一轮交给执行器的配置。
 
-    该在花钱之前失败的都在这里失败(调用方收到 400,工具格不进「在跑」):版本对不上、这一格在跑、
-    插件工具没有这个人自己的连接、数字字段填的不是数、绑定的文档取不到。
+    该在花钱之前失败的都在这里失败(调用方收到 400,那一格不进「在跑」):版本对不上、这一格在跑、
+    宿主还没有内容、插件工具没有这个人自己的连接、数字字段填的不是数、绑定的文档取不到。
+
+    `host_input`:`(字段, 接的是什么)` —— 这一轮吃的是宿主那一格的内容(一项能力、3D 场景格渲白模),
+    值从宿主取(host_value),盖过表单里、绑定里同名的那一份:那个字段**就是**宿主。
 
     单独成一步,因为「开卡之前先干跑一遍」(智能体的 run_board_item)问的就是这些 —— 注定起不了
     任务的卡没有让人去批的道理;而它和真跑走的是同一个函数,两边说的不会是两套话。
@@ -301,10 +321,23 @@ def prepare_node_run(
 
     _ensure_slot_ready(db, request.workspace_id, request.slot)
     board = get_board(db, request.workspace_id, request.board_id)
-    resolved = resolve_bindings(db, board, request.item_id, dict(meta.get("config") or {}), config, bindings)
-    resolved = check_number_fields(node_type, resolved)
+    fixed: dict[str, Any] = {}
+    if host_input is not None:
+        key, sink = host_input
+        from app.domain.boards.canvas import item_not_found
+
+        host = next((one for one in (board.canvas or {}).get("items") or [] if one.get("id") == request.item_id), None)
+        if host is None:
+            raise item_not_found(request.item_id)
+        value = host_value(db, request.workspace_id, host, key, sink)
+        if value is None:
+            raise BoardInputError("boardErr_abilityNeedsContent", tool=label or node_type, item_id=request.item_id)
+        fixed[key] = value
+    without_host = {field: refs for field, refs in bindings.items() if field not in fixed}
+    resolved = resolve_bindings(db, board, request.item_id, dict(meta.get("config") or {}), config, without_host)
+    resolved = check_number_fields(node_type, {key: value for key, value in resolved.items() if key not in fixed})
     _check_plugin_connection(db, node_type, resolved, request.actor_id)
-    return board, resolved
+    return board, {**resolved, **fixed}
 
 
 def run_node_on_board(
@@ -316,19 +349,23 @@ def run_node_on_board(
     config: dict[str, Any],
     bindings: dict[str, list[dict[str, str]]],
     label: str,
-    fixed: dict[str, Any] | None = None,
+    host_input: tuple[str, str] | None = None,
     draft: dict[str, Any] | None = None,
+    ability: bool = False,
 ) -> Board:
-    """在工具格上跑一次节点。**顺序**和另外几个产出者一样:问版本和忙闲 → 建任务 → 摆占位 → 起任务。
+    """在画板上跑一次节点。**顺序**和另外几个产出者一样:问版本和忙闲 → 建任务 → 摆占位 → 起任务。
 
-    宿主不一定是工具格:3D 场景格渲白模跑的也是这一个(同一个执行器、同一种任务、同一套计量和取消),
-    只是节点的一部分配置由宿主给(`fixed`:场景格给 `scene_id`),存回那一格的表单是它自己的形状(`draft`)。
+    三种宿主跑的都是这一个(同一个执行器、同一种任务、同一套计量和取消):
+
+    · 内容格的一项能力(`ability`):宿主的内容填进 `host_input` 那个字段,这一项的设置存进宿主的
+      `form.abilities`,产出新建在右边;
+    · 空格子上的生成器:表单就是这一格自己的,产出填进这一格;
+    · 3D 场景格渲白模:场景由宿主给(`host_input`),存回那一格的表单是它自己的形状(`draft`)。
     """
     from app.domain.boards.actions import _pending
 
     board, resolved = prepare_node_run(db, request=request, node_type=node_type, meta=meta, config=config,
-                                       bindings=bindings)
-    resolved = {**resolved, **(fixed or {})}
+                                       bindings=bindings, host_input=host_input, label=label)
 
     token = set_receipt(receipt_to_item(request.board_id, request.item_id))
     try:
@@ -347,7 +384,7 @@ def run_node_on_board(
     db.commit()
     placed = _pending(
         db, request.workspace_id, request.slot, actor_id=request.actor_id, kind=request.kind,
-        producer=request.producer, job_id=job.id,
+        producer=request.producer, job_id=job.id, ability=ability,
         #: 表单存的是用户填的那份(绑定原样、连接原样),不是这一轮取出来的值 —— 下一次运行时
         #: 上游变了,取到的就是新的。
         form=draft if draft is not None
@@ -415,6 +452,7 @@ __all__ = [
     "binding_sink",
     "board_outputs",
     "check_bindings",
+    "host_value",
     "landing_outputs",
     "prepare_node_run",
     "resolve_bindings",

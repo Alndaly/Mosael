@@ -75,7 +75,7 @@ export const FIELD_BOX =
 
 /**
  * 紧凑的一行一项(`compact`):标签在左、控件在右,标签小而淡,说明收进标签的悬停 —— 和生成面板
- * 「参数」弹层里那几行(ai-studio/parameterPanel 的 ParameterRow)同一个样子。画板上工具格的「参数」
+ * 「参数」弹层里那几行(ai-studio/parameterPanel 的 ParameterRow)同一个样子。画板上一格的能力的「参数」
  * 弹层用它:同一份字段渲染,不是工作流检查器那一列带大标签的表单。
  */
 export const COMPACT_FIELD_BOX =

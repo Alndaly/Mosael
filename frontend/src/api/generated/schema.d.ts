@@ -3805,7 +3805,7 @@ export interface paths {
         };
         /**
          * List Producers
-         * @description 画板上**这个人**能用的产出者:四个内置的,加上工具格能跑的节点(插件工具只列他自己接的)。
+         * @description 画板上**这个人**能用的产出者:内置的,加上画板上能跑的节点 —— 内容格的能力、空格子上的生成器(插件工具只列他自己接的)。
          *
          *     节点的描述和工作流节点面板是同一份(标签、分组、字段一个字都不差),按请求方的语言翻好。
          *     **注册在 `/boards/{board_id}` 之前** —— 反过来的话 `producers` 会被当成一张板的 id。
@@ -3871,7 +3871,7 @@ export interface paths {
          * Run
          * @description 在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。
          *
-         *     画板上一切产出(生成、写字、念出来、截一段、工具格跑一个节点)都走这一条 —— 此前是四条各自的
+         *     画板上一切产出(生成、写字、念出来、截一段、一格的能力跑一个节点)都走这一条 —— 此前是四条各自的
          *     路由和请求体。跑它要什么权限由产出者声明。插件工具用的是**点运行的这个人**自己的连接。
          */
         post: operations["run_api_boards__board_id__run_post"];
@@ -7155,9 +7155,9 @@ export interface components {
          * BoardProducerOut
          * @description 画板上的一个产出者:节点描述(和工作流节点面板同一份)+ 画板自己的几样(见 boards.producers.describe)。
          *
-         *     `type` 是节点类型(内置的四个就是它们自己的名字),字段选项接口认它;`id` 是产出者的名字,
-         *     存在一格的 `form.producer` 上、跑的时候发的是它。配置字段里多一样 `board_sources`:
-         *     这个字段能接哪几种上游格子。
+         *     `type` 是节点类型(内置的就是它们自己的名字),字段选项接口认它;`id` 是产出者的名字,
+         *     存在一格的 `form.producer`(它自己的产出者)或 `form.abilities` 的键(它的一项能力)上、跑的时候发的是它。
+         *     配置字段里多一样 `board_sources`:这个字段能接哪几种上游格子。
          */
         BoardProducerOut: {
             /** Type */
@@ -7203,6 +7203,15 @@ export interface components {
             id: string;
             /** Hosts */
             hosts: string[];
+            /**
+             * Role
+             * @default slot
+             */
+            role: string;
+            /** Host Fields */
+            host_fields?: {
+                [key: string]: string;
+            };
             /** Permission */
             permission: string;
             /** Effects */

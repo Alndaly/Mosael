@@ -53,7 +53,7 @@ def seed(data_dir: Path) -> None:
             INSERT INTO boards (id, workspace_id, name, canvas, created_at, updated_at)
             VALUES (
                 'legacy-board', 'legacy-workspace', 'Legacy board',
-                '{"items":[{"id":"image-1","kind":"image","x":0,"y":0,"text":"old prompt","job_id":"job-1"}],"edges":[]}',
+                '{"items":[{"id":"image-1","kind":"image","x":0,"y":0,"text":"old prompt","job_id":"job-1"},{"id":"note-1","kind":"note","x":0,"y":300,"text":"hello"},{"id":"tool-1","kind":"action","x":300,"y":300,"form":{"producer":"node:translate","config":{"target_lang":"en"},"bindings":{"text":[{"from":"note-1"}]}}}],"edges":[{"id":"e1","source":"note-1","target":"tool-1"}]}',
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             );
             """
@@ -82,6 +82,13 @@ def verify(data_dir: Path) -> None:
             raise SystemExit(f"upgrade failed: board form is {item.get('form')!r}")
         if "job_id" in item or "error" in item:
             raise SystemExit(f"upgrade failed: board kept legacy state fields: {item!r}")
+        # 画板上的工具格撤下(migrate-board-tool-cells-become-abilities):翻译搬成它接着的那张便签的一项能力。
+        by_id = {one["id"]: one for one in board["items"]}
+        if "tool-1" in by_id or any(one.get("kind") == "action" for one in board["items"]):
+            raise SystemExit(f"upgrade failed: a tool item is still on the board: {board['items']!r}")
+        abilities = (by_id["note-1"].get("form") or {}).get("abilities")
+        if abilities != {"node:translate": {"config": {"target_lang": "en"}, "bindings": {}}}:
+            raise SystemExit(f"upgrade failed: the note's abilities are {abilities!r}")
 
 
 if __name__ == "__main__":

@@ -304,5 +304,9 @@ def test_迁移_工具格的设置搬到场景格上_没有场景格的改成便
     assert len({edge["id"] for edge in once["edges"]}) == len(once["edges"])
     assert revision == 6, "升级那一刻还开着这张板的客户端要撞 409"
     assert _canvas(untouched_id)[1] == 2
-    #: 迁完的画布照现在的规则存得下。
-    normalize_canvas(once)
+    #: 迁完的画布照现在的规则存得下 —— 别的工具格(t1)由后来的那一步(migrate-board-tool-cells-become-abilities)
+    #: 搬到它接着的便签上,这一步的身体已经冻住了。
+    from app.db.migrations import _migrate_board_tool_cells_become_abilities
+
+    _migrate_board_tool_cells_become_abilities()
+    normalize_canvas(_canvas(board_id)[0])

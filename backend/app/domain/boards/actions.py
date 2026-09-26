@@ -60,8 +60,23 @@ def _ensure_slot_ready(db: Session, workspace_id: str, slot: Slot) -> None:
 
 
 def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind: str, producer: str,
-             form: dict[str, Any], job_id: str) -> Board:
-    """摆「正在做」的占位。表单末尾写上**是哪个产出者做的** —— 跑挂了回来,面板照它挂、照它重试。"""
+             form: dict[str, Any], job_id: str, ability: bool = False) -> Board:
+    """摆「正在做」的占位。表单末尾写上**是哪个产出者做的** —— 跑挂了回来,面板照它挂、照它重试。
+
+    `ability`:这一轮跑的是宿主的一项**能力**(转写、翻译……,见 boards.transforms 的 `ability`)。宿主自己的
+    产出者不换 —— `form` 是那一项的设置,存进宿主的 `form.abilities[producer]`;这一轮是哪一项记在
+    `run.ability` 上(回执照它把产出新建在右边,界面照它说「转写中」)。
+    """
+    if ability:
+        return place_pending(
+            db,
+            workspace_id=workspace_id,
+            board_id=slot.board_id,
+            item={"id": slot.item_id, "kind": kind, "x": slot.x, "y": slot.y,
+                  "run": {"status": "running", "job_id": job_id, "ability": producer}},
+            actor_id=actor_id,
+            ability=(producer, {key: value for key, value in form.items() if key != "producer"}),
+        )
     return place_pending(
         db,
         workspace_id=workspace_id,

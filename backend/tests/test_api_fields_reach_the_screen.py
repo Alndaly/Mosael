@@ -36,6 +36,10 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     # —— 给 MCP 客户端的自述清单(界面不读它,它是给别的智能体看的)
     "AgentManifestOut.openapi_url": "MCP 客户端按它去取 OpenAPI",
     "AgentManifestOut.skills": "MCP 客户端按它决定能调什么",
+    # —— 画板产出者清单里给智能体看的那几样(list_board_producers 原样转发这个接口):画板上没有工具格之后,
+    #    界面不再按组列工具、不再照产出种类画格子,智能体靠它们知道一项能力会长出什么、归哪一类
+    "BoardProducerOut.board_group_label": "智能体的 list_board_producers 读它(能力按吃什么内容归的类)",
+    "BoardProducerOut.output_kinds": "智能体的 list_board_producers 读它(跑一次会在右边长出哪几种格子)",
     # —— 归属与留痕:后端授权按它判,界面拿到的列表已经按人筛过了
     "AgentSessionOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
     "GenerationSessionOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",

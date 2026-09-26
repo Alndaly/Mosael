@@ -52,7 +52,7 @@ def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Board]
 
 @router.get("/boards/producers", response_model=list[BoardProducerOut])
 def list_producers(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    """画板上**这个人**能用的产出者:四个内置的,加上工具格能跑的节点(插件工具只列他自己接的)。
+    """画板上**这个人**能用的产出者:内置的,加上画板上能跑的节点 —— 内容格的能力、空格子上的生成器(插件工具只列他自己接的)。
 
     节点的描述和工作流节点面板是同一份(标签、分组、字段一个字都不差),按请求方的语言翻好。
     **注册在 `/boards/{board_id}` 之前** —— 反过来的话 `producers` 会被当成一张板的 id。
@@ -124,7 +124,7 @@ def remove(board_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -
 def run(board_id: str, body: BoardRun, db: DbSession, user: CurrentUser) -> Board:
     """在画板上跑一个产出者,产出落回那一格(见 boards.producers.run)。
 
-    画板上一切产出(生成、写字、念出来、截一段、工具格跑一个节点)都走这一条 —— 此前是四条各自的
+    画板上一切产出(生成、写字、念出来、截一段、一格的能力跑一个节点)都走这一条 —— 此前是四条各自的
     路由和请求体。跑它要什么权限由产出者声明。插件工具用的是**点运行的这个人**自己的连接。
     """
     try:

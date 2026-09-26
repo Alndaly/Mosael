@@ -5,24 +5,29 @@ item 种类猜。第五种产出(插件工具、挑过的工作流节点)想上�
 现在四个动作是注册表里的四个内置产出者,一次运行的形状只有一个(RunRequest),路由只有一条
 (`POST /api/boards/{id}/run`),面板由表单上写明的 `form.producer` 决定。
 
-第五种产出 —— 跑一个工作流节点(插件工具、声明了能上画板的内置节点)—— 是 `node:<节点类型>`,
-挂在工具格(`action`)上;它们不在这里逐个登记,而是从节点注册表里读(见 _node_producers)。
+第五种产出 —— 跑一个工作流节点(插件工具、声明了能上画板的内置节点)—— 是 `node:<节点类型>`;
+它们不在这里逐个登记,而是从节点注册表里读(见 _node_producers)。**画板上没有单独的工具格**:
+一个节点要么是内容格的一项**能力**(音频格转写、便签翻译,宿主的内容就是它的输入,产出新建在右边),
+要么是空格子的一种**填法**(按参数出图出片的生成器,和「配音 / 生成」同一个切换)—— 由它自己的声明推
+(boards.transforms 的 board_role / board_hosts,ADR 0025 修订「能力住在内容格上」)。
 
-一个产出者说清五件事:
+一个产出者说清六件事:
 
 · `hosts` —— 能挂在哪些 item 种类上(画板项的 kind);
+· `role` —— `slot`(这一格自己的产出者,写在 `form.producer`)还是 `ability`(内容格的一项能力,
+  设置存在 `form.abilities[产出者]`,跑的时候宿主的内容就是输入);
 · `permission` —— 跑它要的工作区权限(ensure_workspace_perm 的操作名);
 · `effects` —— 有没有花钱或对外的副作用(智能体替人跑时要不要确认卡,见 ADR 0021 决定 2);
 · `form` —— 它收的表单(pydantic)。**表单在领域里校验**:第二个入口(智能体、工作流)
   跑同一个产出者时,拿到的是同一份校验,不必各自再写一遍;
 · `start` —— 建任务 → 摆占位 → 起任务,返回摆好占位的画板。
 
-跑之前的检查(dry_run)和替人写下的表单的检查(check_forms)也在这里 —— 智能体替人放工具格、
+跑之前的检查(dry_run)和替人写下的表单的检查(check_forms)也在这里 —— 智能体替人写能力的设置、
 替人点运行,问的是和界面**同一张注册表**,不另写一份「什么能跑、什么能接」。
 
 内置的本体仍在 `actions`(`*_on_board`),这里只把它们登记成同一种东西。3D 场景格上的渲白模
 (`scene_render`)是个例外:它跑的就是工作流那个节点的执行器(boards.tools.run_node_on_board),只是挂在
-场景格上、场景由那一格给 —— 和工具格同一条运行的路,产出同样新建成右边的几格。
+场景格上、场景由那一格给 —— 和能力同一条运行的路,产出同样新建成右边的几格。
 """
 
 from __future__ import annotations
@@ -52,6 +57,7 @@ from app.domain.boards.producer_ids import (
     node_type_of,
     runs_from_draft,
 )
+from app.domain.boards.transforms import ABILITY, SLOT
 
 
 class ProducerFailed(BoardDomainError):
@@ -112,11 +118,13 @@ class Producer:
     failures: tuple[type[Exception], ...] = ()
     failure_status: int = 400
     #: 给界面看的描述,形状同 NODE_TYPES 的一条(标签和说明是 i18n key,出口才翻,见 describe)。
-    #: 工具格的节点就是那个节点自己的条目;内置的四个只有名字和一句说明(它们的面板是专门写的)。
+    #: 节点产出者就是那个节点自己的条目;内置的只有名字和一句说明(它们的面板是专门写的)。
     meta: dict[str, Any] | None = None
     #: 能不能挑来填一个**空槽**(hosts 里那几种格子刚放下、还没有产出时)。一种格子有两个这样的
-    #: 产出者时(音频槽:念一段 / 生成音乐音效),面板上给一个切换。截一段不是 —— 它得先有一段素材。
+    #: 产出者时(音频槽:念一段 / 生成音乐音效 / 插件的生成器),面板上给一个切换。截一段不是 —— 它得先有一段素材。
     fills_empty_slot: bool = False
+    #: `slot`:这一格自己的产出者(`form.producer`);`ability`:内容格的一项能力(见模块开头)。
+    role: str = SLOT
     #: 起任务之前的那几样检查,**不写任何东西**(见 dry_run);返回给确认卡看的事实(用哪条连接)。
     #: 没有就只做注册表那几样(认产出者、问宿主、校验表单)。
     preflight: Callable[[Session, RunRequest, Any], dict[str, Any]] | None = None
@@ -199,7 +207,7 @@ class SceneRenderConfig(_Form):
 
 
 class SceneRenderForm(_Form):
-    """场景格上的表单。**存在那一格上的就是这一份**(`form.config`),和工具格一样:跑完不清,下一次照它再渲 ——
+    """场景格上的表单。**存在那一格上的就是这一份**(`form.config`),和能力的设置一样:跑完不清,下一次照它再渲 ——
     智能体替人点运行时读的也是它。"""
 
     config: SceneRenderConfig = Field(default_factory=SceneRenderConfig)
@@ -279,18 +287,12 @@ def _start_trim(db: Session, request: RunRequest, form: TrimForm) -> Board:
     )
 
 
-def _host_scene_id(db: Session, request: RunRequest) -> str:
-    """宿主那一格引用的是哪个场景。画布上一定有(场景格没有 scene_id 存不下,见 normalize_canvas)。"""
-    from app.domain.boards.canvas import get_board, item_not_found
-
-    board = get_board(db, request.workspace_id, request.board_id)
-    item = next((one for one in (board.canvas or {}).get("items") or [] if one.get("id") == request.item_id), None)
-    if item is None:
-        raise item_not_found(request.item_id)
-    return str(item.get("scene_id") or "")
+#: 渲白模吃的是宿主那一格的场景:节点的 `scene_id` 字段,接的是 3D 场景(和能力吃宿主内容同一条,
+#: boards.tools.prepare_node_run 的 host_input)。
+_SCENE_HOST = ("scene_id", "scene")
 
 
-def _scene_render_args(db: Session, request: RunRequest, form: SceneRenderForm) -> dict[str, Any]:
+def _scene_render_args(form: SceneRenderForm) -> dict[str, Any]:
     """场景格上的一次渲染 → 跑节点那条路要的东西:节点配置(空着的字段不写,节点照自己的缺省)、宿主给的场景。
 
     `meta` 是渲白模自己那一份(_scene_render_meta):落板的输出按它点名的三份素材算,不是节点的全部输出。
@@ -300,36 +302,31 @@ def _scene_render_args(db: Session, request: RunRequest, form: SceneRenderForm) 
         "meta": _scene_render_meta(),
         "config": {key: value for key, value in form.config.model_dump().items() if value != ""},
         "bindings": {},
-        "fixed": {"scene_id": _host_scene_id(db, request)},
+        "host_input": _SCENE_HOST,
     }
 
 
 def _start_scene_render(db: Session, request: RunRequest, form: SceneRenderForm) -> Board:
-    """在场景格上渲一次:**工作流节点 `scene_render` 的同一个执行器**,走工具格那条路(建 `board_run` 任务、
+    """在场景格上渲一次:**工作流节点 `scene_render` 的同一个执行器**,走能力那条路(建 `board_run` 任务、
     挂在它下面计量、能停),产出新建成场景格右边的几格(canvas._derive)。场景格自己不动。"""
     from app.core.i18n import get_current_locale, t
     from app.domain.boards.tools import run_node_on_board
 
-    args = _scene_render_args(db, request, form)
     return run_node_on_board(
         db,
         request=request,
-        node_type=args["node_type"],
-        meta=args["meta"],
-        config=args["config"],
-        bindings=args["bindings"],
+        **_scene_render_args(form),
         label=t("boardProducer_scene_render", get_current_locale()),
-        fixed=args["fixed"],
         draft={"config": form.config.model_dump(exclude_unset=True)},
     )
 
 
 def _preflight_scene_render(db: Session, request: RunRequest, form: SceneRenderForm) -> dict[str, Any]:
+    from app.core.i18n import get_current_locale, t
     from app.domain.boards.tools import prepare_node_run
 
-    args = _scene_render_args(db, request, form)
-    prepare_node_run(db, request=request, node_type=args["node_type"], meta=args["meta"], config=args["config"],
-                     bindings=args["bindings"])
+    prepare_node_run(db, request=request, **_scene_render_args(form),
+                     label=t("boardProducer_scene_render", get_current_locale()))
     return {}
 
 
@@ -441,7 +438,7 @@ def _builtins() -> dict[str, Producer]:
                 form=SceneRenderForm,
                 start=_start_scene_render,
                 preflight=_preflight_scene_render,
-                #: 起任务之前就会失败的那几种(和工具格同一条路,见 boards.tools.prepare_node_run)。
+                #: 起任务之前就会失败的那几种(和能力同一条路,见 boards.tools.prepare_node_run)。
                 failures=(WorkflowDomainError,),
             ),
         )
@@ -449,7 +446,7 @@ def _builtins() -> dict[str, Producer]:
 
 
 def list_producers(db: Session, actor_id: str | None) -> list[Producer]:
-    """`actor_id` 这个人在画板上能用的全部产出者:四个内置的,加上工具格能跑的节点(见 _node_producers)。
+    """`actor_id` 这个人在画板上能用的全部产出者:内置的,加上画板上能跑的节点(见 _node_producers)。
 
     **每次现取** —— 插件工具随他接了什么、勾了什么而变,不能缓存成进程内状态。
     """
@@ -475,7 +472,7 @@ def get_producer(db: Session, producer_id: str, actor_id: str | None) -> Produce
 
 
 def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> None:
-    """一个工具格的节点此刻跑不了:说清是哪一种情况。总是抛。"""
+    """一个节点产出者此刻跑不了:说清是哪一种情况。总是抛。"""
     from sqlalchemy import select
 
     from app.db.models import PluginInstance, PluginPackage
@@ -506,12 +503,12 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
             row = mirrored_model(index, str(tool.get("instance_id") or ""), tool.get("mirrors"))
             if row is not None and content_transform_gap(node_meta(tool), generation_has=lambda _: True) == "mirrored_by_generation":
                 #: 他用得上的那个生成模型就是这件事:画板上放一格那种素材、选那个模型(见 plugin_references ——
-                #: 存着的这种工具格会被对账改写成生成格,还没改到的这一格在这里说清楚)。
+                #: 空格子上存着的这种生成器会被对账改写成生成,还没改到的这一格在这里说清楚)。
                 raise BoardInputError("boardErr_toolMirroredByGeneration", tool=str(tool.get("label") or tool_name),
                                       model=str(row.display_name or row.model_id))
         #: 他接着这个插件、工具也开着,只是它不是一个内容变换(列清单、看状态、上传、按编号取回……)——
         #: 这不是「去插件页建连接」能解决的事,是「这件事在工作流里做」。清单会变(ComfyUI 的工具随
-        #: 服务器上的工作流),所以画布上存着一个此刻不合格的工具格是正常的,跑的时候说清楚:叫得出工具的名字,
+        #: 服务器上的工作流),所以画布上存着一个此刻不合格的产出者是正常的,跑的时候说清楚:叫得出工具的名字,
         #: 按编号取东西的说它是在按编号取东西(它明明交出素材,「它不交出素材」那句是错的)。
         label = str(mine_exposed[0].get("label") or tool_name)
         if content_transform_gap(node_meta(mine_exposed[0])) == "external_id":
@@ -530,7 +527,8 @@ class BindingRef(_Form):
 
 
 class NodeForm(_Form):
-    """工具格的表单:节点配置(键是节点声明的字段)+ 哪些字段接上游。
+    """节点产出者的表单(一项能力存在宿主上的设置、空格子上生成器的表单):节点配置(键是节点声明的字段)
+    + 哪些字段接上游。
 
     配置的逐字段校验归节点自己(执行器、check_number_fields)—— 插件节点的字段是运行时才知道的,
     在这里写一份 pydantic 等于第二份声明。
@@ -541,8 +539,9 @@ class NodeForm(_Form):
 
 
 def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
-    """工具格能跑的节点。两个来源,**都从节点注册表里读**,画板这边不列清单;两个来源过**同一条**
-    规矩 —— 画板上只放内容变换(boards.transforms.is_content_transform,ADR 0021 修订):
+    """画板上能跑的节点。两个来源,**都从节点注册表里读**,画板这边不列清单;两个来源过**同一条**
+    规矩 —— 画板上只放内容变换(boards.transforms.is_content_transform,ADR 0021 修订)。挂在哪、是能力还是
+    填法也从声明推(boards.transforms.board_role / board_hosts):
 
     · 内置节点里声明了 `"surfaces": [..., "board"]` 的(见 workflows.NODE_TYPES 上方的说明);
     · **这个人自己**接的、可用的插件连接暴露的工具(plugins.tools.exposed,已经跳过只给宿主调的),
@@ -593,15 +592,28 @@ def _mirror_check(db: Session, actor_id: str, tools: list[dict[str, Any]]) -> Ca
 
 
 def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Producer:
+    from app.domain.boards.transforms import board_hosts, board_role, host_field, host_sink
     from app.domain.notes import NoteDomainError
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.workflows import WorkflowDomainError
 
+    role = board_role(meta)
+
     def bindings_of(form: NodeForm) -> dict[str, list[dict[str, str]]]:
         return {field: [{"from": ref.source} for ref in refs] for field, refs in form.bindings.items()}
 
-    def start(db: Session, request: RunRequest, form: NodeForm) -> Board:
+    def host_input(kind: str) -> tuple[str, str] | None:
+        """能力挂在 `kind` 这种格子上时,宿主的内容填进哪个字段、接的是什么。填法没有(它不吃内容)。"""
+        field = host_field(meta, kind) if role == ABILITY else None
+        return (field, str(host_sink(meta, field))) if field else None
+
+    def label() -> str:
         from app.core.i18n import get_current_locale, t
+
+        #: 任务中心里这一条叫什么(节点的名字);宿主还没有内容时的那句话也叫它。
+        return t(str(meta.get("label") or node_type), get_current_locale())
+
+    def start(db: Session, request: RunRequest, form: NodeForm) -> Board:
         from app.domain.boards.tools import run_node_on_board
 
         return run_node_on_board(
@@ -611,8 +623,9 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
             meta=meta,
             config=dict(form.config),
             bindings=bindings_of(form),
-            #: 任务中心里这一条叫什么(节点的名字)。
-            label=t(str(meta.get("label") or node_type), get_current_locale()),
+            label=label(),
+            host_input=host_input(request.kind),
+            ability=role == ABILITY,
         )
 
     def preflight(db: Session, request: RunRequest, form: NodeForm) -> dict[str, Any]:
@@ -621,7 +634,8 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
         from app.domain.plugins.nodes import parse_node_type
 
         _board, resolved = prepare_node_run(db, request=request, node_type=node_type, meta=meta,
-                                            config=dict(form.config), bindings=bindings_of(form))
+                                            config=dict(form.config), bindings=bindings_of(form),
+                                            host_input=host_input(request.kind), label=label())
         #: 插件工具用的是**这个人**自己的哪条连接(prepare 已经按人解析好了)。
         plugin = parse_node_type(node_type) is not None
         instance = db.get(PluginInstance, str(resolved.get("instance_id") or "")) if plugin else None
@@ -629,7 +643,10 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
 
     return Producer(
         id=node_producer_id(node_type),
-        hosts=("action",),
+        hosts=board_hosts(meta),
+        role=role,
+        #: 填法就是空格子的一种填法:和「配音 / 生成」一起出现在那种格子的切换里。
+        fills_empty_slot=role == SLOT,
         permission="edit",
         effects=effects,
         form=NodeForm,
@@ -644,19 +661,27 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
 def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, Any]]:
     """给界面的产出者清单(`GET /api/boards/producers`):每个产出者的节点描述(和工作流节点面板
     **同一份** describe_node_types,标签、分组、字段声明一个字都不差)加上画板自己的几样 ——
-    挂在哪(hosts)、要什么权限、有没有外部后果、能不能挑来填一个空槽。
+    挂在哪(hosts)、是这一格自己的产出者还是它的一项能力(role)、要什么权限、有没有外部后果、
+    能不能挑来填一个空槽。
 
     每个配置字段多一样 `board_sources`:它能接哪几种上游格子(见 boards.tools.bindable_kinds)。
-    面板照它列绑定,不在前端另写一套「什么能接什么」。
+    面板照它列绑定,不在前端另写一套「什么能接什么」。能力还多一样 `host_fields`({宿主种类: 字段}):
+    宿主的内容填进哪个字段 —— 那个字段在面板上不出现,它**就是**宿主。
 
-    工具格(`node:*`)的描述是**画板的那一份**,不照搬工作流的(boards.transforms):字段只留创作者
+    节点产出者(`node:*`)的描述是**画板的那一份**,不照搬工作流的(boards.transforms):字段只留创作者
     看得懂的(映射、原始 JSON、代码不出现,模板字段是一段字);`board_group` / `board_group_label` 说
-    它在「添加」菜单里归哪一组(按吃什么内容分,不是工作流面板的「流程 / 数据 / AI」),
-    `board_description` 是给创作者看的一句说明。工具按分组排好,组内保持注册表的顺序。
+    它按吃什么内容归哪一组(能力图标的兜底),`board_description` 是给创作者看的一句说明。
+    顺序就是注册表的顺序:内置的、内置节点、插件工具 —— 操作条上能力按它排,内置的在前。
     """
     from app.core.i18n import t
     from app.domain.boards.tools import bindable_kinds
-    from app.domain.boards.transforms import BOARD_GROUPS, board_config_view, board_description, board_group, output_kinds
+    from app.domain.boards.transforms import (
+        board_config_view,
+        board_description,
+        board_group,
+        host_fields,
+        output_kinds,
+    )
     from app.domain.workflows.node_catalog import describe_node_types
 
     registry = _registry(db, actor_id)
@@ -672,28 +697,23 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
     }
     described = describe_node_types(metas, locale)
     by_id = {entry["type"]: entry for entry in described}
-    groups = {producer.id: board_group(producer.meta or {}) for producer in registry.values() if node_type_of(producer.id)}
-    tools = sorted((entry["type"] for entry in described if entry["type"] in groups),
-                   key=lambda producer_id: BOARD_GROUPS.index(groups[producer_id]))
-    ordered = [producer.id for producer in registry.values() if producer.id not in groups] + tools
     out = []
-    for producer_id in ordered:
-        producer = registry[producer_id]
+    for producer_id, producer in registry.items():
         entry = dict(by_id[producer_id])
         node_type = node_type_of(producer_id)
         board: dict[str, Any] = {}
         if node_type is not None:
-            group = groups[producer_id]
+            group = board_group(producer.meta or {})
             board = {
                 "config": board_config_view(entry["config"]),
                 "board_group": group,
                 "board_group_label": t(f"boardToolGroup_{group}", locale),
                 "board_description": board_description(producer.meta or {}, locale),
                 "output_kinds": output_kinds(producer.meta or {}),
+                "host_fields": host_fields(producer.meta or {}),
             }
         elif runs_from_draft(producer_id):
-            #: 表单是节点字段的内置产出者(3D 场景格渲白模):字段照工具格那一份画板视图发,面板照它长;
-            #: 不进「添加 → 工具」,所以没有分组。
+            #: 表单是节点字段的内置产出者(3D 场景格渲白模):字段照节点那一份画板视图发,面板照它长。
             board = {
                 "config": board_config_view(entry["config"]),
                 "board_description": board_description(producer.meta or {}, locale),
@@ -706,6 +726,7 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
             "type": node_type or producer_id,
             "id": producer_id,
             "hosts": list(producer.hosts),
+            "role": producer.role,
             "permission": producer.permission,
             "effects": producer.effects,
             "fills_empty_slot": producer.fills_empty_slot,
@@ -760,63 +781,107 @@ def dry_run(db: Session, request: RunRequest) -> tuple[Producer, dict[str, Any]]
         raise _failed(producer, exc) from exc
 
 
-def check_forms(db: Session, canvas: dict[str, Any], item_ids: list[str], actor_id: str | None) -> None:
-    """替人写下的表单(智能体 edit_board 放的、改的工具格)在这张画布上说得通,说不通抛 BoardDomainError。
+#: 替人写下的一份表单在哪儿:`(格子 id, None)` 是那一格自己的表单,`(格子 id, 产出者)` 是它的那一项能力。
+FormRef = tuple[str, str | None]
+
+
+def written_forms(before: dict[str, Any], after: dict[str, Any]) -> list[FormRef]:
+    """两份画布之间**变了的**表单:每一格自己那一份(不算能力)、每一项能力的设置,各算一份。
+
+    只问变了的:一格上存着别的能力的设置,它的插件此刻卸了(或者是别人接的),和这一次写的东西无关 ——
+    拿它去拦这一次改动,就是一张打不开的板换了个样子。
+    """
+    was = {str(one.get("id")): dict(one.get("form") or {}) for one in before.get("items") or []}
+    out: list[FormRef] = []
+    for item in after.get("items") or []:
+        item_id = str(item.get("id"))
+        form = dict(item.get("form") or {})
+        old = was.get(item_id, {})
+        abilities = form.pop("abilities", None) or {}
+        old_abilities = old.pop("abilities", None) or {}
+        if form != old:
+            out.append((item_id, None))
+        out.extend((item_id, producer) for producer, entry in abilities.items() if entry != old_abilities.get(producer))
+    return out
+
+
+def check_forms(db: Session, canvas: dict[str, Any], written: list[FormRef], actor_id: str | None) -> None:
+    """替人写下的表单(智能体 edit_board 放的、改的)在这张画布上说得通,说不通抛 BoardDomainError。
 
     `canvas` 是算子作用之后、**落库之前**的那一份(形状已经由 normalize 过了一遍)—— 绑定要在
     normalize 摘掉断线的那几条**之前**看:写一条没连线的绑定是一个正在写的错,落库时悄悄摘掉的话,
-    智能体以为接上了,用户点运行时那个字段是空的。
+    智能体以为接上了,用户点运行时那个字段是空的。`written` 是这一次写了的那几份(见 written_forms)。
 
     问的和界面同一张注册表、同一张「什么能接什么」(tools.check_bindings):
 
     · 这个人有这个产出者(插件工具是他自己接的连接暴露的 —— 没有的话说清楚是哪个插件);
-    · 它能挂在这种格子上;
-    · 工具的表单:配置里只有这个工具声明过的字段,声明成数字的是数,绑定都接得上。
+    · 它能挂在这种格子上,角色对得上:一格自己的产出者得是这种格子的填法(`slot`),写进 `abilities` 的得是它的
+      一项能力(`ability`);
+    · 节点的表单:配置里只有画板上露出来的字段(能力的话,宿主填的那个字段也不算 —— 它就是宿主),声明成数字的
+      是数,绑定都接得上。
 
     内置产出者(写字、生成、念、截)的表单是各自面板的形状,归面板,这里只问前两样;3D 场景格上渲白模的表单
     存的就是运行发的那一份(runs_from_draft),照它自己的表单模型校验。
     """
-    from app.domain.boards.tools import check_bindings
-    from app.domain.boards.transforms import wiring_field
-    from app.domain.workflows import WorkflowDomainError
-    from app.domain.workflows.binding import check_number_fields
-
     registry = _registry(db, actor_id)
     by_id = {str(one.get("id")): one for one in canvas.get("items") or []}
-    for item_id in item_ids:
+    for item_id, ability in written:
         item = by_id[item_id]
+        kind = str(item.get("kind"))
         form = dict(item.get("form") or {})
+        if ability is not None:
+            producer = registry.get(ability) or get_producer(db, ability, actor_id)
+            if producer.role != ABILITY or kind not in producer.hosts:
+                raise BoardInputError("boardErr_abilityNotOnKind", producer=producer.id, kind=kind,
+                                      kinds=", ".join(producer.hosts) or "-")
+            entry = dict((form.get("abilities") or {}).get(ability) or {})
+            _check_node_form(canvas, item_id, producer, entry, kind)
+            continue
         producer_id = str(form.get("producer") or "")
         if not producer_id:
             continue
         producer = registry.get(producer_id) or get_producer(db, producer_id, actor_id)
-        if item.get("kind") not in producer.hosts:
-            raise BoardInputError("boardErr_producerCannotHost", producer=producer.id, kind=str(item.get("kind")))
-        node_type = node_type_of(producer.id)
-        if node_type is None:
-            if runs_from_draft(producer.id):
-                try:
-                    producer.form.model_validate({key: value for key, value in form.items() if key != "producer"})
-                except ValidationError as exc:
-                    raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
-            continue
-        config = form.get("config") or {}
-        try:
-            node_form = NodeForm.model_validate({"config": config, "bindings": form.get("bindings") or {}})
-        except ValidationError as exc:
-            raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
-        #: 画板上露出来的那几个字段(boards.transforms.wiring_field):映射、原始 JSON、代码这类字段
-        #: 在画板的表单上根本不出现,替人写进去等于留一份面板打开也看不见、改不了的配置。
-        specs = {key: spec for key, spec in ((producer.meta or {}).get("config") or {}).items()
-                 if not wiring_field(key, spec)}
-        for key in config:
-            if key not in specs:
-                raise BoardInputError("boardErr_toolConfigUnknownField", tool=producer.id, field=key,
-                                      fields=", ".join(specs) or "-")
-        try:
-            check_number_fields(node_type, dict(config))
-        except WorkflowDomainError as exc:
-            raise BoardInputError.relay(exc) from exc
-        check_bindings(canvas, item_id, specs,
-                       {field: [{"from": ref.source} for ref in refs] for field, refs in node_form.bindings.items()},
-                       tool=producer.id)
+        if kind not in producer.hosts:
+            raise BoardInputError("boardErr_producerCannotHost", producer=producer.id, kind=kind)
+        if producer.role == ABILITY:
+            raise BoardInputError("boardErr_abilityIsNotAProducer", producer=producer.id, kind=kind, item_id=item_id)
+        if node_type_of(producer.id) is not None:
+            _check_node_form(canvas, item_id, producer, form, kind)
+        elif runs_from_draft(producer.id):
+            try:
+                producer.form.model_validate({key: value for key, value in form.items()
+                                              if key not in ("producer", "abilities")})
+            except ValidationError as exc:
+                raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
+
+
+def _check_node_form(canvas: dict[str, Any], item_id: str, producer: Producer, form: dict[str, Any], kind: str) -> None:
+    """一份节点产出者的表单(`{config, bindings}`)在这一格上说得通。"""
+    from app.domain.boards.tools import check_bindings
+    from app.domain.boards.transforms import external_id_field, host_field, wiring_field
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.binding import check_number_fields
+
+    config = form.get("config") or {}
+    try:
+        node_form = NodeForm.model_validate({"config": config, "bindings": form.get("bindings") or {}})
+    except ValidationError as exc:
+        raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
+    #: 画板上露出来的那几个字段(boards.transforms.board_config_view):映射、原始 JSON、代码、另一个系统里的编号
+    #: 在画板的表单上根本不出现,替人写进去等于留一份面板打开也看不见、改不了的配置。能力的宿主字段也不在:
+    #: 那个值就是宿主这一格的内容。
+    meta = producer.meta or {}
+    host = host_field(meta, kind) if producer.role == ABILITY else None
+    specs = {key: spec for key, spec in (meta.get("config") or {}).items()
+             if not wiring_field(key, spec) and not external_id_field(key, spec) and key != host}
+    for key in config:
+        if key not in specs:
+            raise BoardInputError("boardErr_toolConfigUnknownField", tool=producer.id, field=key,
+                                  fields=", ".join(specs) or "-")
+    try:
+        check_number_fields(str(node_type_of(producer.id)), dict(config))
+    except WorkflowDomainError as exc:
+        raise BoardInputError.relay(exc) from exc
+    check_bindings(canvas, item_id, specs,
+                   {field: [{"from": ref.source} for ref in refs] for field, refs in node_form.bindings.items()},
+                   tool=producer.id)

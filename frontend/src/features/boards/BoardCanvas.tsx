@@ -29,7 +29,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, PencilLine, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, PencilLine, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -48,8 +48,9 @@ import {
 } from "@/components/app/canvasPendingLink";
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
-import { isNodeProducer, type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
-import { boardToolFace, boardToolOptions, toolCellSize } from "@/features/boards/boardTools";
+import { type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
+import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence, hostHasContent } from "@/features/boards/boardTools";
+import { ActionMenu } from "@/components/layout/ActionMenu";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -58,9 +59,9 @@ import { cn } from "@/lib/utils";
 import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
 import { TrimComposer } from "@/features/boards/TrimComposer";
-import { canAskWriter, composerOnDemand, renderComposer, slotProducers } from "@/features/boards/boardComposers";
-import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type BoardToolFace, type MediaKind } from "@/features/boards/boardNodes";
-import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, withProducer } from "@/features/boards/boardItemState";
+import { canAskWriter, composerOnDemand, renderAbility, renderComposer, slotProducers } from "@/features/boards/boardComposers";
+import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
+import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
 import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { assetItem, clipboardContent, type PlacedAsset } from "@/features/boards/boardPlacement";
@@ -358,10 +359,10 @@ interface Props {
   onGrabFrame?: (input: { assetId: string; at: number; x: number; y: number }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationOption[];
-  /** 这个人能用的产出者(后端 GET /api/boards/producers):工具格的表单、拉线菜单里的「工具」一组、
+  /** 这个人能用的产出者(后端 GET /api/boards/producers):一格的能力(操作条上那一排)、它们的面板、
    *  空槽在几个产出者之间的切换都照它。还没到是 undefined。 */
   producers?: BoardProducerInfo[];
-  /** 停下某一格正在跑的任务(工具格上的停止按钮)。 */
+  /** 停下某一格正在跑的任务(运行态外壳上的停止按钮)。 */
   onStop?: (itemId: string) => void;
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
   showMinimap?: boolean;
@@ -551,15 +552,39 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     if (picked.length !== 1) return null;
     return (picked[0].data as unknown as { item: BoardItem }).item;
   }, [nodes]);
-  //: 哪一张便签打开了「让 AI 写」。**写字的面板按需挂**(composerOnDemand):便签首先是自己写的字,
-  //: 选中它多半是要挪一挪 —— 此前一选中就弹出写作面板,挪一张便签也要先把它关掉。换选别的就收起。
-  const [writerFor, setWriterFor] = React.useState<string | null>(null);
+  /**
+   * 操作条上点开的那一块面板:「让 AI 写」(`write`)、「剪一段」(`trim`),或这一格的一项能力(产出者 id)。
+   * **一次只有一块** —— 点另一项,下面那块就换成它的(TapNow 那样:上面选能力,下面的面板跟着变);再点一次
+   * 同一项就收起。它是一时的界面状态(和选中一样),不进画布、不进撤销;每一项的设置存在那一格上
+   * (`form.abilities`),再打开还是上次的样子。换选别的格子、按 Esc 都收起。
+   *
+   * 写字的面板按需挂(composerOnDemand):便签首先是自己写的字,选中它多半是要挪一挪 —— 此前一选中就弹出
+   * 写作面板,挪一张便签也要先把它关掉。「剪一段」同理:选中一段片子最常见的意图是看它、拖它,不是剪它。
+   */
+  const [panel, setPanel] = React.useState<{ itemId: string; name: string } | null>(null);
+  const togglePanel = React.useCallback(
+    (itemId: string, name: string) =>
+      setPanel((current) => (current?.itemId === itemId && current.name === name ? null : { itemId, name })),
+    [],
+  );
   React.useEffect(() => {
-    if (writerFor && composerItem?.id !== writerFor) setWriterFor(null);
-  }, [writerFor, composerItem]);
+    if (panel && composerItem?.id !== panel.itemId) setPanel(null);
+  }, [panel, composerItem]);
+  React.useEffect(() => {
+    if (!panel) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPanel(null);
+    };
+    return listenKeys(window, onKey);
+  }, [panel]);
+  const opened = panel && composerItem && panel.itemId === composerItem.id ? panel.name : null;
+  const trimming = panel?.name === TRIM_PANEL ? panel.itemId : null;
+  //: 点开的是这一格的一项能力:它的面板**换下**这一格自己的那块(场景格的渲白模、空槽的生成)。
+  const ability = opened && opened !== WRITER_PANEL && opened !== TRIM_PANEL ? (opened as BoardProducer) : null;
   const slotProducer = composerItem ? producerOf(composerItem) : null;
   const producer =
-    slotProducer && (!composerOnDemand(slotProducer) || (writerFor === composerItem?.id && composerItem && canAskWriter(composerItem)))
+    slotProducer && !ability && opened !== TRIM_PANEL &&
+    (!composerOnDemand(slotProducer) || (opened === WRITER_PANEL && composerItem && canAskWriter(composerItem)))
       ? slotProducer
       : null;
 
@@ -571,10 +596,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 还没出产出的上游跳过 —— 它自己都还没有东西可给。
    */
   //: 截取面板照着表单上记下的那份素材截、场景格渲的是它自己的场景,都不吃上游 —— 只有吃上游的几块面板
-  //: 才去算、才会被取不到的上游文档拦住。
-  const feeding = composerItem && producer && producer !== "trim" && producer !== "scene_render"
-    ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
-    : NO_UPSTREAM;
+  //: 才去算、才会被取不到的上游文档拦住。一项能力按它自己的绑定算(多输入的工具接连进这一格的上游)。
+  const feeding = composerItem && ability
+    ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents, composerItem.form?.abilities?.[ability]?.bindings ?? {})
+    : composerItem && producer && producer !== "trim" && producer !== "scene_render"
+      ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
+      : NO_UPSTREAM;
 
   /**
    * 拖动分组框时被它带着走的那几项。
@@ -770,18 +797,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
   }, [setNodes, t, insetsOf]);
 
-  /** 工具格上显示的那几样,从产出者清单里查。清单没到是 undefined;查不到(插件卸了、没有连接)是 null。
-   *  「接没接上」看的是此刻连进来的那几格(和面板同一份:按连线的先后)。 */
-  const itemsById = new Map(boardItems(nodes).map((item) => [item.id, item]));
-  const toolFace = (item: BoardItem): BoardToolFace | null | undefined => {
-    if (producers === undefined) return undefined;
-    const found = producers.find((one) => one.id === item.form?.producer);
-    if (!found) return null;
-    const sources = edges
-      .filter((edge) => edge.target === item.id)
-      .map((edge) => itemsById.get(edge.source))
-      .filter((one): one is BoardItem => Boolean(one));
-    return boardToolFace(found, item, sources);
+  /** 一格上在跑(或上一轮跑)的那项能力叫什么:运行态那一条上写它。清单没到、查不到时不写。 */
+  const abilityLabel = (item: BoardItem): string | undefined => {
+    const running = runningAbility(item);
+    return running ? producers?.find((one) => one.id === running)?.label : undefined;
   };
 
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
@@ -796,9 +815,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           className: searchHighlightClass(searchHighlight, node.id),
           draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
           data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
-            //: 停止属于运行态的外壳:每一种在跑的格子都有(生成、念、写、截、工具),不只工具格。
+            //: 停止属于运行态的外壳:每一种在跑的格子都有(生成、念、写、截、能力)。
             onStop,
-            ...(node.type === "action" ? { tool: toolFace((node.data as unknown as { item: BoardItem }).item) } : {}) },
+            abilityLabel: abilityLabel((node.data as unknown as { item: BoardItem }).item) },
         },
   );
   //: 箭头、命中宽度、层次都是**画出来的那一份**才有的东西,不进画布数据(toCanvas 只存 id 和两头)。
@@ -945,11 +964,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       const center = instance
         ? instance.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
         : { x: 0, y: 0 };
-      //: 工具格和它要产出的那种内容格一样大(一个出图的工具是一块图片格那么大,见 boardTools.toolCellSize)。
-      const producerId = extra.form?.producer;
-      const size = isNodeProducer(producerId)
-        ? toolCellSize(producers?.find((one) => one.id === producerId))
-        : DEFAULT_SIZE[kind];
+      const size = DEFAULT_SIZE[kind];
       const item: BoardItem = {
         id: `${kind}-${Date.now().toString(36)}`,
         kind,
@@ -970,7 +985,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       //: 把建好的那一项交回去 —— 从连线末端长出节点时,调用方还要拿它的 id 接上那条线。
       return item;
     },
-    [setNodes, setText, setAspect, producers],
+    [setNodes, setText, setAspect],
   );
 
   /**
@@ -979,28 +994,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * **拉了线就说明用户已经想好了「从这儿接下去」**,这时再让他去右上角找按钮加节点、
    * 拖回来、连上,是把一个动作拆成了三个。菜单里选一种,节点就落在松手的地方并且线已经连好。
    */
-  //: 正在给哪一项定剪辑范围。**不是选中就弹** —— 「剪一段」是对已有产出的动作,
-  //: 而选中一段片子最常见的意图是看它、拖它,不是剪它。
-  const [trimming, setTrimming] = React.useState<string | null>(null);
-  //: 此刻画布上挂着一块面板(产出者的,或剪一段的)—— 缩略图要让开,见 MiniMap。
-  const composerShown = Boolean(trimming) || Boolean(!feeding.blocked && composerItem && producer && onRun);
-
-  //: **关得掉。** 它是从操作条点开的一块面板,而面板一旦只有「成功剪完」这一条出路,
-  //: 用户改主意时就被困住了。三条都给上:换选别的(或点空白处取消选中)、Esc、再点一次
-  //: 那个按钮。此前一条都没有。
-  React.useEffect(() => {
-    if (!trimming) return;
-    const still = nodes.some((node) => node.id === trimming && node.selected);
-    if (!still) setTrimming(null);
-  }, [trimming, nodes]);
-
-  React.useEffect(() => {
-    if (!trimming) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setTrimming(null);
-    };
-    return listenKeys(window, onKey);
-  }, [trimming]);
+  //: 此刻画布上挂着一块面板(产出者的、一项能力的,或剪一段的)—— 缩略图要让开,见 MiniMap。
+  const composerShown = Boolean(trimming) || Boolean(!feeding.blocked && composerItem && (producer || ability) && onRun);
 
   //: 哪一张便签正在写。写字是同步的几秒,期间按钮转圈 —— 不给反馈的话用户会再点一次。
   const [writing, setWriting] = React.useState<string | null>(null);
@@ -1018,7 +1013,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       const { x, y } = ghostRect(at, DEFAULT_SIZE[kind], fromIsSource);
       const item = add(kind, { x, y });
       //: 「生成文案」长出来的便签就是要 AI 写的:写作面板直接打开(整理 · 便签放下的那种等人自己写)。
-      if (canAskWriter(item)) setWriterFor(item.id);
+      if (canAskWriter(item)) setPanel({ itemId: item.id, name: WRITER_PANEL });
       //: 线的方向照着用户拉的那一头:从 source 拉出来的,新节点是终点;反之是起点。
       setEdges((current) =>
         addEdge(
@@ -1029,63 +1024,30 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         ),
       );
     },
-    [add, setEdges, setWriterFor],
-  );
-
-  /**
-   * 从某一格长出一个工具格并连上:上游那一格就是它的输入(必填字段会默认接上它,见 ActionComposer)。
-   * 摆放规则和其它种类同一个函数。
-   */
-  const spawnTool = React.useCallback(
-    (producerId: string, from: string, at: { x: number; y: number }, fromIsSource = true) => {
-      const { x, y } = ghostRect(at, toolCellSize(producers?.find((one) => one.id === producerId)), fromIsSource);
-      const item = add("action", { x, y, form: { producer: producerId as BoardProducer } });
-      setEdges((current) =>
-        addEdge(
-          fromIsSource
-            ? { source: from, target: item.id, sourceHandle: null, targetHandle: null }
-            : { source: item.id, target: from, sourceHandle: null, targetHandle: null },
-          current,
-        ),
-      );
-    },
-    [add, setEdges, producers],
+    [add, setEdges],
   );
 
   /**
    * 从节点拉出一条线、松手在空白处:摆一个占位、连一根待定的线、旁边挂单子
    * (见 components/app/canvasPendingLink)。选中一种就在占位那儿建真节点、连真线。
    *
-   * 单子上除了几种格子,还有这个人能用的工具(把内容变成新内容的插件工具和内置节点),和工具条「添加」
-   * 里同一份分组(boardTools:按它吃什么内容分 —— 处理图片、处理视频……),能搜。
+   * 单子上**只有格子**:把内容变成新内容的工具是格子自己的能力(选中它,在操作条上点),不是另一格 ——
+   * 拉一根线出来只为了长出一格新的内容。
    */
-  const tools = React.useMemo(() => boardToolOptions(producers ?? []), [producers]);
-  const linkChoices = React.useMemo(() => [...SPAWNABLE_KINDS, ...tools.map((one) => one.value)], [tools]);
+  const linkChoices = SPAWNABLE_KINDS as readonly string[] as string[];
   const describeChoice = React.useCallback(
     (choice: string) => {
-      const tool = tools.find((one) => one.value === choice);
-      if (tool) {
-        return {
-          icon: tool.icon,
-          label: tool.label,
-          hint: tool.description,
-          group: tool.group,
-          keywords: tool.keywords,
-        };
-      }
       const kind = choice as (typeof SPAWNABLE_KINDS)[number];
-      return { icon: kindIcon(kind), ...kindText(t, kind), group: tools.length ? t("boardsGroupCreate") : undefined };
+      return { icon: kindIcon(kind), ...kindText(t, kind) };
     },
-    [t, tools],
+    [t],
   );
   const pending = usePendingLink({
     kinds: linkChoices,
     ghostSize: PENDING_GHOST_SIZE,
     describe: describeChoice,
     onChoose: (choice, link) =>
-      isNodeProducer(choice)
-        ? spawnTool(choice, link.nodeId, link.at, link.fromSource)
-        : spawnLinked(choice as (typeof SPAWNABLE_KINDS)[number], link.nodeId, link.at, link.fromSource),
+      spawnLinked(choice as (typeof SPAWNABLE_KINDS)[number], link.nodeId, link.at, link.fromSource),
   });
   const pendingLink = pending.link;
   const cancelPending = pending.cancel;
@@ -1574,7 +1536,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           title={t("boardSpawnTitle")}
           kinds={linkChoices}
           describe={describeChoice}
-          searchPlaceholder={tools.length ? t("boardToolSearch") : undefined}
           active={pending.active}
           onActiveChange={pending.setActive}
           onChoose={pending.choose}
@@ -1593,11 +1554,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onRename={commentMode || markerMode ? undefined : setRenaming}
         onPickAsset={onPickAsset}
         onSpawn={onRun ? spawnLinked : undefined}
-        onTrimRequest={onRun ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
-        trimmingId={trimming}
         producers={producers}
-        onAskWriter={onRun && !commentMode && !markerMode ? (id) => setWriterFor((current) => (current === id ? null : id)) : undefined}
-        writerId={writerFor}
+        panel={panel}
+        onPanel={onRun && !commentMode && !markerMode ? togglePanel : undefined}
       />
 
       {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}
@@ -1631,7 +1590,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
                 x: node.position.x,
                 y: node.position.y + (node.height ?? 200) + 60,
                 form: { asset_id: item.asset_id as string, start, end, mute },
-              }).finally(() => setTrimming(null));
+              }).finally(() => setPanel(null));
             }}
           />
         );
@@ -1647,7 +1606,22 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         models: models ?? [],
         writing: writing === composerItem.id,
         setWriting,
-        onFormChange: (form) => patch(composerItem.id, { form: withProducer(form, producer) }),
+        onFormChange: (form) => patch(composerItem.id, { form: withProducer(form, producer, composerItem.form) }),
+        onPickAsset,
+        run: onRun,
+        producers,
+      })}
+      {/* 操作条上点开的一项能力:它的面板换下这一格自己的那块。宿主就是这一格,设置存在它的 `form.abilities` 上。 */}
+      {!feeding.blocked && composerItem && ability && onRun && renderAbility(ability, {
+        item: composerItem,
+        position: nodes.find((one) => one.id === composerItem.id)?.position ?? { x: composerItem.x, y: composerItem.y },
+        workspaceId,
+        feeding,
+        documents,
+        models: models ?? [],
+        writing: false,
+        setWriting,
+        onSave: (setting) => patch(composerItem.id, { form: withAbility(composerItem.form, ability, setting) }),
         onPickAsset,
         run: onRun,
         producers,
@@ -1655,6 +1629,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     </div>
   );
 }
+
+/** 操作条上点开的那两块不是能力的面板。 */
+const WRITER_PANEL = "write";
+const TRIM_PANEL = "trim";
 
 type GrowKind = (typeof SPAWNABLE_KINDS)[number];
 
@@ -1679,18 +1657,16 @@ const GROW: Partial<Record<BoardItem["kind"], Partial<Record<GrowKind, MessageKe
   scene: { video: "boardSpawnVideoFromImage", note: "boardSpawnNote" },
 };
 
-/** 这一格有没有东西可给:便签要有字,文档接上了就有,别的要有产出。空槽自己都还没有东西。 */
-function hasContent(item: BoardItem): boolean {
-  if (item.kind === "note") return Boolean(item.text?.trim());
-  if (item.kind === "document") return true;
-  return Boolean(item.asset_id);
-}
-
 /**
  * 选中一项时浮在它上面的操作条。
  *
  * **按类型给动作,不给一套通用的**:便签要换颜色,图片/视频要换素材,分组框两者都不要。
  * 摆一排一半是灰的按钮,等于让用户每次都先分辨哪些能点。
+ *
+ * **中间那一段是这一格的能力**(TapNow 那样一排图标):看大图、剪一段、换一份、让 AI 写,再接这一格会的
+ * 那几件事 —— 音频格的转写、分离、降噪,视频格的转 GIF,便签的翻译,插件工具按它吃什么内容挂上来
+ * (后端 `role: "ability"` + `hosts`,见 boardTools.boardAbilities)。直接摆 DIRECT_ABILITIES 项,内置的在前,
+ * 其余收进「⋯」。点一项,它的面板挂在格子下面;点另一项,下面那块换成它的;再点一次收起(BoardCanvas 的 panel)。
  *
  * 位置跟着选中项走 —— 用 NodeToolbar,它渲染在 React Flow 的视口层里,平移缩放时自己跟着动
  * (工作流那边的检查器用的是同一个原语)。
@@ -1703,11 +1679,9 @@ function ItemToolbar({
   onRename,
   onPickAsset,
   onSpawn,
-  onTrimRequest,
-  trimmingId,
   producers,
-  onAskWriter,
-  writerId,
+  panel,
+  onPanel,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -1725,17 +1699,12 @@ function ItemToolbar({
     at: { x: number; y: number },
     fromIsSource?: boolean,
   ) => void;
-  /** 请求给这一项定剪辑范围(再点一次收起)。没给 = 这张画板不支持剪辑。 */
-  onTrimRequest?: (itemId: string) => void;
-  /** 当前开着剪辑面板的那一项 —— 按钮据此变成按下态,再点一次就收起。 */
-  trimmingId?: string | null;
-  /** 产出者清单:空槽能在哪几个之间切(音频槽:配音 / 生成)。 */
+  /** 产出者清单:这一格有哪些能力、空槽能在哪几个产出者之间切(音频槽:配音 / 生成 / 插件的生成器)。 */
   producers?: BoardProducerInfo[];
-  /** 打开 / 收起这张便签的「让 AI 写」面板。没给 = 这张画板不支持写(上层没接产出者)。 */
-  onAskWriter?: (itemId: string) => void;
-  /** 当前开着写作面板的那一张 —— 按钮据此变成按下态,再点一次就收起。 */
-  writerId?: string | null;
-  /** 把当前选中的这几项圈成一组。 */
+  /** 此刻点开的那一块面板(让 AI 写、剪一段、一项能力)—— 按钮据此是按下态,再点一次收起。 */
+  panel?: { itemId: string; name: string } | null;
+  /** 打开 / 收起这一格的一块面板。没给 = 这张画板不能跑(上层没接产出者)。 */
+  onPanel?: (itemId: string, name: string) => void;
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
@@ -1748,9 +1717,7 @@ function ItemToolbar({
   const bar = React.useRef<HTMLDivElement | null>(null);
   const fit = useKeepInCanvas(bar, { vertical: false });
   if (selected.length === 0) return null;
-
   const item = single ? (single.data as unknown as { item: BoardItem }).item : null;
-
   const patch = (id: string, next: Partial<BoardItem>) =>
     setNodes((current) =>
       current.map((node) =>
@@ -1759,9 +1726,12 @@ function ItemToolbar({
           : node,
       ),
     );
-
-  const duplicate = onCopySelected;
-
+  const open = (name: string) => Boolean(item && panel?.itemId === item.id && panel.name === name);
+  const abilities = item && onPanel ? boardAbilities(item, producers) : [];
+  //: 直接摆几项;点开的那一项哪怕排在后面也摆出来(不然按下态藏在「⋯」里,看不出下面那块是谁的)。
+  const direct = abilities.filter((one, index) => index < DIRECT_ABILITIES || open(one.id));
+  const overflow = abilities.filter((one) => !direct.includes(one));
+  const slots = single && item && !itemIsRunning(item) ? slotProducers(item, producers) : [];
   return (
     //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层
     //: 另用一套数字 —— 否则一眼看过去就是上疏下密。
@@ -1771,179 +1741,173 @@ function ItemToolbar({
         style={fit}
         className="nodrag nopan flex items-center gap-1 whitespace-nowrap rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]"
       >
-        {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
-            于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的
-            条件,加了音频节点之后就和实际渲染分了岔:音频头上挂着一道悬空的竖线。 */}
-        <div className="flex items-center gap-1 empty:hidden [&:not(:empty)]:mr-1 [&:not(:empty)]:border-r [&:not(:empty)]:border-border [&:not(:empty)]:pr-2">
-        {item?.kind === "note" &&
-          NOTE_COLORS.map((color) => (
+        {/* 按类型来的几段各装在一格里,**分隔线是那一格自己的右边框**(ToolbarCluster)。于是它不可能在没有
+            动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的条件,加了音频节点之后就和实际渲染分了岔。 */}
+        <ToolbarCluster>
+          {item?.kind === "note" &&
+            NOTE_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={color}
+                className={cn(
+                  "h-6 w-6 cursor-pointer rounded-full border transition-transform hover:scale-110",
+                  noteColorClass(color),
+                  item.color === color && "ring-2 ring-primary ring-offset-1 ring-offset-[var(--panel)]",
+                )}
+                onClick={() => patch(item.id, { color })}
+              />
+            ))}
+          {/* 分组框:**这一组是不是一个整体**。开着的时候拖框会把框里的东西一起带走 ——
+              没有它的话,想把一组想法整体挪个位置就得一个个拖。 */}
+          {item?.kind === "frame" && (
             <button
-              key={color}
               type="button"
-              aria-label={color}
+              aria-pressed={Boolean(item.move_children)}
+              title={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}
               className={cn(
-                "h-6 w-6 cursor-pointer rounded-full border transition-transform hover:scale-110",
-                noteColorClass(color),
-                item.color === color && "ring-2 ring-primary ring-offset-1 ring-offset-[var(--panel)]",
+                "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
+                item.move_children
+                  ? "bg-primary/12 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
-              onClick={() => patch(item.id, { color })}
+              onClick={() => patch(item.id, { move_children: !item.move_children })}
+            >
+              <Group size={13} /> {t("boardMoveChildren")}
+            </button>
+          )}
+        </ToolbarCluster>
+
+        {/* 这一格的能力:一排图标,名字在悬停和读屏里。 */}
+        <ToolbarCluster data-board-abilities="">
+          {/* 预览:**看大图是一个明确的动作,不是点在图上的副作用**。画布上点一下的意思是
+              选中这个节点 —— 让图片自己接管点击的话,操作条和表单都弹不出来。 */}
+          {(item?.kind === "image" || item?.kind === "video") && item.asset_id && (
+            <ToolbarIcon
+              name="preview"
+              icon={Maximize2}
+              label={t("boardPreview")}
+              hint={t("boardPreviewTitle")}
+              onClick={() =>
+                openImagePreview({
+                  src: item.kind === "image"
+                    ? assetPreviewUrl(item.asset_id as string)
+                    : assetFileUrl(item.asset_id as string),
+                  title: item.title || item.text || "",
+                  //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
+                  video: item.kind === "video",
+                })
+              }
             />
-          ))}
+          )}
+          {/* 剪一段:视听素材才有时间轴,一张图截不出「第 3 秒」。 */}
+          {onPanel && item?.asset_id && (item.kind === "video" || item.kind === "audio") && (
+            <ToolbarIcon
+              name="trim"
+              icon={Scissors}
+              label={t("boardTrim")}
+              hint={t("boardTrimTitle")}
+              pressed={open(TRIM_PANEL)}
+              onClick={() => onPanel(item.id, TRIM_PANEL)}
+            />
+          )}
+          {item && isMediaKind(item.kind) && (
+            <ToolbarIcon
+              name="replace"
+              icon={Replace}
+              label={t("boardReplaceAsset")}
+              onClick={() =>
+                onPickAsset(item.kind as MediaKind, (assetId) =>
+                  // 手动换素材不是上一轮 AI 任务的“成功产物”。把运行态归回 idle，同时 asset_id
+                  // 变化会让对应 Composer 从节点表单重新水合，清掉上一轮局部 touched/submitting。
+                  patch(item.id, { asset_id: assetId, run: { status: "idle" } }),
+                )
+              }
+            />
+          )}
+          {/* 让 AI 写:**明确的一个动作**,不是选中的副作用(见 Inner 的 panel)。能力交回的结构化数据
+              (JSON 便签)不给 —— 那是一份数据,不是一段要改写的文案。 */}
+          {single && item && onPanel && canAskWriter(item) && (
+            <ToolbarIcon
+              name="write"
+              icon={Sparkles}
+              label={t("boardAskAiWrite")}
+              hint={t("boardAskAiWriteTitle")}
+              pressed={open(WRITER_PANEL)}
+              onClick={() => onPanel(item.id, WRITER_PANEL)}
+            />
+          )}
+          {single && item && onPanel &&
+            direct.map((ability) => (
+              <ToolbarIcon
+                key={ability.id}
+                name={ability.id}
+                ability
+                icon={boardToolIcon(ability)}
+                label={ability.label}
+                hint={firstSentence(ability.board_description ?? "")}
+                pressed={open(ability.id)}
+                onClick={() => onPanel(item.id, ability.id)}
+              />
+            ))}
+          {single && item && onPanel && overflow.length > 0 && (
+            <ActionMenu
+              label={t("boardMoreAbilities")}
+              actions={overflow.map((ability) => {
+                const Icon = boardToolIcon(ability);
+                return {
+                  label: ability.label,
+                  icon: <Icon size={14} />,
+                  hint: ability.plugin_name || undefined,
+                  onSelect: () => onPanel(item.id, ability.id),
+                };
+              })}
+            />
+          )}
+        </ToolbarCluster>
 
-        {/* 让 AI 写:**明确的一个动作**,不是选中的副作用(见 Inner 的 writerFor)。工具交回的结构化数据
-            (JSON 便签)不给 —— 那是一份数据,不是一段要改写的文案。 */}
-        {single && item && onAskWriter && canAskWriter(item) && (
-          <button
-            type="button"
-            aria-pressed={writerId === item.id}
-            title={t("boardAskAiWriteTitle")}
-            className={cn(
-              "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors hover:bg-secondary hover:text-foreground",
-              writerId === item.id ? "bg-secondary text-foreground" : "text-muted-foreground",
-            )}
-            onClick={() => onAskWriter(item.id)}
-          >
-            <Sparkles size={13} /> {t("boardAskAiWrite")}
-          </button>
-        )}
-
-        {/* 分组框:**这一组是不是一个整体**。开着的时候拖框会把框里的东西一起带走 ——
-            没有它的话,想把一组想法整体挪个位置就得一个个拖。 */}
-        {item?.kind === "frame" && (
-          <button
-            type="button"
-            aria-pressed={Boolean(item.move_children)}
-            title={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}
-            className={cn(
-              "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
-              item.move_children
-                ? "bg-primary/12 text-primary"
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-            )}
-            onClick={() => patch(item.id, { move_children: !item.move_children })}
-          >
-            <Group size={13} /> {t("boardMoveChildren")}
-          </button>
-        )}
-
-        {/* 预览:**看大图是一个明确的动作,不是点在图上的副作用**。画布上点一下的意思是
-            选中这个节点 —— 让图片自己接管点击的话,操作条和表单都弹不出来。 */}
-        {(item?.kind === "image" || item?.kind === "video") && item.asset_id && (
-          <button
-            type="button"
-            className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-            title={t("boardPreviewTitle")}
-            onClick={() =>
-              openImagePreview({
-                src: item.kind === "image"
-                  ? assetPreviewUrl(item.asset_id as string)
-                  : assetFileUrl(item.asset_id as string),
-                title: item.title || item.text || "",
-                //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
-                video: item.kind === "video",
-              })
-            }
-          >
-            <Maximize2 size={13} /> {t("boardPreview")}
-          </button>
-        )}
-
-        {/* 剪一段:视听素材才有时间轴,一张图截不出「第 3 秒」。 */}
-        {onTrimRequest && item?.asset_id && (item.kind === "video" || item.kind === "audio") && (
-          <button
-            type="button"
-            className={cn(
-              "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors hover:bg-secondary hover:text-foreground",
-              trimmingId === item.id ? "bg-secondary text-foreground" : "text-muted-foreground",
-            )}
-            title={t("boardTrimTitle")}
-            onClick={() => onTrimRequest(item.id)}
-            aria-pressed={trimmingId === item.id}
-          >
-            <Scissors size={13} /> {t("boardTrim")}
-          </button>
-        )}
-
-        {item && isMediaKind(item.kind) && (
-          <button
-            type="button"
-            className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-            onClick={() =>
-              onPickAsset(item.kind as MediaKind, (assetId) =>
-                // 手动换素材不是上一轮 AI 任务的“成功产物”。把运行态归回 idle，同时 asset_id
-                // 变化会让对应 Composer 从节点表单重新水合，清掉上一轮局部 touched/submitting。
-                patch(item.id, { asset_id: assetId, run: { status: "idle" } }),
-              )
-            }
-          >
-            <Replace size={13} /> {t("boardReplaceAsset")}
-          </button>
-        )}
-
-        {/* 从这一项长出下一项:**放一个空节点并连上,不是直接开跑**。
-            空节点一选中它的表单就开着,提示词已经由上游这一项填好(便签给文字、图片给首帧),
-            用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都
-            来不及说。已经在生成的那一项不给(它还没有产出)。 */}
-        {/* 空槽用什么产出:一种格子有几个能填空槽的产出者时(音频槽:配音 / 生成音乐音效)给一个切换。
-            **只换表单上写的那个产出者**,面板随之换成它的;在跑的时候不给换。 */}
-        {single && item && !itemIsRunning(item) && slotProducers(item, producers).length > 0 && (
-          <div role="radiogroup" aria-label={t("boardProducerSwitch")} className="flex items-center gap-0.5 rounded-full bg-secondary/60 p-0.5">
-            {slotProducers(item, producers).map((one) => {
-              const on = item.form?.producer === one.id;
-              return (
-                <button
-                  key={one.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  title={toPlainText(one.description)}
-                  className={cn(
-                    "cursor-pointer rounded-full px-2.5 py-1 text-ui-xs transition-colors",
-                    on ? "bg-panel text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => patch(item.id, { form: { ...item.form, producer: one.id as BoardProducer } })}
-                >
-                  {one.label}
-                </button>
-              );
-            })}
-          </div>
+        {/* 空槽用什么产出:一种格子有几个能填空槽的产出者时(音频槽:配音 / 生成音乐音效;插件的生成器)给一个切换。
+            **只换表单上写的那个产出者**,面板随之换成它的;在跑的时候不给换。内置的和此刻选着的那个摆在外面,
+            别的生成器收进「⋯」。 */}
+        {single && item && slots.length > 0 && (
+          <ToolbarCluster>
+            <SlotSwitch item={item} slots={slots} onSwitch={(producer) => patch(item.id, { form: { ...item.form, producer } })} />
+          </ToolbarCluster>
         )}
 
         {/* 从这一项长出下一项:**放一个空节点并连上,不是直接开跑**。空节点一选中它的面板就开着,
             用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都来不及说。
             长出哪几种、每一个悬停时说什么,是同一张表(GROW);图标是要长出来的那种格子的图标,
-            一眼看出这一下会多出一张图、一段视频还是一张便签。已经在跑的那一项不给(它还没有产出)。 */}
-        {/* 「生成」这一组:前面一个淡淡的「生成」,后面每一枚只写要长出来的那种东西(图片、视频、文案、音频)——
-            此前四枚都写「生成图片」「生成视频」…,一条操作条排不下,字被折成两行。完整的一句在悬停里。 */}
-        {onSpawn && single && item && !itemIsRunning(item) && hasContent(item) && GROW_ORDER.some((kind) => GROW[item.kind]?.[kind]) && (
-          <span aria-hidden className="shrink-0 pl-1 text-ui-2xs text-muted-foreground/70">{t("boardGrowLabel")}</span>
+            一眼看出这一下会多出一张图、一段视频还是一张便签。已经在跑的那一项不给(它还没有产出)。
+            前面一个淡淡的「生成」,后面每一枚只写要长出来的那种东西(图片、视频、文案、音频)。 */}
+        {onSpawn && single && item && !itemIsRunning(item) && hostHasContent(item) && GROW_ORDER.some((kind) => GROW[item.kind]?.[kind]) && (
+          <ToolbarCluster>
+            <span aria-hidden className="shrink-0 pl-1 text-ui-2xs text-muted-foreground/70">{t("boardGrowLabel")}</span>
+            {GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
+              const Icon = kindIcon(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  data-board-grow={kind}
+                  className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  title={t(GROW[item.kind]?.[kind] as MessageKey)}
+                  onClick={() =>
+                    onSpawn(kind, item.id, {
+                      x: single.position.x + (single.width ?? 260) + 60,
+                      y: single.position.y + (single.height ?? 180) / 2,
+                    })
+                  }
+                >
+                  <Icon size={13} />{" "}
+                  {/* 文案那一格说的是「生成文案」而不是「生成便签」—— 便签是这张卡片的名字,
+                      而用户要的是里面那段字。套同一个模板会说出「Generate Note」这种话。 */}
+                  {kind === "note" ? t("boardGrowCopy") : kindText(t, kind).label}
+                </button>
+              );
+            })}
+          </ToolbarCluster>
         )}
-        {onSpawn && single && item && !itemIsRunning(item) && hasContent(item) &&
-          GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
-            const Icon = kindIcon(kind);
-            return (
-              <button
-                key={kind}
-                type="button"
-                data-board-grow={kind}
-                className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-                title={t(GROW[item.kind]?.[kind] as MessageKey)}
-                onClick={() =>
-                  onSpawn(kind, item.id, {
-                    x: single.position.x + (single.width ?? 260) + 60,
-                    y: single.position.y + (single.height ?? 180) / 2,
-                  })
-                }
-              >
-                <Icon size={13} />{" "}
-                {/* 文案那一格说的是「生成文案」而不是「生成便签」—— 便签是这张卡片的名字,
-                    而用户要的是里面那段字。套同一个模板会说出「Generate Note」这种话。 */}
-                {kind === "note" ? t("boardGrowCopy") : kindText(t, kind).label}
-              </button>
-            );
-          })}
-        </div>
 
         {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
         {single && item && onRename && (
@@ -1962,7 +1926,7 @@ function ItemToolbar({
           aria-label={t("copy")}
           title={t("copy")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-          onClick={duplicate}
+          onClick={onCopySelected}
         >
           <Copy size={13} />
         </button>
@@ -1977,6 +1941,117 @@ function ItemToolbar({
         </button>
       </div>
     </NodeToolbar>
+  );
+}
+
+/** 操作条上的一段:空着就不占地方,有东西时右边一道分隔线(那一格自己的右边框)。 */
+function ToolbarCluster({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...rest}
+      className="flex items-center gap-0.5 empty:hidden [&:not(:empty)]:mr-1 [&:not(:empty)]:border-r [&:not(:empty)]:border-border [&:not(:empty)]:pr-1.5"
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 操作条上的一枚图标按钮:看大图、剪一段、换一份、让 AI 写,和这一格的每一项能力,都是这一个样子 ——
+ * 图标、名字在悬停和读屏里(`aria-label`),点开了一块面板的那一枚是按下态。
+ */
+function ToolbarIcon({
+  name,
+  icon: Icon,
+  label,
+  hint,
+  pressed,
+  ability = false,
+  onClick,
+}: {
+  name: string;
+  icon: LucideIcon;
+  label: string;
+  hint?: string;
+  pressed?: boolean;
+  /** 这一枚是这一格的一项能力(`data-board-ability`,测试和样式的钩子)。 */
+  ability?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={hint && hint !== label ? `${label} · ${hint}` : label}
+      aria-pressed={pressed === undefined ? undefined : pressed}
+      data-board-action={ability ? undefined : name}
+      data-board-ability={ability ? name : undefined}
+      className={cn(
+        "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full transition-colors hover:bg-secondary hover:text-foreground",
+        pressed ? "bg-secondary text-foreground" : "text-muted-foreground",
+      )}
+      onClick={onClick}
+    >
+      <Icon size={14} />
+    </button>
+  );
+}
+
+/** 空槽上摆在外面的产出者:内置的(配音、生成)和此刻选着的那一个;插件的生成器多了收进「⋯」。 */
+const SLOT_INLINE = 3;
+
+/**
+ * 空槽用什么产出的切换。内置的写名字(「配音」「生成」),插件的生成器带它的图标;多出来的收进「⋯」。
+ * 选中的那一个是按下态,换一个只换表单上写的产出者(面板随之换成它的)。
+ */
+function SlotSwitch({
+  item,
+  slots,
+  onSwitch,
+}: {
+  item: BoardItem;
+  slots: BoardProducerInfo[];
+  onSwitch: (producer: BoardProducer) => void;
+}) {
+  const t = useI18n();
+  const current = item.form?.producer;
+  const inline = slots.filter((one, index) => index < SLOT_INLINE || one.id === current);
+  const more = slots.filter((one) => !inline.includes(one));
+  return (
+    <>
+      <div role="radiogroup" aria-label={t("boardProducerSwitch")} className="flex items-center gap-0.5 rounded-full bg-secondary/60 p-0.5">
+        {inline.map((one) => {
+          const on = current === one.id;
+          const Icon = one.id.startsWith("node:") ? boardToolIcon(one) : null;
+          return (
+            <button
+              key={one.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              title={toPlainText(one.board_description || one.description)}
+              className={cn(
+                "flex max-w-40 cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-ui-xs transition-colors",
+                on ? "bg-panel text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => onSwitch(one.id as BoardProducer)}
+            >
+              {Icon ? <Icon size={12} className="shrink-0" /> : null}
+              <span className="truncate">{one.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {more.length > 0 && (
+        <ActionMenu
+          label={t("boardMoreGenerators")}
+          actions={more.map((one) => {
+            const Icon = boardToolIcon(one);
+            return { label: one.label, icon: <Icon size={14} />, hint: one.plugin_name || undefined, onSelect: () => onSwitch(one.id as BoardProducer) };
+          })}
+        />
+      )}
+    </>
   );
 }
 

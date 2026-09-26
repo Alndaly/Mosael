@@ -98,7 +98,7 @@ the tool list, the workflow node panel and the agent's tools, with a form made f
 - one field per tunable parameter, named and ranged as in the generation parameters, common ones first; seed, size and
   image count under Advanced;
 - outputs per output node: connect “Image · SaveImage” downstream directly, or use “First output” / “All outputs” /
-  “Text outputs” / “Summary” / “Task id”. Those five are for wiring workflows: run the tool on a board and only each
+  “Text outputs” / “Summary” / “Task id”. Those five are for wiring workflows: run it on a board and only each
   output node's own product (image, video, audio, text) lands to the right — no duplicate image, no JSON or summary notes.
 
 Renaming or moving a workflow in ComfyUI keeps the same tool (ComfyUI stores the workflow's id in the file); files saved
@@ -107,7 +107,7 @@ gets an id; saved nodes move to the new tool name automatically. A copy made out
 original, so both are then named by their path (the copy never takes over the original's tool).
 
 There used to be a generic “Run workflow by id” tool as well: it didn't know which workflow it would run, yet its form
-asked you for parameters. It is gone — everything it could run now has its own tool. Workflow nodes and board tool cells
+asked you for parameters. It is gone — everything it could run now has its own tool. Workflow nodes and board items
 that used it with a particular graph are **rewritten to that graph's own tool automatically** (incoming data edges and
 board bindings too; values keyed by node id or by node title both carry over); fields the new tool has no place for are
 dropped, and the workflow revision's note lists them. Nodes whose graph has since been deleted in ComfyUI are left as
@@ -135,11 +135,13 @@ several inputs at once, or get every intermediate output back, use that workflow
 **On a board a workflow has one entry.** A workflow with a single saved image / video / audio output node, no
 text output and no alpha-as-mask input (preview nodes such as PreviewImage don't count — they write temporary files
 that neither generation nor the tool returns by default, so a “save + peek at the line art” ControlNet workflow
-qualifies too) is the same thing as the model of the same name: the board's Add menu no longer lists its tool —
+qualifies too) is the same thing as the model of the same name: the board no longer lists its tool separately —
 add an image (video, audio) item and pick that model; the result lands in place, several at a time, with a longer wait.
-Tool items already on a board with such a tool are turned into the matching generation item automatically: position,
-name, prompt, reference images and parameters carry over; width / height and “Include previews” have no place in
-generation and are dropped. Workflows with several saved output nodes, text outputs or an alpha mask stay tools on boards. “Import outputs”
+Empty items already set to such a workflow switch to generation with that model automatically: position, name, prompt
+and parameters carry over; width / height and “Include previews” have no place in generation and are dropped. Workflows
+with several saved output nodes, text outputs or an alpha mask stay tools on boards — one that takes an image (upscale,
+background removal, face restore) is an ability of image items (select an image and pick it on the toolbar above it),
+one that only takes a prompt is another way to fill an empty item. “Import outputs”
 fetches by task id, so it is not on boards; use it in workflows and chat.
 Workflows keep both, and the tool's description ends with “If you only need the image, use the “AI generate” node with
 this model”.

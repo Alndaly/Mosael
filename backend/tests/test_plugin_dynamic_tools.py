@@ -194,21 +194,25 @@ def test_图后来有了id_按路径哈希起的老工具名改写过来(connect
     assert node["type"] == f"plugin.{PACKAGE}.{PORTRAIT_TOOL}" and node["config"] == {"prompt": "柴犬", "steps_3": 30}
 
 
-def test_画板上的老工具格也改写过去(connected) -> None:
-    """工具格(ADR 0021 P2)存的是 `node:<节点类型>` + 配置 + 绑定。绑定的字段名跟着改。"""
+def test_画板上存着的老插件节点也改写过去(connected) -> None:
+    """画板上存插件节点的两处(ADR 0025 修订):空格子上的生成器(`form.producer` + 配置 + 绑定)和一格的
+    能力(`form.abilities[产出者]`)。产出者改名,绑定的字段名跟着改;能力换了名字,`abilities` 的键跟着换。"""
     from app.db.models import Board
     from app.domain.boards import plugin_references as board_references
 
     client, _, _ = connected
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     producer = f"node:plugin.{PACKAGE}.run_workflow"
+    portrait = f"node:plugin.{PACKAGE}.{PORTRAIT_TOOL}"
     items = [
         {"id": "note", "kind": "note", "x": 0, "y": 0, "w": 100, "h": 100, "text": "柴犬"},
-        {"id": "act", "kind": "action", "x": 200, "y": 0, "w": 100, "h": 100,
-         "form": {"producer": producer, "config": {"workflow": "portrait.json", "values": {"3.cfg": 6}},
-                  "bindings": {"prompt": [{"from": "note"}]}}},
-        {"id": "odd", "kind": "action", "x": 400, "y": 0, "w": 100, "h": 100,
-         "form": {"producer": producer, "config": {"workflow": "portrait.json"}, "bindings": {"values": [{"from": "note"}]}}},
+        {"id": "act", "kind": "image", "x": 200, "y": 0, "w": 100, "h": 100,
+         "form": {"config": {"workflow": "portrait.json", "values": {"3.cfg": 6}},
+                  "bindings": {"prompt": [{"from": "note"}]}, "producer": producer}},
+        {"id": "odd", "kind": "video", "x": 400, "y": 0, "w": 100, "h": 100, "asset_id": "clip",
+         "form": {"abilities": {producer: {"config": {"workflow": "portrait.json"}, "bindings": {"values": [{"from": "note"}]}},
+                                "node:video_to_gif": {"config": {"fps": 12}}},
+                  "producer": "generate"}},
     ]
     with SessionLocal() as db:
         board = Board(workspace_id=ws, name="画板", canvas={"items": items, "edges": []}, revision=3)
@@ -217,10 +221,12 @@ def test_画板上的老工具格也改写过去(connected) -> None:
         assert board_references.rewrite_replaced_tools(db) == 1
         db.refresh(board)
         by_id = {item["id"]: item for item in board.canvas["items"]}
-        assert by_id["act"]["form"] == {"producer": f"node:plugin.{PACKAGE}.{PORTRAIT_TOOL}", "config": {"cfg_3": 6},
-                                        "bindings": {"prompt": [{"from": "note"}]}}
-        assert by_id["odd"]["form"] == {"producer": f"node:plugin.{PACKAGE}.{PORTRAIT_TOOL}", "config": {},
-                                        "bindings": {}}, "run_workflow 已经删了:绑到新工具上没有的字段,绑定拆掉"
+        assert by_id["act"]["form"] == {"config": {"cfg_3": 6}, "bindings": {"prompt": [{"from": "note"}]},
+                                        "producer": portrait}
+        assert by_id["odd"]["form"] == {"abilities": {
+            portrait: {"config": {}, "bindings": {}},
+            "node:video_to_gif": {"config": {"fps": 12}},
+        }, "producer": "generate"}, "run_workflow 已经删了:绑到新工具上没有的字段,绑定拆掉;别的能力不动"
         assert board.revision == 4
 
 

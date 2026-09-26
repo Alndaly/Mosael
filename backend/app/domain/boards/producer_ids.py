@@ -12,24 +12,25 @@ from typing import Any
 #: 内置产出者的名字。注册表里的几个与它一一对应(tests/test_board_producers.py 钉着)。
 BUILTIN_PRODUCER_IDS = ("generate", "scene_render", "speak", "trim", "write")
 
-#: 便签上的产出者:写字。新放下的便签、工具格交回的文字落成的便签都挂它(见下面的 SLOT_PRODUCERS、
+#: 便签上的产出者:写字。新放下的便签、能力交回的文字落成的便签都挂它(见下面的 SLOT_PRODUCERS、
 #: canvas._derived_item)—— 放在这张名字表里,因为画布那一侧也要用,而它不能回头认识注册表。
 NOTE_PRODUCER = "write"
 
 #: 3D 场景格上的产出者:从场景的一个镜头渲出白模首尾帧 / 运镜视频(见 producers 的 scene_render)。
-#: 此前这件事是一格单独的工具格(`node:scene_render`),和它引用的场景格是同一件事的两半 —— 现在渲染是
+#: 此前这件事是一格单独的工具格(已撤下),和它引用的场景格是同一件事的两半 —— 现在渲染是
 #: 场景格自己会做的事,和「剪一段」挂在视频 / 音频格上同一个样子。
 SCENE_PRODUCER = "scene_render"
 
-#: 产出**不落进宿主**、而是新建成宿主右边几格的内置产出者(ADR 0025 的 `landing: derived`)。工具格
-#: (`node:*`)一律如此;内置的只有渲白模 —— 宿主是 3D 场景格,它的内容是那个场景(和缩略图),渲出来的
-#: 首尾帧、运镜视频是右边新的几格,场景格一个字段不动。宿主的表单因此**就是**下一次运行发的那一份
-#: (不会被产出清掉):智能体能照它替人点运行(见 derives_outputs 的用处)。
+#: 产出**不落进宿主**、而是新建成宿主右边几格的内置产出者(ADR 0025 的 `landing: derived`)。内置的只有渲白模 ——
+#: 宿主是 3D 场景格,它的内容是那个场景(和缩略图),渲出来的首尾帧、运镜视频是右边新的几格,场景格一个字段
+#: 不动。宿主的表单因此**就是**下一次运行发的那一份(不会被产出清掉):智能体能照它替人点运行(见 derives_outputs)。
+#: 内容格的**能力**(转写、翻译、分离……,见 boards.transforms 的 `ability`)也是这样落,但它们不写进宿主自己的
+#: 产出者:一次能力的运行记在 `run.ability` 上(见 ability_of)。
 DERIVED_BUILTINS = frozenset({SCENE_PRODUCER})
 
 #: 一种格子**还没有产出时**挂哪个产出者(新放下的一格的缺省):便签写字、音频念、图片/视频生成;
 #: 3D 场景格挂渲白模(它的产出落在右边,
-#: 场景格自己永远「还能再渲」);别的种类(分组框、文档、工具格)不在表里 —— 它们不是「等着被填」的槽。
+#: 场景格自己永远「还能再渲」);别的种类(分组框、文档)不在表里 —— 它们不是「等着被填」的槽。
 #:
 #: 放在这张无依赖的名字表里,因为画布校验(canvas.normalize_canvas)要照它补齐,而画布不能回头认识
 #: 注册表(导入环)。它和注册表对得上 —— 表里的产出者挂得了那种格子、能挑来填空槽,能填空槽的产出者
@@ -59,18 +60,31 @@ def missing_slot_producer(item: dict[str, Any]) -> str | None:
     return default
 
 
-def derives_outputs(item: dict[str, Any]) -> bool:
-    """这一格跑出来的产出是**新建成右边的几格**(派生),而不是填进它自己。
+def ability_of(item: dict[str, Any]) -> str | None:
+    """这一格此刻(或上一次)跑的是它的哪一项**能力**:`run.ability`(见 actions._pending)。不是能力的运行回 None。
 
-    工具格(`action`)和挂着派生产出者的格子(3D 场景格渲白模)。画布那一侧(回执、摆占位、保存时保留
-    服务端的状态)照它分两种落法 —— 派生的宿主自己的 asset_id 不是产出(场景格的缩略图),一概不动。
+    能力是内容格自己会做的事(音频格转写、便签翻译),跑的时候宿主的表单不换产出者 —— 它自己的产出者
+    (`form.producer`)还是它空着时怎么被填的那一个;这一轮是哪一项能力,记在运行态上。
+    """
+    run = item.get("run") if isinstance(item.get("run"), dict) else {}
+    ability = run.get("ability")
+    return ability if isinstance(ability, str) and ability else None
+
+
+def derives_outputs(item: dict[str, Any]) -> bool:
+    """这一格这一轮跑出来的产出是**新建成右边的几格**(派生),而不是填进它自己。
+
+    两种:跑的是它的一项能力(`run.ability`:宿主的内容是输入,产出是新东西),或它挂着派生产出者
+    (3D 场景格渲白模)。画布那一侧(回执、摆占位、保存时保留服务端的状态)照它分两种落法 —— 派生的宿主
+    自己的 asset_id 不是这一轮的产出(音频格里那段音频、场景格的缩略图),一概不动。
     """
     form = item.get("form") if isinstance(item.get("form"), dict) else {}
-    return item.get("kind") == "action" or form.get("producer") in DERIVED_BUILTINS
+    return ability_of(item) is not None or form.get("producer") in DERIVED_BUILTINS
 
 
 def runs_from_draft(producer_id: Any) -> bool:
-    """这个产出者的格子上存着的表单,就是一次运行发出去的那一份(工具格、场景格渲白模)。
+    """这个产出者存着的表单,就是一次运行发出去的那一份(节点产出者 —— 内容格的能力、空格子上的生成器 ——
+    和场景格渲白模)。
 
     这种格子第二个入口(智能体的 set_form / run_board_item)能照原样替人填、替人点运行;内置的生成、写字、
     念、截的表单是各自面板的形状,拼成一次运行是面板的事(ADR 0021 P3)。

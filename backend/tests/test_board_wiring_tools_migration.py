@@ -91,5 +91,9 @@ def test_流程和数据工具格改成便签_线和产出都留着() -> None:
     #: 升级那一刻还开着这张板的客户端要撞 409。
     assert revision == 6
     assert _canvas(untouched_id)[1] == 2, "没改到的板版本号不动"
-    #: 迁完的画布照现在的规则存得下。
-    normalize_canvas(once)
+    #: 迁完的画布照现在的规则存得下 —— 剩下的工具格由后来的那一步(migrate-board-tool-cells-become-abilities)
+    #: 搬到内容格上或改成便签,这一步的身体已经冻住了。
+    from app.db.migrations import _migrate_board_tool_cells_become_abilities
+
+    _migrate_board_tool_cells_become_abilities()
+    normalize_canvas(_canvas(board_id)[0])

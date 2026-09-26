@@ -326,15 +326,16 @@ describe("画板详情页与服务端的同步", () => {
   });
 });
 
-describe("工具格(跑一个把内容变成新内容的工具)", () => {
+describe("一格的能力(把它的内容变成新内容)", () => {
   const TOOL = {
     id: "node:translate", type: "translate", label: "翻译", description: "把文本翻译成目标语言:Google 免费接口或 AI 供应商。",
     category: "工作流面板的分组", config: {}, outputs: [], output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {},
-    hosts: ["action"], permission: "edit", effects: "none", fills_empty_slot: false,
+    hosts: ["note", "document"], role: "ability", host_fields: { note: "text", document: "text" },
+    permission: "edit", effects: "none", fills_empty_slot: false,
     board_group: "text", board_group_label: "处理文字", board_description: "把便签或文档里的文字翻成另一种语言",
   };
 
-  it("工具条「添加」里的工具按它对内容做什么分组,选一个就放下一格写明跑哪个工具", async () => {
+  it("工具条「添加」里只有格子,按动词分组(生成 / 从素材库 / 引用 / 整理);没有工具那一组", async () => {
     Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
     apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
     apiMocks.listBoardProducers.mockResolvedValue([TOOL]);
@@ -345,35 +346,32 @@ describe("工具格(跑一个把内容变成新内容的工具)", () => {
     act(() => {
       fireEvent.click(view.container.ownerDocument.querySelector<HTMLElement>("[data-board-add-item]")!);
     });
-    const option = await vi.waitFor(() => {
-      const found = [...document.querySelectorAll<HTMLElement>("[cmdk-item], [role=option]")].find((one) => one.textContent?.includes("翻译"));
-      expect(found).toBeTruthy();
-      return found!;
-    });
-    //: 组名是内容那一边的(「处理文字」),不是工作流面板的分组;副标题是画板那一句说明;每一行都有图标。
-    expect(document.body.textContent).toContain("处理文字");
-    expect(document.body.textContent).not.toContain("工作流面板的分组");
-    expect(option.textContent).toContain("把便签或文档里的文字翻成另一种语言");
-    expect(option.querySelector("svg")).not.toBeNull();
-    act(() => {
-      fireEvent.click(option);
-    });
-    expect(canvasHarness.api.add).toHaveBeenCalledWith("action", { form: { producer: "node:translate" } });
+    await vi.waitFor(() => expect(document.querySelectorAll("[cmdk-item], [role=option]").length).toBeGreaterThan(0));
+    const rows = [...document.querySelectorAll<HTMLElement>("[cmdk-item], [role=option]")];
+    expect(rows.some((one) => one.textContent?.includes("翻译")), "工具不在「添加」里").toBe(false);
+    for (const group of ["boardsGroupGenerate", "boardsGroupFromLibrary", "boardsGroupReference", "boardsGroupOrganize"]) {
+      expect(document.body.textContent).toContain(group);
+    }
+    expect(document.body.textContent).not.toContain("处理文字");
   });
 
-  it("运行发的是产出者 + 配置 + 绑定;停止取消的是那一格这一轮的任务;跑完右边新建的几格随服务端那份落下来", async () => {
-    const action = { id: "a1", kind: "action" as const, x: 0, y: 0, width: 280, height: 150, form: { producer: "node:translate" as const } };
-    const note = { id: "n1", kind: "note" as const, x: -300, y: 0, width: 220, height: 140, text: "hello" };
-    const server: BoardCanvas = { items: [note, action], edges: [{ id: "e1", source: "n1", target: "a1" }], markers: [] };
-    const running = { ...action, form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] }, producer: action.form.producer }, run: { status: "running" as const, job_id: "job-9" } };
-    const derived = { id: "a1-out-1", kind: "note" as const, x: 360, y: 0, width: 220, height: 140, text: "HELLO", form: { producer: "write" as const } };
+  it("跑一项能力发的是宿主那一格 + 能力 + 设置;停止取消的是这一格这一轮的任务;跑完右边新建的几格随服务端那份落下来", async () => {
+    const note = { id: "n1", kind: "note" as const, x: 0, y: 0, width: 220, height: 140, text: "hello", form: { producer: "write" as const } };
+    const server: BoardCanvas = { items: [note], edges: [], markers: [] };
+    const setting = { config: { target_lang: "en" }, bindings: {} };
+    const running = {
+      ...note,
+      form: { abilities: { "node:translate": setting }, producer: "write" as const },
+      run: { status: "running" as const, job_id: "job-9", ability: "node:translate" as const },
+    };
+    const derived = { id: "n1-out-1", kind: "note" as const, x: 360, y: 0, width: 220, height: 140, text: "HELLO", form: { producer: "write" as const } };
     const settled: BoardCanvas = {
-      items: [note, { ...running, run: { status: "succeeded" } }, derived],
-      edges: [...server.edges, { id: "a1->a1-out-1", source: "a1", target: "a1-out-1" }],
+      items: [{ ...running, run: { status: "succeeded", ability: "node:translate" } }, derived],
+      edges: [{ id: "n1->n1-out-1", source: "n1", target: "n1-out-1" }],
       markers: [],
     };
     apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
-    apiMocks.runOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [note, running] }));
+    apiMocks.runOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [running] }));
     apiMocks.getBoard.mockResolvedValue(boardAt(5, settled));
     apiMocks.cancelJob.mockResolvedValue({ id: "job-9" });
 
@@ -381,21 +379,17 @@ describe("工具格(跑一个把内容变成新内容的工具)", () => {
     await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
     act(() => props().onChange(server));
     await act(async () => {
-      await props().onRun({
-        producer: "node:translate", item_id: "a1", kind: "action", x: 0, y: 0,
-        form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] } },
-      });
+      await props().onRun({ producer: "node:translate", item_id: "n1", kind: "note", x: 0, y: 0, form: { config: { target_lang: "en" }, bindings: {} } });
     });
     expect(apiMocks.runOnBoard.mock.calls[0][1]).toMatchObject({
-      producer: "node:translate", item_id: "a1", kind: "action",
-      form: { config: { op: "upper" }, bindings: { text: [{ from: "n1" }] } },
+      producer: "node:translate", item_id: "n1", kind: "note", form: { config: { target_lang: "en" }, bindings: {} },
     });
-    expect(canvasHarness.api.patch).toHaveBeenCalledWith("a1", expect.objectContaining({ run: running.run }));
+    //: 宿主那一格就地换上服务端的表单和运行态(能力的设置、这一轮是哪一项)。
+    expect(canvasHarness.api.patch).toHaveBeenCalledWith("n1", expect.objectContaining({ run: running.run, form: running.form }));
 
-    //: 画布把节点的最新样子交回来之后,点停止:取消的是这一格这一轮的任务。
-    act(() => props().onChange({ ...server, items: [note, running] }));
+    act(() => props().onChange({ ...server, items: [running] }));
     await act(async () => {
-      await (canvasHarness.props as { onStop: (id: string) => Promise<void> }).onStop("a1");
+      await (canvasHarness.props as { onStop: (id: string) => Promise<void> }).onStop("n1");
     });
     expect(apiMocks.cancelJob).toHaveBeenCalledWith("job-9");
 
@@ -405,13 +399,13 @@ describe("工具格(跑一个把内容变成新内容的工具)", () => {
     expect(canvasHarness.api.replace).toHaveBeenCalledWith(settled);
   });
 
-  it("工具跑不起来(比如没有这个插件的连接):提示说的是工具,不是「生成失败」", async () => {
+  it("能力跑不起来(比如没有这个插件的连接):提示说的是工具,不是「生成失败」", async () => {
     apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
     apiMocks.runOnBoard.mockRejectedValue(new Error("你还没有能跑「去背景」的「抠图」连接"));
     mount();
     await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
     await act(async () => {
-      await props().onRun({ producer: "node:plugin.cut.out", item_id: "a1", kind: "action", x: 0, y: 0, form: { config: {}, bindings: {} } });
+      await props().onRun({ producer: "node:plugin.cut.out", item_id: "i1", kind: "image", x: 0, y: 0, form: { config: {}, bindings: {} } });
     });
     expect(toastMocks.error).toHaveBeenCalledWith("boardToolFailed", { description: "你还没有能跑「去背景」的「抠图」连接" });
   });

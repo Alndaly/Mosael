@@ -82,5 +82,10 @@ def test_镜头和项目的写字绑定摘掉_便签上的镜头搬进表单() -
     #: 升级那一刻还开着这张板的客户端要撞 409。
     assert revision == 4
     assert _canvas(untouched_id)[1] == 2, "没改到的板版本号不动"
-    #: 迁完的画布照现在的规则存得下。
-    normalize_canvas(once)
+    #: 迁完的画布照现在的规则存得下 —— 工具格由后来的那两步(scene-cells-render-themselves、
+    #: tool-cells-become-abilities)搬走,这一步的身体已经冻住了。
+    from app.db.migrations import _migrate_board_scene_cells_render_themselves, _migrate_board_tool_cells_become_abilities
+
+    _migrate_board_scene_cells_render_themselves()
+    _migrate_board_tool_cells_become_abilities()
+    normalize_canvas(_canvas(board_id)[0])

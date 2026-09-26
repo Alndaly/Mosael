@@ -206,7 +206,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     #: 在创意画板上跑时,哪几个输出落成新的格子(和 NODE_TYPES 的 board_outputs 同一个意思,缺省全部)。
     board_outputs = declared.get("board_outputs")
     board_outputs = [str(name) for name in board_outputs if str(name) in outputs] if isinstance(board_outputs, list) else []
-    #: 素材输出是哪种素材(`{输出名: image | video | audio}`):画板上的工具格据此画成那种内容的空格子
+    #: 素材输出是哪种素材(`{输出名: image | video | audio}`):画板上生成器据此挂在那种素材的空格子上
     #: (boards.transforms.output_kinds)。认不出的项丢掉。
     output_media = declared.get("output_media")
     output_media = (

@@ -38,10 +38,10 @@ describe("下游从上游拿到什么", () => {
     expect(after.texts[0].text).toBe("一只红苹果");
   });
 
-  it("工具格只让绑到字段上的文档拦住面板;内置面板读连进来的每一篇", () => {
+  it("节点产出者(空格子上的生成器、一格的能力)只让绑到字段上的文档拦住面板;内置面板读连进来的每一篇", () => {
     const doc = (id: string) => ({ id, kind: "document", note_id: `note-${id}`, note_revision: 1 }) as unknown as BoardItem;
     const tool = (bindings: Record<string, { from: string }[]>) =>
-      ({ id: "t", kind: "action", form: { producer: "node:translate", config: {}, bindings } }) as unknown as BoardItem;
+      ({ id: "t", kind: "image", form: { producer: "node:plugin.comfy.wf_1", config: {}, bindings } }) as unknown as BoardItem;
     //: 「坏的」那篇取不到(读挂了),「好的」那篇读到了。
     const documents = new Map([
       ["bad", { pending: false, error: "gone" }],
@@ -56,6 +56,9 @@ describe("下游从上游拿到什么", () => {
 
     const slot = { id: "t", kind: "image", form: { producer: "generate" } } as unknown as BoardItem;
     expect(upstreamOf("t", [doc("bad"), doc("good"), slot], edges, documents).blocked).toBe(true);
+    //: 一项能力按它自己的那份绑定算,不看这一格自己的产出者。
+    expect(upstreamOf("t", [doc("bad"), doc("good"), slot], edges, documents, { material: [{ from: "good" }] }).blocked).toBe(false);
+    expect(upstreamOf("t", [doc("bad"), doc("good"), slot], edges, documents, { material: [{ from: "bad" }] }).blocked).toBe(true);
   });
 
   it("没有连线时什么都不给", () => {

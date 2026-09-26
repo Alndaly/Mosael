@@ -2,14 +2,16 @@ import type React from "react";
 
 import {
   isNodeProducer,
+  type BoardAbilitySetting,
   type BoardItem,
   type BoardProducer,
   type BoardProducerInfo,
+  type NodeProducer,
   type BoardRunRequest,
   type BuiltinProducer,
   type GenerationOption,
 } from "@/api/client";
-import { ActionComposer } from "@/features/boards/ActionComposer";
+import { AbilityComposer } from "@/features/boards/AbilityComposer";
 import { AudioComposer } from "@/features/boards/AudioComposer";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
@@ -44,7 +46,7 @@ export interface ComposerHost {
 /**
  * 内置产出者各自的面板,按产出者挂(见 boardItemState.producerOf)。**一张表,不是四段条件渲染** ——
  * 此前 BoardCanvas 里按「这是哪种面板」各写一段,面板自己再按种类猜;现在一格挂哪块由它表单上的
- * 产出者说了算,新的产出者(P2 的工具格)只是这张表里多一行。
+ * 产出者说了算,节点产出者(能力、生成器)一律是 AbilityComposer。
  *
  * 面板本身不认识画板的接口:它们交出自己那几个字段,这里拼成一次 runOnBoard 的请求。
  */
@@ -174,35 +176,67 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
   ),
 };
 
+/** 这个人清单里的那一项:清单没到是 undefined,查不到(插件卸了、他没有连接)是 null。 */
+function findTool(producers: BoardProducerInfo[] | undefined, id: string): BoardProducerInfo | null | undefined {
+  return producers === undefined ? undefined : (producers.find((one) => one.id === id) ?? null);
+}
+
 /**
- * 一格该挂的面板。内置的四个查上面那张表;`node:*`(工具格)一律是 ActionComposer —— 表单照节点
- * 声明长出来,不为哪个工具单写。工具在不在这个人的清单里(插件卸了、他没有连接)由面板自己说。
+ * 一格该挂的面板(它**自己的**产出者)。内置的查上面那张表;`node:*`(空格子上的生成器)一律是 AbilityComposer
+ * 的生成器那一种 —— 表单照节点声明长出来,不为哪个工具单写。工具在不在这个人的清单里由面板自己说。
  */
 export function renderComposer(producer: BoardProducer, host: ComposerHost): React.ReactNode {
   if (!isNodeProducer(producer)) return BUILTIN_COMPOSERS[producer](host);
   const { item, position, workspaceId, feeding, producers, onFormChange, run } = host;
-  const tool = producers === undefined ? undefined : (producers.find((one) => one.id === producer) ?? null);
   return (
-    <ActionComposer
-      key={item.id}
+    <AbilityComposer
+      key={`${item.id}:${producer}`}
       item={item}
-      tool={tool}
+      tool={findTool(producers, producer)}
+      setting={{ config: item.form?.config, bindings: item.form?.bindings }}
       sources={feeding.sources}
       workspaceId={workspaceId}
       busy={itemIsRunning(item)}
-      onFormChange={onFormChange}
+      onFormChange={(setting) => onFormChange({ ...item.form, ...setting })}
       onRun={(form) => run({ producer, item_id: item.id, kind: item.kind, ...position, form })}
     />
   );
 }
 
 /**
- * 一格空槽能在哪几个产出者之间切换:能填空槽(`fills_empty_slot`)、又挂得在这种格子上的那几个。
- * 只有一个就不用切。音频槽在「配音」和「生成(音乐、音效)」之间切,就是这一条 —— 生成目录一认
- * 音频,后端 generate 的 hosts 里就有 audio,这里不用改。
+ * 一格的一项**能力**的面板(操作条上点开的那一项)。宿主就是这一格:它的内容是工具的那个输入(`host_fields`),
+ * 设置存在它的 `form.abilities[能力]` 上(`onSave`,见 boardItemState.withAbility),产出新建在它右边。
+ */
+export function renderAbility(
+  ability: BoardProducer,
+  host: Omit<ComposerHost, "onFormChange"> & { item: BoardItem; onSave: (setting: BoardAbilitySetting) => void },
+): React.ReactNode {
+  const { item, position, workspaceId, feeding, producers, onSave, run } = host;
+  const tool = findTool(producers, ability);
+  return (
+    <AbilityComposer
+      key={`${item.id}:${ability}`}
+      item={item}
+      tool={tool}
+      hostField={tool?.host_fields?.[item.kind] ?? null}
+      setting={item.form?.abilities?.[ability] ?? {}}
+      sources={feeding.sources}
+      workspaceId={workspaceId}
+      busy={itemIsRunning(item)}
+      onFormChange={onSave}
+      onRun={(form) => run({ producer: ability as NodeProducer, item_id: item.id, kind: item.kind, ...position, form })}
+    />
+  );
+}
+
+/**
+ * 一格空槽能在哪几个产出者之间切换:能填空槽(`fills_empty_slot`)、又挂得在这种格子上的那几个 —— 内置的
+ * (配音 / 生成)和插件的生成器(按参数出图出片的 ComfyUI 工作流、Manim 动画……)。只有一个就不用切。
+ * 音频槽在「配音」和「生成(音乐、音效)」之间切,就是这一条 —— 生成目录一认音频,后端 generate 的 hosts 里
+ * 就有 audio,这里不用改。
  */
 export function slotProducers(item: BoardItem, producers: BoardProducerInfo[] | undefined): BoardProducerInfo[] {
-  if (!producers || item.asset_id || isNodeProducer(item.form?.producer)) return [];
+  if (!producers || item.asset_id) return [];
   const fitting = producers.filter((one) => one.fills_empty_slot && one.hosts.includes(item.kind));
   return fitting.length > 1 ? fitting : [];
 }
@@ -210,8 +244,8 @@ export function slotProducers(item: BoardItem, producers: BoardProducerInfo[] | 
 /**
  * 这个产出者的面板**选中就挂**,还是**等人点了才挂**。写字是便签的一个帮手,不是便签本身:便签首先是
  * 自己写的字,选中它多半是要挪一挪、改个颜色 —— 此前一选中就弹出写作面板,挪一张便签也得先把它关掉。
- * 写作面板由操作条上的「让 AI 写」打开(BoardCanvas 的 writerFor)。别的产出者的格子(空的图片 / 视频槽、
- * 工具格)选中它就是要跑它,面板照旧直接挂。一张表,不按产出者名字逐个比。
+ * 写作面板由操作条上的「让 AI 写」打开(BoardCanvas 的 panel)。别的产出者的格子(空的图片 / 视频槽、
+ * 空格子上的生成器)选中它就是要跑它,面板照旧直接挂。一张表,不按产出者名字逐个比。
  */
 const COMPOSER_ON_DEMAND: Record<BuiltinProducer, boolean> = {
   write: true,
@@ -225,7 +259,7 @@ export function composerOnDemand(producer: BoardProducer): boolean {
   return !isNodeProducer(producer) && COMPOSER_ON_DEMAND[producer];
 }
 
-/** 这一格能不能打开按需的面板(「让 AI 写」)。工具交回的结构化数据(JSON 便签)不给 —— 它是一份数据,
+/** 这一格能不能打开按需的面板(「让 AI 写」)。能力交回的结构化数据(JSON 便签)不给 —— 它是一份数据,
  *  不是一段要改写的文案。 */
 export function canAskWriter(item: BoardItem): boolean {
   const producer = producerOf(item);

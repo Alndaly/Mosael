@@ -43,6 +43,7 @@ import {
   Shapes,
   SlidersHorizontal,
   Sparkles,
+  Split,
   Tags,
   Timer,
   Wand2,
@@ -52,7 +53,7 @@ import {
 } from "lucide-react";
 
 /**
- * 节点类型 → 图标。**只此一处**:工作流画布上的节点、检查器的标题,和创意画板上的工具格(格子、
+ * 节点类型 → 图标。**只此一处**:工作流画布上的节点、检查器的标题,和创意画板上一格的能力(操作条上那一枚、
  * 格子上方那一行、「添加」和拉线菜单里那一行)读的都是它 —— 同一个节点在两个地方不该长两个样子。
  *
  * 存的是图标组件,不是画好的元素:工作流节点画 13px,画板上的格子各有各的尺寸。
@@ -78,7 +79,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   delay: Timer,
   synthesize_speech: AudioLines,
   //: 把一条音轨剪成两条 —— 剪刀比音波更能说出"分开"这件事。
-  separate_audio: Scissors,
+  //: 拆成两份(人声 / 背景):画板上它和「剪一段」并排在音频格的操作条上,不能都是剪刀。
+  separate_audio: Split,
   //: 把一条毛糙的波形理平。
   denoise_audio: AudioWaveform,
   //: 3D 白模:搭一个盒子,再从机位上"拍"它。

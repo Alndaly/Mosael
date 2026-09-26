@@ -122,7 +122,7 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 "input_schema": tool.get("input_schema") or {"type": "object", "properties": {}},
                 "read_only": read_only,
                 # 后果(domain/effects):智能体调它之前要不要先问人、按哪一档问。**一处算出来**,
-                # 智能体工具表、画板工具格、插件页的「需确认」徽标读的都是这一个值。
+                # 智能体工具表、画板上的能力、插件页的「需确认」徽标读的都是这一个值。
                 # 覆盖 > 工具自己声明的 > 包上的 default_effects > external;只读的一律 none。
                 "effects": plugin_tool_effects(
                     read_only=read_only,

@@ -48,15 +48,16 @@ round send button on the right. However long the body gets, the bottom bar stays
 
 - **Image / video** — while still empty, a prompt panel hangs underneath. Model, aspect ratio,
   resolution and duration are **driven by the model descriptor**, so switching models reshapes
-  that row by itself. Once there is a result, the action bar offers Preview, Swap and Trim.
+  that row by itself. Once there is a result, the action bar is a row of icons: Preview, Trim, Swap, then
+  the item's **abilities** (see "What an item can do with its content" below).
 - **Note** — selecting a note **does not open the writing panel**; you usually select a note to move
   it or recolor it. Press **Ask AI to write** in the action bar when you want help: empty means "write
   it", with text it means "change it the way I say" (you wrote something, now you want it half as long);
-  press it again to close. A note grown with "Write copy" opens it right away. Notes holding a tool's
+  press it again to close. A note grown with "Write copy" opens it right away. Notes holding an ability's
   structured data (code-formatted) have no such button. Double-click still edits by hand.
-- **Audio** — pick a voice and the text to read (voice-over). Once a generation model supports
-  audio, the action bar above an empty audio item switches between Voice-over and Generate
-  (music, sound effects).
+- **Audio** — pick a voice and the text to read (voice-over). The action bar above an empty audio item
+  switches between ways to fill it: Voice-over, Generate (music, sound effects) once a generation model
+  supports audio, and generators from plugins (extra ones go under "…").
 - **Group frame** — fence things off and name them. Select a few nodes and press
   <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
 
@@ -68,7 +69,7 @@ spinning forever. Models that declare a continuous duration range get a numeric 
 Every node also exposes its run state directly: queued uses a light primary outline, running adds an
 animated glow, failed turns red, and cancelled uses a subdued dashed outline. **Completion flashes once and
 settles** — no lasting green ring; the content itself is the proof. **Every running item has Stop**
-(generation, voice-over, writing, trimming, tools); it stops that one job, though a provider may still bill
+(generation, voice-over, writing, trimming, abilities); it stops that one job, though a provider may still bill
 for a remote generation it already accepted. A failed item says "Generation failed" or "Run failed" plus
 the reason, not "could not start".
 The signal is not confined to a spinner in an empty media slot, so a failed rerun remains visible even
@@ -103,84 +104,73 @@ like. When you do want frame accuracy, the number fields on the right are still 
 **The original is untouched.** A trim produces a new asset in a new node — every step on a board
 should be one you can walk back from.
 
-## Tool items: turn what you have into something new
+## What an item can do with its content
 
-Besides generate, write, voice-over and trim, a board can **run a tool** that turns the item in front of
-you into something new: video to GIF, speech in audio or video to text, translate, separate voice and
-background, reduce noise, and the content tools plugins
-provide — such as every workflow saved in ComfyUI, or Manim / Remotion animations.
+There are **no separate tool items** on a board. Turning an item into something new is **something the item itself
+does**: select an audio clip and the action bar above it gains a row of icons — transcribe, separate voice and
+background, reduce noise; a video also offers "Video to GIF"; a note or a document offers "Translate". Content tools
+from plugins work the same way: a ComfyUI workflow that takes an image (upscale, background removal, face restore) sits
+on image items, one that takes a video on video items. Built-in abilities come first and show directly; extra ones go
+under "…". Hover any icon to see what it does to this item.
 
-A board **only holds these content-to-content tools**. Flow and data steps — calling a workflow, HTTP
-requests, text templates, JSON extraction, string handling, note search — plugin tools that only
-list, report status or upload, and plugin tools that **fetch things by an id from another system** (importing
-ComfyUI outputs by task id, a cloud-drive file by fs_id, an object-storage file by key) are not on boards; use them
-in a [workflow](/docs/guides/workflows) or in chat. To put a file on a board, drag it in from the asset library.
-Tool items of those kinds already on a board before the upgrade become a note saying the step now
-belongs in a workflow, with the old settings attached; their connections and the results they made stay.
+**Click an icon and its panel opens under the item; click another and the panel below switches to it; click the same
+one again to close it** (<kbd>Esc</kbd> or selecting another item closes it too). Trim and Ask AI to write are icons in
+the same row and replace the panel below in the same way. The top of the panel says what happens to which item —
+"Reduce noise · Narration: clean the background noise out of audio or video" — **this item's content is the input**:
+nothing to pick, nothing to connect. Below that are the ability's own settings:
 
-**One thing, one entry.** When a plugin tool is the same thing as a generation model — a ComfyUI workflow with a
-single saved image / video / audio output node (preview nodes don't count) is already a model in image and video items — and you can use that model,
-it is not listed as a tool: add an image (video, audio) item and pick the model; the result lands in place, several
-at a time, with a longer wait. Tool items of that kind already on a board are turned into the matching generation
-item automatically; position, name, prompt, reference images and parameters carry over, and what generation has no
-place for (such as ComfyUI's width / height) is dropped.
+- **The bottom bar holds the pick-one settings** ("Target language: English", "Engine"); a chip shows the chosen value,
+  or the field name while nothing is chosen. Required ones come first, three at most; the rest are under **Settings**,
+  whose button shows a dot while a required one there is still empty.
+- **While something required is missing the round send button is grey**, and hovering it says what is missing —
+  Translate needs a target language first.
+- When a tool needs another input (say, audio to put under a video), **connect that item into this one**: the row of
+  upstream chips at the top lets you pick which one feeds which field. Notes give their text, documents the pinned
+  revision's text, images / video / audio the asset, 3D scenes the scene. Values are read **when you run**, so edit the
+  upstream note and the next run follows; delete the connection and the binding goes with it.
+- **Each ability's settings are stored on the item**, so reopening it shows what you used last time; the item's own
+  content (image, text, prompt) is untouched.
 
-**Placing one**: in the toolbar's Add menu or the drag-out menu, tools are **grouped by the content they
-work on** — New assets, Work on images, video, audio, text or 3D scenes — each with one line on what it
-does (the menu has a search box that also matches a plugin tool's call name). A tool item grown out of
-another item is already connected; that item is its input.
+**Outputs land to the right**: every run adds **a new column of items to the right of this one**, connected to it —
+images, video and audio in items of their kind, other files as a note naming the file, text as a note, structured
+data as a code-formatted note; this item itself does not change. Only the tool's **results** land: outputs meant for
+wiring workflows (asset id lists, summaries, task ids) don't. Earlier outputs stay; nothing is overwritten. At most 12
+items per run; the rest merge into the last note.
 
-**A tool item looks like the content it will make**: an image tool is an empty image item, voice
-separation an empty audio strip, translation or transcription an empty note — same look and size as the
-content items beside it, with the tool's own icon as the faint glyph in the middle. The name sits above
-the item, a plugin tool's plugin faintly after it; hover for the one-line description. The item holds at
-most one line: when a required input is missing it says "Connect video" or "Connect note or document";
-everything else is left to the connections.
+**While it runs**, the item keeps showing its content with a strip along the bottom — "Running · Transcribe asset",
+progress and **Stop** (which really stops the plugin process and cancels its job in the task center). A failed run
+doesn't paint the item red: select it and the strip says why, and so does the panel; adjust and run again.
 
-**The form only asks what a creator decides**: model, language, style, duration and the like, with rarer
-knobs under **Settings**. Parameter mappings, raw JSON and code — fields meant for whoever builds a
-workflow — are not on boards; a tool that requires one (such as an explainer video that needs a
-structured list of steps) is used in a workflow or in chat. **Fields take upstream input** without any
-`{{upstream.output}}` either; the input is whatever is connected:
+**Plugin generators that take no board content** (a ComfyUI workflow that turns a prompt into an image, Manim /
+Remotion animations) are not an ability of any item — they are **another way to fill an empty item**: add an empty
+image (video, audio) item, switch it to that generator in the action bar above it, and the panel is the generator's
+form; the image it makes fills this item and any other outputs (a caption…) land to the right.
 
-| Upstream item | Fits which fields | What the run reads |
-| --- | --- | --- |
-| Note | Free-text fields (text to translate, a prompt) | The note's text; several notes join in connection order with a blank line |
-| Document | Same | The pinned revision's text |
-| Image / video / audio | Asset fields (only the kinds the field takes: transcribe, separate and denoise take video and audio; video to GIF takes video) | That asset |
-| 3D scene | Scene fields | That scene |
+A board holds **only content-to-content tools**. Flow control and data steps — calling a workflow, HTTP requests,
+text templates, JSON extraction, string handling, note search — plugin tools that only list, report or upload, and
+plugin tools that **fetch things by an id from another system** (importing ComfyUI outputs by task id, the drive by
+fs_id, object storage by object key) are not on boards; use them in [workflows](/docs/guides/workflows) and chat, and
+drag a file in from the asset library to put it on a board. Forms hold **only what a creator fills in**: parameter
+mappings, raw JSON and code are not on boards; a tool that requires such a field (like an explainer video that needs
+structured steps) is for workflows and chat.
 
-A tool's form looks like the generation panel. **The top row holds upstream chips**: one group per
-field that can take upstream input, listing the connected items that fit; click the ones to read from, and
-clear the last one to type the value by hand instead. **The body** is the text handed to the tool (the text
-to translate, a prompt) — once that field reads from upstream it has no box; a tool with nothing to type
-shows its one-line description. **The bottom bar** holds pick-one settings ("Target language English",
-"Scene", "Shot"), required ones first, at most three; the rest live under **Settings**, whose button shows a
-dot while a required field in there is empty. **A required field is bound
-to the first fitting upstream item by default**; you can change it and the choice is saved on the
-item. Values are read **when you press Run**: edit the upstream note and the next run follows.
-Delete the line and the binding goes with it.
+**One thing, one entry.** When a plugin tool is the same thing as a generation model — say a ComfyUI workflow with
+a single saved image / video / audio output node (preview nodes don't count), which is already a model in image and
+video items — and you can use that model, it isn't listed separately: add an image (video, audio) item and pick that
+model; the result lands in place, several at a time, with a longer wait.
 
-**Fields that point at something are dropdowns, not id boxes**: the 3D scene, project and connection
-are picked from this workspace, with search once the list grows. A dropdown that follows another field (a
-model that follows the connection) is cleared when that field changes. While a field is connected upstream,
-its chip in the bottom bar gives way to the row of upstream items, so the two never show at once.
+**Fields that point at something are dropdowns, not ids to copy**: projects and connections are picked from this
+workspace, with search once the list is long. A dropdown that depends on another field (a model that depends on the
+connection) clears when its parent changes.
 
-**Results land to the right**: every run **adds a new column of items** to the right, each connected
-by a line — images, videos and audio become those kinds of items, other files become a note naming
-the file, text becomes a note, structured data becomes a code-formatted note. Only the tool's **product**
-lands: outputs meant for wiring workflows (asset id lists, summaries, task ids) don't. Earlier results stay;
-nothing is overwritten. One run adds at most 12 items; anything beyond that is merged into the last note.
+**Whose connection**: a plugin tool runs with **the connection of whoever presses run**. On a shared board, settings a
+teammate saved still run with your own connection — if you have none, the panel names the plugin and links to the
+Plugins page to create one. With several connections, pick one under Settings.
 
-**While it runs** the item looks like a generating item: it shimmers and shows a percentage when the
-tool reports progress; **Stop** really stops the plugin process (and cancels the job in the task center).
-If it fails, "Run failed" and the reason are written on the item and the form stays as it was — adjust it
-and press "Run again". When it finishes the item goes back to its calm look; the results are to the right.
-
-**Whose connection**: a plugin tool runs with **the connection of whoever presses Run**. The panel says
-"Runs with your connection “X”". On a shared board, pressing Run on a teammate's tool item uses your
-own connection — if you have none, the panel names the plugin and links to the Plugins page to create
-one. With several connections, pick one under Settings.
+**Tool items from before the upgrade** move onto the item they were connected to: their settings are stored there, the
+tool item goes away, and its earlier outputs stay, now connected from that item. A tool item that made assets from
+parameters becomes an empty item of that kind with that generator selected; one with nothing to attach to (or whose
+tool is no longer on boards) becomes a note spelling out its old settings, with its connections intact.
 
 ## The AI assistant
 
@@ -198,18 +188,18 @@ until you approve it. It submits granular operations rather than a whole canvas,
 handed the whole thing gets it wrong on any non-trivial board: items go missing, or the positions
 you arranged by hand get flattened.
 
-### Letting the agent use tool items
+### Letting the agent use an item's abilities
 
-The assistant can also place tool items, wire up their inputs and run them for you. It first looks at
-the tools available (`list_board_producers` — the same tools, groups and fields you see in the Add
-menu, with plugin tools only from **your own** connections). When it places a tool item it names the tool, fills in its
-fields, says which fields take which upstream items, and connects them in the same batch
-(`edit_board`). Placing and editing still go through a confirmation card, and a broken edit (no such
-tool, no such field, a binding to an item that isn't connected, a note bound to an asset field) is
-refused when the card is opened, not after you approve it.
+The assistant can use an item's abilities for you. It first looks at what is available (`list_board_producers` — the
+same list the action bar reads: which kinds of item each ability sits on, which field the item's own content fills,
+and the other settings; plugin tools only from **your own** connections), then stores the ability's settings on that
+item and says which other inputs come from which connected items, connecting them in the same batch (`edit_board`'s
+`set_form`). Edits still go through a confirmation card, and a broken edit (the item has no such ability, no such
+field, a binding to an item that isn't connected, a note bound to an asset field) is refused when the card is opened,
+not after you approve it. It can no longer place separate tool items.
 
-**Running** (`run_board_item`) takes the same path as pressing Run yourself, with **the approver's own
-connection**:
+**Running** (`run_board_item`, naming the ability) takes the same path as pressing the send button yourself, with
+**the approver's own connection**:
 
 - **Tools that neither cost money nor reach outside run directly** (translate, transcribe, video to GIF,
   plugin tools that declare themselves read-only…) — no card;

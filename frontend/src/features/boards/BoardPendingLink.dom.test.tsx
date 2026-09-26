@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Edge, FinalConnectionState, Node, ReactFlowInstance, ReactFlowProps } from "@xyflow/react";
@@ -422,51 +422,28 @@ describe("画板连线的层次与外观", () => {
   });
 });
 
-describe("拉线菜单里的「工具」一组", () => {
-  //: 形状和 GET /api/boards/producers 发下来的一样。内置的四个不进这一组(它们挂在各自的格子上)。
-  const producer = (id: string, label: string, group: [string, string] | null, extra: Record<string, unknown> = {}) =>
+describe("拉线菜单里只有格子", () => {
+  //: 形状和 GET /api/boards/producers 发下来的一样。能力住在内容格上(选中一格,在操作条上点),不在拉线菜单里。
+  const producer = (id: string, label: string, extra: Record<string, unknown> = {}) =>
     ({
       id, type: id.replace(/^node:/, ""), label, description: `${label}的说明`, category: "工作流里的分组", config: {}, outputs: [],
-      output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {}, hosts: ["action"],
+      output_types: {}, output_labels: {}, plugin_name: "", tool_name: "", body_scope: {}, hosts: ["note", "document"],
+      role: "ability", host_fields: { note: "text", document: "text" },
       permission: "edit", effects: "none", fills_empty_slot: false,
-      board_group: group?.[0] ?? "", board_group_label: group?.[1] ?? "", board_description: `${label}一句话`, ...extra,
+      board_group: "text", board_group_label: "处理文字", board_description: `${label}一句话`, ...extra,
     }) as unknown as NonNullable<React.ComponentProps<typeof BoardCanvas>["producers"]>[number];
   const producers = [
-    producer("write", "写字", null, { hosts: ["note"], fills_empty_slot: true }),
-    producer("node:translate", "翻译", ["text", "处理文字"]),
-    producer("node:plugin.cut.out", "去背景", ["image", "处理图片"], { plugin_name: "我的抠图", tool_name: "remove_bg" }),
+    producer("write", "写字", { hosts: ["note"], role: "slot", fills_empty_slot: true }),
+    producer("node:translate", "翻译"),
+    producer("node:plugin.cut.out", "去背景", { hosts: ["image"], plugin_name: "我的抠图", tool_name: "remove_bg" }),
   ];
 
-  it("分组按工具对内容做什么(不照搬工作流面板);能搜(连插件的调用名一起);回车选定 —— 工具格落在占位那儿、连好线、写明跑哪个工具", async () => {
-    const view = await mount(board, { producers });
+  it("拉一根线出来只为了长出一格新的内容:单子上是那几种格子,没有工具、不分组、不给搜索框", async () => {
+    await mount(board, { producers });
     release(300, 200);
-
-    const groups = [...document.querySelectorAll("[data-pending-link-group]")].map((one) => one.textContent);
-    expect(groups).toEqual(["boardsGroupCreate", "处理文字", "处理图片"]);
-    expect(item("写字")).toBeUndefined();
-    //: 种类多了,打开时焦点在搜索框上 —— 直接打字就是在找。
-    const search = document.querySelector<HTMLInputElement>('[data-pending-link-menu] input[type="search"]')!;
-    expect(document.activeElement).toBe(search);
-    act(() => {
-      fireEvent.change(search, { target: { value: "remove_bg" } });
-    });
-    expect([...document.querySelectorAll('[role="menuitem"]')].map((one) => one.textContent)).toEqual([
-      expect.stringContaining("去背景"),
-    ]);
-    act(() => {
-      fireEvent.keyDown(search, { key: "Enter" });
-    });
-    await settle();
-
-    const made = view.latest().items.find((one) => one.kind === "action")!;
-    expect(made.form).toEqual({ producer: "node:plugin.cut.out" });
-    expect(view.latest().edges).toEqual([expect.objectContaining({ source: "n1", target: made.id })]);
-    expect(menu()).toBeNull();
-  });
-
-  it("没有工具可列时单子照旧:不给搜索框、不分组", async () => {
-    await mount(board, { producers: producers.slice(0, 1) });
-    release(300, 200);
+    const rows = [...document.querySelectorAll('[role="menuitem"]')].map((one) => one.textContent ?? "");
+    expect(rows.some((one) => one.includes("翻译") || one.includes("去背景"))).toBe(false);
+    expect(rows.length).toBeGreaterThan(0);
     expect(document.querySelector('[data-pending-link-menu] input[type="search"]')).toBeNull();
     expect(document.querySelectorAll("[data-pending-link-group]")).toHaveLength(0);
   });

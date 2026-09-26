@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
  * **跟着插件连接走的那些缓存**:装、卸、建连接、改配置、启停、授权、刷新之后都要失效。
  *
  * 插件不只出现在插件页。一条生成插件连接(ComfyUI)就是 AI 工作台里的一家供应商和一串模型,暴露出来的
- * 工具是工作流的节点、画板上的工具格、节点表单里「用哪个连接」的下拉。此前插件页只失效了自己那几份,
+ * 工具是工作流的节点、画板上一格的能力 / 空格子的生成器、节点表单里「用哪个连接」的下拉。此前插件页只失效了自己那几份,
  * 于是在插件页启用 ComfyUI、点「刷新模型」之后回到 AI 工作台,模型选择器还是旧的那一份,要等一分钟
  * (默认 staleTime)或者刷新整页才出现 —— 用户以为刷新没成功。
  *
@@ -13,7 +13,7 @@ import type { QueryClient } from "@tanstack/react-query";
 export const PLUGIN_DEPENDENT_KEYS = [
   ["plugins"],
   ["plugin-models"],
-  // 工作流 / 画板:插件工具是节点和工具格;「用哪个连接」的下拉从插件连接列出。
+  // 工作流 / 画板:插件工具是节点和格子的能力;「用哪个连接」的下拉从插件连接列出。
   ["workflow-node-types"],
   ["workflow-field-options"],
   ["board-producers"],

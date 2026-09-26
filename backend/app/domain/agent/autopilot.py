@@ -73,7 +73,7 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     顺序即优先级:这一次不用问人 → 没有会话 → 不是开模式的那个人 → 工具白名单 → bypass → auto 分档。
 
     第一条排在「没有会话」之前:它不是谁开的口子,而是这次调用本身不需要口子(工具自己声明,
-    见 ConfirmableTool.needs_card)—— MCP 直连、飞书上跑一个只读的工具格也一样直接跑。
+    见 ConfirmableTool.needs_card)—— MCP 直连、飞书上跑一格的一项只读能力也一样直接跑。
     """
     from app.domain.agent.confirmable import tool_spec
 

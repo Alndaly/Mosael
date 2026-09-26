@@ -112,7 +112,7 @@ def _bind(name: str) -> ConfirmableTool:
 
 
 def _needs_card(db: Session, payload: dict[str, Any]) -> bool:
-    """和画板工具格同一条(domain/effects):不花钱、不出门的直接跑。
+    """和画板上的能力同一条(domain/effects):不花钱、不出门的直接跑。
 
     智能体那条路上 none 的工具根本不开卡(routes/agent_tools 直接跑);能走到这里的 none,是有人
     直接往 /api/confirmations 开了一张 —— 那就照 run_board_item 的做法,卡留痕、不等人。

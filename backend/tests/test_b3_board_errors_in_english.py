@@ -93,7 +93,7 @@ def test_board_route_answers_in_the_readers_language() -> None:
     )
     assert en.status_code == 400
     assert en.json()["detail"] == (
-        "Unknown board item type: sticker. Use one of: note, image, video, audio, frame, scene, document, action."
+        "Unknown board item type: sticker. Use one of: note, image, video, audio, frame, scene, document."
     )
 
     zh = client.patch(

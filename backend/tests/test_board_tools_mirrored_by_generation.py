@@ -1,12 +1,13 @@
-"""画板上**一个概念一个入口**:和生成模型是同一件事的插件工具不再是工具格(ADR 0021 修订)。
+"""画板上**一个概念一个入口**:和生成模型是同一件事的插件工具不再单独上画板(ADR 0021 修订)。
 
-ComfyUI 的一张工作流既是生成模型(图片 / 视频格的模型选择器里),又是一个工具(画板的「添加」菜单里)——
+ComfyUI 的一张工作流既是生成模型(图片 / 视频格的模型选择器里),又是一个工具(一格的能力、空格子的一种填法)——
 同一件事两个入口。只有工具做得到的(交回全部输出节点、文字产出、拿 alpha 当蒙版、取回预览)留给工具;
 生成表达得了的(只有一个图 / 视频 / 音频输出节点)在画板上只留生成:结果落在原位、有张数、用量、6 小时。
 
 宿主不认识 ComfyUI:插件报出的工具声明 `mirrors`(见 docs/PLUGIN_MANIFEST),规矩是
 `boards.transforms.content_transform_gap` 的 `mirrored_by_generation` —— 声明了、而且点运行的人在生成目录里
-用得上那个模型(同一条连接下的)。存着的这种工具格由对账改写成生成格(boards.plugin_references)。
+用得上那个模型(同一条连接下的)。空格子上存着的这种生成器由对账改挂生成(boards.plugin_references);
+升级前存着的工具格由迁移(migrate-board-tool-cells-become-abilities)改成那种素材的生成空格子。
 
 另外钉住 `wiring_outputs`:只给连线用的输出从不落板(一次运行不再多出一张重复的图和几张 JSON / 摘要便签)。
 """
@@ -15,12 +16,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.test_board_producers import _install_plugin, _me, _run_tool, _workspace
+from tests.test_board_producers import _install_plugin, _me, _run, _workspace
 from tests.util import fresh_client, second_client
 
 PACKAGE = "dev.test.boardtools"
 MIRRORED = "wf_portrait"
 NOT_MIRRORED = "wf_upscale"
+#: 只吃提示词和参数的那张(文生图):不吃画板内容,是图片空格子的一种填法;它也和 portrait.json 是同一件事。
+TEXT_ONLY = "wf_text"
 
 #: 两个运行时报出的工具(形状照 ComfyUI 插件报的那种):一个和生成模型 portrait.json 是同一件事,
 #: 一个没声明 `mirrors`(插件判它只有工具交得全,比如两个都存下来的输出节点)。
@@ -51,6 +54,17 @@ REPORTED = [
         "node": {"outputs": ["image_4", "image_5", "asset_id"],
                  "output_types": {"image_4": "asset", "image_5": "asset", "asset_id": "asset"},
                  "board_outputs": ["image_4", "image_5"], "wiring_outputs": ["asset_id"]},
+    },
+    {
+        "name": TEXT_ONLY,
+        "label": "工作流 · text",
+        "description": "在 ComfyUI 上原样跑「text」这张工作流。",
+        "input_schema": {"type": "object", "properties": {
+            "prompt": {"type": "string"}, "steps_3": {"type": "integer"}, "width": {"type": "integer"}}},
+        "node": {"outputs": ["image_9", "asset_id"], "output_types": {"image_9": "asset", "asset_id": "asset"},
+                 "output_media": {"image_9": "image"}, "board_outputs": ["image_9"], "wiring_outputs": ["asset_id"]},
+        "mirrors": {"generation_model": "portrait.json", "kind": "image", "prompt": "prompt",
+                    "parameters": {"steps_3": "3.steps"}},
     },
 ]
 
@@ -163,21 +177,25 @@ def test_用得上那个生成模型的人_画板上只有生成那一个入口(
         theirs = {one.id for one in producers.list_producers(db, other)}
     mirrored, kept = f"node:plugin.{PACKAGE}.{MIRRORED}", f"node:plugin.{PACKAGE}.{NOT_MIRRORED}"
     assert mirrored not in mine and kept in mine, "我的生成目录里有 portrait.json:画板上走生成"
-    assert mirrored in theirs and kept in theirs, "他的生成目录里没有那个模型:工具格照旧是唯一的入口"
+    assert mirrored in theirs and kept in theirs, "他的生成目录里没有那个模型:工具照旧是唯一的入口"
 
-    #: 画布上存着的那一格(对账还没改到):跑的时候说清楚去用生成,而不是「它不交出素材」。
+    #: 画布上一格图片存着这一项能力的设置:跑的时候说清楚去用生成,而不是「它不交出素材」。
+    from tests.util import seed_assets
+
     ws = _workspace(client)
+    seed_assets(ws, {"pic": "image"})
     created = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [
-        {"id": "a1", "kind": "action", "x": 0, "y": 0, "form": {"producer": mirrored, "config": {}, "bindings": {}}}],
-        "edges": []}})
-    refused = _run_tool(client, created.json()["id"], ws, mirrored)
+        {"id": "a1", "kind": "image", "x": 0, "y": 0, "asset_id": "pic",
+         "form": {"abilities": {mirrored: {"config": {}}}}}], "edges": []}})
+    refused = _run(client, created.json()["id"], ws, mirrored, kind="image")
     assert refused.status_code == 400, refused.text
     assert "portrait" in refused.json()["detail"] and "生成" in refused.json()["detail"], refused.json()["detail"]
 
 
-def test_存着的工具格改写成那种素材的生成格(tmp_path: Path) -> None:
+def test_升级前存着的工具格改成那种素材的生成空格子(tmp_path: Path) -> None:
     from app.core.db import SessionLocal
-    from app.domain.boards.plugin_references import rewrite_mirrored_tools
+    from app.db.migrations import _migrate_board_tool_cells_become_abilities
+    from app.db.models import Board
 
     client = fresh_client()
     me = _me(client)
@@ -207,21 +225,21 @@ def test_存着的工具格改写成那种素材的生成格(tmp_path: Path) -> 
         {"id": "a4", "kind": "action", "x": 300, "y": 1000, "form": {"producer": kept, "config": {}, "bindings": {}}},
     ]
     edges = [{"id": "e1", "source": "n1", "target": "a1"}, {"id": "e2", "source": "i1", "target": "a1"}]
-    created = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": items, "edges": edges}})
-    assert created.status_code == 200, created.text
-    board_id, revision = created.json()["id"], created.json()["revision"]
-
     with SessionLocal() as db:
-        assert rewrite_mirrored_tools(db) == 1
-        assert rewrite_mirrored_tools(db) == 0, "改过的不再改:重复跑是安全的"
+        #: 直接写行,绕过保存入口 —— 模拟升级前落库的画布。
+        board = Board(workspace_id=ws, name="B", revision=3, canvas={"items": items, "edges": edges})
+        db.add(board)
+        db.commit()
+        board_id = board.id
 
+    _migrate_board_tool_cells_become_abilities()
     board = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
-    assert board["revision"] == revision + 1, "开着这张板的旧快照要撞 409,不能把改写盖回去"
+    assert board["revision"] == 4, "开着这张板的旧快照要撞 409,不能把工具格存回来"
     by_id = {one["id"]: one for one in board["canvas"]["items"]}
     first = by_id["a1"]
-    #: id、位置、名字不变;工具格的尺寸和上一轮的运行状态不带过去。
-    assert (first["kind"], first["x"], first["y"], first["title"]) == ("image", 300, 40, "出图")
-    assert "width" not in first and "run" not in first
+    #: id、位置、大小、名字不变;上一轮的运行状态不带过去。
+    assert (first["kind"], first["x"], first["y"], first["title"], first["width"]) == ("image", 300, 40, "出图", 280)
+    assert "run" not in first
     assert first["form"] == {
         #: 提示词接的是上游便签:留空,连线还在,生成格的面板照上游便签填(和运行时「绑定优先」同一个结果)。
         "prompt": "",
@@ -236,16 +254,73 @@ def test_存着的工具格改写成那种素材的生成格(tmp_path: Path) -> 
     assert {(edge["source"], edge["target"]) for edge in board["canvas"]["edges"]} == {("n1", "a1"), ("i1", "a1")}
     assert by_id["a2"]["kind"] == "image" and by_id["a2"]["form"]["prompt"] == "一只猫"
     assert by_id["a2"]["form"]["source_assets"] == [{"asset_id": "asset-picked", "role": "reference_image"}]
-    assert by_id["a3"]["kind"] == "action", "在跑的那一格不动"
-    assert by_id["a4"]["kind"] == "action" and by_id["a4"]["form"]["producer"] == kept
+    #: 升级那一刻在跑的任务随进程没了:照样改。
+    assert by_id["a3"]["kind"] == "image" and by_id["a3"]["form"]["producer"] == "generate" and "run" not in by_id["a3"]
+    #: 没被生成取代的工具是图片格的一项能力,但它没接着任何一格图片:改成便签,设置附在后面。
+    assert by_id["a4"]["kind"] == "note" and "工作流 · upscale" in by_id["a4"]["text"]
+    assert all(one["kind"] != "action" for one in board["canvas"]["items"])
+
+
+def test_空格子上存着的生成器改挂生成(tmp_path: Path) -> None:
+    from app.core.db import SessionLocal
+    from app.domain.boards.plugin_references import rewrite_mirrored_tools
+
+    client = fresh_client()
+    me = _me(client)
+    _install_plugin(tmp_path)
+    instance_id, profile_id = _connect_reporting(me, with_model=True)
+    ws = _workspace(client)
+    text_only = f"node:plugin.{PACKAGE}.{TEXT_ONLY}"
+    items = [
+        {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "海边的柴犬"},
+        #: 提示词接上游便签、步数和宽度填了值、选了连接;这一格还存着别的能力的设置。
+        {"id": "a1", "kind": "image", "x": 300, "y": 40, "width": 260, "height": 180, "title": "出图",
+         "run": {"status": "failed", "error": "上次挂了"},
+         "form": {"config": {"prompt": "旧的字", "steps_3": "30", "width": "832", "instance_id": instance_id},
+                  "bindings": {"prompt": [{"from": "n1"}]}, "abilities": {"node:x": {"config": {}}},
+                  "producer": text_only}},
+        #: 在跑的那一格等它落终态。
+        {"id": "a2", "kind": "image", "x": 300, "y": 400, "run": {"status": "running", "job_id": "j1"},
+         "form": {"config": {}, "bindings": {}, "producer": text_only}},
+        #: 视频空格子:生成的是图片,放不进来,不动。
+        {"id": "a3", "kind": "video", "x": 300, "y": 700, "form": {"config": {}, "bindings": {}, "producer": text_only}},
+    ]
+    created = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {
+        "items": items, "edges": [{"id": "e1", "source": "n1", "target": "a1"}]}})
+    assert created.status_code == 200, created.text
+    board_id, revision = created.json()["id"], created.json()["revision"]
+
+    with SessionLocal() as db:
+        assert rewrite_mirrored_tools(db) == 1
+        assert rewrite_mirrored_tools(db) == 0, "改过的不再改:重复跑是安全的"
+
+    board = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
+    assert board["revision"] == revision + 1, "开着这张板的旧快照要撞 409,不能把改写盖回去"
+    by_id = {one["id"]: one for one in board["canvas"]["items"]}
+    first = by_id["a1"]
+    assert (first["kind"], first["x"], first["y"], first["title"], first["width"]) == ("image", 300, 40, "出图", 260)
+    assert "run" not in first
+    assert first["form"] == {
+        "prompt": "",
+        "provider": f"plugin:{PACKAGE}",
+        "provider_profile_id": profile_id,
+        "model": "portrait.json",
+        "parameters": {"3.steps": "30"},
+        "source_assets": [],
+        #: 能力的设置归这一格,留着。
+        "abilities": {"node:x": {"config": {}}},
+        "producer": "generate",
+    }
+    assert by_id["a2"]["form"]["producer"] == text_only, "在跑的那一格不动"
+    assert by_id["a3"]["form"]["producer"] == text_only, "种类对不上的不动"
 
 
 def test_保存加预览的ControlNet工作流_存着的工具格也改写成生成格(tmp_path: Path) -> None:
     """「工作流 · controlnet」:一个 SaveImage 加一个看线稿的 PreviewImage。插件 1.5.2 起预览不算输出节点,它声明了
-    `mirrors`;画布上存着的这种工具格,对账照样改写成图片格、选 controlnet.json。清单是插件对着假 ComfyUI 现报的。"""
+    `mirrors`;升级前存着的这种工具格,迁移照样改成图片格、选 controlnet.json。清单是插件对着假 ComfyUI 现报的。"""
     from app.core.db import SessionLocal
-    from app.db.models import PluginInstance, ProviderModel
-    from app.domain.boards.plugin_references import rewrite_mirrored_tools
+    from app.db.migrations import _migrate_board_tool_cells_become_abilities
+    from app.db.models import Board, PluginInstance, ProviderModel
     from app.domain.plugins import runtime
     from app.domain.plugins.dynamic_tools import clean_mirror
     from app.domain.plugins.tools import refresh_tools
@@ -279,16 +354,18 @@ def test_保存加预览的ControlNet工作流_存着的工具格也改写成生
     ws = _workspace(client)
     seed_assets(ws, {"asset-pose": "image"})
     producer = f"node:plugin.{PACKAGE}.{tool['name']}"
-    created = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [
-        {"id": "i1", "kind": "image", "x": 0, "y": 0, "asset_id": "asset-pose"},
-        {"id": "a1", "kind": "action", "x": 300, "y": 0, "title": "线稿出图",
-         "form": {"producer": producer, "config": {"prompt": "一座房子", "steps_3": "30", "include_previews": "true"},
-                  "bindings": {"image_11": [{"from": "i1"}]}}},
-    ], "edges": [{"id": "e1", "source": "i1", "target": "a1"}]}})
-    assert created.status_code == 200, created.text
     with SessionLocal() as db:
-        assert rewrite_mirrored_tools(db) == 1
-    board = client.get(f"/api/boards/{created.json()['id']}", params={"workspace_id": ws}).json()
+        board = Board(workspace_id=ws, name="B", revision=1, canvas={"items": [
+            {"id": "i1", "kind": "image", "x": 0, "y": 0, "asset_id": "asset-pose"},
+            {"id": "a1", "kind": "action", "x": 300, "y": 0, "title": "线稿出图",
+             "form": {"producer": producer, "config": {"prompt": "一座房子", "steps_3": "30", "include_previews": "true"},
+                      "bindings": {"image_11": [{"from": "i1"}]}}},
+        ], "edges": [{"id": "e1", "source": "i1", "target": "a1"}]})
+        db.add(board)
+        db.commit()
+        board_id = board.id
+    _migrate_board_tool_cells_become_abilities()
+    board = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
     cell = next(one for one in board["canvas"]["items"] if one["id"] == "a1")
     assert (cell["kind"], cell["title"]) == ("image", "线稿出图")
     #: 「也取回预览」在生成里没有位置,丢掉(生成本来就不交回预览)。
@@ -301,7 +378,7 @@ def test_保存加预览的ControlNet工作流_存着的工具格也改写成生
 
 
 def test_说不准用哪条连接就不改(tmp_path: Path) -> None:
-    """没选连接的工具格,两条连接(各自的生成连接)给出的不是同一个答案:不改 —— 和 replaces 同一条。"""
+    """没选连接的生成器,两条连接(各自的生成连接)给出的不是同一个答案:不改 —— 和 replaces 同一条。"""
     from app.core.db import SessionLocal
     from app.domain.boards.plugin_references import rewrite_mirrored_tools
 
@@ -312,12 +389,12 @@ def test_说不准用哪条连接就不改(tmp_path: Path) -> None:
     _connect_reporting(me, with_model=True, name="另一台")
     ws = _workspace(client)
     created = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [
-        {"id": "a1", "kind": "action", "x": 0, "y": 0,
-         "form": {"producer": f"node:plugin.{PACKAGE}.{MIRRORED}", "config": {}, "bindings": {}}}], "edges": []}})
+        {"id": "a1", "kind": "image", "x": 0, "y": 0,
+         "form": {"producer": f"node:plugin.{PACKAGE}.{TEXT_ONLY}", "config": {}, "bindings": {}}}], "edges": []}})
     with SessionLocal() as db:
         assert rewrite_mirrored_tools(db) == 0
     board = client.get(f"/api/boards/{created.json()['id']}", params={"workspace_id": ws}).json()
-    assert board["canvas"]["items"][0]["kind"] == "action"
+    assert board["canvas"]["items"][0]["form"]["producer"] == f"node:plugin.{PACKAGE}.{TEXT_ONLY}"
 
 
 def test_清单刷新之后和每次启动都跑这一步() -> None:

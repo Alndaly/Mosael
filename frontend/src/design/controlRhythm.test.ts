@@ -50,7 +50,6 @@ const GRANDFATHERED = new Map<string, string>([
   ["components/ui/slider.tsx: 6/16", "滑杆的轨道与滑块"],
   ["components/ui/command.tsx: 16/40", "放大镜图标在输入框内部"],
   // 画布上的小圆工具条:配色圆点比图标按钮小是有意的。
-  ["features/boards/BoardCanvas.tsx: 24/28", "配色圆点比图标按钮小"],
 ]);
 
 /** `box-sizing: border-box` 是全局的(design/tokens.css),所以写了 height 就是最终高度。 */

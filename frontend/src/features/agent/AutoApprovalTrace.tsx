@@ -29,7 +29,7 @@ const GATE_ICON = {
   auto: ShieldCheck,
   bypass: ShieldAlert,
   "session-allow": Sparkles,
-  // 这一次本就不用问人(智能体跑一个只读的画板工具格):没被问到,也照样列出来。
+  // 这一次本就不用问人(智能体跑画板上一格的一项只读能力):没被问到,也照样列出来。
   "no-card": ShieldCheck,
 } as const;
 

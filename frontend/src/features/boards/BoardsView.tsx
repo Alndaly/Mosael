@@ -595,7 +595,7 @@ function BoardDetail({
     [api, board.id, workspaceId, onSaved, t],
   );
 
-  //: 这个人在画板上能用的产出者:工具格的表单、「工具」那一组、空槽的产出者切换都照它。
+  //: 这个人在画板上能用的产出者:一格的能力(操作条上那一排和它们的面板)、空槽的产出者切换都照它。
   const producers = useQuery({
     queryKey: ["board-producers", workspaceId],
     queryFn: () => listBoardProducers(workspaceId),
@@ -620,12 +620,12 @@ function BoardDetail({
     staleTime: 60_000,
   });
 
-  //: 工具条「添加」的整张单子:几种格子,再接按对内容做什么分组的工具(处理图片 / 视频 / 音频 / 文字……,
-  //: 见 boardTools.boardAddCatalog),不照搬工作流「添加节点」面板的「流程 / 数据」。每一行都是图标、名字、
-  //: 一句说明;图标就是那种格子 / 那个工具的图标(画布上、拉线菜单里是同一颗)。
+  //: 工具条「添加」的整张单子:只有格子,按动词分成生成 / 从素材库 / 引用 / 整理(见 boardTools.boardAddCatalog)。
+  //: 没有「工具」一组 —— 把内容变成新内容的事是格子自己的能力,选中一格在操作条上点。每一行都是图标、名字、
+  //: 一句说明;图标就是那种格子的图标(画布上、拉线菜单里是同一颗)。
   const addOptions = React.useMemo(
-    () => boardAddCatalog(t, producers.data ?? []).map(({ icon: Icon, ...one }) => ({ ...one, icon: <Icon /> })),
-    [t, producers.data],
+    () => boardAddCatalog(t).map(({ icon: Icon, ...one }) => ({ ...one, icon: <Icon /> })),
+    [t],
   );
 
   /** 系统里拖进来 / 粘贴进来的文件:先传进素材库,再由画布按种类各放一格(图片、视频、音频都有自己的格子,
@@ -925,9 +925,6 @@ function BoardDetail({
                   setPicking({ kind: media, place: (assetId) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "scene") {
                   setPickingScene(true);
-                } else if (isNodeProducer(kind)) {
-                  //: 工具格:表单上写明跑哪个节点,面板照它长出来(见 ActionComposer)。
-                  api?.add("action", { form: { producer: kind } });
                 } else {
                   api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
                 }

@@ -310,8 +310,9 @@ def test_运行时报出的工具带着后果_写错或打架时按保守那边�
     assert _clean({"name": "wf_d", "read_only": True}, set())["read_only"] is True
 
 
-def test_画板工具格和对话里是同一条规矩() -> None:
-    #: 画板上只放内容变换(ADR 0021 修订):同一批工具各声明交出一份素材,才上得了画板。
+def test_画板上的生成器和对话里是同一条规矩() -> None:
+    #: 画板上只放内容变换(ADR 0021 修订):同一批工具各声明交出一份素材,才上得了画板 —— 它们不吃画板上的内容,
+    #: 是空格子的一种填法(ADR 0025 修订「能力住在内容格上」)。
     on_board = {**MANIFEST, "tools": {**MANIFEST["tools"], "declare": [
         {**tool, "node": {"outputs": ["asset_id"]}} for tool in MANIFEST["tools"]["declare"]]}}
     setup = Setup(on_board)
@@ -324,7 +325,7 @@ def test_画板工具格和对话里是同一条规矩() -> None:
         assert producers[f"node:plugin.dev.effects.{tool}"]["effects"] == effects, tool
 
     board = setup.client.post("/api/boards", json={"workspace_id": setup.workspace_id, "name": "B", "canvas": {
-        "items": [{"id": "a1", "kind": "action", "x": 0, "y": 0, "form": {
+        "items": [{"id": "a1", "kind": "image", "x": 0, "y": 0, "form": {
             "config": {"code": "print(1)"}, "bindings": {}, "producer": "node:plugin.dev.effects.render"}}],
         "edges": []}}).json()
     response = setup.client.post("/api/confirmations", json={

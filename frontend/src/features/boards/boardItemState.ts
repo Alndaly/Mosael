@@ -1,4 +1,4 @@
-import { derivesOutputs, withSlotProducer, type BoardItem, type BoardProducer } from "@/api/client";
+import { derivesOutputs, withSlotProducer, type BoardAbilitySetting, type BoardItem, type BoardProducer } from "@/api/client";
 
 export type BoardItemRunStatus = NonNullable<BoardItem["run"]>["status"];
 
@@ -20,6 +20,8 @@ export function itemError(item: BoardItem): string | undefined {
  * 已经有了产出(asset_id)的一格不挂 —— 它的事做完了;便签的产出是它自己的正文,不占 asset_id,
  * 所以有字照样挂(有字就是照我说的改)。产出新建在右边的(3D 场景格渲白模)也照样挂:场景格的
  * asset_id 是缩略图,不是它的产出(api/domains/boards 的 derivesOutputs)。
+ *
+ * 这是这一格**自己的**产出者;它的能力(转写、翻译……)从操作条上点开,不在这里(见 boardAbilities)。
  */
 export function producerOf(item: BoardItem): BoardProducer | null {
   const producer = item.form?.producer;
@@ -28,20 +30,41 @@ export function producerOf(item: BoardItem): BoardProducer | null {
 }
 
 /**
- * 面板看到的那一格:表单里不带产出者。产出者不归面板编辑 —— 面板只管自己那几个字段,存回来的
- * 表单由画布补上产出者(见 withProducer)。面板拿「上一次存下的表单」比对要不要回写,带着它的话
- * 每次一挂上就会白写一遍。
+ * 面板看到的那一格:表单里不带产出者,也不带能力的设置。这两样都不归这块面板编辑 —— 面板只管自己那几个
+ * 字段,存回来的表单由画布补上(见 withProducer)。面板拿「上一次存下的表单」比对要不要回写,带着它们的话
+ * 每次一挂上就会白写一遍;而面板自己拼一份新表单时,能力的设置不在它手里,会被悄悄丢掉。
  */
 export function composerView(item: BoardItem): BoardItem {
-  if (!item.form || !("producer" in item.form)) return item;
-  const { producer: _producer, ...form } = item.form;
+  if (!item.form || (!("producer" in item.form) && !("abilities" in item.form))) return item;
+  const { producer: _producer, abilities: _abilities, ...form } = item.form;
   return { ...item, form };
 }
 
-/** 面板存回来的表单,补上这一格的产出者。**排在最后** —— 和后端摆占位时写的位置一致,前端按 JSON 比对表单。 */
-export function withProducer(form: NonNullable<BoardItem["form"]>, producer: BoardProducer): NonNullable<BoardItem["form"]> {
-  const { producer: _producer, ...rest } = form;
-  return { ...rest, producer };
+/**
+ * 面板存回来的表单,补上这一格的能力设置(`stored` 是这一格此刻的表单)和产出者。**产出者排在最后、能力的设置
+ * 在它前面** —— 和后端摆占位时写的位置一致,前端按 JSON 比对表单。
+ */
+export function withProducer(
+  form: NonNullable<BoardItem["form"]>,
+  producer: BoardProducer,
+  stored?: BoardItem["form"],
+): NonNullable<BoardItem["form"]> {
+  const { producer: _producer, abilities: _abilities, ...rest } = form;
+  const abilities = stored?.abilities;
+  return { ...rest, ...(abilities ? { abilities } : {}), producer };
+}
+
+/**
+ * 一项能力的设置存回这一格:`form.abilities[producer]` 换成这一份,这一格自己的草稿和产出者、别的几项能力都不动。
+ * 键的先后同后端 canvas._with_ability(草稿、`abilities`、产出者)。
+ */
+export function withAbility(
+  form: BoardItem["form"],
+  producer: BoardProducer,
+  setting: BoardAbilitySetting,
+): NonNullable<BoardItem["form"]> {
+  const { producer: own, abilities, ...rest } = form ?? {};
+  return { ...rest, abilities: { ...(abilities ?? {}), [producer]: setting }, ...(own ? { producer: own } : {}) };
 }
 
 /**
@@ -70,6 +93,11 @@ export function runningState(jobId: string): NonNullable<BoardItem["run"]> {
   return { status: "running", job_id: jobId };
 }
 
+/** 这一格这一轮(或上一轮)跑的是它的哪一项能力;不是能力的运行回 undefined(见后端 producer_ids.ability_of)。 */
+export function runningAbility(item: BoardItem): BoardProducer | undefined {
+  return item.run?.ability;
+}
+
 /**
  * 复制出来的一格。**进行中的运行态只属于原件**:任务的回执认的是原件那一格(见后端
  * receipt_to_item),便签写作回来的也只落在原件上 —— 带着「在跑」过去的副本永远等不到结束,
@@ -95,9 +123,25 @@ export function serverOwnedPatch(sent: BoardItem, stored: BoardItem): Partial<Bo
   return same ? null : { run: stored.run, asset_id: stored.asset_id };
 }
 
+type Bindings = NonNullable<NonNullable<BoardItem["form"]>["bindings"]>;
+
+/** 一份绑定里,服务端摘掉了(`sent` 有、`stored` 没有)的那几条从 `mine` 里摘掉;没摘到本地的回 null。 */
+function prunedBindings(sent: Bindings | undefined, stored: Bindings | undefined, mine: Bindings | undefined): Bindings | null {
+  const bound = (bindings: Bindings | undefined) =>
+    new Set(Object.entries(bindings ?? {}).flatMap(([field, refs]) => refs.map((ref) => `${field}|${ref.from}`)));
+  const keptRefs = bound(stored);
+  const droppedRefs = new Set([...bound(sent)].filter((one) => !keptRefs.has(one)));
+  if (droppedRefs.size === 0 || ![...bound(mine)].some((one) => droppedRefs.has(one))) return null;
+  return Object.fromEntries(
+    Object.entries(mine ?? {})
+      .map(([field, refs]) => [field, refs.filter((ref) => !droppedRefs.has(`${field}|${ref.from}`))] as const)
+      .filter(([, refs]) => refs.length > 0),
+  );
+}
+
 /**
  * 存回去之后,服务端把哪些「顺着线接上的东西」摘掉了(线已经断了 —— 规则只在后端
- * canvas._drop_detached_bindings 一处):槽位里顺着线挂上的素材、工具格上字段的绑定。
+ * canvas._drop_detached_bindings 一处):槽位里顺着线挂上的素材、生成器和每一项能力上字段的绑定。
  * 回本地那一格该换成的表单;没摘就回 null。
  *
  * 只摘**服务端摘掉的那几份**,拿本地此刻的那一格去摘:请求在路上时用户又挂上的、又改的照留。
@@ -113,19 +157,20 @@ export function prunedLinksPatch(sent: BoardItem, stored: BoardItem, local: Boar
     form = { ...local.form, source_assets: mine.filter((one) => !dropped.has(key(one))) };
   }
 
-  const bound = (bindings: NonNullable<BoardItem["form"]>["bindings"]) =>
-    new Set(Object.entries(bindings ?? {}).flatMap(([field, refs]) => refs.map((ref) => `${field}|${ref.from}`)));
-  const keptRefs = bound(stored.form?.bindings);
-  const droppedRefs = new Set([...bound(sent.form?.bindings)].filter((one) => !keptRefs.has(one)));
-  const myBindings = local.form?.bindings ?? {};
-  if (droppedRefs.size > 0 && [...bound(myBindings)].some((one) => droppedRefs.has(one))) {
-    const next = Object.fromEntries(
-      Object.entries(myBindings)
-        .map(([field, refs]) => [field, refs.filter((ref) => !droppedRefs.has(`${field}|${ref.from}`))] as const)
-        .filter(([, refs]) => refs.length > 0),
+  const bindings = prunedBindings(sent.form?.bindings, stored.form?.bindings, local.form?.bindings);
+  if (bindings) form = { ...(form ?? local.form), bindings };
+
+  const myAbilities = local.form?.abilities ?? {};
+  let abilities: Record<string, BoardAbilitySetting> | null = null;
+  for (const [producer, setting] of Object.entries(myAbilities)) {
+    const next = prunedBindings(
+      sent.form?.abilities?.[producer]?.bindings,
+      stored.form?.abilities?.[producer]?.bindings,
+      setting.bindings,
     );
-    form = { ...(form ?? local.form), bindings: next };
+    if (next) abilities = { ...(abilities ?? myAbilities), [producer]: { ...setting, bindings: next } };
   }
+  if (abilities) form = { ...(form ?? local.form), abilities };
 
   return form ? { form } : null;
 }

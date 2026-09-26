@@ -88,8 +88,8 @@ def test_high_risk_tool_descriptions_disambiguate_common_misuse() -> None:
     assert "Do NOT use for exporting an existing sequence" in descriptions["generate_video"]
     assert "Do NOT use for two-host" in descriptions["generate_audio"]
     assert "use generate_audio" in descriptions["generate_podcast"]
-    # 画板工具格:跑的是工具格,不是槽位(用户自己生成),也不是工作流。
-    assert "Do NOT use for image/" in descriptions["run_board_item"]
+    # 画板上的能力:跑的是一格的能力(或空格子的生成器),不是内置的生成 / 写字(用户自己发起),也不是工作流。
+    assert "Do NOT use for built-in generate" in descriptions["run_board_item"]
     assert "run_workflow" in descriptions["run_board_item"]
 
 

@@ -31,18 +31,31 @@
 6. **一个概念一个入口。** 插件报出的工具声明了 `mirrors`(它和某个生成模型是同一件事,ComfyUI 里只有一个
    存下来的图 / 视频 / 音频输出节点的工作流就是 —— 预览节点不算),而点运行的这个人在生成目录里用得上
    那个模型时,画板上只留生成(图片 / 视频 / 音频格选那个模型:结果落在原位、有张数、用量、6 小时),
-   工具格不再列出它。工作流里两个都在。
+   不再列出它。工作流里两个都在。
    「用得上」要按人、按连接问,规矩本身不查库:调用方(producers._node_producers)把答案递进来。
 
 同一条规矩管内置节点和插件工具:内置节点还要先在 `NODE_TYPES` 上声明 `surfaces: ["board"]`
 (和画板内置的写字 / 生成 / 念重复的、副作用大的,不声明),声明了过不了规矩的由棘轮当场报出来;
 插件工具不用声明,按它清单里 `node` 块声明的输出判。插件工具能不能上画板随它接的连接、清单
 (ComfyUI 每张工作流一个工具)变,所以规矩在每次取注册表时现算(producers._node_producers),
-不缓存;存在画布上、此刻不再合格的工具格,跑的时候说清楚为什么(producers.get_producer)。被生成取代的
-由对账改写成生成格,按编号去外面取东西的由对账改成一张便签(都在 boards.plugin_references)。
+不缓存;存在画布上、此刻不再合格的能力或生成器,跑的时候说清楚为什么(producers.get_producer)。空格子上
+被生成取代的生成器由对账改挂生成(boards.plugin_references)。
 
-画板**怎么摆**一个变换也从这里出:归「添加」菜单的哪一组(`board_group`,按吃什么内容分)、
-一句给创作者看的说明(`board_description`)、表单里哪些字段露出来(`board_config_view`)。
+画板**怎么摆**一个变换也从这里出:它是哪一格的能力(`board_role` / `board_hosts` / `host_field`,
+ADR 0025 修订「能力住在内容格上」)、一句给创作者看的说明(`board_description`)、表单里哪些字段露出来
+(`board_config_view`)、按吃什么内容归的组(`board_group`,图标兜底用)。
+
+**画板上没有单独的工具格。** 一个内容变换是**内容格自己的能力**(音频格会转写、分离、降噪,便签会翻译),
+或者是**空格子的一种填法**(按参数出图、出片的生成器,和「配音 / 生成」同一个切换):
+
+· `ability` —— 吃画板上的内容:挂在它那个内容字段收得下的几种格子上(`board_hosts`),宿主那一格的内容
+  就是那个字段的值(`host_field`:便签给字、文档给钉住那一版的正文、媒体给素材、3D 场景给场景),产出新建在
+  宿主右边;
+· `slot` —— 不吃画板内容、凭空产出一种素材:挂在那种素材的空格子上(产出种类见 output_kinds),产出填进那一格。
+
+判法只看声明,不为哪个工具写特例:画板上露出来、能接上游的字段里有素材 / 3D 场景字段的,是那几种格子的能力;
+只有文字字段、而且只交出文字的(翻译、改写),是便签 / 文档的能力;只有文字字段却交出素材的(提示词出图),
+文字是它的参数不是它的原料 —— 和内置的「生成」一样,是空格子的一种填法。
 """
 
 from __future__ import annotations
@@ -54,8 +67,8 @@ from typing import Any
 from app.core.i18n import t
 from app.domain.boards.tools import binding_sink, landing_outputs
 
-#: 画板「添加」菜单里工具的分组,按**它吃的是什么内容**分,顺序就是菜单里的顺序。
-#: `new` 是不吃画板内容、凭空产出素材的(文生图、讲解视频、取回文件);`asset` 是吃素材却没说
+#: 变换按**它吃的是什么内容**归的组(界面上能力图标的兜底、智能体读的分类),顺序就是接口里排的顺序。
+#: `new` 是不吃画板内容、凭空产出素材的(文生图、讲解视频);`asset` 是吃素材却没说
 #: 哪一种的。标签是 i18n key `boardToolGroup_<组>`。
 BOARD_GROUPS: tuple[str, ...] = ("new", "image", "video", "audio", "text", "scene", "asset")
 
@@ -94,15 +107,15 @@ def content_outputs(meta: dict[str, Any]) -> list[str]:
     return out
 
 
-#: 工具格上「这一格会长出什么」的那几种格子。`asset` = 一份素材,但没说是哪一种。
+#: 一个变换「跑一次会长出什么」的那几种格子。`asset` = 一份素材,但没说是哪一种。
 OUTPUT_KINDS: tuple[str, ...] = ("note", "image", "video", "audio", "asset")
 
 
 def output_kinds(meta: dict[str, Any]) -> list[str]:
     """跑一次落成哪几种格子,和 `content_outputs` 一一对应(同序)。
 
-    ADR 0025 的 `output_kinds`:工具格画成它要产出的那种内容的空格子(图片 / 视频 / 音频 / 便签),
-    界面读这一份,不按工具名或输出名猜。文字落成便签;素材看节点的 `output_media`
+    ADR 0025 的 `output_kinds`:生成器挂在哪种空格子上(图片 / 视频 / 音频)、能力会在右边长出什么,
+    都读这一份,不按工具名或输出名猜。文字落成便签;素材看节点的 `output_media`
     (`{输出名: image | video | audio}`,和输入字段的 `media` 同一个词表);没声明的,工具吃的那一种
     素材就是它吐的那一种(`board_group` 是 image / video / audio 时:降噪、抠图);再说不清就是
     `asset` —— 界面按最通用的媒体格(图片)画。
@@ -174,8 +187,80 @@ def is_content_transform(meta: dict[str, Any], *, generation_has: Callable[[dict
     return content_transform_gap(meta, generation_has=generation_has) is None
 
 
+#: 一个内容变换在画板上的角色(见模块说明):内容格的能力 / 空格子的一种填法。
+ABILITY = "ability"
+SLOT = "slot"
+ROLES: tuple[str, ...] = (ABILITY, SLOT)
+
+#: 画板上装素材的几种格子。
+_MEDIA_KINDS: tuple[str, ...] = ("image", "video", "audio")
+#: 宿主种类的先后(接口、测试按它排):文字的两种、媒体三种、3D 场景。
+_HOST_ORDER: tuple[str, ...] = ("note", "document", *_MEDIA_KINDS, "scene")
+
+
+def _host_fields(meta: dict[str, Any]) -> list[tuple[str, str]]:
+    """这个变换**吃画板内容**的那几个字段 `(字段, 接的是什么)`,必填的在前、其余按声明的先后。
+
+    素材 / 3D 场景字段优先:有它们的,文字字段是参数(出图的提示词),从上游便签接或手写。没有素材字段的:
+    只交出文字的(翻译)吃的就是那段字;交出素材的(提示词出图)不吃内容 —— 空列表。
+    """
+    specs = meta.get("config") or {}
+    sinks = _sinks(meta)
+    fields = [(key, sink) for key, sink in sinks.items() if sink in ("asset", "scene")]
+    if not fields and not _makes_media(meta):
+        fields = list(sinks.items())
+    return sorted(fields, key=lambda one: not (specs.get(one[0]) or {}).get("required"))
+
+
+def board_role(meta: dict[str, Any]) -> str:
+    """`ability`(内容格的能力)或 `slot`(空格子的一种填法)。只对过得了 content_transform_gap 的节点有意义。"""
+    return ABILITY if _host_fields(meta) else SLOT
+
+
+def board_hosts(meta: dict[str, Any]) -> tuple[str, ...]:
+    """它挂在哪几种格子上。
+
+    · 能力:它吃内容的那几个字段收得下的格子种类(`bindable_kinds`,字段的 `media` 说了只收哪几种素材的,
+      就只挂那几种:转写挂音频和视频,转 GIF 只挂视频);
+    · 填法:它产出的那种素材的空格子(output_kinds 里的图片 / 视频 / 音频);说不清产出哪种素材(`asset`)的,
+      三种媒体格都能挑它 —— 回执按素材实际的种类落(见 canvas 的就地填),对不上宿主的新建在右边。
+    """
+    from app.domain.boards.tools import bindable_kinds
+
+    fields = _host_fields(meta)
+    if fields:
+        specs = meta.get("config") or {}
+        kinds = {kind for key, _sink in fields for kind in bindable_kinds(key, specs[key])}
+    else:
+        made = output_kinds(meta)
+        kinds = {kind for kind in made if kind in _MEDIA_KINDS}
+        if not kinds or "asset" in made:
+            kinds = set(_MEDIA_KINDS)
+    return tuple(kind for kind in _HOST_ORDER if kind in kinds)
+
+
+def host_field(meta: dict[str, Any], kind: str) -> str | None:
+    """能力挂在 `kind` 这种格子上时,宿主的内容填进哪个字段(第一个收得下它的,必填的在前)。填法没有这个字段。"""
+    from app.domain.boards.tools import bindable_kinds
+
+    specs = meta.get("config") or {}
+    return next((key for key, _sink in _host_fields(meta) if kind in bindable_kinds(key, specs[key])), None)
+
+
+def host_fields(meta: dict[str, Any]) -> dict[str, str]:
+    """{宿主种类: 它的内容填进哪个字段}。接口发给界面和智能体:面板上这个字段不出现 —— 它**就是**宿主。"""
+    if board_role(meta) != ABILITY:
+        return {}
+    return {kind: field for kind in board_hosts(meta) if (field := host_field(meta, kind))}
+
+
+def host_sink(meta: dict[str, Any], field: str) -> str | None:
+    """宿主填进的那个字段接的是哪种值(asset / scene / text)。"""
+    return _sinks(meta).get(field)
+
+
 def board_group(meta: dict[str, Any]) -> str:
-    """它在「添加」菜单里归哪一组。声明了(`board_group`)就用声明的;没声明按它吃的内容推:
+    """它按吃什么内容归哪一组。声明了(`board_group`)就用声明的;没声明按它吃的内容推:
 
     接 3D 场景的归 3D;接素材的归那种素材(字段声明了 `media`,几个素材字段说的是同一种),
     说不清是哪种归「素材」;不吃素材、交出素材的(提示词出图)归「产出新素材」;剩下的吃文字吐文字。
@@ -236,7 +321,15 @@ def board_config_view(config: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "ABILITY",
     "BOARD_GROUPS",
+    "ROLES",
+    "SLOT",
+    "board_hosts",
+    "board_role",
+    "host_field",
+    "host_fields",
+    "host_sink",
     "board_config_view",
     "board_description",
     "board_group",

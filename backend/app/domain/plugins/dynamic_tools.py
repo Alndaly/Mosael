@@ -119,7 +119,7 @@ def clean_mirror(raw: Any) -> dict[str, Any] | None:
          "sources": {"<入参>": "<素材角色>", …}}               // 可选
 
     前两格是这件事本身(画板上只留生成那一个入口,见 boards.transforms);后三格只给迁移用 —— 画板上存着的
-    这种工具格改写成生成格时,填过的值怎么带过去(见 boards.plugin_references)。形状不对的整条不认:
+    空格子上存着的这种生成器改挂生成时,填过的值怎么带过去(见 boards.plugin_references)。形状不对的整条不认:
     说错了的「同一件事」比没说更糟,它会把一个工具从画板上藏起来。
     """
     if not isinstance(raw, dict):

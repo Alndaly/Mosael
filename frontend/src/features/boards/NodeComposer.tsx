@@ -64,7 +64,7 @@ import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview
  * ## 位置和样子
  *
  * 外框、位置、底栏和发送键都由画板面板的壳摆(BoardComposerShell):它用 NodeToolbar 挂在节点下方,
- * 平移缩放时自己跟着节点走。这块面板是那个壳的样板 —— 写字、配音、剪一段、工具格的面板都长成它这样。
+ * 平移缩放时自己跟着节点走。这块面板是那个壳的样板 —— 写字、配音、剪一段、能力的面板都长成它这样。
  */
 /** 模型和参数共用选择控件;参数在弹层中显示独立标签。 */
 function Pick({

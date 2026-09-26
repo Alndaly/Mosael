@@ -8,8 +8,10 @@ P2 (tool items, 2026-09-26) and P3 (the agent, 2026-09-26) are **done**; P4 is n
 items are content transforms only; 修订 2 adds "one concept, one entry" (a plugin tool that `mirrors` a
 generation model the user can use stays off the board) and `wiring_outputs` (never landed on the board); 修订 3 keeps
 tools that fetch by an id from another system (`external_id` fields) off the board and stops counting ComfyUI preview
-nodes as outputs when deciding `mirrors`. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
-landed before P1, so board generation already sees plugin models as ordinary provider models.
+nodes as outputs when deciding `mirrors`; 修订 4 makes the 3D scene item render itself; 修订 5 (2026-09-27) retires
+tool items altogether — every content transform is an **ability of the content item it consumes** (ADR 0025 修订).
+The "ComfyUI becomes a plugin generation provider" work (ADR 0020) landed before P1, so board generation already sees
+plugin models as ordinary provider models.
 
 ## Context
 
@@ -528,12 +530,29 @@ id、位置、名字不变,产出者 `generate`,选的就是那条连接下的�
   或填的是板上某一格场景格的场景时,设置搬进那一格的 `form.config`、工具格删掉,连向产出的线改从场景格连出(同一对不重复);
   其余(或同一格场景已经收了另一套设置的)照 `migrate-board-wiring-tools-become-notes` 改成便签。改到的板版本号 +1。
 
+### 修订 5:能力住在内容格上,单独的工具格撤下(2026-09-27)
+
+用户:「类似于这种都应该是音频节点自身的能力才对 而不是需要额外特定的节点」,「包括文案翻译也是 应该是属于文本节点 /
+文档节点的特殊能力」。修订 4(场景格自己渲白模)和「剪一段」是先例,这一次推到每一个内容变换:
+
+- 注册表里的 `node:*` 不再挂在 `action` 上:`hosts` 和新的 `role` 从节点声明推(`boards/transforms.board_role` /
+  `board_hosts` / `host_field`)—— 吃素材 / 3D 场景(或只吃文字、只交出文字)的是那几种格子的**能力**(`ability`),
+  宿主的内容就是那个字段的值,设置存在宿主的 `form.abilities[产出者]`,产出新建在右边;不吃画板内容、按参数出素材的
+  是那种素材**空格子的一种填法**(`slot`,`fills_empty_slot`,和配音 / 生成同一个切换)。上面「规矩」一节的判据不变。
+- `canvas.ITEM_KINDS` 撤掉 `action`;「添加」和拉线菜单只有格子;选中一格,操作条上一排图标就是它的能力,点开的面板挂在
+  下面、一次一块(`AbilityComposer`)。
+- 智能体:`set_form` 带 producer 写宿主上那一项能力的设置,`run_board_item` 带 producer 跑它;`add_item` 放不了工具格。
+- 迁移 `migrate-board-tool-cells-become-abilities` 把存着的工具格搬到它接着的内容格上(或改成生成器的空格子、便签)。
+  对账 `rewrite-replaced-plugin-tools` 改认新的两处(`abilities` 的键、空格子的产出者);按编号取东西的那一步对账
+  (`retire_external_id_tools`)撤掉 —— 不再合格的能力只是不再列出,设置照留。
+
+完整的决定、存储形状的取舍和迁移见 [ADR 0025](0025-board-recipes-versions-and-ports.md) 的「修订:能力住在内容格上」。
+
 ### 下一版
 
 - 「从画板沉淀为工作流」:一串在画板上验证过的变换,存成一张工作流;
 - 「把工作流结果送到画板挑选」:工作流批量出的几版落到一张画板上并排比;
-- 内容优先的操作:选中一格内容,就地列出能用在它身上的变换(规矩已经给出「吃什么内容」,`board_group` 就是
-  这个入口的索引)。
+- ~~内容优先的操作:选中一格内容,就地列出能用在它身上的变换~~ —— 修订 5 做了(能力住在内容格上)。
 
 把这份定位落进数据模型的结构改动(做法与版本、内置产出者的端口和服务端取值、落点与来历线、每种格子的字段表)
 见 [ADR 0025](0025-board-recipes-versions-and-ports.md)。

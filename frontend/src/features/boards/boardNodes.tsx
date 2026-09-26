@@ -4,7 +4,7 @@ import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, Wrench, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, Loader2, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import { getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -14,12 +14,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
-import { toPlainText } from "@/components/markdown/inlineSyntax";
-import { itemError, itemIsRunning, itemJobId, itemRunStatus, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { itemError, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
 
 /**
- * 画板上的格子:便签、图片 / 视频 / 音频、文档、3D 场景、分组框,和跑一个工具的工具格。
+ * 画板上的格子:便签、图片 / 视频 / 音频、文档、3D 场景、分组框。把内容变成新内容的工具不是单独的格子 ——
+ * 它们是这些格子自己的能力(操作条上一排图标,见 BoardCanvas 的 ItemToolbar),跑的时候格子上挂一条运行态
+ * (AbilityRun),产出新建在右边。
  *
  * **和工作流节点分开写,不复用。** 两边看着都是"画布上的一个方块",但要的东西正相反:
  * 工作流节点表达的是**一个会执行的步骤**(有输入输出接点、有运行状态、有必填校验),
@@ -27,8 +28,7 @@ import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
  * 硬凑成一个组件的话,每加一个画板专属的交互都要先绕过工作流那套。
  *
  * **画板只有一种视觉语言:格子就是它的内容。** 一张图就是那张图,一段视频是一帧画面加播放键;
- * 空着的格子是一块安静的占位,正中一枚淡淡的图标,名字在格子上方。工具格也照这个画 —— 它长得像
- * 它要产出的那种内容的空格子(见 ActionNode),不是一张缩小的工作流节点或表单。
+ * 空着的格子是一块安静的占位,正中一枚淡淡的图标,名字在格子上方。
  */
 
 /** 便签的色板。给固定几种而不是任意色值 —— 一组固定的色才让「黄色是待办、蓝色是参考」成立。 */
@@ -68,31 +68,11 @@ export type BoardNodeData = {
   onAspect: (id: string, ratio: number) => void;
   /** 评论模式只接受标注，不暴露会修改画布结构的连线入口。 */
   commentMode?: boolean;
-  /** 工具格跑的是哪个工具(从产出者清单里查到的)。null = 这个人此刻用不了它(插件卸了、没有连接);
-   *  undefined = 清单还没到。 */
-  tool?: BoardToolFace | null;
-  /** 停下这一格正在跑的任务。**所有在跑的格子都有**(生成、念、写、截、工具)—— 停止属于运行态的外壳。 */
+  /** 停下这一格正在跑的任务。**所有在跑的格子都有**(生成、念、写、截、能力)—— 停止属于运行态的外壳。 */
   onStop?: (id: string) => void;
+  /** 这一格上一项能力叫什么(`run.ability` 那一项,从产出者清单里查到的):运行态那一条上写它。 */
+  abilityLabel?: string;
 };
-
-/** 工具格长成哪一种内容的空格子。 */
-export type ToolCellKind = "note" | "image" | "video" | "audio";
-
-/**
- * 工具格上要显示的那几样(boardTools.boardToolFace 从工具声明和这一格的表单里读出来):名字、出处
- * (插件名;内置节点为空 —— 「内置」对创作者不是一个有意义的区分)、图标、一句说明(悬停看),
- * 它要产出的是哪种内容(格子就画成那种内容的空格子),以及还差的那一样。
- */
-export interface BoardToolFace {
-  label: string;
-  description: string;
-  plugin: string;
-  icon: LucideIcon;
-  /** 主产出落成哪种格子(ADR 0025 `output_kinds` 的第一个;说不清是哪种素材的按图片格画)。 */
-  kind: ToolCellKind;
-  /** 还差的那一样:第一个没接上、也没手填的**必填**输入能接哪几种格子。null = 不差。 */
-  missing: BoardItem["kind"][] | null;
-}
 
 /**
  * 左右两个接点。**画成圆形的 `+`**,选中或悬停时显形。
@@ -168,7 +148,6 @@ const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey
   video: { icon: FilmIcon, label: "boardKindVideo", hint: "boardKindVideoHint" },
   audio: { icon: Music, label: "boardKindAudio", hint: "boardKindAudioHint" },
   frame: { icon: SquareIcon, label: "boardKindFrame", hint: "boardKindFrameHint" },
-  action: { icon: Wrench, label: "boardKindAction", hint: "boardKindActionHint" },
 };
 
 /** 这一类的图标。图标不需要翻译,所以它可以直接拿。 */
@@ -196,7 +175,7 @@ export function itemName(t: (key: MessageKey) => string, item: Pick<BoardItem, "
   return item.title?.trim() || kindText(t, item.kind).label;
 }
 
-/** 当作**上游**称呼一格(工具格上「接的是哪一格」、面板上的绑定芯片):起了名用名字;便签没起名就用
+/** 当作**上游**称呼一格(能力面板上「对哪一格」、面板上的绑定芯片):起了名用名字;便签没起名就用
  *  开头几个字(几张便签都叫「便签」分不开);文档用它的标题。 */
 export function sourceName(t: (key: MessageKey) => string, item: BoardItem): string {
   const title = item.title?.trim();
@@ -238,6 +217,9 @@ function NodeLabel({ data, icon, fallback, secondary, className }: { data: Board
  * 排队、在跑、失败、取消各有一圈安静的外壳;**成功不留描边** —— 成功的证据是格子里的内容本身
  * (一张图、一段视频、右边新落下的几格)。此前成功后永远挂着一圈绿边,一张板生成过十几次就是
  * 十几圈绿框,反倒盖过画面。刚在眼前跑成功的那一下闪一次(useRunState),然后安静下来。
+ *
+ * 一项**能力**跑挂了、被取消了,那一格自己的内容还好好的:不给它套一圈红框(原因在它的面板里、选中时的那一条
+ * 运行态上说)—— 否则一张图转个 GIF 没成功,那张图就永远挂着一圈红。
  */
 const RUN_STATE_CLASS: Record<BoardItemRunStatus, string> = {
   idle: "ring-0",
@@ -255,7 +237,8 @@ const SUCCESS_FLASH_MS = 1600;
 /** 一格外壳上的运行态:`data-board-run-status` + 那一圈。**刚在眼前跑成功**的那一格闪一下再安静;
  *  打开画板时本来就成功着的不闪(那不是一件刚发生的事)。 */
 function useRunState(item: BoardItem) {
-  const status = itemRunStatus(item);
+  const actual = itemRunStatus(item);
+  const status = runningAbility(item) && (actual === "failed" || actual === "cancelled") ? "idle" : actual;
   const previous = React.useRef(status);
   const [flash, setFlash] = React.useState(false);
   React.useEffect(() => {
@@ -267,15 +250,15 @@ function useRunState(item: BoardItem) {
     return () => window.clearTimeout(timer);
   }, [status]);
   return {
-    "data-board-run-status": status,
+    "data-board-run-status": actual,
     "data-board-just-ran": flash ? "" : undefined,
     className: cn(RUN_STATE_CLASS[status], "transition-shadow duration-700", flash && "ring-2 ring-success/35"),
   } as const;
 }
 
 /**
- * 这一格在跑 / 跑挂了的时候怎么说。**按产出者说**:「生成失败」挂在一次截取或一个工具上是错话,
- * 「生成中」说一个翻译也不对。一张表,不按产出者名字逐个比 —— 工具格(`node:*`)一律是「运行」。
+ * 这一格在跑 / 跑挂了的时候怎么说。**按产出者说**:「生成失败」挂在一次截取或一项能力上是错话,
+ * 「生成中」说一个翻译也不对。一张表,不按产出者名字逐个比 —— 节点(`node:*`:能力、生成器)一律是「运行」。
  * 没挂产出者的格子(贴进来的素材)照生成说。
  */
 const RUN_COPY: Record<BuiltinProducer, { running: MessageKey; failed: MessageKey; stopHint?: MessageKey }> = {
@@ -290,7 +273,7 @@ const TOOL_RUN_COPY: { running: MessageKey; failed: MessageKey } = { running: "b
 
 function runCopy(item: BoardItem): { running: MessageKey; failed: MessageKey; stopHint?: MessageKey } {
   const producer = item.form?.producer;
-  if (isNodeProducer(producer)) return TOOL_RUN_COPY;
+  if (runningAbility(item) || isNodeProducer(producer)) return TOOL_RUN_COPY;
   return RUN_COPY[(producer ?? "generate") as BuiltinProducer] ?? RUN_COPY.generate;
 }
 
@@ -344,7 +327,8 @@ export function NoteNode({ data, selected }: NodeProps) {
 
   const json = item.text_format === "json";
   const state = useRunState(item);
-  const stop = nodeData.onStop && !commentMode && itemIsRunning(item) ? nodeData.onStop : undefined;
+  //: 一项能力在跑时停止在那一条运行态上(AbilityRun),这里只管便签自己的写字。
+  const stop = nodeData.onStop && !commentMode && itemIsRunning(item) && !runningAbility(item) ? nodeData.onStop : undefined;
   return (
     <div
       data-board-run-status={state["data-board-run-status"]}
@@ -379,7 +363,7 @@ export function NoteNode({ data, selected }: NodeProps) {
           onBlur={() => setEditing(false)}
         />
       ) : (
-        //: 工具格交回的结构化数据(JSON)按代码排版:等宽、能滚 —— 当成一段话排,
+        //: 能力交回的结构化数据(JSON)按代码排版:等宽、能滚 —— 当成一段话排,
         //: 一份几十行的对象挤成一团,看不出层次。
         <div
           data-text-format={item.text_format}
@@ -394,6 +378,50 @@ export function NoteNode({ data, selected }: NodeProps) {
       {stop && (
         <div className="absolute bottom-2 right-2">
           <StopButton item={item} onStop={stop} />
+        </div>
+      )}
+      <AbilityRun data={nodeData} selected={selected} />
+    </div>
+  );
+}
+
+/**
+ * 一格**有内容**时跑它的一项能力(转写、翻译、转 GIF ……):那一格自己的内容照常画,底边挂一条运行态 ——
+ * 「正在运行 · 素材转写」+ 进度 + 停止;跑挂了、被取消时这一条只在选中时出现(原因也在那一项的面板里)。
+ * 产出新建在右边,这一格一个字段不动。空格子、在跑自己的产出者的格子走 PendingSlot,不走这里。
+ */
+function AbilityRun({ data, selected }: { data: BoardNodeData; selected?: boolean }) {
+  const status = itemRunStatus(data.item);
+  const running = status === "queued" || status === "running";
+  if (!runningAbility(data.item)) return null;
+  if (!running && !(selected && (status === "failed" || status === "cancelled"))) return null;
+  return <AbilityRunStrip data={data} />;
+}
+
+function AbilityRunStrip({ data }: { data: BoardNodeData }) {
+  const t = useI18n();
+  const { item, onStop, commentMode, abilityLabel } = data;
+  const status = itemRunStatus(item);
+  const running = status === "queued" || status === "running";
+  const progress = useJobProgress(itemJobId(item), itemIsRunning(item));
+  const stop = onStop && !commentMode && itemIsRunning(item) ? onStop : undefined;
+  const said = running ? t(runCopy(item).running) : t(status === "failed" ? runCopy(item).failed : "boardNodeCancelled");
+  return (
+    <div
+      data-board-ability-run={status}
+      role={running ? "status" : "alert"}
+      className="nodrag nopan absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs shadow-sm backdrop-blur"
+    >
+      {running ? <Loader2 size={11} className="shrink-0 animate-spin text-primary" /> : <AlertTriangle size={11} className="shrink-0 text-destructive" />}
+      <span className={cn("min-w-0 flex-1 truncate", running ? "text-primary" : "text-destructive")}>
+        {[said, abilityLabel, progress > 0 ? `${Math.round(progress * 100)}%` : "", !running ? itemError(item) : ""]
+          .filter(Boolean)
+          .join(" · ")}
+      </span>
+      {stop && <StopButton item={item} onStop={stop} />}
+      {running && progress > 0 && (
+        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-primary/15">
+          <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
         </div>
       )}
     </div>
@@ -501,12 +529,12 @@ function Cancelled() {
 
 /**
  * 一格**还没有产出**时画什么:排队、在跑、跑挂了、取消了、空着。**运行态的外壳只此一处** ——
- * 图片、视频、音频格和工具格都走它,所以停止、进度、失败的说法在每一种格子上都一样。
+ * 图片、视频、音频格和 3D 场景格都走它,所以停止、进度、失败的说法在每一种格子上都一样。
  *
  * 此前三个媒体节点各写一份 `job_id ? 转圈 : 空槽`,工具格又自己写了一套在跑 / 跑挂了 ——
  * 状态从三种变成四种时,得记得每处都改;漏掉一处不会报错,只会是那一类节点永远转圈。
  */
-function PendingSlot({ item, icon, hint, onStop }: { item: BoardItem; icon: React.ReactNode; hint?: string; onStop?: (id: string) => void }) {
+function PendingSlot({ item, icon, onStop }: { item: BoardItem; icon: React.ReactNode; onStop?: (id: string) => void }) {
   const status = itemRunStatus(item);
   const text = item.form?.prompt ?? item.text;
   const stop = onStop && itemIsRunning(item) ? onStop : undefined;
@@ -515,28 +543,20 @@ function PendingSlot({ item, icon, hint, onStop }: { item: BoardItem; icon: Reac
   const error = itemError(item);
   if (status === "failed") return <Failed item={item} reason={error || "—"} />;
   if (status === "cancelled") return <Cancelled />;
-  return <EmptySlot icon={icon} hint={hint} />;
+  return <EmptySlot icon={icon} />;
 }
 
 /**
- * 空槽:还没写提示词、也没有任务。一块安静的占位,正中一枚淡淡的图标;缺东西时图标下面**至多一句**
- * (工具格的「接视频」)—— 别的都交给接点和连线去说。
+ * 空槽:还没写提示词、也没有任务。一块安静的占位,正中一枚淡淡的图标 —— 别的都交给接点和连线去说。
  *
  * **不能画成转圈** —— 转圈的意思是"正在跑,等着就行",而这里等不来任何东西:它在等用户。
  * 两种状态长一样的话,用户会盯着一个永远不动的圈。也**不另套一圈虚线**:格子自己的实线边就是它的边,
  * 空和满是同一个框,空的只是里面安静。
  */
-function EmptySlot({ icon, hint }: { icon: React.ReactNode; hint?: string }) {
+function EmptySlot({ icon }: { icon: React.ReactNode }) {
   return (
     <div data-board-empty-slot="" className="grid h-full w-full place-items-center overflow-hidden text-muted-foreground/70">
-      <div className="grid min-w-0 max-w-full justify-items-center gap-1 px-3 text-center">
-        {icon}
-        {hint ? (
-          <span data-board-empty-hint="" className="line-clamp-1 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs">
-            {hint}
-          </span>
-        ) : null}
-      </div>
+      <div className="grid min-w-0 max-w-full justify-items-center gap-1 px-3 text-center">{icon}</div>
     </div>
   );
 }
@@ -583,6 +603,7 @@ export function ImageNode({ data, selected }: NodeProps) {
           onNaturalSize={(width, height) => onAspect(item.id, width / height)}
         />
       )}
+      {item.asset_id && <AbilityRun data={nodeData} selected={selected} />}
     </div>
   );
 }
@@ -652,6 +673,7 @@ export function VideoNode({ data, selected }: NodeProps) {
           onNaturalSize={(width, height) => onAspect(item.id, width / height)}
         />
       )}
+      {item.asset_id && <AbilityRun data={nodeData} selected={selected} />}
     </div>
   );
 }
@@ -677,6 +699,7 @@ function AudioNode({ data, selected }: NodeProps) {
           <BoardAudio assetId={item.asset_id} />
         )}
       </div>
+      {item.asset_id && <AbilityRun data={nodeData} selected={selected} />}
     </div>
   );
 }
@@ -799,6 +822,7 @@ function DocumentNode({ data, selected }: NodeProps) {
           </a>
         </footer>
       )}
+      <AbilityRun data={nodeData} selected={selected} />
     </div>
   );
 }
@@ -806,6 +830,7 @@ function DocumentNode({ data, selected }: NodeProps) {
 /**
  * 3D 场景格:引用一个场景,**自己会渲白模参考**(后端内置产出者 `scene_render`)—— 选中它,面板上挑镜头、
  * 挑渲什么,首尾帧 / 运镜视频新建在右边(SceneComposer)。此前旁边还要另放一格「渲染白模参考」工具格。
+ * 吃 3D 场景的插件工具也是这一格的能力,跑的时候和渲白模同一个运行态外壳。
  *
  * 格子里是场景的缩略图;还没导出过缩略图时说这一格能做什么。在跑、跑挂了和别的格子同一个外壳
  * (PendingSlot:扫光 + 进度 + 停止、失败写原因);跑完回到缩略图,产出在右边。「编辑场景」在面板上。
@@ -832,85 +857,6 @@ export function SceneNode({ data, selected }: NodeProps) {
     </footer>
   </div>;
 }
-/**
- * 工具格:跑一个插件工具或工作流节点。**它自己不放产出** —— 每跑一次,产出都新建成右边的几格、
- * 连上线(后端 canvas._derive),上一轮的留着。
- *
- * **它长得像它要产出的那种内容的空格子**(`tool.kind`,后端 `output_kinds` 的第一个):出图的工具是一块
- * 空的图片格,分离人声是一条空的音频格,翻译是一张空便签 —— 和旁边的内容格同一个外壳、同一个圆角、
- * 同一个正中淡淡的图标,只是那枚图标是这个工具自己的。名字在格子上方(插件工具在名字后面淡淡地写出处)。
- * 此前它是一张深色小卡:图标 + 两行说明 + 一张「吃什么 / 设置 / 产出」的小字表,看着像缩小的工作流节点,
- * 和画板上别的格子是两种语言。
- *
- * 格子里至多一句话:缺一样必填的输入时说「接视频」;输入的其余一切交给接点和连线。在跑、跑挂了、
- * 取消了和生成格同一个外壳(PendingSlot:扫光 + 进度 + 停止、失败写原因);跑完回到安静的空格子,
- * 产出在右边。表单挂在选中时的面板里(ActionComposer)。
- */
-function ActionNode({ data, selected }: NodeProps) {
-  const nodeData = data as unknown as BoardNodeData;
-  const { item, commentMode, tool, onStop } = nodeData;
-  const t = useI18n();
-  const state = useRunState(item);
-  const Icon = tool?.icon ?? kindIcon("action");
-  const kind: ToolCellKind = tool?.kind ?? "image";
-  //: 名字已经挂在框外正上方(没起名就是工具名);起了名之后,名字后面淡淡地写这是哪个工具。
-  //: 插件工具点名出处 —— 它告诉你会用谁的服务;内置的不标。
-  const renamed = Boolean(item.title?.trim());
-  const secondary = [renamed ? tool?.label : "", tool?.plugin].filter(Boolean).join(" · ");
-  const hint =
-    tool === null
-      ? t("boardToolUnavailableShort")
-      : tool?.missing
-        ? t("boardToolConnect").replace("{kinds}", eitherOf(t, tool.missing.map((one) => kindText(t, one).label)))
-        : undefined;
-  const slot = (
-    <PendingSlot
-      item={item}
-      icon={tool === null ? <AlertTriangle size={20} /> : <Icon size={20} data-board-tool-icon="" />}
-      hint={hint}
-      onStop={commentMode ? undefined : onStop}
-    />
-  );
-  return (
-    <div
-      data-board-run-status={state["data-board-run-status"]}
-      data-board-action=""
-      data-board-tool-kind={kind}
-      //: 那一句说明悬停看 —— 格子上不再写字,它是一块内容的占位。
-      title={tool?.description ? toPlainText(tool.description) : tool === null ? t("boardToolUnavailable") : undefined}
-      className={cn(
-        "group relative h-full w-full shadow-sm",
-        //: **一律是空内容格那块中性的面板底**(见 ImageNode 的空槽),哪怕它产出的是一段字。便签的颜色只属于
-        //: 真正的便签 —— 此前产出文字的工具格(翻译、转写)也涂成便签黄,放在画布上和一张真便签分不出来。
-        //: 它会产出什么由正中的工具图标说,格子的形状(音频是一条)跟着产出的种类。
-        "rounded-lg border border-border bg-panel",
-        state.className,
-      )}
-    >
-      <NodeResizer
-        minWidth={kind === "audio" ? 200 : 120}
-        minHeight={kind === "audio" ? 64 : 80}
-        isVisible={selected}
-        lineClassName="!border-transparent"
-        handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel"
-      />
-      <NodeLabel data={nodeData} icon={Icon} fallback={tool?.label} secondary={secondary || undefined} />
-      <Ports visible={selected} disabled={commentMode} />
-      {kind === "audio" ? (
-        <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">{slot}</div>
-      ) : (
-        slot
-      )}
-    </div>
-  );
-}
-
-/** 「A、B 或 C」。 */
-function eitherOf(t: (key: MessageKey) => string, words: string[]): string {
-  if (words.length < 2) return words[0] ?? "";
-  return `${words.slice(0, -1).join(t("listSeparator"))}${t("boardToolKindsOr")}${words[words.length - 1]}`;
-}
-
 //: **写成 Record<kind, …> 而不是随手一个对象** —— 后端加一种 item kind 时,这里漏登记
 //: 不会报错,只会让那种节点在画布上凭空消失。标上类型,漏一种就编译不过。
 export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<NodeProps>> = {
@@ -921,7 +867,6 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
   frame: FrameNode,
   scene: SceneNode,
   document: DocumentNode,
-  action: ActionNode,
 };
 
 /** 指向素材库一份的那几种。**只此一处** —— 操作条给不给「换一份」、选择器能选什么,
@@ -942,5 +887,4 @@ export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: nu
   frame: { width: 420, height: 300 },
   scene: { width: 320, height: 220 },
   document: { width: 320, height: 300 },
-  action: { width: 260, height: 180 },
 };

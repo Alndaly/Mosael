@@ -1,11 +1,15 @@
 import { api } from "@/api/transport";
 import type { components } from "@/api/generated/schema";
 
+/** 一格上一项**能力**上次用的设置(和后端 producers.NodeForm 同形):节点配置 + 哪些字段接连进这一格的上游。
+ *  就是一次运行发的那一份(`BoardRunForms["node"]`),两样都可以还没有。 */
+export type BoardAbilitySetting = Partial<BoardRunForms["node"]>;
+
 /** 创意画板上的一项；表单与运行态归节点自己所有。 */
 export interface BoardItem {
   id: string;
-  /** `action` 工具格:跑一个工作流节点(插件工具、挑过的内置节点),产出新建成右边的几格。 */
-  kind: "note" | "image" | "video" | "audio" | "frame" | "scene" | "document" | "action";
+  /** 画板上没有单独的工具格:把内容变成新内容的工具是内容格自己的能力(`form.abilities`,ADR 0025 修订)。 */
+  kind: "note" | "image" | "video" | "audio" | "frame" | "scene" | "document";
   /** 用户给这一格起的名字。**每种都有、只此一处**(分组框的名字也在这,不在 text)。
    *  没有 = 没起名,显示种类名(见 boardNodes.itemName)。和后端 canvas._normalize_title 同形。 */
   title?: string;
@@ -14,7 +18,7 @@ export interface BoardItem {
   width?: number;
   height?: number;
   text?: string;
-  /** 正文格式。只有便签有;`json` 是工具格交回的结构化数据(按代码排版)。和后端 canvas.TEXT_FORMATS 同形。 */
+  /** 正文格式。只有便签有;`json` 是能力交回的结构化数据(按代码排版)。和后端 canvas.TEXT_FORMATS 同形。 */
   text_format?: "json";
   color?: string;
   asset_id?: string;
@@ -39,11 +43,14 @@ export interface BoardItem {
     /** 这一格是**从哪份素材截的哪一段**(剪一段的产出)。和后端 canvas._normalize_trim 同形。 */
     trim?: { asset_id: string; start: number; end: number; mute: boolean };
     prompt_document?: { type?: string; content?: unknown[]; [key: string]: unknown };
-    /** 工具格的节点配置(键就是节点声明的字段)。 */
+    /** 这一格自己的节点产出者(空格子上的生成器、3D 场景格渲白模)的配置(键就是节点声明的字段)。 */
     config?: Record<string, unknown>;
-    /** 工具格上哪些字段接上游、接哪几格。值由服务端运行时从画布上取;线断了服务端就摘掉
+    /** 这一格自己的节点产出者上哪些字段接上游、接哪几格。值由服务端运行时从画布上取;线断了服务端就摘掉
      *  (后端 canvas._drop_detached_bindings)。 */
     bindings?: Record<string, { from: string }[]>;
+    /** 这一格的**能力**上次用的设置,按产出者分开放(音频格上的转写、便签上的翻译……)。和它自己的草稿不混:
+     *  再打开那一项还是上次的样子。见后端 canvas._normalize_abilities。 */
+    abilities?: Record<string, BoardAbilitySetting>;
     /** 这一格的产出者。排在表单最后(和后端摆占位时写的位置一致)。 */
     producer?: BoardProducer;
   };
@@ -51,6 +58,8 @@ export interface BoardItem {
     status: "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
     job_id?: string;
     error?: string;
+    /** 这一轮跑的是这一格的哪一项能力(没有就是它自己的产出者)。产出新建在右边,这一格自己的内容不动。 */
+    ability?: NodeProducer;
   };
   move_children?: boolean;
 }
@@ -118,10 +127,11 @@ export function deleteBoard(boardId: string, workspaceId: string): Promise<void>
 
 /**
  * 画板上的产出者 —— 一格里「能产出东西」的那件事由谁来做(后端 boards/producers.py,ADR 0021)。
- * 写在那一格的 `form.producer` 上,面板照它挂(见 boardItemState.producerOf),不按种类猜。
+ * 一格**自己的**产出者写在 `form.producer` 上,面板照它挂(见 boardItemState.producerOf),不按种类猜;
+ * 它的**能力**(`role: "ability"`)从操作条上点开,设置存在 `form.abilities` 上。
  *
- * 内置的各有专门的面板;`node:<节点类型>` 是工具格跑的一个节点,表单由节点声明生成。`scene_render` 挂在
- * 3D 场景格上:从场景的一个镜头渲白模参考(跑的是工作流那个节点,产出新建在场景格右边)。
+ * 内置的各有专门的面板;`node:<节点类型>` 跑一个节点(内容格的能力、空格子上的生成器),表单由节点声明生成。
+ * `scene_render` 挂在 3D 场景格上:从场景的一个镜头渲白模参考(跑的是工作流那个节点,产出新建在场景格右边)。
  */
 export type BuiltinProducer = "generate" | "scene_render" | "speak" | "trim" | "write";
 export type NodeProducer = `node:${string}`;
@@ -139,9 +149,9 @@ export function isNodeProducer(producer: string | undefined | null): producer is
  */
 const DERIVED_BUILTINS: ReadonlySet<BoardProducer> = new Set<BoardProducer>(["scene_render"]);
 
-/** 这个产出者的产出新建在宿主右边(工具格、场景格渲白模),而不是填进宿主。 */
+/** 这一格**自己的**产出者把产出新建在它右边(场景格渲白模),而不是填进它。能力一律新建在右边,不看这个。 */
 export function derivesOutputs(producer: BoardProducer | undefined | null): boolean {
-  return Boolean(producer && (isNodeProducer(producer) || DERIVED_BUILTINS.has(producer)));
+  return Boolean(producer && DERIVED_BUILTINS.has(producer));
 }
 
 /**
@@ -173,7 +183,8 @@ export function withSlotProducer<T extends Pick<BoardItem, "kind" | "asset_id" |
 /** 这个人在画板上能用的一个产出者(后端 producers.describe):节点描述 + 挂在哪、能不能填空槽。 */
 export type BoardProducerInfo = components["schemas"]["BoardProducerOut"];
 
-/** 这个人在画板上能用的产出者:四个内置的,加上工具格能跑的节点(插件工具只列他自己接的)。 */
+/** 这个人在画板上能用的产出者:内置的,加上画板上能跑的节点 —— 内容格的能力、空格子上的生成器
+ *  (插件工具只列他自己接的)。 */
 export function listBoardProducers(workspaceId: string): Promise<BoardProducerInfo[]> {
   return api<BoardProducerInfo[]>(`/api/boards/producers?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
@@ -212,7 +223,8 @@ export interface BoardRunForms {
   /** 3D 场景格渲白模:场景由那一格给;镜头留空 = 场景只有一个镜头时用它。和后端 producers.SceneRenderForm 同形 ——
    *  存在那一格上的表单就是这一份。 */
   scene_render: { config: { shot_id?: string; render?: "stills" | "video" | "both"; project_id?: string } };
-  /** 工具格:节点配置 + 哪些字段接上游(值由服务端运行时从画布上取)。和后端 producers.NodeForm 同形。 */
+  /** 节点产出者(一项能力、空格子上的生成器):节点配置 + 哪些字段接上游(值由服务端运行时从画布上取;
+   *  能力吃的那一格的内容由服务端从宿主取,不在这里)。和后端 producers.NodeForm 同形。 */
   node: { config: Record<string, unknown>; bindings: Record<string, { from: string }[]> };
 }
 
@@ -224,7 +236,7 @@ type RunTarget = {
   y: number;
 };
 
-/** 在画板上跑一次产出者:产出落在哪一格(`item_id`,新的一格就是新 id)、谁来做、表单是什么。 */
+/** 在画板上跑一次产出者:落在哪一格(`item_id`,新的一格就是新 id;一项能力就是它挂着的那一格)、谁来做、表单是什么。 */
 export type BoardRunRequest =
   | { [P in BuiltinProducer]: RunTarget & { producer: P; form: BoardRunForms[P] } }[BuiltinProducer]
   | (RunTarget & { producer: NodeProducer; form: BoardRunForms["node"] });

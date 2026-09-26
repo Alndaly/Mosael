@@ -231,14 +231,27 @@ def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]
     # 和落库过同一道(形状 + 引用),见 boards.check_canvas;这次写下的表单再过一遍注册表
     # (工具在不在、绑定接不接得上),和界面、运行是同一张表,见 boards.producers.check_forms。
     before = board.canvas or {}
+    _mark_abilities(db, operations, actor)
     try:
         after = apply_board_ops(before, operations)
         check_canvas(db, workspace_id, after, board.canvas)
-        was = {str(one.get("id")): one.get("form") for one in before.get("items") or []}
-        written = [str(one.get("id")) for one in after.get("items") or [] if one.get("form") != was.get(str(one.get("id")))]
-        producers.check_forms(db, after, written, actor)
+        producers.check_forms(db, after, producers.written_forms(before, after), actor)
     except BoardDomainError as exc:
         raise ConfirmationError(str(exc)) from exc
+
+
+def _mark_abilities(db: Session, operations: list[Any], actor: str | None) -> None:
+    """`set_form` 写的是一格的**一项能力**的设置,还是那一格自己的表单:按注册表判(这个产出者是不是一项能力,
+    boards.transforms.board_role),写回算子上的 `ability` —— **覆盖**,不由调用方自己说。执行时落到批准那一刻的
+    画布上,读的就是这一份判定(批准的人未必接着同一个插件,判法不能跟着人变)。"""
+    from app.domain.boards import producers
+    from app.domain.boards.transforms import ABILITY
+
+    registry = {one.id: one for one in producers.list_producers(db, actor)}
+    for operation in operations:
+        if isinstance(operation, dict) and operation.get("kind") == "set_form":
+            found = registry.get(str(operation.get("producer") or ""))
+            operation["ability"] = found is not None and found.role == ABILITY
 
 
 def _summarize_edit_board(db: Session, payload: dict[str, Any]) -> Summary:
@@ -263,7 +276,12 @@ def _execute_edit_board(db: Session, confirmation: Any, actor: str | None) -> di
     return {"board_id": board.id, "items": len(canvas.get("items", []))}
 
 def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None):
-    """照画布上**现在**那一格拼一次运行:它存着的工具和表单,它自己的位置,这张板当前的版本。
+    """照画布上**现在**那一格拼一次运行:它存着的表单(或它的那一项能力的设置),它自己的位置,这张板当前的版本。
+
+    `payload["producer"]` 点名这一格的一项**能力**(音频格上的转写、便签上的翻译)时,跑的是那一项,设置读
+    `form.abilities[producer]`(没存过就是空的 —— 必填的在干跑时说出来);没点名(或点的就是它自己的产出者)
+    跑的是这一格自己的产出者。`payload["ability"]` 由开卡时的干跑写回(见 _validate_run_board_item),
+    执行时照它认 —— 开卡之后那一格换了自己的产出者,就不是批准的那一件。
 
     版本取当前的,因为智能体不是拿着一份旧快照在改画布 —— 它要跑的就是此刻画布上的那一格;
     「这一格正在跑」照样由 run 那一侧挡(见 actions._ensure_slot_ready)。
@@ -278,12 +296,24 @@ def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor:
     if item is None:
         raise ConfirmationError.relay(item_not_found(item_id))
     form = dict(item.get("form") or {})
-    producer = str(form.pop("producer", "") or "")
-    # 只跑存着的表单就是运行那一份的格子:工具格、3D 场景格(渲白模)。图片/视频/音频槽和便签的表单是
-    # 各自面板的形状(提示词、模型、图例……),拼成一次运行是面板的事;替人拼一份面板没见过的请求,
-    # 跑出来的不是他在面板上看到的那一件。挂不挂得上这种格子由 producers 那一侧问(boardErr_producerCannotHost)。
-    if not runs_from_draft(producer):
-        raise ConfirmationError("confirmErr_runBoardItemNotTool", item_id=item_id)
+    own = str(form.pop("producer", "") or "")
+    abilities = form.pop("abilities", None) or {}
+    wanted = str(payload.get("producer") or "") or own
+    #: 开卡之后照卡上写回的判定;开卡时(还没有这一样)照点名的是不是它自己的产出者。
+    ability = bool(payload["ability"]) if "ability" in payload else wanted != own
+    if ability:
+        # 这一格的一项能力:设置存在宿主上;跑的是节点(能不能挂在这种格子上、是不是能力由 producers 那一侧问)。
+        producer = wanted
+        form = dict(abilities.get(producer) or {})
+        if not runs_from_draft(producer):
+            raise ConfirmationError("confirmErr_runBoardItemNotTool", item_id=item_id)
+    else:
+        producer = own
+        # 只跑存着的表单就是运行那一份的格子:空格子上的生成器、3D 场景格(渲白模)。图片/视频/音频槽和便签上
+        # 内置产出者的表单是各自面板的形状(提示词、模型、图例……),拼成一次运行是面板的事;替人拼一份面板
+        # 没见过的请求,跑出来的不是他在面板上看到的那一件。
+        if not runs_from_draft(producer):
+            raise ConfirmationError("confirmErr_runBoardItemNotTool", item_id=item_id)
     return board, item, producers.RunRequest(
         workspace_id=workspace_id,
         board_id=board.id,
@@ -307,14 +337,23 @@ def _validate_run_board_item(db: Session, workspace_id: str, payload: dict[str, 
     from app.core.i18n import is_message_key
     from app.domain.boards import BoardDomainError, producers
 
+    payload.pop("ability", None)
     board, item, request = _run_request(db, workspace_id, payload, actor)
     try:
         producer, facts = producers.dry_run(db, request)
     except BoardDomainError as exc:
         raise ConfirmationError(str(exc)) from exc
+    from app.domain.boards.transforms import ABILITY
+
+    #: 跑的是这一格的一项能力(不是它自己的产出者):执行时照它读设置(见 _run_request)。点名的得真是一项能力 ——
+    #: 空格子的填法(生成器)当成能力跑,就会把产出填进一格已经有内容的格子里。
+    ability = request.producer != str((item.get("form") or {}).get("producer") or "")
+    if ability and producer.role != ABILITY:
+        raise ConfirmationError("confirmErr_runBoardItemNotTool", item_id=request.item_id)
     label = str((producer.meta or {}).get("label") or producer.id)
     payload.update({
         "producer": producer.id,
+        "ability": ability,
         "effects": producer.effects,
         "tool": {"key": label} if is_message_key(label) else {"text": label},
         "board_name": board.name,

@@ -105,7 +105,7 @@
 | `edit_workflow` | `edit` | 扫 **ops 应用后**的图(复用已有的 `_graph_to_persist`) |
 | `create/update_workflow` | `edit` | 扫 `payload["graph"]` |
 | `delete_assets` / `delete_projects` | `destroy` | 不必派生;这一档没有"某些参数更安全"的说法 |
-| `run_board_item` | `edit` | 按工具格那个工具的 `effects`:`paid` → `ai-cost`,`external` / `local-code` → `external`,`none` 不问人(§4.11) |
+| `run_board_item` | `edit` | 按那一项能力(或生成器)的 `effects`:`paid` → `ai-cost`,`external` / `local-code` → `external`,`none` 不问人(§4.11) |
 | 插件工具 `plugin__<连接>__<工具>` | `edit` | 同上,按插件清单里这个工具的 `effects`(§4.12) |
 | 其余 | —— | 不变 |
 
@@ -283,7 +283,7 @@ JSON 列 `auto_allow_tools`,和模式在**同一个判定函数**里求值:先�
 
 ### 4.11 这一次本就不用问人(`no-card`)
 
-有的工具**同一个名字、后果因参数而异**,其中一部分根本不该问人:智能体替人跑画板工具格
+有的工具**同一个名字、后果因参数而异**,其中一部分根本不该问人:智能体替人跑画板上一格的能力
 (`run_board_item`)时,只读的工具(文字处理、笔记搜索、插件自报只读的)和它读一份素材没有区别,
 花钱或对外的才要人看一眼(ADR 0021 决定 2)。工具在登记时声明 `needs_card(db, payload)`,判据落在
 开卡时 validate 写回 payload 的事实上(调用方自带的同名字段被覆盖)。判定函数的**第一条**就问它,
@@ -295,7 +295,7 @@ JSON 列 `auto_allow_tools`,和模式在**同一个判定函数**里求值:先�
 ### 4.12 插件工具(`effects`,ADR 0023)
 
 智能体直接调的插件工具(`plugin__<连接>__<工具>`,MCP 的 `invoke_plugin_tool` 走同一条路)按清单里声明的
-`effects` 定要不要问人 —— 和画板工具格**同一份词表、同一个判据**(`backend/app/domain/effects.py`):
+`effects` 定要不要问人 —— 和画板上的能力**同一份词表、同一个判据**(`backend/app/domain/effects.py`):
 
 - `none`(只读的一定是它):不开卡,直接跑。
 - `paid` → `ai-cost`;`external`、`local-code` → `external`。**没声明的按 `external`**。

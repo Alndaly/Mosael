@@ -202,7 +202,7 @@ class ToolConfirmation(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     requested_by: Mapped[str] = mapped_column(String(120), nullable=False, default="external-agent")
     #: 这张卡是**怎么**过的:manual(人点的)/ session-allow(工具白名单)/ auto / bypass /
-    #: no-card(这一次本就不用问人,如智能体跑一个只读的画板工具格,见 ConfirmableTool.needs_card)。
+    #: no-card(这一次本就不用问人,如智能体跑画板上一格的一项只读能力,见 ConfirmableTool.needs_card)。
     #: 自动放行必须留痕,而且要能一眼看出是哪一档放的 —— 事后能查是 bypass 唯一可接受的前提。
     decision_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual", server_default="manual")
     #: 记在谁头上。自动放行也有人 —— 那次 turn 是以他的身份跑的,授权闸也是按他校验的。

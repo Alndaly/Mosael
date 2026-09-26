@@ -120,7 +120,7 @@ TaskEvent 行只在总线创建。
 声明能挂在哪种格子上、要什么权限、有没有花钱或对外的副作用、收什么表单(在领域里用 pydantic 校验),
 入口只有 `producers.run`(路由 `POST /api/boards/{id}/run`)。一格的产出者写在它的 `form.producer`
 上,前端照它挂面板(`boardItemState.producerOf` → `boardComposers.BUILTIN_COMPOSERS`),不按种类猜。
-四个内置产出者背后是三条路,因为它们本来就不是一回事:
+内置产出者背后是几条路,因为它们本来就不是一回事:
 
 | 动作 | 走哪条 | 同步还是任务 |
 | --- | --- | --- |
@@ -128,18 +128,33 @@ TaskEvent 行只在总线创建。
 | 写 / 改文案 | `ai_chat.chat`(与工作流 LLM 共用单次补全 Interface;智能体走 pi Agent Adapter) | 同步,几秒就回 |
 | 文案转音频 | `start_synthesis`(TTS 不是「生成」能力,选的是音色) | 任务 + 回执 |
 | 剪一段 | 一次 ffmpeg,`register_file_asset` 登记成新素材 | 任务 + 回执 |
-| 工具格跑一个节点(`node:*`) | `workflows.executors.get_executor`,作用域是 `BoardScope`(`boards/tools`) | `board_run` 任务 + 回执,产出新建成右边的几格 |
+| 跑一个节点(`node:*`:一格的能力、空格子上的生成器;3D 场景格渲白模同路) | `workflows.executors.get_executor`,作用域是 `BoardScope`(`boards/tools`) | `board_run` 任务 + 回执 |
 
-工具格(`action`)的产出者不逐个登记:内置节点在 `NODE_TYPES` 上声明 `"surfaces": ["workflow", "board"]`
+**画板上没有单独的工具格**(ADR 0025 修订「能力住在内容格上」)。把内容变成新内容的节点是**内容格自己的能力**:
+音频 / 视频格会转写、分离人声、降噪,视频格会转 GIF,便签 / 文档会翻译,插件工具按它吃什么内容挂在那几种格子上。
+凭空按参数出素材的节点(ComfyUI 的文生图工作流、Manim / Remotion 动画)是**空格子的一种填法**,和配音 / 生成一起
+出现在空槽的切换里。节点产出者不逐个登记:内置节点在 `NODE_TYPES` 上声明 `"surfaces": ["workflow", "board"]`
 (和哪几个输出落到画板上的 `board_outputs`),插件工具是**运行的这个人**自己接的那些(`plugins.tools.exposed`)。
 两个来源过同一道门:**画板上只放内容变换**(`boards/transforms.content_transform_gap`,ADR 0021 修订)——
 分组不是流程 / 数据 / 知识库(`workflows.WIRING_CATEGORIES`),交出素材或点名落板的文字,吃画板上的内容或
-凭空产出素材,必填字段里没有映射 / 原始 JSON / 代码。`GET /api/boards/producers` 发的是画板那一份描述:
-字段去掉工程字段、模板字段成 `type: "text"`,带 `board_group`(按吃什么内容分组)、`board_description`,
-和 `output_kinds`(跑一次落成哪几种格子,`boards/transforms.output_kinds`:文字是便签,素材读节点的 `output_media`,
-没声明按它吃的那种素材)—— 界面据此把工具格画成它要产出的那种内容的空格子,放下时也是那种格子的大小。
-字段绑定上游格子(`form.bindings`),值由服务端在运行那一刻按连线顺序从画布上取;能接哪几种格子由
-`boards.tools.bindable_kinds` 一处决定,随 `GET /api/boards/producers` 发给界面(`board_sources`)。
+凭空产出素材,必填字段里没有映射 / 原始 JSON / 代码。挂在哪也从声明推(`boards/transforms.board_role` /
+`board_hosts` / `host_field`):画板上露出来、能接上游的字段里有素材 / 3D 场景字段的,是那几种格子的能力
+(`role: "ability"`,字段的 `media` 说了只收哪几种就只挂那几种);只有文字字段、又只交出文字的(翻译)是便签 / 文档的
+能力;只有文字字段却交出素材的(提示词出图)是那种素材空格子的填法(`role: "slot"`,`fills_empty_slot`)。
+
+一项能力跑的时候,**宿主那一格的内容就是它的那个输入**(`host_fields`:便签给字、文档给钉住那一版的正文、媒体给素材、
+3D 场景给场景 —— `tools.prepare_node_run` 的 `host_input`,宿主还没有内容就起不了任务);设置存在宿主的
+`form.abilities[产出者] = {config, bindings}`(每一项分开放,宿主自己的草稿和产出者不动),这一轮是哪一项记在
+`run.ability` 上;产出新建成宿主右边的一列、连一根线(`canvas._derive`),宿主自己的内容一个字段不动
+(`producer_ids.derives_outputs`)。空格子上的生成器跑完,对得上这种格子的那一份填进它,别的新建在右边。
+`GET /api/boards/producers` 发的是画板那一份描述:字段去掉工程字段、模板字段成 `type: "text"`,带 `role`、`hosts`、
+`host_fields`、`board_description`、`board_group`(按吃什么内容归组,能力图标的兜底)和 `output_kinds`。
+能力别的输入绑定连进宿主的上游格子(`form.abilities[…].bindings`),值由服务端在运行那一刻按连线顺序从画布上取;
+能接哪几种格子由 `boards.tools.bindable_kinds` 一处决定,随接口发给界面(`board_sources`)。
+
+前端:选中一格,操作条(`BoardCanvas` 的 `ItemToolbar`)上一排图标是它的能力(`boardTools.boardAbilities`,读
+`role` + `hosts`,内置的在前、多的收进「⋯」);点一项,它的面板(`AbilityComposer`,字段按 `composerFields` 分块,
+宿主字段不出现)挂在格子下面,一次只挂一块 —— 点开哪一块是一时的界面状态,不进画布。
 
 **产出落回画布靠回执**:建任务前用 `set_receipt()` 或 `job.payload["receipt"]` 标记「这次的
 产出属于哪张板的哪一项」,任务落终态时由 `domain/boards.deliver_generated` 填回去。回执的登记
@@ -148,7 +163,7 @@ TaskEvent 行只在总线创建。
 
 `deliver_generated` 读任务结果**只经过 `outputs_of(job)`**,归一成
 `[{"type": "asset", "asset_id"}, {"type": "text", "text"}, {"type": "json", "value"}]`:生成任务一次可能出多张(`asset_ids`),
-语音合成和剪辑一次出一段(`asset_id`),便签写字交回正文(`text`),工具格交回的已经是这个形状(`outputs`)。这不是新旧兼容,是几种任务
+语音合成和剪辑一次出一段(`asset_id`),便签写字交回正文(`text`),跑一个节点交回的已经是这个形状(`outputs`)。这不是新旧兼容,是几种任务
 本来就不同;只认一种的话,另一种落终态时占位会被当成失败摘掉 —— 用户看到的是「生成完就没了」。
 
 节点的 `form` 与 `run` 是画布 JSON 的一部分,不是 React 选中态的副产品。`form` 保存提示词、模型、
@@ -165,12 +180,13 @@ TaskEvent 行只在总线创建。
 
 智能体改画板走 `edit_board`(细粒度算子 + 确认卡),和 `edit_workflow` 同一套:它表达意图,
 服务端落到当前画布 —— 让模型吐回整份 canvas 的话,稍复杂一点的板必然出错(漏项,或把用户
-一手拖好的位置推平),而这两种错都不报错。工具格的表单也由算子写(`add_item` 带
-producer/config/bindings、`set_form`);开卡时的干跑除了 `check_canvas`,还让这次写下的表单过一遍
+一手拖好的位置推平),而这两种错都不报错。一格的能力的设置也由算子写(`set_form` 带上那一项的 producer,
+开卡时按注册表判它是一项能力、写回算子的 `ability`;空格子上的生成器、3D 场景格渲白模写的是那一格自己的表单);
+开卡时的干跑除了 `check_canvas`,还让这次写了的那几份表单(`producers.written_forms`)过一遍
 `boards.producers.check_forms` —— 和界面、运行同一张注册表、同一张「什么能接什么」。
-替人点运行是 `run_board_item`:开卡前 `producers.dry_run`(起任务之前会问的全问一遍,不写东西),
-批准后 `producers.run`,执行者是批准的人;只读的工具(effects 为 none)由 `ConfirmableTool.needs_card`
-判成不用问人,卡照开(留痕、同一条等待协议)但立即执行。
+替人点运行是 `run_board_item`(带上 producer 就是宿主的那一项能力):开卡前 `producers.dry_run`(起任务之前会问的
+全问一遍,不写东西),批准后 `producers.run`,执行者是批准的人;只读的工具(effects 为 none)由
+`ConfirmableTool.needs_card` 判成不用问人,卡照开(留痕、同一条等待协议)但立即执行。
 
 一格的做法与版本、内置产出者的端口和服务端取值、落点与来历线、每种格子的字段表,按
 [ADR-0025](adr/0025-board-recipes-versions-and-ports.md) 分阶段收进产出者声明(设计已定,尚未落地)。

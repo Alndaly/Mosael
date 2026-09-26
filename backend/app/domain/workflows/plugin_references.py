@@ -28,8 +28,9 @@ ComfyUI 插件就是这样:以前一个 `run_workflow` + `workflow: "portrait.js
 `rewrite-replaced-plugin-tools`,用上次缓存的清单 —— ComfyUI 没开也迁得动)。清单里不再有 `replaces`、
 或者库里已经没有老节点时什么都不做,所以重复跑是安全的。
 
-画板上的工具格(ADR 0021 P2)存的是同一种 `node:plugin.<包>.<工具>` + 配置,由画板域用同一个 `rewrite_node`
-改(domain/boards/plugin_references —— 画板的数据归画板域写)。
+画板上存着的节点产出者(内容格的能力 `form.abilities`、空格子上的生成器 `form.producer`)是同一种
+`node:plugin.<包>.<工具>` + 配置,由画板域用同一个 `rewrite_node` 改(domain/boards/plugin_references ——
+画板的数据归画板域写)。
 """
 
 from __future__ import annotations

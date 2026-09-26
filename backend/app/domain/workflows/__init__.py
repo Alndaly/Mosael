@@ -498,8 +498,9 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
     return _OUTPUT_DATA_TYPES.get(key, "any")
 
 
-#: 节点能在哪些地方用:`"surfaces": ["workflow", "board"]` 的节点同时是创意画板上的一种工具格
-#: (见 boards.producers —— 注册表**从这份声明里读**,不在画板那边另列一张表)。没写就只在工作流里。
+#: 节点能在哪些地方用:`"surfaces": ["workflow", "board"]` 的节点同时是创意画板上内容格的一项能力(吃素材 / 文字 /
+#: 3D 场景的,挂在那几种格子上)或空格子的一种填法(凭空产出素材的)—— 见 boards.producers 和 boards.transforms,
+#: 注册表**从这份声明里读**,挂在哪也按字段声明推,不在画板那边另列一张表。没写就只在工作流里。
 #:
 #: **声明了也要过一道规矩:画板上只有内容变换**(boards.transforms.content_transform_gap,ADR 0021 修订)——
 #: 吃画板上的内容(素材 / 文字 / 3D 场景)或凭空产出素材,交出画板摆得下的内容(素材,或点名落板的文字),
@@ -512,8 +513,8 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 #: 视频转 GIF 还会把**输入**那段视频原样再摆一格出来。文字输出只有在这里**点了名**才算这个节点的产出
 #: (一段转写 vs 一行状态摘要,光看类型分不开)。
 #:
-#: `"board_group"` / `"board_description"`:画板「添加」菜单里它归哪一组(按它吃的是什么内容分,
-#: 词表见 boards.transforms.BOARD_GROUPS)、一句给创作者看的说明(i18n key)。工作流的节点说明是写给
+#: `"board_group"` / `"board_description"`:它按吃的是什么内容归哪一组(词表见 boards.transforms.BOARD_GROUPS,
+#: 能力图标认不出时的兜底)、一句给创作者看的说明(i18n key,能力面板上那一句)。工作流的节点说明是写给
 #: 搭流程的人的(输出口、`{{…}}` 引用),画板上不照搬。
 #:
 #: **指向某样东西的字段给选择器,不给文本框**(棘轮 test_entity_fields_have_a_picker):场景、镜头、项目、
@@ -1046,7 +1047,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["scene_id", "shot_ids", "shot_count"],
         "output_types": {"shot_ids": "json", "shot_count": "number"},
     },
-    #: 不上画板的工具格:画板上渲白模是 **3D 场景格自己会做的事**(内置产出者 `scene_render`,见
+    #: 不单独上画板:画板上渲白模是 **3D 场景格自己会做的事**(内置产出者 `scene_render`,见
     #: boards.producers),跑的是这同一个执行器、读的是这同一份字段声明 —— 此前一格工具格引用一格场景格,
     #: 同一件事分成两半摆在桌上。
     "scene_render": {

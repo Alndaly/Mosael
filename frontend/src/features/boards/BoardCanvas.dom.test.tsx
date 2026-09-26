@@ -274,8 +274,11 @@ describe("选中之后挂什么", () => {
     act(() => {
       document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-  const toolbarButton = (text: string) =>
-    [...document.querySelectorAll<HTMLButtonElement>(".react-flow__node-toolbar button")].find((one) => one.textContent?.includes(text));
+  //: 操作条上的动作是一排图标:名字在 aria-label 上(读屏和悬停读它)。
+  const toolbarButton = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>(".react-flow__node-toolbar button")].find(
+      (one) => one.getAttribute("aria-label") === label || one.textContent?.includes(label),
+    );
   const writeNote = (id: string, extra: Record<string, unknown> = {}) =>
     ({ ...note(id, "开场白"), form: { producer: "write" as const }, ...extra });
 

@@ -6,7 +6,7 @@ import { boardDocumentBlocked, boardSourceText, type BoardDocumentState } from "
 
 /** 连到某一项上游的东西,按它们各自该起的作用分好。 */
 export interface Upstream {
-  /** 连进来的每一格,按连线的先后 —— 工具格按它列绑定(接哪一格由用户挑,不在这里分好)。 */
+  /** 连进来的每一格,按连线的先后 —— 节点产出者(能力、生成器)按它列绑定(接哪一格由用户挑,不在这里分好)。 */
   sources: BoardItem[];
   /** 上游的图/视频 —— 当参考素材。 */
   assets: ReturnType<typeof boardAssetSources>;
@@ -36,13 +36,15 @@ export function upstreamOf(
   items: BoardItem[],
   edges: { source: string; target: string }[],
   documents: Map<string, BoardDocumentState>,
+  /** 按这一份绑定取值(一项能力的设置里的):只有绑上的上游读不到才拦。没给就按那一格自己的产出者算。 */
+  bindings?: Record<string, { from: string }[]>,
 ): Upstream {
   const byId = new Map(items.map((item) => [item.id, item]));
   const sources = edges
     .filter((edge) => edge.target === targetId)
     .map((edge) => byId.get(edge.source))
     .filter((item): item is BoardItem => Boolean(item));
-  const consumed = consumedSources(byId.get(targetId), sources);
+  const consumed = consumedSources(byId.get(targetId), sources, bindings);
   return {
     sources,
     references: sources
@@ -61,13 +63,17 @@ export function upstreamOf(
 /**
  * 连进来的上游里,这一格跑的时候**真会读**的那几格 —— 只有它们取不到才拦住面板。
  *
- * 工具格(`node:*`)按绑定取值:哪个字段接哪几格由用户挑(`form.bindings`),服务端也只取绑上的那几格
- * (后端 boards/tools.resolve_bindings)。一篇连着、却没绑到任何字段的文档读不读得到与这次运行无关 ——
- * 因为它挡掉整块面板的话,用户连「把绑定改到别的格子上」都做不了。内置的几块面板(生成、写字、念)把连进来的
- * 每一篇文档都拼进去(documentPrompt),所以每一格都算。
+ * 节点产出者(一项能力、空格子上的生成器)按绑定取值:哪个字段接哪几格由用户挑(能力的 `form.abilities[…].bindings`、
+ * 生成器的 `form.bindings`),服务端也只取绑上的那几格(后端 boards/tools.resolve_bindings)。一篇连着、却没绑到
+ * 任何字段的文档读不读得到与这次运行无关 —— 因为它挡掉整块面板的话,用户连「把绑定改到别的格子上」都做不了。
+ * 内置的几块面板(生成、写字、念)把连进来的每一篇文档都拼进去(documentPrompt),所以每一格都算。
  */
-function consumedSources(target: BoardItem | undefined, sources: BoardItem[]): BoardItem[] {
-  if (!isNodeProducer(target?.form?.producer)) return sources;
-  const bound = new Set(Object.values(target?.form?.bindings ?? {}).flatMap((refs) => refs.map((ref) => ref.from)));
+function consumedSources(
+  target: BoardItem | undefined,
+  sources: BoardItem[],
+  bindings?: Record<string, { from: string }[]>,
+): BoardItem[] {
+  if (!bindings && !isNodeProducer(target?.form?.producer)) return sources;
+  const bound = new Set(Object.values(bindings ?? target?.form?.bindings ?? {}).flatMap((refs) => refs.map((ref) => ref.from)));
   return sources.filter((item) => bound.has(item.id));
 }

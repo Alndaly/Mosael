@@ -2594,6 +2594,221 @@ def _migrate_board_scene_cells_render_themselves() -> None:
                 )
 
 
+def _migrate_board_tool_cells_become_abilities() -> None:
+    """画板上不再有单独的工具格(`action`):把内容变成新内容的工具是**内容格自己的能力**,凭空出图出片的生成器是
+    **空格子的一种填法**(ADR 0025 修订「能力住在内容格上」,和「剪一段」挂在视频 / 音频格上、3D 场景格自己渲白模
+    同一个样子)。存着的每一格工具格:
+
+    · 工具声明了和某个生成模型是同一件事(`mirrors`)、连接的主人用得上那个模型:改成那种素材的**生成**空格子,
+      和对账对空格子上的生成器做的是同一件事(boards.plugin_references 的「被生成取代的生成器」)。
+    · 工具是一项**能力**(按它此刻的声明,boards.transforms.board_role),它吃内容的那个字段**接着**(绑定、且那根线
+      还在)或**填的是**(素材 id / 场景 id 对得上)这张板上一格收得下它的内容格:设置(去掉宿主那个字段 —— 它就是
+      宿主)写进那一格的 `form.abilities[产出者]`,工具格删掉。它跑出来的产出一格不动,**连向产出的线改从宿主连出**;
+      接着别的字段的上游(多输入的工具)改连进宿主,绑定照留;连进工具格的别的线随它去掉。
+    · 工具是一个**生成器**(不吃画板内容,按参数出一种素材):同一个 id、位置、大小、名字,改成它产出的那种素材的
+      **空格子**,`form.producer` 就是它,设置和绑定照留(接提示词的便签线还在)。
+    · 其余 —— 工具此刻认不出(插件卸了、没有哪条连接报得出它)、不再是内容变换、能力找不到宿主、宿主上已经存着
+      这一项的另一套设置:**改成一张便签**,同一个 id、位置、大小、名字,正文写明工具现在挂在内容格上并附上原来的
+      设置,和 `migrate-board-wiring-tools-become-notes` 同一种做法 —— 进出它的线都还连得上,产出不动。
+
+    **判法读工具的声明**:内置节点读 NODE_TYPES,插件工具读每条连接报出的清单(plugins.tools.all_tools:清单里声明的
+    加缓存的动态工具,不连网)—— 所以排在装好随包插件、对账之后。之后插件的清单再变,存下的是能力 / 生成器的名字和
+    设置:注册表每次现算,改名由对账(rewrite-replaced-plugin-tools)跟上;工具格不会再出现,这一步只要一次。
+
+    运行态不带(升级那一刻在跑的任务随进程没了)。文字用部署缺省的中文(迁移时没有读的人的语言)。改到的板版本号
+    +1:升级那一刻还开着这张板的客户端手里的旧快照要撞 409,不能把工具格存回来。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    from sqlalchemy.orm import Session
+
+    from app.core.i18n import t
+    from app.domain.boards.plugin_references import as_generation_slot, mirrors
+    from app.domain.boards.transforms import ABILITY, board_hosts, board_role, content_transform_gap, host_fields
+    from app.domain.workflows import NODE_TYPES
+
+    limit = 20_000
+    kind_names = {"note": "便签", "document": "文档", "image": "图片", "video": "视频", "audio": "音频", "scene": "3D 场景"}
+    plugins_known = "plugin_instances" in set(inspect(engine).get_table_names())
+
+    def tool_meta(db: Session, producer: str) -> tuple[dict | None, str]:
+        """(声明, 名字)。声明认不出、或不是画板上的内容变换时声明是 None。"""
+        node_type = producer[len("node:"):] if producer.startswith("node:") else ""
+        if not node_type:
+            return None, producer
+        if not node_type.startswith("plugin."):
+            meta = NODE_TYPES.get(node_type)
+            label = t(str(meta.get("label") or node_type), "zh") if meta else node_type
+            if meta is None or "board" not in (meta.get("surfaces") or ()) or content_transform_gap(meta) is not None:
+                return None, label
+            return meta, label
+        if not plugins_known:
+            return None, node_type
+        from app.db.models import PluginInstance
+        from app.domain.plugins.errors import PluginDomainError
+        from app.domain.plugins.nodes import node_meta, parse_node_type
+        from app.domain.plugins.tools import all_tools
+
+        parsed = parse_node_type(node_type)
+        if parsed is None:
+            return None, node_type
+        package_id, tool_name = parsed
+        for instance in db.query(PluginInstance).filter(PluginInstance.package_id == package_id):
+            try:
+                tools = all_tools(db, instance)
+            except PluginDomainError:
+                continue
+            for tool in tools:
+                if tool.get("name") != tool_name:
+                    continue
+                label = str(tool.get("label") or tool_name)
+                meta = node_meta({**tool, "package_id": package_id})
+                if tool.get("internal") or content_transform_gap(meta) is not None:
+                    return None, label
+                return meta, label
+        return None, tool_name
+
+    def note_of(item: dict, label: str, config: dict, why: str) -> dict:
+        body = f"「{label}」这一格不在画板上了:{why}"
+        #: 选的连接是本机事实(一串 id),不抄进正文。
+        config = {key: value for key, value in config.items() if key != "instance_id"}
+        if config:
+            body += "\n\n原来的设置:\n" + json.dumps(config, ensure_ascii=False, indent=2)
+        if len(body) > limit:
+            body = body[: limit - 1] + "…"
+        kept = {key: value for key, value in item.items() if key not in ("kind", "form", "run", "text")}
+        return {**kept, "kind": "note", "text": body, "form": {"producer": "write"}}
+
+    retired = "画板只放把内容变成新内容的工具,它们现在是内容格自己会做的事 —— 需要的话在工作流里用它。"
+
+    def fresh_id(taken: set[str], source: str, target: str) -> str:
+        edge_id = f"{source}->{target}"
+        suffix = 1
+        while edge_id in taken:
+            suffix += 1
+            edge_id = f"{source}->{target}-{suffix}"
+        taken.add(edge_id)
+        return edge_id
+
+    def ability_note(label: str, kinds: tuple[str, ...]) -> str:
+        names = "、".join(kind_names.get(kind, kind) for kind in kinds) or "内容"
+        return (f"它现在是{names}格子自己会做的事 —— 选中一格,在它上方的操作条里点「{label}」。"
+                "这一格原来没接着能用的内容,所以改成了这张便签。")
+
+    with Session(engine) as db:
+        mirrored = mirrors(db) if plugins_known else []
+        for row in db.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            if not any(isinstance(item, dict) and item.get("kind") == "action" for item in canvas["items"]):
+                continue
+            items = canvas["items"]
+            edges = [edge for edge in canvas.get("edges") or [] if isinstance(edge, dict)]
+            by_id = {str(item.get("id")): item for item in items if isinstance(item, dict)}
+            wired = {(str(edge.get("source")), str(edge.get("target"))) for edge in edges}
+            #: 工具格 id → (宿主 id, 改连进宿主的那几格上游)。
+            moved: dict[str, tuple[str, set[str]]] = {}
+            for index, item in enumerate(items):
+                if not isinstance(item, dict) or item.get("kind") != "action":
+                    continue
+                item_id = str(item.get("id"))
+                form = item.get("form") if isinstance(item.get("form"), dict) else {}
+                producer = str(form.get("producer") or "")
+                config = dict(form.get("config") or {}) if isinstance(form.get("config"), dict) else {}
+                bindings = form.get("bindings") if isinstance(form.get("bindings"), dict) else {}
+                as_generation = as_generation_slot({**item, "run": {}}, by_id, mirrored, any_kind=True) if mirrored else None
+                if as_generation is not None:
+                    items[index] = as_generation
+                    continue
+                meta, label = tool_meta(db, producer)
+                if meta is None:
+                    items[index] = note_of(item, label, config, retired)
+                    continue
+                if board_role(meta) != ABILITY:
+                    #: 生成器:改成它产出的那种素材的空格子,设置照留。
+                    kind = board_hosts(meta)[0]
+                    kept = {key: value for key, value in item.items() if key not in ("kind", "form", "run", "text")}
+                    items[index] = {**kept, "kind": kind,
+                                    "form": {"config": config, "bindings": bindings, "producer": producer}}
+                    continue
+                fields = host_fields(meta)
+                host = None
+                for field in dict.fromkeys(fields.values()):
+                    for ref in bindings.get(field) or []:
+                        source = str(ref.get("from") if isinstance(ref, dict) else "")
+                        candidate = by_id.get(source)
+                        if candidate is not None and fields.get(str(candidate.get("kind"))) == field \
+                                and (source, item_id) in wired:
+                            host = candidate
+                            break
+                    if host is None and isinstance(config.get(field), str) and config[field].strip():
+                        wanted = config[field].strip()
+                        host = next((one for one in by_id.values() if fields.get(str(one.get("kind"))) == field
+                                     and wanted in (one.get("asset_id"), one.get("scene_id"))), None)
+                    if host is not None:
+                        break
+                if host is None:
+                    items[index] = note_of(item, label, config, ability_note(label, tuple(fields)))
+                    continue
+                host_id = str(host.get("id"))
+                host_key = fields[str(host.get("kind"))]
+                others = {
+                    field: [ref for ref in refs if isinstance(ref, dict)
+                            and str(ref.get("from")) not in (host_id, item_id)
+                            and (str(ref.get("from")), item_id) in wired]
+                    for field, refs in bindings.items() if field != host_key and isinstance(refs, list)
+                }
+                others = {field: refs for field, refs in others.items() if refs}
+                entry = {"config": {key: value for key, value in config.items() if key != host_key},
+                         "bindings": others}
+                host_form = dict(host.get("form") or {}) if isinstance(host.get("form"), dict) else {}
+                abilities = dict(host_form.get("abilities") or {})
+                if producer in abilities and abilities[producer] != entry:
+                    items[index] = note_of(item, label, config,
+                                           f"它现在是{kind_names.get(str(host.get('kind')), '内容')}格子自己会做的事,"
+                                           f"而「{host_id}」上已经存着这一项的另一套设置 —— 这一套附在下面。")
+                    continue
+                abilities[producer] = entry
+                own = host_form.pop("producer", None)
+                host_form.pop("abilities", None)
+                host["form"] = {**host_form, "abilities": abilities, **({"producer": own} if own is not None else {})}
+                moved[item_id] = (host_id, {str(ref["from"]) for refs in others.values() for ref in refs})
+
+            if moved:
+                taken = {str(edge.get("id")) for edge in edges}
+                pairs = {(str(edge.get("source")), str(edge.get("target"))) for edge in edges}
+                kept_edges = []
+                for edge in edges:
+                    source, target = str(edge.get("source")), str(edge.get("target"))
+                    if source in moved and target in moved:
+                        continue
+                    if target in moved:
+                        host_id, upstream = moved[target]
+                        if source in upstream and source != host_id and (source, host_id) not in pairs:
+                            pairs.add((source, host_id))
+                            kept_edges.append({**edge, "id": fresh_id(taken, source, host_id), "target": host_id})
+                        continue
+                    if source in moved:
+                        host_id = moved[source][0]
+                        if target != host_id and (host_id, target) not in pairs:
+                            pairs.add((host_id, target))
+                            kept_edges.append({**edge, "id": fresh_id(taken, host_id, target), "source": host_id})
+                        continue
+                    kept_edges.append(edge)
+                canvas["edges"] = kept_edges
+                canvas["items"] = [item for item in items
+                                   if not (isinstance(item, dict) and str(item.get("id")) in moved)]
+            db.execute(
+                text("UPDATE boards SET canvas = :canvas, revision = revision + 1 WHERE id = :id"),
+                {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+            )
+        db.commit()
+
+
 def _migrate_board_revision() -> None:
     """Add the optimistic concurrency token to existing boards.
 
@@ -3910,7 +4125,7 @@ def _migrate_generation_capabilities_need_evidence() -> None:
 
 
 def _rewrite_replaced_plugin_tools() -> None:
-    """工作流里、画板工具格上存着的、已被插件运行时报出的新工具取代的老插件节点,改写成新工具(见
+    """工作流里、画板上(内容格的能力、空格子上的生成器)存着的、已被插件运行时报出的新工具取代的老插件节点,改写成新工具(见
     domain/workflows/plugin_references 与 domain/boards/plugin_references)。ComfyUI 的 `run_workflow` + 某张工作流 → 那张工作流自己的工具。
     老工具已经从插件里删掉了的(ComfyUI 的 `run_workflow` 就是),新工具上没有位置的格子丢掉、记进修订说明 ——
     留着一个跑不起来的节点不是保住了用户的值。
@@ -3919,9 +4134,9 @@ def _rewrite_replaced_plugin_tools() -> None:
     清单会变(用户在 ComfyUI 里新存了工作流),新出现的对应关系下次启动也该迁;清单刷新时同一个函数也会跑。
     没有可迁的就什么都不做。
 
-    画板上还多一件:工具声明了 `mirrors`(和一个生成模型是同一件事)、连接的主人用得上那个模型时,工具格改写成
-    那种素材的生成格(见 domain/boards/plugin_references 的「被生成取代的工具格」)。同一个道理是对账:`mirrors`
-    只在插件报出清单之后才有。
+    画板上还多一件:工具声明了 `mirrors`(和一个生成模型是同一件事)、连接的主人用得上那个模型时,空格子上存着的
+    这个生成器改挂生成、选那个模型(见 domain/boards/plugin_references 的「被生成取代的生成器」)。同一个道理是对账:
+    `mirrors` 只在插件报出清单之后才有。
     """
     from sqlalchemy.orm import Session
 
@@ -4648,6 +4863,9 @@ def migration_plan() -> MigrationPlan:
             ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),
+            #: 画板上的工具格搬到它接着的内容格上(能力)、改成空格子(生成器)或便签。判法读工具的声明 ——
+            #: 要用到上面装好的随包插件的清单;排在对账之后,对账不再认识工具格。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_tool_cells_become_abilities),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

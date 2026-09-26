@@ -7,10 +7,11 @@
 算子按顺序作用在一份副本上,所以 add_item → connect 放在同一批里就能用(后面的算子看得见
 前面新加的项)。产物不在这里校验 —— 交给 normalize_canvas,它才是"存得下、读得回"的那道关。
 
-工具格(`action`)的表单也由算子写:`add_item` 带上 producer/config/bindings,`set_form` 改它。3D 场景格
-渲白模(`scene_render`)的设置也是这样写(只有 config:镜头、渲什么)—— 存在格子上的表单就是一次运行发的那一份
-(producer_ids.runs_from_draft)。
-这里只管**形状**(是个工具、是个对象);「这个人有没有这个工具、绑定接得上吗、字段对不对」要看
+画板上没有单独的工具格:把内容变成新内容的工具是内容格自己的**能力**(ADR 0025 修订)。它们的设置也由算子写 ——
+`set_form` 带上 `ability: true` 写进那一格的 `form.abilities[producer]`(调用方按注册表判它是不是一项能力,
+见智能体的 edit_board)。一格**自己**的表单只在它存着的就是一次运行发的那一份时才由算子写
+(producer_ids.runs_from_draft):空格子上的生成器(`node:*`)、3D 场景格渲白模(`scene_render`,只有 config)。
+这里只管**形状**(是个节点产出者、是个对象);「这个人有没有这个工具、绑定接得上吗、字段对不对」要看
 注册表和整张画布,由调用方在落库之前问 boards.producers.check_forms(见智能体的 edit_board)。
 """
 
@@ -35,34 +36,15 @@ BOARD_OP_KINDS = (
     "set_form",
 )
 
-#: 算子上写工具格表单的那三样(和画布上 `form` 里的键同名)。
+#: 算子上写表单的那三样(和画布上 `form` 里的键同名)。
 _FORM_KEYS = ("producer", "config", "bindings")
 
-#: 工具格之外,表单也由算子写的那几种格子:它们缺省挂的产出者的表单就是一次运行发的那一份(3D 场景格渲白模)。
-_DRAFT_KINDS = frozenset(kind for kind, producer in SLOT_PRODUCERS.items() if runs_from_draft(producer))
 
-
-def _tool_form(op: dict[str, Any], current: dict[str, Any], item_id: str) -> dict[str, Any]:
-    """按算子写一格工具格的表单:`{"config", "bindings", "producer"}`(产出者排最后,和 actions._pending 一致)。
-
-    · `producer` 只能是一个工具(`node:<节点类型>`),或 3D 场景格的渲白模(`scene_render`,只有 config)。
-      内置的写字 / 生成 / 念 / 截的表单是各自面板的形状,由用户在面板上填;替他写一份面板不认的表单,
-      只会让面板打不开。
-    · 换了工具,旧的 config / bindings 属于上一个工具,一并清掉。
-    · 同一个工具:`config` **逐键合并**(值为 null = 删掉这个键),`bindings` **逐字段替换**
-      (空列表或 null = 这个字段不再接上游)—— 改一个字段不必把整张表单抄一遍。
-    """
-    producer = op.get("producer", current.get("producer"))
-    if not runs_from_draft(producer):
-        raise BoardDomainError("boardErr_formNeedsTool", item_id=item_id, producer=str(producer or ""))
-    if node_type_of(str(producer)) is None:
-        #: 内置的那个(场景格渲白模)没有接上游的字段:镜头、渲什么都直接填。
-        field = next(iter(op.get("bindings") or {}), None)
-        if field is not None:
-            raise BoardDomainError("boardErr_bindingFieldNotBindable", tool=str(producer), field=str(field))
-    same = producer == current.get("producer")
-    config = dict(current.get("config") or {}) if same else {}
-    bindings = dict(current.get("bindings") or {}) if same else {}
+def _merged(op: dict[str, Any], current: dict[str, Any], item_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """`config` **逐键合并**(值为 null = 删掉这个键),`bindings` **逐字段替换**(空列表或 null = 这个字段不再接
+    上游)—— 改一个字段不必把整张表单抄一遍。"""
+    config = dict(current.get("config") or {})
+    bindings = dict(current.get("bindings") or {})
     for key, into in (("config", config), ("bindings", bindings)):
         patch = op.get(key)
         if patch is None:
@@ -74,9 +56,45 @@ def _tool_form(op: dict[str, Any], current: dict[str, Any], item_id: str) -> dic
                 into.pop(field, None)
             else:
                 into[field] = value
+    return config, bindings
+
+
+def _own_form(op: dict[str, Any], current: dict[str, Any], item_id: str) -> dict[str, Any]:
+    """按算子写一格**自己**的表单:`{"config", "bindings", "producer"}`(产出者排最后,和 actions._pending 一致)。
+
+    · `producer` 只能是一个节点产出者(`node:<节点类型>`,空格子上的生成器),或 3D 场景格的渲白模
+      (`scene_render`,只有 config)。内置的写字 / 生成 / 念 / 截的表单是各自面板的形状,由用户在面板上填;
+      替他写一份面板不认的表单,只会让面板打不开。
+    · 换了产出者,旧的 config / bindings 属于上一个,一并清掉;能力的设置(`abilities`)归这一格,留着。
+    """
+    producer = op.get("producer", current.get("producer"))
+    if not runs_from_draft(producer):
+        raise BoardDomainError("boardErr_formNeedsTool", item_id=item_id, producer=str(producer or ""))
     if node_type_of(str(producer)) is None:
-        return {"config": config, "producer": producer}
-    return {"config": config, "bindings": bindings, "producer": producer}
+        #: 内置的那个(场景格渲白模)没有接上游的字段:镜头、渲什么都直接填。
+        field = next(iter(op.get("bindings") or {}), None)
+        if field is not None:
+            raise BoardDomainError("boardErr_bindingFieldNotBindable", tool=str(producer), field=str(field))
+    same = producer == current.get("producer")
+    config, bindings = _merged(op, current if same else {}, item_id)
+    kept = {"abilities": current["abilities"]} if current.get("abilities") else {}
+    if node_type_of(str(producer)) is None:
+        return {"config": config, **kept, "producer": producer}
+    return {"config": config, "bindings": bindings, **kept, "producer": producer}
+
+
+def _ability_form(op: dict[str, Any], current: dict[str, Any], item_id: str) -> dict[str, Any]:
+    """按算子写一格的一项**能力**的设置:`form.abilities[producer] = {"config", "bindings"}`,合并规矩同上。
+    这一格自己的产出者和别的几项能力的设置不动;`abilities` 排在产出者前面(和 canvas._with_ability 一致)。"""
+    producer = op.get("producer")
+    if node_type_of(str(producer or "")) is None:
+        raise BoardDomainError("boardErr_formNeedsTool", item_id=item_id, producer=str(producer or ""))
+    form = {key: value for key, value in current.items() if key != "producer"}
+    abilities = dict(form.pop("abilities", None) or {})
+    config, bindings = _merged(op, abilities.get(str(producer)) or {}, item_id)
+    abilities[str(producer)] = {"config": config, "bindings": bindings}
+    own = {"producer": current["producer"]} if current.get("producer") is not None else {}
+    return {**form, "abilities": abilities, **own}
 
 
 def _require(by_id: dict[str, dict], item_id: str) -> dict:
@@ -141,14 +159,11 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["note_revision"] = op.get("note_revision")
             if op.get("scene_id"):
                 item["scene_id"] = str(op["scene_id"])
-            if item_kind == "action":
-                #: 工具格就是「跑哪个工具」—— 没有工具的一格什么也做不了,不放。
-                item["form"] = _tool_form(op, {}, item_id)
-            elif item_kind in _DRAFT_KINDS and any(op.get(key) is not None for key in _FORM_KEYS):
-                #: 3D 场景格带着渲白模的设置放下(产出者缺省就是这种格子挂的那一个)。
-                item["form"] = _tool_form(op, {"producer": SLOT_PRODUCERS[item_kind]}, item_id)
+            if item_kind in SLOT_PRODUCERS and any(op.get(key) is not None for key in _FORM_KEYS):
+                #: 带着表单放下一格:空格子上的生成器、3D 场景格渲白模的设置(产出者缺省就是这种格子挂的那一个)。
+                item["form"] = _own_form(op, {"producer": SLOT_PRODUCERS[item_kind]}, item_id)
             elif any(op.get(key) is not None for key in _FORM_KEYS):
-                raise BoardDomainError("boardErr_formOnlyOnAction", item_id=item_id, kind=item_kind)
+                raise BoardDomainError("boardErr_formNotOnKind", item_id=item_id, kind=item_kind)
             elif op.get("asset_id"):
                 item["asset_id"] = str(op["asset_id"])
             #: 还没有产出的一格(便签、空的图片/视频/音频槽)写明产出者这件事**不在这里做**:画布的每一次
@@ -166,16 +181,19 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item.pop("title", None)
 
         elif kind == "set_form":
-            #: 改工具格的表单:换工具、改配置、改哪些字段接上游;3D 场景格上改渲白模的设置。别的格子的表单归面板。
+            #: 写一格的一项能力的设置(`ability`),或这一格自己的表单(空格子上换生成器、改它的配置;3D 场景格上
+            #: 改渲白模的设置)。别的表单归面板。
             item_id = str(op.get("item_id", ""))
             item = _require(by_id, item_id)
             kind = str(item.get("kind"))
-            if kind != "action" and kind not in _DRAFT_KINDS:
-                raise BoardDomainError("boardErr_formOnlyOnAction", item_id=item_id, kind=kind)
             current = dict(item.get("form") or {})
-            if kind in _DRAFT_KINDS:
-                current.setdefault("producer", SLOT_PRODUCERS[kind])
-            item["form"] = _tool_form(op, current, item_id)
+            if op.get("ability"):
+                item["form"] = _ability_form(op, current, item_id)
+                continue
+            if kind not in SLOT_PRODUCERS:
+                raise BoardDomainError("boardErr_formNotOnKind", item_id=item_id, kind=kind)
+            current.setdefault("producer", SLOT_PRODUCERS[kind])
+            item["form"] = _own_form(op, current, item_id)
 
         elif kind == "set_text":
             _require(by_id, str(op.get("item_id", "")))["text"] = str(op.get("text", ""))
