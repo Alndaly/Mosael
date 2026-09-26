@@ -388,7 +388,8 @@ function NewConnectionDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t("pluginNewConnection")}
-      className={fields.some(isCodeField) ? "w-[600px] max-w-[calc(100vw-32px)]" : "w-[420px]"}
+      // 配置项的说明常是两三行(地域、接入点的例子),420px 宽时一条说明折成五行,表单读起来像一列窄条。
+      className={cn(fields.some(isCodeField) ? "w-[640px]" : "w-[520px]", "max-w-[calc(100vw-32px)]")}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" disabled={pending} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
