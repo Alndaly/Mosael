@@ -364,7 +364,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 **不是每个工具都上画板。** 画板是「想法摊开,边看边做」的地方,只放内容变换(ADR 0021 修订);列清单、看状态、
 上传、装环境这类工具只在工作流和对话里。判据全从你的声明里读:
 
-- **交出内容**:落板的输出(`board_outputs`,缺省全部)里至少有一个素材(`asset` —— 交出的文件、名字是
+- **交出内容**:落板的输出(`board_outputs`;没写的话是全部不在 `wiring_outputs` 里的,见下)里至少有一个素材(`asset` —— 交出的文件、名字是
   `asset_id` / `*_asset_id` 的输出),或者**点名落板**的文字(写在 `board_outputs` 里、`output_types` 是
   `text`)。只写了类型没点名的文字不算:一行摘要、一句状态不是成品。没声明类型的输出不算 —— 缺省的那一个
   `output` 也一样。
@@ -385,6 +385,11 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
   列表拆成好几格,别的当 JSON —— 一个没声明的 `output` 往往就是一张大 JSON 便签。
 - **只落有用的那几个**:`"board_outputs": ["image", "caption"]`(`node` 块里)点名哪些输出落到画板上,
   缺省是全部。给下游连线用的计数、状态码、引擎名摊在画板上全是噪音。
+- **说清哪几个只给连线用**:`"wiring_outputs": ["asset_ids", "count", "summary"]`(`node` 块里)—— id 列表、
+  个数、摘要、任务号、「第一份产出」这种别名。它们在工作流里照样接得上,画板上**从不**落成格子:没写
+  `board_outputs` 时缺省落的是「全部不在这里的」;写了也不落(两处都写了同一个口子,信这一处,棘轮会报出来)。
+  一个工具交出好几个具名文件、又交一个等于第一份的 `asset_id` 时,`asset_id` 就该写在这里 —— 不然跑一次
+  画板上就多一张一模一样的图。
 - **交出文件**用上面的 `artifact` 约定:它先收进素材库,再落成画板上的一格。
 - 一次最多新建 12 格,超出的合进最后一张 JSON 便签;一个返回几百项的工具,在画板上请交一个
   汇总字段 + `board_outputs` 只点它。
@@ -401,7 +406,8 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
       "config": { "image": { "type": "template", "format": "asset", "required": true, "label": "图片" } },
       "outputs": ["asset_id", "mask_ratio", "engine"],
       "output_types": { "mask_ratio": "number" },
-      "board_outputs": ["asset_id"]          // 画板上只落抠好的那张图
+      "board_outputs": ["asset_id"],         // 画板上只落抠好的那张图
+      "wiring_outputs": ["engine"]           // 给连线用的,画板上不落
     }
   }
 }
@@ -437,7 +443,8 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 `plugin.<包>.<工具>`;不能和清单里声明的重名)、`label`、`description`(可以按语言分)、`input_schema`(属性的 `title` /
 `description` 也可以按语言分)、`read_only`、`effects`(见「确认」;写错的当没写,只读却声明了别的后果按后果算、只读作废)、
 `stream`、`timeout_seconds`(上限照旧)、`node`(`outputs` /
-`output_types` / `output_labels`)、`recommended`(`true` = 第一次出现时默认开放)、`replaces`(见下)。**别的键丢掉**,
+`output_types` / `output_labels` / `board_outputs` / `wiring_outputs`)、`recommended`(`true` = 第一次出现时默认开放)、
+`replaces`、`mirrors`(见下)。**别的键丢掉**,
 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主认领能力,也不能把自己藏起来。最多 300 个。
 
 报出来的工具存进 `plugin_instances.discovered_tools`(MCP 连接从服务拉来的清单也存在这里),和清单里声明的走
@@ -476,6 +483,37 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 改过的工作流追加一版修订(`migration`),作者和认可人沿用上一版。老工具删掉之后,`replaces` 还要一直报下去:
 清单不在手里的时候(服务没开)迁不动,等它下次报上来才迁。
+
+#### 和一个生成模型是同一件事:`mirrors`
+
+插件同时替宿主做生成(`provides: ["generation"]`)时,有些工具和目录里的某个模型**是同一件事**:ComfyUI 里一张只有
+一个图片保存节点的工作流,既是图片模型,又是一个工具。画板上一个概念只给一个入口(ADR 0021 修订):生成那一条
+结果落在原位、有张数、记用量、能等 6 小时;工具那一条交得回全部输出节点、文字产出。所以这种工具说一声:
+
+```jsonc
+"mirrors": {
+  "generation_model": "portrait.json",       // 同一个插件在 op: models 里报的模型 id
+  "kind": "image",                           // image | video | audio
+  "prompt": "prompt",                        // 下面三格可选:存着的工具格改写成生成格时,填过的值怎么带过去
+  "parameters": {"steps_3": "3.steps", "seed": "seed", "negative_prompt": "negative_prompt"},  // 入参 → 生成参数键
+  "sources": {"image_10": "reference_image"} // 素材入参 → 生成的素材角色
+}
+```
+
+宿主据此做三件事(都不认识你的插件):
+
+- **画板上不列它**:点运行的人在生成目录里用得上那个模型(**同一个连接**下的、启用着的)时,画板的「添加」菜单里
+  没有这个工具,图片 / 视频 / 音频格选那个模型就是它。用不上的人(没这个模型、连接停了)照旧看得到工具格。
+  **工作流里两个都在**,节点面板上这个工具的说明末尾多一句「只要图片的话,用『AI 生成素材』节点选这个模型」。
+- **存着的工具格改写成生成格**(对账,和 `replaces` 同一个时机:每次清单刷新、每次启动):那一格变成 `kind` 那种
+  素材的生成格,选的就是那个模型,id、位置、名字不变。提示词和素材按上面三格带过去(接了上游的保持连线,生成格的
+  面板照连线挂);没写进这三格的入参带不过去,丢掉并记日志 —— 所以**能对上的都写上**。在跑的那一格等它落终态;
+  格子上没选连接、而几条连接给出的不是同一个模型时不改,点运行时说清楚去用生成。
+- **形状不对的整条不认**(`generation_model` 空着、`kind` 不是个标识符):说错了「同一件事」会把一个工具从画板上
+  藏起来,比不说更糟。
+
+只在工具**真的**什么都没多做时才声明:它交出两个输出节点、一段文字、拿 alpha 当蒙版、取回预览 —— 这些生成那一条
+做不到,就不是同一件事。清单里写死的工具不认这个键,它只属于运行时报出的工具。
 
 #### 表单长什么样
 
@@ -783,7 +821,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 `bundled: true`、没有 `download`),应用内的市场和官网插件页都列出它们、标「内置」,只是不给安装 ——
 新版跟着应用来;远端索引拉不到时,市场照样由本机清单列出它们。ComfyUI 插件是
 「替宿主做生成」的完整范例:动态模型目录与指纹、按语言分的参数名、参考图 / 蒙版 / 视频槽位、NDJSON 进度、取消文件、
-回执与接着取;也是**运行时报出的工具**(每张工作流一个,带 `replaces`)、**流式工具**和**一次交出几份文件**的范例
+回执与接着取;也是**运行时报出的工具**(每张工作流一个,带 `replaces`、`wiring_outputs`,能表达成生成模型的带 `mirrors`)、**流式工具**和**一次交出几份文件**的范例
 (工作流的工具、`import_outputs`),以及 `json` 配置项(API 模板)。
 
 **object-storage**(「对象存储」)是 `public_url` 的第一方实现:阿里云 OSS / 腾讯云 COS / 火山引擎 TOS /

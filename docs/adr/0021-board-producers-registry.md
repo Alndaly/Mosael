@@ -5,7 +5,8 @@
 Accepted — 2026-09-25. P0 (behaviour-preserving groundwork), P1 (the registry, a pure refactor),
 P2 (tool items, 2026-09-26) and P3 (the agent, 2026-09-26) are **done**; P4 is next. **Amended
 2026-09-26** (「修订:画板上只放内容变换」): the board and workflows serve different purposes, so tool
-items are content transforms only. The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
+items are content transforms only; 修订 2 adds "one concept, one entry" (a plugin tool that `mirrors` a
+generation model the user can use stays off the board) and `wiring_outputs` (never landed on the board). The "ComfyUI becomes a plugin generation provider" work (ADR 0020)
 landed before P1, so board generation already sees plugin models as ordinary provider models.
 
 ## Context
@@ -451,6 +452,38 @@ JSON 提取、文本处理、检索笔记(检索笔记是查知识库、交回�
 它的线都还连得上,不留悬空的线;它跑出来的产出本来就是独立的格子,一格不动。插件工具的格子不迁 —— 它合不合格
 随清单变,运行时由注册表说清楚:内置的回 `boardErr_nodeNotOnBoard`(「……流程控制和数据处理请在工作流里做」),
 插件工具接着连接却不合格的回 `boardErr_toolNotOnBoard`,而不是叫人去插件页建连接。
+
+### 修订 2:一个概念一个入口、只给连线用的输出不落板(2026-09-26,随 ComfyUI 插件 1.5.0)
+
+画板审计找到两处重复。**一次运行落一堆格子**:ComfyUI 每张工作流的工具声明了 `asset_id`(和第一个输出节点
+是同一个文件)、`asset_ids` / `texts`(JSON)、`summary`、`prompt_id`,却没写 `board_outputs`,按「缺省全部」
+跑一次就落五格 —— 一张重复的图、一张 id 列表的 JSON 便签、一张摘要、一张任务号。**同一件事两个入口**:同一张
+工作流既是图片 / 视频格里的生成模型,又是「添加」菜单里的工具格。
+
+- **`wiring_outputs`**(节点声明,内置节点和插件 `node` 块都能写):这几个输出只给工作流连线用,画板上**从不**
+  落成格子。落板的规矩只剩一条(`tools.landing_outputs`,规矩 2 也用它):点了名的(`board_outputs`)是那几个,
+  没点名的是**全部不在 `wiring_outputs` 里的**;点了名又写进 `wiring_outputs` 的不落(棘轮报出来)。ComfyUI 的
+  工具把那五个写进去、`board_outputs` 点每个输出节点自己的口子;棘轮对着假 ComfyUI 现报的清单钉住它
+  (`test_plugin_nodes_declare_their_outputs`)。没声明类型的输出,值正好是这一轮收进素材库的文件时落成素材格
+  (自定义保存节点的 `output_12`),不再是一张写着素材 id 的便签。
+- **规矩 5:`mirrored_by_generation`**。插件报出的工具声明 `mirrors: {generation_model, kind}`(它和同一个插件
+  目录里的某个生成模型是同一件事),而点运行的人在生成目录里用得上那个模型(`models_for_capability`,**同一条连接**
+  下的)时,它不上画板 —— 画板上那件事走生成:结果落在原位、有张数、用量、6 小时、能换模型。用不上的人照旧看得到
+  工具格;**工作流里两个都在**,节点面板上这个工具的说明多一句「只要图片的话,用『AI 生成素材』节点选这个模型」。
+  规矩本身不查库:「用得上吗」由调用方(`producers._node_producers`)递进来。宿主不认识 ComfyUI —— 什么算同一件事
+  由插件判:ComfyUI 只给**只有一个输出节点、交出图 / 视频 / 音频、没有拿 alpha 当蒙版**的工作流声明;交回几个输出
+  节点、文字产出、预览临时文件、alpha 蒙版这些只有工具做得到的,工具格照旧是唯一的入口。
+- **只交出文字的工作流不是生成模型**(打标签、反推提示词):`kind_of` 把它兜成 image,选了永远拿不回一张图。插件的
+  模型目录跳过没有文件输出的图;它们照旧是工具,交出的字点名落板、吃的是图,按规矩归「处理图片」。
+
+**已有数据**:画布上跑着被生成取代的工具的工具格,由对账(`rewrite-replaced-plugin-tools`,和 `replaces` 同一个
+时机:每次清单刷新、每次启动 —— `mirrors` 只有插件报出清单之后才有,不是一次性迁移)改写成**那种素材的生成格**:
+id、位置、名字不变,产出者 `generate`,选的就是那条连接下的那个模型。提示词原样带过去(接了上游便签 / 文档的留空,
+连线还在,生成格的面板照连线填);素材字段按 `mirrors.sources` 换成素材角色(接上游的记着 `from`);参数按
+`mirrors.parameters` 改名。**带不过去的**丢掉并记日志:没写进 `mirrors` 的入参(ComfyUI 的宽和高 —— 生成里是
+一格「尺寸」;「也取回预览」)、选的连接、工具格的尺寸和上一轮的运行状态。在跑的那一格等它落终态再改;没选连接、
+几条连接给出的模型不是同一个时不改,点运行时回 `boardErr_toolMirroredByGeneration`(说清楚去用生成),而不是
+「它不交出素材」。
 
 ### 下一版
 

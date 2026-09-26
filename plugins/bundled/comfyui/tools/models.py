@@ -145,7 +145,11 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Ent
 
 
 def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
-    """这台服务器现在有哪些模型。一张图转不过来就跳过它,不让它拖垮整份清单。"""
+    """这台服务器现在有哪些模型。一张图转不过来就跳过它,不让它拖垮整份清单。
+
+    **不交出文件的图不是模型**(反推提示词、打标签这类只交出一段字的,见 graph.media_outputs):生成是
+    「一段提示词 → 一份成片」,它们交不出成片。它们照样是工具(每张图一个,见 tooling),在工作流里、画板上用。
+    """
     object_info = comfy.object_info()
     models: list[dict[str, Any]] = []
     for entry in each(comfy, object_info, locale):
@@ -154,6 +158,8 @@ def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
                 # 模板坏了也列出来:选中它时会把「哪里坏了」说清楚。不列的话它从选择器里静默消失,
                 # 用户只会以为连接没配上。
                 models.append({"id": TEMPLATE, "label": entry.label, "kind": "image"})
+            continue
+        if not graph.media_outputs(entry.api, object_info, entry.titles):
             continue
         model = graph.describe(entry.id, entry.label, entry.api, object_info, entry.titles)
         if entry.id == BUILTIN:

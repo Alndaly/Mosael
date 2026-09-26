@@ -40,8 +40,16 @@ ComfyUI 那一侧的输入不列出来。
 **每张工作流一个工具**(`wf_<id>`,「工作流 · 名字」,见 `tools/tooling.py`):插件在 `op: tools` 里报给宿主
 (宿主能力 `tools`,和 `generation` 由同一个 `comfyui_generation` 认领),入参、输出都从那张图推 ——
 提示词、每个读素材的节点(`image_10`、`mask_11`、`video_1`…)、每个可调参数(`steps_3`…,和生成参数同一套名字)、
-种子 / 尺寸 / 张数(高级);输出按输出节点(`image_9`、`text_40`…)。名字取 ComfyUI 写在工作流文件里的 id
-(改名、挪目录不变),没有的退到路径哈希;模板是 `wf_api_template`,内置文生图是 `wf_builtin_txt2img`。
+种子 / 尺寸 / 张数(高级);输出按输出节点(`image_9`、`text_40`…),外加给工作流连线用的 `asset_id` / `asset_ids` /
+`texts` / `summary` / `prompt_id`(声明成 `wiring_outputs`:画板上只落每个输出节点自己的产出,`board_outputs`)。
+名字取 ComfyUI 写在工作流文件里的 id(改名、挪目录不变),没有的退到路径哈希;模板是 `wf_api_template`,内置文生图是
+`wf_builtin_txt2img`。
+
+**和生成模型是同一件事的图声明 `mirrors`**(1.5.0):只有一个输出节点、交出的是图 / 视频 / 音频、没有「拿 LoadImage
+的 alpha 当蒙版」那一格的工作流,工具带着 `{"generation_model": <模型 id>, "kind": …}` 和入参到生成表单的对照
+(提示词、素材角色、`steps_3` → `3.steps` 这类参数键;宽高对不过去)。宿主据此在画板上只留生成那一个入口、把存着的
+工具格改写成生成格;工作流里两个都在。**只交出一段字的图(打标签、反推提示词)不进模型目录**(`graph.media_outputs`),
+只是工具。
 
 以前还有一个通用的 `run_workflow`(按 id 跑,入参是写死的一张表):它不知道要跑哪张图,表单却要人填参数,
 1.4.0 删掉了。它能跑的每一种图在上面都有自己的工具;每个工具带着 `replaces`,宿主据此把存着的 `run_workflow`

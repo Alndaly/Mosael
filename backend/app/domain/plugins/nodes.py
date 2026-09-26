@@ -36,6 +36,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import is_message_key, tr
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT
 from app.domain.plugins.manifest import text_of
@@ -187,6 +188,11 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     #: 在创意画板上跑时,哪几个输出落成新的格子(和 NODE_TYPES 的 board_outputs 同一个意思,缺省全部)。
     board_outputs = declared.get("board_outputs")
     board_outputs = [str(name) for name in board_outputs if str(name) in outputs] if isinstance(board_outputs, list) else []
+    #: 只给工作流连线用的输出(id、个数、摘要、任务号):画板上**从不**落成格子(见 boards.tools.landing_outputs)。
+    wiring_outputs = declared.get("wiring_outputs")
+    wiring_outputs = [str(name) for name in wiring_outputs if str(name) in outputs] if isinstance(wiring_outputs, list) else []
+    #: 这个工具和一个生成模型是同一件事(运行时报出的工具才有,见 plugins.tools.all_tools)。
+    mirrors = tool.get("mirrors") if isinstance(tool.get("mirrors"), dict) else None
     #: 画板「添加」菜单里归哪一组、给创作者看的一句说明(和 NODE_TYPES 的同名声明一个意思;不写就由
     #: boards.transforms 按字段和输出推、取说明的第一句)。
     board_group = str(declared.get("board_group") or "")
@@ -196,6 +202,12 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     # 工具的 label/description 在上游已经解过了,而 `node` 这一块是原样透传的,所以解在这里。
     label = text_of(declared.get("label") or tool.get("label") or tool.get("name") or "")
     description = text_of(declared.get("description") or tool.get("description") or "")
+    if mirrors is not None and description:
+        #: 节点面板上说一声:只要那一种成片的话,「AI 生成素材」节点选这个模型是同一件事(还有回执、用量、
+        #: 6 小时)。按声明的种类挑一句,不认识的种类不说。
+        hint = f"pluginNode_mirroredByGeneration_{mirrors.get('kind')}"
+        if is_message_key(hint):
+            description = f"{description}\n{tr(hint)}"
     return {
         "label": label,
         # 面板上每行都有一句说明;插件没写就退到"来自哪个插件",总比空着强。
@@ -217,6 +229,8 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         # 插件可以给专业术语一个更好的名字;未声明的由共用词典/可读降级兜底。
         "output_labels": {str(name): text_of(label) for name, label in output_labels.items()},
         **({"board_outputs": board_outputs} if board_outputs else {}),
+        **({"wiring_outputs": wiring_outputs} if wiring_outputs else {}),
+        **({"mirrors": mirrors} if mirrors is not None else {}),
         **({"board_group": board_group} if board_group else {}),
         **({"board_description": board_description} if board_description else {}),
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。

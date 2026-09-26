@@ -222,25 +222,38 @@ def _sniff(value: Any) -> list[dict[str, Any]]:
     return [{"type": "json", "value": value}]
 
 
+def landing_outputs(meta: dict[str, Any]) -> list[str]:
+    """一次运行落成画板格子的是哪几个输出。**画板上只有这一条**(transforms 判「交不交出内容」也用它):
+
+    · 点了名的(`board_outputs`)就是那几个;
+    · 没点名的,是全部声明的输出里**不是只给连线用的**那些。`wiring_outputs` 是节点(内置的,或插件在
+      `node` 块里)声明的「这几个是给工作流连线的」:id、个数、摘要、任务号 —— 摊在画板上全是噪音,
+      「第一份产出」还会把同一个文件再摆一格;点了名也不落,两句话打架时信这一句。
+    """
+    declared = [str(name) for name in meta.get("outputs") or ["output"]]
+    wiring = {str(name) for name in meta.get("wiring_outputs") or ()}
+    return [name for name in (meta.get("board_outputs") or declared) if name in declared and name not in wiring]
+
+
 def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str, Any]]:
     """执行器的返回值 → 画板认的产出(`[{"type": "asset"|"text"|"json", …}]`,见 canvas.outputs_of)。
 
     按节点**声明**的输出和类型分(workflows.output_data_type —— 和工作流连线认的是同一份):
     素材输出是素材(一串 id 就是几份),文字、数是文字,JSON 是 JSON。只有一个没声明的 `output`
-    (插件工具的缺省)或类型是 any 的输出才按值猜。只落 `board_outputs` 点名的那几个(缺省全部)。
-    空值不落 —— 一个没用上的「尾帧」不该在画布上占一格空便签。
+    (插件工具的缺省)或类型是 any 的输出才按值猜 —— 一个值正好是这一轮收进素材库的文件
+    (插件交出的产出记在某个具名输出上,见 plugins.tools._collect_artifact)就是素材,不是一段写着 id 的字。
+    落哪几个见 landing_outputs。空值不落 —— 一个没用上的「尾帧」不该在画布上占一格空便签。
     """
     from app.domain.workflows import output_data_type
 
-    declared = [str(name) for name in meta.get("outputs") or ["output"]]
-    wanted = [name for name in (meta.get("board_outputs") or declared) if name in declared]
+    collected = {str(one) for one in output.get("asset_ids") or () if isinstance(one, str)}
     produced: list[dict[str, Any]] = []
-    for name in wanted:
+    for name in landing_outputs(meta):
         value = output.get(name)
         if _empty(value):
             continue
         data_type = output_data_type(name, meta)
-        if data_type == "asset":
+        if data_type == "asset" or (data_type == "any" and isinstance(value, str) and value in collected):
             ids = value if isinstance(value, list) else [value]
             produced.extend({"type": "asset", "asset_id": str(one)} for one in ids if isinstance(one, str) and one)
         elif data_type in ("text", "number", "sequence"):
@@ -383,6 +396,7 @@ __all__ = [
     "binding_sink",
     "board_outputs",
     "check_bindings",
+    "landing_outputs",
     "prepare_node_run",
     "resolve_bindings",
     "run_node_on_board",

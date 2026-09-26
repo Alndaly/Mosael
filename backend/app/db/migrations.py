@@ -3674,6 +3674,10 @@ def _rewrite_replaced_plugin_tools() -> None:
     **对账,不是一次性迁移**:依据是插件上一次报出的工具清单(缓存在 `plugin_instances.discovered_tools`),
     清单会变(用户在 ComfyUI 里新存了工作流),新出现的对应关系下次启动也该迁;清单刷新时同一个函数也会跑。
     没有可迁的就什么都不做。
+
+    画板上还多一件:工具声明了 `mirrors`(和一个生成模型是同一件事)、连接的主人用得上那个模型时,工具格改写成
+    那种素材的生成格(见 domain/boards/plugin_references 的「被生成取代的工具格」)。同一个道理是对账:`mirrors`
+    只在插件报出清单之后才有。
     """
     from sqlalchemy.orm import Session
 
@@ -3684,7 +3688,7 @@ def _rewrite_replaced_plugin_tools() -> None:
         return
     with Session(engine) as db:
         plugin_references.rewrite_replaced_tools(db)
-        board_references.rewrite_replaced_tools(db)
+        board_references.reconcile_plugin_tool_cells(db)
 
 
 def _migrate_plugin_generation_columns() -> None:

@@ -364,7 +364,21 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
         if any(tool["name"] == tool_name and tool["internal"] for tool in all_tools(db, instance)):
             #: 只给宿主调的工具(生成协议那一类):画布上存着也不跑(和工作流里同一条)。
             raise BoardInputError("boardErr_toolInternal", tool=tool_name)
-    if actor_id and any(tool["package_id"] == package_id and tool["name"] == tool_name for tool in exposed(db, actor_id)):
+    mine_exposed = [tool for tool in exposed(db, actor_id) if tool["package_id"] == package_id
+                    and tool["name"] == tool_name] if actor_id else []
+    if actor_id and mine_exposed:
+        from app.domain.boards.plugin_references import generation_index, mirrored_model
+        from app.domain.boards.transforms import content_transform_gap
+        from app.domain.plugins.nodes import node_meta
+
+        index = generation_index(db, actor_id)
+        for tool in mine_exposed:
+            row = mirrored_model(index, str(tool.get("instance_id") or ""), tool.get("mirrors"))
+            if row is not None and content_transform_gap(node_meta(tool), generation_has=lambda _: True) == "mirrored_by_generation":
+                #: 他用得上的那个生成模型就是这件事:画板上放一格那种素材、选那个模型(见 plugin_references ——
+                #: 存着的这种工具格会被对账改写成生成格,还没改到的这一格在这里说清楚)。
+                raise BoardInputError("boardErr_toolMirroredByGeneration", tool=str(tool.get("label") or tool_name),
+                                      model=str(row.display_name or row.model_id))
         #: 他接着这个插件、工具也开着,只是它不是一个内容变换(列清单、看状态、上传……)——
         #: 这不是「去插件页建连接」能解决的事,是「这件事在工作流里做」。清单会变(ComfyUI 的工具随
         #: 服务器上的工作流),所以画布上存着一个此刻不合格的工具格是正常的,跑的时候说清楚。
@@ -398,7 +412,8 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
 
     · 内置节点里声明了 `"surfaces": [..., "board"]` 的(见 workflows.NODE_TYPES 上方的说明);
     · **这个人自己**接的、可用的插件连接暴露的工具(plugins.tools.exposed,已经跳过只给宿主调的),
-      按它声明的输出判:列清单、看状态、上传这类不交出内容的工具不上画板。
+      按它声明的输出判:列清单、看状态、上传这类不交出内容的工具不上画板;声明了 `mirrors`、而他在生成目录里
+      用得上那个模型的也不上 —— 画板上那件事走生成(一个概念一个入口,transforms 的 mirrored_by_generation)。
       同一个包接了两条连接,节点只有一个 —— 用哪条是表单里的 instance_id,运行时按人解析。
       没有执行者(None)就不列插件:「不按人过滤」只给后台无人路径用,画板上总有一个点运行的人。
     """
@@ -414,14 +429,33 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
         from app.domain.plugins.nodes import node_meta, node_type_id
         from app.domain.plugins.tools import exposed
 
-        for tool in exposed(db, actor_id):
+        tools = exposed(db, actor_id)
+        generation = _mirror_check(db, actor_id, tools)
+        for tool in tools:
             node_type = node_type_id(tool["package_id"], tool["name"])
             meta = node_meta(tool)
-            if node_producer_id(node_type) not in out and is_content_transform(meta):
+            if node_producer_id(node_type) not in out and is_content_transform(meta, generation_has=generation(tool)):
                 #: 后果就是插件工具自己那一个(plugins.tools.all_tools 按清单算好的,见 domain/effects)——
                 #: 智能体在对话里直接调它、在画板上替人点运行,问不问人是同一条规矩。
                 out[node_producer_id(node_type)] = _node_producer(node_type, meta, tool["effects"])
     return out
+
+
+def _mirror_check(db: Session, actor_id: str, tools: list[dict[str, Any]]) -> Callable[[dict[str, Any]], Any]:
+    """工具 → 「他在生成目录里用得上这个工具声明的那个模型吗」(给 transforms.content_transform_gap)。
+
+    生成目录只问一次(按声明里出现的种类),不是每个工具问一次 —— ComfyUI 一台服务器上百张工作流。
+    模型得是**同一个连接**下的(工具报自哪个连接,模型就得出自那条连接的生成目录)。
+    """
+    from app.domain.boards.plugin_references import generation_index, mirrored_model
+
+    kinds = {str(tool["mirrors"].get("kind")) for tool in tools if isinstance(tool.get("mirrors"), dict)}
+    index = generation_index(db, actor_id, kinds) if kinds else {}
+
+    def check(tool: dict[str, Any]) -> Callable[[dict[str, Any]], bool]:
+        return lambda mirror: mirrored_model(index, str(tool.get("instance_id") or ""), mirror) is not None
+
+    return check
 
 
 def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Producer:

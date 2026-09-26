@@ -41,7 +41,9 @@ its URL on the Plugins page. Its models can be set as default models like any ot
 checks once a minute whether the workflows folder changed and only re-reads it when it did; click **Refresh models**
 on the Plugins page if you can't wait. The model is named after the workflow, and its output nodes decide what it
 makes: a workflow with a video combine node (VHS Video Combine, Save Video …) is a video model, everything else is an
-image model.
+image model. **A workflow that only outputs text is not a model** (taggers, prompt interrogators — their only output
+node is a Show Text kind): it can't hand back an image, so picking it would never produce one. It is still a tool
+(see below), usable in workflows and on boards.
 
 Two more models may appear:
 
@@ -95,7 +97,9 @@ the tool list, the workflow node panel and the agent's tools, with a form made f
   title when you gave it one;
 - one field per tunable parameter, named and ranged as in the generation parameters, common ones first; seed, size and
   image count under Advanced;
-- outputs per output node: connect “Image · SaveImage” downstream directly, or use “All outputs” / “Text outputs”.
+- outputs per output node: connect “Image · SaveImage” downstream directly, or use “First output” / “All outputs” /
+  “Text outputs” / “Summary” / “Task id”. Those five are for wiring workflows: run the tool on a board and only each
+  output node's own product (image, video, audio, text) lands to the right — no duplicate image, no JSON or summary notes.
 
 Renaming or moving a workflow in ComfyUI keeps the same tool (ComfyUI stores the workflow's id in the file); files saved
 by a very old ComfyUI have no id, so a rename makes them a different tool — open and save one in a current ComfyUI and it
@@ -127,6 +131,15 @@ Of the other tools, the five in bold are on by default:
 progress in the task center, cancel, resume after a restart and usage records, and a run may last 6 hours. To **run a
 processing workflow as-is** (upscale, background removal, inpainting, face restore, frame interpolation), feed it
 several inputs at once, or get every intermediate output back, use that workflow's tool.
+
+**On a board a workflow has one entry.** A workflow with a single image / video / audio output node and no
+alpha-as-mask input is the same thing as the model of the same name: the board's Add menu no longer lists its tool —
+add an image (video, audio) item and pick that model; the result lands in place, several at a time, with a longer wait.
+Tool items already on a board with such a tool are turned into the matching generation item automatically: position,
+name, prompt, reference images and parameters carry over; width / height and “Include previews” have no place in
+generation and are dropped. Workflows with several output nodes, text outputs or an alpha mask stay tools on boards.
+Workflows keep both, and the tool's description ends with “If you only need the image, use the “AI generate” node with
+this model”.
 
 A workflow tool may run for up to 30 minutes and reports progress step by step (inside a workflow the run panel shows
 “Sampler 12/20”); cancelling stops that one task in ComfyUI, and **every output** goes into the asset library — each

@@ -315,6 +315,16 @@ def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
 _KNOWN_OUTPUT_TYPES = _VIDEO_OUTPUT_TYPES | _AUDIO_OUTPUT_TYPES | _IMAGE_OUTPUT_TYPES | _TEXT_OUTPUT_TYPES
 
 
+def media_outputs(api: dict[str, Any], object_info: dict[str, Any] | None = None,
+                  titles: dict[str, str] | None = None) -> list[dict[str, str]]:
+    """会交出**文件**的输出节点:图、视频、音频,以及认不出种类的自定义输出节点(多半是某种保存节点)。
+
+    只交出一段字的(反推提示词、打标签)不算 —— 这种图**不是生成模型**:生成是「一段提示词 → 一份成片」,
+    它交不出成片,`kind_of` 却会把它兜成 image,选了它的生成永远拿不回一张图。它照样是一个工具(见 tooling)。
+    """
+    return [node for node in output_nodes(api, object_info, titles) if node["media"] != "text"]
+
+
 def output_media(class_type: str) -> str:
     """一个输出节点交出的是什么:认得的几类说 image / video / audio / text,别的(自定义的输出节点)是 any。
 

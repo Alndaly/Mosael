@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -47,7 +48,11 @@ MAX_REPLACES = 8
 #: 报出来的工具上宿主认的键。别的丢掉 —— 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主
 #: 认领能力,也不能把自己藏成「只给宿主」。
 _KEPT = ("name", "label", "description", "input_schema", "read_only", "effects", "stream", "timeout_seconds", "node",
-         "recommended", "replaces")
+         "recommended", "replaces", "mirrors")
+#: `mirrors` 里的键名(生成参数键、入参名、素材角色)的样子。值是插件报的,进画板表单前先卡一道。
+_MIRROR_KEY = re.compile(r"^[A-Za-z0-9_.:\-]{1,128}$")
+#: 模型 id 可以是一条路径(ComfyUI 的工作流就是 `people/人像.json`),只卡长度和不是空的。
+_MIRROR_MODEL_MAX = 512
 
 #: 清单刷新之后要跟着动的那些(把存着的老节点改写成新工具,见 domain/workflows/plugin_references)。
 #: 插件域不认识工作流域 —— 由那边在组装根登记进来,方向和 host_capabilities 一样。
@@ -97,7 +102,46 @@ def _clean(entry: Any, declared: set[str]) -> dict[str, Any] | None:
         clean["replaces"] = replaces
     else:
         clean.pop("replaces", None)
+    mirror = clean_mirror(clean.get("mirrors"))
+    if mirror is None:
+        clean.pop("mirrors", None)
+    else:
+        clean["mirrors"] = mirror
     return clean
+
+
+def clean_mirror(raw: Any) -> dict[str, Any] | None:
+    """`mirrors`:这个工具**和一个生成模型是同一件事**(见 docs/PLUGIN_MANIFEST「运行时报出的工具」)。
+
+        {"generation_model": "<模型 id>", "kind": "image" | "video" | "audio",
+         "prompt": "<哪个入参是提示词>",                      // 可选
+         "parameters": {"<入参>": "<生成参数键>", …},          // 可选
+         "sources": {"<入参>": "<素材角色>", …}}               // 可选
+
+    前两格是这件事本身(画板上只留生成那一个入口,见 boards.transforms);后三格只给迁移用 —— 画板上存着的
+    这种工具格改写成生成格时,填过的值怎么带过去(见 boards.plugin_references)。形状不对的整条不认:
+    说错了的「同一件事」比没说更糟,它会把一个工具从画板上藏起来。
+    """
+    if not isinstance(raw, dict):
+        return None
+    model = raw.get("generation_model")
+    kind = raw.get("kind")
+    if not isinstance(model, str) or not model.strip() or len(model) > _MIRROR_MODEL_MAX:
+        return None
+    if not isinstance(kind, str) or not _MIRROR_KEY.match(kind):
+        return None
+    mirror: dict[str, Any] = {"generation_model": model.strip(), "kind": kind}
+    prompt = raw.get("prompt")
+    if isinstance(prompt, str) and _MIRROR_KEY.match(prompt):
+        mirror["prompt"] = prompt
+    for field in ("parameters", "sources"):
+        mapping = raw.get(field)
+        if isinstance(mapping, dict):
+            kept = {key: value for key, value in mapping.items()
+                    if isinstance(key, str) and isinstance(value, str) and _MIRROR_KEY.match(key) and _MIRROR_KEY.match(value)}
+            if kept:
+                mirror[field] = kept
+    return mirror
 
 
 def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
@@ -156,4 +200,4 @@ def install() -> None:
     host_capabilities.register(TOOLS, refresh)
 
 
-__all__ = ["CATALOG_TIMEOUT_SECONDS", "MAX_TOOLS", "install", "on_refreshed", "refresh"]
+__all__ = ["CATALOG_TIMEOUT_SECONDS", "MAX_TOOLS", "clean_mirror", "install", "on_refreshed", "refresh"]

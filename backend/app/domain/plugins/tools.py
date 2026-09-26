@@ -122,16 +122,18 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
     手抄一份端点清单会随服务升级而烂,而且烂得很安静。
     """
     manifest = inst.manifest_for(db, instance)
+    #: 运行时报出的工具(进程插件的 `op: tools`,见 dynamic_tools)—— 只有它们说得出 `mirrors`,形状已在收的时候卡过。
+    reported: set[str] = set()
     if manifest.is_mcp:
         raw = list(instance.discovered_tools or [])
     else:
         # 进程插件:清单里声明的,加上它**运行时报出的**(见 dynamic_tools;和 MCP 的清单存在同一格)。
         # 后者的文字原样存着,读的时候按此刻的语言定下来。
         declared = {str(tool.get("name")) for tool in manifest.declared_tools}
-        raw = list(manifest.declared_tools) + [
-            localized_tool(tool) for tool in (instance.discovered_tools or [])
-            if isinstance(tool, dict) and str(tool.get("name")) not in declared
-        ]
+        discovered = [tool for tool in (instance.discovered_tools or [])
+                      if isinstance(tool, dict) and str(tool.get("name")) not in declared]
+        reported = {str(tool.get("name")) for tool in discovered}
+        raw = list(manifest.declared_tools) + [localized_tool(tool) for tool in discovered]
     out: list[dict[str, Any]] = []
     for tool in raw:
         if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
@@ -171,6 +173,9 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 # 边跑边说进度、取消时先让插件去停远端的活(见 runtime.stream_tool)。只给进程形态:
                 # MCP 是别人的协议,我们不往里加字段。
                 "stream": (not manifest.is_mcp) and tool.get("stream") is True,
+                # 这个工具和一个生成模型是同一件事(运行时报出的工具才说得出,见 dynamic_tools.clean_mirror)——
+                # 画板上只留生成那一个入口(boards.transforms 的 mirrored_by_generation)。
+                "mirrors": tool.get("mirrors") if tool["name"] in reported else None,
             }
         )
     return out

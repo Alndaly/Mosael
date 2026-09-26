@@ -9,7 +9,8 @@
 
 1. **不是流程或数据搬运。** 节点的分组不在 `workflows.WIRING_CATEGORIES` 里(流程控制、数据处理、
    知识库)。按分组判,因为光看输出类型分不开 —— 文本模板、字符串处理的输出也是文字。
-2. **交出画板摆得下的内容。** 落板的输出里(`board_outputs`,缺省全部)至少有一个是素材
+2. **交出画板摆得下的内容。** 落板的输出里(`tools.landing_outputs`:`board_outputs` 点名的,缺省是全部
+   不是只给连线用的 —— `wiring_outputs` 从不落板)至少有一个是素材
    (`output_data_type == "asset"`:图片 / 视频 / 音频 / 别的文件),或者是**点了名落板**的文字
    (`board_outputs` 里写着、类型是 text)。只有类型没有点名的文字不算:节点交出的文字多半是给
    下游用的摘要、状态、清单(「列出工作流」的 summary、「服务器状态」的一行),一段转写和一行状态
@@ -21,6 +22,10 @@
 4. **必填的字段创作者填得了。** 画板上的表单只摆创作者看得懂的参数(模型、比例、风格、时长、语言
    这一类);映射、原始 JSON、代码、子图这些只有搭流程的人看得懂的字段(`wiring_field`)在画板上
    不出现。一个工具**必填**这种字段的话,它在画板上填不完,不上画板。
+5. **一个概念一个入口。** 插件报出的工具声明了 `mirrors`(它和某个生成模型是同一件事,ComfyUI 里只有一个
+   图 / 视频 / 音频输出节点的工作流就是),而点运行的这个人在生成目录里用得上那个模型时,画板上只留生成
+   (图片 / 视频 / 音频格选那个模型:结果落在原位、有张数、用量、6 小时),工具格不再列出它。工作流里两个都在。
+   「用得上」要按人、按连接问,规矩本身不查库:调用方(producers._node_producers)把答案递进来。
 
 同一条规矩管内置节点和插件工具:内置节点还要先在 `NODE_TYPES` 上声明 `surfaces: ["board"]`
 (和画板内置的写字 / 生成 / 念重复的、副作用大的,不声明),声明了过不了规矩的由棘轮当场报出来;
@@ -35,10 +40,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 from app.core.i18n import t
-from app.domain.boards.tools import binding_sink
+from app.domain.boards.tools import binding_sink, landing_outputs
 
 #: 画板「添加」菜单里工具的分组,按**它吃的是什么内容**分,顺序就是菜单里的顺序。
 #: `new` 是不吃画板内容、凭空产出素材的(文生图、讲解视频、取回文件);`asset` 是吃素材却没说
@@ -60,19 +66,13 @@ def wiring_field(key: str, spec: Any) -> bool:
     return config_data_type(key, spec) == "json"
 
 
-def _landing(meta: dict[str, Any]) -> list[str]:
-    """落板的输出:`board_outputs` 点名的那几个,缺省全部(和 tools.board_outputs 同一条)。"""
-    declared = [str(name) for name in meta.get("outputs") or ["output"]]
-    return [name for name in (meta.get("board_outputs") or declared) if name in declared]
-
-
 def content_outputs(meta: dict[str, Any]) -> list[str]:
     """落板的输出里算得上**内容**的那几个:素材,或点了名落板的文字。"""
     from app.domain.workflows import output_data_type
 
     named = {str(name) for name in meta.get("board_outputs") or ()}
     out = []
-    for name in _landing(meta):
+    for name in landing_outputs(meta):
         data_type = output_data_type(name, meta)
         if data_type == "asset" or (data_type == "text" and name in named):
             out.append(name)
@@ -94,13 +94,15 @@ def _sinks(meta: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def content_transform_gap(meta: dict[str, Any]) -> str | None:
-    """这个节点**差在哪儿**不是一个内容变换;是的话回 None。
+def content_transform_gap(meta: dict[str, Any], *, generation_has: Callable[[dict[str, Any]], bool] | None = None
+                          ) -> str | None:
+    """这个节点**差在哪儿**不是一个画板上的工具;是的话回 None。
 
     回的是原因的名字(给棘轮和测试说清楚为什么):
     `wiring`(流程 / 数据 / 知识库分组)、`needs_wiring`(必填一个只有搭流程的人看得懂的字段)、
     `no_content_output`(不交出素材,也没点名落板的文字)、`no_content_input`(不吃画板上的内容,
-    又只交出文字)。
+    又只交出文字)、`mirrored_by_generation`(它声明了和某个生成模型是同一件事,而 `generation_has`
+    说点运行的人用得上那个模型 —— 画板上走生成那一个入口,见模块说明第 5 条)。
     """
     from app.domain.workflows import WIRING_CATEGORIES
 
@@ -113,11 +115,15 @@ def content_transform_gap(meta: dict[str, Any]) -> str | None:
         return "no_content_output"
     if not _makes_media(meta) and not _sinks(meta):
         return "no_content_input"
+    mirror = meta.get("mirrors")
+    if isinstance(mirror, dict) and generation_has is not None and generation_has(mirror):
+        return "mirrored_by_generation"
     return None
 
 
-def is_content_transform(meta: dict[str, Any]) -> bool:
-    return content_transform_gap(meta) is None
+def is_content_transform(meta: dict[str, Any], *, generation_has: Callable[[dict[str, Any]], bool] | None = None
+                         ) -> bool:
+    return content_transform_gap(meta, generation_has=generation_has) is None
 
 
 def board_group(meta: dict[str, Any]) -> str:

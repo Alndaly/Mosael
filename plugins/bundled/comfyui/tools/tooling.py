@@ -12,7 +12,12 @@
 - 入参从图里读:提示词 / 反向提示词、每个读素材的节点一格(`image_10`、`mask_11`、`video_1`…,
   `format: "asset"` 带着素材种类)、每个可调输入一格(`steps_3`、`lora_name_10`…,名字、范围、常用与否
   和生成参数同一套,见 labels);种子、尺寸、一次几张收进「高级」;
-- 输出按输出节点声明(`image_9`、`video_30`、`text_40`…),外加 `asset_id` / `asset_ids` / `texts` / `summary`;
+- 输出按输出节点声明(`image_9`、`video_30`、`text_40`…),外加 `asset_id` / `asset_ids` / `texts` / `summary` /
+  `prompt_id` —— 这五个是给工作流连线用的(第一份、全部、全部文字、摘要、任务号),声明成 `wiring_outputs`:
+  画板上只落每个输出节点自己的产出(`board_outputs`),不再多出一张重复的图和几张 JSON / 摘要 / 任务号便签;
+- `mirrors`:这张图**就是**一个生成模型表达得了的东西时(只有一个输出节点、交出的是图 / 视频 / 音频、没有「拿
+  alpha 当蒙版」这种只有工具做得到的入参),说它和哪个模型是同一件事、入参怎么对到生成的表单上。宿主据此在画板上
+  只留生成那一个入口(一个概念一个入口),工作流里两个都在;
 - `replaces` 告诉宿主:存着的 `run_workflow`(选的是这张工作流;那个工具已经删了)、以及这张图以前按路径哈希起的
   名字,怎么改写成这个工具 —— 宿主据此把工作流和画板上的老节点迁过来(见 domain/workflows/plugin_references),
   ComfyUI 的知识仍只在这里。
@@ -136,6 +141,10 @@ class Shape:
         self.rename: dict[str, str | None] = {}
         #: 几个输出节点
         self.output_nodes = 0
+        #: 每个输出节点自己的那个输出(`image_9`、`text_40`…)—— 画板上落的就是这几个
+        self.node_outputs: list[str] = []
+        #: 这张图和哪个生成模型是同一件事(见 _mirror);不是的话 None
+        self.mirror: dict[str, Any] | None = None
 
 
 def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
@@ -271,19 +280,65 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         key = output_key(node["media"], node["node"])
         zh, en = _OUTPUT_LABELS.get(node["media"], _OUTPUT_LABELS["any"])
         shape.outputs.append(key)
+        shape.node_outputs.append(key)
         shape.output_types[key] = "text" if node["media"] == "text" else ("asset" if node["media"] != "any" else "any")
         shape.output_labels[key] = _pair(f"{zh} · {node['title']}", f"{en} · {node['title']}")
-    for key, data_type, zh, en in (
-        ("asset_id", "asset", "第一份产出", "First output"),
-        ("asset_ids", "json", "全部产出", "All outputs"),
-        ("texts", "json", "文字产出", "Text outputs"),
-        ("summary", "text", "摘要", "Summary"),
-        ("prompt_id", "text", "任务号", "Task id"),
-    ):
+    for key, data_type, zh, en in WIRING_OUTPUTS:
         shape.outputs.append(key)
         shape.output_types[key] = data_type
         shape.output_labels[key] = _pair(zh, en)
+    shape.mirror = _mirror(entry, kind, nodes, shape, found)
     return shape
+
+
+#: 每张图的工具都有的那几个**给连线用的**输出:第一份(和第一个输出节点的那份是同一个文件)、全部 id、全部文字、
+#: 摘要、任务号。工作流里下游接得上;画板上一个都不落(`wiring_outputs`,见 docs/PLUGIN_MANIFEST)——
+#: 落的话,跑一次就在右边多出一张重复的图和几张 JSON / 摘要 / 任务号便签。
+WIRING_OUTPUTS: tuple[tuple[str, str, str, str], ...] = (
+    ("asset_id", "asset", "第一份产出", "First output"),
+    ("asset_ids", "json", "全部产出", "All outputs"),
+    ("texts", "json", "文字产出", "Text outputs"),
+    ("summary", "text", "摘要", "Summary"),
+    ("prompt_id", "text", "任务号", "Task id"),
+)
+
+
+def _mirror(entry: models.Entry, kind: str, nodes: list[dict[str, str]], shape: Shape,
+            found: list[dict[str, str]]) -> dict[str, Any] | None:
+    """这张图是不是**就是**一个生成模型(同一个 id 在插件的模型目录里):是的话说出是哪一个、入参怎么对过去。
+
+    判据是「生成那条路表达得了它的全部」:
+    - 只有一个输出节点,交出的是图 / 视频 / 音频(生成只收一种成片;两个输出节点、带一段文字的,只有工具交得全);
+    - 没有「拿 LoadImage 的 alpha 当蒙版」那一格(只有工具会把蒙版合进 alpha 那一路)。
+
+    对得过去的入参:提示词 → 提示词;读素材的节点 → 生成的素材角色;反向提示词 / 种子 / 张数 / 步数 / 可调参数 →
+    生成参数里的同一项(可调参数在生成里的键是 `节点 id.输入名`)。宽和高在生成里是一格「尺寸」,对不过去。
+    """
+    if len(nodes) != 1 or nodes[0]["media"] not in ("image", "video", "audio") or nodes[0]["media"] != kind:
+        return None
+    if any(binding[0] == "alpha_mask" for binding in shape.bindings.values()):
+        return None
+    parameters: dict[str, str] = {}
+    sources: dict[str, str] = {}
+    roles = {slot["node"]: slot["role"] for slot in found}
+    for key, binding in shape.bindings.items():
+        how = binding[0]
+        if how == "param":
+            parameters[key] = f"{binding[1]}.{binding[2]}"
+        elif how == "value" and binding[1] in ("seed", "num_images", "steps"):
+            parameters[key] = binding[1]
+        elif how == "text" and binding[1] == "negative":
+            parameters[key] = "negative_prompt"
+        elif how == "slot" and binding[1] in roles:
+            sources[key] = roles[binding[1]]
+    mirror: dict[str, Any] = {"generation_model": entry.id, "kind": kind}
+    if "prompt" in shape.bindings:
+        mirror["prompt"] = "prompt"
+    if parameters:
+        mirror["parameters"] = parameters
+    if sources:
+        mirror["sources"] = sources
+    return mirror
 
 
 def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dict[str, Any]:
@@ -309,8 +364,14 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
         "effects": "paid",
         "recommended": True,
         "input_schema": {"type": "object", "properties": shape.properties, "required": shape.required},
-        "node": {"outputs": shape.outputs, "output_types": shape.output_types, "output_labels": shape.output_labels},
+        "node": {
+            "outputs": shape.outputs, "output_types": shape.output_types, "output_labels": shape.output_labels,
+            # 画板上落的是每个输出节点自己的产出;给连线用的那几个不落(见 WIRING_OUTPUTS)
+            "board_outputs": shape.node_outputs,
+            "wiring_outputs": [key for key, *_ in WIRING_OUTPUTS],
+        },
         "replaces": _replaces(entry, name, shape),
+        **({"mirrors": shape.mirror} if shape.mirror else {}),
     }
 
 

@@ -120,8 +120,9 @@ def test_放大工作流_图必填_没有提示词(comfy, tmp_path: Path) -> Non
 
 
 def test_每张工作流的工具都上画板_按吃什么素材分组(comfy, tmp_path: Path) -> None:
-    """画板上只放内容变换(ADR 0021 修订):每张工作流都交出素材(`asset_id` 是素材),所以都在画板的
-    「添加」菜单里;读图的放大归「处理图片」,只收提示词的文生图归「产出新素材」。"""
+    """画板上只放内容变换(ADR 0021 修订):每张工作流都交出素材(它的保存节点的产出是素材),所以都是
+    内容变换;读图的放大归「处理图片」,只收提示词的文生图归「产出新素材」。(用得上同名生成模型的人画板上
+    不列其中那几张 —— 见 test_board_tools_mirrored_by_generation;这里问的是规矩本身。)"""
     from app.domain.boards.transforms import board_group, is_content_transform
     from app.domain.plugins.nodes import node_meta
 
@@ -234,3 +235,97 @@ def test_list_workflows_说出每张工作流自己的工具(comfy) -> None:
     listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
     tools = {one["id"]: one.get("tool") for one in listed["workflows"]}
     assert tools["portrait.json"] == PORTRAIT_TOOL and tools["builtin:txt2img"] == "wf_builtin_txt2img"
+
+
+# ── 画板上落什么、和生成模型是不是同一件事 ─────────────────────────────────────────
+
+#: 一张**只交出一段字**的工作流(打标签 / 反推提示词):读一张图 → 标签节点 → ShowText。
+TAGGER_API: dict[str, Any] = {
+    "1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+    "2": {"class_type": "WD14Tagger|pysssss", "inputs": {"image": ["1", 0], "threshold": 0.35}},
+    "3": {"class_type": "ShowText|pysssss", "inputs": {"text": ["2", 0]}},
+}
+#: 一张**拿 LoadImage 的 alpha 当蒙版**的局部重绘:图和它的 alpha 两路都接下去 —— 只有工具会把蒙版合进 alpha。
+ALPHA_API: dict[str, Any] = {
+    "1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5.ckpt"}},
+    "5": {"class_type": "VAEEncode", "inputs": {"pixels": ["1", 0], "vae": ["4", 2]}},
+    "6": {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["5", 0], "mask": ["1", 1]}},
+    "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["4", 2]}},
+    "9": {"class_type": "SaveImage", "inputs": {"images": ["7", 0], "filename_prefix": "x"}},
+}
+TAGGER_TOOL = "wf_" + hashlib.sha1(b"tagger.json").hexdigest()[:12]
+ALPHA_TOOL = "wf_" + hashlib.sha1(b"alpha.json").hexdigest()[:12]
+WAN_TOOL = "wf_" + hashlib.sha1(b"video/wan.json").hexdigest()[:12]
+
+
+def _with_tagger_and_alpha(comfy) -> None:
+    comfy.state.object_info["WD14Tagger|pysssss"] = {"input": {"required": {
+        "image": ["IMAGE"], "threshold": ["FLOAT", {"default": 0.35, "min": 0.0, "max": 1.0}]}}}
+    comfy.state.object_info["SetLatentNoiseMask"] = {"input": {"required": {"samples": ["LATENT"], "mask": ["MASK"]}}}
+    comfy.state.workflows["tagger.json"] = TAGGER_API
+    comfy.state.workflows["alpha.json"] = ALPHA_API
+
+
+def _models(comfy) -> dict[str, dict[str, Any]]:
+    output = runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", {"op": "models"}, {"SERVER_URL": comfy.url},
+                                  timeout=60).output
+    return {model["id"]: model for model in output["models"]}
+
+
+def test_画板上只落每个输出节点自己的产出_给连线用的五个不落(comfy, tmp_path: Path) -> None:
+    """此前一次运行落五格:`image_9`、同一个文件的 `asset_id`、一张 `asset_ids` 的 JSON 便签、摘要、任务号。
+    现在五个给连线用的声明成 `wiring_outputs`,画板上只落那个保存节点的图。工作流里它们照样接得上。"""
+    from app.domain.boards.tools import board_outputs, landing_outputs
+    from app.domain.plugins.nodes import node_meta
+
+    tools = _tools(comfy.url, tmp_path)
+    for name, tool in tools.items():
+        node = tool["node"]
+        assert node["wiring_outputs"] == ["asset_id", "asset_ids", "texts", "summary", "prompt_id"], name
+        assert node["board_outputs"] == [key for key in node["outputs"] if key not in node["wiring_outputs"]], name
+    assert landing_outputs(node_meta(tools[PORTRAIT_TOOL])) == ["image_9"]
+    assert landing_outputs(node_meta(tools[UPSCALE_TOOL])) == ["image_4", "image_5"]
+    collected = {"image_9": "a1", "asset_id": "a1", "asset_ids": ["a1"], "texts": [], "summary": "1 张图", "prompt_id": "p1"}
+    assert board_outputs(node_meta(tools[PORTRAIT_TOOL]), collected) == [{"type": "asset", "asset_id": "a1"}]
+
+
+def test_只有一个图视频音频输出节点的图_声明它和生成模型是同一件事(comfy, tmp_path: Path) -> None:
+    _with_tagger_and_alpha(comfy)
+    tools = _tools(comfy.url, tmp_path)
+    portrait = tools[PORTRAIT_TOOL]["mirrors"]
+    assert portrait["generation_model"] == "portrait.json" and portrait["kind"] == "image"
+    assert portrait["prompt"] == "prompt"
+    assert portrait["sources"] == {"image_10": "reference_image"}
+    #: 入参按生成参数的键改名:可调参数是 `节点 id.输入名`,种子 / 反向提示词 / 张数同名;宽高对不过去。
+    assert portrait["parameters"]["steps_3"] == "3.steps" and portrait["parameters"]["negative_prompt"] == "negative_prompt"
+    assert portrait["parameters"]["seed"] == "seed" and portrait["parameters"]["num_images"] == "num_images"
+    assert "width" not in portrait["parameters"]
+    #: 同一个 id 就在插件的模型目录里,改名后的键就是那个模型的生成参数。
+    models = _models(comfy)
+    assert set(portrait["parameters"].values()) <= set(models["portrait.json"]["parameters"])
+    assert tools[WAN_TOOL]["mirrors"]["kind"] == "video" and tools[WAN_TOOL]["mirrors"]["generation_model"] == "video/wan.json"
+    assert tools[WAN_TOOL]["mirrors"]["sources"] == {"image_12": "first_frame"}
+    assert models["video/wan.json"]["kind"] == "video"
+    assert tools["wf_builtin_txt2img"]["mirrors"]["generation_model"] == "builtin:txt2img"
+    #: 只有工具做得到的:两个输出节点(保存 + 预览)、只交出一段字、拿 alpha 当蒙版 —— 不声明。
+    for only_tool in (UPSCALE_TOOL, TAGGER_TOOL, ALPHA_TOOL):
+        assert "mirrors" not in tools[only_tool], only_tool
+    assert "mask" in tools[ALPHA_TOOL]["input_schema"]["properties"]
+
+
+def test_只交出一段字的图不是生成模型_照样是工具(comfy, tmp_path: Path) -> None:
+    """打标签、反推提示词这类图交不出成片:`kind_of` 会把它兜成 image,此前它就这样出现在图片模型的选择器里,
+    选了永远拿不回一张图。现在模型目录跳过它;工具照旧在,交出的那段字点名落板,吃的是一张图 ——
+    画板上归「处理图片」(按吃什么分组),不是「处理文字」。"""
+    from app.domain.boards.transforms import board_group, content_transform_gap
+    from app.domain.plugins.nodes import node_meta
+
+    _with_tagger_and_alpha(comfy)
+    models = _models(comfy)
+    assert "tagger.json" not in models and {"portrait.json", "alpha.json", "upscale.json"} <= set(models)
+    tool = _tools(comfy.url, tmp_path)[TAGGER_TOOL]
+    assert tool["node"]["board_outputs"] == ["text_3"] and tool["node"]["output_types"]["text_3"] == "text"
+    meta = node_meta(tool)
+    assert content_transform_gap(meta) is None
+    assert board_group(meta) == "image"

@@ -106,6 +106,13 @@ list, report status or upload are not on boards; use them in a [workflow](/docs/
 Tool items of those kinds already on a board before the upgrade become a note saying the step now
 belongs in a workflow, with the old settings attached; their connections and the results they made stay.
 
+**One thing, one entry.** When a plugin tool is the same thing as a generation model — a ComfyUI workflow with a
+single image / video / audio output node is already a model in image and video items — and you can use that model,
+it is not listed as a tool: add an image (video, audio) item and pick the model; the result lands in place, several
+at a time, with a longer wait. Tool items of that kind already on a board are turned into the matching generation
+item automatically; position, name, prompt, reference images and parameters carry over, and what generation has no
+place for (such as ComfyUI's width / height) is dropped.
+
 **Placing one**: in the toolbar's Add menu or the drag-out menu, tools are **grouped by the content they
 work on** — New assets, Work on images, video, audio, text or 3D scenes — each with one line on what it
 does (the menu has a search box that also matches a plugin tool's call name). A tool item grown out of
@@ -132,7 +139,8 @@ Delete the line and the binding goes with it.
 
 **Results land to the right**: every run **adds a new column of items** to the right, each connected
 by a line — images, videos and audio become those kinds of items, other files become a note naming
-the file, text becomes a note, structured data becomes a code-formatted note. Earlier results stay;
+the file, text becomes a note, structured data becomes a code-formatted note. Only the tool's **product**
+lands: outputs meant for wiring workflows (asset id lists, summaries, task ids) don't. Earlier results stay;
 nothing is overwritten. One run adds at most 12 items; anything beyond that is merged into the last note.
 
 **While it runs** the item shimmers and shows a percentage when the tool reports progress; **Stop**
