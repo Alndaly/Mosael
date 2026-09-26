@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "name": "TikHub",
   "default_locale": "zh",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "homepage": "https://docs.tikhub.io/",
   "author": {
     "name": "Mosael",

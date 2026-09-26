@@ -7,20 +7,21 @@
 
 ## 配置
 
-插件页 → 凭据,填两项:
+插件页 → 新建连接:
 
-| 键 | 说明 |
-| --- | --- |
-| `TIKHUB_API_KEY` | 在 <https://user.tikhub.io> 生成 |
-| `TIKHUB_PLATFORM` | 端点走哪个平台,见下表 |
+| 在哪儿 | 键 | 说明 |
+| --- | --- | --- |
+| 配置 | `TIKHUB_PLATFORM` | 这个连接走哪个平台的端点(下拉选),见下表 |
+| 凭据 | `TIKHUB_API_KEY` | 在 <https://user.tikhub.io> 生成;只注入这个连接 |
 
-填完自动拉一次工具清单;之后改平台记得点「刷新工具」。
+连接名跟着平台走(「TikHub · 哔哩哔哩」)。填完凭据自动拉一次工具清单;改了平台之后在插件页点一下「刷新工具」。
 
 平台取值:`douyin` `tiktok` `xiaohongshu` `bilibili` `kuaishou` `weibo` `zhihu` `instagram`
 `youtube` `twitter` `threads` `linkedin` `reddit` `wechat` `others` `tikhub`。
 
-**要同时用两个平台**:把这个目录复制一份,改掉 manifest 里的 `id` 和 `name`,两个插件各填各的平台。
-一个插件对应一个 MCP 端点 —— 这是 MCP 的形状,不是这里的限制。
+**要同时用两个平台**:再建一个连接,选另一个平台、填同一个(或另一个)Key。一个连接对应一个 MCP 端点
+(`https://mcp.tikhub.io/{平台}/mcp`)—— 这是 TikHub 的 MCP 的形状;同一个插件建几个连接都行,
+工作流节点、智能体按连接区分。
 
 ## 为什么从"自己写脚本"改成了"接 MCP"
 

@@ -613,7 +613,7 @@
     {
       "id": "dev.mosael.tikhub",
       "name": "TikHub",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "description": {
         "zh": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。",
         "en": "Read public data from Douyin / TikTok / Xiaohongshu / Bilibili / Kuaishou and other platforms: post details, creator profiles and their posts, keyword search, trending charts. For topic research, studying comparable accounts, and finding footage ideas."

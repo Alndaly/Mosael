@@ -160,8 +160,8 @@ workflow in ComfyUI, click “Refresh models”.
 These live under `plugins/examples/` in the repository — examples and official plugins at once:
 
 - `text-toolkit` — pure functions, no dependencies, no credentials.
-- `tikhub` — local script plus credentials plus network. Reads public data from Douyin, TikTok,
-  Xiaohongshu, Bilibili and Kuaishou.
+- `tikhub` — **an MCP service with zero code**: one package, one connection per platform, each with its own key; the tool list comes live from TikHub's MCP server. Reads public data from Douyin, TikTok,
+  Xiaohongshu, Bilibili, Kuaishou and more.
 - `baidu-pan` — **the one with OAuth**: it runs the authorization itself and renews its own
   tokens, and it shows how to hand a large file to the host to download (the plugin only
   resolves the URL; progress, cancellation and retries belong to the host).
