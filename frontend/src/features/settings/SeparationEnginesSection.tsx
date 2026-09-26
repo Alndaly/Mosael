@@ -6,8 +6,13 @@ import { toast } from "sonner";
 import { type SeparationEngine, installSeparationEngine, listSeparationEngines } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
-import { cn } from "@/lib/utils";
+import {
+  SettingsBlock,
+  SettingsGroup,
+  SettingsItemNote,
+  SettingsItemRow,
+  SettingsItemState,
+} from "@/components/settings/settings-layout";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 
 /**
@@ -36,24 +41,24 @@ export function SeparationEnginesSection() {
 
   return (
     <SettingsGroup title={t("separationTitle")} description={t("separationDesc")}>
-      <SettingsBlock>
-        <div className="grid gap-2">
-          {engines.data?.map((engine) => (
-            <EngineCard
-              key={engine.engine}
-              engine={engine}
-              busy={(install.isPending && install.variables === engine.engine) || engine.status === "installing"}
-              onInstall={() => install.mutate(engine.engine)}
-            />
-          ))}
-          {engines.isLoading && <p className="text-ui-sm text-muted-foreground">{t("connecting")}</p>}
-        </div>
-      </SettingsBlock>
+      {engines.data?.map((engine) => (
+        <EngineRow
+          key={engine.engine}
+          engine={engine}
+          busy={(install.isPending && install.variables === engine.engine) || engine.status === "installing"}
+          onInstall={() => install.mutate(engine.engine)}
+        />
+      ))}
+      {engines.isLoading && (
+        <SettingsBlock>
+          <p className="m-0 text-ui-sm text-muted-foreground">{t("connecting")}</p>
+        </SettingsBlock>
+      )}
     </SettingsGroup>
   );
 }
 
-function EngineCard({
+function EngineRow({
   engine,
   busy,
   onInstall,
@@ -64,61 +69,46 @@ function EngineCard({
 }) {
   const t = useI18n();
   return (
-    <div
-      className={cn(
-        "grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5",
-        engine.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid min-w-0 gap-[3px]">
-          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
-            <strong>{engine.label}</strong>
-            {/* 「约」不是客套:装下来的实际大小取决于这台机器要哪个 torch 轮子。 */}
-            <span className="text-ui-xs tabular-nums text-muted-foreground">{t("separationSize")}</span>
-          </div>
-          <small className="text-ui-xs text-muted-foreground">{t("separationEngineDetail")}</small>
+    <SettingsItemRow
+      label={engine.label}
+      // 「约」不是客套:装下来的实际大小取决于这台机器要哪个 torch 轮子。
+      meta={[t("separationSize")]}
+      description={t("separationEngineDetail")}
+      notes={
+        <>
           {/* 「还没测过」和「测过了、跑不起来」是两回事 —— 探一次要起子进程 import torch,
               不能卡在请求里,所以刚打开这一页时可能还没有答案。说成"未安装"是拿未知冒充结论。 */}
           {!engine.runtime_checked && engine.status !== "installing" && (
-            <small className="text-ui-xs text-muted-foreground">{t("runtimeChecking")}</small>
+            <SettingsItemNote>{t("runtimeChecking")}</SettingsItemNote>
           )}
           {/* 原因**原样显示**:失败时是 pip 说的那句话(用户至少能搜一下),没装好时是
               「运行环境不完整」—— 后者此前没有地方说,于是半装的环境只剩一个光秃秃的「未安装」。 */}
           {engine.runtime_checked && engine.message && (
-            <small className={cn("text-ui-xs", engine.status === "failed" ? "text-destructive" : "text-muted-foreground")}>
-              {engine.message}
-            </small>
+            <SettingsItemNote tone={engine.status === "failed" ? "destructive" : "muted"}>{engine.message}</SettingsItemNote>
           )}
-        </div>
-        <div className="shrink-0">
-          {engine.status === "installed" && (
-            <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
-              <CheckCircle2 size={14} /> {t("separationInstalled")}
-            </span>
-          )}
-          {engine.status === "installing" && (
-            // 没有分母就不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样(转写那一页同款)。
-            <span className="inline-flex items-center gap-[5px] text-xs text-muted-foreground">
-              <Loader2 size={13} className="animate-mosael-spin" />
-            </span>
-          )}
-          {/* 没测过就不摆按钮:这一刻还不知道它装没装,而「安装」和「已安装」都是结论。 */}
-          {engine.status === "missing" && !engine.runtime_checked && (
-            <Loader2 size={13} className="animate-mosael-spin text-muted-foreground" />
-          )}
-          {engine.status === "missing" && engine.runtime_checked && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
-              <Download size={13} /> {t("separationInstall")}
-            </Button>
-          )}
-          {engine.status === "failed" && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
-              <RotateCw size={13} /> {t("separationRetry")}
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {engine.status === "installed" && (
+        <SettingsItemState tone="success" icon={<CheckCircle2 size={14} />}>
+          {t("separationInstalled")}
+        </SettingsItemState>
+      )}
+      {/* 没有分母就不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样(转写那一页同款)。
+          没测过也不摆按钮:这一刻还不知道它装没装,而「安装」和「已安装」都是结论。 */}
+      {(engine.status === "installing" || (engine.status === "missing" && !engine.runtime_checked)) && (
+        <SettingsItemState icon={<Loader2 size={13} className="animate-mosael-spin" />} />
+      )}
+      {engine.status === "missing" && engine.runtime_checked && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+          <Download size={13} /> {t("separationInstall")}
+        </Button>
+      )}
+      {engine.status === "failed" && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+          <RotateCw size={13} /> {t("separationRetry")}
+        </Button>
+      )}
+    </SettingsItemRow>
   );
 }

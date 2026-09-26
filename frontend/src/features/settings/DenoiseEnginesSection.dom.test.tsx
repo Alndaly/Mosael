@@ -50,7 +50,8 @@ function renderSection(deepfilter: Record<string, unknown> = {}) {
   return { posts };
 }
 
-const rowOf = async (label: string) => (await screen.findByText(label)).closest("div.rounded-lg") as HTMLElement;
+const rowOf = async (label: string) =>
+  (await screen.findByText(label)).closest('[data-slot="settings-item-row"]') as HTMLElement;
 
 describe("降噪引擎设置页", () => {
   it("只有要下载的那个有下载按钮,点了就装", async () => {
@@ -84,6 +85,20 @@ describe("降噪引擎设置页", () => {
     const deepfilter = await rowOf("DeepFilterNet");
     expect(deepfilter).toHaveTextContent("denoiseUnsupported");
     expect(within(deepfilter).queryByRole("button")).toBeNull();
+  });
+
+  it("每个引擎是分组里的一行,不是一张带边框的卡片", async () => {
+    renderSection();
+    const row = await rowOf("DeepFilterNet");
+    // 直接挂在分组的正文下面 —— 分隔线由分组画,行自己不带框。
+    expect(row.parentElement).toHaveAttribute("data-slot", "settings-group-content");
+    expect(row).not.toHaveClass("border");
+    expect(row).not.toHaveClass("rounded-lg");
+    // 「会去掉音乐」是安静的语义色淡底标签,不是描边的大写小标。
+    const tag = within(row).getByText("denoiseRemovesMusicBadge");
+    expect(tag).toHaveAttribute("data-slot", "settings-tag");
+    expect(tag).not.toHaveClass("border");
+    expect(tag).not.toHaveClass("uppercase");
   });
 
   it("装好了显示已安装", async () => {

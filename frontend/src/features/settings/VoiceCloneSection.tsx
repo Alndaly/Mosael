@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { AlertCircle, CheckCircle2, CircleAlert, Download, Loader2, RotateCw } from "lucide-react";
+import { CheckCircle2, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,7 +11,6 @@ import {
   getTtsConfig,
   listTtsModels,
   updateTtsConfig,
-  type TtsEngine,
 } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -19,11 +18,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
-import { cn } from "@/lib/utils";
-import { formatBytes, formatSpeed } from "@/lib/bytes";
+import { ModelDownloadRow } from "@/features/settings/ModelDownloadRow";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 
 
@@ -284,126 +281,21 @@ export function VoiceCloneSection() {
         </Form>
       </SettingsBlock>
 
-      <SettingsBlock>
-        <div className="grid gap-2">
-          {models.data?.map((model) => (
-            <EngineCard key={model.id} model={model} busy={startingId === model.id || model.status === "downloading"}
-                unsaved={unsaved} onDownload={() => download.mutate(model.id)} />
-          ))}
-        </div>
-      </SettingsBlock>
+      {models.data?.map((model) => {
+        const busy = startingId === model.id || model.status === "downloading";
+        return (
+          <ModelDownloadRow
+            key={model.id}
+            model={model}
+            noRuntimeText={t("voiceModelNoRuntime")}
+            busy={busy}
+            // **禁用了就要说为什么。** 按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",
+            // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
+            actionTitle={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined}
+            onDownload={() => download.mutate(model.id)}
+          />
+        );
+      })}
     </SettingsGroup>
-  );
-}
-
-function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; busy?: boolean; unsaved?: boolean; onDownload: () => void }) {
-  const t = useI18n();
-  const pct = model.total_bytes > 0 ? Math.min(100, Math.round((model.downloaded_bytes / model.total_bytes) * 100)) : 0;
-  const downloading = model.status === "downloading";
-  return (
-    <div className={cn("grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5", model.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]")}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid min-w-0 gap-[3px]">
-          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
-            <strong>{model.label}</strong>
-            {/* 「约」不是客套:这个数问不到下载源时退回的是目录里写死的估算,而用户会拿它当准数
-                (然后发现进度条走到 93% 就完成了)。问到了就不带「约」—— 那才是实测。 */}
-            <span className="text-ui-xs tabular-nums text-muted-foreground">
-              {model.total_is_estimate ? t("sizeApprox").replace("{size}", formatBytes(model.expected_bytes)) : formatBytes(model.expected_bytes)}
-            </span>
-          </div>
-          <small className="text-ui-xs text-muted-foreground">{model.detail}</small>
-          {model.status === "installed" && !model.runtime_checked && (
-            <small className="text-ui-xs text-muted-foreground">{t("runtimeChecking")}</small>
-          )}
-          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <small className="text-ui-xs text-destructive">{t("voiceModelNoRuntime")}</small>
-          )}
-
-        </div>
-        <div className="shrink-0">
-          {/* **两件事分开说**:权重在不在盘上(status),和跑不跑得起来(runtime_ready)。
-              转写那边刚修过同一个坑:此前这里只看前者,页面写着「已安装」,一点合成却说
-              「没有可用的引擎」—— 而用户最容易做的事是去重下已经在盘上的那几个 GB。 */}
-          {model.status === "installed" && model.runtime_checked && model.runtime_ready && (
-            <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
-              <CheckCircle2 size={14} /> {t("asrModelInstalled")}
-            </span>
-          )}
-          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <Button size="sm" variant="outline" disabled={busy}
-              // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
-              // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
-              // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              title={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
-              <Download size={13} /> {t("asrModelInstallRuntime")}
-            </Button>
-          )}
-          {model.status === "missing" && (
-            <Button size="sm" variant="outline" disabled={busy}
-              // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
-              // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
-              // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              title={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
-              <Download size={13} /> {t("asrModelDownload")}
-            </Button>
-          )}
-          {downloading && (
-            // 没有分母的阶段(装运行环境)不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样。
-            <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
-              <Loader2 size={13} className="animate-mosael-spin" />
-              {model.total_bytes > 0 ? `${pct}%` : ""}
-            </span>
-          )}
-          {model.status === "failed" && (
-            <Button size="sm" variant="outline" disabled={busy}
-              // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
-              // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
-              // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              title={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
-              <RotateCw size={13} /> {t("asrModelRetry")}
-            </Button>
-          )}
-        </div>
-      </div>
-      {downloading && (
-        <div className="grid gap-[5px]">
-          {/* **装运行环境和下权重是两件事**,量纲也不同:前者跑的是 pip(装 torch 等,几 GB
-              但我们不知道总量),后者才是这个引擎的 1.5GB。没有分母时就别画进度条、也别摆
-              「0 MB / 1.5 GB」—— 那个数是权重的,而此刻在跑的不是它,于是它看着就像卡住了。 */}
-          {model.total_bytes > 0 ? (
-            <>
-              <Progress value={pct} />
-              <div className="flex items-center justify-between gap-2 text-ui-xs tabular-nums text-muted-foreground">
-                <span>
-                  {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
-                </span>
-                <span>
-                  {formatSpeed(model.speed_bps)}
-                  {model.speed_bps > 0 && model.message ? " · " : ""}
-                  {model.message}
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-              {/* 没有分母时,分子和速度仍然值得说 —— 「已下载 5.2 GB · 12.4 MB/s」比一个
-                  光转的圈有用得多,而且它是判断"卡住没有"的唯一依据。 */}
-              <Loader2 size={12} className="shrink-0 animate-mosael-spin" />
-              {model.downloaded_bytes > 0 && (
-                <span className="tabular-nums">{formatBytes(model.downloaded_bytes)}</span>
-              )}
-              {model.speed_bps > 0 && <span className="tabular-nums">{formatSpeed(model.speed_bps)}</span>}
-              <span className="min-w-0 truncate">{model.message}</span>
-            </div>
-          )}
-        </div>
-      )}
-      {model.status === "failed" && (
-        <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
-          <AlertCircle size={13} /> {model.message}
-        </div>
-      )}
-    </div>
   );
 }

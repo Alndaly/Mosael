@@ -8,9 +8,15 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
-import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
+import {
+  SettingsBlock,
+  SettingsGroup,
+  SettingsItemNote,
+  SettingsItemRow,
+  SettingsItemState,
+  SettingsTag,
+} from "@/components/settings/settings-layout";
 import { formatBytes } from "@/lib/bytes";
-import { cn } from "@/lib/utils";
 
 /**
  * Settings → 降噪引擎(ADR-0017)。
@@ -36,19 +42,19 @@ export function DenoiseEnginesSection() {
 
   return (
     <SettingsGroup title={t("denoiseEnginesTitle")} description={t("denoiseEnginesDesc")}>
-      <SettingsBlock>
-        <div className="grid gap-2">
-          {engines.data?.map((engine) => (
-            <EngineRow
-              key={engine.engine}
-              engine={engine}
-              busy={(install.isPending && install.variables === engine.engine) || engine.status === "installing"}
-              onInstall={() => install.mutate(engine.engine)}
-            />
-          ))}
-          {engines.isLoading && <p className="text-ui-sm text-muted-foreground">{t("connecting")}</p>}
-        </div>
-      </SettingsBlock>
+      {engines.data?.map((engine) => (
+        <EngineRow
+          key={engine.engine}
+          engine={engine}
+          busy={(install.isPending && install.variables === engine.engine) || engine.status === "installing"}
+          onInstall={() => install.mutate(engine.engine)}
+        />
+      ))}
+      {engines.isLoading && (
+        <SettingsBlock>
+          <p className="m-0 text-ui-sm text-muted-foreground">{t("connecting")}</p>
+        </SettingsBlock>
+      )}
     </SettingsGroup>
   );
 }
@@ -57,69 +63,47 @@ function EngineRow({ engine, busy, onInstall }: { engine: DenoiseEngine; busy: b
   const t = useI18n();
   const installed = engine.installable ? engine.status === "installed" : engine.ready;
   return (
-    <div
-      className={cn(
-        "grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5",
-        installed && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid min-w-0 gap-[3px]">
-          <div className="flex flex-wrap items-center gap-2">
-            <strong className="text-ui-md">{engine.label}</strong>
-            {engine.removes_music && (
-              <span className="rounded-sm bg-[color-mix(in_oklab,var(--warning)_16%,transparent)] px-1.5 py-px text-ui-2xs font-medium">
-                {t("denoiseRemovesMusicBadge")}
-              </span>
-            )}
-            {engine.installable && engine.size_bytes > 0 && engine.status !== "installed" && (
-              <span className="text-ui-xs tabular-nums text-muted-foreground">
-                {t("denoiseSizeApprox").replace("{size}", formatBytes(engine.size_bytes))}
-              </span>
-            )}
-          </div>
-          <small className="text-ui-xs leading-[1.45] text-muted-foreground">
-            <InlineMarkdown text={engine.description} />
-          </small>
+    <SettingsItemRow
+      label={engine.label}
+      meta={[
+        engine.installable && engine.size_bytes > 0 && engine.status !== "installed"
+          ? t("denoiseSizeApprox").replace("{size}", formatBytes(engine.size_bytes))
+          : null,
+      ]}
+      tags={engine.removes_music && <SettingsTag tone="warning">{t("denoiseRemovesMusicBadge")}</SettingsTag>}
+      description={<InlineMarkdown text={engine.description} />}
+      notes={
+        <>
           {/* 不需要装、但现在用不了的(比如 ffmpeg 没带 RNNoise 滤镜):说清原因。 */}
           {!engine.installable && !engine.ready && engine.setup_hint && (
-            <small className="text-ui-xs text-foreground">{engine.setup_hint}</small>
+            <SettingsItemNote tone="foreground">{engine.setup_hint}</SettingsItemNote>
           )}
-          {engine.status === "unsupported" && <small className="text-ui-xs text-foreground">{t("denoiseUnsupported")}</small>}
+          {engine.status === "unsupported" && <SettingsItemNote tone="foreground">{t("denoiseUnsupported")}</SettingsItemNote>}
           {/* 失败原因**原样显示**:校验不符、连不上 GitHub,用户能照着那句话去查。 */}
           {engine.status === "failed" && engine.message && (
-            <small className="text-ui-xs text-destructive">{engine.message}</small>
+            <SettingsItemNote tone="destructive">{engine.message}</SettingsItemNote>
           )}
-          {engine.status === "installing" && engine.message && (
-            <small className="text-ui-xs text-muted-foreground">{engine.message}</small>
-          )}
-        </div>
-        <div className="shrink-0">
-          {installed && (
-            <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
-              <CheckCircle2 size={14} /> {t(engine.installable ? "denoiseInstalled" : "denoiseReadyLabel")}
-            </span>
-          )}
-          {!engine.installable && !engine.ready && (
-            <span className="text-xs text-muted-foreground">{t("denoiseUnavailableLabel")}</span>
-          )}
-          {engine.status === "installing" && (
-            <span className="inline-flex items-center gap-[5px] text-xs text-muted-foreground">
-              <Loader2 size={13} className="animate-mosael-spin" />
-            </span>
-          )}
-          {engine.status === "missing" && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
-              <Download size={13} /> {t("denoiseInstall")}
-            </Button>
-          )}
-          {engine.status === "failed" && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
-              <RotateCw size={13} /> {t("denoiseRetry")}
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
+          {engine.status === "installing" && engine.message && <SettingsItemNote>{engine.message}</SettingsItemNote>}
+        </>
+      }
+    >
+      {installed && (
+        <SettingsItemState tone="success" icon={<CheckCircle2 size={14} />}>
+          {t(engine.installable ? "denoiseInstalled" : "denoiseReadyLabel")}
+        </SettingsItemState>
+      )}
+      {!engine.installable && !engine.ready && <SettingsItemState>{t("denoiseUnavailableLabel")}</SettingsItemState>}
+      {engine.status === "installing" && <SettingsItemState icon={<Loader2 size={13} className="animate-mosael-spin" />} />}
+      {engine.status === "missing" && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+          <Download size={13} /> {t("denoiseInstall")}
+        </Button>
+      )}
+      {engine.status === "failed" && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={onInstall}>
+          <RotateCw size={13} /> {t("denoiseRetry")}
+        </Button>
+      )}
+    </SettingsItemRow>
   );
 }

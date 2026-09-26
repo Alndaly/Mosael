@@ -7,12 +7,17 @@ import {
   SettingsBlock,
   SettingsBlockTitle,
   SettingsGroup,
+  SettingsItemNote,
+  SettingsItemRow,
+  SettingsItemState,
   SettingsList,
   SettingsListBlock,
   SettingsListItem,
   SettingsRow,
   SettingsSectionStack,
+  SettingsTag,
 } from "@/components/settings/settings-layout";
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 
 describe("settings section layout", () => {
   it("keeps groups flat inside the page panel", () => {
@@ -186,5 +191,70 @@ describe("settings section layout", () => {
     const title = container.querySelector('[data-slot="settings-block-title"]');
     expect(title).toHaveClass("m-0");
     expect(title?.className).not.toMatch(/m[tyb]-/);
+  });
+
+  it("an item row sits in the group like any other row: same rhythm, divider from the group, no card frame", () => {
+    const { container } = render(
+      <SettingsGroup title="转写模型">
+        <SettingsRow label="默认模型">K3</SettingsRow>
+        <SettingsItemRow label="FunASR" meta={["funasr", null, "973 MB"]} description="中文好">
+          <button type="button">下载</button>
+        </SettingsItemRow>
+      </SettingsGroup>,
+    );
+
+    const row = container.querySelector('[data-slot="settings-item-row"]')!;
+    expect(row.parentElement).toHaveAttribute("data-slot", "settings-group-content");
+    expect(row).toHaveClass("py-5", "px-0.5");
+    expect(row).not.toHaveClass("border");
+    expect(row).not.toHaveClass("rounded-lg");
+    expect(row).not.toHaveClass("bg-background");
+    // 标签和说明与 SettingsRow 同一档字号。
+    expect(container.querySelector('[data-slot="settings-item-label"]')).toHaveClass("text-ui-md", "font-medium");
+    expect(container.querySelector('[data-slot="settings-item-description"]')).toHaveClass("text-ui-sm", "leading-[1.5]");
+    // 元信息是一行小字,假值跳过,「·」隔开。
+    const meta = container.querySelector('[data-slot="settings-item-meta"]')!;
+    expect(meta).toHaveTextContent("funasr · 973 MB");
+    expect(meta).toHaveClass("text-muted-foreground");
+    expect(screen.getByRole("button", { name: "下载" }).parentElement).toHaveAttribute("data-slot", "settings-item-control");
+  });
+
+  it("puts status lines under the description and progress across the whole row", () => {
+    const { container } = render(
+      <SettingsItemRow
+        label="Demucs"
+        notes={<SettingsItemNote tone="destructive">pip 失败</SettingsItemNote>}
+        footer={<div>进度</div>}
+      />,
+    );
+
+    const note = screen.getByText("pip 失败");
+    expect(note).toHaveAttribute("data-slot", "settings-item-note");
+    expect(note).toHaveClass("text-destructive", "text-ui-sm");
+    const footer = container.querySelector('[data-slot="settings-item-footer"]')!;
+    expect(footer).toHaveTextContent("进度");
+    expect(footer.className).toContain("col-span-2");
+    // 没有右边的控件就不留那一格。
+    expect(container.querySelector('[data-slot="settings-item-control"]')).toBeNull();
+    expect(container.querySelector('[data-slot="settings-item-meta"]')).toBeNull();
+  });
+
+  it("keeps a status in the control slot as tall as the sm button it replaces", () => {
+    render(
+      <SettingsItemRow label="F5-TTS">
+        <SettingsItemState tone="success">已安装</SettingsItemState>
+      </SettingsItemRow>,
+    );
+
+    const state = screen.getByText("已安装");
+    expect(state).toHaveClass(CONTROL_HEIGHT.sm, "text-success");
+  });
+
+  it("draws tags quietly: tinted, no outline, no uppercase", () => {
+    render(<SettingsTag tone="warning">会去掉音乐</SettingsTag>);
+    const tag = screen.getByText("会去掉音乐");
+    expect(tag).toHaveClass("rounded-full", "text-warning");
+    expect(tag).not.toHaveClass("border");
+    expect(tag).not.toHaveClass("uppercase");
   });
 });

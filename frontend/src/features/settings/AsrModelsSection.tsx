@@ -1,18 +1,12 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Download, Loader2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 
-import { type AsrModel, downloadAsrModel, listAsrModels } from "@/api/client";
+import { downloadAsrModel, listAsrModels } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
-import { cn } from "@/lib/utils";
-import { formatBytes, formatSpeed } from "@/lib/bytes";
+import { ModelDownloadRow } from "@/features/settings/ModelDownloadRow";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
-
-
 
 /** Settings → 转写模型:预下载 funasr / whisperx 权重,展示进度、百分比、
     速度与剩余时间。转写首次会自动下载,这里给一个手动、可见的下载渠道。 */
@@ -32,131 +26,23 @@ export function AsrModelsSection() {
 
   return (
     <SettingsGroup title={t("asrModelsTitle")} description={t("asrModelsDesc")}>
-      <SettingsBlock>
-        <div className="grid gap-2">
-          {models.data?.map((model) => (
-            <AsrModelCard
-              key={model.id}
-              model={model}
-              // 只看这一行自己在不在下 —— 每个引擎有自己的 venv,同时装不会互相弄坏。
-              busy={(download.isPending && download.variables === model.id) || model.status === "downloading"}
-              onDownload={() => download.mutate(model.id)}
-            />
-          ))}
-          {models.isLoading && <p className="text-ui-sm text-muted-foreground">{t("connecting")}</p>}
-        </div>
-      </SettingsBlock>
+      {models.data?.map((model) => (
+        <ModelDownloadRow
+          key={model.id}
+          model={model}
+          // 引擎族是一个 id(funasr / whisperx),照原样作小字 —— 不再是描边的大写小标。
+          meta={model.engine}
+          noRuntimeText={t("asrModelNoRuntime")}
+          // 只看这一行自己在不在下 —— 每个引擎有自己的 venv,同时装不会互相弄坏。
+          busy={(download.isPending && download.variables === model.id) || model.status === "downloading"}
+          onDownload={() => download.mutate(model.id)}
+        />
+      ))}
+      {models.isLoading && (
+        <SettingsBlock>
+          <p className="m-0 text-ui-sm text-muted-foreground">{t("connecting")}</p>
+        </SettingsBlock>
+      )}
     </SettingsGroup>
-  );
-}
-
-function AsrModelCard({
-  model,
-  busy,
-  onDownload,
-}: {
-  model: AsrModel;
-  busy?: boolean;
-  onDownload: () => void;
-}) {
-  const t = useI18n();
-  const pct = model.total_bytes > 0 ? Math.min(100, Math.round((model.downloaded_bytes / model.total_bytes) * 100)) : 0;
-  const downloading = model.status === "downloading";
-
-  return (
-    <div className={cn("grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5", model.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]")}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid min-w-0 gap-[3px]">
-          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
-            <strong>{model.label}</strong>
-            <span className="rounded-md border border-border px-[5px] text-ui-2xs uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
-            {/* 「约」不是客套:问不到下载源时这个数是写死的估算,而用户会拿它当准数。 */}
-            <span className="text-ui-xs tabular-nums text-muted-foreground">
-              {model.total_is_estimate ? t("sizeApprox").replace("{size}", formatBytes(model.expected_bytes)) : formatBytes(model.expected_bytes)}
-            </span>
-          </div>
-          <small className="text-ui-xs text-muted-foreground">{model.detail}</small>
-          {/* 「还没测过」和「测过了、跑不起来」是两回事 —— 探测要起子进程 import torch,
-              不能卡在请求里,所以刚打开时可能还没有答案。说成"未就绪"是拿未知冒充结论。 */}
-          {model.status === "installed" && !model.runtime_checked && (
-            <small className="text-ui-xs text-muted-foreground">{t("runtimeChecking")}</small>
-          )}
-          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <small className="text-ui-xs text-destructive">{t("asrModelNoRuntime")}</small>
-          )}
-        </div>
-        <div className="shrink-0">
-          {/* **两件事分开说**:文件在不在盘上(status),和跑不跑得起来(runtime_ready)。
-              它们完全可以一真一假 —— 模型缓存是别的工具下的,而这台机器上没有任何解释器装了
-              funasr/whisperx。此前这里只看前者,于是页面写着「已安装」、一转写就报「未找到
-              转写环境」,而用户最容易做的事是去重下已经在盘上的那几个 GB。 */}
-          {model.status === "installed" && model.runtime_checked && model.runtime_ready && (
-            <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
-              <CheckCircle2 size={14} /> {t("asrModelInstalled")}
-            </span>
-          )}
-          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
-              <Download size={13} /> {t("asrModelInstallRuntime")}
-            </Button>
-          )}
-          {model.status === "missing" && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
-              <Download size={13} /> {t("asrModelDownload")}
-            </Button>
-          )}
-          {downloading && (
-            // 没有分母的阶段(装运行环境)不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样。
-            <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
-              <Loader2 size={13} className="animate-mosael-spin" />
-              {model.total_bytes > 0 ? `${pct}%` : ""}
-            </span>
-          )}
-          {model.status === "failed" && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
-              <RotateCw size={13} /> {t("asrModelRetry")}
-            </Button>
-          )}
-        </div>
-      </div>
-      {downloading && (
-        <div className="grid gap-[5px]">
-          {/* **装运行环境和下模型是两件事**,量纲也不同:前者跑的是 pip(装 torch 等,几 GB
-              但我们不知道总量),后者才是这个模型的 2.2GB。没有分母时就别画进度条、也别摆
-              「0 MB / 2.2 GB」—— 那个数是模型的,而此刻在跑的不是它。 */}
-          {model.total_bytes > 0 ? (
-            <>
-              <Progress value={pct} />
-              <div className="flex items-center justify-between gap-2 text-ui-xs tabular-nums text-muted-foreground">
-                <span>
-                  {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
-                </span>
-                <span>
-                  {formatSpeed(model.speed_bps)}
-                  {model.speed_bps > 0 && model.message ? " · " : ""}
-                  {model.message}
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-              {/* 没有分母时,分子和速度仍然值得说 —— 「已下载 5.2 GB · 12.4 MB/s」比一个
-                  光转的圈有用得多,而且它是判断"卡住没有"的唯一依据。 */}
-              <Loader2 size={12} className="shrink-0 animate-mosael-spin" />
-              {model.downloaded_bytes > 0 && (
-                <span className="tabular-nums">{formatBytes(model.downloaded_bytes)}</span>
-              )}
-              {model.speed_bps > 0 && <span className="tabular-nums">{formatSpeed(model.speed_bps)}</span>}
-              <span className="min-w-0 truncate">{model.message}</span>
-            </div>
-          )}
-        </div>
-      )}
-      {model.status === "failed" && (
-        <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
-          <AlertCircle size={13} /> {model.message}
-        </div>
-      )}
-    </div>
   );
 }

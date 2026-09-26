@@ -1,6 +1,7 @@
 import React from "react";
 
 import { EmptyState } from "@/components/layout/EmptyState";
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { cn } from "@/lib/utils";
 
 /**
@@ -11,7 +12,7 @@ import { cn } from "@/lib/utils";
  * rounded card here would create a frame inside a frame.
  *
  * Row dividers come from the group body's `[&>*+*]:border-t`, so a Group's children must be
- * only Rows and Blocks. Any other element between two of them — including a display:none
+ * only Rows, ItemRows and Blocks. Any other element between two of them — including a display:none
  * one, which sibling selectors do not skip — adds or shifts a divider.
  * Hidden file inputs belong inside the Row whose control opens them.
  *
@@ -128,6 +129,179 @@ export function SettingsRow({
         <div className={cn(stacked ? "grid min-w-0" : "flex min-w-0 flex-wrap items-center gap-2", controlClassName)}>{children}</div>
       )}
     </div>
+  );
+}
+
+/**
+ * 一行"东西"(一个引擎、一个模型):名字 + 小字元信息 + 说明在左,状态或动作在右,
+ * 需要时底下再挂一条横贯整行的进度。
+ *
+ * 和 SettingsRow **同一套版式**:同样的内边距、同样的两列、同样由分组画分隔线,标签和说明也是
+ * 同一档字号 —— 于是一页"引擎列表"和一页"开关设置"读起来是同一个设置页。此前转写、配音、
+ * 人声分离、降噪四页各画一叠带边框的卡片(卡片里还套着描边的大写小标),和其余设置格格不入。
+ *
+ * 为什么不直接用 SettingsRow:它表达不了三件事 —— 名字旁边的元信息(引擎族、大小、标签),
+ * 说明下面按状态出现的几行(「正在检查运行环境…」、失败原因),以及横贯整行的进度条。
+ * 这三件分别是 `meta`/`tags`、`notes`、`footer` 三个插槽;右边照旧是 children。
+ */
+export function SettingsItemRow({
+  id,
+  className,
+  label,
+  meta,
+  tags,
+  description,
+  notes,
+  footer,
+  children,
+}: {
+  id?: string;
+  className?: string;
+  label: React.ReactNode;
+  /** 名字后面的小字,逐项用「·」隔开(引擎族、大小)。假值自动跳过。 */
+  meta?: readonly React.ReactNode[];
+  /** 名字后面的安静标签,用 SettingsTag。 */
+  tags?: React.ReactNode;
+  description?: React.ReactNode;
+  /** 说明下面按状态出现的几行,用 SettingsItemNote。 */
+  notes?: React.ReactNode;
+  /** 横贯整行、在最下面的一格 —— 下载进度条。 */
+  footer?: React.ReactNode;
+  /** 右边:SettingsItemState 或 `<Button size="sm" variant="outline">`。 */
+  children?: React.ReactNode;
+}) {
+  const metaItems = (meta ?? []).filter((item) => item !== null && item !== undefined && item !== false && item !== "");
+  return (
+    <div
+      id={id}
+      data-slot="settings-item-row"
+      className={cn(
+        "grid grid-cols-1 items-start gap-3 px-0.5 py-5",
+        "@min-[620px]/settings:grid-cols-[minmax(0,1fr)_auto] @min-[620px]/settings:items-center @min-[620px]/settings:gap-x-8",
+        className,
+      )}
+    >
+      <div className="grid min-w-0 gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span data-slot="settings-item-label" className="text-ui-md font-medium leading-relaxed">
+            {label}
+          </span>
+          {metaItems.length > 0 && (
+            <span data-slot="settings-item-meta" className="text-ui-xs tabular-nums text-muted-foreground">
+              {metaItems.map((item, index) => (
+                <React.Fragment key={index}>
+                  {index > 0 && " · "}
+                  {item}
+                </React.Fragment>
+              ))}
+            </span>
+          )}
+          {tags}
+        </div>
+        {description && (
+          <small data-slot="settings-item-description" className="text-ui-sm leading-[1.5] text-muted-foreground">
+            {description}
+          </small>
+        )}
+        {notes}
+      </div>
+      {children && (
+        <div data-slot="settings-item-control" className="flex min-w-0 flex-wrap items-center gap-2">
+          {children}
+        </div>
+      )}
+      {footer && (
+        <div data-slot="settings-item-footer" className="min-w-0 @min-[620px]/settings:col-span-2">
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const NOTE_TONE = {
+  muted: "text-muted-foreground",
+  foreground: "text-foreground",
+  destructive: "text-destructive",
+} as const;
+
+/** SettingsItemRow 说明下面的一行状态:检查中、跑不起来的原因、失败原因。和说明同一档字号,只换颜色。 */
+export function SettingsItemNote({
+  tone = "muted",
+  icon,
+  className,
+  children,
+}: {
+  tone?: keyof typeof NOTE_TONE;
+  icon?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <small
+      data-slot="settings-item-note"
+      data-tone={tone}
+      className={cn(
+        "flex min-w-0 items-center gap-1.5 text-ui-sm leading-[1.5] [&>svg]:shrink-0",
+        NOTE_TONE[tone],
+        className,
+      )}
+    >
+      {icon}
+      {children}
+    </small>
+  );
+}
+
+const STATE_TONE = {
+  success: "font-medium text-success",
+  muted: "text-muted-foreground",
+} as const;
+
+/**
+ * SettingsItemRow 右边**不是按钮**时的那个状态(「已安装」、转圈 + 百分比)。
+ *
+ * 高度取 CONTROL_HEIGHT.sm,和同一格里的 `<Button size="sm">` 一样高 —— 一行从「下载」变成
+ * 「已安装」时,整行不跳。
+ */
+export function SettingsItemState({
+  tone = "muted",
+  icon,
+  children,
+}: {
+  tone?: keyof typeof STATE_TONE;
+  icon?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <span
+      data-slot="settings-item-state"
+      data-tone={tone}
+      className={cn(CONTROL_HEIGHT.sm, "inline-flex items-center gap-1.5 text-ui-sm tabular-nums [&>svg]:shrink-0", STATE_TONE[tone])}
+    >
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+const TAG_TONE = {
+  neutral: "bg-secondary text-muted-foreground",
+  warning: "bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-warning",
+} as const;
+
+/**
+ * 设置里的安静标签:语义色淡底的小圆角,不描边、不大写 —— 和飞书机器人的状态、计价规则的来源同一种。
+ */
+export function SettingsTag({ tone = "neutral", children }: { tone?: keyof typeof TAG_TONE; children: React.ReactNode }) {
+  return (
+    <span
+      data-slot="settings-tag"
+      data-tone={tone}
+      className={cn("inline-flex shrink-0 items-center rounded-full px-1.5 text-ui-2xs font-medium leading-5", TAG_TONE[tone])}
+    >
+      {children}
+    </span>
   );
 }
 
