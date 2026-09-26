@@ -24,7 +24,8 @@ Research of official docs (2026-09-25; details in docs/AUDIO_GENERATION_CAPABILI
 - Evolink — Suno v4…v5.5 on `/v1/audios/generations`, asynchronous, two tracks per request.
 - Kling — text-to-audio (sound effects) and video-to-audio, asynchronous, same task envelope as video.
 - Alibaba Model Studio — Fun-Music and AudioGen (`qwen-audio-3.1-tts-next`), synchronous, Beijing only.
-- MiniMax — music-3.0 / 2.6 / cover, synchronous; **closed to new users since 2026-08-20**.
+- MiniMax — music-3.0 / 2.6 / cover, synchronous; **closed to new users since 2026-08-20**. (Integrated at first,
+  removed on 2026-09-26 — see the addendum.)
 - Volcengine AI music — `GenSong*` / `GenBGM*`, asynchronous, **AK/SK-signed only**.
 - OpenAI — no music or sound-effect endpoint (speech only).
 
@@ -70,7 +71,7 @@ Research of official docs (2026-09-25; details in docs/AUDIO_GENERATION_CAPABILI
 6. **Adapters follow the existing seams.** Asynchronous vendors (Suno via Evolink, Kling, Volcengine) go through
    `poll_until_ready`, so the receipt is persisted before waiting and `resume` collects it after a restart
    (ADR 0019); Volcengine's signed-POST query is wrapped in a tiny client whose `get(poll_path)` issues the signed
-   call. Synchronous vendors (Lyria, MiniMax, Alibaba) disable HTTP retries on the paid POST — a retried read
+   call. Synchronous vendors (Lyria, Alibaba) disable HTTP retries on the paid POST — a retried read
    timeout would pay twice — and have no receipt to persist. Vendor error codes are mapped to categories
    (`auth`, `balance`, `rate_limited`, `content_blocked`, `invalid_params`, `not_entitled`, `unavailable`) with
    localized messages; the vendor's own text stays in `detail`.
@@ -89,7 +90,18 @@ Research of official docs (2026-09-25; details in docs/AUDIO_GENERATION_CAPABILI
   this lands. The board UI still needs an audio-slot form (model picker filtered to audio, lyrics, instrumental)
   — that work belongs to the board producers track.
 - Plugins can declare `kind: "audio"` models; `lyrics` and `instrumental` map onto host controls.
-- None of the six vendors has been run with a real key; every descriptor says so and cites its doc page. The first
+- None of the vendors has been run with a real key; every descriptor says so and cites its doc page. The first
   real run of each should re-check limits the way `test_capabilities_match_reality` does for video.
 - TTS could later become an audio-generation mode if a vendor ships prompt-driven speech that fits the descriptor
   model; that would be a new ADR, not a flag.
+
+## Addendum (2026-09-26): MiniMax music removed
+
+MiniMax stopped selling music generation to new accounts on 2026-08-20; a new user could configure the model and
+only learn at the first paid call that the vendor refuses them. The adapter, its three catalog entries
+(`music-3.0`, `music-2.6`, `music-cover`) and the `minimax-music*` capability profiles are gone, and MiniMax no
+longer offers the `audio` capability. The one-time migration `remove-minimax-music-models` deletes those model
+rows (with their declarations, defaults and price rules), clears pointers to the removed profiles, and clears the
+model choice wherever it was saved — AI Studio sessions, board generation cells, workflow `ai_generate` nodes (a new
+revision) and scheduled generations (disabled, so a schedule never silently spends on another model). Generation
+history and usage keep their records. MiniMax chat and Hailuo video are unaffected.

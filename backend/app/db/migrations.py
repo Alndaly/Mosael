@@ -2922,6 +2922,188 @@ def _migrate_comfyui_connections_become_plugin_instances() -> None:
         logger.info("把 %d 条 ComfyUI 连接搬成了 ComfyUI 插件的连接", len(profiles))
 
 
+def _remove_minimax_music_models() -> None:
+    """MiniMax 音乐撤掉(见 ADR 0022 的补充):它 2026-08-20 起不再向新用户开放,接口留着只会让新用户配好之后
+    在第一次付费调用时被对面拒掉。代码里的 Adapter、目录里的三个模型和两份能力档案都删了,这里清掉**存着的指向**。
+
+    - 模型行(`minimax` 连接下的 `music-3.0` / `music-2.6` / `music-cover`)删掉,连同它们的参数声明、指着它们的
+      默认模型(置空 = 没设)和这三个模型的价格规则;
+    - 别的模型行上指向已删档案 / 模型的「参数按什么来」(`profile:minimax-music*`、`model:minimax/music-*`)清空,
+      指着它们的参数声明删掉 —— 留着的话解析回 None,界面显示成「还没认出来」,不如直接回到跟随目录;
+    - 存着的**模型选择**清掉:生成会话(AI 工作台)、画板上的生成格、工作流的 `ai_generate` 节点(连同循环体 / 子图,
+      改过的追加一版修订,作者和认可人沿用上一版)、定时任务。清掉的是 provider / 连接 / 模型三项,提示词、歌词、
+      素材这些用户写下的东西不动 —— 再打开时重新选一个模型就能接着用。**定时任务同时停用**:清掉模型的任务会落到
+      默认模型上跑,那是在用户不知道的情况下换了一家花钱;
+    - 生成历史、任务回执、产出记录和用量是**发生过的事**,原样保留。
+
+    幂等:第二次跑时这三个模型已经没有行、也没有任何引用。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "provider_profiles" not in tables:
+        return
+    models = ("music-3.0", "music-2.6", "music-cover")
+    refs = ("profile:minimax-music", "profile:minimax-music-cover", *(f"model:minimax/{one}" for one in models))
+    in_models = ", ".join(f":m{index}" for index in range(len(models)))
+    in_refs = ", ".join(f":r{index}" for index in range(len(refs)))
+    model_params = {f"m{index}": one for index, one in enumerate(models)}
+    ref_params = {f"r{index}": one for index, one in enumerate(refs)}
+
+    def loads(raw: Any, fallback: Any) -> Any:
+        if raw is None:
+            return fallback
+        if not isinstance(raw, str):
+            return raw
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return fallback
+
+    def dumps(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False)
+
+    stamp = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    with engine.begin() as conn:
+        minimax = set(conn.execute(text("SELECT id FROM provider_profiles WHERE vendor = 'minimax'")).scalars().all())
+
+        def points_at_music(ref: dict[str, Any]) -> bool:
+            """一份存着的选择 `{provider?, provider_profile_id?, model}` 指的是不是被撤掉的那三个。"""
+            if str(ref.get("model") or "").strip() not in models:
+                return False
+            return ref.get("provider") == "minimax" or str(ref.get("provider_profile_id") or "") in minimax
+
+        def cleared(ref: dict[str, Any]) -> dict[str, Any]:
+            return {key: value for key, value in ref.items() if key not in ("provider", "provider_profile_id", "model")}
+
+        if "provider_models" in tables and minimax:
+            profile_params = {f"p{index}": one for index, one in enumerate(sorted(minimax))}
+            in_profiles = ", ".join(f":{key}" for key in profile_params)
+            doomed = conn.execute(
+                text(f"SELECT id FROM provider_models WHERE provider_profile_id IN ({in_profiles})"
+                     f" AND model_id IN ({in_models})"),
+                {**profile_params, **model_params},
+            ).scalars().all()
+            for row_id in doomed:
+                if "generation_capability_declarations" in tables:
+                    conn.execute(text("DELETE FROM generation_capability_declarations WHERE provider_model_id = :id"),
+                                 {"id": row_id})
+                if "provider_defaults" in tables:
+                    conn.execute(text("UPDATE provider_defaults SET provider_model_id = NULL WHERE provider_model_id = :id"),
+                                 {"id": row_id})
+                conn.execute(text("DELETE FROM provider_models WHERE id = :id"), {"id": row_id})
+            if "provider_pricing_rules" in tables:
+                conn.execute(
+                    text(f"DELETE FROM provider_pricing_rules WHERE model IN ({in_models})"
+                         f" AND (provider = 'minimax' OR provider_profile_id IN ({in_profiles}))"),
+                    {**profile_params, **model_params},
+                )
+        elif "provider_pricing_rules" in tables:
+            conn.execute(text(f"DELETE FROM provider_pricing_rules WHERE provider = 'minimax' AND model IN ({in_models})"),
+                         model_params)
+        if "generation_capability_declarations" in tables:
+            conn.execute(text(f"DELETE FROM generation_capability_declarations WHERE catalog_ref IN ({in_refs})"), ref_params)
+        if "provider_models" in tables and "generation_capability_ref" in {
+            column["name"] for column in inspect(conn).get_columns("provider_models")
+        }:
+            conn.execute(
+                text(f"UPDATE provider_models SET generation_capability_ref = NULL WHERE generation_capability_ref IN ({in_refs})"),
+                ref_params,
+            )
+
+        if "generation_sessions" in tables and minimax:
+            for row in conn.execute(text(
+                f"SELECT id, provider_profile_id, model FROM generation_sessions WHERE model IN ({in_models})"
+            ), model_params).mappings().all():
+                if points_at_music(dict(row)):
+                    conn.execute(text("UPDATE generation_sessions SET model = NULL, provider_profile_id = NULL WHERE id = :id"),
+                                 {"id": row["id"]})
+        if "scheduled_tasks" in tables:
+            for row in conn.execute(text("SELECT id, payload FROM scheduled_tasks")).mappings().all():
+                payload = loads(row["payload"], None)
+                if isinstance(payload, dict) and points_at_music(payload):
+                    conn.execute(text("UPDATE scheduled_tasks SET payload = :p, enabled = 0 WHERE id = :id"),
+                                 {"p": dumps(cleared(payload)), "id": row["id"]})
+        if "boards" in tables:
+            board_columns = {column["name"] for column in inspect(conn).get_columns("boards")}
+            for row in conn.execute(text("SELECT id, canvas FROM boards")).mappings().all():
+                canvas = loads(row["canvas"], None)
+                if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                    continue
+                touched = False
+                for item in canvas["items"]:
+                    form = item.get("form") if isinstance(item, dict) else None
+                    if isinstance(form, dict) and points_at_music(form):
+                        item["form"] = cleared(form)
+                        touched = True
+                if touched:
+                    bump = ", revision = revision + 1" if "revision" in board_columns else ""
+                    conn.execute(text(f"UPDATE boards SET canvas = :c{bump} WHERE id = :id"),
+                                 {"c": dumps(canvas), "id": row["id"]})
+        if "workflows" in tables:
+
+            def rewrite_graph(graph: Any) -> Any:
+                if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list):
+                    return graph
+                nodes = []
+                for node in graph["nodes"]:
+                    if not isinstance(node, dict) or not isinstance(node.get("config"), dict):
+                        nodes.append(node)
+                        continue
+                    config = dict(node["config"])
+                    if node.get("type") == "ai_generate" and points_at_music(config):
+                        config = cleared(config)
+                    for key, value in config.items():
+                        if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                            config[key] = rewrite_graph(value)
+                    nodes.append({**node, "config": config} if config != node["config"] else node)
+                return {**graph, "nodes": nodes}
+
+            def digest(graph: Any) -> str:
+                canonical = json.dumps(graph or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+            workflow_columns = {column["name"] for column in inspect(conn).get_columns("workflows")}
+            has_revisions = "workflow_revisions" in tables and {"revision", "graph_hash"} <= workflow_columns
+            for row in conn.execute(text("SELECT id, graph FROM workflows")).mappings().all():
+                graph = loads(row["graph"], None)
+                rewritten = rewrite_graph(graph)
+                if not isinstance(graph, dict) or rewritten == graph:
+                    continue
+                if not has_revisions:
+                    conn.execute(text("UPDATE workflows SET graph = :g WHERE id = :id"),
+                                 {"g": dumps(rewritten), "id": row["id"]})
+                    continue
+                latest = conn.execute(
+                    text("SELECT id, revision, created_by FROM workflow_revisions WHERE workflow_id = :id"
+                         " ORDER BY revision DESC LIMIT 1"),
+                    {"id": row["id"]},
+                ).mappings().first()
+                revision = int(latest["revision"]) + 1 if latest else 1
+                revision_id = uuid.uuid4().hex
+                conn.execute(
+                    text(
+                        "INSERT INTO workflow_revisions (id, workflow_id, revision, graph, graph_hash, source, note,"
+                        " created_by, created_at) VALUES (:id, :workflow, :revision, :graph, :hash, 'migration',"
+                        " 'MiniMax 音乐已撤掉:清掉指向它的模型选择', :author, :now)"
+                    ),
+                    {"id": revision_id, "workflow": row["id"], "revision": revision, "graph": dumps(rewritten),
+                     "hash": digest(rewritten), "author": latest["created_by"] if latest else None, "now": stamp},
+                )
+                if latest and "workflow_revision_attestations" in tables:
+                    for attester in conn.execute(
+                        text("SELECT user_id FROM workflow_revision_attestations WHERE revision_id = :id"),
+                        {"id": latest["id"]},
+                    ).scalars().all():
+                        conn.execute(
+                            text("INSERT INTO workflow_revision_attestations (id, revision_id, user_id, created_at)"
+                                 " VALUES (:id, :revision, :user, :now)"),
+                            {"id": uuid.uuid4().hex, "revision": revision_id, "user": attester, "now": stamp},
+                        )
+                conn.execute(
+                    text("UPDATE workflows SET graph = :g, revision = :r, graph_hash = :h WHERE id = :id"),
+                    {"g": dumps(rewritten), "r": revision, "h": digest(rewritten), "id": row["id"]},
+                )
+
+
 def _install_bundled_plugins() -> None:
     """随应用发的插件(`plugins/bundled/`)装进插件目录并登记包记录。
 
@@ -3564,7 +3746,12 @@ def migration_plan() -> MigrationPlan:
                 _install_bundled_plugins,
             ),
             #: 要用到上一步刚装好的 ComfyUI 插件包(ADR 0020)。
-            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_comfyui_connections_become_plugin_instances),
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _migrate_comfyui_connections_become_plugin_instances,
+                # MiniMax 音乐撤掉(ADR 0022 补充):清掉存着的指向。
+                _remove_minimax_music_models,
+            ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),
             *_steps(

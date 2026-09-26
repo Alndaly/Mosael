@@ -17,7 +17,7 @@
 | `duration_seconds` | 时长,**可选** | 多数音乐模型按歌词定曲长;不给就不发 |
 | `vocal_gender` / `title` / `bgm_prompt` / `model_version` / `asmr_mode` | 各家特有 | `parameter_schema` / `parameter_choices` 声明,界面按宿主文案命名 |
 | `source_video` | 要配声的那段视频 | 可灵只收链接(`url_only_roles`) |
-| `reference_audio` | 参考 / 被翻唱的那首 | MiniMax 翻唱、百炼 AudioGen(≤3 段) |
+| `reference_audio` | 参考音频(照着它的风格 / 音色) | 百炼 AudioGen(≤3 段) |
 | `reference_image` | 图生音乐 | Lyria(≤10 张) |
 
 描述符上的音频专属格子:`max_lyrics_chars`、`default_instrumental`、`lyrics_excludes_prompt`、`requires_prompt`、
@@ -33,8 +33,6 @@
 | 可灵 `kling-video-to-audio` | 给视频配音效 / 配乐 | 视频 mp4/mov、3–20 秒、≤100MB、只收链接;描述与 `bgm_prompt` 各 ≤200、可空 | `/v1/audio/video-to-audio`,异步;取单独音轨(wav 优先) | [视频生音效](https://kling.ai/document-api/api/video/audio-generation/video-to-audio) |
 | 百炼 `fun-music-v1` / `fun-music-preview` | 歌曲、纯音乐 | 仅北京地域、需申请;v1 歌词会覆盖描述(两段都给时拦);preview 描述必填 | `/api/v1/services/audio/music/generation`,同步 | [Fun-Music API](https://help.aliyun.com/zh/model-studio/fun-music-api) |
 | 百炼 `qwen-audio-3.1-tts-next` | 音效、环境声(也能出语音) | 描述 ≤3000;参考音频 ≤3 段;单次 ≤120 秒,无时长参数 | `/api/v1/services/audio/tts/SpeechSynthesizer`,同步 | [AudioGen API](https://www.alibabacloud.com/help/en/model-studio/audio-generation-api) |
-| MiniMax `music-3.0` / `music-2.6` | 歌曲、纯音乐 | 描述 ≤2000、歌词 ≤3500;有人声没歌词时打开 `lyrics_optimizer`;**2026-08-20 起不对新用户开放** | `POST /v1/music_generation`,同步,hex | [音乐生成](https://platform.minimax.cn/docs/api-reference/music-generation) |
-| MiniMax `music-cover` | 翻唱 | 参考音频 6 秒–6 分钟、≤50MB;描述 10–300 必填;歌词 10–1000 可选 | 同上 | 同上 |
 | 火山 `GenSongForTime` / `GenSongV4` | 人声歌曲 | 30–240 秒;歌词和描述只给一段;`ModelVersion` v4.0 / v4.3 / v5.0 | OpenAPI(AK/SK 签名,服务 `imagination`)+ `QuerySong`,异步 | [人声歌曲](https://www.volcengine.com/docs/84992/2091679) |
 | 火山 `GenBGMForTime` / `GenBGM` | 纯音乐 / BGM | 描述只收中文;v5.0 30–120 秒(价目页写「60s 以内」,两页不一致) | 同上 | [纯音乐](https://www.volcengine.com/docs/84992/2100970) |
 | 插件(`kind: "audio"`) | 由插件声明 | `lyrics` / `instrumental` 映射到宿主控件,其余进 `parameter_schema` | 插件协议(ADR 0020) | [PLUGIN_MANIFEST](PLUGIN_MANIFEST.md) |
@@ -47,7 +45,7 @@
   ([价目](https://ai.google.dev/gemini-api/docs/pricing));百炼 Fun-Music v1 ¥0.002/秒、preview ¥0.005/秒
   ([价目](https://help.aliyun.com/zh/model-studio/model-pricing));火山后付费 ¥0.002/秒
   ([计费](https://www.volcengine.com/docs/84992/1404661))。
-- 没收:MiniMax 音乐(价目页标「已下线」);可灵音效(0.25 单位 / 积分,一家两币);AudioGen(按 token 报价、按时长计费,
+- 没收:可灵音效(0.25 单位 / 积分,一家两币);AudioGen(按 token 报价、按时长计费,
   换算没写);火山资源包(包价);Evolink 上的 Suno(中转价)。
 
 ## 查过但没接
@@ -58,14 +56,13 @@
 | Google Lyria RealTime(`lyria-realtime-exp`) | WebSocket 流式、实验性、价目页未列;不是「提交一次、拿回一个文件」的形状 |
 | Vertex AI `lyria-002` | 要 OAuth / ADC,不收 API Key;而 Gemini API 上已有 Lyria 3 / 3.5 |
 | 火山方舟 ARK | 模型列表里没有音乐模型(音频只有 TTS / ASR) |
-| 火山 `GenLyrics`、MiniMax 歌词生成 | 生成的是文字,不是音频;可作为以后的「写词」辅助 |
+| MiniMax 音乐(`music-3.0` / `music-2.6` / `music-cover`)与歌词生成 | 2026-08-20 起不再向新用户开放([音乐生成](https://platform.minimax.cn/docs/api-reference/music-generation)),价目页标「已下线」。曾接入过,2026-09-26 撤掉,存着的引用由迁移 `remove-minimax-music-models` 清掉 |
+| 火山 `GenLyrics` | 生成的是文字,不是音频;可作为以后的「写词」辅助 |
 | Evolink `suno-persona` / Seed-Audio / Qwen TTS | persona 是保存音色的管理动作;另外两个是语音合成 |
 | 百炼万相的视频配音 | 声音在视频里一起出,不单独产出音频文件 |
-| MiniMax `music_cover_preprocess` | 翻唱的可选预处理,直接给参考音频即可 |
 
 ## 还没确认的
 
-- MiniMax `output_format=url` 时地址放在哪(文档只写了 hex),`extra_info.music_duration` 的单位(示例像毫秒)。
 - Suno 完成态 `result_data` 的确切形状(文档有两种说法;Adapter 以 `results` 为准,兜底读 `result_data`)。
 - 可灵音频接口是否还收 AK/SK 签的 JWT(文档现在推荐控制台 API Key;两种 Adapter 都支持)。
 - 百炼两个音频模型在旧域名 `dashscope.aliyuncs.com` 上是否可用(文档说旧域名「仍然完全可用」,没实测)。

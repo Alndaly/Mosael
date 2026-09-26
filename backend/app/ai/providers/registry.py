@@ -31,7 +31,6 @@ from app.ai.providers.adapters.local.deepfilter_denoise import DeepFilterDenoise
 from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
 from app.ai.providers.adapters.local.rnnoise_denoise import RnnoiseDenoiseAdapter
 from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
-from app.ai.providers.adapters.minimax.music import MiniMaxMusicAdapter
 from app.ai.providers.adapters.minimax.video import MiniMaxVideoAdapter
 from app.ai.providers.adapters.openai.image import OpenAIImageAdapter
 from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
@@ -56,7 +55,6 @@ def _generation_adapters() -> tuple[GenerationAdapter, ...]:
         EvolinkGenerationAdapter("video"),
         # 音频生成(ADR 0022)。
         EvolinkGenerationAdapter("audio"),
-        MiniMaxMusicAdapter(),
         LyriaAdapter(),
         KlingAudioAdapter(),
         VolcanoMusicAdapter(),

@@ -250,8 +250,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "minimax": {
         "label": "MiniMax",
         "base_url": "https://api.minimaxi.com/v1",
-        "capabilities": "对话/视觉理解、海螺(Hailuo)视频生成、音乐生成(2026-08-20 起只对已付费的老用户开放)。图像与语音需等对应 Adapter 接入。",
-        "capability_ids": ["chat", "video", "audio"],
+        "capabilities": "对话/视觉理解、海螺(Hailuo)视频生成。图像与语音需等对应 Adapter 接入。",
+        "capability_ids": ["chat", "video"],
         "fields": [
             {
                 "key": "api_key",

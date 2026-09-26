@@ -17,7 +17,6 @@ import httpx
 import pytest
 
 from app.ai.providers.contracts.generation import (
-    REFERENCE_AUDIO,
     REFERENCE_IMAGE,
     GenerationAdapterContext,
     GenerationAdapterError,
@@ -356,89 +355,6 @@ def test_火山签名和音色列表用的是同一个实现() -> None:
     assert "20260925/cn-beijing/imagination/request" in one["Authorization"]
     assert one["Authorization"] != two["Authorization"], "服务名进签名范围"
     assert volc_openapi.SERVICE == "speech_saas_prod"
-
-
-# ── MiniMax · 音乐生成(同步)──────────────────────────────────────────────────────────────
-
-MINIMAX = "app.ai.providers.adapters.minimax.music"
-
-
-def test_minimax_有人声没歌词_打开自动写词(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from app.ai.providers.adapters.minimax.music import MiniMaxMusicAdapter
-
-    bodies: list[dict[str, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/v1/music_generation", "档案里填的 /v1 不能拼成 /v1/v1"
-        bodies.append(json.loads(request.content))
-        return _json({"data": {"audio": b"ID3music".hex(), "status": 2}, "extra_info": {"music_duration": 25364},
-                      "base_resp": {"status_code": 0, "status_msg": "success"}})
-
-    _route(monkeypatch, MINIMAX, handler)
-    result = MiniMaxMusicAdapter().generate(
-        _audio("music-3.0", "夏夜城市流行"), _ctx("minimax", base_url="https://api.minimaxi.com/v1"), tmp_path
-    )
-    assert bodies[0]["lyrics_optimizer"] is True and "is_instrumental" not in bodies[0]
-    assert bodies[0]["output_format"] == "hex" and bodies[0]["model"] == "music-3.0"
-    assert result.output_paths[0].read_bytes() == b"ID3music"
-    # 单位没写明的 music_duration 不冒充秒数
-    assert "audio_seconds" not in result.usage and result.raw_usage["extra_info"]["music_duration"] == 25364
-
-
-def test_minimax_纯音乐与翻唱() -> None:
-    from app.ai.providers.adapters.minimax.music import build_payload
-
-    instrumental = build_payload(_audio("music-2.6", "lofi", instrumental=True))
-    assert instrumental["is_instrumental"] is True and "lyrics_optimizer" not in instrumental
-    cover = build_payload(_audio("music-cover", "换成爵士", reference_audio_url="https://x/song.mp3"))
-    assert cover["audio_url"] == "https://x/song.mp3" and "lyrics_optimizer" not in cover
-
-
-def test_minimax_翻唱的本地参考音频走base64(tmp_path: Path) -> None:
-    from app.ai.providers.adapters.minimax.music import build_payload
-
-    song = tmp_path / "song.mp3"
-    song.write_bytes(b"ID3")
-    payload = build_payload(GenerationRequest(
-        kind="audio", model="music-cover", prompt="换成爵士", sources=(SourceAsset(role=REFERENCE_AUDIO, path=song),),
-    ))
-    assert payload["audio_base64"] == base64.b64encode(b"ID3").decode()
-
-
-@pytest.mark.parametrize(
-    "code, key",
-    [(1004, "providerErr_upstreamAuth"), (1008, "providerErr_upstreamBalance"), (1002, "providerErr_upstreamRateLimited"),
-     (1026, "providerErr_upstreamContentBlocked"), (2013, "providerErr_upstreamInvalidParams"), (9999, "providerErr_generationFailed")],
-)
-def test_minimax_错误以200返回_按base_resp归类(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, code: int, key: str) -> None:
-    from app.ai.providers.adapters.minimax.music import MiniMaxMusicAdapter
-
-    _route(monkeypatch, MINIMAX, lambda _r: _json({"base_resp": {"status_code": code, "status_msg": "nope"}}))
-    with pytest.raises(GenerationAdapterError) as err:
-        MiniMaxMusicAdapter().generate(_audio("music-3.0"), _ctx("minimax"), tmp_path)
-    assert err.value.key == key
-
-
-def test_minimax_同步付费请求不重试(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """读超时后重发 = 让对面再写一首、再收一次钱。"""
-    from app.ai.providers.adapters.minimax import music
-
-    captured: dict[str, Any] = {}
-
-    class Spy:
-        def __init__(self, **kwargs: Any) -> None:
-            captured.update(kwargs)
-
-        def __enter__(self):
-            raise httpx.ConnectError("offline")
-
-        def __exit__(self, *_a: object) -> None:
-            return None
-
-    monkeypatch.setattr(music, "RetryingClient", Spy)
-    with pytest.raises(GenerationAdapterError):
-        music.MiniMaxMusicAdapter().generate(_audio("music-3.0"), _ctx("minimax"), tmp_path)
-    assert captured["max_retries"] == 0
 
 
 # ── Google · Lyria(同步)───────────────────────────────────────────────────────────────────

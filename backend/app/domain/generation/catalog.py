@@ -832,7 +832,7 @@ EVOLINK_VEO_31_PRO_CAPABILITIES = {**EVOLINK_VIDEO_T2V_CAPABILITIES, "supports_a
 #   vocal_gender    人声性别偏好(female / male),Adapter 翻成各家的写法(Suno 是 f / m)。
 #   title           曲名(Suno 的自定义模式要它)。
 #   negative_prompt 不要什么(Suno 的 negative_tags)。
-#   reference_audio 参考音频 / 被翻唱的那首;source_video 要配声的那段视频;reference_image 图生音乐的图。
+#   reference_audio 参考音频(照着它的风格 / 音色来);source_video 要配声的那段视频;reference_image 图生音乐的图。
 #
 # 描述符上的音频专属格子:`max_lyrics_chars`、`default_instrumental`、`lyrics_excludes_prompt`(这家
 # 歌词和描述只收一段)、`requires_prompt`、`prompt_optional`(视频配声可以什么字都不给)、
@@ -844,31 +844,6 @@ EVOLINK_VEO_31_PRO_CAPABILITIES = {**EVOLINK_VIDEO_T2V_CAPABILITIES, "supports_a
 
 #: 人声性别。宿主的写法是 female / male;各家的写法(Suno 的 f / m)由 Adapter 翻。
 VOCAL_GENDER_SCHEMA = {"type": "string", "enum": ["female", "male"], "title": "Vocal gender"}
-
-#: MiniMax 音乐 3.0 / 2.6。文档:https://platform.minimax.cn/docs/api-reference/music-generation(2026-09-25 核)。
-#: 提示词 ≤2000、歌词 ≤3500;纯音乐时提示词必填,有人声时歌词必填 —— 不给歌词又不是纯音乐时,
-#: Adapter 打开文档里的 `lyrics_optimizer`(照提示词自动写词),这是文档给的那条路,不是我们猜的。
-#: **2026-08-20 起不再向新用户开放**(文档原话:付费接口不再面向新用户提供服务,历史付费用户可继续使用)。
-MINIMAX_MUSIC_CAPABILITIES = {
-    "modes": ["text-to-music", "lyrics-to-song", "text-to-bgm"],
-    "parameter_keys": ["lyrics", "instrumental"],
-    "boolean_parameters": ["instrumental"],
-    "default_instrumental": False,
-    "max_prompt_chars": 2000,
-    "max_lyrics_chars": 3500,
-}
-
-#: MiniMax 翻唱(music-cover):给一首参考音频(6 秒–6 分钟、≤50MB),按提示词换风格重唱。
-#: 提示词 10–300 字必填;歌词 10–1000 字可选(不给就从参考音频里识别)。
-MINIMAX_MUSIC_COVER_CAPABILITIES = {
-    "modes": ["audio-to-audio"],
-    "parameter_keys": ["lyrics", "reference_audio"],
-    "source_limits": {"reference_audio": 1},
-    "requires_source": [["reference_audio"]],
-    "requires_prompt": True,
-    "max_prompt_chars": 300,
-    "max_lyrics_chars": 1000,
-}
 
 #: Evolink 上的 Suno。文档:https://evolink.ai/docs/en/api-manual/audio-series/suno/suno-music-generation
 #: (及同名 .json 的 OpenAPI,2026-09-25 核)。**一次交回两首**(产品页 https://evolink.ai/suno)。
@@ -1011,9 +986,6 @@ ALIBABA_AUDIOGEN_CAPABILITIES = {
 
 #: 原厂音频模型:(vendor, model, 描述符)。和 Evolink 那张表同一个形状,一行一个模型。
 AUDIO_BUILTIN_MODELS = [
-    ("minimax", "music-3.0", MINIMAX_MUSIC_CAPABILITIES),
-    ("minimax", "music-2.6", MINIMAX_MUSIC_CAPABILITIES),
-    ("minimax", "music-cover", MINIMAX_MUSIC_COVER_CAPABILITIES),
     ("google", "lyria-3.5", GOOGLE_LYRIA_CAPABILITIES),
     ("google", "lyria-3-pro-preview", GOOGLE_LYRIA_CAPABILITIES),
     ("google", "lyria-3-clip-preview", GOOGLE_LYRIA_CAPABILITIES),
@@ -1338,8 +1310,6 @@ CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
     "evolink-image-edit": EVOLINK_IMAGE_EDIT_CAPABILITIES,
     "evolink-veo-31-pro": EVOLINK_VEO_31_PRO_CAPABILITIES,
     "google-veo-video": GOOGLE_VEO_VIDEO_CAPABILITIES,
-    "minimax-music": MINIMAX_MUSIC_CAPABILITIES,
-    "minimax-music-cover": MINIMAX_MUSIC_COVER_CAPABILITIES,
     "evolink-suno": EVOLINK_SUNO_CAPABILITIES,
     "evolink-suno-v4": EVOLINK_SUNO_V4_CAPABILITIES,
     "evolink-suno-v55": EVOLINK_SUNO_V55_CAPABILITIES,

@@ -124,10 +124,10 @@ def test_纯音乐不带歌词_而且要有描述() -> None:
 
 
 def test_歌词按模型的上限拦() -> None:
-    caps = C.MINIMAX_MUSIC_CAPABILITIES
-    _text("audio", "", {"lyrics": "啦" * 3500}, caps)
-    with pytest.raises(GenerationDomainError, match="3500"):
-        _text("audio", "", {"lyrics": "啦" * 3501}, caps)
+    caps = C.EVOLINK_SUNO_CAPABILITIES
+    _text("audio", "", {"lyrics": "啦" * 5000}, caps)
+    with pytest.raises(GenerationDomainError, match="5000"):
+        _text("audio", "", {"lyrics": "啦" * 5001}, caps)
 
 
 def test_歌词和描述只收一段的模型_两段都给当场说() -> None:
@@ -140,7 +140,7 @@ def test_歌词和描述只收一段的模型_两段都给当场说() -> None:
 
 def test_必须写描述的模型() -> None:
     with pytest.raises(GenerationDomainError, match="要写一段描述"):
-        _text("audio", "", {"lyrics": "只有歌词"}, C.MINIMAX_MUSIC_COVER_CAPABILITIES)
+        _text("audio", "", {"lyrics": "只有歌词"}, C.KLING_TEXT_TO_AUDIO_CAPABILITIES)
 
 
 def test_歌词必须是文字() -> None:
@@ -210,7 +210,6 @@ def test_音频的挂牌价只收查证过的() -> None:
     [song] = price_reference.lookup("volcano-music", "GenSongForTime", region="cn")
     assert (song.billing_unit, song.unit_amount_micros) == ("audio_second", 2_000)
     # 没查证到按次价的不收
-    assert price_reference.lookup("minimax", "music-3.0", region="cn") == []
     assert price_reference.lookup("kuaishou", "kling-text-to-audio", region="cn") == []
     assert price_reference.lookup_for_relay("suno-v5-beta") == []
 

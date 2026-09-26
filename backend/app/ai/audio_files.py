@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -57,16 +55,3 @@ def download_audio(url: str, output_dir: Path, *, stem: str = "generated", fallb
     staged.replace(target)
     return target
 
-
-def write_inline_audio(data: str, output_dir: Path, *, encoding: str, suffix: str, stem: str = "generated") -> Path:
-    """把回包里内联的音频(十六进制或 base64)写成文件。解不开就是 ValueError,由调用方翻成人话。"""
-    try:
-        raw = bytes.fromhex(data) if encoding == "hex" else base64.b64decode(data, validate=True)
-    except (ValueError, binascii.Error) as exc:
-        raise ValueError(f"undecodable {encoding} audio") from exc
-    if not raw:
-        raise ValueError("empty audio")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    target = output_dir / f"{stem}{suffix}"
-    target.write_bytes(raw)
-    return target

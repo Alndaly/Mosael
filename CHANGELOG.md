@@ -23,7 +23,7 @@ commit list and downloadable artifacts.
 - **AI 工作台能生成音乐、BGM 和音效了。** 「生成」页的模型选择器多了「音乐与音效」一组:写描述、单独一栏写歌词
   (`[Verse]` / `[Chorus]`)、一键切纯音乐,时长可以空着让模型按歌词定;结果是播放器,一次出两首的两首都在。
   已接入 Google Lyria 3 / 3.5、Evolink 上的 Suno、可灵文生音效与视频生音效(给一段视频配声)、百炼 Fun-Music 与
-  AudioGen、MiniMax 音乐(官方已不对新用户开放)、火山引擎 AI 音乐生成(AK/SK)。工作流「AI 生成素材」节点、
+  AudioGen、火山引擎 AI 音乐生成(AK/SK)。工作流「AI 生成素材」节点、
   定时任务和智能体(`generate_sound`)同样能出音频;插件也可以提供音频模型。在「设置 → AI 音频 → 音乐与音效生成」
   配连接与默认模型。
 - **Manim 官方插件:用 Manim 做教学动画。** 公式推导、几何关系、函数图像、算法步骤、代码讲解 —— 给每一步的标题、

@@ -91,5 +91,6 @@
   "migrate-tts-pip-index": "09d510e6314d67fd",
   "migrate-usage-unpriced-reason": "55adc52e51b0405d",
   "migrate-workflow-revisions": "99c186ef9d504ed9",
-  "migrate-workflow-source-assets": "7fc1c9a2743e4f67"
+  "migrate-workflow-source-assets": "7fc1c9a2743e4f67",
+  "remove-minimax-music-models": "d441c462a4e3d933"
 }
