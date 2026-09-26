@@ -90,7 +90,7 @@ const SelectContent = React.forwardRef<
         // 配音面板 65px 的引擎格里,「F5-TTS」「Fish Speech S2 Pro」实测显示成
         // 「F5…」「Fi…」。**读不出选项的菜单等于没有菜单**,对齐再齐也没用。
         // 上限交给 Radix 算出来的可用宽度,这样它仍然不会顶出屏幕。
-        position === "popper" && "min-w-[var(--radix-select-trigger-width)] max-w-[--radix-select-content-available-width]",
+        position === "popper" && "min-w-[var(--radix-select-trigger-width)] max-w-(--radix-select-content-available-width)",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1.5 data-[side=left]:-translate-x-1.5 data-[side=right]:translate-x-1.5 data-[side=top]:-translate-y-1.5",
         className

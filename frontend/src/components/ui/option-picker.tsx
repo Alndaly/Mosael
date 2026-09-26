@@ -84,9 +84,10 @@ export function OptionPicker({
         placeholder={placeholder}
         searchPlaceholder={searchPlaceholder}
         emptyText={emptyText}
-        /* 浮层宽度不跟触发器:这些触发器是工具行里的小胶囊,对齐它等于把每个模型名折成三行。
-           触发器比这宽时(设置弹层里的整格)再由调用方用 contentClassName 覆盖。 */
-        contentClassName={cn("w-[min(320px,calc(100vw-16px))]", contentClassName)}
+        /* 只抬高下限,宽度仍对齐触发器(见 SearchableSelect):工具行里的小胶囊装不下模型名,
+           给 320px 兜底;设置弹层里的整格触发器比这宽,浮层就跟着它 —— 以前这里是固定
+           `w-[320px]`,整格下面挂一条窄列表。 */
+        contentClassName={cn("min-w-[min(320px,var(--radix-popover-content-available-width))]", contentClassName)}
         trigger={
           /* 结构照抄 SelectTrigger:一个 span 一个 chevron。调用方那串 `[&>svg]:hidden`、
              `[&>span]:truncate` 才会同样落到实处,而不是只对其中一个分支生效。 */

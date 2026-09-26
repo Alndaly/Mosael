@@ -23,6 +23,23 @@ type Option = {
 };
 
 /**
+ * 浮层宽度,和普通 Select 同一条规则:**对齐触发器,但不窄于一个读得下的下限**,上限是 Radix 算出的
+ * 可用宽度(已扣掉 collisionPadding,不会顶出窗口)。
+ *
+ * 变量必须写成 `w-(--x)` / `w-[var(--x)]`。Tailwind v4 里 `w-[--x]` 生成的是 `width: --x` ——
+ * 无效声明被浏览器丢掉,而 tailwind-merge 已经把 PopoverContent 默认的 `w-72` 当冲突删了,
+ * 浮层只剩 auto 宽:整宽的表单字段下面挂一条窄窄的列表,长文件名全被截成省略号。
+ *
+ * 下限用 min-width 而不是固定宽:触发器是小胶囊 / 图标钮(「添加节点」、画板的「+」)时,
+ * 对齐它等于每行只剩几个字,由下限兜住;触发器本身够宽(表单整格)时就跟着它。
+ * 带描述的清单下限更宽 —— 描述行是整整一句话,200px 里一行读不完。
+ */
+const SEARCHABLE_CONTENT_WIDTH =
+  "w-(--radix-popover-trigger-width) max-w-(--radix-popover-content-available-width)";
+const SEARCHABLE_FLOOR = "min-w-[min(200px,var(--radix-popover-content-available-width))]";
+const SEARCHABLE_FLOOR_WITH_DESCRIPTIONS = "min-w-[min(360px,var(--radix-popover-content-available-width))]";
+
+/**
  * 可搜索、限高的下拉——用于选项多到普通 Select 会溢出屏幕的场景(如 ComfyUI 的 checkpoint/采样器
  * 可能上百项)。Popover + cmdk:输入即过滤,列表封顶高度内滚动,宽度对齐触发器。
  *
@@ -61,7 +78,8 @@ export function SearchableSelect({
   className?: string;
   /** 默认触发器的档位,和 `<Input size>`、`<Button size>` 同一把尺。自定义 `trigger` 时不起作用。 */
   size?: FieldSize;
-  /** 浮层自己的类名 —— 主要用来给宽度兜底:触发器只有一枚小胶囊那么宽时,对齐它等于不可读。 */
+  /** 浮层自己的类名。改宽度时给 `min-w-*`(下限)/ `max-w-*`(上限),别给固定 `w-*` ——
+   *  固定宽会让整宽的触发器下面挂一条窄列表,正是 SEARCHABLE_CONTENT_WIDTH 要消灭的样子。 */
   contentClassName?: string;
   disabled?: boolean;
   /** 自定义触发器(替换默认按钮),用于像「添加节点」这类带图标/胶囊样式的触发器。 */
@@ -117,16 +135,13 @@ export function SearchableSelect({
             </button>
           )}
         </PopoverTrigger>
-        {/* 宽度:普通下拉对齐触发器;**带描述时改用固定宽度**。
-            对齐触发器的前提是"选项跟触发器差不多长",而描述行是整整一句话 —— 「添加节点」的
-            触发器只有一枚胶囊那么宽,列表若跟着它就每行都得折成三行;反过来放开让内容撑,
-            一句长描述能把浮层顶到整屏宽(实测就是如此)。给个够读一行的固定宽度,超出截断。 */}
         <PopoverContent
           className={cn(
             // 浮层自己不滚(overflow-hidden 盖掉 PopoverContent 默认的 overflow-y-auto),滚的是下面
             // 那份列表 —— 否则搜索框会跟着内容一起滚走。
             "p-0 overflow-hidden",
-            hasDescriptions ? "w-[360px] max-w-[calc(100vw-24px)]" : "w-[--radix-popover-trigger-width]",
+            SEARCHABLE_CONTENT_WIDTH,
+            hasDescriptions ? SEARCHABLE_FLOOR_WITH_DESCRIPTIONS : SEARCHABLE_FLOOR,
             contentClassName,
           )}
           align="start"
