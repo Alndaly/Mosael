@@ -444,7 +444,7 @@ class Test入口:
         final, progress = _call("manim_explainer", payload, fake_env)
         assert final["ok"] is True, final
         output = final["output"]
-        assert output["artifacts"] == [{"path": "lesson.mp4", "media": "video"}, {"path": "lesson.srt", "media": "subtitles"}]
+        assert output["artifacts"] == [{"path": "lesson.mp4", "media": "video"}, {"path": "lesson.srt", "media": "subtitles", "output": "subtitles"}]
         out = Path(fake_env["MOSAEL_PLUGIN_OUTPUT_DIR"])
         assert (out / "lesson.mp4").read_bytes() == b"fake-mp4" and "两条直角边" in (out / "lesson.srt").read_text(encoding="utf-8")
         assert [one["kind"] for one in output["steps"]] == ["title", "step", "step"]
@@ -632,6 +632,14 @@ class Test清单:
             assert render.RENDER_TIMEOUT < tools[name]["timeout_seconds"] < agent_limit, name
         assert manim_env.SETUP_TIMEOUT < tools["manim_setup"]["timeout_seconds"]
         assert all(tool.get("stream") is True for tool in tools.values()), "都要能报进度、能取消"
+
+    def test_画板上只落成品_字幕是自己的一个口子(self) -> None:
+        """没写 board_outputs 时画板把每个输出都落一格:讲解视频会多出「全部产出」「每步起止时间」两张 JSON 便签。"""
+        nodes = {t["name"]: t["node"] for t in self.manifest()["tools"]["declare"]}
+        assert nodes["manim_explainer"]["board_outputs"] == ["asset_id", "subtitles"]
+        assert nodes["manim_explainer"]["output_types"]["subtitles"] == "asset"
+        assert nodes["manim_animation"]["board_outputs"] == nodes["manim_still"]["board_outputs"] == ["asset_id"]
+        assert nodes["manim_setup"]["board_outputs"] == ["summary"]
 
     def test_会执行代码的工具默认不开放(self) -> None:
         tools = self.manifest()["tools"]

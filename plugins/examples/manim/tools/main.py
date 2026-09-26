@@ -192,7 +192,8 @@ def manim_explainer(payload: dict[str, Any], locale: str, send: Emit) -> dict[st
         if payload.get("subtitles") is True and any(one.get("narration") for one in steps):
             srt_name = name.rsplit(".", 1)[0] + ".srt"
             (output_dir(locale) / srt_name).write_text(srt(steps), encoding="utf-8")
-            artifacts.append({"path": srt_name, "media": "subtitles"})
+            # 具名输出:宿主把它的素材 id 填进 `subtitles` 那一格,工作流能直接接「那份字幕」,画板上落成它自己的一格
+            artifacts.append({"path": srt_name, "media": "subtitles", "output": "subtitles"})
     finally:
         shutil.rmtree(job, ignore_errors=True)
 

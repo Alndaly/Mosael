@@ -115,6 +115,7 @@
         "node": {
           "outputs": ["ready", "manim", "latex", "summary"],
           "output_types": {"ready": "json", "manim": "text", "latex": "json", "summary": "text"},
+          "board_outputs": ["summary"],
           "output_labels": {
             "ready": {"zh": "就绪", "en": "Ready"},
             "manim": {"zh": "Manim 版本", "en": "Manim version"},
@@ -245,10 +246,12 @@
           "required": ["title", "steps"]
         },
         "node": {
-          "outputs": ["asset_id", "asset_ids", "steps", "seconds", "summary"],
-          "output_types": {"asset_id": "asset", "asset_ids": "json", "steps": "json", "seconds": "number", "summary": "text"},
+          "outputs": ["asset_id", "subtitles", "asset_ids", "steps", "seconds", "summary"],
+          "output_types": {"asset_id": "asset", "subtitles": "asset", "asset_ids": "json", "steps": "json", "seconds": "number", "summary": "text"},
+          "board_outputs": ["asset_id", "subtitles"],
           "output_labels": {
             "asset_id": {"zh": "视频", "en": "Video"},
+            "subtitles": {"zh": "字幕(.srt)", "en": "Subtitles (.srt)"},
             "asset_ids": {"zh": "全部产出", "en": "All outputs"},
             "steps": {"zh": "每步起止时间", "en": "Step timings"},
             "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
@@ -323,6 +326,7 @@
         "node": {
           "outputs": ["asset_id", "seconds", "summary"],
           "output_types": {"asset_id": "asset", "seconds": "number", "summary": "text"},
+          "board_outputs": ["asset_id"],
           "output_labels": {
             "asset_id": {"zh": "动画", "en": "Animation"},
             "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
@@ -385,6 +389,7 @@
         "node": {
           "outputs": ["asset_id", "summary"],
           "output_types": {"asset_id": "asset", "summary": "text"},
+          "board_outputs": ["asset_id"],
           "output_labels": {
             "asset_id": {"zh": "图片", "en": "Image"},
             "summary": {"zh": "一句话", "en": "In one line"}
