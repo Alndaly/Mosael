@@ -9347,6 +9347,11 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Effects
+             * @default
+             */
+            effects: string;
         };
         /**
          * PluginOAuthCode
@@ -9529,6 +9534,8 @@ export interface components {
              * @default false
              */
             read_only: boolean;
+            /** Effects */
+            effects: string;
             /** Input Schema */
             input_schema?: {
                 [key: string]: unknown;
@@ -9553,6 +9560,8 @@ export interface components {
              * @default false
              */
             read_only: boolean;
+            /** Effects */
+            effects: string;
             /** Input Schema */
             input_schema?: {
                 [key: string]: unknown;

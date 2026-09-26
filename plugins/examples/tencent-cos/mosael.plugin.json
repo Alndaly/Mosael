@@ -6,7 +6,7 @@
     "en": "Tencent Cloud COS"
   },
   "default_locale": "zh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage": "https://cloud.tencent.com/document/product/436",
   "author": {
     "name": "Mosael",
@@ -109,6 +109,7 @@
     "declare": [
       {
         "name": "cos_upload",
+        "effects": "external",
         "provides": [
           "public_url"
         ],
@@ -211,6 +212,7 @@
       },
       {
         "name": "cos_fetch",
+        "effects": "none",
         "description": {
           "zh": "把桶里的一个对象拉回素材库。**交回的是地址,由宿主搬字节** —— 进度、取消、重试都归它。",
           "en": "Pull an object back into the asset library. The plugin hands over a URL and the host moves the bytes — progress, cancel and retry all come for free."

@@ -266,6 +266,8 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
         ),
         "stream": True,
         "timeout_seconds": TIMEOUT_SECONDS,
+        # 占的是这台 ComfyUI 的显卡(常常是按时计费的云卡):智能体调它之前先问一声,和内置的生成同一档。
+        "effects": "paid",
         "recommended": True,
         "input_schema": {"type": "object", "properties": shape.properties, "required": shape.required},
         "node": {"outputs": shape.outputs, "output_types": shape.output_types, "output_labels": shape.output_labels},

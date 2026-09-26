@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
+from app.domain.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
@@ -136,18 +137,27 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
         description = (override.description if override and override.description else "") or text_of(
             tool.get("description")
         )
+        # 只读默认 False:插件跑的是别人的代码,没有确认门也照样能发请求、写文件,
+        # 所以"不确定"落在保守那边 —— 子智能体只拿只读工具。
+        #
+        # 两个来源:工具自己声明的(进程插件写在 declare 里),和 overrides 里覆盖的
+        # (MCP 插件只能这么写 —— 它的清单是从服务拉的)。任一处标了就算。
+        read_only = bool((override and override.read_only) or tool.get("read_only"))
         out.append(
             {
                 "name": tool["name"],
                 "label": _display_label(tool, override.label if override else ""),
                 "description": description,
                 "input_schema": tool.get("input_schema") or {"type": "object", "properties": {}},
-                # 只读默认 False:插件跑的是别人的代码,没有确认门也照样能发请求、写文件,
-                # 所以"不确定"落在保守那边 —— 子智能体只拿只读工具。
-                #
-                # 两个来源:工具自己声明的(进程插件写在 declare 里),和 overrides 里覆盖的
-                # (MCP 插件只能这么写 —— 它的清单是从服务拉的)。任一处标了就算。
-                "read_only": bool((override and override.read_only) or tool.get("read_only")),
+                "read_only": read_only,
+                # 后果(domain/effects):智能体调它之前要不要先问人、按哪一档问。**一处算出来**,
+                # 智能体工具表、画板工具格、插件页的「需确认」徽标读的都是这一个值。
+                # 覆盖 > 工具自己声明的 > 包上的 default_effects > external;只读的一律 none。
+                "effects": plugin_tool_effects(
+                    read_only=read_only,
+                    declared=(override.effects if override and override.effects else None) or tool.get("effects"),
+                    default=manifest.default_effects or None,
+                ),
                 "node": (override.node if override else None) or tool.get("node"),
                 # 只给宿主调的:清单上标了 internal 的,和认领了「只给宿主」那类能力的(生成)——
                 # 后者说的是一套流式协议,智能体和工作流调不了、也不该调(见 manifest.HOST_ONLY_CAPABILITIES)。

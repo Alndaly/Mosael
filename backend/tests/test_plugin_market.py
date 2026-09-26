@@ -224,7 +224,11 @@ def test_市场接口把工具和能力按语言发下去(monkeypatch) -> None:
         "description": {"zh": "换回一条**公网直链**", "en": "Get a **public link**"},
         "download": "https://x/demo.zip", "permissions": ["network:demo"],
         "runtime": "process", "provides": ["public_url"],
-        "tools": [{"name": "go", "label": "", "description": {"zh": "跑一下", "en": "Run it"}}],
+        "tools": [
+            {"name": "go", "label": "", "description": {"zh": "跑一下", "en": "Run it"}, "effects": "local-code"},
+            # 老索引里的工具没有 effects:不猜,空串(界面不标「需确认」)。
+            {"name": "old", "label": "", "description": ""},
+        ],
     }])
     listing = client.get("/api/plugins/market").json()
     assert listing["index_error"] == ""
@@ -232,7 +236,10 @@ def test_市场接口把工具和能力按语言发下去(monkeypatch) -> None:
     assert entry["bundled"] is False
     assert entry["provides"] == ["public_url"]
     assert entry["runtime"] == "process"
-    assert entry["tools"] == [{"name": "go", "label": "", "description": "跑一下"}]
+    assert entry["tools"] == [
+        {"name": "go", "label": "", "description": "跑一下", "effects": "local-code"},
+        {"name": "old", "label": "", "description": "", "effects": ""},
+    ]
     #: markdown 原样给 —— 渲染还是剥掉是界面的事,接口不替它决定。
     assert entry["description"] == "换回一条**公网直链**"
 

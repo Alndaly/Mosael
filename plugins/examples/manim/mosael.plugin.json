@@ -6,7 +6,7 @@
     "en": "Manim Teaching Animation"
   },
   "default_locale": "zh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage": "https://docs.manim.community/",
   "author": {
     "name": "Mosael",
@@ -88,6 +88,7 @@
     "declare": [
       {
         "name": "manim_setup",
+        "effects": "none",
         "stream": true,
         "timeout_seconds": 1200,
         "label": {
@@ -124,6 +125,7 @@
       },
       {
         "name": "manim_explainer",
+        "effects": "none",
         "stream": true,
         "timeout_seconds": 170,
         "label": {
@@ -256,6 +258,7 @@
       },
       {
         "name": "manim_animation",
+        "effects": "local-code",
         "stream": true,
         "timeout_seconds": 170,
         "label": {
@@ -329,6 +332,7 @@
       },
       {
         "name": "manim_still",
+        "effects": "local-code",
         "stream": true,
         "timeout_seconds": 170,
         "label": {

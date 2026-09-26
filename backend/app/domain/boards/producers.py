@@ -95,7 +95,8 @@ class Producer:
     id: str
     hosts: tuple[str, ...]
     permission: str
-    #: "none" | "paid" | "external" —— 智能体替人跑时,不是 none 的要确认卡(ADR 0021 决定 2)。
+    #: 词表见 domain/effects(none / paid / external / local-code)—— 智能体替人跑时,不是 none 的要确认卡
+    #: (ADR 0021 决定 2)。
     effects: str
     form: type[BaseModel]
     start: Callable[[Session, RunRequest, Any], Board]
@@ -407,9 +408,9 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
         for tool in exposed(db, actor_id):
             node_type = node_type_id(tool["package_id"], tool["name"])
             if node_producer_id(node_type) not in out:
-                #: 插件自报只读的不花钱不出门;没说的按保守那边算(插件跑的是别人的代码)。
-                effects = "none" if tool["read_only"] else "external"
-                out[node_producer_id(node_type)] = _node_producer(node_type, node_meta(tool), effects)
+                #: 后果就是插件工具自己那一个(plugins.tools.all_tools 按清单算好的,见 domain/effects)——
+                #: 智能体在对话里直接调它、在画板上替人点运行,问不问人是同一条规矩。
+                out[node_producer_id(node_type)] = _node_producer(node_type, node_meta(tool), tool["effects"])
     return out
 
 

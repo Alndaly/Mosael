@@ -34,6 +34,7 @@ from app.api.schemas import (
     PluginToolOut,
 )
 from app.core.config import settings
+from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin, ensure_workspace_perm
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import PluginDomainError
@@ -120,6 +121,8 @@ def _market_entry(entry: dict, installed: dict[str, PluginPackage]) -> PluginMar
                 name=str(tool["name"]),
                 label=text_of(tool.get("label")),
                 description=text_of(tool.get("description")),
+                #: 索引里写了什么就是什么;不认识的值当没写(界面不标),不在这里替它猜。
+                effects=str(tool.get("effects")) if tool.get("effects") in EFFECTS else "",
             )
             for tool in (entry.get("tools") or [])
             if isinstance(tool, dict) and tool.get("name")

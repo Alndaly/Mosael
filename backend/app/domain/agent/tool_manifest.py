@@ -63,20 +63,25 @@ def agent_tool_name(instance_id: str, tool_name: str) -> str:
 
 
 def _plugin_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
+    from app.domain.effects import needs_card
     from app.domain.plugins.tools import exposed
 
-    return [
-        ToolSpec(
+    specs = []
+    for tool in exposed(db, user_id):
+        # 有后果的插件工具(花钱、对外、在本机跑代码,见 domain/effects)调用时先开一张卡 ——
+        # 和内置的确认类工具同一个标记、同一条等待协议(sidecar 据此阻塞轮询,见 _CONFIRMATION_PROTOCOL)。
+        gated = needs_card(tool["effects"])
+        specs.append(ToolSpec(
             name=agent_tool_name(tool["instance_id"], tool["name"]),
             # 标明出处:模型据此知道这不是内置能力,失败时该建议用户去插件页看,而不是
             # 以为 Mosael 自己坏了。实例名(「TikHub · 哔哩哔哩」)也就在这里起作用 ——
             # 同名工具来自不同连接时,模型靠它分辨。
-            description=f"[插件·{tool['instance_name']}] {tool['description']}".strip(),
+            description=_describe(f"[插件·{tool['instance_name']}] {tool['description']}".strip(), gated),
             parameters=tool["input_schema"] or {"type": "object", "properties": {}},
+            confirmation=gated,
             read_only=tool["read_only"],
-        )
-        for tool in exposed(db, user_id)
-    ]
+        ))
+    return specs
 
 
 #: 确认门控工具在**这条路**上的真实协议。工具自己的描述只说事实(要用户批准、可能花钱),

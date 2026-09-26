@@ -28,6 +28,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
+from app.domain.effects import EFFECTS, NONE as NO_EFFECTS
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
@@ -45,7 +46,7 @@ MAX_TOOLS = 300
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 #: 报出来的工具上宿主认的键。别的丢掉 —— 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主
 #: 认领能力,也不能把自己藏成「只给宿主」。
-_KEPT = ("name", "label", "description", "input_schema", "read_only", "stream", "timeout_seconds", "node",
+_KEPT = ("name", "label", "description", "input_schema", "read_only", "effects", "stream", "timeout_seconds", "node",
          "recommended", "replaces")
 
 #: 清单刷新之后要跟着动的那些(把存着的老节点改写成新工具,见 domain/workflows/plugin_references)。
@@ -78,6 +79,14 @@ def _clean(entry: Any, declared: set[str]) -> dict[str, Any] | None:
     for flag in ("read_only", "stream", "recommended"):
         if flag in clean:
             clean[flag] = clean[flag] is True
+    # 后果(domain/effects)和清单里声明的工具同一套词。清单写错在装的时候就报,运行时报出的清单
+    # 没有「装」这一刻,所以在这里按**保守那边**收:不认识的取值当没写(按包上的缺省、再按 external);
+    # 只读却声明了别的后果,两句话打架,信后果那一句、只读作废 —— 反过来信只读,一个会花钱的工具
+    # 就不问人地跑了,还交给了子智能体。
+    if "effects" in clean and clean["effects"] not in EFFECTS:
+        clean.pop("effects")
+    if clean.get("read_only") and clean.get("effects", NO_EFFECTS) != NO_EFFECTS:
+        clean["read_only"] = False
     if not isinstance(clean.get("node"), dict):
         clean.pop("node", None)
     if not isinstance(clean.get("replaces"), dict):

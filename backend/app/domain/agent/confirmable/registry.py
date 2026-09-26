@@ -75,6 +75,14 @@ class ConfirmableTool:
 
 _TOOLS: dict[str, ConfirmableTool] = {}
 
+#: **一族**名字共用一份声明:前缀 → 给定具体名字造出那一条的函数。
+#:
+#: 为插件工具而设。插件工具在智能体眼里是一个个一等公民(`plugin__<连接>__<工具>`,见
+#: agent.tool_manifest),名字在运行时才知道,不能逐个登记;而卡又必须**按这个具体名字**开 ——
+#: 「本会话始终允许」按工具名记(见 autopilot.decide),批准一次 Manim 渲染不该顺带放开往云盘传文件。
+#: 所以登记的是一族,查的时候按具体名字造出那一条(名字就是卡上的 `tool`,validate 由它认出是哪个工具)。
+_FAMILIES: dict[str, Callable[[str], ConfirmableTool]] = {}
+
 
 def confirmable_tool(tool: ConfirmableTool) -> ConfirmableTool:
     if tool.name in _TOOLS:
@@ -83,9 +91,27 @@ def confirmable_tool(tool: ConfirmableTool) -> ConfirmableTool:
     return tool
 
 
+def confirmable_family(prefix: str, bind: Callable[[str], ConfirmableTool]) -> None:
+    """登记一族:名字以 `prefix` 开头的卡都由 `bind(具体名字)` 造出声明。"""
+    if prefix in _FAMILIES or any(name.startswith(prefix) for name in _TOOLS):
+        raise ValueError(f"confirmable family overlaps an existing registration: {prefix}")
+    _FAMILIES[prefix] = bind
+
+
 def tool_spec(name: str) -> ConfirmableTool | None:
-    return _TOOLS.get(name)
+    spec = _TOOLS.get(name)
+    if spec is not None:
+        return spec
+    for prefix, bind in _FAMILIES.items():
+        if name.startswith(prefix) and len(name) > len(prefix):
+            return bind(name)
+    return None
 
 
 def tool_specs() -> dict[str, ConfirmableTool]:
+    """**逐个登记**的那些(和 mcp_server.CONFIRMATION_TOOLS 一一对应)。一族的见 tool_families。"""
     return dict(_TOOLS)
+
+
+def tool_families() -> tuple[str, ...]:
+    return tuple(_FAMILIES)

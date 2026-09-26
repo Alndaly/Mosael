@@ -32,10 +32,10 @@ from pydantic import BaseModel
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
-from app.domain.permissions import ensure_workspace_member
+from app.domain.permissions import ensure_workspace_member, ensure_workspace_perm
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
-from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_name, agent_tool_specs, tool_registry
+from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent-tools"])
@@ -95,27 +95,59 @@ def _fit_arguments(fn: Any, arguments: dict[str, Any]) -> tuple[dict[str, Any], 
     return fitted, dropped
 
 
+def _session_workspace(db: Any, token: str) -> str:
+    """这份凭据所属那次对话的工作区。没有会话(登录令牌、MCP 直连)就是空串。"""
+    from app.db.models import AgentSession
+
+    auth = find_session(db, token)
+    session = db.get(AgentSession, auth.agent_session_id) if auth is not None and auth.agent_session_id else None
+    return session.workspace_id if session is not None else ""
+
+
 def _invoke_plugin_tool(
-    db: Any, name: str, arguments: dict[str, Any], user_id: str, workspace_id: str = ""
+    db: Any, name: str, body: ToolInvocation, user: Any, token: str, workspace_id: str = ""
 ) -> dict[str, Any]:
-    """把展开后的名字反查回 (plugin_id, tool_name) 并执行。
+    """把展开后的名字反查回 (连接, 工具) 并执行 —— **有后果的先开一张卡**。
 
-    走的是 invoke_plugin_tool 这条**唯一**的插件执行路径 —— 权限校验、凭据注入、调用留痕
-    都在那里,智能体不该有一条自己的捷径。
+    后果由工具在清单里声明(domain/effects):none 就地跑,走的是 invoke 这条**唯一**的插件执行
+    路径 —— 权限校验、凭据注入、调用留痕都在那里,智能体不该有一条自己的捷径。花钱的、对外的、
+    在本机跑代码的开一张以这个工具命名的卡(domain/agent/confirmable/plugin_tools),回包和内置的
+    确认类工具一个形状 {confirmation_id, status: pending, …};批准之后走的还是同一个 invoke。
+
+    工作区:参数给了用参数(上面已经过了 ensure_workspace_member),没给就用这份凭据那次对话的 ——
+    sidecar 不带这个参数,而卡总得开在某个工作区里,插件交出的文件也要收进它的素材库。
     """
+    from app.api.routes.confirmations import open_confirmation
+    from app.domain.agent.confirmable.plugin_tools import exposed_tool
+    from app.domain.effects import needs_card
     from app.domain.plugins import PluginDomainError
-    from app.domain.plugins.tools import exposed, invoke
+    from app.domain.plugins.tools import invoke
 
-    # **只在他自己接的实例里找**:否则一个名字对得上的调用就会用别人的第三方密钥跑起来。
-    match = next((t for t in exposed(db, user_id) if agent_tool_name(t["instance_id"], t["name"]) == name), None)
+    match = exposed_tool(db, name, user.id)
     if match is None:
         # 连接被停用/撤权/凭据被清空、或者这个工具被取消暴露之后,模型手里还攥着上一轮的
         # 工具表。说清楚是哪一类问题,而不是一句"找不到"。
         raise HTTPException(status_code=404, detail=tr("routeErr_pluginToolUnavailable", name=name))
+    workspace_id = workspace_id or _session_workspace(db, token)
+    if needs_card(match["effects"]):
+        if not workspace_id:
+            raise HTTPException(status_code=422, detail=tr("routeErr_pluginToolNeedsWorkspace", name=name))
+        # 开卡是写操作,和 POST /api/confirmations 同一道闸。
+        ensure_workspace_perm(db, user, workspace_id, "edit")
+        confirmation = open_confirmation(
+            db, user, token, workspace_id=workspace_id, tool=name, payload={"arguments": dict(body.arguments)},
+            requested_by=body.requested_by or "external-agent",
+        )
+        return {"result": tool_registry()._confirmation_reply({
+            "id": confirmation.id,
+            "status": confirmation.status,
+            "permission": confirmation.permission,
+            "summary": confirmation.summary,
+        })}
+    if workspace_id:
+        ensure_workspace_member(db, user, workspace_id)
     try:
-        # 带上工作区:插件交出的**文件**产出要收进它的素材库,输出里换成 asset_id。
-        # 这个 workspace_id 上面已经过了 ensure_workspace_member,不是模型给的。
-        invocation = invoke(db, match["instance_id"], match["name"], arguments, workspace_id=workspace_id or None)
+        invocation = invoke(db, match["instance_id"], match["name"], body.arguments, workspace_id=workspace_id or None)
     except PluginDomainError as exc:
         return {"error": str(exc)[:500]}
     if invocation.status != "succeeded":
@@ -140,7 +172,7 @@ def invoke_agent_tool(
     if workspace_id:
         ensure_workspace_member(db, user, workspace_id)
     if name.startswith(PLUGIN_TOOL_PREFIX):
-        return _invoke_plugin_tool(db, name, body.arguments, user.id, workspace_id)
+        return _invoke_plugin_tool(db, name, body, user, token, workspace_id)
     registry = tool_registry()
     fn = getattr(registry, name, None)
     if fn is None or not callable(fn) or name.startswith("_"):

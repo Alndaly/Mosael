@@ -38,6 +38,7 @@ from typing import Any
 import httpx
 
 from app.core.http_retry import RetryingClient
+from app.domain.effects import plugin_tool_effects
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest, ManifestError, parse
 from app.domain.plugins.migrations import CANONICAL_FILENAME as MANIFEST_NAME
@@ -90,6 +91,16 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
 REPO_PLUGINS_URL = "https://github.com/Alndaly/Mosael/tree/main/plugins"
 
 
+def _market_effects(manifest: Manifest, tool: dict[str, Any]) -> str:
+    """市场里一个声明过的工具的后果。和装上之后(plugins.tools.all_tools)同一个算法 —— 覆盖 > 声明 > 包缺省。"""
+    override = manifest.overrides.get(str(tool["name"]))
+    return plugin_tool_effects(
+        read_only=bool((override and override.read_only) or tool.get("read_only") is True),
+        declared=(override.effects if override and override.effects else None) or tool.get("effects"),
+        default=manifest.default_effects or None,
+    )
+
+
 def bundled_entry(manifest: Manifest, folder: str) -> dict[str, Any]:
     """随应用内置的插件在市场里的那一条,**由本机那份清单生成**,形状与远端索引的条目一样。
 
@@ -111,7 +122,13 @@ def bundled_entry(manifest: Manifest, folder: str) -> dict[str, Any]:
         "runtime": manifest.runtime.kind,
         "provides": list(manifest.provides),
         "tools": [
-            {"name": str(tool["name"]), "label": tool.get("label") or "", "description": tool.get("description") or ""}
+            {
+                "name": str(tool["name"]),
+                "label": tool.get("label") or "",
+                "description": tool.get("description") or "",
+                # 和 scripts/sync-plugin-registry.py 同一个算法(domain/effects):装之前就看得到哪些工具会先问你。
+                "effects": _market_effects(manifest, tool),
+            }
             for tool in manifest.declared_tools
         ],
         "bundled": True,

@@ -40,18 +40,21 @@
 ## 工具太多怎么办
 
 一个平台的端点可能有几十个,全部进智能体的工具表会挤掉内置能力,而且每一轮对话都要为那几十条
-描述付 token。manifest 里的 `tools` 是**白名单**:
+描述付 token。所以 `tools.expose` 是 `"selected"`:工具默认不开,在插件页逐个勾上要给智能体用的那几个。
+名字以插件页「刷新工具」后列出的为准;要给某个工具改名、标只读,写在 `tools.overrides` 里:
 
 ```jsonc
-"tools": [
-  { "name": "fetch_one_video", "read_only": true },
-  { "name": "fetch_user_post_videos", "read_only": true }
-]
+"tools": {
+  "expose": "selected",
+  "default_effects": "paid",
+  "overrides": {
+    "fetch_one_video": { "read_only": true }
+  }
+}
 ```
 
-不写就是全出。名字以插件页「刷新工具」后列出的为准。
-
-顺带一提 `read_only`:标了的工具子智能体才能用。默认不标 —— 插件跑的是别人的服务,
-没有确认门也照样能发请求,宁可让子智能体少一个工具。
+`default_effects: "paid"`:TikHub 的每个端点按次扣额度,所以智能体调用前先出确认卡(见
+`docs/PLUGIN_MANIFEST.md` 的「确认」;auto 档下按计费那一档放行)。标了 `read_only` 的工具不问人,
+子智能体也能用 —— 默认不标:插件跑的是别人的服务,宁可让子智能体少一个工具。
 
 Sources: [TikHub MCP](https://tikhub.io/mcp) · [TikHub API 文档](https://docs.tikhub.io/)

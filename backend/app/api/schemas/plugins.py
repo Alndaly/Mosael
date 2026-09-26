@@ -34,6 +34,9 @@ class PluginToolStateOut(ApiModel):
     label: str = ""
     description: str = ""
     read_only: bool = False
+    #: 后果(none / paid / external / local-code,见 domain/effects)。不是 none 的,智能体调它之前先开确认卡 ——
+    #: 插件页据此在工具旁标「需确认」。
+    effects: str
     input_schema: dict = Field(default_factory=dict)
     #: 暴不暴露给智能体与工作流。默认关 —— 一个 MCP 端点可能报几十个工具。
     exposed: bool = False
@@ -125,6 +128,8 @@ class PluginMarketTool(ApiModel):
     label: str = ""
     #: 作者写的说明,**可能带 markdown**(`**公网直链**`)—— 界面负责渲染,不在这里剥。
     description: str = ""
+    #: 后果(见 domain/effects),由清单算出来。老索引里没有这一项就是空串 —— 不猜,界面不标。
+    effects: str = ""
 
 
 class PluginMarketEntry(ApiModel):
@@ -248,6 +253,8 @@ class PluginToolOut(ApiModel):
     label: str = ""
     description: str = ""
     read_only: bool = False
+    #: 后果(见 domain/effects)。不是 none 的,智能体调它之前先开确认卡。
+    effects: str
     input_schema: dict = Field(default_factory=dict)
 
 

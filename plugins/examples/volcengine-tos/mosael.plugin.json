@@ -6,7 +6,7 @@
     "en": "Volcengine TOS"
   },
   "default_locale": "zh",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "homepage": "https://www.volcengine.com/docs/6349",
   "author": {
     "name": "Mosael",
@@ -109,6 +109,7 @@
     "declare": [
       {
         "name": "tos_upload",
+        "effects": "external",
         "provides": [
           "public_url"
         ],
@@ -211,6 +212,7 @@
       },
       {
         "name": "tos_fetch",
+        "effects": "none",
         "description": {
           "zh": "把桶里的一个对象拉回素材库。**交回的是地址,由宿主搬字节** —— 进度、取消、重试都归它。",
           "en": "Pull an object back into the asset library. The plugin hands over a URL and the host moves the bytes — progress, cancel and retry all come for free."

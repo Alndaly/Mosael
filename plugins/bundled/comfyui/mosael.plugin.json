@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "name": "ComfyUI",
   "default_locale": "zh",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",
   "author": {
     "name": "Mosael",
@@ -129,6 +129,7 @@
       },
       {
         "name": "run_workflow",
+        "effects": "paid",
         "stream": true,
         "timeout_seconds": 1800,
         "label": {
@@ -314,6 +315,7 @@
       },
       {
         "name": "import_outputs",
+        "effects": "none",
         "stream": true,
         "timeout_seconds": 600,
         "label": {
@@ -452,6 +454,7 @@
       },
       {
         "name": "interrupt",
+        "effects": "external",
         "label": {
           "zh": "中断任务",
           "en": "Interrupt"
@@ -475,6 +478,7 @@
       },
       {
         "name": "clear_queue",
+        "effects": "external",
         "label": {
           "zh": "清空队列",
           "en": "Clear queue"
@@ -490,6 +494,7 @@
       },
       {
         "name": "free_memory",
+        "effects": "external",
         "label": {
           "zh": "释放显存",
           "en": "Free VRAM"

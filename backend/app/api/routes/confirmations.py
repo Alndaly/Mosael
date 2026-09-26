@@ -24,6 +24,28 @@ def create_confirmation(
     body: ConfirmationCreate, db: DbSession, user: CurrentUser, token: PresentedToken
 ) -> ToolConfirmation:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    return open_confirmation(
+        db, user, token, workspace_id=body.workspace_id, tool=body.tool, payload=body.payload,
+        requested_by=body.requested_by,
+    )
+
+
+def open_confirmation(
+    db: DbSession,
+    user: CurrentUser,
+    token: str,
+    *,
+    workspace_id: str,
+    tool: str,
+    payload: dict,
+    requested_by: str,
+) -> ToolConfirmation:
+    """开一张卡、判自动放行、推到它该出现的地方。上面这条路由和智能体直接调插件工具(routes/agent_tools)
+    都走这里 —— 那条路要的是同样的三步,抄一份的话,谁往这里加一道校验那边就静默漏掉。
+
+    **权限由调用方先点名**(`ensure_workspace_perm(..., "edit")`):写路由自己写出它要的权限,这是
+    tests/test_write_permission_is_explicit.py 守着的规矩,不藏进辅助函数里。
+    """
     # 归属**由凭据决定**,不由请求体声明。一次 turn 一个令牌,铸的时候正好知道是哪次对话;调用方
     # 转述的话就可以被伪造 —— 任何拿着同一份凭据的通道,填上别人的会话 id 就能把自己的动作挂进
     # 那次对话(三档权限模式下,那等于挂进别人开的自动放行)。没有会话的凭据(登录令牌、MCP 直连)
@@ -31,11 +53,11 @@ def create_confirmation(
     try:
         confirmation = request_confirmation(
             db,
-            workspace_id=body.workspace_id,
-            tool=body.tool,
-            payload=body.payload,
+            workspace_id=workspace_id,
+            tool=tool,
+            payload=payload,
             actor_id=user.id,
-            requested_by=body.requested_by,
+            requested_by=requested_by,
             session_id=autopilot.session_for_token(db, token),
         )
     except ConfirmationError as exc:

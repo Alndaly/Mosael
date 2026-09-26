@@ -13,6 +13,7 @@ Env:  MOSAEL_API   (default http://127.0.0.1:8800)
 from __future__ import annotations
 
 from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+from app.domain.agent.tool_manifest import agent_tool_name
 import contextlib
 import contextvars
 import json
@@ -1107,7 +1108,8 @@ def list_plugin_tools() -> list[dict[str, Any]]:
 
     Use only when the built-in Mosael tools do not cover the user's request and a
     plugin-specific capability may. Each entry has instance_id (which connection),
-    instance_name, name, description and input_schema; call with invoke_plugin_tool.
+    instance_name, name, description, input_schema and effects ("none" runs directly;
+    "paid", "external" or "local-code" asks the user first); call with invoke_plugin_tool.
     Do NOT use for built-in timeline/workflow/media operations when a first-party
     tool exists.
     """
@@ -1115,21 +1117,33 @@ def list_plugin_tools() -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-def invoke_plugin_tool(instance_id: str, tool_name: str, input: dict[str, Any]) -> dict[str, Any]:
-    """Runs directly: invoke one plugin tool returned by list_plugin_tools.
+def invoke_plugin_tool(
+    instance_id: str, tool_name: str, input: dict[str, Any], workspace_id: str = ""
+) -> dict[str, Any]:
+    """Invoke one plugin tool returned by list_plugin_tools.
 
     Use only with an instance_id/tool_name/input_schema you got from list_plugin_tools —
     instance_id picks WHICH connection (the same plugin can be connected more than once,
-    e.g. one per platform). Built-in Mosael edits, renders, generations,
-    operations, and workflow runs should use their dedicated first-party tools instead.
-    Returns status, output, and error.
+    e.g. one per platform). A tool whose effects is "none" runs directly and returns
+    status, output and error. A tool that costs money ("paid"), acts outside Mosael
+    ("external") or runs code on this computer ("local-code") needs the user's approval:
+    the call returns a pending confirmation_id instead, and the tool runs only if they
+    approve. Built-in Mosael edits, renders, generations, operations, and workflow runs
+    should use their dedicated first-party tools instead.
     """
-    invocation = _post(f"/api/plugins/instances/{instance_id}/tools/{tool_name}/invoke", {"input": input})
-    return {
-        "status": invocation["status"],
-        "output": invocation.get("output") or {},
-        "error": invocation.get("error"),
-    }
+    # 和 sidecar 同一条路(/api/agent/tools/plugin__…):要不要先问人由工具声明的后果决定,在那里判,
+    # 这边不再判一遍。插件页「试一下」那条路由是人点的,智能体不走它。
+    reply = _post(
+        f"/api/agent/tools/{agent_tool_name(instance_id, tool_name)}"
+        f"?workspace_id={workspace_id or _default_workspace_id()}",
+        {"arguments": input, "requested_by": _REQUESTED_BY.get()},
+    )
+    if reply.get("error"):
+        return {"status": "failed", "output": {}, "error": reply["error"]}
+    result = reply.get("result")
+    if isinstance(result, dict) and result.get("confirmation_id"):
+        return result
+    return {"status": "succeeded", "output": result if result is not None else {}, "error": None}
 
 
 

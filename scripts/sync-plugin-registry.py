@@ -19,9 +19,13 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# 工具的后果按后端**同一个函数**算(它是个不依赖任何模块的叶子),不在这里抄一份规则。
+sys.path.insert(0, str(ROOT / "backend"))
+from app.domain.effects import plugin_tool_effects  # noqa: E402
 EXAMPLES = ROOT / "plugins" / "examples"
 BUNDLED = ROOT / "plugins" / "bundled"
 OUT = ROOT / "website" / "public" / "plugins" / "registry.json"
@@ -39,6 +43,18 @@ DOWNLOAD_TEMPLATE = "https://github.com/Alndaly/Mosael/releases/latest/download/
 
 #: 仓库里插件目录的网页地址。与后端 domain/plugins/registry.REPO_PLUGINS_URL 是同一个。
 REPO_PLUGINS_URL = "https://github.com/Alndaly/Mosael/tree/main/plugins"
+
+
+def _effects(raw: dict, tool: dict) -> str:
+    """一个声明过的工具的后果:覆盖 > 声明 > 包上的 default_effects > external;只读的是 none。
+    与后端 plugins.registry._market_effects 同一个算法(真正的规则在 plugin_tool_effects 里)。"""
+    policy = raw.get("tools") or {}
+    override = (policy.get("overrides") or {}).get(tool["name"]) or {}
+    return plugin_tool_effects(
+        read_only=override.get("read_only") is True or tool.get("read_only") is True,
+        declared=override.get("effects") or tool.get("effects"),
+        default=policy.get("default_effects"),
+    )
 
 
 def entry(manifest_path: Path, *, bundled: bool = False) -> dict:
@@ -73,11 +89,13 @@ def entry(manifest_path: Path, *, bundled: bool = False) -> dict:
         "provides": [p for p in (raw.get("provides") or []) if isinstance(p, str)],
         # 声明的工具:名字、显示名和说明(按语言分的原样带过去)。**不带入参 schema** ——
         # 市场里要回答的是"它能干什么",怎么调是装上之后的事,而 schema 会让索引胖一个数量级。
+        # 每个工具带上它的后果(none / paid / external / local-code):市场详情据此标出哪些工具智能体调用前会先问你。
         "tools": [
             {
                 "name": str(tool["name"]),
                 "label": tool.get("label") or "",
                 "description": tool.get("description") or "",
+                "effects": _effects(raw, tool),
             }
             for tool in ((raw.get("tools") or {}).get("declare") or [])
             if isinstance(tool, dict) and tool.get("name")

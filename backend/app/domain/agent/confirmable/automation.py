@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
+from app.domain.effects import needs_card, permission_for, warning_key
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.confirmable.graphs import external_warning, graph_under_review
@@ -322,18 +323,21 @@ def _validate_run_board_item(db: Session, workspace_id: str, payload: dict[str, 
 
 
 def _needs_card_run_board_item(db: Session, payload: dict[str, Any]) -> bool:
-    """只读的工具(不花钱、不出门)直接跑;花钱的、对外有后果的等人点(ADR 0021 决定 2)。"""
-    return payload.get("effects") != "none"
+    """不花钱、不出门的工具直接跑;花钱的、对外有后果的、在本机跑代码的等人点(ADR 0021 决定 2)。
+
+    判据和智能体在对话里直接调插件工具**是同一条**(domain/effects)。
+    """
+    return needs_card(payload.get("effects"))
 
 
 def _escalate_run_board_item(db: Session, tool: str, payload: dict[str, Any]) -> str | None:
-    """按工具的后果开卡:花钱的算 ai-cost(自动档里有连开上限),对外的算 external(自动档也回到人)。"""
-    return {"paid": "ai-cost", "external": "external"}.get(str(payload.get("effects") or ""))
+    """按工具的后果开卡:花钱的算 ai-cost(自动档里有连开上限),对外的、跑代码的算 external(自动档也回到人)。"""
+    return permission_for(payload.get("effects"))
 
 
 def _summarize_run_board_item(db: Session, payload: dict[str, Any]) -> Summary:
     tool = payload.get("tool") or {}
-    effects = payload.get("effects")
+    warning = warning_key(payload.get("effects"))
     connection = str(payload.get("connection") or "")
     title = str(payload.get("item_title") or "")
     return "confirm_runBoardItem", {
@@ -341,8 +345,7 @@ def _summarize_run_board_item(db: Session, payload: dict[str, Any]) -> Summary:
         "board": str(payload.get("board_name") or ""),
         "item": fragment("confirm_boardItemNamed", name=title) if title else "",
         "via": fragment("confirm_boardRunVia", name=connection) if connection else "",
-        "warning": fragment("confirm_boardRunPaid") if effects == "paid"
-        else fragment("confirm_boardRunExternal") if effects == "external" else "",
+        "warning": fragment(warning) if warning else "",
     }
 
 

@@ -6,7 +6,7 @@
     "en": "Baidu Netdisk"
   },
   "default_locale": "zh",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "homepage": "https://pan.baidu.com/union/doc/",
   "author": {
     "name": "Mosael",
@@ -159,6 +159,7 @@
       },
       {
         "name": "pan_import",
+        "effects": "none",
         "description": {
           "zh": "把百度网盘里的一个文件拉进素材库。传 pan_list / pan_search 给出的 fs_id。返回 asset_id,之后就和别的素材一样用。",
           "en": "Pull one file from Baidu Netdisk into the asset library. Pass an fs_id from pan_list or pan_search. Returns an asset_id you can use like any other asset."
@@ -191,6 +192,7 @@
       },
       {
         "name": "pan_upload",
+        "effects": "external",
         "description": {
           "zh": "把素材库里的一个文件传到百度网盘。传 asset_id 和网盘上的目标路径(如 /我的资源/成片.mp4)。",
           "en": "Send one file from the asset library to Baidu Netdisk. Pass an asset_id and the target path on the netdisk (e.g. /My files/final.mp4)."

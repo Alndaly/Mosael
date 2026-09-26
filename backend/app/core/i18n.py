@@ -153,6 +153,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path} 的工具 {tool} 声明了包上没有的能力: {capabilities}",
         "en": "In plugin manifest {path}, tool {tool} declares capabilities the package doesn't: {capabilities}",
     },
+    "pluginErr_manifestBadEffects": {
+        "zh": "插件清单 {path}:{tool} 的 effects 只能是 {allowed} 之一,写的是「{value}」",
+        "en": "In plugin manifest {path}, the effects of {tool} must be one of {allowed}, not “{value}”.",
+    },
+    "pluginErr_manifestReadOnlyEffects": {
+        "zh": "插件清单 {path}:工具 {tool} 标了 read_only,effects 却写成「{value}」—— 只读的工具没有后果,两处说的不是一回事",
+        "en": "In plugin manifest {path}, tool {tool} is marked read_only yet declares effects “{value}”; a read-only tool has no effects, so the two contradict each other.",
+    },
     "pluginErr_manifestCapabilityNeedsProcess": {
         "zh": "插件清单 {path}:能力 {capability} 只能由本地脚本形态的插件提供(MCP 插件不支持)",
         "en": "In plugin manifest {path}, the {capability} capability can only be provided by a local-script plugin (not MCP).",
@@ -451,6 +459,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "routeErr_pluginToolUnavailable": {
         "zh": "插件工具 {name} 不可用(连接未启用、未授权、缺凭据,或该工具未开启)",
         "en": "Plugin tool {name} is unavailable (the connection is disabled, unauthorized, missing credentials, or the tool is turned off).",
+    },
+    "routeErr_pluginToolNeedsWorkspace": {
+        "zh": "插件工具 {name} 要先经你确认,而确认卡得开在某个工作区里 —— 请带上 workspace_id",
+        "en": "Plugin tool {name} needs your approval first, and the approval card has to live in a workspace — pass workspace_id.",
     },
     "routeErr_pluginCallFailed": {
         "zh": "插件调用失败",
@@ -803,6 +815,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirmErr_boardItemChanged": {
         "zh": "开卡之后「{item_id}」换了工具,这张卡批准的不是现在这一个 —— 请重新发起",
         "en": "“{item_id}” switched to a different tool after this card was opened, so the card no longer covers it. Please ask again.",
+    },
+    "confirmErr_pluginToolUnavailable": {
+        "zh": "插件工具 {name} 不在你的工具表里(连接是别人接的、已停用、未授权、缺凭据,或该工具未开启)",
+        "en": "Plugin tool {name} is not among your tools (the connection belongs to someone else, or it is disabled, unauthorized, missing credentials, or the tool is turned off).",
+    },
+    "confirmErr_pluginToolBadInput": {
+        "zh": "插件工具 {name} 的参数不对:{detail}",
+        "en": "The arguments for plugin tool {name} are wrong: {detail}",
+    },
+    "confirmErr_pluginToolFailed": {
+        "zh": "插件工具 {name} 没跑成:{detail}",
+        "en": "Plugin tool {name} did not run: {detail}",
     },
     "confirmErr_noApprover": {
         "zh": "这张卡没有记下是谁批准的,不知道该用谁的身份运行",
@@ -1899,8 +1923,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirm_runBoardItem": {"zh": "在画板「{board}」上运行工具「{tool}」{item}{via}{warning}", "en": "Run the tool “{tool}” on board “{board}”{item}{via}{warning}"},
     "confirm_boardItemNamed": {"zh": "(工具格「{name}」)", "en": " (tool item “{name}”)"},
     "confirm_boardRunVia": {"zh": ",用你的连接「{name}」", "en": ", using your connection “{name}”"},
-    "confirm_boardRunPaid": {"zh": "(会产生费用,按所用模型计费)", "en": " (this costs money, billed by the model it uses)"},
-    "confirm_boardRunExternal": {"zh": "  ⚠️ 后果在本应用之外(插件或外部服务),撤不回", "en": "  ⚠️ Its effects are outside this app (a plugin or an outside service) and cannot be undone"},
+    #: 卡上点明「为什么要你看一眼」的那半句,按后果分(词表见 domain/effects)。画板工具格和插件工具共用。
+    "confirm_effectPaid": {"zh": "(会产生费用或占用付费算力)", "en": " (this costs money or paid compute)"},
+    "confirm_effectExternal": {"zh": "  ⚠️ 后果在本应用之外(插件或外部服务),撤不回", "en": "  ⚠️ Its effects are outside this app (a plugin or an outside service) and cannot be undone"},
+    "confirm_effectLocalCode": {"zh": "  ⚠️ 会在你的电脑上运行代码", "en": "  ⚠️ This runs code on your computer"},
+    "confirm_runPluginTool": {
+        "zh": "运行插件工具「{tool}」(连接「{connection}」){args}{warning}",
+        "en": "Run the plugin tool “{tool}” (connection “{connection}”){args}{warning}",
+    },
+    "confirm_pluginToolArgs": {"zh": ",参数:{args}", "en": ", with {args}"},
     "confirm_externalNodes": {
         "zh": "  ⚠️ 含{labels}节点(后果在本应用之外,撤不回)",
         "en": "  ⚠️ Includes {labels} nodes (their effects are outside this app and cannot be undone)",

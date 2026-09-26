@@ -62,7 +62,7 @@ summaries — never raw internal schemas.
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
 | `inspect_sequence` | 直接执行 | Read-only: inspect a VIDEO TIMELINE sequence — format, revision, duration, tracks, clips. |
-| `invoke_plugin_tool` | 直接执行 | Runs directly: invoke one plugin tool returned by list_plugin_tools. |
+| `invoke_plugin_tool` | 直接执行 | Invoke one plugin tool returned by list_plugin_tools. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
 | `list_board_producers` | 直接执行 | Read-only: list the TOOLS you can put on a creative board as tool items. |

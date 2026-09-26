@@ -6,7 +6,7 @@
     "en": "Remotion Animation"
   },
   "default_locale": "zh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
   "author": {
     "name": "Mosael",
@@ -84,6 +84,7 @@
     "declare": [
       {
         "name": "remotion_setup",
+        "effects": "none",
         "label": {
           "zh": "准备渲染环境",
           "en": "Prepare the renderer"
@@ -100,6 +101,7 @@
       },
       {
         "name": "remotion_explainer",
+        "effects": "none",
         "label": {
           "zh": "讲解视频",
           "en": "Explainer video"
@@ -174,6 +176,7 @@
       },
       {
         "name": "remotion_animation",
+        "effects": "local-code",
         "label": {
           "zh": "自定义动画",
           "en": "Custom animation"

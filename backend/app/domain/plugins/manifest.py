@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any
 
 #: i18n 是纯叶子(只依赖标准库),运行时 import 它不会把这个模块拖出叶子位置。
 from app.core.i18n import LocalizedError, pick_text
+#: 后果词表也是纯叶子(不依赖任何模块)。
+from app.domain.effects import EFFECTS, NONE as NO_EFFECTS
 
 if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块是叶子
     from app.db.models import PluginPackage
@@ -136,6 +138,8 @@ class ToolOverride:
     label: str = ""
     description: str = ""
     read_only: bool = False
+    #: 覆盖这个工具的后果(见 domain/effects)。空 = 不覆盖。MCP 插件只能在这里写 —— 它的清单是从服务拉的。
+    effects: str = ""
     node: dict[str, Any] | None = None
     #: 只给宿主自己的适配层调(比如 3D 场景与 Blender 的互通),**不暴露给智能体和工作流**。
     #: 用在「插件自带一个不经确认的原始入口、而 Mosael 已经有带确认卡的同一能力」时 ——
@@ -170,6 +174,9 @@ class Manifest:
     expose: str = "selected"
     recommended: list[str] = field(default_factory=list)
     overrides: dict[str, ToolOverride] = field(default_factory=dict)
+    #: 这个包里**没声明后果**的工具按什么算(`tools.default_effects`,见 domain/effects)。空 = 按
+    #: 宿主的缺省(external)。给 MCP 插件用:TikHub 那样几十个端点、每个都按次计费的,不必逐个写覆盖。
+    default_effects: str = ""
     #: 进程类插件在 manifest 里声明的工具(MCP 插件此项为空,清单从服务拉)。
     declared_tools: list[dict[str, Any]] = field(default_factory=list)
     #: 插件**自己的**文档/主页。界面上给一个「文档」链接 —— 一个插件带来几十个工具、一串权限
@@ -350,25 +357,55 @@ def runtime_of(raw: dict[str, Any]) -> Runtime:
     )
 
 
-def _tools_policy(raw: dict[str, Any], pick: Callable[[Any], str] = text_of) -> tuple[str, list[str], dict[str, ToolOverride], list[dict[str, Any]]]:
-    """→ (expose, recommended, overrides, 进程插件声明的工具)。
+@dataclass(frozen=True)
+class _ToolsPolicy:
+    expose: str
+    recommended: list[str]
+    overrides: dict[str, ToolOverride]
+    #: 进程插件声明的工具。
+    declared: list[dict[str, Any]]
+    default_effects: str
 
-    `tools` 是个策略对象:`declare` 是进程插件的工具声明,`recommended` 是首次启用默认勾上
-    的那些,`overrides` 按名字覆盖(目前只认 read_only、node 和 internal)。三个名字各说各的 ——
-    此前它是个数组,同时承担这三种语义,读的人得先知道 kind 才能理解那个字段。
+
+def _checked_effects(value: Any, *, read_only: bool, path: str, tool: str) -> str:
+    """工具上写的 `effects`:没写是空串;写了就必须是词表里的一个,而且不能和 `read_only` 打架。
+
+    **写错在装的那一刻就说**,不是跑的时候悄悄按 external 算:作者写 `"efects": "none"` 或
+    `"effects": "readonly"` 的本意是「这个不用问人」,静默改成「要问人」他不会知道为什么;反过来
+    「只读却 paid」是两句互相矛盾的话 —— 只读的工具会交给子智能体,而子智能体没法等一张确认卡。
+    """
+    if value is None:
+        return ""
+    if value not in EFFECTS:
+        raise ManifestError(
+            "pluginErr_manifestBadEffects", path=path, tool=tool, value=str(value), allowed=" / ".join(EFFECTS)
+        )
+    if read_only and value != NO_EFFECTS:
+        raise ManifestError("pluginErr_manifestReadOnlyEffects", path=path, tool=tool, value=value)
+    return str(value)
+
+
+def _tools_policy(raw: dict[str, Any], path: str, pick: Callable[[Any], str] = text_of) -> _ToolsPolicy:
+    """`tools` 策略对象 → 规整过的形状。
+
+    `declare` 是进程插件的工具声明,`recommended` 是首次启用默认勾上的那些,`overrides` 按名字覆盖
+    (目前只认 read_only、effects、node 和 internal),`default_effects` 是没声明后果的工具按什么算。
+    几个名字各说各的 —— 此前它是个数组,同时承担三种语义,读的人得先知道 kind 才能理解那个字段。
     """
     tools = raw.get("tools")
     if not isinstance(tools, dict):
-        return "all", [], {}, []
+        return _ToolsPolicy("all", [], {}, [], "")
     expose = str(tools.get("expose") or "selected").strip().lower()
     overrides: dict[str, ToolOverride] = {}
     for name, spec in (tools.get("overrides") or {}).items():
         if not isinstance(spec, dict):
             continue
+        read_only = spec.get("read_only") is True
         overrides[str(name)] = ToolOverride(
             label=pick(spec.get("label")),
             description=pick(spec.get("description")),
-            read_only=spec.get("read_only") is True,
+            read_only=read_only,
+            effects=_checked_effects(spec.get("effects"), read_only=read_only, path=path, tool=str(name)),
             node=spec.get("node") if isinstance(spec.get("node"), dict) else None,
             internal=spec.get("internal") is True,
         )
@@ -377,8 +414,11 @@ def _tools_policy(raw: dict[str, Any], pick: Callable[[Any], str] = text_of) -> 
         for t in (tools.get("declare") or [])
         if isinstance(t, dict) and isinstance(t.get("name"), str)
     ]
+    for tool in declared:
+        _checked_effects(tool.get("effects"), read_only=tool.get("read_only") is True, path=path, tool=tool["name"])
+    default_effects = _checked_effects(tools.get("default_effects"), read_only=False, path=path, tool="tools.default_effects")
     recommended = [str(n) for n in (tools.get("recommended") or [])]
-    return ("all" if expose == "all" else "selected"), recommended, overrides, declared
+    return _ToolsPolicy(("all" if expose == "all" else "selected"), recommended, overrides, declared, default_effects)
 
 
 def web_url(raw: Any) -> str:
@@ -405,7 +445,8 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
     if not name:
         raise ManifestError("pluginErr_manifestMissingField", path=path, field="name")
     instance = raw.get("instance") if isinstance(raw.get("instance"), dict) else {}
-    expose, recommended, overrides, declared = _tools_policy(raw, pick)
+    policy = _tools_policy(raw, path, pick)
+    declared = policy.declared
     # 工具上声明的能力必须是包声明过的 —— 包上没说「我能换公网地址」,某个工具却自称负责它,
     # 两处说的不是一回事,宿主不该替作者选一个信。
     package_provides = {str(one) for one in (raw.get("provides") or []) if isinstance(one, str)}
@@ -428,10 +469,11 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         credentials=_fields(instance.get("credentials"), secret=True, pick=pick),
         multiple=instance.get("multiple") is True,
         name_template=pick(instance.get("name_template")),
-        expose=expose,
-        recommended=recommended,
-        overrides=overrides,
+        expose=policy.expose,
+        recommended=policy.recommended,
+        overrides=policy.overrides,
         declared_tools=declared,
+        default_effects=policy.default_effects,
         homepage=web_url(raw.get("homepage")),
         author=_author(raw.get("author"), pick),
         docs=web_url(pick(raw.get("docs"))),

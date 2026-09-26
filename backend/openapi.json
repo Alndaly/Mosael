@@ -25424,6 +25424,11 @@
             "type": "string",
             "title": "Description",
             "default": ""
+          },
+          "effects": {
+            "type": "string",
+            "title": "Effects",
+            "default": ""
           }
         },
         "type": "object",
@@ -25736,6 +25741,10 @@
             "title": "Read Only",
             "default": false
           },
+          "effects": {
+            "type": "string",
+            "title": "Effects"
+          },
           "input_schema": {
             "additionalProperties": true,
             "type": "object",
@@ -25747,7 +25756,8 @@
           "instance_id",
           "instance_name",
           "package_id",
-          "name"
+          "name",
+          "effects"
         ],
         "title": "PluginToolOut",
         "description": "一个**已暴露**的工具。智能体工具表与工作流节点面板读的就是这个。"
@@ -25773,6 +25783,10 @@
             "title": "Read Only",
             "default": false
           },
+          "effects": {
+            "type": "string",
+            "title": "Effects"
+          },
           "input_schema": {
             "additionalProperties": true,
             "type": "object",
@@ -25791,7 +25805,8 @@
         },
         "type": "object",
         "required": [
-          "name"
+          "name",
+          "effects"
         ],
         "title": "PluginToolStateOut"
       },
