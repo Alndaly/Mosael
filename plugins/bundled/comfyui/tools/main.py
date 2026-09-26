@@ -32,7 +32,7 @@ import run
 import server
 import tooling
 import workflows
-from comfy_http import Comfy, env_base_url
+from comfy_http import Comfy, env_access_token, env_base_url
 from lines import ComfyError, say
 
 
@@ -77,7 +77,7 @@ def main() -> None:
     locale = str(request.get("locale") or os.environ.get("MOSAEL_LOCALE") or "zh")
     tool = request.get("tool")
     try:
-        comfy = Comfy(env_base_url(), locale)
+        comfy = Comfy(env_base_url(), locale, env_access_token())
         if tool == "comfyui_generation":
             output = _generation(payload, comfy, locale)
         elif tool in _PLAIN:

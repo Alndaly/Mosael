@@ -24,7 +24,7 @@ class WebSocketClosed(Exception):
 
 
 class WebSocket:
-    def __init__(self, url: str, *, timeout: float = 5.0) -> None:
+    def __init__(self, url: str, *, headers: dict[str, str] | None = None, timeout: float = 5.0) -> None:
         parts = urlsplit(url)
         secure = parts.scheme == "wss"
         host = parts.hostname or "127.0.0.1"
@@ -44,9 +44,11 @@ class WebSocket:
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
             f"Sec-WebSocket-Key: {key}\r\n"
-            "Sec-WebSocket-Version: 13\r\n\r\n"
+            "Sec-WebSocket-Version: 13\r\n"
+            + "".join(f"{name}: {value}\r\n" for name, value in (headers or {}).items())
+            + "\r\n"
         )
-        sock.sendall(handshake.encode("ascii"))
+        sock.sendall(handshake.encode("latin-1"))
         head = self._read_until(b"\r\n\r\n", limit=16384)
         status = head.split(b"\r\n", 1)[0]
         if b" 101" not in status:

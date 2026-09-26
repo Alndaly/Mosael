@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import uuid
@@ -32,14 +33,20 @@ _OPENER = request.build_opener(request.ProxyHandler({}))
 class Comfy:
     """一台 ComfyUI 服务器。短命的:一次调用一个。"""
 
-    def __init__(self, base_url: str, locale: str = "zh") -> None:
+    def __init__(self, base_url: str, locale: str = "zh", access_token: str = "") -> None:
         base = (base_url or "").strip().rstrip("/")
         if not base:
             raise ComfyError(say(locale, "没填 ComfyUI 的服务器地址", "The ComfyUI server URL is empty"))
         if not base.startswith(("http://", "https://")):
             base = f"http://{base}"
+        if "@" in parse.urlsplit(base).netloc:
+            # urllib 不认地址里的「用户名:密码@」(报一句 nonnumeric port),而写在地址里的密码会出现在连接名上
+            raise ComfyError(say(locale, "服务器地址里别写用户名和密码 —— 把「用户名:密码」填进连接的「访问凭据」",
+                                 "Don't put a user name and password in the server URL. Enter “user:password” as the connection's access credential."))
         self.base = base
         self.locale = locale
+        #: 每个请求(含 WebSocket 握手)都带的头:ComfyUI 放在要登录的反向代理 / ComfyUI-Login 后面时要它
+        self.headers = auth_headers(access_token)
 
     # --- 传输 -------------------------------------------------------------
 
@@ -48,7 +55,7 @@ class Comfy:
         url = f"{self.base}{path}"
         if params:
             url = f"{url}?{parse.urlencode(params)}"
-        req = request.Request(url, data=body, method=method, headers=headers or {})
+        req = request.Request(url, data=body, method=method, headers={**self.headers, **(headers or {})})
         try:
             return _OPENER.open(req, timeout=timeout)
         except error.HTTPError:
@@ -201,3 +208,18 @@ class Comfy:
 
 def env_base_url() -> str:
     return os.environ.get("SERVER_URL", "").strip()
+
+
+def env_access_token() -> str:
+    """连接的「访问凭据」(凭据 `access_token`,宿主注入成大写的环境变量)。"""
+    return os.environ.get("ACCESS_TOKEN", "").strip()
+
+
+def auth_headers(token: str) -> dict[str, str]:
+    """访问凭据 → Authorization 头:`用户名:密码` 按 Basic(反向代理的登录),别的按 Bearer 令牌(ComfyUI-Login 等)。"""
+    token = (token or "").strip()
+    if not token:
+        return {}
+    if ":" in token:
+        return {"Authorization": "Basic " + base64.b64encode(token.encode("utf-8")).decode("ascii")}
+    return {"Authorization": f"Bearer {token}"}

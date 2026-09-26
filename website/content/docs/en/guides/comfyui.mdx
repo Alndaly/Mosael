@@ -21,7 +21,9 @@ brings two things:
 
 1. Start ComfyUI (on this machine it listens on `http://127.0.0.1:8188` by default).
 2. Open Plugins → **ComfyUI** → “New connection” and fill in the **Server URL**. A LAN address
-   (such as `http://192.168.1.20:8188`) uses another machine's GPU.
+   (such as `http://192.168.1.20:8188`) uses another machine's GPU. If ComfyUI sits behind a reverse proxy with
+   login or ComfyUI-Login, enter `user:password` or a token as the **Access credential** (the former is sent as Basic
+   auth, the latter as a Bearer token); don't put a user name and password in the URL.
 3. Grant `network:comfyui` and switch the connection on.
 
 Mosael then asks the server which workflows it has. The “Generation models” row on the connection card shows

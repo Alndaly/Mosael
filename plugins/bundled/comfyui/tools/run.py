@@ -317,7 +317,7 @@ def follow_poll(comfy: Comfy, prompt_id: str, emit: Emit, locale: str, *, deadli
 
 def _open_socket(comfy: Comfy, client_id: str) -> WebSocket | None:
     try:
-        return WebSocket(comfy.ws_url(client_id))
+        return WebSocket(comfy.ws_url(client_id), headers=comfy.headers)
     except (OSError, WebSocketClosed, ValueError):
         return None
 

@@ -167,6 +167,8 @@ class State:
     uploads: list[tuple[str, bytes]] = field(default_factory=list)
     calls: list[tuple[str, str, Any]] = field(default_factory=list)
     websocket: bool = False
+    #: 放在要登录的反向代理后面:每个请求(含 WebSocket 握手)都得带这个 Authorization 头,否则 401。
+    authorization: str | None = None
     #: WebSocket 在提交之后被对面**重置**(ComfyUI 重启、网络抖一下、代理掐线):插件该退回轮询。
     websocket_reset: bool = False
     submitted: threading.Event = field(default_factory=threading.Event)
@@ -198,6 +200,13 @@ class _Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         return self.rfile.read(length) if length else b""
 
+    def _authorized(self) -> bool:
+        wanted = self.server.state.authorization
+        if wanted is None or self.headers.get("Authorization") == wanted:
+            return True
+        self._json({"error": "unauthorized"}, 401)
+        return False
+
     # --- GET --------------------------------------------------------------
 
     def do_GET(self) -> None:  # noqa: N802 — http.server 的约定
@@ -205,6 +214,8 @@ class _Handler(BaseHTTPRequestHandler):
         parts = urlsplit(self.path)
         path, query = parts.path, parse_qs(parts.query)
         state.calls.append(("GET", path, query))
+        if not self._authorized():
+            return
         if path == "/ws":
             self._websocket(query.get("clientId", [""])[0])
             return
@@ -257,6 +268,8 @@ class _Handler(BaseHTTPRequestHandler):
         state = self.server.state
         path = urlsplit(self.path).path
         raw = self._body()
+        if not self._authorized():
+            return
         if path == "/upload/image":
             name, content = _multipart_file(self.headers.get("Content-Type", ""), raw)
             state.uploads.append((name, content))

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import socket
 from pathlib import Path
@@ -216,6 +217,23 @@ def _unused_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
+
+
+def test_要登录的ComfyUI_按访问凭据带上Authorization头_WebSocket也带(comfy, tmp_path: Path) -> None:
+    comfy.state.authorization = "Bearer s3cret"
+    comfy.state.websocket = True
+    with pytest.raises(runtime.PluginRuntimeError, match="401"):
+        _models(comfy.url)
+    assert "portrait.json" in {one["id"] for one in _models(comfy.url, ACCESS_TOKEN="s3cret")}
+    _, hooks, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"}, ACCESS_TOKEN="s3cret")
+    assert any("5/20" in message for _, message in hooks.progress), "WebSocket 握手也带着凭据,进度照样来"
+    comfy.state.authorization = "Basic " + base64.b64encode(b"me:pa:ss").decode()
+    assert _models(comfy.url, ACCESS_TOKEN="me:pa:ss"), "用户名:密码 按 Basic 发"
+
+
+def test_地址里写了用户名密码_说清楚填到访问凭据(comfy) -> None:
+    with pytest.raises(runtime.PluginRuntimeError, match="访问凭据"):
+        _models(comfy.url.replace("http://", "http://me:pw@"))
 
 
 def test_连不上说出地址(tmp_path: Path) -> None:

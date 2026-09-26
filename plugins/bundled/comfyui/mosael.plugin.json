@@ -64,6 +64,20 @@
           "en": "A fallback for workflows the converter can't read: use “Export (API)” in ComfyUI and paste the JSON here; it appears as “API template” in the model list. Placeholders: `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{steps}}`."
         }
       }
+    ],
+    "credentials": [
+      {
+        "key": "access_token",
+        "label": {
+          "zh": "访问凭据(可选)",
+          "en": "Access credential (optional)"
+        },
+        "required": false,
+        "help": {
+          "zh": "ComfyUI 放在要登录的反向代理或 ComfyUI-Login 后面时才填:`用户名:密码` 按 Basic 认证发,别的按 `Bearer` 令牌发。本机和局域网里直接开着的 ComfyUI 不用填。",
+          "en": "Only for a ComfyUI behind a reverse proxy with login or ComfyUI-Login: `user:password` is sent as Basic auth, anything else as a `Bearer` token. Leave empty for a ComfyUI running directly on this machine or your LAN."
+        }
+      }
     ]
   },
   "tools": {
