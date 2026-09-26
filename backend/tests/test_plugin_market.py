@@ -188,10 +188,36 @@ def test_扫描不认安装现场的暂存目录(tmp_path) -> None:
 
 
 class Test索引:
-    def test_默认市场指向官网实际发布的索引(self) -> None:
+    def test_默认市场读最新一次发版附带的索引(self) -> None:
+        """不读官网那份(main 生成):它许的版本可能还没发版,下载给不出来(见 domain/plugins/updates)。"""
         from app.api.routes.plugins import DEFAULT_REGISTRY_URL
 
-        assert DEFAULT_REGISTRY_URL == "https://mosael.com/plugins/registry.json"
+        assert DEFAULT_REGISTRY_URL == "https://github.com/Alndaly/Mosael/releases/latest/download/registry.json"
+
+    def test_市场请求跟随_GitHub_的跳转(self, monkeypatch) -> None:
+        """`releases/latest/download/…` 先 302 到最新那次 Release,再 302 到附件的 CDN 地址。"""
+        seen: dict[str, object] = {}
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                seen.update(kwargs)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url):
+                seen["url"] = url
+                return _fake_client({"plugins": []})().get(url)
+
+        monkeypatch.setattr(market, "RetryingClient", FakeClient)
+        from app.api.routes.plugins import DEFAULT_REGISTRY_URL
+
+        assert market.fetch_index(DEFAULT_REGISTRY_URL) == []
+        assert seen["follow_redirects"] is True and seen["url"] == DEFAULT_REGISTRY_URL
+        assert seen["timeout"] == market.REGISTRY_TIMEOUT_SECONDS
 
     def test_市场请求不继承_ai_请求的全局重试(self, monkeypatch) -> None:
         seen: dict[str, object] = {}

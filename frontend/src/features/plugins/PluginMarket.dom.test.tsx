@@ -24,13 +24,15 @@ const OSS = {
 const PAN = {
   id: "dev.mosael.baidu-pan", name: "百度网盘", version: "0.5.1", download: "https://x/pan.zip",
   description: "在百度网盘和素材库之间搬文件。", permissions: ["network:baidu-pan"],
-  installed: true, installed_version: "0.5.0", author: "Mosael", author_url: "", docs: "", homepage: "",
+  installed: true, installed_version: "0.5.0", update_available: true, update_unreleased: false,
+  author: "Mosael", author_url: "", docs: "", homepage: "",
   runtime: "process", provides: [], tools: [{ name: "pan_list", label: "", description: "" }],
 };
 const MCP = {
   id: "dev.example.mcp-sample", name: "MCP Sample", version: "0.1.0", download: "https://x/mcp.zip",
   description: "把一个现成的 MCP server 接成插件。", permissions: ["process:spawn"],
-  installed: true, installed_version: "0.1.0", author: "Mosael", author_url: "", docs: "", homepage: "",
+  installed: true, installed_version: "0.1.0", update_available: false, update_unreleased: false,
+  author: "Mosael", author_url: "", docs: "", homepage: "",
   runtime: "mcp", provides: [], tools: [],
 };
 
@@ -59,8 +61,9 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
+import { toast } from "sonner";
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
 
 function renderMarket() {
@@ -198,12 +201,12 @@ describe("安装", () => {
     const { onChanged } = renderMarket();
     await screen.findByRole("list", { name: "pluginMarket" });
     await user.click(within(card("阿里云 OSS")).getByRole("button", { name: "pluginInstall" }));
-    expect(mocks.preview).toHaveBeenCalledWith("https://x/oss.zip");
+    expect(mocks.preview).toHaveBeenCalledWith("https://x/oss.zip", "0.1.2");
     const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
     expect(within(confirm).getByText("network:oss")).toBeTruthy();
     expect(mocks.install).not.toHaveBeenCalled();
     await user.click(within(confirm).getByRole("button", { name: "pluginInstall" }));
-    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/oss.zip", false));
+    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/oss.zip", false, "0.1.2"));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
@@ -215,7 +218,18 @@ describe("安装", () => {
     await user.click(screen.getByRole("button", { name: "pluginUpdate" }));
     const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
     await user.click(within(confirm).getByRole("button", { name: "pluginUpdate" }));
-    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/pan.zip", true));
+    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/pan.zip", true, "0.5.1"));
+  });
+
+  it("确认卡上的版本是包里实际那一版;和市场写的不同时点明", async () => {
+    const user = userEvent.setup();
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    await user.click(within(card("百度网盘")).getByRole("button", { name: "pluginUpdate" }));
+    //: 预览回的是 0.1.2(包里的清单),市场写的是 0.5.1。
+    const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
+    expect(within(confirm).getByText("v0.1.2")).toBeTruthy();
+    expect(within(confirm).getByText("pluginInstallVersionDiffers")).toBeTruthy();
   });
 
   it("详情里能卸载已装的插件,要先确认", async () => {
@@ -284,5 +298,72 @@ describe("随应用内置的插件", () => {
     renderMarket();
     expect(await screen.findByText("pluginMarketFailed")).toBeTruthy();
     expect(screen.getByText("连不上 mosael.com:timeout")).toBeTruthy();
+  });
+});
+
+// 「明明装好了,还显示更新」:市场许了新版,下载地址给的还是装着的那一版。
+describe("新版本还没发布", () => {
+  const REMOTION = {
+    id: "dev.mosael.remotion", name: "Remotion 动画", version: "0.2.0", download: "https://x/remotion.zip",
+    description: "用代码做动画", permissions: ["process:spawn"], installed: true, installed_version: "0.1.0",
+    update_available: true, update_unreleased: false, author: "Mosael", author_url: "", docs: "", homepage: "",
+    runtime: "process", provides: [], tools: [],
+  };
+
+  it("点「更新」下下来的包并不更新:不弹「更新」确认卡,说清还没发布,市场刷新后不再说有新版", async () => {
+    const user = userEvent.setup();
+    let unreleased = false;
+    mocks.market.mockImplementation(async () => ({
+      plugins: [unreleased ? { ...REMOTION, update_available: false, update_unreleased: true } : REMOTION],
+      index_error: "",
+    }));
+    mocks.preview.mockImplementation(async () => {
+      unreleased = true; // 后端在预览时记下了这一条
+      return {
+        id: REMOTION.id, name: REMOTION.name, version: "0.1.0", description: "", permissions: [], tools: [],
+        installed: true, installed_version: "0.1.0", update_unreleased: true,
+        author_name: "Mosael", author_url: "", docs: "", homepage: "",
+      };
+    });
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    expect(within(card("Remotion 动画")).getByText("pluginMarketHasUpdate")).toBeTruthy();
+
+    await user.click(within(card("Remotion 动画")).getByRole("button", { name: "pluginUpdate" }));
+    expect(mocks.preview).toHaveBeenCalledWith("https://x/remotion.zip", "0.2.0");
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith("pluginUpdateNotReleased"));
+    expect(screen.queryByRole("dialog", { name: "pluginInstallConfirmTitle" })).toBeNull();
+    expect(mocks.install).not.toHaveBeenCalled();
+
+    //: 市场刷新:不再说「有新版」、不再给「更新」,标成已安装。
+    await waitFor(() => expect(within(card("Remotion 动画")).queryByText("pluginMarketHasUpdate")).toBeNull());
+    expect(within(card("Remotion 动画")).queryByRole("button", { name: "pluginUpdate" })).toBeNull();
+    expect(within(card("Remotion 动画")).getByText("pluginMarketInstalledBadge")).toBeTruthy();
+  });
+
+  it("详情里说清楚为什么没有「更新」", async () => {
+    const user = userEvent.setup();
+    mocks.market.mockImplementation(async () => ({
+      plugins: [{ ...REMOTION, update_available: false, update_unreleased: true }],
+      index_error: "",
+    }));
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    await user.click(within(card("Remotion 动画")).getByRole("button", { name: "Remotion 动画" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("pluginUpdateNotReleased")).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: "pluginUpdate" })).toBeNull();
+  });
+
+  it("有没有新版听后端的,不拿版本字符串比不相等", async () => {
+    //: 装着 0.10.0、索引写 0.9.0:字符串不相等,但装着的更新 —— 后端说没有新版,就没有「更新」。
+    mocks.market.mockImplementation(async () => ({
+      plugins: [{ ...REMOTION, version: "0.9.0", installed_version: "0.10.0", update_available: false }],
+      index_error: "",
+    }));
+    renderMarket();
+    await screen.findByRole("list", { name: "pluginMarket" });
+    expect(within(card("Remotion 动画")).queryByRole("button", { name: "pluginUpdate" })).toBeNull();
+    expect(within(card("Remotion 动画")).getByText("pluginMarketInstalledBadge")).toBeTruthy();
   });
 });

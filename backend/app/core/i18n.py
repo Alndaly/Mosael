@@ -349,6 +349,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单不合法:{detail}",
         "en": "Invalid plugin manifest: {detail}",
     },
+    "pluginErr_updateNotReleased": {
+        "zh": "这个插件的新版本还没发布,当前已是可下载的最新版",
+        "en": "The new version of this plugin hasn't been released yet — you already have the latest downloadable version.",
+    },
     "pluginErr_alreadyInstalled": {
         "zh": "「{name}」已经装过了 —— 要装新版本请选「更新」",
         "en": "\"{name}\" is already installed — choose \"Update\" to install a new version.",

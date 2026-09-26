@@ -1,4 +1,5 @@
 {
+  "channel": "main",
   "plugins": [
     {
       "id": "dev.mosael.baidu-pan",

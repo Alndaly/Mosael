@@ -14,7 +14,7 @@
 而一个必须经过我们审核的市场长不出多少东西。
 
 代价是**索引不是信任背书**。所以真正的防线不在这里,而在装的那一刻:装什么、它声明了
-哪些权限,都摊开给用户看过才动手(见 install_from_url 与前端的安装确认)。
+哪些权限,都摊开给用户看过才动手(见 install_archive 与前端的安装确认)。
 
 ## 装的时候在防什么
 
@@ -88,11 +88,6 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
     return [entry for entry in entries if isinstance(entry, dict) and entry.get("id")]
 
 
-#: 仓库里插件目录的网页地址。条目没写主页时退到它 —— 至少还能读到源码和 README。
-#: 与 scripts/sync-plugin-registry.py 同一条规则(那边生成官网上的索引,这边补本机内置的条目)。
-REPO_PLUGINS_URL = "https://github.com/Alndaly/Mosael/tree/main/plugins"
-
-
 def _market_effects(manifest: Manifest, tool: dict[str, Any]) -> str:
     """市场里一个声明过的工具的后果。和装上之后(plugins.tools.all_tools)同一个算法 —— 覆盖 > 声明 > 包缺省。"""
     override = manifest.overrides.get(str(tool["name"]))
@@ -103,7 +98,7 @@ def _market_effects(manifest: Manifest, tool: dict[str, Any]) -> str:
     )
 
 
-def bundled_entry(manifest: Manifest, folder: str) -> dict[str, Any]:
+def bundled_entry(manifest: Manifest) -> dict[str, Any]:
     """随应用内置的插件在市场里的那一条,**由本机那份清单生成**,形状与远端索引的条目一样。
 
     和 scripts/sync-plugin-registry.py 给内置插件生成的条目一一对应:`bundled` 为真、没有下载
@@ -118,7 +113,8 @@ def bundled_entry(manifest: Manifest, folder: str) -> dict[str, Any]:
         "author": manifest.author.name,
         "author_url": manifest.author.url,
         "docs": manifest.docs,
-        "homepage": manifest.homepage or f"{REPO_PLUGINS_URL}/bundled/{folder}",
+        # 主页只从清单来(仓库里每个插件都写了),和生成索引的脚本同一条规矩。
+        "homepage": manifest.homepage,
         "download": "",
         "permissions": list(manifest.permissions),
         "runtime": manifest.runtime.kind,
@@ -280,29 +276,31 @@ def _swap_in(staging: Path, target: Path, *, overwrite: bool, name: str) -> None
     shutil.rmtree(retired, ignore_errors=True)
 
 
-def install_from_url(url: str, plugins_dir: Path, *, overwrite: bool = False) -> dict[str, Any]:
-    return install_archive(_download(url), plugins_dir, overwrite=overwrite)
+def download_archive(url: str) -> bytes:
+    """把一个插件包下下来(大小有上限,只认 http/https)。装和预览都从这里拿字节。"""
+    return _download(url)
 
 
-def preview_from_url(url: str) -> dict[str, Any]:
-    """只看不装:下下来读一遍清单就扔。
+def read_manifest(data: bytes) -> dict[str, Any]:
+    """只看不装:解到临时目录读一遍清单就扔。
 
-    给「装之前先让用户看看它要什么权限」用 —— 权限清单写在清单里,而清单在包里面,
-    不下下来看不到。
+    给「装之前先让用户看看它要什么权限」用 —— 权限清单写在清单里,而清单在包里面,不下下来看不到;
+    也给「从市场更新」先认一眼包里**实际**是哪一版(见 domain/plugins/updates)。
     """
-    raw, _, workdir = inspect_archive(_download(url))
+    raw, _, workdir = inspect_archive(data)
     shutil.rmtree(workdir, ignore_errors=True)
     return raw
+
+
 
 
 __all__ = [
     "MAX_ARCHIVE_BYTES",
     "MAX_UNPACKED_BYTES",
-    "REPO_PLUGINS_URL",
     "bundled_entry",
+    "download_archive",
     "fetch_index",
     "inspect_archive",
     "install_archive",
-    "install_from_url",
-    "preview_from_url",
+    "read_manifest",
 ]

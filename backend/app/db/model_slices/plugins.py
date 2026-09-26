@@ -27,6 +27,29 @@ class PluginPackage(Base):
     manifest: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class PluginMarketHold(Base):
+    """市场许了一个新版,点「更新」下下来的却不比装着的新 —— 记下来,市场先别再说「有新版」。
+
+    索引说 0.2.0、下载地址给的还是 0.1.0 时,「更新」装回的是同一版,而索引照旧说 0.2.0:
+    「有新版」永远不消失,用户点多少次都一样(见 domain/plugins/updates)。
+
+    **记的是「这一份索引的这一条」**:索引许的版本 + 它给的下载地址。两样任何一样变了(发了新版、
+    索引换了地址),这条就不再算数,市场照常比版本;装上任何一版也清掉它。另有一个时限兜底 ——
+    自己架的索引可能一直用同一个地址,而那个地址背后的包迟早会换成真正的新版。
+    """
+
+    __tablename__ = "plugin_market_holds"
+
+    package_id: Mapped[str] = mapped_column(ForeignKey("plugin_packages.id", ondelete="CASCADE"), primary_key=True)
+    #: 索引里写的版本(许诺的那一版)。
+    advertised_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: 索引里给的下载地址。
+    download: Mapped[str] = mapped_column(String(1000), nullable=False)
+    #: 那个地址实际给的包里,清单写的版本。
+    served_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class PluginInstance(Base):
     """一次具体接入:包 + 一组配置 + 一个显示名 + 启用开关。凭据与授权都挂在这里。
 

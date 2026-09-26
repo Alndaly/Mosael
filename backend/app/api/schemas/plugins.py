@@ -153,6 +153,12 @@ class PluginMarketEntry(ApiModel):
     #: 这台机器上装没装过同 id 的包。装过的话界面给的是「更新」而不是「安装」。
     installed: bool = False
     installed_version: str = ""
+    #: 索引许的版本**比装着的新**(按语义化版本比先后,见 domain/plugins/versions),而且没被证实
+    #: 「还没发布」。界面据此给「更新」—— 不自己拿两个字符串比不相等。
+    update_available: bool = False
+    #: 索引许的版本比装着的新,但点「更新」下下来的包并不比装着的新:新版本还没发布。
+    #: 界面据此不给「更新」、说清为什么(见 domain/plugins/updates)。
+    update_unreleased: bool = False
     #: 随应用一起发的(`plugins/bundled/`,见 domain/plugins/bundled)。它不从市场装、也不从市场
     #: 更新 —— 新版跟着应用来,所以界面不给装 / 更新 / 卸载,只标「内置」。
     bundled: bool = False
@@ -175,6 +181,9 @@ class PluginInstallRequest(ApiModel):
     #: 覆盖已装的同 id 包。要单独同意 —— 那个目录里可能已经有用户填过的东西,
     #: 而且新版本可能声明了完全不同的权限。
     overwrite: bool = False
+    #: 从市场点的:索引里给这一条写的版本。有它才是「从市场更新」—— 下下来的包不比装着的新时,
+    #: 不装、不报「已更新」,而是说「新版本还没发布」。从链接装时为空(同一版重装是有意的)。
+    advertised_version: str = Field(default="", max_length=40)
 
 
 class PluginInstallPreview(ApiModel):
@@ -192,6 +201,9 @@ class PluginInstallPreview(ApiModel):
     docs: str = ""
     installed: bool = False
     installed_version: str = ""
+    #: 从市场点「更新」,而包里实际那一版(上面的 `version`)不比装着的新:新版本还没发布。
+    #: 界面据此不给确认卡、说清为什么,市场里这一条也不再说「有新版」。
+    update_unreleased: bool = False
 
 
 class PluginInstanceCreate(ApiModel):

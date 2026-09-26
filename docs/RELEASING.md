@@ -107,6 +107,21 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。
+- `registry.json`：**应用里插件市场读的索引**，见下面「插件市场索引」。插件 ZIP 先单独放在一个只装它们的目录里（比如 `dist/plugins-VERSION/`，别和扩展包的 ZIP 混在一起），然后在同一个 checkout 里生成：
+
+  ```bash
+  python3 scripts/sync-plugin-registry.py --release vVERSION --repo Alndaly/Mosael --packages dist/plugins-VERSION
+  ```
+
+  它逐个打开那些 ZIP 核对 id 与版本，对不上（少包、多包、包里的版本不是清单里的）就失败、不写索引；成功后把 `registry.json` 写在包旁边。连同插件 ZIP 一起拷进 `dist/VERSION/`。
+
+### 插件市场索引
+
+应用里的插件市场默认读 `https://github.com/Alndaly/Mosael/releases/latest/download/registry.json` —— **最新一次正式发版附带的那一份**（`backend/app/api/routes/plugins.py` 的 `DEFAULT_REGISTRY_URL`）。它是发版产物：和插件 ZIP 同一次发版、同一份源码生成，每条的下载地址钉在**这次的 tag** 上（`releases/download/vVERSION/<id>.zip`），所以许的版本就是包里的版本；读索引的那一刻恰好发了新版，拿到的也是「那一版的索引 + 那一版的包」。预发版不设为 latest，应用不会读到它的索引。tag 推上去时 `release.yml` 的 draft 任务也会打一遍插件包、生成并上传这份索引（`--clobber`，内容相同）。
+
+`website/public/plugins/registry.json`（官网上的 `https://mosael.com/plugins/registry.json`）是**另一份**：由 main 上的清单生成（`python3 scripts/sync-plugin-registry.py`，标 `"channel": "main"`），说的是仓库里的源码现在是哪一版。新版本应用**不从它装**。它的下载地址仍是 `releases/latest/download/<id>.zip`，只因为 1.5.x 及更早的应用把它写死成了默认索引：main 上改了插件版本、还没发版时，那些应用照旧会看到「有新版」而装回旧版 —— 这正是改读发版产物的原因，它们升级之后就好了（等不及的可以在部署配置 `plugin_registry_url` 里改成上面那个地址）。
+
+所以改了插件、想让用户在市场里拿到，**要发一版**；只合进 main 不会让任何人的市场出现「有新版」。
 
 不要混用不同 commit 的桌面包或插件。开始打包后 main 如有新提交，用原提交的独立 checkout 打包附件，或完整重建新提交；不要让 tag 指向未被测试的代码。
 
@@ -151,13 +166,20 @@ gh release view vVERSION --json isDraft,assets,targetCommitish,url
 
 tag 推上去之后**不要再移动它**:公开版本不可覆盖或移动 tag。
 
-逐个检查附件(DMG、EXE、扩展包,加上 `plugins/examples/` 下每个插件一个 ZIP)的文件名、大小和 GitHub API 返回的 SHA-256 digest，与本地 `shasum -a 256` 比较。若仓库事件触发了额外自动构建，先分辨本机交接 run 和自动 run；不得绕过失败的必要验证发布其他产物。
+逐个检查附件(DMG、EXE、扩展包,加上 `plugins/examples/` 下每个插件一个 ZIP 和插件市场的 `registry.json`)的文件名、大小和 GitHub API 返回的 SHA-256 digest，与本地 `shasum -a 256` 比较。若仓库事件触发了额外自动构建，先分辨本机交接 run 和自动 run；不得绕过失败的必要验证发布其他产物。
 
 所有检查完成后，执行用户已授权的正式发布：
 
 ```bash
 gh release edit vVERSION --draft=false --prerelease=false --latest
 gh release view vVERSION --json isDraft,isPrerelease,publishedAt,assets,url
+```
+
+再确认应用里的市场读到的就是这一版的索引(跟着 GitHub 的跳转):`release` 是 vVERSION,每条下载地址都在 `releases/download/vVERSION/` 下。
+
+```bash
+curl -fsSL https://github.com/Alndaly/Mosael/releases/latest/download/registry.json \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['release']); print({e['download'].rsplit('/',2)[0] for e in d['plugins'] if e['download']})"
 ```
 
 最终报告版本链接、对应 SHA、测试结果、公证情况和安装包是否齐全。将过程证据写入 `docs/validation/`；证据文档后续提交可以在 main 上，但已经发布的 tag 始终保留在原构建提交。

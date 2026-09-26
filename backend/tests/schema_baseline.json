@@ -373,6 +373,13 @@
     "status",
     "tool_name"
   ],
+  "plugin_market_holds": [
+    "package_id",
+    "advertised_version",
+    "download",
+    "served_version",
+    "recorded_at"
+  ],
   "plugin_packages": [
     "id",
     "manifest",

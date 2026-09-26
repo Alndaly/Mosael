@@ -123,8 +123,11 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" "${release_flags[@]}"
 
       # 插件包和平台无关,所以在这里打一次,而不是 mac/win 各打一遍。
-      # 市场索引里的下载地址指的就是这些附件(website/public/plugins/registry.json)——
-      # 不传的话,插件页点「安装」拿到的是 404,而索引看起来一切正常。
+      # **应用里的插件市场读的索引也是这次发版的产物**(registry.json,和插件包传到同一个 Release):
+      # 由同一份源码、在打完包之后生成,每条下载地址钉在这个 tag 上,生成时逐个打开包核对 id 和版本
+      # —— 索引许的就是包里装的。此前应用读官网上由 main 生成的那份,main 上改了插件版本、还没发版
+      # 时它许的新版下载给不出来,「更新」装回旧版,「有新版」永远不消失(见 docs/RELEASING.md)。
+      # 不传的话,市场拉不到索引、点「安装」拿到 404。
       - name: Package plugins
         run: |
           mkdir -p dist/plugins
@@ -133,12 +136,13 @@ jobs:
             (cd "$dir" && zip -qr "$GITHUB_WORKSPACE/dist/plugins/$id.zip" .)
             echo "packed $id"
           done
+          python3 scripts/sync-plugin-registry.py --release "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --packages dist/plugins
           ls -la dist/plugins
 
       - name: Upload plugins to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/plugins/*.zip
+        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/plugins/*.zip dist/plugins/registry.json
 
       - name: Package Chrome extension
         run: |

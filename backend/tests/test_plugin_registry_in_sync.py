@@ -81,8 +81,16 @@ def test_下载地址和_CI_产出的文件名对得上() -> None:
         if entry["bundled"]:
             continue  # 内置的不从市场装,CI 也不打它的包(见上一条)
         assert entry["download"].endswith(f"/{entry['id']}.zip"), f"{entry['id']} 的下载地址和 CI 的文件名对不上"
-        # 不钉版本号:索引由网站部署、附件由发版流程产出,两者各走各的。
+        # 官网这份是 main 上的源码,不跟任何一次发版走:只有已经发出去的老版本应用还从它装,
+        # 给它们的是最新一次 Release 的附件。新版本应用读的是发版产物(见
+        # test_plugin_market_index_is_a_release_artifact),那一份的下载地址钉在 tag 上。
         assert "/releases/latest/download/" in entry["download"], f"{entry['id']} 的下载地址钉死了版本"
+
+
+def test_官网这份标明是_main_上的源码() -> None:
+    """应用装的是发版产物;官网这份说的是 main 上现在是哪一版。标出来,读的人(和写自建索引的人)
+    分得清这两份 —— 把它当成「可下载的版本」正是「明明装好了还显示更新」的来源。"""
+    assert json.loads(REGISTRY.read_text(encoding="utf-8"))["channel"] == "main"
 
 
 def test_工具清单与运行方式一致() -> None:

@@ -47,6 +47,6 @@ it("没装的插件:翻到它的详情并弹出安装确认,但不替人按「�
   //: (确认卡是模态的,它后面那层对读屏是隐藏的,所以查的时候带上 hidden。)
   expect(screen.getByRole("heading", { level: 3, name: "Remotion 动画", hidden: true })).toBeTruthy();
   expect(mocks.preview).toHaveBeenCalledTimes(1);
-  expect(mocks.preview).toHaveBeenCalledWith("https://x/remotion.zip");
+  expect(mocks.preview).toHaveBeenCalledWith("https://x/remotion.zip", "0.1.0");
   await waitFor(() => expect(mocks.install).not.toHaveBeenCalled());
 });

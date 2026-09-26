@@ -15440,7 +15440,7 @@
           "plugins"
         ],
         "summary": "Install From Url",
-        "description": "下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。",
+        "description": "下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。\n\n**从市场更新时先认一眼包里的版本**:预览和安装之间索引可能变了,而装回同一版再报「已更新」\n正是「明明装好了还显示更新」的来源。不比装着的新就不装,回 409 说清「还没发布」。",
         "operationId": "install_from_url_api_plugins_install_post",
         "requestBody": {
           "content": {
@@ -25088,6 +25088,11 @@
             "type": "string",
             "title": "Installed Version",
             "default": ""
+          },
+          "update_unreleased": {
+            "type": "boolean",
+            "title": "Update Unreleased",
+            "default": false
           }
         },
         "type": "object",
@@ -25109,6 +25114,12 @@
             "type": "boolean",
             "title": "Overwrite",
             "default": false
+          },
+          "advertised_version": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Advertised Version",
+            "default": ""
           }
         },
         "type": "object",
@@ -25387,6 +25398,16 @@
             "type": "string",
             "title": "Installed Version",
             "default": ""
+          },
+          "update_available": {
+            "type": "boolean",
+            "title": "Update Available",
+            "default": false
+          },
+          "update_unreleased": {
+            "type": "boolean",
+            "title": "Update Unreleased",
+            "default": false
           },
           "bundled": {
             "type": "boolean",

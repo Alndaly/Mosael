@@ -66,7 +66,17 @@ export const removePluginInvocation = (invocationId: string) =>
   api(`/api/plugins/invocations/${invocationId}`, { method: "DELETE" });
 
 export const listPluginMarket = () => api<PluginMarketListing>("/api/plugins/market");
-export const previewPluginInstall = (url: string) =>
-  api<PluginInstallPreview>("/api/plugins/install/preview", { method: "POST", body: JSON.stringify({ url }) });
-export const installPlugin = (url: string, overwrite: boolean) =>
-  api("/api/plugins/install", { method: "POST", body: JSON.stringify({ url, overwrite }) });
+/**
+ * `advertisedVersion`:从市场点的时候,索引给这一条写的版本(从链接装时留空)。有它,后端才认得出
+ * 「从市场更新、而包里其实不比装着的新」—— 那时不装、也不报「已更新」,而是说新版本还没发布。
+ */
+export const previewPluginInstall = (url: string, advertisedVersion = "") =>
+  api<PluginInstallPreview>("/api/plugins/install/preview", {
+    method: "POST",
+    body: JSON.stringify({ url, advertised_version: advertisedVersion }),
+  });
+export const installPlugin = (url: string, overwrite: boolean, advertisedVersion = "") =>
+  api("/api/plugins/install", {
+    method: "POST",
+    body: JSON.stringify({ url, overwrite, advertised_version: advertisedVersion }),
+  });

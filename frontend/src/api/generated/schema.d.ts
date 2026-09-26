@@ -5175,6 +5175,9 @@ export interface paths {
         /**
          * Install From Url
          * @description 下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。
+         *
+         *     **从市场更新时先认一眼包里的版本**:预览和安装之间索引可能变了,而装回同一版再报「已更新」
+         *     正是「明明装好了还显示更新」的来源。不比装着的新就不装,回 409 说清「还没发布」。
          */
         post: operations["install_from_url_api_plugins_install_post"];
         delete?: never;
@@ -9147,6 +9150,11 @@ export interface components {
              * @default
              */
             installed_version: string;
+            /**
+             * Update Unreleased
+             * @default false
+             */
+            update_unreleased: boolean;
         };
         /** PluginInstallRequest */
         PluginInstallRequest: {
@@ -9157,6 +9165,11 @@ export interface components {
              * @default false
              */
             overwrite: boolean;
+            /**
+             * Advertised Version
+             * @default
+             */
+            advertised_version: string;
         };
         /** PluginInstanceCreate */
         PluginInstanceCreate: {
@@ -9310,6 +9323,16 @@ export interface components {
              * @default
              */
             installed_version: string;
+            /**
+             * Update Available
+             * @default false
+             */
+            update_available: boolean;
+            /**
+             * Update Unreleased
+             * @default false
+             */
+            update_unreleased: boolean;
             /**
              * Bundled
              * @default false

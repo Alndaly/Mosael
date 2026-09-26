@@ -173,6 +173,9 @@ export default async function PluginDetailPage({
             {/* 内置的不用装:给安装步骤的话,访客会去市场里找一颗不存在的「安装」按钮。 */}
             <SideCard title={plugin.bundled ? t.plugins.builtInTitle : t.community.install}>
               <Steps steps={plugin.bundled ? t.plugins.builtInSteps : t.plugins.installSteps} />
+              {/* 这页读的是仓库 main 上的清单,应用的市场装的是最新一次发版里的那一版(见 docs/RELEASING.md
+                  「插件市场索引」)。main 上刚改过的版本号不该被读成「现在就能装到」。 */}
+              {!plugin.bundled && <p className="mt-4 mb-0 text-xs leading-5 text-muted-foreground">{t.plugins.releasedVersionNote}</p>}
               <p className="mt-5 mb-0 text-xs text-muted-foreground">
                 {t.community.noApp}{" "}
                 <a className="font-semibold text-primary hover:underline" href={localePath(locale, "/docs/start/download")}>
@@ -194,7 +197,8 @@ export default async function PluginDetailPage({
                       author
                     ),
                   },
-                  { label: t.community.version, value: <span className="font-mono">v{plugin.version}</span> },
+                  // 源码里的版本(main),不一定已经发布 —— 内置的跟着应用走,就叫版本。
+                  { label: plugin.bundled ? t.community.version : t.plugins.sourceVersion, value: <span className="font-mono">v{plugin.version}</span> },
                   { label: t.community.type, value: plugin.kind === "mcp" ? t.plugins.kindMcp : t.plugins.kindScript },
                   { label: t.community.id, value: <code className="font-mono text-xs">{plugin.id}</code> },
                 ]}

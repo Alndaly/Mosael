@@ -36,7 +36,7 @@ from app.api.schemas import (
 from app.core.config import settings
 from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin, ensure_workspace_perm
-from app.db.models import PluginInstance, PluginInvocation, PluginPackage
+from app.db.models import PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins import bundled
 from app.domain.plugins import host_capabilities
@@ -45,6 +45,7 @@ from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
+from app.domain.plugins import updates
 from app.domain.plugins.manifest import GENERATION, manifest_of, text_of, web_url
 
 router = APIRouter(tags=["plugins"])
@@ -66,8 +67,17 @@ def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     return _packages(db, user)
 
 
-#: 内置的市场索引。部署管理员可以在设置里换成自己那一份(DeploymentConfig.plugin_registry_url)。
-DEFAULT_REGISTRY_URL = "https://mosael.com/plugins/registry.json"
+#: 内置的市场索引:**最新一次正式发版附带的那一份**,和插件包是同一次发版、从同一份源码产出的
+#: (见 scripts/sync-plugin-registry.py --release 与 docs/RELEASING.md)。
+#:
+#: 不再读官网上那份(website/public/plugins/registry.json):那份由 main 生成,版本号是 main 上的,
+#: 而插件包只在打 tag 时产出 —— main 上改了版本、还没发版的那段时间里,它许的新版下载地址给不出来,
+#: 「更新」装回旧版,「有新版」永远不消失。
+#:
+#: `releases/latest/download/…` 由 GitHub 302 到附件的 CDN 地址(fetch_index 跟随跳转、单次超时、
+#: 不重试);索引里每条的下载地址钉在**生成它的那个 tag** 上,所以读索引的那一刻恰好发了新版也不会
+#: 拿到「新索引 + 旧包」。部署管理员可以换成自己那一份(DeploymentConfig.plugin_registry_url)。
+DEFAULT_REGISTRY_URL = "https://github.com/Alndaly/Mosael/releases/latest/download/registry.json"
 
 
 def _registry_url(db: DbSession) -> str:
@@ -94,17 +104,19 @@ def browse_market(db: DbSession, user: CurrentUser) -> PluginMarketOut:
     except PluginDomainError as exc:
         remote, index_error = [], str(exc)
     local_ids = {one.id for one in shipped}
-    entries = [market.bundled_entry(manifest_of(installed[one.id]), one.source.name) for one in shipped] + [
+    entries = [market.bundled_entry(manifest_of(installed[one.id])) for one in shipped] + [
         entry for entry in remote if entry["id"] not in local_ids
     ]
+    holds = updates.holds(db)
     return PluginMarketOut(
-        plugins=[_market_entry(entry, installed) for entry in entries],
+        plugins=[_market_entry(entry, installed, holds) for entry in entries],
         index_error=index_error,
     )
 
 
-def _market_entry(entry: dict, installed: dict[str, PluginPackage]) -> PluginMarketEntry:
+def _market_entry(entry: dict, installed: dict[str, PluginPackage], holds: dict[str, PluginMarketHold]) -> PluginMarketEntry:
     package = installed.get(entry["id"])
+    update = updates.state_of(entry, package, holds.get(entry["id"]))
     return PluginMarketEntry(
         **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download")},
         author_url=web_url(entry.get("author_url")),
@@ -129,6 +141,8 @@ def _market_entry(entry: dict, installed: dict[str, PluginPackage]) -> PluginMar
         ],
         installed=package is not None,
         installed_version=package.version if package else "",
+        update_available=update.available,
+        update_unreleased=update.unreleased,
         bundled=entry.get("bundled") is True,
     )
 
@@ -141,10 +155,16 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
     什么都不说的按钮,而它做的事是往这台机器上放一份会被执行的代码。
     """
     ensure_deployment_admin(db, user)
+    url = body.url.strip()
     try:
-        raw = market.preview_from_url(body.url.strip())
+        raw = market.read_manifest(market.download_archive(url))
     except PluginDomainError as exc:
         raise _fail(exc) from exc
+    #: 从市场点「更新」:包里实际那一版不比装着的新,就不给确认卡(那张卡会说「更新」),
+    #: 而是告诉界面「新版本还没发布」,并记下来让市场先别再说「有新版」(见 domain/plugins/updates)。
+    unreleased = updates.not_released(db, raw, advertised_version=body.advertised_version, download=url)
+    if unreleased:
+        db.commit()
     existing = db.get(PluginPackage, str(raw.get("id") or ""))
     declared = (raw.get("tools") or {}).get("declare") if isinstance(raw.get("tools"), dict) else []
     return PluginInstallPreview(
@@ -162,16 +182,29 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
         docs=web_url(text_of(raw.get("docs"))),
         installed=existing is not None,
         installed_version=existing.version if existing else "",
+        update_unreleased=unreleased,
     )
 
 
 @router.post("/plugins/install", response_model=list[PluginPackageOut])
 def install_from_url(body: PluginInstallRequest, db: DbSession, user: CurrentUser) -> list[dict]:
-    """下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。"""
+    """下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。
+
+    **从市场更新时先认一眼包里的版本**:预览和安装之间索引可能变了,而装回同一版再报「已更新」
+    正是「明明装好了还显示更新」的来源。不比装着的新就不装,回 409 说清「还没发布」。
+    """
     ensure_deployment_admin(db, user)
+    url = body.url.strip()
     try:
-        market.install_from_url(body.url.strip(), settings.plugins_dir, overwrite=body.overwrite)
+        data = market.download_archive(url)
+        raw = market.read_manifest(data)
+        if updates.not_released(db, raw, advertised_version=body.advertised_version, download=url):
+            db.commit()
+            raise _fail(PluginDomainError("pluginErr_updateNotReleased"), status=409)
+        market.install_archive(data, settings.plugins_dir, overwrite=body.overwrite)
         installer.sync(db, settings.plugins_dir, owner_user_id=user.id)
+        updates.clear(db, str(raw.get("id") or ""))
+        db.commit()
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _packages(db, user)

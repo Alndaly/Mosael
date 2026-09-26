@@ -30,28 +30,28 @@ import { cn } from "@/lib/utils";
 type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>["plugins"][number];
 type InstallPreview = Awaited<ReturnType<typeof previewPluginInstall>>;
 type Filter = "all" | "installed" | "updates";
-
-/**
- * 装的就是市场里这一版。
- *
- * 版本号是字符串,比不出大小 —— 但这里不需要:**不相等就是有新版**。真去解析语义化版本的话,
- * 得处理 `1.0` / `v1.0.0` / `1.0.0-beta` 这些写法,而插件作者写什么全凭自觉;判错一次的
- * 后果是把新版说成旧版,比"多提示一次更新"糟得多。
- */
-function upToDate(entry: { installed?: boolean; installed_version?: string; version?: string }): boolean {
-  return Boolean(entry.installed && entry.installed_version && entry.installed_version === entry.version);
-}
+/** 从哪个地址装,以及市场给这一条写的版本(从链接装时为空)。后者让后端认得出「许的新版还没发布」。 */
+type PickTarget = { url: string; advertised: string };
 
 /**
  * 一条市场条目此刻**要人做什么**。装过 ≠ 有新版;内置的另算一态 —— 它跟着应用装、跟着应用
  * 更新,这里什么都不用做(也做不了:没有下载地址,卸了下次启动又会装回来)。
+ *
+ * **有没有新版由后端说(`update_available`)**,这里不拿两个版本字符串比。此前是「不相等就是有新版」:
+ * 索引许 0.2.0、下载给的还是 0.1.0 时,「更新」装回同一版,提示永远不消失;装着的比索引新也被说成
+ * 有新版。后端按语义化版本比先后,并记着「点过更新、包里并不更新」的那几条(见 domain/plugins/updates)。
  */
 type Stance = "install" | "update" | "current" | "bundled";
 
 function stanceOf(entry: MarketEntry): Stance {
   if (entry.bundled) return "bundled";
-  if (upToDate(entry)) return "current";
-  return entry.installed ? "update" : "install";
+  if (!entry.installed) return "install";
+  return entry.update_available ? "update" : "current";
+}
+
+/** 从市场里的这一条装:带上它许的版本。 */
+function pickOf(entry: MarketEntry): PickTarget {
+  return { url: entry.download, advertised: entry.version };
 }
 
 /**
@@ -114,7 +114,7 @@ export function PluginMarketDialog({
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [url, setUrl] = React.useState("");
   const [urlOpen, setUrlOpen] = React.useState(false);
-  const [pending, setPending] = React.useState<{ url: string; preview: InstallPreview } | null>(null);
+  const [pending, setPending] = React.useState<(PickTarget & { preview: InstallPreview }) | null>(null);
   const [removing, setRemoving] = React.useState<MarketEntry | null>(null);
 
   //: 关掉再打开是一次新的浏览:不停在上次那页详情、也不留着上次的搜索词。
@@ -131,29 +131,42 @@ export function PluginMarketDialog({
     retry: false,
   });
 
+  const refreshMarket = () => void qc.invalidateQueries({ queryKey: ["plugin-market"] });
+  const changed = () => {
+    refreshMarket();
+    onChanged();
+  };
+
   const preview = useMutation({
-    mutationFn: (target: string) => previewPluginInstall(target),
+    mutationFn: (target: PickTarget) => previewPluginInstall(target.url, target.advertised),
     onSuccess: (data, target) => {
       setUrlOpen(false);
-      setPending({ url: target, preview: data });
+      //: 市场许了新版,包里却不比装着的新:不弹那张写着「更新」的确认卡 —— 装下去什么都不会变。
+      //: 说清楚为什么,再刷一遍市场:后端已经记下,这一条不再说「有新版」。
+      if (data.update_unreleased) {
+        toast.info(t("pluginUpdateNotReleased"));
+        refreshMarket();
+        return;
+      }
+      setPending({ ...target, preview: data });
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const changed = () => {
-    void qc.invalidateQueries({ queryKey: ["plugin-market"] });
-    onChanged();
-  };
-
   const install = useMutation({
-    mutationFn: ({ url: target, overwrite }: { url: string; overwrite: boolean }) => installPlugin(target, overwrite),
+    mutationFn: ({ target, overwrite }: { target: PickTarget; overwrite: boolean }) =>
+      installPlugin(target.url, overwrite, target.advertised),
     onSuccess: () => {
       setPending(null);
       setUrl("");
       changed();
       toast.success(t("pluginInstallDone"));
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      toast.error(error.message);
+      //: 装的那一刻才发现「新版本还没发布」(预览之后索引变了)时,后端也记下了 —— 市场跟着刷新。
+      refreshMarket();
+    },
   });
 
   const uninstall = useMutation({
@@ -183,13 +196,13 @@ export function PluginMarketDialog({
     if (!target) return;
     autoFocused.current = focusId;
     setDetailId(target.id);
-    if (!target.installed && target.download) preview.mutate(target.download);
+    if (!target.installed && target.download) preview.mutate(pickOf(target));
   }, [open, focusId, entries, pending, preview]);
   React.useEffect(() => {
     if (!open) autoFocused.current = null;
   }, [open]);
 
-  const busyWith = (entry: MarketEntry) => preview.isPending && preview.variables === entry.download;
+  const busyWith = (entry: MarketEntry) => preview.isPending && preview.variables?.url === entry.download;
 
   const count = (which: Filter) => searched.filter((entry) => passes(entry, which)).length;
   const placeholder = market.isLoading ? (
@@ -228,8 +241,8 @@ export function PluginMarketDialog({
           url={url}
           onUrlChange={setUrl}
           //: **只认自己那一条 URL。** 光看 isPending 的话,市场里任何一张卡片在预览,这个按钮都会跟着转。
-          busy={preview.isPending && preview.variables === url.trim()}
-          onSubmit={() => url.trim() && preview.mutate(url.trim())}
+          busy={preview.isPending && preview.variables?.url === url.trim()}
+          onSubmit={() => url.trim() && preview.mutate({ url: url.trim(), advertised: "" })}
         />
       }
       filters={
@@ -262,7 +275,7 @@ export function PluginMarketDialog({
       itemKey={(entry) => entry.id}
       placeholder={placeholder}
       renderCard={(entry, openDetail) => (
-        <MarketCard entry={entry} busy={busyWith(entry)} onPick={() => preview.mutate(entry.download)} onOpen={openDetail} />
+        <MarketCard entry={entry} busy={busyWith(entry)} onPick={() => preview.mutate(pickOf(entry))} onOpen={openDetail} />
       )}
       detail={detail}
       onDetailChange={setDetailId}
@@ -271,7 +284,7 @@ export function PluginMarketDialog({
         <MarketDetail
           entry={entry}
           busy={busyWith(entry)}
-          onPick={() => preview.mutate(entry.download)}
+          onPick={() => preview.mutate(pickOf(entry))}
           onUninstall={() => setRemoving(entry)}
         />
       )}
@@ -279,9 +292,10 @@ export function PluginMarketDialog({
       {pending && (
         <InstallConfirm
           preview={pending.preview}
+          advertised={pending.advertised}
           installing={install.isPending}
           onCancel={() => setPending(null)}
-          onConfirm={() => install.mutate({ url: pending.url, overwrite: !!pending.preview.installed })}
+          onConfirm={() => install.mutate({ target: pending, overwrite: !!pending.preview.installed })}
         />
       )}
       <ConfirmDialog
@@ -546,6 +560,13 @@ function MarketDetail({
           <AlertDescription>{t("pluginMarketBundledNote")}</AlertDescription>
         </Alert>
       )}
+      {/* 市场许了更新的版本,但点过「更新」、下下来的包并不更新:说清楚为什么这里没有「更新」。 */}
+      {entry.update_unreleased && stance === "current" && (
+        <Alert role="note">
+          <AlertTriangle size={14} aria-hidden />
+          <AlertDescription>{t("pluginUpdateNotReleased")}</AlertDescription>
+        </Alert>
+      )}
       {entry.description && (
         <CatalogSection title={t("pluginMarketAbout")}>
           {/* 说明是一段话,只带行内记号 —— 走行内渲染器,不起块级的 Streamdown。 */}
@@ -624,11 +645,14 @@ function PermissionList({ permissions }: { permissions: string[] }) {
 /** 装之前的最后一眼:它是谁、要什么权限、带来哪些工具。权限先说,而且用醒目的形状说 —— 这是这张卡存在的理由。 */
 function InstallConfirm({
   preview,
+  advertised,
   installing,
   onCancel,
   onConfirm,
 }: {
   preview: InstallPreview;
+  /** 市场给这一条写的版本(从链接装时为空)。卡上的版本号是**包里实际那一版**,两者不同时点明。 */
+  advertised: string;
   installing: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -702,6 +726,11 @@ function InstallConfirm({
               ))}
             </ul>
           </div>
+        )}
+        {advertised && preview.version && advertised !== preview.version && (
+          <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
+            {t("pluginInstallVersionDiffers").replace("{listed}", advertised).replace("{actual}", preview.version)}
+          </p>
         )}
         {preview.installed && (
           <p className="m-0 text-ui-xs leading-[1.55] text-warning">
