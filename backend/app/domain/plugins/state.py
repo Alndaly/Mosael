@@ -35,8 +35,24 @@ logger = logging.getLogger(__name__)
 MAX_VALUE_CHARS = 8192
 
 
-def persist(db: Session, instance: PluginInstance, state: dict[str, Any], *, notify: bool = True) -> None:
+def persist(
+    db: Session,
+    instance: PluginInstance,
+    state: dict[str, Any],
+    *,
+    baseline: dict[str, str],
+    notify: bool = True,
+) -> None:
     """把插件交回的状态按声明分流落库。空的就什么都不做。
+
+    `baseline` 是**这次调用开始时**注入给插件的那一份值(instances.secrets_for)。一个键只有在
+    库里的值**还是它**时才写回 —— 比较交换,不是后写者赢:
+
+    同一个连接上两次调用并发(工作流的并行分支、智能体连着调),各自拿同一个旧 refresh_token 去换。
+    会轮换 refresh_token 的服务(百度网盘)上,先换的那次拿到 RT1,后换的那次拿到 RT2、同时让 RT1
+    作废。此前谁后**结束**谁写 —— 先换的那次若结束得晚,就把已作废的 RT1 盖在 RT2 上,之后每一次调用
+    都报令牌失效,用户得重新走一遍授权。调用途中用户自己在插件页改了这一格,也是同一个道理:他的新值
+    不该被一次旧调用的状态盖掉。被跳过的键记一条日志。
 
     `notify=False`:这份状态是插件在**替宿主做事的途中**交回来的(刷新目录、做一次生成),
     不该反过来再触发一次「实例变了,去重新问一遍插件」—— 那会在一次调用里嵌套起另一次调用。
@@ -55,6 +71,14 @@ def persist(db: Session, instance: PluginInstance, state: dict[str, Any], *, not
     too_long = sorted(key for key, value in state.items() if len(str(value)) > MAX_VALUE_CHARS)
     if too_long:
         raise PluginDomainError("pluginErr_stateTooLong", limit=MAX_VALUE_CHARS, keys=", ".join(too_long))
+
+    current = inst.secrets_for(db, instance)
+    moved = sorted(key for key in state if current.get(key, "") != baseline.get(key, ""))
+    if moved:
+        logger.info("插件 %s 的 %s 在这次调用途中被别处改过,不用这次交回的值盖掉", instance.id, ", ".join(moved))
+        state = {key: value for key, value in state.items() if key not in moved}
+        if not state:
+            return
 
     credentials = {key: str(value) for key, value in state.items() if key in credential_keys}
     config = {key: value for key, value in state.items() if key in config_keys and key not in credential_keys}

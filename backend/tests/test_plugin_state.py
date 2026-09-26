@@ -132,13 +132,13 @@ class Test只能写声明过的键:
         with SessionLocal() as db:
             instance = db.get(PluginInstance, instance_id)
             with pytest.raises(PluginDomainError, match="过长"):
-                plugin_state.persist(db, instance, {"TOKEN": "x" * (plugin_state.MAX_VALUE_CHARS + 1)})
+                plugin_state.persist(db, instance, {"TOKEN": "x" * (plugin_state.MAX_VALUE_CHARS + 1)}, baseline={})
 
     def test_空的什么都不做(self, tmp_path) -> None:
         ws, instance_id = install(tmp_path, WRITES_BOTH)
         with SessionLocal() as db:
             instance = db.get(PluginInstance, instance_id)
-            plugin_state.persist(db, instance, {})
+            plugin_state.persist(db, instance, {}, baseline={})
             assert inst.credential_values(db, instance_id) == {}
 
     def test_state_不是对象就报错(self, tmp_path) -> None:
@@ -153,6 +153,39 @@ class Test只能写声明过的键:
         with SessionLocal() as db:
             invocation = invoke(db, instance_id, "go", {}, workspace_id=ws)
             assert invocation.status == "failed" and "必须是对象" in (invocation.error or "")
+
+
+class Test并发写回:
+    def test_调用途中令牌被别的调用换过了_不拿这次的旧结果盖掉(self, tmp_path, monkeypatch) -> None:
+        """同一个连接上两次调用各拿同一个旧 refresh_token 去换。会轮换令牌的服务上,先换的那次拿到的
+        令牌随即被后换的那次作废。此前谁后**结束**谁写 —— 先换的那次结束得晚,就把作废的令牌盖在
+        新令牌上,之后每次调用都报令牌失效。"""
+        from app.domain.plugins import tools
+        from app.domain.plugins.runtime import ToolResult
+
+        ws, instance_id = install(tmp_path, WRITES_BOTH)
+        with SessionLocal() as db:
+            inst.set_credentials(db, db.get(PluginInstance, instance_id), {"TOKEN": "RT0"}, notify=False)
+
+        def slow_call(*args, **kwargs) -> ToolResult:
+            # 这次调用拿着 RT0 跑的时候,另一次调用先结束、把 RT2 写回去了。
+            with SessionLocal() as other:
+                inst.set_credentials(other, other.get(PluginInstance, instance_id), {"TOKEN": "RT2"}, notify=False)
+            return ToolResult(output={"done": True}, state={"TOKEN": "RT1(已作废)", "CURSOR": "第 7 页"})
+
+        monkeypatch.setattr(tools, "execute_tool", slow_call)
+        with SessionLocal() as db:
+            assert invoke(db, instance_id, "go", {}, workspace_id=ws).status == "succeeded"
+            assert inst.credential_values(db, instance_id)["TOKEN"] == "RT2"
+            # 途中没人动过的那一格照常写回。
+            assert db.get(PluginInstance, instance_id).config["CURSOR"] == "第 7 页"
+
+    def test_途中没人动过就照常写回(self, tmp_path) -> None:
+        ws, instance_id = install(tmp_path, WRITES_BOTH)
+        with SessionLocal() as db:
+            inst.set_credentials(db, db.get(PluginInstance, instance_id), {"TOKEN": "RT0"}, notify=False)
+            assert invoke(db, instance_id, "go", {}, workspace_id=ws).status == "succeeded"
+            assert inst.credential_values(db, instance_id)["TOKEN"] == "刷新出来的"
 
 
 class Test顺序:

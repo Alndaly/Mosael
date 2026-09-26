@@ -329,6 +329,8 @@ def invoke(
             # 在这里而不是让插件自己取:它的环境里没有数据库、没有令牌、没有媒体目录,
             # 那是隔离边界的一部分。
             resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id)
+            #: 这次注入的那一份:写回 state 时按它做比较交换(见 plugins/state.persist)。
+            baseline = inst.secrets_for(db, instance)
             env = inst.process_env(db, instance)
             data_dir = _ensure_data_dir(manifest.id)
             budget = {"timeout": timeout} if timeout is not None else {}
@@ -346,7 +348,7 @@ def invoke(
             output = result.output
             # 先落状态再收产出:刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子
             # (下载失败、磁盘满),这次刷新就白做了 —— 而旧令牌已经被百度那边作废了。
-            plugin_state.persist(db, instance, result.state)
+            plugin_state.persist(db, instance, result.state, baseline=baseline)
         output = _collect_artifact(
             db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name
         )
@@ -445,6 +447,8 @@ def invoke_host(
             "data_dir": _ensure_data_dir(manifest.id),
             **({"timeout": budget} if budget is not None else {}),
         }
+        #: 这次注入的那一份:写回 state 时按它做比较交换(见 plugins/state.persist)。
+        baseline = inst.secrets_for(db, instance)
         env = inst.process_env(db, instance)
         result: ToolResult
         # 一问一答(问目录)和别的工具调用一样占一个插件名额(jobs.PLUGIN_SLOTS)。流式的那条
@@ -459,7 +463,7 @@ def invoke_host(
                 result = execute_tool(
                     Path(manifest.path), manifest.runtime.entry, tool["name"], sent, env, **run_kwargs,
                 )
-        plugin_state.persist(db, instance, result.state, notify=False)
+        plugin_state.persist(db, instance, result.state, baseline=baseline, notify=False)
         output = result.output
         recorded = collect(output, scratch) if collect is not None else output
         invocation.status, invocation.output = "succeeded", recorded
