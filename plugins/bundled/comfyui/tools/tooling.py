@@ -197,7 +197,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     if graph.seed_inputs(api) or "seed" in placeholders:
         shape.properties["seed"] = {
             "type": "integer", "minimum": 0, "x-advanced": True, "title": _pair("随机种子", "Seed"),
-            "description": _pair("留空就用工作流存着的", "Leave empty to keep the workflow's own"),
+            "description": _pair("留空照工作流里的设定:固定的用存着的那个,每次随机的换一个",
+                                 "Leave empty to follow the workflow: a fixed seed is kept, a randomized one changes"),
         }
         shape.bindings["seed"] = ("value", "seed", "integer")
         shape.rename["seed"] = "seed"

@@ -65,6 +65,10 @@ _AUDIO_UI_CLASSES = frozenset({"LoadAudio", "SaveAudio", "PreviewAudio", "SaveAu
 #: 只在前端的 widget:它们在 `widgets_values` 里占位置,但不进 API 图。
 _FRONTEND_WIDGETS = frozenset({"upload", "audioUI"})
 
+#: 转换时写进 `_meta` 的:每个带「生成后怎样」的 widget 存着的设定(randomize / fixed / increment / decrement)。
+#: API 图里没有这一格(它是前端的行为),可「这张图的种子每次换不换」只有它说得清。
+CONTROLS = "control_after_generate"
+
 #: 子图输入口 / 输出口的节点 id 缺省值(前端的 SUBGRAPH_INPUT_ID / SUBGRAPH_OUTPUT_ID)。
 _SUBGRAPH_INPUT, _SUBGRAPH_OUTPUT = -10, -20
 #: 子图最多套几层(一个子图里又放了它自己 —— 坏文件 —— 不该让转换转到栈溢出)。
@@ -245,7 +249,8 @@ class _Converter:
     # --- 一个节点 -----------------------------------------------------------
 
     def _emit(self, node: _Node) -> dict[str, Any]:
-        inputs = self._widget_values(node)
+        controls: dict[str, str] = {}
+        inputs = self._widget_values(node, controls)
         for entry in node.inputs:
             name = entry.get("name")
             if not name or entry.get("link") is None:
@@ -255,10 +260,15 @@ class _Converter:
                 continue  # 上游被静音 / 断了:是 widget 的留着它自己的值,是插口的就不连
             if resolved[0] == "value":
                 inputs[name] = _wrap(resolved[1])
+                if len(resolved) > 2 and resolved[2]:
+                    controls[name] = resolved[2]  # PrimitiveNode 自己的「生成后怎样」说了算
             else:
                 inputs[name] = [resolved[1], resolved[2]]
-        title = str(node.raw.get("title") or node.type)
-        return {"class_type": node.type, "inputs": inputs, "_meta": {"title": title}}
+        meta: dict[str, Any] = {"title": str(node.raw.get("title") or node.type)}
+        if controls:
+            # 后端不看 _meta;插件据此在没给种子时照工作流的设定办(见 graph.fill)
+            meta[CONTROLS] = controls
+        return {"class_type": node.type, "inputs": inputs, "_meta": meta}
 
     def _widget_specs(self, node: _Node) -> list[tuple[str, Any, int]]:
         """这个节点的 widget,按它们在 `widgets_values` 里的顺序:(名字, 定义, 后面多占几格)。"""
@@ -332,7 +342,8 @@ class _Converter:
             return True, choices[0]
         return False, None
 
-    def _widget_values(self, node: _Node) -> dict[str, Any]:
+    def _widget_values(self, node: _Node, controls: dict[str, str]) -> dict[str, Any]:
+        """widget 的值;顺手把「生成后怎样」那一格(randomize / fixed / …)记进 `controls`。"""
         stored = node.raw.get("widgets_values")
         values: dict[str, Any] = {}
         index = 0
@@ -342,6 +353,8 @@ class _Converter:
             else:
                 present = isinstance(stored, list) and index < len(stored)
                 value = stored[index] if present else None
+                if extra and isinstance(stored, list) and index + 1 < len(stored) and isinstance(stored[index + 1], str):
+                    controls[name] = stored[index + 1]
                 index += 1 + extra
             if name in _FRONTEND_WIDGETS:
                 continue
@@ -419,9 +432,12 @@ class _Converter:
 
     def _through_frontend_node(self, node: _Node, slot: int, wanted: Any, visited: set) -> tuple | None:
         if node.type == _PRIMITIVE:
-            # PrimitiveNode 在提交前把自己的值写进下游那一格(applyToGraph)
+            # PrimitiveNode 在提交前把自己的值写进下游那一格(applyToGraph);第二格是它的「生成后怎样」
             stored = node.raw.get("widgets_values")
-            return ("value", stored[0]) if isinstance(stored, list) and stored and stored[0] is not None else None
+            if not isinstance(stored, list) or not stored or stored[0] is None:
+                return None
+            control = stored[1] if len(stored) > 1 and isinstance(stored[1], str) else ""
+            return ("value", stored[0], control)
         source: _Node | None = node
         if node.type == _GET:
             source = self._set_node(node)

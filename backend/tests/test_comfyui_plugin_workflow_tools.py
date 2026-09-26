@@ -107,7 +107,7 @@ def test_跑一张工作流的工具_字符串转回类型_素材接上_具名�
     assert prompt["3"]["inputs"]["steps"] == 30 and prompt["3"]["inputs"]["cfg"] == 6.5, "表单里的字符串按声明的类型转回来"
     assert prompt["6"]["inputs"]["text"] == "海边的柴犬"
     assert prompt["7"]["inputs"]["text"] == "blurry", "没给反向提示词就用工作流里写好的"
-    assert prompt["3"]["inputs"]["seed"] == 42, "没给种子就用工作流存着的"
+    assert prompt["3"]["inputs"]["seed"] != 42, "工作流里设的是每次随机(randomize):没给种子就换一个"
     assert prompt["5"]["inputs"]["width"] == 832, "空着的格子不接"
     assert prompt["10"]["inputs"]["image"].startswith("mosael/") and prompt["10"]["inputs"]["image"].endswith("参考.png")
     first, second = result["artifacts"]

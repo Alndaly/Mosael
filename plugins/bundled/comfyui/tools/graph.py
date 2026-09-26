@@ -8,9 +8,11 @@ UI 图(保存的工作流)怎么变成这里吃的 API 图,见 convert.py。
 from __future__ import annotations
 
 import copy
+import random
 import re
 from typing import Any
 
+import convert
 import labels
 
 
@@ -138,6 +140,12 @@ def prompt_requirement(api: dict[str, Any], roles: dict[str, str] | None = None,
         if not any(text.strip() for text in saved):
             return "required"
     return "optional"
+
+
+def _changes_each_run(node: dict[str, Any], name: str) -> bool:
+    meta = node.get("_meta") if isinstance(node.get("_meta"), dict) else {}
+    controls = meta.get(convert.CONTROLS) if isinstance(meta.get(convert.CONTROLS), dict) else {}
+    return controls.get(name, "fixed") != "fixed"
 
 
 def seed_inputs(api: dict[str, Any]) -> list[tuple[str, str]]:
@@ -583,9 +591,13 @@ def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any])
         for name in _TEXT_INPUTS:
             if name in inputs and _literal(inputs[name]) and isinstance(inputs[name], str):
                 inputs[name] = text
-    if values.get("seed") is not None:
-        for node_id, name in seed_inputs(graph):
+    for node_id, name in seed_inputs(graph):
+        if values.get("seed") is not None:
             graph[node_id]["inputs"][name] = values["seed"]
+        elif _changes_each_run(graph[node_id], name):
+            # 没给种子:照工作流自己的设定 —— 界面上每次生成都换种子的(randomize / increment …),通过 API 跑
+            # 也得换,否则同一张图跑两遍拿回同一张图(ComfyUI 还会整张命中缓存);固定的(fixed)留着存的那个
+            graph[node_id]["inputs"][name] = random.randint(0, 2**31 - 1)
     sized = size_node(graph)
     if sized is not None and values.get("width") and values.get("height"):
         graph[sized]["inputs"]["width"] = values["width"]

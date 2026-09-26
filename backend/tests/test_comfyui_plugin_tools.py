@@ -133,11 +133,23 @@ def test_没有保存节点时_预览就是产出(comfy, tmp_path: Path) -> None
 
 
 def test_按标题改值_提示词和种子没给就用工作流自己的(comfy, tmp_path: Path) -> None:
+    fixed = json.loads(json.dumps(comfy.state.workflows["portrait.json"]))
+    fixed["nodes"][0]["widgets_values"][1] = "fixed"
+    comfy.state.workflows["portrait.json"] = fixed
     _stream(comfy.url, "run_workflow", {"workflow": "portrait.json", "values": {"采样.steps": 9}}, tmp_path)
     prompt = comfy.posted("/prompt")[0]["prompt"]
     assert prompt["3"]["inputs"]["steps"] == 9
     assert prompt["6"]["inputs"]["text"] == "a cat" and prompt["7"]["inputs"]["text"] == "blurry"
-    assert prompt["3"]["inputs"]["seed"] == 42, "跑一张存好的工作流:种子没给就用它存着的,可复现"
+    assert prompt["3"]["inputs"]["seed"] == 42, "工作流里的种子是固定的(fixed):没给就用它存着的,可复现"
+
+
+def test_工作流里设成每次随机的种子_没给就换一个(comfy, tmp_path: Path) -> None:
+    """界面上 KSampler 的种子默认「每次生成后随机」:同一张图通过工具跑两遍,不该拿回同一张图
+    (ComfyUI 还会整张命中缓存,第二遍一步都不跑)。"""
+    for _ in range(2):
+        _stream(comfy.url, "run_workflow", {"workflow": "portrait.json"}, tmp_path)
+    first, second = (one["prompt"]["3"]["inputs"]["seed"] for one in comfy.posted("/prompt"))
+    assert first != second and 42 not in (first, second)
 
 
 def test_对不上的值和多给的图说清楚(comfy, tmp_path: Path) -> None:

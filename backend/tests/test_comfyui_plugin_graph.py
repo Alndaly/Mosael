@@ -281,6 +281,26 @@ def test_子图展开成里面的节点_id是外层冒号里层(convert) -> None
     assert convert.titles_of(api)["50:3"] == "精修"
 
 
+def test_种子的生成后怎样记在_meta里_没给种子时照它办(graph, convert) -> None:
+    api = convert.to_api(PORTRAIT_UI, OBJECT_INFO)
+    assert api["3"]["_meta"]["control_after_generate"] == {"seed": "randomize"}
+    assert graph.fill(api, {}, {})["3"]["inputs"]["seed"] != 42, "每次随机的:换一个"
+    assert graph.fill(api, {"seed": 5}, {})["3"]["inputs"]["seed"] == 5
+    fixed = convert.to_api({**PORTRAIT_UI, "nodes": [
+        {**PORTRAIT_UI["nodes"][0], "widgets_values": [42, "fixed", 20, 7.0, "euler", "normal", 1.0]},
+        *PORTRAIT_UI["nodes"][1:]]}, OBJECT_INFO)
+    assert graph.fill(fixed, {}, {})["3"]["inputs"]["seed"] == 42, "固定的:留着"
+    primitive = {
+        "nodes": [
+            {"id": 3, "type": "KSampler", "widgets_values": [1, "fixed", 20, 7, "euler", "normal", 1],
+             "inputs": [{"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": 1}]},
+            {"id": 20, "type": "PrimitiveNode", "widgets_values": [9, "randomize"]},
+        ],
+        "links": [[1, 20, 0, 3, 0, "INT"]],
+    }
+    assert convert.to_api(primitive, OBJECT_INFO)["3"]["_meta"]["control_after_generate"] == {"seed": "randomize"}
+
+
 def test_旧式组节点说清楚要转成子图(convert) -> None:
     ui = {"nodes": [{"id": 1, "type": "workflow>采样", "widgets_values": []}], "links": [],
           "extra": {"groupNodes": {"采样": {"nodes": []}}}}
