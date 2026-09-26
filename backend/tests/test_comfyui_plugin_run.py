@@ -125,6 +125,16 @@ def test_一次生成_参考图传上去接到LoadImage上_产出取回(comfy, t
     assert output["usage"] == {"images": 1}, "预览图(temp)不算产出"
 
 
+def test_文件名里有引号也传得上去(comfy, tmp_path: Path) -> None:
+    """multipart 的 Content-Disposition 里 filename 用引号括着:名字里的引号不剔掉,头就断了。"""
+    reference = tmp_path / 'cat "v2".png'
+    reference.write_bytes(PNG)
+    _generate(comfy.url, tmp_path, {"model": "portrait.json",
+                                    "inputs": [{"role": "reference_image", "path": str(reference)}]})
+    [(uploaded_name, uploaded_bytes)] = comfy.state.uploads
+    assert uploaded_bytes == PNG and uploaded_name.endswith("cat _v2_.png")
+
+
 def test_目录里说清每张图要不要写提示词(comfy) -> None:
     template = json.dumps({"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}},
                            "2": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x", "images": ["1", 0]}}})

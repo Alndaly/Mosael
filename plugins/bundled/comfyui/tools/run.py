@@ -105,8 +105,9 @@ def upload(comfy: Comfy, inputs: list[dict[str, str]]) -> dict[str, list[str]]:
 
 
 def _safe_name(name: str) -> str:
-    """ComfyUI 的 input 目录里的文件名:去掉路径分隔和控制字符,留后缀。"""
-    cleaned = re.sub(r"[\\/\x00-\x1f]+", "_", name).strip() or "input"
+    """ComfyUI 的 input 目录里的文件名:去掉路径分隔、控制字符和引号(它要放进 multipart 头里的
+    `filename="…"`),留后缀。"""
+    cleaned = re.sub(r"[\\/\x00-\x1f\"]+", "_", name).strip() or "input"
     return cleaned[-80:]
 
 
