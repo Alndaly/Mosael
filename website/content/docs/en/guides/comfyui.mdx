@@ -149,8 +149,11 @@ ComfyUI connections you already have get the new tools automatically after upgra
 
 ## Workflows it can't read: the API template
 
-Mosael reads workflows in the UI format ComfyUI saves, which covers almost every workflow; a few unusual ones
-(lots of custom nodes, nested subgraphs) may not convert (“List workflows” lists them with the reason). For those,
+Mosael reads workflows in the UI format ComfyUI saves, following the same rules ComfyUI uses when it queues them:
+bypassed nodes pass their inputs straight through, muted nodes don't run, helper nodes such as Reroute, Primitive and
+Get / Set are resolved, subgraphs are expanded into their nodes, and workflows saved by older ComfyUI versions are read
+too. Convert legacy group nodes to subgraphs in ComfyUI and save again. A few unusual ones (custom nodes whose inputs
+are added on the fly by a UI extension) may not convert (“List workflows” lists them with the reason). For those,
 use **Export (API)** in ComfyUI, click **Edit** on the connection's “API template” row and paste the JSON into the
 code editor — it tells you the line and column of any mistake and won't save broken JSON. It shows up as the
 “API template” model. The template may contain placeholders — `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}`

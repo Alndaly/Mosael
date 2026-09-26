@@ -1,13 +1,8 @@
-"""ComfyUI 的图:UI 格式 → API 格式、看出一张图能调什么、把 Mosael 的请求填进去、收产出。
+"""ComfyUI 的 API 图:看出一张图能调什么、把 Mosael 的请求填进去、收产出。
 
-**所有「ComfyUI 内部格式」的知识只在这一个文件里。** 这些知识跟着 ComfyUI 的版本变(widget 的排法、
-新的采样器节点、新的视频输出节点),所以它们住在插件里跟着插件走,而不是住在应用内核里跟着应用
-发版(ADR 0020)。
-
-ComfyUI 保存的工作流是 UI 图(nodes / links / widgets_values),而 `/prompt` 只吃 API 格式
-(节点 id → {class_type, inputs})。两者的转换在 ComfyUI 前端的 graphToPrompt 里,没有后端接口 ——
-这里复现它的核心语义。转换是**尽力而为**:认不出的非常规工作流,用户可以在 ComfyUI 里
-「导出 (API)」,粘进这个连接的「API 模板」。
+「ComfyUI 内部格式」的知识只在插件里(这个文件和 convert.py):它们跟着 ComfyUI 的版本变(新的采样器节点、
+新的视频输出节点),所以住在插件里跟着插件走,而不是住在应用内核里跟着应用发版(ADR 0020)。
+UI 图(保存的工作流)怎么变成这里吃的 API 图,见 convert.py。
 """
 
 from __future__ import annotations
@@ -18,127 +13,10 @@ from typing import Any
 
 import labels
 
-# ---------------------------------------------------------------------------
-# UI 图 → API 图
-# ---------------------------------------------------------------------------
-
-#: 纯 UI / 不进 API prompt 的节点(注释、分组标记、透传)。Reroute 在连线里单独透传。
-_SKIP_NODE_TYPES = frozenset(
-    {"Note", "MarkdownNote", "Reroute", "PrimitiveNode", "PrimitiveString", "PrimitiveInt", "PrimitiveFloat",
-     "GetNode", "SetNode"}
-)
-#: ComfyUI 节点 mode:2 = muted、4 = bypassed —— 都不该进 prompt。
-_INACTIVE_MODES = frozenset({2, 4})
-
-
-def _has_control_after_generate(input_def: Any) -> bool:
-    """object_info 里某个输入带 control_after_generate(seed 那一类 INT)——它在 widgets_values 里
-    多占一个隐藏项(randomize / fixed / …),转换时必须跳过,否则后面的 widget 全部错位。"""
-    return (
-        isinstance(input_def, list)
-        and len(input_def) > 1
-        and isinstance(input_def[1], dict)
-        and bool(input_def[1].get("control_after_generate"))
-    )
-
-
-def is_api_graph(graph: Any) -> bool:
-    """已经是 API 格式了吗(「导出 (API)」出来的那种:节点 id → {class_type, inputs})。"""
-    return (
-        isinstance(graph, dict)
-        and bool(graph)
-        and "nodes" not in graph
-        and all(isinstance(node, dict) and "class_type" in node for node in graph.values())
-    )
-
 
 def _input_defs(object_info: dict[str, Any], class_type: str) -> dict[str, Any]:
     type_input = (object_info.get(class_type) or {}).get("input") or {}
     return {**(type_input.get("required") or {}), **(type_input.get("optional") or {})}
-
-
-def graph_to_api_prompt(ui_graph: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
-    """ComfyUI UI 图 → `/prompt` 的 API 格式。
-
-    - 连接输入(node.inputs 里带 link)→ [源节点 id, 源槽位];Reroute 透传到真实的源。
-    - widget 输入(带 widget 标记)→ 按顺序取 widgets_values,按 object_info 跳过隐藏的那一项。
-    - 跳过 UI 专用节点和 muted / bypassed 的节点。
-    """
-    if is_api_graph(ui_graph):
-        return copy.deepcopy(ui_graph)
-    nodes = [node for node in (ui_graph.get("nodes") or []) if isinstance(node, dict)]
-    links_by_id: dict[Any, list] = {}
-    for link in ui_graph.get("links") or []:
-        if isinstance(link, list) and len(link) >= 5:
-            links_by_id[link[0]] = link
-    nodes_by_id = {node.get("id"): node for node in nodes}
-
-    def resolve_source(link_id: Any) -> list | None:
-        """顺连线找到真实的源(节点 id, 槽位),透传 Reroute;防环。"""
-        seen: set[Any] = set()
-        while link_id is not None and link_id not in seen:
-            seen.add(link_id)
-            link = links_by_id.get(link_id)
-            if not link:
-                return None
-            from_node, from_slot = link[1], link[2]
-            source = nodes_by_id.get(from_node)
-            if source is not None and source.get("type") == "Reroute":
-                first_input = (source.get("inputs") or [{}])[0]
-                link_id = first_input.get("link")
-                continue
-            return [str(from_node), from_slot]
-        return None
-
-    api: dict[str, Any] = {}
-    for node in nodes:
-        node_id, node_type = node.get("id"), node.get("type")
-        if node_id is None or not node_type:
-            continue
-        if node.get("mode") in _INACTIVE_MODES or node_type in _SKIP_NODE_TYPES:
-            continue
-        input_defs = _input_defs(object_info, node_type)
-        widgets = node.get("widgets_values")
-        widgets = widgets if isinstance(widgets, list) else []
-        inputs: dict[str, Any] = {}
-        value_index = 0
-        for entry in node.get("inputs") or []:
-            name = entry.get("name")
-            if not name:
-                continue
-            has_widget = "widget" in entry
-            if entry.get("link") is not None:
-                source = resolve_source(entry["link"])
-                if source is not None:
-                    inputs[name] = source
-                # 转成输入的 widget 仍在 widgets_values 里占位置 —— 照样步进,否则后面的全对错。
-                if has_widget and value_index < len(widgets):
-                    value_index += 1
-                    if _has_control_after_generate(input_defs.get(name)):
-                        value_index += 1
-            elif has_widget and value_index < len(widgets):
-                inputs[name] = widgets[value_index]
-                value_index += 1
-                if _has_control_after_generate(input_defs.get(name)):
-                    value_index += 1
-        api[str(node_id)] = {"class_type": node_type, "inputs": inputs}
-    return api
-
-
-def ui_titles(ui_graph: dict[str, Any]) -> dict[str, str]:
-    """节点 id → 界面上的名字(用户起的标题,或节点类型)。API 图里没有标题,只能从 UI 图拿。"""
-    titles: dict[str, str] = {}
-    if is_api_graph(ui_graph):
-        for node_id, node in ui_graph.items():
-            meta = node.get("_meta") if isinstance(node.get("_meta"), dict) else {}
-            titles[str(node_id)] = str(meta.get("title") or node.get("class_type") or "")
-        return titles
-    for node in ui_graph.get("nodes") or []:
-        if isinstance(node, dict):
-            titles[str(node.get("id"))] = str(
-                node.get("title") or (node.get("properties") or {}).get("Node name for S&R") or node.get("type") or ""
-            )
-    return titles
 
 
 # ---------------------------------------------------------------------------

@@ -16,18 +16,20 @@ import pytest
 from tests.fake_comfyui import OBJECT_INFO, PORTRAIT_UI, UPSCALE_API, WAN_API, conn, widget
 
 TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui" / "tools"
-_MODULES = ("graph", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows")
+_MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows",
+            "tooling")
 
 
 @pytest.fixture(scope="module")
-def graph():
+def tools():
     """插件的模块名很普通(graph / models / run),用完就从 sys.modules 摘掉,不串到别的测试里。"""
     saved = {name: sys.modules.pop(name) for name in _MODULES if name in sys.modules}
     sys.path.insert(0, str(TOOLS))
     try:
-        import graph as module
+        import convert
+        import graph
 
-        yield module
+        yield graph, convert
     finally:
         sys.path.remove(str(TOOLS))
         for name in _MODULES:
@@ -35,10 +37,20 @@ def graph():
         sys.modules.update(saved)
 
 
+@pytest.fixture(scope="module")
+def graph(tools):
+    return tools[0]
+
+
+@pytest.fixture(scope="module")
+def convert(tools):
+    return tools[1]
+
+
 # --- UI 图 → API 图 ----------------------------------------------------------
 
 
-def test_control_after_generate_is_skipped_and_links_resolve(graph) -> None:
+def test_control_after_generate_is_skipped_and_links_resolve(convert) -> None:
     ui = {
         "nodes": [
             {"id": 3, "type": "KSampler", "widgets_values": [42, "randomize", 20],
@@ -47,13 +59,13 @@ def test_control_after_generate_is_skipped_and_links_resolve(graph) -> None:
         ],
         "links": [[1, 4, 0, 3, 0, "MODEL"]],
     }
-    api = graph.graph_to_api_prompt(ui, OBJECT_INFO)
+    api = convert.to_api(ui, OBJECT_INFO)
     assert api["3"]["inputs"]["seed"] == 42
     assert api["3"]["inputs"]["steps"] == 20, "'randomize' 是 seed 的隐藏项,必须跳过"
     assert api["3"]["inputs"]["model"] == ["4", 0]
 
 
-def test_muted_and_ui_only_nodes_skipped(graph) -> None:
+def test_muted_and_ui_only_nodes_skipped(convert) -> None:
     ui = {
         "nodes": [
             {"id": 1, "type": "CLIPTextEncode", "mode": 0, "widgets_values": ["hi"], "inputs": [widget("text")]},
@@ -62,10 +74,10 @@ def test_muted_and_ui_only_nodes_skipped(graph) -> None:
         ],
         "links": [],
     }
-    assert set(graph.graph_to_api_prompt(ui, OBJECT_INFO)) == {"1"}
+    assert set(convert.to_api(ui, OBJECT_INFO)) == {"1"}
 
 
-def test_reroute_is_transparent(graph) -> None:
+def test_reroute_is_transparent(convert) -> None:
     ui = {
         "nodes": [
             {"id": 3, "type": "KSampler", "widgets_values": [1, "fixed", 20], "inputs": [conn("model", 2), widget("seed"), widget("steps")]},
@@ -74,12 +86,12 @@ def test_reroute_is_transparent(graph) -> None:
         ],
         "links": [[1, 4, 0, 9, 0, "MODEL"], [2, 9, 0, 3, 0, "MODEL"]],
     }
-    api = graph.graph_to_api_prompt(ui, OBJECT_INFO)
+    api = convert.to_api(ui, OBJECT_INFO)
     assert "9" not in api
     assert api["3"]["inputs"]["model"] == ["4", 0]
 
 
-def test_converted_widget_keeps_index_aligned(graph) -> None:
+def test_converted_widget_keeps_index_aligned(convert) -> None:
     """widget 拉成连接之后仍占 widgets_values 一个位置 —— 不步进的话 batch_size 会取到 width 的旧值。"""
     ui = {
         "nodes": [
@@ -91,27 +103,201 @@ def test_converted_widget_keeps_index_aligned(graph) -> None:
         ],
         "links": [[1, 8, 0, 5, 0, "INT"], [2, 8, 1, 5, 1, "INT"]],
     }
-    api = graph.graph_to_api_prompt(ui, OBJECT_INFO)
+    api = convert.to_api(ui, OBJECT_INFO)
     assert api["5"]["inputs"]["batch_size"] == 1
     assert api["5"]["inputs"]["width"] == ["8", 0]
 
 
-def test_api_format_passes_through(graph) -> None:
+def test_api_format_passes_through(convert) -> None:
     """用户「导出 (API)」后存进 workflows/ 的图本来就是 API 格式,原样用。"""
-    assert graph.is_api_graph(WAN_API)
-    assert graph.graph_to_api_prompt(WAN_API, OBJECT_INFO) == WAN_API
+    assert convert.is_api_graph(WAN_API)
+    assert convert.to_api(WAN_API, OBJECT_INFO) == WAN_API
+
+
+def test_老版本前端存的图_widget不在inputs里也按节点定义取值(convert) -> None:
+    """老版本前端存的图,`node.inputs` 只列连线:按 inputs 数 widget 的话 KSampler 一个值都拿不到,提交就被拒。"""
+    ui = {
+        "nodes": [
+            {"id": 3, "type": "KSampler", "widgets_values": [7, "randomize", 25, 6.5, "euler", "karras", 0.9],
+             "inputs": [conn("model", 1)]},
+            {"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["m.safetensors"]},
+            {"id": 5, "type": "EmptyLatentImage", "widgets_values": [640, 768, 2]},
+        ],
+        "links": [[1, 4, 0, 3, 0, "MODEL"]],
+    }
+    api = convert.to_api(ui, OBJECT_INFO)
+    assert api["3"]["inputs"] == {"seed": 7, "steps": 25, "cfg": 6.5, "sampler_name": "euler", "scheduler": "karras",
+                                  "denoise": 0.9, "model": ["4", 0]}
+    assert api["4"]["inputs"] == {"ckpt_name": "m.safetensors"}
+    assert api["5"]["inputs"] == {"width": 640, "height": 768, "batch_size": 2}
+
+
+def test_seed没声明control_after_generate也占一格_定义多了输入用缺省值(convert) -> None:
+    info = {"MySampler": {"input": {"required": {
+        "seed": ["INT", {"default": 0}], "steps": ["INT", {"default": 20}]},
+        "optional": {"eta": ["FLOAT", {"default": 0.5}]}}}}
+    ui = {"nodes": [{"id": 1, "type": "MySampler", "widgets_values": [11, "fixed", 30]}], "links": []}
+    assert convert.to_api(ui, info)["1"]["inputs"] == {"seed": 11, "steps": 30, "eta": 0.5}
+
+
+def test_按名字存的widgets_values_和上传按钮那一格(convert) -> None:
+    """VHS 的节点把 widgets_values 存成对象;读素材的节点在必填输入之后多一个上传按钮。"""
+    info = {
+        "VHS_VideoCombine": {"input": {"required": {"images": ["IMAGE"], "frame_rate": ["FLOAT", {"default": 8}],
+                                                    "format": [["video/h264-mp4", "image/gif"]]}}},
+        "LoadImageMask": OBJECT_INFO["LoadImageMask"],
+        "MaskTool": {"input": {"required": {"image": [["a.png"], {"image_upload": True}]},
+                               "optional": {"feather": ["INT", {"default": 0}]}}},
+    }
+    ui = {"nodes": [
+        {"id": 1, "type": "VHS_VideoCombine", "inputs": [conn("images", None)],
+         "widgets_values": {"frame_rate": 24, "format": "video/h264-mp4", "videopreview": {"hidden": False}}},
+        {"id": 2, "type": "LoadImageMask", "widgets_values": ["m.png", "red", "image"]},
+        {"id": 3, "type": "MaskTool", "widgets_values": ["a.png", "image", 6]},
+    ], "links": []}
+    api = convert.to_api(ui, info)
+    assert api["1"]["inputs"] == {"frame_rate": 24, "format": "video/h264-mp4"}
+    assert api["2"]["inputs"] == {"image": "m.png", "channel": "red"}
+    assert api["3"]["inputs"] == {"image": "a.png", "feather": 6}, "上传按钮那一格跳过,后面的不错位"
+
+
+def test_值是数组的widget包一层_不被当成连线(convert) -> None:
+    info = {"Points": {"input": {"required": {"points": ["STRING", {}]}}}}
+    ui = {"nodes": [{"id": 1, "type": "Points", "widgets_values": [[1, 2]]}], "links": []}
+    assert convert.to_api(ui, info)["1"]["inputs"]["points"] == {"__value__": [1, 2]}
+
+
+def _chain(mode: int) -> dict:
+    """checkpoint → LoRA(模式可调)→ KSampler / CLIPTextEncode。"""
+    return {
+        "nodes": [
+            {"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["m.safetensors"],
+             "outputs": [{"name": "MODEL", "type": "MODEL"}, {"name": "CLIP", "type": "CLIP"}, {"name": "VAE", "type": "VAE"}]},
+            {"id": 10, "type": "LoraLoader", "mode": mode, "widgets_values": ["detail.safetensors", 0.8, 1.0],
+             "inputs": [{"name": "model", "type": "MODEL", "link": 1}, {"name": "clip", "type": "CLIP", "link": 2}],
+             "outputs": [{"name": "MODEL", "type": "MODEL"}, {"name": "CLIP", "type": "CLIP"}]},
+            {"id": 3, "type": "KSampler", "widgets_values": [1, "fixed", 20, 7, "euler", "normal", 1],
+             "inputs": [{"name": "model", "type": "MODEL", "link": 3}]},
+            {"id": 6, "type": "CLIPTextEncode", "widgets_values": ["a cat"],
+             "inputs": [{"name": "clip", "type": "CLIP", "link": 4}]},
+        ],
+        "links": [[1, 4, 0, 10, 0, "MODEL"], [2, 4, 1, 10, 1, "CLIP"], [3, 10, 0, 3, 0, "MODEL"],
+                  [4, 10, 1, 6, 0, "CLIP"]],
+    }
+
+
+def test_旁路的节点透明_下游直通到它同类型的输入(convert) -> None:
+    """用户关掉(bypass)一个 LoRA:模型和 CLIP 照样流下去,而不是留一根指向不存在节点的线让 ComfyUI 拒掉。"""
+    api = convert.to_api(_chain(4), OBJECT_INFO)
+    assert "10" not in api
+    assert api["3"]["inputs"]["model"] == ["4", 0]
+    assert api["6"]["inputs"]["clip"] == ["4", 1]
+
+
+def test_静音的节点_连到它的插口去掉_widget留着自己的值(convert) -> None:
+    ui = _chain(2)
+    ui["nodes"][2]["inputs"].append({"name": "steps", "type": "INT", "widget": {"name": "steps"}, "link": 5})
+    ui["links"].append([5, 10, 0, 3, 5, "INT"])
+    api = convert.to_api(ui, OBJECT_INFO)
+    assert "10" not in api
+    assert "model" not in api["3"]["inputs"] and "clip" not in api["6"]["inputs"]
+    assert api["3"]["inputs"]["steps"] == 20
+
+
+def test_PrimitiveNode的值写进下游那一格_后端的PrimitiveInt照常进图(convert) -> None:
+    info = {**OBJECT_INFO, "PrimitiveInt": {"input": {"required": {"value": ["INT", {"default": 0}]}}}}
+    ui = {
+        "nodes": [
+            {"id": 3, "type": "KSampler", "widgets_values": [1, "fixed", 20, 7, "euler", "normal", 1],
+             "inputs": [{"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": 1},
+                        {"name": "steps", "type": "INT", "widget": {"name": "steps"}, "link": 2}]},
+            {"id": 20, "type": "PrimitiveNode", "widgets_values": [123456, "randomize"],
+             "outputs": [{"name": "INT", "type": "INT", "links": [1]}]},
+            {"id": 21, "type": "PrimitiveInt", "widgets_values": [33]},
+        ],
+        "links": [[1, 20, 0, 3, 0, "INT"], [2, 21, 0, 3, 1, "INT"]],
+    }
+    api = convert.to_api(ui, info)
+    assert "20" not in api
+    assert api["3"]["inputs"]["seed"] == 123456
+    assert api["21"] == {"class_type": "PrimitiveInt", "inputs": {"value": 33}, "_meta": {"title": "PrimitiveInt"}}
+    assert api["3"]["inputs"]["steps"] == ["21", 0]
+
+
+def test_GetNode接到同名SetNode的上游(convert) -> None:
+    ui = {
+        "nodes": [
+            {"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["m.safetensors"]},
+            {"id": 30, "type": "SetNode", "widgets_values": ["model"], "inputs": [{"name": "MODEL", "type": "MODEL", "link": 1}]},
+            {"id": 31, "type": "GetNode", "widgets_values": ["model"], "outputs": [{"name": "MODEL", "type": "MODEL"}]},
+            {"id": 3, "type": "KSampler", "widgets_values": [1, "fixed", 20, 7, "euler", "normal", 1],
+             "inputs": [{"name": "model", "type": "MODEL", "link": 2}]},
+        ],
+        "links": [[1, 4, 0, 30, 0, "MODEL"], [2, 31, 0, 3, 0, "MODEL"]],
+    }
+    api = convert.to_api(ui, OBJECT_INFO)
+    assert set(api) == {"4", "3"}
+    assert api["3"]["inputs"]["model"] == ["4", 0]
+
+
+def test_子图展开成里面的节点_id是外层冒号里层(convert) -> None:
+    """新版前端的子图:一个节点的类型是子图的 id,里面的节点带着自己的连线(对象写法)和输入输出口。"""
+    sub_id = "9f0c2d3e-1111-4a2b-8c3d-5e6f7a8b9c0d"
+    ui = {
+        "nodes": [
+            {"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["m.safetensors"]},
+            {"id": 50, "type": sub_id, "title": "采样组",
+             "inputs": [{"name": "model", "type": "MODEL", "link": 1},
+                        {"name": "steps", "type": "INT", "widget": {"name": "steps"}, "link": None}],
+             "outputs": [{"name": "LATENT", "type": "LATENT", "links": [2]}],
+             "widgets_values": [35]},
+            {"id": 8, "type": "VAEDecode", "inputs": [{"name": "samples", "type": "LATENT", "link": 2}]},
+        ],
+        "links": [[1, 4, 0, 50, 0, "MODEL"], [2, 50, 0, 8, 0, "LATENT"]],
+        "definitions": {"subgraphs": [{
+            "id": sub_id, "name": "采样组",
+            "inputNode": {"id": -10, "bounding": [0, 0, 1, 1]}, "outputNode": {"id": -20, "bounding": [0, 0, 1, 1]},
+            "inputs": [{"id": "a", "name": "model", "type": "MODEL", "linkIds": [11]},
+                       {"id": "b", "name": "steps", "type": "INT", "linkIds": [12]}],
+            "outputs": [{"id": "c", "name": "LATENT", "type": "LATENT", "linkIds": [13]}],
+            "nodes": [
+                {"id": 3, "type": "KSampler", "title": "精修", "widgets_values": [5, "fixed", 20, 7, "euler", "normal", 1],
+                 "inputs": [{"name": "model", "type": "MODEL", "link": 11},
+                            {"name": "steps", "type": "INT", "widget": {"name": "steps"}, "link": 12}]},
+            ],
+            "links": [
+                {"id": 11, "origin_id": -10, "origin_slot": 0, "target_id": 3, "target_slot": 0, "type": "MODEL"},
+                {"id": 12, "origin_id": -10, "origin_slot": 1, "target_id": 3, "target_slot": 1, "type": "INT"},
+                {"id": 13, "origin_id": 3, "origin_slot": 0, "target_id": -20, "target_slot": 0, "type": "LATENT"},
+            ],
+        }]},
+    }
+    api = convert.to_api(ui, OBJECT_INFO)
+    assert set(api) == {"4", "50:3", "8"}
+    assert api["50:3"]["inputs"]["model"] == ["4", 0]
+    assert api["50:3"]["inputs"]["steps"] == 35, "子图节点上提升出来的那一格"
+    assert api["50:3"]["_meta"]["title"] == "精修"
+    assert api["8"]["inputs"]["samples"] == ["50:3", 0]
+    assert convert.titles_of(api)["50:3"] == "精修"
+
+
+def test_旧式组节点说清楚要转成子图(convert) -> None:
+    ui = {"nodes": [{"id": 1, "type": "workflow>采样", "widgets_values": []}], "links": [],
+          "extra": {"groupNodes": {"采样": {"nodes": []}}}}
+    with pytest.raises(Exception, match="子图"):
+        convert.to_api(ui, OBJECT_INFO)
 
 
 # --- 一张图 → 插件目录里的一个模型 -----------------------------------------------
 
 
-def _portrait(graph):
-    api = graph.graph_to_api_prompt(PORTRAIT_UI, OBJECT_INFO)
-    return graph.describe("portrait.json", "portrait", api, OBJECT_INFO, graph.ui_titles(PORTRAIT_UI))
+def _portrait(graph, convert):
+    api = convert.to_api(PORTRAIT_UI, OBJECT_INFO)
+    return graph.describe("portrait.json", "portrait", api, OBJECT_INFO, convert.titles_of(api))
 
 
-def test_提示词种子尺寸对到宿主的控件上(graph) -> None:
-    model = _portrait(graph)
+def test_提示词种子尺寸对到宿主的控件上(graph, convert) -> None:
+    model = _portrait(graph, convert)
     parameters = model["parameters"]
     assert model["kind"] == "image"
     assert parameters["negative_prompt"] == {"type": "string"}
@@ -123,8 +309,8 @@ def test_提示词种子尺寸对到宿主的控件上(graph) -> None:
         assert gone not in parameters
 
 
-def test_其余可调的输入带着ComfyUI给的类型和范围(graph) -> None:
-    parameters = _portrait(graph)["parameters"]
+def test_其余可调的输入带着ComfyUI给的类型和范围(graph, convert) -> None:
+    parameters = _portrait(graph, convert)["parameters"]
     assert parameters["3.steps"] == {
         "title": {"zh": "步数", "en": "Steps"}, "type": "integer", "minimum": 1, "maximum": 10000, "default": 20,
         "description": "采样 · steps",
@@ -139,8 +325,8 @@ def test_其余可调的输入带着ComfyUI给的类型和范围(graph) -> None:
     assert "5.batch_size" not in parameters, "一次几张是宿主的控件(num_images)"
 
 
-def test_常用的在前_细节收进高级(graph) -> None:
-    parameters = _portrait(graph)["parameters"]
+def test_常用的在前_细节收进高级(graph, convert) -> None:
+    parameters = _portrait(graph, convert)["parameters"]
     tuned = [key for key in parameters if "." in key]
     assert tuned[:5] == ["4.ckpt_name", "3.steps", "3.cfg", "3.sampler_name", "3.scheduler"], tuned
     assert not any(parameters[key].get("x-advanced") for key in ("4.ckpt_name", "3.steps", "3.cfg", "3.sampler_name"))
@@ -173,17 +359,17 @@ def test_LoRA和checkpoint是下拉_选项来自object_info(graph) -> None:
     assert parameters["10.strength_clip"]["x-advanced"] is True
 
 
-def test_一次几张对到宿主的num_images(graph) -> None:
-    model = _portrait(graph)
+def test_一次几张对到宿主的num_images(graph, convert) -> None:
+    model = _portrait(graph, convert)
     assert model["parameters"]["num_images"] == {"type": "integer", "minimum": 1, "maximum": 4, "default": 1}
     assert model["max_outputs"] == 4
-    api = graph.graph_to_api_prompt(PORTRAIT_UI, OBJECT_INFO)
+    api = convert.to_api(PORTRAIT_UI, OBJECT_INFO)
     assert graph.fill(api, {"batch": 3}, {})["5"]["inputs"]["batch_size"] == 3
     assert graph.fill(api, {"batch": 99}, {})["5"]["inputs"]["batch_size"] == 4, "不超过宿主一次的上限"
 
 
-def test_LoadImage_变成参考图槽位(graph) -> None:
-    model = _portrait(graph)
+def test_LoadImage_变成参考图槽位(graph, convert) -> None:
+    model = _portrait(graph, convert)
     assert model["inputs"] == [{"role": "reference_image", "max": 1}], "有提示词和画布的图:参考图可给可不给"
     assert model["modes"] == ["text-to-image", "image-to-image"]
     assert model["prompt_dialect"] == "sd-tags"
@@ -222,9 +408,9 @@ def test_没接上采样器的文字节点不算提示词(graph) -> None:
     assert graph.prompt_requirement(api) == "none"
 
 
-def test_存着提示词的图_可以不写(graph) -> None:
+def test_存着提示词的图_可以不写(graph, convert) -> None:
     """不写就用这张图自己那句,写了换成你的。"""
-    assert _portrait(graph)["prompt"] == "optional"
+    assert _portrait(graph, convert)["prompt"] == "optional"
     assert graph.describe("video/wan.json", "wan", WAN_API, OBJECT_INFO)["prompt"] == "optional", "穿过视频节点的条件也认"
     flux = {
         "13": {"class_type": "SamplerCustomAdvanced", "inputs": {"guider": ["22", 0]}},

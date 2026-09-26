@@ -296,8 +296,9 @@ def test_清单里的工具与实现对得上() -> None:
     manifest = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
     declared = {tool["name"]: tool for tool in manifest["tools"]["declare"]}
     sys.path.insert(0, str(PLUGIN / "tools"))
-    saved = {name: sys.modules.pop(name) for name in ("main", "run", "graph", "models", "labels", "server",
-                                                        "workflows", "lines", "ws", "comfy_http") if name in sys.modules}
+    modules = ("main", "run", "graph", "convert", "models", "labels", "server", "workflows", "tooling", "lines", "ws",
+               "comfy_http")
+    saved = {name: sys.modules.pop(name) for name in modules if name in sys.modules}
     try:
         import main as plugin_main
 
@@ -305,7 +306,7 @@ def test_清单里的工具与实现对得上() -> None:
         streaming = set(plugin_main._STREAMING)
     finally:
         sys.path.remove(str(PLUGIN / "tools"))
-        for name in ("main", "run", "graph", "models", "labels", "server", "workflows", "lines", "ws", "comfy_http"):
+        for name in modules:
             sys.modules.pop(name, None)
         sys.modules.update(saved)
     assert set(declared) == implemented

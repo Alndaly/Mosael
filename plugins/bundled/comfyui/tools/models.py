@@ -16,6 +16,7 @@ import json
 import os
 from typing import Any, Iterator, NamedTuple
 
+import convert
 import graph
 from comfy_http import Comfy
 from lines import ComfyError, say
@@ -59,7 +60,7 @@ def _parse_template(text: str, locale: str) -> dict[str, Any]:
     except ValueError as exc:
         raise ComfyError(say(locale, "连接里粘贴的 API 模板不是合法 JSON —— 请在 ComfyUI 里用「导出 (API)」导出后再粘",
                              "The API template pasted into this connection is not valid JSON. Export it from ComfyUI with “Export (API)” and paste that.")) from exc
-    if not graph.is_api_graph(parsed):
+    if not convert.is_api_graph(parsed):
         raise ComfyError(say(locale, "连接里粘贴的模板不是 API 格式(节点 id → {class_type, inputs})",
                              "The pasted template is not in API format (node id → {class_type, inputs})."))
     return parsed
@@ -79,7 +80,7 @@ def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str
         if not text:
             raise ComfyError(say(locale, "这个连接没有粘贴 API 模板", "This connection has no API template."))
         parsed = _parse_template(text, locale)
-        return parsed, dict(PLACEHOLDER_DEFAULTS), graph.ui_titles(parsed)
+        return parsed, dict(PLACEHOLDER_DEFAULTS), convert.titles_of(parsed)
     try:
         ui_graph = comfy.fetch_workflow(model_id)
     except ComfyError as exc:
@@ -87,7 +88,8 @@ def load(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str
             raise ComfyError(say(locale, f"ComfyUI 里已经没有工作流「{model_id}」了 —— 到插件页点「刷新模型」,或用 list_workflows 看看现在有哪些",
                                  f"ComfyUI no longer has the workflow “{model_id}”. Click Refresh models on the Plugins page, or call list_workflows to see what exists.")) from exc
         raise
-    return graph.graph_to_api_prompt(ui_graph, object_info), {}, graph.ui_titles(ui_graph)
+    api = convert.to_api(ui_graph, object_info, locale)
+    return api, {}, convert.titles_of(api)
 
 
 def label_of(path: str) -> str:
@@ -126,20 +128,20 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Ent
     if text:
         try:
             parsed = _parse_template(text, locale)
-            yield Entry(TEMPLATE, {"zh": "API 模板", "en": "API template"}, parsed, graph.ui_titles(parsed), "")
+            yield Entry(TEMPLATE, {"zh": "API 模板", "en": "API template"}, parsed, convert.titles_of(parsed), "")
         except ComfyError as exc:
             yield Entry(TEMPLATE, {"zh": "API 模板", "en": "API template"}, {}, {}, str(exc))
     for path in comfy.list_workflows():
         try:
             ui_graph = comfy.fetch_workflow(path)
-            api = graph.graph_to_api_prompt(ui_graph, object_info)
+            api = convert.to_api(ui_graph, object_info, locale)
         except Exception as exc:  # noqa: BLE001 — 一张图拉不下来 / 转不过来,别的照常列
             yield Entry(path, label_of(path), {}, {}, str(exc) or type(exc).__name__)
             continue
         if not api:
             yield Entry(path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty"), _ident(ui_graph))
             continue
-        yield Entry(path, label_of(path), api, graph.ui_titles(ui_graph), "", _ident(ui_graph))
+        yield Entry(path, label_of(path), api, convert.titles_of(api), "", _ident(ui_graph))
 
 
 def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:

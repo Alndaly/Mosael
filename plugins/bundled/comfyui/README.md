@@ -71,7 +71,10 @@ ComfyUI 那一侧的输入不列出来。
 
 `tools/` 只用 Python 标准库:
 
-- `graph.py` —— UI 图 → API 图、看出提示词 / 种子 / 尺寸 / 槽位 / 输出节点、描述成模型、填图、收产出;
+- `convert.py` —— 保存的工作流(UI 图)→ `/prompt` 吃的 API 图,照 ComfyUI 前端 graphToPrompt 的语义:widget 值按
+  节点定义排(老版本前端存的图也认)、静音的断开、旁路的直通、Reroute / PrimitiveNode / Get·Set 这些前端节点消掉、
+  子图展开成「外层 id:里层 id」;
+- `graph.py` —— 看出提示词 / 种子 / 尺寸 / 槽位 / 输出节点、描述成模型、填图、收产出;
 - `labels.py` —— 可调输入的人话名字、顺序、常用与否、不在 Mosael 里调的那几个;
 - `models.py` —— 有哪些模型、一个模型 id 背后是哪张图、清单的指纹;
 - `run.py` —— 传素材、提交、跟进度、取消、取回(生成与 `run_workflow` 共用);
