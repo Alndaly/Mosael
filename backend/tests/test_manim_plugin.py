@@ -374,6 +374,21 @@ if "BOOM" in source:
     sys.exit(1)
 if scene == "MosaelExplainer":
     spec = json.loads((scene_file.parent / "spec.json").read_text(encoding="utf-8"))
+    attempts = scene_file.parent.parent.parent / "attempts.log"
+    with attempts.open("a") as handle:
+        handle.write(("latex" if spec["use_latex"] else "plain") + "\n")
+    if spec["segments"][0]["title"] == "CRASH":
+        say(kind="error", type="RuntimeError", message="font 'LaTeX Sans' not found", frames=[])
+        sys.exit(1)
+    if spec["use_latex"] and any(part.get("formulas") for part in spec["segments"]):
+        if "BADTEX" in json.dumps(spec):
+            log = scene_file.parent / "media" / "Tex" / "x.log"
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text("! Undefined control sequence.\nl.8 \\badtex\n", encoding="utf-8")
+            say(kind="error", type="ValueError", message=f"latex error converting to dvi. See log output above or the log file: {{log}}", frames=[])
+        else:
+            say(kind="error", type="FileNotFoundError", message="[Errno 2] No such file or directory: 'dvisvgm'", frames=[])
+        sys.exit(1)
     now = 0.0
     for index, part in enumerate(spec["segments"]):
         say(kind="segment", index=index, total=len(spec["segments"]), part=part["kind"], title=part.get("title", ""), time=now)
@@ -437,6 +452,32 @@ class Test入口:
         assert (output["width"], output["height"]) == (1280, 720)
         assert any("第 2/3 段" in one["message"] for one in progress)
         assert not list((Path(fake_env["MOSAEL_PLUGIN_DATA_DIR"]) / "jobs").iterdir()), "工作目录渲完即删"
+
+    @pytest.fixture()
+    def with_latex(self, fake_env: dict[str, str], tmp_path: Path) -> dict[str, str]:
+        """PATH 上放一对假的 latex / dvisvgm:插件据此认为 LaTeX 在,讲解视频先按排版公式去渲。"""
+        bin_dir = tmp_path / "texbin"
+        bin_dir.mkdir()
+        for name in ("latex", "dvisvgm"):
+            (bin_dir / name).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            (bin_dir / name).chmod(0o755)
+        return {**fake_env, "PATH": f"{bin_dir}:{fake_env['PATH']}"}
+
+    def _attempts(self, env: dict[str, str]) -> list[str]:
+        return (Path(env["MOSAEL_PLUGIN_DATA_DIR"]) / "attempts.log").read_text().split()
+
+    @pytest.mark.parametrize("formula", ["a^2+b^2=c^2", "BADTEX"])
+    def test_LaTeX排不了公式时退成纯文字再出一次(self, with_latex: dict[str, str], formula: str) -> None:
+        final, _ = _call("manim_explainer", {"title": "勾股定理", "steps": [{"title": "定理", "formula": formula}]}, with_latex)
+        assert final["ok"] is True, final
+        assert final["output"]["latex"] is False and "纯文字" in final["output"]["summary"]
+        assert self._attempts(with_latex) == ["latex", "plain"]
+
+    def test_不是LaTeX的失败不重试_哪怕报错里写着LaTeX(self, with_latex: dict[str, str]) -> None:
+        """此前按报错文字里有没有「LaTeX」判断要不要退成纯文字 —— 一个恰好提到 LaTeX 的无关失败会白白再渲一遍。"""
+        final, _ = _call("manim_explainer", {"title": "CRASH", "steps": [{"title": "a", "formula": "x^2"}]}, with_latex)
+        assert final["ok"] is False and "LaTeX Sans" in final["error"]
+        assert self._attempts(with_latex) == ["latex"]
 
     def test_自定义动画_数据与格式(self, fake_env: dict[str, str]) -> None:
         final, _ = _call("manim_animation", {"code": SCENE, "format": "webm", "filename": "circle.webm", "data": {"n": 3}}, fake_env)

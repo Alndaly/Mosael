@@ -216,6 +216,30 @@ def _latex_log_error(message: str) -> str:
     return ""
 
 
+class LatexFailed(PluginError):
+    """公式排不了:没装 LaTeX、LaTeX 跑不起来、或者这条公式 LaTeX 报错。
+
+    **分成一类是为了让调用方按类型接**:讲解视频遇到它就把公式退成纯文字再出一次。此前是在报错**文字**里找
+    「LaTeX」—— 一个恰好提到 LaTeX 的无关失败(字体名、用户写的标题)也会白白再渲一遍,而措辞一改就认不出了。
+    """
+
+
+def _latex_cause(report: dict[str, Any]) -> str:
+    """runner 交来的原因是不是 LaTeX 那一类:"missing" / "broken" / "formula",不是返回空串。"""
+    message = str(report.get("message") or "")
+    if report.get("type") == "FileNotFoundError" and re.search(r"'(latex|dvisvgm|xelatex|lualatex)'", message):
+        return "missing"
+    if "did not produce a log file" in message:
+        return "broken"
+    if "error converting to" in message:
+        return "formula"
+    return ""
+
+
+def latex_failed(log: RenderLog) -> bool:
+    return bool(log.error and _latex_cause(log.error))
+
+
 def explain_failure(log: RenderLog, job: Path, user_file: str, locale: str) -> str:
     """把一次失败的渲染说成**改得动**的一句话。
 
@@ -228,12 +252,13 @@ def explain_failure(log: RenderLog, job: Path, user_file: str, locale: str) -> s
         kind = str(report.get("type") or "Error")
         message = _clean_paths(str(report.get("message") or ""), job)
         raw_message = str(report.get("message") or "")
-        if kind == "FileNotFoundError" and re.search(r"'(latex|dvisvgm|xelatex|lualatex)'", raw_message):
+        cause = _latex_cause(report)
+        if cause == "missing":
             return line(locale, "没装 LaTeX,MathTex / Tex 排不了公式。", "LaTeX is not installed, so MathTex / Tex cannot typeset. ") \
                 + latex_hint(locale) + line(locale, " 不装的话:公式改用 Text 写。", " Without it, write formulas with Text instead.")
-        if "did not produce a log file" in raw_message:
+        if cause == "broken":
             return line(locale, "LaTeX 没能运行(装得不完整?)。", "LaTeX failed to run (incomplete install?). ") + latex_hint(locale)
-        if "error converting to" in raw_message:
+        if cause == "formula":
             detail = _latex_log_error(raw_message)
             return line(locale, "公式排版失败(LaTeX 报错):", "Formula typesetting failed (LaTeX error): ") + (detail or message)
         frames = [one for one in report.get("frames") or [] if Path(str(one.get("file") or "")).name == user_file]

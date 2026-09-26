@@ -36,7 +36,8 @@ from manim_env import (
 from manim_explainer import build_spec, has_formulas, srt, timings
 from manim_guard import check
 from manim_render import (
-    FORMATS, RENDER_TIMEOUT, Options, build_args, explain_failure, find_output, new_job, resolve_options, run,
+    FORMATS, RENDER_TIMEOUT, LatexFailed, Options, build_args, explain_failure, find_output, latex_failed, new_job,
+    resolve_options, run,
 )
 
 TRUE = {"1", "true", "yes", "on"}
@@ -48,7 +49,8 @@ def _render(python: str, job: Path, scene_file: Path, scene: str, options: Optio
     log = run(build_args(python, scene_file, scene, media, options), job, locale, on_event, timeout=timeout)
     produced = find_output(media, scene, options)
     if log.returncode != 0 or produced is None:
-        raise PluginError(line(locale, "渲染失败:", "Rendering failed: ") + explain_failure(log, job, user_file, locale))
+        failure = LatexFailed if latex_failed(log) else PluginError
+        raise failure(line(locale, "渲染失败:", "Rendering failed: ") + explain_failure(log, job, user_file, locale))
     return produced, log
 
 
@@ -175,10 +177,10 @@ def manim_explainer(payload: dict[str, Any], locale: str, send: Emit) -> dict[st
         progress(send, 0.01, line(locale, "准备场景", "Preparing the scene"))
         try:
             produced, log = attempt(spec, RENDER_TIMEOUT)
-        except PluginError as exc:
+        except LatexFailed as exc:
             # LaTeX 找得到却排不了(缺宏包之类):公式退成纯文字再试一次,总比整段视频出不来好
             remaining = RENDER_TIMEOUT - (time.monotonic() - started)
-            if not (spec["use_latex"] and has_formulas(spec) and "LaTeX" in str(exc) and remaining > 20):
+            if not (spec["use_latex"] and has_formulas(spec) and remaining > 20):
                 raise
             spec = {**spec, "use_latex": False}
             notes.append(line(locale, f"LaTeX 排公式失败,公式改用纯文字显示({str(exc)[:200]})。",
