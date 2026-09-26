@@ -39,6 +39,7 @@ import {
   hasEnoughText,
   maxImages,
   parameterChoiceEntries,
+  pickGenerationOption,
   promptMode,
   sizeOptions,
   sourceLimit,
@@ -122,6 +123,7 @@ function Pick({
       options={options}
       ariaLabel={label}
       icon={icon}
+      placeholder={placeholder}
       size="sm"
       /* 带标签的排在设置弹层里,要撑满自己那一格,**和旁边的输入框同一个样子**(有边框的字段,
          和全应用的表单一家):此前下拉是无边框的深色填充、输入框是描边的浅底,并排时像两种控件。
@@ -465,11 +467,14 @@ export function NodeComposer({
     () => models.filter((model) => model.kind === item.kind),
     [models, item.kind],
   );
-  const current = options.find((model) => `${model.provider_profile_id}:${model.model}` === picked) ?? options[0] ?? null;
-  //: 显示的就是**实际要用的**那一个。存着的模型不在清单里(被删了、那条通道停了)时 current 已经
-  //: 退到第一个,选择器却还挂着那个不存在的值 —— 显示的和发出去的不是同一个模型。
-  //: 清单还没到时(current 为空)才沿用存着的那个。和写字、念字两块面板同一个做法。
-  const modelValue = current ? `${current.provider_profile_id}:${current.model}` : picked;
+  //: 存着的那个 → 用户设的默认 → 没有(显示「选择模型」,发不出去)。**不拿第一项顶上**:清单按连接名
+  //: 排序,第一项不是谁的选择(见 pickGenerationOption)。
+  const current = pickGenerationOption(options, {
+    saved: picked ? (model) => `${model.provider_profile_id}:${model.model}` === picked : null,
+  });
+  //: 显示的就是**实际要用的**那一个。存着的模型不在清单里(被删了、那条通道停了、不再被认成这种生成)
+  //: 时 current 已经落到默认或空,选择器不能还挂着那个不存在的值 —— 显示的和发出去的不是同一个模型。
+  const modelValue = current ? `${current.provider_profile_id}:${current.model}` : "";
 
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
   //: 对着真机核过的。换模型时跟着换,所以用 key 重挂而不是 useState 记着上一个模型的值。
@@ -922,6 +927,7 @@ export function NodeComposer({
                 className="max-w-[min(15rem,45%)]"
                 icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
                 value={modelValue}
+                placeholder={t("genPickModel")}
                 onChange={(next) => {
                   setPicked(next);
                   const target = options.find((one) => `${one.provider_profile_id}:${one.model}` === next) ?? null;

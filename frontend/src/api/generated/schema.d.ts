@@ -8271,6 +8271,11 @@ export interface components {
              * @default true
              */
             capabilities_known: boolean;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
         };
         /** GenerationSessionCreate */
         GenerationSessionCreate: {

@@ -48,6 +48,9 @@ class GenerationOptionOut(ApiModel):
     #: 界面据此分开两种零:「这个模型确实没有可调参数」和「我们不认识这个模型」——
     #: 合成一个的后果是后者静默地什么都不显示,看起来就像前者。
     capabilities_known: bool = True
+    #: 这是不是**这个人**在这种生成上设的默认模型。选择器据此预选;一项都没标 = 他没设,
+    #: 选择器显示「选择模型」让他选,而不是拿第一项顶上。
+    is_default: bool = False
 
 
 class GenerationModelOut(OrmModel):

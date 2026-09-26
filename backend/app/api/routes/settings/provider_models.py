@@ -10,7 +10,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
 from app.domain import model_limits, provider_models, structured_output, thinking
 from app.domain.provider_credentials import ResolvedConnection
-from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
+from app.domain.providers import normalize_capability_ids
 
 from app.domain.permissions import require_own_profile
 
@@ -191,10 +191,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
                 ),
                 # 和落库后 effective_capabilities 走同一条判据 —— 否则列表里显示的能力
                 # 和加进去之后的能力对不上,而用户是照着列表做的决定。
-                effective_capability_ids=(
-                    provider_models.infer_capabilities(profile.vendor, model_id)
-                    or capability_ids_for_vendor(profile.vendor)
-                ),
+                effective_capability_ids=provider_models.evidenced_capabilities(profile.vendor, model_id),
             )
         )
         known.add(model_id)

@@ -45,7 +45,7 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     它会让一个普通成员看不到**自己那条**连接的地址。根因是那条连接本来就不该出现在他的列表里。
     """
     out = ProviderProfileOut.model_validate(profile)
-    # 连接对外提供的能力 = 它下面所有启用模型能力的并集(没有模型行时回落 vendor 预设)。
+    # 连接出现在哪几个能力分区 = 它下面启用模型的能力 ∪ 供应商预设(见 profile_capabilities)。
     out.capability_ids = provider_models.profile_capabilities(db, profile)
     credential = provider_credentials.get(db, profile.id, user.id)
     out.key_hint = provider_credentials.key_hint(credential)
@@ -399,7 +399,8 @@ def _sync_model_row(db: DbSession, profile: ProviderProfile, incoming: dict[str,
     顺手填一个模型确实是常见流程,但它写进的是 provider_models 的一行,和后来在模型列表里
     加的那些完全平权。
 
-    能力留空,由 effective_capabilities 回落 vendor 预设;用户想细分就去模型列表里改。
+    能力留空,由 effective_capabilities 按证据规则认(认不出的生成模型只当对话模型);
+    用户想细分就去模型列表里改。
     """
     definition = provider_definition(profile.vendor)
     specs = [spec for spec in _field_specs(profile.vendor) if spec.storage == "default_model"]

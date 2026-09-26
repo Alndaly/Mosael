@@ -155,6 +155,7 @@ import {
   maxImages,
   parameterChoiceEntries,
   parseGenerationParameterInput,
+  pickGenerationOption,
   promptMode,
   supportsParameter,
   sourceLimit,
@@ -2797,6 +2798,30 @@ export function NodeInspector({
   /** 是否展开「手动指定 provider/model/类型」。目录里有的模型不需要看见这三项。 */
   const [genCustom, setGenCustom] = React.useState(false);
   const genModel = node.type === "ai_generate" ? generationModelOf(generationModels.data ?? [], config) : null;
+  //: 还没选过模型的生成节点**预选这个人设的默认**(节点定了种类就只认那一种的默认)。没设默认就空着,
+  //: 选择器说「选择要用的生成模型」—— 不拿清单第一项顶上(见 pickGenerationOption)。只填一次:之后
+  //: 用户清掉、换掉都是他的事。
+  const genDefault =
+    node.type === "ai_generate" && !config.provider && !config.model
+      ? config.kind
+        ? pickGenerationOption(generationModels.data ?? [], { kind: String(config.kind) })
+        : pickGenerationOption(generationModels.data ?? [], { kind: "image" }) ??
+          pickGenerationOption(generationModels.data ?? [])
+      : null;
+  const preselectedFor = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!genDefault || preselectedFor.current === node.id) return;
+    preselectedFor.current = node.id;
+    onChange({
+      config: {
+        ...config,
+        provider_profile_id: genDefault.provider_profile_id,
+        provider: genDefault.provider,
+        model: genDefault.model,
+        kind: genDefault.kind,
+      },
+    });
+  }, [genDefault, node.id, config, onChange]);
   //: 这个模型对提示词的要求:不收的把「提示词」一格藏起来,可以不写的说一句,要写的标必填
   //: (节点声明里不再标必填 —— 那是按模型变的,见后端 NODE_TYPES 的 ai_generate)。
   const genPromptMode = promptMode(genModel);

@@ -173,10 +173,33 @@ def resolve_generation_model(
         and (provider_profile_id is None or row.provider_profile_id == provider_profile_id)
     ]
     if not matches:
+        # 分开两种「选不到」:行在、启用着,只是**没被认成能做这件事** —— 那是能力标签的事,
+        # 说「未启用或不存在」会把人支去一个根本没问题的开关那里。常见来源:以前被预设兜底
+        # 认成生图模型的对话模型,存在画板格、工作流节点或定时任务里(见 evidenced_capabilities)。
+        if kind in KINDS and _owned_row_lacks_kind(
+            db, user_id=user_id, provider=provider, model=model, provider_profile_id=provider_profile_id
+        ):
+            raise GenerationResolutionError(f"genErr_modelLacksKind_{kind}", model=model)
         raise GenerationResolutionError("genErr_modelNotEnabled")
     if len(matches) > 1:
         raise GenerationResolutionError("genErr_modelAmbiguous")
     return resolve_row(db, matches[0], kind)
+
+
+def _owned_row_lacks_kind(
+    db: Session, *, user_id: str | None, provider: str, model: str, provider_profile_id: str | None
+) -> bool:
+    """他自己的、启用着的连接下有这一行模型,只是它的能力里没有所问的那种生成。"""
+    return any(
+        row.model_id == model
+        and row.enabled
+        and row.profile is not None
+        and row.profile.enabled
+        and (user_id is None or row.profile.owner_user_id == user_id)
+        and (provider_profile_id is not None or row.profile.vendor == provider)
+        and (provider_profile_id is None or row.provider_profile_id == provider_profile_id)
+        for row in db.scalars(select(ProviderModel).where(ProviderModel.model_id == model))
+    )
 
 
 def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[dict[str, Any]]:
@@ -191,7 +214,12 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
     (vendor, model, kind) 经 resolve_row 解析(声明 → 目录 → 兜底),适配器可用性问
     get_generation_adapter。适配器不可用的照样列出但标出来 —— 藏起来的话,用户配好了
     却找不到,只会以为是自己配错了。
+
+    `is_default` 标出**这个人**在这种生成上设的默认(provider_models.resolve_default,和「没点名
+    模型时用哪个」是同一个答案)。选择器据此预选;没有默认就一项都不标 —— 选择器让人选,
+    而不是拿排在第一的那个顶上(第一个只是按连接名排序的结果,不是谁的选择)。
     """
+    default = provider_models.resolve_default(db, kind, user_id)
     options: list[dict[str, Any]] = []
     for row in provider_models.models_for_capability(db, kind, user_id=user_id):
         resolved = resolve_row(db, row, kind)
@@ -207,6 +235,7 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
                 "capabilities": _for_reader(resolved.capabilities),
                 "capabilities_known": resolved.capabilities_known,
                 "adapter_available": get_generation_adapter(resolved.provider, kind) is not None,
+                "is_default": default is not None and default.id == row.id,
             }
         )
     options.sort(key=lambda item: (item["profile_name"], item["model"]))

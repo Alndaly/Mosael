@@ -16,7 +16,7 @@ it("edits parameters in the settings popup, persists them after closing, and sub
   const onFormChange = vi.fn();
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise" } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {
       parameter_keys: ["aspect_ratio", "generate_audio"], aspect_ratios: ["16:9", "9:16"], default_aspect_ratio: "16:9",
     } } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={onFormChange} onSubmit={onSubmit}
@@ -41,7 +41,7 @@ it("把模型旁那枚图标画在触发器里面 —— 装饰和控件必须�
   // 正是那两个高亮框合成一个的充分条件 —— 内边距、hover、焦点环都由触发器这一个盒子出。
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise" } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={vi.fn()}
   />);
   const trigger = screen.getAllByRole("combobox").find((one) => one.textContent?.includes("a-long-video-model-name"));
@@ -57,7 +57,7 @@ it("认不出参数时要出声,而不是和「确实没有参数」一样静默
   // 同一个模型)。两者都静默的话,用户会以为这个模型就是没参数 —— 今天就是这么错的。
   const model = (known: boolean) => ({
     id: "m", provider_profile_id: "p", profile_name: "T", label: "L",
-    adapter_available: true, capabilities_known: known,
+    adapter_available: true, is_default: true, capabilities_known: known,
     provider: "test", model: "some-image-model", kind: "image", capabilities: { parameter_keys: [] },
   } as GenerationOption);
   const props = {
@@ -76,13 +76,13 @@ it("认不出参数时要出声,而不是和「确实没有参数」一样静默
   expect(screen.queryByRole("button", { name: "boardGenerationSettings" })).not.toBeInTheDocument();
 });
 
-it("存着的模型已经不在可选清单里时,选择器显示的就是实际要用的那一个", () => {
-  // 节点表单记着上次用的模型,而那个模型后来被删了(或那条通道被停了)。提交时用的是清单里的
-  // 第一个,选择器却还挂着那个已经不存在的值 —— 显示的和发出去的不是同一个模型。
+it("存着的模型已经不在可选清单里时,选择器显示的就是实际要用的那一个(用户设的默认)", () => {
+  // 节点表单记着上次用的模型,而那个模型后来被删了(或那条通道被停了、不再被认成这种生成)。
+  // 提交时用的是用户设的默认,选择器却还挂着那个已经不存在的值 —— 显示的和发出去的不是同一个模型。
   const onSubmit = vi.fn();
   render(<NodeComposer
     item={{ id: "video", kind: "video", text: "A sunrise", form: { prompt: "A sunrise", provider_profile_id: "gone", model: "retired-model" } } as BoardItem}
-    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
+    models={[{ id: "model", provider_profile_id: "profile", profile_name: "Test", label: "Video", adapter_available: true, is_default: true, capabilities_known: true, provider: "test", model: "a-long-video-model-name", kind: "video", capabilities: {} } as GenerationOption]}
     busy={false} workspaceId="test" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
   />);
 
@@ -90,6 +90,27 @@ it("存着的模型已经不在可选清单里时,选择器显示的就是实际
   expect(trigger).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ model: "a-long-video-model-name" }));
+});
+
+it("没设默认模型时不拿清单第一项顶上:显示「选择模型」,选了才发得出去", () => {
+  // 清单按连接名排序,第一项不是谁的选择 —— 画板的出图格就是这么默认挑中了 147ai 上的
+  // claude-opus-4-6,而用户在设置里设过的默认生图模型被晾在一边。
+  const onSubmit = vi.fn();
+  const option = (model: string) => ({
+    id: model, provider_profile_id: "relay", profile_name: "147ai", label: model,
+    adapter_available: true, is_default: false, capabilities_known: true,
+    provider: "openai-compatible", model, kind: "image", capabilities: {},
+  } as GenerationOption);
+  render(<NodeComposer
+    item={{ id: "image", kind: "image", text: "一只猫" } as BoardItem}
+    models={[option("aaa-first-by-name"), option("my-flux")]}
+    busy={false} workspaceId="w" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
+  />);
+  const trigger = screen.getAllByRole("combobox").find((one) => one.textContent?.includes("genPickModel"));
+  expect(trigger).toBeDefined();
+  expect(screen.queryByText(/aaa-first-by-name/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).not.toHaveBeenCalled();
 });
 
 it("目录没给取值时,用户没填就一个值都不提交", async () => {
@@ -103,7 +124,7 @@ it("目录没给取值时,用户没填就一个值都不提交", async () => {
     item={{ id: "video", kind: "video", text: "一段风景" } as BoardItem}
     models={[{
       id: "m", provider_profile_id: "p", profile_name: "T", label: "L",
-      adapter_available: true, capabilities_known: false,
+      adapter_available: true, is_default: true, capabilities_known: false,
       provider: "relay", model: "上游昨天刚上的型号", kind: "video",
       capabilities: { parameter_keys: ["size", "resolution", "aspect_ratio", "duration_seconds"] },
     } as GenerationOption]}

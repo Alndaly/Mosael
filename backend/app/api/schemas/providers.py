@@ -19,9 +19,9 @@ class ProviderModelOut(ApiModel):
 
     id: str
     display_name: str = ""
-    #: 该模型能干什么。为空表示跟随 vendor 预设(回填来的老行、以及还没细分过的连接)。
+    #: 用户在这一行上**写下的**能力。为空 = 没写,按 provider_models.evidenced_capabilities 认。
     capability_ids: list[str] = Field(default_factory=list)
-    #: 生效能力(已回落 vendor 预设)。界面显示这个,而 capability_ids 是"用户填了什么"。
+    #: 生效能力(没写时是证据规则认出来的那份)。界面显示这个,而 capability_ids 是"用户填了什么"。
     effective_capability_ids: list[str] = Field(default_factory=list)
     enabled: bool = True
     configured: bool = False

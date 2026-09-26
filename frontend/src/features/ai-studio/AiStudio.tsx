@@ -72,6 +72,7 @@ import {
   sizeOptions,
   maxImages,
   parameterChoiceEntries,
+  pickGenerationOption,
   supportsParameter,
   sourceLimit,
   exclusiveSourceGroups,
@@ -108,7 +109,6 @@ import {
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 
-type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
@@ -262,12 +262,6 @@ function findGenerationOption(
   return options.find((option) => option.value === generationOptionValue(providerProfileId, kind, model)) ?? null;
 }
 
-function defaultGenerationOption(options: GenerationEngineOption[], defaults: ProviderDefault[], kind: "image" | "video" | "audio") {
-  const row = defaults.find((item) => item.capability === kind);
-  if (!row?.provider_profile_id || !row.model) return null;
-  return findGenerationOption(options, row.provider_profile_id, kind, row.model);
-}
-
 //: 生成分两页:图片/视频是按会话迭代的(同一个提示词改几轮),音频是一次一份、直接进素材库。
 const STUDIO_TABS = ["chat", "generate", "audio"] as const;
 type StudioTab = (typeof STUDIO_TABS)[number];
@@ -360,10 +354,6 @@ function GenerateWorkspace({
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
   });
-  const defaults = useQuery({
-    queryKey: ["provider-defaults"],
-    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
-  });
   const jobs = useQuery({
     queryKey: ["jobs", workspace.id, "ai_generation"],
     queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&kind=ai_generation`),
@@ -409,8 +399,13 @@ function GenerateWorkspace({
     activeSession?.provider_profile_id && activeSession.model && activeSession.kind
       ? findGenerationOption(modelOptions, activeSession.provider_profile_id, activeSession.kind, activeSession.model)
       : null;
-  const defaultImageOption = defaultGenerationOption(modelOptions, defaults.data ?? [], "image");
-  const selectedModel = (modelId ? optionByValue.get(modelId) : null) ?? sessionOption ?? defaultImageOption ?? modelOptions[0] ?? null;
+  //: 这次挑的 → 会话记着的 → 用户设的默认(先图像,没有就随便哪一种生成的默认)→ 没有。**不拿第一项顶上**:
+  //: 没设默认时选择器显示「选择模型」,等人选(见 pickGenerationOption)。
+  const selectedModel =
+    (modelId ? optionByValue.get(modelId) : null) ??
+    sessionOption ??
+    pickGenerationOption(modelOptions, { kind: "image" }) ??
+    pickGenerationOption(modelOptions);
   const generationModelsLoading = imageOptions.isPending || videoOptions.isPending || audioOptions.isPending;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
   const selectedSizes = sizeOptions(selectedModel);
@@ -864,7 +859,7 @@ function GenerateWorkspace({
         </div>
 
         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-6 overflow-y-auto overflow-x-hidden p-4">
-          {!selectedModel && !generationModelsLoading && (
+          {modelOptions.length === 0 && !generationModelsLoading && (
             <ConfigNotice
               message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel("image"))}
               actionLabel={t("wfGoConfigure")}
@@ -890,28 +885,33 @@ function GenerateWorkspace({
               {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
             </div>
           )}
+          {/* 模型选择器**有模型就摆出来**,哪怕还没选中任何一个:没设默认时它显示「选择模型」等人选,
+              而不是拿清单第一项顶上 —— 那样选中的就不是谁的选择(见 pickGenerationOption)。 */}
+          {modelOptions.length > 0 && (
+            <ParameterSection icon={Cpu} title={t("genSectionEngine")}>
+              <ParameterField label={t("wfModelPreset")}>
+                {/* 模型清单按能力分组,且**一定**是长清单 —— 直接给可搜索的那一版,不走阈值。
+                    每行的图标撤了:它编码的是"图片还是视频",而分组标题已经说了同一件事,
+                    搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
+                <SearchableSelect
+                  value={selectedModel?.value ?? ""}
+                  onValueChange={selectEngine}
+                  options={modelGroups.flatMap((group) =>
+                    group.models.map((model) => ({
+                      value: model.value,
+                      label: model.label,
+                      group: capabilityLabel(group.kind),
+                    })),
+                  )}
+                  placeholder={t("genPickModel")}
+                  emptyText={t("cmdkEmpty")}
+                  className={PARAMETER_CONTROL_CLASS}
+                />
+              </ParameterField>
+            </ParameterSection>
+          )}
           {selectedModel && (
             <>
-              <ParameterSection icon={Cpu} title={t("genSectionEngine")}>
-                <ParameterField label={t("wfModelPreset")}>
-                  {/* 模型清单按能力分组,且**一定**是长清单 —— 直接给可搜索的那一版,不走阈值。
-                      每行的图标撤了:它编码的是"图片还是视频",而分组标题已经说了同一件事,
-                      搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
-                  <SearchableSelect
-                    value={selectedModel.value}
-                    onValueChange={selectEngine}
-                    options={modelGroups.flatMap((group) =>
-                      group.models.map((model) => ({
-                        value: model.value,
-                        label: model.label,
-                        group: capabilityLabel(group.kind),
-                      })),
-                    )}
-                    emptyText={t("cmdkEmpty")}
-                    className={PARAMETER_CONTROL_CLASS}
-                  />
-                </ParameterField>
-              </ParameterSection>
 
               {/* 出片规格 = "出多大、出几张、出多久、带不带声" —— 看一眼就知道成片长什么样的那几栏。
                   怎么出(seed、反向提示词、各家自己加的开关)在下面那块。 */}

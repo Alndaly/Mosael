@@ -9,20 +9,22 @@
 
 **能力在模型上而不是连接上**:同一个端点既可能有对话模型也可能有生图模型,挂在连接上就只能
 二选一 —— 这正是此前用户被迫"拿模型名当档案名"建一堆档案的原因。模型行的 capability_ids
-为空时回落 vendor 预设,让老数据和"没细分过"的连接仍然work。
+为空时按 `evidenced_capabilities` 那一条规则认 —— **生成能力要有正面证据**,供应商预设只替
+对话作保(见那个函数的说明)。
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from typing import Any, Literal
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core.i18n import tr
-from app.db.models import ProviderModel, ProviderProfile
+from app.db.models import GenerationCapabilityDeclaration, ProviderModel, ProviderProfile
 from app.domain import thinking
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
@@ -48,13 +50,36 @@ _CAPABILITY_HINTS: dict[str, tuple[tuple[tuple[str, ...], str], ...]] = {
         (("cosyvoice", "-tts", "tts-"), "tts"),
         (("-image", "image-", "wanx"), "image"),
     ),
+    #: OpenAI 自家的命名是定死的:`tts-1` / `gpt-4o-mini-tts` 念字,`gpt-image-*` / `dall-e-*` 出图。
+    #: 生成能力不再由预设兜底之后,认不出它们就等于把 OpenAI 的配音和生图模型当成对话模型。
+    "openai": (
+        (("tts",), "tts"),
+        (("gpt-image", "dall-e"), "image"),
+    ),
+    #: 中转上的 OpenAI 图像模型叫同一个名字,走同一个 `/images/generations`。只写这一族 ——
+    #: 中转上别的名字(gemini-*-image、nano-banana …)各家接法不一,由用户在模型行上标。
+    "openai-compatible": (
+        (("gpt-image", "dall-e"), "image"),
+    ),
 }
+
+#: 没有正面证据时,**多能力**供应商的预设只替这几种能力作保。
+#:
+#: 只有对话。理由是两种错的代价不对称:聚合端点(OpenAI 兼容、OpenRouter 一类)挂的几十上百个模型
+#: 绝大多数是对话模型,把一个认不出的模型当对话模型,错的时候是少数、而且它本来就在对话下拉里
+#: 被人挑来挑去;把它当成生成模型,它会出现在**每一个**生图 / 视频 / 音乐 / 配音入口里,选了
+#: 必然失败 —— `claude-opus` 出现在画板的出图下拉里就是这么来的。
+#:
+#: 语音合成(tts)**不在这里**,和图像、视频、音频一样要证据:它的消费方(`model_id_for` 替引擎挑
+#: 模型)会把"这条连接下第一个带 tts 的模型"直接发去念字,预设兜底的话那就是一个对话模型。
+#: 播客只有单能力的连接在做,由下面「预设只有一种能力」那条覆盖。
+PRESET_FALLBACK_CAPABILITIES: tuple[str, ...] = ("chat",)
 
 
 def infer_capabilities(vendor: str, model_id: str) -> list[str]:
     """从模型名推它提供哪种能力;推不出来回空。
 
-    存在的理由:`effective_capabilities` 原本在行上没写能力时回落**整个 vendor 的能力集**。
+    存在的理由:`effective_capabilities` 曾经在行上没写能力时回落**整个 vendor 的能力集**。
     那在一家只有一两种能力时无害,而百炼有四种(对话/图像/视频/语音)—— 于是从目录里加一个
     qwen-tts 模型会被声明成"也能做视频",它随即出现在视频生成的下拉里,选了必然失败。
     界面替供应商撒谎,而用户只会以为是自己配错了。
@@ -76,12 +101,63 @@ def infer_capabilities(vendor: str, model_id: str) -> list[str]:
     return []
 
 
-def effective_capabilities(model: ProviderModel) -> list[str]:
-    """模型实际生效的能力。
+def evidenced_capabilities(
+    vendor: str,
+    model_id: str,
+    *,
+    declared_kinds: Iterable[str] | Callable[[], Iterable[str]] = (),
+) -> list[str]:
+    """模型行**没写能力**时,它凭什么被认成能做什么。**这一条规则只在这里。**
 
-    顺序:行上写了的 → 从模型名推出来的 → vendor 预设。最后那条是兜底,不至于因为"没填"
-    就变成"什么都不能做";但它给的是**整个 vendor 的能力集**,所以能推出来的时候不要用它
-    (见 infer_capabilities 里那段说明)。
+    生成能力(图像 / 视频 / 音频)和语音合成要**正面证据**,依次认:
+
+      1. 内置目录认得这个模型(`infer_capabilities`:目录里登记过的,或该家定死的命名);
+      2. 连接自己声明过(插件目录刷新时写下的 `declared_capabilities`),或者用户给这一行写过
+         某种生成的参数契约(`GenerationCapabilityDeclaration`)—— `declared_kinds` 就是这两者的并集
+         (可以给一个无参函数:目录认得的时候就不必去查库);
+      3. 供应商预设**只有一种能力**(火山语音、火山播客、火山音乐……):连接本身就是证据。
+
+    都没有时,多能力预设只替 `PRESET_FALLBACK_CAPABILITIES` 作保(今天只有对话)。认不出的模型于是
+    **不出现在任何生成入口里**;要用它出图,在设置里给这一行标上能力 —— 那一格写的就是模型行的
+    `capability_ids`,它排在这整条规则之前。
+
+    此前兜底的是**整个预设**:OpenAI 兼容端点的预设是「对话 + 图像」,于是 147ai / Ollama 上的
+    每一个对话模型都是生图模型;Evolink 的预设是「图像 + 视频 + 音频」,于是它上面一个认不出的
+    视频模型同时出现在三个生成下拉里。界面替供应商撒谎,而用户只会以为是自己配错了。
+    """
+    inferred = infer_capabilities(vendor, model_id)
+    if inferred:
+        return inferred
+    from app.domain.generation.catalog import GENERATION_KINDS
+
+    named = set(declared_kinds() if callable(declared_kinds) else declared_kinds)
+    declared = [kind for kind in GENERATION_KINDS if kind in named]
+    if declared:
+        return declared
+    preset = capability_ids_for_vendor(vendor)
+    if len(preset) == 1:
+        return preset
+    return [capability for capability in preset if capability in PRESET_FALLBACK_CAPABILITIES]
+
+
+def _declared_kinds(model: ProviderModel) -> list[str]:
+    """这一行上**别人替它说过**的生成种类:连接的声明 + 用户写下的参数契约。"""
+    kinds = [str(kind) for kind in (model.declared_capabilities or {})]
+    session = object_session(model)
+    if session is not None and model.id:
+        kinds += session.scalars(
+            select(GenerationCapabilityDeclaration.kind).where(
+                GenerationCapabilityDeclaration.provider_model_id == model.id
+            )
+        ).all()
+    return kinds
+
+
+def effective_capabilities(model: ProviderModel) -> list[str]:
+    """模型实际生效的能力:行上写了的,否则按 `evidenced_capabilities`。
+
+    所有消费方(生成选择器、默认模型、工作流模板、智能体、价格预填)都读这里 —— 不要在别处再拼
+    一遍「行上的 → 推出来的 → 预设」。
     """
     own = normalize_capability_ids(model.capability_ids or [])
     if own:
@@ -89,8 +165,9 @@ def effective_capabilities(model: ProviderModel) -> list[str]:
     profile = model.profile
     if profile is None:
         return []
-    inferred = infer_capabilities(profile.vendor, model.model_id)
-    return inferred or capability_ids_for_vendor(profile.vendor)
+    return evidenced_capabilities(
+        profile.vendor, model.model_id, declared_kinds=lambda: _declared_kinds(model)
+    )
 
 
 def list_models(db: Session, profile_id: str, *, enabled_only: bool = False) -> list[ProviderModel]:
@@ -181,7 +258,15 @@ def resolve_default(db: Session, capability: str, user_id: str | None = None) ->
     row = get_row(db, capability, user_id)
     if row is not None and row.provider_model_id:
         model = db.get(ProviderModel, row.provider_model_id)
-        if model is not None and model.enabled and model.profile is not None and model.profile.enabled:
+        # 指着的那一行**得真能做这件事**:用户后来把它的这项能力摘掉了,它就不再是这项能力的默认
+        # —— 回 None,调用方照「没设默认」说清楚,而不是把一个对话模型发去出图。
+        if (
+            model is not None
+            and model.enabled
+            and model.profile is not None
+            and model.profile.enabled
+            and capability in effective_capabilities(model)
+        ):
             return model
     return None
 
@@ -329,14 +414,19 @@ def model_id_for_family(
 
 
 def profile_capabilities(db: Session, profile: ProviderProfile) -> list[str]:
-    """这条连接对外提供的能力 = 它下面所有启用模型能力的并集。
+    """这条连接出现在哪几个能力分区 = 它下面启用模型的能力 ∪ 供应商预设说它能做的。
 
-    还没有任何模型行时回落 vendor 预设 —— 刚建好的连接应当能出现在对应的能力分区里,
-    否则用户会看到"我建了个 Kimi 档案,但对话那栏找不到它"。
+    模型的能力排在前面(那是实际在用的)。预设要并进来,是因为生成能力不再由预设兜底
+    (见 evidenced_capabilities):一条 OpenAI 兼容连接上的模型全认成了对话模型之后,只按模型
+    求并集的话它会从「AI 绘图」分区里消失 —— 而用户正是要去那里给其中能出图的那个标上能力。
+    刚建好、还没有模型行的连接也因此照常出现在对应分区里。
     """
     seen: list[str] = []
     for model in list_models(db, profile.id, enabled_only=True):
         for capability in effective_capabilities(model):
             if capability not in seen:
                 seen.append(capability)
-    return seen or capability_ids_for_vendor(profile.vendor)
+    for capability in capability_ids_for_vendor(profile.vendor):
+        if capability not in seen:
+            seen.append(capability)
+    return seen

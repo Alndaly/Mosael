@@ -61,7 +61,11 @@ function DefaultRow({
         method: "PUT",
         body: JSON.stringify(patch),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["provider-defaults"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
+      // 生成选择器按 `is_default` 预选 —— 换了默认,那边要跟着换。
+      void qc.invalidateQueries({ queryKey: ["generation-options"] });
+    },
   });
 
   return (

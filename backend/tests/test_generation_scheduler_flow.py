@@ -302,6 +302,9 @@ def test_设置页加了什么_生成页就有什么() -> None:
         client, "openai-compatible", "中转", [],
         base_url="https://relay.example/v1", api_key="sk-test", default_model="my-image-alias",
     )
+    # 中转上的别名目录认不出来:没标能力之前它只当对话模型,不进生成页(生成能力要有证据)。
+    assert client.get("/api/generation/options?kind=image").json() == []
+    client.patch(f"/api/settings/providers/{profile_id}/models/my-image-alias", json={"capability_ids": ["image"]})
 
     options = client.get("/api/generation/options?kind=image").json()
     assert [(o["provider_profile_id"], o["model"]) for o in options] == [(profile_id, "my-image-alias")]

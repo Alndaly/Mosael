@@ -69,6 +69,7 @@ function audioOption(capabilities: Record<string, unknown>) {
     capabilities,
     capabilities_known: true,
     adapter_available: true,
+    is_default: true,
   };
 }
 

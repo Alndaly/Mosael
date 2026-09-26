@@ -2,7 +2,7 @@
 title: Model connections
 description: Connect your model services, choose defaults and configure cost estimates.
 order: 1
-updated: 2026-09-25
+updated: 2026-09-26
 version: 1.6.0
 ---
 
@@ -19,7 +19,7 @@ Settings groups AI providers into four **capability sections**, each configured 
 | **AI Video** | text-to-video generation |
 | **AI Audio** | TTS voiceover / podcast synthesis / music and sound generation |
 
-At the top of each section is the **default model**: the default provider and model for that capability, overridable in place wherever it's used. The dropdown lists **models** (e.g. "DeepSeek · deepseek-v4-pro"), not providers — several models under one provider each appear on their own.
+At the top of each section is the **default model**: the default provider and model for that capability. Boards, AI Studio and workflow generation nodes **preselect** it, and you can switch in place. With no default set, those pickers show "Choose a model" and wait for you to pick one — they never fall back to whichever model happens to be listed first. The dropdown lists **models** (e.g. "DeepSeek · deepseek-v4-pro"), not providers — several models under one provider each appear on their own.
 
 ![Settings → AI chat: default model and provider configuration](/media/screens/en/settings-models.png)
 
@@ -102,13 +102,36 @@ Expand a provider row:
 - **Add a model**: the "Add model…" field at the bottom is a **searchable** input listing catalog models you haven't configured yet. Catalogs run to hundreds of entries , so it searches rather than scrolls. Models absent from the catalog — private deployments, aliases — can simply be **typed in**; they work exactly like catalog ones and are only badged "not in catalog".
 - **Enable / disable** a single model with the switch. Disabled models disappear from the default-model dropdown and every model picker.
 - **Model settings** (gear icon):
-  - **Capabilities**: which sections this model serves (chat / image / video / tts / podcast). Empty means "follow the vendor preset". This is how one endpoint expresses "a chat model *and* an image model".
+  - **Capabilities**: which sections this model serves (chat / image / video / music & SFX / speech / podcast). Untagged models are detected automatically, see "Capability tags" below. This is how one endpoint expresses "a chat model *and* an image model".
   - **Context window**: decides how long a conversation can run before compaction kicks in. Defaults to the vendor catalog; when the catalog doesn't know the model, a conservative 32000 is used and you can override it. The line underneath says whether the current value is **yours, the catalog's, or the fallback**.
   - **Advanced** (collapsed): four compatibility switches — reasoning model, vision, reasoning effort, developer role. You only come here when an endpoint rejects a request; normally none of them need touching.
   - **Where parameters come from** (image/video models only; a model with both capabilities configures each separately): see the next section.
 - **Delete** with the trash icon.
 
 > The context window and the compatibility switches only show for **chat** models — asking an image model whether it supports the developer role is noise.
+
+## Capability tags: which models reach the generation pickers
+
+The small tags on a model row (chat, image, video…) are that model's **capabilities**, and they decide which pickers it appears in.
+Click the tags to change them; dashed tags were **detected automatically**, solid ones are tags you set.
+
+Untagged models are read by one rule:
+
+- **Generation (image / video / music & SFX) and speech need evidence**: the built-in catalog knows the model (e.g. `gpt-image-2`,
+  Wan, Seedance, Suno), the connection itself declares it (plugin-provided models), you've written a "where parameters come from"
+  for that kind on it, or the provider only does that one thing (Volcano speech, Volcano music).
+- **Everything else counts as a chat model only** — provided the provider does chat at all. On generation-only providers such as
+  Evolink or Ark, an unrecognised model is nothing and stays out of every picker.
+
+So chat models on OpenAI-compatible endpoints (147ai, Ollama, relays) **no longer** show up in the board's or AI Studio's image
+picker. Conversely, a relay model that does make images but isn't in the built-in catalog needs an "Image" tag before it appears;
+the model list says so at the top: "Models on this connection count as chat models by default. Tag the ones that make images or
+videos here".
+
+When upgrading, untagged models from before this change get the rule's answer **written down as tags**. A capability stays if you
+set the model as that capability's default or it has actually produced an image / video, and tags you set yourself are never
+touched. A saved selection (a board cell, a workflow node) that points at a model which lost the capability shows "Choose a model",
+and submitting explains that the model isn't tagged for it — pick another model or tag it.
 
 ## Where an image/video model's parameters come from
 

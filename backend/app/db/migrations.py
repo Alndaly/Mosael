@@ -3533,6 +3533,138 @@ def _forget_comfyui_run_workflow_tool() -> None:
                 )
 
 
+def _migrate_generation_capabilities_need_evidence() -> None:
+    """生成能力要有正面证据(见 domain/provider_models.evidenced_capabilities):把**没写能力**的模型行按新规则
+    认出来的能力**写进** `capability_ids`,让设置页的能力标签和选择器看的是同一份、看得见也改得了。
+
+    此前行上没写能力时兜底的是整个供应商预设:OpenAI 兼容连接(147ai、Ollama)上的每个对话模型都是生图模型,
+    Evolink 上一个认不出的模型同时是图像、视频和音乐模型 —— 画板的出图下拉里于是列着 `claude-opus-4-6`。
+
+    - **写过能力的行一概不碰**:那是用户的话,哪怕和新规则不一致;
+    - 没写的行,落成新规则的结果:目录认得的按目录,连接声明过 / 用户写过参数契约的按那几种,单能力供应商按
+      那一种,其余只剩对话(多能力预设里有对话的话)。聚合连接上认不出的模型因此变成**只当对话模型**;
+    - 但**用户用行动说过**它能做的那几种,照旧保留(只限旧规则当时确实给了的那几种):
+        · 他把这一行设成了这种能力的**默认模型**;
+        · 这一行在这种生成上**真的出过东西**(生成历史里有产出、或那一趟任务成功了);
+        · 他在这一行上写过旧版的「参数按什么来」(`generation_capability_ref`),而它解析得到这种生成。
+      于是一个在中转上跑通了的生图模型不会因为名字没登记就从下拉里消失;
+    - 新规则什么都认不出、也没有用户证据的行(Evolink 上认不出的模型)留空 —— 空就是"按规则认",而规则
+      认不出它,它不进任何下拉,设置里标上能力即可;
+    - 存着的**模型选择**(画板格、工作流节点、定时任务、AI 工作台会话)不改:指着一个不再能做这件事的模型时,
+      选择器显示「选择模型」,生成漏斗报「没有标上这项能力」(genErr_modelLacksKind_*),不会崩。
+
+    规则本身取领域里那一份,不在这里抄:这一步的意思就是"把现在这条规则的答案写下来",抄一份只会让两边
+    分岔。幂等:第二次跑时这些行都已经写了能力,第一条就跳过;留空的那些再算一遍还是空。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "provider_models" not in tables or "provider_profiles" not in tables:
+        return
+    from app.domain.generation.catalog import GENERATION_KINDS, resolve_capability_ref
+    from app.domain.provider_models import evidenced_capabilities, infer_capabilities
+    from app.domain.providers import ALL_CAPABILITY_IDS, capability_ids_for_vendor
+
+    def loads(raw: Any, fallback: Any) -> Any:
+        if raw is None:
+            return fallback
+        if not isinstance(raw, str):
+            return raw
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return fallback
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT m.id, m.model_id, m.capability_ids, m.declared_capabilities, m.generation_capability_ref,"
+                " m.provider_profile_id, p.vendor FROM provider_models m"
+                " JOIN provider_profiles p ON p.id = m.provider_profile_id"
+            )
+        ).mappings().all()
+
+        declaration_kinds: dict[str, set[str]] = {}
+        if "generation_capability_declarations" in tables:
+            for model_row_id, kind in conn.execute(
+                text("SELECT provider_model_id, kind FROM generation_capability_declarations")
+            ).all():
+                declaration_kinds.setdefault(str(model_row_id), set()).add(str(kind))
+
+        #: 用户用行动说过的:模型行 id → 能力。
+        acted: dict[str, set[str]] = {}
+        if "provider_defaults" in tables:
+            for capability, model_row_id in conn.execute(
+                text("SELECT capability, provider_model_id FROM provider_defaults WHERE provider_model_id IS NOT NULL")
+            ).all():
+                acted.setdefault(str(model_row_id), set()).add(str(capability))
+        produced: set[tuple[str, str, str]] = set()
+        if "generation_jobs" in tables:
+            succeeded = " OR g.job_id IN (SELECT id FROM jobs WHERE status = 'succeeded')" if "jobs" in tables else ""
+            for profile_id, model_name, kind in conn.execute(
+                text(
+                    "SELECT DISTINCT g.provider_profile_id, g.model, g.kind FROM generation_jobs g"
+                    f" WHERE g.provider_profile_id IS NOT NULL AND (g.result_asset_id IS NOT NULL{succeeded})"
+                )
+            ).all():
+                produced.add((str(profile_id), str(model_name), str(kind)))
+        custom_profiles: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
+        if "generation_capability_profiles" in tables:
+            for template_id, profile_id, kind, capabilities in conn.execute(
+                text("SELECT id, provider_profile_id, kind, capabilities FROM generation_capability_profiles")
+            ).all():
+                by_kind = custom_profiles.setdefault(str(profile_id), {}).setdefault(str(kind), {})
+                by_kind[str(template_id)] = loads(capabilities, {}) or {}
+
+        written = narrowed = 0
+        for row in rows:
+            own = [one for one in (loads(row["capability_ids"], []) or []) if one in ALL_CAPABILITY_IDS]
+            if own:
+                continue
+            row_id = str(row["id"])
+            vendor = str(row["vendor"] or "")
+            model_name = str(row["model_id"] or "")
+            profile_id = str(row["provider_profile_id"])
+            declared = loads(row["declared_capabilities"], {}) or {}
+            evidence = set(declaration_kinds.get(row_id, set()))
+            if isinstance(declared, dict):
+                evidence |= {str(kind) for kind in declared}
+            capabilities = evidenced_capabilities(vendor, model_name, declared_kinds=evidence)
+
+            before = infer_capabilities(vendor, model_name) or capability_ids_for_vendor(vendor)
+            ref = str(row["generation_capability_ref"] or "").strip()
+            for capability in before:
+                if capability in capabilities:
+                    continue
+                if (
+                    capability in acted.get(row_id, set())
+                    or (profile_id, model_name, capability) in produced
+                    or (
+                        bool(ref)
+                        and capability in GENERATION_KINDS
+                        and resolve_capability_ref(
+                            ref, capability, custom=custom_profiles.get(profile_id, {}).get(capability)
+                        )
+                        is not None
+                    )
+                ):
+                    capabilities.append(capability)
+            lost = [one for one in before if one not in capabilities and one in (*GENERATION_KINDS, "tts")]
+            if lost:
+                narrowed += 1
+                logger.info(
+                    "模型 %s(%s 连接)没有「能做 %s」的证据,不再出现在对应的生成入口里;要用它就在设置里标上",
+                    model_name, vendor, "/".join(lost),
+                )
+            if not capabilities:
+                continue
+            conn.execute(
+                text("UPDATE provider_models SET capability_ids = :caps WHERE id = :id"),
+                {"caps": json.dumps(capabilities), "id": row_id},
+            )
+            written += 1
+        if written or narrowed:
+            logger.info("模型能力落成显式标签:%d 行写下了能力,其中 %d 行收窄了生成能力", written, narrowed)
+
+
 def _rewrite_replaced_plugin_tools() -> None:
     """工作流里、画板工具格上存着的、已被插件运行时报出的新工具取代的老插件节点,改写成新工具(见
     domain/workflows/plugin_references 与 domain/boards/plugin_references)。ComfyUI 的 `run_workflow` + 某张工作流 → 那张工作流自己的工具。
@@ -4257,6 +4389,9 @@ def migration_plan() -> MigrationPlan:
                 # ComfyUI 插件删掉了通用的 run_workflow:清掉只挂着这个工具名的开关和会话放行;
                 # 存着的节点由下面的对账按插件报出的清单改。
                 _forget_comfyui_run_workflow_tool,
+                # 生成能力要有正面证据:没写能力的模型行按新规则落成显式标签。排在 ComfyUI 那几步之后 ——
+                # 插件连接的模型行由它们建好、自带能力,这里一概不碰。
+                _migrate_generation_capabilities_need_evidence,
             ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),

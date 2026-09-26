@@ -339,8 +339,15 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 `provider_profiles` 删除,替代品是模型行;此前散在二十来处的 `profile.default_model` 统一收敛到
 `provider_models.model_id_for(db, profile, capability)`。
 
-- **能力在模型上**。模型行的 `capability_ids` 留空时回落 vendor 预设(`domain/providers.py`),
-  让回填来的老数据和"还没细分过"的连接继续可用。连接对外提供的能力 = 其下启用模型能力的并集。
+- **能力在模型上**。模型行的 `capability_ids` 是用户写下的能力;留空时按
+  `provider_models.evidenced_capabilities` 那**一条**规则认:生成能力(图像 / 视频 / 音频)和语音合成要正面证据
+  —— 内置目录认得、连接声明过(`declared_capabilities`)、用户写过该种生成的参数契约
+  (`GenerationCapabilityDeclaration`),或供应商预设只有一种能力;都没有时多能力预设只替**对话**作保
+  (`PRESET_FALLBACK_CAPABILITIES`)。曾经兜底的是整个预设,于是 OpenAI 兼容端点上的每个对话模型都进了出图下拉。
+  所有消费方(生成选择器、默认模型、工作流模板、智能体、价格预填)只读 `effective_capabilities`。连接出现在哪几个
+  能力分区 = 其下启用模型的能力 ∪ 供应商预设(好让用户在「AI 绘图」里找到连接、给能出图的模型标上能力)。
+- **生成选择器预选这个人的默认模型**:`/api/generation/options` 的每一项带 `is_default`(同一个
+  `resolve_default`),前端经 `pickGenerationOption` 落在「存着的 → 默认 → 不选」,从不拿清单第一项顶上。
 - **运行时参数只下发显式设过的键**(`runtime_limits`):`context_window` / `max_output_tokens` /
   `reasoning` / `vision` / `reasoning_effort` / `developer_role`。带上 `None` 会让 sidecar 分不清
   "没设过"和"设成了 false",而两者的默认行为不同。

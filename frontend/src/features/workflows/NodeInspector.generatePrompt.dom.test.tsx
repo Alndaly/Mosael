@@ -69,7 +69,7 @@ function renderInspector(capabilities: Record<string, unknown>) {
       body = [{
         id: "p1:image:upscale.json", provider_profile_id: "p1", profile_name: "ComfyUI", label: "ComfyUI · 放大",
         provider: "plugin:dev.mosael.comfyui", model: "upscale.json", kind: "image", capabilities,
-        capabilities_known: true, adapter_available: true,
+        capabilities_known: true, adapter_available: true, is_default: true,
       }];
     }
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });

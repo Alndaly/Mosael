@@ -300,6 +300,8 @@ def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
                          "default_model": "my-image-alias"}},
     ).json()
     assert profile["id"]
+    # 中转上的别名目录认不出来 —— 生成能力要有证据,由用户在模型行上标(见 provider_models.evidenced_capabilities)。
+    client.patch(f"/api/settings/providers/{profile['id']}/models/my-image-alias", json={"capability_ids": ["image"]})
 
     manifest = {tool["name"]: tool for tool in _manifest(client)}
     assert manifest["list_generation_models"]["confirmation"] is False

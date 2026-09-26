@@ -3879,6 +3879,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "生成模型未启用或不存在",
         "en": "The generation model isn't enabled or doesn't exist.",
     },
+    "genErr_modelLacksKind_image": {
+        "zh": "「{model}」没有标上「图像生成」能力。到设置里这个模型的「能力」标上它,或换一个模型",
+        "en": "“{model}” isn't tagged for image generation. Tag it under this model's Capabilities in Settings, or pick another model.",
+    },
+    "genErr_modelLacksKind_video": {
+        "zh": "「{model}」没有标上「视频生成」能力。到设置里这个模型的「能力」标上它,或换一个模型",
+        "en": "“{model}” isn't tagged for video generation. Tag it under this model's Capabilities in Settings, or pick another model.",
+    },
+    "genErr_modelLacksKind_audio": {
+        "zh": "「{model}」没有标上「音乐与音效生成」能力。到设置里这个模型的「能力」标上它,或换一个模型",
+        "en": "“{model}” isn't tagged for music & sound generation. Tag it under this model's Capabilities in Settings, or pick another model.",
+    },
     "genErr_modelAmbiguous": {
         "zh": "同一模型存在于多条连接，请明确选择连接",
         "en": "This model exists on more than one connection. Choose which connection to use.",

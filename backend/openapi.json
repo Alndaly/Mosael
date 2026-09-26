@@ -23148,6 +23148,11 @@
             "type": "boolean",
             "title": "Capabilities Known",
             "default": true
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
           }
         },
         "type": "object",

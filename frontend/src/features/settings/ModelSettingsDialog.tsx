@@ -10,10 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { GENERATION_KINDS, type GenerationKind } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
 import { CapabilityProfileForm, ProfileField } from "./GenerationProfileForm";
+import { CAPABILITY_TAGS, orderedCapabilities } from "./capabilityTags";
 
 type ModelSettings = components["schemas"]["ProviderModelOut"];
 
@@ -44,8 +46,10 @@ type VendorPreset = components["schemas"]["VendorPresetOut"];
  * 对应的格子,既看不到也改不了。
  *
  * 用**这个 vendor 的**预设而不是全集,还顺带解决了另一半:给纯生图的端点列 chat/tts、
- * 给 DeepSeek 端点列 video,都是让人多读几个不可能的选项。而它正是"未指定时跟随预设"里的
- * 那个预设,所以弹窗里的格子和它下面那句提示永远说的是同一件事。
+ * 给 DeepSeek 端点列 video,都是让人多读几个不可能的选项。
+ *
+ * 注意预设**不再是"没标时的答案"**:没标能力的模型按 provider_models.evidenced_capabilities 认,
+ * 生成能力要证据,认不出的只当对话模型。预设在这里只回答"这家能做哪几种",也就是能标哪几种。
  */
 function useCapabilityOptions(vendor: string | undefined): string[] {
   const presets = useQuery({
@@ -275,6 +279,8 @@ export function ModelSettingsDialog({
       void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
       void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
       void qc.invalidateQueries({ queryKey: ["capability-models"] });
+      // 能力标签决定它进不进生图 / 视频下拉。
+      void qc.invalidateQueries({ queryKey: ["generation-options"] });
       onOpenChange(false);
     },
   });
@@ -377,18 +383,24 @@ export function ModelSettingsDialog({
               之后下面少了一半"倒着猜这一组管什么。 */}
           <p className="m-0 text-xs leading-[1.45] text-muted-foreground">{t("modelCapabilitiesHint")}</p>
           <div className="flex flex-wrap gap-1.5">
-            {capabilityOptions.map((capability) => {
+            {/* 可选项 = 这家预设的能力 ∪ 这一行已经有的(标过的、认出来的):迁移或插件写下的能力若不在预设里,
+                也得看得见、点得掉 —— 否则它是一个改不了的隐藏状态。 */}
+            {orderedCapabilities([...capabilityOptions, ...own, ...effective]).map((capability) => {
+              const tag = CAPABILITY_TAGS[capability];
+              const Icon = tag?.icon;
               // **按生效值高亮**,而不是只按显式设置。列表行上的标签画的就是生效值 ——
               // 行里明明标着 image/video,点开却一个都不亮,读起来像丢了配置。
-              // 继承来的用浅底区分:亮着,但看得出"这是跟着预设来的"。
+              // 自动识别的用浅底区分:亮着,但看得出"这是认出来的,不是你标的"。
               const explicit = (current?.capability_ids ?? []).includes(capability);
               const inherited = own.length === 0 && effective.includes(capability);
               return (
                 <button
                   key={capability}
                   type="button"
+                  aria-pressed={explicit || inherited}
                   className={cn(
-                    "cursor-pointer rounded-full border px-2.5 py-1 text-ui-xs transition-colors",
+                    "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 text-ui-xs transition-colors",
+                    CONTROL_HEIGHT.xs,
                     explicit && "border-primary bg-action text-action-foreground",
                     inherited && "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] text-foreground",
                     !explicit && !inherited && "border-border bg-panel text-muted-foreground hover:border-border-strong",
@@ -407,14 +419,22 @@ export function ModelSettingsDialog({
                     })
                   }
                 >
-                  {capability}
+                  {Icon && <Icon size={12} aria-hidden />}
+                  {tag ? t(tag.label) : capability}
                 </button>
               );
             })}
           </div>
           {own.length === 0 ? (
             <span className="text-xs leading-[1.45] text-muted-foreground">
-              {t("modelCapabilitiesInherit").replace("{list}", effective.join(" / "))}
+              {effective.length > 0
+                ? t("modelCapabilitiesInherit").replace(
+                    "{list}",
+                    orderedCapabilities(effective)
+                      .map((id) => (CAPABILITY_TAGS[id] ? t(CAPABILITY_TAGS[id].label) : id))
+                      .join(" / "),
+                  )
+                : t("modelCapabilitiesInheritNone")}
             </span>
           ) : (
             <button

@@ -34,6 +34,27 @@ export type GenerationKind = (typeof GENERATION_KINDS)[number];
  */
 export const UNDECLARED: string[] = [];
 
+/**
+ * 生成模型选择器该落在哪一项:**存着的那个 → 这个人设的默认 → 没有**。
+ *
+ * **不取第一项。** 清单按连接名排序,排在第一的那个不是谁的选择 —— 画板的出图格就是这么默认挑中了
+ * 147ai 上的 `claude-opus-4-6`,而用户在设置里明明设过默认生图模型(后端没点名模型时用的也是它)。
+ * 默认由后端标在选项上(`is_default`,同一个 resolve_default);一项都没标就回 null,选择器显示
+ * 「选择模型」让人选。棘轮:`generationPickerDefault.test.ts`。
+ *
+ * `saved` 认存着的那一项(画板格的表单、会话记着的模型……);它不在清单里了(删了、停用了、
+ * 不再被认成这种生成)就当没存,往下落到默认。`kind` 给了就只认这种生成的默认 —— AI 工作台的
+ * 清单是三种生成合在一起的。
+ */
+export function pickGenerationOption<T extends GenerationOption>(
+  options: readonly T[],
+  { saved, kind }: { saved?: ((option: T) => boolean) | null; kind?: string } = {},
+): T | null {
+  const kept = saved ? options.find(saved) : undefined;
+  if (kept) return kept;
+  return options.find((option) => option.is_default && (!kind || option.kind === kind)) ?? null;
+}
+
 export function capabilityList(model: GenerationOption | null, key: string, fallback: string[]): string[] {
   const value = model?.capabilities?.[key];
   if (!Array.isArray(value)) return fallback;

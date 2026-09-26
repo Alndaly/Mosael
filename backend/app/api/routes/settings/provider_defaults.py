@@ -11,7 +11,6 @@ from app.db.models import ProviderModel
 from app.domain import thinking
 from app.domain import provider_models
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
-from app.domain.providers import capability_ids_for_vendor
 
 from app.domain.permissions import require_own_profile
 
@@ -93,11 +92,11 @@ def set_provider_default(
         profile = require_own_profile(db, user, body.provider_profile_id)
         model = provider_models.get_model(db, body.provider_profile_id, model_id)
         # 能力校验放在建行之前:先建再拒会在库里留下一行没人要的模型。
-        # 已有行按它自己的能力判,没有行按 vendor 预设判(新行正是这么回落的)。
+        # 已有行按它自己的能力判,没有行按同一条证据规则判(新行正是这么认的)。
         capabilities = (
             provider_models.effective_capabilities(model)
             if model is not None
-            else capability_ids_for_vendor(profile.vendor)
+            else provider_models.evidenced_capabilities(profile.vendor, model_id)
         )
         if capability not in capabilities:
             raise HTTPException(status_code=422, detail=tr("routeErr_modelLacksCapability", capability=capability))

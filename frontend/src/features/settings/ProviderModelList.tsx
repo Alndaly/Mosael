@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SlidersHorizontal, Trash2 } from "lucide-react";
+import { SlidersHorizontal, Tags, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -15,8 +15,35 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
 import { SettingsList, SettingsListItem } from "@/components/settings/settings-layout";
+import { CAPABILITY_TAGS, orderedCapabilities } from "@/features/settings/capabilityTags";
+import { GENERATION_KINDS } from "@/lib/generationCapabilities";
 
 type ProviderModel = components["schemas"]["ProviderModelOut"];
+type VendorPreset = components["schemas"]["VendorPresetOut"];
+
+/** 模型行上的能力标签:短名 + 与设置侧栏同一套的图标。自动识别的(行上没标过)画成虚线框。 */
+function CapabilityChips({ ids, auto }: { ids: string[]; auto: boolean }) {
+  const t = useI18n();
+  const chip = cn(
+    "inline-flex items-center gap-0.5 rounded border px-1 py-px text-ui-2xs text-muted-foreground",
+    auto ? "border-dashed border-border" : "border-transparent bg-secondary",
+  );
+  if (ids.length === 0) return <span className={cn(chip, "border-dashed border-border bg-transparent")}>{t("modelCapabilitiesNone")}</span>;
+  return (
+    <>
+      {orderedCapabilities(ids).map((id) => {
+        const tag = CAPABILITY_TAGS[id];
+        const Icon = tag?.icon;
+        return (
+          <span className={chip} key={id}>
+            {Icon && <Icon size={10} aria-hidden />}
+            {tag ? t(tag.label) : id}
+          </span>
+        );
+      })}
+    </>
+  );
+}
 
 /**
  * 一条连接下的模型列表。
@@ -52,11 +79,18 @@ export function ProviderModelList({
     queryKey: ["provider-models", profileId],
     queryFn: () => api<ProviderModel[]>(`/api/settings/providers/${profileId}/models`),
   });
+  const vendorPresets = useQuery({
+    queryKey: ["provider-vendors"],
+    queryFn: () => api<VendorPreset[]>("/api/settings/provider-vendors"),
+    staleTime: 300_000,
+  });
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
     // 能力默认的候选就是这些模型 —— 加/删/停用一个,那边的下拉必须跟着变。
     void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
     void qc.invalidateQueries({ queryKey: ["capability-models"] });
+    // 生成选择器也是这些模型(能力标签决定它进不进生图 / 视频下拉)。
+    void qc.invalidateQueries({ queryKey: ["generation-options"] });
   };
 
   const add = useMutation({
@@ -92,6 +126,22 @@ export function ProviderModelList({
   const rows = models.data ?? [];
   const configured = rows.filter((row) => row.configured);
   const available = rows.filter((row) => !row.configured);
+
+  /* 这条连接能做生成,而它下面的模型一个都没被认成生成模型 —— 那多半是聚合端点上一排认不出名字的模型
+     (147ai、Ollama),它们现在只当对话模型。说一句该去哪里标,不然用户只会看到生图下拉里是空的。 */
+  const presetCapabilities = vendorPresets.data?.find((preset) => preset.vendor === vendor)?.capability_ids ?? [];
+  const connectionGenerates = presetCapabilities.some((id) => (GENERATION_KINDS as readonly string[]).includes(id));
+  const noGenerationModel =
+    configured.length > 0 &&
+    !configured.some((row) =>
+      (row.effective_capability_ids ?? []).some((id) => (GENERATION_KINDS as readonly string[]).includes(id)),
+    );
+  const untaggedHint =
+    connectionGenerates && noGenerationModel
+      ? presetCapabilities.includes("chat")
+        ? t("modelCapabilitiesChatOnlyHint")
+        : t("modelCapabilitiesUnknownHint")
+      : null;
 
   /* 一个端点常常一次加进来十几个模型,之后"只留对话的、其余停用"是常见动作。
      逐个点开关的话,这件事要点十几次,中间还会点错行。 */
@@ -175,6 +225,13 @@ export function ProviderModelList({
         </Button>
       </BulkActionBar>
 
+      {untaggedHint && (
+        <p className="m-0 flex items-start gap-1.5 px-1 text-xs leading-[1.45] text-muted-foreground">
+          <Tags size={12} className="mt-[3px] shrink-0" aria-hidden />
+          {untaggedHint}
+        </p>
+      )}
+
       <SettingsList>
         {configured.map((row) => (
           <SettingsListItem
@@ -200,11 +257,17 @@ export function ProviderModelList({
               {!row.in_catalog && <Badge variant="outline">{unit.gone}</Badge>}
             </span>
             <span className="flex flex-wrap items-center gap-1">
-              {(row.effective_capability_ids ?? []).map((capability) => (
-                <span className="rounded bg-secondary px-1 py-px text-ui-2xs text-muted-foreground" key={capability}>
-                  {capability}
-                </span>
-              ))}
+              {/* 能力标签**就是改能力的入口**:认不出的模型现在只当对话模型(或什么都不是),要让它出图,
+                  用户得一眼看到"它现在被当成什么",并且点一下就能改。自动识别的用虚线框,和"我标过的"分开。 */}
+              <button
+                type="button"
+                className="flex cursor-pointer flex-wrap items-center gap-1 rounded border-0 bg-transparent p-0 hover:opacity-80"
+                aria-label={t("modelCapabilitiesEdit")}
+                title={(row.capability_ids ?? []).length === 0 ? t("modelCapabilitiesAuto") : t("modelCapabilitiesEdit")}
+                onClick={() => setEditing(row.id)}
+              >
+                <CapabilityChips ids={row.effective_capability_ids ?? []} auto={(row.capability_ids ?? []).length === 0} />
+              </button>
               {row.context_window ? (
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {Math.round(row.context_window / 1000)}k
