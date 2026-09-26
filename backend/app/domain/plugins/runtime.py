@@ -391,7 +391,8 @@ def stream_tool(
 
     def pump() -> None:
         try:
-            for line in child.raw_lines():
+            # 一行有上限:超长的整行丢掉、不先读进内存(一个只打字不换行的插件能攒出几 GB 的一行)。
+            for line in child.raw_lines(max_line=MAX_OUTPUT_BYTES):
                 lines.put(line)
         except Exception:  # noqa: BLE001 — 管道断了就是读完了
             pass
@@ -487,9 +488,6 @@ def _parse_line(line: str) -> dict[str, Any] | None:
     """一行 stdout → 一个 JSON 对象。不是的一律跳过:插件往 stdout 打了句日志不该让整次生成失败。"""
     text = line.strip()
     if not text.startswith("{"):
-        return None
-    if len(text) > MAX_OUTPUT_BYTES:
-        logger.warning("插件的一行输出超过 %d 字节,已跳过", MAX_OUTPUT_BYTES)
         return None
     try:
         parsed = json.loads(text)

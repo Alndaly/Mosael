@@ -149,3 +149,29 @@ def test_stderr_很吵的插件照样成功(tmp_path) -> None:
         print(json.dumps({"ok": True, "output": {"done": True}}))
     """)
     assert execute_tool(*plugin, "x", {}).output["done"] is True
+
+
+def test_流式插件打一行不换行的巨型输出_不先整行读进内存(tmp_path) -> None:
+    """流式协议按行读。此前一行整个读进内存、再比上限 —— 一个只打字不换行的插件能攒出几 GB 的一行。
+    现在超长的一行边读边丢,后面的结果照常收到。"""
+    import tracemalloc
+
+    from app.domain.plugins.runtime import StreamHooks, stream_tool
+
+    plugin = make_plugin(tmp_path, """
+        import json, sys
+        chunk = "x" * 1_000_000
+        for _ in range(40):
+            sys.stdout.write(chunk)
+        sys.stdout.write("\\n")
+        print(json.dumps({"ok": True, "output": {"done": True}}), flush=True)
+    """)
+    hooks = StreamHooks(on_progress=lambda *_: None, on_task=lambda _t: None, is_cancelled=lambda: False)
+    tracemalloc.start()
+    try:
+        result = stream_tool(*plugin, "x", {}, hooks=hooks, timeout=60)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert result.output["done"] is True
+    assert peak < 20_000_000, f"读一行 40MB 的输出时内存峰值 {peak / 1e6:.0f}MB"

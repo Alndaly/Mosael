@@ -191,11 +191,25 @@ class ChildProcess:
             if line:
                 yield line
 
-    def raw_lines(self) -> Iterator[str]:
-        """Yield stdout lines verbatim, for callers that parse prefixes or trailing newlines."""
-        if self._process.stdout is None:
+    def raw_lines(self, max_line: int | None = None) -> Iterator[str]:
+        """Yield stdout lines verbatim, for callers that parse prefixes or trailing newlines.
+
+        `max_line`:一行最多收这么多字符,更长的整行丢掉(记一条警告)而**不先读进内存** —— 按行迭代会把
+        一行整个攒起来,一个只打字不换行的子进程(跑的是别人的代码时)能把几 GB 攒成一个字符串。
+        """
+        stream = self._process.stdout
+        if stream is None:
             return
-        yield from self._process.stdout
+        if max_line is None:
+            yield from stream
+            return
+        while line := stream.readline(max_line + 1):
+            if len(line) <= max_line:
+                yield line
+                continue
+            logger.warning("子进程 pid=%s 的一行输出超过 %d 字符,已丢弃", self._process.pid, max_line)
+            while line and not line.endswith("\n"):
+                line = stream.readline(max_line + 1)
 
     def stderr_tail(self, limit: int = 2000) -> str:
         # 同样会被端到界面上(下载失败那句话就来自这里)。
