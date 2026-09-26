@@ -16,6 +16,8 @@ Open **3D Scenes**, create a scene or open the three-hall sample. The library su
 - **Camera view**: see the current shot's actual composition and aspect ratio.
 - **Overview**: observe the moving camera and its path from an independent view, alongside a live shot inset.
 
+Views are remembered per scene: reopening a scene returns you to the view mode, shot and camera position you left it at. This lives only on your device and never changes the scene or syncs to collaborators.
+
 The ground grid has no edge: cell size steps with camera distance (1 → 10 → 100 m) and the fade radius scales with it, so the grid is still there hundreds of metres out; the X axis is tinted red and the Z axis blue for orientation. An axis gizmo in the viewport's top-right corner turns with the view in real time; click any of its balls to swing the camera onto that axis (from above, from the front, and so on) without changing distance. The toolbar provides move, rotate, scale, snapping, view presets and fullscreen. Trackpad/mouse preferences are shared with other canvases. F focuses the view. Fullscreen keeps **only the 3D view and the viewport's own toolbar** — the page header, timeline, inspector and agent pane are hidden; Escape exits. The viewport is not remounted, so the model, camera and any running animation stay exactly where they were.
 
 ## Objects and lighting

@@ -32,6 +32,13 @@ import {
   type Vec3,
 } from "@/api/domains/scenes";
 import { cameraOfShot, sampleCamera, sampleObject } from "./sceneGraph";
+import {
+  applyOrbit,
+  captureOrbit,
+  readSceneView,
+  throttledSave,
+  writeSceneView,
+} from "./sceneViewMemory";
 import { errorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -962,10 +969,38 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           }
         },
       };
+      // **上次停在哪儿就从哪儿看**(见 sceneViewMemory)。此前这里只有上面那句写死的
+      // `editorCamera.position.set(12, 10, 14)`,每次进场景都被拽回默认机位。
+      // 在第一帧之前摆好,画面不会先闪一下默认视角再跳过去;没存过的场景照旧用默认。
+      const remembered = readSceneView(props.workspace, props.sceneId);
+      if (remembered.free) applyOrbit(editorCamera, orbit, remembered.free);
+      if (remembered.overview) {
+        applyOrbit(observerCamera, observerOrbit, remembered.overview);
+        // 记下它框的是哪个镜头:还是那个镜头,进「俯瞰全场」时就不再自动重新框、把它盖掉。
+        observedShot = remembered.overview.shotId;
+      }
+      // 相机无论怎么动 —— 拖、滚轮、阻尼滑行、「聚焦」「视角」按钮、坐标轴、从机位取景 ——
+      // 最后都经过轨道控制的 update,都会发 change。于是显式重置之后记住的就是重置后的样子。
+      const saver = throttledSave(() =>
+        writeSceneView(props.workspace, props.sceneId, {
+          free: captureOrbit(editorCamera, orbit),
+          overview: observedShot
+            ? { ...captureOrbit(observerCamera, observerOrbit), shotId: observedShot }
+            : undefined,
+        }),
+      );
+      const scheduleSave = () => saver.schedule();
+      orbit.addEventListener("change", scheduleSave);
+      observerOrbit.addEventListener("change", scheduleSave);
+      addEventListener("pagehide", saver.flush);
       runtime.current = { sync, selected: select, handle };
       sync();
       render();
       return () => {
+        saver.flush();
+        removeEventListener("pagehide", saver.flush);
+        orbit.removeEventListener("change", scheduleSave);
+        observerOrbit.removeEventListener("change", scheduleSave);
         alive = false;
         abort.abort();
         cancelAnimationFrame(frameId);

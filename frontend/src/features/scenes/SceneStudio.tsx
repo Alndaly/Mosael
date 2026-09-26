@@ -13,6 +13,7 @@ import { SceneBlenderPull } from "./SceneBlenderPull";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { readSceneSnap, writeSceneSnap } from "./sceneSnap";
 import { readClayReference, writeClayReference } from "./clayReference";
+import { forgetSceneView, readSceneView, rememberedShot, writeSceneView } from "./sceneViewMemory";
 import { blockoutPrompt } from "./blockoutPrompt";
 import { lightingPrompt, presetById } from "./lighting";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
@@ -309,6 +310,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
             for (const sceneId of done) {
               qc.removeQueries({ queryKey: ["scene", workspace.id, sceneId] });
               localStorage.removeItem(`mosael.scene-draft:${workspace.id}:${sceneId}`);
+              forgetSceneView(workspace.id, sceneId);
             }
             await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
             if (done.length) toast.success(t("sceneDeletedCount").replace("{n}", String(done.length)));
@@ -386,11 +388,12 @@ function SceneEditor({
     [snap, setSnap] = React.useState(readSceneSnap),
     //: 交给模型时是否附一张灰模参考图。见 clayReference —— 是"我习惯怎么交",不是场景数据。
     [clay, setClay] = React.useState(readClayReference),
-    [shotId, setShotId] = React.useState(initial.content.shots[0].id),
-    [time, setTime] = React.useState(0),
-    [viewMode, setViewMode] = React.useState<"edit" | "camera" | "observe">(
-      "edit",
+    //: 视角档和镜头按场景记住 —— 个人的编辑器状态,存本地,不进场景(见 sceneViewMemory)。
+    [shotId, setShotId] = React.useState(() =>
+      rememberedShot(readSceneView(initial.workspace_id, initial.id), initial.content.shots),
     ),
+    [time, setTime] = React.useState(0),
+    [viewMode, setViewMode] = React.useState(() => readSceneView(initial.workspace_id, initial.id).mode),
     [playing, setPlaying] = React.useState(false),
     [busy, setBusy] = React.useState(""),
     [progress, setProgress] = React.useState(0),
@@ -410,6 +413,10 @@ function SceneEditor({
   const sidePanel = useResizableSidebar("scene-side", { min: 240, max: 480, fallback: 304 });
   const agentPanel = useResizableSidebar("scene-agent", { min: 320, max: 640, fallback: 400 });
   const agentDocked = agent === "docked";
+  React.useEffect(
+    () => writeSceneView(initial.workspace_id, initial.id, { mode: viewMode, shotId }),
+    [initial.workspace_id, initial.id, viewMode, shotId],
+  );
   const preview = viewMode === "camera";
   const observing = viewMode === "observe";
   const setPreview = (value: boolean) => setViewMode(value ? "camera" : "edit");
