@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 const ACTIVE = new Set(["queued", "running", "pending"]);
 // 受阻但可恢复(老版 BLOCKED_STATUSES):人工处理后可重试。
 const BLOCKED = new Set(["login_required", "waiting_manual", "permission_required", "blocked"]);
-// 记录列表的状态筛选。「从起点进来」可以指定其中一个(统计页「近 7 天发布」→ 已成功)。
+// 记录列表的状态筛选。「从起点进来」可以指定其中一个(统计页「近 N 天发布」→ 已成功)。
 const STATUS_FILTERS: readonly string[] = ["all", "active", "succeeded", "attention"];
 
 /** 发布页(计划 §6.9 / Phase 13):成片 + 文案 → 发布目标,状态走任务总线。

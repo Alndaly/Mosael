@@ -887,7 +887,7 @@ export interface paths {
         };
         /**
          * Workspace Summary
-         * @description 首页仪表:工作区一屏统计。只读聚合,单请求给全。
+         * @description 统计页:工作区一屏统计。只读聚合,单请求给全;任务、发布、花费按 `days` 天的窗口算。
          */
         get: operations["workspace_summary_api_workspaces__workspace_id__summary_get"];
         put?: never;
@@ -12441,11 +12441,11 @@ export interface components {
         };
         /**
          * WorkspaceSummaryOut
-         * @description 首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。
+         * @description 统计页的数字。一次请求给全一屏,避免统计页发 N 个列表请求做 .length 聚合。
          *
          *     **这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是
          *     界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的
-         *     聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。
+         *     聚合在后端是有成本的(窗口内的用量事件 join 价格规则),每次打开首页都算一遍扔掉。
          *
          *     两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,
          *     配套的币种反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的
@@ -12462,12 +12462,14 @@ export interface components {
             workflow_count: number;
             /** Running Jobs */
             running_jobs: number;
-            /** Week Jobs Succeeded */
-            week_jobs_succeeded: number;
-            /** Week Jobs Failed */
-            week_jobs_failed: number;
-            /** Week Published */
-            week_published: number;
+            /** Window Days */
+            window_days: number;
+            /** Jobs Succeeded */
+            jobs_succeeded: number;
+            /** Jobs Failed */
+            jobs_failed: number;
+            /** Published */
+            published: number;
             /** Daily */
             daily: components["schemas"]["DailyActivityOut"][];
             /** Asset Kinds */
@@ -14378,7 +14380,9 @@ export interface operations {
     };
     workspace_summary_api_workspaces__workspace_id__summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                days?: number;
+            };
             header?: never;
             path: {
                 workspace_id: string;

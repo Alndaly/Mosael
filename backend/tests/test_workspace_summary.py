@@ -40,10 +40,10 @@ def test_summary_counts_scoped_to_the_workspace() -> None:
     assert summary["sequence_count"] == 1
     assert summary["workflow_count"] == 1
     assert summary["running_jobs"] == 1
-    assert summary["week_jobs_succeeded"] == 1
-    assert summary["week_jobs_failed"] == 0
+    assert summary["jobs_succeeded"] == 1
+    assert summary["jobs_failed"] == 0
     # `publish_accounts`(发布账号数)曾经也在这里 —— 界面一次都没读过,已删。
-    assert summary["week_published"] == 1
+    assert summary["published"] == 1
     assert summary["publish_daily"][-1]["succeeded"] == 1
     assert summary["publish_platforms"] == {"folder": 1}
 
@@ -68,7 +68,8 @@ def test_summary_charts_daily_and_asset_kinds() -> None:
         db.commit()
 
     summary = client.get(f"/api/workspaces/{ws}/summary").json()
-    assert len(summary["daily"]) == 14  # 缺日补零,长度恒定
+    assert summary["window_days"] == 30  # 默认最近一个月
+    assert len(summary["daily"]) == 30  # 缺日补零,长度就是窗口
     today = summary["daily"][-1]
     assert today["succeeded"] == 1 and today["failed"] == 1
     assert all(day["succeeded"] == 0 for day in summary["daily"][:-1])
@@ -119,7 +120,7 @@ def test_summary_publish_charts_group_statuses_and_platforms() -> None:
         db.commit()
 
     summary = client.get(f"/api/workspaces/{ws}/summary").json()
-    assert len(summary["publish_daily"]) == 14
+    assert len(summary["publish_daily"]) == 30
     today = summary["publish_daily"][-1]
     assert today == {
         "date": today["date"],
@@ -133,3 +134,42 @@ def test_summary_publish_charts_group_statuses_and_platforms() -> None:
         for day in summary["publish_daily"][:-1]
     )
     assert summary["publish_platforms"] == {"bilibili": 2, "douyin": 2}
+
+
+def test_一个窗口管住读数_图和花费_总数不跟着窗口走() -> None:
+    """读数和图此前一个是「近 7 天」、一个是「近 14 天」:同一页上两种窗口,两个数对不上。
+    现在只有一个 `days`,任务、发布、平台构成、花费都按它算;项目、素材这些是当前总数。"""
+    from datetime import timedelta
+
+    from app.db.models import now
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        asset = Asset(workspace_id=ws, name="v", kind="video")
+        account = PublishAccount(workspace_id=ws, platform="douyin", name="dy", config={})
+        db.add_all([asset, account])
+        db.flush()
+        long_ago = now() - timedelta(days=20)
+        db.add(Job(workspace_id=ws, kind="render", status="succeeded", payload={}))
+        db.add(Job(workspace_id=ws, kind="render", status="failed", payload={}, updated_at=long_ago))
+        db.add(
+            PublishTask(
+                workspace_id=ws, account_id=account.id, asset_id=asset.id, title="old",
+                description="", tags=[], status="success", updated_at=long_ago,
+            )
+        )
+        db.commit()
+
+    week = client.get(f"/api/workspaces/{ws}/summary", params={"days": 7}).json()
+    assert week["window_days"] == 7 and len(week["daily"]) == 7 and len(week["publish_daily"]) == 7
+    assert (week["jobs_succeeded"], week["jobs_failed"], week["published"]) == (1, 0, 0)
+    assert week["publish_platforms"] == {}  # 二十天前那一条不在这一周里
+    assert week["asset_count"] == 1 and week["asset_kinds"] == {"video": 1}  # 总数不跟窗口走
+
+    month = client.get(f"/api/workspaces/{ws}/summary", params={"days": 30}).json()
+    assert (month["jobs_succeeded"], month["jobs_failed"], month["published"]) == (1, 1, 1)
+    assert month["publish_platforms"] == {"douyin": 1}
+    assert len(month["usage_daily"]) == 30  # 花费按同一个窗口
+
+    assert client.get(f"/api/workspaces/{ws}/summary", params={"days": 91}).status_code == 422

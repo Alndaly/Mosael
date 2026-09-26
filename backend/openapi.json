@@ -2259,7 +2259,7 @@
           "workspaces"
         ],
         "summary": "Workspace Summary",
-        "description": "首页仪表:工作区一屏统计。只读聚合,单请求给全。",
+        "description": "统计页:工作区一屏统计。只读聚合,单请求给全;任务、发布、花费按 `days` 天的窗口算。",
         "operationId": "workspace_summary_api_workspaces__workspace_id__summary_get",
         "parameters": [
           {
@@ -2269,6 +2269,18 @@
             "schema": {
               "type": "string",
               "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
             }
           }
         ],
@@ -32141,17 +32153,21 @@
             "type": "integer",
             "title": "Running Jobs"
           },
-          "week_jobs_succeeded": {
+          "window_days": {
             "type": "integer",
-            "title": "Week Jobs Succeeded"
+            "title": "Window Days"
           },
-          "week_jobs_failed": {
+          "jobs_succeeded": {
             "type": "integer",
-            "title": "Week Jobs Failed"
+            "title": "Jobs Succeeded"
           },
-          "week_published": {
+          "jobs_failed": {
             "type": "integer",
-            "title": "Week Published"
+            "title": "Jobs Failed"
+          },
+          "published": {
+            "type": "integer",
+            "title": "Published"
           },
           "daily": {
             "items": {
@@ -32242,16 +32258,17 @@
           "sequence_count",
           "workflow_count",
           "running_jobs",
-          "week_jobs_succeeded",
-          "week_jobs_failed",
-          "week_published",
+          "window_days",
+          "jobs_succeeded",
+          "jobs_failed",
+          "published",
           "daily",
           "asset_kinds",
           "publish_daily",
           "publish_platforms"
         ],
         "title": "WorkspaceSummaryOut",
-        "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。\n\n**这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是\n界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的\n聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。\n\n两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,\n配套的币种反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的\n连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。"
+        "description": "统计页的数字。一次请求给全一屏,避免统计页发 N 个列表请求做 .length 聚合。\n\n**这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是\n界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的\n聚合在后端是有成本的(窗口内的用量事件 join 价格规则),每次打开首页都算一遍扔掉。\n\n两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,\n配套的币种反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的\n连算带发一起删。棘轮:`tests/test_api_fields_reach_the_screen.py`。"
       },
       "app__api__routes__browser_worker__ClaimRequest": {
         "properties": {

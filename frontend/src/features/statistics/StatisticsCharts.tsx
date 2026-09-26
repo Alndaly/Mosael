@@ -20,7 +20,7 @@ import {
 import { gotoSettings } from "@/lib/deepLink";
 
 /**
- * 首页图表(shadcn/ui chart + Recharts):近 14 天任务活动(堆叠柱)+ 素材构成(环形)。
+ * 统计页图表(shadcn/ui chart + Recharts):窗口内任务活动(堆叠柱)+ 素材构成(环形)等。
  * 颜色走 tokens.css 的 --chart-*(dataviz 校验通过的明暗两档),经 ChartConfig
  * 注入为 --color-<key>;文本一律文本色,不穿系列色。
  */
@@ -104,7 +104,7 @@ export function UsageCostPanel({
   unpriced,
   byProvider,
 }: {
-  title: string;
+  title: React.ReactNode;
   daily: WorkspaceSummary["usage_daily"];
   /** 整段时间的花费,每币种一笔,主要币种在前。 */
   costs: readonly CostAmount[];
@@ -494,9 +494,9 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
 }
 
 /**
- * 近 14 天的花费**按供应商拆开** —— 一行横条,不另占一整块。
+ * 窗口内的花费**按供应商拆开** —— 一行横条,不另占一整块。
  *
- * `usage_by_provider` 一直躺在首页那个回包里没人读:后端每次打开首页都把近 14 天的用量事件
+ * `usage_by_provider` 一直躺在首页那个回包里没人读:后端每次打开首页都把窗口内的用量事件
  * 算一遍,然后扔掉。而"这个月的钱花在谁身上"恰恰是看完总额之后的下一个问题 —— 此前只能去
  * AI 页一家家点开看。
  *

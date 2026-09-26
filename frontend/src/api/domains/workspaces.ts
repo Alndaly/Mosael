@@ -58,8 +58,8 @@ export function deleteWorkspace(workspaceId: string): Promise<void> {
   return api<void>(`/api/workspaces/${workspaceId}`, { method: "DELETE" });
 }
 
-export function workspaceSummary(workspaceId: string): Promise<WorkspaceSummary> {
-  return api<WorkspaceSummary>(`/api/workspaces/${workspaceId}/summary`);
+export function workspaceSummary(workspaceId: string, days: number): Promise<WorkspaceSummary> {
+  return api<WorkspaceSummary>(`/api/workspaces/${workspaceId}/summary?days=${days}`);
 }
 
 export function renameProject(projectId: string, name: string): Promise<Project> {

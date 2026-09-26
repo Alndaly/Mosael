@@ -88,11 +88,11 @@ class DailyUsageTokensOut(ApiModel):
 
 
 class WorkspaceSummaryOut(ApiModel):
-    """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。
+    """统计页的数字。一次请求给全一屏,避免统计页发 N 个列表请求做 .length 聚合。
 
     **这句话要一直是真的。** 它曾经附了八个界面从不读的字段 —— 于是没人知道这个回包里哪些是
     界面需要的、哪些是历史残留,下一个改统计页的人既不敢删也不敢信。而按供应商/能力分组的
-    聚合在后端是有成本的(近 14 天的用量事件 join 价格规则),每次打开首页都算一遍扔掉。
+    聚合在后端是有成本的(窗口内的用量事件 join 价格规则),每次打开首页都算一遍扔掉。
 
     两个方向都修了:费用磁贴改显示**钱**(此前显示调用次数,而同一个回包里躺着金额,
     配套的币种反倒被读了)、费用图下面补一行按供应商的分摊;剩下五个没人要的
@@ -104,13 +104,15 @@ class WorkspaceSummaryOut(ApiModel):
     sequence_count: int
     workflow_count: int
     running_jobs: int
-    week_jobs_succeeded: int
-    week_jobs_failed: int
-    week_published: int
-    # 图表数据:近 14 天逐日任务活动(旧→新,缺日补零)与素材类型构成
+    # 下面这些都按同一个窗口算(`window_days`,请求的 `days`);上面五个是当前总数。
+    window_days: int
+    jobs_succeeded: int
+    jobs_failed: int
+    published: int
+    # 图表数据:窗口内逐日任务活动(旧→新,缺日补零)与素材类型构成(当前总数)
     daily: list[DailyActivityOut]
     asset_kinds: dict[str, int]
-    # 发布图表:近 14 天发布任务状态(旧→新,缺日补零)与按平台聚合的发布任务数
+    # 发布图表:窗口内逐日发布任务状态(旧→新,缺日补零)与按平台聚合的发布任务数
     publish_daily: list[DailyPublishOut]
     publish_platforms: dict[str, int]
     # 供应商费用/用量:近 14 天聚合;没有价格规则时 costs 为空,unknown 计数仍保留审计线索。

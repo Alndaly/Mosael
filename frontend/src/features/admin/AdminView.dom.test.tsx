@@ -149,9 +149,9 @@ describe("概览", () => {
     show();
     await screen.findByText("adminStatUsers");
     expect(calls.overview).toHaveBeenLastCalledWith(30);
-    expect(screen.getAllByText(/adminLastNDays/)).toHaveLength(3);
+    expect(screen.getAllByText(/statLastNDays/)).toHaveLength(3);
 
-    const range = screen.getByRole("radiogroup", { name: "adminRangeLabel" });
+    const range = screen.getByRole("radiogroup", { name: "statRangeLabel" });
     fireEvent.click(within(range).getAllByRole("radio")[0]);
     await waitFor(() => expect(calls.overview).toHaveBeenLastCalledWith(7));
     expect(within(range).getAllByRole("radio")[0]).toHaveAttribute("aria-checked", "true");

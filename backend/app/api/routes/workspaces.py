@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from app.core.i18n import tr
@@ -261,9 +261,14 @@ def remove_member(workspace_id: str, user_id: str, db: DbSession, user: CurrentU
 
 
 @router.get("/workspaces/{workspace_id}/summary", response_model=WorkspaceSummaryOut)
-def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> WorkspaceSummaryOut:
+def workspace_summary(
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    days: int = Query(default=dashboard.WINDOW_DAYS, ge=1, le=dashboard.MAX_WINDOW_DAYS),
+) -> WorkspaceSummaryOut:
     # 聚合在 domain/dashboard:它回答的是「这个工作区里发生了什么」,和 HTTP 没关系,而且不止
     # 一个入口要问。**路由的 docstring 会原样进 OpenAPI 的 description**,所以这段写成注释。
-    """首页仪表:工作区一屏统计。只读聚合,单请求给全。"""
+    """统计页:工作区一屏统计。只读聚合,单请求给全;任务、发布、花费按 `days` 天的窗口算。"""
     ensure_workspace_access(db, user, workspace_id)
-    return WorkspaceSummaryOut(**dashboard.workspace_summary(db, workspace_id))
+    return WorkspaceSummaryOut(**dashboard.workspace_summary(db, workspace_id, days=days))

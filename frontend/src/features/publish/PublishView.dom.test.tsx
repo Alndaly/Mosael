@@ -34,7 +34,7 @@ it("selects only visible publish records and drops selections hidden by a status
   client.clear();
 });
 
-// 统计页「近 7 天发布」点进来:发布记录筛到已成功 —— 那个数数的就是成功的发布。
+// 统计页「近 N 天发布」点进来:发布记录筛到已成功 —— 那个数数的就是成功的发布。
 it("enters at the succeeded records when the statistics tile sends it there", async () => {
   gotoSection("publish", "succeeded");
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -5,18 +5,12 @@ import { Coins } from "lucide-react";
 import { adminOverview, type AdminOverview as Overview } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { RangePicker, useStatRange } from "@/components/layout/RangePicker";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { gotoSettings } from "@/lib/deepLink";
 import { formatCosts, microsIn } from "@/lib/money";
-import { usePersistentTab } from "@/lib/usePersistentTab";
-import { cn } from "@/lib/utils";
 import { AdminActivityChart } from "./AdminActivityChart";
-
-/** 能选的窗口。上限和后端 routes/admin.MAX_WINDOW_DAYS 一致 —— 再长就是在扫全库了。 */
-const RANGES = ["7", "30", "90"] as const;
-type Range = (typeof RANGES)[number];
 
 const CARD = "grid min-w-0 content-start gap-4 rounded-lg border border-border bg-panel p-5";
 const CARD_TITLE = "m-0 text-ui-sm font-semibold text-foreground";
@@ -30,8 +24,7 @@ const CARD_TITLE = "m-0 text-ui-sm font-semibold text-foreground";
 export function AdminOverview() {
   const t = useI18n();
   const { locale } = usePreferences();
-  const [range, setRange] = usePersistentTab<Range>("admin-range", "30", RANGES);
-  const days = Number(range);
+  const [days, setDays] = useStatRange("admin-range");
   const overview = useQuery({
     queryKey: ["admin-overview", days],
     queryFn: () => adminOverview(days),
@@ -41,7 +34,7 @@ export function AdminOverview() {
   const stats = overview.data;
   // 「近 N 天」取**这份数据自己的**窗口,不取控件上的值:换范围时新数据还没到、先留着旧的那一刻,
   // 标题要说的是图上画的那段时间。
-  const lastDays = t("adminLastNDays").replace("{n}", String(stats?.window_days ?? days));
+  const lastDays = t("statLastNDays").replace("{n}", String(stats?.window_days ?? days));
 
   const jobs = stats?.jobs_by_day ?? [];
   const jobsTotal = jobs.reduce((sum, point) => sum + point.total, 0);
@@ -51,20 +44,7 @@ export function AdminOverview() {
     // 范围、读数、图三块挨得近一些(gap-5):它们是同一件事的三层,不是三个分开的节。
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
       <div data-admin-section="range" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-        <span className={cn(SEGMENTED_LIST, "min-h-8 p-0.5")} role="radiogroup" aria-label={t("adminRangeLabel")}>
-          {RANGES.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={value === range}
-              className={cn(segmentedTriggerClass(value === range), "min-h-7 px-3 text-ui-xs tabular-nums")}
-              onClick={() => setRange(value)}
-            >
-              {t("adminRangeDays").replace("{n}", value)}
-            </button>
-          ))}
-        </span>
+        <RangePicker days={days} onChange={setDays} />
         <p className="m-0 text-ui-xs text-muted-foreground">{t("adminRangeScope")}</p>
       </div>
 

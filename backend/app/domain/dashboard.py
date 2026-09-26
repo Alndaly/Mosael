@@ -1,6 +1,6 @@
-"""首页仪表要的那一屏数字。
+"""统计页要的那一屏数字。
 
-**为什么在领域里而不在路由里**:它回答的是「这个工作区里发生了什么」—— 近两周成功/失败了多少活、
+**为什么在领域里而不在路由里**:它回答的是「这个工作区里发生了什么」—— 窗口内成功/失败了多少活、
 素材按类型各有多少、发布去了哪些平台、花掉多少钱。这些问题和 HTTP 没有关系,而且不止首页一个
 入口会问(以后的定时报告、飞书日报要的是同一份数字)。留在路由里时,那一百来行 SQL 谁也复用不了。
 
@@ -19,27 +19,34 @@ from app.db.models import Asset, Job, Project, PublishAccount, PublishTask, Sequ
 from app.domain.publish import summary_bucket
 from app.domain.usage import summarize_usage
 
-#: 首页那两张图各看多少天。
-SPAN_DAYS = 14
+#: 统计窗口的默认值:最近一个月。统计页和管理页用同一套 —— 两页上的「近 N 天」是同一个意思。
+WINDOW_DAYS = 30
+#: 能选的最长窗口。再长就是在扫全库了,而那不是这两页要回答的问题。
+MAX_WINDOW_DAYS = 90
 
 
-def workspace_summary(db: Session, workspace_id: str) -> dict[str, Any]:
-    """这个工作区一屏能看完的统计。只读。"""
+def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS) -> dict[str, Any]:
+    """这个工作区一屏能看完的统计。只读。
+
+    **窗口只有一个**(`days`:今天加上前 `days - 1` 天,从那天零点起,UTC)。任务、发布、花费的
+    读数和图都按它算;项目、素材、序列、工作流、运行中是当前总数,素材构成也是。此前读数是
+    「近 7 天」、图是「近 14 天」,同一页上两种窗口,两个数对不上还看不出为什么。
+    """
 
     def count(stmt) -> int:
         return int(db.scalar(stmt) or 0)
 
-    week_ago = now() - timedelta(days=7)
     scoped = lambda model: select(func.count()).select_from(model).where(model.workspace_id == workspace_id)  # noqa: E731
 
-    # 活动图:近 SPAN_DAYS 天逐日成功/失败(按终态时间 updated_at 归日,UTC),缺日补零。
-    span_start = (now() - timedelta(days=SPAN_DAYS - 1)).date()
+    # 活动图:窗口内逐日成功/失败(按终态时间 updated_at 归日,UTC),缺日补零。
+    span_start = (now() - timedelta(days=days - 1)).date()
+    since = datetime.combine(span_start, datetime.min.time())
     day_rows = db.execute(
         select(func.date(Job.updated_at), Job.status, func.count())
         .where(
             Job.workspace_id == workspace_id,
             Job.status.in_(("succeeded", "failed")),
-            Job.updated_at >= datetime.combine(span_start, datetime.min.time()),
+            Job.updated_at >= since,
         )
         .group_by(func.date(Job.updated_at), Job.status)
     ).all()
@@ -52,14 +59,14 @@ def workspace_summary(db: Session, workspace_id: str) -> dict[str, Any]:
             succeeded=by_day.get(str(span_start + timedelta(days=offset)), {}).get("succeeded", 0),
             failed=by_day.get(str(span_start + timedelta(days=offset)), {}).get("failed", 0),
         )
-        for offset in range(SPAN_DAYS)
+        for offset in range(days)
     ]
 
     publish_day_rows = db.execute(
         select(func.date(PublishTask.updated_at), PublishTask.status, func.count())
         .where(
             PublishTask.workspace_id == workspace_id,
-            PublishTask.updated_at >= datetime.combine(span_start, datetime.min.time()),
+            PublishTask.updated_at >= since,
         )
         .group_by(func.date(PublishTask.updated_at), PublishTask.status)
     ).all()
@@ -76,7 +83,7 @@ def workspace_summary(db: Session, workspace_id: str) -> dict[str, Any]:
             active=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("active", 0),
             blocked=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("blocked", 0),
         )
-        for offset in range(SPAN_DAYS)
+        for offset in range(days)
     ]
 
     kind_rows = db.execute(
@@ -87,13 +94,14 @@ def workspace_summary(db: Session, workspace_id: str) -> dict[str, Any]:
         select(PublishAccount.platform, func.count())
         .select_from(PublishTask)
         .join(PublishAccount, PublishAccount.id == PublishTask.account_id)
-        .where(PublishTask.workspace_id == workspace_id)
+        .where(PublishTask.workspace_id == workspace_id, PublishTask.updated_at >= since)
         .group_by(PublishAccount.platform)
     ).all()
     publish_platforms = {str(platform): int(count_) for platform, count_ in publish_platform_rows}
-    usage = summarize_usage(db, workspace_id=workspace_id, days=SPAN_DAYS)
+    usage = summarize_usage(db, workspace_id=workspace_id, days=days)
 
     return dict(
+        window_days=days,
         daily=daily,
         asset_kinds=asset_kinds,
         publish_daily=publish_daily,
@@ -111,9 +119,7 @@ def workspace_summary(db: Session, workspace_id: str) -> dict[str, Any]:
         sequence_count=count(scoped(Sequence)),
         workflow_count=count(scoped(Workflow)),
         running_jobs=count(scoped(Job).where(Job.status.in_(("queued", "running")))),
-        week_jobs_succeeded=count(scoped(Job).where(Job.status == "succeeded", Job.updated_at >= week_ago)),
-        week_jobs_failed=count(scoped(Job).where(Job.status == "failed", Job.updated_at >= week_ago)),
-        week_published=count(
-            scoped(PublishTask).where(PublishTask.status == "success", PublishTask.updated_at >= week_ago)
-        ),
+        jobs_succeeded=sum(day["succeeded"] for day in daily),
+        jobs_failed=sum(day["failed"] for day in daily),
+        published=sum(day["succeeded"] for day in publish_daily),
     )

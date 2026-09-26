@@ -15,7 +15,7 @@ from app.api.schemas import (
     UserSpendPoint,
 )
 from app.domain.permissions import ensure_deployment_admin
-from app.domain import deployment, host_files, members, usage
+from app.domain import dashboard, deployment, host_files, members, usage
 from app.db.models import (
     Asset,
     AuthSession,
@@ -38,11 +38,6 @@ router = APIRouter(tags=["admin"])
 在侧边栏摆这个入口。
 """
 
-#: 图表窗口的默认值。一个跑了两年的部署不该在打开这一页时扫全库 —— 而"最近一个月"正是这一页
-#: 要回答的那些问题(谁在用、谁在花)的自然尺度。
-WINDOW_DAYS = 30
-#: 管理页上能选的最长窗口。再长就是在扫全库了,而那不是这一页要回答的问题。
-MAX_WINDOW_DAYS = 90
 #: "最近还在用"的判据。
 ACTIVE_DAYS = 7
 
@@ -142,7 +137,8 @@ def set_shared_host_folders(body: SharedHostFolders, db: DbSession, user: Curren
 def overview(
     db: DbSession,
     user: CurrentUser,
-    days: int = Query(default=WINDOW_DAYS, ge=1, le=MAX_WINDOW_DAYS),
+    # 窗口的默认值和上限与统计页是同一套(`domain/dashboard`):两页上的「近 N 天」是同一个意思。
+    days: int = Query(default=dashboard.WINDOW_DAYS, ge=1, le=dashboard.MAX_WINDOW_DAYS),
 ) -> AdminOverviewOut:
     """这一页顶部的几个数,加上两张图。
 
