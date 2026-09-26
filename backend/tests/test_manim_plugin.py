@@ -314,6 +314,11 @@ class Test自定义代码:
         "import os", "import subprocess as sp", "from pathlib import Path", "open('/etc/passwd')",
         "__import__('os')", "eval('1')", "np.save('x', 1)", "().__class__.__bases__", "getattr(self, 'x')",
         "from . import x",
+        # 不经 open 也能读文件的那几条路:把本机文件渲进画面(静帧会交回一张图)
+        "Code(code_file='/Users/me/.ssh/id_rsa')", "SVGMobject('/etc/hosts')", "ImageMobject('~/Pictures/id.png')",
+        r"MathTex(r'\input{/etc/passwd}')", r"Tex('\\openin5=/etc/passwd')",
+        "np.lib.format.open_memmap('x', mode='w+')", "nx.write_edgelist(g, 'x')", "nx.read_gml('x')",
+        "scipy.io.wavfile.write('x', 1, a)",
     ])
     def test_越界的写法挡住并说第几行(self, snippet: str) -> None:
         code = SCENE + f"\nX = 1\n{snippet}\n"

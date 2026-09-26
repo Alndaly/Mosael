@@ -11,6 +11,7 @@ import math
 import re
 from typing import Any
 
+from manim_guard import FORBIDDEN_TEX
 from plugin_kit import PluginError, line
 from scene_kit.mosael_expr import ExpressionError, auto_y_range, compile_function, nice_step, parse, sample
 from scene_kit.mosael_text import display_width, latex_to_plain, reading_seconds
@@ -31,17 +32,6 @@ THEMES = {
     "light": {"background": "#FAFAF7", "text": "#16181D", "muted": "#5B6070", "panel": "#ECEAE4", "accent": "#2563EB",
               "code_style": "friendly"},
 }
-
-#: 讲解视频里的公式不准用的 LaTeX 命令:读写文件、执行外部程序、改 TeX 本身的规则。
-#: 讲解视频是「给内容、不写代码」的那条路,公式也只该是公式。
-FORBIDDEN_TEX = re.compile(
-    r"\\(input|include|includeonly|write|write18|immediate|openin|openout|read|readline|closein|closeout|"
-    r"catcode|def|edef|gdef|xdef|let|futurelet|newcommand|renewcommand|providecommand|DeclareRobustCommand|"
-    r"usepackage|RequirePackage|documentclass|special|csname|endcsname|makeatletter|expandafter|directlua|"
-    r"luaexec|latelua|ShellEscape|pdfshellescape|verbatiminput|lstinputlisting|jobname|message|typeout|"
-    r"errmessage|scantokens|begin\s*\{\s*(filecontents|verbatim)\s*\})(?![A-Za-z])"
-)
-
 
 def _text(value: Any, limit: int) -> str:
     return re.sub(r"[ \t]+", " ", str(value or "")).strip()[:limit]

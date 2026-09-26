@@ -60,7 +60,7 @@ class Sorting(Scene):
 - 这两个工具**默认不开放**,要在插件页的工具列表里自己勾上;
 - 开放之后,智能体每次调用它们都**先出一张确认卡**(清单里声明为 `"effects": "local-code"`),写明
   「会在你的电脑上运行代码」和代码开头,你批准了才跑;插件页里它们旁边标着「需确认」;
-- 默认有一道**护栏**:只准 import 画图用得到的模块(manim、math、numpy、scipy、networkx、random …),不准用 `open`、`exec`、`__import__`,不准碰 `os.system`、`np.save` 之类。护栏挡的是随手写出、或被一段网页诱导写出的越界代码,**它不是沙箱**;
+- 默认有一道**护栏**:只准 import 画图用得到的模块(manim、math、numpy、scipy、networkx、random …),不准用 `open`、`exec`、`__import__`,不准碰 `os.system`、`np.save` 之类,也不准不经 `open` 把本机文件读进画面(`SVGMobject` / `ImageMobject` 按路径读、`Code(code_file=…)`、公式里的 `\input`)。护栏挡的是随手写出、或被一段网页诱导写出的越界代码,**它不是沙箱**;
 - 确实需要别的库时,在插件配置里打开「不限制自定义代码」,后果自负。
 
 讲解视频不执行你给的任何代码,默认开放。

@@ -18,11 +18,23 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 
 from plugin_kit import PluginError, line
 
 MAX_CODE_CHARS = 100_000
+
+#: 公式里不准用的 LaTeX 命令:读写文件、执行外部程序、改 TeX 本身的规则。讲解视频的公式整条查;自定义代码里
+#: 查每一个字符串常量 —— `MathTex(r"\input{/etc/passwd}")` 不经 open 就把一个本机文件排进了画面。
+FORBIDDEN_TEX = re.compile(
+    r"\\(input|include|includeonly|write|write18|immediate|openin|openout|read|readline|closein|closeout|"
+    r"catcode|def|edef|gdef|xdef|let|futurelet|newcommand|renewcommand|providecommand|DeclareRobustCommand|"
+    r"usepackage|RequirePackage|documentclass|special|csname|endcsname|makeatletter|expandafter|directlua|"
+    r"luaexec|latelua|ShellEscape|pdfshellescape|verbatiminput|lstinputlisting|jobname|message|typeout|"
+    r"errmessage|scantokens|begin\s*\{\s*(filecontents|verbatim)\s*\})(?![A-Za-z])"
+)
+
 
 #: 默认准 import 的模块(取第一段:`from manim.utils import x` 看的是 manim)。
 ALLOWED_MODULES = frozenset({
@@ -43,7 +55,15 @@ FORBIDDEN_ATTRIBUTES = frozenset({
     "read_text", "read_bytes", "save", "savez", "savez_compressed", "savetxt", "load", "loadtxt", "fromfile",
     "tofile", "genfromtxt", "memmap", "urlopen", "socket", "subprocess", "environ", "putenv", "modules",
     "loader", "f_globals", "f_locals", "f_back", "gi_frame", "co_code",
+    # numpy / scipy / networkx 里不叫 save / load 的读写文件入口
+    "open_memmap", "fromregex", "loadmat", "savemat", "wavfile", "write", "writelines",
 })
+#: 这些前缀的属性都是读写文件(networkx 的 read_gml / write_edgelist …)。
+FORBIDDEN_ATTRIBUTE_PREFIXES = ("read_", "write_")
+#: 不经 open 就能把本机文件读进画面的 Manim 入口:SVG、图片按路径读,`Code(code_file=…)` 读源码文件。
+#: 自定义动画拿不到用户的素材(工具不收素材),所以代码里出现的路径只可能是这台电脑上的别的文件。
+FORBIDDEN_CALLS = frozenset({"SVGMobject", "ImageMobject"})
+FORBIDDEN_KEYWORDS = frozenset({"code_file", "file_name"})
 #: 下划线开头又结尾的属性只放行这几个(`super().__init__()`、`type(self).__name__`)。
 ALLOWED_DUNDERS = frozenset({"__init__", "__name__", "__doc__", "__len__", "__iter__", "__call__", "__qualname__"})
 
@@ -90,8 +110,16 @@ def violations(tree: ast.Module) -> list[tuple[int, str]]:
             found.append((where, node.id))
         elif isinstance(node, ast.Attribute):
             attr = node.attr
-            if attr in FORBIDDEN_ATTRIBUTES or (attr.startswith("__") and attr.endswith("__") and attr not in ALLOWED_DUNDERS):
+            if (attr in FORBIDDEN_ATTRIBUTES or attr.startswith(FORBIDDEN_ATTRIBUTE_PREFIXES)
+                    or attr in FORBIDDEN_CALLS
+                    or (attr.startswith("__") and attr.endswith("__") and attr not in ALLOWED_DUNDERS)):
                 found.append((where, f".{attr}"))
+        elif isinstance(node, ast.Name) and node.id in FORBIDDEN_CALLS:
+            found.append((where, node.id))
+        elif isinstance(node, ast.keyword) and node.arg in FORBIDDEN_KEYWORDS:
+            found.append((where, f"{node.arg}="))
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and (bad := FORBIDDEN_TEX.search(node.value)):
+            found.append((where, bad.group(0)))
     return sorted(set(found))
 
 
