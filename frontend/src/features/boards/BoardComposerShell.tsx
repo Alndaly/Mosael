@@ -1,5 +1,5 @@
 import React from "react";
-import { NodeToolbar, Position } from "@xyflow/react";
+import { NodeToolbar, Position, useStore } from "@xyflow/react";
 import { ArrowUp, Loader2, SlidersHorizontal, type LucideIcon } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
@@ -87,12 +87,16 @@ export function BoardComposerShell({
   send?: ComposerSend | null;
 }) {
   const body = React.useRef<HTMLDivElement | null>(null);
+  const frame = React.useRef<HTMLDivElement | null>(null);
   const scrolls = useOverflows(body);
+  const fit = useKeepInCanvas(frame);
   return (
     <NodeToolbar nodeId={nodeId} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
       <div
+        ref={frame}
         data-board-composer={name}
         data-width={width}
+        style={fit}
         className={cn(
           CANVAS_WINDOW_SURFACE_CLASS,
           "nodrag nopan grid max-h-[min(560px,70vh)] max-w-[calc(100vw-2rem)] grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden",
@@ -122,6 +126,57 @@ export function BoardComposerShell({
       </div>
     </NodeToolbar>
   );
+}
+
+/** 面板离画布边缘至少留多少。 */
+const CANVAS_MARGIN = 12;
+
+/**
+ * 让面板待在画布里看得见的地方。
+ *
+ * NodeToolbar 只会把面板摆在格子正下方居中 —— 格子靠近画布左右边时,560 宽的生成面板一半钻到侧栏底下;
+ * 靠近下边时发送键掉出画布。这里在每次画布平移 / 缩放、面板换了大小之后量一次:**横向**超出就整块平移回来;
+ * **纵向**把高度上限收到「从面板顶到画布底」—— 正文本来就会滚、底栏钉住,收矮了发送键也还在。量不了
+ * (测试环境没有布局)就什么都不做。
+ */
+function useKeepInCanvas(ref: React.RefObject<HTMLDivElement | null>): React.CSSProperties | undefined {
+  //: 画布一平移、一缩放,面板在屏幕上的位置就变了 —— 订阅视口,变了就重量。
+  const viewport = useStore((state) => state.transform);
+  const [fit, setFit] = React.useState<{ dx: number; maxHeight?: number }>({ dx: 0 });
+  const measure = React.useCallback(() => {
+    const panel = ref.current;
+    const canvas = panel?.closest(".react-flow")?.getBoundingClientRect();
+    if (!panel || !canvas || canvas.width === 0) return;
+    const rect = panel.getBoundingClientRect();
+    setFit((current) => {
+      //: 量到的是已经平移过的位置,先扣掉上一次的平移再算。
+      const left = rect.left - current.dx;
+      const right = left + rect.width;
+      let dx = 0;
+      if (right > canvas.right - CANVAS_MARGIN) dx = canvas.right - CANVAS_MARGIN - right;
+      if (left + dx < canvas.left + CANVAS_MARGIN) dx = canvas.left + CANVAS_MARGIN - left;
+      const room = Math.floor(canvas.bottom - CANVAS_MARGIN - rect.top);
+      const maxHeight = room > 0 && room < 560 ? Math.max(160, room) : undefined;
+      return dx === current.dx && maxHeight === current.maxHeight ? current : { dx, maxHeight };
+    });
+  }, [ref]);
+  React.useLayoutEffect(measure, [measure, viewport]);
+  React.useEffect(() => {
+    const panel = ref.current;
+    if (!panel || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(panel);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [ref, measure]);
+  if (fit.dx === 0 && fit.maxHeight === undefined) return undefined;
+  return {
+    ...(fit.dx ? { transform: `translateX(${fit.dx}px)` } : {}),
+    ...(fit.maxHeight ? { maxHeight: fit.maxHeight } : {}),
+  };
 }
 
 /** 正文此刻是不是真的装不下(会滚)。量不了(测试环境没有 ResizeObserver)就当不会滚。 */
