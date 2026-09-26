@@ -36,7 +36,6 @@ from lines import ComfyError, say
 TEMPLATE_TOOL = "wf_api_template"
 #: 工具一次最多跑多久(宿主的上限就是 1800 秒)。更长的走生成(6 小时、有回执、能续等)。
 TIMEOUT_SECONDS = 1800
-_CACHE = "tools.json"
 
 _ROLE_LABELS = {
     "reference_image": ("图", "Image"),
@@ -302,13 +301,15 @@ def _replaces(entry: models.Entry, name: str, shape: Shape) -> list[dict[str, An
     return found
 
 
-def _cache_path() -> Path | None:
+def _cache_path(comfy: Comfy) -> Path | None:
+    """工具名 → 模型 id 的对照表。**按服务器分开记**:持久目录是整个插件共用的,几台 ComfyUI 记在一个文件里就
+    互相覆盖,每跑一次工具都得把那台服务器上的工作流整个重扫一遍。"""
     root = os.environ.get("MOSAEL_PLUGIN_DATA_DIR", "")
-    return Path(root) / _CACHE if root else None
+    return Path(root) / f"tools-{_hash(comfy.base)}.json" if root else None
 
 
-def _remember(names: dict[str, str]) -> None:
-    path = _cache_path()
+def _remember(comfy: Comfy, names: dict[str, str]) -> None:
+    path = _cache_path(comfy)
     if path is None:
         return
     try:
@@ -323,13 +324,13 @@ def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
     object_info = comfy.object_info()
     entries = list(models.each(comfy, object_info, locale))
     names = tool_names(entries)
-    _remember(names)
+    _remember(comfy, names)
     return [tool_for(entry, names[entry.id], object_info) for entry in entries if entry.id in names]
 
 
 def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) -> models.Entry:
     """工具名 → 那张图。先看上次记下的对照表,对不上再整个扫一遍(工作流可能刚改过名)。"""
-    path = _cache_path()
+    path = _cache_path(comfy)
     known: dict[str, str] = {}
     if path is not None and path.is_file():
         try:
@@ -350,7 +351,7 @@ def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) 
             pass
     entries = list(models.each(comfy, object_info, locale))
     names = tool_names(entries)
-    _remember(names)
+    _remember(comfy, names)
     for entry in entries:
         if names.get(entry.id) == name:
             return entry

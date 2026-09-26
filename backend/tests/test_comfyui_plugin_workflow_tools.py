@@ -154,6 +154,27 @@ def test_自定义输出节点的产出落在它声明的那个输出上(comfy, 
     assert [one["output"] for one in result["artifacts"]] == ["output_12"]
 
 
+def test_两台服务器的对照表各记各的_跑工具不用整个重扫(comfy, tmp_path: Path) -> None:
+    """插件的持久目录是整个插件共用的:两台 ComfyUI 的工具对照表记在同一个文件里,就互相覆盖,
+    每跑一次工具都要把那台服务器上的工作流整个拉一遍。"""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    with FakeComfyUI() as other:
+        _tools(comfy.url, data_dir)
+        _tools(other.url, data_dir)
+    comfy.state.calls.clear()
+    comfy.state.outputs = {"4": {"images": [{"filename": "up.png", "type": "output"}]}}
+    image = tmp_path / "x.png"
+    image.write_bytes(PNG)
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    runtime.stream_tool(PLUGIN, ENTRY, UPSCALE_TOOL, {"image_1": str(image)}, {"SERVER_URL": comfy.url},
+                        hooks=runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False),
+                        scratch_dir=scratch, data_dir=data_dir, timeout=60)
+    listings = [call for call in comfy.state.calls if call[1] == "/api/userdata" and call[2].get("dir") == ["workflows"]]
+    assert listings == [], "对照表里就有这台服务器上的这个工具,不必把工作流整个重扫一遍"
+
+
 def test_没记住对照表也找得到(comfy, tmp_path: Path) -> None:
     """插件的持久目录是空的(刚升级、被清过):按名字重新扫一遍找到那张图。"""
     comfy.state.outputs = {"4": {"images": [{"filename": "up.png", "type": "output"}]}}
