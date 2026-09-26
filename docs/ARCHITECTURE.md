@@ -170,6 +170,9 @@ producer/config/bindings、`set_form`);开卡时的干跑除了 `check_canvas`,�
 批准后 `producers.run`,执行者是批准的人;只读的工具(effects 为 none)由 `ConfirmableTool.needs_card`
 判成不用问人,卡照开(留痕、同一条等待协议)但立即执行。
 
+一格的做法与版本、内置产出者的端口和服务端取值、落点与来历线、每种格子的字段表,按
+[ADR-0025](adr/0025-board-recipes-versions-and-ports.md) 分阶段收进产出者声明(设计已定,尚未落地)。
+
 ### 工作流节点的字段声明
 
 一个节点的表单**完全由 `NODE_TYPES` 的 `config` 声明生成** —— 编辑器不认识任何具体节点,

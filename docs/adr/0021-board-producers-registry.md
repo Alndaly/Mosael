@@ -459,6 +459,9 @@ JSON 提取、文本处理、检索笔记(检索笔记是查知识库、交回�
 - 内容优先的操作:选中一格内容,就地列出能用在它身上的变换(规矩已经给出「吃什么内容」,`board_group` 就是
   这个入口的索引)。
 
+把这份定位落进数据模型的结构改动(做法与版本、内置产出者的端口和服务端取值、落点与来历线、每种格子的字段表)
+见 [ADR 0025](0025-board-recipes-versions-and-ports.md)。
+
 ## Alternatives rejected
 
 - **A. Only make plugins generation providers.** Non-generation plugins would still be unusable on
