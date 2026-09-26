@@ -365,7 +365,7 @@
         "zh": "Manim 教学动画",
         "en": "Manim Teaching Animation"
       },
-      "version": "0.1.1",
+      "version": "0.2.0",
       "description": {
         "zh": "用 Manim(3Blue1Brown 那套数学动画的社区版)做教学动画,本机渲染、零生成费用:公式推导、几何关系、函数图像、算法步骤、代码讲解、物理示意。要「一步一步地变」而且必须讲对的内容用它;要真实画面(人物、场景、实拍感)用视频生成模型;要排版精致的图文讲解卡片、数据图表也可以用 Remotion 插件。给结构化内容(每一步的标题、旁白、要点、公式 / 函数图 / 代码)就出讲解视频,不用写代码;更自由的画面写一段 Manim 场景代码(默认不开放,要在插件页勾选)。第一次用前在插件页运行「准备 Manim 环境」。Manim 是 MIT 许可。",
         "en": "Teaching animations with Manim (the community edition of 3Blue1Brown's maths animation engine), rendered on this computer at no generation cost: derivations, geometry, function plots, algorithm steps, code walk-throughs, physics diagrams. Use it for content that must change step by step and be correct; use a video generation model for realistic footage; the Remotion plugin also suits polished text-and-chart explainer cards. Structured content (each step's title, narration, points and a formula / plot / code) becomes an explainer with no code; anything freer is a Manim scene in Python (off by default — enable it on the plugins page). Run \"Prepare Manim\" once on the plugins page first. Manim is MIT-licensed."

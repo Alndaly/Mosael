@@ -20,7 +20,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
-from manim_common import PluginError, line
+from plugin_kit import PluginError, line
 
 MAX_CODE_CHARS = 100_000
 

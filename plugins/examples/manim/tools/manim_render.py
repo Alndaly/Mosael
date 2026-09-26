@@ -2,22 +2,16 @@
 
 from __future__ import annotations
 
-import codecs
 import json
 import re
 import shutil
-import subprocess
-import threading
-import time
-import queue
-import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from manim_common import Cancelled, PluginError, blame_line, cancel_requested, line, strip_ansi
-from manim_env import _group_kwargs, child_env, latex_hint, stop
+from manim_env import child_env, latex_hint
+from plugin_kit import PluginError, TimedOut, blame_line, fresh_dir, follow, line, strip_ansi
 
 HERE = Path(__file__).resolve().parent
 KIT = HERE / "scene_kit"
@@ -123,19 +117,8 @@ def new_job(data: Path) -> Path:
     """这一次渲染自己的目录:场景文件、数据、Manim 的中间产物都在这里,渲完即删。
 
     放在持久目录而不是系统临时目录:LaTeX 的中间文件、分段视频可能有几百 MB,临时目录在有的机器上很小。
-    顺手清掉一天以前的残留(进程被强杀时来不及删)。
     """
-    jobs = data / "jobs"
-    jobs.mkdir(parents=True, exist_ok=True)
-    cutoff = time.time() - 86400
-    for old in jobs.iterdir():
-        try:
-            if old.is_dir() and old.stat().st_mtime < cutoff:
-                shutil.rmtree(old, ignore_errors=True)
-        except OSError:
-            pass
-    job = jobs / uuid.uuid4().hex[:12]
-    job.mkdir()
+    job = fresh_dir(data / "jobs")
     for name in ("mosael_runner.py", "mosael_expr.py", "mosael_text.py", "mosael_explainer.py", "mosael.py"):
         shutil.copy2(KIT / name, job / name)
     return job
@@ -175,67 +158,30 @@ class RenderLog:
 
 def run(args: list[str], cwd: Path, locale: str, on_event: Callable[[str, Any], None], *,
         timeout: float = RENDER_TIMEOUT) -> RenderLog:
-    """起 Manim,读到它退出为止。看到取消文件就停下它(连同 latex 之类的子进程),超时同样停下。"""
-    process = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-                               env=child_env(), **_group_kwargs())
+    """起 Manim,读到它退出为止。取消、超时都连同它起的 LaTeX 一起停(见 plugin_kit.follow)。"""
     log = RenderLog()
-    lines: queue.Queue = queue.Queue()
 
-    def pump(stream, name: str) -> None:
-        # 进度条用 `\r` 原地重画,按行读会一直读不到换行 —— 所以按块读,`\r` 和 `\n` 都算分隔。
-        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        buffer = ""
-        while True:
-            chunk = stream.read1(4096) if hasattr(stream, "read1") else stream.read(4096)
-            if not chunk:
-                break
-            buffer += decoder.decode(chunk)
-            parts = re.split(r"[\r\n]", buffer)
-            buffer = parts.pop()
-            for part in parts:
-                if part.strip():
-                    lines.put((name, part))
-        buffer += decoder.decode(b"", final=True)
-        if buffer.strip():
-            lines.put((name, buffer))
-        lines.put((name, None))
+    def on_line(stream: str, text: str) -> None:
+        event = parse_line(text) if stream == "err" else None
+        if event is None:
+            return
+        kind, value = event
+        if kind == "marker":
+            if value.get("kind") == "error":
+                log.error = value
+            else:
+                log.markers.append(value)
+        on_event(kind, value)
 
-    readers = [threading.Thread(target=pump, args=(process.stderr, "err"), daemon=True),
-               threading.Thread(target=pump, args=(process.stdout, "out"), daemon=True)]
-    for reader in readers:
-        reader.start()
-    deadline = time.monotonic() + timeout
-    open_streams = 2
-    while open_streams:
-        try:
-            name, text = lines.get(timeout=0.25)
-        except queue.Empty:
-            name, text = "", ""
-        if text is None:
-            open_streams -= 1
-        elif text:
-            log.tail.append(text)
-            event = parse_line(text) if name == "err" else None
-            if event is not None:
-                kind, value = event
-                if kind == "marker":
-                    if value.get("kind") == "error":
-                        log.error = value
-                    else:
-                        log.markers.append(value)
-                on_event(kind, value)
-        if cancel_requested():
-            stop(process)
-            raise Cancelled(line(locale, "已取消。", "Cancelled."))
-        if time.monotonic() > deadline:
-            stop(process)
-            raise PluginError(line(
-                locale,
-                f"渲染超过 {timeout:g} 秒还没完成。降低画质(quality: low / medium)、减少步数或缩短时长,或者拆成几段分别渲染。",
-                f"Rendering did not finish within {timeout:g}s. Lower the quality (low / medium), use fewer steps or split it into parts.",
-            ))
-    process.wait()
-    log.returncode = process.returncode
+    try:
+        done = follow(args, locale=locale, timeout=timeout, cwd=cwd, env=child_env(), on_line=on_line)
+    except TimedOut as exc:
+        raise PluginError(line(
+            locale,
+            f"渲染超过 {timeout:g} 秒还没完成。降低画质(quality: low / medium)、减少步数或缩短时长,或者拆成几段分别渲染。",
+            f"Rendering did not finish within {timeout:g}s. Lower the quality (low / medium), use fewer steps or split it into parts.",
+        )) from exc
+    log.tail, log.returncode = done.tail, done.returncode
     return log
 
 

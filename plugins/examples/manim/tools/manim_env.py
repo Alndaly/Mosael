@@ -22,17 +22,15 @@ from __future__ import annotations
 
 import json
 import os
-import queue
 import re
 import shutil
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 from typing import Any
 
-from manim_common import Cancelled, Emit, PluginError, blame_line, cancel_requested, data_dir, line, progress
+from plugin_kit import Emit, PluginError, TimedOut, blame_line, data_dir, exclusive, follow, line, progress
 
 #: 锁定的 Manim 版本。插件的模板、报错整理、进度解析都是对着它测的。
 MANIM_VERSION = "0.21.0"
@@ -250,91 +248,56 @@ _COLLECTING = re.compile(r"^Collecting (\S+)")
 _BUILDING = re.compile(r"Building wheel for (\S+)")
 
 
-def _stream(args: list[str], send: Emit, locale: str, *, deadline: float, start: float, span: float) -> tuple[int, list[str]]:
-    """跑一个会说很多话的子进程(pip),边读边报进度,看取消、看超时。返回 (退出码, 全部输出)。"""
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                               text=True, encoding="utf-8", errors="replace", env=child_env(), bufsize=1,
-                               **_group_kwargs())
-    lines: list[str] = []
-    collected = 0
-    pending: queue.Queue = queue.Queue()
+def _pip(args: list[str], send: Emit, locale: str, *, timeout: float, start: float, span: float) -> tuple[int, list[str]]:
+    """跑 pip,边读边报进度(看取消、看时限都在 plugin_kit.follow 里)。返回 (退出码, 输出)。"""
+    collected = [0]
 
-    def pump() -> None:
-        assert process.stdout is not None
-        for raw in process.stdout:
-            pending.put(raw)
-        pending.put(None)
+    def on_line(_stream: str, text: str) -> None:
+        text = text.rstrip()
+        if match := _COLLECTING.match(text):
+            collected[0] += 1
+            progress(send, start + span * min(0.7, collected[0] / 45),
+                     line(locale, f"下载 {match.group(1)}", f"Downloading {match.group(1)}"))
+        elif match := _BUILDING.search(text):
+            progress(send, start + span * 0.75, line(locale, f"编译 {match.group(1)}(要一两分钟)",
+                                                     f"Building {match.group(1)} (a minute or two)"))
+        elif text.startswith("Installing collected packages"):
+            progress(send, start + span * 0.85, line(locale, "安装依赖", "Installing packages"))
 
-    threading.Thread(target=pump, daemon=True).start()
-    while True:
-        try:
-            raw = pending.get(timeout=0.3)
-        except queue.Empty:
-            raw = ""
-        if raw is None:
-            break
-        if raw:
-            text = raw.rstrip()
-            lines.append(text)
-            if match := _COLLECTING.match(text):
-                collected += 1
-                progress(send, start + span * min(0.7, collected / 45),
-                         line(locale, f"下载 {match.group(1)}", f"Downloading {match.group(1)}"))
-            elif match := _BUILDING.search(text):
-                progress(send, start + span * 0.75, line(locale, f"编译 {match.group(1)}(要一两分钟)",
-                                                         f"Building {match.group(1)} (a minute or two)"))
-            elif text.startswith("Installing collected packages"):
-                progress(send, start + span * 0.85, line(locale, "安装依赖", "Installing packages"))
-        if cancel_requested():
-            stop(process)
-            raise Cancelled(line(locale, "已取消。", "Cancelled."))
-        if time.monotonic() > deadline:
-            stop(process)
-            raise PluginError(line(
-                locale,
-                "安装超时。网络慢的话在插件配置里填一个 PyPI 镜像(如 https://pypi.tuna.tsinghua.edu.cn/simple)再试。",
-                "Installation timed out. On a slow network, set a PyPI mirror in the plugin settings and try again.",
-            ))
-    process.wait()
-    return process.returncode, lines
-
-
-def _group_kwargs() -> dict[str, Any]:
-    """子进程单独成组:取消时连它派生的进程(编译器、latex)一起停。"""
-    if sys.platform == "win32":
-        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
-    return {"start_new_session": True}
-
-
-def stop(process: subprocess.Popen) -> None:
-    """停掉一个子进程**和它的子孙**。先礼后兵:先请它停,3 秒不停再杀。"""
-    if process.poll() is not None:
-        return
     try:
-        if sys.platform == "win32":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, timeout=15)
-        else:
-            import signal
+        done = follow(args, locale=locale, timeout=timeout, env=child_env(), on_line=on_line, tail=4000)
+    except TimedOut as exc:
+        raise PluginError(_install_timed_out(locale)) from exc
+    return done.returncode, list(done.tail)
 
-            os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=3)
-                return
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-    except (OSError, subprocess.SubprocessError):
-        process.kill()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        pass
+
+def _install_timed_out(locale: str) -> str:
+    return line(
+        locale,
+        "安装超时。网络慢的话在插件配置里填一个 PyPI 镜像(如 https://pypi.tuna.tsinghua.edu.cn/simple)再试。",
+        "Installation timed out. On a slow network, set a PyPI mirror in the plugin settings and try again.",
+    )
 
 
 def install(send: Emit, locale: str, *, reinstall: bool = False) -> bool:
-    """建 venv、装锁定版本的 manim。已经是这一份就什么都不做;返回是否真的装了。"""
+    """建 venv、装锁定版本的 manim。已经是这一份就什么都不做;返回是否真的装了。
+
+    **同一时刻只有一个在装**(`exclusive`):两次「准备 Manim 环境」同时跑,会一个删掉另一个装到一半的 venv。
+    后到的那个等前一个装完,再看一眼 —— 多半已经是这一份了,什么都不用做。
+    """
+    deadline = time.monotonic() + SETUP_TIMEOUT
     venv = venv_dir(locale)
-    if installed_ready(locale) and not reinstall and "error" not in probe(str(venv_python(venv))):
-        return False
+    try:
+        with exclusive(data_dir(locale) / "venv.lock", locale=locale, timeout=SETUP_TIMEOUT):
+            if installed_ready(locale) and not reinstall and "error" not in probe(str(venv_python(venv))):
+                return False
+            _build(send, locale, venv, deadline)
+    except TimedOut as exc:
+        raise PluginError(_install_timed_out(locale)) from exc
+    return True
+
+
+def _build(send: Emit, locale: str, venv: Path, deadline: float) -> None:
     if sys.version_info < MIN_PYTHON:
         raise PluginError(line(
             locale,
@@ -347,7 +310,6 @@ def install(send: Emit, locale: str, *, reinstall: bool = False) -> bool:
                           + "\n".join(f"- {one}" for one in missing)
                           + line(locale, "\n装好后重启 Mosael,再运行一次「准备 Manim 环境」。",
                                  "\nInstall them, restart Mosael and run \"Prepare Manim\" again."))
-    deadline = time.monotonic() + SETUP_TIMEOUT
     progress(send, 0.02, line(locale, "建立 Python 虚拟环境", "Creating a Python virtual environment"))
     shutil.rmtree(venv, ignore_errors=True)
     created = _run([sys.executable, "-m", "venv", str(venv)], timeout=300)
@@ -360,11 +322,10 @@ def install(send: Emit, locale: str, *, reinstall: bool = False) -> bool:
     if index:
         args += ["--index-url", index]
     progress(send, 0.05, line(locale, f"安装 Manim {MANIM_VERSION}", f"Installing Manim {MANIM_VERSION}"))
-    code, output = _stream(args, send, locale, deadline=deadline, start=0.05, span=0.85)
+    code, output = _pip(args, send, locale, timeout=max(1.0, deadline - time.monotonic()), start=0.05, span=0.85)
     if code != 0:
         raise PluginError(line(locale, "安装 Manim 失败:", "Installing Manim failed: ") + explain_pip_failure(output, locale))
     (venv / STAMP).write_text(json.dumps({"manim": MANIM_VERSION, "python": sys.version.split()[0]}), encoding="utf-8")
-    return True
 
 
 def explain_pip_failure(output: list[str], locale: str) -> str:

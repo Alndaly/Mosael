@@ -11,7 +11,7 @@ import math
 import re
 from typing import Any
 
-from manim_common import PluginError, line
+from plugin_kit import PluginError, line
 from scene_kit.mosael_expr import ExpressionError, auto_y_range, compile_function, nice_step, parse, sample
 from scene_kit.mosael_text import display_width, latex_to_plain, reading_seconds
 

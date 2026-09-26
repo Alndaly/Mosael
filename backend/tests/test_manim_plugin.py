@@ -29,7 +29,7 @@ TOOLS = PLUGIN / "tools"
 
 sys.path.insert(0, str(TOOLS))
 try:
-    import manim_common
+    import plugin_kit
     import manim_env
     import manim_explainer as ex
     import manim_guard as guard
@@ -39,7 +39,7 @@ try:
 finally:
     sys.path.remove(str(TOOLS))
 
-PluginError = manim_common.PluginError
+PluginError = plugin_kit.PluginError
 
 
 # ---------------------------------------------------------------- 函数表达式:只认算式
@@ -247,10 +247,10 @@ class Test进度:
 
     def test_重复的进度不再报(self) -> None:
         sent: list = []
-        manim_common._last_progress[0] = None
+        plugin_kit._last_progress[0] = None
         for _ in range(3):
-            manim_common.progress(sent.append, 0.5, "x")
-        manim_common.progress(sent.append, 0.6, "x")
+            plugin_kit.progress(sent.append, 0.5, "x")
+        plugin_kit.progress(sent.append, 0.6, "x")
         assert len(sent) == 2
 
 

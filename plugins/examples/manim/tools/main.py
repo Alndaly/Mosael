@@ -29,14 +29,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from manim_common import Emit, PluginError, data_dir, emit, line, output_dir, progress, safe_stem
+from plugin_kit import Emit, PluginError, data_dir, emit, line, output_dir, progress, safe_stem
 from manim_env import (
     MANIM_VERSION, configured_python, install, latex_hint, latex_status, probe, render_python, venv_dir, venv_python,
 )
 from manim_explainer import build_spec, has_formulas, srt, timings
 from manim_guard import check
 from manim_render import (
-    RENDER_TIMEOUT, Options, build_args, explain_failure, find_output, new_job, resolve_options, run,
+    FORMATS, RENDER_TIMEOUT, Options, build_args, explain_failure, find_output, new_job, resolve_options, run,
 )
 
 TRUE = {"1", "true", "yes", "on"}
@@ -53,7 +53,7 @@ def _render(python: str, job: Path, scene_file: Path, scene: str, options: Optio
 
 
 def _deliver(produced: Path, payload: dict[str, Any], fallback: str, extension: str, locale: str) -> str:
-    name = f"{safe_stem(payload.get('filename'), fallback)}.{extension}"
+    name = f"{safe_stem(payload.get('filename'), fallback, (*FORMATS, 'png', 'srt'))}.{extension}"
     shutil.move(str(produced), str(output_dir(locale) / name))
     return name
 
