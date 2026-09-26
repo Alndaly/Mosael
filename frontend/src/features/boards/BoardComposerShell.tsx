@@ -139,7 +139,10 @@ const CANVAS_MARGIN = 12;
  * **纵向**把高度上限收到「从面板顶到画布底」—— 正文本来就会滚、底栏钉住,收矮了发送键也还在。量不了
  * (测试环境没有布局)就什么都不做。
  */
-function useKeepInCanvas(ref: React.RefObject<HTMLDivElement | null>): React.CSSProperties | undefined {
+export function useKeepInCanvas(
+  ref: React.RefObject<HTMLDivElement | null>,
+  { vertical = true }: { vertical?: boolean } = {},
+): React.CSSProperties | undefined {
   const [fit, setFit] = React.useState<{ dx: number; maxHeight?: number }>({ dx: 0 });
   const measure = React.useCallback(() => {
     const panel = ref.current;
@@ -154,10 +157,10 @@ function useKeepInCanvas(ref: React.RefObject<HTMLDivElement | null>): React.CSS
       if (right > canvas.right - CANVAS_MARGIN) dx = canvas.right - CANVAS_MARGIN - right;
       if (left + dx < canvas.left + CANVAS_MARGIN) dx = canvas.left + CANVAS_MARGIN - left;
       const room = Math.floor(canvas.bottom - CANVAS_MARGIN - rect.top);
-      const maxHeight = room > 0 && room < 560 ? Math.max(160, room) : undefined;
+      const maxHeight = vertical && room > 0 && room < 560 ? Math.max(160, room) : undefined;
       return dx === current.dx && maxHeight === current.maxHeight ? current : { dx, maxHeight };
     });
-  }, [ref]);
+  }, [ref, vertical]);
   React.useLayoutEffect(measure, [measure]);
   React.useEffect(() => {
     const panel = ref.current;
@@ -171,14 +174,19 @@ function useKeepInCanvas(ref: React.RefObject<HTMLDivElement | null>): React.CSS
     };
     const observer = new ResizeObserver(schedule);
     observer.observe(panel);
+    //: 还要看**挂它的那一层**(NodeToolbar 的外层):它在挂上之后才被摆到格子旁边,那一下也是一次挪动 ——
+    //: 只看视口的话,第一次量发生在摆好之前,量到的是左上角的原点,之后没人再叫它量。
     const viewport = panel.closest(".react-flow")?.querySelector(".react-flow__viewport");
-    const moves = viewport ? new MutationObserver(schedule) : null;
-    if (viewport && moves) moves.observe(viewport, { attributes: true, attributeFilter: ["style"] });
+    const moves = new MutationObserver(schedule);
+    for (const target of [viewport, panel.parentElement]) {
+      if (target) moves.observe(target, { attributes: true, attributeFilter: ["style"] });
+    }
+    schedule();
     window.addEventListener("resize", schedule);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      moves?.disconnect();
+      moves.disconnect();
       window.removeEventListener("resize", schedule);
     };
   }, [ref, measure]);

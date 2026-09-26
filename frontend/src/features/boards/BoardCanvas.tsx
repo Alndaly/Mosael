@@ -61,6 +61,7 @@ import { TrimComposer } from "@/features/boards/TrimComposer";
 import { canAskWriter, composerOnDemand, renderComposer, slotProducers } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type BoardToolFace, type MediaKind } from "@/features/boards/boardNodes";
 import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, withProducer } from "@/features/boards/boardItemState";
+import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { assetItem, clipboardContent, type PlacedAsset } from "@/features/boards/boardPlacement";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
@@ -1743,6 +1744,9 @@ function ItemToolbar({
   const selected = nodes.filter((node) => node.selected && node.type !== "marker");
   // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
   const single = selected.length === 1 ? selected[0] : null;
+  //: 操作条和面板一样,格子贴着画布边时不钻到侧栏底下(横向平移回来;它只有一行,不收高度)。
+  const bar = React.useRef<HTMLDivElement | null>(null);
+  const fit = useKeepInCanvas(bar, { vertical: false });
   if (selected.length === 0) return null;
 
   const item = single ? (single.data as unknown as { item: BoardItem }).item : null;
@@ -1762,7 +1766,11 @@ function ItemToolbar({
     //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层
     //: 另用一套数字 —— 否则一眼看过去就是上疏下密。
     <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className="nodrag nopan flex items-center gap-1 rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]">
+      <div
+        ref={bar}
+        style={fit}
+        className="nodrag nopan flex items-center gap-1 whitespace-nowrap rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]"
+      >
         {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
             于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的
             条件,加了音频节点之后就和实际渲染分了岔:音频头上挂着一道悬空的竖线。 */}
@@ -1790,7 +1798,7 @@ function ItemToolbar({
             aria-pressed={writerId === item.id}
             title={t("boardAskAiWriteTitle")}
             className={cn(
-              "flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs transition-colors hover:bg-secondary hover:text-foreground",
+              "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors hover:bg-secondary hover:text-foreground",
               writerId === item.id ? "bg-secondary text-foreground" : "text-muted-foreground",
             )}
             onClick={() => onAskWriter(item.id)}
@@ -1807,7 +1815,7 @@ function ItemToolbar({
             aria-pressed={Boolean(item.move_children)}
             title={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}
             className={cn(
-              "flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
+              "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
               item.move_children
                 ? "bg-primary/12 text-primary"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -1823,7 +1831,7 @@ function ItemToolbar({
         {(item?.kind === "image" || item?.kind === "video") && item.asset_id && (
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             title={t("boardPreviewTitle")}
             onClick={() =>
               openImagePreview({
@@ -1845,7 +1853,7 @@ function ItemToolbar({
           <button
             type="button"
             className={cn(
-              "flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs transition-colors hover:bg-secondary hover:text-foreground",
+              "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors hover:bg-secondary hover:text-foreground",
               trimmingId === item.id ? "bg-secondary text-foreground" : "text-muted-foreground",
             )}
             title={t("boardTrimTitle")}
@@ -1859,7 +1867,7 @@ function ItemToolbar({
         {item && isMediaKind(item.kind) && (
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={() =>
               onPickAsset(item.kind as MediaKind, (assetId) =>
                 // 手动换素材不是上一轮 AI 任务的“成功产物”。把运行态归回 idle，同时 asset_id
@@ -1906,6 +1914,11 @@ function ItemToolbar({
             用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都来不及说。
             长出哪几种、每一个悬停时说什么,是同一张表(GROW);图标是要长出来的那种格子的图标,
             一眼看出这一下会多出一张图、一段视频还是一张便签。已经在跑的那一项不给(它还没有产出)。 */}
+        {/* 「生成」这一组:前面一个淡淡的「生成」,后面每一枚只写要长出来的那种东西(图片、视频、文案、音频)——
+            此前四枚都写「生成图片」「生成视频」…,一条操作条排不下,字被折成两行。完整的一句在悬停里。 */}
+        {onSpawn && single && item && !itemIsRunning(item) && hasContent(item) && GROW_ORDER.some((kind) => GROW[item.kind]?.[kind]) && (
+          <span aria-hidden className="shrink-0 pl-1 text-ui-2xs text-muted-foreground/70">{t("boardGrowLabel")}</span>
+        )}
         {onSpawn && single && item && !itemIsRunning(item) && hasContent(item) &&
           GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
             const Icon = kindIcon(kind);
@@ -1914,7 +1927,7 @@ function ItemToolbar({
                 key={kind}
                 type="button"
                 data-board-grow={kind}
-                className="flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                 title={t(GROW[item.kind]?.[kind] as MessageKey)}
                 onClick={() =>
                   onSpawn(kind, item.id, {
@@ -1926,7 +1939,7 @@ function ItemToolbar({
                 <Icon size={13} />{" "}
                 {/* 文案那一格说的是「生成文案」而不是「生成便签」—— 便签是这张卡片的名字,
                     而用户要的是里面那段字。套同一个模板会说出「Generate Note」这种话。 */}
-                {kind === "note" ? t("boardWriteCopy") : t("boardGenerateKind").replace("{kind}", kindText(t, kind).label)}
+                {kind === "note" ? t("boardGrowCopy") : kindText(t, kind).label}
               </button>
             );
           })}
