@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import shutil
 import uuid
 from datetime import UTC, datetime
@@ -3162,6 +3163,240 @@ def _remove_minimax_music_models() -> None:
                 )
 
 
+def _merge_object_storage_plugins() -> None:
+    """四个对象存储插件(阿里云 OSS / Amazon S3 / 腾讯云 COS / 火山引擎 TOS)合成一个随应用内置的「对象存储」
+    插件(`dev.mosael.object-storage`),连哪一家成了连接的配置(`STORAGE_PROVIDER`)。
+
+    **连接 id 不变**,于是「素材外链」的默认(plugin_capability_defaults)、直链缓存(plugin_public_links)、
+    工作流和画板上选定的连接(`instance_id`)一个都不用动。在原地改的:
+
+    - 连接:改挂新包;配置 `<家>_BUCKET / _REGION / _ENDPOINT` → `STORAGE_*`,并写上服务商。老 S3 插件填了
+      非 amazonaws.com 接入点的(MinIO、R2)归到「S3 兼容服务」。地域空着的按老插件的默认值补上 —— 老代码
+      就是这么补的,迁过来行为不变。名字还是老模板生成的那个时,按新模板重生成(新模板对四家生成的正是同一个
+      名字;S3 兼容服务那一格除外),这样以后改配置时名字照旧跟着走;用户改过的名字不动;
+    - 凭据:**只改键名,不解密**(`value` 是整格密文,和键名无关);
+    - 授权:`network:oss|s3|cos|tos` → `network:object-storage`,授过的照旧是授过的;
+    - 工具:`oss_upload` → `storage_upload`(presign / fetch / list 同理)。工具开关、调用记录、会话里
+      「本会话始终允许」的名字(`plugin__<连接>__<工具>`)和确认卡上的工具名跟着改;新工具缺开关的补上
+      (清单是 `expose: all`,全开);
+    - 工作流(连同循环体 / 子图)与画板工具格上的节点类型 `plugin.<老包>.<老工具>` → 新写法。入参和出参的
+      名字没变(asset_id / key / expires / url / public_url …),数据边与 `{{节点.url}}` 引用不用动。改过的
+      工作流追加一版修订,作者和认可人沿用上一版 —— 机械改写不换担保人;
+    - 老包的记录删掉,插件目录里老包的文件夹和持久目录删掉 —— 否则下一次扫描会把它们重新登记回来。
+
+    新包由 `install-bundled-plugins`(每次启动的对账,排在前面)装好;有连接要搬而它不在就报错,不搬半截。
+    幂等:第二次跑时已经没有老包的连接、记录和目录。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"plugin_packages", "plugin_instances"} <= tables:
+        return
+    new_package = "dev.mosael.object-storage"
+    #: 老包 → (服务商, 配置键前缀, (ID 凭据键, 密钥凭据键), 老权限, 老工具前缀, 老地域默认, 老名字前缀 zh / en)
+    legacy: dict[str, tuple[str, str, tuple[str, str], str, str, str, tuple[str, str]]] = {
+        "dev.mosael.aliyun-oss": ("aliyun-oss", "OSS", ("OSS_ACCESS_KEY_ID", "OSS_ACCESS_KEY_SECRET"), "network:oss",
+                                  "oss", "cn-hangzhou", ("阿里云 OSS", "Alibaba Cloud OSS")),
+        "dev.mosael.aws-s3": ("aws-s3", "S3", ("S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"), "network:s3",
+                              "s3", "us-east-1", ("Amazon S3", "Amazon S3")),
+        "dev.mosael.tencent-cos": ("tencent-cos", "COS", ("COS_SECRET_ID", "COS_SECRET_KEY"), "network:cos",
+                                   "cos", "ap-guangzhou", ("腾讯云 COS", "Tencent Cloud COS")),
+        "dev.mosael.volcengine-tos": ("volcengine-tos", "TOS", ("TOS_ACCESS_KEY", "TOS_SECRET_KEY"), "network:tos",
+                                      "tos", "cn-beijing", ("火山引擎 TOS", "Volcengine TOS")),
+    }
+    #: 新清单里服务商的显示名(zh, en)—— 和 name_template `{STORAGE_PROVIDER:label} · {STORAGE_BUCKET}` 同一份。
+    labels = {"aliyun-oss": ("阿里云 OSS", "Alibaba Cloud OSS"), "aws-s3": ("Amazon S3", "Amazon S3"),
+              "tencent-cos": ("腾讯云 COS", "Tencent Cloud COS"), "volcengine-tos": ("火山引擎 TOS", "Volcengine TOS"),
+              "s3-compatible": ("S3 兼容服务", "S3-compatible service")}
+    actions = ("upload", "presign", "fetch", "list")
+    #: 节点类型 / 画板产出者的新旧写法。
+    node_types = {
+        f"plugin.{package}.{spec[4]}_{action}": f"plugin.{new_package}.storage_{action}"
+        for package, spec in legacy.items() for action in actions
+    }
+    node_types.update({f"node:{old}": f"node:{new}" for old, new in list(node_types.items())})
+
+    def loads(raw: Any, fallback: Any) -> Any:
+        if raw is None:
+            return fallback
+        if not isinstance(raw, str):
+            return raw
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return fallback
+
+    def dumps(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False)
+
+    def safe(name: str) -> str:
+        """智能体工具名里的一段(agent.tool_manifest.agent_tool_name 同一条折叠规则)。"""
+        return re.sub(r"[^A-Za-z0-9_]+", "_", name)
+
+    def renamed(value: Any) -> Any:
+        """把一份 JSON 里**恰好等于**某个老节点类型的字符串换掉(键不动)。"""
+        if isinstance(value, dict):
+            return {key: renamed(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [renamed(item) for item in value]
+        return node_types.get(value, value) if isinstance(value, str) else value
+
+    stamp = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    old_ids = tuple(legacy)
+    marks = ", ".join(f":p{index}" for index in range(len(old_ids)))
+    by_index = {f"p{index}": one for index, one in enumerate(old_ids)}
+    with engine.begin() as conn:
+        instances = conn.execute(
+            text(f"SELECT id, package_id, name, config FROM plugin_instances WHERE package_id IN ({marks})"), by_index
+        ).mappings().all()
+        if instances and conn.execute(text("SELECT 1 FROM plugin_packages WHERE id = :id"),
+                                      {"id": new_package}).first() is None:
+            raise RuntimeError("the bundled object-storage plugin is not installed; storage connections cannot be merged yet")
+
+        #: 这次改了名的智能体工具名:`plugin__<连接>__oss_upload` → `plugin__<连接>__storage_upload`。
+        agent_tools: dict[str, str] = {}
+        for row in instances:
+            provider, prefix, (id_key, secret_key), permission, tool_prefix, region_default, (zh, en) = legacy[row["package_id"]]
+            old = loads(row["config"], {}) or {}
+            bucket = str(old.get(f"{prefix}_BUCKET") or "").strip()
+            region = str(old.get(f"{prefix}_REGION") or "").strip() or region_default
+            endpoint = str(old.get(f"{prefix}_ENDPOINT") or "").strip()
+            if provider == "aws-s3" and endpoint and "amazonaws.com" not in endpoint.lower():
+                provider = "s3-compatible"
+            config = {"STORAGE_PROVIDER": provider, "STORAGE_BUCKET": bucket, "STORAGE_REGION": region,
+                      "STORAGE_ENDPOINT": endpoint}
+            name = row["name"] or ""
+            if name == f"{zh} · {bucket}":
+                name = f"{labels[provider][0]} · {bucket}"
+            elif name == f"{en} · {bucket}":
+                name = f"{labels[provider][1]} · {bucket}"
+            conn.execute(
+                text("UPDATE plugin_instances SET package_id = :package, config = :config, name = :name, updated_at = :now"
+                     " WHERE id = :id"),
+                {"package": new_package, "config": dumps(config), "name": name, "now": stamp, "id": row["id"]},
+            )
+
+            def move(table: str, column: str, old_value: str, new_value: str, instance_id: str = row["id"]) -> None:
+                """把这个连接的一行从老键改到新键;新键已经有了就删掉老的(第二次跑、或者用户手动补过)。"""
+                if table not in tables:
+                    return
+                taken = conn.execute(
+                    text(f"SELECT 1 FROM {table} WHERE instance_id = :id AND {column} = :new"),
+                    {"id": instance_id, "new": new_value},
+                ).first()
+                verb = f"DELETE FROM {table}" if taken else f"UPDATE {table} SET {column} = :new"
+                conn.execute(text(f"{verb} WHERE instance_id = :id AND {column} = :old"),
+                             {"id": instance_id, "old": old_value, "new": new_value})
+
+            move("plugin_credentials", "key", id_key, "STORAGE_ACCESS_KEY_ID")
+            move("plugin_credentials", "key", secret_key, "STORAGE_ACCESS_KEY_SECRET")
+            move("plugin_permission_grants", "permission", permission, "network:object-storage")
+            for action in actions:
+                move("plugin_capabilities", "tool_name", f"{tool_prefix}_{action}", f"storage_{action}")
+                if "plugin_invocations" in tables:
+                    conn.execute(
+                        text("UPDATE plugin_invocations SET tool_name = :new WHERE instance_id = :id AND tool_name = :old"),
+                        {"id": row["id"], "old": f"{tool_prefix}_{action}", "new": f"storage_{action}"},
+                    )
+                agent_tools[f"plugin__{safe(row['id'])}__{tool_prefix}_{action}"] = f"plugin__{safe(row['id'])}__storage_{action}"
+                if "plugin_capabilities" in tables and conn.execute(
+                    text("SELECT 1 FROM plugin_capabilities WHERE instance_id = :id AND tool_name = :tool"),
+                    {"id": row["id"], "tool": f"storage_{action}"},
+                ).first() is None:
+                    conn.execute(
+                        text("INSERT INTO plugin_capabilities (instance_id, tool_name, exposed) VALUES (:id, :tool, 1)"),
+                        {"id": row["id"], "tool": f"storage_{action}"},
+                    )
+
+        if agent_tools and "agent_sessions" in tables:
+            for session in conn.execute(text("SELECT id, auto_allow_tools FROM agent_sessions")).mappings().all():
+                allowed = loads(session["auto_allow_tools"], []) or []
+                if isinstance(allowed, list) and any(name in agent_tools for name in allowed):
+                    conn.execute(text("UPDATE agent_sessions SET auto_allow_tools = :v WHERE id = :id"),
+                                 {"v": dumps([agent_tools.get(name, name) for name in allowed]), "id": session["id"]})
+        if agent_tools and "tool_confirmations" in tables:
+            for old_name, new_name in agent_tools.items():
+                conn.execute(text("UPDATE tool_confirmations SET tool = :new WHERE tool = :old"),
+                             {"old": old_name, "new": new_name})
+
+        if "boards" in tables:
+            board_columns = {column["name"] for column in inspect(conn).get_columns("boards")}
+            for row in conn.execute(text("SELECT id, canvas FROM boards")).mappings().all():
+                canvas = loads(row["canvas"], None)
+                rewritten = renamed(canvas)
+                if isinstance(canvas, dict) and rewritten != canvas:
+                    bump = ", revision = revision + 1" if "revision" in board_columns else ""
+                    conn.execute(text(f"UPDATE boards SET canvas = :c{bump} WHERE id = :id"),
+                                 {"c": dumps(rewritten), "id": row["id"]})
+
+        if "workflows" in tables:
+
+            def digest(graph: Any) -> str:
+                canonical = json.dumps(graph or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+            workflow_columns = {column["name"] for column in inspect(conn).get_columns("workflows")}
+            has_revisions = "workflow_revisions" in tables and {"revision", "graph_hash"} <= workflow_columns
+            for row in conn.execute(text("SELECT id, graph FROM workflows")).mappings().all():
+                graph = loads(row["graph"], None)
+                rewritten = renamed(graph)
+                if not isinstance(graph, dict) or rewritten == graph:
+                    continue
+                if not has_revisions:
+                    conn.execute(text("UPDATE workflows SET graph = :g WHERE id = :id"),
+                                 {"g": dumps(rewritten), "id": row["id"]})
+                    continue
+                latest = conn.execute(
+                    text("SELECT id, revision, created_by FROM workflow_revisions WHERE workflow_id = :id"
+                         " ORDER BY revision DESC LIMIT 1"),
+                    {"id": row["id"]},
+                ).mappings().first()
+                revision = int(latest["revision"]) + 1 if latest else 1
+                revision_id = uuid.uuid4().hex
+                conn.execute(
+                    text(
+                        "INSERT INTO workflow_revisions (id, workflow_id, revision, graph, graph_hash, source, note,"
+                        " created_by, created_at) VALUES (:id, :workflow, :revision, :graph, :hash, 'migration',"
+                        " '对象存储四个插件合成一个:节点改用「对象存储」的工具', :author, :now)"
+                    ),
+                    {"id": revision_id, "workflow": row["id"], "revision": revision, "graph": dumps(rewritten),
+                     "hash": digest(rewritten), "author": latest["created_by"] if latest else None, "now": stamp},
+                )
+                if latest and "workflow_revision_attestations" in tables:
+                    for attester in conn.execute(
+                        text("SELECT user_id FROM workflow_revision_attestations WHERE revision_id = :id"),
+                        {"id": latest["id"]},
+                    ).scalars().all():
+                        conn.execute(
+                            text("INSERT INTO workflow_revision_attestations (id, revision_id, user_id, created_at)"
+                                 " VALUES (:id, :revision, :user, :now)"),
+                            {"id": uuid.uuid4().hex, "revision": revision_id, "user": attester, "now": stamp},
+                        )
+                conn.execute(
+                    text("UPDATE workflows SET graph = :g, revision = :r, graph_hash = :h WHERE id = :id"),
+                    {"g": dumps(rewritten), "r": revision, "h": digest(rewritten), "id": row["id"]},
+                )
+
+        conn.execute(text(f"DELETE FROM plugin_packages WHERE id IN ({marks})"), by_index)
+
+    # 文件夹最后删:库里的事务提交之后。删之前认两件事 —— 它是插件目录的**直接子目录**,里面那份清单的 id
+    # 确实是老包之一(不按文件夹名猜:手动放进来的包可以叫任何名字)。
+    plugins_dir = settings.plugins_dir
+    if plugins_dir.is_dir():
+        for child in sorted(plugins_dir.iterdir()):
+            manifest = child / "mosael.plugin.json"
+            if not child.is_dir() or not manifest.is_file():
+                continue
+            try:
+                package_id = json.loads(manifest.read_text(encoding="utf-8")).get("id")
+            except (OSError, ValueError, AttributeError):
+                continue
+            if package_id in legacy:
+                shutil.rmtree(child)
+    for package_id in legacy:
+        shutil.rmtree(settings.data_dir / "plugin-data" / package_id, ignore_errors=True)
+    if instances:
+        logger.info("把 %d 个对象存储连接合进了「对象存储」插件", len(instances))
+
+
 def _install_bundled_plugins() -> None:
     """随应用发的插件(`plugins/bundled/`)装进插件目录并登记包记录。
 
@@ -3882,6 +4117,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_blender_host_is_ipv4,
                 # 清单形状收紧之后,库里违反新规矩的包记录删掉(否则读它就抛,插件页对所有人报错)。
                 _drop_plugin_packages_that_break_the_manifest_rules,
+                # 四个对象存储插件合成随应用内置的「对象存储」:要用到上面刚装好的那个包。
+                _merge_object_storage_plugins,
             ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),

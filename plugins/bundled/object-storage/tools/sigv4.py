@@ -4,11 +4,11 @@
 请求,代价是安装体积、版本冲突,以及一条我们控制不了的供应链。SigV4 本身是一页纸的算法。
 
 三家对象存储(S3 / 火山 TOS / 阿里云 OSS)的签名**同源但不同字**:算法名、日期头、
-scope 的结尾、密钥派生链的第一步各不相同。所以这一份写成可参数化的,三个插件各传各的 ——
-而不是三份各抄一遍(抄出来的那两份迟早在某一处漂掉,而漂掉的表现是 403,不是报错)。
+scope 的结尾、密钥派生链的第一步各不相同。所以这一份写成可参数化的,三家各是一个 `Flavor`
+(用哪一个由 providers.py 那张表定)。
 
 `Flavor` 同时就是 storage.Bucket 要的那个**签名方言**(sign / presign / list_v2)。
-腾讯云 COS 的签名不是 SigV4 这一系,它带自己的方言(qsign.py),不在这里。
+腾讯云 COS 的签名不是 SigV4 这一系,它的方言在 qsign.py。
 """
 from __future__ import annotations
 
@@ -39,7 +39,9 @@ class Flavor:
     #:   · 只签默认那几类头:`x-oss-*`、`content-type`、`content-md5`(host 不签);
     #:   · 规范化请求里那一行是 `AdditionalHeaders`(我们不加附加头,所以是空行),不是 `SignedHeaders`;
     #:   · Authorization 里没有 `SignedHeaders`,逗号后不带空格;预签名串里也没有那个参数;
-    #:   · 规范化 URI 带桶名:`/桶/对象`、列目录是 `/桶/` —— 虚拟主机式寻址也一样。
+    #:   · 规范化 URI 带桶名:`/桶/对象`、列目录是 `/桶/` —— 虚拟主机式寻址也一样;
+    #:   · 规范化查询串里**没有值的参数只写名字**(`uploads`,不是 `uploads=`)—— 分片上传的
+    #:     `?uploads` 就是这种参数;按 SigV4 写成 `uploads=` 的话,算法对、串不对,还是 403。
     #: 核对来源是官方 SDK(alibabacloud-oss-v2 的 SignerV4),向量见 test_oss_signature_matches_the_sdk。
     aliyun_v4: bool = False
     #: 阿里云的 `x-oss-content-sha256` 目前**只收 `UNSIGNED-PAYLOAD`**(文档原话),
@@ -57,7 +59,8 @@ class Flavor:
         payload = UNSIGNED if body is None or self.unsigned_payload_only else sha256_hex(body)
         signed = {**headers, self.date_header: stamp, self.sha_header: payload}
         signed["authorization"] = authorization(
-            method=method, path=quote(path), query=canonical_query(params), headers=signed,
+            method=method, path=quote(path), query=canonical_query(params, bare_empty=self.aliyun_v4),
+            headers=signed,
             payload_hash=payload, access_key=bucket.access_key, secret=bucket.secret,
             region=bucket.region, stamp=stamp, flavor=self, bucket=bucket.bucket,
         )
@@ -106,8 +109,12 @@ def quote(value: str, *, safe: str = "/") -> str:
     return urllib.parse.quote(value, safe=safe + "~")
 
 
-def canonical_query(params: dict[str, str]) -> str:
-    return "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(params.items()))
+def canonical_query(params: dict[str, str], *, bare_empty: bool = False) -> str:
+    """规范化查询串。`bare_empty`:没有值的参数只写名字(阿里云 V4 的写法,见 Flavor.aliyun_v4)。"""
+    return "&".join(
+        quote(k, safe="") if bare_empty and v == "" else f"{quote(k, safe='')}={quote(v, safe='')}"
+        for k, v in sorted(params.items())
+    )
 
 
 def signing_key(secret: str, date: str, region: str, flavor: Flavor) -> bytes:

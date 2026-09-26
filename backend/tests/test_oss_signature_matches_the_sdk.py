@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "examples" / "aliyun-oss" / "tools"
+TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "object-storage" / "tools"
 
 AK, SK = "LTAI5tExampleAccessKey", "ExampleSecretKeyForVectorsOnly0000"
 KEY = "dir/中文 file.mp4"
@@ -42,7 +42,7 @@ SDK_PRESIGN_SIGNATURE = "a8bb474b3a1eec3dab279e2a7c44ee69d11fad229991f19ac9cb2d5
 def bucket(monkeypatch: pytest.MonkeyPatch):
     sys.path.insert(0, str(TOOLS))
     try:
-        import sigv4
+        import providers
         import storage
     finally:
         sys.path.pop(0)
@@ -50,11 +50,11 @@ def bucket(monkeypatch: pytest.MonkeyPatch):
 
     def fake_request(url, *, method, headers, body=None):
         sent.append({"url": url, "method": method, "headers": headers})
-        return b'<?xml version="1.0"?><ListBucketResult></ListBucketResult>'
+        return b'<?xml version="1.0"?><ListBucketResult></ListBucketResult>', {"etag": '"abc"'}
 
     monkeypatch.setattr(storage, "_now", lambda: datetime.datetime(2026, 9, 23, 8, 0, tzinfo=datetime.UTC))
     monkeypatch.setattr(storage, "_request", fake_request)
-    one = storage.Bucket(dialect=sigv4.OSS, endpoint="oss-cn-hangzhou.aliyuncs.com", bucket="examplebucket",
+    one = storage.Bucket(provider=providers.PROVIDERS["aliyun-oss"], endpoint="", bucket="examplebucket",
                          region="cn-hangzhou", access_key=AK, secret=SK)
     return one, sent
 

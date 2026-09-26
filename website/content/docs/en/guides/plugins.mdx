@@ -178,16 +178,32 @@ These live under `plugins/examples/` in the repository — examples and official
 - `manim` — **teaching animations with Manim** (the community edition of 3Blue1Brown's maths
   animation engine), at no generation cost: derivations, geometry, function plots, algorithm
   steps, code walk-throughs. See “Manim teaching animations” below.
-- `volcengine-tos` / `aliyun-oss` / `aws-s3` / `tencent-cos` — four object stores. **One body,
-  a signing dialect each**: the HTTP surface is the same and only the signing differs, so the
-  shared storage core is a byte-identical copy in every package (a test pins that), and each
-  signature is checked against the vendor's official SDK.
 
-  They close one concrete gap: Mosael is local-first, so your assets live on your own disk with
-  **no public address**, while some providers only take a URL — Seedance's reference video is one
-  (a reference **image** may be Base64, a reference **video** may not). `*_upload` puts the asset
-  up and hands back a **time-limited direct link** (the signature lives in the query string, so the
-  bucket need not be public-read); paste it straight into the generation node.
+## Object storage (built in)
+
+The **Object Storage** plugin ships with Mosael and is on the Plugins page from the start. It closes one
+concrete gap: Mosael is local-first, so your assets live on your own disk with **no public address**, while
+some providers only take a URL — Seedance's reference video is one (a reference **image** may be Base64, a
+reference **video** may not). It uploads the asset to **your own bucket** and hands back a
+**time-limited direct link** (the signature lives in the query string, so the bucket need not be public-read).
+
+1. Under Object Storage on the Plugins page, create a connection and pick the provider: **Alibaba Cloud OSS /
+   Tencent Cloud COS / Volcengine TOS / Amazon S3 / S3-compatible** (MinIO, Cloudflare R2, …). One connection
+   is one bucket; create one per bucket.
+2. Fill in the bucket, region and an access key pair (use a sub-user scoped to this bucket, not the root
+   account). The endpoint is usually left empty and built from the region; an S3-compatible service needs its
+   own address (e.g. `http://localhost:9000`). Tencent bucket names carry the APPID suffix.
+3. Grant its network permission.
+
+From then on, when a generation input only accepts links and you gave it a local asset, the asset is uploaded
+**automatically** first; with several buckets, pick the default under **Settings → Asset links**. The same
+asset reuses its link until it expires. It is also a set of ordinary tools: upload (large files go up in
+parts, with progress), sign a link for an existing object, list a bucket, and pull an object back into the
+library.
+
+The former Alibaba Cloud OSS / Tencent Cloud COS / Volcengine TOS / Amazon S3 plugins have been merged into
+it: on upgrade their connections, keys, permissions, default choice and workflow nodes move over as they are —
+nothing to set up again.
 
 ## Manim teaching animations
 

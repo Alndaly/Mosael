@@ -354,6 +354,6 @@ def test_远端索引拉不到_内置插件照样在_原因也交给界面(monke
     response = client.get("/api/plugins/market")
     assert response.status_code == 200, response.text
     listing = response.json()
-    assert [one["id"] for one in listing["plugins"]] == ["dev.mosael.comfyui"]
-    assert listing["plugins"][0]["bundled"] is True
+    assert sorted(one["id"] for one in listing["plugins"]) == ["dev.mosael.comfyui", "dev.mosael.object-storage"]
+    assert all(one["bundled"] for one in listing["plugins"])
     assert "timeout" in listing["index_error"], "拉不到的原因要说出来,不然人会以为市场里就这一个"

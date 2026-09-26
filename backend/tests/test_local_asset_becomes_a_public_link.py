@@ -90,7 +90,7 @@ def test_只用发起人自己的存储_不碰别人的桶(world) -> None:
     """多人部署:bob 配了存储、alice 没配。alice 的素材不能用 bob 的桶和密钥传上去。"""
     _storage("bob", "bob 的 OSS")
 
-    with pytest.raises(NoUploader, match="对象存储插件"):
+    with pytest.raises(NoUploader, match="「对象存储」里建一个连接"):
         _upload(world, owner="alice")
     assert world["calls"] == [], "用别人的存储传了"
 
@@ -197,17 +197,35 @@ def test_工具声明了包上没有的能力_清单当场拒绝() -> None:
         parse(wrong, "x")
 
 
-def test_官方的对象存储插件都声明了这个能力_也声明了由哪个工具来做() -> None:
+def test_随应用内置的对象存储声明了这个能力_也声明了由哪个工具来做() -> None:
     import json
     from pathlib import Path
 
     from app.domain.plugins.manifest import parse
 
-    root = Path(__file__).resolve().parents[2] / "plugins" / "examples"
-    for name in ("aws-s3", "volcengine-tos", "aliyun-oss", "tencent-cos"):
-        manifest = parse(json.loads((root / name / "mosael.plugin.json").read_text(encoding="utf-8")), name)
-        assert "public_url" in manifest.provides, f"{name} 没声明 public_url —— 宿主找不到它"
-        assert manifest.tool_providing("public_url").endswith("_upload"), f"{name} 没说哪个工具负责上传"
+    root = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "object-storage"
+    manifest = parse(json.loads((root / "mosael.plugin.json").read_text(encoding="utf-8")), "object-storage")
+    assert "public_url" in manifest.provides, "没声明 public_url —— 宿主找不到它"
+    assert manifest.tool_providing("public_url") == "storage_upload", "没说哪个工具负责上传"
+
+
+def test_插件签的有效期比要的短_按它说的记_快到期就重传(world, monkeypatch) -> None:
+    """宿主要 6 小时,插件可能签不了那么久(某家的上限、或者插件自己的规矩),并在 `expires_in` 里如实说。
+    此前缓存一律按 6 小时记:链接早就失效了,宿主还把它交给供应商,生成在对面取文件时才 403。"""
+    from app.domain.plugins import tools as plugin_tools
+
+    _storage("alice", "我的 TOS")
+    calls: list[int] = []
+
+    def short_lived(db, instance_id, tool_name, payload, **kwargs):
+        calls.append(payload["expires"])
+        return _Invocation("succeeded", {"url": f"https://cdn.example.com/{len(calls)}", "expires_in": 600})
+
+    monkeypatch.setattr(plugin_tools, "invoke", short_lived)
+    first, _ = _upload(world)
+    second, _ = _upload(world)
+
+    assert first != second and len(calls) == 2, "只剩 10 分钟的链接被当成还能用 6 小时"
 
 
 def test_在设置里选素材外链用哪一家_只能选自己的() -> None:

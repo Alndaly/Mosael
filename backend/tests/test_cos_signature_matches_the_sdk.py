@@ -1,7 +1,7 @@
 """腾讯云 COS 的签名和**官方 SDK** 在同样输入下逐字相同。
 
 COS 的原生签名(`q-sign-algorithm=sha1`)和另外三家的 SigV4 不是一系,插件带自己的方言
-(plugins/examples/tencent-cos/tools/qsign.py)。没法拿真桶验,就拿官方实现验:签错的表现是
+(plugins/bundled/object-storage/tools/qsign.py)。没法拿真桶验,就拿官方实现验:签错的表现是
 403,而 403 有一百种原因;向量对上了,才说明路径原文、键小写、值转义、末尾换行、
 SHA1 套 HMAC 这几步一步都没写反。
 
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "examples" / "tencent-cos" / "tools"
+TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "object-storage" / "tools"
 KEY = "dir/中文 file.mp4"
 HEAD = "q-sign-algorithm=sha1&q-ak=AKIDExampleSecretIdForVectors&q-sign-time=1790150340;1790151300&q-key-time=1790150340;1790151300"
 
@@ -35,15 +35,15 @@ SDK_PRESIGNED = (
 def bucket(monkeypatch: pytest.MonkeyPatch):
     sys.path.insert(0, str(TOOLS))
     try:
-        import qsign
+        import providers
         import storage
     finally:
         sys.path.pop(0)
     sent: list[tuple[str, dict]] = []
     monkeypatch.setattr(storage, "_now", lambda: datetime.datetime(2026, 9, 23, 8, 0, tzinfo=datetime.UTC))
     monkeypatch.setattr(storage, "_request",
-                        lambda url, *, method, headers, body=None: (sent.append((url, headers)), b"<ListBucketResult/>")[1])
-    one = storage.Bucket(dialect=qsign.COS, endpoint="cos.ap-guangzhou.myqcloud.com",
+                        lambda url, *, method, headers, body=None: (sent.append((url, headers)), (b"<ListBucketResult/>", {"etag": '"abc"'}))[1])
+    one = storage.Bucket(provider=providers.PROVIDERS["tencent-cos"], endpoint="",
                          bucket="examplebucket-1250000000", region="ap-guangzhou",
                          access_key="AKIDExampleSecretIdForVectors", secret="ExampleSecretKeyForVectorsOnly00")
     return one, sent

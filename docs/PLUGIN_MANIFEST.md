@@ -731,33 +731,31 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
   这两个插件起的子进程都不少(pip / Manim / LaTeX,npm / Node / Chrome),共用一份 `tools/plugin_kit.py`
   (两份**字节相同**的拷贝,由 `test_plugin_kits_are_identical.py` 钉住):进度条按 `\r` 逐次读、取消与时限在读输出的
   同一个循环里看、停的时候**整组**停(组长先退了也一样)、装环境上跨进程的文件锁。要起子进程的插件照抄它就好
-- **volcengine-tos** / **aliyun-oss** / **aws-s3** / **tencent-cos** — 对象存储四家。
-  **同一套主体、各自的签名方言**:接口是同一套(PUT/GET 对象、列目录、虚拟主机式寻址),
-  只有签名不同。`storage.py` 不认识任何一种签名,由插件把方言对象交给它
-  (`Bucket(dialect=…)`):SigV4 系三家用 `sigv4.py` 里的 `Flavor`,腾讯云 COS 的原生签名
-  (`q-sign-algorithm=sha1`)不是这一系,带自己的 `qsign.py`。`storage.py` 在四个包里、
-  `sigv4.py` 在三个包里都是**字节相同**的拷贝(由 `test_storage_plugins_share_one_core.py`
-  钉住);每一种签名都拿官方 SDK 的向量对过(`test_*_signature_matches_the_sdk.py`)。
-
-  它们解决的是一个具体的断链:Mosael 是本地优先的,素材没有公网地址,而有些供应商**只收链接**
-  —— 方舟 Seedance 的参考视频就是一例(参考图可以走 Base64,参考视频不行)。
-  `*_upload` 把素材传上去,交回一条**限时直链**(签名在查询串里,桶不必设成公共读)。
-
 它们都写了中英两份文案,可以直接照着抄多语言的写法。
 
-另有 `plugins/bundled/` 下**随应用一起发**的插件(今天是 **comfyui**):它们随后端一起打包,每次启动对账
+另有 `plugins/bundled/` 下**随应用一起发**的插件(今天是 **comfyui** 和 **object-storage**):它们随后端一起打包,每次启动对账
 装进插件目录(按内容指纹,见 `domain/plugins/bundled`;新版本多了工具时,已经接好的连接按 `recommended` 补上开关),卸不掉。它们**也在市场索引里**(标
 `bundled: true`、没有 `download`),应用内的市场和官网插件页都列出它们、标「内置」,只是不给安装 ——
 新版跟着应用来;远端索引拉不到时,市场照样由本机清单列出它们。ComfyUI 插件是
 「替宿主做生成」的完整范例:动态模型目录与指纹、按语言分的参数名、参考图 / 蒙版 / 视频槽位、NDJSON 进度、取消文件、
 回执与接着取;也是**流式工具**和**一次交出几份文件**的范例(`run_workflow`、`import_outputs`),以及 `json` 配置项(API 模板)。
 
+**object-storage**(「对象存储」)是 `public_url` 的第一方实现:阿里云 OSS / 腾讯云 COS / 火山引擎 TOS /
+Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STORAGE_PROVIDER`,和 TikHub 的平台同一种写法),
+不是五个插件 —— 接口是同一套(PUT/GET 对象、分片上传、列目录、XML 错误体),差异只有 `tools/providers.py`
+那一张表(签名方言、默认接入点、预签名上限、寻址方式)。签名纯标准库手写:SigV4 系三家是 `sigv4.py` 里的
+`Flavor`,COS 的原生签名(`q-sign-algorithm=sha1`)在 `qsign.py`;每一种都拿官方 SDK 的向量对过
+(`test_*_signature_matches_the_sdk.py`、`test_object_storage_multipart_matches_the_sdk.py`)。
+上传是**流式工具**(大文件分片、边传边报进度、取消时 Abort)。它随应用发,是因为宿主自己的功能
+(「设置 → 素材外链」、生成时自动换直链)要靠它;此前的四个市场插件由迁移 `merge-object-storage-plugins`
+原地合了进来(连接 id 不变)。
+
 ## 声明「我能替宿主做成什么」
 
 ```json
 {
   "provides": ["public_url"],
-  "tools": { "declare": [ { "name": "oss_upload", "provides": ["public_url"], "…": "…" } ] }
+  "tools": { "declare": [ { "name": "storage_upload", "provides": ["public_url"], "…": "…" } ] }
 }
 ```
 
@@ -770,7 +768,8 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `tools` | **运行时报出工具清单** | 工具表、节点面板、智能体 —— 见「运行时报出的工具」 |
 
 两处都要写:**包上的 `provides`** 说「这个插件能做这件事」,**工具上的 `provides`** 说「这件事归
-我」。负责 `public_url` 的工具收 `{asset_id, expires}`,交回 `{url}`。工具上声明了包上没有的能力,
+我」。负责 `public_url` 的工具收 `{asset_id, expires}`,交回 `{url}`;签的有效期比要的短(某家的上限)
+就在 `expires_in` 里如实说,宿主按它缓存 —— 否则链接失效了还被当成能用。工具上声明了包上没有的能力,
 清单当场拒绝 —— 两处说的不是一回事,宿主不该替作者选一个信。包上声明了、却没有工具认领的,是
 写这条规矩之前的老版本:生成时会让用户去插件页更新它。
 

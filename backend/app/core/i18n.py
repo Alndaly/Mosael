@@ -3810,14 +3810,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genErr_noUploader": {
         "zh": (
             "「{asset}」是本地素材,而这个模型的这一项只收公网链接。"
-            "装一个对象存储插件(火山引擎 TOS / 阿里云 OSS / 腾讯云 COS / Amazon S3)之后它会自动传上去 ——"
-            "在「插件」页里装并填上桶和密钥;或者直接粘一条你已有的公网直链。"
+            "在「插件」页的「对象存储」里建一个连接(火山引擎 TOS / 阿里云 OSS / 腾讯云 COS / Amazon S3 / S3 兼容服务),"
+            "填上桶和密钥,之后它会自动传上去;或者直接粘一条你已有的公网直链。"
         ),
         "en": (
             "“{asset}” is a local asset, but this model only accepts a public link here. "
-            "Install an object storage plugin (Volcengine TOS / Alibaba Cloud OSS / Tencent Cloud COS / Amazon S3) "
-            "and it will be uploaded automatically — install it on the Plugins page and fill in the bucket and keys. "
-            "Or paste a public direct link you already have."
+            "Create a connection under Object Storage on the Plugins page (Volcengine TOS / Alibaba Cloud OSS / "
+            "Tencent Cloud COS / Amazon S3 / any S3-compatible service) and fill in the bucket and keys — it will then "
+            "be uploaded automatically. Or paste a public direct link you already have."
         ),
     },
     "genErr_uploaderIncomplete": {

@@ -253,9 +253,9 @@ def test_提交前就说清楚_而且只拦真没有链接的那一份() -> None
 
     而挂一段**从链接导入**的素材,功能本来就是好的 —— 这一条钉住两者不能被一视同仁。
 
-    **而且拦是最后一招**:装了对象存储插件的话,提交时会自动把本地素材传上去换一条直链
-    (见 domain/generation/public_links)。这条测试跑在没装插件的环境里,所以走的是拦那一支 ——
-    它断言的是**那句话说清了下一步**("装一个对象存储插件"),而不是"请自行上传"。
+    **而且拦是最后一招**:建了对象存储连接的话,提交时会自动把本地素材传上去换一条直链
+    (见 domain/generation/public_links)。这条测试跑在没有连接的环境里,所以走的是拦那一支 ——
+    它断言的是**那句话说清了下一步**("在「对象存储」里建一个连接"),而不是"请自行上传"。
     """
     from sqlalchemy import select
 
@@ -302,8 +302,8 @@ def test_提交前就说清楚_而且只拦真没有链接的那一份() -> None
                 source_assets=[{"role": REFERENCE_VIDEO, "asset_id": asset_id}],
             )
 
-    # **没装对象存储插件时**才拦,而且要说清下一步是"装一个",不是"自己想办法"。
-    with pytest.raises(GenerationDomainError, match="对象存储插件"):
+    # **没有对象存储连接时**才拦,而且要说清下一步是"建一个",不是"自己想办法"。
+    with pytest.raises(GenerationDomainError, match="「对象存储」里建一个连接"):
         _submit(local)
     # 从链接导入的那一份:**拦不该落在它头上**。参考视频本身是支持的。
     _submit(linked)

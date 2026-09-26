@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "examples" / "volcengine-tos" / "tools"
+TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "object-storage" / "tools"
 KEY = "dir/中文 file.mp4"
 CRED = "Credential=AKLTExampleAccessKey/20260923/cn-beijing/tos/request"
 
@@ -32,15 +32,15 @@ SDK_PRESIGN_SIGNATURE = "5e3584c933903abe2f4dba0c5b165bb61d7844b5ea26eac8dc073b1
 def bucket(monkeypatch: pytest.MonkeyPatch):
     sys.path.insert(0, str(TOOLS))
     try:
-        import sigv4
+        import providers
         import storage
     finally:
         sys.path.pop(0)
     sent: list[dict] = []
     monkeypatch.setattr(storage, "_now", lambda: datetime.datetime(2026, 9, 23, 8, 0, tzinfo=datetime.UTC))
     monkeypatch.setattr(storage, "_request",
-                        lambda url, *, method, headers, body=None: (sent.append(headers), b"<ListBucketResult/>")[1])
-    one = storage.Bucket(dialect=sigv4.TOS, endpoint="tos-cn-beijing.volces.com", bucket="examplebucket",
+                        lambda url, *, method, headers, body=None: (sent.append(headers), (b"<ListBucketResult/>", {"etag": '"abc"'}))[1])
+    one = storage.Bucket(provider=providers.PROVIDERS["volcengine-tos"], endpoint="", bucket="examplebucket",
                          region="cn-beijing", access_key="AKLTExampleAccessKey",
                          secret="ExampleSecretKeyForVectorsOnly0000")
     return one, sent

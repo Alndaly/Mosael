@@ -196,6 +196,7 @@ python3 scripts/sync-ratchet-docs.py
 | 吞掉异常不许再变多。 | `backend/tests/test_no_new_silent_swallows_on_the_clone_path.py` |
 | 报错不许再按位置裁子进程的输出。 | `backend/tests/test_no_new_tail_cutting_error_messages.py` |
 | 棘轮:节点**声明的输出**和执行体**真正返回的键**是同一批。 | `backend/tests/test_node_outputs_match_the_executor.py` |
+| 对象存储是**一个插件、五个服务商选项**,各家的差异只住在 providers.py 那一张表里。 | `backend/tests/test_object_storage_plugin.py` |
 | 棘轮:插件字段的说明里写着「可以不填」,清单里就得声明 `required: false`。 | `backend/tests/test_optional_plugin_fields_are_not_required.py` |
 | 付过钱的远端生成,只有两种结束方式:远端给出终态,或者用户取消。 | `backend/tests/test_paid_generations_are_never_abandoned.py` |
 | 宿主把一份**文件**交给插件。 | `backend/tests/test_plugin_inputs.py` |
@@ -228,7 +229,6 @@ python3 scripts/sync-ratchet-docs.py
 | 结构性约束:**「有哪几种输入素材角色」只有一个产地。** | `backend/tests/test_source_roles_have_one_home.py` |
 | `sqlite3.connect()` 不许直接当 `with` 用 —— 那个 with 管事务,不关连接。 | `backend/tests/test_sqlite_connections_are_closed.py` |
 | 取当前帧走的是**渲染那条路**,不是抓预览的画布。 | `backend/tests/test_still_frame_goes_through_render.py` |
-| 对象存储插件共用同一份主体(和同一份 SigV4),**拷贝必须字节相同**。 | `backend/tests/test_storage_plugins_share_one_core.py` |
 | 外部命令只从一个口子出去。 | `backend/tests/test_subprocess_has_one_door.py` |
 | 文本 I/O 必须**自己说清用什么编码**,不能问平台要。 | `backend/tests/test_text_io_never_inherits_the_platform_encoding.py` |
 | 知识库整块删掉了。 | `backend/tests/test_the_knowledge_base_is_gone.py` |

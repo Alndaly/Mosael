@@ -469,9 +469,9 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
     # 只写 reference_video 这一条:参考音频有没有同样的限制没核过,而这个仓库的规矩是
     # **只写有把握的**(推错比不推更糟)。哪天核到了再加。
     #
-    # 本地素材怎么变成链接:装一个对象存储插件(plugins/examples 下的 volcengine-tos /
-    # aliyun-oss / aws-s3 / tencent-cos),它的 `*_upload` 传上去之后交回一条**限时直链** —— 签名在查询串
-    # 里,桶不必设成公共读。方舟自己的文档推荐的也是 TOS。
+    # 本地素材怎么变成链接:随应用内置的「对象存储」插件(plugins/bundled/object-storage,火山 TOS /
+    # 阿里云 OSS / 腾讯云 COS / S3 选一家),它的 `storage_upload` 传上去之后交回一条**限时直链** —— 签名在
+    # 查询串里,桶不必设成公共读(见 generation/public_links)。方舟自己的文档推荐的也是 TOS。
     "url_only_roles": ["reference_video"],
     "duration_seconds": [],
     "default_duration_seconds": 5,

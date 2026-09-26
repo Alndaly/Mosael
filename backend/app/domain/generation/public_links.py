@@ -10,7 +10,8 @@ Mosael 是本地优先的:素材在用户自己的盘上,没有公网地址。�
 他得自己找个对象存储、自己传、自己签链接、再粘回来,而这四步里每一步都可能做错。
 
 现在多一步:提交时看见这种角色带的是本地素材,就找一个**声明了 `public_url` 能力**的插件
-(对象存储四家),让它传上去并交回一条限时直链。用户那一侧只是多等几秒。
+(随应用内置的「对象存储」插件,一个连接对一家的一个桶;第三方插件也可以声明它),
+让它传上去并交回一条限时直链。用户那一侧只是多等几秒。
 
 ## 为什么按声明找,而不是按工具名猜
 
@@ -37,7 +38,7 @@ Mosael 是本地优先的:素材在用户自己的盘上,没有公网地址。�
 
 每一种失败对用户意味着不同的下一步,所以分开说:
 
-- **没装 / 没有自己的**:告诉他装哪几个(而不是"请自行上传到公开地址");
+- **没有自己的连接**:告诉他去「对象存储」建一个、支持哪几家(而不是"请自行上传到公开地址");
 - **装了但没配好**:点名是哪一个实例、缺什么(桶名?密钥?);
 - **配好了几家却没定默认**:点名是哪几家,说去哪儿定;
 - **插件版本太旧**(包上声明了能力、却没有工具认领):去插件页更新;
@@ -164,6 +165,15 @@ def choose_uploader(db: "Session", owner_user_id: str | None, asset_name: str):
     return instance, tool
 
 
+def _granted_seconds(output: dict) -> int:
+    """这条链接**实际**活多久:插件在 `expires_in` 里说了就按它的(可能比要的短 —— 某家的上限、插件自己的
+    规矩),没说才按要的算。此前一律按要的 6 小时记,链接早失效了还被当成能用,生成到对面取文件时才 403。"""
+    raw = output.get("expires_in")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        return LINK_TTL_SECONDS
+    return int(min(raw, LINK_TTL_SECONDS))
+
+
 def public_url_for(
     db: "Session", *, owner_user_id: str | None, workspace_id: str, asset_id: str, asset_name: str,
 ) -> tuple[str, str]:
@@ -194,7 +204,7 @@ def public_url_for(
     if not url:
         raise NoUploader("genErr_uploadNoUrl", plugin=instance.name)
 
-    expires_at = now() + timedelta(seconds=LINK_TTL_SECONDS)
+    expires_at = now() + timedelta(seconds=_granted_seconds(output))
     if cached is None:
         db.add(PluginPublicLink(asset_id=asset_id, instance_id=instance.id, url=url, expires_at=expires_at))
     else:

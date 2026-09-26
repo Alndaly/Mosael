@@ -27,7 +27,16 @@ const nextConfig: NextConfig = {
    * 且切换会记在 URL 里 —— 分享出去的链接自带语言,比嗅探来得可预期。
    */
   async redirects() {
-    return [{ source: "/", destination: `/${DEFAULT_LOCALE}`, permanent: false }];
+    return [
+      { source: "/", destination: `/${DEFAULT_LOCALE}`, permanent: false },
+      // 四个对象存储插件合成了一个随应用内置的「对象存储」。老版本插件清单里的文档链接、外面贴过的地址
+      // 还指着各自的页面 —— 转到合并后的那一页,而不是 404。
+      ...["aliyun-oss", "aws-s3", "tencent-cos", "volcengine-tos"].map((slug) => ({
+        source: `/:locale/plugins/${slug}`,
+        destination: "/:locale/plugins/object-storage",
+        permanent: true,
+      })),
+    ];
   },
 };
 
