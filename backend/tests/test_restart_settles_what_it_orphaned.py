@@ -43,6 +43,29 @@ def test_停在running的插件调用被判成失败() -> None:
         assert rows["done"].status == "succeeded"
 
 
+def test_插件调用的重启原因跟着界面语言(monkeypatch) -> None:
+    """此前这一句是写死的中文 —— 英文界面上照样冒出一句「后端重启,这次调用没有结果」。"""
+    from app.core import i18n
+    from app.domain.plugins.tools import reconcile_orphaned_invocations
+
+    fresh_client()
+    with SessionLocal() as db:
+        db.add(PluginPackage(id="dev.test.pkg", name="测试包", version="0.1.0"))
+        db.flush()
+        instance = PluginInstance(package_id="dev.test.pkg", name="测试接入")
+        db.add(instance)
+        db.flush()
+        db.add(PluginInvocation(instance_id=instance.id, tool_name="do", status="running", input={}, output={}))
+        db.commit()
+        i18n.set_current_locale("en")
+        try:
+            assert reconcile_orphaned_invocations(db) == 1
+        finally:
+            i18n.set_current_locale(i18n.DEFAULT_LOCALE)
+        row = db.query(PluginInvocation).one()
+        assert "restarted" in (row.error or "")
+
+
 def test_停在sending的blender互通被判成失败() -> None:
     """`send()` 先写 status='sending' 再去跑 Blender,正常路径靠 finally 改写 —— 进程被杀就
     写不到。留下来的那份 `receive()` 接不回来(它要求 ready),而 `history()` 会永远列着它。"""

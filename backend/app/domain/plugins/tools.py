@@ -581,7 +581,8 @@ def reconcile_orphaned_invocations(db: Session) -> int:
     stale = list(db.scalars(select(PluginInvocation).where(PluginInvocation.status == "running")))
     for invocation in stale:
         invocation.status = "failed"
-        invocation.error = "后端重启,这次调用没有结果"
+        # 和别的失败原因一样按文案表说(此前这一句是写死的中文,英文界面上照样冒出来)。
+        invocation.error = tr("pluginErr_interruptedByRestart")
     if stale:
         db.commit()
     return len(stale)

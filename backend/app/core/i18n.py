@@ -113,6 +113,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件一次交出的文件超过 {limit} 份",
         "en": "The plugin returned more than {limit} files in one call.",
     },
+    "pluginErr_interruptedByRestart": {
+        "zh": "后端重启,这次调用没有结果",
+        "en": "The backend restarted, so this call has no result.",
+    },
     "pluginErr_runtimeCrashed": {
         "zh": "插件运行时异常: {detail}",
         "en": "Plugin runtime error: {detail}",
