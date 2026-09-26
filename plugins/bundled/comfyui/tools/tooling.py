@@ -392,13 +392,8 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
             title = title.get("zh" if locale.startswith("zh") else "en") if isinstance(title, dict) else title
             raise ComfyError(say(locale, f"「{title}」的值不对:{value}", f"“{title}” has an invalid value: {value}")) from exc
 
-    values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults)
-    if "prompt" not in texts:
-        values.pop("prompt", None)
-    if "negative" not in texts and not defaults:
-        values.pop("negative", None)
-    if "seed" not in parameters and not defaults:
-        values.pop("seed", None)
+    # 跑一张存好的工作流:种子没给就用它存着的;内置图和模板的种子是占位符,照旧每次随机
+    values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
     prompt = graph.fill(api, values, overrides)
 
     uploads = run.upload(comfy, [{"role": f"{node}|{field}", "path": path} for (node, field), path in slots.items()]

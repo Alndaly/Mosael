@@ -139,6 +139,13 @@ def test_可以不写提示词的图_空着就用它自己存的那句(comfy, tm
     assert prompt["6"]["inputs"]["text"] == "a cat"
 
 
+def test_反向提示词空着_用它自己存的那句(comfy, tmp_path: Path) -> None:
+    """用户没写反向提示词时宿主发来空串:那是「没写」,不该把工作流里存着的「blurry」清掉。"""
+    _generate(comfy.url, tmp_path, {"model": "portrait.json", "negative_prompt": ""})
+    prompt = comfy.posted("/prompt")[0]["prompt"]
+    assert prompt["7"]["inputs"]["text"] == "blurry"
+
+
 def test_进度来自WebSocket(comfy, tmp_path: Path) -> None:
     comfy.state.websocket = True
     _, hooks, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"})

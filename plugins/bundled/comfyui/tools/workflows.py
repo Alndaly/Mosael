@@ -189,14 +189,9 @@ def run_workflow(payload: dict[str, Any], comfy: Comfy, locale: str, emit: run.E
     parameters = {key: payload[key] for key in ("seed", "width", "height", "steps") if key in payload}
     if "num_images" in payload:
         parameters["num_images"] = payload["num_images"]
-    prompt_text = payload.get("prompt")
-    values = run.values_from(prompt_text, payload.get("negative_prompt"), parameters, defaults)
-    if prompt_text is None:
-        values.pop("prompt", None)  # 没给提示词就用工作流里写好的那一句
-    if payload.get("negative_prompt") is None and not defaults:
-        values.pop("negative", None)
-    if "seed" not in payload and not defaults:
-        values.pop("seed", None)  # 跑一张存好的工作流:种子没给就用它存着的,可复现
+    # 没给提示词就用工作流里写好的那一句;跑一张存好的工作流,种子没给就用它存着的
+    values = run.values_from(payload.get("prompt"), payload.get("negative_prompt"), parameters, defaults,
+                             keep_seed=not defaults)
     prompt = graph.fill(api, values, {})
     unknown = []
     for key, value in (payload.get("values") or {}).items():

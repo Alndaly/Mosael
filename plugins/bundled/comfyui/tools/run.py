@@ -57,18 +57,24 @@ def _number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def values_from(prompt: Any, negative: Any, parameters: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
-    """宿主主控件的那几样。**只放给了的**(和占位符的默认值)—— 没选尺寸就不改这张图的尺寸。"""
+def values_from(prompt: Any, negative: Any, parameters: dict[str, Any], defaults: dict[str, Any], *,
+                keep_seed: bool = False) -> dict[str, Any]:
+    """宿主主控件的那几样。**只放给了的**(和占位符的默认值)—— 没选尺寸就不改这张图的尺寸。
+
+    提示词、反向提示词空着是「没写」:用这张图自己存着的那句(内置图和粘贴的模板由占位符的默认值兜底),
+    不是把它清成空串 —— 宿主对没填的反向提示词发的就是空串。
+    """
     values: dict[str, Any] = dict(defaults)
-    if prompt is not None:
-        values["prompt"] = str(prompt)
-    negative_text = str(negative or "")
-    if negative_text or "negative" not in values:
-        values["negative"] = negative_text
-    # 种子:用户没给就每次随机 —— 通过 API 提交时同一个种子会得到同一张图,而界面上的
-    # 「每次生成后随机」只是 ComfyUI 前端的行为,API 那一侧没有。
+    for key, text in (("prompt", prompt), ("negative", negative)):
+        if isinstance(text, str) and text.strip():
+            values[key] = text
+    # 种子:用户没给就每次随机 —— 通过 API 提交时同一个种子会得到同一张图(ComfyUI 还会整张命中缓存),
+    # 而界面上的「每次生成后随机」只是 ComfyUI 前端的行为,API 那一侧没有。`keep_seed` 时留着图里存的。
     seed = parameters.get("seed")
-    values["seed"] = int(seed) if _number(seed) else random.randint(0, 2**31 - 1)
+    if _number(seed):
+        values["seed"] = int(seed)
+    elif not keep_seed:
+        values["seed"] = random.randint(0, 2**31 - 1)
     size = _size(parameters.get("size"))
     if size:
         values["width"], values["height"] = size
@@ -369,9 +375,8 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         object_info = comfy.object_info()
         api, defaults, titles = models.load(comfy, str(request.get("model") or ""), object_info, locale)
         parameters = request.get("parameters") or {}
-        # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement),
-        # 不是「把它清成空串」—— 否则一张存好了提示词的工作流,不写就会拿一句空话去跑。
-        values = values_from(request.get("prompt") or None, request.get("negative_prompt"), parameters, defaults)
+        # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement)
+        values = values_from(request.get("prompt"), request.get("negative_prompt"), parameters, defaults)
         prompt = graph.fill(api, values, overrides_from(parameters))
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
