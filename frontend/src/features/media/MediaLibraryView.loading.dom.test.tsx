@@ -12,7 +12,7 @@ vi.mock("@/api/client", async (original) => ({
   api: vi.fn(() => new Promise(() => {})),
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en" }) }));
-vi.mock("@/features/media/RecordingProvider", () => ({ useRecorder: () => ({ openRecorder: vi.fn() }) }));
+vi.mock("@/features/media/recordingContext", () => ({ useRecorder: () => ({ openRecorder: vi.fn() }) }));
 vi.mock("@/features/media/UrlImportDialog", () => ({ UrlImportDialog: () => null }));
 vi.mock("@/features/media/AssetPreviewModal", () => ({ AssetPreviewModal: () => null }));
 

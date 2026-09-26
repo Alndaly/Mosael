@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
-import { useRecorder } from "@/features/media/RecordingProvider";
+import { useRecorder } from "@/features/media/recordingContext";
 
 import {
   API_BASE,

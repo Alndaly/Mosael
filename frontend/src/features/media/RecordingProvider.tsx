@@ -4,26 +4,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { importAsset } from "@/api/client";
 import { Recorder } from "./Recorder";
+import { RecordingContext, type RecordingDestination } from "./recordingContext";
 
-type RecordingDestination = {
-  projectId?: string;
-};
 
 type ActiveRecordingDestination = RecordingDestination & {
   workspaceId: string;
 };
 
-type RecordingContextValue = {
-  openRecorder: (destination?: RecordingDestination) => void;
-};
-
-const RecordingContext = React.createContext<RecordingContextValue | null>(null);
-
-export function useRecorder(): RecordingContextValue {
-  const context = React.useContext(RecordingContext);
-  if (!context) throw new Error("useRecorder must be used within RecordingProvider");
-  return context;
-}
 
 /**
  * Owns the capture session above individual workspace pages so navigation cannot

@@ -25,8 +25,23 @@ interface Props {
   /** 变化时自动复位。传当前页面即可。 */
   resetKey?: string;
   onRetry?: () => void;
-  label: string;
+  /** 那一块代码没取到时说什么。 */
+  chunkLabel: string;
+  /** 这一页自己出错时说什么。 */
+  crashLabel: string;
   retryLabel: string;
+}
+
+/**
+ * 是不是「那一块代码没取到」。各家浏览器的说法不一样(Chromium / Safari / Firefox),打包器
+ * 包一层时是 ChunkLoadError。**只有这一种**重试多半就好;页面自己抛的错重试照样抛,告诉人
+ * 「断了一下、重试就好」是在误导(剪辑页一个 context 找不到时就这样说过)。
+ */
+export function isChunkLoadError(error: Error): boolean {
+  return (
+    error.name === "ChunkLoadError" ||
+    /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS/i.test(error.message)
+  );
 }
 
 interface State {
@@ -55,7 +70,9 @@ class Boundary extends React.Component<Props, State> {
          同一套:自己撑满可用高度,内容用 `m-auto` 落在正中。 */
       <div role="alert" className="flex h-full min-h-0 w-full flex-col overflow-auto p-8">
         <div className="m-auto grid max-w-md shrink-0 justify-items-center gap-3 text-center">
-          <p className="m-0 text-ui-md text-foreground">{this.props.label}</p>
+          <p className="m-0 text-ui-md text-foreground">
+            {isChunkLoadError(this.state.error) ? this.props.chunkLabel : this.props.crashLabel}
+          </p>
           {/* 原始信息留着 —— 它是"这一块没取到"和"这一页自己崩了"的唯一区别。 */}
           <p className="m-0 text-ui-xs text-muted-foreground [overflow-wrap:anywhere]">
             {this.state.error.message}
@@ -88,7 +105,13 @@ export function PageBoundary({
 }) {
   const t = useI18n();
   return (
-    <Boundary resetKey={resetKey} onRetry={onRetry} label={t("pageLoadFailed")} retryLabel={t("retry")}>
+    <Boundary
+      resetKey={resetKey}
+      onRetry={onRetry}
+      chunkLabel={t("pageLoadFailed")}
+      crashLabel={t("pageCrashed")}
+      retryLabel={t("retry")}
+    >
       {children}
     </Boundary>
   );

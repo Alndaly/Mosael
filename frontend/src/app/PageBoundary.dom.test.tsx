@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
-    ({ pageLoadFailed: "这一页没能加载出来。", retry: "重试" })[key] ?? key,
+    ({ pageLoadFailed: "这一页没能加载出来。", pageCrashed: "这一页出错了。", retry: "重试" })[key] ?? key,
 }));
 
 import { PageBoundary } from "./PageBoundary";
@@ -49,6 +49,26 @@ describe("页面错误边界", () => {
     );
     expect(screen.getByText("lookAlongAxis is not defined")).toBeTruthy();
     expect(screen.getByRole("button", { name: /重试/ })).toBeTruthy();
+    spy.mockRestore();
+  });
+
+  it("代码块没取到和页面自己出错,说的不是一回事", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { unmount } = render(
+      <PageBoundary resetKey="editor">
+        <Boom message="Failed to fetch dynamically imported module: http://x/EditorView.js" />
+      </PageBoundary>,
+    );
+    expect(screen.getByText("这一页没能加载出来。")).toBeTruthy();
+    unmount();
+    // 页面自己抛的错重试照样抛:不能说「断了一下、重试就好」。
+    render(
+      <PageBoundary resetKey="editor">
+        <Boom message="useRecorder must be used within RecordingProvider" />
+      </PageBoundary>,
+    );
+    expect(screen.getByText("这一页出错了。")).toBeTruthy();
+    expect(screen.queryByText("这一页没能加载出来。")).toBeNull();
     spy.mockRestore();
   });
 

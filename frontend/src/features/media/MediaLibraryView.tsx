@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { useRecorder } from "@/features/media/RecordingProvider";
+import { useRecorder } from "@/features/media/recordingContext";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { MediaTagFilter } from "./MediaTagFilter";

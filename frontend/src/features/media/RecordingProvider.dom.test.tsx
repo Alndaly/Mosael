@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/api/client", () => ({ importAsset: vi.fn() }));
 
-import { RecordingProvider, useRecorder } from "./RecordingProvider";
+import { RecordingProvider } from "./RecordingProvider";
+import { useRecorder } from "./recordingContext";
 import { importAsset } from "@/api/client";
 
 class FakeMediaRecorder {
