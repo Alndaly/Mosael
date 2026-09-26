@@ -159,6 +159,8 @@ def test_internal_工具不进智能体工具表_也不进插件页(monkeypatch)
     ])
     monkeypatch.setattr(plugin_tools.inst, "blocked_reason", lambda db, i: None)
     monkeypatch.setattr(plugin_tools.inst, "exposed_tools", lambda db, i: {"execute_blender_code", "get_scene_info"})
+    #: exposed() 按插件包的名字标出处(节点按包聚合),这里的假包没有清单 —— 名字直接给。
+    monkeypatch.setattr(plugin_tools.inst, "manifest_for", lambda db, i: SimpleNamespace(name="Blender MCP"))
 
     class FakeDb:
         def scalars(self, stmt):
