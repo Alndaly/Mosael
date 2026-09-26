@@ -220,16 +220,29 @@ function NodeLabel({ data, icon, fallback, secondary, className }: { data: Board
  *
  * 一项**能力**跑挂了、被取消了,那一格自己的内容还好好的:不给它套一圈红框(原因在它的面板里、选中时的那一条
  * 运行态上说)—— 否则一张图转个 GIF 没成功,那张图就永远挂着一圈红。
+ *
+ * **状态只画在格子自己的边框上,不往外画。** 此前在跑的一格外面还有 ring-2 和一圈 20px 的主色外发光,光晕溢出格子、
+ * 压到旁边的格子和连线上;而「在跑」格子里已经有扫光、进度条和「生成中 · 58%」,那圈光什么也没多说。
  */
 const RUN_STATE_CLASS: Record<BoardItemRunStatus, string> = {
   idle: "ring-0",
-  queued: "border-primary/45 ring-1 ring-primary/15",
-  running:
-    "border-primary/70 ring-2 ring-primary/25 shadow-[0_0_20px_color-mix(in_srgb,var(--primary)_16%,transparent)]",
+  queued: "border-primary/45",
+  running: "border-primary/70",
   succeeded: "ring-0",
-  failed: "border-destructive/75 ring-2 ring-destructive/25",
-  cancelled: "border-dashed border-muted-foreground/60 opacity-80 ring-1 ring-muted-foreground/15",
+  failed: "border-destructive/75",
+  cancelled: "border-dashed border-muted-foreground/60 opacity-80",
 };
+
+/**
+ * 格子外壳的圆角,和贴着外壳内沿的那一层(图、视频、占位、状态块)的圆角。
+ *
+ * **里面那层比外壳小一个边框宽**:它缩在 1px 的边框里面,圆角还写成和外壳一样大的话,两条弧不同心,
+ * 四个角各露出一道暗缝(用户截图)。此前图片 / 视频 / 音频格是 `rounded-lg`、便签 / 文档 / 场景是 `rounded-xl`,
+ * 里面一律手写 `rounded-lg` —— 两种格子两套角,里外又各差一截。现在所有格子一个外壳圆角,里面按它减边框。
+ */
+const CELL_RADIUS = "rounded-xl";
+const CELL_INNER_RADIUS = "rounded-[calc(var(--radius-xl)-1px)]";
+const CELL_INNER_TOP_RADIUS = "rounded-t-[calc(var(--radius-xl)-1px)]";
 
 /** 刚跑完时那一下的闪:这么久之后回到安静的外壳。 */
 const SUCCESS_FLASH_MS = 1600;
@@ -252,7 +265,7 @@ function useRunState(item: BoardItem) {
   return {
     "data-board-run-status": actual,
     "data-board-just-ran": flash ? "" : undefined,
-    className: cn(RUN_STATE_CLASS[status], "transition-shadow duration-700", flash && "ring-2 ring-success/35"),
+    className: cn(RUN_STATE_CLASS[status], "transition-colors duration-700", flash && "border-success/60"),
   } as const;
 }
 
@@ -443,8 +456,8 @@ function Generating({ item, text, onStop }: { item: BoardItem; text?: string; on
   const t = useI18n();
   const progress = useJobProgress(itemJobId(item), itemIsRunning(item));
   return (
-    <div role="status" aria-busy="true" className="relative h-full w-full overflow-hidden rounded-lg">
-      <Skeleton surface className="absolute inset-0 h-full w-full rounded-lg" />
+    <div role="status" aria-busy="true" className={cn("relative h-full w-full overflow-hidden", CELL_INNER_RADIUS)}>
+      <Skeleton surface className={cn("absolute inset-0 h-full w-full", CELL_INNER_RADIUS)} />
       {progress > 0 && (
         <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/15">
           <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
@@ -471,7 +484,7 @@ function Generating({ item, text, onStop }: { item: BoardItem; text?: string; on
 function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop?: (id: string) => void }) {
   const t = useI18n();
   return (
-    <div className="relative grid h-full w-full place-items-center overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-3">
+    <div className={cn("relative grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-3", CELL_INNER_RADIUS)}>
       <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1.5 text-center">
         <Clock3 size={16} className="text-primary" />
         <span className="text-ui-2xs font-medium text-primary">{t("boardNodeQueued")}</span>
@@ -503,7 +516,7 @@ function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop
 function Failed({ item, reason }: { item: BoardItem; reason: string }) {
   const t = useI18n();
   return (
-    <div role="alert" className="grid h-full w-full place-items-center overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3">
+    <div role="alert" className={cn("grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3", CELL_INNER_RADIUS)}>
       <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1 text-center">
         <AlertTriangle size={15} className="text-destructive" />
         <span className="text-ui-2xs font-semibold text-destructive">{t(runCopy(item).failed)}</span>
@@ -518,7 +531,7 @@ function Failed({ item, reason }: { item: BoardItem; reason: string }) {
 function Cancelled() {
   const t = useI18n();
   return (
-    <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg bg-secondary/35 px-3">
+    <div className={cn("grid h-full w-full place-items-center overflow-hidden bg-secondary/35 px-3", CELL_INNER_RADIUS)}>
       <div className="grid justify-items-center gap-1 text-center text-muted-foreground">
         <Ban size={15} />
         <span className="text-ui-2xs font-semibold">{t("boardNodeCancelled")}</span>
@@ -577,7 +590,8 @@ export function ImageNode({ data, selected }: NodeProps) {
         // 圆角裁剪交给里面那层媒体。
         //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
         //: 再套一圈主色反而盖过节点里的画面。
-        "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
+        "group relative h-full w-full border border-border bg-panel shadow-sm",
+        CELL_RADIUS,
         state.className,
       )}
     >
@@ -599,7 +613,7 @@ export function ImageNode({ data, selected }: NodeProps) {
           plain
           previewOnClick={false}
           lazy={false}
-          className="h-full w-full overflow-hidden rounded-lg object-cover"
+          className={cn("h-full w-full overflow-hidden object-cover", CELL_INNER_RADIUS)}
           onNaturalSize={(width, height) => onAspect(item.id, width / height)}
         />
       )}
@@ -654,7 +668,8 @@ export function VideoNode({ data, selected }: NodeProps) {
         // 同上:标签和接点都在框外,不能裁在这一层。
         //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
         //: 再套一圈主色反而盖过节点里的画面。
-        "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
+        "group relative h-full w-full border border-border bg-panel shadow-sm",
+        CELL_RADIUS,
         state.className,
       )}
     >
@@ -669,7 +684,7 @@ export function VideoNode({ data, selected }: NodeProps) {
         // 鼠标一悬到视频上画布就拖不动了(踩过)。
         <BoardVideo
           assetId={item.asset_id}
-          className="rounded-lg"
+          className={CELL_INNER_RADIUS}
           onNaturalSize={(width, height) => onAspect(item.id, width / height)}
         />
       )}
@@ -687,12 +702,12 @@ function AudioNode({ data, selected }: NodeProps) {
   return (
     <div
       data-board-run-status={state["data-board-run-status"]}
-      className={cn("group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm", state.className)}
+      className={cn("group relative h-full w-full border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}
     >
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
-      <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
+      <div className={cn("grid h-full w-full place-items-center overflow-hidden px-2", CELL_INNER_RADIUS)}>
         {!item.asset_id ? (
           <PendingSlot item={item} icon={<Music size={20} />} onStop={commentMode ? undefined : onStop} />
         ) : (
@@ -844,10 +859,10 @@ export function SceneNode({ data, selected }: NodeProps) {
   const fallback = <div data-board-scene-hint="" className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
   const pending = status === "queued" || status === "running" || status === "failed";
   //: `group`:接点在悬停时显形(group-hover)—— 少了它,3D 场景格的接点只有选中了才看得见。
-  return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible rounded-xl border border-border bg-panel shadow-sm", state.className)}>
+  return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}>
     <NodeResizer minWidth={240} minHeight={180} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
     <NodeLabel data={nodeData} /><Ports visible={selected} disabled={commentMode} />
-    <div className="min-h-0 flex-1 overflow-hidden rounded-t-xl">
+    <div className={cn("min-h-0 flex-1 overflow-hidden", CELL_INNER_TOP_RADIUS)}>
       {pending ? <PendingSlot item={item} icon={<Box size={20} />} onStop={commentMode ? undefined : onStop} />
         : item.asset_id ? <AssetInlinePreview key={item.asset_id} assetId={item.asset_id} name={item.text || ""} kind="image" plain previewOnClick={false} lazy={false} imageFallback={fallback} className="h-full w-full object-contain" /> : fallback}
     </div>

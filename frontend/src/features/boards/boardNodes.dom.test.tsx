@@ -54,10 +54,10 @@ const STATUS_LABEL = {
 
 const STATUS_CLASS = {
   idle: "ring-0",
-  queued: "ring-primary/15",
-  running: "ring-primary/25",
+  queued: "border-primary/45",
+  running: "border-primary/70",
   succeeded: "ring-0",
-  failed: "ring-destructive/25",
+  failed: "border-destructive/75",
   cancelled: "border-dashed",
 } as const;
 
@@ -127,6 +127,22 @@ describe("无限画布节点运行状态", () => {
       expect(node?.dataset.boardRunStatus).toBe(status);
       expect(node?.className).toContain(STATUS_CLASS[status]);
       if (status === "succeeded") expect(node?.className).not.toMatch(/ring-success|border-success/);
+      //: 状态只画在自己的边框上:外环、外发光会溢出格子,压到旁边的格子和连线上(用户截图里在跑那一格的光晕)。
+      expect(node?.className, `${kind} ${status}`).not.toMatch(/\bring-[1-8]\b|shadow-\[0_0_/);
+      unmount();
+    }
+  });
+
+  it("所有内容格一个外壳圆角;贴着内沿的那层按它减掉 1px 边框,两条弧同心", () => {
+    //: 此前图片 / 视频 / 音频格外壳 rounded-lg、便签 / 场景 rounded-xl,里面一律 rounded-lg —— 角上露一道暗缝。
+    for (const kind of ["note", "image", "video", "audio"] as const) {
+      const { container, unmount } = renderNode(kind, "running", { form: { producer: kind === "note" ? "write" : "generate", prompt: "猫" } });
+      const shell = container.querySelector<HTMLElement>("[data-board-run-status]") ?? container.querySelector<HTMLElement>(".group");
+      expect(shell?.className, kind).toContain("rounded-xl");
+      expect(shell?.className, kind).not.toContain("rounded-lg");
+      if (kind !== "note") {
+        expect(container.querySelector('[role="status"]')?.className, kind).toContain("rounded-[calc(var(--radius-xl)-1px)]");
+      }
       unmount();
     }
   });
@@ -144,12 +160,12 @@ describe("无限画布节点运行状态", () => {
       const node = () => document.querySelector<HTMLElement>("[data-board-run-status]")!;
       const { rerender } = render(view({ status: "running", job_id: "j" }));
       rerender(view({ status: "succeeded" }, "a1"));
-      expect(node().className).toContain("ring-success/35");
+      expect(node().className).toContain("border-success/60");
       act(() => void vi.advanceTimersByTime(2000));
-      expect(node().className).not.toContain("ring-success");
+      expect(node().className).not.toContain("border-success");
       cleanup();
       render(view({ status: "succeeded" }, "a1"));
-      expect(node().className).not.toContain("ring-success");
+      expect(node().className).not.toContain("border-success");
     } finally {
       vi.useRealTimers();
     }
