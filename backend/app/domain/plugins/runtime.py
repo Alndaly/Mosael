@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from app.core.interpreter import base_python
-from app.core.child_process import ChildProcess, popen_text, run_logged
+from app.core.child_process import ChildProcess, kill_tree, own_group, popen_text, run_logged
 from app.core.text import blame_line
 from app.core.i18n import LocalizedError, get_current_locale
 from app.domain.jobs import current_parent_job_id, detach_job_child, register_job_child
@@ -124,7 +124,11 @@ def resolve_entry(plugin_dir: Path, entry: str) -> Path:
 
 
 class _CancelSwitch:
-    """挂在任务名下的那个插件进程。记下「是不是取消杀的」,好把原因说对。"""
+    """挂在任务名下的那个插件进程。记下「是不是取消杀的」,好把原因说对。
+
+    停的是**整棵进程树**:插件入口起的孙进程(`node render.mjs`、ffmpeg)攥着它的 stdout,只杀入口的话
+    渲染照跑,而 `communicate()` 等不到管道关上 —— 取消了的调用要等孙进程自己跑完才返回。
+    """
 
     def __init__(self, job_id: str, process: subprocess.Popen) -> None:
         self.job_id = job_id
@@ -133,7 +137,7 @@ class _CancelSwitch:
 
     def kill(self) -> None:
         self.pulled = True
-        self._process.kill()
+        kill_tree(self._process)
 
 
 def _attach_to(job_id: str, attached: list[_CancelSwitch]) -> Callable[[subprocess.Popen], None]:
@@ -196,6 +200,8 @@ def execute_tool(
             timeout=timeout,
             cwd=entry_path.parent,
             env=env, what="插件命令",
+            # 自成一组:超时、取消停的是整棵进程树(见 _CancelSwitch)。
+            group=True,
             on_child=_attach_to(job_id, attached) if job_id else None)
     except subprocess.TimeoutExpired as exc:
         raise PluginTimeout("pluginErr_timeout", seconds=f"{timeout:g}") from exc
@@ -368,8 +374,10 @@ def stream_tool(
         stderr=subprocess.PIPE,
         cwd=entry_path.parent,
         env=env,
+        **own_group(),
     )
-    child = ChildProcess(process)
+    #: 停它就停整棵进程树 —— 孙进程攥着 stdout 的话,只杀入口进程,读 stdout 的线程永远等不到 EOF。
+    child = ChildProcess(process, own_group=True)
     #: 跑在一个任务里时,这个进程归那个任务(和 execute_tool 同一条):取消任务就拉下开关。
     job_id = current_parent_job_id()
     switch = _GracefulSwitch(job_id, cancel_file, child) if job_id else None

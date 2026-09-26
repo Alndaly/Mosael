@@ -15,8 +15,11 @@ closes stdout and lets the loop finish.
 from __future__ import annotations
 
 import logging
+import os
 import re
+import signal
 import subprocess
+import sys
 import threading
 import time
 from collections import deque
@@ -46,6 +49,48 @@ TEXT_IO: dict[str, str] = {"encoding": "utf-8", "errors": "replace"}
 #: stdin 都关了,它还不退」。后者在本仓库有真实成因 —— Node 的 sidecar 里挂着没人管的后台
 #: promise,事件循环不空就不退。20 秒:到这一步该产出的都产出了,再等只是在赌。
 REAP_TIMEOUT = 20.0
+
+
+# ---------------------------------------------------------------------------
+# 自成一组的子进程:停它就是停它起的所有进程
+# ---------------------------------------------------------------------------
+
+
+def own_group() -> dict[str, Any]:
+    """让子进程**自成一组**的 Popen 参数。配 `kill_tree` 用。
+
+    `Popen.kill()` 只杀那一个 pid。子进程要是又起了孙进程(插件入口起 `node render.mjs`、manim 起
+    ffmpeg),孙进程照跑,而且攥着继承来的 stdout —— 读输出的那一侧等不到 EOF,「杀掉了」并没有让
+    调用返回。自成一组之后,一次 `kill_tree` 停下整组。
+    """
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def kill_tree(process: subprocess.Popen) -> None:
+    """停下 `process` 和它起的所有进程(它得是按 `own_group()` 起的)。可以重复调,可以跨线程调。
+
+    POSIX:新会话里 pgid 就是它的 pid,`killpg` 一次停下整组 —— 入口进程已经自己退了、只剩孙进程
+    攥着管道时也一样。Windows:`taskkill /T` 按父子关系往下找。
+    """
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True, timeout=10, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass  # 整组都已经退了
+    try:
+        process.kill()
+    except Exception:  # noqa: BLE001 — already gone
+        pass
 
 
 def popen_text(args, **kwargs) -> subprocess.Popen:
@@ -82,8 +127,11 @@ class ChildProcess:
         timeout: float | None = None,
         *,
         stderr_lines: int = 200,
+        own_group: bool = False,
     ) -> None:
         self._process = process
+        #: 进程是按 `own_group()` 起的:停它就停整组(见 kill_tree)。
+        self._own_group = own_group
         self.timed_out = False
         # True once kill() ran — lets callers tell "we stopped it" (cancel/timeout) from
         # "the child died on its own", e.g. to decide whether an encoder fallback should retry.
@@ -126,6 +174,9 @@ class ChildProcess:
     def kill(self) -> None:
         """Stop the child now. Safe to call from another thread, and more than once."""
         self.killed = True
+        if self._own_group:
+            kill_tree(self._process)
+            return
         try:
             self._process.kill()
         except Exception:  # noqa: BLE001 — already gone
@@ -232,33 +283,44 @@ def _plain(result: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
 
 def _run_announcing_child(
     args,
-    on_child: Callable[[subprocess.Popen], Any],
+    on_child: Callable[[subprocess.Popen], Any] | None,
     *,
     input=None,
     capture_output: bool = False,
     timeout: float | None = None,
     check: bool = False,
+    group: bool = False,
     **kwargs,
 ) -> subprocess.CompletedProcess:
-    """`subprocess.run` 的同一套语义,只多一步:子进程一起来就交给 `on_child`。
+    """`subprocess.run` 的同一套语义,多两样:子进程一起来就交给 `on_child`;`group` 时自成一组。
 
     `subprocess.run` 不交出 Popen,而任务要在取消时杀得掉它(见 jobs.register_job_child),
-    所以照 CPython 的实现写这一份 —— 只有要登记子进程的调用方走这里。
+    所以照 CPython 的实现写这一份 —— 要登记子进程、或要超时时停下整棵进程树的调用方走这里。
     """
     if input is not None:
         kwargs["stdin"] = subprocess.PIPE
     if capture_output:
         kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+    if group:
+        kwargs.update(own_group())
+
+    def stop(process: subprocess.Popen) -> None:
+        if group:
+            kill_tree(process)
+        else:
+            process.kill()
+
     with subprocess.Popen(args, **kwargs) as process:
         try:
-            on_child(process)
+            if on_child is not None:
+                on_child(process)
             stdout, stderr = process.communicate(input, timeout=timeout)
         except subprocess.TimeoutExpired:
-            process.kill()
+            stop(process)
             process.wait()
             raise
         except BaseException:
-            process.kill()
+            stop(process)
             raise
         retcode = process.poll()
     if check and retcode:
@@ -272,6 +334,7 @@ def run_logged(
     what: str,
     level: int = logging.INFO,
     on_child: Callable[[subprocess.Popen], Any] | None = None,
+    group: bool = False,
     **kwargs,
 ) -> subprocess.CompletedProcess:
     """`subprocess.run`,外加一行日志。**外部命令只从这一个口子出去。**
@@ -291,6 +354,9 @@ def run_logged(
 
     `on_child` 在子进程起来的那一刻拿到它的 Popen —— 给要在任务取消时杀掉它的调用方
     (插件工具,见 plugins/runtime.execute_tool)。
+
+    `group=True`:子进程自成一组,超时停下的是整棵进程树(见 own_group / kill_tree)——
+    跑别人的代码时要这样,它起的孙进程不归我们管,却会在超时之后照跑。
     """
     # 文本模式默认 UTF-8(见 TEXT_IO)。调用方只说了「我要字符串」,没说"按这台机器的
     # locale 猜一个编码" —— 而后者在中文 Windows 上是 GBK,ffprobe 报一个中文文件名就炸。
@@ -300,10 +366,10 @@ def run_logged(
     line = _describe(args)
     started = time.monotonic()
     try:
-        if on_child is None:
+        if on_child is None and not group:
             result = subprocess.run(args, **kwargs)
         else:
-            result = _run_announcing_child(args, on_child, **kwargs)
+            result = _run_announcing_child(args, on_child, group=group, **kwargs)
     except subprocess.TimeoutExpired:
         logger.warning("%s 超时(%s):%s", what, _took(time.monotonic() - started), line)
         raise
