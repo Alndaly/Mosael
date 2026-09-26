@@ -132,7 +132,8 @@ describe("工具格的面板", () => {
     await waitFor(() => expect(sendButton()).toBeTruthy());
     //: 正文就是那段要交给工具的字(第一个没接上游的文字字段),不是一行「文字 *」标签 + 输入框。
     const body = panel().querySelector<HTMLElement>("[data-board-composer-body]")!;
-    expect(body.querySelector('textarea[data-field-key="text"]')?.getAttribute("placeholder")).toBe("文字");
+    //: 占位说「写下文字」这类一句话,不是光秃秃的字段名(「文本」「Key」读起来像没填的表单标签)。
+    expect(body.querySelector('textarea[data-field-key="text"]')?.getAttribute("placeholder")).toBe("boardToolBodyPlaceholder");
     //: 挑一个的字段是底栏里的一枚芯片(标签在芯片里)。
     expect(within(barField("mode")!).getByRole("combobox").textContent).toContain("模式");
     //: 其余的进「参数」;发送键是那枚圆键,和生成面板一样。
@@ -197,8 +198,11 @@ describe("工具格的面板", () => {
     await waitFor(() => expect(sendButton()).toBeTruthy());
     const bar = [...document.querySelectorAll<HTMLElement>("[data-board-composer-bar] [data-field-key]")].map((one) => one.dataset.fieldKey);
     expect(bar).toEqual(["lang", "mode", "style"]);
-    //: 必填还没选:芯片上写「待选」。
-    expect(within(barField("lang")!).getByRole("combobox").textContent).toContain("boardToolUnset");
+    //: 必填还没选:芯片上写字段名(淡色),选了之后写值(「英语」)—— 字段名不和值挤在一枚芯片里。
+    expect(within(barField("lang")!).getByRole("combobox").textContent).toBe("目标语言");
+    //: 还差必填的:发送键是灰的,悬停说差哪几样。
+    expect(sendButton()).toBeDisabled();
+    expect(sendButton().getAttribute("title")).toContain("boardToolMissing");
     //: 第四个挑一个的字段(速度)和必填的数字(种子)进「参数」;种子空着 → 按钮上有个点。
     const settings = screen.getByRole("button", { name: "boardGenerationSettings" });
     expect(settings.dataset.attention).toBe("true");
@@ -229,7 +233,9 @@ describe("工具格的面板", () => {
       producers: [TOOL],
     };
     mount(<>{renderComposer("node:plugin.any.echo", host)}</>);
-    await waitFor(() => expect(screen.getByText("boardToolConnection".replace("{name}", "我的回声"))).toBeTruthy());
+    //: 有连接时面板不再写「将用你的连接 X 运行」—— 那一行是噪音;没有连接时才说。
+    await waitFor(() => expect(sendButton()).toBeEnabled());
+    expect(document.querySelector("[data-tool-connection]")).toBeNull();
     fireEvent.click(sendButton());
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
     expect(run.mock.calls[0][0]).toEqual({
@@ -355,8 +361,12 @@ describe("指向某样东西的字段是下拉", () => {
   it("场景还没挑:镜头说先挑哪一格,是灰的", async () => {
     stubScenes();
     mount(<Stateful initial={action({ config: {} })} sources={[]} tool={SCENE_TOOL} />);
-    await waitFor(() => expect(chip("shot_id").textContent).toContain("wfPickParentFirst"));
+    //: 芯片上只写「镜头」,是灰的;为什么灰(先挑场景)在悬停里说 —— 此前两样挤在一枚芯片里,被截成「镜头 先…」。
+    await waitFor(() =>
+      expect(chip("shot_id").closest("[data-field-key]")?.getAttribute("title")).toContain("wfPickParentFirst"),
+    );
     expect(chip("shot_id")).toBeDisabled();
+    expect(chip("shot_id").textContent).toBe("镜头");
   });
 });
 

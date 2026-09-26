@@ -145,3 +145,31 @@ describe("Tailwind v4 下不再有 `x-[--var]` 这种写法", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * 几项同名(好几个「未命名场景」)时,cmdk 按 value 认「哪一行」—— 此前 value 是显示的文字,同名的几行
+ * 被当成一行:一起高亮,点哪个都可能选到另一个。value 必须是这一项自己的值,文字只用来搜。
+ */
+describe("同名的几项各是各的", () => {
+  beforeAll(() => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+    Element.prototype.scrollIntoView ??= () => {};
+  });
+
+  it("每一行按自己的值标识,点第二个选中的就是第二个;按名字照样搜得到", () => {
+    const onChange = vi.fn();
+    const twins = [
+      { value: "scene-a", label: "未命名场景" },
+      { value: "scene-b", label: "未命名场景" },
+      { value: "scene-c", label: "客厅" },
+    ];
+    render(<SearchableSelect value="scene-a" onValueChange={onChange} options={twins} />);
+    const content = openContent();
+    const rows = [...content.querySelectorAll<HTMLElement>("[cmdk-item]")];
+    expect(rows.map((row) => row.getAttribute("data-value"))).toEqual(["scene-a", "scene-b", "scene-c"]);
+    // 同一时刻只有一行是高亮的。
+    expect(rows.filter((row) => row.getAttribute("data-selected") === "true")).toHaveLength(1);
+    fireEvent.click(rows[1]);
+    expect(onChange).toHaveBeenCalledWith("scene-b");
+  });
+});

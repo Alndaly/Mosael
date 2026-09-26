@@ -1,14 +1,16 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, PlugZap } from "lucide-react";
+import { toPlainText } from "@/components/markdown/inlineSyntax";
 
 import { fetchWorkflowFieldOptions, type BoardItem, type BoardProducerInfo, type BoardRunForms } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { kindIcon, sourceName } from "@/features/boards/boardNodes";
-import { defaultBindings, givesValue, sourceValue } from "@/features/boards/boardTools";
+import { defaultBindings, firstSentence, givesValue, sourceValue } from "@/features/boards/boardTools";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import {
   emptyOptionsHint,
@@ -83,8 +85,11 @@ function filled(value: unknown): boolean {
  * (NodeConfigForm 的紧凑排法),下拉的来源、跟着谁变、唯一一项当缺省也都是它那一份(useNodeFieldOptions)——
  * 这里不认识任何具体节点(棘轮 nodeInspectorIsNodeAgnostic)。
  *
- * **用谁的连接**:插件工具跑的是点运行的这个人自己接的连接 —— 共享画板上尤其如此。正文末尾写明
- * 「将用你的连接「X」运行」;没有就说清楚、给一个去插件页的入口,发送键是灰的。
+ * **用谁的连接**:插件工具跑的是点运行的这个人自己接的连接 —— 共享画板上尤其如此。有连接时不说(一行
+ * 「将用你的连接 X 运行」是噪音,用户说过不要);**没有**时说清楚、给一个去插件页的入口,发送键是灰的。
+ *
+ * **还差什么没填,发送键就是灰的**,悬停说差哪几样 —— 此前必填的场景空着,发送键照样亮着,点了才从服务端
+ * 回一句错。
  */
 export function ActionComposer({
   item,
@@ -151,11 +156,7 @@ export function ActionComposer({
     staleTime: 30_000,
   });
   const plugin = tool?.plugin_name ?? "";
-  const chosen = String(config[connectionKey] ?? "");
   const available = connections.data ?? [];
-  const connection = connectionSpec?.options_from
-    ? available.find((one) => one.value === chosen) ?? (!chosen && available.length === 1 ? available[0] : undefined)
-    : undefined;
   const missingConnection = Boolean(connectionSpec?.options_from) && connections.isSuccess && available.length === 0;
 
   const fits = (key: string) =>
@@ -181,6 +182,8 @@ export function ActionComposer({
   //: 换了父字段就清掉跟着它的(换场景 → 旧镜头失效),和工作流检查器同一条规矩(nodeForms/dependents)。
   const setConfig = (key: string, value: unknown) => save({ config: withDependentsCleared(config, key, value, specs) });
 
+  const fieldLabel = (key: string, spec: BoardFieldSpec) => String(spec.label || key);
+
   //: 分到哪一块:上游芯片(能接上游、有得接或已经接上)、正文(第一段自由的字)、底栏芯片(挑一个的,必填在前)、
   //: 其余进「参数」。只看此刻参与的字段(active_when)。
   const { basic, advanced } = nodeConfigTiers(specs, config);
@@ -200,13 +203,17 @@ export function ActionComposer({
     ([key, spec]) => spec.required && !filled(config[key]) && !filled(spec.default),
   );
 
-  const blocked = !tool || missingConnection;
+  //: 还差哪几样必填:没接上游、没填、没有缺省,也不是「清单只有一项就用它」的那种。
+  const soleDefault = (key: string, spec: BoardFieldSpec) =>
+    Boolean(spec.sole_option_default) && (fieldOptions.dynamicOptions(key, spec) ?? []).length === 1;
+  const missing = active
+    .filter(([key, spec]) => spec.required && !isBound(key) && !filled(config[key]) && !filled(spec.default) && !soleDefault(key, spec))
+    .map(([key, spec]) => fieldLabel(key, spec));
+  const blocked = !tool || missingConnection || missing.length > 0;
   const send = () => {
     if (blocked || working) return;
     run(() => onRun({ config, bindings }));
   };
-
-  const fieldLabel = (key: string, spec: BoardFieldSpec) => String(spec.label || key);
 
   return (
     <BoardComposerShell
@@ -224,7 +231,7 @@ export function ActionComposer({
                   data-binding-chips={key}
                   className="flex min-w-0 flex-wrap items-center gap-1"
                 >
-                  <span className="px-1 text-ui-2xs text-muted-foreground">{fieldLabel(key, spec)}</span>
+                  <span className="px-1 text-ui-xs text-muted-foreground">{fieldLabel(key, spec)}</span>
                   {fits(key).map((source) => {
                     const Icon = kindIcon(source.kind);
                     const on = picked.has(source.id);
@@ -262,24 +269,28 @@ export function ActionComposer({
               const current = String(config[key] ?? spec.default ?? "");
               //: 留空 = 唯一的那一项(sole_option_default):显示成当前值,不写进配置 —— 运行时同一条规矩。
               const shown = !current && spec.sole_option_default && options.length === 1 ? options[0].value : current;
+              //: **芯片上写的是值**(「英语」「客厅」),和模型芯片写模型名一样;还没选时写字段名(「目标语言」),
+              //: 淡色。字段名不和值挤在同一枚芯片里 —— 此前「目标语言 待选」在窄处被截成「镜头 先…」,两样都看不清。
+              //: 清单是空的(先选场景 / 还在查 / 真没有)芯片是灰的,原因在悬停里说。
+              const emptyWhy = options.length === 0 ? emptyOptionsHint(t, fieldOptions.whyEmpty(key)) : "";
               return (
-                <span key={key} data-field-key={key} className="flex min-w-0 shrink">
+                <span
+                  key={key}
+                  data-field-key={key}
+                  //: 宽度上限挂在**这一层**(相对整条底栏的 45%),芯片自己撑满这一层 —— 上限写在芯片上的话,百分比
+                  //: 相对的是这层按内容定宽的包装,一来一回把字的宽度压成了 0(「镜头 先…」就是这么被截掉的)。
+                  className="flex min-w-0 max-w-[min(15rem,45%)] shrink"
+                  title={emptyWhy ? `${fieldLabel(key, spec)} · ${emptyWhy}` : fieldLabel(key, spec)}
+                >
                   <OptionPicker
                     size="sm"
                     ariaLabel={fieldLabel(key, spec)}
-                    icon={<span className="shrink-0 text-muted-foreground">{fieldLabel(key, spec)}</span>}
                     value={shown}
                     onChange={(next) => setConfig(key, next)}
                     options={options}
                     disabled={options.length === 0}
-                    placeholder={
-                      options.length === 0
-                        ? emptyOptionsHint(t, fieldOptions.whyEmpty(key))
-                        : spec.required
-                          ? t("boardToolUnset")
-                          : t("wfPickOption")
-                    }
-                    className={cn(BAR_PICKER, "text-foreground")}
+                    placeholder={fieldLabel(key, spec)}
+                    className={cn(BAR_PICKER, "max-w-full", shown && "text-foreground")}
                     contentClassName="max-w-[min(360px,calc(100vw-16px))]"
                   />
                 </span>
@@ -291,38 +302,19 @@ export function ActionComposer({
         tool && (restBasic.length > 0 || restAdvanced.length > 0)
           ? {
               attention,
+              //: **一张表,一种排法**:常用的在前、不常用的在后,一行一项、标签在左。此前中间插一行「高级选项」
+              //: 把它切成两段,两段各自排版,看着像两张表。
               content: (
-                <>
-                  {restBasic.length > 0 && (
-                    <NodeConfigForm
-                      compact
-                      fields={restBasic}
-                      config={config}
-                      workspaceId={workspaceId}
-                      variables={[]}
-                      fieldOptions={fieldOptions}
-                      onSetConfig={setConfig}
-                      onTypeConfig={setConfig}
-                    />
-                  )}
-                  {restAdvanced.length > 0 && (
-                    <>
-                      {restBasic.length > 0 && (
-                        <span className="border-t border-divider pt-2 text-ui-2xs text-muted-foreground">{t("wfAdvanced")}</span>
-                      )}
-                      <NodeConfigForm
-                        compact
-                        fields={restAdvanced}
-                        config={config}
-                        workspaceId={workspaceId}
-                        variables={[]}
-                        fieldOptions={fieldOptions}
-                        onSetConfig={setConfig}
-                        onTypeConfig={setConfig}
-                      />
-                    </>
-                  )}
-                </>
+                <NodeConfigForm
+                  compact
+                  fields={[...restBasic, ...restAdvanced]}
+                  config={config}
+                  workspaceId={workspaceId}
+                  variables={[]}
+                  fieldOptions={fieldOptions}
+                  onSetConfig={setConfig}
+                  onTypeConfig={setConfig}
+                />
               ),
             }
           : null
@@ -331,7 +323,7 @@ export function ActionComposer({
         tool
           ? {
               label: t(item.run?.status === "succeeded" ? "boardToolRerun" : "boardToolRun"),
-              hint: t("boardToolOutputsHint"),
+              hint: missing.length > 0 ? t("boardToolMissing").replace("{fields}", missing.join(t("listSeparator"))) : t("boardToolOutputsHint"),
               onSend: send,
               disabled: blocked,
               working,
@@ -359,7 +351,7 @@ export function ActionComposer({
               value={String(config[bodyField[0]] ?? "")}
               onChange={(event) => setConfig(bodyField[0], event.target.value)}
               rows={bodyField[1].multiline ? 4 : 3}
-              placeholder={fieldLabel(...bodyField)}
+              placeholder={bodyPlaceholder(t, ...bodyField)}
               className="nowheel w-full resize-none border-0 bg-transparent px-1 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
             />
           ) : tool.board_description ? (
@@ -368,25 +360,26 @@ export function ActionComposer({
               <InlineMarkdown text={tool.board_description} />
             </p>
           ) : null}
-          {connectionSpec?.options_from && connections.isSuccess ? (
-            <p data-tool-connection="" className="m-0 flex items-start gap-1.5 px-1 text-ui-2xs leading-relaxed text-muted-foreground">
-              <PlugZap size={12} className="mt-0.5 shrink-0" />
-              {missingConnection ? (
-                <span role="alert" className="text-foreground">
-                  {t("boardToolNoConnection").replace("{plugin}", plugin)}{" "}
-                  <a href="#/plugins" className="text-primary underline-offset-2 hover:underline">
-                    {t("boardToolOpenPlugins")}
-                  </a>
-                </span>
-              ) : connection ? (
-                <span>{t("boardToolConnection").replace("{name}", connection.label)}</span>
-              ) : (
-                <span>{t("boardToolPickConnection").replace("{plugin}", plugin)}</span>
-              )}
+          {missingConnection ? (
+            <p data-tool-connection="" className="m-0 flex items-start gap-1.5 px-1 text-ui-xs leading-relaxed text-muted-foreground">
+              <PlugZap size={13} className="mt-0.5 shrink-0" />
+              <span role="alert" className="text-foreground">
+                {t("boardToolNoConnection").replace("{plugin}", plugin)}{" "}
+                <a href="#/plugins" className="text-primary underline-offset-2 hover:underline">
+                  {t("boardToolOpenPlugins")}
+                </a>
+              </span>
             </p>
           ) : null}
         </>
       )}
     </BoardComposerShell>
   );
+}
+
+/** 正文的占位:这一格要写什么(字段自己的说明,第一句),没有说明时是「写下{字段}」—— 不是光秃秃的字段名
+ *  (「文本」「Key」读起来像一个没填的表单标签)。 */
+function bodyPlaceholder(t: (key: MessageKey) => string, key: string, spec: BoardFieldSpec): string {
+  const said = spec.description ? firstSentence(toPlainText(String(spec.description))) : "";
+  return said || t("boardToolBodyPlaceholder").replace("{field}", String(spec.label || key));
 }

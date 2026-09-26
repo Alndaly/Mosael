@@ -108,9 +108,11 @@ describe("工具格", () => {
     cleanup();
     renderAction(action(), { tool: TRANSLATE });
     expect(root().dataset.boardToolKind).toBe("note");
-    //: 和便签同一个外壳:有色的圆角卡。
-    expect(root().className).toContain("rounded-xl");
-    expect(root().className).toContain("#f5c518");
+    //: 产出文字的工具格**不涂便签的颜色**:便签黄只属于真正的便签,否则一格翻译放在画布上和一张便签分不出来。
+    //: 它和空的图片格同一块中性的面板底,会产出什么由正中的图标说。
+    expect(root().className).toContain("rounded-lg");
+    expect(root().className).toContain("bg-panel");
+    expect(root().className).not.toContain("#f5c518");
   });
 
   it("正中那枚图标是这个工具自己的(格子上方那一行也是),不是一把通用的扳手", () => {

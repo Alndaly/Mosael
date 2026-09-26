@@ -246,8 +246,7 @@ def _scene_shots(db: Session, ctx: OptionContext) -> list[Option]:
     """`parent` 那个场景里的镜头,按场景里的顺序,显示镜头名。
 
     parent 说不出是哪个场景(还没挑、是一段 `{{…}}` 引用、不在这个工作区)时是空清单 ——
-    不猜,也不把别的工作区的场景内容透出来。镜头重名时(从 Blender 取回的相机常常同名)
-    名字后面带上 id,否则下拉里两项长得一样。
+    不猜,也不把别的工作区的场景内容透出来。
     """
     from app.db.models import Scene3D
 
@@ -256,11 +255,8 @@ def _scene_shots(db: Session, ctx: OptionContext) -> list[Option]:
     if scene is None or scene.workspace_id != ctx.workspace_id:
         return []
     shots = [shot for shot in (scene.content or {}).get("shots") or [] if isinstance(shot, dict) and shot.get("id")]
-    names = [str(shot.get("name") or "").strip() or str(shot["id"]) for shot in shots]
-    return [
-        {"value": str(shot["id"]), "label": name if names.count(name) == 1 else f"{name} · {shot['id']}"}
-        for shot, name in zip(shots, names)
-    ]
+    #: 重名的镜头(从 Blender 取回的相机常常同名)由 distinct_labels 统一带上一截 id。
+    return [{"value": str(shot["id"]), "label": str(shot.get("name") or "").strip() or str(shot["id"])} for shot in shots]
 
 
 def _projects(db: Session, ctx: OptionContext) -> list[Option]:
@@ -331,4 +327,26 @@ def field_options(db: Session, source: str, ctx: OptionContext) -> list[Option]:
     handler = SOURCES.get(source)
     if handler is None:
         raise FieldOptionsError("wfErr_unknownOptionSource", source=source)
-    return handler(db, ctx)
+    return distinct_labels(handler(db, ctx))
+
+
+def distinct_labels(options: list[Option]) -> list[Option]:
+    """同名的几项在名字后面带上 id,**所有来源一处做**。
+
+    几个场景都叫「未命名场景」、两个项目同名,下拉里就是几行一模一样的字 —— 挑哪个全凭运气。短 id(镜头的
+    `shot-2`)整个带上;长 id(32 位的那种)只截末 4 位(「未命名场景 · #3f9a」),万一这 4 位也撞了才用整个 id。
+    名字唯一的不动。
+    """
+    counts: dict[str, int] = {}
+    for option in options:
+        counts[option["label"]] = counts.get(option["label"], 0) + 1
+    tails = [option["value"][-4:] for option in options]
+    out: list[Option] = []
+    for option, tail in zip(options, tails):
+        if counts[option["label"]] == 1:
+            out.append(option)
+            continue
+        value = option["value"]
+        suffix = value if len(value) <= 12 else (f"#{tail}" if tails.count(tail) == 1 else value)
+        out.append({**option, "label": f"{option['label']} · {suffix}"})
+    return out

@@ -353,3 +353,19 @@ class Test指向工作区里某样东西的字段:
         assert (append["track_id"]["options_from"], append["track_id"]["depends_on"]) == ("sequence_tracks", "sequence_id")
         plugin = types["plugin_tool"]["config"]["instance_id"]
         assert (plugin["options_from"], plugin["depends_on"]) == ("plugin_instances", "plugin_id")
+
+
+def test_同名的几项带上一截_id_所有来源一处做() -> None:
+    """几个场景都叫「未命名场景」时,下拉里是几行一模一样的字,高亮和选中都会认错。"""
+    from app.domain.workflows.field_options import distinct_labels
+
+    long_a, long_b = "a" * 28 + "3f9a", "b" * 28 + "77c1"
+    out = distinct_labels([
+        {"value": long_a, "label": "未命名场景"},
+        {"value": long_b, "label": "未命名场景"},
+        {"value": "c" * 32, "label": "客厅"},
+        {"value": "shot-2", "label": "近景"},
+        {"value": "shot-3", "label": "近景"},
+    ])
+    assert [one["label"] for one in out] == ["未命名场景 · #3f9a", "未命名场景 · #77c1", "客厅", "近景 · shot-2", "近景 · shot-3"]
+    assert len({one["label"] for one in out}) == len(out)

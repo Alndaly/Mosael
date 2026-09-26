@@ -164,7 +164,14 @@ function SettingsButton({ attention, children }: { attention: boolean; children:
       <PopoverContent
         align="end"
         side="top"
-        className={cn(MODAL_SURFACE, "nodrag nopan nowheel grid max-h-[min(440px,calc(100dvh-32px))] w-[360px] gap-3 overflow-y-auto rounded-xl p-4")}
+        tabIndex={-1}
+        //: 打开时焦点落在弹层本身,不落在第一个控件上:否则第一个下拉一打开就套着一圈焦点环,看着像已经选中了它。
+        //: Tab 照样从这里进到各个控件。
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
+        className={cn(MODAL_SURFACE, "nodrag nopan nowheel grid max-h-[min(440px,calc(100dvh-32px))] w-[360px] gap-3 overflow-y-auto rounded-xl p-4 outline-none")}
       >
         <span className="text-ui-sm font-medium">{t("boardGenerationSettings")}</span>
         {children}

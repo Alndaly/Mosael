@@ -865,10 +865,10 @@ function ActionNode({ data, selected }: NodeProps) {
       title={tool?.description ? toPlainText(tool.description) : tool === null ? t("boardToolUnavailable") : undefined}
       className={cn(
         "group relative h-full w-full shadow-sm",
-        //: 外壳就是那种内容格的外壳:便签是有色的圆角卡,媒体是面板底的圆角框(见 NoteNode / ImageNode)。
-        kind === "note"
-          ? cn("rounded-xl border p-4", noteColorClass(undefined))
-          : "rounded-lg border border-border bg-panel",
+        //: **一律是空内容格那块中性的面板底**(见 ImageNode 的空槽),哪怕它产出的是一段字。便签的颜色只属于
+        //: 真正的便签 —— 此前产出文字的工具格(翻译、转写)也涂成便签黄,放在画布上和一张真便签分不出来。
+        //: 它会产出什么由正中的工具图标说,格子的形状(音频是一条)跟着产出的种类。
+        "rounded-lg border border-border bg-panel",
         state.className,
       )}
     >

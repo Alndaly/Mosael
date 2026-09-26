@@ -159,8 +159,12 @@ export function SearchableSelect({
                 const rows = groupItems.map((item) => (
                   <CommandItem
                     key={item.value}
-                    // 描述也参与搜索:用户记得住"发抖音"却未必记得节点叫「发布」。
-                    value={`${item.label} ${item.description ?? ""} ${(item.keywords ?? []).join(" ")}`}
+                    // **cmdk 拿 value 认「哪一行」**(高亮、键盘上下、选中都按它),所以它必须是这一项唯一的
+                    // 值 —— 此前拿显示的文字当 value,几个都叫「未命名场景」的场景就被当成同一行:一起高亮,
+                    // 点哪个都可能选到另一个。能搜到的文字走 keywords:标签、描述(用户记得住「发抖音」却
+                    // 未必记得节点叫「发布」)和调用方给的关键词。
+                    value={item.value}
+                    keywords={[item.label, item.description ?? "", ...(item.keywords ?? [])].filter(Boolean)}
                     onSelect={() => {
                       onValueChange(item.value);
                       setOpen(false);
