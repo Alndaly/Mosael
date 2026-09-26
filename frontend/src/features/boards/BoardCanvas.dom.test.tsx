@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -317,22 +317,29 @@ describe("操作条上的「接着做」", () => {
     act(() => {
       document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-  const grow = () =>
-    Object.fromEntries(
-      [...document.querySelectorAll<HTMLButtonElement>("[data-board-grow]")].map((one) => [one.dataset.boardGrow, one]),
-    );
+  //: 「生成」是一颗按钮开一个菜单:一排「图片 视频 文案 音频」挤在操作条上,视频格上会把操作条撑出画布。
+  const grow = () => {
+    const trigger = document.querySelector<HTMLButtonElement>("[data-board-grow-menu]");
+    if (!trigger) return [];
+    act(() => trigger.click());
+    const menu = screen.getByRole("menu", { name: "boardGrowLabel" });
+    const rows = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    return rows;
+  };
 
-  it("悬停说的是这一格往那一种长,图标是要长出来的那种格子", () => {
+  it("每一行把这一下说全,图标是要长出来的那种格子;便签不往下长文案", () => {
     mount({ items: [note("n1", "一只猫")], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
     select("n1");
-    const buttons = grow();
-    expect(Object.keys(buttons)).toEqual(["image", "video", "note", "audio"]);
-    expect(buttons.image.title).toBe("boardSpawnImageFromNote");
-    //: 此前便签往下接视频时说的是「用这段文字生成图片」。
-    expect(buttons.video.title).toBe("boardSpawnVideoFromText");
-    expect(buttons.video.querySelector("svg.lucide-film")).not.toBeNull();
-    expect(buttons.audio.querySelector("svg.lucide-music")).not.toBeNull();
-    expect(document.querySelector("[data-board-grow] svg.lucide-sparkles")).toBeNull();
+    const rows = grow();
+    //: 便签自己就是文案 —— 改写、翻译是它的能力,不再另长一张便签。
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "boardSpawnImageFromNote", "boardSpawnVideoFromText", "boardSpawnAudio",
+    ]);
+    expect(rows[1].querySelector("svg.lucide-film")).not.toBeNull();
+    expect(rows[2].querySelector("svg.lucide-music")).not.toBeNull();
   });
 
   it("有产出的图片往下接视频:拿它当首帧;空槽什么都不长", () => {
@@ -348,9 +355,9 @@ describe("操作条上的「接着做」", () => {
       { onRun: vi.fn(async () => undefined) },
     );
     select("i1");
-    expect(grow().video.title).toBe("boardSpawnVideoFromImage");
+    expect(grow().map((row) => row.textContent)).toEqual(["boardSpawnVideoFromImage", "boardSpawnNote"]);
     select("i2");
-    expect(Object.keys(grow())).toEqual([]);
+    expect(grow()).toEqual([]);
   });
 });
 

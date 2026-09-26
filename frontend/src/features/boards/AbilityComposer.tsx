@@ -18,7 +18,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { kindIcon, sourceName } from "@/features/boards/boardNodes";
 import { boardToolIcon, defaultBindings, firstSentence, givesValue, sourceValue } from "@/features/boards/boardTools";
-import { composerFields, missingFields, takesMany, type BoardFieldSpec } from "@/features/boards/composerFields";
+import { composerFields, filled, missingFields, takesMany, type BoardFieldSpec } from "@/features/boards/composerFields";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { emptyOptionsHint, NodeConfigForm, useNodeFieldOptions } from "@/features/nodeForms/NodeConfigForm";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
@@ -148,7 +148,14 @@ export function AbilityComposer({
   const setConfig = (key: string, value: unknown) => save({ config: withDependentsCleared(config, key, value, specs) });
 
   const fieldLabel = (key: string, spec: BoardFieldSpec) => String(spec.label || key);
-  const fields = composerFields({ specs, config, bindings, hostField, fits });
+  //: **只有一个连接时不摆「连接」**:留空就是用它(sole_option_default,运行时同一条),摆出来只会在「从网盘导入」
+  //: 下面再写一遍「百度网盘」。有两个以上才是一个要挑的东西;值已经写成别的(那个连接删了)时也摆出来让人看见。
+  const soleConnection =
+    Boolean(connectionKey) &&
+    connections.isSuccess &&
+    (connections.data ?? []).length === 1 &&
+    (!filled(config[connectionKey]) || config[connectionKey] === connections.data?.[0]?.value);
+  const fields = composerFields({ specs, config, bindings, hostField, fits, hidden: soleConnection ? connectionKey : null });
   const soleDefault = (key: string, spec: BoardFieldSpec) =>
     Boolean(spec.sole_option_default) && (fieldOptions.dynamicOptions(key, spec) ?? []).length === 1;
   const missing = missingFields(fields, config, bindings, soleDefault).map(([key, spec]) => fieldLabel(key, spec));

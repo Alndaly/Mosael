@@ -31,14 +31,30 @@ export type MenuAction = {
  * 键盘:打开后焦点落在第一个可用条目;↑↓ 循环移动、Home/End 到两端,Enter/空格触发;
  * Esc 关闭,焦点回到 ⋯ 按钮(Radix Popover 的默认行为)。
  */
-export function ActionMenu({ label, actions }: { label: string; actions: MenuAction[] }) {
+export function ActionMenu({
+  label,
+  actions,
+  trigger,
+  align = "end",
+}: {
+  label: string;
+  actions: MenuAction[];
+  /**
+   * 换掉那颗 ⋯(画板操作条上的「生成 ▾」)。得是一个接得住 ref 的按钮,自己带 `aria-label` /
+   * `aria-haspopup`;条目、键盘、分组线还是这一份。
+   */
+  trigger?: ReactNode;
+  align?: "start" | "center" | "end";
+}) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label} title={label} aria-haspopup="menu"><MoreHorizontal /></Button>
+        {trigger ?? (
+          <Button variant="ghost" size="icon-sm" aria-label={label} title={label} aria-haspopup="menu"><MoreHorizontal /></Button>
+        )}
       </PopoverTrigger>
       <PopoverContent
-        align="end"
+        align={align}
         role="menu"
         aria-label={label}
         className="grid w-auto min-w-48 gap-0.5 p-1.5"

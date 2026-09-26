@@ -113,7 +113,10 @@ describe("操作条上的能力", () => {
     expect(transcribe.dataset.boardAbility).toBe("node:transcribe_asset");
     expect(transcribe.textContent).toBe("");
     expect(transcribe.querySelector("svg")).not.toBeNull();
-    expect(transcribe.title).toBe("素材转写 · 素材转写的一句话");
+    //: 悬停(键盘聚焦同一条路)马上出说明:名字一行、那一句说明一行 —— 不是要停一秒多的原生 title。
+    expect(transcribe.title).toBe("");
+    act(() => transcribe.focus());
+    expect(screen.getByRole("tooltip").textContent).toBe("素材转写素材转写的一句话");
     //: 转 GIF 是视频格的,不在音频格上;翻译是便签的。
     expect(bar()).not.toContain("视频转 GIF");
     expect(bar()).not.toContain("翻译");

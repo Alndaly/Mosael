@@ -162,8 +162,13 @@ export function useKeepInCanvas(
     });
   }, [ref, vertical]);
   React.useLayoutEffect(measure, [measure]);
+  //: 观察挂在**此刻真在的那个元素**上,不是挂载那一刻的:操作条这样的调用方没选中时照样挂着、只是渲染成空,
+  //: 按挂载时的 ref.current 装观察的话,之后条出现了也没人量(贴着侧栏的那一格,操作条一半钻到侧栏底下)。
+  const [panel, setPanel] = React.useState<HTMLDivElement | null>(null);
+  React.useLayoutEffect(() => {
+    if (ref.current !== panel) setPanel(ref.current);
+  });
   React.useEffect(() => {
-    const panel = ref.current;
     if (!panel || typeof ResizeObserver === "undefined") return;
     //: 画布一平移、一缩放,面板在屏幕上的位置就变了:视口那一层的 style(transform)一变就重量,一帧量一次。
     //: 看的是 DOM,不订阅画布库的内部 store —— 面板不必知道自己挂在哪个 ReactFlow 实例里。
@@ -189,7 +194,7 @@ export function useKeepInCanvas(
       moves.disconnect();
       window.removeEventListener("resize", schedule);
     };
-  }, [ref, measure]);
+  }, [panel, measure]);
   if (fit.dx === 0 && fit.maxHeight === undefined) return undefined;
   return {
     ...(fit.dx ? { transform: `translateX(${fit.dx}px)` } : {}),

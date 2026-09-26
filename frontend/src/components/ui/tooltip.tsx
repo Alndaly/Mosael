@@ -33,4 +33,33 @@ const TooltipContent = React.forwardRef<
 ))
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+/**
+ * 一枚图标按钮的悬停说明:名字一行,补充的一句淡色在下面。
+ *
+ * 图标按钮只有图形,**名字得在悬停时马上出来**(Provider 的 delayDuration,应用里是 300ms)——
+ * 原生 `title` 要停一秒多、样式是系统的,在一排图标上等于没有。读屏的名字仍然是按钮自己的
+ * `aria-label`,这里只管看得见的那一份,所以两者都要写。需要外面有一个 TooltipProvider。
+ */
+function Hint({
+  label,
+  hint,
+  side = "top",
+  children,
+}: {
+  label: string
+  hint?: string
+  side?: "top" | "bottom" | "left" | "right"
+  children: React.ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side} data-hint="" className="max-w-64 leading-relaxed">
+        <span className="block">{label}</span>
+        {hint && hint !== label ? <span className="block text-muted-foreground">{hint}</span> : null}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, Hint }

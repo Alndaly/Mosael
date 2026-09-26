@@ -79,15 +79,18 @@ export function composerFields({
   bindings,
   hostField,
   fits,
+  hidden,
 }: {
   specs: Record<string, BoardFieldSpec>;
   config: Record<string, unknown>;
   bindings: Record<string, { from: string }[]>;
   hostField?: string | null;
   fits: (key: string) => BoardItem[];
+  /** 不摆出来、也不算「还差」的一个字段(只有一个连接时的连接字段:留空就是用它)。 */
+  hidden?: string | null;
 }): ComposerFields {
   const isBound = (key: string) => Boolean(bindings[key]?.length);
-  const notHost = ([key]: Field) => key !== hostField;
+  const notHost = ([key]: Field) => key !== hostField && key !== hidden;
   const tiers = nodeConfigTiers(specs, config);
   const basic = (tiers.basic as Field[]).filter(notHost);
   const advanced = (tiers.advanced as Field[]).filter(notHost);

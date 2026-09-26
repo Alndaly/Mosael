@@ -29,7 +29,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, PencilLine, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { ChevronDown, Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -51,6 +51,7 @@ import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/a
 import { type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
 import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence, hostHasContent } from "@/features/boards/boardTools";
 import { ActionMenu } from "@/components/layout/ActionMenu";
+import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -1648,7 +1649,8 @@ const GROW_ORDER: GrowKind[] = ["image", "video", "note", "audio"];
  * 谁都能往下接一段文案。
  */
 const GROW: Partial<Record<BoardItem["kind"], Partial<Record<GrowKind, MessageKey>>>> = {
-  note: { image: "boardSpawnImageFromNote", video: "boardSpawnVideoFromText", note: "boardSpawnNote", audio: "boardSpawnAudio" },
+  //: 便签不往下长「文案」:它自己就是一段文案,改写、翻译是它自己的能力(让 AI 写 / 翻译),再长出一张便签是第三个入口。
+  note: { image: "boardSpawnImageFromNote", video: "boardSpawnVideoFromText", audio: "boardSpawnAudio" },
   document: { image: "boardSpawnImageFromNote", video: "boardSpawnVideoFromText", note: "boardSpawnNote", audio: "boardSpawnAudio" },
   image: { video: "boardSpawnVideoFromImage", note: "boardSpawnNote" },
   video: { video: "boardSpawnVideoFromVideo", note: "boardSpawnNote" },
@@ -1736,6 +1738,8 @@ function ItemToolbar({
     //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层
     //: 另用一套数字 —— 否则一眼看过去就是上疏下密。
     <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={BOARD_NODE_PANEL_OFFSET}>
+      {/* 这条上几乎全是图标:名字靠悬停说明(Hint)。自己带一个 Provider —— 从一枚滑到下一枚时不再等一遍。 */}
+      <TooltipProvider delayDuration={300} skipDelayDuration={400}>
       <div
         ref={bar}
         style={fit}
@@ -1761,10 +1765,10 @@ function ItemToolbar({
           {/* 分组框:**这一组是不是一个整体**。开着的时候拖框会把框里的东西一起带走 ——
               没有它的话,想把一组想法整体挪个位置就得一个个拖。 */}
           {item?.kind === "frame" && (
+            <Hint label={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}>
             <button
               type="button"
               aria-pressed={Boolean(item.move_children)}
-              title={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}
               className={cn(
                 "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
                 item.move_children
@@ -1775,6 +1779,7 @@ function ItemToolbar({
             >
               <Group size={13} /> {t("boardMoveChildren")}
             </button>
+            </Hint>
           )}
         </ToolbarCluster>
 
@@ -1853,6 +1858,7 @@ function ItemToolbar({
           {single && item && onPanel && overflow.length > 0 && (
             <ActionMenu
               label={t("boardMoreAbilities")}
+              trigger={<MoreButton label={t("boardMoreAbilities")} />}
               actions={overflow.map((ability) => {
                 const Icon = boardToolIcon(ability);
                 return {
@@ -1882,64 +1888,73 @@ function ItemToolbar({
             前面一个淡淡的「生成」,后面每一枚只写要长出来的那种东西(图片、视频、文案、音频)。 */}
         {onSpawn && single && item && !itemIsRunning(item) && hostHasContent(item) && GROW_ORDER.some((kind) => GROW[item.kind]?.[kind]) && (
           <ToolbarCluster>
-            <span aria-hidden className="shrink-0 pl-1 text-ui-2xs text-muted-foreground/70">{t("boardGrowLabel")}</span>
-            {GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
-              const Icon = kindIcon(kind);
-              return (
+            <ActionMenu
+              label={t("boardGrowLabel")}
+              align="start"
+              trigger={
                 <button
-                  key={kind}
                   type="button"
-                  data-board-grow={kind}
-                  className="flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  title={t(GROW[item.kind]?.[kind] as MessageKey)}
-                  onClick={() =>
+                  aria-label={t("boardGrowLabel")}
+                  aria-haspopup="menu"
+                  data-board-grow-menu=""
+                  className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                >
+                  <Plus size={13} /> {t("boardGrowLabel")} <ChevronDown size={12} className="opacity-60" />
+                </button>
+              }
+              actions={GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
+                const Icon = kindIcon(kind);
+                return {
+                  //: 每一行把这一下说全(「用这张图当首帧生成视频」),不是光秃秃的「视频」—— 菜单里有地方写,
+                  //: 而同一个「视频」从便签、图片、音频长出来是三件不同的事。
+                  label: t(GROW[item.kind]?.[kind] as MessageKey),
+                  icon: <Icon size={14} />,
+                  onSelect: () =>
                     onSpawn(kind, item.id, {
                       x: single.position.x + (single.width ?? 260) + 60,
                       y: single.position.y + (single.height ?? 180) / 2,
-                    })
-                  }
-                >
-                  <Icon size={13} />{" "}
-                  {/* 文案那一格说的是「生成文案」而不是「生成便签」—— 便签是这张卡片的名字,
-                      而用户要的是里面那段字。套同一个模板会说出「Generate Note」这种话。 */}
-                  {kind === "note" ? t("boardGrowCopy") : kindText(t, kind).label}
-                </button>
-              );
-            })}
+                    }),
+                };
+              })}
+            />
           </ToolbarCluster>
         )}
 
         {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
         {single && item && onRename && (
+          <Hint label={t("rename")}>
           <button
             type="button"
             aria-label={t("rename")}
-            title={t("rename")}
             className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={() => onRename(item.id)}
           >
             <PencilLine size={13} />
           </button>
+          </Hint>
         )}
+        <Hint label={t("copy")}>
         <button
           type="button"
           aria-label={t("copy")}
-          title={t("copy")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={onCopySelected}
         >
           <Copy size={13} />
         </button>
+        </Hint>
+        <Hint label={t("delete")}>
         <button
           type="button"
           aria-label={t("delete")}
-          title={t("delete")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
           onClick={onRemoveSelected}
         >
           <Trash2 size={13} />
         </button>
+        </Hint>
       </div>
+      </TooltipProvider>
     </NodeToolbar>
   );
 }
@@ -1979,10 +1994,10 @@ function ToolbarIcon({
   onClick: () => void;
 }) {
   return (
+    <Hint label={label} hint={hint}>
     <button
       type="button"
       aria-label={label}
-      title={hint && hint !== label ? `${label} · ${hint}` : label}
       aria-pressed={pressed === undefined ? undefined : pressed}
       data-board-action={ability ? undefined : name}
       data-board-ability={ability ? name : undefined}
@@ -1994,8 +2009,31 @@ function ToolbarIcon({
     >
       <Icon size={14} />
     </button>
+    </Hint>
   );
 }
+
+/** 操作条上的「⋯」:和别的图标同一个尺寸、同一种悬停说明(ActionMenu 自带的那颗是 `title`)。 */
+const MoreButton = React.forwardRef<HTMLButtonElement, { label: string } & React.ButtonHTMLAttributes<HTMLButtonElement>>(
+  ({ label, className, ...rest }, ref) => (
+    <Hint label={label}>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={label}
+        aria-haspopup="menu"
+        {...rest}
+        className={cn(
+          "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground",
+          className,
+        )}
+      >
+        <MoreHorizontal size={14} />
+      </button>
+    </Hint>
+  ),
+);
+MoreButton.displayName = "MoreButton";
 
 /** 空槽上摆在外面的产出者:内置的(配音、生成)和此刻选着的那一个;插件的生成器多了收进「⋯」。 */
 const SLOT_INLINE = 3;
@@ -2024,12 +2062,11 @@ function SlotSwitch({
           const on = current === one.id;
           const Icon = one.id.startsWith("node:") ? boardToolIcon(one) : null;
           return (
+            <Hint key={one.id} label={one.label} hint={firstSentence(toPlainText(one.board_description || one.description || ""))}>
             <button
-              key={one.id}
               type="button"
               role="radio"
               aria-checked={on}
-              title={toPlainText(one.board_description || one.description)}
               className={cn(
                 "flex max-w-40 cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-ui-xs transition-colors",
                 on ? "bg-panel text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
@@ -2039,12 +2076,14 @@ function SlotSwitch({
               {Icon ? <Icon size={12} className="shrink-0" /> : null}
               <span className="truncate">{one.label}</span>
             </button>
+            </Hint>
           );
         })}
       </div>
       {more.length > 0 && (
         <ActionMenu
           label={t("boardMoreGenerators")}
+          trigger={<MoreButton label={t("boardMoreGenerators")} />}
           actions={more.map((one) => {
             const Icon = boardToolIcon(one);
             return { label: one.label, icon: <Icon size={14} />, hint: one.plugin_name || undefined, onSelect: () => onSwitch(one.id as BoardProducer) };

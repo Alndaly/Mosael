@@ -239,6 +239,23 @@ describe("一格的能力的面板", () => {
     expect(sendButton().disabled).toBe(true);
   });
 
+  it("只有一个连接:「参数」里不摆连接(留空就是用它),也不算还差;两个以上才让挑", async () => {
+    const settingsKeys = async () => {
+      await waitFor(() => expect(sendButton()).toBeEnabled());
+      fireEvent.click(screen.getByRole("button", { name: "boardGenerationSettings" }));
+      const dialog = await screen.findByRole("dialog");
+      return [...dialog.querySelectorAll<HTMLElement>("[data-field-key]")].map((one) => one.dataset.fieldKey);
+    };
+    stubApi([{ value: "i1", label: "百度网盘" }]);
+    const { unmount } = mount(<Stateful initial={{ config: { text: "hi" } }} sources={[]} />);
+    expect(await settingsKeys()).not.toContain("instance_id");
+    unmount();
+
+    stubApi([{ value: "i1", label: "百度网盘" }, { value: "i2", label: "百度网盘 · 公司" }]);
+    mount(<Stateful initial={{ config: { text: "hi" } }} sources={[]} />);
+    expect(await settingsKeys()).toContain("instance_id");
+  });
+
   it("清单里没有这一项(插件卸了、这个人没接):不给表单", () => {
     stubApi([]);
     mount(<Stateful sources={[]} tool={null} />);
