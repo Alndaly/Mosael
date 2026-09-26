@@ -31,6 +31,8 @@ import json
 import logging
 import shutil
 import tempfile
+import threading
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -166,7 +168,9 @@ def _safe_extract(archive: zipfile.ZipFile, target: Path) -> None:
         if (info.external_attr >> 16) & 0o170000 == 0o120000:
             raise PluginDomainError("pluginErr_archiveSymlink", name=info.filename)
         destination = (root / info.filename).resolve()
-        if destination != root and not str(destination).startswith(str(root) + "/"):
+        # 按路径的**段**比,不按字符串前缀比:此前拼的是 `root + "/"`,Windows 上的路径分隔符是 `\\`,
+        # 于是每一条都被当成越界 —— Windows 上从市场一个插件也装不上。
+        if not destination.is_relative_to(root):
             raise PluginDomainError("pluginErr_archivePathEscape", name=info.filename)
         total += info.file_size
         if total > MAX_UNPACKED_BYTES:
@@ -215,26 +219,65 @@ def inspect_archive(data: bytes) -> tuple[dict[str, Any], Path, Path]:
     return raw, root, workdir
 
 
+#: 同一时刻只换一个插件目录。两次安装同一个 id 撞在一起时,先到的装完、后到的按「已经装过」处理,
+#: 而不是两边都判「还没装」、一个把目录挪进另一个里面去。
+_INSTALL_LOCK = threading.Lock()
+
+
 def install_archive(data: bytes, plugins_dir: Path, *, overwrite: bool = False) -> dict[str, Any]:
     """把一个 zip 装进插件目录。返回它的清单。
 
     `overwrite=False` 时**不覆盖已装的同 id 包**。覆盖是一件要单独同意的事:那个目录里
     可能已经有用户填过的东西,而且新版本可能声明了完全不同的权限。
+
+    **随应用发的插件不能被市场上的包顶替**(见 bundled):它们和插件目录里别的包住在一起,此前一个
+    id 写成 `dev.mosael.comfyui` 的第三方包选「更新」就能把随包的 ComfyUI 整个换成自己的代码。
+
+    **换目录是原子的**:先把新版本完整地放到插件目录里一个隐藏的暂存目录(同一个文件系统),再用两次
+    rename 换上去。此前是先 rmtree 旧目录再从临时目录 move 过来 —— 临时目录和插件目录不在同一个
+    文件系统时 move 是逐个文件拷贝,拷到一半失败,留下的是半个新版本、旧版本已经没了。
     """
+    from app.domain.plugins import bundled
+
     raw, root, workdir = inspect_archive(data)
+    staging: Path | None = None
     try:
-        plugin_id = str(raw["id"])
+        plugin_id = str(raw["id"]).strip()  # 形状在 parse 里查过(manifest.PLUGIN_ID_RE)
+        name = raw.get("name") or plugin_id
+        if bundled.is_bundled(plugin_id):
+            raise PluginDomainError("pluginErr_bundledCannotReplace", name=name)
         target = plugins_dir / plugin_id
         if target.exists() and not overwrite:
-            raise PluginDomainError("pluginErr_alreadyInstalled", name=raw.get("name") or plugin_id)
+            raise PluginDomainError("pluginErr_alreadyInstalled", name=name)
         plugins_dir.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            shutil.rmtree(target)
-        shutil.move(str(root), str(target))
+        staging = plugins_dir / f".{plugin_id}.installing-{uuid.uuid4().hex[:8]}"
+        shutil.move(str(root), str(staging))
+        with _INSTALL_LOCK:
+            _swap_in(staging, target, overwrite=overwrite, name=name)
+        staging = None
         logger.info("装上插件 %s(%s)", plugin_id, raw.get("version"))
         return raw
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
+
+
+def _swap_in(staging: Path, target: Path, *, overwrite: bool, name: str) -> None:
+    """把暂存目录换成 `target`。换失败时旧版本原样留着。"""
+    if not target.exists():
+        staging.rename(target)
+        return
+    if not overwrite:
+        raise PluginDomainError("pluginErr_alreadyInstalled", name=name)
+    retired = target.with_name(f".{target.name}.replaced-{uuid.uuid4().hex[:8]}")
+    target.rename(retired)
+    try:
+        staging.rename(target)
+    except OSError:
+        retired.rename(target)
+        raise
+    shutil.rmtree(retired, ignore_errors=True)
 
 
 def install_from_url(url: str, plugins_dir: Path, *, overwrite: bool = False) -> dict[str, Any]:

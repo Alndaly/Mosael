@@ -217,6 +217,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{name}」没有交回模型清单的指纹",
         "en": "“{name}” returned no fingerprint for its model list.",
     },
+    "pluginErr_bundledCannotReplace": {
+        "zh": "「{name}」和随 Mosael 一起提供的插件同名(同一个 id),不能用市场上的包替换它",
+        "en": "“{name}” has the same id as a plugin that ships with Mosael, so a package from the market can't replace it.",
+    },
     "pluginErr_bundledCannotUninstall": {
         "zh": "「{name}」随 Mosael 一起提供,不能卸载;不想用的话停用它的连接即可",
         "en": "“{name}” ships with Mosael and can't be uninstalled; disable its connection if you don't want to use it.",

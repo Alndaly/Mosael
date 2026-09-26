@@ -135,6 +135,58 @@ class Test不悄悄覆盖:
         assert not (tmp_path / "dev.test.demo" / "旧脚本.py").exists()
 
 
+    def test_更新半路失败时旧版本还在(self, tmp_path, monkeypatch) -> None:
+        """此前是先 rmtree 旧目录、再从临时目录 move 过来 —— 两边不在同一个文件系统时 move 是逐个
+        文件拷贝,拷到一半失败(磁盘满、权限),留下的是半个新版本,而旧版本已经没了。"""
+        market.install_archive(make_zip({"mosael.plugin.json": json.dumps(MANIFEST), "main.py": "v1"}), tmp_path)
+
+        def broken_move(src, dst, *args, **kwargs):
+            raise OSError("磁盘满了")
+
+        monkeypatch.setattr(market.shutil, "move", broken_move)
+        newer = {**MANIFEST, "version": "2.0.0"}
+        with pytest.raises(OSError):
+            market.install_archive(good_zip(manifest=newer), tmp_path, overwrite=True)
+        assert (tmp_path / "dev.test.demo" / "main.py").read_text() == "v1"
+        assert [p.name for p in tmp_path.iterdir()] == ["dev.test.demo"], "暂存目录没清掉"
+
+    def test_覆盖之后不留暂存和替换现场(self, tmp_path) -> None:
+        market.install_archive(good_zip(), tmp_path)
+        market.install_archive(good_zip(manifest={**MANIFEST, "version": "2.0.0"}), tmp_path, overwrite=True)
+        assert [p.name for p in tmp_path.iterdir()] == ["dev.test.demo"]
+
+    def test_市场上的包不能顶替随应用发的插件(self, tmp_path, monkeypatch) -> None:
+        """随包插件和别的包住在同一个插件目录里。此前一个 id 撞上 `dev.mosael.comfyui` 的第三方包
+        选「更新」,就能把随包的 ComfyUI 整个换成自己的代码。"""
+        from app.domain.plugins import bundled
+
+        shipped = tmp_path / "bundled" / "demo"
+        shipped.mkdir(parents=True)
+        (shipped / "mosael.plugin.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        monkeypatch.setattr(bundled, "bundled_root", lambda: tmp_path / "bundled")
+        plugins_dir = tmp_path / "plugins"
+        with pytest.raises(PluginDomainError) as caught:
+            market.install_archive(good_zip(), plugins_dir, overwrite=True)
+        assert caught.value.key == "pluginErr_bundledCannotReplace"
+        assert not (plugins_dir / "dev.test.demo").exists()
+
+
+def test_扫描不认安装现场的暂存目录(tmp_path) -> None:
+    """暂存目录里有一份完整的清单 —— 扫到它,包记录的目录就指到一个马上要被删掉的地方。"""
+    from app.core.db import SessionLocal
+    from app.db.models import PluginPackage
+    from app.domain.plugins import packages
+    from tests.util import fresh_client
+
+    fresh_client()
+    staging = tmp_path / ".dev.test.demo.installing-1234"
+    staging.mkdir()
+    (staging / "mosael.plugin.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+    with SessionLocal() as db:
+        packages.scan(db, tmp_path)
+        assert db.get(PluginPackage, "dev.test.demo") is None
+
+
 class Test索引:
     def test_默认市场指向官网实际发布的索引(self) -> None:
         from app.api.routes.plugins import DEFAULT_REGISTRY_URL
