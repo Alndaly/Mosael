@@ -10,6 +10,7 @@
   "drop-generation-models": "cde9e3b09eed1146",
   "drop-legacy-profile-columns": "a758c35105e087e7",
   "drop-member-perm-overrides": "e8640e4a8426a7fb",
+  "drop-plugin-packages-that-break-the-manifest-rules": "f8b6ececa08b19f2",
   "drop-publish-account-profile-name": "81ffa4bfea96b2a2",
   "drop-reviews-table": "11c9694ac0187ec9",
   "drop-shared-credentials": "7fbf2307394bdaa7",

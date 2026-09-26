@@ -3638,6 +3638,74 @@ def _migrate_pricing_time_prices() -> None:
             conn.execute(text("ALTER TABLE provider_pricing_rules ADD COLUMN time_zone VARCHAR(64) NOT NULL DEFAULT ''"))
 
 
+def _drop_plugin_packages_that_break_the_manifest_rules() -> None:
+    """插件清单的形状收紧了(id / 声明的工具名 / 配置与凭据的键,见 domain/plugins/manifest):库里存着的包记录
+    若违反新规矩,`manifest_of` 读它就抛 —— 插件页、智能体工具表、工作流节点面板对**所有人**报错。
+
+    这样的包本来也跑不了:id 是插件目录名(`../x` 会装到插件目录外面)、带点的工具名进不了节点类型、
+    叫 `path` 的配置项会顶掉插件进程的 PATH。删掉包记录(它的连接、凭据、授权、调用记录随外键级联),
+    每删一个记一条警告说是哪个、为什么。**磁盘上的目录不动**:作者改好清单之后重新扫描,它就回来。
+
+    规矩在这里原样写一份(迁移体是那一刻的快照,不随以后的清单规矩变)。幂等:删过的不会再出现。
+    """
+    if "plugin_packages" not in set(inspect(engine).get_table_names()):
+        return
+    import re
+
+    plugin_id = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
+    tool_name = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+    field_key = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    reserved = {
+        "PATH", "HOME", "LANG", "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "TEMP", "TMP",
+        "APPDATA", "LOCALAPPDATA", "USERPROFILE", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
+    }
+
+    def why_broken(package_id: str, raw: Any) -> str:
+        if not isinstance(raw, dict):
+            return "manifest is not an object"
+        declared_id = raw.get("id")
+        for one in (package_id, declared_id.strip() if isinstance(declared_id, str) else ""):
+            if not plugin_id.match(one):
+                return f"invalid id {one!r}"
+        tools = raw.get("tools")
+        seen_tools: set[str] = set()
+        for tool in (tools.get("declare") or []) if isinstance(tools, dict) else []:
+            name = tool.get("name") if isinstance(tool, dict) else None
+            if not isinstance(name, str):
+                continue
+            if not tool_name.match(name):
+                return f"invalid tool name {name!r}"
+            if name in seen_tools:
+                return f"duplicate tool {name!r}"
+            seen_tools.add(name)
+        instance = raw.get("instance")
+        seen_keys: set[str] = set()
+        for group in ("config", "credentials"):
+            fields = instance.get(group) if isinstance(instance, dict) else None
+            for field in fields if isinstance(fields, list) else []:
+                key = str(field.get("key") or "").strip() if isinstance(field, dict) else ""
+                if not field_key.match(key):
+                    continue  # 解析时本来就丢掉的键
+                upper = key.upper()
+                if upper in reserved or upper.startswith("MOSAEL_"):
+                    return f"key {key!r} overrides a host environment variable"
+                if upper in seen_keys:
+                    return f"keys collide as {upper!r}"
+                seen_keys.add(upper)
+        return ""
+
+    with engine.begin() as conn:
+        for package_id, stored in conn.execute(text("SELECT id, manifest FROM plugin_packages")).all():
+            try:
+                raw = json.loads(stored) if isinstance(stored, str) else stored
+            except ValueError:
+                raw = None
+            reason = why_broken(str(package_id), raw)
+            if reason:
+                logger.warning("插件包 %s 的清单不合新规矩(%s),删掉它的记录;改好清单后重新扫描即可", package_id, reason)
+                conn.execute(text("DELETE FROM plugin_packages WHERE id = :id"), {"id": package_id})
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -3812,6 +3880,8 @@ def migration_plan() -> MigrationPlan:
                 _remove_minimax_music_models,
                 # Blender 连接的 `::1` 从来连不上(上游两头都是 IPv4 套接字),改成 127.0.0.1。
                 _migrate_blender_host_is_ipv4,
+                # 清单形状收紧之后,库里违反新规矩的包记录删掉(否则读它就抛,插件页对所有人报错)。
+                _drop_plugin_packages_that_break_the_manifest_rules,
             ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),
