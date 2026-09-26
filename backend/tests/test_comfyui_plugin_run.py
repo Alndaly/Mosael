@@ -92,6 +92,14 @@ def test_坏模板也列出来_选中时再说清楚哪里坏(comfy, tmp_path: P
         _generate(comfy.url, tmp_path, {"model": "api-workflow"}, API_WORKFLOW="not json")
 
 
+def test_刚装好还没存过工作流_照样列出内置文生图(comfy) -> None:
+    """workflows 目录还不存在时 ComfyUI 对列目录回 404:那是「一张都没有」,不是连接坏了。"""
+    comfy.state.workflows = {}
+    assert [one["id"] for one in _models(comfy.url)] == ["builtin:txt2img"]
+    fingerprint = runtime.execute_tool(PLUGIN, ENTRY, TOOL, {"op": "fingerprint"}, {"SERVER_URL": comfy.url}, timeout=60)
+    assert fingerprint.output["fingerprint"]
+
+
 def test_没有checkpoint就不列内置文生图(comfy) -> None:
     comfy.state.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"] = [[]]
     assert "builtin:txt2img" not in {one["id"] for one in _models(comfy.url)}

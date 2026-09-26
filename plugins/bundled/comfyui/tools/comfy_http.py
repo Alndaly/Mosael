@@ -120,7 +120,12 @@ class Comfy:
 
     def workflow_listing(self) -> list[dict[str, Any]]:
         """保存的工作流连同大小和修改时间。**便宜** —— 只列目录,不取内容;判「有没有变」用它。"""
-        items = self.get("/api/userdata", {"dir": "workflows", "recurse": "true", "split": "false", "full_info": "true"})
+        try:
+            items = self.get("/api/userdata", {"dir": "workflows", "recurse": "true", "split": "false", "full_info": "true"})
+        except ComfyError as exc:
+            if exc.status == 404:
+                return []  # 还没存过工作流:workflows 目录不存在,ComfyUI 回 404 —— 就是一张都没有
+            raise
         return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
 
     def system_stats(self) -> dict[str, Any]:

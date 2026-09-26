@@ -221,6 +221,12 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == "/object_info":
             self._json(state.object_info)
+        elif path == "/api/userdata" and query.get("dir") == ["workflows"] and not state.workflows:
+            # 刚装好的 ComfyUI 还没存过工作流:workflows 目录不存在,ComfyUI 回 404 "Directory not found"
+            self.send_response(404)
+            self.send_header("Content-Length", "19")
+            self.end_headers()
+            self.wfile.write(b"Directory not found")
         elif path == "/api/userdata" and query.get("dir") == ["workflows"]:
             self._json([{"path": name, "size": len(json.dumps(graph)), "modified": 1}
                         for name, graph in state.workflows.items()])
