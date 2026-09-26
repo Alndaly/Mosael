@@ -1892,7 +1892,12 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
     operations is a list of:
       {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
           (item_id/x/y/width/height/title optional — the server auto-ids and lays out to the right)
-          type is one of note / image / video / audio / frame / scene / document
+          type is one of note / image / video / audio / frame / scene / document / action
+      {"kind":"add_item","type":"image","asset_id":"<asset id>"}
+          (places an existing asset; it must be in this workspace and match the item type:
+           image → image asset, video → video asset, audio → audio asset)
+      {"kind":"add_item","type":"scene","scene_id":"<list_scenes id>"}
+          (a 3D scene item REQUIRES scene_id — a scene of this workspace; without it the op is rejected)
       {"kind":"add_item","type":"frame","title":"第一幕"}
           (a frame is named by title; it has no text)
       {"kind":"add_item","type":"document","note_id":"<read_note id>","note_revision":1}

@@ -70,7 +70,7 @@ import {
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { importAsset } from "@/api/domains/assets";
-import { createBoard, updateBoard, type BoardItem } from "@/api/domains/boards";
+import { createBoard, updateBoard, withSlotProducer, type BoardItem } from "@/api/domains/boards";
 import { errorText } from "@/api/errorMessage";
 import {
   createScene,
@@ -869,7 +869,9 @@ function SceneEditor({
       await updateBoard(board.id, {
         workspace_id: initial.workspace_id,
         base_revision: board.revision,
-        canvas: { items, edges },
+        //: 每一格过新建格子的那一处(api/domains/boards 的 withSlotProducer):生成那一格带着草稿(提示词、参考、
+        //: 参数),产出者由它补上 —— 和画布上放下的一格同一个样子。此前漏写,选中了什么面板都不挂。
+        canvas: { items: items.map((item) => withSlotProducer(item)), edges },
       });
       await qc.invalidateQueries({
         queryKey: ["boards", initial.workspace_id],

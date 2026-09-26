@@ -135,14 +135,8 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 raise BoardDomainError("boardErr_formOnlyOnAction", item_id=item_id, kind=item_kind)
             elif op.get("asset_id"):
                 item["asset_id"] = str(op["asset_id"])
-            else:
-                #: 还没有产出的一格(便签、空的图片/视频/音频槽)写明它的产出者 —— 面板照它挂,
-                #: 和手动放下的一格同一个样子(见 producers.producer_for_new_slot)。
-                from app.domain.boards.producers import producer_for_new_slot
-
-                producer = producer_for_new_slot(item_kind)
-                if producer:
-                    item["form"] = {"producer": producer}
+            #: 还没有产出的一格(便签、空的图片/视频/音频槽)写明产出者这件事**不在这里做**:画布的每一次
+            #: 写入都过 normalize_canvas,由它照 producer_ids.SLOT_PRODUCERS 补齐 —— 一条规则、一处。
             items.append(item)
             by_id[item_id] = item
 

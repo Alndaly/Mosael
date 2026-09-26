@@ -399,7 +399,7 @@ def _deleted_note_board(client, ws: str) -> tuple[str, dict]:
 
 
 def test_引用的文档删掉之后_画板照样能创建副本() -> None:
-    """坏掉的引用在原板上照样能挪、能删(见 _validate_scene_references);副本是同样的项,
+    """坏掉的引用在原板上照样能挪、能删(见 _validate_references);副本是同样的项,
     不该因为那一格就整张复制不出来。"""
     client = fresh_client()
     ws = _workspace(client)

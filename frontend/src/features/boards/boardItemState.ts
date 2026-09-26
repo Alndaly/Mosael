@@ -1,4 +1,4 @@
-import type { BoardItem, BoardProducer } from "@/api/client";
+import { withSlotProducer, type BoardItem, type BoardProducer } from "@/api/client";
 
 export type BoardItemRunStatus = NonNullable<BoardItem["run"]>["status"];
 
@@ -43,22 +43,14 @@ export function withProducer(form: NonNullable<BoardItem["form"]>, producer: Boa
   return { ...rest, producer };
 }
 
-/** 新放下的一格(还没有产出)挂哪个产出者。和后端 producers.producer_for_new_slot 同一张表。 */
-const NEW_SLOT_PRODUCER: Partial<Record<BoardItem["kind"], BoardProducer>> = {
-  note: "write",
-  image: "generate",
-  video: "generate",
-  audio: "speak",
-};
-
 /**
- * 新放下的一格带上的表单:写明它的产出者。这是**新建时的缺省**,写进去之后就是那一格自己的事实。
- * 已经带着产出(贴进来的素材)或自带表单的不补 —— 前者不挂面板,后者自己说了算。
+ * 新放下的一格带上的表单:写明它的产出者(见 withSlotProducer)。自带表单的不在这里给 —— 调用方的表单
+ * 会整个盖掉这一份,要补的话对整格调 withSlotProducer。
  */
 export function newSlotForm(kind: BoardItem["kind"], extra: Partial<BoardItem> = {}): Pick<BoardItem, "form"> | null {
-  const producer = NEW_SLOT_PRODUCER[kind];
-  if (!producer || extra.asset_id || extra.form) return null;
-  return { form: { producer } };
+  if (extra.form) return null;
+  const { form } = withSlotProducer<Pick<BoardItem, "kind" | "asset_id" | "form">>({ kind, asset_id: extra.asset_id });
+  return form ? { form } : null;
 }
 
 /** 所有画布节点共用的六态解释。 */

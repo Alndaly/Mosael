@@ -2285,6 +2285,53 @@ def _migrate_board_forms_name_their_producer() -> None:
                 )
 
 
+def _migrate_board_empty_slots_name_their_producer() -> None:
+    """升级之后新建的、还没写明产出者的空槽,补上产出者。
+
+    `migrate-board-forms-name-their-producer` 只跑过一次;它之后,3D 场景页「拿去生成」建的画板自己拼格子,
+    生成那一格带着提示词和参考却没写 `form.producer` —— 选中了什么面板都不挂。现在画布的每一次写入都由
+    normalize_canvas 补齐(boards.producer_ids.missing_slot_producer),可已经存进库、之后再没存过的板不会
+    经过它,所以这里按**同一条规则**补一遍(这份口径是迁移那一刻的快照,不跟着领域层走):
+
+    · 便签、以及还没有产出(没有 asset_id)的图片/视频/音频,表单上没写 producer 的:
+      note → write、audio → speak、image/video → generate(截取那一格一向由服务端写明 trim,不在此列);
+    · 没有表单的就补一张只写着产出者的表单。
+
+    已经写了 producer 的、有了产出的媒体格不动(幂等)。`producer` 排在表单最后,和 normalize 补的位置一致。
+    **改到的板版本号 +1**:升级那一刻还开着这张板的客户端手里是旧快照,存回来该撞 409、拉最新的那份。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    by_kind = {"note": "write", "audio": "speak", "image": "generate", "video": "generate"}
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, canvas FROM boards")).fetchall():
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            touched = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict) or item.get("kind") not in by_kind:
+                    continue
+                kind = item["kind"]
+                if kind != "note" and item.get("asset_id"):
+                    continue
+                form = item.get("form")
+                if form is None:
+                    form = {}
+                if not isinstance(form, dict) or form.get("producer") is not None:
+                    continue
+                item["form"] = {**form, "producer": by_kind[kind]}
+                touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = revision + 1 WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_board_wiring_tools_become_notes() -> None:
     """画板上跑流程控制 / 数据处理节点的工具格,改成一张写明「这一步归工作流」的便签(ADR 0021 修订)。
 
@@ -4456,6 +4503,8 @@ def migration_plan() -> MigrationPlan:
                 # 生成能力要有正面证据:没写能力的模型行按新规则落成显式标签。排在 ComfyUI 那几步之后 ——
                 # 插件连接的模型行由它们建好、自带能力,这里一概不碰。
                 _migrate_generation_capabilities_need_evidence,
+                # 3D 场景页建的画板绕开了新建格子的缺省,空槽没写产出者:按 normalize 那条规则补一遍。
+                _migrate_board_empty_slots_name_their_producer,
             ),
             #: 对账:插件报出的新工具取代了老工具时,存着的老节点改写过去(依据是缓存的工具清单,它会变)。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _rewrite_replaced_plugin_tools),

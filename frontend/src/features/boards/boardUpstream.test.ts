@@ -38,6 +38,26 @@ describe("下游从上游拿到什么", () => {
     expect(after.texts[0].text).toBe("一只红苹果");
   });
 
+  it("工具格只让绑到字段上的文档拦住面板;内置面板读连进来的每一篇", () => {
+    const doc = (id: string) => ({ id, kind: "document", note_id: `note-${id}`, note_revision: 1 }) as unknown as BoardItem;
+    const tool = (bindings: Record<string, { from: string }[]>) =>
+      ({ id: "t", kind: "action", form: { producer: "node:translate", config: {}, bindings } }) as unknown as BoardItem;
+    //: 「坏的」那篇取不到(读挂了),「好的」那篇读到了。
+    const documents = new Map([
+      ["bad", { pending: false, error: "gone" }],
+      ["good", { pending: false, reference: { markdown: "正文" } as never }],
+    ]);
+    const edges = [edge("bad", "t"), edge("good", "t")];
+
+    const unbound = upstreamOf("t", [doc("bad"), doc("good"), tool({ text: [{ from: "good" }] })], edges, documents);
+    expect(unbound.blocked).toBe(false);
+    const bound = upstreamOf("t", [doc("bad"), doc("good"), tool({ text: [{ from: "bad" }] })], edges, documents);
+    expect(bound.blocked).toBe(true);
+
+    const slot = { id: "t", kind: "image", form: { producer: "generate" } } as unknown as BoardItem;
+    expect(upstreamOf("t", [doc("bad"), doc("good"), slot], edges, documents).blocked).toBe(true);
+  });
+
   it("没有连线时什么都不给", () => {
     const up = upstreamOf("img", [note("n1", "孤零零"), image("img", "")], [], new Map());
     expect(up).toEqual({ sources: [], assets: [], texts: [], references: [], blocked: false, pending: false });

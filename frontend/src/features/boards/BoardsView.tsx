@@ -38,7 +38,8 @@ import {
   type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import { itemName, kindIcon, type MediaKind } from "@/features/boards/boardNodes";
+import { isMediaKind, itemName, kindIcon, type MediaKind } from "@/features/boards/boardNodes";
+import type { PlacedAsset } from "@/features/boards/boardPlacement";
 import { boardToolOptions } from "@/features/boards/boardTools";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
@@ -631,16 +632,14 @@ function BoardDetail({
     return { value, label, group, icon: <Icon /> };
   };
 
-  /** 系统里拖进来的文件:先传进素材库,再由画布摆到落点上。**只收图片和视频** ——
-   *  画板上的项渲染的就是这两种,音频拖进来会变成一个放不了的空框。 */
+  /** 系统里拖进来 / 粘贴进来的文件:先传进素材库,再由画布按种类各放一格(图片、视频、音频都有自己的格子,
+   *  见 boardPlacement.assetItem)。素材库认成别的种类的(画板上没有那种格子)只进库、不上画板。 */
   const upload = useMutation({
     mutationFn: async (files: File[]) => {
-      const created: { id: string; name: string; kind: "image" | "video" }[] = [];
+      const created: PlacedAsset[] = [];
       for (const file of files) {
         const asset = await importAsset({ workspaceId, file });
-        if (asset.kind === "image" || asset.kind === "video") {
-          created.push({ id: asset.id, name: asset.name, kind: asset.kind });
-        }
+        if (isMediaKind(asset.kind)) created.push({ id: asset.id, name: asset.name, kind: asset.kind });
       }
       return created;
     },

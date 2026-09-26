@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Board, now
-from app.domain.boards.producer_ids import NOTE_PRODUCER, is_producer_id
+from app.domain.boards.producer_ids import NOTE_PRODUCER, is_producer_id, missing_slot_producer
 
 
 logger = logging.getLogger(__name__)
@@ -91,8 +91,14 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
     "action": (280, 150),
 }
 
-#: 必须指向素材库一份的那几种。空着的话存得下、打开却是个空白框。
-_NEEDS_ASSET = ("image", "video", "audio")
+#: 素材在画板上**有自己那种格子**的几种:一份图片 / 视频 / 音频素材放进同名的格子里。工具格交回的素材按它
+#: 落成同种格子,别的文件落成写着名字的便签(见 _derived_item)。它们不是「必须带素材」:没有素材的
+#: 是空槽,合法(见 normalize_canvas 里「空槽是合法的」那一段)。
+_MEDIA_KINDS = ("image", "video", "audio")
+
+#: 一种格子的 `asset_id` 必须是哪种素材(见 _validate_asset_references)。3D 场景借它放缩略图,是一张图。
+#: 不在表里的种类只问「是不是这个工作区的」。
+_ASSET_KIND_OF_ITEM: dict[str, str] = {**{kind: kind for kind in _MEDIA_KINDS}, "scene": "image"}
 
 #: 一个 item 至少要有的东西。坐标必须是数,否则画布渲染不出来。
 _REQUIRED = ("id", "kind", "x", "y")
@@ -475,6 +481,15 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         #   · 跑挂了(run.failed)  —— 提示词还在,可以改一改再来一次;
         #   · 有产出(有 asset_id)。
         # 前两种此前都被当成错误拒掉了 —— 而"节点本身就是生成单元"这件事,正要从空槽开始。
+        #
+        # **能产出、还没产出的一格一定写明产出者**(面板照 `form.producer` 挂,没有它就什么都不挂)。
+        # 这里是这条规则唯一的一处:新建一格的路不止一条(画布的「添加」、智能体的 add_item、3D 场景页
+        # 建的画板……),各自记得写的话,漏写的那一条造出来的格子选中了也没有面板,而且不报错。
+        # 缺了按 producer_ids.SLOT_PRODUCERS 补;已经写明的不动。不是「猜」:它是新建时的缺省,
+        # 和手动放下的一格得到的是同一个值。
+        producer = missing_slot_producer(item)
+        if producer is not None:
+            item["form"] = {**item.get("form", {}), "producer": producer}
 
         items.append(item)
 
@@ -535,7 +550,14 @@ def ensure_revision(board: Board, base_revision: int | None) -> None:
         raise BoardRevisionConflict(base_revision, board.revision)
 
 
-def _validate_scene_references(db: Session, workspace_id: str, canvas: dict, existing: dict | None = None) -> None:
+def _validate_references(
+    db: Session, workspace_id: str, canvas: dict, existing: dict | None = None, *, assets: bool = True
+) -> None:
+    """画布上指向别处的东西在不在、对不对:3D 场景、文档,以及(`assets`)素材。
+
+    `assets=False`:这一次写入是服务端自己落产出(回执)。那几份素材是产出者刚交回的,由回执那一侧
+    按工作区查过(见 _asset_facts);在这里再拒一次的话,整封回执落不下,那一格就永远在转圈。
+    """
     from app.db.models import Scene3D
     ids = {item['scene_id'] for item in canvas['items'] if item.get('scene_id')}
     if ids:
@@ -561,15 +583,48 @@ def _validate_scene_references(db: Session, workspace_id: str, canvas: dict, exi
             # 领域到领域的翻译:引用的文档有问题,对调用方来说是"这块画板存不下"。
             raise BoardDomainError(str(exc)) from exc
 
+    if assets:
+        _validate_asset_references(db, workspace_id, canvas, existing)
+
+
+def _validate_asset_references(db: Session, workspace_id: str, canvas: dict, existing: dict | None) -> None:
+    """一格的 `asset_id` 指着这个工作区里的一份素材,而且种类对得上格子(图片格放图片 —— 一段音频放进
+    图片格,存得下、画出来却是一张裂图,生成时还会被当成参考图发出去)。
+
+    **只查新引入的**,和文档同一条:板上已经有的「这种格子放这份素材」不再重新校验 —— 素材从库里删掉之后,
+    那一格照样能挪、能删、能复制。按「哪种格子放哪份素材」认,不按格子的 id 认(复制出来的那一格是同一份引用)。
+    """
+    from app.db.models import Asset
+
+    retained = {(item.get("kind"), item.get("asset_id"))
+                for item in (existing or {}).get("items", []) if item.get("asset_id")}
+    fresh = [item for item in canvas["items"]
+             if item.get("asset_id") and (item["kind"], item["asset_id"]) not in retained]
+    if not fresh:
+        return
+    ids = {item["asset_id"] for item in fresh}
+    rows = db.execute(select(Asset.id, Asset.kind).where(Asset.workspace_id == workspace_id, Asset.id.in_(ids)))
+    kinds = {str(asset_id): str(kind) for asset_id, kind in rows}
+    for item in fresh:
+        asset_kind = kinds.get(item["asset_id"])
+        if asset_kind is None:
+            raise BoardDomainError("boardErr_itemAssetNotInWorkspace", item_id=item["id"], asset_id=item["asset_id"])
+        wanted = _ASSET_KIND_OF_ITEM.get(item["kind"])
+        if wanted is not None and asset_kind != wanted:
+            raise BoardDomainError("boardErr_itemAssetKindMismatch", item_id=item["id"], asset_id=item["asset_id"],
+                                   kind=item["kind"], asset_kind=asset_kind)
+
+
 def check_canvas(db: Session, workspace_id: str, raw: Any, existing: dict[str, Any] | None = None) -> dict[str, Any]:
-    """一份画布存不存得下:形状(normalize_canvas)+ 引用(文档在不在、3D 场景是不是这个工作区的)。
+    """一份画布存不存得下:形状(normalize_canvas)+ 引用(文档在不在、3D 场景和素材是不是这个工作区的、
+    素材的种类对不对得上格子)。
 
     **落库和干跑共用这一道。** 智能体改画板时开卡前先干跑一遍,为的是写坏的算子在批准之前就失败;
     干跑只过形状的话,引用坏了要等用户点了同意才报错。`existing` 是这张板现在的样子(见
-    _validate_scene_references 里「已知引用」那一条)。
+    _validate_references 里「已知引用」那一条)。
     """
     canvas = normalize_canvas(raw)
-    _validate_scene_references(db, workspace_id, canvas, existing)
+    _validate_references(db, workspace_id, canvas, existing)
     return canvas
 
 
@@ -582,7 +637,7 @@ def create_board(
     actor_id: str | None = None,
     copied_from: dict[str, Any] | None = None,
 ) -> Board:
-    """`copied_from`:这张板照着哪份画布复制来的。那份上已有的引用算已知(见 _validate_scene_references)。"""
+    """`copied_from`:这张板照着哪份画布复制来的。那份上已有的引用算已知(见 _validate_references)。"""
     board = Board(
         workspace_id=workspace_id,
         name=(name or "").strip() or "新画板",
@@ -673,7 +728,7 @@ def update_board(
     if canvas is not None:
         normalized = normalize_canvas(canvas)
         next_canvas = normalized if server_write else _keep_server_owned_state(board.canvas, normalized)
-        _validate_scene_references(db, workspace_id, next_canvas, board.canvas)
+        _validate_references(db, workspace_id, next_canvas, board.canvas, assets=not server_write)
     if next_name == board.name and next_canvas == board.canvas:
         return board
     result = db.execute(
@@ -959,7 +1014,7 @@ def _derived_item(output: dict[str, Any], assets: dict[str, tuple[str, str]]) ->
         if found is None:
             return None
         asset_kind, name = found
-        if asset_kind in _NEEDS_ASSET:
+        if asset_kind in _MEDIA_KINDS:
             return {"kind": asset_kind, "asset_id": str(output["asset_id"])}
         return {"kind": "note", "text": _clip(name), "form": note_form}
     if kind == "text":

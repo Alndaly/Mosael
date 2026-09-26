@@ -376,7 +376,7 @@ def delete_scene(db: Session, workspace_id: str, scene_id: str) -> None:
     | 笔记 | 允许;画板上那条坏引用仍可移动、可删除(专门留了豁免) |
     | 3D 场景 | 允许,**且没有任何人检查画板** |
 
-    第三条的后果是可验证的:画板保存时 `_validate_scene_references` 要求每个 `scene_id` 都
+    第三条的后果是可验证的:画板保存时 `_validate_references` 要求每个 `scene_id` 都
     属于本工作区。场景删掉之后,引用它的那张画板**此后任何一次保存都 422** —— 哪怕用户只是
     挪了一张便签;而错误里不说是哪一个节点,唯一的出路是自己找到那个 3D 节点删掉。
 

@@ -122,6 +122,18 @@ def make_video_asset(client, workspace_id: str) -> dict:
     return created.json()
 
 
+def seed_assets(workspace_id: str, kinds: dict[str, str]) -> None:
+    """素材库里放几行只有记录、没有文件的素材(`{id: 种类}`)—— 画板存格子时要查引用的素材在不在这个
+    工作区、种类对不对得上格子(见 boards.canvas._validate_asset_references),测试要的只是那一行。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+
+    with SessionLocal() as db:
+        for asset_id, kind in kinds.items():
+            db.add(Asset(id=asset_id, workspace_id=workspace_id, kind=kind, name=asset_id, file_key=""))
+        db.commit()
+
+
 def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
     deadline = time.monotonic() + timeout
     status = "queued"

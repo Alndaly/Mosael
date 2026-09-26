@@ -54,13 +54,14 @@ import { errorText } from "@/api/errorMessage";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { listenKeys } from "@/lib/shortcuts";
+import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { renderComposer, slotProducers } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type BoardToolFace, type MediaKind } from "@/features/boards/boardNodes";
 import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, withProducer } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { assetItem, clipboardContent, type PlacedAsset } from "@/features/boards/boardPlacement";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
@@ -366,8 +367,8 @@ interface Props {
   edgeShape?: EdgeShape;
   /** 查找节点的命中集。命中的项外面画一圈(见 CanvasNodeSearch)。 */
   searchHighlight?: CanvasSearchHighlight | null;
-  /** 系统里拖进来的文件:上层负责传进素材库,回来的每一份就地摆到落点上。 */
-  onDropFiles?: (files: File[]) => Promise<{ id: string; name: string; kind: "image" | "video" }[]>;
+  /** 系统里拖进来 / 粘贴进来的文件:上层负责传进素材库,回来的每一份(图片、视频、音频)就地各放一格。 */
+  onDropFiles?: (files: File[]) => Promise<PlacedAsset[]>;
   uploading?: boolean;
   /**
    * 画布上被右栏面板盖住多少 —— 每次要用时现算(面板会拖宽、会在停靠和悬浮之间切)。
@@ -1109,31 +1110,49 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 和工作流那边一样,用一个 ref 把坐标从事件里带出来。
    */
   const dropAt = React.useRef<{ x: number; y: number } | null>(null);
-  const drop = useFileDrop((files) => {
-    const at = dropAt.current ?? { x: 0, y: 0 };
-    void onDropFiles?.(files).then((assets) => {
-      if (!assets?.length) return;
-      setNodes((current) => [
-        ...current.map((node) => ({ ...node, selected: false })),
-        ...assets.flatMap((asset, index) =>
-          toNodes(
-            [
-              {
-                id: `${asset.kind}-${Math.random().toString(36).slice(2, 9)}`,
-                kind: asset.kind,
-                // 多个文件斜着摞开,不然它们会精确重叠成一个。
-                x: Math.round(at.x + index * 24),
-                y: Math.round(at.y + index * 24),
-                ...DEFAULT_SIZE[asset.kind],
-                asset_id: asset.id,
-                text: asset.name,
-              },
-            ],
-          ),
-        ),
-      ]);
-    });
-  }, isMediaFile);
+  /** 文件进素材库,回来的每一份按种类各放一格(见 boardPlacement.assetItem)。拖进来和粘贴进来走这同一条。 */
+  const importAndPlace = React.useCallback(
+    (files: File[], at: { x: number; y: number }) => {
+      void onDropFiles?.(files).then((assets) => {
+        if (!assets?.length) return;
+        setNodes((current) => [
+          ...current.map((node) => ({ ...node, selected: false })),
+          ...toNodes(assets.map((asset, index) => assetItem(asset, at, index))),
+        ]);
+      });
+    },
+    [onDropFiles, setNodes],
+  );
+  const drop = useFileDrop((files) => importAndPlace(files, dropAt.current ?? { x: 0, y: 0 }), isMediaFile);
+
+  /**
+   * 粘贴到画布上:截图 / 复制的媒体文件先进素材库再各放一格,一段文字落成一张便签,摆在视野中心。
+   *
+   * **冲着画布来的才接**(isCanvasKeyTarget):在便签里、提示词框里、任何输入框或编辑器里粘贴,是往那里
+   * 贴字,不是往画布上放东西;经 Portal 弹出去的菜单、对话框也不算。评论 / 标记模式下不接。
+   */
+  React.useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || commentMode || markerMode) return;
+      if (!isCanvasKeyTarget(event.target, surface.current)) return;
+      const content = clipboardContent(event.clipboardData);
+      if (!content) return;
+      event.preventDefault();
+      //: 便签走「添加」那一条(摆在视野中心、加完就选中);素材也摆在视野中心。
+      if ("text" in content) {
+        add("note", { text: content.text });
+        return;
+      }
+      const instance = rf.current;
+      const box = surface.current?.getBoundingClientRect();
+      const center = instance && box
+        ? instance.screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
+        : { x: 0, y: 0 };
+      importAndPlace(content.files, center);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [add, importAndPlace, commentMode, markerMode]);
 
   React.useEffect(() => {
     onReady?.({

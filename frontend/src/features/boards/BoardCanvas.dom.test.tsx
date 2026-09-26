@@ -176,6 +176,59 @@ describe("删除键只认冲着画布来的那一下", () => {
   });
 });
 
+describe("往画布上粘贴", () => {
+  //: 粘贴冲着画布来才接(和删除键同一条判据,isCanvasKeyTarget):在输入框、编辑器里粘贴是往那儿贴字。
+  function paste(target: HTMLElement, data: { text?: string; files?: File[] }) {
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { files: data.files ?? [], getData: (type: string) => (type === "text/plain" ? (data.text ?? "") : "") },
+    });
+    act(() => {
+      target.focus();
+      target.dispatchEvent(event);
+    });
+    return event;
+  }
+
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+  }
+
+  it("一段文字落成一张便签", async () => {
+    const view = mount({ items: [note("n1", "原来的")], edges: [], markers: [] });
+    const event = paste(document.body, { text: "粘进来的想法" });
+    await settle();
+    expect(event.defaultPrevented).toBe(true);
+    const added = view.latest().items.find((one) => one.id !== "n1");
+    expect(added).toMatchObject({ kind: "note", text: "粘进来的想法", form: { producer: "write" } });
+  });
+
+  it("截图先进素材库,再按种类放一格", async () => {
+    const onDropFiles = vi.fn(async (files: File[]) =>
+      files.map((file, index) => ({ id: `a${index}`, name: file.name, kind: "image" as const })),
+    );
+    const view = mount({ items: [note("n1", "原来的")], edges: [], markers: [] }, { onDropFiles });
+    paste(document.body, { files: [new File([new Uint8Array([1])], "", { type: "image/png" })], text: "<img>" });
+    await settle();
+    expect(onDropFiles).toHaveBeenCalledTimes(1);
+    const added = view.latest().items.find((one) => one.id !== "n1");
+    expect(added).toMatchObject({ kind: "image", asset_id: "a0" });
+  });
+
+  it("焦点在输入框里:不接,交给那个输入框", async () => {
+    const view = mount({ items: [note("n1", "原来的")], edges: [], markers: [] });
+    const input = document.createElement("textarea");
+    document.querySelector(".react-flow")!.appendChild(input);
+    const event = paste(input, { text: "打进输入框的字" });
+    await settle();
+    input.remove();
+    expect(event.defaultPrevented).toBe(false);
+    expect(view.latest()?.items.map((one) => one.id) ?? ["n1"]).toEqual(["n1"]);
+  });
+});
+
 describe("截挂了的那一格,选中时挂的是截取面板", () => {
   it("范围原样在,重截落回这一格;不挂生成面板", async () => {
     const onRun = vi.fn(async () => undefined);

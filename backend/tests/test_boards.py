@@ -254,7 +254,82 @@ def test_空画布和缺字段都读得回来() -> None:
     assert normalize_canvas(None) == {"items": [], "edges": [], "markers": []}
     assert normalize_canvas({}) == {"items": [], "edges": [], "markers": []}
     got = normalize_canvas({"items": [{"id": "a", "kind": "note", "x": 1, "y": 2}]})
-    assert got["items"][0] == {"id": "a", "kind": "note", "x": 1.0, "y": 2.0}
+    #: 便签缺了产出者由 normalize 补上(见 producer_ids.missing_slot_producer)—— 一张便签选中了就该能让 AI 改。
+    assert got["items"][0] == {"id": "a", "kind": "note", "x": 1.0, "y": 2.0, "form": {"producer": "write"}}
+
+
+def test_新挂上的素材要在这个工作区里_种类对得上格子() -> None:
+    """画板上一格的 `asset_id`:别的工作区的、查无此素材的、种类和格子对不上的(一段音频放进图片格),
+    存的那一刻就拒,并说清是哪一格、哪份素材。3D 场景的缩略图是一张图。"""
+    from tests.util import seed_assets
+
+    client = fresh_client()
+    ws, other = _workspace(client), _workspace(client)
+    seed_assets(ws, {"pic": "image", "clip": "video", "voice": "audio"})
+    seed_assets(other, {"theirs": "image"})
+    board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "B"}).json()["id"]
+
+    def save(*items: dict):
+        return client.patch(f"/api/boards/{board_id}", json={
+            "workspace_id": ws, "base_revision": board_revision(client, board_id, ws),
+            "canvas": {"items": list(items), "edges": []}})
+
+    ok = save({"id": "i", "kind": "image", "x": 0, "y": 0, "asset_id": "pic"},
+              {"id": "v", "kind": "video", "x": 0, "y": 0, "asset_id": "clip"},
+              {"id": "a", "kind": "audio", "x": 0, "y": 0, "asset_id": "voice"})
+    assert ok.status_code == 200, ok.text
+
+    for item, says in (
+        ({"id": "x", "kind": "image", "x": 0, "y": 0, "asset_id": "theirs"}, "theirs"),
+        ({"id": "x", "kind": "image", "x": 0, "y": 0, "asset_id": "nope"}, "nope"),
+        ({"id": "x", "kind": "image", "x": 0, "y": 0, "asset_id": "voice"}, "audio"),
+        ({"id": "x", "kind": "audio", "x": 0, "y": 0, "asset_id": "clip"}, "video"),
+    ):
+        refused = save(item)
+        assert refused.status_code == 400, refused.text
+        assert "x" in refused.json()["detail"] and says in refused.json()["detail"], refused.json()["detail"]
+
+    #: 建板、智能体改画板开卡前的干跑走的是同一道(check_canvas)。3D 场景的缩略图得是一张图。
+    scene = client.post("/api/scenes", json={"workspace_id": ws, "name": "场景"}).json()["id"]
+    def scene_board(thumbnail: str):
+        return client.post("/api/boards", json={"workspace_id": ws, "name": "C", "canvas": {"items": [
+            {"id": "s", "kind": "scene", "x": 0, "y": 0, "scene_id": scene, "asset_id": thumbnail}], "edges": []}})
+
+    assert scene_board("pic").status_code == 200
+    refused = scene_board("voice")
+    assert refused.status_code == 400, refused.text
+    assert "audio" in refused.json()["detail"], refused.json()["detail"]
+
+
+def test_板上已有的素材引用不再重新校验_素材删了照样能挪能复制() -> None:
+    """和文档引用同一条:只查**新挂上**的。素材从库里删掉之后,那一格照样能挪、能复制,整张板也复制得出来;
+    按「哪种格子放哪份素材」认,不按格子的 id 认 —— 复制出来的那一格是同一份引用。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Board
+
+    client = fresh_client()
+    ws = _workspace(client)
+    with SessionLocal() as db:
+        #: 直接写行 —— 素材后来从库里删掉了,板上的引用留着。
+        board = Board(workspace_id=ws, name="B", canvas={"items": [
+            {"id": "i", "kind": "image", "x": 0, "y": 0, "asset_id": "gone"}], "edges": []})
+        db.add(board)
+        db.commit()
+        board_id = board.id
+
+    moved = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": {"items": [
+            {"id": "i", "kind": "image", "x": 300, "y": 0, "asset_id": "gone"},
+            {"id": "i-copy", "kind": "image", "x": 600, "y": 0, "asset_id": "gone"}], "edges": []}})
+    assert moved.status_code == 200, moved.text
+    copied = client.post(f"/api/boards/{board_id}/duplicate", json={"workspace_id": ws, "name": "副本"})
+    assert copied.status_code == 200, copied.text
+
+    #: 同一份素材换进另一种格子,是一份新引用 —— 照样要查。
+    swapped = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": {"items": [
+            {"id": "i", "kind": "video", "x": 300, "y": 0, "asset_id": "gone"}], "edges": []}})
+    assert swapped.status_code == 400, swapped.text
 
 
 @pytest.mark.parametrize(
@@ -432,6 +507,7 @@ def test_任务成功后占位就地变成素材() -> None:
         "parameters": {"size": "1024x1024"},
         "source_assets": [],
         "mentioned_asset_ids": [],
+        "producer": "generate",
     }
 
 
@@ -624,7 +700,7 @@ def test_旧自动保存不会覆盖便签写作的成功正文和空表单() ->
     got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": stale}).json()
     item = got["canvas"]["items"][0]
     assert item["text"] == "生成后的正文"
-    assert item["form"] == {"prompt": "", "model": "k3", "mentioned_asset_ids": [], "source_assets": []}
+    assert item["form"] == {"prompt": "", "model": "k3", "mentioned_asset_ids": [], "source_assets": [], "producer": "write"}
     assert item["run"] == {"status": "succeeded"}
 
 
@@ -977,6 +1053,7 @@ def test_写文案就地落进那张便签_成功后重置一次性表单() -> N
         "model": "k3",
         "mentioned_asset_ids": [],
         "source_assets": [],
+        "producer": "write",
     }
     assert items[0]["run"] == {"status": "succeeded"}
     db.close()

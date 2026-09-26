@@ -75,12 +75,83 @@ def test_每个产出者的表单都不收非有限的数() -> None:
 
 
 def test_新放下的一格挂哪个产出者() -> None:
-    from app.domain.boards.producers import producer_for_new_slot
+    from app.domain.boards.producer_ids import SLOT_PRODUCERS
 
-    assert [producer_for_new_slot(kind) for kind in ("note", "image", "video", "audio")] == [
-        "write", "generate", "generate", "speak",
-    ]
-    assert [producer_for_new_slot(kind) for kind in ("frame", "scene", "document")] == [None, None, None]
+    assert SLOT_PRODUCERS == {"note": "write", "image": "generate", "video": "generate", "audio": "speak"}
+    assert all(SLOT_PRODUCERS.get(kind) is None for kind in ("frame", "scene", "document", "action"))
+
+
+def test_空槽的缺省产出者和注册表对得上() -> None:
+    """棘轮:producer_ids.SLOT_PRODUCERS(画布那一侧补齐用的无依赖表)和注册表是同一件事。
+
+    · 表里的每一个都挂得了那种格子、能挑来填空槽 —— 否则补上去的产出者面板挂不上、跑不了;
+    · 能填空槽的产出者挂得了的每一种格子都在表里 —— 生成目录多认一种格子,这张表得跟着多一行,
+      否则那种新格子放下去什么面板都没有。
+    """
+    from app.core.db import SessionLocal
+    from app.domain.boards import producers
+    from app.domain.boards.canvas import ITEM_KINDS
+    from app.domain.boards.producer_ids import SLOT_PRODUCERS
+
+    fresh_client()
+    with SessionLocal() as db:
+        by_id = {one.id: one for one in producers.list_producers(db, None)}
+    assert set(SLOT_PRODUCERS) <= set(ITEM_KINDS)
+    for kind, producer in SLOT_PRODUCERS.items():
+        assert kind in by_id[producer].hosts, f"{producer} 挂不了 {kind}"
+        assert by_id[producer].fills_empty_slot, f"{producer} 不能填空槽,却是 {kind} 的缺省"
+    fillable = {kind for one in by_id.values() if one.fills_empty_slot for kind in one.hosts}
+    assert fillable <= set(SLOT_PRODUCERS), f"这几种格子能被填,却没有缺省产出者:{fillable - set(SLOT_PRODUCERS)}"
+
+
+def test_写入之后每一个能产出的空槽都写明了产出者() -> None:
+    """棘轮:不管哪条路造出来的格子(画布的「添加」、智能体、3D 场景页、脚本),过了 normalize 之后,
+    能产出、还没产出的每一格都写明了产出者,而且是挂得了它的那一个;有了产出的媒体格、不产出的种类不补。"""
+    from app.core.db import SessionLocal
+    from app.domain.boards import normalize_canvas, producers
+    from app.domain.boards.canvas import ITEM_KINDS
+    from app.domain.boards.producer_ids import SLOT_PRODUCERS
+
+    fresh_client()
+    with SessionLocal() as db:
+        by_id = {one.id: one for one in producers.list_producers(db, None)}
+    trim = {"asset_id": "src", "start": 0.0, "end": 1.0, "mute": False}
+    shapes = {
+        "bare": {},
+        "draft": {"form": {"prompt": "黄昏的海边", "source_assets": [{"asset_id": "a", "role": "reference_image"}]}},
+        "made": {"asset_id": "a1"},
+        "named": {"form": {"producer": "trim", "trim": trim}},
+    }
+    items = []
+    for kind in ITEM_KINDS:
+        for name, extra in shapes.items():
+            item = {"id": f"{kind}-{name}", "kind": kind, "x": 0, "y": 0, **extra}
+            if kind == "scene":
+                item["scene_id"] = "s1"
+            if kind == "frame" or (kind == "note" and name == "named"):
+                item.pop("form", None)
+            items.append(item)
+    once = normalize_canvas({"items": items, "edges": []})
+    assert normalize_canvas(once) == once, "再过一遍不该再变"
+
+    written = {item["id"] for item in items if (item.get("form") or {}).get("producer")}
+    for item in once["items"]:
+        producer = (item.get("form") or {}).get("producer")
+        if item["id"] in written:
+            continue
+        producible = item["kind"] in SLOT_PRODUCERS and (item["kind"] == "note" or not item.get("asset_id"))
+        if not producible:
+            assert producer is None, f"{item['id']} 不是能产出的空槽,不该被补上产出者"
+            continue
+        assert producer is not None, f"{item['id']} 是能产出的空槽,却没写明产出者"
+        assert item["kind"] in by_id[producer].hosts, f"{item['id']} 挂着 {producer},它挂不了 {item['kind']}"
+    forms = {item["id"]: item.get("form") for item in once["items"]}
+    #: 草稿原样留着,产出者补在最后(和摆占位时写的位置一致)。
+    assert list(forms["video-draft"]) == ["prompt", "source_assets", "producer"]
+    assert forms["video-draft"]["producer"] == "generate"
+    assert forms["audio-bare"] == {"producer": "speak"}
+    assert forms["image-named"]["producer"] == "trim", "写明了的不动"
+    assert forms["image-made"] is None
 
 
 def test_未知的产出者和挂错地方的产出者都拒() -> None:
@@ -148,14 +219,16 @@ def test_跑过的那一格表单上写着是谁做的(monkeypatch) -> None:
 
 
 def test_智能体放下的空格子也写明产出者() -> None:
+    """算子自己不写缺省产出者 —— 落库那一道(normalize)补,和别的新建路是同一条规则。"""
+    from app.domain.boards import normalize_canvas
     from app.domain.boards.ops import apply_board_ops
 
-    canvas = apply_board_ops({"items": [], "edges": []}, [
+    canvas = normalize_canvas(apply_board_ops({"items": [], "edges": []}, [
         {"kind": "add_item", "type": "note", "item_id": "n", "text": "开场"},
         {"kind": "add_item", "type": "image", "item_id": "i"},
         {"kind": "add_item", "type": "video", "item_id": "v", "asset_id": "clip-1"},
         {"kind": "add_item", "type": "frame", "item_id": "f"},
-    ])
+    ]))
     forms = {one["id"]: one.get("form") for one in canvas["items"]}
     assert forms == {"n": {"producer": "write"}, "i": {"producer": "generate"}, "v": None, "f": None}
 
@@ -232,6 +305,61 @@ def test_老画板上的每一格写明产出者_照此前前端的推断() -> N
     assert _canvas(untouched_id)[1] == 2, "没改到的板版本号不动"
     #: 迁完的画布照现在的规则存得下。
     normalize_canvas(once)
+
+
+def test_升级之后新建却没写明产出者的空槽_迁移补上() -> None:
+    """`migrate-board-empty-slots-name-their-producer`:3D 场景页绕开新建格子的缺省,生成那一格带着提示词和
+    参考却没写产出者 —— 选中了什么面板都不挂。库里已经存着、之后没再存过的板由这一步补,规则和 normalize 同一条。"""
+    from app.core.db import SessionLocal
+    from app.db.migrations import _migrate_board_empty_slots_name_their_producer, migration_plan
+    from app.db.models import Board
+    from app.domain.boards import normalize_canvas
+
+    assert "migrate-board-empty-slots-name-their-producer" in {step.name for step in migration_plan().steps}
+
+    client = fresh_client()
+    ws = _workspace(client)
+    trim = {"asset_id": "src", "start": 1.0, "end": 2.0, "mute": False}
+    draft = {"prompt": "镜头缓缓推进", "source_assets": [{"asset_id": "f1", "role": "first_frame"}],
+             "parameters": {"aspect_ratio": "16:9"}}
+    with SessionLocal() as db:
+        #: 直接写行,绕过保存入口 —— 模拟 3D 场景页此前建出来的画板。
+        board = Board(workspace_id=ws, name="场景 · 镜头 1", revision=1, canvas={"items": [
+            {"id": "scene", "kind": "scene", "x": -440, "y": 0, "scene_id": "s1", "asset_id": "thumb"},
+            {"id": "first", "kind": "image", "x": 0, "y": 0, "asset_id": "f1"},
+            {"id": "gen", "kind": "video", "x": 460, "y": 100, "form": draft},
+            {"id": "bare", "kind": "audio", "x": 0, "y": 0},
+            {"id": "note", "kind": "note", "x": 0, "y": 0, "text": "旁白"},
+            {"id": "cut", "kind": "audio", "x": 0, "y": 0, "form": {"trim": trim, "producer": "trim"}},
+            {"id": "named", "kind": "audio", "x": 0, "y": 0, "form": {"producer": "generate"}},
+        ], "edges": [{"id": "e", "source": "first", "target": "gen"}]})
+        untouched = Board(workspace_id=ws, name="好的板", revision=2, canvas={"items": [
+            {"id": "pic", "kind": "image", "x": 0, "y": 0, "asset_id": "a1"},
+            {"id": "n", "kind": "note", "x": 0, "y": 0, "form": {"producer": "write"}},
+        ], "edges": []})
+        db.add_all([board, untouched])
+        db.commit()
+        board_id, untouched_id = board.id, untouched.id
+
+    _migrate_board_empty_slots_name_their_producer()
+    once, revision = _canvas(board_id)
+    _migrate_board_empty_slots_name_their_producer()
+    assert _canvas(board_id) == (once, revision), "再跑一次不该再动(版本号也不该再涨)"
+
+    forms = {item["id"]: item.get("form") for item in once["items"]}
+    assert forms == {
+        "scene": None,
+        "first": None,
+        "gen": {**draft, "producer": "generate"},
+        "bare": {"producer": "speak"},
+        "note": {"producer": "write"},
+        "cut": {"trim": trim, "producer": "trim"},
+        "named": {"producer": "generate"},
+    }
+    assert revision == 2, "改到的板版本号 +1:开着它的旧快照要撞 409"
+    assert _canvas(untouched_id)[1] == 2, "没改到的板版本号不动"
+    #: 迁移和 normalize 是同一条规则:迁完的画布再过 normalize 一个字都不变。
+    assert [item.get("form") for item in normalize_canvas(once)["items"]] == [item.get("form") for item in once["items"]]
 
 
 # ── P2:工具格(`action`)跑一个节点 ─────────────────────────────────────────────

@@ -109,8 +109,11 @@ def test_智能体放一个工具格_带配置和绑定_同一批连上线() -> 
        "bindings": {"text": [{"from": "ghost"}]}}], "ghost"),
 ])
 def test_写坏的工具格在开卡时就拒(operations: list[dict], says: str) -> None:
+    from tests.util import seed_assets
+
     client = fresh_client()
     ws = _workspace(client)
+    seed_assets(ws, {"a-1": "image"})
     board_id = _board(client, ws, [
         {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "hello"},
         {"id": "i1", "kind": "image", "x": 0, "y": 300, "asset_id": "a-1"},

@@ -3419,6 +3419,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_documentNeedsRevision": {"zh": "文档节点需要有效的引用版本", "en": "A document item needs a valid note revision to reference."},
     "boardErr_sceneNeedsId": {"zh": "3D 场景节点需要 scene_id", "en": "A 3D scene item needs a scene_id."},
     "boardErr_sceneNotInWorkspace": {"zh": "3D 场景不属于当前工作区", "en": "That 3D scene isn't in this workspace."},
+    "boardErr_itemAssetNotInWorkspace": {"zh": "画板项 {item_id} 引用的素材 {asset_id} 不在当前工作区的素材库里", "en": "Board item {item_id} points at asset {asset_id}, which isn't in this workspace's library."},
+    "boardErr_itemAssetKindMismatch": {"zh": "画板项 {item_id} 是 {kind} 格子,放不下 {asset_kind} 素材 {asset_id}:换一份 {kind} 素材,或者另放一格 {asset_kind}", "en": "Board item {item_id} is a {kind} item and can't hold the {asset_kind} asset {asset_id}. Pick a {kind} asset, or add a separate {asset_kind} item for it."},
     "boardErr_titleTooLong": {"zh": "画板项 {item_id} 的名字超过 {limit} 字", "en": "The name of board item {item_id} is longer than {limit} characters. Shorten it."},
     "boardErr_frameHasNoText": {"zh": "分组框 {item_id} 没有正文:它的名字写在 title 里", "en": "Frame {item_id} has no text; its name goes in title."},
     "boardErr_moveChildrenFrameOnly": {"zh": "只有分组框有 move_children,{kind} 没有", "en": "Only frames have move_children; a {kind} item doesn't."},

@@ -197,8 +197,11 @@ def test_智能体删掉上游那一格或那根线_下游槽位里从那条线�
     引用原样留着,下次打开面板还挂在首帧上,点生成照样发出去。手动挂的照留。"""
     from tests.util import fresh_client
 
+    from tests.util import seed_assets
+
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    seed_assets(ws, {"a1": "image"})
     board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": _fed_board()}).json()["id"]
 
     from app.core.db import SessionLocal

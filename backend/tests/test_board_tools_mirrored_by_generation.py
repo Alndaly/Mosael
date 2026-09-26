@@ -184,6 +184,9 @@ def test_存着的工具格改写成那种素材的生成格(tmp_path: Path) -> 
     _install_plugin(tmp_path)
     instance_id, profile_id = _connect_reporting(me, with_model=True)
     ws = _workspace(client)
+    from tests.util import seed_assets
+
+    seed_assets(ws, {"asset-up": "image"})
     mirrored, kept = f"node:plugin.{PACKAGE}.{MIRRORED}", f"node:plugin.{PACKAGE}.{NOT_MIRRORED}"
     items = [
         {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "海边的柴犬"},

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { BoardItem } from "@/api/client";
+import { withSlotProducer, type BoardItem } from "@/api/client";
 import { boardSettlementPatch, composerView, itemFormResetKey, itemIsRunning, itemRunStatus, newSlotForm, producerOf, prunedLinksPatch, withProducer } from "./boardItemState";
 
 function image(extra: Partial<BoardItem> = {}): BoardItem {
@@ -94,6 +94,21 @@ describe("选中一格时挂哪块面板", () => {
     expect(newSlotForm("frame")).toBeNull();
     expect(newSlotForm("image", { asset_id: "a1" })).toBeNull();
     expect(newSlotForm("video", { form: { trim, producer: "trim" } })).toBeNull();
+  });
+
+  it("别处新建的一格(3D 场景页的生成格)自带草稿、没写产出者:补上,草稿原样留着,产出者排最后", () => {
+    const draft = { prompt: "镜头推进", source_assets: [{ asset_id: "f1", role: "first_frame" }] };
+    const made = withSlotProducer({ id: "g", kind: "video", x: 0, y: 0, form: draft });
+    expect(made.form).toEqual({ ...draft, producer: "generate" });
+    expect(Object.keys(made.form ?? {}).at(-1)).toBe("producer");
+    expect(producerOf(made)).toBe("generate");
+    //: 写明了的不动;有了产出的媒体格、不产出的种类不补;便签有字照样补(它的产出是正文)。
+    expect(withSlotProducer(image({ form: { producer: "trim", trim } })).form?.producer).toBe("trim");
+    expect(withSlotProducer(image({ asset_id: "a1" })).form).toBeUndefined();
+    const scene: BoardItem = { id: "s", kind: "scene", x: 0, y: 0, scene_id: "s1" };
+    const note: BoardItem = { id: "n", kind: "note", x: 0, y: 0, text: "有字" };
+    expect(withSlotProducer(scene).form).toBeUndefined();
+    expect(withSlotProducer(note).form).toEqual({ producer: "write" });
   });
 
   it("面板看不见产出者;存回来的表单把它补在最后", () => {

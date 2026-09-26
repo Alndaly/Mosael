@@ -43,7 +43,7 @@ from app.domain.boards.actions import (
     write_on_board,
 )
 from app.domain.boards.canvas import BoardDomainError
-from app.domain.boards.producer_ids import BUILTIN_PRODUCER_IDS, NOTE_PRODUCER, node_producer_id, node_type_of
+from app.domain.boards.producer_ids import BUILTIN_PRODUCER_IDS, node_producer_id, node_type_of
 
 
 class ProducerFailed(BoardDomainError):
@@ -137,7 +137,10 @@ class GenerateForm(_Form):
     parameters: dict[str, Any] = Field(default_factory=dict)
     #: 发出去的输入素材:槽位挂的 + 正文里 @ 到的。
     source_assets: list[SourceRef] = Field(default_factory=list)
-    #: 落在这一格上、用户可再次编辑的表单 —— 不含运行时追加的图例;槽位只是槽位那一半。
+    #: 落在这一格上、用户可再次编辑的表单(草稿)。**和上面几样不是同一份**,所以不能由它们推出来:
+    #: 上面的 `prompt` 是发出去的那句(带着运行时追加的图例、拼进来的文档正文),`source_assets` 是
+    #: 槽位挂的并上正文里 @ 到的;这里存的是用户写的那句、`prompt_document`、`mentioned_asset_ids`,
+    #: 槽位只是槽位那一半 —— 重试时照它还原面板,@ 删掉的素材才不会被当成槽位里的再发一次。
     item_form: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -569,20 +572,6 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
             "fills_empty_slot": producer.fills_empty_slot,
         })
     return out
-
-
-def producer_for_new_slot(kind: str) -> str | None:
-    """新放下的一格(还没有产出)挂哪个产出者。便签写字、音频念、图片/视频生成;别的种类不产出。
-
-    这是**新建时的缺省**,不是读的时候猜:它写进 `form.producer` 之后就是那一格自己的事实,
-    改换产出者(工具格、音频槽在念和生成之间切换)也只改那一个字段。和前端 boardItemState.newSlotForm 同一张表。
-    """
-    if kind == "note":
-        return NOTE_PRODUCER
-    if kind == "audio":
-        return "speak"
-    generate = _builtins()["generate"]
-    return generate.id if kind in generate.hosts else None
 
 
 def _admit(db: Session, request: RunRequest) -> tuple[Producer, BaseModel]:

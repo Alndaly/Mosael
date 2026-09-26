@@ -132,6 +132,31 @@ export function isNodeProducer(producer: string | undefined | null): producer is
   return Boolean(producer?.startsWith(NODE_PRODUCER_PREFIX));
 }
 
+/**
+ * 一种格子还没有产出时挂哪个产出者(新放下的一格的缺省)。和后端 boards/producer_ids.SLOT_PRODUCERS 同一张表 ——
+ * 放在这一层而不是画板功能里,因为画板之外也在新建格子(3D 场景页「拿去生成」建的画板)。
+ */
+const SLOT_PRODUCER: Partial<Record<BoardItem["kind"], BuiltinProducer>> = {
+  note: "write",
+  image: "generate",
+  video: "generate",
+  audio: "speak",
+};
+
+/**
+ * 能产出、还没产出的一格补上它的产出者 —— **前端新建一格都过这一处**(画布的「添加」、拖进来 / 粘贴进来的
+ * 素材、3D 场景页建的画板)。规则和后端 canvas.normalize_canvas 那一条相同(缺了按上面的表补,已经写明的
+ * 不动,有了产出的媒体格不补;便签的产出是自己的正文,有字照样补):服务端存的时候也会补,但本地这一格
+ * 要**当场**就挂得上面板,不能等下一次从服务端拉。自带的草稿(提示词、参考)原样留着,产出者排在最后
+ * (和后端摆占位时写的位置一致,前端按 JSON 比对表单)。
+ */
+export function withSlotProducer<T extends Pick<BoardItem, "kind" | "asset_id" | "form">>(item: T): T {
+  const producer = SLOT_PRODUCER[item.kind];
+  if (!producer || item.form?.producer || (item.kind !== "note" && item.asset_id)) return item;
+  const { producer: _none, ...draft } = item.form ?? {};
+  return { ...item, form: { ...draft, producer } };
+}
+
 /** 这个人在画板上能用的一个产出者(后端 producers.describe):节点描述 + 挂在哪、能不能填空槽。 */
 export type BoardProducerInfo = components["schemas"]["BoardProducerOut"];
 
