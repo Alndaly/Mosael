@@ -94,7 +94,11 @@ export const CodeEditor = React.forwardRef<
       //    发蓝的灰,和应用的中性深色、弹窗里半透明的 --field 都不是一家;所以编辑器和行号槽一律透明,
       //    底色只由外框给。聚焦**只认编辑器本身**(.cm-focused),不用 focus-within —— 否则点一下
       //    工具栏上的按钮,整个编辑器也跟着亮起聚焦框。
-      className="h-fit overflow-hidden rounded-md border border-field-border bg-field transition-shadow has-[.cm-focused]:ring-2 has-[.cm-focused]:ring-ring [&_.cm-editor]:bg-transparent! [&_.cm-gutters]:bg-transparent! [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)] [&_.cm-foldGutter_.cm-gutterElement]:flex [&_.cm-foldGutter_.cm-gutterElement]:items-center [&_.cm-foldGutter_.cm-gutterElement]:justify-center"
+      // 5) 改 CodeMirror 自己的样式一律带 `!`:它的样式是运行时注入的、**不在任何 layer 里**,
+      //    而 Tailwind 的 utility 在 @layer utilities 里 —— 没进 layer 的样式不看特异性就赢。
+      //    聚焦时的 `outline: 1px dotted` 就是这么漏出来的(外框的 ring 之外又多一圈虚线)。
+      //    编辑器本身也不圆角:外框已经 overflow-hidden rounded-md,有工具栏时编辑器顶上再圆一次是错的。
+      className="h-fit overflow-hidden rounded-md border border-field-border bg-field transition-shadow has-[.cm-focused]:ring-2 has-[.cm-focused]:ring-ring [&_.cm-editor]:bg-transparent! [&_.cm-gutters]:bg-transparent! [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none! [&_.cm-gutters]:border-0! [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)] [&_.cm-foldGutter_.cm-gutterElement]:flex [&_.cm-foldGutter_.cm-gutterElement]:items-center [&_.cm-foldGutter_.cm-gutterElement]:justify-center"
       style={{ "--cm-min-h": `${minHeight}px` } as React.CSSProperties}
     >
       {toolbar && (
