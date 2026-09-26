@@ -70,6 +70,33 @@
           "en": "Read one object in detail: mesh, materials, modifiers and transform. Read-only."
         }
       },
+      "get_viewport_screenshot": {
+        "read_only": true
+      },
+      "get_addon_status": {
+        "read_only": true
+      },
+      "describe_node_type": {
+        "read_only": true
+      },
+      "bpy_api_lookup": {
+        "read_only": true
+      },
+      "get_polyhaven_status": {
+        "read_only": true
+      },
+      "get_hyper3d_status": {
+        "read_only": true
+      },
+      "get_sketchfab_status": {
+        "read_only": true
+      },
+      "get_polypizza_status": {
+        "read_only": true
+      },
+      "get_hunyuan3d_status": {
+        "read_only": true
+      },
       "execute_blender_code": {
         "label": {
           "zh": "操作 Blender",

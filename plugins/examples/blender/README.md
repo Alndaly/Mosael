@@ -52,6 +52,8 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 
 插件自带的 `execute_blender_code` 是不经确认的原始入口。0.2.0 起它在清单里标为 `internal`：只供 3D 场景互通的固定脚本使用，不出现在插件页的勾选列表里，智能体和工作流都调不到——否则它就是绕开确认卡的后门。更新到 0.2.0 需要重新复制插件目录或从插件市场更新。
 
+上游其余的工具按后果申报:只读的(查看场景 / 物体、视口截图、`describe_node_type` 与 `bpy_api_lookup` 查写法、各集成的 `get_*_status`)智能体直接调;改场景、下载资产、导出文件、调 Hyper3D / 混元生成的,智能体调用前先出确认卡。
+
 ## 当前范围
 
 - 发送以 30 fps 烘焙镜头运动及垂直 FOV。接收按镜头时长最多采样 100 帧；长镜头会显示检查提示。

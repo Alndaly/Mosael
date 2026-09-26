@@ -67,6 +67,35 @@ def test_manifest_passes_local_connection_config():
     assert [o['value'] for o in fields['BLENDER_HOST'].options] == ['127.0.0.1', 'localhost']
 
 
+#: mcp-for-blender 2.0.3 里只读的工具:读场景、看视口、查节点 / API 的写法、问 Add-on 的集成开没开。
+#: `describe_node_type` 在一棵临时节点树里建一个节点读完就删,不碰用户看得见的东西(上游文档原话)。
+UPSTREAM_READ_ONLY = {
+    "get_scene_info", "get_object_info", "get_viewport_screenshot", "get_addon_status", "describe_node_type",
+    "bpy_api_lookup", "get_polyhaven_status", "get_hyper3d_status", "get_sketchfab_status", "get_polypizza_status",
+    "get_hunyuan3d_status",
+}
+
+
+def test_upstream_read_only_tools_skip_the_card_and_writers_do_not():
+    """没标只读的 MCP 工具按 external 算,智能体每调一次都先开确认卡 —— 查一下 API 的写法、看一眼视口也要人点。
+    改场景、下载资产、导出文件、调付费生成的那些照旧要确认;原始的代码执行入口只给互通用。"""
+    from app.domain.effects import NONE, plugin_tool_effects
+
+    raw = json.loads(MANIFEST.read_text())
+    overrides = raw['tools']['overrides']
+
+    def effects(name):
+        override = overrides.get(name) or {}
+        return plugin_tool_effects(read_only=override.get('read_only') is True, declared=override.get('effects'),
+                                   default=raw['tools'].get('default_effects'))
+
+    assert {name for name in overrides if effects(name) == NONE} == UPSTREAM_READ_ONLY
+    for writer in ('set_texture', 'download_polyhaven_asset', 'export_scene', 'generate_hyper3d_model_via_text',
+                   'import_generated_asset'):
+        assert effects(writer) == 'external', writer
+    assert overrides['execute_blender_code']['internal'] is True
+
+
 def test_returned_baked_camera_keys_keep_linear_timing():
     from app.domain.scene_types import SceneContent
     content = SceneContent().model_dump(mode='json')
