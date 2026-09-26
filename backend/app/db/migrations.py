@@ -3525,6 +3525,18 @@ def _migrate_plugin_generation_columns() -> None:
             ))
 
 
+def _migrate_plugin_authorization_rejected() -> None:
+    """`plugin_instances.authorization_rejected_at`:插件上一次说「对方不再接受已存的令牌」是什么时候。
+
+    `create_all` 不给已有的表加列,所以在它之前。表不在的跳过 —— 那种库由 `create-current-schema`
+    直接建成带这一列的样子。可空、没有缺省:老连接一律「没被拒过」,和它们的真实状态一致。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(plugin_instances)"))}
+        if columns and "authorization_rejected_at" not in columns:
+            conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN authorization_rejected_at DATETIME"))
+
+
 def _migrate_plugin_instances() -> None:
     """插件从「一行 = 一个包 = 一次接入」拆成「包 → 实例 → 能力」三层。
 
@@ -4105,6 +4117,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_plugin_instances,
                 # 排在上一步之后:它可能刚把 plugin_instances 建出来。
                 _migrate_plugin_generation_columns,
+                _migrate_plugin_authorization_rejected,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

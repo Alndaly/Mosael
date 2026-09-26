@@ -46,10 +46,15 @@ md5 是流式算的,不整个载进内存 —— 上传的常常是几个 G 的�
 ## 配置
 
 1. 去 [百度网盘开放平台](https://pan.baidu.com/union) 注册一个应用,拿到 AppKey / SecretKey
-2. 走一次 OAuth 拿到 `refresh_token`(有效期 10 年)
-3. 在 Mosael 的插件页接入这个包,把这三样填进去
+2. 在 Mosael 的插件页接入这个包,填上 AppKey 和 SecretKey
+3. 点连接卡片抬头下面那条「授权」里的**去授权**:在打开的百度页面登录、同意,把它显示的授权码贴回来
 
-「Access Token」那一栏**留空即可** —— 插件会用 refresh_token 自己换。
+换回来的 `refresh_token`(有效期 10 年)和 `access_token` 自动存进这个连接,那条「授权」变成**已授权**。
+这两格收在「授权令牌」里,只显示填没填;手里已经有 refresh_token 的话,点「手动填写」展开自己填,
+Access Token 那一格**留空即可** —— 插件会用 refresh_token 自己换。
+
+百度不再接受已存的令牌时(refresh_token 被作废、续过一次还是说过期),插件在失败响应里带上
+`reauthorize: true`,连接会标成**需要重新授权** —— 点「重新授权」走一遍就好。
 
 
 ### token 自己续

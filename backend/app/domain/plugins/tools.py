@@ -357,9 +357,11 @@ def invoke(
             db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name
         )
         invocation.status, invocation.output = "succeeded", output
+        inst.note_authorization(db, instance, rejected=False)
     except (PluginRuntimeError, McpBridgeError, ArtifactError, PluginDomainError) as exc:
         invocation.status, invocation.error = "failed", str(exc)
         _persist_failed_state(db, instance, exc, baseline=baseline)
+        _note_rejected_authorization(db, instance, exc)
     except Exception as exc:  # noqa: BLE001 — runtime must never bubble
         invocation.status, invocation.error = "failed", tr("pluginErr_runtimeCrashed", detail=str(exc))
     finally:
@@ -473,8 +475,9 @@ def invoke_host(
         output = result.output
         recorded = collect(output, scratch) if collect is not None else output
         invocation.status, invocation.output = "succeeded", recorded
-        if record:
-            db.commit()
+        inst.note_authorization(db, instance, rejected=False)
+        # 不留调用记录时也要落这一笔:「需要重新授权」清没清掉,不该取决于这次记不记账。
+        db.commit()
         return output
     except Exception as exc:
         invocation.status = "failed"
@@ -482,8 +485,8 @@ def invoke_host(
             "pluginErr_runtimeCrashed", detail=str(exc)
         )
         _persist_failed_state(db, instance, exc, baseline=baseline, notify=False)
-        if record:
-            db.commit()
+        _note_rejected_authorization(db, instance, exc)
+        db.commit()
         raise
     finally:
         cleanup_scratch_dir(scratch)
@@ -509,6 +512,13 @@ def _persist_failed_state(
         plugin_state.persist(db, instance, state, baseline=baseline, notify=notify)
     except PluginDomainError:
         logger.warning("插件 %s 失败时交回的状态没能记下", instance.id, exc_info=True)
+
+
+def _note_rejected_authorization(db: Session, instance: PluginInstance, exc: BaseException) -> None:
+    """插件说这次失败是因为对方不再接受已存的令牌(`reauthorize: true`,见 runtime._final_response):
+    记在连接上,插件页把它标成「需要重新授权」。别的失败不动这个标记 —— 文件不存在不说明令牌好坏。"""
+    if isinstance(exc, PluginRuntimeError) and exc.reauthorize:
+        inst.note_authorization(db, instance, rejected=True)
 
 
 #: 调用记录里一个值最多留多长。生成的提示词可能很长,参数表可能很大;记录是给人翻的,不是存档。

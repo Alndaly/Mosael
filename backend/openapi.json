@@ -25184,6 +25184,17 @@
             "title": "Blocked Reason",
             "default": ""
           },
+          "authorization": {
+            "type": "string",
+            "enum": [
+              "",
+              "unauthorized",
+              "authorized",
+              "rejected"
+            ],
+            "title": "Authorization",
+            "default": ""
+          },
           "tools": {
             "items": {
               "$ref": "#/components/schemas/PluginToolStateOut"
@@ -25501,6 +25512,20 @@
         "title": "PluginOAuthCode",
         "description": "对方显示出来、由用户贴回来的授权码。"
       },
+      "PluginOAuthOut": {
+        "properties": {
+          "fills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fills"
+          }
+        },
+        "type": "object",
+        "title": "PluginOAuthOut",
+        "description": "插件声明的 OAuth,界面要知道的那一部分。端点、client_id 这些是后端拼链接用的,不往外给。"
+      },
       "PluginPackageOut": {
         "properties": {
           "id": {
@@ -25567,9 +25592,14 @@
             "title": "Credential Fields"
           },
           "oauth": {
-            "type": "boolean",
-            "title": "Oauth",
-            "default": false
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PluginOAuthOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "provides": {
             "items": {

@@ -9202,6 +9202,12 @@ export interface components {
              * @default
              */
             blocked_reason: string;
+            /**
+             * Authorization
+             * @default
+             * @enum {string}
+             */
+            authorization: "" | "unauthorized" | "authorized" | "rejected";
             /** Tools */
             tools?: components["schemas"]["PluginToolStateOut"][];
             /** Capability Status */
@@ -9386,6 +9392,14 @@ export interface components {
             /** Code */
             code: string;
         };
+        /**
+         * PluginOAuthOut
+         * @description 插件声明的 OAuth,界面要知道的那一部分。端点、client_id 这些是后端拼链接用的,不往外给。
+         */
+        PluginOAuthOut: {
+            /** Fills */
+            fills?: string[];
+        };
         /** PluginPackageOut */
         PluginPackageOut: {
             /** Id */
@@ -9430,11 +9444,7 @@ export interface components {
             config_fields?: components["schemas"]["PluginFieldOut"][];
             /** Credential Fields */
             credential_fields?: components["schemas"]["PluginFieldOut"][];
-            /**
-             * Oauth
-             * @default false
-             */
-            oauth: boolean;
+            oauth?: components["schemas"]["PluginOAuthOut"] | null;
             /** Provides */
             provides?: string[];
             /**

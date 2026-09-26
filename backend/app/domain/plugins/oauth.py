@@ -22,7 +22,14 @@ from typing import Any
 from urllib.parse import urlencode
 
 from app.core.i18n import LocalizedError
-from app.domain.plugins.manifest import Manifest, OAuthSpec
+from app.domain.plugins.manifest import Field, Manifest, OAuthSpec
+
+#: 一个声明了 oauth 的连接**授权到哪一步了**(插件页连接卡片上那一条状态)。
+#: 没声明 oauth 的连接不谈授权,是空串。
+UNAUTHORIZED = "unauthorized"
+AUTHORIZED = "authorized"
+#: 令牌填着,但插件上一次调用时说「对方不再接受它」(响应里的 `reauthorize: true`)。
+REJECTED = "rejected"
 
 
 class PluginOAuthError(LocalizedError, RuntimeError):
@@ -33,6 +40,31 @@ def spec_of(manifest: Manifest) -> OAuthSpec:
     if manifest.oauth is None:
         raise PluginOAuthError("pluginErr_oauthNotDeclared")
     return manifest.oauth
+
+
+def fills(spec: OAuthSpec, credentials: list[Field]) -> list[Field]:
+    """授权流程会写的那几格凭据(`stores` 指向的),按清单里的先后。
+
+    界面据此把它们收进「手动填写」:它们本来就由「去授权」填,不该和 AppKey 一样摆成主输入。
+    """
+    targets = set(spec.stores.values())
+    return [one for one in credentials if one.key in targets]
+
+
+def authorization_state(spec: OAuthSpec, credentials: list[Field], filled: set[str], *, rejected: bool) -> str:
+    """这个连接授权到哪一步。**纯函数**,只看「哪几格填着」这个布尔,不碰令牌本身。
+
+    · 授权会写的格子里,**必填的都填了**才算授权过(百度:Refresh Token 必填、Access Token 可以空着
+      让插件自己换);一格都没标必填的,填了任意一格就算;
+    · 填着、但插件上一次说对方不认了(`rejected`),就是「需要重新授权」—— 格子非空不等于令牌还有效,
+      而这一点只有真去调过一次的插件知道。
+    """
+    targets = fills(spec, credentials)
+    required = [one.key for one in targets if one.required]
+    done = all(key in filled for key in required) if required else any(one.key in filled for one in targets)
+    if not done:
+        return UNAUTHORIZED
+    return REJECTED if rejected else AUTHORIZED
 
 
 def authorize_url(spec: OAuthSpec, credentials: dict[str, str]) -> str:

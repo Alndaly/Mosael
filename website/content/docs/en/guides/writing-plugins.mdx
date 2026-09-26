@@ -206,6 +206,12 @@ Only keys **declared** in the manifest can be written. Writing an undeclared key
 rather than being ignored — ignoring it means you think it was saved, you get the old value next
 time, and the error surfaces somewhere else half an hour later.
 
+**Say so when the tokens are dead.** A plugin that declares `oauth` and cannot get a fresh token (the
+refresh_token is refused, or the call still says "expired" after one renewal) adds `"reauthorize": true`
+to its failure response: the connection is then marked **Needs re-authorization** on the Plugins page and
+its button reads **Re-authorize**. The error message only lands in the call log; the user looks at the
+connection card. Leave it off for failures unrelated to tokens, such as a missing file or rate limiting.
+
 ## Running longer, keeping big things
 
 One call runs for **60 seconds** by default. A tool that genuinely needs longer (rendering a

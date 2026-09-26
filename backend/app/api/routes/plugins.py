@@ -42,6 +42,7 @@ from app.domain.plugins import bundled
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import install as installer
+from app.domain.plugins import oauth as plugin_oauth
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
@@ -270,7 +271,11 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                 "credential_fields": [_field(f) for f in manifest.credentials],
                 #: 声明了 OAuth 就给一个「去授权」的入口,不必手抄令牌(见 domain/plugins/oauth)。
                 #: 声明不全的当没声明 —— 半个声明会长出一个点了必然失败的按钮。
-                "oauth": manifest.oauth is not None,
+                "oauth": (
+                    {"fills": [one.key for one in plugin_oauth.fills(manifest.oauth, manifest.credentials)]}
+                    if manifest.oauth is not None
+                    else None
+                ),
                 "provides": manifest.provides,
                 "bundled": package.id in shipped,
                 "instances": [
@@ -307,6 +312,7 @@ def _instance(db: DbSession, instance) -> dict:
         "enabled": instance.enabled,
         "config": instance.config or {},
         "blocked_reason": inst.blocked_reason(db, instance),
+        "authorization": inst.authorization_state(db, instance),
         # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。
         "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool)}
                   for tool in tools_domain.all_tools(db, instance) if not tool["internal"]],
@@ -558,8 +564,6 @@ def plugin_oauth_start(instance_id: str, db: DbSession, user: CurrentUser) -> di
     多这一次粘贴,换来的是这条通路上没有任何可伪造的输入 —— 详见 domain/plugins/oauth
     里那段"为什么不用 mosael:// 接回调"。
     """
-    from app.domain.plugins import oauth as plugin_oauth
-
     instance = my_instance(db, instance_id, user)
     manifest = inst.manifest_for(db, instance)
     try:
@@ -581,7 +585,6 @@ def plugin_oauth_complete(
     把缺失当空串写回去会抹掉已有的 refresh_token —— 而那一份丢了要重新走一遍授权。
     """
     from app.core import http_retry
-    from app.domain.plugins import oauth as plugin_oauth
 
     instance = my_instance(db, instance_id, user)
     manifest = inst.manifest_for(db, instance)

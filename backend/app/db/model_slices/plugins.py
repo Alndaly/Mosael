@@ -75,6 +75,11 @@ class PluginInstance(Base):
     #: 「12 个生成模型 · 刚刷新」或者「连不上服务器:…」—— 目录刷新发生在后台(启动、改配置),
     #: 失败了不记下来的话,用户只会看到选择器里少了东西,不知道为什么。
     capability_status: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    #: 插件上一次调用时说「对方不再接受已存的令牌」(失败响应里的 `reauthorize: true`)是什么时候。
+    #: 插件页据此把这个连接标成「需要重新授权」。重新授权、或手动改了授权写的那几格凭据、或之后
+    #: 一次调用成功了,就清掉 —— 见 domain/plugins/instances 的 note_authorization。
+    #: 只有声明了 `instance.oauth` 的插件才会记。
+    authorization_rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

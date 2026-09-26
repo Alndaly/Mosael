@@ -16,8 +16,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.model_base import now
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
-from app.domain.plugins import host_capabilities
+from app.domain.plugins import host_capabilities, oauth as plugin_oauth
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Field, Manifest, manifest_of, render_name
 from app.core.i18n import tr
@@ -242,14 +243,20 @@ def set_credentials(
     unknown = sorted(set(values) - allowed)
     if unknown:
         raise PluginDomainError("pluginErr_unknownCredentials", keys=", ".join(unknown))
+    written = set()
     for key, value in values.items():
         if value == MASK:
             continue  # 掩码原样回传 = 这项没改;用户改别的字段时不会把 key 洗成一串星号
+        written.add(key)
         row = db.get(PluginCredential, {"instance_id": instance.id, "key": key})
         if row is None:
             db.add(PluginCredential(instance_id=instance.id, key=key, value=value))
         else:
             row.value = value
+    # 授权写的那几格换了新值(重新授权、手动贴了新令牌、插件自己续出来的)= 上一次「对方不认」说的
+    # 已经不是现在这份令牌了。
+    if manifest.oauth is not None and written & set(manifest.oauth.stores.values()):
+        instance.authorization_rejected_at = None
     db.commit()
     if notify:
         host_capabilities.notify(db, instance, refresh=True)
@@ -333,10 +340,46 @@ def blocked_reason(db: Session, instance: PluginInstance) -> str:
         return tr("pluginBlocked_missingConfig", names=tr("punct_listSep").join(absent))
     absent = missing_credentials(db, instance)
     if absent:
+        # 缺的正好是授权会填的那几格:该说「还没授权」,而不是让人去找一格收起来的 Refresh Token。
+        manifest = manifest_for(db, instance)
+        if manifest.oauth is not None and set(absent) <= {
+            one.label for one in plugin_oauth.fills(manifest.oauth, manifest.credentials)
+        }:
+            return tr("pluginBlocked_unauthorized")
         return tr("pluginBlocked_missingCredentials", names=tr("punct_listSep").join(absent))
     if not permissions_granted(db, instance):
         return tr("pluginBlocked_permissionsPending")
     return ""
+
+
+# --- 授权 ---------------------------------------------------------------
+
+def authorization_state(db: Session, instance: PluginInstance) -> str:
+    """声明了 `instance.oauth` 的连接授权到哪一步(见 oauth.authorization_state)。没声明的是空串。
+
+    只看每一格**填没填**,令牌本身不出这个函数。
+    """
+    manifest = manifest_for(db, instance)
+    if manifest.oauth is None:
+        return ""
+    filled = {key for key, value in credential_values(db, instance.id).items() if value}
+    return plugin_oauth.authorization_state(
+        manifest.oauth, manifest.credentials, filled, rejected=instance.authorization_rejected_at is not None
+    )
+
+
+def note_authorization(db: Session, instance: PluginInstance, *, rejected: bool) -> None:
+    """记下一次调用对授权的说法:插件说对方不认了(`rejected`),或者一次调用成功了(令牌显然还有效)。
+
+    不提交 —— 调用方(tools.invoke)随这次调用记录一起提交。没声明 oauth 的插件不记:它说了
+    `reauthorize` 也没有「去授权」可以点,也就没有任何东西会把它清掉。
+    """
+    if manifest_for(db, instance).oauth is None:
+        return
+    if rejected:
+        instance.authorization_rejected_at = now()
+    elif instance.authorization_rejected_at is not None:
+        instance.authorization_rejected_at = None
 
 
 # --- 能力开关 -----------------------------------------------------------
@@ -400,6 +443,7 @@ def set_capability_status(db: Session, instance: PluginInstance, capability: str
 
 __all__ = [
     "MASK",
+    "authorization_state",
     "blocked_reason",
     "create",
     "credential_values",
@@ -410,6 +454,7 @@ __all__ = [
     "manifest_for",
     "missing_config",
     "missing_credentials",
+    "note_authorization",
     "permissions_granted",
     "process_env",
     "rename",

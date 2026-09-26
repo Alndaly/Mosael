@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
+
 from pydantic import Field
 from app.api.schemas.base import ApiModel, OrmModel
 
@@ -92,9 +94,20 @@ class PluginInstanceOut(ApiModel):
     config: dict = Field(default_factory=dict)
     #: 为什么还不能用(未启用 / 缺配置 / 缺凭据 / 未授权)。空串 = 可用。
     blocked_reason: str = ""
+    #: 声明了 `instance.oauth` 的连接授权到哪一步:没授权过 / 授权过 / 插件上一次说对方不认了。
+    #: 没声明 oauth 的是空串。只按授权写的那几格**填没填**算,令牌不出后端。
+    authorization: Literal["", "unauthorized", "authorized", "rejected"] = ""
     tools: list[PluginToolStateOut] = Field(default_factory=list)
     #: 它替宿主做的那些事上一次做得怎么样,按能力分(今天只有 generation)。
     capability_status: dict[str, PluginCapabilityStatusOut] = Field(default_factory=dict)
+
+
+class PluginOAuthOut(ApiModel):
+    """插件声明的 OAuth,界面要知道的那一部分。端点、client_id 这些是后端拼链接用的,不往外给。"""
+
+    #: 授权会写的那几格凭据的键(清单 `stores` 指向的,按清单里的先后)。界面把它们收进
+    #: 「手动填写」,不和 AppKey 一样摆成主输入。
+    fills: list[str] = Field(default_factory=list)
 
 
 class PluginPackageOut(ApiModel):
@@ -112,8 +125,8 @@ class PluginPackageOut(ApiModel):
     docs: str = ""
     config_fields: list[PluginFieldOut] = Field(default_factory=list)
     credential_fields: list[PluginFieldOut] = Field(default_factory=list)
-    #: 这个插件能不能自己走 OAuth。界面据此决定要不要给「去授权」。
-    oauth: bool = False
+    #: 这个插件能自己走 OAuth 的话是它的声明,否则 None。界面据此决定要不要给「去授权」。
+    oauth: PluginOAuthOut | None = None
     #: 它能替宿主做成哪些事(`public_url` / `generation`)。
     provides: list[str] = Field(default_factory=list)
     #: 随应用一起发的(见 domain/plugins/bundled)。卸不掉,界面不给「卸载」。

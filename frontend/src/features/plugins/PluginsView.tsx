@@ -9,7 +9,6 @@ import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, E
 import {
   clearPluginInvocations,
   createPluginInstance,
-  finishPluginOauth,
   invokePluginTool,
   listPluginCredentials,
   listPluginInvocations,
@@ -25,14 +24,12 @@ import {
   savePluginCredentials,
   setPluginCapabilities,
   setPluginPermissions,
-  startPluginOauth,
   updatePluginInstance,
   type PluginField,
   type PluginInstance,
   type PluginInvocation,
   type PluginPackage,
 } from "@/api/client";
-import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -54,6 +51,7 @@ import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
+import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
@@ -520,7 +518,8 @@ function FieldLine({ field, value, onChange, className, commit }: {
   );
 }
 
-function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; instance: PluginInstance; workspaceId: string }) {
+//: 导出**只为测试**:授权那一条摆在卡片的哪儿是结构,由测试盯着(见 PluginsView.dom.test)。
+export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; instance: PluginInstance; workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -611,6 +610,12 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
         onConfirm={() => remove.mutate()}
       />
 
+      {/* 授权是**连接级别**的:写的是这个连接的令牌,管的是这个连接能不能用 —— 所以紧跟抬头,
+          不在凭据组末尾(见 ConnectionAuthorization)。 */}
+      {pkg.oauth && instance.authorization && (
+        <ConnectionAuthorization instanceId={instance.id} state={instance.authorization} />
+      )}
+
       <SettingsRow label={t("pluginConnectionName")} description={t("pluginConnectionNameDesc")}>
         <Input
           className="w-[240px] max-w-full"
@@ -644,7 +649,7 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
       ))}
 
       {(pkg.credential_fields ?? []).length > 0 && (
-        <CredentialRows instanceId={instance.id} oauth={Boolean(pkg.oauth)} />
+        <CredentialRows instanceId={instance.id} oauthFields={pkg.oauth?.fills ?? []} />
       )}
 
       {generates && (
@@ -792,87 +797,6 @@ function CapabilityPicker({
 
 
 /**
- * 「去授权」:替用户走完 OAuth 里那段机械的部分。
- *
- * 注册应用拿 AppKey/SecretKey 是他和开放平台之间的事,替代不了。这里替代的是后面那一段 ——
- * 拼授权链接、拿 code 换令牌、把 refresh_token 抄进表单。每一步抄错换回来的都是一句
- * `invalid_client` 之类的英文报错,看不出错在哪一格。
- *
- * **为什么还要粘贴一次 code。** 回调不走 mosael://(自定义协议是外部输入面,任何网页都能
- * 触发它),也不在本机开监听端口(重定向地址要在对方控制台预先登记,而后端端口会变)。
- * 详见 backend/app/domain/plugins/oauth.py 的文件头。多一次粘贴,换这条路上没有可伪造的输入。
- */
-function PluginOAuth({ instanceId, save }: { instanceId: string; save?: React.ReactNode }) {
-  const t = useI18n();
-  const qc = useQueryClient();
-  const [url, setUrl] = React.useState("");
-  const [code, setCode] = React.useState("");
-
-  const begin = useMutation({
-    mutationFn: () => startPluginOauth(instanceId),
-    onSuccess: (data) => {
-      setUrl(data.authorize_url);
-      // 直接开出去 —— 主进程把 http(s) 交给系统浏览器(见 electron/main 的 setWindowOpenHandler)。
-      window.open(data.authorize_url, "_blank", "noreferrer");
-    },
-    // 「先填 AppKey」这类原因由后端说,原样转出来:换成"授权失败"等于把唯一有用的信息扔掉。
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const finish = useMutation({
-    mutationFn: () =>
-      finishPluginOauth(instanceId, code),
-    onSuccess: () => {
-      setUrl("");
-      setCode("");
-      toast.success(t("pluginOauthDone"));
-      void qc.invalidateQueries({ queryKey: ["plugin-credentials", instanceId] });
-      invalidatePluginDependents(qc);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  return (
-    <>
-      <GroupActions hint={t("pluginOauthHint")}>
-        <Button size="sm" variant="outline" loading={begin.isPending} onClick={() => begin.mutate()}>
-          <ExternalLink size={13} /> {t("pluginOauthStart")}
-        </Button>
-        {save}
-      </GroupActions>
-      {url && (
-        <div className="px-0.5 pb-3 !border-t-0">
-          {/* 链接留着:弹窗拦截、或者他想换个浏览器登录时,总得有个能点的东西。 */}
-          <div className="grid gap-1.5 rounded-md border border-border bg-panel p-2.5">
-          <a
-            className="inline-flex w-fit items-center gap-1 text-ui-xs font-medium text-primary no-underline hover:underline"
-            href={url}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            {t("pluginOauthOpenLink")}
-            <ExternalLink size={11} />
-          </a>
-          <div className="flex items-center gap-1.5">
-            <Input
-              className="min-w-0 flex-1"
-              value={code}
-              placeholder={t("pluginOauthCodePlaceholder")}
-              onChange={(event) => setCode(event.target.value)}
-            />
-            {/* 跟着旁边的输入框走(40px)。表单行里输入框是定高的那一个,按钮得让着它。 */}
-            <Button disabled={!code.trim()} loading={finish.isPending} onClick={() => finish.mutate()}>
-              <KeyRound size={13} /> {t("pluginOauthExchange")}
-            </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-/**
  * 一组设置末尾的动作行。
  *
  * **抽出来是因为已经漂了两份。** 保存按钮写的是 `px-1 pb-1`(没有上内距),授权那块写的是
@@ -883,11 +807,9 @@ function PluginOAuth({ instanceId, save }: { instanceId: string; save?: React.Re
  * 不画上边框:组的契约是 `[&>*+*]:border-t`,因为每个子元素都是**一项设置** —— 而这是上面
  * 那组的动作,画一条线等于在它和它所属的东西之间切了一刀,视觉上反倒成了下一项的开头。
  */
-function GroupActions({ hint, children }: { hint?: string; children: React.ReactNode }) {
+function GroupActions({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 px-0.5 py-3 !border-t-0">
-      {/* 说明文字挤走按钮的话按钮会掉行 —— min-w-0 + flex-1 让它先缩。 */}
-      {hint && <small className="min-w-0 flex-1 text-ui-sm leading-[1.5] text-muted-foreground">{hint}</small>}
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
   );
@@ -895,7 +817,11 @@ function GroupActions({ hint, children }: { hint?: string; children: React.React
 
 //: 导出**只为测试**。这两个组件里各有一处靠肉眼才发现的毛病(两个动作叠成两块、
 //: 灰按钮不说明理由),而它们都是结构性的 —— 结构该由测试盯着,不该由下一次截图盯着。
-export function CredentialRows({ instanceId, oauth }: { instanceId: string; oauth: boolean }) {
+export function CredentialRows({ instanceId, oauthFields }: {
+  instanceId: string;
+  /** 授权流程会写的那几格(清单 `oauth.stores` 指向的)。空 = 这个插件不走授权。 */
+  oauthFields: string[];
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const credentials = useQuery({
@@ -903,6 +829,7 @@ export function CredentialRows({ instanceId, oauth }: { instanceId: string; oaut
     queryFn: () => listPluginCredentials(instanceId),
   });
   const [draft, setDraft] = React.useState<Record<string, string>>({});
+  const [manual, setManual] = React.useState(false);
   const save = useMutation({
     mutationFn: () =>
       savePluginCredentials(instanceId, draft),
@@ -924,38 +851,67 @@ export function CredentialRows({ instanceId, oauth }: { instanceId: string; oaut
     </Button>
   );
 
+  const items = credentials.data ?? [];
+  // 授权会写的那几格(Refresh Token、Access Token)**不和 AppKey 摆成一样的主输入**:它们本来由
+  // 「去授权」填,摆在最显眼的位置等于告诉人「这里要手抄」—— 而手抄正是授权要替掉的那一步。
+  // 收进「手动填写」,平时只说填没填;已经有令牌的人展开照样能改。
+  const byFlow = new Set(oauthFields);
+  const primary = items.filter((item) => !byFlow.has(item.key));
+  const tokens = items.filter((item) => byFlow.has(item.key));
+  const row = (item: (typeof items)[number]) => (
+    <SettingsRow
+      key={item.key}
+      label={item.label}
+      description={item.help ? <InlineMarkdown text={item.help} /> : item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}
+    >
+      <Input
+        className="w-[240px] max-w-full"
+        type={item.secret ? "password" : "text"}
+        value={draft[item.key] ?? item.value}
+        placeholder={item.key}
+        onChange={(event) => setDraft((current) => ({ ...current, [item.key]: event.target.value }))}
+      />
+    </SettingsRow>
+  );
+
   return (
     <>
-      {(credentials.data ?? []).map((item) => (
+      {primary.map(row)}
+      {tokens.length > 0 && (
         <SettingsRow
-          key={item.key}
-          label={item.label}
-          description={item.help ? <InlineMarkdown text={item.help} /> : item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}
+          label={t("pluginOauthTokens")}
+          description={
+            <>
+              {t("pluginOauthTokensDesc")}
+              <span data-slot="plugin-oauth-token-states" className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                {tokens.map((item) => (
+                  <span key={item.key} className="inline-flex items-center gap-1.5">
+                    <span className={cn("size-1.5 shrink-0 rounded-full bg-border-strong", item.filled && "bg-success")} aria-hidden />
+                    {item.label} · {item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}
+                  </span>
+                ))}
+              </span>
+            </>
+          }
         >
-          <Input
-            className="w-[240px] max-w-full"
-            type={item.secret ? "password" : "text"}
-            value={draft[item.key] ?? item.value}
-            placeholder={item.key}
-            onChange={(event) => setDraft((current) => ({ ...current, [item.key]: event.target.value }))}
-          />
+          <Button size="sm" variant="outline" aria-expanded={manual} onClick={() => setManual((open) => !open)}>
+            {manual ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            {manual ? t("pluginOauthManualHide") : t("pluginOauthManual")}
+          </Button>
         </SettingsRow>
-      ))}
+      )}
+      {/* 展开后是一样的设置行,直接排在组里(不包一层):组的分隔线只认行和块这一层。 */}
+      {manual && tokens.map(row)}
       {/* 整组一次提交,不逐格失焦即存:密钥输错一个字符和输对长得一模一样,而逐格自动保存
           会让"改了一半"和"改完了"在后端无法区分 —— 改到一半正好等于一条连不上的连接。
           一个显式的保存按钮同时也是"现在去重连试试"的时机。
 
           **所以它是一个,不是每行一个。** 此前这个按钮画在 map 里,而它的显示条件
           (`draft` 非空)是整组的:改任何一格,每一行都长出一个按钮,四个密钥就是四个
-          "保存",点哪个都一样 —— 看起来像四件事,其实是同一件。 */}
-      {/* 保存和「去授权」是**同一组凭据上的两个动作**,所以排在同一行里,而不是各自
-          占一块上下叠着 —— 叠起来时两颗按钮贴得极近、一颗有说明文字一颗没有,看着像
-          两件互不相干的事。主动作(保存)在最右,和全应用一致。 */}
-      {oauth ? (
-        <PluginOAuth instanceId={instanceId} save={dirty ? saveButton : null} />
-      ) : (
-        dirty && <GroupActions>{saveButton}</GroupActions>
-      )}
+          "保存",点哪个都一样 —— 看起来像四件事,其实是同一件。
+
+          「去授权」不在这一行:它是连接级别的,摆在卡片抬头下面(见 ConnectionAuthorization)。 */}
+      {dirty && <GroupActions>{saveButton}</GroupActions>}
     </>
   );
 }

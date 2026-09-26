@@ -398,6 +398,8 @@ class Test自动续期:
         )
         assert out["ok"] is False and "回设置里检查" in out["error"]
         assert len(calls) == 3, "重试了不止一次"
+        # 续过一次还是不认:令牌这条路走不通了,连接卡片上该标「需要重新授权」。
+        assert out.get("reauthorize") is True
 
     def test_refresh_token_作废时说得明白(self) -> None:
         out, _ = run(
@@ -406,6 +408,13 @@ class Test自动续期:
             [{"errno": 111}, {"error": "invalid_grant", "error_description": "refresh token 已过期"}],
         )
         assert out["ok"] is False and "重新走一次授权" in out["error"]
+        # 这句话写在调用记录里,而用户看的是连接卡片 —— 所以另外明说一声(见 PLUGIN_MANIFEST 的 oauth 那节)。
+        assert out.get("reauthorize") is True
+
+    def test_与令牌无关的失败不说要重新授权(self) -> None:
+        out, _ = run("pan_list", {}, [{"errno": -9}])
+        assert out["ok"] is False
+        assert "reauthorize" not in out
 
     def test_导入那条路也会续期(self) -> None:
         """续期在 _call 里,不是在某个工具里 —— 三个工具都该受益。"""

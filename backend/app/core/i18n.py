@@ -85,6 +85,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "缺少凭据: {names}",
         "en": "Missing credentials: {names}",
     },
+    "pluginBlocked_unauthorized": {
+        "zh": "还没授权 —— 填好应用凭据后点「去授权」",
+        "en": "Not authorized yet — fill in the app credentials, then click Authorize",
+    },
     "pluginBlocked_permissionsPending": {
         "zh": "权限未授予",
         "en": "Permissions not granted",

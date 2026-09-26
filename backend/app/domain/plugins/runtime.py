@@ -6,7 +6,7 @@ Contract with the plugin's entry script:
   write ONE JSON request to stdin and read ONE JSON response from stdout:
 
     stdin : {"tool": str, "input": {...}}
-    stdout: {"ok": true, "output": {...}, "state": {...}} | {"ok": false, "error": str}
+    stdout: {"ok": true, "output": {...}, "state": {...}} | {"ok": false, "error": str, "reauthorize"?: true}
 
 - 要交出一个**文件**(而不是一段 JSON)时,output 里放 `artifact`,写在
   MOSAEL_PLUGIN_OUTPUT_DIR 指的目录里,或者给一个后端去下的 url。见 artifacts。
@@ -80,6 +80,9 @@ class PluginRuntimeError(LocalizedError, RuntimeError):
 
     #: 插件**失败时**交回的 `state`(见 _final_response)。只读的类属性当缺省,出错时才换成一份新的。
     state: dict[str, Any] = {}
+    #: 插件说这次失败是因为**对方不再接受已存的令牌**(失败响应里的 `reauthorize: true`)。
+    #: 宿主据此把连接标成「需要重新授权」(见 instances.note_authorization)。
+    reauthorize: bool = False
 
 
 class PluginCancelled(PluginRuntimeError):
@@ -277,6 +280,8 @@ def _final_response(response: Any) -> ToolResult:
         # refresh_token 一起轮换、旧的当场作废 —— 这份丢了,下一次只能让用户重新授权。落库归调用方(tools)。
         if isinstance(state, dict):
             error.state = dict(state)
+        # 只认字面的 true:一个随手写成 "false" 的字符串不该把连接标成要重新授权。
+        error.reauthorize = response.get("reauthorize") is True
         raise error
     output = response.get("output")
     if not isinstance(output, dict):

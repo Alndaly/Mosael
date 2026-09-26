@@ -59,6 +59,14 @@ class PanError(Exception):
     """面向用户的失败。消息会原样显示在调用记录里。"""
 
 
+class NeedsReauthorization(PanError):
+    """百度不再接受已存的令牌:refresh_token 换不出新的,或者续完了照样说过期。
+
+    响应里带 `reauthorize: true`,宿主据此把这个连接标成「需要重新授权」(见 docs/PLUGIN_MANIFEST
+    的 `instance.oauth` 那节)—— 这句话写在调用记录里,而用户看的是连接卡片。
+    """
+
+
 #: 这次调用期间用的 access_token、要交回去记住的东西,以及调用方的语言。**模块级**是有意的:
 #: 一次进程只处理一个请求,而刷新可能发生在调用链深处(_api 里),结果要能传到 main 那一层。
 _SESSION = {"access_token": "", "state": {}, "locale": "zh"}
@@ -98,7 +106,7 @@ def _refresh() -> None:
         raise PanError(_t(f"续 access_token 失败:{exc}", f"Could not renew the access_token: {exc}")) from exc
     if payload.get("error"):
         reason = payload.get("error_description") or payload["error"]
-        raise PanError(_t(
+        raise NeedsReauthorization(_t(
             f"续 access_token 被拒:{reason} —— refresh_token 可能已作废,回设置里重新走一次授权",
             f"Renewing the access_token was refused: {reason} — the refresh_token may be revoked; "
             "authorize again on this connection",
@@ -162,6 +170,9 @@ def _api(path: str, params: dict, *, form=None, allow_refresh: bool = True) -> d
         # (AppKey 不对、应用被停用),再试就是拿同一个错误刷接口。
         _refresh()
         return _api(path, params, form=form, allow_refresh=False)
+    if errno in EXPIRED_ERRNOS:
+        # 续过一次还是不认:问题不在有效期上,令牌这条路走不通了。
+        raise NeedsReauthorization(_explain(errno, params.get("method", "")))
     if errno not in (0, None):
         raise PanError(_explain(errno, params.get("method", "")))
     return payload
@@ -421,6 +432,8 @@ def main() -> None:
     except PanError as exc:
         # 失败也要交回续出来的令牌:百度那边旧的已经作废了,这次没记住,下次就只能让用户重新授权。
         response = {"ok": False, "error": str(exc)}
+        if isinstance(exc, NeedsReauthorization):
+            response["reauthorize"] = True
         if _SESSION["state"]:
             response["state"] = _SESSION["state"]
         json.dump(response, sys.stdout, ensure_ascii=False)
