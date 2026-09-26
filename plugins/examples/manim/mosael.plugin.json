@@ -105,8 +105,8 @@
             "reinstall": {
               "type": "boolean",
               "description": {
-                "zh": "删掉插件的环境重新装。环境坏了(升级 Mosael 后 Python 变了)时用。",
-                "en": "Delete the plugin's environment and install again — for a broken environment."
+                "zh": "删掉插件的环境重新装。一般用不到:插件换了 Manim 版本、Mosael 自带的 Python 换了版本或位置,都会自动处理;只在环境被改坏了时用。",
+                "en": "Delete the plugin's environment and install again. Rarely needed: a new Manim version or a changed / moved bundled Python is handled automatically; use it only for a damaged environment."
               },
               "x-advanced": true
             }

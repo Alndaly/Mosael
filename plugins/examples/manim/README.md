@@ -77,7 +77,7 @@ Manim 需要 Python 3.11+(插件用随 Mosael 发的那个 Python,不用你装),
 
 - **不需要 ffmpeg**:Manim 0.19 起用 PyAV 编码,PyAV 的二进制包里自带 FFmpeg 的库。
 - **LaTeX 是可选的**:没有它,讲解视频把公式写成一行 Unicode(`a² + b² = c²`、`(-b ± √(b²-4ac))/(2a)`)照样出片,结果里会说明;自定义动画里的 `MathTex` / `Tex` 用不了,会得到一句「没装 LaTeX」和装法。想用精简的 TinyTeX,Manim 文档列了要装的宏包。
-- 约 **350 MB** 磁盘空间,装在 Mosael 数据目录的 `plugin-data/dev.mosael.manim` 下。插件更新不会重装;卸载插件时一起删掉。
+- 约 **350 MB** 磁盘空间,装在 Mosael 数据目录的 `plugin-data/dev.mosael.manim` 下。插件更新不会重装;卸载插件时一起删掉。Mosael 升级后自带的 Python 挪了位置,环境自动接过去;换了次版本(比如 3.13 → 3.14),渲染工具会说清楚,再运行一次「准备 Manim 环境」按新版重建。
 - 「准备 Manim 环境」装之前先查系统依赖,缺什么直接说装哪几个,不让你对着一屏编译报错猜。
 
 ### 插件配置
@@ -94,4 +94,4 @@ Manim 需要 Python 3.11+(插件用随 Mosael 发的那个 Python,不用你装),
 
 ## 版本与许可
 
-Manim 0.21.0(锁定精确版本,插件升级换了版本时会自动重装)。Manim 社区版是 [MIT 许可](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md);插件不分发 Manim 的代码,而是在你的电脑上从 PyPI 安装。
+Manim 0.21.0(锁定精确版本;插件升级换了版本时,渲染工具会提醒再运行一次「准备 Manim 环境」,它按新版本重装)。Manim 社区版是 [MIT 许可](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md);插件不分发 Manim 的代码,而是在你的电脑上从 PyPI 安装。

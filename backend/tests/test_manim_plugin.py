@@ -499,6 +499,76 @@ class Test入口:
         assert seen and all(0 <= fraction <= 1 for fraction, _ in seen)
 
 
+# ---------------------------------------------------------------- 插件自己的 venv 跟着解释器走
+
+def _real_venv(data: Path, *, manim: str | None = None) -> Path:
+    """用跑测试的这个解释器建一个真的 venv(不装 pip,一两秒),打上「装好了」的戳。"""
+    venv = data / "venv"
+    subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(venv)], check=True, timeout=120)
+    (venv / manim_env.STAMP).write_text(json.dumps({"manim": manim or manim_env.MANIM_VERSION}), encoding="utf-8")
+    return venv
+
+
+def _rewrite_cfg(venv: Path, **values: str) -> None:
+    lines = []
+    for one in (venv / "pyvenv.cfg").read_text(encoding="utf-8").splitlines():
+        key = one.partition("=")[0].strip()
+        lines.append(f"{key} = {values[key]}" if key in values else one)
+    (venv / "pyvenv.cfg").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="venv 里的解释器在 POSIX 上是符号链接,这里造的是那一种坏法")
+class Test环境跟着解释器走:
+    """随包的 Python 会随 Mosael 升级换次版本、会随 .app 挪位置;插件的 venv 在持久目录里,跨更新都在。
+    此前只认「venv/bin/python 在不在 + 戳上的 Manim 版本」:挪了位置说「还没装好」,换了次版本则说装好了,
+    一渲就是 `No module named 'manim'`。"""
+
+    @pytest.fixture()
+    def data(self, tmp_path: Path, monkeypatch) -> Path:
+        monkeypatch.setenv("MOSAEL_PLUGIN_DATA_DIR", str(tmp_path))
+        monkeypatch.delenv("PYTHON_EXECUTABLE", raising=False)
+        return tmp_path
+
+    def test_好好的环境直接用(self, data: Path) -> None:
+        venv = _real_venv(data)
+        assert manim_env.venv_state(venv) == manim_env.READY
+        assert manim_env.render_python("zh") == str(manim_env.venv_python(venv))
+
+    def test_解释器挪了位置_自动接回去_装好的包还在(self, data: Path) -> None:
+        venv = _real_venv(data)
+        site = next(venv.glob("lib/python*/site-packages"))
+        (site / "marker_pkg.py").write_text("X = 1\n", encoding="utf-8")
+        gone = data / "old-app" / "bin"
+        _rewrite_cfg(venv, home=str(gone))
+        for one in (venv / "bin").glob("python*"):
+            one.unlink()
+            one.symlink_to(gone / "python3")
+        assert manim_env.venv_state(venv) == manim_env.MOVED
+        python = manim_env.render_python("zh")
+        assert manim_env.venv_state(venv) == manim_env.READY
+        done = subprocess.run([python, "-c", "import marker_pkg; print(marker_pkg.X)"], capture_output=True, text=True, timeout=30)
+        assert done.stdout.strip() == "1", done.stderr
+
+    def test_换了次版本_渲染说清楚要重装(self, data: Path) -> None:
+        venv = _real_venv(data)
+        _rewrite_cfg(venv, version="3.9.1")
+        assert manim_env.venv_state(venv) == manim_env.OTHER_PYTHON
+        with pytest.raises(PluginError, match=r"3\.9.*准备 Manim 环境"):
+            manim_env.render_python("zh")
+
+    def test_插件升级换了Manim版本_渲染说清楚要重装(self, data: Path) -> None:
+        _real_venv(data, manim="0.18.0")
+        with pytest.raises(PluginError, match=r"0\.18\.0.*准备 Manim 环境"):
+            manim_env.render_python("zh")
+
+    def test_准备环境遇到换了次版本的_不用勾重装也会重建(self, data: Path, monkeypatch) -> None:
+        venv = _real_venv(data)
+        _rewrite_cfg(venv, version="3.9.1")
+        built: list[Path] = []
+        monkeypatch.setattr(manim_env, "_build", lambda _send, _locale, where, _deadline: built.append(where))
+        assert manim_env.install(lambda _event: None, "zh") is True and built == [venv]
+
+
 # ---------------------------------------------------------------- 清单
 
 class Test清单:

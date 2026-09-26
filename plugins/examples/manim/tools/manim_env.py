@@ -148,16 +148,95 @@ def _stamp(venv: Path) -> dict[str, Any]:
         return {}
 
 
+# ---------------------------------------------------------------- venv 跟着解释器走
+#
+# 插件的 venv 在持久目录里,跨插件更新、跨 Mosael 升级都在;而建它的那个解释器(随包的 Python)会变:
+# - **换次版本**(3.13 → 3.14):site-packages 在 `lib/python3.13/` 下、编译过的扩展绑着那个 ABI,
+#   venv 只能重建。此前这种情况被当成「装好了」,一渲就是 `No module named 'manim'`;
+# - **挪了位置**(.app 从「下载」拖进「应用程序」、换了安装目录):venv 里的解释器是指向旧位置的链接,
+#   断了。此前被当成「还没装好」,要用户重装一遍(几分钟,macOS 上还要编译 pycairo)。其实包都还在,
+#   `python -m venv --upgrade` 把 venv 接到新位置的解释器上就好,一两秒。
+#
+# 判据读 `pyvenv.cfg`,不执行 venv 里的解释器 —— 执行不了正是要判断的情形之一。宿主给自己的托管 venv
+# 用的是同一个判据(core/interpreter.venv_python_minor)。
+
+READY, MISSING, OUTDATED, OTHER_PYTHON, MOVED = "ready", "missing", "outdated", "other-python", "moved"
+
+
+def _venv_cfg(venv: Path) -> dict[str, str]:
+    try:
+        text = (venv / "pyvenv.cfg").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    return {key.strip(): value.strip() for key, _, value in (one.partition("=") for one in text.splitlines()) if key.strip()}
+
+
+def _minor(version: str) -> str:
+    parts = version.split(".")
+    return f"{parts[0]}.{parts[1]}" if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit() else ""
+
+
+def _this_minor() -> str:
+    return f"{sys.version_info[0]}.{sys.version_info[1]}"
+
+
+def _this_home() -> str:
+    """`python -m venv` 写进 `home` 的那个目录:建 venv 的解释器(本身在 venv 里时是它的底座)所在的目录。"""
+    base = getattr(sys, "_base_executable", "") or sys.executable
+    return os.path.dirname(os.path.abspath(base))
+
+
+def _same_dir(a: str, b: str) -> bool:
+    return bool(a and b) and os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+def venv_state(venv: Path) -> str:
+    """这个 venv 现在能不能用、不能用是哪一种。"""
+    cfg = _venv_cfg(venv)
+    stamp = _stamp(venv)
+    if not cfg or not stamp:
+        return MISSING
+    if stamp.get("manim") != MANIM_VERSION:
+        return OUTDATED
+    if _minor(cfg.get("version") or cfg.get("version_info") or "") != _this_minor():
+        return OTHER_PYTHON
+    if not _same_dir(cfg.get("home", ""), _this_home()) or not venv_python(venv).is_file():
+        return MOVED
+    return READY
+
+
+def reattach(venv: Path) -> str:
+    """把一个「挪了位置」的 venv 接到现在的解释器上(`venv --upgrade`),装好的包原样留着。返回接完的状态。
+
+    先删掉 venv 里指向旧位置的解释器链接:`--upgrade` 只补**不存在**的链接,而一条断了的链接在它看来
+    「存在」,于是它往那条链接里写、报 No such file。
+    """
+    if sys.platform != "win32":
+        for one in (venv / "bin").glob("python*"):
+            if one.is_symlink():
+                one.unlink()
+    try:
+        _run([sys.executable, "-m", "venv", "--upgrade", str(venv)], timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return venv_state(venv)
+
+
+def _usable(venv: Path) -> str:
+    state = venv_state(venv)
+    return reattach(venv) if state == MOVED else state
+
+
 def installed_ready(locale: str) -> bool:
-    venv = venv_dir(locale)
-    return venv_python(venv).is_file() and _stamp(venv).get("manim") == MANIM_VERSION
+    return _usable(venv_dir(locale)) == READY
 
 
 def render_python(locale: str) -> str:
-    """渲染用哪个 Python。没准备好就说去跑「准备 Manim 环境」—— 渲染不顺手装:
+    """渲染用哪个 Python。没准备好就说**为什么**、去跑「准备 Manim 环境」—— 渲染不顺手装:
 
     装一次要一到几分钟(macOS / Linux 上还要编译 pycairo),而渲染工具的预算是按「智能体一次最多等
-    180 秒」定的;在渲染里装,多半是装到一半被掐掉,留下一个半截的环境。
+    180 秒」定的;在渲染里装,多半是装到一半被掐掉,留下一个半截的环境。挪了位置的 venv 例外:
+    接回去只要一两秒,这里当场接。
     """
     configured = configured_python()
     if configured:
@@ -166,13 +245,31 @@ def render_python(locale: str) -> str:
                                    f"The configured Python does not exist: {configured}"))
         return configured
     venv = venv_dir(locale)
-    if not installed_ready(locale):
+    state = _usable(venv)
+    if state == READY:
+        return str(venv_python(venv))
+    setup = line(locale, "在「插件 → Manim 教学动画」里运行一次「准备 Manim 环境」",
+                 "Run \"Prepare Manim\" once from Plugins → Manim")
+    if state == OUTDATED:
+        had = _stamp(venv).get("manim") or "?"
+        raise PluginError(line(locale, f"插件升级后要的是 Manim {MANIM_VERSION},装着的是 {had}。{setup}(不用勾重装)。",
+                               f"The plugin now needs Manim {MANIM_VERSION}; {had} is installed. {setup} (no need to tick reinstall)."))
+    if state == OTHER_PYTHON:
+        cfg = _venv_cfg(venv)
+        had = _minor(cfg.get("version") or cfg.get("version_info") or "") or "?"
         raise PluginError(line(
             locale,
-            "Manim 还没装好。先在「插件 → Manim 教学动画」里运行一次「准备 Manim 环境」(第一次要一到几分钟)。",
-            "Manim is not installed yet. Run \"Prepare Manim\" once from Plugins → Manim first (the first run takes a few minutes).",
+            f"Mosael 自带的 Python 从 {had} 换成了 {_this_minor()},Manim 环境要按新版重装一次:{setup}(不用勾重装,要一到几分钟)。",
+            f"Mosael's bundled Python changed from {had} to {_this_minor()}, so the Manim environment must be rebuilt: {setup} (no need to tick reinstall; it takes a few minutes).",
         ))
-    return str(venv_python(venv))
+    if state == MOVED:
+        raise PluginError(line(locale, f"Mosael 自带的 Python 换了位置,Manim 环境没能接过去:{setup}。",
+                               f"Mosael's bundled Python moved and the Manim environment could not follow it: {setup}."))
+    raise PluginError(line(
+        locale,
+        "Manim 还没装好。先在「插件 → Manim 教学动画」里运行一次「准备 Manim 环境」(第一次要一到几分钟)。",
+        "Manim is not installed yet. Run \"Prepare Manim\" once from Plugins → Manim first (the first run takes a few minutes).",
+    ))
 
 
 # ---------------------------------------------------------------- 系统依赖
@@ -325,7 +422,8 @@ def _build(send: Emit, locale: str, venv: Path, deadline: float) -> None:
     code, output = _pip(args, send, locale, timeout=max(1.0, deadline - time.monotonic()), start=0.05, span=0.85)
     if code != 0:
         raise PluginError(line(locale, "安装 Manim 失败:", "Installing Manim failed: ") + explain_pip_failure(output, locale))
-    (venv / STAMP).write_text(json.dumps({"manim": MANIM_VERSION, "python": sys.version.split()[0]}), encoding="utf-8")
+    # 用哪个解释器建的由 pyvenv.cfg 说(见 venv_state),戳上只记 Manim 的版本 —— 同一件事不记两处。
+    (venv / STAMP).write_text(json.dumps({"manim": MANIM_VERSION}), encoding="utf-8")
 
 
 def explain_pip_failure(output: list[str], locale: str) -> str:
