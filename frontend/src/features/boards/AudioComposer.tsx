@@ -148,10 +148,7 @@ export function AudioComposer({
       nodeId={item.id}
       name="speak"
       bar={
-        engineChoices.length === 0 ? (
-          // 一个引擎都没有时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-          <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoVoices")}</span>
-        ) : (
+        engineChoices.length === 0 ? null : (
           <>
             {/* 图标画在触发器**里面**,箭头不藏:这一排和图片 / 视频格的模型选择器是同一枚控件。 */}
             <Pick
@@ -167,10 +164,7 @@ export function AudioComposer({
               options={engineChoices.map((one) => ({ value: one.id, label: one.label }))}
             />
             {usingClone ? (
-              cloneOptions.length === 0 ? (
-                // 克隆库空着不等于"没有音色可用" —— 左边那个下拉里还有别的引擎。
-                <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoVoices")}</span>
-              ) : (
+              cloneOptions.length === 0 ? null : (
                 /* 音色一多自动带搜索 —— 一个供应商挂几十个音色是常态,滚着找「若曦」不现实。 */
                 <Pick
                   ariaLabel={t("subtitleDubVoice")}
@@ -192,6 +186,13 @@ export function AudioComposer({
       }
       send={{ label: t("boardSpeak"), onSend: send, disabled: !text.trim() || !ready, working, shortcut: true }}
     >
+      {/* **没有音色的说明在正文里,不在底栏。** 底栏只放选择器 —— 一句两行长的说明挤在那儿,会把旁边引擎的名字
+          压成「本地音…」。克隆库空着不等于没得念:引擎下拉里还有别的。 */}
+      {(engineChoices.length === 0 || (usingClone && cloneOptions.length === 0)) && (
+        <p data-board-speak-notice="" className="m-0 px-1 text-ui-xs leading-relaxed text-muted-foreground">
+          {t("boardNoVoices")}
+        </p>
+      )}
       <textarea
         value={text}
         onChange={(event) => setText(event.target.value)}

@@ -981,6 +981,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   //: 正在给哪一项定剪辑范围。**不是选中就弹** —— 「剪一段」是对已有产出的动作,
   //: 而选中一段片子最常见的意图是看它、拖它,不是剪它。
   const [trimming, setTrimming] = React.useState<string | null>(null);
+  //: 此刻画布上挂着一块面板(产出者的,或剪一段的)—— 缩略图要让开,见 MiniMap。
+  const composerShown = Boolean(trimming) || Boolean(!feeding.blocked && composerItem && producer && onRun);
 
   //: **关得掉。** 它是从操作条点开的一块面板,而面板一旦只有「成功剪完」这一条出路,
   //: 用户改主意时就被困住了。三条都给上:换选别的(或点空白处取消选中)、Esc、再点一次
@@ -1534,7 +1536,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           pannable
           zoomable
           position="bottom-right"
-          className="overflow-hidden rounded-md border border-border"
+          //: **有面板打开时缩略图让开。** 面板挂在节点层(react-flow__renderer 的叠放上下文)里,缩略图是它上面一层的
+          //: 浮层,位置一重叠就压在面板的发送键上 —— 调层级做不到只让面板盖过它(节点也会跟着盖过去)。打开一格的面板
+          //: 时人在改这一格、不在找位置,缩略图淡出、不接点击,关掉面板就回来。
+          className={cn(
+            "overflow-hidden rounded-md border border-border transition-opacity duration-150",
+            composerShown && "pointer-events-none opacity-0",
+          )}
           bgColor="var(--panel)"
           maskColor="color-mix(in srgb, var(--background) 55%, transparent)"
           nodeColor="var(--border-strong)"

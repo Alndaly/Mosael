@@ -707,6 +707,9 @@ function DocumentNode({ data, selected }: NodeProps) {
       />
       <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
+      {/* 标题行只在**选了一篇笔记**之后出现,写的是那篇笔记的名字。还没选时它只会是第二个「文档」—— 格子上方的
+          标签已经这么写了;那时整格就是一块安静的空状态,和空的图片格一样。 */}
+      {item.note_id && (
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <BookOpen size={16} className="shrink-0 text-primary" />
         <span
@@ -726,6 +729,7 @@ function DocumentNode({ data, selected }: NodeProps) {
           </button>
         )}
       </header>
+      )}
       {!item.note_id ? (
         <button
           disabled={commentMode}
