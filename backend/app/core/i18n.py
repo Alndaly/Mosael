@@ -117,6 +117,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "后端重启,这次调用没有结果",
         "en": "The backend restarted, so this call has no result.",
     },
+    "pluginErr_toolInternal": {
+        "zh": "工具 {tool} 只供 Mosael 内部使用,不能直接调用",
+        "en": "The tool {tool} is reserved for Mosael itself and can't be called directly.",
+    },
     "pluginErr_runtimeCrashed": {
         "zh": "插件运行时异常: {detail}",
         "en": "Plugin runtime error: {detail}",
@@ -3087,10 +3091,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_conditionNeedsNumbers": {"zh": "比较方式「{op}」要的是数字,拿到的是 {left} / {right}", "en": "The “{op}” comparison needs numbers; got {left} / {right}"},
     "wfErr_childFailed": {"zh": "子任务失败:{reason}", "en": "The sub-task failed: {reason}"},
     "wfErr_pluginToolFailed": {"zh": "插件工具失败:{reason}", "en": "The plugin tool failed: {reason}"},
-    "wfErr_pluginToolInternal": {
-        "zh": "工具 {tool} 只供 Mosael 内部使用,不能在工作流里调用",
-        "en": "The tool {tool} is reserved for Mosael itself and cannot run in a workflow",
-    },
     "wfErr_tagUnknownMode": {"zh": "素材打标签:未知的模式 {mode}", "en": "Tag assets: unknown mode {mode}"},
     "wfErr_pluginNodeType": {"zh": "插件节点类型不合法:{type}", "en": "Invalid plugin node type: {type}"},
     "wfErr_integerRange": {"zh": "{field}必须是 {min} 到 {max} 之间的整数", "en": "{field} must be a whole number between {min} and {max}"},

@@ -21,12 +21,9 @@ def _run_plugin_tool(
     db: Session, instance_id: str, tool_name: str, payload: dict[str, Any], *, workspace_id: str
 ) -> dict[str, Any]:
     from app.domain.plugins import PluginDomainError
-    from app.domain.plugins.tools import find, invoke
+    from app.domain.plugins.tools import invoke
 
-    tool = find(db, instance_id, tool_name)
-    if tool is not None and tool["internal"]:
-        # 只给宿主适配层调的工具(见 plugins/manifest.ToolOverride.internal):图里存着也不跑。
-        raise WorkflowDomainError("wfErr_pluginToolInternal", params={"tool": tool_name})
+    # 只给宿主适配层调的工具(internal)图里存着也不跑 —— 那道门在 invoke 里(pluginErr_toolInternal)。
     # 收在这里而不是各节点里:插件节点和通用插件节点曾经一个过滤一个不过滤(见 common.provided)。
     payload = provided(payload)
     try:

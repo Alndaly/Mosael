@@ -414,6 +414,22 @@ def test_智能体函数名不超过_64_个字符_长名字的工具照样调得
     assert agent_tool_name(instance["id"], "shout") == f"plugin__{instance['id']}__shout"
 
 
+def test_只给宿主调的工具哪个入口都调不到_只有宿主适配层能() -> None:
+    """internal 的工具(Blender 的原始代码执行入口、生成协议)此前靠各入口自己挡:工作流判一次,
+    智能体和画板靠 exposed 过滤,插件页「试一下」那条路由谁都没挡 —— 一个 POST 就能直接跑。
+    现在这道门收在唯一的执行路径 invoke 里。"""
+    from app.domain.plugins.tools import invoke
+
+    manifest = {**SIMPLE, "tools": {**SIMPLE["tools"], "overrides": {"shout": {"internal": True}}}}
+    client = install(manifest)
+    instance = packages(client)["dev.simple"]["instances"][0]
+    client.patch(f"/api/plugins/instances/{instance['id']}", json={"enabled": True})
+    tried = client.post(f"/api/plugins/instances/{instance['id']}/tools/shout/invoke", json={"input": {"text": "x"}})
+    assert tried.status_code == 422 and "shout" in tried.json()["detail"]
+    with SessionLocal() as db:
+        assert invoke(db, instance["id"], "shout", {"text": "hi"}, host=True).output["loud"] == "HI"
+
+
 def test_停用后智能体那条路径立刻关上() -> None:
     client = install(SIMPLE)
     instance = packages(client)["dev.simple"]["instances"][0]

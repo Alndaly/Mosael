@@ -262,8 +262,15 @@ def invoke(
     workspace_id: str | None = None,
     project_id: str | None = None,
     timeout: float | None = None,
+    host: bool = False,
 ) -> PluginInvocation:
     """跑一次工具。**插件唯一的执行路径。**
+
+    `host=True` 只给**宿主自己的适配层**(Blender 互通):只有这时,标了 `internal` 的工具(以及认领了
+    只给宿主那类能力的,见 manifest.HOST_ONLY_CAPABILITIES)才跑得起来。别的入口 —— 智能体、工作流、
+    画板、插件页 —— 一律不行,这道门收在这一处:此前是各入口自己挡(工作流执行器判一次、智能体和画板
+    靠 `exposed` 过滤),插件页的「试一下」那条路由谁都没挡,一个 POST 就能直接跑 Blender 的原始
+    代码执行入口、绕开生成任务直接调生成协议。
 
     `timeout` 不给就用**工具自己声明的** `timeout_seconds`,再没有就用运行时的默认预算(60s)。
     **借道这条通道的产品功能要自己给** ——
@@ -283,6 +290,8 @@ def invoke(
     tool = find(db, instance_id, tool_name)
     if tool is None:
         raise PluginDomainError("pluginErr_noSuchTool", name=instance.name, tool=tool_name)
+    if tool["internal"] and not host:
+        raise PluginDomainError("pluginErr_toolInternal", tool=tool_name)
     if timeout is None:
         timeout = tool.get("timeout_seconds")
 

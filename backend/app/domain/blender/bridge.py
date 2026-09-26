@@ -170,8 +170,9 @@ BLENDER_AGENT_TIMEOUT_SECONDS = 150
 def call(db, instance, tool, payload, workspace_id=None, timeout=BLENDER_SYNC_TIMEOUT_SECONDS):
     started = time.monotonic()
     try:
+        # host=True:这是宿主自己的适配层,Blender 插件的原始代码执行入口(internal)只给这里调。
         result = tools.invoke(db, instance.id, tool, payload,
-                              workspace_id=workspace_id, timeout=timeout)
+                              workspace_id=workspace_id, timeout=timeout, host=True)
     except PluginDomainError as exc:
         raise BlenderConflict('blenderErr_plugin', detail=str(exc)) from exc
     if result.status != 'succeeded':
