@@ -15,7 +15,7 @@ Contract with the plugin's entry script:
   令牌不该出现在那里。见 state。
 
 - The child gets a minimal environment: PATH/HOME/LANG (on Windows also the system variables a
-  process cannot start without — see WINDOWS_ESSENTIALS) plus **the credentials
+  process cannot start without — see child_env.WINDOWS_ESSENTIALS) plus **the credentials
   this plugin itself declared** in its manifest (see credentials.py). It never
   receives the app's own provider keys, database, or API token — plugins cannot
   bypass the permission system by design because they receive nothing but their
@@ -33,7 +33,6 @@ import logging
 import os
 import queue
 import subprocess
-import sys
 import threading
 import time
 from collections.abc import Callable
@@ -46,6 +45,7 @@ from app.core.text import blame_line
 from app.core.i18n import LocalizedError, get_current_locale
 from app.domain.jobs import current_parent_job_id, detach_job_child, register_job_child
 from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
+from app.domain.plugins.child_env import base_env
 from app.domain.plugins.manifest import LOCALE_ENV
 
 logger = logging.getLogger(__name__)
@@ -64,31 +64,6 @@ PLUGIN_TIMEOUT_SECONDS = 60
 #: 要攒一份很贵的东西 —— Remotion 插件装的 node_modules 和渲染用的浏览器有几百 MB,每次更新
 #: 都重装一遍是不可接受的。它和 MOSAEL_PLUGIN_OUTPUT_DIR 正相反:那个是这一次调用的、用完就删。
 DATA_ENV = "MOSAEL_PLUGIN_DATA_DIR"
-
-
-#: Windows 上**没有它们子进程就起不来**的那几个。Python 初始化要 SYSTEMROOT(否则连随机数都拿
-#: 不到),Node 要它做 DNS,npm 要 APPDATA / LOCALAPPDATA 放缓存,TEMP 是一切临时文件的去处。
-#: 都是系统路径,不是凭据 —— 「最小环境」挡的是应用的密钥,不是操作系统本身。
-WINDOWS_ESSENTIALS = (
-    "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "TEMP", "TMP",
-    "APPDATA", "LOCALAPPDATA", "USERPROFILE", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
-)
-
-
-def base_env() -> dict[str, str]:
-    """插件子进程的基础环境:PATH / HOME / LANG,Windows 上再加 WINDOWS_ESSENTIALS。
-
-    此前只有前三个。在 Windows 上这等于起不来任何进程插件 —— 只是一直没人在 Windows 上跑过。
-    """
-    env = {
-        "PATH": os.environ.get("PATH", ""),
-        "HOME": os.environ.get("HOME", ""),
-        "LANG": os.environ.get("LANG", "en_US.UTF-8"),
-    }
-    if sys.platform == "win32":
-        upper = {key.upper(): value for key, value in os.environ.items()}
-        env.update({key: upper[key] for key in WINDOWS_ESSENTIALS if key in upper})
-    return env
 
 
 def data_dir_for(package_id: str) -> Path:

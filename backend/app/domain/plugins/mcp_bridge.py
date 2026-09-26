@@ -26,13 +26,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from typing import Any, Awaitable, Callable, TypeVar
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from app.core.i18n import LocalizedError, get_current_locale
+from app.domain.plugins.child_env import base_env
 from app.domain.plugins.manifest import LOCALE_ENV, expand
 
 #: 连接 + 握手 + 一次调用的**默认**总预算。和进程类插件的 60s 对齐。
@@ -61,6 +61,23 @@ def _spec(manifest: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
+def stdio_env(env: dict[str, str]) -> dict[str, str]:
+    """stdio 传输的子进程环境:宿主给的最小集 + 这个插件自己的配置与凭据。
+
+    最小集和进程插件是**同一份**(child_env.base_env)。此前这里手抄了 PATH/HOME/LANG 三个,
+    漏了 Windows 上起进程必需的 SYSTEMROOT / APPDATA……—— `npx` / `uvx` 起的 MCP 插件在 Windows 上
+    因此一个也起不来,而进程插件那边早就补上了。
+    """
+    return {
+        **base_env(),
+        "MOSAEL_PLUGIN": "1",
+        #: 读的人用哪种语言(见 runtime 里那段说明)。MCP 的调用参数由服务自己定义,
+        #: 我们塞不进去,所以这条走环境变量;http 那条走 Accept-Language。
+        LOCALE_ENV: get_current_locale(),
+        **env,
+    }
+
+
 async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[ClientSession], Awaitable[T]]) -> T:
     spec = _spec(manifest)
     transport = str(spec.get("transport") or "stdio").strip().lower()
@@ -70,19 +87,8 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
         if not command:
             raise McpBridgeError("pluginErr_mcpStdioNoCommand")
         args = [str(a) for a in (spec.get("args") or []) if str(a).strip()]
-        # 子进程环境:最小集 + 该插件自己的凭据。与进程类插件同一条规矩。
-        child_env = {
-            "PATH": os.environ.get("PATH", ""),
-            "HOME": os.environ.get("HOME", ""),
-            "LANG": os.environ.get("LANG", "en_US.UTF-8"),
-            "MOSAEL_PLUGIN": "1",
-            #: 读的人用哪种语言(见 runtime 里那段说明)。MCP 的调用参数由服务自己定义,
-            #: 我们塞不进去,所以这条走环境变量;http 那条走 Accept-Language。
-            LOCALE_ENV: get_current_locale(),
-            **env,
-        }
         params = StdioServerParameters(
-            command=command, args=args, env=child_env, cwd=str(manifest.get("_path") or "") or None
+            command=command, args=args, env=stdio_env(env), cwd=str(manifest.get("_path") or "") or None
         )
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
@@ -190,4 +196,4 @@ def _text(result: Any) -> str:
     return "\n".join(part for part in parts if part).strip()
 
 
-__all__ = ["MCP_TIMEOUT_SECONDS", "McpBridgeError", "McpTimeout", "call_tool", "discover_tools", "is_mcp"]
+__all__ = ["MCP_TIMEOUT_SECONDS", "McpBridgeError", "McpTimeout", "call_tool", "discover_tools", "is_mcp", "stdio_env"]
