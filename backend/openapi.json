@@ -4380,6 +4380,46 @@
         }
       }
     },
+    "/api/tts/preview": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Preview Voice",
+        "description": "试听一个配音引擎里的一把嗓子(资产的音色、以后挑嗓子的地方):念一小句,音频直接回给调用方。\n\n**和真用的时候同一条路** —— 参数由 engine_catalog.synthesis_params 凑(火山的资源族它自己查),合成走\nspeak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听\n活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。",
+        "operationId": "preview_voice_api_tts_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoicePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tts/synthesize": {
       "post": {
         "tags": [
@@ -33007,6 +33047,41 @@
           "created_at"
         ],
         "title": "VoiceOut"
+      },
+      "VoicePreviewRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "engine": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Engine"
+          },
+          "voice": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Voice"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "engine",
+          "voice",
+          "text"
+        ],
+        "title": "VoicePreviewRequest",
+        "description": "试听一个引擎里的一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。"
       },
       "VoiceUpdate": {
         "properties": {

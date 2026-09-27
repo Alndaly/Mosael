@@ -1706,6 +1706,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tts/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Voice
+         * @description 试听一个配音引擎里的一把嗓子(资产的音色、以后挑嗓子的地方):念一小句,音频直接回给调用方。
+         *
+         *     **和真用的时候同一条路** —— 参数由 engine_catalog.synthesis_params 凑(火山的资源族它自己查),合成走
+         *     speak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听
+         *     活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。
+         */
+        post: operations["preview_voice_api_tts_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tts/synthesize": {
         parameters: {
             query?: never;
@@ -12677,6 +12701,20 @@ export interface components {
             created_at: string;
         };
         /**
+         * VoicePreviewRequest
+         * @description 试听一个引擎里的一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。
+         */
+        VoicePreviewRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Engine */
+            engine: string;
+            /** Voice */
+            voice: string;
+            /** Text */
+            text: string;
+        };
+        /**
          * VoiceUpdate
          * @description 改音色。**只改说明性的字段** —— 参考音频不在其中:换了音频就是另一个音色了,
          *     而已经用它生成过的配音还在时间线上,让同一个 id 底下的声音悄悄换人比新建一条更糟。
@@ -16418,6 +16456,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TtsVoiceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_voice_api_tts_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoicePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

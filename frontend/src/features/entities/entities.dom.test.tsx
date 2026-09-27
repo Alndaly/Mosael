@@ -32,6 +32,7 @@ const api = vi.hoisted(() => ({
   importAsset: vi.fn(),
   listAssets: vi.fn(),
   fetchWorkflowFieldOptions: vi.fn(),
+  fetchVoicePreview: vi.fn(),
   listScenes: vi.fn(),
   listSceneModels: vi.fn(),
   getEntityCommunity: vi.fn(),
@@ -61,6 +62,8 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh" }),
 }));
+const playback = vi.hoisted(() => ({ playSpeech: vi.fn(async () => {}), stopSpeaking: vi.fn() }));
+vi.mock("@/lib/speechPlayback", () => playback);
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
 import { EntitiesView } from "./EntitiesView";
@@ -432,6 +435,35 @@ describe("变体页签", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "delete" }));
     await waitFor(() => expect(api.deleteEntity).toHaveBeenCalledTimes(2));
     expect(api.deleteEntity).toHaveBeenCalledWith("v1", false);
+  });
+});
+
+describe("音色试听", () => {
+  it("没挑嗓子时不能试听;挑了就念「你好,我是…」,克隆的放参考录音", async () => {
+    window.location.hash = "#/entities?entity=e1";
+    api.listEntities.mockResolvedValue([summary()]);
+    api.getEntity.mockResolvedValue(entity({ attributes: { real_person: false, voice_engine: "clone", voice_id: "v1" } }));
+    const audio = new Blob(["x"], { type: "audio/wav" });
+    api.fetchVoicePreview.mockResolvedValue(audio);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
+    const preview = await screen.findByRole("button", { name: "entityVoicePreview" });
+    fireEvent.click(preview);
+    await waitFor(() =>
+      expect(api.fetchVoicePreview).toHaveBeenCalledWith({
+        workspace_id: "ws", engine: "clone", voice: "v1", text: "entityVoicePreviewText",
+      }),
+    );
+    await waitFor(() => expect(playback.playSpeech).toHaveBeenCalledWith(audio));
+  });
+
+  it("没挑嗓子时按钮是灰的", async () => {
+    window.location.hash = "#/entities?entity=e1";
+    api.listEntities.mockResolvedValue([summary()]);
+    api.getEntity.mockResolvedValue(entity({ attributes: { real_person: false } }));
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
+    expect(((await screen.findByRole("button", { name: "entityVoicePreview" })) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

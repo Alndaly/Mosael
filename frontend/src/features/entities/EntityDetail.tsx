@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check } from "lucide-react";
+import { BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check, Loader2, Square, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -13,6 +13,7 @@ import {
   assetThumbnailUrl,
   listSceneModels,
   listScenes,
+  fetchVoicePreview,
   fetchWorkflowFieldOptions,
   updateEntity,
   type Entity,
@@ -30,6 +31,7 @@ import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTrail } from "@/components/layout/pageTrail";
+import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -418,6 +420,7 @@ function KindFields({
         <PanelGroup title={t("entityGroupCharacter")}>
           <VoiceField
             workspaceId={workspaceId}
+            name={entity.name}
             engine={String(attributes.voice_engine ?? "")}
             voice={String(attributes.voice_id ?? "")}
             onChange={(next) => save(next)}
@@ -518,11 +521,14 @@ function useVoiceOptions(workspaceId: string, engine: string) {
  */
 function VoiceField({
   workspaceId,
+  name,
   engine,
   voice,
   onChange,
 }: {
   workspaceId: string;
+  /** 试听念「你好,我是{name}」。 */
+  name: string;
   engine: string;
   voice: string;
   onChange: (next: { voice_engine: string; voice_id: string }) => void;
@@ -541,7 +547,7 @@ function VoiceField({
     : [...engineOptions, { value: picked, label: picked }];
   return (
     <Field label={t("entityVoice")} hint={t("entityVoiceHint")}>
-      <div className="grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] gap-2">
         <OptionPicker
           ariaLabel={t("entityVoiceEngine")}
           value={picked}
@@ -557,8 +563,60 @@ function VoiceField({
           onChange={(next) => onChange(next === NONE ? { voice_engine: "", voice_id: "" } : { voice_engine: picked, voice_id: next })}
           options={[{ value: NONE, label: t("entityNone") }, ...(voices.data ?? [])]}
         />
+        <VoicePreviewButton
+          workspaceId={workspaceId}
+          engine={picked}
+          voice={voice && picked === (engine || VOICE_LIBRARY_ENGINE) ? voice : ""}
+          text={t("entityVoicePreviewText").replace("{name}", name)}
+        />
       </div>
     </Field>
+  );
+}
+
+/** 试听:点一下念出来,再点一下停。同一时刻只响一段(和对话里念消息共用一个播放器)。 */
+function VoicePreviewButton({ workspaceId, engine, voice, text }: { workspaceId: string; engine: string; voice: string; text: string }) {
+  const t = useI18n();
+  const [state, setState] = React.useState<"idle" | "loading" | "playing">("idle");
+  const live = React.useRef(true);
+  React.useEffect(
+    () => () => {
+      live.current = false;
+      stopSpeaking();
+    },
+    [],
+  );
+  const play = async () => {
+    if (state !== "idle") {
+      stopSpeaking();
+      setState("idle");
+      return;
+    }
+    setState("loading");
+    try {
+      const audio = await fetchVoicePreview({ workspace_id: workspaceId, engine, voice, text });
+      if (!live.current) return;
+      setState("playing");
+      await playSpeech(audio);
+    } catch (error) {
+      toast.error(errorText(error));
+    } finally {
+      if (live.current) setState("idle");
+    }
+  };
+  const label = state === "idle" ? t("entityVoicePreview") : t("entityVoicePreviewStop");
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      disabled={!voice}
+      aria-label={label}
+      title={voice ? label : t("entityVoicePreviewPick")}
+      onClick={() => void play()}
+      data-voice-preview={state}
+    >
+      {state === "loading" ? <Loader2 className="animate-mosael-spin" /> : state === "playing" ? <Square /> : <Volume2 />}
+    </Button>
   );
 }
 

@@ -733,6 +733,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "素材不存在",
         "en": "Asset not found.",
     },
+    "routeErr_previewCloneUsesSample": {
+        "zh": "本地克隆的音色,试听它的参考录音就是它",
+        "en": "For a cloned voice, its reference recording is the preview.",
+    },
     "routeErr_voiceNotFound": {
         "zh": "音色不存在",
         "en": "Voice not found.",

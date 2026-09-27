@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/client", () => ({ API_BASE: "http://api.test", getAuthToken: () => "token" }));
-vi.mock("@/features/agent/speechPlayback", () => ({
+vi.mock("@/lib/speechPlayback", () => ({
   playSpeech: mocks.playSpeech,
   stopSpeaking: mocks.stopSpeaking,
 }));

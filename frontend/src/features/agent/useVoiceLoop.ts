@@ -19,7 +19,7 @@ import { toast } from "sonner";
 
 import { API_BASE, getAuthToken } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { playSpeech, stopSpeaking } from "@/features/agent/speechPlayback";
+import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
 import { matchSpokenChoice } from "@/features/agent/spokenChoice";
 import { UtteranceDetector } from "@/features/agent/utteranceDetector";
 

@@ -98,6 +98,15 @@ class SubtitleDubRequest(ApiModel):
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
 
 
+class VoicePreviewRequest(ApiModel):
+    """试听一个引擎里的一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。"""
+
+    workspace_id: str
+    engine: str = Field(min_length=1, max_length=40)
+    voice: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=200)
+
+
 class EngineSynthesizeRequest(ApiModel):
     """Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."""
 
