@@ -163,10 +163,13 @@ export function EntityGrid({
   collection,
   rows,
   className,
+  tile = false,
 }: {
   collection: EntityCollection;
   rows: readonly EntitySummary[];
   className: string;
+  /** 小方格(和参考图卡片同一种样子),详情里的变体用;资产库列表是大卡。 */
+  tile?: boolean;
 }) {
   const t = useI18n();
   const { selection, actions } = collection;
@@ -178,6 +181,7 @@ export function EntityGrid({
             <div className="relative min-w-0" data-entity-tile={entity.id}>
               <EntityCard
                 entity={entity}
+                tile={tile}
                 selected={selection.selectMode && selection.selectedIds.has(entity.id)}
                 onOpen={() => (selection.selectMode ? selection.toggle(entity.id) : actions.open(entity.id))}
               />

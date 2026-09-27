@@ -41,8 +41,8 @@ import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/
 
 const FIELD = "w-full rounded-md border border-border bg-field px-3 py-2 text-ui-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const NONE = "__none__";
-//: 变体卡片和参考图同一档大小。
-const VARIANT_GRID = "grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-5";
+//: 变体卡片和参考图墙同一档:同样的最小列宽、同样的间距(见 ReferenceWall 的 Wall)。
+const VARIANT_GRID = "grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4";
 //: 顶部那一块里「看起来是正文、点进去能改」的输入框:平时没有框,悬停和聚焦才出现。
 const INLINE_FIELD =
   "w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:border-border focus-visible:border-primary";
@@ -328,7 +328,7 @@ function VariantsTab({
       {variants.length === 0 ? (
         <EmptyState icon={<Layers size={22} />} title={t("entityVariantsEmpty")} />
       ) : (
-        <EntityGrid collection={collection} rows={variants} className={VARIANT_GRID} />
+        <EntityGrid collection={collection} rows={variants} className={VARIANT_GRID} tile />
       )}
       {collection.dialogs}
     </section>
@@ -715,68 +715,106 @@ function ConsentField({ entity, onSave }: { entity: Entity; onSave: (changes: Re
   );
 }
 
-/** 在哪里用过:画板(资产格 / 提示词里 @ 了它)、生成记录、工作流。点一下过去。 */
+/**
+ * 在哪里用过,按类分组:画板(资产格 / 提示词里 @ 了它)、生成记录(带结果的缩略图)、工作流。一格一条,点一下过去。
+ * 页签上已经写着「在哪里用过」,这里不再重复标题;一条都没有时是空状态。
+ */
 function UsageSection({ workspaceId, entityId }: { workspaceId: string; entityId: string }) {
   const t = useI18n();
   const usage = useQuery({ queryKey: entityKeys.usage(workspaceId, entityId), queryFn: () => getEntityUsage(entityId) });
   const rows = usage.data;
-  const empty = rows && rows.boards.length + rows.generations.length + rows.workflows.length === 0;
   const go = (hash: string) => {
     window.location.hash = hash;
   };
+  if (usage.isPending) {
+    return (
+      <div className={USAGE_GRID} aria-busy="true">
+        {[0, 1, 2].map((one) => (
+          <Skeleton key={one} className="h-16 w-full rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+  if (!rows || rows.boards.length + rows.generations.length + rows.workflows.length === 0) {
+    return (
+      <section aria-label={t("entityUsage")} data-entity-usage="">
+        <EmptyState icon={<LayoutGrid size={22} />} title={t("entityUsageEmpty")} />
+      </section>
+    );
+  }
   return (
-    <section className="grid gap-3" aria-label={t("entityUsage")} data-entity-usage="">
-      <h3 className="m-0 text-ui-md font-semibold">{t("entityUsage")}</h3>
-      {usage.isPending ? (
-        <Skeleton className="h-10 w-full" />
-      ) : empty || !rows ? (
-        <p className="m-0 text-ui-sm text-muted-foreground">{t("entityUsageEmpty")}</p>
-      ) : (
-        <ul className="m-0 grid list-none gap-1 p-0">
-          {rows.boards.map((board) => (
-            <UsageRow
-              key={`b-${board.id}`}
-              icon={<LayoutGrid size={14} />}
-              title={board.name}
-              meta={t(board.how === "cell" ? "entityUsageCell" : "entityUsageMention")}
-              onOpen={() => go(`#/boards?board=${encodeURIComponent(board.id)}`)}
-            />
-          ))}
-          {rows.generations.map((one) => (
-            <UsageRow
-              key={`g-${one.id}`}
-              icon={one.kind === "video" ? <Clapperboard size={14} /> : <BookImage size={14} />}
-              title={one.prompt || one.model}
-              meta={`${t("entityUsageGeneration")} · ${one.model} · ${one.created_at.slice(0, 10)}`}
-              onOpen={() => go("#/ai")}
-              thumb={one.result_asset_id}
-              session={one.session_id}
-            />
-          ))}
-          {rows.workflows.map((flow) => (
-            <UsageRow
-              key={`w-${flow.id}`}
-              icon={<WorkflowIcon size={14} />}
-              title={flow.name}
-              meta={t("entityUsageWorkflow")}
-              onOpen={() => go("#/workflows")}
-            />
-          ))}
-        </ul>
-      )}
+    <section className="grid gap-7" aria-label={t("entityUsage")} data-entity-usage="">
+      <UsageGroup title={t("entityUsageBoards")} count={rows.boards.length}>
+        {rows.boards.map((board) => (
+          <UsageCard
+            key={`b-${board.id}`}
+            lead={<LayoutGrid size={18} />}
+            title={board.name}
+            meta={t(board.how === "cell" ? "entityUsageCell" : "entityUsageMention")}
+            onOpen={() => go(`#/boards?board=${encodeURIComponent(board.id)}`)}
+          />
+        ))}
+      </UsageGroup>
+      <UsageGroup title={t("entityUsageGenerations")} count={rows.generations.length}>
+        {rows.generations.map((one) => (
+          <UsageCard
+            key={`g-${one.id}`}
+            lead={
+              one.result_asset_id ? (
+                <img src={assetThumbnailUrl(one.result_asset_id)} alt="" loading="lazy" className="size-full object-cover" />
+              ) : one.kind === "video" ? (
+                <Clapperboard size={18} />
+              ) : (
+                <BookImage size={18} />
+              )
+            }
+            title={one.prompt || one.model}
+            meta={`${one.model} · ${one.created_at.slice(0, 10)}`}
+            onOpen={() => go("#/ai")}
+            thumb={one.result_asset_id}
+            session={one.session_id}
+          />
+        ))}
+      </UsageGroup>
+      <UsageGroup title={t("entityUsageWorkflows")} count={rows.workflows.length}>
+        {rows.workflows.map((flow) => (
+          <UsageCard
+            key={`w-${flow.id}`}
+            lead={<WorkflowIcon size={18} />}
+            title={flow.name}
+            meta={t("entityUsageWorkflow")}
+            onOpen={() => go("#/workflows")}
+          />
+        ))}
+      </UsageGroup>
     </section>
   );
 }
 
-function UsageRow({
-  icon,
+const USAGE_GRID = "grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3";
+
+function UsageGroup({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+  if (count === 0) return null;
+  return (
+    <div className="grid gap-3">
+      <h3 className="m-0 flex items-center gap-2 text-ui-sm font-semibold">
+        {title}
+        <span className="text-ui-xs font-normal tabular-nums text-muted-foreground">{count}</span>
+      </h3>
+      <ul className={cn("m-0 list-none p-0", USAGE_GRID)}>{children}</ul>
+    </div>
+  );
+}
+
+function UsageCard({
+  lead,
   title,
   meta,
   onOpen,
   thumb,
   session,
 }: {
-  icon: React.ReactNode;
+  lead: React.ReactNode;
   title: string;
   meta: string;
   onOpen: () => void;
@@ -784,17 +822,21 @@ function UsageRow({
   session?: string | null;
 }) {
   return (
-    <li>
+    <li className="grid">
       <button
         type="button"
         data-usage-session={session ?? undefined}
         data-usage-result={thumb ?? undefined}
         onClick={onOpen}
-        className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-secondary"
+        className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border border-border bg-panel p-2.5 text-left transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="text-muted-foreground">{icon}</span>
-        <span className="min-w-0 flex-1 truncate text-ui-sm">{title}</span>
-        <span className="shrink-0 text-ui-xs text-muted-foreground">{meta}</span>
+        <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-md bg-panel-inset text-muted-foreground">{lead}</span>
+        <span className="grid min-w-0 flex-1 gap-0.5">
+          <span className="truncate text-ui-sm font-medium text-foreground" title={title}>
+            {title}
+          </span>
+          <span className="truncate text-ui-xs text-muted-foreground">{meta}</span>
+        </span>
       </button>
     </li>
   );
