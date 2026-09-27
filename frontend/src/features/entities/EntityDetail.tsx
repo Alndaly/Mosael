@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X } from "lucide-react";
+import { ArrowLeft, BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -17,6 +17,7 @@ import {
   updateEntity,
   type Entity,
   type EntityPatch,
+  type EntitySummary,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
@@ -31,7 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
-import { EntityCard } from "@/features/entities/EntityCard";
+import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
 import { ReferenceWall } from "@/features/entities/ReferenceWall";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 
@@ -232,26 +233,7 @@ export function EntityDetail({
 
         {current === "references" && <ReferenceWall entity={data} workspaceId={workspaceId} />}
 
-        {current === "variants" && (
-          <section className="grid gap-4" aria-label={t("entityVariants")}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="m-0 max-w-2xl text-ui-sm text-muted-foreground">{t("entityVariantsHint")}</p>
-              <Button variant="outline" onClick={() => setVariantOpen(true)}>
-                <Plus />
-                {t("entityVariantNew")}
-              </Button>
-            </div>
-            {variantCount === 0 ? (
-              <EmptyState icon={<Layers size={22} />} title={t("entityVariantsEmpty")} />
-            ) : (
-              <div className={VARIANT_GRID}>
-                {data.variants.map((one) => (
-                  <EntityCard key={one.id} entity={one} onOpen={() => onOpen(one.id)} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+        {current === "variants" && <VariantsTab workspaceId={workspaceId} variants={data.variants} onOpen={onOpen} onNew={() => setVariantOpen(true)} />}
 
         {current === "settings" && (
           <div className="grid min-w-0 gap-8" aria-label={t("entityFields")} data-entity-settings="">
@@ -294,6 +276,52 @@ export function EntityDetail({
         onSubmit={(name) => variant.mutate(name)}
       />
     </div>
+  );
+}
+
+/**
+ * 「变体」页签:和资产库列表同一套卡片 —— 右键(打开、重命名、编辑标签、删除)、「选择」之后批量打标签和删除
+ * (见 EntityCollection)。变体下面不再挂变体,所以右键里没有「新建变体」。
+ */
+function VariantsTab({
+  workspaceId,
+  variants,
+  onOpen,
+  onNew,
+}: {
+  workspaceId: string;
+  variants: EntitySummary[];
+  onOpen: (id: string) => void;
+  onNew: () => void;
+}) {
+  const t = useI18n();
+  const collection = useEntityCollection(workspaceId, variants, { onOpen });
+  const { selectMode, setSelectMode, exit } = collection.selection;
+  return (
+    <section className="grid gap-4" aria-label={t("entityVariants")}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="m-0 max-w-2xl text-ui-sm text-muted-foreground">{t("entityVariantsHint")}</p>
+        <span className="flex flex-wrap gap-2">
+          {variants.length > 0 && (
+            <Button variant="outline" aria-pressed={selectMode} onClick={() => (selectMode ? exit() : setSelectMode(true))}>
+              {selectMode ? <X /> : <Check />}
+              {selectMode ? t("cancel") : t("mediaSelectMode")}
+            </Button>
+          )}
+          <Button variant="outline" onClick={onNew}>
+            <Plus />
+            {t("entityVariantNew")}
+          </Button>
+        </span>
+      </div>
+      <EntitySelectionBar collection={collection} rows={variants} />
+      {variants.length === 0 ? (
+        <EmptyState icon={<Layers size={22} />} title={t("entityVariantsEmpty")} />
+      ) : (
+        <EntityGrid collection={collection} rows={variants} className={VARIANT_GRID} />
+      )}
+      {collection.dialogs}
+    </section>
   );
 }
 

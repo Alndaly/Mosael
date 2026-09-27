@@ -402,6 +402,39 @@ describe("音色", () => {
   });
 });
 
+describe("变体页签", () => {
+  it("和列表同一套:右键没有「新建变体」,能多选、批量删", async () => {
+    window.location.hash = "#/entities?entity=e1";
+    api.listEntities.mockResolvedValue([summary()]);
+    api.getEntity.mockResolvedValue(entity({
+      variants: [
+        summary({ id: "v1", name: "冬装", parent_id: "e1", parent_name: "张三", variant_count: 0 }),
+        summary({ id: "v2", name: "少年", parent_id: "e1", parent_name: "张三", variant_count: 0 }),
+      ],
+    }));
+    api.deleteEntity.mockResolvedValue(undefined);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    fireEvent.click(await screen.findByRole("button", { name: /entityVariants/ }));
+    const tile = (await screen.findByText("冬装")).closest("[data-entity-tile]") as HTMLElement;
+    fireEvent.contextMenu(tile);
+    expect(await screen.findByRole("menuitem", { name: /rename/ })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /entityVariantNew/ })).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    const section = screen.getByRole("region", { name: "entityVariants" });
+    fireEvent.click(within(section).getByRole("button", { name: /mediaSelectMode/ }));
+    fireEvent.click(within(section).getByText("冬装").closest("button")!);
+    fireEvent.click(within(section).getByText("少年").closest("button")!);
+    expect(api.getEntity).not.toHaveBeenCalledWith("v1");
+    const bar = within(section).getByRole("group", { name: "mediaSelectMode" });
+    fireEvent.click(within(bar).getByRole("button", { name: /delete/ }));
+    const dialog = await screen.findByRole("alertdialog").catch(() => screen.findByRole("dialog"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "delete" }));
+    await waitFor(() => expect(api.deleteEntity).toHaveBeenCalledTimes(2));
+    expect(api.deleteEntity).toHaveBeenCalledWith("v1", false);
+  });
+});
+
 describe("在哪里用过", () => {
   it("画板、生成记录、工作流各一行", async () => {
     window.location.hash = "#/entities?entity=e1";

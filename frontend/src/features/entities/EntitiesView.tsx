@@ -1,39 +1,32 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FolderOpen, Layers, ListChecks, Pencil, Plus, Search, Tag, Trash2, X } from "lucide-react";
+import { Check, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   ENTITY_KINDS,
   createEntity,
-  createVariant,
-  deleteEntity,
   entityKeys,
   listEntities,
-  updateEntity,
   type EntityKind,
   type EntitySummary,
   type Workspace,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
-import { SelectionCheck } from "@/components/app/SelectionCheck";
-import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { TagFilter } from "@/components/app/TagFilter";
+import { RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CARD_GRID, CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { Button } from "@/components/ui/button";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TAG_MATCHES, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { usePersistentTab } from "@/lib/usePersistentTab";
-import { useMultiSelect } from "@/lib/useMultiSelect";
-import { EntityCard } from "@/features/entities/EntityCard";
+import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
 import { EntityDetail } from "@/features/entities/EntityDetail";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
-import { TagFilter } from "@/components/app/TagFilter";
-import { TAG_MATCHES, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
-import { TagsDialog } from "@/components/app/TagsDialog";
 
 type SortKey = "updated" | "name" | "references";
 const SORT_KEYS: readonly SortKey[] = ["updated", "name", "references"];
@@ -70,11 +63,6 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
   const [tagMatch, setTagMatch] = usePersistentTab<TagMatch>("entities-tag-match", "all", TAG_MATCHES);
   const [openId, setOpenId] = React.useState<string | null>(entityFromHash);
   const [creating, setCreating] = React.useState(false);
-  const [renaming, setRenaming] = React.useState<EntitySummary | null>(null);
-  const [editingTags, setEditingTags] = React.useState<EntitySummary | null>(null);
-  const [variantOf, setVariantOf] = React.useState<EntitySummary | null>(null);
-  const [deleting, setDeleting] = React.useState<EntitySummary[] | null>(null);
-  const [batchTagging, setBatchTagging] = React.useState(false);
   const filtersRef = React.useRef<HTMLDivElement>(null);
   const [filtersStuck, setFiltersStuck] = React.useState(false);
 
@@ -104,9 +92,8 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     () => sortEntities(ofKind.filter((one) => matchesTags(one, tagFilter, tagMatch)), sortKey),
     [ofKind, tagFilter, tagMatch, sortKey],
   );
-  const idOf = React.useCallback((one: EntitySummary) => one.id, []);
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, exit: exitSelectMode } = useMultiSelect(visible, idOf);
-  const selected = visible.filter((one) => selectedIds.has(one.id));
+  const collection = useEntityCollection(workspace.id, visible, { onOpen: setOpenId });
+  const { selectMode, setSelectMode, exit: exitSelectMode } = collection.selection;
   const refresh = () => void qc.invalidateQueries({ queryKey: entityKeys.all(workspace.id) });
   const fail = (error: unknown) => toast.error(errorText(error));
 
@@ -119,55 +106,6 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     },
     onError: fail,
   });
-  const rename = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => updateEntity(id, { name }),
-    onSuccess: () => {
-      setRenaming(null);
-      refresh();
-    },
-    onError: fail,
-  });
-  const saveTags = useMutation({
-    mutationFn: ({ id, tags }: { id: string; tags: string[] }) => updateEntity(id, { tags }),
-    onSuccess: () => {
-      setEditingTags(null);
-      refresh();
-    },
-    onError: fail,
-  });
-  const batchAddTags = useMutation({
-    //: 加到每一个选中的资产上,已有的标签留着(和素材库的「打标签」同一个意思)。
-    mutationFn: async (tags: string[]) => {
-      for (const one of selected) await updateEntity(one.id, { tags: [...new Set([...one.tags, ...tags])] });
-    },
-    onSuccess: () => {
-      setBatchTagging(false);
-      refresh();
-    },
-    onError: fail,
-  });
-  const variant = useMutation({
-    mutationFn: ({ parent, name }: { parent: EntitySummary; name: string }) => createVariant(parent.id, { name }),
-    onSuccess: (made) => {
-      setVariantOf(null);
-      refresh();
-      setOpenId(made.id);
-    },
-    onError: fail,
-  });
-  const remove = useMutation({
-    //: 有变体的连变体一起删(确认框里写明了);素材不动。
-    mutationFn: async (rows: EntitySummary[]) => {
-      for (const one of rows) await deleteEntity(one.id, one.variant_count > 0);
-    },
-    onSuccess: () => {
-      setDeleting(null);
-      exitSelectMode();
-      refresh();
-    },
-    onError: fail,
-  });
-
   const close = () => {
     setOpenId(null);
     if (entityFromHash()) window.history.replaceState(null, "", "#/entities");
@@ -183,7 +121,6 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
 
   const KindIcon = entityKindIcon(kind);
   const filtering = Boolean(keyword || tagFilter.length);
-  const withVariants = (deleting ?? []).reduce((sum, one) => sum + one.variant_count, 0);
   const sortLabel: Record<SortKey, string> = { updated: t("sortUpdated"), name: t("sortName"), references: t("entitiesSortReferences") };
 
   return (
@@ -263,28 +200,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
             </Button>
           </div>
         </div>
-        {selectMode && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-3" role="group" aria-label={t("mediaSelectMode")}>
-            <span className="whitespace-nowrap text-xs text-muted-foreground">{t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}</span>
-            <Button variant="outline" onClick={() => selectAll(visible)}>
-              <ListChecks size={13} />
-              {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
-            </Button>
-            <Button variant="outline" disabled={selectedIds.size === 0} onClick={() => setBatchTagging(true)}>
-              <Tag size={13} />
-              {t("addTags")}
-            </Button>
-            <Button
-              variant="outline"
-              className="hover:border-destructive/50 hover:text-destructive"
-              disabled={selectedIds.size === 0}
-              onClick={() => setDeleting(selected)}
-            >
-              <Trash2 size={13} />
-              {t("delete")}
-            </Button>
-          </div>
-        )}
+        <EntitySelectionBar collection={collection} rows={visible} className="border-t border-divider pt-3" />
       </div>
 
       <div className="pt-5">
@@ -320,45 +236,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
             }
           />
         ) : (
-          <div className={CARD_GRID}>
-            {visible.map((entity) => (
-              <ContextMenu key={entity.id}>
-                <ContextMenuTrigger asChild>
-                  <div className="relative min-w-0" data-entity-tile={entity.id}>
-                    <EntityCard
-                      entity={entity}
-                      selected={selectMode && selectedIds.has(entity.id)}
-                      onOpen={() => (selectMode ? toggle(entity.id) : setOpenId(entity.id))}
-                    />
-                    {selectMode && <SelectionCheck selected={selectedIds.has(entity.id)} />}
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem onSelect={() => setOpenId(entity.id)}>
-                    <FolderOpen size={14} />
-                    {t("entitiesOpen")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => setRenaming(entity)}>
-                    <Pencil size={14} />
-                    {t("rename")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => setEditingTags(entity)}>
-                    <Tag size={14} />
-                    {t("editTags")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => setVariantOf(entity)}>
-                    <Layers size={14} />
-                    {t("entityVariantNew")}
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting([entity])}>
-                    <Trash2 size={14} />
-                    {t("delete")}
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
-          </div>
+          <EntityGrid collection={collection} rows={visible} className={CARD_GRID} />
         )}
       </div>
 
@@ -371,51 +249,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         onCancel={() => setCreating(false)}
         onSubmit={(name) => create.mutate(name)}
       />
-      <RenameDialog
-        open={renaming !== null}
-        title={t("rename")}
-        initialValue={renaming?.name ?? ""}
-        pending={rename.isPending}
-        onCancel={() => setRenaming(null)}
-        onSubmit={(name) => renaming && rename.mutate({ id: renaming.id, name })}
-      />
-      <RenameDialog
-        open={variantOf !== null}
-        title={t("entityVariantNew")}
-        initialValue=""
-        confirmLabel={t("entityCreate")}
-        pending={variant.isPending}
-        onCancel={() => setVariantOf(null)}
-        onSubmit={(name) => variantOf && variant.mutate({ parent: variantOf, name })}
-      />
-      <TagsDialog
-        open={editingTags !== null}
-        title={t("editTags")}
-        initialTags={editingTags?.tags ?? []}
-        onCancel={() => setEditingTags(null)}
-        onSubmit={(tags) => editingTags && saveTags.mutate({ id: editingTags.id, tags })}
-      />
-      <TagsDialog
-        open={batchTagging}
-        title={t("addTags")}
-        body={t("entitiesAddTagsBody")}
-        initialTags={[]}
-        onCancel={() => setBatchTagging(false)}
-        onSubmit={(tags) => tags.length > 0 && batchAddTags.mutate(tags)}
-      />
-      <ConfirmDialog
-        open={deleting !== null}
-        title={
-          deleting?.length === 1
-            ? t("entityDeleteTitle").replace("{name}", deleting[0].name)
-            : t("entitiesDeleteManyTitle").replace("{n}", String(deleting?.length ?? 0))
-        }
-        body={withVariants > 0 ? t("entityDeleteWithVariants").replace("{n}", String(withVariants)) : t("entityDeleteBody")}
-        confirmLabel={t("delete")}
-        pending={remove.isPending}
-        onCancel={() => setDeleting(null)}
-        onConfirm={() => deleting && remove.mutate(deleting)}
-      />
+      {collection.dialogs}
     </div>
   );
 }
