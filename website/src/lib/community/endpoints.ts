@@ -5,7 +5,7 @@
  * 要用的接口**单独放在 `REQUESTED` 里 —— 那是提给社区服务的需求,服务没实现之前,对应的按钮会
  * 拿到 404,页面照常显示错误信息而不是崩掉。
  */
-import { SORT_KEYS, type ItemKind, type SortKey } from "@/lib/community/types";
+import { ASSET_KINDS, SORT_KEYS, type ItemKind, type SortKey } from "@/lib/community/types";
 
 export const API_PREFIX = "/api/community/v1";
 
@@ -24,12 +24,21 @@ export function withQuery(path: string, query: Query = {}): string {
   return search ? `${path}?${search}` : path;
 }
 
-/** `workflow` → `/workflows`,`plugin` → `/plugins`:两类条目的接口同形,只差这一段。 */
-export function collection(kind: ItemKind): "/workflows" | "/plugins" {
-  return kind === "workflow" ? "/workflows" : "/plugins";
+/** `workflow` → `/workflows`,`plugin` → `/plugins`,`asset` → `/assets`:三类条目的接口同形,只差这一段。 */
+export function collection(kind: ItemKind): "/workflows" | "/plugins" | "/assets" {
+  return kind === "workflow" ? "/workflows" : kind === "plugin" ? "/plugins" : "/assets";
 }
 
-export type ListQuery = { q?: string; tag?: string; sort?: SortKey; author?: string; cursor?: string | null; limit?: number };
+export type ListQuery = {
+  q?: string;
+  tag?: string;
+  sort?: SortKey;
+  author?: string;
+  cursor?: string | null;
+  limit?: number;
+  /** 只对资产:人物 / 场景 / 道具。 */
+  asset_kind?: string;
+};
 
 const seg = encodeURIComponent;
 
@@ -102,8 +111,20 @@ export function browserUrl(path: string): string {
 }
 
 /** 列表页 URL 上的 `?q&tag&sort` → 查询参数。认不出的 sort 回到默认的「热门」。 */
-export function parseListQuery(search: Record<string, string | string[] | undefined>): { q: string; tag: string; sort: SortKey } {
+export function parseListQuery(search: Record<string, string | string[] | undefined>): {
+  q: string;
+  tag: string;
+  sort: SortKey;
+  asset_kind: string;
+} {
   const one = (value: string | string[] | undefined) => (typeof value === "string" ? value.trim().slice(0, 100) : "");
   const sort = one(search.sort);
-  return { q: one(search.q), tag: one(search.tag), sort: (SORT_KEYS as readonly string[]).includes(sort) ? (sort as SortKey) : "trending" };
+  const assetKind = one(search.asset_kind);
+  return {
+    q: one(search.q),
+    tag: one(search.tag),
+    sort: (SORT_KEYS as readonly string[]).includes(sort) ? (sort as SortKey) : "trending",
+    //: 只对资产列表有意义;认不出的值当没给(服务端会拒,页面不该因为一个手改的 URL 报错)。
+    asset_kind: (ASSET_KINDS as readonly string[]).includes(assetKind) ? assetKind : "",
+  };
 }

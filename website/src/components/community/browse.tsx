@@ -12,14 +12,23 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import * as React from "react";
 
-import { GRID, PluginCard, WorkflowCard } from "@/components/community/cards";
+import { AssetCard, GRID, PluginCard, WorkflowCard } from "@/components/community/cards";
 import { BUTTON, Spinner, errorText } from "@/components/community/ui";
 import type { Locale } from "@/i18n/config";
 import { HTML_LANG } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { ENDPOINTS, browserUrl } from "@/lib/community/endpoints";
 import { errorFromResponse, networkError } from "@/lib/community/errors";
-import { SORT_KEYS, type ItemKind, type Page, type PluginSummary, type SortKey, type WorkflowSummary } from "@/lib/community/types";
+import {
+  ASSET_KINDS,
+  SORT_KEYS,
+  type AssetSummary,
+  type ItemKind,
+  type Page,
+  type PluginSummary,
+  type SortKey,
+  type WorkflowSummary,
+} from "@/lib/community/types";
 import { cn } from "@/lib/utils";
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -38,9 +47,10 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   );
 }
 
-export type BrowseQuery = { q: string; tag: string; sort: SortKey };
+/** `asset_kind` 只对资产列表有意义(人物 / 场景 / 道具),别的列表恒为空串。 */
+export type BrowseQuery = { q: string; tag: string; sort: SortKey; asset_kind: string };
 
-type Item = WorkflowSummary | PluginSummary;
+type Item = WorkflowSummary | PluginSummary | AssetSummary;
 
 /** 公开的列表不带令牌:同源 fetch,和服务端取第一页是同一个接口。 */
 async function fetchPage(kind: ItemKind, query: BrowseQuery, cursor: string, locale: Locale): Promise<Page<Item>> {
@@ -84,6 +94,7 @@ export function ItemBrowser({ locale, kind, query, initial }: { locale: Locale; 
       if (merged.q.trim()) params.set("q", merged.q.trim());
       if (merged.tag) params.set("tag", merged.tag);
       if (merged.sort !== "trending") params.set("sort", merged.sort);
+      if (merged.asset_kind) params.set("asset_kind", merged.asset_kind);
       const search = params.toString();
       startTransition(() => router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false }));
     },
@@ -114,8 +125,8 @@ export function ItemBrowser({ locale, kind, query, initial }: { locale: Locale; 
 
   // 标签从已经取到的条目里汇总:服务没有单独的标签接口,而当前在筛的那个标签要一直在。
   const tags = [...new Set([query.tag, ...items.flatMap((item) => item.tags)].filter(Boolean))].slice(0, 16);
-  const placeholder = kind === "workflow" ? t.workflows.search : t.plugins.search;
-  const filtered = Boolean(query.q || query.tag);
+  const placeholder = kind === "workflow" ? t.workflows.search : kind === "plugin" ? t.plugins.search : t.assets.search;
+  const filtered = Boolean(query.q || query.tag || query.asset_kind);
 
   return (
     <div className="grid gap-6" aria-busy={pending || undefined}>
@@ -146,6 +157,16 @@ export function ItemBrowser({ locale, kind, query, initial }: { locale: Locale; 
           </fieldset>
           {pending && <Spinner className="text-muted-foreground" />}
         </div>
+        {kind === "asset" && (
+          <fieldset className="m-0 flex flex-wrap gap-2 border-0 p-0">
+            <legend className="sr-only">{t.assets.title}</legend>
+            {(["", ...ASSET_KINDS] as const).map((assetKind) => (
+              <Chip key={assetKind || "all"} active={query.asset_kind === assetKind} onClick={() => navigate({ asset_kind: assetKind })}>
+                {assetKind ? t.assets.kinds[assetKind] : t.assets.all}
+              </Chip>
+            ))}
+          </fieldset>
+        )}
         {tags.length > 0 && (
           <fieldset className="m-0 flex flex-wrap items-center gap-1.5 border-0 p-0">
             <legend className="sr-only">{t.community.tagsLabel}</legend>
@@ -168,7 +189,7 @@ export function ItemBrowser({ locale, kind, query, initial }: { locale: Locale; 
                 type="button"
                 onClick={() => {
                   setText("");
-                  navigate({ q: "", tag: "" });
+                  navigate({ q: "", tag: "", asset_kind: "" });
                 }}
                 className="inline-flex items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
               >
@@ -186,8 +207,10 @@ export function ItemBrowser({ locale, kind, query, initial }: { locale: Locale; 
             <li key={item.slug} className="grid">
               {kind === "workflow" ? (
                 <WorkflowCard locale={locale} item={item as WorkflowSummary} />
-              ) : (
+              ) : kind === "plugin" ? (
                 <PluginCard locale={locale} item={item as PluginSummary} />
+              ) : (
+                <AssetCard locale={locale} item={item as AssetSummary} />
               )}
             </li>
           ))}

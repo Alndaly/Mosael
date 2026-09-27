@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeCheck, Code2, Download, Heart, LayoutGrid, Plug, Shield, SquareTerminal, Users, Wrench } from "lucide-react";
+import { BadgeCheck, Box, Code2, Download, Heart, Images, LayoutGrid, MapPin, Plug, Shield, SquareTerminal, UserRound, Users, Wrench } from "lucide-react";
 import type * as React from "react";
 
 import { PluginTile, WorkflowTile } from "@/components/community/tile";
@@ -7,7 +7,7 @@ import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { formatCount, formatDate } from "@/lib/community/format";
 import { toPlainText } from "@/lib/inline-markdown";
-import type { PluginSummary, PublicUser, ShareSummary, WorkflowSummary } from "@/lib/community/types";
+import type { AssetKind, AssetSummary, PluginSummary, PublicUser, ShareSummary, WorkflowSummary } from "@/lib/community/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -152,6 +152,48 @@ export function WorkflowCard({ locale, item }: { locale: Locale; item: WorkflowS
           </Meta>
         )}
         <Counts locale={locale} downloads={item.downloads} likes={item.likes} />
+      </div>
+    </Link>
+  );
+}
+
+/** 资产三种各一个图标:人物、场景、道具。 */
+export const ASSET_KIND_ICON: Record<AssetKind, typeof Box> = { character: UserRound, location: MapPin, prop: Box };
+
+/**
+ * 资产卡:**封面就是这个资产本身**(一个人物的正面、一个场景的设定图),所以和画板卡一样大图在上,
+ * 而不是工作流、插件那种小方块图标。种类、真人与否、参考图几张写在底下。
+ */
+export function AssetCard({ locale, item }: { locale: Locale; item: AssetSummary }) {
+  const t = getMessages(locale).assets;
+  const KindIcon = ASSET_KIND_ICON[item.asset_kind] ?? Box;
+  return (
+    <Link href={localePath(locale, `/assets/${item.slug}`)} className={cn(CARD, "p-0")}>
+      <div className="relative grid aspect-[4/3] place-items-center overflow-hidden rounded-t-2xl border-b border-border bg-secondary/50">
+        {item.cover_url ? (
+          // oxlint-disable-next-line nextjs/no-img-element
+          <img src={item.cover_url} alt="" loading="lazy" className="size-full object-cover" />
+        ) : (
+          <KindIcon className="size-8 text-muted-foreground" aria-hidden />
+        )}
+        <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-background/85 px-2 py-0.5 text-xs font-medium backdrop-blur">
+          <KindIcon className="size-3.5" aria-hidden />
+          {t.kinds[item.asset_kind] ?? item.asset_kind}
+        </span>
+        {item.real_person && (
+          <span className="absolute top-3 right-3 rounded-full bg-[color:var(--tile-4)] px-2 py-0.5 text-xs font-semibold text-white">
+            {t.realPerson}
+          </span>
+        )}
+      </div>
+      <div className="grid gap-1 p-4">
+        <h3 className="m-0 truncate text-base font-semibold tracking-tight group-hover:text-primary">{item.title}</h3>
+        <Byline locale={locale} author={item.author} official={item.official} version={versionLabel(item.version)} />
+        <p className="mt-2 mb-0 line-clamp-2 text-sm leading-6 text-muted-foreground">{toPlainText(item.summary)}</p>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
+          <Meta icon={Images}>{`${item.reference_count} ${t.references}`}</Meta>
+          <Counts locale={locale} downloads={item.downloads} likes={item.likes} />
+        </div>
       </div>
     </Link>
   );

@@ -20,7 +20,7 @@ import { communityLinks, communityMatch } from "@/lib/community/nav";
 import type { PublicUser } from "@/lib/community/types";
 import { cn } from "@/lib/utils";
 
-const SECTION_ICONS = { workflows: Workflow, plugins: Puzzle, boards: LayoutGrid, stats: BarChart3 } as const;
+const SECTION_ICONS = { workflows: Workflow, plugins: Puzzle, assets: UserRound, boards: LayoutGrid, stats: BarChart3 } as const;
 
 const MENU =
   "z-[70] min-w-52 overflow-hidden rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95";

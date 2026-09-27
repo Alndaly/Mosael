@@ -45,7 +45,10 @@ export type ErrorBody = { error: { code: string; message: string } };
 /** 列表一律游标分页。 */
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
-export type ItemKind = "workflow" | "plugin";
+export type ItemKind = "workflow" | "plugin" | "asset";
+/** 资产的三种(ADR 0027):人物 / 场景 / 道具。 */
+export type AssetKind = "character" | "location" | "prop";
+export const ASSET_KINDS: readonly AssetKind[] = ["character", "location", "prop"];
 export type SortKey = "trending" | "new" | "downloads";
 export const SORT_KEYS: readonly SortKey[] = ["trending", "new", "downloads"];
 
@@ -84,6 +87,33 @@ export type PluginSummary = ItemSummary & {
   /** 清单的运行方式:`mcp` 连一个 MCP 服务,其余是本地进程。 */
   runtime: string;
   permissions: string[];
+};
+
+export type AssetSummary = ItemSummary & {
+  asset_kind: AssetKind;
+  /** 声明为真人的人物:详情页标出来,审核通过才公开(ADR 0027 §4)。 */
+  real_person: boolean;
+  reference_count: number;
+  variant_count: number;
+};
+
+/** 参考图的角度 / 用途,和应用里资产的角度同一组。 */
+export type AssetRole = "front" | "side" | "back" | "turnaround" | "closeup" | "full_body" | "expression" | "concept" | "detail";
+
+export type AssetReference = { sha256: string; content_type: string; width?: number; height?: number; role: AssetRole | (string & {}) };
+
+/** 分享包 `mosael.asset/1` 里页面要用的部分。 */
+export type AssetBundle = {
+  schema: "mosael.asset/1";
+  kind: AssetKind;
+  name: string;
+  description?: string;
+  prompt?: string;
+  tags?: string[];
+  attributes?: { real_person?: boolean; blockout_color?: string; time_of_day?: string };
+  references: AssetReference[];
+  cover_sha256?: string;
+  variants?: Omit<AssetBundle, "schema" | "kind" | "variants">[];
 };
 
 export type WorkflowNode = {
@@ -138,6 +168,15 @@ export type PluginDetail = PluginSummary &
       credentials?: string[];
       homepage?: string | null;
     };
+  };
+
+export type AssetDetail = AssetSummary &
+  DetailExtras & {
+    bundle?: AssetBundle | null;
+    /** 参考图哈希 → 地址。 */
+    media?: Record<string, { url: string; content_type: string; size?: number }>;
+    /** 只有作者和审核员拿得到。 */
+    consent_kind?: "self" | "authorized" | null;
   };
 
 /** `GET /me/submissions`:我提交过的每一个版本。 */
@@ -244,6 +283,8 @@ export type Profile = {
   workflows_count: number;
   plugins: PluginSummary[];
   plugins_count: number;
+  assets: AssetSummary[];
+  assets_count: number;
   boards: ShareSummary[];
   boards_count: number;
   /** 近一年逐日贡献(公开的版本 + 公开画板的分享),给热力图。 */
@@ -255,11 +296,13 @@ export type StatsOverview = {
   users: number;
   workflows: number;
   plugins: number;
+  assets: number;
   shares: number;
   downloads: number;
   downloads_30d?: number;
   top_workflows?: WorkflowSummary[];
   top_plugins?: PluginSummary[];
+  top_assets?: AssetSummary[];
 };
 
 /** 统计页画的四条线;`signups` 就是新注册用户。 */
@@ -288,6 +331,11 @@ export type QueueItem = ItemVersion & {
   tools: { name: string; description?: string }[];
   files: { path: string; size: number; sha256?: string }[];
   diff: ReviewDiff | null;
+  /** 资产(真人人物)那几项:审核员并排看参考图和授权声明(ADR 0027 §4)。 */
+  asset_kind?: AssetKind | null;
+  bundle?: AssetBundle | null;
+  media?: Record<string, { url: string; content_type: string; size?: number }>;
+  consent_kind?: "self" | "authorized" | null;
 };
 
 export type Report = {

@@ -29,7 +29,7 @@ export function VersionList({ locale, versions }: { locale: Locale; versions: It
 }
 
 /** 标签行,点一个回到列表按它筛。 */
-export function TagLinks({ locale, section, tags }: { locale: Locale; section: "/workflows" | "/plugins"; tags: string[] }) {
+export function TagLinks({ locale, section, tags }: { locale: Locale; section: "/workflows" | "/plugins" | "/assets"; tags: string[] }) {
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1.5">

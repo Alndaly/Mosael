@@ -16,7 +16,7 @@ import { BUTTON, INPUT, Notice, Segmented, Spinner, StatePanel, TEXTAREA, errorT
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { diffLines, stableJson } from "@/lib/community/diff";
-import { ENDPOINTS, REQUESTED } from "@/lib/community/endpoints";
+import { ENDPOINTS, REQUESTED, collection } from "@/lib/community/endpoints";
 import { fill, formatBytes, formatDateTime } from "@/lib/community/format";
 import type { QueueItem, Report, ReviewDiff } from "@/lib/community/types";
 import { cn } from "@/lib/utils";
@@ -131,67 +131,73 @@ function QueueCard({ locale, item, session, onDone }: { locale: Locale; item: Qu
 
       {item.changelog && <p className="m-0 text-sm leading-6 whitespace-pre-line text-muted-foreground">{item.changelog}</p>}
 
-      <DiffBlock title={t.admin.permissionsDiff}>
-        <PermissionDiff locale={locale} current={item.permissions} added={diff?.permissions.added ?? []} removed={diff?.permissions.removed ?? []} />
-      </DiffBlock>
+      {item.kind === "asset" ? (
+        <AssetReview locale={locale} item={item} />
+      ) : (
+        <>
+        <DiffBlock title={t.admin.permissionsDiff}>
+          <PermissionDiff locale={locale} current={item.permissions} added={diff?.permissions.added ?? []} removed={diff?.permissions.removed ?? []} />
+        </DiffBlock>
 
-      {(item.tools.length > 0 || (diff?.tools.removed.length ?? 0) > 0) && (
-        <DiffBlock title={t.admin.toolsDiff}>
-          <ul className="m-0 grid list-none gap-1 p-0 text-sm">
-            {item.tools.map((tool) => (
-              <li key={tool.name} className="flex flex-wrap items-baseline gap-x-2">
-                <code className={cn("rounded bg-secondary px-1.5 py-0.5 font-mono text-xs", newTools.has(tool.name) && "bg-primary/12 text-primary")}>
-                  {newTools.has(tool.name) ? "+ " : ""}
-                  {tool.name}
-                </code>
-                {effectTools.has(tool.name) && <span className="text-xs font-medium text-destructive">{t.admin.effectsChanged}</span>}
-              </li>
-            ))}
-            {diff?.tools.removed.map((name) => (
-              <li key={`-${name}`}>
-                <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-muted-foreground line-through">{name}</code>
+        {(item.tools.length > 0 || (diff?.tools.removed.length ?? 0) > 0) && (
+          <DiffBlock title={t.admin.toolsDiff}>
+            <ul className="m-0 grid list-none gap-1 p-0 text-sm">
+              {item.tools.map((tool) => (
+                <li key={tool.name} className="flex flex-wrap items-baseline gap-x-2">
+                  <code className={cn("rounded bg-secondary px-1.5 py-0.5 font-mono text-xs", newTools.has(tool.name) && "bg-primary/12 text-primary")}>
+                    {newTools.has(tool.name) ? "+ " : ""}
+                    {tool.name}
+                  </code>
+                  {effectTools.has(tool.name) && <span className="text-xs font-medium text-destructive">{t.admin.effectsChanged}</span>}
+                </li>
+              ))}
+              {diff?.tools.removed.map((name) => (
+                <li key={`-${name}`}>
+                  <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-muted-foreground line-through">{name}</code>
+                </li>
+              ))}
+            </ul>
+          </DiffBlock>
+        )}
+
+        <DiffBlock title={`${t.admin.filesDiff} · ${touched}/${item.files.length}`}>
+          <ul className="m-0 grid max-h-64 list-none gap-0.5 overflow-auto rounded-xl bg-secondary/40 p-3 font-mono text-xs">
+            {files.map((file) => {
+              const status = addedFiles.has(file.path) ? "added" : changedFiles.has(file.path) ? "changed" : "same";
+              return (
+                <li key={file.path} className="flex min-w-0 justify-between gap-4">
+                  <span className={cn("truncate", status === "added" && "text-primary", status === "changed" && "text-[color:var(--tile-4)]")}>
+                    {status === "added" ? "+ " : status === "changed" ? "~ " : "  "}
+                    {file.path}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">{formatBytes(file.size)}</span>
+                </li>
+              );
+            })}
+            {diff?.files.removed.map((path) => (
+              <li key={`-${path}`} className="truncate text-destructive line-through">
+                − {path}
               </li>
             ))}
           </ul>
         </DiffBlock>
-      )}
 
-      <DiffBlock title={`${t.admin.filesDiff} · ${touched}/${item.files.length}`}>
-        <ul className="m-0 grid max-h-64 list-none gap-0.5 overflow-auto rounded-xl bg-secondary/40 p-3 font-mono text-xs">
-          {files.map((file) => {
-            const status = addedFiles.has(file.path) ? "added" : changedFiles.has(file.path) ? "changed" : "same";
-            return (
-              <li key={file.path} className="flex min-w-0 justify-between gap-4">
-                <span className={cn("truncate", status === "added" && "text-primary", status === "changed" && "text-[color:var(--tile-4)]")}>
-                  {status === "added" ? "+ " : status === "changed" ? "~ " : "  "}
-                  {file.path}
-                </span>
-                <span className="shrink-0 text-muted-foreground">{formatBytes(file.size)}</span>
-              </li>
-            );
-          })}
-          {diff?.files.removed.map((path) => (
-            <li key={`-${path}`} className="truncate text-destructive line-through">
-              − {path}
-            </li>
-          ))}
-        </ul>
-      </DiffBlock>
-
-      {item.manifest && (
-        <DiffBlock title={t.admin.manifestDiff}>
-          <pre className="m-0 max-h-96 overflow-auto rounded-xl bg-secondary/40 p-3 font-mono text-xs leading-5">
-            {lines.map((line, index) => (
-              <div
-                key={index}
-                className={cn("whitespace-pre", line.kind === "added" && "bg-primary/10 text-primary", line.kind === "removed" && "bg-destructive/10 text-destructive")}
-              >
-                {line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}
-                {line.text}
-              </div>
-            ))}
-          </pre>
-        </DiffBlock>
+        {item.manifest && (
+          <DiffBlock title={t.admin.manifestDiff}>
+            <pre className="m-0 max-h-96 overflow-auto rounded-xl bg-secondary/40 p-3 font-mono text-xs leading-5">
+              {lines.map((line, index) => (
+                <div
+                  key={index}
+                  className={cn("whitespace-pre", line.kind === "added" && "bg-primary/10 text-primary", line.kind === "removed" && "bg-destructive/10 text-destructive")}
+                >
+                  {line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}
+                  {line.text}
+                </div>
+              ))}
+            </pre>
+          </DiffBlock>
+        )}
+        </>
       )}
 
       {error ? <Notice tone="error">{errorText(error, t.community.genericError, t.community.networkError)}</Notice> : null}
@@ -226,6 +232,53 @@ function QueueCard({ locale, item, session, onDone }: { locale: Locale; item: Qu
   );
 }
 
+/**
+ * 资产的审核(只有声明为真人的人物会进队列):授权声明,和参考图墙 —— 审核员对着图判断「这是不是本人 /
+ * 有没有同意公开」,所以图要大到看得清脸,不是一排缩略图。
+ */
+function AssetReview({ locale, item }: { locale: Locale; item: QueueItem }) {
+  const t = getMessages(locale);
+  const bundle = item.bundle;
+  if (!bundle) return null;
+  const references = [...bundle.references, ...(bundle.variants ?? []).flatMap((variant) => variant.references)];
+  return (
+    <>
+      <DiffBlock title={t.admin.consentTitle}>
+        <p className="m-0 text-sm leading-6">
+          <strong className="font-semibold">
+            {item.consent_kind === "self" ? t.admin.consentSelf : item.consent_kind === "authorized" ? t.admin.consentAuthorized : t.admin.consentMissing}
+          </strong>
+        </p>
+        <p className="mt-1 mb-0 text-xs leading-5 text-muted-foreground">{t.admin.assetReviewNote}</p>
+      </DiffBlock>
+      <DiffBlock title={`${t.assets.referencesTitle} · ${references.length}`}>
+        <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2 p-0">
+          {references.map((reference) => {
+            const url = item.media?.[reference.sha256]?.url;
+            const role = t.assets.roles[reference.role as keyof typeof t.assets.roles] ?? reference.role;
+            return (
+              <li key={reference.sha256} className="relative overflow-hidden rounded-xl border border-border bg-secondary/40">
+                {url ? (
+                  // oxlint-disable-next-line nextjs/no-img-element
+                  <img src={url} alt={role} loading="lazy" className="aspect-square w-full object-cover" />
+                ) : (
+                  <span className="grid aspect-square place-items-center text-xs text-muted-foreground">{reference.sha256.slice(0, 8)}</span>
+                )}
+                <span className="absolute bottom-1.5 left-1.5 rounded-full bg-background/85 px-2 py-0.5 text-[0.6875rem] font-medium">{role}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </DiffBlock>
+      {bundle.prompt && (
+        <DiffBlock title={t.assets.prompt}>
+          <p className="m-0 font-mono text-xs leading-5 text-muted-foreground">{bundle.prompt}</p>
+        </DiffBlock>
+      )}
+    </>
+  );
+}
+
 function ReportCard({ locale, report, session, onDone }: { locale: Locale; report: Report; session: Session; onDone: () => void }) {
   const t = getMessages(locale);
   const [hiding, setHiding] = React.useState(false);
@@ -233,7 +286,7 @@ function ReportCard({ locale, report, session, onDone }: { locale: Locale; repor
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<unknown>(null);
   const { kind, slug, title } = report.target;
-  const href = slug ? (kind === "share" ? `/b/${slug}` : `/${kind === "workflow" ? "workflows" : "plugins"}/${slug}`) : null;
+  const href = slug ? (kind === "share" ? `/b/${slug}` : `${collection(kind)}/${slug}`) : null;
   const reasonLabel = (t.community.reportReasons as Record<string, string>)[report.reason] ?? report.reason;
 
   const run = async (path: string, body: unknown) => {

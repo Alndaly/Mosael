@@ -8,7 +8,7 @@ import { CommunityHeader } from "@/components/community/community-header";
 import { CommunityDown, CommunityUnavailable } from "@/components/community/shell";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
-import { ENDPOINTS } from "@/lib/community/endpoints";
+import { ENDPOINTS, collection } from "@/lib/community/endpoints";
 import { fill, formatCount } from "@/lib/community/format";
 import { communityEnabled, serverGet } from "@/lib/community/server";
 import { METRICS, type StatsOverview, type Timeseries } from "@/lib/community/types";
@@ -40,13 +40,18 @@ export default async function StatsPage({ params, searchParams }: Props) {
     ...METRICS.map((metric) => serverGet<Timeseries>(ENDPOINTS.stats.timeseries(metric, days), locale)),
   ]);
 
-  // 热门:工作流和插件各取前几名,合在一起按下载数排。
-  const top = overview.ok ? [...(overview.data.top_workflows ?? []), ...(overview.data.top_plugins ?? [])].sort((a, b) => b.downloads - a.downloads) : [];
+  // 热门:工作流、插件、资产各取前几名,合在一起按下载数排。
+  const top = overview.ok
+    ? [...(overview.data.top_workflows ?? []), ...(overview.data.top_plugins ?? []), ...(overview.data.top_assets ?? [])].sort(
+        (a, b) => b.downloads - a.downloads,
+      )
+    : [];
   const totals = overview.ok
     ? ([
         ["users", overview.data.users],
         ["workflows", overview.data.workflows],
         ["plugins", overview.data.plugins],
+        ["assets", overview.data.assets],
         ["shares", overview.data.shares],
         ["downloads", overview.data.downloads],
       ] as const)
@@ -61,7 +66,7 @@ export default async function StatsPage({ params, searchParams }: Props) {
             <CommunityDown locale={locale} />
           ) : (
             <>
-              <dl className="m-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <dl className="m-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 {totals.map(([key, value]) => (
                   <div key={key} className="grid gap-1 rounded-2xl border border-border bg-card p-5">
                     <dt className="text-xs text-muted-foreground">{t.stats.totals[key]}</dt>
@@ -109,7 +114,7 @@ export default async function StatsPage({ params, searchParams }: Props) {
                           <span aria-hidden className="absolute inset-y-0 left-0 bg-primary/6" style={{ width: `${(item.downloads / max) * 100}%` }} />
                           <span className="relative font-mono text-xs text-muted-foreground tabular-nums">{index + 1}</span>
                           <Link
-                            href={localePath(locale, `/${item.kind === "workflow" ? "workflows" : "plugins"}/${item.slug}`)}
+                            href={localePath(locale, `${collection(item.kind)}/${item.slug}`)}
                             className="relative min-w-0 truncate text-sm font-semibold hover:text-primary"
                           >
                             {item.title}

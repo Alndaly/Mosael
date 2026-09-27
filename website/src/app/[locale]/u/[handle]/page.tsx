@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import type * as React from "react";
 
-import { BoardCard, GRID, PluginCard, WorkflowCard } from "@/components/community/cards";
+import { AssetCard, BoardCard, GRID, PluginCard, WorkflowCard } from "@/components/community/cards";
 import { Heatmap } from "@/components/community/charts";
 import { Avatar } from "@/components/community/header-menus";
 import { CommunityDown, CommunityUnavailable, PageShell } from "@/components/community/shell";
@@ -59,7 +59,7 @@ export default async function ProfilePage({ params }: Props) {
     );
   }
   // 一次取齐:最近的工作流、插件、公开画板各一页,加近一年的贡献(服务端 `GET /users/{handle}`)。
-  const { user, workflows: workflowItems, plugins: pluginItems, boards: boardItems } = profile.data;
+  const { user, workflows: workflowItems, plugins: pluginItems, assets: assetItems, boards: boardItems } = profile.data;
 
   return (
     <>
@@ -105,6 +105,20 @@ export default async function ProfilePage({ params }: Props) {
                 {pluginItems.map((item) => (
                   <li key={item.slug} className="grid">
                     <PluginCard locale={locale} item={item} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="m-0 text-sm text-muted-foreground">{t.profile.empty}</p>
+            )}
+          </Shelf>
+
+          <Shelf title={t.profile.assets} count={profile.data.assets_count}>
+            {assetItems.length > 0 ? (
+              <ul className={GRID}>
+                {assetItems.map((item) => (
+                  <li key={item.slug} className="grid">
+                    <AssetCard locale={locale} item={item} />
                   </li>
                 ))}
               </ul>

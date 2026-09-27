@@ -82,8 +82,9 @@ export function LikeButton({ locale, kind, slug, likes }: { locale: Locale; kind
   );
 }
 
-/** 和社区服务的 `REPORT_REASONS` 同一组。 */
-const REASONS = ["spam", "malware", "copyright", "inappropriate", "broken", "other"] as const;
+/** 和社区服务的 `REPORT_REASONS` 同一组。`likeness`(冒用肖像)只在资产上列出:别的条目里没有谁的脸。 */
+const REASONS = ["spam", "malware", "copyright", "inappropriate", "broken", "likeness", "other"] as const;
+const reasonsFor = (kind: ItemKind | "share") => REASONS.filter((one) => one !== "likeness" || kind === "asset");
 
 export function ReportButton({ locale, kind, slug }: { locale: Locale; kind: ItemKind | "share"; slug: string }) {
   const t = getMessages(locale).community;
@@ -139,7 +140,7 @@ export function ReportButton({ locale, kind, slug }: { locale: Locale; kind: Ite
           <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
             <fieldset className="m-0 grid gap-2 border-0 p-0">
               <legend className="mb-2 text-sm font-medium">{t.reportReason}</legend>
-              {REASONS.map((one) => (
+              {reasonsFor(kind).map((one) => (
                 <label key={one} className="flex items-center gap-2.5 text-sm">
                   <input type="radio" name="reason" value={one} checked={reason === one} onChange={() => setReason(one)} className="accent-[var(--primary)]" />
                   {t.reportReasons[one]}

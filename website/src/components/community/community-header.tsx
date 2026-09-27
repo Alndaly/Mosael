@@ -6,10 +6,10 @@ import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { cn } from "@/lib/utils";
 
-export type CommunitySection = "workflows" | "plugins" | "boards" | "stats";
+export type CommunitySection = "workflows" | "plugins" | "assets" | "boards" | "stats";
 
 /**
- * 社区几个分区(工作流 / 插件 / 画板 / 统计)共用的页头。
+ * 社区几个分区(工作流 / 插件 / 资产 / 画板 / 统计)共用的页头。
  *
  * 不再是官网内页那种占半屏的大标题:社区页是**拿来逛和找**的,进来第一眼该看到的是
  * 有哪些东西,而不是一句口号。所以页头压到一行标题 + 一句话,分区之间用标签页切换 ——
@@ -32,6 +32,7 @@ export function CommunityHeader({
   const tabs = [
     { id: "workflows" as const, label: t.nav.workflows, href: localePath(locale, "/workflows") },
     { id: "plugins" as const, label: t.nav.plugins, href: localePath(locale, "/plugins") },
+    { id: "assets" as const, label: t.nav.assets, href: localePath(locale, "/assets") },
     { id: "boards" as const, label: t.nav.boards, href: localePath(locale, "/boards") },
     { id: "stats" as const, label: t.nav.stats, href: localePath(locale, "/community/stats") },
   ];
@@ -47,7 +48,7 @@ export function CommunityHeader({
           </div>
           {actions && <div className="flex flex-wrap gap-2.5">{actions}</div>}
         </div>
-        {/* 窄屏四个标签横向滚动,不折行。 */}
+        {/* 窄屏几个标签横向滚动,不折行。 */}
         <nav aria-label={t.community.name} className="-mx-5 mt-8 flex gap-6 overflow-x-auto px-5 sm:mx-0 sm:px-0">
           {tabs.map((tab) => (
             <Link

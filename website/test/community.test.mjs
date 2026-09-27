@@ -287,3 +287,14 @@ test("接口路径照 ADR 拼,空参数不进查询串", () => {
   assert.equal(REQUESTED.publicShares({ author: "kinda" }), "/shares?author=kinda");
   assert.equal(withQuery("/x"), "/x");
 });
+
+test("资产列表:asset_kind 只认人物 / 场景 / 道具,路径是 /assets", async () => {
+  const { parseListQuery, collection, ENDPOINTS } = await import("../src/lib/community/endpoints.ts");
+  assert.equal(parseListQuery({ asset_kind: "character" }).asset_kind, "character");
+  //: 手改 URL 写了个不认识的种类:当没给,不让服务端报错把页面带崩。
+  assert.equal(parseListQuery({ asset_kind: "robot" }).asset_kind, "");
+  assert.equal(parseListQuery({}).asset_kind, "");
+  assert.equal(collection("asset"), "/assets");
+  assert.equal(ENDPOINTS.items.list("asset", { asset_kind: "prop", q: "" }), "/assets?asset_kind=prop");
+  assert.equal(ENDPOINTS.items.detail("asset", "lin-xiao-man"), "/assets/lin-xiao-man");
+});

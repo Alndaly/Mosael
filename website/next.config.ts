@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
       // 桌面应用和社区服务给出的链接不带语言段:发布后的条目页、设置里的「我的提交 / 我的分享」、
       // 设备授权的 verification_uri_complete(`/device?code=…`,查询串跟着跳转带过去)。和 `/` 一样
       // 送到默认语言,访客在站头切语言即可。不做 Accept-Language 协商,理由同上。
-      ...["workflows", "plugins"].flatMap((section) => [
+      ...["workflows", "plugins", "assets"].flatMap((section) => [
         { source: `/${section}`, destination: `/${DEFAULT_LOCALE}/${section}`, permanent: false },
         { source: `/${section}/:slug`, destination: `/${DEFAULT_LOCALE}/${section}/:slug`, permanent: false },
       ]),
