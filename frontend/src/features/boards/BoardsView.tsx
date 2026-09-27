@@ -6,7 +6,7 @@ import { useOpenRequest } from "@/lib/deepLink";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Bot, Check, CheckSquare, Copy, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Share2, Trash2, Undo2, X } from "lucide-react";
+import { ArrowUpRight, Bot, Check, CheckSquare, Copy, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -80,7 +80,6 @@ import { useMultiSelect } from "@/lib/useMultiSelect";
 import { EdgeShapeToggle, useEdgeShape } from "@/components/app/canvasEdgeShape";
 import { CanvasNodeSearch, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { boardSearchEntries } from "@/features/boards/boardSearch";
-import { BoardShareDialog } from "@/features/community/BoardShareDialog";
 
 /**
  * 创意画板:除了和智能体对话之外,另一条把想法摊开的路。
@@ -455,8 +454,6 @@ function BoardDetail({
   const [renaming, setRenaming] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [deletingBoard, setDeletingBoard] = React.useState(false);
-  //: 「分享」面板(ADR 0026):把这张画板分享成一个社区上的只读链接。
-  const [sharing, setSharing] = React.useState(false);
   const [collaborationOpen, setCollaborationOpen] = React.useState(false);
   const [commentMode, setCommentMode] = React.useState(false);
   const [markerMode, setMarkerMode] = React.useState(false);
@@ -899,19 +896,6 @@ function BoardDetail({
           data-board-toolbar-actions=""
           end={
             <>
-              <CanvasToolbarGroup label={t("boardShareTitle")}>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  data-board-share=""
-                  title={t("boardShareTitle")}
-                  aria-label={t("boardShareTitle")}
-                  aria-pressed={sharing}
-                  onClick={() => setSharing(true)}
-                >
-                  <Share2 size={14} />
-                </Button>
-              </CanvasToolbarGroup>
               <CanvasToolbarGroup label={t("wfAgentTitle")}>
                 <Button
                   variant="ghost"
@@ -1168,8 +1152,6 @@ function BoardDetail({
           requestAnimationFrame(() => api?.focusComment(comment));
         }}
       />
-
-      <BoardShareDialog open={sharing} onOpenChange={setSharing} boardId={board.id} boardName={board.name} workspaceId={workspaceId} />
 
       <ConfirmDialog
         open={confirmingDelete}

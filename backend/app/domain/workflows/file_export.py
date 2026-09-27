@@ -4,8 +4,7 @@
 节点里引用的工作区资源(素材 / 序列 / 供应商档案等)跨工作区导入后可能悬空,这与「保存放行、就绪检查提示、
 运行时拦截」的既有分层一致,导入不做资源级校验。
 
-「导出成文件」(routes/workflows.export_one)和「发布到社区」(domain/community/publish)用的是这同一份 ——
-社区上下载到的文件,和本机点「导出」拿到的是同一种东西。
+「导出成文件」(routes/workflows.export_one)用的是它;格式本身定义在 mosael_formats.workflow_file。
 """
 
 from __future__ import annotations

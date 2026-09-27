@@ -78,7 +78,6 @@ NOT_WORKSPACE_SCOPED = {
     "job_worker.py",     # 外部任务执行器的认领/回报通道(独立的 worker key)
     "oauth.py",          # 第三方登录:还没有登录用户,更没有工作区
     "asr.py",            # 模型下载是部署级 —— 各自 ensure_deployment_admin
-    "community.py",      # 我自己的社区账号(连接 / 断开),不属于任何工作区;往社区发东西的在 community_publishing.py,各自点名
 }
 
 #: 闸在**领域内核**里而不是路由里的写路由。这不是放行,是把闸放在了更靠里的一层:

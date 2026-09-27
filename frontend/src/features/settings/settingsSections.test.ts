@@ -9,7 +9,6 @@ import { describe, expect, it, vi } from "vitest";
 
 // 各页组件本身不在这里渲染 —— 只要声明。把重的依赖桩掉,免得为了读一张表去拉整个界面。
 vi.mock("@/features/settings/AccountSection", () => ({ AccountSection: () => null }));
-vi.mock("@/features/community/CommunityAccountSection", () => ({ CommunityAccountSection: () => null }));
 vi.mock("@/features/settings/AgentMemorySection", () => ({ AgentMemorySection: () => null }));
 vi.mock("@/features/settings/AgentVoiceSection", () => ({ AgentVoiceSection: () => null }));
 vi.mock("@/features/settings/AiRuntimeSection", () => ({ AiRuntimeSection: () => null }));

@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from unittest.mock import patch as mock_patch
 
 import pytest
@@ -192,33 +190,6 @@ def test_正文里_at_的资产存在格子的表单上() -> None:
     assert saved["canvas"]["items"][0]["form"]["mentioned_entity_ids"] == [zhang]
     usage = client.get(f"/api/entities/{zhang}/usage").json()
     assert [(row["id"], row["how"]) for row in usage["boards"]] == [(board_id, "mention")]
-
-
-def test_分享快照_资产格带封面和名字_不带本机_id(monkeypatch) -> None:
-    from tests.community_fake import install, connect
-    from tests.test_community_board_share import FORBIDDEN_KEYS, _asset, _board, _keys, _png, _share
-    from tests.util import wait_status
-
-    fake, client, clock = install(monkeypatch, None)
-    connect(client, fake, clock)
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    cover = _asset(ws, "a-face", "image", _png("red"), "face.png", {"width": 512, "height": 512})
-    zhang = _entity(ws, "张三", "黑色短发", [("a-face", "front")])
-    board_id = _board(ws, [
-        {"id": "who", "kind": "entity", "x": 0, "y": 0, "entity_id": zhang},
-        {"id": "named", "kind": "entity", "x": 300, "y": 0, "entity_id": zhang, "title": "主角"},
-    ])
-    job = _share(client, board_id, ws, title="角色板")
-    assert wait_status(client, job["id"]) == "succeeded", client.get(f"/api/jobs/{job['id']}").json()
-    body = next(iter(fake.shares.values())).versions[-1]
-    by_id = {item["id"]: item for item in body["items"]}
-    assert by_id["who"]["kind"] == "entity"
-    assert by_id["who"]["title"] == "张三" and by_id["named"]["title"] == "主角"
-    assert by_id["who"]["entity_kind"] == "character"
-    assert by_id["who"]["media"]["sha256"] == hashlib.sha256(cover.read_bytes()).hexdigest()
-    dumped = json.dumps(body, ensure_ascii=False)
-    assert zhang not in dumped and "黑色短发" not in dumped, "本机 id 和提示词描述不跟着出门"
-    assert not (_keys(body) & (FORBIDDEN_KEYS | {"entity_id"}))
 
 
 def test_工作流生成节点的_entity_ids_交给同一个漏斗() -> None:

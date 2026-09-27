@@ -367,27 +367,3 @@ describe("新版本还没发布", () => {
     expect(within(card("Remotion 动画")).getByText("pluginMarketInstalledBadge")).toBeTruthy();
   });
 });
-
-describe("社区来源(ADR 0026)", () => {
-  it("官方和社区分开列,社区的条目标出来源,装的时候走同一条预览 → 确认", async () => {
-    const user = userEvent.setup();
-    const COOL = { ...OSS, id: "dev.someone.cool", name: "社区好插件", download: "https://community.test/p/cool.zip", source: "community" };
-    mocks.market.mockImplementation(async (source?: string) =>
-      source === "community" ? { plugins: [COOL], index_error: "" } : { plugins: [OSS], index_error: "" },
-    );
-    renderMarket();
-    await screen.findByRole("list", { name: "pluginMarket" });
-    expect(mocks.market).toHaveBeenLastCalledWith("official");
-    expect(screen.queryByText("社区好插件")).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "pluginMarketSourceCommunity" }));
-    await waitFor(() => expect(mocks.market).toHaveBeenLastCalledWith("community"));
-    const cool = await waitFor(() => card("社区好插件"));
-    expect(within(cool).getByText("pluginMarketCommunityBadge")).toBeTruthy();
-    expect(screen.getByText("pluginMarketCommunityNoticeTitle")).toBeTruthy();
-    expect(screen.queryByText("阿里云 OSS")).toBeNull();
-
-    await user.click(within(cool).getByRole("button", { name: "pluginInstall" }));
-    await waitFor(() => expect(mocks.preview).toHaveBeenCalledWith("https://community.test/p/cool.zip", COOL.version));
-  });
-});

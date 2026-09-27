@@ -46,8 +46,6 @@ from app.api.routes.scheduler import router as scheduler_router
 from app.api.routes.sequences import router as sequences_router
 from app.api.routes.settings import router as settings_router
 from app.api.routes.shares import router as shares_router
-from app.api.routes.community import router as community_router
-from app.api.routes.community_publishing import router as community_publishing_router
 from app.api.routes.publish import router as publish_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.collaboration import router as collaboration_router
@@ -406,8 +404,6 @@ def create_app() -> FastAPI:
     app.include_router(publish_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)
     app.include_router(shares_router, prefix="/api", dependencies=protected)
-    app.include_router(community_router, prefix="/api", dependencies=protected)
-    app.include_router(community_publishing_router, prefix="/api", dependencies=protected)
     app.include_router(admin_router, prefix="/api", dependencies=protected)
     app.include_router(confirmations_router, prefix="/api", dependencies=protected)
     app.include_router(feishu_router, prefix="/api", dependencies=protected)

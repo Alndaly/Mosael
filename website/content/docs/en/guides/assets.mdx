@@ -14,27 +14,41 @@ to a project; tags keep them organised.
 Open **Assets** next to **Media** in the sidebar. Tabs at the top switch between characters, locations and props; each card
 is an asset's cover.
 
+## Organise your assets
+
+The asset library uses the same toolbar as the media library, and it sticks to the top as you scroll:
+
+- **Search** names, descriptions and prompt descriptors; **sort** by recently updated, name, or most references first;
+  **filter by tags**, choosing "has all of them" or "has any of them" when you tick several.
+- **Right-click a card** to open, rename, edit tags, add a variant or delete it.
+- **Select** switches to multi-select: clicking a card selects it instead of opening it, and you can select all. Then
+  **add tags** to every selected asset (existing tags stay) or **delete** them (variants go too; the confirmation says so).
+
 ## Create an asset
 
-Click **New character** (or location, prop), give it a name, and you land on its detail page:
+Click **New character** (or location, prop), give it a name, and you land on its detail page. The top shows **who it is**:
+a large cover, then the name, kind, a one-line description, tags, and a quick summary (how many references and variants,
+voice, blockout color, real or fictional). The name, description and tags read like text; click to edit, and they save when
+you leave them.
 
-- **Description**: for people — who this is, where it comes from.
-- **Prompt descriptor**: for models — appearance, clothing, materials. Whenever the asset is `@`-mentioned in a generation,
-  this text is appended to the prompt.
-- **Tags**: separated by commas; they are how you find things across projects.
-- **Kind-specific fields**: characters have a **voice** (from your voice library), a **blockout color** for their stand-in
-  figure in 3D blockouts, and **real or fictional** with a consent declaration; locations have a linked **3D scene** and
-  "time / weather / light"; props have their **3D model**.
+Below that, tabs split the rest:
 
-Fields save when you leave them.
+- **References**: the asset's reference wall, see the next section.
+- **Variants**: its winter clothes, teenage version…, see "Variants".
+- **Settings**: the **prompt descriptor** (for models: appearance, clothing, materials; whenever the asset is `@`-mentioned
+  in a generation, this text is appended to the prompt) and the kind-specific fields — characters have a **voice** (from
+  your voice library), a **blockout color** for their stand-in figure in 3D blockouts, and **real or fictional** with a
+  consent declaration; locations have a linked **3D scene** and "time / weather / light"; props have their **3D model**.
+- **Where it's used**: see the last section.
 
 ## The reference wall
 
-The left side of the detail page is a wall of reference images, each labelled with its angle or purpose: front, side, back,
-turnaround, close-up, full body, expression, concept, detail.
+Each reference image is labelled with its angle or purpose: front, side, back, turnaround, close-up, full body, expression,
+concept, detail.
 
-- **Add from media library**: open the media panel on the right and click **+**, or drag a thumbnail onto the wall.
-- **Drop files on the wall**: they are imported into the media library first, then attached.
+- **Add from media library** opens a picker: search by name, filter images or videos, click to select several and attach
+  them at once — in the order you picked them. Images already attached are listed too, marked **Attached**.
+- **Upload**, or **drop files on the wall**: they are imported into the media library first, then attached.
 - **Change the angle** with the dropdown under each image. **Set as cover**, **move earlier / later** and **remove from
   references** are in its **⋯** menu; you can also drag images to reorder.
 - Without a cover, the card uses the first reference image.
@@ -83,38 +97,8 @@ finds the same subject instead of creating a duplicate.
 
 **Add → Reference → Asset** places an **asset item** on a board: cover, name and a kind badge. Connect it into an image or
 video generation item and it works exactly like an `@` mention; in the prompt's `@` menu, connected assets come first.
-When you share a board to the community, the asset item shows as an image (its cover and name); the asset's prompt
-descriptor and other references are not shared with the board.
 
 ## Where it's used
 
-The bottom of the detail page lists **where the asset is used**: boards that hold its asset item or mention it in a
+The **Where it's used** tab lists **where the asset is used**: boards that hold its asset item or mention it in a
 prompt, generations that named it, and workflows whose generation nodes use it. Click a row to go there.
-
-## Share to the community
-
-**Share to community** next to the asset's name publishes the asset **together with its variants** (connect an account in
-**Settings → Community account** first). What goes out: the image references (with their angles, cover and order), the
-description, prompt descriptor, tags and the fields that can be public (blockout colour, time of day). **Voices, 3D scenes
-and models, the consent declaration itself and any local ids stay on your machine**, and video references aren't included.
-Fill in a title, summary and tags and publish; it goes live right away. Afterwards the button reads **Publish new version** —
-still the same community entry at the same link. The line under the name shows its community status (published / in review;
-click to open it in your browser).
-
-A **real person** needs "This is me" or "The person has given consent" declared locally, and you tick **The person agreed to
-this being public** again when you share. The community reviews it before it goes public. Someone whose likeness is misused
-can report the asset page (reason "Uses someone’s likeness without consent"). Variants aren't shared on their own.
-
-## Import from the community
-
-**Import from community** at the top of the assets page: paste a community asset link (or its short name), or browse and
-search characters, locations and props below and click one. Importing **doesn't need a community account**. Every reference
-is checked against the hash in the bundle after download — if one doesn't match, nothing is created. The checked images
-become media in this workspace (source "community"), then the asset, its variants, angles and cover are created, and the asset
-remembers which community entry and version it came from: the line under its name reads "From the community · v1", and when
-a newer version appears you're told and can import it with one click.
-
-An imported **real person** gets the consent state **awaiting your confirmation**: its publisher declared the person's consent,
-but nobody on this machine has confirmed it. Until then it can't be used for digital humans; once you have the person's
-permission too, pick one of the options under Consent declaration.
-

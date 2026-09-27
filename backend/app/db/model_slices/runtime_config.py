@@ -11,9 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.db.model_base import now
 
-#: 社区服务的默认站点,和官网 `website/src/lib/site.ts` 的 `SITE.url` 是同一个地址。
-DEFAULT_COMMUNITY_URL = "https://mosael.com"
-
 class AiRuntimeConfig(Base):
     """Singleton (id='default') 运行时 AI 设置。目前只含「供应商瞬断时的最大重试次数」
     (0..10,缺省 3),用户可在设置页调整——见 workflows/executors/ai.py。"""
@@ -48,11 +45,6 @@ class DeploymentConfig(Base):
     #: 管理员共享给成员的本机文件夹(真实路径列表)。这台电脑上的文件是部署主人的私有资源:
     #: 非管理员只能读素材库里的文件,或落在这些文件夹里的路径(见 domain/host_files)。
     shared_host_folders: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
-    #: 社区服务的站点地址(ADR 0026):设备授权、发布、画板分享、插件市场的「社区」来源都连它。
-    #: 默认是官网;空 = 这台部署不连社区(界面上说「社区未配置」)。部署级:连哪个社区是这台后端的事。
-    community_url: Mapped[str] = mapped_column(
-        String(500), nullable=False, default=DEFAULT_COMMUNITY_URL, server_default=DEFAULT_COMMUNITY_URL
-    )
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

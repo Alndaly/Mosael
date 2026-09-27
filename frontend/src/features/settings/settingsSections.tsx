@@ -6,7 +6,6 @@ import {
   Database,
   Download,
   Globe,
-  Globe2,
   Link2,
   ImageIcon,
   MessageSquare,
@@ -25,7 +24,6 @@ import {
 import type { Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { AccountSection } from "@/features/settings/AccountSection";
-import { CommunityAccountSection } from "@/features/community/CommunityAccountSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
 import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
@@ -92,13 +90,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     title: "studioSettingsPersonal",
     sections: [
       { id: "account", label: "settingsAccount", icon: <UserRound size={14} />, render: () => <AccountSection /> },
-      {
-        // 这台 Mosael 连着的社区账号(ADR 0026)。「我」的一部分,不是部署级 —— 每个人连自己的。
-        id: "community",
-        label: "communityTitle",
-        icon: <Globe2 size={14} />,
-        render: () => <CommunityAccountSection />,
-      },
       {
         id: "team",
         label: "teamTitle",

@@ -56,9 +56,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 部署级开关只归 deployment 域写 —— 「这台后端怎么对外」只该有一处答案。
     "DeploymentConfig": ("app/domain/deployment.py",),
     "ResourceShare": ("app/domain/sharing.py",),
-    # 社区账号的刷新令牌与画板分享的本机记忆只归 community 域写(ADR 0026)。
-    "CommunityAccount": ("app/domain/community/",),
-    "BoardShare": ("app/domain/community/",),
     # 钥匙只归 provider_credentials 域写 —— 「谁的钥匙」这个问题只该有一处答案。
     "ProviderCredential": ("app/domain/provider_credentials.py", "app/domain/provider_auth.py"),
     "ScheduledTask": ("app/domain/scheduler/",),

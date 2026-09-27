@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from urllib.parse import urlsplit
-
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError
 from app.db.models import DeploymentConfig
 
 """部署级开关 —— **这台后端**怎么对外。
@@ -14,10 +11,6 @@ from app.db.models import DeploymentConfig
 
 **库是唯一真相**;环境变量只在首次迁移时播一次种(见 core/db._migrate_deployment_config)。
 """
-
-
-class DeploymentError(LocalizedError, ValueError):
-    """部署级设置写不进去(格式不对)。带文案 key,按请求方的语言翻。"""
 
 
 def _row(db: Session) -> DeploymentConfig:
@@ -45,20 +38,3 @@ def shared_host_folders(db: Session) -> list[str]:
 
 def set_shared_host_folders(db: Session, folders: list[str]) -> None:
     _row(db).shared_host_folders = list(folders)
-
-
-def community_url(db: Session) -> str:
-    """社区服务的站点(ADR 0026)。空 = 这台部署不连社区。"""
-    return (_row(db).community_url or "").strip().rstrip("/")
-
-
-def set_community_url(db: Session, value: str) -> str:
-    """设社区地址。只收 http(s) 的站点**根**(不带路径):接口前缀由 domain/community 拼,管理员填的是
-    浏览器里打开官网的那个地址。空串 = 不连社区。"""
-    url = (value or "").strip().rstrip("/")
-    if url:
-        parts = urlsplit(url)
-        if parts.scheme not in ("http", "https") or not parts.netloc or parts.path or parts.query or parts.fragment:
-            raise DeploymentError("deployErr_communityUrlInvalid")
-    _row(db).community_url = url
-    return url

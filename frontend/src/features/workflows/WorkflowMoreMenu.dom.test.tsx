@@ -46,7 +46,7 @@ const workflow = {
   updated_at: "2026-09-20T00:00:00",
 };
 
-it("⋯ 里是 重命名 / 版本历史 v29 / 导出为文件 / 发布到社区,删除单独一组、红字、没有描边", async () => {
+it("⋯ 里是 重命名 / 版本历史 v29 / 导出为文件,删除单独一组、红字、没有描边", async () => {
   localStorage.setItem("mosael:selected:workflows", workflow.id);
   apiMocks.listWorkflows.mockResolvedValue([workflow]);
   apiMocks.fetchWorkflowNodeTypes.mockResolvedValue([]);
@@ -58,7 +58,7 @@ it("⋯ 里是 重命名 / 版本历史 v29 / 导出为文件 / 发布到社区,
   const menu = screen.getByRole("menu", { name: "more" });
 
   const rows = [...menu.children].map((el) => (el.getAttribute("role") === "separator" ? "|" : el.textContent));
-  expect(rows).toEqual(["rename", "wfRevisionHistoryv29", "wfExport", "communityPublishToCommunity", "|", "delete"]);
+  expect(rows).toEqual(["rename", "wfRevisionHistoryv29", "wfExport", "|", "delete"]);
   // 版本号是附注,不拼进名字里。
   expect(within(menu).getByText("v29").className).toContain("text-muted-foreground");
 

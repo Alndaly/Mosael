@@ -4,7 +4,7 @@ import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Send, Store, Terminal, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
 
 import {
   clearPluginInvocations,
@@ -53,7 +53,6 @@ import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
 import { GroupActions } from "@/features/plugins/GroupActions";
-import { PublishPluginDialog } from "@/features/community/PublishPluginDialog";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
@@ -189,8 +188,6 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
   const qc = useQueryClient();
   const [confirmUninstall, setConfirmUninstall] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
-  //: 写插件的人把它发到社区(ADR 0026):打包、自检、上传,先进审核。
-  const [publishing, setPublishing] = React.useState(false);
   const [draft, setDraft] = React.useState<Record<string, string>>({});
 
   const uninstall = useMutation({
@@ -218,7 +215,6 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
 
   return (
     <div className="grid w-full min-w-0 content-start gap-6">
-      {!pkg.bundled && <PublishPluginDialog open={publishing} onOpenChange={setPublishing} plugin={pkg} />}
       {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认。 */}
       <ConfirmDialog
         open={confirmUninstall}
@@ -284,11 +280,6 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
             )}
             {/* 随应用发的插件卸不掉(后端也拒):下次启动对账又会装回来,「删了又回来」比
                 「删不了」更让人困惑。不想用就停用它的连接。 */}
-            {!pkg.bundled && (
-              <Button variant="ghost" size="default" className="text-muted-foreground" onClick={() => setPublishing(true)}>
-                <Send size={13} /> {t("communityPublishToCommunity")}
-              </Button>
-            )}
             {!pkg.bundled && (
               <Button
                 variant="ghost"

@@ -7,7 +7,6 @@ import { AdminOverview } from "./AdminOverview";
 import { AdminMembers } from "./AdminMembers";
 import { RegistrationSection } from "./RegistrationSection";
 import { SharedHostFoldersSection } from "./SharedHostFoldersSection";
-import { CommunitySection } from "./CommunitySection";
 
 const TABS = ["overview", "members", "deployment"] as const;
 export type AdminTab = (typeof TABS)[number];
@@ -58,8 +57,6 @@ export function AdminView() {
             <RegistrationSection />
             {/* 这台电脑上的文件归部署管理员;共享出来的文件夹才是成员读得到的。 */}
             <SharedHostFoldersSection />
-            {/* 连哪个社区(ADR 0026):设置里的「社区账号」、画板分享、发布到社区都连它。 */}
-            <CommunitySection />
           </>
         )}
       </div>

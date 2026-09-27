@@ -73,20 +73,6 @@ and call log. Clearing only the records is not enough — the next scan would in
 and what the user sees is "I deleted it and it came back". Deleting the directory by hand also
 clears the record on the next scan.
 
-## Community plugins
-
-The marketplace has two sources at the top: **Official** (the index shipped with each release) and **Community** (submitted
-by community authors and listed after review). They are listed separately, and every community entry is labeled
-**Community**: it isn't released by Mosael. Installing from the community goes through the same steps: the package is
-downloaded, its manifest read and its permissions shown to you before anything is installed. Deployment admins can change the
-community address under Admin → Deployment; leaving it empty hides the community source.
-
-**Plugin authors** can open their plugin under Installed and click **Publish to community**. The app packages the plugin
-folder the same way a release does (tracked files only when the folder is in git, and never `__pycache__`, `*.pyc`,
-`.DS_Store`, `.env` or private keys), checks it with the same rules as installing from a file, then uploads it. Plugins run
-code on other people's computers, so they are **reviewed** first: the dialog shows **In review**, and you can follow it under
-My submissions on the website. Publishing the same plugin id again adds a new version.
-
 ## Credentials
 
 The manifest's `credentials` block declares which secrets are needed. You fill them in on the

@@ -9,7 +9,6 @@ export * from "@/api/transport";
 export * from "@/api/domains/assets";
 export * from "@/api/domains/boards";
 export * from "@/api/domains/collaboration";
-export * from "@/api/domains/community";
 export * from "@/api/domains/browser";
 export * from "@/api/domains/editor";
 export * from "@/api/domains/entities";

@@ -44,9 +44,6 @@ class Entity(Base):
     #: 随素材一起删掉的那几张参考图:`[{name, role, at}]`。只为了在详情页上说一声「少了哪一张」,
     #: 用户看过之后可以清掉。
     lost_references: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
-    #: 这个资产和社区的关系(ADR 0027 §4):`published`(发出去的那一条:slug、链接、版本、审核状态)、
-    #: `source`(从社区导入的:slug、版本、社区地址)。都没有 = 空对象。
-    community: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

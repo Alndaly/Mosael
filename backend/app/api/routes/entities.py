@@ -16,7 +16,6 @@ from app.api.schemas import (
     AssetEntityOut,
     EntityCatalogOut,
     EntityCreate,
-    EntityImportIn,
     EntityOut,
     EntityReferenceAdd,
     EntityReferenceOrder,
@@ -29,10 +28,7 @@ from app.api.schemas import (
 from app.core.i18n import get_current_locale, t
 from app.db.models import Entity, GenerationSession
 from app.domain import entities as library
-from app.api.routes.community import community_http_error
 from app.domain import sharing
-from app.domain.community import CommunityError
-from app.domain.community import assets as community_assets
 from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, CONSENT_KINDS, KINDS, ROLES
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 
@@ -156,17 +152,6 @@ def create_entity(body: EntityCreate, db: DbSession, user: CurrentUser) -> Entit
         parent_id=body.parent_id,
         actor_id=user.id,
     )
-    return _out(db, entity)
-
-
-@router.post("/entities/import-community", response_model=EntityOut)
-def import_from_community(body: EntityImportIn, db: DbSession, user: CurrentUser) -> EntityOut:
-    """贴一个社区链接(或在列表里点一条),把那条资产连参考图和变体一起拿进这个工作区。"""
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    try:
-        entity = community_assets.import_asset(db, workspace_id=body.workspace_id, user_id=user.id, link=body.link)
-    except CommunityError as exc:
-        raise community_http_error(exc) from exc
     return _out(db, entity)
 
 

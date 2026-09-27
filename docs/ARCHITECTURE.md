@@ -110,21 +110,11 @@ TaskEvent 行只在总线创建。
 接口打成 500,面板上看起来就是"一次都没跑过"。读取端不为改正之前的旧行留分支:迁移
 `_migrate_job_keys_are_keys` 把库里不是 key 的清掉(每次启动都跑,不变式是 key ∈ 文案表 ∪ {""})。
 
-### 社区客户端(ADR 0026)
+### 社区(ADR 0026):服务在仓库里,应用暂不接入
 
-社区服务(`community/`)是另一个进程、另一台机器;桌面后端里的 `domain/community` 只是它的客户端,连的是部署设置里的
-`DeploymentConfig.community_url`(默认官网,空 = 不连)。
-
-- **账号**:设备授权(`device.py`,按服务端的 `interval` / `slow_down` 节流轮询)。刷新令牌存在 `community_accounts`
-  的加密列里(和服务商密钥同一种,`core/secrets_at_rest`),不出后端;访问令牌只在内存。`accounts.CommunityClient`
-  提前 60 秒续期,401 续一次、重放一次;同一个人同一时刻只有一个续期在飞(轮换的刷新令牌被并发重用会被判盗);
-  轮换来的新刷新令牌**先提交进库再用**;被吊销或续完仍 401 就删掉本机令牌,报「社区账号已退出」。
-- **画板分享**:`snapshot.py` 按白名单把画布做成 `mosael.board-snapshot/1`(媒体换成内容哈希 + 缩略图,文档带钉住
-  那一版的正文,不带运行态、连接、本机路径),`shares.py` 以 `board_share` 任务跑三步上传(问缺哪些 → 逐个流式 PUT、
-  单个重试 → 提交),服务端按画板的 `board_key` 认出新版本;本机在 `board_shares` 里记着链接和版本。
-- **发布**:工作流发「导出」那同一份文件(`domain/workflows/file_export`),slug 记在 `workflows.community_slug`,
-  再发即新版本;插件按发版的形状打包(受管文件、去缓存与密钥),先用安装那套规则自检。插件市场多一个 `source=community`,
-  读社区的 `/plugins/index.json`,装的时候走同一条预览 → 权限确认。
+社区服务(`community/`)和官网的社区页面还在仓库里;桌面应用对它的接入(社区账号、画板分享、发布到社区、插件市场的社区
+来源、资产分享与导入)在 2026-09-27 整体拿掉了 —— 先把资产库做好。接入时加的列和表由迁移
+`_migrate_drop_the_community_integration` 删掉。以后重新接入按那时的需求重新建模,不继承这一版的形状。
 
 ### 资产库(ADR 0027)
 
@@ -143,15 +133,8 @@ TaskEvent 行只在总线创建。
   可灵这类「先建主体再引用」的模型由描述符的 `reference_subjects` 说;每个资产的那几张带同一个 `subject`,适配器按
   `contracts/generation.subject_groups` 分组、每组建一个主体,名字仍按内容哈希算(`kling/elements`),不存映射表。
 - **画板的资产格**(`kind: "entity"`,字段 `entity_id`):连进生成格时 `boards/actions.upstream_entities` 按连线把它并进
-  `entity_ids`,和正文里 `@` 的是同一个参数;新引入的资产格要在本工作区,已在板上的不再校验。分享快照里它带封面
-  (`media`)、名字(`title`)和 `entity_kind`,官网查看页照图片画、角上标种类。能力(补全多角度、生成表情)是 ADR 0027
-  的阶段 4,到时照内容格能力的做法挂在它身上。
-- **和社区之间**(`domain/community/assets`,ADR 0027 §4):分享 = `build_bundle` 把母体和变体做成 `mosael.asset/1`
-  (`mosael_formats.asset_bundle`,社区收的时候验同一份),图走画板分享那套三步上传,再 `POST /assets` 或
-  `/assets/{slug}/versions`;记在 `entities.community.published`。导入 = 公开的 `GET /assets/{slug}/download`(不带令牌),
-  每张图**先全部下载并按哈希核对**,都对上了才导入素材(`source="community"`)、建资产与变体,来源记在
-  `entities.community.source`;查新版本读公开详情。导入的真人人物授权记成 `catalog.CONSENT_PENDING`,只能由导入产生,
-  本机选「本人 / 已获授权」即确认。
+  `entity_ids`,和正文里 `@` 的是同一个参数;新引入的资产格要在本工作区,已在板上的不再校验。能力(补全多角度、
+  生成表情)是 ADR 0027 的阶段 4,到时照内容格能力的做法挂在它身上。
 
 ### 创意画板:生成能力的第五个入口
 

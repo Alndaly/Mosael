@@ -354,28 +354,6 @@ describe("真人 / 虚构与授权声明", () => {
   });
 });
 
-describe("导入来的真人", () => {
-  it("导入的真人:授权待你确认,选一项就是确认", async () => {
-    api.updateEntity.mockResolvedValue(entity());
-    window.location.hash = "#/entities?entity=e1";
-    api.listEntities.mockResolvedValue([summary()]);
-    api.getEntity.mockResolvedValue(
-      entity({ attributes: { real_person: true, consent: { kind: "pending", declared_at: "2026-09-27T10:00:00" } }, usable_for_digital_human: false }),
-    );
-    mount(<EntitiesView workspace={WORKSPACE} />);
-    fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
-    await screen.findByRole("radiogroup", { name: "entityConsentTitle" });
-    const note = document.querySelector("[data-consent-pending]") as HTMLElement;
-    expect(note.textContent).toContain("entityConsentPending");
-    expect(screen.getByText("entityDigitalHumanBlocked").textContent).not.toContain("entityConsentDeclaredAt");
-    const consent = screen.getByRole("radiogroup", { name: "entityConsentTitle" });
-    fireEvent.click(within(consent).getByRole("radio", { name: /已取得本人同意/ }));
-    await waitFor(() =>
-      expect(api.updateEntity).toHaveBeenCalledWith("e1", { attributes: { real_person: true, consent: { kind: "authorized" } } }),
-    );
-  });
-});
-
 describe("在哪里用过", () => {
   it("画板、生成记录、工作流各一行", async () => {
     window.location.hash = "#/entities?entity=e1";

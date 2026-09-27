@@ -11,15 +11,12 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AdminOverviewOut,
     AdminUserOut,
-    CommunityUrlIn,
-    CommunityUrlOut,
     DaySeriesPoint,
     UserSpendPoint,
 )
 from app.domain.permissions import ensure_deployment_admin
 from app.domain import dashboard, deployment, host_files, members, usage
 from app.db.models import (
-    DEFAULT_COMMUNITY_URL,
     Asset,
     AuthSession,
     Job,
@@ -134,24 +131,6 @@ def set_shared_host_folders(body: SharedHostFolders, db: DbSession, user: Curren
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     return SharedHostFolders(folders=folders)
-
-
-@router.get("/admin/community", response_model=CommunityUrlOut)
-def get_community_url(db: DbSession, user: CurrentUser) -> CommunityUrlOut:
-    """这台部署连哪个社区(ADR 0026)。**登录就能读** —— 设置页的「社区账号」要据此说「社区未配置」。"""
-    return CommunityUrlOut(url=deployment.community_url(db), default_url=DEFAULT_COMMUNITY_URL)
-
-
-@router.put("/admin/community", response_model=CommunityUrlOut)
-def set_community_url(body: CommunityUrlIn, db: DbSession, user: CurrentUser) -> CommunityUrlOut:
-    """换社区地址(空 = 不连社区)。部署级的决定。换了之后,各人连着的旧账号对新地址不算数,要重新连。"""
-    ensure_deployment_admin(db, user)
-    try:
-        url = deployment.set_community_url(db, body.url)
-    except deployment.DeploymentError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    db.commit()
-    return CommunityUrlOut(url=url, default_url=DEFAULT_COMMUNITY_URL)
 
 
 @router.get("/admin/overview", response_model=AdminOverviewOut)

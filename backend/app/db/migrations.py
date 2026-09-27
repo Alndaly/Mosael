@@ -1460,65 +1460,34 @@ def _migrate_shared_host_folders() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN shared_host_folders JSON NOT NULL DEFAULT '[]'"))
 
 
-def _migrate_deployment_community_url() -> None:
-    """deployment_config 新增 community_url(社区服务的站点,ADR 0026)。
+def _migrate_drop_the_community_integration() -> None:
+    """把桌面端接入社区时加的东西删掉 —— 社区能力整体从应用里拿掉了(2026-09-27,维护者:「先把资产库做好」)。
 
-    老部署补上的是**官网**这个默认值,和新装机一样 —— 「连哪个社区」此前没有答案,官网就是那个答案;
-    不想连的管理员在部署设置里清空它。
+    接入时加过:部署的社区地址(`deployment_config.community_url`)、画板分享用的随机 id(`boards.board_key`)、
+    工作流发布后的 slug(`workflows.community_slug`)、资产的社区来源(`entities.community`),两张表
+    `community_accounts`(社区账号的刷新令牌)和 `board_shares`(画板分享的本机记忆),以及画板分享任务
+    (`jobs.kind = 'board_share'`,它的提示文案随功能一起没了,留着只会显示成一串 key)。
+
+    那几条加列的迁移从没随版本发出去,已经从计划里拿掉;这一条只为跑过它们的库(开发机)收尾,
+    新装机和从 1.7.0 升上来的库上什么都不做。以后重新接入社区时按那时的需求重新建模。
     """
     inspector = inspect(engine)
-    if "deployment_config" not in set(inspector.get_table_names()):
-        return
-    if "community_url" in {c["name"] for c in inspector.get_columns("deployment_config")}:
-        return
+    tables = set(inspector.get_table_names())
+    columns = {
+        "deployment_config": "community_url",
+        "boards": "board_key",
+        "workflows": "community_slug",
+        "entities": "community",
+    }
     with engine.begin() as conn:
-        conn.execute(
-            text("ALTER TABLE deployment_config ADD COLUMN community_url VARCHAR(500) NOT NULL DEFAULT 'https://mosael.com'")
-        )
-
-
-def _migrate_boards_get_a_board_key() -> None:
-    """每张画板有一个分享用的随机 id(`boards.board_key`,ADR 0026)。
-
-    老板子**逐张**补一个各不相同的随机串:列默认值只能给所有行同一个值,而两张板共用一个 key,
-    社区服务就会把第二张当成第一张的新版本。
-    """
-    import secrets
-
-    inspector = inspect(engine)
-    if "boards" not in set(inspector.get_table_names()):
-        return
-    if "board_key" in {c["name"] for c in inspector.get_columns("boards")}:
-        return
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE boards ADD COLUMN board_key VARCHAR(64) NOT NULL DEFAULT ''"))
-        for (board_id,) in conn.execute(text("SELECT id FROM boards")).all():
-            conn.execute(
-                text("UPDATE boards SET board_key = :key WHERE id = :id"),
-                {"key": secrets.token_urlsafe(24), "id": board_id},
-            )
-
-
-def _migrate_workflows_remember_community_slug() -> None:
-    """workflows 新增 community_slug(发布到社区之后那一条的 slug,ADR 0026)。老工作流都没发布过:空串。"""
-    inspector = inspect(engine)
-    if "workflows" not in set(inspector.get_table_names()):
-        return
-    if "community_slug" in {c["name"] for c in inspector.get_columns("workflows")}:
-        return
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE workflows ADD COLUMN community_slug VARCHAR(160) NOT NULL DEFAULT ''"))
-
-
-def _migrate_entities_remember_community() -> None:
-    """entities 新增 community(发布到社区 / 从社区导入之后记下的那一条,ADR 0027 §4)。老资产都没碰过社区:空对象。"""
-    inspector = inspect(engine)
-    if "entities" not in set(inspector.get_table_names()):
-        return
-    if "community" in {c["name"] for c in inspector.get_columns("entities")}:
-        return
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE entities ADD COLUMN community JSON NOT NULL DEFAULT '{}'"))
+        for table in ("board_shares", "community_accounts"):
+            if table in tables:
+                conn.execute(text(f"DROP TABLE {table}"))
+        if "jobs" in tables:
+            conn.execute(text("DELETE FROM jobs WHERE kind = 'board_share'"))
+        for table, column in columns.items():
+            if table in tables and column in {c["name"] for c in inspector.get_columns(table)}:
+                conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
 
 
 def _backfill_workflow_revision_authors() -> None:
@@ -4839,10 +4808,7 @@ def migration_plan() -> MigrationPlan:
                 # 排在上一步之后:它可能刚把 plugin_instances 建出来。
                 _migrate_plugin_generation_columns,
                 _migrate_plugin_authorization_rejected,
-                _migrate_deployment_community_url,
-                _migrate_boards_get_a_board_key,
-                _migrate_workflows_remember_community_slug,
-                _migrate_entities_remember_community,
+                _migrate_drop_the_community_integration,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
