@@ -82,7 +82,11 @@ def _field_error(item_key: str, bare_key: str, field: str, item_id: str, **param
 #: 自己的**能力**(`form.abilities`,见 _normalize_abilities),产出新建成宿主右边的几格;凭空出图出片的生成器是
 #: 空格子的一种填法(`form.producer`)。此前的 `action` 格由迁移 migrate-board-tool-cells-become-abilities
 #: 搬到了它接着的内容格上(ADR 0025 修订「能力住在内容格上」)。
-ITEM_KINDS = ("note", "image", "video", "audio", "frame", "scene", "document")
+#:
+#: **资产格**(`entity`,ADR 0027):引用资产库里的一个人物 / 场景 / 道具(`entity_id`),显示封面、名字和种类。
+#: 它能当生成格的上游 —— 连进去就和在提示词里 `@` 它一样(见 actions.generate_on_board)。它自己不产出东西;
+#: 「补全多角度」「生成表情」这类能力是阶段 4 的事,到时照内容格能力的做法挂在它身上(`form.abilities`)。
+ITEM_KINDS = ("note", "image", "video", "audio", "frame", "scene", "document", "entity")
 
 #: 便签正文的格式。只有一种非默认的:能力交回的结构化数据(JSON)落成的便签,界面按代码排版。
 TEXT_FORMATS = ("json",)
@@ -97,6 +101,7 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
     "frame": (420, 300),
     "scene": (320, 220),
     "document": (320, 300),
+    "entity": (220, 280),
 }
 
 #: 素材在画板上**有自己那种格子**的几种:一份图片 / 视频 / 音频素材放进同名的格子里。能力交回的素材按它
@@ -178,6 +183,12 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
         if not isinstance(mentioned, list):
             raise BoardDomainError("boardErr_itemFieldNotArray", item_id=item_id, field="form.mentioned_asset_ids")
         form["mentioned_asset_ids"] = [str(one).strip() for one in mentioned if str(one).strip()]
+    #: 提示词里 `@` 到的资产(ADR 0027):生成时展开成提示词描述和参考图(见 domain/entities/mentions)。
+    entities = form.get("mentioned_entity_ids")
+    if entities is not None:
+        if not isinstance(entities, list):
+            raise BoardDomainError("boardErr_itemFieldNotArray", item_id=item_id, field="form.mentioned_entity_ids")
+        form["mentioned_entity_ids"] = list(dict.fromkeys(str(one).strip() for one in entities if str(one).strip()))
     trim = form.get("trim")
     if trim is not None:
         form["trim"] = _normalize_trim(trim, item_id)
@@ -518,6 +529,12 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError("boardErr_sceneNeedsId")
             item["scene_id"] = scene_id.strip()
 
+        if kind == "entity":
+            entity_id = entry.get("entity_id")
+            if not isinstance(entity_id, str) or not entity_id.strip() or len(entity_id) > 64:
+                raise BoardDomainError("boardErr_entityNeedsId")
+            item["entity_id"] = entity_id.strip()
+
         asset_id = entry.get("asset_id")
         if asset_id is not None:
             if not isinstance(asset_id, str) or not asset_id.strip():
@@ -632,6 +649,17 @@ def _validate_references(
         owned = set(db.scalars(select(Scene3D.id).where(Scene3D.workspace_id == workspace_id, Scene3D.id.in_(ids))))
         if owned != ids:
             raise BoardDomainError("boardErr_sceneNotInWorkspace")
+
+    # 资产格引用的资产:**只查新引入的**,和文档、素材同一条 —— 资产删了之后那一格照样能挪、能删、能复制。
+    from app.db.models import Entity
+    retained_entities = {item.get("entity_id") for item in (existing or {}).get("items", []) if item["kind"] == "entity"}
+    fresh_entities = {item["entity_id"] for item in canvas["items"]
+                      if item["kind"] == "entity" and item["entity_id"] not in retained_entities}
+    if fresh_entities:
+        owned_entities = set(db.scalars(select(Entity.id).where(
+            Entity.workspace_id == workspace_id, Entity.id.in_(fresh_entities))))
+        if owned_entities != fresh_entities:
+            raise BoardDomainError("boardErr_entityNotInWorkspace")
 
     from app.domain.notes import NoteDomainError, read_reference
     # 板上已经有的引用不再重新校验:源文档删掉之后,坏掉的引用照样能挪、能删、能复制。
@@ -1293,6 +1321,9 @@ def _canvas_with_delivered_result(
             form["prompt"] = ""
             form["source_assets"] = []
             form["mentioned_asset_ids"] = []
+            #: @ 到的资产随提示词一起被消费了;用过它这件事记在生成记录里(request.entities)。
+            if form.get("mentioned_entity_ids"):
+                form["mentioned_entity_ids"] = []
             form.pop("prompt_document", None)
             settled["form"] = form
         settled["run"] = {"status": "succeeded"}

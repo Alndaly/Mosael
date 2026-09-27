@@ -37,6 +37,9 @@ const KEPT_BY_HAND: Record<string, string> = {
   "boards.ts:BoardRunForms":
     "BoardRun.form 是裸 dict:每个产出者的表单由它自己在后端领域里声明、校验(boards/producers.*Form)," +
     "接口不为每个产出者各开一个请求体 —— 产出者是注册表,ADR 0021 的 P2 起插件工具也是产出者。",
+  "entities.ts:EntityAttachReceipt":
+    "`@资产` 的回执存在 GenerationJobOut.request 里,那是一份裸 dict(请求原样留档,见后端 generation/operations);" +
+    "它的形状由 domain/entities/mentions 定,前端手写这一份是为了拿回类型。",
   "scenes.ts:SceneModel": "3D 场景的内容是裸 dict(scene.content),同 boards 的账。",
   "scenes.ts:ScenePreviewData": "同上:预览结构由场景内容那个裸 dict 决定。",
   "scenes.ts:PreviewObject": "同上:预览里的一个物体,形状由场景内容决定。",

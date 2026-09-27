@@ -158,6 +158,28 @@ function SceneNode({ data }: NodeProps<FlowNode>) {
   );
 }
 
+/** 资产格(ADR 0027):一张封面,角上标人物 / 场景 / 道具。资产本身(提示词描述、其余参考图)不随画板分享。 */
+function EntityNode({ data }: NodeProps<FlowNode>) {
+  const { locale } = useViewer();
+  const kinds = getMessages(locale).boards.entityKinds as Record<string, string>;
+  const badge = kinds[data.item.entity_kind ?? ""] ?? getMessages(locale).boards.kinds.entity;
+  return (
+    <div className={cn(SHELL, "overflow-visible")}>
+      <Label data={data} />
+      {data.media ? (
+        // oxlint-disable-next-line nextjs/no-img-element
+        <img src={data.media.thumb} alt={data.item.title ?? ""} loading="lazy" draggable={false} className="size-full rounded-xl object-cover" />
+      ) : (
+        <Missing locale={locale} />
+      )}
+      <span data-entity-badge="" className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-px text-[11px] font-medium text-white">
+        {badge}
+      </span>
+      <Ports />
+    </div>
+  );
+}
+
 function DocumentNode({ data }: NodeProps<FlowNode>) {
   const { locale, documents, openDocument } = useViewer();
   const t = getMessages(locale).boards;
@@ -224,6 +246,7 @@ const NODE_TYPES = {
   audio: AudioNode,
   scene: SceneNode,
   document: DocumentNode,
+  entity: EntityNode,
   frame: FrameNode,
   unknown: UnknownNode,
 };

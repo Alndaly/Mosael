@@ -235,6 +235,7 @@ test("快照变成只读画布:缺尺寸用应用默认值,分组框垫底,媒�
         { id: "x", kind: "image", x: 0, y: 0, media: { sha256: "evil", content_type: "image/png" } },
         { id: "n", kind: "note", x: 300, y: 0, text: "hi", color: "teal" },
         { id: "z", kind: "hologram", x: 0, y: 500 },
+        { id: "who", kind: "entity", x: 600, y: 0, title: "张三", entity_kind: "character", media: { sha256: "aaa", content_type: "image/png" } },
       ],
       edges: [
         { id: "e1", source: "n", target: "i" },
@@ -249,6 +250,10 @@ test("快照变成只读画布:缺尺寸用应用默认值,分组框垫底,媒�
   assert.equal(byId.i.data.media.src, "/files/aaa.png");
   assert.equal(byId.x.data.media, null, "不安全的地址不进页面");
   assert.equal(byId.z.type, "unknown");
+  // 资产格照图片画:封面按哈希找地址,尺寸是应用里资产格的默认值。
+  assert.equal(byId.who.type, "entity");
+  assert.equal(byId.who.width, 220);
+  assert.equal(byId.who.data.media.src, "/files/aaa.png");
   assert.equal(noteColor(byId.n.data.item.color), "yellow");
   assert.deepEqual(edges, [{ id: "e1", source: "n", target: "i" }]);
   assert.equal(safeMediaUrl("//evil.com/x.png"), null);

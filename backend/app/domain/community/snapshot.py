@@ -11,7 +11,10 @@
 - 图片 / 视频 / 音频:`media`(原文件的 sha256 + 类型 + 尺寸,图片视频再带一张缩略图的 sha256)、
   生成它的**提示词**(`prompt`,ADR:提示词以外的生成参数一概不带);
 - 文档:钉住那一版的 `markdown` 和 `revision`;
-- 3D 场景:`preview`(预览图,和媒体同形)。
+- 3D 场景:`preview`(预览图,和媒体同形);
+- 资产格(ADR 0027):像一张图片格那样带**封面**(`media`),`title` 缺省是资产的名字,`entity_kind` 是
+  人物 / 场景 / 道具 —— 查看页照图片画、角上标种类。资产本身(提示词描述、其余参考图、音色)不带:
+  分享资产是另一件事(ADR 0027 §4)。
 
 **不带**:`run`(运行态、任务 id)、`form` 里除提示词以外的一切(供应商连接 id、模型、参数、绑定、
 能力设置 —— 其中可能有密钥)、`asset_id` / `note_id` / `scene_id` 这些本机 id、本机路径、标记。
@@ -35,7 +38,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Board
+from app.db.models import Asset, Board, Entity
 from app.domain.boards.canvas import DEFAULT_SIZE
 from app.domain.community.errors import TooLarge
 from app.media.paths import resolve_key
@@ -81,16 +84,38 @@ def _items(board: Board) -> list[dict[str, Any]]:
     return [item for item in (board.canvas or {}).get("items") or [] if isinstance(item, dict)]
 
 
+def _entities(db: Session, board: Board) -> dict[str, tuple[Entity, str | None]]:
+    """板上资产格引用的资产(这个工作区里还在的),连同它的封面素材 id(没设封面就是第一张参考图)。"""
+    from app.domain.entities import counts_for, cover_of
+
+    wanted = {str(item["entity_id"]) for item in _items(board)
+              if item.get("kind") == "entity" and isinstance(item.get("entity_id"), str)}
+    if not wanted:
+        return {}
+    rows = list(db.scalars(select(Entity).where(Entity.id.in_(wanted), Entity.workspace_id == board.workspace_id)))
+    _refs, _variants, first = counts_for(db, [row.id for row in rows])
+    return {row.id: (row, cover_of(row, first.get(row.id))) for row in rows}
+
+
+def _asset_of(item: dict[str, Any], entities: dict[str, tuple[Entity, str | None]]) -> str:
+    """这一格画的是哪份素材:媒体格和 3D 场景格是它的 `asset_id`,资产格是资产的封面。"""
+    if item.get("kind") == "entity":
+        found = entities.get(str(item.get("entity_id") or ""))
+        return str(found[1] or "") if found else ""
+    return str(item.get("asset_id") or "") if isinstance(item.get("asset_id"), str) else ""
+
+
 def _sources(db: Session, board: Board) -> list[_Source]:
     """板上每一格引用的、**这个工作区里、盘上真有文件**的那份素材。
 
     文件没了(素材删了、还在生成)的格子照样进快照,只是没有媒体 —— 和本机画布上的空槽一个样子。
     """
+    entities = _entities(db, board)
     wanted = {
-        str(item["asset_id"]): str(item["id"])
+        _asset_of(item, entities)
         for item in _items(board)
-        if item.get("kind") in (*_MEDIA_KINDS, "scene") and isinstance(item.get("asset_id"), str)
-    }
+        if item.get("kind") in (*_MEDIA_KINDS, "scene", "entity")
+    } - {""}
     if not wanted:
         return []
     assets = {
@@ -99,7 +124,9 @@ def _sources(db: Session, board: Board) -> list[_Source]:
     }
     found: list[_Source] = []
     for item in _items(board):
-        asset = assets.get(str(item.get("asset_id") or ""))
+        if item.get("kind") not in (*_MEDIA_KINDS, "scene", "entity"):
+            continue
+        asset = assets.get(_asset_of(item, entities))
         if asset is None or not asset.file_key:
             continue
         path = resolve_key(asset.file_key)
@@ -246,6 +273,7 @@ def build(db: Session, board: Board, *, on_progress: Callable[[float], None] | N
     """算出快照和要传的文件。会读每个文件算哈希、缺缩略图时现做 —— 在任务里跑,不在请求里跑。"""
     check_limits(db, board)
     sources = {source.item_id: source for source in _sources(db, board)}
+    entities = _entities(db, board)
     files = _Files()
     items: list[dict[str, Any]] = []
     raw_items = _items(board)
@@ -274,6 +302,16 @@ def build(db: Session, board: Board, *, on_progress: Callable[[float], None] | N
             source = sources.get(str(item["id"]))
             if source is not None:
                 out["preview"] = _media(source, files, with_thumbnail=True)
+        elif kind == "entity":
+            found = entities.get(str(item.get("entity_id") or ""))
+            if found is not None:
+                entity = found[0]
+                out["entity_kind"] = entity.kind
+                if "title" not in out:
+                    out["title"] = entity.name[:120]
+            source = sources.get(str(item["id"]))
+            if source is not None:
+                out["media"] = _media(source, files, with_thumbnail=True)
         items.append(out)
         if on_progress is not None and raw_items:
             on_progress((index + 1) / len(raw_items))

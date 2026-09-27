@@ -95,6 +95,25 @@ def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind:
     )
 
 
+def upstream_entities(board: Board, item_id: str) -> list[str]:
+    """连进这一格的资产格引用的资产(ADR 0027),按连线的先后。
+
+    **连进来就等于 `@` 了它**:生成时和正文里 `@` 的资产走同一条路(domain/entities/mentions)——
+    拼进它的提示词描述、按模型收得下的张数挂它的参考图。还没挑资产的资产格(没有 entity_id)跳过。
+    """
+    canvas = board.canvas or {}
+    items = {str(one.get("id")): one for one in canvas.get("items") or [] if isinstance(one, dict)}
+    out: list[str] = []
+    for edge in canvas.get("edges") or []:
+        if not isinstance(edge, dict) or edge.get("target") != item_id:
+            continue
+        source = items.get(str(edge.get("source")))
+        entity_id = str((source or {}).get("entity_id") or "") if (source or {}).get("kind") == "entity" else ""
+        if entity_id and entity_id not in out:
+            out.append(entity_id)
+    return out
+
+
 def generate_on_board(
     db: Session,
     *,
@@ -109,8 +128,12 @@ def generate_on_board(
     parameters: dict[str, Any],
     source_assets: list[dict[str, Any]],
     form: dict[str, Any],
+    entity_ids: list[str] | None = None,
 ) -> Board:
     """在画板上出图出片。没点名模型时由漏斗用这个人的默认。
+
+    `entity_ids` 是正文里 `@` 到的资产;连进这一格的资产格在这里并进去(upstream_entities),
+    之后两者是同一样东西。
 
     **顺序**:建任务 → 摆占位 → 起任务。起在占位之前的话,一个当场失败的生成会把回执送到一格
     还不存在的地方。生成的错误(GenerationDomainError)原样抛出。
@@ -120,6 +143,10 @@ def generate_on_board(
     from app.domain.generation.runner import start_generation_thread
 
     _ensure_slot_ready(db, workspace_id, slot)
+    mentioned = list(dict.fromkeys([
+        *(entity_ids or []),
+        *upstream_entities(get_board(db, workspace_id, slot.board_id), slot.item_id),
+    ]))
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
         generation, job = create_generation_job(
@@ -136,6 +163,7 @@ def generate_on_board(
             negative_prompt="",
             parameters=dict(parameters),
             source_assets=parse_source_assets(source_assets, kind=kind),
+            entity_ids=mentioned,
         )
     finally:
         reset_receipt(token)
@@ -153,6 +181,9 @@ def generate_on_board(
             #: 并进发出去的清单。把合并后的清单写回来,重试时 @ 过的素材就挂进了槽位 —— 正文里删掉
             #: 那个 @ 它照样被发出去。只有调用方没给表单(智能体、脚本)时,才拿发出去的那份当槽位。
             "source_assets": list(form["source_assets"] if "source_assets" in form else source_assets),
+            #: 正文里 @ 到的资产(不含连进来的资产格 —— 那由连线说,线在它就在)。
+            **({"mentioned_entity_ids": list(form.get("mentioned_entity_ids") or entity_ids or [])}
+               if form.get("mentioned_entity_ids") or entity_ids else {}),
         },
     )
     start_generation_thread(generation.id)

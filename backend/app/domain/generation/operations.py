@@ -63,7 +63,10 @@ def create_generation_job(
     parameters: dict[str, Any],
     source_assets: list[dict[str, str]],
     provider_profile_id: str | None = None,
+    entity_ids: list[str] | None = None,
 ) -> tuple[GenerationJob, Any]:
+    """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
+    挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。"""
     provider = provider.strip()
     model = model.strip()
     if not provider or not model:
@@ -83,6 +86,24 @@ def create_generation_job(
     provider = resolved.provider
     if get_generation_adapter(provider, kind) is None:
         raise GenerationDomainError("genErr_adapterUnavailable", provider=provider, kind=kind)
+
+    # `@资产` 在校验之前展开:拼进来的提示词描述和挂上的参考图,和手写、手挂的走同一套校验。
+    from app.domain.entities import EntityDomainError, attach_entities
+
+    try:
+        expansion = attach_entities(
+            db,
+            workspace_id,
+            list(entity_ids or []),
+            prompt=prompt,
+            source_assets=source_assets,
+            parameters=parameters,
+            kind=kind,
+            capabilities=resolved.capabilities if resolved.capabilities_known else None,
+        )
+    except EntityDomainError as exc:
+        raise GenerationDomainError(exc.key, **exc.params) from exc
+    prompt, source_assets = expansion.prompt, expansion.source_assets
 
     validate_against_capabilities(
         provider,
@@ -119,6 +140,8 @@ def create_generation_job(
         "parameters": parameters,
         "source_assets": source_assets,
     }
+    if expansion.receipt:
+        request["entities"] = expansion.receipt
     job = create_job(
         db,
         workspace_id=workspace_id,
@@ -535,7 +558,7 @@ def validate_against_capabilities(
     # 外链与素材库同权:`<role>_url` 供的角色也计入 —— 只数 source_assets 的话,
     # 粘链接(不选素材)的用户会被 requires_source 误拦在「必须给一份首帧」上。
     counts.update(roles_supplied_via_url(parameters, kind))
-    _check_source_counts(provider, model, capabilities, counts)
+    _check_source_counts(provider, model, capabilities, counts, source_assets)
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
 
 
@@ -688,6 +711,7 @@ def _check_source_counts(
     model: str,
     capabilities: dict[str, Any],
     counts: Counter[str],
+    source_assets: list[dict[str, str]] | None = None,
 ) -> None:
     """按描述符查三件事:**每种给了几份、两组有没有混着用、有没有该搭伴的落了单**。
 
@@ -709,7 +733,29 @@ def _check_source_counts(
     # 报的还是可灵那边关于 refer_images 的话 —— 用户根本不知道自己少挂了一张。
     floor = capabilities.get("min_reference_images")
     given = counts.get("reference_image", 0)
-    if floor and given and given < int(floor):
+    #: 先建主体再引用的模型(`reference_subjects`):参考图按 `subject` 分组,**每一组**是一个主体,
+    #: 下限按组算,组数不超过描述符说的上限(见 domain/entities/mentions)。没分组的算作一组。
+    subjects = capabilities.get("reference_subjects")
+    if subjects and given:
+        groups = Counter(
+            str(entry.get("subject") or "")
+            for entry in source_assets or []
+            if entry.get("role") == "reference_image"
+        )
+        extra = given - sum(groups.values())
+        if extra:
+            groups[""] += extra
+        most = int(subjects.get("max_subjects") or 1)
+        if len(groups) > most:
+            raise GenerationDomainError(
+                "genErr_tooManySubjects", provider=provider, model=model, cap=most, count=len(groups)
+            )
+        for count in groups.values():
+            if floor and count < int(floor):
+                raise GenerationDomainError(
+                    "genErr_tooFewReferences", provider=provider, model=model, floor=floor, given=count
+                )
+    elif floor and given and given < int(floor):
         raise GenerationDomainError(
             "genErr_tooFewReferences", provider=provider, model=model, floor=floor, given=given
         )

@@ -68,6 +68,8 @@ import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas"
 import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
+import { EntityPickerDialog } from "@/features/entities/EntityPickerDialog";
+import { announceEntityReceipt } from "@/features/entities/entityMeta";
 import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { runNoteWrite } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
@@ -506,6 +508,7 @@ function BoardDetail({
   //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards/canvas.py),
   //: 所以不能像文档那样先落一个空节点再补 —— 那种节点存不下去。
   const [pickingScene, setPickingScene] = React.useState(false);
+  const [pickingEntity, setPickingEntity] = React.useState(false);
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
   //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
   const [api, setApi] = React.useState<BoardCanvasApi | null>(null);
@@ -726,6 +729,17 @@ function BoardDetail({
       }
       onSaved();
       setRunning((current) => (current.includes(request.item_id) ? current : [...current, request.item_id]));
+      //: `@` 到的资产(或连进来的资产格)挂不全参考图时说一声(ADR 0027):挂了几张、没挂上的为什么。
+      //: 只在这一次真的点名了资产时去问(正文里 @ 的,或者连进来的资产格)。
+      const named =
+        request.producer === "generate" &&
+        ((request.form.entity_ids?.length ?? 0) > 0 ||
+          (localCanvas.current?.edges ?? []).some(
+            (edge) =>
+              edge.target === request.item_id &&
+              localCanvas.current?.items.some((one) => one.id === edge.source && one.kind === "entity"),
+          ));
+      if (named && made?.run?.job_id) void announceEntityReceipt(made.run.job_id, t);
     },
     [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially, flushSaves],
   );
@@ -941,6 +955,8 @@ function BoardDetail({
                   setPicking({ kind: media, place: (assetId) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "scene") {
                   setPickingScene(true);
+                } else if (kind === "entity") {
+                  setPickingEntity(true);
                 } else {
                   api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
                 }
@@ -1188,6 +1204,15 @@ function BoardDetail({
 
         />
 
+      )}
+
+      {workspaceId && (
+        <EntityPickerDialog
+          workspaceId={workspaceId}
+          open={pickingEntity}
+          onOpenChange={setPickingEntity}
+          onPick={(entity) => api?.add("entity", { entity_id: entity.id })}
+        />
       )}
 
       <AssetPickerDialog

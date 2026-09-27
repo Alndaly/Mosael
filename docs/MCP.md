@@ -7,13 +7,14 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **92** 个工具,其中 **26** 个走确认卡、**1** 个停下来等用户作答。
+共 **96** 个工具,其中 **26** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
 | `analyze_asset` | 直接执行 | Analyze an EXISTING image/video media asset with a multimodal model. |
 | `append_note` | 直接执行 | Append requested writing or research to a note without replacing existing content. |
 | `ask_user` | 等作答 | Ask the user to choose between options you cannot decide for them. |
+| `attach_entity_reference` | 直接执行 | Attach an existing image (or video) asset to an asset-library entry as a reference image |
 | `blender_execute` | 确认卡 | Confirmation required: run Python (bpy) inside the user's open Blender to model. |
 | `blender_import_to_scene` | 直接执行 | Bring what you modeled in Blender into a Mosael 3D scene as ONE model object. |
 | `blender_inspect` | 直接执行 | Read-only: what is in the Blender scene the user has open right now — every object's name, |
@@ -32,6 +33,7 @@ summaries — never raw internal schemas.
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
+| `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
 | `create_note` | 直接执行 | Create a persistent note when the user asks to save research or writing. Preserve factual |
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
 | `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |
@@ -55,6 +57,7 @@ summaries — never raw internal schemas.
 | `get_board` | 直接执行 | Read-only: inspect one CREATIVE BOARD canvas in full. |
 | `get_confirmation` | 直接执行 | Read-only: poll one confirmation card by confirmation_id. |
 | `get_current_time` | 直接执行 | Read-only: what time is it right now, on the machine running this studio. |
+| `get_entity` | 直接执行 | Read-only: one asset from the asset library — its description, prompt descriptor, reference |
 | `get_job` | 直接执行 | Read-only: poll one background job (transcription, render, generation) by id. |
 | `get_scene` | 直接执行 | Read the current editable 3D scene, objects, materials, camera shots and revision. |
 | `get_transcript` | 直接执行 | Read-only: read the transcript/subtitles of an asset — timed segments with speakers. |
@@ -67,6 +70,7 @@ summaries — never raw internal schemas.
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
 | `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — their abilities and slot generators. |
 | `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |
+| `list_entities` | 直接执行 | Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace. |
 | `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video / generate_sound. |
 | `list_jobs` | 直接执行 | Read-only: list recent background jobs (renders, transcriptions, generations, imports). |
 | `list_memories` | 直接执行 | Read-only: list what you already remember in this workspace. |

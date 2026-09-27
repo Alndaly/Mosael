@@ -18,7 +18,7 @@ import { fieldDataType } from "@/features/nodeForms/fieldTypes";
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { MapField, bareRef } from "@/features/nodeForms/MapField";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
-import { ScenePropsField } from "@/features/nodeForms/ScenePropsField";
+import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
 import { cn } from "@/lib/utils";
 
 /**
@@ -392,6 +392,14 @@ export function NodeConfigForm({
                 // 专用控件由**后端的字段声明**点名(editor: "scene_models"),不是这里按
                 // 节点类型 + 字段名认出来的 —— 后者是这份注册表一直在消灭的那种手抄表。
                 <ScenePropsField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
+              ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "id_list" ? (
+                // 挑几个(生成节点点名资产库里的人物 / 场景 / 道具):和一串素材同一个控件,选项来自 options_from。
+                // 存的是一串 id;手写的逗号分隔也认(值可能来自上游插值)。
+                <AssetListField
+                  value={Array.isArray(value) ? value : parseIds(String(value ?? ""))}
+                  options={options ?? []}
+                  onChange={(next) => setConfig(key, next)}
+                />
               ) : isAssetList ? (
                 // 一串素材:挑出来的一排标签 + 再加一份,不是一个写着 `[]` 的 JSON 框
                 <AssetListField value={value} options={options ?? []} onChange={(next) => setConfig(key, next)} />

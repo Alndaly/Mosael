@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/compone
 import React from "react";
 import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Layers, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
@@ -27,6 +27,7 @@ import { useRecorder } from "@/features/media/recordingContext";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { MediaTagFilter } from "./MediaTagFilter";
+import { SetAsReferenceDialog } from "@/features/entities/AssetEntities";
 import { TAG_MATCHES, assetTags, matchesTags, tagCounts, type TagMatch } from "./assetTags";
 import { TagChips } from "./TagChips";
 import { TagsDialog } from "@/features/media/TagsDialog";
@@ -69,6 +70,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [previewing, setPreviewing] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
+  //: 右键「设为某个资产的参考图…」(ADR 0027):图片和视频能当参考图。
+  const [referencing, setReferencing] = React.useState<Asset | null>(null);
   // 筛选和排序是**这个人怎么用素材库**的一部分,不是这一刻的临时值 —— 切走再回来不该重置。
   // 搜索词是另一回事:它是"我此刻在找什么",留着反而会让人以为库里只有这几条。
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("media-kind", "all", KIND_FILTERS);
@@ -423,6 +426,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => saveAssetToDisk(asset)}><Download />{t("assetSaveLocal")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
+                      {asset.kind !== "audio" && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setReferencing(asset)}><Layers />{t("assetSetAsReference")}</Button></PopoverClose>}
                       {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
                       {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
                       {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setDenoising(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
@@ -441,6 +445,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuItem onSelect={() => setEditingTags(asset)}>
                   <Tag /> {t("editTags")}
                 </ContextMenuItem>
+                {asset.kind !== "audio" && (
+                  <ContextMenuItem onSelect={() => setReferencing(asset)}>
+                    <Layers /> {t("assetSetAsReference")}
+                  </ContextMenuItem>
+                )}
                 {asset.kind === "video" && (
                   <ContextMenuItem disabled={convertGif.isPending} onSelect={() => convertGif.mutate(asset.id)}>
                     {convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} {t("assetConvertGif")}
@@ -467,6 +476,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       )}
 
       <AssetPreviewModal asset={previewing} onClose={() => setPreviewing(null)} />
+      <SetAsReferenceDialog asset={referencing} onClose={() => setReferencing(null)} />
       <DenoiseDialog assetId={denoising} onClose={() => setDenoising(null)} />
       <RenameDialog
         open={renaming !== null}

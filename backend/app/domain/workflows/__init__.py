@@ -358,6 +358,7 @@ _FIELD_LABELS = {
     "shot_count": "wfField_shot_count",
     "render": "wfField_render",
     "source_group": "wfField_source_group",
+    "entity_ids": "wfField_entity_ids",
 }
 
 
@@ -788,6 +789,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "source_group": {
                 "advanced": True, "type": "string", "default": "all", "options": list(SOURCE_GROUPS),
                 "allow_custom": True, "description": "wfNode_ai_generate_source_group",
+            },
+            #: 点名资产库里的人物 / 场景 / 道具(ADR 0027 的 `@资产`):提示词描述拼进提示词,参考图按模型收得下的
+            #: 张数挂上 —— 和 AI 工作台、画板、智能体同一条路(domain/entities/mentions)。挑几个就是一串 id;
+            #: 也可以是上游给的一串(`{{…}}`)。
+            "entity_ids": {
+                "type": "template", "options_from": "entities", "editor": "id_list",
+                "description": "wfNode_ai_generate_entity_ids",
             },
         },
         #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是这次出的全部 ——

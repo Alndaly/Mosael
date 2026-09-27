@@ -13,7 +13,7 @@ RATCHET = True
 
 #: 界面认得的控件名(frontend/src/features/workflows/WorkflowsView.tsx 的 renderField)。
 #: 在这里多一个名字,界面那边就要多一个分支 —— 否则那个字段会悄悄退回普通输入框。
-KNOWN_EDITORS = {"map", "json", "scene_models", "note_ref"}
+KNOWN_EDITORS = {"map", "json", "scene_models", "note_ref", "id_list"}
 
 
 def test_笔记读取的_note_id_声明用笔记选择器() -> None:

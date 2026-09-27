@@ -3344,6 +3344,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/entities/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entity Catalog
+         * @description 资产的词表,按请求方的语言翻好。界面上角度的名字、授权选项的说明都读这一份。
+         */
+        get: operations["entity_catalog_api_entities_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Entities */
+        get: operations["list_entities_api_entities_get"];
+        put?: never;
+        /** Create Entity */
+        post: operations["create_entity_api_entities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/entities/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Entity */
+        get: operations["read_entity_api_entities__entity_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Entity
+         * @description 删资产**不删素材**。有变体时要 `with_variants=true`(界面在确认框里写清有几个变体)。
+         */
+        delete: operations["delete_entity_api_entities__entity_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Entity */
+        patch: operations["update_entity_api_entities__entity_id__patch"];
+        trace?: never;
+    };
+    "/api/entities/{entity_id}/variants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Variant */
+        post: operations["create_variant_api_entities__entity_id__variants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/entities/{entity_id}/lost-references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dismiss Lost References
+         * @description 「少了哪几张参考图」那句提示看过了。
+         */
+        delete: operations["dismiss_lost_references_api_entities__entity_id__lost_references_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/entities/{entity_id}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Reference */
+        post: operations["add_reference_api_entities__entity_id__references_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/entities/{entity_id}/references/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder References */
+        put: operations["reorder_references_api_entities__entity_id__references_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/entities/{entity_id}/references/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Reference
+         * @description 摘掉一张参考图。素材还在素材库里。
+         */
+        delete: operations["remove_reference_api_entities__entity_id__references__asset_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Reference */
+        patch: operations["update_reference_api_entities__entity_id__references__asset_id__patch"];
+        trace?: never;
+    };
+    "/api/entities/{entity_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entity Usage
+         * @description 在哪里用过:画板(资产格 / 提示词里 @ 了它)、生成记录(请求里点名了它)、工作流(生成节点点名了它)。
+         */
+        get: operations["entity_usage_api_entities__entity_id__usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Asset Entities
+         * @description 这份素材是哪些资产的参考图(素材详情里的「属于哪些资产」)。
+         */
+        get: operations["asset_entities_api_assets__asset_id__entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scheduled-tasks": {
         parameters: {
             query?: never;
@@ -7135,6 +7327,27 @@ export interface components {
             };
         };
         /**
+         * AssetEntityOut
+         * @description 一份素材是哪个资产的参考图(素材详情里的「属于哪些资产」)。
+         */
+        AssetEntityOut: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /**
+             * Parent Name
+             * @default
+             */
+            parent_name: string;
+            /** Role */
+            role: string;
+        };
+        /**
          * AssetFrameRequest
          * @description 从一段视频里取某一时刻的一帧,存成一份新素材。
          */
@@ -8296,6 +8509,287 @@ export interface components {
             project_id?: string | null;
         };
         /**
+         * EntityCatalogOut
+         * @description 资产的词表,按请求方的语言翻好:几种资产、参考图的角度、授权声明的选项、生成时挑图的先后。
+         */
+        EntityCatalogOut: {
+            /** Kinds */
+            kinds: components["schemas"]["EntityKindOut"][];
+            /** Roles */
+            roles: components["schemas"]["EntityRoleOut"][];
+            /** Consent Kinds */
+            consent_kinds: components["schemas"]["EntityConsentKindOut"][];
+            /** Attach Priority */
+            attach_priority: string[];
+            /** Attributes */
+            attributes: {
+                [key: string]: string[];
+            };
+        };
+        /** EntityConsentKindOut */
+        EntityConsentKindOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Help */
+            help: string;
+        };
+        /** EntityCreate */
+        EntityCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string;
+            /** Attributes */
+            attributes?: {
+                [key: string]: unknown;
+            };
+            /** Tags */
+            tags?: string[];
+            /** Parent Id */
+            parent_id?: string | null;
+        };
+        /** EntityKindOut */
+        EntityKindOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * EntityLostReferenceOut
+         * @description 随素材一起删掉的一张参考图:当时叫什么、是什么角度、什么时候。
+         */
+        EntityLostReferenceOut: {
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** At */
+            at: string;
+        };
+        /** EntityOut */
+        EntityOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Kind */
+            kind: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /**
+             * Parent Name
+             * @default
+             */
+            parent_name: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Prompt */
+            prompt: string;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+            /** Display Cover Asset Id */
+            display_cover_asset_id?: string | null;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Tags */
+            tags: string[];
+            /** Lost References */
+            lost_references: components["schemas"]["EntityLostReferenceOut"][];
+            /** References */
+            references: components["schemas"]["EntityReferenceOut"][];
+            /** Variants */
+            variants: components["schemas"]["EntitySummaryOut"][];
+            /** Usable For Digital Human */
+            usable_for_digital_human: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** EntityReferenceAdd */
+        EntityReferenceAdd: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Role
+             * @default
+             */
+            role: string;
+            /**
+             * Cover
+             * @default false
+             */
+            cover: boolean;
+        };
+        /** EntityReferenceOrder */
+        EntityReferenceOrder: {
+            /** Asset Ids */
+            asset_ids: string[];
+        };
+        /** EntityReferenceOut */
+        EntityReferenceOut: {
+            /** Asset Id */
+            asset_id: string;
+            /** Role */
+            role: string;
+            /** Position */
+            position: number;
+            /** Asset Kind */
+            asset_kind: string;
+            /** Asset Name */
+            asset_name: string;
+        };
+        /** EntityReferenceUpdate */
+        EntityReferenceUpdate: {
+            /** Role */
+            role: string;
+        };
+        /** EntityRoleOut */
+        EntityRoleOut: {
+            /** Role */
+            role: string;
+            /** Label */
+            label: string;
+        };
+        /** EntitySummaryOut */
+        EntitySummaryOut: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /**
+             * Parent Name
+             * @default
+             */
+            parent_name: string;
+            /** Name */
+            name: string;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+            /** Tags */
+            tags: string[];
+            /** Reference Count */
+            reference_count: number;
+            /** Variant Count */
+            variant_count: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * EntityUpdate
+         * @description 没写的字段不动。`cover_asset_id` 写空串 = 不要封面了(退回第一张参考图)。
+         */
+        EntityUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Prompt */
+            prompt?: string | null;
+            /** Attributes */
+            attributes?: {
+                [key: string]: unknown;
+            } | null;
+            /** Tags */
+            tags?: string[] | null;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+        };
+        /** EntityUsageBoardOut */
+        EntityUsageBoardOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** How */
+            how: string;
+        };
+        /** EntityUsageGenerationOut */
+        EntityUsageGenerationOut: {
+            /** Id */
+            id: string;
+            /** Session Id */
+            session_id?: string | null;
+            /** Kind */
+            kind: string;
+            /** Model */
+            model: string;
+            /** Prompt */
+            prompt: string;
+            /** Result Asset Id */
+            result_asset_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** EntityUsageOut */
+        EntityUsageOut: {
+            /** Boards */
+            boards: components["schemas"]["EntityUsageBoardOut"][];
+            /** Generations */
+            generations: components["schemas"]["EntityUsageGenerationOut"][];
+            /** Workflows */
+            workflows: components["schemas"]["EntityUsageWorkflowOut"][];
+        };
+        /** EntityUsageWorkflowOut */
+        EntityUsageWorkflowOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** EntityVariantCreate */
+        EntityVariantCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string;
+            /** Attributes */
+            attributes?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * ExportRequest
          * @description 导出参数;整个 body 可省略(老调用方/工作流节点按默认档导出)。
          */
@@ -8497,6 +8991,8 @@ export interface components {
             };
             /** Source Assets */
             source_assets?: components["schemas"]["SourceAssetRef"][];
+            /** Entity Ids */
+            entity_ids?: string[];
         };
         /** GenerationCreateResponse */
         GenerationCreateResponse: {
@@ -19753,6 +20249,467 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SceneReferenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entity_catalog_api_entities_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityCatalogOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entities_api_entities_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                kind?: string;
+                tag?: string;
+                q?: string;
+                parent_id?: string;
+                include_variants?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitySummaryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_entity_api_entities_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_entity_api_entities__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_entity_api_entities__entity_id__delete: {
+        parameters: {
+            query?: {
+                with_variants?: boolean;
+            };
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_entity_api_entities__entity_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_variant_api_entities__entity_id__variants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityVariantCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_lost_references_api_entities__entity_id__lost_references_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_reference_api_entities__entity_id__references_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityReferenceAdd"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_references_api_entities__entity_id__references_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityReferenceOrder"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_reference_api_entities__entity_id__references__asset_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_reference_api_entities__entity_id__references__asset_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityReferenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entity_usage_api_entities__entity_id__usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityUsageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    asset_entities_api_assets__asset_id__entities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetEntityOut"][];
                 };
             };
             /** @description Validation Error */

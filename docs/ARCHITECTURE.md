@@ -126,6 +126,27 @@ TaskEvent 行只在总线创建。
   再发即新版本;插件按发版的形状打包(受管文件、去缓存与密钥),先用安装那套规则自检。插件市场多一个 `source=community`,
   读社区的 `/plugins/index.json`,装的时候走同一条预览 → 权限确认。
 
+### 资产库(ADR 0027)
+
+**资产**(`domain/entities`,表 `entities` + `entity_references`)是「一个有名字的东西」—— 人物 / 场景 / 道具;
+**素材**(`assets`)是文件。资产只引用素材(参考图带角度 `role` 和先后 `position`),不复制;资产归**工作区**,不挂项目。
+种类的专有字段收在 `attributes` 里、按种类白名单校验(`entities/catalog.normalize_attributes`),指向的音色 / 3D 场景 /
+3D 模型要在同一个工作区;真人的授权声明由服务端记下声明人和时间。角度、种类、授权选项的名字只在后端文案表里
+(`GET /api/entities/catalog` 按请求语言发出),界面不另抄。
+
+- **删除**:删资产不删素材,有变体要显式带上 `with_variants`;删素材时 `domain/assets/deletion` 先调
+  `entities.forget_asset` 摘掉引用、在资产的 `lost_references` 上记一笔「少了哪一张」,资产本身不动。
+- **`@资产` 汇进生成漏斗**:`create_generation_job` 收 `entity_ids`,在校验之前调 `entities/mentions.attach_entities`
+  —— 提示词描述拼进提示词,参考图按先后(三视图 > 正面 > 全身 > 其余)轮流挑,能挂几张只听描述符
+  (`source_limits.reference_image`、`exclusive_source_groups`,查不到不挂),挂不下的写进 `request.entities` 回执。
+  五个入口(AI 工作台、画板、工作流 `ai_generate` 的 `entity_ids`、智能体、定时任务)走的都是这一处。
+  可灵这类「先建主体再引用」的模型由描述符的 `reference_subjects` 说;每个资产的那几张带同一个 `subject`,适配器按
+  `contracts/generation.subject_groups` 分组、每组建一个主体,名字仍按内容哈希算(`kling/elements`),不存映射表。
+- **画板的资产格**(`kind: "entity"`,字段 `entity_id`):连进生成格时 `boards/actions.upstream_entities` 按连线把它并进
+  `entity_ids`,和正文里 `@` 的是同一个参数;新引入的资产格要在本工作区,已在板上的不再校验。分享快照里它带封面
+  (`media`)、名字(`title`)和 `entity_kind`,官网查看页照图片画、角上标种类。能力(补全多角度、生成表情)是 ADR 0027
+  的阶段 4,到时照内容格能力的做法挂在它身上。
+
 ### 创意画板:生成能力的第五个入口
 
 画板(`domain/boards`)是一张无限画布,上面摆的是便签、图片、视频、音频、文档引用、3D 场景引用和分组框。它**不自己

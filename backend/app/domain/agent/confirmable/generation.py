@@ -28,6 +28,7 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import parse_source_assets
     from app.domain.generation.runner import start_generation_thread
+    from app.domain.entities import parse_entity_ids
     kind = _GENERATION_KIND_BY_TOOL[confirmation.tool]
     generation, job = create_generation_job(
         db,
@@ -43,9 +44,14 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
         negative_prompt=str(payload.get("negative_prompt", "")),
         parameters=dict(payload.get("parameters") or {}),
         source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
+        entity_ids=parse_entity_ids(payload.get("entity_ids")),
     )
     start_generation_thread(generation.id)
-    return {"job_id": job.id, "generation_id": generation.id}
+    result: dict[str, Any] = {"job_id": job.id, "generation_id": generation.id}
+    #: `@` 到的资产挂了哪几张参考图、哪几张没挂上(ADR 0027)—— 模型据此如实告诉用户,而不是以为全挂上了。
+    if generation.request.get("entities"):
+        result["entities"] = generation.request["entities"]
+    return result
 
 
 def _check_generation_text(db: Session, payload: dict[str, Any], actor: str | None, kind: str) -> None:
@@ -54,6 +60,9 @@ def _check_generation_text(db: Session, payload: dict[str, Any], actor: str | No
     此前这里写死「必须有提示词」,于是智能体想替人跑一张放大工作流,卡都开不出来。"""
     from app.domain.generation.operations import GenerationDomainError, check_text_inputs
 
+    # 点名了资产、自己没写提示词:资产的提示词描述在执行时才拼进来(domain/entities/mentions),空着不算缺。
+    if payload.get("entity_ids") and not str(payload.get("prompt") or "").strip():
+        return
     try:
         check_text_inputs(
             db,

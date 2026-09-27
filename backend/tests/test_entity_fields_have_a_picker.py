@@ -34,6 +34,8 @@ from typing import Any
 _ENTITIES = (
     "asset", "scene", "shot", "note", "project", "sequence", "track", "clip", "workflow",
     "account", "profile", "instance", "voice", "model", "plugin",
+    # 资产库里的人物 / 场景 / 道具(ADR 0027)。
+    "entity",
 )
 _ENTITY_ID = re.compile(rf"(^|_)({'|'.join(_ENTITIES)})_ids?$")
 _ENTITY_DATA_TYPES = frozenset({"asset", "sequence", "scene"})

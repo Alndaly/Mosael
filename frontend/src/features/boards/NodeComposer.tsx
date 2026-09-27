@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
+import { matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 
 /**
  * 挂在节点**下方**的提示词面板 —— 「节点本身就是生成单元」这件事的那一半。
@@ -420,6 +421,7 @@ export function NodeComposer({
   upstream,
   upstreamTexts,
   upstreamDocuments,
+  upstreamEntities,
   workspaceId,
   onFormChange,
 }: {
@@ -434,6 +436,8 @@ export function NodeComposer({
     model: string;
     parameters: Record<string, unknown>;
     sourceAssets: { asset_id: string; role: string }[];
+    /** 正文里 `@` 到的资产(ADR 0027)。连进来的资产格不在这里 —— 服务端按连线取。 */
+    entityIds: string[];
     form: NonNullable<BoardItem["form"]>;
   }) => void;
   /** 每一次编辑都写回节点，而不是留在面板组件的临时 state 里。 */
@@ -447,6 +451,9 @@ export function NodeComposer({
    *  (便签根本没有图),而是提示词本身。 */
   upstreamTexts?: { itemId: string; text: string }[];
   upstreamDocuments?: NoteReference[];
+  /** 连进这一格的资产格引用的资产(ADR 0027)。生成时服务端按连线把它们当成 `@` 了一样挂上;
+   *  这里只用来把它们排在 `@` 菜单的「连进来的」那一组。 */
+  upstreamEntities?: string[];
   /** `@` 引用素材时去哪个工作区找。 */
   workspaceId: string;
 }) {
@@ -626,6 +633,13 @@ export function NodeComposer({
   //: 正文里 chip 引用到的素材。它们和上面那排槽位是**两件事**:槽位挂的是首帧/参考这种
   //: 有角色的位置,而 chip 是「我在这句话里指的是这张图」。提交时两边都进 source_assets。
   const [mentioned, setMentioned] = React.useState<string[]>(saved.mentioned_asset_ids ?? []);
+  //: 正文里 `@` 到的资产(ADR 0027):它们的提示词描述和参考图由服务端挂上,这里只记是哪几个。
+  const [mentionedEntities, setMentionedEntities] = React.useState<string[]>(saved.mentioned_entity_ids ?? []);
+  const mentionable = useMentionableEntities(workspaceId);
+  const entityCandidates = React.useCallback(
+    (query: string) => matchEntities(mentionable.data, query).slice(0, 6),
+    [mentionable.data],
+  );
   React.useEffect(() => {
     if (promptDocument || mentioned.length === 0 || !library.data?.length) return;
     const restored = restorePromptDocument(prompt, mentioned, library.data);
@@ -683,8 +697,9 @@ export function NodeComposer({
       parameters: formParameters,
       source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role, ...(one.from ? { from: one.from } : {}) })),
       mentioned_asset_ids: mentioned,
+      ...(mentionedEntities.length > 0 || saved.mentioned_entity_ids ? { mentioned_entity_ids: mentionedEntities } : {}),
     }),
-    [prompt, promptDocument, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned],
+    [prompt, promptDocument, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids],
   );
   const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
@@ -724,6 +739,7 @@ export function NodeComposer({
         model: current.model,
         parameters,
         sourceAssets,
+        entityIds: mentionedEntities,
         form: editableForm,
       }),
     );
@@ -1112,10 +1128,11 @@ export function NodeComposer({
         <PromptEditor
           value={prompt}
           document={promptDocument}
-          onChange={(next, assets, document) => {
+          onChange={(next, assets, document, entityIds) => {
             setPrompt(next);
             setMentioned(assets);
             setPromptDocument(document);
+            setMentionedEntities(entityIds);
           }}
           placeholder={t(
             currentPromptMode === "optional"
@@ -1128,6 +1145,9 @@ export function NodeComposer({
           //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
           //: 正是这句话十有八九要指的东西。
           linked={feed.map((one) => one.assetId)}
+          //: 资产库里的人物 / 场景 / 道具也在同一个 `@` 菜单里;连进来的资产格排在最前。
+          entities={entityCandidates}
+          linkedEntities={upstreamEntities}
           onSubmit={send}
           emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
         />

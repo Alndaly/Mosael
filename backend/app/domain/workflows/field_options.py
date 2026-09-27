@@ -303,7 +303,24 @@ def _sequence_tracks(db: Session, ctx: OptionContext) -> list[Option]:
     return [{"value": row.id, "label": f"{row.name} · {kind(row.kind)}"} for row in rows]
 
 
+def _entities(db: Session, ctx: OptionContext) -> list[Option]:
+    """资产库里的人物 / 场景 / 道具(含变体),按最近改过的排。标签是「种类 · 名字」,变体带上母体的名字。"""
+    from app.db.models import Entity
+
+    rows = list(db.scalars(
+        select(Entity).where(Entity.workspace_id == ctx.workspace_id).order_by(Entity.updated_at.desc())
+    ))
+    names = {row.id: row.name for row in rows}
+
+    def label(row: Entity) -> str:
+        name = f"{names[row.parent_id]} · {row.name}" if row.parent_id in names else row.name
+        return f"{t(f'entityKind_{row.kind}', ctx.locale)} · {name}"
+
+    return [{"value": row.id, "label": label(row)} for row in rows]
+
+
 SOURCES: dict[str, Source] = {
+    "entities": _entities,
     "scenes": _scenes,
     "scene_shots": _scene_shots,
     "projects": _projects,

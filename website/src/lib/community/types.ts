@@ -189,7 +189,7 @@ export type SnapshotMedia = {
   thumb_sha256?: string;
 };
 
-export type SnapshotItemKind = "note" | "image" | "video" | "audio" | "frame" | "scene" | "document";
+export type SnapshotItemKind = "note" | "image" | "video" | "audio" | "frame" | "scene" | "document" | "entity";
 
 /** `mosael.board-snapshot/1` 里的一格:与本机画布的格子同形,去掉运行态。 */
 export type SnapshotItem = {
@@ -205,6 +205,8 @@ export type SnapshotItem = {
   media?: SnapshotMedia;
   /** 3D 场景格的预览图。 */
   preview?: SnapshotMedia;
+  /** 资产格(ADR 0027)引用的是人物、场景还是道具:`character` / `location` / `prop`。封面在 `media`。 */
+  entity_kind?: string;
   markdown?: string;
   revision?: number;
 };

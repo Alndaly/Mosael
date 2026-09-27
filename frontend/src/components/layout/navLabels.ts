@@ -13,6 +13,7 @@ import {
   Scissors,
   Settings,
   ShieldCheck,
+  UsersRound,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -33,6 +34,7 @@ export type StudioView =
   | "home"
   | "statistics"
   | "media"
+  | "entities"
   | "notes"
   | "scenes"
   | "editor"
@@ -72,6 +74,8 @@ export type NavItem = {
 export const NAV_ITEMS: readonly NavItem[] = [
   { view: "home", labelKey: "navHome", placement: "primary", icon: Home, keywords: ["home", "shouye"] },
   { view: "media", labelKey: "navMedia", placement: "primary", icon: FolderOpen, keywords: ["media", "assets", "sucai"] },
+  //: 资产库(ADR 0027):人物、场景、道具。紧挨着「素材」—— 素材是文件,资产是「一个有名字的东西」,参考图是素材。
+  { view: "entities", labelKey: "navEntities", placement: "primary", icon: UsersRound, keywords: ["entities", "characters", "zichan", "renwu"] },
   { view: "notes", labelKey: "navNotes", placement: "primary", icon: BookOpen, keywords: ["notes", "biji"] },
   { view: "scenes", labelKey: "navScenes", placement: "primary", icon: Box, keywords: ["scene", "3d", "changjing"] },
   { view: "boards", labelKey: "navBoards", placement: "primary", icon: LayoutGrid, keywords: ["board", "canvas", "huaban"] },

@@ -23,7 +23,7 @@ from app.ai.providers.contracts.generation import (
     LAST_FRAME,
     first_frame_value,
     source_value,
-    source_values,
+    subject_groups,
     REFERENCE_IMAGE,
     metering_from_request,
     adapter_http_error,
@@ -224,12 +224,12 @@ class KlingVideoAdapter(GenerationAdapter):
                     # 多图参考:先把那几张图变成一个主体(查得到就复用,查不到才建),再引用它。
                     # 这一步是**另一个异步任务**,得在提交生成之前跑完 —— 拼请求体的时候顺手做
                     # 不了,那里没有 client 也不该在那里等三分钟。
-                    references = list(source_values(request, REFERENCE_IMAGE))
-                    element_ids = (
-                        [ensure_element(client, references, description=request.prompt[:100])]
-                        if references
-                        else []
-                    )
+                    # 参考图按主体分组(`@资产` 时每个资产一组,见 contracts.generation.subject_groups):
+                    # 每组建一个主体,名字照旧按那几张图的内容哈希算 —— 同一个人物下次再点名,查到的是同一个主体。
+                    element_ids = [
+                        ensure_element(client, list(group), description=request.prompt[:100])
+                        for group in subject_groups(request, REFERENCE_IMAGE)
+                    ]
                     endpoint = v3_endpoint(request, has_elements=bool(element_ids))
                     body = build_v3_payload(request, context, element_ids=element_ids)
                 else:

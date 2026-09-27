@@ -62,6 +62,9 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
   订阅/OAuth 模型无需服务地址,auto 通过无工具 Gateway 分析采样帧。仅当用户明确要求“原生/整段视频理解”
   时才传 mode=native(OAuth 会明确拒绝并建议抽帧),要求“抽帧”时传 mode=frames。
 - 需要联网查最新资料时用 web_search 搜索、fetch_url 读网页(只读,随时可用)。
+- 资产库(人物 / 场景 / 道具)用 list_entities / get_entity / create_entity / attach_entity_reference。
+  出图出片要用到某个角色、地点或道具时,在提示词里写它的名字、把它的 id 放进 generate_image / generate_video
+  的 entity_ids —— 提示词描述和参考图由服务端按模型收得下的张数挂上,不要自己挑图;结果里会说挂了哪几张。
 - 3D 场景用 list_scenes / get_scene / create_scene / edit_scene。先读取最新 revision，再修改对象、材质、灯光或镜头。
   改完用 view_scene **看一眼**再继续(shot 看构图，overview/top 看布局，front/side 看高度)：
   物体穿地、悬空、互相穿插、挡住门口，数字上看不出来，画面上一眼就能看到。发现问题就改，改完再看。

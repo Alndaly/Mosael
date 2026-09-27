@@ -130,7 +130,9 @@ def test_写入之后每一个能产出的空槽都写明了产出者() -> None:
             item = {"id": f"{kind}-{name}", "kind": kind, "x": 0, "y": 0, **extra}
             if kind == "scene":
                 item["scene_id"] = "s1"
-            if kind == "frame" or (kind == "note" and name == "named"):
+            if kind == "entity":
+                item["entity_id"] = "e1"
+            if kind in ("frame", "entity") or (kind == "note" and name == "named"):
                 item.pop("form", None)
             items.append(item)
     once = normalize_canvas({"items": items, "edges": []})

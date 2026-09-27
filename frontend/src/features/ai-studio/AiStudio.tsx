@@ -25,7 +25,9 @@ import {
   assetFileUrl,
   assetPreviewUrl,
   assetThumbnailUrl,
+  entityReceipt,
   optimizeImagePrompt,
+  type EntitySummary,
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationOption,
@@ -40,6 +42,8 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { EntityMentionPicker } from "@/features/entities/EntityMention";
+import { EntityReceiptNote } from "@/features/entities/entityMeta";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -329,6 +333,8 @@ function GenerateWorkspace({
   const sessionKey = generationSessionSelectionKey(workspace.id);
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [prompt, setPrompt] = React.useState("");
+  //: 这一次 `@` 到的资产(ADR 0027):提示词描述和参考图由服务端按所选模型收得下的张数挂上。
+  const [mentionedEntities, setMentionedEntities] = React.useState<EntitySummary[]>([]);
   const [modelId, setModelId] = React.useState<string | null>(null);
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
   
@@ -609,12 +615,14 @@ function GenerateWorkspace({
             },
             (role) => supportsParameter(selectedModel, role),
           ),
+          entity_ids: mentionedEntities.map((one) => one.id),
         }),
       });
       return targetSessionId;
     },
     onSuccess: (targetSessionId) => {
       setPrompt("");
+      setMentionedEntities([]);
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
     },
@@ -799,6 +807,9 @@ function GenerateWorkspace({
                 }
               }}
             />
+          )}
+          {selectedModel && selectedModel.kind !== "audio" && (
+            <EntityMentionPicker workspaceId={workspace.id} value={mentionedEntities} onChange={setMentionedEntities} />
           )}
           <div className="flex items-center justify-between gap-1.5 pt-0.5">
             <div className="flex items-center gap-1.5">
@@ -1332,6 +1343,8 @@ function GenerationTurn({
         >
           <MessageTime iso={timestamp} />
         </MessageFooter>
+        {/* `@` 到的资产挂了几张参考图、没挂上的为什么(ADR 0027)。全挂上了就什么都不写。 */}
+        <EntityReceiptNote receipt={entityReceipt(generation.request)} />
       </div>
       <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
         {outputs.length > 0 && generation.kind === "audio" ? (

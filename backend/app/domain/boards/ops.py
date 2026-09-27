@@ -159,6 +159,8 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["note_revision"] = op.get("note_revision")
             if op.get("scene_id"):
                 item["scene_id"] = str(op["scene_id"])
+            if item_kind == "entity" and op.get("entity_id"):
+                item["entity_id"] = str(op["entity_id"])
             if item_kind in SLOT_PRODUCERS and any(op.get(key) is not None for key in _FORM_KEYS):
                 #: 带着表单放下一格:空格子上的生成器、3D 场景格渲白模的设置(产出者缺省就是这种格子挂的那一个)。
                 item["form"] = _own_form(op, {"producer": SLOT_PRODUCERS[item_kind]}, item_id)

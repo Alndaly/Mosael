@@ -85,7 +85,7 @@ describe("「添加」的单子(boardAddCatalog)", () => {
     expect(rows.map((one) => [one.group, one.value])).toEqual([
       ["生成", "image"], ["生成", "video"], ["生成", "audio"],
       ["从素材库", "pick-image"], ["从素材库", "pick-video"], ["从素材库", "pick-audio"],
-      ["引用", "document"], ["引用", "scene"],
+      ["引用", "document"], ["引用", "scene"], ["引用", "entity"],
       ["整理", "note"], ["整理", "frame"],
     ]);
     expect(rows.every((one) => !one.value.startsWith("node:"))).toBe(true);

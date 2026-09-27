@@ -369,6 +369,8 @@ def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset,
                 role=role,
                 path=path,
                 public_url=direct_media_url((asset.media_info or {}).get("source_url")),
+                #: 先建主体再引用的模型按它分组(`@资产` 时是资产 id,见 domain/entities/mentions)。
+                subject=str(entry.get("subject") or ""),
             )
         )
     return tuple(sources)

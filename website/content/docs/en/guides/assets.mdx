@@ -1,0 +1,92 @@
+---
+title: Asset library: characters, locations, props
+description: Save characters, places and objects as named assets with reference images and a prompt descriptor, then @-mention them in generations and on boards.
+order: 19
+updated: 2026-09-27
+version: 1.7.0
+---
+
+The media library answers "what is this file"; the asset library answers "who is this". An **asset** is a named thing — a
+character, a location, a prop — whose reference images are images from your media library: the asset only points at them,
+it never copies the files. The same character usually appears across projects, so assets belong to the **workspace**, not
+to a project; tags keep them organised.
+
+Open **Assets** next to **Media** in the sidebar. Tabs at the top switch between characters, locations and props; each card
+is an asset's cover.
+
+## Create an asset
+
+Click **New character** (or location, prop), give it a name, and you land on its detail page:
+
+- **Description**: for people — who this is, where it comes from.
+- **Prompt descriptor**: for models — appearance, clothing, materials. Whenever the asset is `@`-mentioned in a generation,
+  this text is appended to the prompt.
+- **Tags**: separated by commas; they are how you find things across projects.
+- **Kind-specific fields**: characters have a **voice** (from your voice library), a **blockout color** for their stand-in
+  figure in 3D blockouts, and **real or fictional** with a consent declaration; locations have a linked **3D scene** and
+  "time / weather / light"; props have their **3D model**.
+
+Fields save when you leave them.
+
+## The reference wall
+
+The left side of the detail page is a wall of reference images, each labelled with its angle or purpose: front, side, back,
+turnaround, close-up, full body, expression, concept, detail.
+
+- **Add from media library**: open the media panel on the right and click **+**, or drag a thumbnail onto the wall.
+- **Drop files on the wall**: they are imported into the media library first, then attached.
+- **Change the angle** with the dropdown under each image. **Set as cover**, **move earlier / later** and **remove from
+  references** are in its **⋯** menu; you can also drag images to reorder.
+- Without a cover, the card uses the first reference image.
+
+**Deleting an asset never deletes media**: the images stay in the media library. **Deleting media** removes that reference
+from any asset that used it; the asset itself stays, and its detail page says which image went missing until you dismiss the
+note. The delete confirmation in the media library mentions this too.
+
+The media detail view gains a **Used by assets** row, and right-clicking an image in the media library offers **Set as an
+asset's reference…** (optionally as its cover).
+
+## Variants
+
+Winter clothes, period costume, the teenage version of the same character are **variants** hanging under it. A variant
+inherits its parent's prompt descriptor and voice; only the references and the outfit description change — "Zhang San ·
+Winter" is the same person as "Zhang San". A variant without references of its own uses its parent's in generations.
+Deleting an asset that has variants asks you to confirm that they go too.
+
+## Real people and consent
+
+A character is declared **fictional** or **a real person**. A real person needs "This is me" or "The person has given
+consent" — every option explains what it means on screen. The server records who declared it and when. A real person
+without a declaration can't be used for the digital-human features that come later ("make it talk"); this is the separate
+consent that deep-synthesis regulations require.
+
+## @-mention assets in generations
+
+When you write a prompt in a board's generation item, the `@` menu lists characters, locations and props from the asset
+library (with cover and kind) alongside media; AI Studio has an **@ Asset** button under its prompt; the workflow **AI
+generate** node has an **Assets** field; the agent's `generate_image` / `generate_video` take `entity_ids`. All four do the
+same thing:
+
+1. The asset's **prompt descriptor** is appended to the prompt (a variant contributes its parent's descriptor plus its own).
+2. Reference images are **picked in order**: turnaround > front > full body > the rest. With several assets mentioned, picks
+   take turns so the first one doesn't use up every slot.
+3. **Only the selected model's description decides how many fit**: how many reference images it takes and whether it can
+   combine them with an attached first/last frame. A model without a known description gets none — nothing is guessed.
+4. **What didn't fit is reported**: the AI Studio history and the board both say how many images were attached, how many
+   were left out, and why.
+
+Models that build a reusable subject first (such as Kling) get one subject per mentioned character, built from its reference
+images with the front view first. The subject's name is derived from the image contents, so using the same character again
+finds the same subject instead of creating a duplicate.
+
+## The asset item on boards
+
+**Add → Reference → Asset** places an **asset item** on a board: cover, name and a kind badge. Connect it into an image or
+video generation item and it works exactly like an `@` mention; in the prompt's `@` menu, connected assets come first.
+When you share a board to the community, the asset item shows as an image (its cover and name); the asset's prompt
+descriptor and other references are not shared with the board.
+
+## Where it's used
+
+The bottom of the detail page lists **where the asset is used**: boards that hold its asset item or mention it in a
+prompt, generations that named it, and workflows whose generation nodes use it. Click a row to go there.

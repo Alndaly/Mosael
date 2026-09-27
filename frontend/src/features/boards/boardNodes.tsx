@@ -3,9 +3,11 @@ import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, ExternalLink, Loader2, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, Loader2, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
-import { getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
+import { entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
+import { EntityThumb } from "@/features/entities/EntityMention";
+import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { DraftTextarea } from "@/components/ui/draft-text";
@@ -149,6 +151,7 @@ const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey
   video: { icon: FilmIcon, label: "boardKindVideo", hint: "boardKindVideoHint" },
   audio: { icon: Music, label: "boardKindAudio", hint: "boardKindAudioHint" },
   frame: { icon: SquareIcon, label: "boardKindFrame", hint: "boardKindFrameHint" },
+  entity: { icon: UsersRound, label: "boardKindEntity", hint: "boardEntityHint" },
 };
 
 /** 这一类的图标。图标不需要翻译,所以它可以直接拿。 */
@@ -877,6 +880,66 @@ export function SceneNode({ data, selected }: NodeProps) {
     </footer>
   </div>;
 }
+/**
+ * 资产格(ADR 0027):引用资产库里的一个人物 / 场景 / 道具 —— 封面、名字、种类的角标。
+ *
+ * 它**本身不产出东西**:连进一格生成,那一格就像在提示词里 `@` 了它(服务端按连线取,和 `@` 同一个参数,
+ * 见后端 boards/actions.upstream_entities);提示词框的 `@` 菜单里它排在「连进来的」那一组。
+ * 「补全多角度」「生成表情」这类能力是之后的事,到时照内容格能力的做法挂在它身上(`form.abilities`)。
+ * 资产删了,这一格还在(能挪、能删),写明「资产已删除」。
+ */
+export function EntityNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, commentMode, workspaceId } = nodeData;
+  const t = useI18n();
+  const labels = useCatalogLabels();
+  const entity = useQuery({
+    queryKey: entityKeys.detail(workspaceId ?? "", item.entity_id ?? ""),
+    queryFn: () => getEntity(item.entity_id ?? ""),
+    enabled: Boolean(item.entity_id),
+    retry: false,
+  });
+  const found = entity.data;
+  const KindIcon = entityKindIcon(found?.kind ?? "character");
+  const open = () => {
+    if (item.entity_id) window.location.hash = `#/entities?entity=${encodeURIComponent(item.entity_id)}`;
+  };
+  return (
+    <div data-board-entity={item.entity_id ?? ""} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS)}>
+      <NodeResizer minWidth={160} minHeight={200} isVisible={selected && !commentMode} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
+      <NodeLabel data={nodeData} fallback={found?.name} />
+      <Ports visible={selected} disabled={commentMode} />
+      <div className={cn("relative min-h-0 flex-1 overflow-hidden bg-secondary/40", CELL_INNER_TOP_RADIUS)}>
+        {entity.isError ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground">
+            <AlertTriangle size={22} strokeWidth={1.4} />
+            <span className="text-ui-xs">{t("boardEntityMissing")}</span>
+          </div>
+        ) : found ? (
+          <EntityThumb entity={{ kind: found.kind, cover_asset_id: found.display_cover_asset_id ?? null }} className="h-full w-full rounded-none" />
+        ) : (
+          <div className="flex h-full items-center justify-center text-muted-foreground"><UsersRound size={28} strokeWidth={1.2} /></div>
+        )}
+        {found && (
+          <span data-board-entity-kind={found.kind} className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-sm bg-[rgba(10,12,15,0.72)] px-1.5 py-px text-ui-2xs font-medium text-[#e8eaed]">
+            <KindIcon size={10} />
+            {labels.kind(found.kind)}
+          </span>
+        )}
+      </div>
+      <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
+        <KindIcon size={15} className="shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-ui-sm" title={found?.name}>{found?.name || t("boardKindEntity")}</span>
+        {found && !commentMode && (
+          <button type="button" className="nodrag nopan inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label={t("boardEntityOpen")} title={t("boardEntityOpen")} onClick={open}>
+            <ExternalLink size={13} />
+          </button>
+        )}
+      </footer>
+    </div>
+  );
+}
+
 //: **写成 Record<kind, …> 而不是随手一个对象** —— 后端加一种 item kind 时,这里漏登记
 //: 不会报错,只会让那种节点在画布上凭空消失。标上类型,漏一种就编译不过。
 export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<NodeProps>> = {
@@ -887,6 +950,7 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
   frame: FrameNode,
   scene: SceneNode,
   document: DocumentNode,
+  entity: EntityNode,
 };
 
 /** 指向素材库一份的那几种。**只此一处** —— 操作条给不给「换一份」、选择器能选什么,
@@ -907,4 +971,5 @@ export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: nu
   frame: { width: 420, height: 300 },
   scene: { width: 320, height: 220 },
   document: { width: 320, height: 300 },
+  entity: { width: 220, height: 280 },
 };

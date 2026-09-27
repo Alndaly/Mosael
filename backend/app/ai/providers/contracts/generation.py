@@ -135,6 +135,9 @@ class SourceAsset:
     role: str
     path: Path
     public_url: str | None = None
+    #: 参考图属于哪个**主体**。只对「先建主体再引用」的模型有意义(可灵,描述符的 `reference_subjects`):
+    #: 同一个值的几张图建成一个主体。空 = 不分组(手挂的参考图)。这里只是一个分组标签,不认识它背后是什么。
+    subject: str = ""
 
 
 @dataclass(frozen=True)
@@ -619,6 +622,26 @@ def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
         inline_only = role in KEYFRAME_ROLES or role == REFERENCE_IMAGE
         urls.append(item.public_url if item.public_url and not inline_only else image_file_to_data_url(item.path))
     return tuple(urls)
+
+
+def subject_groups(request: GenerationRequest, role: str) -> list[tuple[str, ...]]:
+    """某个角色的素材**按主体分组**(`SourceAsset.subject`),每组保持原来的先后;组按第一次出现的顺序。
+
+    没分组的(手挂的、外链给的)合成一组,排在最前 —— 和分组之前「全部建成一个主体」是同一件事。
+    """
+    loose = list(source_url_values(request.parameters, role, request.kind))
+    grouped: dict[str, list[str]] = {}
+    for item in request.sources:
+        if item.role != role:
+            continue
+        value = image_file_to_data_url(item.path)
+        if item.subject:
+            grouped.setdefault(item.subject, []).append(value)
+        else:
+            loose.append(value)
+    groups = [tuple(loose)] if loose else []
+    groups.extend(tuple(values) for values in grouped.values())
+    return groups
 
 
 def _as_list(value: Any) -> list[Any]:

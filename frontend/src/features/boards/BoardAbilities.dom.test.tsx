@@ -235,9 +235,9 @@ describe("一项能力在跑:格子自己的内容照常画,底边挂一条运�
 });
 
 describe("画板上造不出工具格", () => {
-  it("格子只有七种;拉线菜单、「添加」里都没有工具(见 BoardPendingLink / boardAddCatalog 的测试)", async () => {
+  it("格子只有八种(资产格是 ADR 0027 加的);拉线菜单、「添加」里都没有工具(见 BoardPendingLink / boardAddCatalog 的测试)", async () => {
     const { BOARD_NODE_TYPES, DEFAULT_SIZE } = await import("@/features/boards/boardNodes");
-    const kinds = ["note", "image", "video", "audio", "frame", "scene", "document"];
+    const kinds = ["note", "image", "video", "audio", "frame", "scene", "document", "entity"];
     expect(Object.keys(BOARD_NODE_TYPES).sort()).toEqual([...kinds].sort());
     expect(Object.keys(DEFAULT_SIZE).sort()).toEqual([...kinds].sort());
   });

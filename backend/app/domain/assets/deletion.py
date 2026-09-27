@@ -57,6 +57,11 @@ def delete_asset(db: Session, asset: Asset) -> Deleted:
         db.execute(
             update(SequenceModel).where(SequenceModel.id.in_(touched)).values(revision=SequenceModel.revision + 1)
         )
+    # 它若是哪个资产的参考图(ADR 0027),那张参考图随之摘掉,资产上记一笔「少了哪一张」。
+    # 资产本身不动 —— 删素材不删资产。
+    from app.domain.entities import forget_asset
+
+    forget_asset(db, asset)
     db.flush()
     name = asset.name
     asset_id = asset.id

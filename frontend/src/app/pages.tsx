@@ -15,6 +15,7 @@ const AdminView = React.lazy(() => import("@/features/admin/AdminView").then((m)
 const AiStudio = React.lazy(() => import("@/features/ai-studio/AiStudio").then((m) => ({ default: m.AiStudio })));
 const BoardsView = React.lazy(() => import("@/features/boards/BoardsView").then((m) => ({ default: m.BoardsView })));
 const BrowserPoolView = React.lazy(() => import("@/features/browser-pool/BrowserPoolView").then((m) => ({ default: m.BrowserPoolView })));
+const EntitiesView = React.lazy(() => import("@/features/entities/EntitiesView").then((m) => ({ default: m.EntitiesView })));
 const EditorView = React.lazy(() => import("@/features/editor/EditorView").then((m) => ({ default: m.EditorView })));
 const MediaLibraryView = React.lazy(() => import("@/features/media/MediaLibraryView").then((m) => ({ default: m.MediaLibraryView })));
 const NotesView = React.lazy(() => import("@/features/notes/NotesView").then((m) => ({ default: m.NotesView })));
@@ -54,6 +55,7 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
   ),
   statistics: (ctx) => <StatisticsView workspace={ctx.workspace} />,
   media: (ctx) => <MediaLibraryView workspace={ctx.workspace} />,
+  entities: (ctx) => <EntitiesView key={ctx.workspace.id} workspace={ctx.workspace} />,
   notes: (ctx) => <NotesView key={ctx.workspace.id} workspace={ctx.workspace} />,
   scenes: (ctx) => <SceneStudio key={ctx.workspace.id} workspace={ctx.workspace} />,
   boards: (ctx) => <BoardsView workspace={ctx.workspace} />,

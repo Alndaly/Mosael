@@ -77,6 +77,9 @@ class GenerationCreate(ApiModel):
     negative_prompt: str = Field(default="", max_length=4000)
     parameters: dict = Field(default_factory=dict)
     source_assets: list[SourceAssetRef] = Field(default_factory=list)
+    #: 这次 `@` 到的资产(ADR 0027):提示词描述拼进提示词,参考图按模型收得下的张数挂上。
+    #: 挂了哪几张、哪几张没挂上,回在 `request.entities` 里。
+    entity_ids: list[str] = Field(default_factory=list, max_length=8)
 
 
 class GenerationJobOut(OrmModel):

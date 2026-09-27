@@ -153,6 +153,9 @@ class GenerateForm(_Form):
     parameters: dict[str, Any] = Field(default_factory=dict)
     #: 发出去的输入素材:槽位挂的 + 正文里 @ 到的。
     source_assets: list[SourceRef] = Field(default_factory=list)
+    #: 正文里 `@` 到的资产(ADR 0027)。连进这一格的资产格不用写在这里 —— 服务端按连线取,和 `@` 同一条路
+    #: (见 actions.upstream_entities)。
+    entity_ids: list[str] = Field(default_factory=list, max_length=8)
     #: 落在这一格上、用户可再次编辑的表单(草稿)。**和上面几样不是同一份**,所以不能由它们推出来:
     #: 上面的 `prompt` 是发出去的那句(带着运行时追加的图例、拼进来的文档正文),`source_assets` 是
     #: 槽位挂的并上正文里 @ 到的;这里存的是用户写的那句、`prompt_document`、`mentioned_asset_ids`,
@@ -227,6 +230,7 @@ def _start_generate(db: Session, request: RunRequest, form: GenerateForm) -> Boa
         parameters=dict(form.parameters),
         source_assets=[one.model_dump() for one in form.source_assets],
         form=dict(form.item_form),
+        entity_ids=list(form.entity_ids),
     )
 
 

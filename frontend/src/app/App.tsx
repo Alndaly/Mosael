@@ -408,7 +408,7 @@ function readHash(): { view: StudioView; projectId: string | null } {
 }
 
 function writeHash(view: StudioView, projectId: string | null) {
-  const noteQuery = ["notes", "scenes", "boards"].includes(view) && window.location.hash.startsWith(`#/${view}?`) ? window.location.hash.split("?")[1] : "";
+  const noteQuery = ["notes", "scenes", "boards", "entities"].includes(view) && window.location.hash.startsWith(`#/${view}?`) ? window.location.hash.split("?")[1] : "";
   const query = noteQuery ? `?${noteQuery}` : projectId ? `?p=${projectId}` : "";
   const next = `#/${view}${query}`;
   if (window.location.hash !== next)
@@ -499,7 +499,7 @@ function Studio({
       // 白名单在后端 mcp_server._VIEWS 那一侧,这里再挡一道:两边都可能先改。
       if (!VALID_VIEWS.includes(next)) return;
       if (next === "editor" && id) openProject(id);
-      else if (id && ["scenes", "notes", "boards"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : "board"}=${encodeURIComponent(id)}`;
+      else if (id && ["scenes", "notes", "boards", "entities"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : next === "entities" ? "entity" : "board"}=${encodeURIComponent(id)}`;
       else navigate(next as StudioView);
     },
   });

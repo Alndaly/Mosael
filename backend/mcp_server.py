@@ -229,6 +229,8 @@ READ_ONLY_TOOLS = frozenset(
         "list_memories",
         "list_scenes",
         "list_scene_models",
+        "list_entities",
+        "get_entity",
         "get_scene",
         "view_scene",
         "blender_inspect",
@@ -283,6 +285,9 @@ MUTATING_TOOLS = frozenset(
         "remember",
         "create_scene",
         "edit_scene",
+        #: 资产库(ADR 0027):建人物 / 场景 / 道具、挂参考图 —— 往本应用里写东西。
+        "create_entity",
+        "attach_entity_reference",
         #: 渲出来的是新素材 —— 往素材库里写东西。
         "render_scene_references",
         "create_note",
@@ -648,8 +653,16 @@ def generate_image(
     workspace_id: str = "",
     source_asset_ids: list[str] | None = None,
     parameters: dict[str, Any] | None = None,
+    entity_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Confirmation required: generate or edit an image asset.
+
+    entity_ids @-mentions characters / locations / props from the asset library
+    (list_entities): each one's prompt descriptor is appended to the prompt and its
+    reference images are attached, as many as the model accepts (turnaround first,
+    then front, full body, the rest). Write the character's NAME in the prompt where
+    it appears ("张三站在老街口") and pass its id here — do not pick reference images
+    by hand. The result says which images were attached and which did not fit.
 
     Use without source_asset_ids for text-to-image. Use source_asset_ids with
     existing image asset ids when the user asks to edit/transform/continue from
@@ -690,6 +703,7 @@ def generate_image(
                 "source_assets": [
                     {"asset_id": str(one), "role": "reference_image"} for one in (source_asset_ids or [])
                 ],
+                "entity_ids": [str(one) for one in (entity_ids or [])],
             },
         },
     )
@@ -704,7 +718,7 @@ _SURFACES = ("all", "agent", "direct", "gateway", "automation")
 #: 能跳到哪儿。**白名单**,和前端的 StudioView 一一对应 —— 透传任意字符串等于让模型
 #: 往 location.hash 里塞东西,而它拼错一个字的表现是"点了没反应"。
 _VIEWS = (
-    "home", "statistics", "media", "notes", "scenes", "editor", "ai", "publish", "settings",
+    "home", "statistics", "media", "entities", "notes", "scenes", "editor", "ai", "publish", "settings",
     "workflows", "boards", "scheduler", "plugins", "browser-pool", "admin",
 )
 
@@ -725,9 +739,10 @@ def open_view(view: str, id: str = "") -> dict[str, Any]:
     that lists that kind of thing (list_assets, list_projects, list_workflows, list_boards,
     list_publish_accounts, list_jobs), then call this with the page it lives on.
 
-    `view` is one of: home, statistics, media, notes, scenes, editor, ai, publish, settings,
+    `view` is one of: home, statistics, media, entities, notes, scenes, editor, ai, publish, settings,
     workflows, boards, scheduler, plugins, browser-pool, admin. `id` selects a project in
-    editor, a note in notes, a 3D scene in scenes, or a board in boards. Other pages ignore id.
+    editor, a note in notes, a 3D scene in scenes, an asset-library entry in entities, or a board in
+    boards. Other pages ignore id.
 
     Do NOT use it to shuffle the user around while you work — a page that changes under
     someone reading it is worse than no navigation at all. One destination, once you have one.
@@ -935,8 +950,14 @@ def generate_video(
     workspace_id: str = "",
     parameters: dict[str, Any] | None = None,
     source_assets: list[dict[str, str]] | None = None,
+    entity_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Confirmation required: generate a NEW video asset from a text prompt.
+
+    entity_ids @-mentions characters / locations / props from the asset library
+    (list_entities), exactly like generate_image: prompt descriptors appended,
+    reference images attached up to what the model accepts. Models that build a
+    reusable subject first (Kling Omni) get one subject per mentioned character.
 
     Use when the user asks to create new footage/animation/B-roll as a media
     asset. The prompt describes the shot; models whose "prompt" in
@@ -975,6 +996,7 @@ def generate_video(
                 "model": model,
                 "parameters": parameters or {},
                 "source_assets": source_assets or [],
+                "entity_ids": [str(one) for one in (entity_ids or [])],
             },
         },
     )
@@ -1450,6 +1472,77 @@ def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] 
 
 
 @mcp.tool()
+def list_entities(kind: str = "", query: str = "", tag: str = "", workspace_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace.
+
+    An asset ("资产") is a named thing with reference images, not a file: "张三" with his
+    front / side / turnaround images, a prompt descriptor and (for characters) a voice. Media
+    files ("素材") are what list_assets returns. kind is "character", "location" or "prop"
+    (empty = all); query matches name, description and prompt descriptor; tag filters by tag.
+    Variants (张三 · 冬装) are listed under their parent — read get_entity for them.
+
+    To use one in a generation, pass its id in entity_ids of generate_image / generate_video
+    instead of picking reference images yourself.
+    """
+    params = {"workspace_id": workspace_id or _default_workspace_id(), "kind": kind, "q": query, "tag": tag}
+    return _get("/api/entities", {key: value for key, value in params.items() if value})
+
+
+@mcp.tool()
+def get_entity(entity_id: str) -> dict[str, Any]:
+    """Read-only: one asset from the asset library — its description, prompt descriptor, reference
+    images (each with its angle: front / side / back / turnaround / closeup / full_body / expression /
+    concept / detail), cover, per-kind attributes (a character's voice_id, blockout color, whether it is
+    a real person and the consent declared; a location's 3D scene and time of day; a prop's 3D model)
+    and its variants."""
+    return _get(f"/api/entities/{entity_id}")
+
+
+@mcp.tool()
+def create_entity(
+    kind: str,
+    name: str,
+    description: str = "",
+    prompt: str = "",
+    tags: list[str] | None = None,
+    parent_id: str = "",
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Create a character, location or prop in the asset library (a workspace edit, no confirmation).
+
+    kind: "character" / "location" / "prop". description is for people; prompt is the
+    descriptor models read (appearance, clothing, materials) and is appended whenever the asset
+    is mentioned in a generation. parent_id makes it a VARIANT of an existing asset (张三 · 冬装):
+    a variant inherits the parent's prompt descriptor — write only what differs.
+    Add reference images afterwards with attach_entity_reference. Real-person consent is declared
+    by the user in the app, never by you.
+    """
+    body: dict[str, Any] = {
+        "workspace_id": workspace_id or _default_workspace_id(),
+        "kind": kind,
+        "name": name,
+        "description": description,
+        "prompt": prompt,
+        "tags": tags or [],
+    }
+    if parent_id:
+        body["parent_id"] = parent_id
+    return _post("/api/entities", body)
+
+
+@mcp.tool()
+def attach_entity_reference(entity_id: str, asset_id: str, role: str = "", cover: bool = False) -> dict[str, Any]:
+    """Attach an existing image (or video) asset to an asset-library entry as a reference image
+    (a workspace edit, no confirmation). The media file is referenced, not copied.
+
+    role is the angle / purpose: front, side, back, turnaround, closeup, full_body, expression,
+    concept or detail (empty = front for characters and props, concept for locations). Attaching
+    the same asset again changes its role. cover=true also makes it the cover image.
+    """
+    return _post(f"/api/entities/{entity_id}/references", {"asset_id": asset_id, "role": role, "cover": cover})
+
+
+@mcp.tool()
 def list_scene_models(workspace_id: str = "") -> list[dict[str, Any]]:
     """Read-only: the imported 3D models available in this workspace, with id, name, format and size.
 
@@ -1909,12 +2002,16 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
     operations is a list of:
       {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
           (item_id/x/y/width/height/title optional — the server auto-ids and lays out to the right)
-          type is one of note / image / video / audio / frame / scene / document
+          type is one of note / image / video / audio / frame / scene / document / entity
       {"kind":"add_item","type":"image","asset_id":"<asset id>"}
           (places an existing asset; it must be in this workspace and match the item type:
            image → image asset, video → video asset, audio → audio asset)
       {"kind":"add_item","type":"scene","scene_id":"<list_scenes id>"}
           (a 3D scene item REQUIRES scene_id — a scene of this workspace; without it the op is rejected)
+      {"kind":"add_item","type":"entity","entity_id":"<list_entities id>"}
+          (an ASSET item — a character / location / prop from the asset library; it REQUIRES entity_id.
+           connect it into an image/video slot and that generation uses it exactly like an @mention:
+           its prompt descriptor is appended and its reference images are attached)
       {"kind":"add_item","type":"frame","title":"第一幕"}
           (a frame is named by title; it has no text)
       {"kind":"add_item","type":"document","note_id":"<read_note id>","note_revision":1}

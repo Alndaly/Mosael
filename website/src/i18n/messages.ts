@@ -488,7 +488,8 @@ const zh = {
     versionLabel: "第 {version} 版",
     cells: "{count} 格",
     getApp: "用 Mosael 做一张",
-    kinds: { note: "便签", image: "图片", video: "视频", audio: "音频", frame: "分组", scene: "3D 场景", document: "文档" },
+    kinds: { note: "便签", image: "图片", video: "视频", audio: "音频", frame: "分组", scene: "3D 场景", document: "文档", entity: "资产" },
+    entityKinds: { character: "人物", location: "场景", prop: "道具" },
   },
   profile: {
     joined: "加入于",
@@ -1012,7 +1013,8 @@ const en: Messages = {
     versionLabel: "Version {version}",
     cells: "{count} cells",
     getApp: "Make one in Mosael",
-    kinds: { note: "Note", image: "Image", video: "Video", audio: "Audio", frame: "Group", scene: "3D scene", document: "Document" },
+    kinds: { note: "Note", image: "Image", video: "Video", audio: "Audio", frame: "Group", scene: "3D scene", document: "Document", entity: "Asset" },
+    entityKinds: { character: "Character", location: "Location", prop: "Prop" },
   },
   profile: {
     joined: "Joined",

@@ -8,6 +8,9 @@ vi.mock("@/api/client", () => ({
   assetPreviewUrl: (id: string) => `/preview/${id}`,
 }));
 
+//: 「属于哪些资产」那一行自己取数(资产库,ADR 0027),和这里要测的预览层次无关。
+vi.mock("@/features/entities/AssetEntities", () => ({ AssetEntitiesList: () => null }));
+
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
 }));

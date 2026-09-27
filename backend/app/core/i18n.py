@@ -2180,6 +2180,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_shot_count": {"zh": "镜头数", "en": "Shot count"},
     "wfField_render": {"zh": "渲染内容", "en": "Render"},
     "wfField_source_group": {"zh": "用哪一组素材", "en": "Which sources to use"},
+    "wfField_entity_ids": {"zh": "资产", "en": "Assets"},
     #: 节点面板的分组名。
     "wfCat_flow": {"zh": "流程", "en": "Flow"},
     "wfCat_ai": {"zh": "AI", "en": "AI"},
@@ -2278,6 +2279,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_ai_generate_source_group": {
         "zh": "有的模型(如 Seedance)首尾帧和参考素材不能同时用。两组都接上时,在这里选这一次用哪一组,另一组会被忽略;「全部」表示原样全部交给模型",
         "en": "Some models (such as Seedance) cannot combine first/last frames with reference media. With both connected, choose which group this run uses and the other is ignored; All passes everything to the model",
+    },
+    "wfNode_ai_generate_entity_ids": {
+        "zh": "资产库里的人物 / 场景 / 道具:它们的提示词描述拼进提示词,参考图按这个模型收得下的张数挂上(三视图 > 正面 > 全身 > 其余)。挂了哪几张记在生成记录里",
+        "en": "Characters, locations or props from the asset library: their prompt descriptors are appended and their reference images attached, as many as this model accepts (turnaround > front > full body > the rest). Which ones were attached is recorded on the generation",
     },
     # ---- i18n 分区 B2(ai/ 下的供应商与运行时):这一批新加的 key 放在这行下面 ----
     # ---- 生成供应商(ai/providers):上游原话放在 {detail} 里,不翻 ----
@@ -4256,6 +4261,94 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Plugins that ship with the app can't be published to the community.",
     },
     "communityErr_pluginInvalid": {"zh": "插件包没通过校验:{detail}", "en": "The plugin package failed validation: {detail}"},
+    # ---- 资产库(ADR 0027):人物 / 场景 / 道具 ----
+    "entityKind_character": {"zh": "人物", "en": "Character"},
+    "entityKind_location": {"zh": "场景", "en": "Location"},
+    "entityKind_prop": {"zh": "道具", "en": "Prop"},
+    "entityRole_front": {"zh": "正面", "en": "Front"},
+    "entityRole_side": {"zh": "侧面", "en": "Side"},
+    "entityRole_back": {"zh": "背面", "en": "Back"},
+    "entityRole_turnaround": {"zh": "三视图", "en": "Turnaround"},
+    "entityRole_closeup": {"zh": "特写", "en": "Close-up"},
+    "entityRole_full_body": {"zh": "全身", "en": "Full body"},
+    "entityRole_expression": {"zh": "表情", "en": "Expression"},
+    "entityRole_concept": {"zh": "设定图", "en": "Concept"},
+    "entityRole_detail": {"zh": "细节", "en": "Detail"},
+    "entityConsent_self": {"zh": "这是我本人", "en": "This is me"},
+    "entityConsent_self_help": {
+        "zh": "肖像是你自己的。之后用在数字人(让它说话)时,记下的是你本人的声明。",
+        "en": "The likeness is your own. When it is later used for a digital human, this records your own declaration.",
+    },
+    "entityConsent_authorized": {"zh": "已取得本人同意", "en": "The person has given consent"},
+    "entityConsent_authorized_help": {
+        "zh": "肖像是别人的,你已经取得本人单独同意(《深度合成管理规定》第十四条)。没有同意不要选这一项。",
+        "en": "The likeness belongs to someone else and they have given you their separate consent. Don't pick this without it.",
+    },
+    "entityConsent_fictional": {"zh": "虚构人物", "en": "Fictional character"},
+    "entityConsent_fictional_help": {
+        "zh": "不是任何真实存在的人。",
+        "en": "Not any real person.",
+    },
+    "entityErr_notFound": {"zh": "没有这个资产", "en": "No such asset."},
+    "entityErr_kind": {"zh": "资产的种类只能是 {kinds}", "en": "An asset's kind must be one of {kinds}."},
+    "entityErr_nameRequired": {"zh": "资产要有一个名字", "en": "An asset needs a name."},
+    "entityErr_nameTooLong": {"zh": "名字最长 {limit} 字", "en": "The name can be at most {limit} characters."},
+    "entityErr_textTooLong": {"zh": "{field} 最长 {limit} 字", "en": "{field} can be at most {limit} characters."},
+    "entityErr_tagsNotList": {"zh": "标签要是一串字", "en": "Tags must be a list of strings."},
+    "entityErr_tooManyTags": {"zh": "一个资产最多 {limit} 个标签", "en": "An asset can have at most {limit} tags."},
+    "entityErr_attributesNotObject": {"zh": "专有字段要是一个对象", "en": "The attributes must be an object."},
+    "entityErr_attributeUnknown": {
+        "zh": "这种资产没有这些字段:{keys};可用的是 {allowed}",
+        "en": "This kind of asset has no {keys}; it has {allowed}.",
+    },
+    "entityErr_attributeNotText": {"zh": "{field} 要是一段字", "en": "{field} must be text."},
+    "entityErr_attributeNotBool": {"zh": "{field} 要是真或假", "en": "{field} must be true or false."},
+    "entityErr_attributeTooLong": {"zh": "{field} 最长 {limit} 字", "en": "{field} can be at most {limit} characters."},
+    "entityErr_colorFormat": {"zh": "人偶颜色要写成 #RRGGBB", "en": "The blockout color must be written as #RRGGBB."},
+    "entityErr_consentKind": {"zh": "授权声明只能是 {kinds}", "en": "The consent declaration must be one of {kinds}."},
+    "entityErr_realPersonNotFictional": {
+        "zh": "真人不能声明成「虚构人物」:选「这是我本人」或「已取得本人同意」",
+        "en": "A real person can't be declared fictional. Pick \"This is me\" or \"The person has given consent\".",
+    },
+    "entityErr_fictionalConsent": {
+        "zh": "虚构人物的声明只能是「虚构人物」;是真人的话先标成真人",
+        "en": "A fictional character can only be declared fictional. If it's a real person, mark it as one first.",
+    },
+    "entityErr_attributeTargetGone": {
+        "zh": "{field} 指的东西不在这个工作区里",
+        "en": "What {field} points at isn't in this workspace.",
+    },
+    "entityErr_variantOfVariant": {"zh": "变体下面不能再建变体", "en": "A variant can't have variants of its own."},
+    "entityErr_variantKind": {"zh": "变体和母体是同一种资产", "en": "A variant is the same kind of asset as its parent."},
+    "entityErr_coverNotAReference": {"zh": "封面要是这个资产自己的一张参考图", "en": "The cover must be one of this asset's own reference images."},
+    "entityErr_coverNotImage": {"zh": "封面要是一张图片", "en": "The cover must be an image."},
+    "entityErr_hasVariants": {
+        "zh": "这个资产下面有 {count} 个变体,要连它们一起删",
+        "en": "This asset has {count} variant(s); delete them along with it.",
+    },
+    "entityErr_role": {"zh": "参考图的角度只能是 {roles}", "en": "A reference's angle must be one of {roles}."},
+    "entityErr_assetNotInWorkspace": {"zh": "这份素材不在这个工作区的素材库里", "en": "That media isn't in this workspace's library."},
+    "entityErr_referenceKind": {"zh": "参考图要是图片或视频", "en": "A reference must be an image or a video."},
+    "entityErr_tooManyReferences": {
+        "zh": "一个资产最多挂 {limit} 张参考图;更多的角度可以拆成变体",
+        "en": "An asset can hold at most {limit} references; split further looks into variants.",
+    },
+    "entityErr_referenceNotFound": {"zh": "这张图不是这个资产的参考图", "en": "That image isn't one of this asset's references."},
+    "entityErr_reorderMismatch": {
+        "zh": "参考图刚刚有人改过,刷新之后再排一次",
+        "en": "The references just changed. Refresh and reorder again.",
+    },
+    "entityErr_tooManyMentions": {"zh": "一次最多点名 {limit} 个资产", "en": "At most {limit} assets can be mentioned at once."},
+    "entityErr_mentionGone": {
+        "zh": "点名的资产 {id} 不在这个工作区里(可能已经删了)",
+        "en": "The mentioned asset {id} isn't in this workspace (it may have been deleted).",
+    },
+    "genErr_tooManySubjects": {
+        "zh": "{provider}/{model} 一次最多引用 {cap} 个主体,这次给了 {count} 组参考图",
+        "en": "{provider}/{model} can reference at most {cap} subjects at once; this request has {count} groups of references.",
+    },
+    "boardErr_entityNeedsId": {"zh": "资产格需要 entity_id", "en": "An asset item needs an entity_id."},
+    "boardErr_entityNotInWorkspace": {"zh": "资产格引用的资产不在这个工作区里", "en": "The asset that item points at isn't in this workspace."},
 }
 
 

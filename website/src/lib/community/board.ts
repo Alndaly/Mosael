@@ -19,6 +19,8 @@ export const DEFAULT_SIZE: Record<string, { width: number; height: number }> = {
   frame: { width: 420, height: 300 },
   scene: { width: 320, height: 220 },
   document: { width: 320, height: 300 },
+  //: 资产格(ADR 0027):快照里带封面(`media`)和名字,查看页照图片画、角上标种类。
+  entity: { width: 220, height: 280 },
 };
 
 const KNOWN = new Set(Object.keys(DEFAULT_SIZE));

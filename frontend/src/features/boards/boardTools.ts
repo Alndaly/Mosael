@@ -51,7 +51,8 @@ export function hostHasContent(item: BoardItem): boolean {
   if (item.kind === "note") return Boolean(item.text?.trim());
   if (item.kind === "document") return Boolean(item.note_id);
   if (item.kind === "scene") return Boolean(item.scene_id);
-  if (item.kind === "frame") return false;
+  //: 资产格的能力(补全多角度、生成表情)是之后的事(ADR 0027 阶段 4),到时在这里说它的内容是什么。
+  if (item.kind === "frame" || item.kind === "entity") return false;
   return Boolean(item.asset_id);
 }
 
@@ -103,6 +104,8 @@ const KIND_ROWS: KindRow[] = [
   { value: "pick-audio", kind: "audio", group: "library", text: { label: "boardsPickAudio", hint: "boardsPickAudioHint" } },
   { value: "document", kind: "document", group: "reference" },
   { value: "scene", kind: "scene", group: "reference" },
+  //: 资产库里的人物 / 场景 / 道具(ADR 0027):先挑再放,和 3D 场景一样。
+  { value: "entity", kind: "entity", group: "reference" },
   { value: "note", kind: "note", group: "organize" },
   { value: "frame", kind: "frame", group: "organize" },
 ];
@@ -138,6 +141,7 @@ export function givesValue(item: BoardItem): boolean {
   if (item.kind === "note") return true;
   if (item.kind === "document") return Boolean(item.note_id);
   if (item.kind === "scene") return Boolean(item.scene_id);
+  if (item.kind === "entity") return Boolean(item.entity_id);
   return Boolean(item.asset_id);
 }
 
@@ -147,6 +151,7 @@ export function givesValue(item: BoardItem): boolean {
  */
 export function sourceValue(item: BoardItem): string {
   if (item.kind === "scene") return item.scene_id ?? "";
+  if (item.kind === "entity") return item.entity_id ?? "";
   if (item.kind === "note") return item.text ?? "";
   if (item.kind === "document") return "";
   return item.asset_id ?? "";

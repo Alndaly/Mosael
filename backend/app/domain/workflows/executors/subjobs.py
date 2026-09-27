@@ -115,6 +115,7 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import GenerationDomainError, keep_source_group, parse_source_assets
     from app.domain.generation.runner import start_generation_thread
+    from app.domain.entities import parse_entity_ids
 
     kind = str(config.get("kind", "image")).strip() or "image"
     # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
@@ -136,6 +137,8 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 parse_source_assets(config.get("source_assets"), kind=kind),
                 str(config.get("source_group") or "all").strip(),
             ),
+            #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
+            entity_ids=parse_entity_ids(config.get("entity_ids")),
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc

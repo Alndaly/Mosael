@@ -202,6 +202,28 @@
     "open_registration",
     "updated_at"
   ],
+  "entities": [
+    "attributes",
+    "cover_asset_id",
+    "created_at",
+    "description",
+    "id",
+    "kind",
+    "lost_references",
+    "name",
+    "parent_id",
+    "prompt",
+    "tags",
+    "updated_at",
+    "workspace_id"
+  ],
+  "entity_references": [
+    "asset_id",
+    "created_at",
+    "entity_id",
+    "position",
+    "role"
+  ],
   "feishu_bind_codes": [
     "code",
     "expires_at",

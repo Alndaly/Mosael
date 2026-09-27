@@ -155,6 +155,9 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
         choice = (config.get("provider"), config.get("provider_profile_id"), config.get("model"), config.get("kind"))
         if _templated(prompt) or (node_id, "prompt") in bound or any(_templated(one) for one in choice):
             continue
+        # 点名了资产:它们的提示词描述在运行时才拼进来(domain/entities/mentions),空着的提示词不算缺。
+        if config.get("entity_ids") and not str(prompt or "").strip():
+            continue
         parameters = config.get("parameters") if isinstance(config.get("parameters"), dict) else {}
         try:
             check_text_inputs(

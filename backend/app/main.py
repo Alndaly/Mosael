@@ -23,6 +23,7 @@ from app.api.routes.asr import router as asr_router
 from app.api.routes.denoise import router as denoise_router
 from app.api.routes.separation import router as separation_router
 from app.api.routes.assets import router as assets_router
+from app.api.routes.entities import router as entities_router
 from app.api.routes.voices import router as voices_router
 from app.api.routes.translate import router as translate_router
 from app.api.routes.websearch import router as websearch_router
@@ -72,6 +73,7 @@ from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import AssetProjectError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes import SceneDomainError
+from app.domain.entities import EntityDomainError
 from app.domain.blender.bridge import BlenderDomainError
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.agent.host import reconcile_orphaned_agent_sessions
@@ -210,6 +212,11 @@ def _install_permission_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(SceneDomainError)
     async def _scene_error(_request: Request, exc: SceneDomainError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(EntityDomainError)
+    async def _entity_error(_request: Request, exc: EntityDomainError) -> JSONResponse:
+        """资产库的异常按它自己声明的状态码翻(404 / 409 / 422)。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(BlenderDomainError)
@@ -391,6 +398,7 @@ def create_app() -> FastAPI:
     app.include_router(generation_router, prefix="/api", dependencies=protected)
     app.include_router(blender_router, prefix="/api", dependencies=protected)
     app.include_router(scenes_router, prefix="/api", dependencies=protected)
+    app.include_router(entities_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)
     app.include_router(boards_router, prefix="/api", dependencies=protected)

@@ -154,8 +154,9 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
       upstream={feeding.assets}
       upstreamTexts={feeding.texts.filter((one) => !documents.has(one.itemId))}
       upstreamDocuments={feeding.references}
+      upstreamEntities={feeding.sources.flatMap((one) => (one.kind === "entity" && one.entity_id ? [one.entity_id] : []))}
       onFormChange={onFormChange}
-      onSubmit={({ prompt, provider, providerProfileId, model, parameters, sourceAssets, form }) =>
+      onSubmit={({ prompt, provider, providerProfileId, model, parameters, sourceAssets, entityIds, form }) =>
         void run({
           producer: "generate",
           item_id: item.id,
@@ -168,6 +169,7 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
             model,
             parameters,
             source_assets: sourceAssets,
+            entity_ids: entityIds,
             item_form: form,
           },
         })

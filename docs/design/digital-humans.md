@@ -148,6 +148,9 @@ ComfyUI 插件已经能把视频图里的音频输入认成驱动音频，要补
 
 > **修订(2026-09-27)**:「形象」由 [ADR 0027 资产库](../adr/0027-asset-library.md) 的**人物资产**承担 —— 下面说的 `personas` 表不再单独建,
 > 脸(参考图)、嗓子(音色)、授权声明都是人物资产上的字段。
+> 这三样已经落地(ADR 0027 阶段 1):人物资产的 `attributes` 里有 `voice_id`、`real_person` 和
+> `consent: {kind: self | authorized | fictional, declared_by, declared_at}`(声明人和时间由服务端记);
+> 「能不能用于数字人」的判据是 `domain/entities/catalog.usable_for_digital_human` —— 真人要有本人或已获授权的声明。
 
 **新增工作区级的实体「形象」**（表名 `personas`）：
 

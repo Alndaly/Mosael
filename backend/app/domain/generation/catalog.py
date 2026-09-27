@@ -397,6 +397,10 @@ KLING_V3_OMNI_VIDEO_CAPABILITIES = {
     "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 4},
     # 当前 Adapter 先建可复用主体：1 张正面 + 1～3 张其他角度。
     "min_reference_images": 2,
+    #: 参考图不是「这次用几张图」,而是**先建主体再引用**:一组图建一个主体,一次最多引 3 个
+    #: (文档原话「最多支持指定 3 个主体」,见 kling/elements.MAX_ELEMENTS_PER_TASK)。分组由
+    #: `@资产` 给(每个资产一组,见 domain/entities/mentions);手挂的参考图算一组。
+    "reference_subjects": {"max_subjects": 3},
 }
 
 

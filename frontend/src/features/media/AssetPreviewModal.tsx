@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useImagePreview } from "@/components/app/image-preview";
 import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { formatTimecode } from "@/domain/timeline/geometry";
+import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { cn } from "@/lib/utils";
 
 /** 后端时间是无时区的 UTC ISO 串;补 Z 再按本地时区显示到分钟。 */
@@ -139,6 +140,12 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
               )}
               {asset.original_filename && asset.original_filename !== asset.name && (
                 <InfoRow label={t("assetOriginalName")}>{asset.original_filename}</InfoRow>
+              )}
+              {/* 这张图是哪些资产的参考图(ADR 0027)。删这份素材时,它们各少一张参考图。 */}
+              {asset.kind !== "audio" && (
+                <InfoRow label={t("assetEntitiesTitle")}>
+                  <AssetEntitiesList asset={asset} />
+                </InfoRow>
               )}
               {asset.created_at && (
                 <InfoRow label={t("assetCreated")}>

@@ -9,7 +9,7 @@ export type BoardAbilitySetting = Partial<BoardRunForms["node"]>;
 export interface BoardItem {
   id: string;
   /** 画板上没有单独的工具格:把内容变成新内容的工具是内容格自己的能力(`form.abilities`,ADR 0025 修订)。 */
-  kind: "note" | "image" | "video" | "audio" | "frame" | "scene" | "document";
+  kind: "note" | "image" | "video" | "audio" | "frame" | "scene" | "document" | "entity";
   /** 用户给这一格起的名字。**每种都有、只此一处**(分组框的名字也在这,不在 text)。
    *  没有 = 没起名,显示种类名(见 boardNodes.itemName)。和后端 canvas._normalize_title 同形。 */
   title?: string;
@@ -23,6 +23,8 @@ export interface BoardItem {
   color?: string;
   asset_id?: string;
   scene_id?: string;
+  /** 资产格(ADR 0027)引用的资产:资产库里的一个人物 / 场景 / 道具。连进生成格就等于在提示词里 @ 了它。 */
+  entity_id?: string;
   note_id?: string;
   note_revision?: number;
   form?: {
@@ -40,6 +42,8 @@ export interface BoardItem {
      *  服务端存的时候就把它摘掉(后端 canvas._drop_detached_bindings)。 */
     source_assets?: { asset_id: string; role: string; from?: string }[];
     mentioned_asset_ids?: string[];
+    /** 提示词里 `@` 到的资产(ADR 0027)。生成时服务端把它们的提示词描述和参考图挂上。 */
+    mentioned_entity_ids?: string[];
     /** 这一格是**从哪份素材截的哪一段**(剪一段的产出)。和后端 canvas._normalize_trim 同形。 */
     trim?: { asset_id: string; start: number; end: number; mute: boolean };
     prompt_document?: { type?: string; content?: unknown[]; [key: string]: unknown };
@@ -200,6 +204,8 @@ export interface BoardRunForms {
     parameters?: Record<string, unknown>;
     /** 发出去的输入素材:槽位挂的 + 正文里 @ 到的。 */
     source_assets?: { asset_id: string; role: string }[];
+    /** 正文里 `@` 到的资产(ADR 0027);连进来的资产格由服务端按连线并进去。 */
+    entity_ids?: string[];
     /** 落在这一格上、用户可再次编辑的表单(不含运行时追加的图例)。 */
     item_form?: BoardItem["form"];
   };

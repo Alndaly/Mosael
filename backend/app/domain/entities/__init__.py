@@ -1,0 +1,77 @@
+"""资产库(ADR 0027):人物、场景、道具。
+
+调用方从这里取:资产的读写与反查在 `library`,生成里的 `@资产` 在 `mentions`,词表在 `catalog`。
+"""
+
+from app.domain.entities.catalog import (
+    ATTACH_PRIORITY,
+    ATTRIBUTE_KEYS,
+    CONSENT_KINDS,
+    KINDS,
+    ROLES,
+    usable_for_digital_human,
+)
+from app.domain.entities.library import (
+    AssetMembership,
+    EntityConflict,
+    EntityDomainError,
+    EntityNotFound,
+    Usage,
+    add_reference,
+    board_uses,
+    clear_lost_references,
+    counts_for,
+    cover_of,
+    create_entity,
+    delete_entity,
+    entities_of_asset,
+    entity_usage,
+    entity_workspace,
+    forget_asset,
+    get_entity,
+    list_entities,
+    references_of,
+    remove_reference,
+    reorder_references,
+    set_reference_role,
+    update_entity,
+    variants_of,
+)
+from app.domain.entities.catalog import parse_entity_ids
+from app.domain.entities.mentions import Expansion, attach_entities
+
+__all__ = [
+    "ATTACH_PRIORITY",
+    "ATTRIBUTE_KEYS",
+    "CONSENT_KINDS",
+    "KINDS",
+    "ROLES",
+    "AssetMembership",
+    "EntityConflict",
+    "EntityDomainError",
+    "EntityNotFound",
+    "Expansion",
+    "Usage",
+    "add_reference",
+    "attach_entities",
+    "board_uses",
+    "clear_lost_references",
+    "counts_for",
+    "cover_of",
+    "create_entity",
+    "delete_entity",
+    "entities_of_asset",
+    "entity_usage",
+    "entity_workspace",
+    "forget_asset",
+    "get_entity",
+    "list_entities",
+    "parse_entity_ids",
+    "references_of",
+    "remove_reference",
+    "reorder_references",
+    "set_reference_role",
+    "update_entity",
+    "usable_for_digital_human",
+    "variants_of",
+]
