@@ -134,4 +134,28 @@ describe("生成格上的 @资产", () => {
     fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ entityIds: ["e1"] })));
   });
+
+  it("连进来的资产在上面那一排摆出来 —— 连上了看得见,不是悄悄生效", async () => {
+    const street = { id: "e-street", kind: "location", name: "竹林小径", parent_name: "", cover_asset_id: "c1" } as EntitySummary;
+    api.listEntities.mockResolvedValue([street]);
+    mount(
+      <NodeComposer
+        item={{ id: "img", kind: "image", x: 0, y: 0 } as BoardItem}
+        models={[model]}
+        busy={false}
+        workspaceId="ws"
+        onPickAsset={vi.fn()}
+        onFormChange={vi.fn()}
+        onSubmit={vi.fn()}
+        upstreamEntities={["e-street"]}
+      />,
+    );
+    const chip = await waitFor(() => {
+      const found = document.querySelector('[data-linked-entity="e-street"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(chip.textContent).toContain("竹林小径");
+    expect(chip.getAttribute("title")).toBe("boardLinkedEntityHint");
+  });
 });

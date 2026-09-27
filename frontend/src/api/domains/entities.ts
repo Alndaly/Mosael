@@ -85,6 +85,16 @@ export const reorderEntityReferences = (id: string, assetIds: string[]) =>
     body: JSON.stringify({ asset_ids: assetIds }),
   });
 
+/** 「补全多角度」「生成表情」的请求(和画板上资产格的那两项能力同一件事,后端 domain/entities/drawing)。 */
+export type EntityDrawRequest = components["schemas"]["EntityDrawRequest"];
+
+/** 照参考图再画几张,画成的挂回来。说不通的(没图、模型不收参考图、角度都齐了)当场 422;说得通回那个任务。 */
+export const drawEntity = (id: string, body: EntityDrawRequest) =>
+  api<components["schemas"]["JobOut"]>(`/api/entities/${encodeURIComponent(id)}/draw`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
 export const getEntityUsage = (id: string) => api<EntityUsage>(`/api/entities/${encodeURIComponent(id)}/usage`);
 
 export const listAssetEntities = (assetId: string) =>

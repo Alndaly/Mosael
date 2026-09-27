@@ -6,7 +6,8 @@
 
 ## 挑哪几张
 
-- 只挂**图片**,角色是参考图(`reference_image`)。先后:三视图 > 正面 > 全身 > 其余(catalog.ATTACH_PRIORITY)。
+- 只挂**图片**,角色是参考图(`reference_image`)。先后按种类(catalog.ATTACH_PRIORITY):人物三视图 > 正面 > 全身,
+  道具三视图 > 正面,场景全景 > 设定图;其余照资产里排的顺序。
 - 能挂几张**只听描述符**(`source_limits.reference_image`),已经手动挂上的参考图先占名额。描述符查不到、
   没声明这个角色、没写上限、或者和已经挂上的首尾帧互斥(`exclusive_source_groups`),一张都不挂 —— 不猜。
 - 点名了几个资产时轮流挑(甲一张、乙一张、甲第二张……),不让第一个把名额吃光:一镜里有两个人,
@@ -83,7 +84,7 @@ def _mention(db: Session, entity: Entity) -> _Mention:
         entity=entity,
         name=name,
         descriptor=descriptor.strip(),
-        images=attach_order(images),
+        images=attach_order(entity.kind, images),
         roles=dict(images),
     )
 

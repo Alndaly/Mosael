@@ -14,7 +14,7 @@ from typing import Any
 #: 三种资产。「风格」那一种先不做(ADR 0027「以后再议」)。
 KINDS: tuple[str, ...] = ("character", "location", "prop")
 
-#: 参考图的角度 / 用途。顺序就是界面上下拉里的顺序。
+#: 参考图的角度 / 用途,全部的。每一种资产用得上的是其中几种(ROLES_BY_KIND)。
 ROLES: tuple[str, ...] = (
     "front",
     "side",
@@ -23,12 +23,28 @@ ROLES: tuple[str, ...] = (
     "closeup",
     "full_body",
     "expression",
+    "wide",
+    "reverse",
+    "overhead",
     "concept",
     "detail",
 )
 
-#: 生成时从参考图里挑的先后(ADR 0027 §3):三视图 > 正面 > 全身 > 其余(其余按资产里排的顺序)。
-ATTACH_PRIORITY: tuple[str, ...] = ("turnaround", "front", "full_body")
+#: 每一种资产的参考图能标成什么,顺序就是界面上下拉里的顺序。**三种不是一个模板**:人物有全身、表情,
+#: 道具没有;场景没有「正面 / 侧面 / 背面」,它的角度是机位 —— 全景、反打、俯视。
+ROLES_BY_KIND: dict[str, tuple[str, ...]] = {
+    "character": ("front", "side", "back", "turnaround", "closeup", "full_body", "expression", "concept", "detail"),
+    "location": ("wide", "reverse", "overhead", "concept", "detail"),
+    "prop": ("front", "side", "back", "turnaround", "closeup", "concept", "detail"),
+}
+
+#: 生成时从参考图里挑的先后(ADR 0027 §3),按种类:人物三视图 > 正面 > 全身,道具三视图 > 正面,
+#: 场景全景 > 设定图;其余按资产里排的顺序。
+ATTACH_PRIORITY: dict[str, tuple[str, ...]] = {
+    "character": ("turnaround", "front", "full_body"),
+    "location": ("wide", "concept"),
+    "prop": ("turnaround", "front"),
+}
 
 #: 新挂一张参考图、没说角度时按种类给的缺省:人物和道具先当正面,场景先当设定图。
 DEFAULT_ROLE: dict[str, str] = {"character": "front", "location": "concept", "prop": "front"}
@@ -167,9 +183,9 @@ def usable_for_digital_human(attributes: dict[str, Any]) -> bool:
     return bool(consent) and consent.get("kind") in ("self", "authorized")
 
 
-def attach_order(roles: list[tuple[str, str]]) -> list[str]:
-    """`[(素材 id, 角度)]`(已按资产里的顺序排好)→ 生成时挑图的先后:三视图 > 正面 > 全身 > 其余。"""
-    rank = {role: index for index, role in enumerate(ATTACH_PRIORITY)}
+def attach_order(kind: str, roles: list[tuple[str, str]]) -> list[str]:
+    """`[(素材 id, 角度)]`(已按资产里的顺序排好)→ 生成时挑图的先后(按这种资产的 ATTACH_PRIORITY,其余照原顺序)。"""
+    rank = {role: index for index, role in enumerate(ATTACH_PRIORITY.get(kind, ()))}
     ordered = sorted(enumerate(roles), key=lambda pair: (rank.get(pair[1][1], len(rank)), pair[0]))
     return [asset_id for _, (asset_id, _) in ordered]
 

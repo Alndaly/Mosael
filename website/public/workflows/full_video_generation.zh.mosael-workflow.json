@@ -3,8 +3,8 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "从主题到完整视频",
-  "description": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
-  "graph_hash": "d46dfebd73f22da52dcb8b1eab2956e53da43914fd95f236f16f2da114e31ddc",
+  "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
+  "graph_hash": "733ac47b03c17295b40ee684f4f416a29871ff7b7bb44d2b3e8d2573fc552d4e",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -189,6 +189,30 @@
         }
       },
       {
+        "id": "library_characters",
+        "type": "entity_list",
+        "name": "看看资产库里有哪些人物",
+        "position": {
+          "x": 340,
+          "y": 620
+        },
+        "config": {
+          "kind": "character"
+        }
+      },
+      {
+        "id": "library_locations",
+        "type": "entity_list",
+        "name": "看看资产库里有哪些场景",
+        "position": {
+          "x": 340,
+          "y": 780
+        },
+        "config": {
+          "kind": "location"
+        }
+      },
+      {
         "id": "visual_bible",
         "type": "llm",
         "name": "定角色、场景与视觉圣经",
@@ -200,8 +224,8 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是摄影指导、美术指导、角色设计和连续性监制。根据创意简报建立全片共享的视觉圣经：\n主体、环境、光线、色彩、镜头语言与连续性规则，规则要具体到生成模型可以复用，避免空泛风格词。\n同时定下**出镜角色**(最多 4 个；appearance 用英文写到能画出三视图的程度：年龄、脸型发型、服装与配色、\n体型、标志性道具)和**场景**(最多 3 个；description 用英文写空间、陈设、材质与光源，给出大致的\n长宽高)。每个角色分一个不同的白模颜色，并在 blockout_legend 里用英文说明颜色与角色的对应。\nstyle_prompt 是一句英文画风，全片每张图、每段视频都会带上。不得要求画面生成字幕、UI、Logo 或水印。\n只输出符合 JSON Schema 的对象。",
-          "prompt": "创意简报：\n{{creative_brief.text}}\n\n画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。\n请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。",
+          "system": "你是摄影指导、美术指导、角色设计和连续性监制。根据创意简报建立全片共享的视觉圣经：\n主体、环境、光线、色彩、镜头语言与连续性规则，规则要具体到生成模型可以复用，避免空泛风格词。\n同时定下**出镜角色**(最多 4 个；appearance 用英文写到能画出三视图的程度：年龄、脸型发型、服装与配色、\n体型、标志性道具)和**场景**(最多 3 个；description 用英文写空间、陈设、材质与光源，给出大致的\n长宽高)。每个角色分一个不同的白模颜色，并在 blockout_legend 里用英文说明颜色与角色的对应。\nstyle_prompt 是一句英文画风，全片每张图、每段视频都会带上。不得要求画面生成字幕、UI、Logo 或水印。\n用户会给出资产库里已有的人物和场景：故事需要的角色或场景**就是**其中某一个时，name 一字不差地沿用它的名字，\nappearance / description 照它的提示词描述写（它的参考图会直接拿来用，不再重画）；只是相像、并不是同一个的不要硬套，\n新建一个名字不同的。清单为空就全部新建。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "创意简报：\n{{creative_brief.text}}\n\n画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。\n请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。\n\n资产库里已有的人物（名字 — 提示词描述；空着就是还没有）：\n{{library_characters.text}}\n\n资产库里已有的场景：\n{{library_locations.text}}",
           "response_format": "json_schema",
           "json_schema_name": "professional_video_visual_bible",
           "json_schema": {
@@ -376,7 +400,7 @@
       {
         "id": "character_sheets",
         "type": "loop_foreach",
-        "name": "画每个角色的三视图",
+        "name": "每个角色:库里有就用,没有就画三视图",
         "position": {
           "x": 1040,
           "y": 620
@@ -389,13 +413,36 @@
           "body": {
             "nodes": [
               {
-                "id": "sheet",
-                "type": "ai_generate",
-                "name": "画这个角色的三视图",
+                "id": "find",
+                "type": "entity_get",
+                "name": "在资产库里找这个角色",
                 "position": {
                   "x": 80,
                   "y": 140
                 },
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.name}}",
+                  "limit": 1
+                }
+              },
+              {
+                "id": "has_art",
+                "type": "condition",
+                "name": "库里有它的图吗",
+                "position": {
+                  "x": 380,
+                  "y": 140
+                },
+                "config": {
+                  "left": "{{find.asset_ids.0}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "sheet",
+                "type": "ai_generate",
+                "name": "画这个角色的三视图",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
@@ -403,19 +450,63 @@
                   "kind": "image",
                   "prompt": "Character turnaround reference sheet for {{loop.item.name}}: {{loop.item.appearance}}. Three full-body views of the same character side by side — front, side profile, back — identical outfit and proportions, relaxed A-pose, plain white background, soft even studio light, no text, no labels, no borders. {{input.style}}",
                   "parameters": {}
+                },
+                "position": {
+                  "x": 680,
+                  "y": 240
                 }
+              },
+              {
+                "id": "save",
+                "type": "entity_save",
+                "name": "存成人物资产",
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.name}}",
+                  "prompt": "{{loop.item.appearance}}",
+                  "description": "{{loop.item.role}}",
+                  "asset_ids": "",
+                  "role": "turnaround"
+                },
+                "position": {
+                  "x": 980,
+                  "y": 240
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
-            "edges": []
+            "edges": [
+              {
+                "id": "find_check",
+                "source": "find",
+                "target": "has_art"
+              },
+              {
+                "id": "missing_draw",
+                "source": "has_art",
+                "target": "sheet",
+                "source_handle": "false"
+              },
+              {
+                "id": "d-sheet-asset_id-save-asset_ids",
+                "source": "sheet",
+                "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
           },
-          "output": "{{sheet.asset_id}}:reference_image",
+          "output": "{{find.asset_ids.0}}{{sheet.asset_id}}:reference_image",
           "concurrency": 3
         }
       },
       {
         "id": "location_art",
         "type": "loop_foreach",
-        "name": "画每个场景的设定图",
+        "name": "每个场景:库里有就用,没有就画设定图",
         "position": {
           "x": 1040,
           "y": 820
@@ -428,13 +519,36 @@
           "body": {
             "nodes": [
               {
-                "id": "art",
-                "type": "ai_generate",
-                "name": "画这个场景的设定图",
+                "id": "find",
+                "type": "entity_get",
+                "name": "在资产库里找这个场景",
                 "position": {
                   "x": 80,
                   "y": 140
                 },
+                "config": {
+                  "kind": "location",
+                  "name": "{{loop.item.name}}",
+                  "limit": 1
+                }
+              },
+              {
+                "id": "has_art",
+                "type": "condition",
+                "name": "库里有它的图吗",
+                "position": {
+                  "x": 380,
+                  "y": 140
+                },
+                "config": {
+                  "left": "{{find.asset_ids.0}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "art",
+                "type": "ai_generate",
+                "name": "画这个场景的设定图",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
@@ -442,12 +556,55 @@
                   "kind": "image",
                   "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
                   "parameters": {}
+                },
+                "position": {
+                  "x": 680,
+                  "y": 240
                 }
+              },
+              {
+                "id": "save",
+                "type": "entity_save",
+                "name": "存成场景资产",
+                "config": {
+                  "kind": "location",
+                  "name": "{{loop.item.name}}",
+                  "prompt": "{{loop.item.description}}",
+                  "asset_ids": "",
+                  "role": "wide"
+                },
+                "position": {
+                  "x": 980,
+                  "y": 240
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
-            "edges": []
+            "edges": [
+              {
+                "id": "find_check",
+                "source": "find",
+                "target": "has_art"
+              },
+              {
+                "id": "missing_draw",
+                "source": "has_art",
+                "target": "art",
+                "source_handle": "false"
+              },
+              {
+                "id": "d-art-asset_id-save-asset_ids",
+                "source": "art",
+                "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
           },
-          "output": "{{art.asset_id}}:reference_image",
+          "output": "{{find.asset_ids.0}}{{art.asset_id}}:reference_image",
           "concurrency": 3
         }
       },
@@ -1436,6 +1593,26 @@
       {
         "id": "brief_visual",
         "source": "creative_brief",
+        "target": "visual_bible"
+      },
+      {
+        "id": "start_library_characters",
+        "source": "start",
+        "target": "library_characters"
+      },
+      {
+        "id": "start_library_locations",
+        "source": "start",
+        "target": "library_locations"
+      },
+      {
+        "id": "library_characters_visual",
+        "source": "library_characters",
+        "target": "visual_bible"
+      },
+      {
+        "id": "library_locations_visual",
+        "source": "library_locations",
         "target": "visual_bible"
       },
       {

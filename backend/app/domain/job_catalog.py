@@ -18,7 +18,7 @@ from typing import Literal
 Announce = Literal["always", "failures", "never"]
 
 #: 任务做完后可能变了的东西。前端把每一种映射到自己的缓存键,后端不知道 React Query。
-Resource = Literal["assets", "sequences", "transcripts", "workflows", "publish_tasks", "generations", "boards"]
+Resource = Literal["assets", "sequences", "transcripts", "workflows", "publish_tasks", "generations", "boards", "entities"]
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,11 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("board_write", "never", ("boards",), view="boards"),
         # 画板上一格的能力跑一个节点(插件工具、转写、分离……):可能要几分钟,用户多半已经去干别的了。
         # 产出落成画板上的新格子,插件交出的文件还会进素材库。
-        JobKind("board_run", "always", ("boards", "assets"), view="boards"),
+        #: 资产格的能力(补全多角度、生成表情)还会把画成的图挂回资产。
+        JobKind("board_run", "always", ("boards", "assets", "entities"), view="boards"),
+        # 资产详情页上的「补全多角度」「生成表情」:几张图一起画,要一两分钟;画成的挂回那个资产。
+        JobKind("entity_draw", "always", ("entities", "assets", "generations"), view="entities",
+                record_field="entity_id"),
         # 导入、导出之后顺手排的;成功了没人在等,失败了才值得一说(素材预览会不流畅)。
         JobKind("proxy", "failures", ("assets",), view="media"),
     )

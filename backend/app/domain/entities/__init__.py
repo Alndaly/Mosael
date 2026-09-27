@@ -9,6 +9,7 @@ from app.domain.entities.catalog import (
     CONSENT_KINDS,
     KINDS,
     ROLES,
+    ROLES_BY_KIND,
     usable_for_digital_human,
 )
 from app.domain.entities.library import (
@@ -47,6 +48,7 @@ __all__ = [
     "CONSENT_KINDS",
     "KINDS",
     "ROLES",
+    "ROLES_BY_KIND",
     "AssetMembership",
     "EntityConflict",
     "EntityDomainError",

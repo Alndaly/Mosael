@@ -10,6 +10,7 @@ import {
   entityKeys,
   getEntity,
   getEntityUsage,
+  assetPreviewUrl,
   assetThumbnailUrl,
   listSceneModels,
   listScenes,
@@ -17,10 +18,12 @@ import {
   fetchWorkflowFieldOptions,
   updateEntity,
   type Entity,
+  type EntityKind,
   type EntityPatch,
   type EntitySummary,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import { useImagePreview } from "@/components/app/image-preview";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -72,6 +75,7 @@ export function EntityDetail({
   onOpen: (id: string) => void;
 }) {
   const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   const qc = useQueryClient();
   const labels = useCatalogLabels();
   const entity = useQuery({ queryKey: entityKeys.detail(workspaceId, entityId), queryFn: () => getEntity(entityId) });
@@ -157,16 +161,22 @@ export function EntityDetail({
     usage: t("entityUsage"),
   };
   const tabCount: Partial<Record<DetailTab, number>> = { references: data.references.length, variants: variantCount };
+  const cover = data.display_cover_asset_id;
 
   return (
     <div className="grid min-w-0 gap-7" data-entity-detail={data.id}>
       <header className="grid min-w-0 gap-6 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-start" data-entity-hero="">
+        {/* 有封面就放大看它;还没有图就带去参考图那一页传一张。 */}
         <button
           type="button"
-          onClick={() => setTab("references")}
-          title={t("entityReferences")}
-          aria-label={t("entityReferences")}
-          className="relative grid aspect-[4/5] w-full max-w-[180px] cursor-pointer place-items-center overflow-hidden rounded-xl border border-border bg-panel-inset p-0 text-muted-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() =>
+            cover
+              ? openImagePreview({ src: assetPreviewUrl(cover), title: data.name })
+              : setTab("references")
+          }
+          title={t(cover ? "imagePreviewTitle" : "entityReferences")}
+          aria-label={t(cover ? "imagePreviewTitle" : "entityReferences")}
+          className={cn("relative grid aspect-[4/5] w-full max-w-[180px] place-items-center overflow-hidden rounded-xl border border-border bg-panel-inset p-0 text-muted-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", cover ? "cursor-zoom-in" : "cursor-pointer")}
         >
           {data.display_cover_asset_id ? (
             <img src={assetThumbnailUrl(data.display_cover_asset_id)} alt="" className="absolute inset-0 size-full object-cover" />
@@ -243,11 +253,11 @@ export function EntityDetail({
 
         {current === "references" && <ReferenceWall entity={data} workspaceId={workspaceId} />}
 
-        {current === "variants" && <VariantsTab workspaceId={workspaceId} variants={data.variants} onOpen={onOpen} onNew={() => setVariantOpen(true)} />}
+        {current === "variants" && <VariantsTab workspaceId={workspaceId} kind={data.kind} variants={data.variants} onOpen={onOpen} onNew={() => setVariantOpen(true)} />}
 
         {current === "settings" && (
           <div className="grid min-w-0 gap-8" aria-label={t("entityFields")} data-entity-settings="">
-            <Field label={t("entityPrompt")} hint={data.parent_id ? t("entityVariantPromptHint") : t("entityPromptHint")}>
+            <Field label={t("entityPrompt")} hint={t(data.parent_id ? `entityVariantPromptHint_${data.kind}` : `entityPromptHint_${data.kind}`)}>
               <DraftTextarea
                 aria-label={t("entityPrompt")}
                 className={cn(FIELD, "min-h-32 resize-y font-mono text-ui-sm leading-relaxed")}
@@ -295,11 +305,14 @@ export function EntityDetail({
  */
 function VariantsTab({
   workspaceId,
+  kind,
   variants,
   onOpen,
   onNew,
 }: {
   workspaceId: string;
+  /** 说明按种类说:人物换的是服装、年龄,场景是时间、天气,道具是新旧、颜色。 */
+  kind: EntityKind;
   variants: EntitySummary[];
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -310,7 +323,7 @@ function VariantsTab({
   return (
     <section className="grid gap-4" aria-label={t("entityVariants")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="m-0 max-w-2xl text-ui-sm text-muted-foreground">{t("entityVariantsHint")}</p>
+        <p className="m-0 max-w-2xl text-ui-sm text-muted-foreground">{t(`entityVariantsHint_${kind}`)}</p>
         <span className="flex flex-wrap gap-2">
           {variants.length > 0 && (
             <Button variant="outline" aria-pressed={selectMode} onClick={() => (selectMode ? exit() : setSelectMode(true))}>
@@ -340,7 +353,10 @@ function PanelGroup({ title, wide = false, children }: { title: string; wide?: b
   return (
     <section className="grid min-w-0 gap-4 border-t border-divider pt-6" aria-label={title} data-panel-group="">
       <h3 className="m-0 text-ui-md font-semibold">{title}</h3>
-      <div className={cn("grid min-w-0 gap-5", !wide && "md:grid-cols-2")}>{children}</div>
+      {/* 两列排;落单的最后一格占满那一行 —— 同一行不留半截空。 */}
+      <div className={cn("grid min-w-0 gap-5", !wide && "md:grid-cols-2 md:[&>:last-child:nth-child(odd)]:col-span-2")}>
+        {children}
+      </div>
     </section>
   );
 }

@@ -89,7 +89,9 @@ export function SetAsReferenceDialog({
     setCover(false);
   }, [asset?.id]);
   const chosen = (entities.data ?? []).find((one) => one.id === entityId);
-  const effectiveRole = role || (chosen ? DEFAULT_ROLE[chosen.kind] : "");
+  //: 角度按这个资产的种类列:换了一个资产(人物换成场景),原来挑的「正面」场景没有,落回它的缺省。
+  const roleOptions = chosen ? labels.rolesFor(chosen.kind) : [];
+  const effectiveRole = roleOptions.some((one) => one.value === role) ? role : chosen ? DEFAULT_ROLE[chosen.kind] : "";
 
   const attach = useMutation({
     mutationFn: () => addEntityReference(entityId, { asset_id: asset!.id, role: effectiveRole, cover: cover && asset?.kind === "image" }),
@@ -134,7 +136,7 @@ export function SetAsReferenceDialog({
         </label>
         <label className="grid gap-1.5">
           <span className="text-ui-sm font-medium">{t("entityRole")}</span>
-          <OptionPicker ariaLabel={t("entityRole")} value={effectiveRole} onChange={setRole} options={labels.roles} disabled={!entityId} />
+          <OptionPicker ariaLabel={t("entityRole")} value={effectiveRole} onChange={setRole} options={roleOptions} disabled={!entityId} />
         </label>
         {asset?.kind === "image" && (
           <label className="flex items-center gap-2 text-ui-sm">

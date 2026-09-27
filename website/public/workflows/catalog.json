@@ -6,8 +6,8 @@
       "en": "Topic to finished video"
     },
     "summary": {
-      "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
-      "en": "Turn a topic into a creative brief, script and visual bible, draw a turnaround sheet for every character and concept art for every location, auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video."
+      "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
+      "en": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video."
     },
     "requires": {
       "zh": [
@@ -27,7 +27,7 @@
       "zh": [
         "输入主题",
         "脚本、角色与视觉圣经",
-        "角色三视图与场景设定图",
+        "认已有资产，新的画三视图 / 设定图并存进资产库",
         "分镜与机位",
         "搭建 3D 白模",
         "逐镜：白模参考 → 首尾帧 → 视频",
@@ -37,7 +37,7 @@
       "en": [
         "Choose a topic",
         "Script, characters and visual bible",
-        "Character turnarounds and location art",
+        "Reuse library assets; draw and save new turnarounds and location art",
         "Storyboard and camera set-ups",
         "Build the 3D blockout",
         "Per shot: blockout → keyframes → video",
@@ -47,7 +47,7 @@
     },
     "author": "Mosael",
     "version": 9,
-    "nodes": 17,
+    "nodes": 19,
     "download": {
       "zh": "/workflows/full_video_generation.zh.mosael-workflow.json",
       "en": "/workflows/full_video_generation.en.mosael-workflow.json"

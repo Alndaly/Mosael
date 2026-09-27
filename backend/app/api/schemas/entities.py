@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -31,10 +31,13 @@ class EntityCatalogOut(ApiModel):
     """资产的词表,按请求方的语言翻好:几种资产、参考图的角度、授权声明的选项、生成时挑图的先后。"""
 
     kinds: list[EntityKindOut]
+    #: 全部角度的名字;每一种资产用得上哪几种、按什么顺序列,见 roles_by_kind。
     roles: list[EntityRoleOut]
+    #: 每一种资产的参考图能标成什么(人物有表情,场景的角度是全景 / 反打 / 俯视)。
+    roles_by_kind: dict[str, list[str]]
     consent_kinds: list[EntityConsentKindOut]
-    #: 生成时挑参考图的先后(三视图 > 正面 > 全身 > 其余)。
-    attach_priority: list[str]
+    #: 生成时挑参考图的先后,按种类(人物:三视图 > 正面 > 全身 > 其余)。
+    attach_priority: dict[str, list[str]]
     #: 每种资产有哪些专有字段。
     attributes: dict[str, list[str]]
 
@@ -111,6 +114,18 @@ class EntityVariantCreate(ApiModel):
     #: 变体**在母体的提示词描述之上**多出来的那一句(服装、年龄……),生成时两句拼在一起。
     prompt: str = ""
     attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class EntityDrawRequest(ApiModel):
+    """资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4):和画板上资产格的那两项能力是同一件事。"""
+
+    ability: Literal["angles", "expressions"]
+    #: 用哪个图片模型(生成选项 id,见 field_options 的 reference_image_models);空着用他设的默认。
+    model: str = Field(default="", max_length=512)
+    #: 补全多角度:只补还没有的(missing),还是每个角度都重画(all)。
+    scope: Literal["missing", "all"] = "missing"
+    #: 生成表情:画哪几种,逗号分开;空着画缺省的五种。
+    expressions: str = Field(default="", max_length=400)
 
 
 class EntityUpdate(ApiModel):

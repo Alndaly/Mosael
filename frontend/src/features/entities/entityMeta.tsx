@@ -38,10 +38,11 @@ export function useEntityCatalog(enabled = true) {
 export type CatalogLabels = {
   kind: (kind: string) => string;
   role: (role: string) => string;
-  roles: { value: string; label: string }[];
+  /** 这种资产的参考图能标成什么(人物有表情;场景的角度是全景 / 反打 / 俯视,没有正面)。 */
+  rolesFor: (kind: string) => { value: string; label: string }[];
   consent: EntityCatalog["consent_kinds"];
-  /** 生成时挑参考图的先后(角度的名字):三视图 > 正面 > 全身,其余排在后面。 */
-  priority: string[];
+  /** 这种资产生成时挑参考图的先后(角度的名字),其余排在后面:人物三视图 > 正面 > 全身,场景全景 > 设定图。 */
+  priorityFor: (kind: string) => string[];
 };
 
 /** 词表还没到的时候用原值兜底 —— 一格空白比一个英文标识符更让人以为坏了。 */
@@ -51,9 +52,9 @@ export function catalogLabels(catalog: EntityCatalog | undefined): CatalogLabels
   return {
     kind: (kind) => kinds.get(kind) ?? kind,
     role: (role) => roles.get(role) ?? role,
-    roles: (catalog?.roles ?? []).map((one) => ({ value: one.role, label: one.label })),
+    rolesFor: (kind) => (catalog?.roles_by_kind[kind] ?? []).map((role) => ({ value: role, label: roles.get(role) ?? role })),
     consent: catalog?.consent_kinds ?? [],
-    priority: (catalog?.attach_priority ?? []).map((role) => roles.get(role) ?? role),
+    priorityFor: (kind) => (catalog?.attach_priority[kind] ?? []).map((role) => roles.get(role) ?? role),
   };
 }
 

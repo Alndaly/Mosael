@@ -40,12 +40,16 @@ const api = vi.hoisted(() => ({
   publishEntityToCommunity: vi.fn(),
   browseCommunityAssets: vi.fn(),
   importEntityFromCommunity: vi.fn(),
+  drawEntity: vi.fn(),
+  api: vi.fn(),
 }));
 
 vi.mock("@/api/client", () => ({
   ...api,
   ENTITY_KINDS: ["character", "location", "prop"],
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
+  assetPreviewUrl: (id: string) => `/preview/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   entityKeys: {
     all: (ws: string) => ["entities", ws],
     list: (ws: string, filters: Record<string, unknown> = {}) => ["entities", ws, "list", filters],
@@ -65,6 +69,8 @@ vi.mock("@/app/preferences", () => ({
 const playback = vi.hoisted(() => ({ playSpeech: vi.fn(async () => {}), stopSpeaking: vi.fn() }));
 vi.mock("@/lib/speechPlayback", () => playback);
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
+const lightbox = vi.hoisted(() => ({ openImagePreview: vi.fn() }));
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightbox }));
 
 import { EntitiesView } from "./EntitiesView";
 import { AssetEntitiesList, SetAsReferenceDialog } from "./AssetEntities";
@@ -80,13 +86,19 @@ const CATALOG = {
     { role: "side", label: "侧面" },
     { role: "turnaround", label: "三视图" },
     { role: "concept", label: "设定图" },
+    { role: "wide", label: "全景" },
   ],
+  roles_by_kind: {
+    character: ["front", "side", "turnaround", "concept"],
+    location: ["wide", "concept"],
+    prop: ["front", "side", "turnaround", "concept"],
+  },
   consent_kinds: [
     { kind: "self", label: "这是我本人", help: "肖像是你自己的" },
     { kind: "authorized", label: "已取得本人同意", help: "取得了本人单独同意" },
     { kind: "fictional", label: "虚构人物", help: "不是任何真实存在的人" },
   ],
-  attach_priority: ["turnaround", "front", "full_body"],
+  attach_priority: { character: ["turnaround", "front", "full_body"], location: ["wide", "concept"], prop: ["turnaround", "front"] },
   attributes: { character: ["voice_id"], location: [], prop: [] },
 };
 
@@ -157,6 +169,7 @@ beforeEach(() => {
   api.fetchWorkflowFieldOptions.mockImplementation(async (source: string, _ws: string, parent?: string) => {
     if (source === "speech_engines") return [{ value: "clone", label: "本地克隆" }, { value: "edge", label: "Edge" }];
     if (source === "speech_voices") return parent === "edge" ? [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓" }] : [{ value: "v1", label: "我的声音" }];
+    if (source === "reference_image_models") return [{ value: "p1:image:edit", label: "连接 · 能改图 · 默认" }];
     return [];
   });
   api.listScenes.mockResolvedValue([]);
@@ -282,6 +295,49 @@ describe("参考图墙", () => {
     fireEvent.click(within(side).getByRole("button", { name: "entityRole: 侧面.png" }));
     fireEvent.click(await screen.findByRole("button", { name: "三视图" }));
     await waitFor(() => expect(api.setEntityReferenceRole).toHaveBeenCalledWith("e1", "a-side", "turnaround"));
+  });
+
+  it("场景的角度是机位:角度菜单里只有全景、设定图这些,没有三视图", async () => {
+    const wall = await openDetail({ kind: "location" });
+    const side = wall.querySelector('[data-reference="a-side"]') as HTMLElement;
+    fireEvent.click(within(side).getByRole("button", { name: "entityRole: 侧面.png" }));
+    expect(await screen.findByRole("button", { name: "全景" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "三视图" })).toBeNull();
+  });
+
+  it("AI 补画按种类给:场景只有补全多角度(画机位),没有生成表情", async () => {
+    await openDetail({ kind: "location" });
+    fireEvent.click(screen.getByRole("button", { name: "entityDraw" }));
+    expect(await screen.findByRole("button", { name: /entityDrawAngles/ })).toBeTruthy();
+    expect(screen.getByText("entityDrawAnglesHint_location")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /entityDrawExpressions/ })).toBeNull();
+  });
+
+  it("人物:挑「生成表情」、写几种,开始画就发一个请求,按钮跟着任务忙", async () => {
+    api.drawEntity.mockResolvedValue({ id: "job-1", status: "queued" });
+    api.api.mockResolvedValue({ id: "job-1", status: "running" });
+    await openDetail();
+    fireEvent.click(screen.getByRole("button", { name: "entityDraw" }));
+    fireEvent.click(await screen.findByRole("button", { name: /entityDrawExpressions/ }));
+    const dialog = await waitFor(() => document.querySelector('[data-draw-dialog="expressions"]') as HTMLElement);
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "entityDrawExpressionList" }), { target: { value: "开心, 哭" } });
+    fireEvent.click(screen.getByRole("button", { name: "entityDrawStart" }));
+    await waitFor(() =>
+      expect(api.drawEntity).toHaveBeenCalledWith("e1", { ability: "expressions", model: "", scope: "missing", expressions: "开心, 哭" }),
+    );
+    expect(await screen.findByRole("button", { name: "entityDrawRunning" })).toBeTruthy();
+  });
+
+  it("点一张放大看,灯箱里翻的是整面墙;点角度不放大", async () => {
+    lightbox.openImagePreview.mockClear();
+    const wall = await openDetail();
+    const side = wall.querySelector('[data-reference="a-side"]') as HTMLElement;
+    fireEvent.click(within(side).getByRole("button", { name: "entityRole: 侧面.png" }));
+    expect(lightbox.openImagePreview).not.toHaveBeenCalled();
+    fireEvent.click(within(side).getByRole("button", { name: /侧面\.png · / }));
+    const opened = lightbox.openImagePreview.mock.calls[0][0];
+    expect(opened.src).toBe("/preview/a-side");
+    expect(opened.gallery.map((one: { src: string }) => one.src)).toContain("/preview/a-front");
   });
 
   it("设封面、往后挪、移出 —— 各发各的请求", async () => {

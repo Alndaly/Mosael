@@ -285,3 +285,30 @@ it("选中的文档不加彩色描边(和图片、视频、便签同一条);3D �
   const scene = render(<Scene {...sceneProps} />);
   expect((scene.container.firstElementChild as HTMLElement).className.split(/\s+/)).toContain("group");
 });
+
+it("滚轮只在选中的那一格里滚它自己;没选中的文档、便签旁的「保存到笔记」不截住画布的平移", () => {
+  //: 触控板模式下画布靠滚轮平移(panOnScroll)。挂着 nowheel 的元素会让滚轮停在它身上 ——
+  //: 此前文档正文一直挂着、「保存到笔记」那一层也挂着,平移时指针划过它们画布就停在半路。
+  const Doc = BOARD_NODE_TYPES.document;
+  const docProps = (selected: boolean) => ({ data: { item: { id: "doc", kind: "document", note_id: "n", note_revision: 1 },
+    document: { reference: { title: "T", markdown: "正文", revision: 1 } } }, selected }) as unknown as React.ComponentProps<typeof Doc>;
+  const idle = render(<Doc {...docProps(false)} />);
+  expect(idle.container.querySelector("[data-document-preview]")!.closest(".nowheel")).toBeNull();
+  cleanup();
+  const picked = render(<Doc {...docProps(true)} />);
+  expect(picked.container.querySelector("[data-document-preview]")!.classList.contains("nowheel")).toBe(true);
+  cleanup();
+
+  const Note = BOARD_NODE_TYPES.note;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
+  const note = render(
+    <QueryClientProvider client={client}>
+      <Note {...({ id: "n1", data: { item: { id: "n1", kind: "note", x: 0, y: 0, text: "一段字" }, onText: vi.fn(), onAspect: vi.fn(),
+        workspaceId: "ws", boardId: "b1" }, selected: true } as unknown as React.ComponentProps<typeof Note>)} />
+    </QueryClientProvider>,
+  );
+  const saveLayer = note.container.querySelector(".bg-popover");
+  expect(saveLayer, "「保存到笔记」那一层确实画出来了 —— 否则下面这句是在空处断言").not.toBeNull();
+  expect(saveLayer!.querySelector("button")).not.toBeNull();
+  expect(note.container.querySelector(".nowheel"), "便签选中了、没在编辑:没有哪一块要截住滚轮").toBeNull();
+});

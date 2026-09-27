@@ -21,6 +21,7 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
   audio: kindIcon("audio"),
   text: kindIcon("note"),
   scene: kindIcon("scene"),
+  entity: kindIcon("entity"),
   asset: Package,
 };
 
@@ -51,15 +52,30 @@ export function hostHasContent(item: BoardItem): boolean {
   if (item.kind === "note") return Boolean(item.text?.trim());
   if (item.kind === "document") return Boolean(item.note_id);
   if (item.kind === "scene") return Boolean(item.scene_id);
-  //: 资产格的能力(补全多角度、生成表情)是之后的事(ADR 0027 阶段 4),到时在这里说它的内容是什么。
-  if (item.kind === "frame" || item.kind === "entity") return false;
+  //: 资产格给的是它引用的资产(补全多角度、生成表情吃的就是它,ADR 0027 阶段 4)。
+  if (item.kind === "entity") return Boolean(item.entity_id);
+  if (item.kind === "frame") return false;
   return Boolean(item.asset_id);
 }
 
-/** 这一格的能力:`role` 是能力、挂得在这种格子上的那几个,按后端的顺序(内置的在前,插件工具在后)。 */
-export function boardAbilities(item: BoardItem, producers: BoardProducerInfo[] | undefined): BoardProducerInfo[] {
+/**
+ * 这一格的能力:`role` 是能力、挂得在这种格子上的那几个,按后端的顺序(内置的在前,插件工具在后)。
+ *
+ * **资产格不是一个样子**:人物、场景、道具各有各的能力(「生成表情」只有人物有,后端 `host_entity_kinds`)。
+ * `entityKind` 是资产格引用的那个资产的种类;还不知道(没取到)时,只点名了种类的那几项先不列。
+ */
+export function boardAbilities(
+  item: BoardItem,
+  producers: BoardProducerInfo[] | undefined,
+  entityKind?: string,
+): BoardProducerInfo[] {
   if (!producers || !hostHasContent(item)) return [];
-  return producers.filter((one) => one.role === "ability" && one.hosts.includes(item.kind));
+  return producers.filter(
+    (one) =>
+      one.role === "ability" &&
+      one.hosts.includes(item.kind) &&
+      (item.kind !== "entity" || !one.host_entity_kinds?.length || (entityKind !== undefined && one.host_entity_kinds.includes(entityKind))),
+  );
 }
 
 /** 操作条上直接摆几项能力;其余收进「⋯」。内置的排在前面,所以常用的那几项总在外面。 */

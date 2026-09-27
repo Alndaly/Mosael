@@ -57,11 +57,13 @@ _SOURCE_KINDS = {
     "asset": ("image", "video", "audio"),
     "scene": ("scene",),
     "text": ("note", "document"),
+    #: 资产字段(`data_type: "entity"`)接资产格:给的是那一格引用的资产(ADR 0027)。
+    "entity": ("entity",),
 }
 
 
 def binding_sink(key: str, spec: Any) -> str | None:
-    """这个字段从上游接的是哪一种值:`"asset"` / `"scene"` / `"text"`;接不了回 None。
+    """这个字段从上游接的是哪一种值:`"asset"` / `"scene"` / `"entity"` / `"text"`;接不了回 None。
 
     **前端不另写一份**:产出者清单(`GET /api/boards/producers`)给每个字段带上 `board_sources`
     (见 bindable_kinds),面板照它列上游;能力挂在哪几种格子上(boards.transforms.board_hosts)也从它推。
@@ -71,7 +73,7 @@ def binding_sink(key: str, spec: Any) -> str | None:
     if not isinstance(spec, dict):
         return None
     data_type = config_data_type(key, spec)
-    if data_type in ("asset", "scene"):
+    if data_type in ("asset", "scene", "entity"):
         return data_type
     if data_type not in ("", "text", "any"):
         return None
@@ -131,6 +133,8 @@ def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str,
         return str(read_reference(db, workspace_id, source["note_id"], source.get("note_revision"))["markdown"])
     if sink == "scene":
         return str(source.get("scene_id") or "") or None
+    if sink == "entity":
+        return str(source.get("entity_id") or "") or None
     return str(source.get("asset_id") or "") or None
 
 
@@ -332,6 +336,8 @@ def prepare_node_run(
         value = host_value(db, request.workspace_id, host, key, sink)
         if value is None:
             raise BoardInputError("boardErr_abilityNeedsContent", tool=label or node_type, item_id=request.item_id)
+        if sink == "entity":
+            _check_entity_kind(db, request.workspace_id, value, (meta.get("config") or {}).get(key), label or node_type)
         fixed[key] = value
     without_host = {field: refs for field, refs in bindings.items() if field not in fixed}
     resolved = resolve_bindings(db, board, request.item_id, dict(meta.get("config") or {}), config, without_host)
@@ -394,6 +400,22 @@ def run_node_on_board(
     job_id = job.id
     dispatch_job(db, job, lambda: _run_in_job(job_id, node_type, meta, scope, resolved, label))
     return placed
+
+
+def _check_entity_kind(db: Session, workspace_id: str, entity_id: str, spec: Any, tool: str) -> None:
+    """资产格上的能力得是这一种资产的(「生成表情」只有人物有):**起任务之前**说,不花一分钱。
+    `spec` 是宿主那个字段的声明 —— 它点名了收哪一种(workflows.config_entity_kinds,和 transforms.host_entity_kinds
+    读的是同一句)。"""
+    from app.core.i18n import get_current_locale, t
+    from app.db.models import Entity
+    from app.domain.workflows import config_entity_kinds
+
+    kinds = config_entity_kinds(spec)
+    entity = db.get(Entity, entity_id)
+    if kinds and entity is not None and entity.workspace_id == workspace_id and entity.kind not in kinds:
+        locale = get_current_locale()
+        raise BoardInputError("boardErr_abilityNotForEntityKind", tool=tool, kind=t(f"entityKind_{entity.kind}", locale),
+                              kinds="、".join(t(f"entityKind_{one}", locale) for one in kinds))
 
 
 def _check_plugin_connection(db: Session, node_type: str, config: dict[str, Any], actor_id: str) -> None:

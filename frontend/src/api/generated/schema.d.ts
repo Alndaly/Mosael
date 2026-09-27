@@ -3520,6 +3520,28 @@ export interface paths {
         patch: operations["update_reference_api_entities__entity_id__references__asset_id__patch"];
         trace?: never;
     };
+    "/api/entities/{entity_id}/draw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draw Entity
+         * @description 照这个资产的参考图再画几张(补全多角度 / 生成表情),画成的挂回来。付费生成,闸和生成页同一道(`ai`)。
+         *
+         *     说不通的(没图、模型不收参考图、角度都齐了)当场 422,不起任务;说得通就回那个任务,界面跟着它的进度。
+         */
+        post: operations["draw_entity_api_entities__entity_id__draw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/entities/{entity_id}/usage": {
         parameters: {
             query?: never;
@@ -7449,6 +7471,8 @@ export interface components {
             host_fields?: {
                 [key: string]: string;
             };
+            /** Host Entity Kinds */
+            host_entity_kinds?: string[];
             /** Permission */
             permission: string;
             /** Effects */
@@ -8240,10 +8264,16 @@ export interface components {
             kinds: components["schemas"]["EntityKindOut"][];
             /** Roles */
             roles: components["schemas"]["EntityRoleOut"][];
+            /** Roles By Kind */
+            roles_by_kind: {
+                [key: string]: string[];
+            };
             /** Consent Kinds */
             consent_kinds: components["schemas"]["EntityConsentKindOut"][];
             /** Attach Priority */
-            attach_priority: string[];
+            attach_priority: {
+                [key: string]: string[];
+            };
             /** Attributes */
             attributes: {
                 [key: string]: string[];
@@ -8284,6 +8314,33 @@ export interface components {
             tags?: string[];
             /** Parent Id */
             parent_id?: string | null;
+        };
+        /**
+         * EntityDrawRequest
+         * @description 资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4):和画板上资产格的那两项能力是同一件事。
+         */
+        EntityDrawRequest: {
+            /**
+             * Ability
+             * @enum {string}
+             */
+            ability: "angles" | "expressions";
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Scope
+             * @default missing
+             * @enum {string}
+             */
+            scope: "missing" | "all";
+            /**
+             * Expressions
+             * @default
+             */
+            expressions: string;
         };
         /** EntityKindOut */
         EntityKindOut: {
@@ -20380,6 +20437,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draw_entity_api_entities__entity_id__draw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityDrawRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

@@ -253,8 +253,8 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": "Topic to finished video"
         },
         "summary": {
-            "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经，为每个角色画三视图、为每个场景画设定图，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
-            "en": "Turn a topic into a creative brief, script and visual bible, draw a turnaround sheet for every character and concept art for every location, auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video."
+            "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
+            "en": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video."
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -274,7 +274,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "zh": [
                 "输入主题",
                 "脚本、角色与视觉圣经",
-                "角色三视图与场景设定图",
+                "认已有资产，新的画三视图 / 设定图并存进资产库",
                 "分镜与机位",
                 "搭建 3D 白模",
                 "逐镜：白模参考 → 首尾帧 → 视频",
@@ -284,7 +284,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": [
                 "Choose a topic",
                 "Script, characters and visual bible",
-                "Character turnarounds and location art",
+                "Reuse library assets; draw and save new turnarounds and location art",
                 "Storyboard and camera set-ups",
                 "Build the 3D blockout",
                 "Per shot: blockout → keyframes → video",
@@ -1177,6 +1177,9 @@ def full_video_generation_graph(
 体型、标志性道具)和**场景**(最多 3 个；description 用英文写空间、陈设、材质与光源，给出大致的
 长宽高)。每个角色分一个不同的白模颜色，并在 blockout_legend 里用英文说明颜色与角色的对应。
 style_prompt 是一句英文画风，全片每张图、每段视频都会带上。不得要求画面生成字幕、UI、Logo 或水印。
+用户会给出资产库里已有的人物和场景：故事需要的角色或场景**就是**其中某一个时，name 一字不差地沿用它的名字，
+appearance / description 照它的提示词描述写（它的参考图会直接拿来用，不再重画）；只是相像、并不是同一个的不要硬套，
+新建一个名字不同的。清单为空就全部新建。
 只输出符合 JSON Schema 的对象。"""
 
     storyboard_system = f"""你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的
@@ -1444,12 +1447,43 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
     }
-    sheet_body = {
-        "nodes": [{
+    def reuse_or_draw(kind: str, what: dict[str, str], drawer: dict[str, Any], save: dict[str, Any]) -> dict[str, Any]:
+        """每个角色 / 场景:先到资产库里按名字认(ADR 0027 阶段 4),**有图就用它的,不再重画**;没有才画,画完
+        存成资产 —— 下一部片子里的同一个角色是同一张脸。循环交出的是「认出来的那张」或「新画的那张」:
+        没跑的那一支引用出来是空串,两段拼在一起正好是跑了的那一支(见 workflows.interpolate)。"""
+        return {
+            "nodes": [
+                {
+                    "id": "find",
+                    "type": "entity_get",
+                    "name": {"zh": f"在资产库里找这个{what['zh']}", "en": f"Look this {what['en']} up in the asset library"},
+                    "position": {"x": 80, "y": 140},
+                    "config": {"kind": kind, "name": "{{loop.item.name}}", "limit": 1},
+                },
+                {
+                    "id": "has_art",
+                    "type": "condition",
+                    "name": {"zh": "库里有它的图吗", "en": "Does the library have its images?"},
+                    "position": {"x": 380, "y": 140},
+                    "config": {"left": "{{find.asset_ids.0}}", "op": "not_empty"},
+                },
+                {**drawer, "position": {"x": 680, "y": 240}},
+                {**save, "position": {"x": 980, "y": 240}},
+            ],
+            "edges": [
+                {"id": "find_check", "source": "find", "target": "has_art"},
+                {"id": "missing_draw", "source": "has_art", "target": drawer["id"], "source_handle": "false"},
+                {"id": "draw_save", "source": drawer["id"], "target": save["id"]},
+            ],
+        }
+
+    sheet_body = reuse_or_draw(
+        "character",
+        {"zh": "角色", "en": "character"},
+        {
             "id": "sheet",
             "type": "ai_generate",
             "name": {"zh": "画这个角色的三视图", "en": "Draw this character's turnaround"},
-            "position": {"x": 80, "y": 140},
             "config": {
                 "provider": image.provider,
                 "provider_profile_id": image.profile_id,
@@ -1461,15 +1495,28 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
                           "light, no text, no labels, no borders. {{input.style}}",
                 "parameters": sheet_parameters,
             },
-        }],
-        "edges": [],
-    }
-    location_body = {
-        "nodes": [{
+        },
+        {
+            "id": "save",
+            "type": "entity_save",
+            "name": {"zh": "存成人物资产", "en": "Save as a character asset"},
+            "config": {
+                "kind": "character",
+                "name": "{{loop.item.name}}",
+                "prompt": "{{loop.item.appearance}}",
+                "description": "{{loop.item.role}}",
+                "asset_ids": "{{sheet.asset_id}}",
+                "role": "turnaround",
+            },
+        },
+    )
+    location_body = reuse_or_draw(
+        "location",
+        {"zh": "场景", "en": "location"},
+        {
             "id": "art",
             "type": "ai_generate",
             "name": {"zh": "画这个场景的设定图", "en": "Paint this location's concept art"},
-            "position": {"x": 80, "y": 140},
             "config": {
                 "provider": image.provider,
                 "provider_profile_id": image.profile_id,
@@ -1479,9 +1526,20 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
                           "Wide view of the empty set, no people, no text. {{input.style}}",
                 "parameters": sheet_parameters,
             },
-        }],
-        "edges": [],
-    }
+        },
+        {
+            "id": "save",
+            "type": "entity_save",
+            "name": {"zh": "存成场景资产", "en": "Save as a location asset"},
+            "config": {
+                "kind": "location",
+                "name": "{{loop.item.name}}",
+                "prompt": "{{loop.item.description}}",
+                "asset_ids": "{{art.asset_id}}",
+                "role": "wide",
+            },
+        },
+    )
 
     nodes: list[dict[str, Any]] = [
         {
@@ -1563,6 +1621,20 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
             },
         },
         {
+            "id": "library_characters",
+            "type": "entity_list",
+            "name": {"zh": "看看资产库里有哪些人物", "en": "See which characters the asset library has"},
+            "position": {"x": 340, "y": 620},
+            "config": {"kind": "character"},
+        },
+        {
+            "id": "library_locations",
+            "type": "entity_list",
+            "name": {"zh": "看看资产库里有哪些场景", "en": "See which locations the asset library has"},
+            "position": {"x": 340, "y": 780},
+            "config": {"kind": "location"},
+        },
+        {
             "id": "visual_bible",
             "type": "llm",
             "name": {"zh": "定角色、场景与视觉圣经", "en": "Define characters, locations and the visual bible"},
@@ -1576,7 +1648,13 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
 {{creative_brief.text}}
 
 画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。
-请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。""",
+请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。
+
+资产库里已有的人物（名字 — 提示词描述；空着就是还没有）：
+{{library_characters.text}}
+
+资产库里已有的场景：
+{{library_locations.text}}""",
                 "response_format": "json_schema",
                 "json_schema_name": "professional_video_visual_bible",
                 "json_schema": _visual_bible_schema(),
@@ -1600,27 +1678,28 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
         {
             "id": "character_sheets",
             "type": "loop_foreach",
-            "name": {"zh": "画每个角色的三视图", "en": "Draw every character's turnaround"},
+            "name": {"zh": "每个角色:库里有就用,没有就画三视图", "en": "Every character: reuse from the library or draw a turnaround"},
             "position": {"x": 1040, "y": 620},
             "config": {
                 "items": "{{visual_bible.json.characters}}",
                 "inputs": {"style": "{{visual_bible.json.style_prompt}}"},
                 "body": sheet_body,
                 #: 每项交出一行 `素材:reference_image` —— 下游把整组一次接进参考图。
-                "output": "{{sheet.asset_id}}:reference_image",
+                #: 认出来的那张,或新画的那张(另一支没跑,引用出来是空串)。
+                "output": "{{find.asset_ids.0}}{{sheet.asset_id}}:reference_image",
                 "concurrency": 3,
             },
         },
         {
             "id": "location_art",
             "type": "loop_foreach",
-            "name": {"zh": "画每个场景的设定图", "en": "Paint every location's concept art"},
+            "name": {"zh": "每个场景:库里有就用,没有就画设定图", "en": "Every location: reuse from the library or paint concept art"},
             "position": {"x": 1040, "y": 820},
             "config": {
                 "items": "{{visual_bible.json.locations}}",
                 "inputs": {"style": "{{visual_bible.json.style_prompt}}"},
                 "body": location_body,
-                "output": "{{art.asset_id}}:reference_image",
+                "output": "{{find.asset_ids.0}}{{art.asset_id}}:reference_image",
                 "concurrency": 3,
             },
         },
@@ -1810,6 +1889,11 @@ camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=�
         {"id": "start_brief", "source": "start", "target": "creative_brief"},
         {"id": "brief_narrative", "source": "creative_brief", "target": "narrative_script"},
         {"id": "brief_visual", "source": "creative_brief", "target": "visual_bible"},
+        #: 定角色之前先看资产库里有谁、有哪些地方 —— 故事里要的就是库里那一个时原名沿用,下游才认得出它。
+        {"id": "start_library_characters", "source": "start", "target": "library_characters"},
+        {"id": "start_library_locations", "source": "start", "target": "library_locations"},
+        {"id": "library_characters_visual", "source": "library_characters", "target": "visual_bible"},
+        {"id": "library_locations_visual", "source": "library_locations", "target": "visual_bible"},
         {"id": "brief_project", "source": "creative_brief", "target": "video_project"},
         {"id": "visual_sheets", "source": "visual_bible", "target": "character_sheets"},
         {"id": "visual_locations", "source": "visual_bible", "target": "location_art"},

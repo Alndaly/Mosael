@@ -27,7 +27,7 @@ from app.domain.entities.catalog import (
     MAX_TAG_CHARS,
     MAX_TAGS,
     MAX_TEXT_CHARS,
-    ROLES,
+    ROLES_BY_KIND,
     VOICE_LIBRARY_ENGINE,
     AttributeProblem,
     normalize_attributes,
@@ -355,10 +355,14 @@ def clear_lost_references(db: Session, entity: Entity) -> Entity:
 # 参考图
 
 
+#: 标错角度时按种类说能标成什么(名字写在文案里,按读的人的语言;不把词表的键拼进句子)。
+_ROLE_ERRORS = {"character": "entityErr_role_character", "location": "entityErr_role_location", "prop": "entityErr_role_prop"}
+
+
 def _role(value: Any, entity: Entity) -> str:
     role = str(value or "").strip() or DEFAULT_ROLE[entity.kind]
-    if role not in ROLES:
-        raise EntityDomainError("entityErr_role", roles=" / ".join(ROLES))
+    if role not in ROLES_BY_KIND[entity.kind]:
+        raise EntityDomainError(_ROLE_ERRORS[entity.kind])
     return role
 
 

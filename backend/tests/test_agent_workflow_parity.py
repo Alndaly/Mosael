@@ -68,8 +68,13 @@ NODE_TO_TOOL: dict[str, str] = {
     "asset_tag": "update_asset_tags",
     "asset_update": "update_asset",
     "entity_get": "get_entity",
+    "entity_list": "list_entities",
     #: 智能体是先 create_entity、再逐张 attach_entity_reference;节点一次建好并挂上 —— 同一个目标。
     "entity_save": "create_entity",
+    #: 资产格的两项能力。智能体那边是同一件事的两步:generate_image 点名这个资产(entity_ids)画,
+    #: 再 attach_entity_reference 按角度挂回去 —— 提示词它自己会写。
+    "entity_angles": "generate_image",
+    "entity_expressions": "generate_image",
     "project_create": "create_project",
     # 画布上的自动成片便利节点会顺手建立默认序列和轨道；智能体侧对应的用户目标仍是新建项目。
     "project_sequence_create": "create_project",

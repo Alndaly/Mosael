@@ -360,6 +360,10 @@ _FIELD_LABELS = {
     "source_group": "wfField_source_group",
     "entity_ids": "wfField_entity_ids",
     "entity_id": "wfField_entity_id",
+    "entities": "wfField_entities",
+    "tag": "wfField_tag",
+    "expressions": "wfField_expressions",
+    "scope": "wfField_scope",
     "found": "wfField_found",
     "voice_engine": "wfField_voice_engine",
     "voice_id": "wfField_voice_id",
@@ -461,6 +465,17 @@ def config_media(spec: Any) -> tuple[str, ...]:
     没声明,画板格子上写着「接图片、视频或音频」,而转写只吃有声音的那两种。
     """
     return declared_media(spec.get("media") if isinstance(spec, dict) else None)
+
+
+def config_entity_kinds(spec: Any) -> tuple[str, ...]:
+    """这个资产字段收哪几种资产:选项来源点名了种类(`entities.character`)就只收那一种;没点名是哪种都收。
+
+    和素材字段的 `media` 同一个意思:下拉只列这一种,画板上也只有这一种资产格有这项能力(「生成表情」只挂在
+    人物上,场景、道具没有表情 —— boards.transforms.host_entity_kinds)。
+    """
+    source = str(spec.get("options_from") or "") if isinstance(spec, dict) else ""
+    prefix = "entities."
+    return (source[len(prefix):],) if source.startswith(prefix) else ()
 
 
 def config_data_type(key: str, spec: dict[str, Any]) -> str:
@@ -1334,6 +1349,20 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["entity_id", "found", "name", "description", "prompt", "asset_ids", "asset_id", "voice_engine", "voice_id"],
         "output_types": {"found": "number", "name": "text", "description": "text", "prompt": "text"},
     },
+    "entity_list": {
+        "external": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_entity_list",
+        "description": "wfNode_entity_list_desc",
+        "config": {
+            "kind": {"type": "string", "options": ["character", "location", "prop"], "description": "wfNode_entity_list_kind"},
+            "tag": {"type": "template", "description": "wfNode_entity_list_tag"},
+            "query": {"type": "template", "description": "wfNode_entity_list_query"},
+            "limit": {"advanced": True, "type": "number", "description": "wfNode_entity_list_limit"},
+        },
+        "outputs": ["entities", "count", "text"],
+        "output_types": {"entities": "json", "count": "number", "text": "text"},
+    },
     "entity_save": {
         "external": False,
         "category": "wfCat_asset",
@@ -1345,12 +1374,54 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "prompt": {"type": "template", "description": "wfNode_entity_save_prompt"},
             "description": {"type": "template", "description": "wfNode_entity_save_description"},
             "asset_ids": {"type": "template", "description": "wfNode_entity_save_asset_ids", "media": ["image", "video"]},
-            "role": {"type": "string", "options_from": "entity_roles", "description": "wfNode_entity_save_role"},
+            "role": {"type": "string", "options_from": "entity_roles", "depends_on": "kind", "description": "wfNode_entity_save_role"},
             "tags": {"advanced": True, "type": "template", "description": "wfNode_entity_save_tags"},
             "if_exists": {"advanced": True, "type": "string", "default": "merge", "options": ["merge", "new"], "description": "wfNode_entity_save_if_exists"},
         },
         "outputs": ["entity_id", "created", "added", "name"],
         "output_types": {"created": "number", "added": "number", "name": "text"},
+    },
+    #: 资产格的两项能力(ADR 0027 §3「画板」):拿这个资产现有的参考图再画几张「同一个」,画成的按角度挂回去。
+    #: 画板上宿主就是那一格资产(`entity_id` 字段装的是资产,boards.tools 的 entity 接口),产出新建在右边;
+    #: 工作流里点名一个资产,或接上游「取资产」「存成资产」给的 id。每一张是一次付费的生成。
+    "entity_angles": {
+        "external": False,
+        "effects": "paid",
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["asset_ids"],
+        "output_media": {"asset_ids": "image"},
+        "board_group": "entity", "board_description": "wfNode_entity_angles_board",
+        "category": "wfCat_ai",
+        "label": "wfNode_entity_angles",
+        "description": "wfNode_entity_angles_desc",
+        "config": {
+            "entity_id": {"type": "template", "required": True, "data_type": "entity", "options_from": "entities",
+                          "description": "wfNode_entity_angles_entity_id"},
+            "model": {"type": "string", "options_from": "reference_image_models", "description": "wfNode_entity_model"},
+            "scope": {"type": "string", "default": "missing", "options": ["missing", "all"],
+                      "description": "wfNode_entity_angles_scope"},
+        },
+        "outputs": ["asset_ids", "asset_id", "entity_id", "added", "failed"],
+        "output_types": {"asset_ids": "asset", "added": "number", "failed": "number"},
+    },
+    "entity_expressions": {
+        "external": False,
+        "effects": "paid",
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["asset_ids"],
+        "output_media": {"asset_ids": "image"},
+        "board_group": "entity", "board_description": "wfNode_entity_expressions_board",
+        "category": "wfCat_ai",
+        "label": "wfNode_entity_expressions",
+        "description": "wfNode_entity_expressions_desc",
+        "config": {
+            "entity_id": {"type": "template", "required": True, "data_type": "entity",
+                          "options_from": "entities.character", "description": "wfNode_entity_expressions_entity_id"},
+            "model": {"type": "string", "options_from": "reference_image_models", "description": "wfNode_entity_model"},
+            "expressions": {"type": "template", "description": "wfNode_entity_expressions_expressions"},
+        },
+        "outputs": ["asset_ids", "asset_id", "entity_id", "added", "failed"],
+        "output_types": {"asset_ids": "asset", "added": "number", "failed": "number"},
     },
     "asset_tag": {
         "external": False,

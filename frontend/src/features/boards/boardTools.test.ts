@@ -52,6 +52,18 @@ describe("一格的能力(boardAbilities)", () => {
     expect(hostHasContent(at("scene", { scene_id: "s" }))).toBe(true);
     expect(hostHasContent(at("frame"))).toBe(false);
   });
+
+  it("资产格按它引用的是哪一种资产列:生成表情只有人物有,种类没取到时先不列点名了种类的", () => {
+    const entityAbilities = [
+      ability("node:entity_angles", "补全多角度", ["entity"], { host_fields: { entity: "entity_id" } }),
+      ability("node:entity_expressions", "生成表情", ["entity"], { host_fields: { entity: "entity_id" }, host_entity_kinds: ["character"] }),
+    ];
+    const cell = at("entity", { entity_id: "e1" });
+    expect(boardAbilities(cell, entityAbilities, "character").map((one) => one.label)).toEqual(["补全多角度", "生成表情"]);
+    expect(boardAbilities(cell, entityAbilities, "location").map((one) => one.label)).toEqual(["补全多角度"]);
+    expect(boardAbilities(cell, entityAbilities).map((one) => one.label)).toEqual(["补全多角度"]);
+    expect(boardAbilities(at("entity"), entityAbilities, "character")).toEqual([]);
+  });
 });
 
 describe("能力的图标(boardToolIcon)", () => {

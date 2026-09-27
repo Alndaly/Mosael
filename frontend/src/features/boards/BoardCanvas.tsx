@@ -2,7 +2,7 @@ import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout"
 import { CommentCard } from "@/features/collaboration/CommentCard";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
@@ -31,7 +31,7 @@ import {
 } from "@xyflow/react";
 import { ChevronDown, Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -1718,6 +1718,15 @@ function ItemToolbar({
   //: 操作条和面板一样,格子贴着画布边时不钻到侧栏底下(横向平移回来;它只有一行,不收高度)。
   const bar = React.useRef<HTMLDivElement | null>(null);
   const fit = useKeepInCanvas(bar, { vertical: false });
+  //: 资产格的能力看它引用的是哪一种资产(人物才有「生成表情」)。和格子自己取的是同一份缓存。
+  const singleData = single?.data as unknown as { item: BoardItem; workspaceId?: string } | undefined;
+  const entityId = singleData?.item.kind === "entity" ? (singleData.item.entity_id ?? "") : "";
+  const entityKind = useQuery({
+    queryKey: entityKeys.detail(singleData?.workspaceId ?? "", entityId),
+    queryFn: () => getEntity(entityId),
+    enabled: Boolean(entityId),
+    retry: false,
+  }).data?.kind;
   if (selected.length === 0) return null;
   const item = single ? (single.data as unknown as { item: BoardItem }).item : null;
   const patch = (id: string, next: Partial<BoardItem>) =>
@@ -1729,7 +1738,7 @@ function ItemToolbar({
       ),
     );
   const open = (name: string) => Boolean(item && panel?.itemId === item.id && panel.name === name);
-  const abilities = item && onPanel ? boardAbilities(item, producers) : [];
+  const abilities = item && onPanel ? boardAbilities(item, producers, entityKind) : [];
   //: 直接摆几项;点开的那一项哪怕排在后面也摆出来(不然按下态藏在「⋯」里,看不出下面那块是谁的)。
   const direct = abilities.filter((one, index) => index < DIRECT_ABILITIES || open(one.id));
   const overflow = abilities.filter((one) => !direct.includes(one));

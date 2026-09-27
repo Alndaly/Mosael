@@ -76,6 +76,8 @@ class BoardProducerOut(WorkflowNodeTypeOut):
     role: str = "slot"
     #: 能力:{宿主种类: 宿主的内容填进哪个字段}。那个字段在面板上不出现 —— 它就是宿主。别的产出者是空的。
     host_fields: dict[str, str] = Field(default_factory=dict)
+    #: 挂在资产格上的能力收哪几种资产(人物 / 场景 / 道具);空 = 哪种都收。「生成表情」只有人物有。
+    host_entity_kinds: list[str] = Field(default_factory=list)
     permission: str
     #: "none" | "paid" | "external" —— 智能体替人跑时要不要确认卡。
     effects: str

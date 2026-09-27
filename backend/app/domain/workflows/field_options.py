@@ -324,14 +324,30 @@ def _entities(db: Session, ctx: OptionContext, kind: str = "") -> list[Option]:
 
 
 def _entity_roles(db: Session, ctx: OptionContext) -> list[Option]:
-    """参考图的角度 / 用途(正面、三视图、设定图……)。名字在后端文案表里,按读的人的语言。"""
-    from app.domain.entities.catalog import ROLES
+    """参考图的角度 / 用途,按种类(`parent` 是种类:人物有表情,场景的角度是全景 / 反打 / 俯视)。没给种类列全部。
+    名字在后端文案表里,按读的人的语言。"""
+    from app.domain.entities.catalog import ROLES, ROLES_BY_KIND
 
-    return [{"value": role, "label": t(f"entityRole_{role}", ctx.locale)} for role in ROLES]
+    roles = ROLES_BY_KIND.get(ctx.parent, ROLES)
+    return [{"value": role, "label": t(f"entityRole_{role}", ctx.locale)} for role in roles]
+
+
+def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
+    """收参考图的图片模型(资产格的「补全多角度」「生成表情」用):只看得到文字的模型画不出「同一个」。
+    和生成页同一份清单(generation_options),他设的默认那一个标出来 —— 留空用的就是它。"""
+    from app.domain.generation.resolution import generation_options
+    from app.domain.workflows.executors.entities import takes_reference_images
+
+    return [
+        {"value": one["id"], "label": f"{one['label']} · {t('wfOpt_defaultModel', ctx.locale)}" if one["is_default"] else one["label"]}
+        for one in generation_options(db, "image", user_id=ctx.user_id)
+        if takes_reference_images(one)
+    ]
 
 
 SOURCES: dict[str, Source] = {
     "entities": _entities,
+    "reference_image_models": _reference_image_models,
     "entities.character": lambda db, ctx: _entities(db, ctx, "character"),
     "entities.location": lambda db, ctx: _entities(db, ctx, "location"),
     "entities.prop": lambda db, ctx: _entities(db, ctx, "prop"),

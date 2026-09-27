@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from "@/features/editor/dubLanguage";
 import { VoiceField } from "@/features/voice/SpeechVoiceFields";
 import type { SpeechVoice } from "@/features/voice/useSpeechVoice";
-import { useWatchedJob } from "@/features/voice/useWatchedJob";
+import { useWatchedJob } from "@/lib/useWatchedJob";
 import { formatBytes } from "@/lib/bytes";
 import { useEditorStore } from "@/stores/editorStore";
 

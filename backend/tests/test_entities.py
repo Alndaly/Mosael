@@ -126,6 +126,39 @@ def test_老人物的音色补上引擎() -> None:
     assert "voice_engine" not in client.get(f"/api/entities/{plain['id']}").json()["attributes"]
 
 
+def test_参考图的角度按种类分_场景没有正面和表情_老数据迁到意思最近的() -> None:
+    from sqlalchemy import text
+
+    from app.core.db import engine
+    from app.db.migrations import _migrate_entity_reference_roles_follow_kind
+
+    client = fresh_client()
+    ws = _workspace(client)
+    seed_assets(ws, {"a": "image", "b": "image", "c": "image", "d": "image"})
+    place = client.post("/api/entities", json={"workspace_id": ws, "kind": "location", "name": "天台"}).json()["id"]
+    prop = client.post("/api/entities", json={"workspace_id": ws, "kind": "prop", "name": "红伞"}).json()["id"]
+    refused = client.post(f"/api/entities/{place}/references", json={"asset_id": "a", "role": "front"})
+    assert refused.status_code == 422 and "全景" in refused.json()["detail"], "场景的角度是机位,不是正面;说得出能标成什么"
+    assert client.post(f"/api/entities/{prop}/references", json={"asset_id": "d", "role": "expression"}).status_code == 422
+    assert client.post(f"/api/entities/{place}/references", json={"asset_id": "a", "role": "wide"}).status_code == 200
+
+    catalog = client.get("/api/entities/catalog").json()
+    assert catalog["roles_by_kind"]["location"] == ["wide", "reverse", "overhead", "concept", "detail"]
+    assert "expression" in catalog["roles_by_kind"]["character"] and "expression" not in catalog["roles_by_kind"]["prop"]
+    assert catalog["attach_priority"]["location"] == ["wide", "concept"]
+
+    #: 老库里按「三种共用一张表」时标下的角度。
+    with engine.begin() as conn:
+        for entity_id, asset_id, role in ((place, "b", "side"), (place, "c", "expression"), (prop, "d", "full_body")):
+            conn.execute(text("INSERT INTO entity_references (entity_id, asset_id, role, position, created_at) "
+                              "VALUES (:e, :a, :r, 9, CURRENT_TIMESTAMP)"), {"e": entity_id, "a": asset_id, "r": role})
+        conn.execute(text("UPDATE entity_references SET role = 'front' WHERE entity_id = :e AND asset_id = 'a'"), {"e": place})
+    _migrate_entity_reference_roles_follow_kind()
+    roles = {ref["asset_id"]: ref["role"] for ref in client.get(f"/api/entities/{place}").json()["references"]}
+    assert roles == {"a": "wide", "b": "reverse", "c": "concept"}
+    assert [ref["role"] for ref in client.get(f"/api/entities/{prop}").json()["references"]] == ["front"]
+
+
 def test_音色和_3D_场景要在这个工作区() -> None:
     client = fresh_client()
     ws = _workspace(client)

@@ -1485,6 +1485,77 @@ def _migrate_entity_voices_name_their_engine() -> None:
             )
 
 
+def _migrate_entity_reference_roles_follow_kind() -> None:
+    """参考图的角度按资产种类分开(人物、场景、道具不是一个模板):场景的角度是机位(全景 / 反打 / 俯视),
+    没有「正面 / 侧面 / 表情」;道具没有全身和表情。此前三种共用一张表,场景的图可能标成了正面、侧面。
+
+    标得不对的换成这种资产里意思最近的那个(场景的正面 → 全景、侧面 / 背面 → 反打、特写 → 细节);
+    表里没有的落到这种资产的缺省角度。词表在这里抄一份定下来 —— 迁移跑的是当时的规矩,不随 catalog 以后变。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "entities" not in tables or "entity_references" not in tables:
+        return
+    allowed = {
+        "character": {"front", "side", "back", "turnaround", "closeup", "full_body", "expression", "concept", "detail"},
+        "location": {"wide", "reverse", "overhead", "concept", "detail"},
+        "prop": {"front", "side", "back", "turnaround", "closeup", "concept", "detail"},
+    }
+    nearest = {
+        "character": {"wide": "full_body", "reverse": "back", "overhead": "concept"},
+        "location": {"front": "wide", "full_body": "wide", "turnaround": "wide", "side": "reverse", "back": "reverse",
+                     "closeup": "detail", "expression": "concept"},
+        "prop": {"full_body": "front", "expression": "concept", "wide": "concept", "reverse": "back",
+                 "overhead": "concept"},
+    }
+    fallback = {"character": "front", "location": "concept", "prop": "front"}
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT r.entity_id, r.asset_id, r.role, e.kind FROM entity_references r JOIN entities e ON e.id = r.entity_id"
+        )).all()
+        for entity_id, asset_id, role, kind in rows:
+            if kind not in allowed or role in allowed[kind]:
+                continue
+            conn.execute(
+                text("UPDATE entity_references SET role = :role WHERE entity_id = :entity AND asset_id = :asset"),
+                {"role": nearest[kind].get(role, fallback[kind]), "entity": entity_id, "asset": asset_id},
+            )
+
+
+def _migrate_blender_models_are_named_after_their_scene() -> None:
+    """从 Blender 接回来的模型此前一律叫「Blender model」:模型归工作区、道具的 3D 模型下拉里也列着它们,
+    一排同名的分不出是哪一次接回来的。改成「<用它的那个场景> · Blender」;没有场景用它的,按工作区编号(Blender 1、2……)。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "scene_3d_models" not in tables or "scenes_3d" not in tables:
+        return
+    with engine.begin() as conn:
+        models = conn.execute(text(
+            "SELECT id, workspace_id FROM scene_3d_models WHERE name = 'Blender model' ORDER BY id"
+        )).all()
+        if not models:
+            return
+        used_by: dict[str, str] = {}
+        for scene_name, raw in conn.execute(text("SELECT name, content FROM scenes_3d ORDER BY created_at")).all():
+            try:
+                content = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            for obj in (content or {}).get("objects") or []:
+                if isinstance(obj, dict) and obj.get("model_id") and obj["model_id"] not in used_by:
+                    used_by[obj["model_id"]] = str(scene_name or "")
+        unused: dict[str, int] = {}
+        for model_id, workspace_id in models:
+            scene = used_by.get(model_id, "").removesuffix(" · Blender").strip()
+            if scene:
+                name = f"{scene} · Blender"
+            else:
+                unused[workspace_id] = unused.get(workspace_id, 0) + 1
+                name = f"Blender {unused[workspace_id]}"
+            conn.execute(text("UPDATE scene_3d_models SET name = :name WHERE id = :id"), {"name": name[:160], "id": model_id})
+
+
 def _migrate_drop_the_community_integration() -> None:
     """把桌面端接入社区时加的东西删掉 —— 社区能力整体从应用里拿掉了(2026-09-27,维护者:「先把资产库做好」)。
 
@@ -4923,6 +4994,8 @@ def migration_plan() -> MigrationPlan:
             #: 要用到上面装好的随包插件的清单;排在对账之后,对账不再认识工具格。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_tool_cells_become_abilities),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_entity_voices_name_their_engine),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_entity_reference_roles_follow_kind),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_blender_models_are_named_after_their_scene),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

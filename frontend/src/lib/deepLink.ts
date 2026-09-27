@@ -112,6 +112,7 @@ export const OPEN_WORKFLOW_TEMPLATE = "mosael:open-workflow-template";
 /** 页面 → 打开单条记录的事件名(mosael:// 深链、任务中心「前往」共用)。没有对应事件的页面就只跳页。 */
 export const VIEW_RECORD_EVENTS: Record<string, string> = {
   workflows: "mosael:open-workflow",
+  entities: "mosael:open-entity",
   publish: "mosael:open-publish-task",
   settings: "mosael:open-settings",
 };

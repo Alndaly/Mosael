@@ -10343,6 +10343,59 @@
         }
       }
     },
+    "/api/entities/{entity_id}/draw": {
+      "post": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Draw Entity",
+        "description": "照这个资产的参考图再画几张(补全多角度 / 生成表情),画成的挂回来。付费生成,闸和生成页同一道(`ai`)。\n\n说不通的(没图、模型不收参考图、角度都齐了)当场 422,不起任务;说得通就回那个任务,界面跟着它的进度。",
+        "operationId": "draw_entity_api_entities__entity_id__draw_post",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityDrawRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/entities/{entity_id}/usage": {
       "get": {
         "tags": [
@@ -21440,6 +21493,13 @@
             "type": "object",
             "title": "Host Fields"
           },
+          "host_entity_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Host Entity Kinds"
+          },
           "permission": {
             "type": "string",
             "title": "Permission"
@@ -23267,6 +23327,16 @@
             "type": "array",
             "title": "Roles"
           },
+          "roles_by_kind": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Roles By Kind"
+          },
           "consent_kinds": {
             "items": {
               "$ref": "#/components/schemas/EntityConsentKindOut"
@@ -23275,10 +23345,13 @@
             "title": "Consent Kinds"
           },
           "attach_priority": {
-            "items": {
-              "type": "string"
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
-            "type": "array",
+            "type": "object",
             "title": "Attach Priority"
           },
           "attributes": {
@@ -23296,6 +23369,7 @@
         "required": [
           "kinds",
           "roles",
+          "roles_by_kind",
           "consent_kinds",
           "attach_priority",
           "attributes"
@@ -23384,6 +23458,45 @@
           "name"
         ],
         "title": "EntityCreate"
+      },
+      "EntityDrawRequest": {
+        "properties": {
+          "ability": {
+            "type": "string",
+            "enum": [
+              "angles",
+              "expressions"
+            ],
+            "title": "Ability"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Model",
+            "default": ""
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "all"
+            ],
+            "title": "Scope",
+            "default": "missing"
+          },
+          "expressions": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Expressions",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "ability"
+        ],
+        "title": "EntityDrawRequest",
+        "description": "资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4):和画板上资产格的那两项能力是同一件事。"
       },
       "EntityKindOut": {
         "properties": {

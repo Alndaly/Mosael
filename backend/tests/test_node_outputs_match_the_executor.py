@@ -40,6 +40,10 @@ INDIRECT = {
     "code",
     # 在 run_http 里拼:同一份实现给节点和沙箱两条路用,键在那儿。
     "http_request",
+    # 两项资产能力共用 draw_and_attach 的返回值(asset_ids、asset_id、entity_id、added、failed),
+    # 键由 tests/test_entity_abilities.py 钉着。
+    "entity_angles",
+    "entity_expressions",
 }
 
 

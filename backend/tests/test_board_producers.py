@@ -540,6 +540,8 @@ BOARD_NODES = {
     "video_to_gif": ("video",),
     "separate_audio": ("video", "audio"),
     "denoise_audio": ("video", "audio"),
+    "entity_angles": ("entity",),
+    "entity_expressions": ("entity",),
 }
 
 
@@ -583,8 +585,10 @@ def test_画板上的内置变换从节点声明里读_是它吃的那几种格�
     assert nodes == {f"node:{name}" for name in BOARD_NODES}
     assert {one: registry[one].hosts for one in nodes} == {f"node:{name}": hosts for name, hosts in BOARD_NODES.items()}
     assert all(registry[one].role == ABILITY and not registry[one].fills_empty_slot for one in nodes)
-    #: 这几个都在本机做完(对外发请求、调别的流程的那两个已经不在画板上了)。
-    assert all(registry[one].effects == "none" for one in nodes)
+    #: 后果照节点声明:资产格那两项是付费生成(智能体替人点要确认卡),其余都在本机做完
+    #: (对外发请求、调别的流程的那两个已经不在画板上了)。
+    paid = {"node:entity_angles", "node:entity_expressions"}
+    assert {one: registry[one].effects for one in nodes} == {one: "paid" if one in paid else "none" for one in nodes}
 
 
 def test_声明了画板的流程节点注册表也不收_跑的时候说清楚(monkeypatch) -> None:

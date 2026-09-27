@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PODCAST_ENGINE } from "@/features/voice/speechEngines";
 import { FIELD, FIELD_SPEED, FieldRow, SpeechVoiceFields, SpeedPicker, VoiceField, VoicePicker } from "@/features/voice/SpeechVoiceFields";
 import { useSpeechVoice } from "@/features/voice/useSpeechVoice";
-import { useWatchedJob } from "@/features/voice/useWatchedJob";
+import { useWatchedJob } from "@/lib/useWatchedJob";
 import { gotoSettings } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";

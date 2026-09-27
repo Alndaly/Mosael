@@ -48,7 +48,8 @@ import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
-import { matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
+import { EntityThumb, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
+import { entityDisplayName } from "@/features/entities/entityMeta";
 
 /**
  * 挂在节点**下方**的提示词面板 —— 「节点本身就是生成单元」这件事的那一半。
@@ -771,9 +772,13 @@ export function NodeComposer({
     touched.current = false;
   };
 
-  //: 上面那一排:挂上的参考素材(按模型声明出的槽)和连进来的文档。
+  //: 连进来的资产格引用的资产。生成时服务端按连线把它们当成 `@` 了一样挂上(提示词描述 + 参考图),
+  //: 所以这里**摆出来**:连了一个人物进来却什么都看不到,就像连线没起作用。
+  const linkedEntities = (upstreamEntities ?? []).flatMap((id) => mentionable.data?.find((one) => one.id === id) ?? []);
+
+  //: 上面那一排:连进来的资产、挂上的参考素材(按模型声明出的槽)和连进来的文档。
   const upstreamChips =
-    slots.length > 0 || upstreamDocuments?.length ? (
+    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length ? (
       <>
         {mergedSlots ? (
           <>
@@ -913,6 +918,17 @@ export function NodeComposer({
           );
           })
         )}
+        {linkedEntities.map((entity) => (
+          <span
+            key={entity.id}
+            data-linked-entity={entity.id}
+            title={t("boardLinkedEntityHint")}
+            className="inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
+          >
+            <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
+            <span className="min-w-0 truncate">{entityDisplayName(entity)}</span>
+          </span>
+        ))}
         {upstreamDocuments?.map((doc) => (
           <a
             key={doc.note_id}

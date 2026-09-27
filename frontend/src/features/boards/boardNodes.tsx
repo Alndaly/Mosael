@@ -362,7 +362,7 @@ export function NoteNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <NodeLabel data={nodeData} />
-      {selected && !editing && !commentMode && workspaceId && boardId && <div className="nodrag nowheel absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md bg-popover" onDoubleClick={e => e.stopPropagation()}><SaveToNote workspaceId={workspaceId} content={item.text || ""} sources={[{kind: "board", id: boardId, label: t("navBoards"), quote: item.text || ""}]} /></div>}
+      {selected && !editing && !commentMode && workspaceId && boardId && <div className="nodrag absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md bg-popover" onDoubleClick={e => e.stopPropagation()}><SaveToNote workspaceId={workspaceId} content={item.text || ""} sources={[{kind: "board", id: boardId, label: t("navBoards"), quote: item.text || ""}]} /></div>}
       <Ports visible={selected} disabled={commentMode} />
       {editing ? (
         //: **草稿式的框**(见 components/ui/draft-text):字住在 React Flow 的节点里,而 React Flow
@@ -386,7 +386,10 @@ export function NoteNode({ data, selected }: NodeProps) {
           data-text-format={item.text_format}
           className={cn(
             "h-full w-full overflow-hidden whitespace-pre-wrap break-words text-foreground",
-            json && "nowheel overflow-auto font-mono text-ui-xs leading-snug [overflow-wrap:anywhere]",
+            json && "overflow-auto font-mono text-ui-xs leading-snug [overflow-wrap:anywhere]",
+            //: 滚轮只在**选中的这一格**里滚它自己的内容;没选中时滚轮照常平移画布 —— 触控板平移时
+            //: 指针划过一格就截住滚轮,画布会停在半路(见 wheelStaysWithCanvas.dom.test)。
+            json && selected && "nowheel",
           )}
         >
           {item.text || <span className="text-muted-foreground">{t("boardNotePlaceholder")}</span>}
@@ -804,7 +807,7 @@ function DocumentNode({ data, selected }: NodeProps) {
         //: **和笔记页同一个渲染器**(NoteReader,同一套 .note-prose),只由 .note-card 把尺度缩到卡片上 ——
         //: 此前是聊天消息那套 Markdown 渲染,段距、字体、表格都和笔记页对不上,表格外面还多一层框。
         //: 整块不接指针:拖它就是拖格子,点它就是选中格子(看全文走右下角「打开」)。
-        <div data-document-preview="" onDragStartCapture={(event) => event.preventDefault()} className="note-card nowheel select-none min-h-0 flex-1 overflow-y-auto px-4 py-3 text-foreground/85">
+        <div data-document-preview="" onDragStartCapture={(event) => event.preventDefault()} className={cn("note-card select-none min-h-0 flex-1 overflow-y-auto px-4 py-3 text-foreground/85", selected && "nowheel")}>
           <div className="pointer-events-none">
             <NoteReader markdown={ref?.markdown.slice(0, 6000) || ""} />
           </div>
@@ -907,7 +910,8 @@ export function EntityNode({ data, selected }: NodeProps) {
   return (
     <div data-board-entity={item.entity_id ?? ""} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS)}>
       <NodeResizer minWidth={160} minHeight={200} isVisible={selected && !commentMode} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <NodeLabel data={nodeData} fallback={found?.name} />
+      {/* 名字前面是这个资产自己那一种的图标(场景是定位针,道具是盒子),不是一律「人物」。 */}
+      <NodeLabel data={nodeData} icon={found ? KindIcon : undefined} fallback={found?.name} />
       <Ports visible={selected} disabled={commentMode} />
       <div className={cn("relative min-h-0 flex-1 overflow-hidden bg-secondary/40", CELL_INNER_TOP_RADIUS)}>
         {entity.isError ? (

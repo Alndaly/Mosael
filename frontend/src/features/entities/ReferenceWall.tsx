@@ -27,9 +27,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
+import { DrawMenu } from "@/features/entities/DrawDialog";
+import { isImeKeystroke } from "@/lib/shortcuts";
+
 import { assetKeys } from "@/api/queryKeys";
 import {
   addEntityReference,
+  assetFileUrl,
+  assetPreviewUrl,
   assetThumbnailUrl,
   entityKeys,
   importAsset,
@@ -73,6 +79,14 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
   React.useEffect(() => setOrder(entity.references.map((one) => one.asset_id)), [entity.references]);
   const byId = new Map(entity.references.map((one) => [one.asset_id, one]));
   const refs = order.map((id) => byId.get(id)).filter((one): one is EntityReference => Boolean(one));
+  const { openImagePreview } = useImagePreview();
+  //: 点一张放大看;灯箱里左右翻的是这一面墙上的全部(按墙上的先后),视频就地播放。
+  const gallery: ImagePreviewItem[] = refs.map((ref) => ({
+    src: ref.asset_kind === "image" ? assetPreviewUrl(ref.asset_id) : assetFileUrl(ref.asset_id),
+    title: ref.asset_name,
+    video: ref.asset_kind !== "image",
+  }));
+  const preview = (index: number) => openImagePreview({ ...gallery[index], gallery });
 
   const settle = (next: Entity) => {
     qc.setQueryData(entityKeys.detail(workspaceId, entity.id), next);
@@ -165,13 +179,15 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="grid min-w-0 gap-0.5">
             <p className="m-0 text-ui-sm text-muted-foreground">{t("entityReferencesHint")}</p>
-            {labels.priority.length > 0 && (
+            {labels.priorityFor(entity.kind).length > 0 && (
               <p className="m-0 text-ui-xs text-muted-foreground" data-attach-order="">
-                {t("entityAttachOrder").replace("{order}", labels.priority.join(" > "))}
+                {t("entityAttachOrder").replace("{order}", labels.priorityFor(entity.kind).join(" > "))}
               </p>
             )}
           </div>
           <span className="flex flex-wrap gap-2">
+            {/* 照现有的图再画几张同一个:一张图片参考都没有时画不出「同一个」,先传一张。 */}
+            <DrawMenu entity={entity} workspaceId={workspaceId} disabled={!refs.some((one) => one.asset_kind === "image")} />
             <Button variant="outline" onClick={() => fileInput.current?.click()} disabled={upload.isPending}>
               <Upload />
               {t("entityUpload")}
@@ -216,13 +232,14 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
                   reference={ref}
                   isCover={entity.display_cover_asset_id === ref.asset_id}
                   roleLabel={labels.role(ref.role)}
-                  roles={labels.roles}
+                  roles={labels.rolesFor(entity.kind)}
                   first={index === 0}
                   last={index === refs.length - 1}
                   onRole={(next) => role.mutate({ assetId: ref.asset_id, next })}
                   onCover={() => cover.mutate(ref.asset_id)}
                   onRemove={() => remove.mutate(ref.asset_id)}
                   onMove={(offset) => move(ref.asset_id, offset)}
+                  onPreview={() => preview(index)}
                 />
               ))}
             </SortableContext>
@@ -281,6 +298,7 @@ function ReferenceCard({
   onCover,
   onRemove,
   onMove,
+  onPreview,
 }: {
   reference: EntityReference;
   isCover: boolean;
@@ -292,6 +310,8 @@ function ReferenceCard({
   onCover: () => void;
   onRemove: () => void;
   onMove: (offset: number) => void;
+  /** 放大看这一张。拖着排序不会触发它(拖动要先挪 6px,见 sensors),点角度、⋯ 也不会。 */
+  onPreview: () => void;
 }) {
   const t = useI18n();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: reference.asset_id });
@@ -310,8 +330,15 @@ function ReferenceCard({
       <div
         {...attributes}
         {...listeners}
+        onClick={(event) => {
+          if (!(event.target as HTMLElement).closest("button")) onPreview();
+        }}
+        onKeyDown={(event) => {
+          listeners?.onKeyDown?.(event);
+          if (event.key === "Enter" && !isImeKeystroke(event) && event.target === event.currentTarget) onPreview();
+        }}
         className={cn(
-          "relative grid aspect-square cursor-grab place-items-center overflow-hidden rounded-lg border bg-panel-inset text-muted-foreground transition-colors",
+          "relative grid aspect-square cursor-zoom-in place-items-center overflow-hidden rounded-lg border bg-panel-inset text-muted-foreground transition-colors",
           isCover ? "border-primary shadow-[0_0_0_1px_var(--primary)]" : "border-border group-hover:border-border-strong",
         )}
         aria-label={`${reference.asset_name} · ${roleLabel}`}

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -16,6 +16,7 @@ from app.api.schemas import (
     AssetEntityOut,
     EntityCatalogOut,
     EntityCreate,
+    EntityDrawRequest,
     EntityOut,
     EntityReferenceAdd,
     EntityReferenceOrder,
@@ -24,12 +25,13 @@ from app.api.schemas import (
     EntityUpdate,
     EntityUsageOut,
     EntityVariantCreate,
+    JobOut,
 )
 from app.core.i18n import get_current_locale, t
-from app.db.models import Entity, GenerationSession
+from app.db.models import Entity, GenerationSession, Job
 from app.domain import entities as library
 from app.domain import sharing
-from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, CONSENT_KINDS, KINDS, ROLES
+from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, CONSENT_KINDS, KINDS, ROLES, ROLES_BY_KIND
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 
 router = APIRouter(tags=["entities"])
@@ -114,7 +116,8 @@ def entity_catalog(db: DbSession, user: CurrentUser) -> dict[str, Any]:
             {"kind": kind, "label": t(f"entityConsent_{kind}", locale), "help": t(f"entityConsent_{kind}_help", locale)}
             for kind in CONSENT_KINDS
         ],
-        "attach_priority": list(ATTACH_PRIORITY),
+        "roles_by_kind": {kind: list(roles) for kind, roles in ROLES_BY_KIND.items()},
+        "attach_priority": {kind: list(order) for kind, order in ATTACH_PRIORITY.items()},
         "attributes": {kind: list(keys) for kind, keys in ATTRIBUTE_KEYS.items()},
     }
 
@@ -224,6 +227,25 @@ def remove_reference(entity_id: str, asset_id: str, db: DbSession, user: Current
     """摘掉一张参考图。素材还在素材库里。"""
     entity = _entity(db, user, entity_id, perm="edit")
     return _out(db, library.remove_reference(db, entity, asset_id))
+
+
+@router.post("/entities/{entity_id}/draw", response_model=JobOut)
+def draw_entity(entity_id: str, body: EntityDrawRequest, db: DbSession, user: CurrentUser) -> Job:
+    """照这个资产的参考图再画几张(补全多角度 / 生成表情),画成的挂回来。付费生成,闸和生成页同一道(`ai`)。
+
+    说不通的(没图、模型不收参考图、角度都齐了)当场 422,不起任务;说得通就回那个任务,界面跟着它的进度。
+    """
+    from app.core.i18n import render_message
+    from app.domain.entities.drawing import start_drawing
+    from app.domain.workflows import WorkflowDomainError
+
+    entity = _entity(db, user, entity_id, perm="ai")
+    config = {"model": body.model, "scope": body.scope, "expressions": body.expressions}
+    try:
+        return start_drawing(db, entity, body.ability, config, actor_id=user.id)
+    except WorkflowDomainError as exc:
+        detail = render_message(exc.key, get_current_locale(), exc.params) if exc.key else str(exc)
+        raise HTTPException(status_code=422, detail=detail) from exc
 
 
 @router.get("/entities/{entity_id}/usage", response_model=EntityUsageOut)

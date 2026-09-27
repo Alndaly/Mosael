@@ -20,7 +20,8 @@ from tests.util import fresh_client
 RATCHET = True
 
 #: 画板上装内容的几种格子:能力和生成器只能挂在这些上面。
-CONTENT_KINDS = {"note", "document", "image", "video", "audio", "scene"}
+#: 资产格(ADR 0027)给的是它引用的资产:补全多角度、生成表情吃的就是它。
+CONTENT_KINDS = {"note", "document", "image", "video", "audio", "scene", "entity"}
 MEDIA_KINDS = {"image", "video", "audio"}
 
 

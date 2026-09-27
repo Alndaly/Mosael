@@ -49,8 +49,8 @@ ADR 0025 修订「能力住在内容格上」)、一句给创作者看的说明(
 或者是**空格子的一种填法**(按参数出图、出片的生成器,和「配音 / 生成」同一个切换):
 
 · `ability` —— 吃画板上的内容:挂在它那个内容字段收得下的几种格子上(`board_hosts`),宿主那一格的内容
-  就是那个字段的值(`host_field`:便签给字、文档给钉住那一版的正文、媒体给素材、3D 场景给场景),产出新建在
-  宿主右边;
+  就是那个字段的值(`host_field`:便签给字、文档给钉住那一版的正文、媒体给素材、3D 场景给场景、资产格给资产),
+  产出新建在宿主右边;
 · `slot` —— 不吃画板内容、凭空产出一种素材:挂在那种素材的空格子上(产出种类见 output_kinds),产出填进那一格。
 
 判法只看声明,不为哪个工具写特例:画板上露出来、能接上游的字段里有素材 / 3D 场景字段的,是那几种格子的能力;
@@ -70,7 +70,7 @@ from app.domain.boards.tools import binding_sink, landing_outputs
 #: 变换按**它吃的是什么内容**归的组(界面上能力图标的兜底、智能体读的分类),顺序就是接口里排的顺序。
 #: `new` 是不吃画板内容、凭空产出素材的(文生图、讲解视频);`asset` 是吃素材却没说
 #: 哪一种的。标签是 i18n key `boardToolGroup_<组>`。
-BOARD_GROUPS: tuple[str, ...] = ("new", "image", "video", "audio", "text", "scene", "asset")
+BOARD_GROUPS: tuple[str, ...] = ("new", "image", "video", "audio", "text", "scene", "entity", "asset")
 
 #: 只有搭流程的人看得懂的字段类型:键值映射 / 原始 JSON(object)、代码、子图。
 _WIRING_FIELD_TYPES = frozenset({"object", "code", "graph"})
@@ -194,19 +194,19 @@ ROLES: tuple[str, ...] = (ABILITY, SLOT)
 
 #: 画板上装素材的几种格子。
 _MEDIA_KINDS: tuple[str, ...] = ("image", "video", "audio")
-#: 宿主种类的先后(接口、测试按它排):文字的两种、媒体三种、3D 场景。
-_HOST_ORDER: tuple[str, ...] = ("note", "document", *_MEDIA_KINDS, "scene")
+#: 宿主种类的先后(接口、测试按它排):文字的两种、媒体三种、3D 场景、资产。
+_HOST_ORDER: tuple[str, ...] = ("note", "document", *_MEDIA_KINDS, "scene", "entity")
 
 
 def _host_fields(meta: dict[str, Any]) -> list[tuple[str, str]]:
     """这个变换**吃画板内容**的那几个字段 `(字段, 接的是什么)`,必填的在前、其余按声明的先后。
 
-    素材 / 3D 场景字段优先:有它们的,文字字段是参数(出图的提示词),从上游便签接或手写。没有素材字段的:
+    素材 / 3D 场景 / 资产字段优先:有它们的,文字字段是参数(出图的提示词),从上游便签接或手写。没有素材字段的:
     只交出文字的(翻译)吃的就是那段字;交出素材的(提示词出图)不吃内容 —— 空列表。
     """
     specs = meta.get("config") or {}
     sinks = _sinks(meta)
-    fields = [(key, sink) for key, sink in sinks.items() if sink in ("asset", "scene")]
+    fields = [(key, sink) for key, sink in sinks.items() if sink in ("asset", "scene", "entity")]
     if not fields and not _makes_media(meta):
         fields = list(sinks.items())
     return sorted(fields, key=lambda one: not (specs.get(one[0]) or {}).get("required"))
@@ -254,6 +254,15 @@ def host_fields(meta: dict[str, Any]) -> dict[str, str]:
     return {kind: field for kind in board_hosts(meta) if (field := host_field(meta, kind))}
 
 
+def host_entity_kinds(meta: dict[str, Any]) -> list[str]:
+    """挂在资产格上的能力收哪几种资产(空 = 哪种都收)。**资产格不是一个样子**:人物、场景、道具各有各的能力 ——
+    「生成表情」只对人物有意思。按宿主那个字段的声明推(workflows.config_entity_kinds),不另列清单。"""
+    from app.domain.workflows import config_entity_kinds
+
+    field = host_field(meta, "entity") if board_role(meta) == ABILITY else None
+    return list(config_entity_kinds((meta.get("config") or {}).get(field))) if field else []
+
+
 def host_sink(meta: dict[str, Any], field: str) -> str | None:
     """宿主填进的那个字段接的是哪种值(asset / scene / text)。"""
     return _sinks(meta).get(field)
@@ -262,7 +271,7 @@ def host_sink(meta: dict[str, Any], field: str) -> str | None:
 def board_group(meta: dict[str, Any]) -> str:
     """它按吃什么内容归哪一组。声明了(`board_group`)就用声明的;没声明按它吃的内容推:
 
-    接 3D 场景的归 3D;接素材的归那种素材(字段声明了 `media`,几个素材字段说的是同一种),
+    接 3D 场景的归 3D、接资产的归资产;接素材的归那种素材(字段声明了 `media`,几个素材字段说的是同一种),
     说不清是哪种归「素材」;不吃素材、交出素材的(提示词出图)归「产出新素材」;剩下的吃文字吐文字。
     """
     declared = meta.get("board_group")
@@ -271,6 +280,8 @@ def board_group(meta: dict[str, Any]) -> str:
     sinks = _sinks(meta)
     if "scene" in sinks.values():
         return "scene"
+    if "entity" in sinks.values():
+        return "entity"
     from app.domain.workflows import config_media
 
     specs = meta.get("config") or {}
@@ -328,6 +339,7 @@ __all__ = [
     "board_hosts",
     "board_role",
     "host_field",
+    "host_entity_kinds",
     "host_fields",
     "host_sink",
     "board_config_view",

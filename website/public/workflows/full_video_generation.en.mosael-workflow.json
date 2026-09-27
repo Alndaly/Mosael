@@ -3,8 +3,8 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Topic to finished video",
-  "description": "Turn a topic into a creative brief, script and visual bible, draw a turnaround sheet for every character and concept art for every location, auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video.",
-  "graph_hash": "586d7e2b7980a7da5f44973b660bc2a986c395d7f97198197a9926f618efc3e8",
+  "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video.",
+  "graph_hash": "d1590df1fd9f4e855a1aabb017b75bfd9c72eb85c2a1281b4d3bba18389a6f94",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -189,6 +189,30 @@
         }
       },
       {
+        "id": "library_characters",
+        "type": "entity_list",
+        "name": "See which characters the asset library has",
+        "position": {
+          "x": 340,
+          "y": 620
+        },
+        "config": {
+          "kind": "character"
+        }
+      },
+      {
+        "id": "library_locations",
+        "type": "entity_list",
+        "name": "See which locations the asset library has",
+        "position": {
+          "x": 340,
+          "y": 780
+        },
+        "config": {
+          "kind": "location"
+        }
+      },
+      {
         "id": "visual_bible",
         "type": "llm",
         "name": "Define characters, locations and the visual bible",
@@ -200,8 +224,8 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是摄影指导、美术指导、角色设计和连续性监制。根据创意简报建立全片共享的视觉圣经：\n主体、环境、光线、色彩、镜头语言与连续性规则，规则要具体到生成模型可以复用，避免空泛风格词。\n同时定下**出镜角色**(最多 4 个；appearance 用英文写到能画出三视图的程度：年龄、脸型发型、服装与配色、\n体型、标志性道具)和**场景**(最多 3 个；description 用英文写空间、陈设、材质与光源，给出大致的\n长宽高)。每个角色分一个不同的白模颜色，并在 blockout_legend 里用英文说明颜色与角色的对应。\nstyle_prompt 是一句英文画风，全片每张图、每段视频都会带上。不得要求画面生成字幕、UI、Logo 或水印。\n只输出符合 JSON Schema 的对象。",
-          "prompt": "创意简报：\n{{creative_brief.text}}\n\n画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。\n请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。",
+          "system": "你是摄影指导、美术指导、角色设计和连续性监制。根据创意简报建立全片共享的视觉圣经：\n主体、环境、光线、色彩、镜头语言与连续性规则，规则要具体到生成模型可以复用，避免空泛风格词。\n同时定下**出镜角色**(最多 4 个；appearance 用英文写到能画出三视图的程度：年龄、脸型发型、服装与配色、\n体型、标志性道具)和**场景**(最多 3 个；description 用英文写空间、陈设、材质与光源，给出大致的\n长宽高)。每个角色分一个不同的白模颜色，并在 blockout_legend 里用英文说明颜色与角色的对应。\nstyle_prompt 是一句英文画风，全片每张图、每段视频都会带上。不得要求画面生成字幕、UI、Logo 或水印。\n用户会给出资产库里已有的人物和场景：故事需要的角色或场景**就是**其中某一个时，name 一字不差地沿用它的名字，\nappearance / description 照它的提示词描述写（它的参考图会直接拿来用，不再重画）；只是相像、并不是同一个的不要硬套，\n新建一个名字不同的。清单为空就全部新建。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "创意简报：\n{{creative_brief.text}}\n\n画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。\n请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则，并定下出镜角色与场景。\n\n资产库里已有的人物（名字 — 提示词描述；空着就是还没有）：\n{{library_characters.text}}\n\n资产库里已有的场景：\n{{library_locations.text}}",
           "response_format": "json_schema",
           "json_schema_name": "professional_video_visual_bible",
           "json_schema": {
@@ -376,7 +400,7 @@
       {
         "id": "character_sheets",
         "type": "loop_foreach",
-        "name": "Draw every character's turnaround",
+        "name": "Every character: reuse from the library or draw a turnaround",
         "position": {
           "x": 1040,
           "y": 620
@@ -389,13 +413,36 @@
           "body": {
             "nodes": [
               {
-                "id": "sheet",
-                "type": "ai_generate",
-                "name": "Draw this character's turnaround",
+                "id": "find",
+                "type": "entity_get",
+                "name": "Look this character up in the asset library",
                 "position": {
                   "x": 80,
                   "y": 140
                 },
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.name}}",
+                  "limit": 1
+                }
+              },
+              {
+                "id": "has_art",
+                "type": "condition",
+                "name": "Does the library have its images?",
+                "position": {
+                  "x": 380,
+                  "y": 140
+                },
+                "config": {
+                  "left": "{{find.asset_ids.0}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "sheet",
+                "type": "ai_generate",
+                "name": "Draw this character's turnaround",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
@@ -403,19 +450,63 @@
                   "kind": "image",
                   "prompt": "Character turnaround reference sheet for {{loop.item.name}}: {{loop.item.appearance}}. Three full-body views of the same character side by side — front, side profile, back — identical outfit and proportions, relaxed A-pose, plain white background, soft even studio light, no text, no labels, no borders. {{input.style}}",
                   "parameters": {}
+                },
+                "position": {
+                  "x": 680,
+                  "y": 240
                 }
+              },
+              {
+                "id": "save",
+                "type": "entity_save",
+                "name": "Save as a character asset",
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.name}}",
+                  "prompt": "{{loop.item.appearance}}",
+                  "description": "{{loop.item.role}}",
+                  "asset_ids": "",
+                  "role": "turnaround"
+                },
+                "position": {
+                  "x": 980,
+                  "y": 240
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
-            "edges": []
+            "edges": [
+              {
+                "id": "find_check",
+                "source": "find",
+                "target": "has_art"
+              },
+              {
+                "id": "missing_draw",
+                "source": "has_art",
+                "target": "sheet",
+                "source_handle": "false"
+              },
+              {
+                "id": "d-sheet-asset_id-save-asset_ids",
+                "source": "sheet",
+                "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
           },
-          "output": "{{sheet.asset_id}}:reference_image",
+          "output": "{{find.asset_ids.0}}{{sheet.asset_id}}:reference_image",
           "concurrency": 3
         }
       },
       {
         "id": "location_art",
         "type": "loop_foreach",
-        "name": "Paint every location's concept art",
+        "name": "Every location: reuse from the library or paint concept art",
         "position": {
           "x": 1040,
           "y": 820
@@ -428,13 +519,36 @@
           "body": {
             "nodes": [
               {
-                "id": "art",
-                "type": "ai_generate",
-                "name": "Paint this location's concept art",
+                "id": "find",
+                "type": "entity_get",
+                "name": "Look this location up in the asset library",
                 "position": {
                   "x": 80,
                   "y": 140
                 },
+                "config": {
+                  "kind": "location",
+                  "name": "{{loop.item.name}}",
+                  "limit": 1
+                }
+              },
+              {
+                "id": "has_art",
+                "type": "condition",
+                "name": "Does the library have its images?",
+                "position": {
+                  "x": 380,
+                  "y": 140
+                },
+                "config": {
+                  "left": "{{find.asset_ids.0}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "art",
+                "type": "ai_generate",
+                "name": "Paint this location's concept art",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
@@ -442,12 +556,55 @@
                   "kind": "image",
                   "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
                   "parameters": {}
+                },
+                "position": {
+                  "x": 680,
+                  "y": 240
                 }
+              },
+              {
+                "id": "save",
+                "type": "entity_save",
+                "name": "Save as a location asset",
+                "config": {
+                  "kind": "location",
+                  "name": "{{loop.item.name}}",
+                  "prompt": "{{loop.item.description}}",
+                  "asset_ids": "",
+                  "role": "wide"
+                },
+                "position": {
+                  "x": 980,
+                  "y": 240
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
-            "edges": []
+            "edges": [
+              {
+                "id": "find_check",
+                "source": "find",
+                "target": "has_art"
+              },
+              {
+                "id": "missing_draw",
+                "source": "has_art",
+                "target": "art",
+                "source_handle": "false"
+              },
+              {
+                "id": "d-art-asset_id-save-asset_ids",
+                "source": "art",
+                "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
           },
-          "output": "{{art.asset_id}}:reference_image",
+          "output": "{{find.asset_ids.0}}{{art.asset_id}}:reference_image",
           "concurrency": 3
         }
       },
@@ -1436,6 +1593,26 @@
       {
         "id": "brief_visual",
         "source": "creative_brief",
+        "target": "visual_bible"
+      },
+      {
+        "id": "start_library_characters",
+        "source": "start",
+        "target": "library_characters"
+      },
+      {
+        "id": "start_library_locations",
+        "source": "start",
+        "target": "library_locations"
+      },
+      {
+        "id": "library_characters_visual",
+        "source": "library_characters",
+        "target": "visual_bible"
+      },
+      {
+        "id": "library_locations_visual",
+        "source": "library_locations",
         "target": "visual_bible"
       },
       {

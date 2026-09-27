@@ -560,8 +560,9 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
     out: dict[str, Producer] = {}
     for node_type, meta in NODE_TYPES.items():
         if "board" in (meta.get("surfaces") or ()) and is_content_transform(meta):
-            #: 声明了后果在应用之外的要确认卡;其余在本机做完。
-            out[node_producer_id(node_type)] = _node_producer(node_type, meta, "external" if meta.get("external") else "none")
+            #: 后果照节点声明(`effects`:资产格那两项是付费生成);没声明的,后果在应用之外的要确认卡,其余在本机做完。
+            effects = str(meta.get("effects") or ("external" if meta.get("external") else "none"))
+            out[node_producer_id(node_type)] = _node_producer(node_type, meta, effects)
     if actor_id:
         from app.domain.plugins.nodes import node_meta, node_type_id
         from app.domain.plugins.tools import exposed
@@ -683,6 +684,7 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
         board_config_view,
         board_description,
         board_group,
+        host_entity_kinds,
         host_fields,
         output_kinds,
     )
@@ -715,6 +717,7 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
                 "board_description": board_description(producer.meta or {}, locale),
                 "output_kinds": output_kinds(producer.meta or {}),
                 "host_fields": host_fields(producer.meta or {}),
+                "host_entity_kinds": host_entity_kinds(producer.meta or {}),
             }
         elif runs_from_draft(producer_id):
             #: 表单是节点字段的内置产出者(3D 场景格渲白模):字段照节点那一份画板视图发,面板照它长。

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOpenRequest } from "@/lib/deepLink";
 import { TAG_MATCHES, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
@@ -74,6 +75,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  //: 任务中心里点「资产补图」那一条的「前往」:打开画的那个资产。
+  useOpenRequest("mosael:open-entity", (id) => setOpenId(id));
 
   const all = useQuery({
     queryKey: entityKeys.list(workspace.id),

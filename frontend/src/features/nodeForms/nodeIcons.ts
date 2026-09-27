@@ -1,4 +1,6 @@
 import {
+  Rotate3d,
+  Smile,
   UserRoundPlus,
   UsersRound,
   AlignLeft,
@@ -30,6 +32,7 @@ import {
   Image as ImageIcon,
   Keyboard,
   Languages,
+  List as ListIcon,
   ListPlus,
   Mic,
   MousePointer2,
@@ -109,8 +112,12 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   loop_while: RefreshCw,
   asset_query: Filter,
   //: 资产库的两个节点,和侧栏「资产」同一族图标。
+  entity_list: ListIcon,
   entity_get: UsersRound,
   entity_save: UserRoundPlus,
+  //: 资产格的两项能力:转一圈看别的角度、换几种表情。
+  entity_angles: Rotate3d,
+  entity_expressions: Smile,
   note_search: Search,
   note_read: BookOpen,
   note_create: BookPlus,

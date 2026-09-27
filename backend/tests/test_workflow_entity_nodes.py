@@ -137,3 +137,66 @@ def test_资产下拉可以按种类筛() -> None:
         roles = {one["value"]: one["label"] for one in field_options(db, "entity_roles", ctx)}
     assert len(every) == 2 and props == ["道具 · 红伞"]
     assert roles["front"] == "正面" and roles["turnaround"] == "三视图"
+
+
+def test_整片模板的角色循环_库里有的直接用_没有的画完存成资产(monkeypatch) -> None:
+    """「从主题到完整视频」的角色循环体原样拿来跑:林小满库里有图,阿澄没有 —— 只画阿澄,画完存成人物资产。"""
+    from app.domain.workflows import executors
+    from app.domain.workflows.templates import full_video_generation_graph
+    from tests.test_workflow_templates import CHAT, SEEDANCE, SEEDREAM
+
+    client, ws = _setup()
+    known = _character(client, ws)
+    client.post(f"/api/entities/{known['id']}/references", json={"asset_id": "front", "role": "front"})
+    drawn: list[str] = []
+
+    def fake_generate(db, scope, config):
+        drawn.append(config["prompt"])
+        return {"asset_id": "sheet", "asset_ids": ["sheet"], "generation_id": "g"}
+
+    monkeypatch.setitem(executors._REGISTRY, "ai_generate", fake_generate)
+    template = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
+    loop = next(node for node in template["nodes"] if node["id"] == "character_sheets")
+    characters = [{"name": "林小满", "appearance": "short hair", "role": "主角"},
+                  {"name": "阿澄", "appearance": "tall boy", "role": "同学"}]
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {**loop, "config": {**loop["config"], "items": characters, "inputs": {"style": "anime"}}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "character_sheets"}],
+    }
+    wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "认角色", "graph": graph})
+    assert wf.status_code == 200, wf.text
+    job_id = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}}).json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+    assert len(drawn) == 1 and "阿澄" in drawn[0], "库里有图的林小满不再重画"
+    assert job["result"]["context"]["character_sheets"]["results"] == ["front:reference_image", "sheet:reference_image"]
+    saved = [one for one in client.get("/api/entities", params={"workspace_id": ws, "kind": "character"}).json()
+             if one["name"] == "阿澄"]
+    assert len(saved) == 1
+    entity = client.get(f"/api/entities/{saved[0]['id']}").json()
+    assert entity["prompt"] == "tall boy" and [(r["asset_id"], r["role"]) for r in entity["references"]] == [("sheet", "turnaround")]
+
+
+def test_列资产_按种类列_交出给模型读的清单() -> None:
+    from app.domain.workflows.executors.entities import entity_list
+
+    client, ws = _setup()
+    _character(client, ws, prompt="短发,校服")
+    _character(client, ws, name="阿澄")
+    client.post("/api/entities", json={"workspace_id": ws, "kind": "location", "name": "旧城天台", "prompt": "rooftop"})
+    with SessionLocal() as db:
+        people = entity_list(db, _scope(ws), {"kind": "character"})
+        places = entity_list(db, _scope(ws), {"kind": "location"})
+        empty = entity_list(db, _scope(ws), {"kind": "prop"})
+    assert people["count"] == 2 and {one["name"] for one in people["entities"]} == {"林小满", "阿澄"}
+    assert "- 林小满 — 短发,校服" in people["text"] and "- 阿澄 — (无描述)" in people["text"]
+    assert places["text"] == "- 旧城天台 — rooftop"
+    assert empty == {"entities": [], "count": 0, "text": ""}

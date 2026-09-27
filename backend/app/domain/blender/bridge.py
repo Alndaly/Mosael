@@ -541,7 +541,8 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
         # 建一个新场景)都是同一步 —— 此前新建那条要等场景有了 id 才挂得上模型,于是多出
         # 一个「场景+模型+修订一把落地」的特例函数。
         with exported.open('rb') as stream:
-            model_id = import_model(db, scene.workspace_id, 'Blender model', stream,
+            #: 模型按它来自的那个场景起名 —— 此前一律叫「Blender model」,道具的 3D 模型下拉里一排同名的分不出是哪个。
+            model_id = import_model(db, scene.workspace_id, blender_model_name(record['snapshot']['name']), stream,
                                     declared_size=exported.stat().st_size).id
         try:
             # 接回来的场景 = 一个 Blender 模型 + 原来那些机位(带回传的运镜)。相机是物体,
@@ -565,6 +566,13 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
         record.update(received_scene_id=received.id, warnings=render_warnings(result.get('warnings')), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
         write_record(folder, record)
         return summary(record)
+
+
+def blender_model_name(scene_name: str) -> str:
+    """从 Blender 接回来的几何体叫什么:「<场景名> · Blender」。模型归工作区、处处能摆(道具的 3D 模型也从这里挑),
+    名字得认得出是哪一次接回来的。"""
+    base = scene_name.strip().removesuffix(" · Blender").strip()
+    return f"{base} · Blender"[:160] if base else "Blender"
 
 
 def pull(db, user, workspace_id, instance_id):
@@ -591,8 +599,9 @@ def pull(db, user, workspace_id, instance_id):
             if not exported.is_file():
                 raise BlenderUnavailable('blenderErr_noExport')
             validate_model_file(exported)
+            scene_name = result.get('scene_name') or t('blenderDefaultSceneName', get_current_locale())
             with exported.open('rb') as stream:
-                model_id = import_model(db, workspace_id, 'Blender model', stream,
+                model_id = import_model(db, workspace_id, blender_model_name(scene_name), stream,
                                         declared_size=exported.stat().st_size).id
             warnings = list(result.get('warnings') or [])
             cameras, shots, notes = native_cameras(result.get('cameras') or [])
@@ -608,7 +617,7 @@ def pull(db, user, workspace_id, instance_id):
             if lighting is not None:
                 blank['lighting'] = lighting.model_dump(mode='json')
             content = SceneContent.model_validate({**blank, 'objects': [*blank['objects'], model, *lights]})
-            scene = create_scene(db, workspace_id, result.get('scene_name') or t('blenderDefaultSceneName', get_current_locale()), content)
+            scene = create_scene(db, workspace_id, scene_name, content)
         finally:
             #: 临时目录用完即删 —— 字节已经拷进场景的模型目录,这里没有第二个读者。
             shutil.rmtree(folder, ignore_errors=True)

@@ -22,6 +22,7 @@ import {
   Mic,
   PenLine,
   Radio,
+  Rotate3d,
   Scissors,
   Send,
   Sparkles,
@@ -50,6 +51,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   trim: Scissors,
   board_write: PenLine,
   board_run: Wrench,
+  entity_draw: Rotate3d,
   proxy: Clapperboard,
 };
 
@@ -62,6 +64,8 @@ const RESOURCE_QUERY_KEYS: Record<string, readonly string[]> = {
   publish_tasks: ["publish-tasks"],
   generations: ["generation-jobs", "generation-sessions"],
   boards: ["boards"],
+  //: 资产库:参考图挂上了新的(资产格的能力、详情页的「补全多角度」「生成表情」)。
+  entities: ["entities"],
 };
 
 export type JobKindMeta = JobKind & { icon: LucideIcon };

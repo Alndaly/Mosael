@@ -147,7 +147,37 @@ class Test每一镜都有实物参考:
     def test_角色三视图按角色逐个画_交出整组参考行(self) -> None:
         sheets = _node(_full_video(), "character_sheets")["config"]
         assert sheets["items"] == "{{visual_bible.json.characters}}"
-        assert sheets["output"] == "{{sheet.asset_id}}:reference_image"
+        #: 认出来的那张,或新画的那张 —— 另一支没跑,引用出来是空串。
+        assert sheets["output"] == "{{find.asset_ids.0}}{{sheet.asset_id}}:reference_image"
+
+    def test_角色和场景先到资产库里认_有图就用_没有才画_画完存成资产(self) -> None:
+        """ADR 0027 阶段 4:第二部片子里的同一个角色是同一张脸。"""
+        graph = _full_video()
+        for loop, drawer, kind, role in (("character_sheets", "sheet", "character", "turnaround"),
+                                         ("location_art", "art", "location", "wide")):
+            body = _node(graph, loop)["config"]["body"]
+            nodes = {one["id"]: one for one in body["nodes"]}
+            assert nodes["find"]["type"] == "entity_get"
+            assert nodes["find"]["config"] == {"kind": kind, "name": "{{loop.item.name}}", "limit": 1}
+            assert nodes["has_art"]["config"] == {"left": "{{find.asset_ids.0}}", "op": "not_empty"}
+            edges = {(one["source"], one["target"], one.get("source_handle")) for one in body["edges"]}
+            assert edges == {("find", "has_art", None), ("has_art", drawer, "false"), (drawer, "save", None)}, \
+                "只有库里没有它的图时才画;画完就存"
+            #: 存的就是刚画的那张(模板规范化把整串引用改成了一根数据线)。
+            wire = next(one for one in body["edges"] if one["target"] == "save")
+            assert (wire.get("source_output"), wire.get("target_input")) == ("asset_id", "asset_ids")
+            save = nodes["save"]["config"]
+            assert (save["kind"], save["name"], save["role"]) == (kind, "{{loop.item.name}}", role)
+
+    def test_定角色之前先看资产库里有谁(self) -> None:
+        graph = _full_video()
+        for node_id, kind in (("library_characters", "character"), ("library_locations", "location")):
+            node = _node(graph, node_id)
+            assert (node["type"], node["config"]) == ("entity_list", {"kind": kind})
+            assert {"source": node_id, "target": "visual_bible"}.items() <= next(
+                one for one in graph["edges"] if one["source"] == node_id).items()
+        prompt = _node(graph, "visual_bible")["config"]["prompt"]
+        assert "{{library_characters.text}}" in prompt and "{{library_locations.text}}" in prompt
 
     def test_布景直接建成_3D_场景(self) -> None:
         build = _node(_full_video(), "build_set")
