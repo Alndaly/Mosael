@@ -7,6 +7,7 @@ import { cancelJob, getJob, listJobEvents, type Job } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { JobEventList } from "@/components/layout/JobEvents";
+import { JobResult } from "@/components/layout/JobResult";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useJobKinds } from "@/components/layout/jobKinds";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -137,6 +138,9 @@ export function JobDetailDialog({
               {current.error}
             </p>
           )}
+
+          {/* 做出了什么:写出来的字、生成的图、写成的笔记 —— 此前这里只有状态和一串 job.* 事件,看不到结果。 */}
+          <JobResult job={current} />
 
           {(children.data ?? []).length > 0 && (
             <div className="grid min-w-0 gap-1 border-t border-border pt-2">

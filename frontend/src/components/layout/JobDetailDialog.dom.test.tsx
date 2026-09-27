@@ -22,6 +22,13 @@ vi.mock("@/components/layout/jobKinds", () => ({
   useJobKinds: () => ({ kindOf: () => ({ label: "工作流" }) }),
 }));
 vi.mock("@/api/client", () => ({
+  listAssets: async () => [
+    { id: "img-1", kind: "image", name: "三视图" },
+    { id: "aud-1", kind: "audio", name: "旁白" },
+  ],
+  assetThumbnailUrl: (id: string) => `/thumb/${id}`,
+  assetPreviewUrl: (id: string) => `/preview/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   getJob: async () => null,
   listJobChildren: async () => [],
   listJobEvents: async () => h.events,
@@ -32,6 +39,8 @@ vi.mock("@/api/client", () => ({
 }));
 vi.mock("@/api/errorMessage", () => ({ errorText: (e: Error) => e.message }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+const lightbox = vi.hoisted(() => ({ openImagePreview: vi.fn() }));
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightbox }));
 
 import { JobDetailDialog } from "./JobDetailDialog";
 
@@ -133,5 +142,45 @@ describe("运行中的任务能在详情里停下", () => {
   it("已经结束的不给这个按钮 —— 点了只会得到一句「任务已结束」", () => {
     mount("succeeded");
     expect(screen.queryByRole("button", { name: /jobCancel/ })).toBeNull();
+  });
+});
+
+
+describe("任务执行详情:做出了什么", () => {
+  const mountJob = (over: Partial<Job>) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <JobDetailDialog job={{ ...job, status: "succeeded", error: null, ...over } as Job} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+  };
+
+  it("画板写字交回的正文摊出来 —— 此前只有状态和一串 job.* 事件", async () => {
+    mountJob({ kind: "board_write", result: { text: "林小满,十七岁,班长。" } as Job["result"] });
+    const block = await screen.findByText("林小满,十七岁,班长。");
+    expect(block.closest("[data-job-result]")).not.toBeNull();
+  });
+
+  it("交回的图点开大图,音频就地播,文档格写成的笔记给一条链接", async () => {
+    lightbox.openImagePreview.mockClear();
+    mountJob({
+      kind: "board_run",
+      result: { outputs: [
+        { type: "asset", asset_id: "img-1" },
+        { type: "asset", asset_id: "aud-1" },
+        { type: "note", note_id: "note-9", revision: 3, title: "人物小传" },
+      ] } as unknown as Job["result"],
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "三视图" }));
+    expect(lightbox.openImagePreview).toHaveBeenCalledWith(expect.objectContaining({ src: "/preview/img-1" }));
+    expect(document.querySelector('audio[src="/file/aud-1"]')).not.toBeNull();
+    expect(screen.getByText("人物小传").closest("a")).not.toBeNull();
+  });
+
+  it("没成功的、交回的东西认不出的(工作流整份上下文)不摆「结果」", async () => {
+    mountJob({ kind: "workflow", result: { context: { a: 1 } } as unknown as Job["result"] });
+    await screen.findByText("jobDetailEvents");
+    expect(document.querySelector("[data-job-result]")).toBeNull();
   });
 });
