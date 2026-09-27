@@ -80,6 +80,10 @@ xcrun notarytool submit /path/to/Mosael-VERSION-mac-signed.zip \
 
 保存 submission ID。连接中断或等待超时时，先用 `notarytool info ID --keychain-profile mosael-release` 查询原提交，避免盲目重复上传。只有 `Accepted` 才继续；`Invalid` 时读取 `notarytool log` 并解决实际问题。
 
+报 `No Keychain password item found for profile: mosael-release` 时**凭据多半还在**，先看屏幕是不是锁着
+（`ioreg -n Root -d1 -a | grep -A1 IOConsoleLocked` 为 true）：锁屏时读不到这条钥匙串凭据。解锁后原命令重试即可，
+不要重建凭据（那一步只能维护者自己输 App 专用密码）。1.6.0 时把它误判成和沙箱有关，1.7.0 查清是锁屏。
+
 ```bash
 xcrun stapler staple /path/to/unpacked/Mosael.app
 node scripts/verify-mac-signing.cjs /path/to/unpacked/Mosael.app
