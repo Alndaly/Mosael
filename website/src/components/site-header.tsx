@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DownloadLink } from "@/components/download-link";
 
 import { BrandWordmark } from "@/components/brand-logo";
+import { AccountMenu, CommunityNav } from "@/components/community/header-menus";
 import { GithubMark } from "@/components/icons";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { MobileMenu } from "@/components/mobile-menu";
@@ -10,20 +11,17 @@ import { SearchDialog } from "@/components/search-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { localePath, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { communityLinks, communityMatch } from "@/lib/community/nav";
 import { docHref, firstDoc } from "@/lib/docs";
 import { SITE } from "@/lib/site";
 
 /** 悬浮站头。它脱离文档流，首页的品牌色因此能一直延伸到视口顶部。 */
 export function SiteHeader({ locale }: { locale: Locale }) {
   const t = getMessages(locale);
-  const links = [
-    { href: localePath(locale), match: localePath(locale), exact: true, label: t.nav.product },
-    // 插件和工作流是同一个社区的两个分区(页头里有标签页切换),导航上只占一格。
-    {
-      href: localePath(locale, "/plugins"),
-      match: [localePath(locale, "/plugins"), localePath(locale, "/workflows")],
-      label: t.nav.community,
-    },
+  const product = { href: localePath(locale), match: localePath(locale), exact: true, label: t.nav.product };
+  // 社区的四个分区(工作流 / 插件 / 画板 / 统计)收在一个下拉里,导航上只占一格。
+  const community = { href: localePath(locale, "/workflows"), match: communityMatch(locale), label: t.nav.community };
+  const rest = [
     { href: localePath(locale, "/changelog"), match: localePath(locale, "/changelog"), label: t.nav.changelog },
     { href: docHref(locale, firstDoc(locale)), match: localePath(locale, "/docs"), label: t.nav.docs },
   ];
@@ -36,8 +34,12 @@ export function SiteHeader({ locale }: { locale: Locale }) {
         </Link>
 
         <nav className="hidden min-w-0 items-center gap-1 text-sm font-medium lg:flex">
-          {links.map((link) => (
-            <NavLink key={link.href} href={link.href} match={link.match} exact={link.exact}>
+          <NavLink href={product.href} match={product.match} exact>
+            {product.label}
+          </NavLink>
+          <CommunityNav locale={locale} />
+          {rest.map((link) => (
+            <NavLink key={link.href} href={link.href} match={link.match}>
               {link.label}
             </NavLink>
           ))}
@@ -67,10 +69,11 @@ export function SiteHeader({ locale }: { locale: Locale }) {
             rel="noreferrer"
             aria-label={t.nav.github}
             title={t.nav.github}
-            className="hidden size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:inline-flex"
+            className="hidden size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground xl:inline-flex"
           >
             <GithubMark className="size-4" />
           </a>
+          <AccountMenu locale={locale} />
           <DownloadLink
             locale={locale}
             className="hidden min-h-10 items-center rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/88 lg:inline-flex"
@@ -79,7 +82,8 @@ export function SiteHeader({ locale }: { locale: Locale }) {
           </DownloadLink>
           <MobileMenu
             locale={locale}
-            links={links}
+            links={[product, community, ...rest]}
+            community={communityLinks(locale).map(({ href, label }) => ({ href, label }))}
             labels={{
               menu: t.nav.menu,
               language: t.nav.language,

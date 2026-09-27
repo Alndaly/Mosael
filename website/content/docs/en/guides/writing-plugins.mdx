@@ -2,7 +2,7 @@
 title: Writing a plugin
 description: Write a manifest, declare tools and permissions, and test file inputs and outputs.
 order: 11
-updated: 2026-09-25
+updated: 2026-09-27
 version: 1.7.0
 ---
 
@@ -275,7 +275,9 @@ GitHub, `[link](https://…)` is safer here.
 
 ## Shipping it
 
-The market index is plain JSON that anyone can host — including on a company intranet:
+The easiest route is the [community](/plugins): sign in, choose Submit a plugin and upload the same zip that Install from file takes. Before you submit, the page lays out the manifest, permissions and file list; the server runs the same checks as the app, and a moderator reviews the manifest and permissions before the plugin goes public. The first submitter owns a plugin id — submitting the same id again publishes a new version. People find it under the Community source in the app's plugin Market, and the permission prompt still appears before installing.
+
+You can also host your own index. The market index is plain JSON that anyone can host — including on a company intranet:
 
 ```json
 {"plugins": [{

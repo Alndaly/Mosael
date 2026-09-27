@@ -2,12 +2,49 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type * as React from "react";
 
-import { Byline } from "@/components/community/browse";
+import { Byline } from "@/components/community/cards";
 import { PageGlow } from "@/components/page-hero";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { formatDate } from "@/lib/community/format";
 import { InlineMarkdown } from "@/lib/inline-markdown";
+import type { ItemVersion, PublicUser } from "@/lib/community/types";
 import { cn } from "@/lib/utils";
+
+/** 版本列表:新的在上,带日期和更新说明。 */
+export function VersionList({ locale, versions }: { locale: Locale; versions: ItemVersion[] }) {
+  return (
+    <ol className="m-0 grid list-none gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0">
+      {versions.map((version) => (
+        <li key={version.id} className="grid gap-1 border-border px-5 py-3.5 not-last:border-b">
+          <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="font-mono text-sm font-semibold">v{version.version}</span>
+            <span className="text-xs text-muted-foreground">{formatDate(version.created_at, locale)}</span>
+          </span>
+          {version.changelog && <p className="m-0 text-sm leading-6 whitespace-pre-line text-muted-foreground">{version.changelog}</p>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** 标签行,点一个回到列表按它筛。 */
+export function TagLinks({ locale, section, tags }: { locale: Locale; section: "/workflows" | "/plugins"; tags: string[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {tags.map((tag) => (
+        <Link
+          key={tag}
+          href={`${localePath(locale, section)}?tag=${encodeURIComponent(tag)}`}
+          className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          #{tag}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 /**
  * 社区详情页的骨架:面包屑 + 身份栏(图标、名字、署名、一句话、主操作),下面左正文右侧栏。
@@ -21,24 +58,27 @@ export function DetailHeader({
   tile,
   name,
   author,
-  version,
   official,
-  builtIn = false,
+  version,
   summary,
   actions,
+  notice,
 }: {
   locale: Locale;
   section: { label: string; href: string };
   tile: React.ReactNode;
   name: string;
-  author: string;
-  version: string;
+  author: PublicUser;
   official: boolean;
-  /** 随应用内置的插件:署名旁标出来(见 Byline)。 */
-  builtIn?: boolean;
-  /** 数据里的简介,行内 markdown。 */
+  version: string;
+  /**
+   * 一句话简介。官方条目迁过来的简介里有行内 markdown(清单的技能描述是写给智能体的),交给
+   * InlineMarkdown —— 它只认行内记号、只放 http(s) 链接,作者写的字也能安全地走这条路。
+   */
   summary: string;
   actions: React.ReactNode;
+  /** 名字下面醒目的一条(含运行代码节点)。 */
+  notice?: React.ReactNode;
 }) {
   const t = getMessages(locale).community;
   return (
@@ -46,7 +86,7 @@ export function DetailHeader({
       <PageGlow />
       <div className="mx-auto max-w-[76rem] px-5 pt-30 pb-10 sm:px-8 sm:pt-34">
         <nav aria-label="breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-          <Link href={localePath(locale, "/plugins")} className="hover:text-foreground">
+          <Link href={localePath(locale, "/workflows")} className="hover:text-foreground">
             {t.name}
           </Link>
           <ChevronRight className="size-3.5" aria-hidden />
@@ -64,10 +104,11 @@ export function DetailHeader({
             {tile}
             <div className="grid min-w-0 gap-2">
               <h1 className="m-0 font-display text-3xl font-bold tracking-[-0.03em] text-balance sm:text-4xl">{name}</h1>
-              <Byline locale={locale} author={author} version={version} official={official} builtIn={builtIn} />
+              <Byline locale={locale} author={author} official={official} version={version} link />
               <p className="m-0 max-w-[46rem] text-base leading-7 text-muted-foreground">
                 <InlineMarkdown text={summary} />
               </p>
+              {notice}
             </div>
           </div>
           <div className="flex flex-wrap gap-2.5 lg:shrink-0">{actions}</div>
@@ -77,7 +118,7 @@ export function DetailHeader({
   );
 }
 
-/** 主操作 / 次操作两种按钮。站外链接(下载、源码)开新页,`mosael://` 就地唤起。 */
+/** 主操作 / 次操作两种按钮。站外链接开新页,`mosael://` 就地唤起,下载走同源的 `/api/community/…`。 */
 export function ActionLink({
   href,
   primary = false,

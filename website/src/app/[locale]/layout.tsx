@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 // fontsource 这份把字体按 unicode-range 切成了上百片,浏览器只取真正用到的那几片。
 import "@fontsource-variable/noto-sans-sc";
 import "../globals.css";
+import { SessionProvider } from "@/components/community/session-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { NavProgress } from "@/components/nav-progress";
 import { SiteHeader } from "@/components/site-header";
@@ -120,10 +121,13 @@ export default async function LocaleLayout({
             {t.nav.skipToContent}
           </a>
           <NavProgress />
-          <SiteHeader locale={current} />
-          {/* 站头固定悬浮。内页保留呼吸位；首页自己以负 margin 把品牌渐变延伸到站头背后。 */}
-          <main id="main" className="pt-20">{children}</main>
-          <SiteFooter locale={current} />
+          {/* 社区会话:站头的账号区和社区页共用一份。客户端组件,不让静态页变成动态页。 */}
+          <SessionProvider locale={current}>
+            <SiteHeader locale={current} />
+            {/* 站头固定悬浮。内页保留呼吸位；首页自己以负 margin 把品牌渐变延伸到站头背后。 */}
+            <main id="main" className="pt-20">{children}</main>
+            <SiteFooter locale={current} />
+          </SessionProvider>
         </ThemeProvider>
       </body>
       {googleAnalyticsId ? <GoogleAnalytics gaId={googleAnalyticsId} /> : null}
