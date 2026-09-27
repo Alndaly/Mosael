@@ -133,6 +133,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "画板快照的格子太多({count} 个,上限 {limit} 个)",
         "en": "The board snapshot has too many items ({count}; the limit is {limit}).",
     },
+    # ---- 资产分享包 ----
+    "assetBundleErr_invalid": {
+        "zh": "资产分享包不合法:{where} {detail}",
+        "en": "Invalid asset bundle: {where} {detail}",
+    },
+    "assetBundleErr_forbiddenKey": {
+        "zh": "资产分享包里不能带「{field}」({where}):音色、授权声明原文、关联的 3D 场景 / 模型和本机 id 都不公开",
+        "en": "An asset bundle can't carry “{field}” ({where}): voices, consent statements, linked 3D scenes/models and local ids stay private.",
+    },
+    "assetBundleErr_consentRequired": {
+        "zh": "真人人物要先声明授权才能分享:{kinds}",
+        "en": "A real person can only be shared with a consent claim: {kinds}",
+    },
+    "assetBundleErr_consentNotApplicable": {
+        "zh": "只有真人人物才需要授权声明",
+        "en": "Only a real person takes a consent claim.",
+    },
 }
 
 

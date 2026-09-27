@@ -1,7 +1,7 @@
 [project]
 name = "mosael-formats"
 version = "0.1.0"
-description = "Mosael 的文件格式校验:插件包、工作流文件、画板快照。桌面后端与社区服务共用这一份。"
+description = "Mosael 的文件格式校验:插件包、工作流文件、画板快照、资产分享包。桌面后端与社区服务共用这一份。"
 requires-python = ">=3.12"
 # **没有依赖,这是约束不是现状。** 它要同时装进桌面后端(PyInstaller 打包)、社区服务(容器)和
 # 发版脚本(scripts/sync-plugin-registry.py 用系统 python3 直接 import),哪一边多一个依赖,
