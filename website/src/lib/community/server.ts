@@ -11,6 +11,7 @@
 import { HTML_LANG, type Locale } from "@/i18n/config";
 import { API_PREFIX } from "@/lib/community/endpoints";
 import { CommunityError, errorFromResponse, networkError } from "@/lib/community/errors";
+import { localizeTree } from "@/lib/community/localize";
 
 /** 社区服务的基址(不带 `/api/community/v1`)。空 = 社区未开放。 */
 export function communityApiUrl(): string | null {
@@ -43,5 +44,5 @@ export async function serverGet<T>(path: string, locale: Locale): Promise<Result
     return { ok: false, error: networkError() };
   }
   if (!response.ok) return { ok: false, error: await errorFromResponse(response) };
-  return { ok: true, data: (await response.json()) as T };
+  return { ok: true, data: localizeTree((await response.json()) as T, locale) };
 }

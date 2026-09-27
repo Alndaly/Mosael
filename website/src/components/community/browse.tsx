@@ -7,6 +7,7 @@
  * 改筛选就改 URL,让服务端重新取。往后翻页用游标(ADR:`?cursor=…`)在浏览器里直接取
  * 同源的 `/api/community/v1/…`,接在后面。
  */
+import { localizeTree } from "@/lib/community/localize";
 import { usePathname, useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import * as React from "react";
@@ -52,7 +53,7 @@ async function fetchPage(kind: ItemKind, query: BrowseQuery, cursor: string, loc
     throw networkError();
   }
   if (!response.ok) throw await errorFromResponse(response);
-  return (await response.json()) as Page<Item>;
+  return localizeTree((await response.json()) as Page<Item>, locale);
 }
 
 export function ItemBrowser({ locale, kind, query, initial }: { locale: Locale; kind: ItemKind; query: BrowseQuery; initial: Page<Item> }) {

@@ -19,6 +19,7 @@
  * 刷新逻辑用 node 的测试跑器就能测(test/session.test.mjs)。React 那一层在
  * components/community/session-provider.tsx。
  */
+import { localizeTree } from "@/lib/community/localize";
 import { CommunityError, errorFromResponse, networkError } from "@/lib/community/errors";
 import type { LoginResponse, User } from "@/lib/community/types";
 
@@ -300,7 +301,7 @@ export class SessionClient {
     if (!response.ok) throw await errorFromResponse(response);
     if (response.status === 204) return undefined as T;
     const text = await response.text();
-    return (text ? JSON.parse(text) : undefined) as T;
+    return (text ? localizeTree(JSON.parse(text), this.language) : undefined) as T;
   }
 
   // ── 登录与退出 ────────────────────────────────────────────────────────

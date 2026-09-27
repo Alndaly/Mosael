@@ -1,6 +1,7 @@
 "use client";
 
 /** 公开画板列表:第一页服务端给,之后按游标在浏览器里接。 */
+import { localizeTree } from "@/lib/community/localize";
 import { LayoutGrid } from "lucide-react";
 import * as React from "react";
 
@@ -31,7 +32,7 @@ export function BoardList({ locale, initial }: { locale: Locale; initial: Page<S
         throw networkError();
       }
       if (!response.ok) throw await errorFromResponse(response);
-      const page = (await response.json()) as Page<ShareSummary>;
+      const page = localizeTree((await response.json()) as Page<ShareSummary>, locale);
       setItems((current) => [...current, ...page.items]);
       setCursor(page.next_cursor);
     } catch (caught) {
