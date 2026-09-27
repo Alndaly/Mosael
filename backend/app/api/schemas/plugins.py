@@ -166,7 +166,7 @@ class PluginMarketEntry(ApiModel):
     #: 这台机器上装没装过同 id 的包。装过的话界面给的是「更新」而不是「安装」。
     installed: bool = False
     installed_version: str = ""
-    #: 索引许的版本**比装着的新**(按语义化版本比先后,见 domain/plugins/versions),而且没被证实
+    #: 索引许的版本**比装着的新**(按语义化版本比先后,见 mosael_formats.versions),而且没被证实
     #: 「还没发布」。界面据此给「更新」—— 不自己拿两个字符串比不相等。
     update_available: bool = False
     #: 索引许的版本比装着的新,但点「更新」下下来的包并不比装着的新:新版本还没发布。

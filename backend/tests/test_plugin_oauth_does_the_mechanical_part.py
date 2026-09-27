@@ -94,11 +94,11 @@ def test_一个声明过的字段都没回就说出来() -> None:
 
 def test_声明不全就当没声明() -> None:
     """半个 oauth 块会让界面长出一个点了必然失败的按钮。"""
-    from app.domain.plugins.manifest import _oauth
+    from app.domain.plugins.manifest import oauth_spec
 
-    assert _oauth({"authorize_url": "https://x.test/a"}) is None  # 缺 token_url / client_id_field / stores
-    assert _oauth(None) is None
-    assert _oauth({
+    assert oauth_spec({"authorize_url": "https://x.test/a"}) is None  # 缺 token_url / client_id_field / stores
+    assert oauth_spec(None) is None
+    assert oauth_spec({
         "authorize_url": "https://x.test/a",
         "token_url": "https://x.test/t",
         "client_id_field": "K",

@@ -4,6 +4,7 @@ import json
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Response
+from mosael_formats import workflow_file
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -194,12 +195,13 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
 
 
 # ---------------- 文件导出/导入 ----------------
-# 信封格式:{format, version, workflow_revision, graph_hash, name, description, graph}。graph 原样携带 —— 节点里
+# 信封格式:{format, version, workflow_revision, graph_hash, name, description, graph},定义与校验在
+# mosael_formats.workflow_file(社区服务收工作流文件过的是同一份,ADR 0026)。graph 原样携带 —— 节点里
 # 引用的工作区资源(素材/序列/供应商档案等)跨工作区导入后可能悬空,这与「保存放行、
 # 就绪检查提示、运行时拦截」的既有分层一致,导入不做资源级校验。
-WORKFLOW_FILE_FORMAT = "mosael-workflow"
-WORKFLOW_FILE_VERSION = 1
-WORKFLOW_FILE_SUFFIX = f".{WORKFLOW_FILE_FORMAT}.json"
+WORKFLOW_FILE_FORMAT = workflow_file.FORMAT
+WORKFLOW_FILE_VERSION = workflow_file.VERSION
+WORKFLOW_FILE_SUFFIX = workflow_file.SUFFIX
 
 
 @router.get("/workflows/{workflow_id}/export")
@@ -230,18 +232,14 @@ def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 @router.post("/workflows/import", response_model=WorkflowOut)
 def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) -> Workflow:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    data = body.data
-    if data.get("format") != WORKFLOW_FILE_FORMAT or not isinstance(data.get("graph"), dict):
-        raise HTTPException(status_code=422, detail=tr("routeErr_notWorkflowFile"))
     try:
-        version = int(data.get("version", 0))
-    except (TypeError, ValueError):
-        version = 0
-    if version > WORKFLOW_FILE_VERSION:
-        raise HTTPException(status_code=422, detail=tr("routeErr_workflowFileTooNew", version=version))
+        envelope = workflow_file.read_workflow_file(body.data)
+    except workflow_file.WorkflowFileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    version = envelope.version
     # 导入是最容易被当成「只是拖个文件进来」的入口,但文件里的 graph 原样落库——含 code 节点的
     # 工作流文件就是一份可执行载荷,门禁和手写一张图完全同级。
-    name = str(data.get("name") or "").strip()[:180] or "导入的工作流"
+    name = envelope.name or "导入的工作流"
     # 同名冲突自动加序号,导入不打断
     existing = {w.name for w in list_workflows(db, body.workspace_id)}
     candidate, counter = name, 2
@@ -253,8 +251,8 @@ def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) ->
             db,
             workspace_id=body.workspace_id,
             name=candidate,
-            description=str(data.get("description") or "")[:2000],
-            graph=data["graph"],
+            description=envelope.description,
+            graph=envelope.graph,
             source="import",
             created_by=user.id,
             revision_note=f"file:v{version}",

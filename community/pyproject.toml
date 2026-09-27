@@ -1,0 +1,77 @@
+[project]
+name = "mosael-community"
+version = "0.1.0"
+description = "Mosael 社区服务:账号、工作流与插件的提交与审核、画板分享(ADR 0026)。"
+requires-python = ">=3.14"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.5",
+  "sqlalchemy>=2.0.36",
+  "alembic>=1.14",
+  # PostgreSQL 驱动(psycopg 3)。本地和测试可以用 SQLite,生产用 Postgres。
+  "psycopg[binary]>=3.2",
+  "python-multipart>=0.0.9",
+  # 密码用 argon2id(PasswordHasher 的缺省就是 argon2id)。
+  "argon2-cffi>=23.1",
+  # 访问令牌:EdDSA(Ed25519)签名的 JWT。
+  "pyjwt[crypto]>=2.9",
+  "cryptography>=42.0",
+  # 分享预览图(Open Graph)。
+  "pillow>=11.3",
+  # 对象存储的 S3 兼容实现(腾讯云 COS、阿里云 OSS、MinIO、AWS S3)。
+  "boto3>=1.35",
+  # 腾讯云短信 SendSms 与验证码(天御)DescribeCaptchaResult:用官方 SDK 签名(TC3-HMAC-SHA256),
+  # 不自己手搓签名。
+  "tencentcloud-sdk-python-common>=3.0.1200",
+  "tencentcloud-sdk-python-sms>=3.0.1200",
+  "tencentcloud-sdk-python-captcha>=3.0.1200",
+  # 插件包 / 工作流文件 / 画板快照的校验,和桌面后端共用这一份。
+  "mosael-formats",
+]
+
+[project.scripts]
+mosael-community = "community.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "community"
+
+[tool.uv.sources]
+mosael-formats = { path = "../packages/mosael-formats", editable = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "httpx>=0.28",
+  "ruff>=0.14",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  "error::pytest.PytestUnhandledThreadExceptionWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+extend-exclude = ["migrations/script.py.mako"]
+
+[tool.ruff.lint]
+# 和 backend/ 同一组:能抓缺陷的,不是风格(理由见 backend/pyproject.toml)。
+select = ["F", "E9", "B"]
+ignore = ["B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+  "fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Body",
+  "fastapi.Query", "fastapi.Header", "fastapi.Path", "fastapi.Cookie",
+]

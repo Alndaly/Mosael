@@ -8,7 +8,8 @@
 一个叫 `path` 的配置项会把 PATH 换成用户填的一个文件路径,插件连解释器都找不到。所以这些名字在清单
 解析时就挡住(见 manifest 与 `is_reserved`),不留到跑的时候才出一个看不懂的错。
 
-这是个叶子模块(只依赖标准库):清单解析也要用它。
+**哪些名字插件不能占**是清单格式的一条规则,住在 `mosael_formats.plugin_env`(桌面后端与社区服务
+共用,ADR 0026);这里只剩「宿主实际给哪些值」这一半。
 """
 
 from __future__ import annotations
@@ -16,19 +17,7 @@ from __future__ import annotations
 import os
 import sys
 
-#: 所有平台都给的三个。
-BASE_KEYS = ("PATH", "HOME", "LANG")
-
-#: Windows 上**没有它们子进程就起不来**的那几个。Python 初始化要 SYSTEMROOT(否则连随机数都拿
-#: 不到),Node 要它做 DNS,npm 要 APPDATA / LOCALAPPDATA 放缓存,TEMP 是一切临时文件的去处。
-#: 都是系统路径,不是凭据 —— 「最小环境」挡的是应用的密钥,不是操作系统本身。
-WINDOWS_ESSENTIALS = (
-    "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "TEMP", "TMP",
-    "APPDATA", "LOCALAPPDATA", "USERPROFILE", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
-)
-
-#: 宿主和插件之间的约定变量(产出目录、持久目录、取消文件、语言……)都用这个前缀。
-HOST_PREFIX = "MOSAEL_"
+from mosael_formats.plugin_env import BASE_KEYS, HOST_PREFIX, WINDOWS_ESSENTIALS, is_reserved
 
 
 def base_env() -> dict[str, str]:
@@ -42,12 +31,6 @@ def base_env() -> dict[str, str]:
         upper = {key.upper(): value for key, value in os.environ.items()}
         env.update({key: upper[key] for key in WINDOWS_ESSENTIALS if key in upper})
     return env
-
-
-def is_reserved(key: str) -> bool:
-    """这个配置 / 凭据键大写之后会不会盖掉宿主给的变量。**按所有平台算**:清单是跨平台的。"""
-    upper = key.upper()
-    return upper in BASE_KEYS or upper in WINDOWS_ESSENTIALS or upper.startswith(HOST_PREFIX)
 
 
 __all__ = ["BASE_KEYS", "HOST_PREFIX", "WINDOWS_ESSENTIALS", "base_env", "is_reserved"]

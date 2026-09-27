@@ -1,0 +1,107 @@
+# Mosael 官网 + 社区服务的单机部署(ADR 0026)。完整步骤见 docs/DEPLOY_COMMUNITY.md。
+#
+#   cd deploy/community
+#   cp .env.example .env && 编辑 .env
+#   docker compose build
+#   docker compose up -d postgres
+#   docker compose run --rm community python -m community.cli migrate
+#   docker compose up -d
+#
+# 对外只开 Caddy 的 80/443;官网、社区服务、数据库都只在内部网络里。
+
+name: mosael
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?在 .env 里设 SITE_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      # 本地存储的文件由 Caddy 直接出(只读挂载;签名密钥在另一个卷里,Caddy 看不到)。
+      - community_media:/srv/community-media:ro
+    depends_on:
+      - website
+      - community
+
+  website:
+    build:
+      context: ../..
+      dockerfile: website/Dockerfile
+    restart: unless-stopped
+    environment:
+      # 官网服务端渲染时从内部网络直连社区服务;浏览器里走同源的 /api/community/*(经 Caddy)。
+      COMMUNITY_API_URL: http://community:8000
+    expose:
+      - "3000"
+
+  community:
+    build:
+      context: ../..
+      dockerfile: community/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      COMMUNITY_ENV: production
+      COMMUNITY_DATABASE_URL: postgresql+psycopg://mosael:${POSTGRES_PASSWORD:?在 .env 里设 POSTGRES_PASSWORD}@postgres:5432/mosael
+      COMMUNITY_JWT_PRIVATE_KEY_FILE: /data/keys/jwt-ed25519.pem
+    volumes:
+      - community_media:/data/media
+      - community_keys:/data/keys
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/community/v1/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mosael
+      POSTGRES_DB: mosael
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?在 .env 里设 POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mosael -d mosael"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # 可选:自建 S3 兼容存储。`docker compose --profile minio up -d`,并把 COMMUNITY_STORAGE 改成 s3、
+  # COMMUNITY_S3_ENDPOINT 指到一个浏览器访问得到的地址(见 Caddyfile 末尾注释掉的那段)。
+  minio:
+    image: minio/minio:latest
+    profiles: ["minio"]
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-mosael}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+    volumes:
+      - minio_data:/data
+    expose:
+      - "9000"
+      - "9001"
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  community_media:
+  community_keys:
+  minio_data:

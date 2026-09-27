@@ -37,9 +37,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-# 工具的后果按后端**同一个函数**算(它是个不依赖任何模块的叶子),不在这里抄一份规则。
-sys.path.insert(0, str(ROOT / "backend"))
-from app.domain.effects import plugin_tool_effects  # noqa: E402
+# 一条索引长什么样、工具的后果怎么算,由格式包(packages/mosael-formats,零依赖)说 —— 社区服务的
+# /plugins/index.json 也由它生成,三份索引一个形状。这里只决定下载地址和哪几个是内置的。
+sys.path.insert(0, str(ROOT / "packages" / "mosael-formats" / "src"))
+from mosael_formats.plugin_index import index_entry  # noqa: E402
 EXAMPLES = ROOT / "plugins" / "examples"
 BUNDLED = ROOT / "plugins" / "bundled"
 WEBSITE_OUT = ROOT / "website" / "public" / "plugins" / "registry.json"
@@ -62,63 +63,13 @@ TAG_RE = re.compile(r"^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
-def _effects(raw: dict, tool: dict) -> str:
-    """一个声明过的工具的后果:覆盖 > 声明 > 包上的 default_effects > external;只读的是 none。
-    与后端 plugins.registry._market_effects 同一个算法(真正的规则在 plugin_tool_effects 里)。"""
-    policy = raw.get("tools") or {}
-    override = (policy.get("overrides") or {}).get(tool["name"]) or {}
-    return plugin_tool_effects(
-        read_only=override.get("read_only") is True or tool.get("read_only") is True,
-        declared=override.get("effects") or tool.get("effects"),
-        default=policy.get("default_effects"),
-    )
-
-
 def entry(manifest_path: Path, *, download: str) -> dict:
     """一条索引。内置插件的那一条与后端 registry.bundled_entry 由本机清单生成的一一对应。
 
     `download` 由调用方按产物给(发版那份钉 tag,官网那份指最新 Release);内置插件给空串。
     """
     raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-    skills = raw.get("skills") or []
-    return {
-        "id": raw["id"],
-        "name": raw.get("name", ""),
-        "version": raw.get("version", ""),
-        # 描述取第一条技能的说明 —— 那句话本来就是写给"这东西是干嘛的"的。
-        "description": (skills[0].get("description") if skills else "") or "",
-        # 作者从清单来(清单里是 {name, url})。**author 仍是一个字符串** —— 已经装着的旧版本
-        # 按字符串读它;改成对象的话,它们的市场里会显示一串 {'name': …}。主页另起一个键。
-        "author": str((raw.get("author") or {}).get("name") or ""),
-        "author_url": str((raw.get("author") or {}).get("url") or ""),
-        # 在 Mosael 里怎么用的文档,可按语言分;原样带过去,由读的一方挑语言。
-        "docs": raw.get("docs") or "",
-        # 主页**只从清单来**:仓库里每个插件都写了(见 backend/tests/test_first_party_plugins_name_a_homepage.py),
-        # 应用的插件页读的也是清单里这一个值 —— 两处一条规矩。
-        "homepage": str(raw["homepage"]).strip(),
-        "download": download,
-        # 权限**从清单来**:界面在装之前把它摊开给用户看,写错等于骗人。
-        "permissions": [p for p in (raw.get("permissions") or []) if isinstance(p, str)],
-        # 它是本机脚本还是一个 MCP server —— 后者的工具由 server 自己报,装之前列不出来,
-        # 市场详情据此说「装上之后才知道」,而不是显示一个空的工具清单。
-        "runtime": str((raw.get("runtime") or {}).get("kind") or "process"),
-        # 它能替 Mosael 做哪类事(公网直链…)。和工具清单一样是「装了能得到什么」。
-        "provides": [p for p in (raw.get("provides") or []) if isinstance(p, str)],
-        # 声明的工具:名字、显示名和说明(按语言分的原样带过去)。**不带入参 schema** ——
-        # 市场里要回答的是"它能干什么",怎么调是装上之后的事,而 schema 会让索引胖一个数量级。
-        # 每个工具带上它的后果(none / paid / external / local-code):市场详情据此标出哪些工具智能体调用前会先问你。
-        "tools": [
-            {
-                "name": str(tool["name"]),
-                "label": tool.get("label") or "",
-                "description": tool.get("description") or "",
-                "effects": _effects(raw, tool),
-            }
-            for tool in ((raw.get("tools") or {}).get("declare") or [])
-            if isinstance(tool, dict) and tool.get("name")
-        ],
-        "bundled": manifest_path.parent.parent == BUNDLED,
-    }
+    return index_entry(raw, download=download, bundled=manifest_path.parent.parent == BUNDLED)
 
 
 def build_entries(download_for: Callable[[str], str]) -> list[dict]:

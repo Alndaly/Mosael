@@ -18,39 +18,37 @@
 
 ## 装的时候在防什么
 
-装插件 = 在用户机器上放一份**会被执行**的代码。这里挡住的是:压缩包里的路径穿越
-(`../../.ssh/authorized_keys`)、解压炸弹、没有清单的垃圾包、以及悄悄覆盖掉一个已经装好
-并且已经填了凭据的包。挡不住的是「这个作者是不是好人」—— 那件事只能由用户看着权限清单
-自己决定,所以那份清单必须在装之前就看得见。
+装插件 = 在用户机器上放一份**会被执行**的代码。包本身的检查 —— 压缩包里的路径穿越
+(`../../.ssh/authorized_keys`)、符号链接、解压炸弹、没有清单或清单不合法的垃圾包 —— 在
+`mosael_formats.plugin_archive`,社区服务上架时过的是同一份(ADR 0026)。这里再挡的是桌面端自己的事:
+悄悄覆盖掉一个已经装好并且已经填了凭据的包、拿市场上的包顶替随应用发的插件。挡不住的是「这个作者是
+不是好人」—— 那件事只能由用户看着权限清单自己决定,所以那份清单必须在装之前就看得见。
 """
 
 from __future__ import annotations
 
-import io
-import json
 import logging
 import shutil
 import tempfile
 import threading
 import uuid
-import zipfile
 from pathlib import Path
 from typing import Any
 
 import httpx
+from mosael_formats import plugin_archive
 
 from app.core.http_retry import RetryingClient
 from app.domain.effects import plugin_tool_effects
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import Manifest, ManifestError, parse
-from app.domain.plugins.migrations import CANONICAL_FILENAME as MANIFEST_NAME
+from app.domain.plugins.manifest import Manifest
 
 logger = logging.getLogger(__name__)
 
-#: 压缩包最大多少。插件是脚本和清单,正常几十 KB 到几 MB。给上限是挡解压炸弹 ——
-#: 一个 1MB 的 zip 能解出几十 GB。
-MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
-MAX_UNPACKED_BYTES = 256 * 1024 * 1024
+#: 压缩包最大多少、解压后最大多少(上限的由来见 mosael_formats.plugin_archive)。留成本模块的名字,
+#: 装的那一刻按**此刻**的值传进去。
+MAX_ARCHIVE_BYTES = plugin_archive.MAX_ARCHIVE_BYTES
+MAX_UNPACKED_BYTES = plugin_archive.MAX_UNPACKED_BYTES
 
 DOWNLOAD_TIMEOUT_SECONDS = 60.0
 REGISTRY_TIMEOUT_SECONDS = 15.0
@@ -156,69 +154,29 @@ def _download(url: str) -> bytes:
     return bytes(written)
 
 
-def _safe_extract(archive: zipfile.ZipFile, target: Path) -> None:
-    """解压,**逐条查落点**。
-
-    zip 里的路径是压缩包作者写的字符串,可以是 `../../.ssh/authorized_keys`,也可以是一条
-    指向别处的符号链接。Python 的 extractall 自 3.6 起会规范化 `..`,但不拦符号链接,
-    也不拦解压炸弹 —— 这两样在这里显式拦。
-    """
-    total = 0
-    root = target.resolve()
-    for info in archive.infolist():
-        # 符号链接:高 16 位是 st_mode,0o120000 是 S_IFLNK。
-        if (info.external_attr >> 16) & 0o170000 == 0o120000:
-            raise PluginDomainError("pluginErr_archiveSymlink", name=info.filename)
-        destination = (root / info.filename).resolve()
-        # 按路径的**段**比,不按字符串前缀比:此前拼的是 `root + "/"`,Windows 上的路径分隔符是 `\\`,
-        # 于是每一条都被当成越界 —— Windows 上从市场一个插件也装不上。
-        if not destination.is_relative_to(root):
-            raise PluginDomainError("pluginErr_archivePathEscape", name=info.filename)
-        total += info.file_size
-        if total > MAX_UNPACKED_BYTES:
-            raise PluginDomainError("pluginErr_archiveUnpackedTooLarge")
-    archive.extractall(target)
-
-
-def _manifest_root(unpacked: Path) -> Path:
-    """找到清单所在的那一层。
-
-    从 GitHub 下下来的 zip 外面总套一层 `repo-main/`,而清单在里面。认死最外层的话,
-    从 GitHub 下的包一个都装不上 —— 而那正是最常见的来源。
-    """
-    direct = unpacked / MANIFEST_NAME
-    if direct.is_file():
-        return unpacked
-    candidates = sorted(unpacked.rglob(MANIFEST_NAME), key=lambda p: len(p.parts))
-    if not candidates:
-        raise PluginDomainError("pluginErr_archiveNoManifest", manifest=MANIFEST_NAME)
-    return candidates[0].parent
-
-
 def inspect_archive(data: bytes) -> tuple[dict[str, Any], Path, Path]:
-    """解到临时目录并读出清单。返回 (清单, 清单所在目录, 临时根目录)。
+    """看清楚这个包、再解到临时目录。返回 (清单, 清单所在目录, 临时根目录)。
 
-    **先看清楚再落地**:清单不合法、或者根本没有清单的包,不该在插件目录里留下任何东西。
-    调用方负责删掉临时根目录。
+    **先看清楚再落地**:成员安全、清单存在且合法都在内存里查完(`read_plugin_archive`),不合格的包
+    不在磁盘上留下任何东西;解压时 `safe_extract` 逐条再查一次。调用方负责删掉临时根目录。
     """
+    try:
+        package = plugin_archive.read_plugin_archive(
+            data, max_archive_bytes=None, max_unpacked_bytes=MAX_UNPACKED_BYTES
+        )
+    except plugin_archive.ArchiveError as exc:
+        raise PluginDomainError.relay(exc) from exc
     workdir = Path(tempfile.mkdtemp(prefix="mosael-plugin-install-"))
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            _safe_extract(archive, workdir)
-    except zipfile.BadZipFile as exc:
+        with plugin_archive.open_archive(data, max_archive_bytes=None) as archive:
+            plugin_archive.safe_extract(archive, workdir, max_unpacked_bytes=MAX_UNPACKED_BYTES)
+    except plugin_archive.ArchiveError as exc:
         shutil.rmtree(workdir, ignore_errors=True)
-        raise PluginDomainError("pluginErr_archiveNotZip") from exc
-    except PluginDomainError:
+        raise PluginDomainError.relay(exc) from exc
+    except BaseException:
         shutil.rmtree(workdir, ignore_errors=True)
         raise
-    try:
-        root = _manifest_root(workdir)
-        raw = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
-        parse(raw, str(root))  # 只为校验:清单不合法的包直接挡在门外
-    except (ManifestError, PluginDomainError, ValueError) as exc:
-        shutil.rmtree(workdir, ignore_errors=True)
-        raise PluginDomainError("pluginErr_manifestInvalid", detail=str(exc)) from exc
-    return raw, root, workdir
+    return package.raw, workdir.joinpath(*package.root.split("/")) if package.root else workdir, workdir
 
 
 #: 同一时刻只换一个插件目录。两次安装同一个 id 撞在一起时,先到的装完、后到的按「已经装过」处理,

@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.db.model_base import now
 from app.db.models import PluginMarketHold, PluginPackage
-from app.domain.plugins.versions import is_newer
+from mosael_formats.versions import is_newer
 
 #: 记下的「还没发布」多久之后不再算数。官方索引发新版时下载地址本身就会换(钉 tag),用不上它;
 #: 它兜的是自己架的索引 —— 那种索引可能一直用同一个地址,而地址背后的包迟早会换成真正的新版,

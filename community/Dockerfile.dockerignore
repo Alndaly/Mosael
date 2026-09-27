@@ -1,0 +1,12 @@
+# community/Dockerfile 的构建上下文是仓库根:只放它要的几样。
+*
+!community
+!packages/mosael-formats
+!website/public/brand/mosael-wordmark-tight.png
+!website/public/plugins/registry.json
+!website/public/workflows
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+community/community-data

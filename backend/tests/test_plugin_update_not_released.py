@@ -19,7 +19,7 @@ from datetime import timedelta
 import pytest
 
 from app.domain.plugins import registry as market
-from app.domain.plugins.versions import compare, is_newer
+from mosael_formats.versions import compare, is_newer
 
 MANIFEST = {
     "id": "dev.test.anim",

@@ -1,0 +1,57 @@
+# Mosael 的反代(Caddy 自动申请并续期 HTTPS 证书)。
+#
+#   /api/community/*   → 社区服务(同源:刷新令牌的 cookie 是第一方的)
+#   /community-media/* → 本地存储卷里的文件,Caddy 直接出(带安全头)
+#   其余               → 官网(Next.js)
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	handle /api/community/* {
+		# 画板文件的上传(本地存储时经服务自己的 PUT 地址)单个最大 200 MB;其余请求(含插件包)远小于此。
+		@upload path /api/community/v1/uploads/*
+		request_body @upload {
+			max_size 210MB
+		}
+		@other not path /api/community/v1/uploads/*
+		request_body @other {
+			max_size 80MB
+		}
+		reverse_proxy community:8000
+	}
+
+	# 用户上传的东西一律不当网页内联出:能内联显示的只有服务端白名单里的媒体类型(图片 / 视频 / 音频,
+	# 扩展名由服务端按类型定),files/ 下的下载型文件(插件包、工作流文件)一律 attachment;
+	# 再加一道 CSP sandbox,万一有什么被当成文档打开,也跑不了脚本。
+	handle_path /community-media/* {
+		root * /srv/community-media
+		header {
+			Content-Security-Policy "default-src 'none'; sandbox"
+			Cache-Control "public, max-age=86400"
+			X-Content-Type-Options nosniff
+		}
+		@downloads path /files/*
+		header @downloads Content-Disposition attachment
+		file_server
+	}
+
+	handle {
+		reverse_proxy website:3000
+	}
+}
+
+# 可选:用 compose 里的 MinIO 当对象存储时,给它一个浏览器访问得到的地址(预签名 URL 里带的就是这个主机名),
+# 并把 COMMUNITY_S3_ENDPOINT 设成 https://{$MINIO_DOMAIN}。
+# {$MINIO_DOMAIN} {
+# 	reverse_proxy minio:9000
+# }

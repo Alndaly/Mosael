@@ -31,7 +31,10 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
-          cache-dependency-glob: backend/uv.lock
+          cache-dependency-glob: |
+            backend/uv.lock
+            community/uv.lock
+            packages/mosael-formats/uv.lock
 
       # 没有 ffmpeg 的话,9 个测试文件会整体 skip —— 导出与渲染主流程都在里面。
       # 那样这道闸看着是绿的,实际没验到最该验的那部分。
@@ -65,7 +68,7 @@ jobs:
             exit 1
           }
 
-      # 三处 lint(frontend、website 的 oxlint,backend 的 ruff)都是零告警,所以它能当闸用 —— 一条开局几百条警告的 lint 只能当摆设。
+      # 五处 lint(frontend、website 的 oxlint,backend、community、packages/mosael-formats 的 ruff)都是零告警,所以它能当闸用 —— 一条开局几百条警告的 lint 只能当摆设。
       # 放在测试前面:它几秒钟就跑完,而且它抓的那类问题(未定义名字、未用变量)在测试
       # 里往往表现为一个八竿子打不着的报错。
       - name: Lint
@@ -121,3 +124,61 @@ jobs:
         run: |
           pnpm --dir website test
           pnpm --dir website build
+
+  # 社区服务(ADR 0026):生产跑 PostgreSQL,所以 CI 在 Postgres 服务容器上跑整套测试(本地缺省是 SQLite)。
+  # ruff 由上面 test job 里根目录的 `pnpm lint` 跑(和本地提交前那一条是同一条),这里再跑一次是为了
+  # 这个 job 单独失败时能直接看到是哪一半。
+  community:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: community
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: community_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      COMMUNITY_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/community_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: community/uv.lock
+      - name: Install dependencies
+        run: uv sync --frozen --python 3.14
+      - name: Lint
+        run: uv run ruff check
+      - name: Tests (PostgreSQL)
+        run: uv run pytest -q
+
+  # 插件包 / 工作流文件 / 画板快照的格式校验:桌面后端和社区服务共用的那一份。
+  formats:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/mosael-formats
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: packages/mosael-formats/uv.lock
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check
+      - name: Tests
+        run: uv run pytest -q

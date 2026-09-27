@@ -17,12 +17,22 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Any
 
-#: 支持的语言。第一个是缺省。
-LOCALES = ("zh", "en")
-DEFAULT_LOCALE = LOCALES[0]
+# 语言清单、「这一次是谁在问」那个 ContextVar、数据自带文案的挑法,和插件包 / 工作流文件校验报错的
+# 文案,都住在 mosael_formats(桌面后端与社区服务共用的格式包,ADR 0026)。这里接过来用同一份:
+# 同一个 ContextVar,格式包里的 FormatError 说哪种语言就和这里的 LocalizedError 一致。
+from mosael_formats.i18n import (
+    CURRENT_LOCALE,
+    DEFAULT_LOCALE,
+    LOCALES,
+    MESSAGES as FORMAT_MESSAGES,
+    pick_text as pick_text,
+)
 
 #: key → {语言: 文案}。**每个 key 两种语言都必须有**(见 tests/test_backend_i18n.py 的棘轮)。
 MESSAGES: dict[str, dict[str, str]] = {
+    # 格式包自己的那几条(插件清单 / 插件包 / 工作流文件的校验报错)。并进来,`t()`、`is_message_key`、
+    # `LocalizedError.relay` 才认得它们;不在这张表里再抄一份 —— 两份会漂。
+    **FORMAT_MESSAGES,
     # ---- i18n 分区 B1(路由、插件、供应商设置等):这一批新加的 key 放在这行下面 ----
     # ---- B1 · 01_plugins ----
     "pluginErr_upstream": {
@@ -161,54 +171,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "下载插件产出失败:{detail}",
         "en": "Could not download the plugin output: {detail}",
     },
-    "pluginErr_manifestMissingField": {
-        "zh": "插件清单 {path} 缺少必填字段: {field}",
-        "en": "Plugin manifest {path} is missing a required field: {field}",
-    },
-    "pluginErr_manifestBadId": {
-        "zh": "插件清单 {path} 的 id「{id}」不合法:只能用字母、数字和 . _ -,并以字母或数字开头",
-        "en": "Plugin manifest {path} has an invalid id “{id}”: use only letters, digits and . _ -, starting with a letter or digit.",
-    },
-    "pluginErr_manifestBadToolName": {
-        "zh": "插件清单 {path} 的工具名「{tool}」不合法:以字母开头,只能用字母、数字、_ 和 -,最长 64 个字符",
-        "en": "Plugin manifest {path} has an invalid tool name “{tool}”: start with a letter and use only letters, digits, _ and -, up to 64 characters.",
-    },
-    "pluginErr_manifestDuplicateTool": {
-        "zh": "插件清单 {path} 里有两个工具都叫 {tool}",
-        "en": "Plugin manifest {path} declares two tools named {tool}.",
-    },
-    "pluginErr_manifestReservedKey": {
-        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 会盖掉宿主给插件的环境变量(PATH、HOME、LANG、MOSAEL_* 等),请换个名字",
-        "en": "In plugin manifest {path}, the config/credential key {field} would override an environment variable the host provides (PATH, HOME, LANG, MOSAEL_* and so on); please rename it.",
-    },
-    "pluginErr_manifestDuplicateKey": {
-        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 和 {other} 大写后是同一个环境变量",
-        "en": "In plugin manifest {path}, the config/credential keys {field} and {other} become the same environment variable once upper-cased.",
-    },
-    "pluginErr_manifestToolExtraCapability": {
-        "zh": "插件清单 {path} 的工具 {tool} 声明了包上没有的能力: {capabilities}",
-        "en": "In plugin manifest {path}, tool {tool} declares capabilities the package doesn't: {capabilities}",
-    },
-    "pluginErr_manifestBadEffects": {
-        "zh": "插件清单 {path}:{tool} 的 effects 只能是 {allowed} 之一,写的是「{value}」",
-        "en": "In plugin manifest {path}, the effects of {tool} must be one of {allowed}, not “{value}”.",
-    },
-    "pluginErr_manifestReadOnlyEffects": {
-        "zh": "插件清单 {path}:工具 {tool} 标了 read_only,effects 却写成「{value}」—— 只读的工具没有后果,两处说的不是一回事",
-        "en": "In plugin manifest {path}, tool {tool} is marked read_only yet declares effects “{value}”; a read-only tool has no effects, so the two contradict each other.",
-    },
-    "pluginErr_manifestCapabilityNeedsProcess": {
-        "zh": "插件清单 {path}:能力 {capability} 只能由本地脚本形态的插件提供(MCP 插件不支持)",
-        "en": "In plugin manifest {path}, the {capability} capability can only be provided by a local-script plugin (not MCP).",
-    },
-    "pluginErr_manifestCapabilityUnclaimed": {
-        "zh": "插件清单 {path} 声明了能力 {capability},但没有哪个工具认领它 —— 在负责它的那个工具上也写上 provides",
-        "en": "Plugin manifest {path} declares the {capability} capability, but no tool claims it — add provides to the tool that handles it.",
-    },
-    "pluginErr_manifestCapabilityClaimedTwice": {
-        "zh": "插件清单 {path}:能力 {capability} 被多个工具同时认领({tools}),只能有一个",
-        "en": "In plugin manifest {path}, the {capability} capability is claimed by several tools ({tools}); only one may claim it.",
-    },
     "pluginErr_streamNoResult": {
         "zh": "插件没有给出结果就结束了(最后一行应当是 {shape})",
         "en": "The plugin finished without a result (its last line should be {shape}).",
@@ -325,37 +287,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件下载地址只能是 http/https",
         "en": "The plugin download URL must be http or https.",
     },
-    "pluginErr_archiveTooLarge": {
-        "zh": "插件包超过大小上限",
-        "en": "The plugin package exceeds the size limit.",
-    },
     "pluginErr_downloadFailed": {
         "zh": "下载插件失败:{detail}",
         "en": "Could not download the plugin: {detail}",
-    },
-    "pluginErr_archiveSymlink": {
-        "zh": "插件包里有符号链接,拒绝安装:{name}",
-        "en": "The plugin package contains a symbolic link, so it was not installed: {name}",
-    },
-    "pluginErr_archivePathEscape": {
-        "zh": "插件包里有越界路径,拒绝安装:{name}",
-        "en": "The plugin package contains a path outside its folder, so it was not installed: {name}",
-    },
-    "pluginErr_archiveUnpackedTooLarge": {
-        "zh": "插件包解压后超过大小上限",
-        "en": "The unpacked plugin package exceeds the size limit.",
-    },
-    "pluginErr_archiveNoManifest": {
-        "zh": "这个包里没有 {manifest},不是一个插件",
-        "en": "This package has no {manifest}, so it isn't a plugin.",
-    },
-    "pluginErr_archiveNotZip": {
-        "zh": "这不是一个合法的 zip 包",
-        "en": "This is not a valid zip file.",
-    },
-    "pluginErr_manifestInvalid": {
-        "zh": "插件清单不合法:{detail}",
-        "en": "Invalid plugin manifest: {detail}",
     },
     "pluginErr_updateNotReleased": {
         "zh": "这个插件的新版本还没发布,当前已是可下载的最新版",
@@ -822,14 +756,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "routeErr_workflowTemplateAndGraph": {
         "zh": "创建工作流时不能同时提交模板和自定义图",
         "en": "When creating a workflow, send either a template or a custom graph, not both.",
-    },
-    "routeErr_notWorkflowFile": {
-        "zh": "不是有效的 Mosael 工作流文件",
-        "en": "This isn't a valid Mosael workflow file.",
-    },
-    "routeErr_workflowFileTooNew": {
-        "zh": "文件版本({version})比当前应用支持的更新,请升级应用后再导入",
-        "en": "The file version ({version}) is newer than this app supports. Update the app, then import it.",
     },
     "routeErr_workflowRevisionNotFound": {
         "zh": "工作流修订不存在",
@@ -4280,7 +4206,7 @@ MESSAGES: dict[str, dict[str, str]] = {
 #: 十二个答案 —— 漏一个,那一屏的任务就还是另一种语言。序列化那一层拿不到 Request,ContextVar 是
 #: 让它知道"这一次是谁在问"的唯一办法。
 #: 没有请求上下文时(飞书机器人、定时任务、后台线程)取缺省 —— 那正是它该给的答案。
-_current_locale: ContextVar[str] = ContextVar("mosael_locale", default=DEFAULT_LOCALE)
+_current_locale: ContextVar[str] = CURRENT_LOCALE
 
 
 def set_current_locale(locale: str) -> None:
@@ -4343,38 +4269,6 @@ def _text(key: str, locale: str) -> str:
     if entry is None:
         return key
     return entry.get(locale) or entry.get(DEFAULT_LOCALE) or key
-
-
-def pick_text(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
-    """一段**贴着数据写的**多语言文字:`{"zh": "…", "en": "…"}`,也可以就是一个字符串。
-
-    和 `t()` 是两件事,不该混:`t` 翻的是**我们自己**的文案(key 在 MESSAGES 里,棘轮盯着两种
-    语言都得有);这里挑的是**数据自带**的文案 —— 插件清单里作者写的、内置模板里节点的名字。
-    那些东西没有全局 key 可言,翻译就写在它旁边("翻译贴着它翻译的那个东西写")。
-
-    挑哪一条:要的那种语言 → 同一主语言的任意变体(`en-US` 认 `en`)→ 作者声明的原文语言 →
-    部署缺省 → 写在最前面的那一条。**退路是给原文,不是给空**。
-    """
-    if not isinstance(value, dict):
-        return str(value or "")
-    want = locale or get_current_locale()
-    by_primary: dict[str, str] = {}
-    for key, picked in value.items():
-        if not isinstance(picked, str) or not picked.strip():
-            continue
-        by_primary.setdefault(_primary_tag(str(key)), picked)
-        if str(key).strip().lower() == str(want).strip().lower():
-            return picked
-    for candidate in (want, author_locale, DEFAULT_LOCALE):
-        picked = by_primary.get(_primary_tag(str(candidate))) if candidate else None
-        if picked:
-            return picked
-    return next(iter(by_primary.values()), "")
-
-
-def _primary_tag(tag: str) -> str:
-    """`zh-CN` / `zh_Hans` → `zh`。整串相等的话,一份写成 `en-US` 的翻译就白写了。"""
-    return tag.replace("_", "-").split("-")[0].strip().lower()
 
 
 def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:

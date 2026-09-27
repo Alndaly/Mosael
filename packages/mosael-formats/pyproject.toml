@@ -1,0 +1,34 @@
+[project]
+name = "mosael-formats"
+version = "0.1.0"
+description = "Mosael 的文件格式校验:插件包、工作流文件、画板快照。桌面后端与社区服务共用这一份。"
+requires-python = ">=3.12"
+# **没有依赖,这是约束不是现状。** 它要同时装进桌面后端(PyInstaller 打包)、社区服务(容器)和
+# 发版脚本(scripts/sync-plugin-registry.py 用系统 python3 直接 import),哪一边多一个依赖,
+# 另外两边就得跟着装。
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.14",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# 和 backend/ 同一组:能抓缺陷的,不是风格(理由见 backend/pyproject.toml)。
+select = ["F", "E9", "B"]
+ignore = ["B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]

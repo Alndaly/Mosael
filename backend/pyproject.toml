@@ -36,6 +36,8 @@ dependencies = [
   # 3D 白模参考帧在后端渲染(domain/scene_render):z-buffer 光栅化 + 阴影图。纯 Python 逐像素
   # 跑不动一帧 960x540,而工作流跑在后端 —— 工作台那个 three.js 渲染器在这里够不着。
   "numpy>=2.1",
+  # 插件清单 / 插件包 / 工作流文件的格式与校验,和社区服务共用这一份(ADR 0026)。
+  "mosael-formats",
 ]
 
 [dependency-groups]
@@ -48,6 +50,9 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+mosael-formats = { path = "../packages/mosael-formats", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,6 +1,8 @@
 """一个动作**后果落在哪儿** —— 智能体替人做它之前要不要先问一声,就看这一个词。
 
-这份词表是**唯一那一份**。三处在用它,说的是同一件事:
+**词表本身**(none / paid / external / local-code,以及插件工具没声明时按 external 算)属于插件清单
+格式,住在 `mosael_formats.effects`(桌面后端与社区服务共用,ADR 0026);这里接过来,再加上桌面端
+自己的那一半:开不开确认卡、归哪一档权限、卡上那半句怎么说。三处在用它,说的是同一件事:
 
 · 插件清单里每个工具的 `effects`(见 docs/PLUGIN_MANIFEST 的「确认」一节,domain/plugins);
 · 画板产出者的 `effects`(见 domain/boards/producers,ADR 0021 决定 2);
@@ -17,23 +19,19 @@
                 要确认卡,归 external 那一档。
     local-code  会在这台电脑上执行一段**调用方写的代码**。要确认卡,归 external 那一档
                 (那一档的定义本来就含「本机跑过的代码」),卡上单独点明。
-
-**插件工具没声明时按 external 算**:插件跑的是别人的代码,「不知道」要落在保守那一边(见
-`plugin_tool_effects`)。本模块不依赖任何别的模块 —— 市场索引的生成脚本也按它算。
 """
 
 from __future__ import annotations
 
-NONE = "none"
-PAID = "paid"
-EXTERNAL = "external"
-LOCAL_CODE = "local-code"
-
-#: 认得的全部取值。顺序即「由轻到重」,给文档和界面列举用。
-EFFECTS = (NONE, PAID, EXTERNAL, LOCAL_CODE)
-
-#: 插件工具**没说**的时候按哪个算。
-PLUGIN_DEFAULT = EXTERNAL
+from mosael_formats.effects import (
+    EFFECTS,
+    EXTERNAL,
+    LOCAL_CODE,
+    NONE,
+    PAID,
+    PLUGIN_DEFAULT,
+    plugin_tool_effects,
+)
 
 #: 每种后果开卡时归哪一档权限(confirmable/registry.PERMISSIONS 里的名字)。
 #: none 不在表里:它不开卡。
@@ -60,20 +58,6 @@ def warning_key(effects: object) -> str:
     if effects == NONE:
         return ""
     return _WARNING.get(str(effects), _WARNING[EXTERNAL])
-
-
-def plugin_tool_effects(*, read_only: bool, declared: object = None, default: object = None) -> str:
-    """一个插件工具**实际**的后果:只读就是 none;否则按工具自己声明的、再按包上的缺省,都没有就 external。
-
-    清单解析时已经把「只读却声明了别的后果」判成错(见 plugins.manifest);运行时报出的工具在
-    清洗时按保守那边收(见 plugins.dynamic_tools)。这里只做取值,不再判一遍。
-    """
-    if read_only:
-        return NONE
-    for candidate in (declared, default):
-        if candidate in EFFECTS:
-            return str(candidate)
-    return PLUGIN_DEFAULT
 
 
 __all__ = [

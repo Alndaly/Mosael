@@ -1,4 +1,4 @@
-"""插件版本号的先后。
+"""插件版本号的先后。桌面端「有新版」和社区上架「新版本必须更新」按的是同一条。
 
 市场里「有新版」此前是字符串**不相等**:索引写 0.2.0、装着 0.1.0 就提示更新 —— 而下载地址给的
 若仍是 0.1.0,点「更新」装回同一版,提示永远不消失。「不相等」回答不了「谁更新」:装着的比索引
@@ -44,6 +44,11 @@ def _parse(version: str) -> _Parsed | None:
     return (core[0], core[1], core[2]), idents
 
 
+def is_semver(version: str) -> bool:
+    """这是不是一个比得出先后的版本号。社区上架插件时要求它 —— 否则「有新版」无从判断。"""
+    return _parse(version) is not None
+
+
 def compare(left: str, right: str) -> int | None:
     """left 比 right 新返回 1、旧返回 -1、同一版返回 0;任何一边不是语义化版本返回 None。"""
     a, b = _parse(left), _parse(right)
@@ -71,4 +76,4 @@ def is_newer(candidate: str, installed: str) -> bool:
     return order > 0
 
 
-__all__ = ["compare", "is_newer"]
+__all__ = ["compare", "is_newer", "is_semver"]

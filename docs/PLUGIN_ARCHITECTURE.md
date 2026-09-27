@@ -207,7 +207,7 @@ main 上的源码,新版本应用不从它装。此前应用读的正是它:main
 下载给 0.1.0,「更新」装回旧版,「有新版」永远不消失。两份条目除了下载地址一模一样(有测试钉着)。
 
 **装的那一刻还有第二道**(`domain/plugins/updates`):索引是谁都能架的 JSON,许诺和实物对不上不能只靠
-索引那头不犯错。「有新版」由后端按语义化版本比先后给出(`update_available`,`domain/plugins/versions`;
+索引那头不犯错。「有新版」由后端按语义化版本比先后给出(`update_available`,`mosael_formats.versions`,在 `packages/mosael-formats`;
 比不出先后的才退回「不相等」),界面不再拿字符串比。从市场点「更新」时请求带上索引许的版本,下下来的包
 先读清单:**不比装着的新**就不给确认卡(预览回 `update_unreleased`)、安装回 409,都说「这个插件的新版本
 还没发布,当前已是可下载的最新版」,并记一条 `PluginMarketHold`(许的版本 + 下载地址 + 包里的版本),

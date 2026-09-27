@@ -19,10 +19,13 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from mosael_formats.plugin_manifest import MANIFEST_FILENAME
+
 logger = logging.getLogger(__name__)
 
-#: 清单的规范文件名。别的名字会在迁移时被改成它 —— 一个目录一份清单,一个名字。
-CANONICAL_FILENAME = "mosael.plugin.json"
+#: 清单的规范文件名(清单格式的一部分,见 mosael_formats)。别的名字会在迁移时被改成它 ——
+#: 一个目录一份清单,一个名字。
+CANONICAL_FILENAME = MANIFEST_FILENAME
 
 #: 迁移时会被认出来并改名的通用写法。
 LEGACY_FILENAMES = ("plugin.json",)
