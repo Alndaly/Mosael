@@ -23,6 +23,7 @@ from app.domain.workflows.template_requirements import (
     REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
     SEPARATION_ENGINE,
+    SPEECH_VIDEO_MODEL,
     TRANSCRIPTION_ENGINE,
     requirement,
 )
@@ -33,11 +34,13 @@ from app.domain.workflows.templates_business import (
     HIGHLIGHT_SHORTS,
     PRODUCT_ON_MODEL,
     PRODUCT_PITCH_SHORT,
+    TALKING_SCRIPT_VIDEO,
     fabric_lookbook_graph,
     footage_montage_graph,
     highlight_shorts_graph,
     product_on_model_graph,
     product_pitch_short_graph,
+    talking_script_video_graph,
 )
 from sqlalchemy import select
 from app.ai.providers import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
@@ -414,6 +417,9 @@ def built_in_template_graph(
             image=_reference_image_model(db, user_id),
             voice_id=_first_voice_id(db, workspace_id),
         ))
+    if template_id == TALKING_SCRIPT_VIDEO:
+        # 音色按工作区取(克隆音色存在工作区名下);说话照片模型不在图里写死,节点按描述符挑会的那一个。
+        return localised_names(locale, talking_script_video_graph(voice_id=_first_voice_id(db, workspace_id)))
     if template_id == FOOTAGE_MONTAGE:
         # 不生成画面,所以只要对话模型;音色按工作区取,没有就只出字幕(图里由条件挡掉旁白那两步)。
         return localised_names(locale, footage_montage_graph(chat=chat, voice_id=_first_voice_id(db, workspace_id)))
@@ -1125,6 +1131,7 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
     这里说缺,那一格就是空的。两处各写一份判据的话,迟早一处说齐、一处留空。
     """
     from app.ai.runtime import asr_models, separation_models
+    from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, talking_models
 
     has_chat = bool(_pick(db, user_id, "chat", lambda _db, choice: bool(choice.model)).model)
     statuses: dict[str, CheckStatus] = {
@@ -1134,6 +1141,7 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
         CLONED_VOICE: "met" if _first_voice_id(db, workspace_id) else "missing",
         TRANSCRIPTION_ENGINE: _engines_status(asr_models.runtime_status, ["funasr", "whisperx"]),
         SEPARATION_ENGINE: _engines_status(separation_models.runtime_status, list(separation_models.ENGINES)),
+        SPEECH_VIDEO_MODEL: "met" if talking_models(db, SPEECH_TO_VIDEO, user_id) else "missing",
     }
     return statuses
 

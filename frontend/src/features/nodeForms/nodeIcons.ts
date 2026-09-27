@@ -126,6 +126,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   //: 数字人:说一段话(人物、人像)、对口型(视频)。
   entity_speak: MessageCircle,
   image_speak: MessageCircle,
+  //: 长稿分段配音:一段稿子配成几段音频(和配音同一个图标)。
+  talking_segments: AudioLines,
   video_lipsync: Speech,
   note_search: Search,
   note_read: BookOpen,

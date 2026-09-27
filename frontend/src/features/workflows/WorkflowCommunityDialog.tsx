@@ -16,6 +16,7 @@ import {
   SearchX,
   Shirt,
   Smartphone,
+  UserRound,
 } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -58,6 +59,7 @@ const TEMPLATE_ICONS: Record<string, typeof Film> = {
   product_pitch_short: Megaphone,
   footage_montage: Clapperboard,
   fabric_lookbook: Palette,
+  talking_script_video: UserRound,
 };
 
 type Filter = "all" | "added" | "ready";

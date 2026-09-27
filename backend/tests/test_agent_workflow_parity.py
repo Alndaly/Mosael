@@ -81,6 +81,8 @@ NODE_TO_TOOL: dict[str, str] = {
     "entity_speak": "generate_video",
     "image_speak": "generate_video",
     "video_lipsync": "generate_video",
+    #: 长稿分段配音:智能体逐句 generate_audio,按模型的音频上限自己分段(说明见 generate_video)。
+    "talking_segments": "generate_audio",
     "project_create": "create_project",
     # 画布上的自动成片便利节点会顺手建立默认序列和轨道；智能体侧对应的用户目标仍是新建项目。
     "project_sequence_create": "create_project",

@@ -30,6 +30,7 @@ from app.domain.workflows.templates_business import (
     highlight_shorts_graph,
     product_on_model_graph,
     product_pitch_short_graph,
+    talking_script_video_graph,
 )
 
 
@@ -50,6 +51,7 @@ def catalog_files() -> dict[str, str]:
         "product_pitch_short": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id=""),
         "fabric_lookbook": fabric_lookbook_graph(chat=ModelChoice(), image=ModelChoice()),
         "footage_montage": footage_montage_graph(chat=ModelChoice(), voice_id=""),
+        "talking_script_video": talking_script_video_graph(voice_id=""),
     }
     templates = [{**template, "graph": graphs[template["id"]]} for template in TEMPLATE_CATALOG]
     files: dict[str, str] = {}

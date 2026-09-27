@@ -1,4 +1,4 @@
-import { Clapperboard, Film, Languages, Layers, type LucideIcon, Scissors, Shirt, ShoppingBag, Smartphone } from "lucide-react";
+import { Clapperboard, Film, Languages, Layers, type LucideIcon, Scissors, Shirt, ShoppingBag, Smartphone, UserRound } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -51,6 +51,7 @@ const WORKFLOW_ICONS: Record<string, LucideIcon> = {
   product_pitch_short: ShoppingBag,
   footage_montage: Clapperboard,
   fabric_lookbook: Layers,
+  talking_script_video: UserRound,
 };
 
 export function WorkflowTile({ id, size = "md" }: { id: string; size?: keyof typeof SIZES }) {

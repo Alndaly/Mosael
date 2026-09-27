@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -183,7 +185,7 @@ def entity_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 
 @register("image_speak")
 def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """一张人像说一段话:稿子用挑的嗓子配音 → 这张图 + 这段配音做说话照片。"""
+    """一张人像说一段话:音频接上游的(比如长稿分段配好的一段),没接就用稿子和挑的嗓子当场配 → 这张图 + 这段音频做说话照片。"""
     from app.domain.workflows.executors.subjobs import _asset_in
 
     _require_consent(config)
@@ -193,9 +195,13 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     #: 收进本工作区:别处的 id 不能借这一步被拿去生成。
     face = _asset_in(db, scope, face).id
     model = _pick_model(db, _text(config.get("model")), SPEECH_TO_VIDEO)
-    audio = _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
+    given = _text(config.get("audio_asset_id"))
+    if given:
+        given = _asset_in(db, scope, given).id
+    audio = given or _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
     videos = _generate(db, scope, model, [{"asset_id": face, "role": FIRST_FRAME}, {"asset_id": audio, "role": DRIVING_AUDIO}])
-    return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": audio}
+    #: 用的是上游现成的音频时不交回它(和对口型同一条)。
+    return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": "" if given else audio}
 
 
 @register("video_lipsync")
@@ -216,3 +222,126 @@ def video_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     videos = _generate(db, scope, model, [{"asset_id": video, "role": SOURCE_VIDEO}, {"asset_id": audio, "role": DRIVING_AUDIO}])
     #: 用的是上游现成的音频时不交回它 —— 画板上不多出一格重复的音频。
     return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": "" if given else audio}
+
+
+#: 一句话在哪儿断:句末标点(中英文)和换行。标点留在句子里,字幕照原样显示。
+_SENTENCE_END = re.compile(r"(?<=[。！？!?；;…])|(?<=\.)\s+|\n+")
+#: 一句太长(念出来超过一段的上限)时再按逗号、顿号断一次。
+_CLAUSE_END = re.compile(r"(?<=[，,、：:])")
+#: 估一句念多久:中文每秒约 4 个字。只用来决定要不要预先按逗号断开 —— 分组看的是配出来的实际时长。
+_CHARS_PER_SECOND = 4.0
+
+
+def split_script(text: str, max_seconds: float) -> list[str]:
+    """把稿子切成一句一句(长稿分段的第一步,ADR 0028 阶段 3)。估着念出来超过一段上限的长句,再按逗号断开。"""
+    sentences: list[str] = []
+    for piece in _SENTENCE_END.split(text or ""):
+        piece = (piece or "").strip()
+        if not piece:
+            continue
+        if len(piece) / _CHARS_PER_SECOND <= max_seconds:
+            sentences.append(piece)
+            continue
+        clause = ""
+        for part in _CLAUSE_END.split(piece):
+            if clause and len(clause + part) / _CHARS_PER_SECOND > max_seconds:
+                sentences.append(clause.strip())
+                clause = ""
+            clause += part
+        if clause.strip():
+            sentences.append(clause.strip())
+    return sentences
+
+
+def _duration(asset: Any) -> float:
+    """这段音频多长(秒):素材库登记时量过;没量到就现量一次。"""
+    from app.media.paths import resolve_key
+    from app.media.probe import probe_media
+
+    seconds = (asset.media_info or {}).get("duration")
+    if seconds is None and asset.file_key:
+        seconds = probe_media(resolve_key(asset.file_key)).get("duration")
+    return float(seconds or 0.0)
+
+
+def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) -> str:
+    """几段配音首尾相接成一段(一组句子交给说话照片的那一段),登记进素材库。"""
+    import tempfile
+
+    from app.core.child_process import run_logged
+    from app.domain.assets.importer import register_file_asset
+    from app.media.paths import resolve_key
+
+    sources = [resolve_key(str(asset.file_key)) for asset in assets]
+    with tempfile.TemporaryDirectory(prefix="mosael-talking-") as folder:
+        target = Path(folder) / "segment.wav"
+        inputs = [part for path in sources for part in ("-i", str(path))]
+        chain = "".join(f"[{index}:a]" for index in range(len(sources))) + f"concat=n={len(sources)}:v=0:a=1[out]"
+        result = run_logged(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", chain, "-map", "[out]",
+                             "-ac", "1", "-ar", "24000", str(target)],
+                            capture_output=True, text=True, timeout=300, what="口播分段拼接")
+        if result.returncode != 0 or not target.exists():
+            raise WorkflowDomainError("wfErr_talkingConcatFailed")
+        return register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
+                                   name=name, source="tts").id
+
+
+@register("talking_segments")
+def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """长稿分段配音(ADR 0028 阶段 3「稿子 → 数字人口播」):一段稿子 → 一组组**说话照片接得住**的音频 + 字幕时间。
+
+    说话照片的驱动音频有上限(wan2.2-s2v 20 秒,描述符的 `source_duration_seconds.driving_audio`),长稿要切。
+    **按句切、按实测时长分组**:逐句配音(配音本来就逐句合成),把相邻的句子凑成一组、每组配出来的总长不超过上限,
+    一组的几句拼成一段音频交给一次说话照片。句子不从中间断开,接缝落在句子之间。字幕直接用稿子加这些实测时长,
+    不再转写一遍。上限来自所选模型的描述符,不写死;`max_seconds` 只能往小里调。
+    """
+    from app.domain.workflows.executors.subjobs import _asset_in, synthesize_speech
+
+    text = _text(config.get("text"))
+    if not text:
+        raise WorkflowDomainError("wfErr_talkingNeedsText")
+    engine, voice = _text(config.get("engine")), _text(config.get("voice"))
+    if not voice:
+        raise WorkflowDomainError("wfErr_talkingNeedsVoice")
+    #: 这些段都是要交给数字人的:克隆音色要有授权声明,在配第一句之前就问。
+    _require_voice_consent(db, engine, voice)
+    model = _pick_model(db, _text(config.get("model")), SPEECH_TO_VIDEO)
+    limits = ((model.get("capabilities") or {}).get("source_duration_seconds") or {}).get(DRIVING_AUDIO) or [1, 20]
+    ceiling = float(limits[1])
+    try:
+        wanted = float(config.get("max_seconds") or 0)
+    except (TypeError, ValueError):
+        wanted = 0.0
+    if 0 < wanted < ceiling:
+        ceiling = wanted
+
+    voiced: list[tuple[str, Any, float]] = []
+    for sentence in split_script(text, ceiling):
+        asset = _asset_in(db, scope, synthesize_speech(db, scope, {"text": sentence, "engine": engine, "voice": voice})["asset_id"])
+        seconds = _duration(asset)
+        if seconds > ceiling:
+            raise WorkflowDomainError("wfErr_talkingSentenceTooLong",
+                                      params={"sentence": sentence[:40], "seconds": f"{seconds:.1f}", "limit": f"{ceiling:g}"})
+        voiced.append((sentence, asset, seconds))
+    if not voiced:
+        raise WorkflowDomainError("wfErr_talkingNeedsText")
+
+    groups: list[list[tuple[str, Any, float]]] = [[]]
+    for one in voiced:
+        if groups[-1] and sum(item[2] for item in groups[-1]) + one[2] > ceiling:
+            groups.append([])
+        groups[-1].append(one)
+
+    segments: list[dict[str, Any]] = []
+    cues: list[dict[str, Any]] = []
+    cursor = 0.0
+    for index, group in enumerate(groups, start=1):
+        audio = str(group[0][1].id) if len(group) == 1 else _concat_audio(
+            db, scope, [item[1] for item in group], f"{scope.name} · 口播第 {index} 段")
+        start = cursor
+        for sentence, _asset, seconds in group:
+            cues.append({"start": round(cursor, 3), "end": round(cursor + seconds, 3), "text": sentence})
+            cursor += seconds
+        segments.append({"index": index, "audio_asset_id": audio, "start": round(start, 3),
+                         "duration": round(cursor - start, 3), "text": "".join(item[0] for item in group)})
+    return {"segments": segments, "cues": cues, "count": len(segments), "duration": round(cursor, 3)}

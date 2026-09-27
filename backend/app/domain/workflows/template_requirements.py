@@ -25,6 +25,8 @@ REFERENCE_VIDEO_MODEL = "reference_video_model"
 CLONED_VOICE = "cloned_voice"
 TRANSCRIPTION_ENGINE = "transcription_engine"
 SEPARATION_ENGINE = "separation_engine"
+#: 会「说话照片」的视频模型(描述符的 modes 里有 speech-to-video,ADR 0028)。
+SPEECH_VIDEO_MODEL = "speech_video_model"
 
 CHECKS: tuple[str, ...] = (
     CHAT_MODEL,
@@ -33,6 +35,7 @@ CHECKS: tuple[str, ...] = (
     CLONED_VOICE,
     TRANSCRIPTION_ENGINE,
     SEPARATION_ENGINE,
+    SPEECH_VIDEO_MODEL,
 )
 
 #: met = 齐了;missing = 没有;unknown = 还没测出来(引擎探测在后台跑,**不拿未知冒充结论**)。

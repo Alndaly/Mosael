@@ -976,9 +976,22 @@ def generate_video(
 
     source_assets attaches input footage/images, each with the role it plays:
     [{"asset_id": "...", "role": "first_frame"}]. Roles are first_frame,
-    last_frame, reference_image, reference_video. Giving first_frame and
-    last_frame together is "keyframes to video" — the model animates from one
-    image to the other. Only models whose parameters list the role support it.
+    last_frame, reference_image, reference_video, source_video, driving_audio.
+    Giving first_frame and last_frame together is "keyframes to video" — the
+    model animates from one image to the other. Only models whose parameters
+    list the role support it.
+
+    Digital humans (a face that speaks a given audio) are two combinations,
+    offered only by models whose capabilities.modes in list_generation_models
+    include them: "speech-to-video" = first_frame (a portrait) + driving_audio
+    (the speech); "video-lipsync" = source_video + driving_audio (re-sync the
+    mouth). The result is as long as the audio, so do not pass
+    duration_seconds. To make a character from the asset library say a line,
+    first generate_audio with that character's voice, then generate_video with
+    its front reference image as first_frame and that audio as driving_audio.
+    Only animate a real person's face or voice when the user has said they are
+    that person or have the person's consent (get_entity shows
+    usable_for_digital_human); never for anyone else.
 
     Do NOT use for exporting an existing sequence (render_sequence), running a
     workflow (run_workflow), or editing workflow nodes (edit_workflow).

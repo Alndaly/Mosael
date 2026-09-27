@@ -1,0 +1,271 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "Script into a talking-head video",
+  "description": "A portrait and a script: voice it sentence by sentence, group the sentences into segments the speaking-photo model accepts, make the face speak each one, lay them end to end on the timeline, caption from the real voicing times, and export. The export carries an \"AI-generated\" label. Confirm consent on \"Make it speak\" before running.",
+  "graph_hash": "80dc4a32914647cea71f064c7aed4e251255d044b0b1b5430637856e8a3a14bb",
+  "graph": {
+    "meta": {
+      "template_id": "talking_script_video",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "The script",
+        "position": {
+          "x": 40,
+          "y": 260
+        },
+        "config": {
+          "params": {
+            "title": "数字人口播",
+            "script": "把要说的话贴在这里;按句子断开配音,每句不要太长",
+            "voice_id": "",
+            "width": 1080,
+            "height": 1920,
+            "fps": 25
+          }
+        }
+      },
+      {
+        "id": "face",
+        "type": "asset",
+        "name": "Pick a portrait",
+        "position": {
+          "x": 330,
+          "y": 120
+        },
+        "config": {
+          "asset_id": ""
+        }
+      },
+      {
+        "id": "voicing",
+        "type": "talking_segments",
+        "name": "Voice the script in segments",
+        "position": {
+          "x": 330,
+          "y": 400
+        },
+        "config": {
+          "text": "{{start.script}}",
+          "engine": "clone",
+          "voice": "{{start.voice_id}}",
+          "model": ""
+        }
+      },
+      {
+        "id": "project",
+        "type": "project_sequence_create",
+        "name": "Create the timeline",
+        "position": {
+          "x": 650,
+          "y": 400
+        },
+        "config": {
+          "name": "{{start.title}}",
+          "width": "{{start.width}}",
+          "height": "{{start.height}}",
+          "fps": "{{start.fps}}"
+        }
+      },
+      {
+        "id": "speak_segments",
+        "type": "loop_foreach",
+        "name": "Make each segment speak onto the timeline",
+        "position": {
+          "x": 970,
+          "y": 260
+        },
+        "config": {
+          "items": "",
+          "inputs": {
+            "face_asset_id": "{{face.asset_id}}",
+            "sequence_id": "{{project.sequence_id}}",
+            "video_track_id": "{{project.video_track_id}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "speak",
+                "type": "image_speak",
+                "name": "Speaking photo for this segment",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "asset_id": "{{input.face_asset_id}}",
+                  "audio_asset_id": "{{loop.item.audio_asset_id}}",
+                  "model": "",
+                  "consent": ""
+                }
+              },
+              {
+                "id": "place",
+                "type": "timeline_append",
+                "name": "Place it after the previous one",
+                "position": {
+                  "x": 400,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "",
+                  "track_id": "{{input.video_track_id}}"
+                },
+                "inputs": [
+                  "asset_id"
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "id": "d-speak-asset_id-place-asset_id",
+                "source": "speak",
+                "target": "place",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_id"
+              }
+            ]
+          },
+          "concurrency": 1,
+          "output": "{{place.clip_id}}"
+        },
+        "inputs": [
+          "items"
+        ]
+      },
+      {
+        "id": "captions",
+        "type": "generate_subtitles",
+        "name": "Caption from the voicing times",
+        "position": {
+          "x": 1290,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "start_field": "start",
+          "end_field": "end",
+          "text_field": "text"
+        },
+        "inputs": [
+          "sequence_id",
+          "segments"
+        ]
+      },
+      {
+        "id": "export_video",
+        "type": "export_sequence",
+        "name": "Export the video",
+        "position": {
+          "x": 1610,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "Hand over the video",
+        "position": {
+          "x": 1930,
+          "y": 260
+        },
+        "config": {
+          "values": {
+            "final_asset_id": "{{export_video.asset_id}}",
+            "segment_clip_ids": "{{speak_segments.results}}",
+            "sequence_id": "{{project.sequence_id}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_face",
+        "source": "start",
+        "target": "face"
+      },
+      {
+        "id": "start_voicing",
+        "source": "start",
+        "target": "voicing"
+      },
+      {
+        "id": "start_project",
+        "source": "start",
+        "target": "project"
+      },
+      {
+        "id": "face_speak",
+        "source": "face",
+        "target": "speak_segments"
+      },
+      {
+        "id": "project_speak",
+        "source": "project",
+        "target": "speak_segments"
+      },
+      {
+        "id": "speak_captions",
+        "source": "speak_segments",
+        "target": "captions"
+      },
+      {
+        "id": "captions_export",
+        "source": "captions",
+        "target": "export_video"
+      },
+      {
+        "id": "export_output",
+        "source": "export_video",
+        "target": "output"
+      },
+      {
+        "id": "d-voicing-segments-speak_segments-items",
+        "source": "voicing",
+        "target": "speak_segments",
+        "kind": "data",
+        "source_output": "segments",
+        "target_input": "items"
+      },
+      {
+        "id": "d-project-sequence_id-captions-sequence_id",
+        "source": "project",
+        "target": "captions",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-voicing-cues-captions-segments",
+        "source": "voicing",
+        "target": "captions",
+        "kind": "data",
+        "source_output": "cues",
+        "target_input": "segments"
+      },
+      {
+        "id": "d-project-sequence_id-export_video-sequence_id",
+        "source": "project",
+        "target": "export_video",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      }
+    ]
+  }
+}

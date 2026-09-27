@@ -2980,6 +2980,32 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_video_lipsync_asset_id": {"zh": "要改口型的视频(单人、正脸清楚)", "en": "The video to re-sync (one person, face clearly visible)"},
     "wfNode_video_lipsync_audio": {"zh": "新的那段话;画板上连一个音频格进来,留空就用下面的稿子配", "en": "The new speech; on a board connect an audio item, or leave empty to voice the script below"},
     "wfNode_video_lipsync_text": {"zh": "稿子(没接音频时用它配音)", "en": "Script (voiced when no audio is connected)"},
+    "wfNode_image_speak_audio": {
+        "zh": "要说的那段话;接上游的音频(长稿分段配好的一段、画板上连进来的音频格),留空就用下面的稿子配",
+        "en": "The speech to say; connect an upstream audio (a segment from long-script voicing, or an audio item on a board), or leave empty to voice the script below",
+    },
+    "wfNode_image_speak_text": {"zh": "稿子(没接音频时用它配音)", "en": "Script (voiced when no audio is connected)"},
+    "wfNode_talking_segments": {"zh": "长稿分段配音", "en": "Voice a long script in segments"},
+    "wfNode_talking_segments_desc": {
+        "zh": "把一段长稿逐句配音,按说话照片模型能收的最长音频分成几段,每段一段音频;字幕时间用配出来的实际时长。接「让它说话」逐段出说话照片。",
+        "en": "Voice a long script sentence by sentence and group the sentences into segments no longer than the speaking-photo model accepts, one audio per segment; subtitle times come from the real durations. Feed each segment to \"make it speak\".",
+    },
+    "wfNode_talking_segments_text": {"zh": "整段稿子;按句子切,不从句子中间断开", "en": "The whole script; split at sentences, never mid-sentence"},
+    "wfNode_talking_segments_model": {
+        "zh": "之后用哪个说话照片模型;每段的上限按它能收的最长音频算",
+        "en": "The speaking-photo model used next; each segment's limit is the longest audio it accepts",
+    },
+    "wfNode_talking_segments_max_seconds": {
+        "zh": "每段最长几秒(只能比模型的上限小;留空按模型的上限)",
+        "en": "Longest segment in seconds (can only be shorter than the model's limit; empty uses the limit)",
+    },
+    "wfField_cues": {"zh": "字幕时间", "en": "Subtitle cues"},
+    "wfField_max_seconds": {"zh": "每段最长", "en": "Longest segment"},
+    "wfErr_talkingSentenceTooLong": {
+        "zh": "这一句配出来 {seconds} 秒,超过说话照片一次能收的 {limit} 秒:「{sentence}…」—— 把它拆成两句再试",
+        "en": "This sentence runs {seconds} s, longer than the {limit} s a speaking photo takes at once: \"{sentence}…\" — split it in two and try again",
+    },
+    "wfErr_talkingConcatFailed": {"zh": "把几句配音接成一段时失败了", "en": "Joining the voiced sentences into one segment failed"},
     "wfNode_talking_text": {"zh": "要说的话;画板上可以连一张便签或文档进来", "en": "What to say; on a board you can connect a note or document"},
     "wfNode_talking_model": {"zh": "用哪个视频模型;只列会这一种的,留空用默认或第一个", "en": "Which video model; only ones that can do this are listed, empty picks the default or the first"},
     "wfNode_talking_consent": {

@@ -376,6 +376,8 @@ _FIELD_LABELS = {
     "added": "wfField_added",
     "role": "wfField_role",
     "if_exists": "wfField_if_exists",
+    "cues": "wfField_cues",
+    "max_seconds": "wfField_max_seconds",
 }
 
 
@@ -1483,7 +1485,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_image_speak_desc",
         "config": {
             "asset_id": {"type": "template", "required": True, "media": "image", "description": "wfNode_image_speak_asset_id"},
-            "text": {"type": "template", "required": True, "description": "wfNode_talking_text"},
+            #: 音频接上游的(长稿分段配好的一段、画板上连进来的音频格)—— 参数,不是宿主(和对口型同一条)。
+            "audio_asset_id": {"type": "template", "media": "audio", "board_host": False,
+                                "description": "wfNode_image_speak_audio"},
+            "text": {"type": "template", "description": "wfNode_image_speak_text"},
             "engine": {"type": "string", "default": "clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
             "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
             "model": {"type": "string", "options_from": "speech_video_models", "description": "wfNode_talking_model"},
@@ -1513,6 +1518,23 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "consent": {"type": "string", "required": True, "options": ["yes"], "description": "wfNode_talking_consent"},
         },
         "outputs": ["asset_id", "asset_ids", "audio_asset_id"],
+    },
+    "talking_segments": {
+        "external": False,
+        #: 逐句配音:走 TTS,云端引擎按字计费。
+        "effects": "paid",
+        "category": "wfCat_ai",
+        "label": "wfNode_talking_segments",
+        "description": "wfNode_talking_segments_desc",
+        "config": {
+            "text": {"type": "template", "required": True, "description": "wfNode_talking_segments_text"},
+            "engine": {"type": "string", "default": "clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
+            "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
+            "model": {"type": "string", "options_from": "speech_video_models", "description": "wfNode_talking_segments_model"},
+            "max_seconds": {"advanced": True, "type": "number", "description": "wfNode_talking_segments_max_seconds"},
+        },
+        "outputs": ["segments", "cues", "count", "duration"],
+        "output_types": {"segments": "json", "cues": "json", "count": "number", "duration": "number"},
     },
     "asset_tag": {
         "external": False,

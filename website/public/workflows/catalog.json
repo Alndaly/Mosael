@@ -392,5 +392,53 @@
       "zh": "/workflows/fabric_lookbook.zh.mosael-workflow.json",
       "en": "/workflows/fabric_lookbook.en.mosael-workflow.json"
     }
+  },
+  {
+    "id": "talking_script_video",
+    "name": {
+      "zh": "稿子 → 数字人口播",
+      "en": "Script into a talking-head video"
+    },
+    "summary": {
+      "zh": "一张正脸加一段稿子:逐句配音,按说话照片模型一次能收的长度分段,每段让这张脸说出来,首尾相接铺上时间线,字幕按配音的实际时长铺好,导出成片。成片带「AI 生成」标识。运行前在「让它说话」上确认已取得授权。",
+      "en": "A portrait and a script: voice it sentence by sentence, group the sentences into segments the speaking-photo model accepts, make the face speak each one, lay them end to end on the timeline, caption from the real voicing times, and export. The export carries an \"AI-generated\" label. Confirm consent on \"Make it speak\" before running."
+    },
+    "requires": {
+      "zh": [
+        "会「说话照片」的视频模型",
+        "一把嗓子:配音库的克隆音色(要声明是谁的)",
+        "一张清晰的单人正脸"
+      ],
+      "en": [
+        "A speaking-photo video model",
+        "A voice: a cloned voice with a consent declaration",
+        "A clear, single-person portrait"
+      ]
+    },
+    "stages": {
+      "zh": [
+        "填稿子",
+        "选一张正脸",
+        "长稿分段配音",
+        "逐段让它说话并接上时间线",
+        "按配音时间铺字幕",
+        "导出成片"
+      ],
+      "en": [
+        "The script",
+        "Pick a portrait",
+        "Voice the script in segments",
+        "Make each segment speak onto the timeline",
+        "Caption from the voicing times",
+        "Export the video"
+      ]
+    },
+    "author": "Mosael",
+    "version": 1,
+    "nodes": 8,
+    "download": {
+      "zh": "/workflows/talking_script_video.zh.mosael-workflow.json",
+      "en": "/workflows/talking_script_video.en.mosael-workflow.json"
+    }
   }
 ]

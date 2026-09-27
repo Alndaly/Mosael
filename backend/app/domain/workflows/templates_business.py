@@ -27,6 +27,7 @@ from app.domain.workflows.template_requirements import (
     REFERENCE_VIDEO_MODEL,
     TRANSCRIPTION_ENGINE,
     requirement,
+    SPEECH_VIDEO_MODEL,
 )
 
 HIGHLIGHT_SHORTS = "highlight_shorts"
@@ -34,6 +35,7 @@ PRODUCT_ON_MODEL = "product_on_model"
 PRODUCT_PITCH_SHORT = "product_pitch_short"
 FABRIC_LOOKBOOK = "fabric_lookbook"
 FOOTAGE_MONTAGE = "footage_montage"
+TALKING_SCRIPT_VIDEO = "talking_script_video"
 
 #: 竖屏。短视频平台的默认画幅 —— 横屏素材按 cover 居中裁进来(和剪辑台的「改画幅」同一套)。
 VERTICAL = {"width": 1080, "height": 1920}
@@ -1056,6 +1058,157 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
     )
 
 
+def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
+    """稿子 → 数字人口播(ADR 0028 阶段 3):一张正脸 + 一段稿子 → 分段配音 → 逐段说话照片 → 接上时间线 + 字幕 → 导出。
+
+    说话照片一次只收一小段音频(wan2.2-s2v 20 秒),长稿由「长稿分段配音」按句切、按实测时长分组;每段都从同一张脸
+    开始,接缝在句子之间。字幕用稿子加配音的实测时长,不再转写。**「让它说话」上的授权确认留空** —— 这张脸是谁的、
+    是否取得同意,由跑的人自己选,模板不替他选。
+    """
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "start",
+            "type": "start",
+            "name": {"zh": "填稿子", "en": "The script"},
+            "position": {"x": 40, "y": 260},
+            "config": {
+                "params": {
+                    "title": "数字人口播",
+                    "script": "把要说的话贴在这里;按句子断开配音,每句不要太长",
+                    "voice_id": voice_id,
+                    "width": VERTICAL["width"],
+                    "height": VERTICAL["height"],
+                    "fps": 25,
+                }
+            },
+        },
+        {
+            "id": "face",
+            "type": "asset",
+            "name": {"zh": "选一张正脸", "en": "Pick a portrait"},
+            "position": {"x": 330, "y": 120},
+            "config": {"asset_id": ""},
+        },
+        {
+            "id": "voicing",
+            "type": "talking_segments",
+            "name": {"zh": "长稿分段配音", "en": "Voice the script in segments"},
+            "position": {"x": 330, "y": 400},
+            "config": {"text": "{{start.script}}", "engine": "clone", "voice": "{{start.voice_id}}", "model": ""},
+        },
+        {
+            "id": "project",
+            "type": "project_sequence_create",
+            "name": {"zh": "建立口播时间线", "en": "Create the timeline"},
+            "position": {"x": 650, "y": 400},
+            "config": {
+                "name": "{{start.title}}",
+                "width": "{{start.width}}",
+                "height": "{{start.height}}",
+                "fps": "{{start.fps}}",
+            },
+        },
+        {
+            "id": "speak_segments",
+            "type": "loop_foreach",
+            "name": {"zh": "逐段让它说话并接上时间线", "en": "Make each segment speak onto the timeline"},
+            "position": {"x": 970, "y": 260},
+            "config": {
+                "items": "{{voicing.segments}}",
+                "inputs": {
+                    "face_asset_id": "{{face.asset_id}}",
+                    "sequence_id": "{{project.sequence_id}}",
+                    "video_track_id": "{{project.video_track_id}}",
+                },
+                "body": {
+                    "nodes": [
+                        {
+                            "id": "speak",
+                            "type": "image_speak",
+                            "name": {"zh": "这一段说话照片", "en": "Speaking photo for this segment"},
+                            "position": {"x": 80, "y": 140},
+                            "config": {
+                                "asset_id": "{{input.face_asset_id}}",
+                                "audio_asset_id": "{{loop.item.audio_asset_id}}",
+                                "model": "",
+                                #: 留空:授权要跑的人自己确认(见函数说明)。
+                                "consent": "",
+                            },
+                        },
+                        {
+                            "id": "place",
+                            "type": "timeline_append",
+                            "name": {"zh": "接到上一段后面", "en": "Place it after the previous one"},
+                            "position": {"x": 400, "y": 140},
+                            "config": {
+                                "sequence_id": "{{input.sequence_id}}",
+                                "asset_id": "{{speak.asset_id}}",
+                                "track_id": "{{input.video_track_id}}",
+                            },
+                        },
+                    ],
+                    "edges": [{"id": "speak_place", "source": "speak", "target": "place"}],
+                },
+                #: 按段的顺序首尾相接,**不能并发** —— 并发的落位顺序是谁先回来谁在前。
+                "concurrency": 1,
+                "output": "{{place.clip_id}}",
+            },
+        },
+        {
+            "id": "captions",
+            "type": "generate_subtitles",
+            "name": {"zh": "按配音时间铺字幕", "en": "Caption from the voicing times"},
+            "position": {"x": 1290, "y": 260},
+            "config": {
+                "sequence_id": "{{project.sequence_id}}",
+                "segments": "{{voicing.cues}}",
+                "start_field": "start",
+                "end_field": "end",
+                "text_field": "text",
+            },
+        },
+        {
+            "id": "export_video",
+            "type": "export_sequence",
+            "name": {"zh": "导出成片", "en": "Export the video"},
+            "position": {"x": 1610, "y": 260},
+            "config": {"sequence_id": "{{project.sequence_id}}"},
+        },
+        {
+            "id": "output",
+            "type": "output",
+            "name": {"zh": "交付成片", "en": "Hand over the video"},
+            "position": {"x": 1930, "y": 260},
+            "config": {
+                "values": {
+                    "final_asset_id": "{{export_video.asset_id}}",
+                    "segment_clip_ids": "{{speak_segments.results}}",
+                    "sequence_id": "{{project.sequence_id}}",
+                }
+            },
+        },
+    ]
+    edges = [
+        {"id": "start_face", "source": "start", "target": "face"},
+        {"id": "start_voicing", "source": "start", "target": "voicing"},
+        {"id": "start_project", "source": "start", "target": "project"},
+        {"id": "voicing_speak", "source": "voicing", "target": "speak_segments"},
+        {"id": "face_speak", "source": "face", "target": "speak_segments"},
+        {"id": "project_speak", "source": "project", "target": "speak_segments"},
+        {"id": "speak_captions", "source": "speak_segments", "target": "captions"},
+        {"id": "captions_export", "source": "captions", "target": "export_video"},
+        {"id": "export_output", "source": "export_video", "target": "output"},
+    ]
+    return normalize_graph(
+        {
+            "meta": {"template_id": TALKING_SCRIPT_VIDEO, "template_version": 1, "source": "official"},
+            "nodes": nodes,
+            "edges": edges,
+        },
+        node_types=NODE_TYPES,
+    )
+
+
 #: 模板库里这四条的卡片。和 `TEMPLATE_CATALOG` 里那三条同一个形状,由 templates.py 拼在一起 ——
 #: 卡片和图分开写是因为**卡片要先于图存在**:用户是照着 requires 判断自己能不能跑的。
 BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
@@ -1155,6 +1308,23 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "stages": {
             "zh": ["填面料参数", "选择面料图", "规划应用与规格卡", "逐种出成品效果图", "生成可发客户的规格页"],
             "en": ["Fabric specs", "Pick the fabric photo", "Plan applications and the spec sheet", "Render each application", "Write the spec sheet to send"],
+        },
+    },
+    {
+        "id": TALKING_SCRIPT_VIDEO,
+        "name": {"zh": "稿子 → 数字人口播", "en": "Script into a talking-head video"},
+        "summary": {
+            "zh": "一张正脸加一段稿子:逐句配音,按说话照片模型一次能收的长度分段,每段让这张脸说出来,首尾相接铺上时间线,字幕按配音的实际时长铺好,导出成片。成片带「AI 生成」标识。运行前在「让它说话」上确认已取得授权。",
+            "en": "A portrait and a script: voice it sentence by sentence, group the sentences into segments the speaking-photo model accepts, make the face speak each one, lay them end to end on the timeline, caption from the real voicing times, and export. The export carries an \"AI-generated\" label. Confirm consent on \"Make it speak\" before running.",
+        },
+        "requires": [
+            requirement(SPEECH_VIDEO_MODEL, zh="会「说话照片」的视频模型", en="A speaking-photo video model"),
+            requirement(CLONED_VOICE, zh="一把嗓子:配音库的克隆音色(要声明是谁的)", en="A voice: a cloned voice with a consent declaration"),
+            requirement(None, zh="一张清晰的单人正脸", en="A clear, single-person portrait"),
+        ],
+        "stages": {
+            "zh": ["填稿子", "选一张正脸", "长稿分段配音", "逐段让它说话并接上时间线", "按配音时间铺字幕", "导出成片"],
+            "en": ["The script", "Pick a portrait", "Voice the script in segments", "Make each segment speak onto the timeline", "Caption from the voicing times", "Export the video"],
         },
     },
 ]

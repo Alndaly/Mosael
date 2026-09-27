@@ -636,6 +636,7 @@ def test_模板卡片和图一一对应() -> None:
         PRODUCT_ON_MODEL,
         FOOTAGE_MONTAGE,
         PRODUCT_PITCH_SHORT,
+        TALKING_SCRIPT_VIDEO,
         TRANSCRIPT_VIDEO_CLEANUP,
         TRANSLATED_DUB,
     )
@@ -643,6 +644,7 @@ def test_模板卡片和图一一对应() -> None:
     known = {
         FULL_VIDEO_GENERATION, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
         HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK, FOOTAGE_MONTAGE,
+        TALKING_SCRIPT_VIDEO,
     }
     assert {card["id"] for card in TEMPLATE_CATALOG} == known
     for card in BUSINESS_TEMPLATE_CATALOG:
@@ -772,3 +774,23 @@ def test_布景台的组是场景格式本来就支持的() -> None:
     kinds = typing.get_args(SceneObject.model_fields["kind"].annotation)
     assert "group" in kinds, kinds
     assert "parent_id" in SceneObject.model_fields
+
+
+def test_稿子到数字人口播_分段配音逐段说话_授权留给跑的人() -> None:
+    """ADR 0028 阶段 3:长稿按说话照片接得住的长度分段;每段一次「让它说话」接上一段的音频,按段的顺序首尾相接;
+    字幕用配音的实测时长;授权确认不替用户选。"""
+    from app.domain.workflows import validate_graph
+    from app.domain.workflows.templates_business import talking_script_video_graph
+
+    graph = talking_script_video_graph(voice_id="v1")
+    assert validate_graph(graph, require_config=False) == []
+    voicing = _node(graph, "voicing")
+    assert voicing["type"] == "talking_segments" and voicing["config"]["voice"] == "{{start.voice_id}}"
+    wires = {(edge["source"], edge.get("source_output"), edge["target"], edge.get("target_input")) for edge in graph["edges"]}
+    assert ("voicing", "segments", "speak_segments", "items") in wires, "逐段循环吃的是分好的段"
+    assert ("voicing", "cues", "captions", "segments") in wires, "字幕用配音的实测时长"
+    loop = _node(graph, "speak_segments")
+    assert loop["config"]["concurrency"] == 1
+    speak = next(one for one in loop["config"]["body"]["nodes"] if one["id"] == "speak")
+    assert speak["type"] == "image_speak" and speak["config"]["audio_asset_id"] == "{{loop.item.audio_asset_id}}"
+    assert speak["config"]["consent"] == "", "这张脸是谁的、有没有同意,由跑的人确认"
