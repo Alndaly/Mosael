@@ -14,6 +14,8 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
+  ChevronDown,
   Film,
   FolderOpen,
   ImagePlus,
@@ -41,7 +43,6 @@ import {
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ACTION_MENU } from "@/components/ui/floating";
 import { useFileDrop } from "@/lib/useFileDrop";
@@ -295,19 +296,23 @@ function ReferenceCard({
   const t = useI18n();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: reference.asset_id });
   const image = reference.asset_kind === "image";
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  //: 压在图上的小控件:半透明深底、白字,在任何图上都读得清;和画板格子上的角标同一种样子。
+  const overlay =
+    "inline-flex items-center gap-1 rounded-md border-0 bg-[rgba(10,12,15,0.72)] text-ui-2xs font-medium text-[#e8eaed] backdrop-blur-sm";
   return (
     <figure
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       data-reference={reference.asset_id}
-      className={cn("m-0 grid min-w-0 gap-1.5", isDragging && "z-20 opacity-70")}
+      className={cn("group m-0 grid min-w-0 gap-2", isDragging && "z-20 opacity-70")}
     >
       <div
         {...attributes}
         {...listeners}
         className={cn(
-          "relative grid aspect-square cursor-grab place-items-center overflow-hidden rounded-md border bg-panel-inset text-muted-foreground",
-          isCover ? "border-primary" : "border-border",
+          "relative grid aspect-square cursor-grab place-items-center overflow-hidden rounded-lg border bg-panel-inset text-muted-foreground transition-colors",
+          isCover ? "border-primary shadow-[0_0_0_1px_var(--primary)]" : "border-border group-hover:border-border-strong",
         )}
         aria-label={`${reference.asset_name} · ${roleLabel}`}
       >
@@ -316,30 +321,50 @@ function ReferenceCard({
         ) : (
           <Film size={24} strokeWidth={1.4} />
         )}
-        <span className="absolute left-1.5 top-1.5 rounded-sm bg-[rgba(10,12,15,0.72)] px-1.5 py-px text-ui-2xs font-medium text-[#e8eaed]" data-reference-role={reference.role}>
-          {roleLabel}
-        </span>
-        {isCover && (
-          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-sm bg-primary px-1.5 py-px text-ui-2xs font-medium text-primary-foreground">
-            <Star size={10} />
-            {t("entityCoverBadge")}
-          </span>
-        )}
-      </div>
-      <figcaption className="flex min-w-0 items-center gap-1">
-        <OptionPicker
-          value={reference.role}
-          onChange={onRole}
-          options={roles}
-          ariaLabel={`${t("entityRole")}: ${reference.asset_name}`}
-          size="sm"
-          className="min-w-0 flex-1 text-ui-xs"
-        />
+        {/* 角度就写在图上,点它就能换 —— 不再在图下面另摆一个写着同一个词的下拉。 */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={`${t("studioActions")}: ${reference.asset_name}`}>
-              <MoreHorizontal />
-            </Button>
+            <button
+              type="button"
+              aria-label={`${t("entityRole")}: ${reference.asset_name}`}
+              title={t("entityRole")}
+              className={cn(overlay, "absolute left-2 top-2 cursor-pointer px-2 py-1 hover:bg-[rgba(10,12,15,0.88)]")}
+            >
+              <span data-reference-role={reference.role}>{roleLabel}</span>
+              <ChevronDown size={11} className="opacity-70" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className={cn(ACTION_MENU, "max-h-72 w-40 overflow-y-auto")} align="start">
+            {roles.map((one) => (
+              <PopoverClose asChild key={one.value}>
+                <Button
+                  variant="ghost"
+                  className="justify-start"
+                  aria-pressed={one.value === reference.role}
+                  onClick={() => one.value !== reference.role && onRole(one.value)}
+                >
+                  <Check className={cn(one.value === reference.role ? "opacity-100" : "opacity-0")} />
+                  {one.label}
+                </Button>
+              </PopoverClose>
+            ))}
+          </PopoverContent>
+        </Popover>
+        <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${t("studioActions")}: ${reference.asset_name}`}
+              title={t("studioActions")}
+              className={cn(
+                overlay,
+                "absolute right-2 top-2 grid size-7 cursor-pointer place-items-center p-0 transition-opacity hover:bg-[rgba(10,12,15,0.88)]",
+                //: 平时收着,鼠标移上来、键盘聚焦、菜单开着时才出现 —— 一墙的图上不该顶着一排圆点。
+                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+              )}
+            >
+              <MoreHorizontal size={14} />
+            </button>
           </PopoverTrigger>
           <PopoverContent className={cn(ACTION_MENU, "w-44")} align="end">
             {image && !isCover && (
@@ -374,6 +399,15 @@ function ReferenceCard({
             </PopoverClose>
           </PopoverContent>
         </Popover>
+        {isCover && (
+          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-ui-2xs font-medium text-primary-foreground">
+            <Star size={10} />
+            {t("entityCoverBadge")}
+          </span>
+        )}
+      </div>
+      <figcaption className="truncate px-0.5 text-ui-xs text-muted-foreground" title={reference.asset_name}>
+        {reference.asset_name}
       </figcaption>
     </figure>
   );

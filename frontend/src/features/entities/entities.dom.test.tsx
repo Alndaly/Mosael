@@ -270,6 +270,17 @@ describe("参考图墙", () => {
     expect(wall.querySelector('[data-reference="a-side"] [data-reference-role="side"]')?.textContent).toBe("侧面");
   });
 
+  it("点图上的角度就能换,图下面不再另摆一个下拉", async () => {
+    api.setEntityReferenceRole.mockResolvedValue(entity());
+    const wall = await openDetail();
+    const side = wall.querySelector('[data-reference="a-side"]') as HTMLElement;
+    expect(within(side).queryByRole("combobox")).toBeNull();
+    expect(side.querySelector("figcaption")?.textContent).toBe("侧面.png");
+    fireEvent.click(within(side).getByRole("button", { name: "entityRole: 侧面.png" }));
+    fireEvent.click(await screen.findByRole("button", { name: "三视图" }));
+    await waitFor(() => expect(api.setEntityReferenceRole).toHaveBeenCalledWith("e1", "a-side", "turnaround"));
+  });
+
   it("设封面、往后挪、移出 —— 各发各的请求", async () => {
     api.updateEntity.mockResolvedValue(entity({ cover_asset_id: "a-side", display_cover_asset_id: "a-side" }));
     api.reorderEntityReferences.mockResolvedValue(entity());
