@@ -329,3 +329,23 @@ it("文档格在「让 AI 写」时:排队、扫光占位 + 这次的要求,不�
   const failed = renderNode("document", "failed", { text: undefined, form: { producer: "write" } });
   expect(failed.container.querySelector("[data-document-empty] [role=alert]")!.textContent).toContain("上游拒绝了请求");
 });
+
+it("在写的便签、文档格和生成中的图片格同一个样子:占位贴满整格,不缩进一圈", () => {
+  const note = renderNode("note", "running", { text: "原来的字", form: { producer: "write", prompt: "改短" } });
+  const noteCover = note.container.querySelector<HTMLElement>("[data-note-writing]");
+  expect(noteCover, "便签在写时也有占位,不只是边框变色").not.toBeNull();
+  expect(noteCover!.className).toContain("inset-0");
+  expect(noteCover!.querySelector('[aria-busy="true"]')).not.toBeNull();
+  cleanup();
+
+  const doc = renderNode("document", "running", { text: undefined, note_id: "n", note_revision: 1, form: { producer: "write", prompt: "写" } });
+  const docCover = doc.container.querySelector<HTMLElement>("[data-document-writing]");
+  expect(docCover!.className).toContain("inset-0");
+  expect(docCover!.className).not.toMatch(/\bp-1\b/);
+  expect(doc.container.querySelector("header"), "写的时候整格是占位,标题行不露在上面").toBeNull();
+  cleanup();
+
+  //: 跑它的一项能力(翻译)时便签照常显示,运行态在底边那一条 —— 不是整格在写。
+  const translating = renderNode("note", "running", { text: "hello", form: { producer: "write" }, run: { status: "running", job_id: "j", ability: "node:translate" } });
+  expect(translating.container.querySelector("[data-note-writing]")).toBeNull();
+});

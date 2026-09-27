@@ -345,7 +345,8 @@ export function NoteNode({ data, selected }: NodeProps) {
   const json = item.text_format === "json";
   const state = useRunState(item);
   //: 一项能力在跑时停止在那一条运行态上(AbilityRun),这里只管便签自己的写字。
-  const stop = nodeData.onStop && !commentMode && itemIsRunning(item) && !runningAbility(item) ? nodeData.onStop : undefined;
+  const writing = itemIsRunning(item) && !runningAbility(item);
+  const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
   return (
     <div
       data-board-run-status={state["data-board-run-status"]}
@@ -395,11 +396,8 @@ export function NoteNode({ data, selected }: NodeProps) {
           {item.text || <span className="text-muted-foreground">{t("boardNotePlaceholder")}</span>}
         </div>
       )}
-      {stop && (
-        <div className="absolute bottom-2 right-2">
-          <StopButton item={item} onStop={stop} />
-        </div>
-      )}
+      {/* 让 AI 写的时候整格是占位(和图片格生成一样),停止在占位里。 */}
+      {writing && <WritingCover item={item} onStop={stop} data-note-writing="" />}
       <AbilityRun data={nodeData} selected={selected} />
     </div>
   );
@@ -484,6 +482,23 @@ function Generating({ item, text, onStop }: { item: BoardItem; text?: string; on
         </div>
         {onStop && <StopButton item={item} onStop={onStop} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 一格**整格在写**(便签、文档格的「让 AI 写」)的样子:和空槽生成同一个占位,**贴满整格**,只留格子自己那一圈
+ * 运行态边框。此前文档格的占位缩进了一圈(看着像格子里又叠了一张带边的卡),便签在写时干脆没有占位、只是边框变色。
+ */
+function WritingCover({ item, onStop, ...rest }: { item: BoardItem; onStop?: (id: string) => void } & React.HTMLAttributes<HTMLDivElement>) {
+  const text = item.form?.prompt;
+  return (
+    <div {...rest} className={cn("absolute inset-0 z-[1] overflow-hidden", CELL_INNER_RADIUS)}>
+      {itemRunStatus(item) === "queued" ? (
+        <Queued item={item} text={text} onStop={onStop} />
+      ) : (
+        <Generating item={item} text={text} onStop={onStop} />
+      )}
     </div>
   );
 }
@@ -765,7 +780,8 @@ function DocumentNode({ data, selected }: NodeProps) {
       <Ports visible={selected} disabled={commentMode} />
       {/* 标题行只在**选了一篇笔记**之后出现,写的是那篇笔记的名字。还没选时它只会是第二个「文档」—— 格子上方的
           标签已经这么写了;那时整格就是一块安静的空状态,和空的图片格一样。 */}
-      {item.note_id && (
+      {writing && <WritingCover item={item} onStop={stop} data-document-writing="" />}
+      {item.note_id && !writing && (
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <BookOpen size={16} className="shrink-0 text-primary" />
         <span
@@ -776,15 +792,7 @@ function DocumentNode({ data, selected }: NodeProps) {
         </span>
       </header>
       )}
-      {writing ? (
-        <div className="relative min-h-0 flex-1 p-1" data-document-writing="">
-          {status === "queued" ? (
-            <Queued item={item} text={item.form?.prompt} onStop={stop} />
-          ) : (
-            <Generating item={item} text={item.form?.prompt} onStop={stop} />
-          )}
-        </div>
-      ) : !item.note_id ? (
+      {writing ? null : !item.note_id ? (
         //: **一块安静的空状态,不是按钮**:点格子就是选中它(和空的图片格一样);引用哪一篇、让 AI 写一篇,
         //: 都在选中之后上方的操作条里 —— 此前整格是「选择笔记」按钮,想选中、拖动、让 AI 写都先弹出挑笔记。
         <div
