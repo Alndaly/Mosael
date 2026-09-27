@@ -1,4 +1,5 @@
 import { RenameDialog } from "@/components/app/modals";
+import { usePageTrail } from "@/components/layout/pageTrail";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
@@ -30,7 +31,6 @@ import { SceneSubsection } from "./SceneSubsection";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArchiveRestore,
-  ArrowLeft,
   Box,
   Boxes,
   Camera,
@@ -368,6 +368,8 @@ function SceneEditor({
     })),
     current = React.useRef(draft);
   current.current = draft;
+  //: 顶栏的路径:3D 场景 / 这一个(点名字改名,点「3D 场景」回清单)。
+  usePageTrail({ onRoot: onBack, segments: [{ label: draft.name, onRename: () => setRenaming(true), renameLabel: t("sceneRenameTitle") }] });
   /** 有孩子的那些物体(组,以及任何被当成父级用的东西)—— 一键收拢要作用在它们身上。 */
   const groupIds = React.useMemo(
     () => objectTree(draft.content).filter((row) => row.children > 0).map((row) => row.object.id),
@@ -950,11 +952,9 @@ function SceneEditor({
     >
       <RenameDialog open={renaming} title={t("sceneRenameTitle")} initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
       <header className="scene-header">
-        <Tool label={t("sceneBackToList")} onClick={onBack}>
-          <ArrowLeft size={17} />
-        </Tool>
+        {/* 「回清单 · 这是哪一个」在顶栏的路径里(3D 场景 / 片场,点名字改名,见 components/layout/pageTrail);
+            这里只留保存状态。 */}
         <div className="scene-heading">
-          <button className="scene-name truncate text-left" title={t("sceneRenameTitle")} aria-label={t("sceneRenameTitle")} onClick={() => setRenaming(true)}>{draft.name}</button>
           <span className="scene-save" role="status">
             {error ? (
               t("sceneUnsaved")

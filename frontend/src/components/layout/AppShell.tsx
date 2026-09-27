@@ -174,7 +174,19 @@ export function AppShell({
                 return (
                   <React.Fragment key={`${index}:${segment.label}`}>
                     <span className="text-border-strong">/</span>
-                    {segment.onSelect && !last ? (
+                    {last && segment.onRename ? (
+                      <button
+                        type="button"
+                        onClick={segment.onRename}
+                        aria-current="page"
+                        aria-label={`${segment.label} · ${segment.renameLabel ?? ""}`}
+                        title={`${segment.label} · ${segment.renameLabel ?? ""}`}
+                        className="group/rename inline-flex max-w-64 cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent p-0 font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="truncate">{segment.label}</span>
+                        <Pencil size={11} className="shrink-0 opacity-0 transition-opacity group-hover/rename:opacity-60" aria-hidden />
+                      </button>
+                    ) : segment.onSelect && !last ? (
                       <button type="button" onClick={segment.onSelect} className={cn(TRAIL_LINK, "max-w-48 truncate")} title={segment.label}>
                         {segment.label}
                       </button>

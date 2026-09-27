@@ -23,6 +23,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import type { Workspace, WorkflowGraph } from "@/api/client";
+import { WithPageTrail } from "@/test/pageTrail";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
 
@@ -70,7 +71,9 @@ async function renderEditor(graph: WorkflowGraph) {
   render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} />
+        <WithPageTrail>
+          <WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} />
+        </WithPageTrail>
       </TooltipProvider>
     </QueryClientProvider>,
   );
@@ -116,6 +119,16 @@ const CHAIN: WorkflowGraph = {
     { id: "e-llm-1-template-1", source: "llm-1", target: "template-1" },
   ],
 } as WorkflowGraph;
+
+it("顶栏路径:最外层时最后一段是工作流的名字,点它改名;点页面名回到清单", async () => {
+  await renderEditor(CHAIN);
+  const trail = screen.getByRole("navigation", { name: "page-trail" });
+  fireEvent.click(within(trail).getByRole("button", { name: "测试" }));
+  expect(await screen.findByRole("dialog")).toBeTruthy();
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+  fireEvent.click(within(trail).getByRole("button", { name: "trail-root" }));
+  await waitFor(() => expect(screen.queryByRole("group", { name: "canvasTools" })).toBeNull());
+});
 
 it("⌘/Ctrl 点击是往选区里加,不是换成只选这一个", async () => {
   await renderEditor(CHAIN);
@@ -226,8 +239,11 @@ it("循环体里套的循环也能钻进去,改动写进最里面那层,返回�
   expect(innerBody.nodes[0].name).toBe("改过");
   // 外层体里同名的 template-1 不受影响。
   expect(outerBody.nodes.find((node) => node.id === "template-1")?.name).toBe("体内");
-  fireEvent.click(screen.getByRole("button", { name: "wfLoopBack" }));
-  await screen.findByText("loop · wfLoopBody");
+  //: 顶栏的路径:工作流 / 名字 / loop · 循环体 / 内层 · 循环体 —— 点中间那一层回上一层。
+  const trail = screen.getByRole("navigation", { name: "page-trail" });
+  fireEvent.click(within(trail).getByRole("button", { name: "loop · wfLoopBody" }));
+  await waitFor(() => expect(within(trail).queryByText("内层 · wfLoopBody")).toBeNull());
+  expect(within(trail).getByText("loop · wfLoopBody").getAttribute("aria-current")).toBe("page");
 });
 
 it("焦点在检查器里(按钮、下拉)时按 Backspace 不删节点", async () => {

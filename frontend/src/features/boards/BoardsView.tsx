@@ -45,7 +45,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { CanvasTitle } from "@/components/app/canvasTitle";
+import { usePageTrail } from "@/components/layout/pageTrail";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
@@ -452,6 +452,8 @@ function BoardDetail({
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [renaming, setRenaming] = React.useState(false);
+  //: 顶栏的路径:创意画板 / 这张板(点名字改名,点「创意画板」回清单)。
+  usePageTrail({ onRoot: onBack, segments: [{ label: board.name, onRename: () => setRenaming(true), renameLabel: t("rename") }] });
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [deletingBoard, setDeletingBoard] = React.useState(false);
   const [collaborationOpen, setCollaborationOpen] = React.useState(false);
@@ -873,23 +875,11 @@ function BoardDetail({
       .finally(() => setSavingName(false));
   };
 
-  // 版式跟着工作流详情页:**画布铺满,两组胶囊浮在上面** —— 左边是身份(回哪儿去、这是谁),
-  // 右边是操作。悬浮不等于没有边界:两组各有自己的底,否则它们会散在画布上和内容抢注意力。
+  // 画布铺满,操作那组胶囊浮在右上。「这是哪一张、回哪儿去」写在顶栏的路径里(创意画板 / 这张板,
+  // 见 components/layout/pageTrail),点名字改名 —— 画布左上角不再摆一颗「返回 · 名字」。
   return (
     <div className="relative grid h-full min-h-0">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
-        {/* 和工作流详情页、子图共用同一颗胶囊(components/app/canvasTitle)—— 它们是同一类
-            东西:「你现在在哪儿」。此前这里是自己写的一份,标题的 font-semibold 挂在 <button>
-            上,被 tokens.css 那条无层级的 `button { font: inherit }` 压掉了,于是画板的标题
-            比工作流的明显更细 —— 而两处的 class 写得一模一样。 */}
-        <CanvasTitle
-          onBack={onBack}
-          backLabel={t("navBoards")}
-          name={board.name}
-          onRename={() => setRenaming(true)}
-          renameLabel={t("rename")}
-        />
-
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-end gap-2 [&>*]:pointer-events-auto">
 
         <CanvasToolbar
           label={t("canvasTools")}

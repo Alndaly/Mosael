@@ -29,7 +29,6 @@ import {
 } from "@xyflow/react";
 import {
   AlertTriangle,
-  ArrowLeft,
   Bot,
   Boxes,
   Check,
@@ -46,7 +45,6 @@ import {
   Play,
   Plus,
   Redo2,
-  Repeat,
   Square,
   Store,
   Trash2,
@@ -101,7 +99,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
-import { CanvasTitle } from "@/components/app/canvasTitle";
+import { usePageTrail } from "@/components/layout/pageTrail";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
@@ -913,6 +911,26 @@ function WorkflowEditor({
     return listenKeys(window, onKey);
   }, [undo, redo]);
   const [renaming, setRenaming] = React.useState(false);
+  //: 顶栏的路径:工作流 / 这一个 / 钻进去的每一层(子图、循环体)。在最外层时点名字改名;钻进去了,名字和中间
+  //: 每一层都点得回去(此前是画布左上角一颗「← 回上一层」,一层一层退)。
+  const scopeLabel = (node: WorkflowGraph["nodes"][number]) =>
+    `${node.name || registry.get(node.type)?.label || node.type} · ${t(node.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}`;
+  usePageTrail({
+    onRoot: onBack,
+    segments: [
+      atRoot
+        ? { label: workflow.name, onRename: () => setRenaming(true), renameLabel: t("rename") }
+        : { label: workflow.name, onSelect: () => enterScope([]) },
+      ...scopePath.map((_, index) => {
+        const node = scopeContainer(rootGraph, scopePath.slice(0, index + 1), registry);
+        const last = index === scopePath.length - 1;
+        return {
+          label: node ? scopeLabel(node) : "…",
+          onSelect: last ? undefined : () => enterScope(scopePath.slice(0, index + 1)),
+        };
+      }),
+    ],
+  });
   const [deleting, setDeleting] = React.useState(false);
   // 导出走后端信封(格式和版本的权威在后端),落成 .mosael-workflow.json —— 和列表页
   // 右键那条是同一个函数,不另写一份:两份迟早会在文件名或格式上分叉。
@@ -1882,32 +1900,9 @@ function WorkflowEditor({
     // 两条并排的竖条,用户得先分辨"哪条是应用的、哪条是这一页的"。所以横向成组、浮在顶部,
     // 保持"这一页的操作"和"整个应用的导航"在方向上就分得开。
     <div ref={editorRef} className="relative grid min-h-0">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
-        {/* 左边这组是**身份**(回哪儿去、这是谁),右边那组是**操作**。浮起来之后两组各自要有
-            自己的底,否则它们会散在画布上,和节点抢注意力 —— 悬浮不等于没有边界。 */}
-        {/* 工作流图标去掉了:左边导航栏里那一格已经亮着"工作流",顶上再画一次是同一句话说两遍,
-            而这一格真正要回答的是"**哪一个**工作流"。
-            保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
-            拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
-        {scopeNode ? (
-          // 钻进了某一层:返回键是「回上一层」而不是「回清单」,所以用 ←。
-          // 名字在它自己的节点上改,这里不给 onRename。
-          <CanvasTitle
-            onBack={() => enterScope(scopePath.slice(0, -1))}
-            backLabel={t("wfLoopBack")}
-            backIcon={<ArrowLeft size={16} />}
-            icon={scopeNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />}
-            name={`${scopeNode.name || registry.get(scopeNode.type)?.label || scopeNode.type} · ${t(scopeNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}`}
-          />
-        ) : (
-          <CanvasTitle
-            onBack={onBack}
-            backLabel={t("navWorkflows")}
-            name={workflow.name}
-            onRename={() => setRenaming(true)}
-            renameLabel={t("rename")}
-          />
-        )}
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-end gap-2 [&>*]:pointer-events-auto">
+        {/* 「这是哪一个工作流、钻到了第几层」写在顶栏的路径里(工作流 / 批量配音 / 循环体,见
+            components/layout/pageTrail),画布上只浮着操作这一组。保存状态只放工具栏的 wf-save-status。 */}
         <CanvasToolbar
           label={t("canvasTools")}
           data-workflow-toolbar-actions=""
