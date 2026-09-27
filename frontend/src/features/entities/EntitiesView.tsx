@@ -225,7 +225,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
           <EmptyState
             icon={<KindIcon size={22} />}
             title={filtering ? t("studioNoMatches") : t("entitiesEmptyTitle").replace("{kind}", labels.kind(kind))}
-            body={filtering ? t("studioNoMatchesHint") : t("entitiesEmptyBody")}
+            body={filtering ? t("studioNoMatchesHint") : t(`entitiesEmptyBody_${kind}`)}
             action={
               filtering ? undefined : (
                 <Button onClick={() => setCreating(true)}>

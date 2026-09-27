@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check } from "lucide-react";
+import { BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -29,6 +29,7 @@ import { DraftInput, DraftTextarea } from "@/components/ui/draft-text";
 import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePageTrail } from "@/components/layout/pageTrail";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -75,6 +76,18 @@ export function EntityDetail({
   const [deleting, setDeleting] = React.useState(false);
   const [variantOpen, setVariantOpen] = React.useState(false);
   const [tab, setTab] = usePersistentTab<DetailTab>("entity-detail", "references", DETAIL_TABS);
+  //: 在哪一层写在顶栏的路径里(「资产 / 小美 / 中年」,见 pageTrail),正文里不再摆「← 返回」。
+  const shown = entity.data;
+  usePageTrail(
+    shown
+      ? {
+          onRoot: onBack,
+          segments: shown.parent_id
+            ? [{ label: shown.parent_name, onSelect: () => onOpen(shown.parent_id!) }, { label: shown.name }]
+            : [{ label: shown.name }],
+        }
+      : { onRoot: onBack, segments: [] },
+  );
 
   const settle = (next: Entity) => {
     qc.setQueryData(entityKeys.detail(workspaceId, next.id), next);
@@ -145,17 +158,6 @@ export function EntityDetail({
 
   return (
     <div className="grid min-w-0 gap-7" data-entity-detail={data.id}>
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" onClick={data.parent_id ? () => onOpen(data.parent_id!) : onBack}>
-          <ArrowLeft />
-          {data.parent_id ? data.parent_name : t("navEntities")}
-        </Button>
-        <Button variant="outline" size="sm" className="hover:border-destructive/50 hover:text-destructive" onClick={() => setDeleting(true)}>
-          <Trash2 />
-          {t("delete")}
-        </Button>
-      </div>
-
       <header className="grid min-w-0 gap-6 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-start" data-entity-hero="">
         <button
           type="button"
@@ -171,13 +173,19 @@ export function EntityDetail({
           )}
         </button>
         <div className="grid min-w-0 content-start gap-2">
-          <span className="flex min-w-0 flex-wrap items-center gap-2 px-2 text-ui-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-0.5">
-              <KindIcon size={12} />
-              {labels.kind(data.kind)}
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <span className="flex min-w-0 flex-wrap items-center gap-2 px-2 text-ui-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-0.5">
+                <KindIcon size={12} />
+                {labels.kind(data.kind)}
+              </span>
+              {data.parent_id && <span>{t("entityVariantOf").replace("{name}", data.parent_name)}</span>}
             </span>
-            {data.parent_id && <span>{t("entityVariantOf").replace("{name}", data.parent_name)}</span>}
-          </span>
+            <Button variant="outline" size="sm" className="shrink-0 hover:border-destructive/50 hover:text-destructive" onClick={() => setDeleting(true)}>
+              <Trash2 />
+              {t("delete")}
+            </Button>
+          </div>
           <DraftInput
             aria-label={t("entityName")}
             className={cn(INLINE_FIELD, "text-ui-title font-semibold leading-tight tracking-tight")}

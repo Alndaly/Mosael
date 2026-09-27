@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "./AppShell";
+import { usePageTrail } from "./pageTrail";
 import { NAV_ITEMS } from "./navLabels";
 
 const state = vi.hoisted(() => ({ admin: false }));
@@ -82,4 +83,36 @@ it("keeps workspace switching and management reachable from both sidebar sizes",
     expect(select).toHaveBeenLastCalledWith("b");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   }
+});
+
+it("子页面交上来的路径接在顶栏的页面名后面:前面几段点得回去,最后一段是「你在这儿」;离开就清掉", () => {
+  const onRoot = vi.fn();
+  const onParent = vi.fn();
+  function Detail() {
+    usePageTrail({ onRoot, segments: [{ label: "小美", onSelect: onParent }, { label: "中年" }] });
+    return <p>detail</p>;
+  }
+  function Page({ open }: { open: boolean }) {
+    return open ? <Detail /> : <p>list</p>;
+  }
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const shell = (open: boolean) => (
+    <QueryClientProvider client={client}>
+      <TooltipProvider><AppShell view="entities" onViewChange={vi.fn()} workspaceName="Studio" projectName={null}>
+        <Page open={open} />
+      </AppShell></TooltipProvider>
+    </QueryClientProvider>
+  );
+  const { rerender } = render(shell(true));
+  const header = screen.getByRole("banner");
+  fireEvent.click(within(header).getByRole("button", { name: "navEntities" }));
+  expect(onRoot).toHaveBeenCalled();
+  fireEvent.click(within(header).getByRole("button", { name: "小美" }));
+  expect(onParent).toHaveBeenCalled();
+  expect(within(header).getByText("中年").getAttribute("aria-current")).toBe("page");
+  expect(within(header).queryByRole("button", { name: "中年" })).toBeNull();
+
+  rerender(shell(false));
+  expect(within(header).queryByText("小美")).toBeNull();
+  expect(within(header).queryByRole("button", { name: "navEntities" })).toBeNull();
 });

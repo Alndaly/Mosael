@@ -34,6 +34,7 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
+import { PageTrailProvider, type PageTrail } from "@/components/layout/pageTrail";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
 export type { StudioView } from "@/components/layout/navLabels";
@@ -52,6 +53,10 @@ const FOOTER_NAV = navItemsAt("footer");
     「AI 助手」同理是工作区级:智能体本身就能跨项目管理(列项目、改时间线都是它的工具),
     把会话锁在"当前项目"是把关系搞反了 —— 它是项目的操作者,不是项目的附属物。 */
 const PROJECT_SCOPED_VIEWS: StudioView[] = ["editor"];
+
+//: 路径里点得回去的那几段:看着是字,悬停才像链接 —— 顶栏不是一排按钮。
+const TRAIL_LINK =
+  "cursor-pointer rounded-sm border-0 bg-transparent p-0 text-inherit transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function AppShell({
   view,
@@ -96,6 +101,14 @@ export function AppShell({
     } catch { return null; }
   });
   const compact = collapsed ?? narrow;
+  //: 子页面交上来的路径下半截(见 pageTrail)。换了页面就清掉 —— 上一页的「小美 / 中年」不该挂到下一页上。
+  //: **在渲染时比,不用 effect**:子页面的 effect 先于这里的跑,放在 effect 里清会把子页面刚交上来的那条又抹掉。
+  const [trail, setTrail] = React.useState<PageTrail | null>(null);
+  const [trailView, setTrailView] = React.useState(view);
+  if (trailView !== view) {
+    setTrailView(view);
+    setTrail(null);
+  }
   React.useEffect(() => {
     const media = window.matchMedia("(max-width: 1199px)");
     const update = () => setNarrow(media.matches);
@@ -147,7 +160,36 @@ export function AppShell({
               <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" aria-label={compact ? t("navExpand") : t("navCollapse")}>
                 {compact ? <PanelLeftOpen /> : <PanelLeftClose />}
               </Button>
-              <h1 className={cn("m-0 shrink-0 text-ui-sm font-semibold text-foreground", scoped && "font-medium text-muted-foreground")}>{pageLabel}</h1>
+              <h1 className={cn("m-0 shrink-0 text-ui-sm font-semibold text-foreground", (scoped || trail) && "font-medium text-muted-foreground")}>
+                {trail?.onRoot ? (
+                  <button type="button" onClick={trail.onRoot} className={TRAIL_LINK}>
+                    {pageLabel}
+                  </button>
+                ) : (
+                  pageLabel
+                )}
+              </h1>
+              {trail?.segments.map((segment, index) => {
+                const last = index === trail.segments.length - 1;
+                return (
+                  <React.Fragment key={`${index}:${segment.label}`}>
+                    <span className="text-border-strong">/</span>
+                    {segment.onSelect && !last ? (
+                      <button type="button" onClick={segment.onSelect} className={cn(TRAIL_LINK, "max-w-48 truncate")} title={segment.label}>
+                        {segment.label}
+                      </button>
+                    ) : (
+                      <span
+                        className={cn("max-w-64 truncate", last ? "font-semibold text-foreground" : "")}
+                        aria-current={last ? "page" : undefined}
+                        title={segment.label}
+                      >
+                        {segment.label}
+                      </span>
+                    )}
+                  </React.Fragment>
+                );
+              })}
               {scoped && (
                 <>
                   <span className="text-border-strong">/</span>
@@ -232,7 +274,7 @@ export function AppShell({
       {/* data-glass-surface:开了自定义背景时由 tokens.css 统一给模糊 —— 几何一个字都不改。
           此前这里在 glass 下会长出 m-2/h-auto/rounded-xl/border,内容区于是从铺满变成浮起的卡。 */}
       <main data-glass-surface className="col-start-2 row-start-2 h-full min-h-0 min-w-0 overflow-hidden bg-background">
-        {children}
+        <PageTrailProvider value={setTrail}>{children}</PageTrailProvider>
       </main>
     </div>
   );
