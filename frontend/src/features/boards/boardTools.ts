@@ -1,4 +1,4 @@
-import { Sparkles, Package, Wrench, type LucideIcon } from "lucide-react";
+import { FolderOpen, Sparkles, Package, Wrench, type LucideIcon } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -90,13 +90,21 @@ export interface BoardAddOption {
   icon: LucideIcon;
 }
 
-/** 「添加」的四组(ADR 0025 决定 6):组名是动词,行是名词。 */
-type AddGroup = "generate" | "library" | "reference" | "organize";
+/**
+ * 「添加」的三组(ADR 0025 决定 6,2026-09-28 修订):组名是动词,行是名词。
+ *
+ * - **新建**:放一格空的,让 AI 生成 / 写,或者自己挑、自己写(图片、视频、音频、便签、文档);
+ * - **从库里放**:挑一个现成的放上来(素材库的素材、资产库的资产、3D 场景);
+ * - **整理**:不产出内容的(分组)。
+ *
+ * 此前是「生成 / 从素材库 / 引用 / 整理」四组 11 行:「生成」和「从素材库」是同样的三种格子列了两遍,便签在
+ * 「整理」里(它会让 AI 写,是内容格),文档在「引用」里(空文档格也能让 AI 写一篇)。
+ */
+type AddGroup = "create" | "library" | "organize";
 
 const GROUP_LABELS: Record<AddGroup, MessageKey> = {
-  generate: "boardsGroupGenerate",
+  create: "boardsGroupCreate",
   library: "boardsGroupFromLibrary",
-  reference: "boardsGroupReference",
   organize: "boardsGroupOrganize",
 };
 
@@ -105,29 +113,28 @@ interface KindRow {
   value: string;
   kind: BoardItem["kind"];
   group: AddGroup;
-  /** 从素材库挑一份的那几行有自己的名字和说明;其余就是那种格子的名字和说明(kindText)。 */
-  text?: { label: MessageKey; hint: MessageKey };
+  /** 「素材」那一行有自己的名字、说明和图标(素材库);其余就是那种格子的(kindText、kindIcon)。 */
+  text?: { label: MessageKey; hint: MessageKey; icon: LucideIcon };
 }
 
 //: **同一组的必须挨在一起。** SearchableSelect 按*相邻*的同名 group 归组(它不重排),隔开写就会渲染出
 //: 第二个同名小标题。
 const KIND_ROWS: KindRow[] = [
-  { value: "image", kind: "image", group: "generate" },
-  { value: "video", kind: "video", group: "generate" },
-  { value: "audio", kind: "audio", group: "generate" },
-  { value: "pick-image", kind: "image", group: "library", text: { label: "boardsPickImage", hint: "boardsPickImageHint" } },
-  { value: "pick-video", kind: "video", group: "library", text: { label: "boardsPickVideo", hint: "boardsPickVideoHint" } },
-  { value: "pick-audio", kind: "audio", group: "library", text: { label: "boardsPickAudio", hint: "boardsPickAudioHint" } },
-  { value: "document", kind: "document", group: "reference" },
-  { value: "scene", kind: "scene", group: "reference" },
+  { value: "image", kind: "image", group: "create" },
+  { value: "video", kind: "video", group: "create" },
+  { value: "audio", kind: "audio", group: "create" },
+  { value: "note", kind: "note", group: "create" },
+  { value: "document", kind: "document", group: "create" },
+  //: 一行挑三种:弹窗里按图片 / 视频 / 音频筛,挑中哪一种放哪一种格子(AssetPickerDialog 的 `media`)。
+  { value: "pick-media", kind: "image", group: "library", text: { label: "boardsAddMedia", hint: "boardsAddMediaHint", icon: FolderOpen } },
   //: 资产库里的人物 / 场景 / 道具(ADR 0027):先挑再放,和 3D 场景一样。
-  { value: "entity", kind: "entity", group: "reference" },
-  { value: "note", kind: "note", group: "organize" },
+  { value: "entity", kind: "entity", group: "library" },
+  { value: "scene", kind: "scene", group: "library" },
   { value: "frame", kind: "frame", group: "organize" },
 ];
 
 /**
- * 工具条「添加」的整张单子:**只有格子**,按动词分成生成 / 从素材库 / 引用 / 整理四组(ADR 0025 决定 6)。
+ * 工具条「添加」的整张单子:**只有格子**,按动词分成新建 / 从库里放 / 整理三组(ADR 0025 决定 6)。
  *
  * 没有「工具」那一组:画板上没有单独的工具格,把内容变成新内容的事是内容格自己的能力 —— 放一段音频进来,
  * 选中它,操作条上就有转写、分离、降噪。每一行都是同一个样子:图标、名字、一句说明;格子的说明和拉线菜单读的是
@@ -136,7 +143,7 @@ const KIND_ROWS: KindRow[] = [
 export function boardAddCatalog(t: (key: MessageKey) => string): BoardAddOption[] {
   return KIND_ROWS.map(({ value, kind, group, text }) => {
     const { label, hint } = text ? { label: t(text.label), hint: t(text.hint) } : kindText(t, kind);
-    return { value, label, description: hint, group: t(GROUP_LABELS[group]), icon: kindIcon(kind) };
+    return { value, label, description: hint, group: t(GROUP_LABELS[group]), icon: text?.icon ?? kindIcon(kind) };
   });
 }
 

@@ -36,9 +36,9 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
     Element.prototype.scrollIntoView ??= () => {};
   });
 
-  it("十一种放法,没有工具那一组 —— 把内容变成新内容的事是格子自己的能力", () => {
+  it("九种放法,没有工具那一组 —— 把内容变成新内容的事是格子自己的能力", () => {
     const rows = openMenu();
-    expect(rows).toHaveLength(11);
+    expect(rows).toHaveLength(9);
     for (const row of rows) {
       const [label, description] = lines(row);
       expect(label, "每一行都有名字").toBeTruthy();
@@ -47,9 +47,9 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
       //: 图标一样大、一样的颜色:都在同一个图标槽里。
       expect(row.querySelector(":scope > span[aria-hidden] svg"), `「${label}」这一行没有图标`).not.toBeNull();
     }
-    //: 组名是动词(ADR 0025 决定 6),按生成 / 从素材库 / 引用 / 整理排。
+    //: 组名是动词(ADR 0025 决定 6,2026-09-28 修订):新建 / 从库里放 / 整理。
     const groups = [...document.querySelectorAll("[cmdk-group-heading]")].map((one) => one.textContent);
-    expect(groups).toEqual(["生成", "从素材库", "引用", "整理"]);
+    expect(groups).toEqual(["新建", "从库里放", "整理"]);
   });
 
   it("格子那几行是给创作者的一句话(和拉线菜单同一份)", () => {
@@ -58,7 +58,9 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
     expect(byLabel["视频"]).toBe("写一句话、或接一张图生成视频");
     expect(byLabel["音频"]).toBe("配音、音乐或音效");
     expect(byLabel["便签"]).toBe("随手写，或让 AI 写");
-    expect(byLabel["文档"]).toBe("引用一篇笔记");
+    expect(byLabel["文档"]).toBe("引用一篇笔记,或让 AI 写一篇");
+    expect(byLabel["素材"]).toBe("从素材库挑一张图片、一段视频或音频放上来");
+    expect(byLabel["资产"]).toBe("资产库里的一个人物、场景或道具");
     expect(byLabel["3D 场景"]).toBe("引用一个 3D 场景");
     expect(byLabel["分组"]).toBe("把几格圈在一起");
   });

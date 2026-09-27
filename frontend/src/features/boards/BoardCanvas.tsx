@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
 import { type BoardDocumentState } from "./boardDocumentSources";
-import { useCanvasInputMode } from "@/components/app/canvasInputMode";
+import { useCanvasInputMode, canvasWheelProps } from "@/components/app/canvasInputMode";
 import React from "react";
 import { carriedByFrame } from "@/features/boards/frameCarry";
 import {
@@ -1302,8 +1302,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         }}
         className={cn(!ready && "opacity-0", (commentMode || markerMode) && "cursor-crosshair")}
         proOptions={{ hideAttribution: false }}
-        panOnScroll={inputMode === "trackpad"}
-        zoomOnScroll={inputMode === "mouse"}
+        {...canvasWheelProps(inputMode)}
         zoomOnPinch
         maxZoom={2.5}
         // 删除键由 useCanvasDeleteKey 判(见下):React Flow 自带的那一套把面板按钮、Portal 出去的

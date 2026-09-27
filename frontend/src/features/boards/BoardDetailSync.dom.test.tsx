@@ -335,7 +335,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
     board_group: "text", board_group_label: "处理文字", board_description: "把便签或文档里的文字翻成另一种语言",
   };
 
-  it("工具条「添加」里只有格子,按动词分组(生成 / 从素材库 / 引用 / 整理);没有工具那一组", async () => {
+  it("工具条「添加」里只有格子,按动词分组(新建 / 从库里放 / 整理);没有工具那一组", async () => {
     Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
     apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
     apiMocks.listBoardProducers.mockResolvedValue([TOOL]);
@@ -349,7 +349,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
     await vi.waitFor(() => expect(document.querySelectorAll("[cmdk-item], [role=option]").length).toBeGreaterThan(0));
     const rows = [...document.querySelectorAll<HTMLElement>("[cmdk-item], [role=option]")];
     expect(rows.some((one) => one.textContent?.includes("翻译")), "工具不在「添加」里").toBe(false);
-    for (const group of ["boardsGroupGenerate", "boardsGroupFromLibrary", "boardsGroupReference", "boardsGroupOrganize"]) {
+    for (const group of ["boardsGroupCreate", "boardsGroupFromLibrary", "boardsGroupOrganize"]) {
       expect(document.body.textContent).toContain(group);
     }
     expect(document.body.textContent).not.toContain("处理文字");

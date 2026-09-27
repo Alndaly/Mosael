@@ -47,6 +47,7 @@ export function PickListDialog<T>({
   empty,
   notice,
   className,
+  filters,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -68,6 +69,8 @@ export function PickListDialog<T>({
   /** 清单下面一句(「只列了前 200 条,再搜细一点」)。 */
   notice?: string;
   className?: string;
+  /** 搜索框下面、同样钉在头里的一排筛选(挑素材时按图片 / 视频 / 音频筛)。它也作用于整份清单。 */
+  filters?: React.ReactNode;
 }) {
   const t = useI18n();
   const [active, setActive] = React.useState(0);
@@ -115,6 +118,7 @@ export function PickListDialog<T>({
               aria-controls="pick-list"
             />
           </div>
+          {filters}
         </>
       }
     >

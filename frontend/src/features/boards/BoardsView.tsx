@@ -503,7 +503,11 @@ function BoardDetail({
     () => boardSearchEntries((canvas ?? board.canvas)?.items ?? [], t),
     [canvas, board.canvas, t],
   );
-  const [picking, setPicking] = React.useState<{ kind: MediaKind; place: (assetId: string) => void } | null>(null);
+  //: 挑一份素材:给一格换一份(只列那一类),或「添加 → 素材」(三种都列,挑中哪种放哪种格子)。
+  const [picking, setPicking] = React.useState<{
+    kind: MediaKind | "media";
+    place: (assetId: string, kind: MediaKind) => void;
+  } | null>(null);
   //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards/canvas.py),
   //: 所以不能像文档那样先落一个空节点再补 —— 那种节点存不下去。
   const [pickingScene, setPickingScene] = React.useState(false);
@@ -922,11 +926,9 @@ function BoardDetail({
                 setMarkerMode(false);
                 setCommentMode(false);
                 setActiveCommentId(null);
-                //: `pick-<kind>` 一条分支通吃三类。此前只认死 "pick-image",于是新增视频/音频
-                //: 就得再抄两遍同样的三行 —— 而 AssetPickerDialog 本来就是按 kind 列的。
-                if (kind.startsWith("pick-")) {
-                  const media = kind.slice("pick-".length) as MediaKind;
-                  setPicking({ kind: media, place: (assetId) => api?.add(media, { asset_id: assetId }) });
+                //: 「素材」一行挑三种:挑中哪一种就放哪一种格子。
+                if (kind === "pick-media") {
+                  setPicking({ kind: "media", place: (assetId, media) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "scene") {
                   setPickingScene(true);
                 } else if (kind === "entity") {
@@ -1192,8 +1194,8 @@ function BoardDetail({
         kind={picking?.kind ?? "image"}
         workspaceId={workspaceId}
         onOpenChange={(next) => !next && setPicking(null)}
-        onPick={(assetId) => {
-          picking?.place(assetId);
+        onPick={(assetId, kind) => {
+          picking?.place(assetId, kind);
           setPicking(null);
         }}
       />

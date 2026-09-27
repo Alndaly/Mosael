@@ -92,13 +92,13 @@ describe("能力的图标(boardToolIcon)", () => {
 describe("「添加」的单子(boardAddCatalog)", () => {
   const t = (key: MessageKey) => messages["zh-CN"][key];
 
-  it("只有格子,按动词分成四组:生成 / 从素材库 / 引用 / 整理;没有工具那一组", () => {
+  it("只有格子,按动词分成三组:新建 / 从库里放 / 整理;没有工具那一组", () => {
     const rows = boardAddCatalog(t);
+    //: 同样的格子不列两遍(此前「生成」和「从素材库」各有图片 / 视频 / 音频);便签、文档会让 AI 写,是新建的内容格。
     expect(rows.map((one) => [one.group, one.value])).toEqual([
-      ["生成", "image"], ["生成", "video"], ["生成", "audio"],
-      ["从素材库", "pick-image"], ["从素材库", "pick-video"], ["从素材库", "pick-audio"],
-      ["引用", "document"], ["引用", "scene"], ["引用", "entity"],
-      ["整理", "note"], ["整理", "frame"],
+      ["新建", "image"], ["新建", "video"], ["新建", "audio"], ["新建", "note"], ["新建", "document"],
+      ["从库里放", "pick-media"], ["从库里放", "entity"], ["从库里放", "scene"],
+      ["整理", "frame"],
     ]);
     expect(rows.every((one) => !one.value.startsWith("node:"))).toBe(true);
   });

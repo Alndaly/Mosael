@@ -1,6 +1,6 @@
 import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
-import { useCanvasInputMode } from "@/components/app/canvasInputMode";
+import { useCanvasInputMode, canvasWheelProps } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
@@ -2315,8 +2315,7 @@ function WorkflowEditor({
               blurFloatingPanels();
               selectInspectorNode(null);
             }}
-            panOnScroll={inputMode === "trackpad"}
-            zoomOnScroll={inputMode === "mouse"}
+            {...canvasWheelProps(inputMode)}
             zoomOnPinch
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}

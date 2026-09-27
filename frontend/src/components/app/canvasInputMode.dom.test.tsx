@@ -3,6 +3,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   CANVAS_INPUT_KEY,
+  canvasWheelProps,
   readCanvasInputMode,
   setCanvasInputMode,
   useCanvasInputMode,
@@ -51,4 +52,10 @@ it("keeps the new choice usable when storage writes are unavailable", () => {
   });
   setCanvasInputMode("trackpad");
   expect(readCanvasInputMode()).toBe("trackpad");
+});
+
+it("画布的滚轮不靠「按住 ⌘」切换:触控板双指永远平移、鼠标滚轮永远缩放,捏合照样缩放", () => {
+  //: ⌘ 的抬起常被系统吞掉(聚焦搜索、截图),React Flow 就一直以为它按着 —— 双指滑动变成了缩放。
+  expect(canvasWheelProps("trackpad")).toEqual({ panOnScroll: true, zoomOnScroll: false, zoomActivationKeyCode: null });
+  expect(canvasWheelProps("mouse")).toEqual({ panOnScroll: false, zoomOnScroll: true, zoomActivationKeyCode: null });
 });
