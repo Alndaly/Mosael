@@ -149,6 +149,8 @@ class DeviceAuthorization(Base):
 
 KIND_WORKFLOW = "workflow"
 KIND_PLUGIN = "plugin"
+#: 一个人物 / 场景 / 道具(ADR 0027)。版本里存的是分享包 mosael.asset/1,参考图是按内容哈希存的 Blob。
+KIND_ASSET = "asset"
 ITEM_KINDS = (KIND_WORKFLOW, KIND_PLUGIN)
 
 VERSION_PENDING = "pending"
@@ -157,7 +159,7 @@ VERSION_REJECTED = "rejected"
 
 
 class Item(Base):
-    """社区上的一项:一个工作流或一个插件。版本在 ItemVersion 里。
+    """社区上的一项:一个工作流、一个插件或一个资产(人物 / 场景 / 道具)。版本在 ItemVersion 里。
 
     `title` / `summary` 是 JSON:用户提交的是一个字符串,官方条目是 `{"zh": …, "en": …}` ——
     和插件索引同一条约定,原样交给读的一方按语言挑。
@@ -185,6 +187,9 @@ class Item(Base):
     #: 当前版本的几样摘要,列表页用(不必每行都去读版本)。
     version_label: Mapped[str] = mapped_column(String(64), default="")
     has_code: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: 资产的种类(character / location / prop);列表按它筛,所以是一列而不是 extra 里的一个键 ——
+    #: JSON 里的键在 SQLite 和 Postgres 上的查询写法不一样。别的种类为空。
+    asset_kind: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     node_count: Mapped[int] = mapped_column(Integer, default=0)
     extra: Mapped[Any] = mapped_column(JSONType, default=dict)
     #: 搜索用:标题、简介(各语言)与标签拼起来的小写文本。

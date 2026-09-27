@@ -263,6 +263,7 @@ def create_app(settings: Settings | None = None, *, context: Context | None = No
         me.router,
         items.workflows_router,
         items.plugins_router,
+        items.assets_router,
         shares.router,
         public.router,
         admin.router,

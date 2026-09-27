@@ -24,8 +24,8 @@ from sqlalchemy.orm import Session
 
 from community.api.deps import Ctx, CurrentUser, Db, MaybeUser, Principal
 from community.api.items import ReportIn, file_report
+from community.blobs import claim_ready
 from community.api.views import iso, og_path, public_user, share_media, share_summary, share_url, users_by_id
-from community.context import Context
 from community.crypto import sign_payload, verify_payload
 from community.db import utcnow
 from community.errors import ApiError, human_size
@@ -189,26 +189,6 @@ async def put_upload(sha256: str, request: Request, ctx: Ctx, db: Db, t: str = Q
     return Response(status_code=204)
 
 
-def _verify_remote(ctx: Context, blob: Blob) -> bool:
-    """S3 直传的文件:提交快照时读回来算一遍哈希。对不上就删掉那份对象。"""
-    digest = hashlib.sha256()
-    size = 0
-    try:
-        for chunk in ctx.storage.iter_chunks(blob.storage_key):
-            size += len(chunk)
-            if size > ctx.settings.share_max_file_bytes:
-                break
-            digest.update(chunk)
-    except Exception as exc:  # noqa: BLE001 - 对象不存在 / 读不出都算「没上传」
-        log_event(logger, "remote blob unreadable", logging.INFO, error=type(exc).__name__)
-        return False
-    if digest.hexdigest() != blob.sha256 or size > ctx.settings.share_max_file_bytes:
-        ctx.storage.delete(blob.storage_key)
-        return False
-    blob.size = size
-    return True
-
-
 # ---------------- 第三步:提交快照 ----------------
 
 
@@ -233,16 +213,7 @@ def create_share(body: ShareIn, principal: CurrentUser, ctx: Ctx, db: Db) -> JSO
     except SnapshotError as exc:
         raise ApiError.from_format(exc, code="invalid_snapshot") from exc
 
-    total = 0
-    for sha in sorted(summary.hashes):
-        blob = db.get(Blob, sha)
-        if blob is None or db.get(BlobOwner, (user.id, sha)) is None:
-            raise ApiError(422, "unknown_blob", sha256=sha)
-        if blob.status != BLOB_READY:
-            if ctx.storage.uploads_through_service or not _verify_remote(ctx, blob):
-                raise ApiError(422, "unknown_blob", sha256=sha)
-            blob.status, blob.verified_at = BLOB_READY, utcnow()
-        total += blob.size
+    total = sum(blob.size for blob in claim_ready(ctx, db, user, summary.hashes).values())
     if total > settings.share_max_total_bytes:
         raise ApiError(413, "share_too_large", limit=human_size(settings.share_max_total_bytes))
 

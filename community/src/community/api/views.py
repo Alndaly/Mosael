@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from community.config import API_PREFIX
 from community.context import Context
 from community.models import (
+    KIND_ASSET,
     KIND_PLUGIN,
     KIND_WORKFLOW,
     ROLE_USER,
@@ -24,7 +25,7 @@ from community.models import (
 )
 from community.security import mask_phone
 
-KIND_PATHS = {KIND_WORKFLOW: "workflows", KIND_PLUGIN: "plugins"}
+KIND_PATHS = {KIND_WORKFLOW: "workflows", KIND_PLUGIN: "plugins", KIND_ASSET: "assets"}
 
 
 def iso(value: datetime | None) -> str | None:
@@ -98,6 +99,16 @@ def item_summary(ctx: Context, db: Session, item: Item, owner: User, tags: list[
     }
     if item.kind == KIND_WORKFLOW:
         base.update({"has_code": item.has_code, "node_count": item.node_count})
+    elif item.kind == KIND_ASSET:
+        extra = item.extra or {}
+        base.update(
+            {
+                "asset_kind": item.asset_kind,
+                "real_person": bool(extra.get("real_person")),
+                "reference_count": int(extra.get("reference_count") or 0),
+                "variant_count": int(extra.get("variant_count") or 0),
+            }
+        )
     else:
         extra = item.extra or {}
         base.update(

@@ -57,6 +57,13 @@ uv run alembic revision --autogenerate -m "说明"
 生成的文件里 `community.db.UTCDateTime` 换成 `sa.DateTime(timezone=True)`(迁移不 import 应用代码),
 跑过一次的迁移不再改。数据形状的变化一律走迁移,不在读取代码里认两种形状(ADR 0006)。
 
+## 资产(人物 / 场景 / 道具)
+
+ADR 0027 §4。`/assets` 和工作流、插件是同一种条目(`items.kind = "asset"`,`asset_kind` 一列按种类筛),提交收的是
+分享包 `mosael.asset/1`(校验在 `mosael_formats.asset_bundle`,桌面端导出、导入过的是同一份),参考图走 `/shares/uploads`
+那套三步上传。虚构的发布即上架,真人人物要 `consent_kind` 并进审核队列。`dev-seed` 会放一个虚构人物(带冬装变体)、
+一个场景、一个道具,和一个在审核队列里的真人人物。
+
 ## 目录
 
 | 位置 | 内容 |

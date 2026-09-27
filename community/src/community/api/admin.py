@@ -14,6 +14,7 @@ from community.db import utcnow
 from community.errors import ApiError
 from community.logs import log_event
 from community.models import (
+    KIND_ASSET,
     KIND_PLUGIN,
     KIND_WORKFLOW,
     REPORT_DISMISSED,
@@ -26,7 +27,7 @@ from community.models import (
     Share,
 )
 from community.pagination import paginate
-from community.submissions import plugin_diff, previous_approved, review
+from community.submissions import asset_media, plugin_diff, previous_approved, review
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -37,6 +38,8 @@ TARGET_KINDS = {
     "workflow": KIND_WORKFLOW,
     "plugins": KIND_PLUGIN,
     "plugin": KIND_PLUGIN,
+    "assets": KIND_ASSET,
+    "asset": KIND_ASSET,
     "shares": "share",
     "share": "share",
 }
@@ -83,6 +86,17 @@ def queue(
                 "tools": entry.get("tools", []),
                 "files": meta.get("files", []),
                 "diff": plugin_diff(row, previous_approved(db, row)) if item.kind == KIND_PLUGIN else None,
+                # 资产(真人人物):审核界面并排看参考图和授权声明(ADR 0027 §4)。
+                **(
+                    {
+                        "asset_kind": item.asset_kind,
+                        "bundle": meta.get("bundle"),
+                        "media": asset_media(ctx, db, meta.get("bundle") or {}),
+                        "consent_kind": meta.get("consent_kind") or None,
+                    }
+                    if item.kind == KIND_ASSET
+                    else {}
+                ),
             }
         )
     return {"items": out, "next_cursor": next_cursor}

@@ -7,7 +7,8 @@
   并打印在终端上 —— 不写死在代码或文档里;
 - 几个社区工作流(其中一个含运行代码节点)、一个审核通过的社区插件、一个待审核的插件;
 - 近 30 天的下载 / 浏览 / 点赞(按天,有起伏),统计页和详情页的走势图有东西可画;
-- 一张公开的画板分享:几张 Pillow 画的占位图、一张便签、一个文档格和连线。
+- 一张公开的画板分享:几张 Pillow 画的占位图、一张便签、一个文档格和连线;
+- 几个资产(ADR 0027):一个虚构人物(带一个变体)、一个场景、一个道具,和一个待审核的真人人物。
 """
 
 from __future__ import annotations
@@ -42,7 +43,8 @@ from community.models import (
 )
 from community.security import hash_password
 from community.stats import refresh_trend, today
-from community.submissions import Metadata, review, store_blob, submit_plugin, submit_workflow
+from community.submissions import Metadata, review, store_blob, submit_asset, submit_plugin, submit_workflow
+from mosael_formats import asset_bundle
 from mosael_formats.board_snapshot import SCHEMA, validate_snapshot
 
 CREDENTIALS_FILE = "dev-credentials.txt"
@@ -213,6 +215,61 @@ def _seed_share(ctx: Context, db: Session, owner: User, report: DevSeedReport) -
     report.created.append("share:demo-board")
 
 
+def _portrait(color: tuple[int, int, int], label: str) -> bytes:
+    """一张竖版的人物占位图:一个头、一个身子,底下写着是哪个角度。"""
+    size = (480, 720)
+    image = Image.new("RGB", size, tuple(max(0, c - 60) for c in color))
+    draw = ImageDraw.Draw(image)
+    draw.ellipse([150, 110, 330, 290], fill=color)
+    draw.rectangle([130, 320, 350, 640], fill=color)
+    draw.text((24, 680), label, fill=(255, 255, 255))
+    out = io.BytesIO()
+    image.save(out, format="PNG")
+    return out.getvalue()
+
+
+def _asset_reference(ctx: Context, db: Session, owner: User, data: bytes, role: str) -> dict:
+    blob = store_blob(ctx, db, owner, data, "image/png")
+    with Image.open(io.BytesIO(data)) as image:
+        width, height = image.size
+    return {"sha256": blob.sha256, "content_type": "image/png", "width": width, "height": height, "role": role}
+
+
+def _seed_assets(ctx: Context, db: Session, owner: User, admin: User, report: DevSeedReport) -> None:
+    """资产页签有东西看:虚构人物(带一个冬装变体)、场景、道具发布即上架;一个真人人物在审核队列里。"""
+    ref = lambda data, role: _asset_reference(ctx, db, owner, data, role)  # noqa: E731
+    samples = [
+        ("林小满", "character", False, {"real_person": False, "blockout_color": "#e0644f"},
+         "短片女主角,十七岁,高二学生。", "17-year-old girl, short black bob hair, navy school uniform, red scarf",
+         [ref(_portrait((224, 100, 79), "front"), "front"), ref(_portrait((200, 90, 70), "side"), "side"),
+          ref(_placeholder((180, 80, 60), "turnaround", size=(960, 540)), "turnaround")],
+         [{"name": "冬装", "description": "", "prompt": "long wool coat, knitted hat", "tags": [],
+           "attributes": {"blockout_color": "#e0644f"},
+           "references": [ref(_portrait((90, 110, 170), "winter front"), "front")]}]),
+        ("旧城天台", "location", False, {"time_of_day": "黄昏,逆光"},
+         "老城区一栋六层楼的天台,晾衣绳、水箱、远处的电视塔。", "old rooftop at dusk, water tank, laundry lines, TV tower in the distance",
+         [ref(_placeholder((214, 150, 86), "rooftop concept"), "concept"), ref(_placeholder((160, 110, 70), "rooftop detail"), "detail")], []),
+        ("红色雨伞", "prop", False, {},
+         "女主角一直带着的旧雨伞,伞骨断了一根。", "an old red umbrella with one broken rib",
+         [ref(_placeholder((200, 40, 50), "umbrella", size=(400, 400)), "front")], []),
+        ("示例真人主播", "character", True, {"real_person": True},
+         "(开发数据)一个声明为真人的人物,用来看审核队列。", "a streamer in a studio",
+         [ref(_portrait((120, 120, 120), "real person"), "front")], []),
+    ]
+    for name, kind, real, attributes, description, prompt, references, variants in samples:
+        if _item_owned(db, owner, "asset", name) is not None:
+            continue
+        for variant in variants:
+            variant["cover_sha256"] = variant["references"][0]["sha256"]
+        bundle = {
+            "schema": asset_bundle.SCHEMA, "kind": kind, "name": name, "description": description, "prompt": prompt,
+            "tags": ["示例"], "attributes": attributes, "references": references,
+            "cover_sha256": references[0]["sha256"], "variants": variants,
+        }
+        submit_asset(ctx, db, owner, bundle, "authorized" if real else None, Metadata(title=name, tags=["示例", "dev"]))
+        report.created.append(f"asset:{name}" + (" (pending review)" if real else ""))
+
+
 def dev_seed(ctx: Context, db: Session) -> DevSeedReport:
     if not ctx.settings.development:
         raise RuntimeError("dev-seed only runs with COMMUNITY_ENV=development")
@@ -247,6 +304,7 @@ def dev_seed(ctx: Context, db: Session) -> DevSeedReport:
         _seed_stats(db, item, rng)
 
     _seed_share(ctx, db, demo, report)
+    _seed_assets(ctx, db, demo, admin, report)
     # 让「注册」走势也有几天的数:两个开发账号的注册时间落在最近几天(只改开发库)。
     for offset, user in enumerate((admin, demo)):
         user.created_at = min(user.created_at, utcnow() - timedelta(days=3 + offset * 5))

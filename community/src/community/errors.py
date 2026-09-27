@@ -144,8 +144,13 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "size_mismatch": {"zh": "上传的大小和声明的不一致", "en": "The uploaded size doesn't match the declared size."},
     "unknown_blob": {
-        "zh": "快照引用了没有上传过的文件:{sha256}",
-        "en": "The snapshot references a file that hasn't been uploaded: {sha256}",
+        "zh": "引用了没有上传过的文件:{sha256}",
+        "en": "It references a file that hasn't been uploaded: {sha256}",
+    },
+    "invalid_asset_bundle": {"zh": "{detail}", "en": "{detail}"},
+    "asset_kind_changed": {
+        "zh": "这个资产是「{kind}」,新版本不能换成别的种类 —— 别人导入的那一份会对不上",
+        "en": "This asset is a “{kind}”; a new version can't change its kind, or copies others imported would no longer match.",
     },
     "invalid_snapshot": {"zh": "{detail}", "en": "{detail}"},
     "share_too_large": {"zh": "这张画板的文件总量超过上限({limit})", "en": "This board's files exceed the limit ({limit})."},

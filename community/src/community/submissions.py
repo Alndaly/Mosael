@@ -1,7 +1,9 @@
-"""提交工作流与插件:收文件、过同一套格式校验、落存储、建版本(ADR 0026 第 4 节)。
+"""提交工作流、插件与资产:收文件、过同一套格式校验、落存储、建版本(ADR 0026 第 4 节、ADR 0027 §4)。
 
 - **工作流**发布即上架:它是数据,不在别人机器上执行代码;含「运行代码」节点的在详情里醒目标出。
 - **插件**先进审核队列(`pending`),`moderator` 以上通过后才公开 —— 插件会在别人的电脑上运行代码。
+- **资产**(人物 / 场景 / 道具)是一个分享包 `mosael.asset/1`,参考图先走三步上传、按哈希引用。虚构的
+  发布即上架;**真人**人物须声明「本人」或「已取得本人同意公开」,并先进审核队列(肖像是这个人的)。
 - 同一作者再提交同一项 = 新版本;插件的 id 由第一个提交者占有。
 
 路由(api/items.py)只管 HTTP;这里的函数不认识 Request,测试和官方条目导入(catalog.py)直接调它们。
@@ -24,7 +26,9 @@ from community.crypto import sha256_hex
 from community.db import utcnow
 from community.errors import ApiError, human_size
 from community.logs import log_event
+from community.blobs import claim_ready
 from community.models import (
+    KIND_ASSET,
     KIND_PLUGIN,
     KIND_WORKFLOW,
     VERSION_APPROVED,
@@ -38,7 +42,7 @@ from community.models import (
     User,
 )
 from community.storage import IMAGE_TYPES, attachment, blob_key
-from mosael_formats import plugin_archive, versions, workflow_file
+from mosael_formats import asset_bundle, plugin_archive, versions, workflow_file
 from mosael_formats.i18n import FormatError, pick_text
 from mosael_formats.plugin_index import index_entry
 
@@ -143,7 +147,7 @@ def set_tags(db: Session, item: Item, tags: list[str]) -> None:
 def unique_slug(db: Session, kind: str, base: str) -> str:
     base = SLUG_SAFE.sub("-", base.lower()).strip("-")[:60]
     if len(base) < 3:
-        base = f"{'wf' if kind == KIND_WORKFLOW else 'p'}-{secrets.token_hex(4)}"
+        base = f"{ {KIND_WORKFLOW: 'wf', KIND_ASSET: 'a'}.get(kind, 'p') }-{secrets.token_hex(4)}"
     if base in RESERVED_SLUGS:
         base = f"{base}-{secrets.token_hex(2)}"
     candidate = base
@@ -303,6 +307,17 @@ def publish_version(item: Item, version: ItemVersion) -> None:
         summary = (version.meta or {}).get("summary") or {}
         item.has_code = bool(summary.get("code_node_types"))
         item.node_count = int(summary.get("node_count") or 0)
+    elif item.kind == KIND_ASSET:
+        bundle = (version.meta or {}).get("bundle") or {}
+        item.asset_kind = bundle.get("kind")
+        item.cover_sha256 = bundle.get("cover_sha256") or item.cover_sha256
+        references = len(bundle.get("references") or []) + sum(len(one.get("references") or []) for one in bundle.get("variants") or [])
+        item.extra = {
+            **(item.extra or {}),
+            "real_person": bool((bundle.get("attributes") or {}).get("real_person")),
+            "reference_count": references,
+            "variant_count": len(bundle.get("variants") or []),
+        }
     else:
         entry = (version.meta or {}).get("index_entry") or {}
         item.extra = {**(item.extra or {}), "permissions": entry.get("permissions", []), "runtime": entry.get("runtime", "process")}
@@ -426,6 +441,109 @@ def submit_plugin(
     return item, version
 
 
+# ---------------- 资产 ----------------
+
+
+def read_asset(bundle: Any, consent_kind: Any) -> tuple[asset_bundle.AssetBundleSummary, str]:
+    """过 mosael_formats.asset_bundle 的校验(桌面端导出、别人导入过的是同一份),回摘要与规整后的授权声明。"""
+    try:
+        summary = asset_bundle.validate_bundle(bundle)
+        consent = asset_bundle.check_consent(summary, consent_kind)
+    except FormatError as exc:
+        raise ApiError.from_format(exc, code="invalid_asset_bundle") from exc
+    return summary, consent
+
+
+def submit_asset(
+    ctx: Context,
+    db: Session,
+    user: User,
+    bundle: Any,
+    consent_kind: Any,
+    meta: Metadata,
+    *,
+    item: Item | None = None,
+) -> tuple[Item, ItemVersion]:
+    """新建一个资产(item 为空)或给它发一个新版本。
+
+    参考图只以哈希出现在包里,必须都是提交者自己上传过、核对过的文件(blobs.claim_ready)—— 和画板快照一样。
+    虚构的发布即上架;真人人物进审核队列,审核界面并排看参考图和授权声明。种类定下就不能改:
+    同一个资产的新版本从人物变成道具,别人导入的那一份就对不上了。
+    """
+    summary, consent = read_asset(bundle, consent_kind)
+    claim_ready(ctx, db, user, summary.hashes)
+    now = utcnow()
+    if item is None:
+        title = _check_title(meta.title or summary.name)
+        item = Item(
+            kind=KIND_ASSET,
+            slug=unique_slug(db, KIND_ASSET, title),
+            owner_id=user.id,
+            title=title,
+            summary=(meta.summary if meta.summary is not None else (bundle.get("description") or ""))[:MAX_SUMMARY_CHARS],
+            description=(meta.description if meta.description is not None else (bundle.get("description") or ""))[:MAX_DESCRIPTION_CHARS],
+            asset_kind=summary.kind,
+            extra={},
+            created_at=now,
+        )
+        db.add(item)
+        db.flush()
+        tags = meta.tags if meta.tags is not None else parse_tags(list(bundle.get("tags") or [])) or []
+        set_tags(db, item, tags)
+        item.search_text = search_text(item.title, item.summary, tags, bundle.get("prompt") or "", item.slug)
+    elif item.owner_id != user.id:
+        raise ApiError(403, "not_owner")
+    elif item.asset_kind != summary.kind:
+        raise ApiError(422, "asset_kind_changed", kind=item.asset_kind)
+    else:
+        update_metadata(ctx, db, item, user, meta, None)
+    number = _next_number(db, item)
+    version = ItemVersion(
+        item_id=item.id,
+        number=number,
+        version=str(number),
+        status=VERSION_PENDING if summary.real_person else VERSION_APPROVED,
+        submitter_id=user.id,
+        file_sha256=sha256_hex(json.dumps(bundle, sort_keys=True, ensure_ascii=False).encode("utf-8")),
+        file_size=0,
+        meta={"bundle": bundle, "consent_kind": consent},
+        changelog=meta.changelog[:MAX_CHANGELOG_CHARS],
+        reviewed_at=None if summary.real_person else now,
+        created_at=now,
+    )
+    db.add(version)
+    db.flush()
+    if not summary.real_person:
+        publish_version(item, version)
+    elif item.current_version_id is None:
+        # 还没有公开的版本:列表页不显示它,但作者自己的「我的提交」要有封面和种类。
+        item.cover_sha256 = summary.cover_sha256 or None
+    db.flush()
+    log_event(logger, "asset submitted", item_id=item.id, version=version.number, user_id=user.id, pending=summary.real_person)
+    return item, version
+
+
+def asset_media(ctx: Context, db: Session, bundle: dict, *, absolute: bool = False) -> dict[str, dict]:
+    """分享包里每张参考图的地址。下载、详情、审核队列给的都是它。
+
+    `absolute`:下载给的是**完整地址**。本地存储出的是站内相对路径(官网同源,直接能用),而下载的一方是
+    桌面应用,它不在这个站点上。
+    """
+    hashes = [ref["sha256"] for ref in bundle.get("references") or []]
+    for variant in bundle.get("variants") or []:
+        hashes.extend(ref["sha256"] for ref in variant.get("references") or [])
+    if not hashes:
+        return {}
+    def url_of(blob: Blob) -> str:
+        url = ctx.storage.media_url(blob.storage_key)
+        return f"{ctx.settings.public_url}{url}" if absolute and url.startswith("/") else url
+
+    return {
+        blob.sha256: {"url": url_of(blob), "content_type": blob.content_type, "size": blob.size}
+        for blob in db.scalars(select(Blob).where(Blob.sha256.in_(set(hashes))))
+    }
+
+
 # ---------------- 审核 ----------------
 
 
@@ -502,6 +620,9 @@ def review(db: Session, version: ItemVersion, reviewer: User, *, approve: bool, 
 
 __all__ = [
     "Metadata",
+    "asset_media",
+    "read_asset",
+    "submit_asset",
     "parse_tags",
     "plugin_diff",
     "previous_approved",

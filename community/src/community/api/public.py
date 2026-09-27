@@ -12,6 +12,7 @@ from community.api.items import public_items
 from community.api.views import item_summaries, public_user, share_summary
 from community.errors import ApiError
 from community.models import (
+    KIND_ASSET,
     KIND_PLUGIN,
     KIND_WORKFLOW,
     VERSION_APPROVED,
@@ -43,7 +44,7 @@ def _public_shares():
 def overview(ctx: Ctx, db: Db) -> dict:
     count = lambda stmt: int(db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)  # noqa: E731
     top = {}
-    for kind in (KIND_WORKFLOW, KIND_PLUGIN):
+    for kind in (KIND_WORKFLOW, KIND_PLUGIN, KIND_ASSET):
         rows = list(db.scalars(public_items(kind).order_by(Item.downloads_total.desc(), Item.id.desc()).limit(TOP_N)))
         top[f"top_{kind}s"] = item_summaries(ctx, db, rows)
     since = today() - timedelta(days=29)
@@ -51,6 +52,7 @@ def overview(ctx: Ctx, db: Db) -> dict:
         "users": count(select(User.id).where(User.is_official.is_(False))),
         "workflows": count(public_items(KIND_WORKFLOW)),
         "plugins": count(public_items(KIND_PLUGIN)),
+        "assets": count(public_items(KIND_ASSET)),
         "shares": count(_public_shares()),
         "downloads": int(db.scalar(select(func.coalesce(func.sum(Item.downloads_total), 0))) or 0),
         "downloads_30d": int(
@@ -90,12 +92,12 @@ def timeseries(db: Db, metric: str, days: int = Query(default=30, ge=1, le=365))
 
 @router.get("/users/{handle}")
 def profile(handle: str, ctx: Ctx, db: Db) -> dict:
-    """作者主页:TA 的工作流、插件、公开画板,和近一年逐日贡献(用于热力图)。"""
+    """作者主页:TA 的工作流、插件、资产、公开画板,和近一年逐日贡献(用于热力图)。"""
     user = db.scalars(select(User).where(User.handle == handle.strip().lower())).first()
     if user is None or user.status != "active":
         raise ApiError(404, "user_not_found")
     out: dict = {"user": public_user(ctx, db, user)}
-    for kind in (KIND_WORKFLOW, KIND_PLUGIN):
+    for kind in (KIND_WORKFLOW, KIND_PLUGIN, KIND_ASSET):
         stmt = public_items(kind).where(Item.owner_id == user.id)
         out[f"{kind}s"] = item_summaries(ctx, db, list(db.scalars(stmt.order_by(Item.updated_at.desc()).limit(PROFILE_LIST))))
         out[f"{kind}s_count"] = int(db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)

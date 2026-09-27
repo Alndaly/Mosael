@@ -150,6 +150,14 @@ Accepted — 2026-09-27。按阶段落地,部署由维护者按 [docs/DEPLOY_COM
 **插件**:同工作流的形状,路径换成 `/plugins`,提交后状态 `pending`;`GET /plugins/index.json` 给应用读,
 字段与发版产物 `registry.json` 相同。
 
+**资产**(人物 / 场景 / 道具,[ADR 0027](0027-asset-library.md) §4):同工作流的形状,路径换成 `/assets`,列表多一个
+`?asset_kind=character|location|prop`。提交不是上传一个文件,而是 JSON:`POST /assets`、`POST /assets/{slug}/versions`
+收 `{bundle, consent_kind?, title?, summary?, tags?, changelog?}`,`bundle` 是 `mosael.asset/1`,参考图先走画板分享同一套
+三步上传、只以哈希引用(必须是提交者自己上传过的)。虚构的发布即上架;真人人物必须带 `consent_kind`(`self` /
+`authorized`)并进审核队列,队列条目带参考图地址和授权声明。`GET /assets/{slug}/download` 计一次下载,直接回
+`{slug, version, bundle, media}`(`media` 是哈希 → 完整地址),不是 302 到一个文件。种类定下就不能换。举报理由多一个
+`likeness`(冒用肖像)。
+
 **画板分享**:
 
 | 方法 | 路径 | 说明 |

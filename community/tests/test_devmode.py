@@ -56,7 +56,13 @@ def test_dev_seed_之后整个社区能在本地逛(dev_env: Path, capsys) -> No
         assert login.status_code == 200 and "Secure" not in login.headers["set-cookie"]
         admin = {"Authorization": f"Bearer {login.json()['access_token']}"}
         queue = client.get(f"{API}/admin/queue", headers=admin).json()["items"]
-        assert [one["item"]["plugin_id"] for one in queue] == ["dev.demo.pending"]
+        #: 待审核的:一个插件,和一个声明为真人的人物(资产里的真人先审核,ADR 0027 §4)。
+        assert sorted((one["kind"], one["item"]["plugin_id"] or one["item"]["title"]) for one in queue) == [
+            ("asset", "示例真人主播"),
+            ("plugin", "dev.demo.pending"),
+        ]
+        assets = client.get(f"{API}/assets").json()["items"]
+        assert sorted(one["asset_kind"] for one in assets) == ["character", "location", "prop"]
 
         workflows = client.get(f"{API}/workflows", params={"official": "false"}).json()["items"]
         assert len(workflows) == 3 and any(one["has_code"] for one in workflows)
