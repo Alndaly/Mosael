@@ -2,7 +2,7 @@
 title: Asset library: characters, locations, props
 description: Save characters, places and objects as named assets with reference images and a prompt descriptor, then @-mention them in generations and on boards.
 order: 19
-updated: 2026-09-27
+updated: 2026-09-28
 version: 1.7.0
 ---
 
@@ -35,23 +35,44 @@ Below that, tabs split the rest:
 
 - **References**: the asset's reference wall, see the next section.
 - **Variants**: its winter clothes, teenage version…, see "Variants".
-- **Settings**: the **prompt descriptor** (for models: appearance, clothing, materials; whenever the asset is `@`-mentioned
-  in a generation, this text is appended to the prompt) and the kind-specific fields — characters have a **voice** (from
+- **Settings**: the **prompt descriptor** (for models — for a character: face, hair, clothing, age; for a location: layout,
+  furnishings, light, time and weather; for a prop: shape, color, material, wear. Whenever the asset is `@`-mentioned in a
+  generation, this text is appended to the prompt) and the kind-specific fields — characters have a **voice** (from
   any voice engine — your cloned voice library, Edge or a cloud engine; pick the engine, then the voice), a **blockout color** for their stand-in figure in 3D blockouts, and **real or fictional** with a
   consent declaration; locations have a linked **3D scene** and "time / weather / light"; props have their **3D model**.
 - **Where it's used**: see the last section.
 
 ## The reference wall
 
-Each reference image is labelled with its angle or purpose: front, side, back, turnaround, close-up, full body, expression,
-concept, detail.
+Each reference image is labelled with its angle or purpose, and **each kind has its own set**:
+
+| Kind | Labels |
+| --- | --- |
+| Character | front, side, back, turnaround, close-up, full body, expression, concept, detail |
+| Location | wide shot, reverse angle, overhead, concept, detail — a location's "angles" are camera set-ups, with no front or side |
+| Prop | front, side, back, turnaround, close-up, concept, detail |
 
 - **Add from media library** opens a picker: search by name, filter images or videos, click to select several and attach
   them at once — in the order you picked them. Images already attached are listed too, marked **Attached**.
 - **Upload**, or **drop files on the wall**: they are imported into the media library first, then attached.
-- **Change the angle** with the dropdown under each image. **Set as cover**, **move earlier / later** and **remove from
-  references** are in its **⋯** menu; you can also drag images to reorder.
+- **Change the angle** by clicking the label on the image's top-left corner. **Set as cover**, **move earlier / later** and
+  **remove from references** are in its **⋯** menu; you can also drag images to reorder.
+- **Click an image to enlarge it**; the lightbox pages through the whole wall. The cover at the top of the page enlarges too.
 - Without a cover, the card uses the first reference image.
+
+### AI fill-in
+
+**AI fill-in** at the top right of the reference wall draws more images of the same asset from its existing references and
+attaches them back by angle:
+
+- **Fill in angles**: for characters and props, the front, side, back and turnaround views it doesn't have yet; for
+  locations, the wide shot, reverse angle and overhead view. You can choose to redraw every angle instead.
+- **Generate expressions** (characters only): list a few expressions (comma-separated, up to 8; empty draws smiling,
+  laughing, surprised, angry and sad) — one image each, attached as Expression.
+
+Pick an **image model that takes reference images** (text-only models can't draw the same one, so they aren't listed);
+leave it empty to use your default image model. Each image is one image generation, billed by the model; the button reads
+"Drawing…" while it runs and the task center tells you when it's done. An asset with no image reference needs one first.
 
 **Deleting an asset never deletes media**: the images stay in the media library. **Deleting media** removes that reference
 from any asset that used it; the asset itself stays, and its detail page says which image went missing until you dismiss the
@@ -62,9 +83,10 @@ asset's reference…** (optionally as its cover).
 
 ## Variants
 
-Winter clothes, period costume, the teenage version of the same character are **variants** hanging under it. A variant
-inherits its parent's prompt descriptor and voice; only the references and the outfit description change — "Zhang San ·
-Winter" is the same person as "Zhang San". A variant without references of its own uses its parent's in generations.
+Winter clothes or the teenage version of a character, the same place by day, on a rainy night or years later, the same object
+brand new, worn or in another color — these are **variants** hanging under it. A variant inherits its parent's prompt
+descriptor (characters also inherit the voice); only the references and this version's extra description change —
+"Zhang San · Winter" is the same person as "Zhang San". A variant without references of its own uses its parent's in generations.
 Deleting an asset that has variants asks you to confirm that they go too.
 
 ## Real people and consent
@@ -82,8 +104,9 @@ generate** node has an **Assets** field; the agent's `generate_image` / `generat
 same thing:
 
 1. The asset's **prompt descriptor** is appended to the prompt (a variant contributes its parent's descriptor plus its own).
-2. Reference images are **picked in order**: turnaround > front > full body > the rest. With several assets mentioned, picks
-   take turns so the first one doesn't use up every slot.
+2. Reference images are **picked in order**: for characters turnaround > front > full body, for props turnaround > front,
+   for locations wide shot > concept, then the rest in wall order. With several assets mentioned, picks take turns so the
+   first one doesn't use up every slot.
 3. **Only the selected model's description decides how many fit**: how many reference images it takes and whether it can
    combine them with an attached first/last frame. A model without a known description gets none — nothing is guessed.
 4. **What didn't fit is reported**: the AI Studio history and the board both say how many images were attached, how many
@@ -95,7 +118,7 @@ finds the same subject instead of creating a duplicate.
 
 ## Assets in workflows
 
-Workflows have two asset-library nodes under "Assets & timeline":
+Workflows have three asset-library nodes under "Assets & timeline":
 
 - **Get from asset library**: pick an asset, or look it up by kind + name. It outputs the prompt descriptor, references (in
   the order generation picks them), cover and voice, ready to feed generation, plugin and other nodes. When a name lookup
@@ -104,12 +127,26 @@ Workflows have two asset-library nodes under "Assets & timeline":
   of that kind and name exists, it's merged: only missing references are added, and the prompt descriptor and description are
   filled only if empty — edits by people aren't overwritten. You can also choose "always create a new one".
 
-Together they "reuse what exists, save what's new": the same character in your second film has the same face.
+- **List library assets**: lists one kind of asset as one-per-line text (name — prompt descriptor), usually handed to an LLM
+  so it can tell whether someone in the story is already in the library.
+
+Under "AI" there are also **Fill in angles** and **Generate expressions** — the same thing as AI fill-in on the reference wall.
+
+Together they "reuse what exists, save what's new". The **Topic to finished video** template works this way: before it
+defines the cast and locations it shows the model what the library already has, and reuses a name exactly when the story
+needs that one; each character and location is looked up first — if it has images they're used as-is, and only new ones get
+a turnaround or concept art, which is then saved to the library. The same character in your second film has the same face.
 
 ## The asset item on boards
 
-**Add → Reference → Asset** places an **asset item** on a board: cover, name and a kind badge. Connect it into an image or
-video generation item and it works exactly like an `@` mention; in the prompt's `@` menu, connected assets come first.
+**Add → From your libraries → Asset** places an **asset item** on a board: cover, name and a kind badge.
+
+- Connect it into an image or video generation item and it works exactly like an `@` mention; the generation panel shows the
+  connected assets along its top, and they come first in the `@` menu.
+- Connect it into a note or a document and "Let AI write" reads its description and looks at its first two references
+  ("describe this character", "write her backstory").
+- Select the asset item and its toolbar offers its abilities: **Fill in angles** (all three kinds) and **Generate
+  expressions** (characters only). The new images appear to the right and are attached to the asset.
 
 ## Where it's used
 
