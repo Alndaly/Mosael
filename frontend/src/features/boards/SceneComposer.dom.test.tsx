@@ -207,20 +207,23 @@ describe("3D 场景格", () => {
     expect(document.querySelector("[data-board-stop]")).not.toBeNull();
   });
 
-  it("在跑、跑挂了的那一块只圆上两角:下面贴着场景名那条底栏,四角都圆会在底部两角露出空(用户截图)", () => {
+  it("在跑、跑挂了:整格一块占位,不留场景名那条底栏(用户截图:按文字重搭时顶着旧场景的名字)", () => {
     const blocks = [
-      { run: { status: "running", job_id: "j1" }, pick: () => screen.getByRole("status") },
-      { run: { status: "failed", job_id: "j1", error: "坏了" }, pick: () => screen.getByRole("alert") },
+      { run: { status: "queued", job_id: "j1" } },
+      { run: { status: "running", job_id: "j1" } },
+      { run: { status: "failed", job_id: "j1", error: "坏了" } },
     ] as const;
-    for (const { run, pick } of blocks) {
-      const { unmount } = node(scene("sc", { form: { producer: "scene_render" }, run }));
-      const block = pick();
-      expect(block.className).toContain("rounded-t-");
-      expect(block.className).not.toMatch(/(^|\s)rounded-\[/);
-      //: 扫光那层自己也不能四角都圆 —— 它铺满这一块,角是外面那层裁出来的(上一版只查了外层,扫光的下两角照样圆)。
-      block.querySelectorAll<HTMLElement>('[data-slot="skeleton"]').forEach((skeleton) =>
+    for (const { run } of blocks) {
+      const { unmount } = node(scene("sc", { text: "远古巨柱神殿", form: { producer: "node:scene_from_text" }, run }));
+      expect(document.querySelector("[data-board-scene-pending]"), run.status).not.toBeNull();
+      expect(document.querySelector("footer"), run.status).toBeNull();
+      expect(document.body.textContent, run.status).not.toContain("远古巨柱神殿");
+      //: 扫光那层不自带圆角 —— 角是外面那层裁出来的(此前它的 rounded-md 和外层的角叠成两套)。
+      document.querySelectorAll<HTMLElement>('[data-slot="skeleton"]').forEach((skeleton) =>
         expect(skeleton.className).not.toMatch(/(^|\s)rounded-(sm|md|lg|xl|\[)/));
       unmount();
     }
+    node(scene("sc", { text: "远古巨柱神殿", form: { producer: "scene_render" } }));
+    expect(document.querySelector("footer")?.textContent).toContain("远古巨柱神殿");
   });
 });
