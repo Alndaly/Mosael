@@ -1588,6 +1588,34 @@ def _migrate_board_documents_can_be_written() -> None:
                 )
 
 
+def _migrate_board_scene_cells_hold_no_image() -> None:
+    """3D 场景格不再存图(ADR 0029 §1):摘掉每一格场景格上的 `asset_id`。
+
+    那是编辑器「生成素材」时导出的一帧,格子上此前画它、连到下游时当图片喂出去。现在格子上画场景的全景白模(现渲),
+    连到下游给的是场景;那一帧素材本身还在素材库里,当初也一起放下了一格图片。改到的板版本号 +1。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for board_id, raw, revision in conn.execute(text("SELECT id, canvas, revision FROM boards")).fetchall():
+            try:
+                canvas = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            changed = False
+            for item in canvas["items"]:
+                if isinstance(item, dict) and item.get("kind") == "scene" and "asset_id" in item:
+                    del item["asset_id"]
+                    changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = :revision WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "revision": int(revision or 0) + 1, "id": board_id},
+                )
+
+
 def _migrate_drop_the_community_integration() -> None:
     """把桌面端接入社区时加的东西删掉 —— 社区能力整体从应用里拿掉了(2026-09-27,维护者:「先把资产库做好」)。
 
@@ -5029,6 +5057,7 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_entity_reference_roles_follow_kind),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_blender_models_are_named_after_their_scene),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_documents_can_be_written),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_cells_hold_no_image),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

@@ -114,6 +114,22 @@ def upstream_entities(board: Board, item_id: str) -> list[str]:
     return out
 
 
+def upstream_scene(board: Board, item_id: str) -> str | None:
+    """连进这一格的 3D 场景格给的场景(ADR 0029 §2),按连线的先后取第一个。还没搭出场景的空场景格跳过。
+
+    **连进来的是场景,不是一张图**:生成时现渲它的一个镜头当参考(见 generation.create_generation_job)。
+    """
+    canvas = board.canvas or {}
+    items = {str(one.get("id")): one for one in canvas.get("items") or [] if isinstance(one, dict)}
+    for edge in canvas.get("edges") or []:
+        if not isinstance(edge, dict) or edge.get("target") != item_id:
+            continue
+        source = items.get(str(edge.get("source"))) or {}
+        if source.get("kind") == "scene" and source.get("scene_id"):
+            return str(source["scene_id"])
+    return None
+
+
 def generate_on_board(
     db: Session,
     *,
@@ -129,11 +145,12 @@ def generate_on_board(
     source_assets: list[dict[str, Any]],
     form: dict[str, Any],
     entity_ids: list[str] | None = None,
+    scene_reference: dict[str, str] | None = None,
 ) -> Board:
     """在画板上出图出片。没点名模型时由漏斗用这个人的默认。
 
     `entity_ids` 是正文里 `@` 到的资产;连进这一格的资产格在这里并进去(upstream_entities),
-    之后两者是同一样东西。
+    之后两者是同一样东西。连进这一格的 3D 场景格(upstream_scene)按 `scene_reference`(镜头、用法)现渲成参考。
 
     **顺序**:建任务 → 摆占位 → 起任务。起在占位之前的话,一个当场失败的生成会把回执送到一格
     还不存在的地方。生成的错误(GenerationDomainError)原样抛出。
@@ -143,10 +160,10 @@ def generate_on_board(
     from app.domain.generation.runner import start_generation_thread
 
     _ensure_slot_ready(db, workspace_id, slot)
-    mentioned = list(dict.fromkeys([
-        *(entity_ids or []),
-        *upstream_entities(get_board(db, workspace_id, slot.board_id), slot.item_id),
-    ]))
+    board = get_board(db, workspace_id, slot.board_id)
+    mentioned = list(dict.fromkeys([*(entity_ids or []), *upstream_entities(board, slot.item_id)]))
+    scene_id = upstream_scene(board, slot.item_id)
+    reference = {**(scene_reference or {}), "scene_id": scene_id} if scene_id else None
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
         generation, job = create_generation_job(
@@ -164,6 +181,7 @@ def generate_on_board(
             parameters=dict(parameters),
             source_assets=parse_source_assets(source_assets, kind=kind),
             entity_ids=mentioned,
+            scene_reference=reference,
         )
     finally:
         reset_receipt(token)

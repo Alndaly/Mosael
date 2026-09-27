@@ -648,6 +648,8 @@ def _set_design_schema() -> dict[str, Any]:
         #: 只有 kind="model" 用得上:上游道具清单里的那个 id。其余物体写空字符串
         #: (严格模式要求每一格都在)。
         "model_id": {"type": "string"},
+        #: 只有 figure 用得上:它演的是资产库里哪个人物(ADR 0029 §3)。没有就写空字符串。
+        "entity_id": {"type": "string"},
         "parameters": _object(parameters, list(parameters)),
         "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
         "target": vec3, "fov": {"type": "number", "minimum": 10, "maximum": 120},
@@ -1212,7 +1214,9 @@ def single_set_rules(clip: int, *, source: str) -> str:
 - 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……),尺寸按真实比例。
 - 每个出场的角色**一个** figure(整段戏只有这一个,不按镜头复制):parameters.height = 角色身高,
   width 0.4~0.5(肩宽),depth 0.22~0.28;每个角色一个不同的 color;rotation[1] 是朝向(度)。
-{_PROP_RULE}- 相机以外的物体 target 写 [0,1,0]、fov 写 45(用不上);非 model 的物体 model_id 写空字符串。
+  这个角色是下面「资产库里的人物」清单里的某一个,entity_id 就写那个 id(之后生成时带上他的长相);不是就写空字符串。
+{_PROP_RULE}- 相机以外的物体 target 写 [0,1,0]、fov 写 45(用不上);非 model 的物体 model_id 写空字符串,
+  非 figure 的物体 entity_id 写空字符串。
 
 **动作写在人物的 track 上,不要摆成静止的人偶。** 文字里的跑、走、转身、停下……都是这个 figure 的关键帧:
 每一档写 position(y=0 贴地)和 rotation(rotation[1] 朝着运动方向),target 写 [0,1,0]、fov 写 45(人物用不上)。

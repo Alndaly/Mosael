@@ -18,9 +18,11 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
+from app.ai.providers.contracts.generation import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from app.domain.scene_types import SceneContent
 from app.media.paths import resolve_key, scene_model_dir, scene_model_key, scene_preview_dir
-from typing import TYPE_CHECKING, BinaryIO
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable
 
 if TYPE_CHECKING:  # 渲染器带着 numpy,按这个文件一贯的做法留到函数里再导
     from app.domain.scene_render.model_mesh import ModelLibrary
@@ -558,6 +560,117 @@ def view_scene(db: Session, scene: Scene3D, *, views: list[str], shot_id: str = 
             "skipped_models": skipped, "model_warnings": model_warnings(db, scene, library), "images": images}
 
 
+def _pick_shot(content: SceneContent, shot_id: str) -> str:
+    """没指定镜头:场景只有一个时就是它(表单把它显示成当前值,见节点声明的 sole_option_default);
+    有好几个时不猜 —— 渲错了镜头的参考比报错更难发现。"""
+    if shot_id:
+        return shot_id
+    if len(content.shots) != 1:
+        raise SceneDomainError("sceneErr_pickShot", shots=", ".join(shot.name for shot in content.shots))
+    return content.shots[0].id
+
+
+#: 「3D 参考」的三种用法(ADR 0029 §2)和各自交给模型的素材角色。首尾帧里尾帧是「模型收才给」。
+REFERENCE_USES = ("composition", "frames", "motion")
+_USE_ROLES = {"composition": (REFERENCE_IMAGE,), "frames": (FIRST_FRAME,), "motion": (REFERENCE_VIDEO,)}
+
+
+@dataclass(frozen=True)
+class SceneReference:
+    """渲好的「3D 参考」:挂给模型的素材、并进提示词的几句、镜头里看得见的人偶演的人物(当 `@` 了它们)。"""
+
+    source_assets: list[dict[str, str]] = field(default_factory=list)
+    prompt: str = ""
+    entity_ids: list[str] = field(default_factory=list)
+    receipt: dict[str, Any] = field(default_factory=dict)
+
+
+def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: str, use: str, kind: str,
+                    accepts: Callable[[str], bool]) -> SceneReference:
+    """把一个场景的一个镜头**现渲**成一次生成的参考(ADR 0029 §2):用场景此刻的修订,改了场景下一次就是新的。
+
+    - `composition`:这个镜头第 0 秒的白模,当参考图(图片、视频都行)。
+    - `frames`:首、尾两帧,当首帧 / 尾帧(视频;模型不收尾帧就只给首帧)。
+    - `motion`:这个镜头的运镜白模视频,当参考视频(视频;要逐帧渲,一个 5 秒镜头半分钟上下)。
+    角色名见 `_USE_ROLES`。
+
+    `accepts(role)` 问这次的模型收不收某种素材角色(描述符说了算;查不到的模型一律当收)。用法要的角色它不收就
+    当场说,不渲 —— 面板上本来只列模型收得下的用法,走到这里多半是换了模型。视频另附一句从机位轨迹算出的运镜描述。
+    镜头里看得见的人偶指着人物资产的,交回那几个资产(调用方当 `@` 处理:拼描述、挂参考图),提示词写明谁是谁。
+    """
+    import tempfile
+
+    from app.db.models import Entity
+    from app.domain.assets.importer import register_file_asset
+    from app.domain.scene_render import (
+        SceneRenderError, describe_camera_move, figures_in_shot, find_shot, render_frame, render_shot_video,
+    )
+
+    if use not in REFERENCE_USES:
+        raise SceneDomainError("sceneErr_badReferenceUse", choices=", ".join(REFERENCE_USES))
+    if use != "composition" and kind != "video":
+        raise SceneDomainError("sceneErr_referenceUseVideoOnly")
+    for role in _USE_ROLES[use]:
+        if not accepts(role):
+            raise SceneDomainError("sceneErr_referenceRoleUnsupported", role=role)
+    scene = get_scene(db, workspace_id, scene_id)
+    content = SceneContent.model_validate(scene.content)
+    library = model_library(db, scene, content)
+    try:
+        shot = find_shot(content, _pick_shot(content, shot_id))
+        first = render_frame(content, shot.id, 0, models=library)
+        last = render_frame(content, shot.id, shot.duration, models=library) if kind == "video" else None
+        figures = figures_in_shot(content, shot)
+    except SceneRenderError as exc:
+        raise SceneDomainError(str(exc)) from exc
+
+    label = f"{scene.name} · {shot.name}"
+    sources: list[dict[str, str]] = []
+    with tempfile.TemporaryDirectory(prefix="mosael-scene-ref-") as folder:
+        work = Path(folder)
+
+        def keep(path: Path, name: str, role: str) -> None:
+            asset = register_file_asset(db, workspace_id=workspace_id, project_id=None, source_path=path,
+                                        name=name, source="graybox")
+            sources.append({"asset_id": asset.id, "role": role})
+
+        if use == "composition":
+            first.image.save(work / "composition.png")
+            keep(work / "composition.png", f"{label} · 白模构图", REFERENCE_IMAGE)
+        elif use == "frames":
+            first.image.save(work / "first.png")
+            keep(work / "first.png", f"{label} · 白模首帧", FIRST_FRAME)
+            if last is not None and accepts(LAST_FRAME):
+                last.image.save(work / "last.png")
+                keep(work / "last.png", f"{label} · 白模尾帧", LAST_FRAME)
+        else:
+            try:
+                video = render_shot_video(content, shot.id, work / "move.mp4", library)
+            except SceneRenderError as exc:
+                raise SceneDomainError(str(exc)) from exc
+            keep(video, f"{label} · 白模运镜", REFERENCE_VIDEO)
+
+    lines = [tr({"composition": "sceneRef_image", "frames": "sceneRef_frames", "motion": "sceneRef_video"}[use],
+                name=scene.name), tr("sceneRef_realism")]
+    cast = [one for one in figures if one.entity_id]
+    known = {row.id: row.name for row in db.query(Entity).filter(
+        Entity.workspace_id == workspace_id, Entity.id.in_([one.entity_id for one in cast])).all()} if cast else {}
+    entity_ids: list[str] = []
+    for figure in cast:
+        name = known.get(figure.entity_id or "")
+        if name:
+            lines.append(tr("sceneRef_figure", color=figure.color, name=name))
+            if figure.entity_id not in entity_ids:
+                entity_ids.append(str(figure.entity_id))
+    if last is not None:
+        lines.append(tr("sceneRef_cameraMove", move=describe_camera_move(first.camera, last.camera)))
+    return SceneReference(
+        source_assets=sources, prompt="\n".join(lines), entity_ids=entity_ids,
+        receipt={"scene_id": scene.id, "revision": scene.revision, "shot_id": shot.id, "use": use,
+                 "asset_ids": [one["asset_id"] for one in sources], "entity_ids": entity_ids},
+    )
+
+
 def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render: str = "stills",
                            project_id: str | None = None) -> dict:
     """从一个镜头渲出白模参考,登记成本工作区的素材。**工作流节点、接口、智能体工具共用这一份。**
@@ -580,12 +693,7 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
         if project is None or project.workspace_id != scene.workspace_id:
             raise SceneDomainError("sceneErr_projectNotInWorkspace")
     content = SceneContent.model_validate(scene.content)
-    if not shot_id:
-        #: 没指定镜头:场景只有一个时就是它(表单把它显示成当前值,见节点声明的 sole_option_default);
-        #: 有好几个时不猜 —— 渲错了镜头的参考比报错更难发现。
-        if len(content.shots) != 1:
-            raise SceneDomainError("sceneErr_pickShot", shots=", ".join(shot.name for shot in content.shots))
-        shot_id = content.shots[0].id
+    shot_id = _pick_shot(content, shot_id)
     library = model_library(db, scene, content)
     try:
         shot = find_shot(content, shot_id)

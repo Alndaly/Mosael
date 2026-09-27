@@ -1368,6 +1368,39 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "render 只能是 {choices}",
         "en": "render must be one of {choices}.",
     },
+    "sceneErr_badReferenceUse": {
+        "zh": "3D 参考的用法只能是 {choices}",
+        "en": "A 3D reference is used as one of: {choices}.",
+    },
+    "sceneErr_referenceUseVideoOnly": {
+        "zh": "首尾帧和运镜参考只给视频用;图片用构图参考",
+        "en": "First/last frames and camera-move references are for video; images use the composition reference.",
+    },
+    "sceneErr_referenceRoleUnsupported": {
+        "zh": "这个模型不收 {role},换一种 3D 参考的用法,或换一个收它的模型",
+        "en": "This model does not accept {role}. Pick another way to use the 3D reference, or a model that accepts it.",
+    },
+    "sceneRef_image": {
+        "zh": "参考图是 3D 场景「{name}」的白模渲染:只沿用它的构图、机位视角、人物站位和光的方向。",
+        "en": "The reference image is a blockout render of the 3D scene \"{name}\": take only its composition, camera angle, where the people stand and where the light comes from.",
+    },
+    "sceneRef_frames": {
+        "zh": "首帧和尾帧是 3D 场景「{name}」的白模渲染:只沿用构图、机位、人物站位和光的方向。",
+        "en": "The first and last frames are blockout renders of the 3D scene \"{name}\": take only the composition, camera, where the people stand and where the light comes from.",
+    },
+    "sceneRef_video": {
+        "zh": "参考视频是 3D 场景「{name}」的白模预演:只沿用它的运镜、机位节奏、构图和人物走位。",
+        "en": "The reference video is a blockout previs of the 3D scene \"{name}\": take only its camera moves, pacing, composition and how the people move.",
+    },
+    "sceneRef_realism": {
+        "zh": "白模的纯色、无材质外观只是占位 —— 成品要完整写实,每样东西都换成真实的材质、纹理与细节,不要出现灰模或未上材质的表面。",
+        "en": "The flat, untextured blockout look is only a placeholder. The result must be fully realistic, with real materials, textures and detail everywhere; no grey models or untextured surfaces.",
+    },
+    "sceneRef_figure": {
+        "zh": "白模里颜色为 {color} 的人偶是「{name}」。",
+        "en": "The figure coloured {color} in the blockout is \"{name}\".",
+    },
+    "sceneRef_cameraMove": {"zh": "运镜:{move}。", "en": "Camera: {move}."},
     "sceneErr_pickShot": {
         "zh": "这个场景有好几个镜头({shots}),要指定渲哪一个",
         "en": "This scene has several shots ({shots}); pick the one to render.",
@@ -3503,6 +3536,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_documentNeedsNote": {"zh": "文档节点需要有效的笔记 ID", "en": "A document item needs a valid note ID."},
     "boardErr_documentNeedsRevision": {"zh": "文档节点需要有效的引用版本", "en": "A document item needs a valid note revision to reference."},
     "boardErr_sceneNeedsId": {"zh": "3D 场景节点需要 scene_id", "en": "A 3D scene item needs a scene_id."},
+    "boardErr_sceneHasNoAsset": {
+        "zh": "3D 场景格 {item_id} 不存图片(asset_id):格子上画的是场景本身;要一张图,渲白模参考或放一格图片",
+        "en": "3D scene item {item_id} holds no image (asset_id): it shows the scene itself. Render a blockout reference or add an image item.",
+    },
     "boardErr_sceneNotInWorkspace": {"zh": "3D 场景不属于当前工作区", "en": "That 3D scene isn't in this workspace."},
     "boardErr_itemAssetNotInWorkspace": {"zh": "画板项 {item_id} 引用的素材 {asset_id} 不在当前工作区的素材库里", "en": "Board item {item_id} points at asset {asset_id}, which isn't in this workspace's library."},
     "boardErr_itemAssetKindMismatch": {"zh": "画板项 {item_id} 是 {kind} 格子,放不下 {asset_kind} 素材 {asset_id}:换一份 {kind} 素材,或者另放一格 {asset_kind}", "en": "Board item {item_id} is a {kind} item and can't hold the {asset_kind} asset {asset_id}. Pick a {kind} asset, or add a separate {asset_kind} item for it."},

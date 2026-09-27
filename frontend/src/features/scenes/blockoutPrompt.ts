@@ -1,5 +1,5 @@
 /**
- * 从 3D 场景「一键生成」时交给生成模型的那段提示词。
+ * 从 3D 场景「生成素材」时写进生成格的那段提示词。
  *
  * ## 为什么要专门写
  *
@@ -53,34 +53,23 @@ export function sceneInventory(
     .join(t("sceneListSeparator"));
 }
 
-/** 按界面语言写 —— 它会落进画板生成节点的提示词框,人要看、要改。 */
-export function blockoutPrompt({
-  kind,
-  sceneName,
+/**
+ * 从 3D 场景「生成素材」时,生成格提示词框里先写好的那几句:画面里有什么、打光是什么。按界面语言写 —— 人要看、要改。
+ *
+ * 「参考是白模、只取构图和运镜、成品要写实」那几句**不在这里**:参考是服务端生成时现渲的(ADR 0029),说明也由它
+ * 随参考一起附上(后端 sceneRef_*),连进来的场景不管从哪条路来都有,不靠这一段被留在提示词框里。
+ */
+export function sceneBriefPrompt({
   objects,
   lighting,
-  clay,
   t,
 }: {
-  kind: "image" | "video";
-  sceneName: string;
   objects: readonly InventoryObject[];
   /** 打光预设那段话(lightingPrompt 的结果),不带句号。 */
   lighting: string;
-  /** 出图时是否另附了一张灰模渲染(只用来读光影与体积)。视频路径没有这张。 */
-  clay: boolean;
   t: (key: MessageKey) => string;
 }): string {
   const inventory = sceneInventory(objects, t);
-  const lines =
-    kind === "video"
-      ? [t("sceneBlockoutVideoReference").replace("{name}", sceneName), t("sceneBlockoutVideoRealism")]
-      : [
-          t("sceneBlockoutImageReference").replace("{name}", sceneName),
-          t("sceneBlockoutImageRealism"),
-          clay ? t("sceneBlockoutClayNote") : "",
-        ];
-  if (inventory) lines.push(t("sceneBlockoutInventory").replace("{items}", inventory));
-  lines.push(t("sceneBlockoutLighting").replace("{lighting}", lighting));
+  const lines = [inventory ? t("sceneBlockoutInventory").replace("{items}", inventory) : "", t("sceneBlockoutLighting").replace("{lighting}", lighting)];
   return lines.filter(Boolean).join(t("sceneSentenceGap"));
 }

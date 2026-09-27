@@ -110,9 +110,9 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
 #: 是空槽,合法(见 normalize_canvas 里「空槽是合法的」那一段)。
 _MEDIA_KINDS = ("image", "video", "audio")
 
-#: 一种格子的 `asset_id` 必须是哪种素材(见 _validate_asset_references)。3D 场景借它放缩略图,是一张图。
+#: 一种格子的 `asset_id` 必须是哪种素材(见 _validate_asset_references)。
 #: 不在表里的种类只问「是不是这个工作区的」。
-_ASSET_KIND_OF_ITEM: dict[str, str] = {**{kind: kind for kind in _MEDIA_KINDS}, "scene": "image"}
+_ASSET_KIND_OF_ITEM: dict[str, str] = {kind: kind for kind in _MEDIA_KINDS}
 
 #: 一个 item 至少要有的东西。坐标必须是数,否则画布渲染不出来。
 _REQUIRED = ("id", "kind", "x", "y")
@@ -190,6 +190,15 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
         if not isinstance(entities, list):
             raise BoardDomainError("boardErr_itemFieldNotArray", item_id=item_id, field="form.mentioned_entity_ids")
         form["mentioned_entity_ids"] = list(dict.fromkeys(str(one).strip() for one in entities if str(one).strip()))
+    #: 连进来的 3D 场景怎么用(ADR 0029 §2):镜头、用法。和生成表单(producers.SceneReferenceForm)同形。
+    reference = form.get("scene_reference")
+    if reference is not None:
+        if (not isinstance(reference, dict) or set(reference) - {"shot_id", "use"}
+                or not isinstance(reference.get("shot_id", ""), str)
+                or reference.get("use", "composition") not in ("composition", "frames", "motion")):
+            raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="form.scene_reference")
+        form["scene_reference"] = {"shot_id": str(reference.get("shot_id") or "").strip()[:128],
+                                   "use": str(reference.get("use") or "composition")}
     trim = form.get("trim")
     if trim is not None:
         form["trim"] = _normalize_trim(trim, item_id)
@@ -540,6 +549,10 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
             item["entity_id"] = entity_id.strip()
 
         asset_id = entry.get("asset_id")
+        #: 3D 场景格**就是一个场景**,不存图(ADR 0029 §1):格子上画的是场景的全景白模(现渲),连到下游时给的是
+        #: 场景,不是某一帧。此前它存着编辑器里导出过的一帧,格子上看到的和喂给下游的不是一张,还会过期。
+        if kind == "scene" and asset_id is not None:
+            raise BoardDomainError("boardErr_sceneHasNoAsset", item_id=item_id)
         if asset_id is not None:
             if not isinstance(asset_id, str) or not asset_id.strip():
                 raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="asset_id")
@@ -897,8 +910,8 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
         settled_run = (settled or {}).get("run") or {}
         live = live_job(settled)
         incoming_running = (item.get("run") or {}).get("status") in ("queued", "running")
-        #: 派生落点的宿主(跑着一项能力的内容格、3D 场景格)自己的 asset_id 不是这一轮的产出 —— 音频格里是
-        #: 那段音频本身、场景格的是缩略图,归客户端。
+        #: 派生落点的宿主(跑着一项能力的内容格、3D 场景格)自己的字段不是这一轮的产出 —— 音频格里是
+        #: 那段音频本身,归客户端。
         derived = derives_outputs(settled or item)
         if live and live_job(item) != live:
             kept = {**item, "run": settled_run}
@@ -1043,7 +1056,7 @@ def place_pending(
             #: 四个状态两两互斥 —— 重新生成时旧产出、上一次的失败都让位给这次的占位。
             #: 不清的话,一个项会同时带着 run.running 和 asset_id(画布不知道该画哪个),
             #: 或者一边转圈一边挂着上次的报错(用户以为这次也挂了)。派生落点的宿主不清:它的产出
-            #: 在右边,它自己的 asset_id(3D 场景格的缩略图)不是上一次的产出。
+            #: 在右边,它自己的 asset_id(比如音频格里那段音频)不是上一次的产出。
             if not derives_outputs(merged):
                 merged.pop("asset_id", None)
             items[index] = merged
@@ -1326,9 +1339,8 @@ def _canvas_with_delivered_result(
             elif fit is not None and fit.get("type") == "note":
                 filled.update(note_id=str(fit["note_id"]), note_revision=fit.get("revision"), text=str(fit.get("title") or ""))
             elif fit is not None and fit.get("type") == "scene":
-                #: 按剧本搭出的是一个**新场景**,换进这一格;原来那个还在「3D 场景」里。缩略图是旧场景的,摘掉。
+                #: 按剧本搭出的是一个**新场景**,换进这一格;原来那个还在「3D 场景」里。
                 filled.update(scene_id=str(fit["scene_id"]), text=str(fit.get("name") or ""))
-                filled.pop("asset_id", None)
             elif fit is not None:
                 filled["text"] = _clip(str(fit.get("text") or ""))
             kept.append(filled)

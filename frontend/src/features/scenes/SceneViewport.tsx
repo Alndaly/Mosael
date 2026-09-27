@@ -62,7 +62,7 @@ export type ViewportHandle = {
   placement: (halfWidth: number) => Vec3;
   view: (direction: "perspective" | "front" | "top") => void;
   editCamera: (shot: SceneShot, time: number) => void;
-  frame: (shot: SceneShot, time: number, options?: { clay?: boolean }) => Promise<Blob>;
+  frame: (shot: SceneShot, time: number) => Promise<Blob>;
   glb: () => Promise<Blob>;
   record: (
     shot: SceneShot,
@@ -190,7 +190,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         placement: (w) => runtime.current?.handle.placement(w) ?? [0, 0, 0],
         view: (v) => runtime.current?.handle.view(v),
         editCamera: (s, t) => runtime.current?.handle.editCamera(s, t),
-        frame: (s, t, options) => runtime.current!.handle.frame(s, t, options),
+        frame: (s, t) => runtime.current!.handle.frame(s, t),
         glb: () => runtime.current!.handle.glb(),
         record: (s, signal, p) => runtime.current!.handle.record(s, signal, p),
       }),
@@ -700,7 +700,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           }
         }
       }
-      function output(shot: SceneShot, clay = false) {
+      function output(shot: SceneShot) {
         if (modelsPending) throw new Error(translate.current("sceneModelsLoadingExport"));
         if (
           latest.current.content.objects.some(
@@ -724,29 +724,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           Math.round((aspect >= 1 ? 1280 : 720) / aspect),
         );
         const exportScene = new THREE.Scene();
-        // 灰模那一张换成中性底:场景自己的背景色会把整张图染上一层色偏,而这张图的用处
-        // 恰恰是"只看光影"。
-        exportScene.background = new THREE.Color(
-          clay ? "#8a8f96" : latest.current.content.background,
-        );
+        exportScene.background = new THREE.Color(latest.current.content.background);
         const copy = cloneSceneForExport(root);
-        if (clay) {
-          /** 统一材质的"灰模"。**去掉材质噪音,只留光的结构。**
-           *
-           * 3D 里的占位球和默认色看着塑料,直接当参考图会把模型往塑料感带;而影子、明暗
-           * 过渡、体积这些**光的信息**在灰模上反而更干净。它是配合正片一起送的第二张参考图,
-           * 不是替代。
-           *
-           * clone(true) 不复制材质(是共享引用),所以在这里换掉不会动到视口里的那一份。 */
-          const clayMaterial = new THREE.MeshStandardMaterial({
-            color: 0xbfc3c8,
-            roughness: 0.85,
-            metalness: 0,
-          });
-          copy.traverse((node) => {
-            if (node instanceof THREE.Mesh) node.material = clayMaterial;
-          });
-        }
         const exportSun = sun.clone();
         // 平行光的朝向由 target 决定,而 clone 出来的 target 不在任何场景里 —— 不加进去,
         // 它的世界矩阵就不参与更新,光会照着默认方向(原点)打。
@@ -855,8 +834,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           orbit.target.fromArray(frame.target);
           orbit.update();
         },
-        frame: async (shot, time, options) => {
-          const { r, draw } = output(shot, options?.clay);
+        frame: async (shot, time) => {
+          const { r, draw } = output(shot);
           try {
             draw(time);
             return await new Promise<Blob>((resolve, reject) =>

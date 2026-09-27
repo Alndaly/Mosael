@@ -13,9 +13,8 @@ import { SceneBlender } from "./SceneBlender";
 import { SceneBlenderPull } from "./SceneBlenderPull";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { readSceneSnap, writeSceneSnap } from "./sceneSnap";
-import { readClayReference, writeClayReference } from "./clayReference";
 import { forgetSceneView, readSceneView, rememberedShot, writeSceneView } from "./sceneViewMemory";
-import { blockoutPrompt } from "./blockoutPrompt";
+import { sceneBriefPrompt } from "./blockoutPrompt";
 import { lightingPrompt, presetById } from "./lighting";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
@@ -70,7 +69,7 @@ import {
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { importAsset } from "@/api/domains/assets";
-import { createBoard, updateBoard, withSlotProducer, type BoardItem } from "@/api/domains/boards";
+import { createBoard, updateBoard, withSlotProducer, type BoardItem, type SceneReferenceUse } from "@/api/domains/boards";
 import { errorText } from "@/api/errorMessage";
 import {
   createScene,
@@ -388,8 +387,6 @@ function SceneEditor({
     // 吸附是「我习惯这么干活」,不是这一次的临时状态 —— 和画布输入模式同一类,记住它。
     // 每次打开场景都退回关闭,等于让常开的人每次先点一下。
     [snap, setSnap] = React.useState(readSceneSnap),
-    //: 交给模型时是否附一张灰模参考图。见 clayReference —— 是"我习惯怎么交",不是场景数据。
-    [clay, setClay] = React.useState(readClayReference),
     //: 视角档和镜头按场景记住 —— 个人的编辑器状态,存本地,不进场景(见 sceneViewMemory)。
     [shotId, setShotId] = React.useState(() =>
       rememberedShot(readSceneView(initial.workspace_id, initial.id), initial.content.shots),
@@ -758,12 +755,11 @@ function SceneEditor({
       placeModel(m.name, m.id);
     });
   }
-  async function assetFrame(at: number, options?: { clay?: boolean }) {
-    const blob = await view.current!.frame(shot, at, options);
-    const suffix = options?.clay ? `-${t("sceneClaySuffix")}` : "";
+  async function assetFrame(at: number) {
+    const blob = await view.current!.frame(shot, at);
     return importAsset({
       workspaceId: initial.workspace_id,
-      file: new File([blob], `${draft.name}-${shot.name}-${at.toFixed(2)}${suffix}.png`, {
+      file: new File([blob], `${draft.name}-${shot.name}-${at.toFixed(2)}.png`, {
         type: "image/png",
       }),
     });
@@ -789,95 +785,44 @@ function SceneEditor({
     recordAbort.current = null;
     return asset;
   }
-  async function bridge(kind: "image" | "frames" | "video") {
+  /**
+   * 「生成素材」:开一张画板,放这个场景一格、连一格空的生成格,**镜头和用法已经挑好**(ADR 0029 §2)。
+   *
+   * 不在这里渲 —— 生成时服务端按场景那一刻存着的修订现渲这个镜头(构图参考 / 首尾帧 / 运镜参考),改了场景再生成
+   * 就是新的;镜头里看得见的人偶演的人物一并带上。此前在浏览器里先导出一帧,场景格存着那一帧当缩略图,改了场景就过期。
+   * 提示词里先写好画面里有什么、打光是什么(白模说明由服务端附上)。
+   */
+  async function bridge(use: SceneReferenceUse) {
     await work(t("sceneBusyPrepareGenerate"), async () => {
-      const sources: NonNullable<
-        NonNullable<BoardItem["form"]>["source_assets"]
-      > = [];
-      const items: BoardItem[] = [];
-      if (kind === "image") {
-        const a = await assetFrame(time);
-        sources.push({ asset_id: a.id, role: "reference_image" });
-        if (clay) {
-          const gray = await assetFrame(time, { clay: true });
-          sources.push({ asset_id: gray.id, role: "reference_image" });
-        }
-      } else if (kind === "frames") {
-        for (const [i, at] of [0, shot.duration].entries()) {
-          const a = await assetFrame(at);
-          sources.push({
-            asset_id: a.id,
-            role: i ? "last_frame" : "first_frame",
-          });
-          items.push({
-            id: uid(),
-            kind: "image",
-            x: 0,
-            y: i * 280,
-            asset_id: a.id,
-          });
-        }
-      } else {
-        const a = await exportVideo();
-        sources.push({ asset_id: a.id, role: "reference_video" });
-        items.push({ id: uid(), kind: "video", x: 0, y: 0, asset_id: a.id });
-      }
-      const thumbnail =
-        kind === "video" ? (await assetFrame(0)).id : sources[0].asset_id;
-      items.push({
-        id: uid(),
-        kind: "scene",
-        scene_id: initial.id,
-        text: draft.name,
-        asset_id: thumbnail,
-        x: -440,
-        y: 0,
-      });
+      //: 服务端渲的是**存着的**那一版:没存完的先存上。
+      if (!(await autosave.flush())) throw new Error(t("sceneGenerateUnsaved"));
       const board = await createBoard({
         workspace_id: initial.workspace_id,
         name: `${draft.name} · ${shot.name}`,
       });
-      const generatorId = uid();
-      const edges = items
-        .filter((i) => kind === "image" ? i.kind === "scene" : i.kind !== "scene")
-        .map((i) => ({ id: uid(), source: i.id, target: generatorId }));
-      items.push({
-        id: generatorId,
-        kind: kind === "image" ? "image" : "video",
-        x: kind === "image" ? 0 : 460,
-        y: 100,
+      const sceneItem: BoardItem = { id: uid(), kind: "scene", scene_id: initial.id, text: draft.name, x: -440, y: 0 };
+      const kind = use === "composition" ? "image" : "video";
+      const generator: BoardItem = {
+        id: uid(),
+        kind,
+        x: 0,
+        y: 0,
         form: {
-          // **打光要一起说出去。** 参考帧只表达"光从哪来"(靠影子),而"这是什么光"——
-          // 暖的冷的、硬的柔的、什么场合 —— 只有文字说得清。此前这句只提构图和运镜,
-          // 光完全由模型自己发挥,于是同一场景的两个镜头打光对不上,剪到一起就穿帮。
-          //: 另外两件事同样要说:参考只是白模占位(不说的话成片会照着灰模画),以及画面里有什么
-          //: (白模里的形状各是什么)。见 blockoutPrompt。
-          prompt: blockoutPrompt({
-            kind: kind === "image" ? "image" : "video",
-            sceneName: draft.name,
-            objects: draft.content.objects,
-            lighting: lightingPrompt(draft.content.lighting, t),
-            clay: kind === "image" && clay,
-            t,
-          }),
-          source_assets: sources,
-          mode: kind === "frames" ? "first_frame" : undefined,
-          parameters: {
-            aspect_ratio: shot.aspect,
-            ...(kind !== "image" ? { duration_seconds: shot.duration } : {}),
-          },
+          prompt: sceneBriefPrompt({ objects: draft.content.objects, lighting: lightingPrompt(draft.content.lighting, t), t }),
+          scene_reference: { shot_id: shot.id, use },
+          parameters: { aspect_ratio: shot.aspect, ...(kind === "video" ? { duration_seconds: shot.duration } : {}) },
         },
-      });
+      };
       await updateBoard(board.id, {
         workspace_id: initial.workspace_id,
         base_revision: board.revision,
-        //: 每一格过新建格子的那一处(api/domains/boards 的 withSlotProducer):生成那一格带着草稿(提示词、参考、
-        //: 参数),产出者由它补上 —— 和画布上放下的一格同一个样子。此前漏写,选中了什么面板都不挂。
-        canvas: { items: items.map((item) => withSlotProducer(item)), edges },
+        //: 每一格过新建格子的那一处(api/domains/boards 的 withSlotProducer):产出者由它补上 —— 和画布上放下的一格同一个样子。
+        canvas: {
+          items: [sceneItem, generator].map((item) => withSlotProducer(item)),
+          edges: [{ id: uid(), source: sceneItem.id, target: generator.id }],
+        },
       });
-      await qc.invalidateQueries({
-        queryKey: ["boards", initial.workspace_id],
-      });
+      await qc.invalidateQueries({ queryKey: ["boards", initial.workspace_id] });
       location.hash = `#/boards?board=${board.id}`;
       toast.success(kind === "image" ? t("sceneBridgeImageDone") : t("sceneBridgeVideoDone"));
     });
@@ -1024,14 +969,12 @@ function SceneEditor({
                 <button
                   className="scene-choice"
                   disabled={!!busy}
-                  onClick={() => void bridge("image")}
+                  onClick={() => void bridge("composition")}
                 >
                   <ImageIcon size={20} />
                   <span>
                     <strong>{t("sceneGenerateFromFrame")}</strong>
-                    <small>
-                      {t("sceneGenerateFromFrameHint").replace("{time}", time.toFixed(1))}
-                    </small>
+                    <small>{t("sceneGenerateFromFrameHint")}</small>
                   </span>
                   <ChevronRight size={16} />
                 </button>
@@ -1050,7 +993,7 @@ function SceneEditor({
                 <button
                   className="scene-choice"
                   disabled={!!busy}
-                  onClick={() => void bridge("video")}
+                  onClick={() => void bridge("motion")}
                 >
                   <Play size={20} />
                   <span>
@@ -1059,20 +1002,6 @@ function SceneEditor({
                   </span>
                   <ChevronRight size={16} />
                 </button>
-                {/* **灰模是第二张参考图,不是替代。** 3D 里的占位色看着塑料,会把模型往塑料感
-                    带;而影子、明暗过渡、体积这些光的信息在灰模上反而更干净。生成侧的
-                    reference_image 上限是 9,多送一张是现成能力。 */}
-                <label className="scene-toggle">
-                  <input
-                    type="checkbox"
-                    checked={clay}
-                    onChange={() => setClay((on) => writeClayReference(!on))}
-                  />
-                  <span>
-                    <strong>{t("sceneClayToggle")}</strong>
-                    <small>{t("sceneClayToggleHint")}</small>
-                  </span>
-                </label>
                 <p>
                   {t("sceneGenerateLightingNote").replace("{lighting}", t(presetById(draft.content.lighting.preset)?.label ?? "sceneLightingCustom"))}{" "}
                   {t("sceneGenerateNextStep")}
@@ -1162,13 +1091,13 @@ function SceneEditor({
                 {t("sceneExportPreviewToLibrary")}
               </button>
               <hr />
-              <button onClick={() => void bridge("image")}>
+              <button onClick={() => void bridge("composition")}>
                 {t("sceneExportToImage")}
               </button>
               <button onClick={() => void bridge("frames")}>
                 {t("sceneExportFramesToVideo")}
               </button>
-              <button onClick={() => void bridge("video")}>
+              <button onClick={() => void bridge("motion")}>
                 {t("sceneExportVideoToVideo")}
               </button>
               <p>{t("sceneExportNote")}</p>
@@ -1713,6 +1642,7 @@ function SceneEditor({
 
                 <ScenePanel id="inspector" title={object ? t("sceneAdjustObject") : t("sceneAppearance")}>
                   <SceneInspector
+                    workspaceId={initial.workspace_id}
                     content={draft.content}
                     object={object && posing !== object.id ? {...object, ...samplePose(object)} : object}
                     objectPatch={(id, patch) => {

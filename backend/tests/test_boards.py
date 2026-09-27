@@ -289,16 +289,12 @@ def test_新挂上的素材要在这个工作区里_种类对得上格子() -> N
         assert refused.status_code == 400, refused.text
         assert "x" in refused.json()["detail"] and says in refused.json()["detail"], refused.json()["detail"]
 
-    #: 建板、智能体改画板开卡前的干跑走的是同一道(check_canvas)。3D 场景的缩略图得是一张图。
+    #: 建板、智能体改画板开卡前的干跑走的是同一道(check_canvas)。3D 场景格不存图(ADR 0029)。
     scene = client.post("/api/scenes", json={"workspace_id": ws, "name": "场景"}).json()["id"]
-    def scene_board(thumbnail: str):
-        return client.post("/api/boards", json={"workspace_id": ws, "name": "C", "canvas": {"items": [
-            {"id": "s", "kind": "scene", "x": 0, "y": 0, "scene_id": scene, "asset_id": thumbnail}], "edges": []}})
-
-    assert scene_board("pic").status_code == 200
-    refused = scene_board("voice")
+    refused = client.post("/api/boards", json={"workspace_id": ws, "name": "C", "canvas": {"items": [
+        {"id": "s", "kind": "scene", "x": 0, "y": 0, "scene_id": scene, "asset_id": "pic"}], "edges": []}})
     assert refused.status_code == 400, refused.text
-    assert "audio" in refused.json()["detail"], refused.json()["detail"]
+    assert "asset_id" in refused.json()["detail"], refused.json()["detail"]
 
 
 def test_板上已有的素材引用不再重新校验_素材删了照样能挪能复制() -> None:

@@ -1,4 +1,5 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SceneSubsection } from "./SceneSubsection";
 import { Copy, Eye, EyeOff, Group, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,12 +13,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/scenes";
+import { entityKeys, listEntities } from "@/api/domains/entities";
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
 import { duplicateObject, groupPath, groupTargets, makeObject, moveToGroup } from "./sceneGraph";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 export function SceneInspector({
+  workspaceId,
   content,
   object,
   objectPatch,
@@ -25,6 +28,7 @@ export function SceneInspector({
   onRemove,
   setSelected,
 }: {
+  workspaceId: string;
   content: SceneContent;
   object: SceneObject | undefined;
   objectPatch: (id: string, patch: Partial<SceneObject>) => void;
@@ -73,6 +77,13 @@ export function SceneInspector({
                   </SelectContent>
                 </Select>
               </label>
+            )}
+            {object.kind === "figure" && (
+              <FigureCast
+                workspaceId={workspaceId}
+                value={object.entity_id ?? null}
+                onChange={(entity_id) => objectPatch(object.id, { entity_id })}
+              />
             )}
             <div className="scene-actions">
               <Tool
@@ -294,6 +305,43 @@ export function SceneInspector({
  *  没用 —— 调的人想的是身高和肩宽,名字贴着它实际是什么,省掉一次心里的换算。 */
 /** 「不在组里」在 Select 里要有一个值 —— 空串会被 Radix 当成"没选" 。 */
 const TOP_LEVEL = "__top__";
+const NO_CAST = "__none__";
+
+/**
+ * 人偶演的是资产库里哪个人物(ADR 0029 §3)。指上之后,把这个场景的镜头当生成参考时,镜头里看得见的人偶带上
+ * 他的参考图和描述、提示词写明「这个颜色的人偶是谁」—— 构图由 3D 定,长相由资产定。
+ */
+function FigureCast({ workspaceId, value, onChange }: {
+  workspaceId: string;
+  value: string | null;
+  onChange: (next: string | null) => void;
+}) {
+  const t = useI18n();
+  const people = useQuery({
+    queryKey: entityKeys.list(workspaceId, { kind: "character" }),
+    queryFn: () => listEntities(workspaceId, { kind: "character" }),
+  });
+  const known = people.data ?? [];
+  //: 指着的人物已经删了:照实说,不悄悄显示成「不指定」(那样用户以为本来就没指)。
+  const missing = value && people.isSuccess && !known.some((one) => one.id === value);
+  return (
+    <label className="scene-number" data-figure-cast="">
+      <span>{t("sceneFigureCast")}</span>
+      <Select value={value ?? NO_CAST} onValueChange={(next) => onChange(next === NO_CAST ? null : next)}>
+        <SelectTrigger aria-label={t("sceneFigureCast")}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_CAST}>{t("sceneFigureCastNone")}</SelectItem>
+          {missing && <SelectItem value={value}>{t("sceneFigureCastMissing")}</SelectItem>}
+          {known.map((one) => (
+            <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </label>
+  );
+}
 
 const PARAMETER_LABELS: Partial<
   Record<SceneObject["kind"], Partial<Record<keyof SceneObject["parameters"], MessageKey>>>

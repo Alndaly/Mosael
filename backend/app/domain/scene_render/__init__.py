@@ -167,6 +167,40 @@ def _lighting(content: SceneContent, world: dict[str, np.ndarray]) -> Lighting:
     )
 
 
+def figures_in_shot(content: SceneContent, shot: SceneShot) -> list[SceneObject]:
+    """这个镜头里**看得见**的人偶:首帧或尾帧时它的胸口落在画面里就算(没藏、在相机前面)。
+
+    给「3D 参考」挑要带上哪几个人物的参考图用(ADR 0029 §3):镜头里只有一个人,就只交一个人的脸 ——
+    整个场景的人全交的话,模型会把没出镜的人也画进来。不算遮挡:躲在柱子后面的人照样算看得见,
+    多交一张脸比漏一张好。
+    """
+    objects = {obj.id: obj for obj in content.objects}
+    width, height = FRAME_SIZES[shot.aspect]
+    seen: dict[str, SceneObject] = {}
+    for time in (0.0, shot.duration):
+        world = _world_matrices(content, shot, time)
+        camera = _camera(content, shot, time)
+        eye = np.asarray(camera.position, dtype=np.float64)
+        forward = np.asarray(camera.target, dtype=np.float64) - eye
+        forward /= max(float(np.linalg.norm(forward)), 1e-9)
+        right = np.cross(forward, np.array([0.0, 1.0, 0.0]))
+        right /= max(float(np.linalg.norm(right)), 1e-9)
+        up = np.cross(right, forward)
+        half_h = math.tan(math.radians(camera.fov) / 2)
+        half_w = half_h * width / height
+        for obj in content.objects:
+            if obj.kind != "figure" or obj.id in seen or not _visible(obj, objects):
+                continue
+            chest = world[obj.id] @ np.array([0.0, obj.parameters.height * 0.7, 0.0, 1.0])
+            offset = chest[:3] - eye
+            depth = float(np.dot(offset, forward))
+            if depth <= 0.05:
+                continue
+            if abs(float(np.dot(offset, right))) / depth <= half_w and abs(float(np.dot(offset, up))) / depth <= half_h:
+                seen[obj.id] = obj
+    return list(seen.values())
+
+
 def find_shot(content: SceneContent, shot_id: str) -> SceneShot:
     shot = next((one for one in content.shots if one.id == shot_id), None)
     if shot is None:

@@ -66,6 +66,8 @@ export function makeObject(
     intensity: 40,
     hidden: false,
     model_id: null,
+    //: 人偶演的是资产库里哪个人物(ADR 0029 §3);没指就是 null。
+    entity_id: null,
     ...patch,
   };
 }

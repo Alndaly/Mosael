@@ -11408,6 +11408,8 @@ export interface components {
             hidden: boolean;
             /** Model Id */
             model_id?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
             /**
              * Target
              * @default [

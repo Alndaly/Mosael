@@ -6,7 +6,8 @@ import { ArrowLeftRight, Plus, Sparkles } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { listAssets, type Asset, type BoardItem, type GenerationOption } from "@/api/client";
+import { listAssets, type Asset, type BoardItem, type GenerationOption, type SceneReferenceForm } from "@/api/client";
+import { SceneReferencePicker, sceneReferenceUses } from "@/features/boards/SceneReferencePicker";
 import {
   collect,
   PromptEditor,
@@ -423,6 +424,7 @@ export function NodeComposer({
   upstreamTexts,
   upstreamDocuments,
   upstreamEntities,
+  upstreamScene,
   workspaceId,
   onFormChange,
 }: {
@@ -439,6 +441,8 @@ export function NodeComposer({
     sourceAssets: { asset_id: string; role: string }[];
     /** 正文里 `@` 到的资产(ADR 0027)。连进来的资产格不在这里 —— 服务端按连线取。 */
     entityIds: string[];
+    /** 连进来的 3D 场景怎么用(ADR 0029);没连场景时不给。 */
+    sceneReference?: SceneReferenceForm;
     form: NonNullable<BoardItem["form"]>;
   }) => void;
   /** 每一次编辑都写回节点，而不是留在面板组件的临时 state 里。 */
@@ -455,6 +459,8 @@ export function NodeComposer({
   /** 连进这一格的资产格引用的资产(ADR 0027)。生成时服务端按连线把它们当成 `@` 了一样挂上;
    *  这里只用来把它们排在 `@` 菜单的「连进来的」那一组。 */
   upstreamEntities?: string[];
+  /** 连进这一格的 3D 场景格给的场景(ADR 0029)。生成时服务端现渲它的一个镜头当参考;这里挑镜头和用法。 */
+  upstreamScene?: string;
   /** `@` 引用素材时去哪个工作区找。 */
   workspaceId: string;
 }) {
@@ -463,6 +469,9 @@ export function NodeComposer({
   const [prompt, setPrompt] = React.useState(saved.prompt ?? item.text ?? "");
   const [promptDocument, setPromptDocument] = React.useState<PromptDocument | undefined>(
     saved.prompt_document as PromptDocument | undefined,
+  );
+  const [sceneReference, setSceneReference] = React.useState<SceneReferenceForm>(
+    saved.scene_reference ?? { shot_id: "", use: "composition" },
   );
   const [picked, setPicked] = React.useState(
     saved.provider_profile_id && saved.model ? `${saved.provider_profile_id}:${saved.model}` : "",
@@ -699,8 +708,9 @@ export function NodeComposer({
       source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role, ...(one.from ? { from: one.from } : {}) })),
       mentioned_asset_ids: mentioned,
       ...(mentionedEntities.length > 0 || saved.mentioned_entity_ids ? { mentioned_entity_ids: mentionedEntities } : {}),
+      ...(upstreamScene || saved.scene_reference ? { scene_reference: sceneReference } : {}),
     }),
-    [prompt, promptDocument, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids],
+    [prompt, promptDocument, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids, upstreamScene, saved.scene_reference, sceneReference],
   );
   const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
@@ -712,7 +722,10 @@ export function NodeComposer({
 
   //: 这个模型对提示词的要求(见 promptMode):不收的不摆编辑器、发空串;可以不写的,空着也能跑。
   const currentPromptMode = promptMode(current);
-  const canSend = Boolean(current) && hasEnoughText(current, prompt);
+  //: 连了 3D 场景:这个模型收得下哪几种用法(一种都没有时发不出去 —— 服务端照连线一定会现渲它)。
+  const sceneUses = sceneReferenceUses(current, item.kind);
+  const sceneUse = sceneUses.includes(sceneReference.use) ? sceneReference.use : sceneUses[0];
+  const canSend = Boolean(current) && hasEnoughText(current, prompt) && (!upstreamScene || sceneUses.length > 0);
 
   const send = () => {
     //: 不收提示词的模型:编辑器里残留的字(换模型之前写的)不跟着发出去。
@@ -741,6 +754,7 @@ export function NodeComposer({
         parameters,
         sourceAssets,
         entityIds: mentionedEntities,
+        ...(upstreamScene && sceneUse ? { sceneReference: { ...sceneReference, use: sceneUse } } : {}),
         form: editableForm,
       }),
     );
@@ -778,8 +792,17 @@ export function NodeComposer({
 
   //: 上面那一排:连进来的资产、挂上的参考素材(按模型声明出的槽)和连进来的文档。
   const upstreamChips =
-    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length ? (
+    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene ? (
       <>
+        {upstreamScene && (
+          <SceneReferencePicker
+            workspaceId={workspaceId}
+            sceneId={upstreamScene}
+            uses={sceneUses}
+            value={{ ...sceneReference, use: sceneUse ?? sceneReference.use }}
+            onChange={setSceneReference}
+          />
+        )}
         {mergedSlots ? (
           <>
             {mergedSlots.flatMap((slot) =>

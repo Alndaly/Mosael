@@ -64,9 +64,14 @@ def create_generation_job(
     source_assets: list[dict[str, str]],
     provider_profile_id: str | None = None,
     entity_ids: list[str] | None = None,
+    scene_reference: dict[str, str] | None = None,
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
-    挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。"""
+    挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
+
+    `scene_reference`(`scene_id` / `shot_id` / `use`)是这次的「3D 参考」(ADR 0029):在这里**现渲**成素材挂上,
+    提示词里并进白模说明;镜头里看得见的人偶演的人物并进 `entity_ids`,和 `@` 同一条路。用了哪个修订、渲出了哪几份
+    记进请求的 `scene_reference`。"""
     provider = provider.strip()
     model = model.strip()
     if not provider or not model:
@@ -86,6 +91,27 @@ def create_generation_job(
     provider = resolved.provider
     if get_generation_adapter(provider, kind) is None:
         raise GenerationDomainError("genErr_adapterUnavailable", provider=provider, kind=kind)
+
+    capabilities = resolved.capabilities if resolved.capabilities_known else None
+    scene_receipt: dict[str, Any] | None = None
+    if scene_reference:
+        from app.domain.scenes import SceneDomainError
+        from app.domain.scenes import scene_reference as render_scene_reference
+
+        declared = allowed_parameter_keys(capabilities, kind) if capabilities and capabilities.get("parameter_keys") else None
+        try:
+            rendered = render_scene_reference(
+                db, workspace_id, scene_id=str(scene_reference.get("scene_id") or ""),
+                shot_id=str(scene_reference.get("shot_id") or ""), use=str(scene_reference.get("use") or "composition"),
+                kind=kind, accepts=lambda role: declared is None or role in declared,
+            )
+        except SceneDomainError as exc:
+            raise GenerationDomainError(exc.key, **exc.params) from exc
+        source_assets = [*source_assets, *rendered.source_assets]
+        if capabilities is None or prompt_mode(capabilities) != "none":
+            prompt = "\n\n".join(part for part in (prompt.strip(), rendered.prompt) if part)
+        entity_ids = [*(entity_ids or []), *(one for one in rendered.entity_ids if one not in (entity_ids or []))]
+        scene_receipt = rendered.receipt
 
     # `@资产` 在校验之前展开:拼进来的提示词描述和挂上的参考图,和手写、手挂的走同一套校验。
     from app.domain.entities import EntityDomainError, attach_entities
@@ -142,6 +168,8 @@ def create_generation_job(
     }
     if expansion.receipt:
         request["entities"] = expansion.receipt
+    if scene_receipt:
+        request["scene_reference"] = scene_receipt
     job = create_job(
         db,
         workspace_id=workspace_id,

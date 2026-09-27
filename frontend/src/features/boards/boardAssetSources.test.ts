@@ -9,28 +9,28 @@ const item = (kind: BoardItem["kind"], asset_id?: string): BoardItem => ({
   x: 0,
   y: 0,
 });
-it("feeds a scene frame into image reference and video first-frame slots", () => {
-  const sources = boardAssetSources([item("scene", "render")]);
-  expect(sources).toEqual([{ assetId: "render", kind: "image", itemId: "scene" }]);
+it("feeds an upstream image into image reference and video first-frame slots", () => {
+  const sources = boardAssetSources([item("image", "render")]);
+  expect(sources).toEqual([{ assetId: "render", kind: "image", itemId: "image" }]);
   //: 顺着线挂上的记着是从哪一格来的 —— 线断了,服务端存的时候凭它摘掉。
   expect(autoAssign([{ role: "reference_image", limit: 1 }], sources)).toEqual([
-    { role: "reference_image", assetId: "render", from: "scene" },
+    { role: "reference_image", assetId: "render", from: "image" },
   ]);
   expect(autoAssign([{ role: "first_frame", limit: 1 }], sources)).toEqual([
-    { role: "first_frame", assetId: "render", from: "scene" },
+    { role: "first_frame", assetId: "render", from: "image" },
   ]);
 });
-it("preserves input order without duplicating a scene frame also connected as an image", () => {
+it("preserves input order without duplicates; a 3D scene gives a scene, not an image (ADR 0029)", () => {
   expect(
     boardAssetSources([
-      item("scene", "frame"),
+      item("image", "frame"),
       item("image", "frame"),
       item("video", "motion"),
       item("document", "invalid"),
-      item("scene"),
+      item("scene", "legacy"),
     ]),
   ).toEqual([
-    { assetId: "frame", kind: "image", itemId: "scene" },
+    { assetId: "frame", kind: "image", itemId: "image" },
     { assetId: "motion", kind: "video", itemId: "video" },
   ]);
 });

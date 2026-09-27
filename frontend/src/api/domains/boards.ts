@@ -44,6 +44,8 @@ export interface BoardItem {
     mentioned_asset_ids?: string[];
     /** 提示词里 `@` 到的资产(ADR 0027)。生成时服务端把它们的提示词描述和参考图挂上。 */
     mentioned_entity_ids?: string[];
+    /** 连进来的 3D 场景怎么用(ADR 0029 §2):镜头(空 = 场景只有一个时用它)、用法。和后端 canvas 同形。 */
+    scene_reference?: SceneReferenceForm;
     /** 这一格是**从哪份素材截的哪一段**(剪一段的产出)。和后端 canvas._normalize_trim 同形。 */
     trim?: { asset_id: string; start: number; end: number; mute: boolean };
     prompt_document?: { type?: string; content?: unknown[]; [key: string]: unknown };
@@ -196,6 +198,11 @@ export function listBoardProducers(workspaceId: string): Promise<BoardProducerIn
 }
 
 /** 每个产出者收的表单。和后端 producers.*Form 同形 —— 表单在后端领域里校验。 */
+/** 「3D 参考」的三种用法:构图参考(reference_image)、首尾帧(first_frame / last_frame)、运镜参考(reference_video)。 */
+export type SceneReferenceUse = "composition" | "frames" | "motion";
+/** 连进来的 3D 场景怎么用(后端 producers.SceneReferenceForm)。形状就是生成表单里那一项。 */
+export type SceneReferenceForm = NonNullable<BoardRunForms["generate"]["scene_reference"]>;
+
 export interface BoardRunForms {
   generate: {
     /** 发给模型的那句(可带运行时追加的图例)。 */
@@ -208,6 +215,8 @@ export interface BoardRunForms {
     source_assets?: { asset_id: string; role: string }[];
     /** 正文里 `@` 到的资产(ADR 0027);连进来的资产格由服务端按连线并进去。 */
     entity_ids?: string[];
+    /** 连进来的 3D 场景怎么用(ADR 0029):镜头(空 = 场景只有一个时用它)、用法;场景本身由服务端按连线取。 */
+    scene_reference?: { shot_id: string; use: SceneReferenceUse };
     /** 落在这一格上、用户可再次编辑的表单(不含运行时追加的图例)。 */
     item_form?: BoardItem["form"];
   };

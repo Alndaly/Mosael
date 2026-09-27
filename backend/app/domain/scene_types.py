@@ -68,6 +68,9 @@ class SceneObject(SceneValue):
     intensity: float = Field(30, ge=0, le=10000)
     hidden: bool = False
     model_id: Identifier | None = None
+    #: 人偶演的是资产库里的哪个人物(ADR 0029 §3)。渲这个镜头当生成参考时,镜头里看得见的人偶带上它的参考图、
+    #: 提示词里写明「这个颜色的人偶是谁」—— 构图由 3D 定,长相由资产定。只有 figure 用得上。
+    entity_id: Identifier | None = None
     #: 相机看向哪里,以及视角。非相机忽略它们。
     #:
     #: **相机的静止姿态也放在物体上**(position + target + fov),和别的物体一样 ——

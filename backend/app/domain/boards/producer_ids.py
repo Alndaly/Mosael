@@ -22,7 +22,7 @@ NOTE_PRODUCER = "write"
 SCENE_PRODUCER = "scene_render"
 
 #: 产出**不落进宿主**、而是新建成宿主右边几格的内置产出者(ADR 0025 的 `landing: derived`)。内置的只有渲白模 ——
-#: 宿主是 3D 场景格,它的内容是那个场景(和缩略图),渲出来的首尾帧、运镜视频是右边新的几格,场景格一个字段
+#: 宿主是 3D 场景格,它的内容是那个场景,渲出来的首尾帧、运镜视频是右边新的几格,场景格一个字段
 #: 不动。宿主的表单因此**就是**下一次运行发的那一份(不会被产出清掉):智能体能照它替人点运行(见 derives_outputs)。
 #: 内容格的**能力**(转写、翻译、分离……,见 boards.transforms 的 `ability`)也是这样落,但它们不写进宿主自己的
 #: 产出者:一次能力的运行记在 `run.ability` 上(见 ability_of)。
@@ -56,8 +56,7 @@ def missing_slot_producer(item: dict[str, Any]) -> str | None:
     form = item.get("form") if isinstance(item.get("form"), dict) else {}
     if default is None or form.get("producer") is not None:
         return None
-    #: 媒体格的 asset_id 是它的产出:有了就不再是空槽。派生落点的宿主不一样 —— 3D 场景格的 asset_id 是
-    #: 缩略图,不是渲出来的东西,有它照样挂渲白模。
+    #: 媒体格的 asset_id 是它的产出:有了就不再是空槽。派生落点的宿主不一样 —— 它的产出落在右边。
     if kind != "note" and item.get("asset_id") and default not in DERIVED_BUILTINS:
         return None
     return default
@@ -79,7 +78,7 @@ def derives_outputs(item: dict[str, Any]) -> bool:
 
     两种:跑的是它的一项能力(`run.ability`:宿主的内容是输入,产出是新东西),或它挂着派生产出者
     (3D 场景格渲白模)。画布那一侧(回执、摆占位、保存时保留服务端的状态)照它分两种落法 —— 派生的宿主
-    自己的 asset_id 不是这一轮的产出(音频格里那段音频、场景格的缩略图),一概不动。
+    自己的 asset_id 不是这一轮的产出(音频格里那段音频),一概不动。
     """
     form = item.get("form") if isinstance(item.get("form"), dict) else {}
     return ability_of(item) is not None or form.get("producer") in DERIVED_BUILTINS

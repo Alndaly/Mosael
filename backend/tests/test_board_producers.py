@@ -131,6 +131,8 @@ def test_写入之后每一个能产出的空槽都写明了产出者() -> None:
             item = {"id": f"{kind}-{name}", "kind": kind, "x": 0, "y": 0, **extra}
             if kind == "scene":
                 item["scene_id"] = "s1"
+                #: 场景格不存图(ADR 0029):「有产出」的那一种对它不存在。
+                item.pop("asset_id", None)
             if kind == "entity":
                 item["entity_id"] = "e1"
             if kind in ("frame", "entity") or (kind == "note" and name == "named"):
@@ -332,7 +334,7 @@ def test_升级之后新建却没写明产出者的空槽_迁移补上() -> None
     with SessionLocal() as db:
         #: 直接写行,绕过保存入口 —— 模拟 3D 场景页此前建出来的画板。
         board = Board(workspace_id=ws, name="场景 · 镜头 1", revision=1, canvas={"items": [
-            {"id": "scene", "kind": "scene", "x": -440, "y": 0, "scene_id": "s1", "asset_id": "thumb"},
+            {"id": "scene", "kind": "scene", "x": -440, "y": 0, "scene_id": "s1"},
             {"id": "first", "kind": "image", "x": 0, "y": 0, "asset_id": "f1"},
             {"id": "gen", "kind": "video", "x": 460, "y": 100, "form": draft},
             {"id": "bare", "kind": "audio", "x": 0, "y": 0},

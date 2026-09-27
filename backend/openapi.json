@@ -30450,6 +30450,20 @@
             ],
             "title": "Model Id"
           },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[\\w-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
           "target": {
             "prefixItems": [
               {

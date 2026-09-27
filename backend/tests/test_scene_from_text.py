@@ -85,14 +85,13 @@ def test_画板上是_3D_场景格的一种填法_剧本从连进来的文档便
     outputs = board_outputs(meta, {"scene_id": "sc-new", "shot_ids": ["s1"], "shot_count": 1, "name": "天台告白"})
     assert outputs == [{"type": "scene", "scene_id": "sc-new", "name": "天台告白"}]
 
-    #: 已经有场景的格子按剧本重搭:新场景换进这一格,旧场景的缩略图摘掉(旧场景本身还在库里)。
-    cell = {"id": "set", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc-old", "asset_id": "thumb-old",
+    #: 已经有场景的格子按剧本重搭:新场景换进这一格(旧场景本身还在库里)。
+    cell = {"id": "set", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc-old",
             "form": {"producer": "node:scene_from_text"}, "run": {"status": "running", "job_id": "j1"}}
     canvas = _canvas_with_delivered_result({"items": [cell], "edges": []}, item_id="set", job_id="j1", outputs=outputs,
                                            reason="", cancelled=False, succeeded=True, assets={})
     [filled] = canvas["items"]
     assert (filled["scene_id"], filled["text"], filled["run"]["status"]) == ("sc-new", "天台告白", "succeeded")
-    assert "asset_id" not in filled
 
 
 def test_空的_3D_场景格存得下_写了_id_照旧校验() -> None:
@@ -139,3 +138,27 @@ def test_跑动的人物_关键帧带朝向_严格模式的填充格按种类摘
     assert [frame["time"] for frame in hero] == [0, 5] and hero[1]["position"] == [15, 0, -1]
     assert hero[0]["rotation"] == [0, 90, 0] and hero[0].get("target") is None
     assert all(frame.get("rotation") is None and frame["target"] for frame in by_id["cam-1"]["track"])
+
+
+def test_人偶指向资产库里的人物_编的_id_当没写(written) -> None:
+    """ADR 0029 §3:资产库里的人物随文字交给写布景的模型,它在人偶上写 entity_id;之后渲镜头当参考时带上他的长相。"""
+    from app.db.models import Entity
+    from tests.test_scene_workflow_nodes import LAYOUT as BASE
+
+    scope = _scope()
+    with SessionLocal() as db:
+        mei = Entity(workspace_id=scope.workspace_id, kind="character", name="小美", prompt="", attributes={}, tags=[],
+                     lost_references=[])
+        db.add(mei)
+        db.commit()
+        mei_id = mei.id
+    objects = [{**one, "entity_id": mei_id} if one["kind"] == "figure" else {**one, "entity_id": ""} for one in BASE["objects"]]
+    objects.append({"id": "ghost", "kind": "figure", "position": [2, 0, -1], "entity_id": "made-up"})
+    written["reply"] = {**BASE, "objects": objects}
+    with SessionLocal() as db:
+        out = scene_from_text(db, scope, {"text": "小美在天台上"})
+        content = db.get(Scene3D, out["scene_id"]).content
+    assert f"- {mei_id}:小美" in written["prompt"]
+    by_id = {one["id"]: one for one in content["objects"]}
+    assert by_id["hero"]["entity_id"] == mei_id
+    assert by_id["ghost"].get("entity_id") is None and by_id["room"].get("entity_id") is None

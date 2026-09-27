@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
+
+import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Board
@@ -33,17 +34,6 @@ def _scene(ws: str, layout: dict | None = None) -> str:
         one.get("track", []).sort(key=lambda frame: frame["time"])
     with SessionLocal() as db:
         return create_scene(db, ws, "教室", SceneContent.model_validate(content)).id
-
-
-def _thumbnail(ws: str, tmp_path: Path) -> str:
-    from PIL import Image
-
-    from app.domain.assets.importer import register_file_asset
-
-    path = tmp_path / "thumb.png"
-    Image.new("RGB", (8, 8), "#888888").save(path)
-    with SessionLocal() as db:
-        return register_file_asset(db, workspace_id=ws, project_id=None, source_path=path, name="缩略图").id
 
 
 def test_渲白模是挂在场景格上的内置产出者_工具格撤下画板() -> None:
@@ -86,15 +76,46 @@ def test_渲白模是挂在场景格上的内置产出者_工具格撤下画板(
     assert not any(one["id"] == "node:scene_render" for one in listed)
 
 
-def test_新放下的场景格写明产出者_有缩略图也一样() -> None:
-    from app.domain.boards import normalize_canvas
+def test_新放下的场景格写明产出者_不存图() -> None:
+    """场景格就是一个场景(ADR 0029 §1):格子上画的是场景的全景白模,连到下游给的是场景 —— 不再存一帧当缩略图。"""
+    from app.domain.boards import BoardDomainError, normalize_canvas
 
-    canvas = normalize_canvas({"items": [
-        {"id": "s1", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc"},
-        {"id": "s2", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc", "asset_id": "thumb"},
-    ], "edges": []})
-    assert [item["form"] for item in canvas["items"]] == [{"producer": "scene_render"}] * 2
-    assert canvas["items"][1]["asset_id"] == "thumb"
+    canvas = normalize_canvas({"items": [{"id": "s1", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc"}], "edges": []})
+    assert canvas["items"][0]["form"] == {"producer": "scene_render"}
+    with pytest.raises(BoardDomainError) as refused:
+        normalize_canvas({"items": [{"id": "s2", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc", "asset_id": "a"}],
+                          "edges": []})
+    assert refused.value.key == "boardErr_sceneHasNoAsset"
+
+
+def test_迁移_场景格上的图摘掉_别的格子不动() -> None:
+    from app.db.migrations import _migrate_board_scene_cells_hold_no_image, migration_plan
+
+    assert "migrate-board-scene-cells-hold-no-image" in {step.name for step in migration_plan().steps}
+    client = fresh_client()
+    ws = _workspace(client)
+    with SessionLocal() as db:
+        #: 直接写行,绕过保存入口 —— 模拟升级前落库的画布。
+        board = Board(workspace_id=ws, name="旧板", revision=3, canvas={"items": [
+            {"id": "s", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc", "asset_id": "frame",
+             "form": {"producer": "scene_render"}},
+            {"id": "i", "kind": "image", "x": 0, "y": 0, "asset_id": "frame"},
+        ], "edges": [{"id": "e", "source": "s", "target": "i"}]})
+        untouched = Board(workspace_id=ws, name="新板", revision=2, canvas={"items": [
+            {"id": "s", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc", "form": {"producer": "scene_render"}},
+        ], "edges": []})
+        db.add_all([board, untouched])
+        db.commit()
+        board_id, untouched_id = board.id, untouched.id
+
+    _migrate_board_scene_cells_hold_no_image()
+    once, revision = _canvas(board_id)
+    _migrate_board_scene_cells_hold_no_image()
+    assert _canvas(board_id) == (once, revision) and revision == 4, "再跑一次不该再动"
+    items = {item["id"]: item for item in once["items"]}
+    assert "asset_id" not in items["s"] and items["s"]["scene_id"] == "sc"
+    assert items["i"]["asset_id"] == "frame", "那一帧自己那格图片照旧"
+    assert _canvas(untouched_id)[1] == 2
 
 
 def _settled(client, board_id: str, ws: str, item_id: str, timeout: float = 30.0) -> dict:
@@ -108,13 +129,12 @@ def _settled(client, board_id: str, ws: str, item_id: str, timeout: float = 30.0
     raise AssertionError("场景格一直没渲完")
 
 
-def test_在场景格上渲_首尾帧落成右边的图片格_场景格不动(tmp_path) -> None:
+def test_在场景格上渲_首尾帧落成右边的图片格_场景格不动() -> None:
     client = fresh_client()
     ws = _workspace(client)
     scene_id = _scene(ws)
-    thumb = _thumbnail(ws, tmp_path)
     scene = {"id": "s1", "kind": "scene", "x": 0, "y": 0, "width": 320, "height": 220, "scene_id": scene_id,
-             "asset_id": thumb, "title": "教室"}
+             "title": "教室"}
     created = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": {"items": [scene], "edges": []}})
     assert created.status_code == 200, created.text
     board_id = created.json()["id"]
@@ -124,15 +144,14 @@ def test_在场景格上渲_首尾帧落成右边的图片格_场景格不动(tm
     assert placed.status_code == 200, placed.text
     host = next(one for one in placed.json()["canvas"]["items"] if one["id"] == "s1")
     assert host["run"]["status"] in ("queued", "running")
-    #: 摆占位不清缩略图:它不是上一次的产出。
-    assert host["asset_id"] == thumb and host["scene_id"] == scene_id
+    assert host["scene_id"] == scene_id
     job = client.get(f"/api/jobs/{host['run']['job_id']}").json()
     assert job["kind"] == "board_run", "和工具格同一种任务:计量、取消、归属都走它"
 
     canvas = _settled(client, board_id, ws, "s1")
     host = next(one for one in canvas["items"] if one["id"] == "s1")
     assert host["run"] == {"status": "succeeded"}, host
-    assert host["asset_id"] == thumb and host["scene_id"] == scene_id and host["title"] == "教室"
+    assert host["scene_id"] == scene_id and host["title"] == "教室" and "asset_id" not in host
     #: 表单就是下一次运行那一份,跑完不清。
     assert host["form"] == {"config": {"render": "stills"}, "producer": "scene_render"}
     targets = {edge["target"] for edge in canvas["edges"] if edge["source"] == "s1"}
@@ -237,7 +256,7 @@ def test_迁移_工具格的设置搬到场景格上_没有场景格的改成便
         #: 直接写行,绕过保存入口 —— 模拟升级前落库的画布。
         board = Board(workspace_id=ws, name="旧板", revision=5, canvas={
             "items": [
-                {"id": "sa", "kind": "scene", "x": 0, "y": 0, "scene_id": "scene-a", "asset_id": "thumb"},
+                {"id": "sa", "kind": "scene", "x": 0, "y": 0, "scene_id": "scene-a"},
                 {"id": "sb", "kind": "scene", "x": 0, "y": 400, "scene_id": "scene-b"},
                 {"id": "n1", "kind": "note", "x": -300, "y": 0, "text": "说明", "form": {"producer": "write"}},
                 #: 接着场景格 sa:设置搬过去,工具格删掉,产出改从 sa 连出。
@@ -285,7 +304,7 @@ def test_迁移_工具格的设置搬到场景格上_没有场景格的改成便
     items = {item["id"]: item for item in once["items"]}
     assert "r1" not in items and "r2" not in items
     assert items["sa"]["form"] == {"config": {"shot_id": "shot-2", "render": "both"}, "producer": "scene_render"}
-    assert items["sa"]["asset_id"] == "thumb" and items["sa"]["scene_id"] == "scene-a"
+    assert items["sa"]["scene_id"] == "scene-a"
     assert items["sb"]["form"] == {"config": {"render": "video"}, "producer": "scene_render"}
     for kept in ("r1-out-1", "r1-out-2", "r4-out-1", "n1", "t1"):
         assert items[kept] == next(one for one in before["items"] if one["id"] == kept), kept

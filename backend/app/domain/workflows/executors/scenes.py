@@ -41,7 +41,7 @@ def _layout(value: Any) -> dict[str, Any]:
 
 #: 布景的结构化输出(严格模式)要求每一格都在,用不上的引用写空字符串(见 templates._set_design_schema);
 #: 场景格式里它们是「没有就不写」。空字符串在这里就是「没有」—— 不是替它猜一个值。
-_OPTIONAL_REFERENCES = ("parent_id", "model_id")
+_OPTIONAL_REFERENCES = ("parent_id", "model_id", "entity_id")
 
 
 #: 关键帧上哪几格归谁用(scene_types.Keyframe):相机看 target / fov,物体看 rotation。严格模式要求每一格都在,
@@ -163,6 +163,14 @@ DEFAULT_SHOT_SECONDS = 5
 SHOT_ASPECTS = ("16:9", "9:16", "1:1")
 
 
+def _library_characters(db: Session, workspace_id: str) -> dict[str, str]:
+    """这个工作区资产库里的人物:id → 名字。交给写布景的模型,让人偶指向它演的那个人物(ADR 0029 §3)。"""
+    from app.db.models import Entity
+
+    rows = db.query(Entity.id, Entity.name).filter(Entity.workspace_id == workspace_id, Entity.kind == "character")
+    return {str(one_id): str(name) for one_id, name in rows.order_by(Entity.name).limit(60)}
+
+
 @register("scene_from_text")
 def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """照一段剧本 / 描述搭**一个** 3D 白模场景:一个布景、人物按文字动起来(关键帧)、几台相机从不同机位拍这段动作。
@@ -187,6 +195,7 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     if aspect not in SHOT_ASPECTS:
         aspect = "16:9"
     props = scene_props(db, scope, {"model_ids": ""})
+    cast = _library_characters(db, scope.workspace_id)
     system = (
         "你是导演兼布景师、摄影助理。照下面这段文字搭**一个** 3D 白模场景:定下这个地方(大致的长宽高)和出场的人物"
         f"(身高、每人一个不同的白模颜色),把文字里的动作写成人物 {clip} 秒的关键帧,再用不超过 {shots} 台相机从不同"
@@ -202,7 +211,9 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         "preset": "precise",
         "system": system,
         "prompt": f"文字:\n{text}\n\n可用的 3D 道具(kind=\"model\" 时 model_id 只能从这里选;尺寸是实测值):\n"
-                  f"{props['catalog']}\n\n画幅:{aspect}。",
+                  f"{props['catalog']}\n\n资产库里的人物(figure 的 entity_id 只能从这里选):\n"
+                  + ("\n".join(f"- {one_id}:{name}" for one_id, name in cast.items()) or "(没有)")
+                  + f"\n\n画幅:{aspect}。",
         "response_format": "json_schema",
         "json_schema_name": "blockout_scene",
         "json_schema": _set_design_schema(),
@@ -211,5 +222,11 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         "max_tokens": 16000,
     })
     name = str(config.get("name") or "").strip() or text.splitlines()[0].strip("# ")[:60] or scope.name
-    built = scene_create(db, scope, {"name": name, "layout": written.get("json") or written.get("text")})
+    layout = written.get("json") or written.get("text")
+    if isinstance(layout, dict):
+        #: 写了清单里没有的人物 id 就当没写 —— 模型编的 id 指向别人工作区的资产,或者谁也不是。
+        layout = {**layout, "objects": [
+            {key: value for key, value in one.items() if key != "entity_id" or value in cast}
+            if isinstance(one, dict) else one for one in layout.get("objects") or []]}
+    built = scene_create(db, scope, {"name": name, "layout": layout})
     return {"scene_id": built["scene_id"], "shot_ids": built["shot_ids"], "shot_count": built["shot_count"], "name": name}
