@@ -8,7 +8,6 @@ import { useTheme } from "next-themes";
 import { createPortal } from "react-dom";
 import { DownloadLink } from "@/components/download-link";
 
-import { MobileAccountLinks } from "@/components/community/header-menus";
 import { GithubMark } from "@/components/icons";
 import { isNavLinkActive } from "@/components/nav-link";
 import { LOCALE_LABEL, LOCALES, type Locale } from "@/i18n/config";
@@ -29,13 +28,10 @@ import { cn } from "@/lib/utils";
 export function MobileMenu({
   locale,
   links,
-  community,
   labels,
 }: {
   locale: Locale;
   links: { href: string; match: string | readonly string[]; exact?: boolean; label: string }[];
-  /** 「社区」下面的几个分区,在菜单里缩进列在「社区」之后。 */
-  community: { href: string; label: string }[];
   labels: { menu: string; language: string; github: string; download: string; theme: string };
 }) {
   const mounted = useMounted();
@@ -74,44 +70,22 @@ export function MobileMenu({
       {mounted && open && createPortal(
         <div className="fixed inset-0 z-40 overflow-y-auto bg-paper/95 px-3 pt-24 backdrop-blur-xl lg:hidden">
           <nav className="mx-auto flex max-w-lg flex-col gap-1">
-            {links.map((link, index) => {
+            {links.map((link) => {
               const active = isNavLinkActive(pathname, link.match, link.exact);
               return (
-                <React.Fragment key={link.href}>
-                  <Link
-                    href={link.href}
-                    className={cn(
-                      "rounded-2xl px-5 py-4 font-display text-xl font-semibold tracking-tight transition-colors",
-                      active ? "bg-brand-soft text-primary" : "text-foreground hover:bg-secondary",
-                    )}
-                  >
-                    {link.label}
-                  </Link>
-                  {/* 第二项是「社区」:它的分区缩进跟在后面。 */}
-                  {index === 1 && (
-                    <div className="grid grid-cols-2 gap-1 pb-2 pl-5">
-                      {community.map((section) => (
-                        <Link
-                          key={section.href}
-                          href={section.href}
-                          className={cn(
-                            "rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                            pathname.startsWith(section.href) ? "text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                          )}
-                        >
-                          {section.label}
-                        </Link>
-                      ))}
-                    </div>
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    "rounded-2xl px-5 py-4 font-display text-xl font-semibold tracking-tight transition-colors",
+                    active ? "bg-brand-soft text-primary" : "text-foreground hover:bg-secondary",
                   )}
-                </React.Fragment>
+                >
+                  {link.label}
+                </Link>
               );
             })}
           </nav>
-
-          <div className="mx-auto flex max-w-lg flex-col border-t border-border pb-2">
-            <MobileAccountLinks locale={locale} itemClass="border-b border-border px-1 py-3.5 font-medium" />
-          </div>
 
           <div className="mx-auto flex max-w-lg flex-col border-t border-border pt-4 pb-8">
             <Link

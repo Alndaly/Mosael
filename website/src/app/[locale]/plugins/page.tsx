@@ -1,58 +1,41 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { connection } from "next/server";
 
-import { ItemBrowser } from "@/components/community/browse";
-import { CommunityHeader, HeaderAction } from "@/components/community/community-header";
-import { CommunityDown, CommunityUnavailable } from "@/components/community/shell";
+import { PluginBrowser } from "@/components/community/browse";
+import { CommunityHeader } from "@/components/community/community-header";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
-import { ENDPOINTS, PAGE_SIZE, parseListQuery } from "@/lib/community/endpoints";
-import { communityEnabled, serverGet } from "@/lib/community/server";
-import type { Page, PluginSummary } from "@/lib/community/types";
+import { listPlugins, listWorkflows } from "@/lib/registry";
 
-type Props = { params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
+type Params = Promise<{ locale: string }>;
 
-export async function generateMetadata({ params }: Pick<Props, "params">): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getMessages(locale).plugins;
   return { title: `${t.title} · Mosael`, description: t.lede };
 }
 
-/** 请求时渲染,读社区服务(ADR 0026 §8)。列表里只有审核通过的插件,官方的在 `official` 名下。 */
-export default async function PluginsPage({ params, searchParams }: Props) {
+export default async function PluginsPage({ params }: { params: Params }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  await connection();
-  if (!communityEnabled()) return <CommunityUnavailable locale={locale} />;
-  const t = getMessages(locale);
-  const query = parseListQuery(await searchParams);
-  const result = await serverGet<Page<PluginSummary>>(ENDPOINTS.items.list("plugin", { ...query, limit: PAGE_SIZE }), locale);
+  const t = getMessages(locale).plugins;
+  // 列表来自仓库里真的能装的 manifest,不是另抄的一份(见 lib/registry)。
+  const plugins = listPlugins(locale);
 
   return (
     <>
       <CommunityHeader
         locale={locale}
         active="plugins"
-        title={t.plugins.title}
-        lede={t.plugins.lede}
-        actions={
-          <>
-            <HeaderAction href={localePath(locale, "/docs/guides/writing-plugins")}>{t.plugins.writeGuide}</HeaderAction>
-            <HeaderAction href={localePath(locale, "/plugins/new")} primary>
-              {t.plugins.submit}
-            </HeaderAction>
-          </>
-        }
+        counts={{ plugins: plugins.length, workflows: listWorkflows(locale).length }}
+        title={t.title}
+        lede={t.lede}
+        contribute={{ label: t.contribute, href: localePath(locale, "/docs/guides/writing-plugins") }}
       />
       <section className="bg-paper">
         <div className="mx-auto max-w-[76rem] px-5 py-10 sm:px-8 sm:pb-24">
-          {result.ok ? (
-            <ItemBrowser locale={locale} kind="plugin" query={query} initial={result.data} />
-          ) : (
-            <CommunityDown locale={locale} />
-          )}
+          <PluginBrowser locale={locale} plugins={plugins} />
         </div>
       </section>
     </>

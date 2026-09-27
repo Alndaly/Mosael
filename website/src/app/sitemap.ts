@@ -18,12 +18,8 @@ type Entry = { path: (locale: Locale) => string; priority: number };
 
 const STATIC: Entry[] = [
   { path: (locale) => `/${locale}`, priority: 1 },
-  // 社区的几个入口页。它们在请求时渲染、内容天天变,但地址是固定的。条目详情、作者主页不列:
-  // 那要在构建期问社区服务,而构建不依赖它(ADR 0026 §8)。
-  { path: (locale) => `/${locale}/workflows`, priority: 0.8 },
   { path: (locale) => `/${locale}/plugins`, priority: 0.8 },
-  { path: (locale) => `/${locale}/boards`, priority: 0.6 },
-  { path: (locale) => `/${locale}/community/stats`, priority: 0.5 },
+  { path: (locale) => `/${locale}/workflows`, priority: 0.8 },
   { path: (locale) => `/${locale}/changelog`, priority: 0.7 },
 ];
 

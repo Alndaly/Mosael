@@ -1,8 +1,0 @@
-# website/Dockerfile 的构建上下文是仓库根:只放它要的两样(website/、plugins/)。
-*
-!website
-!plugins
-**/node_modules
-**/.next
-**/.venv
-**/__pycache__

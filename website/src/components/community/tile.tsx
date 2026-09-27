@@ -1,4 +1,4 @@
-import { Clapperboard, Film, Languages, Layers, type LucideIcon, Scissors, Shirt, ShoppingBag, Smartphone, Workflow } from "lucide-react";
+import { Clapperboard, Film, Languages, Layers, type LucideIcon, Scissors, Shirt, ShoppingBag, Smartphone } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
  *
  * 插件清单里没有图标,硬塞一个通用拼图块的话,一屏卡片长得一模一样,扫一眼分不出谁是谁。
  * 这里用**名字的第一个字**加一个按 id 固定的色相:同一个插件在列表、详情、推荐位上永远是
- * 同一块颜色,认得出来。官方工作流有明确的用途,用对应的图标(和应用里「工作流社区」同一套);
- * 作者上传了封面图的,用封面。
+ * 同一块颜色,认得出来。工作流有明确的用途,用对应的图标(和应用里「工作流社区」同一套)。
  */
 const HUES = ["--tile-1", "--tile-2", "--tile-3", "--tile-4", "--tile-5", "--tile-6"] as const;
 
@@ -29,40 +28,35 @@ function tileStyle(seed: string) {
   return { color: hue, backgroundColor: `color-mix(in oklab, ${hue} 14%, var(--card))` };
 }
 
-/** 封面图:作者上传的,尺寸不定,不走 next/image(它只认白名单里的主机)。 */
-function Cover({ src, size }: { src: string; size: keyof typeof SIZES }) {
-  // oxlint-disable-next-line nextjs/no-img-element
-  return <img src={src} alt="" loading="lazy" className={cn("shrink-0 bg-muted object-cover", SIZES[size])} />;
-}
-
-export function PluginTile({ seed, name, cover, size = "md" }: { seed: string; name: string; cover?: string | null; size?: keyof typeof SIZES }) {
-  if (cover) return <Cover src={cover} size={size} />;
+export function PluginTile({ seed, name, size = "md" }: { seed: string; name: string; size?: keyof typeof SIZES }) {
   // 「Amazon S3」取 A,「腾讯云 COS」取 腾 —— 按字形取,不按 UTF-16 码元。
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "?";
   return (
-    <span aria-hidden className={cn("grid shrink-0 place-items-center font-display font-bold", SIZES[size])} style={tileStyle(seed)}>
+    <span
+      aria-hidden
+      className={cn("grid shrink-0 place-items-center font-display font-bold", SIZES[size])}
+      style={tileStyle(seed)}
+    >
       {initial}
     </span>
   );
 }
 
-/** 官方模板的图标,按 URL 里的 slug 认(模板 id 的下划线换成了连字符)。 */
 const WORKFLOW_ICONS: Record<string, LucideIcon> = {
-  "full-video-generation": Film,
-  "transcript-video-cleanup": Scissors,
-  "translated-dub": Languages,
-  "highlight-shorts": Smartphone,
-  "product-on-model": Shirt,
-  "product-pitch-short": ShoppingBag,
-  "footage-montage": Clapperboard,
-  "fabric-lookbook": Layers,
+  full_video_generation: Film,
+  transcript_video_cleanup: Scissors,
+  translated_dub: Languages,
+  highlight_shorts: Smartphone,
+  product_on_model: Shirt,
+  product_pitch_short: ShoppingBag,
+  footage_montage: Clapperboard,
+  fabric_lookbook: Layers,
 };
 
-export function WorkflowTile({ slug, cover, size = "md" }: { slug: string; cover?: string | null; size?: keyof typeof SIZES }) {
-  if (cover) return <Cover src={cover} size={size} />;
-  const Icon = WORKFLOW_ICONS[slug] ?? Workflow;
+export function WorkflowTile({ id, size = "md" }: { id: string; size?: keyof typeof SIZES }) {
+  const Icon = WORKFLOW_ICONS[id] ?? Film;
   return (
-    <span aria-hidden className={cn("grid shrink-0 place-items-center", SIZES[size])} style={tileStyle(slug)}>
+    <span aria-hidden className={cn("grid shrink-0 place-items-center", SIZES[size])} style={tileStyle(id)}>
       <Icon className={size === "lg" ? "size-7" : "size-5"} strokeWidth={1.8} />
     </span>
   );
